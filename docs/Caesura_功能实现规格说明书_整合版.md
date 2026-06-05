@@ -36,7 +36,7 @@ Lua 256MB, 纹理 1GB。对象池。显式 GC 点。
 
 ### 异步加载 ([10.2.32]
 
-createTextureAsync + [preload] 标签 + 过渡槽。
+createTextureAsync + [preload] 标签 + 过渡槽(转场资源预加载队列, 由 [trans] 触发时后台异步加载下一个场景所需纹理/音频, 加载完成前显示占位纹理)。
 
 ---
 
@@ -45,8 +45,8 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 ## [1.1] tokenizer.lua — LPeg 解析 .ks -> Token 序列
 ## [1.2] scheduler.lua — 遍历 tokens, kag[cmd](ctx,params), yield 阻塞
 ### 协程关闭守卫 ([10.2.21] — abort/resume 内 coroutine.close()
-## [1.3] flow.lua — [jump]/[call]/[return]/[link]/[end]
-### CancelToken ([10.2.33] — 阻塞操作注册取消回调, [jump] 时遍历取消
+## [1.3] flow.lua — [jump]/[call]/[return]/[link](场景跳转时清空所有图层、清空 backlog、取消活跃 CancelToken)/[end]
+### CancelToken ([10.2.33] — 阻塞操作([wait]/[trans]/[move]/[quake]/playvoice 等)注册取消回调, [jump] 时遍历取消
 ## [1.4] flow.lua — [if]/[else]/[endif]/[switch]/[case]
 
 ---
@@ -94,8 +94,8 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 
 ## [5.2] FreeType 矢量字体 — FontRenderer.h/.cpp
 ### 字体图集 TextureArray ([10.2.12] — 预分配 4 层 2048x2048 RGBA8, shader: texture2DArray
-### 动态扩容 ([10.2.23] — 4 层 >90% 时 A/B 双阵列切换, 1-2 帧半透明遮罩+沙漏进度指示, 扩容期间暂停文字渲染(不暂停翻页/跳过输入), 扩容完成后自动恢复文字渲染内置字体
-### 文本布局引擎 ([10.2.7] — 自动换行/对齐(H/V)/行间距/中英混排/ruby 注音
+### 动态扩容 ([10.2.23] — 4 层 >90% 时 A/B 双阵列切换, 1-2 帧半透明遮罩+沙漏进度指示。扩容期间所有文本统一降级为内置位图渲染([10.2.54]), 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。内置字体
+### 文本布局引擎 ([10.2.7] — 自动换行/对齐(H/V)/行间距/中英混排/ruby(Ruby 注解规范: 注音默认居中对齐基底字符上方, 多字符基底逐字对应; 换行时注音跟随基底字符移至下一行; 参考 HTML ruby 标准)注音
 ### 文本批处理 ([10.2.26] — MessageLayerCache 缓存顶点缓冲, 单 submit, O(1) draw call
 
 ## [5.3] 实时调色板 — palette.lua + GLSL
@@ -136,7 +136,7 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 # Part 9: CARC 现代化容器格式
 
 ## [9.1] 设计目标 — AES-256-GCM + Ed25519 + zstd + mmap
-## [9.2] 文件布局 — Header(64B) + Content + Index(encrypted) + Signature(96B) + PublicKey(32B)
+## [9.2] 文件布局 — Header(64B) + Content + Index(encrypted) + Signature(64B) + PublicKey(32B)
 ### 签名版本号 ([10.2.10] — SHA-256(header||version||count||hashes), 防降级攻击
 ## [9.3] 密钥管理 — private.key(开发者), public.key(CARC 末尾)
 ### 公钥外置 ([10.2.28] — 引擎启动时读取 CARC 末尾公钥, 无需重编译
@@ -235,6 +235,7 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 | 60 | Lua 内存硬上限(64K 检查) | P1 | 系统 |
 | 61 | [link] 完整语义+CancelToken | P1 | 脚本 |
 | 62 | 最坏情况 GPU 帧预算+Monitor | P1 | 渲染 |
+| 64 | 移动平台适配 | P2 | 平台 |
 | 63 | 多 CARC 链式信任(有效期可配置) | P0 | CARC/安全 |
 
 ### 优先级分布
@@ -256,15 +257,15 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 
 ### [10.2.2] 视频 PTS 同步
 
-**决策**: SoLoud::getAudioPosition -> PTS_audio。追赶/丢帧。窗口 +/-1 帧。 若音频流先于视频结束, 视频暂停在最后一帧。**用户手动跳过**: 鼠标点击或空格键触发 CancelToken 取消视频播放, 释放视频图层并恢复 KAG 控制。
+**决策**: SoLoud::getAudioPosition -> PTS_audio。追赶/丢帧。窗口 +/-1 帧。 若音频流先于视频结束, 视频暂停在最后一帧。**用户手动跳过**: 鼠标点击或空格键触发 CancelToken 取消视频播放: 停止解码器, 释放视频图层纹理(归还 RTT 池), 立即继续脚本执行, 恢复 KAG 控制。CancelToken 回调在主线程执行。
 ### [10.2.3] 3D 安全性
 
-**决策**: 着色器上限 64KB。Lua 走 create_shader_from_file。Vertex 48B。__gc 元方法。
+**决策**: 着色器模块 SPIR-V 字节码上限 64KB(单个着色器模块)。Lua 走 create_shader_from_file。Vertex 48B。调试构建启用着色器大小检查。__gc 元方法。
 
 ### [10.2.4] 热重载恢复
 
 **决策**: 分级安全范围。C++ 资源不支持。handle 失效 -> INVALID_HANDLE。
-**热重载时正在运行的协程处理**: 终止所有活跃协程(CancelToken:cancel() -> coroutine.close()), 从上一存档点或标题页重新开始, 显示警告'脚本已热重载, 建议重新加载存档'。重载时 GameState 重置: call_stack 清空, tokens 重置, co 重新创建, tf 重置为{}, sf/f 保留。
+**热重载时正在运行的协程处理**: 终止所有活跃协程(CancelToken:cancel() -> coroutine.close()), 从上一存档点或标题页重新开始, 显示警告'脚本已热重载, 建议重新加载存档'。重载时 GameState 重置: call_stack 清空, tokens 重置, co 重新创建, tf 重置为{}。同时清空所有图层(layers 全部 [cl]), 清空 backlog, 取消所有活跃 CancelToken 和阻塞操作。sf/f 保留。
 ### [10.2.5] JSON 存档安全
 
 **决策**: 禁止 load()/loadstring()。json.decode() 仅纯数据。coroutine/audio 不保存。
@@ -340,7 +341,7 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 
 ### [10.2.23] TextureArray 扩容
 
-**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示, 扩容期间暂停文字渲染(不暂停翻页/跳过输入), 扩容完成后自动恢复文字渲染。8 层约 8000 CJK。
+**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间所有文本统一降级为内置位图渲染([10.2.54]), 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。。8 层约 8000 CJK。
 
 ### [10.2.24] FFmpeg/H.264 集成(P1)
 
@@ -380,7 +381,7 @@ createTextureAsync + [preload] 标签 + 过渡槽。
 **异步加载回调线程模型**: 后台线程通过 SDL_PushEvent 派发到主线程事件队列, 确保 bgfx/SoLoud 调用在主线程([10.2.14]。
 ### [10.2.33] CancelToken 取消
 
-**决策**: 阻塞操作注册取消回调。[jump] 时遍历 cancel。pcall 包裹。防 RTT/音频泄漏。
+**决策**: 阻塞操作([wait]/[trans]/[move]/[quake]/playvoice 等)注册取消回调。[jump] 时遍历 cancel。pcall 包裹。防 RTT/音频泄漏。
 **CancelToken API**(主线程执行取消回调): register(fn) / cancel()(反向遍历+pcall, 全部在主线程执行)。取消语义: move=停止当前位置, trans=跳转结束, quake=立即停止, playvoice=fadeout(50ms)+stop。
 ### [10.2.34] 存档版本管理
 
@@ -411,17 +412,17 @@ Beta(+15): trans, move, quake, fade, blur, playse3d, fadebgm, xfadebgm, save, lo
 
 ### [10.2.40] 性能基准
 
-**决策**: Intel HD 620, 2C 2.0GHz, 4GB RAM, 60 FPS。每帧: SDL<0.5, Lua<3, Audio<0.5, Layer<1, GPU<10ms。
+**决策**: Intel HD 620, 2C 2.0GHz, 4GB RAM, 60 FPS。每帧: SDL<0.5, Lua<3, Audio<0.5, Layer<1, GPU理想<10ms(典型场景)。最坏情况硬上限 16ms 见 [10.2.62]。
 
 --- OS: Win10 22H2+ / Linux 5.10+。bgfx 后端: Vulkan 1.1+ / D3D11 / Metal。
 
-**典型场景预期**: 背景1层+立绘1层+文本层+BGM+SE = <8ms/frame(HD620); 转场动画 +2ms; 视频解码 +3ms。### [10.2.41] [move] Bezier Math Definition
+**典型场景预期**: 背景1层+立绘1层+文本层+BGM+SE = <8ms/frame(HD620); 转场动画 +2ms; 视频解码 +3ms。### [10.2.41] [move] 贝塞尔曲线数学定义
 
 B(t)=(1-t)^3*P0+3(1-t)^2*t*P1+3(1-t)*t^2*P2+t^3*P3. path params define P1,P2. arcrad for corner radius. **P1**.
 
 ---
 
-### [10.2.42] [quake] Click Interaction Spec
+### [10.2.42] [quake] 点击交互规范
 
 Clicks suppressed during quake. Embedded [p] pauses quake until click. offsetX=intensity*sin(t*freq)*exp(-t*damping). **P1**.
 
@@ -439,10 +440,7 @@ migrations={[1]=fn1,...}. Chain: for v=schema..CURRENT-1: data=migrations[v](dat
 
 ### [10.2.45] Audio Mixed-Model Ordering Guarantee
 
-Direct APIs execute immediately; batch ops execute at frame-end in accumulation order. Direct always before batch within same frame. **P1**.
-
----
-
+**决策**: 见 [10.2.11]。直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 同一帧内禁止混用。**P1**.
 ### [10.2.46] CARC Engine Self-Verification
 
 Engine embeds ENGINE_VERSION. CARC.version <= ENGINE_VERSION allowed. Binary checksum in signature verification (anti-tamper). **P1**.
@@ -493,7 +491,7 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 **决策**: TextureArray A/B 切换期间(1-2帧), TextRenderer 自动降级为内置 8x16 位图字体渲染。降级期间记录 [WARN] Font degraded to built-in bitmap。扩容完成后自动重建 FreeType 缓存并恢复矢量渲染。降级对用户透明, 仅字体质量暂时下降。**P1**.
 
 ---
-**CJK fallback**: 内置 Noto Sans CJK SC 子集(常用 3500 汉字, ~15MB) 4096x4096 RGBA8 图集, 作为独立静态纹理。扩容时优先使用 CJK 图集(不依赖动态 TextureArray), 其次降级到位图。提供 [preload_chars] 标签预加载字符列表; 提供工具扫描 .ks 脚本生成所需字符集。对话中扩容施加 50ms 遮罩。
+**CJK fallback**: 内置 Noto Sans CJK SC 子集(常用 3500 汉字(未压缩 RGBA8 4096x4096 ~64MB, ASTC/BC7 压缩后 ~16MB)) 4096x4096 RGBA8 图集, 作为独立静态纹理。扩容时优先使用 CJK 图集(不依赖动态 TextureArray), 其次降级到位图。提供 [preload_chars] 标签预加载字符列表; 提供工具扫描 .ks 脚本生成所需字符集。对话中扩容施加 50ms 遮罩。
 ### [10.2.55] RTT 池自旋锁策略
 
 **决策**: Alpha 阶段: ssert(is_main_thread()) 确保 RTT 操作仅在主线程。保留 spinlock 字段代码注释标记为多线程预留。Beta 阶段评估: 若引入后台加载线程, 激活 spinlock。当前不编译锁代码, 零开销。**P2**.
@@ -551,10 +549,9 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 - `expiry: "none"` 或不填 — 证书永不过期, 适合需要长期流传的独立游戏和社团作品
 - 拒绝加载时显示: "子CARC授权证书已过期(有效期至XXXX-XX-XX), 请联系提供商更新"
 - 开发者模式 --unsafe 可强制跳过过期检查。
-**CRL (证书吊销列表)**: 主密钥签发 CRL 文件(JSON, 含被吊销的子公钥指纹列表)。引擎启动时读取 CRL(本地缓存于 saves/crl_cache.json, 远程 URL 由主 CARC 内 config.json 的 carc_crl_url 字段指定, 支持远程更新), 被吊销的子公钥即使未过期也拒绝加载。CRL 自身由主密钥签名防篡改。开发者通过构建工具管理 CRL, 用于紧急吊销泄露的子密钥。expiry "none" 的永久证书可通过 CRL 吊销, 兼顾长期流传与安全可控。**P0**.
+**CRL (证书吊销列表)**: 主密钥签发 CRL 文件(JSON, 含被吊销的子公钥指纹列表)。引擎启动时读取 CRL(本地缓存于 saves/crl_cache.json, 由主密钥签名, 通过 IAssetProvider 读取, 防止篡改, 远程 URL 由主 CARC 内 config.json 的 carc_crl_url 字段指定, 支持远程更新), 被吊销的子公钥即使未过期也拒绝加载。CRL 自身由主密钥签名防篡改。开发者通过构建工具管理 CRL, 用于紧急吊销泄露的子密钥。expiry "none" 的永久证书可通过 CRL 吊销, 兼顾长期流传与安全可控。**P0**.
 **P2** (CRL 远程更新).
-
-**决策**: 引擎信任主 CARC Ed25519 公钥。子 CARC 使用独立密钥, 其公钥由主公钥签发授权证书(含哈希+有效期)。验证: (1) 读子公钥 (2) 主公钥验证证书 (3) 子公钥验签。整链拒绝加载。过期证书: 拒绝加载, 显示明确错误信息'子CARC授权证书已过期(有效期至XXXX-XX-XX), 请联系游戏提供商更新'。开发者模式 --unsafe 可强制跳过。**P0**.
+, 显示明确错误信息'子CARC授权证书已过期(有效期至XXXX-XX-XX), 请联系游戏提供商更新'。开发者模式 --unsafe 可强制跳过。**P0**.
 
 ## [10.3] 实施优先级
 
@@ -615,7 +612,7 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 
 ## Appendix D: 28 Blend Modes (GLSL Reference)
 
-混合公式遵循 W3C Compositing Level 1 + Porter-Duff 规范。所有模式在 blend.glsl 中实现, 输入: ec4 base(下层), ec4 blend(上层), loat opacity。输出: ec4 result。
+混合公式遵循 W3C Compositing Level 1 + Porter-Duff 规范。所有模式在 blend.glsl 中实现, 输入: vec4 base(下层), ec4 blend(上层), float opacity。输出: ec4 result。
 
 | # | 模式 | GLSL 核心 | 分类 |
 |---|------|-----------|------|
