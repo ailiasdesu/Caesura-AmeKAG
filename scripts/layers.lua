@@ -645,6 +645,18 @@ function Layers.set_options(layer_name, opts)
     Layers.mark_dirty(l)
 end
 
+-- =============================================================================
+--  Layers.restore_text_state(text_state)
+--  Restore text rendering position after save/load.
+-- =============================================================================
+
+function Layers.restore_text_state(text_state)
+    if not text_state then return end
+    if backend.text_set_state then
+        backend.text_set_state(text_state.line or 1, text_state.char_offset or 0)
+    end
+end
+
 function Layers.resize_layer(node, w, h)
     if not node then return end
     if w ~= nil then node.w = w end

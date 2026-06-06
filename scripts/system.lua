@@ -351,6 +351,9 @@ function System.save(slot, ctx)
         -- Backlog
         backlog       = System._serialize_backlog(ctx.backlog or {}),
 
+        -- Text position tracking for save/load
+        text_state    = ctx.text_state and table_deep_copy(ctx.text_state) or {},
+
         -- Call stack for [call]/[return]
         call_stack    = ctx.callStack or {},
 
@@ -476,6 +479,17 @@ function System._load_from_file(filename, ctx)
     -- Restore call stack
     ctx.callStack = data.call_stack or {}
 
+    -- Restore text position
+    ctx.text_state = data.text_state or {}
+    if data.text_state and data.text_state.line then
+        pcall(function()
+            local layers = require("layers")
+            if layers and layers.restore_text_state then
+                layers.restore_text_state(ctx.text_state)
+            end
+        end)
+    end
+
     print("[System] Loaded from slot " .. (data.slot or 0))
     return true
 end
@@ -509,6 +523,7 @@ function System.saveplace(ctx)
         pc = ctx.pc,
         tf = ctx.tf and table_deep_copy(ctx.tf) or {},
         dialog_index = ctx.dialog_index,
+        text_state = ctx.text_state and table_deep_copy(ctx.text_state) or {},
         layers = ctx.layers,  -- reference is fine
     }
     print("[System] Place saved (temporary bookmark).")
@@ -525,6 +540,15 @@ function System.loadplace(ctx)
     ctx.pc = pd.pc
     ctx.tf = pd.tf
     ctx.dialog_index = pd.dialog_index
+    ctx.text_state = pd.text_state or {}
+    if pd.text_state and pd.text_state.line then
+        pcall(function()
+            local layers = require("layers")
+            if layers and layers.restore_text_state then
+                layers.restore_text_state(pd.text_state)
+            end
+        end)
+    end
     print("[System] Place loaded.")
     return true
 end

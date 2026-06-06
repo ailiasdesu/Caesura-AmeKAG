@@ -8,11 +8,32 @@
 local backend = require("backend")
 local layers  = require("layers")
 
+-- =============================================================================
+--  Internal: update text_state for save/load position tracking
+-- =============================================================================
+
+local function update_text_state(ctx, action)
+    ctx.text_state = ctx.text_state or {}
+    ctx.text_state.line = ctx.text_state.line or 1
+    ctx.text_state.char_offset = ctx.text_state.char_offset or 0
+    ctx.text_state.last_action = action
+
+    if action == "l" or action == "r" then
+        ctx.text_state.line = (ctx.text_state.line or 1) + 1
+        ctx.text_state.char_offset = 0
+    elseif action == "p" or action == "er" then
+        ctx.text_state.line = 1
+        ctx.text_state.char_offset = 0
+    elseif action == "ch" or action == "text" then
+        ctx.text_state.char_offset = ctx.text_state.char_offset + 1
+    end
+end
+
 local TextCommands = {}
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  Internal: push a message entry to the ctx.backlog (spec [4.1])
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 
 local function push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
@@ -32,11 +53,11 @@ local function push_backlog(ctx, speaker, text, voiceFile)
     end
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [ch name="Hero" text="Hello, world!"]
 --  Display character dialog: renders name + text on message layer,
 --  appends to backlog, and blocks until click (via [p] semantics).
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
@@ -84,12 +105,13 @@ function TextCommands.ch(ctx, params)
     ctx.textCursorX = 32
     ctx.textCursorY = msgY
     ctx.waiting_input = true
+    update_text_state(ctx, "ch")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [text text="Plain narration text."]
 --  Display narration (no speaker name). Appends to backlog.
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 
 function TextCommands.text(ctx, params)
     local message = params.text or params.message or params.content or ""
@@ -114,27 +136,30 @@ function TextCommands.text(ctx, params)
     ctx.textCursorX = 32
     ctx.textCursorY = y
     ctx.waiting_input = true
+    update_text_state(ctx, "text")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [l] — line break: advance text cursor to next line
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 
 function TextCommands.l(ctx, params)
     local lineHeight = backend.line_height() or 24
     ctx.textCursorY = (ctx.textCursorY or 600) + lineHeight
     ctx.textCursorX = 32
+    update_text_state(ctx, "l")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [r] — carriage return: reset cursor to start of current line
 -- =============================================================================
 
 function TextCommands.r(ctx, params)
     ctx.textCursorX = 32
+    update_text_state(ctx, "r")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [er] — erase: clear all text from message layer (backlog preserved)
 -- =============================================================================
 
@@ -143,13 +168,14 @@ function TextCommands.er(ctx, params)
     ctx.textCursorX = 32
     ctx.textCursorY = 580
     ctx.waiting_input = false
+    update_text_state(ctx, "er")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 --  [p] — page break / click-to-advance
 --  Blocks the coroutine until user clicks or presses Enter/Space.
 --  The scheduler detects ctx.waiting_input and handles resume on input.
--- ═══════════════════════════════════════════════════════════════════════════
+-- =============================================================================
 
 function TextCommands.p(ctx, params)
     -- Clear any previous text rendering state
@@ -160,6 +186,7 @@ function TextCommands.p(ctx, params)
 
     -- Yield the coroutine — scheduler resumes on next click
     coroutine.yield()
+    update_text_state(ctx, "p")
 end
 
 return TextCommands
