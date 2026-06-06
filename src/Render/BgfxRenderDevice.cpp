@@ -1,4 +1,5 @@
  #include "BgfxRenderDevice.h"
+#include "ShaderCache.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
 #include <bx/math.h>
@@ -488,6 +489,30 @@ void BgfxRenderDevice::initEmbeddedShaders() {
     m_u_stretchParams = bgfx::createUniform("StretchParams", bgfx::UniformType::Vec4, 1);
     m_u_affineParams  = bgfx::createUniform("AffineParams",  bgfx::UniformType::Vec4, 4);
 
+    // -- Register with ShaderCache -------------------------------------
+    if (bgfx::isValid(m_blendProgram)) {
+        static const int kAlphaModes[] = {
+            (int)BlendMode::Normal,    (int)BlendMode::Multiply,
+            (int)BlendMode::Screen,    (int)BlendMode::Overlay,
+            (int)BlendMode::Darken,    (int)BlendMode::Lighten,
+            (int)BlendMode::Add,       (int)BlendMode::Difference,
+            (int)BlendMode::Exclusion, (int)BlendMode::SoftLight
+        };
+        for (auto mode : kAlphaModes) {
+            CompositeShaderKey key;
+            key.blendMode  = mode;
+            key.usePalette = false;
+            CompositeShaderCache::instance().registerProgram(key, m_blendProgram);
+        }
+        printf("[BgfxRenderDevice] Registered 10 blend modes with ShaderCache.\n");
+    }
+    if (bgfx::isValid(m_fallbackProgram)) {
+        CompositeShaderKey fk;
+        fk.blendMode  = static_cast<int>(BlendMode::Normal);
+        fk.usePalette = false;
+        CompositeShaderCache::instance().registerProgram(fk, m_fallbackProgram);
+    }
+    // stretch/affine are singletons -- no ShaderCache registration needed.
 }}
 
 

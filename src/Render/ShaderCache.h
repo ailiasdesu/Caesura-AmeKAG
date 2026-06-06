@@ -104,6 +104,11 @@ public:
     // Returns a bgfx program for the given key; creates + caches if missing.
     bgfx::ProgramHandle getProgram(const CompositeShaderKey& key);
 
+    // -- Registration -------------------------------------------------------
+    // Called by BgfxRenderDevice after creating programs via buildBgfxShader.
+    // Registers a pre-created program for the given key without recompiling.
+    void registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program);
+
     // -- Precompile helpers ------------------------------------------------
     // Pre-loads the 10 most common combinations (Normal, Multiply, Screen,
     // Overlay, Darken, Lighten, Add, Subtract, Alpha, Erase) all without palette.

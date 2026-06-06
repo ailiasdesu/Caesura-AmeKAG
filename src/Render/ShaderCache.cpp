@@ -42,6 +42,29 @@ void CompositeShaderCache::shutdown() {
 }
 
 // ---------------------------------------------------------------------------
+// Registration -- called by BgfxRenderDevice after createProgram
+// ---------------------------------------------------------------------------
+
+void CompositeShaderCache::registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program) {
+    if (!bgfx::isValid(program)) {
+        fprintf(stderr, "[ShaderCache] registerProgram: invalid program for blend=%d palette=%d\n",
+                key.blendMode, (int)key.usePalette);
+        return;
+    }
+
+    if (m_cache.size() >= MAX_ENTRIES) {
+        evictOne();
+    }
+
+    m_lruList.push_front(key);
+    CacheEntry entry;
+    entry.program = program;
+    entry.key     = key;
+    entry.lruIt   = m_lruList.begin();
+    m_cache[key]  = entry;
+}
+
+// ---------------------------------------------------------------------------
 // LRU eviction
 // ---------------------------------------------------------------------------
 
@@ -80,7 +103,25 @@ bgfx::ProgramHandle CompositeShaderCache::getProgram(const CompositeShaderKey& k
         evictOne();
     }
 
-    // Compile new variant
+    // Palette not available in Alpha -- fall back to same blend mode without palette
+    if (key.usePalette) {
+        CompositeShaderKey fallbackKey = key;
+        fallbackKey.usePalette = false;
+        auto fb = m_cache.find(fallbackKey);
+        if (fb != m_cache.end()) {
+            printf("[ShaderCache] palette not available, falling back to blend=%d without palette\n",
+                   key.blendMode);
+            m_lruList.erase(fb->second.lruIt);
+            m_lruList.push_front(fallbackKey);
+            fb->second.lruIt = m_lruList.begin();
+            return fb->second.program;
+        }
+        fprintf(stderr, "[ShaderCache] palette requested but no fallback for blend=%d\n",
+                key.blendMode);
+        return BGFX_INVALID_HANDLE;
+    }
+
+    // Compile new variant (should not reach here if registered by BgfxRenderDevice)
     bgfx::ProgramHandle prog = compileVariant(key);
     if (!bgfx::isValid(prog)) {
         fprintf(stderr, "[ShaderCache] Failed to compile variant: blend=%d palette=%d\n",
@@ -145,14 +186,13 @@ void CompositeShaderCache::precompileCommon() {
 // EmbeddedShaders / file-load path and injected here.
 
 bgfx::ProgramHandle CompositeShaderCache::compileVariant(const CompositeShaderKey& key) {
-    // In a full implementation, this selects the right pre-compiled program.
-    // Currently all blend modes share one program (mode passed via uniform),
-    // so we return the fallback. The render device is responsible for loading
-    // the actual program and calling registerProgram().
-    //
-    // For palette + blend combos, a second pass program would be compiled
-    // from fs_blend.sc + fs_palette.sc macros, or a multi-pass approach used.
-    (void)key;  // suppress unused warning
+    // All programs are pre-compiled by BgfxRenderDevice::initEmbeddedShaders()
+    // and registered via registerProgram(). If we reach here, the program
+    // was not registered -- this is a configuration error.
+    fprintf(stderr, "[ShaderCache] compileVariant: unregistered variant blend=%d palette=%d. "
+            "Did BgfxRenderDevice forget to register it?\n",
+            key.blendMode, (int)key.usePalette);
+    (void)key;
     return BGFX_INVALID_HANDLE;
 }
 
