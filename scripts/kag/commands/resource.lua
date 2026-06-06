@@ -225,4 +225,49 @@ function ResourceCommands.flush_cache()
     print("[Resource] Preload cache flushed.")
 end
 
+
+-- ???????????????????????????????????????????????????????????????????????????
+--  Phase G8-U2: Transition slot ? preload next-scene assets without
+--  replacing current display textures. Promoted on [trans] start.
+-- ???????????????????????????????????????????????????????????????????????????
+
+-- transition slot: { path = texture_id } ? separate from main cache
+ResourceCommands._transitionSlot = {}
+
+--- Preload assets into the transition slot (next scene)
+function ResourceCommands.preload_transition(paths, ctx)
+    local dev = is_dev_mode(ctx)
+    for _, path in ipairs(paths) do
+        if not ResourceCommands._transitionSlot[path] then
+            local tex = load_texture(path, ctx)
+            ResourceCommands._transitionSlot[path] = tex
+            if not tex then
+                print("[Resource] preload_transition failed: " .. path)
+            end
+        end
+    end
+end
+
+--- Promote transition-slot textures to main cache (called by [trans])
+function ResourceCommands.promote_transition_slot()
+    for path, tex in pairs(ResourceCommands._transitionSlot) do
+        if tex then
+            -- Don''t overwrite existing main-cache textures
+            if not ResourceCommands._textureCache[path] then
+                ResourceCommands._textureCache[path] = tex
+            end
+        end
+    end
+    ResourceCommands._transitionSlot = {}
+    print("[Resource] Transition slot promoted (" .. tostring(#ResourceCommands._transitionSlot) .. " textures)")
+end
+
+--- Check if any transition-slot textures are still pending
+function ResourceCommands.has_pending_transition()
+    for path, tex in pairs(ResourceCommands._transitionSlot) do
+        if not tex then return true end
+    end
+    return false
+end
+
 return ResourceCommands

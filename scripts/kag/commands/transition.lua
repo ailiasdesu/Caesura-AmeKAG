@@ -58,6 +58,19 @@ function TransCommands.trans(ctx, params)
     ctx.active_operations = ctx.active_operations or {}
     table.insert(ctx.active_operations, ct)
 
+    -- Phase G8-U2: promote transition-slot preloaded textures to main cache
+    local ResourceCommands = require("kag.commands.resource")
+    if ResourceCommands.has_pending_transition() then
+        -- Wait with 5-second timeout
+        local waited = 0
+        while ResourceCommands.has_pending_transition() and waited < 5000 do
+            if ct.cancelled then break end
+            coroutine.yield()
+            waited = waited + 16
+        end
+    end
+    ResourceCommands.promote_transition_slot()
+
     -- Wait for preloaded textures if configured
     local waitPreload = params.wait_preload
     if waitPreload == nil then waitPreload = true end
