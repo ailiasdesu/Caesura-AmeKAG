@@ -1,4 +1,4 @@
--- =============================================================================
+﻿-- =============================================================================
 --  Caesura (AmeKAG) — kag.lua
 --  KAG command handler table. The scheduler dispatches kag[cmd](ctx, params)
 --  for every non-flow-control tag in the token stream.
@@ -64,6 +64,18 @@ do
     local System = require("system")
     KAG.saveplace = function(ctx, params) System.saveplace(ctx) end
     KAG.loadplace = function(ctx, params) System.loadplace(ctx) end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Save/Load commands — [save], [load], [listsaves]
+--  Loaded from kag/commands/save.lua, wired to C++ SaveManager.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+do
+    local save_cmds = require("kag.commands.save")
+    KAG.save = save_cmds.save
+    KAG.load = save_cmds.load
+    KAG.listsaves = save_cmds.listsaves
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
