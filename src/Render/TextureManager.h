@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <bgfx/bgfx.h>
 #include <string>
@@ -27,6 +27,9 @@ public:
 
     bool initialize();
     void shutdown();
+
+    // [10.2.57] Set dev mode: true = checkerboard placeholder, false = transparent
+    void setDevMode(bool dev);
 
     // Load from disk (png, jpg, tga, bmp, etc.)
     // Uses bx::FileReader + bimg::imageParse; falls back to stb_image.
@@ -72,6 +75,7 @@ private:
 
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
+    bool m_devMode = true;  // [10.2.57] default: dev mode (checkerboard)
     uint32_t m_nextId = 1;
     bool m_initialized = false;
 };

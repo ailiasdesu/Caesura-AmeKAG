@@ -35,6 +35,9 @@ public:
     unsigned int playSE(const std::string& file) override;
     unsigned int playSE3D(const std::string& file, float x, float y, float z) override;
     void stopSE() override;
+    void setSEVolume(unsigned int handle, float volume) override;
+    float getSEVolume(unsigned int handle) override;
+    void stopSEHandle(unsigned int handle) override;
 
     void update3dListener(float posX, float posY, float posZ,
                           float atX, float atY, float atZ,

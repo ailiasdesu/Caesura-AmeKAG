@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../Core/IAudioBackend.h"
 
 namespace Caesura {
@@ -32,6 +32,10 @@ public:
     unsigned int playSE3D(const std::string& file,
                           float x, float y, float z) override;
     void stopSE() override;
+    void setSEVolume(unsigned int handle, float volume) override;
+    float getSEVolume(unsigned int handle) override;
+    void stopSEHandle(unsigned int handle) override;
+
 
     // -- 3D Audio ----------------------------------------------------------
     void update3dListener(float posX, float posY, float posZ,

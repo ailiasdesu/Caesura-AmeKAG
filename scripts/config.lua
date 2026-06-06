@@ -1,4 +1,4 @@
-﻿-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — config.lua
 --  Engine configuration and backend selection.
 --  Spec [0.4]: Uses BackendFactory to create unified backend proxy.
@@ -8,6 +8,7 @@
 
 config = {}
 config.dev_mode = true  -- true = dev mode (lax sandbox), false = Release (strict sandbox)
+config.entry_script = "game_logic.lua"  -- First script loaded after init ([10.2.30])
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Backend Selection (spec [0.4] factory pattern)
@@ -40,6 +41,9 @@ config.voice_volume = 1.0
 config.se_volume    = 1.0
 
 -- ═══════════════════════════════════════════════════════════════════
+-- CARC validation ([10.2.30])
+config.carc_verify_on_startup = true  -- Verify CARC signature before loading scripts
+
 -- Persistence file paths (relative to game root)
 -- ═══════════════════════════════════════════════════════════════════
 
@@ -195,10 +199,14 @@ function config.save_window_settings()
         "  window_height = %d,\n" ..
         "  fullscreen    = %s,\n" ..
         "  vsync         = %s,\n" ..
+        "  thumbnail_quality = %d,\n" ..
+        "  thumbnail_format  = %q,\n" ..
         "  window_title  = %q,\n" ..
         "}\n",
         config.window_width, config.window_height,
         tostring(config.fullscreen), tostring(config.vsync),
+        config.thumbnail_quality,
+        config.thumbnail_format,
         config.window_title or "Caesura"
     ))
     f:close()
@@ -241,6 +249,8 @@ function config.load_all()
         config.bgm_volume    = tonumber(data.bgm_volume)    or config.bgm_volume
         config.voice_volume  = tonumber(data.voice_volume)  or config.voice_volume
         config.se_volume     = tonumber(data.se_volume)     or config.se_volume
+        config.thumbnail_quality = tonumber(data.thumbnail_quality) or config.thumbnail_quality
+        config.thumbnail_format  = data.thumbnail_format or config.thumbnail_format
         config.window_width  = tonumber(data.window_width)  or config.window_width
         config.window_height = tonumber(data.window_height) or config.window_height
         config.fullscreen    = data.fullscreen
@@ -270,11 +280,15 @@ function config.save_all()
         "  window_height = %d,\n" ..
         "  fullscreen    = %s,\n" ..
         "  vsync         = %s,\n" ..
+        "  thumbnail_quality = %d,\n" ..
+        "  thumbnail_format  = %q,\n" ..
         "  window_title  = %q,\n" ..
         "}\n",
         config.bgm_volume, config.voice_volume, config.se_volume,
         config.window_width, config.window_height,
         tostring(config.fullscreen), tostring(config.vsync),
+        config.thumbnail_quality,
+        config.thumbnail_format,
         config.window_title or "Caesura"
     ))
     f:close()

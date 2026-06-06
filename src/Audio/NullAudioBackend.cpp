@@ -1,4 +1,4 @@
-﻿#include "NullAudioBackend.h"
+#include "NullAudioBackend.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -67,4 +67,9 @@ void  NullAudioBackend::fadeVolume(const char* /*bus*/, float /*targetVolume*/,
 
 const char* NullAudioBackend::getBackendName() const { return "NullAudio"; }
 
+
+// -- [10.2.27] SE per-handle (no-op stubs) -----------------------------------
+void NullAudioBackend::setSEVolume(unsigned int, float) {}
+float NullAudioBackend::getSEVolume(unsigned int) { return 0.0f; }
+void NullAudioBackend::stopSEHandle(unsigned int) {}
 } // namespace Caesura

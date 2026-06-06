@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — kag/commands/transition.lua
 --  Phase 4: KAG transition tag handlers — [trans], [move], [quake], [fade]
 --  Wires KAG tags to the GPU-backed transition.lua engine (crossfade/wipe/rule).
@@ -9,6 +9,106 @@ local CancelToken = require("kag.cancel_token")
 local Transition  = require("transition")
 local backend     = require("backend")
 local layers      = require("layers")
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [10.2.25] LUT (Look-Up Table) cache — one texture, progress uniform
+--  Pre-generate easing LUT textures; never create per-frame.
+--  Shader uses progress uniform + hardcoded easing to interpolate.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+local LUTCache = {
+    _textures = {},   -- easing_name → texture handle
+    _generated = false,
+}
+
+--- Pre-generate all LUT textures at init (called once from kag/init.lua)
+function LUTCache.pregen()
+    if LUTCache._generated then return end
+    -- Standard easing LUTs: 256x1 R8 textures
+    -- Each texel = precomputed easing(t/255)
+    local easings = { "linear", "ease_in", "ease_out", "ease_in_out",
+                      "cubic_in", "cubic_out", "cubic_in_out",
+                      "quart_in", "quart_out", "back_in", "back_out", "elastic_out" }
+    for _, name in ipairs(easings) do
+        local tex = backend.create_lut_texture and backend.create_lut_texture(name)
+        if tex then
+            LUTCache._textures[name] = tex
+        end
+    end
+    LUTCache._generated = true
+    print("[LUT] Pre-generated " .. #easings .. " easing LUT textures.")
+end
+
+--- Get LUT texture handle by easing name (cached, no per-frame creation)
+function LUTCache.get(name)
+    return LUTCache._textures[name or "linear"]
+end
+
+--- Release all LUT textures
+function LUTCache.release()
+    for name, tex in pairs(LUTCache._textures) do
+        if tex then backend.destroy_texture(tex) end
+    end
+    LUTCache._textures = {}
+    LUTCache._generated = false
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [10.2.41] Cubic Bezier easing — control point interpolation
+--  P0=(0,0), P1=(cp1x,cp1y), P2=(cp2x,cp2y), P3=(1,1)
+--  Evaluates Y at given X using de Casteljau / Newton-Raphson.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+local Bezier = {}
+
+--- Evaluate cubic bezier at parameter t
+--- cp1x,cp1y: first control point (relative to start 0,0)
+--- cp2x,cp2y: second control point (relative to end 1,1)
+--- Returns (x, y) at parameter t
+function Bezier.eval(cp1x, cp1y, cp2x, cp2y, t)
+    local u = 1 - t
+    local tt = t * t
+    local uu = u * u
+    local uuu = uu * u
+    local ttt = tt * t
+    local x = uuu * 0 + 3 * uu * t * cp1x + 3 * u * tt * cp2x + ttt * 1
+    local y = uuu * 0 + 3 * uu * t * cp1y + 3 * u * tt * cp2y + ttt * 1
+    return x, y
+end
+
+--- Solve bezier Y at given X using Newton-Raphson (8 iterations)
+function Bezier.solve_y(cp1x, cp1y, cp2x, cp2y, x)
+    local t = x  -- initial guess
+    for _ = 1, 8 do
+        local bx, by = Bezier.eval(cp1x, cp1y, cp2x, cp2y, t)
+        -- Derivative dx/dt
+        local u = 1 - t
+        local dx = 3 * u * u * cp1x + 6 * u * t * (cp2x - cp1x) + 3 * t * t * (1 - cp2x)
+        if math.abs(dx) < 0.0001 then break end
+        t = t - (bx - x) / dx
+        t = math.max(0, math.min(1, t))
+    end
+    local _, y = Bezier.eval(cp1x, cp1y, cp2x, cp2y, t)
+    return y
+end
+
+-- Preset bezier curves matching common CSS easing
+Bezier.PRESETS = {
+    ease        = { 0.25, 0.1, 0.25, 1.0 },
+    ["ease-in"] = { 0.42, 0.0, 1.0,  1.0 },
+    ["ease-out"]= { 0.0,  0.0, 0.58, 1.0 },
+    ["ease-in-out"] = { 0.42, 0.0, 0.58, 1.0 },
+    linear      = { 0.0, 0.0, 1.0, 1.0 },
+}
+
+--- Apply a named bezier preset to a progress value t
+function Bezier.apply(preset_name, t)
+    local p = Bezier.PRESETS[preset_name or "linear"]
+    if not p then return t end
+    return Bezier.solve_y(p[1], p[2], p[3], p[4], t)
+end
+
 
 local TransCommands = {}
 
@@ -272,5 +372,8 @@ function TransCommands.fade(ctx, params)
         end
     end
 end
+
+TransCommands.LUTCache = LUTCache
+TransCommands.Bezier = Bezier
 
 return TransCommands

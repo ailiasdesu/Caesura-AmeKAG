@@ -1,4 +1,4 @@
-﻿#include "SoLoudAudioEngine.h"
+#include "SoLoudAudioEngine.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>
@@ -358,6 +358,27 @@ void SoLoudAudioEngine::fadeVolume(const char* bus, float targetVolume, float fa
         m_soloud.fadeVolume(m_seBusHandle, targetVolume, fadeTime);
     }
     printf("[Audio] Bus %s fade to %.2f over %.2fs\n", bus, targetVolume, fadeTime);
+}
+
+
+// -- [10.2.27] Per-SE-handle volume control ---------------------------------
+
+void SoLoudAudioEngine::setSEVolume(unsigned int handle, float volume) {
+    if (!m_initialized || handle == 0) return;
+    m_soloud.setVolume(handle, volume);
+}
+
+float SoLoudAudioEngine::getSEVolume(unsigned int handle) {
+    if (!m_initialized || handle == 0) return 0.0f;
+    return m_soloud.getVolume(handle);
+}
+
+void SoLoudAudioEngine::stopSEHandle(unsigned int handle) {
+    if (!m_initialized || handle == 0) return;
+    m_soloud.stop(handle);
+    // Remove from active SE tracking
+    auto it = std::find(m_activeSE.begin(), m_activeSE.end(), handle);
+    if (it != m_activeSE.end()) m_activeSE.erase(it);
 }
 
 } // namespace Caesura

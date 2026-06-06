@@ -1,4 +1,4 @@
-﻿#include "TextureManager.h"
+#include "TextureManager.h"
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -53,6 +53,22 @@ void TextureManager::shutdown() {
 }
 
 // ---------------------------------------------------------------------------
+// [10.2.57] Dev/Release mode placeholder selection
+// ---------------------------------------------------------------------------
+
+void TextureManager::setDevMode(bool dev) {
+    if (m_devMode == dev) return;
+    m_devMode = dev;
+    if (bgfx::isValid(m_placeholderTex)) {
+        bgfx::destroy(m_placeholderTex);
+        m_placeholderTex = BGFX_INVALID_HANDLE;
+    }
+    buildCheckerboardTexture();
+    printf("[TextureManager] Placeholder mode: %s\n", dev ? "checkerboard (dev)" : "transparent (release)");
+}
+
+
+// ---------------------------------------------------------------------------
 // Placeholder texture -- 16x16 purple/black checkerboard
 // ---------------------------------------------------------------------------
 
@@ -61,16 +77,19 @@ bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
         return m_placeholderTex;
 
     const uint16_t size = 16;
-    const uint32_t pixels = size * size;  // RGBA8 = 4 * 16 * 16 bytes
     uint32_t data[size * size];
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            bool white = ((x / 4) + (y / 4)) % 2 == 0;
-            // Purple (0xFF8000FF) vs Black (0xFF000000)
-            data[y * size + x] = white ? 0xFF8000FFu : 0xFF000000u;
+    if (m_devMode) {
+        // Dev: purple/black checkerboard for visible debugging
+        for (int y = 0; y < size; ++y) {
+            for (int x = 0; x < size; ++x) {
+                bool white = ((x / 4) + (y / 4)) % 2 == 0;
+                data[y * size + x] = white ? 0xFF8000FFu : 0xFF000000u;
+            }
         }
+    } else {
+        // Release: fully transparent placeholder
+        for (int i = 0; i < size * size; ++i) data[i] = 0x00000000u;
     }
-
     const bgfx::Memory* mem = bgfx::copy(data, sizeof(data));
     m_placeholderTex = bgfx::createTexture2D(
         size, size, false, 1, bgfx::TextureFormat::RGBA8,
@@ -79,7 +98,7 @@ bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
     if (!bgfx::isValid(m_placeholderTex)) {
         fprintf(stderr, "[TextureManager] Failed to create placeholder texture.\n");
     } else {
-        printf("[TextureManager] Placeholder texture created (16x16 purple checkerboard).\n");
+        printf("[TextureManager] Placeholder texture created (16x16 %s).\n", m_devMode ? "checkerboard" : "transparent");
     }
     return m_placeholderTex;
 }

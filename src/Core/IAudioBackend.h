@@ -32,6 +32,11 @@ public:
     virtual unsigned int playSE3D(const std::string& file,
                                    float x, float y, float z) = 0;
     virtual void stopSE() = 0;
+    // [10.2.27] Per-SE-handle volume control
+    virtual void setSEVolume(unsigned int handle, float volume) = 0;
+    virtual float getSEVolume(unsigned int handle) = 0;
+    virtual void stopSEHandle(unsigned int handle) = 0;
+
 
     // -- 3D Audio ----------------------------------------------------------
     virtual void update3dListener(float posX, float posY, float posZ,

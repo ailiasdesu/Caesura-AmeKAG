@@ -1,4 +1,4 @@
-﻿-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — layers.lua
 --  Layer tree manager. Full implementation per spec [2.1].
 --  Each layer supports: z-order, blend mode, visibility, opacity, position,
@@ -668,6 +668,45 @@ function Layers.resize_layer(node, w, h)
     if node.rt then rtt.destroy(node.rt) end
     node.rt = rtt.create(node.w, node.h)
     Layers.mark_dirty(node)
+end
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [10.2.53] mark_dirty_with_transparency — recursive dirty marking
+--  When a layer has a blend mode with transparency, lower layers
+--  underneath may become visible. This marks the layer AND all
+--  layers beneath it in z-order as dirty for the affected region.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.mark_dirty_with_transparency(layer, rect)
+    if not layer then return end
+    rect = rect or { x = layer.x, y = layer.y, w = layer.w, h = layer.h }
+    layer.dirty = true
+    layer.dirty_rect = rect
+
+    -- Walk up to find all layers below this one in z-order
+    local parent = layer.parent
+    if not parent then return end
+
+    for _, sibling in ipairs(parent.children) do
+        if sibling == layer then break end  -- stop at/after current layer
+        if not sibling.visible then goto continue_sib end
+        -- Mark sibling as dirty in overlapping region
+        sibling.dirty = true
+        if not sibling.dirty_rect then
+            sibling.dirty_rect = { x = rect.x, y = rect.y, w = rect.w, h = rect.h }
+        else
+            -- Union the dirty rects
+            local dr = sibling.dirty_rect
+            local nx1 = math.min(dr.x, rect.x)
+            local ny1 = math.min(dr.y, rect.y)
+            local nx2 = math.max(dr.x + dr.w, rect.x + rect.w)
+            local ny2 = math.max(dr.y + dr.h, rect.y + rect.h)
+            dr.x, dr.y = nx1, ny1
+            dr.w, dr.h = nx2 - nx1, ny2 - ny1
+        end
+        ::continue_sib::
+    end
 end
 
 return Layers
