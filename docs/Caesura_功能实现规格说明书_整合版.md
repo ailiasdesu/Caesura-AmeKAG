@@ -36,7 +36,7 @@ Lua 256MB, 纹理 1GB, 音频 128MB(LRU 卸载)。对象池。显式 GC 点。
 
 ### 异步加载 ([10.2.32]
 
-createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[preload] 标签+过渡槽(转场资源预加载队列, 由 [trans] 触发时后台异步加载下一个场景所需纹理/音频, 加载完成前显示占位纹理)。
+createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[preload] 标签(语法: [preload type="texture|audio" storage="path1,path2" wait="true|false"], wait=true 阻塞至加载完成, wait=false 后台预加载首次使用可能显示占位)+过渡槽(转场资源预加载队列, 由 [trans] 触发时后台异步加载下一个场景所需纹理/音频, 加载完成前显示占位纹理)。
 
 ---
 
@@ -60,6 +60,9 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 ## [2.2] blend.lua + GLSL — 28 种混合模式 (详细公式清单见 Appendix D)
 ## [2.3] transition.lua + GLSL — Rule Image, progress+easing
 ### LUT 优化 ([10.2.25] — 单纹理+uniform, 禁止每帧创建
+
+**Rule Image**: 单通道 R8 纹理(或 RGB 取 R), 运行时拉伸到屏幕分辨率。progress 0->1 按 easing 采样。使用全局缓存纹理, 禁止每帧创建。
+
 ## [2.4] transform.lua + GLSL — 仿射变换, 4 种重采样
 ## [2.5] vfx.lua — Quake/Blur/Fade
 
@@ -94,7 +97,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ## [5.2] FreeType 矢量字体 — FontRenderer.h/.cpp
 ### 字体图集 TextureArray ([10.2.12] — 预分配 4 层 2048x2048 RGBA8, shader: texture2DArray
-### 动态扩容 ([10.2.23] — 4 层 >90% 时 增量扩容(新建第5+层, 保留原4层, 无需拷贝)。预分配 8 层(2048x2048 RGBA8, ~128MB)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 切换为 CJK 静态图集渲染(若字符在图集中), 否则降级为内置 8x16 位图+U+FFFD。与 [10.2.23] 统一。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。内置字体
+### 动态扩容 ([10.2.23] — 4 层 >90% 时 增量扩容(新建第5+层, 保留原4层, 无需拷贝)。预分配 8 层(2048x2048 RGBA8, ~128MB)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 优先从 CJK 静态图集渲染(Noto Sans CJK SC 子集), 若字符不在图集中则降级为内置 8x16 位图并显示 U+FFFD。此策略与 [10.2.54] 一致, 合并为一个条目。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。内置字体
 ### 文本布局引擎 ([10.2.7] — 自动换行/对齐(H/V)/行间距/中英混排/ruby(Ruby 注解规范: 注音默认居中对齐基底字符上方, 多字符基底逐字对应; 换行时注音跟随基底字符移至下一行; 参考 HTML ruby 标准)注音
 ### 文本批处理 ([10.2.26] — MessageLayerCache 缓存顶点缓冲, 单 submit, O(1) draw call
 
@@ -138,6 +141,19 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 ## [9.1] 设计目标 — AES-256-GCM + Ed25519 + zstd + mmap
 ## [9.2] 文件布局 — Header(64B) + Content + Index(encrypted) + Signature(64B) + PublicKey(32B)
 ### 签名版本号 ([10.2.10] — SHA-256(header||version||count||hashes), 防降级攻击
+
+**Index 区块布局** (AES-256-GCM 加密存储):
+```
+uint32_t num_files;
+struct FileEntry {
+  uint8_t path_hash[32];    // SHA-256(relative_path)
+  uint64_t offset;           // 文件数据在 Data 区块中的偏移
+  uint64_t size;             // 原始文件大小
+  uint8_t aes_key[32];      // 每文件独立 AES 密钥
+  uint8_t nonce[12];        // AES-GCM nonce
+  uint8_t tag[16];          // AES-GCM auth tag
+} entries[num_files];
+```
 ## [9.3] 密钥管理 — private.key(开发者), public.key(CARC 末尾)
 ### 公钥外置 ([10.2.28] — 引擎启动时读取 CARC 末尾公钥, 无需重编译
 
@@ -218,7 +234,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 ## [8.2] 输出
 
 - 控制台: 始终输出(Release Info+)。
-- 文件: logs/caesura_YYYY-MM-DD_HH-MM-SS.log, 10MB 轮转(保留5个)。
+- 文件: logs/caesura_YYYY-MM-DD_HH-MM-SS.log, 10MB 轮转(保留5个, 每次写入前检查日志大小, 超10MB触发轮转, 启动时不主动轮转)。
 - Dev socket: 端口 9229 结构化日志。
 
 ## [8.3] 格式
@@ -323,15 +339,15 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ### [10.2.2] 视频 PTS 同步
 
-**决策**: SoLoud::getAudioPosition -> PTS_audio。追赶/丢帧。窗口 +/-1 帧。 若音频流先于视频结束, 视频暂停在最后一帧。**用户手动跳过**: 鼠标点击或空格键触发 CancelToken 取消视频播放: 停止解码器, 释放视频图层纹理(归还 RTT 池), 立即继续脚本执行, 恢复 KAG 控制。CancelToken 回调在主线程执行, 等待解码线程退出(超时 500ms, 超时后强制终止)。
+**决策**: SoLoud::getAudioPosition -> PTS_audio。追赶/丢帧。窗口 = |PTS_audio - PTS_video| <= (1 / video_fps)。若超出且音频领先则丢帧, 若视频领先则等待(不阻塞主线程, 重试)。 若音频流先于视频结束, 视频暂停在最后一帧。**用户手动跳过**: 鼠标点击或空格键触发 CancelToken 取消视频播放: 停止解码器, 释放视频图层纹理(归还 RTT 池), 立即继续脚本执行, 恢复 KAG 控制。CancelToken 回调在主线程执行, 等待解码线程退出(超时 500ms, 超时后强制终止)。
 ### [10.2.3] 3D 安全性
 
-**决策**: 着色器模块 SPIR-V 字节码上限 64KB(单个着色器模块)。Lua 走 create_shader_from_file。Vertex 48B。调试构建启用着色器大小检查。__gc 元方法。
+**决策**: 着色器模块 SPIR-V 字节码上限 64KB(压缩后, 不含调试符号)。Release 构建必须 strip 调试信息。Lua 加载时检查大小, 超限抛错。Lua 走 create_shader_from_file。Vertex 48B。调试构建启用着色器大小检查。__gc 元方法。
 
 ### [10.2.4] 热重载恢复
 
 **决策**: 分级安全范围。C++ 资源不支持。handle 失效 -> INVALID_HANDLE。
-**热重载时正在运行的协程处理**: 终止所有活跃协程(先 CancelToken:cancel() 释放外部资源, 再 coroutine.close()。持有外部资源的协程注册 cancel 回调或 __close 元方法), 从上一存档点或标题页重新开始, 显示警告'脚本已热重载, 建议重新加载存档'。重载时 GameState 重置: call_stack 清空, tokens 重置, co 重新创建, tf 重置为{}。同时清空所有图层(layers 全部 [cl]), 清空 backlog, 取消所有活跃 CancelToken 和阻塞操作。sf/f 保留。
+**热重载时正在运行的协程处理**: 终止所有活跃协程(先遍历所有活跃协程的 CancelToken:cancel()(等待音频回调 max 100ms, 超时强制终止), 再 coroutine.close()。C++ 侧 RTT shared_ptr 在 bgfx::frame() 后延迟销毁。持有外部资源的协程注册 cancel 回调或 __close 元方法), 从上一存档点或标题页重新开始, 显示警告'脚本已热重载, 建议重新加载存档'。重载时 GameState 重置: call_stack 清空, tokens 重置, co 重新创建, tf 重置为{}。同时清空所有图层(layers 全部 [cl]), 清空 backlog, 取消所有活跃 CancelToken 和阻塞操作。sf/f 保留。
 ### [10.2.5] JSON 存档安全
 
 **决策**: 禁止 load()/loadstring()。json.decode() 仅纯数据。coroutine/audio 不保存。
@@ -359,7 +375,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 ### [10.2.11] 音频混合模型
 
 **决策**: 非阻塞(playbgm/playse/fadebgm) -> batch 帧末提交。阻塞(playvoice/waitsound) -> 直调。3D -> 直调。
-**音频直调与批量执行顺序保证**: 直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 禁止同一流混用。**P1** 混用检测: C++ 音频管理器维护 per-stream 状态: `first_op_mode`(None/Batch/Direct, 每帧初重置) + `has_executed_direct`。在 play_xxx 入口处立即检查: 若当前帧 first_op_mode 已锁定且与本次操作模式不同 → 冲突。处理策略: **Debug 模式**: Lua 抛错 `audio_mixed_mode`; **Release 模式**: 自动将所有操作转为 Direct 模式(降级, 完全禁用批量提交, 所有操作立即执行, 保证同一流内顺序), 记录一次警告日志。帧末提交后重置所有 per-stream 状态。禁止同一流混用。**P0**。若实现复杂度过高, 可退化为同一帧内所有音频统一直调, 删除批量提交。
+**音频直调与批量执行顺序保证**: 直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 禁止同一流混用。**P1** 混用检测: C++ 音频管理器维护 per-stream 状态: `first_op_mode`(None/Batch/Direct, 每帧初重置) + `has_executed_direct`。在 play_xxx 入口处立即检查: 若当前帧 first_op_mode 已锁定且与本次操作模式不同 → 冲突。处理策略: **Debug 模式**: Lua 抛错 `audio_mixed_mode`; **Release 模式**: 自动将所有操作转为 Direct 模式(降级, 完全禁用批量提交, 所有操作立即执行, 保证同一流内顺序), 记录一次警告日志。帧末提交后重置所有 per-stream 状态。禁止同一流混用。**P0**。若实现复杂度过高, 可退化为同一帧内所有音频统一直调, 删除批量提交。降级时记录 [WARN] Audio mode degraded to Direct 并暴露 kag.isAudioDirectOnly() 供脚本查询。
 ### [10.2.12] TextureArray 字体图集
 
 **决策**: 预分配 4 层 2048x2048 RGBA8。shader: texture2DArray。
@@ -391,7 +407,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ### [10.2.19] 存档缩略图配置(编码流程见 [10.2.59]
 
-**决策**: config: width/height/quality/max_size_kb。降级: 320x180 -> 160x90 -> 禁用。
+**决策**: config: width/height/quality(1-100, 默认80, 对应 libpng zlib 压缩级别, 100=无损)/max_size_kb。降级: 320x180 -> 160x90 -> 禁用。
 
 ### [10.2.20] 3D/RTT 池类型区分
 
@@ -407,7 +423,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ### [10.2.23] TextureArray 扩容
 
-**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 切换为 CJK 静态图集渲染(若字符在图集中), 否则降级为内置 8x16 位图+U+FFFD。与 [10.2.23] 统一。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。。8 层约 8000 CJK。
+**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 优先从 CJK 静态图集渲染(Noto Sans CJK SC 子集), 若字符不在图集中则降级为内置 8x16 位图并显示 U+FFFD。此策略与 [10.2.54] 一致, 合并为一个条目。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。。8 层约 8000 CJK。
 
 ### [10.2.24] FFmpeg/H.264 集成(P1, Beta 起默认 ON)
 
@@ -455,7 +471,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ### [10.2.35] i18n 深度集成
 
-**决策**: kag.ch/text 自动 _T 替换(转义: \_ 原样输出下划线, \% 原样输出百分号)。Backlog 存 key 实时翻译(保存 key+参数表副本, 显示时根据当前语言重新插值 %{key})。%{key} 插值。
+**决策**: kag.ch/text 自动 _T 替换(转义规则仅在 _T 内生效: \_ 输出下划线, \% 输出百分号。非翻译字符串不处理转义)(转义: \_ 原样输出下划线, \% 原样输出百分号)。Backlog 存 key 实时翻译(保存 key+参数表副本, 显示时根据当前语言重新插值 %{key})。%{key} 插值。
 
 ### [10.2.36] Lua 5.4 特性
 
@@ -472,7 +488,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 Alpha(20命令): text, ch, p, l, r, er, current, ruby, font, bg, fg, cl, image, playbgm, stopbgm, playse, stopse, playvoice, wait, jump, if_/else_/endif
 Beta(+15): trans, move, quake, fade, blur, playse3d, fadebgm, xfadebgm, save, load, link, call, return_, switch/case, eval
-1.0(+15共50): waitclick, waitsound, movie, preload, backlog, config, saveplace, loadplace, history, mode, label, end_, vp, freeimage, emb### [10.2.39] 错误界面策略
+1.0(+15共50): waitclick, waitsound, movie, preload, backlog, config, saveplace(保存当前场景路径+PC+tf+对话索引到临时槽位)/loadplace(恢复, 独立于存档), history, mode, label, end_, vp, freeimage, emb### [10.2.39] 错误界面策略
 
 **决策**: 硬编码几何+内置 8x16 位图字体(ASCII 32-126, 不支持的字符显示 U+FFFD �)。零外部依赖。Lua/IAssetProvider 失效仍可工作。bgfx 彻底故障时退化为 SDL_ShowSimpleMessageBox 显示错误文本。
 
@@ -484,7 +500,7 @@ Beta(+15): trans, move, quake, fade, blur, playse3d, fadebgm, xfadebgm, save, lo
 
 **典型场景预期**: 背景1层+立绘1层+文本层+BGM+SE = <8ms/frame(HD620); 转场动画 +2ms; 视频解码 +3ms。### [10.2.41] [move] 贝塞尔曲线数学定义
 
-B(t)=(1-t)^3*P0+3(1-t)^2*t*P1+3(1-t)*t^2*P2+t^3*P3. path params define P1,P2. arcrad for corner radius. **P1**.
+B(t)=(1-t)^3*P0+3(1-t)^2*t*P1+3(1-t)*t^2*P2+t^3*P3。P0=起点, P1/P2=控制点(相对于P0的像素偏移), P3=终点。time 参数指定动画时长(ms), 支持缓动函数(linear/ease-in/ease-out/ease-in-out)。. path params define P1,P2. arcrad for corner radius. **P1**.
 
 ---
 
@@ -504,9 +520,10 @@ migrations={[1]=fn1,...}. Chain: for v=schema..CURRENT-1: data=migrations[v](dat
 
 **决策**: spinlock -> 新 TextureArray -> 逐页拷贝 -> 旧 TextureArray 延迟销毁(下一帧 bgfx::destroy) -> 1-2 帧降级为 CJK 静态图集或内置位图。扩容仅在后台空闲帧执行。**P2**.
 
-### [10.2.45] Audio Mixed-Model Ordering Guarantee
+### [10.2.45] Audio Mixed-Model (见 [10.2.11])
 
-**决策**: 见 [10.2.11]。直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 同一帧内禁止混用。**P1**.
+**决策**: 参见 [10.2.11] 音频混合模型条目。本条目仅作交叉引用, 主规格在 [10.2.11]。
+
 ### [10.2.46] CARC Engine Self-Verification
 
 Engine embeds ENGINE_VERSION. CARC.version <= ENGINE_VERSION allowed. Binary checksum in signature verification (anti-tamper). **P1**.
@@ -537,7 +554,7 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 
 **决策**: kag.try(cmd_fn) 包裹所有命令执行。未捕获异常触发 C++ 错误界面: 显示脚本堆栈 + 当前 tokens 行号 + [R]etry [T]itle [Q]uit 三选项。Retry 重新执行当前 token, Title 回标题, Quit 退出引擎。错误界面使用硬编码几何+内置位图字体([10.2.39]。**P1**.
 
---- [Retry] 同一 token >3 次自动 Title。[Retry] 重新初始化命令全部状态, 新建 CancelToken。Retry 仅限幂等/可恢复命令(文本显示/图层操作/音频启停), 已部分执行的动画/转场禁用 Retry 改为自动 Title。**Title 崩溃保护**: 全局错误计数器, 若连续 Title 回退 3 次仍崩溃, fallback 到 SDL_ShowSimpleMessageBox(仅显示错误文本 + 退出按钮), 不再尝试恢复脚本。**P1**。
+--- [Retry] 同一 token >3 次自动 Title。[Retry] 重新初始化命令全部状态, 新建 CancelToken。Retry 仅对以下命令有效: text, ch, bg, fg, cl, image, playbgm, stopbgm, playse, stopse, setvolume, wait, if/else/endif, ruby, font, current。动画/转场(move/trans/quake/fade)若 Retry 时已部分执行, 自动 Title。同一 token 连续 3 次 Retry 失败自动 Title。(文本显示/图层操作/音频启停), 已部分执行的动画/转场禁用 Retry 改为自动 Title。**Title 崩溃保护**: 全局错误计数器, 若连续 Title 回退 3 次仍崩溃, fallback 到 SDL_ShowSimpleMessageBox(仅显示错误文本 + 退出按钮), 不再尝试恢复脚本。**P1**。
 ### [10.2.51] Lua 沙箱 Dev/Release 开关
 
 **决策**: --unsafe CLI 参数仅在开发构建中可用。Release 构建永久强制沙箱([10.2.47]。Dev 模式放宽 _ENV 白名单, 允许 require/dofile/loadfile。Release 模式严格限制, 任何绕过沙箱的尝试记录警告并拒绝执行。**P0**.
@@ -563,12 +580,9 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 **决策**: Alpha 阶段: ssert(is_main_thread()) 确保 RTT 操作仅在主线程。保留 spinlock 字段代码注释标记为多线程预留。Beta 阶段评估: 若引入后台加载线程, 激活 spinlock。当前不编译锁代码, 零开销。**P2**.
 
 ---
-### [10.2.57] 异步加载的即时回退策略
+### [10.2.57] 异步加载回退策略 (见 [10.2.32])
 
-**决策**: create_texture_async(path, callback): 后台线程完成 I/O 后通过 SDL_PushEvent 派发到主线程事件队列执行 callback([10.2.32]。若异步加载未完成但图层已请求渲染: Release 模式显示全透明占位(可配置显示'Loading...'提示), Dev 模式显示 32x32 紫黑棋盘格占位纹理 + 记录 [WARN] Texture async pending: path。加载完成后 callback 更新纹理句柄, 标记图层 dirty 触发重绘。preload 标签可在转场前预加载, 避免占位。**P1**.
-
----
-
+**决策**: 参见 [10.2.32] 异步加载+预加载条目。占位纹理: Dev 棋盘格, Release 全透明。加载完成回调标记图层 dirty 触发重绘。
 
 ### [10.2.58] 热重载后 C++ 句柄存活类型清单
 
@@ -609,7 +623,7 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 
 ### [10.2.63] 多 CARC 公钥管理 (链式信任模型, 认证有效期可由开发者配置)
 
-**决策**: 引擎信任主 CARC Ed25519 公钥(编译时通过 -DCAESURA_ROOT_PUBKEY 嵌入引擎二进制, 或从首个 CARC 固定偏移读取 32B 公钥启动签名链验证)。子 CARC 使用独立密钥, 其公钥由主公钥签发授权证书(含子公钥哈希+有效期+权限范围), **证书存储于主 CARC chain/ 目录**。验证: (1) 读子公钥(子CARC末尾32B) (2) 读主CARC chain/下对应证书 (3) 主公钥验证证书签名 (4) 比对证书内公钥哈希与末尾公钥 (5) 子公钥验签。**P0**。
+**决策**: 引擎信任主 CARC Ed25519 公钥(Alpha: 编译时嵌入(-DCAESURA_ROOT_PUBKEY=...)。Beta: 支持从首个 CARC 固定偏移读取, 需签名链验证。编译时嵌入更安全, 建议长期保留。)。子 CARC 使用独立密钥, 其公钥由主公钥签发授权证书(含子公钥哈希+有效期+权限范围), **证书存储于主 CARC chain/ 目录**。验证: (1) 读子公钥(子CARC末尾32B) (2) 读主CARC chain/下对应证书 (3) 主公钥验证证书签名 (4) 比对证书内公钥哈希与末尾公钥 (5) 子公钥验签。**P0**。
 **认证有效期策略**: 授权证书包含可选的 expiry 字段。开发者通过构建工具配置:
 - `expiry: "2028-12-31"` — 设定明确过期日期, 过期后拒绝加载并显示提示
 - `expiry: "none"` 或不填 — 证书永不过期, 适合需要长期流传的独立游戏和社团作品
