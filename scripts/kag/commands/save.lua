@@ -177,6 +177,9 @@ function SaveCommands.save(ctx, params)
     local tokenIdx  = ctx.token_index or 1
 
     local ok = KAG.save_game(slot, jsonStr, sceneName, tokenIdx, thumbnail)
+    -- Phase G8-U1: explicit GC collect after save
+    pcall(function() collectgarbage("collect") end)
+
     if ok then
         print("[SaveCmd] Saved to slot " .. slot .. " (" .. sceneName .. ")")
         -- Set save result flag for UI feedback

@@ -776,4 +776,26 @@ if next(System._config) == nil then
     end
 end
 
+
+-- ===========================================================================
+-- Phase G8-U1: Explicit GC hooks
+-- ===========================================================================
+
+--- System.collect_step(size) ? incremental GC step (size in KB)
+function System.collect_step(size)
+    collectgarbage("step", size or 10)
+end
+
+--- System.collect_full() ? full GC collect + audio cache cleanup
+function System.collect_full()
+    collectgarbage("collect")
+    -- Clear audio cache if Audio module available
+    pcall(function()
+        local Audio = require("audio")
+        if Audio and Audio.clear_cache then
+            Audio.clear_cache()
+        end
+    end)
+end
+
 return System

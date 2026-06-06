@@ -27,6 +27,30 @@
 
 namespace Caesura {
 
+// -- Phase G8-U1: lua_Alloc hook for per-allocation memory check ---------------
+// Checks lua_gc(L, LUA_GCCOUNT) after every Lua allocation.
+// Returns NULL on overflow to force a Lua allocation error.
+static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
+    lua_State* L = static_cast<lua_State*>(ud);
+    if (!L) {
+        if (nsize == 0) { free(ptr); }
+        else { return realloc(ptr, nsize); }
+        return nullptr;
+    }
+    int memKB = lua_gc(L, LUA_GCCOUNT, 0);
+    if (memKB > 256 * 1024 && nsize > osize) {
+        // Trigger emergency GC, then retry
+        lua_gc(L, LUA_GCCOLLECT, 0);
+        memKB = lua_gc(L, LUA_GCCOUNT, 0);
+        if (memKB > 256 * 1024) {
+            fprintf(stderr, "[Engine] Lua OOM: %dKB > 256MB limit\n", memKB);
+            return nullptr; // force allocation error
+        }
+    }
+    if (nsize == 0) { free(ptr); return nullptr; }
+    return realloc(ptr, nsize);
+}
+
 Engine::Engine()
     : m_lua(std::make_unique<LuaManager>())
     , m_inputRouter(std::make_unique<InputRouter>())
@@ -100,6 +124,9 @@ bool Engine::init(const char* title, int width, int height) {
         return false;
     }
 
+    // Phase G8-U1: install lua_Alloc hook for memory monitoring
+    lua_setallocf(m_lua->state(), s_luaAllocFn, m_lua->state());
+
     BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
 
     // -- Phase 8.1: Initialize HotReload for scripts/ directory -----------
@@ -126,6 +153,35 @@ void Engine::run() {
 
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
+
+        // -- Phase G8-U1: Lua memory budget check (every frame) ---------------
+        lua_State* Lgc = m_lua->state();
+        if (Lgc) {
+            int memKB = lua_gc(Lgc, LUA_GCCOUNT, 0);
+            if (memKB > 204 * 1024) {  // 80% = 204MB
+                lua_gc(Lgc, LUA_GCSTEP, 50);
+            }
+            if (memKB > 244 * 1024) {  // 95% = 244MB
+                lua_gc(Lgc, LUA_GCCOLLECT, 0);
+                lua_getglobal(Lgc, "System");
+                if (lua_istable(Lgc, -1)) {
+                    lua_getfield(Lgc, -1, "collect_full");
+                    if (lua_isfunction(Lgc, -1)) lua_pcall(Lgc, 0, 0, 0);
+                    else lua_pop(Lgc, 1);
+                }
+                lua_pop(Lgc, 1);
+            }
+            if (memKB > 256 * 1024) {  // 100% = 256MB
+                fprintf(stderr, "[Engine] FATAL: Lua memory exceeded 256MB\n");
+                handleFatalError("Lua OOM", "Memory exceeded 256MB limit");
+            }
+            // 300-frame periodic GC step
+            m_gcFrameCounter++;
+            if (m_gcFrameCounter >= 300) {
+                m_gcFrameCounter = 0;
+                lua_gc(Lgc, LUA_GCSTEP, 10);
+            }
+        }
 
         GpuQuality gpuQ = m_gpuMonitor->update(static_cast<double>(dt));
 

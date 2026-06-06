@@ -95,6 +95,9 @@ function TransCommands.trans(ctx, params)
         Transition.tick(dt)
     end
 
+    -- Phase G8-U1: explicit GC step after transition
+    pcall(function() collectgarbage("step", 20) end)
+
     -- Cleanup
     if ct.cancelled then
         Transition.cancel()

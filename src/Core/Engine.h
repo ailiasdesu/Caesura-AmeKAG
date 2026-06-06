@@ -55,6 +55,10 @@ private:
     // Audio voice-complete tracking (no polling — detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;
 
+    // -- Phase G8-U1: Lua memory management
+    int  m_gcFrameCounter = 0;
+    static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);
+
     // Owned backend instances (engine owns, BackendRegistry holds raw ptrs)
     std::unique_ptr<IRenderDevice>     m_renderDevice;
     std::unique_ptr<IAudioBackend>     m_audioBackend;
