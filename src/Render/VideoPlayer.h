@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <bgfx/bgfx.h>
 
 namespace Caesura {
@@ -65,6 +66,7 @@ public:
 private:
     struct VideoState {
         void*  plm = nullptr;             // plm_t* (opaque to avoid header dependency)
+        bool   useFFmpeg = false;         // true when FFmpeg path is active
         bgfx::TextureHandle texture = BGFX_INVALID_HANDLE;
         int    width  = 0;
         int    height = 0;
@@ -72,6 +74,17 @@ private:
         bool   playing = true;
         bool   ended   = false;
         bool   hasFrame = false;
+
+#ifdef CAESURA_VIDEO_FFMPEG
+        // FFmpeg handles (void* to avoid leaking headers into every TU)
+        void*  avFormat = nullptr;        // AVFormatContext*
+        void*  avCodec  = nullptr;        // AVCodecContext*
+        void*  avFrame  = nullptr;        // AVFrame*
+        void*  avFrameRGB = nullptr;      // AVFrame* (RGBA)
+        void*  swsCtx   = nullptr;        // SwsContext*
+        int    videoStreamIndex = -1;
+        std::vector<uint8_t> rgbaBuffer;  // pre-allocated RGBA buffer
+#endif
     };
 
     VideoState* find(VideoHandle handle);

@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -25,6 +25,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }
+
 
     // Script directory discovery (3-level fallback)
     std::string scriptDir = "scripts/";
@@ -73,6 +74,22 @@ if (!engine.lua().loadScript((scriptDir + "game_logic.lua").c_str())) {
         fprintf(stderr, "Warning: Failed to load game_logic.lua.\n");
         return 1;
     }
+
+    // Push _CAESURA_CONFIG global for sandbox to read
+    lua_getglobal(L, "config");  // config table loaded by config.lua
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "dev_mode");
+        bool devMode = lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        
+        lua_newtable(L);
+        lua_pushboolean(L, devMode ? 1 : 0);
+        lua_setfield(L, -2, "dev_mode");
+        lua_setglobal(L, "_CAESURA_CONFIG");
+        printf("[main] _CAESURA_CONFIG.dev_mode = %s\n", devMode ? "true" : "false");
+    }
+    lua_pop(L, 1);
+
 
     // C3+W8: lockdown script env after ALL scripts are preloaded
     engine.lua().lockdownScriptEnv();

@@ -1,4 +1,4 @@
--- ═══════════════════════════════════════════════════════════════════════════
+﻿-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — config.lua
 --  Engine configuration and backend selection.
 --  Spec [0.4]: Uses BackendFactory to create unified backend proxy.
@@ -6,7 +6,8 @@
 --  Loaded BEFORE kag/init.lua and game_logic.lua.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-local config = {}
+config = {}
+config.dev_mode = true  -- true = dev mode (lax sandbox), false = Release (strict sandbox)
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Backend Selection (spec [0.4] factory pattern)

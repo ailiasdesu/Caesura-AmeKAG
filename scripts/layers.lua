@@ -173,6 +173,20 @@ function Layers.find(pred)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
+--  Layers.get(layer_name) → LayerNode | nil
+--    Look up a layer by its name field (set at construction).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.get(layer_name)
+    if not layer_name then return nil end
+    for _, node in pairs(layerMap) do
+        if node.name == layer_name then return node end
+    end
+    return nil
+end
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Layers.forEach(fn) — iterate all layers
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -441,8 +455,10 @@ function Layers.render()
     local function renderNode(node, parent_wx, parent_wy)
         if not node or not node.visible then return end
 
-        local wx = parent_wx + (node.x or 0)
-        local wy = parent_wy + (node.y or 0)
+        local use_x = (node.pos_x ~= nil) and node.pos_x or node.x
+        local use_y = (node.pos_y ~= nil) and node.pos_y or node.y
+        local wx = parent_wx + (use_x or 0)
+        local wy = parent_wy + (use_y or 0)
 
         -- apply quake / shake offsets
         local qx, qy = 0, 0
@@ -473,8 +489,8 @@ function Layers.render()
                 h          = node.h or 0,
                 blend_mode = node.blend_mode or "alpha",
                 opacity    = node.opacity or 255,
-                scaleX     = node.scaleX or 1.0,
-                scaleY     = node.scaleY or 1.0,
+                scaleX     = node.scale or node.scaleX or 1.0,
+                scaleY     = node.scale or node.scaleY or 1.0,
                 rotation   = node.rotation or 0,
                 clipX      = node.clipX,
                 clipY      = node.clipY,
@@ -581,6 +597,53 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Layers.resize_layer(node, w, h) — resize and reallocate RTT
 -- ═══════════════════════════════════════════════════════════════════════════
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Layers.set_position(layer_name, x, y, scale, unit)
+--    Set layer position. x,y are NDC [0-1] by default, or pixel when
+--    unit="px" (assumes 1280×720 reference resolution).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.set_position(layer_name, x, y, scale, unit)
+    if unit == "px" then
+        x = x / 1280
+        y = y / 720
+    end
+    local l = Layers.get(layer_name)
+    if l then
+        l.pos_x = x; l.pos_y = y; l.scale = scale or 1.0
+        Layers.mark_dirty(l)
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Layers.set_options(layer_name, opts)
+--    Batch-set layer options: opacity (0.0-1.0), visible (bool), blend (string).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.set_options(layer_name, opts)
+    local l = Layers.get(layer_name)
+    if not l then return end
+    if opts.opacity then
+        local op = tonumber(opts.opacity)
+        if op then
+            -- opacity in [0.0, 1.0] range from KAG
+            local a = math.max(0.0, math.min(1.0, op))
+            l.opacity = math.floor(a * 255)
+            l.alpha = a
+        end
+    end
+    if opts.visible ~= nil then
+        if l.visible ~= opts.visible then
+            l.visible = opts.visible
+        end
+    end
+    if opts.blend then
+        l.blend_mode = opts.blend
+    end
+    Layers.mark_dirty(l)
+end
 
 function Layers.resize_layer(node, w, h)
     if not node then return end

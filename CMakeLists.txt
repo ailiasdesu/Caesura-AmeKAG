@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -228,6 +228,15 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     "$<TARGET_FILE_DIR:${PROJECT_NAME}>/scripts"
     COMMENT "Copying scripts to output directory..."
 )
+
+# -- FFmpeg video decoding (optional) ----------------------------------------
+option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" OFF)
+if(CAESURA_VIDEO_FFMPEG)
+    find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat swscale avutil)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 

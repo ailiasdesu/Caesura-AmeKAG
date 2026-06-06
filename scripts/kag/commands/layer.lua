@@ -155,4 +155,43 @@ function LayerCommands.image(ctx, params)
     ctx.layers[layerName] = file
 end
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [position layer="fg0" x=0.5 y=0.3 scale=1.0 unit="ndc"]
+--  Set a layer's position. x,y in NDC [0-1] unless unit="px".
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function LayerCommands.position(ctx, params)
+    local layerName = params.layer or "fg"
+    local x = tonumber(params.x) or 0
+    local y = tonumber(params.y) or 0
+    local scale = tonumber(params.scale) or 1.0
+    local unit = params.unit or "ndc"
+    layers.set_position(layerName, x, y, scale, unit)
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [layopt layer="fg0" opacity=0.8 visible=true blend="multiply"]
+--  Batch-set layer visual options.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function LayerCommands.layopt(ctx, params)
+    local layerName = params.layer or "fg"
+    local opts = {}
+    if params.opacity then
+        opts.opacity = tonumber(params.opacity)
+    end
+    if params.visible ~= nil then
+        if type(params.visible) == "string" then
+            opts.visible = (params.visible == "true")
+        else
+            opts.visible = params.visible
+        end
+    end
+    if params.blend then
+        opts.blend = params.blend
+    end
+    layers.set_options(layerName, opts)
+end
+
 return LayerCommands
