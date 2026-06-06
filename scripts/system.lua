@@ -32,6 +32,22 @@ local function escape_string(s)
 end
 
 -- ===========================================================================
+-- ===========================================================================
+-- ===========================================================================
+-- table_deep_copy(t) -> table -- recursive deep copy (no metatables)
+-- ===========================================================================
+local function table_deep_copy(orig, copies)
+    copies = copies or {}
+    if type(orig) ~= "table" then return orig end
+    if copies[orig] then return copies[orig] end
+    local copy = {}
+    copies[orig] = copy
+    for k, v in next, orig do
+        copy[table_deep_copy(k, copies)] = table_deep_copy(v, copies)
+    end
+    return copy
+end
+
 -- serialize_value(v, indent) -> string
 -- Handles nil, boolean, number, string, table (recursive).
 -- ===========================================================================
@@ -506,21 +522,7 @@ function System._load_from_file(filename, ctx)
     return true
 end
 
--- ===========================================================================
--- ===========================================================================
--- table_deep_copy(t) -> table -- recursive deep copy (no metatables)
--- ===========================================================================
-local function table_deep_copy(orig, copies)
-    copies = copies or {}
-    if type(orig) ~= "table" then return orig end
-    if copies[orig] then return copies[orig] end
-    local copy = {}
-    copies[orig] = copy
-    for k, v in next, orig do
-        copy[table_deep_copy(k, copies)] = table_deep_copy(v, copies)
-    end
-    return copy
-end
+
 
 -- Saveplace / Loadplace -- in-memory scene bookmark
 -- Spec [10.2.38]: independent temporary slot, no disk writes.

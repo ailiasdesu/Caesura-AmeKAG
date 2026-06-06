@@ -33,6 +33,8 @@ local save_cmds  = require("kag.commands.save")
 -- P1 extensions
 local gallery    = require("gallery")
 local music_room = require("music_room")
+local pool       = require("pool")
+
 local i18n       = require("i18n")
 local settings   = require("settings")
 

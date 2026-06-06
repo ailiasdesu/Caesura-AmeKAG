@@ -11,6 +11,7 @@
 
 local backend   = require("backend")
 local rtt       = require("rtt")
+local pool       = require("pool")
 local blend_lib = require("blend")
 
 local Layers = {}
