@@ -1,4 +1,4 @@
-﻿-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — config.lua
 --  Engine configuration and backend selection.
 --  Spec [0.4]: Uses BackendFactory to create unified backend proxy.
@@ -319,7 +319,13 @@ local function apply()
     backend.audio("set_bus_volume", "voice", config.voice_volume)
     backend.audio("set_bus_volume", "se",    config.se_volume)
 
-    print(string.format(
+        -- Initialize particle system
+    pcall(function()
+        VFX.particles_init()
+        print("[config] Particle system initialized.")
+    end)
+
+	print(string.format(
         "[config] Backends ready: render=%s audio=%s platform=%s",
         config.render_backend, config.audio_backend, config.platform_backend
     ))

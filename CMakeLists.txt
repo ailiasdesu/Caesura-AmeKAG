@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -92,6 +92,7 @@ set(ENGINE_SOURCES
     src/Scripting/KAGBinding.cpp
     src/Scripting/GameState.cpp
     src/Scripting/RenderBinding.cpp
+    src/Scripting/VFXBinding.cpp
     src/Scripting/DevCoreBinding.cpp
     src/Scripting/DebugBinding.cpp
     src/Scripting/UnifiedBinding.cpp
@@ -140,6 +141,7 @@ set(ENGINE_HEADERS
     src/Scripting/KAGBinding.h
     src/Scripting/GameState.h
     src/Scripting/RenderBinding.h
+    src/Scripting/VFXBinding.h
     src/Scripting/DevCoreBinding.h
     src/Scripting/DebugBinding.h
     src/Scripting/UnifiedBinding.h

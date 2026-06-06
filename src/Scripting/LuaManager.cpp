@@ -1,4 +1,4 @@
-﻿ extern "C" {
+ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -9,6 +9,7 @@
 #include "DevCoreBinding.h"
 #include "DebugBinding.h"
 #include "UnifiedBinding.h"
+#include "VFXBinding.h"
 #include "../System/SaveBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
@@ -142,6 +143,7 @@ void LuaManager::registerModules() {
     registerDebugBinding(m_L);
     registerUnifiedBackendBinding(m_L);
     registerSaveBinding(m_L);
+    registerVFXBinding(m_L);
 
     printf("[Lua] Engine (backend selection) module registered.\n");
     printf("[Lua] KAG module registered (32 APIs, via BackendRegistry).\n");

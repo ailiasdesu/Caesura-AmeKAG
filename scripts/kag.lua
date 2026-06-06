@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — kag.lua
 --  KAG command handler table. The scheduler dispatches kag[cmd](ctx, params)
 --  for every non-flow-control tag in the token stream.
@@ -99,6 +99,16 @@ for name, handler in pairs(resource_cmds) do
     KAG[name] = handler
 end
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  VFX commands — [vfx type="particle|quake|shake|flash|fade|blur|stop"]
+--  Loaded from kag/commands/vfx.lua, wired to vfx.lua + particle system.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+local vfx_cmds = require("kag.commands.vfx")
+for name, handler in pairs(vfx_cmds) do
+    KAG[name] = handler
+end
 --  Legacy aliases — backward compatibility
 -- ═══════════════════════════════════════════════════════════════════════════
 

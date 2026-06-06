@@ -5,6 +5,7 @@ extern "C" {
 #include "UnifiedBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
+#include "../Scripting/VFXBinding.h"
 #include <cstdio>
 #include <cstring>
 
@@ -50,11 +51,12 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) — ALL render commands delegate to Render table
+//  b:render(cmd, ...) — render → Render, particles → VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
     const char* cmd = luaL_checkstring(L, 1);
+    // -- Render table commands
     static const struct { const char* cmd; const char* func; } map[] = {
         {"create_viewport","create_viewport"}, {"destroy_viewport","destroy_viewport"},
         {"draw_viewport","draw_viewport"}, {"fill_viewport","fill_viewport"},
@@ -73,6 +75,22 @@ static int lua_Backend_render(lua_State* L) {
         if (strcmp(cmd, m->cmd) == 0) {
             lua_remove(L, 1);
             return delegateToGlobalFunc(L, "Render", m->func);
+        }
+    }
+    // -- VFX table commands (particles)
+    static const struct { const char* cmd; const char* func; } vfxMap[] = {
+        {"particles_init","particles_init"},{"particles_shutdown","particles_shutdown"},
+        {"particles_create_emitter","particles_create_emitter"},
+        {"particles_destroy_emitter","particles_destroy_emitter"},
+        {"particles_emit","particles_emit"},{"particles_update","particles_update"},
+        {"particles_render","particles_render"},{"particles_alive_count","particles_alive_count"},
+        {"particles_clear","particles_clear"},{"begin_particles","begin_particles"},
+        {nullptr,nullptr}
+    };
+    for (auto* m = vfxMap; m->cmd; m++) {
+        if (strcmp(cmd, m->cmd) == 0) {
+            lua_remove(L, 1);
+            return delegateToGlobalFunc(L, "VFX", m->func);
         }
     }
     lua_pushnil(L);
