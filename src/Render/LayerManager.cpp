@@ -114,21 +114,18 @@ void LayerManager::markDirty(LayerType t, uint16_t x, uint16_t y,
     m_dirtyRects[static_cast<uint8_t>(t)].merge(r);
 }
 
-void LayerManager::markDirtyWithTransparency(LayerType t,
-                                              uint16_t x, uint16_t y,
-                                              uint16_t w, uint16_t h,
-                                              bool hasAlpha) {
-    // If the dirty region has transparency, the layers behind it are also
-    // revealed and need to be redrawn. Mark all layers *below* this one
-    // with the same region.
-    uint8_t idx = static_cast<uint8_t>(t);
+void LayerManager::markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y,
+                                              uint16_t w, uint16_t h) {
+    int idx = static_cast<int>(t);
+    if (idx < 0 || idx >= COUNT) return;
+
+    // Mark the layer itself
     markDirty(t, x, y, w, h);
 
-    if (hasAlpha) {
-        // Dirty layers below this one so the revealed content is redrawn
-        for (int i = static_cast<int>(idx) - 1; i >= 0; --i) {
-            m_dirtyRects[i].merge({x, y, w, h});
-        }
+    // Recursively mark layers BELOW (lower Z-order = smaller index)
+    // because transparency reveals what's underneath
+    for (int i = idx - 1; i >= 0; --i) {
+        markDirty(static_cast<LayerType>(i), x, y, w, h);
     }
 }
 

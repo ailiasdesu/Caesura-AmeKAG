@@ -31,10 +31,10 @@ add_executable(${TOOL_NAME}
 target_include_directories(${TOOL_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/external/ed25519
-    ${CMAKE_SOURCE_DIR}${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
+    ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(${TOOL_NAME} PRIVATE bcrypt miniz)
+target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
 
 target_compile_definitions(${TOOL_NAME} PRIVATE
     _CRT_SECURE_NO_WARNINGS

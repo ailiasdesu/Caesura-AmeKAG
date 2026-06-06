@@ -74,7 +74,7 @@ public:
     bool isInitialized() const { return m_initialized; }
 
     // -- Glyph lookup ------------------------------------------------------
-    FontGlyph getGlyph(char32_t codepoint) const;
+    FontGlyph getGlyph(char32_t codepoint);
 
     // -- Texture atlas access ----------------------------------------------
     bgfx::TextureHandle atlas() const { return m_atlas; }

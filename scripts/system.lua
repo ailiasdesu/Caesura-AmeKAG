@@ -481,23 +481,52 @@ function System._load_from_file(filename, ctx)
 end
 
 -- ===========================================================================
--- Saveplace / Loadplace -- Quick save/load (slot 0) -- Spec [4.2]
 -- ===========================================================================
-
---- System.saveplace(ctx) -- quick save to slot 0
-function System.saveplace(ctx)
-    System.save(0, ctx)
-    print("[System] Quick saved.")
+-- table_deep_copy(t) -> table -- recursive deep copy (no metatables)
+-- ===========================================================================
+local function table_deep_copy(orig, copies)
+    copies = copies or {}
+    if type(orig) ~= "table" then return orig end
+    if copies[orig] then return copies[orig] end
+    local copy = {}
+    copies[orig] = copy
+    for k, v in next, orig do
+        copy[table_deep_copy(k, copies)] = table_deep_copy(v, copies)
+    end
+    return copy
 end
 
---- System.loadplace(ctx) -- quick load from slot 0
+-- Saveplace / Loadplace -- in-memory scene bookmark
+-- Spec [10.2.38]: independent temporary slot, no disk writes.
+-- ===========================================================================
+
+System._placeData = nil
+
+--- System.saveplace(ctx) -- save scene bookmark (in-memory only)
+function System.saveplace(ctx)
+    System._placeData = {
+        label = ctx.current_label,
+        pc = ctx.pc,
+        tf = ctx.tf and table_deep_copy(ctx.tf) or {},
+        dialog_index = ctx.dialog_index,
+        layers = ctx.layers,  -- reference is fine
+    }
+    print("[System] Place saved (temporary bookmark).")
+end
+
+--- System.loadplace(ctx) -- restore scene bookmark from memory
 function System.loadplace(ctx)
-    if System.load(0, ctx) then
-        print("[System] Quick loaded.")
-        return true
+    if not System._placeData then
+        print("[System] No place bookmark found.")
+        return false
     end
-    print("[System] No quick save found.")
-    return false
+    local pd = System._placeData
+    ctx.current_label = pd.label
+    ctx.pc = pd.pc
+    ctx.tf = pd.tf
+    ctx.dialog_index = pd.dialog_index
+    print("[System] Place loaded.")
+    return true
 end
 
 --- System.quick_save(ctx) -- alias for saveplace (backward compat)

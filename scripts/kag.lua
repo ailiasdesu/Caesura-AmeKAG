@@ -55,6 +55,18 @@ for name, handler in pairs(system_cmds) do
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
+--  Saveplace / Loadplace — in-memory scene bookmarks
+--  Spec [10.2.38]: independent of save system, no disk writes.
+--  Wired to system.lua System.saveplace/loadplace.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+do
+    local System = require("system")
+    KAG.saveplace = function(ctx, params) System.saveplace(ctx) end
+    KAG.loadplace = function(ctx, params) System.loadplace(ctx) end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Transition commands — [trans], [move], [quake], [fade]
 --  Loaded from kag/commands/transition.lua, wired to GPU transition engine.
 -- ═══════════════════════════════════════════════════════════════════════════

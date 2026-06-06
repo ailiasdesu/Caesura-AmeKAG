@@ -217,12 +217,27 @@ bool FontRenderer::ensureGlyph(char32_t cp) {
 // Glyph lookup
 // ---------------------------------------------------------------------------
 
-FontGlyph FontRenderer::getGlyph(char32_t codepoint) const {
+FontGlyph FontRenderer::getGlyph(char32_t codepoint) {
     auto it = m_cache.find(codepoint);
     if (it != m_cache.end())
         return it->second;
-    FontGlyph fallback{};
-    return fallback;
+
+    // Try lazy rasterize for CJK / uncached glyphs
+    if (rasterizeGlyph(codepoint)) {
+        it = m_cache.find(codepoint);
+        if (it != m_cache.end())
+            return it->second;
+    }
+
+    // Fallback to U+FFFD (REPLACEMENT CHARACTER)
+    if (codepoint != 0xFFFD) {
+        return getGlyph(0xFFFD);
+    }
+
+    // Absolute last resort: 8px advance empty glyph (no texture)
+    FontGlyph fb{};
+    fb.advance = 8;
+    return fb;
 }
 
 // ---------------------------------------------------------------------------

@@ -116,7 +116,7 @@ public:
     // has partial transparency, extends the dirty rect to include what
     // might be revealed behind it.
     void markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y,
-                                   uint16_t w, uint16_t h, bool hasAlpha);
+                                   uint16_t w, uint16_t h);
 
     // Merge per-layer dirty rects and decide scissor vs full-frame.
     // Sets bgfx scissor if total dirty area < 75% of frame.
