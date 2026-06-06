@@ -177,7 +177,7 @@ void ErrorUI::renderLevel1(
     uint8_t green = 0x0A;
 
     bgfx::dbgTextPrintf(0, 0, 0x4F, "========================================");
-    bgfx::dbgTextPrintf(0, 1, 0x4F, "  CAESURA ENGINE — FATAL ERROR");
+    bgfx::dbgTextPrintf(0, 1, 0x4F, "  CAESURA ENGINE -- FATAL ERROR");
     bgfx::dbgTextPrintf(0, 2, 0x4F, "========================================");
 
     int row = 4;
@@ -220,9 +220,9 @@ void ErrorUI::renderLevel1(
     }
 
     row += 2;
-    bgfx::dbgTextPrintf(0, row++, green, "  [R] Retry  — Reload and retry the current script");
-    bgfx::dbgTextPrintf(0, row++, green, "  [T] Title  — Return to title screen");
-    bgfx::dbgTextPrintf(0, row++, green, "  [Q] Quit   — Exit the engine (Esc)");
+    bgfx::dbgTextPrintf(0, row++, green, "  [R] Retry  -- Reload and retry the current script");
+    bgfx::dbgTextPrintf(0, row++, green, "  [T] Title  -- Return to title screen");
+    bgfx::dbgTextPrintf(0, row++, green, "  [Q] Quit   -- Exit the engine (Esc)");
 }
 
 ErrorAction ErrorUI::showFallback(
