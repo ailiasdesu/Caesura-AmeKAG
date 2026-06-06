@@ -1,4 +1,4 @@
--- =============================================================================
+﻿-- =============================================================================
 --  Caesura (AmeKAG) — tokenizer.lua (simplified grammar)
 -- =============================================================================
 
@@ -24,7 +24,7 @@ local param   = Ct(C(ident) * space * "=" * space * (qval + uval))
 -- Command body: ["cmd", name, {{key,val},...}]
 local cmd_body = Ct(Cc("cmd") * C(ident) * space * Ct(param * space)^0)
 -- Text body: ["text", content]
-local text_body = Ct(Cc("text") * C((1 - S("[") - P("\r") * P("\n"))^1))
+local text_body = Ct(Cc("text") * C((1 - S("[\r\n"))^1))
 local cmd_pat  = P("[") * space * cmd_body * space * P("]")
 
 -- Skip: whitespace (1+) or comment (; ... optional newline), repeated

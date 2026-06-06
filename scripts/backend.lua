@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) -- backend.lua
 --  Spec [0.4]: Unified C++ backend proxy.
 --  Resolution order: 1. _CAESURA_BACKEND  2. direct KAG/Render/DevCore
@@ -350,5 +350,20 @@ function Backend.clear_particles()
 end
 
 
+-- ══════════════════════════════════════════════════════
+-- 异步加载 API (G11-U3)
+-- ══════════════════════════════════════════════════════
+
+--- 异步加载纹理 (立即返回 request_id)
+function Backend.load_texture_async(path)
+    local b = get_backend()
+    if b then return b.render("load_texture_async", path) end
+end
+
+--- 取消所有异步加载
+function Backend.cancel_async_loads()
+    local b = get_backend()
+    if b then return b.render("cancel_async_loads") end
+end
 return Backend
 

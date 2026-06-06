@@ -20,11 +20,9 @@ CompositeShaderCache& CompositeShaderCache::instance() {
 void CompositeShaderCache::init() {
     if (m_initialized) return;
 
-    precompileCommon();
-
     m_initialized = true;
-    printf("[ShaderCache] Initialized with %zu precompiled variants (max %zu).\n",
-           m_cache.size(), MAX_ENTRIES);
+    printf("[ShaderCache] Initialized (max %zu). Programs registered by BgfxRenderDevice.\\n",
+           MAX_ENTRIES);
 }
 
 void CompositeShaderCache::shutdown() {

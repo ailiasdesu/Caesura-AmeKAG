@@ -6,6 +6,7 @@
 #include "../Core/BackendRegistry.h"
 #include "../Render/IRenderDevice.h"
 #include "../Render/BgfxRenderDevice.h"
+#include "../Resource/AsyncLoader.h"
 #include "../Render/TextureManager.h"
 #include <bgfx/bgfx.h>
 #include <cstdio>
@@ -398,6 +399,23 @@ static int lua_Render_resize(lua_State* L) {
     return 1;
 }
 
+// -- Render.load_texture_async(path) ----------------------------------------
+
+static int lua_Render_load_texture_async(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    int id = AsyncLoader::instance().enqueue(path, "texture");
+    lua_pushinteger(L, id);
+    return 1;
+}
+
+// -- Render.cancel_async_loads() --------------------------------------------
+
+static int lua_Render_cancel_async_loads(lua_State* L) {
+    AsyncLoader::instance().cancelAll();
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // -- Video placeholders -----------------------------------------------------
 
 static int lua_Render_video_play(lua_State* L) {
@@ -478,7 +496,8 @@ static const luaL_Reg render_functions[] = {
     { "resize",             lua_Render_resize             },
     { "is_valid_handle",    lua_Render_is_valid_handle   },
     { "invalidate_handles", lua_Render_invalidate_handles },
-    { "video_play",         lua_Render_video_play         },
+    { "load_texture_async",  lua_Render_load_texture_async  },
+    { "cancel_async_loads",  lua_Render_cancel_async_loads  },
     { "video_stop",         lua_Render_video_stop         },
     { "video_update",       lua_Render_video_update       },
     { "video_get_texture",  lua_Render_video_get_texture  },

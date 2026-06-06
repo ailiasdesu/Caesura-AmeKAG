@@ -1,4 +1,4 @@
-﻿ #include "BgfxRenderDevice.h"
+ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
@@ -201,6 +201,7 @@ const char* BgfxRenderDevice::getBackendName() const {
 }
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
+    // [10.2.22] main-thread-only guarantee — architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
 
@@ -336,6 +337,12 @@ void BgfxRenderDevice::shutdown() {
 
 static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t codeSize,
                                             bool fragment, uint8_t numAttrs, const uint16_t* attrIds) {
+    // [10.2.3] Shader safety: reject bytecode > 64 KB (SPIR-V/DXBC limit)
+    if (codeSize > 65536) {
+        fprintf(stderr, "[BgfxRenderDevice] Shader rejected: %u bytes exceeds 64 KB limit.\n", codeSize);
+        return BGFX_INVALID_HANDLE;
+    }
+
     const uint16_t uniformCount = 0;
 
     const uint32_t totalSize = 4 + 4 + 4 + 2
