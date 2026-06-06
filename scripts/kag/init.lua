@@ -27,6 +27,9 @@ local system     = require("system")
 local config     = require("config")
 local backend    = require("backend")
 
+-- Save/Load (Phase 6)
+local save_cmds  = require("kag.commands.save")
+
 -- P1 extensions
 local gallery    = require("gallery")
 local music_room = require("music_room")
@@ -36,5 +39,8 @@ local settings   = require("settings")
 -- Legacy (backward compat)
 local parser     = require("kag.parser")
 local conductor  = require("kag.conductor")
+
+-- Register global _T shortcut for i18n
+_G._T = i18n.t
 
 print("[kag/init] All KAG libraries loaded.")

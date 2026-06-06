@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <vector>
 
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "../../external/stb/stb_truetype.h"
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 namespace Caesura {
 
@@ -316,6 +316,13 @@ void TextRenderer::shutdown() {
         bgfx::destroy(m_texSampler);
         m_texSampler = BGFX_INVALID_HANDLE;
     }
+    // FreeType cleanup
+    if (m_ttf) {
+        if (m_ttf->ftFace) { FT_Done_Face(m_ttf->ftFace); m_ttf->ftFace = nullptr; }
+        if (m_ttf->ftLib)  { FT_Done_FreeType(m_ttf->ftLib); m_ttf->ftLib = nullptr; }
+    }
+    m_ttf.reset();
+
     // m_fallbackProgram and m_posTexLayout are borrowed �?do NOT destroy
     m_initialized = false;
 }
@@ -621,35 +628,32 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
 
 
 // ===========================================================================
-// TTF loading via stb_truetype
+// TTF loading via FreeType 2
 // ===========================================================================
 
 bool TextRenderer::loadTTF(const char* path, float fontSize) {
-    // Read entire .ttf file
-    FILE* fp = fopen(path, "rb");
-    if (!fp) { fprintf(stderr, "[TextRenderer] TTF not found: %s\n", path); return false; }
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    if (sz <= 0 || sz > 64 * 1024 * 1024) {
-        fprintf(stderr, "[TextRenderer] TTF invalid size: %ld\n", sz);
-        fclose(fp); return false;
-    }
+    // Initialize FreeType
     m_ttf = std::make_unique<TTFState>();
-    m_ttf->fontData.resize(sz);
-    fread(m_ttf->fontData.data(), 1, sz, fp);
-    fclose(fp);
-
-    stbtt_fontinfo font;
-    if (!stbtt_InitFont(&font, m_ttf->fontData.data(), 0)) {
-        fprintf(stderr, "[TextRenderer] TTF init failed: %s\n", path);
+    FT_Error ftErr = FT_Init_FreeType(&m_ttf->ftLib);
+    if (ftErr) {
+        fprintf(stderr, "[TextRenderer] FT_Init_FreeType failed: %d\n", (int)ftErr);
         m_ttf.reset(); return false;
     }
 
-    m_ttf->scale = stbtt_ScaleForPixelHeight(&font, fontSize);
-    stbtt_GetFontVMetrics(&font, &m_ttf->ascent, &m_ttf->descent, &m_ttf->lineGap);
+    ftErr = FT_New_Face(m_ttf->ftLib, path, 0, &m_ttf->ftFace);
+    if (ftErr) {
+        fprintf(stderr, "[TextRenderer] FT_New_Face failed: %s (err=%d)\n", path, (int)ftErr);
+        FT_Done_FreeType(m_ttf->ftLib);
+        m_ttf.reset(); return false;
+    }
+
+    FT_Set_Pixel_Sizes(m_ttf->ftFace, 0, (FT_UInt)fontSize);
+
+    m_ttf->ascent  = m_ttf->ftFace->size->metrics.ascender / 64.0f;
+    m_ttf->descent = m_ttf->ftFace->size->metrics.descender / 64.0f;
+    m_ttf->lineGap = 0.0f;
     m_ttfFontSize = fontSize;
-    m_cursor.lineHeight = (m_ttf->ascent - m_ttf->descent + m_ttf->lineGap) * m_ttf->scale;
+    m_cursor.lineHeight = m_ttf->ftFace->size->metrics.height / 64.0f;
 
     // Create runtime atlas
     std::vector<uint8_t> atlas(m_ttf->atlasW * m_ttf->atlasH, 0);
@@ -685,23 +689,25 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
 }
 
 bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
-    if (!m_ttf) return false;
-    if (m_ttf->glyphs.count(cp)) return true; // already rasterized
+    if (!m_ttf || !m_ttf->ftFace) return false;
+    if (m_ttf->glyphs.count(cp)) return true;
 
-    stbtt_fontinfo font;
-    if (!stbtt_InitFont(&font, m_ttf->fontData.data(), 0)) return false;
+    FT_UInt glyphIndex = FT_Get_Char_Index(m_ttf->ftFace, cp);
 
-    int w, h, xoff, yoff;
-    unsigned char* bitmap = stbtt_GetCodepointBitmap(&font, m_ttf->scale, m_ttf->scale,
-        cp, &w, &h, &xoff, &yoff);
-    if (!bitmap || w <= 0 || h <= 0) {
-        if (bitmap) stbtt_FreeBitmap(bitmap, nullptr);
-        return false;
-    }
+    FT_Error ftErr = FT_Load_Glyph(m_ttf->ftFace, glyphIndex, FT_LOAD_DEFAULT);
+    if (ftErr) return false;
 
-    int adv, lsb;
-    stbtt_GetCodepointHMetrics(&font, cp, &adv, &lsb);
-    int advance = (int)(adv * m_ttf->scale + 0.5f);
+    ftErr = FT_Render_Glyph(m_ttf->ftFace->glyph, FT_RENDER_MODE_NORMAL);
+    if (ftErr) return false;
+
+    FT_Bitmap* bitmap = &m_ttf->ftFace->glyph->bitmap;
+    int w = (int)bitmap->width;
+    int h = (int)bitmap->rows;
+    if (w <= 0 || h <= 0) return false;
+
+    int advance = (int)(m_ttf->ftFace->glyph->advance.x >> 6);
+    int xoff = m_ttf->ftFace->glyph->bitmap_left;
+    int yoff = m_ttf->ftFace->glyph->bitmap_top;
 
     // Pack into atlas (simple row packing)
     if (m_ttf->penX + w + 1 >= m_ttf->atlasW) {
@@ -710,16 +716,15 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
         m_ttf->maxRowH = 0;
     }
     if (m_ttf->penY + h + 1 >= m_ttf->atlasH) {
-        stbtt_FreeBitmap(bitmap, nullptr);
-        return false; // atlas full
+        return false;
     }
 
-    // Copy glyph to atlas
+    // Copy glyph to atlas (FreeType grayscale -> R8 atlas, direct copy)
     for (int row = 0; row < h; row++) {
         for (int col = 0; col < w; col++) {
             int ax = m_ttf->penX + col;
             int ay = m_ttf->penY + row;
-            atlas[ay * m_ttf->atlasW + ax] = bitmap[row * w + col];
+            atlas[ay * m_ttf->atlasW + ax] = bitmap->buffer[row * bitmap->pitch + col];
         }
     }
 
@@ -732,10 +737,8 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
 
     m_ttf->penX += w + 1;
     if (h > m_ttf->maxRowH) m_ttf->maxRowH = h;
-    stbtt_FreeBitmap(bitmap, nullptr);
     return true;
 }
-
 void TextRenderer::newline() {
     m_cursor.x = m_cursor.leftMargin;
     m_cursor.y += m_cursor.lineHeight;

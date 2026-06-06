@@ -7,13 +7,18 @@
 #include "InputRouter.h"
 #include "BackendRegistry.h"
 #include "DebugManager.h"
+#include "ErrorUI.h"
 #include "SDL3PlatformBackend.h"
 #include "IAudioBackend.h"
 #include "../Render/IRenderDevice.h"
+#include "../Render/GpuMonitor.h"
+#include "../Render/VideoPlayer.h"
 #include "../Audio/SoLoudAudioEngine.h"
 #include "../Scripting/RenderBinding.h"
 #include "../Render/BgfxRenderDevice.h"
 #include "../Scripting/LuaManager.h"
+#include "../System/SaveManager.h"
+#include "../Debug/HotReload.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/bx.h>
@@ -25,6 +30,9 @@ namespace Caesura {
 Engine::Engine()
     : m_lua(std::make_unique<LuaManager>())
     , m_inputRouter(std::make_unique<InputRouter>())
+    , m_gpuMonitor(std::make_unique<GpuMonitor>())
+    , m_videoPlayer(std::make_unique<VideoPlayer>())
+    
 {}
 
 Engine::~Engine() {
@@ -85,15 +93,17 @@ bool Engine::init(const char* title, int width, int height) {
     ii.currentFocus = "KAG";
     DebugManager::instance().setInputInfo(ii);
 
-    // Note: bgfx::reset() is NOT called here because it destroys
-    // all view settings configured by BgfxRenderDevice::setupDefaultViews().
-    // Resolution is already set via bgfx::init() params.
-
+    SaveManager::instance().init("saves/");
 
     if (!m_lua->init()) {
         fprintf(stderr, "Lua VM init failed.");
         return false;
     }
+
+    BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
+
+    // -- Phase 8.1: Initialize HotReload for scripts/ directory -----------
+    HotReload::instance().init("scripts/", m_lua->state());
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     return true;
@@ -114,69 +124,70 @@ void Engine::run() {
         if (dt < 0.0f) dt = 0.0f;
         if (dt > 0.25f) dt = 0.25f;
 
+        // -- Phase 8.1: HotReload check (per frame) -----------------------
+        HotReload::instance().checkAndReload();
+
+        GpuQuality gpuQ = m_gpuMonitor->update(static_cast<double>(dt));
+
         lua_State* L = m_lua->state();
         if (L) {
             lua_getglobal(L, "engine_update");
             if (lua_isfunction(L, -1)) {
                 lua_pushnumber(L, dt);
                 if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-                    fprintf(stderr, "engine_update: %s",
-                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                    const char* err = lua_tostring(L, -1);
+                    fprintf(stderr, "engine_update: %s\n", err ? err : "unknown");
+                    handleFatalError("engine_update", err);
                     lua_pop(L, 1);
                 }
             } else { lua_pop(L, 1); }
+
+            lua_pushinteger(L, static_cast<int>(gpuQ));
+            lua_setglobal(L, "_CAESURA_GPU_QUALITY");
+            lua_pushboolean(L, m_gpuMonitor->vfxEnabled() ? 1 : 0);
+            lua_setglobal(L, "_CAESURA_VFX_ENABLED");
+            lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().gpuTimeMs));
+            lua_setglobal(L, "_CAESURA_GPU_TIME_MS");
+            lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().rollingAvgMs));
+            lua_setglobal(L, "_CAESURA_GPU_AVG_MS");
+            lua_pushboolean(L, m_gpuMonitor->metrics().degraded ? 1 : 0);
+            lua_setglobal(L, "_CAESURA_GPU_DEGRADED");
         }
 
-        // Audio update before beginFrame (P0 fix: correct frame order)
-        if (m_audioBackend) m_audioBackend->update(dt);
-
-        if (m_renderDevice) {
-            m_renderDevice->beginFrame();
-            render();
-            m_renderDevice->endFrame();
+        // Audio voice-complete edge detection
+        if (m_audioBackend) {
+            bool playing = m_audioBackend->isVoicePlaying();
+            if (m_audioVoiceWasPlaying && !playing && L) {
+                lua_pushboolean(L, 1);
+                lua_setglobal(L, "_CAESURA_VOICE_COMPLETE");
+            }
+            m_audioVoiceWasPlaying = playing;
         }
+
+        render();
+        bgfx::frame();
     }
-}
 
-void Engine::quit() { m_running = false; }
+    shutdown();
+}
 
 void Engine::processEvents() {
     lua_State* L = m_lua->state();
-    auto* sdlBackend = dynamic_cast<SDL3PlatformBackend*>(m_platformBackend.get());
-    if (!sdlBackend) { m_running = false; return; }
-    while (sdlBackend->pollEvent()) {
-        SDL_Event& event = sdlBackend->lastEvent();
-        if (event.type == SDL_EVENT_QUIT) { m_running = false; return; }
-        // Handle window resize
-        if (event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-            int newW = (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
-                ? (int)event.window.data1 : (int)event.window.data1;
-            int newH = (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
-                ? (int)event.window.data2 : (int)event.window.data2;
-            if (newW > 0 && newH > 0 && (newW != m_width || newH != m_height)) {
-                m_width  = newW;
-                m_height = newH;
-                if (m_renderDevice) m_renderDevice->resize(newW, newH);
-                // Notify InputRouter → layers.lua to rebuild layer tree and mark all layers dirty
-                m_inputRouter->notifyResize(newW, newH);
-                // Set Lua globals so layers.lua can detect resize and rebuild
-                if (L) {
-                    lua_pushinteger(L, newW); lua_setglobal(L, "_CAESURA_WINDOW_W");
-                    lua_pushinteger(L, newH); lua_setglobal(L, "_CAESURA_WINDOW_H");
-                    lua_pushboolean(L, 1); lua_setglobal(L, "_CAESURA_RESIZED");
-                }
-                DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Window resized: %dx%d", newW, newH);
-            }
-            continue;
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_EVENT_QUIT) {
+            m_running = false;
+            return;
         }
 
-        if (L) {
-            auto mouse = m_platformBackend->getMouseState();
-            // P1 security: clamp mouse coords to window boundaries
-            if (mouse.x < 0) mouse.x = 0;
-            if (mouse.y < 0) mouse.y = 0;
-            if (mouse.x > m_width) mouse.x = (float)m_width;
-            if (mouse.y > m_height) mouse.y = (float)m_height;
+        if ((event.type == SDL_EVENT_MOUSE_MOTION ||
+             event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+             event.type == SDL_EVENT_MOUSE_BUTTON_UP) && L) {
+            float mx = 0, my = 0;
+            SDL_GetMouseState(&mx, &my);
+            IPlatformBackend::MouseState mouse;
+            mouse.x = mx; mouse.y = my;
+            mouse.leftDown = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;
             lua_pushnumber(L, mouse.x); lua_setglobal(L, "_GAME_MOUSE_X");
             lua_pushnumber(L, mouse.y); lua_setglobal(L, "_GAME_MOUSE_Y");
             lua_pushboolean(L, mouse.leftDown ? 1 : 0);
@@ -196,8 +207,8 @@ void Engine::processEvents() {
                 lua_getglobal(L, "_KAG_onClick");
                 if (lua_isfunction(L, -1)) {
                     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                        fprintf(stderr, "_KAG_onClick: %s",
-                                lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                        const char* err = lua_tostring(L, -1);
+                        fprintf(stderr, "_KAG_onClick: %s\n", err ? err : "unknown");
                         lua_pop(L, 1);
                     }
                 } else { lua_pop(L, 1); }
@@ -206,7 +217,6 @@ void Engine::processEvents() {
         m_inputRouter->processEvent(event);
     }
 
-    // P0 fix: null pointer check before _CAESURA_QUIT
     if (!L) return;
 
     lua_getglobal(L, "_CAESURA_QUIT");
@@ -224,8 +234,8 @@ void Engine::render() {
         lua_getglobal(L, "engine_render");
         if (lua_isfunction(L, -1)) {
             if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                fprintf(stderr, "engine_render: %s",
-                        lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                const char* err = lua_tostring(L, -1);
+                fprintf(stderr, "engine_render: %s\n", err ? err : "unknown");
                 lua_pop(L, 1);
             }
         } else { lua_pop(L, 1); }
@@ -237,16 +247,13 @@ void Engine::render() {
             lua_getglobal(L2, "Engine_OnFrameRender");
             if (lua_isfunction(L2, -1)) {
                 if (lua_pcall(L2, 0, 0, 0) != LUA_OK) {
-                    fprintf(stderr, "Engine_OnFrameRender: %s",
+                    fprintf(stderr, "Engine_OnFrameRender: %s\n",
                             lua_tostring(L2, -1) ? lua_tostring(L2, -1) : "unknown");
                     lua_pop(L2, 1);
                 }
             } else { lua_pop(L2, 1); }
         }
     }
-
-    // P1 fix: removed empty-frame bgfx::touch calls
-    // Views are touched by the render bindings that actually draw into them.
 
     const bgfx::Caps* caps = bgfx::getCaps();
     if (caps) {
@@ -256,14 +263,57 @@ void Engine::render() {
                             bgfx::getRendererName(caps->rendererType), m_width, m_height);
         bgfx::dbgTextPrintf(0, 2, 0x0F, "Input Focus: %s  Errors: %u",
                             inputFocusToString(m_inputRouter->getFocus()), 0);
-        bgfx::dbgTextPrintf(0, 3, 0x0F, "Log: %s", "logs/");
+        const auto& gm = m_gpuMonitor->metrics();
+        bgfx::dbgTextPrintf(0, 3, 0x0F, "GPU: %s | frame=%.1fms avg=%.1fms | degradation=%s",
+                            gpuQualityName(gm.quality), gm.gpuTimeMs, gm.rollingAvgMs,
+                            gm.degraded ? "ACTIVE" : "none");
+        bgfx::dbgTextPrintf(0, 4, 0x0F, "Videos: %d  Log: %s",
+                            m_videoPlayer->activeCount(), "logs/");
+    }
+}
+
+void Engine::handleFatalError(const char* context, const char* luaError) {
+    std::string msg = "A fatal error occurred in the engine.\n\n";
+    msg += "Context: ";
+    msg += context ? context : "unknown";
+    msg += "\n\n";
+    msg += luaError ? luaError : "No error details available.";
+    msg += "\n\nPlease choose an action below.";
+
+    ErrorAction action = ErrorUI::show(
+        "Engine Runtime Error",
+        msg,
+        "", 0,
+        m_renderDevice != nullptr
+    );
+
+    switch (action) {
+        case ErrorAction::Retry:
+            DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "ErrorUI: Retry requested");
+            // Request hot reload retry
+            HotReload::instance().requestReload();
+            break;
+        case ErrorAction::Title:
+            DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "ErrorUI: Title requested");
+            m_running = false;
+            break;
+        case ErrorAction::Quit:
+        default:
+            DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "ErrorUI: Quit requested");
+            m_running = false;
+            break;
     }
 }
 
 void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
+
+    // Reset error crash counters on clean shutdown
+    ErrorUI::resetCounters();
+
     if (m_lua) m_lua->shutdown();
+    if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
     if (m_audioBackend) m_audioBackend->shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();

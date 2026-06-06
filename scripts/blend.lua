@@ -95,6 +95,7 @@ Blend.GPUMode = {
     DARKEN     = 6,  -- darken: min(dst, src)
     LIGHTEN    = 7,  -- lighten: max(dst, src)
     DIFFERENCE = 8,  -- difference: abs(dst - src)
+    SOFT_LIGHT = 9,  -- soft light: pegtop formula (contrast)
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -123,8 +124,8 @@ local KrkrzToGPUMode = {
     [16] = Blend.GPUMode.MULTIPLY,    -- PS_MULTIPLICATIVE→mul
     [17] = Blend.GPUMode.SCREEN,      -- PS_SCREEN       → screen
     [18] = Blend.GPUMode.OVERLAY,     -- PS_OVERLAY      → overlay
-    [19] = Blend.GPUMode.OVERLAY,     -- PS_HARD_LIGHT   → overlay (approximate)
-    [20] = Blend.GPUMode.OVERLAY,     -- PS_SOFT_LIGHT   → overlay (approximate)
+    [19] = Blend.GPUMode.SOFT_LIGHT,     -- PS_HARD_LIGHT   → soft_light
+    [20] = Blend.GPUMode.SOFT_LIGHT,     -- PS_SOFT_LIGHT   → soft_light
     [21] = Blend.GPUMode.ADD,         -- PS_COLOR_DODGE  → add (approximate)
     [22] = Blend.GPUMode.ADD,         -- PS_COLOR_DODGE5 → add
     [23] = Blend.GPUMode.DARKEN,      -- PS_COLOR_BURN   → darken (approximate)
@@ -270,6 +271,7 @@ function Blend.get_shader_for_mode(gpu_mode)
         [Blend.GPUMode.DARKEN]     = "blend_darken",
         [Blend.GPUMode.LIGHTEN]    = "blend_lighten",
         [Blend.GPUMode.DIFFERENCE] = "blend_diff",
+        [Blend.GPUMode.SOFT_LIGHT]  = "blend_softlight",
     }
     return shaderPrograms[names[gpu_mode]]
 end

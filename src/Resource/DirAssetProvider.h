@@ -1,0 +1,23 @@
+﻿// DirAssetProvider — reads files from a filesystem directory
+#pragma once
+#include "IAssetProvider.h"
+#include <string>
+
+namespace caesura {
+
+class DirAssetProvider : public IAssetProvider {
+public:
+    explicit DirAssetProvider(std::string rootDir)
+        : m_rootDir(std::move(rootDir)) {}
+
+    std::vector<uint8_t> read(const std::string& path) override;
+    bool exists(const std::string& path) override;
+    std::string getSource() const override { return "Dir:" + m_rootDir; }
+    int priority() const override { return 5; }
+
+private:
+    std::string m_rootDir;
+    std::string fullPath(const std::string& path) const;
+};
+
+} // namespace caesura

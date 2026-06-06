@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
@@ -10,6 +10,9 @@ class IRenderDevice;
 class IAudioBackend;
 class LuaManager;
 class InputRouter;
+class GpuMonitor;
+class VideoPlayer;
+class HotReload;
 
 // -- Engine -- Top-level engine class --------------------------------------
 // Creates platform backend first, then initializes all subsystems through
@@ -34,10 +37,13 @@ public:
     IPlatformBackend& platform();
     LuaManager&   lua()           { return *m_lua; }
     InputRouter&  input()         { return *m_inputRouter; }
+    GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
+    VideoPlayer&  videoPlayer()   { return *m_videoPlayer; }
 
 private:
     void processEvents();
     void render();
+    void handleFatalError(const char* context, const char* luaError);
     void shutdown();
 
     int          m_width    = 1280;
@@ -46,12 +52,18 @@ private:
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
 
+    // Audio voice-complete tracking (no polling — detects edge in main loop)
+    bool         m_audioVoiceWasPlaying = false;
+
     // Owned backend instances (engine owns, BackendRegistry holds raw ptrs)
     std::unique_ptr<IRenderDevice>     m_renderDevice;
     std::unique_ptr<IAudioBackend>     m_audioBackend;
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
     std::unique_ptr<LuaManager>        m_lua;
     std::unique_ptr<InputRouter>       m_inputRouter;
+    std::unique_ptr<GpuMonitor>        m_gpuMonitor;
+    std::unique_ptr<VideoPlayer>       m_videoPlayer;
+    // HotReload is a singleton, accessed via HotReload::instance()
 };
 
 } // namespace Caesura

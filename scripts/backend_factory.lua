@@ -1,4 +1,4 @@
--- ===========================================================================
+﻿-- ===========================================================================
 --  Caesura (AmeKAG) -- backend_factory.lua
 --  Spec [0.4]: Factory pattern for backend creation.
 --  Called once during engine init. Creates render/audio/platform backends,
@@ -65,9 +65,9 @@ function BackendFactory.create(opts)
         elseif cmd == "set_bus_volume" then return KAG.set_bus_volume(...)
         elseif cmd == "get_bus_volume" then return KAG.get_bus_volume(...)
         elseif cmd == "flush_wave_cache" then return KAG.flush_wave_cache()
-        elseif cmd == "fade_volume" then return KAG.audio_fade_volume(...
-        elseif cmd == "get_position" then return KAG.audio_get_position(...
-        elseif cmd == "get_length" then return KAG.audio_get_length(...
+        elseif cmd == "fade_volume" then return KAG.audio_fade_volume(...)
+        elseif cmd == "get_position" then return KAG.audio_get_position(...)
+        elseif cmd == "get_length" then return KAG.audio_get_length(...)
         elseif cmd == "active_voice_count" then return 0
         else error("[BackendFactory] Unknown audio: " .. tostring(cmd)) end
     end

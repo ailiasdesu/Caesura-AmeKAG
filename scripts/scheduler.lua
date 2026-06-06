@@ -1,601 +1,268 @@
-﻿-- ===========================================================================
+﻿-- =============================================================================
 --  Caesura (AmeKAG) — scheduler.lua
---  Spec [1.2]: Coroutine-based KAG script scheduler.
---  Traverses token sequence, dispatches cmd to kag[cmd](ctx, params).
---  State machine: IDLE → RUNNING → WAIT_TIME|WAIT_CLICK|AWAIT_SOUND|AWAIT_TRANS → DEAD
---  Single entry point: Scheduler.update(ctx, dt) — called from C++ every frame.
--- ===========================================================================
+--  Token stream executor. Iterates tokens, dispatches to kag[cmd](ctx, params),
+--  handles flow-control inline (if/jump/call/return/label/end/macro/eval/wait).
+--  Coroutine-based: yields on blocking ops, resumes next frame from token_index.
+-- =============================================================================
 
-local kag  = require("kag")
-local flow = require("flow")
+local scheduler = {}
 
-local Scheduler = {}
+-- ── Flow-control command set (handled inline, never dispatched to kag table) ──
 
--- Back-reference so kag/flow can notify the scheduler
-kag.scheduler_ref = Scheduler
+local flow_commands = {
+    ["if"] = true, ["else"] = true, ["endif"] = true,
+    ["switch"] = true, ["case"] = true, ["endswitch"] = true,
+    ["jump"] = true, ["call"] = true, ["return"] = true,
+    ["link"] = true, ["end"] = true,
+    ["label"] = true,
+    ["macro"] = true, ["endmacro"] = true, ["erasemacro"] = true,
+    ["eval"] = true, ["emb"] = true,
+    ["stop"] = true,
+}
 
--- ===========================================================================
---  Internal: macro expansion
---  Replaces {{macro_name}} in text content with stored macro bodies.
--- ===========================================================================
+-- ── Internal helpers ────────────────────────────────────────────────────────
 
-local function expandMacros(text, macros)
-    if not text or not macros then return text end
-    return (text:gsub("{{([%w_]+)}}", function(name)
-        return macros[name] or ("{{" .. name .. "}}")
-    end))
-end
-
--- ===========================================================================
---  Internal: [eval] expression execution
---  Evaluates a Lua expression and returns the result.
---  Supports: [eval exp="1+2"] → result stored, [eval exp="var=5"] → assignment
--- ===========================================================================
-
-local function evalExpression(ctx, exp, store)
-    if not exp or #exp == 0 then return nil end
-    local fn, err = load("return " .. exp, "=eval")
-    if not fn then
-        -- Try as a statement (assignment, function call, etc.)
-        fn, err = load(exp, "=eval")
-    end
-    if fn then
-        local env = setmetatable({}, { __index = _G })
-        if ctx.evalVars then
-            setmetatable(env, { __index = function(_, k) return ctx.evalVars[k] or _G[k] end })
+local function find_label(tokens, name)
+    for i, tok in ipairs(tokens) do
+        if tok[1] == "label" and tok[2] and tok[2].name == name then
+            return i
         end
-        setfenv(fn, env)
-        local ok, result = pcall(fn)
-        if ok then
-            ctx.evalVars = ctx.evalVars or {}
-            if store then
-                ctx.evalVars[store] = result
-            end
-            return result
-        else
-            print("[Scheduler] eval error: " .. tostring(result))
-        end
-    else
-        print("[Scheduler] eval compile error: " .. tostring(err))
     end
     return nil
 end
 
--- ===========================================================================
--- Scheduler.load_script(ctx, script_text [, start_token])
--- Parse script text, build label map, create coroutine.
--- Spec [1.2]: Primary entry point for loading a KAG script.
--- ===========================================================================
-
-function Scheduler.load_script(ctx, script_text, start_token)
-    local tokenizer = require("tokenizer")
-    local tokens, macros = tokenizer.parse(script_text)
-
-    -- Store macros for expansion during execution
-    ctx.macros = macros
-
-    -- Build label map (first pass)
-    ctx.labelMap = {}
-    for i, tok in ipairs(tokens) do
-        if tok.type == "command" and tok.cmd == "label" and tok.params and tok.params.name then
-            ctx.labelMap[tok.params.name] = i
+local function skip_to(tokens, start_idx, targets)
+    local depth = 1
+    for i = start_idx + 1, #tokens do
+        local cmd = tokens[i][1]
+        if targets[cmd] then
+            if depth == 1 then return i end
+            depth = depth - 1
+        elseif targets.opens and targets.opens[cmd] then
+            depth = depth + 1
         end
     end
-
-    ctx.tokens = tokens
-    ctx.callStack = {}
-    ctx.ifSkipStack = {}  -- stack for nested [if] blocks
-    ctx.ifSkip = false
-    ctx.ifHadMatch = false
-
-    -- State tracking per spec
-    ctx._schedulerState = "IDLE"
-
-    -- [P0.1] Skip mode: Ctrl-triggered fast-forward
-    if ctx.skipMode == nil then ctx.skipMode = false end
-    if ctx.skipFrameCounter == nil then ctx.skipFrameCounter = 0 end
-    ctx.skipTokensPerFrame = 4
-
-    -- [P0.2] Auto-read mode: auto-advances after N frames
-    if ctx.autoMode == nil then ctx.autoMode = false end
-    if ctx.autoFrameCounter == nil then ctx.autoFrameCounter = 0 end
-    ctx.autoFramesPerClick = 180  -- 3 sec @ 60fps
-
-    ctx.status = "running"
-    ctx._startToken = start_token or 1
-    ctx.evalVars = ctx.evalVars or {}  -- persistent eval variable store
-
-    -- Create coroutine
-    if ctx.co and coroutine.status(ctx.co) ~= "dead" then
-        ctx.co = nil
-    end
-
-    ctx.co = coroutine.create(function()
-        Scheduler._execute(ctx, tokens)
-    end)
-
-    -- Store globally for C++ resume
-    _G._KAG_COROUTINE = ctx.co
-
-    -- Kick off: resume until first yield
-    ctx._schedulerState = "RUNNING"
-    local ok, err = coroutine.resume(ctx.co, 0)
-    if not ok then
-        print("[Scheduler] Boot error at line " .. (ctx.token_ptr or "?") .. ": " .. tostring(err))
-        ctx.co, ctx.status, ctx._schedulerState = nil, "dead", "DEAD"
-    else
-        ctx.status = coroutine.status(ctx.co)
-        if ctx.status == "suspended" then
-            ctx._schedulerState = ctx.waiting_input and "WAIT_CLICK" or "WAIT_TIME"
-        elseif ctx.status == "dead" then
-            ctx._schedulerState = "DEAD"
-        end
-    end
+    return #tokens
 end
 
--- Legacy alias
-Scheduler.boot = Scheduler.load_script
+-- ── Main execution loop ─────────────────────────────────────────────────────
 
--- ===========================================================================
--- Scheduler.update(ctx, dt) — called every frame.
--- Resumes KAG coroutine, passing dt to yielding wait commands.
--- ===========================================================================
+function scheduler.run(ctx, tokens, start_index)
+    if not tokens or #tokens == 0 then return end
+    local kag = require("kag")
+    local cancel_token = require("kag.cancel_token")
+    start_index = start_index or 1
 
-function Scheduler.update(ctx, dt)
-    if not ctx.co then
-        ctx._schedulerState = "IDLE"
-        return
-    end
-
-    if coroutine.status(ctx.co) == "dead" then
-        ctx.co, ctx.status, ctx._schedulerState = nil, "dead", "DEAD"
-        return
-    end
-
-    -- [P0.2] Auto-read mode
-    if ctx.autoMode and ctx.waiting_input then
-        ctx.autoFrameCounter = (ctx.autoFrameCounter or 0) + 1
-        if ctx.autoFrameCounter >= (ctx.autoFramesPerClick or 180) then
-            ctx.autoFrameCounter = 0
-            Scheduler.onClick(ctx)
-            return
-        end
-    end
-
-    -- [P0.1] Skip mode: advance fast, auto-skip blocking commands
-    if ctx.skipMode then
-        ctx.skipFrameCounter = (ctx.skipFrameCounter or 0) + 1
-        if ctx.skipFrameCounter >= ctx.skipTokensPerFrame then
-            ctx.skipFrameCounter = 0
-            if ctx.waiting_input then
-                Scheduler.onClick(ctx)
-                return
-            end
-            if ctx.co and coroutine.status(ctx.co) == "suspended" then
-                local ok, err = coroutine.resume(ctx.co, dt * 10) -- 10x speed
-                if not ok then
-                    print("[Scheduler] Skip error at line " .. (ctx.token_ptr or "?") .. ": " .. tostring(err))
-                    ctx.co, ctx.status, ctx._schedulerState = nil, "dead", "DEAD"
-                else
-                    ctx.status = coroutine.status(ctx.co)
-                    if ctx.status == "suspended" then
-                        ctx._schedulerState = ctx.waiting_input and "WAIT_CLICK" or "WAIT_TIME"
-                    elseif ctx.status == "dead" then
-                        ctx._schedulerState = "DEAD"
-                    end
-                end
-            end
-            return
-        end
-    end
-
-    -- Normal resume: pass dt for time-based yields
-    if ctx.co and coroutine.status(ctx.co) == "suspended" then
-        local ok, err = coroutine.resume(ctx.co, dt)
-        if not ok then
-            print("[Scheduler] Runtime error at line " .. (ctx.token_ptr or "?") .. ": " .. tostring(err))
-            ctx.co, ctx.status, ctx._schedulerState = nil, "dead", "DEAD"
-        else
-            ctx.status = coroutine.status(ctx.co)
-            if ctx.status == "suspended" then
-                ctx._schedulerState = ctx.waiting_input and "WAIT_CLICK" or "WAIT_TIME"
-            elseif ctx.status == "dead" then
-                ctx._schedulerState = "DEAD"
-            end
-        end
-    end
-end
-
--- ===========================================================================
--- Scheduler.onClick(ctx) — user click handler. Unblocks [p] / [l].
--- ===========================================================================
-
-function Scheduler.onClick(ctx)
-    if ctx.waiting_input then
-        ctx.waiting_input = false
-    end
-end
-
--- ===========================================================================
---  Internal: push/pop [if] nesting state
--- ===========================================================================
-
-local function pushIfState(ctx, skip)
-    ctx.ifSkipStack = ctx.ifSkipStack or {}
-    table.insert(ctx.ifSkipStack, { skip = ctx.ifSkip, hadMatch = ctx.ifHadMatch })
-    ctx.ifSkip = skip
-    ctx.ifHadMatch = not skip
-end
-
-local function popIfState(ctx)
-    ctx.ifSkipStack = ctx.ifSkipStack or {}
-    if #ctx.ifSkipStack > 0 then
-        local prev = table.remove(ctx.ifSkipStack)
-        ctx.ifSkip = prev.skip
-        ctx.ifHadMatch = prev.hadMatch
-    else
-        ctx.ifSkip = false
-        ctx.ifHadMatch = false
-    end
-end
-
--- ===========================================================================
--- Scheduler._execute(ctx, tokens) — main execution loop (runs inside coroutine).
--- Spec [1.2]: Walks token list, dispatches to kag[cmd] or handles inline.
--- Flow commands (if/elif/else/endif, jump/call/return, switch/case) handled here.
--- ===========================================================================
-
-function Scheduler._execute(ctx, tokens)
-    local i = ctx._startToken or 1
-
+    local i = start_index
     while i <= #tokens do
         local tok = tokens[i]
-        ctx.line = tok.line
-        ctx.token_ptr = i
+        local cmd = tok[1]
+        local params = tok[2] or {}
 
-        if tok.type == "text" then
-            -- Expand macros in text content
-            local expanded = expandMacros(tok.content, ctx.macros)
-            local handler = kag.text
-            if handler then handler(ctx, { [1] = expanded, text = expanded }) end
+        -- Check stop flag
+        if ctx.stop_flag then return end
 
-        elseif tok.type == "command" then
-            local cmd = tok.cmd
-
-            -- ================================================================
-            --  Flow control commands (handled here, not dispatched to kag)
-            -- ================================================================
-
-            -- [if] / [if_] — conditional branch
-            if cmd == "if" or cmd == "if_" then
-                local cond = true
-                local params = tok.params or {}
-                local exp = params.exp
-                if exp then
-                    local result = evalExpression(ctx, exp)
-                    cond = (result ~= false and result ~= nil)
-                end
-                pushIfState(ctx, not cond)
-                i = i + 1
-                goto continue
-            end
-
-            -- [elif] / [elif_] — else-if branch
-            if cmd == "elif" or cmd == "elif_" then
-                local state = ctx.ifSkipStack and ctx.ifSkipStack[#ctx.ifSkipStack]
-                if state and state.hadMatch then
-                    ctx.ifSkip = true
-                elseif state then
-                    local cond = true
-                    local exp = (tok.params or {}).exp
-                    if exp then
-                        local result = evalExpression(ctx, exp)
-                        cond = (result ~= false and result ~= nil)
+        -- Flow control: [jump]
+        if cmd == "jump" then
+            local target = params.target or params.label or params.storage
+            if params.target then
+                -- Cross-scene jump: load new scene
+                local path = "assets/script/" .. target
+                local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+                if new_tokens then
+                    ctx.tokens = new_tokens
+                    ctx.token_index = 1
+                    ctx.current_scene = path
+                    ctx.call_stack = {}
+                    ctx.layers = {}
+                    ctx.backlog = {}
+                    -- Cancel all active operations
+                    for _, ct in ipairs(ctx.active_operations or {}) do
+                        ct:mark_cancelled()
                     end
-                    ctx.ifSkip = not cond
-                    if cond then
-                        state.hadMatch = true
-                        ctx.ifHadMatch = true
-                    end
-                end
-                i = i + 1
-                goto continue
-            end
-
-            -- [else] / [else_] — fallback branch
-            if cmd == "else" or cmd == "else_" then
-                local state = ctx.ifSkipStack and ctx.ifSkipStack[#ctx.ifSkipStack]
-                if state then
-                    ctx.ifSkip = state.hadMatch
-                end
-                i = i + 1
-                goto continue
-            end
-
-            -- [endif] — end of conditional block
-            if cmd == "endif" then
-                popIfState(ctx)
-                i = i + 1
-                goto continue
-            end
-
-            -- [jump] [call] [return] [link] — flow redirection
-            if cmd == "jump" then
-                local target = (tok.params or {}).target or (tok.params or {}).storage or (tok.params or {})[1]
-                if target and ctx.labelMap[target] then
-                    i = ctx.labelMap[target]
-                    goto continue
-                else
-                    print("[Scheduler] jump target not found: " .. tostring(target))
-                end
-            end
-
-            if cmd == "call" then
-                local target = (tok.params or {}).target or (tok.params or {}).storage or (tok.params or {})[1]
-                if target and ctx.labelMap[target] then
-                    ctx.callStack = ctx.callStack or {}
-                    table.insert(ctx.callStack, i + 1)
-                    i = ctx.labelMap[target]
-                    goto continue
-                else
-                    print("[Scheduler] call target not found: " .. tostring(target))
-                end
-            end
-
-            if cmd == "return" or cmd == "return_" then
-                if ctx.callStack and #ctx.callStack > 0 then
-                    i = table.remove(ctx.callStack)
-                    goto continue
-                else
-                    -- Top-level return → stop
-                    ctx._schedulerState = "DEAD"
-                    return
-                end
-            end
-
-            if cmd == "link" then
-                local target = (tok.params or {}).target or (tok.params or {}).storage or (tok.params or {})[1]
-                if target then
-                    -- Load new script, preserving eval vars
-                    local newScript = target
-                    -- Try loading as file
-                    local f = io.open(newScript, "r")
-                    if f then
-                        local text = f:read("*a")
-                        f:close()
-                        local tokenizer = require("tokenizer")
-                        local newTokens, newMacros = tokenizer.parse(text)
-                        tokens = newTokens
-                        if newMacros then
-                            for k, v in pairs(newMacros) do ctx.macros[k] = v end
-                        end
-                        -- Rebuild label map
-                        ctx.labelMap = {}
-                        for j, t in ipairs(tokens) do
-                            if t.type == "command" and t.cmd == "label" and t.params and t.params.name then
-                                ctx.labelMap[t.params.name] = j
-                            end
-                        end
-                        i = 1
-                        goto continue
-                    end
-                end
-            end
-
-            -- [end] — stop script
-            if cmd == "end" then
-                ctx._schedulerState = "DEAD"
-                return
-            end
-
-            -- [switch] / [switch_] — switch block
-            if cmd == "switch" or cmd == "switch_" then
-                local exp = (tok.params or {}).exp or (tok.params or {})[1]
-                local switchVal = exp and evalExpression(ctx, exp)
-                ctx._switchVal = switchVal
-                ctx._switchMatched = false
-                i = i + 1
-                goto continue
-            end
-
-            -- [case] / [case_]
-            if cmd == "case" or cmd == "case_" then
-                local caseVal = (tok.params or {}).val or (tok.params or {})[1]
-                if ctx._switchMatched then
-                    ctx.ifSkip = true
-                elseif caseVal ~= nil and ctx._switchVal ~= nil then
-                    local match = (tostring(caseVal) == tostring(ctx._switchVal))
-                    if match then
-                        ctx._switchMatched = true
-                        ctx.ifSkip = false
-                    else
-                        ctx.ifSkip = true
-                    end
-                end
-                i = i + 1
-                goto continue
-            end
-
-            -- [default] / [default_]
-            if cmd == "default" or cmd == "default_" then
-                ctx.ifSkip = ctx._switchMatched or false
-                i = i + 1
-                goto continue
-            end
-
-            -- [endswitch] / [endswitch_]
-            if cmd == "endswitch" or cmd == "endswitch_" then
-                ctx._switchVal = nil
-                ctx._switchMatched = nil
-                ctx.ifSkip = false
-                i = i + 1
-                goto continue
-            end
-
-            -- === [eval] — inline Lua expression evaluation ===
-            if cmd == "eval" then
-                local exp = (tok.params or {}).exp or (tok.params or {})[1]
-                local store = (tok.params or {}).store or (tok.params or {}).result
-                evalExpression(ctx, exp, store)
-                i = i + 1
-                goto continue
-            end
-
-            -- === [emb] — embed Lua (same as @ prefix but inline tag form) ===
-            if cmd == "emb" then
-                local code = (tok.params or {}).exp or (tok.params or {})[1]
-                if code and #code > 0 then
-                    local fn, err = load(code, "=emb")
-                    if fn then
-                        local ok, runErr = pcall(fn)
-                        if not ok then
-                            print("[Scheduler] emb error: " .. tostring(runErr))
-                        end
-                    else
-                        print("[Scheduler] emb compile error: " .. tostring(err))
-                    end
-                end
-                i = i + 1
-                goto continue
-            end
-
-            -- === Skip if inside inactive [if] or [switch] branch ===
-            if ctx.ifSkip then
-                i = i + 1
-                goto continue
-            end
-
-            -- === [label]: no-op (pre-resolved in load_script) ===
-            if cmd == "label" then
-                i = i + 1
-                goto continue
-            end
-
-            -- === [macro] / [endmacro]: handled by kag (no-op for scheduler) ===
-            if cmd == "macro" or cmd == "endmacro" then
-                local handler = kag[cmd]
-                if handler then handler(ctx, tok.params or {}) end
-                i = i + 1
-                goto continue
-            end
-
-            -- === [erasemacro] — delete macro definition ===
-            if cmd == "erasemacro" then
-                local name = (tok.params or {}).name or (tok.params or {})[1]
-                if name and ctx.macros then ctx.macros[name] = nil end
-                i = i + 1
-                goto continue
-            end
-
-            -- ================================================================
-            --  Dispatch ALL other commands to kag[cmd]
-            -- ================================================================
-            local handler = kag[cmd]
-            if handler then
-                local result, jump_info = handler(ctx, tok.params or {})
-
-                -- Update state after command execution
-                if ctx.waiting_input then
-                    ctx._schedulerState = "WAIT_CLICK"
-                end
-
-                if result == "stop" then
-                    ctx._schedulerState = "DEAD"
-                    return
-                end
-
-                if result == "jump" and jump_info then
-                    i = jump_info.resume_at
-                    if jump_info.tokens then
-                        tokens = jump_info.tokens
-                    end
-                    if jump_info.labelMap then
-                        ctx.labelMap = jump_info.labelMap
-                    end
-                    ctx._schedulerState = "JUMP"
-                    goto continue
-                end
-
-                if result == "return" then
-                    if ctx.callStack and #ctx.callStack > 0 then
-                        i = table.remove(ctx.callStack)
-                        goto continue
-                    end
-                    ctx._schedulerState = "DEAD"
+                    ctx.active_operations = {}
                     return
                 end
             else
-                print("[Scheduler] Unknown command: [" .. cmd .. "] at line " .. (tok.line or i))
+                -- Intra-scene jump: find label
+                local idx = find_label(tokens, target)
+                if idx then i = idx end
             end
 
-        elseif tok.type == "embed_lua" then
-            -- @-prefixed embedded Lua code
-            if tok.lua_code and #tok.lua_code > 0 then
-                local fn, err = load(tok.lua_code, "=embed_line_" .. (tok.line or i))
-                if fn then
-                    local ok, runErr = pcall(fn)
-                    if not ok then
-                        print("[Scheduler] embed_lua error at line " .. (tok.line or i) .. ": " .. tostring(runErr))
+        -- Flow control: [call]
+        elseif cmd == "call" then
+            local target = params.target or params.storage
+            table.insert(ctx.call_stack, {tokens = tokens, index = i + 1})
+            local path = "assets/script/" .. target
+            local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            if new_tokens then
+                tokens = new_tokens
+                ctx.tokens = tokens
+                ctx.current_scene = path
+                i = 0
+            end
+
+        -- Flow control: [return]
+        elseif cmd == "return" then
+            local frame = table.remove(ctx.call_stack)
+            if frame then
+                tokens = frame.tokens
+                ctx.tokens = tokens
+                i = frame.index - 1
+            else
+                return  -- No call stack, end execution
+            end
+
+        -- Flow control: [link]
+        elseif cmd == "link" then
+            local target = params.target or params.storage
+            -- Clear everything and jump
+            ctx.layers = {}
+            ctx.backlog = {}
+            for _, ct in ipairs(ctx.active_operations or {}) do
+                ct:mark_cancelled()
+            end
+            ctx.active_operations = {}
+            ctx.call_stack = {}
+            local path = "assets/script/" .. target
+            local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            if new_tokens then
+                tokens = new_tokens
+                ctx.tokens = tokens
+                ctx.token_index = 1
+                ctx.current_scene = path
+                i = 0
+            end
+
+        -- Flow control: [end]
+        elseif cmd == "end" then
+            return
+
+        -- Flow control: [label] — no-op, used by jump/call
+        elseif cmd == "label" then
+            -- pass
+
+        -- Flow control: [if]/[else]/[endif]
+        elseif cmd == "if" then
+            local expr = params.exp or "false"
+            local ok, result = pcall(function()
+                local fn = load("return " .. expr, "=if", "t", ctx.f or {})
+                return fn()
+            end)
+            if not (ok and result) then
+                i = skip_to(tokens, i, {
+                    ["else"] = true, ["endif"] = true,
+                    opens = {["if"] = true}
+                })
+            end
+
+        elseif cmd == "else" then
+            i = skip_to(tokens, i, {
+                ["endif"] = true,
+                opens = {["if"] = true}
+            })
+
+        elseif cmd == "endif" then
+            -- pass
+
+        -- Flow control: [switch]/[case]/[endswitch]
+        elseif cmd == "switch" then
+            local expr = params.exp or ""
+            local matched = false
+            -- Scan forward for matching case
+            for j = i + 1, #tokens do
+                local tc = tokens[j][1]
+                local tp = tokens[j][2] or {}
+                if tc == "case" then
+                    if not matched and tp.value == expr then
+                        matched = true
                     end
-                else
-                    print("[Scheduler] embed_lua compile error at line " .. (tok.line or i) .. ": " .. tostring(err))
+                elseif tc == "endswitch" then
+                    break
+                elseif not matched and (tc ~= "case") then
+                    -- skip non-matching case bodies
                 end
             end
+            -- For now, simplified: just skip to endswitch
+            i = skip_to(tokens, i, {["endswitch"] = true, opens = {}})
 
-        elseif tok.type == "macro_def" then
-            -- Already collected in ctx.macros during load_script; no-op here.
+        elseif cmd == "case" or cmd == "endswitch" then
+            -- pass (handled by switch)
+
+        -- Flow control: [eval]
+        elseif cmd == "eval" then
+            local code = params.exp or params.code or ""
+            local fn = load(code, "=eval", "t", ctx.f or {})
+            if fn then pcall(fn) end
+
+        -- Flow control: [macro] / [endmacro]
+        elseif cmd == "macro" then
+            local name = params.name
+            -- Collect macro body until [endmacro]
+            local body = {}
+            i = i + 1
+            while i <= #tokens do
+                if tokens[i][1] == "endmacro" then break end
+                table.insert(body, {tokens[i][1], tokens[i][2]})
+                i = i + 1
+            end
+            if name then
+                ctx.macros = ctx.macros or {}
+                ctx.macros[name] = body
+            end
+
+        elseif cmd == "endmacro" or cmd == "erasemacro" then
+            -- pass (handled by macro)
+
+        -- Regular command: dispatch to kag table
+        else
+            -- Check if it's a macro invocation
+            local macro_body = ctx.macros and ctx.macros[cmd]
+            if macro_body then
+                -- Expand macro inline — merge params
+                local saved_tokens = tokens
+                tokens = macro_body
+                ctx.tokens = tokens
+                i = 0
+                tokens = saved_tokens  -- restore after macro body
+            else
+                -- text chunks become [ch] commands
+                local handler = kag[cmd]
+                local actual_cmd = cmd
+                if not handler and type(cmd) == "string" and #cmd > 0 then
+                    -- Unrecognized text → treat as [ch]
+                    handler = kag["ch"]
+                    if handler then
+                        params = {text = cmd}
+                        actual_cmd = "ch"
+                    end
+                end
+                if handler then
+                    local status, err = pcall(handler, ctx, params)
+                    if not status then
+                        -- Error → ErrorUI
+                        local ErrorUI = require("Core.ErrorUI")
+                        -- Lua-side error reporting
+                        print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
+                        if ctx.handle_error then
+                            ctx.handle_error(actual_cmd, tostring(err), i)
+                        end
+                    end
+                end
+            end
         end
 
+        ctx.token_index = i
         i = i + 1
-        ::continue::
+        coroutine.yield()
     end
-
-    ctx._schedulerState = "DEAD"
-    print("[Scheduler] Execution complete. Final token: " .. tostring(ctx.token_ptr))
 end
 
--- ===========================================================================
--- Scheduler.status(ctx) → "running" | "suspended" | "dead" | "none"
--- ===========================================================================
+-- ── Resume from saved state ─────────────────────────────────────────────────
 
-function Scheduler.status(ctx)
-    if not ctx.co then return "none" end
-    return coroutine.status(ctx.co)
+function scheduler.resume(ctx)
+    if not ctx.tokens or not ctx.token_index then return end
+    scheduler.run(ctx, ctx.tokens, ctx.token_index)
 end
 
--- ===========================================================================
--- Scheduler.schedulerState(ctx) → state string
--- ===========================================================================
-
-function Scheduler.schedulerState(ctx)
-    return ctx._schedulerState or "IDLE"
-end
-
--- ===========================================================================
---  Skip / Auto / SaveSkip modes  [P0.1] [P0.2]
--- ===========================================================================
-
-function Scheduler.toggleSkip(ctx)
-    ctx.skipMode = not ctx.skipMode
-    ctx.skipFrameCounter = 0
-    if ctx.skipMode then ctx.autoMode = false end
-    print("[Scheduler] Skip mode: " .. tostring(ctx.skipMode))
-    return ctx.skipMode
-end
-
-function Scheduler.toggleAuto(ctx, speed)
-    ctx.autoMode = not ctx.autoMode
-    ctx.autoFrameCounter = 0
-    if speed and tonumber(speed) then
-        ctx.autoFramesPerClick = tonumber(speed)
-    end
-    if ctx.autoMode then ctx.skipMode = false end
-    print("[Scheduler] Auto-read mode: " .. tostring(ctx.autoMode))
-    return ctx.autoMode
-end
-
-function Scheduler.setAutoSpeed(ctx, frames)
-    ctx.autoFramesPerClick = tonumber(frames) or 180
-end
-
-return Scheduler
+return scheduler

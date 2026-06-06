@@ -9,6 +9,8 @@
 #include "DevCoreBinding.h"
 #include "DebugBinding.h"
 #include "UnifiedBinding.h"
+#include "../System/SaveBinding.h"
+#include "GameState.h"
 #include "../Core/BackendRegistry.h"
 #include <cstdio>
 
@@ -24,6 +26,10 @@ bool LuaManager::init() {
     }
 
     luaL_openlibs(m_L);
+
+    // Create the global KAG context table in Lua registry before modules load
+    GameState::create(m_L);
+
     registerModules();
 
     m_initialized = true;
@@ -135,6 +141,7 @@ void LuaManager::registerModules() {
     registerDevCoreBinding(m_L);
     registerDebugBinding(m_L);
     registerUnifiedBackendBinding(m_L);
+    registerSaveBinding(m_L);
 
     printf("[Lua] Engine (backend selection) module registered.\n");
     printf("[Lua] KAG module registered (32 APIs, via BackendRegistry).\n");

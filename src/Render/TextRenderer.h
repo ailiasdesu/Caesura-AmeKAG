@@ -5,6 +5,8 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 namespace Caesura {
 
@@ -67,9 +69,9 @@ private:
 
     // TTF atlas
     struct TTFState {
-        std::vector<uint8_t> fontData;
-        int ascent = 0, descent = 0, lineGap = 0;
-        float scale = 1.0f;
+        FT_Library ftLib = nullptr;
+        FT_Face    ftFace = nullptr;
+        float ascent = 0.0f, descent = 0.0f, lineGap = 0.0f;
         int atlasW = 1024, atlasH = 1024;
         int penX = 1, penY = 1, maxRowH = 0;
         std::unordered_map<uint32_t, GlyphMetrics> glyphs;

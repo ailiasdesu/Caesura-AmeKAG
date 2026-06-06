@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -13,7 +13,7 @@ extern "C" {
 namespace Caesura {
 
 // ============================================================================
-//  Null backends ?? safe no-op fallbacks when a backend is unavailable
+//  Null backends -- safe no-op fallbacks when a backend is unavailable
 // ============================================================================
 
 class NullRenderDevice : public IRenderDevice {
@@ -93,6 +93,18 @@ void BackendRegistry::setInputRouter(InputRouter* router) {
     m_inputRouter = router;
 }
 
+void BackendRegistry::setVideoPlayer(VideoPlayer* player) {
+    m_videoPlayer = player;
+}
+
+void BackendRegistry::setTextureManager(TextureManager* mgr) {
+    m_textureManager = mgr;
+}
+
+void BackendRegistry::setLayerManager(LayerManager* mgr) {
+    m_layerManager = mgr;
+}
+
 // -- Backend factory -------------------------------------------------------
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
@@ -115,7 +127,7 @@ IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
     if (strcmp(name, "bgfx") == 0) {
         m_ownedRenderDevice = std::make_unique<BgfxRenderDevice>();
         m_renderDevice = m_ownedRenderDevice.get();
-        printf("[BackendRegistry] Created render device: bgfx\n");
+        printf("[BackendRegistry] Created render backend: bgfx\n");
         return m_renderDevice;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
@@ -143,7 +155,7 @@ IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
     return nullptr;
 }
 
-// -- Lua registry keys -----------------------------------------------------
+// -- Registry keys for Lua lightuserdata ----------------------------------
 
 static const char* kRegistryKey_RenderDevice   = "Caesura.RenderDevice";
 static const char* kRegistryKey_AudioBackend   = "Caesura.AudioBackend";
@@ -274,6 +286,10 @@ InputRouter* BackendRegistry::getInputRouterFromLua(lua_State* L) {
     return router;
 }
 
+VideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
+    return BackendRegistry::instance().getVideoPlayer();
+}
+
 // -- Register Engine.* bindings to Lua -------------------------------------
 
 void BackendRegistry::registerEngineBindings(lua_State* L) {
@@ -291,3 +307,4 @@ void BackendRegistry::registerEngineBindings(lua_State* L) {
 }
 
 } // namespace Caesura
+
