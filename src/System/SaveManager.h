@@ -37,6 +37,9 @@ class SaveManager {
 public:
     static SaveManager& instance();
 
+    // Engine version for save compatibility (Spec U6: archive version management)
+    static const char* ENGINE_VERSION;
+
     SaveManager(const SaveManager&) = delete;
     SaveManager& operator=(const SaveManager&) = delete;
 
@@ -69,6 +72,9 @@ public:
     // -- Migration ----------------------------------------------------------
     // Register a migration from fromVersion → toVersion
     void registerMigration(int fromVersion, int toVersion, MigrationFn fn);
+
+    // Engine-level version check and migration (Spec U6)
+    bool migrateSave(std::string& jsonData);
 
     // Migrate a JSON string through version chain (fromVersion → latest)
     std::string migrate(const std::string& jsonData, int fromVersion);

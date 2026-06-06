@@ -189,4 +189,64 @@ function TextCommands.p(ctx, params)
     update_text_state(ctx, "p")
 end
 
+
+-- =============================================================================
+--  [ruby text="漢字" ruby="かんじ"]
+--  Render base text with ruby (furigana) annotation above it.
+--  Delegates to backend.text_render_ruby for glyph layout.
+-- =============================================================================
+
+function TextCommands.ruby(ctx, params)
+    local text = params.text or ""
+    local ruby_text = params.ruby or ""
+    local backend = require("backend")
+    backend.text_render_ruby(0, 0, text, ruby_text)
+end
+
+-- =============================================================================
+--  [font face="Noto Serif" size=28 color="#333333"]
+--  Set font face, size, and/or color for subsequent text rendering.
+--  Only specified params are updated; existing values are preserved.
+-- =============================================================================
+
+function TextCommands.font(ctx, params)
+    ctx.text_state = ctx.text_state or {}
+    if params.face then ctx.text_state.font_face = params.face end
+    if params.size then ctx.text_state.font_size = tonumber(params.size) end
+    if params.color then ctx.text_state.font_color = params.color end
+    local backend = require("backend")
+    backend.text_set_font(ctx.text_state.font_face, ctx.text_state.font_size, ctx.text_state.font_color)
+end
+
+-- =============================================================================
+--  [skip] — toggle skip mode
+--  When active, scheduler auto-advances without waiting for user click.
+-- =============================================================================
+
+function TextCommands.skip(ctx, params)
+    ctx.skip_mode = not ctx.skip_mode
+end
+
+-- =============================================================================
+--  [reset] — reset text state
+--  Clears line/char_offset tracking and resets backend text renderer.
+--  Registered as KAG.reset via auto-iteration in kag.lua.
+-- =============================================================================
+
+function TextCommands.reset(ctx, params)
+    ctx.text_state = { line = 1, char_offset = 0 }
+    local backend = require("backend")
+    backend.text_reset_state()
+end
+
+-- =============================================================================
+--  [pt speed=50] — typewriter speed (ms per character)
+--  Controls the delay between each character appearing in [ch] / [text].
+-- =============================================================================
+
+function TextCommands.pt(ctx, params)
+    ctx.text_speed = tonumber(params.speed) or 50
+end
+
+
 return TextCommands

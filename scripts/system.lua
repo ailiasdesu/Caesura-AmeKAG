@@ -319,6 +319,7 @@ function System.save(slot, ctx)
     -- Build comprehensive SaveData per Spec [4.2]
     local data = {
         version       = 2,
+        engine_version = "1.0.0",
         slot          = slot,
         timestamp     = os.time(),
         scene         = ctx.currentScene or "",
@@ -420,6 +421,15 @@ function System._load_from_file(filename, ctx)
     if not ok or type(data) ~= "table" then
         print("[System] Save data corrupt.")
         return false
+    end
+
+
+    -- Engine version check (Spec U6: archive version management)
+    local loaded_version = data.engine_version or "0.0.0"
+    if loaded_version ~= "1.0.0" then
+        print(string.format("[System] Save version mismatch: %s (engine %s)", loaded_version, "1.0.0"))
+        -- Future: call migrate function chain here
+        -- For now: warn but continue loading
     end
 
     -- Restore KAG variables

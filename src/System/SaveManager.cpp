@@ -22,6 +22,9 @@
 
 namespace Caesura {
 
+// Engine version string (Spec U6: archive version management)
+const char* SaveManager::ENGINE_VERSION = "1.0.0";
+
 // ============================================================================
 //  Singleton
 // ============================================================================
@@ -195,6 +198,7 @@ bool SaveManager::save(int slot, const std::string& jsonData,
     // (pre-escaped by the caller or Lua side via jsonEscape)
     std::string json = jsonBuildObj({
         {"schema_version", std::to_string(m_currentSchemaVersion)},
+        {"engine_version", "\"" + std::string(ENGINE_VERSION) + "\""},
         {"timestamp",      std::to_string(ts)},
         {"scene",          "\"" + jsonEscape(sceneName) + "\""},
         {"token_index",    std::to_string(tokenIndex)},
@@ -245,6 +249,9 @@ std::string SaveManager::load(int slot, SaveMeta* outMeta) {
     }
 
     // Populate metadata
+
+    // Engine version migration (Spec U6)
+    migrateSave(json);
     if (outMeta) {
         outMeta->slot          = slot;
         outMeta->timestamp     = jsonGetUint64(json, "timestamp");
@@ -404,6 +411,33 @@ std::string SaveManager::migrate(const std::string& jsonData, int fromVersion) {
 // ============================================================================
 //  Built-in migration scripts
 // ============================================================================
+
+// ============================================================================
+//  Engine version migration (Spec U6: archive version management)
+// ============================================================================
+
+bool SaveManager::migrateSave(std::string& jsonData) {
+    std::string ver = jsonGetString(jsonData, "engine_version");
+    if (ver.empty()) ver = "0.0.0";
+
+    if (ver == ENGINE_VERSION) return true;  // Current version, no migration needed
+
+    printf("[SaveManager] Engine version mismatch: %s (engine %s) — warn but continue loading\n",
+           ver.c_str(), ENGINE_VERSION);
+
+    // Future: chain migration functions here
+    // if (ver == "1.0.0") { migrate_v1_to_v2(jsonData); ver = "1.1.0"; }
+
+    // Update the engine_version field in the JSON
+    std::string oldField = "\"engine_version\":\"" + ver + "\"";
+    std::string newField = "\"engine_version\":\"" + std::string(ENGINE_VERSION) + "\"";
+    size_t pos = jsonData.find(oldField);
+    if (pos != std::string::npos) {
+        jsonData.replace(pos, oldField.size(), newField);
+    }
+
+    return true;
+}
 
 void SaveManager::registerBuiltinMigrations() {
     // Example: if schema v1 → v2 needs a data transformation
