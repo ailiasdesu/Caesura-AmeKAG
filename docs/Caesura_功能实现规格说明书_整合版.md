@@ -94,7 +94,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ## [5.2] FreeType 矢量字体 — FontRenderer.h/.cpp
 ### 字体图集 TextureArray ([10.2.12] — 预分配 4 层 2048x2048 RGBA8, shader: texture2DArray
-### 动态扩容 ([10.2.23] — 4 层 >90% 时 A/B 双阵列切换, 1-2 帧半透明遮罩+沙漏进度指示。扩容期间优先使用 CJK 静态图集([10.2.54])渲染, 若字符不在图集中则降级为内置位图+U+FFFD, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。内置字体
+### 动态扩容 ([10.2.23] — 4 层 >90% 时 增量扩容(新建第5+层, 保留原4层, 无需拷贝)。预分配 8 层(2048x2048 RGBA8, ~128MB)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 切换为 CJK 静态图集渲染(若字符在图集中), 否则降级为内置 8x16 位图+U+FFFD。与 [10.2.23] 统一。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。内置字体
 ### 文本布局引擎 ([10.2.7] — 自动换行/对齐(H/V)/行间距/中英混排/ruby(Ruby 注解规范: 注音默认居中对齐基底字符上方, 多字符基底逐字对应; 换行时注音跟随基底字符移至下一行; 参考 HTML ruby 标准)注音
 ### 文本批处理 ([10.2.26] — MessageLayerCache 缓存顶点缓冲, 单 submit, O(1) draw call
 
@@ -169,6 +169,72 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ---
 
+
+
+---
+
+# Part 7: 输入系统
+
+## [7.1] 输入事件分发
+
+| 输入类型 | SDL 事件 | Lua 分发 | 优先级 |
+|---------|---------|--------|:----:|
+| 鼠标左键 | SDL_EVENT_MOUSE_BUTTON_DOWN | on_click(x,y,button) | 1 |
+| 鼠标移动 | SDL_EVENT_MOUSE_MOTION | on_mousemove(x,y) | 2 |
+| 键盘 | SDL_EVENT_KEY_DOWN | on_key(keycode,mod) | 1 |
+| 触控按下 | SDL_EVENT_FINGER_DOWN | 映射为鼠标点击 | 1 |
+| 触控移动 | SDL_EVENT_FINGER_MOTION | 映射为鼠标移动 | 2 |
+| 滚轮 | SDL_EVENT_MOUSE_WHEEL | on_scroll(dx,dy) | 3 |
+| 窗口 resize | SDL_EVENT_WINDOW_RESIZED | Engine::onResize | 0 |
+
+## [7.2] 输入焦点
+
+- **KAG**: 点击推进 [p] 等待, 右键/ESC 菜单。转场动画中屏蔽点击, 完成后恢复。
+- **GAME**: 事件分发给 CustomGame 回调, KAG 静默。
+- **全局热键**: F5 快速存档 / F7 快速读档 / F12 调试, 不受焦点限制。
+
+## [7.3] 触控手势 (移动平台 [10.2.64])
+
+- 单指: 映射为鼠标左键。双指缩放: 保留接口(Alpha 不实现)。长按 >500ms: 右键菜单。
+
+## [7.4] 输入屏蔽规则
+
+[p]/[wait]/playvoice 等待期间, 点击触发 coroutine.resume([10.2.33])。[quake] 期间屏蔽所有点击([10.2.42])。[trans]/[move] 期间屏蔽点击推进, 允许右键/ESC。
+
+
+
+
+# Part 8: 日志系统
+
+## [8.1] 日志级别
+
+| 级别 | 标识 | 用途 | Release |
+|------|------|------|:---:|
+| Debug | [DEBUG] | 每帧状态、内存 | 否 |
+| Info | [INFO] | 子系统初始化 | 是 |
+| Warn | [WARN] | 资源降级、性能警告 | 是 |
+| Error | [ERROR] | 脚本崩溃、GPU 故障 | 是 |
+
+## [8.2] 输出
+
+- 控制台: 始终输出(Release Info+)。
+- 文件: logs/caesura_YYYY-MM-DD_HH-MM-SS.log, 10MB 轮转(保留5个)。
+- Dev socket: 端口 9229 结构化日志。
+
+## [8.3] 格式
+
+```
+[2026-06-06 08:00:00.123] [INFO] [Audio] SoLoud initialized.
+[2026-06-06 08:00:00.456] [WARN] [Render] Texture pending: bg/01.png
+[2026-06-06 08:00:00.789] [ERROR] [Script] kag.lua:488: nil value
+```
+
+## [8.4] 性能约束
+
+高频操作(SE播放、render_batch)不输出日志。异步缓冲写入。
+
+
+
 ## [10.1] 决策索引
 
 | # | 决策 | 优先级 | 领域 |
@@ -235,8 +301,8 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 | 60 | Lua 内存硬上限(64K 检查) | P1 | 系统 |
 | 61 | [link] 完整语义+CancelToken | P1 | 脚本 |
 | 62 | 最坏情况 GPU 帧预算+Monitor | P1 | 渲染 |
-| 64 | 移动平台适配 | P2 | 平台 |
-| 63 | 多 CARC 链式信任(有效期可配置) | P0 | CARC/安全 |
+| 64 | 移动平台适配(iOS/Android, onPause/onResume Lua钩子) | P2 | 平台 |
+| 63 | 多 CARC 链式信任(Alpha 单主 CARC, Beta 链式+CRL)(有效期可配置) | P0 | CARC/安全 |
 
 ### 优先级分布
 
@@ -293,7 +359,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 ### [10.2.11] 音频混合模型
 
 **决策**: 非阻塞(playbgm/playse/fadebgm) -> batch 帧末提交。阻塞(playvoice/waitsound) -> 直调。3D -> 直调。
-**音频直调与批量执行顺序保证**: 直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 禁止同一流混用。**P1** 混用检测: C++ 音频管理器维护 per-stream 状态: `first_op_mode`(None/Batch/Direct, 每帧初重置) + `has_executed_direct`。在 play_xxx 入口处立即检查: 若当前帧 first_op_mode 已锁定且与本次操作模式不同 → 冲突。处理策略: **Debug 模式**: Lua 抛错 `audio_mixed_mode`; **Release 模式**: 自动将所有操作转为 Direct 模式(降级, 完全禁用批量提交, 所有操作立即执行, 保证同一流内顺序), 记录一次警告日志。帧末提交后重置所有 per-stream 状态。禁止同一流混用。**P0**。
+**音频直调与批量执行顺序保证**: 直调用立即生效, 帧末批量按 accumulate 顺序执行。直调先于批量, 禁止同一流混用。**P1** 混用检测: C++ 音频管理器维护 per-stream 状态: `first_op_mode`(None/Batch/Direct, 每帧初重置) + `has_executed_direct`。在 play_xxx 入口处立即检查: 若当前帧 first_op_mode 已锁定且与本次操作模式不同 → 冲突。处理策略: **Debug 模式**: Lua 抛错 `audio_mixed_mode`; **Release 模式**: 自动将所有操作转为 Direct 模式(降级, 完全禁用批量提交, 所有操作立即执行, 保证同一流内顺序), 记录一次警告日志。帧末提交后重置所有 per-stream 状态。禁止同一流混用。**P0**。若实现复杂度过高, 可退化为同一帧内所有音频统一直调, 删除批量提交。
 ### [10.2.12] TextureArray 字体图集
 
 **决策**: 预分配 4 层 2048x2048 RGBA8。shader: texture2DArray。
@@ -341,7 +407,7 @@ createTextureAsync(SDL_PushEvent 派发, 队列上限 256, 超限阻塞后台)+[
 
 ### [10.2.23] TextureArray 扩容
 
-**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间优先使用 CJK 静态图集([10.2.54])渲染, 若字符不在图集中则降级为内置位图+U+FFFD, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。。8 层约 8000 CJK。
+**决策**: A/B 双阵列。85% 触发(空闲时刻执行)。1-2 帧半透明遮罩+沙漏进度指示。扩容期间 TextRenderer 切换为 CJK 静态图集渲染(若字符在图集中), 否则降级为内置 8x16 位图+U+FFFD。与 [10.2.23] 统一。, 翻页/跳过输入不受影响。扩容完成后自动恢复 FreeType 矢量渲染。。8 层约 8000 CJK。
 
 ### [10.2.24] FFmpeg/H.264 集成(P1, Beta 起默认 ON)
 
@@ -414,7 +480,7 @@ Beta(+15): trans, move, quake, fade, blur, playse3d, fadebgm, xfadebgm, save, lo
 
 **决策**: Intel HD 620, 2C 2.0GHz, 4GB RAM, 60 FPS。每帧: SDL<0.5, Lua<3, Audio<0.5, Layer<1, GPU理想<10ms(典型场景)。最坏情况硬上限 16ms 见 [10.2.62]。
 
---- OS: Win10 22H2+ / Linux 5.10+。bgfx 后端: Vulkan 1.1+ / D3D11 / Metal。
+--- OS: Win10 22H2+ / Linux 5.10+。bgfx 后端: Vulkan 1.1+ / D3D11 / Metal(macOS)。
 
 **典型场景预期**: 背景1层+立绘1层+文本层+BGM+SE = <8ms/frame(HD620); 转场动画 +2ms; 视频解码 +3ms。### [10.2.41] [move] 贝塞尔曲线数学定义
 
@@ -449,10 +515,10 @@ Engine embeds ENGINE_VERSION. CARC.version <= ENGINE_VERSION allowed. Binary che
 
 ### [10.2.47] [eval]/[emb] Lua Sandbox
 
-_ENV whitelist: KAG,Render,math,string,table. Block: os,io,package,debug,require,dofile,loadfile. **Render 仅暴露高层游戏命令**, 完整白名单(14 API): load_image, load_texture, destroy_texture, set_blend, set_blend_mode, create_viewport, destroy_viewport, draw_viewport, create_solid_texture, get_viewport_texture, set_viewport_clear, create_texture_async, set_font, get_text_bounds。禁止: 创建着色器/修改管线/直接 bgfx API。**禁止直接访问 bgfx 底层 API** (submit, setViewRect, setTransform 等 Render 内部实现细节, 不入 Lua API)。Dev mode relaxed, release strict. **P0**.
+_ENV whitelist: KAG,Render,math,string,table. Block: os,io,package,debug,require,dofile,loadfile. **Render 仅暴露高层游戏命令**, 完整白名单(14 API): load_image, load_texture, destroy_texture, set_blend, set_blend_mode, create_viewport, destroy_viewport, draw_viewport, create_solid_texture, get_viewport_texture, set_viewport_clear, create_texture_async, set_font, get_text_bounds。禁止: 创建着色器/修改管线/直接 bgfx API。视口数量硬上限 max_viewports=16。**禁止直接访问 bgfx 底层 API** (submit, setViewRect, setTransform 等 Render 内部实现细节, 不入 Lua API)。Dev mode relaxed, release strict. **P0**.
 
 ---
-同时禁止: load, rawget, rawset, _G 不可访问。**[eval]** 当前协程, 读写 f/sf/tf。**禁止在 [eval]/[emb] 内执行控制流命令** ([jump]/[link]/[call]/[return_]/[end_]), 违反则 Lua 抛错。**[emb]** 临时协程, return 返回。
+同时禁止: load, rawget, rawset, _G 不可访问。**[eval]** 当前协程, 读写 f/sf/tf。**禁止在 [eval]/[emb] 内执行控制流命令及阻塞操作(playvoice/wait/[p]/[trans] 等)。若外部 CancelToken 取消, 直接终止临时协程并 Lua 抛错。** ([jump]/[link]/[call]/[return_]/[end_]), 违反则 Lua 抛错。**[emb]** 临时协程, return 返回。
 ### [10.2.48] Hot-Reload Static Analysis
 
 C++ handle validity check post-reload. Invalid handles -> INVALID_HANDLE sentinel. proxy.lua audit module (dev mode). **P2**.
@@ -535,7 +601,7 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 **决策**: 目标硬件 HD 620 集成显卡预算: 4 图层x2048x2048 RGBA8 纹理采样(~8ms) + 28 种混合模式单 Pass(~2ms) + 调色板 LUT(~1ms) + 字体批处理(~1ms) + 离屏 RTT(~2ms) + 余量(2ms) = <=16ms/帧(>=60 FPS)。超出预算时: (1) 降低混合模式复杂度(关闭非必要图层混合) (2) 缩小 RTT 分辨率 (3) 降级为内置字体。**P1**.
 
 ---
-**GraphicsMonitor**: 每帧 gpuTimeMs。连续 3 帧 >18ms 降级, 30 帧 <12ms 恢复。降级顺序: (1) 关闭抗锯齿(MSAA 4x->1x, config.msaa 控制) (2) 降低 RTT 分辨率到 0.5x (3) 禁用后处理特效 (4) 降级为内置字体。逐级尝试, 每级等待 10 帧评估效果。config.quality 允许用户手动设置档位(low/medium/high/auto), 禁用自动降级。
+**GraphicsMonitor**: 每帧 gpuTimeMs(若 bgfx 不支持 GPU 计时, 降级为 CPU帧预算: 子系统上报->主线程汇总)。连续 3 帧 >18ms 降级, 30 帧 <12ms 恢复。降级顺序: (1) 关闭抗锯齿(MSAA 4x->1x, config.msaa 控制) (2) 降低 RTT 分辨率到 0.5x (3) 禁用后处理特效 (4) 降级为内置字体。逐级尝试, 每级等待 10 帧评估效果。config.quality 允许用户手动设置档位(low/medium/high/auto), 禁用自动降级。
 
 ### [10.2.64] 移动平台适配 (iOS/Android)
 
@@ -563,6 +629,31 @@ RTT, LUT, Ed25519, AES-256-GCM, zstd, SPIR-V, HAL, PTS, NDC, CARC, KAG, LPeg, Ca
 
 ### P2 (14 项): Beta 迭代
 包含: 3D清除/CARC回滚+差分/FFmpeg/纹理扩容/i18n/Lua5.4/图集锁/热重载分析/词汇表/RTT锁+并发
+
+
+### [10.2.65] API 数据结构原型
+
+**CancelToken (Lua)**:
+```
+CancelToken = {
+  register = function(self, cancel_fn) end,
+  cancel = function(self) end
+}
+```
+
+**create_viewport 参数**:
+```
+{ width=400, height=300, clear_color={0,0,0,0}, clear_depth=1.0, no_clear=false }
+```
+
+**mark_dirty_with_transparency(rect)**: rect = {x,y,w,h}。Erase/Alpha 模式强制标记全图层。
+
+**max_viewports = 16**: 超限 Lua 抛错。
+
+**lua_Alloc 钩子**: 每次分配后检查 lua_gc(L, LUA_GCCOUNT), 超 256MB 立即抛错。
+
+**P1**.
+
 
 ---
 
