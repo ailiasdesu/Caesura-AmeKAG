@@ -669,6 +669,102 @@ CancelToken = {
 **P1**.
 
 
+
+### [10.2.66] 剩余小 Issue 解决路径清单
+
+历轮审查中不阻塞编码但需有明确解决路径的非关键问题。每个条目: 解决思路 + 实现路径 + 实施阶段。
+
+---
+
+**I1. 着色器组合爆炸 (28 混合 x N Palette)**
+
+- 思路: 运行时按需编译 + LRU 缓存(max 64)。
+- 路径: CompositeShaderCache (unordered_map<hash, ProgramHandle>)。首次请求编译(1-3ms), 缓存满 LRU 淘汰。Alpha 预编译 10 种常用组合。
+- 阶段: Alpha(10种) / Beta(28种)
+
+---
+
+**I2. TextureArray + CJK + 位图三层 Fallback**
+
+- 思路: 三阶段 fallback 链路, 预分配避免运行时扩容。
+- 路径: 第一优先 FreeType(8层预分配) -> 第二优先 CJK 静态图集(独立纹理) -> 第三优先 8x16 位图+U+FFFD。Alpha 不实现动态扩容(P2)。
+- 阶段: Alpha(预分配+三层fallback) / P2(动态扩容)
+
+---
+
+**I3. 逐字打字机效果的顶点缓冲增量更新**
+
+- 思路: 文本层脏范围标记, 仅重建变化段。
+- 路径: MessageLayerCache.dirty_char_range={start,end}。[ch] 仅标记新增字符。每帧 rebuild_range() 更新 TransientVertexBuffer。完整重建仅在 [r]/[er]/[font] 触发。
+- 阶段: Alpha
+
+---
+
+**I4. RTT 池纹理复用的残留帧清除**
+
+- 思路: 默认 clear, 可选 no_clear。
+- 路径: RTTManager::acquire(w,h,clear_mode)。DEFAULT 模式 bgfx 自动清除。NO_CLEAR 调用者保证覆盖全像素。从池取出即使 no_clear 也保证首帧有效。
+- 阶段: Alpha
+
+---
+
+**I5. CARC 差分更新状态文件**
+
+- 思路: JSON 状态机 + SHA256 校验和。
+- 路径: .carc_update_state = {phase: updating|committing|rollback, checksum, timestamp}。启动时检测: committing+校验OK=完成, updating=回滚, 损坏=提示用户。
+- 阶段: Beta (Alpha 不实现差分)
+
+---
+
+**I6. 转场+视频同时触发帧预算超限**
+
+- 思路: 视频优先, 转场降级。
+- 路径: 两者同时活跃时视频保持原帧率, 转场降级为简单淡入淡出。GraphicsMonitor 3帧>16ms 自动触发。config.video_priority 可配置。
+- 阶段: Beta
+
+---
+
+**I7. CJK/ASCII/Emoji 混排字符宽度**
+
+- 思路: 统一宽度表, CJK=2x, ASCII=1x。
+- 路径: TextRenderer::getCharWidth(): CJK(U+4E00-U+9FFF等) 2x, ASCII 1x。Emoji 降级为 U+FFFD(若 FreeType 不支持)。自动换行基于累积宽度。
+- 阶段: Alpha
+
+---
+
+**I8. 音频资源 LRU 卸载**
+
+- 思路: 引用计数 + 最近最少使用淘汰。
+- 路径: AudioCacheEntry{handle, ref_count, last_used, size}。每次 play ref_count++, stop ref_count--。总缓存超 128MB 时 LRU 卸载 ref_count=0 的句柄(SE优先)。
+- 阶段: Alpha
+
+---
+
+**I9. 调试协议与热重载状态互斥**
+
+- 思路: 三态 ScriptState 状态机。
+- 路径: IDLE/DEBUG_ACTIVE/RELOADING 互斥。调试中热重载排队, 重载中斷开 socket+移除钩子。
+- 阶段: P2 (Alpha: lua_sethook 单步, 无网络协议)
+
+---
+
+**I10. 移动平台 onPause/onResume**
+
+- 思路: 预定义 Lua 钩子 + 引擎自动处理。
+- 路径: _G.onPause/_G.onResume 全局回调。SDL_EVENT_DID_ENTER_BACKGROUND 暂停 SoLoud+帧循环。FOREGROUND 恢复+调用钩子。
+- 阶段: P2 (Alpha 仅桌面)
+
+---
+
+**实施优先级**:
+| 阶段 | Issue | 数量 |
+|------|-------|:---:|
+| Alpha | I3打字机/I4 RTT/I7字符/I8 LRU | 4 |
+| Alpha(部分) | I1着色器(10种)/I2 fallback(预分配) | 2 |
+| Beta | I5差分/I6转场/I9调试/I10移动 | 4 |
+
+**P2**.
+
 ---
 
 ## [10.4] 设计质量结论
