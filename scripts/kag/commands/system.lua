@@ -173,4 +173,14 @@ function SystemCommands.eval(ctx, params)
     end
 end
 
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [history] — open backlog overlay UI
+--  U3: Backlog display. Opens scrollable overlay with jump + voice replay.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function SystemCommands.history(ctx, params)
+    local HistoryUI = require("history_ui")
+    return HistoryUI.show(ctx)
+end
+
 return SystemCommands

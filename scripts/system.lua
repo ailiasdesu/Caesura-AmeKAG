@@ -121,7 +121,7 @@ end
 -- ===========================================================================
 
 --- System.push_backlog(ctx, text, voice_file) -- push entry to backlog
---- BacklogEntry: { text, voice, layers, timestamp, chapter }
+--- BacklogEntry: { text, voice, layers, timestamp, chapter, scene, token_index }
 function System.push_backlog(ctx, text, voice_file)
     if not ctx then return end
     ctx.backlog = ctx.backlog or {}
@@ -142,6 +142,8 @@ function System.push_backlog(ctx, text, voice_file)
         layers    = layersSnapshot,
         timestamp = os.time(),
         chapter   = ctx.currentChapter or "",
+        scene     = ctx.current_scene,
+        token_index = ctx.token_index,
     }
     table.insert(ctx.backlog, entry)
 
