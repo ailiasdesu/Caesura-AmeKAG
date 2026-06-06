@@ -1,4 +1,4 @@
- #include "BgfxRenderDevice.h"
+﻿ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
@@ -381,6 +381,8 @@ void BgfxRenderDevice::initEmbeddedShaders() {
 
     printf("[BgfxRenderDevice] initEmbeddedShaders: renderer=%s\n",
            bgfx::getRendererName(renderer));
+    // Initialize ShaderCache before registering any programs
+    CompositeShaderCache::instance().init();
 
     const uint8_t*  vsCode     = nullptr;
     uint32_t        vsCodeSize = 0;
@@ -1092,5 +1094,4 @@ void BgfxRenderDevice::affineBlt(uint16_t targetView, uint32_t dstTexId,
 }
 
 } // namespace Caesura
-
 
