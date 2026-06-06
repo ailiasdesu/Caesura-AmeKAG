@@ -91,6 +91,11 @@ bool FontRenderer::init(const std::string& fontPath, float fontSize) {
 }
 
 void FontRenderer::shutdown() {
+    if (bgfx::isValid(m_cjkAtlas)) {
+        bgfx::destroy(m_cjkAtlas);
+        m_cjkAtlas = BGFX_INVALID_HANDLE;
+    }
+    m_cjkGlyphs.clear();
     if (!m_initialized) return;
 
     if (bgfx::isValid(m_atlas))            bgfx::destroy(m_atlas);
@@ -208,6 +213,65 @@ bool FontRenderer::rasterizeGlyph(char32_t cp) {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// CJK static atlas fallback (G8-U5) -- spec [10.2.54]
+// Fallback chain: dynamic atlas -> CJK static atlas -> built-in bitmap -> empty
+// ---------------------------------------------------------------------------
+
+bool FontRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath) {
+    // Load raw RGBA8 atlas texture (4096x4096)
+    FILE* f = fopen(atlasPath.c_str(), "rb");
+    if (!f) {
+        fprintf(stderr, "[FontRenderer] CJK atlas not found: %s (skipping)\n", atlasPath.c_str());
+        return false;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    std::vector<uint8_t> data(size);
+    fread(data.data(), 1, size, f);
+    fclose(f);
+
+    const uint16_t cjkW = 4096, cjkH = 4096;
+    m_cjkAtlas = bgfx::createTexture2D(cjkW, cjkH, false, 1,
+        bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP,
+        bgfx::copy(data.data(), (uint32_t)(cjkW * cjkH * 4)));
+    if (!bgfx::isValid(m_cjkAtlas)) {
+        fprintf(stderr, "[FontRenderer] CJK atlas texture creation failed\n");
+        return false;
+    }
+
+    // Load glyph metadata binary
+    FILE* mf = fopen(metaPath.c_str(), "rb");
+    if (!mf) {
+        fprintf(stderr, "[FontRenderer] CJK metadata not found: %s\n", metaPath.c_str());
+        bgfx::destroy(m_cjkAtlas);
+        m_cjkAtlas = BGFX_INVALID_HANDLE;
+        return false;
+    }
+    uint32_t count = 0;
+    fread(&count, sizeof(count), 1, mf);
+    m_cjkGlyphs.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t cp;
+        CjkGlyph g;
+        fread(&cp, sizeof(cp), 1, mf);
+        fread(&g.x, sizeof(g.x), 1, mf);
+        fread(&g.y, sizeof(g.y), 1, mf);
+        fread(&g.w, sizeof(g.w), 1, mf);
+        fread(&g.h, sizeof(g.h), 1, mf);
+        fread(&g.advance, sizeof(g.advance), 1, mf);
+        fread(&g.offsetX, sizeof(g.offsetX), 1, mf);
+        fread(&g.offsetY, sizeof(g.offsetY), 1, mf);
+        m_cjkGlyphs[cp] = g;
+    }
+    fclose(mf);
+
+    printf("[FontRenderer] CJK static atlas loaded: %u glyphs (%dx%d)\n", count, cjkW, cjkH);
+    return true;
+}
+
 bool FontRenderer::ensureGlyph(char32_t cp) {
     if (m_cache.count(cp)) return true;
     return rasterizeGlyph(cp);
@@ -218,23 +282,40 @@ bool FontRenderer::ensureGlyph(char32_t cp) {
 // ---------------------------------------------------------------------------
 
 FontGlyph FontRenderer::getGlyph(char32_t codepoint) {
+    // 1. Check dynamic atlas cache
     auto it = m_cache.find(codepoint);
     if (it != m_cache.end())
         return it->second;
 
-    // Try lazy rasterize for CJK / uncached glyphs
-    if (rasterizeGlyph(codepoint)) {
+    // 2. CJK static atlas fallback (during expansion or as secondary cache)
+    if (bgfx::isValid(m_cjkAtlas)) {
+        auto cjkIt = m_cjkGlyphs.find(codepoint);
+        if (cjkIt != m_cjkGlyphs.end()) {
+            FontGlyph cjk;
+            cjk.x       = cjkIt->second.x;
+            cjk.y       = cjkIt->second.y;
+            cjk.w       = cjkIt->second.w;
+            cjk.h       = cjkIt->second.h;
+            cjk.advance = cjkIt->second.advance;
+            cjk.offsetX = cjkIt->second.offsetX;
+            cjk.offsetY = cjkIt->second.offsetY;
+            return cjk;
+        }
+    }
+
+    // 3. Try lazy rasterize (skip during expansion)
+    if (!m_expanding && rasterizeGlyph(codepoint)) {
         it = m_cache.find(codepoint);
         if (it != m_cache.end())
             return it->second;
     }
 
-    // Fallback to U+FFFD (REPLACEMENT CHARACTER)
+    // 4. Fallback to U+FFFD (REPLACEMENT CHARACTER)
     if (codepoint != 0xFFFD) {
         return getGlyph(0xFFFD);
     }
 
-    // Absolute last resort: 8px advance empty glyph (no texture)
+    // 5. Absolute last resort: 8px advance empty glyph
     FontGlyph fb{};
     fb.advance = 8;
     return fb;

@@ -5,6 +5,7 @@
 --  size, clipping, hit testing, dirty tracking, per-layer RTT.
 --  Render pipeline: DFS traversal → z-order sort → blend child RTs →
 --  submit via backend.submit_batch → flush to screen.
+--  Uses pool.lua for per-frame batch command tables (reduces GC).
 --  Krkrz reference: LayerIntf.h, LayerManager.h, drawable.h (28 blend types)
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -450,7 +451,9 @@ function Layers.render()
     local root = Layers.get_root()
     if not root then return end
 
-    local batch = { commands = {}, layer_count = 0 }
+    local batch = pool.eventTablePool:acquire()
+    batch.commands = pool.eventTablePool:acquire()
+    batch.layer_count = 0
 
     local function renderNode(node, parent_wx, parent_wy)
         if not node or not node.visible then return end

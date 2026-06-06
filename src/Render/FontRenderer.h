@@ -26,8 +26,26 @@ struct FontGlyph {
 };
 
 // ---------------------------------------------------------------------------
+// CjkGlyph — pre-built CJK static atlas entry (G8-U5)
+// Loaded from a pre-generated atlas binary at init.  Used as a fallback
+// layer during dynamic atlas expansion so CJK text never degrades to
+// built-in bitmap unless the character truly isn''t available.
+// ---------------------------------------------------------------------------
+
+struct CjkGlyph {
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
+    int16_t  advance = 0;
+    int16_t  offsetX = 0;
+    int16_t  offsetY = 0;
+};
+
+// ---------------------------------------------------------------------------
 // PosTexVertex — 2D position + UV for glyph quad submission
 // ---------------------------------------------------------------------------
+
 
 struct PosTexVertex {
     float x, y;
@@ -98,6 +116,10 @@ public:
     void invalidateCache();
     const MessageLayerCache& cache() const { return m_msgCache; }
 
+    // -- CJK static atlas (G8-U5) ------------------------------------------
+    bool loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath);
+    bool isExpanding() const { return m_expanding; }
+
     // -- Metrics -----------------------------------------------------------
     float lineHeight()     const { return m_lineHeight; }
     float ascender()       const { return m_ascender; }
@@ -132,6 +154,11 @@ private:
 
     // -- Glyph cache -----------------------------------------------------------
     std::unordered_map<uint32_t, FontGlyph> m_cache;
+
+    // -- CJK static atlas fallback (G8-U5) --------------------------------------
+    bgfx::TextureHandle m_cjkAtlas = BGFX_INVALID_HANDLE;
+    std::unordered_map<uint32_t, CjkGlyph> m_cjkGlyphs;
+    bool m_expanding = false;  // true while dynamic atlas is resizing
 
     // -- bgfx resources for quad submission ------------------------------------
     bgfx::VertexLayout   m_layout;

@@ -1,4 +1,4 @@
--- ===========================================================================
+﻿-- ===========================================================================
 --  Caesura (AmeKAG) -- backend.lua
 --  Spec [0.4]: Unified C++ backend proxy.
 --  Resolution order: 1. _CAESURA_BACKEND  2. direct KAG/Render/DevCore

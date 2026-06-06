@@ -6,6 +6,7 @@ extern "C" {
 #include "../Core/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
 #include "../Scripting/VFXBinding.h"
+#include "../Resource/AsyncLoader.h"
 #include <cstdio>
 #include <cstring>
 
@@ -69,7 +70,7 @@ static int lua_Backend_render(lua_State* L) {
         {"clear_text","clear_text"}, {"render_ruby","render_ruby"},
         {"set_font","set_font"}, {"line_height","line_height"},
         {"begin_batch","begin_batch"}, {"flush_batch","flush_batch"},
-        {"resize","resize"}, {nullptr,nullptr}
+        {"resize","resize"}, {"load_texture_async","load_texture_async"}, {"cancel_async_loads","cancel_async_loads"}, {nullptr,nullptr}
     };
     for (auto* m = map; m->cmd; m++) {
         if (strcmp(cmd, m->cmd) == 0) {
@@ -216,6 +217,67 @@ static int lua_Backend_show_text(lua_State* L)   { return delegateToGlobalFunc(L
 static int lua_Backend_show_image(lua_State* L)  { return delegateToGlobalFunc(L, "KAG", "show_image"); }
 static int lua_Backend_clear_screen(lua_State* L){ return delegateToGlobalFunc(L, "KAG", "clear_screen"); }
 static int lua_Backend_wait_click(lua_State* L)  { return delegateToGlobalFunc(L, "KAG", "wait_click"); }
+
+
+// =========================================================================
+//  b:render("load_texture_async", path, callback_fn) ? async load
+// =========================================================================
+
+static int lua_Backend_load_texture_async(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    if (!lua_isfunction(L, 2)) {
+        lua_pushnil(L);
+        lua_pushstring(L, "load_texture_async: second argument must be a callback function");
+        return 2;
+    }
+
+    // Store callback in registry so it survives across yields
+    lua_pushvalue(L, 2);  // copy callback
+    int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    int reqId = AsyncLoader::instance().enqueue(path, "texture");
+    if (reqId < 0) {
+        luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "Queue full (max 16 pending)");
+        return 2;
+    }
+
+    // Store (reqId, cbRef) mapping in a global weak table
+    lua_getglobal(L, "_ASYNC_CALLBACKS");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "_ASYNC_CALLBACKS");
+    }
+    lua_pushinteger(L, reqId);
+    lua_pushinteger(L, cbRef);
+    lua_settable(L, -3);
+    lua_pop(L, 1);
+
+    lua_pushinteger(L, reqId);
+    return 1;
+}
+
+static int lua_Backend_cancel_async_loads(lua_State* L) {
+    AsyncLoader::instance().cancelAll();
+    // Release all stored callbacks
+    lua_getglobal(L, "_ASYNC_CALLBACKS");
+    if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            int cbRef = (int)lua_tointeger(L, -1);
+            luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+            lua_pop(L, 1);
+        }
+        lua_newtable(L);
+        lua_setglobal(L, "_ASYNC_CALLBACKS");
+    }
+    lua_pop(L, 1);
+    lua_pushboolean(L, 1);
+    return 1;
+}
 
 // =========================================================================
 //  Module registration

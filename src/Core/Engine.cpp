@@ -19,6 +19,7 @@
 #include "../Scripting/LuaManager.h"
 #include "../System/SaveManager.h"
 #include "../Debug/HotReload.h"
+#include "../Resource/AsyncLoader.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/bx.h>
@@ -132,6 +133,9 @@ bool Engine::init(const char* title, int width, int height) {
     // -- Phase 8.1: Initialize HotReload for scripts/ directory -----------
     HotReload::instance().init("scripts/", m_lua->state());
 
+    // Phase G8-U3: Initialize AsyncLoader for background asset loading
+    AsyncLoader::instance().init();
+
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     return true;
 }
@@ -153,6 +157,9 @@ void Engine::run() {
 
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
+
+        // Phase G8-U3: Poll async load completions
+        AsyncLoader::instance().poll();
 
         // -- Phase G8-U1: Lua memory budget check (every frame) ---------------
         lua_State* Lgc = m_lua->state();
@@ -231,9 +238,44 @@ void Engine::processEvents() {
     lua_State* L = m_lua->state();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
-            m_running = false;
-            return;
+        // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
+        if (event.type == CAESURA_EVENT_ASYNC_LOAD && L) {
+            auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
+            if (completed) {
+                lua_getglobal(L, "_ASYNC_CALLBACKS");
+                if (lua_istable(L, -1)) {
+                    lua_pushinteger(L, completed->id);
+                    lua_gettable(L, -2);
+                    int cbRef = (int)lua_tointeger(L, -1);
+                    lua_pop(L, 2);
+                    if (cbRef > 0) {
+                        lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
+                        if (lua_isfunction(L, -1)) {
+                            lua_pushboolean(L, completed->success ? 1 : 0);
+                            lua_pushstring(L, completed->path.c_str());
+                            lua_pushinteger(L, (lua_Integer)completed->data.size());
+                            if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+                                fprintf(stderr, "[AsyncLoader] callback error: %s\n",
+                                        lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                                lua_pop(L, 1);
+                            }
+                            printf("[AsyncLoader] Callback #%d: %s (%s)\n",
+                                   completed->id, completed->path.c_str(),
+                                   completed->success ? "ok" : "fail");
+                        } else { lua_pop(L, 1); }
+                        luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+                        lua_getglobal(L, "_ASYNC_CALLBACKS");
+                        if (lua_istable(L, -1)) {
+                            lua_pushinteger(L, completed->id);
+                            lua_pushnil(L);
+                            lua_settable(L, -3);
+                        }
+                        lua_pop(L, 1);
+                    }
+                } else { lua_pop(L, 1); }
+                delete completed;
+            }
+            continue;
         }
 
         if ((event.type == SDL_EVENT_MOUSE_MOTION ||
@@ -368,6 +410,7 @@ void Engine::shutdown() {
     // Reset error crash counters on clean shutdown
     ErrorUI::resetCounters();
 
+    AsyncLoader::instance().shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
