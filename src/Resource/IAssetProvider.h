@@ -1,4 +1,4 @@
-﻿// IAssetProvider — abstract interface for asset sources
+﻿// IAssetProvider -- abstract interface for asset sources
 #pragma once
 #include <string>
 #include <vector>

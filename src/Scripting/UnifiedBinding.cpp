@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -13,7 +13,7 @@ extern "C" {
 namespace Caesura {
 
 // =========================================================================
-//  Unified _CAESURA_BACKEND Lua proxy — spec [0.4]
+//  Unified _CAESURA_BACKEND Lua proxy -- spec [0.4]
 //  ALL commands delegate to existing Render / KAG / DevCore globals.
 //  No duplicated logic; single source of truth.
 // =========================================================================
@@ -52,7 +52,7 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) — render → Render, particles → VFX
+//  b:render(cmd, ...) -- render → Render, particles → VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
@@ -100,7 +100,7 @@ static int lua_Backend_render(lua_State* L) {
 }
 
 // =========================================================================
-//  b:audio(cmd, ...) — ALL audio commands delegate to KAG table
+//  b:audio(cmd, ...) -- ALL audio commands delegate to KAG table
 //  Fix #9: is_playing supports bus-dependent routing
 // =========================================================================
 
@@ -188,7 +188,7 @@ static int lua_Backend_audio(lua_State* L) {
 }
 
 // =========================================================================
-//  b:platform(cmd, ...) — ALL platform commands delegate to DevCore
+//  b:platform(cmd, ...) -- ALL platform commands delegate to DevCore
 // =========================================================================
 
 static int lua_Backend_platform(lua_State* L) {
@@ -210,7 +210,7 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience — delegate to KAG
+//  UI convenience -- delegate to KAG
 // =========================================================================
 
 static int lua_Backend_show_text(lua_State* L)   { return delegateToGlobalFunc(L, "KAG", "show_text"); }

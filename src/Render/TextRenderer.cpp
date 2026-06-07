@@ -1,4 +1,4 @@
-#include "TextRenderer.h"
+ï»¿#include "TextRenderer.h"
 #include "BgfxRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -14,12 +14,12 @@
 namespace Caesura {
 
 // ===========================================================================
-// UTF-8 Decode Helper ¡ª consume multi-byte sequences as single codepoints
+// UTF-8 Decode Helper ï¿½ï¿½ consume multi-byte sequences as single codepoints
 // ===========================================================================
 
 static int utf8_char_len(uint8_t lead) {
     if (lead < 0x80) return 1;
-    if (lead < 0xC0) return 1;  // continuation byte ¡ª treat as '?'
+    if (lead < 0xC0) return 1;  // continuation byte ï¿½ï¿½ treat as '?'
     if (lead < 0xE0) return 2;
     if (lead < 0xF0) return 3;
     return 4;
@@ -343,7 +343,7 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
     if (id == FontId::Large) buildFont16x32();
 
-    // Atlas: 32 cols ¡Á 3 rows = 96 glyphs, RGBA8
+    // Atlas: 32 cols ï¿½ï¿½ 3 rows = 96 glyphs, RGBA8
     int atlasW = glyphW * 32;                     // 256 or 512
     int atlasH = glyphH * 3;                      // 48 or 96
     int totalPixels = atlasW * atlasH;

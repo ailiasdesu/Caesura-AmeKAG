@@ -1,4 +1,4 @@
-﻿// CRLManager implementation — CRL parsing, caching, online fetch, revocation checks.
+﻿// CRLManager implementation -- CRL parsing, caching, online fetch, revocation checks.
 // Uses CryptoEngine for Ed25519 signature verification and SHA-256 fingerprinting.
 #include "CRLManager.h"
 #include "CryptoEngine.h"
@@ -8,7 +8,7 @@
 #include <thread>
 #include <chrono>
 
-// Simple JSON parsing — no external dependency for this lightweight CRL format.
+// Simple JSON parsing -- no external dependency for this lightweight CRL format.
 // Expected structure:
 // {
 //   "version": 1,
@@ -148,7 +148,7 @@ void CRLManager::setRootPublicKey(const uint8_t key[32]) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  verify — check a certificate against the CRL
+//  verify -- check a certificate against the CRL
 // ══════════════════════════════════════════════════════════════════════════
 bool CRLManager::verify(const std::string& pubKeyFingerprint, CRLMode mode) {
     bool fetched = false;
@@ -185,7 +185,7 @@ bool CRLManager::verify(const std::string& pubKeyFingerprint, CRLMode mode) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  fetchOnline — HTTPS fetch CRL → verify signature → cache locally
+//  fetchOnline -- HTTPS fetch CRL → verify signature → cache locally
 // ══════════════════════════════════════════════════════════════════════════
 bool CRLManager::fetchOnline(const std::string& url) {
     // This is a stub for offline/embedded use.
@@ -200,11 +200,11 @@ bool CRLManager::fetchOnline(const std::string& url) {
     //   4. Replace m_revoked with new entries
     //   5. Write JSON to m_cachePath for offline use
     (void)url;
-    return false; // Online fetch not yet connected — use local cache
+    return false; // Online fetch not yet connected -- use local cache
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  loadLocalCache — load CRL from saves/crl_cache.json
+//  loadLocalCache -- load CRL from saves/crl_cache.json
 // ══════════════════════════════════════════════════════════════════════════
 bool CRLManager::loadLocalCache() {
     if (m_cachePath.empty()) return false;
@@ -220,7 +220,7 @@ bool CRLManager::loadLocalCache() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  isRevoked — set lookup
+//  isRevoked -- set lookup
 // ══════════════════════════════════════════════════════════════════════════
 bool CRLManager::isRevoked(const std::string& fingerprint) const {
     return m_revoked.find(fingerprint) != m_revoked.end();
@@ -243,7 +243,7 @@ void CRLManager::clear() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  parseCRL — parse CRL JSON, verify signature, populate revoked set
+//  parseCRL -- parse CRL JSON, verify signature, populate revoked set
 // ══════════════════════════════════════════════════════════════════════════
 bool CRLManager::parseCRL(const std::string& json) {
     if (json.empty()) return false;
@@ -261,7 +261,7 @@ bool CRLManager::parseCRL(const std::string& json) {
     if (m_hasRootKey) {
         std::string payload, sigHex;
         if (!extractSignature(json, payload, sigHex)) {
-            return false; // malformed CRL — no signature
+            return false; // malformed CRL -- no signature
         }
 
         // Convert hex signature to binary
@@ -294,7 +294,7 @@ bool CRLManager::parseCRL(const std::string& json) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  generateCRL — produce a signed CRL JSON string from current revoked set
+//  generateCRL -- produce a signed CRL JSON string from current revoked set
 // ══════════════════════════════════════════════════════════════════════════
 std::string CRLManager::generateCRL() const {
     std::ostringstream oss;
@@ -331,7 +331,7 @@ std::string CRLManager::generateCRL() const {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  computeFingerprint — SHA-256 of public key data as hex string
+//  computeFingerprint -- SHA-256 of public key data as hex string
 // ══════════════════════════════════════════════════════════════════════════
 std::string CRLManager::computeFingerprint(const uint8_t* data, size_t len) {
     uint8_t hash[32];

@@ -1,4 +1,4 @@
- #pragma once
+﻿ #pragma once
 #include <cstdint>
 #include <cstddef>
 
@@ -34,7 +34,7 @@ extern const uint8_t  kEmbeddedDXBC_FS_Texture[];
 extern const size_t   kEmbeddedDXBC_FS_Texture_size;
 
 // ---------------------------------------------------------------------------
-// Precompiled DX11 DXBC bytecodes ¡ª blend / transition / VFX / fullscreen
+// Precompiled DX11 DXBC bytecodes -- blend / transition / VFX / fullscreen
 // ---------------------------------------------------------------------------
 
 extern const uint8_t  kEmbeddedDXBC_vs_fullscreen[];

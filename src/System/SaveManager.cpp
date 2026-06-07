@@ -1,7 +1,7 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — SaveManager.cpp
+//  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
-//  Uses raw string building for JSON — no external JSON library dependency.
+//  Uses raw string building for JSON -- no external JSON library dependency.
 //  Save format: {"schema_version":1,"timestamp":12345,"scene":"...","token_index":5,"thumbnail":"...","data":{...}}
 // ===========================================================================
 
@@ -89,7 +89,7 @@ std::string SaveManager::jsonBuildObj(
     return out;
 }
 
-// Simple JSON value extractors (no nesting, no arrays — flat top-level only)
+// Simple JSON value extractors (no nesting, no arrays -- flat top-level only)
 
 std::string SaveManager::jsonGetString(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\":\"";
@@ -194,7 +194,7 @@ bool SaveManager::save(int slot, const std::string& jsonData,
 
     std::string escapedData = jsonEscape(jsonData);
 
-    // Minimal JSON building — the data field is embedded as a string
+    // Minimal JSON building -- the data field is embedded as a string
     // (pre-escaped by the caller or Lua side via jsonEscape)
     std::string json = jsonBuildObj({
         {"schema_version", std::to_string(m_currentSchemaVersion)},
@@ -261,7 +261,7 @@ std::string SaveManager::load(int slot, SaveMeta* outMeta) {
         outMeta->schemaVersion = m_currentSchemaVersion;
     }
 
-    // Extract the "data" field — it's an embedded JSON object
+    // Extract the "data" field -- it's an embedded JSON object
     // Find the start of data: "data":{
     std::string dataKey = "\"data\":";
     size_t dataPos = json.find(dataKey);
@@ -422,7 +422,7 @@ bool SaveManager::migrateSave(std::string& jsonData) {
 
     if (ver == ENGINE_VERSION) return true;  // Current version, no migration needed
 
-    printf("[SaveManager] Engine version mismatch: %s (engine %s) — warn but continue loading\n",
+    printf("[SaveManager] Engine version mismatch: %s (engine %s) -- warn but continue loading\n",
            ver.c_str(), ENGINE_VERSION);
 
     // Future: chain migration functions here
@@ -448,7 +448,7 @@ void SaveManager::registerBuiltinMigrations() {
 
     // Current schema version starts at 1; register migrations here as
     // the schema evolves.
-    // For now, v1 is the current version — no migrations needed.
+    // For now, v1 is the current version -- no migrations needed.
 }
 
 } // namespace Caesura

@@ -1,4 +1,4 @@
-﻿// CARCReader — Read, verify, decrypt, and decompress files from a CARC archive.
+﻿// CARCReader -- Read, verify, decrypt, and decompress files from a CARC archive.
 // Phase 9: Chain trust verification (spec [10.2.63]) via verifyChainTrust().
 #pragma once
 #include "CARCFormat.h"

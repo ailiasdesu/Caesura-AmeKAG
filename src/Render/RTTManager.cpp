@@ -59,7 +59,7 @@ ViewportHandle RTTManager::acquireCanvas(int w, int h, RTType type, bool clear) 
         return pool[idx].handle;
     }
 
-    // No free match — create a new RTT
+    // No free match -- create a new RTT
     ViewportHandle hdl = m_device.createRenderTarget(w, h);
     if (hdl.id == 0) {
         fprintf(stderr, "[RTTManager] Failed to create %s RTT (%dx%d)\n",
@@ -111,7 +111,7 @@ void RTTManager::releaseCanvas(ViewportHandle handle) {
         }
     }
 
-    // Not in pool — fallback: just mark as available in whichever pool matches
+    // Not in pool -- fallback: just mark as available in whichever pool matches
     fprintf(stderr, "[RTTManager] releaseCanvas: handle %u not found in pool index, searching...\n", handle.id);
     for (auto& entry : m_pool2D) {
         if (entry.handle.id == handle.id) { entry.inUse = false; return; }
@@ -195,7 +195,7 @@ void RTTManager::destroyCanvas(ViewportHandle handle) {
     // For legacy callers, we use deferred destruction to be safe.
     // Direct callers should use destroyCanvasDeferred + flushDeferredDestroys.
     destroyCanvasDeferred(handle);
-    // Immediate flush for backward compat — callers expect immediate destruction
+    // Immediate flush for backward compat -- callers expect immediate destruction
     flushDeferredDestroys();
 }
 

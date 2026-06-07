@@ -1,4 +1,4 @@
-ï»¿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) â€” no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ¡ª no C build needed
 
 # Engine sources
 
@@ -247,3 +247,6 @@ message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 # -- Tools ----------------------------------------------------------------
 add_subdirectory(tools/carc_pack)
+
+# -- Unit Tests
+add_subdirectory(tests)

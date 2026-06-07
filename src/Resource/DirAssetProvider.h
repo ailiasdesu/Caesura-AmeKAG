@@ -1,4 +1,4 @@
-﻿// DirAssetProvider — reads files from a filesystem directory
+﻿// DirAssetProvider -- reads files from a filesystem directory
 #pragma once
 #include "IAssetProvider.h"
 #include <string>

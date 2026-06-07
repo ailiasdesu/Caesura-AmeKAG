@@ -45,7 +45,7 @@ public:
     // Cancel all pending and in-flight loads. Best-effort.
     void cancelAll();
 
-    // -- Polling (main thread) — returns true when a load completed --------
+    // -- Polling (main thread) -- returns true when a load completed --------
     // Called from main loop. Dispatches completion callbacks.
     bool poll();
 

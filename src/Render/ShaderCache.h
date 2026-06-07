@@ -10,7 +10,7 @@
 namespace Caesura {
 
 // ---------------------------------------------------------------------------
-// BlendMode — 28 Photoshop-compatible blend modes (matches fs_blend.sc)
+// BlendMode -- 28 Photoshop-compatible blend modes (matches fs_blend.sc)
 // ---------------------------------------------------------------------------
 enum class BlendMode : int {
     Normal       = 0,
@@ -45,7 +45,7 @@ enum class BlendMode : int {
 };
 
 // ---------------------------------------------------------------------------
-// CompositeShaderKey — unique key for a shader variant
+// CompositeShaderKey -- unique key for a shader variant
 // ---------------------------------------------------------------------------
 // Combines blend mode + whether palette LUT post-processing is required.
 // Future extensions: can add more flags (dithering, tone-mapping, etc.)
@@ -75,7 +75,7 @@ namespace std {
 namespace Caesura {
 
 // ---------------------------------------------------------------------------
-// CompositeShaderCache — LRU cache of bgfx::ProgramHandle variants
+// CompositeShaderCache -- LRU cache of bgfx::ProgramHandle variants
 // ---------------------------------------------------------------------------
 // Each variant is keyed by CompositeShaderKey: {blend_mode, use_palette}.
 // Max 64 entries; evicts least-recently-used when full.
@@ -83,10 +83,10 @@ namespace Caesura {
 //
 // Architecture invariant: bgfx::createProgram / bgfx::destroy must be called
 // on the main thread only.  ShaderCache does NOT manage shader source
-// compilation — it assumes pre-compiled shader binaries are loaded via
+// compilation -- it assumes pre-compiled shader binaries are loaded via
 // EmbeddedShaders or a shader binary loader.
 //
-// Thread safety: not thread-safe by design — must be used from the main
+// Thread safety: not thread-safe by design -- must be used from the main
 // thread (bgfx requirement).
 
 class CompositeShaderCache {

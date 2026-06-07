@@ -144,7 +144,7 @@ void BgfxRenderDevice::flushBatch() {
     for (uint32_t qi = 0; qi < quadCount; qi++) {
         auto& q = m_batchQuads[qi];
 
-        // Check if next quad shares same texture �?merge if so
+        // Check if next quad shares same texture ??merge if so
         uint32_t mergeEnd = qi + 1;
         while (mergeEnd < quadCount &&
                m_batchQuads[mergeEnd].tex.idx == q.tex.idx &&
@@ -208,11 +208,11 @@ const char* BgfxRenderDevice::getBackendName() const {
 }
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
-    // [10.2.22] main-thread-only guarantee — architecture enforces, SDL_IsMainThread not in all SDL3 builds
+    // [10.2.22] main-thread-only guarantee �� architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
 
-    //                                                     ?bgfx platform setup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+        // -- bgfx platform setup
         // Register debug callback via bgfx::Init::callback
 
     // Platform data will be set via initParams.platformData directly
@@ -269,6 +269,14 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     printf("[BgfxRenderDevice] Initialized %dx%d with 3 views (order: RTT -> MAIN -> DEBUG)\n",
            width, height);
     m_bgfxInitialized = true;
+    // Pre-create vertex layout and sampler uniform (one-time, not per-frame lazy)
+    m_posTexLayout
+        .begin()
+        .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+        .end();
+    m_texSampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
+
 
     // Initialize embedded text renderer
     m_textRenderer = std::make_unique<TextRenderer>();
@@ -779,10 +787,10 @@ void BgfxRenderDevice::setDebugName(uint16_t viewId, const std::string& name) {
 
 
 // ===========================================================================
-//  GPU Effect: Blend �� two-texture blend with selectable mode
+//  GPU Effect: Blend -- two-texture blend with selectable mode
 
 // ===========================================================================
-//  fillViewport �?render solid-color quad into a viewport's RTT framebuffer
+//  fillViewport -- render solid-color quad into a viewport RTT framebuffer
 // ===========================================================================
 
 void BgfxRenderDevice::fillViewport(ViewportHandle handle,
@@ -923,7 +931,7 @@ void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
 }
 
 // ===========================================================================
-//  GPU Effect: Transition �� crossfade / rule / wipe between two textures
+//  GPU Effect: Transition ?? crossfade / rule / wipe between two textures
 // ===========================================================================
 
 void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
@@ -948,7 +956,7 @@ void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fro
 }
 
 // ===========================================================================
-//  GPU Effect: VFX �� fade / blur / quake post-processing
+//  GPU Effect: VFX ?? fade / blur / quake post-processing
 // ===========================================================================
 
 void BgfxRenderDevice::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
@@ -967,7 +975,7 @@ void BgfxRenderDevice::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
     // Vec4[0] = u_color (r,g,b, fadeAlpha)
     // Vec4[1] = u_blurR (x,y) + u_qx + u_qy
     // Vec4[2] = u_effect + padding
-    // VFXParams is a single Vec4[3] uniform �� set all 12 floats at once
+    // VFXParams is a single Vec4[3] uniform ?? set all 12 floats at once
     float vfxData[12] = {
         fadeR, fadeG, fadeB, fadeAlpha,
         blurRadius, blurRadius, quakeX, quakeY,

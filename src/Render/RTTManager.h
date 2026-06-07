@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "IRenderDevice.h"
 #include <cstdint>
 #include <unordered_set>
@@ -51,7 +51,7 @@ public:
 private:
     IRenderDevice& m_device;
 
-    // Pool storage — separate 2D and 3D pools
+    // Pool storage -- separate 2D and 3D pools
     std::vector<RTTEntry> m_pool2D;
     std::vector<RTTEntry> m_pool3D;
 
@@ -59,7 +59,7 @@ private:
     std::unordered_map<uint32_t, size_t> m_handleToPoolIndex;
     std::unordered_set<uint32_t> m_legacyHandles;
 
-    // Deferred destruction queue — handles destroyed at end-of-frame
+    // Deferred destruction queue -- handles destroyed at end-of-frame
     std::vector<ViewportHandle> m_deferredDestroy;
 
     // -- Internal helpers ----------------------------------------------------

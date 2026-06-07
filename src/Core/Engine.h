@@ -57,7 +57,7 @@ private:
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
 
-    // Audio voice-complete tracking (no polling — detects edge in main loop)
+    // Audio voice-complete tracking (no polling -- detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;
 
     // -- Phase G8-U1: Lua memory management

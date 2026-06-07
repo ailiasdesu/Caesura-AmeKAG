@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — DebugProtocol.h
+//  Caesura (AmeKAG) -- DebugProtocol.h
 //  Phase 8.2: Lua debug hooks for breakpoints, stepping, and inspection.
 //  Uses lua_sethook with LUA_MASKLINE for breakpoint detection.
 // ===========================================================================
@@ -50,7 +50,7 @@ public:
     int currentLine() const { return m_currentLine; }
     bool isDebugActive() const { return m_waitingForCommand; }
 
-    // Hook callback — registered via lua_sethook
+    // Hook callback -- registered via lua_sethook
     static void hookCallback(lua_State* L, lua_Debug* ar);
 
 private:

@@ -1,4 +1,4 @@
-﻿// CarcAssetProvider — wraps CARCReader as an IAssetProvider
+﻿// CarcAssetProvider -- wraps CARCReader as an IAssetProvider
 #pragma once
 #include "Resource/IAssetProvider.h"
 #include "CARCReader.h"

@@ -1,6 +1,6 @@
-﻿// MobileAdapter — Mobile platform interface stubs (P2 reserved).
+﻿// MobileAdapter -- Mobile platform interface stubs (P2 reserved).
 // Spec [10.2.64]: Touch input mapping, lifecycle events, DPI scaling.
-// All methods are stubs for future mobile port — no actual mobile code.
+// All methods are stubs for future mobile port -- no actual mobile code.
 // Namespace: caesura::platform (consistent with engine layering).
 #pragma once
 #include <cstdint>
@@ -19,7 +19,7 @@ struct TouchPoint {
     bool  active = false;
 };
 
-/// Mobile platform adapter — lifecycle + touch → input mapping.
+/// Mobile platform adapter -- lifecycle + touch → input mapping.
 /// P2 reserved: all implementations are placeholder stubs.
 class MobileAdapter {
 public:
@@ -38,21 +38,21 @@ public:
 
     // ── Touch → Mouse Mapping ──────────────────────────────────────────
 
-    /// Single finger down — maps to left mouse button press at (x, y).
+    /// Single finger down -- maps to left mouse button press at (x, y).
     void onFingerDown(float x, float y, int fingerId = 0);
 
-    /// Finger moved — maps to mouse motion at (x, y).
+    /// Finger moved -- maps to mouse motion at (x, y).
     void onFingerMotion(float x, float y, int fingerId = 0);
 
-    /// Finger lifted — maps to left mouse button release at (x, y).
+    /// Finger lifted -- maps to left mouse button release at (x, y).
     void onFingerUp(float x, float y, int fingerId = 0);
 
     // ── Gesture Input (reserved) ───────────────────────────────────────
 
-    /// Pinch gesture — zoom in/out (reserved for future).
+    /// Pinch gesture -- zoom in/out (reserved for future).
     void onPinch(float centerX, float centerY, float scale);
 
-    /// Long press > 500ms — maps to right mouse button click.
+    /// Long press > 500ms -- maps to right mouse button click.
     void onLongPress(float x, float y);
 
     // ── Display ────────────────────────────────────────────────────────

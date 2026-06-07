@@ -134,7 +134,7 @@ void AsyncLoader::workerLoop() {
             fprintf(stderr, "[AsyncLoader] Failed to open: %s\n", req.path.c_str());
         }
 
-                // Add to completed queue — main-thread poll() will push SDL events
+                // Add to completed queue -- main-thread poll() will push SDL events
         {
             std::lock_guard<std::mutex> lock(m_completeMutex);
             m_completed.push_back({req.id, req.path, std::move(data), success});

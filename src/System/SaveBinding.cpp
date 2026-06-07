@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — SaveBinding.cpp
+//  Caesura (AmeKAG) -- SaveBinding.cpp
 //  Phase 6: C++ Lua binding for save/load.
 //  Registers: KAG.save_game(jsonData, sceneName, tokenIndex, [thumbnail])
 //             KAG.load_game(slot) → jsonData, metaTable
@@ -21,7 +21,7 @@ namespace Caesura {
 // -- lua_Save_game ----------------------------------------------------------
 // KAG.save_game(jsonData, sceneName, tokenIndex, [thumbnailBase64]) → bool
 static int lua_Save_game(lua_State* L) {
-    // Determine slot: use KAG style — caller passes slot as first arg or
+    // Determine slot: use KAG style -- caller passes slot as first arg or
     // we auto-pick next available. Let's use explicit slot parameter.
     // Signature: save_game(slot, jsonData, sceneName, tokenIndex, [thumbnail])
     int slot        = (int)luaL_checkinteger(L, 1);

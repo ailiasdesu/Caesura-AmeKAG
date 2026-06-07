@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — DebugProtocol.cpp
+//  Caesura (AmeKAG) -- DebugProtocol.cpp
 //  Phase 8.2: Lua debug hooks for breakpoints, stepping, and inspection.
 // ===========================================================================
 
@@ -34,7 +34,7 @@ void DebugProtocol::init(lua_State* L) {
     lua_sethook(L, hookCallback, LUA_MASKLINE, 0);
 
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
-               "DebugProtocol initialized — lua_sethook registered.");
+               "DebugProtocol initialized -- lua_sethook registered.");
 }
 
 // -- Breakpoint management ------------------------------------------------
@@ -157,7 +157,7 @@ void DebugProtocol::hookCallback(lua_State* L, lua_Debug* ar) {
     dp.m_currentSource = source;
     dp.m_currentLine = currentLine;
 
-    // Check if we're in the middle of a reload — don't interrupt
+    // Check if we're in the middle of a reload -- don't interrupt
     auto& hr = HotReload::instance();
     if (hr.scriptState() == ScriptState::RELOADING) return;
 
@@ -169,7 +169,7 @@ void DebugProtocol::hookCallback(lua_State* L, lua_Debug* ar) {
             break;
         case StepMode::Over:
             if (dp.m_stepDepth == 0) {
-                // First hit — record depth
+                // First hit -- record depth
                 dp.m_stepDepth = 1;  // Will be tracked via stack depth
                 shouldBreak = true;
             }

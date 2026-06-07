@@ -1,4 +1,4 @@
-﻿// CryptoEngine — AES-256-GCM + SHA-256 via BCrypt, Ed25519 via orlp library.
+﻿// CryptoEngine -- AES-256-GCM + SHA-256 via BCrypt, Ed25519 via orlp library.
 // Windows-only implementation. No external crypto dependencies.
 #pragma once
 #include "CARCFormat.h"

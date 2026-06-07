@@ -18,7 +18,7 @@ enum class InputFocus {
 
 using GameInputCallback = std::function<void(const SDL_Event&)>;
 using FocusChangeCallback = std::function<void(InputFocus newFocus)>;
-// Window resize notification — spec [0.1]: notify layers to rebuild, mark dirty
+// Window resize notification -- spec [0.1]: notify layers to rebuild, mark dirty
 using ResizeCallback = std::function<void(int newWidth, int newHeight)>;
 
 class InputRouter {

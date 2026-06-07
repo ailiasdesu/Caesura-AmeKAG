@@ -1,4 +1,4 @@
-﻿// CRLManager — Certificate Revocation List management for CARC chain trust.
+﻿// CRLManager -- Certificate Revocation List management for CARC chain trust.
 // Spec [10.2.63]: Offline/Online/Hybrid modes, set-based revocation lookup,
 // JSON CRL format with version, timestamp, revoked fingerprints, signature.
 #pragma once

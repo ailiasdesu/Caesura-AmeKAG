@@ -11,14 +11,14 @@ int         ErrorUI::m_retryCount        = 0;
 int         ErrorUI::m_titleCrashCount    = 0;
 std::string ErrorUI::m_lastTokenLocation;
 
-// Retry whitelist — commands where a retry is safe
+// Retry whitelist -- commands where a retry is safe
 const std::unordered_set<std::string> ErrorUI::s_retryWhitelist = {
     "text", "ch", "bg", "fg", "cl", "image",
     "playbgm", "stopbgm", "playse", "stopse", "setvolume",
     "wait", "if", "else", "endif", "ruby", "font", "current",
 };
 
-// Animation/transition ops — retry auto-promotes to title
+// Animation/transition ops -- retry auto-promotes to title
 const std::unordered_set<std::string> ErrorUI::s_animateOps = {
     "move", "trans", "quake", "fade",
     "anim", "transition", "quakex", "quakey",
@@ -52,11 +52,11 @@ ErrorAction ErrorUI::show(
     // Auto-promotion logic (processed before showing UI)
     ErrorAction forcedAction = ErrorAction::Retry;  // sentinel: no force
 
-    // Check: animation/transition ops — retry auto-promotes to title
+    // Check: animation/transition ops -- retry auto-promotes to title
     if (!commandName.empty() && !isRetrySafe(commandName)) {
         if (s_animateOps.count(commandName)) {
             // This command's retry would auto-promote to title.
-            // We don't force yet — let user choose, but show a note.
+            // We don't force yet -- let user choose, but show a note.
         }
     }
 
@@ -68,7 +68,7 @@ ErrorAction ErrorUI::show(
                 scriptTrace.c_str(), tokenLine, commandName.c_str());
         fprintf(stderr, "The engine cannot recover. Exiting.\n");
         showFallback(
-            "FATAL ERROR — Engine Cannot Recover",
+            "FATAL ERROR -- Engine Cannot Recover",
             "3 consecutive attempts to return to title have failed.\n"
             "The engine will now exit.\n\n"
             "Last error: " + title + "\n" +
@@ -142,7 +142,7 @@ ErrorAction ErrorUI::show(
         m_retryCount++;
         if (sameToken && m_retryCount >= 3) {
             // Auto-promote to title
-            fprintf(stderr, "[ErrorUI] Same token retried 3 times — auto-promoting to Title.\n");
+            fprintf(stderr, "[ErrorUI] Same token retried 3 times -- auto-promoting to Title.\n");
             m_retryCount = 0;
             m_titleCrashCount++;
             return ErrorAction::Title;

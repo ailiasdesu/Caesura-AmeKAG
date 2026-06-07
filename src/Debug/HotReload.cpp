@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — HotReload.cpp
+//  Caesura (AmeKAG) -- HotReload.cpp
 //  Phase 8.1: File monitoring + coroutine rebuild for .ks/.lua scripts.
 // ===========================================================================
 
@@ -36,7 +36,7 @@ void HotReload::init(const std::string& scriptDir, lua_State* L) {
 
     m_initialized = true;
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
-               "HotReload initialized — monitoring %zu files in %s",
+               "HotReload initialized -- monitoring %zu files in %s",
                m_fileTimes.size(), scriptDir.c_str());
 }
 
@@ -73,7 +73,7 @@ static void cancelAllActiveOps(lua_State* L) {
         return;
     }
 
-    // Iterate: Phase 1 — mark_cancelled on all
+    // Iterate: Phase 1 -- mark_cancelled on all
     int opsLen = (int)lua_rawlen(L, -1);
     for (int i = 1; i <= opsLen; i++) {
         lua_rawgeti(L, -1, i);  // stack: ctx, ops, op
@@ -87,7 +87,7 @@ static void cancelAllActiveOps(lua_State* L) {
         lua_pop(L, 1);  // pop op
     }
 
-    // Phase 2 — execute_callbacks on all (reverse order not critical here)
+    // Phase 2 -- execute_callbacks on all (reverse order not critical here)
     for (int i = 1; i <= opsLen; i++) {
         lua_rawgeti(L, -1, i);  // stack: ctx, ops, op
         if (lua_istable(L, -1)) {
@@ -152,7 +152,7 @@ bool HotReload::checkAndReload() {
     if (!changed) {
         if (m_warningFrames > 0) {
             m_warningFrames--;
-            showWarningOverlay("SCRIPTS RELOADED — Changes applied.");
+            showWarningOverlay("SCRIPTS RELOADED -- Changes applied.");
         }
         return false;
     }
@@ -187,7 +187,7 @@ bool HotReload::checkAndReload() {
             }
             lua_pop(m_L, 1);  // pop coroutine table
         }
-        lua_pop(m_L, 2);  // pop co (or nil), ctx — NO, need ctx still
+        lua_pop(m_L, 2);  // pop co (or nil), ctx -- NO, need ctx still
     }
 
     // Step 3: Reset GameState (sf/f preserved)

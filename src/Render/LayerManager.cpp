@@ -152,7 +152,7 @@ void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
         bgfx::setScissor(m_mergedDirty.x, m_mergedDirty.y,
                          m_mergedDirty.w, m_mergedDirty.h);
     }
-    // else: full frame — no scissor set (or clear scissor)
+    // else: full frame -- no scissor set (or clear scissor)
 }
 
 void LayerManager::clearDirtyRects() {

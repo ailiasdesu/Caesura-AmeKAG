@@ -83,7 +83,7 @@ void CompositeShaderCache::evictOne() {
 }
 
 // ---------------------------------------------------------------------------
-// Program lookup — get or create
+// Program lookup -- get or create
 // ---------------------------------------------------------------------------
 
 bgfx::ProgramHandle CompositeShaderCache::getProgram(const CompositeShaderKey& key) {
@@ -143,7 +143,7 @@ bgfx::ProgramHandle CompositeShaderCache::getProgram(const CompositeShaderKey& k
 // ---------------------------------------------------------------------------
 
 void CompositeShaderCache::precompileCommon() {
-    // Most common blend modes without palette — preloaded eagerly
+    // Most common blend modes without palette -- preloaded eagerly
     static const BlendMode kCommonModes[] = {
         BlendMode::Normal,
         BlendMode::Multiply,

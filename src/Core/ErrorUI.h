@@ -67,10 +67,10 @@ private:
     static int m_titleCrashCount;
     static std::string m_lastTokenLocation;
 
-    // Retry whitelist — commands safe to retry
+    // Retry whitelist -- commands safe to retry
     static const std::unordered_set<std::string> s_retryWhitelist;
 
-    // Animation/transition ops — auto-promote retry to title
+    // Animation/transition ops -- auto-promote retry to title
     static const std::unordered_set<std::string> s_animateOps;
 };
 

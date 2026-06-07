@@ -8,7 +8,7 @@
 namespace Caesura {
 
 // ---------------------------------------------------------------------------
-// DirtyRect — sub-region of the framebuffer that needs redrawing
+// DirtyRect -- sub-region of the framebuffer that needs redrawing
 // ---------------------------------------------------------------------------
 
 struct DirtyRect {
@@ -55,12 +55,12 @@ struct Layer {
 };
 
 // ---------------------------------------------------------------------------
-// LayerManager — simple state wrapper for bg / fg / message layers
+// LayerManager -- simple state wrapper for bg / fg / message layers
 // ---------------------------------------------------------------------------
 // Manages the three Z-ordered layers of the KAG rendering pipeline:
-//   BG  (index 0) — background / scene art
-//   FG  (index 1) — foreground / character sprites
-//   MSG (index 2) — message box / UI overlay
+//   BG  (index 0) -- background / scene art
+//   FG  (index 1) -- foreground / character sprites
+//   MSG (index 2) -- message box / UI overlay
 //
 // Does NOT own the bgfx textures; the caller (RenderBinding / Lua layer)
 // is responsible for loading and passing texture handles.

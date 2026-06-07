@@ -12,7 +12,7 @@
 namespace caesura::carc {
 
 // ==========================================================================
-// open — load and verify a CARC file
+// open -- load and verify a CARC file
 // ==========================================================================
 bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
 {
@@ -108,7 +108,7 @@ void CARCReader::close()
 }
 
 // ==========================================================================
-// readFile — decrypt + decompress one file by relative path
+// readFile -- decrypt + decompress one file by relative path
 // ==========================================================================
 std::vector<uint8_t> CARCReader::readFile(const std::string& relativePath)
 {
@@ -159,7 +159,7 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
 }
 
 // ==========================================================================
-// hasFile — existence check (no decrypt/decompress)
+// hasFile -- existence check (no decrypt/decompress)
 // ==========================================================================
 bool CARCReader::hasFile(const std::string& relativePath) const
 {
@@ -174,7 +174,7 @@ bool CARCReader::hasFileByHash(const uint8_t pathHash[PATH_HASH_SIZE]) const
 }
 
 // ==========================================================================
-// hashPath — SHA-256 of a path string
+// hashPath -- SHA-256 of a path string
 // ==========================================================================
 void CARCReader::hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE])
 {
@@ -183,7 +183,7 @@ void CARCReader::hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE])
 }
 
 // ==========================================================================
-// verifySignature — Ed25519 verify over header + content + index blocks
+// verifySignature -- Ed25519 verify over header + content + index blocks
 // ==========================================================================
 bool CARCReader::verifySignature()
 {
@@ -208,7 +208,7 @@ bool CARCReader::verifySignature()
 }
 
 // ==========================================================================
-// decryptIndex — read and decrypt the index block
+// decryptIndex -- read and decrypt the index block
 // ==========================================================================
 bool CARCReader::decryptIndex(std::vector<uint8_t>& outIndexData)
 {
@@ -277,7 +277,7 @@ void CARCReader::setRootPublicKey(const uint8_t key[PUBLICKEY_SIZE])
 }
 
 // ==========================================================================
-//  parseCertificate — parse JSON certificate from raw data
+//  parseCertificate -- parse JSON certificate from raw data
 //  Expected format:
 //  {
 //    "child_pubkey_hash": "hex_sha256...",
@@ -290,7 +290,7 @@ bool CARCReader::parseCertificate(const std::string& json, CarcCertificate& cert
 {
     if (json.empty()) return false;
 
-    // Simple JSON extraction helpers (inline — no external lib)
+    // Simple JSON extraction helpers (inline -- no external lib)
     auto findString = [](const std::string& s, const std::string& key) -> std::string {
         std::string search = "\"" + key + "\"";
         size_t pos = s.find(search);
@@ -349,7 +349,7 @@ bool CARCReader::parseCertificate(const std::string& json, CarcCertificate& cert
 }
 
 // ==========================================================================
-//  verifyChainTrust — full 7-step chain verification per spec [10.2.63]
+//  verifyChainTrust -- full 7-step chain verification per spec [10.2.63]
 // ==========================================================================
 bool CARCReader::verifyChainTrust(const uint8_t* childPublicKey,
                                    const std::string& certificatePath)
@@ -362,7 +362,7 @@ bool CARCReader::verifyChainTrust(const uint8_t* childPublicKey,
     // Step 2: Read certificate JSON from this (parent) CARC at certificatePath
     std::vector<uint8_t> certData = readFile(certificatePath);
     if (certData.empty()) {
-        // Cert not found in archive — chain trust fails
+        // Cert not found in archive -- chain trust fails
         return false;
     }
     std::string certJson(reinterpret_cast<const char*>(certData.data()), certData.size());
@@ -408,11 +408,11 @@ bool CARCReader::verifyChainTrust(const uint8_t* childPublicKey,
 
     // Step 4: SHA-256 compare cert's pubkey hash vs child's trailing pubkey hash
     if (cert.childPubKeyHash != childPubKeyHash) {
-        return false; // Hash mismatch — child CARC not authorized by this cert
+        return false; // Hash mismatch -- child CARC not authorized by this cert
     }
 
     // Step 5: Verify child CARC signature with child pubkey
-    // (This is done in child CARC's own open() call — we have already
+    // (This is done in child CARC's own open() call -- we have already
     // verified that the hash matches, so the child will verify itself)
 
     // Step 6: Check certificate expiry

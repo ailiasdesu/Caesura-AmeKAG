@@ -89,7 +89,7 @@ bool SoLoudAudioEngine::init(){
 
     m_soloud.setGlobalVolume(m_globalVolume);
 
-    // Create and play audio buses — all must succeed or init fails
+    // Create and play audio buses -- all must succeed or init fails
     m_bgmBus.setVolume(1.0f);
     m_bgmBusHandle = m_soloud.play(m_bgmBus);
     if (!m_soloud.isValidVoiceHandle(m_bgmBusHandle)) {

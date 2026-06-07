@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — HotReload.h
+//  Caesura (AmeKAG) -- HotReload.h
 //  Phase 8.1: File monitoring + coroutine rebuild for .ks/.lua scripts.
 //  Singleton, called per-frame in Engine::run().
 // ===========================================================================
@@ -29,7 +29,7 @@ public:
     HotReload(const HotReload&) = delete;
     HotReload& operator=(const HotReload&) = delete;
 
-    // Initialize — scan scriptDir recursively for .ks/.lua files.
+    // Initialize -- scan scriptDir recursively for .ks/.lua files.
     // Stores initial last_write_time for each file.
     void init(const std::string& scriptDir, lua_State* L);
 

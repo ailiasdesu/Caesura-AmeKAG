@@ -26,7 +26,7 @@ struct FontGlyph {
 };
 
 // ---------------------------------------------------------------------------
-// CjkGlyph — pre-built CJK static atlas entry (G8-U5)
+// CjkGlyph -- pre-built CJK static atlas entry (G8-U5)
 // Loaded from a pre-generated atlas binary at init.  Used as a fallback
 // layer during dynamic atlas expansion so CJK text never degrades to
 // built-in bitmap unless the character truly isn''t available.
@@ -43,7 +43,7 @@ struct CjkGlyph {
 };
 
 // ---------------------------------------------------------------------------
-// PosTexVertex — 2D position + UV for glyph quad submission
+// PosTexVertex -- 2D position + UV for glyph quad submission
 // ---------------------------------------------------------------------------
 
 
@@ -53,7 +53,7 @@ struct PosTexVertex {
 };
 
 // ---------------------------------------------------------------------------
-// MessageLayerCache — resident vertex/index buffer for text layer batching
+// MessageLayerCache -- resident vertex/index buffer for text layer batching
 // ---------------------------------------------------------------------------
 
 struct MessageLayerCache {

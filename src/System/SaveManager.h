@@ -1,9 +1,9 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — SaveManager.h
+//  Caesura (AmeKAG) -- SaveManager.h
 //  Spec [6.1]: JSON save/load system with schema versioning.
 //  SaveMeta: slot, timestamp, sceneName, thumbnail, tokenIndex, schemaVersion
 //  SaveManager (singleton): init(), save(), load(), listSaves(), migrate()
-//  Uses raw JSON string building — no external JSON library dependency.
+//  Uses raw JSON string building -- no external JSON library dependency.
 //  Migration: version chain walk (1→2, 2→3, etc.) with migration scripts.
 // ===========================================================================
 

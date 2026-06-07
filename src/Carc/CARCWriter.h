@@ -1,4 +1,4 @@
-﻿// CARCWriter — Create and write CARC archives.
+﻿// CARCWriter -- Create and write CARC archives.
 #pragma once
 #include "CARCFormat.h"
 #include <string>

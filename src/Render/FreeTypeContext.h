@@ -5,7 +5,7 @@
 
 namespace Caesura {
 
-// Global shared FreeType instance — ensures FontRenderer and TextRenderer
+// Global shared FreeType instance -- ensures FontRenderer and TextRenderer
 // share a single FT_Library rather than each initializing their own.
 class FreeTypeContext {
 public:

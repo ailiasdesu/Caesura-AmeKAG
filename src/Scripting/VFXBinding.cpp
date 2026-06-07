@@ -13,7 +13,7 @@
 namespace Caesura {
 
 // ===========================================================================
-// Singleton ParticleSystem instance — managed by VFXBinding lifecycle
+// Singleton ParticleSystem instance -- managed by VFXBinding lifecycle
 // ===========================================================================
 
 static ParticleSystem s_particleSystem;
@@ -152,7 +152,7 @@ static int lua_VFX_particles_is_initialized(lua_State* L) {
     return 1;
 }
 
-// -- VFX.particles_clear() — reset all emitters and particles ----------------
+// -- VFX.particles_clear() -- reset all emitters and particles ----------------
 
 static int lua_VFX_particles_clear(lua_State* L) {
     s_particleSystem.shutdown();

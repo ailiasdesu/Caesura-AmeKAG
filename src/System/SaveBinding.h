@@ -1,5 +1,5 @@
 ﻿// ===========================================================================
-//  Caesura (AmeKAG) — SaveBinding.h
+//  Caesura (AmeKAG) -- SaveBinding.h
 //  Phase 6: C++ Lua binding for save/load system.
 //  Registers KAG.save_game / KAG.load_game / KAG.list_saves / KAG.delete_save
 //  All save I/O goes through SaveManager singleton.

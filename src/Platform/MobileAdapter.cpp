@@ -1,11 +1,11 @@
-﻿// MobileAdapter implementation — mobile platform stubs (P2 reserved).
+﻿// MobileAdapter implementation -- mobile platform stubs (P2 reserved).
 // Spec [10.2.64]: All methods are placeholder stubs for future mobile port.
-// No actual mobile SDK code — just the interface wiring.
+// No actual mobile SDK code -- just the interface wiring.
 #include "MobileAdapter.h"
 #include <cstring>
 #include <cstdio>
 
-// Minimal Lua include — we only need lua_State* for callbacks
+// Minimal Lua include -- we only need lua_State* for callbacks
 extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
@@ -14,7 +14,7 @@ extern "C" {
 namespace caesura::platform {
 
 // ══════════════════════════════════════════════════════════════════════════
-//  onPause — backgrounding
+//  onPause -- backgrounding
 // ══════════════════════════════════════════════════════════════════════════
 void MobileAdapter::onPause(lua_State* L) {
     m_paused = true;
@@ -34,7 +34,7 @@ void MobileAdapter::onPause(lua_State* L) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  onResume — foregrounding
+//  onResume -- foregrounding
 // ══════════════════════════════════════════════════════════════════════════
 void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
     m_paused = false;

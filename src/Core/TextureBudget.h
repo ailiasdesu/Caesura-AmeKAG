@@ -4,7 +4,7 @@
 namespace Caesura {
 
 // ---------------------------------------------------------------------------
-// TextureBudget — 6-tier adaptive texture memory budget
+// TextureBudget -- 6-tier adaptive texture memory budget
 // Spec [10.2.65]: auto-detect from system RAM, developer-overridable.
 // Called once at Engine::init(), read-only after.
 // ---------------------------------------------------------------------------
