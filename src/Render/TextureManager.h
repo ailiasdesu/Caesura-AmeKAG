@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <bgfx/bgfx.h>
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <list>
 
 namespace Caesura {
 
@@ -66,6 +67,12 @@ public:
     // Check whether a given id is in the cache and valid
     bool isValid(uint32_t id) const;
 
+    // -- Budget enforcement ([10.2.65]) --
+    uint64_t totalTextureBytes() const { return m_totalBytes; }
+    void checkBudget(uint32_t id, uint16_t w, uint16_t h);
+    void trackTexture(uint32_t id, uint32_t bytes);
+    void untrackTexture(uint32_t id);
+
 private:
     TextureManager() = default;
 
@@ -76,6 +83,9 @@ private:
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
     bool m_devMode = true;  // [10.2.57] default: dev mode (checkerboard)
+    std::unordered_map<uint32_t, uint32_t> m_textureSizes;
+    std::list<uint32_t> m_textureLRU;
+    uint64_t m_totalBytes = 0;
     uint32_t m_nextId = 1;
     bool m_initialized = false;
 };

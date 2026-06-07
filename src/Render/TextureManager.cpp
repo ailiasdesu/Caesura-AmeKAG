@@ -1,4 +1,4 @@
-#include "TextureManager.h"
+﻿#include "TextureManager.h"
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -6,6 +6,8 @@
 #include <cstring>
 #include <vector>
 
+#include "../Core/TextureBudget.h"
+#include "../Core/BackendRegistry.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../external/stb/stb_image.h"
 
@@ -42,6 +44,9 @@ void TextureManager::shutdown() {
             bgfx::destroy(tex);
     }
     m_cache.clear();
+    m_textureSizes.clear();
+    m_textureLRU.clear();
+    m_totalBytes = 0;
 
     if (bgfx::isValid(m_placeholderTex)) {
         bgfx::destroy(m_placeholderTex);
@@ -178,6 +183,50 @@ bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t
 }
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Budget enforcement ([10.2.65])
+// ---------------------------------------------------------------------------
+
+void TextureManager::trackTexture(uint32_t id, uint32_t bytes) {
+    m_textureSizes[id] = bytes;
+    m_totalBytes += bytes;
+    m_textureLRU.push_front(id);
+}
+
+void TextureManager::untrackTexture(uint32_t id) {
+    auto it = m_textureSizes.find(id);
+    if (it != m_textureSizes.end()) {
+        m_totalBytes -= it->second;
+        m_textureSizes.erase(it);
+    }
+    m_textureLRU.remove(id);
+}
+
+void TextureManager::checkBudget(uint32_t id, uint16_t w, uint16_t h) {
+    uint32_t bytes = uint32_t(w) * uint32_t(h) * 4;
+    uint64_t budget = TextureBudget::instance().getBudgetBytes();
+
+    while (m_totalBytes + bytes > budget && !m_textureLRU.empty()) {
+        uint32_t victimId = m_textureLRU.back();
+        fprintf(stderr, "[TextureManager] Budget exceeded (%llu/%llu MB), evicting texture %u\n",
+                (unsigned long long)((m_totalBytes + bytes) / (1024*1024)),
+                (unsigned long long)(budget / (1024*1024)), victimId);
+        destroyTexture(victimId);
+    }
+
+    if (m_totalBytes + bytes > budget) {
+        fprintf(stderr, "[TextureManager] Cannot fit texture within %llu MB budget\n",
+                (unsigned long long)(budget / (1024*1024)));
+        return;
+    }
+
+    trackTexture(id, bytes);
+    printf("[TextureManager] Budget: %llu / %llu MB (tier %d)\n",
+           (unsigned long long)(m_totalBytes / (1024*1024)),
+           (unsigned long long)(budget / (1024*1024)),
+           TextureBudget::instance().getTier());
+}
 // Public load API
 // ---------------------------------------------------------------------------
 
@@ -205,11 +254,11 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     }
 
     bgfx::TextureInfo info;
-    bgfx::calcTextureSize(info, uint16_t(0), uint16_t(0), 1, false, false, 1,
-                          bgfx::TextureFormat::RGBA8);
+    bgfx::calcTextureSize(info, uint16_t(1), uint16_t(1), 1, false, false, 1, bgfx::TextureFormat::RGBA8);
 
     uint32_t id = m_nextId++;
     m_cache[id] = tex;
+    checkBudget(id, info.width, info.height);
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
     return id;
 }
@@ -262,6 +311,7 @@ uint32_t TextureManager::registerTexture(bgfx::TextureHandle tex) {
     if (!bgfx::isValid(tex)) return 0;
     uint32_t id = m_nextId++;
     m_cache[id] = tex;
+    checkBudget(id, 256, 256); // assume default 256x256
     return id;
 }
 
@@ -274,6 +324,7 @@ void TextureManager::destroyTexture(uint32_t id) {
     if (it != m_cache.end()) {
         if (bgfx::isValid(it->second))
             bgfx::destroy(it->second);
+        untrackTexture(id);
         m_cache.erase(it);
         printf("[TextureManager] Texture %u destroyed.\n", id);
     }

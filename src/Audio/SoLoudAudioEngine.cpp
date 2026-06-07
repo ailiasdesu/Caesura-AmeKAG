@@ -1,4 +1,4 @@
-#include "SoLoudAudioEngine.h"
+﻿#include "SoLoudAudioEngine.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>
@@ -14,6 +14,7 @@ namespace Caesura {
 
 static std::unordered_map<std::string, std::shared_ptr<SoLoud::AudioSource>> g_waveCache;
 static std::list<std::string> g_waveLRU;
+static std::unordered_map<std::string, std::list<std::string>::iterator> g_waveLRUMap;
 
 // Detect extension and use WavStream for .ogg/.mp3, Wav for .wav
 static bool isStreamFormat(const std::string& file) {
@@ -28,8 +29,8 @@ static bool isStreamFormat(const std::string& file) {
 static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
     auto it = g_waveCache.find(file);
     if (it != g_waveCache.end()) {
-        auto lruIt = std::find(g_waveLRU.begin(), g_waveLRU.end(), file);
-        if (lruIt != g_waveLRU.end()) g_waveLRU.splice(g_waveLRU.begin(), g_waveLRU, lruIt);
+        auto mapIt = g_waveLRUMap.find(file);
+        if (mapIt != g_waveLRUMap.end()) g_waveLRU.splice(g_waveLRU.begin(), g_waveLRU, mapIt->second);
         return it->second;
     }
 
@@ -55,11 +56,13 @@ static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
     if (g_waveCache.size() >= 128) {
         std::string lruFile = g_waveLRU.back();
         g_waveLRU.pop_back();
+        g_waveLRUMap.erase(lruFile);
         g_waveCache.erase(lruFile);
         fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
     }
     g_waveCache[file] = src;
     g_waveLRU.push_front(file);
+    g_waveLRUMap[file] = g_waveLRU.begin();
     return src;
 }
 
@@ -123,6 +126,7 @@ void SoLoudAudioEngine::shutdown(){
     m_soloud.deinit();
     g_waveCache.clear();
     g_waveLRU.clear();
+    g_waveLRUMap.clear();
     m_activeSE.clear();
     m_initialized = false;
     m_currentBGM = 0;
@@ -184,6 +188,7 @@ float SoLoudAudioEngine::getBusVolume(const char* bus) const {
 void SoLoudAudioEngine::flushWaveCache() {
     g_waveCache.clear();
     g_waveLRU.clear();
+    g_waveLRUMap.clear();
     printf("[Audio] Wave cache flushed.\n");
 }
 

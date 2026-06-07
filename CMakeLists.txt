@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -72,6 +72,7 @@ set(ENGINE_SOURCES
     src/Core/InputRouter.cpp
     src/Core/BackendRegistry.cpp
     src/Core/DebugManager.cpp
+    src/Core/TextureBudget.cpp
     src/Core/ErrorUI.cpp
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
@@ -124,6 +125,7 @@ set(ENGINE_HEADERS
     src/Core/BackendRegistry.h
     src/Resource/ResourceHandle.h
     src/Core/DebugManager.h
+    src/Core/TextureBudget.h
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h

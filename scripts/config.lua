@@ -1,4 +1,4 @@
--- ═══════════════════════════════════════════════════════════════════════════
+﻿-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — config.lua
 --  Engine configuration and backend selection.
 --  Spec [0.4]: Uses BackendFactory to create unified backend proxy.
@@ -32,6 +32,7 @@ config.platform_backend = "sdl3"
 config.window_width   = 1280
 config.window_height  = 720
 config.vsync          = true
+config.texture_budget = "auto"  -- "auto" | 0|1|2|3|4|5: texture memory budget tier ([10.2.65])
 config.fullscreen     = false
 config.window_title   = "Caesura"
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "IAudioBackend.h"
 #include "IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
@@ -14,6 +14,7 @@ struct lua_State;
 namespace Caesura {
 
 // Forward declarations for render subsystem managers
+class TextureBudget;
 class TextureManager;
 class LayerManager;
 
@@ -57,6 +58,8 @@ public:
     VideoPlayer*     getVideoPlayer()    { return m_videoPlayer; }
     TextureManager*  getTextureManager() { return m_textureManager; }
     LayerManager*    getLayerManager()   { return m_layerManager; }
+    TextureBudget*  getTextureBudget()  { return m_textureBudget; }
+    void setTextureBudget(TextureBudget* tb) { m_textureBudget = tb; }
 
     // -- Backend factory: create by name -----------------------------------
     IAudioBackend*   createAudioBackend(const char* name);
@@ -105,6 +108,7 @@ private:
     VideoPlayer*     m_videoPlayer     = nullptr;
     TextureManager*  m_textureManager  = nullptr;
     LayerManager*    m_layerManager    = nullptr;
+    TextureBudget*  m_textureBudget  = nullptr;
 };
 
 } // namespace Caesura

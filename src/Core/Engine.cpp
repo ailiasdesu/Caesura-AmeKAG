@@ -10,6 +10,7 @@
 #include "ErrorUI.h"
 #include "SDL3PlatformBackend.h"
 #include "IAudioBackend.h"
+#include "TextureBudget.h"
 #include "../Render/IRenderDevice.h"
 #include "../Render/GpuMonitor.h"
 #include "../Render/VideoPlayer.h"
@@ -127,6 +128,9 @@ bool Engine::init(const char* title, int width, int height) {
     DebugManager::instance().setInputInfo(ii);
 
     SaveManager::instance().init("saves/");
+
+    TextureBudget::instance().detect();
+    BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
 
     if (!m_lua->init()) {
         fprintf(stderr, "Lua VM init failed.");
@@ -425,11 +429,11 @@ void Engine::shutdown() {
     ErrorUI::resetCounters();
 
     AsyncLoader::instance().shutdown();
-    if (m_lua) m_lua->shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
+    if (m_lua) m_lua->shutdown();
+    if (m_audioBackend) m_audioBackend->shutdown();
     if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
     FreeTypeContext::instance().shutdown();
-    if (m_audioBackend) m_audioBackend->shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();
     DebugManager::instance().shutdown();
 }

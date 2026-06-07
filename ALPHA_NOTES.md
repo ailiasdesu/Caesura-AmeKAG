@@ -63,7 +63,6 @@
 | 3 | 存档跨版本迁移未实现 | 存档兼容性 | Beta |
 | 4 | CARC 自验证逻辑缺失 | 完整性检查 | Beta |
 | 5 | Tokenizer 部分 token 丢失 (82/167) | .ks 解析不完全 | Alpha 迭代 |
-| 6 | AsyncLoader API 未绑定到 Lua backend | 异步加载需脚本适配 | Alpha 迭代 |
 | 7 | ShaderCache 未预注册全部 10 种 blend | 部分混合模式需运行时编译 | Alpha 迭代 |
 | 8 | FFmpeg 视频解码未集成 (P2) | 仅支持 MPEG1 | Beta |
 
