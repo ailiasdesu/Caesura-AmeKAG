@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -41,14 +41,9 @@ static int lua_VFX_particles_init(lua_State* L) {
         return 1;
     }
 
-    BgfxRenderDevice* device = getBgfxDevice(L);
-    if (!device) {
-        lua_pushnil(L);
-        lua_pushstring(L, "BgfxRenderDevice not available for particle init");
-        return 2;
-    }
+    
 
-    bool ok = s_particleSystem.init(device);
+    bool ok = s_particleSystem.init();
     s_particlesInitialized = ok;
     if (ok) {
         printf("[VFX] Particle system initialized.\n");
@@ -158,11 +153,7 @@ static int lua_VFX_particles_clear(lua_State* L) {
     s_particleSystem.shutdown();
     s_particlesInitialized = false;
 
-    BgfxRenderDevice* device = getBgfxDevice(L);
-    if (device) {
-        s_particleSystem.init(device);
-        s_particlesInitialized = true;
-    }
+    s_particleSystem.init(); s_particlesInitialized = true;
     lua_pushboolean(L, s_particlesInitialized ? 1 : 0);
     return 1;
 }

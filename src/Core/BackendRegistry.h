@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "IAudioBackend.h"
 #include "IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
@@ -42,18 +42,18 @@ public:
     BackendRegistry& operator=(const BackendRegistry&) = delete;
 
     // -- Set active backends (called by Engine during init or Lua config) --
-    void setRenderDevice(IRenderDevice* device);
-    void setAudioBackend(IAudioBackend* backend);
-    void setPlatformBackend(IPlatformBackend* backend);
+    void setRenderDevice(IRenderDevice& device);
+    void setAudioBackend(IAudioBackend& backend);
+    void setPlatformBackend(IPlatformBackend& backend);
     void setInputRouter(InputRouter* router);
     void setVideoPlayer(VideoPlayer* player);
     void setTextureManager(TextureManager* mgr);
     void setLayerManager(LayerManager* mgr);
 
     // -- Get active backends -----------------------------------------------
-    IRenderDevice*   getRenderDevice()   { return m_renderDevice; }
-    IAudioBackend*   getAudioBackend()   { return m_audioBackend; }
-    IPlatformBackend* getPlatformBackend() { return m_platformBackend; }
+    IRenderDevice*   getRenderDevice()   { return m_renderDevice; }  // non-owning; owned by Engine
+    IAudioBackend*   getAudioBackend()   { return m_audioBackend; }  // non-owning; owned by Engine
+    IPlatformBackend* getPlatformBackend() { return m_platformBackend; }  // non-owning; owned by Engine
     InputRouter*     getInputRouter()    { return m_inputRouter; }
     VideoPlayer*     getVideoPlayer()    { return m_videoPlayer; }
     TextureManager*  getTextureManager() { return m_textureManager; }
@@ -62,6 +62,8 @@ public:
     void setTextureBudget(TextureBudget* tb) { m_textureBudget = tb; }
 
     // -- Backend factory: create by name -----------------------------------
+    // Returns raw pointer; Engine is responsible for lifecycle.
+    // Returns existing backend if already registered, nullptr if unknown name.
     IAudioBackend*   createAudioBackend(const char* name);
     IRenderDevice*   createRenderDevice(const char* name);
     IPlatformBackend* createPlatformBackend(const char* name);
@@ -97,13 +99,10 @@ public:
 private:
     BackendRegistry() = default;
 
-    IRenderDevice*   m_renderDevice    = nullptr;
-    std::unique_ptr<IRenderDevice>     m_ownedRenderDevice;
-    IAudioBackend*   m_audioBackend    = nullptr;
-    std::unique_ptr<IAudioBackend>     m_ownedAudioBackend;
-    IPlatformBackend* m_platformBackend = nullptr;
-    std::unique_ptr<IPlatformBackend>  m_ownedPlatformBackend;
-    InputRouter*     m_inputRouter     = nullptr;
+    IRenderDevice*   m_renderDevice    = nullptr;   // non-owning; Engine holds unique_ptr
+        IAudioBackend*   m_audioBackend    = nullptr;   // non-owning; Engine holds unique_ptr
+        IPlatformBackend* m_platformBackend = nullptr;  // non-owning; Engine holds unique_ptr
+        InputRouter*     m_inputRouter     = nullptr;
     GenerationTracker m_generations;
     VideoPlayer*     m_videoPlayer     = nullptr;
     TextureManager*  m_textureManager  = nullptr;

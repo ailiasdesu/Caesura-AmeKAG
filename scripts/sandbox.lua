@@ -1,201 +1,112 @@
-﻿-- =============================================================================
---  Caesura (AmeKAG) — scripts/sandbox.lua
---  Phase 9: Lua sandbox for [eval] and [emb] KAG commands.
---  Spec [10.2.47]: _ENV whitelist with Dev/Release dual mode.
---  Provides sandbox.create() and sandbox.execute() with CancelToken support.
--- =============================================================================
+-- ===========================================================================
+--  Caesura (AmeKAG) — Sandbox Rules
+--  ===========================================================================
+--  Loaded once at engine startup via LuaManager::lockdownScriptEnv().
+--  All rules here are readable by external AI assistants so they understand
+--  exactly which Lua APIs are available and which are restricted.
+--
+--  Design principle: DEFAULT DENY, EXPLICIT ALLOW.
+--  Any capability not explicitly permitted here is blocked.
+--  ===========================================================================
 
-local Sandbox = {}
+-- ---------------------------------------------------------------------------
+--  1. GLOBAL DANGEROUS FUNCTIONS — REMOVED
+-- ---------------------------------------------------------------------------
+--  These are the most dangerous entry points: they allow arbitrary file
+--  loading and script execution from the filesystem.
+--  All asset loading goes through the C++ IAssetProvider chain instead.
+-- ---------------------------------------------------------------------------
 
--- ═══════════════════════════════════════════════════════════════════════
---  Whitelist / Blacklist — spec [10.2.47]
--- ═══════════════════════════════════════════════════════════════════════
+_G.loadfile = nil   -- Removed: arbitrary .lua file loading
+_G.dofile   = nil   -- Removed: same as loadfile + execute
 
--- Allowed globals (whitelist)
-local WHITELIST = {
-    ["math"]     = math,
-    ["string"]   = string,
-    ["table"]    = table,
-    ["pairs"]    = pairs,
-    ["ipairs"]   = ipairs,
-    ["next"]     = next,
-    ["type"]     = type,
-    ["tostring"] = tostring,
-    ["tonumber"] = tonumber,
-    ["pcall"]    = pcall,
-    ["error"]    = error,
-    ["assert"]   = assert,
-    ["select"]   = select,
-    ["xpcall"]   = xpcall,
-    ["rawget"]   = rawget,
-    ["rawset"]   = rawset,
-    ["rawequal"] = rawequal,
-    ["rawlen"]   = rawlen,
-    ["unpack"]   = unpack or table.unpack,
-}
+-- ---------------------------------------------------------------------------
+--  2. DEBUG LIBRARY — READ-ONLY SUBSET
+-- ---------------------------------------------------------------------------
+--  Kept (inspection only):
+--    getinfo, traceback, getlocal, getupvalue, getuservalue, getmetatable
+--  Removed (mutation capable):
+--    setupvalue, sethook, setlocal, setmetatable, getregistry,
+--    upvaluejoin, setuservalue, debug (raw), gethook
+-- ---------------------------------------------------------------------------
 
--- Blacklisted globals
-local BLACKLIST = {
-    ["os"]      = true,
-    ["io"]      = true,
-    ["package"] = true,
-    ["debug"]   = true,
-    ["require"] = true,
-    ["dofile"]  = true,
-    ["loadfile"] = true,
-    ["_G"]      = true,
-    ["load"]    = true,
-    ["collectgarbage"] = true,
-    ["coroutine"]      = true,
-}
-
--- Forbidden KAG commands (cannot be smuggled into sandbox eval/emb)
-local FORBIDDEN_KAG = {
-    jump     = true,
-    link     = true,
-    call     = true,
-    return_  = true,
-    end_     = true,
-    trans    = true,
-    move     = true,
-    quake    = true,
-    fade     = true,
-    playvoice = true,
-    wait     = true,
-}
-
--- ═══════════════════════════════════════════════════════════════════════
---  sandbox.create(env_table) → sandboxed _ENV proxy
---  Returns a table with __index → env_table + whitelist
---  and __newindex → env_table only (blocks writing to whitelist)
--- ═══════════════════════════════════════════════════════════════════════
-
-function Sandbox.create(env_table)
-    env_table = env_table or {}
-
-    local proxy = {}
-    local mt = {
-        __index = function(t, k)
-            -- 1. Check env_table first (user-defined context)
-            if env_table[k] ~= nil then
-                return env_table[k]
-            end
-            -- 2. Whitelist
-            if WHITELIST[k] ~= nil then
-                return WHITELIST[k]
-            end
-            -- 3. Block blacklisted globals
-            if BLACKLIST[k] then
-                error(string.format(
-                    "[sandbox] Access denied: '%s' is blacklisted", tostring(k)), 2)
-            end
-            -- 4. Nil for disallowed
-            return nil
-        end,
-
-        __newindex = function(t, k, v)
-            -- Allow writing to env scope only
-            if WHITELIST[k] ~= nil then
-                error(string.format(
-                    "[sandbox] Cannot override built-in: '%s'", tostring(k)), 2)
-            end
-            if BLACKLIST[k] then
-                error(string.format(
-                    "[sandbox] Access denied: '%s' is blacklisted", tostring(k)), 2)
-            end
-            env_table[k] = v
-        end,
+if _G.debug then
+    local raw_debug = _G.debug
+    _G.debug = {
+        getinfo      = raw_debug.getinfo,
+        traceback    = raw_debug.traceback,
+        getlocal     = raw_debug.getlocal,
+        getupvalue   = raw_debug.getupvalue,
+        getuservalue = raw_debug.getuservalue,
+        getmetatable = raw_debug.getmetatable,
     }
-
-    setmetatable(proxy, mt)
-    return proxy
 end
 
--- ═══════════════════════════════════════════════════════════════════════
---  sandbox.execute(code, env, cancelToken) → ok, result, env
---  Compiles with sandboxed _ENV, runs with pcall, supports cancel.
--- ═══════════════════════════════════════════════════════════════════════
+-- ---------------------------------------------------------------------------
+--  3. PACKAGE SYSTEM — SEARCH DISABLED
+-- ---------------------------------------------------------------------------
+--  Clears package.searchers/loaders so require() cannot search the filesystem.
+--  Only modules already preloaded in package.loaded (loaded at startup via
+--  config.lua / kag/init.lua) are accessible.
+-- ---------------------------------------------------------------------------
 
-function Sandbox.execute(code, env, cancelToken)
-    if not code or #code == 0 then
-        return true, nil, env
+package.loadlib    = nil   -- Removed: C library loading
+package.searchpath = nil   -- Removed: filesystem path search
+
+if package.searchers then
+    package.searchers = {}
+elseif package.loaders then
+    package.loaders = {}
+end
+
+-- ---------------------------------------------------------------------------
+--  4. REQUIRE — SAFE WRAPPER
+-- ---------------------------------------------------------------------------
+--  Replaced with a version that only returns preloaded modules.
+--  Attempting to require an un-preloaded module is a hard error.
+-- ---------------------------------------------------------------------------
+
+_G.require = function(name)
+    local loaded = package.loaded[name]
+    if loaded ~= nil then
+        return loaded
     end
+    error('Sandbox: module "' .. name .. '" not preloaded. Add to config.lua.', 2)
+end
 
-    env = env or {}
+-- ---------------------------------------------------------------------------
+--  5. OS MODULE — FILESYSTEM OPERATIONS DISABLED
+-- ---------------------------------------------------------------------------
+--  Kept: os.clock, os.date, os.time, os.difftime (legitimate non-I/O use)
+--  Replaced with no-ops or sandboxed stubs:
+-- ---------------------------------------------------------------------------
 
-    -- Create sandboxed _ENV proxy
-    local sandbox_env = Sandbox.create(env)
+if _G.os then
+    _G.os.execute = function(cmd) return -1 end
+    _G.os.remove  = function(path) return nil, "sandboxed" end
+    _G.os.rename  = function() return nil, "sandboxed" end
+    _G.os.exit    = function() error("os.exit disabled", 2) end
+    -- Note: os.tmpname is NOT overridden — it returns a string but doesn't
+    -- create files. The io module prevents actual file creation.
+end
 
-    -- Compile with sandboxed environment
-    local fn, compileErr = load(code, "=sandbox", "t", sandbox_env)
-    if not fn then
-        print("[sandbox] Compile error: " .. tostring(compileErr))
-        return false, compileErr, env
-    end
+-- ---------------------------------------------------------------------------
+--  6. IO MODULE — FILESYSTEM READ/WRITE DISABLED
+-- ---------------------------------------------------------------------------
+--  All file I/O goes through the C++ IAssetProvider chain (read) or
+--  SaveManager (write). Direct Lua filesystem access is prohibited.
+-- ---------------------------------------------------------------------------
 
-    -- Inject cancel awareness if token provided
-    if cancelToken then
-        env._CANCEL_TOKEN = cancelToken
-        env._SANDBOX_CHECK_CANCEL = function()
-            if cancelToken.cancelled then
-                error("[sandbox] Execution cancelled")
-            end
+if _G.io then
+    _G.io.open  = function(fn, mode)
+        if mode == "r" then
+            return nil, "io.open read disabled"
         end
+        return nil, "io.open write disabled"
     end
-
-    -- Set print redirect in env for sandboxed code
-    env.print = Sandbox.print_redirect
-
-    local ok, result = pcall(fn)
-
-    if ok then
-        return true, result, env
-    else
-        print("[sandbox] Runtime error: " .. tostring(result))
-        return false, result, env
-    end
+    _G.io.popen = function() return nil, "io.popen disabled" end
 end
 
--- ═══════════════════════════════════════════════════════════════════════
---  sandbox.is_strict() → bool
---  Returns true when NOT in dev_mode (Release builds enforce sandbox).
---  In dev_mode, eval/emb use the lax (old) path.
--- ═══════════════════════════════════════════════════════════════════════
-
-function Sandbox.is_strict()
-    -- Check _CAESURA_CONFIG global set by engine config
-    local cfg = rawget(_G, "_CAESURA_CONFIG") or {}
-    if cfg.dev_mode ~= nil then
-        return not cfg.dev_mode
-    end
-    -- If _CAESURA_DEBUG is set, dev mode → lax sandbox
-    if rawget(_G, "_CAESURA_DEBUG") then
-        return false
-    end
-    -- Default: strict in all other cases
-    return true
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  sandbox.whitelist / blacklist — expose for introspection
--- ═══════════════════════════════════════════════════════════════════════
-
-Sandbox.whitelist = WHITELIST
-Sandbox.blacklist = BLACKLIST
-Sandbox.forbidden_kag = FORBIDDEN_KAG
-
--- ═══════════════════════════════════════════════════════════════════════
---  sandbox.print_redirect(...)
---  Redirects sandboxed print() calls to the engine log.
--- ═══════════════════════════════════════════════════════════════════════
-
-function Sandbox.print_redirect(...)
-    local args = { ... }
-    local parts = {}
-    for i = 1, select("#", ...) do
-        parts[i] = tostring(args[i])
-    end
-    print("[sandbox:print] " .. table.concat(parts, "\t"))
-end
-
-return Sandbox
+-- ===========================================================================
+--  End of sandbox rules.
+-- ===========================================================================

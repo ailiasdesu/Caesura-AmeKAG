@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdint>
@@ -34,7 +34,7 @@ public:
     ParticleSystem() = default;
     ~ParticleSystem();
 
-    bool init(class BgfxRenderDevice* device);
+    bool init();
     void shutdown();
 
     int  createEmitter(const Emitter& cfg);
@@ -58,8 +58,7 @@ private:
     bgfx::TextureHandle  m_particleTex = BGFX_INVALID_HANDLE;
     uint32_t m_screenW = 1280;
     uint32_t m_screenH = 720;
-    class BgfxRenderDevice* m_device = nullptr;
-    bool m_initialized = false;
+        bool m_initialized = false;
 };
 
 } // namespace Caesura

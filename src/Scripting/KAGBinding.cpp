@@ -29,14 +29,18 @@ static int lua_KAG_set_bus_volume(lua_State* L);
 static int lua_KAG_get_bus_volume(lua_State* L);
 static int lua_KAG_flush_wave_cache(lua_State* L);
 static int lua_KAG_show_text(lua_State* L);
+static int lua_KAG_show_image(lua_State* L);
+static int lua_KAG_clear_screen(lua_State* L);
+static int lua_KAG_wait_click(lua_State* L);
+
 static int lua_KAG_render_text(lua_State* L);
 static int lua_KAG_render_ruby(lua_State* L);
 static int lua_KAG_clear_text(lua_State* L);
 static int lua_KAG_set_font(lua_State* L);
 static int lua_KAG_line_height(lua_State* L);
-static int lua_KAG_wait_click(lua_State* L);
-static int lua_KAG_show_image(lua_State* L);
-static int lua_KAG_clear_screen(lua_State* L);
+
+
+
 static int lua_KAG_set_listener(lua_State* L);
 static int lua_KAG_is_voice_playing(lua_State* L);
 static int lua_KAG_is_bgm_playing(lua_State* L);
@@ -256,13 +260,13 @@ static int lua_KAG_flush_wave_cache(lua_State* L) {
 // -- KAG.show_text(text) -- console echo -----------------------------------
 
 static int lua_KAG_show_text(lua_State* L) {
-    const char* text = luaL_checkstring(L, 1);
-    printf("[KAG] %s\n", text);
-    lua_pushboolean(L, 1);
-    return 1;
+    lua_getglobal(L, "_CAESURA_BACKEND");
+    lua_getfield(L, -1, "show_text");
+    lua_remove(L, -2);
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
 }
-
-// -- KAG.render_text(text, x, y, r, g, b, a) -- bgfx bitmap font ----------
 
 static int lua_KAG_render_text(lua_State* L) {
     const char* text = luaL_checkstring(L, 1);
@@ -329,29 +333,31 @@ static int lua_KAG_line_height(lua_State* L) {
 // -- KAG.wait_click() -- coroutine yield -----------------------------------
 
 static int lua_KAG_wait_click(lua_State* L) {
-    return lua_yield(L, 0);
+    lua_getglobal(L, "_CAESURA_BACKEND");
+    lua_getfield(L, -1, "wait_click");
+    lua_remove(L, -2);
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
 }
-
-// -- KAG.show_image(file, x, y) -------------------------------------------
 
 static int lua_KAG_show_image(lua_State* L) {
-    const char* file = luaL_checkstring(L, 1);
-    float x = (float)luaL_optnumber(L, 2, 0.0);
-    float y = (float)luaL_optnumber(L, 3, 0.0);
-    printf("[KAG] Show image: %s at (%.0f, %.0f)\n", file, x, y);
-    lua_pushboolean(L, 1);
-    return 1;
+    lua_getglobal(L, "_CAESURA_BACKEND");
+    lua_getfield(L, -1, "show_image");
+    lua_remove(L, -2);
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
 }
-
-// -- KAG.clear_screen() ---------------------------------------------------
 
 static int lua_KAG_clear_screen(lua_State* L) {
-    (void)L;
-    printf("[KAG] Clear screen.\n");
-    return 0;
+    lua_getglobal(L, "_CAESURA_BACKEND");
+    lua_getfield(L, -1, "clear_screen");
+    lua_remove(L, -2);
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
 }
-
-// -- KAG.set_listener(px, py, pz, ax, ay, az, [upX, upY, upZ]) -----------
 
 static int lua_KAG_set_listener(lua_State* L) {
     float px = (float)luaL_checknumber(L, 1);

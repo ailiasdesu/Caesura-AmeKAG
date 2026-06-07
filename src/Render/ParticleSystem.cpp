@@ -1,5 +1,6 @@
-﻿#include "ParticleSystem.h"
+#include "ParticleSystem.h"
 #include "BgfxRenderDevice.h"
+#include "../Core/BackendRegistry.h"
 #include <bx/math.h>
 #include <cmath>
 #include <cstdio>
@@ -11,12 +12,16 @@ static std::mt19937& rng() { static std::mt19937 r(std::random_device{}()); retu
 
 ParticleSystem::~ParticleSystem() { shutdown(); }
 
-bool ParticleSystem::init(BgfxRenderDevice* device) {
-    if (!device) return false;
+bool ParticleSystem::init() {
+        auto* renderDev = BackendRegistry::instance().getRenderDevice();
+    if (!renderDev) return false;
     m_particles.resize(MAX_PARTICLES);
 
-    m_texSampler = device->getTexSampler();
-    m_program = device->getFallbackProgram();
+    // Get bgfx-specific handles from the concrete BgfxRenderDevice (only impl)
+    auto* bgfxDev = dynamic_cast<BgfxRenderDevice*>(renderDev);
+    if (!bgfxDev) return false;
+    m_texSampler = bgfxDev->getTexSampler();
+    m_program = bgfxDev->getFallbackProgram();
 
     // Create a 4x4 white point texture for particles
     uint8_t white[16] = { 255,255,255,255, 255,255,255,255, 255,255,255,255, 255,255,255,255 };
@@ -28,10 +33,7 @@ bool ParticleSystem::init(BgfxRenderDevice* device) {
         .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-        .end();
-
-    m_device = device;
-    m_initialized = true;
+        .end();m_initialized = true;
     printf("[ParticleSystem] Initialized (max %d particles)\n", MAX_PARTICLES);
     return true;
 }

@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -77,17 +77,11 @@ BackendRegistry& BackendRegistry::instance() {
 
 // -- Set active backends ---------------------------------------------------
 
-void BackendRegistry::setRenderDevice(IRenderDevice* device) {
-    m_renderDevice = device;
-}
+void BackendRegistry::setRenderDevice(IRenderDevice& device) { m_renderDevice = &device; }
 
-void BackendRegistry::setAudioBackend(IAudioBackend* backend) {
-    m_audioBackend = backend;
-}
+void BackendRegistry::setAudioBackend(IAudioBackend& backend) { m_audioBackend = &backend; }
 
-void BackendRegistry::setPlatformBackend(IPlatformBackend* backend) {
-    m_platformBackend = backend;
-}
+void BackendRegistry::setPlatformBackend(IPlatformBackend& backend) { m_platformBackend = &backend; }
 
 void BackendRegistry::setInputRouter(InputRouter* router) {
     m_inputRouter = router;
@@ -109,14 +103,14 @@ void BackendRegistry::setLayerManager(LayerManager* mgr) {
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
     if (strcmp(name, "soloud") == 0 || strcmp(name, "SoLoud") == 0) {
-        m_ownedAudioBackend = std::make_unique<SoLoudAudioEngine>();
-        m_audioBackend = m_ownedAudioBackend.get();
+        m_audioBackend = new SoLoudAudioEngine();
+        // Engine is responsible for lifecycle
         printf("[BackendRegistry] Created audio backend: SoLoud\n");
         return m_audioBackend;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_ownedAudioBackend = std::make_unique<NullAudioBackend>();
-        m_audioBackend = m_ownedAudioBackend.get();
+        m_audioBackend = new NullAudioBackend();
+        // Engine is responsible for lifecycle
         return m_audioBackend;
     }
     fprintf(stderr, "[BackendRegistry] Unknown audio backend: %s\n", name);
@@ -125,14 +119,14 @@ IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
 
 IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
     if (strcmp(name, "bgfx") == 0) {
-        m_ownedRenderDevice = std::make_unique<BgfxRenderDevice>();
-        m_renderDevice = m_ownedRenderDevice.get();
+        m_renderDevice = new BgfxRenderDevice();
+        // Engine is responsible for lifecycle
         printf("[BackendRegistry] Created render backend: bgfx\n");
         return m_renderDevice;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_ownedRenderDevice = std::make_unique<NullRenderDevice>();
-        m_renderDevice = m_ownedRenderDevice.get();
+        m_renderDevice = new NullRenderDevice();
+        // Engine is responsible for lifecycle
         return m_renderDevice;
     }
     fprintf(stderr, "[BackendRegistry] Unknown render backend: %s\n", name);
@@ -141,14 +135,14 @@ IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
 
 IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
     if (strcmp(name, "sdl3") == 0 || strcmp(name, "SDL3") == 0) {
-        m_ownedPlatformBackend = std::make_unique<SDL3PlatformBackend>();
-        m_platformBackend = m_ownedPlatformBackend.get();
+        m_platformBackend = new SDL3PlatformBackend();
+        // Engine is responsible for lifecycle
         printf("[BackendRegistry] Created platform backend: SDL3\n");
         return m_platformBackend;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_ownedPlatformBackend = std::make_unique<NullPlatformBackend>();
-        m_platformBackend = m_ownedPlatformBackend.get();
+        m_platformBackend = new NullPlatformBackend();
+        // Engine is responsible for lifecycle
         return m_platformBackend;
     }
     fprintf(stderr, "[BackendRegistry] Unknown platform backend: %s\n", name);

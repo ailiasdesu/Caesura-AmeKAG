@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -90,7 +90,7 @@ bool Engine::init(const char* title, int width, int height) {
         fprintf(stderr, "SDL3 platform backend init failed.");
         return false;
     }
-    BackendRegistry::instance().setPlatformBackend(m_platformBackend.get());
+    BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
 
     void* nwh = m_platformBackend->getNativeWindowHandle();
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
@@ -100,7 +100,7 @@ bool Engine::init(const char* title, int width, int height) {
         fprintf(stderr, "Render device init failed.");
         return false;
     }
-    BackendRegistry::instance().setRenderDevice(m_renderDevice.get());
+    BackendRegistry::instance().setRenderDevice(*m_renderDevice);
 
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
@@ -114,7 +114,7 @@ bool Engine::init(const char* title, int width, int height) {
         fprintf(stderr, "Audio backend init failed.");
         return false;
     }
-    BackendRegistry::instance().setAudioBackend(m_audioBackend.get());
+    BackendRegistry::instance().setAudioBackend(*m_audioBackend);
 
     DebugManager::AudioInfo ai;
     ai.initialized = true; ai.bgmBusReady = true;
