@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2010-2026 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bx/blob/master/LICENSE
  */
@@ -264,17 +264,11 @@ namespace bx
 			tn.id    = ti->m_threadId;
 			tn.flags = 0;
 
-			__try
-			{
-				RaiseException(0x406d1388
-					, 0
-					, sizeof(tn)/4
-					, reinterpret_cast<ULONG_PTR*>(&tn)
-					);
-			}
-			__except(EXCEPTION_EXECUTE_HANDLER)
-			{
-			}
+			RaiseException(0x406d1388
+				, 0
+				, sizeof(tn)/4
+				, reinterpret_cast<ULONG_PTR*>(&tn)
+				);
 #	endif // BX_COMPILER_MSVC
 		}
 #endif // BX_PLATFORM_
