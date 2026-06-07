@@ -1,0 +1,39 @@
+{
+  "name": "caesura-amekag",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n vite,electron \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "package": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^10.0.3",
+    "electron": "^42.3.3",
+    "electron-builder": "^26.15.0",
+    "vite": "^5.3.1",
+    "wait-on": "^9.0.10"
+  },
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.caesura.amekag",
+    "productName": "Caesura (AmeKAG)",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ]
+  }
+}

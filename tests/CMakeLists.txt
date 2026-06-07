@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -28,6 +28,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/TextureBudget.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/SandboxQuota.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp

@@ -10,7 +10,7 @@
 #include <fstream>
 #include <filesystem>
 
-using namespace caesura::carc;
+using namespace Caesura::carc;
 
 TEST_CASE("CARCFormat::constants") {
     CHECK(CARC_MAGIC == 0x43524143);

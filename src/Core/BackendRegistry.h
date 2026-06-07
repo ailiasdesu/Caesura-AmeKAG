@@ -47,6 +47,9 @@ public:
     void setPlatformBackend(IPlatformBackend& backend);
     void setInputRouter(InputRouter* router);
     void setVideoPlayer(VideoPlayer* player);
+
+    // Install null (no-op) render and platform backends for headless mode
+    void registerNullBackends();
     void setTextureManager(TextureManager* mgr);
     void setLayerManager(LayerManager* mgr);
 

@@ -29,8 +29,10 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    bool init(const char* title, int width, int height);
+    bool init(const char* title, int width, int height, bool headless = false);
     void run();
+
+    bool isHeadless() const { return m_headless; }
     void quit();
 
     // Accessors (resolve from BackendRegistry)
@@ -56,6 +58,7 @@ private:
     bool         m_running  = false;
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
+    bool         m_headless = false;
 
     // Audio voice-complete tracking (no polling -- detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;

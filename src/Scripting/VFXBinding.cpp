@@ -4,6 +4,7 @@ extern "C" {
 }
 #include "VFXBinding.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/SandboxQuota.h"
 #include "../Render/IRenderDevice.h"
 #include "../Render/BgfxRenderDevice.h"
 #include "../Render/ParticleSystem.h"
@@ -90,6 +91,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
 
     int id = s_particleSystem.createEmitter(cfg);
     lua_pushinteger(L, id);
+    SandboxQuota::tryAlloc(L, "particles_emitters");
     return 1;
 }
 
@@ -98,6 +100,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
 static int lua_VFX_particles_destroy_emitter(lua_State* L) {
     int id = (int)luaL_checkinteger(L, 1);
     s_particleSystem.destroyEmitter(id);
+    SandboxQuota::release(L, "particles_emitters");
     lua_pushboolean(L, 1);
     return 1;
 }

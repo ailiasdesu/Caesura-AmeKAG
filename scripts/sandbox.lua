@@ -183,5 +183,102 @@ function _G._SANDBOX_CHECK(kind)
 end
 
 -- ===========================================================================
+-- ---------------------------------------------------------------------------
+--  9. RENDER OPERATION WHITELIST (Track 3) -- "DEFAULT DENY, EXPLICIT ALLOW"
+-- ---------------------------------------------------------------------------
+--  In strict mode, engine API tables (Render, DevCore) are wrapped with
+--  __index proxies. Calls to non-whitelisted functions are blocked.
+--  Set _SANDBOX_MODE = "dev" (or omit) to disable whitelist enforcement.
+-- ---------------------------------------------------------------------------
+
+-- Whitelist: Render module -- allowed functions for AI scripts
+local RENDER_WHITELIST = {
+    load_texture        = true,
+    destroy_texture     = true,
+    create_solid_texture = true,
+    get_resolution      = true,
+    set_view_name       = true,
+    submit_batch        = true,
+    submit_blend        = true,
+    load_texture_async  = true,
+    cancel_async_loads  = true,
+}
+
+-- Whitelist: DevCore module -- allowed functions for AI scripts
+local DEVCORE_WHITELIST = {
+    set_input_focus     = true,
+    get_input_focus     = true,
+    log                 = true,
+    get_resolution      = true,
+    get_window_size     = true,
+}
+
+-- Whitelist: Debug module -- read-only inspection only
+local DEBUG_WHITELIST = {
+    get_last_error      = true,
+    get_error_count     = true,
+    get_subsystem_stats = true,
+    dump_report         = true,
+    get_render_info     = true,
+    get_audio_info      = true,
+    get_input_info      = true,
+    get_log_path        = true,
+    log                 = true,
+    get_stats           = true,
+}
+
+-- Build a call-proxy metatable for a module table
+local function make_whitelist_proxy(original, whitelist, module_name)
+    local proxy = {}
+    local mt = {
+        __index = function(t, k)
+            local v = original[k]
+            if v == nil then return nil end
+            if type(v) == "function" then
+                if whitelist[k] then
+                    return v  -- allowed: return original function
+                else
+                    error("Sandbox: " .. module_name .. "." .. k .. " is blocked in strict mode", 2)
+                end
+            end
+            return v  -- non-function fields: always readable
+        end,
+        __newindex = function(t, k, v)
+            error("Sandbox: cannot modify " .. module_name .. " table", 2)
+        end,
+        __metatable = "protected",
+    }
+    setmetatable(proxy, mt)
+    return proxy
+end
+
+-- Apply whitelist proxies in strict mode
+-- Default mode is "strict" -- AI scripts get maximum protection.
+-- Developers can set _SANDBOX_MODE = "dev" in config.lua for full access.
+if rawget(_G, "_SANDBOX_MODE") == nil then
+    rawset(_G, "_SANDBOX_MODE", "strict")
+end
+
+if _SANDBOX_MODE == "strict" then
+    -- KAG: full access (safe high-level API, all ops go through BackendRegistry)
+    -- VFX: full access (already quota-controlled by C++ side)
+    -- Unified (_CAESURA_BACKEND): delegates through whitelisted modules, inherits restrictions
+
+    if Render then
+        _G.Render = make_whitelist_proxy(Render, RENDER_WHITELIST, "Render")
+    end
+    if DevCore then
+        _G.DevCore = make_whitelist_proxy(DevCore, DEVCORE_WHITELIST, "DevCore")
+    end
+    if Debug then
+        _G.Debug = make_whitelist_proxy(Debug, DEBUG_WHITELIST, "Debug")
+    end
+
+    print("[Sandbox] Strict mode: render operation whitelist active")
+else
+    print("[Sandbox] Dev mode: whitelist disabled, full API access")
+end
+
+-- ===========================================================================
 --  End of sandbox rules.
 -- ===========================================================================

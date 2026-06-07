@@ -1,4 +1,4 @@
-ï»¿// carc_pack.exe â€” CARC archive packer
+// carc_pack.exe ¡ª CARC archive packer
 // Usage: carc_pack.exe <input_dir> <output.carc> [public_key_out] [private_key_out]
 //
 // If key paths are omitted, keys are embedded in the archive only.
@@ -14,10 +14,10 @@ namespace fs = std::filesystem;
 
 static void printUsage() {
     std::cerr << "Usage: carc_pack.exe <input_dir> <output.carc> [public.key] [private.key]\n"
-              << "  input_dir      â€” directory to pack\n"
-              << "  output.carc    â€” CARC archive to create\n"
-              << "  public.key     â€” (optional) path to save public key\n"
-              << "  private.key    â€” (optional) path to save private key\n";
+              << "  input_dir      ¡ª directory to pack\n"
+              << "  output.carc    ¡ª CARC archive to create\n"
+              << "  public.key     ¡ª (optional) path to save public key\n"
+              << "  private.key    ¡ª (optional) path to save private key\n";
 }
 
 static std::string relativePath(const fs::path& filePath, const fs::path& baseDir)
@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    caesura::carc::CARCWriter writer;
+    Caesura::carc::CARCWriter writer;
     if (!writer.create(outputCarc, privKeyPath, pubKeyPath)) {
         std::cerr << "Error: failed to create output file: " << outputCarc << "\n";
         return 1;

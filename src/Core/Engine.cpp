@@ -30,6 +30,7 @@
 #include <bx/bx.h>
 #include <cstdio>
 #include <cmath>
+#include <chrono>
 
 
 std::thread::id Caesura::Engine::s_mainThreadId;
@@ -76,15 +77,21 @@ IRenderDevice& Engine::renderDevice() { return *BackendRegistry::instance().getR
 IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBackend(); }
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
-bool Engine::init(const char* title, int width, int height) {
+bool Engine::init(const char* title, int width, int height, bool headless) {
     s_mainThreadId = std::this_thread::get_id();
     m_width  = width;
     m_height = height;
+
+    m_headless = headless;
+    if (m_headless) {
+        fprintf(stderr, "[Engine] Running in HEADLESS mode (no window, no GPU)\n");
+    }
 
     if (!DebugManager::instance().init("logs")) {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
+    if (!m_headless) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         fprintf(stderr, "SDL3 platform backend init failed.");
@@ -101,13 +108,19 @@ bool Engine::init(const char* title, int width, int height) {
         return false;
     }
     BackendRegistry::instance().setRenderDevice(*m_renderDevice);
+    } else {
+        // Headless: register null backends for safe no-op operations
+        BackendRegistry::instance().registerNullBackends();
+    }
 
+    if (!m_headless) {
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
     ri.backendName = bgfx::getRendererName(caps->rendererType);
     ri.width = width; ri.height = height;
     ri.viewCount = 3; ri.shaderReady = true;
     DebugManager::instance().setRenderInfo(ri);
+    }
 
     m_audioBackend = std::make_unique<SoLoudAudioEngine>();
     if (!m_audioBackend->init()) {
@@ -160,14 +173,25 @@ bool Engine::init(const char* title, int width, int height) {
 
 void Engine::run() {
     m_running = true;
-    m_lastTick = m_platformBackend->getTicksMs();
+    if (m_headless) {
+        m_lastTick = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    } else {
+        m_lastTick = m_platformBackend->getTicksMs();
+    }
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Entering main loop.");
 
     while (m_running) {
         PROFILE_SCOPE("frame");
         processEvents();
 
-        uint64_t now = m_platformBackend->getTicksMs();
+        uint64_t now;
+        if (m_headless) {
+            now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        } else {
+            now = m_platformBackend->getTicksMs();
+        }
         float dt = (float)(now - m_lastTick) / 1000.0f;
         m_lastTick = now;
         if (dt < 0.0f) dt = 0.0f;
@@ -255,6 +279,12 @@ void Engine::run() {
 void Engine::processEvents() {
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
+
+    // Headless mode: no SDL events, minimal sleep
+    if (m_headless) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        return;
+    }
     lua_State* L = m_lua->state();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -347,6 +377,9 @@ void Engine::processEvents() {
 }
 
 void Engine::render() {
+    // Headless mode: no GPU rendering
+    if (m_headless) return;
+
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
     if (L) {

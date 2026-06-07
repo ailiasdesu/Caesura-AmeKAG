@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <string>
 #include "Carc/CARCReader.h"
+#include "Editor/EditorServer.h"
 #include <thread>
 #include <atomic>
 
@@ -17,19 +18,66 @@ int main(int argc, char* argv[]) {
     setbuf(stderr, NULL);
     fprintf(stderr, "[main] Starting Caesura (AmeKAG)...\n");
 
+    // -- Parse CLI flags -------------------------------------------------
+    bool headless = false;
+    int editorPort = 9876;
+    std::string webRoot = "web-editor/dist";
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--headless") {
+            headless = true;
+        } else if (arg == "--editor-port" && i + 1 < argc) {
+            editorPort = std::stoi(argv[++i]);
+        } else if (arg == "--web-root" && i + 1 < argc) {
+            webRoot = argv[++i];
+        }
+    }
+
     printf("============================================\n");
     printf("  Caesura (AmeKAG) v1.0.0\n");
     printf("  Cross-platform Visual Novel Engine\n");
     printf("  SDL3 + bgfx + SoLoud + Lua\n");
+    if (headless) printf("  [HEADLESS MODE]\n");
     printf("============================================\n\n");
 
     Caesura::Engine engine;
 
-    if (!engine.init("Caesura (AmeKAG)", 1280, 720)) {
+    if (!engine.init("Caesura (AmeKAG)", 1280, 720, headless)) {
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }
 
+    // -- Headless mode: start EditorServer ---------------------------------
+    if (headless) {
+        auto& editor = Caesura::EditorServer::instance();
+        editor.setLuaState(engine.lua().state());
+        // Try multiple web root paths
+        if (FILE* f = fopen((webRoot + "/index.html").c_str(), "r")) {
+            fclose(f);
+            editor.setWebRoot(webRoot);
+        } else if (FILE* f = fopen(("../../" + webRoot + "/index.html").c_str(), "r")) {
+            fclose(f);
+            editor.setWebRoot("../../" + webRoot);
+        } else if (FILE* f = fopen(("../../../" + webRoot + "/index.html").c_str(), "r")) {
+            fclose(f);
+            editor.setWebRoot("../../../" + webRoot);
+        } else {
+            fprintf(stderr, "[main] Warning: Cannot find web editor at %s\n", webRoot.c_str());
+        }
+
+        if (!editor.start(editorPort)) {
+            fprintf(stderr, "[main] EditorServer failed to start on port %d\n", editorPort);
+            return 1;
+        }
+
+        fprintf(stderr, "[main] Headless mode: HTTP editor server running.\n");
+        fprintf(stderr, "[main] Open http://localhost:%d in browser, or use Electron.\n", editorPort);
+
+        // Run engine loop (headless: no window, just Lua + HTTP)
+        engine.run();
+        printf("Caesura (AmeKAG) shut down cleanly.\n");
+        return 0;
+    }
 
     // Script directory discovery (3-level fallback)
     std::string scriptDir = "scripts/";

@@ -99,6 +99,15 @@ void BackendRegistry::setLayerManager(LayerManager* mgr) {
     m_layerManager = mgr;
 }
 
+// -- Null backend registration (headless mode) -------------------------------
+void BackendRegistry::registerNullBackends() {
+    static NullRenderDevice  s_nullRenderer;
+    static NullPlatformBackend s_nullPlatform;
+    m_renderDevice = &s_nullRenderer;
+    m_platformBackend = &s_nullPlatform;
+    printf("[BackendRegistry] Registered null backends (headless mode)\n");
+}
+
 // -- Backend factory -------------------------------------------------------
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {

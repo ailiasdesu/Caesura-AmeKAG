@@ -73,6 +73,8 @@ set(ENGINE_SOURCES
     src/Core/BackendRegistry.cpp
     src/Core/DebugManager.cpp
     src/Core/TextureBudget.cpp
+    src/Core/SandboxQuota.cpp
+    src/Editor/EditorServer.cpp
     src/Core/ErrorUI.cpp
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
@@ -175,6 +177,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external
     ${CMAKE_SOURCE_DIR}/external/soloud/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bx/include 
+    external/cpp-httplib
     ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty

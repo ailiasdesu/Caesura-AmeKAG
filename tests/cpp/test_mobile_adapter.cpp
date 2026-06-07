@@ -1,7 +1,7 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "Platform/MobileAdapter.h"
 
-using namespace caesura::platform;
+using namespace Caesura;
 
 TEST_CASE("MobileAdapter::stub returns safe defaults") {
     MobileAdapter ma;

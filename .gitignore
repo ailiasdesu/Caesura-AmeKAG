@@ -1,4 +1,4 @@
-# ── Build artifacts ──
+﻿# --- Build artifacts ---
 build/
 bin/
 cmake-build*/
@@ -15,28 +15,39 @@ out/
 *.so
 *.dylib
 *.bak
-# ── IDE / Editor ──
+
+# --- IDE / Editor ---
 .idea/
 .vs/
 .vscode/
 *.swp
 *.swo
 *~
-# ── Submodules (tracked via git submodule, not vendored) ──
-# ── Runtime generated ──
+
+# --- Node.js ---
+node_modules/
+web-editor/dist/
+web-editor/node_modules/
+web-editor/release/
+
+# --- Runtime generated ---
 logs/
 saves/
 settings/
 config/
-# ── Test / Demo scripts ──
+
+# --- Test / Demo scripts ---
 scripts/game_logic.lua
-# ── Reference source (not engine) ──
+
+# --- Reference source (not engine) ---
 krkrz参考源码/
-# ── OS files ──
+
+# --- OS files ---
 .DS_Store
 Thumbs.db
 desktop.ini
-# ── CMake generated ──
+
+# --- CMake generated ---
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake

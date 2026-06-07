@@ -4,6 +4,8 @@
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdio>
+#include "../Core/SandboxQuota.h"
+#include "../Scripting/LuaManager.h"
 
 namespace Caesura {
 
