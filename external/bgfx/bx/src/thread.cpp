@@ -214,7 +214,71 @@ namespace bx
 		return m_exitCode;
 	}
 
-	void Thread::setThreadName(const StringView& _name) { BX_UNUSED(_name); }
+	void Thread::setThreadName(const StringView& _name)
+	{
+		if (_name.isEmpty() )
+		{
+			return;
+		}
+
+		m_name = _name;
+
+		ThreadInternal* ti = (ThreadInternal*)m_internal;
+		BX_UNUSED(ti);
+#if  BX_PLATFORM_OSX   \
+	|| BX_PLATFORM_IOS \
+	|| BX_PLATFORM_VISIONOS
+		pthread_setname_np(m_name.getCPtr() );
+#elif BX_CRT_GLIBC
+		pthread_setname_np(ti->m_handle, m_name.getCPtr() );
+#elif BX_PLATFORM_LINUX
+		prctl(PR_SET_NAME, m_name.getCPtr(), 0, 0, 0);
+#elif BX_PLATFORM_WINDOWS
+		typedef HRESULT (WINAPI *SetThreadDescriptionFn)(HANDLE, PCWSTR);
+		SetThreadDescriptionFn setThreadDescription = dlsym<SetThreadDescriptionFn>( (void*)GetModuleHandleA("kernel32.dll"), "SetThreadDescription");
+
+		if (NULL != setThreadDescription)
+		{
+			const uint32_t length = m_name.getLength();
+			const uint32_t max    = (length+1)*sizeof(wchar_t);
+			wchar_t* name = (wchar_t*)BX_STACK_ALLOC(max);
+			mbstowcs(name, m_name.getCPtr(), length);
+			name[length] = 0;
+			setThreadDescription(ti->m_handle, name);
+		}
+		else
+		{
+#	if BX_COMPILER_MSVC
+#		pragma pack(push, 8)
+			struct ThreadName
+			{
+				DWORD  type;
+				LPCSTR name;
+				DWORD  id;
+				DWORD  flags;
+			};
+#		pragma pack(pop)
+			ThreadName tn;
+			tn.type  = 0x1000;
+			tn.name  = m_name.getCPtr();
+			tn.id    = ti->m_threadId;
+			tn.flags = 0;
+
+			__try
+			{
+				RaiseException(0x406d1388
+					, 0
+					, sizeof(tn)/4
+					, reinterpret_cast<ULONG_PTR*>(&tn)
+					);
+			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{
+			}
+#	endif // BX_COMPILER_MSVC
+		}
+#endif // BX_PLATFORM_
+	}
 
 	void Thread::push(void* _ptr)
 	{

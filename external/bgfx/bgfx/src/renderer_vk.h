@@ -330,57 +330,6 @@ VK_DESTROY_FUNC(DescriptorSet);
 	{
 	}
 
-	template<typename Ty>
-	class StateCacheT
-	{
-	public:
-		void add(uint64_t _key, Ty _value)
-		{
-			invalidate(_key);
-			m_hashMap.insert(stl::make_pair(_key, _value) );
-		}
-
-		Ty find(uint64_t _key)
-		{
-			typename HashMap::iterator it = m_hashMap.find(_key);
-			if (it != m_hashMap.end() )
-			{
-				return it->second;
-			}
-
-			return 0;
-		}
-
-		void invalidate(uint64_t _key)
-		{
-			typename HashMap::iterator it = m_hashMap.find(_key);
-			if (it != m_hashMap.end() )
-			{
-				release(it->second);
-				m_hashMap.erase(it);
-			}
-		}
-
-		void invalidate()
-		{
-			for (typename HashMap::iterator it = m_hashMap.begin(), itEnd = m_hashMap.end(); it != itEnd; ++it)
-			{
-				release(it->second);
-			}
-
-			m_hashMap.clear();
-		}
-
-		uint32_t getCount() const
-		{
-			return uint32_t(m_hashMap.size() );
-		}
-
-	private:
-		typedef stl::unordered_map<uint64_t, Ty> HashMap;
-		HashMap m_hashMap;
-	};
-
 	struct DeviceMemoryAllocationVK {
 		DeviceMemoryAllocationVK()
 			: mem(VK_NULL_HANDLE)
@@ -463,50 +412,23 @@ VK_DESTROY_FUNC(DescriptorSet);
 		uint32_t offsets[2];
 	};
 
-	struct ChunkedScratchBufferAlloc
+	struct ChunkVK
 	{
-		uint32_t offset;
-		uint32_t chunkIdx;
+		VkBuffer buffer;
+		DeviceMemoryAllocationVK deviceMem;
+		uint8_t* data;
 	};
 
-	struct ChunkedScratchBufferVK
+	struct ChunkedScratchBufferVK : ChunkedScratchBufferT<ChunkedScratchBufferVK, VkBuffer, ChunkVK>
 	{
-		ChunkedScratchBufferVK()
-			: m_chunkControl(0)
-		{
-		}
-
-		void create(uint32_t _chunkSize, uint32_t _numChunks, VkBufferUsageFlags usage, uint32_t _align);
 		void createUniform(uint32_t _chunkSize, uint32_t _numChunks);
-		void destroy();
 
-		void addChunk(uint32_t _at = UINT32_MAX);
-		ChunkedScratchBufferAlloc alloc(uint32_t _size);
+		void createChunk(ChunkVK& _chunk);
+		void destroyChunk(ChunkVK& _chunk);
+		void flushChunk(ChunkVK& _chunk, uint32_t _size);
+		uint32_t currentFrameInFlight() const;
 
-		void write(ChunkedScratchBufferOffset& _outSbo, const void* _vsData, uint32_t _vsSize, const void* _fsData = NULL, uint32_t _fsSize = 0);
-
-		void begin();
-		void end();
-
-		struct Chunk
-		{
-			VkBuffer buffer;
-			DeviceMemoryAllocationVK deviceMem;
-			uint8_t* data;
-		};
-
-		using ScratchBufferChunksArray = stl::vector<Chunk>;
-
-		ScratchBufferChunksArray m_chunks;
-		bx::RingBufferControl m_chunkControl;
-
-		uint32_t m_chunkPos;
-		uint32_t m_chunkSize;
-		uint32_t m_align;
 		VkBufferUsageFlags m_usage;
-
-		uint32_t m_consume[BGFX_CONFIG_MAX_FRAME_LATENCY];
-		uint32_t m_totalUsed;
 	};
 
 	struct BufferVK

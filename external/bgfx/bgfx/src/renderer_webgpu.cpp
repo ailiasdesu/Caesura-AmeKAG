@@ -1976,12 +1976,7 @@ WGPU_IMPORT
 			RenderBind renderBind;
 			renderBind.clear();
 			Binding& bind = renderBind.m_bind[0];
-			bind.m_idx    = _blitter.m_texture.idx;
-			bind.m_type   = uint8_t(Binding::Texture);
-			bind.m_samplerFlags = uint32_t(texture.m_flags & BGFX_SAMPLER_BITS_MASK);
-			bind.m_format = 0;
-			bind.m_access = 0;
-			bind.m_mip    = 0;
+			bind.setTexture(_blitter.m_texture, uint32_t(texture.m_flags & BGFX_SAMPLER_BITS_MASK) );
 
 			const Stream stream =
 			{
@@ -2544,7 +2539,9 @@ WGPU_IMPORT
 							, shaderBind.binding
 							, shaderBind.shaderStage
 							, sampleType
-							, m_textures[bind.m_idx].m_viewDimension
+							, WGPUTextureViewDimension_Undefined != shaderBind.viewDimension
+								? shaderBind.viewDimension
+								: m_textures[bind.m_idx].m_viewDimension
 							);
 
 						initSamplerBinding(
@@ -3053,8 +3050,8 @@ WGPU_IMPORT
 								.size        = 0,
 								.sampler     = NULL,
 								.textureView = _isCompute
-									? texture.getTextureView(bind.m_mip, 1, Binding::Image == bind.m_type)
-									: texture.getTextureView(0, UINT8_MAX, false)
+									? texture.getTextureView(bind.m_firstMip, bind.m_numMips, Binding::Image == bind.m_type)
+									: texture.getTextureView(bind.m_firstMip, bind.m_numMips, false, bind.m_firstLayer, bind.m_numLayers)
 									,
 							};
 
@@ -3238,6 +3235,11 @@ WGPU_IMPORT
 
 		void setDepthStencilState(WGPUDepthStencilState& _outDepthStencilState, TextureFormat::Enum _format, uint64_t _state, uint64_t _stencil)
 		{
+			if (!hasStencil(_format) )
+			{
+				_stencil = 0;
+			}
+
 			_stencil = 0 == _stencil ? kStencilDisabled : _stencil;
 
 			const uint32_t fstencil = unpackStencil(0, _stencil);
@@ -3384,48 +3386,17 @@ WGPU_IMPORT
 		}
 	}
 
-	void ChunkedScratchBufferWGPU::create(uint32_t _chunkSize, uint32_t _numChunks, WGPUBufferUsage _usage, uint32_t _align)
-	{
-		const uint32_t chunkSize = bx::alignUp(_chunkSize, 1<<20);
-
-		m_chunkPos  = 0;
-		m_chunkSize = chunkSize;
-		m_align     = _align;
-		m_usage     = _usage;
-
-		m_chunkControl.m_size = 0;
-		m_chunkControl.reset();
-
-		bx::memSet(m_consume, 0, sizeof(m_consume) );
-		m_totalUsed = 0;
-
-		for (uint32_t ii = 0; ii < _numChunks; ++ii)
-		{
-			addChunk();
-		}
-	}
-
 	void ChunkedScratchBufferWGPU::createUniform(uint32_t _chunkSize, uint32_t _numChunks)
 	{
 		const WGPULimits& limits = s_renderWGPU->m_limits;
 		const uint32_t align = uint32_t(limits.minUniformBufferOffsetAlignment);
 
-		create(_chunkSize, _numChunks, WGPUBufferUsage_Uniform, align);
+		m_usage = WGPUBufferUsage_Uniform;
+		create(_chunkSize, _numChunks, align);
 	}
 
-	void ChunkedScratchBufferWGPU::destroy()
+	void ChunkedScratchBufferWGPU::createChunk(ChunkWGPU& _chunk)
 	{
-		for (Chunk& sbc : m_chunks)
-		{
-			wgpuRelease(sbc.buffer);
-			bx::free(g_allocator, sbc.data);
-		}
-	}
-
-	void ChunkedScratchBufferWGPU::addChunk(uint32_t _at)
-	{
-		Chunk sbc;
-
 		WGPUBufferDescriptor bufferDesc =
 		{
 			.nextInChain = NULL,
@@ -3438,134 +3409,24 @@ WGPU_IMPORT
 			.mappedAtCreation = false,
 		};
 
-		sbc.buffer = WGPU_CHECK(wgpuDeviceCreateBuffer(s_renderWGPU->m_device, &bufferDesc) );
-		sbc.data   = (uint8_t*)bx::alloc(g_allocator, m_chunkSize);
-
-		const uint32_t lastChunk = bx::max(uint32_t(m_chunks.size()-1), 1);
-		const uint32_t at = UINT32_MAX == _at ? lastChunk : _at;
-		const uint32_t chunkIndex = at % bx::max(m_chunks.size(), 1);
-
-		m_chunkControl.resize(m_chunkSize);
-
-		m_chunks.insert(&m_chunks[chunkIndex], sbc);
+		_chunk.buffer = WGPU_CHECK(wgpuDeviceCreateBuffer(s_renderWGPU->m_device, &bufferDesc) );
+		_chunk.data   = (uint8_t*)bx::alloc(g_allocator, m_chunkSize);
 	}
 
-	ChunkedScratchBufferAlloc ChunkedScratchBufferWGPU::alloc(uint32_t _size)
+	void ChunkedScratchBufferWGPU::destroyChunk(ChunkWGPU& _chunk)
 	{
-		BX_ASSERT(_size < m_chunkSize, "Size can't be larger than chunk size (size: %d, chunk size: %d)!", _size, m_chunkSize);
-
-		uint32_t offset     = m_chunkPos;
-		uint32_t nextOffset = offset + _size;
-		uint32_t chunkIdx   = m_chunkControl.m_write/m_chunkSize;
-
-		if (nextOffset >= m_chunkSize)
-		{
-			const uint32_t total = m_chunkSize - m_chunkPos + _size;
-			uint32_t reserved    = m_chunkControl.reserve(total, true);
-
-			if (total != reserved)
-			{
-				addChunk(chunkIdx + 1);
-				reserved = m_chunkControl.reserve(total, true);
-				BX_ASSERT(total == reserved, "Failed to reserve chunk memory after adding chunk.");
-			}
-
-			m_chunkPos = 0;
-			offset     = 0;
-			nextOffset = _size;
-			chunkIdx   = m_chunkControl.m_write/m_chunkSize;
-		}
-		else
-		{
-			const uint32_t size = m_chunkControl.reserve(_size, true);
-			BX_ASSERT(size == _size, "Failed to reserve chunk memory.");
-			BX_UNUSED(size);
-		}
-
-		m_chunkPos = nextOffset;
-
-		return { .offset = offset, .chunkIdx = chunkIdx };
+		wgpuRelease(_chunk.buffer);
+		bx::free(g_allocator, _chunk.data);
 	}
 
-	void ChunkedScratchBufferWGPU::write(ChunkedScratchBufferOffset& _outSbo, const void* _vsData, uint32_t _vsSize, const void* _fsData, uint32_t _fsSize)
+	void ChunkedScratchBufferWGPU::flushChunk(ChunkWGPU& _chunk, uint32_t _size)
 	{
-		const uint32_t vsSize = bx::strideAlign(_vsSize, m_align);
-		const uint32_t fsSize = bx::strideAlign(_fsSize, m_align);
-		const uint32_t size   = vsSize + fsSize;
-
-		const ChunkedScratchBufferAlloc sba = alloc(size);
-
-		const uint32_t offset0 = sba.offset;
-		const uint32_t offset1 = offset0 + vsSize;
-
-		const Chunk& sbc = m_chunks[sba.chunkIdx];
-
-		_outSbo.buffer = sbc.buffer;
-		_outSbo.offsets[0] = offset0;
-		_outSbo.offsets[1] = offset1;
-
-		if (NULL != _vsData)
-		{
-			bx::memCopy(&sbc.data[offset0], _vsData, _vsSize);
-		}
-
-		if (NULL != _fsData)
-		{
-			bx::memCopy(&sbc.data[offset1], _fsData, _fsSize);
-		}
+		s_renderWGPU->m_cmd.writeBuffer(_chunk.buffer, 0, _chunk.data, _size);
 	}
 
-	void ChunkedScratchBufferWGPU::begin()
+	uint32_t ChunkedScratchBufferWGPU::currentFrameInFlight() const
 	{
-		BX_ASSERT(0 == m_chunkPos, "");
-		const uint32_t numConsumed = m_consume[s_renderWGPU->m_cmd.m_currentFrameInFlight];
-		m_chunkControl.consume(numConsumed);
-	}
-
-	void ChunkedScratchBufferWGPU::end()
-	{
-		uint32_t numFlush = m_chunkControl.getNumReserved();
-
-		if (0 != m_chunkPos)
-		{
-retry:
-			const uint32_t remainder = m_chunkSize - m_chunkPos;
-			const uint32_t rem = m_chunkControl.reserve(remainder, true);
-
-			if (rem != remainder)
-			{
-				const uint32_t chunkIdx = m_chunkControl.m_write/m_chunkSize;
-				addChunk(chunkIdx + 1);
-				goto retry;
-			}
-
-			m_chunkPos = 0;
-		}
-
-		const uint32_t numReserved = m_chunkControl.getNumReserved();
-		BX_ASSERT(0 == numReserved % m_chunkSize, "Number of reserved must always be aligned to chunk size!");
-
-		const uint32_t first = m_chunkControl.m_current / m_chunkSize;
-
-		for (uint32_t ii = first, end = numReserved / m_chunkSize + first; ii < end; ++ii)
-		{
-			const Chunk& chunk = m_chunks[ii % m_chunks.size()];
-
-			s_renderWGPU->m_cmd.writeBuffer(chunk.buffer, 0, chunk.data, bx::min(numFlush, m_chunkSize) );
-
-			m_chunkControl.commit(m_chunkSize);
-			numFlush = bx::satSub<uint32_t>(numFlush, m_chunkSize);
-		}
-
-		m_consume[s_renderWGPU->m_cmd.m_currentFrameInFlight] = numReserved;
-
-		m_totalUsed = m_chunkControl.getNumUsed();
-	}
-
-	void ChunkedScratchBufferWGPU::flush()
-	{
-		end();
-		begin();
+		return s_renderWGPU->m_cmd.m_currentFrameInFlight;
 	}
 
 	void BufferWGPU::create(uint32_t _size, void* _data, uint16_t _flags, bool _vertex, uint32_t _stride)
@@ -4241,6 +4102,8 @@ retry:
 
 	void TextureWGPU::destroy()
 	{
+		s_renderWGPU->m_textureViewStateCache.invalidateWithParent(uint16_t(this - s_renderWGPU->m_textures) );
+
 		wgpuDestroy(m_texture);
 		wgpuDestroy(m_textureResolve);
 	}
@@ -4355,7 +4218,7 @@ retry:
 		return sampler;
 	}
 
-	WGPUTextureView TextureWGPU::getTextureView(uint8_t _baseMipLevel, uint8_t _mipLevelCount, bool _storage) const
+	WGPUTextureView TextureWGPU::getTextureView(uint8_t _baseMipLevel, uint8_t _mipLevelCount, bool _storage, uint16_t _baseArrayLayer, uint16_t _arrayLayerCount) const
 	{
 		bx::HashMurmur3 murmur;
 		murmur.begin();
@@ -4363,6 +4226,8 @@ retry:
 		murmur.add(_baseMipLevel);
 		murmur.add(_mipLevelCount);
 		murmur.add(_storage);
+		murmur.add(_baseArrayLayer);
+		murmur.add(_arrayLayerCount);
 		const uint32_t hash = murmur.end();
 
 		WGPUTextureView textureView = s_renderWGPU->m_textureViewStateCache.find(hash);
@@ -4370,7 +4235,10 @@ retry:
 		if (NULL == textureView)
 		{
 			WGPUTextureViewDimension tvd = m_viewDimension;
-			uint32_t arrayLayerCount = WGPU_ARRAY_LAYER_COUNT_UNDEFINED;
+			const uint32_t arrayLayerCount = UINT16_MAX == _arrayLayerCount
+				? WGPU_ARRAY_LAYER_COUNT_UNDEFINED
+				: _arrayLayerCount
+				;
 
 			if (_storage)
 			{
@@ -4388,16 +4256,17 @@ retry:
 				.dimension       = tvd,
 				.baseMipLevel    = _baseMipLevel,
 				.mipLevelCount   = UINT8_MAX == _mipLevelCount ? WGPU_MIP_LEVEL_COUNT_UNDEFINED : _mipLevelCount,
-				.baseArrayLayer  = 0,
+				.baseArrayLayer  = _baseArrayLayer,
 				.arrayLayerCount = arrayLayerCount,
 				.aspect          = WGPUTextureAspect_All,
-				.usage           = WGPUTextureUsage_TextureBinding
+				.usage           = 0
+					| WGPUTextureUsage_TextureBinding
 					| (_storage ? WGPUTextureUsage_StorageBinding : 0)
 					,
 			};
 
 			textureView = WGPU_CHECK(wgpuTextureCreateView(m_texture, &textureViewDesc) );
-			s_renderWGPU->m_textureViewStateCache.add(hash, textureView);
+			s_renderWGPU->m_textureViewStateCache.add(hash, textureView, uint16_t(this - s_renderWGPU->m_textures) );
 		}
 
 		return textureView;
@@ -5359,15 +5228,17 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 	void RendererContextWGPU::generateMips(WGPUCommandEncoder _cmdEncoder, TextureWGPU& _texture, TextureHandle _textureHandle)
 	{
 		if (NULL == m_mipGen
-		||  !isValid(m_mipGen->m_program[0]) )
+		||  !isValid(m_mipGen->m_program[0])
+		||  _texture.m_numMips <= 1
+		||  TextureWGPU::Texture3D == _texture.m_type
+		   )
 		{
 			return;
 		}
 
-		if (_texture.m_numMips <= 1)
-		{
-			return;
-		}
+		const uint32_t numSlices = (TextureWGPU::TextureCube == _texture.m_type ? 6 : 1)
+			* bx::max<uint32_t>(_texture.m_numLayers, 1)
+			;
 
 		if (NULL == m_mipGenStubTexture)
 		{
@@ -5394,7 +5265,7 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 					.nextInChain     = NULL,
 					.label           = WGPU_STRING_VIEW_INIT,
 					.format          = WGPUTextureFormat_RGBA8Unorm,
-					.dimension       = WGPUTextureViewDimension_2D,
+					.dimension       = WGPUTextureViewDimension_2DArray,
 					.baseMipLevel    = ii,
 					.mipLevelCount   = 1,
 					.baseArrayLayer  = 0,
@@ -5466,22 +5337,19 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 			for (uint32_t ii = 0; ii < 4; ++ii)
 			{
 				Binding& bind = renderBind.m_bind[ii];
-				bind.m_type   = Binding::Image;
-				bind.m_access = Access::Write;
-				bind.m_idx    = _textureHandle.idx;
-				bind.m_mip    = uint8_t(bx::min(topMip + 1 + ii, uint32_t(_texture.m_numMips - 1) ) );
+				bind.setImage(_textureHandle, uint8_t(bx::min(topMip + 1 + ii, uint32_t(_texture.m_numMips - 1) ) ), Access::Write, TextureFormat::Enum(0) );
 			}
 
 			{
-				Binding& bind    = renderBind.m_bind[4];
-				bind.m_type         = Binding::Texture;
-				bind.m_idx          = _textureHandle.idx;
-				bind.m_mip          = uint8_t(topMip);
-				bind.m_samplerFlags = 0
+				Binding& bind = renderBind.m_bind[4];
+				bind.setTexture(
+					  _textureHandle
+					, 0
 					| BGFX_SAMPLER_U_CLAMP
 					| BGFX_SAMPLER_V_CLAMP
 					| BGFX_SAMPLER_W_CLAMP
-					;
+					, uint8_t(topMip)
+					);
 			}
 
 			ComputePipeline* computePipeline = getPipeline(prog, renderBind);
@@ -5521,7 +5389,7 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 				WGPUTextureView view;
 				if (ii < numMips)
 				{
-					view = _texture.getTextureView(uint8_t(topMip + 1 + ii), 1, true);
+					view = _texture.getTextureView(uint8_t(topMip + 1 + ii), 1, true, true);
 				}
 				else
 				{
@@ -5553,7 +5421,7 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 						.offset      = 0,
 						.size        = 0,
 						.sampler     = NULL,
-						.textureView = _texture.getTextureView(uint8_t(topMip), 1, false),
+						.textureView = _texture.getTextureView(uint8_t(topMip), 1, false, true),
 					};
 
 					const uint32_t samplerFlags = 0
@@ -5593,7 +5461,7 @@ m_resolution.formatColor = TextureFormat::BGRA8;
 				  computePass
 				, bx::max<uint32_t>( (dstWidth  + 7) / 8, 1)
 				, bx::max<uint32_t>( (dstHeight + 7) / 8, 1)
-				, 1
+				, numSlices
 				) );
 
 			WGPU_CHECK(wgpuComputePassEncoderEnd(computePass) );

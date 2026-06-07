@@ -3750,19 +3750,26 @@ VK_IMPORT_DEVICE
 			return sampler;
 		}
 
-		VkImageView getCachedImageView(TextureHandle _handle, uint32_t _mip, uint32_t _numMips, VkImageViewType _type, bool _stencil = false)
+		VkImageView getCachedImageView(TextureHandle _handle, uint32_t _mip, uint32_t _numMips, VkImageViewType _type, bool _stencil = false, uint32_t _firstLayer = 0, uint32_t _numLayers = UINT32_MAX)
 		{
 			const TextureVK& texture = m_textures[_handle.idx];
 
 			_stencil = _stencil && !!(texture.m_aspectFlags & VK_IMAGE_ASPECT_STENCIL_BIT);
 
+			const uint32_t firstLayer = bx::min<uint32_t>(_firstLayer, texture.m_numSides);
+			const uint32_t numLayers  = bx::min<uint32_t>(_numLayers,  texture.m_numSides - firstLayer);
+			const uint32_t firstMip   = bx::min<uint32_t>(_mip,        texture.m_numMips);
+			const uint32_t numMips    = bx::min<uint32_t>(_numMips,    texture.m_numMips - firstMip);
+
 			bx::HashMurmur2A hash;
 			hash.begin();
 			hash.add(_handle.idx);
-			hash.add(_mip);
-			hash.add(_numMips);
+			hash.add(firstMip);
+			hash.add(numMips);
 			hash.add(_type);
 			hash.add(_stencil);
+			hash.add(firstLayer);
+			hash.add(numLayers);
 			uint32_t hashKey = hash.end();
 
 			VkImageView* viewCached = m_imageViewCache.find(hashKey);
@@ -3778,7 +3785,7 @@ VK_IMPORT_DEVICE
 				;
 
 			VkImageView view;
-			VK_CHECK(texture.createView(0, texture.m_numSides, _mip, _numMips, _type, aspectMask, false, &view) );
+			VK_CHECK(texture.createView(firstLayer, numLayers, firstMip, numMips, _type, aspectMask, false, &view) );
 			m_imageViewCache.add(hashKey, view, _handle.idx);
 
 			return view;
@@ -4149,8 +4156,8 @@ VK_IMPORT_DEVICE
 							imageInfo[imageCount].sampler     = VK_NULL_HANDLE;
 							imageInfo[imageCount].imageView   = getCachedImageView(
 								  { bind.m_idx }
-								, bind.m_mip
-								, 1
+								, bind.m_firstMip
+								, bind.m_numMips
 								, type
 								);
 							wds[wdsCount].pImageInfo = &imageInfo[imageCount];
@@ -4210,10 +4217,12 @@ VK_IMPORT_DEVICE
 							imageInfo[imageCount].sampler     = sampler;
 							imageInfo[imageCount].imageView   = getCachedImageView(
 								  { bind.m_idx }
-								, 0
-								, texture.m_numMips
+								, bind.m_firstMip
+								, bind.m_numMips
 								, type
 								, sampleStencil
+								, bind.m_firstLayer
+								, bind.m_numLayers
 								);
 
 							wds[wdsCount].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -5154,52 +5163,19 @@ VK_DESTROY
 		}
 	}
 
-	void ChunkedScratchBufferVK::create(uint32_t _chunkSize, uint32_t _numChunks, VkBufferUsageFlags usage, uint32_t _align)
-	{
-		const uint32_t chunkSize = bx::alignUp(_chunkSize, 1<<20);
-
-		m_chunkPos  = 0;
-		m_chunkSize = chunkSize;
-		m_align     = _align;
-		m_usage     = usage;
-
-		m_chunkControl.m_size = 0;
-		m_chunkControl.reset();
-
-		bx::memSet(m_consume, 0, sizeof(m_consume) );
-		m_totalUsed = 0;
-
-		for (uint32_t ii = 0; ii < _numChunks; ++ii)
-		{
-			addChunk();
-		}
-	}
-
 	void ChunkedScratchBufferVK::createUniform(uint32_t _chunkSize, uint32_t _numChunks)
 	{
 		const VkPhysicalDeviceLimits& deviceLimits = s_renderVK->m_deviceProperties.limits;
 		const uint32_t align = uint32_t(deviceLimits.minUniformBufferOffsetAlignment);
 
-		create(_chunkSize, _numChunks, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, align);
+		m_usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		create(_chunkSize, _numChunks, align);
 	}
 
-	void ChunkedScratchBufferVK::destroy()
-	{
-		for (Chunk& sbc : m_chunks)
-		{
-			vkUnmapMemory(s_renderVK->m_device, sbc.deviceMem.mem);
-
-			s_renderVK->release(sbc.buffer);
-			s_renderVK->recycleMemory(sbc.deviceMem);
-		}
-	}
-
-	void ChunkedScratchBufferVK::addChunk(uint32_t _at)
+	void ChunkedScratchBufferVK::createChunk(ChunkVK& _chunk)
 	{
 		const VkAllocationCallbacks* allocatorCb = s_renderVK->m_allocatorCb;
 		const VkDevice device = s_renderVK->m_device;
-
-		Chunk sbc;
 
 		VkBufferCreateInfo bci =
 		{
@@ -5217,161 +5193,57 @@ VK_DESTROY
 			  device
 			, &bci
 			, allocatorCb
-			, &sbc.buffer
+			, &_chunk.buffer
 			) );
 
 		VkMemoryRequirements mr;
 		vkGetBufferMemoryRequirements(
 			  device
-			, sbc.buffer
+			, _chunk.buffer
 			, &mr
 			);
 
 		VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		VkResult result = s_renderVK->allocateMemory(&mr, flags, &sbc.deviceMem, true);
+		VkResult result = s_renderVK->allocateMemory(&mr, flags, &_chunk.deviceMem, true);
 
 		if (VK_SUCCESS != result)
 		{
 			flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-			VK_CHECK(s_renderVK->allocateMemory(&mr, flags, &sbc.deviceMem, true) );
+			VK_CHECK(s_renderVK->allocateMemory(&mr, flags, &_chunk.deviceMem, true) );
 		}
 
 		m_chunkSize = bx::narrowCast<uint32_t>(mr.size);
 
-		VK_CHECK(vkBindBufferMemory(device, sbc.buffer, sbc.deviceMem.mem, sbc.deviceMem.offset) );
+		VK_CHECK(vkBindBufferMemory(device, _chunk.buffer, _chunk.deviceMem.mem, _chunk.deviceMem.offset) );
 
-		VK_CHECK(vkMapMemory(device, sbc.deviceMem.mem, sbc.deviceMem.offset, m_chunkSize, 0, (void**)&sbc.data) );
-
-		const uint32_t lastChunk = bx::max(uint32_t(m_chunks.size()-1), 1);
-		const uint32_t at = UINT32_MAX == _at ? lastChunk : _at;
-		const uint32_t chunkIndex = at % bx::max(m_chunks.size(), 1);
-
-		m_chunkControl.resize(m_chunkSize);
-
-		m_chunks.insert(m_chunks.begin() + chunkIndex, sbc);
+		VK_CHECK(vkMapMemory(device, _chunk.deviceMem.mem, _chunk.deviceMem.offset, m_chunkSize, 0, (void**)&_chunk.data) );
 	}
 
-	ChunkedScratchBufferAlloc ChunkedScratchBufferVK::alloc(uint32_t _size)
+	void ChunkedScratchBufferVK::destroyChunk(ChunkVK& _chunk)
 	{
-		BX_ASSERT(_size < m_chunkSize, "Size can't be larger than chunk size (size: %d, chunk size: %d)!", _size, m_chunkSize);
+		vkUnmapMemory(s_renderVK->m_device, _chunk.deviceMem.mem);
 
-		uint32_t offset     = m_chunkPos;
-		uint32_t nextOffset = offset + _size;
-		uint32_t chunkIdx   = m_chunkControl.m_write/m_chunkSize;
-
-		if (nextOffset >= m_chunkSize)
-		{
-			const uint32_t total = m_chunkSize - m_chunkPos + _size;
-			uint32_t reserved    = m_chunkControl.reserve(total, true);
-
-			if (total != reserved)
-			{
-				addChunk(chunkIdx + 1);
-				reserved = m_chunkControl.reserve(total, true);
-				BX_ASSERT(total == reserved, "Failed to reserve chunk memory after adding chunk.");
-			}
-
-			m_chunkPos = 0;
-			offset     = 0;
-			nextOffset = _size;
-			chunkIdx   = m_chunkControl.m_write/m_chunkSize;
-		}
-		else
-		{
-			const uint32_t size = m_chunkControl.reserve(_size, true);
-			BX_ASSERT(size == _size, "Failed to reserve chunk memory.");
-			BX_UNUSED(size);
-		}
-
-		m_chunkPos = nextOffset;
-
-		return { .offset = offset, .chunkIdx = chunkIdx };
+		s_renderVK->release(_chunk.buffer);
+		s_renderVK->recycleMemory(_chunk.deviceMem);
 	}
 
-	void ChunkedScratchBufferVK::write(ChunkedScratchBufferOffset& _outSbo, const void* _vsData, uint32_t _vsSize, const void* _fsData, uint32_t _fsSize)
+	void ChunkedScratchBufferVK::flushChunk(ChunkVK& _chunk, uint32_t _size)
 	{
-		const uint32_t vsSize = bx::strideAlign(_vsSize, m_align);
-		const uint32_t fsSize = bx::strideAlign(_fsSize, m_align);
-		const uint32_t size   = vsSize + fsSize;
-
-		const ChunkedScratchBufferAlloc sba = alloc(size);
-
-		const uint32_t offset0 = sba.offset;
-		const uint32_t offset1 = offset0 + vsSize;
-
-		const Chunk& sbc = m_chunks[sba.chunkIdx];
-
-		_outSbo.buffer = sbc.buffer;
-		_outSbo.offsets[0] = offset0;
-		_outSbo.offsets[1] = offset1;
-
-		if (NULL != _vsData)
-		{
-			bx::memCopy(&sbc.data[offset0], _vsData, _vsSize);
-		}
-
-		if (NULL != _fsData)
-		{
-			bx::memCopy(&sbc.data[offset1], _fsData, _fsSize);
-		}
-	}
-
-	void ChunkedScratchBufferVK::begin()
-	{
-		BX_ASSERT(0 == m_chunkPos, "");
-		const uint32_t numConsumed = m_consume[s_renderVK->m_cmd.m_currentFrameInFlight];
-		m_chunkControl.consume(numConsumed);
-	}
-
-	void ChunkedScratchBufferVK::end()
-	{
-		uint32_t numFlush = m_chunkControl.getNumReserved();
-
-		if (0 != m_chunkPos)
-		{
-retry:
-			const uint32_t remainder = m_chunkSize - m_chunkPos;
-			const uint32_t rem = m_chunkControl.reserve(remainder, true);
-
-			if (rem != remainder)
-			{
-				const uint32_t chunkIdx = m_chunkControl.m_write/m_chunkSize;
-				addChunk(chunkIdx + 1);
-				goto retry;
-			}
-
-			m_chunkPos = 0;
-		}
-
 		const VkPhysicalDeviceLimits& deviceLimits = s_renderVK->m_deviceProperties.limits;
 		const uint32_t align = uint32_t(deviceLimits.nonCoherentAtomSize);
 
-		VkDevice device = s_renderVK->m_device;
+		VkMappedMemoryRange range;
+		range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+		range.pNext  = NULL;
+		range.memory = _chunk.deviceMem.mem;
+		range.offset = _chunk.deviceMem.offset;
+		range.size   = bx::alignUp(_size, align);
+		VK_CHECK(vkFlushMappedMemoryRanges(s_renderVK->m_device, 1, &range) );
+	}
 
-		const uint32_t numReserved = m_chunkControl.getNumReserved();
-		BX_ASSERT(0 == numReserved % m_chunkSize, "Number of reserved must always be aligned to chunk size!");
-
-		const uint32_t first = m_chunkControl.m_current / m_chunkSize;
-
-		for (uint32_t ii = first, end = numReserved / m_chunkSize + first; ii < end; ++ii)
-		{
-			const Chunk& chunk = m_chunks[ii % m_chunks.size()];
-
-			VkMappedMemoryRange range;
-			range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-			range.pNext  = NULL;
-			range.memory = chunk.deviceMem.mem;
-			range.offset = chunk.deviceMem.offset;
-			range.size   = bx::alignUp(bx::min(numFlush, m_chunkSize), align);
-			VK_CHECK(vkFlushMappedMemoryRanges(device, 1, &range) );
-
-			m_chunkControl.commit(m_chunkSize);
-			numFlush -= m_chunkSize;
-		}
-
-		m_consume[s_renderVK->m_cmd.m_currentFrameInFlight] = numReserved;
-
-		m_totalUsed = m_chunkControl.getNumUsed();
+	uint32_t ChunkedScratchBufferVK::currentFrameInFlight() const
+	{
+		return s_renderVK->m_cmd.m_currentFrameInFlight;
 	}
 
 	void BufferVK::create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, uint16_t _flags, bool _vertex, uint32_t _stride)
@@ -6933,21 +6805,43 @@ retry:
 
 		const uint32_t bpp = bimg::getBitsPerPixel(bimg::TextureFormat::Enum(m_textureFormat) );
 		const bimg::ImageBlockInfo& blockInfo = bimg::getBlockInfo(bimg::TextureFormat::Enum(m_textureFormat) );
-		uint32_t rectpitch = _rect.m_width * bpp / 8;
+		const bool compressed = bimg::isCompressed(bimg::TextureFormat::Enum(m_textureFormat) );
+		const bool convert    = m_textureFormat != m_requestedFormat;
+
+		uint32_t rectpitch  = _rect.m_width * bpp / 8;
 		uint32_t slicepitch = rectpitch * _rect.m_height;
-		uint32_t align = blockInfo.blockSize;
-		if (bimg::isCompressed(bimg::TextureFormat::Enum(m_textureFormat) ) )
+		uint32_t numRows    = _rect.m_height;
+		uint32_t align      = blockInfo.blockSize;
+		if (compressed)
 		{
-			rectpitch  = (_rect.m_width  / blockInfo.blockWidth ) * blockInfo.blockSize;
-			slicepitch = (_rect.m_height / blockInfo.blockHeight) * rectpitch;
+			const uint32_t numBlocksX = (_rect.m_width  + blockInfo.blockWidth  - 1) / blockInfo.blockWidth;
+			const uint32_t numBlocksY = (_rect.m_height + blockInfo.blockHeight - 1) / blockInfo.blockHeight;
+			rectpitch  = numBlocksX * blockInfo.blockSize;
+			slicepitch = numBlocksY * rectpitch;
+			numRows    = numBlocksY;
 		}
+
 		const uint32_t srcpitch = UINT16_MAX == _pitch ? rectpitch : _pitch;
-		const uint32_t size     = UINT16_MAX == _pitch ? slicepitch  * _depth: _rect.m_height * _pitch * _depth;
-		const bool convert = m_textureFormat != m_requestedFormat;
+		const uint32_t size = convert || UINT16_MAX == _pitch
+			? slicepitch * _depth
+			: numRows * srcpitch * _depth
+			;
+
+		// bufferRowLength is expressed in texels and, for block-compressed
+		// formats, must be a multiple of the block width.
+		uint32_t bufferRowLength = 0;
+		if (!convert
+		&&  UINT16_MAX != _pitch)
+		{
+			bufferRowLength = compressed
+				? (srcpitch / blockInfo.blockSize) * blockInfo.blockWidth
+				: srcpitch * 8 / bpp
+				;
+		}
 
 		VkBufferImageCopy region;
 		region.bufferOffset      = 0;
-		region.bufferRowLength   = (_pitch == UINT16_MAX ? 0 : _pitch * 8 / bpp);
+		region.bufferRowLength   = bufferRowLength;
 		region.bufferImageHeight = 0;
 		region.imageSubresource.aspectMask     = m_aspectFlags;
 		region.imageSubresource.mipLevel       = _mip;
