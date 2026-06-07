@@ -1,4 +1,4 @@
-#include "DebugManager.h"
+﻿#include "DebugManager.h"
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>

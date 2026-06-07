@@ -1,5 +1,5 @@
--- ===========================================================================
---  Caesura (AmeKAG) — Sandbox Rules v2 (Track 3)
+﻿-- ===========================================================================
+--  Caesura (AmeKAG) 鈥?Sandbox Rules v2 (Track 3)
 --  ===========================================================================
 --  Loaded once at engine startup via LuaManager::lockdownScriptEnv().
 --  All rules here are readable by external AI assistants.
@@ -9,7 +9,7 @@
 --  ===========================================================================
 
 -- ---------------------------------------------------------------------------
---  1. GLOBAL DANGEROUS FUNCTIONS — REMOVED
+--  1. GLOBAL DANGEROUS FUNCTIONS 鈥?REMOVED
 -- ---------------------------------------------------------------------------
 --  These are the most dangerous entry points: arbitrary file loading,
 --  script execution, and process spawning.
@@ -20,7 +20,7 @@ _G.loadfile = nil
 _G.dofile   = nil
 
 -- ---------------------------------------------------------------------------
---  2. DEBUG LIBRARY — READ-ONLY SUBSET
+--  2. DEBUG LIBRARY 鈥?READ-ONLY SUBSET
 -- ---------------------------------------------------------------------------
 --  Kept (inspection only):
 --    getinfo, traceback, getlocal, getupvalue, getuservalue, getmetatable
@@ -42,7 +42,7 @@ if _G.debug then
 end
 
 -- ---------------------------------------------------------------------------
---  3. PACKAGE SYSTEM — SEARCH DISABLED
+--  3. PACKAGE SYSTEM 鈥?SEARCH DISABLED
 -- ---------------------------------------------------------------------------
 --  Clears package.searchers/loaders so require() cannot search the filesystem.
 --  Only modules preloaded in package.loaded (at startup via config.lua +
@@ -59,7 +59,7 @@ elseif package.loaders then
 end
 
 -- ---------------------------------------------------------------------------
---  4. REQUIRE — SAFE WRAPPER
+--  4. REQUIRE 鈥?SAFE WRAPPER
 -- ---------------------------------------------------------------------------
 --  Only returns preloaded modules. Un-preloaded module = hard error.
 -- ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ _G.require = function(name)
 end
 
 -- ---------------------------------------------------------------------------
---  5. OS MODULE — FILESYSTEM OPERATIONS DISABLED
+--  5. OS MODULE 鈥?FILESYSTEM OPERATIONS DISABLED
 -- ---------------------------------------------------------------------------
 --  Kept: os.clock, os.date, os.time, os.difftime (non-I/O)
 --  Replaced with no-ops or sandboxed stubs.
@@ -87,7 +87,7 @@ if _G.os then
 end
 
 -- ---------------------------------------------------------------------------
---  6. IO MODULE — FILESYSTEM READ/WRITE DISABLED
+--  6. IO MODULE 鈥?FILESYSTEM READ/WRITE DISABLED
 -- ---------------------------------------------------------------------------
 --  All file I/O through C++ IAssetProvider chain (read) or SaveManager (write).
 -- ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ local _G_whitelist = {
     string     = true,
     -- Table (pure computation)
     table      = true,
-    -- Engine API tables (read-only — their internals are protected by C)
+    -- Engine API tables (read-only 鈥?their internals are protected by C)
     KAG        = true,
     Engine     = true,
     Render     = true,
@@ -134,6 +134,8 @@ local _G_whitelist = {
     DevCore    = true,
     _CAESURA_BACKEND = true,
     _CAESURA_CONFIG  = true,
+    _SANDBOX_RESOURCES = true,
+    _SANDBOX_CHECK     = true,
     debug      = true,  -- already read-only from section 2
     -- Read-only globals
     package    = true,

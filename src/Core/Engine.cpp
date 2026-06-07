@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -360,19 +360,6 @@ void Engine::render() {
         } else { lua_pop(L, 1); }
     }
 
-    if (m_inputRouter->getFocus() == InputFocus::GAME) {
-        lua_State* L2 = m_lua->state();
-        if (L2) {
-            lua_getglobal(L2, "Engine_OnFrameRender");
-            if (lua_isfunction(L2, -1)) {
-                if (lua_pcall(L2, 0, 0, 0) != LUA_OK) {
-                    fprintf(stderr, "Engine_OnFrameRender: %s\n",
-                            lua_tostring(L2, -1) ? lua_tostring(L2, -1) : "unknown");
-                    lua_pop(L2, 1);
-                }
-            } else { lua_pop(L2, 1); }
-        }
-    }
 
     const bgfx::Caps* caps = bgfx::getCaps();
     if (caps) {
