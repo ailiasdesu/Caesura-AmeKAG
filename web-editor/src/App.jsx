@@ -1,10 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
-
-const API = 'http://127.0.0.1:9876'
+﻿import { useState, useEffect, useCallback } from 'react'
 
 export default function App() {
   const [assets, setAssets] = useState([])
-  const [script, setScript] = useState(`-- Write your KAG scene script here
+  const [script, setScript] = useState(-- Write your KAG scene script here
 function scene_start()
     KAG.clear_screen()
     KAG.show_image("bg", "assets/bg/classroom.png", 0, 0)
@@ -14,18 +12,17 @@ function scene_start()
 end
 
 scene_start()
-`)
+)
   const [logs, setLogs] = useState([])
   const [status, setStatus] = useState('disconnected')
   const [activePanel, setActivePanel] = useState('editor')
 
-  // Poll engine status
+  // Poll engine status via RPC
   useEffect(() => {
     const ping = async () => {
       try {
-        const r = await fetch(API + '/api/ping')
-        const j = await r.json()
-        setStatus(j.status === 'ok' ? 'connected' : 'error')
+        const r = await window.caesura.ping()
+        setStatus(r.result === 'ok' ? 'connected' : 'error')
       } catch {
         setStatus('disconnected')
       }
@@ -35,26 +32,20 @@ scene_start()
     return () => clearInterval(iv)
   }, [])
 
-  // Poll logs
+  // Listen for engine logs (pushed via events)
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const r = await fetch(API + '/api/logs')
-        const j = await r.json()
-        setLogs(j)
-      } catch {}
-    }
-    poll()
-    const iv = setInterval(poll, 2000)
-    return () => clearInterval(iv)
+    window.caesura.onLog((msg) => {
+      const now = new Date()
+      const time = now.toTimeString().slice(0, 8)
+      setLogs(prev => [...prev.slice(-199), { ...msg, time }])
+    })
   }, [])
 
   // Load assets
   const loadAssets = useCallback(async () => {
     try {
-      const r = await fetch(API + '/api/assets')
-      const j = await r.json()
-      setAssets(j)
+      const r = await window.caesura.assets()
+      setAssets(r.assets || [])
     } catch {}
   }, [])
 
@@ -63,22 +54,18 @@ scene_start()
   // Run script
   const runScript = async () => {
     try {
-      await fetch(API + '/api/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: script
-      })
+      await window.caesura.run(script)
     } catch {}
   }
 
   // Stop
   const stopScript = async () => {
     try {
-      await fetch(API + '/api/stop', { method: 'POST' })
+      await window.caesura.stop()
     } catch {}
   }
 
-  // Insert asset path into script
+  // Insert asset path
   const insertAsset = (path) => {
     setScript(s => s + '\n-- ' + path)
   }
@@ -169,7 +156,7 @@ const tabStyle = {
   fontSize: 12, fontWeight: 600,
   color: '#888', userSelect: 'none',
   borderBottom: '1px solid #1a1a24',
-  writingMode: 'horizontal-tb', whiteSpace: 'nowrap'
+  whiteSpace: 'nowrap'
 }
 
 const toolbarStyle = {
@@ -193,8 +180,7 @@ const sectionTitle = {
 
 const assetItem = {
   padding: '4px 8px', fontSize: 12, cursor: 'pointer',
-  borderRadius: 3, color: '#aaa',
-  ':hover': { background: '#1a1a28' }
+  borderRadius: 3, color: '#aaa'
 }
 
 const btnStyle = (bg) => ({

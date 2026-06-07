@@ -7,6 +7,7 @@
 #include "InputRouter.h"
 #include "BackendRegistry.h"
 #include "DebugManager.h"
+#include "RpcServer.h"
 #include "ErrorUI.h"
 #include "SDL3PlatformBackend.h"
 #include "IAudioBackend.h"
@@ -442,6 +443,13 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
             m_running = false;
             break;
     }
+}
+
+
+void Engine::runRpc() {
+    fprintf(stderr, "[Engine] Starting JSON-RPC loop (stdin/stdout)\n");
+    RpcServer::instance().setLuaState(m_lua->state());
+    RpcServer::instance().run();
 }
 
 void Engine::shutdown() {

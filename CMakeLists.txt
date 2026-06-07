@@ -74,6 +74,7 @@ set(ENGINE_SOURCES
     src/Core/DebugManager.cpp
     src/Core/TextureBudget.cpp
     src/Core/SandboxQuota.cpp
+    src/Core/RpcServer.cpp
     src/Editor/EditorServer.cpp
     src/Core/ErrorUI.cpp
     src/Core/SDL3PlatformBackend.cpp

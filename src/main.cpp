@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <string>
 #include "Carc/CARCReader.h"
-#include "Editor/EditorServer.h"
+#include "Core/RpcServer.h"
 #include <thread>
 #include <atomic>
 
@@ -20,16 +20,10 @@ int main(int argc, char* argv[]) {
 
     // -- Parse CLI flags -------------------------------------------------
     bool headless = false;
-    int editorPort = 9876;
-    std::string webRoot = "web-editor/dist";
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
             headless = true;
-        } else if (arg == "--editor-port" && i + 1 < argc) {
-            editorPort = std::stoi(argv[++i]);
-        } else if (arg == "--web-root" && i + 1 < argc) {
-            webRoot = argv[++i];
         }
     }
 
@@ -47,34 +41,25 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // -- Headless mode: start EditorServer ---------------------------------
+    // -- Headless mode: stdin/stdout JSON-RPC -----------------------------
     if (headless) {
-        auto& editor = Caesura::EditorServer::instance();
-        editor.setLuaState(engine.lua().state());
-        // Try multiple web root paths
-        if (FILE* f = fopen((webRoot + "/index.html").c_str(), "r")) {
+        fprintf(stderr, "[main] Headless mode: JSON-RPC on stdin/stdout\n");
+
+        // Load minimal config for Lua VM
+        engine.lua().loadScript("scripts/config.lua");
+        std::string scriptDir = "scripts/";
+        if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
             fclose(f);
-            editor.setWebRoot(webRoot);
-        } else if (FILE* f = fopen(("../../" + webRoot + "/index.html").c_str(), "r")) {
-            fclose(f);
-            editor.setWebRoot("../../" + webRoot);
-        } else if (FILE* f = fopen(("../../../" + webRoot + "/index.html").c_str(), "r")) {
-            fclose(f);
-            editor.setWebRoot("../../../" + webRoot);
         } else {
-            fprintf(stderr, "[main] Warning: Cannot find web editor at %s\n", webRoot.c_str());
+            scriptDir = "../../scripts/";
+            if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
+            else { scriptDir = "../../../scripts/"; }
         }
+        engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
+        engine.lua().lockdownScriptEnv();
 
-        if (!editor.start(editorPort)) {
-            fprintf(stderr, "[main] EditorServer failed to start on port %d\n", editorPort);
-            return 1;
-        }
-
-        fprintf(stderr, "[main] Headless mode: HTTP editor server running.\n");
-        fprintf(stderr, "[main] Open http://localhost:%d in browser, or use Electron.\n", editorPort);
-
-        // Run engine loop (headless: no window, just Lua + HTTP)
-        engine.run();
+        // Enter RPC loop (blocks until stdin EOF or quit command)
+        engine.runRpc();
         printf("Caesura (AmeKAG) shut down cleanly.\n");
         return 0;
     }

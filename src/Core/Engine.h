@@ -31,6 +31,7 @@ public:
 
     bool init(const char* title, int width, int height, bool headless = false);
     void run();
+    void runRpc();  // stdin/stdout JSON-RPC loop
 
     bool isHeadless() const { return m_headless; }
     void quit();

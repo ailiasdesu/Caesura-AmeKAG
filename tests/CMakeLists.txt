@@ -29,6 +29,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Core/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/TextureBudget.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SandboxQuota.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/RpcServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
