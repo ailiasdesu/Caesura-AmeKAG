@@ -233,7 +233,12 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 )
 
 # -- FFmpeg video decoding (optional) ----------------------------------------
+option(CAESURA_DEBUG "Enable debug logging" ON)
 option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" OFF)
+if(CAESURA_DEBUG)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_DEBUG)
+endif()
+
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat swscale avutil)
     target_link_libraries(${PROJECT_NAME} PRIVATE 

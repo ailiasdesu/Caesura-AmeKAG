@@ -6,7 +6,7 @@
 #include <fstream>
 #include <cstdint>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 struct PendingFile {
     std::string relativePath;
@@ -48,4 +48,4 @@ private:
     std::vector<uint8_t> m_contentBlock;
 };
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

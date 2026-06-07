@@ -9,7 +9,7 @@
 #include <fstream>
 #include <memory>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 struct CarcFileInfo {
     uint64_t offset;
@@ -112,4 +112,4 @@ public:
     bool parseCertificate(const std::string& json, CarcCertificate& cert) const;
 };
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

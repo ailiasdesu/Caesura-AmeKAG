@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
             if (verifyCarc) {
                 printf("[main] CARC startup validation enabled.\n");
                 // Scan for .carc archives in current directory and verify
-                namespace carc_ns = caesura::carc;
+                namespace carc_ns = Caesura::carc;
                 const char* dataFiles[] = {"data.carc", "game.carc", "patch.carc"};
                 for (const char* fname : dataFiles) {
                     carc_ns::CARCReader reader;

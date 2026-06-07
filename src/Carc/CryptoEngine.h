@@ -1,12 +1,12 @@
 ﻿// CryptoEngine -- AES-256-GCM + SHA-256 via BCrypt, Ed25519 via orlp library.
-// Windows-only implementation. No external crypto dependencies.
+// AES/SHA via BCrypt (Win) or OpenSSL (Unix). Ed25519 via orlp (cross-platform).. No external crypto dependencies.
 #pragma once
 #include "CARCFormat.h"
 #include <vector>
 #include <string>
 #include <cstdint>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 class CryptoEngine {
 public:
@@ -54,4 +54,4 @@ public:
     static bool writePrivateKey(const std::string& path, const uint8_t key[64]);
 };
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

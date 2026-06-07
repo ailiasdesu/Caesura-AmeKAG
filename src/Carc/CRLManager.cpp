@@ -17,7 +17,7 @@
 //   "signature": "hex..."
 // }
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 namespace {
 
@@ -345,4 +345,4 @@ std::string CRLManager::computeFingerprint(const uint8_t* data, size_t len) {
     return oss.str();
 }
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

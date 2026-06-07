@@ -1,4 +1,4 @@
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+﻿#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../external/stb/stb_image_write.h"
 #include "RTTManager.h"
 #include <bgfx/bgfx.h>
@@ -41,7 +41,6 @@ void RTTManager::clearRTT(const RTTEntry& entry) {
 // ===========================================================================
 
 ViewportHandle RTTManager::acquireCanvas(int w, int h, RTType type, bool clear) {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     if (w <= 0 || h <= 0) return ViewportHandle{0};
 
@@ -89,7 +88,6 @@ ViewportHandle RTTManager::acquireCanvas(int w, int h, RTType type, bool clear) 
 }
 
 void RTTManager::releaseCanvas(ViewportHandle handle) {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     if (handle.id == 0) return;
 
@@ -126,7 +124,6 @@ void RTTManager::releaseCanvas(ViewportHandle handle) {
 // ===========================================================================
 
 void RTTManager::destroyCanvasDeferred(ViewportHandle handle) {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     if (handle.id == 0) return;
     m_deferredDestroy.push_back(handle);
@@ -135,7 +132,6 @@ void RTTManager::destroyCanvasDeferred(ViewportHandle handle) {
 }
 
 void RTTManager::flushDeferredDestroys() {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     if (m_deferredDestroy.empty()) return;
 
@@ -179,7 +175,6 @@ next_handle:;
 // ===========================================================================
 
 ViewportHandle RTTManager::createCanvas(int width, int height) {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     // Use acquireCanvas with 2D default
     ViewportHandle h = acquireCanvas(width, height, RTType::RT_2D, true);
@@ -190,14 +185,12 @@ ViewportHandle RTTManager::createCanvas(int width, int height) {
 }
 
 void RTTManager::destroyCanvas(ViewportHandle handle) {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
-    // Deferred destruction — flushed at end-of-frame by Engine::render()
+    // Deferred destruction 鈥?flushed at end-of-frame by Engine::render()
     destroyCanvasDeferred(handle);
 }
 
 void RTTManager::clearAll() {
-    // assert(isMainThread()); // @Beta: enable main-thread assertion
 
     for (auto& entry : m_pool2D) {
         if (entry.handle.id != 0) {

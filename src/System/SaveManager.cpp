@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses raw string building for JSON -- no external JSON library dependency.
@@ -89,7 +89,10 @@ std::string SaveManager::jsonBuildObj(
     return out;
 }
 
-// Simple JSON value extractors (no nesting, no arrays -- flat top-level only)
+// Simple JSON value extractors.
+// DESIGN NOTE: Flat key-value only — adequate for current save format.
+// If nested saves are needed, migrate to nlohmann/json (header-only, MIT).
+// https://github.com/nlohmann/json)
 
 std::string SaveManager::jsonGetString(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\":\"";
@@ -210,7 +213,7 @@ bool SaveManager::save(int slot, const std::string& jsonData,
     bool ok = writeFile(path, json);
 
     if (ok) {
-        printf("[SaveManager] Saved slot %d (%s, token=%d) → %s\n",
+        printf("[SaveManager] Saved slot %d (%s, token=%d) 鈫?%s\n",
                slot, sceneName.c_str(), tokenIndex, path.c_str());
     } else {
         fprintf(stderr, "[SaveManager] Failed to save slot %d\n", slot);
@@ -240,7 +243,7 @@ std::string SaveManager::load(int slot, SaveMeta* outMeta) {
 
     // Migrate if schema version is outdated
     if (ver < m_currentSchemaVersion) {
-        printf("[SaveManager] Migrating slot %d: schema v%d → v%d\n",
+        printf("[SaveManager] Migrating slot %d: schema v%d 鈫?v%d\n",
                slot, ver, m_currentSchemaVersion);
         json = migrate(json, ver);
 
@@ -375,7 +378,7 @@ void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn 
     if (toVersion > m_currentSchemaVersion) {
         m_currentSchemaVersion = toVersion;
     }
-    printf("[SaveManager] Registered migration: v%d → v%d\n", fromVersion, toVersion);
+    printf("[SaveManager] Registered migration: v%d 鈫?v%d\n", fromVersion, toVersion);
 }
 
 std::string SaveManager::migrate(const std::string& jsonData, int fromVersion) {
@@ -390,7 +393,7 @@ std::string SaveManager::migrate(const std::string& jsonData, int fromVersion) {
         int nextVer = it->second.first;
         const MigrationFn& fn = it->second.second;
 
-        printf("[SaveManager] Applying migration v%d → v%d\n", ver, nextVer);
+        printf("[SaveManager] Applying migration v%d 鈫?v%d\n", ver, nextVer);
         current = fn(current);
         ver = nextVer;
     }

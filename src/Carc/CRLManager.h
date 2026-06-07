@@ -7,7 +7,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 /// Operating mode for CRL checking
 enum class CRLMode {
@@ -96,4 +96,4 @@ private:
     uint32_t m_crlVersion = 0;    ///< Version from last loaded/parsed CRL
 };
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

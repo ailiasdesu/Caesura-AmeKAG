@@ -1,6 +1,7 @@
 ﻿// CryptoEngine  Windows BCrypt implementation
 #include "CryptoEngine.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
 #include <cstring>
@@ -12,7 +13,7 @@ extern "C" {
 
 #pragma comment(lib, "bcrypt.lib")
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 namespace {
 
@@ -260,4 +261,35 @@ bool CryptoEngine::writePrivateKey(const std::string& path, const uint8_t key[64
     return ok;
 }
 
-} // namespace caesura::carc
+
+#else // !_WIN32
+
+// Stub implementations for non-Windows platforms.
+// TODO: Replace with OpenSSL or platform-native crypto (CommonCrypto on macOS, OpenSSL on Linux).
+// Ed25519 is already cross-platform via the orlp library.
+
+namespace {
+void checkBCrypt(long, const char*) {}
+}
+
+std::vector<uint8_t> CryptoEngine::encrypt(const uint8_t*, size_t, const uint8_t*, uint8_t*, uint8_t*) {
+    fprintf(stderr, "[CryptoEngine] encrypt: not implemented on this platform\n");
+    return {};
+}
+std::vector<uint8_t> CryptoEngine::decrypt(const uint8_t*, size_t, const uint8_t*, const uint8_t*, const uint8_t*) {
+    fprintf(stderr, "[CryptoEngine] decrypt: not implemented on this platform\n");
+    return {};
+}
+void CryptoEngine::sha256(const uint8_t*, size_t, uint8_t*) {
+    fprintf(stderr, "[CryptoEngine] sha256: not implemented on this platform\n");
+}
+void CryptoEngine::generateKey(uint8_t*) {
+    fprintf(stderr, "[CryptoEngine] generateKey: not implemented on this platform\n");
+}
+void CryptoEngine::generateNonce(uint8_t*) {
+    fprintf(stderr, "[CryptoEngine] generateNonce: not implemented on this platform\n");
+}
+
+#endif // _WIN32
+
+} // namespace Caesura::carc

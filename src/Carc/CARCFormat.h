@@ -3,7 +3,7 @@
 #pragma once
 #include <cstdint>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 // --- Constants ---
 inline constexpr uint32_t CARC_MAGIC = 0x43524143; // 'CARC'
@@ -48,4 +48,4 @@ using PublicKey = uint8_t[PUBLICKEY_SIZE];
 using Signature = uint8_t[SIGNATURE_SIZE];
 using PrivateKey = uint8_t[64];
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

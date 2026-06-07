@@ -9,7 +9,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 // ==========================================================================
 // open -- load and verify a CARC file
@@ -432,4 +432,4 @@ bool CARCReader::verifyChainTrust(const uint8_t* childPublicKey,
     return true;
 }
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

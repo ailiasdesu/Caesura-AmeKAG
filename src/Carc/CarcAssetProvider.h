@@ -4,7 +4,7 @@
 #include "CARCReader.h"
 #include <memory>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 class CarcAssetProvider : public ::caesura::IAssetProvider {
 public:
@@ -23,4 +23,4 @@ private:
     std::unique_ptr<CARCReader> m_reader;
 };
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

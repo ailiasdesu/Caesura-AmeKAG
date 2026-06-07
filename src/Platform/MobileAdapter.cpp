@@ -11,7 +11,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 
-namespace caesura::platform {
+namespace Caesura {
 
 // ══════════════════════════════════════════════════════════════════════════
 //  onPause -- backgrounding
@@ -131,4 +131,4 @@ bool MobileAdapter::isFingerDown(int fingerId) const {
     return m_touchPoints[fingerId].active;
 }
 
-} // namespace caesura::platform
+} // namespace Caesura

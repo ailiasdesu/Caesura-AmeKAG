@@ -5,7 +5,7 @@
 #include <cstring>
 #include <algorithm>
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 bool CARCWriter::create(const std::string& outputPath,
                         const std::string& privateKeyPath,
@@ -160,4 +160,4 @@ bool CARCWriter::finalize()
     return true;
 }
 
-} // namespace caesura::carc
+} // namespace Caesura::carc

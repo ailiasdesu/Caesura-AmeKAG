@@ -1,7 +1,7 @@
 ﻿// CarcAssetProvider implementation
 #include "CarcAssetProvider.h"
 
-namespace caesura::carc {
+namespace Caesura::carc {
 
 CarcAssetProvider::CarcAssetProvider(std::unique_ptr<CARCReader> reader)
     : m_reader(std::move(reader))
@@ -19,6 +19,6 @@ bool CarcAssetProvider::exists(const std::string& path)
     return m_reader->hasFile(path);
 }
 
-} // namespace caesura::carc
+} // namespace Caesura::carc
 // verify() is defined inline in CarcAssetProvider.h
 // (returns m_reader->verifySignature())

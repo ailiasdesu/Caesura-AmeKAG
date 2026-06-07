@@ -1,7 +1,7 @@
 ﻿// MobileAdapter -- Mobile platform interface stubs (P2 reserved).
 // Spec [10.2.64]: Touch input mapping, lifecycle events, DPI scaling.
 // All methods are stubs for future mobile port -- no actual mobile code.
-// Namespace: caesura::platform (consistent with engine layering).
+// Namespace: Caesura (consistent with engine layering).
 #pragma once
 #include <cstdint>
 #include <string>
@@ -9,7 +9,7 @@
 // Forward declaration for Lua state (avoid full include in header)
 struct lua_State;
 
-namespace caesura::platform {
+namespace Caesura {
 
 /// Touch point data for finger events
 struct TouchPoint {
@@ -85,4 +85,4 @@ private:
     TouchPoint m_touchPoints[MAX_TOUCH_POINTS];
 };
 
-} // namespace caesura::platform
+} // namespace Caesura
