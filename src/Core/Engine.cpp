@@ -253,6 +253,8 @@ void Engine::run() {
 }
 
 void Engine::processEvents() {
+    // Track 3: Reset Lua instruction budget each frame
+    m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -345,6 +347,7 @@ void Engine::processEvents() {
 }
 
 void Engine::render() {
+    m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
     if (L) {
         lua_getglobal(L, "engine_render");

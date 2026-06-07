@@ -18,6 +18,22 @@
 
 namespace Caesura {
 
+
+// ===========================================================================
+//  Track 3: Instruction-count hook for CPU budget enforcement
+// ===========================================================================
+
+void LuaManager::instructionHook(lua_State* L, lua_Debug* /*ar*/) {
+    auto& mgr = LuaManager::instance();
+    mgr.m_instructionCount++;
+    if (mgr.m_instructionCount > mgr.m_instructionBudget) {
+        mgr.m_budgetExceeded = true;
+        // Force a Lua error to unwind the stack
+        luaL_error(L, "Sandbox: instruction budget exceeded (%d instructions)",
+                   mgr.m_instructionBudget);
+    }
+}
+
 bool LuaManager::init() {
     if (m_initialized) return true;
     CAESURA_ASSERT_MAIN_THREAD();
@@ -34,6 +50,9 @@ bool LuaManager::init() {
     GameState::create(m_L);
 
     registerModules();
+
+    // Track 3: Instruction-count hook for CPU budget (every 1000 instructions)
+    lua_sethook(m_L, instructionHook, LUA_MASKCOUNT, 1000);
 
     m_initialized = true;
     printf("[Lua] VM initialized.\n");
