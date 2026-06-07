@@ -20,6 +20,9 @@ set(TEST_SOURCES
     cpp/test_error_ui.cpp
     cpp/test_save_migration.cpp
     cpp/test_mobile_adapter.cpp
+    cpp/test_render.cpp
+    cpp/test_kag_binding.cpp
+    cpp/test_kag_integration.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp

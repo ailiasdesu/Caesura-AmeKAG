@@ -419,14 +419,8 @@ static int lua_Render_cancel_async_loads(lua_State* L) {
 // -- Video placeholders -----------------------------------------------------
 
 static int lua_Render_video_play(lua_State* L) {
-    const char* path = luaL_checkstring(L, 1);
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-    lua_pushboolean(L, 0);
-    (void)path; // TODO: implement video playback
-    return 1;
+    (void)luaL_checkstring(L, 1); // consume arg, validate type
+    return luaL_error(L, "Video playback not available in Alpha (FFmpeg planned for Beta)");
 }
 
 static int lua_Render_video_stop(lua_State* L)     { lua_pushboolean(L, 1); return 1; }

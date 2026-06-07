@@ -1,5 +1,6 @@
 ﻿# ── Build artifacts ──
 build/
+bin/
 cmake-build*/
 out/
 *.o
@@ -21,8 +22,11 @@ out/
 *.swp
 *.swo
 *~
-# ── Dependencies (submodules tracked separately) ──
-external/
+# ── Submodules (tracked via git submodule, not vendored) ──
+external/bgfx/
+external/SDL3/
+external/freetype/
+external/zstd/
 # ── Runtime generated ──
 logs/
 saves/
@@ -41,4 +45,3 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
-

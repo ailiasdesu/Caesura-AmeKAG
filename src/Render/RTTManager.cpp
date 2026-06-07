@@ -192,11 +192,8 @@ ViewportHandle RTTManager::createCanvas(int width, int height) {
 void RTTManager::destroyCanvas(ViewportHandle handle) {
     // assert(isMainThread()); // @Beta: enable main-thread assertion
 
-    // For legacy callers, we use deferred destruction to be safe.
-    // Direct callers should use destroyCanvasDeferred + flushDeferredDestroys.
+    // Deferred destruction — flushed at end-of-frame by Engine::render()
     destroyCanvasDeferred(handle);
-    // Immediate flush for backward compat -- callers expect immediate destruction
-    flushDeferredDestroys();
 }
 
 void RTTManager::clearAll() {

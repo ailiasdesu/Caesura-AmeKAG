@@ -186,11 +186,20 @@ void CompositeShaderCache::precompileCommon() {
 bgfx::ProgramHandle CompositeShaderCache::compileVariant(const CompositeShaderKey& key) {
     // All programs are pre-compiled by BgfxRenderDevice::initEmbeddedShaders()
     // and registered via registerProgram(). If we reach here, the program
-    // was not registered -- this is a configuration error.
+    // was not registered -- fall back to Normal blend mode.
     fprintf(stderr, "[ShaderCache] compileVariant: unregistered variant blend=%d palette=%d. "
-            "Did BgfxRenderDevice forget to register it?\n",
+            "Falling back to Normal.\n",
             key.blendMode, (int)key.usePalette);
-    (void)key;
+
+    // Try Normal fallback
+    CompositeShaderKey fallbackKey;
+    fallbackKey.blendMode  = static_cast<int>(BlendMode::Normal);
+    fallbackKey.usePalette = false;
+    auto fb = m_cache.find(fallbackKey);
+    if (fb != m_cache.end()) {
+        return fb->second.program;
+    }
+
     return BGFX_INVALID_HANDLE;
 }
 

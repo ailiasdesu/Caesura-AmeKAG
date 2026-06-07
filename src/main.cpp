@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -93,7 +93,17 @@ int main(int argc, char* argv[]) {
             lua_pop(L, 1);
             if (verifyCarc) {
                 printf("[main] CARC startup validation enabled.\n");
-                // TODO: CarcAssetProvider::verifyAll() when CARC provider is active
+                // Scan for .carc archives in current directory and verify
+                namespace carc_ns = caesura::carc;
+                const char* dataFiles[] = {"data.carc", "game.carc", "patch.carc"};
+                for (const char* fname : dataFiles) {
+                    carc_ns::CARCReader reader;
+                    if (reader.open(fname)) {
+                        bool ok = reader.verifySignature();
+                        printf("[main] CARC %s: signature %s\n", fname, ok ? "OK" : "FAILED");
+                        reader.close();
+                    }
+                }
             }
         }
         lua_pop(L, 1);

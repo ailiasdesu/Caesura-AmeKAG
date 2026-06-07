@@ -1,0 +1,26 @@
+﻿# Auto-detect text files, normalize to LF in repo, CRLF on Windows checkout
+* text=auto
+
+# Source code
+*.cpp text eol=lf
+*.h text eol=lf
+*.c text eol=lf
+*.lua text eol=lf
+*.hlsl text eol=lf
+*.sc text eol=lf
+*.metal text eol=lf
+*.cmake text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.bat text eol=crlf
+*.sh text eol=lf
+
+# Binary
+*.dxbc binary
+*.png binary
+*.jpg binary
+*.ttf binary
+*.carc binary
+*.mp3 binary
+*.ogg binary
+*.wav binary

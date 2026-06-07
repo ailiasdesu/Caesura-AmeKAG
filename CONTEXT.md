@@ -1,7 +1,7 @@
-# Caesura (AmeKAG) — 项目上下文记忆
+﻿# Caesura (AmeKAG) — 项目上下文记忆
 
 > 自动压缩恢复用。每次重大变更后更新。
-> 最后更新: 2026-06-07
+> 最后更新: 2026-06-07 (Alpha 完成)
 
 ---
 
@@ -39,9 +39,9 @@
 
 | 指标 | 值 |
 |------|-----|
-| P0 决策 | 13/13 (100%) |
-| P1 决策 | 30/30 (100%) |
-| 引擎测试 | 40/40 |
+| P0 决策 | 17/17 (100%) |
+| P1 决策 | 32/32 (100%) |
+| 引擎测试 | 110/110 C++ + 33/33 Lua |
 | Debug 构建 | OK |
 | Release 构建 | OK |
 
@@ -69,18 +69,18 @@ shaders/            GPU 着色器 (dx11/, glsl/, metal/)
 tests/              测试 (Lua 脚本 + CARC 测试数据)
 tools/carc_pack/    CARC 打包工具 (独立 CMake 目标)
 external/           第三方库
-docs/               规格说明书 + 计划文档
+docs/               规格说明书 + 计划 + 构建指南
 
 ## 关键文件索引
 
 | 文件 | 用途 |
 |------|------|
-| Caesura_功能实现规格说明书_整合版.md | 478 行, 68 项决策 |
+| docs/Caesura_功能实现规格说明书_整合版.md |, 74 项决策(含Beta) |
 | CONCEPTS.md | 62 行, 领域词汇表 |
-| ALPHA_NOTES.md | 80 行, Alpha 发布说明 |
-| BUILD.md | 118 行, 构建指南 |
+| ALPHA_NOTES.md | Alpha 发布说明 |
+| docs/BUILD.md | 构建指南 |
 | README.md | 24 行, 项目简介 |
-| docs/Caesura_Alpha补完开发计划_20260607.md | Alpha 补完记录 |
+| docs/plans/Caesura_Alpha补完开发计划_20260607.md | Alpha 补完记录 |
 | docs/solutions/architecture-patterns/engine-architecture-reference.md | 架构参考 |
 
 ## 构建命令

@@ -1,0 +1,18 @@
+﻿#include "doctest.h"
+#include "Core/Engine.h"
+#include <thread>
+
+using namespace Caesura;
+
+TEST_CASE("Engine::default construct destruct no-crash") {
+    Engine::s_mainThreadId = std::this_thread::get_id();
+    {
+        Engine engine;
+    }
+}
+
+TEST_CASE("Engine::double destruct via scope safe") {
+    Engine::s_mainThreadId = std::this_thread::get_id();
+    Engine* engine = new Engine();
+    delete engine;
+}

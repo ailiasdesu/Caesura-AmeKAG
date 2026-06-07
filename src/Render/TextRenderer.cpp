@@ -320,7 +320,7 @@ void TextRenderer::shutdown() {
     // FreeType cleanup
     if (m_ttf) {
         if (m_ttf->ftFace) { FT_Done_Face(m_ttf->ftFace); m_ttf->ftFace = nullptr; }
-        if (m_ttf->ftLib)  { FT_Done_FreeType(m_ttf->ftLib); m_ttf->ftLib = nullptr; }
+        // ftLib now owned by FreeTypeContext singleton
     }
     m_ttf.reset();
 
@@ -633,18 +633,17 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
 // ===========================================================================
 
 bool TextRenderer::loadTTF(const char* path, float fontSize) {
-    // Initialize FreeType
+    // Initialize FreeType via shared context
     m_ttf = std::make_unique<TTFState>();
-    FT_Error ftErr = FT_Init_FreeType(&m_ttf->ftLib);
-    if (ftErr) {
-        fprintf(stderr, "[TextRenderer] FT_Init_FreeType failed: %d\n", (int)ftErr);
+    m_ttf->ftLib = FreeTypeContext::instance().getLibrary();
+    if (!m_ttf->ftLib) {
+        fprintf(stderr, "[TextRenderer] FreeTypeContext not initialized\n");
         m_ttf.reset(); return false;
     }
 
-    ftErr = FT_New_Face(m_ttf->ftLib, path, 0, &m_ttf->ftFace);
+    FT_Error ftErr = FT_New_Face(m_ttf->ftLib, path, 0, &m_ttf->ftFace);
     if (ftErr) {
         fprintf(stderr, "[TextRenderer] FT_New_Face failed: %s (err=%d)\n", path, (int)ftErr);
-        FT_Done_FreeType(m_ttf->ftLib);
         m_ttf.reset(); return false;
     }
 

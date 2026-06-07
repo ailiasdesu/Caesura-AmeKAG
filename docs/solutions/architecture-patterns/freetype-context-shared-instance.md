@@ -104,4 +104,4 @@ if (!m_ftLibrary) return false;
 ## Related
 
 - `docs/solutions/build-errors/alpha-completion-build-fixes.md` — 接入过程中的编译损坏修复
-- `Caesura_功能实现规格说明书_整合版.md` [10.2.68] — 全局共享 FreeType 决策
+- `docs/Caesura_功能实现规格说明书_整合版.md` [10.2.68] — 全局共享 FreeType 决策

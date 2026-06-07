@@ -81,4 +81,4 @@ bool Engine::init(const char* title, int width, int height) {
 ## Related Issues
 
 - `docs/solutions/build-errors/caesura-alpha-build-fixes-20260607.md` — 链接错误修复
-- `Caesura_功能实现规格说明书_整合版.md` [10.2.14] — 线程安全断言决策
+- `docs/Caesura_功能实现规格说明书_整合版.md` [10.2.14] — 线程安全断言决策

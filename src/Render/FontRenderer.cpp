@@ -1,4 +1,4 @@
-#include "FontRenderer.h"
+﻿#include "FontRenderer.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -29,19 +29,17 @@ bool FontRenderer::init(const std::string& fontPath, float fontSize) {
         return true;
     }
 
-    // -- Initialize FreeType 2 --
-    FT_Error ftErr = FT_Init_FreeType(&m_ftLibrary);
-    if (ftErr) {
-        fprintf(stderr, "[FontRenderer] FT_Init_FreeType failed: %d\n", (int)ftErr);
+    // -- Use shared FreeType library (spec [10.2.68]) --
+    FT_Library ftLib = FreeTypeContext::instance().getLibrary();
+    if (!ftLib) {
+        fprintf(stderr, "[FontRenderer] FreeTypeContext not initialized\n");
         return false;
     }
 
-    ftErr = FT_New_Face(m_ftLibrary, fontPath.c_str(), 0, &m_ftFace);
+    FT_Error ftErr = FT_New_Face(ftLib, fontPath.c_str(), 0, &m_ftFace);
     if (ftErr) {
         fprintf(stderr, "[FontRenderer] FT_New_Face failed: %s (err=%d)\n",
                 fontPath.c_str(), (int)ftErr);
-        FT_Done_FreeType(m_ftLibrary);
-        m_ftLibrary = nullptr;
         return false;
     }
 
@@ -62,9 +60,7 @@ bool FontRenderer::init(const std::string& fontPath, float fontSize) {
     if (!bgfx::isValid(m_atlas)) {
         fprintf(stderr, "[FontRenderer] Failed to create atlas texture.\n");
         FT_Done_Face(m_ftFace);
-        FT_Done_FreeType(m_ftLibrary);
         m_ftFace = nullptr;
-        m_ftLibrary = nullptr;
         return false;
     }
 
@@ -106,8 +102,8 @@ void FontRenderer::shutdown() {
     if (bgfx::isValid(m_msgCache.ib))      bgfx::destroy(m_msgCache.ib);
 
     m_cache.clear();
-    if (m_ftFace)    { FT_Done_Face(m_ftFace);       m_ftFace = nullptr; }
-    if (m_ftLibrary) { FT_Done_FreeType(m_ftLibrary); m_ftLibrary = nullptr; }
+    if (m_ftFace) { FT_Done_Face(m_ftFace); m_ftFace = nullptr; }
+    // ftLib owned by FreeTypeContext singleton
     m_msgCache = MessageLayerCache{};
     m_initialized = false;
     printf("[FontRenderer] Shutdown complete.\n");
@@ -176,6 +172,7 @@ bool FontRenderer::rasterizeGlyph(char32_t cp) {
         m_penY += m_maxRowH + 1;
         m_maxRowH = 0;
     }
+    // @Beta: Replace hardcoded 2048x2048 threshold with configurable atlas growth policy
     if (m_penY + h + 1 >= m_atlasH) {
         fprintf(stderr, "[FontRenderer] Atlas overflow at glyph %u\n", (unsigned)cp);
         return false;

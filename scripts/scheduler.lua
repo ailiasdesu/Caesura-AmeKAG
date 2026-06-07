@@ -165,73 +165,50 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "endif" then
             -- pass
 
+        
         -- Flow control: [switch]/[case]/[default]/[endswitch] (spec [1.4])
         elseif cmd == "switch" then
-            local expr = params.exp or ""
-            -- Resolve expression
-            local ok, expr_val = pcall(function()
-                local fn = load("return " .. expr, "=switch", "t", ctx.f or {})
-                return fn()
-            end)
-            local target = ok and tostring(expr_val) or ""
-            -- Phase 1: scan to find the matching case body range
-            local body_start = 0
-            local body_end   = 0
-            local depth = 0
-            local found_default = 0
-            for j = i + 1, #tokens do
-                local tc = tokens[j][1]
-                local tp = tokens[j][2] or {}
-                if tc == "case" then
-                    if body_start == 0 then
-                        if tp.value == target then
-                            body_start = j + 1
-                        end
-                    end
-                elseif tc == "default" then
-                    if body_start == 0 then
-                        found_default = j + 1
-                        body_start = found_default  -- fallback
-                    end
-                elseif tc == "switch" then
-                    depth = depth + 1
-                elseif tc == "endswitch" then
-                    if depth == 0 then
-                        body_end = j
+            -- switch/case dispatch (Alpha: flat only, single-level)
+            local switchExpr = params[1] or ""
+            local switchVal = nil
+            if ctx.variables and ctx.variables[switchExpr] ~= nil then
+                switchVal = tostring(ctx.variables[switchExpr])
+            else
+                switchVal = switchExpr
+            end
+
+            -- Scan forward to find matching case
+            local caseStart = nil
+            local scanIdx = i
+            while scanIdx <= #tokens do
+                local stok = tokens[scanIdx]
+                if stok[1] == "case" then
+                    local caseParams = stok[2] or {}
+                    local caseVal = caseParams[1] or ""
+                    if tostring(caseVal) == switchVal then
+                        caseStart = scanIdx + 1
                         break
                     end
-                    depth = depth - 1
+                elseif stok[1] == "default" then
+                    caseStart = scanIdx + 1
+                    break
+                elseif stok[1] == "endswitch" then
+                    break
+                end
+                scanIdx = scanIdx + 1
+            end
+
+            if caseStart then
+                i = caseStart  -- jump into case body, scheduler.run will execute
+            else
+                -- No match: skip to endswitch
+                while i <= #tokens and tokens[i][1] ~= "endswitch" do
+                    i = i + 1
                 end
             end
-            -- Phase 2: execute matched case body by dispatching non-flow tokens
-            if body_start > 0 and body_end > body_start then
-                for j = body_start, body_end - 1 do
-                    local tj = tokens[j]
-                    local tcmd = tj[1]
-                    local tparams = tj[2] or {}
-                    if not flow_commands[tcmd] then
-                        local handler = kag[tcmd]
-                        if not handler and type(tcmd) == "string" and #tcmd > 0 then
-                            handler = kag["ch"]
-                            if handler then tparams = {text = tcmd}; tcmd = "ch" end
-                        end
-                        if handler then
-                            local st, er = pcall(handler, ctx, tparams)
-                            if not st then
-                                print("[ERROR] KAG switch body '" .. tcmd .. "': " .. tostring(er))
-                                if ctx.handle_error then ctx.handle_error(tcmd, tostring(er), j) end
-                            end
-                        end
-                    end
-                    ctx.token_index = j
-                    coroutine.yield()
-                end
-            end
-            i = body_end  -- skip past [endswitch]; loop increment advances to next token
 
         elseif cmd == "case" or cmd == "default" or cmd == "endswitch" then
             -- pass (handled by [switch] above)
-
         -- Flow control: [eval]
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""

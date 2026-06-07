@@ -530,6 +530,7 @@ void BgfxRenderDevice::initEmbeddedShaders() {
             CompositeShaderCache::instance().registerProgram(key, m_blendProgram);
         }
         printf("[BgfxRenderDevice] Registered 10 blend modes with ShaderCache.\n");
+    CompositeShaderCache::instance().precompileCommon();
     }
     if (bgfx::isValid(m_fallbackProgram)) {
         CompositeShaderKey fk;
