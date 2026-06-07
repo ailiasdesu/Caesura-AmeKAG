@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Multi-mode Blend Fragment Shader (Metal)
+// Caesura (AmeKAG) - Multi-mode Blend Fragment Shader (Metal)
 // Corresponds to shaders/dx11/fs_blend.hlsl
 
 #include <metal_stdlib>
@@ -28,7 +28,7 @@ float3 bDrk(float3 a, float3 b) { return min(a, b); }
 float3 bLit(float3 a, float3 b) { return max(a, b); }
 float3 bDif(float3 a, float3 b) { return abs(a - b); }
 
-fragment float4 fs_blend(PSInput in [[stage_in]],
+fragment float4 xlatMtlMain(PSInput in [[stage_in]],
                          texture2d<float> s_baseTex  [[texture(0)]],
                          texture2d<float> s_blendTex [[texture(1)]],
                          sampler s_baseSamp  [[sampler(0)]],

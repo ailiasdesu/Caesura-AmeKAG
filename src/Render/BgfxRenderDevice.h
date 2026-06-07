@@ -137,6 +137,7 @@ private:
     uint32_t m_nextHandle = 1;
     std::unordered_map<uint32_t, RTTEntry> m_rttMap;
     std::unique_ptr<TextRenderer> m_textRenderer;
+    std::unique_ptr<bgfx::CallbackI> m_debugCallback;
 
     // Batch protocol (spec [0.3])
     struct BatchQuad {

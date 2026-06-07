@@ -8,6 +8,7 @@
 #include "Scripting/LuaManager.h"
 #include <cstdio>
 #include <string>
+#include <unistd.h>
 #include "Carc/CARCReader.h"
 #include <thread>
 #include <atomic>
@@ -151,5 +152,5 @@ if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
     engine.run();
 
     printf("Caesura (AmeKAG) shut down cleanly.\n");
-    return 0;
+    _exit(0);
 }

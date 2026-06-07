@@ -10,9 +10,11 @@
 // ==================================================================
 
 #include "EmbeddedShaders.h"
-#include "EmbeddedShaders_SPIRV.cpp"
 
 namespace Caesura {
+
+#include "EmbeddedShaders_SPIRV.cpp"
+#include "EmbeddedShaders_Metal.cpp"
 
 // -- Vulkan SPIR-V: Vertex Shader (157 dwords) -----------------------------
 

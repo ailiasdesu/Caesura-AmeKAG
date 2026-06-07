@@ -1,7 +1,9 @@
 ﻿cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
+# doctest has C++20 compatibility issues — use C++17 for tests
 add_library(doctest INTERFACE)
+target_compile_features(doctest INTERFACE cxx_std_17)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 
 set(TEST_SOURCES
@@ -84,27 +86,44 @@ target_include_directories(CaesuraTests PRIVATE
     ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty
     ${CMAKE_SOURCE_DIR}/external/stb
     ${CMAKE_SOURCE_DIR}/external/lua
-    ${CMAKE_SOURCE_DIR}/external/ed25519
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
     ${CMAKE_SOURCE_DIR}/external/freetype/include
 )
 
 target_link_libraries(CaesuraTests PRIVATE
     doctest lua ed25519 SDL3::SDL3 soloud bgfx bimg bx
-    bcrypt freetype libzstd_static
+    freetype libzstd_static
 )
 
 if(WIN32)
-    target_link_libraries(CaesuraTests PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
+    target_link_libraries(CaesuraTests PRIVATE bcrypt winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
+elseif(CAESURA_CRYPTO_OPENSSL)
+    target_link_libraries(CaesuraTests PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(CaesuraTests PRIVATE CAESURA_CRYPTO_OPENSSL)
+endif()
+
+if(APPLE)
+    find_library(COCOA_LIBRARY Cocoa REQUIRED)
+    find_library(IOKIT_LIBRARY IOKit REQUIRED)
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(QUARTZCORE QuartzCore REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} pthread)
+elseif(UNIX)
+    find_package(Threads REQUIRED)
+    find_package(X11 REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE Threads::Threads dl X11::X11)
 endif()
 
 target_compile_definitions(CaesuraTests PRIVATE
-    _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN
-    CAESURA_PLATFORM_WINDOWS
     __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS
     SDL_MAIN_HANDLED
     $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>
 )
+if(WIN32)
+    target_compile_definitions(CaesuraTests PRIVATE
+        _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN CAESURA_PLATFORM_WINDOWS)
+endif()
 
 if(MSVC)
     target_compile_options(CaesuraTests PRIVATE /W3 /wd4100 /wd4189 /wd4244 /Zc:__cplusplus /Zc:preprocessor /utf-8 /FS)

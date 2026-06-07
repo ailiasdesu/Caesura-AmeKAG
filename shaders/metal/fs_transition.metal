@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Transition Fragment Shader (Metal)
+// Caesura (AmeKAG) - Transition Fragment Shader (Metal)
 // crossfade / rule / wipe between two textures
 // Corresponds to shaders/dx11/fs_transition.hlsl
 
@@ -16,7 +16,7 @@ struct TransParams {
     float2 u_pad;
 };
 
-fragment float4 fs_transition(PSInput in [[stage_in]],
+fragment float4 xlatMtlMain(PSInput in [[stage_in]],
                               texture2d<float> s_fromTex [[texture(0)]],
                               texture2d<float> s_toTex   [[texture(1)]],
                               texture2d<float> s_ruleTex [[texture(2)]],

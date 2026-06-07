@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - VFX Fragment Shader (Metal)
+// Caesura (AmeKAG) - VFX Fragment Shader (Metal)
 // fade / blur / quake post-processing
 // Corresponds to shaders/dx11/fs_vfx.hlsl
 
@@ -19,7 +19,7 @@ struct VFXParams {
     float3 u_p;
 };
 
-fragment float4 fs_vfx(PSInput in [[stage_in]],
+fragment float4 xlatMtlMain(PSInput in [[stage_in]],
                        texture2d<float> s_tex [[texture(0)]],
                        sampler s_samp [[sampler(0)]],
                        constant VFXParams& params [[buffer(0)]]) {

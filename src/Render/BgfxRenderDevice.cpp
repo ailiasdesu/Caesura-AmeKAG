@@ -37,8 +37,6 @@ public:
     void captureFrame(const void*, uint32_t) override {}
 };
 
-static BgfxDebugCallback s_debugCallback;
-
 namespace Caesura {
 
 BgfxRenderDevice::~BgfxRenderDevice() {
@@ -180,7 +178,13 @@ void BgfxRenderDevice::flushBatch() {
 // DX12 / Metal / WebGPU backend stubs. bgfx handles the actual backend
 // internally; these helpers expose the selection API.
 
+#if defined(__APPLE__)
+static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Metal;
+#elif defined(__linux__)
+static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Vulkan;
+#else
 static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3D11;
+#endif
 
 bool BgfxRenderDevice::setPreferredBackend(const char* name) {
     if (strcmp(name, "vulkan") == 0 || strcmp(name, "Vulkan") == 0) {
@@ -229,7 +233,8 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     // Enable debug text for engine HUD overlay
 
     initParams.profile  = false;
-    initParams.callback = &s_debugCallback;
+    m_debugCallback = std::make_unique<BgfxDebugCallback>();
+    initParams.callback = m_debugCallback.get();
 
     printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
     if (!bgfx::init(initParams)) {
@@ -412,7 +417,7 @@ void BgfxRenderDevice::initEmbeddedShaders() {
     const uint8_t*  fsCode     = nullptr;
     uint32_t        fsCodeSize = 0;
 
-    if (renderer == 2) {
+    if (renderer == bgfx::RendererType::Vulkan) {
         if (kEmbeddedVS_SpriteSize > 0 && kEmbeddedFS_TextureSize > 0) {
             vsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite);
             vsCodeSize = uint32_t(kEmbeddedVS_SpriteSize * sizeof(uint32_t));
@@ -420,8 +425,15 @@ void BgfxRenderDevice::initEmbeddedShaders() {
             fsCodeSize = uint32_t(kEmbeddedFS_TextureSize * sizeof(uint32_t));
         }
 
-    } else if (renderer == 4 ||
-               renderer == 5) {
+    } else if (renderer == bgfx::RendererType::Metal) {
+        if (kEmbeddedMetal_VS_Sprite_size > 0 && kEmbeddedMetal_FS_Texture_size > 0) {
+            vsCode     = kEmbeddedMetal_VS_Sprite;
+            vsCodeSize = uint32_t(kEmbeddedMetal_VS_Sprite_size);
+            fsCode     = kEmbeddedMetal_FS_Texture;
+            fsCodeSize = uint32_t(kEmbeddedMetal_FS_Texture_size);
+        }
+    } else if (renderer == bgfx::RendererType::Direct3D11 ||
+               renderer == bgfx::RendererType::Direct3D12) {
         if (kEmbeddedDXBC_VS_Sprite_size > 0 && kEmbeddedDXBC_FS_Texture_size > 0) {
             vsCode     = kEmbeddedDXBC_VS_Sprite;
             vsCodeSize = uint32_t(kEmbeddedDXBC_VS_Sprite_size);
@@ -460,9 +472,9 @@ void BgfxRenderDevice::initEmbeddedShaders() {
     } else {
         
     // -- Create effect shader programs from embedded DXBC -------------
-    auto createProgramFromDXBC = [&](const uint8_t* vsData, size_t vsSize,
-                                      const uint8_t* fsData, size_t fsSize,
-                                      const char* name) -> bgfx::ProgramHandle {
+    auto createProgramFromBinary = [&](const uint8_t* vsData, size_t vsSize,
+                                         const uint8_t* fsData, size_t fsSize,
+                                         const char* name) -> bgfx::ProgramHandle {
         if (!vsData || !fsData || vsSize == 0 || fsSize == 0) {
             printf("[BgfxRenderDevice] %s: no embedded data.\n", name);
             return BGFX_INVALID_HANDLE;
@@ -482,28 +494,50 @@ void BgfxRenderDevice::initEmbeddedShaders() {
         return prog;
     };
 
-    if (renderer == 4 ||
-        renderer == 5) {
+    // Pick fullscreen + stretch/affine bytecode per renderer
+    const uint8_t *vsFull = nullptr, *fsBlend = nullptr, *fsTrans = nullptr, *fsVfx = nullptr;
+    const uint8_t *vsStretch = nullptr, *fsStretch = nullptr;
+    const uint8_t *vsAffine = nullptr,  *fsAffine = nullptr;
+    size_t vsFullSz = 0, fsBlendSz = 0, fsTransSz = 0, fsVfxSz = 0;
+    size_t vsStretchSz = 0, fsStretchSz = 0;
+    size_t vsAffineSz = 0,  fsAffineSz = 0;
 
-        m_blendProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_blend, kEmbeddedDXBC_fs_blend_size, "Blend");
-
-        m_transitionProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_transition, kEmbeddedDXBC_fs_transition_size, "Transition");
-
-        m_vfxProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX");
+    if (renderer == bgfx::RendererType::Vulkan) {
+        vsFull = reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_vs_fullscreen);
+        vsFullSz = kEmbeddedSPIRV_vs_fullscreen_size * sizeof(uint32_t);
+        fsBlend = reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_blend);
+        fsBlendSz = kEmbeddedSPIRV_fs_blend_size * sizeof(uint32_t);
+        fsTrans = reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_transition);
+        fsTransSz = kEmbeddedSPIRV_fs_transition_size * sizeof(uint32_t);
+        fsVfx = reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_vfx);
+        fsVfxSz = kEmbeddedSPIRV_fs_vfx_size * sizeof(uint32_t);
+    } else if (renderer == bgfx::RendererType::Metal) {
+        vsFull = kEmbeddedMetal_vs_fullscreen;
+        vsFullSz = kEmbeddedMetal_vs_fullscreen_size;
+        fsBlend = kEmbeddedMetal_fs_blend; fsBlendSz = kEmbeddedMetal_fs_blend_size;
+        fsTrans = kEmbeddedMetal_fs_transition; fsTransSz = kEmbeddedMetal_fs_transition_size;
+        fsVfx = kEmbeddedMetal_fs_vfx; fsVfxSz = kEmbeddedMetal_fs_vfx_size;
+        vsStretch = kEmbeddedMetal_stretch_blt_vs; vsStretchSz = kEmbeddedMetal_stretch_blt_vs_size;
+        fsStretch = kEmbeddedMetal_stretch_blt_fs; fsStretchSz = kEmbeddedMetal_stretch_blt_fs_size;
+        vsAffine = kEmbeddedMetal_affine_blt_vs; vsAffineSz = kEmbeddedMetal_affine_blt_vs_size;
+        fsAffine = kEmbeddedMetal_affine_blt_fs; fsAffineSz = kEmbeddedMetal_affine_blt_fs_size;
+    } else if (renderer == bgfx::RendererType::Direct3D11 ||
+               renderer == bgfx::RendererType::Direct3D12) {
+        vsFull = kEmbeddedDXBC_vs_fullscreen; vsFullSz = kEmbeddedDXBC_vs_fullscreen_size;
+        fsBlend = kEmbeddedDXBC_fs_blend; fsBlendSz = kEmbeddedDXBC_fs_blend_size;
+        fsTrans = kEmbeddedDXBC_fs_transition; fsTransSz = kEmbeddedDXBC_fs_transition_size;
+        fsVfx = kEmbeddedDXBC_fs_vfx; fsVfxSz = kEmbeddedDXBC_fs_vfx_size;
+        vsStretch = kEmbeddedDXBC_stretch_blt_vs; vsStretchSz = kEmbeddedDXBC_stretch_blt_vs_size;
+        fsStretch = kEmbeddedDXBC_stretch_blt_fs; fsStretchSz = kEmbeddedDXBC_stretch_blt_fs_size;
+        vsAffine = kEmbeddedDXBC_affine_blt_vs; vsAffineSz = kEmbeddedDXBC_affine_blt_vs_size;
+        fsAffine = kEmbeddedDXBC_affine_blt_fs; fsAffineSz = kEmbeddedDXBC_affine_blt_fs_size;
     }
-        m_stretchProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size,
-            kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size, "StretchBlt");
 
-        m_affineProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size,
-            kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size, "AffineBlt");
+    m_blendProgram = createProgramFromBinary(vsFull, vsFullSz, fsBlend, fsBlendSz, "Blend");
+    m_transitionProgram = createProgramFromBinary(vsFull, vsFullSz, fsTrans, fsTransSz, "Transition");
+    m_vfxProgram = createProgramFromBinary(vsFull, vsFullSz, fsVfx, fsVfxSz, "VFX");
+    m_stretchProgram = createProgramFromBinary(vsStretch, vsStretchSz, fsStretch, fsStretchSz, "StretchBlt");
+    m_affineProgram = createProgramFromBinary(vsAffine, vsAffineSz, fsAffine, fsAffineSz, "AffineBlt");
 
     // -- Create uniform handles for effect cbuffers -------------------
     m_u_blendParams = bgfx::createUniform("BlendParams",  bgfx::UniformType::Vec4, 2);

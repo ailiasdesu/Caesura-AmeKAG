@@ -1,5 +1,5 @@
-﻿// CryptoEngine -- AES-256-GCM + SHA-256 via BCrypt, Ed25519 via orlp library.
-// Windows-only implementation. No external crypto dependencies.
+﻿// CryptoEngine -- Windows: BCrypt, macOS/Linux: OpenSSL (optional via CAESURA_CRYPTO_OPENSSL).
+// Ed25519 via orlp library (portable).
 #pragma once
 #include "CARCFormat.h"
 #include <vector>

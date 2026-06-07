@@ -1,7 +1,7 @@
 ﻿#include "TextureBudget.h"
 #include <cstdio>
 
-#ifdef CAESURA_PLATFORM_WINDOWS
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -21,7 +21,7 @@ TextureBudget& TextureBudget::instance() {
 }
 
 void TextureBudget::detect() {
-#ifdef CAESURA_PLATFORM_WINDOWS
+#ifdef _WIN32
     MEMORYSTATUSEX memStatus = {};
     memStatus.dwLength = sizeof(memStatus);
     if (GlobalMemoryStatusEx(&memStatus)) {

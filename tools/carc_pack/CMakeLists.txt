@@ -11,15 +11,15 @@ set(CARC_SOURCES
 )
 
 set(ED25519_SOURCES
-    ${CMAKE_SOURCE_DIR}/external/ed25519/fe.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/ge.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/keypair.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/sc.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/sha512.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/sign.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/verify.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/seed.c
-    ${CMAKE_SOURCE_DIR}/external/ed25519/add_scalar.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/fe.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/ge.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/keypair.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/sc.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/sha512.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/sign.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/verify.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/seed.c
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src/add_scalar.c
 )
 
 add_executable(${TOOL_NAME}
@@ -30,17 +30,19 @@ add_executable(${TOOL_NAME}
 
 target_include_directories(${TOOL_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/external/ed25519
+    ${CMAKE_SOURCE_DIR}/external/ed25519/src
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
-
-target_compile_definitions(${TOOL_NAME} PRIVATE
-    _CRT_SECURE_NO_WARNINGS
-    NOMINMAX
-    WIN32_LEAN_AND_MEAN
-)
+target_link_libraries(${TOOL_NAME} PRIVATE libzstd_static)
+if(WIN32)
+    target_link_libraries(${TOOL_NAME} PRIVATE bcrypt)
+    target_compile_definitions(${TOOL_NAME} PRIVATE
+        _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
+elseif(CAESURA_CRYPTO_OPENSSL)
+    target_link_libraries(${TOOL_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(${TOOL_NAME} PRIVATE CAESURA_CRYPTO_OPENSSL)
+endif()
 
 if(MSVC)
     set_target_properties(${TOOL_NAME} PROPERTIES

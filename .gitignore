@@ -45,3 +45,7 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
+# ── Shader intermediates ──
+shaders/compiled/
+*.metallib
+*.metal.bin

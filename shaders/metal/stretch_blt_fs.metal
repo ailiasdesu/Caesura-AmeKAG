@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Stretch Blit Fragment Shader (Metal)
+// Caesura (AmeKAG) - Stretch Blit Fragment Shader (Metal)
 // Corresponds to spec [2.4] stretch_blt.fs
 
 #include <metal_stdlib>
@@ -13,7 +13,7 @@ struct StretchParams {
     float4 u_stretchParams;    // xy=src_offset, zw=src_scale
 };
 
-fragment float4 stretch_blt_fs(PSInput in [[stage_in]],
+fragment float4 xlatMtlMain(PSInput in [[stage_in]],
                                texture2d<float> s_texColor [[texture(0)]],
                                sampler s_samp [[sampler(0)]],
                                constant StretchParams& params [[buffer(0)]]) {

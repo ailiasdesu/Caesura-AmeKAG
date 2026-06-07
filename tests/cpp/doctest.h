@@ -1195,7 +1195,7 @@ struct filldata {
 #if defined(_MSC_VER) && _MSC_VER <= 1900
         insert_hack_t<T>::insert(*stream, in);
 #else
-        operator<<(*stream, in);
+        *stream << in;
 #endif // _MSV_VER
     }
 };

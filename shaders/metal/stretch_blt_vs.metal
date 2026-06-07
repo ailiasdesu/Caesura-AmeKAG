@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Stretch Blit Vertex Shader (Metal)
+// Caesura (AmeKAG) - Stretch Blit Vertex Shader (Metal)
 // Corresponds to spec [2.4] stretch_blt
 
 #include <metal_stdlib>
@@ -14,7 +14,7 @@ struct VSOutput {
     float2 texcoord;
 };
 
-vertex VSOutput stretch_blt_vs(VSInput in [[stage_in]]) {
+vertex VSOutput xlatMtlMain(VSInput in [[stage_in]]) {
     VSOutput out;
     out.position = float4(in.position * 2.0 - 1.0, 0.0, 1.0);
     out.texcoord = in.texcoord;

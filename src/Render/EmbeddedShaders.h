@@ -56,4 +56,26 @@ extern const size_t   kEmbeddedDXBC_affine_blt_vs_size;
 extern const uint8_t  kEmbeddedDXBC_affine_blt_fs[];
 extern const size_t   kEmbeddedDXBC_affine_blt_fs_size;
 
+// -- Metal (macOS, bgfx renderer type 5) ------------------------------------
+extern const uint8_t  kEmbeddedMetal_VS_Sprite[];
+extern const size_t   kEmbeddedMetal_VS_Sprite_size;
+extern const uint8_t  kEmbeddedMetal_FS_Texture[];
+extern const size_t   kEmbeddedMetal_FS_Texture_size;
+extern const uint8_t  kEmbeddedMetal_vs_fullscreen[];
+extern const size_t   kEmbeddedMetal_vs_fullscreen_size;
+extern const uint8_t  kEmbeddedMetal_fs_blend[];
+extern const size_t   kEmbeddedMetal_fs_blend_size;
+extern const uint8_t  kEmbeddedMetal_fs_transition[];
+extern const size_t   kEmbeddedMetal_fs_transition_size;
+extern const uint8_t  kEmbeddedMetal_fs_vfx[];
+extern const size_t   kEmbeddedMetal_fs_vfx_size;
+extern const uint8_t  kEmbeddedMetal_stretch_blt_vs[];
+extern const size_t   kEmbeddedMetal_stretch_blt_vs_size;
+extern const uint8_t  kEmbeddedMetal_stretch_blt_fs[];
+extern const size_t   kEmbeddedMetal_stretch_blt_fs_size;
+extern const uint8_t  kEmbeddedMetal_affine_blt_vs[];
+extern const size_t   kEmbeddedMetal_affine_blt_vs_size;
+extern const uint8_t  kEmbeddedMetal_affine_blt_fs[];
+extern const size_t   kEmbeddedMetal_affine_blt_fs_size;
+
 } // namespace Caesura

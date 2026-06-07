@@ -23,11 +23,22 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/zstd/build/cmake ${CMAKE_BINARY_DI
 # Dependencies
 find_package(SDL3 REQUIRED)
 
-# SoLoud backend config -- disable SDL2 (we use SDL3), enable WINMM+WASAPI on Windows
+# OpenSSL for non-Windows crypto (CARC encryption)
+option(CAESURA_CRYPTO_OPENSSL "OpenSSL crypto backend (non-Windows)" ON)
+if(CAESURA_CRYPTO_OPENSSL AND NOT WIN32)
+    find_package(OpenSSL REQUIRED)
+endif()
+
+# SoLoud backend config â€” per-platform native audio
 set(SOLOUD_BACKEND_SDL2 OFF CACHE BOOL "" FORCE)
 if(WIN32)
     set(SOLOUD_BACKEND_WINMM ON CACHE BOOL "" FORCE)
     set(SOLOUD_BACKEND_WASAPI ON CACHE BOOL "" FORCE)
+elseif(APPLE)
+    set(SOLOUD_BACKEND_COREAUDIO ON CACHE BOOL "" FORCE)
+elseif(UNIX)
+    set(SOLOUD_BACKEND_ALSA ON CACHE BOOL "" FORCE)
+    set(SOLOUD_BACKEND_PULSEAUDIO ON CACHE BOOL "" FORCE)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/bgfx/bx   ${CMAKE_BINARY_DIR}/bx)
@@ -49,20 +60,20 @@ target_compile_definitions(miniz PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 # -- ed25519 (public-domain Ed25519 implementation) -------------------------
 set(ED25519_SOURCES
-    external/ed25519/fe.c
-    external/ed25519/ge.c
-    external/ed25519/keypair.c
-    external/ed25519/sc.c
-    external/ed25519/sha512.c
-    external/ed25519/sign.c
-    external/ed25519/verify.c
-    external/ed25519/seed.c
-    external/ed25519/add_scalar.c
+    external/ed25519/src/fe.c
+    external/ed25519/src/ge.c
+    external/ed25519/src/keypair.c
+    external/ed25519/src/sc.c
+    external/ed25519/src/sha512.c
+    external/ed25519/src/sign.c
+    external/ed25519/src/verify.c
+    external/ed25519/src/seed.c
+    external/ed25519/src/add_scalar.c
 )
 add_library(ed25519 STATIC ${ED25519_SOURCES})
-target_include_directories(ed25519 PUBLIC external/ed25519)
+target_include_directories(ed25519 PUBLIC external/ed25519/src)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) ¡ª no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ï¿½ï¿½ no C build needed
 
 # Engine sources
 
@@ -191,17 +202,25 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 bcrypt freetype libzstd_static)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 freetype libzstd_static)
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE bcrypt)
+elseif(CAESURA_CRYPTO_OPENSSL)
+    target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_CRYPTO_OPENSSL)
+endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
 
-# Copy SDL3 DLL to output directory for runtime
+# Copy SDL3 DLL to output (Windows only)
+if(WIN32)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${SDL3_DIR}/../lib/${CMAKE_VS_PLATFORM_NAME}/SDL3.dll"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/SDL3.dll"
     COMMENT "Copying SDL3.dll to output"
 )
+endif()
 
 
 
@@ -212,6 +231,7 @@ if(MSVC)
 endif()
 
 if(WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_PLATFORM_WINDOWS)
     target_link_libraries(${PROJECT_NAME} PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
 elseif(APPLE)
     find_library(COCOA_LIBRARY Cocoa REQUIRED)

@@ -32,4 +32,10 @@ cmake --build build
 
 ## 开源协议
 
+## 平台适配
+
+> [macOS 适配修改日志](MACOS_PORT_LOG.md) | [macOS Metal 已知问题](MACOS_ISSUES.md)
+
+## 开源协议
+
 MIT License

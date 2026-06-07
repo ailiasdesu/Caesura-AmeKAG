@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - 2D Sprite Vertex Shader (Metal)
+// Caesura (AmeKAG) - 2D Sprite Vertex Shader (Metal)
 // Corresponds to shaders/dx11/vs_sprite.hlsl
 
 #include <metal_stdlib>
@@ -14,7 +14,7 @@ struct VSOutput {
     float2 texcoord;
 };
 
-vertex VSOutput vs_sprite(VSInput in [[stage_in]]) {
+vertex VSOutput xlatMtlMain(VSInput in [[stage_in]]) {
     VSOutput out;
     out.position = float4(in.position, 0.0, 1.0);
     out.texcoord = in.texcoord;

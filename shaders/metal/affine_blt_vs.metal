@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Affine Blit Vertex Shader (Metal)
+// Caesura (AmeKAG) - Affine Blit Vertex Shader (Metal)
 // 2D affine matrix transform
 // Corresponds to spec [2.4] affine_blt.vs
 //
@@ -25,7 +25,7 @@ struct AffineParams {
     float4x4 u_affineParams;
 };
 
-vertex VSOutput affine_blt_vs(VSInput in [[stage_in]],
+vertex VSOutput xlatMtlMain(VSInput in [[stage_in]],
                               constant AffineParams& params [[buffer(0)]]) {
     VSOutput out;
 

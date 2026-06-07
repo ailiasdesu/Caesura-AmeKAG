@@ -256,6 +256,12 @@ void Engine::processEvents() {
     lua_State* L = m_lua->state();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // Quit: window close or Esc key
+        if (event.type == SDL_EVENT_QUIT ||
+            (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)) {
+            m_running = false;
+            return;
+        }
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
         if (event.type == CAESURA_EVENT_ASYNC_LOAD && L) {
             auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
@@ -351,7 +357,7 @@ void Engine::render() {
         if (lua_isfunction(L, -1)) {
             if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
                 const char* err = lua_tostring(L, -1);
-                fprintf(stderr, "engine_render: %s\n", err ? err : "unknown");
+                fprintf(stderr, "engine_render error: %s\n", err ? err : "unknown");
                 lua_pop(L, 1);
             }
         } else { lua_pop(L, 1); }
@@ -371,20 +377,12 @@ void Engine::render() {
         }
     }
 
-    const bgfx::Caps* caps = bgfx::getCaps();
-    if (caps) {
-        bgfx::dbgTextClear();
-        bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
-        bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
-                            bgfx::getRendererName(caps->rendererType), m_width, m_height);
-        bgfx::dbgTextPrintf(0, 2, 0x0F, "Input Focus: %s  Errors: %u",
-                            inputFocusToString(m_inputRouter->getFocus()), 0);
+    // Frame stats to stderr — TextRenderer::renderText has Metal crash (TBD)
+    static int fc = 0;
+    if (++fc % 60 == 0) {
         const auto& gm = m_gpuMonitor->metrics();
-        bgfx::dbgTextPrintf(0, 3, 0x0F, "GPU: %s | frame=%.1fms avg=%.1fms | degradation=%s",
-                            gpuQualityName(gm.quality), gm.gpuTimeMs, gm.rollingAvgMs,
-                            gm.degraded ? "ACTIVE" : "none");
-        bgfx::dbgTextPrintf(0, 4, 0x0F, "Videos: %d  Log: %s",
-                            m_videoPlayer->activeCount(), "logs/");
+        fprintf(stderr, "[frame %d] GPU %dms avg %dms\n", fc,
+                (int)gm.gpuTimeMs, (int)gm.rollingAvgMs);
     }
 }
 
