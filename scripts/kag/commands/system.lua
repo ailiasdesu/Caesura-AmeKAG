@@ -8,7 +8,15 @@
 -- =============================================================================
 
 local CancelToken = require("kag.cancel_token")
-local Sandbox = require("sandbox")
+-- Sandbox is loaded by C++ lockdownScriptEnv() AFTER all modules are preloaded.
+-- Do NOT require("sandbox") here ? it would activate lockdown too early.
+local _sandbox_cache = nil
+local function getSandbox()
+    if not _sandbox_cache then
+        _sandbox_cache = rawget(package.loaded, "sandbox")
+    end
+    return _sandbox_cache
+end
 
 local SystemCommands = {}
 
@@ -57,7 +65,7 @@ function SystemCommands.emb(ctx, params)
     if #exp == 0 then return end
 
     -- Check if sandbox enforcement is active
-    if Sandbox.is_strict() then
+    if getSandbox().is_strict() then
         -- Strict mode: use sandbox.execute()
         local env = {
             ctx  = ctx,
@@ -67,7 +75,7 @@ function SystemCommands.emb(ctx, params)
             mp   = ctx.mp or {},
         }
 
-        local ok, result, envOut = Sandbox.execute(exp, env)
+        local ok, result, envOut = getSandbox().execute(exp, env)
 
         -- Sync back any mutations to the environment
         if envOut then
@@ -137,7 +145,7 @@ function SystemCommands.eval(ctx, params)
     if #exp == 0 then return end
 
     -- If not strict, let scheduler handle it inline (backward compat)
-    if not Sandbox.is_strict() then
+    if not getSandbox().is_strict() then
         -- Scheduler intercepts before dispatch; this is a no-op
         return
     end
@@ -153,7 +161,7 @@ function SystemCommands.eval(ctx, params)
 
     -- Wrap expression as a return statement to capture the result
     local code = "return " .. exp
-    local ok, result, envOut = Sandbox.execute(code, env)
+    local ok, result, envOut = getSandbox().execute(code, env)
 
     -- Sync back mutations
     if envOut then
