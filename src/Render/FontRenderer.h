@@ -73,7 +73,7 @@ struct MessageLayerCache {
 // ---------------------------------------------------------------------------
 // FontRenderer -- TrueType font atlas and text rendering via FreeType 2
 // ---------------------------------------------------------------------------
-// Rasterizes glyphs into a 2048x2048 RGBA8 texture atlas on demand.
+// Rasterizes glyphs into a configurable RGBA8 texture atlas (default 2048x2048). Call setAtlasSize() before init() to resize.
 // Pre-fills ASCII 32-126 at init.  CJK / additional ranges are added lazily
 // on first render.  Submits textured quads directly to the GPU through bgfx.
 //
@@ -140,8 +140,11 @@ private:
 
     // -- Atlas -----------------------------------------------------------------
     bgfx::TextureHandle m_atlas       = BGFX_INVALID_HANDLE;
-    static constexpr uint16_t m_atlasW = 2048;
-    static constexpr uint16_t m_atlasH = 2048;
+    uint16_t m_atlasW = 2048;
+    uint16_t m_atlasH = 2048;
+
+    // Spec [10.2.23]: Configurable atlas size. Call before init().
+    void setAtlasSize(uint16_t w, uint16_t h) { m_atlasW = w; m_atlasH = h; }
     uint16_t m_penX = 1, m_penY = 1, m_maxRowH = 0;
 
     // -- Font state (FreeType 2) -----------------------------------------------

@@ -1,4 +1,4 @@
-﻿#include "TextRenderer.h"
+#include "TextRenderer.h"
 #include "BgfxRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>

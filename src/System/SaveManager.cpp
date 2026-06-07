@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses raw string building for JSON -- no external JSON library dependency.
@@ -440,15 +440,26 @@ bool SaveManager::migrateSave(std::string& jsonData) {
 }
 
 void SaveManager::registerBuiltinMigrations() {
-    // Example: if schema v1 → v2 needs a data transformation
-    // registerMigration(1, 2, [](const std::string& json) -> std::string {
-    //     // Transform json here...
-    //     return json;
-    // });
+    // v1 -> v2: Add "playtime" field to track total play time across saves.
+    registerMigration(1, 2, [](const std::string& json) -> std::string {
+        // Idempotent: skip if playtime already present
+        if (json.find("\"playtime\":") != std::string::npos) return json;
 
-    // Current schema version starts at 1; register migrations here as
-    // the schema evolves.
-    // For now, v1 is the current version -- no migrations needed.
+        std::string result = json;
+        std::string marker = "\"data\":{";
+        size_t pos = result.find(marker);
+        if (pos != std::string::npos) {
+            size_t insertPos = pos + marker.size();
+            // Avoid trailing comma for empty data object "data":{}
+            char nextChar = (insertPos < result.size()) ? result[insertPos] : 0;
+            if (nextChar == '}') {
+                result.insert(insertPos, "\"playtime\":0");
+            } else {
+                result.insert(insertPos, "\"playtime\":0,");
+            }
+        }
+        return result;
+    });
 }
 
 } // namespace Caesura

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "IRenderDevice.h"
 #include <cstdint>
 #include <unordered_set>
@@ -44,6 +44,10 @@ public:
     void destroyCanvasDeferred(ViewportHandle handle);
     // Actually destroy all enqueued handles. Call once per frame at end.
     void flushDeferredDestroys();
+
+    // -- Resize (Spec [10.2.13]) --------------------------------------------
+    // Destroy all pooled canvases and reset. Call on window resize.
+    void resizeAll(int newW, int newH);
 
     // -- Snapshot ------------------------------------------------------------
     bool captureSnapshot(const char* path, int w, int h);

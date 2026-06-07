@@ -1,4 +1,4 @@
-﻿# ── Build artifacts ──
+# ── Build artifacts ──
 build/
 bin/
 cmake-build*/
@@ -23,10 +23,6 @@ out/
 *.swo
 *~
 # ── Submodules (tracked via git submodule, not vendored) ──
-external/bgfx/
-external/SDL3/
-external/freetype/
-external/zstd/
 # ── Runtime generated ──
 logs/
 saves/

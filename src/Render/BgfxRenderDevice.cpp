@@ -935,6 +935,9 @@ void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
 //  GPU Effect: Transition ?? crossfade / rule / wipe between two textures
 // ===========================================================================
 
+// Spec [10.2.25]: @Beta — Pre-bake rule images into a LUT texture atlas for batch
+// transition rendering. Currently each transition passes its rule texture
+// individually via texture slot 2. A pre-baked atlas would reduce draw calls.
 void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
                                          bgfx::TextureHandle toTex,
                                          bgfx::TextureHandle ruleTex,
