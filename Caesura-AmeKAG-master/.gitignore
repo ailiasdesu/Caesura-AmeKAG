@@ -1,0 +1,44 @@
+﻿# ── Build artifacts ──
+build/
+cmake-build*/
+out/
+*.o
+*.obj
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.a
+*.so
+*.dylib
+*.bak
+# ── IDE / Editor ──
+.idea/
+.vs/
+.vscode/
+*.swp
+*.swo
+*~
+# ── Dependencies (submodules tracked separately) ──
+external/
+# ── Runtime generated ──
+logs/
+saves/
+settings/
+config/
+# ── Test / Demo scripts ──
+scripts/game_logic.lua
+# ── Reference source (not engine) ──
+krkrz参考源码/
+# ── OS files ──
+.DS_Store
+Thumbs.db
+desktop.ini
+# ── CMake generated ──
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
