@@ -70,7 +70,7 @@ Two cooperating subsystems for text display. FontRenderer rasterizes glyphs from
 A CPU-driven particle emitter supporting configurable spawn rate, lifetime, velocity, color, and size. Resolution-aware: receives screen dimensions at `update(dt, w, h)` rather than hardcoding values.
 
 ### Shader Cache
-A registry of `bgfx::ProgramHandle` values indexed by name. Owns the bgfx::ProgramHandle instances. BgfxRenderDevice creates and registers programs; CompositeShaderCache::shutdown() destroys them.
+"Owns all bgfx::ProgramHandle instances. BgfxRenderDevice creates and registers programs during init via registerProgram(); ShaderCache::shutdown() iterates and calls bgfx::destroy() on every entry as the exclusive owner."
 
 ---
 
