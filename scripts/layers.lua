@@ -508,7 +508,7 @@ function Layers.render()
     renderNode(root, 0, 0)
 
     if batch.layer_count > 0 then
-        backend.submit_batch(batch)
+        backend.submit_batch(batch.commands)
     end
 
     clearDirtyRecursive(root)

@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -42,22 +42,7 @@ namespace Caesura {
 // Checks lua_gc(L, LUA_GCCOUNT) after every Lua allocation.
 // Returns NULL on overflow to force a Lua allocation error.
 static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
-    lua_State* L = static_cast<lua_State*>(ud);
-    if (!L) {
-        if (nsize == 0) { free(ptr); }
-        else { return realloc(ptr, nsize); }
-        return nullptr;
-    }
-    int memKB = lua_gc(L, LUA_GCCOUNT, 0);
-    if (memKB > 256 * 1024 && nsize > osize) {
-        // Trigger emergency GC, then retry
-        lua_gc(L, LUA_GCCOLLECT, 0);
-        memKB = lua_gc(L, LUA_GCCOUNT, 0);
-        if (memKB > 256 * 1024) {
-            fprintf(stderr, "[Engine] Lua OOM: %dKB > 256MB limit\n", memKB);
-            return nullptr; // force allocation error
-        }
-    }
+    // Lua 5.4 forbids calling lua_gc inside the allocator (C stack overflow).
     if (nsize == 0) { free(ptr); return nullptr; }
     return realloc(ptr, nsize);
 }
@@ -204,7 +189,7 @@ void Engine::run() {
         // Phase G8-U3: Poll async load completions
         AsyncLoader::instance().poll();
 
-        // -- Phase G8-U1: Lua memory budget check (every frame) ---------------
+        // -- Phase G8-U1: Lua memory budget check \(every frame\) ---------------
         lua_State* Lgc = m_lua->state();
         if (Lgc) {
             int memKB = lua_gc(Lgc, LUA_GCCOUNT, 0);

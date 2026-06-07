@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) 鈥?Sandbox Rules v2 (Track 3)
 --  ===========================================================================
 --  Loaded once at engine startup via LuaManager::lockdownScriptEnv().
@@ -142,6 +142,18 @@ local _G_whitelist = {
     _KAG_onClick        = true,
     _KAG_onKey          = true,
     _KAG_onScroll       = true,
+    -- Engine runtime state globals (set by C++ main loop)
+    _CAESURA_GPU_QUALITY  = true,
+    _CAESURA_VFX_ENABLED  = true,
+    _CAESURA_GPU_TIME_MS  = true,
+    _CAESURA_GPU_AVG_MS   = true,
+    _CAESURA_GPU_DEGRADED = true,
+    _CAESURA_VOICE_COMPLETE = true,
+    _GAME_MOUSE_X   = true,
+    _GAME_MOUSE_Y   = true,
+    _GAME_MOUSE_DOWN = true,
+    _GAME_KEY_F5    = true,
+    _GAME_KEY_F6    = true,
     debug      = true,  -- already read-only from section 2
     -- Read-only globals
     package    = true,

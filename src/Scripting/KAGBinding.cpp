@@ -260,12 +260,10 @@ static int lua_KAG_flush_wave_cache(lua_State* L) {
 // -- KAG.show_text(text) -- console echo -----------------------------------
 
 static int lua_KAG_show_text(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "show_text");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    const char* text = luaL_checkstring(L, 1);
+    printf("[KAG] %s\n", text);
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_KAG_render_text(lua_State* L) {
@@ -333,30 +331,22 @@ static int lua_KAG_line_height(lua_State* L) {
 // -- KAG.wait_click() -- coroutine yield -----------------------------------
 
 static int lua_KAG_wait_click(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "wait_click");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    // Stub: controlled by engine input loop, not Lua
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_KAG_show_image(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "show_image");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    const char* file = luaL_checkstring(L, 1);
+    printf("[KAG] show_image: %s\n", file);
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_KAG_clear_screen(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "clear_screen");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    printf("[KAG] clear_screen\n");
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_KAG_set_listener(lua_State* L) {
