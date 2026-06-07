@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -7,6 +7,7 @@ extern "C" {
 #include "../Render/IRenderDevice.h"
 #include "../Render/BgfxRenderDevice.h"
 #include "../Render/ParticleSystem.h"
+#include "../Core/BackendRegistry.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -120,7 +121,10 @@ static int lua_VFX_particles_emit(lua_State* L) {
 
 static int lua_VFX_particles_update(lua_State* L) {
     float dt = (float)luaL_checknumber(L, 1);
-    s_particleSystem.update(dt);
+    int sw = 1280, sh = 720;
+    auto* rd = BackendRegistry::instance().getRenderDevice();
+    if (rd) { sw = rd->getBackbufferWidth(); sh = rd->getBackbufferHeight(); }
+    s_particleSystem.update(dt, (uint32_t)sw, (uint32_t)sh);
     lua_pushboolean(L, 1);
     return 1;
 }

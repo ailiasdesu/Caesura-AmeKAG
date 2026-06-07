@@ -3,6 +3,8 @@
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
 #include <memory>
+#include <thread>
+#include <cassert>
 
 namespace Caesura {
 
@@ -40,6 +42,9 @@ public:
     GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
     VideoPlayer&  videoPlayer()   { return *m_videoPlayer; }
 
+    // -- Thread safety: main thread id for debug assertions
+    static std::thread::id s_mainThreadId;
+
 private:
     void processEvents();
     void render();
@@ -71,3 +76,11 @@ private:
 };
 
 } // namespace Caesura
+
+// -- Thread safety assertion macro (Debug only) --
+#ifndef NDEBUG
+#define CAESURA_ASSERT_MAIN_THREAD() \
+    assert(std::this_thread::get_id() == ::Caesura::Engine::s_mainThreadId)
+#else
+#define CAESURA_ASSERT_MAIN_THREAD() ((void)0)
+#endif

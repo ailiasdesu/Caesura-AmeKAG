@@ -117,7 +117,7 @@ void LayerManager::markDirty(LayerType t, uint16_t x, uint16_t y,
 void LayerManager::markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y,
                                               uint16_t w, uint16_t h) {
     int idx = static_cast<int>(t);
-    if (idx < 0 || idx >= COUNT) return;
+    if (idx >= (int)COUNT) return;
 
     // Mark the layer itself
     markDirty(t, x, y, w, h);
@@ -169,6 +169,7 @@ void LayerManager::clearDirtyRects() {
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
                            bgfx::ProgramHandle program) {
+    static bgfx::UniformHandle s_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler);
     if (!m_initialized) return;
     if (!bgfx::isValid(program)) return;
 
@@ -231,7 +232,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         idx[0] = 0; idx[1] = 1; idx[2] = 2;
         idx[3] = 0; idx[4] = 2; idx[5] = 3;
 
-        bgfx::setTexture(0, bgfx::createUniform("s_tex", bgfx::UniformType::Sampler), l.tex);
+        bgfx::setTexture(0, s_texUniform, l.tex);
         bgfx::setVertexBuffer(0, &tvb);
         bgfx::setIndexBuffer(&tib);
         bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |

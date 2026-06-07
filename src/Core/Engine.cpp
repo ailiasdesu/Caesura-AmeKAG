@@ -13,6 +13,7 @@
 #include "../Render/IRenderDevice.h"
 #include "../Render/GpuMonitor.h"
 #include "../Render/VideoPlayer.h"
+#include "../Render/FreeTypeContext.h"
 #include "../Audio/SoLoudAudioEngine.h"
 #include "../Scripting/RenderBinding.h"
 #include "../Render/BgfxRenderDevice.h"
@@ -20,11 +21,17 @@
 #include "../System/SaveManager.h"
 #include "../Debug/HotReload.h"
 #include "../Resource/AsyncLoader.h"
+#include "../Resource/ProviderChain.h"
+#include <thread>
+#include <atomic>
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/bx.h>
 #include <cstdio>
 #include <cmath>
+
+
+std::thread::id Caesura::Engine::s_mainThreadId;
 
 namespace Caesura {
 
@@ -69,6 +76,7 @@ IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBac
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
 bool Engine::init(const char* title, int width, int height) {
+    s_mainThreadId = std::this_thread::get_id();
     m_width  = width;
     m_height = height;
 
@@ -132,6 +140,12 @@ bool Engine::init(const char* title, int width, int height) {
 
     // -- Phase 8.1: Initialize HotReload for scripts/ directory -----------
     HotReload::instance().init("scripts/", m_lua->state());
+
+    // Initialize shared FreeType (before any text/font subsystem uses it)
+    if (!FreeTypeContext::instance().init()) {
+        fprintf(stderr, "[Engine] FreeTypeContext init failed.\n");
+        return false;
+    }
 
     // Phase G8-U3: Initialize AsyncLoader for background asset loading
     AsyncLoader::instance().init();
@@ -414,6 +428,7 @@ void Engine::shutdown() {
     if (m_lua) m_lua->shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
+    FreeTypeContext::instance().shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();
     DebugManager::instance().shutdown();

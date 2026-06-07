@@ -1,4 +1,4 @@
- extern "C" {
+﻿ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -13,12 +13,14 @@
 #include "../System/SaveBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/Engine.h"
 #include <cstdio>
 
 namespace Caesura {
 
 bool LuaManager::init() {
     if (m_initialized) return true;
+    CAESURA_ASSERT_MAIN_THREAD();
 
     m_L = luaL_newstate();
     if (!m_L) {
@@ -129,10 +131,12 @@ void LuaManager::shutdown() {
 }
 
 void LuaManager::update(float /*deltaTime*/) {
+    CAESURA_ASSERT_MAIN_THREAD();
     // Event-driven; no polling needed
 }
 
 void LuaManager::registerModules() {
+    CAESURA_ASSERT_MAIN_THREAD();
 
     // -- Security: sandboxing moved to lockdownScriptEnv() (called after scripts load) --
 
@@ -154,6 +158,7 @@ void LuaManager::registerModules() {
 
 
 bool LuaManager::loadScript(const char* path) {
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_L || !path) return false;
     printf("[Lua] Loading script: %s\n", path);
     if (luaL_dofile(m_L, path) != LUA_OK) {
@@ -165,6 +170,7 @@ bool LuaManager::loadScript(const char* path) {
 }
 
 void LuaManager::resumeKAGCoroutine() {
+    CAESURA_ASSERT_MAIN_THREAD();
     // Reserved for future use
 }
 } // namespace Caesura

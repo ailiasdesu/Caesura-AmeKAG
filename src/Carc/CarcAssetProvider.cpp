@@ -20,3 +20,5 @@ bool CarcAssetProvider::exists(const std::string& path)
 }
 
 } // namespace caesura::carc
+// verify() is defined inline in CarcAssetProvider.h
+// (returns m_reader->verifySignature())

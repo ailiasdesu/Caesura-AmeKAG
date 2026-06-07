@@ -4,7 +4,6 @@
 #include <windows.h>
 #include <bcrypt.h>
 #include <cstring>
-#include <random>
 #include <stdexcept>
 
 extern "C" {
@@ -186,20 +185,18 @@ bool CryptoEngine::verify(const uint8_t* data, size_t len,
 // ==========================================================================
 void CryptoEngine::generateKey(uint8_t key[AES_KEY_SIZE])
 {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<unsigned int> dist(0, 255);
-    for (size_t i = 0; i < AES_KEY_SIZE; ++i)
-        key[i] = static_cast<uint8_t>(dist(gen));
+    // [10.2.66] Must use cryptographically secure RNG
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, key, AES_KEY_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+        throw std::runtime_error("BCryptGenRandom failed for AES key generation");
+    }
 }
 
 void CryptoEngine::generateNonce(uint8_t nonce[AES_NONCE_SIZE])
 {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<unsigned int> dist(0, 255);
-    for (size_t i = 0; i < AES_NONCE_SIZE; ++i)
-        nonce[i] = static_cast<uint8_t>(dist(gen));
+    // [10.2.66] Must use cryptographically secure RNG
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, AES_NONCE_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+        throw std::runtime_error("BCryptGenRandom failed for nonce generation");
+    }
 }
 
 // ==========================================================================

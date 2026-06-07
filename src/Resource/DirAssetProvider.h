@@ -14,6 +14,7 @@ public:
     bool exists(const std::string& path) override;
     std::string getSource() const override { return "Dir:" + m_rootDir; }
     int priority() const override { return 5; }
+    bool verify() override { return true; }
 
 private:
     std::string m_rootDir;

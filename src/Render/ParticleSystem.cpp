@@ -30,6 +30,7 @@ bool ParticleSystem::init(BgfxRenderDevice* device) {
         .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
         .end();
 
+    m_device = device;
     m_initialized = true;
     printf("[ParticleSystem] Initialized (max %d particles)\n", MAX_PARTICLES);
     return true;
@@ -83,8 +84,10 @@ void ParticleSystem::emit(int emitterId, int count) {
     }
 }
 
-void ParticleSystem::update(float dt) {
+void ParticleSystem::update(float dt, uint32_t screenW, uint32_t screenH) {
     if (!m_initialized) return;
+    m_screenW = screenW;
+    m_screenH = screenH;
 
     for (auto& em : m_emitters) {
         if (!em.active) continue;
@@ -169,7 +172,7 @@ void ParticleSystem::render(uint16_t viewId) {
 
     float ortho[16];
     const bgfx::Caps* caps = bgfx::getCaps();
-    bx::mtxOrtho(ortho, 0.0f, 1280.0f, 720.0f, 0.0f, -1.0f, 1.0f, 0.0f,
+    bx::mtxOrtho(ortho, 0.0f, (float)m_screenW, (float)m_screenH, 0.0f, -1.0f, 1.0f, 0.0f,
                  caps ? caps->homogeneousDepth : false, bx::Handedness::Left);
     bgfx::setViewTransform(viewId, nullptr, ortho);
 

@@ -1,5 +1,6 @@
- #include "BgfxRenderDevice.h"
+﻿ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
+#include "Core/Engine.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
 #include <bx/math.h>
@@ -47,8 +48,14 @@ BgfxRenderDevice::~BgfxRenderDevice() {
 
 
 void BgfxRenderDevice::flushAllRTT() {
-    // Release all GPU-side RTT resources while bgfx context is still alive.
-    // Called by shutdown() and may be called explicitly by Engine teardown.
+    // [10.2.67] Release all GPU-side RTT resources while bgfx context is still alive.
+    // Must be called before bgfx::shutdown().
+    for (auto& [id, entry] : m_rttMap) {
+        if (bgfx::isValid(entry.fb)) {
+            bgfx::destroy(entry.fb);
+        }
+    }
+    m_rttMap.clear();
 }
 
 // ===========================================================================
@@ -283,6 +290,7 @@ void BgfxRenderDevice::resize(int width, int height) {
 }
 
 void BgfxRenderDevice::shutdown() {
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_bgfxInitialized) return;
     // 1. Release all RTT framebuffers while GPU context is alive
     flushAllRTT();
@@ -567,12 +575,14 @@ void BgfxRenderDevice::setupDefaultViews() {
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 
 void BgfxRenderDevice::beginFrame() {
+    CAESURA_ASSERT_MAIN_THREAD();
     // No-op: bgfx::frame() in endFrame() handles frame pacing.
     // The debug-text overlay in VIEW_DEBUG + explicit submit calls
     // in blitTexture/blitViewport drive VIEW_MAIN and VIEW_RTT.
 }
 
 void BgfxRenderDevice::endFrame() {
+    CAESURA_ASSERT_MAIN_THREAD();
     bgfx::frame();
 }
 
@@ -850,6 +860,7 @@ void BgfxRenderDevice::fillViewport(ViewportHandle handle,
 //  submitFullscreenQuad  helper for GPU effects
 // ===========================================================================
 
+// x,y reserved for future 3D RTT offset rendering
 static void submitFullscreenQuad(uint16_t viewId, bgfx::ProgramHandle program,
                                   float x, float y, float w, float h,
                                   bgfx::TextureHandle tex, bgfx::UniformHandle sampler,

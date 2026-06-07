@@ -1,4 +1,4 @@
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+﻿#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../external/stb/stb_image_write.h"
 #include "RTTManager.h"
 #include <bgfx/bgfx.h>
@@ -150,7 +150,12 @@ void RTTManager::flushDeferredDestroys() {
             for (auto it = pool->begin(); it != pool->end(); ++it) {
                 if (it->handle.id == handle.id) {
                     m_device.destroyRenderTarget(it->handle);
+                    size_t erasedIdx = std::distance(pool->begin(), it);
                     pool->erase(it);
+                    // Fixup indices: after erase, all entries shifted left by 1
+                    for (auto& kv : m_handleToPoolIndex) {
+                        if (kv.second > erasedIdx) --kv.second;
+                    }
                     goto next_handle;
                 }
             }

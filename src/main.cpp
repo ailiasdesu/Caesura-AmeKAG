@@ -4,10 +4,13 @@ extern "C" {
 #include <lualib.h>
 }
 #include "Core/Engine.h"
-#include "../Render/TextureManager.h"
+#include "Render/TextureManager.h"
 #include "Scripting/LuaManager.h"
 #include <cstdio>
 #include <string>
+#include "Carc/CARCReader.h"
+#include <thread>
+#include <atomic>
 
 int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);

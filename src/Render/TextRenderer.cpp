@@ -1,4 +1,4 @@
-ï»¿#include "TextRenderer.h"
+#include "TextRenderer.h"
 #include "BgfxRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -9,16 +9,17 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include "Render/FreeTypeContext.h"
 
 namespace Caesura {
 
 // ===========================================================================
-// UTF-8 Decode Helper â€” consume multi-byte sequences as single codepoints
+// UTF-8 Decode Helper ¡ª consume multi-byte sequences as single codepoints
 // ===========================================================================
 
 static int utf8_char_len(uint8_t lead) {
     if (lead < 0x80) return 1;
-    if (lead < 0xC0) return 1;  // continuation byte â€” treat as '?'
+    if (lead < 0xC0) return 1;  // continuation byte ¡ª treat as '?'
     if (lead < 0xE0) return 2;
     if (lead < 0xF0) return 3;
     return 4;
@@ -33,7 +34,7 @@ static uint32_t utf8_codepoint(const uint8_t* data, int len) {
 
 
 // ===========================================================================
-// Embedded 8x16 bitmap font ï¿½?ASCII 32 (space) through 126 (~)
+// Embedded 8x16 bitmap font ??ASCII 32 (space) through 126 (~)
 // Each glyph: 16 bytes, MSB = leftmost pixel, 1 = lit pixel
 // Sourced from public-domain VGA ROM font (Linux kbd console font).
 // ===========================================================================
@@ -323,7 +324,7 @@ void TextRenderer::shutdown() {
     }
     m_ttf.reset();
 
-    // m_fallbackProgram and m_posTexLayout are borrowed ï¿½?do NOT destroy
+    // m_fallbackProgram and m_posTexLayout are borrowed ??do NOT destroy
     m_initialized = false;
 }
 
@@ -342,7 +343,7 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
     if (id == FontId::Large) buildFont16x32();
 
-    // Atlas: 32 cols Ã— 3 rows = 96 glyphs, RGBA8
+    // Atlas: 32 cols ¡Á 3 rows = 96 glyphs, RGBA8
     int atlasW = glyphW * 32;                     // 256 or 512
     int atlasH = glyphH * 3;                      // 48 or 96
     int totalPixels = atlasW * atlasH;
@@ -746,7 +747,7 @@ void TextRenderer::newline() {
 
 void TextRenderer::clearText(uint16_t /*viewId*/) {
     m_cursor.x = m_cursor.leftMargin;
-    // No GPU clear ï¿½?just reset cursor. Layer system handles visibility.
+    // No GPU clear ??just reset cursor. Layer system handles visibility.
 }
 
 } // namespace Caesura

@@ -84,6 +84,7 @@ set(ENGINE_SOURCES
     src/Render/VideoPlayer.cpp
     src/Render/TextureManager.cpp
     src/Render/FontRenderer.cpp
+    src/Render/FreeTypeContext.cpp
     src/Render/LayerManager.cpp
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp

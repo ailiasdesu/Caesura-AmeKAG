@@ -21,6 +21,10 @@ public:
 
     // Priority: higher = checked first. CARC=10, Dir=5, Patch=8.
     virtual int priority() const = 0;
+
+    // Verify integrity of the asset source. Returns true if valid.
+    // CARC providers verify Ed25519 signature; others return true.
+    virtual bool verify() = 0;
 };
 
 } // namespace caesura

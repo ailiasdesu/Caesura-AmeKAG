@@ -29,6 +29,7 @@ struct CarcCertificate {
 };
 
 class CARCReader {
+    friend class CarcAssetProvider;
 public:
     CARCReader() = default;
     ~CARCReader() { close(); }
@@ -84,7 +85,7 @@ public:
     const uint8_t* publicKey() const { return m_publicKey; }
     bool hasPublicKey() const { return m_hasPublicKey; }
 
-private:
+public:
     CARCHeader m_header;
     // pathHash (32-byte as hex string) → FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;

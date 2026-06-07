@@ -1,4 +1,4 @@
-﻿#include "FontRenderer.h"
+#include "FontRenderer.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -6,6 +6,7 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include "Render/FreeTypeContext.h"
 
 namespace Caesura {
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdint>
@@ -41,7 +41,7 @@ public:
     void destroyEmitter(int id);
     void emit(int emitterId, int count);
 
-    void update(float dt);
+    void update(float dt, uint32_t screenW, uint32_t screenH);
     void render(uint16_t viewId);
 
     // Access
@@ -56,6 +56,9 @@ private:
     bgfx::ProgramHandle  m_program = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle  m_texSampler = BGFX_INVALID_HANDLE;
     bgfx::TextureHandle  m_particleTex = BGFX_INVALID_HANDLE;
+    uint32_t m_screenW = 1280;
+    uint32_t m_screenH = 720;
+    class BgfxRenderDevice* m_device = nullptr;
     bool m_initialized = false;
 };
 

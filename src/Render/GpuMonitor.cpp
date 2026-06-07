@@ -43,12 +43,16 @@ GpuQuality GpuMonitor::update(double dt) {
     
     m_metrics.gpuTimeMs = gpuTimeMs;
 
-    // Rolling average
+    // Rolling average (cumulative for first kWindowSize frames to avoid zero-bias)
     double oldest = m_frameTimeWindow.front();
     m_frameTimeWindow.pop_front();
     m_frameTimeWindow.push_back(gpuTimeMs);
     m_windowSum += gpuTimeMs - oldest;
-    m_metrics.rollingAvgMs = m_windowSum / static_cast<double>(kWindowSize);
+    if (m_metrics.frameCount < kWindowSize) {
+        m_metrics.rollingAvgMs = m_windowSum / static_cast<double>(m_metrics.frameCount);
+    } else {
+        m_metrics.rollingAvgMs = m_windowSum / static_cast<double>(kWindowSize);
+    }
 
     // -- Degradation / Recovery state machine ------------------------------
     

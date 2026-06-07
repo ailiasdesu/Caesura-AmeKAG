@@ -5,12 +5,15 @@
 #include <unordered_map>
 #include <memory>
 #include <algorithm>
+#include "Core/Engine.h"
+#include <list>
 
 namespace Caesura {
 
 // -- Internal wave cache ---------------------------------------------------
 
 static std::unordered_map<std::string, std::shared_ptr<SoLoud::AudioSource>> g_waveCache;
+static std::list<std::string> g_waveLRU;
 
 // Detect extension and use WavStream for .ogg/.mp3, Wav for .wav
 static bool isStreamFormat(const std::string& file) {
@@ -24,7 +27,11 @@ static bool isStreamFormat(const std::string& file) {
 
 static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
     auto it = g_waveCache.find(file);
-    if (it != g_waveCache.end()) return it->second;
+    if (it != g_waveCache.end()) {
+        auto lruIt = std::find(g_waveLRU.begin(), g_waveLRU.end(), file);
+        if (lruIt != g_waveLRU.end()) g_waveLRU.splice(g_waveLRU.begin(), g_waveLRU, lruIt);
+        return it->second;
+    }
 
     std::shared_ptr<SoLoud::AudioSource> src;
 
@@ -44,12 +51,15 @@ static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
         src = wav;
     }
 
-    // Security: cap wave cache at 128 entries to prevent unbounded growth
-    if (g_waveCache.size() > 128) {
-        g_waveCache.clear();
-        fprintf(stderr, "[Audio] Wave cache flushed (exceeded 128 entries)\n");
+    // LRU eviction: remove least recently used when >= 128 entries
+    if (g_waveCache.size() >= 128) {
+        std::string lruFile = g_waveLRU.back();
+        g_waveLRU.pop_back();
+        g_waveCache.erase(lruFile);
+        fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
     }
     g_waveCache[file] = src;
+    g_waveLRU.push_front(file);
     return src;
 }
 
@@ -59,7 +69,8 @@ SoLoudAudioEngine::~SoLoudAudioEngine() {
     shutdown();
 }
 
-bool SoLoudAudioEngine::init() {
+bool SoLoudAudioEngine::init(){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (m_initialized) return true;
 
     SoLoud::result res = m_soloud.init(
@@ -78,7 +89,7 @@ bool SoLoudAudioEngine::init() {
     // Create and play audio buses — all must succeed or init fails
     m_bgmBus.setVolume(1.0f);
     m_bgmBusHandle = m_soloud.play(m_bgmBus);
-    if (m_bgmBusHandle == 0) {
+    if (!m_soloud.isValidVoiceHandle(m_bgmBusHandle)) {
         fprintf(stderr, "[Audio] BGM bus play() returned invalid handle 0\n");
         m_soloud.deinit();
         return false;
@@ -86,7 +97,7 @@ bool SoLoudAudioEngine::init() {
 
     m_voiceBus.setVolume(1.0f);
     m_voiceBusHandle = m_soloud.play(m_voiceBus);
-    if (m_voiceBusHandle == 0) {
+    if (!m_soloud.isValidVoiceHandle(m_voiceBusHandle)) {
         fprintf(stderr, "[Audio] VOICE bus play() returned invalid handle 0\n");
         m_soloud.deinit();
         return false;
@@ -94,7 +105,7 @@ bool SoLoudAudioEngine::init() {
 
     m_seBus.setVolume(1.0f);
     m_seBusHandle = m_soloud.play(m_seBus);
-    if (m_seBusHandle == 0) {
+    if (!m_soloud.isValidVoiceHandle(m_seBusHandle)) {
         fprintf(stderr, "[Audio] SE bus play() returned invalid handle 0\n");
         m_soloud.deinit();
         return false;
@@ -105,11 +116,13 @@ bool SoLoudAudioEngine::init() {
     return true;
 }
 
-void SoLoudAudioEngine::shutdown() {
+void SoLoudAudioEngine::shutdown(){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     m_soloud.stopAll();
     m_soloud.deinit();
     g_waveCache.clear();
+    g_waveLRU.clear();
     m_activeSE.clear();
     m_initialized = false;
     m_currentBGM = 0;
@@ -117,7 +130,8 @@ void SoLoudAudioEngine::shutdown() {
     printf("[Audio] SoLoud shut down.\n");
 }
 
-void SoLoudAudioEngine::update(float /*deltaTime*/) {
+void SoLoudAudioEngine::update(float /*deltaTime*/){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     m_soloud.update3dAudio();
 
@@ -130,7 +144,8 @@ void SoLoudAudioEngine::update(float /*deltaTime*/) {
 
 // -- Global volume ---------------------------------------------------------
 
-void SoLoudAudioEngine::setGlobalVolume(float volume) {
+void SoLoudAudioEngine::setGlobalVolume(float volume){
+    CAESURA_ASSERT_MAIN_THREAD();
     m_globalVolume = volume;
     if (m_initialized) m_soloud.setGlobalVolume(volume);
 }
@@ -141,7 +156,8 @@ float SoLoudAudioEngine::getGlobalVolume() const {
 
 // -- Per-bus volume --------------------------------------------------------
 
-void SoLoudAudioEngine::setBusVolume(const char* bus, float volume) {
+void SoLoudAudioEngine::setBusVolume(const char* bus, float volume){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     std::string b(bus);
     if (b == "bgm") {
@@ -167,6 +183,7 @@ float SoLoudAudioEngine::getBusVolume(const char* bus) const {
 
 void SoLoudAudioEngine::flushWaveCache() {
     g_waveCache.clear();
+    g_waveLRU.clear();
     printf("[Audio] Wave cache flushed.\n");
 }
 
@@ -208,7 +225,8 @@ void SoLoudAudioEngine::stopBGM(float fadeTime) {
 
 // -- VOICE -----------------------------------------------------------------
 
-unsigned int SoLoudAudioEngine::playVoice(const std::string& file) {
+unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return 0;
 
     auto wav = loadWave(file);
@@ -227,7 +245,8 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file) {
     return static_cast<unsigned int>(h);
 }
 
-void SoLoudAudioEngine::stopVoice() {
+void SoLoudAudioEngine::stopVoice(){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized || m_currentVoice == 0) return;
     if (m_soloud.isValidVoiceHandle(m_currentVoice)) {
         m_soloud.fadeVolume(m_currentVoice, 0.0f, 0.05f);
@@ -240,7 +259,8 @@ void SoLoudAudioEngine::stopVoice() {
 // SE handles are tracked in m_activeSE for mass-stop via stopSE().
 // Cleanup: dead handles are culled on each playSE/playSE3D call.
 
-void SoLoudAudioEngine::stopSE() {
+void SoLoudAudioEngine::stopSE(){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     for (auto h : m_activeSE) {
         if (m_soloud.isValidVoiceHandle(h)) {
@@ -251,7 +271,8 @@ void SoLoudAudioEngine::stopSE() {
     printf("[Audio] SE: all sound effects stopped.\n");
 }
 
-unsigned int SoLoudAudioEngine::playSE(const std::string& file) {
+unsigned int SoLoudAudioEngine::playSE(const std::string& file){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return 0;
     auto wav = loadWave(file);
     if (!wav) return 0;
@@ -272,6 +293,7 @@ unsigned int SoLoudAudioEngine::playSE(const std::string& file) {
 
 unsigned int SoLoudAudioEngine::playSE3D(const std::string& file,
                                           float x, float y, float z) {
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return 0;
     auto wav = loadWave(file);
     if (!wav) return 0;
@@ -344,7 +366,8 @@ float SoLoudAudioEngine::getLength(const char* bus) {
 
 // -- Fade bus volume without stopping (Spec [3.2]) --------------------------
 
-void SoLoudAudioEngine::fadeVolume(const char* bus, float targetVolume, float fadeTime) {
+void SoLoudAudioEngine::fadeVolume(const char* bus, float targetVolume, float fadeTime){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     std::string b(bus);
     if (b == "bgm") {
@@ -363,7 +386,8 @@ void SoLoudAudioEngine::fadeVolume(const char* bus, float targetVolume, float fa
 
 // -- [10.2.27] Per-SE-handle volume control ---------------------------------
 
-void SoLoudAudioEngine::setSEVolume(unsigned int handle, float volume) {
+void SoLoudAudioEngine::setSEVolume(unsigned int handle, float volume){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized || handle == 0) return;
     m_soloud.setVolume(handle, volume);
 }
@@ -373,7 +397,8 @@ float SoLoudAudioEngine::getSEVolume(unsigned int handle) {
     return m_soloud.getVolume(handle);
 }
 
-void SoLoudAudioEngine::stopSEHandle(unsigned int handle) {
+void SoLoudAudioEngine::stopSEHandle(unsigned int handle){
+    CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized || handle == 0) return;
     m_soloud.stop(handle);
     // Remove from active SE tracking
