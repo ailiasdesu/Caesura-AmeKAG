@@ -8,7 +8,7 @@
 
 config = {}
 config.dev_mode = true  -- true = dev mode (lax sandbox), false = Release (strict sandbox)
-config.entry_script = "game_logic.lua"  -- First script loaded after init ([10.2.30])
+config.entry_script = "demo.lua"  -- Change to "game_logic.lua" for automated tests  -- First script loaded after init ([10.2.30])
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Backend Selection (spec [0.4] factory pattern)

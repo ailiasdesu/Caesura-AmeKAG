@@ -136,6 +136,12 @@ local _G_whitelist = {
     _CAESURA_CONFIG  = true,
     _SANDBOX_RESOURCES = true,
     _SANDBOX_CHECK     = true,
+    -- Engine callback globals (game scripts define these)
+    engine_update       = true,
+    engine_render       = true,
+    _KAG_onClick        = true,
+    _KAG_onKey          = true,
+    _KAG_onScroll       = true,
     debug      = true,  -- already read-only from section 2
     -- Read-only globals
     package    = true,
