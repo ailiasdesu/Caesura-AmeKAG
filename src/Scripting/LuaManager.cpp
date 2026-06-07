@@ -73,6 +73,8 @@ void LuaManager::lockdownScriptEnv() {
                 lua_tostring(m_L, -1));
         lua_pop(m_L, 1);
     } else {
+        // sandbox.lua returns the Sandbox module table; pop it to keep the stack clean
+        lua_pop(m_L, 1);
         printf("[Lua] Script environment locked down (sandbox.lua).\n");
     }
 }

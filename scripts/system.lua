@@ -1,5 +1,5 @@
-ï»¿-- ===========================================================================
---  Caesura (AmeKAG) â€” system.lua
+-- ===========================================================================
+--  Caesura (AmeKAG) ¡ª system.lua
 --  System facilities: save/load, config, backlog, saveplace/loadplace.
 --  Spec [4.1]: Backlog with voice + layers snapshots
 --  Spec [4.2]: Save/Load with full ctx serialization
@@ -8,6 +8,9 @@
 -- ===========================================================================
 
 local System = {}
+
+-- Forward declarations (sandbox-safe: no globals)
+local serialize_table
 
 -- Cache sandbox-vulnerable globals before lockdown (C3 + W8)
 local _os_execute = os.execute

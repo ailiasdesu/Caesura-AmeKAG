@@ -113,3 +113,11 @@ endif()
 
 enable_testing()
 add_test(NAME CaesuraUnitTests COMMAND CaesuraTests)
+
+# Copy scripts to test output directory so sandbox.lua et al are found
+add_custom_command(TARGET CaesuraTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/scripts"
+    "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
+    COMMENT "Copying scripts to test output directory..."
+)

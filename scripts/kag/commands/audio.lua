@@ -1,5 +1,5 @@
 -- =============================================================================
---  Caesura (AmeKAG) â€” kag/commands/audio.lua
+--  Caesura (AmeKAG) â€?kag/commands/audio.lua
 --  KAG audio tag handlers: [playbgm], [stopbgm], [playse], [playvoice],
 --  [fadebgm], [xfadebgm]
 --  All audio calls route through backend.lua (unified C++ proxy).
@@ -10,13 +10,18 @@ local backend = require("backend")
 
 local AudioCommands = {}
 
+-- Internal: resolve file path (storage > path > file > positional)
+local function resolve_file(params)
+    return params.storage or params.path or params.file or params[1]
+end
+
 -- =============================================================================
 --  [playbgm storage="file.ogg" volume=0.8 fadein=2000 loop=true]
 --  Load + play on BGM bus with optional fade-in and loop.
 -- =============================================================================
 
 function AudioCommands.playbgm(ctx, params)
-    local file = params.storage or params.file or params[1]
+    local file = resolve_file(params)
     if not file then
         print("[AudioCmd] playbgm: no file specified")
         return
@@ -55,7 +60,7 @@ end
 -- =============================================================================
 
 function AudioCommands.playbgmstop(ctx, params)
-    local file = params.storage or params.file or params[1]
+    local file = resolve_file(params)
     local fadeout = tonumber(params.fadeout) or 0
     local fadein  = tonumber(params.fadein)  or 0
 
@@ -93,7 +98,7 @@ end
 -- =============================================================================
 
 function AudioCommands.xfadebgm(ctx, params)
-    local file  = params.storage or params.file or params[1]
+    local file  = resolve_file(params)
     local time  = tonumber(params.time) or 2000
 
     backend.audio_xfade("bgm", file, time / 1000.0)
@@ -101,11 +106,11 @@ end
 
 -- =============================================================================
 --  [playse storage="click.wav" volume=0.8]
---  Play sound effect on SE bus â€” fire and forget (no blocking).
+--  Play sound effect on SE bus â€?fire and forget (no blocking).
 -- =============================================================================
 
 function AudioCommands.playse(ctx, params)
-    local file = params.storage or params.file or params[1]
+    local file = resolve_file(params)
     if not file then
         print("[AudioCmd] playse: no file specified")
         return
@@ -129,13 +134,13 @@ end
 
 -- =============================================================================
 --  [playvoice storage="line001.ogg"]
---  Play voice line on VOICE bus â€” blocks until complete via coroutine.yield.
+--  Play voice line on VOICE bus â€?blocks until complete via coroutine.yield.
 --  Each frame, the scheduler resumes and re-checks voice status.
 --  When voice finishes (or _CAESURA_AUDIO_EVENT fires), the command returns.
 -- =============================================================================
 
 function AudioCommands.playvoice(ctx, params)
-    local file = params.storage or params.file or params[1]
+    local file = resolve_file(params)
     if not file then
         print("[AudioCmd] playvoice: no file specified")
         return
@@ -147,7 +152,7 @@ function AudioCommands.playvoice(ctx, params)
     -- Play the voice line
     backend.audio_play("voice", file, {})
 
-    -- Block until voice finishes â€” cooperative yield each frame.
+    -- Block until voice finishes â€?cooperative yield each frame.
     -- Two exit conditions: SoLoud handle invalid (normal) or C++ edge trigger.
     while backend.audio_is_playing("voice") do
         coroutine.yield()

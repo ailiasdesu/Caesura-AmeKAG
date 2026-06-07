@@ -279,6 +279,44 @@ else
     print("[Sandbox] Dev mode: whitelist disabled, full API access")
 end
 
+
+-- ===========================================================================
+--  10. SANDBOX MODULE API -- for require("sandbox")
+-- ===========================================================================
+--  Provides create/execute/is_strict for standalone Lua testing,
+--  AI tool integration, and IDE code assistants.
+-- ===========================================================================
+
+local Sandbox = {}
+
+function Sandbox.create(opts)
+    opts = opts or {}
+    local mode = opts.mode or "release"
+    local env = {}
+    setmetatable(env, { __index = _G })
+    if mode == "release" then
+        env.os = { clock = os.clock, date = os.date, time = os.time, difftime = os.difftime }
+        env.io = { write = io.write }
+        env.loadfile = nil
+        env.dofile = nil
+    end
+    return env
+end
+
+function Sandbox.execute(code, env)
+    env = env or Sandbox.create()
+    local fn, err = load(code, "=sandbox", "t", env)
+    if not fn then return false, err end
+    return pcall(fn)
+end
+
+function Sandbox.is_strict()
+    return _SANDBOX_MODE == "strict"
+end
+
+package.loaded["sandbox"] = Sandbox
+return Sandbox
+
 -- ===========================================================================
 --  End of sandbox rules.
 -- ===========================================================================

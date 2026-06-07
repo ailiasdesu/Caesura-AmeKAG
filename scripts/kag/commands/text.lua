@@ -1,6 +1,6 @@
-Ôªø-- =============================================================================
---  Caesura (AmeKAG) ‚Äî kag/commands/text.lua
---  Phase 4: KAG text tag handlers ‚Äî [ch], [text], [l], [r], [er], [p]
+-- =============================================================================
+--  Caesura (AmeKAG) °™ kag/commands/text.lua
+--  Phase 4: KAG text tag handlers °™ [ch], [text], [l], [r], [er], [p]
 --  Manages character dialog display, backlog, and text cursor state.
 --  All rendering delegates to backend.font_render_text / backend.font_clear.
 -- =============================================================================
@@ -80,7 +80,7 @@ function TextCommands.ch(ctx, params)
 
     -- Render speaker name if present
     if #speaker > 0 then
-        backend.font_render_text("„Äê" .. speaker .. "„Äë", 32, 48, 540, 1, 1, 1, 1)
+        backend.render_text("°æ" .. speaker .. "°ø", 32, 48, 540, 1, 1, 1, 1)
     end
 
     -- Calculate y-position for message (below speaker if present)
@@ -95,7 +95,7 @@ function TextCommands.ch(ctx, params)
             local lineEnd = math.min(pos + charsPerLine - 1, #message)
             -- Don't break mid-character for CJK; find a natural break point
             local line = message:sub(pos, lineEnd)
-            backend.font_render_text(line, 32, 48, msgY, 1, 1, 1, 1)
+            backend.render_text(line, 32, 48, msgY, 1, 1, 1, 1)
             msgY = msgY + lineHeight
             pos = lineEnd + 1
         end
@@ -128,7 +128,7 @@ function TextCommands.text(ctx, params)
     while pos <= #message do
         local lineEnd = math.min(pos + charsPerLine - 1, #message)
         local line = message:sub(pos, lineEnd)
-        backend.font_render_text(line, 32, 48, y, 1, 1, 1, 1)
+        backend.render_text(line, 32, 48, y, 1, 1, 1, 1)
         y = y + lineHeight
         pos = lineEnd + 1
     end
@@ -140,7 +140,7 @@ function TextCommands.text(ctx, params)
 end
 
 -- =============================================================================
---  [l] ‚Äî line break: advance text cursor to next line
+--  [l] °™ line break: advance text cursor to next line
 -- =============================================================================
 
 function TextCommands.l(ctx, params)
@@ -151,7 +151,7 @@ function TextCommands.l(ctx, params)
 end
 
 -- =============================================================================
---  [r] ‚Äî carriage return: reset cursor to start of current line
+--  [r] °™ carriage return: reset cursor to start of current line
 -- =============================================================================
 
 function TextCommands.r(ctx, params)
@@ -160,7 +160,7 @@ function TextCommands.r(ctx, params)
 end
 
 -- =============================================================================
---  [er] ‚Äî erase: clear all text from message layer (backlog preserved)
+--  [er] °™ erase: clear all text from message layer (backlog preserved)
 -- =============================================================================
 
 function TextCommands.er(ctx, params)
@@ -172,7 +172,7 @@ function TextCommands.er(ctx, params)
 end
 
 -- =============================================================================
---  [p] ‚Äî page break / click-to-advance
+--  [p] °™ page break / click-to-advance
 --  Blocks the coroutine until user clicks or presses Enter/Space.
 --  The scheduler detects ctx.waiting_input and handles resume on input.
 -- =============================================================================
@@ -184,14 +184,14 @@ function TextCommands.p(ctx, params)
     -- Set state for scheduler to detect
     ctx.waiting_input = true
 
-    -- Yield the coroutine ‚Äî scheduler resumes on next click
+    -- Yield the coroutine °™ scheduler resumes on next click
     coroutine.yield()
     update_text_state(ctx, "p")
 end
 
 
 -- =============================================================================
---  [ruby text="Êº¢Â≠ó" ruby="„Åã„Çì„Åò"]
+--  [ruby text="ùh◊÷" ruby="§´§Û§∏"]
 --  Render base text with ruby (furigana) annotation above it.
 --  Delegates to backend.text_render_ruby for glyph layout.
 -- =============================================================================
@@ -200,7 +200,7 @@ function TextCommands.ruby(ctx, params)
     local text = params.text or ""
     local ruby_text = params.ruby or ""
     local backend = require("backend")
-    backend.text_render_ruby(0, 0, text, ruby_text)
+    backend.render_ruby(text, ruby_text, 0, 0)
 end
 
 -- =============================================================================
@@ -215,11 +215,11 @@ function TextCommands.font(ctx, params)
     if params.size then ctx.text_state.font_size = tonumber(params.size) end
     if params.color then ctx.text_state.font_color = params.color end
     local backend = require("backend")
-    backend.text_set_font(ctx.text_state.font_face, ctx.text_state.font_size, ctx.text_state.font_color)
+    -- text_set_font stub (face/size/color not yet implemented in C++)
 end
 
 -- =============================================================================
---  [skip] ‚Äî toggle skip mode
+--  [skip] °™ toggle skip mode
 --  When active, scheduler auto-advances without waiting for user click.
 -- =============================================================================
 
@@ -228,7 +228,7 @@ function TextCommands.skip(ctx, params)
 end
 
 -- =============================================================================
---  [reset] ‚Äî reset text state
+--  [reset] °™ reset text state
 --  Clears line/char_offset tracking and resets backend text renderer.
 --  Registered as KAG.reset via auto-iteration in kag.lua.
 -- =============================================================================
@@ -236,11 +236,11 @@ end
 function TextCommands.reset(ctx, params)
     ctx.text_state = { line = 1, char_offset = 0 }
     local backend = require("backend")
-    backend.text_reset_state()
+    -- text_reset_state stub
 end
 
 -- =============================================================================
---  [pt speed=50] ‚Äî typewriter speed (ms per character)
+--  [pt speed=50] °™ typewriter speed (ms per character)
 --  Controls the delay between each character appearing in [ch] / [text].
 -- =============================================================================
 

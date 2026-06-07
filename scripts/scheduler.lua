@@ -1,5 +1,5 @@
-ï»¿-- =============================================================================
---  Caesura (AmeKAG) â€” scheduler.lua
+-- =============================================================================
+--  Caesura (AmeKAG) ¡ª scheduler.lua
 --  Token stream executor. Iterates tokens, dispatches to kag[cmd](ctx, params),
 --  handles flow-control inline (if/jump/call/return/label/end/macro/eval/wait).
 --  Coroutine-based: yields on blocking ops, resumes next frame from token_index.
@@ -7,7 +7,7 @@
 
 local scheduler = {}
 
--- â”€â”€ Flow-control command set (handled inline, never dispatched to kag table) â”€â”€
+-- ©¤©¤ Flow-control command set (handled inline, never dispatched to kag table) ©¤©¤
 
 local flow_commands = {
     ["if"] = true, ["else"] = true, ["endif"] = true,
@@ -20,7 +20,7 @@ local flow_commands = {
     ["stop"] = true,
 }
 
--- â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- ©¤©¤ Internal helpers ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
 local function find_label(tokens, name)
     for i, tok in ipairs(tokens) do
@@ -45,10 +45,21 @@ local function skip_to(tokens, start_idx, targets)
     return #tokens
 end
 
--- â”€â”€ Main execution loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- ©¤©¤ Main execution loop ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
 function scheduler.run(ctx, tokens, start_index)
     if not tokens or #tokens == 0 then return end
+
+    -- Normalize token format: tokenizer returns {type, cmd, params}
+    -- scheduler expects {[1]=cmd, [2]=params}
+    -- If first token has .type field, convert all to array format
+    if tokens[1] and tokens[1].type then
+        for j, t in ipairs(tokens) do
+            if t.type then
+                tokens[j] = { t.cmd or t.type, t.params or {} }
+            end
+        end
+    end
     local kag = require("kag")
     local cancel_token = require("kag.cancel_token")
     start_index = start_index or 1
@@ -138,7 +149,7 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "end" then
             return
 
-        -- Flow control: [label] â€” no-op, used by jump/call
+        -- Flow control: [label] ¡ª no-op, used by jump/call
         elseif cmd == "label" then
             -- pass
 
@@ -239,7 +250,7 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expand macro inline â€” merge params
+                -- Expand macro inline ¡ª merge params
                 local saved_tokens = tokens
                 tokens = macro_body
                 ctx.tokens = tokens
@@ -250,7 +261,7 @@ function scheduler.run(ctx, tokens, start_index)
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then
-                    -- Unrecognized text â†’ treat as [ch]
+                    -- Unrecognized text ¡ú treat as [ch]
                     handler = kag["ch"]
                     if handler then
                         params = {text = cmd}
@@ -260,7 +271,7 @@ function scheduler.run(ctx, tokens, start_index)
                 if handler then
                     local status, err = pcall(handler, ctx, params)
                     if not status then
-                        -- Error â†’ ErrorUI
+                        -- Error ¡ú ErrorUI
                         local ErrorUI = require("Core.ErrorUI")
                         -- Lua-side error reporting
                         print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
@@ -278,7 +289,7 @@ function scheduler.run(ctx, tokens, start_index)
     end
 end
 
--- â”€â”€ Resume from saved state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- ©¤©¤ Resume from saved state ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
 function scheduler.resume(ctx)
     if not ctx.tokens or not ctx.token_index then return end

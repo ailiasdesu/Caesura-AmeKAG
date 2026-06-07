@@ -14,6 +14,7 @@ local tests = {
 }
 
 local passed, failed = 0, 0
+local _real_os_exit = os.exit  -- save before sandbox replaces it
 print("\n=== Caesura Lua Test Suite ===\n")
 
 for _, name in ipairs(tests) do
@@ -30,4 +31,4 @@ end
 
 print(string.format("Results: %d passed, %d failed, %d total",
     passed, failed, passed + failed))
-if failed > 0 then os.exit(1) end
+if failed > 0 then _real_os_exit(1) end
