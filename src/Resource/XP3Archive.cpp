@@ -1,4 +1,4 @@
-#include "XP3Archive.h"
+#include "Resource/XP3Archive.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>

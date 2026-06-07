@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -74,7 +74,7 @@ set(ENGINE_SOURCES
     src/Core/DebugManager.cpp
     src/Core/ErrorUI.cpp
     src/Core/SDL3PlatformBackend.cpp
-    src/Core/XP3Archive.cpp
+    src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
     src/Render/RTTManager.cpp
     src/Render/EmbeddedShaders.cpp
@@ -120,9 +120,9 @@ set(ENGINE_HEADERS
     src/Core/IAudioBackend.h
     src/Core/IPlatformBackend.h
     src/Core/SDL3PlatformBackend.h
-    src/Core/XP3Archive.h
+    src/Resource/XP3Archive.h
     src/Core/BackendRegistry.h
-    src/Core/ResourceHandle.h
+    src/Resource/ResourceHandle.h
     src/Core/DebugManager.h
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h

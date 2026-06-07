@@ -1,8 +1,8 @@
-﻿#pragma once
+#pragma once
 #include "IAudioBackend.h"
 #include "IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
-#include "ResourceHandle.h"
+#include "../Resource/ResourceHandle.h"
 #include "../Render/VideoPlayer.h"
 #include "InputRouter.h"
 #include <unordered_map>
