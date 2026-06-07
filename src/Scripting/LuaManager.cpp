@@ -1,4 +1,4 @@
- extern "C" {
+﻿ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -17,6 +17,11 @@
 #include <cstdio>
 
 namespace Caesura {
+
+LuaManager& LuaManager::instance() {
+    static LuaManager mgr;
+    return mgr;
+}
 
 
 // ===========================================================================

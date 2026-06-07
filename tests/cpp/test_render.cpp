@@ -3,7 +3,6 @@
 #include "Render/RTTManager.h"
 #include "Render/LayerManager.h"
 #include "Render/ParticleSystem.h"
-#include "Render/FontRenderer.h"
 #include "Render/TextRenderer.h"
 #include "Render/FreeTypeContext.h"
 #include "Render/TextureManager.h"
@@ -37,13 +36,13 @@ TEST_CASE("ParticleSystem::MAX_PARTICLES constant") {
 
 TEST_CASE("ParticleSystem::init with nullptr device") {
     ParticleSystem ps;
-    bool ok = ps.init(nullptr);
+    bool ok = ps.init();
     (void)ok;
 }
 
 TEST_CASE("ParticleSystem::update dynamic resolution no-crash") {
     ParticleSystem ps;
-    ps.init(nullptr);
+    ps.init();
     ps.update(0.016f, 1920, 1080);
     ps.update(0.016f, 640, 480);
 }
@@ -65,7 +64,6 @@ TEST_CASE("FreeTypeContext::double init idempotent") {
     FreeTypeContext::instance().shutdown();
 }
 
-TEST_CASE("FontRenderer::singleton accessible") { FontRenderer& fr = FontRenderer::instance(); (void)fr; }
 
 TEST_CASE("TextRenderer::construct no-crash") {
     auto tr = std::make_unique<TextRenderer>();

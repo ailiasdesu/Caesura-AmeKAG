@@ -1,4 +1,4 @@
-#include "TextRenderer.h"
+﻿#include "TextRenderer.h"
 #include "BgfxRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -14,12 +14,12 @@
 namespace Caesura {
 
 // ===========================================================================
-// UTF-8 Decode Helper �� consume multi-byte sequences as single codepoints
+// UTF-8 Decode Helper 锟斤拷 consume multi-byte sequences as single codepoints
 // ===========================================================================
 
 static int utf8_char_len(uint8_t lead) {
     if (lead < 0x80) return 1;
-    if (lead < 0xC0) return 1;  // continuation byte �� treat as '?'
+    if (lead < 0xC0) return 1;  // continuation byte 锟斤拷 treat as '?'
     if (lead < 0xE0) return 2;
     if (lead < 0xF0) return 3;
     return 4;
@@ -294,6 +294,12 @@ bool TextRenderer::init(BgfxRenderDevice* device) {
         return false;
     }
 
+    m_u_color = bgfx::createUniform("u_color", bgfx::UniformType::Vec4);
+    if (!bgfx::isValid(m_u_color)) {
+        fprintf(stderr, "[TextRenderer] Color uniform creation failed.\n");
+        return false;
+    }
+
     if (!loadFontAtlas(FontId::Small)) {
         fprintf(stderr, "[TextRenderer] Font atlas creation failed.\n");
         return false;
@@ -324,6 +330,13 @@ void TextRenderer::shutdown() {
     }
     m_ttf.reset();
 
+    // Track 2: batch cache and CJK atlas cleanup
+    if (bgfx::isValid(m_msgCache.vb)) { bgfx::destroy(m_msgCache.vb); m_msgCache.vb = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_msgCache.ib)) { bgfx::destroy(m_msgCache.ib); m_msgCache.ib = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_u_color))    { bgfx::destroy(m_u_color);   m_u_color   = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_cjkAtlas))   { bgfx::destroy(m_cjkAtlas);  m_cjkAtlas  = BGFX_INVALID_HANDLE; }
+    m_cjkGlyphs.clear();
+
     // m_fallbackProgram and m_posTexLayout are borrowed ??do NOT destroy
     m_initialized = false;
 }
@@ -343,7 +356,7 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
     if (id == FontId::Large) buildFont16x32();
 
-    // Atlas: 32 cols �� 3 rows = 96 glyphs, RGBA8
+    // Atlas: 32 cols 锟斤拷 3 rows = 96 glyphs, RGBA8
     int atlasW = glyphW * 32;                     // 256 or 512
     int atlasH = glyphH * 3;                      // 48 or 96
     int totalPixels = atlasW * atlasH;
@@ -748,5 +761,299 @@ void TextRenderer::clearText(uint16_t /*viewId*/) {
     m_cursor.x = m_cursor.leftMargin;
     // No GPU clear ??just reset cursor. Layer system handles visibility.
 }
+
+// ===========================================================================
+//  Track 2: Batch-cached text rendering + CJK static atlas (merged from FontRenderer)
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Glyph lookup with fallback: TTF atlas > CJK static atlas > built-in bitmap > U+FFFD
+// ---------------------------------------------------------------------------
+
+static GlyphMetrics s_emptyGlyph2{0,0,0,0,8,0,0};
+
+GlyphMetrics TextRenderer::getTTFGlyph(uint32_t codepoint) {
+    // 1. TTF atlas
+    if (m_ttf) {
+        auto it = m_ttf->glyphs.find(codepoint);
+        if (it != m_ttf->glyphs.end()) return it->second;
+    }
+
+    // 2. CJK static atlas
+    if (bgfx::isValid(m_cjkAtlas)) {
+        auto cjkIt = m_cjkGlyphs.find(codepoint);
+        if (cjkIt != m_cjkGlyphs.end()) {
+            GlyphMetrics gm;
+            gm.x = cjkIt->second.x; gm.y = cjkIt->second.y;
+            gm.w = cjkIt->second.w; gm.h = cjkIt->second.h;
+            gm.advance = cjkIt->second.advance;
+            gm.offsetX = cjkIt->second.offsetX;
+            gm.offsetY = cjkIt->second.offsetY;
+            return gm;
+        }
+    }
+
+    // 3. Built-in bitmap fallback (ASCII 32-126)
+    if (codepoint >= 32 && codepoint <= 126) {
+        GlyphMetrics gm;
+        int idx = (int)(codepoint - 32);
+        gm.x = (idx % m_atlasCols) * m_fontGlyphW;
+        gm.y = (idx / m_atlasCols) * m_fontGlyphH;
+        gm.w = m_fontGlyphW; gm.h = m_fontGlyphH;
+        gm.advance = m_fontGlyphW;
+        gm.offsetX = 0; gm.offsetY = 0;
+        return gm;
+    }
+
+    // 4. U+FFFD replacement
+    if (codepoint != 0xFFFD) return getTTFGlyph(0xFFFD);
+    return s_emptyGlyph2;
+}
+
+// ---------------------------------------------------------------------------
+// CJK static atlas (pre-generated G8-U5 bitmap)
+// ---------------------------------------------------------------------------
+
+bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath) {
+    FILE* f = fopen(atlasPath.c_str(), "rb");
+    if (!f) {
+        fprintf(stderr, "[TextRenderer] CJK atlas not found: %s (skipping)\n", atlasPath.c_str());
+        return false;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    std::vector<uint8_t> data(size);
+    fread(data.data(), 1, size, f);
+    fclose(f);
+
+    const uint16_t cjkW = 4096, cjkH = 4096;
+    m_cjkAtlas = bgfx::createTexture2D(cjkW, cjkH, false, 1,
+        bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP,
+        bgfx::copy(data.data(), (uint32_t)(cjkW * cjkH * 4)));
+    if (!bgfx::isValid(m_cjkAtlas)) {
+        fprintf(stderr, "[TextRenderer] CJK atlas texture creation failed\n");
+        return false;
+    }
+
+    FILE* mf = fopen(metaPath.c_str(), "rb");
+    if (!mf) {
+        fprintf(stderr, "[TextRenderer] CJK metadata not found: %s\n", metaPath.c_str());
+        bgfx::destroy(m_cjkAtlas); m_cjkAtlas = BGFX_INVALID_HANDLE;
+        return false;
+    }
+    uint32_t count = 0;
+    fread(&count, sizeof(count), 1, mf);
+    m_cjkGlyphs.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t cp; CjkGlyph g;
+        fread(&cp, sizeof(cp), 1, mf);
+        fread(&g.x, sizeof(g.x), 1, mf);
+        fread(&g.y, sizeof(g.y), 1, mf);
+        fread(&g.w, sizeof(g.w), 1, mf);
+        fread(&g.h, sizeof(g.h), 1, mf);
+        fread(&g.advance, sizeof(g.advance), 1, mf);
+        fread(&g.offsetX, sizeof(g.offsetX), 1, mf);
+        fread(&g.offsetY, sizeof(g.offsetY), 1, mf);
+        m_cjkGlyphs[cp] = g;
+    }
+    fclose(mf);
+
+    printf("[TextRenderer] CJK static atlas loaded: %u glyphs (%dx%d)\n", count, cjkW, cjkH);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Batch cache management
+// ---------------------------------------------------------------------------
+
+void TextRenderer::invalidateCache() {
+    m_msgCache.cachedText.clear();
+    m_msgCache.markAllDirty();
+}
+
+void TextRenderer::updateDirtyRange(const std::string& newText) {
+    const std::string& oldText = m_msgCache.cachedText;
+    size_t oldLen = oldText.size();
+    size_t newLen = newText.size();
+
+    uint32_t diffStart = 0;
+    const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldText.data());
+    const uint8_t* newData = reinterpret_cast<const uint8_t*>(newText.data());
+
+    size_t oldPos = 0, newPos = 0;
+    while (oldPos < oldLen && newPos < newLen) {
+        int oclen = utf8_char_len(oldData[oldPos]);
+        int nclen = utf8_char_len(newData[newPos]);
+        if (oclen != nclen || memcmp(oldData + oldPos, newData + newPos, oclen) != 0)
+            break;
+        oldPos += oclen; newPos += nclen; diffStart++;
+    }
+
+    auto countGlyphs = [](const uint8_t* data, size_t len) -> uint32_t {
+        uint32_t count = 0;
+        for (size_t pos = 0; pos < len; ) {
+            int clen = utf8_char_len(data[pos]);
+            if (pos + clen > len) clen = (int)(len - pos);
+            pos += clen; count++;
+        }
+        return count;
+    };
+
+    uint32_t oldRemain = countGlyphs(oldData + oldPos, oldLen - oldPos);
+    uint32_t newRemain = countGlyphs(newData + newPos, newLen - newPos);
+
+    if (oldRemain == 0 && newRemain == 0) { m_msgCache.clearDirty(); return; }
+
+    m_msgCache.dirtyStart = diffStart;
+    m_msgCache.dirtyEnd   = diffStart + (oldRemain > newRemain ? oldRemain : newRemain);
+    if (m_msgCache.dirtyEnd > m_msgCache.maxGlyphs)
+        m_msgCache.dirtyEnd = m_msgCache.maxGlyphs;
+    m_msgCache.cachedText = newText;
+}
+
+bool TextRenderer::ensureCacheBuffers() {
+    uint32_t maxVerts = m_msgCache.maxGlyphs * 6;
+    uint32_t maxInds  = m_msgCache.maxGlyphs * 6;
+
+    if (!bgfx::isValid(m_msgCache.vb)) {
+        m_msgCache.vb = bgfx::createDynamicVertexBuffer(
+            maxVerts, m_posTexLayout, BGFX_BUFFER_ALLOW_RESIZE);
+        if (!bgfx::isValid(m_msgCache.vb)) {
+            fprintf(stderr, "[TextRenderer] Failed to create dynamic vertex buffer.\n");
+            return false;
+        }
+    }
+    if (!bgfx::isValid(m_msgCache.ib)) {
+        m_msgCache.ib = bgfx::createDynamicIndexBuffer(
+            maxInds, BGFX_BUFFER_ALLOW_RESIZE | BGFX_BUFFER_INDEX32);
+        if (!bgfx::isValid(m_msgCache.ib)) {
+            fprintf(stderr, "[TextRenderer] Failed to create dynamic index buffer.\n");
+            return false;
+        }
+    }
+    return true;
+}
+
+float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
+                                  float x, float y, TextColor color,
+                                  bgfx::ProgramHandle program) {
+    if (!ensureCacheBuffers() || text.empty()) return x;
+
+    bgfx::TextureHandle tex = (m_ttf && bgfx::isValid(m_fontTexture))
+        ? m_fontTexture : m_fontTexture;
+    uint16_t texW = m_ttf ? (uint16_t)m_ttf->atlasW : (uint16_t)(m_atlasCols * m_fontGlyphW);
+    uint16_t texH = m_ttf ? (uint16_t)m_ttf->atlasH : (uint16_t)(m_fontGlyphH * 13);
+
+    const float invW = 1.0f / float(texW);
+    const float invH = 1.0f / float(texH);
+    float penX = x;
+    const float penY = y;
+
+    const uint8_t* tdata = reinterpret_cast<const uint8_t*>(text.data());
+    int tlen = (int)text.size();
+
+    struct PosTexVertex { float x, y, u, v; };
+    std::vector<GlyphDraw> draws;
+    draws.reserve(m_msgCache.maxGlyphs);
+
+    for (int i = 0; i < tlen; ) {
+        int clen = utf8_char_len(tdata[i]);
+        if (i + clen > tlen) clen = tlen - i;
+        uint32_t cp = utf8_codepoint(&tdata[i], clen);
+        i += clen;
+
+        GlyphMetrics gm = getTTFGlyph(cp);
+        if (gm.w > 0 && gm.h > 0) {
+            GlyphDraw d;
+            d.gx = penX + gm.offsetX;
+            d.gy = penY - gm.offsetY + (m_ttf ? m_ttf->ascent : 8.0f);
+            d.u0 = gm.x * invW;  d.v0 = gm.y * invH;
+            d.u1 = (gm.x + gm.w) * invW;  d.v1 = (gm.y + gm.h) * invH;
+            draws.push_back(d);
+        } else {
+            draws.push_back({0,0,0,0,0,0});
+        }
+        penX += gm.advance;
+    }
+
+    m_msgCache.glyphCount = static_cast<uint32_t>(draws.size());
+    if (m_msgCache.glyphCount > m_msgCache.maxGlyphs)
+        m_msgCache.glyphCount = m_msgCache.maxGlyphs;
+
+    std::vector<PosTexVertex> verts;
+    std::vector<uint32_t> indices;
+    verts.reserve(m_msgCache.glyphCount * 6);
+    indices.reserve(m_msgCache.glyphCount * 6);
+
+    for (uint32_t gi = 0; gi < m_msgCache.glyphCount; ++gi) {
+        const GlyphDraw& d = draws[gi];
+        uint32_t vbase = gi * 6;
+        verts.push_back({ d.gx,       d.gy,       d.u0, d.v0 });
+        verts.push_back({ d.gx + 1.0f, d.gy,       d.u1, d.v0 });
+        verts.push_back({ d.gx + 1.0f, d.gy + 1.0f, d.u1, d.v1 });
+        verts.push_back({ d.gx,       d.gy,       d.u0, d.v0 });
+        verts.push_back({ d.gx + 1.0f, d.gy + 1.0f, d.u1, d.v1 });
+        verts.push_back({ d.gx,       d.gy + 1.0f, d.u0, d.v1 });
+
+        indices.push_back(vbase);     indices.push_back(vbase + 1); indices.push_back(vbase + 2);
+        indices.push_back(vbase);     indices.push_back(vbase + 2); indices.push_back(vbase + 3);
+    }
+
+    uint32_t nv = m_msgCache.glyphCount * 6, ni = m_msgCache.glyphCount * 6;
+    const bgfx::Memory* vm = bgfx::copy(verts.data(), (uint32_t)(verts.size() * sizeof(PosTexVertex)));
+    const bgfx::Memory* im = bgfx::copy(indices.data(), (uint32_t)(indices.size() * sizeof(uint32_t)));
+    bgfx::update(m_msgCache.vb, 0, vm);
+    bgfx::update(m_msgCache.ib, 0, im);
+
+    float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
+    bgfx::setUniform(m_u_color, fc);
+    bgfx::setTexture(0, m_texSampler, tex);
+    bgfx::setVertexBuffer(0, m_msgCache.vb, 0, nv);
+    bgfx::setIndexBuffer(m_msgCache.ib, 0, ni);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
+    bgfx::submit(viewId, program);
+
+    m_msgCache.clearDirty();
+    return penX;
+}
+
+float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
+                                      float x, float y, TextColor color,
+                                      bgfx::ProgramHandle program) {
+    if (!m_initialized || text.empty()) return x;
+
+    bgfx::ProgramHandle prog = bgfx::isValid(program) ? program : m_fallbackProgram;
+    if (!bgfx::isValid(prog)) return x;
+
+    if (text != m_msgCache.cachedText) updateDirtyRange(text);
+
+    if (m_msgCache.isDirty())
+        return rebuildCache(viewId, text, x, y, color, prog);
+
+    if (!ensureCacheBuffers()) return x;
+
+    float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
+    bgfx::setUniform(m_u_color, fc);
+    bgfx::setTexture(0, m_texSampler,
+        (m_ttf && bgfx::isValid(m_fontTexture)) ? m_fontTexture : m_fontTexture);
+    bgfx::setVertexBuffer(0, m_msgCache.vb, 0, m_msgCache.glyphCount * 6);
+    bgfx::setIndexBuffer(m_msgCache.ib, 0, m_msgCache.glyphCount * 6);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
+    bgfx::submit(viewId, prog);
+
+    float penX = x;
+    const uint8_t* td = reinterpret_cast<const uint8_t*>(text.data());
+    int tl = (int)text.size();
+    for (int i = 0; i < tl; ) {
+        int clen = utf8_char_len(td[i]);
+        if (i + clen > tl) clen = tl - i;
+        i += clen;
+        penX += getTTFGlyph(utf8_codepoint(&td[i - clen], clen)).advance;
+    }
+    return penX;
+}
+
 
 } // namespace Caesura

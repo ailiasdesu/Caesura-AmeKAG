@@ -59,7 +59,6 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/ShaderCache.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/TextureManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/LayerManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/FontRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/FreeTypeContext.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/ParticleSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/RTTManager.cpp

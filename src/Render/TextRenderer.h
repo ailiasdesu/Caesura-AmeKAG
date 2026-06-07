@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <bgfx/bgfx.h>
 #include <string>
 #include <cstdint>
@@ -9,6 +9,25 @@
 #include FT_FREETYPE_H
 
 namespace Caesura {
+
+// CJK static atlas entry (Track 2 — merged from FontRenderer)
+struct CjkGlyph {
+    uint16_t x = 0, y = 0, w = 0, h = 0;
+    int16_t advance = 0, offsetX = 0, offsetY = 0;
+};
+
+// Resident vertex/index buffer for text layer batching
+struct MessageLayerCache {
+    bgfx::DynamicVertexBufferHandle vb = BGFX_INVALID_HANDLE;
+    bgfx::DynamicIndexBufferHandle  ib = BGFX_INVALID_HANDLE;
+    uint32_t maxGlyphs = 2048;
+    uint32_t dirtyStart = 0, dirtyEnd = 0, glyphCount = 0;
+    std::string cachedText;
+
+    bool isDirty() const { return dirtyStart < dirtyEnd; }
+    void markAllDirty() { dirtyStart = 0; dirtyEnd = maxGlyphs; }
+    void clearDirty()   { dirtyStart = dirtyEnd = 0; }
+};
 
 enum class FontId : uint8_t { Small = 0, Large = 1, TTF = 2 };
 
@@ -58,6 +77,17 @@ public:
     bgfx::TextureHandle fontTexture() const { return m_fontTexture; }
     bool isInitialized() const { return m_initialized; }
 
+    // -- Batch-cached rendering (Track 2) --
+    float renderTextCached(uint16_t viewId, const std::string& text,
+                           float x, float y, TextColor color,
+                           bgfx::ProgramHandle program = BGFX_INVALID_HANDLE);
+    void invalidateCache();
+    const MessageLayerCache& cache() const { return m_msgCache; }
+
+    // -- CJK static atlas (Track 2) --
+    bool loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath);
+    bool isExpanding() const { return m_expanding; }
+
 private:
     struct GlyphQuad { float x, y, w, h, u0, v0, u1, v1; };
     GlyphQuad buildGlyph(char ch, float penX, float penY, float scaleW, float scaleH);
@@ -78,6 +108,25 @@ private:
     };
     std::unique_ptr<TTFState> m_ttf;
     bool rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas);
+
+    // -- Glyph lookup (Track 2) --
+    GlyphMetrics getTTFGlyph(uint32_t codepoint);
+
+    // -- Batch cache internals (Track 2) --
+    struct GlyphDraw { float gx, gy, u0, v0, u1, v1; };
+    void updateDirtyRange(const std::string& newText);
+    float rebuildCache(uint16_t viewId, const std::string& text,
+                       float x, float y, TextColor color,
+                       bgfx::ProgramHandle program);
+    bool ensureCacheBuffers();
+
+    // -- Track 2 state --
+    uint16_t m_atlasW = 2048, m_atlasH = 2048;
+    bgfx::TextureHandle m_cjkAtlas = BGFX_INVALID_HANDLE;
+    std::unordered_map<uint32_t, CjkGlyph> m_cjkGlyphs;
+    bool m_expanding = false;
+    bgfx::UniformHandle m_u_color = BGFX_INVALID_HANDLE;
+    MessageLayerCache m_msgCache;
 
     bool m_initialized = false;
     FontId m_currentFont = FontId::Small;
