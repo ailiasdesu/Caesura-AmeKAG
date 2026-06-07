@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -11,6 +11,15 @@ set(TEST_SOURCES
     cpp/test_system.cpp
     cpp/test_resource.cpp
     cpp/test_debug.cpp
+    cpp/test_input.cpp
+    cpp/test_async.cpp
+    cpp/test_audio.cpp
+    cpp/test_lua_manager.cpp
+    cpp/test_texture_budget_edge.cpp
+    cpp/test_resource_handle.cpp
+    cpp/test_error_ui.cpp
+    cpp/test_save_migration.cpp
+    cpp/test_mobile_adapter.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp

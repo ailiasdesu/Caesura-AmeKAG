@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -11,18 +11,18 @@ extern "C" {
 #include "SDL3PlatformBackend.h"
 #include "IAudioBackend.h"
 #include "TextureBudget.h"
-#include "../Render/IRenderDevice.h"
-#include "../Render/GpuMonitor.h"
-#include "../Render/VideoPlayer.h"
-#include "../Render/FreeTypeContext.h"
-#include "../Audio/SoLoudAudioEngine.h"
-#include "../Scripting/RenderBinding.h"
-#include "../Render/BgfxRenderDevice.h"
-#include "../Scripting/LuaManager.h"
-#include "../System/SaveManager.h"
-#include "../Debug/HotReload.h"
-#include "../Resource/AsyncLoader.h"
-#include "../Resource/ProviderChain.h"
+#include "Render/IRenderDevice.h"
+#include "Render/GpuMonitor.h"
+#include "Render/VideoPlayer.h"
+#include "Render/FreeTypeContext.h"
+#include "Audio/SoLoudAudioEngine.h"
+#include "Scripting/RenderBinding.h"
+#include "Render/BgfxRenderDevice.h"
+#include "Scripting/LuaManager.h"
+#include "System/SaveManager.h"
+#include "Debug/HotReload.h"
+#include "Resource/AsyncLoader.h"
+#include "Resource/ProviderChain.h"
 #include <thread>
 #include <atomic>
 #include <bgfx/bgfx.h>
@@ -439,3 +439,4 @@ void Engine::shutdown() {
 }
 
 } // namespace Caesura
+

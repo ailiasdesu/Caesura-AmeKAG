@@ -10,11 +10,6 @@
 
 namespace Caesura {
 
-// -- Internal wave cache ---------------------------------------------------
-
-static std::unordered_map<std::string, std::shared_ptr<SoLoud::AudioSource>> g_waveCache;
-static std::list<std::string> g_waveLRU;
-static std::unordered_map<std::string, std::list<std::string>::iterator> g_waveLRUMap;
 
 // Detect extension and use WavStream for .ogg/.mp3, Wav for .wav
 static bool isStreamFormat(const std::string& file) {
@@ -26,11 +21,11 @@ static bool isStreamFormat(const std::string& file) {
     return ext == ".ogg" || ext == ".mp3";
 }
 
-static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
-    auto it = g_waveCache.find(file);
-    if (it != g_waveCache.end()) {
-        auto mapIt = g_waveLRUMap.find(file);
-        if (mapIt != g_waveLRUMap.end()) g_waveLRU.splice(g_waveLRU.begin(), g_waveLRU, mapIt->second);
+std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::string& file) {
+    auto it = m_waveCache.find(file);
+    if (it != m_waveCache.end()) {
+        auto mapIt = m_waveLRUMap.find(file);
+        if (mapIt != m_waveLRUMap.end()) m_waveLRU.splice(m_waveLRU.begin(), m_waveLRU, mapIt->second);
         return it->second;
     }
 
@@ -53,16 +48,16 @@ static std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file) {
     }
 
     // LRU eviction: remove least recently used when >= 128 entries
-    if (g_waveCache.size() >= 128) {
-        std::string lruFile = g_waveLRU.back();
-        g_waveLRU.pop_back();
-        g_waveLRUMap.erase(lruFile);
-        g_waveCache.erase(lruFile);
+    if (m_waveCache.size() >= 128) {
+        std::string lruFile = m_waveLRU.back();
+        m_waveLRU.pop_back();
+        m_waveLRUMap.erase(lruFile);
+        m_waveCache.erase(lruFile);
         fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
     }
-    g_waveCache[file] = src;
-    g_waveLRU.push_front(file);
-    g_waveLRUMap[file] = g_waveLRU.begin();
+    m_waveCache[file] = src;
+    m_waveLRU.push_front(file);
+    m_waveLRUMap[file] = m_waveLRU.begin();
     return src;
 }
 
@@ -124,9 +119,9 @@ void SoLoudAudioEngine::shutdown(){
     if (!m_initialized) return;
     m_soloud.stopAll();
     m_soloud.deinit();
-    g_waveCache.clear();
-    g_waveLRU.clear();
-    g_waveLRUMap.clear();
+    m_waveCache.clear();
+    m_waveLRU.clear();
+    m_waveLRUMap.clear();
     m_activeSE.clear();
     m_initialized = false;
     m_currentBGM = 0;
@@ -186,9 +181,9 @@ float SoLoudAudioEngine::getBusVolume(const char* bus) const {
 }
 
 void SoLoudAudioEngine::flushWaveCache() {
-    g_waveCache.clear();
-    g_waveLRU.clear();
-    g_waveLRUMap.clear();
+    m_waveCache.clear();
+    m_waveLRU.clear();
+    m_waveLRUMap.clear();
     printf("[Audio] Wave cache flushed.\n");
 }
 
@@ -412,3 +407,8 @@ void SoLoudAudioEngine::stopSEHandle(unsigned int handle){
 }
 
 } // namespace Caesura
+
+
+
+
+

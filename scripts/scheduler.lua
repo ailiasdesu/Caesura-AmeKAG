@@ -165,29 +165,72 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "endif" then
             -- pass
 
-        -- Flow control: [switch]/[case]/[endswitch]
+        -- Flow control: [switch]/[case]/[default]/[endswitch] (spec [1.4])
         elseif cmd == "switch" then
             local expr = params.exp or ""
-            local matched = false
-            -- Scan forward for matching case
+            -- Resolve expression
+            local ok, expr_val = pcall(function()
+                local fn = load("return " .. expr, "=switch", "t", ctx.f or {})
+                return fn()
+            end)
+            local target = ok and tostring(expr_val) or ""
+            -- Phase 1: scan to find the matching case body range
+            local body_start = 0
+            local body_end   = 0
+            local depth = 0
+            local found_default = 0
             for j = i + 1, #tokens do
                 local tc = tokens[j][1]
                 local tp = tokens[j][2] or {}
                 if tc == "case" then
-                    if not matched and tp.value == expr then
-                        matched = true
+                    if body_start == 0 then
+                        if tp.value == target then
+                            body_start = j + 1
+                        end
                     end
+                elseif tc == "default" then
+                    if body_start == 0 then
+                        found_default = j + 1
+                        body_start = found_default  -- fallback
+                    end
+                elseif tc == "switch" then
+                    depth = depth + 1
                 elseif tc == "endswitch" then
-                    break
-                elseif not matched and (tc ~= "case") then
-                    -- skip non-matching case bodies
+                    if depth == 0 then
+                        body_end = j
+                        break
+                    end
+                    depth = depth - 1
                 end
             end
-            -- For now, simplified: just skip to endswitch
-            i = skip_to(tokens, i, {["endswitch"] = true, opens = {}})
+            -- Phase 2: execute matched case body by dispatching non-flow tokens
+            if body_start > 0 and body_end > body_start then
+                for j = body_start, body_end - 1 do
+                    local tj = tokens[j]
+                    local tcmd = tj[1]
+                    local tparams = tj[2] or {}
+                    if not flow_commands[tcmd] then
+                        local handler = kag[tcmd]
+                        if not handler and type(tcmd) == "string" and #tcmd > 0 then
+                            handler = kag["ch"]
+                            if handler then tparams = {text = tcmd}; tcmd = "ch" end
+                        end
+                        if handler then
+                            local st, er = pcall(handler, ctx, tparams)
+                            if not st then
+                                print("[ERROR] KAG switch body '" .. tcmd .. "': " .. tostring(er))
+                                if ctx.handle_error then ctx.handle_error(tcmd, tostring(er), j) end
+                            end
+                        end
+                    end
+                    ctx.token_index = j
+                    coroutine.yield()
+                end
+            end
+            i = body_end  -- skip past [endswitch]; loop increment advances to next token
 
-        elseif cmd == "case" or cmd == "endswitch" then
-            -- pass (handled by switch)
+        elseif cmd == "case" or cmd == "default" or cmd == "endswitch" then
+            -- pass (handled by [switch] above)
 
         -- Flow control: [eval]
         elseif cmd == "eval" then
@@ -266,3 +309,4 @@ function scheduler.resume(ctx)
 end
 
 return scheduler
+

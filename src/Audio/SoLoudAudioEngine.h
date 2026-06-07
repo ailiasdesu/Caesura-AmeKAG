@@ -1,8 +1,11 @@
-#pragma once
+﻿#pragma once
 #include "../Core/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
 #include <string>
+#include <unordered_map>
+#include <list>
+#include <memory>
 #include <vector>
 
 namespace Caesura {
@@ -12,6 +15,8 @@ namespace Caesura {
 // ---------------------------------------------------------------------------
 // Three audio buses: BGM, VOICE, SE.
 // Managed via BackendRegistry; created by factory at Lua init time.
+// Waveform cache uses LRU eviction (spec [10.2.69]) with O(1) touch via
+// unordered_map + list.  Cache is a class member, not a global static.
 
 class SoLoudAudioEngine : public IAudioBackend {
 public:
@@ -60,7 +65,6 @@ public:
     float getLength(const char* bus) override;
     void fadeVolume(const char* bus, float targetVolume, float fadeTime) override;
 
-
     const char* getBackendName() const override { return "SoLoud"; }
 
     // -- Direct SoLoud access (for advanced use) ---------------------------
@@ -70,6 +74,9 @@ public:
     SoLoud::Bus& seBus()     { return m_seBus; }
 
 private:
+    // -- Internal helpers -------------------------------------------------
+    std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file);
+
     SoLoud::Soloud m_soloud;
     SoLoud::Bus    m_bgmBus;
     SoLoud::Bus    m_voiceBus;
@@ -78,12 +85,16 @@ private:
     SoLoud::handle m_voiceBusHandle = 0;
     SoLoud::handle m_seBusHandle    = 0;
 
-
     unsigned int m_currentVoice = 0;
     unsigned int m_currentBGM   = 0;
 
     // SE handles: tracked per-play for mass-stop via stopSE()
     std::vector<SoLoud::handle> m_activeSE;
+
+    // Waveform LRU cache (spec [3.1], [10.2.69]) -- class member, not global static
+    std::unordered_map<std::string, std::shared_ptr<SoLoud::AudioSource>> m_waveCache;
+    std::list<std::string> m_waveLRU;
+    std::unordered_map<std::string, std::list<std::string>::iterator> m_waveLRUMap;
 
     bool m_initialized = false;
     float m_globalVolume = 1.0f;
@@ -95,3 +106,6 @@ private:
 };
 
 } // namespace Caesura
+
+
+

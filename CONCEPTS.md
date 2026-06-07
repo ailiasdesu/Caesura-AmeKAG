@@ -70,7 +70,7 @@ Two cooperating subsystems for text display. FontRenderer rasterizes glyphs from
 A CPU-driven particle emitter supporting configurable spawn rate, lifetime, velocity, color, and size. Resolution-aware: receives screen dimensions at `update(dt, w, h)` rather than hardcoding values.
 
 ### Shader Cache
-A registry of `bgfx::ProgramHandle` values indexed by name. Does not own the handles — `BgfxRenderDevice` creates on init and destroys on shutdown. The cache is read-only after initialization.
+A registry of `bgfx::ProgramHandle` values indexed by name. Owns the bgfx::ProgramHandle instances. BgfxRenderDevice creates and registers programs; CompositeShaderCache::shutdown() destroys them.
 
 ---
 
@@ -98,3 +98,5 @@ A file-watching system that detects changes to Lua scripts at runtime. When a sc
 
 - "Backend" had been used for both the abstract interface (`IAudioBackend`) and the concrete implementation (`SoLoudAudioEngine`) — these are distinct. The interface lives in `Core/`, the implementation in its subsystem directory.
 - "Layer" in the rendering pipeline vs "Layer" in the Lua `layers.lua` module — same concept, different representation layers. The C++ `LayerManager` drives the GPU; `layers.lua` is the script-facing API.
+
+

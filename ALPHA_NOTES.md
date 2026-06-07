@@ -19,14 +19,14 @@
 
 ## 二、技术栈
 
-- **语言:** C++17 + Lua 5.4
+- **语言:** C++20 + Lua 5.4
 - **渲染:** bgfx (Direct3D 11)
 - **音频:** SoLoud (BGM/Voice/SE 三总线)
 - **窗口/输入:** SDL3
 - **脚本解析:** LPeg (KAG .ks 格式)
 - **字体:** FreeType (TTF + CJK fallback)
 - **视频:** pl_mpeg (MPEG1, Alpha)
-- **加密:** OpenSSL (AES-256-GCM + Ed25519)
+- **加密:** Windows BCrypt (AES-256-GCM + Ed25519)
 - **压缩:** zstd
 - **容器:** CARC (自研格式)
 
@@ -97,3 +97,5 @@ bin/Release/
 ---
 
 > **Alpha 状态:** 可开始制作第一个 Galgame 原型。核心引擎稳定，40 项测试全部通过。
+
+
