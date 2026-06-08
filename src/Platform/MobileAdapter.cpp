@@ -68,7 +68,7 @@ void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
     }
     m_activeTouches++;
 
-    // TD-14: Inject SDL mouse button down event for touch→mouse mapping
+    // Touch-to-mouse: inject SDL mouse button down event
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.x = x * m_displayScale;
@@ -84,7 +84,7 @@ void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
         m_touchPoints[fingerId].y = y;
     }
 
-    // TD-14: Inject SDL mouse motion event for touch→mouse mapping
+    // Touch-to-mouse: inject SDL mouse motion event
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_MOTION;
     ev.motion.x = x * m_displayScale;
@@ -98,7 +98,7 @@ void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
     }
     if (m_activeTouches > 0) m_activeTouches--;
 
-    // TD-14: Inject SDL mouse button up event for touch→mouse mapping
+    // Touch-to-mouse: inject SDL mouse button up event
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
     ev.button.x = x * m_displayScale;
@@ -120,7 +120,7 @@ void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
 }
 
 void MobileAdapter::onLongPress(float x, float y) {
-    // TD-14: Long press → right mouse button click
+    // Long press → right mouse button click
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.x = x * m_displayScale;
