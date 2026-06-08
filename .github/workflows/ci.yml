@@ -63,11 +63,14 @@ jobs:
         run: |
           $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
           if (Test-Path $testExe) {
-            & $testExe --success -s
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $testExe
+            # doctest exit code = failed assertion count; 0 = all pass
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::Tests reported $LASTEXITCODE failures"
+              exit $LASTEXITCODE
+            }
           } else {
             Write-Host "Test executable not found at $testExe"
-            Write-Host "Checking for test binary..."
             Get-ChildItem -Recurse -Filter "CaesuraTests.exe" -Path build | Select-Object FullName
             exit 1
           }
@@ -131,7 +134,7 @@ jobs:
       - name: Build SDL3 from source
         if: steps.cache-sdl.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
+          curl -fsSL --retry 3 --retry-delay 5 "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
           tar xzf sdl3.tar.gz
           cd SDL3-${{ env.SDL_VERSION }}
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/external/SDL3"
