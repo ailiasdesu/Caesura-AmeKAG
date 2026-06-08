@@ -1,30 +1,23 @@
-# Caesura (AmeKAG) ¡ª Cross-Platform Visual Novel Engine
+ï»¿# Caesura (AmeKAG)
 
-SDL3 + bgfx + SoLoud + Lua 5.4 ¡¤ C++20
+Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 
 [![CI](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml)
 [![Alpha](https://img.shields.io/badge/status-alpha-blue)](https://github.com/ailiasdesu/Caesura-AmeKAG/releases)
-[![CI](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml)&#10;[![Tests](https://img.shields.io/badge/tests-109%2F109%20%E2%9C%93-brightgreen)]()
 
 ## Quick Start
 
-### Download & Run
+Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately â€” no dependencies.
 
-1. [Download the latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases)
-2. Extract the zip
-3. Double-click `CaesuraAmeKAG.exe`
+## Build from Source
 
-A visual demo runs immediately ¡ª no setup, no dependencies.
-
-### Build from Source
-
-**Prerequisites:** Visual Studio 2022 (MSVC) + CMake 3.25+
+**Requires:** Visual Studio 2022, CMake 3.25+, SDL3
 
 ```
 git clone https://github.com/ailiasdesu/Caesura-AmeKAG.git
 cd Caesura-AmeKAG
 cmake -B build -S .
-cmake --build build --config Debug
+cmake --build build --config Debug --parallel
 ```
 
 Run the engine:
@@ -33,82 +26,77 @@ Run the engine:
 ./build/Debug/CaesuraAmeKAG.exe
 ```
 
-### Run Tests
+## Tests
 
 ```
-# C++ tests (109/109)
+# C++ (140/140)
 ./build/tests/Debug/CaesuraTests.exe
 
-# Lua tests (3 suites)
+# Lua (4 suites)
 lua tests/scripts/run_lua_tests.lua
 ```
-
-## What's Inside
-
-| Module | Description |
-|---|---|
-| **KAG Script Engine** | 9 command modules, 53 tag handlers ¡ª bg, fg, text, audio, VFX, transitions, save/load |
-| **Lua Sandbox** | Track 3 strict mode ¡ª DEFAULT DENY, EXPLICIT ALLOW. All rules in `scripts/sandbox.lua` (AI-auditable) |
-| **CARC Packaging** | Encrypted archives with ed25519 signature + zstd compression |
-| **VFX System** | Quake, flash, blur, fade, snow, rain ¡ª 1024 particle cap |
-| **3D LUT Grading** | Real-time palette-based color correction |
-| **Video Playback** | MPEG1 software decode via pl_mpeg |
-| **IDE Connection** | stdin/stdout JSON-RPC for AI agent / external editor integration |
-| **Hot Reload** | Monitors `scripts/` ¡ª changes take effect without restart |
 
 ## Architecture
 
 ```
 src/
-  Core/       Engine, BackendRegistry, Input, Debug, TextureBudget
-  Render/     bgfx device, Text, Font, Textures, Particles, RTT, Video, ShaderCache
-  Audio/      SoLoud (BGM / VOICE / SE buses)
-  Scripting/  Lua VM, KAG bindings, Render/VFX/Debug bindings
-  Resource/   Asset providers (Dir, CARC, XP3), Async loader
-  System/     Save/Load manager with schema migration
-  Carc/       Encrypted archive (ed25519 + AES-GCM + zstd)
-  Debug/      Hot reload, Debug protocol
-  Platform/   Mobile adapter
+  Core/        Engine lifecycle, BackendRegistry, Input, TextureBudget
+  Render/      bgfx device, Text/Font, RTT manager, Particles, Video, ShaderCache
+  Audio/       SoLoud engine (BGM / VOICE / SE buses, 3D spatial)
+  Scripting/   Lua VM, KAG bindings, Render/VFX/Debug/IDE bindings
+  Resource/    Asset providers (Dir, CARC, XP3), AsyncLoader, ImageDecoder
+  System/      Save/Load with schema migration, SandboxQuota
+  Carc/        Encrypted archive (ed25519 + AES-GCM + zstd + BCrypt/OpenSSL)
+  Debug/       HotReload, DebugProtocol, GpuMonitor
+  Editor/      IDE protocol (JSON-RPC stdin/stdout)
+  Platform/    Mobile adapter, CRL manager
+  MiniGame/    3D mini-game subsystem
 
 scripts/
-  kag/         KAG parser, scheduler, conductor, 9 command modules
+  kag/         Parser, scheduler, conductor, 9 command modules
   demo.lua     4-phase visual demo (runs on launch)
-  sandbox.lua  Security rules (AI-readable)
-  config.lua   Engine configuration, backend selection
+  sandbox.lua  Security rules â€” DEFAULT DENY, EXPLICIT ALLOW
+  config.lua   Backend selection, engine configuration
+
+tests/
+  cpp/         140 C++ test cases (doctest)
+  scripts/     4 Lua test suites (KAG commands, sandbox, etc.)
 ```
 
-## Dependencies (vendored)
+## Capabilities
+
+| Module | Detail |
+|---|---|
+| KAG Script | 9 command modules, 53 tag handlers â€” bg, fg, text, audio, VFX, transitions, save/load |
+| Lua Sandbox | Strict mode â€” all rules in `scripts/sandbox.lua`, AI-auditable |
+| CARC Packaging | ed25519 signature + AES-GCM encryption + zstd compression |
+| VFX System | Quake, flash, blur, fade, snow, rain â€” 1024 particle cap |
+| 3D LUT Grading | Real-time palette-based color correction |
+| Video Playback | FFmpeg with hardware decode fallback to pl_mpeg |
+| Multi-Core | JobSystem work-stealing thread pool for async texture/video loading |
+| IDE Protocol | JSON-RPC over stdin/stdout for AI agent / external editor |
+| Hot Reload | Script changes take effect without restart |
+
+## Dependencies
+
+Vendored â€” no system packages required beyond SDL3:
 
 | Library | Purpose |
 |---|---|
-| SDL3 | Windowing, input, platform abstraction |
-| bgfx + bx + bimg | Cross-platform GPU rendering (D3D11 / Metal / Vulkan) |
+| SDL3 | Windowing, input, platform |
+| bgfx + bx + bimg | GPU rendering (D3D11 / Metal / Vulkan) |
 | SoLoud | Audio engine |
-| Lua 5.4 | Embedded scripting runtime |
-| FreeType 2 | TTF/OTF font rasterization |
-| zstd | Fast compression |
+| Lua 5.4 | Scripting runtime |
+| FreeType 2 | Font rasterization |
+| zstd | Compression |
 | ed25519 | Digital signatures |
 | doctest | C++ unit testing |
-| stb | Image loading |
-| pl_mpeg | MPEG video decoding |
+| stb | Image I/O |
+| pl_mpeg | MPEG1 software decode |
 
+## KAG Script
 
-## Release Packaging
-
-`ash
-# Configure + Build Release
-cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-
-# Package as ZIP (engine + scripts + assets + SDL3.dll)
-cd build && cpack -C Release -G ZIP
-`
-
-The output CaesuraAmeKAG-1.0.0-win64.zip is ready for distribution.
-
-## KAG Script Example
-
-```kag
+```
 [bg storage="sky.png"]
 [wait time=500]
 [ch name="Hero" text="The wind carries the scent of cherry blossoms."]
@@ -117,6 +105,16 @@ The output CaesuraAmeKAG-1.0.0-win64.zip is ready for distribution.
 [position layer="fg0" x=0.5 y=0.5 scale=1.0]
 [playbgm storage="bgm/peaceful.ogg" volume=0.8]
 ```
+
+## Release
+
+```
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+cd build && cpack -C Release -G ZIP
+```
+
+Output: `CaesuraAmeKAG-1.0.0-win64.zip` â€” ready to distribute.
 
 ## License
 
