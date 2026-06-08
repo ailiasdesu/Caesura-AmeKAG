@@ -1,4 +1,5 @@
-﻿#include "doctest.h"
+#include "doctest.h"
+#include <cstring>
 #include "Audio/SoLoudAudioEngine.h"
 
 using namespace Caesura;
