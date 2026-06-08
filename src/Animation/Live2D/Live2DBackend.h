@@ -6,7 +6,10 @@
 #include <unordered_map>
 #include <memory>
 
-struct SDL_IOStream;
+struct ID3D11Device;
+struct ID3D11DeviceContext;
+
+namespace bgfx { struct TextureHandle; }
 
 namespace Live2D { namespace Cubism { namespace Framework {
     class CubismUserModel;
@@ -14,6 +17,8 @@ namespace Live2D { namespace Cubism { namespace Framework {
 namespace Csm = Live2D::Cubism::Framework;
 
 namespace Caesura {
+
+class BgfxRenderDevice;
 
 class Live2DBackend : public IAnimationBackend {
 public:
@@ -35,6 +40,9 @@ public:
 
     const char* name() const override { return "Live2D"; }
 
+    // Bridge: set render device for texture output
+    void setRenderDevice(BgfxRenderDevice* device);
+
 private:
     struct Live2DModel {
         std::string path;
@@ -42,22 +50,33 @@ private:
         bool visible = false;
         float x = 0, y = 0, scale = 1.0f, opacity = 1.0f;
 
-        // Cubism objects
+        // Cubism
         std::unique_ptr<Csm::CubismUserModel> userModel;
-        void* mocData = nullptr;  // raw .moc3 bytes (aligned)
-        void* renderer = nullptr; // CubismRenderer_D3D11 (opaque ptr to avoid header deps)
-        int renderTargetWidth = 0;
-        int renderTargetHeight = 0;
+        void* mocData = nullptr;
+        void* renderer = nullptr;        // CubismRenderer_D3D11*
+        void* stagingTex = nullptr;      // ID3D11Texture2D* staging
+        int renderWidth = 1280;
+        int renderHeight = 720;
+
+        // bgfx
+        uint16_t bgfxTexHandle = 0;
+        bgfx::TextureHandle bgfxTex;
 
         ~Live2DModel();
     };
+
+    BgfxRenderDevice* m_renderDevice = nullptr;
+    ID3D11Device* m_d3dDevice = nullptr;
+    ID3D11DeviceContext* m_d3dContext = nullptr;
+    bool m_deviceShared = false;
 
     std::unordered_map<int, std::unique_ptr<Live2DModel>> m_models;
     int m_nextHandle = 1;
     bool m_initialized = false;
 
     bool loadModelInternal(Live2DModel& model);
-    void createRenderer(Live2DModel& model);
+    bool createRendererForModel(Live2DModel& model);
+    void uploadToBgfx(Live2DModel& model);
 };
 
 void registerLive2DBinding(void* luaState);
