@@ -37,7 +37,8 @@ target_include_directories(${TOOL_NAME} PRIVATE
 if(WIN32)
     target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
 else()
-    target_link_libraries(${TOOL_NAME} PRIVATE libzstd_static)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(${TOOL_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto libzstd_static)
 endif()
 
 target_compile_definitions(${TOOL_NAME} PRIVATE
