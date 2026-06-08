@@ -85,6 +85,7 @@ void JobSystem::shutdown() {
     // Join workers with timeout -- prevent indefinite hang on stuck workers.
     // Uses native Windows handle for WaitForSingleObject with 500ms deadline;
     // falls back to detach with warning if a worker doesn't stop in time.
+#ifdef _WIN32
     constexpr DWORD kTimeoutMs = 500;
     for (auto& t : m_workers) {
         if (!t.joinable()) continue;
@@ -97,6 +98,11 @@ void JobSystem::shutdown() {
                     GetThreadId(t.native_handle()), kTimeoutMs);
         }
     }
+#else
+    for (auto& t : m_workers) {
+        if (t.joinable()) t.join();
+    }
+#endif
     m_workers.clear();
     m_workerThreadIds.clear();
     m_queues.clear();

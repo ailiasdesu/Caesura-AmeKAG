@@ -3,11 +3,11 @@
 #include "doctest.h"
 #include "Core/Engine.h"
 #include <thread>
-#ifdef _MSC_VER
 #include <crtdbg.h>
-#endif
 #include <stdlib.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
 
