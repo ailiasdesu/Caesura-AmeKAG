@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- DebugProtocol.cpp
 //  Phase 8.2: Lua debug hooks for breakpoints, stepping, and inspection.
 // ===========================================================================
@@ -15,6 +15,7 @@ extern "C" {
 #include <thread>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 
 namespace Caesura {

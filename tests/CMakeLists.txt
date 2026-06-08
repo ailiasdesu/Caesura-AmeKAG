@@ -111,11 +111,23 @@ target_link_libraries(CaesuraTests PRIVATE
 
 if(WIN32)
     target_link_libraries(CaesuraTests PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
+elseif(APPLE)
+    find_library(COCOA_LIBRARY Cocoa REQUIRED)
+    find_library(IOKIT_LIBRARY IOKit REQUIRED)
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(QUARTZCORE QuartzCore REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} ${FOUNDATION_LIBRARY} pthread OpenSSL::SSL OpenSSL::Crypto)
+elseif(UNIX)
+    find_package(Threads REQUIRED)
+    find_package(X11 REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE Threads::Threads dl X11::X11 OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 target_compile_definitions(CaesuraTests PRIVATE
     _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN
-    CAESURA_PLATFORM_WINDOWS
     __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS
     SDL_MAIN_HANDLED
     $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>
