@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -13,6 +13,8 @@ set(TEST_SOURCES
     cpp/test_debug.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
+    cpp/test_job_system.cpp
+    cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
     cpp/test_lua_manager.cpp
     cpp/test_texture_budget_edge.cpp
@@ -33,6 +35,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
@@ -43,6 +46,8 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/System/SaveBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/DirAssetProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/ProviderChain.cpp
+    ${CMAKE_SOURCE_DIR}/src/Resource/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/Resource/ImageDecoder.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/AsyncLoader.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/XP3Archive.cpp
     ${CMAKE_SOURCE_DIR}/src/Debug/HotReload.cpp

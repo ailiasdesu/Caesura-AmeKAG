@@ -8,6 +8,7 @@
 
 #include "../Core/TextureBudget.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/Engine.h"
 #include "../Scripting/LuaManager.h"
 #include "../Core/SandboxQuota.h"
 #define STB_IMAGE_IMPLEMENTATION
@@ -262,6 +263,35 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     m_cache[id] = tex;
     checkBudget(id, info.width, info.height);
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
+    SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
+    return id;
+}
+
+uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
+                                             const std::string& cacheKey) {
+    CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_initialized || !rgba || w == 0 || h == 0) {
+        fprintf(stderr, "[TextureManager] Invalid RGBA input.\n");
+        return 0;
+    }
+
+    const bgfx::Memory* mem = bgfx::copy(rgba, uint32_t(w) * uint32_t(h) * 4);
+    bgfx::TextureHandle tex = bgfx::createTexture2D(
+        w, h, false, 1, bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
+    if (!bgfx::isValid(tex)) {
+        fprintf(stderr, "[TextureManager] GPU texture creation failed (RGBA).\n");
+        return 0;
+    }
+
+    uint32_t id = m_nextId++;
+    m_cache[id] = tex;
+    checkBudget(id, w, h);
+    if (!cacheKey.empty()) {
+        printf("[TextureManager] Loaded from RGBA (key=%s) -> id=%u\n", cacheKey.c_str(), id);
+    } else {
+        printf("[TextureManager] Loaded from RGBA -> id=%u\n", id);
+    }
     SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
     return id;
 }

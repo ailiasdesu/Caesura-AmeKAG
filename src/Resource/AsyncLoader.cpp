@@ -1,10 +1,16 @@
 ﻿#include "AsyncLoader.h"
+#include "AssetManager.h"
+#include "ImageDecoder.h"
+#include "../Core/JobSystem.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
-#include <fstream>
-#include <chrono>
+#include <memory>
 
 namespace Caesura {
+
+static bool isPathSafe(const std::string& path) {
+    return !path.empty() && path.find("..") == std::string::npos;
+}
 
 AsyncLoader& AsyncLoader::instance() {
     static AsyncLoader s;
@@ -19,8 +25,7 @@ void AsyncLoader::init() {
     if (m_running) return;
     m_running = true;
     m_cancelRequested = false;
-    m_worker = std::thread(&AsyncLoader::workerLoop, this);
-    printf("[AsyncLoader] Initialized (max 16 pending)\n");
+    printf("[AsyncLoader] Initialized via JobSystem (max 16 pending)\n");
 }
 
 void AsyncLoader::shutdown() {
@@ -28,36 +33,89 @@ void AsyncLoader::shutdown() {
     m_running = false;
     m_cancelRequested = true;
 
-    if (m_worker.joinable()) {
-        m_worker.join();
-    }
+    JobSystem::instance().waitIdle();
 
-    // Clear queues
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        while (!m_queue.empty()) m_queue.pop();
-    }
     {
         std::lock_guard<std::mutex> lock(m_completeMutex);
         m_completed.clear();
     }
     m_pendingCount = 0;
+    m_cancelRequested = false;
     printf("[AsyncLoader] Shutdown complete.\n");
+}
+
+AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& req) {
+    CompletedLoad result;
+    result.id   = req.id;
+    result.path = req.path;
+    result.type = req.type;
+
+    std::vector<uint8_t> raw = AssetManager::instance().read(req.path);
+    if (raw.empty()) {
+        fprintf(stderr, "[AsyncLoader] Asset not found: %s\n", req.path.c_str());
+        result.success = false;
+        return result;
+    }
+
+    if (req.type == "texture") {
+        DecodedImage decoded = ImageDecoder::decode(raw.data(), raw.size());
+        if (decoded.ok) {
+            result.rgba    = std::move(decoded.rgba);
+            result.width   = decoded.width;
+            result.height  = decoded.height;
+            result.success = true;
+            printf("[AsyncLoader] Decoded #%d: %s (%ux%u)\n",
+                   req.id, req.path.c_str(), result.width, result.height);
+        } else {
+            fprintf(stderr, "[AsyncLoader] Decode failed: %s\n", req.path.c_str());
+            result.success = false;
+        }
+    } else {
+        result.data    = std::move(raw);
+        result.success = true;
+        printf("[AsyncLoader] Loaded #%d: %s (%zu bytes)\n",
+               req.id, req.path.c_str(), result.data.size());
+    }
+    return result;
 }
 
 int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     if (!m_running) return -1;
+    if (!isPathSafe(path)) {
+        fprintf(stderr, "[AsyncLoader] Path rejected: %s\n", path.c_str());
+        return -1;
+    }
 
     if (m_pendingCount >= 16) {
         fprintf(stderr, "[AsyncLoader] Queue full (16 pending), rejecting: %s\n", path.c_str());
         return -1;
     }
 
+    m_cancelRequested.store(false);
+
     int id = m_nextId.fetch_add(1);
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_queue.push({id, path, type});
-    }
+    AsyncLoadRequest req{id, path, type};
+    auto result = std::make_shared<CompletedLoad>();
+    auto cancelled = std::make_shared<std::atomic<bool>>(false);
+
+    JobSystem::instance().submit(
+        [req, result, cancelled, this]() {
+            if (m_cancelRequested.load()) {
+                cancelled->store(true);
+                return;
+            }
+            *result = processRequest(req);
+        },
+        JobPriority::Normal,
+        [this, result, cancelled]() {
+            if (cancelled->load()) {
+                m_pendingCount--;
+                return;
+            }
+            std::lock_guard<std::mutex> lock(m_completeMutex);
+            m_completed.push_back(std::move(*result));
+        });
+
     m_pendingCount++;
     printf("[AsyncLoader] Enqueued #%d: %s (%s) [pending=%d]\n",
            id, path.c_str(), type.c_str(), m_pendingCount.load());
@@ -65,14 +123,8 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
 }
 
 void AsyncLoader::cancelAll() {
-    m_cancelRequested = true;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        while (!m_queue.empty()) m_queue.pop();
-    }
-    m_pendingCount = 0;
+    m_cancelRequested.store(true);
     printf("[AsyncLoader] All loads cancelled.\n");
-    m_cancelRequested = false;
 }
 
 bool AsyncLoader::poll() {
@@ -84,7 +136,6 @@ bool AsyncLoader::poll() {
 
     for (auto& c : completed) {
         m_pendingCount--;
-        // Post SDL event for main-thread callback
         SDL_Event event;
         SDL_zero(event);
         event.type = CAESURA_EVENT_ASYNC_LOAD;
@@ -94,59 +145,13 @@ bool AsyncLoader::poll() {
     return true;
 }
 
-void AsyncLoader::workerLoop() {
-    printf("[AsyncLoader] Worker thread started.\n");
-
-    while (m_running) {
-        AsyncLoadRequest req;
-        bool hasWork = false;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            if (!m_queue.empty()) {
-                req = m_queue.front();
-                m_queue.pop();
-                hasWork = true;
-            }
-        }
-
-        if (!hasWork) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-        }
-
-        if (m_cancelRequested) continue;
-
-        // Load file from disk
-        std::vector<uint8_t> data;
-        bool success = false;
-
-        std::ifstream file(req.path, std::ios::binary | std::ios::ate);
-        if (file.is_open()) {
-            size_t size = file.tellg();
-            file.seekg(0, std::ios::beg);
-            data.resize(size);
-            file.read(reinterpret_cast<char*>(data.data()), size);
-            success = file.good();
-            printf("[AsyncLoader] Loaded #%d: %s (%zu bytes)\n",
-                   req.id, req.path.c_str(), size);
-        } else {
-            fprintf(stderr, "[AsyncLoader] Failed to open: %s\n", req.path.c_str());
-        }
-
-                // Add to completed queue -- main-thread poll() will push SDL events
-        {
-            std::lock_guard<std::mutex> lock(m_completeMutex);
-            m_completed.push_back({req.id, req.path, std::move(data), success});
-        }
-    }
-
-    printf("[AsyncLoader] Worker thread stopped.\n");
-}
-
 void AsyncLoader::postCompleteEvent(int requestId, const std::string& path,
                                      const std::vector<uint8_t>& data, bool success) {
-    auto* completed = new CompletedLoad{requestId, path, data, success};
+    auto* completed = new CompletedLoad{};
+    completed->id = requestId;
+    completed->path = path;
+    completed->data = data;
+    completed->success = success;
     SDL_Event event;
     SDL_zero(event);
     event.type = CAESURA_EVENT_ASYNC_LOAD;

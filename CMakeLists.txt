@@ -69,6 +69,7 @@ target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
 set(ENGINE_SOURCES
     src/main.cpp
     src/Core/Engine.cpp
+    src/Core/JobSystem.cpp
     src/Core/InputRouter.cpp
     src/Core/BackendRegistry.cpp
     src/Core/DebugManager.cpp
@@ -108,6 +109,8 @@ set(ENGINE_SOURCES
     src/Carc/CarcAssetProvider.cpp
     src/Resource/DirAssetProvider.cpp
     src/Resource/ProviderChain.cpp
+    src/Resource/AssetManager.cpp
+    src/Resource/ImageDecoder.cpp
     src/Resource/AsyncLoader.cpp
     # Phase 8: Dev Tools
     src/Debug/HotReload.cpp
@@ -119,6 +122,7 @@ set(ENGINE_SOURCES
 
 set(ENGINE_HEADERS
     src/Core/Engine.h
+    src/Core/JobSystem.h
     src/Core/InputRouter.h
     src/Core/IAudioBackend.h
     src/Core/IPlatformBackend.h
@@ -160,6 +164,8 @@ set(ENGINE_HEADERS
     src/Resource/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
+    src/Resource/AssetManager.h
+    src/Resource/ImageDecoder.h
     src/Resource/AsyncLoader.h
     # Phase 8: Dev Tools
     src/Debug/HotReload.h

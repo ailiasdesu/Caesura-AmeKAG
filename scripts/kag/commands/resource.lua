@@ -62,13 +62,24 @@ end
 --  Internal: load a single texture, returning its ID (or placeholder on fail)
 -- ═══════════════════════════════════════════════════════════════════════════
 
-local function load_texture(path, ctx)
+local function load_texture(path, ctx, async)
     if ResourceCommands._textureCache[path] then
         return ResourceCommands._textureCache[path]
     end
 
-    -- Mark as pending for background loads
     ResourceCommands._pendingTextures[path] = true
+
+    if async and backend.load_texture_async then
+        backend.load_texture_async(path, function(success, loadedPath, texId)
+            if success and texId and texId > 0 then
+                ResourceCommands._textureCache[loadedPath] = texId
+            else
+                print("[Resource] WARN: async texture load failed: " .. loadedPath)
+            end
+            ResourceCommands._pendingTextures[loadedPath] = nil
+        end)
+        return get_placeholder(is_dev_mode(ctx))
+    end
 
     local tex = backend.load_texture(path)
     if tex then
@@ -77,7 +88,7 @@ local function load_texture(path, ctx)
         return tex
     end
 
-    -- Load failed — return placeholder
+    ResourceCommands._pendingTextures[path] = nil
     print("[Resource] WARN: texture load failed: " .. path .. " (using placeholder)")
     return get_placeholder(is_dev_mode(ctx))
 end
@@ -150,8 +161,8 @@ function ResourceCommands.preload(ctx, params)
 
     if assetType == "texture" then
         for _, path in ipairs(paths) do
-            local tex = load_texture(path, ctx)
-            if isWait and not tex then
+            local tex = load_texture(path, ctx, not isWait)
+            if isWait and (not tex or ResourceCommands._pendingTextures[path]) then
                 print("[Resource] preload: sync load failed for " .. path)
             end
         end
@@ -182,7 +193,7 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function ResourceCommands.get_texture(path, ctx)
-    return load_texture(path, ctx)
+    return load_texture(path, ctx, false)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -239,7 +250,7 @@ function ResourceCommands.preload_transition(paths, ctx)
     local dev = is_dev_mode(ctx)
     for _, path in ipairs(paths) do
         if not ResourceCommands._transitionSlot[path] then
-            local tex = load_texture(path, ctx)
+            local tex = load_texture(path, ctx, false)
             ResourceCommands._transitionSlot[path] = tex
             if not tex then
                 print("[Resource] preload_transition failed: " .. path)

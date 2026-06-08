@@ -1,7 +1,18 @@
 ﻿#include "doctest.h"
+#include "Core/JobSystem.h"
 #include "Resource/AsyncLoader.h"
 
 using namespace Caesura;
+
+static void initJobInfra() {
+    JobSystem::instance().init();
+    AsyncLoader::instance().init();
+}
+
+static void shutdownJobInfra() {
+    AsyncLoader::instance().shutdown();
+    JobSystem::instance().shutdown();
+}
 
 TEST_CASE("AsyncLoader::singleton") {
     auto& a = AsyncLoader::instance();
@@ -10,35 +21,44 @@ TEST_CASE("AsyncLoader::singleton") {
 }
 
 TEST_CASE("AsyncLoader::shutdown is idempotent") {
-    auto& al = AsyncLoader::instance();
-    al.init();
-    al.shutdown();
-    al.shutdown();
+    initJobInfra();
+    AsyncLoader::instance().shutdown();
+    AsyncLoader::instance().shutdown();
+    shutdownJobInfra();
 }
 
 TEST_CASE("AsyncLoader::enqueue returns positive id") {
-    auto& al = AsyncLoader::instance();
-    al.init();
-    int id = al.enqueue("test.png", "texture");
+    initJobInfra();
+    int id = AsyncLoader::instance().enqueue("test.png", "texture");
     CHECK(id > 0);
-    al.cancelAll();
-    al.shutdown();
+    AsyncLoader::instance().cancelAll();
+    shutdownJobInfra();
+}
+
+TEST_CASE("AsyncLoader::rejects path traversal") {
+    initJobInfra();
+    int id = AsyncLoader::instance().enqueue("../secret.png", "texture");
+    CHECK(id < 0);
+    shutdownJobInfra();
 }
 
 TEST_CASE("AsyncLoader::cancelAll clears queue") {
+    initJobInfra();
     auto& al = AsyncLoader::instance();
-    al.init();
     al.enqueue("a.png", "texture");
     al.enqueue("b.png", "texture");
     al.cancelAll();
+    JobSystem::instance().waitIdle();
+    JobSystem::instance().pollMainThreadJobs();
+    al.poll();
     CHECK(al.pendingCount() == 0);
-    al.shutdown();
+    shutdownJobInfra();
 }
 
 TEST_CASE("AsyncLoader::poll does not crash") {
-    auto& al = AsyncLoader::instance();
-    al.init();
-    bool has = al.poll();
-    // poll may return true or false
-    al.shutdown();
+    initJobInfra();
+    JobSystem::instance().pollMainThreadJobs();
+    bool has = AsyncLoader::instance().poll();
+    (void)has;
+    shutdownJobInfra();
 }
