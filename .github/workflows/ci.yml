@@ -72,7 +72,7 @@ jobs:
       - name: Copy SDL3 DLL for tests
         shell: pwsh
         run: |
-          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Where-Object { $_.FullName -like *x64* } | Select-Object -First 1
+          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
           if ($sdlDll) {
             Copy-Item $sdlDll.FullName "build/tests/${{ matrix.config }}/"
             Write-Host "Copied SDL3.dll to test dir"
