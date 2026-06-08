@@ -107,6 +107,7 @@ KAG 脚本 API 98+ 函数覆盖 Kirikiri Adventure Game 全部核心指令，包
 | P2 | README 跨平台构建说明 | H-7 | ✅
 | P2 | 测试 mock 框架 | H-13 |
 | P3 | CRLManager fetchOnline(url) 参数冗余 | TD-18 |
+| P2 | CARC 差分更新（bsdiff/bspatch）| 新增 |
 | P3 | 单例模式 → 依赖注入 | H-9 |
 
 **已全部完成（本周期）：**
