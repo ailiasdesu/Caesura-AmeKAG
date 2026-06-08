@@ -1,14 +1,9 @@
-ï»¿name: CI
+name: CI
 
-# Caesura (AmeKAG) é—‚?CI/CD Pipeline
+# Caesura (AmeKAG) é—?CI/CD Pipeline
 # Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
 
 on:
-  push:
-    branches: [master, main, dev]
-    paths-ignore: ["docs/**", "*.md", "external/**"]
-  pull_request:
-    branches: [master, main]
   workflow_dispatch:
 
 env:
@@ -152,7 +147,7 @@ jobs:
 
 
   coverage:
-    name: "Linux Â· GCC Â· Coverage"
+    name: "Linux ¡¤ GCC ¡¤ Coverage"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -188,7 +183,7 @@ jobs:
           path: coverage_report/
 
 
-    name: "Release é—‚?Package"
+    name: "Release é—?Package"
     runs-on: windows-2022
     needs: build-windows
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
