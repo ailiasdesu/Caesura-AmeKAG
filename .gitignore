@@ -1,5 +1,5 @@
 ﻿# --- Build artifacts ---
-build/
+/build/
 bin/
 cmake-build*/
 out/
@@ -34,7 +34,7 @@ web-editor/release/
 logs/
 saves/
 settings/
-config/
+/config/
 
 # --- Test / Demo scripts ---
 scripts/game_logic.lua
