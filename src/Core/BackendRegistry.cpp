@@ -88,6 +88,8 @@ void BackendRegistry::setInputRouter(InputRouter* router) {
     m_inputRouter = router;
 }
 
+void BackendRegistry::setMiniGameBackend(IMiniGameBackend* backend) { m_miniGameBackend = backend; }
+
 void BackendRegistry::setVideoPlayer(VideoPlayer* player) {
     m_videoPlayer = player;
 }
@@ -295,6 +297,10 @@ VideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
 }
 
 // -- Register Engine.* bindings to Lua -------------------------------------
+
+IMiniGameBackend* BackendRegistry::getMiniGameBackendFromLua(lua_State* L) {
+    return BackendRegistry::instance().getMiniGameBackend();
+}
 
 void BackendRegistry::registerEngineBindings(lua_State* L) {
     static const luaL_Reg engine_funcs[] = {

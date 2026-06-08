@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
+#include "MiniGame/IMiniGameBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>
@@ -40,6 +41,7 @@ public:
     IRenderDevice& renderDevice();
     IAudioBackend& audio();
     IPlatformBackend& platform();
+    IMiniGameBackend& miniGame() { return *m_miniGameBackend; }
     LuaManager&   lua()           { return *m_lua; }
     InputRouter&  input()         { return *m_inputRouter; }
     GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
@@ -75,6 +77,7 @@ private:
     std::unique_ptr<LuaManager>        m_lua;
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<GpuMonitor>        m_gpuMonitor;
+    std::unique_ptr<IMiniGameBackend> m_miniGameBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     // HotReload is a singleton, accessed via HotReload::instance()
 };

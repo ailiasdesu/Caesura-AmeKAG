@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -26,6 +26,7 @@
 #include "Resource/AsyncLoader.h"
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
+#include "MiniGame/NullMiniGameBackend.h"
 #include <thread>
 #include <atomic>
 #include <bgfx/bgfx.h>
@@ -157,6 +158,11 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
     AssetManager::instance().init();
     AsyncLoader::instance().init();
 
+    // -- Reserved: 3D mini-game backend (NullMiniGame until real impl) --
+    m_miniGameBackend = std::make_unique<NullMiniGameBackend>();
+    m_miniGameBackend->init();
+    BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     return true;
 }
@@ -262,6 +268,11 @@ void Engine::run() {
 
         render();
         bgfx::frame();
+
+        // -- Reserved: 3D mini-game update hook (CPU work, future JobSystem target) --
+        if (m_miniGameBackend && m_miniGameBackend->isActive()) {
+            m_miniGameBackend->update(static_cast<float>(dt));
+        }
     }
 
     shutdown();
@@ -403,6 +414,11 @@ void Engine::render() {
                             bgfx::getRendererName(caps->rendererType), m_width, m_height);
     }
 
+    // -- Reserved: 3D mini-game render hook (main thread, after KAG pass) --
+    if (m_miniGameBackend && m_miniGameBackend->isActive()) {
+        m_miniGameBackend->render();
+    }
+
 }
 
 void Engine::handleFatalError(const char* context, const char* luaError) {
@@ -451,6 +467,8 @@ void Engine::shutdown() {
 
     // Reset error crash counters on clean shutdown
     ErrorUI::resetCounters();
+
+    if (m_miniGameBackend) { m_miniGameBackend->shutdown(); m_miniGameBackend.reset(); }
 
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();

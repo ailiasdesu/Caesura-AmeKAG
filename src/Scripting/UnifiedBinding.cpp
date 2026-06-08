@@ -7,6 +7,8 @@ extern "C" {
 #include "../Core/IAudioBackend.h"
 #include "../Scripting/VFXBinding.h"
 #include "../Resource/AsyncLoader.h"
+#include "../Core/BackendRegistry.h"
+#include "../MiniGame/IMiniGameBackend.h"
 #include <cstdio>
 #include <cstring>
 
@@ -294,6 +296,44 @@ static int lua_Backend_cancel_async_loads(lua_State* L) {
 //  Module registration
 // =========================================================================
 
+// =========================================================================
+//  b:mini_game(cmd, ...) -- 3D mini-game lifecycle (reserved)
+// =========================================================================
+
+static int lua_Backend_mini_game(lua_State* L) {
+    const char* cmd = luaL_checkstring(L, 1);
+    IMiniGameBackend* mg = BackendRegistry::instance().getMiniGameBackend();
+    if (!mg) { lua_pushboolean(L, 0); lua_pushstring(L, "No mini-game backend registered"); return 2; }
+
+    if (strcmp(cmd, "enter") == 0) {
+        uint32_t scene = (uint32_t)luaL_optinteger(L, 2, 0);
+        mg->enter(scene);
+    } else if (strcmp(cmd, "leave") == 0) {
+        mg->leave();
+    } else if (strcmp(cmd, "is_active") == 0) {
+        lua_pushboolean(L, mg->isActive() ? 1 : 0);
+        return 1;
+    } else if (strcmp(cmd, "load_scene") == 0) {
+        const char* path = luaL_checkstring(L, 2);
+        uint32_t handle = mg->loadScene(path);
+        lua_pushinteger(L, handle);
+        return 1;
+    } else if (strcmp(cmd, "unload_scene") == 0) {
+        uint32_t handle = (uint32_t)luaL_checkinteger(L, 2);
+        mg->unloadScene(handle);
+    } else if (strcmp(cmd, "call") == 0) {
+        const char* method = luaL_checkstring(L, 2);
+        lua_remove(L, 1); lua_remove(L, 1);  // strip cmd + method
+        return mg->luaCall(L, method);
+    } else {
+        lua_pushboolean(L, 0);
+        lua_pushfstring(L, "Unknown mini_game command: %s", cmd);
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static const luaL_Reg backend_methods[] = {
     { "audio",       lua_Backend_audio       },
     { "render",      lua_Backend_render      },
@@ -301,7 +341,8 @@ static const luaL_Reg backend_methods[] = {
     { "show_text",   lua_Backend_show_text   },
     { "show_image",  lua_Backend_show_image  },
     { "clear_screen", lua_Backend_clear_screen },
-    { "wait_click",  lua_Backend_wait_click  },
+        { "wait_click",  lua_Backend_wait_click  },
+    { "mini_game",   lua_Backend_mini_game   },
     { nullptr, nullptr }
 };
 

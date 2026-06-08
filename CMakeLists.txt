@@ -90,6 +90,7 @@ set(ENGINE_SOURCES
     src/Render/TextureManager.cpp
     src/Render/FreeTypeContext.cpp
     src/Render/LayerManager.cpp
+    src/MiniGame/NullMiniGameBackend.cpp
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp
     src/Audio/NullAudioBackend.cpp
@@ -143,6 +144,8 @@ set(ENGINE_HEADERS
     src/Render/VideoPlayer.h
     src/Render/TextureManager.h
     src/Render/LayerManager.h
+    src/MiniGame/IMiniGameBackend.h
+    src/MiniGame/NullMiniGameBackend.h
     src/Render/ShaderCache.h
     src/Audio/SoLoudAudioEngine.h
     src/Audio/NullAudioBackend.h
