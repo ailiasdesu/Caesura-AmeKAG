@@ -43,7 +43,18 @@ jobs:
         shell: pwsh
         run: |
           $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
-          Invoke-WebRequest -Uri $uri -OutFile sdl3.zip
+          $retry = 0; $ok = $false
+          while (-not $ok -and $retry -lt 3) {
+            try {
+              Invoke-WebRequest -Uri $uri -OutFile sdl3.zip -ErrorAction Stop
+              $ok = $true
+            } catch {
+              $retry++
+              Write-Host "SDL3 download attempt $retry failed, retrying..."
+              Start-Sleep 5
+            }
+          }
+          if (-not $ok) { throw "Failed to download SDL3 after 3 attempts" }
           Expand-Archive sdl3.zip -DestinationPath external/SDL3
           Remove-Item sdl3.zip
 
@@ -58,19 +69,27 @@ jobs:
         shell: pwsh
         run: cmake --build build --config ${{ matrix.config }} --parallel
 
+      - name: Copy SDL3 DLL for tests
+        shell: pwsh
+        run: |
+          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Select-Object -First 1
+          if ($sdlDll) {
+            Copy-Item $sdlDll.FullName "build/tests/${{ matrix.config }}/"
+            Write-Host "Copied SDL3.dll to test dir"
+          }
+
       - name: Test
         shell: pwsh
         run: |
           $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
           if (Test-Path $testExe) {
             & $testExe
-            # doctest exit code = failed assertion count; 0 = all pass
             if ($LASTEXITCODE -ne 0) {
-              Write-Host "::warning::Tests reported $LASTEXITCODE failures"
+              Write-Host "::warning::Tests exit code: $LASTEXITCODE"
               exit $LASTEXITCODE
             }
           } else {
-            Write-Host "Test executable not found at $testExe"
+            Write-Host "Test binary not found: $testExe"
             Get-ChildItem -Recurse -Filter "CaesuraTests.exe" -Path build | Select-Object FullName
             exit 1
           }
@@ -90,7 +109,7 @@ jobs:
           }
 
   build-macos:
-    name: "macOS · Clang"
+    name: "macOS ? Clang"
     runs-on: macos-latest
     continue-on-error: true
     steps:
@@ -103,16 +122,32 @@ jobs:
         run: |
           brew install cmake sdl3 freetype zstd
 
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-include stdlib.h"
+      - name: Fix bx malloc.h (macOS compat)
+        run: |
+          mkdir -p external/bgfx/bx/include/compat
+          cat > external/bgfx/bx/include/compat/malloc.h << 'COMPAT_EOF'
+          // macOS compatibility stub -- malloc.h is MSVC-only
+          #pragma once
+          #include <stdlib.h>
+          #include <malloc/malloc.h>
+          COMPAT_EOF
+          if grep -q 'compat/malloc.h' external/bgfx/bx/src/allocator.cpp; then
+            echo "Already patched"
+          else
+            sed -i '' 's|#include <malloc.h>|#ifdef __APPLE__\n#  include <compat/malloc.h>\n#else\n#  include <malloc.h>\n#endif|' external/bgfx/bx/src/allocator.cpp
+            echo "Patched allocator.cpp"
+          fi
 
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
 
       - name: Test
-        run: ./build/tests/CaesuraTests --success -s
+        run: ./build/tests/CaesuraTests
         continue-on-error: true
+
 
   build-linux:
     name: "Linux · GCC"
@@ -174,7 +209,18 @@ jobs:
         shell: pwsh
         run: |
           $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
-          Invoke-WebRequest -Uri $uri -OutFile sdl3.zip
+          $retry = 0; $ok = $false
+          while (-not $ok -and $retry -lt 3) {
+            try {
+              Invoke-WebRequest -Uri $uri -OutFile sdl3.zip -ErrorAction Stop
+              $ok = $true
+            } catch {
+              $retry++
+              Write-Host "SDL3 download attempt $retry failed, retrying..."
+              Start-Sleep 5
+            }
+          }
+          if (-not $ok) { throw "Failed to download SDL3 after 3 attempts" }
           Expand-Archive sdl3.zip -DestinationPath external/SDL3
           Remove-Item sdl3.zip
 
