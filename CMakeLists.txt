@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) 閿熸枻鎷?no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) 锟斤�?no C build needed
 
 # Engine sources
 
@@ -91,6 +91,7 @@ set(ENGINE_SOURCES
     src/Render/FreeTypeContext.cpp
     src/Render/LayerManager.cpp
     src/MiniGame/NullMiniGameBackend.cpp
+    src/Animation/NullAnimationBackend.cpp
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp
     src/Audio/NullAudioBackend.cpp
@@ -146,6 +147,8 @@ set(ENGINE_HEADERS
     src/Render/LayerManager.h
     src/MiniGame/IMiniGameBackend.h
     src/MiniGame/NullMiniGameBackend.h
+    src/Animation/IAnimationBackend.h
+    src/Animation/NullAnimationBackend.h
     src/Render/ShaderCache.h
     src/Audio/SoLoudAudioEngine.h
     src/Audio/NullAudioBackend.h
@@ -269,6 +272,26 @@ if(CAESURA_VIDEO_FFMPEG)
         FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
     target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
 endif()
+
+# -- Live2D Cubism animation (optional, proprietary SDK) ---------------------
+option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK download)" OFF)
+
+if(CAESURA_LIVE2D)
+    message(STATUS "Live2D enabled �� user must provide Cubism SDK headers/libs")
+    set(LIVE2D_SDK_ROOT "" CACHE PATH "Path to Live2D Cubism SDK root")
+    if(NOT LIVE2D_SDK_ROOT)
+        message(WARNING "Live2D SDK root not set; set LIVE2D_SDK_ROOT to Cubism SDK path")
+    else()
+        target_include_directories(${PROJECT_NAME} PRIVATE "${LIVE2D_SDK_ROOT}/include")
+        target_link_directories(${PROJECT_NAME} PRIVATE "${LIVE2D_SDK_ROOT}/lib")
+        target_link_libraries(${PROJECT_NAME} PRIVATE Live2DCubismCore)
+        target_sources(${PROJECT_NAME} PRIVATE
+            src/Animation/Live2D/Live2DBackend.h
+            src/Animation/Live2D/Live2DBackend.cpp
+        )
+    endif()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D)
+endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 
@@ -283,7 +306,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine 閿熸枻鎷?SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine 锟斤�?SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
