@@ -83,10 +83,10 @@ SDL_PushEvent(&ev);
 
 | Step | Item | Validation |
 |---|---|---|
-| 1 | CI bx 补丁正规化 | CI macOS/Linux 构建通过 |
-| 2 | CI 测试可见性 | CI 测试结果可查 |
-| 3 | TD-14 MobileAdapter | 编译通过 |
-| 4 | UnifiedBinding 废弃 | demo 正常启动，_CAESURA_BACKEND 可用 |
+| 1 | TD-14 MobileAdapter | 编译通过 |
+| 2 | UnifiedBinding 废弃 | demo 正常启动 |
+| 3 | CI bx 补丁正规化 | CI macOS/Linux 构建通过 |
+| 4 | CI 测试可见性 | CI 测试结果可查 |
 
 **预计总时:** ~2h
 
@@ -95,3 +95,4 @@ SDL_PushEvent(&ev);
 ## Post-Cleanup State
 
 完成后所有技术债清零。P2 功能（MiniGame/Mobile/FFmpeg）按功能路线图推进。
+
