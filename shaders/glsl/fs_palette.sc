@@ -68,6 +68,9 @@ void main()
 {
     vec4 inputColor = texture2D(s_inputTex, v_texcoord0);
     vec4 lutResult  = lutLookup(inputColor.rgb, s_lutTex, u_lutSize);
-    vec4 finalColor = mix(inputColor, lutResult, u_intensity);
-    gl_FragColor = finalColor;
+    // Bugfix #1: LUT only modifies RGB; preserve the original alpha channel.
+    // The LUT texture's alpha channel is arbitrary — mixing it would corrupt
+    // the source image's transparency.
+    vec3 finalRGB = mix(inputColor.rgb, lutResult.rgb, u_intensity);
+    gl_FragColor = vec4(finalRGB, inputColor.a);
 }

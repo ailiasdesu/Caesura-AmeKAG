@@ -280,6 +280,11 @@ bool TextRenderer::init(BgfxRenderDevice* device) {
                 "Ensure device::init() runs first.\n");
         return false;
     }
+    m_u_texColor = device->getTexColorUniform();
+    if (!bgfx::isValid(m_u_texColor)) {
+        fprintf(stderr, "[TextRenderer] u_texColor uniform not ready.\n");
+        return false;
+    }
 
     // Use the same PosTex layout: Position(2F) + TexCoord0(2F)
     m_posTexLayout
@@ -533,6 +538,17 @@ void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
                    | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
                                            BGFX_STATE_BLEND_INV_SRC_ALPHA);
 
+    // Bugfix #4: apply TextColor (r,g,b,a) via u_texColor uniform.
+    // The font atlas stores white glyphs on transparent background, so
+    // tex * u_texColor produces the correctly tinted text with proper alpha.
+    float texColor[4] = {
+        (float)color.r / 255.0f,
+        (float)color.g / 255.0f,
+        (float)color.b / 255.0f,
+        (float)color.a / 255.0f
+    };
+    bgfx::setUniform(m_u_texColor, texColor, 1);
+
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
     bgfx::setTexture(0, m_texSampler, m_fontTexture);
@@ -655,8 +671,8 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
     m_ttfFontSize = fontSize;
     m_cursor.lineHeight = m_ttf->ftFace->size->metrics.height / 64.0f;
 
-    // Create runtime atlas
-    std::vector<uint8_t> atlas(m_ttf->atlasW * m_ttf->atlasH, 0);
+    // Create runtime atlas (RGBA8: white glyphs with coverage in alpha)
+    std::vector<uint8_t> atlas(m_ttf->atlasW * m_ttf->atlasH * 4, 0);
 
     // Rasterize ASCII 32-126
     for (uint32_t cp = 32; cp <= 126; cp++)
@@ -670,13 +686,13 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
     for (uint32_t cp = 0x3040; cp <= 0x30FF; cp++)
         rasterizeTTFGlyph(cp, atlas);
 
-    // Upload atlas as bgfx texture
+    // Upload atlas as bgfx texture (RGBA8: white glyphs, coverage in alpha)
     if (bgfx::isValid(m_fontTexture))
         bgfx::destroy(m_fontTexture);
-    const bgfx::Memory* mem = bgfx::copy(atlas.data(), m_ttf->atlasW * m_ttf->atlasH);
+    const bgfx::Memory* mem = bgfx::copy(atlas.data(), m_ttf->atlasW * m_ttf->atlasH * 4);
     m_fontTexture = bgfx::createTexture2D(
         (uint16_t)m_ttf->atlasW, (uint16_t)m_ttf->atlasH,
-        false, 1, bgfx::TextureFormat::R8,
+        false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
     m_atlasCols = m_ttf->atlasW;
     m_fontGlyphW = (int)fontSize;
@@ -719,12 +735,18 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
         return false;
     }
 
-    // Copy glyph to atlas (FreeType grayscale -> R8 atlas, direct copy)
+    // Bugfix #5: Copy glyph to atlas as RGBA8 — white glyph with
+    // FreeType grayscale coverage in alpha channel for anti-aliased blending.
     for (int row = 0; row < h; row++) {
         for (int col = 0; col < w; col++) {
             int ax = m_ttf->penX + col;
             int ay = m_ttf->penY + row;
-            atlas[ay * m_ttf->atlasW + ax] = bitmap->buffer[row * bitmap->pitch + col];
+            int idx = (ay * m_ttf->atlasW + ax) * 4;
+            uint8_t coverage = bitmap->buffer[row * bitmap->pitch + col];
+            atlas[idx + 0] = 255;       // R = white
+            atlas[idx + 1] = 255;       // G = white
+            atlas[idx + 2] = 255;       // B = white
+            atlas[idx + 3] = coverage;  // A = FreeType coverage (anti-alias)
         }
     }
 
