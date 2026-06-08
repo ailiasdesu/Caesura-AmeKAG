@@ -10,9 +10,11 @@ Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately — no dependencies.
 
 ## Build from Source
+## Build from Source
 
-**Requires:** Visual Studio 2022, CMake 3.25+, SDL3
+**Requires:** CMake 3.25+, SDL3
 
+### Windows (MSVC)
 ```
 git clone https://github.com/ailiasdesu/Caesura-AmeKAG.git
 cd Caesura-AmeKAG
@@ -20,10 +22,24 @@ cmake -B build -S .
 cmake --build build --config Debug --parallel
 ```
 
-Run the engine:
-
+### macOS (Clang)
 ```
-./build/Debug/CaesuraAmeKAG.exe
+brew install cmake sdl3 freetype zstd openssl@3
+cmake -B build -S . -DCMAKE_PREFIX_PATH=$(brew --prefix openssl@3)
+cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
+```
+
+### Linux (GCC)
+```
+sudo apt install cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev
+cmake -B build -S .
+cmake --build build --config Debug --parallel $(nproc)
+```
+
+Run the engine:
+```
+./build/Debug/CaesuraAmeKAG.exe   # Windows
+./build/CaesuraAmeKAG             # macOS/Linux
 ```
 
 ## Tests
