@@ -30,6 +30,7 @@ public:
     void touch(uint16_t) override {}
     ViewportHandle createRenderTarget(int, int) override { return ViewportHandle{}; }
     void destroyRenderTarget(ViewportHandle) override {}
+    bgfx::TextureHandle getViewportTexture(ViewportHandle) override { return BGFX_INVALID_HANDLE; }
     void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
     int getBackbufferWidth() const override { return m_width; }
     int getBackbufferHeight() const override { return m_height; }

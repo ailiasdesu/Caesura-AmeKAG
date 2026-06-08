@@ -260,8 +260,6 @@ static int lua_KAG_flush_wave_cache(lua_State* L) {
 // -- KAG.show_text(text) -- console echo -----------------------------------
 
 static int lua_KAG_show_text(lua_State* L) {
-    const char* text = luaL_checkstring(L, 1);
-    printf("[KAG] %s\n", text);
     lua_pushboolean(L, 1);
     return 1;
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "IRenderDevice.h"
 #include "EmbeddedShaders.h"
@@ -41,6 +41,7 @@ public:
                       float x, float y, float w, float h, uint8_t opacity);
     void blitViewport(ViewportHandle handle, uint16_t targetView,
                       float x, float y, float w, float h) override;
+    bgfx::TextureHandle getViewportTexture(ViewportHandle handle) override;
     int getBackbufferWidth() const override  { return m_width; }
     int getBackbufferHeight() const override { return m_height; }
 

@@ -1,4 +1,4 @@
-﻿#include "JobSystem.h"
+#include "JobSystem.h"
 #include "Engine.h"
 #include <cstdio>
 #include <chrono>
@@ -55,7 +55,8 @@ void JobSystem::init() {
     if (m_running.exchange(true)) return;
 
     m_workerCount = computeWorkerCount();
-    m_queues.resize(static_cast<size_t>(m_workerCount));
+    m_queues.reserve(static_cast<size_t>(m_workerCount));
+    for (int i = 0; i < m_workerCount; ++i) m_queues.emplace_back(std::make_unique<WorkQueue>());
     m_workers.reserve(static_cast<size_t>(m_workerCount));
     m_workerThreadIds.reserve(static_cast<size_t>(m_workerCount));
 
@@ -107,7 +108,7 @@ uint64_t JobSystem::submit(JobFn work, JobPriority priority, MainThreadFn onComp
     job.priority   = priority;
 
     uint32_t idx = m_roundRobin.fetch_add(1) % static_cast<uint32_t>(m_workerCount);
-    m_queues[idx].push(std::move(job));
+    m_queues[idx]->push(std::move(job));
     notifyWorkers();
     return id;
 }
@@ -153,12 +154,12 @@ void JobSystem::notifyWorkers() {
 }
 
 bool JobSystem::tryDequeueJob(int workerIndex, Job& out) {
-    if (m_queues[static_cast<size_t>(workerIndex)].pop(out))
+    if (m_queues[static_cast<size_t>(workerIndex)]->pop(out))
         return true;
 
     for (int i = 0; i < m_workerCount; ++i) {
         if (i == workerIndex) continue;
-        if (m_queues[static_cast<size_t>(i)].steal(out))
+        if (m_queues[static_cast<size_t>(i)]->steal(out))
             return true;
     }
     return false;
@@ -174,7 +175,7 @@ void JobSystem::workerLoop(int workerIndex) {
             m_cv.wait_for(lock, std::chrono::milliseconds(10), [this] {
                 if (!m_running.load() && m_pendingJobs.load() == 0) return true;
                 for (const auto& q : m_queues) {
-                    if (!q.empty()) return true;
+                    if (!q->empty()) return true;
                 }
                 return false;
             });

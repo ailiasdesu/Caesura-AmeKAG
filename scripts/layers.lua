@@ -486,6 +486,7 @@ function Layers.render()
         if node.dirty and node.rt and node.view_id then
             batch.commands[#batch.commands + 1] = {
                 view_id    = node.view_id,
+                tex        = node.tex or 0,
                 rt         = node.rt,
                 x          = wx,
                 y          = wy,
@@ -545,7 +546,7 @@ end
 
 function Layers.set_layer_image(node, tex_id, ix, iy, iw, ih)
     if not node then return end
-    node.rt = tex_id
+    node.tex = tex_id  -- texture id (separate from RTT handle)
     node.imgX = ix; node.imgY = iy; node.imgW = iw; node.imgH = ih
     if iw and ih then
         node.w = iw

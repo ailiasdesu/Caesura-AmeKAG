@@ -118,12 +118,12 @@ static int lua_Render_submit_batch(lua_State* L) {
     int n = (int)lua_rawlen(L, 1);
     if (n == 0) { lua_pushboolean(L, 1); return 1; }
 
+
     dev->beginBatch();
 
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, 1, i);
         if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
-
         uint32_t texId  = (uint32_t)getTableInt(L, "tex", 0);
         float    x      = getTableFloat(L, "x", 0);
         float    y      = getTableFloat(L, "y", 0);
@@ -132,6 +132,14 @@ static int lua_Render_submit_batch(lua_State* L) {
         int      opacity = getTableInt(L, "opacity", 255);
 
         bgfx::TextureHandle tex = getTexHandle(texId);
+        if (!bgfx::isValid(tex)) {
+            // Fallback: check rt (RTT viewport) key for layer compositing
+            uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
+            if (rtId != 0) {
+                ViewportHandle vp{ rtId };
+                tex = dev->getViewportTexture(vp);
+            }
+        }
         if (bgfx::isValid(tex)) {
             dev->blitTexture(VIEW_MAIN, (uint32_t)tex.idx, x, y, w, h, (uint8_t)opacity);
         }
@@ -510,3 +518,5 @@ void registerRenderBinding(lua_State* L) {
 }
 
 } // namespace Caesura
+
+

@@ -1,4 +1,4 @@
-﻿ #include "BgfxRenderDevice.h"
+ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
 #include "Core/Engine.h"
 #include <bgfx/bgfx.h>
@@ -674,6 +674,14 @@ void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
     if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
 
     blitTexture(targetView, it->second.tex, x, y, w, h, 255);
+}
+
+bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle handle) {
+    auto it = m_rttMap.find(handle.id);
+    if (it != m_rttMap.end() && bgfx::isValid(it->second.tex)) {
+        return it->second.tex;
+    }
+    return BGFX_INVALID_HANDLE;
 }
 
 

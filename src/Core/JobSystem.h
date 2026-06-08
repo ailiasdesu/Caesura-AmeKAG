@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <atomic>
 #include <condition_variable>
@@ -81,7 +81,7 @@ private:
     std::atomic<bool> m_running{false};
     int m_workerCount = 0;
 
-    std::vector<WorkQueue>              m_queues;
+    std::vector<std::unique_ptr<WorkQueue>> m_queues;
     std::vector<std::thread>            m_workers;
     std::vector<std::thread::id>        m_workerThreadIds;
 

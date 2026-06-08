@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -401,15 +401,8 @@ void Engine::render() {
         bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
         bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
                             bgfx::getRendererName(caps->rendererType), m_width, m_height);
-        bgfx::dbgTextPrintf(0, 2, 0x0F, "Input Focus: %s  Errors: %u",
-                            inputFocusToString(m_inputRouter->getFocus()), 0);
-        const auto& gm = m_gpuMonitor->metrics();
-        bgfx::dbgTextPrintf(0, 3, 0x0F, "GPU: %s | frame=%.1fms avg=%.1fms | degradation=%s",
-                            gpuQualityName(gm.quality), gm.gpuTimeMs, gm.rollingAvgMs,
-                            gm.degraded ? "ACTIVE" : "none");
-        bgfx::dbgTextPrintf(0, 4, 0x0F, "Videos: %d  Log: %s",
-                            m_videoPlayer->activeCount(), "logs/");
     }
+
 }
 
 void Engine::handleFatalError(const char* context, const char* luaError) {
@@ -472,4 +465,6 @@ void Engine::shutdown() {
 }
 
 } // namespace Caesura
+
+
 

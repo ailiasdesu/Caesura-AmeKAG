@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <bgfx/bgfx.h>
 
 namespace Caesura {
 
@@ -61,6 +62,9 @@ public:
     // Draw a viewport`s texture as a full-view quad in another view
     virtual void blitViewport(ViewportHandle handle, uint16_t targetView,
                               float x, float y, float w, float h) = 0;
+
+    // Get the bgfx texture from a viewport handle (rt->tex mapping for submit_batch)
+    virtual bgfx::TextureHandle getViewportTexture(ViewportHandle handle) = 0;
 
     // Resolution query
     virtual int getBackbufferWidth() const = 0;

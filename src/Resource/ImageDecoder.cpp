@@ -34,7 +34,7 @@ static DecodedImage fromBimg(bimg::ImageContainer* img) {
     out.height = static_cast<uint16_t>(h);
     out.rgba.resize(static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
 
-    const uint8_t* src = img->m_data;
+    const uint8_t* src = static_cast<const uint8_t*>(img->m_data);
     if (!src) return out;
 
     if (img->m_format == bimg::TextureFormat::RGBA8) {
