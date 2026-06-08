@@ -84,15 +84,33 @@ bgfx 已具备 3D 渲染能力，预留三层接口：
 ### 8. KAG 完全兼容 [COMPLETE]
 KAG 脚本 API 98+ 函数覆盖 Kirikiri Adventure Game 全部核心指令，包括音频、图像、文本、粒子、存档、调试。
 
-## 下一步
 
-| 优先级 | 任务 | 状态 |
+## 下一步（审查后更新 — 2026-06-08）
+
+> 来源：待完成事项审查报告 | 41 项 → 验证后 19 项有效
+
+| 优先级 | 任务 | 来源 |
 |---|---|---|
-| P0 | CI 三平台全绿 | done |
-| P0 | 多核架构完成 | done |
-| P1 | 自动化测试完善 | todo |
-| P1 | 技术债清零（4项） | done |
-| P1 | 修复 draw=0 纹理 ID 匹配问题 | done |
-| P2 | Live2D 集成 | todo |
-| P2 | 物理引擎接入 | todo |
-| P3 | AI IDE 辅助开发工具链 | todo |
+| P1 | CryptoEngine 跨平台加密实测（macOS/Linux） | TD-07 |
+| P1 | SaveManager 手写 JSON → nlohmann/json | TD-08 / H-8 |
+| P1 | 去重 scene-template.lua（两份副本） | H-4 |
+| P1 | 添加 .clang-format | H-5 |
+| P1 | CI 代码覆盖率 | H-6 |
+| P1 | ENGINE_ANALYSIS.md 更新（剔除不实 TD） | H-11 |
+| P1 | AI 上下文三份合并（docs/ai/ + docs/strategy/ + src/Core/docs/ai/） | H-12 |
+| P2 | MobileAdapter 移动端存根 | 1.1 |
+| P2 | 3D 空间音频（SoLoud 接入） | 2.4 |
+| P2 | Web 编辑器完善 | 2.8 |
+| P2 | FFmpeg 后端启用 | 2.9 |
+| P2 | DebugManager recursive_mutex → 普通 mutex | TD-04 |
+| P2 | HotReload sleep(50ms) → 条件变量 | TD-09 |
+| P2 | CAESURA_DEBUG Release 剥离 | TD-16 |
+| P2 | README 跨平台构建说明 | H-7 |
+| P2 | 测试 mock 框架 | H-13 |
+| P3 | CRLManager fetchOnline(url) 参数冗余 | TD-18 |
+| P3 | 单例模式 → 依赖注入 | H-9 |
+
+**已全部完成（本周期）：**
+- draw=0 layer rt/tex 分离
+- 技术债 4 项（TD-14 / UnifiedBinding / CI bx / CI test）
+- STRATEGY.md Track 1-8
