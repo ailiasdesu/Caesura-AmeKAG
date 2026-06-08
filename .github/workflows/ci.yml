@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 # Caesura (AmeKAG) — CI/CD Pipeline
 # Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
@@ -40,11 +40,24 @@ jobs:
         run: |
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_APPLOCAL_DEPS=OFF
 
       - name: Build
         shell: pwsh
         run: cmake --build build --config ${{ matrix.config }} --parallel
+
+      - name: Copy SDL3 DLL
+        shell: pwsh
+        run: |
+          $dstDir = "build/${{ matrix.config }}"
+          $sdlBin = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
+          if (Test-Path $sdlBin) {
+            Copy-Item $sdlBin $dstDir
+            Write-Host "Copied SDL3.dll to $dstDir"
+          } else {
+            Write-Host "SDL3.dll not found at $sdlBin"
+            Get-ChildItem -Recurse -Filter SDL3.dll -Path $env:VCPKG_INSTALLATION_ROOT -ErrorAction SilentlyContinue | Select-Object FullName
+          }
 
       - name: Copy SDL3 DLL for tests
         shell: pwsh
@@ -140,6 +153,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev
 
+      - name: Fix bx cross-platform includes (Linux)
+        run: |
+          sed -i "/include\\/compat\\/msvc/d" external/bgfx/bx/CMakeLists.txt
+          echo "Removed msvc compat from bx include paths"
+          sed -i 's|#include <malloc.h>|#ifndef _WIN32\\n#  include <stdlib.h>\\n#else\\n#  include <malloc.h>\\n#endif|' external/bgfx/bx/src/allocator.cpp
+          echo "Patched bx allocator.cpp"
+
       - name: Install SDL3 (vcpkg)
         run: |
           vcpkg install sdl3 --triplet x64-linux
@@ -176,7 +196,7 @@ jobs:
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_APPLOCAL_DEPS=OFF
 
       - name: Build Release
         shell: pwsh
