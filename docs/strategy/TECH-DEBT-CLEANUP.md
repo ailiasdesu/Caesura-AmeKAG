@@ -1,6 +1,6 @@
 ﻿# Tech Debt Cleanup Plan — Caesura (AmeKAG)
 
-> Generated: 2026-06-08 | Target: 4 items / ~2h
+> Generated: 2026-06-08 | Target: 4 items / ~2h | Status: ✅ COMPLETE
 
 ## Scope
 
@@ -89,6 +89,17 @@ SDL_PushEvent(&ev);
 | 4 | CI 测试可见性 | CI 测试结果可查 |
 
 **预计总时:** ~2h
+
+---
+
+## Execution Log
+
+| Step | Item | Commit | Status |
+|---|---|---|---|
+| 1 | TD-14 MobileAdapter | 44c8604 | ✅ |
+| 2 | UnifiedBinding 废弃 | 44c8604 | ✅ |
+| 3 | CI bx 补丁正规化 | 6a995a6 | ✅ |
+| 4 | CI 测试可见性 | 6a995a6 | ✅ |
 
 ---
 
