@@ -87,6 +87,7 @@ void ParticleSystem::destroyEmitter(int id) {
 }
 
 void ParticleSystem::emit(int emitterId, int count) {
+    if (!m_initialized) return;
     if (emitterId < 0 || emitterId >= (int)m_emitters.size()) return;
     auto& em = m_emitters[emitterId];
     if (!em.active) return;
