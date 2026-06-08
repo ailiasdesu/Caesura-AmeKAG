@@ -1,9 +1,10 @@
-ï»¿# Caesura (AmeKAG) â€” Cross-Platform Visual Novel Engine
+# Caesura (AmeKAG) ¡ª Cross-Platform Visual Novel Engine
 
-SDL3 + bgfx + SoLoud + Lua 5.4 Â· C++20
+SDL3 + bgfx + SoLoud + Lua 5.4 ¡¤ C++20
 
+[![CI](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml)
 [![Alpha](https://img.shields.io/badge/status-alpha-blue)](https://github.com/ailiasdesu/Caesura-AmeKAG/releases)
-[![Tests](https://img.shields.io/badge/tests-109%2F109%20%E2%9C%93-brightgreen)]()
+[![CI](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ailiasdesu/Caesura-AmeKAG/actions/workflows/ci.yml)&#10;[![Tests](https://img.shields.io/badge/tests-109%2F109%20%E2%9C%93-brightgreen)]()
 
 ## Quick Start
 
@@ -13,7 +14,7 @@ SDL3 + bgfx + SoLoud + Lua 5.4 Â· C++20
 2. Extract the zip
 3. Double-click `CaesuraAmeKAG.exe`
 
-A visual demo runs immediately â€” no setup, no dependencies.
+A visual demo runs immediately ¡ª no setup, no dependencies.
 
 ### Build from Source
 
@@ -46,14 +47,14 @@ lua tests/scripts/run_lua_tests.lua
 
 | Module | Description |
 |---|---|
-| **KAG Script Engine** | 9 command modules, 53 tag handlers â€” bg, fg, text, audio, VFX, transitions, save/load |
-| **Lua Sandbox** | Track 3 strict mode â€” DEFAULT DENY, EXPLICIT ALLOW. All rules in `scripts/sandbox.lua` (AI-auditable) |
+| **KAG Script Engine** | 9 command modules, 53 tag handlers ¡ª bg, fg, text, audio, VFX, transitions, save/load |
+| **Lua Sandbox** | Track 3 strict mode ¡ª DEFAULT DENY, EXPLICIT ALLOW. All rules in `scripts/sandbox.lua` (AI-auditable) |
 | **CARC Packaging** | Encrypted archives with ed25519 signature + zstd compression |
-| **VFX System** | Quake, flash, blur, fade, snow, rain â€” 1024 particle cap |
+| **VFX System** | Quake, flash, blur, fade, snow, rain ¡ª 1024 particle cap |
 | **3D LUT Grading** | Real-time palette-based color correction |
 | **Video Playback** | MPEG1 software decode via pl_mpeg |
 | **IDE Connection** | stdin/stdout JSON-RPC for AI agent / external editor integration |
-| **Hot Reload** | Monitors `scripts/` â€” changes take effect without restart |
+| **Hot Reload** | Monitors `scripts/` ¡ª changes take effect without restart |
 
 ## Architecture
 
@@ -90,6 +91,20 @@ scripts/
 | doctest | C++ unit testing |
 | stb | Image loading |
 | pl_mpeg | MPEG video decoding |
+
+
+## Release Packaging
+
+`ash
+# Configure + Build Release
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+
+# Package as ZIP (engine + scripts + assets + SDL3.dll)
+cd build && cpack -C Release -G ZIP
+`
+
+The output CaesuraAmeKAG-1.0.0-win64.zip is ready for distribution.
 
 ## KAG Script Example
 

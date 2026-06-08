@@ -1,0 +1,197 @@
+﻿name: CI
+
+# Caesura (AmeKAG) — CI/CD Pipeline
+# Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
+
+on:
+  push:
+    branches: [master, main, dev]
+    paths-ignore: ["docs/**", "*.md"]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Debug
+  SDL_VERSION: "3.2.10"
+
+jobs:
+  build-windows:
+    name: "Windows · MSVC · ${{ matrix.config }}"
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Cache SDL3
+        id: cache-sdl
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/external/SDL3
+          key: sdl3-${{ env.SDL_VERSION }}-x64
+
+      - name: Install SDL3
+        if: steps.cache-sdl.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
+          Invoke-WebRequest -Uri $uri -OutFile sdl3.zip
+          Expand-Archive sdl3.zip -DestinationPath external/SDL3
+          Remove-Item sdl3.zip
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/cmake"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config ${{ matrix.config }} --parallel
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
+          if (Test-Path $testExe) {
+            & $testExe --success -s
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Host "Test executable not found at $testExe"
+            Write-Host "Checking for test binary..."
+            Get-ChildItem -Recurse -Filter "CaesuraTests.exe" -Path build | Select-Object FullName
+            exit 1
+          }
+
+      - name: Smoke Test
+        if: matrix.config == 'Debug'
+        shell: pwsh
+        run: |
+          $exe = "build/${{ matrix.config }}/CaesuraAmeKAG.exe"
+          if (Test-Path $exe) {
+            Write-Host "Engine binary built successfully: $exe"
+            $size = (Get-Item $exe).Length
+            Write-Host "Size: $([math]::Round($size/1MB, 2)) MB"
+          } else {
+            Write-Host "Engine binary not found"
+            exit 1
+          }
+
+  build-macos:
+    name: "macOS · Clang"
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          brew install cmake sdl3 freetype zstd
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        run: ./build/tests/CaesuraTests --success -s
+        continue-on-error: true
+
+  build-linux:
+    name: "Linux · GCC"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libsdl3-dev libfreetype-dev libzstd-dev libssl-dev libx11-dev
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel $(nproc)
+
+      - name: Test
+        run: ./build/tests/CaesuraTests --success -s
+        continue-on-error: true
+
+  release:
+    name: "Release · Package"
+    runs-on: windows-2022
+    needs: build-windows
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install SDL3
+        shell: pwsh
+        run: |
+          $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
+          Invoke-WebRequest -Uri $uri -OutFile sdl3.zip
+          Expand-Archive sdl3.zip -DestinationPath external/SDL3
+          Remove-Item sdl3.zip
+
+      - name: Configure Release
+        shell: pwsh
+        run: |
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/cmake"
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Package (CPack)
+        shell: pwsh
+        run: |
+          cd build
+          cpack -C Release -G ZIP
+
+      - name: Collect Artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-artifacts
+          $zip = Get-ChildItem -Filter "*.zip" -Path build | Select-Object -First 1
+          if ($zip) {
+            Copy-Item $zip.FullName release-artifacts/
+          }
+          Copy-Item build/Release/CaesuraAmeKAG.exe release-artifacts/ -ErrorAction SilentlyContinue
+          Copy-Item build/Release/SDL3.dll release-artifacts/ -ErrorAction SilentlyContinue
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: caesura-amekag-windows-x64
+          path: release-artifacts/
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+          generate_release_notes: true

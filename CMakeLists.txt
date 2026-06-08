@@ -271,6 +271,26 @@ endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 
+
+# -- CPack Release packaging ------------------------------------------------
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
+install(DIRECTORY scripts/ DESTINATION scripts)
+install(DIRECTORY assets/ DESTINATION assets)
+install(DIRECTORY shaders/ DESTINATION shaders OPTIONAL)
+install(FILES README.md LICENSE DESTINATION . OPTIONAL)
+
+set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VENDOR "AiliasDesu")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ¡ª SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
+
+# Include SDL3 DLL in package
+install(FILES "${SDL3_DIR}/../lib/${CMAKE_VS_PLATFORM_NAME}/SDL3.dll" DESTINATION . OPTIONAL)
+
+include(CPack)
+
 # -- Tools ----------------------------------------------------------------
 add_subdirectory(tools/carc_pack)
 
