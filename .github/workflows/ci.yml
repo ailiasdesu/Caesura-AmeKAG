@@ -13,11 +13,10 @@ on:
 
 env:
   BUILD_TYPE: Debug
-  SDL_VERSION: "3.2.10"
 
 jobs:
   build-windows:
-    name: "Windows · MSVC · ${{ matrix.config }}"
+    name: "Windows ? MSVC ? ${{ matrix.config }}"
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -31,39 +30,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Cache SDL3
-        id: cache-sdl
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/external/SDL3
-          key: sdl3-${{ env.SDL_VERSION }}-x64
-
-      - name: Install SDL3
-        if: steps.cache-sdl.outputs.cache-hit != 'true'
+      - name: Install SDL3 (vcpkg)
         shell: pwsh
         run: |
-          $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
-          $retry = 0; $ok = $false
-          while (-not $ok -and $retry -lt 3) {
-            try {
-              Invoke-WebRequest -Uri $uri -OutFile sdl3.zip -ErrorAction Stop
-              $ok = $true
-            } catch {
-              $retry++
-              Write-Host "SDL3 download attempt $retry failed, retrying..."
-              Start-Sleep 5
-            }
-          }
-          if (-not $ok) { throw "Failed to download SDL3 after 3 attempts" }
-          Expand-Archive sdl3.zip -DestinationPath external/SDL3
-          Remove-Item sdl3.zip
+          vcpkg install sdl3 --triplet x64-windows
 
       - name: Configure
         shell: pwsh
         run: |
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
-            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/SDL3-${{ env.SDL_VERSION }}/cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         shell: pwsh
@@ -72,10 +49,13 @@ jobs:
       - name: Copy SDL3 DLL for tests
         shell: pwsh
         run: |
-          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
-          if ($sdlDll) {
-            Copy-Item $sdlDll.FullName "build/tests/${{ matrix.config }}/"
+          $sdlDll = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
+          if (Test-Path $sdlDll) {
+            Copy-Item $sdlDll "build/tests/${{ matrix.config }}/"
             Write-Host "Copied SDL3.dll to test dir"
+          } else {
+            Write-Host "SDL3.dll not found, searching..."
+            Get-ChildItem -Recurse -Filter SDL3.dll -Path $env:VCPKG_INSTALLATION_ROOT -ErrorAction SilentlyContinue
           }
 
       - name: Test
@@ -101,7 +81,7 @@ jobs:
         run: |
           $exe = "build/${{ matrix.config }}/CaesuraAmeKAG.exe"
           if (Test-Path $exe) {
-            Write-Host "Engine binary built successfully: $exe"
+            Write-Host "Engine binary built: $exe"
             $size = (Get-Item $exe).Length
             Write-Host "Size: $([math]::Round($size/1MB, 2)) MB"
           } else {
@@ -123,21 +103,30 @@ jobs:
         run: |
           brew install cmake sdl3 freetype zstd
 
-      - name: Fix bx malloc.h (macOS compat)
+      - name: Fix bx cross-platform includes (macOS)
         run: |
+          # 1. malloc.h compat
           mkdir -p external/bgfx/bx/include/compat
           cat > external/bgfx/bx/include/compat/malloc.h << 'COMPAT_EOF'
-          // macOS compatibility stub -- malloc.h is MSVC-only
+          // macOS compatibility ? malloc.h is MSVC-only
           #pragma once
           #include <stdlib.h>
           #include <malloc/malloc.h>
           COMPAT_EOF
-          if grep -q 'compat/malloc.h' external/bgfx/bx/src/allocator.cpp; then
-            echo "Already patched"
-          else
+
+          # 2. Fix allocator.cpp
+          if ! grep -q 'compat/malloc.h' external/bgfx/bx/src/allocator.cpp; then
             sed -i '' 's|#include <malloc.h>|#ifdef __APPLE__\n#  include <compat/malloc.h>\n#else\n#  include <malloc.h>\n#endif|' external/bgfx/bx/src/allocator.cpp
             echo "Patched allocator.cpp"
           fi
+
+          # 3. msvc/dirent.h -> need to stub windows.h
+          mkdir -p external/bgfx/bx/include/compat/msvc
+          cat > external/bgfx/bx/include/compat/msvc/windows.h << 'WINEOF'
+          // macOS stub ? prevent bx from pulling real windows.h
+          #pragma once
+          WINEOF
+          echo "Created windows.h stub"
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
@@ -149,9 +138,8 @@ jobs:
         run: ./build/tests/CaesuraTests
         continue-on-error: true
 
-
   build-linux:
-    name: "Linux · GCC"
+    name: "Linux ? GCC"
     runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
@@ -160,39 +148,23 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache SDL3
-        id: cache-sdl
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/external/SDL3
-          key: sdl3-${{ env.SDL_VERSION }}-linux-x64
-
-      - name: Build SDL3 from source
-        if: steps.cache-sdl.outputs.cache-hit != 'true'
-        run: |
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
-          tar xzf sdl3.tar.gz
-          cd SDL3-${{ env.SDL_VERSION }}
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/external/SDL3"
-          cmake --build build --config Release --parallel $(nproc)
-          cmake --install build
-          cd ..
-          rm -rf sdl3.tar.gz SDL3-${{ env.SDL_VERSION }}
-
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev
 
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DSDL3_DIR="${{ github.workspace }}/external/SDL3/lib/cmake/SDL3"
+      - name: Install SDL3 (vcpkg)
+        run: |
+          vcpkg install sdl3 --triplet x64-linux
 
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
 
       - name: Test
-        run: ./build/tests/CaesuraTests --success -s
+        run: ./build/tests/CaesuraTests
         continue-on-error: true
 
   release:
@@ -206,24 +178,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install SDL3
+      - name: Install SDL3 (vcpkg)
         shell: pwsh
         run: |
-          $uri = "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-devel-${{ env.SDL_VERSION }}-VC.zip"
-          $retry = 0; $ok = $false
-          while (-not $ok -and $retry -lt 3) {
-            try {
-              Invoke-WebRequest -Uri $uri -OutFile sdl3.zip -ErrorAction Stop
-              $ok = $true
-            } catch {
-              $retry++
-              Write-Host "SDL3 download attempt $retry failed, retrying..."
-              Start-Sleep 5
-            }
-          }
-          if (-not $ok) { throw "Failed to download SDL3 after 3 attempts" }
-          Expand-Archive sdl3.zip -DestinationPath external/SDL3
-          Remove-Item sdl3.zip
+          vcpkg install sdl3 --triplet x64-windows
 
       - name: Configure Release
         shell: pwsh
@@ -231,7 +189,7 @@ jobs:
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/SDL3-${{ env.SDL_VERSION }}/cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build Release
         shell: pwsh
