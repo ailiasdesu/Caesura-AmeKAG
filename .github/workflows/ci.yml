@@ -13,6 +13,7 @@ jobs:
   build-windows:
     name: "Windows ? MSVC ? ${{ matrix.config }}"
     continue-on-error: true
+    if: github.event_name != 'push'
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -101,6 +102,7 @@ jobs:
 
   build-macos:
     name: "macOS ? Clang"
+    if: github.event_name != 'push'
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -124,6 +126,7 @@ jobs:
 
   build-linux:
     name: "Linux ? GCC"
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -148,6 +151,7 @@ jobs:
 
   coverage:
     name: "Linux ¡¤ GCC ¡¤ Coverage"
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -184,6 +188,7 @@ jobs:
 
 
     name: "Release é—?Package"
+    if: github.event_name != 'push'
     runs-on: windows-2022
     needs: build-windows
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
