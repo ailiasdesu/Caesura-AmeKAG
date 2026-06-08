@@ -160,6 +160,18 @@ void BgfxRenderDevice::flushBatch() {
         float alpha = q.opacity / 255.0f;
         bgfx::setUniform(m_u_blendParams, &alpha, 1);
 
+        // Rebase indices relative to merge group start: bgfx interprets
+        // index values as offsets from setVertexBuffer startVertex.
+        for (uint32_t m = 0; m < mergeCount; m++) {
+            uint32_t localBase = m * 4;
+            indices[idxOffset + m*6 + 0] = localBase + 0;
+            indices[idxOffset + m*6 + 1] = localBase + 1;
+            indices[idxOffset + m*6 + 2] = localBase + 2;
+            indices[idxOffset + m*6 + 3] = localBase + 0;
+            indices[idxOffset + m*6 + 4] = localBase + 2;
+            indices[idxOffset + m*6 + 5] = localBase + 3;
+        }
+
         // Submit the vertex/index subset for this texture group
         bgfx::setVertexBuffer(0, &tvb, vertOffset, mergeCount * 4);
         bgfx::setIndexBuffer(&tib, idxOffset, mergeIdxCount);
@@ -943,7 +955,7 @@ void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
 //  GPU Effect: Transition ?? crossfade / rule / wipe between two textures
 // ===========================================================================
 
-// Spec [10.2.25]: @Beta â€” Pre-bake rule images into a LUT texture atlas for batch
+// Spec [10.2.25]: @Beta â€?Pre-bake rule images into a LUT texture atlas for batch
 // transition rendering. Currently each transition passes its rule texture
 // individually via texture slot 2. A pre-baked atlas would reduce draw calls.
 void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,

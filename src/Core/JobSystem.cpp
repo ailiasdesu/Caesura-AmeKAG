@@ -2,6 +2,7 @@
 #include "Engine.h"
 #include <cstdio>
 #include <chrono>
+#include <windows.h>
 
 namespace Caesura {
 
@@ -79,8 +80,20 @@ void JobSystem::shutdown() {
     waitIdle();
     notifyWorkers();
 
+    // Join workers with timeout -- prevent indefinite hang on stuck workers.
+    // Uses native Windows handle for WaitForSingleObject with 500ms deadline;
+    // falls back to detach with warning if a worker doesn't stop in time.
+    constexpr DWORD kTimeoutMs = 500;
     for (auto& t : m_workers) {
-        if (t.joinable()) t.join();
+        if (!t.joinable()) continue;
+        DWORD rc = WaitForSingleObject(t.native_handle(), kTimeoutMs);
+        if (rc == WAIT_OBJECT_0) {
+            t.join();  // immediately returns since thread already exited
+        } else {
+            t.detach();
+            fprintf(stderr, "[JobSystem] Worker %u timed out after %lums -- detached\n",
+                    GetThreadId(t.native_handle()), kTimeoutMs);
+        }
     }
     m_workers.clear();
     m_workerThreadIds.clear();

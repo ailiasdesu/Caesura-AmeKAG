@@ -1,4 +1,4 @@
-ï»¿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) â€” no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ¡ª no C build needed
 
 # Engine sources
 
@@ -242,12 +242,19 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying scripts to output directory..."
 )
 
-# -- FFmpeg video decoding (optional) ----------------------------------------
-option(CAESURA_DEBUG "Enable debug logging" ON)
-option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" OFF)
+# -- Debug / Release configuration ------------------------------------------
+# CAESURA_DEBUG: defaults ON for Debug builds, OFF for Release/MinSizeRel
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    option(CAESURA_DEBUG "Enable debug logging and assertions" ON)
+else()
+    option(CAESURA_DEBUG "Enable debug logging and assertions" OFF)
+endif()
 if(CAESURA_DEBUG)
     target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_DEBUG)
 endif()
+
+# -- FFmpeg video decoding (optional) ----------------------------------------
+option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" OFF)
 
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat swscale avutil)
@@ -263,3 +270,4 @@ add_subdirectory(tools/carc_pack)
 
 # -- Unit Tests
 add_subdirectory(tests)
+

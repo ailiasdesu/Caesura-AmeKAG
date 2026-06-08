@@ -1,4 +1,4 @@
-ï»¿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -52,7 +52,7 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) -- render â†’ Render, particles â†’ VFX
+//  b:render(cmd, ...) -- render ¡ú Render, particles ¡ú VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
@@ -151,7 +151,7 @@ static int lua_Backend_audio(lua_State* L) {
         return 1;
     }
 
-    // get_length / get_position â†’ IAudioBackend (Spec [3.3])
+    // get_length / get_position ¡ú IAudioBackend (Spec [3.3])
     if (strcmp(cmd, "get_length") == 0) {
         const char* bus = luaL_checkstring(L, 2);
         float len = audio ? audio->getLength(bus) : 0.0f;
@@ -210,40 +210,23 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience -- delegate to KAG
+//  UI convenience -- delegate to KAG (single source of truth)
 // =========================================================================
 
 static int lua_Backend_show_text(lua_State* L) {
-    const char* text = luaL_checkstring(L, 1);
-    printf("[KAG] %s\n", text);
-    lua_pushboolean(L, 1);
-    return 1;
+    return delegateToGlobalFunc(L, "KAG", "show_text");
 }
 
-// -- KAG.render_text(text, x, y, r, g, b, a) -- bgfx bitmap font ----------
 static int lua_Backend_show_image(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "show_image");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    return delegateToGlobalFunc(L, "KAG", "show_image");
 }
+
 static int lua_Backend_clear_screen(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "clear_screen");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    return delegateToGlobalFunc(L, "KAG", "clear_screen");
 }
+
 static int lua_Backend_wait_click(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "wait_click");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    return delegateToGlobalFunc(L, "KAG", "wait_click");
 }
 
 
