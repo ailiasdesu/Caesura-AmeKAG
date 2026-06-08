@@ -2,7 +2,7 @@
 #include "Engine.h"
 #include <cstdio>
 #include <chrono>
-#include <windows.h>
+#ifdef _WIN32\n#include <windows.h>\n#endif
 
 namespace Caesura {
 
