@@ -150,7 +150,44 @@ jobs:
       - name: Test
         run: ./build/tests/CaesuraTests
 
-  release:
+
+  coverage:
+    name: "Linux · GCC · Coverage"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev lcov
+
+      - name: Configure
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCODE_COVERAGE=ON
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel $(nproc)
+
+      - name: Test
+        run: ./build/tests/CaesuraTests
+
+      - name: Generate coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' '*/external/*' '*/tests/*' --output-file coverage_filtered.info
+          genhtml coverage_filtered.info --output-directory coverage_report
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_report/
+
+
     name: "Release 闂?Package"
     runs-on: windows-2022
     needs: build-windows
