@@ -3,13 +3,19 @@
 #include "doctest.h"
 #include "Core/Engine.h"
 #include <thread>
+#ifdef _MSC_VER
 #include <crtdbg.h>
+#endif
 #include <stdlib.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#ifdef _WIN32
 #include <dbghelp.h>
+#endif
+#ifdef _MSC_VER
 #pragma comment(lib, "dbghelp.lib")
+#endif
 
 static void printStackTrace() {
     void* stack[64];

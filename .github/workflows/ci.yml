@@ -130,7 +130,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$(brew --prefix openssl@3)
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH=$(brew --prefix openssl@3)
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
