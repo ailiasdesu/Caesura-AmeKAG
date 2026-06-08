@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #ifdef CAESURA_HAS_LIVE2D
 
 #include "../IAnimationBackend.h"
@@ -40,12 +40,11 @@ public:
 
     const char* name() const override { return "Live2D"; }
 
-    // Bridge: set render device for texture output
     void setRenderDevice(BgfxRenderDevice* device);
 
 private:
     struct Live2DModel {
-        std::string path;
+        std::string dir;          // model directory (e.g. "assets/live2d/haru/")
         std::string name;
         bool visible = false;
         float x = 0, y = 0, scale = 1.0f, opacity = 1.0f;
@@ -59,8 +58,12 @@ private:
         int renderHeight = 720;
 
         // bgfx
-        uint16_t bgfxTexHandle = 0;
         bgfx::TextureHandle bgfxTex;
+        bool bgfxTexValid = false;
+
+        // Motion cache
+        std::unordered_map<std::string, std::vector<char>> motionCache;
+        std::unordered_map<std::string, std::vector<char>> expressionCache;
 
         ~Live2DModel();
     };
@@ -80,6 +83,7 @@ private:
 };
 
 void registerLive2DBinding(void* luaState);
+void Live2DBackend_setGlobal(Live2DBackend* backend);
 
 } // namespace Caesura
 
