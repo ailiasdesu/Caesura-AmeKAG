@@ -1,5 +1,5 @@
--- =============================================================================
---  Caesura (AmeKAG) ¡ª scheduler.lua
+ï»¿-- =============================================================================
+--  Caesura (AmeKAG) ï¿½ï¿½ scheduler.lua
 --  Token stream executor. Iterates tokens, dispatches to kag[cmd](ctx, params),
 --  handles flow-control inline (if/jump/call/return/label/end/macro/eval/wait).
 --  Coroutine-based: yields on blocking ops, resumes next frame from token_index.
@@ -7,7 +7,7 @@
 
 local scheduler = {}
 
--- ©¤©¤ Flow-control command set (handled inline, never dispatched to kag table) ©¤©¤
+-- ï¿½ï¿½ï¿½ï¿½ Flow-control command set (handled inline, never dispatched to kag table) ï¿½ï¿½ï¿½ï¿½
 
 local flow_commands = {
     ["if"] = true, ["else"] = true, ["endif"] = true,
@@ -20,7 +20,7 @@ local flow_commands = {
     ["stop"] = true,
 }
 
--- ©¤©¤ Internal helpers ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+-- ï¿½ï¿½ï¿½ï¿½ Internal helpers ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 local function find_label(tokens, name)
     for i, tok in ipairs(tokens) do
@@ -45,7 +45,7 @@ local function skip_to(tokens, start_idx, targets)
     return #tokens
 end
 
--- ©¤©¤ Main execution loop ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+-- ï¿½ï¿½ï¿½ï¿½ Main execution loop ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 function scheduler.run(ctx, tokens, start_index)
     if not tokens or #tokens == 0 then return end
@@ -149,7 +149,7 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "end" then
             return
 
-        -- Flow control: [label] ¡ª no-op, used by jump/call
+        -- Flow control: [label] ï¿½ï¿½ no-op, used by jump/call
         elseif cmd == "label" then
             -- pass
 
@@ -250,7 +250,7 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expand macro inline ¡ª merge params
+                -- Expand macro inline ï¿½ï¿½ merge params
                 local saved_tokens = tokens
                 tokens = macro_body
                 ctx.tokens = tokens
@@ -261,7 +261,7 @@ function scheduler.run(ctx, tokens, start_index)
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then
-                    -- Unrecognized text ¡ú treat as [ch]
+                    -- Unrecognized text ï¿½ï¿½ treat as [ch]
                     handler = kag["ch"]
                     if handler then
                         params = {text = cmd}
@@ -271,7 +271,7 @@ function scheduler.run(ctx, tokens, start_index)
                 if handler then
                     local status, err = pcall(handler, ctx, params)
                     if not status then
-                        -- Error ¡ú ErrorUI
+                        -- Error ï¿½ï¿½ ErrorUI
                         local ErrorUI = require("Core.ErrorUI")
                         -- Lua-side error reporting
                         print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
@@ -289,7 +289,7 @@ function scheduler.run(ctx, tokens, start_index)
     end
 end
 
--- ©¤©¤ Resume from saved state ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+-- ï¿½ï¿½ï¿½ï¿½ Resume from saved state ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 function scheduler.resume(ctx)
     if not ctx.tokens or not ctx.token_index then return end

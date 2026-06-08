@@ -14,12 +14,12 @@
 namespace Caesura {
 
 // ===========================================================================
-// UTF-8 Decode Helper 锟斤拷 consume multi-byte sequences as single codepoints
+// UTF-8 Decode Helper �� consume multi-byte sequences as single codepoints
 // ===========================================================================
 
 static int utf8_char_len(uint8_t lead) {
     if (lead < 0x80) return 1;
-    if (lead < 0xC0) return 1;  // continuation byte 锟斤拷 treat as '?'
+    if (lead < 0xC0) return 1;  // continuation byte �� treat as '?'
     if (lead < 0xE0) return 2;
     if (lead < 0xF0) return 3;
     return 4;
@@ -356,7 +356,7 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
     if (id == FontId::Large) buildFont16x32();
 
-    // Atlas: 32 cols 锟斤拷 3 rows = 96 glyphs, RGBA8
+    // Atlas: 32 cols �� 3 rows = 96 glyphs, RGBA8
     int atlasW = glyphW * 32;                     // 256 or 512
     int atlasH = glyphH * 3;                      // 48 or 96
     int totalPixels = atlasW * atlasH;
@@ -955,8 +955,16 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
     int tlen = (int)text.size();
 
     struct PosTexVertex { float x, y, u, v; };
+    
+    // CJK atlas UV dimensions (when separate atlas is loaded)
+    float cjkInvW = 1.0f / float(m_atlasW);
+    float cjkInvH = 1.0f / float(m_atlasH);
+    bool hasCjk = bgfx::isValid(m_cjkAtlas);
+    
     std::vector<GlyphDraw> draws;
+    std::vector<bool> glyphFromCjk;  // per-glyph: true if sourced from CJK atlas
     draws.reserve(m_msgCache.maxGlyphs);
+    glyphFromCjk.reserve(m_msgCache.maxGlyphs);
 
     for (int i = 0; i < tlen; ) {
         int clen = utf8_char_len(tdata[i]);
@@ -965,16 +973,28 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
         i += clen;
 
         GlyphMetrics gm = getTTFGlyph(cp);
+        bool fromCjk = false;
+        if (hasCjk && !m_ttf) {
+            fromCjk = true;
+        } else if (hasCjk && m_ttf) {
+            // glyph from CJK if not found in TTF atlas
+            fromCjk = (m_ttf->glyphs.find(cp) == m_ttf->glyphs.end());
+        }
+        
         if (gm.w > 0 && gm.h > 0) {
             GlyphDraw d;
-            d.gx = penX + gm.offsetX;
-            d.gy = penY - gm.offsetY + (m_ttf ? m_ttf->ascent : 8.0f);
-            d.u0 = gm.x * invW;  d.v0 = gm.y * invH;
-            d.u1 = (gm.x + gm.w) * invW;  d.v1 = (gm.y + gm.h) * invH;
+            float iw = fromCjk ? cjkInvW : invW;
+            float ih = fromCjk ? cjkInvH : invH;
+            d.gx = penX + (fromCjk ? (float)gm.offsetX : gm.offsetX);
+            d.gy = penY - (fromCjk ? (float)gm.offsetY : gm.offsetY) 
+                   + (m_ttf && !fromCjk ? m_ttf->ascent : 8.0f);
+            d.u0 = gm.x * iw;  d.v0 = gm.y * ih;
+            d.u1 = (gm.x + gm.w) * iw;  d.v1 = (gm.y + gm.h) * ih;
             draws.push_back(d);
         } else {
             draws.push_back({0,0,0,0,0,0});
         }
+        glyphFromCjk.push_back(fromCjk);
         penX += gm.advance;
     }
 
@@ -1009,12 +1029,17 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
 
     float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
     bgfx::setUniform(m_u_color, fc);
-    bgfx::setTexture(0, m_texSampler, tex);
+    // TD-13: Use CJK atlas texture when CJK-only text is detected
+    bool allCjk = hasCjk && !glyphFromCjk.empty();
+    for (bool c : glyphFromCjk) { if (!c) { allCjk = false; break; } }
+    bgfx::TextureHandle useTex = (allCjk && bgfx::isValid(m_cjkAtlas)) ? m_cjkAtlas : tex;
+    bgfx::setTexture(0, m_texSampler, useTex);
     bgfx::setVertexBuffer(0, m_msgCache.vb, 0, nv);
     bgfx::setIndexBuffer(m_msgCache.ib, 0, ni);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
     bgfx::submit(viewId, program);
 
+    m_msgCache.cacheIsCjk = allCjk && bgfx::isValid(m_cjkAtlas);
     m_msgCache.clearDirty();
     return penX;
 }

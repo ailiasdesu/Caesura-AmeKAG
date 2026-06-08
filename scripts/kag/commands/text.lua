@@ -1,6 +1,6 @@
--- =============================================================================
---  Caesura (AmeKAG) ¡ª kag/commands/text.lua
---  Phase 4: KAG text tag handlers ¡ª [ch], [text], [l], [r], [er], [p]
+ï»¿-- =============================================================================
+--  Caesura (AmeKAG) ï¿½ï¿½ kag/commands/text.lua
+--  Phase 4: KAG text tag handlers ï¿½ï¿½ [ch], [text], [l], [r], [er], [p]
 --  Manages character dialog display, backlog, and text cursor state.
 --  All rendering delegates to backend.font_render_text / backend.font_clear.
 -- =============================================================================
@@ -80,7 +80,7 @@ function TextCommands.ch(ctx, params)
 
     -- Render speaker name if present
     if #speaker > 0 then
-        backend.render_text("¡¾" .. speaker .. "¡¿", 32, 48, 540, 1, 1, 1, 1)
+        backend.render_text("ï¿½ï¿½" .. speaker .. "ï¿½ï¿½", 32, 48, 540, 1, 1, 1, 1)
     end
 
     -- Calculate y-position for message (below speaker if present)
@@ -140,7 +140,7 @@ function TextCommands.text(ctx, params)
 end
 
 -- =============================================================================
---  [l] ¡ª line break: advance text cursor to next line
+--  [l] ï¿½ï¿½ line break: advance text cursor to next line
 -- =============================================================================
 
 function TextCommands.l(ctx, params)
@@ -151,7 +151,7 @@ function TextCommands.l(ctx, params)
 end
 
 -- =============================================================================
---  [r] ¡ª carriage return: reset cursor to start of current line
+--  [r] ï¿½ï¿½ carriage return: reset cursor to start of current line
 -- =============================================================================
 
 function TextCommands.r(ctx, params)
@@ -160,7 +160,7 @@ function TextCommands.r(ctx, params)
 end
 
 -- =============================================================================
---  [er] ¡ª erase: clear all text from message layer (backlog preserved)
+--  [er] ï¿½ï¿½ erase: clear all text from message layer (backlog preserved)
 -- =============================================================================
 
 function TextCommands.er(ctx, params)
@@ -172,7 +172,7 @@ function TextCommands.er(ctx, params)
 end
 
 -- =============================================================================
---  [p] ¡ª page break / click-to-advance
+--  [p] ï¿½ï¿½ page break / click-to-advance
 --  Blocks the coroutine until user clicks or presses Enter/Space.
 --  The scheduler detects ctx.waiting_input and handles resume on input.
 -- =============================================================================
@@ -184,14 +184,14 @@ function TextCommands.p(ctx, params)
     -- Set state for scheduler to detect
     ctx.waiting_input = true
 
-    -- Yield the coroutine ¡ª scheduler resumes on next click
+    -- Yield the coroutine ï¿½ï¿½ scheduler resumes on next click
     coroutine.yield()
     update_text_state(ctx, "p")
 end
 
 
 -- =============================================================================
---  [ruby text="h×Ö" ruby="¤«¤ó¤¸"]
+--  [ruby text="ï¿½hï¿½ï¿½" ruby="ï¿½ï¿½ï¿½ï¿½"]
 --  Render base text with ruby (furigana) annotation above it.
 --  Delegates to backend.text_render_ruby for glyph layout.
 -- =============================================================================
@@ -219,7 +219,7 @@ function TextCommands.font(ctx, params)
 end
 
 -- =============================================================================
---  [skip] ¡ª toggle skip mode
+--  [skip] ï¿½ï¿½ toggle skip mode
 --  When active, scheduler auto-advances without waiting for user click.
 -- =============================================================================
 
@@ -228,7 +228,7 @@ function TextCommands.skip(ctx, params)
 end
 
 -- =============================================================================
---  [reset] ¡ª reset text state
+--  [reset] ï¿½ï¿½ reset text state
 --  Clears line/char_offset tracking and resets backend text renderer.
 --  Registered as KAG.reset via auto-iteration in kag.lua.
 -- =============================================================================
@@ -240,7 +240,7 @@ function TextCommands.reset(ctx, params)
 end
 
 -- =============================================================================
---  [pt speed=50] ¡ª typewriter speed (ms per character)
+--  [pt speed=50] ï¿½ï¿½ typewriter speed (ms per character)
 --  Controls the delay between each character appearing in [ch] / [text].
 -- =============================================================================
 
@@ -248,5 +248,86 @@ function TextCommands.pt(ctx, params)
     ctx.text_speed = tonumber(params.speed) or 50
 end
 
+
+
+-- =============================================================================
+--  [button text="Choice 1" target="*label_a"]
+--  [button text="Choice 2" target="*label_b"]  
+--  [endbutton]
+--  Interactive choice buttons. Blocks coroutine until user selects.
+--  Each [button] renders a clickable choice. [endbutton] executes the block.
+--  On selection, jumps to the target label within current scene.
+-- =============================================================================
+
+function TextCommands.button(ctx, params)
+    ctx._choiceButtons = ctx._choiceButtons or {}
+    local text = params.text or params.caption or ""
+    local target = params.target or params.storage or ""
+    table.insert(ctx._choiceButtons, { text = text, target = target })
+end
+
+function TextCommands.endbutton(ctx, params)
+    if not ctx._choiceButtons or #ctx._choiceButtons == 0 then
+        ctx._choiceButtons = nil
+        return
+    end
+
+    local backend = require("backend")
+    
+    -- Render choice buttons on screen
+    local startY = 450
+    local lineHeight = backend.line_height() or 30
+    for idx, choice in ipairs(ctx._choiceButtons) do
+        local y = startY + (idx - 1) * (lineHeight + 8)
+        backend.render_text((idx) .. ". " .. choice.text, 32, 48, y, 1, 1, 0, 1)
+        -- Store button region for hit testing
+        choice.y = y
+        choice.h = lineHeight
+        choice.index = idx
+    end
+    
+    -- Install click handler for choice mode
+    ctx._choiceButtonsActive = ctx._choiceButtons
+    ctx._choiceButtons = nil
+    ctx._choiceMode = true
+    ctx.waiting_input = true
+
+    -- Override the global click callback for choice detection
+    local oldClick = _G._KAG_onClick
+    _G._KAG_onClick = function(x, y)
+        if not ctx._choiceMode then
+            if oldClick then oldClick(x, y) end
+            return
+        end
+        -- Hit-test against button regions
+        local buttons = ctx._choiceButtonsActive
+        if not buttons then return end
+        for _, choice in ipairs(buttons) do
+            if y >= choice.y and y <= choice.y + choice.h
+               and x >= 32 and x <= 600 then
+                ctx._selectedChoice = choice
+                ctx._choiceMode = false
+                ctx._choiceButtonsActive = nil
+                ctx.waiting_input = false
+                _G._KAG_onClick = oldClick  -- restore
+                return
+            end
+        end
+    end
+
+    -- Block until user selects
+    coroutine.yield()
+    
+    -- After selection, jump to target label
+    local selected = ctx._selectedChoice
+    ctx._selectedChoice = nil
+    
+    -- Ensure click handler is restored
+    _G._KAG_onClick = oldClick
+    
+    if selected and selected.target then
+        ctx._pendingJump = selected.target
+    end
+end
 
 return TextCommands

@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 #include <bgfx/bgfx.h>
 #include <string>
 #include <cstdint>
@@ -10,7 +10,7 @@
 
 namespace Caesura {
 
-// CJK static atlas entry (Track 2 â€” merged from FontRenderer)
+// CJK static atlas entry (Track 2 ¡ª merged from FontRenderer)
 struct CjkGlyph {
     uint16_t x = 0, y = 0, w = 0, h = 0;
     int16_t advance = 0, offsetX = 0, offsetY = 0;
@@ -23,6 +23,7 @@ struct MessageLayerCache {
     uint32_t maxGlyphs = 2048;
     uint32_t dirtyStart = 0, dirtyEnd = 0, glyphCount = 0;
     std::string cachedText;
+    bool        cacheIsCjk = false;     // TD-13: whether cached text uses CJK atlas
 
     bool isDirty() const { return dirtyStart < dirtyEnd; }
     void markAllDirty() { dirtyStart = 0; dirtyEnd = maxGlyphs; }

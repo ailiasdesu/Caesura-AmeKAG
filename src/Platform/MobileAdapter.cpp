@@ -4,6 +4,7 @@
 #include "MobileAdapter.h"
 #include <cstring>
 #include <cstdio>
+#include <SDL3/SDL.h>
 
 // Minimal Lua include -- we only need lua_State* for callbacks
 extern "C" {
@@ -67,10 +68,14 @@ void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
     }
     m_activeTouches++;
 
-    // TODO: Inject SDL mouse button down event at scaled (x, y).
-    // For mobile port: SDL_PushEvent with SDL_MOUSEBUTTONDOWN.
-    (void)x;
-    (void)y;
+    // TD-14: Inject SDL mouse button down event for touch→mouse mapping
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    ev.button.x = x * m_displayScale;
+    ev.button.y = y * m_displayScale;
+    ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.clicks = 1;
+    SDL_PushEvent(&ev);
 }
 
 void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
@@ -79,9 +84,12 @@ void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
         m_touchPoints[fingerId].y = y;
     }
 
-    // TODO: Inject SDL mouse motion event at scaled (x, y).
-    (void)x;
-    (void)y;
+    // TD-14: Inject SDL mouse motion event for touch→mouse mapping
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_MOTION;
+    ev.motion.x = x * m_displayScale;
+    ev.motion.y = y * m_displayScale;
+    SDL_PushEvent(&ev);
 }
 
 void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
@@ -90,9 +98,14 @@ void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
     }
     if (m_activeTouches > 0) m_activeTouches--;
 
-    // TODO: Inject SDL mouse button up event at scaled (x, y).
-    (void)x;
-    (void)y;
+    // TD-14: Inject SDL mouse button up event for touch→mouse mapping
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    ev.button.x = x * m_displayScale;
+    ev.button.y = y * m_displayScale;
+    ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.clicks = 1;
+    SDL_PushEvent(&ev);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -107,9 +120,17 @@ void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
 }
 
 void MobileAdapter::onLongPress(float x, float y) {
-    // TODO: Inject SDL right mouse button click event at scaled (x, y).
-    (void)x;
-    (void)y;
+    // TD-14: Long press → right mouse button click
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    ev.button.x = x * m_displayScale;
+    ev.button.y = y * m_displayScale;
+    ev.button.button = SDL_BUTTON_RIGHT;
+    ev.button.clicks = 1;
+    SDL_PushEvent(&ev);
+    // Synthesize immediate button-up
+    ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    SDL_PushEvent(&ev);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
