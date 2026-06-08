@@ -1,4 +1,4 @@
-ï»¿# Caesura (AmeKAG)
+# Caesura (AmeKAG)
 
 Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 
@@ -7,7 +7,7 @@ Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 
 ## Quick Start
 
-Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately â€” no dependencies.
+Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately ¡ª no dependencies.
 
 ## Build from Source
 ## Build from Source
@@ -71,7 +71,7 @@ src/
 scripts/
   kag/         Parser, scheduler, conductor, 9 command modules
   demo.lua     4-phase visual demo (runs on launch)
-  sandbox.lua  Security rules â€” DEFAULT DENY, EXPLICIT ALLOW
+  sandbox.lua  Security rules ¡ª DEFAULT DENY, EXPLICIT ALLOW
   config.lua   Backend selection, engine configuration
 
 tests/
@@ -83,10 +83,10 @@ tests/
 
 | Module | Detail |
 |---|---|
-| KAG Script | 9 command modules, 53 tag handlers â€” bg, fg, text, audio, VFX, transitions, save/load |
-| Lua Sandbox | Strict mode â€” all rules in `scripts/sandbox.lua`, AI-auditable |
+| KAG Script | 9 command modules, 53 tag handlers ¡ª bg, fg, text, audio, VFX, transitions, save/load |
+| Lua Sandbox | Strict mode ¡ª all rules in `scripts/sandbox.lua`, AI-auditable |
 | CARC Packaging | ed25519 signature + AES-GCM encryption + zstd compression |
-| VFX System | Quake, flash, blur, fade, snow, rain â€” 1024 particle cap |
+| VFX System | Quake, flash, blur, fade, snow, rain ¡ª 1024 particle cap |
 | 3D LUT Grading | Real-time palette-based color correction |
 | Video Playback | FFmpeg with hardware decode fallback to pl_mpeg |
 | Multi-Core | JobSystem work-stealing thread pool for async texture/video loading |
@@ -95,7 +95,7 @@ tests/
 
 ## Dependencies
 
-Vendored â€” no system packages required beyond SDL3:
+Vendored ¡ª no system packages required beyond SDL3:
 
 | Library | Purpose |
 |---|---|
@@ -130,7 +130,28 @@ cmake --build build --config Release --parallel
 cd build && cpack -C Release -G ZIP
 ```
 
-Output: `CaesuraAmeKAG-1.0.0-win64.zip` â€” ready to distribute.
+Output: `CaesuraAmeKAG-1.0.0-win64.zip` ¡ª ready to distribute.
+
+## Live2D Cubism (Optional)
+
+Live2D support requires the **Live2D Cubism 5 Native SDK**, which is proprietary software
+and is **not** included in this repository.
+
+### Setup
+
+1. Download Cubism 5 Native SDK from [live2d.com](https://www.live2d.com/en/download/cubism-sdk/)
+2. Configure with the SDK path:
+
+```
+cmake -B build -DCAESURA_LIVE2D=ON -DLIVE2D_SDK_ROOT="path/to/CubismSdkForNative" ...
+```
+
+### Legal
+
+- Cubism SDK is Live2D Inc. proprietary software ¡ª subject to its own license
+- This engine does **not** redistribute Cubism SDK in source or binary form
+- The engine's MIT license does **not** apply to Cubism SDK
+
 
 ## License
 
