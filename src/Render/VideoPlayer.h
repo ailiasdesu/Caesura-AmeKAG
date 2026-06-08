@@ -1,8 +1,9 @@
-ï»¿#pragma once
+#pragma once
 #include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 #include <bgfx/bgfx.h>
 
 namespace Caesura {
@@ -20,6 +21,15 @@ struct VideoHandle {
 // separately; video audio track is discarded for now per Alpha spec).
 //
 // Thread safety: main-thread only (bgfx texture creation).
+
+
+// -- DecodedFrame: worker ¡ú main-thread transfer buffer -------------------
+struct DecodedFrame {
+    std::vector<uint8_t> rgba;
+    int width  = 0;
+    int height = 0;
+    bool valid = false;
+};
 
 class VideoPlayer {
 public:
@@ -74,6 +84,8 @@ private:
         bool   playing = true;
         bool   ended   = false;
         bool   hasFrame = false;
+        std::shared_ptr<DecodedFrame> m_readyFrame;  // decoded, waiting for GPU upload
+        std::shared_ptr<DecodedFrame> m_nextFrame;   // being decoded by JobSystem worker
 
 #ifdef CAESURA_VIDEO_FFMPEG
         // FFmpeg handles (void* to avoid leaking headers into every TU)

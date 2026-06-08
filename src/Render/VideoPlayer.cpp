@@ -1,12 +1,14 @@
-ï»¿#include <cstdio>
+#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <memory>
 #define PL_MPEG_IMPLEMENTATION
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
 #include "../Core/DebugManager.h"
+#include "../Core/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
 extern "C" {
@@ -112,7 +114,7 @@ VideoHandle VideoPlayer::open(const char* path) {
         vs.ended    = false;
         vs.hasFrame = false;
 
-        // SwsContext for YUV â†’ RGBA
+        // SwsContext for YUV ¡ú RGBA
         SwsContext* sws = sws_getContext(
             avCodec->width, avCodec->height, avCodec->pix_fmt,
             avCodec->width, avCodec->height, AV_PIX_FMT_RGBA,
@@ -324,13 +326,38 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 #endif
     }
 
-    // -------- pl_mpeg path --------
-    plm_t* plm = static_cast<plm_t*>(vs->plm);
+    // -------- pl_mpeg path (decode on JobSystem worker) --------------
+    {
+        plm_t* plm = static_cast<plm_t*>(vs->plm);
+        auto frame = std::make_shared<DecodedFrame>();
+        frame->width  = vs->width;
+        frame->height = vs->height;
 
-    plm_frame_t* frame = plm_decode_video(plm);
-    plm_decode_audio(plm);
+        JobSystem::instance().submit(
+            [frame, plm]() {
+                plm_frame_t* f = plm_decode_video(plm);
+                plm_decode_audio(plm);
+                if (f) {
+                    frame->rgba.resize(frame->width * frame->height * 4);
+                    plm_frame_to_rgba(f, frame->rgba.data(), frame->width * 4);
+                    frame->valid = true;
+                } else {
+                    frame->valid = false;
+                }
+            },
+            JobPriority::High
+        );
 
-    if (!frame) {
+        JobSystem::instance().waitIdle();
+
+        if (frame->valid) {
+            const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
+            bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
+                                  (uint16_t)frame->width, (uint16_t)frame->height, mem);
+            vs->hasFrame = true;
+            return true;
+        }
+
         if (plm_has_ended(plm)) {
             vs->ended = true;
             vs->playing = false;
@@ -339,17 +366,6 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         }
         return false;
     }
-
-    int stride = vs->width * 4;
-    std::vector<uint8_t> rgba(static_cast<size_t>(vs->width) * vs->height * 4);
-    plm_frame_to_rgba(frame, rgba.data(), stride);
-
-    const bgfx::Memory* mem = bgfx::copy(rgba.data(), (uint32_t)rgba.size());
-    bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
-                          (uint16_t)vs->width, (uint16_t)vs->height, mem);
-
-    vs->hasFrame = true;
-    return true;
 }
 
 bgfx::TextureHandle VideoPlayer::getTexture(VideoHandle handle) const {
