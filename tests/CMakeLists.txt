@@ -83,6 +83,10 @@ set(TEST_SOURCES
 
 add_executable(CaesuraTests ${TEST_SOURCES})
 
+if(WIN32)
+    target_link_libraries(CaesuraTests PRIVATE bcrypt)
+endif()
+
 target_include_directories(CaesuraTests PRIVATE
     ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
     ${CMAKE_SOURCE_DIR}/src
@@ -102,7 +106,7 @@ target_include_directories(CaesuraTests PRIVATE
 
 target_link_libraries(CaesuraTests PRIVATE
     doctest lua ed25519 SDL3::SDL3 soloud bgfx bimg bx
-$<IF:$<BOOL:${WIN32}>,bcrypt,> freetype libzstd_static
+    freetype libzstd_static
 )
 
 if(WIN32)

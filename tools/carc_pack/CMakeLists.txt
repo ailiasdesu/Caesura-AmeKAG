@@ -34,7 +34,11 @@ target_include_directories(${TOOL_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-if(WIN32)`n    target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)`nelse()`n    target_link_libraries(${TOOL_NAME} PRIVATE libzstd_static)`nendif()
+if(WIN32)
+    target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
+else()
+    target_link_libraries(${TOOL_NAME} PRIVATE libzstd_static)
+endif()
 
 target_compile_definitions(${TOOL_NAME} PRIVATE
     _CRT_SECURE_NO_WARNINGS
