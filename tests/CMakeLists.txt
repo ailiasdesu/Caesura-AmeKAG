@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -102,7 +102,7 @@ target_include_directories(CaesuraTests PRIVATE
 
 target_link_libraries(CaesuraTests PRIVATE
     doctest lua ed25519 SDL3::SDL3 soloud bgfx bimg bx
-    bcrypt freetype libzstd_static
+$<IF:$<BOOL:${WIN32}>,bcrypt,> freetype libzstd_static
 )
 
 if(WIN32)
