@@ -3,7 +3,9 @@
 #include "doctest.h"
 #include "Core/Engine.h"
 #include <thread>
-#ifdef _MSC_VER\n#include <crtdbg.h>\n#endif
+#ifdef _MSC_VER
+#include <crtdbg.h>
+#endif
 #include <stdlib.h>
 #include <windows.h>
 #include <dbghelp.h>
