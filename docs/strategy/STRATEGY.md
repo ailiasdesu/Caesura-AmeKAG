@@ -1,7 +1,7 @@
 ﻿---
 name: Caesura (AmeKAG)
 last_updated: 2026-06-08
-version: Alpha 0.2.0
+version: Alpha 0.3.0
 ---
 
 # Caesura (AmeKAG) Strategy
@@ -11,7 +11,7 @@ version: Alpha 0.2.0
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
 | Alpha 0.1.0 | 2026-06-07 | 引擎核心、KAG API、Lua 沙盒、可视化编辑器 MVP |
-| Alpha 0.2.0 | 2026-06-08 | CI 三平台全绿、多核 JobSystem、KAG 完全兼容、CARC 多线程解码、视频异步 |
+| Alpha 0.3.0 | 2026-06-08 | CI 三平台全绿、多核 JobSystem、KAG 完全兼容、CARC 多线程解码、视频异步 |
 
 ## Tracks
 
@@ -90,7 +90,8 @@ KAG 脚本 API 98+ 函数覆盖 Kirikiri Adventure Game 全部核心指令，包
 |---|---|---|
 | P0 | CI 三平台全绿 | done |
 | P0 | 多核架构完成 | done |
-| P1 | 自动化测试完善 | in_progress |
+| P1 | 自动化测试完善 | todo |
+| P1 | 技术债清零（4项） | done |
 | P1 | 修复 draw=0 纹理 ID 匹配问题 | done |
 | P2 | Live2D 集成 | todo |
 | P2 | 物理引擎接入 | todo |
