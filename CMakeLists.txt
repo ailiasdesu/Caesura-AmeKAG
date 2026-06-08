@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) ¡ª no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ï¿½ï¿½ no C build needed
 
 # Engine sources
 
@@ -209,7 +209,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
 # Copy SDL3 DLL to output directory for runtime
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SDL3_DIR}/../lib/${CMAKE_VS_PLATFORM_NAME}/SDL3.dll"
+        "$<TARGET_FILE:SDL3::SDL3>"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/SDL3.dll"
     COMMENT "Copying SDL3.dll to output"
 )
@@ -282,12 +282,12 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ¡ª SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ï¿½ï¿½ SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
 # Include SDL3 DLL in package
-install(FILES "${SDL3_DIR}/../lib/${CMAKE_VS_PLATFORM_NAME}/SDL3.dll" DESTINATION . OPTIONAL)
+install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
 
 include(CPack)
 

@@ -1,6 +1,6 @@
 name: CI
 
-# Caesura (AmeKAG) â€?CI/CD Pipeline
+# Caesura (AmeKAG) ï¿½?CI/CD Pipeline
 # Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
 
 on:
@@ -41,15 +41,6 @@ jobs:
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_APPLOCAL_DEPS=OFF
-
-      - name: Pre-copy SDL3 DLL for applocal
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/x64/"
-          $src = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
-          $dst = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/lib/x64/SDL3.dll"
-          Copy-Item $src $dst -Force
-          Write-Host "Pre-staged SDL3.dll for applocal"
 
       - name: Build
         shell: pwsh
@@ -123,7 +114,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          brew install cmake sdl3 freetype zstd openssl
+          brew install cmake sdl3 freetype zstd openssl@3
 
       - name: Fix bx cross-platform includes (macOS)
         run: |
@@ -138,7 +129,7 @@ jobs:
           echo "Patched bx allocator.cpp"
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
@@ -174,7 +165,7 @@ jobs:
           vcpkg install sdl3 --triplet x64-linux
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-msse4.1" -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
