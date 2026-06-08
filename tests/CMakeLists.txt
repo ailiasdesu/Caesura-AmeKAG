@@ -25,6 +25,10 @@ set(TEST_SOURCES
     cpp/test_render.cpp
     cpp/test_kag_binding.cpp
     cpp/test_kag_integration.cpp
+    cpp/test_sandbox_quota.cpp
+    cpp/test_particle_system.cpp
+    cpp/test_engine_lifecycle.cpp
+    cpp/test_mini_game.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
@@ -74,6 +78,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Platform/MobileAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})
