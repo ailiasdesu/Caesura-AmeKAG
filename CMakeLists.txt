@@ -277,21 +277,91 @@ endif()
 option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK download)" OFF)
 
 if(CAESURA_LIVE2D)
-    message(STATUS "Live2D enabled ¡ª user must provide Cubism SDK headers/libs")
-    set(LIVE2D_SDK_ROOT "" CACHE PATH "Path to Live2D Cubism SDK root")
-    if(NOT LIVE2D_SDK_ROOT)
-        message(WARNING "Live2D SDK root not set; set LIVE2D_SDK_ROOT to Cubism SDK path")
+    # Default SDK location (not committed to git)
+    set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root")
+    
+    if(NOT EXISTS "${CUBISM_SDK_ROOT}/Core/include/Live2DCubismCore.h")
+        message(WARNING "Cubism SDK not found at ${CUBISM_SDK_ROOT}. Download from live2d.com")
     else()
-        target_include_directories(${PROJECT_NAME} PRIVATE "${LIVE2D_SDK_ROOT}/include")
-        target_link_directories(${PROJECT_NAME} PRIVATE "${LIVE2D_SDK_ROOT}/lib")
-        target_link_libraries(${PROJECT_NAME} PRIVATE Live2DCubismCore)
+        message(STATUS "Live2D SDK found at ${CUBISM_SDK_ROOT}")
+        
+        set(CUBISM_CORE_DIR "${CUBISM_SDK_ROOT}/Core")
+        set(CUBISM_FRAMEWORK_DIR "${CUBISM_SDK_ROOT}/Framework")
+        
+        # --- Cubism Core (C library, prebuilt) ---
+        add_library(Live2DCubismCore STATIC IMPORTED)
+        if(WIN32)
+            if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+                set_target_properties(Live2DCubismCore PROPERTIES
+                    IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib"
+                )
+            else()
+                set_target_properties(Live2DCubismCore PROPERTIES
+                    IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86/143/Live2DCubismCore_MT.lib"
+                )
+            endif()
+        elseif(APPLE)
+            # TODO: macOS library selection
+        elseif(UNIX)
+            set_target_properties(Live2DCubismCore PROPERTIES
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/x86_64/libLive2DCubismCore.a"
+            )
+        endif()
+        
+        # --- Cubism Framework (C++ static lib) ---
+        file(GLOB_RECURSE CUBISM_FRAMEWORK_SRCS
+            "${CUBISM_FRAMEWORK_DIR}/src/CubismCdiJson.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/CubismDefaultParameterId.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/CubismFramework.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/CubismModelSettingJson.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Effect/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Id/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Math/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Model/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Motion/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Physics/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/csmBlendMode.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/CubismRenderer.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Type/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Utils/*.cpp"
+        )
+        
+        # D3D11 render backend (Windows)
+        if(WIN32)
+            file(GLOB CUBISM_RENDER_D3D11
+                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/*.cpp"
+            )
+            list(APPEND CUBISM_FRAMEWORK_SRCS ${CUBISM_RENDER_D3D11})
+        endif()
+        
+        add_library(CubismFramework STATIC ${CUBISM_FRAMEWORK_SRCS})
+        target_include_directories(CubismFramework PUBLIC
+            "${CUBISM_FRAMEWORK_DIR}/src"
+            "${CUBISM_CORE_DIR}/include"
+        )
+        if(WIN32)
+            target_include_directories(CubismFramework PRIVATE
+                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11"
+            )
+        endif()
+        target_compile_definitions(CubismFramework PRIVATE CSM_TARGET_WIN_GL)
+        target_compile_definitions(CubismFramework PRIVATE _CRT_SECURE_NO_WARNINGS)
+        
+        # --- Engine Live2D backend ---
         target_sources(${PROJECT_NAME} PRIVATE
             src/Animation/Live2D/Live2DBackend.h
             src/Animation/Live2D/Live2DBackend.cpp
         )
+        
+        target_link_libraries(${PROJECT_NAME} PRIVATE CubismFramework Live2DCubismCore)
+        target_include_directories(${PROJECT_NAME} PRIVATE
+            "${CUBISM_CORE_DIR}/include"
+            "${CUBISM_FRAMEWORK_DIR}/src"
+        )
+        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D)
     endif()
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D)
 endif()
+message(STATUS "Caesura (AmeKAG) configured successfully.")
 message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 

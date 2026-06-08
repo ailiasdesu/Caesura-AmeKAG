@@ -6,6 +6,13 @@
 #include <unordered_map>
 #include <memory>
 
+struct SDL_IOStream;
+
+namespace Live2D { namespace Cubism { namespace Framework {
+    class CubismUserModel;
+} } }
+namespace Csm = Live2D::Cubism::Framework;
+
 namespace Caesura {
 
 class Live2DBackend : public IAnimationBackend {
@@ -29,9 +36,28 @@ public:
     const char* name() const override { return "Live2D"; }
 
 private:
-    struct ModelState;
-    std::unordered_map<int, std::unique_ptr<ModelState>> m_models;
+    struct Live2DModel {
+        std::string path;
+        std::string name;
+        bool visible = false;
+        float x = 0, y = 0, scale = 1.0f, opacity = 1.0f;
+
+        // Cubism objects
+        std::unique_ptr<Csm::CubismUserModel> userModel;
+        void* mocData = nullptr;  // raw .moc3 bytes (aligned)
+        void* renderer = nullptr; // CubismRenderer_D3D11 (opaque ptr to avoid header deps)
+        int renderTargetWidth = 0;
+        int renderTargetHeight = 0;
+
+        ~Live2DModel();
+    };
+
+    std::unordered_map<int, std::unique_ptr<Live2DModel>> m_models;
     int m_nextHandle = 1;
+    bool m_initialized = false;
+
+    bool loadModelInternal(Live2DModel& model);
+    void createRenderer(Live2DModel& model);
 };
 
 void registerLive2DBinding(void* luaState);
