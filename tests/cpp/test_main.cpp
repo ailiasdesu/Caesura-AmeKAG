@@ -1,4 +1,4 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+﻿#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define WIN32_LEAN_AND_MEAN
 #include "doctest.h"
 #include "Core/Engine.h"
@@ -9,14 +9,11 @@
 #include <stdlib.h>
 #ifdef _WIN32
 #include <windows.h>
-#endif
-#ifdef _WIN32
 #include <dbghelp.h>
-#endif
-#ifdef _MSC_VER
 #pragma comment(lib, "dbghelp.lib")
 #endif
 
+#ifdef _WIN32
 static void printStackTrace() {
     void* stack[64];
     HANDLE process = GetCurrentProcess();
@@ -37,7 +34,9 @@ static void printStackTrace() {
     }
     SymCleanup(process);
 }
+#endif
 
+#ifdef _MSC_VER
 static int __cdecl reportHook(int reportType, char* message, int* returnValue) {
     if (reportType == _CRT_ASSERT) {
         fprintf(stderr, "ASSERT: %s\n", message);
@@ -56,6 +55,7 @@ static int s_setupCRT = []() -> int {
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     return 0;
 }();
+#endif
 
 static int s_testSetup = []() -> int {
     Caesura::Engine::s_mainThreadId = std::this_thread::get_id();
