@@ -1,6 +1,6 @@
 name: CI
 
-# Caesura (AmeKAG) â€” CI/CD Pipeline
+# Caesura (AmeKAG) â€?CI/CD Pipeline
 # Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
 
 on:
@@ -41,6 +41,15 @@ jobs:
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_APPLOCAL_DEPS=OFF
+
+      - name: Pre-copy SDL3 DLL for applocal
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/x64/"
+          $src = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
+          $dst = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/lib/x64/SDL3.dll"
+          Copy-Item $src $dst -Force
+          Write-Host "Pre-staged SDL3.dll for applocal"
 
       - name: Build
         shell: pwsh
@@ -114,7 +123,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          brew install cmake sdl3 freetype zstd
+          brew install cmake sdl3 freetype zstd openssl
 
       - name: Fix bx cross-platform includes (macOS)
         run: |
@@ -129,7 +138,7 @@ jobs:
           echo "Patched bx allocator.cpp"
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
@@ -155,9 +164,9 @@ jobs:
 
       - name: Fix bx cross-platform includes (Linux)
         run: |
-          sed -i "/include\\/compat\\/msvc/d" external/bgfx/bx/CMakeLists.txt
+          sed -i '/include\/compat\/msvc/d' external/bgfx/bx/CMakeLists.txt
           echo "Removed msvc compat from bx include paths"
-          sed -i 's|#include <malloc.h>|#ifndef _WIN32\\n#  include <stdlib.h>\\n#else\\n#  include <malloc.h>\\n#endif|' external/bgfx/bx/src/allocator.cpp
+          sed -i 's|#include <malloc.h>|#include <stdlib.h>|' external/bgfx/bx/src/allocator.cpp
           echo "Patched bx allocator.cpp"
 
       - name: Install SDL3 (vcpkg)
