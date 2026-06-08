@@ -105,28 +105,15 @@ jobs:
 
       - name: Fix bx cross-platform includes (macOS)
         run: |
-          # 1. malloc.h compat
-          mkdir -p external/bgfx/bx/include/compat
-          cat > external/bgfx/bx/include/compat/malloc.h << 'COMPAT_EOF'
-          // macOS compatibility ? malloc.h is MSVC-only
-          #pragma once
-          #include <stdlib.h>
-          #include <malloc/malloc.h>
-          COMPAT_EOF
+          # bx unconditionally adds include/compat/msvc to include path
+          # This breaks macOS because msvc/dirent.h pulls in windows.h
+          # Fix: remove msvc from CMakeLists include dirs on non-Windows
+          sed -i '' '/include\/compat\/msvc/d' external/bgfx/bx/CMakeLists.txt
+          echo "Removed msvc compat from bx include paths"
 
-          # 2. Fix allocator.cpp
-          if ! grep -q 'compat/malloc.h' external/bgfx/bx/src/allocator.cpp; then
-            sed -i '' 's|#include <malloc.h>|#ifdef __APPLE__\n#  include <compat/malloc.h>\n#else\n#  include <malloc.h>\n#endif|' external/bgfx/bx/src/allocator.cpp
-            echo "Patched allocator.cpp"
-          fi
-
-          # 3. msvc/dirent.h -> need to stub windows.h
-          mkdir -p external/bgfx/bx/include/compat/msvc
-          cat > external/bgfx/bx/include/compat/msvc/windows.h << 'WINEOF'
-          // macOS stub ? prevent bx from pulling real windows.h
-          #pragma once
-          WINEOF
-          echo "Created windows.h stub"
+          # Fix allocator.cpp ? use stdlib.h instead of malloc.h on Apple
+          sed -i '' 's|#include <malloc.h>|#ifdef __APPLE__\n#  include <stdlib.h>\n#else\n#  include <malloc.h>\n#endif|' external/bgfx/bx/src/allocator.cpp
+          echo "Patched bx allocator.cpp"
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
