@@ -1,6 +1,6 @@
 name: CI
 
-# Caesura (AmeKAG) 锟?CI/CD Pipeline
+# Caesura (AmeKAG) 閿?CI/CD Pipeline
 # Build + Test on Windows (MSVC), with macOS/Linux stubs for future expansion.
 
 on:
@@ -71,7 +71,7 @@ jobs:
             Get-ChildItem -Recurse -Filter SDL3.dll -Path $env:VCPKG_INSTALLATION_ROOT -ErrorAction SilentlyContinue
           }
 
-            - name: Test
+      - name: Test
         shell: pwsh
         run: |
           $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
@@ -88,7 +88,7 @@ jobs:
                 Write-Host "::error::Tests crashed (exit $LASTEXITCODE)"
                 exit $LASTEXITCODE
               }
-              # doctest exit 1 means test failures — report but don't block
+              # doctest exit 1 means test failures 鈥?report but don't block
               if ($LASTEXITCODE -eq 1) {
                 Write-Host "::warning::Some tests failed"
               }
@@ -100,7 +100,7 @@ jobs:
             Get-ChildItem -Recurse -Filter "CaesuraTests.exe" -Path build | Select-Object FullName
             exit 1
           }
-- name: Smoke Test
+      - name: Smoke Test
         if: matrix.config == 'Debug'
         shell: pwsh
         run: |
@@ -188,7 +188,7 @@ jobs:
         continue-on-error: true
 
   release:
-    name: "Release 路 Package"
+    name: "Release 璺?Package"
     runs-on: windows-2022
     needs: build-windows
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
