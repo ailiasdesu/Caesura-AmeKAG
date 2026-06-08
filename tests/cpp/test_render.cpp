@@ -1,4 +1,4 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "Render/BgfxRenderDevice.h"
 #include "Render/RTTManager.h"
 #include "Render/LayerManager.h"
@@ -113,11 +113,11 @@ TEST_CASE("VideoPlayer::construct no-crash") {
 
 TEST_CASE("EmbeddedShaders::DX11 VS binary present") {
     CHECK(kEmbeddedVS_SpriteSize > 0);
-    CHECK(kEmbeddedVS_Sprite != nullptr);
+    CHECK(static_cast<const void*>(kEmbeddedVS_Sprite) != nullptr);
 }
 
 TEST_CASE("EmbeddedShaders::DX11 FS binary present") {
     CHECK(kEmbeddedFS_TextureSize > 0);
-    CHECK(kEmbeddedFS_Texture != nullptr);
+    CHECK(static_cast<const void*>(kEmbeddedFS_Texture) != nullptr);
 }
 

@@ -3,6 +3,9 @@
 #include <windows.h>
 #endif
 #include <fstream>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 namespace caesura {
 
@@ -32,9 +35,13 @@ std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
 
 bool DirAssetProvider::exists(const std::string& path)
 {
+#ifdef _WIN32
     std::string fp = fullPath(path);
-    DWORD attr = GetFileAttributesA(fp.c_str());
-    return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
+    DWORD attr = GetFileAttributesA(fp.c_str());    return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+    struct stat st;
+    return (stat(fp.c_str(), &st) == 0 && S_ISREG(st.st_mode));
+#endif
 }
 
 } // namespace caesura

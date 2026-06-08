@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) �� no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) 锟斤拷 no C build needed
 
 # Engine sources
 
@@ -204,7 +204,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 freetype libzstd_static)
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
+target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>)
 
 # Copy SDL3 DLL to output directory for runtime
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -219,7 +219,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 if(MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
     target_compile_options(${PROJECT_NAME} PRIVATE /W3 /wd4100 /wd4189 /wd4244 /Zc:__cplusplus /Zc:preprocessor /utf-8 /FS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0> __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS)
 endif()
 
 if(WIN32)
@@ -282,7 +282,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine �� SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine 锟斤拷 SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
