@@ -69,6 +69,7 @@ target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
 set(ENGINE_SOURCES
     src/main.cpp
     src/Core/Engine.cpp
+    src/Core/JobSystem.cpp
     src/Core/InputRouter.cpp
     src/Core/BackendRegistry.cpp
     src/Core/DebugManager.cpp
@@ -121,6 +122,7 @@ set(ENGINE_SOURCES
 
 set(ENGINE_HEADERS
     src/Core/Engine.h
+    src/Core/JobSystem.h
     src/Core/InputRouter.h
     src/Core/IAudioBackend.h
     src/Core/IPlatformBackend.h

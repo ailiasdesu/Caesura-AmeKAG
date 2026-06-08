@@ -13,6 +13,7 @@ set(TEST_SOURCES
     cpp/test_debug.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
+    cpp/test_job_system.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
     cpp/test_lua_manager.cpp
@@ -34,6 +35,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp

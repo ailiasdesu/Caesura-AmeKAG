@@ -1,10 +1,8 @@
 ﻿#pragma once
 #include <string>
 #include <vector>
-#include <queue>
 #include <mutex>
 #include <atomic>
-#include <thread>
 #include <functional>
 #include <unordered_map>
 
@@ -12,19 +10,18 @@ namespace Caesura {
 
 // -- AsyncLoadRequest -----------------------------------------------------
 struct AsyncLoadRequest {
-    int         id = 0;          // unique request ID
-    std::string path;             // asset file path
-    std::string type;             // "texture" | "audio"
+    int         id = 0;
+    std::string path;
+    std::string type;  // "texture" | "audio"
 };
 
 // -- AsyncLoader ----------------------------------------------------------
-// Single background thread for asset I/O + CPU decode (green zone).
-// Posts SDL events to main thread for bgfx/SoLoud resource creation (red zone).
+// Submits asset I/O + CPU decode jobs to JobSystem (green zone).
+// Main-thread poll() dispatches SDL events for GPU upload (red zone).
 //
 // Queue limit: 16 pending requests (high watermark).
-// Cancel: clears queue + stops in-flight loads (best-effort).
+// Cancel: clears counter + stops in-flight loads (best-effort).
 
-// Custom SDL event type for async load completion (pushed from main thread)
 static constexpr uint32_t CAESURA_EVENT_ASYNC_LOAD = 0x8000;
 
 class AsyncLoader {
@@ -34,36 +31,25 @@ public:
     AsyncLoader(const AsyncLoader&) = delete;
     AsyncLoader& operator=(const AsyncLoader&) = delete;
 
-    // -- Lifecycle (main thread) ------------------------------------------
     void init();
     void shutdown();
 
-    // -- Queue management (main thread) -----------------------------------
-    // Enqueue a load request. Returns request id on success, -1 if queue full.
     int  enqueue(const std::string& path, const std::string& type);
-
-    // Cancel all pending and in-flight loads. Best-effort.
     void cancelAll();
 
-    // -- Polling (main thread) -- returns true when a load completed --------
-    // Called from main loop. Dispatches completion callbacks.
     bool poll();
 
-    // -- Stats ------------------------------------------------------------
     int  pendingCount() const { return m_pendingCount.load(); }
     bool isRunning()   const { return m_running; }
 
-    // -- Completed load result (public: Engine::processEvents() accesses it) --
     struct CompletedLoad {
         int         id = 0;
         std::string path;
-        std::string type;           // "texture" | "audio"
+        std::string type;
         bool        success = false;
-        // Worker-decoded RGBA pixels (texture only; GPU upload on main thread)
         std::vector<uint8_t> rgba;
         uint16_t    width  = 0;
         uint16_t    height = 0;
-        // Raw bytes for non-texture loads (audio pre-read, future use)
         std::vector<uint8_t> data;
     };
 
@@ -71,17 +57,13 @@ private:
     AsyncLoader() = default;
     ~AsyncLoader();
 
-    void workerLoop();
+    static CompletedLoad processRequest(const AsyncLoadRequest& req);
     void postCompleteEvent(int requestId, const std::string& path,
                            const std::vector<uint8_t>& data, bool success);
 
     std::atomic<bool> m_running{false};
-    std::thread       m_worker;
-
-    mutable std::mutex m_mutex;
-    std::queue<AsyncLoadRequest> m_queue;
-    std::atomic<int> m_pendingCount{0};
-    std::atomic<int> m_nextId{1};
+    std::atomic<int>  m_pendingCount{0};
+    std::atomic<int>  m_nextId{1};
     std::atomic<bool> m_cancelRequested{false};
 
     std::mutex m_completeMutex;

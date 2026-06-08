@@ -22,6 +22,7 @@
 #include "Scripting/LuaManager.h"
 #include "System/SaveManager.h"
 #include "Debug/HotReload.h"
+#include "JobSystem.h"
 #include "Resource/AsyncLoader.h"
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
@@ -166,7 +167,8 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         return false;
     }
 
-    // Asset pipeline: ProviderChain (Dir + CARC) then async worker loader
+    // Parallel task system + asset pipeline
+    JobSystem::instance().init();
     AssetManager::instance().init();
     AsyncLoader::instance().init();
 
@@ -203,7 +205,8 @@ void Engine::run() {
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
 
-        // Phase G8-U3: Poll async load completions
+        // JobSystem main-thread callbacks + async load SDL events
+        JobSystem::instance().pollMainThreadJobs();
         AsyncLoader::instance().poll();
 
         // -- Phase G8-U1: Lua memory budget check (every frame) ---------------
@@ -473,6 +476,7 @@ void Engine::shutdown() {
 
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();
+    JobSystem::instance().shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();
