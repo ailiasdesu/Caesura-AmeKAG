@@ -52,7 +52,7 @@ jobs:
         run: |
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
-            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/cmake"
+            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/SDL3-${{ env.SDL_VERSION }}/cmake"
 
       - name: Build
         shell: pwsh
@@ -101,7 +101,8 @@ jobs:
           brew install cmake sdl3 freetype zstd
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-include stdlib.h"
+
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
@@ -120,13 +121,33 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache SDL3
+        id: cache-sdl
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/external/SDL3
+          key: sdl3-${{ env.SDL_VERSION }}-linux-x64
+
+      - name: Build SDL3 from source
+        if: steps.cache-sdl.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
+          tar xzf sdl3.tar.gz
+          cd SDL3-${{ env.SDL_VERSION }}
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/external/SDL3"
+          cmake --build build --config Release --parallel $(nproc)
+          cmake --install build
+          cd ..
+          rm -rf sdl3.tar.gz SDL3-${{ env.SDL_VERSION }}
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libsdl3-dev libfreetype-dev libzstd-dev libssl-dev libx11-dev
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DSDL3_DIR="${{ github.workspace }}/external/SDL3/lib/cmake/SDL3"
+
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
@@ -160,7 +181,7 @@ jobs:
           cmake -B build -S . `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/cmake"
+            -DSDL3_DIR="${{ github.workspace }}/external/SDL3/SDL3-${{ env.SDL_VERSION }}/cmake"
 
       - name: Build Release
         shell: pwsh
