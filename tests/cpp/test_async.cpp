@@ -25,6 +25,14 @@ TEST_CASE("AsyncLoader::enqueue returns positive id") {
     al.shutdown();
 }
 
+TEST_CASE("AsyncLoader::rejects path traversal") {
+    auto& al = AsyncLoader::instance();
+    al.init();
+    int id = al.enqueue("../secret.png", "texture");
+    CHECK(id < 0);
+    al.shutdown();
+}
+
 TEST_CASE("AsyncLoader::cancelAll clears queue") {
     auto& al = AsyncLoader::instance();
     al.init();

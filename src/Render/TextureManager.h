@@ -41,6 +41,10 @@ public:
     uint32_t loadTextureFromMemory(const uint8_t* data, uint32_t size,
                                    const std::string& cacheKey = "");
 
+    // Load from worker-decoded RGBA8 pixels (main thread only; used by AsyncLoader)
+    uint32_t loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
+                                 const std::string& cacheKey = "");
+
     // Create a 1x1 solid-color texture -- useful for fade-to-color
     bgfx::TextureHandle createSolidTexture(uint8_t r, uint8_t g, uint8_t b,
                                            uint8_t a = 255);

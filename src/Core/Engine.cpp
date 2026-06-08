@@ -23,7 +23,8 @@
 #include "System/SaveManager.h"
 #include "Debug/HotReload.h"
 #include "Resource/AsyncLoader.h"
-#include "Resource/ProviderChain.h"
+#include "Resource/AssetManager.h"
+#include "Render/TextureManager.h"
 #include <thread>
 #include <atomic>
 #include <bgfx/bgfx.h>
@@ -165,7 +166,8 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         return false;
     }
 
-    // Phase G8-U3: Initialize AsyncLoader for background asset loading
+    // Asset pipeline: ProviderChain (Dir + CARC) then async worker loader
+    AssetManager::instance().init();
     AsyncLoader::instance().init();
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
@@ -293,6 +295,16 @@ void Engine::processEvents() {
         if (event.type == CAESURA_EVENT_ASYNC_LOAD && L) {
             auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
             if (completed) {
+                uint32_t texId = 0;
+                if (completed->success && completed->type == "texture" &&
+                    !completed->rgba.empty() && completed->width > 0) {
+                    CAESURA_ASSERT_MAIN_THREAD();
+                    texId = TextureManager::instance().loadTextureFromRGBA(
+                        completed->rgba.data(), completed->width, completed->height,
+                        completed->path);
+                    if (texId == 0) completed->success = false;
+                }
+
                 lua_getglobal(L, "_ASYNC_CALLBACKS");
                 if (lua_istable(L, -1)) {
                     lua_pushinteger(L, completed->id);
@@ -304,7 +316,7 @@ void Engine::processEvents() {
                         if (lua_isfunction(L, -1)) {
                             lua_pushboolean(L, completed->success ? 1 : 0);
                             lua_pushstring(L, completed->path.c_str());
-                            lua_pushinteger(L, (lua_Integer)completed->data.size());
+                            lua_pushinteger(L, static_cast<lua_Integer>(texId));
                             if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
                                 fprintf(stderr, "[AsyncLoader] callback error: %s\n",
                                         lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
@@ -460,6 +472,7 @@ void Engine::shutdown() {
     ErrorUI::resetCounters();
 
     AsyncLoader::instance().shutdown();
+    AssetManager::instance().shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();

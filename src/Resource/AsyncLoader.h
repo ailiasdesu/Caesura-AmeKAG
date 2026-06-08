@@ -18,8 +18,8 @@ struct AsyncLoadRequest {
 };
 
 // -- AsyncLoader ----------------------------------------------------------
-// Single background thread for file I/O. Posts SDL events to main thread
-// for bgfx/SoLoud resource creation (main-thread-only requirement).
+// Single background thread for asset I/O + CPU decode (green zone).
+// Posts SDL events to main thread for bgfx/SoLoud resource creation (red zone).
 //
 // Queue limit: 16 pending requests (high watermark).
 // Cancel: clears queue + stops in-flight loads (best-effort).
@@ -55,10 +55,16 @@ public:
 
     // -- Completed load result (public: Engine::processEvents() accesses it) --
     struct CompletedLoad {
-        int    id;
+        int         id = 0;
         std::string path;
+        std::string type;           // "texture" | "audio"
+        bool        success = false;
+        // Worker-decoded RGBA pixels (texture only; GPU upload on main thread)
+        std::vector<uint8_t> rgba;
+        uint16_t    width  = 0;
+        uint16_t    height = 0;
+        // Raw bytes for non-texture loads (audio pre-read, future use)
         std::vector<uint8_t> data;
-        bool   success;
     };
 
 private:

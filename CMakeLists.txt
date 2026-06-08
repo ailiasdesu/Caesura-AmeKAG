@@ -108,6 +108,8 @@ set(ENGINE_SOURCES
     src/Carc/CarcAssetProvider.cpp
     src/Resource/DirAssetProvider.cpp
     src/Resource/ProviderChain.cpp
+    src/Resource/AssetManager.cpp
+    src/Resource/ImageDecoder.cpp
     src/Resource/AsyncLoader.cpp
     # Phase 8: Dev Tools
     src/Debug/HotReload.cpp
@@ -160,6 +162,8 @@ set(ENGINE_HEADERS
     src/Resource/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
+    src/Resource/AssetManager.h
+    src/Resource/ImageDecoder.h
     src/Resource/AsyncLoader.h
     # Phase 8: Dev Tools
     src/Debug/HotReload.h
