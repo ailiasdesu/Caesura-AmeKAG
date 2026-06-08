@@ -135,5 +135,9 @@ void main()
             break;
     }
 
-    gl_FragColor = vec4(c, alpha) * u_globalAlpha;
+    // Bugfix #2: Only apply globalAlpha to the alpha channel, not RGB.
+    // Applying it to both causes u_globalAlpha² on the source RGB contribution
+    // when the GPU does SRC_ALPHA * src.a blending: (c*ua) * (alpha*ua) = c*alpha*ua².
+    // Correct: c * (alpha * u_globalAlpha) = c * alpha * u_globalAlpha (linear).
+    gl_FragColor = vec4(c, alpha * u_globalAlpha);
 }

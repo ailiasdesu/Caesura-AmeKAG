@@ -79,6 +79,7 @@ public:
     bgfx::UniformHandle getBlendParams()       const { return m_u_blendParams; }
     bgfx::UniformHandle getTransParams()       const { return m_u_transParams; }
     bgfx::UniformHandle getVFXParams()         const { return m_u_vfxParams; }
+    bgfx::UniformHandle getTexColorUniform()   const { return m_u_texColor; }
 
     // Stretch/Affine shader accessors
     bgfx::ProgramHandle getStretchProgram()    const { return m_stretchProgram; }
@@ -127,6 +128,7 @@ private:
     bgfx::UniformHandle m_u_vfxParams     = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_stretchParams = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_affineParams  = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_u_texColor      = BGFX_INVALID_HANDLE;  // for fs_texture.sc (rgb=tint, a=opacity)
 
     struct RTTEntry {
         bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;

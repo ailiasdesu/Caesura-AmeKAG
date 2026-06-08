@@ -85,6 +85,7 @@ private:
     bgfx::TextureHandle m_fontTexture    = BGFX_INVALID_HANDLE;
     bgfx::VertexLayout  m_posTexLayout;
     bgfx::UniformHandle m_texSampler      = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_u_texColor      = BGFX_INVALID_HANDLE;  // borrowed from BgfxRenderDevice
     bgfx::ProgramHandle m_fallbackProgram = BGFX_INVALID_HANDLE;
 
     int m_screenWidth  = 1280;

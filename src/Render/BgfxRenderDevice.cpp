@@ -156,9 +156,10 @@ void BgfxRenderDevice::flushBatch() {
         uint32_t mergeIdxCount = mergeCount * 6;
 
         bgfx::setTexture(0, m_texSampler, q.tex);
-        // Set opacity as a uniform if needed
-        float alpha = q.opacity / 255.0f;
-        bgfx::setUniform(m_u_blendParams, &alpha, 1);
+        // Bugfix #3: apply per-quad opacity via u_texColor (was dead code
+        // setting m_u_blendParams on a shader that has no BlendParams uniform).
+        float texColor[4] = { 1.0f, 1.0f, 1.0f, q.opacity / 255.0f };
+        bgfx::setUniform(m_u_texColor, texColor, 1);
 
         // Submit the vertex/index subset for this texture group
         bgfx::setVertexBuffer(0, &tvb, vertOffset, mergeCount * 4);
@@ -320,6 +321,7 @@ void BgfxRenderDevice::shutdown() {
     if (bgfx::isValid(m_affineProgram))     { bgfx::destroy(m_affineProgram);     m_affineProgram     = BGFX_INVALID_HANDLE; }
     if (bgfx::isValid(m_u_stretchParams))   { bgfx::destroy(m_u_stretchParams);   m_u_stretchParams   = BGFX_INVALID_HANDLE; }
     if (bgfx::isValid(m_u_affineParams))    { bgfx::destroy(m_u_affineParams);    m_u_affineParams    = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_u_texColor))        { bgfx::destroy(m_u_texColor);        m_u_texColor        = BGFX_INVALID_HANDLE; }
     if (bgfx::isValid(m_texSampler)) {
         bgfx::destroy(m_texSampler);
         m_texSampler = BGFX_INVALID_HANDLE;
@@ -509,6 +511,7 @@ void BgfxRenderDevice::initEmbeddedShaders() {
     m_u_blendParams = bgfx::createUniform("BlendParams",  bgfx::UniformType::Vec4, 2);
     m_u_transParams = bgfx::createUniform("TransParams",  bgfx::UniformType::Vec4, 1);
     m_u_vfxParams   = bgfx::createUniform("VFXParams",    bgfx::UniformType::Vec4, 3);
+    m_u_texColor    = bgfx::createUniform("u_texColor",   bgfx::UniformType::Vec4, 1);
 
     // -- Stretch / Affine uniforms ----------------------------------
     m_u_stretchParams = bgfx::createUniform("StretchParams", bgfx::UniformType::Vec4, 1);
@@ -750,6 +753,11 @@ void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     // If we have a fallback shader, use it; otherwise texture blit is no-op
     if (!bgfx::isValid(m_fallbackProgram)) return;
 
+    // Bugfix #3: set u_texColor for the passthrough shader.  Default tint=white;
+    // alpha = per-call opacity (0–255 → 0.0–1.0).
+    float texColor[4] = { 1.0f, 1.0f, 1.0f, opacity / 255.0f };
+    bgfx::setUniform(m_u_texColor, texColor, 1);
+
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
     bgfx::setTexture(0, m_texSampler, tex);
@@ -853,6 +861,10 @@ void BgfxRenderDevice::fillViewport(ViewportHandle handle,
     bgfx::setIndexBuffer(&tib);
     bgfx::setTexture(0, m_texSampler, colorTex);
     bgfx::setState(state);
+    // Bugfix #3: u_texColor required by the updated passthrough shader;
+    // color is baked in the 1x1 texture, so pass white + opaque.
+    float texColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    bgfx::setUniform(m_u_texColor, texColor, 1);
     bgfx::submit(vpView, m_fallbackProgram);
 
     bgfx::destroy(colorTex);
@@ -1052,6 +1064,11 @@ void BgfxRenderDevice::stretchBlt(uint16_t targetView, uint32_t dstTexId,
     bgfx::setTexture(0, m_texSampler, srcTex);
 
     bgfx::ProgramHandle prog = bgfx::isValid(m_stretchProgram) ? m_stretchProgram : m_fallbackProgram;
+    // Bugfix #3: fallback passthrough shader requires u_texColor.
+    if (prog.idx == m_fallbackProgram.idx) {
+        float texColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        bgfx::setUniform(m_u_texColor, texColor, 1);
+    }
     bgfx::submit(targetView, prog);
 }
 
@@ -1120,6 +1137,11 @@ void BgfxRenderDevice::affineBlt(uint16_t targetView, uint32_t dstTexId,
     bgfx::setTexture(0, m_texSampler, srcTex);
 
     bgfx::ProgramHandle prog = bgfx::isValid(m_affineProgram) ? m_affineProgram : m_fallbackProgram;
+    // Bugfix #3: fallback passthrough shader requires u_texColor.
+    if (prog.idx == m_fallbackProgram.idx) {
+        float texColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        bgfx::setUniform(m_u_texColor, texColor, 1);
+    }
     bgfx::submit(targetView, prog);
 }
 
