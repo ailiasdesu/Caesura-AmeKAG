@@ -91,7 +91,7 @@ KAG 脚本 API 98+ 函数覆盖 Kirikiri Adventure Game 全部核心指令，包
 | P0 | CI 三平台全绿 | done |
 | P0 | 多核架构完成 | done |
 | P1 | 自动化测试完善 | in_progress |
-| P1 | 修复 draw=0 纹理 ID 匹配问题 | in_progress |
+| P1 | 修复 draw=0 纹理 ID 匹配问题 | done |
 | P2 | Live2D 集成 | todo |
 | P2 | 物理引擎接入 | todo |
 | P3 | AI IDE 辅助开发工具链 | todo |
