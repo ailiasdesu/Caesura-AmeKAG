@@ -27,9 +27,27 @@ struct Emitter {
     float timer = 0.0f;
 };
 
+
+// -- Multi-threaded simulation batch (JobSystem worker payload) -----------
+// Each batch processes a disjoint slice of the particle array.
+// Workers write particle state directly; deadCount is summed by main thread.
+struct SimBatch {
+    Particle* particles = nullptr;
+    uint32_t  startIdx  = 0;
+    uint32_t  endIdx    = 0;
+    float     dt        = 0.0f;
+    float     gravityX  = 0.0f;
+    float     gravityY  = 0.0f;
+    int       deadCount = 0;  // output: set by worker
+};
+
+// Process one batch (free function, called from JobSystem worker threads).
+void processSimBatch(SimBatch& batch);
+
 class ParticleSystem {
 public:
     static constexpr int MAX_PARTICLES = 1024;
+    static constexpr int SIM_BATCH_SIZE = 256;  // particles per JobSystem batch
 
     ParticleSystem() = default;
     ~ParticleSystem();

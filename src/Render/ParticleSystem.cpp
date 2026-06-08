@@ -1,13 +1,41 @@
 #include "ParticleSystem.h"
 #include "BgfxRenderDevice.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/JobSystem.h"
 #include <bx/math.h>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 #include <random>
 
 namespace Caesura {
 // Security: replaced rand() with std::mt19937 for proper RNG
+
+// ===========================================================================
+//  processSimBatch -- JobSystem worker payload (pure CPU, no GPU/alloc)
+// ===========================================================================
+
+void processSimBatch(SimBatch& batch) {
+    int dead = 0;
+    for (uint32_t i = batch.startIdx; i < batch.endIdx; ++i) {
+        auto& p = batch.particles[i];
+        if (!p.alive) continue;
+
+        p.life -= batch.dt;
+        if (p.life <= 0.0f) {
+            p.alive = false;
+            ++dead;
+            continue;
+        }
+
+        p.vx += batch.gravityX * batch.dt;
+        p.vy += batch.gravityY * batch.dt;
+        p.x  += p.vx * batch.dt;
+        p.y  += p.vy * batch.dt;
+    }
+    batch.deadCount = dead;
+}
+
 static std::mt19937& rng() { static std::mt19937 r(std::random_device{}()); return r; }
 
 ParticleSystem::~ParticleSystem() { shutdown(); }
