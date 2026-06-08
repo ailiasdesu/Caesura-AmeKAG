@@ -1,5 +1,5 @@
-﻿// CryptoEngine -- AES-256-GCM + SHA-256 via BCrypt, Ed25519 via orlp library.
-// AES/SHA via BCrypt (Win) or OpenSSL (Unix). Ed25519 via orlp (cross-platform).. No external crypto dependencies.
+// CryptoEngine -- AES-256-GCM + SHA-256. Win: BCrypt; macOS/Linux: OpenSSL EVP.
+// Ed25519 via orlp (cross-platform). File I/O via std::ifstream (cross-platform).
 #pragma once
 #include "CARCFormat.h"
 #include <vector>

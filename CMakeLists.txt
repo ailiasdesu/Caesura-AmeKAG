@@ -202,7 +202,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 bcrypt freetype libzstd_static)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 freetype libzstd_static)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
 
@@ -224,16 +224,19 @@ endif()
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
+    # BCrypt is built into Windows; no extra OpenSSL needed
 elseif(APPLE)
     find_library(COCOA_LIBRARY Cocoa REQUIRED)
     find_library(IOKIT_LIBRARY IOKit REQUIRED)
     find_library(METAL_LIBRARY Metal REQUIRED)
     find_library(QUARTZCORE QuartzCore REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} pthread)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} pthread OpenSSL::SSL OpenSSL::Crypto)
 elseif(UNIX)
     find_package(Threads REQUIRED)
     find_package(X11 REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads dl X11::X11)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads dl X11::X11 OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 

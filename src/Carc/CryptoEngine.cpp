@@ -1,20 +1,33 @@
-﻿// CryptoEngine  Windows BCrypt implementation
+﻿// CryptoEngine -- AES-256-GCM + SHA-256.
+//   Windows:  BCrypt (zero system deps, thread-safe)
+//   macOS/Linux: OpenSSL EVP
+// Ed25519 via orlp library (cross-platform).
 #include "CryptoEngine.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+#else
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#endif
+
 #include <cstring>
+#include <fstream>
 #include <stdexcept>
 
 extern "C" {
 #include "../../external/ed25519/ed25519.h"
 }
 
-#pragma comment(lib, "bcrypt.lib")
-
 namespace Caesura::carc {
 
+// ==========================================================================
+// Helpers
+// ==========================================================================
+
+#ifdef _WIN32
 namespace {
 
 void checkBCrypt(NTSTATUS status, const char* op) {
@@ -24,17 +37,11 @@ void checkBCrypt(NTSTATUS status, const char* op) {
     }
 }
 
-struct BcryptHandle {
-    BCRYPT_ALG_HANDLE h = nullptr;
-    ~BcryptHandle() { if (h) BCryptCloseAlgorithmProvider(h, 0); }
-};
-
-struct BcryptKeyHandle {
-    BCRYPT_KEY_HANDLE h = nullptr;
-    ~BcryptKeyHandle() { if (h) BCryptDestroyKey(h); }
-};
+struct BcryptAlgHandle { BCRYPT_ALG_HANDLE h = nullptr; ~BcryptAlgHandle() { if (h) BCryptCloseAlgorithmProvider(h, 0); } };
+struct BcryptKeyHandle  { BCRYPT_KEY_HANDLE h = nullptr;  ~BcryptKeyHandle()  { if (h) BCryptDestroyKey(h); } };
 
 } // anon
+#endif
 
 // ==========================================================================
 // AES-256-GCM encrypt
@@ -45,46 +52,60 @@ std::vector<uint8_t> CryptoEngine::encrypt(
     uint8_t nonce[AES_NONCE_SIZE],
     uint8_t tag[AES_TAG_SIZE])
 {
+    if (!plaintext || plaintextLen == 0) return {};
+
+#ifdef _WIN32
     try {
-        BcryptHandle alg;
-        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0),
-                    "BCryptOpenAlgorithmProvider(AES)");
+        BcryptAlgHandle alg;
+        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(AES)");
         checkBCrypt(BCryptSetProperty(alg.h, BCRYPT_CHAINING_MODE,
-                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0),
-                    "BCryptSetProperty(GCM)");
+                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0), "SetProperty(GCM)");
+
+        struct { BCRYPT_KEY_DATA_BLOB_HEADER hdr; uint8_t data[AES_KEY_SIZE]; } blob;
+        blob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
+        blob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
+        blob.hdr.cbKeyData = AES_KEY_SIZE;
+        memcpy(blob.data, key, AES_KEY_SIZE);
 
         BcryptKeyHandle keyObj;
-        struct KeyBlob {
-            BCRYPT_KEY_DATA_BLOB_HEADER hdr;
-            uint8_t keyData[AES_KEY_SIZE];
-        } keyBlob;
-        keyBlob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
-        keyBlob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
-        keyBlob.hdr.cbKeyData = AES_KEY_SIZE;
-        memcpy(keyBlob.keyData, key, AES_KEY_SIZE);
+        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB, &keyObj.h, nullptr, 0,
+                     (PUCHAR)&blob, sizeof(blob), 0), "ImportKey");
 
-        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB,
-                     &keyObj.h, nullptr, 0, (PUCHAR)&keyBlob, sizeof(keyBlob), 0),
-                    "BCryptImportKey");
+        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO auth;
+        BCRYPT_INIT_AUTH_MODE_INFO(auth);
+        auth.pbNonce = nonce; auth.cbNonce = AES_NONCE_SIZE;
+        auth.pbTag   = tag;   auth.cbTag   = AES_TAG_SIZE;
 
-        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
-        BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
-        authInfo.pbNonce = nonce;
-        authInfo.cbNonce = AES_NONCE_SIZE;
-        authInfo.pbTag = tag;
-        authInfo.cbTag = AES_TAG_SIZE;
-
-        std::vector<uint8_t> ciphertext(plaintextLen);
-        ULONG cbResult = 0;
+        std::vector<uint8_t> out(plaintextLen);
+        ULONG done = 0;
         checkBCrypt(BCryptEncrypt(keyObj.h, (PUCHAR)plaintext, (ULONG)plaintextLen,
-                     &authInfo, nullptr, 0, ciphertext.data(), (ULONG)plaintextLen,
-                     &cbResult, 0),
-                    "BCryptEncrypt");
-        ciphertext.resize(cbResult);
-        return ciphertext;
-    } catch (const std::exception&) {
-        return {};
-    }
+                     &auth, nullptr, 0, out.data(), (ULONG)plaintextLen, &done, 0), "Encrypt");
+        out.resize(done);
+        return out;
+    } catch (const std::exception&) { return {}; }
+#else
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return {};
+    int len = 0;
+    std::vector<uint8_t> out(plaintextLen + 16);
+    int outLen = 0;
+    bool ok = false;
+    do {
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, AES_NONCE_SIZE, nullptr) != 1) break;
+        if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, nonce) != 1) break;
+        if (EVP_EncryptUpdate(ctx, out.data(), &len, plaintext, (int)plaintextLen) != 1) break;
+        outLen = len;
+        if (EVP_EncryptFinal_ex(ctx, out.data() + len, &len) != 1) break;
+        outLen += len;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, AES_TAG_SIZE, tag) != 1) break;
+        ok = true;
+    } while (false);
+    EVP_CIPHER_CTX_free(ctx);
+    if (!ok) return {};
+    out.resize(outLen);
+    return out;
+#endif
 }
 
 // ==========================================================================
@@ -96,75 +117,93 @@ std::vector<uint8_t> CryptoEngine::decrypt(
     const uint8_t nonce[AES_NONCE_SIZE],
     const uint8_t tag[AES_TAG_SIZE])
 {
+    if (!ciphertext || ciphertextLen == 0) return {};
+
+#ifdef _WIN32
     try {
-        BcryptHandle alg;
-        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0),
-                    "BCryptOpenAlgorithmProvider(AES)");
+        BcryptAlgHandle alg;
+        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(AES)");
         checkBCrypt(BCryptSetProperty(alg.h, BCRYPT_CHAINING_MODE,
-                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0),
-                    "BCryptSetProperty(GCM)");
+                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0), "SetProperty(GCM)");
+
+        struct { BCRYPT_KEY_DATA_BLOB_HEADER hdr; uint8_t data[AES_KEY_SIZE]; } blob;
+        blob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
+        blob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
+        blob.hdr.cbKeyData = AES_KEY_SIZE;
+        memcpy(blob.data, key, AES_KEY_SIZE);
 
         BcryptKeyHandle keyObj;
-        struct KeyBlob {
-            BCRYPT_KEY_DATA_BLOB_HEADER hdr;
-            uint8_t keyData[AES_KEY_SIZE];
-        } keyBlob;
-        keyBlob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
-        keyBlob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
-        keyBlob.hdr.cbKeyData = AES_KEY_SIZE;
-        memcpy(keyBlob.keyData, key, AES_KEY_SIZE);
+        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB, &keyObj.h, nullptr, 0,
+                     (PUCHAR)&blob, sizeof(blob), 0), "ImportKey");
 
-        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB,
-                     &keyObj.h, nullptr, 0, (PUCHAR)&keyBlob, sizeof(keyBlob), 0),
-                    "BCryptImportKey");
+        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO auth;
+        BCRYPT_INIT_AUTH_MODE_INFO(auth);
+        auth.pbNonce = const_cast<uint8_t*>(nonce); auth.cbNonce = AES_NONCE_SIZE;
+        auth.pbTag   = const_cast<uint8_t*>(tag);   auth.cbTag   = AES_TAG_SIZE;
 
-        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
-        BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
-        authInfo.pbNonce = const_cast<uint8_t*>(nonce);
-        authInfo.cbNonce = AES_NONCE_SIZE;
-        authInfo.pbTag = const_cast<uint8_t*>(tag);
-        authInfo.cbTag = AES_TAG_SIZE;
-
-        std::vector<uint8_t> plaintext(ciphertextLen);
-        ULONG cbResult = 0;
+        std::vector<uint8_t> out(ciphertextLen);
+        ULONG done = 0;
         checkBCrypt(BCryptDecrypt(keyObj.h, (PUCHAR)ciphertext, (ULONG)ciphertextLen,
-                     &authInfo, nullptr, 0, plaintext.data(), (ULONG)ciphertextLen,
-                     &cbResult, 0),
-                    "BCryptDecrypt");
-        plaintext.resize(cbResult);
-        return plaintext;
-    } catch (const std::exception&) {
-        return {};
-    }
+                     &auth, nullptr, 0, out.data(), (ULONG)ciphertextLen, &done, 0), "Decrypt");
+        out.resize(done);
+        return out;
+    } catch (const std::exception&) { return {}; }
+#else
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return {};
+    int len = 0;
+    std::vector<uint8_t> out(ciphertextLen);
+    int outLen = 0;
+    bool ok = false;
+    do {
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, AES_NONCE_SIZE, nullptr) != 1) break;
+        if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, nonce) != 1) break;
+        if (EVP_DecryptUpdate(ctx, out.data(), &len, ciphertext, (int)ciphertextLen) != 1) break;
+        outLen = len;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, AES_TAG_SIZE, const_cast<uint8_t*>(tag)) != 1) break;
+        if (EVP_DecryptFinal_ex(ctx, out.data() + len, &len) != 1) break;
+        outLen += len;
+        ok = true;
+    } while (false);
+    EVP_CIPHER_CTX_free(ctx);
+    if (!ok) return {};
+    out.resize(outLen);
+    return out;
+#endif
 }
 
 // ==========================================================================
-// SHA-256 via BCrypt
+// SHA-256
 // ==========================================================================
 void CryptoEngine::sha256(const uint8_t* data, size_t len, uint8_t hash[PATH_HASH_SIZE])
 {
-    BcryptHandle alg;
-    checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_SHA256_ALGORITHM, nullptr, 0),
-                "BCryptOpenAlgorithmProvider(SHA256)");
-
-    DWORD cbHashObject = 0, cbData = 0;
-    checkBCrypt(BCryptGetProperty(alg.h, BCRYPT_OBJECT_LENGTH,
-                 (PUCHAR)&cbHashObject, sizeof(DWORD), &cbData, 0),
-                "BCryptGetProperty(OBJECT_LENGTH)");
-
-    std::vector<uint8_t> hashObject(cbHashObject);
-    BcryptKeyHandle hashHandle;
-    checkBCrypt(BCryptCreateHash(alg.h, &hashHandle.h, hashObject.data(),
-                 cbHashObject, nullptr, 0, 0),
-                "BCryptCreateHash");
-    checkBCrypt(BCryptHashData(hashHandle.h, (PUCHAR)data, (ULONG)len, 0),
-                "BCryptHashData");
-    checkBCrypt(BCryptFinishHash(hashHandle.h, hash, PATH_HASH_SIZE, 0),
-                "BCryptFinishHash");
+#ifdef _WIN32
+    BCRYPT_ALG_HANDLE alg = nullptr;
+    BCRYPT_HASH_HANDLE h  = nullptr;
+    try {
+        checkBCrypt(BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(SHA256)");
+        checkBCrypt(BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0), "CreateHash");
+        checkBCrypt(BCryptHashData(h, (PUCHAR)data, (ULONG)len, 0), "HashData");
+        checkBCrypt(BCryptFinishHash(h, hash, PATH_HASH_SIZE, 0), "FinishHash");
+    } catch (const std::exception&) { memset(hash, 0, PATH_HASH_SIZE); }
+    if (h)   BCryptDestroyHash(h);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+#else
+    unsigned int hashLen = 0;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (ctx) {
+        EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+        EVP_DigestUpdate(ctx, data, len);
+        EVP_DigestFinal_ex(ctx, hash, &hashLen);
+        EVP_MD_CTX_free(ctx);
+    }
+    if (hashLen != PATH_HASH_SIZE) memset(hash, 0, PATH_HASH_SIZE);
+#endif
 }
 
 // ==========================================================================
-// Ed25519 sign / verify
+// Ed25519 signing / verification (orlp — cross-platform)
 // ==========================================================================
 bool CryptoEngine::sign(const uint8_t* data, size_t len,
                         const uint8_t privateKey[64],
@@ -182,22 +221,28 @@ bool CryptoEngine::verify(const uint8_t* data, size_t len,
 }
 
 // ==========================================================================
-// Random key generation
+// Random generation
 // ==========================================================================
 void CryptoEngine::generateKey(uint8_t key[AES_KEY_SIZE])
 {
-    // [10.2.66] Must use cryptographically secure RNG
-    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, key, AES_KEY_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
-        throw std::runtime_error("BCryptGenRandom failed for AES key generation");
-    }
+#ifdef _WIN32
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, key, AES_KEY_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
+        throw std::runtime_error("BCryptGenRandom failed for AES key");
+#else
+    if (RAND_bytes(key, AES_KEY_SIZE) != 1)
+        throw std::runtime_error("RAND_bytes failed for AES key");
+#endif
 }
 
 void CryptoEngine::generateNonce(uint8_t nonce[AES_NONCE_SIZE])
 {
-    // [10.2.66] Must use cryptographically secure RNG
-    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, AES_NONCE_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
-        throw std::runtime_error("BCryptGenRandom failed for nonce generation");
-    }
+#ifdef _WIN32
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, AES_NONCE_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
+        throw std::runtime_error("BCryptGenRandom failed for nonce");
+#else
+    if (RAND_bytes(nonce, AES_NONCE_SIZE) != 1)
+        throw std::runtime_error("RAND_bytes failed for nonce");
+#endif
 }
 
 // ==========================================================================
@@ -212,84 +257,38 @@ void CryptoEngine::generateKeyPair(uint8_t publicKey[PUBLICKEY_SIZE],
 }
 
 // ==========================================================================
-// Key file I/O
+// Key file I/O (std::ifstream — cross-platform, unified)
 // ==========================================================================
-static bool readFileBytes(HANDLE hFile, void* buf, DWORD size) {
-    DWORD read = 0;
-    return ReadFile(hFile, buf, size, &read, nullptr) && read == size;
-}
-
 bool CryptoEngine::readPublicKey(const std::string& path, uint8_t key[PUBLICKEY_SIZE])
 {
-    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
-    bool ok = readFileBytes(hFile, key, PUBLICKEY_SIZE);
-    CloseHandle(hFile);
-    return ok;
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    f.read(reinterpret_cast<char*>(key), PUBLICKEY_SIZE);
+    return f.gcount() == PUBLICKEY_SIZE;
 }
 
 bool CryptoEngine::readPrivateKey(const std::string& path, uint8_t key[64])
 {
-    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
-    bool ok = readFileBytes(hFile, key, 64);
-    CloseHandle(hFile);
-    return ok;
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    f.read(reinterpret_cast<char*>(key), 64);
+    return f.gcount() == 64;
 }
 
 bool CryptoEngine::writePublicKey(const std::string& path, const uint8_t key[PUBLICKEY_SIZE])
 {
-    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0,
-                               nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
-    DWORD written = 0;
-    BOOL ok = WriteFile(hFile, key, PUBLICKEY_SIZE, &written, nullptr) && written == PUBLICKEY_SIZE;
-    CloseHandle(hFile);
-    return ok;
+    std::ofstream f(path, std::ios::binary);
+    if (!f) return false;
+    f.write(reinterpret_cast<const char*>(key), PUBLICKEY_SIZE);
+    return f.good();
 }
 
 bool CryptoEngine::writePrivateKey(const std::string& path, const uint8_t key[64])
 {
-    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0,
-                               nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
-    DWORD written = 0;
-    BOOL ok = WriteFile(hFile, key, 64, &written, nullptr) && written == 64;
-    CloseHandle(hFile);
-    return ok;
+    std::ofstream f(path, std::ios::binary);
+    if (!f) return false;
+    f.write(reinterpret_cast<const char*>(key), 64);
+    return f.good();
 }
-
-
-#else // !_WIN32
-
-// Stub implementations for non-Windows platforms.
-// TODO: Replace with OpenSSL or platform-native crypto (CommonCrypto on macOS, OpenSSL on Linux).
-// Ed25519 is already cross-platform via the orlp library.
-
-namespace {
-void checkBCrypt(long, const char*) {}
-}
-
-std::vector<uint8_t> CryptoEngine::encrypt(const uint8_t*, size_t, const uint8_t*, uint8_t*, uint8_t*) {
-    fprintf(stderr, "[CryptoEngine] encrypt: not implemented on this platform\n");
-    return {};
-}
-std::vector<uint8_t> CryptoEngine::decrypt(const uint8_t*, size_t, const uint8_t*, const uint8_t*, const uint8_t*) {
-    fprintf(stderr, "[CryptoEngine] decrypt: not implemented on this platform\n");
-    return {};
-}
-void CryptoEngine::sha256(const uint8_t*, size_t, uint8_t*) {
-    fprintf(stderr, "[CryptoEngine] sha256: not implemented on this platform\n");
-}
-void CryptoEngine::generateKey(uint8_t*) {
-    fprintf(stderr, "[CryptoEngine] generateKey: not implemented on this platform\n");
-}
-void CryptoEngine::generateNonce(uint8_t*) {
-    fprintf(stderr, "[CryptoEngine] generateNonce: not implemented on this platform\n");
-}
-
-#endif // _WIN32
 
 } // namespace Caesura::carc
