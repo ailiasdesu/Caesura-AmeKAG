@@ -27,6 +27,11 @@ extern "C" {
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
 #include "MiniGame/NullMiniGameBackend.h"
+#include "../Animation/NullAnimationBackend.h"
+#ifdef CAESURA_HAS_LIVE2D
+#include "../Animation/Live2D/Live2DBackend.h"
+#include "../Render/BgfxRenderDevice.h"
+#endif
 #include <thread>
 #include <atomic>
 #include <bgfx/bgfx.h>
@@ -162,6 +167,23 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
     m_miniGameBackend = std::make_unique<NullMiniGameBackend>();
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+
+    // -- Animation backend (Live2D or Null) --
+#ifdef CAESURA_HAS_LIVE2D
+    m_animationBackend = std::make_unique<Live2DBackend>();
+#else
+    m_animationBackend = std::make_unique<NullAnimationBackend>();
+#endif
+    if (!m_animationBackend->init()) {
+        fprintf(stderr, "Animation backend init failed, falling back to null.\n");
+        m_animationBackend = std::make_unique<NullAnimationBackend>();
+        m_animationBackend->init();
+    }
+    BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
+#ifdef CAESURA_HAS_LIVE2D
+    static_cast<Live2DBackend&>(*m_animationBackend).setRenderDevice(
+        static_cast<BgfxRenderDevice*>(m_renderDevice.get()));
+#endif
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     return true;
@@ -469,6 +491,7 @@ void Engine::shutdown() {
     ErrorUI::resetCounters();
 
     if (m_miniGameBackend) { m_miniGameBackend->shutdown(); m_miniGameBackend.reset(); }
+    if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
 
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();

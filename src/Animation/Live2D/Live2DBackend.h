@@ -5,23 +5,25 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
-
-struct ID3D11Device;
-struct ID3D11DeviceContext;
-
-namespace bgfx { struct TextureHandle; }
+#include <vector>
+#include <bgfx/bgfx.h>
 
 namespace Live2D { namespace Cubism { namespace Framework {
     class CubismUserModel;
+    class CubismModelSettingJson;
 } } }
 namespace Csm = Live2D::Cubism::Framework;
 
 namespace Caesura {
 
+class ILive2DRenderPath;
+
 class BgfxRenderDevice;
 
 class Live2DBackend : public IAnimationBackend {
 public:
+    Live2DBackend() = default;
+    ~Live2DBackend() override;
     bool init() override;
     void shutdown() override;
 
@@ -44,24 +46,27 @@ public:
 
 private:
     struct Live2DModel {
-        std::string dir;          // model directory (e.g. "assets/live2d/haru/")
+        std::string dir;
         std::string name;
         bool visible = false;
         float x = 0, y = 0, scale = 1.0f, opacity = 1.0f;
 
         // Cubism
         std::unique_ptr<Csm::CubismUserModel> userModel;
-        void* mocData = nullptr;
-        void* renderer = nullptr;        // CubismRenderer_D3D11*
-        void* stagingTex = nullptr;      // ID3D11Texture2D* staging
+        void* renderer = nullptr;       // CubismRenderer_OpenGLES2*
         int renderWidth = 1280;
         int renderHeight = 720;
 
-        // bgfx
-        bgfx::TextureHandle bgfxTex;
+        // bgfx texture
+        bgfx::TextureHandle bgfxTex = BGFX_INVALID_HANDLE;
         bool bgfxTexValid = false;
 
-        // Motion cache
+        // Cached raw asset data (owned)
+        std::vector<char> mocData;     // .moc3 raw bytes (aligned)
+        std::vector<char> settingJson; // .model3.json raw bytes
+        Csm::CubismModelSettingJson* setting = nullptr;
+
+        // Motion/expression cache
         std::unordered_map<std::string, std::vector<char>> motionCache;
         std::unordered_map<std::string, std::vector<char>> expressionCache;
 
@@ -69,17 +74,16 @@ private:
     };
 
     BgfxRenderDevice* m_renderDevice = nullptr;
-    ID3D11Device* m_d3dDevice = nullptr;
-    ID3D11DeviceContext* m_d3dContext = nullptr;
-    bool m_deviceShared = false;
+    bool m_deviceReady = false;
+
+    ILive2DRenderPath* m_renderPath = nullptr;
 
     std::unordered_map<int, std::unique_ptr<Live2DModel>> m_models;
     int m_nextHandle = 1;
     bool m_initialized = false;
 
     bool loadModelInternal(Live2DModel& model);
-    bool createRendererForModel(Live2DModel& model);
-    void uploadToBgfx(Live2DModel& model);
+    bool createRenderer(Live2DModel& model);
 };
 
 void registerLive2DBinding(void* luaState);
@@ -87,4 +91,4 @@ void Live2DBackend_setGlobal(Live2DBackend* backend);
 
 } // namespace Caesura
 
-#endif // CAESURA_HAS_LIVE2D
+#endif

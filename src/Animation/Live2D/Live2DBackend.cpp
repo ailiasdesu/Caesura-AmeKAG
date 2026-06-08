@@ -2,16 +2,13 @@
 
 #include "Live2DBackend.h"
 
-// D3D11
-#include <d3d11.h>
-#include <wrl/client.h>
-using Microsoft::WRL::ComPtr;
-
-// bgfx
-#include <bgfx/bgfx.h>
-
-// Cubism Core
-#include <Live2DCubismCore.h>
+// GL MUST come before Cubism headers (CSM_TARGET_WIN_GL needs GL types)
+#ifdef _WIN32
+#include <GL/glew.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "opengl32.lib")
+#endif
+#endif
 
 // Cubism Framework
 #include <CubismFramework.hpp>
@@ -22,13 +19,20 @@ using Microsoft::WRL::ComPtr;
 #include <CubismModelSettingJson.hpp>
 #include <Motion/CubismMotion.hpp>
 #include <Motion/CubismMotionManager.hpp>
+#include <Motion/CubismMotionQueueManager.hpp>
 #include <Motion/CubismExpressionMotion.hpp>
 #include <Motion/CubismExpressionMotionManager.hpp>
 #include <Rendering/CubismRenderer.hpp>
-#include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
 
 // Engine
 #include "../../Render/BgfxRenderDevice.h"
+#include "Live2DUserModel.h"
+#include "ILive2DRenderPath.h"
+#include "OpenGLReadbackRenderPath.h"
+#include "D3D11NativeRenderPath.h"
+#include "OpenGLSharedRenderPath.h"
+#include "MetalNativeRenderPath.h"
 
 // Lua
 extern "C" {
@@ -44,9 +48,10 @@ namespace Caesura {
 
 using namespace Csm;
 using namespace Csm::Rendering;
+using namespace Live2D::Cubism::Core;
 
 // ============================================================
-// File / path utilities
+// File helpers
 // ============================================================
 static std::vector<char> readFile(const std::string& path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -71,14 +76,16 @@ static std::string joinPath(const std::string& dir, const std::string& name) {
 }
 
 // ============================================================
-// Cubism allocator & logging
+// Cubism allocator
 // ============================================================
 namespace {
     class EngineAllocator : public ICubismAllocator {
     public:
         void* Allocate(const csmSizeType size) override { return SDL_malloc(size); }
         void  Deallocate(void* memory) override { SDL_free(memory); }
-        void* AllocateAligned(const csmSizeType size, csmUint32 alignment) override { return SDL_aligned_alloc(alignment, size); }
+        void* AllocateAligned(const csmSizeType size, csmUint32 alignment) override {
+            return SDL_aligned_alloc(alignment, size);
+        }
         void  DeallocateAligned(void* alignedMemory) override { SDL_aligned_free(alignedMemory); }
     };
 
@@ -91,19 +98,15 @@ namespace {
 // Live2DModel destructor
 // ============================================================
 Live2DBackend::Live2DModel::~Live2DModel() {
+    if (setting) {
+        delete setting;
+        setting = nullptr;
+    }
     if (renderer) {
         CubismRenderer::Delete(static_cast<CubismRenderer*>(renderer));
         renderer = nullptr;
     }
     userModel.reset();
-    if (mocData) {
-        csmFreeAlignedMoc(mocData);
-        mocData = nullptr;
-    }
-    if (stagingTex) {
-        static_cast<ID3D11Texture2D*>(stagingTex)->Release();
-        stagingTex = nullptr;
-    }
     if (bgfxTexValid && bgfx::isValid(bgfxTex)) {
         bgfx::destroy(bgfxTex);
         bgfxTexValid = false;
@@ -124,207 +127,174 @@ bool Live2DBackend::init() {
         return false;
     }
     CubismFramework::Initialize();
+
+    // Select render path based on bgfx backend
+    const auto rendererType = bgfx::getRendererType();
+    switch (rendererType) {
+    case bgfx::RendererType::Direct3D11: {
+        auto* path = new D3D11NativeRenderPath();
+        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
+        else { delete path; goto fallback; }
+        break;
+    }
+    case bgfx::RendererType::OpenGL:
+    case bgfx::RendererType::OpenGLES: {
+        auto* path = new OpenGLSharedRenderPath();
+        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
+        else { delete path; goto fallback; }
+        break;
+    }
+    case bgfx::RendererType::Metal: {
+        // Try Metal first (stub until macOS developer validates)
+        auto* path = new MetalNativeRenderPath();
+        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
+        else { delete path; goto fallback; }
+        break;
+    }
+    default:
+    fallback:
+        m_renderPath = new OpenGLReadbackRenderPath();
+        m_renderPath->init(1280, 720);
+        break;
+    }
+
     m_initialized = true;
-    SDL_Log("[Live2D] CubismFramework 5 initialized");
+    SDL_Log("[Live2D] CubismFramework 5 initialized (render path: %s)", m_renderPath->name());
     return true;
 }
 
+Live2DBackend::~Live2DBackend() = default;
+
 void Live2DBackend::shutdown() {
     m_models.clear();
+    if (m_renderPath) {
+        m_renderPath->shutdown();
+        delete m_renderPath;
+        m_renderPath = nullptr;
+    }
     if (m_initialized) {
         CubismFramework::Dispose();
         m_initialized = false;
     }
-    m_deviceShared = false;
-    if (m_d3dContext) { m_d3dContext->Release(); m_d3dContext = nullptr; }
+    m_deviceReady = false;
 }
 
 void Live2DBackend::setRenderDevice(BgfxRenderDevice* device) {
     m_renderDevice = device;
-    if (!device) return;
-
-    auto* internalData = bgfx::getInternalData();
-    if (!internalData || !internalData->context) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] bgfx not using D3D11");
-        return;
-    }
-
-    m_d3dDevice = static_cast<ID3D11Device*>(internalData->context);
-    m_d3dDevice->GetImmediateContext(&m_d3dContext);
-    CubismRenderer_D3D11::SetConstantSettings(1, m_d3dDevice);
-    m_deviceShared = true;
-    SDL_Log("[Live2D] D3D11 device shared from bgfx");
+    m_deviceReady = (device != nullptr);
 }
 
 // ============================================================
-// Model loading
+// Model loading éˆ¥?Cubism 5 API
 // ============================================================
 bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     std::string dir = dirName(model.dir);
 
-    // 1. Load .model3.json (model.dir is the full path to .model3.json)
-    auto jsonData = readFile(model.dir);
-    if (jsonData.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read %s", model.dir.c_str());
+    // 1. Load .model3.json
+    model.settingJson = readFile(model.dir);
+    if (model.settingJson.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read: %s", model.dir.c_str());
         return false;
     }
-
-    auto* setting = CubismModelSettingJson::Create(
-        reinterpret_cast<const csmByte*>(jsonData.data()),
-        static_cast<csmSizeInt>(jsonData.size())
+    model.setting = new CubismModelSettingJson(
+        reinterpret_cast<const csmByte*>(model.settingJson.data()),
+        static_cast<csmSizeInt>(model.settingJson.size())
     );
-    if (!setting) return false;
 
     // 2. Load .moc3
-    std::string mocPath = joinPath(dir, setting->GetModelFileName());
-    auto mocBytes = readFile(mocPath);
-    if (mocBytes.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read %s", mocPath.c_str());
-        CubismModelSettingJson::Delete(setting);
-        return false;
+    std::string mocPath = joinPath(dir, model.setting->GetModelFileName());
+    model.mocData = readFile(mocPath);
+    if (model.mocData.empty()) return false;
+
+    // 3. Create user model (Live2DUserModel for protected member access)
+    model.userModel = std::make_unique<Live2DUserModel>();
+    model.userModel->LoadModel(
+        reinterpret_cast<const csmByte*>(model.mocData.data()),
+        static_cast<csmSizeInt>(model.mocData.size())
+    );
+
+    // 4. Create renderer + bgfx texture
+    if (!createRenderer(model)) return false;
+
+    // 5. Load textures
+    for (csmInt32 i = 0; i < model.setting->GetTextureCount(); ++i) {
+        std::string texPath = joinPath(dir, model.setting->GetTextureFileName(i));
+        auto texData = readFile(texPath);
+        if (!texData.empty()) {
+            // TODO: Load texture into Cubism renderer
+            SDL_Log("[Live2D] Texture %d: %s (%zu bytes)", i, texPath.c_str(), texData.size());
+        }
     }
 
-    model.mocData = csmAllocateAligned(mocBytes.data(),
-        static_cast<csmSizeInt>(mocBytes.size()), csmAlignofMoc);
-    if (!model.mocData) { CubismModelSettingJson::Delete(setting); return false; }
-
-    auto* moc = CubismMoc::Create(model.mocData,
-        static_cast<csmSizeInt>(mocBytes.size()));
-    if (!moc) { CubismModelSettingJson::Delete(setting); return false; }
-
-    // 3. Create user model
-    model.userModel = std::make_unique<CubismUserModel>();
-    model.userModel->LoadModel(moc->CreateModel());
-
-    // 4. Preload motions (.motion3.json)
-    for (csmInt32 i = 0; i < setting->GetMotionGroupCount(); ++i) {
-        const csmChar* group = setting->GetMotionGroupName(i);
-        csmInt32 count = setting->GetMotionCount(group);
-        for (csmInt32 j = 0; j < count; ++j) {
-            std::string motionFile = setting->GetMotionFileName(group, j);
-            std::string motionPath = joinPath(dir, motionFile);
+    // 6. Cache motions (keyed by file path éˆ¥?Cubism 5 has no GetMotionName)
+    for (csmInt32 i = 0; i < model.setting->GetMotionGroupCount(); ++i) {
+        const char* group = model.setting->GetMotionGroupName(i);
+        for (csmInt32 j = 0; j < model.setting->GetMotionCount(group); ++j) {
+            std::string motionPath = joinPath(dir, model.setting->GetMotionFileName(group, j));
             auto motionData = readFile(motionPath);
             if (!motionData.empty()) {
-                std::string key = group + std::string("/") + motionFile;
-                model.motionCache[key] = std::move(motionData);
+                model.motionCache[motionPath] = std::move(motionData);
             }
         }
     }
 
-    // 5. Preload expressions (.exp3.json)
-    for (csmInt32 i = 0; i < setting->GetExpressionCount(); ++i) {
-        const csmChar* expName = setting->GetExpressionName(i);
-        const csmChar* expFile = setting->GetExpressionFileName(i);
-        std::string expPath = joinPath(dir, expFile);
-        auto expData = readFile(expPath);
-        if (!expData.empty()) {
-            model.expressionCache[expName] = std::move(expData);
+    // 7. Cache expressions
+    if (model.setting->GetExpressionCount() > 0) {
+        for (csmInt32 i = 0; i < model.setting->GetExpressionCount(); ++i) {
+            std::string exprName = model.setting->GetExpressionName(i);
+            std::string exprPath = joinPath(dir, model.setting->GetExpressionFileName(i));
+            auto exprData = readFile(exprPath);
+            if (!exprData.empty()) {
+                model.expressionCache[exprName] = std::move(exprData);
+            }
         }
     }
 
-    // 6. Create renderer
-    if (m_deviceShared) {
-        createRendererForModel(model);
-    }
-
-    CubismModelSettingJson::Delete(setting);
-    SDL_Log("[Live2D] Model loaded: %s (%zu motions, %zu expressions)",
-        model.name.c_str(), model.motionCache.size(), model.expressionCache.size());
+    SDL_Log("[Live2D] Model loaded: %s", model.name.c_str());
     return true;
 }
 
-bool Live2DBackend::createRendererForModel(Live2DModel& model) {
-    if (!m_d3dDevice || !model.userModel) return false;
+bool Live2DBackend::createRenderer(Live2DModel& model) {
+    if (!model.userModel) return false;
 
-    auto* renderer = CubismRenderer::Create();
-    if (!renderer) return false;
+    model.userModel->CreateRenderer(model.renderWidth, model.renderHeight);
+    model.renderer = model.userModel->GetRenderer<CubismRenderer_OpenGLES2>();
 
-    auto* d3dRenderer = dynamic_cast<CubismRenderer_D3D11*>(renderer);
-    if (!d3dRenderer) { CubismRenderer::Delete(renderer); return false; }
+    if (!model.renderer) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Failed to create OpenGL renderer");
+        return false;
+    }
 
-    d3dRenderer->Initialize(model.userModel->GetModel());
-
-    // Staging texture for D3D11 ¡ú CPU readback
-    D3D11_TEXTURE2D_DESC sd = {};
-    sd.Width = model.renderWidth;
-    sd.Height = model.renderHeight;
-    sd.MipLevels = 1;
-    sd.ArraySize = 1;
-    sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.SampleDesc.Count = 1;
-    sd.Usage = D3D11_USAGE_STAGING;
-    sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    m_d3dDevice->CreateTexture2D(&sd, nullptr, (ID3D11Texture2D**)&model.stagingTex);
-
-    // bgfx dynamic texture (RGBA8)
+    // Create bgfx texture for output
     model.bgfxTex = bgfx::createTexture2D(
         model.renderWidth, model.renderHeight,
         false, 1, bgfx::TextureFormat::RGBA8,
-        BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE
+        BGFX_TEXTURE_BLIT_DST | BGFX_SAMPLER_POINT
     );
     model.bgfxTexValid = bgfx::isValid(model.bgfxTex);
 
-    model.renderer = renderer;
+    SDL_Log("[Live2D] Renderer created (%dx%d)", model.renderWidth, model.renderHeight);
     return true;
 }
 
 // ============================================================
-// Per-frame render
+// Per-frame: Cubism render éˆ«?render path éˆ«?bgfx
 // ============================================================
-void Live2DBackend::uploadToBgfx(Live2DModel& model) {
-    if (!model.stagingTex || !model.bgfxTexValid) return;
-
-    D3D11_MAPPED_SUBRESOURCE mapped = {};
-    HRESULT hr = m_d3dContext->Map(
-        static_cast<ID3D11Texture2D*>(model.stagingTex),
-        0, D3D11_MAP_READ, 0, &mapped
-    );
-    if (FAILED(hr)) return;
-
-    auto* mem = bgfx::copy(mapped.pData,
-        static_cast<uint32_t>(mapped.RowPitch * model.renderHeight));
-    bgfx::updateTexture2D(model.bgfxTex, 0, 0, 0, 0,
-        model.renderWidth, model.renderHeight, mem);
-
-    m_d3dContext->Unmap(static_cast<ID3D11Texture2D*>(model.stagingTex), 0);
-}
-
 void Live2DBackend::render(float dt) {
-    if (!m_deviceShared || !m_d3dContext) return;
-
+    if (!m_renderPath) return;
     for (auto& [handle, model] : m_models) {
         if (!model->visible || !model->renderer || !model->userModel) continue;
 
-        auto* d3dRenderer = static_cast<CubismRenderer_D3D11*>(model->renderer);
         auto* cubismModel = model->userModel->GetModel();
         if (!cubismModel) continue;
 
-        // Update model (parameters, physics, motions, expressions)
-        model->userModel->Update();
+        // Update model (motions, expressions)
+        static_cast<Live2DUserModel*>(model->userModel.get())->motionManager()->UpdateMotion(cubismModel, dt);
+        static_cast<Live2DUserModel*>(model->userModel.get())->expressionManager()->UpdateMotion(cubismModel, dt);
 
-        // Render Cubism to its internal D3D11 targets
-        d3dRenderer->StartFrame(m_d3dContext);
-        d3dRenderer->SetRenderState(m_d3dDevice, m_d3dContext,
-            model->renderWidth, model->renderHeight);
-        d3dRenderer->DrawModel();
-        d3dRenderer->EndFrame();
-
-        // Copy Cubism output ¡ú staging ¡ú bgfx
-        auto& rts = d3dRenderer->GetModelRenderTargets();
-        if (!rts.IsEmpty() && model->stagingTex) {
-            ID3D11ShaderResourceView* srv = rts[0].GetTextureView();
-            if (srv) {
-                ID3D11Resource* res = nullptr;
-                srv->GetResource(&res);
-                if (res) {
-                    m_d3dContext->CopyResource(
-                        static_cast<ID3D11Texture2D*>(model->stagingTex), res);
-                    res->Release();
-                }
-            }
-        }
-
-        uploadToBgfx(*model);
+        // Cubism render éˆ«?bgfx (via pluggable render path)
+        m_renderPath->beginFrame(static_cast<CubismRenderer*>(model->renderer));
+        m_renderPath->endFrame(static_cast<CubismRenderer*>(model->renderer), model->bgfxTex);
 
         // Blit bgfx texture to screen
         if (m_renderDevice && model->bgfxTexValid) {
@@ -338,23 +308,18 @@ void Live2DBackend::render(float dt) {
 }
 
 // ============================================================
-// Motion playback
+// Motion playback éˆ¥?Cubism 5 API
 // ============================================================
 bool Live2DBackend::playMotion(int handle, const std::string& name) {
     auto it = m_models.find(handle);
-    if (it == m_models.end() || !it->second->userModel) return false;
+    if (it == m_models.end() || !it->second->userModel || !it->second->setting) return false;
 
     auto& model = *it->second;
 
-    // Find in motion cache (try exact key first, then fuzzy match)
     auto mit = model.motionCache.find(name);
     if (mit == model.motionCache.end()) {
-        // Try matching just the file name
         for (auto& [key, data] : model.motionCache) {
-            if (key.find(name) != std::string::npos) {
-                mit = model.motionCache.find(key);
-                break;
-            }
+            if (key.find(name) != std::string::npos) { mit = model.motionCache.find(key); break; }
         }
     }
     if (mit == model.motionCache.end()) {
@@ -363,16 +328,17 @@ bool Live2DBackend::playMotion(int handle, const std::string& name) {
     }
 
     auto& data = mit->second;
-    auto* motion = CubismMotion::Create(
+    auto* motion = model.userModel->LoadMotion(
         reinterpret_cast<const csmByte*>(data.data()),
-        static_cast<csmSizeInt>(data.size())
+        static_cast<csmSizeInt>(data.size()),
+        name.c_str(),
+        nullptr, nullptr,
+        model.setting
     );
     if (!motion) return false;
 
-    auto* manager = model.userModel->GetMotionManager();
-    csmInt32 handle2 = manager->StartMotion(motion, false);
-    SDL_Log("[Live2D] Motion playing: %s (handle=%d)", mit->first.c_str(), handle2);
-    return handle2 >= 0;
+    static_cast<Live2DUserModel*>(model.userModel.get())->motionManager()->StartMotion(motion, false);
+    return true;
 }
 
 // ============================================================
@@ -387,26 +353,36 @@ void Live2DBackend::setExpression(int handle, const std::string& name) {
     if (eit == model.expressionCache.end()) return;
 
     auto& data = eit->second;
-    auto* expression = CubismExpressionMotion::Create(
+    auto* expression = model.userModel->LoadExpression(
         reinterpret_cast<const csmByte*>(data.data()),
-        static_cast<csmSizeInt>(data.size())
+        static_cast<csmSizeInt>(data.size()),
+        name.c_str()
     );
     if (!expression) return;
 
-    auto* manager = model.userModel->GetExpressionManager();
-    manager->StartMotion(expression, false);
+    static_cast<Live2DUserModel*>(model.userModel.get())->expressionManager()->StartMotion(expression, false);
 }
 
 // ============================================================
-// Parameter control
+// Parameter éˆ¥?Cubism 5 API
 // ============================================================
 void Live2DBackend::setParameter(int handle, const std::string& param, float value) {
     auto it = m_models.find(handle);
     if (it == m_models.end() || !it->second->userModel) return;
     auto* cubismModel = it->second->userModel->GetModel();
     if (!cubismModel) return;
-    csmInt32 id = csmGetParameterId(cubismModel, param.c_str());
-    if (id >= 0) csmSetParameterValue(cubismModel, id, value);
+    auto* rawModel = cubismModel->GetModel();
+    if (!rawModel) return;
+
+    csmInt32 count = csmGetParameterCount(rawModel);
+    const char** ids = csmGetParameterIds(rawModel);
+    float* values = csmGetParameterValues(rawModel);
+    for (csmInt32 i = 0; i < count; ++i) {
+        if (ids[i] && param == ids[i]) {
+            values[i] = value;
+            return;
+        }
+    }
 }
 
 // ============================================================
@@ -449,72 +425,25 @@ static Live2DBackend* g_live2d = nullptr;
 
 static int lua_l2d_load_model(lua_State* L) {
     if (!g_live2d) { lua_pushinteger(L, -1); return 1; }
-    const char* path = luaL_checkstring(L, 1);
-    const char* name = luaL_optstring(L, 2, "model");
-    int handle = g_live2d->loadModel(path, name);
+    int handle = g_live2d->loadModel(luaL_checkstring(L, 1), luaL_optstring(L, 2, "model"));
     lua_pushinteger(L, handle);
     return 1;
 }
 
-static int lua_l2d_unload_model(lua_State* L) {
-    if (!g_live2d) return 0;
-    int handle = (int)luaL_checkinteger(L, 1);
-    g_live2d->unloadModel(handle);
-    return 0;
-}
-
-static int lua_l2d_show_model(lua_State* L) {
-    if (!g_live2d) return 0;
-    int handle = (int)luaL_checkinteger(L, 1);
-    float x = (float)luaL_optnumber(L, 2, 0);
-    float y = (float)luaL_optnumber(L, 3, 0);
-    float scale = (float)luaL_optnumber(L, 4, 1.0);
-    g_live2d->showModel(handle, x, y, scale);
-    return 0;
-}
-
-static int lua_l2d_hide_model(lua_State* L) {
-    if (!g_live2d) return 0;
-    g_live2d->hideModel((int)luaL_checkinteger(L, 1));
-    return 0;
-}
-
-static int lua_l2d_set_opacity(lua_State* L) {
-    if (!g_live2d) return 0;
-    g_live2d->setOpacity((int)luaL_checkinteger(L, 1),
-        (float)luaL_checknumber(L, 2));
-    return 0;
-}
+static int lua_l2d_unload_model(lua_State* L) { if (g_live2d) g_live2d->unloadModel((int)luaL_checkinteger(L, 1)); return 0; }
+static int lua_l2d_show_model(lua_State* L) { if (g_live2d) g_live2d->showModel((int)luaL_checkinteger(L, 1), (float)luaL_optnumber(L, 2, 0), (float)luaL_optnumber(L, 3, 0), (float)luaL_optnumber(L, 4, 1.0)); return 0; }
+static int lua_l2d_hide_model(lua_State* L) { if (g_live2d) g_live2d->hideModel((int)luaL_checkinteger(L, 1)); return 0; }
+static int lua_l2d_set_opacity(lua_State* L) { if (g_live2d) g_live2d->setOpacity((int)luaL_checkinteger(L, 1), (float)luaL_checknumber(L, 2)); return 0; }
 
 static int lua_l2d_play_motion(lua_State* L) {
-    if (!g_live2d) { lua_pushboolean(L, 0); return 1; }
-    bool ok = g_live2d->playMotion(
-        (int)luaL_checkinteger(L, 1),
-        luaL_checkstring(L, 2));
+    bool ok = g_live2d && g_live2d->playMotion((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2));
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
 
-static int lua_l2d_set_expression(lua_State* L) {
-    if (!g_live2d) return 0;
-    g_live2d->setExpression((int)luaL_checkinteger(L, 1),
-        luaL_checkstring(L, 2));
-    return 0;
-}
-
-static int lua_l2d_set_parameter(lua_State* L) {
-    if (!g_live2d) return 0;
-    g_live2d->setParameter((int)luaL_checkinteger(L, 1),
-        luaL_checkstring(L, 2),
-        (float)luaL_checknumber(L, 3));
-    return 0;
-}
-
-static int lua_l2d_is_loaded(lua_State* L) {
-    if (!g_live2d) { lua_pushboolean(L, 0); return 1; }
-    lua_pushboolean(L, g_live2d->isLoaded((int)luaL_checkinteger(L, 1)) ? 1 : 0);
-    return 1;
-}
+static int lua_l2d_set_expression(lua_State* L) { if (g_live2d) g_live2d->setExpression((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2)); return 0; }
+static int lua_l2d_set_parameter(lua_State* L) { if (g_live2d) g_live2d->setParameter((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2), (float)luaL_checknumber(L, 3)); return 0; }
+static int lua_l2d_is_loaded(lua_State* L) { lua_pushboolean(L, g_live2d && g_live2d->isLoaded((int)luaL_checkinteger(L, 1)) ? 1 : 0); return 1; }
 
 static const luaL_Reg l2d_functions[] = {
     { "load_model",    lua_l2d_load_model    },
@@ -536,11 +465,8 @@ void registerLive2DBinding(void* luaState) {
     SDL_Log("[Live2D] Lua bindings registered (live2d.*)");
 }
 
-// Global setter (called by Engine when backend is created)
-void Live2DBackend_setGlobal(Live2DBackend* backend) {
-    g_live2d = backend;
-}
+void Live2DBackend_setGlobal(Live2DBackend* backend) { g_live2d = backend; }
 
 } // namespace Caesura
 
-#endif // CAESURA_HAS_LIVE2D
+#endif

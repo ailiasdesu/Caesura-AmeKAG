@@ -277,38 +277,28 @@ endif()
 option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK download)" OFF)
 
 if(CAESURA_LIVE2D)
-    # Default SDK location (not committed to git)
     set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root")
-    
+    set(GLEW_ROOT "C:/glew/glew-2.2.0")
+
     if(NOT EXISTS "${CUBISM_SDK_ROOT}/Core/include/Live2DCubismCore.h")
         message(WARNING "Cubism SDK not found at ${CUBISM_SDK_ROOT}. Download from live2d.com")
     else()
-        message(STATUS "Live2D SDK found at ${CUBISM_SDK_ROOT}")
-        
+        message(STATUS "Live2D SDK + GLEW found")
+
         set(CUBISM_CORE_DIR "${CUBISM_SDK_ROOT}/Core")
         set(CUBISM_FRAMEWORK_DIR "${CUBISM_SDK_ROOT}/Framework")
-        
-        # --- Cubism Core (C library, prebuilt) ---
+
+        # --- Cubism Core (prebuilt) ---
         add_library(Live2DCubismCore STATIC IMPORTED)
         if(WIN32)
-            if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-                set_target_properties(Live2DCubismCore PROPERTIES
-                    IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib"
-                )
-            else()
-                set_target_properties(Live2DCubismCore PROPERTIES
-                    IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86/143/Live2DCubismCore_MT.lib"
-                )
-            endif()
-        elseif(APPLE)
-            # TODO: macOS library selection
+            set_target_properties(Live2DCubismCore PROPERTIES
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib")
         elseif(UNIX)
             set_target_properties(Live2DCubismCore PROPERTIES
-                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/x86_64/libLive2DCubismCore.a"
-            )
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/x86_64/libLive2DCubismCore.a")
         endif()
-        
-        # --- Cubism Framework (C++ static lib) ---
+
+        # --- Cubism Framework + OpenGL ES2 backend ---
         file(GLOB_RECURSE CUBISM_FRAMEWORK_SRCS
             "${CUBISM_FRAMEWORK_DIR}/src/CubismCdiJson.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/CubismDefaultParameterId.cpp"
@@ -322,46 +312,61 @@ if(CAESURA_LIVE2D)
             "${CUBISM_FRAMEWORK_DIR}/src/Physics/*.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Rendering/csmBlendMode.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Rendering/CubismRenderer.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/OpenGL/*.cpp"
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/*.cpp"  # Windows only (D3D11)
             "${CUBISM_FRAMEWORK_DIR}/src/Type/*.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Utils/*.cpp"
         )
-        
-        # D3D11 render backend (Windows)
-        if(WIN32)
-            file(GLOB CUBISM_RENDER_D3D11
-                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/*.cpp"
-            )
-            list(APPEND CUBISM_FRAMEWORK_SRCS ${CUBISM_RENDER_D3D11})
-        endif()
-        
+
         add_library(CubismFramework STATIC ${CUBISM_FRAMEWORK_SRCS})
         target_include_directories(CubismFramework PUBLIC
             "${CUBISM_FRAMEWORK_DIR}/src"
             "${CUBISM_CORE_DIR}/include"
         )
+        target_include_directories(CubismFramework PRIVATE
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/OpenGL"
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11"  # Windows only
+        )
         if(WIN32)
-            target_include_directories(CubismFramework PRIVATE
-                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11"
-            )
+            target_include_directories(CubismFramework PRIVATE "${GLEW_ROOT}/include")
+            target_link_libraries(CubismFramework PRIVATE
+                debug "${GLEW_ROOT}/lib/Release/x64/glew32s.lib"
+                optimized "${GLEW_ROOT}/lib/Release/x64/glew32s.lib")
         endif()
-        target_compile_definitions(CubismFramework PRIVATE CSM_TARGET_WIN_GL)
-        target_compile_definitions(CubismFramework PRIVATE _CRT_SECURE_NO_WARNINGS)
-        
+        target_compile_definitions(CubismFramework PRIVATE
+            CSM_TARGET_WIN_GL
+            _CRT_SECURE_NO_WARNINGS
+            GLEW_STATIC
+        )
+
         # --- Engine Live2D backend ---
         target_sources(${PROJECT_NAME} PRIVATE
             src/Animation/Live2D/Live2DBackend.h
             src/Animation/Live2D/Live2DBackend.cpp
+            src/Animation/Live2D/ILive2DRenderPath.h
+            src/Animation/Live2D/OpenGLReadbackRenderPath.h
+            src/Animation/Live2D/OpenGLReadbackRenderPath.cpp
+            src/Animation/Live2D/D3D11NativeRenderPath.h
+            src/Animation/Live2D/D3D11NativeRenderPath.cpp
+            src/Animation/Live2D/OpenGLSharedRenderPath.h
+            src/Animation/Live2D/OpenGLSharedRenderPath.cpp
+            src/Animation/Live2D/MetalNativeRenderPath.h
+            src/Animation/Live2D/MetalNativeRenderPath.cpp
         )
-        
         target_link_libraries(${PROJECT_NAME} PRIVATE CubismFramework Live2DCubismCore)
         target_include_directories(${PROJECT_NAME} PRIVATE
             "${CUBISM_CORE_DIR}/include"
             "${CUBISM_FRAMEWORK_DIR}/src"
         )
+        if(WIN32)
+            target_include_directories(${PROJECT_NAME} PRIVATE "${GLEW_ROOT}/include")
+            target_link_libraries(${PROJECT_NAME} PRIVATE
+                debug "${GLEW_ROOT}/lib/Release/x64/glew32s.lib"
+                optimized "${GLEW_ROOT}/lib/Release/x64/glew32s.lib")
+        endif()
         target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D)
     endif()
 endif()
-message(STATUS "Caesura (AmeKAG) configured successfully.")
 message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 
@@ -390,4 +395,3 @@ add_subdirectory(tools/carc_pack)
 
 # -- Unit Tests
 add_subdirectory(tests)
-

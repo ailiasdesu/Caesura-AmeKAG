@@ -1,84 +1,72 @@
 ﻿# Live2D Integration Plan — Caesura (AmeKAG)
 
-> 2026-06-08 | P2 | 预估 5d
+> 2026-06-08 | P2 | Phase 1 完成，Phase 2-4 进行中
 
-## Legal Safety Design
+## ✅ 已完成
 
-**原则：引擎保持纯 MIT。Live2D 是可选插件，不污染协议。**
+### Phase 1: SDK 集成 + CMake (完成)
+- [x] `CAESURA_LIVE2D` option（默认 OFF）
+- [x] Cubism 5 Core (prebuilt) + Framework 静态库编译
+- [x] GLEW 静态链接（Windows OpenGL ES 2 后端）
+- [x] `Live2DUserModel` 桥接类（暴露 protected motionManager/expressionManager）
+- [x] Debug 构建通过：`CaesuraAmeKAG.exe` + `CaesuraTests.exe` + `carc_pack.exe`
 
-```cmake
-option(CAESURA_LIVE2D "Live2D Cubism support (requires SDK)" OFF)
-
-if(CAESURA_LIVE2D)
-    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/external/Live2DCubismSDK/Core")
-        message(FATAL_ERROR
-            "Live2D Cubism SDK not found.\n"
-            "  Download: https://www.live2d.com/en/download/cubism-sdk/\n"
-            "  Extract to: external/Live2DCubismSDK/\n"
-            "  Or disable: -DCAESURA_LIVE2D=OFF")
-    endif()
-    add_subdirectory(external/Live2DCubismSDK)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D=1)
-endif()
-```
-
-- 默认 `OFF`，引擎编译不依赖 Cubism SDK
-- 用户主动 `-DCAESURA_LIVE2D=ON` 时才加载
-- 所有 Live2D 代码在 `#ifdef CAESURA_HAS_LIVE2D` 守卫内
-- README 注明："Live2D 需自行下载 SDK，接受其授权条款"
+### Live2DBackend 已实现功能
+- [x] CubismFramework 初始化和销毁
+- [x] 模型加载（`.model3.json` → `.moc3` → 纹理 → 动作/表情缓存）
+- [x] 模型显示/隐藏/透明度
+- [x] 动作播放（motion）
+- [x] 表情设置（expression）
+- [x] 参数控制（Cubism 5 API：遍历 `csmGetParameterIds`）
+- [x] Lua 绑定（`live2d.*`）
+- [x] 渲染管线：OpenGL FBO → `glReadPixels` → bgfx Texture2D
 
 ---
 
-## Integration Steps
+## ⚠️ 已知限制
 
-### Phase 1: nlohmann/json + CMake 框架 (1d)
+### macOS 兼容性风险
 
-| Step | 内容 |
-|---|---|
-| 1.1 | CMake FetchContent: nlohmann/json (MIT, header-only) |
-| 1.2 | 替换 SaveManager → nlohmann::json |
-| 1.3 | `CAESURA_LIVE2D` option + 守卫宏 |
-| 1.4 | Live2D SDK 检测 + 错误提示 |
+**OpenGL 已被 Apple 弃用（2018），macOS 15+ 可能随时移除。**
 
-### Phase 2: Live2D 模块 (2d)
+| 平台 | bgfx 后端 | Live2D 渲染路径 | 状态 |
+|------|-----------|----------------|------|
+| Windows | D3D11 | OpenGL ES 2（headless context）| ✅ 可用 |
+| Linux | OpenGL/Vulkan | OpenGL ES 2 | ✅ 可用 |
+| macOS | Metal | **无可用渲染器** | ❌ 阻塞 |
 
-| Step | 内容 | 文件 |
-|---|---|---|
-| 2.1 | `Live2DModel`: .model3.json → 纹理/动作/参数 | `src/Animation/Live2D/Live2DModel.h/.cpp` |
-| 2.2 | `Live2DRenderer`: bgfx 纹理四边形 | `src/Animation/Live2D/Live2DRenderer.h/.cpp` |
-| 2.3 | `Live2DAnimator`: 动作/表情 + 参数插值 | `src/Animation/Live2D/Live2DAnimator.h/.cpp` |
-| 2.4 | `#ifdef CAESURA_HAS_LIVE2D` 守卫所有文件 | — |
+**原因：**
+- Cubism SDK Metal 渲染器 (`Framework/src/Rendering/Metal/`) 仅支持 iOS (`CSM_TARGET_IPHONE`)，未验证 macOS
+- macOS 需无窗口 OpenGL Context（CGL），当前未实现
+- Apple 可能在 macOS 16 彻底移除 OpenGL 支持
 
-### Phase 3: Lua API (1d)
+**TODO（需 macOS 开发者）：**
+1. 验证 Cubism Metal 渲染器能否在 macOS 工作（需 `MTKView` 或无窗口 `MTLDevice`）
+2. 或者适配 macOS CGL headless context + OpenGL ES 2（临时的）
+3. 最终方案：为每个 bgfx 后端实现对应的 Cubism 原生渲染器
 
-| API | 功能 |
-|---|---|
-| `KAG.load_live2d(path, name)` | 加载模型 |
-| `KAG.show_live2d(name, x, y, scale)` | 显示 |
-| `KAG.hide_live2d(name)` | 隐藏 |
-| `KAG.play_live2d_motion(name, motion)` | 播放动作 |
-| `KAG.set_live2d_expression(name, expr)` | 表情 |
-| `KAG.set_live2d_param(name, param, value)` | 参数控制 |
-| `KAG.set_live2d_opacity(name, opacity)` | 透明度 |
+### 性能：GPU→CPU→GPU 回读
 
-### Phase 4: 渲染 + Demo (1d)
+当前每帧 `glReadPixels` → bgfx `updateTexture2D`，高分辨率模型会瓶颈。
+后续架构重构计划见下文。
 
 ---
 
-## File Structure
+## 🚧 下一步：可插拔渲染路径
 
 ```
-external/Live2DCubismSDK/     ← 用户自行下载（不在 git 内）
-external/nlohmann/            ← CMake FetchContent (MIT, 自动)
-src/Animation/
-├── IAnimationBackend.h       ← 抽象接口
-├── NullAnimationBackend.h    ← 默认空实现
-└── Live2D/                   ← 全部在 #ifdef CAESURA_HAS_LIVE2D 内
-    ├── Live2DModel.h/.cpp
-    ├── Live2DRenderer.h/.cpp
-    ├── Live2DAnimator.h/.cpp
-    └── Live2DBinding.h/.cpp
+Live2D 顶点/纹理数据
+       │
+       ▼
+IRenderPath 接口
+       │
+       ├── OpenGLReadbackPath  ← 当前方案（CPU 回读，跨平台后备）
+       ├── D3D11NativePath     ← Windows 最优（零拷贝，直接写 bgfx 纹理）
+       ├── MetalNativePath     ← macOS 最优（待验证）
+       └── OpenGLSharedPath    ← Linux 最优（共享 bgfx GL 上下文）
 ```
+
+通过 `IAnimationBackend` → `ILive2DRenderPath` 两层抽象，编译期/运行期选择渲染路径。
 
 ## Legal Checklist
 

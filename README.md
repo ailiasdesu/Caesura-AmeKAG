@@ -1,4 +1,4 @@
-# Caesura (AmeKAG)
+Ôªø# Caesura (AmeKAG)
 
 Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 
@@ -7,7 +7,7 @@ Visual novel engine. Cross-platform. C++20 + SDL3 + bgfx + Lua 5.4.
 
 ## Quick Start
 
-Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately °™ no dependencies.
+Download the [latest release](https://github.com/ailiasdesu/Caesura-AmeKAG/releases), extract, and run `CaesuraAmeKAG.exe`. A visual demo plays immediately ‚Äî no dependencies.
 
 ## Build from Source
 ## Build from Source
@@ -39,6 +39,19 @@ cmake --build build --config Debug --parallel $(nproc)
 Run the engine:
 ```
 ./build/Debug/CaesuraAmeKAG.exe   # Windows
+
+
+### Live2D Cubism (optional)
+
+Enable via `-DCAESURA_LIVE2D=ON`. Requires [Cubism 5 SDK for Native](https://www.live2d.com/en/download/cubism-sdk/) placed at `CubismSdkForNative-5-r.5/`.
+
+> ‚ö†Ô∏è **macOS**: OpenGL has been deprecated by Apple since 2018. Live2D uses OpenGL ES 2 for rendering and may not work on future macOS versions. A Metal-native renderer is planned but not yet implemented.
+
+```
+cmake -B build -S . -DCAESURA_LIVE2D=ON
+cmake --build build --config Debug
+```
+
 ./build/CaesuraAmeKAG             # macOS/Linux
 ```
 
@@ -71,7 +84,7 @@ src/
 scripts/
   kag/         Parser, scheduler, conductor, 9 command modules
   demo.lua     4-phase visual demo (runs on launch)
-  sandbox.lua  Security rules °™ DEFAULT DENY, EXPLICIT ALLOW
+  sandbox.lua  Security rules ‚Äî DEFAULT DENY, EXPLICIT ALLOW
   config.lua   Backend selection, engine configuration
 
 tests/
@@ -83,10 +96,10 @@ tests/
 
 | Module | Detail |
 |---|---|
-| KAG Script | 9 command modules, 53 tag handlers °™ bg, fg, text, audio, VFX, transitions, save/load |
-| Lua Sandbox | Strict mode °™ all rules in `scripts/sandbox.lua`, AI-auditable |
+| KAG Script | 9 command modules, 53 tag handlers ‚Äî bg, fg, text, audio, VFX, transitions, save/load |
+| Lua Sandbox | Strict mode ‚Äî all rules in `scripts/sandbox.lua`, AI-auditable |
 | CARC Packaging | ed25519 signature + AES-GCM encryption + zstd compression |
-| VFX System | Quake, flash, blur, fade, snow, rain °™ 1024 particle cap |
+| VFX System | Quake, flash, blur, fade, snow, rain ‚Äî 1024 particle cap |
 | 3D LUT Grading | Real-time palette-based color correction |
 | Video Playback | FFmpeg with hardware decode fallback to pl_mpeg |
 | Multi-Core | JobSystem work-stealing thread pool for async texture/video loading |
@@ -95,7 +108,7 @@ tests/
 
 ## Dependencies
 
-Vendored °™ no system packages required beyond SDL3:
+Vendored ‚Äî no system packages required beyond SDL3:
 
 | Library | Purpose |
 |---|---|
@@ -130,7 +143,7 @@ cmake --build build --config Release --parallel
 cd build && cpack -C Release -G ZIP
 ```
 
-Output: `CaesuraAmeKAG-1.0.0-win64.zip` °™ ready to distribute.
+Output: `CaesuraAmeKAG-1.0.0-win64.zip` ‚Äî ready to distribute.
 
 ## Live2D Cubism (Optional)
 
@@ -148,7 +161,7 @@ cmake -B build -DCAESURA_LIVE2D=ON -DLIVE2D_SDK_ROOT="path/to/CubismSdkForNative
 
 ### Legal
 
-- Cubism SDK is Live2D Inc. proprietary software °™ subject to its own license
+- Cubism SDK is Live2D Inc. proprietary software ‚Äî subject to its own license
 - This engine does **not** redistribute Cubism SDK in source or binary form
 - The engine's MIT license does **not** apply to Cubism SDK
 

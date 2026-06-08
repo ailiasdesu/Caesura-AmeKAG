@@ -375,3 +375,27 @@ Caesura(AmeKAG)/
 - 6 个 @Beta 标记 + 6 个 TODO 占位需推进
 - 手写 JSON 解析器未来可能成为约束
 - Windows-only 加密路径需跨平台抽象
+
+---
+
+## Live2D Cubism 5 集成
+
+> 状态：✅ 编译通过 (Windows/Debug) | ⚠️ macOS 阻塞
+
+| 项目 | 详情 |
+|---|---|
+| SDK 版本 | Cubism 5 SDK for Native (r.5) |
+| 渲染路径 | OpenGL ES 2 FBO → `glReadPixels` → bgfx `updateTexture2D` |
+| CMake Option | `CAESURA_LIVE2D` (默认 OFF) |
+| 守卫宏 | `CAESURA_HAS_LIVE2D` |
+| 已实现 | 模型加载/显示/隐藏/透明度、动作播放、表情设置、参数控制、Lua 绑定 |
+
+### macOS 兼容性 ⚠️
+- Apple 已弃用 OpenGL（2018），macOS 16 可能彻底移除
+- Cubism Metal 渲染器仅验证过 iOS，macOS 未测试
+- **macOS 用户当前无法使用 Live2D 功能**
+- 需 macOS 开发者验证 Metal 路径可行性
+
+### 性能注记
+- CPU 回读每帧一次，高分辨率模型会成为瓶颈
+- 计划重构为可插拔渲染路径（D3D11/Metal/OpenGL native→bgfx 零拷贝）

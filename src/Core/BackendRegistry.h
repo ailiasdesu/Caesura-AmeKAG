@@ -5,6 +5,7 @@
 #include "../Resource/ResourceHandle.h"
 #include "../Render/VideoPlayer.h"
 #include "../MiniGame/IMiniGameBackend.h"
+#include "../Animation/IAnimationBackend.h"
 #include "InputRouter.h"
 #include <unordered_map>
 #include <string>
@@ -50,6 +51,9 @@ public:
     void setInputRouter(InputRouter* router);
     void setMiniGameBackend(IMiniGameBackend* backend);
     IMiniGameBackend* getMiniGameBackend() { return m_miniGameBackend; }
+
+    void setAnimationBackend(IAnimationBackend* backend) { m_animationBackend = backend; }
+    IAnimationBackend* getAnimationBackend() { return m_animationBackend; }
 
     void setVideoPlayer(VideoPlayer* player);
 
@@ -114,6 +118,7 @@ private:
         InputRouter*     m_inputRouter     = nullptr;
     GenerationTracker m_generations;
     IMiniGameBackend* m_miniGameBackend = nullptr;
+    IAnimationBackend* m_animationBackend = nullptr;
     VideoPlayer*     m_videoPlayer     = nullptr;
     TextureManager*  m_textureManager  = nullptr;
     LayerManager*    m_layerManager    = nullptr;

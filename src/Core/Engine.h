@@ -3,6 +3,7 @@
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
 #include "MiniGame/IMiniGameBackend.h"
+#include "../Animation/IAnimationBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>
@@ -42,6 +43,7 @@ public:
     IAudioBackend& audio();
     IPlatformBackend& platform();
     IMiniGameBackend& miniGame() { return *m_miniGameBackend; }
+    IAnimationBackend& animation() { return *m_animationBackend; }
     LuaManager&   lua()           { return *m_lua; }
     InputRouter&  input()         { return *m_inputRouter; }
     GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
@@ -78,6 +80,7 @@ private:
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<GpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend> m_miniGameBackend;
+    std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     // HotReload is a singleton, accessed via HotReload::instance()
 };
