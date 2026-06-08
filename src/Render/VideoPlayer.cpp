@@ -34,10 +34,10 @@ VideoPlayer::VideoPlayer()  = default;
 VideoPlayer::~VideoPlayer() { shutdown(); }
 
 VideoHandle VideoPlayer::open(const char* path) {
-    bool usePl = shouldUsePlmpeg(path);
-
+    // If FFmpeg is available, prefer it for all formats (hardware decode, SIMD).
+    // pl_mpeg is the zero-dependency fallback for MPEG-1 only.
 #ifdef CAESURA_VIDEO_FFMPEG
-    if (!usePl) {
+    {
         // -------- FFmpeg path --------
         VideoState vs;
         vs.useFFmpeg = true;
@@ -320,11 +320,12 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         }
         return false;
 #else
-        return false;
+        // FFmpeg not compiled ¡ª fall through to pl_mpeg below
 #endif
     }
 
-    // -------- pl_mpeg path (decode on JobSystem worker) --------------
+    // -------- pl_mpeg path (zero-dependency fallback) ----------------
+    // Only reached when CAESURA_VIDEO_FFMPEG is OFF, or FFmpeg open() failed.
     {
         plm_t* plm = static_cast<plm_t*>(vs->plm);
         auto frame = std::make_shared<DecodedFrame>();
