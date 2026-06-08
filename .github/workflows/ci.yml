@@ -72,7 +72,7 @@ jobs:
       - name: Copy SDL3 DLL for tests
         shell: pwsh
         run: |
-          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Select-Object -First 1
+          $sdlDll = Get-ChildItem -Recurse -Filter "SDL3.dll" -Path external/SDL3 | Where-Object { $_.FullName -like *x64* } | Select-Object -First 1
           if ($sdlDll) {
             Copy-Item $sdlDll.FullName "build/tests/${{ matrix.config }}/"
             Write-Host "Copied SDL3.dll to test dir"
@@ -169,7 +169,7 @@ jobs:
       - name: Build SDL3 from source
         if: steps.cache-sdl.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL --retry 3 --retry-delay 5 "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL_VERSION }}/SDL3-${{ env.SDL_VERSION }}.tar.gz" -o sdl3.tar.gz
           tar xzf sdl3.tar.gz
           cd SDL3-${{ env.SDL_VERSION }}
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/external/SDL3"
