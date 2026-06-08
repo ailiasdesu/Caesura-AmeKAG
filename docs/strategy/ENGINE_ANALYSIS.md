@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
-> 分析日期: 2026-06-08 | 构建配置: CMake 3.25+ / C++20 / MSVC+Clang+GCC
+> 分析日期: 2026-06-08 (updated) | 构建配置: CMake 3.25+ / C++20 / MSVC+Clang+GCC
 > 构建状态: 三平台全量通过 (Win/Linux/macOS) | 140 tests / 270 assertions / 100% pass
 > 仅分析可成功构建模块，忽略废弃代码
 
@@ -338,7 +338,7 @@ _CAESURA_BACKEND (Lua) →     BackendFactory.create() (Lua)
 |------|------|----------|
 | v1.0.0-alpha | 2026-06-07 | 初始构建，18 条技术债清零 |
 | v1.0.0-alpha-2 | 2026-06-08 | mu-q 多核合并、layers.lua 修复、EditorServer/RpcServer/SandboxQuota |
-| v1.0.0-alpha-3 | 2026-06-08 | 三平台 CI 全绿（20 轮迭代，14 个跨平台修复） |
+| v1.0.0-alpha-4 | 2026-06-08 | 三平台 CI 全绿（20 轮迭代，14 个跨平台修复） |
 
 ---
 
@@ -390,3 +390,21 @@ _CAESURA_BACKEND (Lua) →     BackendFactory.create() (Lua)
 ---
 
 *此文档由 ce-repo-research-analyst 深度分析生成，整合了代码模块扫描 + 构建系统分析 + 测试审查 + CI 状态。*
+
+### 审查剔除项（2026-06-08）
+
+以下标记经代码验证不实，已从活跃清单移除：
+
+| 标记 | 原因 |
+|------|------|
+| TD-01 | Engine::render() 仅 1 次 pcall，非 2 次 |
+| TD-02 | FontRenderer.cpp 不存在，无 TextRenderer↔FontRenderer 重叠 |
+| TD-03 | 已修复 — Engine unique_ptr + Registry non-owning raw ptr |
+| TD-05 | LuaManager 0 处 luaL_dostring，无内联 Lua |
+| TD-06 | ParticleSystem 不引用 BgfxRenderDevice |
+| TD-10 | RTTManager 无 @Beta 注释 |
+| TD-11 | FontRenderer.cpp 不存在，无 2048 硬编码 |
+| TD-13 | BgfxRenderDevice 无 LUT 图集代码 |
+| TD-15 | 已修复 — UnifiedBinding 废弃 |
+| TD-17 | MobileAdapter namespace 为 Caesura，一致 |
+
