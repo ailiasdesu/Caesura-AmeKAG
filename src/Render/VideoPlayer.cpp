@@ -260,63 +260,61 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 
     if (vs->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
-        auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
-        auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
-        auto* f    = static_cast<AVFrame*>(vs->avFrame);
-        auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
-        auto* sws  = static_cast<SwsContext*>(vs->swsCtx);
+        // Offload read+decode+convert to JobSystem worker.
+        // State is exclusive: main thread waits before touching FFmpeg objects.
+        auto frame = std::make_shared<DecodedFrame>();
+        frame->width  = vs->width;
+        frame->height = vs->height;
 
-        // Read packets until we get a video frame
-        AVPacket* pkt = av_packet_alloc();
-        bool gotFrame = false;
+        JobSystem::instance().submit(
+            [frame, vs]() {
+                auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
+                auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
+                auto* f    = static_cast<AVFrame*>(vs->avFrame);
+                auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
+                auto* sws  = static_cast<SwsContext*>(vs->swsCtx);
 
-        while (!gotFrame) {
-            int ret = av_read_frame(fmt, pkt);
-            if (ret == AVERROR_EOF) {
-                // Flush decoder
-                av_packet_unref(pkt);
-                ret = avcodec_send_packet(cc, nullptr);
-                if (ret >= 0) {
-                    ret = avcodec_receive_frame(cc, f);
-                    if (ret == 0) {
-                        gotFrame = true;
+                AVPacket* pkt = av_packet_alloc();
+                bool gotFrame = false;
+
+                while (!gotFrame) {
+                    int ret = av_read_frame(fmt, pkt);
+                    if (ret == AVERROR_EOF) {
+                        av_packet_unref(pkt);
+                        ret = avcodec_send_packet(cc, nullptr);
+                        if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
+                            gotFrame = true;
+                        vs->ended = true;
+                        vs->playing = false;
+                        break;
                     }
-                }
-                vs->ended = true;
-                vs->playing = false;
-                DEBUG_INFO(SubSys::Render, ErrCode::Ok,
-                           "VideoPlayer: video %u ended", handle.id);
-                break;
-            }
-            if (ret < 0) {
-                av_packet_unref(pkt);
-                break;
-            }
+                    if (ret < 0) { av_packet_unref(pkt); break; }
 
-            if (pkt->stream_index == vs->videoStreamIndex) {
-                ret = avcodec_send_packet(cc, pkt);
-                if (ret >= 0) {
-                    ret = avcodec_receive_frame(cc, f);
-                    if (ret == 0) {
-                        gotFrame = true;
-                    } else if (ret == AVERROR(EAGAIN)) {
-                        // Need more packets - continue
+                    if (pkt->stream_index == vs->videoStreamIndex) {
+                        ret = avcodec_send_packet(cc, pkt);
+                        if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
+                            gotFrame = true;
                     }
+                    av_packet_unref(pkt);
                 }
-            }
-            av_packet_unref(pkt);
-        }
+                av_packet_free(&pkt);
 
-        av_packet_free(&pkt);
+                if (gotFrame && cc && sws && fRGB) {
+                    sws_scale(sws, f->data, f->linesize, 0, cc->height,
+                              fRGB->data, fRGB->linesize);
+                    frame->rgba.assign(vs->rgbaBuffer.begin(), vs->rgbaBuffer.end());
+                    frame->valid = true;
+                }
+            },
+            JobPriority::High
+        );
 
-        if (gotFrame) {
-            sws_scale(sws,
-                      f->data, f->linesize, 0, cc->height,
-                      fRGB->data, fRGB->linesize);
+        JobSystem::instance().waitIdle();
 
-            const bgfx::Memory* mem = bgfx::copy(vs->rgbaBuffer.data(), (uint32_t)vs->rgbaBuffer.size());
+        if (frame->valid) {
+            const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
             bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
-                                  (uint16_t)vs->width, (uint16_t)vs->height, mem);
+                                  (uint16_t)frame->width, (uint16_t)frame->height, mem);
             vs->hasFrame = true;
             return true;
         }
