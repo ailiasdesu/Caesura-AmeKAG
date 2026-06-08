@@ -18,6 +18,18 @@ namespace Caesura {
 
 // -- Internal texture helper: delegates to TextureManager -------------------
 
+// Resolve a texture ID: first try TextureManager, then RTT viewport map.
+// This handles the case where Lua passes an RTT view ID as "tex" field.
+static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
+    bgfx::TextureHandle tex = TextureManager::instance().getTextureHandle(id);
+    if (!bgfx::isValid(tex) && dev && id != 0) {
+        ViewportHandle vp{ id };
+        tex = dev->getViewportTexture(vp);
+    }
+    return tex;
+}
+
+// Legacy wrapper for callers that don't have a device pointer
 static bgfx::TextureHandle getTexHandle(uint32_t texId) {
     return TextureManager::instance().getTextureHandle(texId);
 }
@@ -131,13 +143,12 @@ static int lua_Render_submit_batch(lua_State* L) {
         float    h      = getTableFloat(L, "h", 128);
         int      opacity = getTableInt(L, "opacity", 255);
 
-        bgfx::TextureHandle tex = getTexHandle(texId);
+        bgfx::TextureHandle tex = resolveTexture(texId, dev);
+        // Also try explicit "rt" key for forward-compat
         if (!bgfx::isValid(tex)) {
-            // Fallback: check rt (RTT viewport) key for layer compositing
             uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
             if (rtId != 0) {
-                ViewportHandle vp{ rtId };
-                tex = dev->getViewportTexture(vp);
+                tex = resolveTexture(rtId, dev);
             }
         }
         if (bgfx::isValid(tex)) {
@@ -162,16 +173,15 @@ static int lua_Render_submit_blend(lua_State* L) {
     float    blendAlpha = (float)luaL_optnumber(L, 5, 1.0);
     float    globalAlpha = (float)luaL_optnumber(L, 6, 1.0);
 
-    bgfx::TextureHandle baseTex  = getTexHandle(baseTexId);
-    bgfx::TextureHandle blendTex = getTexHandle(blendTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle baseTex  = resolveTexture(baseTexId, dev);
+    bgfx::TextureHandle blendTex = resolveTexture(blendTexId, dev);
 
     if (!bgfx::isValid(baseTex) || !bgfx::isValid(blendTex)) {
         fprintf(stderr, "[Render] submit_blend: invalid texture(s)\n");
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
     if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
@@ -191,8 +201,10 @@ static int lua_Render_submit_transition(lua_State* L) {
     int      method    = (int)luaL_checkinteger(L, 4);
     float    progress  = (float)luaL_checknumber(L, 5);
 
-    bgfx::TextureHandle fromTex = getTexHandle(fromTexId);
-    bgfx::TextureHandle toTex   = getTexHandle(toTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle fromTex = resolveTexture(fromTexId, dev);
+    bgfx::TextureHandle toTex   = resolveTexture(toTexId, dev);
 
     if (!bgfx::isValid(fromTex) || !bgfx::isValid(toTex)) {
         fprintf(stderr, "[Render] submit_transition: invalid texture(s)\n");
@@ -201,11 +213,8 @@ static int lua_Render_submit_transition(lua_State* L) {
 
     bgfx::TextureHandle ruleTex = BGFX_INVALID_HANDLE;
     if (ruleTexId != 0) {
-        ruleTex = getTexHandle(ruleTexId);
+        ruleTex = resolveTexture(ruleTexId, dev);
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
     if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
@@ -229,14 +238,13 @@ static int lua_Render_submit_vfx(lua_State* L) {
     float    quakeX    = (float)luaL_optnumber(L, 8, 0.0);
     float    quakeY    = (float)luaL_optnumber(L, 9, 0.0);
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         fprintf(stderr, "[Render] submit_vfx: invalid texture\n");
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
     if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
@@ -263,13 +271,12 @@ static int lua_Render_stretch_blt(lua_State* L) {
     float    sh = (float)luaL_checknumber(L, 10);
     int      filter = (int)luaL_optinteger(L, 11, 1);
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     dev->stretchBlt(VIEW_MAIN, dstTexId,
                      dx, dy, dw, dh,
@@ -312,13 +319,12 @@ static int lua_Render_affine_blt(lua_State* L) {
         }
     }
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     dev->affineBlt(VIEW_MAIN, dstTexId,
                     dx, dy, dw, dh,
@@ -332,15 +338,14 @@ static int lua_Render_affine_blt(lua_State* L) {
 
 static int lua_Render_fill_viewport(lua_State* L) {
     uint32_t id = (uint32_t)luaL_checkinteger(L, 1);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
     uint8_t r = (uint8_t)luaL_optinteger(L, 2, 0);
     uint8_t g = (uint8_t)luaL_optinteger(L, 3, 0);
     uint8_t b = (uint8_t)luaL_optinteger(L, 4, 0);
     uint8_t a = (uint8_t)luaL_optinteger(L, 5, 255);
 
     ViewportHandle vp{ id };
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-
     BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
     if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
 
