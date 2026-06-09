@@ -1,79 +1,62 @@
-﻿# Build Guide — Caesura (AmeKAG)
+﻿# Caesura (AmeKAG) 构建指南
 
-## Prerequisites
+## 前置条件
 
 - CMake 3.25+
-- C++20 compiler
-- Git (for submodules)
+- C++20 编译器 (MSVC 2022 / GCC 13+ / Clang 16+)
+- Node.js 20+ (仅编辑器)
+- Python 3 (仅 CI 脚本)
 
-## Windows (MSVC + D3D11)
+## 引擎构建
 
-```powershell
-git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
-cd Caesura-AmeKAG
-
-# Default build (no Live2D, no FFmpeg)
-cmake -B build
-cmake --build build --config Debug
-
-# With Live2D (requires Cubism 5 Native SDK)
-cmake -B build_l2d -DCAESURA_LIVE2D:BOOL=ON -DCUBISM_SDK_ROOT:PATH="C:/path/to/CubismSdkForNative-5-r.5"
-cmake --build build_l2d --config Debug
-
-# Without Live2D (clean build)
-cmake -B build_nol2d
+### Windows (MSVC)
+```bash
+# 不含 Live2D
+cmake -B build_nol2d -DCAESURA_ENABLE_LIVE2D=OFF
 cmake --build build_nol2d --config Debug
+cmake --build build_nol2d --config Release
+
+# 含 Live2D（需 Cubism SDK 路径）
+cmake -B build_l2d -DCAESURA_ENABLE_LIVE2D=ON -DCUBISM_SDK_PATH="C:/path/to/CubismSdkForNative"
+cmake --build build_l2d --config Debug
 ```
 
-## Linux (GCC + OpenGL)
-
+### Linux
 ```bash
-git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
-cd Caesura-AmeKAG
-
-cmake -B build
+cmake -B build -DCAESURA_ENABLE_LIVE2D=OFF
 cmake --build build
 ```
 
-> **注意**: Linux CI 当前构建失败 (CryptoEngine 使用 BCrypt，需替换为 OpenSSL)。
-
-## macOS (Clang + Metal)
-
+### macOS
 ```bash
-git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
-cd Caesura-AmeKAG
-
-cmake -B build
+cmake -B build -DCAESURA_ENABLE_LIVE2D=OFF
 cmake --build build
 ```
 
-> **注意**: macOS CI 当前构建失败 (同 BCrypt 问题)。
+## 编辑器开发
 
-## Build Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `CAESURA_LIVE2D` | OFF | Enable Live2D Cubism 5 support |
-| `CUBISM_SDK_ROOT` | — | Path to Cubism Native SDK |
-| `CAESURA_VIDEO_FFMPEG` | OFF | Enable FFmpeg video backend |
-
-## Directory Layout After Build
-
-```
-build/Debug/
-├── CaesuraAmeKAG.exe
-├── SDL3.dll
-└── scripts/          (copied from repo)
+```bash
+cd web-editor
+npm install
+npm run dev          # Vite dev server + Electron
+npm run build        # Vite production build
+npm run package      # 完整打包 (Win/Mac/Linux)
+npm run package:win  # 仅 Windows
 ```
 
-## Running Tests
+编辑器 dev 模式下：
+- Vite 运行在 `http://localhost:5173`
+- Electron 自动启动，加载 Vite dev server
+- 引擎以 headless 模式自动 spawn
 
-```powershell
-ctest --test-dir build --config Debug
+## 测试
+
+```bash
+ctest --test-dir build_nol2d -C Debug
 ```
 
-## CI Pipeline
+## 已知问题
 
-- `.github/workflows/ci.yml`: Windows MSVC (Debug+Release), Linux GCC, macOS Clang
-- Windows: ✅ 通过
-- Linux/macOS: ❌ 待修复 (全局约束最后)
+- 测试项目 BgfxMiniGameBackend 链接错误（预存，非功能性缺陷）
+- macOS/Linux CI 测试被 continue-on-error 掩盖
+- pl_mpeg 无硬件加速

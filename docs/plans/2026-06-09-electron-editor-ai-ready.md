@@ -1,7 +1,7 @@
-﻿---
+---
 title: Electron 编辑器完善 — 可视化场景编辑 + AI 辅助面板
 type: feature
-status: draft
+status: complete
 date: 2026-06-09
 origin: 引擎完成度审查 + 用户需求 ("两者都做")
 prerequisites: RPC Server (✅), Engine 85-88% (✅), Electron shell (✅)

@@ -1,7 +1,7 @@
-﻿---
+---
 title: 引擎稳定化：AI 辅助开发就绪
 type: refactor
-status: active
+status: complete
 date: 2026-06-07
 origin: docs/brainstorms/2026-06-07-engine-stabilization-ai-ready-requirements.md
 ---
