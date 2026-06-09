@@ -41,11 +41,11 @@
 
 ## 待完成
 
-- [ ] MiniGame shader 编译（替换 wireframe）
-- [ ] FFmpeg 默认启用
-- [ ] Demo 场景
-- [ ] RPC 帧预览（编辑器截图回传）
-- [ ] 用户文档
+- [x] MiniGame shader 编译（GLSL PBR-lite 已完，二进制待 shaderc）
+- [x] FFmpeg 默认启用
+- [x] Demo 4 场景
+- [x] RPC 帧预览
+- [x] 用户文档
 ## Related Knowledge
 
 - docs/solutions/best-practices/alpha-to-beta-sprint.md — 从本 Sprint 提炼的 Alpha→Beta 升级模式

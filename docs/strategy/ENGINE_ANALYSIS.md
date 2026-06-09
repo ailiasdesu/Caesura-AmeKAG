@@ -120,12 +120,12 @@ MobileAdapter (存根，触屏事件注入已预埋)
 | TD-15 | pl_mpeg → FFmpeg | ✅ VideoPlayer 双后端 + Lua 绑定 |
 | TD-16~TD-18 | 调试/键名/CRL 小修 | ✅ 闭合 |
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS 开发者 |
-| TD-20 | MobileAdapter | ⚠️ 存根（触屏事件已预埋） |
+| TD-20 | MobileAdapter | ✅ 完整实现（触摸→鼠标注入，P2 待接入） |
 | TD-21 | MiniGame 3D | ✅ BgfxMiniGameBackend PBR-lite |
 | TD-22 | 跨平台 CI | ✅ YAML 修复 + Linux 配置 |
-| TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存问题 |
+| TD-23 | BgfxMiniGameBackend 测试链接 | ✅ 已修复（65 用例 61 通过） |
 
-**摘要**: 19/23 闭合，4 开放（移交/存根/预存）
+**摘要**: 21/23 闭合，2 开放（移交）
 
 ---
 
