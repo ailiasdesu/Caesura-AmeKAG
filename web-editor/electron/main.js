@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+﻿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -214,6 +214,41 @@ ipcMain.handle("ai-chat", async (event, { messages, provider, settings }) => {
 
 ipcMain.handle("codex-chat", async (event, { messages, settings }) => {
   return { content: "Codex bridge: use the Codex IDE for AI assistance with KAG scripting." };
+});
+
+
+// =========================================================================
+// One-click package
+// =========================================================================
+
+ipcMain.handle("package-build", async (event, platform) => {
+  const { execSync } = require("child_process");
+  const builderPath = path.join(__dirname, "..");
+
+  try {
+    // Step 1: Build web app
+    if (mainWindow) mainWindow.webContents.send("package-log", { level: "info", message: "Building web app..." });
+    execSync("npx vite build", { cwd: builderPath, stdio: "pipe", encoding: "utf-8", timeout: 60000 });
+
+    // Step 2: Package for platform
+    if (mainWindow) mainWindow.webContents.send("package-log", { level: "info", message: `Packaging for ${platform}...` });
+
+    const result = execSync(`npx electron-builder --${platform}`, {
+      cwd: builderPath,
+      stdio: "pipe",
+      encoding: "utf-8",
+      timeout: 300000,
+      env: { ...process.env, CI: "true", USE_HARD_LINKS: "false" },
+    });
+
+    const outputDir = path.join(builderPath, "release");
+    if (mainWindow) mainWindow.webContents.send("package-log", { level: "info", message: `Package complete: ${outputDir}` });
+    return { success: true, path: outputDir, platform };
+  } catch (e) {
+    const errMsg = e.stderr || e.stdout || e.message;
+    if (mainWindow) mainWindow.webContents.send("package-log", { level: "error", message: `Package failed: ${errMsg.slice(0, 200)}` });
+    return { success: false, error: errMsg.slice(0, 500), platform };
+  }
 });
 
 // =========================================================================

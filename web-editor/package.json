@@ -13,6 +13,17 @@
     "package:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/fold": "^0.19.4",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/legacy-modes": "^6.5.3",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.43.1",
+    "@lezer/highlight": "^1.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -42,20 +53,33 @@
       {
         "from": "../build_nol2d/Release",
         "to": "engine",
-        "filter": ["CaesuraAmeKAG.exe", "*.exe", "*.dll", "scripts/**", "assets/**", "demo/**"]
+        "filter": [
+          "CaesuraAmeKAG.exe",
+          "*.exe",
+          "*.dll",
+          "scripts/**",
+          "assets/**",
+          "demo/**"
+        ]
       }
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "assets/icon.ico"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "assets/icon.png",
       "category": "Development"
     },

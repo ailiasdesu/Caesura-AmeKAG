@@ -77,6 +77,9 @@ scene_start()
   bottomTab: "code",          // code | ai | logs | settings
   settingsTab: "ai",          // ai | editor | engine | package | about
   showSaveManager: false,
+  packagePlatform: 'win',
+  packaging: false,
+  packageResult: null,
 };
 
 function editorReducer(state, action) {
@@ -170,6 +173,9 @@ function editorReducer(state, action) {
     case "SET_SETTINGS_TAB": return { ...state, settingsTab: action.payload };
     case "SET_SHOW_SAVE_MANAGER": return { ...state, showSaveManager: action.payload };
 
+    case 'SET_PACKAGE_PLATFORM': return { ...state, packagePlatform: action.payload };
+    case 'SET_PACKAGING': return { ...state, packaging: action.payload };
+    case 'SET_PACKAGE_RESULT': return { ...state, packageResult: action.payload };
     default: return state;
   }
 }

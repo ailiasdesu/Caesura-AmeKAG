@@ -489,3 +489,69 @@ html, body, #root {
 .text-muted { color: var(--fg-muted); }
 .mt-2 { margin-top: 8px; }
 .mb-2 { margin-bottom: 8px; }
+
+
+/* ============================================================
+   VS Code-style File Menu Dropdown
+   ============================================================ */
+.file-menu-dropdown {
+  position: absolute; top: 100%; left: 0; z-index: 100; margin-top: 2px;
+  background: var(--bg-primary); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  min-width: 220px; overflow: hidden;
+}
+.file-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px; font-size: var(--text-sm); cursor: pointer;
+  color: var(--fg-dim); transition: all var(--ease-out);
+}
+.file-menu-item:hover { background: var(--accent-dim); color: var(--fg); }
+.file-menu-shortcut {
+  margin-left: auto; font-size: var(--text-2xs); color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+.file-menu-divider {
+  height: 1px; background: var(--border); margin: 4px 8px;
+}
+
+.toolbar-sep {
+  width: 1px; height: 20px; background: var(--border); margin: 0 6px;
+}
+
+.toolbar-file-btn {
+  display: flex; align-items: center; gap: 4px;
+  color: var(--fg); background: transparent; border: none; border-radius: var(--radius-sm);
+  padding: 4px 10px; cursor: pointer; font-size: var(--text-sm);
+}
+.toolbar-file-btn:hover { background: var(--bg-hover); }
+
+.toolbar-icon-btn {
+  color: var(--fg-dim); background: transparent; border: none;
+  border-radius: var(--radius-sm); width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 14px;
+}
+.toolbar-icon-btn:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* ============================================================
+   VS Code-style Activity Bar (left edge icons)
+   ============================================================ */
+.activity-bar {
+  width: 40px; min-width: 40px; background: var(--bg-primary);
+  border-right: 1px solid var(--border); display: flex;
+  flex-direction: column; align-items: center; padding-top: 4px;
+  z-index: 10;
+}
+.activity-btn {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; border-radius: var(--radius-sm); color: var(--fg-dim);
+  font-size: 16px; position: relative; transition: all var(--ease-out);
+  margin-bottom: 2px; border: none; background: transparent;
+}
+.activity-btn:hover { color: var(--fg); background: var(--bg-hover); }
+.activity-btn.active { color: var(--fg); }
+.activity-btn.active::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 2px; background: var(--accent); border-radius: 1px;
+}
+.activity-btn.bottom { margin-top: auto; }

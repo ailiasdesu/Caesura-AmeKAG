@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+﻿const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("caesura", {
   // Engine RPC
@@ -20,10 +20,15 @@ contextBridge.exposeInMainWorld("caesura", {
     ipcRenderer.on("engine-status", (event, status) => callback(status));
   },
 
-  // AI Chat (E6/E7)
+  // AI Chat
   aiChat: ({ messages, provider, settings }) =>
     ipcRenderer.invoke("ai-chat", { messages, provider, settings }),
-
   codexChat: ({ messages, settings }) =>
     ipcRenderer.invoke("codex-chat", { messages, settings }),
+
+  // One-click package
+  package: (platform) => ipcRenderer.invoke("package-build", platform),
+  onPackageLog: (callback) => {
+    ipcRenderer.on("package-log", (event, msg) => callback(msg));
+  },
 });
