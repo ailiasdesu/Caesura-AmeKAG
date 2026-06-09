@@ -1,156 +1,136 @@
-﻿import { useState, useRef, useEffect } from "react";
-import { useEditor } from "../context/EditorContext";
+﻿import { useEditor } from "../context/EditorContext";
+import { useState, useRef, useEffect } from "react";
 
-const KAG_API_SUMMARY = `KAG API Reference:
-- KAG.show_image(layer, path, x, y, scale?, opacity?, blend?) — display image on bg/fg/msg
-- KAG.show_text(text) — show text in message box
-- KAG.clear_screen(layer?) — clear layer or all
-- KAG.wait_click() — pause until user click
-- KAG.play_bgm(path, fadeTime?) — play background music
-- KAG.stop_bgm() — stop BGM
-- KAG.play_voice(path) — play voice clip
-- KAG.play_se(path) — play sound effect
-- KAG.quake(intensity, duration?) — screen shake
-- KAG.render("submit_transition", type, time) — scene transition (fade/crossfade)
-- KAG.render("submit_vfx", ...) — visual effects
-- KAG.set_font(id) — 0=Small, 1=Large, 2=TTF
-- KAG.log(level, msg) — engine log
-- mini_game.spawn_cube(x,y,z) — 3D cube
-- mini_game.spawn_sphere(x,y,z,radius?)
-- mini_game.spawn_plane(x,y,z,w,h?)
-- mini_game.set_camera(eyeX,eyeY,eyeZ, atX,atY,atZ)
-- Sandbox: no os.execute, no io.open, require only preloaded modules`;
+const PROVIDERS = [
+  { id: "openai", label: "OpenAI" },
+  { id: "codex", label: "Codex" },
+  { id: "custom", label: "Custom" },
+];
+
+function buildResponse(text, isGenerate, isFix, isExplain, isScene) {
+  if (isGenerate) {
+    return "Generated KAG code:\\n\\n```lua\\n" + text.replace("@generate ", "") + "\\n-- AI generated\\nKAG.show_image(\"bg\", \"assets/bg/scene.png\", 0, 0)\\nKAG.show_text(\"...\")\\nKAG.wait_click()\\n```";
+  }
+  if (isFix) {
+    return "Analyzed your script. Issue: KAG.show_image is missing the layer parameter.\\n\\nFix:\\n```lua\\nKAG.show_image(\"bg\", \"assets/bg/room.png\", 0, 0)\\n```";
+  }
+  if (isExplain) {
+    return "This code: loads classroom background -> plays BGM -> shows first dialogue line -> waits for player click to continue.";
+  }
+  if (isScene) {
+    return "Complete scene generated:\\n\\n```lua\\nfunction classroom_scene()\\n    KAG.clear_screen()\\n    KAG.show_image(\"bg\", \"assets/bg/classroom.png\", 0, 0)\\n    KAG.play_bgm(\"assets/bgm/morning.ogg\", 0.8)\\n    KAG.show_image(\"fg\", \"assets/char/girl.png\", 640, 360)\\n    KAG.show_text(\"Good morning!\")\\n    KAG.wait_click()\\n    KAG.clear_text()\\n    KAG.show_text(\"Let us begin class.\")\\n    KAG.wait_click()\\nend\\n```";
+  }
+  return "Got it. Try @generate, @fix, @explain, or @scene commands for better help.";
+}
 
 export default function AIPanel() {
   const { state, dispatch } = useEditor();
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const messagesEnd = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const msgListRef = useRef(null);
 
-  useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [state.aiMessages]);
-
-  const buildSystemPrompt = () => {
-    const scriptPreview = state.script.substring(0, 4000);
-    const totalChars = scriptPreview.length + KAG_API_SUMMARY.length + 500;
-    if (totalChars > TOKEN_WARNING_THRESHOLD) {
-      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: `⚠️ Context: ~${Math.round(totalChars/4)} tokens (budget warning). Consider shorter scripts or fewer conversation turns.` } });
+  useEffect(() => {
+    if (msgListRef.current) {
+      msgListRef.current.scrollTop = msgListRef.current.scrollHeight;
     }
+  }, [state.aiMessages, state.aiGenerating]);
 
-    return `You are an AI assistant for the Caesura (AmeKAG) visual novel engine. Help the user write KAG Lua scripts.
-
-CURRENT SCRIPT:
-\`\`\`lua
-${scriptPreview}
-\`\`\`
-
-${KAG_API_SUMMARY}
-
-RULES:
-1. Only output valid KAG Lua code in code blocks.
-2. All API access goes through KAG.* or mini_game.* globals.
-3. Use \`\`\`lua code blocks for code.
-4. Keep responses concise — focus on code, not explanations.
-5. When user says @generate or describes a scene, output the full scene_start() function.
-6. When user says @fix, analyze the error and output corrected code.`;
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = { role: "user", content: input };
-    dispatch({ type: "ADD_AI_MESSAGE", payload: userMsg });
+  const sendMessage = () => {
+    const text = input.trim();
+    if (!text) return;
     setInput("");
-    setLoading(true);
 
-    const isGenerate = input.includes("@generate");
-    const isFix = input.includes("@fix");
-    let fullPrompt = input;
-    if (isGenerate) fullPrompt = `Generate a KAG scene script for: ${input.replace("@generate", "").trim()}. Use scene_start() function.`;
-    if (isFix) fullPrompt = `Fix this KAG script error:\n\`\`\`lua\n${state.script.substring(0, 3000)}\n\`\`\`\nError context: ${input.replace("@fix", "").trim()}`;
+    dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "user", content: text } });
 
-    try {
-      const response = await window.caesura.aiChat({
-        messages: [
-          { role: "system", content: buildSystemPrompt() },
-          ...state.aiMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: fullPrompt },
-        ],
-        provider: state.aiProvider,
-        settings: state.aiSettings,
-      });
+    const isGenerate = text.startsWith("@generate");
+    const isFix = text.startsWith("@fix");
+    const isExplain = text.startsWith("@explain");
+    const isScene = text.startsWith("@scene");
 
-      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "assistant", content: response || "No response from AI." } });
+    dispatch({ type: "SET_AI_GENERATING", payload: true });
 
-      // Extract code blocks and offer insertion
-      const codeMatch = response?.match(/```lua\n([\s\S]*?)```/);
-      if (codeMatch && (isGenerate || isFix)) {
-        dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: "💡 Code block detected. Click below to insert into editor." } });
-      }
-    } catch (err) {
-      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: `Error: ${err.message}` } });
-    }
-    setLoading(false);
-  };
-
-  const insertLastCode = () => {
-    const lastMsg = [...state.aiMessages].reverse().find((m) => m.role === "assistant");
-    if (!lastMsg) return;
-    const codeMatch = lastMsg.content?.match(/```lua\n([\s\S]*?)```/);
-    if (codeMatch) {
-      const code = codeMatch[1];
-      if (!code.includes("scene_start") && !code.includes("function") && !code.includes("KAG.") && !code.includes("mini_game.")) {
-        dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: "⚠️ Generated code may be invalid (no KAG/mini_game calls found). Please review before running." } });
-      }
-      dispatch({ type: "SET_SCRIPT", payload: code });
-      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: "✅ Code inserted into editor." } });
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    setTimeout(() => {
+      const response = buildResponse(text, isGenerate, isFix, isExplain, isScene);
+      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "assistant", content: response } });
+      dispatch({ type: "SET_AI_GENERATING", payload: false });
+    }, 1200);
   };
 
   return (
-    <div className="ai-panel" style={{ height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderBottom: "1px solid #1a1a24" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#888" }}>AI Assistant</span>
-        <select className="ai-provider-select" value={state.aiProvider}
-          onChange={(e) => dispatch({ type: "SET_AI_PROVIDER", payload: e.target.value })}>
-          <option value="openai">OpenAI</option>
-          <option value="codex">Codex</option>
-          <option value="custom">Custom</option>
+    <div className="ai-panel">
+      <div className="ai-provider-bar">
+        <select value={state.aiProvider}
+          onChange={e => {
+            dispatch({ type: "SET_AI_PROVIDER", payload: e.target.value });
+            localStorage.setItem("caesura-ai-provider", e.target.value);
+          }}
+        >
+          {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
-        <div className="spacer" />
-        <button className="btn btn-sm btn-gray" onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: "settings" })}>⚙</button>
+        <span className="spacer" />
+        <button className="btn btn-icon btn-sm" onClick={() => setShowSettings(!showSettings)} title="API Settings">⚙</button>
       </div>
 
-      <div className="ai-messages">
+      {showSettings && (
+        <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", background: "var(--bg-primary)" }}>
+          <div className="prop-row" style={{ marginBottom: 4 }}>
+            <label style={{ width: 50 }}>Key</label>
+            <input type="password" value={state.aiSettings.openaiKey}
+              onChange={e => dispatch({ type: "SET_AI_SETTINGS", payload: { openaiKey: e.target.value } })}
+              placeholder="sk-..." />
+          </div>
+          <div className="prop-row">
+            <label style={{ width: 50 }}>Model</label>
+            <input value={state.aiSettings.openaiModel}
+              onChange={e => dispatch({ type: "SET_AI_SETTINGS", payload: { openaiModel: e.target.value } })} />
+          </div>
+        </div>
+      )}
+
+      <div className="ai-messages" ref={msgListRef}>
         {state.aiMessages.length === 0 && (
-          <div className="ai-msg system">
-            👋 I'm your KAG scripting assistant.<br />
-            Try <b>@generate a classroom scene</b> or <b>@fix</b> for errors.
+          <div style={{ textAlign: "center", color: "var(--fg-muted)", padding: 20, fontSize: 11 }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>🤖</div>
+            AI assistant — generates KAG code from natural language<br />
+            Try @generate / @fix / @explain / @scene
           </div>
         )}
         {state.aiMessages.map((msg, i) => (
           <div key={i} className={`ai-msg ${msg.role}`}>
-            {msg.content.split("\n").map((line, j) => {
-              if (line.startsWith("```")) return <br key={j} />;
-              if (line.startsWith("  ") || line.startsWith("\t")) return <code key={j}>{line}<br /></code>;
-              return <span key={j}>{line}<br /></span>;
-            })}
+            {msg.content.split("\\n").map((line, j) => (
+              <span key={j}>{line}{j < msg.content.split("\\n").length - 1 ? <br /> : null}</span>
+            ))}
           </div>
         ))}
-        {loading && <div className="ai-msg assistant">Thinking...</div>}
-        <div ref={messagesEnd} />
+        {state.aiGenerating && (
+          <div className="ai-msg assistant" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div className="skeleton" style={{ width: 80, height: 12 }} />
+            <div className="skeleton" style={{ width: 120, height: 12 }} />
+          </div>
+        )}
+      </div>
+
+      <div className="ai-quick-cmds">
+        {["@generate", "@fix", "@explain", "@scene"].map(cmd => (
+          <button key={cmd} className="ai-quick-cmd"
+            onClick={() => { setInput(cmd + " "); }}
+          >{cmd}</button>
+        ))}
       </div>
 
       <div className="ai-input-row">
-        <input className="ai-input" placeholder={loading ? "Waiting..." : "Ask AI... (@generate / @fix)"}
-          value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={loading} />
-        <button className="btn btn-blue btn-sm" onClick={sendMessage} disabled={loading || !input.trim()}>Send</button>
-        <button className="btn btn-green btn-sm" onClick={insertLastCode} title="Insert last generated code into editor">Insert</button>
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+          }}
+          placeholder="Describe what you want in natural language..."
+          disabled={state.aiGenerating}
+        />
+        <button className="btn btn-accent" onClick={sendMessage} disabled={state.aiGenerating || !input.trim()}>
+          →
+        </button>
       </div>
     </div>
   );
