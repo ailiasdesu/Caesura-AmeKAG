@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "IMiniGameBackend.h"
 
 namespace Caesura {
@@ -29,6 +29,8 @@ public:
 
     bool processEvent(const void* sdlEvent) override;
     int  luaCall(lua_State* L, const char* method) override;
+
+        void setRenderDevice(class IRenderDevice* dev) override { (void)dev; }
 
     const char* getBackendName() const override { return "NullMiniGame"; }
 

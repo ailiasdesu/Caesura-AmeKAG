@@ -5,7 +5,7 @@
 // Abstract 3D mini-game backend interface.
 // Reserved for future 3D mini-game scenes embedded in visual novel flow.
 //
-// Lifecycle:  KAG scene ¡ú mini_game:enter ¡ú active loop ¡ú mini_game:leave ¡ú KAG
+// Lifecycle:  KAG scene ï¿½ï¿½ mini_game:enter ï¿½ï¿½ active loop ï¿½ï¿½ mini_game:leave ï¿½ï¿½ KAG
 //
 // Thread safety:
 //   - update() may be dispatched to JobSystem workers (pure CPU: physics,
@@ -84,7 +84,10 @@ public:
     virtual int luaCall(lua_State* L, const char* method) = 0;
 
     // -- Backend identification --------------------------------------------
-    virtual const char* getBackendName() const = 0;
+        // -- Renderer binding (set before init()) --
+    virtual void setRenderDevice(class IRenderDevice* dev) = 0;
+
+virtual const char* getBackendName() const = 0;
 };
 
 // ===========================================================================
@@ -93,15 +96,15 @@ public:
 
 // SDL user event codes reserved for mini-game interop
 enum class MiniGameEvent : uint32_t {
-    Entered     = 0x9000,  // mini-game activated ¡ú Lua callback
-    Left        = 0x9001,  // mini-game deactivated ¡ú Lua callback
+    Entered     = 0x9000,  // mini-game activated ï¿½ï¿½ Lua callback
+    Left        = 0x9001,  // mini-game deactivated ï¿½ï¿½ Lua callback
     Transition  = 0x9002,  // mini-game wants to transition back to KAG
     Error       = 0x9003,  // mini-game fatal error
 };
 
 // Reserved KAG <-> MiniGame transition types
 enum class MiniGameTransition : uint8_t {
-    FadeToBlack     = 0,  // fade ¡ú load ¡ú fade in (default)
+    FadeToBlack     = 0,  // fade ï¿½ï¿½ load ï¿½ï¿½ fade in (default)
     Instant         = 1,  // instant switch, no transition
     Portal          = 2,  // custom transition effect
 };

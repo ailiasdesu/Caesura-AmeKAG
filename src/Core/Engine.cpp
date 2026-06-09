@@ -26,7 +26,7 @@ extern "C" {
 #include "Resource/AsyncLoader.h"
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
-#include "MiniGame/NullMiniGameBackend.h"
+#include "MiniGame/BgfxMiniGameBackend.h"
 #include "../Animation/NullAnimationBackend.h"
 #ifdef CAESURA_HAS_LIVE2D
 #include "../Animation/Live2D/Live2DBackend.h"
@@ -163,8 +163,9 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
     AssetManager::instance().init();
     AsyncLoader::instance().init();
 
-    // -- Reserved: 3D mini-game backend (NullMiniGame until real impl) --
-    m_miniGameBackend = std::make_unique<NullMiniGameBackend>();
+        // -- 3D mini-game backend (bgfx) --
+    m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
+    m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
 
