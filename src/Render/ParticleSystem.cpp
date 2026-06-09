@@ -1,5 +1,4 @@
 #include "ParticleSystem.h"
-#include "BgfxRenderDevice.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/JobSystem.h"
 #include <bx/math.h>
@@ -45,13 +44,13 @@ bool ParticleSystem::init() {
     if (!renderDev) return false;
     m_particles.resize(MAX_PARTICLES);
 
-    // Get bgfx-specific handles from the concrete BgfxRenderDevice (only impl)
-    auto* bgfxDev = dynamic_cast<BgfxRenderDevice*>(renderDev);
-    if (!bgfxDev) return false;
-    m_texSampler = bgfxDev->getTexSampler();
-    m_program = bgfxDev->getFallbackProgram();
-
-    // Create a 4x4 white point texture for particles
+    // Get handles from IRenderDevice abstraction (no concrete dependency)
+    m_texSampler = renderDev->getDefaultSampler();
+    m_program = renderDev->getFallbackProgram();
+    if (!bgfx::isValid(m_texSampler) || !bgfx::isValid(m_program)) {
+        fprintf(stderr, "[ParticleSystem] Render device missing sampler or program\n");
+        return false;
+    }
     uint8_t white[16] = { 255,255,255,255, 255,255,255,255, 255,255,255,255, 255,255,255,255 };
     const bgfx::Memory* mem = bgfx::copy(white, 16);
     m_particleTex = bgfx::createTexture2D(2, 2, false, 1,

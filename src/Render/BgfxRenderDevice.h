@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "IRenderDevice.h"
 #include "EmbeddedShaders.h"
@@ -70,9 +70,9 @@ public:
     float textLineHeight() const override;
     void flushAllRTT() override;
 
-    bgfx::ProgramHandle getFallbackProgram() const { return m_fallbackProgram; }
+    bgfx::ProgramHandle getFallbackProgram() const override { return m_fallbackProgram; }
     const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
-    bgfx::UniformHandle getTexSampler() const { return m_texSampler; }
+    bgfx::UniformHandle getDefaultSampler() const override { return m_texSampler; }
 
     bgfx::ProgramHandle getBlendProgram()      const { return m_blendProgram; }
     bgfx::ProgramHandle getTransitionProgram() const { return m_transitionProgram; }

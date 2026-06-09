@@ -120,6 +120,10 @@ public:
                              uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
     virtual void setFont(int fontId) = 0;
     virtual float textLineHeight() const = 0;
+
+    // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
+    virtual bgfx::UniformHandle getDefaultSampler() const { return BGFX_INVALID_HANDLE; }
+    virtual bgfx::ProgramHandle getFallbackProgram() const { return BGFX_INVALID_HANDLE; }
 };
 
 } // namespace Caesura
