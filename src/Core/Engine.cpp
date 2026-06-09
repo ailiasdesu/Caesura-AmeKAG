@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -27,9 +27,9 @@
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
 #include "MiniGame/BgfxMiniGameBackend.h"
-#include "../Animation/NullAnimationBackend.h"
+#include "../Live2D/NullAnimationBackend.h"
 #ifdef CAESURA_HAS_LIVE2D
-#include "../Animation/Live2D/Live2DBackend.h"
+#include "../Live2D/Live2D/Live2DBackend.h"
 #include "../Render/BgfxRenderDevice.h"
 #endif
 #include <thread>

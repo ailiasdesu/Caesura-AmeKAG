@@ -1,9 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
 #include "MiniGame/IMiniGameBackend.h"
-#include "../Animation/IAnimationBackend.h"
+#include "../Live2D/IAnimationBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>

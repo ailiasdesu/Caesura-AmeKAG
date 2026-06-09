@@ -1,4 +1,4 @@
-ï»¿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -22,6 +22,85 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/zstd/build/cmake ${CMAKE_BINARY_DI
 
 # Dependencies
 find_package(SDL3 REQUIRED)
+
+# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
+
+# -- FFmpeg (optional, hardware-accelerated video decoding) -----------------
+option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" OFF)
+if(CAESURA_ENABLE_FFMPEG)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FFMPEG QUIET
+            libavcodec libavformat libswscale libavutil)
+    endif()
+    if(FFMPEG_FOUND)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+
+# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
+target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
+
+
+# -- FFmpeg (optional, hardware-accelerated video decoding) -----------------
+# To enable: install FFmpeg dev packages
+#   Windows (MSVC): vcpkg install ffmpeg:x64-windows
+#   Linux: apt install libavcodec-dev libavformat-dev libswscale-dev libavutil-dev
+#   macOS: brew install ffmpeg
+# Then rebuild with: cmake -DCAESURA_ENABLE_FFMPEG=ON
+option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" OFF)
+if(CAESURA_ENABLE_FFMPEG)
+    # Method 1: try pkg-config (Linux/macOS)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FFMPEG QUIET
+            libavcodec libavformat libswscale libavutil)
+    endif()
+
+    # Method 2: try CMake find modules (works with vcpkg and some installs)
+    if(NOT FFMPEG_FOUND)
+        find_path(FFMPEG_INCLUDE_DIRS libavcodec/avcodec.h
+            PATHS ${CMAKE_SOURCE_DIR}/external/ffmpeg/include
+                  ${VCPKG_INSTALLED_DIR}/include
+                  /usr/local/include /opt/homebrew/include)
+        find_library(FFMPEG_avcodec_LIBRARY  avcodec
+            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
+        find_library(FFMPEG_avformat_LIBRARY avformat
+            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
+        find_library(FFMPEG_swscale_LIBRARY  swscale
+            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
+        find_library(FFMPEG_avutil_LIBRARY   avutil
+            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
+        if(FFMPEG_avcodec_LIBRARY AND FFMPEG_avformat_LIBRARY AND
+           FFMPEG_swscale_LIBRARY AND FFMPEG_avutil_LIBRARY AND
+           FFMPEG_INCLUDE_DIRS)
+            set(FFMPEG_FOUND TRUE)
+            set(FFMPEG_LIBRARIES
+                ${FFMPEG_avcodec_LIBRARY}
+                ${FFMPEG_avformat_LIBRARY}
+                ${FFMPEG_swscale_LIBRARY}
+                ${FFMPEG_avutil_LIBRARY})
+        endif()
+    endif()
+
+    if(FFMPEG_FOUND)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
+        message(STATUS "FFmpeg video decoding: ENABLED")
+    else()
+        message(STATUS "FFmpeg dev libraries not found - install ffmpeg-dev then rebuild")
+        message(STATUS "  Windows: vcpkg install ffmpeg:x64-windows")
+        message(STATUS "  Linux:   sudo apt install libavcodec-dev libavformat-dev libswscale-dev libavutil-dev")
+        message(STATUS "  macOS:   brew install ffmpeg")
+    endif()
+endif()
+
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
+        message(STATUS "FFmpeg video decoding: ENABLED")
+    else()
+        message(STATUS "FFmpeg not found - pl_mpeg fallback only")
+    endif()
+endif()
 
 # SoLoud backend config -- disable SDL2 (we use SDL3), enable WINMM+WASAPI on Windows
 set(SOLOUD_BACKEND_SDL2 OFF CACHE BOOL "" FORCE)
@@ -62,7 +141,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) é”Ÿæ–¤ï¿½?no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ï¿½ï??no C build needed
 
 # Engine sources
 
@@ -72,11 +151,11 @@ set(ENGINE_SOURCES
     src/Core/JobSystem.cpp
     src/Core/InputRouter.cpp
     src/Core/BackendRegistry.cpp
-    src/Core/DebugManager.cpp
+    src/Debug/DebugManager.cpp
     src/Core/TextureBudget.cpp
     src/Core/SandboxQuota.cpp
     src/Core/RpcServer.cpp
-    src/Editor/EditorServer.cpp
+    src/Core/EditorServer.cpp
     src/Core/ErrorUI.cpp
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
@@ -84,6 +163,8 @@ set(ENGINE_SOURCES
     src/Render/RTTManager.cpp
     src/Render/EmbeddedShaders.cpp
     src/Render/EmbeddedShaders_MiniGame.cpp
+    src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
+    src/Render/EmbeddedShaders_MiniGame_Metal.cpp
     src/Render/TextRenderer.cpp
     src/Render/ParticleSystem.cpp
     src/Render/GpuMonitor.cpp
@@ -95,7 +176,7 @@ set(ENGINE_SOURCES
     src/MiniGame/BgfxMiniGameBackend.cpp
     src/MiniGame/MiniGeometry.cpp
     src/MiniGame/MiniCollision.cpp
-    src/Animation/NullAnimationBackend.cpp
+    src/Live2D/NullAnimationBackend.cpp
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp
     src/Audio/NullAudioBackend.cpp
@@ -110,10 +191,10 @@ set(ENGINE_SOURCES
     src/System/SaveManager.cpp
     src/System/ISaveProvider.cpp
     src/System/SaveBinding.cpp
-    src/Carc/CryptoEngine.cpp
-    src/Carc/CARCReader.cpp
-    src/Carc/CARCWriter.cpp
-    src/Carc/CarcAssetProvider.cpp
+    src/CARC/CryptoEngine.cpp
+    src/CARC/CARCReader.cpp
+    src/CARC/CARCWriter.cpp
+    src/CARC/CarcAssetProvider.cpp
     src/Resource/DirAssetProvider.cpp
     src/Resource/ProviderChain.cpp
     src/Resource/AssetManager.cpp
@@ -123,9 +204,9 @@ set(ENGINE_SOURCES
     src/Debug/HotReload.cpp
     src/Debug/DebugProtocol.cpp
     # Phase 9: Security & Platform
-    src/Carc/CRLManager.cpp
-    src/Carc/DeltaCARC.cpp
-    src/Platform/MobileAdapter.cpp
+    src/CARC/CRLManager.cpp
+    src/CARC/DeltaCARC.cpp
+    src/Core/MobileAdapter.cpp
 )
 
 set(ENGINE_HEADERS
@@ -138,7 +219,7 @@ set(ENGINE_HEADERS
     src/Resource/XP3Archive.h
     src/Core/BackendRegistry.h
     src/Resource/ResourceHandle.h
-    src/Core/DebugManager.h
+    src/Debug/DebugManager.h
     src/Core/TextureBudget.h
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h
@@ -158,8 +239,8 @@ set(ENGINE_HEADERS
     src/MiniGame/MiniLight.h
     src/MiniGame/MiniGeometry.h
     src/MiniGame/MiniCollision.h
-    src/Animation/IAnimationBackend.h
-    src/Animation/NullAnimationBackend.h
+    src/Live2D/IAnimationBackend.h
+    src/Live2D/NullAnimationBackend.h
     src/Render/ShaderCache.h
     src/Audio/SoLoudAudioEngine.h
     src/Audio/NullAudioBackend.h
@@ -174,11 +255,11 @@ set(ENGINE_HEADERS
     src/System/SaveManager.h
     src/System/ISaveProvider.h
     src/System/SaveBinding.h
-    src/Carc/CARCFormat.h
-    src/Carc/CryptoEngine.h
-    src/Carc/CARCReader.h
-    src/Carc/CARCWriter.h
-    src/Carc/CarcAssetProvider.h
+    src/CARC/CARCFormat.h
+    src/CARC/CryptoEngine.h
+    src/CARC/CARCReader.h
+    src/CARC/CARCWriter.h
+    src/CARC/CarcAssetProvider.h
     src/Resource/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
@@ -189,9 +270,9 @@ set(ENGINE_HEADERS
     src/Debug/HotReload.h
     src/Debug/DebugProtocol.h
     # Phase 9: Security & Platform
-    src/Carc/CRLManager.h
-    src/Carc/DeltaCARC.h
-    src/Platform/MobileAdapter.h
+    src/CARC/CRLManager.h
+    src/CARC/DeltaCARC.h
+    src/Core/MobileAdapter.h
 )
 
 # Executable
@@ -283,12 +364,12 @@ option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg QUIET COMPONENTS avcodec avformat swscale avutil)
     if(FFmpeg_FOUND)
-        message(STATUS "FFmpeg found â€” video decoding enabled")
+        message(STATUS "FFmpeg found ¡ª video decoding enabled")
         target_link_libraries(${PROJECT_NAME} PRIVATE
             FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
         target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
     else()
-        message(STATUS "FFmpeg NOT found â€” video decoding falls back to pl_mpeg only")
+        message(STATUS "FFmpeg NOT found ¡ª video decoding falls back to pl_mpeg only")
     endif()
 endif()
 
@@ -360,17 +441,17 @@ if(CAESURA_LIVE2D)
 
         # --- Engine Live2D backend ---
         target_sources(${PROJECT_NAME} PRIVATE
-            src/Animation/Live2D/Live2DBackend.h
-            src/Animation/Live2D/Live2DBackend.cpp
-            src/Animation/Live2D/ILive2DRenderPath.h
-            src/Animation/Live2D/OpenGLReadbackRenderPath.h
-            src/Animation/Live2D/OpenGLReadbackRenderPath.cpp
-            src/Animation/Live2D/D3D11NativeRenderPath.h
-            src/Animation/Live2D/D3D11NativeRenderPath.cpp
-            src/Animation/Live2D/OpenGLSharedRenderPath.h
-            src/Animation/Live2D/OpenGLSharedRenderPath.cpp
-            src/Animation/Live2D/MetalNativeRenderPath.h
-            src/Animation/Live2D/MetalNativeRenderPath.cpp
+            src/Live2D/Live2D/Live2DBackend.h
+            src/Live2D/Live2D/Live2DBackend.cpp
+            src/Live2D/Live2D/ILive2DRenderPath.h
+            src/Live2D/Live2D/OpenGLReadbackRenderPath.h
+            src/Live2D/Live2D/OpenGLReadbackRenderPath.cpp
+            src/Live2D/Live2D/D3D11NativeRenderPath.h
+            src/Live2D/Live2D/D3D11NativeRenderPath.cpp
+            src/Live2D/Live2D/OpenGLSharedRenderPath.h
+            src/Live2D/Live2D/OpenGLSharedRenderPath.cpp
+            src/Live2D/Live2D/MetalNativeRenderPath.h
+            src/Live2D/Live2D/MetalNativeRenderPath.cpp
         )
         target_link_libraries(${PROJECT_NAME} PRIVATE CubismFramework Live2DCubismCore)
         target_include_directories(${PROJECT_NAME} PRIVATE
@@ -400,7 +481,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine é”Ÿæ–¤ï¿½?SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ï¿½ï??SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 

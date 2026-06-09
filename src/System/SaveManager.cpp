@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses nlohmann/json v3.11.3 for robust structured serialization.
@@ -10,7 +10,7 @@
 
 #include "SaveManager.h"
 #include "ISaveProvider.h"
-#include "../Carc/CryptoEngine.h"
+#include "../CARC/CryptoEngine.h"
 
 #include <cstdio>
 #include <cstring>
