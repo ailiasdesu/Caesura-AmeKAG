@@ -1,4 +1,4 @@
-﻿ #pragma once
+ #pragma once
 #include <cstdint>
 #include <cstddef>
 
@@ -56,4 +56,10 @@ extern const size_t   kEmbeddedDXBC_affine_blt_vs_size;
 extern const uint8_t  kEmbeddedDXBC_affine_blt_fs[];
 extern const size_t   kEmbeddedDXBC_affine_blt_fs_size;
 
+
+// -- MiniGame 3D shaders (DXBC, for Phong-lit 3D mini-games) -----------------
+extern const uint8_t  kEmbeddedDXBC_MiniGame_VS[];
+extern const size_t   kEmbeddedDXBC_MiniGame_VS_size;
+extern const uint8_t  kEmbeddedDXBC_MiniGame_FS[];
+extern const size_t   kEmbeddedDXBC_MiniGame_FS_size;
 } // namespace Caesura

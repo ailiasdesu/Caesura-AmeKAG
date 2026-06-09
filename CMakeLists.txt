@@ -83,6 +83,7 @@ set(ENGINE_SOURCES
     src/Render/BgfxRenderDevice.cpp
     src/Render/RTTManager.cpp
     src/Render/EmbeddedShaders.cpp
+    src/Render/EmbeddedShaders_MiniGame.cpp
     src/Render/TextRenderer.cpp
     src/Render/ParticleSystem.cpp
     src/Render/GpuMonitor.cpp
@@ -92,6 +93,8 @@ set(ENGINE_SOURCES
     src/Render/LayerManager.cpp
     src/MiniGame/NullMiniGameBackend.cpp
     src/MiniGame/BgfxMiniGameBackend.cpp
+    src/MiniGame/MiniGeometry.cpp
+    src/MiniGame/MiniCollision.cpp
     src/Animation/NullAnimationBackend.cpp
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp
@@ -150,6 +153,10 @@ set(ENGINE_HEADERS
     src/MiniGame/IMiniGameBackend.h
     src/MiniGame/NullMiniGameBackend.h
     src/MiniGame/BgfxMiniGameBackend.h
+    src/MiniGame/MiniMaterial.h
+    src/MiniGame/MiniLight.h
+    src/MiniGame/MiniGeometry.h
+    src/MiniGame/MiniCollision.h
     src/Animation/IAnimationBackend.h
     src/Animation/NullAnimationBackend.h
     src/Render/ShaderCache.h
