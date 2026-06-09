@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,7 +62,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) 锟斤�?no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) 锟斤�?no C build needed
 
 # Engine sources
 
@@ -119,6 +119,7 @@ set(ENGINE_SOURCES
     src/Debug/DebugProtocol.cpp
     # Phase 9: Security & Platform
     src/Carc/CRLManager.cpp
+    src/Carc/DeltaCARC.cpp
     src/Platform/MobileAdapter.cpp
 )
 
@@ -178,6 +179,7 @@ set(ENGINE_HEADERS
     src/Debug/DebugProtocol.h
     # Phase 9: Security & Platform
     src/Carc/CRLManager.h
+    src/Carc/DeltaCARC.h
     src/Platform/MobileAdapter.h
 )
 
@@ -381,7 +383,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine 锟斤�?SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine 锟斤�?SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
