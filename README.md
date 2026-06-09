@@ -43,6 +43,27 @@ SDL3 → bgfx (D3D11/Metal/OpenGL) → SoLoud → Lua 5.4
 | Tech debt | 18/22 closed |
 | Cross-platform | Windows ✅ / Linux ⚠️ / macOS ⚠️ |
 
+
+## Directory Structure
+
+`
+Caesura(AmeKAG)/
+├── src/              # C++ engine core
+│   ├── Core/         # Engine, JobSystem, VideoDecoder
+│   ├── Render/       # bgfx render device, RenderBinding
+│   ├── Scripting/    # Lua bindings, KAG parser, sandbox
+│   ├── Resource/     # CARC, XP3, TextureManager
+│   ├── MiniGame/     # 3D mini-game backend (PBR-lite)
+│   └── Platform/     # SDL3, FileSystem
+├── scripts/          # Lua runtime (demo, layers, sandbox)
+├── shaders/          # bgfx shaders (DX11/Metal/GLSL)
+├── assets/           # Demo assets (images, fonts, audio)
+├── docs/             # Documentation
+│   └── solutions/    # Documented solutions: bugs, patterns, workflows
+├── CONCEPTS.md       # Shared domain vocabulary
+└── ENGINE_ANALYSIS.md
+`
+
 ## License
 
 MIT — Live2D Cubism SDK 不包含在本仓库中
