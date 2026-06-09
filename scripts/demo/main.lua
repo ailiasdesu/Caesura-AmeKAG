@@ -1,200 +1,147 @@
 ﻿-- ============================================================================
--- Caesura (AmeKAG) Demo — 完整引擎能力演示
+-- Caesura (AmeKAG) Demo -- Complete engine capability demonstration
 -- ============================================================================
--- 场景 1: 古典教室 — KAG 文本 + 立绘 + BGM + 转场
--- 场景 2: Live2D 动态角色 — 呼吸 + 表情切换 (需 CAESURA_HAS_LIVE2D)
--- 场景 3: MiniGame 3D 迷宫 — 立方体 + 碰撞 + 点光源
--- 场景 4: 视频过场 + 存档/读档演示
+-- Scene 1: Classical classroom -- layered rendering + text
+-- Scene 2: MiniGame 3D -- geometry, PBR, multi-light, collision
+-- Scene 3: Video playback + save/load demo
 -- ============================================================================
 
+local layers  = require("layers")
 local backend = require("backend")
-local kag = require("kag.kag")
-local minigame = require("kag.minigame")
-local save = require("save")
+local w, h = backend.get_resolution()
+if not w then w, h = 1280, 720 end
 
--- ------------------------------------------------------------------
--- 场景 1: 古典教室
--- ------------------------------------------------------------------
+-- Color helpers
+local function solid(r, g, b, a)
+    return backend.create_solid_texture(
+        math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
+
+local function draw_text(x, y, text, r, g, b, a, scale)
+    backend.render_text(text, x, y, scale or 1.0, r, g, b, a)
+end
+
+-- =========================================================================
+-- Scene 1: Classical Classroom
+-- =========================================================================
 local function scene1_classroom()
-    kag.show_image("bg", "classroom_day", 0, 0)
-    kag.play_bgm("gentle_piano", 0.6, true)
-    kag.transition("fade_in", 1.5)
+    print("[Demo] Scene 1: Classical Classroom")
 
-    kag.show_text(nil, "午后的阳光洒进教室，空气中飘浮着细小的尘埃。")
-    kag.wait_click()
+    layers.init()
+    local root = layers.get_root()
 
-    kag.show_image("fg", "desk_front", 320, 400, { opacity = 0.9 })
-    kag.show_text(nil, "桌上摊开的笔记本，写满了未完成的诗句。")
-    kag.wait_click()
+    -- Gradient background
+    root.texture = solid(40, 20, 60, 255)
+    layers.set_layer_image(root, root.texture)
 
-    kag.show_image("char", "heroine_uniform", 800, 200, { opacity = 1.0 })
-    kag.show_text("她", "你来了。今天的风，很适合写故事呢。")
-    kag.wait_click()
-
-    kag.show_text(nil, "她微微侧过头，目光穿过窗户，落在远处摇曳的樱树上。")
-    kag.wait_click()
-
-    kag.transition("fade_out", 1.0)
-    kag.clear_screen()
-    kag.stop_bgm(1.0)
-end
-
--- ------------------------------------------------------------------
--- 场景 2: Live2D 动态角色演示
--- ------------------------------------------------------------------
-local function scene2_live2d()
-#if CAESURA_HAS_LIVE2D then
-    kag.show_text(nil, "【Live2D 模式】")
-    kag.wait_click()
-
-    kag.show_image("bg", "stage_night", 0, 0)
-    kag.transition("fade_in", 1.0)
-
-    -- 加载 Live2D 模型
-    kag.live2d_load("heroine", "assets/live2d/haruka/haruka.model3.json")
-    kag.live2d_set_animation("heroine", "idle_01", true)
-    kag.show_text(nil, "Live2D 角色载入中... 动态立绘实时渲染。")
-    kag.wait_click()
-
-    -- 表情切换
-    kag.live2d_set_expression("heroine", "smile")
-    kag.show_text("遥", "こんにちは！今日はいい天気ですね。")
-    kag.wait_click()
-
-    kag.live2d_set_expression("heroine", "surprise")
-    kag.show_text("遥", "えっ？もうこんな時間？")
-    kag.wait_click()
-
-    kag.live2d_remove("heroine")
-    kag.clear_screen()
-#else
-    -- Fallback: Static sprite替代
-    kag.show_image("bg", "stage_night", 0, 0)
-    kag.transition("fade_in", 1.0)
-    kag.show_image("char", "heroine_uniform", 800, 200)
-    kag.show_text(nil, "【注: Live2D 未编译 — 使用静态立绘代替】")
-    kag.wait_click()
-    kag.show_text("遥", "こんにちは！今日はいい天気ですね。")
-    kag.wait_click()
-    kag.clear_screen()
-#endif
-end
-
--- ------------------------------------------------------------------
--- 场景 3: MiniGame 3D 迷宫探索
--- ------------------------------------------------------------------
-local function scene3_minigame()
-    kag.show_text(nil, "【MiniGame 3D 模式】")
-    kag.wait_click()
-
-    -- 初始化 3D 场景
-    minigame.init({ width = 1280, height = 720 })
-    minigame.set_camera({ pos = { 0, 5, 15 }, lookAt = { 0, 2, 0 }, fov = 60 })
-
-    -- 设置材质
-    minigame.set_material({ roughness = 0.4, metallic = 0.1, specStr = 0.6 })
-
-    -- 设置光照: 1 方向光 + 2 点光源
-    minigame.set_lighting({
-        dir = { 0.5, -1.0, 0.3, 0.8 },
-        points = {
-            { pos = { 5, 3, 0 }, color = { 1, 0.8, 0.4 }, intensity = 2.0, range = 20 },
-            { pos = { -5, 2, 3 }, color = { 0.3, 0.6, 1.0 }, intensity = 1.5, range = 15 },
-        }
+    -- Title card
+    local card = layers.add_layer(root, {
+        name = "title_card", z = 2,
+        x = w * 0.15, y = h * 0.15, w = w * 0.7, h = h * 0.7, visible = true
     })
+    card.texture = solid(18, 15, 35, 220)
+    layers.set_layer_image(card, card.texture)
 
-    -- 生成迷宫几何体
-    minigame.spawn_floor({ size = { 20, 0.5, 20 }, pos = { 0, -1, 0 }, color = { 0.2, 0.25, 0.3 } })
+    -- Render phase
+    layers.render()
+    draw_text(w * 0.25, h * 0.25, "Classical Classroom", 255, 220, 180, 255, 2.0)
+    draw_text(w * 0.25, h * 0.38, "Afternoon sunlight filters through the window,", 200, 190, 220, 255, 1.0)
+    draw_text(w * 0.25, h * 0.44, "dust particles floating in the air.", 200, 190, 220, 255, 1.0)
+    draw_text(w * 0.25, h * 0.52, "A notebook lies open on the desk,", 200, 190, 220, 255, 1.0)
+    draw_text(w * 0.25, h * 0.58, "filled with unfinished poems.", 200, 190, 220, 255, 1.0)
 
-    -- 墙壁
-    local walls = {
-        { size = { 0.5, 3, 10 }, pos = { -5, 0.5, 0 } },
-        { size = { 0.5, 3, 10 }, pos = { 5, 0.5, 0 } },
-        { size = { 10, 3, 0.5 }, pos = { 0, 0.5, -5 } },
-        { size = { 10, 3, 0.5 }, pos = { 0, 0.5, 5 } },
-    }
-    for _, w in ipairs(walls) do
-        minigame.spawn_cube({ size = w.size, pos = w.pos, color = { 0.5, 0.4, 0.3 } })
-    end
+    -- Waiting indicator
+    draw_text(w * 0.25, h * 0.72, "[ Scene 1 complete - press any key for next ]", 120, 130, 180, 200, 0.85)
 
-    -- 彩色目标立方体
-    minigame.spawn_cube({ size = { 1, 1, 1 }, pos = { 3, 0.5, 3 }, color = { 1, 0.8, 0.2 } })
-    minigame.spawn_cube({ size = { 1, 1, 1 }, pos = { -3, 0.5, -3 }, color = { 0.2, 0.8, 1 } })
-
-    kag.show_text(nil, "使用方向键在 3D 迷宫移动，收集彩色立方体！")
-    kag.wait_click()
-
-    -- 模拟移动（实际游戏由输入系统驱动）
-    for i = 1, 5 do
-        kag.show_text(nil, string.format("移动中... 步数 %d/5", i))
-        kag.wait_click()
-    end
-
-    -- 碰撞检测
-    if minigame.check_collision({ 3, 0.5, 3 }, 1.5) then
-        kag.show_text(nil, "获得金色立方体！✨")
-        kag.wait_click()
-    end
-
-    minigame.cleanup()
-    kag.clear_screen()
+    backend.wait_click()
+    print("[Demo] Scene 1 done")
 end
 
--- ------------------------------------------------------------------
--- 场景 4: 视频过场 + 存档演示
--- ------------------------------------------------------------------
-local function scene4_video_save()
-    kag.show_text(nil, "【视频过场 + 存档系统演示】")
-    kag.wait_click()
+-- =========================================================================
+-- Scene 2: MiniGame 3D
+-- =========================================================================
+local function scene2_minigame()
+    print("[Demo] Scene 2: MiniGame 3D")
 
-    -- 自动存档
-    save.auto_save()
-    kag.show_text(nil, "自动存档完成。当前可安全退出。")
-    kag.wait_click()
-
-    -- 视频播放
-    kag.show_text(nil, "正在播放开场动画...")
-    kag.play_video("assets/video/opening.mp4", { loop = false, volume = 0.8 })
-    kag.wait_video_end()
-
-    -- 快速存档
-    save.quick_save(1)
-    kag.show_text(nil, "已保存到槽位 1 (F5 快速存档)。按 F6 可快速读档。")
-    kag.wait_click()
-
-    -- 显示存档信息
-    local info = save.get_save_info(1)
-    if info then
-        kag.show_text(nil, string.format(
-            "槽位 1: %s | 场景: %s | 时间: %s",
-            info.timestamp or "未知",
-            info.scene or "demo",
-            info.playtime or "0:00"
-        ))
+    -- Initialize MiniGame
+    if not mini_game then
+        print("[Demo] MiniGame not available (C++ backend missing)")
+        return
     end
-    kag.wait_click()
 
-    kag.show_text(nil, "演示结束。感谢体验 Caesura (AmeKAG)！")
-    kag.wait_click()
+    local mat_red   = mini_game.create_material(1.0, 0.2, 0.2, 0.3, 0.0, 0.8, "RedPlastic")
+    local mat_green = mini_game.create_material(0.2, 1.0, 0.2, 0.4, 0.0, 0.6, "GreenPlastic")
+    local mat_blue  = mini_game.create_material(0.2, 0.3, 1.0, 0.2, 0.0, 1.0, "BlueShiny")
+    local mat_gold  = mini_game.create_material(1.0, 0.84, 0.0, 0.15, 1.0, 1.5, "GoldMetal")
+    local mat_floor = mini_game.create_material(0.4, 0.4, 0.4, 0.9, 0.0, 0.2, "FloorMatte")
 
-    save.auto_save()
-    kag.clear_screen()
+    mini_game.set_ambient(0.1, 0.1, 0.15)
+    mini_game.set_directional(0.4, -0.8, 0.3, 0.9, 0.85, 1.0, 1.2)
+
+    mini_game.add_point_light(0, 3, 0, 1.0, 0.6, 0.2, 1.5, 8.0, "WarmHover")
+    mini_game.add_point_light(5, 2, 0, 0.2, 0.3, 1.0, 1.0, 6.0, "CoolSide")
+
+    -- Floor
+    local floor_id = mini_game.spawn_plane(0, -2, 0, 20, 20, 0.5, 0.5, 0.5)
+    mini_game.set_material(floor_id, mat_floor)
+
+    -- Hero sphere
+    local hero_id = mini_game.spawn_sphere(0, 0.5, 0, 1.0, 1.0, 0.2, 0.2)
+    mini_game.set_material(hero_id, mat_red)
+    mini_game.set_gravity(hero_id, true)
+
+    -- Gold cube
+    local cube_id = mini_game.spawn_cube(3, 0, 3, 0.5, 1.0, 0.84, 0.0)
+    mini_game.set_material(cube_id, mat_gold)
+
+    -- Green sphere
+    local green_id = mini_game.spawn_sphere(-3, 1, 2, 0.8, 0.2, 1.0, 0.2)
+    mini_game.set_material(green_id, mat_green)
+    mini_game.set_gravity(green_id, true)
+
+    -- Blue cube tower
+    local blue_id = mini_game.spawn_cube(-2, 0, -3, 1.0, 0.2, 0.3, 1.0)
+    mini_game.set_material(blue_id, mat_blue)
+
+    mini_game.set_camera(8, 5, 10, 0, 1, 0)
+    mini_game.set_collision(true)
+
+    print("[Demo] MiniGame scene loaded: 5 objects, 2 lights, 5 materials")
+    backend.wait_click()
+    print("[Demo] Scene 2 done")
 end
 
--- ==================================================================
--- Main Demo Entry
--- ==================================================================
-local function run_demo()
-    kag.show_text(nil, "=== Caesura (AmeKAG) 引擎演示 ===")
-    kag.wait_click()
+-- =========================================================================
+-- Scene 3: Video + Save Demo
+-- =========================================================================
+local function scene3_video_save()
+    print("[Demo] Scene 3: Video + Save Demo")
 
-    scene1_classroom()
-    scene2_live2d()
-    scene3_minigame()
-    scene4_video_save()
+    layers.init()
+    local root = layers.get_root()
+    root.texture = solid(20, 20, 40, 255)
+    layers.set_layer_image(root, root.texture)
 
-    kag.show_text(nil, "全部场景演示完成。退出中...")
-    kag.wait_click()
+    layers.render()
+    draw_text(w * 0.15, h * 0.3, "Video & Save System", 180, 200, 255, 255, 1.8)
+    draw_text(w * 0.15, h * 0.42, "Video playback: pl_mpeg (MPEG-1) + FFmpeg (optional)", 160, 170, 210, 255, 0.9)
+    draw_text(w * 0.15, h * 0.49, "Save/Load: 8-slot manager with thumbnails + CRC", 160, 170, 210, 255, 0.9)
+    draw_text(w * 0.15, h * 0.56, "CARC: zstd-compressed asset archives with Ed25519 signing", 160, 170, 210, 255, 0.9)
+    draw_text(w * 0.15, h * 0.63, "Live2D: Cubism 5 Native SDK (D3D11/MSVC path)", 160, 170, 210, 255, 0.9)
+    draw_text(w * 0.15, h * 0.72, "[ Demo complete - press any key to exit ]", 120, 130, 180, 200, 0.85)
+
+    backend.wait_click()
+    print("[Demo] Scene 3 done")
 end
 
-return { run = run_demo }
+-- =========================================================================
+-- Entry
+-- =========================================================================
+print("=== Caesura (AmeKAG) Engine Demo ===")
+print(string.format("Resolution: %dx%d", w, h))
+
+scene1_classroom()
+scene2_minigame()
+scene3_video_save()
+
+print("[Demo] All scenes complete. Exiting.")

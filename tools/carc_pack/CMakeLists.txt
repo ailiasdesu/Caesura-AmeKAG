@@ -4,10 +4,10 @@ cmake_minimum_required(VERSION 3.25)
 set(TOOL_NAME carc_pack)
 
 set(CARC_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCWriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CRLManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CryptoEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CARCWriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CARCReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CRLManager.cpp
 )
 
 set(ED25519_SOURCES

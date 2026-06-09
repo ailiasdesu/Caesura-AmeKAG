@@ -5,7 +5,7 @@
 #include "../Resource/ResourceHandle.h"
 #include "../Render/VideoPlayer.h"
 #include "../MiniGame/IMiniGameBackend.h"
-#include "../Animation/IAnimationBackend.h"
+#include "../Live2D/IAnimationBackend.h"
 #include "InputRouter.h"
 #include <unordered_map>
 #include <string>

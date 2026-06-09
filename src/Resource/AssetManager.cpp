@@ -1,7 +1,7 @@
-﻿#include "AssetManager.h"
+#include "AssetManager.h"
 #include "DirAssetProvider.h"
-#include "../Carc/CarcAssetProvider.h"
-#include "../Carc/CARCReader.h"
+#include "../CARC/CarcAssetProvider.h"
+#include "../CARC/CARCReader.h"
 #include <cstdio>
 #include <memory>
 

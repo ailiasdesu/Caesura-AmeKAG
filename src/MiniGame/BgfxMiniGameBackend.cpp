@@ -1,4 +1,4 @@
-ï»¿#include "BgfxMiniGameBackend.h"
+#include "BgfxMiniGameBackend.h"
 #include "../Core/BackendRegistry.h"
 #include "../Render/EmbeddedShaders.h"
 #include <bgfx/bgfx.h>
@@ -35,8 +35,43 @@ void BgfxMiniGameBackend::initGeometryCache() {
 // ==========================================================================
 
 bool BgfxMiniGameBackend::init() {
-    bgfx::ShaderHandle vs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_VS, uint32_t(kEmbeddedDXBC_MiniGame_VS_size)));
-    bgfx::ShaderHandle fs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_FS, uint32_t(kEmbeddedDXBC_MiniGame_FS_size)));
+    bgfx::ShaderHandle vs, fs;
+    const bgfx::RendererType::Enum rt = bgfx::getRendererType();
+    bool shaderOk = false;
+
+    // D3D11/D3D12: use pre-compiled DXBC bytecode
+    if (rt == bgfx::RendererType::Direct3D11 || rt == bgfx::RendererType::Direct3D12) {
+        vs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_VS, uint32_t(kEmbeddedDXBC_MiniGame_VS_size)));
+        fs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_FS, uint32_t(kEmbeddedDXBC_MiniGame_FS_size)));
+        shaderOk = bgfx::isValid(vs) && bgfx::isValid(fs);
+    }
+    // OpenGL/GLES: try built-in GLSL compilation (requires bgfx built with BGFX_CONFIG_RENDERER_OPENGL)
+    else if (rt == bgfx::RendererType::OpenGL || rt == bgfx::RendererType::OpenGLES) {
+        vs = bgfx::createShader(bgfx::makeRef(kEmbeddedGLSL_MiniGame_VS, uint32_t(strlen(kEmbeddedGLSL_MiniGame_VS))));
+        fs = bgfx::createShader(bgfx::makeRef(kEmbeddedGLSL_MiniGame_FS, uint32_t(strlen(kEmbeddedGLSL_MiniGame_FS))));
+        shaderOk = bgfx::isValid(vs) && bgfx::isValid(fs);
+    }
+    // Metal: try built-in MSL compilation
+    else if (rt == bgfx::RendererType::Metal) {
+        vs = bgfx::createShader(bgfx::makeRef(kEmbeddedMSL_MiniGame_VS, uint32_t(strlen(kEmbeddedMSL_MiniGame_VS))));
+        fs = bgfx::createShader(bgfx::makeRef(kEmbeddedMSL_MiniGame_FS, uint32_t(strlen(kEmbeddedMSL_MiniGame_FS))));
+        shaderOk = bgfx::isValid(vs) && bgfx::isValid(fs);
+    }
+
+    // Fallback: try DXBC for any other backend (including Vulkan via bgfx translation)
+    if (!shaderOk) {
+        vs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_VS, uint32_t(kEmbeddedDXBC_MiniGame_VS_size)));
+        fs = bgfx::createShader(bgfx::makeRef(kEmbeddedDXBC_MiniGame_FS, uint32_t(kEmbeddedDXBC_MiniGame_FS_size)));
+        shaderOk = bgfx::isValid(vs) && bgfx::isValid(fs);
+    }
+
+    if (!shaderOk) {
+        printf("[MiniGame] Shader compilation failed for renderer %s (pre-compile with shaderc for this platform)\n",
+               bgfx::getRendererName(rt));
+        if (bgfx::isValid(vs)) bgfx::destroy(vs);
+        if (bgfx::isValid(fs)) bgfx::destroy(fs);
+        return false;
+    }
     m_program = bgfx::createProgram(vs, fs, true);
     if (!bgfx::isValid(m_program)) { printf("[MiniGame] Shader program failed\n"); return false; }
 
@@ -298,7 +333,8 @@ static const luaL_Reg mg_functions[]={
 void registerMiniGameBinding(lua_State* L,BgfxMiniGameBackend* backend){
     g_mg=backend; backend->setLuaState(L);
     luaL_newlib(L,mg_functions); lua_setglobal(L,"mini_game");
-    printf("[MiniGame] Lua bindings â€” 15 functions\n");
+    printf("[MiniGame] Lua bindings ¡ª 15 functions\n");
 }
 
 } // namespace Caesura
+

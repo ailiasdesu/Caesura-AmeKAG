@@ -32,20 +32,21 @@ set(TEST_SOURCES
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/DebugManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/Debug/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/TextureBudget.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SandboxQuota.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/RpcServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCWriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CarcAssetProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CRLManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CryptoEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CARCReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CARCWriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CarcAssetProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/CARC/CRLManager.cpp
     ${CMAKE_SOURCE_DIR}/src/System/SaveManager.cpp
     ${CMAKE_SOURCE_DIR}/src/System/SaveBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/DirAssetProvider.cpp
@@ -77,12 +78,14 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/VideoPlayer.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Platform/MobileAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/MobileAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})
