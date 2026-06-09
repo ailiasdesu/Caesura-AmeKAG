@@ -212,23 +212,35 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience -- delegate to KAG (single source of truth)
+//  UI convenience ¡ª self-contained (no delegation to KAG)
+//  U3 de-duplication: KAGBinding no longer carries these; UnifiedBinding is
+//  now the single source of truth for cross-backend convenience methods.
 // =========================================================================
 
 static int lua_Backend_show_text(lua_State* L) {
-    return delegateToGlobalFunc(L, "KAG", "show_text");
+    const char* text = luaL_checkstring(L, 1);
+    printf("[CAESURA] show_text: %s\n", text);
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_Backend_show_image(lua_State* L) {
-    return delegateToGlobalFunc(L, "KAG", "show_image");
+    const char* file = luaL_checkstring(L, 1);
+    printf("[CAESURA] show_image: %s\n", file);
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_Backend_clear_screen(lua_State* L) {
-    return delegateToGlobalFunc(L, "KAG", "clear_screen");
+    printf("[CAESURA] clear_screen\n");
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int lua_Backend_wait_click(lua_State* L) {
-    return delegateToGlobalFunc(L, "KAG", "wait_click");
+    // Controlled by engine input loop; stub returns success
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 
