@@ -1,4 +1,4 @@
-﻿#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_HAS_LIVE2D
 
 #include "D3D11NativeRenderPath.h"
 
@@ -47,7 +47,7 @@ bool D3D11NativeRenderPath::init(int width, int height) {
             "[Live2D/D3D11] bgfx D3D11 device not available, falling back");
         return false;
     }
-    m_device->GetImmediateContext(&m_context);
+    m_device->GetImmediateContext(&m_context);  // shared with bgfx, no Release
     m_width = width;
     m_height = height;
 
@@ -59,7 +59,8 @@ void D3D11NativeRenderPath::shutdown() {
     if (m_srv)  { m_srv->Release();  m_srv = nullptr;  }
     if (m_rtv)  { m_rtv->Release();  m_rtv = nullptr;  }
     if (m_sharedTex) { m_sharedTex->Release(); m_sharedTex = nullptr; }
-    if (m_context) { m_context->Release(); m_context = nullptr; }
+    // m_context is shared with bgfx; do NOT release it
+    m_context = nullptr;
     m_device = nullptr;
 }
 

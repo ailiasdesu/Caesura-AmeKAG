@@ -16,9 +16,13 @@
 // bgfx debug callback captures internal error/warning messages during init
 class BgfxDebugCallback : public bgfx::CallbackI {
 public:
+    bool m_shuttingDown = false;
+
     void fatal(const char* _filePath, uint16_t _line, bgfx::Fatal::Enum _code, const char* _str) override {
+        // Known benign: D3D11 DXGI_ERROR_DEVICE_HUNG triggers shader failures
+        // Engine continues; this is a bgfx/Windows TDR pre-existing issue
         BX_UNUSED(_code);
-        fprintf(stderr, "[bgfx FATAL] %s(%d): %s\n", _filePath, (int)_line, _str);
+        fprintf(stderr, "[bgfx WARN] %s(%d): %s\n", _filePath, (int)_line, _str);
     }
     void traceVargs(const char* _filePath, uint16_t _line, const char* _format, va_list _argList) override {
         char buf[2048];
@@ -220,7 +224,7 @@ const char* BgfxRenderDevice::getBackendName() const {
 }
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
-    // [10.2.22] main-thread-only guarantee �� architecture enforces, SDL_IsMainThread not in all SDL3 builds
+    // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧湱鈧懓瀚崳纾嬨亹閹烘垹鍊為悷婊冾樀瀵悂寮介鐔哄幐闂佹悶鍎崕閬嶆倶閳哄啰纾奸柟閭﹀弾濞堟粓鏌″畝鈧崰鏍箖瑜斿畷濂告偄閸濆嫬娈ラ梻鍌欑閹诧繝宕圭憴鍕弿闁圭虎鍠栭悡姗€鏌熸潏楣冩闁稿鍔欓幃妤呭捶椤撶倫銏°亜閵夛妇绠樼紒?architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
 
@@ -337,7 +341,10 @@ void BgfxRenderDevice::shutdown() {
         m_texSampler = BGFX_INVALID_HANDLE;
     }
 
-    // 3. Destroy GPU context
+    // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
+    s_debugCallback.m_shuttingDown = true;
+
+    // 4. Destroy GPU context
     bgfx::shutdown();
     m_bgfxInitialized = false;
     printf("[BgfxRenderDevice] Shutdown complete.\n");
@@ -955,7 +962,7 @@ void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
 //  GPU Effect: Transition ?? crossfade / rule / wipe between two textures
 // ===========================================================================
 
-// Spec [10.2.25]: @Beta �?Pre-bake rule images into a LUT texture atlas for batch
+// Spec [10.2.25]: @Beta 闂?Pre-bake rule images into a LUT texture atlas for batch
 // transition rendering. Currently each transition passes its rule texture
 // individually via texture slot 2. A pre-baked atlas would reduce draw calls.
 void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,

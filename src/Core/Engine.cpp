@@ -491,7 +491,6 @@ void Engine::shutdown() {
     ErrorUI::resetCounters();
 
     if (m_miniGameBackend) { m_miniGameBackend->shutdown(); m_miniGameBackend.reset(); }
-    if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
 
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();
@@ -499,7 +498,20 @@ void Engine::shutdown() {
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();
-    if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
+
+    // Flush bgfx pipeline BEFORE touching any D3D11-shared resources (Live2D)
+    if (m_renderDevice) { m_renderDevice->flushAllRTT(); }
+
+    // Process one final bgfx frame to drain pending GPU commands
+    bgfx::frame();
+
+    // Animation (Live2D) shut down after bgfx pipeline is drained
+    if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
+
+    // Final bgfx frame after Live2D cleanup
+    bgfx::frame();
+    
+    if (m_renderDevice) { m_renderDevice->shutdown(); }
     FreeTypeContext::instance().shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();
     DebugManager::instance().shutdown();

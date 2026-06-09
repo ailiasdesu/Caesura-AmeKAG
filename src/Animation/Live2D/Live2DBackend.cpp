@@ -23,7 +23,11 @@
 #include <Motion/CubismExpressionMotion.hpp>
 #include <Motion/CubismExpressionMotionManager.hpp>
 #include <Rendering/CubismRenderer.hpp>
+#ifdef _WIN32
+#include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#else
 #include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
+#endif
 
 // Engine
 #include "../../Render/BgfxRenderDevice.h"
@@ -185,7 +189,7 @@ void Live2DBackend::setRenderDevice(BgfxRenderDevice* device) {
 }
 
 // ============================================================
-// Model loading 鈥?Cubism 5 API
+// Model loading 闂?Cubism 5 API
 // ============================================================
 bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     std::string dir = dirName(model.dir);
@@ -226,7 +230,7 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
         }
     }
 
-    // 6. Cache motions (keyed by file path 鈥?Cubism 5 has no GetMotionName)
+    // 6. Cache motions (keyed by file path 闂?Cubism 5 has no GetMotionName)
     for (csmInt32 i = 0; i < model.setting->GetMotionGroupCount(); ++i) {
         const char* group = model.setting->GetMotionGroupName(i);
         for (csmInt32 j = 0; j < model.setting->GetMotionCount(group); ++j) {
@@ -258,7 +262,11 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
     if (!model.userModel) return false;
 
     model.userModel->CreateRenderer(model.renderWidth, model.renderHeight);
+#ifdef _WIN32
+    model.renderer = model.userModel->GetRenderer<CubismRenderer_D3D11>();
+#else
     model.renderer = model.userModel->GetRenderer<CubismRenderer_OpenGLES2>();
+#endif
 
     if (!model.renderer) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Failed to create OpenGL renderer");
@@ -278,7 +286,7 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
 }
 
 // ============================================================
-// Per-frame: Cubism render 鈫?render path 鈫?bgfx
+// Per-frame: Cubism render 闂?render path 闂?bgfx
 // ============================================================
 void Live2DBackend::render(float dt) {
     if (!m_renderPath) return;
@@ -292,7 +300,7 @@ void Live2DBackend::render(float dt) {
         static_cast<Live2DUserModel*>(model->userModel.get())->motionManager()->UpdateMotion(cubismModel, dt);
         static_cast<Live2DUserModel*>(model->userModel.get())->expressionManager()->UpdateMotion(cubismModel, dt);
 
-        // Cubism render 鈫?bgfx (via pluggable render path)
+        // Cubism render 闂?bgfx (via pluggable render path)
         m_renderPath->beginFrame(static_cast<CubismRenderer*>(model->renderer));
         m_renderPath->endFrame(static_cast<CubismRenderer*>(model->renderer), model->bgfxTex);
 
@@ -308,7 +316,7 @@ void Live2DBackend::render(float dt) {
 }
 
 // ============================================================
-// Motion playback 鈥?Cubism 5 API
+// Motion playback 闂?Cubism 5 API
 // ============================================================
 bool Live2DBackend::playMotion(int handle, const std::string& name) {
     auto it = m_models.find(handle);
@@ -364,7 +372,7 @@ void Live2DBackend::setExpression(int handle, const std::string& name) {
 }
 
 // ============================================================
-// Parameter 鈥?Cubism 5 API
+// Parameter 闂?Cubism 5 API
 // ============================================================
 void Live2DBackend::setParameter(int handle, const std::string& param, float value) {
     auto it = m_models.find(handle);
