@@ -195,6 +195,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external/soloud/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bx/include 
     external/cpp-httplib
+    external/json
     ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/include 
     ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty

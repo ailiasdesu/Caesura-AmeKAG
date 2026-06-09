@@ -1,10 +1,11 @@
 ﻿// ===========================================================================
 //  Caesura (AmeKAG) -- SaveBinding.cpp
 //  Phase 6: C++ Lua binding for save/load.
-//  Registers: KAG.save_game(jsonData, sceneName, tokenIndex, [thumbnail])
-//             KAG.load_game(slot) → jsonData, metaTable
-//             KAG.list_saves() → {{slot, timestamp, scene, ...}, ...}
-//             KAG.delete_save(slot) → bool
+//  Uses nlohmann/json for structured data interchange between Lua and C++.
+//  Registers: KAG.save_game(slot, dataTable, sceneName, tokenIndex, [thumbnail])
+//             KAG.load_game(slot) -> dataTable, metaTable
+//             KAG.list_saves() -> {{slot, timestamp, scene, ...}, ...}
+//             KAG.delete_save(slot) -> bool
 // ===========================================================================
 
 extern "C" {
@@ -18,42 +19,167 @@ extern "C" {
 
 namespace Caesura {
 
+// -- Lua table -> nlohmann::json (recursive) -------------------------------
+static json luaTableToJson(lua_State* L, int index) {
+    json result;
+
+    // Normalize negative indices
+    int absIdx = (index < 0) ? lua_gettop(L) + index + 1 : index;
+
+    lua_pushnil(L);  // first key
+    while (lua_next(L, absIdx) != 0) {
+        // Stack: ... table key value
+        // Duplicate key for lua_next
+        std::string key;
+        if (lua_type(L, -2) == LUA_TSTRING) {
+            key = lua_tostring(L, -2);
+        } else if (lua_type(L, -2) == LUA_TNUMBER) {
+            key = std::to_string((int)lua_tointeger(L, -2));
+        } else {
+            lua_pop(L, 1);
+            continue;
+        }
+
+        int valueType = lua_type(L, -1);
+        switch (valueType) {
+            case LUA_TBOOLEAN:
+                result[key] = (bool)lua_toboolean(L, -1);
+                break;
+            case LUA_TNUMBER:
+                if (lua_isinteger(L, -1))
+                    result[key] = (int64_t)lua_tointeger(L, -1);
+                else
+                    result[key] = (double)lua_tonumber(L, -1);
+                break;
+            case LUA_TSTRING:
+                result[key] = std::string(lua_tostring(L, -1));
+                break;
+            case LUA_TTABLE:
+                result[key] = luaTableToJson(L, -1);
+                break;
+            case LUA_TNIL:
+                result[key] = nullptr;
+                break;
+            default:
+                // Unsupported type -- skip
+                break;
+        }
+        lua_pop(L, 1);  // pop value, keep key for next iteration
+    }
+
+    return result;
+}
+
+// -- nlohmann::json -> Lua table (recursive) -------------------------------
+static void jsonToLuaTable(lua_State* L, const json& j) {
+    lua_newtable(L);
+
+    if (j.is_object()) {
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            const std::string& key = it.key();
+            const json& value = it.value();
+
+            lua_pushstring(L, key.c_str());
+
+            switch (value.type()) {
+                case json::value_t::null:
+                    lua_pushnil(L);
+                    break;
+                case json::value_t::boolean:
+                    lua_pushboolean(L, value.get<bool>() ? 1 : 0);
+                    break;
+                case json::value_t::number_integer:
+                case json::value_t::number_unsigned:
+                    lua_pushinteger(L, (lua_Integer)value.get<int64_t>());
+                    break;
+                case json::value_t::number_float:
+                    lua_pushnumber(L, value.get<double>());
+                    break;
+                case json::value_t::string:
+                    lua_pushstring(L, value.get<std::string>().c_str());
+                    break;
+                case json::value_t::array:
+                    jsonToLuaTable(L, value);  // array -> indexed table
+                    break;
+                case json::value_t::object:
+                    jsonToLuaTable(L, value);
+                    break;
+                default:
+                    lua_pushnil(L);
+                    break;
+            }
+
+            lua_settable(L, -3);
+        }
+    } else if (j.is_array()) {
+        int idx = 1;
+        for (const auto& elem : j) {
+            switch (elem.type()) {
+                case json::value_t::null:
+                    lua_pushnil(L);
+                    break;
+                case json::value_t::boolean:
+                    lua_pushboolean(L, elem.get<bool>() ? 1 : 0);
+                    break;
+                case json::value_t::number_integer:
+                case json::value_t::number_unsigned:
+                    lua_pushinteger(L, (lua_Integer)elem.get<int64_t>());
+                    break;
+                case json::value_t::number_float:
+                    lua_pushnumber(L, elem.get<double>());
+                    break;
+                case json::value_t::string:
+                    lua_pushstring(L, elem.get<std::string>().c_str());
+                    break;
+                case json::value_t::array:
+                case json::value_t::object:
+                    jsonToLuaTable(L, elem);
+                    break;
+                default:
+                    lua_pushnil(L);
+                    break;
+            }
+            lua_rawseti(L, -2, idx++);
+        }
+    }
+}
+
 // -- lua_Save_game ----------------------------------------------------------
-// KAG.save_game(jsonData, sceneName, tokenIndex, [thumbnailBase64]) → bool
+// KAG.save_game(slot, dataTable, sceneName, tokenIndex, [thumbnail]) -> bool
 static int lua_Save_game(lua_State* L) {
-    // Determine slot: use KAG style -- caller passes slot as first arg or
-    // we auto-pick next available. Let's use explicit slot parameter.
-    // Signature: save_game(slot, jsonData, sceneName, tokenIndex, [thumbnail])
-    int slot        = (int)luaL_checkinteger(L, 1);
-    const char* jsonData  = luaL_checkstring(L, 2);
+    int slot              = (int)luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
     const char* sceneName = luaL_checkstring(L, 3);
-    int tokenIndex = (int)luaL_checkinteger(L, 4);
+    int tokenIndex        = (int)luaL_checkinteger(L, 4);
     const char* thumbnail = luaL_optstring(L, 5, "");
 
-    bool ok = SaveManager::instance().save(slot, jsonData, sceneName,
+    // Convert Lua table to structured JSON
+    json gameData = luaTableToJson(L, 2);
+
+    bool ok = SaveManager::instance().save(slot, gameData, sceneName,
                                            tokenIndex, thumbnail);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
 
 // -- lua_Load_game ----------------------------------------------------------
-// KAG.load_game(slot) → jsonData, metaTable | nil, error
+// KAG.load_game(slot) -> dataTable, metaTable | nil, error
 static int lua_Load_game(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
 
     SaveMeta meta;
-    std::string data = SaveManager::instance().load(slot, &meta);
+    json data = SaveManager::instance().load(slot, &meta);
 
-    if (data.empty()) {
+    if (data.is_null() || data.empty()) {
         lua_pushnil(L);
         lua_pushfstring(L, "Failed to load save slot %d", slot);
         return 2;
     }
 
-    // Push JSON data string
-    lua_pushstring(L, data.c_str());
+    // Push game data as Lua table
+    jsonToLuaTable(L, data);
 
-    // Push metadata table = {slot, timestamp, scene, token_index, schema_version}
+    // Push metadata table
     lua_newtable(L);
     lua_pushinteger(L, meta.slot);
     lua_setfield(L, -2, "slot");
@@ -66,11 +192,11 @@ static int lua_Load_game(lua_State* L) {
     lua_pushinteger(L, meta.schemaVersion);
     lua_setfield(L, -2, "schema_version");
 
-    return 2;  // jsonData, meta
+    return 2;  // dataTable, metaTable
 }
 
 // -- lua_List_saves ---------------------------------------------------------
-// KAG.list_saves() → {{slot=N, timestamp=T, scene=S, token_index=I}, ...}
+// KAG.list_saves() -> {{slot=N, timestamp=T, scene=S, token_index=I}, ...}
 static int lua_List_saves(lua_State* L) {
     auto saves = SaveManager::instance().listSaves();
 
@@ -88,7 +214,6 @@ static int lua_List_saves(lua_State* L) {
         lua_setfield(L, -2, "token_index");
         lua_pushinteger(L, meta.schemaVersion);
         lua_setfield(L, -2, "schema_version");
-        // raw_seti for array index
         lua_rawseti(L, -2, idx++);
     }
 
@@ -96,7 +221,7 @@ static int lua_List_saves(lua_State* L) {
 }
 
 // -- lua_Delete_save ---------------------------------------------------------
-// KAG.delete_save(slot) → bool
+// KAG.delete_save(slot) -> bool
 static int lua_Delete_save(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
     bool ok = SaveManager::instance().deleteSlot(slot);
@@ -105,7 +230,7 @@ static int lua_Delete_save(lua_State* L) {
 }
 
 // -- lua_Save_exists ---------------------------------------------------------
-// KAG.save_exists(slot) → bool
+// KAG.save_exists(slot) -> bool
 static int lua_Save_exists(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
     bool ok = SaveManager::instance().slotExists(slot);
@@ -114,9 +239,8 @@ static int lua_Save_exists(lua_State* L) {
 }
 
 // -- lua_Save_get_dir --------------------------------------------------------
-// KAG.get_save_dir() → string
+// KAG.get_save_dir() -> string
 static int lua_Get_save_dir(lua_State* L) {
-    // Return a sensible default; engine sets this via SaveManager::init()
     lua_pushstring(L, "saves/");
     return 1;
 }
@@ -135,13 +259,12 @@ void registerSaveBinding(lua_State* L) {
         lua_newtable(L);
     }
 
-    // Register save functions on KAG table
     static const luaL_Reg saveFuncs[] = {
-        { "save_game",   lua_Save_game   },
-        { "load_game",   lua_Load_game   },
-        { "list_saves",  lua_List_saves  },
-        { "delete_save", lua_Delete_save },
-        { "save_exists", lua_Save_exists },
+        { "save_game",    lua_Save_game    },
+        { "load_game",    lua_Load_game    },
+        { "list_saves",   lua_List_saves   },
+        { "delete_save",  lua_Delete_save  },
+        { "save_exists",  lua_Save_exists  },
         { "get_save_dir", lua_Get_save_dir },
         { nullptr, nullptr }
     };
@@ -151,7 +274,7 @@ void registerSaveBinding(lua_State* L) {
     if (!hasKAG) {
         lua_setglobal(L, "KAG");
     } else {
-        lua_pop(L, 1);  // pop KAG table
+        lua_pop(L, 1);
     }
 
     printf("[SaveBinding] KAG save/load functions registered (6 APIs).\n");

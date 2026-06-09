@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
-> 分析日期: 2026-06-09 | 构建配置: CMake 3.25+ / C++20
+> 分析日期: 2026-06-09 | 构建配置: CMake 3.25+ / C++20`r`n> 构建状态: Windows Debug + Release 全量通过，D3D11 零 TDR 稳定`r`n> 最近提交: (nlohmann/json 集成 — 存档系统结构化序列化)
 > 构建状态: Windows Debug + Release 全量通过，D3D11 零 TDR 稳定
 > 最近提交: db2964f — CI 修复 + MiniGame 3D + DeltaCARC + FFmpeg 接线
 
@@ -30,7 +30,7 @@
 | C++ 单元测试 | 24 个文件 |
 | KAG 命令 | 61 个（6 个子模块: layer/text/audio/system/transition/video） |
 | 纯虚接口 | 8 个: IRenderDevice, IAudioBackend, IPlatformBackend, IAssetProvider, IAnimationBackend, ILive2DRenderPath, IMiniGameBackend, IVideoDecoder |
-| 外部库 | 10 个全部静态编译 |
+| 外部库     | 11 个: SDL3, bgfx, SoLoud, Lua 5.4, FreeType, zstd, nlohmann/json, pl_mpeg, FFmpeg, ed25519, httplib |
 | 模块 | 12 个 |
 
 ---
@@ -77,8 +77,7 @@ src/
 - `video_stop/update/get_texture/is_playing/has_ended/get_size/pause/resume`
 - 通过 BackendRegistry::getVideoPlayerFromLua 访问 VideoPlayer
 
-### 3.5 System
-2 .cpp + 2 .h | SaveManager (JSON 存档 + v1→v3 迁移)
+### 3.5 System`r`n2 .cpp + 2 .h | SaveManager (nlohmann/json 结构化存档 + v1→v3 增量迁移)，SaveBinding (Lua table ↔ json 双向转换)
 
 ### 3.6 Carc
 6 .cpp + 7 .h | CryptoEngine (AES-256-GCM: Win BCrypt / 其他 OpenSSL EVP), CARCReader/Writer, CRLManager, **DeltaCARC** (差分更新: generate/apply/verify)
@@ -119,7 +118,9 @@ src/
 | TD-21 | MiniGame 3D | ✅ BgfxMiniGameBackend |
 | TD-22 | 跨平台 CI | ✅ YAML 修复 + Linux 配置 |
 
-**摘要**: 18/22 闭合，4 开放（均为移交/存根，非 bug）
+| TD-23 | 存档系统 nlohmann/json 集成 | ✅ 闭合 |
+
+**摘要**: 19/23 闭合，4 开放（均为移交/存根，非 bug）
 
 ---
 

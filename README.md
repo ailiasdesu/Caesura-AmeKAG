@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG)
 
-Cross-Platform Visual Novel Engine — SDL3 + bgfx + SoLoud + Lua 5.4
+Cross-Platform Visual Novel Engine — SDL3 + bgfx + SoLoud + Lua 5.4 + nlohmann/json
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ cmake --build build --config Debug
 
 - **61 KAG commands** — 完整视觉小说脚本兼容
 - **8 pure virtual interfaces** — IRenderDevice/IAudioBackend/IPlatformBackend/...
-- **Video playback** — pl_mpeg (默认) + FFmpeg (条件编译)，8 Lua 函数
+- **Structured save system** — nlohmann/json v3.11.3, schema versioning, Lua table ↔ JSON auto-conversion`r`n- **Video playback** — pl_mpeg (默认) + FFmpeg (条件编译)，8 Lua 函数
 - **Live2D Cubism 5** — D3D11 ✅, 条件编译安全
 - **3D mini-games** — BgfxMiniGameBackend, cube rendering + orbit camera
 - **Delta CARC updates** — AES-256-GCM 加密差分补丁
