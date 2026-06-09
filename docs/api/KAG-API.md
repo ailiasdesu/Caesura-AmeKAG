@@ -1,6 +1,6 @@
 ﻿# KAG API Reference — 完整版
 
-> Caesura (AmeKAG) 引擎 KAG 脚本 API。61 个命令，6 个子模块。
+> Caesura (AmeKAG) 引擎 KAG 脚本 API。54 个 KAG 命令，6 个子模块（MiniGame API 已独立：[docs/api/MiniGame-API.md](MiniGame-API.md)）。
 > 所有 C++ 访问通过 `backend.lua → BackendRegistry → I*Backend` 抽象接口。
 
 ## Layer（图层操作）
@@ -110,20 +110,6 @@
 | `KAG.is_video_playing()` | — | 视频播放中？ |
 | `KAG.get_video_position()` | — | 当前播放位置(ms) |
 
-## MiniGame（3D 小游戏）
-
-| 函数 | 参数 | 说明 |
-|------|------|------|
-| `mini_game.init(opts)` | opts:{width,height} | 初始化3D场景 |
-| `mini_game.spawn_cube(opts)` | opts:{size:{x,y,z}, pos:{x,y,z}, color:{r,g,b}?} | 生成立方体 |
-| `mini_game.spawn_sphere(opts)` | opts:{pos:{x,y,z}, radius?, color?} | 生成球体 |
-| `mini_game.spawn_plane(opts)` | opts:{size:{w,h}, pos:{x,y,z}, color?} | 生成平面 |
-| `mini_game.spawn_floor(opts)` | opts:{size:{x,y,z}, pos:{x,y,z}, color?} | 生成地板 |
-| `mini_game.set_camera(opts)` | opts:{pos:{x,y,z}, lookAt:{x,y,z}, fov?} | 设置摄像机 |
-| `mini_game.set_material(opts)` | opts:{roughness, metallic, specStr} | 设置PBR材质 |
-| `mini_game.set_lighting(opts)` | opts:{dir:{x,y,z,w}, points?:[{pos,color,intensity,range}]} | 设置光照 |
-| `mini_game.check_collision(pos, radius)` | pos:{x,y,z}, radius:number | 碰撞检测 |
-| `mini_game.cleanup()` | — | 清理3D资源 |
 
 ## Live2D（条件编译）
 
