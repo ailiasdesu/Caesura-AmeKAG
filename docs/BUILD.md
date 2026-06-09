@@ -20,15 +20,16 @@
 cmake -B build_nol2d
 cmake --build build_nol2d --config Release
 
-# 带 Live2D (需先下载 Cubism SDK)
+# 带 Live2D (需先下载 Cubism SDK 到外部路径)
 cmake -B build_l2d -DCAESURA_ENABLE_LIVE2D=ON -DCUBISM_SDK_PATH=C:/path/to/CubismSdkForNative-5-r.5
 cmake --build build_l2d --config Release
 
-# 带 FFmpeg (需通过 vcpkg 安装)
-# vcpkg install ffmpeg:x64-windows
-cmake -B build_ffmpeg -DCAESURA_VIDEO_FFMPEG=ON
+# 带 FFmpeg (需安装 ffmpeg-dev 库)
+cmake -B build_ffmpeg -DCAESURA_ENABLE_FFMPEG=ON
 cmake --build build_ffmpeg --config Release
 ```
+
+> SDL3 开发包应放在 `SDL3-3.4.10/` 目录下，CMake 自动检测。
 
 ## Linux 构建
 
@@ -75,7 +76,7 @@ cmake --build build_nol2d --config Debug
 build_nol2d/Debug/tests/CaesuraTests.exe
 ```
 
-24 个测试文件覆盖 Core/Render/Audio/Scripting/System/Carc/Resource/MiniGame。
+24 个测试文件覆盖 Core/Render/Audio/Scripting/System/CARC/Resource/MiniGame/Debug。
 
 ## 编辑器开发
 

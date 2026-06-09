@@ -1,6 +1,6 @@
 ﻿# Caesura Editor — Design System
 
-> 视觉小说引擎可视化编辑器 · 暗色专业风格
+> 视觉小说引擎可视化编辑器 · 暗色专业风格 · 11 组件
 
 ## Brand Identity
 **Caesura（休止符）** — 乐章中的停顿。编辑器服务于创作者在"停顿"中打磨作品。
@@ -53,25 +53,23 @@
 | Tooltip | `--bg-tertiary`, `--text-primary`, `6px 10px`, `4px` radius |
 | Dialog | `--bg-primary`, `--border` border, `8px` radius, backdrop blur |
 
-## Layout
+## Layout (无 Timeline 设计)
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Toolbar                    Caesura Editor    — □ ✕ │ 36px
+│  Toolbar          Caesura Editor    [保存][打包]— □ ✕ │ 36px
 ├──────────┬──────────────────────────┬───────────────┤
-│  Assets  │                          │  Properties   │
-│  Browser │      Stage Canvas        │  Panel        │
-│  200px   │      flex:1             │  240px        │
-│          │                          │               │
+│          │                          │  Properties   │
+│ SceneList│      Stage Canvas        │  Panel        │
+│ + Assets │      flex:1             │  240px        │
+│  220px   │                          │               │
 │          │                          │               │
 ├──────────┴──────────────────────────┴───────────────┤
-│  Timeline (events)                                   │ 120px
-├─────────────────────────────────────────────────────┤
 │                                                     │
-│  Code Editor (Lua)                                  │ flex:1
+│  Code Editor (Lua) + AI Panel (tabbed)              │ flex:1
 │                                                     │
 ├─────────────────────────────────────────────────────┤
-│  Log Panel / AI Panel (tabbed)                      │ 160px
+│  Log Panel                                          │ 160px
 └─────────────────────────────────────────────────────┘
 ```
 

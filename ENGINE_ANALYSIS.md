@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-09 | 构建配置: CMake 3.25+ / C++20
 > 构建状态: Windows Debug + Release 全量通过，D3D11 零 TDR 稳定
-> 最近提交: bd22a86 — Electron 编辑器完善 (E1-E8)
+> 最近提交: 527aae0 — Live2D GL FBO + MiniGame 着色器 + FFmpeg CMake + AI 面板真实 API
 
 ---
 
@@ -24,16 +24,16 @@
 
 | 维度 | 数值 |
 |------|------|
-| C++ 文件 | 63 .cpp + 73 .h = 136 个编译单元 |
-| C++ 代码量 | ~17,000 行 |
+| C++ 文件 | 64 .cpp + 73 .h = 137 个编译单元 |
+| C++ 代码量 | ~18,000 行 |
 | Lua 脚本 | 44 个文件 / ~8,500 行 |
 | C++ 单元测试 | 24 个文件 |
 | Electron 编辑器 | 11 组件 + 3 AI provider + 1 解析器 |
-| KAG 命令 | 61 个（6 子模块: layer/text/audio/system/transition/video） |
+| KAG 命令 | 61 个（7 子模块: layer/text/audio/system/transition/vfx/video） |
 | MiniGame API | 15 个 Lua 函数（几何体/材质/光照/碰撞/物理） |
 | 纯虚接口 | 8 个: IRenderDevice, IAudioBackend, IPlatformBackend, IAssetProvider, IAnimationBackend, ILive2DRenderPath, IMiniGameBackend, IVideoDecoder |
 | 外部库 | 13 个全部静态编译 |
-| 模块 | 13 个（含 EditorServer） |
+| 模块 | 10 个（精简重组） |
 
 ---
 
@@ -41,37 +41,36 @@
 
 ```
 src/
-├── Core/          ← Engine, BackendRegistry, InputRouter, DebugManager, ErrorUI
-│                   JobSystem, SandboxQuota, TextureBudget, RpcServer
+├── Core/          ← Engine, BackendRegistry, InputRouter, RpcServer
+│                   JobSystem, SandboxQuota, TextureBudget, MobileAdapter
 ├── Render/        ← BgfxRenderDevice, LayerManager, TextRenderer, TextureManager
 │                   RTTManager, ShaderCache, ParticleSystem, GpuMonitor, VideoPlayer
+│                   EmbeddedShaders_MiniGame (D3D11/GLSL/Metal 跨平台)
 ├── Audio/         ← SoLoudAudioEngine + NullAudioBackend
 ├── Scripting/     ← LuaManager, KAGBinding, RenderBinding(含视频8函数), VFXBinding
 │                   DevCoreBinding, DebugBinding, UnifiedBinding, GameState
 ├── System/        ← SaveManager (JSON + AES-256-GCM + ISaveProvider + Schema v1→v5)
-├── Carc/          ← CryptoEngine (BCrypt/OpenSSL), CARCReader/Writer, CRLManager, DeltaCARC
+├── CARC/          ← CryptoEngine (BCrypt/OpenSSL), CARCReader/Writer, CRLManager, DeltaCARC
 ├── Resource/      ← AssetManager, AsyncLoader, ProviderChain, XP3Archive, ImageDecoder
-├── Animation/     ← Live2D Backend (Cubism 5, 4 渲染路径, CAESURA_HAS_LIVE2D)
+├── Live2D/        ← Cubism 5 (CAESURA_HAS_LIVE2D), 4 渲染路径 + OpenGLReadback FBO
 ├── MiniGame/      ← IMiniGameBackend + BgfxMiniGameBackend (PBR-lite, 15 Lua API)
-├── Debug/         ← HotReload + DebugProtocol
-├── Editor/        ← EditorServer (JSON-RPC stdin/stdout, 7 methods)
-└── Platform/      ← MobileAdapter (存根)
+└── Debug/         ← HotReload + DebugProtocol + DebugManager (从 Core 迁入)
 
 web-editor/
-├── electron/      ← main.js (engine spawn + AI chat bridge) + preload.js (IPC)
-├── src/           ← React 18 组件 + Context + 解析器 + AI providers
-└── dist/          ← Vite 构建输出 (168KB JS + 6.7KB CSS)
+├── electron/      ← main.cjs (engine spawn + AI IPC bridge) + preload.cjs (IPC)
+├── src/           ← React 18 组件 (11) + Context + 解析器 + AI providers (3)
+└── dist/          ← Vite 构建输出
 ```
 
 ---
 
 ## 3. 模块详解
 
-### 3.1 Core（10 .cpp + 12 .h）
-Engine 主循环、BackendRegistry 单例工厂、InputRouter 输入路由、DebugManager 双级 ErrorUI、JobSystem 多线程调度、SandboxQuota 指令预算、TextureBudget 6 级、RpcServer JSON-RPC (ping/run/eval/stop/assets/getState/logs)
+### 3.1 Core（11 .cpp + 13 .h）
+Engine 主循环、BackendRegistry 单例工厂、InputRouter 输入路由、JobSystem 多线程调度、SandboxQuota 指令预算、TextureBudget 6 级、RpcServer JSON-RPC (ping/run/eval/stop/assets/getState/getFrame/logs)、MobileAdapter（存根，触屏事件预埋）
 
-### 3.2 Render（12 .cpp + 13 .h）
-BgfxRenderDevice (IRenderDevice)、LayerManager 多层合成、TextRenderer (FreeType + CJK atlas)、TextureManager 生命周期、RTTManager 渲染到纹理、ShaderCache 5 级、ParticleSystem (多线程 JobSystem)、GpuMonitor TDR 防护、VideoPlayer (pl_mpeg + FFmpeg 条件编译)
+### 3.2 Render（15 .cpp + 13 .h）
+BgfxRenderDevice (IRenderDevice)、LayerManager 多层合成、TextRenderer (FreeType + CJK atlas)、TextureManager 生命周期、RTTManager 渲染到纹理、ShaderCache 5 级、ParticleSystem (多线程 JobSystem)、GpuMonitor TDR 防护、VideoPlayer (pl_mpeg + FFmpeg 条件编译)、EmbeddedShaders_MiniGame_GLSL/Metal 跨平台着色器
 
 ### 3.3 Audio（2 .cpp + 2 .h）
 SoLoudAudioEngine (BGM/VOICE/SE 三通道, fade, 3D positional)
@@ -79,32 +78,23 @@ SoLoudAudioEngine (BGM/VOICE/SE 三通道, fade, 3D positional)
 ### 3.4 Scripting（8 .cpp + 8 .h）
 LuaManager 沙箱、KAGBinding 35 C 函数 + 61 KAG 命令、RenderBinding (31 函数 + 8 视频)、VFXBinding 粒子、DevCoreBinding、DebugBinding、UnifiedBinding (_CAESURA_BACKEND 统一入口)
 
-### 3.5 System（2 .cpp + 2 .h）
+### 3.5 System（3 .cpp + 3 .h）
 SaveManager (JSON + AES-256-GCM 加密 + ISaveProvider 可替换后端 + v1→v5 Schema 迁移 + F5/F6 快速存档 + 自动存档)
 
-### 3.6 Carc（6 .cpp + 7 .h）
+### 3.6 CARC（6 .cpp + 7 .h）
 CryptoEngine (AES-256-GCM: Win BCrypt / 其他 OpenSSL EVP, SHA-256, Ed25519)、CARCReader/Writer、CRLManager 证书撤销、**DeltaCARC** 差分更新 (generate/apply/verify)
 
 ### 3.7 Resource（6 .cpp + 8 .h）
 AssetManager、AsyncLoader 多线程异步加载、ProviderChain (Dir → XP3 → CARC 优先级递减)、XP3Archive KiriKiri 兼容、ImageDecoder
 
-### 3.8 Animation（6 .cpp + 9 .h）
-Live2D Cubism 5 (CAESURA_HAS_LIVE2D 条件编译)、ILive2DRenderPath 4 路径：D3D11Native ✅ / OpenGLShared ⚠️ 移交 / MetalNative ⚠️ 移交 / OpenGLReadback ⚠️ 移交
+### 3.8 Live2D（6 .cpp + 9 .h）
+Cubism 5 (CAESURA_HAS_LIVE2D 条件编译)、ILive2DRenderPath 4 路径：D3D11Native ✅ / OpenGLShared ⚠️ 移交 / MetalNative ⚠️ 移交 / OpenGLReadback ✅ (FBO + GL状态保存恢复)
 
-### 3.9 MiniGame（2 .cpp + 3 .h）
-BgfxMiniGameBackend (PBR-lite: roughness/metallic/specular + 3 光源类型 + 碰撞检测 + 物理)、15 Lua 函数、debug wireframe 回退
+### 3.9 MiniGame（4 .cpp + 7 .h）
+BgfxMiniGameBackend (PBR-lite: roughness/metallic/specular + 3 光源类型 + 碰撞检测 + 物理)、15 Lua 函数、跨平台 shader (D3D11 DXBC / OpenGL GLSL / Metal MSL 运行时选择)
 
-### 3.10 Debug（2 .cpp + 2 .h）
-HotReload (Lua 文件监控)、DebugProtocol
-
-### 3.11 Editor（1 .cpp + 1 .h）
-EditorServer JSON-RPC (stdin/stdout)，7 个 RPC 方法，Electron IDE 后端完全就绪
-
-### 3.12 Platform（1 .cpp + 1 .h）
-MobileAdapter (存根，触屏事件注入已预埋)
-
-### 3.13 Electron 编辑器（11 组件 + 3 providers + 1 parser）
-舞台视图 (Canvas 2D + 拖入素材 + 网格)、时间线 (事件可视化 + 累计时间轴)、属性面板 (代码双向同步)、AI 面板 (@generate/@fix + 多后端)、素材浏览器、日志面板、设置对话框
+### 3.10 Debug（3 .cpp + 3 .h）
+DebugManager 双级 ErrorUI + TDR 防护监控、HotReload (Lua 文件监控)、DebugProtocol
 
 ---
 
@@ -121,11 +111,12 @@ MobileAdapter (存根，触屏事件注入已预埋)
 | TD-16~TD-18 | 调试/键名/CRL 小修 | ✅ 闭合 |
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS 开发者 |
 | TD-20 | MobileAdapter | ⚠️ 存根（触屏事件已预埋） |
-| TD-21 | MiniGame 3D | ✅ BgfxMiniGameBackend PBR-lite |
+| TD-21 | MiniGame 3D | ✅ BgfxMiniGameBackend PBR-lite + 跨平台 shader |
 | TD-22 | 跨平台 CI | ✅ YAML 修复 + Linux 配置 |
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存问题 |
+| TD-24 | Live2D OpenGLReadback | ✅ FBO + GL 状态保存恢复 |
 
-**摘要**: 19/23 闭合，4 开放（移交/存根/预存）
+**摘要**: 20/24 闭合，4 开放（移交/存根/预存）
 
 ---
 
@@ -142,7 +133,7 @@ MobileAdapter (存根，触屏事件注入已预埋)
 
 | 平台 | 渲染后端 | 构建 | Live2D | 备注 |
 |------|----------|:---:|:---:|------|
-| Windows | D3D11 | ✅ | ✅ | 零 TDR |
+| Windows | D3D11 | ✅ | ✅ | 零 TDR, D3D11Native ✅ |
 | Linux | OpenGL | ⚠️ CI | ⚠️ 移交 | OpenSSL 依赖已配置 |
 | macOS | Metal | ⚠️ CI | ⚠️ 移交 | OpenSSL 依赖已配置 |
 
@@ -155,7 +146,7 @@ MobileAdapter (存根，触屏事件注入已预埋)
 | D3D11Native | ✅ | — | — |
 | OpenGLShared | — | ⚠️ 待实现 | — |
 | MetalNative | — | — | ⚠️ 待验证 |
-| OpenGLReadback | — | — | — |
+| OpenGLReadback | ✅ FBO | — | — |
 
 ---
 
@@ -163,17 +154,22 @@ MobileAdapter (存根，触屏事件注入已预埋)
 
 | 组件 | 文件 | 功能 |
 |------|------|------|
-| StageView | components/StageView.jsx | Canvas 2D 舞台 + 拖入素材 + 安全区 |
-| AssetPanel | components/AssetPanel.jsx | 素材浏览 + 拖拽源 |
-| Timeline | components/Timeline.jsx | 时间线事件可视化 |
-| PropertyPanel | components/PropertyPanel.jsx | 属性编辑 + KAG 代码生成 |
-| AIPanel | components/AIPanel.jsx | AI 对话 + @generate/@fix |
-| SettingsDialog | components/SettingsDialog.jsx | AI 后端设置 |
+| StageView | components/StageView.jsx | Canvas 2D 舞台 + 拖入素材 + Live Preview |
+| SceneList | components/SceneList.jsx | 场景拖拽排序、模板选择 |
+| CodeEditor | components/CodeEditor.jsx | 语法高亮 + 自动补全 + 错误行标记 |
+| AssetPanel | components/AssetPanel.jsx | 场景列表 + 素材树上下分区 |
+| PropertyPanel | components/PropertyPanel.jsx | 素材/Live2D/MiniGame 三种上下文切换 |
+| AIPanel | components/AIPanel.jsx | AI 对话 + 多后端 + 流式输出 + @指令 |
+| Live2DPanel | components/Live2DPanel.jsx | 模型选择、表情/动作、参数调试 |
+| MiniGamePanel | components/MiniGamePanel.jsx | 物体列表、PBR材质、光照编辑 |
+| LogPanel | components/LogPanel.jsx | 分级筛选、搜索、连接状态指示器 |
+| SaveManager | components/SaveManager.jsx | 8档位网格、缩略图、右键菜单 |
+| SettingsDialog | components/SettingsDialog.jsx | 标签页分组设置 |
 | EditorContext | context/EditorContext.jsx | useReducer 全局状态 |
 | kagParser | parser/kagParser.js | KAG Lua 正则解析 + 代码生成 |
-| OpenAI/Codex/Custom | providers/ | AI 多后端 |
-| Electron main | electron/main.js | 引擎 spawn + AI IPC |
-| Electron preload | electron/preload.js | contextBridge IPC |
+| OpenAI/Codex/Custom | providers/ | AI 多后端 (真实 IPC 桥接) |
+| Electron main | electron/main.cjs | 引擎 spawn + AI chat bridge |
+| Electron preload | electron/preload.cjs | contextBridge IPC |
 
 ### RPC 方法
 `ping` → 健康检查  
@@ -182,13 +178,14 @@ MobileAdapter (存根，触屏事件注入已预埋)
 `stop` → 停止场景  
 `assets` → 列出素材  
 `getState` → 引擎状态  
+`getFrame` → 引擎帧截图 (base64 PNG)  
 `logs` → 日志缓冲区
 
 ---
 
 ## 9. 总体评估
 
-### 完成度: ~90% (Alpha+)
+### 完成度: ~93% (Beta)
 
 ### 优势
 - 8 个纯虚接口，核心约束全面合规
@@ -197,8 +194,9 @@ MobileAdapter (存根，触屏事件注入已预埋)
 - 多线程 JobSystem 覆盖粒子/CARC/纹理/视频解码
 - D3D11 零 TDR + 双级 ErrorUI + 智能重试
 - DeltaCARC 差分更新 + AES-256-GCM 存档加密
-- BgfxMiniGameBackend PBR-lite 3D 小游戏
-- Electron 可视化编辑器 + AI 辅助面板
+- BgfxMiniGameBackend PBR-lite 3D 小游戏 + 跨平台 shader
+- Live2D OpenGLReadback FBO 实现
+- Electron 可视化编辑器 (11 组件 + 3 后端) + AI 真实 IPC
 - MIT 许可 + Live2D 条件编译无法律风险
 
 ### 移交共同开发者
@@ -207,7 +205,6 @@ MobileAdapter (存根，触屏事件注入已预埋)
 - 跨平台 CI 测试启用（需非 GPU 测试桩）
 
 ### 下一阶段
-- 编辑器 AI 上下文优化（token 预算调优）
-- MiniGame shader 编译（替换 debug wireframe）
-- FFmpeg 默认启用
-- 可视化编辑器 → 引擎 RPC 帧预览
+- Beta 冲刺: FFmpeg 默认启用 + MiniGame shader 最终化
+- Demo 场景: Live2D + MiniGame + 视频 完整演示
+- 编辑器: AI 上下文优化 + Electron 打包试运行

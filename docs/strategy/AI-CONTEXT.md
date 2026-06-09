@@ -35,7 +35,7 @@ processEvents → engine_update (Lua) → beginFrame → engine_render → MiniG
 | IAnimationBackend | Live2DBackend |
 | ILive2DRenderPath | D3D11Native / OpenGLShared / Metal / OpenGLReadback |
 | IMiniGameBackend | **BgfxMiniGameBackend** / NullMiniGameBackend |
-| IVideoDecoder | PlMpegDecoder |
+| IVideoDecoder | PlMpegDecoder / FFmpegDecoder |
 
 ## 关键模式
 
@@ -65,9 +65,13 @@ apply: old.carc + .cdelta → new.carc (SHA-256 验证)
 
 ### 3D 小游戏
 ```
-BgfxMiniGameBackend: cube VB/IB → bgfx view 10 → orbit camera → debug wireframe fallback
+BgfxMiniGameBackend: cube VB/IB → bgfx view 10 → orbit camera → PBR-lite shader
+跨平台 shader: D3D11 DXBC / OpenGL GLSL / Metal MSL 运行时选择
 Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 ```
+
+### Live2D 渲染路径
+4 渲染路径: D3D11Native (Win) / OpenGLShared (Linux, 移交) / Metal (macOS, 移交) / OpenGLReadback (FBO + GL状态保存, ✅)
 
 ## 外部库
 
