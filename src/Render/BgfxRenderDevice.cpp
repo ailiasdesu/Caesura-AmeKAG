@@ -440,7 +440,8 @@ void BgfxRenderDevice::initEmbeddedShaders() {
     const uint8_t*  fsCode     = nullptr;
     uint32_t        fsCodeSize = 0;
 
-    if (renderer == 2) {
+    // bgfx RendererType: 2=Direct3D11, 3=Direct3D12, 9=Vulkan
+    if (renderer == bgfx::RendererType::Vulkan) {
         if (kEmbeddedVS_SpriteSize > 0 && kEmbeddedFS_TextureSize > 0) {
             vsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite);
             vsCodeSize = uint32_t(kEmbeddedVS_SpriteSize * sizeof(uint32_t));
@@ -448,8 +449,8 @@ void BgfxRenderDevice::initEmbeddedShaders() {
             fsCodeSize = uint32_t(kEmbeddedFS_TextureSize * sizeof(uint32_t));
         }
 
-    } else if (renderer == 4 ||
-               renderer == 5) {
+    } else if (renderer == bgfx::RendererType::Direct3D11 ||
+               renderer == bgfx::RendererType::Direct3D12) {
         if (kEmbeddedDXBC_VS_Sprite_size > 0 && kEmbeddedDXBC_FS_Texture_size > 0) {
             vsCode     = kEmbeddedDXBC_VS_Sprite;
             vsCodeSize = uint32_t(kEmbeddedDXBC_VS_Sprite_size);
@@ -510,8 +511,8 @@ void BgfxRenderDevice::initEmbeddedShaders() {
         return prog;
     };
 
-    if (renderer == 4 ||
-        renderer == 5) {
+    if (renderer == bgfx::RendererType::Direct3D11 ||
+        renderer == bgfx::RendererType::Direct3D12) {
 
         m_blendProgram = createProgramFromDXBC(
             kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
