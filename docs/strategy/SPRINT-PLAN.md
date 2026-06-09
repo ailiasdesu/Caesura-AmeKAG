@@ -46,3 +46,6 @@
 - [ ] Demo 场景
 - [ ] RPC 帧预览（编辑器截图回传）
 - [ ] 用户文档
+## Related Knowledge
+
+- docs/solutions/best-practices/alpha-to-beta-sprint.md — 从本 Sprint 提炼的 Alpha→Beta 升级模式

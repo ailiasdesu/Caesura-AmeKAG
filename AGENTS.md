@@ -17,6 +17,7 @@ docs/solutions/ — documented solutions organized by category:
 - uild-error/ — build system and CI fixes
 - untime-errors/ — crashes and bug resolutions
 Consult when implementing or debugging in documented areas.
+- best-practices/ — upgrade patterns and development workflows
 
 ## Build
 `powershell

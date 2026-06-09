@@ -116,3 +116,8 @@ npm run package:linux # Linux
 - 完整 KAG API: `docs/api/KAG-API.md`
 - MiniGame 3D: `docs/api/MiniGame-API.md`
 - 构建指南: `docs/BUILD.md`
+
+## 延伸阅读
+
+- docs/solutions/best-practices/alpha-to-beta-sprint.md — 了解引擎从 Alpha 到 Beta 的升级模式
+- docs/api/KAG-API.md — KAG 61 命令完整参考

@@ -173,7 +173,7 @@ BgfxMiniGameBackend: PBR-lite (roughness, metallic, specular)
 
 ## 6. 知识库
 
-`docs/solutions/` — 按类别组织的已解决问题（5 条）：
+`docs/solutions/` — 按类别组织的已解决问题（6 条）：
 
 | 类别 | 条目 | 说明 |
 |------|------|------|
@@ -182,6 +182,7 @@ BgfxMiniGameBackend: PBR-lite (roughness, metallic, specular)
 | `build-error/` | cross-platform-ci-fixes | 跨平台 CI 构建修复 |
 | `runtime-errors/` | kag-backend-circular-delegation-stack-overflow | KAG 后端循环委托栈溢出 |
 | `runtime-errors/` | multi-core-jobsystem-asyncloader-layer-crash | 多核 JobSystem AsyncLoader 崩溃 |
+| `best-practices/` | alpha-to-beta-sprint | Alpha→Beta 引擎升级 — 最小可行填补策略 |
 
 每个条目含 YAML frontmatter 元数据：`title`, `date`, `problem_type`, `component`, `severity`, `tags`。
 
