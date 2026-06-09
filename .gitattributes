@@ -1,4 +1,4 @@
-﻿# Auto-detect text files, normalize to LF in repo, CRLF on Windows checkout
+# Auto-detect text files, normalize to LF in repo, CRLF on Windows checkout
 * text=auto
 
 # Source code
