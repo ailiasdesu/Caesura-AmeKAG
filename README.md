@@ -1,4 +1,4 @@
-﻿# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
+# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
 
 > 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源
 
@@ -96,7 +96,7 @@ build_nol2d/Debug/CaesuraAmeKAG.exe --demo
 ## MiniGame 3D
 
 15 个 Lua API：spawn_cube/sphere/plane、set_camera、材质、光照、碰撞检测、物理。
-详见 [docs/strategy/SPRINT-PLAN.md](docs/strategy/SPRINT-PLAN.md)
+详见 [docs/api/MiniGame-API.md](docs/api/MiniGame-API.md)
 
 ## 多线程
 
@@ -157,7 +157,7 @@ Caesura(AmeKAG)/
 │   ├── electron/      Electron 主进程 + IPC
 │   └── ...
 ├── docs/              文档
-│   ├── api/           KAG API 参考
+│   ├── api/           KAG-API.md + MiniGame-API.md
 │   ├── strategy/      战略分析
 │   ├── plans/         实施计划
 │   └── solutions/     知识库
