@@ -62,4 +62,13 @@ extern const uint8_t  kEmbeddedDXBC_MiniGame_VS[];
 extern const size_t   kEmbeddedDXBC_MiniGame_VS_size;
 extern const uint8_t  kEmbeddedDXBC_MiniGame_FS[];
 extern const size_t   kEmbeddedDXBC_MiniGame_FS_size;
+
+// -- MiniGame 3D shaders (GLSL, for OpenGL/GLES backends) --------------------
+extern const char*    kEmbeddedGLSL_MiniGame_VS;
+extern const char*    kEmbeddedGLSL_MiniGame_FS;
+
+// -- MiniGame 3D shaders (MSL, for Metal backend) ----------------------------
+extern const char*    kEmbeddedMSL_MiniGame_VS;
+extern const char*    kEmbeddedMSL_MiniGame_FS;
+
 } // namespace Caesura
