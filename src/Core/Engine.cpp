@@ -428,17 +428,14 @@ void Engine::render() {
     }
 
 
-    // [TDR-FIX] bgfx debug text uses internal shader creation on D3D11.
-    // When bgfx built-in shaders fail to compile (pre-existing bgfx issue),
-    // subsequent dbgText calls submit invalid draw commands -> GPU hang.
-    // Disabled until bgfx upstream fix or custom debug text overlay is integrated.
-    // const bgfx::Caps* caps = bgfx::getCaps();
-    // if (caps) {
-    //     bgfx::dbgTextClear();
-    //     bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
-    //     bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
-    //                         bgfx::getRendererName(caps->rendererType), m_width, m_height);
-    // }
+    // bgfx debug text overlay: engine info + renderer + resolution
+    const bgfx::Caps* caps = bgfx::getCaps();
+    if (caps) {
+        bgfx::dbgTextClear();
+        bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
+        bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
+                            bgfx::getRendererName(caps->rendererType), m_width, m_height);
+    }
 
     // -- Reserved: 3D mini-game render hook (main thread, after KAG pass) --
     if (m_miniGameBackend && m_miniGameBackend->isActive()) {
