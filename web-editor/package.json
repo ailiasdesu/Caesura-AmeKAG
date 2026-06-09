@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "caesura-amekag",
   "private": true,
   "version": "0.1.0-alpha",
@@ -40,9 +40,9 @@
     ],
     "extraResources": [
       {
-        "from": "../bin/Release",
+        "from": "../build_nol2d/Release",
         "to": "engine",
-        "filter": ["CaesuraAmeKAG.exe", "*.dll", "scripts/**", "assets/**"]
+        "filter": ["CaesuraAmeKAG.exe", "*.exe", "*.dll", "scripts/**", "assets/**", "demo/**"]
       }
     ],
     "win": {

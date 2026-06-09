@@ -278,13 +278,18 @@ if(CAESURA_DEBUG)
 endif()
 
 # -- FFmpeg video decoding (optional) ----------------------------------------
-option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" OFF)
+option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" ON)
 
 if(CAESURA_VIDEO_FFMPEG)
-    find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat swscale avutil)
-    target_link_libraries(${PROJECT_NAME} PRIVATE 
-        FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+    find_package(FFmpeg QUIET COMPONENTS avcodec avformat swscale avutil)
+    if(FFmpeg_FOUND)
+        message(STATUS "FFmpeg found — video decoding enabled")
+        target_link_libraries(${PROJECT_NAME} PRIVATE
+            FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+    else()
+        message(STATUS "FFmpeg NOT found — video decoding falls back to pl_mpeg only")
+    endif()
 endif()
 
 # -- Live2D Cubism animation (optional, proprietary SDK) ---------------------

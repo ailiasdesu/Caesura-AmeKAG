@@ -173,11 +173,16 @@ BgfxMiniGameBackend: PBR-lite (roughness, metallic, specular)
 
 ## 6. 知识库
 
-`docs/solutions/` — 按类别组织的已解决问题：
-- `architecture-patterns/` — 架构模式（如 MiniGame 3D 管线）
-- `build-error/` — 构建错误修复记录
-- `runtime-errors/` — 运行时错误诊断
+`docs/solutions/` — 按类别组织的已解决问题（5 条）：
 
-每个条目含 YAML frontmatter 元数据：`status`, `type`, `severity`, `date`, `tags`。
+| 类别 | 条目 | 说明 |
+|------|------|------|
+| `architecture-patterns/` | electron-editor-ai-panel | Electron 可视化编辑器 + AI 面板完整架构 |
+| `architecture-patterns/` | minigame-3d-pipeline | 3D 小游戏 PBR-lite 管线 |
+| `build-error/` | cross-platform-ci-fixes | 跨平台 CI 构建修复 |
+| `runtime-errors/` | kag-backend-circular-delegation-stack-overflow | KAG 后端循环委托栈溢出 |
+| `runtime-errors/` | multi-core-jobsystem-asyncloader-layer-crash | 多核 JobSystem AsyncLoader 崩溃 |
+
+每个条目含 YAML frontmatter 元数据：`title`, `date`, `problem_type`, `component`, `severity`, `tags`。
 
 通过 `/ce-compound` 记录新知识，`/ce-compound-refresh` 审计索引。

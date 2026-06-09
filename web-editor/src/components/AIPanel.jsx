@@ -31,6 +31,11 @@ export default function AIPanel() {
 
   const buildSystemPrompt = () => {
     const scriptPreview = state.script.substring(0, 4000);
+    const totalChars = scriptPreview.length + KAG_API_SUMMARY.length + 500;
+    if (totalChars > TOKEN_WARNING_THRESHOLD) {
+      dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: `⚠️ Context: ~${Math.round(totalChars/4)} tokens (budget warning). Consider shorter scripts or fewer conversation turns.` } });
+    }
+
     return `You are an AI assistant for the Caesura (AmeKAG) visual novel engine. Help the user write KAG Lua scripts.
 
 CURRENT SCRIPT:
@@ -91,7 +96,11 @@ RULES:
     if (!lastMsg) return;
     const codeMatch = lastMsg.content?.match(/```lua\n([\s\S]*?)```/);
     if (codeMatch) {
-      dispatch({ type: "SET_SCRIPT", payload: codeMatch[1] });
+      const code = codeMatch[1];
+      if (!code.includes("scene_start") && !code.includes("function") && !code.includes("KAG.") && !code.includes("mini_game.")) {
+        dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: "⚠️ Generated code may be invalid (no KAG/mini_game calls found). Please review before running." } });
+      }
+      dispatch({ type: "SET_SCRIPT", payload: code });
       dispatch({ type: "ADD_AI_MESSAGE", payload: { role: "system", content: "✅ Code inserted into editor." } });
     }
   };
