@@ -38,6 +38,8 @@
 #include <bx/math.h>
 #include <bx/bx.h>
 #include <cstdio>
+#include <fstream>
+#include <vector>
 #include <cmath>
 #include <chrono>
 
@@ -71,12 +73,16 @@ IRenderDevice& Engine::renderDevice() { return *BackendRegistry::instance().getR
 IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBackend(); }
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
-bool Engine::init(const char* title, int width, int height, bool headless) {
+bool Engine::init(const char* title, int width, int height, bool headless, bool editorMode) {
     s_mainThreadId = std::this_thread::get_id();
     m_width  = width;
     m_height = height;
 
     m_headless = headless;
+    m_editorMode = editorMode;
+    if (m_editorMode) {
+        fprintf(stderr, "[Engine] Running in EDITOR mode (hidden window + GPU)\n");
+    }
     if (m_headless) {
         fprintf(stderr, "[Engine] Running in HEADLESS mode (no window, no GPU)\n");
     }
@@ -85,13 +91,16 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
-    if (!m_headless) {
+    if (!m_headless || m_editorMode) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         fprintf(stderr, "SDL3 platform backend init failed.");
         return false;
     }
     BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
+    if (m_editorMode) {
+        SDL_HideWindow(static_cast<SDL_Window*>(m_platformBackend->getNativeWindowHandle()));
+    }
 
     void* nwh = m_platformBackend->getNativeWindowHandle();
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
@@ -107,7 +116,7 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         BackendRegistry::instance().registerNullBackends();
     }
 
-    if (!m_headless) {
+    if (!m_headless || m_editorMode) {
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
     ri.backendName = bgfx::getRendererName(caps->rendererType);
@@ -306,8 +315,8 @@ void Engine::processEvents() {
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
 
-    // Headless mode: no SDL events, minimal sleep
-    if (m_headless) {
+    // Headless/Editor mode: no SDL events, minimal sleep
+    if (m_headless || m_editorMode) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
     }
@@ -413,8 +422,8 @@ void Engine::processEvents() {
 }
 
 void Engine::render() {
-    // Headless mode: no GPU rendering
-    if (m_headless) return;
+    // Headless mode (not editor): no GPU rendering
+    if (m_headless && !m_editorMode) return;
 
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
@@ -502,6 +511,54 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
     }
 }
 
+
+void Engine::renderOneFrame() {
+    if (m_headless && !m_editorMode) return;
+    lua_State* L = m_lua->state();
+    if (L) {
+        lua_getglobal(L, "engine_update");
+        if (lua_isfunction(L, -1)) {
+            lua_pushnumber(L, 0.016);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+        } else { lua_pop(L, 1); }
+    }
+    render();
+    bgfx::frame();
+}
+
+static std::string captureFrameBase64(int w, int h) {
+    static int counter = 0;
+    char path[256];
+    snprintf(path, sizeof(path), "editor_frame_%d.png", counter++);
+    if (counter > 99) counter = 0;
+    bgfx::requestScreenShot(BGFX_INVALID_HANDLE, path);
+    bgfx::frame();
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) return "";
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::vector<unsigned char> buffer(size);
+    file.read(reinterpret_cast<char*>(buffer.data()), size);
+    file.close();
+    std::remove(path);
+    static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    result.reserve(((size + 2) / 3) * 4);
+    for (size_t i = 0; i < size; i += 3) {
+        unsigned char a = buffer[i];
+        unsigned char b = (i + 1 < size) ? buffer[i + 1] : 0;
+        unsigned char c = (i + 2 < size) ? buffer[i + 2] : 0;
+        result += b64[a >> 2];
+        result += b64[((a & 3) << 4) | (b >> 4)];
+        result += (i + 1 < size) ? b64[((b & 15) << 2) | (c >> 6)] : '=';
+        result += (i + 2 < size) ? b64[c & 63] : '=';
+    }
+    return result;
+}
+
+std::string Engine::captureFrameForRpc(int w, int h) {
+    return captureFrameBase64(w, h);
+}
 
 void Engine::runRpc() {
     fprintf(stderr, "[Engine] Starting JSON-RPC loop (stdin/stdout)\n");

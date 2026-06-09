@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "../context/EditorContext";
 import { extractAssetPaths } from "../parser/kagParser";
 
@@ -9,6 +9,28 @@ export default function StageView() {
   const canvasRef = useRef(null);
   const assets = state.assets;
   const script = state.script;
+
+  const [previewFrame, setPreviewFrame] = useState(null);
+  const [livePreview, setLivePreview] = useState(false);
+  const previewTimerRef = useRef(null);
+
+  // Live preview polling
+  useEffect(() => {
+    if (!livePreview) {
+      if (previewTimerRef.current) { clearInterval(previewTimerRef.current); previewTimerRef.current = null; }
+      setPreviewFrame(null);
+      return;
+    }
+    const poll = async () => {
+      try {
+        const result = await window.caesura.getFrame(state.resolution.w, state.resolution.h);
+        if (result && result.frame) setPreviewFrame(result.frame);
+      } catch (e) { /* engine may be busy */ }
+    };
+    poll();
+    previewTimerRef.current = setInterval(poll, 200);
+    return () => { if (previewTimerRef.current) clearInterval(previewTimerRef.current); };
+  }, [livePreview, state.resolution.w, state.resolution.h]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -23,6 +45,13 @@ export default function StageView() {
     // Background
     ctx.fillStyle = "#1a1a24";
     ctx.fillRect(0, 0, w, h);
+
+    // Live preview frame (from engine)
+    if (livePreview && previewFrame) {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0, w, h); };
+      img.src = "data:image/png;base64," + previewFrame;
+    }
 
     // Grid
     if (state.stageGrid) {
@@ -98,7 +127,7 @@ export default function StageView() {
     ctx.fillStyle = "#333";
     ctx.font = "10px monospace";
     ctx.fillText(`${w}×${h}`, w - 70, h - 6);
-  }, [script, state.stageGrid, state.resolution]);
+  }, [script, state.stageGrid, state.resolution, livePreview, previewFrame]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -136,6 +165,11 @@ export default function StageView() {
         <button onClick={() => { dispatch({ type: "SET_ZOOM", payload: 1 }); const nextRes = state.resolution.w === 1280 ? { w: 1920, h: 1080 } : { w: 1280, h: 720 }; dispatch({ type: "SET_RESOLUTION", payload: nextRes }); }}>
           {state.resolution.w}×{state.resolution.h}
         </button>
+        <button
+          className={livePreview ? "active live-preview" : ""}
+          onClick={() => setLivePreview(!livePreview)}
+          title="Toggle live engine preview (200ms polling)"
+        >{livePreview ? "■ Live" : "▶ Preview"}</button>
       </div>
     </div>
   );

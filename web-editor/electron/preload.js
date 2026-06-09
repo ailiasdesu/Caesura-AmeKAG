@@ -1,4 +1,4 @@
-﻿const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("caesura", {
   // Engine RPC
@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("caesura", {
   assets: (type) => ipcRenderer.invoke("rpc-call", "assets", { type: type || "" }),
   eval: (code) => ipcRenderer.invoke("rpc-call", "eval", { code }),
   getState: () => ipcRenderer.invoke("rpc-call", "getState", {}),
+  getFrame: (w, h) => ipcRenderer.invoke("rpc-call", "getFrame", { w: w || 1280, h: h || 720 }),
 
   // Log events
   onLog: (callback) => {

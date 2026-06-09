@@ -31,11 +31,14 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    bool init(const char* title, int width, int height, bool headless = false);
+    bool init(const char* title, int width, int height, bool headless = false, bool editorMode = false);
     void run();
     void runRpc();  // stdin/stdout JSON-RPC loop
 
     bool isHeadless() const { return m_headless; }
+    bool isEditorMode() const { return m_editorMode; }
+    void renderOneFrame();  // render single frame (for editor/RPC screenshot)
+    std::string captureFrameForRpc(int w, int h);
     void quit();
 
     // Accessors (resolve from BackendRegistry)
@@ -72,6 +75,7 @@ private:
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
     bool         m_headless = false;
+    bool         m_editorMode = false;
 
     // Audio voice-complete tracking (no polling -- detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;

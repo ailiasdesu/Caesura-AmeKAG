@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -34,7 +34,7 @@ function startEngine() {
   const cwd = getEngineCwd();
 
   try {
-    engineProcess = spawn(enginePath, ["--headless"], {
+    engineProcess = spawn(enginePath, ["--editor"], {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });

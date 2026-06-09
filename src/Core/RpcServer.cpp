@@ -143,6 +143,9 @@ std::string RpcServer::handleRequest(const std::string& jsonLine) {
     if (method == "logs")    return handleLogs(id);
     if (method == "assets")  return handleAssets(id, extractField(jsonLine, "type"));
     if (method == "eval")    return handleEval(id, extractField(jsonLine, "code"));
+    if (method == "getFrame") return handleGetFrame(id,
+        std::stoi(extractField(jsonLine, "w").empty() ? "0" : extractField(jsonLine, "w")),
+        std::stoi(extractField(jsonLine, "h").empty() ? "0" : extractField(jsonLine, "h")));
     if (method == "getState") return handleGetState(id);
 
     // Unknown method
@@ -286,6 +289,25 @@ std::string RpcServer::handleEval(int id, const std::string& code) {
 
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"status\":\"ok\",\"result\":\"" << jsonEscape(result) << "\"}";
+    return out.str();
+}
+
+std::string RpcServer::handleGetFrame(int id, int w, int h) {
+    if (!m_frameCaptureCb) {
+        std::ostringstream err;
+        err << "{\"id\":" << id << ",\"error\":\"Frame capture not available (editor mode only)\"}";
+        return err.str();
+    }
+    if (w <= 0) w = 1280;
+    if (h <= 0) h = 720;
+    std::string b64 = m_frameCaptureCb(w, h);
+    if (b64.empty()) {
+        std::ostringstream err;
+        err << "{\"id\":" << id << ",\"error\":\"Screenshot capture failed\"}";
+        return err.str();
+    }
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"frame\":\"" << b64 << "\"}";
     return out.str();
 }
 
