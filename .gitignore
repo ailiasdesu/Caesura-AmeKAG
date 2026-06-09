@@ -55,3 +55,12 @@ CTestTestfile.cmake
 CubismSdkForNative-*/
 
 build_live2d/
+
+# --- External SDKs (local only) ---
+SDL3-*/
+build_l2d/
+build_nol2d/
+
+# --- Debug logs ---
+stderr*.txt
+stdout*.txt
