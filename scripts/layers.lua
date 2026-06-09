@@ -1,4 +1,4 @@
--- ═══════════════════════════════════════════════════════════════════════════
+﻿-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — layers.lua
 --  Layer tree manager. Full implementation per spec [2.1].
 --  Each layer supports: z-order, blend mode, visibility, opacity, position,
@@ -85,6 +85,7 @@ local function newLayerNode(id, config)
         shake       = { active = false, offset_x = 0, offset_y = 0 },
         fade        = { active = false, alpha = 255 },
         -- application data
+        name        = config.name or nil,
         tag         = config.tag or nil,
         userdata    = config.userdata or nil,
     }
@@ -134,6 +135,7 @@ function Layers.get_root()
             dirty = true, dirty_rect = nil,
             scaleX = 1.0, scaleY = 1.0, rotation = 0,
             alpha = 1.0, quake = {}, shake = {},
+            tex = 0,
         }
         layerMap["_root"] = rootNode
     end
@@ -482,8 +484,9 @@ function Layers.render()
             renderNode(child, wx, wy)
         end
 
-        -- only emit commands for dirty nodes that own an RT
-        if node.dirty and node.rt and node.view_id then
+        -- emit commands for dirty nodes with tex/rt and view_id
+        -- Root-level nodes may have tex but no rt; include them
+        if node.dirty and node.view_id and (node.rt or (node.tex and node.tex ~= 0)) then
             batch.commands[#batch.commands + 1] = {
                 view_id    = node.view_id,
                 tex        = node.tex or 0,
