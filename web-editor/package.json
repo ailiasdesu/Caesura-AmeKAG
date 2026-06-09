@@ -1,13 +1,16 @@
 {
   "name": "caesura-amekag",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0-alpha",
   "type": "module",
   "scripts": {
     "dev": "concurrently -n vite,electron \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
     "build": "vite build",
     "preview": "vite preview",
-    "package": "vite build && electron-builder"
+    "package": "vite build && electron-builder --win --mac --linux",
+    "package:win": "vite build && electron-builder --win",
+    "package:mac": "vite build && electron-builder --mac",
+    "package:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -34,6 +37,32 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
-    ]
+    ],
+    "extraResources": [
+      {
+        "from": "../bin/Release",
+        "to": "engine",
+        "filter": ["CaesuraAmeKAG.exe", "*.dll", "scripts/**", "assets/**"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "assets/icon.png",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico"
+    }
   }
 }

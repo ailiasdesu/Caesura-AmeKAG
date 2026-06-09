@@ -1,22 +1,28 @@
-﻿const { contextBridge, ipcRenderer } = require('electron')
+﻿const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld('caesura', {
-  // Call engine RPC
-  call: (method, params = {}) => ipcRenderer.invoke('rpc-call', method, params),
+contextBridge.exposeInMainWorld("caesura", {
+  // Engine RPC
+  ping: () => ipcRenderer.invoke("rpc-call", "ping"),
+  run: (script) => ipcRenderer.invoke("rpc-call", "run", { script }),
+  stop: () => ipcRenderer.invoke("rpc-call", "stop"),
+  assets: (type) => ipcRenderer.invoke("rpc-call", "assets", { type: type || "" }),
+  eval: (code) => ipcRenderer.invoke("rpc-call", "eval", { code }),
+  getState: () => ipcRenderer.invoke("rpc-call", "getState", {}),
 
-  // Listen for engine events
+  // Log events
   onLog: (callback) => {
-    ipcRenderer.on('engine-log', (event, msg) => callback(msg))
-  },
-  onStatus: (callback) => {
-    ipcRenderer.on('engine-status', (event, msg) => callback(msg))
+    ipcRenderer.on("engine-log", (event, msg) => callback(msg));
   },
 
-  // Convenience methods
-  ping: () => ipcRenderer.invoke('rpc-call', 'ping'),
-  run: (script) => ipcRenderer.invoke('rpc-call', 'run', { script }),
-  eval: (code) => ipcRenderer.invoke('rpc-call', 'eval', { code }),
-  stop: () => ipcRenderer.invoke('rpc-call', 'stop'),
-  assets: (type = '') => ipcRenderer.invoke('rpc-call', 'assets', { type }),
-  getState: () => ipcRenderer.invoke('rpc-call', 'getState')
-})
+  // Engine status
+  onStatus: (callback) => {
+    ipcRenderer.on("engine-status", (event, status) => callback(status));
+  },
+
+  // AI Chat (E6/E7)
+  aiChat: ({ messages, provider, settings }) =>
+    ipcRenderer.invoke("ai-chat", { messages, provider, settings }),
+
+  codexChat: ({ messages, settings }) =>
+    ipcRenderer.invoke("codex-chat", { messages, settings }),
+});

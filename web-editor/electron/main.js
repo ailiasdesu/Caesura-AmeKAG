@@ -1,168 +1,262 @@
-﻿const { app, BrowserWindow, dialog } = require('electron')
-const { spawn } = require('child_process')
-const path = require('path')
+﻿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { spawn } = require("child_process");
+const path = require("path");
 
-let engineProcess = null
-let mainWindow = null
-let rpcId = 0
-let rpcPending = new Map()
+let engineProcess = null;
+let mainWindow = null;
+let rpcId = 0;
+let rpcPending = new Map();
+
+// =========================================================================
+// Engine process management
+// =========================================================================
+
+function getEnginePath() {
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    return path.join(__dirname, "..", "..", "build_nol2d", "Debug", "CaesuraAmeKAG.exe");
+  }
+  // Packaged: engine is in extraResources
+  return path.join(process.resourcesPath, "engine", "CaesuraAmeKAG.exe");
+}
+
+function getEngineCwd() {
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    // Include assets/, scripts/, demo/ folders accessible
+    return path.join(__dirname, "..", "..");
+  }
+  return path.join(process.resourcesPath, "engine");
+}
 
 function startEngine() {
-  const enginePath = path.join(__dirname, '..', '..', 'build', 'Debug', 'CaesuraAmeKAG.exe')
+  const enginePath = getEnginePath();
+  const cwd = getEngineCwd();
 
   try {
-    engineProcess = spawn(enginePath, ['--headless'], {
-      cwd: path.join(__dirname, '..', '..', 'build', 'Debug'),
-      stdio: ['pipe', 'pipe', 'pipe'] // stdin, stdout, stderr
-    })
+    engineProcess = spawn(enginePath, ["--headless"], {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
-    // Collect stdout (JSON-RPC responses)
-    let buffer = ''
-    engineProcess.stdout.on('data', (data) => {
-      buffer += data.toString()
-      const lines = buffer.split('\n')
-      buffer = lines.pop() // keep incomplete line
-
+    let buffer = "";
+    engineProcess.stdout.on("data", (data) => {
+      buffer += data.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
       for (const line of lines) {
-        if (!line.trim()) continue
+        if (!line.trim()) continue;
         try {
-          const msg = JSON.parse(line)
-          handleRpcResponse(msg)
+          const msg = JSON.parse(line);
+          handleRpcResponse(msg);
         } catch (e) {
-          console.log('[Engine stdout]', line)
+          console.log("[Engine stdout]", line);
         }
       }
-    })
+    });
 
-    engineProcess.stderr.on('data', (data) => {
-      console.log('[Engine]', data.toString().trim())
-    })
+    engineProcess.stderr.on("data", (data) => {
+      const text = data.toString().trim();
+      if (text) console.log("[Engine]", text);
+    });
 
-    engineProcess.on('close', (code) => {
-      console.log('Engine exited with code', code)
-      engineProcess = null
+    engineProcess.on("close", (code) => {
+      console.log("Engine exited with code", code);
+      engineProcess = null;
       if (mainWindow) {
-        mainWindow.webContents.send('engine-status', { running: false, code })
+        mainWindow.webContents.send("engine-status", { running: false, code });
       }
-    })
+    });
 
-    engineProcess.on('error', (err) => {
-      console.error('Engine spawn error:', err.message)
-      dialog.showErrorBox('Engine Error', 'Cannot start engine:\n' + err.message)
-    })
+    engineProcess.on("error", (err) => {
+      console.error("Engine spawn error:", err.message);
+      if (err.message.includes("ENOENT")) {
+        dialog.showErrorBox("Engine Not Found", `Cannot find engine at:\n${enginePath}\n\nBuild the engine first: cmake --build build_nol2d --config Debug`);
+      } else {
+        dialog.showErrorBox("Engine Error", "Cannot start engine:\n" + err.message);
+      }
+    });
 
-    console.log('Engine started via stdin/stdout RPC:', enginePath)
+    console.log("Engine started:", enginePath);
   } catch (err) {
-    console.error('Failed to start engine:', err.message)
-    dialog.showErrorBox('Engine Error', 'Cannot start engine:\n' + err.message)
+    console.error("Failed to start engine:", err.message);
   }
 }
 
+function stopEngine() {
+  if (engineProcess) {
+    try { engineProcess.stdin.end(); } catch {}
+    engineProcess.kill();
+    engineProcess = null;
+  }
+}
+
+// =========================================================================
+// JSON-RPC handlers
+// =========================================================================
+
 function handleRpcResponse(msg) {
-  if (msg.event === 'log') {
-    if (mainWindow) {
-      mainWindow.webContents.send('engine-log', msg)
-    }
-    return
+  // Push events (logs)
+  if (msg.event === "log") {
+    if (mainWindow) mainWindow.webContents.send("engine-log", msg);
+    return;
   }
 
   if (msg.id !== undefined && rpcPending.has(msg.id)) {
-    const { resolve } = rpcPending.get(msg.id)
-    rpcPending.delete(msg.id)
-    resolve(msg)
+    const { resolve } = rpcPending.get(msg.id);
+    rpcPending.delete(msg.id);
+    resolve(msg);
   }
 }
 
 function sendRpc(method, params = {}) {
   return new Promise((resolve, reject) => {
     if (!engineProcess || !engineProcess.stdin.writable) {
-      reject(new Error('Engine not running'))
-      return
+      reject(new Error("Engine not running"));
+      return;
+    }
+    const id = ++rpcId;
+    const request = JSON.stringify({ id, method, ...params }) + "\n";
+    rpcPending.set(id, { resolve, reject });
+    const timeout = setTimeout(() => { rpcPending.delete(id); reject(new Error("RPC timeout")); }, 30000);
+    const origResolve = resolve;
+    rpcPending.set(id, { resolve: (result) => { clearTimeout(timeout); origResolve(result); }, reject });
+    engineProcess.stdin.write(request);
+  });
+}
+
+// =========================================================================
+// AI Chat bridge (E6/E7)
+// =========================================================================
+
+async function handleAiChat(messages, provider, settings) {
+  if (provider === "openai") {
+    const key = settings.openaiKey || "";
+    if (!key) throw new Error("OpenAI API key not configured.");
+    const model = settings.openaiModel || "gpt-4o";
+    const temperature = settings.temperature ?? 0.7;
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+      body: JSON.stringify({ model, messages, temperature, max_tokens: 2048 }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
     }
 
-    const id = ++rpcId
-    const request = JSON.stringify({ id, method, ...params }) + '\n'
-
-    rpcPending.set(id, { resolve, reject })
-
-    // Timeout after 30s
-    const timeout = setTimeout(() => {
-      rpcPending.delete(id)
-      reject(new Error('RPC timeout'))
-    }, 30000)
-
-    const origResolve = resolve
-    rpcPending.set(id, {
-      resolve: (result) => {
-        clearTimeout(timeout)
-        origResolve(result)
-      },
-      reject
-    })
-
-    engineProcess.stdin.write(request)
-  })
-}
-
-function stopEngine() {
-  if (engineProcess) {
-    try { engineProcess.stdin.end() } catch (e) {}
-    engineProcess.kill()
-    engineProcess = null
+    const data = await resp.json();
+    return { content: data.choices?.[0]?.message?.content || "" };
   }
+
+  if (provider === "codex") {
+    // Codex: try to use local agent bridge
+    try {
+      const { execSync } = require("child_process");
+      const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n\n");
+      // Use PowerShell to call Codex via CLI
+      const result = execSync(
+        `powershell -NoProfile -Command "& '${process.env.USERPROFILE}\\.codex\\venv\\Scripts\\python.exe' -c \\"import sys; print('Codex local provider: use AI panel in Codex IDE for direct assistance.')\\" "`,
+        { encoding: "utf-8", timeout: 5000 }
+      );
+      return { content: result.trim() || "Local Codex bridge is available. Open this project in Codex IDE for AI-assisted KAG scripting." };
+    } catch {
+      return { content: "Codex local provider requires the project to be open in Codex IDE. Use OpenAI or Custom provider for standalone AI assistance." };
+    }
+  }
+
+  if (provider === "custom") {
+    const url = settings.customUrl || "";
+    if (!url) throw new Error("Custom endpoint URL not configured.");
+    const key = settings.customKey || "";
+    const model = settings.customModel || "default";
+    const temperature = settings.temperature ?? 0.7;
+    const headers = { "Content-Type": "application/json" };
+    if (key) headers["Authorization"] = `Bearer ${key}`;
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, messages, temperature, max_tokens: 2048 }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    return { content: data.choices?.[0]?.message?.content || "" };
+  }
+
+  throw new Error(`Unknown AI provider: ${provider}`);
 }
 
-// Expose RPC to renderer via IPC
-const { ipcMain } = require('electron')
+// =========================================================================
+// IPC handlers
+// =========================================================================
 
-ipcMain.handle('rpc-call', async (event, method, params) => {
+ipcMain.handle("rpc-call", async (event, method, params) => {
+  try { return await sendRpc(method, params); }
+  catch (e) { return { error: e.message }; }
+});
+
+ipcMain.handle("ai-chat", async (event, { messages, provider, settings }) => {
   try {
-    return await sendRpc(method, params)
+    const result = await handleAiChat(messages, provider, settings);
+    return result;
   } catch (e) {
-    return { error: e.message }
+    return { error: e.message };
   }
-})
+});
+
+ipcMain.handle("codex-chat", async (event, { messages, settings }) => {
+  return { content: "Codex bridge: use the Codex IDE for AI assistance with KAG scripting." };
+});
+
+// =========================================================================
+// Window management
+// =========================================================================
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    title: 'Caesura (AmeKAG)',
-    backgroundColor: '#0f0f14',
+    width: 1600,
+    height: 950,
+    minWidth: 1100,
+    minHeight: 650,
+    title: "Caesura (AmeKAG) — Visual Novel Engine",
+    backgroundColor: "#0f0f14",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
-    }
-  })
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
 
-  const isDev = process.env.NODE_ENV !== 'production' || process.argv.includes('--dev')
+  const isDev = !app.isPackaged;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
+  mainWindow.on("closed", () => { mainWindow = null; });
 }
 
 app.whenReady().then(() => {
-  startEngine()
-  // Wait for engine RPC to be ready, then open window
-  setTimeout(createWindow, 2000)
-})
+  startEngine();
+  setTimeout(createWindow, 2000);
+});
 
-app.on('window-all-closed', () => {
-  stopEngine()
-  app.quit()
-})
+app.on("window-all-closed", () => {
+  stopEngine();
+  app.quit();
+});
 
-app.on('before-quit', () => {
-  stopEngine()
-})
+app.on("before-quit", () => {
+  stopEngine();
+});

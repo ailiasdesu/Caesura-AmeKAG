@@ -1,190 +1,171 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+﻿import { useEffect, useCallback } from "react";
+import { EditorProvider, useEditor } from "./context/EditorContext";
+import StageView from "./components/StageView";
+import AssetPanel from "./components/AssetPanel";
+import Timeline from "./components/Timeline";
+import PropertyPanel from "./components/PropertyPanel";
+import AIPanel from "./components/AIPanel";
+import SettingsDialog from "./components/SettingsDialog";
 
-export default function App() {
-  const [assets, setAssets] = useState([])
-  const [script, setScript] = useState(-- Write your KAG scene script here
-function scene_start()
-    KAG.clear_screen()
-    KAG.show_image("bg", "assets/bg/classroom.png", 0, 0)
-    KAG.play_bgm("assets/bgm/morning.ogg", 1.0)
-    KAG.show_text("Welcome to my visual novel!")
-    KAG.wait_click()
-end
+function AppInner() {
+  const { state, dispatch } = useEditor();
 
-scene_start()
-)
-  const [logs, setLogs] = useState([])
-  const [status, setStatus] = useState('disconnected')
-  const [activePanel, setActivePanel] = useState('editor')
-
-  // Poll engine status via RPC
+  // Poll engine status
   useEffect(() => {
     const ping = async () => {
       try {
-        const r = await window.caesura.ping()
-        setStatus(r.result === 'ok' ? 'connected' : 'error')
+        const r = await window.caesura.ping();
+        dispatch({ type: "SET_STATUS", payload: r.result === "ok" ? "connected" : "error" });
       } catch {
-        setStatus('disconnected')
+        dispatch({ type: "SET_STATUS", payload: "disconnected" });
       }
-    }
-    ping()
-    const iv = setInterval(ping, 3000)
-    return () => clearInterval(iv)
-  }, [])
+    };
+    ping();
+    const iv = setInterval(ping, 3000);
+    return () => clearInterval(iv);
+  }, []);
 
-  // Listen for engine logs (pushed via events)
+  // Listen for logs
   useEffect(() => {
-    window.caesura.onLog((msg) => {
-      const now = new Date()
-      const time = now.toTimeString().slice(0, 8)
-      setLogs(prev => [...prev.slice(-199), { ...msg, time }])
-    })
-  }, [])
+    if (!window.caesura.onLog) return;
+    window.caesura.onLog((msg) => dispatch({ type: "ADD_LOG", payload: msg }));
+  }, []);
 
   // Load assets
   const loadAssets = useCallback(async () => {
     try {
-      const r = await window.caesura.assets()
-      setAssets(r.assets || [])
+      const r = await window.caesura.assets();
+      dispatch({ type: "SET_ASSETS", payload: r.assets || [] });
     } catch {}
-  }, [])
+  }, []);
+  useEffect(() => { if (state.status === "connected") loadAssets(); }, [state.status, loadAssets]);
 
-  useEffect(() => { if (status === 'connected') loadAssets() }, [status, loadAssets])
+  // Load saved AI settings
+  useEffect(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem("caesura-ai-settings"));
+      if (settings) dispatch({ type: "SET_AI_SETTINGS", payload: settings });
+      const provider = localStorage.getItem("caesura-ai-provider");
+      if (provider) dispatch({ type: "SET_AI_PROVIDER", payload: provider });
+    } catch {}
+  }, []);
 
-  // Run script
   const runScript = async () => {
     try {
-      await window.caesura.run(script)
-    } catch {}
-  }
+      dispatch({ type: "SET_PREVIEW", payload: true });
+      dispatch({ type: "ADD_LOG", payload: { level: "info", message: "Running scene script..." } });
+      await window.caesura.run(state.script);
+    } catch (e) {
+      dispatch({ type: "ADD_LOG", payload: { level: "error", message: e.message } });
+    }
+    dispatch({ type: "SET_PREVIEW", payload: false });
+  };
 
-  // Stop
   const stopScript = async () => {
-    try {
-      await window.caesura.stop()
-    } catch {}
-  }
+    try { await window.caesura.stop(); } catch {}
+    dispatch({ type: "SET_PREVIEW", payload: false });
+  };
 
-  // Insert asset path
-  const insertAsset = (path) => {
-    setScript(s => s + '\n-- ' + path)
-  }
-
-  const statusColor = status === 'connected' ? '#4f8' : status === 'error' ? '#f84' : '#f44'
+  const statusColor = state.status === "connected" ? "#4f8" : state.status === "error" ? "#f84" : "#f44";
+  const panel = state.activePanel;
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: '100vh' }}>
-      {/* Left: Asset Browser */}
-      <div style={panelStyle(activePanel === 'assets' ? '280px' : '48px')}>
-        <div style={tabStyle} onClick={() => setActivePanel(p => p === 'assets' ? 'editor' : 'assets')}>
-          {activePanel === 'assets' ? '\u25C0 \u7D20\u6750' : '\u25B6'}
-        </div>
-        {activePanel === 'assets' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
-            <div style={sectionTitle}>Images</div>
-            {assets.filter(a => a.type === 'image').map(a => (
-              <div key={a.path} style={assetItem} onClick={() => insertAsset(a.path)}>
-                {a.name}
-              </div>
-            ))}
-            <div style={sectionTitle}>Audio</div>
-            {assets.filter(a => a.type === 'audio').map(a => (
-              <div key={a.path} style={assetItem} onClick={() => insertAsset(a.path)}>
-                {a.name}
-              </div>
-            ))}
-            <div style={sectionTitle}>Scripts</div>
-            {assets.filter(a => a.type === 'script').map(a => (
-              <div key={a.path} style={assetItem} onClick={() => insertAsset(a.path)}>
-                {a.name}
-              </div>
-            ))}
+    <div className="app-layout">
+      {/* Left: Asset Browser / Settings */}
+      {panel === "settings" ? (
+        <SettingsDialog />
+      ) : (
+        <div className={`panel ${panel === "assets" ? "" : "collapsed"}`} style={{ width: panel === "assets" ? "240px" : "42px" }}>
+          <div className="panel-tab" onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "assets" ? "editor" : "assets" })}>
+            {panel === "assets" ? "◂ Assets" : "▸"}
           </div>
+          {panel === "assets" && <AssetPanel />}
+        </div>
+      )}
+
+      {/* Center: Stage / Code Editor */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Toolbar */}
+        <div className="toolbar">
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#a0a0c0" }}>Caesura (AmeKAG)</span>
+          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: statusColor + "22", color: statusColor }}>
+            <span className={`status-dot ${state.status}`} />
+            {state.status}
+          </span>
+          <span style={{ fontSize: 10, color: "#444", marginLeft: 4 }}>
+            {state.resolution.w}×{state.resolution.h}
+          </span>
+          <div className="spacer" />
+          <button className={`btn ${panel === "stage" ? "btn-blue" : "btn-gray"} btn-sm`}
+            onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "stage" ? "editor" : "stage" })}>
+            {panel === "stage" ? "Code" : "Stage"}
+          </button>
+          <button className={`btn ${panel === "ai" ? "btn-blue" : "btn-gray"} btn-sm`}
+            onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "ai" ? "editor" : "ai" })}>
+            AI
+          </button>
+          <button className="btn btn-green btn-sm" onClick={runScript} disabled={state.previewRunning}>
+            ▶ Run
+          </button>
+          <button className="btn btn-red btn-sm" onClick={stopScript}>■ Stop</button>
+        </div>
+
+        {/* Code Editor or Stage */}
+        {panel === "stage" ? (
+          <StageView />
+        ) : (
+          <textarea className="code-editor" value={state.script}
+            onChange={(e) => dispatch({ type: "SET_SCRIPT", payload: e.target.value })}
+            spellCheck={false} />
         )}
+
+        {/* Timeline */}
+        <Timeline />
       </div>
 
-      {/* Center: Script Editor */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={toolbarStyle}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#c0c0d0' }}>
-            Caesura (AmeKAG)
-          </span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: statusColor + '22', color: statusColor }}>
-            {status}
-          </span>
-          <div style={{ flex: 1 }} />
-          <button style={btnStyle('#4a4')} onClick={runScript}>\u25B6 Run</button>
-          <button style={btnStyle('#a44')} onClick={stopScript}>\u25A0 Stop</button>
-        </div>
-        <textarea
-          style={editorStyle}
-          value={script}
-          onChange={e => setScript(e.target.value)}
-          spellCheck={false}
-        />
-      </div>
-
-      {/* Right: Log Panel */}
-      <div style={panelStyle(activePanel === 'logs' ? '300px' : '48px')}>
-        <div style={tabStyle} onClick={() => setActivePanel(p => p === 'logs' ? 'editor' : 'logs')}>
-          {activePanel === 'logs' ? '\u25B6 \u65E5\u5FD7' : '\u25C0'}
-        </div>
-        {activePanel === 'logs' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 8, fontFamily: 'monospace', fontSize: 11 }}>
-            {logs.map((l, i) => (
-              <div key={i} style={{ padding: '1px 0', color: l.level === 'error' ? '#f66' : l.level === 'warn' ? '#fa0' : '#aaa' }}>
-                <span style={{ color: '#555' }}>{l.time}</span> {l.message}
-              </div>
-            ))}
+      {/* Right: Properties / AI / Logs */}
+      {panel !== "settings" && (
+        <div className={`panel ${["props", "ai", "logs"].includes(panel) ? "" : "collapsed"}`}
+          style={{ width: ["props", "ai", "logs"].includes(panel) ? "280px" : "42px" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #1a1a24" }}>
+            <div className="panel-tab" style={{ flex: 1 }}
+              onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "props" ? "editor" : "props" })}>
+              {panel === "props" ? "Props ▸" : "▸"}
+            </div>
+            <div className="panel-tab" style={{ flex: 1 }}
+              onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "ai" ? "editor" : "ai" })}>
+              {panel === "ai" ? "AI ▸" : "▸"}
+            </div>
+            <div className="panel-tab" style={{ flex: 1 }}
+              onClick={() => dispatch({ type: "SET_ACTIVE_PANEL", payload: panel === "logs" ? "editor" : "logs" })}>
+              {panel === "logs" ? "Logs ▸" : "▸"}
+            </div>
           </div>
-        )}
-      </div>
+
+          {panel === "props" && <PropertyPanel />}
+          {panel === "ai" && <AIPanel />}
+          {panel === "logs" && (
+            <div className="panel-content" style={{ padding: 8, fontFamily: "monospace", fontSize: 11 }}>
+              {state.logs.length === 0 && (
+                <div style={{ color: "#555", textAlign: "center", padding: 16 }}>No logs yet.<br />Run a script to see output.</div>
+              )}
+              {state.logs.map((l, i) => (
+                <div key={i} style={{ padding: "1px 0", color: l.level === "error" ? "#f66" : l.level === "warn" ? "#fa0" : "#888" }}>
+                  <span style={{ color: "#444" }}>{l.time}</span> {l.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
-  )
+  );
 }
 
-const panelStyle = (width) => ({
-  display: 'flex', flexDirection: 'column',
-  borderRight: '1px solid #1a1a24',
-  background: '#12121a',
-  transition: 'width 0.2s',
-  width, minWidth: 48, overflow: 'hidden'
-})
-
-const tabStyle = {
-  padding: '12px 14px', cursor: 'pointer',
-  fontSize: 12, fontWeight: 600,
-  color: '#888', userSelect: 'none',
-  borderBottom: '1px solid #1a1a24',
-  whiteSpace: 'nowrap'
+export default function App() {
+  return (
+    <EditorProvider>
+      <AppInner />
+    </EditorProvider>
+  );
 }
-
-const toolbarStyle = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  padding: '8px 12px', borderBottom: '1px solid #1a1a24',
-  background: '#14141e'
-}
-
-const editorStyle = {
-  flex: 1, background: '#0d0d14', color: '#c8c8d8',
-  border: 'none', padding: 16, fontFamily: 'monospace',
-  fontSize: 13, lineHeight: 1.6, resize: 'none', outline: 'none',
-  tabSize: 2
-}
-
-const sectionTitle = {
-  fontSize: 10, fontWeight: 700, color: '#555',
-  textTransform: 'uppercase', letterSpacing: 1,
-  padding: '8px 4px 4px', marginTop: 4
-}
-
-const assetItem = {
-  padding: '4px 8px', fontSize: 12, cursor: 'pointer',
-  borderRadius: 3, color: '#aaa'
-}
-
-const btnStyle = (bg) => ({
-  padding: '4px 12px', border: 'none', borderRadius: 4,
-  background: bg, color: '#fff', fontSize: 12,
-  fontWeight: 600, cursor: 'pointer'
-})
