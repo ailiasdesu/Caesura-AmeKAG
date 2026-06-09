@@ -1,4 +1,4 @@
-﻿#include "DebugManager.h"
+#include "DebugManager.h"
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
@@ -135,7 +135,7 @@ bool DebugManager::init(const char* logDir) {
         fprintf(stderr, "[DebugManager] init: path traversal blocked: %s\n", logDir);
         return false;
     }
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(m_mutex);
     if (m_initialized) return true;
     if (m_initialized) return true;
     {
@@ -183,7 +183,7 @@ bool DebugManager::init(const char* logDir) {
 }
 
 void DebugManager::shutdown() {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_initialized) return;
 
     if (m_logFile.is_open()) {
@@ -211,7 +211,7 @@ void DebugManager::log(DbgLevel level, SubSys subsystem, ErrCode code,
     entry.message   = msgBuf;
 
     {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         if (m_ringBuffer.size() >= kRingSize) m_ringBuffer.pop_front();
         m_ringBuffer.push_back(entry);

@@ -206,7 +206,7 @@ private:
     void writeToConsole(const LogEntry& entry);
 
     bool m_initialized = false;
-    std::recursive_mutex m_mutex;
+    std::mutex m_mutex;
     std::ofstream m_logFile;
     std::string m_logFilePath;
 
