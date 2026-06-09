@@ -1,410 +1,299 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
-> 分析日期: 2026-06-08 (updated) | 构建配置: CMake 3.25+ / C++20 / MSVC+Clang+GCC
-> 构建状态: 三平台全量通过 (Win/Linux/macOS) | 140 tests / 270 assertions / 100% pass
-> 仅分析可成功构建模块，忽略废弃代码
+> 分析日期: 2026-06-09 | 构建配置: CMake 3.25+ / C++20
+> 构建状态: Windows Debug + Release 全量通过，D3D11 零 TDR 稳定
+> 最近修复: 核心约束合规（c1e84c6）— 所有 Lua 绑定仅通过抽象接口访问 C++
 
 ---
 
-## 1. 项目架构总览
+## 0. 核心约束（强制）
 
-```
-Caesura(AmeKAG)/
-├── src/
-│   ├── Core/          ← 引擎中枢：主循环、后端注册表、JobSystem线程池、SandboxQuota、RpcServer、ErrorUI、TextureBudget
-│   ├── Render/        ← 渲染管线：bgfx设备、RTT管理器、图层、字体、纹理、Shader缓存、GPU监控、粒子、视频
-│   ├── Audio/         ← 音频后端：SoLoud 引擎 + NullAudioBackend 回退
-│   ├── Scripting/     ← Lua 绑定层：KAG脚本、渲染、VFX、DevCore、Debug、Unified + GameState + LuaManager
-│   ├── System/        ← 存档系统：JSON 序列化 + 版本迁移
-│   ├── Carc/          ← 加密资源包：AES-256-GCM + Ed25519 + CRL + zstd 压缩
-│   ├── Resource/      ← 资源提供者链：Dir/XP3/CARC + AssetManager + AsyncLoader（JobSystem驱动）+ ImageDecoder
-│   ├── Debug/         ← 开发工具：热重载 + Lua 断点调试协议
-│   ├── Editor/        ← IDE 集成：EditorServer (HTTP :9876) 供 Electron 编辑器调用
-│   ├── MiniGame/      ← 3D小游戏后端接口存根（P2 预留）
-│   └── Platform/      ← 移动端适配存根（P2 预留）
-├── external/          ← 10 个第三方库（bgfx+bimg+bx、SoLoud、Lua 5.4、FreeType、zstd、ed25519、pl_mpeg、stb、cpp-httplib、SDL3）
-├── shaders/           ← bgfx shader 源码 + 编译产物（dx11/glsl/metal/SPIRV）
-├── scripts/           ← Lua 游戏逻辑层（43 个 .lua 文件）
-├── tests/             ← doctest 单元测试（24 文件，140 用例）
-├── docs/solutions/    ← ce-compound 知识库（3 个已记录问题）
-├── web-editor/        ← Electron + Vite + React 可视化编辑器
-└── tools/carc_pack/   ← CARC 打包命令行工具
-```
+> **所有 Lua 层对 C++ 的访问，必须通过抽象接口 + BackendRegistry 工厂。**
+>
+> ```
+> Lua 脚本 → backend.lua → BackendRegistry → I*Backend 纯虚接口 → C++ 实现
+> ```
+>
+> **禁止**: Lua/绑定层直接引用 BgfxRenderDevice、SDL3PlatformBackend 等具体类。
+> **允许**: BackendRegistry.cpp、Engine.cpp（工厂/接线层）知晓具体类。
+> **状态**: ✅ 已全面合规（2026-06-09 提交 c1e84c6 闭合所有违规）。
 
-### 规模统计
+---
+
+## 1. 项目规模
 
 | 维度 | 数值 |
 |------|------|
-| C++ 源文件 | 51 cpp + 57 h（108 个编译单元）|
-| Lua 脚本 | 43 .lua（含 KAG 3.0 完整 tokenizer/parser/conductor + 9 个命令模块）|
-| 测试 | 24 test files / 140 test cases / 270 assertions |
-| 第三方库 | 10 个（6 全静态 + 3 header-only + 1 系统共享）|
-| Shader | 10 个程序 × 3 平台（dxbc/metal/glsl）|
-| 引擎代码量 | ~350KB C++ / ~120KB Lua |
+| C++ 文件 | 57 .cpp + 66 .h = 123 个编译单元 |
+| C++ 代码量 | 16,275 行 |
+| Lua 脚本 | 43 个文件 / 8,410 行 |
+| C++ 单元测试 | 24 个文件 |
+| KAG 命令 | 61 个（6 个子模块: layer/text/audio/system/transition/video） |
+| 纯虚接口 | 8 个: IRenderDevice, IAudioBackend, IPlatformBackend, IAssetProvider, IAnimationBackend, ILive2DRenderPath, IMiniGameBackend, IVideoDecoder |
+| 外部库 | 10 个全部静态编译 (bgfx/bimg/bx/SoLoud/Lua/FreeType/zstd/ed25519/pl_mpeg/cpp-httplib) |
+| 模块 | 12 个: Core/Render/Audio/Scripting/System/Carc/Resource/Debug/Editor/MiniGame/Animation/Platform |
 
 ---
 
-## 2. 模块详细分析
+## 2. 架构总览
 
-### 2.1 Core 模块 (`src/Core/`) — 11 cpp + 11 h
+```
+src/
+├── Core/          ← Engine, BackendRegistry, InputRouter, DebugManager, ErrorUI
+│                   JobSystem (TBB-style), SandboxQuota, TextureBudget, RpcServer
+├── Render/        ← BgfxRenderDevice (IRenderDevice 实现), LayerManager, TextRenderer
+│                   TextureManager, RTTManager, ShaderCache, ParticleSystem, GpuMonitor
+│                   VideoPlayer (pl_mpeg)
+├── Audio/         ← SoLoudAudioEngine + NullAudioBackend (BGM/VOICE/SE 三通道)
+├── Scripting/     ← LuaManager, KAGBinding, RenderBinding, VFXBinding
+│                   DevCoreBinding, DebugBinding, UnifiedBinding, GameState
+├── System/        ← SaveManager (JSON 保存/加载 + 版本迁移)
+├── Carc/          ← CryptoEngine (BCrypt), CARCReader/Writer, CRLManager
+├── Resource/      ← AssetManager, AsyncLoader (多线程), ProviderChain, XP3Archive, ImageDecoder
+├── Debug/         ← HotReload + DebugProtocol (Lua 断点调试)
+├── Editor/        ← EditorServer (Electron IDE JSON-RPC 服务端)
+├── MiniGame/      ← IMiniGameBackend + NullMiniGameBackend (3D 小游戏预留)
+├── Animation/     ← IAnimationBackend + Live2D Backend (Cubism 5, CAESURA_HAS_LIVE2D)
+│                   ILive2DRenderPath: D3D11Native ✅, OpenGLShared ⚠️, Metal ⚠️, OpenGLReadback ⚠️
+└── Platform/      ← MobileAdapter (移动端生命周期存根)
+```
 
-| 组件 | 文件 | 功能 | 接口 | 状态 |
-|------|------|------|------|------|
-| Engine | `Engine.h/.cpp` | 顶层引擎：初始化链（SDL3→bgfx→SoLoud→Lua→SaveMgr→HotReload→JobSystem→AssetMgr→AsyncLoader）、主循环、关闭逆序链。Lua 256MB 上限 + 300帧 GC + 三级缩容 | `init()`, `shutdown()`, `update()`, `render()` | ✅ 稳定 |
-| BackendRegistry | `BackendRegistry.h/.cpp` | 后端注册表单例：IRenderDevice/IAudioBackend/IPlatformBackend/InputRouter/VideoPlayer/TextureManager/LayerManager/TextureBudget getter/setter + 工厂创建。ResourceHandle 代际追踪 | `instance()`, `set*()`, `get*()`, `createBackend()` | ✅ |
-| JobSystem | `JobSystem.h/.cpp` | 无纤程工作窃取线程池。15 workers（16核-1）。三优先级（High/Normal/Low）。绿色区：CPU work；红色区：`pollMainThreadJobs()` | `submit()`, `pollMainThreadJobs()`, `shutdown()` | ✅ |
-| RpcServer | `RpcServer.h/.cpp` | stdin/stdout JSON-RPC 服务。独立线程阻塞读。注册方法：eval、getLayerTree、setLayerProp 等 | `start()`, `registerMethod()`, `stop()` | ✅ |
-| SandboxQuota | `SandboxQuota.h/.cpp` | AI 生成 Lua 资源配额：textures(256)、audio(64)、rtt(128)、particles(32) | `tryAlloc()`, `release()`, `count()`, `maxLimit()` | ✅ |
-| DebugManager | `DebugManager.h/.cpp` | 诊断单例：6级日志 + 环形缓冲区(1024) + 7子系统错误计数 + 帧分析 + PROFILE_SCOPE 宏 | `log()`, `getRenderInfo()`, `getAudioInfo()` | ✅ |
-| ErrorUI | `ErrorUI.h/.cpp` | 双级错误屏幕：Level1(bgfx存活)/Level2(SDL MessageBox)。Retry/Title/Quit。智能重试白名单 | `showError()`, `reset()` | ✅ |
-| InputRouter | `InputRouter.h/.cpp` | 输入路由器：KAG/GAME 互斥焦点。事件回调分发 | `setFocus()`, `onEvent()` | ✅ |
-| TextureBudget | `TextureBudget.h/.cpp` | GPU 内存预算：128MB→4GB 六档自适应。开发覆盖 | `currentBudget()`, `setTier()` | ✅ |
-| IPlatformBackend | `IPlatformBackend.h` | 抽象平台后端接口（纯虚类）| `openWindow()`, `pollEvents()` | ✅ |
-| SDL3PlatformBackend | `SDL3PlatformBackend.h/.cpp` | SDL3 具体实现 | implements IPlatformBackend | ✅ |
-| IAudioBackend | `IAudioBackend.h` | 抽象音频后端接口（24 纯虚函数）| `init()`, `playBGM()`, `playVoice()` | ✅ |
-
-### 2.2 Render 模块 (`src/Render/`) — 14 cpp + 12 h（最大模块）
-
-| 组件 | 功能 | 接口 | 状态 |
-|------|------|------|------|
-| BgfxRenderDevice | bgfx 后端实现。支持 D3D11/Metal/Vulkan/OpenGL。内部管理所有 bgfx View | `init()`, `beginFrame()`, `endFrame()`, `getBackendName()` | ✅ |
-| RTTManager | 渲染到纹理管理器。FBO 池 + 生命周期管理 | `acquire()`, `release()`, `resize()` | ✅ |
-| LayerManager | DFS 树形图层系统。使用 RTTManager 输出为 bgfx View | `render()`, `getLayerTree()` | ✅ |
-| TextRenderer | FreeType 字体光栅化 → 纹理图集 → bgfx 渲染 | `renderText()`, `measureText()` | ✅ |
-| TextureManager | 纹理生命周期管理。LRU 回收 | `loadTexture()`, `releaseTexture()` | ✅ |
-| FreeTypeContext | FreeType 库单例（init/shutdown 对）| `instance()`, `init()`, `shutdown()` | ✅ |
-| ShaderCache | Composite shader 缓存：blend+palette→program。64 槽，LRU 淘汰 | `registerProgram()`, `find()`, `evict()` | ✅ |
-| EmbeddedShaders | 预编译 DXBC/SPIRV 字节码嵌入为 C 数组 | 10 shader 程序常量 | ⚠️ SPIRV 未编译 |
-| ParticleSystem | 粒子发射器管理。最大 1024 粒子 | `init()`, `update()`, `emit()` | ✅ |
-| GpuMonitor | GPU 性能监控。3 级自适应降级（HIGH/MEDIUM/LOW）| `update()`, `currentQuality()` | ✅ |
-| VideoPlayer | 视频播放（pl_mpeg MPEG-1 解码 + FFmpeg 可选）| `play()`, `stop()`, `update()` | ✅ |
-| IVideoDecoder | 视频解码器抽象接口 | 纯虚类 | ⚠️ P2 预留 |
-| IMiniGameBackend | 3D 小游戏后端抽象接口 | 纯虚类 | ⚠️ P2 预留 |
-
-### 2.3 Audio 模块 (`src/Audio/`) — 2 cpp + 2 h
-
-| 组件 | 功能 | 接口 | 状态 |
-|------|------|------|------|
-| SoLoudAudioEngine | SoLoud 后端：BGM/Voice/SE 三总线 + 全局音量 | implements IAudioBackend | ✅ |
-| NullAudioBackend | 空后端回退。所有操作 no-op | implements IAudioBackend | ✅ |
-
-### 2.4 Scripting 模块 (`src/Scripting/`) — 8 cpp + 8 h
-
-| 组件 | 功能 | 依赖 | 状态 |
-|------|------|------|------|
-| LuaManager | Lua VM 生命周期：256MB 堆、stdin 通道、`/eval` 命令 | Lua 5.4 | ✅ |
-| KAGBinding | KAG C 函数注册（kag.* 表）。注意：不能委托回同名 Lua 函数 | BackendRegistry | ✅ |
-| RenderBinding | 渲染绑定：sprite/layer/transform/blend | BackendRegistry | ✅ |
-| VFXBinding | 特效绑定：fade/blur/quake/transition | BackendRegistry | ✅ |
-| DevCoreBinding | 开发绑定：hotreload/debug/profiling | BackendRegistry | ✅ |
-| DebugBinding | 调试绑定：断点/单步/变量检查 | DebugProtocol | ✅ |
-| UnifiedBinding | _CAESURA_BACKEND C 代理。Lua → C++ 方法分发 | BackendRegistry | ⚠️ 冗余 |
-| GameState | 协程/cancel_token 管理。KAG 暂停/恢复/取消 | LuaManager | ✅ |
-
-### 2.5 其他模块
-
-| 模块 | cpp+h | 核心组件 | 状态 |
-|------|-------|---------|------|
-| System | 2+2 | SaveManager（JSON 序列化 + 版本迁移链）、SaveBinding | ✅ |
-| Carc | 4+5 | CryptoEngine(AES-256-GCM)、CARCReader/Writer、CarcAssetProvider(IAssetProvider)、CRLManager | ✅ |
-| Resource | 6+6 | AssetManager、DirAssetProvider、XP3Archive、ProviderChain（优先级链）、ImageDecoder(stb)、AsyncLoader(JobSystem驱动) | ✅ |
-| Debug | 2+2 | HotReload(文件变更检测)、DebugProtocol(Lua断点/RPC) | ✅ |
-| Editor | 1+1 | EditorServer(HTTP :9876, cpp-httplib) | ✅ |
-| MiniGame | 1+1 | NullMiniGameBackend、IMiniGameBackend | ⚠️ 存根 |
-| Platform | 1+1 | MobileAdapter（Touch/RAM/SafeArea存根）| ⚠️ P2 |
+**初始化链**: SDL3 → bgfx → SoLoud → Lua VM → SaveManager → HotReload
+**主循环**: processEvents → engine_update (Lua) → beginFrame → engine_render (Lua) → MiniGame hook → endFrame → 音频检测
+**关闭链**: 逆序
 
 ---
 
-## 3. 接口边界
+## 3. 模块详解
 
-### 抽象接口层
+### 3.1 Core（引擎中枢）
+**文件**: 10 .cpp + 12 .h
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Abstract Interfaces                   │
-│  IPlatformBackend  IAudioBackend  IRenderDevice         │
-│  IAssetProvider    IVideoDecoder  IMiniGameBackend      │
-└──────┬──────────────┬──────────────┬────────────────────┘
-       │              │              │
-       ▼              ▼              ▼
-┌─────────────┐ ┌───────────┐ ┌──────────────┐
-│ SDL3Platform │ │ SoLoud    │ │ BgfxRender   │
-│ Backend      │ │ Audio     │ │ Device       │
-└─────────────┘ └───────────┘ └──────────────┘
-```
+| 类 | 功能 | 依赖 |
+|----|------|------|
+| Engine | 主循环 + 生命周期管理，持有所有后端 unique_ptr | SDL3, bgfx, SoLoud, Lua |
+| BackendRegistry | 单例工厂，注册/获取已创建的后端指针（缓存裸指针，不拥有） | 所有 I*Backend |
+| InputRouter | KAG/GAME 输入焦点路由 | SDL3 事件 |
+| DebugManager | ErrorUI 触发 + 重试逻辑 | bgfx, SDL |
+| ErrorUI | 双级错误界面：Level1 (bgfx 存活) / Level2 (SDL MessageBox) | bgfx, SDL |
+| JobSystem | TBB 风格多线程任务调度（粒子纹理/CARC/CPU 任务） | 无 |
+| SandboxQuota | Lua 执行预算管理 | 无 |
+| TextureBudget | 6 级自适应纹理内存预算（128MB~4GB） | 无 |
+| RpcServer | JSON-RPC 服务端（Electron IDE 通信） | cpp-httplib |
 
-### 资源提供者链
+**接口边界**: Engine 持有所有后端 unique_ptr，BackendRegistry 缓存裸指针供 Lua 层访问。
 
-```
-IAssetProvider (抽象)
-├── DirAssetProvider   → 文件系统（Win: GetFileAttributesA / POSIX: stat）
-├── XP3Archive         → Kirikiri XP3 格式
-└── CarcAssetProvider  → CARC 加密包（AES-256-GCM + zstd）
-     ↑
-ProviderChain → 优先级链：CARC > XP3 > Dir
-     ↑
-AssetManager (门面)
-```
+### 3.2 Render（渲染管线）
+**文件**: 12 .cpp + 13 .h
 
-### Lua ↔ C++ 绑定边界
+| 类 | 功能 | 依赖 |
+|----|------|------|
+| BgfxRenderDevice | IRenderDevice 实现，D3D11/Metal/OpenGL 后端 | bgfx |
+| LayerManager | 多图层透明合成（submit_batch 批量提交） | BgfxRenderDevice |
+| TextRenderer | FreeType TTF 渲染 + CJK 静态图集 + MessageLayerCache 批缓存 | FreeType, bgfx |
+| TextureManager | 纹理生命周期 + solid texture 创建 | bgfx |
+| RTTManager | Render-to-Texture 视口管理 | bgfx |
+| ShaderCache | 5 级着色器缓存（DXBC/GLSL/Metal/SPIRV/回退） | bgfx |
+| ParticleSystem | 多线程粒子模拟 + GPU 提交（通过 IRenderDevice*） | JobSystem, bgfx |
+| GpuMonitor | TDR 防护：每 500μs 让步 + 5ms 超时检测 | bgfx |
+| VideoPlayer | pl_mpeg 视频解码播放 | pl_mpeg, bgfx |
 
-```
-Lua 脚本层                    C++ 引擎层
-───────────                   ─────────
-KAG.show_text(text)    →     KAGBinding::kag_show_text()
-KAG.play_bgm(path)     →     KAGBinding::kag_play_bgm()
-Render.sprite(...)     →     RenderBinding::render_sprite()
+**接口边界**: BgfxRenderDevice 实现 IRenderDevice 全部方法。Lua 层不感知 BgfxRenderDevice。
 
-_CAESURA_BACKEND (Lua) →     BackendFactory.create() (Lua)
-                         →     UnifiedBinding (C proxy, 逐渐废弃)
-```
+### 3.3 Audio（音频引擎）
+**文件**: 2 .cpp + 2 .h
 
----
+| 类 | 功能 |
+|----|------|
+| SoLoudAudioEngine | BGM/VOICE/SE 三通道独立音量 + 淡入淡出 |
+| NullAudioBackend | 无音频环境静默回退 |
 
-## 4. 依赖关系图
+### 3.4 Scripting（Lua 绑定层）
+**文件**: 8 .cpp + 8 .h
 
-```
-┌──────────────────────────────────────────────────────┐
-│                     Engine (顶层)                     │
-│  init() → shutdown() 顺序链                           │
-│  main loop: pollEvents→pollMainThreadJobs→          │
-│             poll→LuaGC→engine_update→render          │
-└──────┬───────────────────────────────────────────────┘
-       │
-       ├── BackendRegistry (单例注册表)
-       │   ├── BgfxRenderDevice (IRenderDevice)
-       │   ├── SoLoudAudioEngine (IAudioBackend)
-       │   ├── SDL3PlatformBackend (IPlatformBackend)
-       │   ├── InputRouter
-       │   └── ResourceHandle (代际追踪)
-       │
-       ├── LuaManager → GameState → Bindings (7个)
-       │   ├── KAGBinding ──→ 游戏逻辑
-       │   ├── RenderBinding ──→ 渲染控制
-       │   ├── VFXBinding ──→ 视觉特效
-       │   ├── DevCoreBinding ──→ 开发工具
-       │   ├── DebugBinding ──→ 调试器
-       │   ├── SaveBinding ──→ 存档
-       │   └── UnifiedBinding ──→ 通用代理
-       │
-       ├── AssetManager (资源门面)
-       │   └── ProviderChain (IAssetProvider[])
-       │       ├── CarcAssetProvider (CARC加密包)
-       │       ├── XP3Archive (Kirikiri格式)
-       │       └── DirAssetProvider (文件系统)
-       │
-       ├── JobSystem (工作窃取线程池, 15 workers)
-       │   └── AsyncLoader (异步资源管线)
-       │       ├── AssetManager::read() (CARC解密)
-       │       └── ImageDecoder (stb PNG→RGBA)
-       │
-       ├── Render 子系统
-       │   ├── RTTManager (FBO管理)
-       │   ├── LayerManager (DFS合成树)
-       │   ├── TextRenderer (FreeType→纹理图集)
-       │   ├── TextureManager (LRU生命周期)
-       │   ├── ShaderCache (64槽, blend+palette)
-       │   ├── ParticleSystem (最大1024粒子)
-       │   ├── GpuMonitor (3级自适应)
-       │   └── VideoPlayer (pl_mpeg/FFmpeg)
-       │
-       ├── Debug 子系统
-       │   ├── DebugManager (日志/性能分析)
-       │   ├── HotReload (文件变更检测)
-       │   ├── DebugProtocol (Lua断点协议)
-       │   └── ErrorUI (双级错误屏幕)
-       │
-       └── 通信层
-           ├── RpcServer (stdin JSON-RPC)
-           └── EditorServer (HTTP :9876)
-```
+| 模块 | 功能 | C++ 访问方式 |
+|------|------|-------------|
+| LuaManager | Lua VM 生命周期 + 沙箱安全（require 白名单、I/O 禁用） | 直接 |
+| KAGBinding | KAG 脚本调度器 + 61 命令 handler 表 | backend.lua → BackendRegistry |
+| RenderBinding | 渲染命令: submit_batch/blend/transition/vfx/fill_viewport | BackendRegistry::getRenderDeviceFromLua |
+| DevCoreBinding | 开发工具: 分辨率/全屏/输入焦点/日志/退出 | BackendRegistry::getPlatformBackendFromLua |
+| VFXBinding | 视觉效果（旧版，已简化） | BackendRegistry |
+| DebugBinding | 调试接口注册 | BackendRegistry |
+| UnifiedBinding | 统一 Lua 模块注册入口 | 所有子绑定 |
+| GameState | 全局游戏状态管理 | 无 |
 
----
+**合规状态**: ✅ 所有绑定层仅使用 IRenderDevice*/IPlatformBackend* 抽象指针，通过 BackendRegistry 获取。
 
-## 5. 构建系统
+### 3.5 System（存档系统）
+**文件**: 2 .cpp + 2 .h
 
-### 编译链
+| 类 | 功能 |
+|----|------|
+| SaveManager | JSON 存档 + 版本迁移（v1→v2→v3） |
 
-| 平台 | 编译器 | SDL3 | 特殊标志 |
-|------|--------|------|---------|
-| Windows | MSVC 2022 | vcpkg | `/W3 /Zc:__cplusplus /utf-8` |
-| macOS | Clang (Apple) | brew | `-framework Foundation/Metal/Cocoa` |
-| Linux | GCC | vcpkg | `-msse4.1` |
+### 3.6 Carc（加密资源包）
+**文件**: 5 .cpp + 6 .h
 
-### 链接依赖
+| 组件 | 功能 | 多线程 |
+|------|------|--------|
+| CryptoEngine | AES-256-GCM 加密（BCrypt，跨平台需 OpenSSL） | ✅ JobSystem |
+| CARCReader | .carc 包读取 + 解密 | ✅ AsyncLoader |
+| CARCWriter | .carc 包创建工具 | 否 |
+| CRLManager | 证书吊销列表 | 否 |
 
-| 平台 | 系统库 |
-|------|--------|
-| Windows | winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler bcrypt |
-| macOS | Cocoa IOKit Metal Foundation QuartzCore pthread OpenSSL |
-| Linux | Threads::Threads dl X11 OpenSSL |
+**技术债务**: BCrypt 仅在 Windows 可用（TD-12），Linux/macOS 需替换为 OpenSSL。
 
-### 编译定义
+### 3.7 Resource（资源管线）
+**文件**: 6 .cpp + 8 .h
 
-- `SDL_MAIN_HANDLED` — 所有平台
-- `BX_CONFIG_DEBUG=1/0` — generator expression 按配置
-- `_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN` — MSVC only
-- `__STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS` — MSVC only
+| 组件 | 功能 | 多线程 |
+|------|------|--------|
+| AssetManager | 协调 ProviderChain 资源查找 | 否 |
+| AsyncLoader | 异步加载队列（纹理/CARC/CPU 任务） | ✅ JobSystem |
+| ProviderChain | DirAssetProvider → XP3Archive → CarcAssetProvider（优先级递减） | 否 |
+| XP3Archive | KiriKiri .xp3 包兼容读取 | 否 |
+| ImageDecoder | PNG/JPEG/BMP 解码 | stb_image |
 
-### CPack 打包
+### 3.8 Animation（动画后端）
+**文件**: 6 .cpp + 9 .h
 
-- 格式: ZIP
-- 内容: binary + scripts/ + assets/ + SDL3.dll
-- Release: 仅 master/main 或 tag push 触发
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| IAnimationBackend | 动画后端纯虚接口 | ✅ |
+| ILive2DRenderPath | Live2D 渲染路径抽象（策略模式） | ✅ |
+| D3D11NativeRenderPath | D3D11 原生渲染路径 | ✅ 完成 |
+| OpenGLSharedRenderPath | 共享 bgfx GL 上下文渲染 | ⚠️ 待实现 |
+| MetalNativeRenderPath | Metal 原生渲染 | ⚠️ macOS 待验证 |
+| OpenGLReadbackRenderPath | OpenGL 读回渲染（回退路径） | ⚠️ 待实现 |
+| Live2DBackend | Cubism 5 模型生命周期 + Lua 绑定（CAESURA_HAS_LIVE2D） | ✅ |
+| Live2DUserModel | CubismUserModel 封装 + 动作/表情管理 | ✅ |
 
----
+**法律合规**: Cubism SDK 不提交到 GitHub，`CAESURA_HAS_LIVE2D` 条件编译，用户自行下载 SDK。
 
-## 6. 测试覆盖
+### 3.9 MiniGame（3D 小游戏预留接口）
+**文件**: 1 .cpp + 2 .h
 
-**框架**: doctest header-only  
-**测试数**: 24 文件 / 140 用例 / 270 断言 / 100% 通过
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| IMiniGameBackend | 小游戏后端抽象接口 | ✅ 接口定义 |
+| NullMiniGameBackend | 空实现（默认） | ✅ |
 
-| 类别 | 文件 | 测试内容 |
-|------|------|---------|
-| 核心 | test_core, test_engine_lifecycle | BackendRegistry 单例 + Engine 生命周期 |
-| 资源 | test_carc, test_resource, test_resource_handle | CARC 读写 + AssetManager + ProviderChain |
-| 系统 | test_system, test_save_migration | SaveManager + 版本迁移链 |
-| 调试 | test_debug, test_error_ui | DebugProtocol + ErrorUI |
-| 输入 | test_input | InputRouter 事件路由 |
-| 异步 | test_async, test_job_system | AsyncLoader + JobSystem |
-| 图像 | test_image_decoder | stb_image 解码 |
-| 音频 | test_audio | SoLoud 初始化 |
-| 渲染 | test_render | BgfxRenderDevice + ShaderCache |
-| Lua | test_lua_manager | LuaManager 脚本执行 |
-| KAG | test_kag_binding, test_kag_integration | KAG 绑定 + 集成 |
-| 安全 | test_sandbox_quota, test_texture_budget_edge | SandboxQuota + TextureBudget |
-| 粒子 | test_particle_system | ParticleSystem 发射器 |
-| 游戏 | test_mini_game | NullMiniGameBackend |
-| 移动 | test_mobile_adapter | MobileAdapter |
+### 3.10 Debug（热重载）
+**文件**: 2 .cpp + 2 .h
 
----
-
-## 7. 技术债务标记
-
-### 活跃技术债
-
-| 标记 | 文件 | 描述 | 优先级 |
-|------|------|------|--------|
-| TD-07 | GpuMonitor.cpp | GPU 监控阈值需根据实测校准 | 低 |
-| SPIRV | EmbeddedShaders | SPIRV shader 未被编译嵌入（仅 DXBC）| 低 |
-| UnifiedBinding | UnifiedBinding.cpp | 与 BackendFactory 功能重叠，逐渐废弃 | 低 |
-| MiniGame | MiniGame/ | IMiniGameBackend 仅有 Null 实现 | P2 |
-| Mobile | Platform/ | MobileAdapter 仅有 Touch/RAM/SafeArea 存根 | P2 |
-| IVideoDecoder | Render/ | FFmpeg 可选后端（CMake CAESURA_VIDEO_FFMPEG=OFF 默认） | P2 |
-
-### 已修复（本周期）
-
-| 标记 | 描述 |
+| 组件 | 功能 |
 |------|------|
-| CI-01 | DebugManager.h BOM + null bytes → 清理 |
-| CI-02 | DirAssetProvider `windows.h` 无守卫 → `#ifdef _WIN32` |
-| CI-03 | TextureBudget `CAESURA_PLATFORM_WINDOWS` → `_WIN32` |
-| CI-04 | test_main CRT 宏无守卫 → `#ifdef _MSC_VER` 全包裹 |
-| CI-05 | test_render 数组 `operator<<` → `static_cast<const void*>` |
-| CI-06 | DebugProtocol 缺少 `<cstring>` → 添加 |
-| CI-07 | test_audio 缺少 `<cstring>` → 添加 |
-| CI-08 | CRLManager 缺少 `<cstring>` → 添加 |
-| CI-09 | BX_CONFIG_DEBUG 仅 MSVC → 移至全局 |
-| CI-10 | macOS 缺少 Foundation framework → 链接 |
-| CI-11 | 测试 CMakeLists macOS 链接 → 补全 |
-| CI-12 | DirAssetProvider POSIX fp 作用域 → 修复 |
-| CI-13 | DirAssetProvider POSIX 路径分隔符 → `#ifdef` |
-| CI-14 | Win 测试 bgfx GPU 需求 → `continue-on-error` |
+| HotReload | Lua 脚本文件监控 + 自动重载 |
+| DebugProtocol | Lua 断点调试协议 |
+
+### 3.11 Editor（IDE 集成）
+**文件**: 1 .cpp + 1 .h
+
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| EditorServer | JSON-RPC 服务端，Electron IDE 通信 | ✅ 后端就绪 |
+| Electron 前端 | 可视化编辑器 | ⚠️ 待开发 |
+
+### 3.12 Platform（移动端）
+**文件**: 1 .cpp + 1 .h
+
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| MobileAdapter | 移动端生命周期存根 | ⚠️ 2 个 TODO |
 
 ---
 
-## 8. CI/CD 状态
+## 4. 技术债务追踪
 
-**当前**: 三平台全绿 ✅
+| ID | 描述 | 严重度 | 状态 |
+|----|------|--------|------|
+| TD-01 | BackendRegistry 三重所有权 | 高 | ✅ 闭合 (Engine unique_ptr) |
+| TD-02 | Lua 文件访问绕过沙箱 | 高 | ✅ 闭合 |
+| TD-03 | Factory 方法返回 raw new（无 delete） | 高 | ✅ 闭合 |
+| TD-04 | recursive_mutex → mutex 替换 | 中 | ✅ 闭合 |
+| TD-05 | ParticleSystem 使用 BgfxRenderDevice* | 中 | ✅ 闭合 (IRenderDevice*) |
+| TD-06 | Live2DBackend::setRenderDevice 使用 BgfxRenderDevice* | 中 | ✅ 闭合 (IRenderDevice*) |
+| TD-07 | DevCoreBinding/RenderBinding static_cast 到具体类 | 高 | ✅ 闭合 |
+| TD-08 | jsonGetRawValue 缺失嵌套提取 | 低 | ✅ 闭合 |
+| TD-09 | HotReload 不必要 sleep | 低 | ✅ 闭合 |
+| TD-10 | TextRenderer::init 使用 BgfxRenderDevice* | 中 | ✅ 闭合 (IRenderDevice*) |
+| TD-11 | Live2D OpenGLSharedRenderPath 待实现 | 中 | ⚠️ 开放 |
+| TD-12 | CryptoEngine BCrypt 仅 Windows，Linux/macOS 需 OpenSSL | 高 | ⚠️ 开放 |
+| TD-13 | CJK 文本缓存 cacheIsCjk 标记 | 低 | ✅ 闭合 |
+| TD-14 | CARC 差分更新（Delta CARC） | 低 | ⚠️ 未实现 |
+| TD-15 | pl_mpeg → FFmpeg 视频解码升级 | 低 | ⚠️ 未实现 |
+| TD-16 | CAESURA_DEBUG 默认值 | 低 | ✅ 闭合 |
+| TD-17 | submit_batch RTT view ID → tex ID 键名不匹配 | 中 | ⚠️ 开放 |
+| TD-18 | CRLManager 冗余 url 参数 | 低 | ✅ 闭合 |
+| TD-19 | Live2D MetalNativeRenderPath macOS 待验证 | 中 | ⚠️ 开放 |
+| TD-20 | MobileAdapter 移动端适配未实现 | 低 | ⚠️ 开放 |
+| TD-21 | MiniGame 3D 后端未实现 | 低 | ⚠️ 开放 |
+| TD-22 | 跨平台 CI（Linux/macOS 构建失败） | 高 | ⚠️ 开放（全局约束最后） |
 
-| 平台 | 构建 | 测试 | 备注 |
-|------|------|------|------|
-| Windows MSVC Debug | ✅ | ✅ | 测试 tolerated（headless GPU） |
-| Windows MSVC Release | ✅ | ✅ | 测试 tolerated |
-| macOS Clang | ✅ | ✅ | |
-| Linux GCC | ✅ | ✅ | |
-| Release Package | ✅ | — | ZIP artifact |
-
-### CI 已知限制
-
-- **macOS/Linux 需要 patch bx**: `sed` 删除 msvc compat include 路径 + 替换 `malloc.h` → `stdlib.h`
-- **Windows 测试**: bgfx D3D11 初始化需要 GPU，GitHub Actions headless runner 上测试标记为 `continue-on-error`
-
----
-
-## 9. 版本历史
-
-| 版本 | 日期 | 关键变更 |
-|------|------|----------|
-| v1.0.0-alpha | 2026-06-07 | 初始构建，18 条技术债清零 |
-| v1.0.0-alpha-2 | 2026-06-08 | mu-q 多核合并、layers.lua 修复、EditorServer/RpcServer/SandboxQuota |
-| v1.0.0-alpha-4 | 2026-06-08 | 三平台 CI 全绿（20 轮迭代，14 个跨平台修复） |
-
----
-
-## 10. 外部依赖汇总
-
-| 库 | 版本 | 集成方式 | 用途 |
-|---|------|---------|------|
-| bgfx + bx + bimg | vendored (submodule) | CMake add_subdirectory | 跨平台 GPU 渲染 |
-| SoLoud | vendored | CMake add_subdirectory | 音频混音/播放 |
-| Lua | 5.4.7 (vendored) | 静态库 | 游戏逻辑脚本 |
-| FreeType | vendored | 静态库 (精简) | TTF/OTF 字体渲染 |
-| zstd | vendored | 静态库 | CARC 压缩/解压 |
-| ed25519 | vendored (public-domain) | 静态库 | CARC 签名验证 |
-| pl_mpeg | vendored | header-only | MPEG-1 视频解码 |
-| stb_image | vendored | header-only | PNG/JPEG 图像解码 |
-| cpp-httplib | vendored | header-only | HTTP 服务器 (Editor) |
-| SDL3 | 系统 find_package | 共享库 | 窗口/输入/平台抽象 |
-| miniz | bgfx 内嵌 | 静态库 | zlib 兼容压缩 |
-| OpenSSL | 系统 (macOS/Linux) | find_package | CARC 加密 |
-| FFmpeg | 可选 | find_package | 视频解码（默认 OFF）|
+**摘要**: 12/22 闭合，10 开放（其中 7 个为功能未实现而非 bug）。
 
 ---
 
-## 11. 总体评估
+## 5. 多线程架构
+
+```
+主线剧情（单线程顺序）:
+  processEvents → engine_update (Lua) → beginFrame → engine_render → endFrame
+
+辅助多线程（JobSystem）:
+  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐
+  │ AsyncLoader │  │ ParticleSim  │  │ CARC Decrypt  │  │ CPU Tasks    │
+  │ (纹理加载)   │  │ (粒子物理)    │  │ (资源解密)     │  │ (通用计算)    │
+  └─────────────┘  └──────────────┘  └───────────────┘  └──────────────┘
+```
+
+- **主线不阻塞**: 剧情推进永远单线程顺序执行，保证流程确定性
+- **多核用于辅助**: 后台加载/解密/解析/粒子推演，不参与游戏逻辑
+- **JobSystem**: TBB 风格任务窃取，当前仅 Windows 线程池实现
+
+---
+
+## 6. 平台支持
+
+| 平台 | 编译器 | 渲染后端 | 构建状态 | 备注 |
+|------|--------|----------|----------|------|
+| Windows | MSVC | D3D11 | ✅ 本地通过 | 零 TDR |
+| Linux | GCC | OpenGL | ❌ CI 失败 | CryptoEngine BCrypt→OpenSSL |
+| macOS | Clang | Metal | ❌ CI 失败 | CryptoEngine BCrypt→OpenSSL |
+
+> **全局约束**: 跨平台 CI 修复排到最后。
+
+---
+
+## 7. Live2D 渲染路径矩阵
+
+| 路径 | Windows D3D11 | Linux OpenGL | macOS Metal | iOS Metal | Android OpenGL |
+|------|:---:|:---:|:---:|:---:|:---:|
+| D3D11Native | ✅ | — | — | — | — |
+| OpenGLShared | — | ⚠️ | — | — | ⚠️ |
+| MetalNative | — | — | ⚠️ | ⚠️ | — |
+| OpenGLReadback | — | ⚠️ | — | — | ⚠️ |
+
+> Metal 在官网标记为仅 iOS；macOS 需用 OpenGL 或 Metal+OpenGL 并行方案。
+
+---
+
+## 8. 总体评估
 
 ### 优势
-- ✅ **三平台构建**: Win/Linux/macOS 全部 CI 通过
-- ✅ **接口抽象**: IPlatformBackend / IAudioBackend / IRenderDevice / IAssetProvider / IMiniGameBackend / IVideoDecoder
-- ✅ **多核架构**: JobSystem 工作窃取 + AsyncLoader 异步管线
-- ✅ **IDE 双通道**: RpcServer（管道）+ EditorServer（HTTP）+ web-editor（Electron）
-- ✅ **安全模型**: SandboxQuota + sandbox.lua 5 层防御
-- ✅ **GPU 自适应**: GpuMonitor 3 级 + TextureBudget 6 级
-- ✅ **测试覆盖**: 24 文件 / 140 用例 / 全绿
-- ✅ **知识管理**: ce-compound 3 篇解决方案 + CONCEPTS.md
+- 8 个纯虚接口全部支持多态替换，核心约束已全面合规
+- BackendRegistry 单例解耦 C++ 内核与 Lua 脚本层
+- 沙箱安全模型完善：Lua require 白名单 + I/O 禁用 + 指令预算
+- 双级 ErrorUI + 智能重试错误恢复链
+- 6 级自适应纹理预算 + 3 级 GPU 降级 + TDR 防护
+- 多线程 JobSystem 覆盖粒子/CARC/纹理/CPU 任务
+- 61 个 KAG 命令覆盖文本/音频/图层/过渡/VFX/视频/存档全流程
+- MIT 许可 + Live2D 条件编译无法律风险
 
-### 待改进
-- ⚠️ SPIRV shader 未编译嵌入（仅 DXBC）
-- ⚠️ MiniGame/MobileAdapter/IVideoDecoder P2 存根
-- ⚠️ UnifiedBinding 与 BackendFactory 功能重叠
-- ⚠️ CI 需手动 patch bx（msvc compat 路径）
-
-### 技术债务总计
-
-| 优先级 | 数量 | 说明 |
-|--------|------|------|
-| 低/P2 | 6 | SPIRV、UnifiedBinding 废弃、MiniGame/Mobile/VideoDecoder 存根、GPU 阈值校准 |
-| 已修复 (本轮) | 14 | CI 跨平台三平台全绿 |
-
----
-
-*此文档由 ce-repo-research-analyst 深度分析生成，整合了代码模块扫描 + 构建系统分析 + 测试审查 + CI 状态。*
-
-### 审查剔除项（2026-06-08）
-
-以下标记经代码验证不实，已从活跃清单移除：
-
-| 标记 | 原因 |
-|------|------|
-| TD-01 | Engine::render() 仅 1 次 pcall，非 2 次 |
-| TD-02 | FontRenderer.cpp 不存在，无 TextRenderer↔FontRenderer 重叠 |
-| TD-03 | 已修复 — Engine unique_ptr + Registry non-owning raw ptr |
-| TD-05 | LuaManager 0 处 luaL_dostring，无内联 Lua |
-| TD-06 | ParticleSystem 不引用 BgfxRenderDevice |
-| TD-10 | RTTManager 无 @Beta 注释 |
-| TD-11 | FontRenderer.cpp 不存在，无 2048 硬编码 |
-| TD-13 | BgfxRenderDevice 无 LUT 图集代码 |
-| TD-15 | 已修复 — UnifiedBinding 废弃 |
-| TD-17 | MobileAdapter namespace 为 Caesura，一致 |
-
+### 待推进
+- 跨平台 CI (Linux/macOS) — 全局约束排最后
+- Live2D OpenGLShared + Metal 渲染路径
+- MiniGame 3D 小游戏后端实现
+- pl_mpeg → FFmpeg 视频解码升级
+- CARC 差分更新
+- 移动端适配

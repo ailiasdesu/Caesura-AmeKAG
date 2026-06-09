@@ -1,121 +1,89 @@
-﻿# Caesura (AmeKAG) - AI Development Context
+﻿# Caesura (AmeKAG) 核心概念
 
-## What this project is
+## 引擎名称
+**Caesura** — 乐章中的停顿，呼应视觉小说的节奏感。
+代号 **AmeKAG** — あめ (雨) + KAG，致敬 KiriKiri 的 KAG 脚本系统。
 
-Cross-platform visual novel engine (C++20, SDL3 + bgfx + SoLoud + Lua 5.4).
-Target user: artists/writers with zero programming experience.
-AI-assisted KAG script development via IDE tools (Codex, Copilot, Cursor).
+## 架构核心
 
-**Cross-Platform Status:** Windows (MSVC) / macOS (Clang) / Linux (GCC) — GitHub Actions CI 全绿。
+### 后端注册表 (BackendRegistry)
+解耦 C++ 与 Lua 的关键模式。Engine 持有 unique_ptr 所有权，BackendRegistry 缓存裸指针。
+Lua 脚本通过 `backend.lua → BackendRegistry → I*Backend` 访问后端，不直接依赖 C++ 具体类。
 
-## How to generate KAG scripts
-
-1. Read `docs/api/KAG-API-REFERENCE.md` for the complete function reference (98+ functions, 7 modules)
-2. Read `scripts/sandbox.lua` to understand safety boundaries and resource quotas
-3. Use `docs/templates/scene-template.lua` as a starting point
-4. All KAG functions live under the global `KAG` table
-5. Convenience methods (show_text, show_image, clear_screen, wait_click) have their canonical implementation in `_CAESURA_BACKEND`
-6. File paths for assets: relative paths resolved through the IAssetProvider chain (directory -> XP3 -> CARC)
-
-## Engine Capabilities (Quick Glance)
-
-### What the engine CAN do
-- Display images (backgrounds, character sprites, UI overlays) on bg/fg/msg layers
-- Play background music with cross-fade (WAV/MP3/OGG)
-- Play voice lines (absolute interrupt, auto-advance on complete)
-- Play 2D and 3D sound effects
-- Control audio volume per bus (bgm/voice/se) with fade
-- Display dialogue text in message box
-- Wait for user click to advance
-- Render text at arbitrary screen positions with color
-- Render ruby/furigana text (Japanese reading aids)
-- Screen shake effects (KAG.quake)
-- Save/load game state (6 save slots, JSON state, metadata)
-- Particle effects (emitters with full config, per-frame update via JobSystem)
-- Change resolution and toggle fullscreen at runtime
-- Switch input focus between KAG (visual novel) and GAME (mini-game) modes
-- Debug diagnostics and JSON error reports
-- Async texture loading with callbacks
-- Batch quad rendering for performance
-- Video playback (FFmpeg, non-blocking decode thread)
-- CARC archive decryption (multi-threaded, BCrypt/OpenSSL)
-
-### What the engine CANNOT do (yet)
-- 3D rendering (bgfx capable, IGamePlugin interface reserved, no script-level API yet)
-- Animation/tweening system (planned for Beta)
-- Choice menus (must be scripted manually in Lua with click detection)
-- Auto-save/skip/backlog (planned)
-- Localization/i18n (planned)
-- Network/multiplayer (out of scope)
-- Live2D integration (planned for Beta)
-
-## Architecture Summary
-
+### 初始化链
 ```
-main.cpp -> Engine -> BackendRegistry (singleton, pure query)
-                  -> IRenderDevice (bgfx)
-                  -> IAudioBackend (SoLoud)
-                  -> IPlatformBackend (SDL3)
-                  -> JobSystem (thread pool + lock-free queue)
-Lua scripts -> KAG table -> C++ bindings -> BackendRegistry
+SDL3 平台 → bgfx 渲染 → SoLoud 音频 → Lua VM → SaveManager → HotReload
 ```
 
-## Multi-Threading Architecture
+### 主循环
+```
+processEvents → engine_update (Lua) → beginFrame → engine_render (Lua) → MiniGame hook → endFrame → 音频检测
+```
 
-**Principle:** Main storyline runs single-threaded sequentially. Multi-core is reserved for non-storyline paths.
+### 三层分离
+- **C++ 层**: 性能关键路径 (渲染/音频/加密/解码)，`src/` 下 12 个模块
+- **Lua 层**: 游戏逻辑 (KAG 解析/调度/命令执行)，`scripts/` 下 43 个文件
+- **IDE 层**: Electron 编辑器 (RpcServer → EditorServer JSON-RPC)
 
-| Subsystem | Thread Model |
-|---|---|
-| Main Loop (Engine) | Main thread, sequential |
-| JobSystem | Thread pool, lock-free queue — for CPU tasks |
-| CARC Decryption | Background thread pool (BCrypt Win / OpenSSL cross-platform) |
-| Texture Loading | Background load + main thread callback |
-| FFmpeg Video Decode | Independent decode thread, non-blocking main loop |
-| Particle System | JobSystem per-frame update, parallelized |
-| Audio (SoLoud) | Internal mixing thread (SoLoud-managed) |
+### KAG 脚本流程
+```
+.ks 文件 → tokenizer.lua (词法) → parser.lua (语法) → scheduler.lua (调度) → kag.lua (命令分发) → backend.lua (C++ 代理) → BackendRegistry → I*Backend
+```
 
-## Module Map
+## 8 个纯虚接口
 
-| Module | Global | Functions | Purpose |
-|---|---|---|---|
-| KAG | KAG | 35 | Core VN: audio, images, text, save/load |
-| Render | Render | 28 | Low-level: textures, viewports, batch/blend |
-| VFX | VFX | 10 | Particle system (JobSystem parallelized) |
-| Unified | _CAESURA_BACKEND | 7 | Delegation proxy to Render/KAG/DevCore |
-| DevCore | DevCore | 8 | Engine control: resolution, fullscreen, quit |
-| Debug | Debug | 10 | Diagnostics: errors, stats, JSON reports |
-| Save | (on KAG) | 6 | Save/load game state |
-| Video | (internal) | — | FFmpeg decode, non-blocking |
+| 接口 | 头文件 | 实现类 |
+|------|--------|--------|
+| IRenderDevice | src/Render/IRenderDevice.h | BgfxRenderDevice |
+| IAudioBackend | src/Audio/IAudioBackend.h | SoLoudAudioEngine / NullAudioBackend |
+| IPlatformBackend | src/Core/IPlatformBackend.h | SDL3PlatformBackend |
+| IAssetProvider | src/Resource/IAssetProvider.h | DirAssetProvider / XP3Archive / CarcAssetProvider |
+| IAnimationBackend | src/Animation/IAnimationBackend.h | Live2DBackend |
+| ILive2DRenderPath | src/Animation/Live2D/ILive2DRenderPath.h | D3D11Native / OpenGLShared / Metal / OpenGLReadback |
+| IMiniGameBackend | src/MiniGame/IMiniGameBackend.h | NullMiniGameBackend |
+| IVideoDecoder | src/Render/IVideoDecoder.h | PlMpegDecoder |
 
-## Key Rules for AI-Generated Code
+## 关键模式
 
-1. **All KAG scripts run in a sandbox** (see scripts/sandbox.lua)
-2. **No filesystem access** - all asset loading through KAG API functions
-3. **500k instruction budget per frame** - keep loops bounded
-4. **Resource quotas**: 256 textures max, 64 audio handles, 8 RTTs, 16 particle emitters
-5. **_G is write-protected** - can only assign to whitelisted globals
-6. **Scene entry point**: define scene_start() and optionally scene_end()
-7. **Dialogue pattern**: KAG.show_text() + KAG.wait_click() for each line
-8. **For character sprites**: use layer "fg", position them relative to 1280x720 base resolution
-9. **For backgrounds**: use layer "bg" at position 0,0
-10. **Japanese text support**: use KAG.render_ruby() for furigana, KAG.render_text() for labels
+### 资源提供者链
+```
+ProviderChain: DirAssetProvider → XP3Archive → CarcAssetProvider (优先级递减)
+```
 
-## Cross-Platform Build Rules
+### 纹理内存预算
+```
+6 级自动检测: 128MB / 256MB / 512MB / 1GB / 2GB / 4GB (基于系统 RAM)
+3 级 GPU 降级: 全分辨率 → 半分辨率 → 纯色回退
+```
 
-When modifying C++ engine code, follow these rules to keep CI green:
+### 错误恢复
+```
+ErrorUI Level1 (bgfx 存活) → Level2 (SDL MessageBox 回退) → Retry/Title/Quit
+智能重试: 同 token 3 次提级 + 白名单检查
+TDR 防护: 每 500μs 让步 + 5ms 超时检测
+```
 
-1. **Windows API guards**: All `#include <windows.h>` and Win32 API calls must be wrapped in `#ifdef _WIN32`
-2. **MSVC CRT guards**: `_CrtSetReportHook` etc. must use `#ifdef _MSC_VER` for both includes and function bodies
-3. **C standard library**: Clang/GCC require explicit `#include <cstring>` for `memcpy`/`strcmp` — do not rely on implicit MSVC includes
-4. **CMake definitions**: Platform-specific compile definitions use `$<CONFIG:Debug>` generator expressions, not `if(MSVC)` blocks
-5. **macOS Metal**: bgfx Metal backend requires linking `Foundation.framework` in both main and test targets
-6. **doctest arrays**: `extern const T arr[]` passed to `CHECK()` must be cast to `const void*` for macOS Clang compatibility
+### 多线程模型
+```
+主线剧情（单线程顺序）:
+  processEvents → engine_update (Lua) → beginFrame → engine_render → endFrame
 
-## Key Files
+辅助多线程（JobSystem）:
+  AsyncLoader (纹理) | ParticleSim (粒子) | CARC Decrypt (解密) | CPU Tasks (通用)
+```
 
-- `STRATEGY.md` - product strategy and 8-track plan
-- `ENGINE_ANALYSIS.md` - full codebase technical analysis
-- `docs/api/KAG-API-REFERENCE.md` - **complete API reference (98+ functions)**
-- `docs/templates/scene-template.lua` - scene template
-- `scripts/sandbox.lua` - sandbox rules (AI-readable)
-- `docs/solutions/build-error/cross-platform-ci-fixes.md` - CI cross-platform fixes reference
+## 外部库选择
+
+| 库 | 用途 | 选择理由 |
+|----|------|----------|
+| bgfx | 跨平台渲染 | 单 API 多后端 (D3D11/Metal/OpenGL/Vulkan) |
+| SDL3 | 窗口/输入 | 最广泛平台支持 |
+| SoLoud | 音频引擎 | 轻量、多后端、3D 空间音频 |
+| Lua 5.4 | 脚本引擎 | 轻量、可嵌入、沙箱能力强 |
+| FreeType | 字体渲染 | TTF/OTF + CJK 支持 |
+| zstd | 压缩 | 现代压缩比 + 速度 |
+| ed25519 | 签名验证 | 公钥域、MIT 友好 |
+| pl_mpeg | 视频解码 | 单头文件、无外部依赖 |
+| stb | 图像解码 | 单头文件 |
+| cpp-httplib | HTTP/RPC | 单头文件、Electron IDE 通信 |
+| Live2D Cubism 5 | 动态立绘 | 条件编译 OFF，不提交 SDK，法律安全 |

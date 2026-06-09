@@ -1,150 +1,79 @@
-﻿# Caesura (AmeKAG) — Build Guide
+﻿# Build Guide — Caesura (AmeKAG)
 
 ## Prerequisites
 
-| Dependency | Version | Windows | Linux |
-|-----------|---------|---------|-------|
-| CMake | ≥ 3.25 | [cmake.org](https://cmake.org) | `apt install cmake` |
-| MSVC / MinGW / GCC / Clang | C++20 | Visual Studio 2022 | `apt install build-essential` |
-| SDL3 | ≥ 3.2 | vcpkg / manual build | `apt install libsdl3-dev` |
-| Git | any | [git-scm.com](https://git-scm.com) | `apt install git` |
+- CMake 3.25+
+- C++20 compiler
+- Git (for submodules)
 
-## Step 1 — Clone & Initialize Submodules
+## Windows (MSVC + D3D11)
 
-```bash
-git clone https://github.com/your-org/Caesura-AmeKAG.git
-cd Caesura-AmeKAG
-git submodule update --init --recursive
-```
-
-This pulls in:
-- `external/bgfx` — Cross-platform rendering library
-- `external/lua` — Lua 5.4 scripting engine
-- `external/soloud` — SoLoud audio engine
-- `external/SDL3` — SDL3 platform abstraction
-
-## Step 2 — Install SDL3
-
-### Windows (vcpkg)
 ```powershell
-vcpkg install sdl3:x64-windows
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake
-```
+git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
+cd Caesura-AmeKAG
 
-### Windows (manual)
-Download SDL3-devel from [github.com/libsdl-org/SDL](https://github.com/libsdl-org/SDL/releases).
-Set `SDL3_DIR` to the cmake directory.
-
-### Linux
-```bash
-sudo apt install libsdl3-dev
-# or build from source:
-git clone https://github.com/libsdl-org/SDL --branch release-3.2.0
-cd SDL && cmake -B build && sudo cmake --install build
-```
-
-## Step 3 — Configure & Build
-
-```bash
-# Configure
-cmake -B build -S .
-
-# Build Release
-cmake --build build --config Release
-
-# Build Debug (with debug symbols)
+# Default build (no Live2D, no FFmpeg)
+cmake -B build
 cmake --build build --config Debug
+
+# With Live2D (requires Cubism 5 Native SDK)
+cmake -B build_l2d -DCAESURA_LIVE2D:BOOL=ON -DCUBISM_SDK_ROOT:PATH="C:/path/to/CubismSdkForNative-5-r.5"
+cmake --build build_l2d --config Debug
+
+# Without Live2D (clean build)
+cmake -B build_nol2d
+cmake --build build_nol2d --config Debug
 ```
 
-The executable is at:
-- Windows: `build\Release\CaesuraAmeKAG.exe`
-- Linux: `build/CaesuraAmeKAG`
-
-## Step 4 — Run
+## Linux (GCC + OpenGL)
 
 ```bash
-cd build/Release   # (or build/Debug)
-./CaesuraAmeKAG    # (or .\CaesuraAmeKAG.exe on Windows)
+git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
+cd Caesura-AmeKAG
+
+cmake -B build
+cmake --build build
 ```
 
-The engine will:
-1. Create a 1280×720 window via SDL3
-2. Initialize bgfx with Direct3D 11 (Windows) or Vulkan/Metal
-3. Initialize SoLoud audio engine
-4. Load Lua scripts from `scripts/`
-5. Start the KAG demo script
-6. Enter the main loop — press Esc or close the window to exit
+> **注意**: Linux CI 当前构建失败 (CryptoEngine 使用 BCrypt，需替换为 OpenSSL)。
 
-## Step 5 — Generate Production Shaders (Optional)
-
-The embedded shaders in `src/Render/EmbeddedShaders.cpp` are fallback stubs.
-For production rendering, compile shaders using bgfx's `shaderc` tool:
+## macOS (Clang + Metal)
 
 ```bash
-# Build shaderc first
-cd external/bgfx
-make shaderc
+git clone --recursive https://github.com/ailiasdesu/Caesura-AmeKAG.git
+cd Caesura-AmeKAG
 
-# Compile vertex shader
-./shaderc -f shaders/vs_sprite.sc -o shaders/vs_sprite.bin \
-  --type vertex --platform windows -p s_5_0 \
-  --varyingdef shaders/varying.def.sc
-
-# Compile fragment shader
-./shaderc -f shaders/fs_texture.sc -o shaders/fs_texture.bin \
-  --type fragment --platform windows -p s_5_0 \
-  --varyingdef shaders/varying.def.sc
+cmake -B build
+cmake --build build
 ```
 
-The resulting `.bin` files can be loaded at runtime, or converted to C arrays
-for embedding using `xxd -i` or a similar tool.
+> **注意**: macOS CI 当前构建失败 (同 BCrypt 问题)。
 
-## Directory Layout
+## Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CAESURA_LIVE2D` | OFF | Enable Live2D Cubism 5 support |
+| `CUBISM_SDK_ROOT` | — | Path to Cubism Native SDK |
+| `CAESURA_VIDEO_FFMPEG` | OFF | Enable FFmpeg video backend |
+
+## Directory Layout After Build
 
 ```
-Caesura(AmeKAG)/
-├── CMakeLists.txt          # Build configuration
-├── BUILD.md                # This file
-├── src/                    # C++ engine source
-│   ├── main.cpp            # Entry point
-│   ├── Core/               # Engine, InputRouter, BackendRegistry
-│   ├── Render/             # IRenderDevice, BgfxRenderDevice, RTTManager
-│   ├── Audio/              # SoLoudAudioEngine
-│   └── Scripting/          # LuaManager, KAG/Render/DevCore bindings
-├── scripts/                # Lua game logic
-│   ├── backend.lua         # Unified C++ backend interface
-│   ├── config.lua          # Engine configuration
-│   ├── game_logic.lua      # Main game entry point
-│   ├── kag.lua             # KAG command dispatch
-│   ├── scheduler.lua       # Coroutine-based script executor
-│   ├── tokenizer.lua       # KAG script parser
-│   ├── audio.lua           # Audio subsystem (→ backend.lua)
-│   ├── layers.lua          # Layer tree manager
-│   └── ...                 # Other subsystems
-├── external/               # Git submodules (bgfx, lua, soloud, SDL3)
-└── shaders/                # Shader source files
+build/Debug/
+├── CaesuraAmeKAG.exe
+├── SDL3.dll
+└── scripts/          (copied from repo)
 ```
 
-## Troubleshooting
+## Running Tests
 
-**"bgfx::init failed"**: Check GPU driver support. On Windows, ensure Direct3D 11
-is available. On Linux, ensure Vulkan drivers are installed.
-
-**"SDL_Init failed"**: Verify SDL3 is properly installed and the DLL/so is in
-the library path.
-
-**"Embedded shaders failed"**: This is expected — production shaders should be
-compiled using bgfx shaderc. The engine runs with debug text overlay in the
-meantime.
-
-**Link error "LNK1104 cannot open file"**: A previous instance is still running.
-Kill it: `taskkill /F /IM CaesuraAmeKAG.exe` (Windows) or `pkill CaesuraAmeKAG`.
-
-## CI Build (GitHub Actions)
-
-```yaml
-- name: Configure
-  run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-- name: Build
-  run: cmake --build build --config Release -j$(nproc)
+```powershell
+ctest --test-dir build --config Debug
 ```
+
+## CI Pipeline
+
+- `.github/workflows/ci.yml`: Windows MSVC (Debug+Release), Linux GCC, macOS Clang
+- Windows: ✅ 通过
+- Linux/macOS: ❌ 待修复 (全局约束最后)
