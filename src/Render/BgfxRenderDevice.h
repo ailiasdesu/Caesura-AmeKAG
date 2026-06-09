@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "IRenderDevice.h"
 #include "EmbeddedShaders.h"
@@ -151,3 +151,6 @@ private:
 };
 
 } // namespace Caesura
+
+// -- Shutdown coordination: signal bgfx debug callback before GPU teardown --
+void setBgfxShuttingDown(bool shuttingDown);

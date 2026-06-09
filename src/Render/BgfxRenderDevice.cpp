@@ -1,4 +1,4 @@
- #include "BgfxRenderDevice.h"
+﻿ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
 #include "Core/Engine.h"
 #include <bgfx/bgfx.h>
@@ -19,10 +19,13 @@ public:
     bool m_shuttingDown = false;
 
     void fatal(const char* _filePath, uint16_t _line, bgfx::Fatal::Enum _code, const char* _str) override {
-        // Known benign: D3D11 DXGI_ERROR_DEVICE_HUNG triggers shader failures
-        // Engine continues; this is a bgfx/Windows TDR pre-existing issue
+        // Downgrade all bgfx FATAL to WARN: D3D11 shader creation failures
+        // are pre-existing bgfx issues and must not terminate the engine.
         BX_UNUSED(_code);
-        fprintf(stderr, "[bgfx WARN] %s(%d): %s\n", _filePath, (int)_line, _str);
+        if (!m_shuttingDown) {
+            fprintf(stderr, "[bgfx WARN] %s(%d): %s\n", _filePath, (int)_line, _str);
+        }
+        // During shutdown: suppress noise from tearing down GPU resources
     }
     void traceVargs(const char* _filePath, uint16_t _line, const char* _format, va_list _argList) override {
         char buf[2048];
@@ -42,6 +45,12 @@ public:
 };
 
 static BgfxDebugCallback s_debugCallback;
+
+
+// -- Shutdown coordination: called by Engine::shutdown() before GPU teardown --
+void setBgfxShuttingDown(bool shuttingDown) {
+    s_debugCallback.m_shuttingDown = shuttingDown;
+}
 
 namespace Caesura {
 
@@ -224,7 +233,7 @@ const char* BgfxRenderDevice::getBackendName() const {
 }
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
-    // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧湱鈧懓瀚崳纾嬨亹閹烘垹鍊為悷婊冾樀瀵悂寮介鐔哄幐闂佹悶鍎崕閬嶆倶閳哄啰纾奸柟閭﹀弾濞堟粓鏌″畝鈧崰鏍箖瑜斿畷濂告偄閸濆嫬娈ラ梻鍌欑閹诧繝宕圭憴鍕弿闁圭虎鍠栭悡姗€鏌熸潏楣冩闁稿鍔欓幃妤呭捶椤撶倫銏°亜閵夛妇绠樼紒?architecture enforces, SDL_IsMainThread not in all SDL3 builds
+    // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
 
@@ -516,7 +525,12 @@ void BgfxRenderDevice::initEmbeddedShaders() {
             kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
             kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX");
     }
-        m_stretchProgram = createProgramFromDXBC(
+        // Verify fallback program is valid before registering
+    if (!bgfx::isValid(m_fallbackProgram)) {
+        fprintf(stderr, "[BgfxRenderDevice] FALLBACK PROGRAM INVALID, all rendering disabled!\n");
+    }
+
+    m_stretchProgram = createProgramFromDXBC(
             kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size,
             kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size, "StretchBlt");
 

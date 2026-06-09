@@ -1,6 +1,6 @@
--- ===========================================================================
---  Caesura (AmeKAG) — Demo Scene
---  4 阶段视觉演示，无需外部素材，下载即看
+﻿-- ===========================================================================
+--  Caesura (AmeKAG) -- Demo Scene
+--  4-phase visual demo, no external assets needed, download and run
 -- ===========================================================================
 
 local layers  = require("layers")
@@ -9,23 +9,23 @@ local backend = require("backend")
 local w, h = backend.get_resolution()
 if not w then w, h = 1280, 720 end
 
--- ============================== 场景状态 ==============================
+-- ============================== Scene State ==============================
 
 local scene = {
     frame = 0,
-    phase = 0,          -- 0=title, 1=features, 2=tech, 3=end
+    phase = 0,
     phaseTimer = 0,
     bg = nil,
     logoRect = nil,
 }
 
--- ============================== 颜色调色板 ==============================
+-- ============================== Color Palette ==============================
 
 local C = {
-    bgDark    = { 8,  12, 28, 255 },   -- 深蓝黑
-    bgMid     = { 18, 24, 48, 255 },   -- 中蓝
-    accent    = { 80, 160, 255, 255 }, -- 亮蓝
-    accent2   = { 220, 120, 60, 255 }, -- 暖橙
+    bgDark    = { 8,  12, 28, 255 },
+    bgMid     = { 18, 24, 48, 255 },
+    accent    = { 80, 160, 255, 255 },
+    accent2   = { 220, 120, 60, 255 },
     white     = { 240, 240, 250, 255 },
     dimWhite  = { 160, 170, 200, 255 },
     green     = { 60, 200, 100, 255 },
@@ -38,52 +38,55 @@ local function solid(r, g, b, a)
         math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
 end
 
--- ============================== 文字渲染 ==============================
+-- ============================== Text Rendering ==============================
 
 local function draw_text(x, y, text, color, scale)
     backend.render_text(text, x, y, scale or 1.0,
-        color[1]/255, color[2]/255, color[3]/255, color[4]/255)
+        color[1], color[2], color[3], color[4])
 end
 
 local function draw_centered(y, text, color, scale)
-    local approxW = #text * (scale or 1.0) * 8
-    local x = (w - approxW) / 2
+    local tw = #text * (scale or 1.0) * 10
+    local x = (w - tw) / 2
     draw_text(x, y, text, color, scale)
 end
 
--- ============================== 场景构建 ==============================
+-- ============================== Scene Init ==============================
 
 function scene_init()
     layers.init()
+    scene.bg = layers.get_root()
+    scene.bg.name = "bg"
 
-    scene.bg = layers.add_layer(layers.get_root(), {
-        name = "demo_bg", z = 0, x = 0, y = 0, w = w, h = h, visible = true
-    })
-    scene.bg.texture = solid(C.bgDark[1], C.bgDark[2], C.bgDark[3], C.bgDark[4])
+    -- Background fill
+    scene.bg.texture = solid(C.bgDark[1], C.bgDark[2], C.bgDark[3], 255)
     layers.set_layer_image(scene.bg, scene.bg.texture)
 
-    scene.logoRect = layers.add_layer(layers.get_root(), {
-        name = "logo_deco", z = 2, x = w/2 - 180, y = 100, w = 360, h = 4, visible = true
+    -- Decorative elements
+    local topLine = layers.add_layer(scene.bg, {
+        name = "top_line", z = 1, x = 0, y = 0, w = w, h = 2, visible = true
     })
-    scene.logoRect.texture = solid(C.accent[1], C.accent[2], C.accent[3], C.accent[4])
-    layers.set_layer_image(scene.logoRect, scene.logoRect.texture)
+    topLine.texture = solid(C.accent[1], C.accent[2], C.accent[3], 255)
+    layers.set_layer_image(topLine, topLine.texture)
 
-    local bottomLine = layers.add_layer(layers.get_root(), {
-        name = "bottom_line", z = 1, x = w/2 - 300, y = h - 120, w = 600, h = 2, visible = true
+    local bottomLine = layers.add_layer(scene.bg, {
+        name = "bottom_line", z = 1, x = 0, y = h - 2, w = w, h = 2, visible = true
     })
-    bottomLine.texture = solid(C.accent[1], C.accent[2], C.accent[3], 100)
+    bottomLine.texture = solid(C.accent[1], C.accent[2], C.accent[3], 255)
     layers.set_layer_image(bottomLine, bottomLine.texture)
 end
 
--- ============================== 每帧更新 ==============================
+-- ============================== Per-Frame Update ==============================
 
 function engine_render()
     layers.render()
 end
 
 function engine_update(dt)
+    if not scene.bg then scene_init() end
     scene.frame = scene.frame + 1
-    scene.phaseTimer = scene.phaseTimer + dt
+    scene.phaseTimer = scene.phaseTimer + (dt or 0.016)
+
     if scene.phase == 0 then update_title()
     elseif scene.phase == 1 then update_features()
     elseif scene.phase == 2 then update_tech()
@@ -92,66 +95,59 @@ function engine_update(dt)
 end
 
 -- ================================================================
---  阶段0: 标题画面（0→5s）
---  元素：引擎名、版本号、装饰线、点击提示
+--  Phase 0: Title Screen (0 -> 5s)
 -- ================================================================
 
 function update_title()
     local t = math.min(scene.phaseTimer / 2.0, 1.0)
-    local easeIn = t * t * (3 - 2 * t)
+    local ease = t * t * (3.0 - 2.0 * t)
+    local ty = h * 0.35 - (1.0 - ease) * 40
 
-    draw_centered(200, "Caesura", C.white, 3.0 * easeIn)
-    draw_centered(260, "(AmeKAG)", C.dimWhite, 1.5 * easeIn)
+    draw_centered(ty, "Caesura (AmeKAG)", C.white, 2.5)
 
-    if scene.logoRect then scene.logoRect.w = 360 * easeIn end
+    local alpha = math.floor(200 * math.min(scene.phaseTimer / 3.0, 1.0))
+    draw_centered(ty + 80, "Next-Gen Visual Novel Engine", C.accent, 1.6)
 
-    if t > 0.6 then
-        draw_centered(350, "Cross-platform Visual Novel Engine", C.accent, 1.0 * ((t - 0.6) / 0.4))
-    end
-    if t > 0.8 then
-        draw_centered(400, "v1.0.0-alpha", C.dimWhite, 0.8 * ((t - 0.8) / 0.2))
-    end
-    if t > 0.9 and math.floor(scene.frame / 60) % 2 == 0 then
+    local blink = math.floor(math.abs(math.sin(scene.phaseTimer * 3.0)) * 200 + 55)
+    if scene.phaseTimer > 3.0 then
         draw_centered(h - 80, "[ Click or press any key to continue ]", C.dimWhite, 0.9)
     end
 
-    -- 背景呼吸脉冲（每120帧一次，约2秒）
+    -- Background breathing pulse (every ~2 seconds via opacity)
     if scene.frame % 120 == 0 and scene.bg then
         local pulse = 1.0 + math.sin(scene.frame * 0.02) * 0.08
-        if scene.bg.texture then backend.destroy_texture(scene.bg.texture) end
-        scene.bg.texture = solid(C.bgDark[1] * pulse, C.bgDark[2] * pulse, C.bgDark[3] * pulse, 255)
-        layers.set_layer_image(scene.bg, scene.bg.texture)
+        scene.bg.opacity = math.floor(200 + 55 * pulse)
+        layers.mark_dirty(scene.bg)
     end
 
     _next_phase(5.0, 1)
 end
 
 -- ================================================================
---  阶段1: 功能展示（5→13.5s）
---  元素：6 个功能条目 + 进度条
+--  Phase 1: Feature Showcase (5 -> 13.5s)
 -- ================================================================
 
 local features = {
     { "KAG Script Compatible",    "53+ command handlers" },
-    { "Lua Sandbox Security",     "Track 3 strict mode, AI-auditable" },
-    { "D3D11 / bgfx Renderer",    "RTT-based layer compositing" },
-    { "Hot Reload",               "Save scripts, see changes instantly" },
-    { "Multi-bus Audio",          "BGM + Voice + SE, xfade, 3D spatial" },
-    { "CARC Packaging",           "ed25519 signature + zstd compression" },
+    { "Multiplatform Rendering",  "bgfx: D3D11 / Metal / OpenGL" },
+    { "Live2D Cubism 5",          "Native SDK integration" },
+    { "SoLoud Audio Engine",      "BGM / Voice / SFX buses" },
+    { "Lua Scripting",            "Full KAG parser + runtime" },
+    { "Modern C++20 Core",        "Job system, async loader, zstd" },
 }
 
 function update_features()
-    draw_centered(60, "Feature Highlights", C.accent, 2.0)
+    local t = math.min(scene.phaseTimer / 1.5, 1.0)
 
-    local startY = 160
-    for i = 1, #features do
-        local rowT = math.min(math.max((scene.phaseTimer - (i-1)*0.3) / 0.4, 0), 1.0)
-        local y = startY + (i-1) * 48
-        draw_text(w * 0.15, y, features[i][1], C.accent2, 1.4 * rowT)
-        draw_text(w * 0.15, y + 24, features[i][2], C.dimWhite, 0.8 * rowT)
+    for i, feat in ipairs(features) do
+        local y = h * 0.12 + (i - 1) * 55
+        local rowT = math.min(math.max((t * 8.0 - (i - 1) * 0.6), 0), 1.0)
+        local alpha = math.floor(rowT * 255)
+        draw_text(w * 0.15, y, feat[1], { C.accent[1], C.accent[2], C.accent[3], alpha }, 1.1)
+        draw_text(w * 0.15, y + 24, feat[2], C.dimWhite, 0.8 * rowT)
     end
 
-    -- 底部进度条
+    -- Bottom progress bar
     local barW = w * 0.6
     local progress = math.min((scene.phaseTimer - 0.5) / (13.5 - 0.5), 1.0)
     local barBg = layers.find(function(n) return n.name == "progress_bg" end)
@@ -167,82 +163,79 @@ function update_features()
         barFg = layers.add_layer(layers.get_root(), {
             name = "progress_fg", z = 4, x = w * 0.2, y = h - 140, w = 1, h = 4, visible = true
         })
+        barFg.texture = solid(C.accent[1], C.accent[2], C.accent[3], 255)
+        layers.set_layer_image(barFg, barFg.texture)
     end
     barFg.w = barW * progress
     if scene.frame % 30 == 0 then
-        if barFg.texture then backend.destroy_texture(barFg.texture) end
-        barFg.texture = solid(C.accent[1], C.accent[2], C.accent[3], 255)
-        layers.set_layer_image(barFg, barFg.texture)
+        barFg.w = 200 * progress
+        layers.mark_dirty(barFg)
     end
 
     _next_phase(13.5, 2)
 end
 
 -- ================================================================
---  阶段2: 技术栈（13.5→21.5s）
---  元素：3×2 卡片矩阵（SDL3/bgfx/SoLoud/Lua/FreeType/zstd）
+--  Phase 2: Tech Stack (13.5 -> 21.5s)
 -- ================================================================
 
 local techItems = {
     { "SDL3",      "Platform layer",     C.accent },
-    { "bgfx",      "GPU renderer",       C.accent2 },
+    { "bgfx",      "Cross-platform GPU", C.accent2 },
     { "SoLoud",    "Audio engine",       C.green },
     { "Lua 5.4",   "Scripting runtime",  C.purple },
-    { "FreeType",  "Font rasterizer",    C.white },
-    { "zstd",      "Compression",        C.dimWhite },
+    { "FreeType",  "Font rendering",     C.accent },
+    { "zstd",      "Asset compression",  C.accent2 },
 }
 
 function update_tech()
-    draw_centered(60, "Tech Stack", C.accent, 2.0)
+    local t = math.min(scene.phaseTimer / 0.8, 1.0)
 
-    local cols, cardW, cardH, gapX, gapY = 3, 200, 90, 40, 24
-    local startX = (w - (cols*cardW + (cols-1)*gapX)) / 2
-    local startY = 160
+    for i, item in ipairs(techItems) do
+        local col = (i - 1) % 3
+        local row = math.floor((i - 1) / 3)
+        local cx = w * 0.17 + col * w * 0.22 + w * 0.11
+        local cy = h * 0.25 + row * 120
+        local itemT = math.min(math.max((t * 7.0 - (i - 1) * 0.5), 0), 1.0)
+        local ease = itemT * itemT * (3.0 - 2.0 * itemT)
+        local alpha = math.floor(ease * 255)
 
-    for i = 1, #techItems do
-        local cx = startX + ((i-1) % cols) * (cardW + gapX)
-        local cy = startY + math.floor((i-1) / cols) * (cardH + gapY)
-        local cardT = math.min(math.max((scene.phaseTimer - (i-1)*0.3) / 0.4, 0), 1.0)
-
-        local cardName = "tech_card_" .. i
-        local card = layers.find(function(n) return n.name == cardName end)
-        if not card and cardT > 0.01 then
-            card = layers.add_layer(layers.get_root(), {
-                name = cardName, z = 5 + i, x = cx, y = cy, w = cardW, h = cardH, visible = true
+        local cardBg = layers.find(function(n) return n.name == "card_" .. i end)
+        if not cardBg then
+            cardBg = layers.add_layer(layers.get_root(), {
+                name = "card_" .. i, z = 2,
+                x = cx - 90, y = cy - 35, w = 180, h = 70, visible = true
             })
-            card.texture = solid(C.card[1], C.card[2], C.card[3], 220)
-            layers.set_layer_image(card, card.texture)
+            cardBg.texture = solid(C.card[1], C.card[2], C.card[3], C.card[4])
+            layers.set_layer_image(cardBg, cardBg.texture)
         end
-        if cardT > 0.5 then
-            draw_text(cx + 12, cy + 14, techItems[i][1], techItems[i][3], 1.4)
-            draw_text(cx + 12, cy + 48, techItems[i][2], C.dimWhite, 0.7)
-        end
+        cardBg.visible = itemT > 0.1
+        draw_text(cx - 40, cy - 10, item[1], { item[3][1], item[3][2], item[3][3], alpha }, 1.2)
+        draw_text(cx - 40, cy + 14, item[2], { C.dimWhite[1], C.dimWhite[2], C.dimWhite[3], alpha }, 0.8)
     end
 
-    _next_phase(8.0, 3)
+    _next_phase(21.5, 3)
 end
 
 -- ================================================================
---  阶段3: 结束画面（21.5→∞）
---  元素：号召性用语 + GitHub 链接
+--  Phase 3: End Screen (21.5 -> inf)
 -- ================================================================
 
 function update_end()
-    local t = math.min(scene.phaseTimer / 1.5, 1.0)
-    local easeIn = t * t * (3 - 2 * t)
+    local t = math.min(scene.phaseTimer / 2.0, 1.0)
+    local ease = t * t * (3.0 - 2.0 * t)
 
-    draw_centered(h/2 - 40, "Ready for Your Story", C.white, 2.5 * easeIn)
-    draw_centered(h/2 + 20, "Drop a .ks script, build, and run.", C.dimWhite, 1.0 * easeIn)
+    draw_centered(h * 0.3, "Thank you for watching!", C.white, 2.2 * ease)
 
-    if t > 0.7 then
-        draw_centered(h/2 + 80, "github.com/ailiasdesu/Caesura-AmeKAG", C.accent, 0.8 * ((t-0.7)/0.3))
-    end
-    if t > 0.95 and math.floor(scene.frame / 60) % 2 == 0 then
-        draw_centered(h - 60, "[ Press ESC or close window to exit ]", C.dimWhite, 0.8)
+    if scene.phaseTimer > 3.0 then
+        local alpha = math.floor(240 * ease)
+        draw_centered(h * 0.5, "github.com/ailiasdesu/Caesura-AmeKAG", C.accent, 1.1)
+        draw_centered(h * 0.6, "Built with SDL3 + bgfx + SoLoud + Lua", C.dimWhite, 0.9)
+        draw_centered(h * 0.7, "Cross-platform | Open Source | Visual Novel Engine", C.dimWhite, 0.8)
     end
 end
 
--- ============================== 辅助函数 ==============================
+-- ============================== Helpers ==============================
 
 function _next_phase(delay, nextPhase)
     if scene.phaseTimer >= delay then
@@ -250,14 +243,3 @@ function _next_phase(delay, nextPhase)
         scene.phaseTimer = 0
     end
 end
-
-function _KAG_onClick(x, y)
-    if scene.phase < 3 then scene.phaseTimer = 999 end
-end
-
-function _KAG_onKey(key, mods)
-    _KAG_onClick(0, 0)
-end
-
-scene_init()
-print("[DEMO] Caesura (AmeKAG) demo scene loaded.")
