@@ -3,10 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
-#include "SDL3PlatformBackend.h"
 #include "../Render/BgfxRenderDevice.h"
-#include "../Audio/SoLoudAudioEngine.h"
-#include "../Audio/NullAudioBackend.h"
 #include <cstdio>
 #include <cstring>
 
@@ -114,48 +111,60 @@ void BackendRegistry::registerNullBackends() {
 // -- Backend factory -------------------------------------------------------
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setAudioBackend() to register first.
     if (strcmp(name, "soloud") == 0 || strcmp(name, "SoLoud") == 0) {
-        m_audioBackend = new SoLoudAudioEngine();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created audio backend: SoLoud\n");
-        return m_audioBackend;
+        if (m_audioBackend) {
+            printf("[BackendRegistry] Using pre-registered audio backend: SoLoud\n");
+            return m_audioBackend;
+        }
+        fprintf(stderr, "[BackendRegistry] SoLoud backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_audioBackend = new NullAudioBackend();
-        // Engine is responsible for lifecycle
-        return m_audioBackend;
+        if (m_audioBackend) return m_audioBackend;
+        fprintf(stderr, "[BackendRegistry] Null audio backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown audio backend: %s\n", name);
     return nullptr;
 }
 
 IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setRenderDevice() to register first.
     if (strcmp(name, "bgfx") == 0) {
-        m_renderDevice = new BgfxRenderDevice();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created render backend: bgfx\n");
-        return m_renderDevice;
+        if (m_renderDevice) {
+            printf("[BackendRegistry] Using pre-registered render backend: bgfx\n");
+            return m_renderDevice;
+        }
+        fprintf(stderr, "[BackendRegistry] bgfx backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_renderDevice = new NullRenderDevice();
-        // Engine is responsible for lifecycle
-        return m_renderDevice;
+        if (m_renderDevice) return m_renderDevice;
+        fprintf(stderr, "[BackendRegistry] Null render backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown render backend: %s\n", name);
     return nullptr;
 }
 
 IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setPlatformBackend() to register first.
     if (strcmp(name, "sdl3") == 0 || strcmp(name, "SDL3") == 0) {
-        m_platformBackend = new SDL3PlatformBackend();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created platform backend: SDL3\n");
-        return m_platformBackend;
+        if (m_platformBackend) {
+            printf("[BackendRegistry] Using pre-registered platform backend: SDL3\n");
+            return m_platformBackend;
+        }
+        fprintf(stderr, "[BackendRegistry] SDL3 backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_platformBackend = new NullPlatformBackend();
-        // Engine is responsible for lifecycle
-        return m_platformBackend;
+        if (m_platformBackend) return m_platformBackend;
+        fprintf(stderr, "[BackendRegistry] Null platform backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown platform backend: %s\n", name);
     return nullptr;

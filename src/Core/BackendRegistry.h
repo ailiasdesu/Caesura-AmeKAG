@@ -73,9 +73,8 @@ public:
     TextureBudget*  getTextureBudget()  { return m_textureBudget; }
     void setTextureBudget(TextureBudget* tb) { m_textureBudget = tb; }
 
-    // -- Backend factory: create by name -----------------------------------
-    // Returns raw pointer; Engine is responsible for lifecycle.
-    // Returns existing backend if already registered, nullptr if unknown name.
+    // -- Backend lookup: resolve by name (no allocation) --------------------
+    // Returns existing backend pointer (Engine owns lifecycle via unique_ptr).
     IAudioBackend*   createAudioBackend(const char* name);
     IRenderDevice*   createRenderDevice(const char* name);
     IPlatformBackend* createPlatformBackend(const char* name);
