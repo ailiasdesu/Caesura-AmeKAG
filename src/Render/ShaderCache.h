@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <bgfx/bgfx.h>
 #include <cstdint>
@@ -105,7 +105,7 @@ public:
     bgfx::ProgramHandle getProgram(const CompositeShaderKey& key);
 
     // -- Registration -------------------------------------------------------
-    // Called by BgfxRenderDevice after creating programs via buildBgfxShader.
+    // Called by IRenderDevice after creating programs via buildBgfxShader.
     // Registers a pre-created program for the given key without recompiling.
     void registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program);
 

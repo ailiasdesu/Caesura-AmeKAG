@@ -67,6 +67,14 @@ uint64_t SDL3PlatformBackend::getTicksMs() const {
     return SDL_GetTicks();
 }
 
+void SDL3PlatformBackend::resizeWindow(int width, int height) {
+    if (m_window) {
+        SDL_SetWindowSize(m_window, width, height);
+        m_width = width;
+        m_height = height;
+    }
+}
+
 void SDL3PlatformBackend::setFullscreen(bool fullscreen) {
     if (m_window) {
         SDL_SetWindowFullscreen(m_window, fullscreen);

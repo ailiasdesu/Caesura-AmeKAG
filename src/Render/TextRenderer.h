@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <ft2build.h>
+#include "IRenderDevice.h"
 #include FT_FREETYPE_H
 
 namespace Caesura {
@@ -53,7 +54,7 @@ public:
     TextRenderer(const TextRenderer&) = delete;
     TextRenderer& operator=(const TextRenderer&) = delete;
 
-    bool init(class BgfxRenderDevice* device);
+    bool init(IRenderDevice* device);
     void shutdown();
 
     // TTF loading: loads .ttf, rasterizes ASCII+CJK to runtime atlas, sets FontId::TTF

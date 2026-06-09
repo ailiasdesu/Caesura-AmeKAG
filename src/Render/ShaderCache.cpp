@@ -1,4 +1,4 @@
-﻿#include "ShaderCache.h"
+#include "ShaderCache.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -21,7 +21,7 @@ void CompositeShaderCache::init() {
     if (m_initialized) return;
 
     m_initialized = true;
-    printf("[ShaderCache] Initialized (max %zu). Programs registered by BgfxRenderDevice.\\n",
+    printf("[ShaderCache] Initialized (max %zu). Programs registered by IRenderDevice.\\n",
            MAX_ENTRIES);
 }
 
@@ -40,7 +40,7 @@ void CompositeShaderCache::shutdown() {
 }
 
 // ---------------------------------------------------------------------------
-// Registration -- called by BgfxRenderDevice after createProgram
+// Registration -- called by IRenderDevice after createProgram
 // ---------------------------------------------------------------------------
 
 void CompositeShaderCache::registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program) {
@@ -184,7 +184,7 @@ void CompositeShaderCache::precompileCommon() {
 // EmbeddedShaders / file-load path and injected here.
 
 bgfx::ProgramHandle CompositeShaderCache::compileVariant(const CompositeShaderKey& key) {
-    // All programs are pre-compiled by BgfxRenderDevice::initEmbeddedShaders()
+    // All Programs registered by IRenderDevice::initEmbeddedShaders()
     // and registered via registerProgram(). If we reach here, the program
     // was not registered -- fall back to Normal blend mode.
     fprintf(stderr, "[ShaderCache] compileVariant: unregistered variant blend=%d palette=%d. "

@@ -1,11 +1,10 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Render/IRenderDevice.h"
-#include "../Render/BgfxRenderDevice.h"
 #include "../Resource/AsyncLoader.h"
 #include "../Render/TextureManager.h"
 #include <bgfx/bgfx.h>
@@ -183,10 +182,7 @@ static int lua_Render_submit_blend(lua_State* L) {
         lua_pushboolean(L, 0); return 1;
     }
 
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitBlend(VIEW_MAIN, baseTex, blendTex,
+    dev->submitBlend(VIEW_MAIN, baseTex, blendTex,
                          mode, baseAlpha, blendAlpha, globalAlpha);
     lua_pushboolean(L, 1);
     return 1;
@@ -216,10 +212,7 @@ static int lua_Render_submit_transition(lua_State* L) {
         ruleTex = resolveTexture(ruleTexId, dev);
     }
 
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitTransition(VIEW_MAIN, fromTex, toTex, ruleTex,
+    dev->submitTransition(VIEW_MAIN, fromTex, toTex, ruleTex,
                                method, progress);
     lua_pushboolean(L, 1);
     return 1;
@@ -246,10 +239,7 @@ static int lua_Render_submit_vfx(lua_State* L) {
         lua_pushboolean(L, 0); return 1;
     }
 
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitVFX(VIEW_MAIN, srcTex, effect,
+    dev->submitVFX(VIEW_MAIN, srcTex, effect,
                        fadeAlpha, fadeR, fadeG, fadeB,
                        blurRadius, quakeX, quakeY);
     lua_pushboolean(L, 1);
@@ -346,10 +336,7 @@ static int lua_Render_fill_viewport(lua_State* L) {
     uint8_t a = (uint8_t)luaL_optinteger(L, 5, 255);
 
     ViewportHandle vp{ id };
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->fillViewport(vp, r, g, b, a);
+    dev->fillViewport(vp, r, g, b, a);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -523,5 +510,4 @@ void registerRenderBinding(lua_State* L) {
 }
 
 } // namespace Caesura
-
 

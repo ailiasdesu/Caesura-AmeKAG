@@ -1,12 +1,10 @@
-﻿ extern "C" {
+ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/InputRouter.h"
-#include "../Core/SDL3PlatformBackend.h"
-#include <SDL3/SDL.h>
 #include <cstdio>
 #include <cstring>
 
@@ -84,8 +82,7 @@ static int lua_DevCore_set_resolution(lua_State* L) {
     renderer->resize(w, h);
     // Resize SDL window if platform backend available
     if (platform) {
-        SDL_Window* win = static_cast<SDL3PlatformBackend*>(platform)->window();
-        if (win) SDL_SetWindowSize(win, w, h);
+        platform->resizeWindow(w, h);
     }
     printf("[DevCore] Resolution set: %dx%d\n", w, h);
     lua_pushboolean(L, 1);
@@ -108,11 +105,8 @@ static int lua_DevCore_set_fullscreen(lua_State* L) {
     int enabled = lua_toboolean(L, 1);
     auto* platform = BackendRegistry::getPlatformBackendFromLua(L);
     if (!platform) { lua_pushboolean(L, 0); return 1; }
-    SDL_Window* win = static_cast<SDL3PlatformBackend*>(platform)->window();
-    if (win) {
-        SDL_SetWindowFullscreen(win, enabled ? SDL_WINDOW_FULLSCREEN : 0);
-        printf("[DevCore] Fullscreen: %s\n", enabled ? "ON" : "OFF");
-    }
+    platform->setFullscreen(enabled);
+    printf("[DevCore] Fullscreen: %s\n", enabled ? "ON" : "OFF");
     lua_pushboolean(L, 1);
     return 1;
 }

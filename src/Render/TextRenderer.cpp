@@ -1,5 +1,5 @@
-﻿#include "TextRenderer.h"
-#include "BgfxRenderDevice.h"
+#include "TextRenderer.h"
+#include "IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <cstdio>
@@ -14,12 +14,12 @@
 namespace Caesura {
 
 // ===========================================================================
-// UTF-8 Decode Helper �� consume multi-byte sequences as single codepoints
+// UTF-8 Decode Helper ?? consume multi-byte sequences as single codepoints
 // ===========================================================================
 
 static int utf8_char_len(uint8_t lead) {
     if (lead < 0x80) return 1;
-    if (lead < 0xC0) return 1;  // continuation byte �� treat as '?'
+    if (lead < 0xC0) return 1;  // continuation byte ?? treat as '?'
     if (lead < 0xE0) return 2;
     if (lead < 0xF0) return 3;
     return 4;
@@ -266,14 +266,14 @@ TextRenderer::~TextRenderer() {
     shutdown();
 }
 
-bool TextRenderer::init(BgfxRenderDevice* device) {
+bool TextRenderer::init(IRenderDevice* device) {
     if (m_initialized) return true;
     if (!device) {
         fprintf(stderr, "[TextRenderer] Null device pointer.\n");
         return false;
     }
 
-    // Borrow shared resources from BgfxRenderDevice
+    // Borrow shared resources from IRenderDevice
     m_fallbackProgram = device->getFallbackProgram();
     if (!bgfx::isValid(m_fallbackProgram)) {
         fprintf(stderr, "[TextRenderer] Fallback program not ready. "
@@ -356,7 +356,7 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
     if (id == FontId::Large) buildFont16x32();
 
-    // Atlas: 32 cols �� 3 rows = 96 glyphs, RGBA8
+    // Atlas: 32 cols ?? 3 rows = 96 glyphs, RGBA8
     int atlasW = glyphW * 32;                     // 256 or 512
     int atlasH = glyphH * 3;                      // 48 or 96
     int totalPixels = atlasW * atlasH;

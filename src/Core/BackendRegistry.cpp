@@ -43,6 +43,10 @@ public:
                    uint32_t, float, float, float, float,
                    const float*) override {}
     void beginBatch() override {}
+    void submitBlend(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, int, float, float, float) override {}
+    void submitTransition(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, bgfx::TextureHandle, int, float) override {}
+    void submitVFX(uint16_t, bgfx::TextureHandle, int, float, float, float, float, float, float, float) override {}
+    void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void flushBatch() override {}
     float textLineHeight() const override { return 0.0f; }
 private:
@@ -61,6 +65,7 @@ public:
     int getWindowWidth() const override { return m_width; }
     int getWindowHeight() const override { return m_height; }
     void setFullscreen(bool) override {}
+    void resizeWindow(int, int) override {}
     const char* getBackendName() const override { return "NullPlatform"; }
 private:
     int m_width = 0, m_height = 0;

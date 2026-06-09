@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -182,7 +182,7 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
     BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
 #ifdef CAESURA_HAS_LIVE2D
     static_cast<Live2DBackend&>(*m_animationBackend).setRenderDevice(
-        static_cast<BgfxRenderDevice*>(m_renderDevice.get()));
+        m_renderDevice.get());
 #endif
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");

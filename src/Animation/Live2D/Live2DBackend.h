@@ -18,7 +18,7 @@ namespace Caesura {
 
 class ILive2DRenderPath;
 
-class BgfxRenderDevice;
+class IRenderDevice;
 
 class Live2DBackend : public IAnimationBackend {
 public:
@@ -42,7 +42,7 @@ public:
 
     const char* name() const override { return "Live2D"; }
 
-    void setRenderDevice(BgfxRenderDevice* device);
+    void setRenderDevice(IRenderDevice* device);
 
 private:
     struct Live2DModel {
@@ -73,7 +73,7 @@ private:
         ~Live2DModel();
     };
 
-    BgfxRenderDevice* m_renderDevice = nullptr;
+    IRenderDevice* m_renderDevice = nullptr;
     bool m_deviceReady = false;
 
     ILive2DRenderPath* m_renderPath = nullptr;

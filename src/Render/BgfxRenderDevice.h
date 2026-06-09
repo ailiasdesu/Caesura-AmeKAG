@@ -87,16 +87,10 @@ public:
     bgfx::UniformHandle getStretchParams()     const { return m_u_stretchParams; }
     bgfx::UniformHandle getAffineParams()      const { return m_u_affineParams; }
 
-    void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
-                     bgfx::TextureHandle blendTex, int mode,
-                     float baseAlpha, float blendAlpha, float globalAlpha);
-    void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
-                          bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex,
-                          int method, float progress);
-    void submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
-                   int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB,
-                   float blurRadius, float quakeX, float quakeY);
-    void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+    void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex, bgfx::TextureHandle blendTex, int mode, float baseAlpha, float blendAlpha, float globalAlpha) override;
+    void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex, bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex, int method, float progress) override;
+    void submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex, int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB, float blurRadius, float quakeX, float quakeY) override;
+    void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
 
     // -- Batch protocol (spec [0.3])
     void beginBatch() override;
