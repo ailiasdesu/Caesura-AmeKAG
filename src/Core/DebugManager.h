@@ -13,10 +13,8 @@
 //  CAESURA_DEBUG compilation gate
 // ============================================================================
 #ifndef CAESURA_DEBUG
-  #define CAESURA_DEBUG 1
+  #define CAESURA_DEBUG 0
 #endif
-
-
 
 
 

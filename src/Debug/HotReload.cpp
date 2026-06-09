@@ -1,4 +1,4 @@
-ï»¿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- HotReload.cpp
 //  Phase 8.1: File monitoring + coroutine rebuild for .ks/.lua scripts.
 // ===========================================================================
@@ -164,8 +164,7 @@ bool HotReload::checkAndReload() {
     // Step 1: Cancel all active operations
     cancelAllActiveOps(m_L);
 
-    // Brief wait to let cancellations settle
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // Cancellations are synchronous ¡ª no sleep needed
 
     // Step 2: Close the KAG coroutine if running
     if (GameState::push(m_L)) {

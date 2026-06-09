@@ -163,7 +163,7 @@ bool CRLManager::verify(const std::string& pubKeyFingerprint, CRLMode mode) {
 
     case CRLMode::Online:
         if (!m_onlineURL.empty()) {
-            fetched = fetchOnline(m_onlineURL);
+            fetched = fetchOnline();
         }
         break;
 
@@ -172,7 +172,7 @@ bool CRLManager::verify(const std::string& pubKeyFingerprint, CRLMode mode) {
         // Try online first
         if (!m_onlineURL.empty()) {
             // Simple timeout simulation: fetchOnline already handles this
-            fetched = fetchOnline(m_onlineURL);
+            fetched = fetchOnline();
         }
         // Fallback to local cache
         if (!fetched && m_revoked.empty()) {
@@ -188,7 +188,7 @@ bool CRLManager::verify(const std::string& pubKeyFingerprint, CRLMode mode) {
 // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
 //  fetchOnline -- HTTPS fetch CRL ¡ú verify signature ¡ú cache locally
 // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-bool CRLManager::fetchOnline(const std::string& url) {
+bool CRLManager::fetchOnline() {
     // This is a stub for offline/embedded use.
     // In a full implementation, this would use platform HTTP (WinHTTP / libcurl).
     // For now, returns false to signal that online fetch is unavailable,
@@ -200,7 +200,7 @@ bool CRLManager::fetchOnline(const std::string& url) {
     //   3. Verify CRL signature with root public key
     //   4. Replace m_revoked with new entries
     //   5. Write JSON to m_cachePath for offline use
-    (void)url;
+    (void)m_onlineURL;  // suppress unused until HTTP wired
     return false; // Online fetch not yet connected -- use local cache
 }
 
