@@ -1,8 +1,8 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
 > 分析日期: 2026-06-09 | 构建配置: CMake 3.25+ / C++20
-> 构建状态: Windows Debug + Release 全量通过，D3D11 零 TDR 稳定
-> 最近提交: bd22a86 — Electron 编辑器完善 (E1-E8)
+> 构建状态: Windows Debug 构建通过，D3D11 零 TDR 稳定
+> 最近提交: 662d618 — RPC帧预览 (B1)
 
 ---
 
@@ -68,7 +68,7 @@ web-editor/
 ## 3. 模块详解
 
 ### 3.1 Core（10 .cpp + 12 .h）
-Engine 主循环、BackendRegistry 单例工厂、InputRouter 输入路由、DebugManager 双级 ErrorUI、JobSystem 多线程调度、SandboxQuota 指令预算、TextureBudget 6 级、RpcServer JSON-RPC (ping/run/eval/stop/assets/getState/logs)
+Engine 主循环、BackendRegistry 单例工厂、InputRouter 输入路由、DebugManager 双级 ErrorUI、JobSystem 多线程调度、SandboxQuota 指令预算、TextureBudget 6 级、RpcServer JSON-RPC (ping/run/eval/stop/assets/getState/logs/getFrame)
 
 ### 3.2 Render（12 .cpp + 13 .h）
 BgfxRenderDevice (IRenderDevice)、LayerManager 多层合成、TextRenderer (FreeType + CJK atlas)、TextureManager 生命周期、RTTManager 渲染到纹理、ShaderCache 5 级、ParticleSystem (多线程 JobSystem)、GpuMonitor TDR 防护、VideoPlayer (pl_mpeg + FFmpeg 条件编译)
@@ -163,7 +163,7 @@ MobileAdapter (存根，触屏事件注入已预埋)
 
 | 组件 | 文件 | 功能 |
 |------|------|------|
-| StageView | components/StageView.jsx | Canvas 2D 舞台 + 拖入素材 + 安全区 |
+| StageView | components/StageView.jsx | Canvas 2D 舞台 + 拖入素材 + Live Preview (引擎帧预览) |
 | AssetPanel | components/AssetPanel.jsx | 素材浏览 + 拖拽源 |
 | Timeline | components/Timeline.jsx | 时间线事件可视化 |
 | PropertyPanel | components/PropertyPanel.jsx | 属性编辑 + KAG 代码生成 |
@@ -181,14 +181,15 @@ MobileAdapter (存根，触屏事件注入已预埋)
 `eval` → 评估表达式  
 `stop` → 停止场景  
 `assets` → 列出素材  
-`getState` → 引擎状态  
+`getState` → 引擎状态
+`getFrame` → 引擎帧截图 (base64 PNG)  
 `logs` → 日志缓冲区
 
 ---
 
 ## 9. 总体评估
 
-### 完成度: ~90% (Alpha+)
+### 完成度: ~93% (Beta)
 
 ### 优势
 - 8 个纯虚接口，核心约束全面合规
@@ -207,7 +208,7 @@ MobileAdapter (存根，触屏事件注入已预埋)
 - 跨平台 CI 测试启用（需非 GPU 测试桩）
 
 ### 下一阶段
-- 编辑器 AI 上下文优化（token 预算调优）
-- MiniGame shader 编译（替换 debug wireframe）
-- FFmpeg 默认启用
-- 可视化编辑器 → 引擎 RPC 帧预览
+- B2: 编辑器 UI 打磨 (暗色主题/布局/快捷键)
+- MiniGame shader 跨平台编译 (shaderc + Metal/GL)
+- Electron 打包试运行
+- 跨平台 CI 最终修复

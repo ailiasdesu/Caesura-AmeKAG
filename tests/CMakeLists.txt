@@ -79,6 +79,10 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Platform/MobileAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})
