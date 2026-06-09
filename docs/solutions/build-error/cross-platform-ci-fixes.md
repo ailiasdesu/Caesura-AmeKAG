@@ -1,6 +1,7 @@
-﻿---
+---
 title: "Cross-Platform CI Build Fixes — macOS/Linux/Windows MSVC"
 date: 2026-06-08
+last_reviewed: 2026-06-09
 category: build-error
 module: "CI/CD Pipeline & Cross-Platform Build"
 problem_type: build_error
@@ -12,6 +13,7 @@ symptoms:
 root_cause: missing_include
 resolution_type: code_fix
 severity: critical
+status: active
 tags:
   - cross-platform
   - ci

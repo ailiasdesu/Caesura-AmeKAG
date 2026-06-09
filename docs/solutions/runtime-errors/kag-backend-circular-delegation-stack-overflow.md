@@ -1,12 +1,14 @@
-﻿---
+---
 title: "C Stack Overflow from KAG↔Backend Circular Delegation"
 date: 2026-06-08
+last_reviewed: 2026-06-09
 category: runtime-errors
 module: Scripting
 problem_type: runtime_error
 component: development_workflow
 symptoms:
   - '"engine_update: C stack overflow" on every frame in demo mode'
+last_reviewed: 2026-06-09
   - "PANIC when sandbox blocks engine globals (_GAME_MOUSE_X, _CAESURA_GPU_QUALITY, etc.)"
   - "bgfx debug-text shader FATAL errors on engine startup"
   - "Demo loads assets then immediately shows red ErrorUI crash screen"
@@ -14,6 +16,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: critical
+status: active
 tags:
   - lua
   - sandbox
@@ -39,6 +42,7 @@ The Caesura (AmeKAG) engine demo crashed immediately with a C stack overflow on 
 ## Symptoms
 
 - engine_update: C stack overflow printed to stderr on the very first frame
+last_reviewed: 2026-06-09
 - Engine entered ErrorUI (red crash screen with [R]etry/[T]itle/[Q]uit)
 - PANIC: unprotected error in call to Lua API (Sandbox: cannot create global '_GAME_MOUSE_X')
 - gfx FATAL: Failed to create vertex shader and ragment shader on startup

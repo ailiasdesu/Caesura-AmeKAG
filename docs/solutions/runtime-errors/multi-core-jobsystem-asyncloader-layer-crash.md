@@ -1,6 +1,7 @@
-﻿---
+---
 title: "Multi-Core Adaptation: JobSystem + AsyncLoader Merge & Layer Rendering Crash"
 date: 2026-06-08
+last_reviewed: 2026-06-09
 category: runtime-errors
 module: Core
 problem_type: runtime_error
@@ -14,6 +15,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: critical
+status: active
 last_updated: 2026-06-08
 tags:
   - multi-core

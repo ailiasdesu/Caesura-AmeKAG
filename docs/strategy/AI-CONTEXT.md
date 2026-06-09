@@ -1,4 +1,4 @@
-﻿# Caesura (AmeKAG) 核心概念
+# Caesura (AmeKAG) 核心概念
 
 ## 引擎名称
 **Caesura** — 乐章中的停顿，呼应视觉小说的节奏感。
@@ -71,6 +71,11 @@ TDR 防护: 每 500μs 让步 + 5ms 超时检测
 辅助多线程（JobSystem）:
   AsyncLoader (纹理) | ParticleSim (粒子) | CARC Decrypt (解密) | CPU Tasks (通用)
 ```
+
+
+## 知识库
+
+`docs/solutions/` — 已记录的问题解决方案（bugs、最佳实践、工作流模式），按类别组织，含 YAML frontmatter (`module`, `tags`, `problem_type`)。在已记录领域实现或调试时参考。
 
 ## 外部库选择
 
