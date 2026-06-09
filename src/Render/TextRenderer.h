@@ -10,7 +10,7 @@
 
 namespace Caesura {
 
-// CJK static atlas entry (Track 2 ¡ª merged from FontRenderer)
+// CJK static atlas entry
 struct CjkGlyph {
     uint16_t x = 0, y = 0, w = 0, h = 0;
     int16_t advance = 0, offsetX = 0, offsetY = 0;

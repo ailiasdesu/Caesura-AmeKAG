@@ -1,4 +1,4 @@
-ï»¿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses raw string building for JSON -- no external JSON library dependency.
@@ -90,9 +90,8 @@ std::string SaveManager::jsonBuildObj(
 }
 
 // Simple JSON value extractors.
-// DESIGN NOTE: Flat key-value only â€” adequate for current save format.
-// If nested saves are needed, migrate to nlohmann/json (header-only, MIT).
-// https://github.com/nlohmann/json)
+// Flat key-value extraction + raw nested value extraction for "data" field.
+// Adequate for current save format where only "data" may be a nested object.
 
 std::string SaveManager::jsonGetString(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\":\"";
@@ -130,6 +129,60 @@ uint64_t SaveManager::jsonGetUint64(const std::string& json, const std::string& 
     while (end < json.size() && json[end] >= '0' && json[end] <= '9') end++;
     if (end == pos) return 0;
     return std::stoull(json.substr(pos, end - pos));
+}
+
+// Extract the raw JSON value for a key (string, number, object, or array).
+// Handles brace/bracket depth for nested values and escaped quotes in strings.
+std::string SaveManager::jsonGetRawValue(const std::string& json, const std::string& key) {
+    std::string search = "\"" + key + "\":";
+    size_t pos = json.find(search);
+    if (pos == std::string::npos) return "";
+    pos += search.size();
+
+    // Skip whitespace
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
+    if (pos >= json.size()) return "";
+
+    char first = json[pos];
+    if (first == '"') {
+        // String value ¡ª find matching closing quote (respecting escapes)
+        size_t start = pos + 1;
+        size_t end = start;
+        while (end < json.size()) {
+            if (json[end] == '\\') { end += 2; continue; }
+            if (json[end] == '"') break;
+            end++;
+        }
+        return json.substr(start, end - start);
+    }
+    if (first == '{' || first == '[') {
+        // Object or array ¡ª track depth with matching close char
+        char close = (first == '{') ? '}' : ']';
+        int depth = 0;
+        size_t start = pos;
+        bool inString = false;
+        for (size_t i = pos; i < json.size(); i++) {
+            char ch = json[i];
+            if (inString) {
+                if (ch == '\\') { i++; continue; }
+                if (ch == '"') inString = false;
+                continue;
+            }
+            if (ch == '"') { inString = true; continue; }
+            if (ch == first) depth++;
+            if (ch == close) {
+                if (depth == 0) return json.substr(start, i - start + 1);
+                depth--;
+            }
+        }
+    }
+    // Number/bool/null ¡ª read until comma/whitespace/closing brace
+    size_t start = pos;
+    size_t end = pos;
+    while (end < json.size() && json[end] != ',' && json[end] != '}' && json[end] != ']') end++;
+    // Trim trailing whitespace
+    while (end > start && (json[end-1] == ' ' || json[end-1] == '\t' || json[end-1] == '\n')) end--;
+    return json.substr(start, end - start);
 }
 
 // ============================================================================
@@ -213,7 +266,7 @@ bool SaveManager::save(int slot, const std::string& jsonData,
     bool ok = writeFile(path, json);
 
     if (ok) {
-        printf("[SaveManager] Saved slot %d (%s, token=%d) éˆ«?%s\n",
+        printf("[SaveManager] Saved slot %d (%s, token=%d) â†?%s\n",
                slot, sceneName.c_str(), tokenIndex, path.c_str());
     } else {
         fprintf(stderr, "[SaveManager] Failed to save slot %d\n", slot);
@@ -243,7 +296,7 @@ std::string SaveManager::load(int slot, SaveMeta* outMeta) {
 
     // Migrate if schema version is outdated
     if (ver < m_currentSchemaVersion) {
-        printf("[SaveManager] Migrating slot %d: schema v%d éˆ«?v%d\n",
+        printf("[SaveManager] Migrating slot %d: schema v%d â†?v%d\n",
                slot, ver, m_currentSchemaVersion);
         json = migrate(json, ver);
 
@@ -264,61 +317,17 @@ std::string SaveManager::load(int slot, SaveMeta* outMeta) {
         outMeta->schemaVersion = m_currentSchemaVersion;
     }
 
-    // Extract the "data" field -- it's an embedded JSON object
-    // Find the start of data: "data":{
-    std::string dataKey = "\"data\":";
-    size_t dataPos = json.find(dataKey);
-    if (dataPos == std::string::npos) {
-        fprintf(stderr, "[SaveManager] Slot %d: missing 'data' field\n", slot);
+    // Extract the "data" field using reusable JSON value extractor
+    std::string rawData = jsonGetRawValue(json, "data");
+    if (rawData.empty()) {
+        fprintf(stderr, "[SaveManager] Slot %d: missing or empty 'data' field\n", slot);
         return "";
-    }
-
-    dataPos += dataKey.size();
-    // Skip whitespace
-    while (dataPos < json.size() && (json[dataPos] == ' ' || json[dataPos] == '\t')) dataPos++;
-
-    if (dataPos >= json.size() || json[dataPos] != '{') {
-        fprintf(stderr, "[SaveManager] Slot %d: 'data' is not a JSON object\n", slot);
-        return "";
-    }
-
-    // Find matching closing brace (brace counting, respecting strings)
-    int braceDepth = 0;
-    bool inString = false;
-    bool escaped = false;
-    size_t start = dataPos;
-    size_t end = dataPos;
-
-    for (size_t i = dataPos; i < json.size(); i++) {
-        char c = json[i];
-        if (escaped) {
-            escaped = false;
-            continue;
-        }
-        if (c == '\\' && inString) {
-            escaped = true;
-            continue;
-        }
-        if (c == '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString) continue;
-
-        if (c == '{') braceDepth++;
-        else if (c == '}') {
-            braceDepth--;
-            if (braceDepth == 0) {
-                end = i + 1;
-                break;
-            }
-        }
     }
 
     printf("[SaveManager] Loaded slot %d (%s, schema v%d)\n",
            slot, outMeta ? outMeta->sceneName.c_str() : "?", ver);
 
-    return json.substr(start, end - start);
+    return rawData;
 }
 
 // ============================================================================
@@ -378,7 +387,7 @@ void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn 
     if (toVersion > m_currentSchemaVersion) {
         m_currentSchemaVersion = toVersion;
     }
-    printf("[SaveManager] Registered migration: v%d éˆ«?v%d\n", fromVersion, toVersion);
+    printf("[SaveManager] Registered migration: v%d â†?v%d\n", fromVersion, toVersion);
 }
 
 std::string SaveManager::migrate(const std::string& jsonData, int fromVersion) {
@@ -393,7 +402,7 @@ std::string SaveManager::migrate(const std::string& jsonData, int fromVersion) {
         int nextVer = it->second.first;
         const MigrationFn& fn = it->second.second;
 
-        printf("[SaveManager] Applying migration v%d éˆ«?v%d\n", ver, nextVer);
+        printf("[SaveManager] Applying migration v%d â†?v%d\n", ver, nextVer);
         current = fn(current);
         ver = nextVer;
     }

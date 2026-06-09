@@ -1,10 +1,10 @@
-ï»¿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.h
 //  Spec [6.1]: JSON save/load system with schema versioning.
 //  SaveMeta: slot, timestamp, sceneName, thumbnail, tokenIndex, schemaVersion
 //  SaveManager (singleton): init(), save(), load(), listSaves(), migrate()
 //  Uses raw JSON string building -- no external JSON library dependency.
-//  Migration: version chain walk (1â†’2, 2â†’3, etc.) with migration scripts.
+//  Migration: version chain walk (1¡ú2, 2¡ú3, etc.) with migration scripts.
 // ===========================================================================
 
 #pragma once
@@ -70,13 +70,13 @@ public:
     bool deleteSlot(int slot);
 
     // -- Migration ----------------------------------------------------------
-    // Register a migration from fromVersion â†’ toVersion
+    // Register a migration from fromVersion ¡ú toVersion
     void registerMigration(int fromVersion, int toVersion, MigrationFn fn);
 
     // Engine-level version check and migration (Spec U6)
     bool migrateSave(std::string& jsonData);
 
-    // Migrate a JSON string through version chain (fromVersion â†’ latest)
+    // Migrate a JSON string through version chain (fromVersion ¡ú latest)
     std::string migrate(const std::string& jsonData, int fromVersion);
 
     // Current schema version (latest)
@@ -92,6 +92,7 @@ public:
     static std::string jsonGetString(const std::string& json, const std::string& key);
     static int         jsonGetInt(const std::string& json, const std::string& key);
     static uint64_t    jsonGetUint64(const std::string& json, const std::string& key);
+    static std::string jsonGetRawValue(const std::string& json, const std::string& key);
 
 private:
     SaveManager() = default;
@@ -99,7 +100,7 @@ private:
     std::string m_saveDir;
     int m_currentSchemaVersion = 1;
 
-    // Migration chain: maps from-version â†’ {to-version, migration function}
+    // Migration chain: maps from-version ¡ú {to-version, migration function}
     // e.g., {1, {2, fn1_2}}, {2, {3, fn2_3}}
     std::unordered_map<int, std::pair<int, MigrationFn>> m_migrations;
 
