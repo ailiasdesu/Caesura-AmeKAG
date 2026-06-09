@@ -1,4 +1,4 @@
--- ===========================================================================
+﻿-- ===========================================================================
 --  Caesura (AmeKAG) 鈥?Sandbox Rules v2 (Track 3)
 --  ===========================================================================
 --  Loaded once at engine startup via LuaManager::lockdownScriptEnv().
@@ -154,6 +154,9 @@ local _G_whitelist = {
     _GAME_MOUSE_DOWN = true,
     _GAME_KEY_F5    = true,
     _GAME_KEY_F6    = true,
+    quicksave = true,
+    quickload = true,
+    autosave  = true,
     debug      = true,  -- already read-only from section 2
     -- Read-only globals
     package    = true,

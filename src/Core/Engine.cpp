@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -215,6 +215,7 @@ void Engine::run() {
         m_lastTick = now;
         if (dt < 0.0f) dt = 0.0f;
         if (dt > 0.25f) dt = 0.25f;
+        m_frameTime = dt;
 
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
@@ -443,6 +444,29 @@ void Engine::render() {
         m_miniGameBackend->render();
     }
 
+}
+
+
+// ============================================================================
+//  Save helpers (SU-3)
+// ============================================================================
+void Engine::quicksave() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "quicksave");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quicksave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
+}
+void Engine::quickload() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "quickload");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quickload: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
+}
+void Engine::triggerAutoSave() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "autosave");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "autosave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
 }
 
 void Engine::handleFatalError(const char* context, const char* luaError) {

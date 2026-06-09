@@ -108,6 +108,7 @@ set(ENGINE_SOURCES
     src/Scripting/DebugBinding.cpp
     src/Scripting/UnifiedBinding.cpp
     src/System/SaveManager.cpp
+    src/System/ISaveProvider.cpp
     src/System/SaveBinding.cpp
     src/Carc/CryptoEngine.cpp
     src/Carc/CARCReader.cpp
@@ -171,6 +172,7 @@ set(ENGINE_HEADERS
     src/Scripting/DebugBinding.h
     src/Scripting/UnifiedBinding.h
     src/System/SaveManager.h
+    src/System/ISaveProvider.h
     src/System/SaveBinding.h
     src/Carc/CARCFormat.h
     src/Carc/CryptoEngine.h

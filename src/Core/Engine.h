@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/IPlatformBackend.h"
 #include "Core/DebugManager.h"
@@ -55,6 +55,14 @@ public:
 private:
     void processEvents();
     void render();
+
+    // Auto-save
+    void setAutoSaveInterval(float seconds) { m_autoSaveInterval = seconds; }
+    float autoSaveInterval() const { return m_autoSaveInterval; }
+    void triggerAutoSave();
+    void quicksave();
+    void quickload();
+
     void handleFatalError(const char* context, const char* luaError);
     void shutdown();
 
@@ -80,6 +88,9 @@ private:
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<GpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend> m_miniGameBackend;
+    float m_autoSaveInterval = 0.0f;
+    float m_autoSaveTimer = 0.0f;
+    float m_frameTime = 0.0f;
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     // HotReload is a singleton, accessed via HotReload::instance()

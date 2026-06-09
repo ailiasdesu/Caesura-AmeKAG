@@ -20,11 +20,37 @@ extern "C" {
 namespace Caesura {
 
 // -- Lua table -> nlohmann::json (recursive) -------------------------------
+// Detect if a Lua table is a dense array (all keys are 1..N positive integers)
+static bool isLuaArray(lua_State* L, int absIdx) {
+    int maxKey = 0, count = 0;
+    lua_pushnil(L);
+    while (lua_next(L, absIdx) != 0) { count++; if (lua_type(L, -2) == LUA_TNUMBER) { int k = (int)lua_tointeger(L, -2); if (k > maxKey) maxKey = k; } lua_pop(L, 1); }
+    return (count > 0 && maxKey == count);
+}
+
 static json luaTableToJson(lua_State* L, int index) {
     json result;
 
     // Normalize negative indices
-    int absIdx = (index < 0) ? lua_gettop(L) + index + 1 : index;
+        int absIdx = (index < 0) ? lua_gettop(L) + index + 1 : index;
+    // Check if this table is a dense array
+    if (isLuaArray(L, absIdx)) {
+        json arr = json::array();
+        lua_pushnil(L);
+        while (lua_next(L, absIdx) != 0) {
+            int vt = lua_type(L, -1);
+            switch (vt) {
+                case LUA_TBOOLEAN: arr.push_back((bool)lua_toboolean(L, -1)); break;
+                case LUA_TNUMBER:  arr.push_back(lua_isinteger(L, -1) ? (json)(int64_t)lua_tointeger(L, -1) : (json)(double)lua_tonumber(L, -1)); break;
+                case LUA_TSTRING:  arr.push_back(std::string(lua_tostring(L, -1))); break;
+                case LUA_TTABLE:   arr.push_back(luaTableToJson(L, -1)); break;
+                default:           arr.push_back(nullptr); break;
+            }
+            lua_pop(L, 1);
+        }
+        return arr;
+    }
+
 
     lua_pushnil(L);  // first key
     while (lua_next(L, absIdx) != 0) {
@@ -239,6 +265,27 @@ static int lua_Save_exists(lua_State* L) {
 }
 
 // -- lua_Save_get_dir --------------------------------------------------------
+
+// -- lua_SetEncryptionKey ---------------------------------------------------
+static int lua_SetEncryptionKey(lua_State* L) {
+    size_t len; const char* keyStr = luaL_checklstring(L, 1, &len);
+    if (len != 32) { lua_pushboolean(L, 0); lua_pushstring(L, "Key must be 32 bytes"); return 2; }
+    SaveManager::instance().setEncryptionKey(reinterpret_cast<const uint8_t*>(keyStr));
+    lua_pushboolean(L, 1); return 1;
+}
+
+// -- lua_ClearEncryptionKey -------------------------------------------------
+static int lua_ClearEncryptionKey(lua_State* L) {
+    SaveManager::instance().clearEncryptionKey(); return 0;
+}
+
+// -- lua_CaptureThumbnail ---------------------------------------------------
+static int lua_CaptureThumbnail(lua_State* L) {
+    std::string b64 = SaveManager::instance().captureThumbnailPNG(320, 180);
+    if (b64.empty()) { lua_pushnil(L); return 1; }
+    lua_pushlstring(L, b64.c_str(), b64.size()); return 1;
+}
+
 // KAG.get_save_dir() -> string
 static int lua_Get_save_dir(lua_State* L) {
     lua_pushstring(L, "saves/");
@@ -266,6 +313,9 @@ void registerSaveBinding(lua_State* L) {
         { "delete_save",  lua_Delete_save  },
         { "save_exists",  lua_Save_exists  },
         { "get_save_dir", lua_Get_save_dir },
+        { "set_encryption_key",  lua_SetEncryptionKey  },
+        { "clear_encryption_key", lua_ClearEncryptionKey },
+        { "capture_thumbnail",    lua_CaptureThumbnail },
         { nullptr, nullptr }
     };
 
@@ -277,7 +327,7 @@ void registerSaveBinding(lua_State* L) {
         lua_pop(L, 1);
     }
 
-    printf("[SaveBinding] KAG save/load functions registered (6 APIs).\n");
+    printf("[SaveBinding] KAG save/load functions registered (9 APIs).\n");
 }
 
 } // namespace Caesura

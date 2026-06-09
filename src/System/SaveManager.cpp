@@ -5,9 +5,12 @@
 //  Save format: {"schema_version":1,"timestamp":12345,"scene":"...",
 //                "token_index":5,"thumbnail":"...","engine_version":"1.0.0",
 //                "data":{...}}
+//  Encrypted format: "CAES" [12-byte nonce] [16-byte tag] [ciphertext...]
 // ===========================================================================
 
 #include "SaveManager.h"
+#include "ISaveProvider.h"
+#include "../Carc/CryptoEngine.h"
 
 #include <cstdio>
 #include <cstring>
@@ -38,8 +41,13 @@ SaveManager& SaveManager::instance() {
 }
 
 // ============================================================================
-//  Lifecycle
+//  Pluggable save provider (SU-6)
 // ============================================================================
+
+void SaveManager::setSaveProvider(std::unique_ptr<ISaveProvider> provider) {
+    m_saveProvider = std::move(provider);
+    printf("[SaveManager] Custom save provider installed.\n");
+}
 
 void SaveManager::init(const std::string& saveDir) {
     m_saveDir = saveDir;
@@ -56,7 +64,24 @@ void SaveManager::init(const std::string& saveDir) {
 }
 
 // ============================================================================
-//  File I/O
+//  Encryption (SU-2) -- AES-256-GCM via CryptoEngine
+//  Encrypted save format: [4-byte "CAES"][12-byte nonce][16-byte tag][ciphertext]
+// ============================================================================
+
+void SaveManager::setEncryptionKey(const uint8_t key[32]) {
+    std::memcpy(m_encryptKey, key, 32);
+    m_keySet = true;
+    printf("[SaveManager] Encryption key set (AES-256-GCM)\n");
+}
+
+void SaveManager::clearEncryptionKey() {
+    m_keySet = false;
+    std::memset(m_encryptKey, 0, sizeof(m_encryptKey));
+    printf("[SaveManager] Encryption key cleared\n");
+}
+
+// ============================================================================
+//  File I/O (with optional AES-256-GCM encryption)
 // ============================================================================
 
 std::string SaveManager::slotPath(int slot) const {
@@ -66,6 +91,7 @@ std::string SaveManager::slotPath(int slot) const {
 static constexpr size_t MAX_SAVE_SIZE = 10 * 1024 * 1024;  // 10 MiB
 
 std::string SaveManager::readFile(const std::string& path) {
+    if (m_saveProvider) return m_saveProvider->readFile(path);
     std::ifstream in(path, std::ios::binary);
     if (!in) return "";
 
@@ -76,16 +102,61 @@ std::string SaveManager::readFile(const std::string& path) {
     std::string content(static_cast<size_t>(sz), '\0');
     in.seekg(0, std::ios::beg);
     in.read(&content[0], sz);
+
+    // Decrypt if key is set and data starts with "CAES" magic
+    if (m_keySet && content.size() >= 4 && std::memcmp(content.data(), "CAES", 4) == 0) {
+        if (content.size() < 32) {
+            fprintf(stderr, "[SaveManager] Encrypted save too short\n");
+            return "";
+        }
+        const auto* nonce = reinterpret_cast<const uint8_t*>(content.data() + 4);
+        const auto* tag   = reinterpret_cast<const uint8_t*>(content.data() + 16);
+        const auto* ct    = reinterpret_cast<const uint8_t*>(content.data() + 32);
+        size_t ctLen = content.size() - 32;
+
+        auto plain = carc::CryptoEngine::decrypt(ct, ctLen, m_encryptKey, nonce, tag);
+        if (plain.empty()) {
+            fprintf(stderr, "[SaveManager] Decryption failed (wrong key or corrupted data)\n");
+            return "";
+        }
+        return std::string(reinterpret_cast<char*>(plain.data()), plain.size());
+    }
+
     return content;
 }
 
 bool SaveManager::writeFile(const std::string& path, const std::string& content) {
+    if (m_saveProvider) return m_saveProvider->writeFile(path, content);
+
+    std::string dataToWrite;
+    if (m_keySet) {
+        uint8_t nonce[12];
+        uint8_t tag[16];
+        carc::CryptoEngine::generateNonce(nonce);
+
+        auto cipher = carc::CryptoEngine::encrypt(
+            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
+            m_encryptKey, nonce, tag);
+        if (cipher.empty()) {
+            fprintf(stderr, "[SaveManager] Encryption failed\n");
+            return false;
+        }
+
+        dataToWrite.reserve(4 + 12 + 16 + cipher.size());
+        dataToWrite.append("CAES", 4);
+        dataToWrite.append(reinterpret_cast<char*>(nonce), 12);
+        dataToWrite.append(reinterpret_cast<char*>(tag), 16);
+        dataToWrite.append(reinterpret_cast<char*>(cipher.data()), cipher.size());
+    } else {
+        dataToWrite = content;
+    }
+
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) {
         fprintf(stderr, "[SaveManager] Failed to open file for writing: %s\n", path.c_str());
         return false;
     }
-    out.write(content.c_str(), static_cast<std::streamsize>(content.size()));
+    out.write(dataToWrite.c_str(), static_cast<std::streamsize>(dataToWrite.size()));
     return out.good();
 }
 
@@ -134,15 +205,15 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
     try {
         envelope = json::parse(contents);
     } catch (const json::exception& e) {
-        fprintf(stderr, "[SaveManager] JSON parse error in slot %d: %s\n", slot, e.what());
+        fprintf(stderr, "[SaveManager] JSON parse error: %s\n", e.what());
         return json();
     }
 
-    int schemaVer         = envelope.value("schema_version", 1);
-    uint64_t ts           = envelope.value("timestamp", uint64_t(0));
-    std::string scene     = envelope.value("scene", "");
-    int tokenIdx          = envelope.value("token_index", 0);
-    std::string thumb     = envelope.value("thumbnail", "");
+    uint64_t ts       = envelope.value("timestamp", uint64_t(0));
+    std::string scene = envelope.value("scene", "");
+    int tokenIdx      = envelope.value("token_index", 0);
+    std::string thumb = envelope.value("thumbnail", "");
+    int schemaVer     = envelope.value("schema_version", 1);
     std::string engineVer = envelope.value("engine_version", "");
 
     if (outMeta) {
@@ -214,6 +285,7 @@ bool SaveManager::slotExists(int slot) {
 
 bool SaveManager::deleteSlot(int slot) {
     std::string path = slotPath(slot);
+    if (m_saveProvider) return m_saveProvider->deleteFile(path);
     if (remove(path.c_str()) == 0) {
         printf("[SaveManager] Deleted slot %d\n", slot);
         return true;
@@ -256,14 +328,39 @@ json SaveManager::migrate(const json& data, int fromVersion) {
 // ============================================================================
 
 void SaveManager::registerBuiltinMigrations() {
-    // v1 -> v2: Add "playtime" field to track total play time across saves.
+    // v1 -> v2: Add playtime field
     registerMigration(1, 2, [](const json& data) -> json {
         json result = data;
-        if (!result.contains("playtime")) {
-            result["playtime"] = 0;
-        }
+        if (!result.contains("playtime")) result["playtime"] = 0;
         return result;
     });
+    // v2 -> v3: Add MiniGame 3D state
+    registerMigration(2, 3, [](const json& data) -> json {
+        json result = data;
+        if (!result.contains("minigame")) result["minigame"] = json::object();
+        return result;
+    });
+    // v3 -> v4: Add Live2D state
+    registerMigration(3, 4, [](const json& data) -> json {
+        json result = data;
+        if (!result.contains("live2d")) result["live2d"] = json::object();
+        return result;
+    });
+    // v4 -> v5: Add Editor state
+    registerMigration(4, 5, [](const json& data) -> json {
+        json result = data;
+        if (!result.contains("editor")) result["editor"] = json::object();
+        return result;
+    });
+}
+
+
+// ============================================================================
+//  Thumbnail capture (SU-4 stub)
+// ============================================================================
+std::string SaveManager::captureThumbnailPNG(int width, int height) {
+    (void)width; (void)height;
+    return "";
 }
 
 } // namespace Caesura

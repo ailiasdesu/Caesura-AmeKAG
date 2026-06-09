@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.h
 //  Spec [6.1]: JSON save/load system with schema versioning.
 //  Uses nlohmann/json v3.11.3 — structured save data, nested objects,
@@ -60,11 +60,28 @@ public:
 
     int currentSchemaVersion() const { return m_currentSchemaVersion; }
 
+    // Encryption (AES-256-GCM via CryptoEngine)
+    static constexpr uint32_t ENCRYPT_MAGIC = 0x53454143;
+    void setEncryptionKey(const uint8_t key[32]);
+    void clearEncryptionKey();
+    bool isEncryptionEnabled() const { return m_keySet; }
+
+    // Thumbnail capture (SU-4 stub — bgfx readback deferred)
+
+    // Pluggable storage provider (SU-6) — default: LocalFileSaveProvider
+    void setSaveProvider(std::unique_ptr<class ISaveProvider> provider);
+    ISaveProvider* getSaveProvider() const { return m_saveProvider.get(); }
+
+    std::string captureThumbnailPNG(int width = 320, int height = 180);
+
 private:
     SaveManager() = default;
 
     std::string m_saveDir;
     int m_currentSchemaVersion = 1;
+        bool m_keySet = false;
+    uint8_t m_encryptKey[32] = {0};
+    std::unique_ptr<class ISaveProvider> m_saveProvider;
     std::unordered_map<int, std::pair<int, MigrationFn>> m_migrations;
 
     std::string slotPath(int slot) const;
