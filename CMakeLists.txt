@@ -249,6 +249,12 @@ set(ENGINE_HEADERS
 )
 
 # Executable
+if(NOT ENGINE_SOURCES)
+  message(FATAL_ERROR "ENGINE_SOURCES is empty! This is a bug.")
+endif()
+if(NOT ENGINE_SOURCES)
+  message(FATAL_ERROR "ENGINE_SOURCES is empty on this platform")
+endif()
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
 # -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
