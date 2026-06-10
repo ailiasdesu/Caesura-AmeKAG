@@ -544,7 +544,7 @@ static std::string captureFrameBase64(int w, int h) {
     static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string result;
     result.reserve(((size + 2) / 3) * 4);
-    for (size_t i = 0; i < size; i += 3) {
+    for (size_t i = 0; i < static_cast<size_t>(size); i += 3) {
         unsigned char a = buffer[i];
         unsigned char b = (i + 1 < size) ? buffer[i + 1] : 0;
         unsigned char c = (i + 2 < size) ? buffer[i + 2] : 0;
