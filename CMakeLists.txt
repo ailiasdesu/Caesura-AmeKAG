@@ -114,7 +114,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) ��??no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) --??no C build needed
 
 # Engine sources
 
@@ -249,12 +249,6 @@ set(ENGINE_HEADERS
 )
 
 # Executable
-if(NOT ENGINE_SOURCES)
-  message(FATAL_ERROR "ENGINE_SOURCES is empty! This is a bug.")
-endif()
-if(NOT ENGINE_SOURCES)
-  message(FATAL_ERROR "ENGINE_SOURCES is empty on this platform")
-endif()
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
 # -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
@@ -359,12 +353,12 @@ option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg QUIET COMPONENTS avcodec avformat swscale avutil)
     if(FFmpeg_FOUND)
-        message(STATUS "FFmpeg found �� video decoding enabled")
+        message(STATUS "FFmpeg found -- video decoding enabled")
         target_link_libraries(${PROJECT_NAME} PRIVATE
             FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
         target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
     else()
-        message(STATUS "FFmpeg NOT found �� video decoding falls back to pl_mpeg only")
+        message(STATUS "FFmpeg NOT found -- video decoding falls back to pl_mpeg only")
     endif()
 endif()
 
@@ -476,7 +470,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ��??SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine --??SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
