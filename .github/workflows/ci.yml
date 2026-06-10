@@ -84,7 +84,7 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
 
       - name: Build (verbose)
-        run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
+        run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 
 
       - name: Test
         continue-on-error: true
@@ -122,10 +122,10 @@ jobs:
 
       - name: Configure (verbose)
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 2>&1 | tail -80
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 
 
       - name: Build
-        run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
+        run: cmake --build build --config Debug --parallel $(nproc) 
 
       - name: Test
         continue-on-error: true
