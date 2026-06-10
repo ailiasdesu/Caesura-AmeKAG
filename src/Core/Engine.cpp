@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -6,7 +6,7 @@ extern "C" {
 #include "Engine.h"
 #include "InputRouter.h"
 #include "BackendRegistry.h"
-#include "DebugManager.h"
+#include "Debug/DebugManager.h"
 #include "RpcServer.h"
 #include "ErrorUI.h"
 #include "SDL3PlatformBackend.h"

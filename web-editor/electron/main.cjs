@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+ï»¿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -261,7 +261,7 @@ function createWindow() {
     height: 950,
     minWidth: 1100,
     minHeight: 650,
-    title: "Caesura (AmeKAG) ¡ª Visual Novel Engine",
+    title: "Caesura (AmeKAG) ï¿½ï¿½ Visual Novel Engine",
     backgroundColor: "#0f0f14",
     webPreferences: {
       nodeIntegration: false,

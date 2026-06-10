@@ -382,22 +382,63 @@ function AppInner() {
   }, [sidebarActivity, sidebarVisible]);
 
   // Run / Stop
-  const runScript = useCallback(() => {
+  const runScript = useCallback(async () => {
     if (state.previewing) return;
     dispatch({ type: "SET_PREVIEW", payload: true });
-    addToast("\u8FD0\u884C KAG \u811A\u672C...");
-  }, [state.previewing, dispatch, addToast]);
+    addToast("运行 KAG 脚本...");
+    try {
+      const script = state.openFiles?.[state.activeFileIdx]?.content || "";
+      if (window.caesura) {
+        const result = await window.caesura.run(script);
+        dispatch({ type: "ADD_LOG", payload: { level: "info", message: "RPC run: " + JSON.stringify(result) } });
+      } else {
+        dispatch({ type: "ADD_LOG", payload: { level: "warn", message: "引擎未连接（浏览器模式）" } });
+      }
+    } catch (e) {
+      dispatch({ type: "ADD_LOG", payload: { level: "error", message: "RPC run error: " + e.message } });
+    }
+  }, [state.previewing, state.openFiles, state.activeFileIdx, dispatch, addToast]);
 
-  const stopScript = useCallback(() => {
+  const stopScript = useCallback(async () => {
     dispatch({ type: "SET_PREVIEW", payload: false });
-    addToast("\u505C\u6B62\u8FD0\u884C");
+    addToast("停止运行");
+    try {
+      if (window.caesura) await window.caesura.stop();
+    } catch (e) {
+      dispatch({ type: "ADD_LOG", payload: { level: "error", message: "RPC stop error: " + e.message } });
+    }
   }, [dispatch, addToast]);
 
   // Package build
-  const handlePackageBuild = useCallback((platform) => {
-    addToast("\u2713 \u5DF2\u6253\u5305 " + platform + " \u2192 ./dist/");
+  const handlePackageBuild = useCallback(async (platform) => {
     setShowPackagePanel(false);
-  }, [addToast]);
+    addToast("打包中: " + platform + "...");
+    dispatch({ type: "SET_PACKAGE_RESULT", payload: null });
+    try {
+      if (window.caesura) {
+        const result = await window.caesura.package(platform);
+        if (result.success) {
+          addToast("✓ 打包完成 → " + (result.path || "release/"));
+          dispatch({ type: "SET_PACKAGE_RESULT", payload: result });
+        } else {
+          addToast("✕ 打包失败: " + (result.error || "unknown"));
+          dispatch({ type: "SET_PACKAGE_RESULT", payload: result });
+        }
+      }
+    } catch (e) {
+      addToast("✕ 打包失败: " + e.message);
+    }
+  }, [addToast, dispatch]);
+
+  // Engine RPC: status + logs + periodic ping
+  useEffect(() => {
+    if (!window.caesura) return;
+    window.caesura.onStatus((s) => dispatch({ type: "SET_STATUS", payload: s.running ? "connected" : "disconnected" }));
+    window.caesura.onLog((msg) => dispatch({ type: "ADD_LOG", payload: { level: msg.level || "info", message: msg.message || JSON.stringify(msg) } }));
+    const pingTimer = setInterval(() => { window.caesura.ping().then(() => dispatch({ type: "SET_STATUS", payload: "connected" })).catch(() => {}); }, 5000);
+    window.caesura.ping().then(() => dispatch({ type: "SET_STATUS", payload: "connected" })).catch(() => {});
+    return () => clearInterval(pingTimer);
+  }, [dispatch]);
 
   // Keyboard shortcuts
   useEffect(() => {

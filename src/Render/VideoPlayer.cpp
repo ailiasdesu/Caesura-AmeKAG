@@ -1,4 +1,4 @@
-#include <cstdio>
+ï»¿#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <vector>
@@ -7,7 +7,7 @@
 #define PL_MPEG_IMPLEMENTATION
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
-#include "../Core/DebugManager.h"
+#include "../Debug/DebugManager.h"
 #include "../Core/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
@@ -114,7 +114,7 @@ VideoHandle VideoPlayer::open(const char* path) {
         vs.ended    = false;
         vs.hasFrame = false;
 
-        // SwsContext for YUV ¡ú RGBA
+        // SwsContext for YUV ï¿½ï¿½ RGBA
         SwsContext* sws = sws_getContext(
             avCodec->width, avCodec->height, avCodec->pix_fmt,
             avCodec->width, avCodec->height, AV_PIX_FMT_RGBA,
@@ -320,7 +320,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         }
         return false;
 #else
-        // FFmpeg not compiled ¡ª fall through to pl_mpeg below
+        // FFmpeg not compiled ï¿½ï¿½ fall through to pl_mpeg below
 #endif
     }
 

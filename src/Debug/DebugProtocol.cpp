@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- DebugProtocol.cpp
 //  Phase 8.2: Lua debug hooks for breakpoints, stepping, and inspection.
 // ===========================================================================
@@ -11,7 +11,7 @@ extern "C" {
 
 #include "DebugProtocol.h"
 #include "HotReload.h"
-#include "../Core/DebugManager.h"
+#include "DebugManager.h"
 #include <thread>
 #include <chrono>
 #include <cstdio>

@@ -3,7 +3,7 @@
 #include <lauxlib.h>
 }
 #include "DebugBinding.h"
-#include "../Core/DebugManager.h"
+#include "../Debug/DebugManager.h"
 #include <cstdio>
 #include <string>
 

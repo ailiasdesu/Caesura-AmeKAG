@@ -1,6 +1,6 @@
 ﻿#include "doctest.h"
 #include "../src/Core/BackendRegistry.h"
-#include "../src/Core/DebugManager.h"
+#include "../src/Debug/DebugManager.h"
 #include "../src/Core/JobSystem.h"
 
 using namespace Caesura;
