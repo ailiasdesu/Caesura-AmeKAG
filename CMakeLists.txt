@@ -249,6 +249,8 @@ set(ENGINE_HEADERS
 )
 
 # Executable
+message(STATUS "ENGINE_SOURCES: ${ENGINE_SOURCES}")
+message(STATUS "ENGINE_HEADERS: ${ENGINE_HEADERS}")
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
 # -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
