@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 # Caesura (AmeKAG) — CI/CD Pipeline
 # Build + Test on Windows (MSVC), macOS (Clang), Linux (GCC).
