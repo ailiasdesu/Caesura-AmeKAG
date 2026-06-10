@@ -253,6 +253,40 @@ ipcMain.handle("package-build", async (event, platform) => {
   }
 });
 
+
+// =========================================================================
+// Custom protocol — serves app files with proper MIME for ES modules
+// =========================================================================
+const { protocol, net: electronNet } = require("electron");
+
+function registerAppProtocol() {
+  protocol.handle("app", (request) => {
+    try {
+      const url = new URL(request.url);
+      const filePath = path.join(__dirname, "..", url.pathname === "/" || url.pathname === "" ? "index.html" : url.pathname);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = {
+        ".html": "text/html; charset=utf-8",
+        ".js":   "text/javascript; charset=utf-8", 
+        ".css":  "text/css; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".png":  "image/png",
+        ".svg":  "image/svg+xml",
+      }[ext] || "application/octet-stream";
+      
+      const fileUrl = "file:///" + filePath.replace(/\\/g, "/");
+      return electronNet.fetch(fileUrl).then((r) => {
+        return new Response(r.body, { 
+          status: r.status, 
+          headers: { "content-type": mime, "access-control-allow-origin": "*" }
+        });
+      });
+    } catch (e) {
+      return new Response("Not Found: " + e.message, { status: 404 });
+    }
+  });
+}
+
 // =========================================================================
 // Window management
 // =========================================================================
@@ -273,24 +307,17 @@ function createWindow() {
     },
   });
 
-  // Use file:// when packaged (win-unpacked), HTTP in dev (with Vite)
   const hasDevFlag = process.argv.includes("--dev");
-  const isLocalFile = !hasDevFlag || !app.isPackaged;
-
-  // Always try local file first in packaged mode
-  if (!isLocalFile) {
+  if (hasDevFlag && !app.isPackaged) {
     const devUrl = "http://localhost:5173";
     mainWindow.loadURL(devUrl).catch(() => {
       console.log("[Electron] Dev server not available, loading local file");
-      mainWindow.loadFile(path.join(__dirname, "..", "index.html"));
+      mainWindow.loadURL("app://app/index.html");
     });
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-  } else {
     mainWindow.loadFile(path.join(__dirname, "..", "index.html"));
   }
-
-  mainWindow.on("closed", () => { mainWindow = null; });
 
   // Debug: capture renderer console and load errors
   mainWindow.webContents.on("console-message", (event, level, message) => {
@@ -299,9 +326,12 @@ function createWindow() {
   mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDesc, validatedURL) => {
     console.error("[Renderer FAIL]", errorCode, errorDesc, validatedURL);
   });
+
+  mainWindow.on("closed", () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await registerAppProtocol();
   startEngine();
   setTimeout(createWindow, 2000);
 });
