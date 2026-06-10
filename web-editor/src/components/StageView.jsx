@@ -6,7 +6,7 @@ export default function StageView() {
   const canvasRef = useRef(null);
   const areaRef = useRef(null);
   const [didInitialFit, setDidInitialFit] = useState(false);
-  const panning = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const { resolution, stageZoom, stagePanX, stagePanY, stageGrid, stageSafe, previewing } = state;
 
@@ -65,20 +65,20 @@ export default function StageView() {
   const handleMouseDown = useCallback((e) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       e.preventDefault();
-      panning.current = true;
+      setIsPanning(true);
       panStart.current = { x: e.clientX, y: e.clientY, px: stagePanX, py: stagePanY };
     }
   }, [stagePanX, stagePanY]);
 
   const handleMouseMove = useCallback((e) => {
-    if (!panning.current) return;
+    if (!isPanning) return;
     const dx = (e.clientX - panStart.current.x) / zoom;
     const dy = (e.clientY - panStart.current.y) / zoom;
     dispatch({ type: "SET_PAN", payload: { x: panStart.current.px + dx, y: panStart.current.py + dy } });
   }, [zoom, dispatch]);
 
   const handleMouseUp = useCallback(() => {
-    panning.current = false;
+    setIsPanning(false);
   }, []);
 
   // Global mouseup to catch releases outside the area
@@ -101,7 +101,7 @@ export default function StageView() {
       onDrop={handleDrop}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      style={{ cursor: panning.current ? "grabbing" : "default" }}
+      style={{ cursor: isPanning ? "grabbing" : "default" }}
     >
       <div className={`stage-viewport${previewing ? " preview-active" : ""}`}
         style={{
