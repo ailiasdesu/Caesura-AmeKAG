@@ -12,21 +12,23 @@ let rpcPending = new Map();
 // =========================================================================
 
 function getEnginePath() {
-  const isDev = !app.isPackaged;
-  if (isDev) {
-    return path.join(__dirname, "..", "..", "build_nol2d", "Release", "CaesuraAmeKAG.exe");
-  }
-  // Packaged: engine is in extraResources
-  return path.join(process.resourcesPath, "engine", "CaesuraAmeKAG.exe");
+  const fs = require("fs");
+  // 1. Packaged (win-unpacked): engine at resources/engine/
+  const pkgDir = path.join(__dirname, "..", "..", "engine");
+  const pkgPath = path.join(pkgDir, "CaesuraAmeKAG.exe");
+  if (fs.existsSync(pkgPath)) return pkgPath;
+  // 2. Dev: engine at ../../build_nol2d/Release/
+  const devPath = path.join(__dirname, "..", "..", "build_nol2d", "Release", "CaesuraAmeKAG.exe");
+  if (fs.existsSync(devPath)) return devPath;
+  return devPath; // return best guess so error message is helpful
 }
 
 function getEngineCwd() {
-  const isDev = !app.isPackaged;
-  if (isDev) {
-    return path.join(__dirname, "..", "..", "build_nol2d", "Release");
-  }
-  return path.join(process.resourcesPath, 'engine');
-  return path.join(process.resourcesPath, "engine");
+  const fs = require("fs");
+  // Same priority: try engine dir first, then build dir
+  const pkgDir = path.join(__dirname, "..", "..", "engine");
+  if (fs.existsSync(pkgDir)) return pkgDir;
+  return path.join(__dirname, "..", "..", "build_nol2d", "Release");
 }
 
 function startEngine() {
