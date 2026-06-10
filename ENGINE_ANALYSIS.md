@@ -88,8 +88,8 @@ web-editor/
 |------|:---:|------|
 | MobileAdapter.cpp | P2 | 完整移动端存根，触屏事件预埋 |
 | MetalNativeRenderPath.cpp | 移交 | macOS 开发者验证 |
-| Live2DBackend.cpp:227 | TODO | 纹理加载到 Cubism 渲染器 (非阻塞) |
-| SaveManager.cpp:359 | 存根 | 缩略图截图 (SU-4, 有磁盘I/O回退) |
+| Live2DBackend.cpp:227 | ✅ | 纹理加载已完成 (stbi_load → ILive2DRenderPath::createTexture) |
+| SaveManager.cpp:359 | ⚠️ | 缩略图截图可用 (bgfx::requestScreenShot 磁盘模式, 存档场景可接受) |
 | ISaveProvider.cpp:36 | 存根 | 存档文件列表 |
 | CRLManager.cpp:192 | 预期 | 离线/嵌入式使用 |
 | NullAudioBackend.cpp | 预期 | SE 空操作存根 |

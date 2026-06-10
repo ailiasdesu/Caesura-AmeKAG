@@ -1,6 +1,7 @@
 ﻿# KAG API Reference — 完整版
 
-> Caesura (AmeKAG) 引擎 KAG 脚本 API。54 个 KAG 命令，6 个子模块（MiniGame API 已独立：[docs/api/MiniGame-API.md](MiniGame-API.md)）。
+> Caesura (AmeKAG) 引擎 KAG 脚本 API。31 C++ 函数 + 53 Lua 命令 = 84 个 API 入口，9 个子模块。
+> MiniGame API 已独立：[docs/api/MiniGame-API.md](MiniGame-API.md)。
 > 所有 C++ 访问通过 `backend.lua → BackendRegistry → I*Backend` 抽象接口。
 
 ## Layer（图层操作）
@@ -30,6 +31,16 @@
 | `KAG.render_text(text, x, y, r, g, b, a)` | text:string, x,y:number, r,g,b,a:number | 直接渲染文本在坐标 |
 | `KAG.render_ruby(text, ruby, x, y, r, g, b, a)` | text:string, ruby:string, x,y:number, r,g,b,a:number | Ruby注音文本 |
 | `KAG.line_height()` | — | 返回当前字体行高(px) |
+| `KAG.show_name(name)` | name:string | 显示说话人名称 |
+| `KAG.hide_name()` | — | 隐藏说话人名称 |
+| `KAG.clear_text()` | — | 清除消息层全部文本 |
+| `KAG.clear_text_layer()` | — | 清除消息图层 |
+| `KAG.show_button(text, label?)` | text:string, label:string? | 显示选项按钮 |
+| `KAG.end_buttons()` | — | 结束选项按钮组，等待选择 |
+| `KAG.set_skip_mode(enabled)` | enabled:bool | 启用/禁用快速跳过模式 |
+| `KAG.reset_text_state()` | — | 重置文本状态（字体/颜色/速度） |
+| `KAG.pause_text(duration?)` | duration:number(0) | 暂停文本输出（0=等点击） |
+| `KAG.set_name_color(r,g,b)` | r,g,b:number | 说话人名字颜色 |
 
 ## Audio（音频）
 
@@ -60,6 +71,20 @@
 | `KAG.get_active_voices()` | — | 活跃语音数 |
 | `KAG.set_listener(posX,posY,posZ, atX,atY,atZ)` | posX,posY,posZ,atX,atY,atZ:number | 更新3D监听器位置 |
 
+
+## Resource（资源加载）
+
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `KAG.preload(type, path)` | type:string("bg"/"fg"/"voice"/"se"/"bgm"/"video"), path:string | 预加载资源到缓存 |
+| `KAG.is_loaded(path)` | path:string | 资源是否已加载 |
+| `KAG.is_pending(path)` | path:string | 资源是否加载中 |
+| `KAG.flush_cache()` | — | 释放所有缓存资源 |
+| `KAG.get_texture(path)` | path:string | 从缓存获取纹理句柄 |
+| `KAG.preload_transition(paths)` | paths:table | 预加载转场目标资源（双缓冲） |
+| `KAG.promote_transition_slot()` | — | 将预加载槽提升为当前槽（转场用） |
+| `KAG.has_pending_transition()` | — | 是否有待执行的转场预加载 |
+
 ## System（系统控制）
 
 | 函数 | 参数 | 说明 |
@@ -81,6 +106,9 @@
 | `KAG.set_encryption_key(key)` | key:string | 设置存档加密密钥 |
 | `KAG.clear_encryption_key()` | — | 清除加密密钥 |
 | `KAG.log(level, msg)` | level:string("trace"/"debug"/"info"/"warn"/"error"/"fatal"), msg:string | 引擎日志 |
+| `KAG.emb(expression)` | expression:string | 执行嵌入式表达式（数学/字符串运算） |
+| `KAG.eval(code)` | code:string | 执行任意 Lua 代码片段（沙箱约束内） |
+| `KAG.history()` | — | 将当前选择计入历史分支（剧情分支/回滚用） |
 
 ## Transition（转场效果）
 
