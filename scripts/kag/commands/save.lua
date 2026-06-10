@@ -125,7 +125,7 @@ function SaveCommands.load(ctx, params)
     local slot = tonumber(params.slot or params[1] or 0)
 
     -- Call C++ SaveManager via KAG binding
-    local state, meta = KAG.load_game(slot)`r`n    if not state or type(state) ~= "table" then
+    local state, meta = KAG.load_game(slot)    if not state or type(state) ~= "table" then
         print("[SaveCmd] Load failed for slot " .. slot .. ": " .. tostring(meta or "unknown error"))
         ctx.tf = ctx.tf or {}
         ctx.tf.load_result = "error"

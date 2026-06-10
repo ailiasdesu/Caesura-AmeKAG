@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+﻿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -312,11 +312,11 @@ function createWindow() {
     const devUrl = "http://localhost:5173";
     mainWindow.loadURL(devUrl).catch(() => {
       console.log("[Electron] Dev server not available, loading local file");
-      mainWindow.loadURL("app://app/index.html");
+      mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
     });
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "index.html"));
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
   // Debug: capture renderer console and load errors

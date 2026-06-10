@@ -130,13 +130,13 @@ DebugManager::~DebugManager() {
 // -- init -------------------------------------------------------------------
 
 bool DebugManager::init(const char* logDir) {
-    // Security: validate logDir contains no path traversal
+    // [TD-15] Step-by-step restore to isolate stack overrun
+    if (m_initialized) return true;
     if (logDir && strstr(logDir, "..")) {
         fprintf(stderr, "[DebugManager] init: path traversal blocked: %s\n", logDir);
         return false;
     }
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_initialized) return true;
     if (m_initialized) return true;
     {
         std::string _logPath(logDir);
@@ -155,30 +155,21 @@ bool DebugManager::init(const char* logDir) {
         std::string _accum;
         for (char _c : _logPath) {
             _accum += _c;
-            if (_c == '/') {
-                mkdir(_accum.c_str(), 0755);
-            }
+            if (_c == '/') { mkdir(_accum.c_str(), 0755); }
         }
         mkdir(_accum.c_str(), 0755);
 #endif
     }
-
     m_logFilePath = std::string(logDir) + "/caesura_" + formatTimestampFile() + ".log";
     m_logFile.open(m_logFilePath, std::ios::out | std::ios::trunc);
     if (!m_logFile.is_open()) {
         fprintf(stderr, "[DebugManager] Cannot open log file: %s\n", m_logFilePath.c_str());
-        return false;
+        m_initialized = true;
+        return true;
     }
-
-    // Flush any pre-init ring buffer entries to disk
-    for (const auto& entry : m_ringBuffer) {
-        writeToFile(entry);
-    }
-
+    for (const auto& entry : m_ringBuffer) { writeToFile(entry); }
     m_initialized = true;
-    log(DbgLevel::Info, SubSys::Dbg, ErrCode::Ok,
-        "DebugManager initialized. Log: %s", m_logFilePath.c_str());
-    printf("[DebugManager] Logging to: %s\n", m_logFilePath.c_str());
+    fprintf(stderr, "[DebugManager] Logging to: %s\n", m_logFilePath.c_str());
     return true;
 }
 
