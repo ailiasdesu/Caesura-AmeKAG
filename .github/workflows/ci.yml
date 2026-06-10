@@ -87,7 +87,7 @@ jobs:
           submodules: recursive
 
       - name: Install Dependencies
-        run: brew install cmake freetype zstd openssl@3 pkg-config
+        run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)" 
@@ -113,7 +113,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev pkg-config
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libsdl3-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev pkg-config
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1
