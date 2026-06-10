@@ -259,20 +259,12 @@ if(CAESURA_FFMPEG_FOUND)
     target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_INCLUDE_DIRS})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
-endif()
-    # Auto-copy FFmpeg DLLs to output directory on Windows
+    # Copy FFmpeg DLLs to output at configure time (avoids MSBuild Unicode path issues)
     if(WIN32)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${FFMPEG_LIBRARY_DIR}/avcodec-62.dll"
-                "${FFMPEG_LIBRARY_DIR}/avformat-62.dll"
-                "${FFMPEG_LIBRARY_DIR}/swscale-9.dll"
-                "${FFMPEG_LIBRARY_DIR}/avutil-60.dll"
-                "${FFMPEG_LIBRARY_DIR}/swresample-6.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-            COMMENT "Copying FFmpeg DLLs to output"
-        )
+        file(COPY ${FFMPEG_LIBRARY_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/Release
+            FILES_MATCHING PATTERN "av*.dll" PATTERN "sw*.dll")
     endif()
+endif()
 
 
 target_include_directories(${PROJECT_NAME} PRIVATE 

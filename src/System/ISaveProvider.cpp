@@ -6,6 +6,7 @@
 #include "ISaveProvider.h"
 #include <fstream>
 #include <cstdio>
+#include <filesystem>
 
 namespace Caesura {
 
@@ -33,11 +34,25 @@ bool LocalFileSaveProvider::deleteFile(const std::string& path) {
 }
 
 std::vector<std::string> LocalFileSaveProvider::listFiles(const std::string& pattern) {
-    // Stub: pattern-based listing requires filesystem API.
-    // The full implementation would use std::filesystem::directory_iterator.
-    // For now, SaveManager uses its own slot-based iteration.
-    (void)pattern;
-    return {};
+    std::vector<std::string> result;
+    std::string p = pattern;
+    auto slash = p.find_last_of("/\\");
+    std::string dirPath = (slash != std::string::npos) ? p.substr(0, slash) : ".";
+    std::string glob = (slash != std::string::npos) ? p.substr(slash + 1) : pattern;
+    bool matchAll = (glob == "*" || glob == "*.*");
+
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+            if (!entry.is_regular_file()) continue;
+            std::string fn = entry.path().filename().string();
+            if (matchAll || fn == glob) {
+                result.push_back(entry.path().string());
+            }
+        }
+    } catch (const std::exception&) {
+        // Directory may not exist — return empty
+    }
+    return result;
 }
 
 } // namespace Caesura

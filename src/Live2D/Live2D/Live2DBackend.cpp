@@ -17,6 +17,7 @@
 #include <Model/CubismUserModel.hpp>
 #include <ICubismModelSetting.hpp>
 #include <CubismModelSettingJson.hpp>
+#include <stb_image.h>
 #include <Motion/CubismMotion.hpp>
 #include <Motion/CubismMotionManager.hpp>
 #include <Motion/CubismMotionQueueManager.hpp>
@@ -188,7 +189,7 @@ void Live2DBackend::setRenderDevice(IRenderDevice* device) {
 }
 
 // ============================================================
-// Model loading é—?Cubism 5 API
+// Model loading ï¿½?Cubism 5 API
 // ============================================================
 bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     std::string dir = dirName(model.dir);
@@ -224,17 +225,17 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
         std::string texPath = joinPath(dir, model.setting->GetTextureFileName(i));
         auto texData = readFile(texPath);
         if (!texData.empty()) {
-            // TODO: Load texture into Cubism renderer
-            SDL_Log("[Live2D] Texture %d: %s (%zu bytes)", i, texPath.c_str(), texData.size());
-        }
-    }
-
-    // 6. Cache motions (keyed by file path é—?Cubism 5 has no GetMotionName)
-    for (csmInt32 i = 0; i < model.setting->GetMotionGroupCount(); ++i) {
-        const char* group = model.setting->GetMotionGroupName(i);
-        for (csmInt32 j = 0; j < model.setting->GetMotionCount(group); ++j) {
-            std::string motionPath = joinPath(dir, model.setting->GetMotionFileName(group, j));
-            auto motionData = readFile(motionPath);
+            // Create Cubism texture from loaded PNG data
+            int w, h, comp;
+            unsigned char* pixels = stbi_load_from_memory(
+                reinterpret_cast<const stbi_uc*>(texData.data()),
+                static_cast<int>(texData.size()), &w, &h, &comp, 4);
+            if (pixels) {
+                model.textures[i] = ILive2DRenderPath::createTexture(w, h, pixels);
+                stbi_image_free(pixels);
+                SDL_Log("[Live2D] Texture %d loaded: %dx%d", i, w, h);
+            } else {
+                SDL_Log("[Live2D] Texture %d failed to decode: %s", i, texPath.c_str());
             if (!motionData.empty()) {
                 model.motionCache[motionPath] = std::move(motionData);
             }
@@ -285,7 +286,7 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
 }
 
 // ============================================================
-// Per-frame: Cubism render é—?render path é—?bgfx
+// Per-frame: Cubism render ï¿½?render path ï¿½?bgfx
 // ============================================================
 void Live2DBackend::render(float dt) {
     if (!m_renderPath) return;
@@ -299,7 +300,7 @@ void Live2DBackend::render(float dt) {
         static_cast<Live2DUserModel*>(model->userModel.get())->motionManager()->UpdateMotion(cubismModel, dt);
         static_cast<Live2DUserModel*>(model->userModel.get())->expressionManager()->UpdateMotion(cubismModel, dt);
 
-        // Cubism render é—?bgfx (via pluggable render path)
+        // Cubism render ï¿½?bgfx (via pluggable render path)
         m_renderPath->beginFrame(static_cast<CubismRenderer*>(model->renderer));
         m_renderPath->endFrame(static_cast<CubismRenderer*>(model->renderer), model->bgfxTex);
 
@@ -315,7 +316,7 @@ void Live2DBackend::render(float dt) {
 }
 
 // ============================================================
-// Motion playback é—?Cubism 5 API
+// Motion playback ï¿½?Cubism 5 API
 // ============================================================
 bool Live2DBackend::playMotion(int handle, const std::string& name) {
     auto it = m_models.find(handle);
@@ -371,7 +372,7 @@ void Live2DBackend::setExpression(int handle, const std::string& name) {
 }
 
 // ============================================================
-// Parameter é—?Cubism 5 API
+// Parameter ï¿½?Cubism 5 API
 // ============================================================
 void Live2DBackend::setParameter(int handle, const std::string& param, float value) {
     auto it = m_models.find(handle);

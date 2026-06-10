@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -563,6 +563,7 @@ std::string Engine::captureFrameForRpc(int w, int h) {
 void Engine::runRpc() {
     fprintf(stderr, "[Engine] Starting JSON-RPC loop (stdin/stdout)\n");
     RpcServer::instance().setLuaState(m_lua->state());
+    RpcServer::instance().setFrameCaptureCallback([this](int w, int h) { return captureFrameForRpc(w, h); });
     RpcServer::instance().run();
 }
 

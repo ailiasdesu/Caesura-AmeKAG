@@ -11,6 +11,8 @@
 #include "SaveManager.h"
 #include "ISaveProvider.h"
 #include "../CARC/CryptoEngine.h"
+#include <bgfx/bgfx.h>
+#include <vector>
 
 #include <cstdio>
 #include <cstring>
@@ -360,7 +362,33 @@ void SaveManager::registerBuiltinMigrations() {
 // ============================================================================
 std::string SaveManager::captureThumbnailPNG(int width, int height) {
     (void)width; (void)height;
-    return "";
+    char path[256];
+    static int thumbCounter = 0;
+    snprintf(path, sizeof(path), "save_thumb_%d.png", thumbCounter++);
+    if (thumbCounter > 99) thumbCounter = 0;
+    bgfx::requestScreenShot(BGFX_INVALID_HANDLE, path);
+    bgfx::frame();
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) return "";
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::vector<unsigned char> buffer(size);
+    file.read(reinterpret_cast<char*>(buffer.data()), size);
+    file.close();
+    std::remove(path);
+    static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    result.reserve(((size + 2) / 3) * 4);
+    for (size_t j = 0; j < size; j += 3) {
+        unsigned char a = buffer[j];
+        unsigned char b = (j + 1 < size) ? buffer[j + 1] : 0;
+        unsigned char c = (j + 2 < size) ? buffer[j + 2] : 0;
+        result += b64[a >> 2];
+        result += b64[((a & 3) << 4) | (b >> 4)];
+        result += (j + 1 < size) ? b64[((b & 15) << 2) | (c >> 6)] : '=';
+        result += (j + 2 < size) ? b64[c & 63] : '=';
+    }
+    return result;
 }
 
 } // namespace Caesura
