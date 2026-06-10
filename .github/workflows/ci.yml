@@ -113,7 +113,7 @@ jobs:
           wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
           tar xzf SDL3-3.2.0.tar.gz
           cd SDL3-3.2.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake -B build -DCMAKE_BUILD_TYPE=Release  -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
           cmake --build build --parallel $(nproc)
           sudo cmake --install build
           sudo ldconfig
