@@ -64,3 +64,6 @@ build_nol2d/
 # --- Debug logs ---
 stderr*.txt
 stdout*.txt
+
+external/ffmpeg/
+

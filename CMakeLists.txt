@@ -23,82 +23,55 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/zstd/build/cmake ${CMAKE_BINARY_DI
 # Dependencies
 find_package(SDL3 REQUIRED)
 
-# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
-
-# -- FFmpeg (optional, hardware-accelerated video decoding) -----------------
-option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" OFF)
+# -- FFmpeg (hardware-accelerated video decoding, ON by default) -----------
+option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_ENABLE_FFMPEG)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(FFMPEG QUIET
-            libavcodec libavformat libswscale libavutil)
-    endif()
-    if(FFMPEG_FOUND)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
-        target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
-
-# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
-target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
-
-
-# -- FFmpeg (optional, hardware-accelerated video decoding) -----------------
-# To enable: install FFmpeg dev packages
-#   Windows (MSVC): vcpkg install ffmpeg:x64-windows
-#   Linux: apt install libavcodec-dev libavformat-dev libswscale-dev libavutil-dev
-#   macOS: brew install ffmpeg
-# Then rebuild with: cmake -DCAESURA_ENABLE_FFMPEG=ON
-option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" OFF)
-if(CAESURA_ENABLE_FFMPEG)
-    # Method 1: try pkg-config (Linux/macOS)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(FFMPEG QUIET
-            libavcodec libavformat libswscale libavutil)
-    endif()
-
-    # Method 2: try CMake find modules (works with vcpkg and some installs)
-    if(NOT FFMPEG_FOUND)
-        find_path(FFMPEG_INCLUDE_DIRS libavcodec/avcodec.h
-            PATHS ${CMAKE_SOURCE_DIR}/external/ffmpeg/include
-                  ${VCPKG_INSTALLED_DIR}/include
-                  /usr/local/include /opt/homebrew/include)
-        find_library(FFMPEG_avcodec_LIBRARY  avcodec
-            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
-        find_library(FFMPEG_avformat_LIBRARY avformat
-            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
-        find_library(FFMPEG_swscale_LIBRARY  swscale
-            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
-        find_library(FFMPEG_avutil_LIBRARY   avutil
-            PATHS ${VCPKG_INSTALLED_DIR}/lib /usr/local/lib /opt/homebrew/lib)
-        if(FFMPEG_avcodec_LIBRARY AND FFMPEG_avformat_LIBRARY AND
-           FFMPEG_swscale_LIBRARY AND FFMPEG_avutil_LIBRARY AND
-           FFMPEG_INCLUDE_DIRS)
+    # Method 1: bundled in external/ffmpeg (Windows prebuilt)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/external/ffmpeg/include")
+        set(FFMPEG_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external/ffmpeg/include")
+        set(FFMPEG_LIBRARY_DIR "${CMAKE_SOURCE_DIR}/external/ffmpeg/lib")
+        find_library(FFMPEG_avcodec_LIBRARY  avcodec  PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
+        find_library(FFMPEG_avformat_LIBRARY avformat PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
+        find_library(FFMPEG_swscale_LIBRARY  swscale  PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
+        find_library(FFMPEG_avutil_LIBRARY   avutil   PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
+        if(FFMPEG_avcodec_LIBRARY AND FFMPEG_avformat_LIBRARY AND FFMPEG_swscale_LIBRARY AND FFMPEG_avutil_LIBRARY)
             set(FFMPEG_FOUND TRUE)
-            set(FFMPEG_LIBRARIES
-                ${FFMPEG_avcodec_LIBRARY}
-                ${FFMPEG_avformat_LIBRARY}
-                ${FFMPEG_swscale_LIBRARY}
-                ${FFMPEG_avutil_LIBRARY})
+            set(FFMPEG_LIBRARIES ${FFMPEG_avcodec_LIBRARY} ${FFMPEG_avformat_LIBRARY} ${FFMPEG_swscale_LIBRARY} ${FFMPEG_avutil_LIBRARY})
+            message(STATUS "FFmpeg: bundled (external/ffmpeg)")
+        endif()
+    endif()
+
+    # Method 2: vcpkg
+    if(NOT FFMPEG_FOUND AND DEFINED VCPKG_INSTALLED_DIR)
+        find_path(FFMPEG_INCLUDE_DIRS libavcodec/avcodec.h PATHS ${VCPKG_INSTALLED_DIR}/include)
+        find_library(FFMPEG_avcodec_LIBRARY  avcodec  PATHS ${VCPKG_INSTALLED_DIR}/lib)
+        find_library(FFMPEG_avformat_LIBRARY avformat PATHS ${VCPKG_INSTALLED_DIR}/lib)
+        find_library(FFMPEG_swscale_LIBRARY  swscale  PATHS ${VCPKG_INSTALLED_DIR}/lib)
+        find_library(FFMPEG_avutil_LIBRARY   avutil   PATHS ${VCPKG_INSTALLED_DIR}/lib)
+        if(FFMPEG_avcodec_LIBRARY AND FFMPEG_avformat_LIBRARY AND FFMPEG_swscale_LIBRARY AND FFMPEG_avutil_LIBRARY)
+            set(FFMPEG_FOUND TRUE)
+            set(FFMPEG_LIBRARIES ${FFMPEG_avcodec_LIBRARY} ${FFMPEG_avformat_LIBRARY} ${FFMPEG_swscale_LIBRARY} ${FFMPEG_avutil_LIBRARY})
+            message(STATUS "FFmpeg: vcpkg")
+        endif()
+    endif()
+
+    # Method 3: pkg-config (Linux/macOS)
+    if(NOT FFMPEG_FOUND)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(FFMPEG QUIET libavcodec libavformat libswscale libavutil)
         endif()
     endif()
 
     if(FFMPEG_FOUND)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
-        target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
+        set(CAESURA_FFMPEG_FOUND TRUE)
+        set(CAESURA_FFMPEG_INCLUDE_DIRS ${FFMPEG_INCLUDE_DIRS})
+        set(CAESURA_FFMPEG_LIBRARIES ${FFMPEG_LIBRARIES})
         message(STATUS "FFmpeg video decoding: ENABLED")
     else()
-        message(STATUS "FFmpeg dev libraries not found - install ffmpeg-dev then rebuild")
-        message(STATUS "  Windows: vcpkg install ffmpeg:x64-windows")
-        message(STATUS "  Linux:   sudo apt install libavcodec-dev libavformat-dev libswscale-dev libavutil-dev")
-        message(STATUS "  macOS:   brew install ffmpeg")
-    endif()
-endif()
-
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
-        message(STATUS "FFmpeg video decoding: ENABLED")
-    else()
-        message(STATUS "FFmpeg not found - pl_mpeg fallback only")
+        message(STATUS "FFmpeg not found -- pl_mpeg fallback only")
+        message(STATUS "  To enable: place FFmpeg dev build in external/ffmpeg/")
+        message(STATUS "  Download: https://github.com/BtbN/FFmpeg-Builds/releases")
     endif()
 endif()
 
@@ -141,7 +114,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) ï¿½ï??no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ï¿½ï¿½??no C build needed
 
 # Engine sources
 
@@ -278,6 +251,30 @@ set(ENGINE_HEADERS
 # Executable
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
+# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
+target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
+
+# -- FFmpeg (apply if found above) -----------------------------------------
+if(CAESURA_FFMPEG_FOUND)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
+endif()
+    # Auto-copy FFmpeg DLLs to output directory on Windows
+    if(WIN32)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${FFMPEG_LIBRARY_DIR}/avcodec-62.dll"
+                "${FFMPEG_LIBRARY_DIR}/avformat-62.dll"
+                "${FFMPEG_LIBRARY_DIR}/swscale-9.dll"
+                "${FFMPEG_LIBRARY_DIR}/avutil-60.dll"
+                "${FFMPEG_LIBRARY_DIR}/swresample-6.dll"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            COMMENT "Copying FFmpeg DLLs to output"
+        )
+    endif()
+
+
 target_include_directories(${PROJECT_NAME} PRIVATE 
     src 
     src/Platform
@@ -364,12 +361,12 @@ option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg QUIET COMPONENTS avcodec avformat swscale avutil)
     if(FFmpeg_FOUND)
-        message(STATUS "FFmpeg found ¡ª video decoding enabled")
+        message(STATUS "FFmpeg found ï¿½ï¿½ video decoding enabled")
         target_link_libraries(${PROJECT_NAME} PRIVATE
             FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
         target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
     else()
-        message(STATUS "FFmpeg NOT found ¡ª video decoding falls back to pl_mpeg only")
+        message(STATUS "FFmpeg NOT found ï¿½ï¿½ video decoding falls back to pl_mpeg only")
     endif()
 endif()
 
@@ -481,7 +478,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ï¿½ï??SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ï¿½ï¿½??SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
