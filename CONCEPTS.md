@@ -19,6 +19,19 @@ SDL3 → bgfx → SoLoud → Lua VM → SaveManager → HotReload → MiniGame �
 processEvents → engine_update (Lua) → beginFrame → engine_render → MiniGame render → endFrame → 音频检测
 ```
 
+### 编辑器 RPC 模式 (--editor)
+```
+Electron main.cjs spawn --editor → Engine::runRpc() → RpcServer::run()
+  stdin/stdout JSON-RPC 8 方法: ping/run/stop/eval/getFrame/getState/assets/logs
+  stderr → main.cjs 转发 → IPC engine-log → React LogPanel
+```
+
+### 帧捕获流程 (getFrame)
+```
+RPC getFrame → Engine::captureFrameForRpc → engine_update (Lua) → render()
+  → captureFrameBase64 → requestScreenShot → bgfx::frame() → 读PNG → base64
+```
+
 ### KAG 脚本流程
 ```
 .ks → tokenizer → parser → scheduler → kag.lua → backend.lua → BackendRegistry → I*Backend
@@ -77,7 +90,7 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 
 | 模块 | 内容 |
 |------|------|
-| Core/ | Engine, BackendRegistry, InputRouter, JobSystem, RpcServer, MobileAdapter |
+| Core/ | Engine, BackendRegistry, InputRouter, JobSystem, RpcServer (JSON-RPC 8方法), MobileAdapter |
 | Render/ | BgfxRenderDevice, LayerManager, ParticleSystem, GpuMonitor, VideoPlayer, 跨平台 shader |
 | Audio/ | SoLoudAudioEngine (BGM/VOICE/SE) |
 | Scripting/ | LuaManager, KAGBinding (61 cmd), RenderBinding, VFXBinding, DevCoreBinding |
@@ -86,7 +99,7 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 | Resource/ | AssetManager, AsyncLoader, ProviderChain, XP3Archive |
 | Live2D/ | Cubism 5 Backend (4 渲染路径, 条件编译) |
 | MiniGame/ | BgfxMiniGameBackend (PBR-lite, 15 Lua API, 跨平台 shader) |
-| Debug/ | DebugManager, HotReload, DebugProtocol |
+| Debug/ | DebugManager (std::put_time 日志), HotReload, DebugProtocol |
 
 ## 外部库
 
@@ -106,3 +119,4 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 ## 知识库
 
 `docs/solutions/` — 已记录的问题解决方案（bugs、最佳实践、工作流模式），按类别组织，含 YAML frontmatter。
+`web-editor/` — Electron + React 编辑器 (12 组件, RPC 桥接, AI 面板, 一键打包)。

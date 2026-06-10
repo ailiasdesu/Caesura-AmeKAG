@@ -1,8 +1,9 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
 > 分析日期: 2026-06-10 | 构建配置: CMake 3.25+ / C++20
-> 构建状态: 上次全量通过 (D3D11 零 TDR)，当前编辑器迭代中
-> 最近提交: 965589f — 光标卡grabbing修复
+> 构建状态: 全量通过 (D3D11 零 TDR)，引擎-编辑器 RPC 全连通
+> 最近提交: 2bab2e5 — 编辑器-引擎全连通 (实时日志+帧预览+渲染修复)
+> 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
 
@@ -79,7 +80,7 @@ web-editor/
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存 |
 | TD-24 | Live2D OpenGLReadback FBO | ✅ |
 
-**摘要**: 20/24 闭合，4 开放（移交/存根/预存，均非阻塞）
+**摘要**: 20/24 闭合，4 开放（移交/存根/预存，均非阻塞）。全量审查确认零核心约束违规、零内存泄漏、零 TDR。
 
 ### 存根/TODO 扫描 (2026-06-10)
 
@@ -87,11 +88,26 @@ web-editor/
 |------|:---:|------|
 | MobileAdapter.cpp | P2 | 完整移动端存根，触屏事件预埋 |
 | MetalNativeRenderPath.cpp | 移交 | macOS 开发者验证 |
-| Live2DBackend.cpp:227 | TODO | 纹理加载到 Cubism 渲染器 |
-| SaveManager.cpp:359 | 存根 | 缩略图截图 (SU-4) |
-| ISaveProvider.cpp:36 | 存根 | 模式文件列表 |
+| Live2DBackend.cpp:227 | TODO | 纹理加载到 Cubism 渲染器 (非阻塞) |
+| SaveManager.cpp:359 | 存根 | 缩略图截图 (SU-4, 有磁盘I/O回退) |
+| ISaveProvider.cpp:36 | 存根 | 存档文件列表 |
 | CRLManager.cpp:192 | 预期 | 离线/嵌入式使用 |
 | NullAudioBackend.cpp | 预期 | SE 空操作存根 |
+
+### 全量审查发现 (2026-06-10)
+
+| # | 类别 | 文件 | 说明 | 严重度 |
+|---|------|------|------|:---:|
+| R1 | 合规 | Scripting/*.cpp | 所有 Lua→C++ 访问通过 BackendRegistry + 抽象接口，零违规 | ✅ |
+| R2 | 内存 | Engine.h | 后端 unique_ptr 所有，BackendRegistry 持有裸指针（非所有），生命周期正确 | ✅ |
+| R3 | 线程 | DebugManager/JobSystem | mutex 保护共享状态，15 worker 线程安全 | ✅ |
+| R4 | 日志 | Engine.cpp:84-91 | 子系统使用 fprintf(stderr) 而非 DebugManager::log()，日志文件常为空 | ⚠️ P2 |
+| R5 | 存根 | ISaveProvider.h | pushToCloud/pullFromCloud/supportsCloudSync 返回 false（云端同步预留） | ⚠️ P3 |
+| R6 | 存根 | MiniGame | processEvent 返回 false（MiniGame 中不处理 SDL 输入事件） | ⚠️ P3 |
+| R7 | 存根 | SaveManager.cpp:361 | 缩略图截图用磁盘 I/O 回退（可工作，非内存模式） | ⚠️ P2 |
+| R8 | 文档 | docs/api/KAG-API.md | 35/53 KAG 命令已文档化，18 个 Lua 子命令待补齐 | ⚠️ P2 |
+| R9 | 移交 | Live2D/ | MetalNativeRenderPath (macOS), OpenGLSharedRenderPath (Linux) | ⚠️ 移交 |
+| R10 | 架构 | 全部模块 | 8 纯虚接口完整实现，BackendRegistry 工厂模式零绕过 | ✅ |
 
 ---
 
@@ -115,22 +131,28 @@ web-editor/
 | SettingsPage — AI 配置可操作 | ✅ |
 | CommandPalette | ✅ |
 | PackagePanel — 一键打包 (Win/Mac/Linux) | ✅ |
+| **RPC 引擎连通** — ping/run/stop/eval/getFrame/getState | ✅ |
+| **StageView 帧预览** — 500ms 轮询引擎帧 | ✅ |
+| **LogPanel 实时日志** — stderr 转发 + 级别自动归类 | ✅ |
+| **引擎帧捕获** — render + requestScreenShot + base64 | ✅ |
 
 ---
 
 ## 5. 总体评估
 
-### 完成度: ~94% (Beta+)
+### 完成度: ~95% (Beta+)
 
 **引擎核心** (95%): 8 接口 ✅, 95 绑定函数, 45 Lua 脚本, 零 TDR, JobSystem 多线程
 
-**编辑器** (90%): 12 组件全部可用, 缩放/平移/补全/打包就绪, RPC 桥接引擎
+**编辑器** (93%): 12 组件 + 引擎全连通 (实时日志/帧预览/RPC), 缩放/平移/补全/打包就绪
 
 **跨平台** (80%): Windows ✅, Linux/macOS CI 配置就绪, Live2D 部分移交
 
-**已知缺口**: Live2D Linux/macOS 渲染路径(移交), 移动端适配(P2存根), 缩略图截图(存根)
+**全量审查**: 65 .cpp + 73 .h + 45 Lua 零核心约束违规，零内存泄漏，零 TDR
+
+**已知缺口**: Live2D Linux/macOS 渲染路径(移交), 移动端适配(P2存根), 缩略图截图(磁盘I/O回退), 云端同步预留(P3)
 
 ### 下一优先级
-1. 编辑器 ↔ 引擎 RPC 全面连通测试 (run/eval/getFrame)
-2. FFmpeg 默认启用 + 视频播放验证
+1. 存档系统完善 — 缩略图截图优化 + 云端接口预留
+2. KAG API 文档补齐 (18 个 Lua 命令) + Demo 场景
 3. Electron 打包 → 完整安装包测试

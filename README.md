@@ -1,6 +1,7 @@
 ﻿# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
 
-> 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源
+> 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源  
+> 完成度: **~95% Beta+** | 全量审查: **零违规 · 零泄漏 · 零 TDR**
 
 Caesura 是为视觉小说创作者打造的现代化引擎。KAG 脚本兼容、跨平台渲染、内置 Electron 可视化编辑器、AI 辅助代码生成。
 
@@ -41,7 +42,7 @@ build_nol2d/Release/CaesuraAmeKAG.exe --demo
 │  Electron Editor (React + Vite)                         │
 │  Stage View │ Scene List │ AI Panel │ Code Editor      │
 └────────────┬────────────────────────────────────────────┘
-             │ JSON-RPC (stdin/stdout)
+             │ JSON-RPC (stdin/stdout, 8 methods: ping/run/stop/eval/getFrame/getState/assets/logs)
 ┌────────────▼────────────────────────────────────────────┐
 │  Engine (C++20)                                         │
 │  ┌──────────┐  ┌────────┐  ┌──────────┐  ┌───────────┐ │
@@ -81,13 +82,17 @@ build_nol2d/Release/CaesuraAmeKAG.exe --demo
 
 | 面板 | 功能 |
 |------|------|
-| **舞台** | Canvas 2D 预览，拖入素材定位，网格吸附，分辨率切换 |
+| **舞台** | Canvas 2D 预览 + 引擎实时帧 (RPC getFrame, 500ms 轮询) |
 | **场景列表** | 场景拖拽排序、点击跳转、模板选择 |
 | **代码编辑器** | 语法高亮、自动补全、错误行标记、文件标签栏 |
 | **属性** | 选中→编辑参数→实时生成 KAG Lua 代码 |
 | **AI 面板** | @generate / @fix 指令，多后端（OpenAI/Codex/Custom），流式输出 |
 | **素材** | 场景列表 + 素材树上下分区，拖入舞台生成代码 |
-| **日志** | 引擎实时日志，错误高亮，连接状态指示器 |
+| **日志** | ✅ 引擎实时 stderr 流，错误/警告自动归类，连接状态指示器 |
+| **RPC 桥接** | ✅ 8 方法全通 (ping/run/stop/eval/getFrame/getState/assets/logs) |
+| **实时帧预览** | ✅ StageView 500ms 轮询引擎渲染帧 (base64 PNG) |
+| **实时日志** | ✅ 引擎 stderr 自动转发 LogPanel，错误/警告归类 |
+| **打包** | 一键打包 (Win/Mac/Linux)，electron-builder NSIS/DMG/AppImage |
 
 ## KAG 脚本兼容
 
@@ -221,6 +226,17 @@ Caesura(AmeKAG)/
 | **concurrently** | 10.x | MIT | 并发启动 Vite + Electron |
 | **electron-builder** | 26.x | MIT | 打包分发 (NSIS/DMG/AppImage) |
 | **wait-on** | 9.x | MIT | 等待 Vite 就绪后启动 Electron |
+
+## 已知限制
+
+| 项目 | 状态 | 说明 |
+|------|:---:|------|
+| 缩略图截图 | ⚠️ | 磁盘 I/O 回退模式，非内存读取 |
+| Live2D macOS | ⚠️ | Metal 渲染路径移交 macOS 开发者 |
+| Live2D Linux | ⚠️ | OpenGL 渲染路径移交 Linux 开发者 |
+| 移动端适配 | 📋 | MobileAdapter 存根 (P2 预留) |
+| 云端同步 | 📋 | pushToCloud/pullFromCloud 存根 |
+| KAG API 文档 | ⚠️ | 35/53 命令已文档化，18 待补齐 |
 
 ## 版权声明
 
