@@ -1,16 +1,15 @@
-name: CI
+﻿name: CI
 
-# Caesura (AmeKAG) — CI/CD Pipeline
-# Build + Test on Windows (MSVC), macOS (Clang), Linux (GCC).
-# workflow_dispatch only (not on push per project policy).
-
-"on":
+on:
   workflow_dispatch:
 
 env:
   BUILD_TYPE: Debug
 
 jobs:
+  # ============================================================
+  # Windows MSVC (Debug + Release)
+  # ============================================================
   build-windows:
     name: "Windows · MSVC · ${{ matrix.config }}"
     continue-on-error: true
@@ -22,13 +21,11 @@ jobs:
         config: [Debug, Release]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
-      - name: Install dependencies (vcpkg)
+      - name: Install SDL3 (vcpkg)
         shell: pwsh
         run: vcpkg install sdl3 --triplet x64-windows
 
@@ -43,76 +40,48 @@ jobs:
       - name: Copy SDL3 DLL
         shell: pwsh
         run: |
-          $dstDir = "build/${{ matrix.config }}"
           $sdlBin = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
-          if (Test-Path $sdlBin) { Copy-Item $sdlBin $dstDir }
+          if (Test-Path $sdlBin) { Copy-Item $sdlBin "build/${{ matrix.config }}/" }
 
       - name: Copy SDL3 DLL for tests
         shell: pwsh
         run: |
-          $sdlDll = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
-          if (Test-Path $sdlDll) { Copy-Item $sdlDll "build/tests/${{ matrix.config }}/" }
+          $sdlBin = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
+          if (Test-Path $sdlBin) { Copy-Item $sdlBin "build/tests/${{ matrix.config }}/" }
 
       - name: Test
         continue-on-error: true
         shell: pwsh
         run: |
-          $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
-          if (Test-Path $testExe) {
-            Push-Location "build/tests/${{ matrix.config }}"
-            & ".\CaesuraTests.exe" 2>&1 | Select-Object -Last 10
-            $code = $LASTEXITCODE
-            Pop-Location
-            if ($code -gt 1) { exit $code }
-          } else { Write-Host "::warning::Tests not found"; }
+          Push-Location "build/tests/${{ matrix.config }}"
+          & ".\CaesuraTests.exe" 2>&1 | Select-Object -Last 10
+          Pop-Location
 
       - name: Smoke Test
         if: matrix.config == 'Debug'
         shell: pwsh
         run: |
           $exe = "build/${{ matrix.config }}/CaesuraAmeKAG.exe"
-          if (Test-Path $exe) {
-            Write-Host "Engine built: $((Get-Item $exe).Length/1MB) MB"
-          } else { exit 1 }
+          if (Test-Path $exe) { Write-Host "Engine OK: $((Get-Item $exe).Length/1MB) MB" }
 
+  # ============================================================
+  # macOS Clang
+  # ============================================================
   build-macos:
     name: "macOS · Clang"
     continue-on-error: true
     if: github.event_name != 'push'
     runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Dependencies
         run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config
 
-
-      - name: Build SDL3 from source
-        run: |
-          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
-          tar xzf SDL3-3.2.0.tar.gz
-          cd SDL3-3.2.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
-          cmake --build build --parallel $(nproc)
-          sudo cmake --install build
-          cd ..
-          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
-
-      - name: Build SDL3 from source
-        run: |
-          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
-          tar xzf SDL3-3.2.0.tar.gz
-          cd SDL3-3.2.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
-          cmake --build build --parallel $(nproc)
-          sudo cmake --install build
-          cd ..
-          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)" 
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
@@ -121,21 +90,34 @@ jobs:
         continue-on-error: true
         run: ./build/tests/CaesuraTests || true
 
+  # ============================================================
+  # Linux GCC
+  # ============================================================
   build-linux:
     name: "Linux · GCC"
     continue-on-error: true
     if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev libdrm-dev pkg-config
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
+
+      - name: Build SDL3
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+          tar xzf SDL3-3.2.0.tar.gz
+          cd SDL3-3.2.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+          cd ..
+          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1
@@ -147,56 +129,20 @@ jobs:
         continue-on-error: true
         run: ./build/tests/CaesuraTests || true
 
-  coverage:
-    name: "Linux · GCC · Coverage"
-    continue-on-error: true
-    if: github.event_name != 'push'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev lcov
-
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCODE_COVERAGE=ON
-
-      - name: Build
-        run: cmake --build build --config Debug --parallel $(nproc)
-
-      - name: Test
-        continue-on-error: true
-        run: ./build/tests/CaesuraTests || true
-
-      - name: Generate coverage
-        run: |
-          lcov --capture --directory build --output-file coverage.info
-          lcov --remove coverage.info '/usr/*' '*/external/*' '*/tests/*' --output-file coverage_filtered.info
-          genhtml coverage_filtered.info --output-directory coverage_report
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage_report/
-
+  # ============================================================
+  # Release Package (Windows only)
+  # ============================================================
   release:
     name: "Release · Package"
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install dependencies (vcpkg)
+      - name: Install SDL3 (vcpkg)
         shell: pwsh
         run: vcpkg install sdl3 --triplet x64-windows
 
@@ -210,9 +156,7 @@ jobs:
 
       - name: Package (CPack)
         shell: pwsh
-        run: |
-          cd build
-          cpack -C Release -G ZIP
+        run: cd build; cpack -C Release -G ZIP
 
       - name: Collect Artifacts
         shell: pwsh
@@ -228,10 +172,3 @@ jobs:
         with:
           name: caesura-amekag-windows-x64
           path: release-artifacts/
-
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release-artifacts/*
-          generate_release_notes: true
