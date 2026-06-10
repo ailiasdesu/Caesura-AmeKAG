@@ -1,10 +1,11 @@
-﻿import { useEditor } from "../context/EditorContext";
-import { useState } from "react";
+﻿import { useState } from "react";
+import { useEditor } from "../context/EditorContext";
 
-const TEMPLATES = [
-  { name: "空白场景", code: "-- New scene\nfunction scene_N()\n    KAG.clear_screen()\nend\n" },
-  { name: "教室", code: "-- Classroom scene\nfunction scene_N()\n    KAG.clear_screen()\n    KAG.show_image(\"bg\", \"assets/bg/classroom.png\", 0, 0)\n    KAG.show_text(\"...\")\nend\n" },
-  { name: "户外", code: "-- Outdoor scene\nfunction scene_N()\n    KAG.clear_screen()\n    KAG.show_image(\"bg\", \"assets/bg/outdoor.png\", 0, 0)\n    KAG.play_bgm(\"assets/bgm/outdoor.ogg\", 1.0)\nend\n" },
+const SCENE_TEMPLATES = [
+  { id: "prologue", label: "\u5E8F\u5E55" },
+  { id: "daily", label: "\u65E5\u5E38" },
+  { id: "battle", label: "\u6218\u6597" },
+  { id: "hscene", label: "H \u573A\u666F" },
 ];
 
 export default function SceneList() {
@@ -12,67 +13,47 @@ export default function SceneList() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [dragIdx, setDragIdx] = useState(null);
 
-  const addScene = (template) => {
-    const id = `scene_${Date.now()}`;
-    const fnName = `scene_${state.scenes.length}`;
-    const code = template.code.replace(/scene_N/g, fnName);
-    dispatch({ type: "ADD_SCENE", payload: { id, name: template.name, line: 0 } });
-    const newScript = state.script + "\n" + code;
-    dispatch({ type: "SET_SCRIPT", payload: newScript });
+  const scenes = state.sceneList || [
+    { id: "start", name: "start.cae", active: true },
+    { id: "prologue", name: "prologue.cae" },
+    { id: "ch1", name: "chapter1.cae" },
+  ];
+
+  const handleAdd = (template) => {
+    dispatch({ type: "ADD_SCENE", payload: { name: `scene_${Date.now()}.cae`, template } });
     setShowTemplates(false);
   };
 
-  const onDragStart = (idx) => setDragIdx(idx);
-  const onDragOver = (e) => e.preventDefault();
-  const onDrop = (idx) => {
-    if (dragIdx === null || dragIdx === idx) return;
-    const reordered = [...state.scenes];
-    const [moved] = reordered.splice(dragIdx, 1);
-    reordered.splice(idx, 0, moved);
-    dispatch({ type: "REORDER_SCENES", payload: reordered });
-    setDragIdx(null);
-  };
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="panel-header">
-        <span>📋 场景</span>
-        <button className="btn btn-sm" onClick={() => setShowTemplates(!showTemplates)} title="添加场景">
-          +
-        </button>
+    <div className="scene-section">
+      <div className="scene-section-header">
+        <span className="scene-section-title">\u573A\u666F\u5217\u8868</span>
+        <button className="scene-add-btn" onClick={() => setShowTemplates(!showTemplates)} title="\u6DFB\u52A0\u573A\u666F">+</button>
       </div>
-
       {showTemplates && (
-        <div style={{ padding: "4px 8px", borderBottom: "1px solid var(--border)" }}>
-          {TEMPLATES.map(t => (
-            <div key={t.name} className="scene-item" onClick={() => addScene(t)}
-              style={{ justifyContent: "flex-start", gap: 8 }}>
-              + {t.name}
-            </div>
+        <div style={{ padding: "0 12px 8px", display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {SCENE_TEMPLATES.map(t => (
+            <button key={t.id} className="btn btn-sm" onClick={() => handleAdd(t.id)}>{t.label}</button>
           ))}
         </div>
       )}
-
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        {state.scenes.map((scene, idx) => (
-          <div key={scene.id}
-            className={`scene-item${state.activeScene === scene.id ? " active" : ""}${dragIdx === idx ? " dragging" : ""}`}
-            onClick={() => dispatch({ type: "SET_ACTIVE_SCENE", payload: scene.id })}
+      <div className="scene-list-body">
+        {scenes.map((s, i) => (
+          <div key={s.id || i}
+            className={`scene-item${s.active ? " active" : ""}${dragIdx === i ? " drag-over" : ""}`}
             draggable
-            onDragStart={() => onDragStart(idx)}
-            onDragOver={onDragOver}
-            onDrop={() => onDrop(idx)}
+            onClick={() => dispatch({ type: "SET_ACTIVE_SCENE", payload: i })}
+            onDragStart={(e) => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+            onDragEnter={(e) => { e.preventDefault(); if (dragIdx !== i) setDragIdx(i); }}
+            onDragLeave={() => setDragIdx(null)}
+            onDrop={(e) => { e.preventDefault(); setDragIdx(null); dispatch({ type: "REORDER_SCENES", payload: { from: dragIdx, to: i } }); }}
             onDragEnd={() => setDragIdx(null)}
           >
-            <span style={{ fontSize: 10, color: "var(--fg-muted)" }}>L{scene.line || "?"}</span>
-            <span>{scene.name}</span>
+            <span className="scene-item-icon">{'\u25C9'}</span>
+            <span className="scene-item-label">{s.name}</span>
           </div>
         ))}
-        {state.scenes.length === 0 && (
-          <div style={{ padding: 16, textAlign: "center", color: "var(--fg-muted)", fontSize: 11 }}>
-            点击 + 添加场景
-          </div>
-        )}
       </div>
     </div>
   );

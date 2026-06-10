@@ -1,88 +1,59 @@
-﻿import { useEditor } from "../context/EditorContext";
+﻿import { useState } from "react";
+
+const L2D_MODELS = ["haru", "miku", "koharu"];
+const L2D_EXPRESSIONS = ["neutral", "happy", "sad", "angry", "surprised"];
+const L2D_MOTIONS = ["idle", "wave", "nod", "headshake", "point"];
+
+const L2D_PARAMS = [
+  { id: "ParamAngleX", label: "Angle X", min: -30, max: 30, def: 0 },
+  { id: "ParamAngleY", label: "Angle Y", min: -30, max: 30, def: 0 },
+  { id: "ParamAngleZ", label: "Angle Z", min: -30, max: 30, def: 0 },
+  { id: "ParamEyeLOpen", label: "Eye L Open", min: 0, max: 1, def: 1 },
+  { id: "ParamEyeROpen", label: "Eye R Open", min: 0, max: 1, def: 1 },
+  { id: "ParamMouthOpenY", label: "Mouth Open", min: 0, max: 1, def: 0 },
+  { id: "ParamBodyAngleX", label: "Body X", min: -10, max: 10, def: 0 },
+];
 
 export default function Live2DPanel() {
-  const { state, dispatch } = useEditor();
-
-  if (!state.live2dEnabled) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: 16, alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "var(--live2d)", fontSize: 48, marginBottom: 12 }}>🎭</div>
-        <div style={{ color: "var(--fg-dim)", fontSize: 13, marginBottom: 8 }}>
-          Live2D Cubism 5 — 未启用
-        </div>
-        <div style={{ color: "var(--fg-muted)", fontSize: 11, textAlign: "center", lineHeight: 1.6 }}>
-          请在引擎构建设置中开启 CAESURA_ENABLE_LIVE2D<br />
-          macOS / Linux / iOS 需共同开发者适配
-        </div>
-      </div>
-    );
-  }
+  const [model, setModel] = useState(L2D_MODELS[0]);
+  const [expression, setExpression] = useState(L2D_EXPRESSIONS[0]);
+  const [motion, setMotion] = useState(L2D_MOTIONS[0]);
+  const [params, setParams] = useState(Object.fromEntries(L2D_PARAMS.map(p => [p.id, p.def])));
 
   return (
-    <div style={{ padding: 10, height: "100%", overflowY: "auto" }}>
-      <div className="prop-group">
-        <div className="prop-label">模型</div>
-        {state.live2dModels.length === 0 ? (
-          <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "8px 0" }}>暂无模型</div>
-        ) : (
-          state.live2dModels.map(m => (
-            <div key={m.id}
-              className={`scene-item${state.activeLive2DModel === m.id ? " active" : ""}`}
-              onClick={() => dispatch({ type: "SET_ACTIVE_LIVE2D_MODEL", payload: m.id })}
-            >
-              {m.name}
-            </div>
-          ))
-        )}
+    <div className="live2d-panel">
+      <div className="aux-bar-title" style={{ marginBottom: 8 }}>Live2D Cubism 5</div>
+      <select value={model} onChange={(e) => setModel(e.target.value)}>
+        {L2D_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <div className="prop-row">
+        <span className="prop-label">{'\u8868\u60C5'}</span>
+        <select value={expression} onChange={(e) => setExpression(e.target.value)} style={{ flex: 1 }}>
+          {L2D_EXPRESSIONS.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
       </div>
-
-      <div className="prop-group">
-        <div className="prop-label">表情</div>
-        <div className="prop-row">
-          <select style={{ flex: 1 }}>
-            <option>默认</option>
-            <option>开心</option>
-            <option>悲伤</option>
-            <option>惊讶</option>
-            <option>生气</option>
-          </select>
-        </div>
-        <button className="btn btn-sm mt-2" style={{ width: "100%" }}>切换</button>
+      <div className="prop-row">
+        <span className="prop-label">{'\u52A8\u4F5C'}</span>
+        <select value={motion} onChange={(e) => setMotion(e.target.value)} style={{ flex: 1 }}>
+          {L2D_MOTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <button className="btn btn-sm btn-accent">{'\u25B6'}</button>
       </div>
-
-      <div className="prop-group">
-        <div className="prop-label">动作</div>
-        <div className="prop-row">
-          <select style={{ flex: 1 }}>
-            <option>待机</option>
-            <option>点头</option>
-            <option>摇头</option>
-            <option>挥手</option>
-          </select>
-        </div>
-        <button className="btn btn-sm mt-2" style={{ width: "100%" }}>播放</button>
-      </div>
-
-      <div className="prop-group">
-        <div className="prop-label">参数调试</div>
-        {[
-          ["呼吸幅度", 0.5],
-          ["物理强度", 0.3],
-          ["头部 X", 0],
-          ["头部 Y", 0],
-          ["眼睛开合", 1],
-        ].map(([label, val]) => (
-          <div key={label} className="prop-row">
-            <label style={{ width: 56 }}>{label}</label>
-            <input type="range" className="prop-slider" defaultValue={val} min={-1} max={1} step={0.01} />
+      <div style={{ marginTop: 12 }}>
+        <div className="aux-bar-title" style={{ marginBottom: 8 }}>{'\u53C2\u6570\u8C03\u8BD5'}</div>
+        {L2D_PARAMS.map(p => (
+          <div key={p.id} className="prop-row">
+            <span className="prop-label" style={{ fontSize: 9 }}>{p.label}</span>
+            <input className="prop-slider" type="range" min={p.min} max={p.max}
+              step={p.max - p.min > 10 ? 1 : 0.05}
+              value={params[p.id]}
+              onChange={(e) => setParams({ ...params, [p.id]: Number(e.target.value) })} />
+            <span className="prop-val">{typeof params[p.id] === 'number' ? params[p.id].toFixed(2) : params[p.id]}</span>
           </div>
         ))}
       </div>
-
-      <div className="prop-group">
-        <div className="prop-label">状态</div>
-        <div style={{ fontSize: 11, color: "var(--green)" }}>✅ Windows · D3D11Native</div>
-        <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>⚠️ macOS/Linux · 移交共同开发者</div>
+      <div style={{ marginTop: 12, padding: 8, borderRadius: "var(--radius-sm)", background: "var(--vscode-editor-background-deep)", fontSize: 10, color: "var(--green)" }}>
+        {'\u25C9'} D3D11 Native — \u5DF2\u7F16\u8BD1
       </div>
     </div>
   );
