@@ -268,20 +268,37 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
-  const isDev = !app.isPackaged;
+  // Use file:// when packaged (win-unpacked), HTTP in dev (with Vite)
+  const hasDevFlag = process.argv.includes("--dev");
+  const isLocalFile = !hasDevFlag || !app.isPackaged;
 
-  if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+  // Always try local file first in packaged mode
+  if (!isLocalFile) {
+    const devUrl = "http://localhost:5173";
+    mainWindow.loadURL(devUrl).catch(() => {
+      console.log("[Electron] Dev server not available, loading local file");
+      mainWindow.loadFile(path.join(__dirname, "..", "index.html"));
+    });
     mainWindow.webContents.openDevTools({ mode: "detach" });
+  } else {
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "index.html"));
   }
 
   mainWindow.on("closed", () => { mainWindow = null; });
+
+  // Debug: capture renderer console and load errors
+  mainWindow.webContents.on("console-message", (event, level, message) => {
+    console.log("[Renderer L" + level + "]", message);
+  });
+  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDesc, validatedURL) => {
+    console.error("[Renderer FAIL]", errorCode, errorDesc, validatedURL);
+  });
 }
 
 app.whenReady().then(() => {
