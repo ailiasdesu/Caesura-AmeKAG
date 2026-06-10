@@ -81,7 +81,7 @@ jobs:
         run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 --trace-expand 2>&1 | grep -E 'ENGINE_SOURCES|add_executable|Error|set\(ENGINE' | head -40 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
 
       - name: Build (verbose)
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 
@@ -122,7 +122,7 @@ jobs:
 
       - name: Configure (verbose)
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 --trace-expand 2>&1 | grep -E 'ENGINE_SOURCES|add_executable|Error|set\(ENGINE' | head -40 
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc) 
