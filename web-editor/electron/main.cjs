@@ -59,7 +59,19 @@ function startEngine() {
 
     engineProcess.stderr.on("data", (data) => {
       const text = data.toString().trim();
-      if (text) console.log("[Engine]", text);
+      if (!text) return;
+      console.log("[Engine]", text);
+      // Forward stderr to renderer as log events for LogPanel
+      const lines = text.split("
+");
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let level = "info";
+        const upper = line.toUpperCase();
+        if (upper.includes("ERROR") || upper.includes("FATAL") || upper.includes("FAIL")) level = "error";
+        else if (upper.includes("WARN")) level = "warn";
+        if (mainWindow) mainWindow.webContents.send("engine-log", { level, message: line.trim() });
+      }
     });
 
     engineProcess.on("close", (code) => {

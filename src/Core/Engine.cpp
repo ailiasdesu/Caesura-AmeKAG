@@ -557,6 +557,20 @@ static std::string captureFrameBase64(int w, int h) {
 }
 
 std::string Engine::captureFrameForRpc(int w, int h) {
+    // Render one frame first (submits draw calls without bgfx::frame)
+    if (!m_headless) {
+        lua_State* L = m_lua->state();
+        if (L) {
+            lua_getglobal(L, "engine_update");
+            if (lua_isfunction(L, -1)) {
+                lua_pushnumber(L, 0.016);
+                if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+            } else { lua_pop(L, 1); }
+        }
+        render(); // submits draw calls, no bgfx::frame yet
+    }
+    // captureFrameBase64 calls requestScreenShot + bgfx::frame,
+    // which triggers the screenshot of the frame we just rendered.
     return captureFrameBase64(w, h);
 }
 

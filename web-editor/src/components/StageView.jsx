@@ -7,6 +7,7 @@ export default function StageView() {
   const areaRef = useRef(null);
   const [didInitialFit, setDidInitialFit] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [frameData, setFrameData] = useState(null);
   const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const { resolution, stageZoom, stagePanX, stagePanY, stageGrid, stageSafe, previewing } = state;
 
@@ -28,7 +29,7 @@ export default function StageView() {
 
   const zoom = (stageZoom != null && stageZoom !== 0) ? stageZoom : 0.55;
 
-  // Draw canvas
+  // Draw canvas (grid/safe zone or engine frame preview)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -36,6 +37,16 @@ export default function StageView() {
     canvas.height = VP_H;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, VP_W, VP_H);
+
+    // When previewing with engine frame, draw the frame
+    if (previewing && frameData) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = "data:image/png;base64," + frameData;
+      return;
+    }
+
+    // Otherwise draw grid background
     ctx.fillStyle = "#1a1a24";
     ctx.fillRect(0, 0, VP_W, VP_H);
 
@@ -59,7 +70,27 @@ export default function StageView() {
       ctx.strokeRect(mx, my, VP_W - mx * 2, VP_H - my * 2);
       ctx.setLineDash([]);
     }
-  }, [VP_W, VP_H, stageGrid, stageSafe]);
+  }, [VP_W, VP_H, stageGrid, stageSafe, previewing, frameData]);
+  // Engine frame preview: poll getFrame when previewing
+  useEffect(() => {
+    if (!previewing) { setFrameData(null); return; }
+    if (!window.caesura) return;
+    let active = true;
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const result = await window.caesura.getFrame(VP_W, VP_H);
+        if (active && result && result.frame) {
+          setFrameData(result.frame);
+        }
+      } catch (e) {
+        // Engine frame not ready yet, keep polling
+      }
+    };
+    poll();
+    const timer = setInterval(poll, 500);
+    return () => { active = false; clearInterval(timer); };
+  }, [previewing, VP_W, VP_H]);
 
   // Mouse pan handlers
   const handleMouseDown = useCallback((e) => {
