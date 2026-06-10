@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -14,7 +14,7 @@ let rpcPending = new Map();
 function getEnginePath() {
   const isDev = !app.isPackaged;
   if (isDev) {
-    return path.join(__dirname, "..", "..", "build_nol2d", "Debug", "CaesuraAmeKAG.exe");
+    return path.join(__dirname, "..", "..", "build_nol2d", "Release", "CaesuraAmeKAG.exe");
   }
   // Packaged: engine is in extraResources
   return path.join(process.resourcesPath, "engine", "CaesuraAmeKAG.exe");
@@ -23,9 +23,9 @@ function getEnginePath() {
 function getEngineCwd() {
   const isDev = !app.isPackaged;
   if (isDev) {
-    // Include assets/, scripts/, demo/ folders accessible
-    return path.join(__dirname, "..", "..");
+    return path.join(__dirname, "..", "..", "build_nol2d", "Release");
   }
+  return path.join(process.resourcesPath, 'engine');
   return path.join(process.resourcesPath, "engine");
 }
 
@@ -71,7 +71,7 @@ function startEngine() {
     engineProcess.on("error", (err) => {
       console.error("Engine spawn error:", err.message);
       if (err.message.includes("ENOENT")) {
-        dialog.showErrorBox("Engine Not Found", `Cannot find engine at:\n${enginePath}\n\nBuild the engine first: cmake --build build_nol2d --config Debug`);
+        dialog.showErrorBox("Engine Not Found", `Cannot find engine at:\n${enginePath}\n\nBuild the engine first: cmake --build build_nol2d --config Release`);
       } else {
         dialog.showErrorBox("Engine Error", "Cannot start engine:\n" + err.message);
       }
