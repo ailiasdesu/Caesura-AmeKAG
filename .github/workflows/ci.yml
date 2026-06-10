@@ -89,6 +89,28 @@ jobs:
       - name: Install Dependencies
         run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config
 
+
+      - name: Build SDL3 from source
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+          tar xzf SDL3-3.2.0.tar.gz
+          cd SDL3-3.2.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+          cd ..
+          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
+
+      - name: Build SDL3 from source
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+          tar xzf SDL3-3.2.0.tar.gz
+          cd SDL3-3.2.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+          cd ..
+          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)" 
 
@@ -113,10 +135,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev pkg-config
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev libdrm-dev pkg-config
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
