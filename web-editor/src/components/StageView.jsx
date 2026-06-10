@@ -6,12 +6,14 @@ export default function StageView() {
   const canvasRef = useRef(null);
   const areaRef = useRef(null);
   const [didInitialFit, setDidInitialFit] = useState(false);
-  const { resolution, stageZoom, stageGrid, stageSafe, previewing } = state;
+  const panning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
+  const { resolution, stageZoom, stagePanX, stagePanY, stageGrid, stageSafe, previewing } = state;
 
   const VP_W = resolution?.w || 1920;
   const VP_H = resolution?.h || 1080;
 
-  // One-time fit on mount — no ResizeObserver to avoid clobbering manual zoom
+  // One-time fit on mount
   useEffect(() => {
     const area = areaRef.current;
     if (!area) return;
@@ -33,15 +35,10 @@ export default function StageView() {
     canvas.width = VP_W;
     canvas.height = VP_H;
     const ctx = canvas.getContext("2d");
-
-    // Clear
     ctx.clearRect(0, 0, VP_W, VP_H);
-
-    // Background
     ctx.fillStyle = "#1a1a24";
     ctx.fillRect(0, 0, VP_W, VP_H);
 
-    // Grid
     if (stageGrid) {
       ctx.strokeStyle = "rgba(255,255,255,0.02)";
       ctx.lineWidth = 1;
@@ -54,7 +51,6 @@ export default function StageView() {
       }
     }
 
-    // Safe zone
     if (stageSafe) {
       const mx = VP_W * 0.1, my = VP_H * 0.1;
       ctx.strokeStyle = "rgba(108, 92, 231, 0.3)";
@@ -64,6 +60,32 @@ export default function StageView() {
       ctx.setLineDash([]);
     }
   }, [VP_W, VP_H, stageGrid, stageSafe]);
+
+  // Mouse pan handlers
+  const handleMouseDown = useCallback((e) => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault();
+      panning.current = true;
+      panStart.current = { x: e.clientX, y: e.clientY, px: stagePanX, py: stagePanY };
+    }
+  }, [stagePanX, stagePanY]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!panning.current) return;
+    const dx = (e.clientX - panStart.current.x) / zoom;
+    const dy = (e.clientY - panStart.current.y) / zoom;
+    dispatch({ type: "SET_PAN", payload: { x: panStart.current.px + dx, y: panStart.current.py + dy } });
+  }, [zoom, dispatch]);
+
+  const handleMouseUp = useCallback(() => {
+    panning.current = false;
+  }, []);
+
+  // Global mouseup to catch releases outside the area
+  useEffect(() => {
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [handleMouseUp]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -77,9 +99,15 @@ export default function StageView() {
     <div ref={areaRef} className="stage-area"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      style={{ cursor: panning.current ? "grabbing" : "default" }}
     >
       <div className={`stage-viewport${previewing ? " preview-active" : ""}`}
-        style={{ width: VP_W + "px", height: VP_H + "px", transform: `scale(${zoom})` }}
+        style={{
+          width: VP_W + "px", height: VP_H + "px",
+          transform: `scale(${zoom}) translate(${stagePanX}px, ${stagePanY}px)`,
+        }}
       >
         <canvas ref={canvasRef} className="stage-canvas" />
       </div>
@@ -103,8 +131,8 @@ export default function StageView() {
           title="\u653E\u5927">+</button>
         <button onClick={() => {
           const area = areaRef.current;
-          if (area) { const s = Math.min((area.clientWidth - 48) / VP_W, (area.clientHeight - 48) / VP_H, 1); dispatch({ type: "SET_ZOOM", payload: s }); }
-        }} title="\u9002\u914D">\u2194</button>
+          if (area) { const s = Math.min((area.clientWidth - 48) / VP_W, (area.clientHeight - 48) / VP_H, 1); dispatch({ type: "SET_ZOOM", payload: s }); dispatch({ type: "RESET_PAN" }); }
+        }} title="\u9002\u914D + \u5F52\u4F4D">\u2194</button>
         <select value={`${VP_W}\u00D7${VP_H}`}
           onChange={(e) => { const [w, h] = e.target.value.split("\u00D7").map(Number); dispatch({ type: "SET_RESOLUTION", payload: { w, h } }); }}>
           <option>1920\u00D71080</option>

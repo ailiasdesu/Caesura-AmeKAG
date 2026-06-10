@@ -16,6 +16,8 @@ const initialState = {
   // Stage
   resolution: { w: 1920, h: 1080 },
   stageZoom: 0.55,
+  stagePanX: 0,
+  stagePanY: 0,
   stageGrid: true,
   stageSafe: false,
   previewing: false,
@@ -58,6 +60,10 @@ function editorReducer(state, action) {
     // Stage
     case "SET_ZOOM":
       return { ...state, stageZoom: action.payload };
+    case "SET_PAN":
+      return { ...state, stagePanX: action.payload.x, stagePanY: action.payload.y };
+    case "RESET_PAN":
+      return { ...state, stagePanX: 0, stagePanY: 0 };
     case "SET_RESOLUTION":
       return { ...state, resolution: action.payload };
     case "TOGGLE_GRID":

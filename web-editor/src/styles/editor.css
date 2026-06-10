@@ -223,15 +223,13 @@ html, body, #root {
 }
 .stage-viewport {
   position: relative; background: var(--stage-bg); border: 2px solid var(--vscode-sideBar-border); border-radius: 1px;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 60px rgba(0, 0, 0, 0.5),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 12px rgba(0, 0, 0, 0.2);
   transform-origin: center center;
   transition: border-color var(--ease-smooth), box-shadow var(--ease-smooth);
 }
 .stage-viewport::before {
   content: ''; position: absolute; inset: -6px; border: 1px solid rgba(255, 255, 255, 0.03);
-  border-radius: 3px; pointer-events: none; z-index: -1;
+  border-radius: 3px; pointer-events: none; z-index: 0;
 }
 .stage-viewport.preview-active {
   border-color: var(--green);
@@ -244,7 +242,7 @@ html, body, #root {
     0 0 0 1px var(--accent-dim), 0 0 30px var(--accent-glow), 0 0 80px rgba(108, 92, 231, 0.08);
 }
 .stage-canvas {
-  position: absolute; inset: 0; display: block;
+  position: absolute; inset: 0; display: block; z-index: 1;
 }
 .grid-pattern {
   position: absolute; inset: 0; pointer-events: none;
