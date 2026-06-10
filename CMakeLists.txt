@@ -31,13 +31,12 @@ if(NOT SDL3_FOUND)
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
         GIT_TAG release-3.2.0
         GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
     )
-    set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
-    set(SDL_DISABLE_INSTALL_CPACK ON CACHE BOOL "" FORCE)
-    set(SDL_DISABLE_UNINSTALL ON CACHE BOOL "" FORCE)
-    set(SDL_SHARED ON CACHE BOOL "" FORCE)
-    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
     set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(SDL3)
     message(STATUS "SDL3 built from source (release-3.2.0)")
