@@ -1,4 +1,4 @@
-﻿import { useEditor } from "../context/EditorContext";
+import { useEditor } from "../context/EditorContext";
 import { useEffect, useRef, useCallback, useState } from "react";
 
 export default function StageView() {
@@ -75,7 +75,7 @@ export default function StageView() {
     const dx = (e.clientX - panStart.current.x) / zoom;
     const dy = (e.clientY - panStart.current.y) / zoom;
     dispatch({ type: "SET_PAN", payload: { x: panStart.current.px + dx, y: panStart.current.py + dy } });
-  }, [zoom, dispatch]);
+  }, [isPanning, zoom, dispatch]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
