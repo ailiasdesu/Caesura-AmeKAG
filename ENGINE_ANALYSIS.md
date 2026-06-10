@@ -1,8 +1,8 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
 > 分析日期: 2026-06-10 | 构建配置: CMake 3.25+ / C++20
-> 构建状态: 全量通过 (D3D11 零 TDR)，引擎-编辑器 RPC 全连通
-> 最近提交: 2bab2e5 — 编辑器-引擎全连通 (实时日志+帧预览+渲染修复)
+> 构建状态: Windows 全量通过 (D3D11 零 TDR + 测试 + 打包)，Linux/macOS CI 修复中
+> 最近提交: f780a95 — Linux vcpkg SDL3
 > 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
@@ -76,7 +76,7 @@ web-editor/
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS |
 | TD-20 | MobileAdapter 存根 | ⚠️ P2 预留 |
 | TD-21 | MiniGame 3D PBR-lite | ✅ |
-| TD-22 | 跨平台 CI | ✅ |
+| TD-22 | 跨平台 CI | ⚠️ Windows ✅, Linux/macOS 修复中 (vcpkg) |
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存 |
 | TD-24 | Live2D OpenGLReadback FBO | ✅ |
 
