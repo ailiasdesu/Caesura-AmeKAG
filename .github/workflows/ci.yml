@@ -106,23 +106,13 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config
 
-      - name: Build SDL3
-        run: |
-          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
-          tar xzf SDL3-3.2.0.tar.gz
-          cd SDL3-3.2.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=$HOME/sdl3
-          cmake --build build --parallel $(nproc)
-          cmake --install build
-          cd ..
-          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
+      - name: Install SDL3 (vcpkg)
+        run: vcpkg install sdl3 --triplet x64-linux
 
       - name: Configure
-        run: |
-          export SDL3_DIR=$HOME/sdl3/lib/cmake/SDL3
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH=$HOME/sdl3
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
