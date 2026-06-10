@@ -113,15 +113,16 @@ jobs:
           wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
           tar xzf SDL3-3.2.0.tar.gz
           cd SDL3-3.2.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release  -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=$HOME/sdl3
           cmake --build build --parallel $(nproc)
-          sudo cmake --install build
-          sudo ldconfig
+          cmake --install build
           cd ..
           rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH=/usr/local
+        run: |
+          export SDL3_DIR=$HOME/sdl3/lib/cmake/SDL3
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH=$HOME/sdl3
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
