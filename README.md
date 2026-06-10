@@ -163,8 +163,95 @@ Caesura(AmeKAG)/
 └── shaders/           着色器源码
 ```
 
-## 许可
 
-MIT License — 详见 [LICENSE](LICENSE)
+## 第三方库许可
 
-Live2D Cubism SDK 为单独授权，需从 [Live2D 官网](https://www.live2d.com/) 获取。
+本引擎静态/动态链接以下第三方库。所有库的原始许可证文本保留在各自目录中。
+
+### C++ 引擎依赖
+
+| 库 | 版本 | 许可证 | 用途 | 上游 |
+|----|------|--------|------|------|
+| **bgfx** | 主线 | BSD 2-Clause | 跨平台渲染 (D3D11/OpenGL/Metal) | [bkaradzic/bgfx](https://github.com/bkaradzic/bgfx) |
+| **bx** | 主线 | BSD 2-Clause | bgfx 基础设施 | [bkaradzic/bgfx](https://github.com/bkaradzic/bgfx) |
+| **bimg** | 主线 | BSD 2-Clause | 图像加载/压缩 | [bkaradzic/bgfx](https://github.com/bkaradzic/bgfx) |
+| **SDL3** | 3.2.0 | zlib | 窗口/输入/平台抽象 | [libsdl-org/SDL](https://github.com/libsdl-org/SDL) |
+| **SoLoud** | 主线 | zlib/libpng | 音频引擎 (WASAPI/WinMM) | [jarikomppa/soloud](https://github.com/jarikomppa/soloud) |
+| **Lua** | 5.4 | MIT | 脚本运行时 | [lua/lua](https://github.com/lua/lua) |
+| **FreeType** | 主线 | FreeType License (BSD-like) | CJK 字体渲染 | [freetype/freetype](https://github.com/freetype/freetype) |
+| **zstd** | 主线 | BSD + GPLv2 双许可 | CARC 压缩 | [facebook/zstd](https://github.com/facebook/zstd) |
+| **pl_mpeg** | 主线 | MIT | MPEG-1 视频解码 (零依赖回退) | [phoboslab/pl_mpeg](https://github.com/phoboslab/pl_mpeg) |
+| **nlohmann/json** | 主线 | MIT | JSON 解析 (存档/CARC 索引) | [nlohmann/json](https://github.com/nlohmann/json) |
+| **ed25519** | 主线 | 公共领域 / CC0 | CARC 数字签名 | [orlp/ed25519](https://github.com/orlp/ed25519) |
+| **stb** | 主线 | 公共领域 / MIT | 图像加载 (stb_image) | [nothings/stb](https://github.com/nothings/stb) |
+| **cpp-httplib** | 主线 | MIT | HTTP 服务 (RPC Server / 热重载) | [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) |
+
+### 条件编译依赖
+
+| 库 | 版本 | 许可证 | 条件 | 用途 |
+|----|------|--------|------|------|
+| **Live2D Cubism 5 Native SDK** | 5-r.5 | 专有 (Live2D 社) | `CAESURA_ENABLE_LIVE2D=ON` | 2D 动态立绘 |
+| **FFmpeg** | 系统 | LGPL 2.1+ | `CAESURA_ENABLE_FFMPEG=ON` | 硬件加速视频解码 |
+| **GLEW** | 主线 | BSD-like | `CAESURA_ENABLE_LIVE2D=ON` (Win) | OpenGL 扩展加载 |
+
+### 平台加密后端
+
+| 平台 | 库 | 许可证 |
+|------|----|--------|
+| Windows | BCrypt (系统内置) | Microsoft Windows SDK |
+| macOS / Linux | OpenSSL EVP | Apache 2.0 |
+
+### Electron 编辑器依赖
+
+| 库 | 版本 | 许可证 | 用途 |
+|----|------|--------|------|
+| **Electron** | 42.x | MIT | 桌面壳 / Node.js 运行时 |
+| **React** | 18.x | MIT | UI 框架 |
+| **React DOM** | 18.x | MIT | DOM 渲染 |
+| **Vite** | 5.x | MIT | 构建工具 / HMR |
+| **CodeMirror 6** | 6.x | MIT | 代码编辑器 (语法高亮/补全) |
+| **@codemirror/view** | 6.x | MIT | 编辑器视口 |
+| **@codemirror/state** | 6.x | MIT | 编辑器状态模型 |
+| **@codemirror/language** | 6.x | MIT | 语言支持 (Lua) |
+| **@codemirror/autocomplete** | 6.x | MIT | 自动补全 (KAG 命令) |
+| **@codemirror/theme-one-dark** | 6.x | MIT | One Dark 主题 |
+| **@codemirror/legacy-modes** | 6.x | MIT | Lua 语法模式 |
+| **@lezer/highlight** | 1.x | MIT | 语法树高亮 |
+| **@vitejs/plugin-react** | 4.x | MIT | Vite React 插件 |
+| **concurrently** | 10.x | MIT | 并发启动 Vite + Electron |
+| **electron-builder** | 26.x | MIT | 打包分发 (NSIS/DMG/AppImage) |
+| **wait-on** | 9.x | MIT | 等待 Vite 就绪后启动 Electron |
+
+## 版权声明
+
+```
+Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
+Copyright (c) 2025-2026 AiliasDesu
+
+本引擎以 MIT 许可证发布，详见 LICENSE 文件。
+
+包含的第三方库保留其原始版权和许可证：
+- bgfx/bx/bimg — Copyright (c) 2012-2025 Branimir Karadžić
+- SDL3 — Copyright (c) 1997-2025 Sam Lantinga
+- SoLoud — Copyright (c) 2013-2025 Jari Komppa
+- Lua — Copyright (c) 1994-2025 Lua.org, PUC-Rio
+- FreeType — Copyright (c) 1996-2025 David Turner, Robert Wilhelm, Werner Lemberg
+- Facebook zstd — Copyright (c) 2016-2025 Meta Platforms, Inc.
+- pl_mpeg — Copyright (c) 2019-2025 Dominic Szablewski
+- nlohmann/json — Copyright (c) 2013-2025 Niels Lohmann
+- ed25519 — Copyright (c) 2015 Orson Peters
+- stb — Copyright (c) 2017 Sean Barrett
+- cpp-httplib — Copyright (c) 2017-2025 Yuji Hirose
+- Live2D Cubism SDK — Copyright (c) Live2D Inc. (专有许可)
+- CodeMirror — Copyright (c) 2018-2025 Marijn Haverbeke
+- React — Copyright (c) Meta Platforms, Inc.
+- Electron — Copyright (c) GitHub, Inc.
+- Vite — Copyright (c) 2019-2025 Evan You
+
+保留所有权利。
+```
+
+> **免责声明**: 本文件中的许可证信息为摘要。各第三方库的完整许可证文本
+> 位于 `external/<库名>/LICENSE*` 或相关 npm 包的 `node_modules/<包名>/LICENSE*`。
+> Live2D Cubism SDK 为 Live2D 社的专有软件，不包含在引擎源代码中，
+> 用户需自行从 [live2d.com](https://www.live2d.com/) 获取并遵守其最终用户许可协议。
