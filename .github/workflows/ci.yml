@@ -28,9 +28,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install SDL3 (vcpkg)
+      - name: Install dependencies (vcpkg)
         shell: pwsh
-        run: vcpkg install sdl3 --triplet x64-windows
+        run: vcpkg install sdl3 ffmpeg --triplet x64-windows
 
       - name: Configure
         shell: pwsh
@@ -63,7 +63,7 @@ jobs:
           $testExe = "build/tests/${{ matrix.config }}/CaesuraTests.exe"
           if (Test-Path $testExe) {
             Push-Location "build/tests/${{ matrix.config }}"
-            & ".\CaesuraTests.exe" --no-color -s 2>&1 | Select-Object -Last 5
+            & ".\CaesuraTests.exe" 2>&1 | Select-Object -Last 10
             $code = $LASTEXITCODE
             Pop-Location
             if ($code -gt 1) { exit $code }
@@ -90,12 +90,12 @@ jobs:
           submodules: recursive
 
       - name: Install Dependencies
-        run: brew install cmake sdl3 freetype zstd openssl@3
+        run: brew install cmake freetype zstd openssl@3 pkg-config
 
       - name: Configure
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 `
-            -DCMAKE_PREFIX_PATH=$(brew --prefix openssl@3)
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1 \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)" 
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu)
@@ -118,10 +118,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev
+          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxss-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev pkg-config
 
       - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-msse4.1"
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DBX_CONFIG_DEBUG=1
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc)
@@ -179,9 +179,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install SDL3 (vcpkg)
+      - name: Install dependencies (vcpkg)
         shell: pwsh
-        run: vcpkg install sdl3 --triplet x64-windows
+        run: vcpkg install sdl3 ffmpeg --triplet x64-windows
 
       - name: Configure Release
         shell: pwsh
