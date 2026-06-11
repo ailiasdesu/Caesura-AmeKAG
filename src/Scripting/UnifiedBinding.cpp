@@ -1,4 +1,4 @@
-ï»¿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -7,6 +7,8 @@
 #include "../Core/IAudioBackend.h"
 #include "../Scripting/VFXBinding.h"
 #include "../Resource/AsyncLoader.h"
+#include "../Core/BackendRegistry.h"
+#include "../MiniGame/IMiniGameBackend.h"
 #include <cstdio>
 #include <cstring>
 
@@ -52,7 +54,7 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) -- render â†’ Render, particles â†’ VFX
+//  b:render(cmd, ...) -- render ¡ú Render, particles ¡ú VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
@@ -151,7 +153,7 @@ static int lua_Backend_audio(lua_State* L) {
         return 1;
     }
 
-    // get_length / get_position â†’ IAudioBackend (Spec [3.3])
+    // get_length / get_position ¡ú IAudioBackend (Spec [3.3])
     if (strcmp(cmd, "get_length") == 0) {
         const char* bus = luaL_checkstring(L, 2);
         float len = audio ? audio->getLength(bus) : 0.0f;
@@ -210,40 +212,35 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience -- delegate to KAG
+//  UI convenience ¡ª self-contained (no delegation to KAG)
+//  U3 de-duplication: KAGBinding no longer carries these; UnifiedBinding is
+//  now the single source of truth for cross-backend convenience methods.
 // =========================================================================
 
 static int lua_Backend_show_text(lua_State* L) {
     const char* text = luaL_checkstring(L, 1);
-    printf("[KAG] %s\n", text);
+    printf("[CAESURA] show_text: %s\n", text);
     lua_pushboolean(L, 1);
     return 1;
 }
 
-// -- KAG.render_text(text, x, y, r, g, b, a) -- bgfx bitmap font ----------
 static int lua_Backend_show_image(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "show_image");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    const char* file = luaL_checkstring(L, 1);
+    printf("[CAESURA] show_image: %s\n", file);
+    lua_pushboolean(L, 1);
+    return 1;
 }
+
 static int lua_Backend_clear_screen(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "clear_screen");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    printf("[CAESURA] clear_screen\n");
+    lua_pushboolean(L, 1);
+    return 1;
 }
+
 static int lua_Backend_wait_click(lua_State* L) {
-    lua_getglobal(L, "_CAESURA_BACKEND");
-    lua_getfield(L, -1, "wait_click");
-    lua_remove(L, -2);
-    lua_insert(L, 1);
-    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-    return lua_gettop(L);
+    // Controlled by engine input loop; stub returns success
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 
@@ -311,6 +308,44 @@ static int lua_Backend_cancel_async_loads(lua_State* L) {
 //  Module registration
 // =========================================================================
 
+// =========================================================================
+//  b:mini_game(cmd, ...) -- 3D mini-game lifecycle (reserved)
+// =========================================================================
+
+static int lua_Backend_mini_game(lua_State* L) {
+    const char* cmd = luaL_checkstring(L, 1);
+    IMiniGameBackend* mg = BackendRegistry::instance().getMiniGameBackend();
+    if (!mg) { lua_pushboolean(L, 0); lua_pushstring(L, "No mini-game backend registered"); return 2; }
+
+    if (strcmp(cmd, "enter") == 0) {
+        uint32_t scene = (uint32_t)luaL_optinteger(L, 2, 0);
+        mg->enter(scene);
+    } else if (strcmp(cmd, "leave") == 0) {
+        mg->leave();
+    } else if (strcmp(cmd, "is_active") == 0) {
+        lua_pushboolean(L, mg->isActive() ? 1 : 0);
+        return 1;
+    } else if (strcmp(cmd, "load_scene") == 0) {
+        const char* path = luaL_checkstring(L, 2);
+        uint32_t handle = mg->loadScene(path);
+        lua_pushinteger(L, handle);
+        return 1;
+    } else if (strcmp(cmd, "unload_scene") == 0) {
+        uint32_t handle = (uint32_t)luaL_checkinteger(L, 2);
+        mg->unloadScene(handle);
+    } else if (strcmp(cmd, "call") == 0) {
+        const char* method = luaL_checkstring(L, 2);
+        lua_remove(L, 1); lua_remove(L, 1);  // strip cmd + method
+        return mg->luaCall(L, method);
+    } else {
+        lua_pushboolean(L, 0);
+        lua_pushfstring(L, "Unknown mini_game command: %s", cmd);
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static const luaL_Reg backend_methods[] = {
     { "audio",       lua_Backend_audio       },
     { "render",      lua_Backend_render      },
@@ -318,7 +353,8 @@ static const luaL_Reg backend_methods[] = {
     { "show_text",   lua_Backend_show_text   },
     { "show_image",  lua_Backend_show_image  },
     { "clear_screen", lua_Backend_clear_screen },
-    { "wait_click",  lua_Backend_wait_click  },
+        { "wait_click",  lua_Backend_wait_click  },
+    { "mini_game",   lua_Backend_mini_game   },
     { nullptr, nullptr }
 };
 

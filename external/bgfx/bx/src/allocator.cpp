@@ -5,7 +5,11 @@
 
 #include <bx/allocator.h>
 
-#include <malloc.h>
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#   include <stdlib.h>  // malloc/free/realloc on macOS/BSD (no malloc.h)
+#else
+#   include <malloc.h>
+#endif
 
 #ifndef BX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT
 #	define BX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT 8

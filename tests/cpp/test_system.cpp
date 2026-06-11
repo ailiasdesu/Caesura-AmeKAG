@@ -1,4 +1,4 @@
-#include "doctest.h"
+﻿#include "doctest.h"
 #include "System/SaveManager.h"
 #include <cstdio>
 #include <cstring>
@@ -26,15 +26,16 @@ TEST_CASE("SaveManager::save and load round-trip") {
     fs::remove_all("test_saves");
     auto& sm = SaveManager::instance();
     sm.init("test_saves/");
-    
-    CHECK(sm.save(1, R"({"key":"value","nested":{"a":1}})", "scene1", 42));
+
+    json data = {{"key", "value"}, {"nested", {{"a", 1}}}};
+    CHECK(sm.save(1, data, "scene1", 42));
     CHECK(sm.slotExists(1));
-    
-    std::string data = sm.load(1);
-    CHECK_FALSE(data.empty());
-    CHECK(data.find("key") != std::string::npos);
-    CHECK(data.find("value") != std::string::npos);
-    
+
+    json loaded = sm.load(1);
+    CHECK_FALSE(loaded.empty());
+    CHECK(loaded["key"] == "value");
+    CHECK(loaded["nested"]["a"] == 1);
+
     fs::remove_all("test_saves");
 }
 
@@ -53,14 +54,14 @@ TEST_CASE("SaveManager::listSaves") {
     fs::remove_all("test_saves");
     auto& sm = SaveManager::instance();
     sm.init("test_saves/");
-    
-    sm.save(1, R"({"name":"one"})", "s1", 0);
-    sm.save(3, R"({"name":"three"})", "s3", 0);
-    sm.save(5, R"({"name":"five"})", "s5", 0);
-    
+
+    sm.save(1, {{"name", "one"}}, "s1", 0);
+    sm.save(3, {{"name", "three"}}, "s3", 0);
+    sm.save(5, {{"name", "five"}}, "s5", 0);
+
     auto saves = sm.listSaves();
     CHECK(saves.size() == 3);
-    
+
     fs::remove_all("test_saves");
 }
 
@@ -69,13 +70,13 @@ TEST_CASE("SaveManager::deleteSlot") {
     fs::remove_all("test_saves");
     auto& sm = SaveManager::instance();
     sm.init("test_saves/");
-    
-    sm.save(1, R"({"name":"one"})", "s1", 0);
+
+    sm.save(1, {{"name", "one"}}, "s1", 0);
     CHECK(sm.slotExists(1));
     sm.deleteSlot(1);
     CHECK_FALSE(sm.slotExists(1));
     CHECK(sm.load(1).empty());
-    
+
     fs::remove_all("test_saves");
 }
 
@@ -84,29 +85,49 @@ TEST_CASE("SaveManager::load with metadata") {
     fs::remove_all("test_saves");
     auto& sm = SaveManager::instance();
     sm.init("test_saves/");
-    
-    sm.save(1, R"({"text":"hello"})", "MyScene", 100);
-    
+
+    sm.save(1, {{"text", "hello"}}, "MyScene", 100);
+
     SaveMeta meta;
-    std::string data = sm.load(1, &meta);
+    json data = sm.load(1, &meta);
     CHECK_FALSE(data.empty());
     CHECK(meta.slot == 1);
     CHECK(meta.sceneName == "MyScene");
     CHECK(meta.tokenIndex == 100);
-    
+
     fs::remove_all("test_saves");
 }
 
-TEST_CASE("SaveManager::jsonEscape") {
-    CHECK(SaveManager::jsonEscape("hello") == "hello");
-    CHECK(SaveManager::jsonEscape("a\"b") == "a\\\"b");
-    CHECK(SaveManager::jsonEscape("a\\b") == "a\\\\b");
-}
+TEST_CASE("SaveManager::json round-trip preserves types") {
+    namespace fs = std::filesystem;
+    fs::remove_all("test_saves");
+    auto& sm = SaveManager::instance();
+    sm.init("test_saves/");
 
-TEST_CASE("SaveManager::jsonGet helpers") {
-    std::string json = R"({"name":"test","count":42})";
-    CHECK(SaveManager::jsonGetString(json, "name") == "test");
-    CHECK(SaveManager::jsonGetInt(json, "count") == 42);
+    json original = {
+        {"bool_true", true},
+        {"bool_false", false},
+        {"int_val", 42},
+        {"float_val", 3.14},
+        {"string_val", "hello world"},
+        {"null_val", nullptr},
+        {"array_val", {1, 2, 3}},
+        {"nested", {{"a", 1}, {"b", "text"}}}
+    };
+
+    sm.save(1, original, "types_test", 0);
+    json loaded = sm.load(1);
+
+    CHECK(loaded["bool_true"] == true);
+    CHECK(loaded["bool_false"] == false);
+    CHECK(loaded["int_val"] == 42);
+    CHECK(loaded["float_val"] == 3.14);
+    CHECK(loaded["string_val"] == "hello world");
+    CHECK(loaded["null_val"] == nullptr);
+    CHECK(loaded["array_val"].size() == 3);
+    CHECK(loaded["nested"]["a"] == 1);
+
+    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::ENGINE_VERSION is set") {

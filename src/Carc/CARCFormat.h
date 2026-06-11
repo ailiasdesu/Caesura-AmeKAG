@@ -1,6 +1,7 @@
-﻿// Caesura CARC Container Format
+// Caesura CARC Container Format
 // Modern archive format: AES-256-GCM encrypted, Ed25519 signed, miniz compressed.
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 namespace Caesura::carc {

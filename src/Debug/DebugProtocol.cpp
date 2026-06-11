@@ -11,10 +11,11 @@ extern "C" {
 
 #include "DebugProtocol.h"
 #include "HotReload.h"
-#include "../Core/DebugManager.h"
+#include "DebugManager.h"
 #include <thread>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 
 namespace Caesura {

@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -20,10 +20,13 @@ int main(int argc, char* argv[]) {
 
     // -- Parse CLI flags -------------------------------------------------
     bool headless = false;
+    bool editorMode = false;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
             headless = true;
+        } else if (arg == "--editor") {
+            editorMode = true;
         }
     }
 
@@ -36,17 +39,15 @@ int main(int argc, char* argv[]) {
 
     Caesura::Engine engine;
 
-    if (!engine.init("Caesura (AmeKAG)", 1280, 720, headless)) {
+    if (!engine.init("Caesura (AmeKAG)", 1280, 720, headless, editorMode)) {
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }
 
-    // -- Headless mode: stdin/stdout JSON-RPC -----------------------------
-    if (headless) {
-        fprintf(stderr, "[main] Headless mode: JSON-RPC on stdin/stdout\n");
+    // -- Editor mode: hidden window + GPU + JSON-RPC ------------------------
+    if (editorMode) {
+        fprintf(stderr, "[main] Editor mode: JSON-RPC on stdin/stdout (GPU enabled)\n");
 
-        // Load minimal config for Lua VM
-        engine.lua().loadScript("scripts/config.lua");
         std::string scriptDir = "scripts/";
         if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
             fclose(f);
@@ -55,6 +56,63 @@ int main(int argc, char* argv[]) {
             if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
             else { scriptDir = "../../../scripts/"; }
         }
+        // Set Lua package.path BEFORE loading any scripts
+        {
+            lua_State* L = engine.lua().state();
+            if (L) {
+                lua_getglobal(L, "package");
+                lua_getfield(L, -1, "path");
+                std::string cp = lua_tostring(L, -1);
+                lua_pop(L, 1);
+                std::string np = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + cp;
+                lua_pushstring(L, np.c_str());
+                lua_setfield(L, -2, "path");
+                lua_pop(L, 1);
+            }
+        }
+        engine.lua().loadScript("scripts/config.lua");
+        engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
+        engine.lua().lockdownScriptEnv();
+
+        // Wire up frame capture for getFrame RPC
+        Caesura::RpcServer::instance().setFrameCaptureCallback(
+            [&engine](int w, int h) -> std::string {
+                return engine.captureFrameForRpc(w, h);
+            });
+
+        engine.runRpc();
+        printf("Caesura (AmeKAG) shut down cleanly.\n");
+        return 0;
+    }
+
+    // -- Headless mode: stdin/stdout JSON-RPC -----------------------------
+    if (headless) {
+        fprintf(stderr, "[main] Headless mode: JSON-RPC on stdin/stdout\n");
+
+        // Load minimal config for Lua VM
+        std::string scriptDir = "scripts/";
+        if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
+            fclose(f);
+        } else {
+            scriptDir = "../../scripts/";
+            if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
+            else { scriptDir = "../../../scripts/"; }
+        }
+        // Set Lua package.path BEFORE loading any scripts
+        {
+            lua_State* L = engine.lua().state();
+            if (L) {
+                lua_getglobal(L, "package");
+                lua_getfield(L, -1, "path");
+                std::string cp = lua_tostring(L, -1);
+                lua_pop(L, 1);
+                std::string np = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + cp;
+                lua_pushstring(L, np.c_str());
+                lua_setfield(L, -2, "path");
+                lua_pop(L, 1);
+            }
+        }
+        engine.lua().loadScript("scripts/config.lua");
         engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
         engine.lua().lockdownScriptEnv();
 

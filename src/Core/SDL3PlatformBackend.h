@@ -28,6 +28,7 @@ public:
     int getWindowWidth() const override  { return m_width; }
     int getWindowHeight() const override { return m_height; }
     void setFullscreen(bool fullscreen) override;
+    void resizeWindow(int width, int height) override;
 
     const char* getBackendName() const override { return "SDL3"; }
 

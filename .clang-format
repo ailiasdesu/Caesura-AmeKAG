@@ -1,0 +1,19 @@
+﻿# Caesura (AmeKAG) — clang-format configuration
+# Based on WebKit style, C++20, 120 column limit
+
+BasedOnStyle: WebKit
+Language: Cpp
+Standard: c++20
+ColumnLimit: 120
+IndentWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReferenceAlignment: Left
+SpaceAfterCStyleCast: true
+IncludeBlocks: Preserve
+SortIncludes: false

@@ -1,10 +1,12 @@
 ﻿#include "doctest.h"
 #include "Core/JobSystem.h"
 #include "Resource/AsyncLoader.h"
+#include "Core/Engine.h"
 
 using namespace Caesura;
 
 static void initJobInfra() {
+    Engine::s_mainThreadId = std::this_thread::get_id();
     JobSystem::instance().init();
     AsyncLoader::instance().init();
 }

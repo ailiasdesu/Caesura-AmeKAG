@@ -8,9 +8,10 @@
 #include "RenderBinding.h"
 #include "DevCoreBinding.h"
 #include "DebugBinding.h"
-#include "UnifiedBinding.h"
+// #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "VFXBinding.h"
 #include "../System/SaveBinding.h"
+#include "SteamBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/Engine.h"
@@ -103,7 +104,7 @@ void LuaManager::registerModules() {
     registerRenderBinding(m_L);
     registerDevCoreBinding(m_L);
     registerDebugBinding(m_L);
-    registerUnifiedBackendBinding(m_L);
+    // registerUnifiedBackendBinding(m_L);  // deprecated, replaced by BackendFactory
     registerSaveBinding(m_L);
     registerVFXBinding(m_L);
 

@@ -1,7 +1,10 @@
 ﻿#pragma once
 
 #include "Core/IPlatformBackend.h"
-#include "Core/DebugManager.h"
+#include "Debug/DebugManager.h"
+#include "MiniGame/IMiniGameBackend.h"
+#include "../Live2D/IAnimationBackend.h"
+#include "../Steam/ISteamBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>
@@ -29,17 +32,22 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    bool init(const char* title, int width, int height, bool headless = false);
+    bool init(const char* title, int width, int height, bool headless = false, bool editorMode = false);
     void run();
     void runRpc();  // stdin/stdout JSON-RPC loop
 
     bool isHeadless() const { return m_headless; }
+    bool isEditorMode() const { return m_editorMode; }
+    void renderOneFrame();  // render single frame (for editor/RPC screenshot)
+    std::string captureFrameForRpc(int w, int h);
     void quit();
 
     // Accessors (resolve from BackendRegistry)
     IRenderDevice& renderDevice();
     IAudioBackend& audio();
     IPlatformBackend& platform();
+    IMiniGameBackend& miniGame() { return *m_miniGameBackend; }
+    IAnimationBackend& animation() { return *m_animationBackend; }
     LuaManager&   lua()           { return *m_lua; }
     InputRouter&  input()         { return *m_inputRouter; }
     GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
@@ -51,6 +59,14 @@ public:
 private:
     void processEvents();
     void render();
+
+    // Auto-save
+    void setAutoSaveInterval(float seconds) { m_autoSaveInterval = seconds; }
+    float autoSaveInterval() const { return m_autoSaveInterval; }
+    void triggerAutoSave();
+    void quicksave();
+    void quickload();
+
     void handleFatalError(const char* context, const char* luaError);
     void shutdown();
 
@@ -60,6 +76,7 @@ private:
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
     bool         m_headless = false;
+    bool         m_editorMode = false;
 
     // Audio voice-complete tracking (no polling -- detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;
@@ -75,6 +92,12 @@ private:
     std::unique_ptr<LuaManager>        m_lua;
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<GpuMonitor>        m_gpuMonitor;
+    std::unique_ptr<IMiniGameBackend> m_miniGameBackend;
+    float m_autoSaveInterval = 0.0f;
+    float m_autoSaveTimer = 0.0f;
+    float m_frameTime = 0.0f;
+    std::unique_ptr<IAnimationBackend>  m_animationBackend;
+    std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     // HotReload is a singleton, accessed via HotReload::instance()
 };

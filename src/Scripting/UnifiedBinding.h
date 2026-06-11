@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿// @deprecated: BackendFactory (scripts/backend_factory.lua) now creates _CAESURA_BACKEND.
+// UnifiedBinding is no longer registered. Keep file for reference only.
+#pragma once
 
 struct lua_State;
 

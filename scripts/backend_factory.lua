@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) -- backend_factory.lua
 --  Spec [0.4]: Factory pattern for backend creation.
 --  Called once during engine init. Creates render/audio/platform backends,
@@ -86,10 +86,10 @@ function BackendFactory.create(opts)
     end
 
     -- Text / UI shortcuts ------------------------------------------------
-    backend.show_text = function(...) return KAG.show_text(...) end
-    backend.show_image = function(...) return KAG.show_image(...) end
-    backend.clear_screen = function(...) return KAG.clear_screen() end
-    backend.wait_click = function(...) return KAG.wait_click(...) end
+    -- U3 de-duplication: convenience methods are now served by
+    -- UnifiedBinding C++ layer (_CAESURA_BACKEND). No KAG delegation needed.
+    -- Lua aliases (KAG.show_text = _CAESURA_BACKEND.show_text) are set in
+    -- kag.lua for backward compatibility.
 
     rawset(_G, "_CAESURA_BACKEND", backend)
     print(string.format("[BackendFactory] Created: render=%s audio=%s platform=%s",

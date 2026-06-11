@@ -1,5 +1,5 @@
-ï»¿# --- Build artifacts ---
-build/
+# --- Build artifacts ---
+/build/
 bin/
 cmake-build*/
 out/
@@ -34,13 +34,13 @@ web-editor/release/
 logs/
 saves/
 settings/
-config/
+/config/
 
 # --- Test / Demo scripts ---
 scripts/game_logic.lua
 
 # --- Reference source (not engine) ---
-krkrzå‚è€ƒæºç /
+krkrz²Î¿¼Ô´Âë/
 
 # --- OS files ---
 .DS_Store
@@ -52,3 +52,18 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
+CubismSdkForNative-*/
+
+build_live2d/
+
+# --- External SDKs (local only) ---
+SDL3-*/
+build_l2d/
+build_nol2d/
+
+# --- Debug logs ---
+stderr*.txt
+stdout*.txt
+
+external/ffmpeg/
+

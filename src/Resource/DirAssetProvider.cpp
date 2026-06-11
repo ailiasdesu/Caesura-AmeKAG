@@ -1,5 +1,9 @@
 ﻿#include "DirAssetProvider.h"
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/stat.h>
+#endif
 #include <fstream>
 
 namespace caesura {
@@ -7,9 +11,15 @@ namespace caesura {
 std::string DirAssetProvider::fullPath(const std::string& path) const
 {
     if (m_rootDir.empty()) return path;
+#ifdef _WIN32
     if (m_rootDir.back() == '\\' || m_rootDir.back() == '/')
         return m_rootDir + path;
     return m_rootDir + "\\" + path;
+#else
+    if (m_rootDir.back() == '/')
+        return m_rootDir + path;
+    return m_rootDir + "/" + path;
+#endif
 }
 
 std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
@@ -31,8 +41,13 @@ std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
 bool DirAssetProvider::exists(const std::string& path)
 {
     std::string fp = fullPath(path);
+#ifdef _WIN32
     DWORD attr = GetFileAttributesA(fp.c_str());
     return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+    struct stat st;
+    return (stat(fp.c_str(), &st) == 0 && S_ISREG(st.st_mode));
+#endif
 }
 
 } // namespace caesura

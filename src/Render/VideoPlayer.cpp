@@ -3,10 +3,12 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <memory>
 #define PL_MPEG_IMPLEMENTATION
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
-#include "../Core/DebugManager.h"
+#include "../Debug/DebugManager.h"
+#include "../Core/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
 extern "C" {
@@ -32,10 +34,10 @@ VideoPlayer::VideoPlayer()  = default;
 VideoPlayer::~VideoPlayer() { shutdown(); }
 
 VideoHandle VideoPlayer::open(const char* path) {
-    bool usePl = shouldUsePlmpeg(path);
-
+    // If FFmpeg is available, prefer it for all formats (hardware decode, SIMD).
+    // pl_mpeg is the zero-dependency fallback for MPEG-1 only.
 #ifdef CAESURA_VIDEO_FFMPEG
-    if (!usePl) {
+    {
         // -------- FFmpeg path --------
         VideoState vs;
         vs.useFFmpeg = true;
@@ -112,7 +114,7 @@ VideoHandle VideoPlayer::open(const char* path) {
         vs.ended    = false;
         vs.hasFrame = false;
 
-        // SwsContext for YUV → RGBA
+        // SwsContext for YUV �� RGBA
         SwsContext* sws = sws_getContext(
             avCodec->width, avCodec->height, avCodec->pix_fmt,
             avCodec->width, avCodec->height, AV_PIX_FMT_RGBA,
@@ -258,79 +260,103 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 
     if (vs->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
-        auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
-        auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
-        auto* f    = static_cast<AVFrame*>(vs->avFrame);
-        auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
-        auto* sws  = static_cast<SwsContext*>(vs->swsCtx);
+        // Offload read+decode+convert to JobSystem worker.
+        // State is exclusive: main thread waits before touching FFmpeg objects.
+        auto frame = std::make_shared<DecodedFrame>();
+        frame->width  = vs->width;
+        frame->height = vs->height;
 
-        // Read packets until we get a video frame
-        AVPacket* pkt = av_packet_alloc();
-        bool gotFrame = false;
+        JobSystem::instance().submit(
+            [frame, vs]() {
+                auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
+                auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
+                auto* f    = static_cast<AVFrame*>(vs->avFrame);
+                auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
+                auto* sws  = static_cast<SwsContext*>(vs->swsCtx);
 
-        while (!gotFrame) {
-            int ret = av_read_frame(fmt, pkt);
-            if (ret == AVERROR_EOF) {
-                // Flush decoder
-                av_packet_unref(pkt);
-                ret = avcodec_send_packet(cc, nullptr);
-                if (ret >= 0) {
-                    ret = avcodec_receive_frame(cc, f);
-                    if (ret == 0) {
-                        gotFrame = true;
+                AVPacket* pkt = av_packet_alloc();
+                bool gotFrame = false;
+
+                while (!gotFrame) {
+                    int ret = av_read_frame(fmt, pkt);
+                    if (ret == AVERROR_EOF) {
+                        av_packet_unref(pkt);
+                        ret = avcodec_send_packet(cc, nullptr);
+                        if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
+                            gotFrame = true;
+                        vs->ended = true;
+                        vs->playing = false;
+                        break;
                     }
-                }
-                vs->ended = true;
-                vs->playing = false;
-                DEBUG_INFO(SubSys::Render, ErrCode::Ok,
-                           "VideoPlayer: video %u ended", handle.id);
-                break;
-            }
-            if (ret < 0) {
-                av_packet_unref(pkt);
-                break;
-            }
+                    if (ret < 0) { av_packet_unref(pkt); break; }
 
-            if (pkt->stream_index == vs->videoStreamIndex) {
-                ret = avcodec_send_packet(cc, pkt);
-                if (ret >= 0) {
-                    ret = avcodec_receive_frame(cc, f);
-                    if (ret == 0) {
-                        gotFrame = true;
-                    } else if (ret == AVERROR(EAGAIN)) {
-                        // Need more packets - continue
+                    if (pkt->stream_index == vs->videoStreamIndex) {
+                        ret = avcodec_send_packet(cc, pkt);
+                        if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
+                            gotFrame = true;
                     }
+                    av_packet_unref(pkt);
                 }
-            }
-            av_packet_unref(pkt);
-        }
+                av_packet_free(&pkt);
 
-        av_packet_free(&pkt);
+                if (gotFrame && cc && sws && fRGB) {
+                    sws_scale(sws, f->data, f->linesize, 0, cc->height,
+                              fRGB->data, fRGB->linesize);
+                    frame->rgba.assign(vs->rgbaBuffer.begin(), vs->rgbaBuffer.end());
+                    frame->valid = true;
+                }
+            },
+            JobPriority::High
+        );
 
-        if (gotFrame) {
-            sws_scale(sws,
-                      f->data, f->linesize, 0, cc->height,
-                      fRGB->data, fRGB->linesize);
+        JobSystem::instance().waitIdle();
 
-            const bgfx::Memory* mem = bgfx::copy(vs->rgbaBuffer.data(), (uint32_t)vs->rgbaBuffer.size());
+        if (frame->valid) {
+            const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
             bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
-                                  (uint16_t)vs->width, (uint16_t)vs->height, mem);
+                                  (uint16_t)frame->width, (uint16_t)frame->height, mem);
             vs->hasFrame = true;
             return true;
         }
         return false;
 #else
-        return false;
+        // FFmpeg not compiled �� fall through to pl_mpeg below
 #endif
     }
 
-    // -------- pl_mpeg path --------
-    plm_t* plm = static_cast<plm_t*>(vs->plm);
+    // -------- pl_mpeg path (zero-dependency fallback) ----------------
+    // Only reached when CAESURA_VIDEO_FFMPEG is OFF, or FFmpeg open() failed.
+    {
+        plm_t* plm = static_cast<plm_t*>(vs->plm);
+        auto frame = std::make_shared<DecodedFrame>();
+        frame->width  = vs->width;
+        frame->height = vs->height;
 
-    plm_frame_t* frame = plm_decode_video(plm);
-    plm_decode_audio(plm);
+        JobSystem::instance().submit(
+            [frame, plm]() {
+                plm_frame_t* f = plm_decode_video(plm);
+                plm_decode_audio(plm);
+                if (f) {
+                    frame->rgba.resize(frame->width * frame->height * 4);
+                    plm_frame_to_rgba(f, frame->rgba.data(), frame->width * 4);
+                    frame->valid = true;
+                } else {
+                    frame->valid = false;
+                }
+            },
+            JobPriority::High
+        );
 
-    if (!frame) {
+        JobSystem::instance().waitIdle();
+
+        if (frame->valid) {
+            const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
+            bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
+                                  (uint16_t)frame->width, (uint16_t)frame->height, mem);
+            vs->hasFrame = true;
+            return true;
+        }
+
         if (plm_has_ended(plm)) {
             vs->ended = true;
             vs->playing = false;
@@ -339,17 +365,6 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         }
         return false;
     }
-
-    int stride = vs->width * 4;
-    std::vector<uint8_t> rgba(static_cast<size_t>(vs->width) * vs->height * 4);
-    plm_frame_to_rgba(frame, rgba.data(), stride);
-
-    const bgfx::Memory* mem = bgfx::copy(rgba.data(), (uint32_t)rgba.size());
-    bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
-                          (uint16_t)vs->width, (uint16_t)vs->height, mem);
-
-    vs->hasFrame = true;
-    return true;
 }
 
 bgfx::TextureHandle VideoPlayer::getTexture(VideoHandle handle) const {

@@ -6,7 +6,6 @@ extern "C" {
 #include "../Core/BackendRegistry.h"
 #include "../Core/SandboxQuota.h"
 #include "../Render/IRenderDevice.h"
-#include "../Render/BgfxRenderDevice.h"
 #include "../Render/ParticleSystem.h"
 #include "../Core/BackendRegistry.h"
 #include <cstdio>
@@ -21,16 +20,7 @@ static ParticleSystem s_particleSystem;
 static bool s_particlesInitialized = false;
 
 // ===========================================================================
-// Helper: get BgfxRenderDevice from Lua/BackendRegistry
-// ===========================================================================
-
-static BgfxRenderDevice* getBgfxDevice(lua_State* L) {
-    IRenderDevice* dev = BackendRegistry::getRenderDeviceFromLua(L);
-    if (!dev) return nullptr;
-    return dynamic_cast<BgfxRenderDevice*>(dev);
-}
-
-// ===========================================================================
+// Helper: get IRenderDevice from Lua/BackendRegistry
 // Lua binding functions
 // ===========================================================================
 

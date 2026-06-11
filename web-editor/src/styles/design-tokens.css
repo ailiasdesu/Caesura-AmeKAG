@@ -1,0 +1,200 @@
+﻿/* Caesura Editor — Design Tokens (Open Design + VSCode naming) */
+
+:root {
+  /* ============================================================
+     Background hierarchy (deepest → lightest)
+     ============================================================ */
+  --vscode-editor-background:        #08080d;
+  --vscode-editor-background-deep:   #040407;
+  --vscode-sideBar-background:       #0f0f17;
+  --vscode-sideBar-background-alt:   #13131d;
+  --vscode-activityBar-background:   #0a0a12;
+  --vscode-titleBar-activeBackground: rgba(15, 15, 23, 0.92);
+  --vscode-statusBar-background:     #0c0c14;
+
+  /* ============================================================
+     Foreground hierarchy
+     ============================================================ */
+  --vscode-foreground:               #e2e2f0;
+  --vscode-editor-foreground:        #e2e2f0;
+  --vscode-descriptionForeground:    #9090aa;
+  --fg-muted:                        #5a5a72;
+  --vscode-activityBar-foreground:   #e2e2f0;
+  --vscode-activityBar-inactiveForeground: #5a5a72;
+  --vscode-sideBar-foreground:       #e2e2f0;
+  --vscode-statusBar-foreground:     #e2e2f0;
+  --vscode-titleBar-inactiveForeground: #9090aa;
+
+  /* ============================================================
+     Accent (purple)
+     ============================================================ */
+  --vscode-focusBorder:              #6c5ce7;
+  --vscode-button-background:        #6c5ce7;
+  --vscode-button-foreground:        #ffffff;
+  --vscode-button-hoverBackground:   #7d6ff0;
+  --vscode-button-secondaryBackground: #1a1a28;
+  --vscode-button-secondaryForeground: #e2e2f0;
+  --vscode-button-secondaryHoverBackground: #262638;
+  --vscode-activityBar-activeBorder: #6c5ce7;
+  --accent-bright:                   #a78bfa;
+  --accent-dim:                      rgba(108, 92, 231, 0.16);
+  --accent-glow:                     rgba(108, 92, 231, 0.30);
+  --accent-ghost:                    rgba(108, 92, 231, 0.06);
+
+  /* ============================================================
+     Semantic colors
+     ============================================================ */
+  --vscode-errorForeground:          #ff4757;
+  --vscode-editorWarning-foreground: #f0a040;
+  --green:                           #00d68f;
+  --green-glow:                      rgba(0, 214, 143, 0.28);
+  --warn:                            #f0a040;
+  --red:                             #ff4757;
+  --blue:                            #40a0e0;
+  --orange:                          #f0a040;
+  --yellow:                          #f0c040;
+  --cyan:                            #40d0e0;
+  --pink:                            #e060a0;
+
+  /* ============================================================
+     Engine-specific
+     ============================================================ */
+  --live2d:                          #ff6b9d;
+  --minigame:                        #00bcd4;
+  --stage-bg:                        #1a1a24;
+
+  /* ============================================================
+     Borders
+     ============================================================ */
+  --vscode-sideBar-border:           #262638;
+  --vscode-activityBar-border:       #262638;
+  --vscode-statusBar-border:         #262638;
+  --vscode-titleBar-border:          #262638;
+  --border-light:                    #2f2f44;
+
+  /* ============================================================
+     Inputs
+     ============================================================ */
+  --vscode-input-background:         #1a1a28;
+  --vscode-input-border:             #262638;
+  --vscode-input-foreground:         #e2e2f0;
+
+  /* ============================================================
+     Lists and selections
+     ============================================================ */
+  --vscode-list-activeSelectionBackground: rgba(108, 92, 231, 0.16);
+  --vscode-list-activeSelectionForeground: #e2e2f0;
+  --vscode-list-hoverBackground:     #1a1a2a;
+
+  /* ============================================================
+     Tabs
+     ============================================================ */
+  --vscode-tab-activeBackground:     rgba(108, 92, 231, 0.04);
+  --vscode-tab-activeForeground:     #e2e2f0;
+  --vscode-tab-inactiveBackground:   transparent;
+  --vscode-tab-inactiveForeground:   #9090aa;
+  --vscode-tab-border:               #262638;
+  --vscode-editorGroupHeader-tabsBorder: #262638;
+
+  /* ============================================================
+     Cards and surfaces
+     ============================================================ */
+  --card:                            #161622;
+  --card-hover:                      #1a1a2a;
+  --vscode-editorWidget-background:  #161622;
+  --vscode-editorWidget-border:      #262638;
+  --vscode-notifications-background: #161622;
+  --vscode-notifications-foreground: #e2e2f0;
+  --vscode-notifications-border:     #262638;
+
+  /* ============================================================
+     Scrollbar
+     ============================================================ */
+  --vscode-scrollbarSlider-background:      #262638;
+  --vscode-scrollbarSlider-hoverBackground: #2f2f44;
+
+  /* ============================================================
+     Badge
+     ============================================================ */
+  --vscode-badge-background:         #6c5ce7;
+  --vscode-badge-foreground:         #ffffff;
+
+  /* ============================================================
+     Debug
+     ============================================================ */
+  --vscode-debugIcon-startForeground: #00d68f;
+
+  /* ============================================================
+     Quick Input (Command Palette)
+     ============================================================ */
+  --vscode-quickInput-background:    #161622;
+  --vscode-quickInput-border:        #2f2f44;
+
+  /* ============================================================
+     Sidebar title
+     ============================================================ */
+  --vscode-sideBarTitle-background:  #0f0f17;
+  --vscode-sideBarTitle-foreground:  #e2e2f0;
+
+  /* ============================================================
+     Radii
+     ============================================================ */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   9px;
+  --radius-xl:   12px;
+
+  /* ============================================================
+     Shadows
+     ============================================================ */
+  --shadow-xs:              0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm:              0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md:              0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg:              0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glow-accent:     0 0 18px var(--accent-glow);
+  --shadow-glow-green:      0 0 18px var(--green-glow);
+
+  /* ============================================================
+     Typography
+     ============================================================ */
+  --text-2xs:  9px;
+  --text-xs:   10px;
+  --text-sm:   11px;
+  --text-md:   12px;
+  --text-lg:   13px;
+  --text-xl:   15px;
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  /* ============================================================
+     Layout dimensions
+     ============================================================ */
+  --titlebar-h:   30px;
+  --statusbar-h:  22px;
+  --activity-w:   48px;
+  --sidebar-w:    260px;
+  --auxbar-w:     240px;
+
+  /* ============================================================
+     Easings
+     ============================================================ */
+  --ease-out:    0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   Reduced motion
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ease-out:    0s;
+    --ease-smooth: 0s;
+    --ease-spring: 0s;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

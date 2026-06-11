@@ -1,11 +1,12 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <bgfx/bgfx.h>
 
 namespace Caesura {
 
 // -- View ID constants -----------------------------------------------------
-// Render order enforced via bgfx::setViewOrder in BgfxRenderDevice::init()
+// Render order enforced via bgfx::setViewOrder in IRenderDevice::init()
 // VIEW_RTT (0) renders first   VIEW_MAIN (1) composites second   VIEW_DEBUG (2) last
 constexpr uint16_t VIEW_RTT   = 0;  // Offscreen render-to-texture canvas
 constexpr uint16_t VIEW_MAIN  = 1;  // Primary compositing pipeline (KAG UI)
@@ -62,6 +63,9 @@ public:
     virtual void blitViewport(ViewportHandle handle, uint16_t targetView,
                               float x, float y, float w, float h) = 0;
 
+    // Get the bgfx texture from a viewport handle (rt->tex mapping for submit_batch)
+    virtual bgfx::TextureHandle getViewportTexture(ViewportHandle handle) = 0;
+
     // Resolution query
     virtual int getBackbufferWidth() const = 0;
     virtual int getBackbufferHeight() const = 0;
@@ -116,6 +120,22 @@ public:
                              uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
     virtual void setFont(int fontId) = 0;
     virtual float textLineHeight() const = 0;
+
+    // -- Blend / Transition / VFX submission (P1: abstract interface methods) --
+    virtual void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
+                             bgfx::TextureHandle blendTex, int mode,
+                             float baseAlpha, float blendAlpha, float globalAlpha) = 0;
+    virtual void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
+                                  bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex,
+                                  int method, float progress) = 0;
+    virtual void submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
+                           int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB,
+                           float blurRadius, float quakeX, float quakeY) = 0;
+    virtual void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
+
+    // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
+    virtual bgfx::UniformHandle getDefaultSampler() const { return BGFX_INVALID_HANDLE; }
+    virtual bgfx::ProgramHandle getFallbackProgram() const { return BGFX_INVALID_HANDLE; }
 };
 
 } // namespace Caesura

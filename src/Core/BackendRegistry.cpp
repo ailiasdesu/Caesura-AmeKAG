@@ -3,10 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
-#include "SDL3PlatformBackend.h"
 #include "../Render/BgfxRenderDevice.h"
-#include "../Audio/SoLoudAudioEngine.h"
-#include "../Audio/NullAudioBackend.h"
 #include <cstdio>
 #include <cstring>
 
@@ -30,6 +27,7 @@ public:
     void touch(uint16_t) override {}
     ViewportHandle createRenderTarget(int, int) override { return ViewportHandle{}; }
     void destroyRenderTarget(ViewportHandle) override {}
+    bgfx::TextureHandle getViewportTexture(ViewportHandle) override { return BGFX_INVALID_HANDLE; }
     void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
     int getBackbufferWidth() const override { return m_width; }
     int getBackbufferHeight() const override { return m_height; }
@@ -45,6 +43,10 @@ public:
                    uint32_t, float, float, float, float,
                    const float*) override {}
     void beginBatch() override {}
+    void submitBlend(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, int, float, float, float) override {}
+    void submitTransition(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, bgfx::TextureHandle, int, float) override {}
+    void submitVFX(uint16_t, bgfx::TextureHandle, int, float, float, float, float, float, float, float) override {}
+    void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void flushBatch() override {}
     float textLineHeight() const override { return 0.0f; }
 private:
@@ -63,6 +65,7 @@ public:
     int getWindowWidth() const override { return m_width; }
     int getWindowHeight() const override { return m_height; }
     void setFullscreen(bool) override {}
+    void resizeWindow(int, int) override {}
     const char* getBackendName() const override { return "NullPlatform"; }
 private:
     int m_width = 0, m_height = 0;
@@ -86,6 +89,8 @@ void BackendRegistry::setPlatformBackend(IPlatformBackend& backend) { m_platform
 void BackendRegistry::setInputRouter(InputRouter* router) {
     m_inputRouter = router;
 }
+
+void BackendRegistry::setMiniGameBackend(IMiniGameBackend* backend) { m_miniGameBackend = backend; }
 
 void BackendRegistry::setVideoPlayer(VideoPlayer* player) {
     m_videoPlayer = player;
@@ -111,48 +116,60 @@ void BackendRegistry::registerNullBackends() {
 // -- Backend factory -------------------------------------------------------
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setAudioBackend() to register first.
     if (strcmp(name, "soloud") == 0 || strcmp(name, "SoLoud") == 0) {
-        m_audioBackend = new SoLoudAudioEngine();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created audio backend: SoLoud\n");
-        return m_audioBackend;
+        if (m_audioBackend) {
+            printf("[BackendRegistry] Using pre-registered audio backend: SoLoud\n");
+            return m_audioBackend;
+        }
+        fprintf(stderr, "[BackendRegistry] SoLoud backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_audioBackend = new NullAudioBackend();
-        // Engine is responsible for lifecycle
-        return m_audioBackend;
+        if (m_audioBackend) return m_audioBackend;
+        fprintf(stderr, "[BackendRegistry] Null audio backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown audio backend: %s\n", name);
     return nullptr;
 }
 
 IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setRenderDevice() to register first.
     if (strcmp(name, "bgfx") == 0) {
-        m_renderDevice = new BgfxRenderDevice();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created render backend: bgfx\n");
-        return m_renderDevice;
+        if (m_renderDevice) {
+            printf("[BackendRegistry] Using pre-registered render backend: bgfx\n");
+            return m_renderDevice;
+        }
+        fprintf(stderr, "[BackendRegistry] bgfx backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_renderDevice = new NullRenderDevice();
-        // Engine is responsible for lifecycle
-        return m_renderDevice;
+        if (m_renderDevice) return m_renderDevice;
+        fprintf(stderr, "[BackendRegistry] Null render backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown render backend: %s\n", name);
     return nullptr;
 }
 
 IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
+    // Factory only returns pre-registered backend.
+    // Engine owns lifecycle ¡ª use setPlatformBackend() to register first.
     if (strcmp(name, "sdl3") == 0 || strcmp(name, "SDL3") == 0) {
-        m_platformBackend = new SDL3PlatformBackend();
-        // Engine is responsible for lifecycle
-        printf("[BackendRegistry] Created platform backend: SDL3\n");
-        return m_platformBackend;
+        if (m_platformBackend) {
+            printf("[BackendRegistry] Using pre-registered platform backend: SDL3\n");
+            return m_platformBackend;
+        }
+        fprintf(stderr, "[BackendRegistry] SDL3 backend not registered yet\n");
+        return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        m_platformBackend = new NullPlatformBackend();
-        // Engine is responsible for lifecycle
-        return m_platformBackend;
+        if (m_platformBackend) return m_platformBackend;
+        fprintf(stderr, "[BackendRegistry] Null platform backend not registered yet\n");
+        return nullptr;
     }
     fprintf(stderr, "[BackendRegistry] Unknown platform backend: %s\n", name);
     return nullptr;
@@ -294,6 +311,10 @@ VideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
 }
 
 // -- Register Engine.* bindings to Lua -------------------------------------
+
+IMiniGameBackend* BackendRegistry::getMiniGameBackendFromLua(lua_State* L) {
+    return BackendRegistry::instance().getMiniGameBackend();
+}
 
 void BackendRegistry::registerEngineBindings(lua_State* L) {
     static const luaL_Reg engine_funcs[] = {

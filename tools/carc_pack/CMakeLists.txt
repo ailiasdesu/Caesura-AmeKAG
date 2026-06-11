@@ -1,4 +1,4 @@
-﻿# carc_pack - standalone CARC packing tool
+# carc_pack - standalone CARC packing tool
 cmake_minimum_required(VERSION 3.25)
 
 set(TOOL_NAME carc_pack)
@@ -34,7 +34,12 @@ target_include_directories(${TOOL_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
+if(WIN32)
+    target_link_libraries(${TOOL_NAME} PRIVATE bcrypt libzstd_static)
+else()
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(${TOOL_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto libzstd_static)
+endif()
 
 target_compile_definitions(${TOOL_NAME} PRIVATE
     _CRT_SECURE_NO_WARNINGS

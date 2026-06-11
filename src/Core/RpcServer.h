@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 // ===========================================================================
 //  Caesura (AmeKAG) -- RpcServer
 //  stdin/stdout JSON-RPC for IDE/Editor integration.
@@ -33,7 +33,10 @@ public:
     // Signal stop from outside
     void stop();
 
-    // Push a log entry to the output stream (thread-safe)
+    // Set frame capture callback (for editor mode getFrame RPC)
+    void setFrameCaptureCallback(std::function<std::string(int,int)> cb) { m_frameCaptureCb = std::move(cb); }
+
+    // Push a log entry to the output stream
     void pushLog(const std::string& level, const std::string& message);
 
 private:
@@ -47,6 +50,7 @@ private:
     std::string handleAssets(int id, const std::string& type);
     std::string handleEval(int id, const std::string& code);
     std::string handleGetState(int id);
+    std::string handleGetFrame(int id, int w, int h);
 
     // Write a JSON line to stdout (thread-safe via mutex)
     void writeLine(const std::string& json);
@@ -58,6 +62,7 @@ private:
     std::atomic<bool> m_running{false};
     std::mutex   m_writeMutex;
     bool         m_shutdownRequested = false;
+    std::function<std::string(int,int)> m_frameCaptureCb;
 };
 
 } // namespace Caesura

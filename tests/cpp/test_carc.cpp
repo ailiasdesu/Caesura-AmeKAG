@@ -39,7 +39,7 @@ TEST_CASE("CryptoEngine::bad key fails decrypt") {
     for (int i = 0; i < AES_NONCE_SIZE; i++) nonce[i] = (uint8_t)i;
     auto ct = CryptoEngine::encrypt((const uint8_t*)"test", 4, key, nonce, tag);
     auto pt = CryptoEngine::decrypt(ct.data(), ct.size(), bad, nonce, tag);
-    CHECK((pt.empty() || memcmp(pt.data(), "test", 4) != 0));
+    CHECK(pt.empty());
 }
 
 TEST_CASE("CryptoEngine::generateKey entropy") {

@@ -78,83 +78,6 @@ local function capture_state(ctx)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  Internal: serialize a Lua table to JSON string (simple, no dependencies)
---  Handles: nil, boolean, number, string, table (flat only, no cycles)
--- ═══════════════════════════════════════════════════════════════════════════
-
-local function json_encode(v)
-    local t = _type(v)
-    if t == "nil" then
-        return "null"
-    elseif t == "boolean" then
-        return v and "true" or "false"
-    elseif t == "number" then
-        return tostring(v)
-    elseif t == "string" then
-        return '"' .. v:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t') .. '"'
-    elseif t == "table" then
-        local parts = {}
-        local isArray = true
-        local maxIdx = 0
-        for k in pairs(v) do
-            if _type(k) ~= "number" or k < 1 or k ~= math.floor(k) then
-                isArray = false
-                break
-            end
-            if k > maxIdx then maxIdx = k end
-        end
-        if isArray and maxIdx > 0 then
-            for i = 1, maxIdx do
-                parts[#parts + 1] = json_encode(v[i])
-            end
-            return "[" .. table.concat(parts, ",") .. "]"
-        else
-            -- Sort keys for deterministic output
-            local keys = {}
-            for k in pairs(v) do
-                keys[#keys + 1] = tostring(k)
-            end
-            table.sort(keys)
-            for _, k in ipairs(keys) do
-                parts[#parts + 1] = '"' .. k:gsub('\\', '\\\\'):gsub('"', '\\"') .. '":' .. json_encode(v[k])
-            end
-            return "{" .. table.concat(parts, ",") .. "}"
-        end
-    else
-        return "null"
-    end
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
---  Internal: parse a simple flat JSON string into a Lua table
---  Uses Lua's load() with sandboxed environment (safe — no os/io access)
--- ═══════════════════════════════════════════════════════════════════════════
-
-local function json_decode(jsonStr)
-    -- Convert JSON to Lua table literal and load it
-    -- Simple approach: replace JSON null→nil, true/false stay, numbers stay
-    -- Use load() in a limited environment
-    local env = {}
-    local fn, err = load("return " .. jsonStr, "=json", "t", env)
-    if not fn then
-        print("[SaveCmd] JSON parse error: " .. tostring(err))
-        return nil
-    end
-    local ok, result = pcall(fn)
-    if ok then
-        return result
-    else
-        print("[SaveCmd] JSON eval error: " .. tostring(result))
-        return nil
-    end
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
---  [save slot=0 desc="第一章-教室"]
---  Serializes ctx state → JSON → KAG.save_game() → disk
---  Thumbnail support: if ctx has a screenshot/capture function, include it
--- ═══════════════════════════════════════════════════════════════════════════
-
 function SaveCommands.save(ctx, params)
     local slot = tonumber(params.slot or params[1] or 0)
     local desc = params.desc or params.description or ""
@@ -163,8 +86,7 @@ function SaveCommands.save(ctx, params)
     ctx.saveDescription = desc
     local state = capture_state(ctx)
 
-    -- Serialize to JSON
-    local jsonStr = json_encode(state)
+
 
     -- Thumbnail: capture if available (engine provides via ctx)
     local thumbnail = params.thumbnail or ""
@@ -176,7 +98,7 @@ function SaveCommands.save(ctx, params)
     local sceneName = ctx.currentScene or "unknown"
     local tokenIdx  = ctx.token_index or 1
 
-    local ok = KAG.save_game(slot, jsonStr, sceneName, tokenIdx, thumbnail)
+    local ok = KAG.save_game(slot, state, sceneName, tokenIdx, thumbnail)
     -- Phase G8-U1: explicit GC collect after save
     pcall(function() collectgarbage("collect") end)
 
@@ -203,22 +125,14 @@ function SaveCommands.load(ctx, params)
     local slot = tonumber(params.slot or params[1] or 0)
 
     -- Call C++ SaveManager via KAG binding
-    local jsonStr, meta = KAG.load_game(slot)
-    if not jsonStr then
-        print("[SaveCmd] Load failed for slot " .. slot .. ": " .. tostring(meta))
+    local state, meta = KAG.load_game(slot)    if not state or type(state) ~= "table" then
+        print("[SaveCmd] Load failed for slot " .. slot .. ": " .. tostring(meta or "unknown error"))
         ctx.tf = ctx.tf or {}
         ctx.tf.load_result = "error"
         return
     end
 
-    -- Parse JSON
-    local state = json_decode(jsonStr)
-    if not state then
-        print("[SaveCmd] JSON parse failed for slot " .. slot)
-        ctx.tf = ctx.tf or {}
-        ctx.tf.load_result = "error"
-        return
-    end
+
 
     -- Restore f-variables
     if state.f then

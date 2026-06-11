@@ -1,4 +1,4 @@
-ï»¿// CARCReader -- Read, verify, decrypt, and decompress files from a CARC archive.
+// CARCReader -- Read, verify, decrypt, and decompress files from a CARC archive.
 // Phase 9: Chain trust verification (spec [10.2.63]) via verifyChainTrust().
 #pragma once
 #include "CARCFormat.h"
@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <memory>
+#include <mutex>
 
 namespace Caesura::carc {
 
@@ -59,7 +60,7 @@ public:
     // Utility: hash a path string to 32-byte SHA-256
     static void hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE]);
 
-    // â”€â”€ Phase 9: Chain Trust (spec [10.2.63]) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Phase 9: Chain Trust (spec [10.2.63]) ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     /// Verify chain trust: a child CARC is authorized by a certificate
     /// stored in this (parent) CARC. The certificate is a JSON blob at
@@ -87,10 +88,11 @@ public:
 
 public:
     CARCHeader m_header;
-    // pathHash (32-byte as hex string) â†’ FileInfo
+    // pathHash (32-byte as hex string) ¡ú FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;
     std::vector<std::string> m_fileList;
     std::ifstream m_stream;
+    std::mutex    m_streamMutex;  // serialize concurrent seekg/read from JobSystem workers
 
     uint8_t m_publicKey[PUBLICKEY_SIZE];
     bool m_hasPublicKey = false;
@@ -103,7 +105,7 @@ public:
 
     static std::string pathHashToHex(const uint8_t hash[PATH_HASH_SIZE]);
 
-    // â”€â”€ Chain trust â”€â”€
+    // ©¤©¤ Chain trust ©¤©¤
     CRLManager* m_crlManager = nullptr;
     uint8_t m_rootPublicKey[PUBLICKEY_SIZE] = {};
     bool m_hasRootKey = false;

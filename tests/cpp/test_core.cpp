@@ -1,7 +1,7 @@
-#include "doctest.h"
+﻿#include "doctest.h"
 #include "Core/BackendRegistry.h"
 #include "Core/TextureBudget.h"
-#include "Core/DebugManager.h"
+#include "Debug/DebugManager.h"
 #include "Resource/ResourceHandle.h"
 #include <cstring>
 

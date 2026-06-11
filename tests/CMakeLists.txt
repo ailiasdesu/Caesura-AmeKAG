@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -25,16 +25,22 @@ set(TEST_SOURCES
     cpp/test_render.cpp
     cpp/test_kag_binding.cpp
     cpp/test_kag_integration.cpp
+    cpp/test_sandbox_quota.cpp
+    cpp/test_particle_system.cpp
+    cpp/test_engine_lifecycle.cpp
+    cpp/test_mini_game.cpp
+    cpp/test_steam.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/DebugManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/Debug/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/TextureBudget.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SandboxQuota.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/RpcServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
@@ -73,10 +79,24 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/VideoPlayer.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Platform/MobileAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/Core/MobileAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
+    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
+    ${CMAKE_SOURCE_DIR}/src/Steam/SteamBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/Scripting/SteamBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/System/CloudSaveProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})
+
+if(WIN32)
+    target_link_libraries(CaesuraTests PRIVATE bcrypt)
+endif()
 
 target_include_directories(CaesuraTests PRIVATE
     ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
@@ -97,16 +117,28 @@ target_include_directories(CaesuraTests PRIVATE
 
 target_link_libraries(CaesuraTests PRIVATE
     doctest lua ed25519 SDL3::SDL3 soloud bgfx bimg bx
-    bcrypt freetype libzstd_static
+    freetype libzstd_static
 )
 
 if(WIN32)
     target_link_libraries(CaesuraTests PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
+elseif(APPLE)
+    find_library(COCOA_LIBRARY Cocoa REQUIRED)
+    find_library(IOKIT_LIBRARY IOKit REQUIRED)
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(QUARTZCORE QuartzCore REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} ${FOUNDATION_LIBRARY} pthread OpenSSL::SSL OpenSSL::Crypto)
+elseif(UNIX)
+    find_package(Threads REQUIRED)
+    find_package(X11 REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraTests PRIVATE Threads::Threads dl X11::X11 OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 target_compile_definitions(CaesuraTests PRIVATE
     _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN
-    CAESURA_PLATFORM_WINDOWS
     __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS
     SDL_MAIN_HANDLED
     $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>
@@ -125,4 +157,8 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     "${CMAKE_SOURCE_DIR}/scripts"
     "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
     COMMENT "Copying scripts to test output directory..."
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/tests/audio"
+    "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
+    COMMENT "Copying test audio files..."
 )

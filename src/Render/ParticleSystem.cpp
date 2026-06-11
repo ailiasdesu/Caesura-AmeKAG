@@ -1,13 +1,40 @@
 #include "ParticleSystem.h"
-#include "BgfxRenderDevice.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/JobSystem.h"
 #include <bx/math.h>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 #include <random>
 
 namespace Caesura {
 // Security: replaced rand() with std::mt19937 for proper RNG
+
+// ===========================================================================
+//  processSimBatch -- JobSystem worker payload (pure CPU, no GPU/alloc)
+// ===========================================================================
+
+void processSimBatch(SimBatch& batch) {
+    int dead = 0;
+    for (uint32_t i = batch.startIdx; i < batch.endIdx; ++i) {
+        auto& p = batch.particles[i];
+        if (!p.alive) continue;
+
+        p.life -= batch.dt;
+        if (p.life <= 0.0f) {
+            p.alive = false;
+            ++dead;
+            continue;
+        }
+
+        p.vx += batch.gravityX * batch.dt;
+        p.vy += batch.gravityY * batch.dt;
+        p.x  += p.vx * batch.dt;
+        p.y  += p.vy * batch.dt;
+    }
+    batch.deadCount = dead;
+}
+
 static std::mt19937& rng() { static std::mt19937 r(std::random_device{}()); return r; }
 
 ParticleSystem::~ParticleSystem() { shutdown(); }
@@ -17,13 +44,13 @@ bool ParticleSystem::init() {
     if (!renderDev) return false;
     m_particles.resize(MAX_PARTICLES);
 
-    // Get bgfx-specific handles from the concrete BgfxRenderDevice (only impl)
-    auto* bgfxDev = dynamic_cast<BgfxRenderDevice*>(renderDev);
-    if (!bgfxDev) return false;
-    m_texSampler = bgfxDev->getTexSampler();
-    m_program = bgfxDev->getFallbackProgram();
-
-    // Create a 4x4 white point texture for particles
+    // Get handles from IRenderDevice abstraction (no concrete dependency)
+    m_texSampler = renderDev->getDefaultSampler();
+    m_program = renderDev->getFallbackProgram();
+    if (!bgfx::isValid(m_texSampler) || !bgfx::isValid(m_program)) {
+        fprintf(stderr, "[ParticleSystem] Render device missing sampler or program\n");
+        return false;
+    }
     uint8_t white[16] = { 255,255,255,255, 255,255,255,255, 255,255,255,255, 255,255,255,255 };
     const bgfx::Memory* mem = bgfx::copy(white, 16);
     m_particleTex = bgfx::createTexture2D(2, 2, false, 1,
@@ -59,6 +86,7 @@ void ParticleSystem::destroyEmitter(int id) {
 }
 
 void ParticleSystem::emit(int emitterId, int count) {
+    if (!m_initialized) return;
     if (emitterId < 0 || emitterId >= (int)m_emitters.size()) return;
     auto& em = m_emitters[emitterId];
     if (!em.active) return;

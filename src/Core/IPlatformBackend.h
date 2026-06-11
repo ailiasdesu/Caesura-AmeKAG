@@ -39,6 +39,9 @@ public:
     virtual int getWindowHeight() const = 0;
     virtual void setFullscreen(bool fullscreen) = 0;
 
+    // -- Window management --------------------------------------------------
+    virtual void resizeWindow(int width, int height) = 0;
+
     // -- Backend identification --------------------------------------------
     virtual const char* getBackendName() const = 0;
 };

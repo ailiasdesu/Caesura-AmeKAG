@@ -4,6 +4,8 @@
 #include "../Render/IRenderDevice.h"
 #include "../Resource/ResourceHandle.h"
 #include "../Render/VideoPlayer.h"
+#include "../MiniGame/IMiniGameBackend.h"
+#include "../Live2D/IAnimationBackend.h"
 #include "InputRouter.h"
 #include <unordered_map>
 #include <string>
@@ -17,6 +19,7 @@ namespace Caesura {
 class TextureBudget;
 class TextureManager;
 class LayerManager;
+class IMiniGameBackend;
 
 // ---------------------------------------------------------------------------
 // BackendRegistry -- Singleton factory/registry for all engine backends
@@ -46,6 +49,12 @@ public:
     void setAudioBackend(IAudioBackend& backend);
     void setPlatformBackend(IPlatformBackend& backend);
     void setInputRouter(InputRouter* router);
+    void setMiniGameBackend(IMiniGameBackend* backend);
+    IMiniGameBackend* getMiniGameBackend() { return m_miniGameBackend; }
+
+    void setAnimationBackend(IAnimationBackend* backend) { m_animationBackend = backend; }
+    IAnimationBackend* getAnimationBackend() { return m_animationBackend; }
+
     void setVideoPlayer(VideoPlayer* player);
 
     // Install null (no-op) render and platform backends for headless mode
@@ -64,9 +73,8 @@ public:
     TextureBudget*  getTextureBudget()  { return m_textureBudget; }
     void setTextureBudget(TextureBudget* tb) { m_textureBudget = tb; }
 
-    // -- Backend factory: create by name -----------------------------------
-    // Returns raw pointer; Engine is responsible for lifecycle.
-    // Returns existing backend if already registered, nullptr if unknown name.
+    // -- Backend lookup: resolve by name (no allocation) --------------------
+    // Returns existing backend pointer (Engine owns lifecycle via unique_ptr).
     IAudioBackend*   createAudioBackend(const char* name);
     IRenderDevice*   createRenderDevice(const char* name);
     IPlatformBackend* createPlatformBackend(const char* name);
@@ -79,6 +87,7 @@ public:
     static IAudioBackend*   getAudioBackendFromLua(lua_State* L);
     static IPlatformBackend* getPlatformBackendFromLua(lua_State* L);
     static InputRouter*     getInputRouterFromLua(lua_State* L);
+    static IMiniGameBackend* getMiniGameBackendFromLua(lua_State* L);
     static VideoPlayer*     getVideoPlayerFromLua(lua_State* L);
 
     // -- ResourceHandle / Generation tracking -----------------------------------
@@ -107,6 +116,8 @@ private:
         IPlatformBackend* m_platformBackend = nullptr;  // non-owning; Engine holds unique_ptr
         InputRouter*     m_inputRouter     = nullptr;
     GenerationTracker m_generations;
+    IMiniGameBackend* m_miniGameBackend = nullptr;
+    IAnimationBackend* m_animationBackend = nullptr;
     VideoPlayer*     m_videoPlayer     = nullptr;
     TextureManager*  m_textureManager  = nullptr;
     LayerManager*    m_layerManager    = nullptr;

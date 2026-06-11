@@ -142,6 +142,21 @@ local _G_whitelist = {
     _KAG_onClick        = true,
     _KAG_onKey          = true,
     _KAG_onScroll       = true,
+    -- Engine runtime state globals (set by C++ main loop)
+    _CAESURA_GPU_QUALITY  = true,
+    _CAESURA_VFX_ENABLED  = true,
+    _CAESURA_GPU_TIME_MS  = true,
+    _CAESURA_GPU_AVG_MS   = true,
+    _CAESURA_GPU_DEGRADED = true,
+    _CAESURA_VOICE_COMPLETE = true,
+    _GAME_MOUSE_X   = true,
+    _GAME_MOUSE_Y   = true,
+    _GAME_MOUSE_DOWN = true,
+    _GAME_KEY_F5    = true,
+    _GAME_KEY_F6    = true,
+    quicksave = true,
+    quickload = true,
+    autosave  = true,
     debug      = true,  -- already read-only from section 2
     -- Read-only globals
     package    = true,
@@ -208,6 +223,16 @@ local RENDER_WHITELIST = {
     submit_blend        = true,
     load_texture_async  = true,
     cancel_async_loads  = true,
+    -- Viewport operations (for RTT layer compositing)
+    create_viewport     = true,
+    destroy_viewport    = true,
+    draw_viewport       = true,
+    fill_viewport       = true,
+    -- Transition and VFX rendering
+    submit_transition   = true,
+    submit_vfx          = true,
+    submit_stretch_blt  = true,
+    submit_affine_blt   = true,
 }
 
 -- Whitelist: DevCore module -- allowed functions for AI scripts
@@ -261,8 +286,21 @@ end
 -- Apply whitelist proxies in strict mode
 -- Default mode is "strict" -- AI scripts get maximum protection.
 -- Developers can set _SANDBOX_MODE = "dev" in config.lua for full access.
+-- Check if _CAESURA_CONFIG.dev_mode is set (by main.cpp before lockdown)
+local function is_dev_mode()
+    local cfg = rawget(_G, "_CAESURA_CONFIG")
+    if type(cfg) == "table" and cfg.dev_mode == true then
+        return true
+    end
+    return false
+end
+
 if rawget(_G, "_SANDBOX_MODE") == nil then
-    rawset(_G, "_SANDBOX_MODE", "strict")
+    if is_dev_mode() then
+        rawset(_G, "_SANDBOX_MODE", "dev")
+    else
+        rawset(_G, "_SANDBOX_MODE", "strict")
+    end
 end
 
 if _SANDBOX_MODE == "strict" then

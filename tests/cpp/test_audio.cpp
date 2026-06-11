@@ -1,4 +1,5 @@
-﻿#include "doctest.h"
+#include "doctest.h"
+#include <cstring>
 #include "Audio/SoLoudAudioEngine.h"
 
 using namespace Caesura;
@@ -65,4 +66,30 @@ TEST_CASE("SoLoudAudioEngine::LRU cache survives multiple plays") {
         eng.playSE("nonexistent.wav");  // each call attempts load
     }
     // Cache operations should not crash
+}
+
+
+TEST_CASE("SoLoudAudioEngine::load WAV format") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playSE("tests/audio/silence.wav");
+    CHECK(h > 0);
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine::load FLAC format") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playSE("tests/audio/silence.flac");
+    CHECK(h > 0);
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine::unsupported format returns 0 no crash") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playSE("CMakeLists.txt");
+    CHECK(h == 0);
+    unsigned int h2 = eng.playSE("");
+    CHECK(h2 == 0);
 }

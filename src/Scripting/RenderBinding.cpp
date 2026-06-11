@@ -1,13 +1,13 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Render/IRenderDevice.h"
-#include "../Render/BgfxRenderDevice.h"
 #include "../Resource/AsyncLoader.h"
 #include "../Render/TextureManager.h"
+#include "../Render/VideoPlayer.h"
 #include <bgfx/bgfx.h>
 #include <cstdio>
 #include <cstring>
@@ -18,6 +18,18 @@ namespace Caesura {
 
 // -- Internal texture helper: delegates to TextureManager -------------------
 
+// Resolve a texture ID: first try TextureManager, then RTT viewport map.
+// This handles the case where Lua passes an RTT view ID as "tex" field.
+static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
+    bgfx::TextureHandle tex = TextureManager::instance().getTextureHandle(id);
+    if (!bgfx::isValid(tex) && dev && id != 0) {
+        ViewportHandle vp{ id };
+        tex = dev->getViewportTexture(vp);
+    }
+    return tex;
+}
+
+// Legacy wrapper for callers that don't have a device pointer
 static bgfx::TextureHandle getTexHandle(uint32_t texId) {
     return TextureManager::instance().getTextureHandle(texId);
 }
@@ -118,12 +130,12 @@ static int lua_Render_submit_batch(lua_State* L) {
     int n = (int)lua_rawlen(L, 1);
     if (n == 0) { lua_pushboolean(L, 1); return 1; }
 
+
     dev->beginBatch();
 
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, 1, i);
         if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
-
         uint32_t texId  = (uint32_t)getTableInt(L, "tex", 0);
         float    x      = getTableFloat(L, "x", 0);
         float    y      = getTableFloat(L, "y", 0);
@@ -131,7 +143,14 @@ static int lua_Render_submit_batch(lua_State* L) {
         float    h      = getTableFloat(L, "h", 128);
         int      opacity = getTableInt(L, "opacity", 255);
 
-        bgfx::TextureHandle tex = getTexHandle(texId);
+        bgfx::TextureHandle tex = resolveTexture(texId, dev);
+        // Also try explicit "rt" key for forward-compat
+        if (!bgfx::isValid(tex)) {
+            uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
+            if (rtId != 0) {
+                tex = resolveTexture(rtId, dev);
+            }
+        }
         if (bgfx::isValid(tex)) {
             dev->blitTexture(VIEW_MAIN, (uint32_t)tex.idx, x, y, w, h, (uint8_t)opacity);
         }
@@ -154,21 +173,17 @@ static int lua_Render_submit_blend(lua_State* L) {
     float    blendAlpha = (float)luaL_optnumber(L, 5, 1.0);
     float    globalAlpha = (float)luaL_optnumber(L, 6, 1.0);
 
-    bgfx::TextureHandle baseTex  = getTexHandle(baseTexId);
-    bgfx::TextureHandle blendTex = getTexHandle(blendTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle baseTex  = resolveTexture(baseTexId, dev);
+    bgfx::TextureHandle blendTex = resolveTexture(blendTexId, dev);
 
     if (!bgfx::isValid(baseTex) || !bgfx::isValid(blendTex)) {
         fprintf(stderr, "[Render] submit_blend: invalid texture(s)\n");
         lua_pushboolean(L, 0); return 1;
     }
 
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitBlend(VIEW_MAIN, baseTex, blendTex,
+    dev->submitBlend(VIEW_MAIN, baseTex, blendTex,
                          mode, baseAlpha, blendAlpha, globalAlpha);
     lua_pushboolean(L, 1);
     return 1;
@@ -183,8 +198,10 @@ static int lua_Render_submit_transition(lua_State* L) {
     int      method    = (int)luaL_checkinteger(L, 4);
     float    progress  = (float)luaL_checknumber(L, 5);
 
-    bgfx::TextureHandle fromTex = getTexHandle(fromTexId);
-    bgfx::TextureHandle toTex   = getTexHandle(toTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle fromTex = resolveTexture(fromTexId, dev);
+    bgfx::TextureHandle toTex   = resolveTexture(toTexId, dev);
 
     if (!bgfx::isValid(fromTex) || !bgfx::isValid(toTex)) {
         fprintf(stderr, "[Render] submit_transition: invalid texture(s)\n");
@@ -193,16 +210,10 @@ static int lua_Render_submit_transition(lua_State* L) {
 
     bgfx::TextureHandle ruleTex = BGFX_INVALID_HANDLE;
     if (ruleTexId != 0) {
-        ruleTex = getTexHandle(ruleTexId);
+        ruleTex = resolveTexture(ruleTexId, dev);
     }
 
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitTransition(VIEW_MAIN, fromTex, toTex, ruleTex,
+    dev->submitTransition(VIEW_MAIN, fromTex, toTex, ruleTex,
                                method, progress);
     lua_pushboolean(L, 1);
     return 1;
@@ -221,19 +232,15 @@ static int lua_Render_submit_vfx(lua_State* L) {
     float    quakeX    = (float)luaL_optnumber(L, 8, 0.0);
     float    quakeY    = (float)luaL_optnumber(L, 9, 0.0);
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         fprintf(stderr, "[Render] submit_vfx: invalid texture\n");
         lua_pushboolean(L, 0); return 1;
     }
 
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->submitVFX(VIEW_MAIN, srcTex, effect,
+    dev->submitVFX(VIEW_MAIN, srcTex, effect,
                        fadeAlpha, fadeR, fadeG, fadeB,
                        blurRadius, quakeX, quakeY);
     lua_pushboolean(L, 1);
@@ -255,13 +262,12 @@ static int lua_Render_stretch_blt(lua_State* L) {
     float    sh = (float)luaL_checknumber(L, 10);
     int      filter = (int)luaL_optinteger(L, 11, 1);
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     dev->stretchBlt(VIEW_MAIN, dstTexId,
                      dx, dy, dw, dh,
@@ -304,13 +310,12 @@ static int lua_Render_affine_blt(lua_State* L) {
         }
     }
 
-    bgfx::TextureHandle srcTex = getTexHandle(srcTexId);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    bgfx::TextureHandle srcTex = resolveTexture(srcTexId, dev);
     if (!bgfx::isValid(srcTex)) {
         lua_pushboolean(L, 0); return 1;
     }
-
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     dev->affineBlt(VIEW_MAIN, dstTexId,
                     dx, dy, dw, dh,
@@ -324,19 +329,15 @@ static int lua_Render_affine_blt(lua_State* L) {
 
 static int lua_Render_fill_viewport(lua_State* L) {
     uint32_t id = (uint32_t)luaL_checkinteger(L, 1);
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
     uint8_t r = (uint8_t)luaL_optinteger(L, 2, 0);
     uint8_t g = (uint8_t)luaL_optinteger(L, 3, 0);
     uint8_t b = (uint8_t)luaL_optinteger(L, 4, 0);
     uint8_t a = (uint8_t)luaL_optinteger(L, 5, 255);
 
     ViewportHandle vp{ id };
-    IRenderDevice* dev = getRender(L);
-    if (!dev) { lua_pushboolean(L, 0); return 1; }
-
-    BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(dev);
-    if (!bgfxDev) { lua_pushboolean(L, 0); return 1; }
-
-    bgfxDev->fillViewport(vp, r, g, b, a);
+    dev->fillViewport(vp, r, g, b, a);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -416,21 +417,82 @@ static int lua_Render_cancel_async_loads(lua_State* L) {
     return 1;
 }
 
-// -- Video placeholders -----------------------------------------------------
+// -- Video playback (pl_mpeg default, FFmpeg with CAESURA_VIDEO_FFMPEG) ----
 
-static int lua_Render_video_play(lua_State* L) {
-    (void)luaL_checkstring(L, 1); // consume arg, validate type
-    return luaL_error(L, "Video playback not available in Alpha (FFmpeg planned for Beta)");
+static VideoPlayer* getVideo(lua_State* L) {
+    return BackendRegistry::getVideoPlayerFromLua(L);
 }
 
-static int lua_Render_video_stop(lua_State* L)     { lua_pushboolean(L, 1); return 1; }
-static int lua_Render_video_update(lua_State* L)    { lua_pushboolean(L, 1); return 1; }
-static int lua_Render_video_get_texture(lua_State* L) { lua_pushinteger(L, 0); return 1; }
-static int lua_Render_video_is_playing(lua_State* L) { lua_pushboolean(L, 0); return 1; }
-static int lua_Render_video_has_ended(lua_State* L)  { lua_pushboolean(L, 0); return 1; }
-static int lua_Render_video_get_size(lua_State* L)   { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
-static int lua_Render_video_pause(lua_State* L)      { lua_pushboolean(L, 1); return 1; }
-static int lua_Render_video_resume(lua_State* L)     { lua_pushboolean(L, 1); return 1; }
+static int lua_Render_video_play(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    VideoPlayer* vp = getVideo(L);
+    if (!vp) { lua_pushnil(L); lua_pushstring(L, "VideoPlayer not available"); return 2; }
+    VideoHandle h = vp->open(path);
+    if (!h) { lua_pushnil(L); lua_pushstring(L, "Failed to open video"); return 2; }
+    lua_pushinteger(L, (lua_Integer)h.id);
+    return 1;
+}
+
+static int lua_Render_video_stop(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (vp) vp->close(h);
+    lua_pushboolean(L, 1); return 1;
+}
+
+static int lua_Render_video_update(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (!vp) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, vp->update(h, 0.0) ? 1 : 0);
+    return 1;
+}
+
+static int lua_Render_video_get_texture(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (!vp) { lua_pushinteger(L, 0); return 1; }
+    bgfx::TextureHandle tex = vp->getTexture(h);
+    lua_pushinteger(L, bgfx::isValid(tex) ? (lua_Integer)tex.idx : 0);
+    return 1;
+}
+
+static int lua_Render_video_is_playing(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    lua_pushboolean(L, vp && vp->isPlaying(h) ? 1 : 0);
+    return 1;
+}
+
+static int lua_Render_video_has_ended(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    lua_pushboolean(L, vp && vp->hasEnded(h) ? 1 : 0);
+    return 1;
+}
+
+static int lua_Render_video_get_size(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (!vp) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
+    lua_pushinteger(L, vp->width(h));
+    lua_pushinteger(L, vp->height(h));
+    return 2;
+}
+
+static int lua_Render_video_pause(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (vp) vp->pause(h);
+    lua_pushboolean(L, 1); return 1;
+}
+
+static int lua_Render_video_resume(lua_State* L) {
+    VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
+    VideoPlayer* vp = getVideo(L);
+    if (vp) vp->resume(h);
+    lua_pushboolean(L, 1); return 1;
+}
 
 // -- ResourceHandle validation (Phase 0.5) ---------------------------------
 
@@ -510,3 +572,4 @@ void registerRenderBinding(lua_State* L) {
 }
 
 } // namespace Caesura
+

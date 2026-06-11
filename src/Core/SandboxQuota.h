@@ -1,4 +1,6 @@
 #pragma once
+// Note: counters below are lock-free (plain Lua table integer fields).
+// Safe under a single Lua VM; not safe for concurrent multi-VM access.
 // ===========================================================================
 //  Caesura (AmeKAG) -- SandboxQuota (Track 3)
 //  Resource quota enforcement for AI-generated Lua scripts.

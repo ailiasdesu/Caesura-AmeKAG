@@ -1,150 +1,122 @@
-﻿# Caesura (AmeKAG) — Build Guide
+﻿# Caesura (AmeKAG) 构建与部署指南
 
-## Prerequisites
+> 三平台构建 + Electron 打包 + 测试
 
-| Dependency | Version | Windows | Linux |
-|-----------|---------|---------|-------|
-| CMake | ≥ 3.25 | [cmake.org](https://cmake.org) | `apt install cmake` |
-| MSVC / MinGW / GCC / Clang | C++20 | Visual Studio 2022 | `apt install build-essential` |
-| SDL3 | ≥ 3.2 | vcpkg / manual build | `apt install libsdl3-dev` |
-| Git | any | [git-scm.com](https://git-scm.com) | `apt install git` |
+## 前置要求
 
-## Step 1 — Clone & Initialize Submodules
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| CMake | 3.25+ | 构建系统 |
+| Visual Studio 2022 | 17+ | Windows 编译 (MSVC) |
+| GCC / Clang | 12+ | Linux/macOS 编译 |
+| Node.js | 18+ | Electron 编辑器 |
+| npm | 9+ | 包管理 |
+| Python 3 | 3.10+ | bgfx shaderc 构建 (可选) |
 
-```bash
-git clone https://github.com/your-org/Caesura-AmeKAG.git
-cd Caesura-AmeKAG
-git submodule update --init --recursive
-```
-
-This pulls in:
-- `external/bgfx` — Cross-platform rendering library
-- `external/lua` — Lua 5.4 scripting engine
-- `external/soloud` — SoLoud audio engine
-- `external/SDL3` — SDL3 platform abstraction
-
-## Step 2 — Install SDL3
-
-### Windows (vcpkg)
-```powershell
-vcpkg install sdl3:x64-windows
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake
-```
-
-### Windows (manual)
-Download SDL3-devel from [github.com/libsdl-org/SDL](https://github.com/libsdl-org/SDL/releases).
-Set `SDL3_DIR` to the cmake directory.
-
-### Linux
-```bash
-sudo apt install libsdl3-dev
-# or build from source:
-git clone https://github.com/libsdl-org/SDL --branch release-3.2.0
-cd SDL && cmake -B build && sudo cmake --install build
-```
-
-## Step 3 — Configure & Build
+## Windows 构建
 
 ```bash
-# Configure
-cmake -B build -S .
+# 标准构建 (无 Live2D, FFmpeg 自动检测)
+cmake -B build_nol2d
+cmake --build build_nol2d --config Release
 
-# Build Release
+# 带 Live2D (需先下载 Cubism SDK 到外部路径)
+cmake -B build_l2d -DCAESURA_ENABLE_LIVE2D=ON -DCUBISM_SDK_PATH=C:/path/to/CubismSdkForNative-5-r.5
+cmake --build build_l2d --config Release
+
+# 带 FFmpeg (需安装 ffmpeg-dev 库)
+cmake -B build_ffmpeg -DCAESURA_ENABLE_FFMPEG=ON
+cmake --build build_ffmpeg --config Release
+```
+
+> SDL3 开发包应放在 `SDL3-3.4.10/` 目录下，CMake 自动检测。
+
+## Linux 构建
+
+```bash
+# 安装依赖
+sudo apt install libsdl3-dev libfreetype-dev
+
+# FFmpeg (可选)
+sudo apt install libavcodec-dev libavformat-dev libswscale-dev libavutil-dev
+
+# 构建
+cmake -B build
 cmake --build build --config Release
-
-# Build Debug (with debug symbols)
-cmake --build build --config Debug
 ```
 
-The executable is at:
-- Windows: `build\Release\CaesuraAmeKAG.exe`
-- Linux: `build/CaesuraAmeKAG`
-
-## Step 4 — Run
+## macOS 构建
 
 ```bash
-cd build/Release   # (or build/Debug)
-./CaesuraAmeKAG    # (or .\CaesuraAmeKAG.exe on Windows)
+# 安装依赖
+brew install sdl3 freetype
+
+# FFmpeg (可选)
+brew install ffmpeg
+
+# 构建
+cmake -B build
+cmake --build build --config Release
 ```
 
-The engine will:
-1. Create a 1280×720 window via SDL3
-2. Initialize bgfx with Direct3D 11 (Windows) or Vulkan/Metal
-3. Initialize SoLoud audio engine
-4. Load Lua scripts from `scripts/`
-5. Start the KAG demo script
-6. Enter the main loop — press Esc or close the window to exit
-
-## Step 5 — Generate Production Shaders (Optional)
-
-The embedded shaders in `src/Render/EmbeddedShaders.cpp` are fallback stubs.
-For production rendering, compile shaders using bgfx's `shaderc` tool:
+## 运行 Demo
 
 ```bash
-# Build shaderc first
-cd external/bgfx
-make shaderc
+# Windows
+build_nol2d/Release/CaesuraAmeKAG.exe --demo
 
-# Compile vertex shader
-./shaderc -f shaders/vs_sprite.sc -o shaders/vs_sprite.bin \
-  --type vertex --platform windows -p s_5_0 \
-  --varyingdef shaders/varying.def.sc
-
-# Compile fragment shader
-./shaderc -f shaders/fs_texture.sc -o shaders/fs_texture.bin \
-  --type fragment --platform windows -p s_5_0 \
-  --varyingdef shaders/varying.def.sc
+# Linux/macOS
+./build/CaesuraAmeKAG --demo
 ```
 
-The resulting `.bin` files can be loaded at runtime, or converted to C arrays
-for embedding using `xxd -i` or a similar tool.
+## 运行测试
 
-## Directory Layout
-
-```
-Caesura(AmeKAG)/
-├── CMakeLists.txt          # Build configuration
-├── BUILD.md                # This file
-├── src/                    # C++ engine source
-│   ├── main.cpp            # Entry point
-│   ├── Core/               # Engine, InputRouter, BackendRegistry
-│   ├── Render/             # IRenderDevice, BgfxRenderDevice, RTTManager
-│   ├── Audio/              # SoLoudAudioEngine
-│   └── Scripting/          # LuaManager, KAG/Render/DevCore bindings
-├── scripts/                # Lua game logic
-│   ├── backend.lua         # Unified C++ backend interface
-│   ├── config.lua          # Engine configuration
-│   ├── game_logic.lua      # Main game entry point
-│   ├── kag.lua             # KAG command dispatch
-│   ├── scheduler.lua       # Coroutine-based script executor
-│   ├── tokenizer.lua       # KAG script parser
-│   ├── audio.lua           # Audio subsystem (→ backend.lua)
-│   ├── layers.lua          # Layer tree manager
-│   └── ...                 # Other subsystems
-├── external/               # Git submodules (bgfx, lua, soloud, SDL3)
-└── shaders/                # Shader source files
+```bash
+cmake --build build_nol2d --config Debug
+build_nol2d/Debug/tests/CaesuraTests.exe
 ```
 
-## Troubleshooting
+24 个测试文件覆盖 Core/Render/Audio/Scripting/System/CARC/Resource/MiniGame/Debug。
 
-**"bgfx::init failed"**: Check GPU driver support. On Windows, ensure Direct3D 11
-is available. On Linux, ensure Vulkan drivers are installed.
+## 编辑器开发
 
-**"SDL_Init failed"**: Verify SDL3 is properly installed and the DLL/so is in
-the library path.
-
-**"Embedded shaders failed"**: This is expected — production shaders should be
-compiled using bgfx shaderc. The engine runs with debug text overlay in the
-meantime.
-
-**Link error "LNK1104 cannot open file"**: A previous instance is still running.
-Kill it: `taskkill /F /IM CaesuraAmeKAG.exe` (Windows) or `pkill CaesuraAmeKAG`.
-
-## CI Build (GitHub Actions)
-
-```yaml
-- name: Configure
-  run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-- name: Build
-  run: cmake --build build --config Release -j$(nproc)
+```bash
+cd web-editor
+npm install
+npm run dev        # 开发模式 (Vite + Electron)
+npm run build      # 仅构建前端
 ```
+
+## 编辑器打包
+
+```bash
+cd web-editor
+npm run package:win    # Windows NSIS 安装包
+npm run package:mac    # macOS DMG
+npm run package:linux  # Linux AppImage
+```
+
+打包产物在 `web-editor/release/`。
+
+## Shader 编译
+
+```bash
+# 需要先构建 bgfx shaderc 工具
+# (参考 external/bgfx/bgfx/makefile)
+
+cd shaders
+compile_shaders.bat windows   # D3D11
+compile_shaders.bat linux     # OpenGL
+compile_shaders.bat macos     # Metal
+```
+
+编译后需更新 `src/Render/EmbeddedShaders_*.cpp`。
+
+## CI/CD
+
+GitHub Actions: `.github/workflows/ci.yml`
+- Windows MSVC Debug + Release
+- Linux GCC
+- macOS Clang
+
+跨平台 CI 测试启用需要非 GPU 测试桩（当前跳过）。

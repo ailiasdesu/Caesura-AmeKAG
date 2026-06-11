@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -6,7 +6,7 @@
 #include "Engine.h"
 #include "InputRouter.h"
 #include "BackendRegistry.h"
-#include "DebugManager.h"
+#include "Debug/DebugManager.h"
 #include "RpcServer.h"
 #include "ErrorUI.h"
 #include "SDL3PlatformBackend.h"
@@ -26,12 +26,24 @@
 #include "Resource/AsyncLoader.h"
 #include "Resource/AssetManager.h"
 #include "Render/TextureManager.h"
+#include "MiniGame/BgfxMiniGameBackend.h"
+#include "../Live2D/NullAnimationBackend.h"
+#include "../Steam/ISteamBackend.h"
+#include "../Steam/SteamBackend.h"
+#include "../Steam/NullSteamBackend.h"
+#include "../Scripting/SteamBinding.h"
+#ifdef CAESURA_HAS_LIVE2D
+#include "../Live2D/Live2D/Live2DBackend.h"
+#include "../Render/BgfxRenderDevice.h"
+#endif
 #include <thread>
 #include <atomic>
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/bx.h>
 #include <cstdio>
+#include <fstream>
+#include <vector>
 #include <cmath>
 #include <chrono>
 
@@ -44,22 +56,7 @@ namespace Caesura {
 // Checks lua_gc(L, LUA_GCCOUNT) after every Lua allocation.
 // Returns NULL on overflow to force a Lua allocation error.
 static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
-    lua_State* L = static_cast<lua_State*>(ud);
-    if (!L) {
-        if (nsize == 0) { free(ptr); }
-        else { return realloc(ptr, nsize); }
-        return nullptr;
-    }
-    int memKB = lua_gc(L, LUA_GCCOUNT, 0);
-    if (memKB > 256 * 1024 && nsize > osize) {
-        // Trigger emergency GC, then retry
-        lua_gc(L, LUA_GCCOLLECT, 0);
-        memKB = lua_gc(L, LUA_GCCOUNT, 0);
-        if (memKB > 256 * 1024) {
-            fprintf(stderr, "[Engine] Lua OOM: %dKB > 256MB limit\n", memKB);
-            return nullptr; // force allocation error
-        }
-    }
+    // Lua 5.4 forbids calling lua_gc inside the allocator (C stack overflow).
     if (nsize == 0) { free(ptr); return nullptr; }
     return realloc(ptr, nsize);
 }
@@ -69,6 +66,11 @@ Engine::Engine()
     , m_inputRouter(std::make_unique<InputRouter>())
     , m_gpuMonitor(std::make_unique<GpuMonitor>())
     , m_videoPlayer(std::make_unique<VideoPlayer>())
+#ifdef CAESURA_HAS_STEAM
+    , m_steamBackend(std::make_unique<SteamBackend>())
+#else
+    , m_steamBackend(std::make_unique<NullSteamBackend>())
+#endif
     
 {}
 
@@ -80,12 +82,16 @@ IRenderDevice& Engine::renderDevice() { return *BackendRegistry::instance().getR
 IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBackend(); }
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
-bool Engine::init(const char* title, int width, int height, bool headless) {
+bool Engine::init(const char* title, int width, int height, bool headless, bool editorMode) {
     s_mainThreadId = std::this_thread::get_id();
     m_width  = width;
     m_height = height;
 
     m_headless = headless;
+    m_editorMode = editorMode;
+    if (m_editorMode) {
+        fprintf(stderr, "[Engine] Running in EDITOR mode (hidden window + GPU)\n");
+    }
     if (m_headless) {
         fprintf(stderr, "[Engine] Running in HEADLESS mode (no window, no GPU)\n");
     }
@@ -94,13 +100,16 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
-    if (!m_headless) {
+    if (!m_headless || m_editorMode) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         fprintf(stderr, "SDL3 platform backend init failed.");
         return false;
     }
     BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
+    if (m_editorMode) {
+        SDL_HideWindow(static_cast<SDL_Window*>(m_platformBackend->getNativeWindowHandle()));
+    }
 
     void* nwh = m_platformBackend->getNativeWindowHandle();
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
@@ -116,7 +125,7 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
         BackendRegistry::instance().registerNullBackends();
     }
 
-    if (!m_headless) {
+    if (!m_headless || m_editorMode) {
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
     ri.backendName = bgfx::getRendererName(caps->rendererType);
@@ -172,6 +181,34 @@ bool Engine::init(const char* title, int width, int height, bool headless) {
     AssetManager::instance().init();
     AsyncLoader::instance().init();
 
+    // Steam init (optional, no-op if SDK not present)
+    if (m_steamBackend->init()) {
+        registerSteamBinding(m_lua->state(), m_steamBackend.get());
+    }
+
+        // -- 3D mini-game backend (bgfx) --
+    m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
+    m_miniGameBackend->setRenderDevice(m_renderDevice.get());
+    m_miniGameBackend->init();
+    BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+
+    // -- Animation backend (Live2D or Null) --
+#ifdef CAESURA_HAS_LIVE2D
+    m_animationBackend = std::make_unique<Live2DBackend>();
+#else
+    m_animationBackend = std::make_unique<NullAnimationBackend>();
+#endif
+    if (!m_animationBackend->init()) {
+        fprintf(stderr, "Animation backend init failed, falling back to null.\n");
+        m_animationBackend = std::make_unique<NullAnimationBackend>();
+        m_animationBackend->init();
+    }
+    BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
+#ifdef CAESURA_HAS_LIVE2D
+    static_cast<Live2DBackend&>(*m_animationBackend).setRenderDevice(
+        m_renderDevice.get());
+#endif
+
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     return true;
 }
@@ -201,6 +238,7 @@ void Engine::run() {
         m_lastTick = now;
         if (dt < 0.0f) dt = 0.0f;
         if (dt > 0.25f) dt = 0.25f;
+        m_frameTime = dt;
 
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
@@ -209,7 +247,7 @@ void Engine::run() {
         JobSystem::instance().pollMainThreadJobs();
         AsyncLoader::instance().poll();
 
-        // -- Phase G8-U1: Lua memory budget check (every frame) ---------------
+        // -- Phase G8-U1: Lua memory budget check \(every frame\) ---------------
         lua_State* Lgc = m_lua->state();
         if (Lgc) {
             int memKB = lua_gc(Lgc, LUA_GCCOUNT, 0);
@@ -277,17 +315,26 @@ void Engine::run() {
 
         render();
         bgfx::frame();
+
+        // -- Reserved: 3D mini-game update hook (CPU work, future JobSystem target) --
+        if (m_miniGameBackend && m_miniGameBackend->isActive()) {
+            m_miniGameBackend->update(static_cast<float>(dt));
+        }
     }
 
     shutdown();
 }
 
 void Engine::processEvents() {
+    // Steam callbacks every frame
+    m_steamBackend->runCallbacks();
+    // Pause input while Steam overlay is active
+    if (m_steamBackend->isOverlayActive()) return;
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
 
-    // Headless mode: no SDL events, minimal sleep
-    if (m_headless) {
+    // Headless/Editor mode: no SDL events, minimal sleep
+    if (m_headless || m_editorMode) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
     }
@@ -393,8 +440,8 @@ void Engine::processEvents() {
 }
 
 void Engine::render() {
-    // Headless mode: no GPU rendering
-    if (m_headless) return;
+    // Headless mode (not editor): no GPU rendering
+    if (m_headless && !m_editorMode) return;
 
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
@@ -410,21 +457,43 @@ void Engine::render() {
     }
 
 
+    // bgfx debug text overlay: engine info + renderer + resolution
     const bgfx::Caps* caps = bgfx::getCaps();
     if (caps) {
         bgfx::dbgTextClear();
         bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
         bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
                             bgfx::getRendererName(caps->rendererType), m_width, m_height);
-        bgfx::dbgTextPrintf(0, 2, 0x0F, "Input Focus: %s  Errors: %u",
-                            inputFocusToString(m_inputRouter->getFocus()), 0);
-        const auto& gm = m_gpuMonitor->metrics();
-        bgfx::dbgTextPrintf(0, 3, 0x0F, "GPU: %s | frame=%.1fms avg=%.1fms | degradation=%s",
-                            gpuQualityName(gm.quality), gm.gpuTimeMs, gm.rollingAvgMs,
-                            gm.degraded ? "ACTIVE" : "none");
-        bgfx::dbgTextPrintf(0, 4, 0x0F, "Videos: %d  Log: %s",
-                            m_videoPlayer->activeCount(), "logs/");
     }
+
+    // -- Reserved: 3D mini-game render hook (main thread, after KAG pass) --
+    if (m_miniGameBackend && m_miniGameBackend->isActive()) {
+        m_miniGameBackend->render();
+    }
+
+}
+
+
+// ============================================================================
+//  Save helpers (SU-3)
+// ============================================================================
+void Engine::quicksave() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "quicksave");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quicksave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
+}
+void Engine::quickload() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "quickload");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quickload: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
+}
+void Engine::triggerAutoSave() {
+    lua_State* L = m_lua->state(); if (!L) return;
+    lua_getglobal(L, "autosave");
+    if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "autosave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
+    else { lua_pop(L, 1); }
 }
 
 void Engine::handleFatalError(const char* context, const char* luaError) {
@@ -461,9 +530,72 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
 }
 
 
+void Engine::renderOneFrame() {
+    if (m_headless && !m_editorMode) return;
+    lua_State* L = m_lua->state();
+    if (L) {
+        lua_getglobal(L, "engine_update");
+        if (lua_isfunction(L, -1)) {
+            lua_pushnumber(L, 0.016);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+        } else { lua_pop(L, 1); }
+    }
+    render();
+    bgfx::frame();
+}
+
+static std::string captureFrameBase64(int w, int h) {
+    static int counter = 0;
+    char path[256];
+    snprintf(path, sizeof(path), "editor_frame_%d.png", counter++);
+    if (counter > 99) counter = 0;
+    bgfx::requestScreenShot(BGFX_INVALID_HANDLE, path);
+    bgfx::frame();
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) return "";
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::vector<unsigned char> buffer(size);
+    file.read(reinterpret_cast<char*>(buffer.data()), size);
+    file.close();
+    std::remove(path);
+    static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    result.reserve(((size + 2) / 3) * 4);
+    for (size_t i = 0; i < static_cast<size_t>(size); i += 3) {
+        unsigned char a = buffer[i];
+        unsigned char b = (i + 1 < size) ? buffer[i + 1] : 0;
+        unsigned char c = (i + 2 < size) ? buffer[i + 2] : 0;
+        result += b64[a >> 2];
+        result += b64[((a & 3) << 4) | (b >> 4)];
+        result += (i + 1 < size) ? b64[((b & 15) << 2) | (c >> 6)] : '=';
+        result += (i + 2 < size) ? b64[c & 63] : '=';
+    }
+    return result;
+}
+
+std::string Engine::captureFrameForRpc(int w, int h) {
+    // Render one frame first (submits draw calls without bgfx::frame)
+    if (!m_headless) {
+        lua_State* L = m_lua->state();
+        if (L) {
+            lua_getglobal(L, "engine_update");
+            if (lua_isfunction(L, -1)) {
+                lua_pushnumber(L, 0.016);
+                if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+            } else { lua_pop(L, 1); }
+        }
+        render(); // submits draw calls, no bgfx::frame yet
+    }
+    // captureFrameBase64 calls requestScreenShot + bgfx::frame,
+    // which triggers the screenshot of the frame we just rendered.
+    return captureFrameBase64(w, h);
+}
+
 void Engine::runRpc() {
     fprintf(stderr, "[Engine] Starting JSON-RPC loop (stdin/stdout)\n");
     RpcServer::instance().setLuaState(m_lua->state());
+    RpcServer::instance().setFrameCaptureCallback([this](int w, int h) { return captureFrameForRpc(w, h); });
     RpcServer::instance().run();
 }
 
@@ -471,20 +603,43 @@ void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
 
+    // Signal bgfx debug callback that shutdown is in progress
+    // (suppresses FATAL/WARN noise during GPU resource teardown)
+    setBgfxShuttingDown(true);
+
     // Reset error crash counters on clean shutdown
     ErrorUI::resetCounters();
+
+    if (m_miniGameBackend) { m_miniGameBackend->shutdown(); m_miniGameBackend.reset(); }
 
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();
     JobSystem::instance().shutdown();
+    unregisterSteamBinding(m_steamBackend.get());
+    if (m_steamBackend) m_steamBackend->shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();
-    if (m_renderDevice) { m_renderDevice->flushAllRTT(); m_renderDevice->shutdown(); }
+
+    // Flush bgfx pipeline BEFORE touching any D3D11-shared resources (Live2D)
+    if (m_renderDevice) { m_renderDevice->flushAllRTT(); }
+
+    // Process one final bgfx frame to drain pending GPU commands
+    bgfx::frame();
+
+    // Animation (Live2D) shut down after bgfx pipeline is drained
+    if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
+
+    // Final bgfx frame after Live2D cleanup
+    bgfx::frame();
+    
+    if (m_renderDevice) { m_renderDevice->shutdown(); }
     FreeTypeContext::instance().shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();
     DebugManager::instance().shutdown();
 }
 
 } // namespace Caesura
+
+
 
