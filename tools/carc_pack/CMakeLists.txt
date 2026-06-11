@@ -22,17 +22,6 @@ set(ED25519_SOURCES
     ${CMAKE_SOURCE_DIR}/external/ed25519/add_scalar.c
 )
 
-# Linux workaround
-if(UNIX AND NOT APPLE)
-  if(NOT CARC_SOURCES)
-    message(WARNING "CARC_SOURCES empty on Linux - using file(GLOB)")
-    file(GLOB_RECURSE CARC_SOURCES "${CMAKE_SOURCE_DIR}/src/CARC/*.cpp")
-  endif()
-  if(NOT ED25519_SOURCES)
-    message(WARNING "ED25519_SOURCES empty on Linux - using file(GLOB)")
-    file(GLOB_RECURSE ED25519_SOURCES "${CMAKE_SOURCE_DIR}/external/ed25519/*.c")
-  endif()
-endif()
 add_executable(${TOOL_NAME}
     main.cpp
     ${CARC_SOURCES}

@@ -248,24 +248,6 @@ set(ENGINE_HEADERS
     src/Core/MobileAdapter.h
 )
 
-
-# Linux workaround: if ENGINE_SOURCES is empty, gather sources via glob
-if(UNIX AND NOT APPLE)
-  if(NOT ENGINE_SOURCES)
-    message(WARNING "ENGINE_SOURCES empty on Linux — using file(GLOB) workaround")
-    file(GLOB_RECURSE ENGINE_SOURCES
-      "src/*.cpp"
-      "src/*/*.cpp"
-      "src/*/*/*.cpp"
-    )
-    file(GLOB_RECURSE ENGINE_HEADERS
-      "src/*.h"
-      "src/*/*.h"
-      "src/*/*/*.h"
-    )
-  endif()
-endif()
-
 # Executable
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 

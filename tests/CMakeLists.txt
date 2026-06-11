@@ -88,18 +88,6 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp
 )
 
-# Linux workaround
-if(UNIX AND NOT APPLE)
-  if(NOT TEST_SOURCES)
-    message(WARNING "TEST_SOURCES empty on Linux - using file(GLOB)")
-    file(GLOB_RECURSE TEST_SOURCES
-      "cpp/*.cpp"
-      "${CMAKE_SOURCE_DIR}/src/*.cpp"
-      "${CMAKE_SOURCE_DIR}/src/*/*.cpp"
-      "${CMAKE_SOURCE_DIR}/src/*/*/*.cpp"
-    )
-  endif()
-endif()
 add_executable(CaesuraTests ${TEST_SOURCES})
 
 if(WIN32)
