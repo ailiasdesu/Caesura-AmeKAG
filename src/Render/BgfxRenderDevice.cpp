@@ -174,73 +174,8 @@ void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, f
 
 
 
-void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
-                                    float x, float y, float w, float h, uint8_t opacity) {
-    if (!bgfx::isValid(tex)) return;
+// blitTexture(handle) old body removed
 
-    // Ortho projection for screen-space quad
-    float ortho[16];
-    const bgfx::Caps* caps = bgfx::getCaps();
-    bx::mtxOrtho(ortho, 0.0f, float(m_width), float(m_height), 0.0f,
-                 -1.0f, 1.0f, 0.0f, caps ? caps->homogeneousDepth : false,
-                 bx::Handedness::Left);
-    bgfx::setViewTransform(targetView, nullptr, ortho);
-
-    // Lazy-init vertex layout
-    if (m_posTexLayout.getStride() == 0) {
-        m_posTexLayout
-            .begin()
-            .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-            .end();
-    }
-
-    // Lazy-init sampler uniform
-    if (!bgfx::isValid(m_shaders->getDefaultSampler())) {
-        m_shaders->getDefaultSampler() = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
-    }
-
-    // Pixel coords -> NDC (passthrough shader bypasses u_viewProj)
-    float sw = (float)getBackbufferWidth();
-    float sh = (float)getBackbufferHeight();
-    float nx  = (x / sw) * 2.0f - 1.0f;
-    float ny  = 1.0f - (y / sh) * 2.0f;
-    float nx2 = ((x + w) / sw) * 2.0f - 1.0f;
-    float ny2 = 1.0f - ((y + h) / sh) * 2.0f;
-
-    struct PosTexVertex { float x, y; float u, v; };
-
-    PosTexVertex quad[4] = {
-        { nx,  ny,  0.0f, 0.0f },
-        { nx2, ny,  1.0f, 0.0f },
-        { nx2, ny2, 1.0f, 1.0f },
-        { nx,  ny2, 0.0f, 1.0f },
-    };
-
-    bgfx::TransientVertexBuffer tvb;
-    if (bgfx::getAvailTransientVertexBuffer(4, m_posTexLayout) < 4) return;
-    bgfx::allocTransientVertexBuffer(&tvb, 4, m_posTexLayout);
-    bx::memCopy(tvb.data, quad, sizeof(quad));
-
-    uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
-    bgfx::TransientIndexBuffer tib;
-    if (bgfx::getAvailTransientIndexBuffer(6) < 6) return;
-    bgfx::allocTransientIndexBuffer(&tib, 6);
-    bx::memCopy(tib.data, indices, sizeof(indices));
-
-    uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
-                   | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
-                                           BGFX_STATE_BLEND_INV_SRC_ALPHA);
-
-    // If we have a fallback shader, use it; otherwise texture blit is no-op
-    if (!bgfx::isValid(m_shaders->getFallbackProgram())) return;
-
-    bgfx::setVertexBuffer(0, &tvb);
-    bgfx::setIndexBuffer(&tib);
-    bgfx::setTexture(0, m_shaders->getDefaultSampler(), tex);
-    bgfx::setState(state);
-    bgfx::submit(targetView, m_shaders->getFallbackProgram());
-}
 
 
 void BgfxRenderDevice::renderText(uint16_t viewId, const std::string& text,
