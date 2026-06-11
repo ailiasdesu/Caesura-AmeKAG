@@ -7,6 +7,8 @@
 
 namespace Caesura {
 
+static void submitFullscreenQuad(uint16_t viewId, bgfx::ProgramHandle program, float x, float y, float w, float h, bgfx::TextureHandle tex, bgfx::UniformHandle sampler, bgfx::UniformHandle params, const float* paramData, uint16_t paramVec4s);
+
 void BgfxDraw::init(DrawState* state) { m_state = state; }
 
 void BgfxDraw::beginBatch() {
