@@ -1,72 +1,44 @@
-﻿# Caesura (AmeKAG) 引擎战略
+---
+name: Caesura (AmeKAG)
+last_updated: 2026-06-11
+---
 
-> 更新: 2026-06-09 | 引擎完成度: ~93% (Beta)
+# Caesura (AmeKAG) 策略
 
-## 核心目标
+## 目标问题
 
-为视觉小说创作者提供**现代化、跨平台、AI IDE 辅助开发**的 galgame 引擎。
+Galgame/视觉小说创作者缺乏一个将 Live2D、3D MiniGame、AI 辅助作为一等公民内建的现代开源引擎——现有方案要么是日系闭源引擎（功能现代化不足），要么是通用游戏引擎（太重、需学多个技术栈）。当前引擎已有 11 个模块、138 个源文件的完整实现，但模块间耦合失控（Core 依赖全部 9 个子系统、Core↔Render 循环引用、Scripting 成为 7 模块集成蜘蛛网），导致 Bug 修复变成全局连锁反应，继续堆功能会让项目不可维护。
 
-## 定位
+## 破局方案
 
-- **不是** KiriKiri 的克隆 — KAG 兼容是入口，不是终点
-- **不是** 通用游戏引擎 — 聚焦视觉小说 + 轻量 3D 互动
-- AI **不嵌入**引擎运行时 — AI 在 IDE 中协助创作
+将现代能力（Live2D、3D、AI 辅助）作为架构层的一等公民，同时**以接口隔离重建模块边界**——让每个子系统只通过抽象接口（BackendRegistry 已有的 9 个纯虚接口）互相通信，消除 Core↔Render 双向依赖和 Audio→Scripting 越层引用。稳定架构是交付 galgame 创作工具的物质前提。
 
-## 技术路线
+## 目标用户
 
-### 已完成 (Beta)
+**首要用户：** 小型 galgame/VN 开发社团——需要 Live2D + 3D 小游戏但不想维护多个技术栈。他们雇佣本引擎用一个统一工具交付包含动态立绘和 3D 小游戏的现代 galgame，而不是在 Cubism SDK + Unity + 自建桥接之间手动搬运。
 
-1. **KAG 脚本兼容** — 61 命令 + 8 视频函数 + 15 MiniGame API
-2. **D3D11 渲染管线** — 零 TDR，GpuMonitor 防护
-3. **跨平台架构** — SDL3 + bgfx + Lua 5.4，8 纯虚接口
-4. **核心约束合规** — Lua 仅走抽象接口 + BackendRegistry
-5. **多线程 JobSystem** — 粒子/纹理/CARC/视频解码异步
-6. **Live2D Cubism 5** — Windows D3D11 + OpenGLReadback FBO, 条件编译安全
-7. **视频播放** — pl_mpeg + FFmpeg 双后端，Lua 全绑定
-8. **DeltaCARC 差分更新** — AES-256-GCM 加密 delta
-9. **3D 小游戏** — BgfxMiniGameBackend PBR-lite, 15 Lua API, 跨平台 shader
-10. **沙箱安全** — require 白名单 + I/O 禁用 + strict 模式
-11. **存档系统** — JSON + AES-256-GCM + ISaveProvider + Schema v1→v5
-12. **Electron 编辑器** — 11 组件 (无 Timeline) + 3 AI 后端 + 真实 IPC
-13. **目录重组** — 10 模块精简 (Carc→CARC, Animation→Live2D, Editor/Platform→Core, DebugManager→Debug)
+## 关键指标
 
-### 移交共同开发者
+- **跨平台 CI 绿率** — Windows/macOS/Linux 三端 CI 同时通过构建和测试的比率。当前已知 135/138 单元测试通过，3 个失败待修。
+- **架构耦合度** — 跨模块 #include 的数量。当前 Core 跨 9 模块、Scripting 跨 7 模块；目标减半。
+- **新人上手到 Demo 可跑时间** — 从下载引擎到成功跑出 Demo 场景的耗时（分钟计）。
 
-| 任务 | 原因 |
-|------|------|
-| Live2D OpenGLShared | 需 Linux 实测 |
-| Live2D Metal | 需 macOS 实测 |
-| 移动端适配 | 需真机 |
-| 跨平台 CI 测试 | 需非 GPU 测试环境 |
+## 赛道
 
-### 中期目标 (Beta+)
+### 架构解耦：接口隔离与模块边界重建
 
-- [ ] FFmpeg 默认启用（当前 CAESURA_VIDEO_FFMPEG 定义）
-- [ ] MiniGame shader 最终化（跨平台编译）
-- [ ] Demo 场景（Live2D + MiniGame + 视频 完整演示）
-- [ ] 编辑器 AI 上下文优化（token 预算 + 提示词调优）
+消除循环依赖、越层引用和上帝模块——让 Core 不再知道 Render 的具体实现，Audio 不再引用 Scripting。以 BackendRegistry 已有的 9 个纯虚接口为锚点，重新梳理每个模块的 include 边界。
 
-### 远期目标 (v1.0)
+_服务方案的理由：_ 当前 Bug 失控的根因是耦合——修一个模块触发三个模块的回归。不解耦，所有功能开发都会越来越慢。
 
-- [ ] Electron 打包发布（Win/Mac/Linux 安装包）
-- [ ] 用户文档 + 教程
-- [ ] 移动端适配
-- [ ] 社区协作工具
+### 跨平台 CI 与测试稳定性
 
-## 优先级矩阵
+修复剩余 3 个失败单元测试，补齐关键路径的集成测试，确保三端 CI 稳定绿。涵盖 bgfx 多渲染后端（D3D11/OpenGL/Metal）的一致性。
 
-| 优先级 | 领域 | 状态 |
-|--------|------|:---:|
-| P0 | 引擎稳定性 + 核心约束 | ✅ |
-| P1 | KAG 兼容性 (61 cmd) | ✅ |
-| P1 | 技术债 (20/24 闭合) | ✅ |
-| P1 | Electron 编辑器 + AI 面板 | ✅ |
-| P2 | Live2D 全平台 | ⚠️ 移交 |
-| P2 | 跨平台 CI | ✅ YAML |
-| P3 | MiniGame 3D + 跨平台 shader | ✅ |
-| P3 | Electron 可视化编辑器 (11 组件) | ✅ |
-| P3 | AI 辅助代码生成 | ✅ |
-| P3 | Live2D OpenGLReadback | ✅ |
-| P4 | Demo 场景 | ❌ |
-| P4 | 移动端 | ❌ 存根 |
-| P4 | 发行打包 | ⚠️ 配置就绪 |
+_服务方案的理由：_ 跨平台是 galgame 创作者不受绑定的基础——引擎在每端都稳定，社团才敢把项目押在上面。
+
+### 创作者上手体验与文档
+
+Demo 场景、web-editor 开箱即用体验、84 个 KAG API 的文档和示例——让创作者从下载到"能跑出第一个 galgame 场景"的路径尽可能短。
+
+_服务方案的理由：_ 引擎再强，如果 galgame 创作者不会用、不敢用，就只是一个技术演示。

@@ -116,7 +116,7 @@ bool Engine::init() {
     void* nwh = m_platformBackend->getNativeWindowHandle();
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
 
-    m_renderDevice = std::make_unique<BgfxRenderDevice>();
+    if (m_config.render) { m_renderDevice.reset(m_config.render); } else { m_renderDevice = std::make_unique<BgfxRenderDevice>(); }
     if (!m_renderDevice->init(nwh, width, height)) {
     DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed, "Render device init failed.");
         return false;

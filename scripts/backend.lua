@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) -- backend.lua
 --  Spec [0.4]: Unified C++ backend proxy.
 --  Resolution order: 1. _CAESURA_BACKEND  2. direct KAG/Render/DevCore
@@ -199,33 +199,23 @@ end
 -- =========================================================================
 
 function Backend.render_text(text, x, y, r, g, b, a)
-    local bb = get_backend()
-    if bb then return bb.show_text(text)
-    else return KAG.show_text(text) end
+    return KAG.show_text(text, x, y, r, g, b, a)
 end
 
 function Backend.show_text(text)
-    local b = get_backend()
-    if b then return b.show_text(text)
-    else return KAG.show_text(text) end
+    return KAG.show_text(text)
 end
 
 function Backend.show_image(file, x, y)
-    local b = get_backend()
-    if b then return b.show_image(file, x, y)
-    else return KAG.show_image(file, x or 0, y or 0) end
+    return KAG.show_image(file, x or 0, y or 0)
 end
 
 function Backend.clear_screen()
-    local b = get_backend()
-    if b then return b.clear_screen()
-    else return KAG.clear_screen() end
+    return KAG.clear_screen()
 end
 
 function Backend.wait_click()
-    local b = get_backend()
-    if b then return b.wait_click()
-    else return KAG.wait_click() end
+    return KAG.wait_click()
 end
 
 -- =========================================================================

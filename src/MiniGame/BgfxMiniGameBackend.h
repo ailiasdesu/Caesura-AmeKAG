@@ -38,6 +38,7 @@ public:
     ~BgfxMiniGameBackend() override;
 
     bool init() override;
+    bool ensureGpuResources();
     void shutdown() override;
     uint32_t loadScene(const std::string& path) override;
     void unloadScene(uint32_t sceneHandle) override;
@@ -96,6 +97,7 @@ private:
 
     IRenderDevice* m_renderDevice = nullptr;
     bool m_active = false;
+    bool m_gpuReady = false;
     uint32_t m_activeScene = 0;
     uint32_t m_nextSceneId = 1, m_nextObjId = 1;
     MiniCamera m_camera;
