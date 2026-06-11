@@ -239,13 +239,8 @@ void BgfxDeviceCore::setupDefaultViews() {
     bgfx::setViewClear(VIEW_DEBUG, BGFX_CLEAR_NONE, 0x00000000, 1.0f, 0);
 }
 
-void BgfxDeviceCore::blitViewport(ViewportHandle handle, uint16_t targetView,
-                                     float x, float y, float w, float h) {
-    auto it = m_rttMap.find(handle.id);
-    if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
+// blitViewport stays in BgfxRenderDevice
 
-    blitTexture(targetView, it->second.tex, x, y, w, h, 255);
-}
 
 bgfx::FrameBufferHandle BgfxDeviceCore::getRttFb(ViewportHandle handle) {
     auto it = m_rttMap.find(handle.id);

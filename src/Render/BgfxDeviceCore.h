@@ -36,7 +36,7 @@ public:
     void setViewRect(uint16_t viewId, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void setViewClear(uint16_t viewId, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil);
     void touch(uint16_t viewId);
-    void setDebugName(uint16_t viewId, const char* name);
+    void setDebugName(uint16_t viewId, const std::string& name);
 
     ViewportHandle createRenderTarget(int width, int height);
     void destroyRenderTarget(ViewportHandle handle);
