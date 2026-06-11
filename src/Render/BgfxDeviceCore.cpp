@@ -88,7 +88,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
 
     //                                                     ?Init embedded shader fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ?
-    initEmbeddedShaders();
+    // initEmbeddedShaders called by BgfxRenderDevice::init()
 
     //                                                     ?Explicit View Order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
         // Enforce: VIEW_RTT (0) -> VIEW_MAIN (1) -> VIEW_DEBUG (2)
@@ -121,24 +121,24 @@ void BgfxDeviceCore::shutdown() {
     // Destroy text renderer (GPU resources)
 
     // 2. Destroy shader programs
-    if (bgfx::isValid(m_fallbackProgram)) {
-        bgfx::destroy(m_fallbackProgram);
-        m_fallbackProgram = BGFX_INVALID_HANDLE;
-    }
-    if (bgfx::isValid(m_blendProgram))      { bgfx::destroy(m_blendProgram);      m_blendProgram      = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_transitionProgram)) { bgfx::destroy(m_transitionProgram); m_transitionProgram = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_vfxProgram))        { bgfx::destroy(m_vfxProgram);        m_vfxProgram        = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_blendParams))     { bgfx::destroy(m_u_blendParams);     m_u_blendParams     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_transParams))     { bgfx::destroy(m_u_transParams);     m_u_transParams     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_vfxParams))       { bgfx::destroy(m_u_vfxParams);       m_u_vfxParams       = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_stretchProgram))    { bgfx::destroy(m_stretchProgram);    m_stretchProgram    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_affineProgram))     { bgfx::destroy(m_affineProgram);     m_affineProgram     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_stretchParams))   { bgfx::destroy(m_u_stretchParams);   m_u_stretchParams   = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_affineParams))    { bgfx::destroy(m_u_affineParams);    m_u_affineParams    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_texSampler)) {
-        bgfx::destroy(m_texSampler);
-        m_texSampler = BGFX_INVALID_HANDLE;
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
     g_bgfxDebugCallback.m_shuttingDown = true;
