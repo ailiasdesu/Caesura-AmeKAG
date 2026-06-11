@@ -3,8 +3,8 @@
 
 namespace Caesura {
 
-enum class GpuQuality : uint8_t;
-const char* gpuQualityName(GpuQuality q);
+enum class GpuQuality : uint8_t { HIGH = 0, MEDIUM = 1, LOW = 2 };
+
 
 class IGpuMonitor {
 public:
