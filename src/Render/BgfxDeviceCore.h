@@ -2,6 +2,7 @@
 
 #include <bgfx/bgfx.h>
 #include <unordered_map>
+#include "IRenderDevice.h"
 #include <cstdint>
 
 namespace Caesura {
