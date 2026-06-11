@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -168,8 +168,8 @@ set(ENGINE_SOURCES
     src/MiniGame/MiniCollision.cpp
     src/Live2D/NullAnimationBackend.cpp
     src/Render/ShaderCache.cpp
-    src/Audio/SoLoudAudioEngine.cpp
-    src/Audio/NullAudioBackend.cpp
+    src/audio/SoLoudAudioEngine.cpp
+    src/audio/NullAudioBackend.cpp
     src/script/vm/LuaManager.cpp
     src/script/bindings/KAGBinding.cpp
     src/script/state/GameState.cpp
@@ -205,7 +205,7 @@ set(ENGINE_HEADERS
     src/entry/EngineConfig.h
     src/job/JobSystem.h
     src/input/InputRouter.h
-    src/Audio/api/IAudioBackend.h
+    src/audio/api/IAudioBackend.h
     src/platform/api/IPlatformBackend.h
     src/platform/SDL3PlatformBackend.h
     src/Resource/XP3Archive.h
@@ -240,8 +240,8 @@ set(ENGINE_HEADERS
     src/Live2D/IAnimationBackend.h
     src/Live2D/NullAnimationBackend.h
     src/Render/ShaderCache.h
-    src/Audio/SoLoudAudioEngine.h
-    src/Audio/NullAudioBackend.h
+    src/audio/SoLoudAudioEngine.h
+    src/audio/NullAudioBackend.h
     src/script/vm/LuaManager.h
     src/script/bindings/KAGBinding.h
     src/script/state/GameState.h
@@ -502,3 +502,4 @@ add_subdirectory(tools/carc_pack)
 
 # -- Unit Tests
 add_subdirectory(tests)
+

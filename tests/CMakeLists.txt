@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -81,8 +81,8 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/RTTManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/GpuMonitor.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/VideoPlayer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/SoLoudAudioEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/NullAudioBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/MobileAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
@@ -166,3 +166,4 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
     COMMENT "Copying test audio files..."
 )
+
