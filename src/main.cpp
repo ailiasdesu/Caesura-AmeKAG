@@ -12,6 +12,10 @@ extern "C" {
 #include "Live2D/NullAnimationBackend.h"
 #include "Steam/NullSteamBackend.h"
 #include "Steam/SteamBackend.h"
+#include "script/vm/LuaManager.h"
+#include "input/InputRouter.h"
+#include "Render/GpuMonitor.h"
+#include "Render/VideoPlayer.h"
 #include "di/BackendRegistry.h"
 #include "entry/Engine.h"
 #include "Render/TextureManager.h"
@@ -61,6 +65,10 @@ int main(int argc, char* argv[]) {
     config.miniGame  = new Caesura::BgfxMiniGameBackend();
     config.animation = new Caesura::NullAnimationBackend();
     config.steam     = new Caesura::NullSteamBackend();
+    config.lua         = new Caesura::LuaManager();
+    config.inputRouter = new Caesura::InputRouter();
+    config.gpuMonitor  = new Caesura::GpuMonitor();
+    config.videoPlayer = new Caesura::VideoPlayer();
 
     Caesura::Engine engine(config);
 

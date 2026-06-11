@@ -63,14 +63,14 @@ static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
 
 Engine::Engine(const EngineConfig& config)
     : m_config(config)
-    , m_lua(std::make_unique<LuaManager>())
-    , m_inputRouter(std::make_unique<InputRouter>())
-    , m_gpuMonitor(std::make_unique<GpuMonitor>())
-    , m_videoPlayer(std::make_unique<VideoPlayer>())
+    , m_lua(config.lua ? std::unique_ptr<LuaManager>(config.lua) : std::make_unique<LuaManager>())
+    , m_inputRouter(config.inputRouter ? std::unique_ptr<InputRouter>(config.inputRouter) : std::make_unique<InputRouter>())
+    , m_gpuMonitor(config.gpuMonitor ? std::unique_ptr<GpuMonitor>(config.gpuMonitor) : std::make_unique<GpuMonitor>())
+    , m_videoPlayer(config.videoPlayer ? std::unique_ptr<VideoPlayer>(config.videoPlayer) : std::make_unique<VideoPlayer>())
 #ifdef CAESURA_HAS_STEAM
-    , m_steamBackend(std::make_unique<SteamBackend>())
+    , m_steamBackend(config.steam ? std::unique_ptr<ISteamBackend>(config.steam) : std::make_unique<SteamBackend>())
 #else
-    , m_steamBackend(std::make_unique<NullSteamBackend>())
+    , m_steamBackend(config.steam ? std::unique_ptr<ISteamBackend>(config.steam) : std::make_unique<NullSteamBackend>())
 #endif
     
 {}
