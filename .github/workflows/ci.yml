@@ -83,7 +83,7 @@ jobs:
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
 
-      - name: Build (verbose)
+      - name: Build
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
@@ -120,17 +120,8 @@ jobs:
           cd ..
           rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
 
-      - name: Configure (capture to file)
-        run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 > /tmp/cmake-out.txt 2>&1; echo "EXIT=$?" >> /tmp/cmake-out.txt
-        continue-on-error: true
-
-      - name: Upload cmake output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-cmake-log
-          path: /tmp/cmake-out.txt
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1
 
       - name: Build
         run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
