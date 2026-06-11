@@ -36,7 +36,7 @@ const char* BgfxDeviceCore::getBackendName() const {
     return bgfx::getRendererName(bgfx::getCaps()->rendererType);
 }
 
-bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
+bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxShaderManager* shaders) {
     // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
