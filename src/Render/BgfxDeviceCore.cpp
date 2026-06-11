@@ -7,6 +7,8 @@
 
 namespace Caesura {
 
+static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3D11;
+
 BgfxDeviceCore::~BgfxDeviceCore() { shutdown(); }
 
 bool BgfxDeviceCore::setPreferredBackend(const char* name) {
