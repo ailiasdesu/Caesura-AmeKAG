@@ -20,7 +20,7 @@ static bool isStreamFormat(const std::string& file) {
     std::string ext = file.substr(dot);
     // case-insensitive compare
     for (auto& c : ext) c = (char)tolower((unsigned char)c);
-    return ext == ".ogg" || ext == ".mp3";
+    return ext == ".ogg" || ext == ".mp3" || ext == ".flac";
 }
 
 std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::string& file) {

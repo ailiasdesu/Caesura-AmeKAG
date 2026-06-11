@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses nlohmann/json v3.11.3 for robust structured serialization.
@@ -252,9 +252,15 @@ std::vector<SaveMeta> SaveManager::listSaves() {
     std::vector<SaveMeta> result;
     if (m_saveDir.empty()) return result;
 
+    int consecutiveEmpty = 0;
     for (int slot = 0; slot < 1000; slot++) {
         std::string contents = readFile(slotPath(slot));
-        if (contents.empty()) continue;
+        if (contents.empty()) {
+            consecutiveEmpty++;
+            if (consecutiveEmpty >= 8) break;
+            continue;
+        }
+        consecutiveEmpty = 0;
 
         json envelope;
         try {

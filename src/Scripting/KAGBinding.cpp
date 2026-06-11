@@ -214,7 +214,7 @@ static int lua_KAG_get_global_volume(lua_State* L) {
     return 1;
 }
 
-// -- KAG.replay_voice(file) -- replay voice from backlog -------------------
+// -- KAG.replay_voice(file) -- playVoice alias (backlog replay deferred to IAudioBackend v2) -------------------
 
 static int lua_KAG_replay_voice(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
