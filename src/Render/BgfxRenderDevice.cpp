@@ -1,4 +1,4 @@
-﻿ #include "BgfxRenderDevice.h"
+ #include "BgfxRenderDevice.h"
 #include "BgfxDebugCallback.h"
 #include "ShaderCache.h"
 #include "../di/thread/ThreadAssert.h"
@@ -58,7 +58,7 @@ static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     m_shaders = std::make_unique<BgfxShaderManager>();
-    m_shaders = std::make_unique<BgfxShaderManager>();
+    m_shaders->initEmbeddedShaders();
     m_deviceCore = std::make_unique<BgfxDeviceCore>();
     if (!m_deviceCore->init(nativeWindowHandle, width, height)) return false;
     m_posTexLayout
