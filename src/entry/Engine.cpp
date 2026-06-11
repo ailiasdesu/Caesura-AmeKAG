@@ -111,7 +111,6 @@ bool Engine::init() {
     }
 
     if (!m_config.headless || m_config.editorMode || m_config.platform) {
-    m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed, "SDL3 platform backend init failed.");
         return false;
@@ -124,7 +123,6 @@ bool Engine::init() {
     void* nwh = m_platformBackend->getNativeWindowHandle();
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
 
-    if (m_config.render) { m_renderDevice.reset(m_config.render); } else { m_renderDevice = std::make_unique<BgfxRenderDevice>(); }
     if (!m_renderDevice->init(nwh, width, height)) {
     DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed, "Render device init failed.");
         return false;
@@ -205,7 +203,7 @@ bool Engine::init() {
     }
 
         // -- 3D mini-game backend (bgfx) --
-    if (!m_miniGameBackend) m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
+    // miniGame injected via EngineConfig, no fallback needed
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
