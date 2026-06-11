@@ -43,13 +43,13 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/rpc/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/job/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/SDL3PlatformBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CARCWriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CarcAssetProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/Carc/CRLManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/System/SaveManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/System/SaveBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/archive/CryptoEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/archive/CARCReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/archive/CARCWriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/archive/CarcAssetProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/archive/CRLManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/storage/SaveManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/storage/SaveBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/DirAssetProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/ProviderChain.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/AssetManager.cpp
@@ -88,7 +88,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
     ${CMAKE_SOURCE_DIR}/src/Steam/SteamBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/SteamBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/System/CloudSaveProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/storage/CloudSaveProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp

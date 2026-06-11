@@ -177,13 +177,13 @@ set(ENGINE_SOURCES
     src/script/bindings/DebugBinding.cpp
     src/script/bindings/UnifiedBinding.cpp
     src/script/bindings/SteamBinding.cpp
-    src/System/SaveManager.cpp
-    src/System/ISaveProvider.cpp
-    src/System/SaveBinding.cpp
-    src/Carc/CryptoEngine.cpp
-    src/Carc/CARCReader.cpp
-    src/Carc/CARCWriter.cpp
-    src/Carc/CarcAssetProvider.cpp
+    src/storage/SaveManager.cpp
+    src/storage/ISaveProvider.cpp
+    src/storage/SaveBinding.cpp
+    src/archive/CryptoEngine.cpp
+    src/archive/CARCReader.cpp
+    src/archive/CARCWriter.cpp
+    src/archive/CarcAssetProvider.cpp
     src/Resource/DirAssetProvider.cpp
     src/Resource/ProviderChain.cpp
     src/Resource/AssetManager.cpp
@@ -193,8 +193,8 @@ set(ENGINE_SOURCES
     src/Debug/HotReload.cpp
     src/Debug/DebugProtocol.cpp
     # Phase 9: Security & Platform
-    src/Carc/CRLManager.cpp
-    src/Carc/DeltaCARC.cpp
+    src/archive/CRLManager.cpp
+    src/archive/DeltaCARC.cpp
     src/platform/MobileAdapter.cpp
 )
 
@@ -247,14 +247,14 @@ set(ENGINE_HEADERS
     src/script/bindings/DebugBinding.h
     src/script/bindings/UnifiedBinding.h
     src/script/bindings/SteamBinding.h
-    src/System/SaveManager.h
-    src/System/ISaveProvider.h
-    src/System/SaveBinding.h
-    src/Carc/CARCFormat.h
-    src/Carc/CryptoEngine.h
-    src/Carc/CARCReader.h
-    src/Carc/CARCWriter.h
-    src/Carc/CarcAssetProvider.h
+    src/storage/SaveManager.h
+    src/storage/ISaveProvider.h
+    src/storage/SaveBinding.h
+    src/archive/CARCFormat.h
+    src/archive/CryptoEngine.h
+    src/archive/CARCReader.h
+    src/archive/CARCWriter.h
+    src/archive/CarcAssetProvider.h
     src/Resource/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
@@ -265,8 +265,8 @@ set(ENGINE_HEADERS
     src/Debug/HotReload.h
     src/Debug/DebugProtocol.h
     # Phase 9: Security & Platform
-    src/Carc/CRLManager.h
-    src/Carc/DeltaCARC.h
+    src/archive/CRLManager.h
+    src/archive/DeltaCARC.h
     src/platform/MobileAdapter.h
 )
 
