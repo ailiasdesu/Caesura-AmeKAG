@@ -1,15 +1,17 @@
-﻿# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
+﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源
-> **v1.0-rc** | CI: **Win/Mac/Linux 全通** | 快捷键: **F5 运行** | 审查: **零违规 · 零泄漏**
+> Cross-platform · AI-assisted IDE · Live2D · 3D Mini-games · MIT License
+> **v1.0-rc** | CI: **Win/Mac/Linux** | Hotkeys: **F5 to Run** | Audit: **Zero Violations**
 
-Caesura 是为视觉小说创作者打造的现代化引擎。KAG 脚本兼容、跨平台渲染、内置 Electron 可视化编辑器、AI 辅助代码生成。
+Caesura is a modern engine for visual novel creators. KAG script compatible, cross-platform rendering, built-in Electron visual editor, AI-assisted code generation.
 
-## 快速开始
+---
 
-### 构建引擎
+## Quick Start
 
-`ash
+### Build
+
+```bash
 # Windows (Visual Studio 2022)
 cmake -B build_nol2d -DCAESURA_ENABLE_LIVE2D=OFF
 cmake --build build_nol2d --config Release
@@ -17,147 +19,178 @@ cmake --build build_nol2d --config Release
 # macOS / Linux
 cmake -B build -DCAESURA_ENABLE_LIVE2D=OFF
 cmake --build build
-`
+```
 
-### 启动编辑器
+### Launch Editor
 
-`ash
+```bash
 cd web-editor
 npm install
 npm run dev
-`
+```
 
-编辑器自动启动引擎，通过 stdin/stdout JSON-RPC 通信。按 **F5** 运行脚本，**Shift+F5** 停止。
+Editor auto-spawns the engine via stdin/stdout JSON-RPC. Press **F5** to run, **Shift+F5** to stop.
 
-### 运行 Demo
+### Run Demo
 
-`ash
-# Windows
-build_nol2d/Release/CaesuraAmeKAG.exe --demo
+```bash
+build_nol2d/Release/CaesuraAmeKAG.exe --demo     # Windows
+./build/CaesuraAmeKAG --demo                      # macOS / Linux
+```
 
-# macOS / Linux
-./build/CaesuraAmeKAG --demo
-`
+Demo covers 3 scenes: classroom rendering, MiniGame 3D, save system.
 
-Demo 包含 3 个场景：教室渲染、MiniGame 3D、存档系统展示。
+### Your First KAG Script
 
-### 第一个 KAG 脚本
-
-`lua
+```lua
 -- hello.cae
-KAG.show_text(nil, \"Hello, Visual Novel!\")
+KAG.show_text(nil, "Hello, Visual Novel!")
 KAG.wait_click()
 KAG.clear_text()
-`
+```
 
-在编辑器中粘贴上述代码，按 F5 运行。
+Paste into the editor and press **F5**.
 
-## 架构概览
+---
 
-`
+## Architecture
+
+```
 Electron Editor (React + Vite + CodeMirror 6)
-         |  JSON-RPC (stdin/stdout, 8 methods)
-Engine (C++20 + CMake 3.25+)
-  Render(bgfx)  Audio(SoLoud)  Scripting(Lua5.4)  System(Save)
-  MiniGame(PBR)  Live2D(Cubism5)  CARC(Crypto)  Debug(HotReload)
-`
+       |  JSON-RPC (stdin/stdout, 8 methods)
+Engine (C++20 + SDL3 + bgfx + SoLoud + Lua 5.4)
+  |-- Render (bgfx D3D11/OpenGL/Metal)
+  |-- Audio (SoLoud 3-bus: BGM/VOICE/SE)
+  |-- Scripting (Lua VM + Sandbox + 84 KAG APIs)
+  |-- System (Save + AES-256-GCM + v1-v5 Schema)
+  |-- MiniGame (PBR-lite + 15 Lua APIs)
+  |-- Live2D (Cubism 5 + 4 render paths)
+  |-- CARC (Crypto + Delta updates + Ed25519)
+  |-- Debug (HotReload + TDR protection)
+```
 
-## 8 个纯虚接口
+---
 
-所有 Lua → C++ 访问必须通过 BackendRegistry + 抽象接口：
+## 8 Abstract Interfaces
 
-| 接口 | 实现 | 状态 |
-|------|------|:---:|
-| IRenderDevice | BgfxRenderDevice (D3D11/OpenGL/Metal) | ✅ |
-| IAudioBackend | SoLoudAudioEngine | ✅ |
-| IPlatformBackend | SDL3PlatformBackend | ✅ |
-| IAssetProvider | Dir → XP3 → CARC 链 | ✅ |
-| IAnimationBackend | Live2DBackend (Cubism 5) | ✅ Win |
-| IMiniGameBackend | BgfxMiniGameBackend (PBR-lite) | ✅ |
-| IVideoDecoder | PlMpegDecoder / FFmpegDecoder | ✅ |
-| ISaveProvider | LocalFileSaveProvider (AES-256-GCM) | ✅ |
+All Lua to C++ access through BackendRegistry + pure virtual interfaces:
 
-## 编辑器功能
+| Interface | Implementation | Status |
+|-----------|---------------|:------:|
+| IRenderDevice | BgfxRenderDevice (D3D11/OpenGL/Metal) | OK |
+| IAudioBackend | SoLoudAudioEngine | OK |
+| IPlatformBackend | SDL3PlatformBackend | OK |
+| IAssetProvider | Dir -> XP3 -> CARC chain | OK |
+| IAnimationBackend | Live2DBackend (Cubism 5) | OK Win |
+| IMiniGameBackend | BgfxMiniGameBackend (PBR-lite) | OK |
+| IVideoDecoder | PlMpegDecoder / FFmpegDecoder | OK |
+| ISaveProvider | LocalFileSaveProvider (AES-256-GCM) | OK |
 
-| 面板 | 功能 |
-|------|------|
-| **舞台** | Canvas 2D 预览 + 引擎实时帧 (200ms 轮询) |
-| **代码编辑器** | CodeMirror 6 语法高亮、自动补全、错误行标记 |
-| **AI 面板** | @generate / @fix 指令，多后端，流式输出 |
-| **素材** | 场景列表 + 素材树，拖入舞台生成代码 |
-| **日志** | 引擎 stderr 实时转发，错误/警告归类 |
-| **RPC 桥接** | ping/run/stop/eval/getFrame/getState/assets/logs |
-| **快捷键** | F5 运行 / Shift+F5 停止 / Ctrl+, 设置 / Ctrl+S 存档 |
-| **打包** | 一键打包 (Win/Mac/Linux)，electron-builder |
+---
 
-## KAG 脚本兼容
+## Editor Features
 
-84 个 KAG 命令，9 个子模块：layer / text / audio / resource / save / system / transition / vfx / video。详见 [docs/api/KAG-API.md](docs/api/KAG-API.md)
+| Panel | Function |
+|-------|----------|
+| Stage | Canvas 2D preview + engine real-time frames (200ms polling) |
+| Code | CodeMirror 6 syntax highlight, autocomplete, error markers |
+| AI | @generate / @fix commands, multi-backend (OpenAI/Codex/Custom) |
+| Assets | Scene list + asset tree, drag to stage generates code |
+| Log | Engine stderr real-time forwarding, error/warning classification |
+| RPC | ping/run/stop/eval/getFrame/getState/assets/logs |
+| Hotkeys | F5 run / Shift+F5 stop / Ctrl+, settings / Ctrl+S save |
+| Package | One-click build (Win/Mac/Linux), electron-builder |
+
+---
+
+## KAG Script Compatibility
+
+84 KAG commands, 9 sub-modules: layer / text / audio / resource / save / system / transition / vfx / video.
+
+See: [docs/api/KAG-API.md](docs/api/KAG-API.md)
 
 ## MiniGame 3D
 
-15 个 Lua API：spawn_cube/sphere/plane、set_camera、PBR 材质、多光源、碰撞检测、物理。详见 [docs/api/MiniGame-API.md](docs/api/MiniGame-API.md)
+15 Lua APIs: spawn_cube/sphere/plane, set_camera, PBR materials, multi-light, collision, physics.
 
-## 平台支持
+See: [docs/api/MiniGame-API.md](docs/api/MiniGame-API.md)
 
-| 平台 | 渲染 | 构建 | CI | Live2D |
-|------|------|:---:|:---:|:---:|
-| Windows | D3D11 | ✅ | ✅ | ✅ |
-| Linux | OpenGL | ✅ | ✅ | ⚠️ 移交 |
-| macOS | Metal | ✅ | ✅ | ⚠️ 移交 |
+---
 
-## 技术栈
+## Platform Support
 
-| 层 | 技术 |
-|----|------|
-| 引擎 | C++20, CMake 3.25+ |
-| 渲染 | bgfx (D3D11/OpenGL/Metal) |
-| 窗口 | SDL3 |
-| 音频 | SoLoud (3-Bus: BGM/VOICE/SE) |
-| 脚本 | Lua 5.4 + 沙箱 |
-| 字体 | FreeType + CJK atlas |
-| 加密 | BCrypt (Win) / OpenSSL EVP (Unix) |
-| 视频 | pl_mpeg + FFmpeg (条件编译) |
-| 立绘 | Live2D Cubism 5 (条件编译, SDK 不提交) |
-| 编辑器 | Electron 42 + React 18 + Vite 5 + CodeMirror 6 |
-| AI | OpenAI API / Codex CLI / 自定义端点 |
+| Platform | Renderer | Build | CI | Live2D |
+|----------|----------|:-----:|:--:|:------:|
+| Windows  | D3D11    | OK | OK | OK |
+| Linux    | OpenGL   | OK | OK | Deferred |
+| macOS    | Metal    | OK | OK | Deferred |
 
-## 目录结构
+---
 
-`
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Engine | C++20, CMake 3.25+ |
+| Render | bgfx (D3D11/OpenGL/Metal) |
+| Windowing | SDL3 |
+| Audio | SoLoud (3 buses) |
+| Scripting | Lua 5.4 + sandbox |
+| Font | FreeType + CJK atlas |
+| Crypto | BCrypt (Win) / OpenSSL (Unix) |
+| Video | pl_mpeg + FFmpeg (optional) |
+| Live2D | Cubism 5 SDK (optional, not committed) |
+| Editor | Electron 42 + React 18 + Vite 5 + CodeMirror 6 |
+| AI | OpenAI API / Codex CLI / custom endpoint |
+
+---
+
+## Directory Structure
+
+```
 Caesura(AmeKAG)/
-├── src/               C++ 引擎源码 (65 .cpp + 73 .h, 10 模块)
-│   ├── Core/          引擎主循环, BackendRegistry, JobSystem, RpcServer
-│   ├── Render/        BgfxRenderDevice, 粒子, 文字, 视频, 跨平台 shader
-│   ├── Audio/         SoLoud (BGM/VOICE/SE 3总线)
-│   ├── Scripting/     Lua VM, KAGBinding (31), RenderBinding, VFXBinding
-│   ├── System/        SaveManager (AES-256-GCM, v1→v5 Schema)
-│   ├── CARC/          CryptoEngine, CARC Reader/Writer, DeltaCARC
-│   ├── Resource/      AssetManager, AsyncLoader, ProviderChain, XP3
-│   ├── Live2D/        Cubism 5 Backend (4 渲染路径, 条件编译)
-│   ├── MiniGame/      PBR-lite, 15 Lua API, 跨平台 shader
-│   └── Debug/         DebugManager, HotReload, TDR防护
-├── scripts/           Lua 脚本 (45 文件)
-│   ├── kag/           KAG 模块 (init.lua, backend.lua, sandbox.lua)
-│   ├── kag/commands/  命令子模块 (9 个: audio/layer/text/…)
-│   └── demo/          Demo 场景 (3 场景)
-├── web-editor/        Electron + React 编辑器 (12 组件, F5 运行)
-├── tests/             C++ 单元测试 (24 文件, 135/138 通过)
-├── docs/              文档 (API, 解决方案, 计划)
-└── external/          第三方库 (12 个, 全部静态编译)
-`
+src/              C++ engine source (65 .cpp + 73 .h, 10 modules)
+  Core/           Engine, BackendRegistry, JobSystem, RpcServer
+  Render/         BgfxRenderDevice, particles, text, video, shaders
+  Audio/          SoLoud (BGM/VOICE/SE)
+  Scripting/      Lua VM, KAGBinding (31), RenderBinding, VFXBinding
+  System/         SaveManager (AES-256-GCM, v1-v5 schema)
+  CARC/           CryptoEngine, CARC Reader/Writer, DeltaCARC
+  Resource/       AssetManager, AsyncLoader, ProviderChain, XP3
+  Live2D/         Cubism 5 backend (4 render paths, conditional)
+  MiniGame/       PBR-lite, 15 Lua APIs, cross-platform shaders
+  Debug/          DebugManager, HotReload, TDR protection
+scripts/          Lua scripts (45 files)
+  kag/            KAG modules (init, backend, sandbox)
+  kag/commands/   9 sub-modules (audio/layer/text/system/...)
+  demo/           Demo scenes (3 scenes)
+web-editor/       Electron + React editor (12 components, F5 to run)
+tests/            C++ unit tests (24 files, 135/138 pass) + Lua E2E
+docs/             Documentation (API, solutions, plans)
+external/         3rd-party libraries (12 total, all static)
+```
 
-## 已知限制
+---
 
-| 项目 | 状态 | 说明 |
-|------|:---:|------|
-| Live2D macOS | ⚠️ | Metal 渲染路径移交 macOS 开发者 |
-| Live2D Linux | ⚠️ | OpenGL 渲染路径移交 Linux 开发者 |
-| 移动端适配 | 📋 | MobileAdapter 接口完备，待平台构建 |
+## Known Limitations
 
-## 许可证
+| Item | Status | Notes |
+|------|:------:|-------|
+| Live2D macOS | Deferred | Metal render path for macOS developers |
+| Live2D Linux | Deferred | OpenGL render path for Linux developers |
+| Mobile | Planned | MobileAdapter interface complete, awaiting platform build |
 
-Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
-Copyright (c) 2025-2026 AiliasDesu，MIT License。
+---
 
-第三方库保留各自原始版权：bgfx (BSD-2), SDL3 (zlib), SoLoud (zlib), Lua (MIT), FreeType (FTL), zstd (BSD), nlohmann/json (MIT), ed25519 (CC0), stb (MIT/PD), pl_mpeg (MIT), cpp-httplib (MIT)。Live2D Cubism SDK © Live2D Inc. (专有，用户自行下载)。
+## License
+
+Caesura (AmeKAG) — Copyright (c) 2025-2026 AiliasDesu. MIT License.
+
+Third-party libraries retain their original copyrights:
+bgfx (BSD-2), SDL3 (zlib), SoLoud (zlib), Lua (MIT), FreeType (FTL),
+zstd (BSD), nlohmann/json (MIT), ed25519 (CC0), stb (MIT/PD),
+pl_mpeg (MIT), cpp-httplib (MIT).
+
+Live2D Cubism SDK is proprietary software by Live2D Inc.
+Users must download it separately from live2d.com.
+
