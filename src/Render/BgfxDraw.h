@@ -2,6 +2,7 @@
 
 #include <bgfx/bgfx.h>
 #include <vector>
+#include "IRenderDevice.h"
 #include <cstdint>
 
 namespace Caesura {
