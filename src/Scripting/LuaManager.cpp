@@ -14,6 +14,7 @@
 #include "SteamBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
+#include "../Core/ThreadAssert.h"
 #include <cstdio>
 
 namespace Caesura {
