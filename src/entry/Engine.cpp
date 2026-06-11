@@ -143,7 +143,7 @@ bool Engine::init() {
     }
 
     if (!m_config.headless || m_config.editorMode || m_config.platform) {
-    m_audioBackend = std::make_unique<SoLoudAudioEngine>();
+    // audio injected via EngineConfig (ownership transferred in init body)
     if (!m_audioBackend->init()) {
     DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed, "Audio backend init failed.");
         return false;
@@ -210,10 +210,10 @@ bool Engine::init() {
 
     // -- Animation backend (Live2D or Null) --
 #ifdef CAESURA_HAS_LIVE2D
-    m_animationBackend = std::make_unique<Live2DBackend>();
-#else
-    m_animationBackend = std::make_unique<NullAnimationBackend>();
-#endif
+    // animation injected via EngineConfig
+
+
+
     if (!m_animationBackend->init()) {
         fprintf(stderr, "Animation backend init failed, falling back to null.\n");
         m_animationBackend = std::make_unique<NullAnimationBackend>();
