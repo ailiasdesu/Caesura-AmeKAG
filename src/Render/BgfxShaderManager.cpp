@@ -2,6 +2,8 @@
 #include "EmbeddedShaders.h"
 #include "ShaderCache.h"
 #include <bx/bx.h>
+#include <bx/readerwriter.h>
+#include <bx/error.h>
 #include <cstdio>
 
 namespace Caesura {
