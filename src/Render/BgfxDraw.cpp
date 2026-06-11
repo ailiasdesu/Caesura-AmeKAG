@@ -406,7 +406,7 @@ void BgfxDraw::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     // Ortho projection for screen-space quad
     float ortho[16];
     const bgfx::Caps* caps = bgfx::getCaps();
-    bx::mtxOrtho(ortho, 0.0f, float(m_width), float(m_height), 0.0f,
+    bx::mtxOrtho(ortho, 0.0f, float(m_state->device->getWidth()), float(m_state->device->getHeight()), 0.0f,
                  -1.0f, 1.0f, 0.0f, caps ? caps->homogeneousDepth : false,
                  bx::Handedness::Left);
     bgfx::setViewTransform(targetView, nullptr, ortho);
