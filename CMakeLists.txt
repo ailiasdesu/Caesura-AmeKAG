@@ -147,6 +147,7 @@ set(ENGINE_SOURCES
     src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
     src/Render/BgfxDeviceCore.cpp
+    src/Render/BgfxDraw.cpp
     src/Render/BgfxShaderManager.cpp
     src/Render/BgfxDebugCallback.cpp
     src/Render/RTTManager.cpp
@@ -219,6 +220,7 @@ set(ENGINE_HEADERS
     src/Render/BgfxRenderDevice.h
     src/Render/BgfxShaderManager.h
     src/Render/BgfxDeviceCore.h
+    src/Render/BgfxDraw.h
     src/Render/BgfxDebugCallback.h
     src/Render/RTTManager.h
     src/Render/EmbeddedShaders.h
