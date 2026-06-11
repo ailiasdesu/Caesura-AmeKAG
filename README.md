@@ -1,7 +1,7 @@
 ﻿# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
 
 > 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源  
-> 完成度: **~95% Beta+** | 全量审查: **零违规 · 零泄漏 · 零 TDR**
+> 完成度: **~95% Beta+** | CI: **Win/Mac/Linux 全通** | 审查: **零违规 · 零泄漏**
 
 Caesura 是为视觉小说创作者打造的现代化引擎。KAG 脚本兼容、跨平台渲染、内置 Electron 可视化编辑器、AI 辅助代码生成。
 
@@ -116,8 +116,8 @@ build_nol2d/Release/CaesuraAmeKAG.exe --demo
 | 平台 | 渲染 | 构建 | Live2D |
 |------|------|:---:|:---:|
 | Windows | D3D11 | ✅ | ✅ |
-| Linux | OpenGL | ⚠️ CI | ⚠️ 移交 |
-| macOS | Metal | ⚠️ CI | ⚠️ 移交 |
+| Linux | OpenGL | ✅ | ⚠️ 移交 |
+| macOS | Metal | ✅ | ⚠️ 移交 |
 
 ## 技术栈
 
@@ -231,12 +231,10 @@ Caesura(AmeKAG)/
 
 | 项目 | 状态 | 说明 |
 |------|:---:|------|
-| 缩略图截图 | ⚠️ | 磁盘 I/O 回退模式，非内存读取 |
 | Live2D macOS | ⚠️ | Metal 渲染路径移交 macOS 开发者 |
 | Live2D Linux | ⚠️ | OpenGL 渲染路径移交 Linux 开发者 |
 | 移动端适配 | 📋 | MobileAdapter 存根 (P2 预留) |
-| 云端同步 | 📋 | pushToCloud/pullFromCloud 存根 |
-| KAG API 文档 | ⚠️ | 35/53 命令已文档化，18 待补齐 |
+| 缩略图截图 | ⚠️ | 磁盘 I/O 模式，存档场景可接受 |
 
 ## 版权声明
 

@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-11 | 构建配置: CMake 3.25+ / C++20
 > 构建状态: 三平台全量通过 (Win/Mac/Linux + 打包)
-> 最近提交: f780a95 — Linux vcpkg SDL3
+> 最近提交: 8ad6082 — CI 三平台全通
 > 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
@@ -76,7 +76,7 @@ web-editor/
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS |
 | TD-20 | MobileAdapter 存根 | ⚠️ P2 预留 |
 | TD-21 | MiniGame 3D PBR-lite | ✅ |
-| TD-22 | 跨平台 CI | ✅ 三平台全部通过 |
+| TD-22 | 跨平台 CI | ✅ 三平台全通 (Win/Linux/macOS + 打包) |
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存 |
 | TD-24 | Live2D OpenGLReadback FBO | ✅ |
 
@@ -146,13 +146,13 @@ web-editor/
 
 **编辑器** (93%): 12 组件 + 引擎全连通 (实时日志/帧预览/RPC), 缩放/平移/补全/打包就绪
 
-**跨平台** (80%): Windows ✅, Linux/macOS CI 配置就绪, Live2D 部分移交
+**跨平台** (95%): Win ✅, macOS ✅, Linux ✅, CI 三平台全通 + 打包
 
 **全量审查**: 65 .cpp + 73 .h + 45 Lua 零核心约束违规，零内存泄漏，零 TDR
 
-**已知缺口**: Live2D Linux/macOS 渲染路径(移交), 移动端适配(P2存根), 缩略图截图(磁盘I/O回退), 云端同步预留(P3)
+**已知缺口**: Live2D Linux/macOS 渲染路径(移交), 移动端适配(P2存根), 缩略图截图(磁盘I/O回退)
 
 ### 下一优先级
-1. 存档系统完善 — 缩略图截图优化 + 云端接口预留
-2. KAG API 文档补齐 (18 个 Lua 命令) + Demo 场景
+1. 存档系统完善 — 缩略图截图优化
+2. KAG API 文档补齐 + Demo 场景扩展
 3. Electron 打包 → 完整安装包测试

@@ -120,3 +120,10 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 
 `docs/solutions/` — 已记录的问题解决方案（bugs、最佳实践、工作流模式），按类别组织，含 YAML frontmatter。
 `web-editor/` — Electron + React 编辑器 (12 组件, RPC 桥接, AI 面板, 一键打包)。
+
+## CI 约束
+
+- `workflow_dispatch` 手动触发，非 push 自动
+- SDL3: Windows vcpkg / macOS brew / Linux 源码构建 → /usr/local
+- FFmpeg: 非 Windows 平台 OFF（避免额外依赖）
+- 路径大小写必须与 git 一致（Linux 区分大小写）
