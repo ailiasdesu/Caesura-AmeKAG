@@ -326,7 +326,7 @@ void BgfxDraw::fillViewport(ViewportHandle handle,
     if (!bgfx::isValid(fb)) return;
     uint16_t vpView = BgfxDeviceCore::VIEW_RTT;
     bgfx::setViewFrameBuffer(vpView, fb);
-    bgfx::setViewFrameBuffer(vpView, it->second.fb);
+// migrated to DeviceCore API
 
     // Create a 1x1 solid-color texture
     uint8_t pixel[4] = { r, g, b, a };
@@ -382,7 +382,7 @@ void BgfxDraw::fillViewport(ViewportHandle handle,
     bgfx::submit(vpView, m_state->shaders->getFallbackProgram());
 
     bgfx::destroy(colorTex);
-    bgfx::setViewFrameBuffer(vpView, it->second.fb);
+// migrated to DeviceCore API
 
     printf("[BgfxRenderDevice] fillViewport #%u: (%d,%d,%d,%d) -> view %u\n",
            handle.id, r, g, b, a, (unsigned)vpView);
