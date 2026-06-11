@@ -21,7 +21,7 @@ public:
     BgfxRenderDevice& operator=(const BgfxRenderDevice&) = delete;
 
     static bool setPreferredBackend(const char* name) { return BgfxDeviceCore::setPreferredBackend(name); }
-    const char* getBackendName() const { return BgfxDeviceCore::setPreferredBackend(""); return ""; }
+    const char* getBackendName() const { return m_deviceCore->getBackendName(); }
 
     bool init(void* nativeWindowHandle, int width, int height) override;
     
