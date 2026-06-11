@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -44,6 +44,7 @@ static int lua_KAG_line_height(lua_State* L);
 static int lua_KAG_set_listener(lua_State* L);
 static int lua_KAG_is_voice_playing(lua_State* L);
 static int lua_KAG_is_bgm_playing(lua_State* L);
+static int lua_KAG_is_se_playing(lua_State* L);
 static int lua_KAG_get_active_voices(lua_State* L);
 static int lua_KAG_log(lua_State* L);
 static int lua_KAG_clear_text_layer(lua_State* L);
@@ -78,6 +79,7 @@ static const luaL_Reg kag_functions[] = {
     { "line_height",        lua_KAG_line_height        },    { "set_listener",       lua_KAG_set_listener       },
     { "is_voice_playing",   lua_KAG_is_voice_playing   },
     { "is_bgm_playing",     lua_KAG_is_bgm_playing     },
+    { "is_se_playing",     lua_KAG_is_se_playing     },
     { "get_active_voices",  lua_KAG_get_active_voices  },
     { "log",                lua_KAG_log                },
     { "clear_text_layer",   lua_KAG_clear_text_layer   },
@@ -89,6 +91,10 @@ static const luaL_Reg kag_functions[] = {
     { "audio_fade_volume",  lua_KAG_audio_fade_volume  },
 
     { "quake",              lua_KAG_quake              },
+    { "show_text",         lua_KAG_show_text         },
+    { "show_image",        lua_KAG_show_image        },
+    { "clear_screen",      lua_KAG_clear_screen      },
+    { "wait_click",        lua_KAG_wait_click        },
     { nullptr, nullptr }
 };
 
@@ -371,6 +377,13 @@ static int lua_KAG_is_bgm_playing(lua_State* L) {
     IAudioBackend* audio = getAudio(L);
     if (!audio) { lua_pushboolean(L, 0); return 1; }
     lua_pushboolean(L, audio->isBGMPlaying() ? 1 : 0);
+    return 1;
+}
+
+static int lua_KAG_is_se_playing(lua_State* L) {
+    IAudioBackend* audio = getAudio(L);
+    if (!audio) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, audio->isSEPlaying() ? 1 : 0);
     return 1;
 }
 

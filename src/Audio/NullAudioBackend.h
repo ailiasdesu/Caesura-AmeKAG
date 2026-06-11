@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../Core/IAudioBackend.h"
 
 namespace Caesura {
@@ -57,6 +57,7 @@ public:
     // -- State query -------------------------------------------------------
     bool isVoicePlaying() override;
     bool isBGMPlaying() override;
+    bool isSEPlaying() override;
     int activeVoiceCount() override;
 
     // -- Playback position / length / fade (Spec [3.2][3.3]) ---------------

@@ -1,4 +1,4 @@
-#include "BgfxMiniGameBackend.h"
+﻿#include "BgfxMiniGameBackend.h"
 #include "../Core/BackendRegistry.h"
 #include "../Render/EmbeddedShaders.h"
 #include <bgfx/bgfx.h>
@@ -64,6 +64,13 @@ void BgfxMiniGameBackend::initGeometryCache() {
 // ==========================================================================
 
 bool BgfxMiniGameBackend::init() {
+    // GPU resources created lazily by ensureGpuResources()
+    return true;
+}
+
+bool BgfxMiniGameBackend::ensureGpuResources() {
+    if (m_gpuReady) return true;
+
     bgfx::ShaderHandle vs, fs;
     const bgfx::RendererType::Enum rt = bgfx::getRendererType();
     bool shaderOk = false;
@@ -130,10 +137,13 @@ bool BgfxMiniGameBackend::init() {
     initGeometryCache();
     bgfx::setDebug(BGFX_DEBUG_NONE);
     printf("[MiniGame] Init complete (geo x4, PBR, multi-light, collision, physics)\n");
+    m_gpuReady = true;
+    printf("[MiniGame] GPU resources ready\n");
     return true;
 }
 
 void BgfxMiniGameBackend::shutdown() {
+    if (!m_gpuReady) return;
     for(int i=0;i<int(MiniGeoType::Count);++i){if(bgfx::isValid(m_geoVB[i]))bgfx::destroy(m_geoVB[i]);if(bgfx::isValid(m_geoIB[i]))bgfx::destroy(m_geoIB[i]);}
     if(bgfx::isValid(m_program))bgfx::destroy(m_program);
     if(bgfx::isValid(m_u_mtx))bgfx::destroy(m_u_mtx);
@@ -154,7 +164,7 @@ void BgfxMiniGameBackend::shutdown() {
 // Lights
 // ==========================================================================
 
-void BgfxMiniGameBackend::setLightUniforms() {
+void BgfxMiniGameBackend::setLightUniforms() { if(!m_gpuReady) return;
     float d[4]={m_dirLight.dirX,m_dirLight.dirY,m_dirLight.dirZ,m_dirLight.intensity};
     float c[4]={m_dirLight.r,m_dirLight.g,m_dirLight.b,1};
     float a[4]={m_ambientLight.r,m_ambientLight.g,m_ambientLight.b,1};
@@ -194,7 +204,7 @@ bool BgfxMiniGameBackend::checkCollision(uint32_t a,uint32_t b){
 
 uint32_t BgfxMiniGameBackend::loadScene(const std::string& p){printf("[MiniGame] loadScene: %s\n",p.c_str());return m_nextSceneId++;}
 void BgfxMiniGameBackend::unloadScene(uint32_t h){if(h==m_activeScene)leave();}
-void BgfxMiniGameBackend::enter(uint32_t h){m_activeScene=h;m_active=true;}
+void BgfxMiniGameBackend::enter(uint32_t h){if(!ensureGpuResources())return;m_activeScene=h;m_active=true;}
 void BgfxMiniGameBackend::leave(){m_active=false;}
 
 // ==========================================================================
@@ -207,7 +217,7 @@ bool BgfxMiniGameBackend::update(float dt) {
     return true;
 }
 
-void BgfxMiniGameBackend::render() {
+void BgfxMiniGameBackend::render() { if(!m_gpuReady) return;
     if(!m_active)return;
     float view[16],proj[16],viewProj[16];
     bx::mtxLookAt(view,bx::Vec3{m_camera.eyeX,m_camera.eyeY,m_camera.eyeZ},bx::Vec3{m_camera.atX,m_camera.atY,m_camera.atZ});

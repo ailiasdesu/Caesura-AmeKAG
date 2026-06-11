@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -53,8 +53,8 @@ std::thread::id Caesura::Engine::s_mainThreadId;
 namespace Caesura {
 
 // -- Phase G8-U1: lua_Alloc hook for per-allocation memory check ---------------
-// Checks lua_gc(L, LUA_GCCOUNT) after every Lua allocation.
-// Returns NULL on overflow to force a Lua allocation error.
+// Lua 5.4 forbids calling lua_gc inside the allocator (stack overflow).
+// Memory budget is enforced per-frame in Engine::run() instead.
 static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
     // Lua 5.4 forbids calling lua_gc inside the allocator (C stack overflow).
     if (nsize == 0) { free(ptr); return nullptr; }
@@ -134,12 +134,16 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
     DebugManager::instance().setRenderInfo(ri);
     }
 
+    if (!m_headless || m_editorMode) {
     m_audioBackend = std::make_unique<SoLoudAudioEngine>();
     if (!m_audioBackend->init()) {
         fprintf(stderr, "Audio backend init failed.");
         return false;
     }
     BackendRegistry::instance().setAudioBackend(*m_audioBackend);
+    } else {
+        printf("[Engine] Headless mode: skipping audio init\n");
+    }
 
     DebugManager::AudioInfo ai;
     ai.initialized = true; ai.bgmBusReady = true;
@@ -404,14 +408,6 @@ void Engine::processEvents() {
             lua_pushboolean(L, mouse.leftDown ? 1 : 0);
             lua_setglobal(L, "_GAME_MOUSE_DOWN");
 
-            if (event.type == SDL_EVENT_KEY_DOWN) {
-                if (event.key.key == SDLK_F5) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5"); }
-                if (event.key.key == SDLK_F6) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F6"); }
-            }
-            if (event.type == SDL_EVENT_KEY_UP) {
-                if (event.key.key == SDLK_F5) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F5"); }
-                if (event.key.key == SDLK_F6) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F6"); }
-            }
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                 m_inputRouter->getFocus() == InputFocus::KAG) {
@@ -423,6 +419,17 @@ void Engine::processEvents() {
                         lua_pop(L, 1);
                     }
                 } else { lua_pop(L, 1); }
+            }
+        }
+
+        if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && L) {
+            if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_F5) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5"); }
+                if (event.key.key == SDLK_F6) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F6"); }
+            }
+            if (event.type == SDL_EVENT_KEY_UP) {
+                if (event.key.key == SDLK_F5) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F5"); }
+                if (event.key.key == SDLK_F6) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F6"); }
             }
         }
         m_inputRouter->processEvent(event);

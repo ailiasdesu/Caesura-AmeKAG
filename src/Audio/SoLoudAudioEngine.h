@@ -59,6 +59,7 @@ public:
 
     bool isVoicePlaying() override;
     bool isBGMPlaying() override;
+    bool isSEPlaying() override;
     int activeVoiceCount() override;
 
     float getPosition(const char* bus) override;

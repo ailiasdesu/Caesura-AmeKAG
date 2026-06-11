@@ -1,4 +1,4 @@
-#include "NullAudioBackend.h"
+﻿#include "NullAudioBackend.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -54,6 +54,7 @@ void NullAudioBackend::flushWaveCache() {}
 
 bool NullAudioBackend::isVoicePlaying() { return false; }
 bool NullAudioBackend::isBGMPlaying()  { return false; }
+bool NullAudioBackend::isSEPlaying()  { return false; }
 int  NullAudioBackend::activeVoiceCount() { return 0; }
 
 // -- Playback position / length / fade (Spec [3.2][3.3]) ---------------

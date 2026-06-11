@@ -345,6 +345,15 @@ bool SoLoudAudioEngine::isBGMPlaying() {
         && m_soloud.isValidVoiceHandle(m_currentBGM);
 }
 
+bool SoLoudAudioEngine::isSEPlaying() {
+    if (!m_initialized) return false;
+    m_activeSE.erase(
+        std::remove_if(m_activeSE.begin(), m_activeSE.end(),
+            [this](SoLoud::handle h) { return !m_soloud.isValidVoiceHandle(h); }),
+        m_activeSE.end());
+    return !m_activeSE.empty();
+}
+
 int SoLoudAudioEngine::activeVoiceCount() {
     return m_initialized ? m_soloud.getActiveVoiceCount() : 0;
 }

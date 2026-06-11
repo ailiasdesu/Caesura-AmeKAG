@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -554,6 +554,7 @@ static const luaL_Reg render_functions[] = {
     { "invalidate_handles", lua_Render_invalidate_handles },
     { "load_texture_async",  lua_Render_load_texture_async  },
     { "cancel_async_loads",  lua_Render_cancel_async_loads  },
+    { "video_play",        lua_Render_video_play        },
     { "video_stop",         lua_Render_video_stop         },
     { "video_update",       lua_Render_video_update       },
     { "video_get_texture",  lua_Render_video_get_texture  },

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 
 namespace Caesura {
@@ -58,6 +58,7 @@ public:
     // -- State query -------------------------------------------------------
     virtual bool isVoicePlaying() = 0;
     virtual bool isBGMPlaying() = 0;
+    virtual bool isSEPlaying() = 0;
     virtual int activeVoiceCount() = 0;
 
     // -- Playback position / length / fade (Spec [3.2][3.3]) -----------
