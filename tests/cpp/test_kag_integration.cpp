@@ -9,8 +9,10 @@ using namespace Caesura;
 
 TEST_CASE("Engine::default construct destruct no-crash") {
     Engine::s_mainThreadId = std::this_thread::get_id();
-    BackendRegistry::instance().setRenderDevice(new NullRenderDevice());
-    BackendRegistry::instance().setAudioBackend(new NullAudioBackend());
+    static NullRenderDevice nullRender;
+    BackendRegistry::instance().setRenderDevice(nullRender);
+    static NullAudioBackend nullAudio;
+    BackendRegistry::instance().setAudioBackend(nullAudio);
     {
         Engine engine;
     }
@@ -18,8 +20,10 @@ TEST_CASE("Engine::default construct destruct no-crash") {
 
 TEST_CASE("Engine::double destruct via scope safe") {
     Engine::s_mainThreadId = std::this_thread::get_id();
-    BackendRegistry::instance().setRenderDevice(new NullRenderDevice());
-    BackendRegistry::instance().setAudioBackend(new NullAudioBackend());
+    static NullRenderDevice nullRender;
+    BackendRegistry::instance().setRenderDevice(nullRender);
+    static NullAudioBackend nullAudio;
+    BackendRegistry::instance().setAudioBackend(nullAudio);
     Engine* engine = new Engine();
     delete engine;
 }
