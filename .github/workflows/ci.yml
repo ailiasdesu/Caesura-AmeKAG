@@ -120,6 +120,17 @@ jobs:
           cd ..
           rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
 
+      - name: Debug CMakeLists.txt
+        run: |
+          echo "=== Line count ==="
+          wc -l CMakeLists.txt
+          echo "=== set(ENGINE_SOURCES area ==="
+          grep -n "set(ENGINE_SOURCES" CMakeLists.txt
+          echo "=== add_executable area ==="
+          grep -n "add_executable.*PROJECT_NAME" CMakeLists.txt
+          echo "=== Source file count ==="
+          grep -c "src/.*\.cpp" CMakeLists.txt || true
+
       - name: Configure (verbose)
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 
