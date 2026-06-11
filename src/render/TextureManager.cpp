@@ -9,7 +9,6 @@
 #include "../di/TextureBudget.h"
 #include "../di/BackendRegistry.h"
 #include "../di/thread/ThreadAssert.h"
-#include "../script/vm/LuaManager.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../external/stb/stb_image.h"
 

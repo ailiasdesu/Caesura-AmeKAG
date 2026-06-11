@@ -4,7 +4,6 @@
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdio>
-#include "../script/vm/LuaManager.h"
 
 namespace Caesura {
 
