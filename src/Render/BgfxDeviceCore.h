@@ -25,7 +25,7 @@ public:
     static bool setPreferredBackend(const char* name);
     const char* getBackendName() const;
 
-    bool init(void* nativeWindowHandle, int width, int height, BgfxShaderManager* shaders);
+    bool init(void* nativeWindowHandle, int width, int height);
     void resize(int width, int height);
     void shutdown();
 
@@ -48,7 +48,7 @@ public:
     int getHeight() const { return m_height; }
 
 private:
-    void setupDefaultViews(BgfxShaderManager* shaders);
+    void setupDefaultViews();
 
     int m_width  = 1280;
     int m_height = 720;

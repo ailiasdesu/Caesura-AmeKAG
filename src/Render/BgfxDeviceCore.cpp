@@ -66,7 +66,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
            caps->homogeneousDepth ? "homogeneous" : "non-homogeneous");
 
     bgfx::setDebug(BGFX_DEBUG_TEXT);
-    setupDefaultViews(shaders);
+    setupDefaultViews();
 
     if (shaders) shaders->initEmbeddedShaders();
 
@@ -83,7 +83,7 @@ void BgfxDeviceCore::resize(int width, int height) {
     m_width  = width;
     m_height = height;
     bgfx::reset(uint32_t(width), uint32_t(height), BGFX_RESET_VSYNC);
-    setupDefaultViews(shaders);
+    setupDefaultViews();
     fprintf(stderr, "[BgfxRenderDevice] Resized to %dx%d\n", width, height);
 }
 
@@ -96,23 +96,7 @@ void BgfxDeviceCore::shutdown() {
 // if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); } (stays in BgfxRenderDevice)
 
     // 2. Destroy shader programs
-    if (bgfx::isValid(shaders->getFallbackProgram())) {
-        bgfx::destroy(shaders->getFallbackProgram());
-        shaders->getFallbackProgram() = BGFX_INVALID_HANDLE;
     }
-    if (bgfx::isValid(shaders->getBlendProgram()))      { bgfx::destroy(shaders->getBlendProgram());      shaders->getBlendProgram()      = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getTransitionProgram())) { bgfx::destroy(shaders->getTransitionProgram()); shaders->getTransitionProgram() = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getVFXProgram()))        { bgfx::destroy(shaders->getVFXProgram());        shaders->getVFXProgram()        = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getBlendParams()))     { bgfx::destroy(shaders->getBlendParams());     shaders->getBlendParams()     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getTransParams()))     { bgfx::destroy(shaders->getTransParams());     shaders->getTransParams()     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getVFXParams()))       { bgfx::destroy(shaders->getVFXParams());       shaders->getVFXParams()       = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getStretchProgram()))    { bgfx::destroy(shaders->getStretchProgram());    shaders->getStretchProgram()    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getAffineProgram()))     { bgfx::destroy(shaders->getAffineProgram());     shaders->getAffineProgram()     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getStretchParams()))   { bgfx::destroy(shaders->getStretchParams());   shaders->getStretchParams()   = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getAffineParams()))    { bgfx::destroy(shaders->getAffineParams());    shaders->getAffineParams()    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(shaders->getDefaultSampler())) {
-        bgfx::destroy(shaders->getDefaultSampler());
-        shaders->getDefaultSampler() = BGFX_INVALID_HANDLE;
     }
 
     // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
@@ -222,7 +206,7 @@ void BgfxDeviceCore::flushAllRTT() {
     m_rttMap.clear();
 }
 
-void BgfxDeviceCore::setupDefaultViews(BgfxShaderManager* shaders) {
+void BgfxDeviceCore::setupDefaultViews() {
     // -- View RTT (offscreen render target) --
     bgfx::setViewRect(VIEW_RTT, 0, 0, uint16_t(m_width), uint16_t(m_height));
     bgfx::setViewClear(VIEW_RTT, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
