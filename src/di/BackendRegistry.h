@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core/IAudioBackend.h"
-#include "IPlatformBackend.h"
+#include "../platform/api/IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
 #include "../Resource/ResourceHandle.h"
 #include "../Render/VideoPlayer.h"
@@ -10,7 +10,7 @@
 #include "../Resource/AsyncLoader.h"
 #include "../MiniGame/IMiniGameBackend.h"
 #include "../Live2D/IAnimationBackend.h"
-#include "InputRouter.h"
+#include "../input/InputRouter.h"
 #include <unordered_map>
 #include <string>
 #include <memory>
