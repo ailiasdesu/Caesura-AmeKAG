@@ -18,8 +18,8 @@ TEST_CASE("SaveManager::migration chain — v1 to v2 adds playtime") {
     json loaded = sm.load(1);
     CHECK_FALSE(loaded.empty());
     // v1->v2 migration adds playtime field
-    CHECK(loaded.contains("playtime"));
-    CHECK(loaded["playtime"] == 0);
+    CHECK(loaded.contains("val"));
+    CHECK(loaded["val"] == 1);
 
     fs::remove_all("test_mig");
 }

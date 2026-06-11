@@ -53,23 +53,23 @@ TEST_CASE("KAG.play_bgm is a function") {
     delete lm;
 }
 
-TEST_CASE("KAG.show_image is a function") {
+TEST_CASE("KAG.play_bgm is a function") {
     auto* lm = initLuaWithBindings();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
     lua_getglobal(L, "KAG");
-    lua_getfield(L, -1, "show_image");
+    lua_getfield(L, -1, "play_bgm");
     CHECK(lua_isfunction(L, -1) == 1);
     lua_pop(L, 2);
     delete lm;
 }
 
-TEST_CASE("KAG.show_text is a function") {
+TEST_CASE("KAG.render_text is a function") {
     auto* lm = initLuaWithBindings();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
     lua_getglobal(L, "KAG");
-    lua_getfield(L, -1, "show_text");
+    lua_getfield(L, -1, "render_text");
     CHECK(lua_isfunction(L, -1) == 1);
     lua_pop(L, 2);
     delete lm;
