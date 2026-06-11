@@ -148,6 +148,7 @@ set(ENGINE_SOURCES
     src/Render/BgfxRenderDevice.cpp
     src/Render/BgfxDeviceCore.cpp
     src/Render/BgfxDraw.cpp
+    src/Render/BgfxQuadBatch.cpp
     src/Render/BgfxShaderManager.cpp
     src/Render/BgfxDebugCallback.cpp
     src/Render/RTTManager.cpp
@@ -221,6 +222,7 @@ set(ENGINE_HEADERS
     src/Render/BgfxShaderManager.h
     src/Render/BgfxDeviceCore.h
     src/Render/BgfxDraw.h
+    src/Render/BgfxQuadBatch.h
     src/Render/BgfxDebugCallback.h
     src/Render/RTTManager.h
     src/Render/EmbeddedShaders.h
