@@ -229,6 +229,7 @@ set(ENGINE_HEADERS
     src/Render/TextRenderer.h
     src/Render/ParticleSystem.h
     src/Render/GpuMonitor.h
+    src/Render/api/IGpuMonitor.h
     src/Render/VideoPlayer.h
     src/Render/TextureManager.h
     src/Render/LayerManager.h

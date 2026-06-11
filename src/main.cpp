@@ -14,7 +14,7 @@ extern "C" {
 #include "Steam/SteamBackend.h"
 #include "script/vm/LuaManager.h"
 #include "input/InputRouter.h"
-#include "Render/GpuMonitor.h"
+#include "render/GpuMonitor.h"
 #include "Render/VideoPlayer.h"
 #include "di/BackendRegistry.h"
 #include "entry/Engine.h"

@@ -1,5 +1,6 @@
-﻿#pragma once
-#include <cstdint>
+#pragma once
+#include "api/IGpuMonitor.h"
+#include <deque>
 #include <deque>
 
 namespace Caesura {
@@ -20,7 +21,7 @@ const char* gpuQualityName(GpuQuality q);
 // Budget: 16.67ms @ 60fps for Intel HD 620 target.
 // Recovery: 10 consecutive good frames to step up one quality level.
 
-class GpuMonitor {
+class GpuMonitor : public IGpuMonitor {
 public:
     struct FrameMetrics {
         double gpuTimeMs    = 0.0;   // GPU frame time (bgfx stats)
@@ -37,21 +38,21 @@ public:
 
     // Call once per frame, before render submission.
     // dt = frame delta in seconds. Returns the current quality level.
-    GpuQuality update(double dt);
+    GpuQuality update(double dt) override;
 
     // Accessors
-    const FrameMetrics& metrics() const { return m_metrics; }
-    GpuQuality          currentQuality() const { return m_quality; }
-    bool                isDegraded() const { return m_quality != GpuQuality::HIGH; }
+    const FrameMetrics& metrics() const override { return m_metrics; }
+    GpuQuality currentQuality() const override { return m_quality; }
+    bool isDegraded() const override { return m_quality != GpuQuality::HIGH; }
 
     // Resolution scale factor for current quality level
-    float resolutionScale() const;
+    float resolutionScale() const override;
 
     // Whether VFX (blur, particles, transition shaders) should be disabled
-    bool vfxEnabled() const { return m_quality != GpuQuality::LOW; }
+    bool vfxEnabled() const override { return m_quality != GpuQuality::LOW; }
 
     // Reset counters (e.g. after scene change)
-    void reset();
+    void reset() override;
 
 private:
     static constexpr double kBudgetMs      = 16.67;  // 60fps target

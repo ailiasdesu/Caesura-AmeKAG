@@ -12,7 +12,7 @@ class IRenderDevice;
 class IAudioBackend;
 class LuaManager;
 class InputRouter;
-class GpuMonitor;
+class IGpuMonitor;
 class VideoPlayer;
 class DebugManager;
 class IMiniGameBackend;
@@ -44,7 +44,7 @@ public:
     IAnimationBackend& animation() { return *m_animationBackend; }
     LuaManager&   lua()           { return *m_lua; }
     InputRouter&  input()         { return *m_inputRouter; }
-    GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
+    IGpuMonitor&  gpuMonitor()    { return *m_gpuMonitor; }
     VideoPlayer&  videoPlayer()   { return *m_videoPlayer; }
 
     const EngineConfig& config() const { return m_config; }
@@ -74,7 +74,7 @@ private:
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
     std::unique_ptr<LuaManager>        m_lua;
     std::unique_ptr<InputRouter>       m_inputRouter;
-    std::unique_ptr<GpuMonitor>        m_gpuMonitor;
+    std::unique_ptr<IGpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend>  m_miniGameBackend;
     float m_autoSaveInterval = 0.0f;
     float m_autoSaveTimer = 0.0f;

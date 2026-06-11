@@ -12,7 +12,7 @@ class ISteamBackend;
 class IVideoDecoder;
 class LuaManager;
 class InputRouter;
-class GpuMonitor;
+class IGpuMonitor;
 class VideoPlayer;
 
 // EngineConfig — aggregate struct for DI into Engine.
@@ -30,7 +30,7 @@ struct EngineConfig {
     InputRouter*      inputRouter     = nullptr;
 
     // Render enhancements
-    GpuMonitor*       gpuMonitor      = nullptr;
+    IGpuMonitor*      gpuMonitor      = nullptr;
     VideoPlayer*      videoPlayer     = nullptr;
 
     // Optional — default nullptr, no conditional compilation in signature
