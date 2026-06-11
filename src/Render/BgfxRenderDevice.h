@@ -20,14 +20,12 @@ public:
     BgfxRenderDevice(const BgfxRenderDevice&) = delete;
     BgfxRenderDevice& operator=(const BgfxRenderDevice&) = delete;
 
-    static bool setPreferredBackend(const char* name) { return BgfxDeviceCore::setPreferredBackend(name); }
-    const char* getBackendName() const { return m_deviceCore->getBackendName(); }
+    static bool setPreferredBackend(const char* name);
+    const char* getBackendName() const;
 
     bool init(void* nativeWindowHandle, int width, int height) override;
-    
-    
-    
-    
+    void resize(int width, int height) override;
+    void shutdown() override;
     void beginFrame() override;
     void endFrame() override;
     void commit_frame() override;
@@ -104,7 +102,11 @@ private:
     // initEmbeddedShaders delegated to BgfxShaderManager
     // setupDefaultViews delegated to BgfxDeviceCore
 
-        bgfx::VertexLayout   m_posTexLayout;
+    // width/height moved to BgfxDeviceCore
+    
+    
+
+    bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
 
