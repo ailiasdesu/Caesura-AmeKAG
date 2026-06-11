@@ -191,4 +191,26 @@ void BgfxShaderManager::initEmbeddedShaders() {
     // -- Stretch / Affine uniforms ----------------------------------
     m_u_stretchParams = bgfx::createUniform("StretchParams", bgfx::UniformType::Vec4, 1);
     m_u_affineParams  = bgfx::createUniform("AffineParams",  bgfx::UniformType::Vec4, 4);
+
+    // -- Register with ShaderCache -------------------------------------
+    if (bgfx::isValid(m_blendProgram)) {
+        static const int kAlphaModes[] = {
+            (int)BlendMode::Normal,    (int)BlendMode::Multiply,
+            (int)BlendMode::Screen,    (int)BlendMode::Overlay,
+            (int)BlendMode::Darken,    (int)BlendMode::Lighten,
+            (int)BlendMode::ColorDodge,(int)BlendMode::ColorBurn,
+            (int)BlendMode::HardLight, (int)BlendMode::SoftLight
+        };
+        for (int mode : kAlphaModes) {
+            CompositeShaderKey key = { (uint8_t)mode };
+            CompositeShaderCache::instance().registerProgram(key, m_blendProgram);
+        }
+        printf("[BgfxShaderManager] Registered 10 blend modes with ShaderCache.\\n");
+    }
+    CompositeShaderCache::instance().precompileCommon();
+    if (bgfx::isValid(m_fallbackProgram)) {
+        CompositeShaderKey fk;
+        CompositeShaderCache::instance().registerProgram(fk, m_fallbackProgram);
+    }
+}
 } // namespace Caesura
