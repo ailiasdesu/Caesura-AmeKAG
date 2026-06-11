@@ -2,9 +2,9 @@
 #include "entry/Engine.h"
 #include "script/vm/LuaManager.h"
 #include "script/bindings/KAGBinding.h"
-#include "Scripting/RenderBinding.h"
-#include "Scripting/VFXBinding.h"
-#include "Scripting/DebugBinding.h"
+#include "script/bindings/RenderBinding.h"
+#include "script/bindings/VFXBinding.h"
+#include "script/bindings/DebugBinding.h"
 #include "Scripting/DevCoreBinding.h"
 #include "Scripting/UnifiedBinding.h"
 #include <thread>
@@ -122,5 +122,6 @@ TEST_CASE("registerUnifiedBackendBinding no-crash") {
     registerUnifiedBackendBinding(L);
     delete lm;
 }
+
 
 

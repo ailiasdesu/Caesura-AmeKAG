@@ -1,17 +1,17 @@
- extern "C" {
+﻿ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 }
 #include "../vm/LuaManager.h"
-#include "KAGBinding.h"
-#include "RenderBinding.h"
-#include "DevCoreBinding.h"
-#include "DebugBinding.h"
+#include "../bindings/KAGBinding.h"
+#include "../bindings/RenderBinding.h"
+#include "../bindings/DevCoreBinding.h"
+#include "../bindings/DebugBinding.h"
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
-#include "VFXBinding.h"
+#include "../bindings/VFXBinding.h"
 #include "../System/SaveBinding.h"
-#include "SteamBinding.h"
+#include "../bindings/SteamBinding.h"
 #include "../state/GameState.h"
 #include "../di/BackendRegistry.h"
 #include "../di/thread/ThreadAssert.h"
@@ -133,3 +133,4 @@ void LuaManager::resumeKAGCoroutine() {
     // Reserved for future use
 }
 } // namespace Caesura
+
