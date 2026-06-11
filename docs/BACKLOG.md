@@ -8,7 +8,7 @@
 
 ## 1. Audio Format Expansion
 
-**Status**: Code already supports WAV/OGG/MP3/FLAC via SoLoud (`dr_wav`, `dr_mp3`, `stb_vorbis`, `dr_flac`). Missing test + doc closure.
+**Status**: DONE (2026-06-11) WAV/OGG/MP3/FLAC via SoLoud (`dr_wav`, `dr_mp3`, `stb_vorbis`, `dr_flac`). Missing test + doc closure.
 
 | # | Type | Severity | Description | Files |
 |---|------|----------|-------------|-------|
@@ -20,17 +20,17 @@
 **Estimated effort**: ~50 lines C++ (A-01 + A-02) + 5 lines doc (A-03) + 4 tiny audio files (A-04).
 
 **Acceptance criteria**:
-- [ ] `test_audio.cpp` loads and plays each of the 4 formats
-- [ ] Loading an unsupported format returns 0 handle without crash
-- [ ] README lists "WAV, OGG, MP3, FLAC" as supported formats
-- [ ] Test audio files are checked in under `tests/audio/`
-- [ ] `cmake --build build --target CaesuraTests && ./build/tests/CaesuraTests` passes
+- [x] `test_audio.cpp` loads and plays each of the 4 formats
+- [x] Loading an unsupported format returns 0 handle without crash
+- [x] README lists "WAV, OGG, MP3, FLAC" as supported formats
+- [x] Test audio files are checked in under `tests/audio/`
+- [x] `cmake --build build --target CaesuraTests && ./build/tests/CaesuraTests` passes
 
 ---
 
 ## 2. Steam SDK Integration
 
-**Status**: Nothing exists. Follow the same pattern as Live2D -- optional module (`CAESURA_HAS_STEAM`), user downloads Steamworks SDK separately.
+**Status**: DONE (2026-06-11). Follow the same pattern as Live2D -- optional module (`CAESURA_HAS_STEAM`), user downloads Steamworks SDK separately.
 
 | # | Type | Severity | Description | Files |
 |---|------|----------|-------------|-------|

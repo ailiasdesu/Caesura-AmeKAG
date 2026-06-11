@@ -84,7 +84,8 @@ All Lua to C++ access through BackendRegistry + pure virtual interfaces:
 | IAnimationBackend | Live2DBackend (Cubism 5) | OK Win |
 | IMiniGameBackend | BgfxMiniGameBackend (PBR-lite) | OK |
 | IVideoDecoder | PlMpegDecoder / FFmpegDecoder | OK |
-| ISaveProvider | LocalFileSaveProvider (AES-256-GCM) | OK |
+| ISaveProvider | LocalFileSaveProvider / CloudSaveProvider | OK |
+| ISteamBackend | SteamBackend / NullSteamBackend (optional) | OK |
 
 ---
 
@@ -125,6 +126,8 @@ See: [docs/api/MiniGame-API.md](docs/api/MiniGame-API.md)
 | Linux    | OpenGL   | OK | OK | Deferred |
 | macOS    | Metal    | OK | OK | Deferred |
 
+> Steam SDK integration available on all platforms (CAESURA_ENABLE_STEAM=ON)
+
 ---
 
 ## Tech Stack
@@ -158,6 +161,7 @@ src/              C++ engine source (65 .cpp + 73 .h, 10 modules)
   CARC/           CryptoEngine, CARC Reader/Writer, DeltaCARC
   Resource/       AssetManager, AsyncLoader, ProviderChain, XP3
   Live2D/         Cubism 5 backend (4 render paths, conditional)
+  Steam/          Steamworks SDK (ISteamBackend, optional)
   MiniGame/       PBR-lite, 15 Lua APIs, cross-platform shaders
   Debug/          DebugManager, HotReload, TDR protection
 scripts/          Lua scripts (45 files)

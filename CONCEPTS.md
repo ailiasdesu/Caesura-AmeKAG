@@ -127,3 +127,9 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 - SDL3: Windows vcpkg / macOS brew / Linux 源码构建 → /usr/local
 - FFmpeg: 非 Windows 平台 OFF（避免额外依赖）
 - 路径大小写必须与 git 一致（Linux 区分大小写）
+
+## Steam SDK 集成 (可选)
+
+镜像 Live2D 模块模式: `CAESURA_ENABLE_STEAM=ON`。SDK 不提交。NullBackend 回退。
+接口: ISteamBackend (achievements/stats/cloud)。Lua: `steam.unlock_achievement(id)`。
+CloudSaveProvider: ISaveProvider via ISteamRemoteStorage, >256KB 自动分块。

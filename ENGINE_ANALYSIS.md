@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-06-11 | 构建配置: CMake 3.25+ / C++20
 > 构建状态: v1.0-rc — 三平台全通零错误 + 编辑器 F5 快捷键 + Demo 存档
-> 最近提交: 21f116b — v1.0-rc final
+> 最近提交: e9da6de — Steam SDK + Audio test closure
 > 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
@@ -23,10 +23,10 @@
 
 | 维度 | 数值 |
 |------|------|
-| C++ 文件 | 65 .cpp + 73 .h = 138 编译单元 |
-| C++ 代码量 | ~18,500 行 |
+| C++ 文件 | 68 .cpp + 80 .h = 148 编译单元 |
+| C++ 代码量 | ~19,500 行 |
 | Lua 脚本 | 45 文件 (scripts/ 31 + kag/commands/ 9 + demo/ 1 + dev/ 1) |
-| C++ 单元测试 | 24 文件 |
+| C++ 单元测试 | 26 文件 |
 | Electron 编辑器 | 12 组件 + 3 AI provider + 1 解析器 |
 | KAG 绑定 | 95 C 函数 (31 KAG + 28 Render + 10 VFX + 10 Debug + 8 DevCore + 8 Unified) |
 | Lua KAG 命令 | 14 函数 (9 子模块: audio/layer/resource/save/system/text/transition/vfx/video) |
@@ -51,6 +51,7 @@ src/
 ├── CARC/         ← CryptoEngine (BCrypt/OpenSSL), CARCReader/Writer, DeltaCARC
 ├── Resource/     ← AssetManager, AsyncLoader, ProviderChain, XP3Archive
 ├── Live2D/       ← Cubism 5 条件编译, 4 渲染路径, OpenGLReadback FBO ✅
+├── Steam/        ← Steamworks SDK 可选集成, ISteamBackend + NullBackend, 10 Lua APIs
 ├── MiniGame/     ← BgfxMiniGameBackend PBR-lite, 15 Lua API, 跨平台shader
 └── Debug/        ← HotReload, DebugProtocol, DebugManager (双级ErrorUI+TDR)
 
@@ -146,6 +147,8 @@ web-editor/
 | **LogPanel 实时日志** — stderr 转发 + 级别自动归类 | ✅ |
 | **引擎帧捕获** — render + requestScreenShot + base64 | ✅ |
 | **快捷键** — F5 运行 / Shift+F5 停止 / Ctrl+, 设置 | ✅ |
+| **Steam 集成** — ISteamBackend + NullBackend + Lua 10 APIs | ✅ |
+| **CloudSaveProvider** — ISaveProvider via Steam Remote Storage (256KB chunks) | ✅ |
 
 ---
 
