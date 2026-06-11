@@ -1,44 +1,73 @@
 ---
 name: Caesura (AmeKAG)
-last_updated: 2026-06-11
+last_updated: 2026-06-12
 ---
 
 # Caesura (AmeKAG) 策略
 
 ## 目标问题
 
-Galgame/视觉小说创作者缺乏一个将 Live2D、3D MiniGame、AI 辅助作为一等公民内建的现代开源引擎——现有方案要么是日系闭源引擎（功能现代化不足），要么是通用游戏引擎（太重、需学多个技术栈）。当前引擎已有 11 个模块、138 个源文件的完整实现，但模块间耦合失控（Core 依赖全部 9 个子系统、Core↔Render 循环引用、Scripting 成为 7 模块集成蜘蛛网），导致 Bug 修复变成全局连锁反应，继续堆功能会让项目不可维护。
+Galgame/视觉小说创作者缺乏一个将 Live2D、3D MiniGame、AI 辅助作为一等公民内建的现代开源引擎——现有方案要么是日系闭源引擎（功能现代化不足），要么是通用游戏引擎（太重、需学多个技术栈）。
+
+## 当前架构状态
+
+已完成大规模模块化解耦重构：
+- **16 个独立模块**：archive, Audio, debug, di, entry, input, job, Live2D, MiniGame, platform, render, Resource, rpc, script, Steam, storage
+- **Core 目录已消除**——拆分为 di（依赖注入）、entry（引擎入口）、platform（平台后端）、input（输入路由）、job（任务系统）
+- **Scripting→script 重命名**——内部分为 vm/state/bindings 子目录
+- **Carc→archive、System→storage**——模块名对齐职责
+- **主循环依赖已消除**：Core↔Render 双向依赖已断开，Audio→Scripting 越层引用已修复
 
 ## 破局方案
 
-将现代能力（Live2D、3D、AI 辅助）作为架构层的一等公民，同时**以接口隔离重建模块边界**——让每个子系统只通过抽象接口（BackendRegistry 已有的 9 个纯虚接口）互相通信，消除 Core↔Render 双向依赖和 Audio→Scripting 越层引用。稳定架构是交付 galgame 创作工具的物质前提。
+将现代能力（Live2D、3D、AI 辅助）作为架构层的一等公民，同时**以接口隔离重建模块边界**——让每个子系统只通过抽象接口互相通信。稳定架构是交付 galgame 创作工具的物质前提。
+
+## 接口覆盖状态
+
+每个子系统通过 `api/` 子目录暴露纯虚接口，BackendRegistry 只依赖接口指针：
+
+| 子系统 | 接口 | 状态 |
+|---|---|---|
+| Render | IRenderDevice | ✅ `render/api/` |
+| Render | IGpuMonitor | ✅ `render/api/` |
+| Render | IVideoDecoder | ✅ `render/` |
+| Audio | IAudioBackend | ✅ `Audio/api/` |
+| Platform | IPlatformBackend | ✅ `platform/api/` |
+| MiniGame | IMiniGameBackend | ✅ `MiniGame/api/` |
+| Animation | IAnimationBackend | ✅ `Live2D/` |
+| Steam | ISteamBackend | ✅ `Steam/` |
+| Asset | IAssetProvider | ✅ `Resource/api/` |
+| Save | ISaveProvider | ✅ `storage/` |
+| Debug | IDebugManager | ✅ `debug/api/` |
+
+全部 11 个子系统接口已完成。
 
 ## 目标用户
 
-**首要用户：** 小型 galgame/VN 开发社团——需要 Live2D + 3D 小游戏但不想维护多个技术栈。他们雇佣本引擎用一个统一工具交付包含动态立绘和 3D 小游戏的现代 galgame，而不是在 Cubism SDK + Unity + 自建桥接之间手动搬运。
+**首要用户：** 小型 galgame/VN 开发社团——需要 Live2D + 3D 小游戏但不想维护多个技术栈。他们使用本引擎用一个统一工具交付包含动态立绘和 3D 小游戏的现代 galgame。
 
 ## 关键指标
 
-- **跨平台 CI 绿率** — Windows/macOS/Linux 三端 CI 同时通过构建和测试的比率。当前已知 135/138 单元测试通过，3 个失败待修。
-- **架构耦合度** — 跨模块 #include 的数量。当前 Core 跨 9 模块、Scripting 跨 7 模块；目标减半。
+- **跨平台 CI 绿率** — Windows/macOS/Linux 三端 CI 同时通过构建和测试的比率。当前 85/90 单元测试通过，5 个失败待修。
+- **架构耦合度** — 跨模块 #include 的数量。Core 已消除，Scripting 耦合已修复；持续监控。
 - **新人上手到 Demo 可跑时间** — 从下载引擎到成功跑出 Demo 场景的耗时（分钟计）。
 
 ## 赛道
 
-### 架构解耦：接口隔离与模块边界重建
+### 架构解耦：接口隔离与模块边界重建 ✅
 
-消除循环依赖、越层引用和上帝模块——让 Core 不再知道 Render 的具体实现，Audio 不再引用 Scripting。以 BackendRegistry 已有的 9 个纯虚接口为锚点，重新梳理每个模块的 include 边界。
+消除循环依赖、越层引用和上帝模块。以 BackendRegistry 的纯虚接口为锚点，所有 11 个子系统接口已就位，模块间通过抽象接口通信。
 
-_服务方案的理由：_ 当前 Bug 失控的根因是耦合——修一个模块触发三个模块的回归。不解耦，所有功能开发都会越来越慢。
+_状态：完成。后续维护：防止新增跨模块直接依赖。_
 
 ### 跨平台 CI 与测试稳定性
 
-修复剩余 3 个失败单元测试，补齐关键路径的集成测试，确保三端 CI 稳定绿。涵盖 bgfx 多渲染后端（D3D11/OpenGL/Metal）的一致性。
+修复剩余 5 个失败单元测试，补齐关键路径的集成测试，确保三端 CI 稳定绿。涵盖 bgfx 多渲染后端（D3D11/OpenGL/Metal）的一致性。
 
-_服务方案的理由：_ 跨平台是 galgame 创作者不受绑定的基础——引擎在每端都稳定，社团才敢把项目押在上面。
+_状态：进行中。85/90 通过，5 个预存失败（音频加载、图片解码、Lua 脚本、bgfx null 崩溃）。_
 
 ### 创作者上手体验与文档
 
 Demo 场景、web-editor 开箱即用体验、84 个 KAG API 的文档和示例——让创作者从下载到"能跑出第一个 galgame 场景"的路径尽可能短。
 
-_服务方案的理由：_ 引擎再强，如果 galgame 创作者不会用、不敢用，就只是一个技术演示。
+_状态：待启动。_

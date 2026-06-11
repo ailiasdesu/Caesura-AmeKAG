@@ -6,7 +6,7 @@
 #include "../Render/VideoPlayer.h"
 #include "../Render/TextureManager.h"
 #include "../Render/ParticleSystem.h"
-#include "../Debug/DebugManager.h"
+#include "../debug/api/IDebugManager.h"
 #include "../Resource/AsyncLoader.h"
 #include "../MiniGame/api/IMiniGameBackend.h"
 #include "../Live2D/IAnimationBackend.h"
@@ -66,8 +66,8 @@ public:
     void setTextureManager(TextureManager* mgr);
     void setParticleSystem(ParticleSystem* ps) { m_particleSystem = ps; }
     ParticleSystem* getParticleSystem() { return m_particleSystem; }
-    void setDebugManager(DebugManager* dm) { m_debugManager = dm; }
-    DebugManager* getDebugManager() { return m_debugManager; }
+    void setDebugManager(IDebugManager* dm) { m_debugManager = dm; }
+    IDebugManager* getDebugManager() { return m_debugManager; }
     void setAsyncLoader(AsyncLoader* al) { m_asyncLoader = al; }
     AsyncLoader* getAsyncLoader() { return m_asyncLoader; }
     void setLayerManager(LayerManager* mgr);
@@ -130,7 +130,7 @@ private:
     IAnimationBackend* m_animationBackend = nullptr;
     VideoPlayer*     m_videoPlayer     = nullptr;
     ParticleSystem*  m_particleSystem  = nullptr;
-    DebugManager*    m_debugManager    = nullptr;
+    IDebugManager*   m_debugManager    = nullptr;
     AsyncLoader*     m_asyncLoader     = nullptr;
     TextureManager*  m_textureManager  = nullptr;
     LayerManager*    m_layerManager    = nullptr;
