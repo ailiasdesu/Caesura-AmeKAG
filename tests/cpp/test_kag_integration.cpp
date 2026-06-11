@@ -2,7 +2,7 @@
 #include "Core/Engine.h"
 #include "Core/BackendRegistry.h"
 #include "Audio/NullAudioBackend.h"
-#include "Render/IRenderDevice.h"
+#include "Render/NullRenderDevice.h"
 #include <thread>
 
 using namespace Caesura;
