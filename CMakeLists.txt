@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -144,6 +144,7 @@ set(ENGINE_SOURCES
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
+    src/Render/BgfxShaderManager.cpp
     src/Render/RTTManager.cpp
     src/Render/EmbeddedShaders.cpp
     src/Render/EmbeddedShaders_MiniGame.cpp
@@ -209,6 +210,7 @@ set(ENGINE_HEADERS
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h
+    src/Render/BgfxShaderManager.h
     src/Render/RTTManager.h
     src/Render/EmbeddedShaders.h
     src/Render/TextRenderer.h

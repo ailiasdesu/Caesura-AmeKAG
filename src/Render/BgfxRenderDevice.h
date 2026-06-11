@@ -1,8 +1,9 @@
 #pragma once
 
 #include "IRenderDevice.h"
-#include "EmbeddedShaders.h"
+#include "BgfxShaderManager.h"
 #include "TextRenderer.h"
+#include <memory>
 #include <memory>
 #include <bgfx/bgfx.h>
 #include <unordered_map>
@@ -70,22 +71,22 @@ public:
     float textLineHeight() const override;
     void flushAllRTT() override;
 
-    bgfx::ProgramHandle getFallbackProgram() const override { return m_fallbackProgram; }
+    bgfx::ProgramHandle getFallbackProgram() const override { return m_shaders->getFallbackProgram(); }
     const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
-    bgfx::UniformHandle getDefaultSampler() const override { return m_texSampler; }
+    bgfx::UniformHandle getDefaultSampler() const override { return m_shaders->getDefaultSampler(); }
 
-    bgfx::ProgramHandle getBlendProgram()      const { return m_blendProgram; }
-    bgfx::ProgramHandle getTransitionProgram() const { return m_transitionProgram; }
-    bgfx::ProgramHandle getVFXProgram()        const { return m_vfxProgram; }
-    bgfx::UniformHandle getBlendParams()       const { return m_u_blendParams; }
-    bgfx::UniformHandle getTransParams()       const { return m_u_transParams; }
-    bgfx::UniformHandle getVFXParams()         const { return m_u_vfxParams; }
+    bgfx::ProgramHandle getBlendProgram() const { return m_shaders->getBlendProgram(); }
+    bgfx::ProgramHandle getTransitionProgram() const { return m_shaders->getTransitionProgram(); }
+    bgfx::ProgramHandle getVFXProgram() const { return m_shaders->getVFXProgram(); }
+    bgfx::UniformHandle getBlendParams() const { return m_shaders->getBlendParams(); }
+    bgfx::UniformHandle getTransParams() const { return m_shaders->getTransParams(); }
+    bgfx::UniformHandle getVFXParams() const { return m_shaders->getVFXParams(); }
 
     // Stretch/Affine shader accessors
-    bgfx::ProgramHandle getStretchProgram()    const { return m_stretchProgram; }
-    bgfx::ProgramHandle getAffineProgram()     const { return m_affineProgram; }
-    bgfx::UniformHandle getStretchParams()     const { return m_u_stretchParams; }
-    bgfx::UniformHandle getAffineParams()      const { return m_u_affineParams; }
+    bgfx::ProgramHandle getStretchProgram() const { return m_shaders->getStretchProgram(); }
+    bgfx::ProgramHandle getAffineProgram() const { return m_shaders->getAffineProgram(); }
+    bgfx::UniformHandle getStretchParams() const { return m_shaders->getStretchParams(); }
+    bgfx::UniformHandle getAffineParams() const { return m_shaders->getAffineParams(); }
 
     void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex, bgfx::TextureHandle blendTex, int mode, float baseAlpha, float blendAlpha, float globalAlpha) override;
     void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex, bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex, int method, float progress) override;
@@ -98,30 +99,15 @@ public:
 
 
 private:
-    void initEmbeddedShaders();
+    void initEmbeddedShaders() { m_shaders->initEmbeddedShaders(); }
     void setupDefaultViews();
 
     int m_width  = 1280;
     int m_height = 720;
     bool m_bgfxInitialized = false;
 
-    bgfx::ProgramHandle m_fallbackProgram = BGFX_INVALID_HANDLE;
     bgfx::VertexLayout   m_posTexLayout;
-    bgfx::UniformHandle  m_texSampler = BGFX_INVALID_HANDLE;
-
-    bgfx::ProgramHandle m_blendProgram      = BGFX_INVALID_HANDLE;
-    bgfx::ProgramHandle m_transitionProgram = BGFX_INVALID_HANDLE;
-    bgfx::ProgramHandle m_vfxProgram        = BGFX_INVALID_HANDLE;
-
-    // Stretch / Affine programs and uniforms
-    bgfx::ProgramHandle m_stretchProgram = BGFX_INVALID_HANDLE;
-    bgfx::ProgramHandle m_affineProgram  = BGFX_INVALID_HANDLE;
-
-    bgfx::UniformHandle m_u_blendParams   = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_u_transParams   = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_u_vfxParams     = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_u_stretchParams = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_u_affineParams  = BGFX_INVALID_HANDLE;
+    std::unique_ptr<BgfxShaderManager> m_shaders;
 
     struct RTTEntry {
         bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
