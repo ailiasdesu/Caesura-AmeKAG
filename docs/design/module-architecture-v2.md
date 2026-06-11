@@ -1,4 +1,4 @@
----
+﻿---
 title: Caesar's Engine Module Architecture v2
 type: design
 date: 2026-06-11
@@ -311,9 +311,9 @@ Script::KAGBinding                  # KAG 命令解释器
 | `src/Scripting/*` | `src/script/*` | 18 |
 | `src/System/*` | `src/storage/*` | 4 |
 | `src/CARC/*` → `src/archive/*` | 全部文件 | 10 |
-| `src/Live2D/*` | `src/live2d/*` | 7 |
-| `src/MiniGame/*` | `src/minigame/*` | 8 |
-| `src/Debug/BgfxDebugCallback.*` | 移入 `src/debug/` | 2 |
+| `src/live2d/*` | `src/live2d/*` | 7 |
+| `src/minigame/*` | `src/minigame/*` | 8 |
+| `src/debug/BgfxDebugCallback.*` | 移入 `src/debug/` | 2 |
 | 总计 | 78 文件移动 |
 
 **不在此范围：** 函数重命名、接口重构、逻辑修改。本 PR 纯移动 + `#include` 路径修正。

@@ -1,4 +1,4 @@
----
+﻿---
 title: BgfxRenderDevice careful split
 type: refactor
 status: active
@@ -24,7 +24,7 @@ date: 2026-06-11
 ### U1. BgfxDebugCallback
 
 - **提取内容：** BgfxDebugCallback 类（~40行）+ s_debugCallback 实例 + setBgfxShuttingDown 函数。
-- **新文件：** `src/Render/BgfxDebugCallback.h`, `src/Render/BgfxDebugCallback.cpp`
+- **新文件：** `src/render/BgfxDebugCallback.h`, `src/render/BgfxDebugCallback.cpp`
 - **原文件改动：** 移除 class 定义和 static 实例，添加 `#include "BgfxDebugCallback.h"`，替换 `s_debugCallback` → `g_bgfxDebugCallback`（新名称避免匿名命名空间冲突）。
 - **CMakeLists：** 添加新 .cpp 到 ENGINE_SOURCES，新 .h 到 ENGINE_HEADERS。
 - **验证：** `cmake --build build_nol2d --config Debug` 编译通过。
@@ -32,7 +32,7 @@ date: 2026-06-11
 ### U2. BgfxShaderManager
 
 - **提取内容：** buildBgfxShader (~48行) + initEmbeddedShaders (~150行) + 所有 ProgramHandle/UniformHandle 成员变量（m_fallbackProgram, m_texSampler, m_blendProgram, m_transitionProgram, m_vfxProgram, m_stretchProgram, m_affineProgram, m_u_blendParams, m_u_transParams, m_u_vfxParams, m_u_stretchParams, m_u_affineParams）+ 所有对应的 getter 方法。
-- **新文件：** `src/Render/BgfxShaderManager.h`, `src/Render/BgfxShaderManager.cpp`
+- **新文件：** `src/render/BgfxShaderManager.h`, `src/render/BgfxShaderManager.cpp`
 - **原文件改动：**
   - 头文件：include EmbeddedShaders.h → include BgfxShaderManager.h；移除所有 shader 成员 + getter → 替换为 `std::unique_ptr<BgfxShaderManager> m_shaders;` + 委托 getter。
   - cpp 文件：移除 buildBgfxShader + initEmbeddedShaders 函数体；init() 中 `m_shaders = std::make_unique<BgfxShaderManager>();` + `m_shaders->initEmbeddedShaders();`；shutdown() 中 `m_shaders.reset()` 替换逐个 destroy。
@@ -43,7 +43,7 @@ date: 2026-06-11
 ### U3. BgfxDeviceCore
 
 - **提取内容：** init/resize/shutdown/beginFrame/endFrame/commit_frame + setupDefaultViews/setViewRect/setViewClear/touch/setDebugName + createRenderTarget/destroyRenderTarget/getViewportTexture + blitViewport + setPreferredBackend/getBackendName。
-- **新文件：** `src/Render/BgfxDeviceCore.h`, `src/Render/BgfxDeviceCore.cpp`
+- **新文件：** `src/render/BgfxDeviceCore.h`, `src/render/BgfxDeviceCore.cpp`
 - **Dependencies:** BgfxShaderManager（init 中调用 initEmbeddedShaders），bx/math.h（mtxOrtho）。
 - **原文件改动：**
   - 头文件：添加 `#include "BgfxDeviceCore.h"`，添加 `std::unique_ptr<BgfxDeviceCore> m_deviceCore;`。移除 m_width/m_height/m_bgfxInitialized/m_rttMap/m_nextHandle/RTTEntry → 委托 getBackbufferWidth/Height 到 m_deviceCore->getWidth/Height。

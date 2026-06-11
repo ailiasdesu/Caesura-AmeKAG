@@ -1,5 +1,5 @@
 ﻿#include "GpuMonitor.h"
-#include "../Debug/DebugManager.h"
+#include "../debug/DebugManager.h"
 #include <bgfx/bgfx.h>
 #include <cmath>
 #include <cstdio>

@@ -1,7 +1,7 @@
-#include "doctest.h"
-#include "Resource/ResourceHandle.h"
-#include "Resource/DirAssetProvider.h"
-#include "Resource/ProviderChain.h"
+﻿#include "doctest.h"
+#include "resource/ResourceHandle.h"
+#include "resource/DirAssetProvider.h"
+#include "resource/ProviderChain.h"
 #include <cstdio>
 #include <fstream>
 #include <filesystem>

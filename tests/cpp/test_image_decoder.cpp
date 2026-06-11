@@ -1,6 +1,6 @@
 ﻿#include "doctest.h"
-#include "Resource/ImageDecoder.h"
-#include "Resource/AssetManager.h"
+#include "resource/ImageDecoder.h"
+#include "resource/AssetManager.h"
 #include <cstdint>
 
 using namespace Caesura;

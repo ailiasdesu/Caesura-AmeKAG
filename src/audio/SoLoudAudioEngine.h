@@ -1,6 +1,6 @@
 ﻿#pragma once
 struct lua_State;
-#include "../Audio/api/IAudioBackend.h"
+#include "../audio/api/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
 #include <string>

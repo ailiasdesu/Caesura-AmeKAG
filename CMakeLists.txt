@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -135,7 +135,7 @@ set(ENGINE_SOURCES
     src/job/JobSystem.cpp
     src/input/InputRouter.cpp
     src/di/BackendRegistry.cpp
-    src/Debug/DebugManager.cpp
+    src/debug/DebugManager.cpp
     src/di/TextureBudget.cpp
     src/di/SandboxQuota.cpp
     src/rpc/RpcServer.h
@@ -144,33 +144,33 @@ set(ENGINE_SOURCES
     src/rpc/EditorServer.cpp
     src/entry/ErrorUI.cpp
     src/platform/SDL3PlatformBackend.cpp
-    src/Resource/XP3Archive.cpp
-    src/Render/BgfxRenderDevice.cpp
-    src/Render/BgfxDeviceCore.cpp
-    src/Render/BgfxDraw.cpp
-    src/Render/BgfxQuadBatch.cpp
-    src/Render/BgfxShaderManager.cpp
-    src/Render/BgfxDebugCallback.cpp
-    src/Render/RTTManager.cpp
-    src/Render/EmbeddedShaders.cpp
-    src/Render/EmbeddedShaders_MiniGame.cpp
-    src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
-    src/Render/EmbeddedShaders_MiniGame_Metal.cpp
-    src/Render/TextRenderer.cpp
-    src/Render/ParticleSystem.cpp
-    src/Render/GpuMonitor.cpp
-    src/Render/VideoPlayer.cpp
-    src/Render/TextureManager.cpp
-    src/Render/FreeTypeContext.cpp
-    src/Render/LayerManager.cpp
-    src/MiniGame/NullMiniGameBackend.cpp
-    src/MiniGame/BgfxMiniGameBackend.cpp
-    src/MiniGame/MiniGeometry.cpp
-    src/MiniGame/MiniCollision.cpp
-    src/Live2D/NullAnimationBackend.cpp
-    src/Render/ShaderCache.cpp
-    src/Audio/SoLoudAudioEngine.cpp
-    src/Audio/NullAudioBackend.cpp
+    src/resource/XP3Archive.cpp
+    src/render/BgfxRenderDevice.cpp
+    src/render/BgfxDeviceCore.cpp
+    src/render/BgfxDraw.cpp
+    src/render/BgfxQuadBatch.cpp
+    src/render/BgfxShaderManager.cpp
+    src/render/BgfxDebugCallback.cpp
+    src/render/RTTManager.cpp
+    src/render/EmbeddedShaders.cpp
+    src/render/EmbeddedShaders_MiniGame.cpp
+    src/render/EmbeddedShaders_MiniGame_GLSL.cpp
+    src/render/EmbeddedShaders_MiniGame_Metal.cpp
+    src/render/TextRenderer.cpp
+    src/render/ParticleSystem.cpp
+    src/render/GpuMonitor.cpp
+    src/render/VideoPlayer.cpp
+    src/render/TextureManager.cpp
+    src/render/FreeTypeContext.cpp
+    src/render/LayerManager.cpp
+    src/minigame/NullMiniGameBackend.cpp
+    src/minigame/BgfxMiniGameBackend.cpp
+    src/minigame/MiniGeometry.cpp
+    src/minigame/MiniCollision.cpp
+    src/live2d/NullAnimationBackend.cpp
+    src/render/ShaderCache.cpp
+    src/audio/SoLoudAudioEngine.cpp
+    src/audio/NullAudioBackend.cpp
     src/script/vm/LuaManager.cpp
     src/script/bindings/KAGBinding.cpp
     src/script/state/GameState.cpp
@@ -187,14 +187,14 @@ set(ENGINE_SOURCES
     src/archive/CARCReader.cpp
     src/archive/CARCWriter.cpp
     src/archive/CarcAssetProvider.cpp
-    src/Resource/DirAssetProvider.cpp
-    src/Resource/ProviderChain.cpp
-    src/Resource/AssetManager.cpp
-    src/Resource/ImageDecoder.cpp
-    src/Resource/AsyncLoader.cpp
+    src/resource/DirAssetProvider.cpp
+    src/resource/ProviderChain.cpp
+    src/resource/AssetManager.cpp
+    src/resource/ImageDecoder.cpp
+    src/resource/AsyncLoader.cpp
     # Phase 8: Dev Tools
-    src/Debug/HotReload.cpp
-    src/Debug/DebugProtocol.cpp
+    src/debug/HotReload.cpp
+    src/debug/DebugProtocol.cpp
     # Phase 9: Security & Platform
     src/archive/CRLManager.cpp
     src/archive/DeltaCARC.cpp
@@ -206,45 +206,45 @@ set(ENGINE_HEADERS
     src/entry/EngineConfig.h
     src/job/JobSystem.h
     src/input/InputRouter.h
-    src/Audio/api/IAudioBackend.h
+    src/audio/api/IAudioBackend.h
     src/platform/api/IPlatformBackend.h
     src/platform/SDL3PlatformBackend.h
-    src/Resource/XP3Archive.h
+    src/resource/XP3Archive.h
     src/di/BackendRegistry.h
     src/di/SandboxQuota.h
     src/di/thread/ThreadAssert.h
-    src/Resource/ResourceHandle.h
-    src/Debug/DebugManager.h
+    src/resource/ResourceHandle.h
+    src/debug/DebugManager.h
     src/di/TextureBudget.h
     src/entry/ErrorUI.h
-    src/Render/IRenderDevice.h
-    src/Render/BgfxRenderDevice.h
-    src/Render/BgfxShaderManager.h
-    src/Render/BgfxDeviceCore.h
-    src/Render/BgfxDraw.h
-    src/Render/BgfxQuadBatch.h
-    src/Render/BgfxDebugCallback.h
-    src/Render/RTTManager.h
-    src/Render/EmbeddedShaders.h
-    src/Render/TextRenderer.h
-    src/Render/ParticleSystem.h
-    src/Render/GpuMonitor.h
-    src/Render/api/IGpuMonitor.h
-    src/Render/VideoPlayer.h
-    src/Render/TextureManager.h
-    src/Render/LayerManager.h
-    src/MiniGame/api/IMiniGameBackend.h
-    src/MiniGame/NullMiniGameBackend.h
-    src/MiniGame/BgfxMiniGameBackend.h
-    src/MiniGame/MiniMaterial.h
-    src/MiniGame/MiniLight.h
-    src/MiniGame/MiniGeometry.h
-    src/MiniGame/MiniCollision.h
-    src/Live2D/IAnimationBackend.h
-    src/Live2D/NullAnimationBackend.h
-    src/Render/ShaderCache.h
-    src/Audio/SoLoudAudioEngine.h
-    src/Audio/NullAudioBackend.h
+    src/render/IRenderDevice.h
+    src/render/BgfxRenderDevice.h
+    src/render/BgfxShaderManager.h
+    src/render/BgfxDeviceCore.h
+    src/render/BgfxDraw.h
+    src/render/BgfxQuadBatch.h
+    src/render/BgfxDebugCallback.h
+    src/render/RTTManager.h
+    src/render/EmbeddedShaders.h
+    src/render/TextRenderer.h
+    src/render/ParticleSystem.h
+    src/render/GpuMonitor.h
+    src/render/api/IGpuMonitor.h
+    src/render/VideoPlayer.h
+    src/render/TextureManager.h
+    src/render/LayerManager.h
+    src/minigame/api/IMiniGameBackend.h
+    src/minigame/NullMiniGameBackend.h
+    src/minigame/BgfxMiniGameBackend.h
+    src/minigame/MiniMaterial.h
+    src/minigame/MiniLight.h
+    src/minigame/MiniGeometry.h
+    src/minigame/MiniCollision.h
+    src/live2d/IAnimationBackend.h
+    src/live2d/NullAnimationBackend.h
+    src/render/ShaderCache.h
+    src/audio/SoLoudAudioEngine.h
+    src/audio/NullAudioBackend.h
     src/script/vm/LuaManager.h
     src/script/bindings/KAGBinding.h
     src/script/state/GameState.h
@@ -262,15 +262,15 @@ set(ENGINE_HEADERS
     src/archive/CARCReader.h
     src/archive/CARCWriter.h
     src/archive/CarcAssetProvider.h
-    src/Resource/api/IAssetProvider.h
-    src/Resource/DirAssetProvider.h
-    src/Resource/ProviderChain.h
-    src/Resource/AssetManager.h
-    src/Resource/ImageDecoder.h
-    src/Resource/AsyncLoader.h
+    src/resource/api/IAssetProvider.h
+    src/resource/DirAssetProvider.h
+    src/resource/ProviderChain.h
+    src/resource/AssetManager.h
+    src/resource/ImageDecoder.h
+    src/resource/AsyncLoader.h
     # Phase 8: Dev Tools
-    src/Debug/HotReload.h
-    src/Debug/DebugProtocol.h
+    src/debug/HotReload.h
+    src/debug/DebugProtocol.h
     # Phase 9: Security & Platform
     src/archive/CRLManager.h
     src/archive/DeltaCARC.h
@@ -451,17 +451,17 @@ if(CAESURA_LIVE2D)
 
         # --- Engine Live2D backend ---
         target_sources(${PROJECT_NAME} PRIVATE
-            src/Live2D/Live2D/Live2DBackend.h
-            src/Live2D/Live2D/Live2DBackend.cpp
-            src/Live2D/Live2D/ILive2DRenderPath.h
-            src/Live2D/Live2D/OpenGLReadbackRenderPath.h
-            src/Live2D/Live2D/OpenGLReadbackRenderPath.cpp
-            src/Live2D/Live2D/D3D11NativeRenderPath.h
-            src/Live2D/Live2D/D3D11NativeRenderPath.cpp
-            src/Live2D/Live2D/OpenGLSharedRenderPath.h
-            src/Live2D/Live2D/OpenGLSharedRenderPath.cpp
-            src/Live2D/Live2D/MetalNativeRenderPath.h
-            src/Live2D/Live2D/MetalNativeRenderPath.cpp
+            src/live2d/Live2D/Live2DBackend.h
+            src/live2d/Live2D/Live2DBackend.cpp
+            src/live2d/Live2D/ILive2DRenderPath.h
+            src/live2d/Live2D/OpenGLReadbackRenderPath.h
+            src/live2d/Live2D/OpenGLReadbackRenderPath.cpp
+            src/live2d/Live2D/D3D11NativeRenderPath.h
+            src/live2d/Live2D/D3D11NativeRenderPath.cpp
+            src/live2d/Live2D/OpenGLSharedRenderPath.h
+            src/live2d/Live2D/OpenGLSharedRenderPath.cpp
+            src/live2d/Live2D/MetalNativeRenderPath.h
+            src/live2d/Live2D/MetalNativeRenderPath.cpp
         )
         target_link_libraries(${PROJECT_NAME} PRIVATE CubismFramework Live2DCubismCore)
         target_include_directories(${PROJECT_NAME} PRIVATE

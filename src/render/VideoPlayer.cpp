@@ -1,4 +1,4 @@
-#include <cstdio>
+﻿#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <vector>
@@ -7,7 +7,7 @@
 #define PL_MPEG_IMPLEMENTATION
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
-#include "../Debug/DebugManager.h"
+#include "../debug/DebugManager.h"
 #include "../job/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG

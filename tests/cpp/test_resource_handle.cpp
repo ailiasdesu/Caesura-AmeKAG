@@ -1,5 +1,5 @@
 ﻿#include "doctest.h"
-#include "Resource/ResourceHandle.h"
+#include "resource/ResourceHandle.h"
 
 using namespace Caesura;
 

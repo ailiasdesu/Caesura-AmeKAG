@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+﻿cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -33,7 +33,7 @@ set(TEST_SOURCES
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/di/BackendRegistry.cpp
-    ${CMAKE_SOURCE_DIR}/src/Debug/DebugManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/di/TextureBudget.cpp
     ${CMAKE_SOURCE_DIR}/src/di/SandboxQuota.cpp
     ${CMAKE_SOURCE_DIR}/src/rpc/RpcServer.cpp
@@ -50,14 +50,14 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/archive/CRLManager.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/SaveManager.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/SaveBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/DirAssetProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/ProviderChain.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/AssetManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/ImageDecoder.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/AsyncLoader.cpp
-    ${CMAKE_SOURCE_DIR}/src/Resource/XP3Archive.cpp
-    ${CMAKE_SOURCE_DIR}/src/Debug/HotReload.cpp
-    ${CMAKE_SOURCE_DIR}/src/Debug/DebugProtocol.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/DirAssetProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/ProviderChain.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/AssetManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/ImageDecoder.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/AsyncLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/resource/XP3Archive.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/HotReload.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/DebugProtocol.cpp
     ${CMAKE_SOURCE_DIR}/src/script/vm/LuaManager.cpp
     ${CMAKE_SOURCE_DIR}/src/script/state/GameState.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/KAGBinding.cpp
@@ -66,35 +66,35 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/script/bindings/DevCoreBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/DebugBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/UnifiedBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/TextRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxRenderDevice.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxDeviceCore.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxDraw.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxQuadBatch.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxShaderManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/BgfxDebugCallback.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/ShaderCache.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/TextureManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/LayerManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/FreeTypeContext.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/ParticleSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/RTTManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/GpuMonitor.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/VideoPlayer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/TextRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxRenderDevice.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDeviceCore.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDraw.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxQuadBatch.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxShaderManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDebugCallback.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/EmbeddedShaders.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/ShaderCache.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/TextureManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/LayerManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/FreeTypeContext.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/ParticleSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/RTTManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/GpuMonitor.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/VideoPlayer.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/SoLoudAudioEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/NullAudioBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/MobileAdapter.cpp
-    ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
-    ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
-    ${CMAKE_SOURCE_DIR}/src/Steam/SteamBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/minigame/NullMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/minigame/BgfxMiniGameBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/minigame/MiniGeometry.cpp
+    ${CMAKE_SOURCE_DIR}/src/minigame/MiniCollision.cpp
+    ${CMAKE_SOURCE_DIR}/src/steam/SteamBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/SteamBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/CloudSaveProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
-    ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/EmbeddedShaders_MiniGame.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/EmbeddedShaders_MiniGame_GLSL.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/EmbeddedShaders_MiniGame_Metal.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})

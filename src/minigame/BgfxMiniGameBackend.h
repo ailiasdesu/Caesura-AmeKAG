@@ -4,7 +4,7 @@
 #include "MiniGeometry.h"
 #include "MiniLight.h"
 #include "MiniCollision.h"
-#include "../Render/IRenderDevice.h"
+#include "../render/IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <unordered_map>

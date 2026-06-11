@@ -3,7 +3,7 @@
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
-#include "../Render/BgfxRenderDevice.h"
+#include "../render/BgfxRenderDevice.h"
 #include <cstdio>
 #include <cstring>
 

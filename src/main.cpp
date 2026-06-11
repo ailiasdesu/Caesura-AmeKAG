@@ -1,24 +1,24 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 }
-#include "Render/BgfxRenderDevice.h"
-#include "Audio/SoLoudAudioEngine.h"
-#include "Audio/NullAudioBackend.h"
+#include "render/BgfxRenderDevice.h"
+#include "audio/SoLoudAudioEngine.h"
+#include "audio/NullAudioBackend.h"
 #include "platform/SDL3PlatformBackend.h"
-#include "MiniGame/BgfxMiniGameBackend.h"
-#include "MiniGame/NullMiniGameBackend.h"
-#include "Live2D/NullAnimationBackend.h"
-#include "Steam/NullSteamBackend.h"
-#include "Steam/SteamBackend.h"
+#include "minigame/BgfxMiniGameBackend.h"
+#include "minigame/NullMiniGameBackend.h"
+#include "live2d/NullAnimationBackend.h"
+#include "steam/NullSteamBackend.h"
+#include "steam/SteamBackend.h"
 #include "script/vm/LuaManager.h"
 #include "input/InputRouter.h"
 #include "render/GpuMonitor.h"
-#include "Render/VideoPlayer.h"
+#include "render/VideoPlayer.h"
 #include "di/BackendRegistry.h"
 #include "entry/Engine.h"
-#include "Render/TextureManager.h"
+#include "render/TextureManager.h"
 #include "script/vm/LuaManager.h"
 #include <cstdio>
 #include <string>

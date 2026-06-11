@@ -48,17 +48,17 @@ shaders/
 [glsl/*.sc] ──shaderc──→ [compiled/<platform>/*.bin]
                                │
                                ▼ (DXBC path)
-                          [dx11/*.dxbc] ──manual──→ [src/Render/EmbeddedShaders.cpp]
+                          [dx11/*.dxbc] ──manual──→ [src/render/EmbeddedShaders.cpp]
 ```
-- For D3D11/D3D12 backends, DXBC byte arrays are embedded directly in `src/Render/EmbeddedShaders.cpp`.
-- For Vulkan, SPIR-V byte arrays are embedded in `src/Render/EmbeddedShaders.cpp` + `EmbeddedShaders_SPIRV.cpp`.
+- For D3D11/D3D12 backends, DXBC byte arrays are embedded directly in `src/render/EmbeddedShaders.cpp`.
+- For Vulkan, SPIR-V byte arrays are embedded in `src/render/EmbeddedShaders.cpp` + `EmbeddedShaders_SPIRV.cpp`.
 - Metal shaders can be compiled via `shaderc --platform osx --profile metal` and then embedded.
 
 ## How to add a new shader
 1. Create `glsl/<name>.sc` (bgfx shaderc dialect)
 2. Create `dx11/<name>.hlsl` (HLSL source)
 3. Compile HLSL: `fxc /T vs_4_0|ps_4_0 /E main /Fo dx11/<name>.dxbc dx11/<name>.hlsl`
-4. Convert `.dxbc` → C array, append to `src/Render/EmbeddedShaders.cpp`
-5. Add `extern` declaration to `src/Render/EmbeddedShaders.h`
+4. Convert `.dxbc` → C array, append to `src/render/EmbeddedShaders.cpp`
+5. Add `extern` declaration to `src/render/EmbeddedShaders.h`
 6. Wire program creation in `BgfxRenderDevice::initEmbeddedShaders()`
 7. Create `metal/<name>.metal` for macOS reference

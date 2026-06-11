@@ -1,6 +1,6 @@
-#include "BgfxMiniGameBackend.h"
+﻿#include "BgfxMiniGameBackend.h"
 #include "../di/BackendRegistry.h"
-#include "../Render/EmbeddedShaders.h"
+#include "../render/EmbeddedShaders.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/readerwriter.h>

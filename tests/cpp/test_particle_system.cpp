@@ -1,5 +1,5 @@
 ﻿#include "doctest.h"
-#include "../src/Render/ParticleSystem.h"
+#include "../src/render/ParticleSystem.h"
 
 using namespace Caesura;
 

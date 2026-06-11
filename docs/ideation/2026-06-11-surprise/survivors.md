@@ -1,4 +1,4 @@
-# Survivors — 2026-06-11 Surprise-Me Ideation
+﻿# Survivors — 2026-06-11 Surprise-Me Ideation
 
 ## Grounding Context
 **Codebase:** Caesura v1.0-rc C++20引擎 (68 cpp + 71 h, 10模块) + 0.1.0-alpha Electron/React web-editor (12组件)。9个抽象接口 + BackendRegistry。JSON-RPC桥接 (8方法)。84 KAG API via Lua沙箱。
@@ -33,7 +33,7 @@
 
 ### 4. Live2D macOS/Linux 支持 — 兑现"跨平台现代引擎"承诺
 **Description:** Live2D 当前仅 Windows 可用 (README 标注 macOS/Linux "Deferred")。实现 Metal 渲染路径 (macOS) 和 OpenGL 渲染路径 (Linux)，使 Live2D 成为真正的跨平台一等公民。引擎已有 4 条渲染路径的接口定义 (ILive2DRenderPath)，MetalNativeRenderPath 和 OpenGLSharedRenderPath 文件已存在但可能未完成。
-**Basis:** `direct:` README Known Limitations 表格标明 macOS/Linux Live2D 为 Deferred；`src/Live2D/Live2D/MetalNativeRenderPath.cpp` 文件已存在；策略方案"现代能力一等公民内建"
+**Basis:** `direct:` README Known Limitations 表格标明 macOS/Linux Live2D 为 Deferred；`src/live2d/Live2D/MetalNativeRenderPath.cpp` 文件已存在；策略方案"现代能力一等公民内建"
 **Rationale:** 策略核心承诺是跨平台现代能力——核心用户群"需要Live2D+3D"在macOS/Linux上目前无法获得Live2D，这直接违反"一等公民"声明。文件已存在说明工作已有开端，属于"完成而非开始"。
 **Downsides:** Cubism SDK 在不同平台的编译链接配置可能复杂；Metal shader 和 OpenGL shader 的调试周期长
 **Confidence:** 75%

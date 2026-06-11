@@ -1,10 +1,10 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../Render/IRenderDevice.h"
+#include "../render/IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <cstdio>
 #include <cstring>

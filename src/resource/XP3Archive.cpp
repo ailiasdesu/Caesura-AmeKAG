@@ -1,4 +1,4 @@
-#include "Resource/XP3Archive.h"
+ï»¿#include "resource/XP3Archive.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -381,7 +381,7 @@ std::vector<XP3Archive::FileEntry> XP3Archive::list(const std::string& xp3File) 
     size_t indexRawSize = raw.size() - (size_t)indexOff;
     if (indexOff >= raw.size() || indexRawSize == 0) return {};
 
-    // M1: prevent decompression bomb (cap at 256 MB) ¡ª same as unpack()
+    // M1: prevent decompression bomb (cap at 256 MB) ï¿½ï¿½ same as unpack()
     constexpr size_t kMaxIndexSize = 256 * 1024 * 1024;
     if (indexRawSize > kMaxIndexSize) return {};
     size_t estimateOut = indexRawSize * 4;

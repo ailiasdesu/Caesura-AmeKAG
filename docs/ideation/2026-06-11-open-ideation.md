@@ -1,4 +1,4 @@
----
+﻿---
 date: 2026-06-11
 topic: open-ideation
 focus: surprise-me
@@ -73,7 +73,7 @@ mode: repo-grounded
 
 **Description:** Live2D 当前仅 Windows 可用 (README 标注 macOS/Linux "Deferred")。实现 Metal 渲染路径 (macOS) 和 OpenGL 渲染路径 (Linux)，使 Live2D 成为真正的跨平台一等公民。引擎已有 ILive2DRenderPath 接口和 MetalNativeRenderPath.cpp / OpenGLSharedRenderPath.cpp 文件。
 
-**Basis:** `direct:` README Known Limitations 表格标明 macOS/Linux Live2D 为 Deferred；`src/Live2D/Live2D/MetalNativeRenderPath.cpp` 文件已存在；策略方案"现代能力一等公民内建"
+**Basis:** `direct:` README Known Limitations 表格标明 macOS/Linux Live2D 为 Deferred；`src/live2d/Live2D/MetalNativeRenderPath.cpp` 文件已存在；策略方案"现代能力一等公民内建"
 
 **Rationale:** 策略核心承诺是跨平台现代能力——核心用户群"需要Live2D+3D"在macOS/Linux上目前无法获得Live2D，这直接违反"一等公民"声明。文件已存在说明工作已有开端。
 

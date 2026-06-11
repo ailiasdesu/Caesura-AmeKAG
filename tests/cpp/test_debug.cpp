@@ -1,6 +1,6 @@
-#include "doctest.h"
-#include "Debug/HotReload.h"
-#include "Debug/DebugProtocol.h"
+﻿#include "doctest.h"
+#include "debug/HotReload.h"
+#include "debug/DebugProtocol.h"
 
 extern "C" {
 #include <lua.h>

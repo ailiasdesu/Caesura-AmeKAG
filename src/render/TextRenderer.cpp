@@ -1,4 +1,4 @@
-#include "TextRenderer.h"
+﻿#include "TextRenderer.h"
 #include "IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -9,7 +9,7 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include "Render/FreeTypeContext.h"
+#include "render/FreeTypeContext.h"
 
 namespace Caesura {
 

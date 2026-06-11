@@ -4,10 +4,10 @@
 }
 #include "UnifiedBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../Audio/api/IAudioBackend.h"
+#include "../audio/api/IAudioBackend.h"
 #include "VFXBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../MiniGame/api/IMiniGameBackend.h"
+#include "../minigame/api/IMiniGameBackend.h"
 #include <cstdio>
 #include <cstring>
 

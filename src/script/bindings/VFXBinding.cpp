@@ -1,11 +1,11 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "VFXBinding.h"
 #include "../di/BackendRegistry.h"
 #include "../di/SandboxQuota.h"
-#include "../Render/IRenderDevice.h"
+#include "../render/IRenderDevice.h"
 #include "../di/BackendRegistry.h"
 #include <cstdio>
 

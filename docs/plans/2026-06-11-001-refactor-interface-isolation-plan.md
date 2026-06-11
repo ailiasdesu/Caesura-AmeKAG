@@ -1,4 +1,4 @@
----
+﻿---
 title: 引擎模块接口隔离实施规划
 type: refactor
 status: active
@@ -77,7 +77,7 @@ Traceable to `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` (
 ### U3. Audio→Scripting decoupling (Step 2)
 
 - **Goal:** SoLoudAudioEngine.cpp 不再 include `LuaManager.h` 和 `Engine.h`。音频事件通过 `IAudioBackend::setEventCallback` 回调上报，回调注册在 main.cpp 完成。
-- **Files:** `src/Core/IAudioBackend.h`, `src/Audio/SoLoudAudioEngine.h`, `src/Audio/SoLoudAudioEngine.cpp`, `src/main.cpp`
+- **Files:** `src/Core/IAudioBackend.h`, `src/audio/SoLoudAudioEngine.h`, `src/audio/SoLoudAudioEngine.cpp`, `src/main.cpp`
 - **Pattern:** 回调接口模式。IAudioBackend 新增纯虚方法 `setEventCallback(ScriptCallback cb)` 或通过 `std::function` 实现。参考 BackendRegistry 中已有的事件通知模式。
 - **Test Scenarios:**
   - 音频播放结束触发回调，Lua 层接收到 `audio_end` 事件且行为不变。
@@ -88,7 +88,7 @@ Traceable to `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` (
 ### U2. Core↔Render decoupling (Step 1)
 
 - **Goal:** `Engine.h` 不再 include `BgfxRenderDevice.h`。BgfxRenderDevice 创建移至 main.cpp，通过 `EngineConfig.render` 注入。
-- **Files:** `src/Core/Engine.h`, `src/Core/Engine.cpp`, `src/main.cpp`, `src/Render/BgfxRenderDevice.h`
+- **Files:** `src/Core/Engine.h`, `src/Core/Engine.cpp`, `src/main.cpp`, `src/render/BgfxRenderDevice.h`
 - **Pattern:** main.cpp 中 `auto render = std::make_unique<BgfxRenderDevice>()`，init 后传入 EngineConfig。Engine 通过 `IRenderDevice*` 持有，不再直接构造 BgfxRenderDevice。这是组合根模式的首次应用，后续模块套用同一模板。
 - **Test Scenarios:**
   - `main.cpp` 构造 BgfxRenderDevice 并注入 Engine，渲染行为不变（Demo 场景正常显示）。
@@ -99,12 +99,12 @@ Traceable to `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` (
 ### U4. Render→Core decoupling (Step 3)
 
 - **Goal:** `BgfxRenderDevice.cpp` 不再 include `Engine.h`。渲染层所需运行时数据通过注入接口获取。
-- **Files:** `src/Render/BgfxRenderDevice.cpp`, `src/Render/BgfxRenderDevice.h`, `src/Core/Engine.h`
+- **Files:** `src/render/BgfxRenderDevice.cpp`, `src/render/BgfxRenderDevice.h`, `src/Core/Engine.h`
 - **Pattern:** 当前 BgfxRenderDevice 依赖 Engine.h 获取帧时间戳（TDR 检测）和沙箱配额。将帧时间戳通过 `setFrameTick(uint64_t)` setter 传入，沙箱配额已通过 SandboxQuota 接口可用。移除 include 后若发现其他隐蔽依赖逐个注入。
 - **Test Scenarios:**
   - TDR 检测仍正常工作（长时间帧触发 GPU 重置）。
   - 沙箱配额检查行为不变。
-  - 编译边界验证：`rg '#include.*Engine.h' src/Render/` 返回空。
+  - 编译边界验证：`rg '#include.*Engine.h' src/render/` 返回空。
 - **Verification:** 构建通过，138 测试全绿。
 
 ### U5. Scripting de-spiderweb (Step 4)
@@ -121,18 +121,18 @@ Traceable to `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` (
 ### U6. CARC↔Resource bidirectional decoupling (Step 5)
 
 - **Goal:** 消除 CARC（`CARCReader`, `CarcAssetProvider`）与 Resource（`AssetManager`, `IAssetProvider`）之间的双向 include。
-- **Files:** `src/CARC/CarcAssetProvider.h`, `src/CARC/CarcAssetProvider.cpp`, `src/Resource/AssetManager.h`, `src/Resource/AssetManager.cpp`, `src/Resource/ProviderChain.h`
+- **Files:** `src/CARC/CarcAssetProvider.h`, `src/CARC/CarcAssetProvider.cpp`, `src/resource/AssetManager.h`, `src/resource/AssetManager.cpp`, `src/resource/ProviderChain.h`
 - **Pattern:** CarcAssetProvider 当前 include `Resource/IAssetProvider.h`（通过 ProviderChain 已桥接），AssetManager include `CARC/CARCReader.h` 和 `CARC/CarcAssetProvider.h`。将 AssetManager 对 CARC 的具体依赖替换为通过 IAssetProvider 抽象接口和 ProviderChain 间接访问。ProviderChain 作为中介持有 CarcAssetProvider 实例并向上暴露 IAssetProvider 接口。
 - **Test Scenarios:**
   - CARC 归档文件正常加载（Reader/Writer 功能不变）。
   - 资产链（Dir → XP3 → CARC）正常解析。
   - DeltaCARC 增量更新功能不变。
-- **Verification:** 构建通过，138 测试全绿。`rg '#include.*CARC' src/Resource/ | rg -v 'CarcAssetProvider'` 返回空（仅 ProviderChain 引入 CarcAssetProvider.h）。Resource 模块不再直接 include CARC 头文件。
+- **Verification:** 构建通过，138 测试全绿。`rg '#include.*CARC' src/resource/ | rg -v 'CarcAssetProvider'` 返回空（仅 ProviderChain 引入 CarcAssetProvider.h）。Resource 模块不再直接 include CARC 头文件。
 
 ### U7. BgfxRenderDevice split (Step 6)
 
 - **Goal:** 将 1170 行的 BgfxRenderDevice 拆分为 5 个编译单元。
-- **Files:** `src/Render/BgfxDeviceCore.h/.cpp` (new, ~300 行), `src/Render/BgfxShaderManager.h/.cpp` (new, ~150 行), `src/Render/BgfxDraw.h/.cpp` (new, ~450 行), `src/Render/BgfxDebugCallback.h/.cpp` (new, ~50 行), `src/Render/BgfxRenderDevice.h/.cpp` (修改，退化为门面)
+- **Files:** `src/render/BgfxDeviceCore.h/.cpp` (new, ~300 行), `src/render/BgfxShaderManager.h/.cpp` (new, ~150 行), `src/render/BgfxDraw.h/.cpp` (new, ~450 行), `src/render/BgfxDebugCallback.h/.cpp` (new, ~50 行), `src/render/BgfxRenderDevice.h/.cpp` (修改，退化为门面)
 - **Pattern:** 按抽离顺序执行：
   1. BgfxShaderManager — 内嵌 shader 编译 (`initEmbeddedShaders`, `buildBgfxShader`) 和所有 ProgramHandle/UniformHandle 存储。纯资源管理，无正向依赖。
   2. BgfxDeviceCore — init/shutdown/resize/frame loop/view 设置/RTT 管理。持有画布尺寸和 m_rttMap。依赖 BgfxShaderManager。
@@ -177,7 +177,7 @@ Traceable to `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` (
 - `src/Core/Engine.cpp` — Engine::init() 构造序列
 - `src/Core/BackendRegistry.h` — DI 容器模式
 - `src/Core/IPlatformBackend.h` — 抽象接口参考风格
-- `src/Render/BgfxRenderDevice.cpp` — 关注点拆分分析（1170 行，按函数边界 4 路切分）
+- `src/render/BgfxRenderDevice.cpp` — 关注点拆分分析（1170 行，按函数边界 4 路切分）
 - `src/main.cpp` — 当前 Engine 构造模式
-- `src/Audio/SoLoudAudioEngine.cpp` — Audio→Scripting 越层引用点
+- `src/audio/SoLoudAudioEngine.cpp` — Audio→Scripting 越层引用点
 - `docs/brainstorms/2026-06-11-interface-isolation-requirements.md` — 上游需求文档
