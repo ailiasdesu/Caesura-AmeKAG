@@ -1,4 +1,5 @@
-﻿ #include "BgfxRenderDevice.h"
+ #include "BgfxRenderDevice.h"
+#include "BgfxDebugCallback.h"
 #include "ShaderCache.h"
 #include "Core/Engine.h"
 #include <bgfx/bgfx.h>
@@ -44,12 +45,12 @@ public:
     void captureFrame(const void*, uint32_t) override {}
 };
 
-static BgfxDebugCallback s_debugCallback;
+static BgfxDebugCallback g_bgfxDebugCallback;
 
 
 // -- Shutdown coordination: called by Engine::shutdown() before GPU teardown --
 void setBgfxShuttingDown(bool shuttingDown) {
-    s_debugCallback.m_shuttingDown = shuttingDown;
+    g_bgfxDebugCallback.m_shuttingDown = shuttingDown;
 }
 
 namespace Caesura {
@@ -254,7 +255,7 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     // Enable debug text for engine HUD overlay
 
     initParams.profile  = false;
-    initParams.callback = &s_debugCallback;
+    initParams.callback = &g_bgfxDebugCallback;
 
     printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
     if (!bgfx::init(initParams)) {
@@ -351,7 +352,7 @@ void BgfxRenderDevice::shutdown() {
     }
 
     // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
-    s_debugCallback.m_shuttingDown = true;
+    g_bgfxDebugCallback.m_shuttingDown = true;
 
     // 4. Destroy GPU context
     bgfx::shutdown();
