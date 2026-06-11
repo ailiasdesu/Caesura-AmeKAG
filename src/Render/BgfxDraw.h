@@ -3,6 +3,7 @@
 #include <bgfx/bgfx.h>
 #include <vector>
 #include "IRenderDevice.h"
+#include "BgfxQuadBatch.h"
 #include <cstdint>
 
 namespace Caesura {
@@ -36,10 +37,6 @@ public:
     BgfxDraw& operator=(const BgfxDraw&) = delete;
 
     void init(DrawState* state);
-
-    void beginBatch();
-    void flushBatch();
-
     void blitTexture(uint16_t targetView, uint32_t textureId, float x, float y, float w, float h, uint8_t opacity);
     void blitTexture(uint16_t targetView, bgfx::TextureHandle tex, float x, float y, float w, float h, uint8_t opacity);
 
@@ -59,6 +56,7 @@ public:
 
 private:
     DrawState* m_state = nullptr;
+    std::unique_ptr<BgfxQuadBatch> m_quadBatch;
 };
 
 } // namespace Caesura
