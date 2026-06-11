@@ -322,8 +322,8 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
 
 void BgfxDraw::fillViewport(ViewportHandle handle,
                                      uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    auto it = m_state->device->rttMap().find(handle.id);
-    if (it == m_state->device->rttMap().end() || !bgfx::isValid(it->second.fb)) return;
+    auto it = /* use DeviceCore API */.find(handle.id);
+    if (it == /* use DeviceCore API */.end() || !bgfx::isValid(it->second.fb)) return;
 
     uint16_t vpView = it->second.viewId;
     bgfx::setViewFrameBuffer(vpView, it->second.fb);
