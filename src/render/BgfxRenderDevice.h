@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "IRenderDevice.h"
 #include "BgfxShaderManager.h"
@@ -44,8 +44,8 @@ public:
     void blitViewport(ViewportHandle handle, uint16_t targetView,
                       float x, float y, float w, float h) override;
     bgfx::TextureHandle getViewportTexture(ViewportHandle handle) override;
-    int getBackbufferWidth() const override { return m_deviceCore ? m_deviceCore->getWidth() : 0; }
-    int getBackbufferHeight() const override { return m_deviceCore ? m_deviceCore->getHeight() : 0; }
+    int getBackbufferWidth() const override { return m_deviceCore ? m_deviceCore->getWidth() : m_width; }
+    int getBackbufferHeight() const override { return m_deviceCore ? m_deviceCore->getHeight() : m_height; }
 
     // -- Stretch Blit / Affine Blit (transform.lua GPU path) ----------
     void stretchBlt(uint16_t targetView, uint32_t dstTexId,

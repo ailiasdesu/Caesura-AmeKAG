@@ -1,4 +1,4 @@
- #include "BgfxRenderDevice.h"
+﻿ #include "BgfxRenderDevice.h"
 #include "BgfxDebugCallback.h"
 #include "ShaderCache.h"
 #include "../di/thread/ThreadAssert.h"
@@ -78,7 +78,7 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
 void BgfxRenderDevice::resize(int width, int height) { m_deviceCore->resize(width, height); }
 
 
-void BgfxRenderDevice::shutdown() { if (m_textRenderer) m_textRenderer.reset(); m_shaders.reset(); m_deviceCore->shutdown(); }
+void BgfxRenderDevice::shutdown() { if (m_textRenderer) m_textRenderer.reset(); m_shaders.reset(); if (m_deviceCore) m_deviceCore->shutdown(); }
 
 
 
