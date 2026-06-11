@@ -12,6 +12,7 @@
 #include "../live2d/IAnimationBackend.h"
 #include "../input/api/IInputRouter.h"
 #include "../di/api/ITextureBudget.h"
+#include "SandboxQuota.h"
 #include "../render/api/ILayerManager.h"
 #include <unordered_map>
 #include <string>
@@ -39,6 +40,12 @@ public:
     void setAudioBackend(IAudioBackend& backend);
     void setPlatformBackend(IPlatformBackend& backend);
     void setInputRouter(IInputRouter* router);
+    void setLuaState(lua_State* L) { m_luaState = L; }
+
+    // -- SandboxQuota wrappers ---------------------------------------------
+    bool tryAlloc(const char* kind) { return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : false; }
+    void release(const char* kind) { if (m_luaState) SandboxQuota::release(m_luaState, kind); }
+    lua_State* getLuaState() { return m_luaState; }
     void setMiniGameBackend(IMiniGameBackend* backend);
     IMiniGameBackend* getMiniGameBackend() { return m_miniGameBackend; }
 
@@ -102,6 +109,7 @@ public:
 private:
     BackendRegistry() = default;
 
+    lua_State*         m_luaState        = nullptr;
     IRenderDevice*    m_renderDevice    = nullptr;
     IAudioBackend*    m_audioBackend    = nullptr;
     IPlatformBackend* m_platformBackend = nullptr;

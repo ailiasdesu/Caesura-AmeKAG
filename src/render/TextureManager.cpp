@@ -10,7 +10,6 @@
 #include "../di/BackendRegistry.h"
 #include "../di/thread/ThreadAssert.h"
 #include "../script/vm/LuaManager.h"
-#include "../di/SandboxQuota.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../external/stb/stb_image.h"
 
@@ -263,7 +262,7 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     m_cache[id] = tex;
     checkBudget(id, info.width, info.height);
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
+    BackendRegistry::instance().tryAlloc("textures");
     return id;
 }
 
@@ -292,7 +291,7 @@ uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, ui
     } else {
         printf("[TextureManager] Loaded from RGBA -> id=%u\n", id);
     }
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
+    BackendRegistry::instance().tryAlloc("textures");
     return id;
 }
 
@@ -317,7 +316,7 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
     } else {
         printf("[TextureManager] Loaded from memory -> id=%u\n", id);
     }
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
+    BackendRegistry::instance().tryAlloc("textures");
     return id;
 }
 
@@ -346,7 +345,7 @@ uint32_t TextureManager::registerTexture(bgfx::TextureHandle tex) {
     uint32_t id = m_nextId++;
     m_cache[id] = tex;
     checkBudget(id, 256, 256); // assume default 256x256
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "textures");
+    BackendRegistry::instance().tryAlloc("textures");
     return id;
 }
 
@@ -361,7 +360,7 @@ void TextureManager::destroyTexture(uint32_t id) {
             bgfx::destroy(it->second);
         untrackTexture(id);
         m_cache.erase(it);
-        SandboxQuota::release(LuaManager::instance().state(), "textures");
+        BackendRegistry::instance().release("textures");
         printf("[TextureManager] Texture %u destroyed.\n", id);
     }
 }

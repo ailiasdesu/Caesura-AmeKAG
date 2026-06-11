@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
             lua_getfield(L, -1, "dev_mode");
             bool devMode = lua_toboolean(L, -1) != 0;
             lua_pop(L, 1);
-            Caesura::TextureManager::instance().setDevMode(devMode);
+            Caesura::BackendRegistry::instance().getTextureManager()->setDevMode(devMode);
         }
         lua_pop(L, 1);
     }

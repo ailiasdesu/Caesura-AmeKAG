@@ -4,7 +4,6 @@
 }
 #include "VFXBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../di/SandboxQuota.h"
 #include "../render/IRenderDevice.h"
 #include "../render/ParticleSystem.h"
 #include "../di/BackendRegistry.h"
@@ -81,7 +80,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
 
     int id = BackendRegistry::instance().getParticleSystem()->createEmitter(cfg);
     lua_pushinteger(L, id);
-    SandboxQuota::tryAlloc(L, "particles_emitters");
+    BackendRegistry::instance().tryAlloc("particles_emitters");
     return 1;
 }
 
@@ -90,7 +89,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
 static int lua_VFX_particles_destroy_emitter(lua_State* L) {
     int id = (int)luaL_checkinteger(L, 1);
     BackendRegistry::instance().getParticleSystem()->destroyEmitter(id);
-    SandboxQuota::release(L, "particles_emitters");
+    BackendRegistry::instance().release("particles_emitters");
     lua_pushboolean(L, 1);
     return 1;
 }

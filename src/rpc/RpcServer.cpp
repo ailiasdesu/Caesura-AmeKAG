@@ -6,6 +6,7 @@
 
 #include "RpcServer.h"
 #include "../script/vm/LuaManager.h"
+#include "../di/BackendRegistry.h"
 
 extern "C" {
 #include <lua.h>
@@ -165,7 +166,7 @@ std::string RpcServer::handlePing(int id) {
 }
 
 std::string RpcServer::handleRun(int id, const std::string& script) {
-    lua_State* L = m_L ? m_L : LuaManager::instance().state();
+    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
     if (!L) {
         std::ostringstream err;
         err << "{\"id\":" << id << ",\"error\":\"Lua not initialized\"}";
@@ -205,7 +206,7 @@ std::string RpcServer::handleRun(int id, const std::string& script) {
 }
 
 std::string RpcServer::handleStop(int id) {
-    lua_State* L = m_L ? m_L : LuaManager::instance().state();
+    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
     if (L) {
         lua_pushboolean(L, 1);
         lua_setglobal(L, "_CAESURA_QUIT");
@@ -258,7 +259,7 @@ std::string RpcServer::handleAssets(int id, const std::string& type) {
 }
 
 std::string RpcServer::handleEval(int id, const std::string& code) {
-    lua_State* L = m_L ? m_L : LuaManager::instance().state();
+    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
     if (!L) {
         std::ostringstream err;
         err << "{\"id\":" << id << ",\"error\":\"Lua not initialized\"}";
@@ -312,7 +313,7 @@ std::string RpcServer::handleGetFrame(int id, int w, int h) {
 }
 
 std::string RpcServer::handleGetState(int id) {
-    lua_State* L = m_L ? m_L : LuaManager::instance().state();
+    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"state\":{";
 

@@ -1,10 +1,9 @@
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+﻿#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../external/stb/stb_image_write.h"
 #include "RTTManager.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdio>
-#include "../di/SandboxQuota.h"
 #include "../script/vm/LuaManager.h"
 
 namespace Caesura {

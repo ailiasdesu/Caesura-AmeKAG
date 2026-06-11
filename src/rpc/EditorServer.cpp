@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- EditorServer implementation (Track 4)
 // ===========================================================================
 
@@ -11,7 +11,7 @@ extern "C" {
 }
 
 #include "../di/BackendRegistry.h"
-#include "../entry/Engine.h"
+#include "../script/vm/LuaManager.h"
 #include "../script/vm/LuaManager.h"
 #include <cstdio>
 #include <ctime>
@@ -177,7 +177,7 @@ void EditorServer::serverLoop(int port) {
             return;
         }
 
-        lua_State* L = m_L ? m_L : LuaManager::instance().state();
+        lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
         if (!L) {
             res.set_content("{\"error\":\"Lua not initialized\"}", "application/json");
             res.status = 500;
@@ -215,7 +215,7 @@ void EditorServer::serverLoop(int port) {
     // POST /api/stop -- stop execution
     // ---------------------------------------------------------------------
     svr.Post("/api/stop", [this](const httplib::Request&, httplib::Response& res) {
-        lua_State* L = m_L ? m_L : LuaManager::instance().state();
+        lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
         if (L) {
             lua_pushboolean(L, 1);
             lua_setglobal(L, "_CAESURA_QUIT");

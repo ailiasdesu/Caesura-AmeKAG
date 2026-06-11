@@ -180,6 +180,7 @@ bool Engine::init() {
 
     // Phase G8-U1: install lua_Alloc hook for memory monitoring
     lua_setallocf(m_lua->state(), s_luaAllocFn, m_lua->state());
+    BackendRegistry::instance().setLuaState(m_lua->state());
 
     BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
 
