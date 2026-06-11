@@ -2,6 +2,7 @@
 
 #include "IRenderDevice.h"
 #include "BgfxShaderManager.h"
+#include "BgfxDeviceCore.h"
 #include "TextRenderer.h"
 #include <memory>
 #include <bgfx/bgfx.h>
@@ -19,8 +20,8 @@ public:
     BgfxRenderDevice(const BgfxRenderDevice&) = delete;
     BgfxRenderDevice& operator=(const BgfxRenderDevice&) = delete;
 
-    static bool setPreferredBackend(const char* name);
-    const char* getBackendName() const;
+    static bool setPreferredBackend(const char* name) { return BgfxDeviceCore::setPreferredBackend(name); }
+    const char* getBackendName() const { return m_deviceCore ? m_deviceCore->getBackendName() : ""; }
 
     bool init(void* nativeWindowHandle, int width, int height) override;
     void resize(int width, int height) override;
@@ -42,8 +43,8 @@ public:
     void blitViewport(ViewportHandle handle, uint16_t targetView,
                       float x, float y, float w, float h) override;
     bgfx::TextureHandle getViewportTexture(ViewportHandle handle) override;
-    int getBackbufferWidth() const override  { return m_width; }
-    int getBackbufferHeight() const override { return m_height; }
+    int getBackbufferWidth() const override { return m_deviceCore ? m_deviceCore->getWidth() : 0; }
+    int getBackbufferHeight() const override { return m_deviceCore ? m_deviceCore->getHeight() : 0; }
 
     // -- Stretch Blit / Affine Blit (transform.lua GPU path) ----------
     void stretchBlt(uint16_t targetView, uint32_t dstTexId,
@@ -98,8 +99,8 @@ public:
 
 
 private:
-    void initEmbeddedShaders();
-    void setupDefaultViews();
+    // initEmbeddedShaders → BgfxShaderManager
+    // setupDefaultViews → BgfxDeviceCore
 
     int m_width  = 1280;
     int m_height = 720;
@@ -107,6 +108,7 @@ private:
 
     bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
+    std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
 
     struct RTTEntry {
         bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
