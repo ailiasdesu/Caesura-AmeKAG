@@ -3,13 +3,13 @@ extern "C" {
 #include <lauxlib.h>
 #include <lualib.h>
 }
-#include "Core/Engine.h"
+#include "entry/Engine.h"
 #include "Render/TextureManager.h"
 #include "Scripting/LuaManager.h"
 #include <cstdio>
 #include <string>
 #include "Carc/CARCReader.h"
-#include "Core/RpcServer.h"
+#include "rpc/RpcServer.h"
 #include <thread>
 #include <atomic>
 

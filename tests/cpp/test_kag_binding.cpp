@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "Core/Engine.h"
+#include "doctest.h"
+#include "entry/Engine.h"
 #include "Scripting/LuaManager.h"
 #include "Scripting/KAGBinding.h"
 #include "Scripting/RenderBinding.h"

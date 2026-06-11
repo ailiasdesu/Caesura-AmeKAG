@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Core/EngineConfig.h"
-#include "Core/IPlatformBackend.h"
+#include "entry/EngineConfig.h"
+#include "platform/api/IPlatformBackend.h"
 #include "di/thread/ThreadAssert.h"
 #include <memory>
 #include <thread>

@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "Core/ErrorUI.h"
+#include "doctest.h"
+#include "entry/ErrorUI.h"
 
 using namespace Caesura;
 

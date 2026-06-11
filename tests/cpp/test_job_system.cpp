@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "Core/JobSystem.h"
-#include "Core/Engine.h"
+#include "job/JobSystem.h"
+#include "entry/Engine.h"
 #include <atomic>
 #include <chrono>
 #include <thread>

@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "Core/MobileAdapter.h"
+#include "doctest.h"
+#include "platform/MobileAdapter.h"
 
 using namespace Caesura;
 

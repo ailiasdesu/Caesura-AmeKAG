@@ -1,4 +1,4 @@
-﻿#include <cstdio>
+#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <vector>
@@ -8,7 +8,7 @@
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
 #include "../Debug/DebugManager.h"
-#include "../Core/JobSystem.h"
+#include "../job/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
 extern "C" {

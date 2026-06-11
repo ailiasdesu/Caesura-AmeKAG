@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define WIN32_LEAN_AND_MEAN
 #include "doctest.h"
-#include "Core/Engine.h"
+#include "entry/Engine.h"
 #include <thread>
 #ifdef _MSC_VER
 #include <crtdbg.h>

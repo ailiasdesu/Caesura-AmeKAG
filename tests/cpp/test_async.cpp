@@ -1,7 +1,7 @@
 #include "doctest.h"
-#include "Core/JobSystem.h"
+#include "job/JobSystem.h"
 #include "Resource/AsyncLoader.h"
-#include "Core/Engine.h"
+#include "entry/Engine.h"
 
 using namespace Caesura;
 

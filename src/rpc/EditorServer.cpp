@@ -11,7 +11,7 @@ extern "C" {
 }
 
 #include "../di/BackendRegistry.h"
-#include "../Core/Engine.h"
+#include "../entry/Engine.h"
 #include "../Scripting/LuaManager.h"
 #include <cstdio>
 #include <ctime>

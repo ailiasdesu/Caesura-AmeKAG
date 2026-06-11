@@ -1,7 +1,7 @@
-﻿#include "AsyncLoader.h"
+#include "AsyncLoader.h"
 #include "AssetManager.h"
 #include "ImageDecoder.h"
-#include "../Core/JobSystem.h"
+#include "../job/JobSystem.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <memory>

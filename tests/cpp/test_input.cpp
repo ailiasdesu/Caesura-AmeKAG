@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "Core/InputRouter.h"
+#include "doctest.h"
+#include "input/InputRouter.h"
 #include <SDL3/SDL_events.h>
 
 using namespace Caesura;
