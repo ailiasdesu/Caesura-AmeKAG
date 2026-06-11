@@ -58,9 +58,9 @@ static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     m_shaders = std::make_unique<BgfxShaderManager>();
-    m_shaders->initEmbeddedShaders();
     m_deviceCore = std::make_unique<BgfxDeviceCore>();
     if (!m_deviceCore->init(nativeWindowHandle, width, height)) return false;
+    m_shaders->initEmbeddedShaders();
     m_posTexLayout
         .begin()
         .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
