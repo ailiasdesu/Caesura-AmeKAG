@@ -31,32 +31,32 @@ BgfxRenderDevice::~BgfxRenderDevice() {
 
 
 // -- Draw delegation (extracted to BgfxDraw) -----------------------------
-void BgfxRenderDevice::flushAllRTT()                                        { m_draw->flushAllRTT(); }
-void BgfxRenderDevice::beginBatch()                                         { m_draw->beginBatch(); }
-void BgfxRenderDevice::flushBatch()                                         { m_draw->flushBatch(); }
+void BgfxRenderDevice::flushAllRTT()                                        { flushAllRTT(); }
+void BgfxRenderDevice::beginBatch()                                         { beginBatch(); }
+void BgfxRenderDevice::flushBatch()                                         { flushBatch(); }
 void BgfxRenderDevice::blitViewport(ViewportHandle h, uint16_t v, float x, float y, float w, float h2)
-    { m_draw->blitViewport(h, v, x, y, w, h2); }
+    { blitViewport(h, v, x, y, w, h2); }
 void BgfxRenderDevice::blitTexture(uint16_t v, uint32_t tid, float x, float y, float w, float h, uint8_t o)
-    { m_draw->blitTexture(v, tid, x, y, w, h, o); }
+    { blitTexture(v, tid, x, y, w, h, o); }
 void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, float y, float w, float h, uint8_t o)
-    { m_draw->blitTexture(v, t, x, y, w, h, o); }
+    { blitTexture(v, t, x, y, w, h, o); }
 void BgfxRenderDevice::fillViewport(ViewportHandle h, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-    { m_draw->fillViewport(h, r, g, b, a); }
+    { fillViewport(h, r, g, b, a); }
 void BgfxRenderDevice::stretchBlt(uint16_t v, uint32_t d, float dx, float dy, float dw, float dh,
     uint32_t s, float sx, float sy, float sw, float sh, int f)
-    { m_draw->stretchBlt(v, d, dx, dy, dw, dh, s, sx, sy, sw, sh, f); }
+    { stretchBlt(v, d, dx, dy, dw, dh, s, sx, sy, sw, sh, f); }
 void BgfxRenderDevice::affineBlt(uint16_t v, uint32_t d, float dx, float dy, float dw, float dh,
     uint32_t s, float sx, float sy, float sw, float sh, const float m[6])
-    { m_draw->affineBlt(v, d, dx, dy, dw, dh, s, sx, sy, sw, sh, m); }
+    { affineBlt(v, d, dx, dy, dw, dh, s, sx, sy, sw, sh, m); }
 void BgfxRenderDevice::submitBlend(uint16_t v, bgfx::TextureHandle base, bgfx::TextureHandle blend,
     int mode, float ba, float bla, float ga)
-    { m_draw->submitBlend(v, base, blend, mode, ba, bla, ga); }
+    { submitBlend(v, base, blend, mode, ba, bla, ga); }
 void BgfxRenderDevice::submitTransition(uint16_t v, bgfx::TextureHandle from, bgfx::TextureHandle to,
     bgfx::TextureHandle rule, int method, float progress)
-    { m_draw->submitTransition(v, from, to, rule, method, progress); }
+    { submitTransition(v, from, to, rule, method, progress); }
 void BgfxRenderDevice::submitVFX(uint16_t v, bgfx::TextureHandle src, int effect,
     float fa, float fr, float fg, float fb, float br, float qx, float qy)
-    { m_draw->submitVFX(v, src, effect, fa, fr, fg, fb, br, qx, qy); }
+    { submitVFX(v, src, effect, fa, fr, fg, fb, br, qx, qy); }
 // Backend preference helpers
 // These correspond to the original objective's requirement for explicit
 // DX12 / Metal / WebGPU backend stubs. bgfx handles the actual backend
