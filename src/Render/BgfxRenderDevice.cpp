@@ -1,6 +1,6 @@
-﻿ #include "BgfxRenderDevice.h"
+ #include "BgfxRenderDevice.h"
 #include "ShaderCache.h"
-#include "Core/Engine.h"
+#include "Core/ThreadAssert.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
 #include <bx/math.h>
