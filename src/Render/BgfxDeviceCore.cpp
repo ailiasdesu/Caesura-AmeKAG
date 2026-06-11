@@ -1,5 +1,6 @@
 #include "BgfxDeviceCore.h"
 #include "BgfxShaderManager.h"
+#include "../di/thread/ThreadAssert.h"
 #include "BgfxDebugCallback.h"
 #include <bx/math.h>
 #include <bx/bx.h>
