@@ -171,10 +171,10 @@ set(ENGINE_SOURCES
     src/System/SaveManager.cpp
     src/System/ISaveProvider.cpp
     src/System/SaveBinding.cpp
-    src/CARC/CryptoEngine.cpp
-    src/CARC/CARCReader.cpp
-    src/CARC/CARCWriter.cpp
-    src/CARC/CarcAssetProvider.cpp
+    src/Carc/CryptoEngine.cpp
+    src/Carc/CARCReader.cpp
+    src/Carc/CARCWriter.cpp
+    src/Carc/CarcAssetProvider.cpp
     src/Resource/DirAssetProvider.cpp
     src/Resource/ProviderChain.cpp
     src/Resource/AssetManager.cpp
@@ -184,8 +184,8 @@ set(ENGINE_SOURCES
     src/Debug/HotReload.cpp
     src/Debug/DebugProtocol.cpp
     # Phase 9: Security & Platform
-    src/CARC/CRLManager.cpp
-    src/CARC/DeltaCARC.cpp
+    src/Carc/CRLManager.cpp
+    src/Carc/DeltaCARC.cpp
     src/Core/MobileAdapter.cpp
 )
 
@@ -235,11 +235,11 @@ set(ENGINE_HEADERS
     src/System/SaveManager.h
     src/System/ISaveProvider.h
     src/System/SaveBinding.h
-    src/CARC/CARCFormat.h
-    src/CARC/CryptoEngine.h
-    src/CARC/CARCReader.h
-    src/CARC/CARCWriter.h
-    src/CARC/CarcAssetProvider.h
+    src/Carc/CARCFormat.h
+    src/Carc/CryptoEngine.h
+    src/Carc/CARCReader.h
+    src/Carc/CARCWriter.h
+    src/Carc/CarcAssetProvider.h
     src/Resource/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
@@ -250,8 +250,8 @@ set(ENGINE_HEADERS
     src/Debug/HotReload.h
     src/Debug/DebugProtocol.h
     # Phase 9: Security & Platform
-    src/CARC/CRLManager.h
-    src/CARC/DeltaCARC.h
+    src/Carc/CRLManager.h
+    src/Carc/DeltaCARC.h
     src/Core/MobileAdapter.h
 )
 

@@ -42,11 +42,11 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Core/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/CARC/CryptoEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/CARC/CARCReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/CARC/CARCWriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/CARC/CarcAssetProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/CARC/CRLManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/Carc/CARCWriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/Carc/CarcAssetProvider.cpp
+    ${CMAKE_SOURCE_DIR}/src/Carc/CRLManager.cpp
     ${CMAKE_SOURCE_DIR}/src/System/SaveManager.cpp
     ${CMAKE_SOURCE_DIR}/src/System/SaveBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Resource/DirAssetProvider.cpp
