@@ -322,10 +322,10 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
 
 void BgfxDraw::fillViewport(ViewportHandle handle,
                                      uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    auto it = /* use DeviceCore API */.find(handle.id);
-    if (it == /* use DeviceCore API */.end() || !bgfx::isValid(it->second.fb)) return;
-
-    uint16_t vpView = it->second.viewId;
+    bgfx::FrameBufferHandle fb = m_state->device->getRttFb(handle);
+    if (!bgfx::isValid(fb)) return;
+    uint16_t vpView = BgfxDeviceCore::VIEW_RTT;
+    bgfx::setViewFrameBuffer(vpView, fb);
     bgfx::setViewFrameBuffer(vpView, it->second.fb);
 
     // Create a 1x1 solid-color texture
