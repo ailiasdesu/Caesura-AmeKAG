@@ -230,7 +230,7 @@ set(ENGINE_HEADERS
     src/Render/VideoPlayer.h
     src/Render/TextureManager.h
     src/Render/LayerManager.h
-    src/MiniGame/IMiniGameBackend.h
+    src/MiniGame/api/IMiniGameBackend.h
     src/MiniGame/NullMiniGameBackend.h
     src/MiniGame/BgfxMiniGameBackend.h
     src/MiniGame/MiniMaterial.h
@@ -259,7 +259,7 @@ set(ENGINE_HEADERS
     src/archive/CARCReader.h
     src/archive/CARCWriter.h
     src/archive/CarcAssetProvider.h
-    src/Resource/IAssetProvider.h
+    src/Resource/api/IAssetProvider.h
     src/Resource/DirAssetProvider.h
     src/Resource/ProviderChain.h
     src/Resource/AssetManager.h
