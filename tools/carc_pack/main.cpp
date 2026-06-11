@@ -1,10 +1,10 @@
-// carc_pack.exe ¡ª CARC archive packer
+// carc_pack.exe ï¿½ï¿½ CARC archive packer
 // Usage: carc_pack.exe <input_dir> <output.carc> [public_key_out] [private_key_out]
 //
 // If key paths are omitted, keys are embedded in the archive only.
 // Key files are raw binary (32 bytes public, 64 bytes private).
 
-#include "Carc/CARCWriter.h"
+#include "archive/CARCWriter.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -14,10 +14,10 @@ namespace fs = std::filesystem;
 
 static void printUsage() {
     std::cerr << "Usage: carc_pack.exe <input_dir> <output.carc> [public.key] [private.key]\n"
-              << "  input_dir      ¡ª directory to pack\n"
-              << "  output.carc    ¡ª CARC archive to create\n"
-              << "  public.key     ¡ª (optional) path to save public key\n"
-              << "  private.key    ¡ª (optional) path to save private key\n";
+              << "  input_dir      ï¿½ï¿½ directory to pack\n"
+              << "  output.carc    ï¿½ï¿½ CARC archive to create\n"
+              << "  public.key     ï¿½ï¿½ (optional) path to save public key\n"
+              << "  private.key    ï¿½ï¿½ (optional) path to save private key\n";
 }
 
 static std::string relativePath(const fs::path& filePath, const fs::path& baseDir)
