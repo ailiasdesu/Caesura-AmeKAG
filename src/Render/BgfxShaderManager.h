@@ -13,7 +13,7 @@ public:
     BgfxShaderManager(const BgfxShaderManager&) = delete;
     BgfxShaderManager& operator=(const BgfxShaderManager&) = delete;
 
-    bool initEmbeddedShaders();
+    void initEmbeddedShaders();
 
     bgfx::ProgramHandle getFallbackProgram()    const { return m_fallbackProgram; }
     bgfx::ProgramHandle getBlendProgram()       const { return m_blendProgram; }
