@@ -32,7 +32,7 @@ public:
     void setViewRect(uint16_t v, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void setViewClear(uint16_t v, uint16_t f, uint32_t c, float d, uint8_t s);
     void touch(uint16_t v);
-    void setDebugName(uint16_t v, const char* n);
+    void setDebugName(uint16_t v, const std::string& n);
     ViewportHandle createRenderTarget(int w, int h);
     void destroyRenderTarget(ViewportHandle h);
     bgfx::TextureHandle getViewportTexture(ViewportHandle h);
