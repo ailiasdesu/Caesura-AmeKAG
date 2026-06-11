@@ -55,12 +55,12 @@ int main(int argc, char* argv[]) {
     config.editorMode = editorMode;
 
     // Create all concrete implementations here (composition root)
-    config.platform  = new SDL3PlatformBackend();
-    config.render    = new BgfxRenderDevice();
-    config.audio     = new SoLoudAudioEngine();
-    config.miniGame  = new BgfxMiniGameBackend();
-    config.animation = new NullAnimationBackend();
-    config.steam     = new NullSteamBackend();
+    config.platform  = new Caesura::SDL3PlatformBackend();
+    config.render    = new Caesura::BgfxRenderDevice();
+    config.audio     = new Caesura::SoLoudAudioEngine();
+    config.miniGame  = new Caesura::BgfxMiniGameBackend();
+    config.animation = new Caesura::NullAnimationBackend();
+    config.steam     = new Caesura::NullSteamBackend();
 
     Caesura::Engine engine(config);
 
