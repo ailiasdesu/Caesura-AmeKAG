@@ -280,8 +280,8 @@ void BgfxDeviceCore::flushAllRTT() {
 }
 
 bgfx::FrameBufferHandle BgfxDeviceCore::getRttFb(ViewportHandle handle) {
+    auto it = m_rttMap.find(handle.id);
     if (it != m_rttMap.end()) return it->second.fb;
     return BGFX_INVALID_HANDLE;
-
-
+}
 } // namespace Caesura
