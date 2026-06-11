@@ -37,16 +37,9 @@ const char* BgfxDeviceCore::getBackendName() const {
 }
 
 bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxShaderManager* shaders) {
-    // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
 
-        // -- bgfx platform setup
-        // Register debug callback via bgfx::Init::callback
-
-    // Platform data will be set via initParams.platformData directly
-
-    //                                                     ?bgfx init                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 ?
     bgfx::Init initParams;
     initParams.platformData.nwh = nativeWindowHandle;
     initParams.type     = s_preferredBackend;
@@ -54,65 +47,32 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
     initParams.resolution.width  = uint32_t(width);
     initParams.resolution.height = uint32_t(height);
     initParams.resolution.reset  = BGFX_RESET_VSYNC;
-
-    // Enable debug text for engine HUD overlay
-
     initParams.profile  = false;
     initParams.callback = &g_bgfxDebugCallback;
 
-    printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
     if (!bgfx::init(initParams)) {
-        // Fallback: let bgfx auto-select best renderer
-        const char* preferredName = bgfx::getRendererName(s_preferredBackend);
-        fprintf(stderr, "[BgfxRenderDevice] %s init failed; trying auto-select...\n",
-                preferredName);
         bgfx::shutdown();
         initParams.type = bgfx::RendererType::Count;
-        printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
-    if (!bgfx::init(initParams)) {
-            fprintf(stderr, "[BgfxRenderDevice] Fatal: bgfx::init failed.\n");
+        if (!bgfx::init(initParams)) {
+            fprintf(stderr, "[BgfxDeviceCore] Fatal: bgfx::init failed.\n");
             return false;
         }
     }
 
     const bgfx::Caps* caps = bgfx::getCaps();
-    const char* rendererName = bgfx::getRendererName(caps->rendererType);
-    printf("[BgfxRenderDevice] Renderer: %s (%s)\n", rendererName,
+    printf("[BgfxDeviceCore] Renderer: %s (%s)\n",
+           bgfx::getRendererName(caps->rendererType),
            caps->homogeneousDepth ? "homogeneous" : "non-homogeneous");
 
-
-    // Enable debug text for engine HUD overlay
     bgfx::setDebug(BGFX_DEBUG_TEXT);
-    // -- Set up default views --
     setupDefaultViews(shaders);
-    fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
 
-    //                                                     ?Init embedded shader fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ?
     if (shaders) shaders->initEmbeddedShaders();
 
-    //                                                     ?Explicit View Order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
-        // Enforce: VIEW_RTT (0) -> VIEW_MAIN (1) -> VIEW_DEBUG (2)
     bgfx::ViewId viewOrder[] = { VIEW_RTT, VIEW_MAIN, VIEW_DEBUG, VIEW_TRANSITION };
     bgfx::setViewOrder(0, 4, viewOrder);
 
-    printf("[BgfxRenderDevice] Initialized %dx%d with 3 views (order: RTT -> MAIN -> DEBUG)\n",
-           width, height);
-// m_bgfxInitialized = true; (stays in BgfxRenderDevice)
-    // Pre-create vertex layout and sampler uniform (one-time, not per-frame lazy)
-// m_posTexLayout (stays in BgfxRenderDevice)
-        .begin()
-        .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-        .end();
-    shaders->getDefaultSampler() = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
-
-
-    // Initialize embedded text renderer
-// m_textRenderer = std::make_unique<TextRenderer>(); (stays in BgfxRenderDevice)
-// if (!m_textRenderer->init(this)) { (stays in BgfxRenderDevice)
-        fprintf(stderr, "[BgfxRenderDevice] TextRenderer init failed.\n");
-// m_textRenderer.reset(); (stays in BgfxRenderDevice)
-    }
+    printf("[BgfxDeviceCore] Initialized %dx%d\n", width, height);
     return true;
 }
 
