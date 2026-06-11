@@ -4,7 +4,6 @@
 #include "BgfxShaderManager.h"
 #include "TextRenderer.h"
 #include "BgfxDeviceCore.h"
-#include "BgfxDraw.h"
 #include <memory>
 #include <memory>
 #include <bgfx/bgfx.h>
@@ -76,7 +75,7 @@ public:
     void flushAllRTT() override;
 
     bgfx::ProgramHandle getFallbackProgram() const override { return m_shaders->getFallbackProgram(); }
-    const bgfx::VertexLayout& getPosTexLayout() const { return m_draw->getPosTexLayout(); }
+    const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
     bgfx::UniformHandle getDefaultSampler() const override { return m_shaders->getDefaultSampler(); }
 
     bgfx::ProgramHandle getBlendProgram() const { return m_shaders->getBlendProgram(); }
@@ -111,9 +110,7 @@ private:
     
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
-    std::unique_ptr<BgfxDraw>         m_draw;
-
-    std::unique_ptr<TextRenderer> m_textRenderer;
+        std::unique_ptr<TextRenderer> m_textRenderer;
 
     // Batch protocol (spec [0.3])
     struct BatchQuad {
