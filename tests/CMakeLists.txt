@@ -68,6 +68,8 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/script/bindings/UnifiedBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/TextRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/BgfxRenderDevice.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/BgfxDeviceCore.cpp
+    ${CMAKE_SOURCE_DIR}/src/Render/BgfxDraw.cpp
     /src/Render/BgfxDeviceCore.cpp
     /src/Render/BgfxDraw.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/BgfxShaderManager.cpp
