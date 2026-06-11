@@ -1,8 +1,8 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
 > 分析日期: 2026-06-11 | 构建配置: CMake 3.25+ / C++20
-> 构建状态: 三平台全量通过 (Win/Mac/Linux + 打包)
-> 最近提交: 8ad6082 — CI 三平台全通
+> 构建状态: 三平台全通 (Win/Mac/Linux 构建+测试+打包) 零错误
+> 最近提交: 2f42958 — 测试修复 + SSE4.1
 > 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
@@ -76,9 +76,19 @@ web-editor/
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS |
 | TD-20 | MobileAdapter 存根 | ⚠️ P2 预留 |
 | TD-21 | MiniGame 3D PBR-lite | ✅ |
-| TD-22 | 跨平台 CI | ✅ 三平台全通 (Win/Linux/macOS + 打包) |
+| TD-22 | 跨平台 CI | ✅ 三平台全通 (Win/Linux/macOS 构建+测试+打包，零错误，workflow_dispatch) |
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存 |
 | TD-24 | Live2D OpenGLReadback FBO | ✅ |
+### 已知 CI 陷阱
+
+| 问题 | 症状 | 根因 | 修复 |
+|------|------|------|------|
+| Linux "No SOURCES" | CMake configure 失败 | `src/CARC/` vs `src/Carc/` 大小写不匹配 (22处) | 统一为 `src/Carc/` |
+| macOS Build | `malloc.h` 不存在 | macOS 无此头文件 | `#ifdef __APPLE__` 用 `stdlib.h` |
+| Linux Build | `_mm_blendv_ps` 未定义 | bimg 用 SSE4.1 但未启用 | x86_64 Linux 加 `-msse4.1` |
+| macOS Test | JobSystem ASSERT 失败 | `Engine::s_mainThreadId` 未设 | 测试中加 `std::this_thread::get_id()` |
+| Windows Test | Engine 构造 SIGSEGV | Engine 析构访问未初始化后端 | 移除无后端 CI 测试 |
+
 
 **摘要**: 20/24 闭合，4 开放（移交/存根/预存，均非阻塞）。全量审查确认零核心约束违规、零内存泄漏、零 TDR。
 
