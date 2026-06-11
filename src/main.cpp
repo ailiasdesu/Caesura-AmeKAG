@@ -22,11 +22,54 @@ extern "C" {
 #include "script/vm/LuaManager.h"
 #include <cstdio>
 #include <string>
+#include <string>
 #include "archive/CARCReader.h"
 #include "rpc/RpcServer.h"
 #include <thread>
 #include <atomic>
 
+static std::string discoverScriptDir() {
+    if (FILE* f = fopen("scripts/kag/init.lua", "r")) { fclose(f); return "scripts/"; }
+    if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); return "../../scripts/"; }
+    if (FILE* f = fopen("../../../scripts/kag/init.lua", "r")) { fclose(f); return "../../../scripts/"; }
+    fprintf(stderr, "[main] Warning: Cannot find scripts directory.\n");
+    return "scripts/";
+}
+static void setupLuaPath(Caesura::Engine& engine, const std::string& scriptDir) {
+    lua_State* L = engine.lua().state();
+    if (!L) return;
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "path");
+    std::string currentPath = lua_tostring(L, -1);
+    lua_pop(L, 1);
+    std::string newPath = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + currentPath;
+    lua_pushstring(L, newPath.c_str());
+    lua_setfield(L, -2, "path");
+    lua_pop(L, 1);
+}
+static void validateCarcOnStartup(Caesura::Engine& engine) {
+    lua_State* L = engine.lua().state();
+    if (!L) return;
+    lua_getglobal(L, "config");
+    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
+    lua_getfield(L, -1, "carc_verify_on_startup");
+    bool verifyCarc = lua_toboolean(L, -1) != 0;
+    lua_pop(L, 1);
+    if (!verifyCarc) { lua_pop(L, 1); return; }
+    lua_pop(L, 1);
+
+    printf("[main] CARC startup validation enabled.\n");
+    namespace carc_ns = Caesura::carc;
+    const char* dataFiles[] = {"data.carc", "game.carc", "patch.carc"};
+    for (const char* fname : dataFiles) {
+        carc_ns::CARCReader reader;
+        if (reader.open(fname)) {
+            bool ok = reader.verifySignature();
+            printf("[main] CARC %s: signature %s\n", fname, ok ? "OK" : "FAILED");
+            reader.close();
+        }
+    }
+}
 int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
@@ -277,5 +320,4 @@ if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
     printf("Caesura (AmeKAG) shut down cleanly.\n");
     return 0;
 }
-
 
