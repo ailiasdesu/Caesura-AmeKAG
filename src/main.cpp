@@ -3,15 +3,15 @@ extern "C" {
 #include <lauxlib.h>
 #include <lualib.h>
 }
-#include "render/BgfxRenderDevice.h"
+#include "Render/BgfxRenderDevice.h"
 #include "Audio/SoLoudAudioEngine.h"
 #include "Audio/NullAudioBackend.h"
 #include "platform/SDL3PlatformBackend.h"
 #include "MiniGame/BgfxMiniGameBackend.h"
 #include "MiniGame/NullMiniGameBackend.h"
-#include "../Live2D/NullAnimationBackend.h"
-#include "../Steam/NullSteamBackend.h"
-#include "../Steam/SteamBackend.h"
+#include "Live2D/NullAnimationBackend.h"
+#include "Steam/NullSteamBackend.h"
+#include "Steam/SteamBackend.h"
 #include "di/BackendRegistry.h"
 #include "entry/Engine.h"
 #include "Render/TextureManager.h"
