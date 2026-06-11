@@ -1,6 +1,6 @@
 ﻿// DirAssetProvider -- reads files from a filesystem directory
 #pragma once
-#include "IAssetProvider.h"
+#include "api/IAssetProvider.h"
 #include <string>
 
 namespace caesura {
