@@ -104,9 +104,7 @@ private:
     // initEmbeddedShaders delegated to BgfxShaderManager
     // setupDefaultViews delegated to BgfxDeviceCore
 
-    std::unique_ptr<BgfxDeviceCore> m_deviceCore;
-
-    bgfx::VertexLayout   m_posTexLayout;
+        bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
 
