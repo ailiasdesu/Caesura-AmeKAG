@@ -26,16 +26,7 @@ BgfxRenderDevice::~BgfxRenderDevice() {
 
 
 
-void BgfxDeviceCore::flushAllRTT() {
-    // [10.2.67] Release all GPU-side RTT resources while bgfx context is still alive.
-    // Must be called before bgfx::shutdown().
-    for (auto& [id, entry] : m_deviceCore->rttMap()) {
-        if (bgfx::isValid(entry.fb)) {
-            bgfx::destroy(entry.fb);
-        }
-    }
-    m_deviceCore->rttMap().clear();
-}
+void BgfxRenderDevice::flushAllRTT() { m_deviceCore->flushAllRTT(); }
 
 // ===========================================================================
 //  Batch protocol (spec [0.3]): beginBatch / flushBatch
