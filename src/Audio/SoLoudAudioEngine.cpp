@@ -1,4 +1,5 @@
 #include "SoLoudAudioEngine.h"
+#include "Core/ThreadAssert.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>

@@ -22,6 +22,7 @@ namespace Caesura {
 class SoLoudAudioEngine : public IAudioBackend {
 public:
     SoLoudAudioEngine() = default;
+    void setLuaState(lua_State* L) { m_luaState = L; }
     ~SoLoudAudioEngine() override;
 
     SoLoudAudioEngine(const SoLoudAudioEngine&) = delete;
