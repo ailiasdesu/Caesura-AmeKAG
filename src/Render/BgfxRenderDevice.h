@@ -46,8 +46,8 @@ public:
     void blitViewport(ViewportHandle handle, uint16_t targetView,
                       float x, float y, float w, float h) override;
     bgfx::TextureHandle getViewportTexture(ViewportHandle handle) override;
-    int getBackbufferWidth() const override  { return m_width; }
-    int getBackbufferHeight() const override { return m_height; }
+    int getBackbufferWidth() const override { return m_deviceCore ? m_deviceCore->getWidth() : 0; }
+    int getBackbufferHeight() const override { return m_deviceCore ? m_deviceCore->getHeight() : 0; }
 
     // -- Stretch Blit / Affine Blit (transform.lua GPU path) ----------
     void stretchBlt(uint16_t targetView, uint32_t dstTexId,
@@ -105,22 +105,12 @@ private:
     void initEmbeddedShaders() { m_shaders->initEmbeddedShaders(); }
     void setupDefaultViews();
 
-    int m_width  = 1280;
-    int m_height = 720;
     bool m_bgfxInitialized = false;
 
     
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
 
-    struct RTTEntry {
-        bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
-        bgfx::TextureHandle     tex   = BGFX_INVALID_HANDLE;
-        uint16_t                viewId = VIEW_RTT;
-    };
-
-    uint32_t m_nextHandle = 1;
-    std::unordered_map<uint32_t, RTTEntry> m_rttMap;
     std::unique_ptr<TextRenderer> m_textRenderer;
 
     // Batch protocol (spec [0.3])
