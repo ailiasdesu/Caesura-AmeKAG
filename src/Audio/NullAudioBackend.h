@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../Audio/api/IAudioBackend.h"
 
 namespace Caesura {
@@ -70,3 +70,4 @@ public:
 };
 
 } // namespace Caesura
+

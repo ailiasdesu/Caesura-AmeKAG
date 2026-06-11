@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 struct lua_State;
 #include "../Audio/api/IAudioBackend.h"
 #include <soloud.h>
@@ -110,6 +110,7 @@ private:
 };
 
 } // namespace Caesura
+
 
 
 
