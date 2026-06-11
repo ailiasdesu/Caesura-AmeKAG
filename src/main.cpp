@@ -1,8 +1,18 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 }
+#include "render/BgfxRenderDevice.h"
+#include "Audio/SoLoudAudioEngine.h"
+#include "Audio/NullAudioBackend.h"
+#include "platform/SDL3PlatformBackend.h"
+#include "MiniGame/BgfxMiniGameBackend.h"
+#include "MiniGame/NullMiniGameBackend.h"
+#include "../Live2D/NullAnimationBackend.h"
+#include "../Steam/NullSteamBackend.h"
+#include "../Steam/SteamBackend.h"
+#include "di/BackendRegistry.h"
 #include "entry/Engine.h"
 #include "Render/TextureManager.h"
 #include "script/vm/LuaManager.h"
@@ -37,7 +47,22 @@ int main(int argc, char* argv[]) {
     if (headless) printf("  [HEADLESS MODE]\n");
     printf("============================================\n\n");
 
-    Caesura::Engine engine({});  // default config, init() will populate internally
+    Caesura::EngineConfig config;
+    config.title      = "Caesura (AmeKAG)";
+    config.width      = 1280;
+    config.height     = 720;
+    config.headless   = headless;
+    config.editorMode = editorMode;
+
+    // Create all concrete implementations here (composition root)
+    config.platform  = new SDL3PlatformBackend();
+    config.render    = new BgfxRenderDevice();
+    config.audio     = new SoLoudAudioEngine();
+    config.miniGame  = new BgfxMiniGameBackend();
+    config.animation = new NullAnimationBackend();
+    config.steam     = new NullSteamBackend();
+
+    Caesura::Engine engine(config);
 
     if (!engine.init()) {
         fprintf(stderr, "Failed to initialize engine.\n");

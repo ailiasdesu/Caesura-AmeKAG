@@ -197,7 +197,7 @@ bool Engine::init() {
     }
 
         // -- 3D mini-game backend (bgfx) --
-    m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
+    if (!m_miniGameBackend) m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
