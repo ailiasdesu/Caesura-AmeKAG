@@ -15,7 +15,7 @@ namespace Caesura {
 // Singleton ParticleSystem instance -- managed by VFXBinding lifecycle
 // ===========================================================================
 
-static ParticleSystem BackendRegistry::instance().getParticleSystem();
+static ParticleSystem s_particleSystem;  // owned here, registered in registerVFXBinding()
 static bool s_particlesInitialized = false;
 
 // ===========================================================================
