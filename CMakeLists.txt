@@ -114,7 +114,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) --??no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) ��??no C build needed
 
 # Engine sources
 
@@ -248,69 +248,26 @@ set(ENGINE_HEADERS
     src/Core/MobileAdapter.h
 )
 
+
+# Linux workaround: if ENGINE_SOURCES is empty, gather sources via glob
+if(UNIX AND NOT APPLE)
+  if(NOT ENGINE_SOURCES)
+    message(WARNING "ENGINE_SOURCES empty on Linux — using file(GLOB) workaround")
+    file(GLOB_RECURSE ENGINE_SOURCES
+      "src/*.cpp"
+      "src/*/*.cpp"
+      "src/*/*/*.cpp"
+    )
+    file(GLOB_RECURSE ENGINE_HEADERS
+      "src/*.h"
+      "src/*/*.h"
+      "src/*/*/*.h"
+    )
+  endif()
+endif()
+
 # Executable
-add_executable(${PROJECT_NAME}
-    src/main.cpp
-    src/Core/Engine.cpp
-    src/Core/JobSystem.cpp
-    src/Core/InputRouter.cpp
-    src/Core/BackendRegistry.cpp
-    src/Debug/DebugManager.cpp
-    src/Core/TextureBudget.cpp
-    src/Core/SandboxQuota.cpp
-    src/Core/RpcServer.cpp
-    src/Core/EditorServer.cpp
-    src/Core/ErrorUI.cpp
-    src/Core/SDL3PlatformBackend.cpp
-    src/Resource/XP3Archive.cpp
-    src/Render/BgfxRenderDevice.cpp
-    src/Render/RTTManager.cpp
-    src/Render/EmbeddedShaders.cpp
-    src/Render/EmbeddedShaders_MiniGame.cpp
-    src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
-    src/Render/EmbeddedShaders_MiniGame_Metal.cpp
-    src/Render/TextRenderer.cpp
-    src/Render/ParticleSystem.cpp
-    src/Render/GpuMonitor.cpp
-    src/Render/VideoPlayer.cpp
-    src/Render/TextureManager.cpp
-    src/Render/FreeTypeContext.cpp
-    src/Render/LayerManager.cpp
-    src/MiniGame/NullMiniGameBackend.cpp
-    src/MiniGame/BgfxMiniGameBackend.cpp
-    src/MiniGame/MiniGeometry.cpp
-    src/MiniGame/MiniCollision.cpp
-    src/Live2D/NullAnimationBackend.cpp
-    src/Render/ShaderCache.cpp
-    src/Audio/SoLoudAudioEngine.cpp
-    src/Audio/NullAudioBackend.cpp
-    src/Scripting/LuaManager.cpp
-    src/Scripting/KAGBinding.cpp
-    src/Scripting/GameState.cpp
-    src/Scripting/RenderBinding.cpp
-    src/Scripting/VFXBinding.cpp
-    src/Scripting/DevCoreBinding.cpp
-    src/Scripting/DebugBinding.cpp
-    src/Scripting/UnifiedBinding.cpp
-    src/System/SaveManager.cpp
-    src/System/ISaveProvider.cpp
-    src/System/SaveBinding.cpp
-    src/CARC/CryptoEngine.cpp
-    src/CARC/CARCReader.cpp
-    src/CARC/CARCWriter.cpp
-    src/CARC/CarcAssetProvider.cpp
-    src/Resource/DirAssetProvider.cpp
-    src/Resource/ProviderChain.cpp
-    src/Resource/AssetManager.cpp
-    src/Resource/ImageDecoder.cpp
-    src/Resource/AsyncLoader.cpp
-    src/Debug/HotReload.cpp
-    src/Debug/DebugProtocol.cpp
-    src/CARC/CRLManager.cpp
-    src/CARC/DeltaCARC.cpp
-    src/Core/MobileAdapter.cpp
-    ${ENGINE_HEADERS}
-)
+add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
 # -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
 target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
@@ -414,12 +371,12 @@ option(CAESURA_VIDEO_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_VIDEO_FFMPEG)
     find_package(FFmpeg QUIET COMPONENTS avcodec avformat swscale avutil)
     if(FFmpeg_FOUND)
-        message(STATUS "FFmpeg found -- video decoding enabled")
+        message(STATUS "FFmpeg found �� video decoding enabled")
         target_link_libraries(${PROJECT_NAME} PRIVATE
             FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::avutil)
         target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
     else()
-        message(STATUS "FFmpeg NOT found -- video decoding falls back to pl_mpeg only")
+        message(STATUS "FFmpeg NOT found �� video decoding falls back to pl_mpeg only")
     endif()
 endif()
 
@@ -531,7 +488,7 @@ install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine --??SDL3 + bgfx + SoLoud + Lua 5.4")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine ��??SDL3 + bgfx + SoLoud + Lua 5.4")
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
