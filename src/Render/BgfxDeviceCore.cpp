@@ -84,7 +84,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
     // Enable debug text for engine HUD overlay
     bgfx::setDebug(BGFX_DEBUG_TEXT);
     // -- Set up default views --
-    setupDefaultViews();
+    setupDefaultViews(shaders);
     fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
 
     //                                                     ?Init embedded shader fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ?
@@ -122,7 +122,7 @@ void BgfxDeviceCore::resize(int width, int height) {
     m_width  = width;
     m_height = height;
     bgfx::reset(uint32_t(width), uint32_t(height), BGFX_RESET_VSYNC);
-    setupDefaultViews();
+    setupDefaultViews(shaders);
     fprintf(stderr, "[BgfxRenderDevice] Resized to %dx%d\n", width, height);
 }
 
