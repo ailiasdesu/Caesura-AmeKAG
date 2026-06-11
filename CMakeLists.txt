@@ -144,8 +144,8 @@ set(ENGINE_SOURCES
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
-    src/Render/BgfxDeviceCore.cpp`n    src/Render/BgfxDraw.cpp`n    src/Render/BgfxDebugCallback.cpp
-    src/Render/BgfxShaderManager.cpp
+    src/Render/BgfxDeviceCore.cpp
+    src/Render/BgfxDebugCallback.cpp
     src/Render/BgfxShaderManager.cpp
     src/Render/RTTManager.cpp
     src/Render/EmbeddedShaders.cpp
