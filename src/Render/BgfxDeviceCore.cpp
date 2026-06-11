@@ -37,7 +37,7 @@ const char* BgfxDeviceCore::getBackendName() const {
     return bgfx::getRendererName(bgfx::getCaps()->rendererType);
 }
 
-bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxShaderManager* shaders) {
+bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     m_width  = width;
     m_height = height;
 
@@ -68,7 +68,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
     bgfx::setDebug(BGFX_DEBUG_TEXT);
     setupDefaultViews();
 
-    if (shaders) shaders->initEmbeddedShaders();
+
 
     bgfx::ViewId viewOrder[] = { VIEW_RTT, VIEW_MAIN, VIEW_DEBUG, VIEW_TRANSITION };
     bgfx::setViewOrder(0, 4, viewOrder);
