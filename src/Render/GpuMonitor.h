@@ -23,15 +23,7 @@ const char* gpuQualityName(GpuQuality q);
 
 class GpuMonitor : public IGpuMonitor {
 public:
-    struct FrameMetrics {
-        double gpuTimeMs    = 0.0;   // GPU frame time (bgfx stats)
-        double cpuTimeMs    = 0.0;   // CPU frame time
-        double rollingAvgMs = 0.0;   // Rolling average over window
-        uint32_t frameCount = 0;     // Total frames since init
-        uint32_t overloadFrames = 0; // Frames over budget
-        bool     degraded    = false; // Currently at reduced quality
-        GpuQuality quality   = GpuQuality::HIGH;
-    };
+    // FrameMetrics defined in api/IGpuMonitor.h
 
     GpuMonitor();
     ~GpuMonitor() = default;
