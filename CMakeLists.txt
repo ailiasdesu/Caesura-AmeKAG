@@ -131,17 +131,17 @@ target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 set(ENGINE_SOURCES
     src/main.cpp
-    src/Core/Engine.cpp
-    src/Core/JobSystem.cpp
-    src/Core/InputRouter.cpp
+    src/entry/Engine.cpp
+    src/job/JobSystem.cpp
+    src/input/InputRouter.cpp
     src/di/BackendRegistry.cpp
     src/Debug/DebugManager.cpp
     src/di/TextureBudget.cpp
     src/di/SandboxQuota.cpp
-    src/Core/RpcServer.cpp
-    src/Core/EditorServer.cpp
-    src/Core/ErrorUI.cpp
-    src/Core/SDL3PlatformBackend.cpp
+    src/rpc/RpcServer.cpp
+    src/rpc/EditorServer.cpp
+    src/entry/ErrorUI.cpp
+    src/platform/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
     src/Render/BgfxShaderManager.cpp
@@ -193,22 +193,22 @@ set(ENGINE_SOURCES
     # Phase 9: Security & Platform
     src/Carc/CRLManager.cpp
     src/Carc/DeltaCARC.cpp
-    src/Core/MobileAdapter.cpp
+    src/platform/MobileAdapter.cpp
 )
 
 set(ENGINE_HEADERS
-    src/Core/Engine.h
-    src/Core/JobSystem.h
-    src/Core/InputRouter.h
+    src/entry/Engine.h
+    src/job/JobSystem.h
+    src/input/InputRouter.h
     src/Core/IAudioBackend.h
-    src/Core/IPlatformBackend.h
-    src/Core/SDL3PlatformBackend.h
+    src/platform/api/IPlatformBackend.h
+    src/platform/SDL3PlatformBackend.h
     src/Resource/XP3Archive.h
     src/di/BackendRegistry.h
     src/Resource/ResourceHandle.h
     src/Debug/DebugManager.h
     src/di/TextureBudget.h
-    src/Core/ErrorUI.h
+    src/entry/ErrorUI.h
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h
     src/Render/BgfxShaderManager.h
@@ -262,7 +262,7 @@ set(ENGINE_HEADERS
     # Phase 9: Security & Platform
     src/Carc/CRLManager.h
     src/Carc/DeltaCARC.h
-    src/Core/MobileAdapter.h
+    src/platform/MobileAdapter.h
 )
 
 # Executable

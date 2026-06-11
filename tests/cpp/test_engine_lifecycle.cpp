@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "../src/di/BackendRegistry.h"
 #include "../src/Debug/DebugManager.h"
-#include "../src/Core/JobSystem.h"
+#include "../src/job/JobSystem.h"
 
 using namespace Caesura;
 

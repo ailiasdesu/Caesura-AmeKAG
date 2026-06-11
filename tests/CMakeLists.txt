@@ -36,13 +36,13 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Debug/DebugManager.cpp
     ${CMAKE_SOURCE_DIR}/src/di/TextureBudget.cpp
     ${CMAKE_SOURCE_DIR}/src/di/SandboxQuota.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/RpcServer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/Engine.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/EditorServer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/JobSystem.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/SDL3PlatformBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpc/RpcServer.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/ErrorUI.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/InputRouter.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpc/EditorServer.cpp
+    ${CMAKE_SOURCE_DIR}/src/job/JobSystem.cpp
+    ${CMAKE_SOURCE_DIR}/src/platform/SDL3PlatformBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CryptoEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CARCReader.cpp
     ${CMAKE_SOURCE_DIR}/src/Carc/CARCWriter.cpp
@@ -81,7 +81,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Render/VideoPlayer.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/SoLoudAudioEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/Audio/NullAudioBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/MobileAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/platform/MobileAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/NullMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
