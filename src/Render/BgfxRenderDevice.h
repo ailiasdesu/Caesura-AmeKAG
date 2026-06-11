@@ -76,7 +76,7 @@ public:
     void flushAllRTT() override;
 
     bgfx::ProgramHandle getFallbackProgram() const override { return m_shaders->getFallbackProgram(); }
-    const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
+    const bgfx::VertexLayout& getPosTexLayout() const { return m_draw->getPosTexLayout(); }
     bgfx::UniformHandle getDefaultSampler() const override { return m_shaders->getDefaultSampler(); }
 
     bgfx::ProgramHandle getBlendProgram() const { return m_shaders->getBlendProgram(); }

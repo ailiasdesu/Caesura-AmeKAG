@@ -21,6 +21,7 @@ public:
     BgfxDraw& operator=(const BgfxDraw&) = delete;
 
     void init(BgfxShaderManager* shaders, BgfxDeviceCore* device);
+    const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
     void flushAllRTT();
 
     void beginBatch();
@@ -45,6 +46,7 @@ public:
                    float blurRadius, float quakeX, float quakeY);
 
 private:
+    bgfx::VertexLayout   m_posTexLayout;
     BgfxShaderManager* m_shaders = nullptr;
     BgfxDeviceCore*    m_device  = nullptr;
 
