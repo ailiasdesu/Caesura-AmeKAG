@@ -105,6 +105,7 @@ private:
     int m_height = 720;
     bool m_bgfxInitialized = false;
 
+    bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
 
     struct RTTEntry {
