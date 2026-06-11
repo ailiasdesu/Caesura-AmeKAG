@@ -4,6 +4,7 @@
 #include <vector>
 #include "IRenderDevice.h"
 #include "BgfxQuadBatch.h"
+#include <memory>
 #include <cstdint>
 
 namespace Caesura {
