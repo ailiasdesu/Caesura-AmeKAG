@@ -200,7 +200,7 @@ set(ENGINE_HEADERS
     src/entry/Engine.h
     src/job/JobSystem.h
     src/input/InputRouter.h
-    src/Core/IAudioBackend.h
+    src/Audio/api/IAudioBackend.h
     src/platform/api/IPlatformBackend.h
     src/platform/SDL3PlatformBackend.h
     src/Resource/XP3Archive.h
