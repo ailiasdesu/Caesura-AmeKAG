@@ -110,7 +110,7 @@ bool Engine::init() {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
-    if (!m_config.headless || m_config.editorMode) {
+    if (!m_config.headless || m_config.editorMode || m_config.platform) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed, "SDL3 platform backend init failed.");
@@ -135,7 +135,7 @@ bool Engine::init() {
         BackendRegistry::instance().registerNullBackends();
     }
 
-    if (!m_config.headless || m_config.editorMode) {
+    if (!m_config.headless || m_config.editorMode || m_config.platform) {
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
     ri.backendName = bgfx::getRendererName(caps->rendererType);
@@ -144,7 +144,7 @@ bool Engine::init() {
     DebugManager::instance().setRenderInfo(ri);
     }
 
-    if (!m_config.headless || m_config.editorMode) {
+    if (!m_config.headless || m_config.editorMode || m_config.platform) {
     m_audioBackend = std::make_unique<SoLoudAudioEngine>();
     if (!m_audioBackend->init()) {
     DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed, "Audio backend init failed.");
