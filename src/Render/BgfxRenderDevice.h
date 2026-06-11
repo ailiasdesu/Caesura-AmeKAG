@@ -29,8 +29,6 @@ public:
     
     
     
-    void setViewRect(uint16_t viewId, uint16_t x, uint16_t y, uint16_t width, uint16_t height) override;
-    void setViewClear(uint16_t viewId, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil) override;
     void beginFrame() override;
     void endFrame() override;
     void commit_frame() override;
@@ -111,7 +109,6 @@ private:
 
     
     bgfx::VertexLayout   m_posTexLayout;
-    std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
         std::unique_ptr<TextRenderer> m_textRenderer;
 
