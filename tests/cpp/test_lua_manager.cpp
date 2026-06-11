@@ -1,5 +1,5 @@
 ﻿#include "doctest.h"
-#include "Scripting/LuaManager.h"
+#include "script/vm/LuaManager.h"
 
 extern "C" {
 #include <lua.h>
@@ -62,3 +62,4 @@ TEST_CASE("LuaManager::double init is safe") {
     CHECK(lm.init());  // second call
     CHECK(lm.state() != nullptr);
 }
+

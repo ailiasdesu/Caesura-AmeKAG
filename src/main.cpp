@@ -1,11 +1,11 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 }
 #include "entry/Engine.h"
 #include "Render/TextureManager.h"
-#include "Scripting/LuaManager.h"
+#include "script/vm/LuaManager.h"
 #include <cstdio>
 #include <string>
 #include "Carc/CARCReader.h"
@@ -244,3 +244,4 @@ if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
     printf("Caesura (AmeKAG) shut down cleanly.\n");
     return 0;
 }
+

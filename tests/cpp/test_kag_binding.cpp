@@ -1,7 +1,7 @@
-#include "doctest.h"
+﻿#include "doctest.h"
 #include "entry/Engine.h"
-#include "Scripting/LuaManager.h"
-#include "Scripting/KAGBinding.h"
+#include "script/vm/LuaManager.h"
+#include "script/bindings/KAGBinding.h"
 #include "Scripting/RenderBinding.h"
 #include "Scripting/VFXBinding.h"
 #include "Scripting/DebugBinding.h"
@@ -122,4 +122,5 @@ TEST_CASE("registerUnifiedBackendBinding no-crash") {
     registerUnifiedBackendBinding(L);
     delete lm;
 }
+
 
