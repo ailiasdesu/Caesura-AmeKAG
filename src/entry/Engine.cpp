@@ -4,7 +4,7 @@ extern "C" {
 #include <lualib.h>
 }
 #include "Engine.h"
-#include "InputRouter.h"
+#include "../input/InputRouter.h"
 #include "BackendRegistry.h"
 #include "Debug/DebugManager.h"
 #include "RpcServer.h"
