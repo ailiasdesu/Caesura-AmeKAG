@@ -38,6 +38,8 @@ public:
     BgfxDraw& operator=(const BgfxDraw&) = delete;
 
     void init(DrawState* state);
+    void beginBatch();
+    void flushBatch();
     void blitTexture(uint16_t targetView, uint32_t textureId, float x, float y, float w, float h, uint8_t opacity);
     void blitTexture(uint16_t targetView, bgfx::TextureHandle tex, float x, float y, float w, float h, uint8_t opacity);
 
