@@ -163,7 +163,7 @@ void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
     auto it = m_rttMap.find(handle.id);
     if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
 
-    blitTexture(targetView, it->second.tex, x, y, w, h, 255);
+    blitTexture(targetView, m_deviceCore->getViewportTexture(handle), x, y, w, h, 255);
 }
 
 bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { return m_deviceCore->getViewportTexture(h); }
@@ -171,6 +171,7 @@ bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { ret
 
 
 
+void BgfxRenderDevice::blitTexture(uint16_t v, uint32_t tid, float x, float y, float w, float h, uint8_t o) { m_draw->blitTexture(v,tid,x,y,w,h,o); }
 void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, float y, float w, float h, uint8_t o) { m_draw->blitTexture(v,t,x,y,w,h,o); }
 
 
