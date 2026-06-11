@@ -11,6 +11,7 @@
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "VFXBinding.h"
 #include "../System/SaveBinding.h"
+#include "SteamBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/Engine.h"

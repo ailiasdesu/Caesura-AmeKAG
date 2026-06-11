@@ -4,6 +4,7 @@
 #include "Debug/DebugManager.h"
 #include "MiniGame/IMiniGameBackend.h"
 #include "../Live2D/IAnimationBackend.h"
+#include "../Steam/ISteamBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>
@@ -96,6 +97,7 @@ private:
     float m_autoSaveTimer = 0.0f;
     float m_frameTime = 0.0f;
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
+    std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     // HotReload is a singleton, accessed via HotReload::instance()
 };

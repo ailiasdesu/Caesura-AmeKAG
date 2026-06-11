@@ -373,6 +373,13 @@ if(CAESURA_VIDEO_FFMPEG)
     endif()
 endif()
 
+# -- Steam (optional)
+if(CAESURA_HAS_STEAM)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_STEAM)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${STEAM_INCLUDE_DIR})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${STEAM_LIBRARY})
+endif()
+
 # -- Live2D Cubism animation (optional, proprietary SDK) ---------------------
 option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK download)" OFF)
 

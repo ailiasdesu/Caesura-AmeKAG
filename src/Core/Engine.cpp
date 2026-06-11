@@ -28,6 +28,10 @@ extern "C" {
 #include "Render/TextureManager.h"
 #include "MiniGame/BgfxMiniGameBackend.h"
 #include "../Live2D/NullAnimationBackend.h"
+#include "../Steam/ISteamBackend.h"
+#include "../Steam/SteamBackend.h"
+#include "../Steam/NullSteamBackend.h"
+#include "../Scripting/SteamBinding.h"
 #ifdef CAESURA_HAS_LIVE2D
 #include "../Live2D/Live2D/Live2DBackend.h"
 #include "../Render/BgfxRenderDevice.h"
@@ -62,6 +66,11 @@ Engine::Engine()
     , m_inputRouter(std::make_unique<InputRouter>())
     , m_gpuMonitor(std::make_unique<GpuMonitor>())
     , m_videoPlayer(std::make_unique<VideoPlayer>())
+#ifdef CAESURA_HAS_STEAM
+    , m_steamBackend(std::make_unique<SteamBackend>())
+#else
+    , m_steamBackend(std::make_unique<NullSteamBackend>())
+#endif
     
 {}
 
@@ -171,6 +180,11 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
     JobSystem::instance().init();
     AssetManager::instance().init();
     AsyncLoader::instance().init();
+
+    // Steam init (optional, no-op if SDK not present)
+    if (m_steamBackend->init()) {
+        registerSteamBinding(m_lua->state(), m_steamBackend.get());
+    }
 
         // -- 3D mini-game backend (bgfx) --
     m_miniGameBackend = std::make_unique<BgfxMiniGameBackend>();
@@ -312,6 +326,10 @@ void Engine::run() {
 }
 
 void Engine::processEvents() {
+    // Steam callbacks every frame
+    m_steamBackend->runCallbacks();
+    // Pause input while Steam overlay is active
+    if (m_steamBackend->isOverlayActive()) return;
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
 
@@ -597,6 +615,8 @@ void Engine::shutdown() {
     AsyncLoader::instance().shutdown();
     AssetManager::instance().shutdown();
     JobSystem::instance().shutdown();
+    unregisterSteamBinding(m_steamBackend.get());
+    if (m_steamBackend) m_steamBackend->shutdown();
     if (m_videoPlayer) m_videoPlayer->shutdown();
     if (m_lua) m_lua->shutdown();
     if (m_audioBackend) m_audioBackend->shutdown();

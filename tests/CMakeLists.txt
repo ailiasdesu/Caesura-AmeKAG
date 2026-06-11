@@ -29,6 +29,7 @@ set(TEST_SOURCES
     cpp/test_particle_system.cpp
     cpp/test_engine_lifecycle.cpp
     cpp/test_mini_game.cpp
+    cpp/test_steam.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
@@ -83,6 +84,9 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MiniGame/BgfxMiniGameBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
+    ${CMAKE_SOURCE_DIR}/src/Steam/SteamBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/Scripting/SteamBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/System/CloudSaveProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_Metal.cpp
