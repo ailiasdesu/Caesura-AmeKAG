@@ -1,10 +1,7 @@
-﻿#pragma once
+#pragma once
 
+#include "Core/EngineConfig.h"
 #include "Core/IPlatformBackend.h"
-#include "Debug/DebugManager.h"
-#include "MiniGame/IMiniGameBackend.h"
-#include "../Live2D/IAnimationBackend.h"
-#include "../Steam/ISteamBackend.h"
 #include <memory>
 #include <thread>
 #include <cassert>
@@ -17,7 +14,10 @@ class LuaManager;
 class InputRouter;
 class GpuMonitor;
 class VideoPlayer;
-class HotReload;
+class DebugManager;
+class IMiniGameBackend;
+class IAnimationBackend;
+class ISteamBackend;
 
 // -- Engine -- Top-level engine class --------------------------------------
 // Creates platform backend first, then initializes all subsystems through
@@ -26,18 +26,18 @@ class HotReload;
 
 class Engine {
 public:
-    Engine();
+    Engine(const EngineConfig& config);
     ~Engine();
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    bool init(const char* title, int width, int height, bool headless = false, bool editorMode = false);
+    bool init();
     void run();
     void runRpc();  // stdin/stdout JSON-RPC loop
 
-    bool isHeadless() const { return m_headless; }
-    bool isEditorMode() const { return m_editorMode; }
+    bool isHeadless() const { return m_config.headless; }
+    bool isEditorMode() const { return m_config.editorMode; }
     void renderOneFrame();  // render single frame (for editor/RPC screenshot)
     std::string captureFrameForRpc(int w, int h);
     void quit();
@@ -52,6 +52,8 @@ public:
     InputRouter&  input()         { return *m_inputRouter; }
     GpuMonitor&   gpuMonitor()    { return *m_gpuMonitor; }
     VideoPlayer&  videoPlayer()   { return *m_videoPlayer; }
+
+    const EngineConfig& config() const { return m_config; }
 
     // -- Thread safety: main thread id for debug assertions
     static std::thread::id s_mainThreadId;
@@ -70,13 +72,9 @@ private:
     void handleFatalError(const char* context, const char* luaError);
     void shutdown();
 
-    int          m_width    = 1280;
-    int          m_height   = 720;
     bool         m_running  = false;
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
-    bool         m_headless = false;
-    bool         m_editorMode = false;
 
     // Audio voice-complete tracking (no polling -- detects edge in main loop)
     bool         m_audioVoiceWasPlaying = false;
@@ -99,6 +97,7 @@ private:
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
+    EngineConfig m_config;    // stored config, populated by ctor
     // HotReload is a singleton, accessed via HotReload::instance()
 };
 

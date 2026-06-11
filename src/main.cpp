@@ -37,9 +37,9 @@ int main(int argc, char* argv[]) {
     if (headless) printf("  [HEADLESS MODE]\n");
     printf("============================================\n\n");
 
-    Caesura::Engine engine;
+    Caesura::Engine engine({});  // default config, init() will populate internally
 
-    if (!engine.init("Caesura (AmeKAG)", 1280, 720, headless, editorMode)) {
+    if (!engine.init()) {
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }

@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -61,8 +61,9 @@ static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
     return realloc(ptr, nsize);
 }
 
-Engine::Engine()
-    : m_lua(std::make_unique<LuaManager>())
+Engine::Engine(const EngineConfig& config)
+    : m_config(config)
+    , m_lua(std::make_unique<LuaManager>())
     , m_inputRouter(std::make_unique<InputRouter>())
     , m_gpuMonitor(std::make_unique<GpuMonitor>())
     , m_videoPlayer(std::make_unique<VideoPlayer>())
@@ -82,17 +83,18 @@ IRenderDevice& Engine::renderDevice() { return *BackendRegistry::instance().getR
 IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBackend(); }
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
-bool Engine::init(const char* title, int width, int height, bool headless, bool editorMode) {
+bool Engine::init() {
     s_mainThreadId = std::this_thread::get_id();
-    m_width  = width;
-    m_height = height;
+    int width  = m_config.width;
+    int height = m_config.height;
+    const char* title = m_config.title;
 
-    m_headless = headless;
-    m_editorMode = editorMode;
-    if (m_editorMode) {
+    bool headless = m_config.headless;
+    bool editorMode = m_config.editorMode;
+    if (m_config.editorMode) {
         fprintf(stderr, "[Engine] Running in EDITOR mode (hidden window + GPU)\n");
     }
-    if (m_headless) {
+    if (m_config.headless) {
         fprintf(stderr, "[Engine] Running in HEADLESS mode (no window, no GPU)\n");
     }
 
@@ -100,14 +102,14 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
-    if (!m_headless || m_editorMode) {
+    if (!m_config.headless || m_config.editorMode) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
         DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed, "SDL3 platform backend init failed.");
         return false;
     }
     BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
-    if (m_editorMode) {
+    if (m_config.editorMode) {
         SDL_HideWindow(static_cast<SDL_Window*>(m_platformBackend->getNativeWindowHandle()));
     }
 
@@ -125,7 +127,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
         BackendRegistry::instance().registerNullBackends();
     }
 
-    if (!m_headless || m_editorMode) {
+    if (!m_config.headless || m_config.editorMode) {
     const bgfx::Caps* caps = bgfx::getCaps();
     DebugManager::RenderInfo ri;
     ri.backendName = bgfx::getRendererName(caps->rendererType);
@@ -134,7 +136,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
     DebugManager::instance().setRenderInfo(ri);
     }
 
-    if (!m_headless || m_editorMode) {
+    if (!m_config.headless || m_config.editorMode) {
     m_audioBackend = std::make_unique<SoLoudAudioEngine>();
     if (!m_audioBackend->init()) {
     DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed, "Audio backend init failed.");
@@ -219,7 +221,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
 
 void Engine::run() {
     m_running = true;
-    if (m_headless) {
+    if (m_config.headless) {
         m_lastTick = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
     } else {
@@ -232,7 +234,7 @@ void Engine::run() {
         processEvents();
 
         uint64_t now;
-        if (m_headless) {
+        if (m_config.headless) {
             now = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
         } else {
@@ -338,7 +340,7 @@ void Engine::processEvents() {
     m_lua->resetInstructionBudget();
 
     // Headless/Editor mode: no SDL events, minimal sleep
-    if (m_headless || m_editorMode) {
+    if (m_config.headless || m_config.editorMode) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
     }
@@ -448,7 +450,7 @@ void Engine::processEvents() {
 
 void Engine::render() {
     // Headless mode (not editor): no GPU rendering
-    if (m_headless && !m_editorMode) return;
+    if (m_config.headless && !m_config.editorMode) return;
 
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
@@ -470,7 +472,7 @@ void Engine::render() {
         bgfx::dbgTextClear();
         bgfx::dbgTextPrintf(0, 0, 0x0F, "Caesura (AmeKAG) v1.0.0");
         bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
-                            bgfx::getRendererName(caps->rendererType), m_width, m_height);
+                            bgfx::getRendererName(caps->rendererType), m_config.width, m_config.height);
     }
 
     // -- Reserved: 3D mini-game render hook (main thread, after KAG pass) --
@@ -538,7 +540,7 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
 
 
 void Engine::renderOneFrame() {
-    if (m_headless && !m_editorMode) return;
+    if (m_config.headless && !m_config.editorMode) return;
     lua_State* L = m_lua->state();
     if (L) {
         lua_getglobal(L, "engine_update");
@@ -583,7 +585,7 @@ static std::string captureFrameBase64(int w, int h) {
 
 std::string Engine::captureFrameForRpc(int w, int h) {
     // Render one frame first (submits draw calls without bgfx::frame)
-    if (!m_headless) {
+    if (!m_config.headless) {
         lua_State* L = m_lua->state();
         if (L) {
             lua_getglobal(L, "engine_update");
