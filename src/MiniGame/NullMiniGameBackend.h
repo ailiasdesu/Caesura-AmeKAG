@@ -1,5 +1,5 @@
-#pragma once
-#include "IMiniGameBackend.h"
+﻿#pragma once
+#include "api/IMiniGameBackend.h"
 
 namespace Caesura {
 

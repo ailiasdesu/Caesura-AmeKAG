@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "IMiniGameBackend.h"
+#include "api/IMiniGameBackend.h"
 #include "MiniMaterial.h"
 #include "MiniGeometry.h"
 #include "MiniLight.h"
@@ -137,3 +137,4 @@ private:
 
 void registerMiniGameBinding(lua_State* L, BgfxMiniGameBackend* backend);
 } // namespace Caesura
+
