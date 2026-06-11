@@ -4,7 +4,7 @@ extern "C" {
 }
 #include "KAGBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../Core/IAudioBackend.h"
+#include "../Audio/api/IAudioBackend.h"
 #include "../Render/IRenderDevice.h"
 #include <cstdio>
 #include <cstring>

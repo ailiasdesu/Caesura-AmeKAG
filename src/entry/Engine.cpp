@@ -10,7 +10,7 @@ extern "C" {
 #include "../rpc/RpcServer.h"
 #include "ErrorUI.h"
 #include "../platform/SDL3PlatformBackend.h"
-#include "../Core/IAudioBackend.h"
+#include "../Audio/api/IAudioBackend.h"
 #include "../di/TextureBudget.h"
 #include "../Render/IRenderDevice.h"
 #include "../Render/GpuMonitor.h"
