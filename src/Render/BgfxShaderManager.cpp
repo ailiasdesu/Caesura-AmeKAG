@@ -214,3 +214,4 @@ void BgfxShaderManager::initEmbeddedShaders() {
     }
 }
 } // namespace Caesura
+}
