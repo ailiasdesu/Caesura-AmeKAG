@@ -12,7 +12,7 @@ extern "C" {
 
 #include "../di/BackendRegistry.h"
 #include "../entry/Engine.h"
-#include "../Scripting/LuaManager.h"
+#include "../script/vm/LuaManager.h"
 #include <cstdio>
 #include <ctime>
 #include <sstream>

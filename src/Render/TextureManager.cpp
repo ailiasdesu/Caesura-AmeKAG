@@ -9,7 +9,7 @@
 #include "../di/TextureBudget.h"
 #include "../di/BackendRegistry.h"
 #include "../entry/Engine.h"
-#include "../Scripting/LuaManager.h"
+#include "../script/vm/LuaManager.h"
 #include "../di/SandboxQuota.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../external/stb/stb_image.h"

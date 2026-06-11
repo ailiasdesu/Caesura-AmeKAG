@@ -5,7 +5,7 @@
 #include <vector>
 #include <cstdio>
 #include "../di/SandboxQuota.h"
-#include "../Scripting/LuaManager.h"
+#include "../script/vm/LuaManager.h"
 
 namespace Caesura {
 

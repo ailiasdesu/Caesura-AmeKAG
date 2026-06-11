@@ -11,7 +11,7 @@ extern "C" {
 
 #include "HotReload.h"
 #include "DebugManager.h"
-#include "../Scripting/GameState.h"
+#include "../script/state/GameState.h"
 #include <bgfx/bgfx.h>
 #include <SDL3/SDL.h>
 #include <chrono>
