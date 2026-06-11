@@ -32,8 +32,25 @@ npm run dev
 ### 运行 Demo
 
 ```bash
+# Windows
 build_nol2d/Release/CaesuraAmeKAG.exe --demo
+
+# macOS / Linux
+./build/CaesuraAmeKAG --demo
 ```
+
+Demo 包含 3 个场景：教室渲染、MiniGame 3D、存档系统展示。
+
+### 第一个 KAG 脚本
+
+```lua
+-- hello.cae
+KAG.show_text(nil, "Hello, Visual Novel!")
+KAG.wait_click()
+KAG.clear_text()
+```
+
+在编辑器中粘贴上述代码，按 F5 运行。
 
 ## 架构概览
 

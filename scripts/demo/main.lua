@@ -131,6 +131,13 @@ local function scene3_video_save()
     draw_text(w * 0.15, h * 0.72, "[ Demo complete - press any key to exit ]", 120, 130, 180, 200, 0.85)
 
     backend.wait_click()
+
+    -- Quick save/load demo
+    print("[Demo] Testing save system...")
+    KAG.save(1)
+    print("[Demo] Saved to slot 1")
+    KAG.load(1)
+    print("[Demo] Loaded from slot 1")
     print("[Demo] Scene 3 done")
 end
 

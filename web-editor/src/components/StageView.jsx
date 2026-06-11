@@ -88,7 +88,7 @@ export default function StageView() {
       }
     };
     poll();
-    const timer = setInterval(poll, 500);
+    const timer = setInterval(poll, 200);
     return () => { active = false; clearInterval(timer); };
   }, [previewing, VP_W, VP_H]);
 

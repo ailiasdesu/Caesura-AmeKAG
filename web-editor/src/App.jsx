@@ -239,10 +239,10 @@ function EditorArea({ state, dispatch, runScript, stopScript }) {
           {'<>'} \u4EE3\u7801
         </div>
         <div className="editor-actions" style={{ display: "flex", alignItems: "center", marginLeft: "auto", paddingRight: 8, gap: 4 }}>
-          <button className="btn btn-sm" onClick={runScript} disabled={state.previewing} title="\u8FD0\u884C (F5)">
+          <button className="btn btn-sm" onClick={runScript} disabled={state.previewing} title="Run (F5)">
             <Icons.Play />
           </button>
-          <button className="btn btn-sm" onClick={stopScript} title="\u505C\u6B62 (Shift+F5)">
+          <button className="btn btn-sm" onClick={stopScript} title="Stop (Shift+F5)">
             <Icons.Stop />
           </button>
         </div>
@@ -446,10 +446,11 @@ function AppInner() {
       const tag = (e.target || {}).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
       if (e.ctrlKey && e.shiftKey && e.key === "P") { e.preventDefault(); setShowCommandPalette(true); }
-      if (e.ctrlKey && e.key === "p") { e.preventDefault(); runScript(); }
+      if (e.key === "F5") { e.preventDefault(); runScript(); }
+      if (e.key === "F5" && e.shiftKey) { e.preventDefault(); stopScript(); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); setShowSaveManager(true); }
       if (e.ctrlKey && e.key === ",") { e.preventDefault(); setShowSettings(true); }
-      if (e.key === "g") dispatch({ type: "TOGGLE_GRID" });
+      if (e.key === "g" && !e.ctrlKey) dispatch({ type: "TOGGLE_GRID" });
       if (e.key === "s" && !e.ctrlKey) dispatch({ type: "TOGGLE_SAFE" });
       if (e.key === "Escape") { setShowCommandPalette(false); setShowSettings(false); setShowSaveManager(false); }
     };
