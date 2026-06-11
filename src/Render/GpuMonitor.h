@@ -41,7 +41,7 @@ public:
     GpuQuality update(double dt) override;
 
     // Accessors
-    const FrameMetrics& metrics() const override { return m_metrics; }
+    const FrameMetrics& metrics() override { return m_metrics; }
     GpuQuality currentQuality() const override { return m_quality; }
     bool isDegraded() const override { return m_quality != GpuQuality::HIGH; }
 

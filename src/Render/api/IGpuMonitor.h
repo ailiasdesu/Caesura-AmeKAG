@@ -21,7 +21,7 @@ public:
     };
 
     virtual GpuQuality update(double dt) = 0;
-    virtual const FrameMetrics& metrics() const = 0;
+    virtual const FrameMetrics& metrics() = 0;
     virtual GpuQuality currentQuality() const = 0;
     virtual bool isDegraded() const = 0;
     virtual float resolutionScale() const = 0;
