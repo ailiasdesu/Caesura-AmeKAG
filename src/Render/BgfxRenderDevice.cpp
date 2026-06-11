@@ -966,3 +966,15 @@ void BgfxRenderDevice::affineBlt(uint16_t targetView, uint32_t dstTexId,
 }
 
 } // namespace Caesura
+// -- DeviceCore delegation --------------------------------------------
+void BgfxRenderDevice::beginFrame() { m_deviceCore->beginFrame(); }
+void BgfxRenderDevice::endFrame() { m_deviceCore->endFrame(); }
+void BgfxRenderDevice::commit_frame() { m_deviceCore->commit_frame(); }
+void BgfxRenderDevice::setViewRect(uint16_t v, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { m_deviceCore->setViewRect(v,x,y,w,h); }
+void BgfxRenderDevice::setViewClear(uint16_t v, uint16_t f, uint32_t c, float d, uint8_t s) { m_deviceCore->setViewClear(v,f,c,d,s); }
+void BgfxRenderDevice::touch(uint16_t v) { m_deviceCore->touch(v); }
+void BgfxRenderDevice::setDebugName(uint16_t v, const std::string& n) { m_deviceCore->setDebugName(v,n.c_str()); }
+ViewportHandle BgfxRenderDevice::createRenderTarget(int w, int h) { return m_deviceCore->createRenderTarget(w,h); }
+void BgfxRenderDevice::destroyRenderTarget(ViewportHandle h) { m_deviceCore->destroyRenderTarget(h); }
+void BgfxRenderDevice::blitViewport(ViewportHandle h, uint16_t v, float x, float y, float w, float h2) { m_deviceCore->blitViewport(h,v,x,y,w,h2); }
+bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { return m_deviceCore->getViewportTexture(h); }
