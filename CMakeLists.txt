@@ -249,7 +249,68 @@ set(ENGINE_HEADERS
 )
 
 # Executable
-add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
+add_executable(${PROJECT_NAME}
+    src/main.cpp
+    src/Core/Engine.cpp
+    src/Core/JobSystem.cpp
+    src/Core/InputRouter.cpp
+    src/Core/BackendRegistry.cpp
+    src/Debug/DebugManager.cpp
+    src/Core/TextureBudget.cpp
+    src/Core/SandboxQuota.cpp
+    src/Core/RpcServer.cpp
+    src/Core/EditorServer.cpp
+    src/Core/ErrorUI.cpp
+    src/Core/SDL3PlatformBackend.cpp
+    src/Resource/XP3Archive.cpp
+    src/Render/BgfxRenderDevice.cpp
+    src/Render/RTTManager.cpp
+    src/Render/EmbeddedShaders.cpp
+    src/Render/EmbeddedShaders_MiniGame.cpp
+    src/Render/EmbeddedShaders_MiniGame_GLSL.cpp
+    src/Render/EmbeddedShaders_MiniGame_Metal.cpp
+    src/Render/TextRenderer.cpp
+    src/Render/ParticleSystem.cpp
+    src/Render/GpuMonitor.cpp
+    src/Render/VideoPlayer.cpp
+    src/Render/TextureManager.cpp
+    src/Render/FreeTypeContext.cpp
+    src/Render/LayerManager.cpp
+    src/MiniGame/NullMiniGameBackend.cpp
+    src/MiniGame/BgfxMiniGameBackend.cpp
+    src/MiniGame/MiniGeometry.cpp
+    src/MiniGame/MiniCollision.cpp
+    src/Live2D/NullAnimationBackend.cpp
+    src/Render/ShaderCache.cpp
+    src/Audio/SoLoudAudioEngine.cpp
+    src/Audio/NullAudioBackend.cpp
+    src/Scripting/LuaManager.cpp
+    src/Scripting/KAGBinding.cpp
+    src/Scripting/GameState.cpp
+    src/Scripting/RenderBinding.cpp
+    src/Scripting/VFXBinding.cpp
+    src/Scripting/DevCoreBinding.cpp
+    src/Scripting/DebugBinding.cpp
+    src/Scripting/UnifiedBinding.cpp
+    src/System/SaveManager.cpp
+    src/System/ISaveProvider.cpp
+    src/System/SaveBinding.cpp
+    src/CARC/CryptoEngine.cpp
+    src/CARC/CARCReader.cpp
+    src/CARC/CARCWriter.cpp
+    src/CARC/CarcAssetProvider.cpp
+    src/Resource/DirAssetProvider.cpp
+    src/Resource/ProviderChain.cpp
+    src/Resource/AssetManager.cpp
+    src/Resource/ImageDecoder.cpp
+    src/Resource/AsyncLoader.cpp
+    src/Debug/HotReload.cpp
+    src/Debug/DebugProtocol.cpp
+    src/CARC/CRLManager.cpp
+    src/CARC/DeltaCARC.cpp
+    src/Core/MobileAdapter.cpp
+    ${ENGINE_HEADERS}
+)
 
 # -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
 target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
