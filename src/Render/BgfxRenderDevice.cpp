@@ -278,16 +278,9 @@ bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { ret
 
 
 
-void BgfxRenderDevice::blitTexture(uint16_t targetView, uint32_t textureId,
-                                    float x, float y, float w, float h, uint8_t opacity) {
-    // Batch protocol: when batching, accumulate quads instead of drawing
-    if (m_batching) {
-        m_batchQuads.push_back({targetView, { static_cast<uint16_t>(textureId) }, x, y, w, h, opacity});
-        return;
-    }
-    bgfx::TextureHandle tex = { uint16_t(textureId) };
-    blitTexture(targetView, tex, x, y, w, h, opacity);
-}
+void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, float y, float w, float h, uint8_t o) { m_draw->blitTexture(v,t,x,y,w,h,o); }
+
+
 
 void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
                                     float x, float y, float w, float h, uint8_t opacity) {
@@ -469,48 +462,8 @@ void BgfxRenderDevice::fillViewport(ViewportHandle handle,
 // ===========================================================================
 
 // x,y reserved for future 3D RTT offset rendering
-static void submitFullscreenQuad(uint16_t viewId, bgfx::ProgramHandle program,
-                                  float x, float y, float w, float h,
-                                  bgfx::TextureHandle tex, bgfx::UniformHandle sampler,
-                                  bgfx::UniformHandle /*params*/, const float* /*paramData*/, uint16_t /*paramVec4s*/) {
-    if (!bgfx::isValid(program)) return;
+// submitFullscreenQuad extracted to BgfxDraw
 
-    struct FsVertex { float x, y, u, v; };
-    bgfx::TransientVertexBuffer tvb;
-    bgfx::VertexLayout layout;
-    layout.begin()
-        .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-        .end();
-
-    if (bgfx::getAvailTransientVertexBuffer(4, layout) < 4) return;
-    bgfx::allocTransientVertexBuffer(&tvb, 4, layout);
-    auto* v = (FsVertex*)tvb.data;
-
-    const bgfx::Caps* caps = bgfx::getCaps();
-    v[0] = { -1.0f,  1.0f, 0.0f, 0.0f };
-    v[1] = {  1.0f,  1.0f, 1.0f, 0.0f };
-    v[2] = {  1.0f, -1.0f, 1.0f, 1.0f };
-    v[3] = { -1.0f, -1.0f, 0.0f, 1.0f };
-
-    uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
-    bgfx::TransientIndexBuffer tib;
-    if (bgfx::getAvailTransientIndexBuffer(6) < 6) return;
-    bgfx::allocTransientIndexBuffer(&tib, 6);
-    bx::memCopy(tib.data, indices, sizeof(indices));
-
-    uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
-                   | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
-                                           BGFX_STATE_BLEND_INV_SRC_ALPHA);
-
-    bgfx::setVertexBuffer(0, &tvb);
-    bgfx::setIndexBuffer(&tib);
-    bgfx::setState(state);
-    if (bgfx::isValid(tex) && bgfx::isValid(sampler))
-        bgfx::setTexture(0, sampler, tex);
-
-    bgfx::submit(viewId, program);
-}
 
 void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
                                     bgfx::TextureHandle blendTex, int mode,

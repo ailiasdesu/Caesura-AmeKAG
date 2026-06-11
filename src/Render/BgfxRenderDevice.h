@@ -3,6 +3,7 @@
 #include "IRenderDevice.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"
+#include "BgfxDraw.h"
 #include "TextRenderer.h"
 #include <memory>
 #include <bgfx/bgfx.h>
@@ -109,6 +110,8 @@ private:
     bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
+    DrawState m_drawState;
+    std::unique_ptr<BgfxDraw>         m_draw;
 
     struct RTTEntry {
         bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
