@@ -97,9 +97,9 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
 
     printf("[BgfxRenderDevice] Initialized %dx%d with 3 views (order: RTT -> MAIN -> DEBUG)\n",
            width, height);
-    m_bgfxInitialized = true;
+// m_bgfxInitialized = true; (stays in BgfxRenderDevice)
     // Pre-create vertex layout and sampler uniform (one-time, not per-frame lazy)
-    m_posTexLayout
+// m_posTexLayout (stays in BgfxRenderDevice)
         .begin()
         .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
@@ -108,10 +108,10 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height, BgfxS
 
 
     // Initialize embedded text renderer
-    m_textRenderer = std::make_unique<TextRenderer>();
-    if (!m_textRenderer->init(this)) {
+// m_textRenderer = std::make_unique<TextRenderer>(); (stays in BgfxRenderDevice)
+// if (!m_textRenderer->init(this)) { (stays in BgfxRenderDevice)
         fprintf(stderr, "[BgfxRenderDevice] TextRenderer init failed.\n");
-        m_textRenderer.reset();
+// m_textRenderer.reset(); (stays in BgfxRenderDevice)
     }
     return true;
 }
@@ -128,11 +128,11 @@ void BgfxDeviceCore::resize(int width, int height) {
 
 void BgfxDeviceCore::shutdown() {
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_bgfxInitialized) return;
+// if (!m_bgfxInitialized) return; (stays in BgfxRenderDevice)
     // 1. Release all RTT framebuffers while GPU context is alive
     flushAllRTT();
     // Destroy text renderer (GPU resources)
-    if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); }
+// if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); } (stays in BgfxRenderDevice)
 
     // 2. Destroy shader programs
     if (bgfx::isValid(shaders->getFallbackProgram())) {
@@ -159,7 +159,7 @@ void BgfxDeviceCore::shutdown() {
 
     // 4. Destroy GPU context
     bgfx::shutdown();
-    m_bgfxInitialized = false;
+// m_bgfxInitialized = false; (stays in BgfxRenderDevice)
     printf("[BgfxRenderDevice] Shutdown complete.\n");
 }
 
