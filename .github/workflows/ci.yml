@@ -16,8 +16,7 @@ jobs:
   # ============================================================
   build-windows:
     name: "Windows · MSVC · ${{ matrix.config }}"
-    continue-on-error: true
-        runs-on: windows-2022
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -71,8 +70,7 @@ jobs:
   # ============================================================
   build-macos:
     name: "macOS · Clang"
-    continue-on-error: true
-        runs-on: macos-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,8 +93,7 @@ jobs:
   # ============================================================
   build-linux:
     name: "Linux · GCC"
-    continue-on-error: true
-        runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
