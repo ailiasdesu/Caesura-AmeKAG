@@ -1,5 +1,5 @@
 #include "ParticleSystem.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../Core/JobSystem.h"
 #include <bx/math.h>
 #include <cmath>

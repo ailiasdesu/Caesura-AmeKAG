@@ -1,4 +1,4 @@
-﻿#include "TextureManager.h"
+#include "TextureManager.h"
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -6,11 +6,11 @@
 #include <cstring>
 #include <vector>
 
-#include "../Core/TextureBudget.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/TextureBudget.h"
+#include "../di/BackendRegistry.h"
 #include "../Core/Engine.h"
 #include "../Scripting/LuaManager.h"
-#include "../Core/SandboxQuota.h"
+#include "../di/SandboxQuota.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../external/stb/stb_image.h"
 

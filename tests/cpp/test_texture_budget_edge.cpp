@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "Core/TextureBudget.h"
+#include "doctest.h"
+#include "di/TextureBudget.h"
 #include <cstring>
 
 using namespace Caesura;

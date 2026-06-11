@@ -3,7 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "KAGBinding.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
 #include "../Render/IRenderDevice.h"
 #include <cstdio>

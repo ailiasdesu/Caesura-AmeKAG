@@ -1,6 +1,6 @@
-﻿#include "doctest.h"
-#include "Core/BackendRegistry.h"
-#include "Core/TextureBudget.h"
+#include "doctest.h"
+#include "di/BackendRegistry.h"
+#include "di/TextureBudget.h"
 #include "Debug/DebugManager.h"
 #include "Resource/ResourceHandle.h"
 #include <cstring>

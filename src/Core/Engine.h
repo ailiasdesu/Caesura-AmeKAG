@@ -2,7 +2,7 @@
 
 #include "Core/EngineConfig.h"
 #include "Core/IPlatformBackend.h"
-#include "Core/ThreadAssert.h"
+#include "di/thread/ThreadAssert.h"
 #include <memory>
 #include <thread>
 

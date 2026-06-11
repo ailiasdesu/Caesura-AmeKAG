@@ -1,6 +1,6 @@
 #include "doctest.h"
 #include "../src/MiniGame/NullMiniGameBackend.h"
-#include "../src/Core/BackendRegistry.h"
+#include "../src/di/BackendRegistry.h"
 
 using namespace Caesura;
 

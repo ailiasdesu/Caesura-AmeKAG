@@ -10,7 +10,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../Core/Engine.h"
 #include "../Scripting/LuaManager.h"
 #include <cstdio>

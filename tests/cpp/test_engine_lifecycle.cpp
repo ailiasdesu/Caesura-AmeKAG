@@ -1,5 +1,5 @@
-﻿#include "doctest.h"
-#include "../src/Core/BackendRegistry.h"
+#include "doctest.h"
+#include "../src/di/BackendRegistry.h"
 #include "../src/Debug/DebugManager.h"
 #include "../src/Core/JobSystem.h"
 

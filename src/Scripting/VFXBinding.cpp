@@ -3,10 +3,10 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "VFXBinding.h"
-#include "../Core/BackendRegistry.h"
-#include "../Core/SandboxQuota.h"
+#include "../di/BackendRegistry.h"
+#include "../di/SandboxQuota.h"
 #include "../Render/IRenderDevice.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include <cstdio>
 
 namespace Caesura {

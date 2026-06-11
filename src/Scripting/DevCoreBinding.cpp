@@ -3,7 +3,7 @@
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include <cstdio>
 #include <cstring>
 

@@ -32,10 +32,10 @@ set(TEST_SOURCES
     cpp/test_steam.cpp
 
     # Source files needed for linking
-    ${CMAKE_SOURCE_DIR}/src/Core/BackendRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/di/BackendRegistry.cpp
     ${CMAKE_SOURCE_DIR}/src/Debug/DebugManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/TextureBudget.cpp
-    ${CMAKE_SOURCE_DIR}/src/Core/SandboxQuota.cpp
+    ${CMAKE_SOURCE_DIR}/src/di/TextureBudget.cpp
+    ${CMAKE_SOURCE_DIR}/src/di/SandboxQuota.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/RpcServer.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/Core/InputRouter.cpp

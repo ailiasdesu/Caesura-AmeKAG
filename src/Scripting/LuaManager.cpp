@@ -13,8 +13,8 @@
 #include "../System/SaveBinding.h"
 #include "SteamBinding.h"
 #include "GameState.h"
-#include "../Core/BackendRegistry.h"
-#include "../Core/ThreadAssert.h"
+#include "../di/BackendRegistry.h"
+#include "../di/thread/ThreadAssert.h"
 #include <cstdio>
 
 namespace Caesura {

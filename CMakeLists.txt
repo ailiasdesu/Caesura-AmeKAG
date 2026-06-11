@@ -134,10 +134,10 @@ set(ENGINE_SOURCES
     src/Core/Engine.cpp
     src/Core/JobSystem.cpp
     src/Core/InputRouter.cpp
-    src/Core/BackendRegistry.cpp
+    src/di/BackendRegistry.cpp
     src/Debug/DebugManager.cpp
-    src/Core/TextureBudget.cpp
-    src/Core/SandboxQuota.cpp
+    src/di/TextureBudget.cpp
+    src/di/SandboxQuota.cpp
     src/Core/RpcServer.cpp
     src/Core/EditorServer.cpp
     src/Core/ErrorUI.cpp
@@ -204,10 +204,10 @@ set(ENGINE_HEADERS
     src/Core/IPlatformBackend.h
     src/Core/SDL3PlatformBackend.h
     src/Resource/XP3Archive.h
-    src/Core/BackendRegistry.h
+    src/di/BackendRegistry.h
     src/Resource/ResourceHandle.h
     src/Debug/DebugManager.h
-    src/Core/TextureBudget.h
+    src/di/TextureBudget.h
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h

@@ -1,5 +1,5 @@
 #include "SoLoudAudioEngine.h"
-#include "Core/ThreadAssert.h"
+#include "di/thread/ThreadAssert.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>
@@ -7,7 +7,7 @@
 #include <memory>
 #include <algorithm>
 #include <list>
-#include "../Core/SandboxQuota.h"
+#include "../di/SandboxQuota.h"
 namespace Caesura {
 
 

@@ -3,7 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../Render/IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <cstdio>

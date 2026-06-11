@@ -3,10 +3,10 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "UnifiedBinding.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
 #include "../Scripting/VFXBinding.h"
-#include "../Core/BackendRegistry.h"
+#include "../di/BackendRegistry.h"
 #include "../MiniGame/IMiniGameBackend.h"
 #include <cstdio>
 #include <cstring>
