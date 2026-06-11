@@ -213,6 +213,8 @@ set(ENGINE_HEADERS
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h
     src/Render/BgfxShaderManager.h
+    src/Render/BgfxDeviceCore.h
+    src/Render/BgfxDebugCallback.h
     src/Render/RTTManager.h
     src/Render/EmbeddedShaders.h
     src/Render/TextRenderer.h

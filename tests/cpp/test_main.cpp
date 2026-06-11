@@ -1,4 +1,4 @@
-﻿#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #define WIN32_LEAN_AND_MEAN
 #include "doctest.h"
 #include "Core/Engine.h"
@@ -58,6 +58,6 @@ static int s_setupCRT = []() -> int {
 #endif
 
 static int s_testSetup = []() -> int {
-    Caesura::Engine::s_mainThreadId = std::this_thread::get_id();
+    Caesura::Caesura::detail::g_mainThreadId = std::this_thread::get_id();
     return 0;
 }();

@@ -1,4 +1,4 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "Core/JobSystem.h"
 #include "Core/Engine.h"
 #include <atomic>
@@ -43,7 +43,7 @@ TEST_CASE("JobSystem::main thread callback") {
         [&workerDone]() { workerDone.store(true); },
         JobPriority::Normal,
         [&mainDone]() {
-            CHECK(std::this_thread::get_id() == Engine::s_mainThreadId);
+            CHECK(std::this_thread::get_id() == Caesura::detail::g_mainThreadId);
             mainDone.store(true);
         });
 
