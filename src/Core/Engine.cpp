@@ -103,7 +103,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
     if (!m_headless || m_editorMode) {
     m_platformBackend = std::make_unique<SDL3PlatformBackend>();
     if (!m_platformBackend->init(title, width, height)) {
-        DEBUG_ERROR(SubSys::Engine, ErrCode::InitFailed, "SDL3 platform backend init failed.");
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed, "SDL3 platform backend init failed.");
         return false;
     }
     BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
@@ -116,7 +116,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
 
     m_renderDevice = std::make_unique<BgfxRenderDevice>();
     if (!m_renderDevice->init(nwh, width, height)) {
-        DEBUG_ERROR(SubSys::Engine, ErrCode::InitFailed, "Render device init failed.");
+    DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed, "Render device init failed.");
         return false;
     }
     BackendRegistry::instance().setRenderDevice(*m_renderDevice);
@@ -137,7 +137,7 @@ bool Engine::init(const char* title, int width, int height, bool headless, bool 
     if (!m_headless || m_editorMode) {
     m_audioBackend = std::make_unique<SoLoudAudioEngine>();
     if (!m_audioBackend->init()) {
-        DEBUG_ERROR(SubSys::Engine, ErrCode::InitFailed, "Audio backend init failed.");
+    DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed, "Audio backend init failed.");
         return false;
     }
     BackendRegistry::instance().setAudioBackend(*m_audioBackend);
