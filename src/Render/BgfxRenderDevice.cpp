@@ -15,8 +15,6 @@
 
 #include "BgfxDebugCallback.h"
 // BgfxDebugCallback + setBgfxShuttingDown extracted to BgfxDebugCallback.h/.cpp
-    g_bgfxDebugCallback.m_shuttingDown = shuttingDown;
-}
 
 namespace Caesura {
 
