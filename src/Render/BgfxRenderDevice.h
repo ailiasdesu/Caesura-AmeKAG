@@ -3,6 +3,7 @@
 #include "IRenderDevice.h"
 #include "BgfxShaderManager.h"
 #include "TextRenderer.h"
+#include "BgfxDeviceCore.h"
 #include <memory>
 #include <memory>
 #include <bgfx/bgfx.h>
@@ -24,8 +25,10 @@ public:
     const char* getBackendName() const;
 
     bool init(void* nativeWindowHandle, int width, int height) override;
-    void resize(int width, int height) override;
-    void shutdown() override;
+    
+    
+    
+    
     void beginFrame() override;
     void endFrame() override;
     void commit_frame() override;
@@ -106,8 +109,9 @@ private:
     int m_height = 720;
     bool m_bgfxInitialized = false;
 
-    bgfx::VertexLayout   m_posTexLayout;
+    
     std::unique_ptr<BgfxShaderManager> m_shaders;
+    std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
 
     struct RTTEntry {
         bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
