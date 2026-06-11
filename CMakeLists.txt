@@ -138,6 +138,8 @@ set(ENGINE_SOURCES
     src/Debug/DebugManager.cpp
     src/di/TextureBudget.cpp
     src/di/SandboxQuota.cpp
+    src/rpc/RpcServer.h
+    src/rpc/EditorServer.h
     src/rpc/RpcServer.cpp
     src/rpc/EditorServer.cpp
     src/entry/ErrorUI.cpp
@@ -198,6 +200,7 @@ set(ENGINE_SOURCES
 
 set(ENGINE_HEADERS
     src/entry/Engine.h
+    src/entry/EngineConfig.h
     src/job/JobSystem.h
     src/input/InputRouter.h
     src/Audio/api/IAudioBackend.h
@@ -205,6 +208,8 @@ set(ENGINE_HEADERS
     src/platform/SDL3PlatformBackend.h
     src/Resource/XP3Archive.h
     src/di/BackendRegistry.h
+    src/di/SandboxQuota.h
+    src/di/thread/ThreadAssert.h
     src/Resource/ResourceHandle.h
     src/Debug/DebugManager.h
     src/di/TextureBudget.h
