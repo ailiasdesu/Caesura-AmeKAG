@@ -1,12 +1,12 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "entry/Engine.h"
 #include "script/vm/LuaManager.h"
 #include "script/bindings/KAGBinding.h"
 #include "script/bindings/RenderBinding.h"
 #include "script/bindings/VFXBinding.h"
 #include "script/bindings/DebugBinding.h"
-#include "Scripting/DevCoreBinding.h"
-#include "Scripting/UnifiedBinding.h"
+#include "script/bindings/DevCoreBinding.h"
+#include "script/bindings/UnifiedBinding.h"
 #include <thread>
 
 extern "C" {

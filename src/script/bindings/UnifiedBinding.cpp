@@ -5,7 +5,7 @@ extern "C" {
 #include "UnifiedBinding.h"
 #include "../di/BackendRegistry.h"
 #include "../Audio/api/IAudioBackend.h"
-#include "../Scripting/VFXBinding.h"
+#include "VFXBinding.h"
 #include "../di/BackendRegistry.h"
 #include "../MiniGame/IMiniGameBackend.h"
 #include <cstdio>
