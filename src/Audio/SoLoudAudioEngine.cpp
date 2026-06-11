@@ -1,15 +1,12 @@
-﻿#include "SoLoudAudioEngine.h"
+#include "SoLoudAudioEngine.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>
 #include <unordered_map>
 #include <memory>
 #include <algorithm>
-#include "Core/Engine.h"
 #include <list>
 #include "../Core/SandboxQuota.h"
-#include "../Scripting/LuaManager.h"
-
 namespace Caesura {
 
 
@@ -213,7 +210,7 @@ unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime)
     m_currentBGM = h;
 
     printf("[Audio] BGM: %s (handle %u, fade %.1fs)\n", file.c_str(), h, fadeTime);
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::tryAlloc(m_luaState, "audio_handles");
     return static_cast<unsigned int>(h);
 }
 
@@ -224,7 +221,7 @@ void SoLoudAudioEngine::stopBGM(float fadeTime) {
         m_soloud.scheduleStop(m_currentBGM, fadeTime);
     }
     m_currentBGM = 0;
-    SandboxQuota::release(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::release(m_luaState, "audio_handles");
 }
 
 // -- VOICE -----------------------------------------------------------------
@@ -246,7 +243,7 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
 
     m_currentVoice = h;
     printf("[Audio] Voice: %s (handle %u)\n", file.c_str(), h);
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::tryAlloc(m_luaState, "audio_handles");
     return static_cast<unsigned int>(h);
 }
 
@@ -258,7 +255,7 @@ void SoLoudAudioEngine::stopVoice(){
         m_soloud.scheduleStop(m_currentVoice, 0.05f);
     }
     m_currentVoice = 0;
-    SandboxQuota::release(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::release(m_luaState, "audio_handles");
 }
 
 // -- SE --------------------------------------------------------------------
@@ -275,7 +272,7 @@ void SoLoudAudioEngine::stopSE(){
     }
     m_activeSE.clear();
     printf("[Audio] SE: all sound effects stopped.\n");
-    SandboxQuota::release(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::release(m_luaState, "audio_handles");
 }
 
 unsigned int SoLoudAudioEngine::playSE(const std::string& file){
@@ -295,7 +292,7 @@ unsigned int SoLoudAudioEngine::playSE(const std::string& file){
         m_activeSE.push_back(h);
     }
     printf("[Audio] SE: %s (handle %u)\n", file.c_str(), h);
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::tryAlloc(m_luaState, "audio_handles");
     return static_cast<unsigned int>(h);
 }
 
@@ -318,7 +315,7 @@ unsigned int SoLoudAudioEngine::playSE3D(const std::string& file,
     }
     printf("[Audio] SE 3D: %s at (%.1f,%.1f,%.1f) h=%u\n",
            file.c_str(), x, y, z, h);
-    SandboxQuota::tryAlloc(LuaManager::instance().state(), "audio_handles");
+    SandboxQuota::tryAlloc(m_luaState, "audio_handles");
     return static_cast<unsigned int>(h);
 }
 

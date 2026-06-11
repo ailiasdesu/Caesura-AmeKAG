@@ -163,7 +163,7 @@ bool Engine::init() {
     TextureBudget::instance().detect();
     BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
 
-    if (!m_lua->init()) {
+    if (!m_lua->init()) {`n        auto* soLoud = static_cast<SoLoudAudioEngine*>(m_audioBackend.get());`n        soLoud->setLuaState(m_lua->state());
         fprintf(stderr, "Lua VM init failed.");
         return false;
     }
