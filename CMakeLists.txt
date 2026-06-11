@@ -4,6 +4,13 @@ project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Force modern CMake policies (FreeType sets 3.0...3.5 which can cause issues)
+cmake_policy(SET CMP0053 NEW)  # Variable expansion in strings
+cmake_policy(SET CMP0054 NEW)  # if() argument handling
+cmake_policy(SET CMP0057 NEW)  # if() IN_LIST operator
+cmake_policy(SET CMP0063 NEW)  # Honor visibility properties
+cmake_policy(SET CMP0077 NEW)  # option() honors normal variables
 # -- FreeType 2 (font rendering, spec [2.4]) ---------------------------------
 # Disable optional deps: bzip2, PNG, HarfBuzz, Brotli
 set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
