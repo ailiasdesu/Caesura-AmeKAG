@@ -1,4 +1,12 @@
 extern "C" {
+    // Take ownership of injected implementations (composition root)
+    if (m_config.platform)  m_platformBackend.reset(static_cast<IPlatformBackend*>(m_config.platform));
+    if (m_config.render)    m_renderDevice.reset(static_cast<IRenderDevice*>(m_config.render));
+    if (m_config.audio)     m_audioBackend.reset(static_cast<IAudioBackend*>(m_config.audio));
+    if (m_config.miniGame)  m_miniGameBackend.reset(static_cast<IMiniGameBackend*>(m_config.miniGame));
+    if (m_config.animation) m_animationBackend.reset(static_cast<IAnimationBackend*>(m_config.animation));
+    if (m_config.steam)     m_steamBackend.reset(static_cast<ISteamBackend*>(m_config.steam));
+
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
