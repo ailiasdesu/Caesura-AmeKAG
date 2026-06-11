@@ -49,8 +49,6 @@ public:
 
     const EngineConfig& config() const { return m_config; }
 
-    static std::thread::id s_mainThreadId;
-
 private:
     void processEvents();
     void render();

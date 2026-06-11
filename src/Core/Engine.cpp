@@ -48,7 +48,7 @@ extern "C" {
 #include <chrono>
 
 
-std::thread::id Caesura::Engine::s_mainThreadId;
+namespace Caesura { namespace detail { thread_local std::thread::id g_mainThreadId; }}
 
 namespace Caesura {
 
@@ -84,7 +84,7 @@ IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBac
 IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
 
 bool Engine::init() {
-    s_mainThreadId = std::this_thread::get_id();
+    detail::g_mainThreadId = std::this_thread::get_id();
     int width  = m_config.width;
     int height = m_config.height;
     const char* title = m_config.title;
