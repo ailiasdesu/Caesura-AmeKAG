@@ -1,5 +1,5 @@
-#include "JobSystem.h"
-#include "../entry/Engine.h"
+﻿#include "JobSystem.h"
+#include "../di/thread/ThreadAssert.h"
 #include <cstdio>
 #include <chrono>
 #ifdef _WIN32
@@ -221,3 +221,4 @@ void JobSystem::workerLoop(int workerIndex) {
 }
 
 } // namespace Caesura
+
