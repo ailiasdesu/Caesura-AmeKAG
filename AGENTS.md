@@ -1,4 +1,4 @@
-# AGENTS.md — Caesura (AmeKAG) 引擎核心约束
+﻿# AGENTS.md — Caesura (AmeKAG) 引擎核心约束
 
 > 本文档是参与本项目的所有 AI Agent 必须遵守的宪章。
 > 违反这些规则的 PR 不应被合并。
@@ -86,7 +86,7 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 
 ## 6. 命名与风格
 
-- **模块目录：全部小写**（`audio/`, `render/`, `script/`，不是 `Audio/`, `Render/`）。
+- **模块目录：全部小写**（`audio/`, `render/`, `script/`，不是 `Audio/`, `Render/`）。`n`n- **大小写必须与 git 索引一致。** 16 个模块目录已统一为全小写。新增模块必须使用小写目录名。Windows 文件系统不区分大小写但 git 区分——在 Windows 上创建 `src/NewModule/` 后，git 索引会记录为 `src/NewModule/`，必须在提交前修正：`n  ```powershell`n  git mv src/NewModule src/newmodule_tmp`n  git mv src/newmodule_tmp src/newmodule`n  ````n  Linux/macOS 构建会因大小写不匹配而失败。`n
 - **接口文件名：** `I` 前缀 + PascalCase（`IRenderDevice.h`, `IAudioBackend.h`）。
 - **实现文件名：** PascalCase（`BgfxRenderDevice.h`, `SoLoudAudioEngine.cpp`）。
 - **命名空间：** 所有公共类型在 `Caesura::` 下。
