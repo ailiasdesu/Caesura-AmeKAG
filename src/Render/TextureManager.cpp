@@ -1,4 +1,4 @@
-#include "TextureManager.h"
+﻿#include "TextureManager.h"
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -8,7 +8,7 @@
 
 #include "../di/TextureBudget.h"
 #include "../di/BackendRegistry.h"
-#include "../entry/Engine.h"
+#include "../di/thread/ThreadAssert.h"
 #include "../script/vm/LuaManager.h"
 #include "../di/SandboxQuota.h"
 #define STB_IMAGE_IMPLEMENTATION
@@ -406,4 +406,5 @@ void TextureManager::getTextureSizeById(uint32_t id,
 }
 
 } // namespace Caesura
+
 

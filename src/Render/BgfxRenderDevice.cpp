@@ -1,7 +1,7 @@
- #include "BgfxRenderDevice.h"
+﻿ #include "BgfxRenderDevice.h"
 #include "BgfxDebugCallback.h"
 #include "ShaderCache.h"
-#include "entry/Engine.h"
+#include "../di/thread/ThreadAssert.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
 #include <bx/math.h>
@@ -264,4 +264,5 @@ void BgfxRenderDevice::affineBlt(uint16_t v, uint32_t d, float dx, float dy, flo
 
 
 } // namespace Caesura
+
 
