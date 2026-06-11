@@ -168,7 +168,8 @@ static const luaL_Reg vfx_functions[] = {
     { nullptr, nullptr }
 };
 
-void registerVFXBinding(lua_State* L) {`n    BackendRegistry::instance().setParticleSystem(&BackendRegistry::instance().getParticleSystem());
+void registerVFXBinding(lua_State* L) {
+    BackendRegistry::instance().setParticleSystem(&BackendRegistry::instance().getParticleSystem());
     luaL_newlib(L, vfx_functions);
     lua_setglobal(L, "VFX");
     printf("[Lua] VFX module registered (10 particle APIs).\n");

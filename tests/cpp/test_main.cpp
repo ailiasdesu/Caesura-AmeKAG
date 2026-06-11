@@ -58,6 +58,6 @@ static int s_setupCRT = []() -> int {
 #endif
 
 static int s_testSetup = []() -> int {
-    Caesura::Caesura::detail::g_mainThreadId = std::this_thread::get_id();
+    Caesura::detail::g_mainThreadId = std::this_thread::get_id();
     return 0;
 }();

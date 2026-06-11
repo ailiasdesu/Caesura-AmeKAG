@@ -6,7 +6,7 @@
 using namespace Caesura;
 
 static void initJobInfra() {
-    Caesura::detail::g_mainThreadId = std::this_thread::get_id();
+    detail::g_mainThreadId = std::this_thread::get_id();
     JobSystem::instance().init();
     AsyncLoader::instance().init();
 }

@@ -161,9 +161,13 @@ bool Engine::init() {
     SaveManager::instance().init("saves/");
 
     TextureBudget::instance().detect();
-    BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());`n    BackendRegistry::instance().setDebugManager(&DebugManager::instance());`n    BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
+    BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
+    BackendRegistry::instance().setDebugManager(&DebugManager::instance());
+    BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
 
-    if (!m_lua->init()) {`n        auto* soLoud = static_cast<SoLoudAudioEngine*>(m_audioBackend.get());`n        soLoud->setLuaState(m_lua->state());
+    if (!m_lua->init()) {
+        auto* soLoud = static_cast<SoLoudAudioEngine*>(m_audioBackend.get());
+        soLoud->setLuaState(m_lua->state());
         fprintf(stderr, "Lua VM init failed.");
         return false;
     }
