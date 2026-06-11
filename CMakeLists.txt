@@ -144,7 +144,6 @@ set(ENGINE_SOURCES
     src/Core/SDL3PlatformBackend.cpp
     src/Resource/XP3Archive.cpp
     src/Render/BgfxRenderDevice.cpp
-    src/Render/BgfxDeviceCore.cpp
     src/Render/BgfxShaderManager.cpp
     src/Render/BgfxDebugCallback.cpp
     src/Render/RTTManager.cpp
@@ -212,7 +211,6 @@ set(ENGINE_HEADERS
     src/Core/ErrorUI.h
     src/Render/IRenderDevice.h
     src/Render/BgfxRenderDevice.h
-    src/Render/BgfxDeviceCore.h
     src/Render/BgfxShaderManager.h
     src/Render/BgfxDebugCallback.h
     src/Render/RTTManager.h
