@@ -1,6 +1,10 @@
-﻿name: CI
+name: CI
 
 on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
   workflow_dispatch:
 
 env:
@@ -13,8 +17,7 @@ jobs:
   build-windows:
     name: "Windows · MSVC · ${{ matrix.config }}"
     continue-on-error: true
-    if: github.event_name != 'push'
-    runs-on: windows-2022
+        runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +53,6 @@ jobs:
           if (Test-Path $sdlBin) { Copy-Item $sdlBin "build/tests/${{ matrix.config }}/" }
 
       - name: Test
-        continue-on-error: true
         shell: pwsh
         run: |
           Push-Location "build/tests/${{ matrix.config }}"
@@ -70,8 +72,7 @@ jobs:
   build-macos:
     name: "macOS · Clang"
     continue-on-error: true
-    if: github.event_name != 'push'
-    runs-on: macos-latest
+        runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,7 +88,6 @@ jobs:
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
-        continue-on-error: true
         run: ./build/tests/CaesuraTests || true
 
   # ============================================================
@@ -96,8 +96,7 @@ jobs:
   build-linux:
     name: "Linux · GCC"
     continue-on-error: true
-    if: github.event_name != 'push'
-    runs-on: ubuntu-24.04
+        runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,8 +126,10 @@ jobs:
         run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
 
       - name: Test
-        continue-on-error: true
-        run: ./build/tests/CaesuraTests || true
+        run: ./build/tests/CaesuraTests
+
+      - name: Coupling Count
+        run: python3 scripts/count_coupling.py --ci
 
   # ============================================================
   # Release Package (Windows only)
