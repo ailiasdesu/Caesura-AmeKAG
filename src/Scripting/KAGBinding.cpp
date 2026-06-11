@@ -1,11 +1,10 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "KAGBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
-#include "../Core/InputRouter.h"
 #include "../Render/IRenderDevice.h"
 #include <cstdio>
 #include <cstring>

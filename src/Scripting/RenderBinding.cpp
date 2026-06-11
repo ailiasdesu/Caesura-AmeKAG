@@ -1,13 +1,10 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
 #include "../Core/BackendRegistry.h"
 #include "../Render/IRenderDevice.h"
-#include "../Resource/AsyncLoader.h"
-#include "../Render/TextureManager.h"
-#include "../Render/VideoPlayer.h"
 #include <bgfx/bgfx.h>
 #include <cstdio>
 #include <cstring>
@@ -21,7 +18,7 @@ namespace Caesura {
 // Resolve a texture ID: first try TextureManager, then RTT viewport map.
 // This handles the case where Lua passes an RTT view ID as "tex" field.
 static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
-    bgfx::TextureHandle tex = TextureManager::instance().getTextureHandle(id);
+    bgfx::TextureHandle tex = BackendRegistry::instance().getTextureManager()->getTextureHandle(id);
     if (!bgfx::isValid(tex) && dev && id != 0) {
         ViewportHandle vp{ id };
         tex = dev->getViewportTexture(vp);
@@ -31,7 +28,7 @@ static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
 
 // Legacy wrapper for callers that don't have a device pointer
 static bgfx::TextureHandle getTexHandle(uint32_t texId) {
-    return TextureManager::instance().getTextureHandle(texId);
+    return BackendRegistry::instance().getTextureManager()->getTextureHandle(texId);
 }
 
 // -- Helpers ----------------------------------------------------------------
@@ -59,7 +56,7 @@ static float getTableFloat(lua_State* L, const char* key, float def) {
 static int lua_Render_load_texture(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
 
-    uint32_t texId = TextureManager::instance().loadTexture(file);
+    uint32_t texId = BackendRegistry::instance().getTextureManager()->loadTexture(file);
     if (texId == 0) {
         lua_pushnil(L);
         lua_pushstring(L, "Failed to load texture");
@@ -73,7 +70,7 @@ static int lua_Render_load_texture(lua_State* L) {
 
 static int lua_Render_destroy_texture(lua_State* L) {
     uint32_t texId = (uint32_t)luaL_checkinteger(L, 1);
-    TextureManager::instance().destroyTexture(texId);
+    BackendRegistry::instance().getTextureManager()->destroyTexture(texId);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -86,13 +83,13 @@ static int lua_Render_create_solid_texture(lua_State* L) {
     int b = (int)luaL_checkinteger(L, 3);
     int a = (int)luaL_optinteger(L, 4, 255);
 
-    bgfx::TextureHandle tex = TextureManager::instance().createSolidTexture(
+    bgfx::TextureHandle tex = BackendRegistry::instance().getTextureManager()->createSolidTexture(
         (uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a);
     if (!bgfx::isValid(tex)) {
         lua_pushnil(L); lua_pushstring(L, "GPU solid tex failed"); return 2;
     }
 
-    uint32_t texId = TextureManager::instance().registerTexture(tex);
+    uint32_t texId = BackendRegistry::instance().getTextureManager()->registerTexture(tex);
     printf("[Render] Solid texture RGBA(%d,%d,%d,%d) -> %u\n", r, g, b, a, texId);
     lua_pushinteger(L, (lua_Integer)texId);
     return 1;
@@ -404,7 +401,7 @@ static int lua_Render_resize(lua_State* L) {
 
 static int lua_Render_load_texture_async(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
-    int id = AsyncLoader::instance().enqueue(path, "texture");
+    int id = BackendRegistry::instance().getAsyncLoader()->enqueue(path, "texture");
     lua_pushinteger(L, id);
     return 1;
 }
@@ -412,7 +409,7 @@ static int lua_Render_load_texture_async(lua_State* L) {
 // -- Render.cancel_async_loads() --------------------------------------------
 
 static int lua_Render_cancel_async_loads(lua_State* L) {
-    AsyncLoader::instance().cancelAll();
+    BackendRegistry::instance().getAsyncLoader()->cancelAll();
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -506,7 +503,7 @@ static int lua_Render_is_valid_handle(lua_State* L) {
 
     switch (type) {
         case HandleType::TEXTURE: {
-            bool valid = TextureManager::instance().isValid(id);
+            bool valid = BackendRegistry::instance().getTextureManager()->isValid(id);
             lua_pushboolean(L, valid ? 1 : 0);
             return 1;
         }

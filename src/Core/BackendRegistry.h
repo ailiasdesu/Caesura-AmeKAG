@@ -3,7 +3,7 @@
 #include "IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
 #include "../Resource/ResourceHandle.h"
-#include "../Render/VideoPlayer.h"
+#include "../Render/VideoPlayer.h"`n#include "../Render/TextureManager.h"`n#include "../Render/ParticleSystem.h"`n#include "../Debug/DebugManager.h"`n#include "../Resource/AsyncLoader.h"
 #include "../MiniGame/IMiniGameBackend.h"
 #include "../Live2D/IAnimationBackend.h"
 #include "InputRouter.h"
@@ -59,7 +59,7 @@ public:
 
     // Install null (no-op) render and platform backends for headless mode
     void registerNullBackends();
-    void setTextureManager(TextureManager* mgr);
+    void setTextureManager(TextureManager* mgr);`n    void setParticleSystem(ParticleSystem* ps) { m_particleSystem = ps; }`n    ParticleSystem* getParticleSystem() { return m_particleSystem; }`n    void setDebugManager(DebugManager* dm) { m_debugManager = dm; }`n    DebugManager* getDebugManager() { return m_debugManager; }`n    void setAsyncLoader(AsyncLoader* al) { m_asyncLoader = al; }`n    AsyncLoader* getAsyncLoader() { return m_asyncLoader; }
     void setLayerManager(LayerManager* mgr);
 
     // -- Get active backends -----------------------------------------------
@@ -118,7 +118,7 @@ private:
     GenerationTracker m_generations;
     IMiniGameBackend* m_miniGameBackend = nullptr;
     IAnimationBackend* m_animationBackend = nullptr;
-    VideoPlayer*     m_videoPlayer     = nullptr;
+    VideoPlayer*     m_videoPlayer     = nullptr;`n    ParticleSystem*  m_particleSystem  = nullptr;`n    DebugManager*    m_debugManager    = nullptr;`n    AsyncLoader*     m_asyncLoader     = nullptr;
     TextureManager*  m_textureManager  = nullptr;
     LayerManager*    m_layerManager    = nullptr;
     TextureBudget*  m_textureBudget  = nullptr;

@@ -4,7 +4,6 @@
 }
 #include "DevCoreBinding.h"
 #include "../Core/BackendRegistry.h"
-#include "../Core/InputRouter.h"
 #include <cstdio>
 #include <cstring>
 

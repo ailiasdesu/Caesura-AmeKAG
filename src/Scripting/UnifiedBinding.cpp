@@ -6,7 +6,6 @@ extern "C" {
 #include "../Core/BackendRegistry.h"
 #include "../Core/IAudioBackend.h"
 #include "../Scripting/VFXBinding.h"
-#include "../Resource/AsyncLoader.h"
 #include "../Core/BackendRegistry.h"
 #include "../MiniGame/IMiniGameBackend.h"
 #include <cstdio>
@@ -54,7 +53,7 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) -- render ¡ú Render, particles ¡ú VFX
+//  b:render(cmd, ...) -- render ï¿½ï¿½ Render, particles ï¿½ï¿½ VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
@@ -153,7 +152,7 @@ static int lua_Backend_audio(lua_State* L) {
         return 1;
     }
 
-    // get_length / get_position ¡ú IAudioBackend (Spec [3.3])
+    // get_length / get_position ï¿½ï¿½ IAudioBackend (Spec [3.3])
     if (strcmp(cmd, "get_length") == 0) {
         const char* bus = luaL_checkstring(L, 2);
         float len = audio ? audio->getLength(bus) : 0.0f;
@@ -212,7 +211,7 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience ¡ª self-contained (no delegation to KAG)
+//  UI convenience ï¿½ï¿½ self-contained (no delegation to KAG)
 //  U3 de-duplication: KAGBinding no longer carries these; UnifiedBinding is
 //  now the single source of truth for cross-backend convenience methods.
 // =========================================================================
@@ -260,7 +259,7 @@ static int lua_Backend_load_texture_async(lua_State* L) {
     lua_pushvalue(L, 2);  // copy callback
     int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    int reqId = AsyncLoader::instance().enqueue(path, "texture");
+    int reqId = BackendRegistry::instance().getAsyncLoader()->enqueue(path, "texture");
     if (reqId < 0) {
         luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
         lua_pushboolean(L, 0);
@@ -286,7 +285,7 @@ static int lua_Backend_load_texture_async(lua_State* L) {
 }
 
 static int lua_Backend_cancel_async_loads(lua_State* L) {
-    AsyncLoader::instance().cancelAll();
+    BackendRegistry::instance().getAsyncLoader()->cancelAll();
     // Release all stored callbacks
     lua_getglobal(L, "_ASYNC_CALLBACKS");
     if (lua_istable(L, -1)) {

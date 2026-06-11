@@ -1,4 +1,4 @@
-﻿ extern "C" {
+ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -14,7 +14,6 @@
 #include "SteamBinding.h"
 #include "GameState.h"
 #include "../Core/BackendRegistry.h"
-#include "../Core/Engine.h"
 #include <cstdio>
 
 namespace Caesura {

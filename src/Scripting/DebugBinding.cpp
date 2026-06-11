@@ -1,9 +1,8 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "DebugBinding.h"
-#include "../Debug/DebugManager.h"
 #include <cstdio>
 #include <string>
 
@@ -67,7 +66,7 @@ static void pushErrorEntry(lua_State* L, const LogEntry* entry) {
 // -- Debug.get_last_error() --
 
 static int lua_Debug_get_last_error(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     pushErrorEntry(L, dm.lastError());
     return 1;
 }
@@ -75,7 +74,7 @@ static int lua_Debug_get_last_error(lua_State* L) {
 // -- Debug.get_error_count() --
 
 static int lua_Debug_get_error_count(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     lua_pushinteger(L, dm.errorCount());
     return 1;
 }
@@ -92,7 +91,7 @@ static int lua_Debug_get_subsystem_stats(lua_State* L) {
     if (s == "input")     ss = SubSys::Input;
     if (s == "platform")  ss = SubSys::Platform;
     if (s == "engine")    ss = SubSys::Engine;
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     auto st  = dm.getSubsystemStats(ss);
     lua_newtable(L);
     lua_pushinteger(L, st.totalCalls);  lua_setfield(L, -2, "total_calls");
@@ -106,7 +105,7 @@ static int lua_Debug_get_subsystem_stats(lua_State* L) {
 // -- Debug.dump_report() --
 
 static int lua_Debug_dump_report(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     std::string json = dm.dumpFullReport();
     lua_pushstring(L, json.c_str());
     return 1;
@@ -115,7 +114,7 @@ static int lua_Debug_dump_report(lua_State* L) {
 // -- Debug.get_render_info() --
 
 static int lua_Debug_get_render_info(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     auto ri  = dm.getRenderInfo();
     lua_newtable(L);
     lua_pushstring(L, ri.backendName.c_str()); lua_setfield(L, -2, "backend");
@@ -131,7 +130,7 @@ static int lua_Debug_get_render_info(lua_State* L) {
 // -- Debug.get_audio_info() --
 
 static int lua_Debug_get_audio_info(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     auto ai  = dm.getAudioInfo();
     lua_newtable(L);
     lua_pushboolean(L, ai.initialized ? 1 : 0); lua_setfield(L, -2, "initialized");
@@ -147,7 +146,7 @@ static int lua_Debug_get_audio_info(lua_State* L) {
 // -- Debug.get_input_info() --
 
 static int lua_Debug_get_input_info(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     auto ii  = dm.getInputInfo();
     lua_newtable(L);
     lua_pushstring(L, ii.currentFocus.c_str());        lua_setfield(L, -2, "focus");
@@ -160,7 +159,7 @@ static int lua_Debug_get_input_info(lua_State* L) {
 // -- Debug.get_log_path() --
 
 static int lua_Debug_get_log_path(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     lua_pushstring(L, dm.logFilePath().c_str());
     return 1;
 }
@@ -171,7 +170,7 @@ static int lua_Debug_get_log_path(lua_State* L) {
 static int lua_Debug_log(lua_State* L) {
     const char* level = luaL_checkstring(L, 1);
     const char* msg   = luaL_checkstring(L, 2);
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     std::string lvl(level);
     if (lvl == "info")           dm.log(DbgLevel::Info, SubSys::Dbg, "%s", msg);
     else if (lvl == "warn" || lvl == "warning") dm.log(DbgLevel::Warn, SubSys::Dbg, "%s", msg);
@@ -184,7 +183,7 @@ static int lua_Debug_log(lua_State* L) {
 // -- Debug.get_stats() -- aggregate stats from all subsystems -------------
 
 static int lua_Debug_get_stats(lua_State* L) {
-    auto& dm = DebugManager::instance();
+    auto& dm = (*BackendRegistry::instance().getDebugManager());
     lua_newtable(L);
 
     // Error stats
