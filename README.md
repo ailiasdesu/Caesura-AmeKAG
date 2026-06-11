@@ -134,7 +134,7 @@ See: [docs/api/MiniGame-API.md](docs/api/MiniGame-API.md)
 | Engine | C++20, CMake 3.25+ |
 | Render | bgfx (D3D11/OpenGL/Metal) |
 | Windowing | SDL3 |
-| Audio | SoLoud (3 buses) |
+| Audio | SoLoud (3 buses: BGM/VOICE/SE) | WAV/OGG/MP3/FLAC | |
 | Scripting | Lua 5.4 + sandbox |
 | Font | FreeType + CJK atlas |
 | Crypto | BCrypt (Win) / OpenSSL (Unix) |

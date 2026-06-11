@@ -153,4 +153,8 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     "${CMAKE_SOURCE_DIR}/scripts"
     "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
     COMMENT "Copying scripts to test output directory..."
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/tests/audio"
+    "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
+    COMMENT "Copying test audio files..."
 )
