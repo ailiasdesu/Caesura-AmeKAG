@@ -40,6 +40,7 @@ public:
     ViewportHandle createRenderTarget(int width, int height);
     void destroyRenderTarget(ViewportHandle handle);
     bgfx::TextureHandle getViewportTexture(ViewportHandle handle);
+    bgfx::FrameBufferHandle getRttFb(ViewportHandle handle);
     void flushAllRTT();
 
     int getWidth()  const { return m_width; }

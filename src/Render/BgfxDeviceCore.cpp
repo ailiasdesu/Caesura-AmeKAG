@@ -300,4 +300,9 @@ void BgfxDeviceCore::blitViewport(ViewportHandle handle, uint16_t targetView,
     blitTexture(targetView, it->second.tex, x, y, w, h, 255);
 }
 
+bgfx::FrameBufferHandle BgfxDeviceCore::getRttFb(ViewportHandle handle) {
+    auto it = m_rttMap.find(handle.id);
+    return (it != m_rttMap.end()) ? it->second.fb : BGFX_INVALID_HANDLE;
+}
+
 } // namespace Caesura
