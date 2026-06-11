@@ -26,15 +26,15 @@ BgfxRenderDevice::~BgfxRenderDevice() {
 
 
 
-void BgfxRenderDevice::flushAllRTT() {
+void BgfxDeviceCore::flushAllRTT() {
     // [10.2.67] Release all GPU-side RTT resources while bgfx context is still alive.
     // Must be called before bgfx::shutdown().
-    for (auto& [id, entry] : m_rttMap) {
+    for (auto& [id, entry] : m_deviceCore->rttMap()) {
         if (bgfx::isValid(entry.fb)) {
             bgfx::destroy(entry.fb);
         }
     }
-    m_rttMap.clear();
+    m_deviceCore->rttMap().clear();
 }
 
 // ===========================================================================
@@ -484,7 +484,7 @@ ViewportHandle BgfxDeviceCore::createRenderTarget(int width, int height) {
     entry.fb     = fb;
     entry.tex    = tex;
     entry.viewId = VIEW_RTT;
-    m_rttMap[handle.id] = entry;
+    m_deviceCore->rttMap()[handle.id] = entry;
 
     printf("[BgfxRenderDevice] RTT %u created (%dx%d)\n",
            handle.id, width, height);
@@ -492,27 +492,27 @@ ViewportHandle BgfxDeviceCore::createRenderTarget(int width, int height) {
 }
 
 void BgfxDeviceCore::destroyRenderTarget(ViewportHandle handle) {
-    auto it = m_rttMap.find(handle.id);
-    if (it == m_rttMap.end()) return;
+    auto it = m_deviceCore->rttMap().find(handle.id);
+    if (it == m_deviceCore->rttMap().end()) return;
 
     if (bgfx::isValid(it->second.fb)) {
         bgfx::destroy(it->second.fb);
     }
-    m_rttMap.erase(it);
+    m_deviceCore->rttMap().erase(it);
     printf("[BgfxRenderDevice] RTT %u destroyed\n", handle.id);
 }
 
 void BgfxDeviceCore::blitViewport(ViewportHandle handle, uint16_t targetView,
                                      float x, float y, float w, float h) {
-    auto it = m_rttMap.find(handle.id);
-    if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
+    auto it = m_deviceCore->rttMap().find(handle.id);
+    if (it == m_deviceCore->rttMap().end() || !bgfx::isValid(it->second.tex)) return;
 
     blitTexture(targetView, it->second.tex, x, y, w, h, 255);
 }
 
 bgfx::TextureHandle BgfxDeviceCore::getViewportTexture(ViewportHandle handle) {
-    auto it = m_rttMap.find(handle.id);
-    if (it != m_rttMap.end() && bgfx::isValid(it->second.tex)) {
+    auto it = m_deviceCore->rttMap().find(handle.id);
+    if (it != m_deviceCore->rttMap().end() && bgfx::isValid(it->second.tex)) {
         return it->second.tex;
     }
     return BGFX_INVALID_HANDLE;
@@ -638,8 +638,8 @@ void BgfxDeviceCore::setDebugName(uint16_t viewId, const std::string& name) {
 
 void BgfxRenderDevice::fillViewport(ViewportHandle handle,
                                      uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    auto it = m_rttMap.find(handle.id);
-    if (it == m_rttMap.end() || !bgfx::isValid(it->second.fb)) return;
+    auto it = m_deviceCore->rttMap().find(handle.id);
+    if (it == m_deviceCore->rttMap().end() || !bgfx::isValid(it->second.fb)) return;
 
     uint16_t vpView = it->second.viewId;
     bgfx::setViewFrameBuffer(vpView, it->second.fb);

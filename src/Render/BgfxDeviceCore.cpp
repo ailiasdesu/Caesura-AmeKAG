@@ -162,3 +162,12 @@ void BgfxDeviceCore::destroyRenderTarget(ViewportHandle handle) { m_deviceCore->
 } // namespace Caesura
 
 } // namespace Caesura
+
+void BgfxDeviceCore::flushAllRTT() {
+    for (auto& entry : m_rttMap) {
+        if (bgfx::isValid(entry.second.fb)) {
+            bgfx::destroy(entry.second.fb);
+        }
+    }
+    m_rttMap.clear();
+}

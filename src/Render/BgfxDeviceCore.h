@@ -41,6 +41,7 @@ public:
     void destroyRenderTarget(ViewportHandle handle);
     bgfx::TextureHandle getViewportTexture(ViewportHandle handle);
     void blitViewport(ViewportHandle handle, uint16_t targetView, float x, float y, float w, float h);
+    void flushAllRTT();
 
     int getWidth()  const { return m_width; }
     int getHeight() const { return m_height; }
