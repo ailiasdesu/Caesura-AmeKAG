@@ -33,7 +33,7 @@ static int lua_VFX_particles_init(lua_State* L) {
 
     
 
-    bool ok = BackendRegistry::instance().getParticleSystem().init();
+    bool ok = BackendRegistry::instance().getParticleSystem()->init();
     s_particlesInitialized = ok;
     if (ok) {
         printf("[VFX] Particle system initialized.\n");
@@ -47,7 +47,7 @@ static int lua_VFX_particles_init(lua_State* L) {
 // -- VFX.particles_shutdown() ------------------------------------------------
 
 static int lua_VFX_particles_shutdown(lua_State* L) {
-    BackendRegistry::instance().getParticleSystem().shutdown();
+    BackendRegistry::instance().getParticleSystem()->shutdown();
     s_particlesInitialized = false;
     printf("[VFX] Particle system shut down.\n");
     lua_pushboolean(L, 1);
@@ -78,7 +78,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
     lua_getfield(L, 1, "gravityX");  cfg.gravityX=lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : 0.0f;  lua_pop(L, 1);
     lua_getfield(L, 1, "gravityY");  cfg.gravityY=lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : 0.0f;  lua_pop(L, 1);
 
-    int id = BackendRegistry::instance().getParticleSystem().createEmitter(cfg);
+    int id = BackendRegistry::instance().getParticleSystem()->createEmitter(cfg);
     lua_pushinteger(L, id);
     SandboxQuota::tryAlloc(L, "particles_emitters");
     return 1;
@@ -88,7 +88,7 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
 
 static int lua_VFX_particles_destroy_emitter(lua_State* L) {
     int id = (int)luaL_checkinteger(L, 1);
-    BackendRegistry::instance().getParticleSystem().destroyEmitter(id);
+    BackendRegistry::instance().getParticleSystem()->destroyEmitter(id);
     SandboxQuota::release(L, "particles_emitters");
     lua_pushboolean(L, 1);
     return 1;
@@ -99,7 +99,7 @@ static int lua_VFX_particles_destroy_emitter(lua_State* L) {
 static int lua_VFX_particles_emit(lua_State* L) {
     int emitterId = (int)luaL_checkinteger(L, 1);
     int count     = (int)luaL_checkinteger(L, 2);
-    BackendRegistry::instance().getParticleSystem().emit(emitterId, count);
+    BackendRegistry::instance().getParticleSystem()->emit(emitterId, count);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -111,7 +111,7 @@ static int lua_VFX_particles_update(lua_State* L) {
     int sw = 1280, sh = 720;
     auto* rd = BackendRegistry::instance().getRenderDevice();
     if (rd) { sw = rd->getBackbufferWidth(); sh = rd->getBackbufferHeight(); }
-    BackendRegistry::instance().getParticleSystem().update(dt, (uint32_t)sw, (uint32_t)sh);
+    BackendRegistry::instance().getParticleSystem()->update(dt, (uint32_t)sw, (uint32_t)sh);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -120,7 +120,7 @@ static int lua_VFX_particles_update(lua_State* L) {
 
 static int lua_VFX_particles_render(lua_State* L) {
     uint16_t viewId = (uint16_t)luaL_checkinteger(L, 1);
-    BackendRegistry::instance().getParticleSystem().render(viewId);
+    BackendRegistry::instance().getParticleSystem()->render(viewId);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -128,7 +128,7 @@ static int lua_VFX_particles_render(lua_State* L) {
 // -- VFX.particles_alive_count() ----------------------------------------------
 
 static int lua_VFX_particles_alive_count(lua_State* L) {
-    lua_pushinteger(L, BackendRegistry::instance().getParticleSystem().aliveCount());
+    lua_pushinteger(L, BackendRegistry::instance().getParticleSystem()->aliveCount());
     return 1;
 }
 
@@ -142,10 +142,10 @@ static int lua_VFX_particles_is_initialized(lua_State* L) {
 // -- VFX.particles_clear() -- reset all emitters and particles ----------------
 
 static int lua_VFX_particles_clear(lua_State* L) {
-    BackendRegistry::instance().getParticleSystem().shutdown();
+    BackendRegistry::instance().getParticleSystem()->shutdown();
     s_particlesInitialized = false;
 
-    BackendRegistry::instance().getParticleSystem().init(); s_particlesInitialized = true;
+    BackendRegistry::instance().getParticleSystem()->init(); s_particlesInitialized = true;
     lua_pushboolean(L, s_particlesInitialized ? 1 : 0);
     return 1;
 }
@@ -177,7 +177,7 @@ void registerVFXBinding(lua_State* L) {
 
 void VFXBinding_Shutdown() {
     if (s_particlesInitialized) {
-        BackendRegistry::instance().getParticleSystem().shutdown();
+        BackendRegistry::instance().getParticleSystem()->shutdown();
         s_particlesInitialized = false;
         printf("[VFX] Particle system shut down (VFXBinding_Shutdown).\n");
     }
