@@ -89,22 +89,22 @@ void BgfxDeviceCore::resize(int width, int height) {
 
 void BgfxDeviceCore::shutdown() {
     CAESURA_ASSERT_MAIN_THREAD();
-// if (!m_bgfxInitialized) return; (stays in BgfxRenderDevice)
+
     // 1. Release all RTT framebuffers while GPU context is alive
     flushAllRTT();
     // Destroy text renderer (GPU resources)
-// if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); } (stays in BgfxRenderDevice)
+
 
     // 2. Destroy shader programs
-    }
-    }
+    // Shader cleanup handled by BgfxShaderManager dtor
+
 
     // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
     g_bgfxDebugCallback.m_shuttingDown = true;
 
     // 4. Destroy GPU context
     bgfx::shutdown();
-// m_bgfxInitialized = false; (stays in BgfxRenderDevice)
+
     printf("[BgfxRenderDevice] Shutdown complete.\n");
 }
 
