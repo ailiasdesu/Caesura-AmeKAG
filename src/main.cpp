@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -8,7 +8,7 @@ extern "C" {
 #include "script/vm/LuaManager.h"
 #include <cstdio>
 #include <string>
-#include "Carc/CARCReader.h"
+#include "archive/CARCReader.h"
 #include "rpc/RpcServer.h"
 #include <thread>
 #include <atomic>
@@ -244,4 +244,5 @@ if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
     printf("Caesura (AmeKAG) shut down cleanly.\n");
     return 0;
 }
+
 
