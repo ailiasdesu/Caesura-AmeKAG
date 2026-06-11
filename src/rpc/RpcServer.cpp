@@ -1,11 +1,11 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- RpcServer implementation
 //  stdin/stdout JSON-RPC — simplest possible protocol.
 //  Each line is a complete JSON object, \n delimited.
 // ===========================================================================
 
 #include "RpcServer.h"
-#include "../Scripting/LuaManager.h"
+#include "../script/vm/LuaManager.h"
 
 extern "C" {
 #include <lua.h>

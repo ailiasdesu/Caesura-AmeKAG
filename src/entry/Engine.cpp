@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -17,9 +17,9 @@ extern "C" {
 #include "../Render/VideoPlayer.h"
 #include "../Render/FreeTypeContext.h"
 #include "../Audio/SoLoudAudioEngine.h"
-#include "../Scripting/RenderBinding.h"
+#include "../script/bindings/RenderBinding.h"
 #include "../Render/BgfxRenderDevice.h"
-#include "../Scripting/LuaManager.h"
+#include "../script/vm/LuaManager.h"
 #include "../System/SaveManager.h"
 #include "../Debug/HotReload.h"
 #include "../job/JobSystem.h"
@@ -31,7 +31,7 @@ extern "C" {
 #include "../Steam/ISteamBackend.h"
 #include "../Steam/SteamBackend.h"
 #include "../Steam/NullSteamBackend.h"
-#include "../Scripting/SteamBinding.h"
+#include "../script/bindings/SteamBinding.h"
 #ifdef CAESURA_HAS_LIVE2D
 #include "../Live2D/Live2D/Live2DBackend.h"
 #include "../Render/BgfxRenderDevice.h"
@@ -653,6 +653,7 @@ void Engine::shutdown() {
 }
 
 } // namespace Caesura
+
 
 
 
