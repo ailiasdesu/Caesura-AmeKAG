@@ -6,11 +6,11 @@
 namespace Caesura {
 
 // -- Quality levels for adaptive degradation -------------------------------
-enum class GpuQuality : uint8_t {
-    HIGH   = 0,  // Full resolution, all VFX enabled
-    MEDIUM = 1,  // 75% resolution, simplified VFX
-    LOW    = 2,  // 50% resolution, no VFX
-};
+// GpuQuality enum defined in api/IGpuMonitor.h
+
+
+
+
 
 const char* gpuQualityName(GpuQuality q);
 
