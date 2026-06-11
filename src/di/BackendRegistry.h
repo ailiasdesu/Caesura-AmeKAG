@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../Audio/api/IAudioBackend.h"
 #include "../platform/api/IPlatformBackend.h"
 #include "../Render/IRenderDevice.h"
@@ -8,7 +8,7 @@
 #include "../Render/ParticleSystem.h"
 #include "../Debug/DebugManager.h"
 #include "../Resource/AsyncLoader.h"
-#include "../MiniGame/IMiniGameBackend.h"
+#include "../MiniGame/api/IMiniGameBackend.h"
 #include "../Live2D/IAnimationBackend.h"
 #include "../input/InputRouter.h"
 #include <unordered_map>
@@ -138,3 +138,4 @@ private:
 };
 
 } // namespace Caesura
+

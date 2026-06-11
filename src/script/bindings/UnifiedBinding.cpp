@@ -1,4 +1,4 @@
-extern "C" {
+﻿extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -7,7 +7,7 @@ extern "C" {
 #include "../Audio/api/IAudioBackend.h"
 #include "VFXBinding.h"
 #include "../di/BackendRegistry.h"
-#include "../MiniGame/IMiniGameBackend.h"
+#include "../MiniGame/api/IMiniGameBackend.h"
 #include <cstdio>
 #include <cstring>
 
