@@ -4,6 +4,7 @@
 #include "BgfxShaderManager.h"
 #include "TextRenderer.h"
 #include "BgfxDeviceCore.h"
+#include "BgfxDraw.h"
 #include <memory>
 #include <memory>
 #include <bgfx/bgfx.h>
@@ -110,6 +111,7 @@ private:
     
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
+    std::unique_ptr<BgfxDraw>         m_draw;
 
     std::unique_ptr<TextRenderer> m_textRenderer;
 
