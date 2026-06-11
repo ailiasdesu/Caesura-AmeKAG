@@ -1,7 +1,7 @@
 ﻿# Caesura (AmeKAG) — 次世代 Visual Novel 引擎
 
 > 跨平台 · AI IDE 辅助 · Live2D · 3D 小游戏 · MIT 开源  
-> 完成度: **~95% Beta+** | CI: **Win/Mac/Linux 全通 (零错误)** | 审查: **零违规 · 零泄漏**
+> **v1.0-rc** | CI: **Win/Mac/Linux 全通** | 快捷键: **F5 运行** | 审查: **零违规 · 零泄漏**
 
 Caesura 是为视觉小说创作者打造的现代化引擎。KAG 脚本兼容、跨平台渲染、内置 Electron 可视化编辑器、AI 辅助代码生成。
 
@@ -109,6 +109,7 @@ KAG.clear_text()
 | **RPC 桥接** | ✅ 8 方法全通 (ping/run/stop/eval/getFrame/getState/assets/logs) |
 | **实时帧预览** | ✅ StageView 500ms 轮询引擎渲染帧 (base64 PNG) |
 | **实时日志** | ✅ 引擎 stderr 自动转发 LogPanel，错误/警告归类 |
+| **快捷键** | F5 运行 / Shift+F5 停止 / Ctrl+, 设置 / Ctrl+S 存档 |
 | **打包** | 一键打包 (Win/Mac/Linux)，electron-builder NSIS/DMG/AppImage |
 
 ## KAG 脚本兼容

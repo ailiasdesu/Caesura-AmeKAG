@@ -119,7 +119,7 @@ Lua: mini_game.spawn_cube(x,y,z) / set_camera(...)
 ## 知识库
 
 `docs/solutions/` — 已记录的问题解决方案（bugs、最佳实践、工作流模式），按类别组织，含 YAML frontmatter。
-`web-editor/` — Electron + React 编辑器 (12 组件, RPC 桥接, AI 面板, 一键打包)。
+`web-editor/` — Electron + React 编辑器 (12 组件, F5 运行, RPC 桥接, AI 面板, 一键打包)。
 
 ## CI 约束
 

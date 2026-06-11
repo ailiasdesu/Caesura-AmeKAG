@@ -1,8 +1,8 @@
 ﻿# Caesura (AmeKAG) 引擎代码库深度分析
 
 > 分析日期: 2026-06-11 | 构建配置: CMake 3.25+ / C++20
-> 构建状态: 三平台全通 (Win/Mac/Linux 构建+测试+打包) 零错误
-> 最近提交: 2f42958 — 测试修复 + SSE4.1
+> 构建状态: v1.0-rc — 三平台全通零错误 + 编辑器 F5 快捷键 + Demo 存档
+> 最近提交: 21f116b — v1.0-rc final
 > 审查类型: 全量代码审查 (65 .cpp, 73 .h, 45 Lua)
 
 ---
@@ -74,7 +74,7 @@ web-editor/
 | TD-15 | pl_mpeg → FFmpeg 双后端 | ✅ |
 | TD-16~TD-18 | 调试/键名/CRL 小修 | ✅ |
 | TD-19 | Live2D Metal | ⚠️ 移交 macOS |
-| TD-20 | MobileAdapter 存根 | ⚠️ P2 预留 |
+| TD-20 | MobileAdapter | ✅ 完备 (触屏映射+生命周期+手势+Lua回调) |
 | TD-21 | MiniGame 3D PBR-lite | ✅ |
 | TD-22 | 跨平台 CI | ✅ 三平台全通 (Win/Linux/macOS 构建+测试+打包，零错误，workflow_dispatch) |
 | TD-23 | BgfxMiniGameBackend 测试链接 | ⚠️ 预存 |
@@ -96,10 +96,10 @@ web-editor/
 
 | 文件 | 级别 | 说明 |
 |------|:---:|------|
-| MobileAdapter.cpp | P2 | 完整移动端存根，触屏事件预埋 |
+| MobileAdapter.cpp | ✅ | 完整实现 (触屏→鼠标映射, 生命周期, 手势, Lua回调) |
 | MetalNativeRenderPath.cpp | 移交 | macOS 开发者验证 |
 | Live2DBackend.cpp:227 | ✅ | 纹理加载已完成 (stbi_load → ILive2DRenderPath::createTexture) |
-| SaveManager.cpp:359 | ⚠️ | 缩略图截图可用 (bgfx::requestScreenShot 磁盘模式, 存档场景可接受) |
+| SaveManager.cpp:359 | ⚠️ | 缩略图截图 (bgfx 磁盘模式, 存档低频操作可接受) |
 | ISaveProvider.cpp:36 | 存根 | 存档文件列表 |
 | CRLManager.cpp:192 | 预期 | 离线/嵌入式使用 |
 | NullAudioBackend.cpp | 预期 | SE 空操作存根 |
@@ -142,9 +142,10 @@ web-editor/
 | CommandPalette | ✅ |
 | PackagePanel — 一键打包 (Win/Mac/Linux) | ✅ |
 | **RPC 引擎连通** — ping/run/stop/eval/getFrame/getState | ✅ |
-| **StageView 帧预览** — 500ms 轮询引擎帧 | ✅ |
+| **StageView 帧预览** — 200ms 轮询引擎帧 | ✅ |
 | **LogPanel 实时日志** — stderr 转发 + 级别自动归类 | ✅ |
 | **引擎帧捕获** — render + requestScreenShot + base64 | ✅ |
+| **快捷键** — F5 运行 / Shift+F5 停止 / Ctrl+, 设置 | ✅ |
 
 ---
 
@@ -162,7 +163,11 @@ web-editor/
 
 **已知缺口**: Live2D Linux/macOS 渲染路径(移交), 移动端适配(P2存根), 缩略图截图(磁盘I/O回退)
 
+### v1.0-rc 状态 (2026-06-11)
+✅ CI 三平台全通 | ✅ 编辑器 F5/Shift+F5 | ✅ Demo 存档展示 | ✅ MobileAdapter 完备 | ✅ 入门教程
+
 ### 下一优先级
-1. 存档系统完善 — 缩略图截图优化
-2. KAG API 文档补齐 + Demo 场景扩展
+1. Live2D macOS/Linux 渲染路径验证
+2. Electron 编辑器独立打包
+3. v1.1 移动端实际构建
 3. Electron 打包 → 完整安装包测试
