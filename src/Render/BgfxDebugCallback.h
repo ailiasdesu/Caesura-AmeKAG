@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bx/bx.h>
 #include <bgfx/bgfx.h>
 #include <cstdio>
 #include <cstdarg>
