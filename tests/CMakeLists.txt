@@ -58,14 +58,14 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Resource/XP3Archive.cpp
     ${CMAKE_SOURCE_DIR}/src/Debug/HotReload.cpp
     ${CMAKE_SOURCE_DIR}/src/Debug/DebugProtocol.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/LuaManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/GameState.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/KAGBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/RenderBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/VFXBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/DevCoreBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/DebugBinding.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/UnifiedBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/vm/LuaManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/state/GameState.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/KAGBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/RenderBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/VFXBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/DevCoreBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/DebugBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/UnifiedBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/TextRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/BgfxRenderDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/BgfxShaderManager.cpp
@@ -87,7 +87,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniGeometry.cpp
     ${CMAKE_SOURCE_DIR}/src/MiniGame/MiniCollision.cpp
     ${CMAKE_SOURCE_DIR}/src/Steam/SteamBackend.cpp
-    ${CMAKE_SOURCE_DIR}/src/Scripting/SteamBinding.cpp
+    ${CMAKE_SOURCE_DIR}/src/script/bindings/SteamBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/System/CloudSaveProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame.cpp
     ${CMAKE_SOURCE_DIR}/src/Render/EmbeddedShaders_MiniGame_GLSL.cpp

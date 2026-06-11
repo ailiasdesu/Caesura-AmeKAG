@@ -166,15 +166,15 @@ set(ENGINE_SOURCES
     src/Render/ShaderCache.cpp
     src/Audio/SoLoudAudioEngine.cpp
     src/Audio/NullAudioBackend.cpp
-    src/Scripting/LuaManager.cpp
-    src/Scripting/KAGBinding.cpp
-    src/Scripting/GameState.cpp
-    src/Scripting/RenderBinding.cpp
-    src/Scripting/VFXBinding.cpp
-    src/Scripting/DevCoreBinding.cpp
-    src/Scripting/DebugBinding.cpp
-    src/Scripting/UnifiedBinding.cpp
-    src/Scripting/SteamBinding.cpp
+    src/script/vm/LuaManager.cpp
+    src/script/bindings/KAGBinding.cpp
+    src/script/state/GameState.cpp
+    src/script/bindings/RenderBinding.cpp
+    src/script/bindings/VFXBinding.cpp
+    src/script/bindings/DevCoreBinding.cpp
+    src/script/bindings/DebugBinding.cpp
+    src/script/bindings/UnifiedBinding.cpp
+    src/script/bindings/SteamBinding.cpp
     src/System/SaveManager.cpp
     src/System/ISaveProvider.cpp
     src/System/SaveBinding.cpp
@@ -233,15 +233,15 @@ set(ENGINE_HEADERS
     src/Render/ShaderCache.h
     src/Audio/SoLoudAudioEngine.h
     src/Audio/NullAudioBackend.h
-    src/Scripting/LuaManager.h
-    src/Scripting/KAGBinding.h
-    src/Scripting/GameState.h
-    src/Scripting/RenderBinding.h
-    src/Scripting/VFXBinding.h
-    src/Scripting/DevCoreBinding.h
-    src/Scripting/DebugBinding.h
-    src/Scripting/UnifiedBinding.h
-    src/Scripting/SteamBinding.h
+    src/script/vm/LuaManager.h
+    src/script/bindings/KAGBinding.h
+    src/script/state/GameState.h
+    src/script/bindings/RenderBinding.h
+    src/script/bindings/VFXBinding.h
+    src/script/bindings/DevCoreBinding.h
+    src/script/bindings/DebugBinding.h
+    src/script/bindings/UnifiedBinding.h
+    src/script/bindings/SteamBinding.h
     src/System/SaveManager.h
     src/System/ISaveProvider.h
     src/System/SaveBinding.h

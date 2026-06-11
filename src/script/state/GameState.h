@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- GameState.h
 //  Spec [10.2.31]: GameState singleton -- creates/manages ctx table in Lua
 //  registry.  All KAG script state lives in ctx: coroutine, tokens,

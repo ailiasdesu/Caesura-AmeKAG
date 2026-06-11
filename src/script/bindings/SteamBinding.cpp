@@ -1,4 +1,4 @@
-﻿// SteamBinding — Lua bindings: steam.unlock_achievement, steam.set_stat, steam.cloud_*
+// SteamBinding — Lua bindings: steam.unlock_achievement, steam.set_stat, steam.cloud_*
 #include "SteamBinding.h"
 #include "../Steam/ISteamBackend.h"
 #include <cstdio>

@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- GameState.cpp
 //  Spec [10.2.31]: Creates the ctx table in the Lua registry with all
 //  required fields for KAG script execution.
@@ -8,7 +8,7 @@ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
-#include "GameState.h"
+#include "../state/GameState.h"
 #include <cstdio>
 
 namespace Caesura {

@@ -3,7 +3,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 }
-#include "LuaManager.h"
+#include "../vm/LuaManager.h"
 #include "KAGBinding.h"
 #include "RenderBinding.h"
 #include "DevCoreBinding.h"
@@ -12,7 +12,7 @@
 #include "VFXBinding.h"
 #include "../System/SaveBinding.h"
 #include "SteamBinding.h"
-#include "GameState.h"
+#include "../state/GameState.h"
 #include "../di/BackendRegistry.h"
 #include "../di/thread/ThreadAssert.h"
 #include <cstdio>
