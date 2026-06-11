@@ -1,9 +1,10 @@
- extern "C" {
+﻿ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
 #include "../di/BackendRegistry.h"
+#include "../input/InputRouter.h"
 #include <cstdio>
 #include <cstring>
 
@@ -11,7 +12,7 @@ namespace Caesura {
 
 // -- Helper ----------------------------------------------------------------
 
-static InputRouter* getInput(lua_State* L) {
+static IInputRouter* getInput(lua_State* L) {
     return BackendRegistry::getInputRouterFromLua(L);
 }
 
@@ -20,7 +21,7 @@ static InputRouter* getInput(lua_State* L) {
 static int lua_DevCore_set_input_focus(lua_State* L) {
     const char* mode = luaL_checkstring(L, 1);
 
-    InputRouter* router = getInput(L);
+    IInputRouter* router = getInput(L);
     if (!router) { lua_pushboolean(L, 0); return 1; }
 
     if (strcmp(mode, "KAG") == 0 || strcmp(mode, "kag") == 0) {
@@ -42,7 +43,7 @@ static int lua_DevCore_set_input_focus(lua_State* L) {
 // -- DevCore.get_input_focus() --------------------------------------------
 
 static int lua_DevCore_get_input_focus(lua_State* L) {
-    InputRouter* router = getInput(L);
+    IInputRouter* router = getInput(L);
     if (!router) { lua_pushstring(L, "KAG"); return 1; }
 
     lua_pushstring(L, inputFocusToString(router->getFocus()));

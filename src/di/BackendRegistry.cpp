@@ -3,6 +3,7 @@
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
+#include "../input/InputRouter.h"
 #include "../render/BgfxRenderDevice.h"
 #include <cstdio>
 #include <cstring>
@@ -86,21 +87,21 @@ void BackendRegistry::setAudioBackend(IAudioBackend& backend) { m_audioBackend =
 
 void BackendRegistry::setPlatformBackend(IPlatformBackend& backend) { m_platformBackend = &backend; }
 
-void BackendRegistry::setInputRouter(InputRouter* router) {
+void BackendRegistry::setInputRouter(IInputRouter* router) {
     m_inputRouter = router;
 }
 
 void BackendRegistry::setMiniGameBackend(IMiniGameBackend* backend) { m_miniGameBackend = backend; }
 
-void BackendRegistry::setVideoPlayer(VideoPlayer* player) {
+void BackendRegistry::setVideoPlayer(IVideoPlayer* player) {
     m_videoPlayer = player;
 }
 
-void BackendRegistry::setTextureManager(TextureManager* mgr) {
+void BackendRegistry::setTextureManager(ITextureManager* mgr) {
     m_textureManager = mgr;
 }
 
-void BackendRegistry::setLayerManager(LayerManager* mgr) {
+void BackendRegistry::setLayerManager(ILayerManager* mgr) {
     m_layerManager = mgr;
 }
 
@@ -298,15 +299,15 @@ IPlatformBackend* BackendRegistry::getPlatformBackendFromLua(lua_State* L) {
     return backend;
 }
 
-InputRouter* BackendRegistry::getInputRouterFromLua(lua_State* L) {
+IInputRouter* BackendRegistry::getInputRouterFromLua(lua_State* L) {
     lua_getfield(L, LUA_REGISTRYINDEX, kRegistryKey_InputRouter);
-    InputRouter* router = static_cast<InputRouter*>(lua_touserdata(L, -1));
+    IInputRouter* router = static_cast<IInputRouter*>(lua_touserdata(L, -1));
     lua_pop(L, 1);
     if (!router) router = BackendRegistry::instance().getInputRouter();
     return router;
 }
 
-VideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
+IVideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
     return BackendRegistry::instance().getVideoPlayer();
 }
 

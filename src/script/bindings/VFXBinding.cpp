@@ -6,6 +6,7 @@
 #include "../di/BackendRegistry.h"
 #include "../di/SandboxQuota.h"
 #include "../render/IRenderDevice.h"
+#include "../render/ParticleSystem.h"
 #include "../di/BackendRegistry.h"
 #include <cstdio>
 

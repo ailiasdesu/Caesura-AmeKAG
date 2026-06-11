@@ -416,13 +416,13 @@ static int lua_Render_cancel_async_loads(lua_State* L) {
 
 // -- Video playback (pl_mpeg default, FFmpeg with CAESURA_VIDEO_FFMPEG) ----
 
-static VideoPlayer* getVideo(lua_State* L) {
+static IVideoPlayer* getVideo(lua_State* L) {
     return BackendRegistry::getVideoPlayerFromLua(L);
 }
 
 static int lua_Render_video_play(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (!vp) { lua_pushnil(L); lua_pushstring(L, "VideoPlayer not available"); return 2; }
     VideoHandle h = vp->open(path);
     if (!h) { lua_pushnil(L); lua_pushstring(L, "Failed to open video"); return 2; }
@@ -432,14 +432,14 @@ static int lua_Render_video_play(lua_State* L) {
 
 static int lua_Render_video_stop(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (vp) vp->close(h);
     lua_pushboolean(L, 1); return 1;
 }
 
 static int lua_Render_video_update(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (!vp) { lua_pushboolean(L, 0); return 1; }
     lua_pushboolean(L, vp->update(h, 0.0) ? 1 : 0);
     return 1;
@@ -447,7 +447,7 @@ static int lua_Render_video_update(lua_State* L) {
 
 static int lua_Render_video_get_texture(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (!vp) { lua_pushinteger(L, 0); return 1; }
     bgfx::TextureHandle tex = vp->getTexture(h);
     lua_pushinteger(L, bgfx::isValid(tex) ? (lua_Integer)tex.idx : 0);
@@ -456,21 +456,21 @@ static int lua_Render_video_get_texture(lua_State* L) {
 
 static int lua_Render_video_is_playing(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     lua_pushboolean(L, vp && vp->isPlaying(h) ? 1 : 0);
     return 1;
 }
 
 static int lua_Render_video_has_ended(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     lua_pushboolean(L, vp && vp->hasEnded(h) ? 1 : 0);
     return 1;
 }
 
 static int lua_Render_video_get_size(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (!vp) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
     lua_pushinteger(L, vp->width(h));
     lua_pushinteger(L, vp->height(h));
@@ -479,14 +479,14 @@ static int lua_Render_video_get_size(lua_State* L) {
 
 static int lua_Render_video_pause(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (vp) vp->pause(h);
     lua_pushboolean(L, 1); return 1;
 }
 
 static int lua_Render_video_resume(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
-    VideoPlayer* vp = getVideo(L);
+    IVideoPlayer* vp = getVideo(L);
     if (vp) vp->resume(h);
     lua_pushboolean(L, 1); return 1;
 }

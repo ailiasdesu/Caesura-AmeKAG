@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "api/IAsyncLoader.h"
 #include <string>
 #include <vector>
 #include <mutex>
@@ -8,54 +9,41 @@
 
 namespace Caesura {
 
-// -- AsyncLoadRequest -----------------------------------------------------
 struct AsyncLoadRequest {
     int         id = 0;
     std::string path;
-    std::string type;  // "texture" | "audio"
+    std::string type;
 };
-
-// -- AsyncLoader ----------------------------------------------------------
-// Submits asset I/O + CPU decode jobs to JobSystem (green zone).
-// Main-thread poll() dispatches SDL events for GPU upload (red zone).
-//
-// Queue limit: 16 pending requests (high watermark).
-// Cancel: clears counter + stops in-flight loads (best-effort).
 
 static constexpr uint32_t CAESURA_EVENT_ASYNC_LOAD = 0x8000;
 
-class AsyncLoader {
+// ============================================================================
+// AsyncLoader -- implements IAsyncLoader
+// ============================================================================
+
+class AsyncLoader : public IAsyncLoader {
+public:
+    // Backward-compat alias (CompletedLoad now in IAsyncLoader)
+    using CompletedLoad = Caesura::CompletedLoad;
 public:
     static AsyncLoader& instance();
 
     AsyncLoader(const AsyncLoader&) = delete;
     AsyncLoader& operator=(const AsyncLoader&) = delete;
 
-    void init();
-    void shutdown();
+    void init() override;
+    void shutdown() override;
 
-    int  enqueue(const std::string& path, const std::string& type);
-    void cancelAll();
+    int  enqueue(const std::string& path, const std::string& type) override;
+    void cancelAll() override;
+    bool poll() override;
 
-    bool poll();
-
-    int  pendingCount() const { return m_pendingCount.load(); }
-    bool isRunning()   const { return m_running; }
-
-    struct CompletedLoad {
-        int         id = 0;
-        std::string path;
-        std::string type;
-        bool        success = false;
-        std::vector<uint8_t> rgba;
-        uint16_t    width  = 0;
-        uint16_t    height = 0;
-        std::vector<uint8_t> data;
-    };
+    int  pendingCount() const override { return m_pendingCount.load(); }
+    bool isRunning()   const override { return m_running; }
 
 private:
     AsyncLoader() = default;
-    ~AsyncLoader();
+    ~AsyncLoader() override;
 
     static CompletedLoad processRequest(const AsyncLoadRequest& req);
     void postCompleteEvent(int requestId, const std::string& path,

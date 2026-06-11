@@ -1,4 +1,5 @@
-#pragma once
+ï»¿#pragma once
+#include "api/IVideoPlayer.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -8,22 +9,7 @@
 
 namespace Caesura {
 
-// -- VideoHandle -----------------------------------------------------------
-struct VideoHandle {
-    uint32_t id = 0;
-    explicit operator bool() const { return id != 0; }
-    bool operator==(const VideoHandle& o) const { return id == o.id; }
-};
-
-// -- VideoPlayer -----------------------------------------------------------
-// MPEG1 video playback via pl_mpeg. Decodes one frame per engine frame.
-// Audio from the video file is decoded but not mixed (SoLoud handles audio
-// separately; video audio track is discarded for now per Alpha spec).
-//
-// Thread safety: main-thread only (bgfx texture creation).
-
-
-// -- DecodedFrame: worker ¡ú main-thread transfer buffer -------------------
+// -- DecodedFrame: worker -> main-thread transfer buffer -------------------
 struct DecodedFrame {
     std::vector<uint8_t> rgba;
     int width  = 0;
@@ -31,52 +17,41 @@ struct DecodedFrame {
     bool valid = false;
 };
 
-class VideoPlayer {
+// ============================================================================
+// VideoPlayer -- MPEG1/FFmpeg video playback, implements IVideoPlayer
+// ============================================================================
+
+class VideoPlayer : public IVideoPlayer {
 public:
     VideoPlayer();
-    ~VideoPlayer();
+    ~VideoPlayer() override;
 
     VideoPlayer(const VideoPlayer&) = delete;
     VideoPlayer& operator=(const VideoPlayer&) = delete;
 
-    // Open an MPEG1 (.mpg) file. Returns a handle or {0} on failure.
-    VideoHandle open(const char* path);
+    VideoHandle open(const char* path) override;
+    void close(VideoHandle handle) override;
+    bool update(VideoHandle handle, double dt) override;
+    bgfx::TextureHandle getTexture(VideoHandle handle) const override;
 
-    // Close and release all resources for a video.
-    void close(VideoHandle handle);
+    bool isPlaying(VideoHandle handle) const override;
+    bool hasEnded(VideoHandle handle) const override;
+    int  width(VideoHandle handle) const override;
+    int  height(VideoHandle handle) const override;
+    double duration(VideoHandle handle) const override;
+    double currentTime(VideoHandle handle) const override;
 
-    // Decode the next video frame. Call once per engine frame before getTexture().
-    // dt = frame delta in seconds for PTS synchronization.
-    // Returns true if a new frame was decoded (texture updated).
-    bool update(VideoHandle handle, double dt);
+    void pause(VideoHandle handle) override;
+    void resume(VideoHandle handle) override;
+    void seek(VideoHandle handle, double time) override;
 
-    // Get the current bgfx texture handle for the decoded frame.
-    // Valid until the next update() call.
-    bgfx::TextureHandle getTexture(VideoHandle handle) const;
-
-    // State queries
-    bool isPlaying(VideoHandle handle) const;
-    bool hasEnded(VideoHandle handle) const;
-    int  width(VideoHandle handle) const;
-    int  height(VideoHandle handle) const;
-    double duration(VideoHandle handle) const;
-    double currentTime(VideoHandle handle) const;
-
-    // Control
-    void pause(VideoHandle handle);
-    void resume(VideoHandle handle);
-    void seek(VideoHandle handle, double time);
-
-    // Cleanup all videos (call before bgfx::shutdown)
-    void shutdown();
-
-    // Query active video count
-    int activeCount() const { return static_cast<int>(m_videos.size()); }
+    void shutdown() override;
+    int  activeCount() const override { return static_cast<int>(m_videos.size()); }
 
 private:
     struct VideoState {
-        void*  plm = nullptr;             // plm_t* (opaque to avoid header dependency)
-        bool   useFFmpeg = false;         // true when FFmpeg path is active
+        void*  plm = nullptr;
+        bool   useFFmpeg = false;
         bgfx::TextureHandle texture = BGFX_INVALID_HANDLE;
         int    width  = 0;
         int    height = 0;
@@ -84,18 +59,17 @@ private:
         bool   playing = true;
         bool   ended   = false;
         bool   hasFrame = false;
-        std::shared_ptr<DecodedFrame> m_readyFrame;  // decoded, waiting for GPU upload
-        std::shared_ptr<DecodedFrame> m_nextFrame;   // being decoded by JobSystem worker
+        std::shared_ptr<DecodedFrame> m_readyFrame;
+        std::shared_ptr<DecodedFrame> m_nextFrame;
 
 #ifdef CAESURA_VIDEO_FFMPEG
-        // FFmpeg handles (void* to avoid leaking headers into every TU)
-        void*  avFormat = nullptr;        // AVFormatContext*
-        void*  avCodec  = nullptr;        // AVCodecContext*
-        void*  avFrame  = nullptr;        // AVFrame*
-        void*  avFrameRGB = nullptr;      // AVFrame* (RGBA)
-        void*  swsCtx   = nullptr;        // SwsContext*
+        void*  avFormat = nullptr;
+        void*  avCodec  = nullptr;
+        void*  avFrame  = nullptr;
+        void*  avFrameRGB = nullptr;
+        void*  swsCtx   = nullptr;
         int    videoStreamIndex = -1;
-        std::vector<uint8_t> rgbaBuffer;  // pre-allocated RGBA buffer
+        std::vector<uint8_t> rgbaBuffer;
 #endif
     };
 
