@@ -7,13 +7,15 @@
 #include <bgfx/platform.h>
 #include <bimg/decode.h>
 #include <bx/bx.h>
+#include "BgfxShaderManager.h"
 #include <bx/readerwriter.h>
 #include <bx/error.h>
 #include <cstdio>
 #include <cstring>
 
 
-#include "BgfxDebugCallback.h"
+#include "BgfxDeviceCore.h"
+#include "BgfxShaderManager.h"
 // BgfxDebugCallback + setBgfxShuttingDown extracted to BgfxDebugCallback.h/.cpp
 
 namespace Caesura {
@@ -171,7 +173,7 @@ void BgfxRenderDevice::flushBatch() {
 
 static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3D11;
 
-bool BgfxRenderDevice::setPreferredBackend(const char* name) {
+bool BgfxDeviceCore::setPreferredBackend(const char* name) {
     if (strcmp(name, "vulkan") == 0 || strcmp(name, "Vulkan") == 0) {
         s_preferredBackend = bgfx::RendererType::Vulkan;
     } else if (strcmp(name, "dx12") == 0 || strcmp(name, "DirectX12") == 0) {
@@ -192,14 +194,14 @@ bool BgfxRenderDevice::setPreferredBackend(const char* name) {
     return true;
 }
 
-const char* BgfxRenderDevice::getBackendName() const {
+const char* BgfxDeviceCore::getBackendName() const {
     return bgfx::getRendererName(bgfx::getCaps()->rendererType);
 }
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
-    m_width  = width;
-    m_height = height;
+    m_deviceCore->getWidth()  = width;
+    m_deviceCore->getHeight() = height;
 
         // -- bgfx platform setup
         // Register debug callback via bgfx::Init::callback
@@ -278,21 +280,15 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
 
 void BgfxRenderDevice::resize(int width, int height) {
     if (width <= 0 || height <= 0) return;
-    if (width == m_width && height == m_height) return;
-    m_width  = width;
-    m_height = height;
+    if (width == m_deviceCore->getWidth() && height == m_deviceCore->getHeight()) return;
+    m_deviceCore->getWidth()  = width;
+    m_deviceCore->getHeight() = height;
     bgfx::reset(uint32_t(width), uint32_t(height), BGFX_RESET_VSYNC);
     setupDefaultViews();
     fprintf(stderr, "[BgfxRenderDevice] Resized to %dx%d\n", width, height);
 }
 
-void BgfxRenderDevice::shutdown() {
-    CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_bgfxInitialized) return;
-    // 1. Release all RTT framebuffers while GPU context is alive
-    flushAllRTT();
-    // Destroy text renderer (GPU resources)
-    if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); }
+void BgfxRenderDevice::shutdown() { if (m_textRenderer) m_textRenderer.reset(); m_shaders.reset(); m_deviceCore->shutdown(); }; // initEmbeddedShaders extracted
 
     // 2. Destroy shader programs
     if (bgfx::isValid(m_shaders->getFallbackProgram())) {
@@ -387,19 +383,19 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
 
 void BgfxRenderDevice::setupDefaultViews() {
     // -- View RTT (offscreen render target) --
-    bgfx::setViewRect(VIEW_RTT, 0, 0, uint16_t(m_width), uint16_t(m_height));
+    bgfx::setViewRect(VIEW_RTT, 0, 0, uint16_t(m_deviceCore->getWidth()), uint16_t(m_deviceCore->getHeight()));
     bgfx::setViewClear(VIEW_RTT, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
                        0x00000000, 1.0f, 0);
 
     // -- View MAIN (primary compositing) --
-    bgfx::setViewRect(VIEW_MAIN, 0, 0, uint16_t(m_width), uint16_t(m_height));
+    bgfx::setViewRect(VIEW_MAIN, 0, 0, uint16_t(m_deviceCore->getWidth()), uint16_t(m_deviceCore->getHeight()));
     bgfx::setViewClear(VIEW_MAIN, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
                        0x303030FF, 1.0f, 0);
 
     // Set ortho projection for MAIN view (pixel coords 0->w, 0->h)
     const bgfx::Caps* caps = bgfx::getCaps();
     float orthoMain[16];
-    bx::mtxOrtho(orthoMain, 0.0f, float(m_width), float(m_height), 0.0f,
+    bx::mtxOrtho(orthoMain, 0.0f, float(m_deviceCore->getWidth()), float(m_deviceCore->getHeight()), 0.0f,
                  -1.0f, 1.0f, 0.0f,
                  caps ? caps->homogeneousDepth : false,
                  bx::Handedness::Left);
@@ -407,14 +403,14 @@ void BgfxRenderDevice::setupDefaultViews() {
 
     // Set ortho projection for RTT view (same pixel-coord space)
     float orthoRTT[16];
-    bx::mtxOrtho(orthoRTT, 0.0f, float(m_width), float(m_height), 0.0f,
+    bx::mtxOrtho(orthoRTT, 0.0f, float(m_deviceCore->getWidth()), float(m_deviceCore->getHeight()), 0.0f,
                  -1.0f, 1.0f, 0.0f,
                  caps ? caps->homogeneousDepth : false,
                  bx::Handedness::Left);
     bgfx::setViewTransform(VIEW_RTT, nullptr, orthoRTT);
 
     // -- View DEBUG (engine HUD overlay) --
-    bgfx::setViewRect(VIEW_DEBUG, 0, 0, uint16_t(m_width), uint16_t(m_height));
+    bgfx::setViewRect(VIEW_DEBUG, 0, 0, uint16_t(m_deviceCore->getWidth()), uint16_t(m_deviceCore->getHeight()));
     bgfx::setViewClear(VIEW_DEBUG, BGFX_CLEAR_NONE, 0x00000000, 1.0f, 0);
 }
 
@@ -435,26 +431,24 @@ void BgfxRenderDevice::endFrame() {
     bgfx::frame();
 }
 
-void BgfxRenderDevice::commit_frame() {
-    bgfx::frame();
-}
+void BgfxRenderDevice::commit_frame() { m_deviceCore->commit_frame(); }
 
 
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 // View-management pass-throughs
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 
-void BgfxRenderDevice::setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
+void BgfxDeviceCore::setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
                                     uint16_t width, uint16_t height) {
     bgfx::setViewRect(viewId, x, y, width, height);
 }
 
-void BgfxRenderDevice::setViewClear(uint16_t viewId, uint16_t flags,
+void BgfxDeviceCore::setViewClear(uint16_t viewId, uint16_t flags,
                                      uint32_t rgba, float depth, uint8_t stencil) {
     bgfx::setViewClear(viewId, flags, rgba, depth, stencil);
 }
 
-void BgfxRenderDevice::touch(uint16_t viewId) {
+void BgfxDeviceCore::touch(uint16_t viewId) {
     bgfx::touch(viewId);
 }
 
@@ -463,7 +457,7 @@ void BgfxRenderDevice::touch(uint16_t viewId) {
 // createRenderTarget / destroyRenderTarget / blitViewport
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 
-ViewportHandle BgfxRenderDevice::createRenderTarget(int width, int height) {
+ViewportHandle BgfxDeviceCore::createRenderTarget(int width, int height) {
     ViewportHandle handle;
     handle.id = m_nextHandle++;
 
@@ -497,7 +491,7 @@ ViewportHandle BgfxRenderDevice::createRenderTarget(int width, int height) {
     return handle;
 }
 
-void BgfxRenderDevice::destroyRenderTarget(ViewportHandle handle) {
+void BgfxDeviceCore::destroyRenderTarget(ViewportHandle handle) {
     auto it = m_rttMap.find(handle.id);
     if (it == m_rttMap.end()) return;
 
@@ -508,7 +502,7 @@ void BgfxRenderDevice::destroyRenderTarget(ViewportHandle handle) {
     printf("[BgfxRenderDevice] RTT %u destroyed\n", handle.id);
 }
 
-void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
+void BgfxDeviceCore::blitViewport(ViewportHandle handle, uint16_t targetView,
                                      float x, float y, float w, float h) {
     auto it = m_rttMap.find(handle.id);
     if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
@@ -516,7 +510,7 @@ void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
     blitTexture(targetView, it->second.tex, x, y, w, h, 255);
 }
 
-bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle handle) {
+bgfx::TextureHandle BgfxDeviceCore::getViewportTexture(ViewportHandle handle) {
     auto it = m_rttMap.find(handle.id);
     if (it != m_rttMap.end() && bgfx::isValid(it->second.tex)) {
         return it->second.tex;
@@ -544,7 +538,7 @@ void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     // Ortho projection for screen-space quad
     float ortho[16];
     const bgfx::Caps* caps = bgfx::getCaps();
-    bx::mtxOrtho(ortho, 0.0f, float(m_width), float(m_height), 0.0f,
+    bx::mtxOrtho(ortho, 0.0f, float(m_deviceCore->getWidth()), float(m_deviceCore->getHeight()), 0.0f,
                  -1.0f, 1.0f, 0.0f, caps ? caps->homogeneousDepth : false,
                  bx::Handedness::Left);
     bgfx::setViewTransform(targetView, nullptr, ortho);
@@ -564,8 +558,8 @@ void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     }
 
     // Pixel coords -> NDC (passthrough shader bypasses u_viewProj)
-    float sw = (float)m_width;
-    float sh = (float)m_height;
+    float sw = (float)m_deviceCore->getWidth();
+    float sh = (float)m_deviceCore->getHeight();
     float nx  = (x / sw) * 2.0f - 1.0f;
     float ny  = 1.0f - (y / sh) * 2.0f;
     float nx2 = ((x + w) / sw) * 2.0f - 1.0f;
@@ -630,7 +624,7 @@ float BgfxRenderDevice::textLineHeight() const {
     return m_textRenderer ? m_textRenderer->lineHeight() : 16.0f;
 }
 
-void BgfxRenderDevice::setDebugName(uint16_t viewId, const std::string& name) {
+void BgfxDeviceCore::setDebugName(uint16_t viewId, const std::string& name) {
     bgfx::setViewName(viewId, name.c_str());
 }
 
@@ -776,7 +770,7 @@ void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
     float params[8] = { baseAlpha, blendAlpha, globalAlpha, (float)mode, 0, 0, 0, 0 };
     bgfx::setUniform(m_shaders->getBlendParams(), params, 2);
 
-    submitFullscreenQuad(viewId, m_shaders->getBlendProgram(), 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getBlendProgram(), 0, 0, (float)m_deviceCore->getWidth(), (float)m_deviceCore->getHeight(), BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -804,7 +798,7 @@ void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fro
     float params[4] = { progress, (float)method, 0, 0 };
     bgfx::setUniform(m_shaders->getTransParams(), params, 1);
 
-    submitFullscreenQuad(viewId, m_shaders->getTransitionProgram(), 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getTransitionProgram(), 0, 0, (float)m_deviceCore->getWidth(), (float)m_deviceCore->getHeight(), BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -835,7 +829,7 @@ void BgfxRenderDevice::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
     };
     bgfx::setUniform(m_shaders->getVFXParams(), vfxData, 3);
 
-    submitFullscreenQuad(viewId, m_shaders->getVFXProgram(), 0, 0, (float)m_width, (float)m_height, srcTex, m_shaders->getDefaultSampler(), BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getVFXProgram(), 0, 0, (float)m_deviceCore->getWidth(), (float)m_deviceCore->getHeight(), srcTex, m_shaders->getDefaultSampler(), BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -857,8 +851,8 @@ void BgfxRenderDevice::stretchBlt(uint16_t targetView, uint32_t dstTexId,
         return;
     }
 
-    float hw = (float)m_width  * 0.5f;
-    float hh = (float)m_height * 0.5f;
+    float hw = (float)m_deviceCore->getWidth()  * 0.5f;
+    float hh = (float)m_deviceCore->getHeight() * 0.5f;
     float l = (dx / hw) - 1.0f;
     float r = ((dx + dw) / hw) - 1.0f;
     float t = 1.0f - (dy / hh);
@@ -920,8 +914,8 @@ void BgfxRenderDevice::affineBlt(uint16_t targetView, uint32_t dstTexId,
         return;
     }
 
-    float hw = (float)m_width  * 0.5f;
-    float hh = (float)m_height * 0.5f;
+    float hw = (float)m_deviceCore->getWidth()  * 0.5f;
+    float hh = (float)m_deviceCore->getHeight() * 0.5f;
     float l = (dx / hw) - 1.0f;
     float r = ((dx + dw) / hw) - 1.0f;
     float t = 1.0f - (dy / hh);
