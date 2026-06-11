@@ -131,10 +131,10 @@ void BgfxRenderDevice::flushBatch() {
         uint32_t mergeCount = mergeEnd - qi;
         uint32_t mergeIdxCount = mergeCount * 6;
 
-        bgfx::setTexture(0, m_texSampler, q.tex);
+        bgfx::setTexture(0, m_shaders->getDefaultSampler(), q.tex);
         // Set opacity as a uniform if needed
         float alpha = q.opacity / 255.0f;
-        bgfx::setUniform(m_u_blendParams, &alpha, 1);
+        bgfx::setUniform(m_shaders->getBlendParams(), &alpha, 1);
 
         // Rebase indices relative to merge group start: bgfx interprets
         // index values as offsets from setVertexBuffer startVertex.
@@ -151,7 +151,7 @@ void BgfxRenderDevice::flushBatch() {
         // Submit the vertex/index subset for this texture group
         bgfx::setVertexBuffer(0, &tvb, vertOffset, mergeCount * 4);
         bgfx::setIndexBuffer(&tib, idxOffset, mergeIdxCount);
-        bgfx::submit(q.viewId, m_fallbackProgram);
+        bgfx::submit(q.viewId, m_shaders->getFallbackProgram());
 
         idxOffset += mergeIdxCount;
         vertOffset += mergeCount * 4;
@@ -247,7 +247,7 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
 
     //                                                     ?Init embedded shader fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ?
-    initEmbeddedShaders();
+    m_shaders = std::make_unique<BgfxShaderManager>(); m_shaders->initEmbeddedShaders();
 
     //                                                     ?Explicit View Order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
         // Enforce: VIEW_RTT (0) -> VIEW_MAIN (1) -> VIEW_DEBUG (2)
@@ -263,7 +263,7 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
         .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
         .end();
-    m_texSampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
+    m_shaders->getDefaultSampler() = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
 
 
     // Initialize embedded text renderer
@@ -294,23 +294,23 @@ void BgfxRenderDevice::shutdown() {
     if (m_textRenderer) { m_textRenderer->shutdown(); m_textRenderer.reset(); }
 
     // 2. Destroy shader programs
-    if (bgfx::isValid(m_fallbackProgram)) {
-        bgfx::destroy(m_fallbackProgram);
-        m_fallbackProgram = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(m_shaders->getFallbackProgram())) {
+        bgfx::destroy(m_shaders->getFallbackProgram());
+        m_shaders->getFallbackProgram() = BGFX_INVALID_HANDLE;
     }
-    if (bgfx::isValid(m_blendProgram))      { bgfx::destroy(m_blendProgram);      m_blendProgram      = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_transitionProgram)) { bgfx::destroy(m_transitionProgram); m_transitionProgram = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_vfxProgram))        { bgfx::destroy(m_vfxProgram);        m_vfxProgram        = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_blendParams))     { bgfx::destroy(m_u_blendParams);     m_u_blendParams     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_transParams))     { bgfx::destroy(m_u_transParams);     m_u_transParams     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_vfxParams))       { bgfx::destroy(m_u_vfxParams);       m_u_vfxParams       = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_stretchProgram))    { bgfx::destroy(m_stretchProgram);    m_stretchProgram    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_affineProgram))     { bgfx::destroy(m_affineProgram);     m_affineProgram     = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_stretchParams))   { bgfx::destroy(m_u_stretchParams);   m_u_stretchParams   = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_u_affineParams))    { bgfx::destroy(m_u_affineParams);    m_u_affineParams    = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_texSampler)) {
-        bgfx::destroy(m_texSampler);
-        m_texSampler = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(m_shaders->getBlendProgram()))      { bgfx::destroy(m_shaders->getBlendProgram());      m_shaders->getBlendProgram()      = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getTransitionProgram())) { bgfx::destroy(m_shaders->getTransitionProgram()); m_shaders->getTransitionProgram() = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getVFXProgram()))        { bgfx::destroy(m_shaders->getVFXProgram());        m_shaders->getVFXProgram()        = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getBlendParams()))     { bgfx::destroy(m_shaders->getBlendParams());     m_shaders->getBlendParams()     = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getTransParams()))     { bgfx::destroy(m_shaders->getTransParams());     m_shaders->getTransParams()     = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getVFXParams()))       { bgfx::destroy(m_shaders->getVFXParams());       m_shaders->getVFXParams()       = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getStretchProgram()))    { bgfx::destroy(m_shaders->getStretchProgram());    m_shaders->getStretchProgram()    = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getAffineProgram()))     { bgfx::destroy(m_shaders->getAffineProgram());     m_shaders->getAffineProgram()     = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getStretchParams()))   { bgfx::destroy(m_shaders->getStretchParams());   m_shaders->getStretchParams()   = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getAffineParams()))    { bgfx::destroy(m_shaders->getAffineParams());    m_shaders->getAffineParams()    = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_shaders->getDefaultSampler())) {
+        bgfx::destroy(m_shaders->getDefaultSampler());
+        m_shaders->getDefaultSampler() = BGFX_INVALID_HANDLE;
     }
 
     // 3. Mark shutdown-in-progress to suppress benign D3D11 teardown errors
@@ -342,46 +342,7 @@ void BgfxRenderDevice::shutdown() {
 //   uint16_t  attrIds[numAttrs]
 //   uint16_t  cbSize         constant-buffer size, 0 when none
 
-static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t codeSize,
-                                            bool fragment, uint8_t numAttrs, const uint16_t* attrIds) {
-    // [10.2.3] Shader safety: reject bytecode > 64 KB (SPIR-V/DXBC limit)
-    if (codeSize > 65536) {
-        fprintf(stderr, "[BgfxRenderDevice] Shader rejected: %u bytes exceeds 64 KB limit.\n", codeSize);
-        return BGFX_INVALID_HANDLE;
-    }
 
-    const uint16_t uniformCount = 0;
-
-    const uint32_t totalSize = 4 + 4 + 4 + 2
-                             + 4 + codeSize + 1
-                             + 1 + 2 * numAttrs
-                             + 2;
-
-    const bgfx::Memory* mem = bgfx::alloc(totalSize);
-    bx::StaticMemoryBlockWriter writer(mem->data, mem->size);
-    bx::ErrorAssert err;
-
-    const uint32_t magic = fragment
-        ? BX_MAKEFOURCC('F', 'S', 'H', 11)
-        : BX_MAKEFOURCC('V', 'S', 'H', 11);
-    bx::write(&writer, magic, err);
-    bx::write(&writer, uint32_t(0), err);
-    bx::write(&writer, uint32_t(0), err);
-    bx::write(&writer, uniformCount, err);
-
-    bx::write(&writer, codeSize, err);
-    for (uint32_t i = 0; i < codeSize; ++i)
-        bx::write(&writer, bytecode[i], err);
-    bx::write(&writer, uint8_t(0), err);
-
-    bx::write(&writer, numAttrs, err);
-    for (uint8_t i = 0; i < numAttrs; ++i)
-        bx::write(&writer, attrIds[i], err);
-
-    bx::write(&writer, uint16_t(0), err);
-
-    return bgfx::createShader(mem);
-}
 
 
 // initEmbeddedShaders
@@ -390,153 +351,7 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
 // buildBgfxShader(), and registers the resulting program as the
 // engine-wide fallback for 2-D quad rendering and RTT blits.
 
-void BgfxRenderDevice::initEmbeddedShaders() {
-    const bgfx::RendererType::Enum renderer = bgfx::getCaps()->rendererType;
 
-    printf("[BgfxRenderDevice] initEmbeddedShaders: renderer=%s\n",
-           bgfx::getRendererName(renderer));
-    // Initialize ShaderCache before registering any programs
-    CompositeShaderCache::instance().init();
-
-    const uint8_t*  vsCode     = nullptr;
-    uint32_t        vsCodeSize = 0;
-    const uint8_t*  fsCode     = nullptr;
-    uint32_t        fsCodeSize = 0;
-
-    // bgfx RendererType: 2=Direct3D11, 3=Direct3D12, 9=Vulkan
-    if (renderer == bgfx::RendererType::Vulkan) {
-        if (kEmbeddedVS_SpriteSize > 0 && kEmbeddedFS_TextureSize > 0) {
-            vsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite);
-            vsCodeSize = uint32_t(kEmbeddedVS_SpriteSize * sizeof(uint32_t));
-            fsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedFS_Texture);
-            fsCodeSize = uint32_t(kEmbeddedFS_TextureSize * sizeof(uint32_t));
-        }
-
-    } else if (renderer == bgfx::RendererType::Direct3D11 ||
-               renderer == bgfx::RendererType::Direct3D12) {
-        if (kEmbeddedDXBC_VS_Sprite_size > 0 && kEmbeddedDXBC_FS_Texture_size > 0) {
-            vsCode     = kEmbeddedDXBC_VS_Sprite;
-            vsCodeSize = uint32_t(kEmbeddedDXBC_VS_Sprite_size);
-            fsCode     = kEmbeddedDXBC_FS_Texture;
-            fsCodeSize = uint32_t(kEmbeddedDXBC_FS_Texture_size);
-        }
-    }
-
-    if (!vsCode || !fsCode) {
-        printf("[BgfxRenderDevice] No embedded shaders for %s. "
-               "Debug text only.\n", bgfx::getRendererName(renderer));
-        return;
-    }
-
-    // Vertex shader input: Position (0x0001) + TexCoord0 (0x0010)
-    const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
-
-    bgfx::ShaderHandle vs = buildBgfxShader(vsCode, vsCodeSize, false, 2, vsAttrs);
-    bgfx::ShaderHandle fs = buildBgfxShader(fsCode, fsCodeSize, true,  0, nullptr);
-
-    if (!bgfx::isValid(vs) || !bgfx::isValid(fs)) {
-        fprintf(stderr, "[BgfxRenderDevice] buildBgfxShader failed.\n");
-        if (bgfx::isValid(vs)) bgfx::destroy(vs);
-        if (bgfx::isValid(fs)) bgfx::destroy(fs);
-        return;
-    }
-
-    printf("[BgfxRenderDevice] Shader binaries built (VS=%u B, FS=%u B).\n",
-           vsCodeSize, fsCodeSize);
-
-    m_fallbackProgram = bgfx::createProgram(vs, fs, true);
-
-    if (!bgfx::isValid(m_fallbackProgram)) {
-        fprintf(stderr, "[BgfxRenderDevice] createProgram rejected shaders. "
-                "Debug text only.\n");
-    } else {
-        
-    // -- Create effect shader programs from embedded DXBC -------------
-    auto createProgramFromDXBC = [&](const uint8_t* vsData, size_t vsSize,
-                                      const uint8_t* fsData, size_t fsSize,
-                                      const char* name) -> bgfx::ProgramHandle {
-        if (!vsData || !fsData || vsSize == 0 || fsSize == 0) {
-            printf("[BgfxRenderDevice] %s: no embedded data.\n", name);
-            return BGFX_INVALID_HANDLE;
-        }
-        const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
-        bgfx::ShaderHandle vs = buildBgfxShader(vsData, (uint32_t)vsSize, false, 2, vsAttrs);
-        bgfx::ShaderHandle fs = buildBgfxShader(fsData, (uint32_t)fsSize, true, 0, nullptr);
-        if (!bgfx::isValid(vs) || !bgfx::isValid(fs)) {
-            printf("[BgfxRenderDevice] %s: shader build failed.\n", name);
-            if (bgfx::isValid(vs)) bgfx::destroy(vs);
-            if (bgfx::isValid(fs)) bgfx::destroy(fs);
-            return BGFX_INVALID_HANDLE;
-        }
-        bgfx::ProgramHandle prog = bgfx::createProgram(vs, fs, true);
-        printf("[BgfxRenderDevice] %s program %s.\n", name,
-               bgfx::isValid(prog) ? "READY" : "FAILED");
-        return prog;
-    };
-
-    if (renderer == bgfx::RendererType::Direct3D11 ||
-        renderer == bgfx::RendererType::Direct3D12) {
-
-        m_blendProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_blend, kEmbeddedDXBC_fs_blend_size, "Blend");
-
-        m_transitionProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_transition, kEmbeddedDXBC_fs_transition_size, "Transition");
-
-        m_vfxProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX");
-    }
-        // Verify fallback program is valid before registering
-    if (!bgfx::isValid(m_fallbackProgram)) {
-        fprintf(stderr, "[BgfxRenderDevice] FALLBACK PROGRAM INVALID, all rendering disabled!\n");
-    }
-
-    m_stretchProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size,
-            kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size, "StretchBlt");
-
-        m_affineProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size,
-            kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size, "AffineBlt");
-
-    // -- Create uniform handles for effect cbuffers -------------------
-    m_u_blendParams = bgfx::createUniform("BlendParams",  bgfx::UniformType::Vec4, 2);
-    m_u_transParams = bgfx::createUniform("TransParams",  bgfx::UniformType::Vec4, 1);
-    m_u_vfxParams   = bgfx::createUniform("VFXParams",    bgfx::UniformType::Vec4, 3);
-
-    // -- Stretch / Affine uniforms ----------------------------------
-    m_u_stretchParams = bgfx::createUniform("StretchParams", bgfx::UniformType::Vec4, 1);
-    m_u_affineParams  = bgfx::createUniform("AffineParams",  bgfx::UniformType::Vec4, 4);
-
-    // -- Register with ShaderCache -------------------------------------
-    if (bgfx::isValid(m_blendProgram)) {
-        static const int kAlphaModes[] = {
-            (int)BlendMode::Normal,    (int)BlendMode::Multiply,
-            (int)BlendMode::Screen,    (int)BlendMode::Overlay,
-            (int)BlendMode::Darken,    (int)BlendMode::Lighten,
-            (int)BlendMode::Add,       (int)BlendMode::Difference,
-            (int)BlendMode::Exclusion, (int)BlendMode::SoftLight
-        };
-        for (auto mode : kAlphaModes) {
-            CompositeShaderKey key;
-            key.blendMode  = mode;
-            key.usePalette = false;
-            CompositeShaderCache::instance().registerProgram(key, m_blendProgram);
-        }
-        printf("[BgfxRenderDevice] Registered 10 blend modes with ShaderCache.\n");
-    CompositeShaderCache::instance().precompileCommon();
-    }
-    if (bgfx::isValid(m_fallbackProgram)) {
-        CompositeShaderKey fk;
-        fk.blendMode  = static_cast<int>(BlendMode::Normal);
-        fk.usePalette = false;
-        CompositeShaderCache::instance().registerProgram(fk, m_fallbackProgram);
-    }
-    // stretch/affine are singletons -- no ShaderCache registration needed.
-}}
 
 
 //setupDefaultViews      configure the three View layers
@@ -716,8 +531,8 @@ void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     }
 
     // Lazy-init sampler uniform
-    if (!bgfx::isValid(m_texSampler)) {
-        m_texSampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
+    if (!bgfx::isValid(m_shaders->getDefaultSampler())) {
+        m_shaders->getDefaultSampler() = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
     }
 
     // Pixel coords -> NDC (passthrough shader bypasses u_viewProj)
@@ -753,13 +568,13 @@ void BgfxRenderDevice::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
                                            BGFX_STATE_BLEND_INV_SRC_ALPHA);
 
     // If we have a fallback shader, use it; otherwise texture blit is no-op
-    if (!bgfx::isValid(m_fallbackProgram)) return;
+    if (!bgfx::isValid(m_shaders->getFallbackProgram())) return;
 
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
-    bgfx::setTexture(0, m_texSampler, tex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), tex);
     bgfx::setState(state);
-    bgfx::submit(targetView, m_fallbackProgram);
+    bgfx::submit(targetView, m_shaders->getFallbackProgram());
 }
 
 
@@ -813,7 +628,7 @@ void BgfxRenderDevice::fillViewport(ViewportHandle handle,
     bgfx::TextureHandle colorTex = bgfx::createTexture2D(1, 1, false, 1,
         bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_POINT, mem);
 
-    if (!bgfx::isValid(colorTex) || !bgfx::isValid(m_fallbackProgram)) {
+    if (!bgfx::isValid(colorTex) || !bgfx::isValid(m_shaders->getFallbackProgram())) {
         bgfx::setViewFrameBuffer(vpView, BGFX_INVALID_HANDLE);
         return;
     }
@@ -856,9 +671,9 @@ void BgfxRenderDevice::fillViewport(ViewportHandle handle,
 
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
-    bgfx::setTexture(0, m_texSampler, colorTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), colorTex);
     bgfx::setState(state);
-    bgfx::submit(vpView, m_fallbackProgram);
+    bgfx::submit(vpView, m_shaders->getFallbackProgram());
 
     bgfx::destroy(colorTex);
     bgfx::setViewFrameBuffer(vpView, it->second.fb);
@@ -921,19 +736,19 @@ static void submitFullscreenQuad(uint16_t viewId, bgfx::ProgramHandle program,
 void BgfxRenderDevice::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
                                     bgfx::TextureHandle blendTex, int mode,
                                     float baseAlpha, float blendAlpha, float globalAlpha) {
-    if (!bgfx::isValid(m_blendProgram)) {
+    if (!bgfx::isValid(m_shaders->getBlendProgram())) {
         static bool once = false;
         if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitBlend: blend program not loaded.\n"); once = true; }
         return;
     }
 
-    bgfx::setTexture(0, m_texSampler, baseTex);
-    bgfx::setTexture(1, m_texSampler, blendTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), baseTex);
+    bgfx::setTexture(1, m_shaders->getDefaultSampler(), blendTex);
 
     float params[8] = { baseAlpha, blendAlpha, globalAlpha, (float)mode, 0, 0, 0, 0 };
-    bgfx::setUniform(m_u_blendParams, params, 2);
+    bgfx::setUniform(m_shaders->getBlendParams(), params, 2);
 
-    submitFullscreenQuad(viewId, m_blendProgram, 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getBlendProgram(), 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -947,21 +762,21 @@ void BgfxRenderDevice::submitTransition(uint16_t viewId, bgfx::TextureHandle fro
                                          bgfx::TextureHandle toTex,
                                          bgfx::TextureHandle ruleTex,
                                          int method, float progress) {
-    if (!bgfx::isValid(m_transitionProgram)) {
+    if (!bgfx::isValid(m_shaders->getTransitionProgram())) {
         static bool once = false;
         if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitTransition: transition program not loaded.\n"); once = true; }
         return;
     }
 
-    bgfx::setTexture(0, m_texSampler, fromTex);
-    bgfx::setTexture(1, m_texSampler, toTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), fromTex);
+    bgfx::setTexture(1, m_shaders->getDefaultSampler(), toTex);
     if (bgfx::isValid(ruleTex))
-        bgfx::setTexture(2, m_texSampler, ruleTex);
+        bgfx::setTexture(2, m_shaders->getDefaultSampler(), ruleTex);
 
     float params[4] = { progress, (float)method, 0, 0 };
-    bgfx::setUniform(m_u_transParams, params, 1);
+    bgfx::setUniform(m_shaders->getTransParams(), params, 1);
 
-    submitFullscreenQuad(viewId, m_transitionProgram, 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getTransitionProgram(), 0, 0, (float)m_width, (float)m_height, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -972,13 +787,13 @@ void BgfxRenderDevice::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
                                   int effect, float fadeAlpha,
                                   float fadeR, float fadeG, float fadeB,
                                   float blurRadius, float quakeX, float quakeY) {
-    if (!bgfx::isValid(m_vfxProgram)) {
+    if (!bgfx::isValid(m_shaders->getVFXProgram())) {
         static bool once = false;
         if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitVFX: VFX program not loaded.\n"); once = true; }
         return;
     }
 
-    bgfx::setTexture(0, m_texSampler, srcTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), srcTex);
 
     // VFXParams cbuffer layout:
     // Vec4[0] = u_color (r,g,b, fadeAlpha)
@@ -990,9 +805,9 @@ void BgfxRenderDevice::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
         blurRadius, blurRadius, quakeX, quakeY,
         (float)effect, 0, 0, 0
     };
-    bgfx::setUniform(m_u_vfxParams, vfxData, 3);
+    bgfx::setUniform(m_shaders->getVFXParams(), vfxData, 3);
 
-    submitFullscreenQuad(viewId, m_vfxProgram, 0, 0, (float)m_width, (float)m_height, srcTex, m_texSampler, BGFX_INVALID_HANDLE, nullptr, 0);
+    submitFullscreenQuad(viewId, m_shaders->getVFXProgram(), 0, 0, (float)m_width, (float)m_height, srcTex, m_shaders->getDefaultSampler(), BGFX_INVALID_HANDLE, nullptr, 0);
 }
 
 // ===========================================================================
@@ -1049,14 +864,14 @@ void BgfxRenderDevice::stretchBlt(uint16_t targetView, uint32_t dstTexId,
                                            BGFX_STATE_BLEND_INV_SRC_ALPHA);
 
     float stretchData[4] = { sx, sy, sw, sh };
-    bgfx::setUniform(m_u_stretchParams, stretchData, 1);
+    bgfx::setUniform(m_shaders->getStretchParams(), stretchData, 1);
 
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
     bgfx::setState(state);
-    bgfx::setTexture(0, m_texSampler, srcTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), srcTex);
 
-    bgfx::ProgramHandle prog = bgfx::isValid(m_stretchProgram) ? m_stretchProgram : m_fallbackProgram;
+    bgfx::ProgramHandle prog = bgfx::isValid(m_shaders->getStretchProgram()) ? m_shaders->getStretchProgram() : m_shaders->getFallbackProgram();
     bgfx::submit(targetView, prog);
 }
 
@@ -1118,13 +933,13 @@ void BgfxRenderDevice::affineBlt(uint16_t targetView, uint32_t dstTexId,
         sx, sy, sw, sh,
         0.0f, 0.0f, 0.0f, 0.0f
     };
-    bgfx::setUniform(m_u_affineParams, affineData, 4);
+    bgfx::setUniform(m_shaders->getAffineParams(), affineData, 4);
     bgfx::setVertexBuffer(0, &tvb);
     bgfx::setIndexBuffer(&tib);
     bgfx::setState(state);
-    bgfx::setTexture(0, m_texSampler, srcTex);
+    bgfx::setTexture(0, m_shaders->getDefaultSampler(), srcTex);
 
-    bgfx::ProgramHandle prog = bgfx::isValid(m_affineProgram) ? m_affineProgram : m_fallbackProgram;
+    bgfx::ProgramHandle prog = bgfx::isValid(m_shaders->getAffineProgram()) ? m_shaders->getAffineProgram() : m_shaders->getFallbackProgram();
     bgfx::submit(targetView, prog);
 }
 
