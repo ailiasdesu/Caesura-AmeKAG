@@ -30,6 +30,7 @@ set(TEST_SOURCES
     cpp/test_texture_manager.cpp
     cpp/test_kag_binding.cpp
     cpp/test_kag_integration.cpp
+    cpp/test_kag_execution.cpp
     cpp/test_sandbox_quota.cpp
     cpp/test_particle_system.cpp
     cpp/test_engine_lifecycle.cpp
@@ -176,4 +177,3 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
     COMMENT "Copying test audio files..."
 )
-
