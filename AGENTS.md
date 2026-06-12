@@ -127,3 +127,9 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 3. 更新 `BackendRegistry`（如果需要新 getter/setter）
 4. 更新 `Engine::init()`（如果需要新注册调用）
 5. 全量构建 → 149 测试全绿 → 提交
+
+## 11. 已文档化的解决方案
+
+`docs/solutions/` — 按类别组织的过往问题解决方案（bug 诊断、架构模式、最佳实践），
+使用 YAML frontmatter（`module`, `tags`, `problem_type`）可搜索。在已文档化
+的领域实现或调试时参考。
