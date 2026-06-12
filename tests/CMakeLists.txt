@@ -20,9 +20,12 @@ set(TEST_SOURCES
     cpp/test_audio.cpp
     cpp/test_audio_integration.cpp
     cpp/test_lua_manager.cpp
+    cpp/test_script_bindings.cpp
+    cpp/test_game_state.cpp
     cpp/test_texture_budget_edge.cpp
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
+    cpp/test_entry.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
     cpp/test_mobile_adapter.cpp
