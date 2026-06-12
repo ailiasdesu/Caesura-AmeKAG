@@ -12,6 +12,7 @@ set(TEST_SOURCES
     cpp/test_resource.cpp
     cpp/test_debug.cpp
     cpp/test_hotreload_integration.cpp
+    cpp/test_demo_smoke.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
     cpp/test_job_system.cpp
