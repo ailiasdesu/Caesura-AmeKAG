@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -86,7 +86,7 @@ jobs:
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
-        run: ./build/tests/CaesuraTests || true
+        run: ./build/tests/CaesuraTests
 
   # ============================================================
   # Linux GCC
