@@ -21,6 +21,7 @@ set(TEST_SOURCES
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
     cpp/test_save_migration.cpp
+    cpp/test_save_roundtrip.cpp
     cpp/test_mobile_adapter.cpp
     cpp/test_render_device.cpp
     cpp/test_render_pipeline.cpp
