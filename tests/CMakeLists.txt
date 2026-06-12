@@ -63,6 +63,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/entry/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/input/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/entry/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/Engine_Gpu.cpp
     ${CMAKE_SOURCE_DIR}/src/rpc/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/job/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/SDL3PlatformBackend.cpp

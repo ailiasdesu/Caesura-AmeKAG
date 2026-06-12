@@ -13,8 +13,8 @@ extern "C" {
 #include "../audio/api/IAudioBackend.h"
 #include "../di/TextureBudget.h"
 #include "../render/IRenderDevice.h"
-#include "../render/GpuMonitor.h"
 #include "../render/VideoPlayer.h"
+#include "../render/api/IGpuMonitor.h"
 #include "../render/FreeTypeContext.h"
 #include "../audio/SoLoudAudioEngine.h"
 #include "../script/bindings/RenderBinding.h"
@@ -31,7 +31,6 @@ extern "C" {
 #include "../steam/api/ISteamBackend.h"
 #include "../steam/SteamBackend.h"
 #include "../steam/NullSteamBackend.h"
-#include "../render/NullGpuMonitor.h"
 #include "../script/bindings/SteamBinding.h"
 #include "../archive/CryptoEngine.h"
 #ifdef CAESURA_HAS_LIVE2D
@@ -50,9 +49,17 @@ extern "C" {
 #include <chrono>
 
 
-namespace Caesura { namespace detail { thread_local std::thread::id g_mainThreadId; }}
+namespace Caesura {
+
+// Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
+std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
+ namespace detail { thread_local std::thread::id g_mainThreadId; }}
 
 namespace Caesura {
+
+// Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
+std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
+
 
 // -- Phase G8-U1: lua_Alloc hook for per-allocation memory check ---------------
 // Lua 5.4 forbids calling lua_gc inside the allocator (stack overflow).
@@ -67,7 +74,6 @@ Engine::Engine(const EngineConfig& config)
     : m_config(config)
     , m_lua(config.lua ? std::unique_ptr<LuaManager>(config.lua) : std::make_unique<LuaManager>())
     , m_inputRouter(config.inputRouter ? std::unique_ptr<InputRouter>(config.inputRouter) : std::make_unique<InputRouter>())
-    , m_gpuMonitor(config.gpuMonitor ? std::unique_ptr<IGpuMonitor>(config.gpuMonitor) : (m_config.headless ? std::unique_ptr<IGpuMonitor>(std::make_unique<NullGpuMonitor>()) : std::unique_ptr<IGpuMonitor>(std::make_unique<GpuMonitor>())))
     , m_videoPlayer(config.videoPlayer ? std::unique_ptr<VideoPlayer>(config.videoPlayer) : std::make_unique<VideoPlayer>())
 #ifdef CAESURA_HAS_STEAM
     , m_steamBackend(config.steam ? std::unique_ptr<ISteamBackend>(config.steam) : std::make_unique<SteamBackend>())
@@ -188,11 +194,11 @@ bool Engine::initPlatformPhase() {
     ii.currentFocus = "KAG";
     DebugManager::instance().setInputInfo(ii);
 
-    // GpuMonitor: create real (GPU) or null (headless/test)
+    m_gpuMonitor = createGpuMonitor(m_config.headless);
     if (m_config.headless)
-        m_gpuMonitor = std::make_unique<NullGpuMonitor>();
+    m_gpuMonitor = createGpuMonitor(m_config.headless);
     else
-        m_gpuMonitor = std::make_unique<GpuMonitor>();
+    m_gpuMonitor = createGpuMonitor(m_config.headless);
 
     // SaveManager + TextureBudget + misc registrations
     SaveManager::instance().init("saves/");

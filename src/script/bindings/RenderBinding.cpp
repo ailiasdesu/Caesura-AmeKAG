@@ -55,6 +55,10 @@ static float getTableFloat(lua_State* L, const char* key, float def) {
 
 static int lua_Render_load_texture(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
+    if (file == nullptr || file[0] == '\0') {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
 
     uint32_t texId = BackendRegistry::instance().getTextureManager()->loadTexture(file);
     if (texId == 0) {
@@ -570,4 +574,3 @@ void registerRenderBinding(lua_State* L) {
 }
 
 } // namespace Caesura
-
