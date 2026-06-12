@@ -6,7 +6,7 @@ namespace Caesura {
 struct Emitter;
 
 // ============================================================================
-// IParticleSystem â€?pure virtual interface for particle effects
+// IParticleSystem éˆ¥?pure virtual interface for particle effects
 // ============================================================================
 // ParticleSystem implements this interface. BackendRegistry stores IParticleSystem*.
 
