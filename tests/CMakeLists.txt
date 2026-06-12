@@ -11,11 +11,13 @@ set(TEST_SOURCES
     cpp/test_system.cpp
     cpp/test_resource.cpp
     cpp/test_debug.cpp
+    cpp/test_hotreload_integration.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
     cpp/test_job_system.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
+    cpp/test_audio_integration.cpp
     cpp/test_lua_manager.cpp
     cpp/test_texture_budget_edge.cpp
     cpp/test_resource_handle.cpp
@@ -25,6 +27,7 @@ set(TEST_SOURCES
     cpp/test_mobile_adapter.cpp
     cpp/test_render_device.cpp
     cpp/test_render_pipeline.cpp
+    cpp/test_render_integration.cpp
     cpp/test_rpc.cpp
     cpp/test_backend_registry.cpp
     cpp/test_layer_manager.cpp
