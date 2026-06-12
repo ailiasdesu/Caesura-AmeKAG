@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "api/ITextureManager.h"
 #include <bgfx/bgfx.h>
@@ -32,15 +32,12 @@ public:
     uint32_t loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
                                  const std::string& cacheKey = "") override;
 
-    bgfx::TextureHandle createSolidTexture(uint8_t r, uint8_t g, uint8_t b,
-                                           uint8_t a = 255) override;
-    uint32_t registerTexture(bgfx::TextureHandle tex) override;
-    bgfx::TextureHandle getPlaceholderTexture() override;
+    uint32_t createSolidTexture(uint8_t r, uint8_t g, uint8_t b,
+                                uint8_t a = 255) override;
+    uint32_t getPlaceholderTexture() override;
 
     void destroyTexture(uint32_t id) override;
-    bgfx::TextureHandle getTextureHandle(uint32_t id) const override;
-    void getTextureSize(bgfx::TextureHandle handle, uint16_t& width,
-                        uint16_t& height) const override;
+    uint32_t getTextureHandle(uint32_t id) const override;
     void getTextureSizeById(uint32_t id, uint16_t& width,
                             uint16_t& height) const override;
     bool isValid(uint32_t id) const override;
@@ -56,6 +53,11 @@ private:
     bgfx::TextureHandle buildCheckerboardTexture();
     bgfx::TextureHandle loadFromFile(const std::string& path);
     bgfx::TextureHandle loadFromMemory(const uint8_t* data, uint32_t size);
+    void getTextureSize(bgfx::TextureHandle handle, uint16_t& width,
+                        uint16_t& height) const;
+
+    // Internally create bgfx texture and register in cache, return TM ID.
+    uint32_t registerTexture(bgfx::TextureHandle tex);
 
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;

@@ -1,4 +1,4 @@
-﻿#include "TextureManager.h"
+#include "TextureManager.h"
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -109,10 +109,10 @@ bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
     return m_placeholderTex;
 }
 
-bgfx::TextureHandle TextureManager::getPlaceholderTexture() {
+uint32_t TextureManager::getPlaceholderTexture() {
     if (!bgfx::isValid(m_placeholderTex))
         buildCheckerboardTexture();
-    return m_placeholderTex;
+    return m_placeholderTex.idx;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,11 +320,12 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
 }
 
 // ---------------------------------------------------------------------------
-// Solid color texture
+// Solid colour texture — creates bgfx texture + registers in cache.
+// Merged createSolidTexture + registerTexture into one call returning TM ID.
 // ---------------------------------------------------------------------------
 
-bgfx::TextureHandle TextureManager::createSolidTexture(uint8_t r, uint8_t g,
-                                                        uint8_t b, uint8_t a) {
+uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
+                                             uint8_t b, uint8_t a) {
     uint32_t pixel = (uint32_t(a) << 24) | (uint32_t(b) << 16) |
                      (uint32_t(g) << 8) | uint32_t(r);
     const bgfx::Memory* mem = bgfx::alloc(4);
@@ -332,11 +333,11 @@ bgfx::TextureHandle TextureManager::createSolidTexture(uint8_t r, uint8_t g,
     bgfx::TextureHandle tex = bgfx::createTexture2D(
         1, 1, false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
-    return tex;
+    return registerTexture(tex);
 }
 
 // ---------------------------------------------------------------------------
-// Register externally-created texture
+// Register externally-created texture (private helper)
 // ---------------------------------------------------------------------------
 
 uint32_t TextureManager::registerTexture(bgfx::TextureHandle tex) {
@@ -365,14 +366,14 @@ void TextureManager::destroyTexture(uint32_t id) {
 }
 
 // ---------------------------------------------------------------------------
-// Lookup
+// Lookup — returns raw bgfx TextureHandle.idx as uint32_t
 // ---------------------------------------------------------------------------
 
-bgfx::TextureHandle TextureManager::getTextureHandle(uint32_t id) const {
+uint32_t TextureManager::getTextureHandle(uint32_t id) const {
     auto it = m_cache.find(id);
     if (it != m_cache.end() && bgfx::isValid(it->second))
-        return it->second;
-    return BGFX_INVALID_HANDLE;
+        return it->second.idx;
+    return 0;
 }
 
 bool TextureManager::isValid(uint32_t id) const {
@@ -381,7 +382,7 @@ bool TextureManager::isValid(uint32_t id) const {
 }
 
 // ---------------------------------------------------------------------------
-// Size query
+// Size query (private — takes bgfx handle)
 // ---------------------------------------------------------------------------
 
 void TextureManager::getTextureSize(bgfx::TextureHandle handle,
@@ -404,5 +405,3 @@ void TextureManager::getTextureSizeById(uint32_t id,
 }
 
 } // namespace Caesura
-
-
