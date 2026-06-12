@@ -23,6 +23,7 @@ set(TEST_SOURCES
     cpp/test_audio_integration.cpp
     cpp/test_lua_manager.cpp
     cpp/test_script_bindings.cpp
+    cpp/test_script_boundary.cpp
     cpp/test_game_state.cpp
     cpp/test_texture_budget_edge.cpp
     cpp/test_resource_handle.cpp
