@@ -1,4 +1,4 @@
-ï»¿#include "LayerManager.h"
+#include "LayerManager.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -50,9 +50,9 @@ const Layer& LayerManager::get(LayerType t) const {
 // Convenience setters
 // ---------------------------------------------------------------------------
 
-void LayerManager::setTexture(LayerType t, bgfx::TextureHandle tex) {
+void LayerManager::setTexture(LayerType t, uint32_t texId) {
     Layer& l = get(t);
-    l.tex   = tex;
+    l.tex   = { uint16_t(texId) };
     l.dirty = true;
 }
 
@@ -164,14 +164,14 @@ void LayerManager::clearDirtyRects() {
 }
 
 // ---------------------------------------------------------------------------
-// Z-order submit -- BG â†’ FG â†’ MSG
+// Z-order submit -- BG ¡ú FG ¡ú MSG
 // ---------------------------------------------------------------------------
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
-                           bgfx::ProgramHandle program) {
+                           uint32_t programId) {
     static bgfx::UniformHandle s_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler);
     if (!m_initialized) return;
-    if (!bgfx::isValid(program)) return;
+    if (programId == 0) return;
 
     // Update dirty regions for scissor optimization
     updateDirtyRegions(static_cast<uint16_t>(screenW),
@@ -205,7 +205,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         float rw = (float)screenW * l.sx;
         float rh = (float)screenH * l.sy;
 
-        // Convert to NDC: screen coordinates â†’ [-1, 1]
+        // Convert to NDC: screen coordinates ¡ú [-1, 1]
         float nx0 = (lx / (screenW * 0.5f)) - 1.0f;
         float ny0 = 1.0f - (ly / (screenH * 0.5f));  // flip Y
         float nx1 = ((lx + rw) / (screenW * 0.5f)) - 1.0f;
@@ -237,7 +237,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         bgfx::setIndexBuffer(&tib);
         bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
                        BGFX_STATE_BLEND_ALPHA);
-        bgfx::submit(viewId, program);
+        bgfx::submit(viewId, bgfx::ProgramHandle{ uint16_t(programId) });
 
         l.dirty = false;
     }

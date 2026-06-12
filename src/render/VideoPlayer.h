@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "api/IVideoPlayer.h"
 #include <cstdint>
 #include <string>
@@ -32,7 +32,7 @@ public:
     VideoHandle open(const char* path) override;
     void close(VideoHandle handle) override;
     bool update(VideoHandle handle, double dt) override;
-    bgfx::TextureHandle getTexture(VideoHandle handle) const override;
+    uint32_t getTexture(VideoHandle handle) const override;
 
     bool isPlaying(VideoHandle handle) const override;
     bool hasEnded(VideoHandle handle) const override;

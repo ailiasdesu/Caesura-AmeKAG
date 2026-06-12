@@ -368,11 +368,11 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
     }
 }
 
-bgfx::TextureHandle VideoPlayer::getTexture(VideoHandle handle) const {
+uint32_t VideoPlayer::getTexture(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
     if (it == m_videos.end() || !it->second.hasFrame)
-        return BGFX_INVALID_HANDLE;
-    return it->second.texture;
+        return 0;
+    return it->second.texture.idx;
 }
 
 bool VideoPlayer::isPlaying(VideoHandle handle) const {

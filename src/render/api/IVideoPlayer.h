@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 #include <string>
-#include <bgfx/bgfx.h>
 
 namespace Caesura {
 
@@ -25,7 +24,8 @@ public:
     virtual VideoHandle open(const char* path) = 0;
     virtual void close(VideoHandle handle) = 0;
     virtual bool update(VideoHandle handle, double dt) = 0;
-    virtual bgfx::TextureHandle getTexture(VideoHandle handle) const = 0;
+    // Returns raw bgfx TextureHandle.idx, or 0 if no frame available.
+    virtual uint32_t getTexture(VideoHandle handle) const = 0;
 
     virtual bool isPlaying(VideoHandle handle) const = 0;
     virtual bool hasEnded(VideoHandle handle) const = 0;

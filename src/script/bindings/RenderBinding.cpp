@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -18,7 +18,8 @@ namespace Caesura {
 // Resolve a texture ID: first try TextureManager, then RTT viewport map.
 // This handles the case where Lua passes an RTT view ID as "tex" field.
 static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
-    bgfx::TextureHandle tex = BackendRegistry::instance().getTextureManager()->getTextureHandle(id);
+    uint32_t rawHandle = BackendRegistry::instance().getTextureManager()->getTextureHandle(id);
+    bgfx::TextureHandle tex = { uint16_t(rawHandle) };
     if (!bgfx::isValid(tex) && dev && id != 0) {
         ViewportHandle vp{ id };
         tex = dev->getViewportTexture(vp);
@@ -28,7 +29,8 @@ static bgfx::TextureHandle resolveTexture(uint32_t id, IRenderDevice* dev) {
 
 // Legacy wrapper for callers that don't have a device pointer
 static bgfx::TextureHandle getTexHandle(uint32_t texId) {
-    return BackendRegistry::instance().getTextureManager()->getTextureHandle(texId);
+    uint32_t raw = BackendRegistry::instance().getTextureManager()->getTextureHandle(texId);
+    return bgfx::TextureHandle{ uint16_t(raw) };
 }
 
 // -- Helpers ----------------------------------------------------------------
@@ -87,13 +89,11 @@ static int lua_Render_create_solid_texture(lua_State* L) {
     int b = (int)luaL_checkinteger(L, 3);
     int a = (int)luaL_optinteger(L, 4, 255);
 
-    bgfx::TextureHandle tex = BackendRegistry::instance().getTextureManager()->createSolidTexture(
+    uint32_t texId = BackendRegistry::instance().getTextureManager()->createSolidTexture(
         (uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a);
-    if (!bgfx::isValid(tex)) {
+    if (texId == 0) {
         lua_pushnil(L); lua_pushstring(L, "GPU solid tex failed"); return 2;
     }
-
-    uint32_t texId = BackendRegistry::instance().getTextureManager()->registerTexture(tex);
     printf("[Render] Solid texture RGBA(%d,%d,%d,%d) -> %u\n", r, g, b, a, texId);
     lua_pushinteger(L, (lua_Integer)texId);
     return 1;
@@ -453,8 +453,8 @@ static int lua_Render_video_get_texture(lua_State* L) {
     VideoHandle h{ (uint32_t)luaL_checkinteger(L, 1) };
     IVideoPlayer* vp = getVideo(L);
     if (!vp) { lua_pushinteger(L, 0); return 1; }
-    bgfx::TextureHandle tex = vp->getTexture(h);
-    lua_pushinteger(L, bgfx::isValid(tex) ? (lua_Integer)tex.idx : 0);
+    uint32_t texId = vp->getTexture(h);
+    lua_pushinteger(L, (lua_Integer)texId);
     return 1;
 }
 

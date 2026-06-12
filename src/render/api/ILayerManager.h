@@ -1,5 +1,4 @@
 #pragma once
-#include <bgfx/bgfx.h>
 #include <cstdint>
 
 namespace Caesura {
@@ -23,7 +22,8 @@ public:
     virtual void init() = 0;
     virtual void shutdown() = 0;
 
-    virtual void setTexture(LayerType t, bgfx::TextureHandle tex) = 0;
+    // texId: raw bgfx TextureHandle.idx value
+    virtual void setTexture(LayerType t, uint32_t texId) = 0;
     virtual void setVisible(LayerType t, bool visible) = 0;
     virtual void setOpacity(LayerType t, float opacity) = 0;
     virtual void setPosition(LayerType t, float x, float y) = 0;
@@ -41,8 +41,9 @@ public:
     virtual void updateDirtyRegions(uint16_t screenW, uint16_t screenH) = 0;
     virtual void clearDirtyRects() = 0;
 
+    // programId: raw bgfx ProgramHandle.idx value
     virtual void render(uint16_t viewId, int screenW, int screenH,
-                        bgfx::ProgramHandle program) = 0;
+                        uint32_t programId) = 0;
 };
 
 } // namespace Caesura

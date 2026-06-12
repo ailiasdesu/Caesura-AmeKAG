@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 
 #include "api/ILayerManager.h"
 #include <bgfx/bgfx.h>
@@ -54,11 +54,11 @@ public:
     void init() override;
     void shutdown() override;
 
-    // Accessors (not in interface â€” returns internal Layer& for direct manipulation)
+    // Accessors (not in interface ¡ª returns internal Layer& for direct manipulation)
     Layer& get(LayerType t);
     const Layer& get(LayerType t) const;
 
-    void setTexture(LayerType t, bgfx::TextureHandle tex) override;
+    void setTexture(LayerType t, uint32_t texId) override;
     void setVisible(LayerType t, bool visible) override;
     void setOpacity(LayerType t, float opacity) override;
     void setPosition(LayerType t, float x, float y) override;
@@ -77,7 +77,7 @@ public:
     void clearDirtyRects() override;
 
     void render(uint16_t viewId, int screenW, int screenH,
-                bgfx::ProgramHandle program) override;
+                uint32_t programId) override;
 
 private:
     LayerManager() = default;
