@@ -133,3 +133,56 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 `docs/solutions/` — 按类别组织的过往问题解决方案（bug 诊断、架构模式、最佳实践），
 使用 YAML frontmatter（`module`, `tags`, `problem_type`）可搜索。在已文档化
 的领域实现或调试时参考。
+
+
+
+## 11. 文档分类
+
+引擎文档按用途分为 5 类，放在 `docs/` 下：
+
+### api/ — API 参考文档
+| 文件 | 内容 |
+|------|------|
+| `api/kag-commands.md` | 68 个 KAG 命令的完整参考（签名/参数/示例） |
+| `api/lua-modules.md` | 6 个 Lua 模块的 API 参考 |
+
+### design/ — 架构与设计文档
+| 文件 | 内容 |
+|------|------|
+| `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
+| `design/engine-capability-matrix.md` | 79 项能力的完成状态矩阵 |
+| `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
+| `design/engine-topology-mermaid.md` | 4 张 Mermaid 拓扑图源码 |
+| `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
+
+### guides/ — 用户与开发者指南
+| 文件 | 内容 |
+|------|------|
+| `guides/getting-started.md` | 从克隆到 Demo 可跑的入门指南 |
+| `guides/asset-pipeline.md` | 支持的资源格式与目录规范 |
+| `guides/carc-packaging.md` | CARC 打包格式与工具使用 |
+| `guides/live2d-setup.md` | Cubism SDK 集成步骤 |
+
+### plans/ — 执行记录与当前计划
+| 文件 | 内容 |
+|------|------|
+| `plans/2026-06-12-null-jobsystem-plan.md` | 当前活跃计划 |
+| `plans/T1-T5-execution-summary.md` | T1-T5 执行记录 |
+| `plans/R1-R5-execution-summary.md` | R1-R5 执行记录 |
+| `plans/F1-F4-execution-summary.md` | F1-F4 执行记录 |
+| `plans/null-jobsystem-execution-summary.md` | NullJobSystem 执行记录 |
+
+### solutions/ — 经验与模式
+| 文件 | 内容 |
+|------|------|
+| `solutions/architecture-patterns/engine-constructor-sigsegv-testing.md` | Engine 构造崩溃的 NullGpuMonitor 解决模式 |
+| `solutions/architecture-patterns/header-only-to-instance-class.md` | 头文件内联类重构为实例类模式 |
+| `solutions/build-errors/clean-build-include-path.md` | 全量构建 include 路径修复模式 |
+
+### 规则
+- **新 API 文档** → `docs/api/`
+- **新架构/设计文档** → `docs/design/`
+- **新使用指南** → `docs/guides/`
+- **执行计划与记录** → `docs/plans/`（按日期命名：`YYYY-MM-DD-NNN-描述.md`）
+- **可复用的经验/模式** → `docs/solutions/`
+- **禁止**将一次性执行提示词（prompts）留在 docs/ 中——执行完成后删除，仅保留执行总结
