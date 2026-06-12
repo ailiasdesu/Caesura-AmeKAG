@@ -188,6 +188,12 @@ bool Engine::initPlatformPhase() {
     ii.currentFocus = "KAG";
     DebugManager::instance().setInputInfo(ii);
 
+    // GpuMonitor: create real (GPU) or null (headless/test)
+    if (m_config.headless)
+        m_gpuMonitor = std::make_unique<NullGpuMonitor>();
+    else
+        m_gpuMonitor = std::make_unique<GpuMonitor>();
+
     // SaveManager + TextureBudget + misc registrations
     SaveManager::instance().init("saves/");
     TextureBudget::instance().detect();

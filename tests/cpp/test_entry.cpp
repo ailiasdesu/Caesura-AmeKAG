@@ -82,3 +82,14 @@ TEST_CASE("Entry: Engine default construct then destruct without init") {
     Engine engine2(cfg);
     CHECK(true);
 }
+
+TEST_CASE("Entry: Engine default construct then destruct") {
+    // Test that default-constructed Engine (no init) destructs safely
+    CHECK_NOTHROW({
+        EngineConfig cfg;
+        cfg.headless = true;
+        Engine engine(cfg);
+        // Destructor runs here — must not crash
+    });
+}
+
