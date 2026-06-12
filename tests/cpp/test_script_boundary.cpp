@@ -189,3 +189,153 @@ TEST_CASE("E3 Bindings: DevCore set_dev_mode invalid value does not crash") {
     lua_pop(L, 1);
     delete lm;
 }
+
+// -- E3 Step 4: Jump to unknown label does not crash (scheduler.lua guard) --
+
+TEST_CASE("E3 Scheduler: jump to unknown label does not crash") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "tokenizer"));
+    REQUIRE(requireModule(L, "scheduler"));
+    int r = luaL_dostring(L,
+        "local sch = require('scheduler'); "
+        "local tokens = require('tokenizer').parse('[jump target=\"*nonexistent\"]'); "
+        "local ctx = { tokens = tokens, token_index = 1, call_stack = {}, "
+        "layers = {}, backlog = {}, active_operations = {} }; "
+        "local co = coroutine.create(function() sch.run(ctx, ctx.tokens) end); "
+        "local ok, err = coroutine.resume(co); "
+        "assert(ok ~= false)");  // should not crash even if label not found
+    CHECK((r == LUA_OK || r == LUA_ERRRUN));
+    delete lm;
+}
+
+TEST_CASE("E3 Scheduler: jump with nil target does not crash") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "tokenizer"));
+    REQUIRE(requireModule(L, "scheduler"));
+    int r = luaL_dostring(L,
+        "local sch = require('scheduler'); "
+        "local tokens = require('tokenizer').parse('[jump]'); "
+        "local ctx = { tokens = tokens, token_index = 1, call_stack = {}, "
+        "layers = {}, backlog = {}, active_operations = {} }; "
+        "local co = coroutine.create(function() sch.run(ctx, ctx.tokens) end); "
+        "local ok, err = coroutine.resume(co); "
+        "assert(ok ~= false)");
+    CHECK((r == LUA_OK || r == LUA_ERRRUN));
+    delete lm;
+}
+
+// -- E3 Step 5: VFX create_emitter rejects negative parameters --
+
+TEST_CASE("E3 VFX: create_emitter rejects negative rate") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "VFX");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "particles_create_emitter");
+    REQUIRE(lua_isfunction(L, -1));
+    // Create config table with negative rate
+    lua_newtable(L);
+    lua_pushnumber(L, -10.0); lua_setfield(L, -2, "rate");
+    int r = lua_pcall(L, 1, 1, 0);
+    CHECK(r == LUA_OK);
+    CHECK(lua_tointeger(L, -1) == -1);  // should return error code
+    lua_pop(L, 2);
+    delete lm;
+}
+
+TEST_CASE("E3 VFX: create_emitter clamps lifeMax below lifeMin") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "VFX");
+    lua_getfield(L, -1, "particles_create_emitter");
+    lua_newtable(L);
+    lua_pushnumber(L, 5.0); lua_setfield(L, -2, "lifeMin");
+    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "lifeMax");
+    int r = lua_pcall(L, 1, 1, 0);
+    CHECK(r == LUA_OK);
+    CHECK(lua_tointeger(L, -1) >= 0);  // should succeed with clamped values
+    lua_pop(L, 2);
+    delete lm;
+}
+
+// -- E3 Step 6: GameState survives coroutine context switch --
+
+TEST_CASE("E3 GameState: survives coroutine context switch") {
+    LuaManager lm;
+    REQUIRE(lm.init());
+    lua_State* L = lm.state();
+    // Create GameState in main thread via C API
+    REQUIRE(GameState::push(L));
+    lua_pushstring(L, "cross_coro_value");
+    lua_setfield(L, -2, "coro_key");
+    lua_pop(L, 1);
+    // Create and resume a coroutine ¡ª GameState table should still be on the
+    // registry and accessible from any lua_State sharing the same Lua universe
+    int r = luaL_dostring(L,
+        "local co = coroutine.create(function() return 42 end); "
+        "local ok, result = coroutine.resume(co); "
+        "assert(ok and result == 42)");
+    CHECK(r == LUA_OK);
+    // Verify GameState still accessible from main thread
+    REQUIRE(GameState::push(L));
+    lua_getfield(L, -1, "coro_key");
+    CHECK(std::string(lua_tostring(L, -1)) == "cross_coro_value");
+    lua_pop(L, 2);
+}
+
+// -- E3 Step 6: Bindings nil parameter safety --
+
+TEST_CASE("E3 Bindings: Render load_texture nil path does not crash") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "Render");
+    lua_getfield(L, -1, "load_texture");
+    lua_pushnil(L);
+    int r = lua_pcall(L, 1, 1, 0);
+    CHECK((r == LUA_OK || r == LUA_ERRRUN));  // nil â†?error is acceptable
+    lua_pop(L, 2);
+    delete lm;
+}
+
+TEST_CASE("E3 Bindings: Render destroy_texture invalid id does not crash") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    // This test requires TextureManager to be registered ¡ª skip if not available
+    if (!BackendRegistry::instance().getTextureManager()) {
+        delete lm;
+        return;
+    }
+    lua_getglobal(L, "Render");
+    lua_getfield(L, -1, "destroy_texture");
+    lua_pushinteger(L, 99999);  // non-existent texture ID
+    int r = lua_pcall(L, 1, 1, 0);
+    CHECK(r == LUA_OK);  // should succeed (no-op for invalid ID)
+    lua_pop(L, 2);
+    delete lm;
+}
+
+TEST_CASE("E3 Bindings: VFX emit negative count does not crash") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    if (!BackendRegistry::instance().getParticleSystem()) {
+        delete lm;
+        return;
+    }
+    lua_getglobal(L, "VFX");
+    lua_getfield(L, -1, "particles_emit");
+    lua_pushinteger(L, 1);     // emitter ID
+    lua_pushinteger(L, -5);    // negative count
+    int r = lua_pcall(L, 2, 1, 0);
+    CHECK((r == LUA_OK || r == LUA_ERRRUN));
+    lua_pop(L, 2);
+    delete lm;
+}

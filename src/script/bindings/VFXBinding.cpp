@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
@@ -77,6 +77,17 @@ static int lua_VFX_particles_create_emitter(lua_State* L) {
     lua_getfield(L, 1, "a");         cfg.a       =lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : 1.0f;  lua_pop(L, 1);
     lua_getfield(L, 1, "gravityX");  cfg.gravityX=lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : 0.0f;  lua_pop(L, 1);
     lua_getfield(L, 1, "gravityY");  cfg.gravityY=lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : 0.0f;  lua_pop(L, 1);
+
+    // Validate — reject negative values that would produce undefined behaviour
+    if (cfg.rate < 0.0f || cfg.lifeMin < 0.0f || cfg.lifeMax < 0.0f ||
+        cfg.speedMin < 0.0f || cfg.speedMax < 0.0f ||
+        cfg.sizeMin < 0.0f || cfg.sizeMax < 0.0f) {
+        lua_pushinteger(L, -1);
+        return 1;
+    }
+    if (cfg.lifeMax < cfg.lifeMin) cfg.lifeMax = cfg.lifeMin;
+    if (cfg.speedMax < cfg.speedMin) cfg.speedMax = cfg.speedMin;
+    if (cfg.sizeMax < cfg.sizeMin) cfg.sizeMax = cfg.sizeMin;
 
     int id = BackendRegistry::instance().getParticleSystem()->createEmitter(cfg);
     lua_pushinteger(L, id);

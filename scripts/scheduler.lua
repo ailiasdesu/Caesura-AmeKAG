@@ -1,5 +1,5 @@
-﻿-- =============================================================================
---  Caesura (AmeKAG) �� scheduler.lua
+-- =============================================================================
+--  Caesura (AmeKAG) ?? scheduler.lua
 --  Token stream executor. Iterates tokens, dispatches to kag[cmd](ctx, params),
 --  handles flow-control inline (if/jump/call/return/label/end/macro/eval/wait).
 --  Coroutine-based: yields on blocking ops, resumes next frame from token_index.
@@ -7,7 +7,7 @@
 
 local scheduler = {}
 
--- ���� Flow-control command set (handled inline, never dispatched to kag table) ����
+-- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
 
 local flow_commands = {
     ["if"] = true, ["else"] = true, ["endif"] = true,
@@ -20,7 +20,7 @@ local flow_commands = {
     ["stop"] = true,
 }
 
--- ���� Internal helpers ����������������������������������������������������������������������������������������������������������������
+-- ???? Internal helpers ????????????????????????????????????????????????????????????????????????????????????????????????????????????????
 
 local function find_label(tokens, name)
     for i, tok in ipairs(tokens) do
@@ -45,7 +45,7 @@ local function skip_to(tokens, start_idx, targets)
     return #tokens
 end
 
--- ���� Main execution loop ����������������������������������������������������������������������������������������������������������
+-- ???? Main execution loop ??????????????????????????????????????????????????????????????????????????????????????????????????????????
 
 function scheduler.run(ctx, tokens, start_index)
     if not tokens or #tokens == 0 then return end
@@ -76,7 +76,9 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [jump]
         if cmd == "jump" then
             local target = params.target or params.label or params.storage
-            if params.target then
+            if not target then
+                print("[WARN] [jump] missing target/label/storage parameter")
+            elseif params.target then
                 -- Cross-scene jump: load new scene
                 local path = "assets/script/" .. target
                 local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
@@ -97,7 +99,11 @@ function scheduler.run(ctx, tokens, start_index)
             else
                 -- Intra-scene jump: find label
                 local idx = find_label(tokens, target)
-                if idx then i = idx end
+                if idx then
+                    i = idx
+                else
+                    print("[WARN] [jump] label not found: " .. tostring(target))
+                end
             end
 
         -- Flow control: [call]
@@ -149,7 +155,7 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "end" then
             return
 
-        -- Flow control: [label] �� no-op, used by jump/call
+        -- Flow control: [label] ?? no-op, used by jump/call
         elseif cmd == "label" then
             -- pass
 
@@ -250,7 +256,7 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expand macro inline �� merge params
+                -- Expand macro inline ?? merge params
                 local saved_tokens = tokens
                 tokens = macro_body
                 ctx.tokens = tokens
@@ -261,7 +267,7 @@ function scheduler.run(ctx, tokens, start_index)
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then
-                    -- Unrecognized text �� treat as [ch]
+                    -- Unrecognized text ?? treat as [ch]
                     handler = kag["ch"]
                     if handler then
                         params = {text = cmd}
@@ -271,7 +277,7 @@ function scheduler.run(ctx, tokens, start_index)
                 if handler then
                     local status, err = pcall(handler, ctx, params)
                     if not status then
-                        -- Error �� ErrorUI
+                        -- Error ?? ErrorUI
                         local ErrorUI = require("Core.ErrorUI")
                         -- Lua-side error reporting
                         print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
@@ -289,7 +295,7 @@ function scheduler.run(ctx, tokens, start_index)
     end
 end
 
--- ���� Resume from saved state ��������������������������������������������������������������������������������������������������
+-- ???? Resume from saved state ??????????????????????????????????????????????????????????????????????????????????????????????????
 
 function scheduler.resume(ctx)
     if not ctx.tokens or not ctx.token_index then return end
@@ -297,4 +303,3 @@ function scheduler.resume(ctx)
 end
 
 return scheduler
-
