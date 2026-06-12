@@ -12,7 +12,7 @@ TEST_CASE("NullAnimationBackend::init returns true") {
 
 TEST_CASE("NullAnimationBackend::name") {
     NullAnimationBackend anim;
-    CHECK(std::string(anim.name()) == "NullAnimation");
+    CHECK(std::string(anim.name()) == "NullAnimation+PNG");
 }
 
 TEST_CASE("NullAnimationBackend::model lifecycle returns safe defaults") {
@@ -50,7 +50,7 @@ TEST_CASE("IAnimationBackend interface completeness") {
     // Verify the interface is usable through base pointer
     IAnimationBackend* iface = new NullAnimationBackend();
     CHECK(iface->init() == true);
-    CHECK(std::string(iface->name()) == "NullAnimation");
+    CHECK(std::string(iface->name()) == "NullAnimation+PNG");
     CHECK(iface->isLoaded(0) == false);
     iface->render(0.0f);
     iface->shutdown();

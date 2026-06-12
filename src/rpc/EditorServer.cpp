@@ -110,6 +110,18 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // GET /api/status -- detailed engine status (R1.1)
+    // ---------------------------------------------------------------------
+    svr.Get("/api/status", [this](const httplib::Request&, httplib::Response& res) {
+        const char* luaOk = (m_L || BackendRegistry::instance().getLuaState()) ? "true" : "false";
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+            "{\"status\":\"ok\",\"engine\":\"CaesuraAmeKAG\",\"lua\":%s,\"port\":%d}",
+            luaOk, m_port);
+        res.set_content(buf, "application/json");
+    });
+
+    // ---------------------------------------------------------------------
     // GET /api/assets -- list project assets
     // ---------------------------------------------------------------------
     svr.Get("/api/assets", [](const httplib::Request& req, httplib::Response& res) {

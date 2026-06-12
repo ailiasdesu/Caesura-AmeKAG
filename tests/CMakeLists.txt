@@ -108,6 +108,7 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/minigame/MiniGeometry.cpp
     ${CMAKE_SOURCE_DIR}/src/minigame/MiniCollision.cpp
     ${CMAKE_SOURCE_DIR}/src/steam/SteamBackend.cpp
+    ${CMAKE_SOURCE_DIR}/src/live2d/NullAnimationBackend.cpp
     ${CMAKE_SOURCE_DIR}/src/script/bindings/SteamBinding.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/CloudSaveProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/render/EmbeddedShaders_MiniGame.cpp
