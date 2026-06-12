@@ -27,6 +27,8 @@ set(TEST_SOURCES
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
     cpp/test_entry.cpp
+    cpp/test_di.cpp
+    cpp/test_minigame.cpp
     cpp/test_platform.cpp
     cpp/test_storage.cpp
     cpp/test_save_migration.cpp
