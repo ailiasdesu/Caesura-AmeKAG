@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- EditorServer implementation (Track 4)
 // ===========================================================================
 
@@ -11,11 +11,13 @@ extern "C" {
 }
 
 #include "../di/BackendRegistry.h"
+#include "../archive/CARCWriter.h"
 #include "../script/vm/LuaManager.h"
 #include "../script/vm/LuaManager.h"
 #include <cstdio>
 #include <ctime>
 #include <sstream>
+#include <fstream>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -250,6 +252,161 @@ void EditorServer::serverLoop(int port) {
         }
         json += "]";
         res.set_content(json, "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------
+    // GET /api/live2d/models -- list available Live2D models (R1.2)
+    // ---------------------------------------------------------------------
+    svr.Get("/api/live2d/models", [](const httplib::Request&, httplib::Response& res) {
+        std::string json = "[";
+        bool first = true;
+        const char* dirs[] = {"models", "assets/models", "assets/live2d"};
+        for (const char* dir : dirs) {
+            if (!fs::exists(dir)) continue;
+            try {
+                for (const auto& entry : fs::directory_iterator(dir)) {
+                    if (!entry.is_regular_file()) continue;
+                    std::string name = entry.path().filename().string();
+                    // Filter for Live2D model files
+                    bool isModel = false;
+                    if (name.size() > 4) {
+                        std::string ext = name.substr(name.size() - 4);
+                        if (ext == ".moc" || ext == ".json" || name.find(".model") != std::string::npos) isModel = true;
+                    }
+                    if (!isModel) continue;
+                    if (!first) json += ",";
+                    first = false;
+                    std::string path = (std::string(dir) + "/" + name);
+                    json += "{\"name\":\"" + name + "\",\"path\":\"" + path + "\"}";
+                }
+            } catch (...) {}
+        }
+        json += "]";
+        res.set_content(json, "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/live2d/load -- load a Live2D model (R1.2)
+    // ---------------------------------------------------------------------
+    svr.Post("/api/live2d/load", [](const httplib::Request& req, httplib::Response& res) {
+        // Parse modelPath from JSON body
+        std::string body = req.body;
+        std::string modelPath;
+        auto pos = body.find("\"modelPath\"");
+        if (pos != std::string::npos) {
+            auto start = body.find("\"", pos + 12);
+            if (start != std::string::npos) {
+                auto end = body.find("\"", start + 1);
+                if (end != std::string::npos) {
+                    modelPath = body.substr(start + 1, end - start - 1);
+                }
+            }
+        }
+
+        if (modelPath.empty()) {
+            res.set_content("{\"error\":\"modelPath required\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+
+        auto* anim = BackendRegistry::instance().getAnimationBackend();
+        if (!anim) {
+            res.set_content("{\"error\":\"Animation backend not available\"}", "application/json");
+            res.status = 500;
+            return;
+        }
+
+        anim->init();
+        int handle = anim->loadModel(modelPath.c_str(), modelPath.c_str());
+        if (handle > 0) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                "{\"status\":\"ok\",\"modelId\":%d,\"name\":\"%s\"}",
+                handle, modelPath.c_str());
+            res.set_content(buf, "application/json");
+        } else {
+            res.set_content("{\"error\":\"Failed to load model\"}", "application/json");
+            res.status = 500;
+        }
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/build -- one-click CARC packaging (R1.3)
+    // ---------------------------------------------------------------------
+    svr.Post("/api/build", [](const httplib::Request& req, httplib::Response& res) {
+        std::string outputPath = "build/game.carc";
+        std::string keyPath = "build/game.key";
+
+        // Parse optional outputPath and keyPath from body
+        std::string body = req.body;
+        auto findParam = [&](const std::string& name) -> std::string {
+            auto pos = body.find("\"" + name + "\"");
+            if (pos == std::string::npos) return "";
+            auto start = body.find("\"", pos + name.size() + 3);
+            if (start == std::string::npos) return "";
+            auto end = body.find("\"", start + 1);
+            if (end == std::string::npos) return "";
+            return body.substr(start + 1, end - start - 1);
+        };
+        std::string customOutput = findParam("outputPath");
+        std::string customKey = findParam("keyPath");
+        if (!customOutput.empty()) outputPath = customOutput;
+        if (!customKey.empty()) keyPath = customKey;
+
+        // Collect files from scripts/ and assets/
+        std::vector<std::pair<std::string, std::string>> files; // relPath, diskPath
+        for (const char* dir : {"scripts", "assets"}) {
+            if (!fs::exists(dir)) continue;
+            try {
+                for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+                    if (!entry.is_regular_file()) continue;
+                    std::string rel = entry.path().string();
+                    // Normalize to forward slashes
+                    for (auto& c : rel) if (c == '\\') c = '/';
+                    files.push_back({rel, entry.path().string()});
+                }
+            } catch (...) {}
+        }
+
+        if (files.empty()) {
+            res.set_content("{\"error\":\"No files to package\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+
+        // Create output directory
+        fs::create_directories("build");
+
+        // Package using CARCWriter
+        Caesura::carc::CARCWriter writer;
+        if (!writer.create(outputPath, keyPath, keyPath + ".pub")) {
+            res.set_content("{\"error\":\"Failed to create CARC archive\"}", "application/json");
+            res.status = 500;
+            return;
+        }
+
+        for (const auto& [relPath, diskPath] : files) {
+            std::ifstream ifs(diskPath, std::ios::binary);
+            if (!ifs.is_open()) continue;
+            std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)),
+                                       std::istreambuf_iterator<char>());
+            writer.addFile(relPath, data.data(), data.size());
+        }
+
+        if (!writer.finalize()) {
+            res.set_content("{\"error\":\"Failed to finalize CARC archive\"}", "application/json");
+            res.status = 500;
+            return;
+        }
+
+        auto fileSize = fs::file_size(outputPath);
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+            "{\"status\":\"ok\",\"path\":\"%s\",\"size\":%llu,\"files\":%zu}",
+            outputPath.c_str(), (unsigned long long)fileSize, files.size());
+        res.set_content(buf, "application/json");
     });
 
     // ---------------------------------------------------------------------

@@ -13,6 +13,7 @@ set(TEST_SOURCES
     cpp/test_debug.cpp
     cpp/test_hotreload_integration.cpp
     cpp/test_demo_smoke.cpp
+    cpp/test_demo_e2e.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
     cpp/test_job_system.cpp
@@ -26,6 +27,8 @@ set(TEST_SOURCES
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
     cpp/test_entry.cpp
+    cpp/test_platform.cpp
+    cpp/test_storage.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
     cpp/test_mobile_adapter.cpp

@@ -31,6 +31,7 @@ extern "C" {
 #include "../steam/api/ISteamBackend.h"
 #include "../steam/SteamBackend.h"
 #include "../steam/NullSteamBackend.h"
+#include "../render/NullGpuMonitor.h"
 #include "../script/bindings/SteamBinding.h"
 #include "../archive/CryptoEngine.h"
 #ifdef CAESURA_HAS_LIVE2D
@@ -66,7 +67,7 @@ Engine::Engine(const EngineConfig& config)
     : m_config(config)
     , m_lua(config.lua ? std::unique_ptr<LuaManager>(config.lua) : std::make_unique<LuaManager>())
     , m_inputRouter(config.inputRouter ? std::unique_ptr<InputRouter>(config.inputRouter) : std::make_unique<InputRouter>())
-    , m_gpuMonitor(config.gpuMonitor ? std::unique_ptr<IGpuMonitor>(config.gpuMonitor) : std::make_unique<GpuMonitor>())
+    , m_gpuMonitor(config.gpuMonitor ? std::unique_ptr<IGpuMonitor>(config.gpuMonitor) : (m_config.headless ? std::unique_ptr<IGpuMonitor>(std::make_unique<NullGpuMonitor>()) : std::unique_ptr<IGpuMonitor>(std::make_unique<GpuMonitor>())))
     , m_videoPlayer(config.videoPlayer ? std::unique_ptr<VideoPlayer>(config.videoPlayer) : std::make_unique<VideoPlayer>())
 #ifdef CAESURA_HAS_STEAM
     , m_steamBackend(config.steam ? std::unique_ptr<ISteamBackend>(config.steam) : std::make_unique<SteamBackend>())
@@ -698,13 +699,13 @@ void Engine::shutdown() {
     if (m_renderDevice) { m_renderDevice->flushAllRTT(); }
 
     // Process one final bgfx frame to drain pending GPU commands
-    bgfx::frame();
+    if (m_renderDevice) { bgfx::frame(); }
 
     // Animation (Live2D) shut down after bgfx pipeline is drained
     if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
 
     // Final bgfx frame after Live2D cleanup
-    bgfx::frame();
+    if (m_renderDevice) { bgfx::frame(); }
     
     if (m_renderDevice) { m_renderDevice->shutdown(); }
     FreeTypeContext::instance().shutdown();

@@ -75,6 +75,7 @@ private:
     int  m_gcFrameCounter = 0;
     static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);
 
+    EngineConfig m_config;
     std::unique_ptr<IRenderDevice>     m_renderDevice;
     std::unique_ptr<IAudioBackend>     m_audioBackend;
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
@@ -88,7 +89,6 @@ private:
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
-    EngineConfig m_config;
 };
 
 } // namespace Caesura

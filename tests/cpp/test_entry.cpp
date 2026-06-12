@@ -1,6 +1,8 @@
-// test_entry.cpp - entry module unit tests (R4.2)
+// test_entry.cpp - entry module unit tests (R4.2, extended S3)
 #include "doctest.h"
+#include "entry/Engine.h"
 #include "entry/EngineConfig.h"
+#include "di/BackendRegistry.h"
 #include <cstring>
 
 using namespace Caesura;
@@ -59,4 +61,24 @@ TEST_CASE("Entry: EngineConfig width/height range") {
     cfg.height = 1080;
     CHECK(cfg.width == 1920);
     CHECK(cfg.height == 1080);
+}
+
+// S3 — Engine construction and lifecycle tests
+
+TEST_CASE("Entry: Engine constructs in headless mode without crash") {
+    EngineConfig cfg;
+    cfg.headless = true;
+    Engine engine(cfg);
+    CHECK(true);
+}
+
+TEST_CASE("Entry: Engine default construct then destruct without init") {
+    EngineConfig cfg;
+    cfg.headless = true;
+    {
+        Engine engine(cfg);
+    }
+    // Construct again to verify BackendRegistry state is clean
+    Engine engine2(cfg);
+    CHECK(true);
 }
