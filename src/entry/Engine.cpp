@@ -94,12 +94,7 @@ bool Engine::init() {
     if (m_config.steam)     m_steamBackend.reset(static_cast<ISteamBackend*>(m_config.steam));
 
     detail::g_mainThreadId = std::this_thread::get_id();
-    int width  = m_config.width;
-    int height = m_config.height;
-    const char* title = m_config.title;
 
-    bool headless = m_config.headless;
-    bool editorMode = m_config.editorMode;
     if (m_config.editorMode) {
         fprintf(stderr, "[Engine] Running in EDITOR mode (hidden window + GPU)\n");
     }
@@ -111,45 +106,72 @@ bool Engine::init() {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
+    // T2: Phase-split initialization
+    if (!initPlatformPhase()) return false;
+    if (!initScriptingPhase()) return false;
+    if (!initAssetPhase()) return false;
+    if (!initOptionalPhase()) {
+        fprintf(stderr, "[Engine] Optional subsystems init had issues (non-fatal).\n");
+    }
+
+    DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
+    return true;
+}
+
+// ============================================================================
+// T2.1: Platform + Render + Audio initialization
+// ============================================================================
+
+bool Engine::initPlatformPhase() {
+    int width  = m_config.width;
+    int height = m_config.height;
+    const char* title = m_config.title;
+
     if (!m_config.headless || m_config.editorMode || m_config.platform) {
-    if (!m_platformBackend->init(title, width, height)) {
-        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed, "SDL3 platform backend init failed.");
-        return false;
-    }
-    BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
-    if (m_config.editorMode) {
-        SDL_HideWindow(static_cast<SDL_Window*>(m_platformBackend->getNativeWindowHandle()));
-    }
+        if (!m_platformBackend->init(title, width, height)) {
+            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
+                        "SDL3 platform backend init failed.");
+            return false;
+        }
+        BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
 
-    void* nwh = m_platformBackend->getNativeWindowHandle();
-    DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
+        if (m_config.editorMode) {
+            SDL_HideWindow(static_cast<SDL_Window*>(
+                m_platformBackend->getNativeWindowHandle()));
+        }
 
-    if (!m_renderDevice->init(nwh, width, height)) {
-    DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed, "Render device init failed.");
-        return false;
-    }
-    BackendRegistry::instance().setRenderDevice(*m_renderDevice);
+        void* nwh = m_platformBackend->getNativeWindowHandle();
+        DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
+
+        if (!m_renderDevice->init(nwh, width, height)) {
+            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
+                        "Render device init failed.");
+            return false;
+        }
+        BackendRegistry::instance().setRenderDevice(*m_renderDevice);
     } else {
         // Headless: register null backends for safe no-op operations
         BackendRegistry::instance().registerNullBackends();
     }
 
+    // Render info (GPU caps)
     if (!m_config.headless || m_config.editorMode || m_config.platform) {
-    const bgfx::Caps* caps = bgfx::getCaps();
-    DebugManager::RenderInfo ri;
-    ri.backendName = bgfx::getRendererName(caps->rendererType);
-    ri.width = width; ri.height = height;
-    ri.viewCount = 3; ri.shaderReady = true;
-    DebugManager::instance().setRenderInfo(ri);
+        const bgfx::Caps* caps = bgfx::getCaps();
+        DebugManager::RenderInfo ri;
+        ri.backendName = bgfx::getRendererName(caps->rendererType);
+        ri.width = width; ri.height = height;
+        ri.viewCount = 3; ri.shaderReady = true;
+        DebugManager::instance().setRenderInfo(ri);
     }
 
+    // Audio backend init
     if (!m_config.headless || m_config.editorMode || m_config.platform) {
-    // audio backend injected via EngineConfig
-    if (!m_audioBackend->init()) {
-    DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed, "Audio backend init failed.");
-        return false;
-    }
-    BackendRegistry::instance().setAudioBackend(*m_audioBackend);
+        if (!m_audioBackend->init()) {
+            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
+                        "Audio backend init failed.");
+            return false;
+        }
+        BackendRegistry::instance().setAudioBackend(*m_audioBackend);
     } else {
         printf("[Engine] Headless mode: skipping audio init\n");
     }
@@ -159,71 +181,99 @@ bool Engine::init() {
     ai.voiceBusReady = true; ai.seBusReady = true; ai.globalVolume = 1.0f;
     DebugManager::instance().setAudioInfo(ai);
 
+    // Input router
     BackendRegistry::instance().setInputRouter(m_inputRouter.get());
-
     DebugManager::InputInfo ii;
     ii.currentFocus = "KAG";
     DebugManager::instance().setInputInfo(ii);
 
+    // SaveManager + TextureBudget + misc registrations
     SaveManager::instance().init("saves/");
-
     TextureBudget::instance().detect();
     BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
     BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
 
+    return true;
+}
+
+// ============================================================================
+// T2.2: Lua scripting + bindings + HotReload
+// ============================================================================
+
+bool Engine::initScriptingPhase() {
     if (!m_lua->init()) {
+        // Wire SoLoud to Lua before failing
         auto* soLoud = static_cast<SoLoudAudioEngine*>(m_audioBackend.get());
-        soLoud->setLuaState(m_lua->state());
-        fprintf(stderr, "Lua VM init failed.");
+        if (soLoud) soLoud->setLuaState(m_lua->state());
+        fprintf(stderr, "[Engine] Lua VM init failed.\n");
         return false;
     }
 
     // Phase G8-U1: install lua_Alloc hook for memory monitoring
     lua_setallocf(m_lua->state(), s_luaAllocFn, m_lua->state());
     BackendRegistry::instance().setLuaState(m_lua->state());
-
     BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
 
-    // -- Phase 8.1: Initialize HotReload for scripts/ directory -----------
+    // HotReload for scripts/ directory
     HotReload::instance().init("scripts/", m_lua->state());
 
-    // Initialize shared FreeType (before any text/font subsystem uses it)
+    // Shared FreeType (before any text/font subsystem uses it)
     if (!FreeTypeContext::instance().init()) {
         fprintf(stderr, "[Engine] FreeTypeContext init failed.\n");
         return false;
     }
 
-    // Parallel task system + asset pipeline
+    return true;
+}
+
+// ============================================================================
+// T2.3: Job system + Asset pipeline
+// ============================================================================
+
+bool Engine::initAssetPhase() {
+    // Parallel task system
     JobSystem::instance().init();
     BackendRegistry::instance().setJobSystem(&JobSystem::instance());
+
+    // Asset management
     AssetManager::instance().init();
     AsyncLoader::instance().init();
+
+    return true;
+}
+
+// ============================================================================
+// T2.4: Optional subsystems (Steam, Crypto, MiniGame, Animation)
+// ============================================================================
+
+bool Engine::initOptionalPhase() {
+    bool allOk = true;
 
     // Steam init (optional, no-op if SDK not present)
     if (m_steamBackend->init()) {
         registerSteamBinding(m_lua->state(), m_steamBackend.get());
-
-    // Crypto engine registration (via BackendRegistry)
-    BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
     }
 
-        // -- 3D mini-game backend (bgfx) --
-    // miniGame injected via EngineConfig, no fallback needed
+    // Crypto engine registration (moved OUT of Steam if-block - bug fix)
+    BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
+
+    // 3D mini-game backend (bgfx)
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
 
-    // -- Animation backend (Live2D or Null) --
+    // Animation backend (Live2D or Null)
 #ifdef CAESURA_HAS_LIVE2D
     if (!m_animationBackend) m_animationBackend = std::make_unique<Live2DBackend>();
 #else
-    m_animationBackend = std::make_unique<NullAnimationBackend>();
+    if (!m_animationBackend) m_animationBackend = std::make_unique<NullAnimationBackend>();
 #endif
     if (!m_animationBackend->init()) {
-        fprintf(stderr, "Animation backend init failed, falling back to null.\n");
-    if (!m_animationBackend) m_animationBackend = std::make_unique<NullAnimationBackend>();
+        fprintf(stderr, "[Engine] Animation backend init failed, falling back to null.\n");
+        m_animationBackend = std::make_unique<NullAnimationBackend>();
         m_animationBackend->init();
+        allOk = false;
     }
     BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
 #ifdef CAESURA_HAS_LIVE2D
@@ -231,10 +281,8 @@ bool Engine::init() {
         m_renderDevice.get());
 #endif
 
-    DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
-    return true;
+    return allOk;
 }
-
 void Engine::run() {
     m_running = true;
     if (m_config.headless) {

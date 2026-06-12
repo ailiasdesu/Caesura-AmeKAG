@@ -62,6 +62,12 @@ private:
     void handleFatalError(const char* context, const char* luaError);
     void shutdown();
 
+    // T2: Init phase methods
+    bool initPlatformPhase();
+    bool initScriptingPhase();
+    bool initAssetPhase();
+    bool initOptionalPhase();
+
     bool         m_running  = false;
     uint64_t     m_lastTick = 0;
     bool         m_shutdownComplete = false;
