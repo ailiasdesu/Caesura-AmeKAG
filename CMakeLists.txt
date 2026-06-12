@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 project(CaesuraAmeKAG VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -147,7 +147,9 @@ set(ENGINE_SOURCES
     src/resource/XP3Archive.cpp
     src/render/BgfxRenderDevice.cpp
     src/render/BgfxDeviceCore.cpp
-    src/render/BgfxDraw.cpp
+    src/render/BgfxDraw_Batch.cpp
+    src/render/BgfxDraw_Blit.cpp
+    src/render/BgfxDraw_Effects.cpp
     src/render/BgfxQuadBatch.cpp
     src/render/BgfxShaderManager.cpp
     src/render/BgfxDebugCallback.cpp
@@ -240,7 +242,7 @@ set(ENGINE_HEADERS
     src/minigame/MiniLight.h
     src/minigame/MiniGeometry.h
     src/minigame/MiniCollision.h
-    src/live2d/IAnimationBackend.h
+    src/live2d/api/IAnimationBackend.h
     src/live2d/NullAnimationBackend.h
     src/render/ShaderCache.h
     src/audio/SoLoudAudioEngine.h
@@ -255,7 +257,7 @@ set(ENGINE_HEADERS
     src/script/bindings/UnifiedBinding.h
     src/script/bindings/SteamBinding.h
     src/storage/SaveManager.h
-    src/storage/ISaveProvider.h
+    src/storage/api/ISaveProvider.h
     src/storage/SaveBinding.h
     src/archive/CARCFormat.h
     src/archive/CryptoEngine.h

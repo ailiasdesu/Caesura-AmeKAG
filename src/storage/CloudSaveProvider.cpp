@@ -1,6 +1,6 @@
-﻿// CloudSaveProvider — ISaveProvider backed by Steam Remote Storage
+// CloudSaveProvider �� ISaveProvider backed by Steam Remote Storage
 #include "CloudSaveProvider.h"
-#include "../steam/ISteamBackend.h"
+#include "../steam/api/ISteamBackend.h"
 #include <cstring>
 #include <sstream>
 #include <iomanip>

@@ -1,6 +1,7 @@
 #include "AsyncLoader.h"
 #include "AssetManager.h"
 #include "ImageDecoder.h"
+#include "../di/BackendRegistry.h"
 #include "../job/JobSystem.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
@@ -33,7 +34,7 @@ void AsyncLoader::shutdown() {
     m_running = false;
     m_cancelRequested = true;
 
-    JobSystem::instance().waitIdle();
+    (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
 
     {
         std::lock_guard<std::mutex> lock(m_completeMutex);
@@ -98,7 +99,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     auto result = std::make_shared<CompletedLoad>();
     auto cancelled = std::make_shared<std::atomic<bool>>(false);
 
-    JobSystem::instance().submit(
+    (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
         [req, result, cancelled, this]() {
             if (m_cancelRequested.load()) {
                 cancelled->store(true);

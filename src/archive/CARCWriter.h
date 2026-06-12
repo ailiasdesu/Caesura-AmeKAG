@@ -1,6 +1,7 @@
-﻿// CARCWriter -- Create and write CARC archives.
+// CARCWriter -- Create and write CARC archives.
 #pragma once
 #include "CARCFormat.h"
+#include "api/IArchiveWriter.h"
 #include <string>
 #include <vector>
 #include <fstream>
@@ -15,7 +16,7 @@ struct PendingFile {
     uint64_t    originalSize;
 };
 
-class CARCWriter {
+class CARCWriter : public IArchiveWriter {
 public:
     CARCWriter() = default;
     ~CARCWriter() { if (m_output.is_open()) m_output.close(); }

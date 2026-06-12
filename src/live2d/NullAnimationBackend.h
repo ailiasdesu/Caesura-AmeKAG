@@ -1,5 +1,5 @@
-﻿#pragma once
-#include "IAnimationBackend.h"
+#pragma once
+#include "api/IAnimationBackend.h"
 
 namespace Caesura {
 

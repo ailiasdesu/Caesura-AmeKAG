@@ -1,4 +1,5 @@
 #pragma once
+#include "api/IEditorServer.h"
 // ===========================================================================
 //  Caesura (AmeKAG) -- EditorServer (Track 4)
 //  Embedded HTTP server for the Web-based visual editor.
@@ -16,7 +17,7 @@ struct lua_State;
 
 namespace Caesura {
 
-class EditorServer {
+class EditorServer : public IEditorServer {
 public:
     static EditorServer& instance();
 

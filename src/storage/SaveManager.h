@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.h
 //  Spec [6.1]: JSON save/load system with schema versioning.
 //  Uses nlohmann/json v3.11.3 — structured save data, nested objects,
@@ -13,6 +13,7 @@
 #include <functional>
 #include <unordered_map>
 #include "../external/json/nlohmann_json.hpp"
+#include "api/ISaveManager.h"
 
 struct lua_State;
 
@@ -31,7 +32,7 @@ struct SaveMeta {
 
 using MigrationFn = std::function<json(json)>;
 
-class SaveManager {
+class SaveManager : public ISaveManager {
 public:
     static SaveManager& instance();
     static const char* ENGINE_VERSION;
@@ -81,7 +82,7 @@ private:
     int m_currentSchemaVersion = 1;
         bool m_keySet = false;
     uint8_t m_encryptKey[32] = {0};
-    std::unique_ptr<class ISaveProvider> m_saveProvider;
+    std::unique_ptr<ISaveProvider> m_saveProvider;
     std::unordered_map<int, std::pair<int, MigrationFn>> m_migrations;
 
     std::string slotPath(int slot) const;

@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
 find_package(SDL3 REQUIRED)
 
 add_library(doctest INTERFACE)
@@ -22,7 +22,12 @@ set(TEST_SOURCES
     cpp/test_error_ui.cpp
     cpp/test_save_migration.cpp
     cpp/test_mobile_adapter.cpp
-    cpp/test_render.cpp
+    cpp/test_render_device.cpp
+    cpp/test_render_pipeline.cpp
+    cpp/test_rpc.cpp
+    cpp/test_backend_registry.cpp
+    cpp/test_layer_manager.cpp
+    cpp/test_texture_manager.cpp
     cpp/test_kag_binding.cpp
     cpp/test_kag_integration.cpp
     cpp/test_sandbox_quota.cpp
@@ -30,6 +35,8 @@ set(TEST_SOURCES
     cpp/test_engine_lifecycle.cpp
     cpp/test_mini_game.cpp
     cpp/test_steam.cpp
+    cpp/test_live2d.cpp
+    cpp/test_archive.cpp
 
     # Source files needed for linking
     ${CMAKE_SOURCE_DIR}/src/di/BackendRegistry.cpp
@@ -69,7 +76,9 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/render/TextRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/render/BgfxRenderDevice.cpp
     ${CMAKE_SOURCE_DIR}/src/render/BgfxDeviceCore.cpp
-    ${CMAKE_SOURCE_DIR}/src/render/BgfxDraw.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDraw_Batch.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDraw_Blit.cpp
+    ${CMAKE_SOURCE_DIR}/src/render/BgfxDraw_Effects.cpp
     ${CMAKE_SOURCE_DIR}/src/render/BgfxQuadBatch.cpp
     ${CMAKE_SOURCE_DIR}/src/render/BgfxShaderManager.cpp
     ${CMAKE_SOURCE_DIR}/src/render/BgfxDebugCallback.cpp

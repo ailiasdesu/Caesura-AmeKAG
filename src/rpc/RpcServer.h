@@ -1,4 +1,5 @@
 #pragma once
+#include "api/IRpcServer.h"
 // ===========================================================================
 //  Caesura (AmeKAG) -- RpcServer
 //  stdin/stdout JSON-RPC for IDE/Editor integration.
@@ -17,7 +18,7 @@ struct lua_State;
 
 namespace Caesura {
 
-class RpcServer {
+class RpcServer : public IRpcServer {
 public:
     static RpcServer& instance();
 
@@ -32,6 +33,7 @@ public:
 
     // Signal stop from outside
     void stop();
+    bool isRunning() const { return m_running.load(); }
 
     // Set frame capture callback (for editor mode getFrame RPC)
     void setFrameCaptureCallback(std::function<std::string(int,int)> cb) { m_frameCaptureCb = std::move(cb); }

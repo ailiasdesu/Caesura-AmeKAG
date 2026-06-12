@@ -1,7 +1,7 @@
 ﻿// test_steam.cpp — Steam backend tests (NullSteamBackend)
 #include "doctest.h"
 #include "steam/NullSteamBackend.h"
-#include "steam/ISteamBackend.h"
+#include "steam/api/ISteamBackend.h"
 
 using namespace Caesura;
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "api/IJobSystem.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -11,19 +12,11 @@
 
 namespace Caesura {
 
-enum class JobPriority : uint8_t {
-    High   = 0,
-    Normal = 1,
-    Low    = 2,
-};
-
-using JobFn          = std::function<void()>;
-using MainThreadFn   = std::function<void()>;
 
 // Fiber-free work-stealing job system (Beta Part 8 subset).
 // - Workers execute JobFn (green zone: I/O, decode, CPU math).
 // - MainThreadFn callbacks are queued and run via pollMainThreadJobs() (red zone).
-class JobSystem {
+class JobSystem : public IJobSystem {
 public:
     static JobSystem& instance();
 

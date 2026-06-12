@@ -1,10 +1,11 @@
-﻿#pragma once
+#pragma once
+#include "../api/ILuaManager.h"
 struct lua_State;
 struct lua_Debug;
 
 namespace Caesura {
 
-class LuaManager {
+class LuaManager : public ILuaManager {
 public:
     static LuaManager& instance();
 

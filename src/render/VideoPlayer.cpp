@@ -1,4 +1,4 @@
-﻿#include <cstdio>
+#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <vector>
@@ -8,6 +8,7 @@
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
 #include "../debug/DebugManager.h"
+#include "../di/BackendRegistry.h"
 #include "../job/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
@@ -266,7 +267,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->width  = vs->width;
         frame->height = vs->height;
 
-        JobSystem::instance().submit(
+        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
             [frame, vs]() {
                 auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
                 auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
@@ -309,7 +310,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             JobPriority::High
         );
 
-        JobSystem::instance().waitIdle();
+        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
 
         if (frame->valid) {
             const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
@@ -332,7 +333,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->width  = vs->width;
         frame->height = vs->height;
 
-        JobSystem::instance().submit(
+        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
             [frame, plm]() {
                 plm_frame_t* f = plm_decode_video(plm);
                 plm_decode_audio(plm);
@@ -347,7 +348,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             JobPriority::High
         );
 
-        JobSystem::instance().waitIdle();
+        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
 
         if (frame->valid) {
             const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());

@@ -1,7 +1,7 @@
-ï»¿// NullSteamBackend â€” no-op implementation of ISteamBackend
+// NullSteamBackend ¡ª no-op implementation of ISteamBackend
 // Used when CAESURA_ENABLE_STEAM=OFF or Steamworks SDK not available
 #pragma once
-#include "ISteamBackend.h"
+#include "api/ISteamBackend.h"
 
 namespace Caesura {
 

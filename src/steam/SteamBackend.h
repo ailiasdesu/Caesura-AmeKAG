@@ -1,7 +1,7 @@
-ï»¿// SteamBackend â€” real Steamworks SDK integration
+// SteamBackend ¡ª real Steamworks SDK integration
 // Requires Steamworks SDK 1.60+. Compiled only when CAESURA_HAS_STEAM is defined.
 #pragma once
-#include "ISteamBackend.h"
+#include "api/ISteamBackend.h"
 
 namespace Caesura {
 

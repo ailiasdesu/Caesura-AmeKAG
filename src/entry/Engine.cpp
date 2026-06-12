@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -28,10 +28,11 @@
 #include "../render/TextureManager.h"
 #include "../minigame/BgfxMiniGameBackend.h"
 #include "../live2d/NullAnimationBackend.h"
-#include "../steam/ISteamBackend.h"
+#include "../steam/api/ISteamBackend.h"
 #include "../steam/SteamBackend.h"
 #include "../steam/NullSteamBackend.h"
 #include "../script/bindings/SteamBinding.h"
+#include "../archive/CryptoEngine.h"
 #ifdef CAESURA_HAS_LIVE2D
 #include "../live2d/Live2D/Live2DBackend.h"
 #include "../render/BgfxRenderDevice.h"
@@ -195,12 +196,16 @@ bool Engine::init() {
 
     // Parallel task system + asset pipeline
     JobSystem::instance().init();
+    BackendRegistry::instance().setJobSystem(&JobSystem::instance());
     AssetManager::instance().init();
     AsyncLoader::instance().init();
 
     // Steam init (optional, no-op if SDK not present)
     if (m_steamBackend->init()) {
         registerSteamBinding(m_lua->state(), m_steamBackend.get());
+
+    // Crypto engine registration (via BackendRegistry)
+    BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
     }
 
         // -- 3D mini-game backend (bgfx) --

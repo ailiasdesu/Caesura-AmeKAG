@@ -1,7 +1,7 @@
-﻿// CloudSaveProvider — ISaveProvider backed by ISteamRemoteStorage
+// CloudSaveProvider — ISaveProvider backed by ISteamRemoteStorage
 // Splits saves > 256KB into chunks (Steam Remote Storage per-file limit)
 #pragma once
-#include "ISaveProvider.h"
+#include "api/ISaveProvider.h"
 
 namespace Caesura {
 class ISteamBackend;

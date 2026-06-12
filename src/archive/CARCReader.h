@@ -2,6 +2,7 @@
 // Phase 9: Chain trust verification (spec [10.2.63]) via verifyChainTrust().
 #pragma once
 #include "CARCFormat.h"
+#include "api/IArchiveReader.h"
 #include "CRLManager.h"
 #include <string>
 #include <vector>
@@ -29,7 +30,7 @@ struct CarcCertificate {
     std::string signature;          ///< Ed25519 signature (hex) from root key
 };
 
-class CARCReader {
+class CARCReader : public IArchiveReader {
     friend class CarcAssetProvider;
 public:
     CARCReader() = default;
@@ -60,7 +61,7 @@ public:
     // Utility: hash a path string to 32-byte SHA-256
     static void hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE]);
 
-    // ©¤©¤ Phase 9: Chain Trust (spec [10.2.63]) ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Phase 9: Chain Trust (spec [10.2.63]) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     /// Verify chain trust: a child CARC is authorized by a certificate
     /// stored in this (parent) CARC. The certificate is a JSON blob at
@@ -88,7 +89,7 @@ public:
 
 public:
     CARCHeader m_header;
-    // pathHash (32-byte as hex string) ¡ú FileInfo
+    // pathHash (32-byte as hex string) ï¿½ï¿½ FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;
     std::vector<std::string> m_fileList;
     std::ifstream m_stream;
@@ -105,7 +106,7 @@ public:
 
     static std::string pathHashToHex(const uint8_t hash[PATH_HASH_SIZE]);
 
-    // ©¤©¤ Chain trust ©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Chain trust ï¿½ï¿½ï¿½ï¿½
     CRLManager* m_crlManager = nullptr;
     uint8_t m_rootPublicKey[PUBLICKEY_SIZE] = {};
     bool m_hasRootKey = false;

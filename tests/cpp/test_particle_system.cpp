@@ -1,7 +1,25 @@
-﻿#include "doctest.h"
+// test_particle_system.cpp - ParticleSystem tests (merged from test_render.cpp)
+#include "doctest.h"
 #include "../src/render/ParticleSystem.h"
 
 using namespace Caesura;
+
+TEST_CASE("ParticleSystem::MAX_PARTICLES constant") {
+    CHECK(ParticleSystem::MAX_PARTICLES == 1024);
+}
+
+TEST_CASE("ParticleSystem::init with nullptr device") {
+    ParticleSystem ps;
+    bool ok = ps.init();
+    (void)ok;
+}
+
+TEST_CASE("ParticleSystem::update dynamic resolution no-crash") {
+    ParticleSystem ps;
+    ps.init();
+    ps.update(0.016f, 1920, 1080);
+    ps.update(0.016f, 640, 480);
+}
 
 TEST_CASE("ParticleSystem::createEmitter assigns id") {
     Caesura::ParticleSystem ps;
@@ -32,7 +50,6 @@ TEST_CASE("ParticleSystem::destroyEmitter then create reuses") {
 TEST_CASE("ParticleSystem::emit no-op when not initialized") {
     Caesura::ParticleSystem ps;
     int id = ps.createEmitter(Caesura::Emitter{});
-    // Without init(), emit is guarded and should not crash
     ps.emit(id, 5);
     CHECK(ps.aliveCount() == 0);
 }
@@ -44,7 +61,6 @@ TEST_CASE("ParticleSystem::update no-op when not initialized") {
     cfg.lifeMax = 0.2f;
     int id = ps.createEmitter(cfg);
     ps.emit(id, 10);
-    // update early-returns when not initialized
     ps.update(0.1f, 1280, 720);
     CHECK(ps.aliveCount() == 0);
 }
@@ -55,8 +71,7 @@ TEST_CASE("ParticleSystem::destroyEmitter sets inactive") {
     cfg.rate = 100.0f;
     int id = ps.createEmitter(cfg);
     ps.destroyEmitter(id);
-    // No crash, emitter marked inactive
-    CHECK(id >= 0);  // just verify no crash
+    CHECK(id >= 0);
 }
 
 TEST_CASE("ParticleSystem::aliveCount within MAX_PARTICLES") {

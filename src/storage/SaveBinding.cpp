@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveBinding.cpp
 //  Phase 6: C++ Lua binding for save/load.
 //  Uses nlohmann/json for structured data interchange between Lua and C++.

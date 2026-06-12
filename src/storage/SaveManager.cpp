@@ -1,4 +1,4 @@
-// ===========================================================================
+﻿// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses nlohmann/json v3.11.3 for robust structured serialization.
@@ -9,8 +9,8 @@
 // ===========================================================================
 
 #include "SaveManager.h"
-#include "ISaveProvider.h"
-#include "../archive/CryptoEngine.h"
+#include "api/ISaveProvider.h"
+#include "../di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 
@@ -116,7 +116,7 @@ std::string SaveManager::readFile(const std::string& path) {
         const auto* ct    = reinterpret_cast<const uint8_t*>(content.data() + 32);
         size_t ctLen = content.size() - 32;
 
-        auto plain = carc::CryptoEngine::decrypt(ct, ctLen, m_encryptKey, nonce, tag);
+        auto plain = BackendRegistry::instance().getCryptoEngine()->decrypt(ct, ctLen, m_encryptKey, 32, nonce, 12, tag, 16);
         if (plain.empty()) {
             fprintf(stderr, "[SaveManager] Decryption failed (wrong key or corrupted data)\n");
             return "";
@@ -134,11 +134,10 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
     if (m_keySet) {
         uint8_t nonce[12];
         uint8_t tag[16];
-        carc::CryptoEngine::generateNonce(nonce);
+        BackendRegistry::instance().getCryptoEngine()->generateNonce(nonce, 12);
 
-        auto cipher = carc::CryptoEngine::encrypt(
-            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
-            m_encryptKey, nonce, tag);
+        auto cipher = BackendRegistry::instance().getCryptoEngine()->encrypt(            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
+            m_encryptKey, 32, nonce, 12, tag, 16);
         if (cipher.empty()) {
             fprintf(stderr, "[SaveManager] Encryption failed\n");
             return false;

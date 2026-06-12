@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../audio/api/IAudioBackend.h"
 #include "../platform/api/IPlatformBackend.h"
 #include "../render/IRenderDevice.h"
@@ -9,7 +9,13 @@
 #include "../debug/api/IDebugManager.h"
 #include "../resource/api/IAsyncLoader.h"
 #include "../minigame/api/IMiniGameBackend.h"
-#include "../live2d/IAnimationBackend.h"
+#include "../live2d/api/IAnimationBackend.h"
+#include "../archive/api/ICryptoEngine.h"
+#include "../script/api/ILuaManager.h"
+#include "../job/api/IJobSystem.h"
+#include "../rpc/api/IRpcServer.h"
+#include "../rpc/api/IEditorServer.h"
+#include "api/ISandboxQuota.h"
 #include "../input/api/IInputRouter.h"
 #include "../di/api/ITextureBudget.h"
 #include "SandboxQuota.h"
@@ -51,6 +57,24 @@ public:
 
     void setAnimationBackend(IAnimationBackend* backend) { m_animationBackend = backend; }
     IAnimationBackend* getAnimationBackend() { return m_animationBackend; }
+
+    void setCryptoEngine(carc::ICryptoEngine* engine) { m_cryptoEngine = engine; }
+    carc::ICryptoEngine* getCryptoEngine() { return m_cryptoEngine; }
+
+    void setLuaManager(ILuaManager* mgr) { m_luaManager = mgr; }
+    ILuaManager* getLuaManager() { return m_luaManager; }
+
+    void setJobSystem(IJobSystem* js) { m_jobSystem = js; }
+    IJobSystem* getJobSystem() { return m_jobSystem; }
+
+    void setRpcServer(IRpcServer* rpc) { m_rpcServer = rpc; }
+    IRpcServer* getRpcServer() { return m_rpcServer; }
+
+    void setEditorServer(IEditorServer* es) { m_editorServer = es; }
+    IEditorServer* getEditorServer() { return m_editorServer; }
+
+    void setSandboxQuota(ISandboxQuota* sq) { m_sandboxQuota = sq; }
+    ISandboxQuota* getSandboxQuota() { return m_sandboxQuota; }
 
     void setVideoPlayer(IVideoPlayer* player);
 
@@ -117,6 +141,12 @@ private:
     GenerationTracker m_generations;
     IMiniGameBackend*  m_miniGameBackend  = nullptr;
     IAnimationBackend* m_animationBackend = nullptr;
+    carc::ICryptoEngine* m_cryptoEngine = nullptr;
+    ILuaManager*      m_luaManager      = nullptr;
+    IJobSystem*       m_jobSystem       = nullptr;
+    IRpcServer*       m_rpcServer       = nullptr;
+    IEditorServer*    m_editorServer    = nullptr;
+    ISandboxQuota*    m_sandboxQuota    = nullptr;
     IVideoPlayer*      m_videoPlayer      = nullptr;
     IParticleSystem*   m_particleSystem   = nullptr;
     IDebugManager*     m_debugManager     = nullptr;
