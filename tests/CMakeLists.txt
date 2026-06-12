@@ -16,6 +16,7 @@ set(TEST_SOURCES
     cpp/test_demo_e2e.cpp
     cpp/test_input.cpp
     cpp/test_async.cpp
+    cpp/test_null_jobsystem.cpp
     cpp/test_job_system.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
@@ -128,6 +129,7 @@ if(WIN32)
 endif()
 
 target_include_directories(CaesuraTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/Platform
