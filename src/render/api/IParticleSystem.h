@@ -1,5 +1,4 @@
 #pragma once
-#include <bgfx/bgfx.h>
 #include <cstdint>
 
 namespace Caesura {
@@ -7,7 +6,7 @@ namespace Caesura {
 struct Emitter;
 
 // ============================================================================
-// IParticleSystem â€” pure virtual interface for particle effects
+// IParticleSystem â€?pure virtual interface for particle effects
 // ============================================================================
 // ParticleSystem implements this interface. BackendRegistry stores IParticleSystem*.
 
