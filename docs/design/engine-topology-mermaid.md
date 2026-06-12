@@ -1,36 +1,36 @@
 ﻿flowchart LR
-    subgraph root["组合根"]
+    subgraph root["Composition Root"]
         main["main.cpp"]
         engine["entry/Engine"]
     end
-    subgraph di["依赖注入"]
+    subgraph di["Dependency Injection"]
         registry["BackendRegistry (26 I*)"]
     end
-    subgraph core["核心运行时"]
+    subgraph core["Core Runtime"]
         platform["platform (SDL3)"]
-        input["input (输入路由)"]
+        input["input (Input Router)"]
         script["script (Lua+KAG)"]
         render["render (bgfx 22cpp)"]
         audio["audio (SoLoud)"]
-        resource["resource (资产管线)"]
+        resource["resource (Asset Pipeline)"]
     end
-    subgraph data["数据层"]
+    subgraph data["Data Layer"]
         archive["archive (CARC+AES)"]
-        storage["storage (存档)"]
+        storage["storage (Save/Load)"]
     end
-    subgraph opt["可选子系统"]
+    subgraph opt["Optional Subsystems"]
         live2d["live2d (PNG/Cubism)"]
         minigame["minigame (3D)"]
-        steam["steam (成就)"]
+        steam["steam (Achievements)"]
     end
-    subgraph tools["工具"]
-        debug["debug (日志/热重载)"]
-        job["job (多线程)"]
-        rpc["rpc (HTTP editor)"]
+    subgraph tools["Tools"]
+        debug["debug (Log/HotReload)"]
+        job["job (Multithread)"]
+        rpc["rpc (HTTP Editor)"]
     end
 
     main --> engine
-    engine -->|"注册所有后端"| registry
+    engine -->|"Register All Backends"| registry
 
     registry -.->|"I*"| platform
     registry -.->|"I*"| input
@@ -48,16 +48,16 @@
     registry -.->|"I*"| rpc
 
     platform -->|"SDL_Event"| input
-    input -->|"resume协程"| script
-    script -->|"KAG命令"| render
+    input -->|"resume coroutine"| script
+    script -->|"KAG Commands"| render
     script -->|"BGM/SE"| audio
-    script -->|"存读档"| storage
-    render -->|"纹理查询"| resource
-    resource -->|"读取归档"| archive
-    storage -->|"加密"| archive
-    job -->|"异步解码"| resource
-    debug -->|"热重载"| script
-    rpc -->|"执行脚本"| script
+    script -->|"Save/Load"| storage
+    render -->|"Texture Query"| resource
+    resource -->|"Read Archive"| archive
+    storage -->|"Encrypt"| archive
+    job -->|"Async Decode"| resource
+    debug -->|"Hot Reload"| script
+    rpc -->|"Execute Script"| script
 
     style root fill:#C2E5FF,stroke:#3DADFF
     style di fill:#FFECBD,stroke:#FFC943
