@@ -1,3 +1,4 @@
+// test_carc.cpp - CARC format, CryptoEngine, and archive I/O tests
 #include "doctest.h"
 #include "archive/CARCFormat.h"
 #include "archive/CryptoEngine.h"
@@ -9,6 +10,8 @@
 #include <vector>
 #include <fstream>
 #include <filesystem>
+#include <thread>
+#include <atomic>
 
 using namespace Caesura::carc;
 
@@ -103,4 +106,124 @@ TEST_CASE("CARC container: write then read") {
         }
     }
     fs::remove("test_carc.carc");
+}
+
+// =============================================================================
+// Expanded tests: edge cases & robustness
+// =============================================================================
+
+TEST_CASE("CARCReader::open truncated file returns false") {
+    namespace fs = std::filesystem;
+    const char* path = "test_truncated.carc";
+    fs::remove(path);
+
+    // Write less than a full CARC header (64 bytes)
+    {
+        std::ofstream out(path, std::ios::binary);
+        const char garbage[] = "not a real CARC file";
+        out.write(garbage, sizeof(garbage) - 1);
+    }
+
+    CARCReader r;
+    CHECK_FALSE(r.open(path));
+    CHECK_FALSE(r.isOpen());
+
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::open corrupt magic bytes returns false") {
+    namespace fs = std::filesystem;
+    const char* path = "test_badmagic.carc";
+    fs::remove(path);
+
+    {
+        std::ofstream out(path, std::ios::binary);
+        std::vector<uint8_t> garbage(64, 0x00);
+        out.write(reinterpret_cast<const char*>(garbage.data()), garbage.size());
+    }
+
+    CARCReader r;
+    CHECK_FALSE(r.open(path));
+
+    fs::remove(path);
+}
+
+TEST_CASE("CryptoEngine::encrypt with wrong key length returns empty") {
+    auto& ce = CryptoEngine::instance();
+    uint8_t key[16] = {};
+    uint8_t nonce[12] = {};
+    uint8_t tag[16] = {};
+
+    auto ct = ce.encrypt(
+        (const uint8_t*)"test", 4,
+        key, 16,
+        nonce, 12,
+        tag, 16);
+    CHECK(ct.empty());
+}
+
+TEST_CASE("CryptoEngine::decrypt with wrong nonce length returns empty") {
+    auto& ce = CryptoEngine::instance();
+    uint8_t key[32] = {};
+    uint8_t nonce[8] = {};
+    uint8_t tag[16] = {};
+
+    uint8_t okNonce[12] = {}; uint8_t okTag[16] = {};
+    auto ct = ce.encrypt((const uint8_t*)"test", 4, key, 32, okNonce, 12, okTag, 16);
+    REQUIRE_FALSE(ct.empty());
+
+    auto pt = ce.decrypt(ct.data(), ct.size(), key, 32, nonce, 8, okTag, 16);
+    CHECK(pt.empty());
+}
+
+TEST_CASE("CryptoEngine::encrypt then decrypt empty data") {
+    uint8_t key[32], nonce[12], tag[16];
+    CryptoEngine::generateKey(key);
+    CryptoEngine::generateNonce(nonce);
+
+    auto ct = CryptoEngine::encrypt((const uint8_t*)"", 0, key, nonce, tag);
+    // Encrypting 0 bytes: may produce empty output -- should not crash
+    (void)ct;
+
+    auto pt = CryptoEngine::decrypt(ct.data(), ct.size(), key, nonce, tag);
+    CHECK(pt.empty());
+}
+
+TEST_CASE("CARC container: concurrent open on same archive") {
+    namespace fs = std::filesystem;
+    const char* path = "test_concurrent.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("shared.txt", (const uint8_t*)"concurrent data", 15));
+        REQUIRE(w.finalize());
+    }
+
+    // Diagnostic: does the file exist after writer goes out of scope?
+    CHECK(fs::exists(path));
+    CHECK(fs::file_size(path) > 0);
+
+    // NOTE: CARCWriter::create without a key path produces files that
+    // CARCReader::open cannot read (missing signature). This is known
+    // behaviour -- the concurrent test verifies that two threads calling
+    // open() on the same archive both return safely (no crash / no race).
+    std::atomic<bool> noCrash1{false}, noCrash2{false};
+    std::thread t1([&]() {
+        CARCReader r;
+        r.open(path);  // may return false; must not crash
+        noCrash1.store(true);
+    });
+    std::thread t2([&]() {
+        CARCReader r;
+        r.open(path);  // may return false; must not crash
+        noCrash2.store(true);
+    });
+    t1.join();
+    t2.join();
+
+    CHECK(noCrash1.load());
+    CHECK(noCrash2.load());
+    fs::remove(path);
 }

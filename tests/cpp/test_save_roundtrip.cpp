@@ -6,6 +6,20 @@
 
 using namespace Caesura;
 
+#include "di/BackendRegistry.h"
+#include "archive/CryptoEngine.h"
+
+// Ensure CryptoEngine is registered before any encryption test runs.
+// When running storage tests in isolation, no other test module
+// registers it, causing SIGSEGV on encrypt/decrypt paths.
+static void ensureCryptoRegistered() {
+    static bool done = false;
+    if (!done) {
+        BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
+        done = true;
+    }
+}
+
 static const char* TEST_DIR = "test_roundtrip/";
 
 static void cleanTestDir() {
@@ -102,6 +116,7 @@ TEST_CASE("SaveManager: deleteSlot removes save") {
 
 TEST_CASE("SaveManager: encryption roundtrip preserves data") {
     cleanTestDir();
+    ensureCryptoRegistered();
     auto& sm = SaveManager::instance();
     sm.init(TEST_DIR);
 
@@ -128,6 +143,7 @@ TEST_CASE("SaveManager: encryption roundtrip preserves data") {
 
 TEST_CASE("SaveManager: wrong key returns empty JSON") {
     cleanTestDir();
+    ensureCryptoRegistered();
     auto& sm = SaveManager::instance();
     sm.init(TEST_DIR);
 
