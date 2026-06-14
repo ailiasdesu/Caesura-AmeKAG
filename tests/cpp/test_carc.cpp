@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <thread>
 #include <atomic>
+#include <sstream>
+#include <iomanip>
 
 using namespace Caesura::carc;
 
@@ -405,4 +407,259 @@ TEST_CASE("CARC container: create with keys + open with public key") {
 
     r2.close();
     fs::remove(arcPath); fs::remove(pubPath); fs::remove(privPath);
+}
+
+// =============================================================================
+// Final completion: previously exempted methods (index, chain trust, setters)
+// =============================================================================
+
+TEST_CASE("CARCReader::index returns non-empty map after open") {
+    namespace fs = std::filesystem;
+    const char* path = "test_index.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("a.txt", (const uint8_t*)"aa", 2));
+        REQUIRE(w.addFile("b.txt", (const uint8_t*)"bb", 2));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+    CHECK(r.numFiles() == 2);
+
+    const auto& idx = r.index();
+    CHECK(idx.size() == 2);  // two entries in the hash map
+
+    // Each entry should have non-zero offsets and key material
+    for (const auto& [hash, info] : idx) {
+        CHECK_FALSE(hash.empty());
+        CHECK(info.compressedSize > 0);
+        CHECK(info.originalSize > 0);
+    }
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::setCRLManager and setRootPublicKey do not crash") {
+    namespace fs = std::filesystem;
+    const char* path = "test_setters.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("f.txt", (const uint8_t*)"x", 1));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+
+    // Set root public key (32 bytes of any data)
+    uint8_t rootKey[PUBLICKEY_SIZE] = {}, unused[64] = {};
+    CryptoEngine::generateKeyPair(rootKey, unused);
+    r.setRootPublicKey(rootKey);
+
+    // Set CRL manager and test hybrid mode revocation
+    CRLManager crl;
+    r.setCRLManager(&crl);
+
+    // verifyChainTrust with no root key should skip signature verification
+    // but still fail because cert doesn't exist
+    uint8_t dummyPub[PUBLICKEY_SIZE] = {};
+    CHECK_FALSE(r.verifyChainTrust(dummyPub, "nonexistent_cert.json"));
+
+    // nullptr childPublicKey returns false
+    CHECK_FALSE(r.verifyChainTrust(nullptr, "cert.json"));
+
+    // Empty certificate path returns false
+    CHECK_FALSE(r.verifyChainTrust(dummyPub, ""));
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::verifyChainTrust happy path with root signature") {
+    namespace fs = std::filesystem;
+    const char* parentPath = "test_chain_parent.carc";
+    fs::remove(parentPath);
+
+    // Step A: generate root key pair (signs certificates)
+    uint8_t rootPub[PUBLICKEY_SIZE], rootPriv[64];
+    CryptoEngine::generateKeyPair(rootPub, rootPriv);
+
+    // Step B: generate child key pair (simulates a child CARC's public key)
+    uint8_t childPub[PUBLICKEY_SIZE], childPriv[64];
+    CryptoEngine::generateKeyPair(childPub, childPriv);
+
+    // Step C: compute SHA-256 fingerprint of child public key
+    std::string childFingerprint = CRLManager::computeFingerprint(childPub, PUBLICKEY_SIZE);
+
+    // Step D: build certificate JSON and sign with root key
+    // The payload is everything before "signature" + "\n}"
+    std::string certPayload =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + childFingerprint + "\",\n"
+        "  \"expiry\": 9999999999,\n"
+        "  \"permissions\": 1\n"
+        "}";
+
+    uint8_t certSig[SIGNATURE_SIZE];
+    REQUIRE(CryptoEngine::sign(
+        reinterpret_cast<const uint8_t*>(certPayload.data()), certPayload.size(),
+        rootPriv, certSig));
+
+    // Hex-encode the signature (128 hex chars)
+    std::ostringstream sigHex;
+    sigHex << std::hex << std::setfill('0');
+    for (int i = 0; i < SIGNATURE_SIZE; ++i)
+        sigHex << std::setw(2) << static_cast<int>(certSig[i]);
+
+    // Step E: construct full certificate JSON with signature
+    std::string certJson =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + childFingerprint + "\",\n"
+        "  \"expiry\": 9999999999,\n"
+        "  \"permissions\": 1,\n"
+        "  \"signature\": \"" + sigHex.str() + "\"\n"
+        "}";
+
+    // Step F: create parent CARC containing the certificate as a file
+    {
+        CARCWriter w;
+        REQUIRE(w.create(parentPath));
+        REQUIRE(w.addFile("cert.json",
+            reinterpret_cast<const uint8_t*>(certJson.data()), certJson.size()));
+        REQUIRE(w.finalize());
+    }
+
+    // Step G: open parent, set root key, verify chain trust
+    CARCReader parent;
+    REQUIRE(parent.open(parentPath));
+    parent.setRootPublicKey(rootPub);
+
+    CHECK(parent.verifyChainTrust(childPub, "cert.json"));
+
+    parent.close();
+    fs::remove(parentPath);
+}
+
+TEST_CASE("CARCReader::verifyChainTrust fails with expired certificate") {
+    namespace fs = std::filesystem;
+    const char* path = "test_chain_expired.carc";
+    fs::remove(path);
+
+    uint8_t rootPub[PUBLICKEY_SIZE], rootPriv[64];
+    CryptoEngine::generateKeyPair(rootPub, rootPriv);
+
+    uint8_t childPub[PUBLICKEY_SIZE], childPriv[64];
+    CryptoEngine::generateKeyPair(childPub, childPriv);
+    std::string childFp = CRLManager::computeFingerprint(childPub, PUBLICKEY_SIZE);
+
+    // Build certificate with expired timestamp (Jan 1 2020)
+    std::string certPayload =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + childFp + "\",\n"
+        "  \"expiry\": 1577836800,\n"
+        "  \"permissions\": 1\n"
+        "}";
+
+    uint8_t sig[SIGNATURE_SIZE];
+    REQUIRE(CryptoEngine::sign(
+        reinterpret_cast<const uint8_t*>(certPayload.data()), certPayload.size(),
+        rootPriv, sig));
+
+    std::ostringstream sh;
+    sh << std::hex << std::setfill('0');
+    for (int i = 0; i < SIGNATURE_SIZE; ++i) sh << std::setw(2) << static_cast<int>(sig[i]);
+
+    std::string certJson =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + childFp + "\",\n"
+        "  \"expiry\": 1577836800,\n"
+        "  \"permissions\": 1,\n"
+        "  \"signature\": \"" + sh.str() + "\"\n"
+        "}";
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("cert.json",
+            reinterpret_cast<const uint8_t*>(certJson.data()), certJson.size()));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+    r.setRootPublicKey(rootPub);
+
+    // Certificate expired in 2020 -- chain trust should fail
+    CHECK_FALSE(r.verifyChainTrust(childPub, "cert.json"));
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::verifyChainTrust fails with hash mismatch") {
+    namespace fs = std::filesystem;
+    const char* path = "test_chain_hash.carc";
+    fs::remove(path);
+
+    uint8_t rootPub[PUBLICKEY_SIZE], rootPriv[64];
+    CryptoEngine::generateKeyPair(rootPub, rootPriv);
+
+    uint8_t childPub[PUBLICKEY_SIZE], childPriv[64];
+    CryptoEngine::generateKeyPair(childPub, childPriv);
+    std::string childFp = CRLManager::computeFingerprint(childPub, PUBLICKEY_SIZE);
+
+    // Certificate claims a DIFFERENT child pubkey hash
+    uint8_t otherPub[PUBLICKEY_SIZE], otherPriv[64];
+    CryptoEngine::generateKeyPair(otherPub, otherPriv);
+    std::string otherFp = CRLManager::computeFingerprint(otherPub, PUBLICKEY_SIZE);
+
+    std::string certPayload =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + otherFp + "\",\n"
+        "  \"expiry\": 9999999999,\n"
+        "  \"permissions\": 1\n"
+        "}";
+
+    uint8_t sig[SIGNATURE_SIZE];
+    REQUIRE(CryptoEngine::sign(
+        reinterpret_cast<const uint8_t*>(certPayload.data()), certPayload.size(),
+        rootPriv, sig));
+
+    std::ostringstream sh;
+    sh << std::hex << std::setfill('0');
+    for (int i = 0; i < SIGNATURE_SIZE; ++i) sh << std::setw(2) << static_cast<int>(sig[i]);
+
+    std::string certJson =
+        "{\n"
+        "  \"child_pubkey_hash\": \"" + otherFp + "\",\n"
+        "  \"expiry\": 9999999999,\n"
+        "  \"permissions\": 1,\n"
+        "  \"signature\": \"" + sh.str() + "\"\n"
+        "}";
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("cert.json",
+            reinterpret_cast<const uint8_t*>(certJson.data()), certJson.size()));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+    r.setRootPublicKey(rootPub);
+
+    // Hash in cert doesn't match child's actual pubkey
+    CHECK_FALSE(r.verifyChainTrust(childPub, "cert.json"));
+
+    r.close();
+    fs::remove(path);
 }
