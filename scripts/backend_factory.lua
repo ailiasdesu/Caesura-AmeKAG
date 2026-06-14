@@ -44,11 +44,11 @@ function BackendFactory.create(opts)
         elseif cmd == "submit_stretch_blt" then return Render.submit_stretch_blt(...)
         elseif cmd == "submit_affine_blt" then return Render.submit_affine_blt(...)
         elseif cmd == "set_view_name" then return Render.set_view_name(...)
-        elseif cmd == "render_text" then return Render.render_text(...)
-        elseif cmd == "render_ruby" then return Render.render_ruby(...)
-        elseif cmd == "clear_text" then return Render.clear_text(...)
-        elseif cmd == "set_font" then return Render.set_font(...)
-        elseif cmd == "line_height" then return Render.line_height(...)
+        elseif cmd == "render_text" then return KAG.render_text(...)
+        elseif cmd == "render_ruby" then return KAG.render_ruby(...)
+        elseif cmd == "clear_text" then return KAG.clear_text(...)
+        elseif cmd == "set_font" then return KAG.set_font(...)
+        elseif cmd == "line_height" then return KAG.line_height(...)
         else error("[BackendFactory] Unknown render: " .. tostring(cmd)) end
     end
 
