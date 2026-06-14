@@ -67,6 +67,20 @@ TEST_CASE("CryptoEngine::keypair generation") {
     CHECK(ok);
 }
 
+TEST_CASE("CryptoEngine::generateKeyPair with sign/verify round-trip") {
+    uint8_t pub[PUBLICKEY_SIZE], priv[64];
+    CryptoEngine::generateKeyPair(pub, priv);
+
+    const char* msg = "test message for ed25519";
+    size_t len = strlen(msg);
+
+    uint8_t sig[SIGNATURE_SIZE];
+    REQUIRE(CryptoEngine::sign((const uint8_t*)msg, len, priv, sig));
+
+    bool ok = CryptoEngine::verify((const uint8_t*)msg, len, pub, sig);
+    CHECK(ok);
+}
+
 TEST_CASE("CryptoEngine::SHA-256") {
     uint8_t hash[PATH_HASH_SIZE];
     CryptoEngine::sha256((const uint8_t*)"test", 4, hash);
@@ -100,10 +114,9 @@ TEST_CASE("CARC container: write then read") {
     CHECK(fs::file_size("test_carc.carc") > 0);
     {
         CARCReader r;
-        if (r.open("test_carc.carc")) {
-            CHECK(r.numFiles() == 1);
-            CHECK(r.hasFile("data.txt"));
-        }
+        REQUIRE(r.open("test_carc.carc"));
+        CHECK(r.numFiles() == 1);
+        CHECK(r.hasFile("data.txt"));
     }
     fs::remove("test_carc.carc");
 }
