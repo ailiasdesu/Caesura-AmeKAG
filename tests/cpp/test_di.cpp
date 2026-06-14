@@ -7,6 +7,13 @@
 #include "audio/api/IAudioBackend.h"
 #include "platform/api/IPlatformBackend.h"
 #include "live2d/api/IAnimationBackend.h"
+#include "input/api/IInputRouter.h"
+#include "rpc/api/IRpcServer.h"
+#include "rpc/api/IEditorServer.h"
+#include "render/api/IParticleSystem.h"
+#include "debug/api/IDebugManager.h"
+#include "resource/api/IAsyncLoader.h"
+#include "render/api/ILayerManager.h"
 
 using namespace Caesura;
 
@@ -84,4 +91,80 @@ TEST_CASE("DI: SandboxQuota namespace is accessible") {
     // SandboxQuota is a namespace with static functions,
     // not a singleton class. Verify compilation.
     CHECK(true);
+}
+
+// =============================================================================
+// Expanded: remaining BackendRegistry set/get pairs
+// =============================================================================
+
+TEST_CASE("DI: BackendRegistry setPlatformBackend/getPlatformBackend") {
+    auto& reg = BackendRegistry::instance();
+    IPlatformBackend* sentinel = reinterpret_cast<IPlatformBackend*>(0x1);
+    IPlatformBackend* old = reg.getPlatformBackend();
+    reg.setPlatformBackend(*sentinel);
+    CHECK(reg.getPlatformBackend() == sentinel);
+    if (old) reg.setPlatformBackend(*old);
+}
+
+TEST_CASE("DI: BackendRegistry setInputRouter/getInputRouter") {
+    auto& reg = BackendRegistry::instance();
+    IInputRouter* sentinel = reinterpret_cast<IInputRouter*>(0x1);
+    reg.setInputRouter(sentinel);
+    CHECK(reg.getInputRouter() == sentinel);
+    reg.setInputRouter(nullptr);
+    CHECK(reg.getInputRouter() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setRpcServer/getRpcServer") {
+    auto& reg = BackendRegistry::instance();
+    IRpcServer* sentinel = reinterpret_cast<IRpcServer*>(0x1);
+    reg.setRpcServer(sentinel);
+    CHECK(reg.getRpcServer() == sentinel);
+    reg.setRpcServer(nullptr);
+    CHECK(reg.getRpcServer() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setEditorServer/getEditorServer") {
+    auto& reg = BackendRegistry::instance();
+    IEditorServer* sentinel = reinterpret_cast<IEditorServer*>(0x1);
+    reg.setEditorServer(sentinel);
+    CHECK(reg.getEditorServer() == sentinel);
+    reg.setEditorServer(nullptr);
+    CHECK(reg.getEditorServer() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setParticleSystem/getParticleSystem") {
+    auto& reg = BackendRegistry::instance();
+    IParticleSystem* sentinel = reinterpret_cast<IParticleSystem*>(0x1);
+    reg.setParticleSystem(sentinel);
+    CHECK(reg.getParticleSystem() == sentinel);
+    reg.setParticleSystem(nullptr);
+    CHECK(reg.getParticleSystem() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setDebugManager/getDebugManager") {
+    auto& reg = BackendRegistry::instance();
+    IDebugManager* sentinel = reinterpret_cast<IDebugManager*>(0x1);
+    reg.setDebugManager(sentinel);
+    CHECK(reg.getDebugManager() == sentinel);
+    reg.setDebugManager(nullptr);
+    CHECK(reg.getDebugManager() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setAsyncLoader/getAsyncLoader") {
+    auto& reg = BackendRegistry::instance();
+    IAsyncLoader* sentinel = reinterpret_cast<IAsyncLoader*>(0x1);
+    reg.setAsyncLoader(sentinel);
+    CHECK(reg.getAsyncLoader() == sentinel);
+    reg.setAsyncLoader(nullptr);
+    CHECK(reg.getAsyncLoader() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setLayerManager/getLayerManager") {
+    auto& reg = BackendRegistry::instance();
+    ILayerManager* sentinel = reinterpret_cast<ILayerManager*>(0x1);
+    reg.setLayerManager(sentinel);
+    CHECK(reg.getLayerManager() == sentinel);
+    reg.setLayerManager(nullptr);
+    CHECK(reg.getLayerManager() == nullptr);
 }
