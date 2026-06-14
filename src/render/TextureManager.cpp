@@ -123,18 +123,21 @@ uint32_t TextureManager::getPlaceholderTexture() {
 // ---------------------------------------------------------------------------
 
 bgfx::TextureHandle TextureManager::loadFromFile(const std::string& path) {
-    // Use std::ifstream for Unicode path support on Windows
-        std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        fprintf(stderr, "[TextureManager] File not found: %s\n", path.c_str());
-        return BGFX_INVALID_HANDLE;
+    // Try multiple base paths to support running from build directory
+    const char* bases[] = { "", "../../", "../" };
+    for (const char* base : bases) {
+        std::string fullPath = std::string(base) + path;
+        std::ifstream file(std::filesystem::path(std::u8string(fullPath.begin(), fullPath.end())), std::ios::binary | std::ios::ate);
+        if (!file.is_open()) continue;
+        std::streamsize sz = file.tellg();
+        if (sz <= 0) continue;
+        file.seekg(0, std::ios::beg);
+        std::vector<uint8_t> buf(static_cast<size_t>(sz));
+        file.read(reinterpret_cast<char*>(buf.data()), sz);
+        return loadFromMemory(buf.data(), static_cast<uint32_t>(sz));
     }
-    std::streamsize sz = file.tellg();
-    if (sz <= 0) return BGFX_INVALID_HANDLE;
-    file.seekg(0, std::ios::beg);
-    std::vector<uint8_t> buf(static_cast<size_t>(sz));
-    file.read(reinterpret_cast<char*>(buf.data()), sz);
-    return loadFromMemory(buf.data(), static_cast<uint32_t>(sz));
+    fprintf(stderr, "[TextureManager] File not found: %s\n", path.c_str());
+    return BGFX_INVALID_HANDLE;
 }
 
 bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t size) {
