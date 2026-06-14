@@ -195,3 +195,13 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
     COMMENT "Copying test audio files..."
 )
+
+# Copy FFmpeg DLLs to test output so VideoPlayer can load them
+if(CAESURA_FFMPEG_FOUND AND WIN32)
+    add_custom_command(TARGET CaesuraTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${FFMPEG_BIN_DIR}"
+        "$<TARGET_FILE_DIR:CaesuraTests>"
+        COMMENT "Copying FFmpeg DLLs to test output directory..."
+    )
+endif()

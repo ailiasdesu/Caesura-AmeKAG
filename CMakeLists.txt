@@ -37,6 +37,7 @@ if(CAESURA_ENABLE_FFMPEG)
     if(EXISTS "${CMAKE_SOURCE_DIR}/external/ffmpeg/include")
         set(FFMPEG_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external/ffmpeg/include")
         set(FFMPEG_LIBRARY_DIR "${CMAKE_SOURCE_DIR}/external/ffmpeg/lib")
+        set(FFMPEG_BIN_DIR "${CMAKE_SOURCE_DIR}/external/ffmpeg/bin")
         find_library(FFMPEG_avcodec_LIBRARY  avcodec  PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
         find_library(FFMPEG_avformat_LIBRARY avformat PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
         find_library(FFMPEG_swscale_LIBRARY  swscale  PATHS ${FFMPEG_LIBRARY_DIR} NO_DEFAULT_PATH)
@@ -293,8 +294,11 @@ if(CAESURA_FFMPEG_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
     # Copy FFmpeg DLLs to output at configure time (avoids MSBuild Unicode path issues)
     if(WIN32)
-        file(COPY ${FFMPEG_LIBRARY_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/Release
-            FILES_MATCHING PATTERN "av*.dll" PATTERN "sw*.dll")
+        # Copy DLLs from bin/ (where prebuilt FFmpeg keeps them), not lib/
+        foreach(CFG Debug Release RelWithDebInfo MinSizeRel)
+            file(COPY ${FFMPEG_BIN_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/${CFG}
+                FILES_MATCHING PATTERN "*.dll")
+        endforeach()
     endif()
 endif()
 
@@ -508,4 +512,3 @@ add_subdirectory(tools/carc_pack)
 
 # -- Unit Tests
 add_subdirectory(tests)
-

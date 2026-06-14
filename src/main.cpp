@@ -1,4 +1,4 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -132,9 +132,9 @@ int main(int argc, char* argv[]) {
             if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
             else { scriptDir = "../../../scripts/"; }
         }
-        // Set Lua package.path BEFORE loading any scripts
-        {
-            lua_State* L = engine.lua().state();
+    // Set Lua package.path BEFORE loading any scripts
+    {
+        lua_State* L = engine.lua().state();
             if (L) {
                 lua_getglobal(L, "package");
                 lua_getfield(L, -1, "path");
@@ -289,7 +289,6 @@ int main(int argc, char* argv[]) {
         }
         lua_pop(L, 1);
     }
-    printf("[main] Entry script: %s\n", entryScript.c_str());
 
 if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
         fprintf(stderr, "Warning: Failed to load game_logic.lua.\n");

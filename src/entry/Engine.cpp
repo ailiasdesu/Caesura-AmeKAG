@@ -51,13 +51,13 @@ extern "C" {
 
 namespace Caesura {
 
-// Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
+// Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
  namespace detail { thread_local std::thread::id g_mainThreadId; }}
 
 namespace Caesura {
 
-// Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
+// Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
 
 
@@ -98,7 +98,7 @@ bool Engine::init() {
     if (m_config.audio)     m_audioBackend.reset(static_cast<IAudioBackend*>(m_config.audio));
     if (m_config.miniGame)  m_miniGameBackend.reset(static_cast<IMiniGameBackend*>(m_config.miniGame));
     if (m_config.animation) m_animationBackend.reset(static_cast<IAnimationBackend*>(m_config.animation));
-    if (m_config.steam)     m_steamBackend.reset(static_cast<ISteamBackend*>(m_config.steam));
+
 
     detail::g_mainThreadId = std::this_thread::get_id();
 
@@ -274,7 +274,7 @@ bool Engine::initOptionalPhase() {
     // 3D mini-game backend (bgfx)
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
-    BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+    m_miniGameBackend->init();
 
     // Animation backend (Live2D or Null)
 #ifdef CAESURA_HAS_LIVE2D
@@ -283,7 +283,7 @@ bool Engine::initOptionalPhase() {
     if (!m_animationBackend) m_animationBackend = std::make_unique<NullAnimationBackend>();
 #endif
     if (!m_animationBackend->init()) {
-        fprintf(stderr, "[Engine] Animation backend init failed, falling back to null.\n");
+
         m_animationBackend = std::make_unique<NullAnimationBackend>();
         m_animationBackend->init();
         allOk = false;
@@ -726,7 +726,6 @@ void Engine::shutdown() {
 }
 
 } // namespace Caesura
-
 
 
 
