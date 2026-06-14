@@ -245,3 +245,164 @@ TEST_CASE("CARC container: concurrent open on same archive") {
     CHECK(ok2.load());
     fs::remove(path);
 }
+
+// =============================================================================
+// Completion tests: previously untested methods
+// =============================================================================
+
+TEST_CASE("CARCReader::readFileByHash returns correct data") {
+    namespace fs = std::filesystem;
+    const char* path = "test_byhash.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        const char* name = "hash_test.txt";
+        REQUIRE(w.addFile(name, (const uint8_t*)"by hash", 7));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+
+    // Compute the path hash for "hash_test.txt"
+    uint8_t ph[PATH_HASH_SIZE];
+    CARCReader::hashPath("hash_test.txt", ph);
+
+    CHECK(r.hasFileByHash(ph));
+
+    auto data = r.readFileByHash(ph);
+    REQUIRE_FALSE(data.empty());
+    CHECK(data.size() == 7);
+    CHECK(memcmp(data.data(), "by hash", 7) == 0);
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::readFile on nonexistent file returns empty") {
+    namespace fs = std::filesystem;
+    const char* path = "test_nofile.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("only.txt", (const uint8_t*)"hi", 2));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+    CHECK_FALSE(r.hasFile("nonexistent.txt"));
+    auto data = r.readFile("nonexistent.txt");
+    CHECK(data.empty());
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CARCReader::version and publicKey accessors") {
+    namespace fs = std::filesystem;
+    const char* path = "test_accessors.carc";
+    fs::remove(path);
+
+    {
+        CARCWriter w;
+        REQUIRE(w.create(path));
+        REQUIRE(w.addFile("f.txt", (const uint8_t*)"x", 1));
+        REQUIRE(w.finalize());
+    }
+
+    CARCReader r;
+    REQUIRE(r.open(path));
+    CHECK(r.version() == CARC_VERSION);
+    CHECK(r.hasPublicKey());
+    CHECK(r.publicKey() != nullptr);
+    // fileList should contain one entry (hex hash string)
+    CHECK(r.fileList().size() == 1);
+    CHECK_FALSE(r.fileList()[0].empty());
+
+    r.close();
+    fs::remove(path);
+}
+
+TEST_CASE("CryptoEngine::writePublicKey + readPublicKey round-trip") {
+    namespace fs = std::filesystem;
+    const char* keyPath = "test_key.pub";
+    fs::remove(keyPath);
+
+    uint8_t pub[PUBLICKEY_SIZE], priv[64];
+    CryptoEngine::generateKeyPair(pub, priv);
+
+    CHECK(CryptoEngine::writePublicKey(keyPath, pub));
+    CHECK(fs::exists(keyPath));
+
+    uint8_t loaded[PUBLICKEY_SIZE] = {};
+    CHECK(CryptoEngine::readPublicKey(keyPath, loaded));
+    CHECK(memcmp(loaded, pub, PUBLICKEY_SIZE) == 0);
+
+    fs::remove(keyPath);
+}
+
+TEST_CASE("CryptoEngine::writePrivateKey + readPrivateKey round-trip") {
+    namespace fs = std::filesystem;
+    const char* keyPath = "test_key.priv";
+    fs::remove(keyPath);
+
+    uint8_t pub[PUBLICKEY_SIZE], priv[64];
+    CryptoEngine::generateKeyPair(pub, priv);
+
+    CHECK(CryptoEngine::writePrivateKey(keyPath, priv));
+    CHECK(fs::exists(keyPath));
+
+    uint8_t loaded[64] = {};
+    CHECK(CryptoEngine::readPrivateKey(keyPath, loaded));
+    CHECK(memcmp(loaded, priv, 64) == 0);
+
+    // Verify the loaded key still works for signing
+    uint8_t sig[SIGNATURE_SIZE];
+    REQUIRE(CryptoEngine::sign((const uint8_t*)"test", 4, loaded, sig));
+    CHECK(CryptoEngine::verify((const uint8_t*)"test", 4, pub, sig));
+
+    fs::remove(keyPath);
+}
+
+TEST_CASE("CARC container: create with keys + open with public key") {
+    namespace fs = std::filesystem;
+    const char* arcPath = "test_keyed.carc";
+    const char* pubPath = "test_keyed.pub";
+    const char* privPath = "test_keyed.priv";
+    fs::remove(arcPath); fs::remove(pubPath); fs::remove(privPath);
+
+    // Create archive with explicit key pair
+    {
+        CARCWriter w;
+        REQUIRE(w.create(arcPath, privPath, pubPath));
+        REQUIRE(w.addFile("secret.txt", (const uint8_t*)"classified", 10));
+        REQUIRE(w.finalize());
+    }
+    CHECK(fs::exists(pubPath));
+    CHECK(fs::exists(privPath));
+
+    // Open using the public key file
+    CARCReader r;
+    REQUIRE(r.open(arcPath, pubPath));
+    CHECK(r.numFiles() == 1);
+    CHECK(r.hasFile("secret.txt"));
+
+    auto data = r.readFile("secret.txt");
+    REQUIRE_FALSE(data.empty());
+    CHECK(data.size() == 10);
+    CHECK(memcmp(data.data(), "classified", 10) == 0);
+
+    r.close();
+    // Opening without the public key should also work (trailing key in file)
+    CARCReader r2;
+    CHECK(r2.open(arcPath));
+    CHECK(r2.numFiles() == 1);
+
+    r2.close();
+    fs::remove(arcPath); fs::remove(pubPath); fs::remove(privPath);
+}
