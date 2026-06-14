@@ -49,7 +49,9 @@ public:
     void setLuaState(lua_State* L) { m_luaState = L; }
 
     // -- SandboxQuota wrappers ---------------------------------------------
-    bool tryAlloc(const char* kind) { return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : false; }
+    // When Lua state is not yet initialized, allow all allocations —
+    // consistent with SandboxQuota::tryAlloc(nullptr, ...) returning true.
+    bool tryAlloc(const char* kind) { return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : true; }
     void release(const char* kind) { if (m_luaState) SandboxQuota::release(m_luaState, kind); }
     lua_State* getLuaState() { return m_luaState; }
     void setMiniGameBackend(IMiniGameBackend* backend);
