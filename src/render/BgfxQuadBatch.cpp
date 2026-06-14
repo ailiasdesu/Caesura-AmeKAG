@@ -16,6 +16,15 @@ void BgfxQuadBatch::flushBatch() {
         return;
     }
 
+    // Ensure vertex layout is initialized (same as blitTexture lazy init)
+    if (m_state->posTexLayout.getStride() == 0) {
+        m_state->posTexLayout
+            .begin()
+            .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .end();
+    }
+
     struct FsVertex { float x, y, u, v; };
     uint32_t quadCount = (uint32_t)m_state->batchQuads.size();
     uint32_t vertCount = quadCount * 4;
