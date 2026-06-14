@@ -4,6 +4,7 @@
 #include <bx/allocator.h>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 #include "../di/TextureBudget.h"
@@ -120,18 +121,18 @@ uint32_t TextureManager::getPlaceholderTexture() {
 // ---------------------------------------------------------------------------
 
 bgfx::TextureHandle TextureManager::loadFromFile(const std::string& path) {
-    bx::FileReader reader;
-    if (!bx::open(&reader, path.c_str())) {
+    // Use std::ifstream for Unicode path support on Windows
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
         fprintf(stderr, "[TextureManager] File not found: %s\n", path.c_str());
         return BGFX_INVALID_HANDLE;
     }
-
-    uint32_t size = (uint32_t)bx::getSize(&reader);
-    std::vector<uint8_t> buf(size);
-    bx::read(&reader, buf.data(), size, bx::ErrorAssert{});
-    bx::close(&reader);
-
-    return loadFromMemory(buf.data(), size);
+    std::streamsize sz = file.tellg();
+    if (sz <= 0) return BGFX_INVALID_HANDLE;
+    file.seekg(0, std::ios::beg);
+    std::vector<uint8_t> buf(static_cast<size_t>(sz));
+    file.read(reinterpret_cast<char*>(buf.data()), sz);
+    return loadFromMemory(buf.data(), static_cast<uint32_t>(sz));
 }
 
 bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t size) {

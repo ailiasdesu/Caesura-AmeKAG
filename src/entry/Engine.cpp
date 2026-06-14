@@ -205,6 +205,7 @@ bool Engine::initPlatformPhase() {
     TextureBudget::instance().detect();
     BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
     BackendRegistry::instance().setTextureManager(&TextureManager::instance());
+    TextureManager::instance().initialize();
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
     BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
 
