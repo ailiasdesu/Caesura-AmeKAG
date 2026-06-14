@@ -45,6 +45,7 @@ private:
     void setupDefaultViews();
     int m_width  = 1280;
     int m_height = 720;
+    bool m_shutdownComplete = false;
     struct RTTEntry { bgfx::FrameBufferHandle fb = BGFX_INVALID_HANDLE; bgfx::TextureHandle tex = BGFX_INVALID_HANDLE; uint16_t viewId = VIEW_RTT; };
     uint32_t m_nextHandle = 1;
     std::unordered_map<uint32_t, RTTEntry> m_rttMap;

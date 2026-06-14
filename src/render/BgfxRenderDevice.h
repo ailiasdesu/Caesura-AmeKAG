@@ -111,6 +111,7 @@ private:
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
     DrawState m_drawState;
+    bool m_shutdownComplete = false;
     std::unique_ptr<BgfxDraw>         m_draw;
 
     struct RTTEntry {

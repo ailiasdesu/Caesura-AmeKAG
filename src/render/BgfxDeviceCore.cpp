@@ -116,6 +116,8 @@ void BgfxDeviceCore::resize(int width, int height) {
 
 void BgfxDeviceCore::shutdown() {
     CAESURA_ASSERT_MAIN_THREAD();
+    if (m_shutdownComplete) return;
+    m_shutdownComplete = true;
     // 1. Release all RTT framebuffers while GPU context is alive
     flushAllRTT();
     // Destroy text renderer (GPU resources)
