@@ -83,10 +83,15 @@ TEST_CASE("CryptoEngine::generateKeyPair with sign/verify round-trip") {
 
 TEST_CASE("CryptoEngine::SHA-256") {
     uint8_t hash[PATH_HASH_SIZE];
-    CryptoEngine::sha256((const uint8_t*)"test", 4, hash);
-    bool ok = false;
-    for (int i = 0; i < PATH_HASH_SIZE; i++) if (hash[i] != 0) ok = true;
-    CHECK(ok);
+    // SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+    CryptoEngine::sha256((const uint8_t*)"hello", 5, hash);
+    uint8_t expected[PATH_HASH_SIZE] = {
+        0x2c,0xf2,0x4d,0xba,0x5f,0xb0,0xa3,0x0e,
+        0x26,0xe8,0x3b,0x2a,0xc5,0xb9,0xe2,0x9e,
+        0x1b,0x16,0x1e,0x5c,0x1f,0xa7,0x42,0x5e,
+        0x73,0x04,0x33,0x62,0x93,0x8b,0x98,0x24
+    };
+    CHECK(memcmp(hash, expected, PATH_HASH_SIZE) == 0);
 }
 
 TEST_CASE("CRLManager::lifecycle") {
@@ -117,6 +122,10 @@ TEST_CASE("CARC container: write then read") {
         REQUIRE(r.open("test_carc.carc"));
         CHECK(r.numFiles() == 1);
         CHECK(r.hasFile("data.txt"));
+        auto data = r.readFile("data.txt");
+        REQUIRE_FALSE(data.empty());
+        CHECK(data.size() == 7);
+        CHECK(memcmp(data.data(), "payload", 7) == 0);
     }
     fs::remove("test_carc.carc");
 }
@@ -195,8 +204,8 @@ TEST_CASE("CryptoEngine::encrypt then decrypt empty data") {
     CryptoEngine::generateNonce(nonce);
 
     auto ct = CryptoEngine::encrypt((const uint8_t*)"", 0, key, nonce, tag);
-    // Encrypting 0 bytes: may produce empty output -- should not crash
-    (void)ct;
+    // Encrypting 0 bytes must not crash. The output may be empty or
+    // contain only the GCM tag — either is valid, but the call must succeed.
 
     auto pt = CryptoEngine::decrypt(ct.data(), ct.size(), key, nonce, tag);
     CHECK(pt.empty());
@@ -218,25 +227,21 @@ TEST_CASE("CARC container: concurrent open on same archive") {
     CHECK(fs::exists(path));
     CHECK(fs::file_size(path) > 0);
 
-    // NOTE: CARCWriter::create without a key path produces files that
-    // CARCReader::open cannot read (missing signature). This is known
-    // behaviour -- the concurrent test verifies that two threads calling
-    // open() on the same archive both return safely (no crash / no race).
-    std::atomic<bool> noCrash1{false}, noCrash2{false};
+    // Two threads each open their own reader on the same archive file.
+    // Verifies that concurrent open() is thread-safe (no crash / no race).
+    std::atomic<bool> ok1{false}, ok2{false};
     std::thread t1([&]() {
         CARCReader r;
-        r.open(path);  // may return false; must not crash
-        noCrash1.store(true);
+        ok1.store(r.open(path) && r.numFiles() == 1 && r.hasFile("shared.txt"));
     });
     std::thread t2([&]() {
         CARCReader r;
-        r.open(path);  // may return false; must not crash
-        noCrash2.store(true);
+        ok2.store(r.open(path) && r.numFiles() == 1 && r.hasFile("shared.txt"));
     });
     t1.join();
     t2.join();
 
-    CHECK(noCrash1.load());
-    CHECK(noCrash2.load());
+    CHECK(ok1.load());
+    CHECK(ok2.load());
     fs::remove(path);
 }
