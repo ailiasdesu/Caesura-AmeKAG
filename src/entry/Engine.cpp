@@ -204,6 +204,7 @@ bool Engine::initPlatformPhase() {
     SaveManager::instance().init("saves/");
     TextureBudget::instance().detect();
     BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
+    BackendRegistry::instance().setTextureManager(&TextureManager::instance());
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
     BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
 
