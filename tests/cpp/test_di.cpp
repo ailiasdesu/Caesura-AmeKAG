@@ -21,9 +21,10 @@ using namespace Caesura;
 
 TEST_CASE("DI: BackendRegistry getAudioBackend returns non-null after set") {
     auto& reg = BackendRegistry::instance();
-    // setAudioBackend takes reference, can't easily test with sentinel
-    // Verify the method compiles and getter exists
-    CHECK(true);
+    // setAudioBackend takes a reference — can't test with sentinel.
+    // Verify getter is callable and returns a pointer.
+    IAudioBackend* current = reg.getAudioBackend();
+    (void)current;  // may be null or set by other tests
 }
 
 TEST_CASE("DI: BackendRegistry setAnimationBackend/getAnimationBackend") {
@@ -62,27 +63,47 @@ TEST_CASE("DI: TextureBudget singleton instance is accessible") {
 
 TEST_CASE("DI: TextureBudget default tier is 1") {
     auto& tb = TextureBudget::instance();
+    // Default tier after detect() is tier 1 (256 MB)
+    // detect() auto-senses system RAM and picks an appropriate tier.
+    // The exact value is machine-dependent, but it should be in [0, 5].
+    tb.detect();
     CHECK(tb.getTier() >= 0);
+    CHECK(tb.getTier() <= 5);
+    CHECK(tb.isAutoDetected());
 }
 
 TEST_CASE("DI: TextureBudget setTier/getTier round-trip") {
     auto& tb = TextureBudget::instance();
+    // Save state to restore after test
+    int oldTier = tb.getTier();
+    bool oldAuto = tb.isAutoDetected();
+
     tb.setTier(3);
     CHECK(tb.getTier() == 3);
     CHECK(tb.isAutoDetected() == false);
+
+    // Restore
+    tb.setTier(oldTier);
+    // Note: isAutoDetected cannot be restored (it's set to false by setTier);
+    // call detect() to re-enable auto-detection if it was on before
+    if (oldAuto) tb.detect();
 }
 
 TEST_CASE("DI: TextureBudget getBudgetMB returns positive value") {
     auto& tb = TextureBudget::instance();
+    int oldTier = tb.getTier();
     CHECK(tb.getBudgetMB() > 0);
+    tb.setTier(oldTier);
 }
 
 TEST_CASE("DI: TextureBudget tier names are non-empty") {
     auto& tb = TextureBudget::instance();
+    int oldTier = tb.getTier();
     for (int t = 0; t <= 5; ++t) {
         tb.setTier(t);
         CHECK(tb.getTierName() != nullptr);
     }
+    tb.setTier(oldTier);
 }
 
 // -- SandboxQuota namespace interface -----------------------------------

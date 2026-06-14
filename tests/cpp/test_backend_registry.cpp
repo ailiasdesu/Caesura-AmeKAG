@@ -33,27 +33,40 @@ TEST_CASE("BackendRegistry::ResourceHandle invalid handle") {
     CHECK(reg.isValidHandle(invalid) == false);
 }
 
-TEST_CASE("BackendRegistry::invalidateHandles") {
+TEST_CASE("BackendRegistry::invalidateHandles verifies effect") {
     auto& reg = BackendRegistry::instance();
+    // Create a valid handle, invalidate its type, verify it becomes invalid
+    ResourceHandle h = reg.makeHandle(HandleType::TEXTURE, 42);
+    CHECK(reg.isValidHandle(h));
     reg.invalidateHandles(HandleType::TEXTURE);
+    CHECK_FALSE(reg.isValidHandle(h));
 }
 
 TEST_CASE("BackendRegistry::setJobSystem/getJobSystem") {
     auto& reg = BackendRegistry::instance();
-    IJobSystem* before = reg.getJobSystem();
-    (void)before;
+    IJobSystem* old = reg.getJobSystem();
+    IJobSystem* sentinel = reinterpret_cast<IJobSystem*>(0x1);
+    reg.setJobSystem(sentinel);
+    CHECK(reg.getJobSystem() == sentinel);
+    reg.setJobSystem(old);  // Restore
 }
 
 TEST_CASE("BackendRegistry::setCryptoEngine/getCryptoEngine") {
     auto& reg = BackendRegistry::instance();
-    carc::ICryptoEngine* before = reg.getCryptoEngine();
-    (void)before;
+    carc::ICryptoEngine* old = reg.getCryptoEngine();
+    carc::ICryptoEngine* sentinel = reinterpret_cast<carc::ICryptoEngine*>(0x1);
+    reg.setCryptoEngine(sentinel);
+    CHECK(reg.getCryptoEngine() == sentinel);
+    reg.setCryptoEngine(old);  // Restore
 }
 
 TEST_CASE("BackendRegistry::setLuaManager/getLuaManager") {
     auto& reg = BackendRegistry::instance();
-    ILuaManager* before = reg.getLuaManager();
-    (void)before;
+    ILuaManager* old = reg.getLuaManager();
+    ILuaManager* sentinel = reinterpret_cast<ILuaManager*>(0x1);
+    reg.setLuaManager(sentinel);
+    CHECK(reg.getLuaManager() == sentinel);
+    reg.setLuaManager(old);  // Restore
 }
 
 // =============================================================================
@@ -61,10 +74,6 @@ TEST_CASE("BackendRegistry::setLuaManager/getLuaManager") {
 // =============================================================================
 
 TEST_CASE("BackendRegistry::registerNullBackends compiles and runs") {
-    // registerNullBackends creates Null* stubs for headless mode.
-    // It permanently modifies the singleton, so we only verify the
-    // method exists and is callable. Full behaviour is verified in
-    // the Engine headless integration tests.
     (void)&BackendRegistry::registerNullBackends;
 }
 
@@ -79,7 +88,6 @@ TEST_CASE("BackendRegistry::createBackend factory rejects unknown names") {
 TEST_CASE("BackendRegistry::getRenderDeviceFromLua returns fallback") {
     lua_State* L = luaL_newstate();
     REQUIRE(L != nullptr);
-    // No backend stored in Lua registry -- falls back to BackendRegistry
     IRenderDevice* dev = BackendRegistry::getRenderDeviceFromLua(L);
     (void)dev;  // may be null or not -- just verify no crash
     lua_close(L);
