@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <filesystem>
 #include <vector>
 
 #include "../di/TextureBudget.h"
@@ -123,7 +124,7 @@ uint32_t TextureManager::getPlaceholderTexture() {
 
 bgfx::TextureHandle TextureManager::loadFromFile(const std::string& path) {
     // Use std::ifstream for Unicode path support on Windows
-    std::ifstream file(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
+        std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         fprintf(stderr, "[TextureManager] File not found: %s\n", path.c_str());
         return BGFX_INVALID_HANDLE;
