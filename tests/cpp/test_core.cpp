@@ -166,6 +166,7 @@ TEST_CASE("DebugManager::setRenderInfo/getRenderInfo round-trip") {
     CHECK(out.width == 1920);
     CHECK(out.height == 1080);
     CHECK(out.shaderReady);
+    CHECK(out.viewCount == 4);
 }
 
 TEST_CASE("DebugManager::setAudioInfo/getAudioInfo round-trip") {
@@ -178,4 +179,6 @@ TEST_CASE("DebugManager::setAudioInfo/getAudioInfo round-trip") {
     CHECK(out.initialized);
     CHECK(out.bgmBusReady);
     CHECK_FALSE(out.voiceBusReady);
+    CHECK(out.seBusReady);
+    CHECK(out.globalVolume == 0.75f);
 }

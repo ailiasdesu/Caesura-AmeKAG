@@ -4,8 +4,8 @@
 
 using namespace Caesura;
 
-TEST_CASE("InputRouter::singleton lifecycle") {
-    InputRouter router;
+TEST_CASE("InputRouter::default focus is KAG") {
+    InputRouter router;  // NOT a singleton — each test creates its own instance
     CHECK(router.getFocus() == InputFocus::KAG);
 }
 
