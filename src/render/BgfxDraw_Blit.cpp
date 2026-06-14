@@ -43,6 +43,7 @@ void BgfxDraw::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
 
     float sw = (float)m_state->device->getWidth();
     float sh = (float)m_state->device->getHeight();
+    if (sw <= 0.0f || sh <= 0.0f) return;  // guard zero-size backbuffer
     float nx  = (x / sw) * 2.0f - 1.0f;
     float ny  = 1.0f - (y / sh) * 2.0f;
     float nx2 = ((x + w) / sw) * 2.0f - 1.0f;
@@ -96,6 +97,7 @@ void BgfxDraw::stretchBlt(uint16_t targetView, uint32_t dstTexId,
 
     float hw = (float)m_state->device->getWidth()  * 0.5f;
     float hh = (float)m_state->device->getHeight() * 0.5f;
+    if (hw <= 0.0f || hh <= 0.0f) return;
     float l = (dx / hw) - 1.0f;
     float r = ((dx + dw) / hw) - 1.0f;
     float t = 1.0f - (dy / hh);
@@ -155,6 +157,7 @@ void BgfxDraw::affineBlt(uint16_t targetView, uint32_t dstTexId,
 
     float hw = (float)m_state->device->getWidth()  * 0.5f;
     float hh = (float)m_state->device->getHeight() * 0.5f;
+    if (hw <= 0.0f || hh <= 0.0f) return;
     float l = (dx / hw) - 1.0f;
     float r = ((dx + dw) / hw) - 1.0f;
     float t = 1.0f - (dy / hh);
