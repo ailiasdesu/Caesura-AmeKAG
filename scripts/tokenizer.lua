@@ -109,7 +109,9 @@ end
 function tokenizer.parse(ks_text)
     if not ks_text or ks_text == "" then return {} end
     -- Strip BOM
-    if ks_text:sub(1,1) == "\239" then ks_text = ks_text:sub(4) end
+    -- BOM is 3 bytes (EF BB BF). Grammar also has optional BOM prefix.
+    if ks_text:byte(1)==0xEF and ks_text:byte(2)==0xBB and ks_text:byte(3)==0xBF then
+        ks_text = ks_text:sub(4) end
     local raw = lpeg.match(grammar, ks_text)
     if not raw then
         error("Tokenizer: parse failed -- check .ks syntax")

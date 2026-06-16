@@ -56,7 +56,11 @@ function scheduler.run(ctx, tokens, start_index)
     if tokens[1] and tokens[1].type then
         for j, t in ipairs(tokens) do
             if t.type then
-                tokens[j] = { t.cmd or t.type, t.params or {} }
+                if t.type == "label" then
+                    tokens[j] = { "label", { name = t.name } }
+                else
+                    tokens[j] = { t.cmd or t.type, t.params or {} }
+                end
             end
         end
     end
