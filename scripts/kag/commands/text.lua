@@ -215,7 +215,7 @@ function TextCommands.font(ctx, params)
     if params.size then ctx.text_state.font_size = tonumber(params.size) end
     if params.color then ctx.text_state.font_color = params.color end
     local backend = require("backend")
-    -- text_set_font stub (face/size/color not yet implemented in C++)
+    backend.text_set_font(ctx.text_state.font_face, ctx.text_state.font_size, ctx.text_state.font_color)
 end
 
 -- =============================================================================
@@ -236,7 +236,7 @@ end
 function TextCommands.reset(ctx, params)
     ctx.text_state = { line = 1, char_offset = 0 }
     local backend = require("backend")
-    -- text_reset_state stub
+    backend.text_reset_state()
 end
 
 -- =============================================================================

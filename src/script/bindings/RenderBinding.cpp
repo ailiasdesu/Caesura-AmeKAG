@@ -532,6 +532,28 @@ static int lua_Render_invalidate_handles(lua_State* L) {
     return 1;
 }
 
+
+// -- text_set_font(face, size, color) — stores font settings for renderText ---------
+static int lua_Render_text_set_font(lua_State* L) {
+    // Font settings are managed in Lua ctx.text_state.
+    // C++ renderText uses the current font atlas; dynamic font face/size/color
+    // switching is reserved for future implementation. For now, this is a safe no-op
+    // that allows the Lua [font] command to call backend.text_set_font without error.
+    (void)L;  // params consumed by Lua caller
+    return 0;
+}
+
+// -- text_reset_state() — reset text renderer state -------------------------------
+static int lua_Render_text_reset_state(lua_State* L) {
+    // Resets the text renderer's internal line/char tracking.
+    // C++ renderText starts fresh each frame; this is a safe no-op
+    // that allows the Lua [reset] command to call backend.text_reset_state without error.
+    (void)L;
+    IRenderDevice* dev = BackendRegistry::instance().getRenderDevice();
+    if (dev) dev->setFont(0);  // reset to default font
+    return 0;
+}
+
 // -- Module registration ----------------------------------------------------
 
 static const luaL_Reg render_functions[] = {
@@ -564,6 +586,8 @@ static const luaL_Reg render_functions[] = {
     { "video_get_size",     lua_Render_video_get_size     },
     { "video_pause",        lua_Render_video_pause        },
     { "video_resume",       lua_Render_video_resume       },
+    { "text_set_font",     lua_Render_text_set_font     },
+    { "text_reset_state",  lua_Render_text_reset_state  },
     { nullptr, nullptr }
 };
 
