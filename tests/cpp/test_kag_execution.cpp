@@ -357,3 +357,14 @@ TEST_CASE("KAG: unlock cg command adds to unlockedCG") {
     CHECK(doString(L, code));
     delete lm;
 }
+
+
+TEST_CASE("KAG: saveplace and loadplace roundtrip") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "system"));
+    const char* code = "local System = require('system'); local ctx = { current_label = 'start', pc = 5, tf = { flag = true }, dialog_index = 3 }; System.saveplace(ctx); ctx.current_label = nil; ctx.pc = nil; ctx.tf = nil; local ok = System.loadplace(ctx); assert(ok ~= false); assert(ctx.current_label == 'start'); assert(ctx.pc == 5); assert(ctx.tf.flag == true); assert(ctx.dialog_index == 3);";
+    CHECK(doString(L, code));
+    delete lm;
+}
