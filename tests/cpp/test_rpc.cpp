@@ -24,6 +24,33 @@ TEST_CASE("IRpcServer interface completeness") {
     CHECK(iface->isRunning() == false);
 }
 
+// =============================================================================
+// Expanded: RpcServer handlers + EditorServer accessors
+// =============================================================================
+
+TEST_CASE("RpcServer::pushLog does not crash") {
+    RpcServer& rpc = RpcServer::instance();
+    rpc.pushLog("info", "test");
+    rpc.pushLog("error", "oops");
+}
+
+TEST_CASE("RpcServer::setLuaState does not crash") {
+    RpcServer& rpc = RpcServer::instance();
+    rpc.setLuaState(nullptr);
+    // setting nullptr should not crash
+}
+
+TEST_CASE("EditorServer::port returns set port") {
+    EditorServer& es = EditorServer::instance();
+    // port defaults to 0 until start is called
+    CHECK(es.port() == 0);
+}
+
+TEST_CASE("EditorServer::setLuaState does not crash") {
+    EditorServer& es = EditorServer::instance();
+    es.setLuaState(nullptr);
+}
+
 TEST_CASE("EditorServer::construct and stop without start") {
     EditorServer& es = EditorServer::instance();
     es.stop();
