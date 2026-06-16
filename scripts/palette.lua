@@ -88,4 +88,55 @@ function palette.unload_all()
     luts = {}
 end
 
+--- Day/night mode state
+palette._mode = "day"  -- "day" or "night"
+palette._nightLutId = "__night_preset"
+
+--- Activate day mode (neutral/no color grading).
+-- Clears any active LUT. Safe to call repeatedly.
+function palette.set_day_mode()
+    palette._mode = "day"
+    palette.clear()
+    return true
+end
+
+--- Activate night mode (blue-dark color grading).
+-- Tries to load assets/lut/night.png LUT. Falls back to clear if missing.
+-- The LUT is cached after first load so subsequent calls are cheap.
+function palette.set_night_mode()
+    palette._mode = "night"
+
+    -- Try loading the night LUT if not already loaded
+    if not luts[palette._nightLutId] then
+        local nightPath = "assets/lut/night.png"
+        local ok = palette.load(palette._nightLutId, nightPath)
+        if not ok then
+            -- No night LUT file available; clear and exit gracefully
+            palette.clear()
+            return true, "night mode (no LUT file -- using neutral)"
+        end
+    end
+
+    palette.apply(palette._nightLutId, 1.0)
+    return true
+end
+
+--- Toggle between day and night mode.
+-- @return "day" or "night"
+function palette.toggle_mode()
+    if palette._mode == "day" then
+        palette.set_night_mode()
+        return "night"
+    else
+        palette.set_day_mode()
+        return "day"
+    end
+end
+
+--- Get the current mode.
+-- @return "day" or "night"
+function palette.get_mode()
+    return palette._mode
+end
+
 return palette

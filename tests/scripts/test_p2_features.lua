@@ -128,6 +128,28 @@ do
     if not ok6 then print("  unload error:", err6) end
     assert_eq(ok6, true, "palette: unload no crash")
 
+
+    -- Test: set_day_mode clears palette
+    palette.load("daytest", "fake/path.png")
+    palette.apply("daytest", 1.0)
+    palette.set_day_mode()
+    assert_eq(palette.get_mode(), "day", "palette: day mode sets _mode to day")
+
+    -- Test: set_night_mode (no LUT file - graceful fallback)
+    local ok7, msg7 = palette.set_night_mode()
+    assert_eq(ok7, true, "palette: set_night_mode returns true")
+    assert_eq(palette.get_mode(), "night", "palette: night mode sets _mode to night")
+
+    -- Test: toggle_mode cycles
+    palette.set_day_mode()
+    local r1 = palette.toggle_mode()
+    assert_eq(r1, "night", "palette: toggle day->night")
+    local r2 = palette.toggle_mode()
+    assert_eq(r2, "day", "palette: toggle night->day")
+
+    -- Test: get_mode default
+    palette.set_day_mode()
+    assert_eq(palette.get_mode(), "day", "palette: get_mode returns day after reset")
     package.loaded["palette"] = nil
     package.loaded["backend"] = nil
 end
