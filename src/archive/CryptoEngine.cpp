@@ -267,6 +267,12 @@ void CryptoEngine::generateKeyPair(uint8_t* publicKey, size_t publicKeyLen,
     uint8_t seed[32];
     generateKey(seed, sizeof(seed));
     ed25519_create_keypair(publicKey, privateKey, seed);
+
+    // ed25519_create_keypair writes SHA-512(seed) to privateKey[0..63]
+    // but does NOT store the public key there. Standard ed25519 convention
+    // is privateKey = seed(32) + publicKey(32), so ed25519_sign can use
+    // privateKey+32 as the public key argument. Copy it now.
+    memcpy(privateKey + 32, publicKey, 32);
 }
 
 // ==========================================================================

@@ -7,6 +7,13 @@
 #include "audio/api/IAudioBackend.h"
 #include "platform/api/IPlatformBackend.h"
 #include "live2d/api/IAnimationBackend.h"
+#include "input/api/IInputRouter.h"
+#include "rpc/api/IRpcServer.h"
+#include "rpc/api/IEditorServer.h"
+#include "render/api/IParticleSystem.h"
+#include "debug/api/IDebugManager.h"
+#include "resource/api/IAsyncLoader.h"
+#include "render/api/ILayerManager.h"
 
 using namespace Caesura;
 
@@ -14,9 +21,10 @@ using namespace Caesura;
 
 TEST_CASE("DI: BackendRegistry getAudioBackend returns non-null after set") {
     auto& reg = BackendRegistry::instance();
-    // setAudioBackend takes reference, can't easily test with sentinel
-    // Verify the method compiles and getter exists
-    CHECK(true);
+    // setAudioBackend takes a reference — can't test with sentinel.
+    // Verify getter is callable and returns a pointer.
+    IAudioBackend* current = reg.getAudioBackend();
+    (void)current;  // may be null or set by other tests
 }
 
 TEST_CASE("DI: BackendRegistry setAnimationBackend/getAnimationBackend") {
@@ -55,27 +63,47 @@ TEST_CASE("DI: TextureBudget singleton instance is accessible") {
 
 TEST_CASE("DI: TextureBudget default tier is 1") {
     auto& tb = TextureBudget::instance();
+    // Default tier after detect() is tier 1 (256 MB)
+    // detect() auto-senses system RAM and picks an appropriate tier.
+    // The exact value is machine-dependent, but it should be in [0, 5].
+    tb.detect();
     CHECK(tb.getTier() >= 0);
+    CHECK(tb.getTier() <= 5);
+    CHECK(tb.isAutoDetected());
 }
 
 TEST_CASE("DI: TextureBudget setTier/getTier round-trip") {
     auto& tb = TextureBudget::instance();
+    // Save state to restore after test
+    int oldTier = tb.getTier();
+    bool oldAuto = tb.isAutoDetected();
+
     tb.setTier(3);
     CHECK(tb.getTier() == 3);
     CHECK(tb.isAutoDetected() == false);
+
+    // Restore
+    tb.setTier(oldTier);
+    // Note: isAutoDetected cannot be restored (it's set to false by setTier);
+    // call detect() to re-enable auto-detection if it was on before
+    if (oldAuto) tb.detect();
 }
 
 TEST_CASE("DI: TextureBudget getBudgetMB returns positive value") {
     auto& tb = TextureBudget::instance();
+    int oldTier = tb.getTier();
     CHECK(tb.getBudgetMB() > 0);
+    tb.setTier(oldTier);
 }
 
 TEST_CASE("DI: TextureBudget tier names are non-empty") {
     auto& tb = TextureBudget::instance();
+    int oldTier = tb.getTier();
     for (int t = 0; t <= 5; ++t) {
         tb.setTier(t);
         CHECK(tb.getTierName() != nullptr);
     }
+    tb.setTier(oldTier);
 }
 
 // -- SandboxQuota namespace interface -----------------------------------
@@ -84,4 +112,80 @@ TEST_CASE("DI: SandboxQuota namespace is accessible") {
     // SandboxQuota is a namespace with static functions,
     // not a singleton class. Verify compilation.
     CHECK(true);
+}
+
+// =============================================================================
+// Expanded: remaining BackendRegistry set/get pairs
+// =============================================================================
+
+TEST_CASE("DI: BackendRegistry setPlatformBackend/getPlatformBackend") {
+    auto& reg = BackendRegistry::instance();
+    IPlatformBackend* sentinel = reinterpret_cast<IPlatformBackend*>(0x1);
+    IPlatformBackend* old = reg.getPlatformBackend();
+    reg.setPlatformBackend(*sentinel);
+    CHECK(reg.getPlatformBackend() == sentinel);
+    if (old) reg.setPlatformBackend(*old);
+}
+
+TEST_CASE("DI: BackendRegistry setInputRouter/getInputRouter") {
+    auto& reg = BackendRegistry::instance();
+    IInputRouter* sentinel = reinterpret_cast<IInputRouter*>(0x1);
+    reg.setInputRouter(sentinel);
+    CHECK(reg.getInputRouter() == sentinel);
+    reg.setInputRouter(nullptr);
+    CHECK(reg.getInputRouter() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setRpcServer/getRpcServer") {
+    auto& reg = BackendRegistry::instance();
+    IRpcServer* sentinel = reinterpret_cast<IRpcServer*>(0x1);
+    reg.setRpcServer(sentinel);
+    CHECK(reg.getRpcServer() == sentinel);
+    reg.setRpcServer(nullptr);
+    CHECK(reg.getRpcServer() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setEditorServer/getEditorServer") {
+    auto& reg = BackendRegistry::instance();
+    IEditorServer* sentinel = reinterpret_cast<IEditorServer*>(0x1);
+    reg.setEditorServer(sentinel);
+    CHECK(reg.getEditorServer() == sentinel);
+    reg.setEditorServer(nullptr);
+    CHECK(reg.getEditorServer() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setParticleSystem/getParticleSystem") {
+    auto& reg = BackendRegistry::instance();
+    IParticleSystem* sentinel = reinterpret_cast<IParticleSystem*>(0x1);
+    reg.setParticleSystem(sentinel);
+    CHECK(reg.getParticleSystem() == sentinel);
+    reg.setParticleSystem(nullptr);
+    CHECK(reg.getParticleSystem() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setDebugManager/getDebugManager") {
+    auto& reg = BackendRegistry::instance();
+    IDebugManager* sentinel = reinterpret_cast<IDebugManager*>(0x1);
+    reg.setDebugManager(sentinel);
+    CHECK(reg.getDebugManager() == sentinel);
+    reg.setDebugManager(nullptr);
+    CHECK(reg.getDebugManager() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setAsyncLoader/getAsyncLoader") {
+    auto& reg = BackendRegistry::instance();
+    IAsyncLoader* sentinel = reinterpret_cast<IAsyncLoader*>(0x1);
+    reg.setAsyncLoader(sentinel);
+    CHECK(reg.getAsyncLoader() == sentinel);
+    reg.setAsyncLoader(nullptr);
+    CHECK(reg.getAsyncLoader() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setLayerManager/getLayerManager") {
+    auto& reg = BackendRegistry::instance();
+    ILayerManager* sentinel = reinterpret_cast<ILayerManager*>(0x1);
+    reg.setLayerManager(sentinel);
+    CHECK(reg.getLayerManager() == sentinel);
+    reg.setLayerManager(nullptr);
+    CHECK(reg.getLayerManager() == nullptr);
 }

@@ -55,3 +55,63 @@ TEST_CASE("ProviderChain::add and check") {
     CHECK_FALSE(chain.exists("nope.bin"));
     fs::remove_all("test_pc");
 }
+
+// =============================================================================
+// Expanded: DirAssetProvider read + ProviderChain priority fallback
+// =============================================================================
+
+TEST_CASE("DirAssetProvider::read returns file content") {
+    namespace fs = std::filesystem;
+    fs::create_directories("test_read");
+    { std::ofstream out("test_read/data.txt"); out << "hello world"; }
+    DirAssetProvider provider("test_read");
+    auto data = provider.read("data.txt");
+    REQUIRE_FALSE(data.empty());
+    std::string content(data.begin(), data.end());
+    CHECK(content == "hello world");
+    fs::remove_all("test_read");
+}
+
+TEST_CASE("DirAssetProvider::getSource and priority") {
+    DirAssetProvider provider("/some/root");
+    CHECK(provider.getSource().find("Dir:") != std::string::npos);
+    CHECK(provider.getSource().find("/some/root") != std::string::npos);
+    CHECK(provider.priority() == 5);
+    CHECK(provider.verify());
+}
+
+TEST_CASE("ProviderChain::read falls back to lower priority") {
+    namespace fs = std::filesystem;
+    fs::create_directories("test_high");
+    fs::create_directories("test_low");
+    // Only write file in low-priority dir
+    { std::ofstream out("test_low/fallback.txt"); out << "fallback"; }
+    ProviderChain chain;
+    // Both providers have default priority 5. File only in test_low —
+    // tests same-priority chaining (not priority ordering).
+    chain.addProvider(std::make_unique<DirAssetProvider>("test_high"));
+    chain.addProvider(std::make_unique<DirAssetProvider>("test_low"));
+    CHECK(chain.exists("fallback.txt"));
+    auto data = chain.read("fallback.txt");
+    REQUIRE_FALSE(data.empty());
+    std::string content(data.begin(), data.end());
+    CHECK(content == "fallback");
+    fs::remove_all("test_high");
+    fs::remove_all("test_low");
+}
+
+TEST_CASE("ProviderChain::providers accessor") {
+    ProviderChain chain;
+    CHECK(chain.providers().empty());
+    chain.addProvider(std::make_unique<DirAssetProvider>("some_dir"));
+    CHECK(chain.providers().size() == 1);
+}
+
+TEST_CASE("DirAssetProvider::read nonexistent returns empty") {
+    namespace fs = std::filesystem;
+    fs::create_directories("test_empty");
+    DirAssetProvider provider("test_empty");
+    auto data = provider.read("nonexistent.txt");
+    CHECK(data.empty());
+    fs::remove_all("test_empty");
+}

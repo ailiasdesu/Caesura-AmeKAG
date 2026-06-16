@@ -73,3 +73,23 @@ TEST_CASE("NullJobSystem: multiple submits get unique IDs") {
     CHECK(id2 != id3);
     CHECK(id1 != id3);
 }
+
+// =============================================================================
+// Expanded: remaining no-op methods
+// =============================================================================
+
+TEST_CASE("NullJobSystem: pollMainThreadJobs is safe no-op") {
+    NullJobSystem njs;
+    njs.init();
+    // pollMainThreadJobs is a no-op in synchronous mode — should not crash
+    njs.pollMainThreadJobs();
+    njs.pollMainThreadJobs();  // idempotent
+}
+
+TEST_CASE("NullJobSystem: waitIdle is safe no-op") {
+    NullJobSystem njs;
+    njs.init();
+    // waitIdle is a no-op in synchronous mode — should not crash
+    njs.waitIdle();
+    njs.waitIdle();  // idempotent
+}

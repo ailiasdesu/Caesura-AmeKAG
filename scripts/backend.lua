@@ -355,5 +355,16 @@ function Backend.cancel_async_loads()
     local b = get_backend()
     if b then return b.render("cancel_async_loads") end
 end
-return Backend
 
+-- =============================================================================
+-- Text rendering state
+-- =============================================================================
+
+function Backend.text_set_font(face, size, color)
+    Render.text_set_font(face, size, color)
+end
+
+function Backend.text_reset_state()
+    Render.text_reset_state()
+end
+return Backend

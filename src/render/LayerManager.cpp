@@ -133,7 +133,7 @@ bool LayerManager::shouldUseScissor(uint16_t screenW, uint16_t screenH) const {
     if (m_mergedDirty.empty()) return false;
     uint32_t frameArea = static_cast<uint32_t>(screenW) * static_cast<uint32_t>(screenH);
     // Fallback: if dirty area > 75% of frame, draw full frame instead
-    return m_mergedDirty.area() <= (frameArea * 3u / 4u);
+    return m_mergedDirty.area() <= ((frameArea * 3u) / 4u);
 }
 
 void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
@@ -164,7 +164,7 @@ void LayerManager::clearDirtyRects() {
 }
 
 // ---------------------------------------------------------------------------
-// Z-order submit -- BG ¡ú FG ¡ú MSG
+// Z-order submit -- BG ï¿½ï¿½ FG ï¿½ï¿½ MSG
 // ---------------------------------------------------------------------------
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
@@ -205,7 +205,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         float rw = (float)screenW * l.sx;
         float rh = (float)screenH * l.sy;
 
-        // Convert to NDC: screen coordinates ¡ú [-1, 1]
+        // Convert to NDC: screen coordinates ï¿½ï¿½ [-1, 1]
         float nx0 = (lx / (screenW * 0.5f)) - 1.0f;
         float ny0 = 1.0f - (ly / (screenH * 0.5f));  // flip Y
         float nx1 = ((lx + rw) / (screenW * 0.5f)) - 1.0f;

@@ -15,6 +15,49 @@ TEST_CASE("JobSystem::singleton and lifecycle") {
     js.shutdown();
 }
 
+// =============================================================================
+// Expanded: priority and pending jobs
+// =============================================================================
+
+TEST_CASE("JobSystem::pendingJobs tracks active work") {
+    auto& js = JobSystem::instance();
+    js.init();
+    CHECK(js.pendingJobs() == 0);
+
+    std::atomic<bool> done{false};
+
+    // Allow jobs to start, then check pending count
+    std::atomic<int> startCount{0};
+    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
+    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
+
+    // Wait for both jobs to actually start before checking pending
+    for (int i = 0; i < 100 && startCount.load() < 2; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    CHECK(startCount.load() == 2);  // both jobs started
+    CHECK(js.pendingJobs() > 0);
+
+    done.store(true);
+    js.waitIdle();
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+TEST_CASE("JobSystem::both priority levels execute correctly") {
+    auto& js = JobSystem::instance();
+    js.init();
+
+    std::atomic<bool> normalRan{false}, lowRan{false};
+    js.submit([&]() { lowRan.store(true); }, JobPriority::Low);
+    js.submit([&]() { normalRan.store(true); }, JobPriority::Normal);
+
+    js.waitIdle();
+    CHECK(normalRan.load());
+    CHECK(lowRan.load());
+    js.shutdown();
+}
+
 TEST_CASE("JobSystem::submit runs work on worker") {
     auto& js = JobSystem::instance();
     js.init();

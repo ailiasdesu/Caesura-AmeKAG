@@ -22,6 +22,9 @@ TEST_CASE("HotReload::state transitions") {
     hr.setScriptState(ScriptState::DEBUG_ACTIVE);
     CHECK(hr.scriptState() == ScriptState::DEBUG_ACTIVE);
     hr.setScriptState(ScriptState::IDLE);
+    hr.setScriptState(ScriptState::RELOADING);
+    CHECK(hr.scriptState() == ScriptState::RELOADING);
+    hr.setScriptState(ScriptState::IDLE);
     CHECK(hr.scriptState() == ScriptState::IDLE);
 }
 

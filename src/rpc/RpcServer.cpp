@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- RpcServer implementation
 //  stdin/stdout JSON-RPC — simplest possible protocol.
 //  Each line is a complete JSON object, \n delimited.
@@ -134,6 +134,14 @@ static std::string extractMethod(const std::string& json) {
     return extractField(json, "method");
 }
 
+
+
+// Safe integer parse -- returns 0 on non-numeric input
+static int safeStoi(const std::string& s) {
+    if (s.empty()) return 0;
+    try { return std::stoi(s); }
+    catch (...) { return 0; }
+}
 std::string RpcServer::handleRequest(const std::string& jsonLine) {
     std::string method = extractMethod(jsonLine);
     int id = parseId(jsonLine);
@@ -145,8 +153,8 @@ std::string RpcServer::handleRequest(const std::string& jsonLine) {
     if (method == "assets")  return handleAssets(id, extractField(jsonLine, "type"));
     if (method == "eval")    return handleEval(id, extractField(jsonLine, "code"));
     if (method == "getFrame") return handleGetFrame(id,
-        std::stoi(extractField(jsonLine, "w").empty() ? "0" : extractField(jsonLine, "w")),
-        std::stoi(extractField(jsonLine, "h").empty() ? "0" : extractField(jsonLine, "h")));
+        safeStoi(extractField(jsonLine, "w")),
+        safeStoi(extractField(jsonLine, "h")));
     if (method == "getState") return handleGetState(id);
 
     // Unknown method

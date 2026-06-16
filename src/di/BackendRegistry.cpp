@@ -106,6 +106,9 @@ void BackendRegistry::setLayerManager(ILayerManager* mgr) {
 }
 
 // -- Null backend registration (headless mode) -------------------------------
+// Registers null stubs for render and platform backends so the engine
+// can operate without a GPU or window. Other backends (audio, input, etc.)
+// are left unregistered — they should be set separately or checked for null.
 void BackendRegistry::registerNullBackends() {
     static NullRenderDevice  s_nullRenderer;
     static NullPlatformBackend s_nullPlatform;
@@ -307,7 +310,8 @@ IInputRouter* BackendRegistry::getInputRouterFromLua(lua_State* L) {
     return router;
 }
 
-IVideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {
+IVideoPlayer* BackendRegistry::getVideoPlayerFromLua(lua_State* L) {  
+    (void)L;  // singleton fallback — see getMiniGameBackendFromLua
     return BackendRegistry::instance().getVideoPlayer();
 }
 
@@ -332,4 +336,3 @@ void BackendRegistry::registerEngineBindings(lua_State* L) {
 }
 
 } // namespace Caesura
-

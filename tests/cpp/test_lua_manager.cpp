@@ -63,3 +63,52 @@ TEST_CASE("LuaManager::double init is safe") {
     CHECK(lm.state() != nullptr);
 }
 
+// =============================================================================
+// Expanded: instruction budget, update, resumeKAG
+// =============================================================================
+
+TEST_CASE("LuaManager::instruction budget set/get round-trip") {
+    LuaManager lm;
+    lm.setInstructionBudget(200000);
+    CHECK(lm.getInstructionBudget() == 200000);
+    lm.resetInstructionBudget();
+    CHECK_FALSE(lm.isInstructionBudgetExceeded());
+}
+
+TEST_CASE("LuaManager::instruction budget interrupts infinite loop") {
+    LuaManager lm;
+
+    // Set very low budget (100 instructions) and run an infinite loop
+    // The instruction hook fires on LuaManager::instance(), not on locals.
+    auto& mgr = LuaManager::instance();
+    REQUIRE(mgr.init());
+    lua_State* L = mgr.state();
+    REQUIRE(L != nullptr);
+
+    // Save budget to restore after test
+    int oldBudget = mgr.getInstructionBudget();
+    mgr.setInstructionBudget(100);
+    // With budget=100 and hook firing every 1000 instrs, the loop will
+    // be interrupted after multiple hook invocations. Verify it doesn't hang.
+    int result = luaL_dostring(L, "while true do end");
+    // The loop should be interrupted (not hang forever)
+    CHECK(result != LUA_OK);
+    mgr.resetInstructionBudget();
+    mgr.setInstructionBudget(oldBudget);  // Restore for other tests
+    CHECK_FALSE(mgr.isInstructionBudgetExceeded());
+}
+
+TEST_CASE("LuaManager::update does not crash") {
+    LuaManager lm;
+    lm.init();
+    lm.update(0.016f);
+    lm.update(0.0f);
+}
+
+TEST_CASE("LuaManager::resumeKAGCoroutine does not crash without coroutine") {
+    LuaManager lm;
+    lm.init();
+    // No KAG coroutine running — should be a safe no-op
+    lm.resumeKAGCoroutine();
+}
+

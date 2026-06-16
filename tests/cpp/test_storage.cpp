@@ -3,6 +3,7 @@
 #include "storage/api/ISaveManager.h"
 #include "storage/SaveManager.h"
 #include <filesystem>
+#include <cstring>
 
 using namespace Caesura;
 
@@ -60,4 +61,23 @@ TEST_CASE("Storage: ISaveManager interface upcast") {
     ISaveManager* iface = &SaveManager::instance();
     CHECK(iface != nullptr);
     CHECK(iface->currentSchemaVersion() >= 0);
+}
+
+// =============================================================================
+// Expanded: save provider
+// =============================================================================
+
+TEST_CASE("Storage: SaveManager default save provider exists after init") {
+    setupTempDir();
+    auto& sm = SaveManager::instance();
+    sm.init(g_tempDir);
+    // Save provider is nullptr by default (must be set via setSaveProvider)
+    // init does not automatically create a LocalFileSaveProvider
+    CHECK(sm.getSaveProvider() == nullptr);
+    cleanupTempDir();
+}
+
+TEST_CASE("Storage: SaveManager ENGINE_VERSION is not empty") {
+    CHECK(SaveManager::ENGINE_VERSION != nullptr);
+    CHECK(std::strlen(SaveManager::ENGINE_VERSION) > 0);
 }

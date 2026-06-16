@@ -94,3 +94,91 @@ TEST_CASE("DebugManager::valid init and log") {
     CHECK(dm.errorCount() >= 1);
     dm.shutdown();
 }
+
+// =============================================================================
+// Expanded DebugManager coverage
+// =============================================================================
+
+TEST_CASE("DebugManager::shutdown is idempotent") {
+    auto& dm = DebugManager::instance();
+    dm.shutdown();
+    dm.shutdown();  // second call must not crash
+}
+
+TEST_CASE("DebugManager::ring buffer wraps after 1024 entries") {
+    auto& dm = DebugManager::instance();
+    CHECK(dm.init("logs"));
+    // Fill ring buffer past capacity
+    for (int i = 0; i < 1100; ++i) {
+        dm.log(DbgLevel::Info, SubSys::Engine, ErrCode::Ok, "msg %d", i);
+    }
+    // Ring buffer should be capped at kRingSize (1024)
+    CHECK(dm.ringBuffer().size() <= 1024);
+    CHECK(dm.ringBuffer().size() > 0);
+    dm.shutdown();
+}
+
+TEST_CASE("DebugManager::lastError returns most recent error") {
+    auto& dm = DebugManager::instance();
+    CHECK(dm.init("logs"));
+    dm.log(DbgLevel::Err, SubSys::Render, ErrCode::Render_ShaderCompileFailed, "shader A failed");
+    dm.log(DbgLevel::Warn, SubSys::Audio, ErrCode::Ok, "audio warning");
+    dm.log(DbgLevel::Err, SubSys::Engine, ErrCode::Engine_AudioInitFailed, "final error");
+    const auto* last = dm.lastError();
+    CHECK(last != nullptr);
+    CHECK(last->subsystem == SubSys::Engine);
+    dm.shutdown();
+}
+
+TEST_CASE("DebugManager::subsystemErrorCount isolates subsystems") {
+    auto& dm = DebugManager::instance();
+    CHECK(dm.init("logs"));
+    // Read baseline — previous tests may have logged to any subsystem
+    uint32_t baseRender = dm.subsystemErrorCount(SubSys::Render);
+    uint32_t baseAudio  = dm.subsystemErrorCount(SubSys::Audio);
+    uint32_t baseEngine = dm.subsystemErrorCount(SubSys::Engine);
+    dm.log(DbgLevel::Err, SubSys::Render, ErrCode::Ok, "rerr");
+    dm.log(DbgLevel::Err, SubSys::Render, ErrCode::Ok, "rerr2");
+    dm.log(DbgLevel::Err, SubSys::Audio, ErrCode::Ok, "aerr");
+    CHECK(dm.subsystemErrorCount(SubSys::Render) >= baseRender + 2);
+    CHECK(dm.subsystemErrorCount(SubSys::Audio) >= baseAudio + 1);
+    // Engine was not touched by this test — count unchanged
+    CHECK(dm.subsystemErrorCount(SubSys::Engine) == baseEngine);
+    dm.shutdown();
+}
+
+TEST_CASE("DebugManager::dumpFullReport returns non-empty string") {
+    auto& dm = DebugManager::instance();
+    CHECK(dm.init("logs"));
+    dm.log(DbgLevel::Info, SubSys::Engine, ErrCode::Ok, "report test");
+    std::string report = dm.dumpFullReport();
+    CHECK_FALSE(report.empty());
+    dm.shutdown();
+}
+
+TEST_CASE("DebugManager::setRenderInfo/getRenderInfo round-trip") {
+    auto& dm = DebugManager::instance();
+    DebugManager::RenderInfo ri;
+    ri.backendName = "D3D11";
+    ri.width = 1920; ri.height = 1080; ri.viewCount = 4; ri.shaderReady = true;
+    dm.setRenderInfo(ri);
+    auto out = dm.getRenderInfo();
+    CHECK(out.width == 1920);
+    CHECK(out.height == 1080);
+    CHECK(out.shaderReady);
+    CHECK(out.viewCount == 4);
+}
+
+TEST_CASE("DebugManager::setAudioInfo/getAudioInfo round-trip") {
+    auto& dm = DebugManager::instance();
+    DebugManager::AudioInfo ai;
+    ai.initialized = true; ai.bgmBusReady = true; ai.voiceBusReady = false;
+    ai.seBusReady = true; ai.globalVolume = 0.75f;
+    dm.setAudioInfo(ai);
+    auto out = dm.getAudioInfo();
+    CHECK(out.initialized);
+    CHECK(out.bgmBusReady);
+    CHECK_FALSE(out.voiceBusReady);
+    CHECK(out.seBusReady);
+    CHECK(out.globalVolume == 0.75f);
+}
