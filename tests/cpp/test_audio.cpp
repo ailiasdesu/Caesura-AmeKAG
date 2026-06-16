@@ -93,3 +93,82 @@ TEST_CASE("SoLoudAudioEngine::unsupported format returns 0 no crash") {
     unsigned int h2 = eng.playSE("");
     CHECK(h2 == 0);
 }
+
+// =============================================================================
+// Expanded: BGM, Voice, SE3D, SE control, 3D, position, flush
+// =============================================================================
+
+TEST_CASE("SoLoudAudioEngine::playBGM and stopBGM with silence") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    CHECK(h > 0);
+    CHECK(eng.isBGMPlaying());
+    eng.stopBGM(0.0f);
+}
+
+TEST_CASE("SoLoudAudioEngine::playVoice and stopVoice with silence") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playVoice("tests/audio/silence.wav");
+    CHECK(h > 0);
+    CHECK(eng.isVoicePlaying());
+    eng.stopVoice();
+}
+
+TEST_CASE("SoLoudAudioEngine::playSE3D with silence") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playSE3D("tests/audio/silence.wav", 0, 0, -5);
+    CHECK(h > 0);
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine::setSEVolume and stopSEHandle") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    unsigned int h = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(h > 0);
+    eng.setSEVolume(h, 0.5f);
+    CHECK(eng.getSEVolume(h) == doctest::Approx(0.5f));
+    eng.stopSEHandle(h);
+    // stopSE handle 0 should not crash
+    eng.stopSEHandle(0);
+}
+
+TEST_CASE("SoLoudAudioEngine::update3dListener does not crash") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    eng.update3dListener(0, 0, 0, 1, 0, 0);
+    eng.update3dListener(10, 5, -3, 0, 1, 0, 0, 1, 0);
+}
+
+TEST_CASE("SoLoudAudioEngine::isSEPlaying returns false initially") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    CHECK_FALSE(eng.isSEPlaying());
+}
+
+TEST_CASE("SoLoudAudioEngine::getPosition and getLength return zero initially") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    CHECK(eng.getPosition("bgm") == 0.0f);
+    CHECK(eng.getLength("bgm") == 0.0f);
+    CHECK(eng.getPosition("voice") == 0.0f);
+    CHECK(eng.getPosition("se") == 0.0f);
+}
+
+TEST_CASE("SoLoudAudioEngine::update does not crash") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    eng.update(0.016f);
+    eng.update(0.0f);
+}
+
+TEST_CASE("SoLoudAudioEngine::flushWaveCache does not crash") {
+    SoLoudAudioEngine eng;
+    eng.init();
+    eng.playSE("tests/audio/silence.wav");
+    eng.flushWaveCache();
+    eng.flushWaveCache();  // idempotent
+}
