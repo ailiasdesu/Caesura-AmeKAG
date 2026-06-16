@@ -368,3 +368,124 @@ TEST_CASE("KAG: saveplace and loadplace roundtrip") {
     CHECK(doString(L, code));
     delete lm;
 }
+
+// =============================================================================
+// SECTION 7: U1.3 -- [ch] multi-character position & state management
+// =============================================================================
+
+TEST_CASE("KAG: ch command with pos=left renders left-aligned") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello!', pos = 'left' })\n"
+        "assert(ctx.characters ~= nil, 'ctx.characters should exist')\n"
+        "assert(ctx.characters['Hero'] ~= nil, 'Hero should be registered')\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'Hero pos should be left')\n"
+        "assert(ctx.waiting_input == true, 'should wait for input')\n"
+        "assert(#ctx.backlog == 1, 'should have 1 backlog entry')\n"
+        "assert(ctx.backlog[1].name == 'Hero', 'backlog speaker should be Hero')\n"
+        "assert(ctx.backlog[1].text == 'Hello!', 'backlog text should match')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command with pos=right renders right-aligned") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Heroine', text = 'Hi!', pos = 'right' })\n"
+        "assert(ctx.characters['Heroine'] ~= nil, 'Heroine should be registered')\n"
+        "assert(ctx.characters['Heroine'].pos == 'right', 'pos should be right')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command defaults to center when pos omitted") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Narrator', text = 'Once upon a time...' })\n"
+        "assert(ctx.characters['Narrator'] ~= nil, 'should be registered')\n"
+        "assert(ctx.characters['Narrator'].pos == 'center', 'default pos should be center')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command tracks multiple characters independently") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello!', pos = 'left' })\n"
+        "Text.ch(ctx, { name = 'Heroine', text = 'Hi!', pos = 'right' })\n"
+        "assert(ctx.characters['Hero'] ~= nil, 'Hero should exist')\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'Hero pos should be left')\n"
+        "assert(ctx.characters['Heroine'] ~= nil, 'Heroine should exist')\n"
+        "assert(ctx.characters['Heroine'].pos == 'right', 'Heroine pos should be right')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command inherits position from stored character state") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'First line', pos = 'left' })\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Second line' })\n"
+        "-- Second call omits pos, should inherit left from stored state\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'pos should be inherited')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command handles invalid pos gracefully") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "-- Invalid pos values should fall back to center without crash\n"
+        "Text.ch(ctx, { name = 'Test', text = 'A', pos = 'top' })\n"
+        "assert(ctx.characters['Test'].pos == 'center', 'invalid pos should default to center')\n"
+        "Text.ch(ctx, { name = 'Test2', text = 'B', pos = '' })\n"
+        "assert(ctx.characters['Test2'].pos == 'center', 'empty pos should default to center')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command stores layer and sprite info in character state") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello', layer = 'fg0', storage = 'hero.png' })\n"
+        "assert(ctx.characters['Hero'].layer == 'fg0', 'layer should be stored')\n"
+        "assert(ctx.characters['Hero'].sprite == 'hero.png', 'sprite should be stored')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
