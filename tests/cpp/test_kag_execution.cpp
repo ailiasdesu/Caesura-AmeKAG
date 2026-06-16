@@ -489,3 +489,86 @@ TEST_CASE("KAG: ch command stores layer and sprite info in character state") {
     delete lm;
 }
 
+
+// =============================================================================
+
+// =============================================================================
+// SECTION 8: U1.5 -- macro record & erase (expansion via scheduler inline)
+// =============================================================================
+
+TEST_CASE("KAG: macro records body between macro and endmacro") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro name=\"greet\"]\n"
+        "[text text=\"Hello!\"]\n"
+        "[p]\n"
+        "[endmacro]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "assert(ctx.macros ~= nil, 'macros should exist')\n"
+        "assert(ctx.macros['greet'] ~= nil, 'macro greet should be recorded')\n"
+        "assert(#ctx.macros['greet'] == 2, 'body should have 2 tokens')\n"
+        "assert(ctx.macros['greet'][1][1] == 'text', 'first body token: text')\n"
+        "assert(ctx.macros['greet'][2][1] == 'p', 'second body token: p')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: erasemacro removes macro from registry") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro name=\"temp\"]\n"
+        "[text text=\"temp body\"]\n"
+        "[endmacro]\n"
+        "[erasemacro name=\"temp\"]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "assert(ctx.macros ~= nil, 'macros should exist')\n"
+        "assert(ctx.macros['temp'] == nil, 'macro temp should be erased')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: macro with no name is not recorded") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro]\n"
+        "[text text=\"no name\"]\n"
+        "[endmacro]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "local empty = (ctx.macros == nil) or (next(ctx.macros) == nil)\n"
+        "assert(empty, 'no macro should be recorded without name')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}

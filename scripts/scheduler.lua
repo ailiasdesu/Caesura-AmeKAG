@@ -64,6 +64,19 @@ function scheduler.run(ctx, tokens, start_index)
             end
         end
     end
+    -- Normalize params: convert array-format {{key,val},...} to named access
+    -- so commands can use params.name, params.target, etc.
+    for j, t in ipairs(tokens) do
+        local params = t[2]
+        if type(params) == "table" then
+            for _, p in ipairs(params) do
+                if type(p) == "table" and type(p[1]) == "string" then
+                    params[p[1]] = p[2]
+                end
+            end
+        end
+    end
+
     local kag = require("kag")
     local cancel_token = require("kag.cancel_token")
     start_index = start_index or 1
@@ -252,20 +265,33 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.macros[name] = body
             end
 
-        elseif cmd == "endmacro" or cmd == "erasemacro" then
-            -- pass (handled by macro)
+        elseif cmd == "erasemacro" then
+            local name = params.name
+            if name and ctx.macros then
+                ctx.macros[name] = nil
+            end
+        elseif cmd == "endmacro" then
+            -- pass (handled by macro recording above)
 
         -- Regular command: dispatch to kag table
         else
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expand macro inline ?? merge params
-                local saved_tokens = tokens
-                tokens = macro_body
+                -- Splice macro body into token stream, replacing the invocation
+                local new_tokens = {}
+                for n = 1, i - 1 do
+                    table.insert(new_tokens, tokens[n])
+                end
+                for _, bt in ipairs(macro_body) do
+                    table.insert(new_tokens, {bt[1], bt[2]})
+                end
+                for n = i + 1, #tokens do
+                    table.insert(new_tokens, tokens[n])
+                end
+                tokens = new_tokens
                 ctx.tokens = tokens
-                i = 0
-                tokens = saved_tokens  -- restore after macro body
+                i = i - 1  -- will point to first body token after i = i + 1
             else
                 -- text chunks become [ch] commands
                 local handler = kag[cmd]
