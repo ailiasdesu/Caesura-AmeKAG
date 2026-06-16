@@ -24,12 +24,18 @@ TEST_CASE("JobSystem::pendingJobs tracks active work") {
     js.init();
     CHECK(js.pendingJobs() == 0);
 
-    std::atomic<bool> started{false}, done{false};
-    js.submit([&]() { started.store(true); while (!done.load()) {} });
-    js.submit([&]() { started.store(true); while (!done.load()) {} });
+    std::atomic<bool> done{false};
 
     // Allow jobs to start, then check pending count
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::atomic<int> startCount{0};
+    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
+    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
+
+    // Wait for both jobs to actually start before checking pending
+    for (int i = 0; i < 100 && startCount.load() < 2; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    CHECK(startCount.load() == 2);  // both jobs started
     CHECK(js.pendingJobs() > 0);
 
     done.store(true);
@@ -38,7 +44,7 @@ TEST_CASE("JobSystem::pendingJobs tracks active work") {
     js.shutdown();
 }
 
-TEST_CASE("JobSystem::low priority jobs defer to normal") {
+TEST_CASE("JobSystem::both priority levels execute correctly") {
     auto& js = JobSystem::instance();
     js.init();
 
