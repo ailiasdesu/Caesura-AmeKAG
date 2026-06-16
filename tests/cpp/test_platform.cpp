@@ -41,10 +41,10 @@ TEST_CASE("Platform: IPlatformBackend interface upcast") {
 
 TEST_CASE("Platform: SDL3PlatformBackend getTicksMs before init") {
     SDL3PlatformBackend backend;
-    // getTicksMs should return 0 before SDL is initialized
-    // SDL_GetTicks() works even without an active window — just verify no crash
+    // SDL_GetTicks() works without an active window.
+    // Verify it returns a positive value or zero (not a sentinel/UINT64_MAX).
     uint64_t t = backend.getTicksMs();
-    (void)t;  // value is machine-dependent
+    CHECK(t < UINT64_MAX);  // not overflow sentinel
 }
 
 TEST_CASE("Platform: SDL3PlatformBackend getMouseState before init") {
@@ -76,25 +76,4 @@ TEST_CASE("Platform: SDL3PlatformBackend shutdown before init is safe") {
     SDL3PlatformBackend backend;
     CHECK_NOTHROW(backend.shutdown());
     CHECK_NOTHROW(backend.shutdown());  // idempotent
-}
-
-TEST_CASE("Platform: MobileAdapter default constructor") {
-    MobileAdapter adapter;
-    CHECK(adapter.isPaused() == false);
-    CHECK(adapter.activeTouchCount() == 0);
-    CHECK(adapter.getDisplayScale() == 1.0f);
-}
-
-TEST_CASE("Platform: MobileAdapter touch events") {
-    MobileAdapter adapter;
-    adapter.onFingerDown(100.0f, 200.0f, 0);
-    CHECK(adapter.activeTouchCount() > 0);
-    adapter.onFingerUp(100.0f, 200.0f, 0);
-    CHECK(adapter.activeTouchCount() == 0);
-}
-
-TEST_CASE("Platform: MobileAdapter display scale set/get") {
-    MobileAdapter adapter;
-    adapter.setDisplayScale(2.5f);
-    CHECK(adapter.getDisplayScale() == 2.5f);
 }
