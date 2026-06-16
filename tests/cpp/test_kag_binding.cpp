@@ -42,12 +42,23 @@ TEST_CASE("KAG global table exists after registerKAGBinding") {
     delete lm;
 }
 
-TEST_CASE("KAG.play_bgm is a function") {
+TEST_CASE("Render.text_set_font binding exists") {
     auto* lm = initLuaWithBindings();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
-    lua_getglobal(L, "KAG");
-    lua_getfield(L, -1, "play_bgm");
+    lua_getglobal(L, "Render");
+    lua_getfield(L, -1, "text_set_font");
+    CHECK(lua_isfunction(L, -1) == 1);
+    lua_pop(L, 2);
+    delete lm;
+}
+
+TEST_CASE("Render.text_reset_state binding exists") {
+    auto* lm = initLuaWithBindings();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "Render");
+    lua_getfield(L, -1, "text_reset_state");
     CHECK(lua_isfunction(L, -1) == 1);
     lua_pop(L, 2);
     delete lm;
@@ -63,6 +74,7 @@ TEST_CASE("KAG.play_bgm is a function") {
     lua_pop(L, 2);
     delete lm;
 }
+
 
 TEST_CASE("KAG.render_text is a function") {
     auto* lm = initLuaWithBindings();
