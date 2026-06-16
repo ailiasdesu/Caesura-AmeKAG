@@ -35,6 +35,49 @@ TEST_CASE("Platform: IPlatformBackend interface upcast") {
     CHECK(iface->getBackendName() != nullptr);
 }
 
+// =============================================================================
+// Expanded: pre-init safety checks
+// =============================================================================
+
+TEST_CASE("Platform: SDL3PlatformBackend getTicksMs before init") {
+    SDL3PlatformBackend backend;
+    // getTicksMs should return 0 before SDL is initialized
+    // SDL_GetTicks() works even without an active window — just verify no crash
+    uint64_t t = backend.getTicksMs();
+    (void)t;  // value is machine-dependent
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend getMouseState before init") {
+    SDL3PlatformBackend backend;
+    auto mouse = backend.getMouseState();
+    CHECK(mouse.x == 0);
+    CHECK(mouse.y == 0);
+    CHECK_FALSE(mouse.leftDown);
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend getNativeWindowHandle before init") {
+    SDL3PlatformBackend backend;
+    // Native window handle should be nullptr before SDL init
+    CHECK(backend.getNativeWindowHandle() == nullptr);
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend setFullscreen before init is safe") {
+    SDL3PlatformBackend backend;
+    CHECK_NOTHROW(backend.setFullscreen(true));
+    CHECK_NOTHROW(backend.setFullscreen(false));
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend resizeWindow before init is safe") {
+    SDL3PlatformBackend backend;
+    CHECK_NOTHROW(backend.resizeWindow(1920, 1080));
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend shutdown before init is safe") {
+    SDL3PlatformBackend backend;
+    CHECK_NOTHROW(backend.shutdown());
+    CHECK_NOTHROW(backend.shutdown());  // idempotent
+}
+
 TEST_CASE("Platform: MobileAdapter default constructor") {
     MobileAdapter adapter;
     CHECK(adapter.isPaused() == false);
