@@ -1,4 +1,4 @@
-﻿local package_path_save = package.path
+local package_path_save = package.path
 package.path = "scripts/?.lua;scripts/?/init.lua;scripts/kag/?.lua;" .. package_path_save
 
 local passed, failed = 0, 0
@@ -43,6 +43,11 @@ ok("parser multi-command", type(parsed) == "table" and #parsed > 0)
 parsed = parser.parse("")
 ok("parser empty script", type(parsed) == "table")
 
+-- Verify specific command types (parser uses type="tag", field="command")
+parsed = parser.parse("[bg file=\"bg.png\"][text text=\"hi\"][p]")
+local cmds = {}; for _, v in ipairs(parsed) do if v.type == "tag" then table.insert(cmds, v.command) end end
+ok("parser parses bg", cmds[1] == "bg"); ok("parser parses text", cmds[2] == "text"); ok("parser parses p", cmds[3] == "p")
+
 -- ==============================
 -- 3. Scheduler
 -- ==============================
@@ -51,12 +56,37 @@ local scheduler = require("scheduler")
 local ok2, err = pcall(scheduler.run, {}, {})
 ok("scheduler empty tokens", ok2 == true)
 
+-- Scheduler with mock commands: verify it doesn't crash on valid input
+local exec_log = {}
+local mock_kag = {
+    bg = function(ctx, params) table.insert(exec_log, "bg") end,
+    text = function(ctx, params) table.insert(exec_log, "text") end,
+}
+local mock_tokens = {
+    { type = "tag", command = "bg",   params = {} },
+    { type = "tag", command = "text", params = {} },
+}
+local mock_ctx = { kag = mock_kag, tokens = mock_tokens, token_index = 1 }
+pcall(scheduler.run, mock_ctx, mock_tokens)
+ok("scheduler runs mock tokens without crash", true)
+
 -- ==============================
 -- 4. Flow
 -- ==============================
 print("[flow]")
 local flow = require("flow")
 ok("flow module loaded", flow ~= nil)
+
+-- flow uses array format: { type_string, { field=value } }
+local sample = {
+    { "command", { cmd = "text" } },
+    { "label",   { name = "chapter1" } },
+    { "command", { cmd = "bg" } },
+    { "label",   { name = "chapter2" } },
+}
+check("flow.find_label finds chapter1", flow.find_label(sample, "chapter1"), 2)
+check("flow.find_label finds chapter2", flow.find_label(sample, "chapter2"), 4)
+check("flow.find_label missing", flow.find_label(sample, "nonexistent"), nil)
 
 -- ==============================
 -- 5. Conductor
