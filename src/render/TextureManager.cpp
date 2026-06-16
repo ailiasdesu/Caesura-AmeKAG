@@ -141,7 +141,7 @@ bgfx::TextureHandle TextureManager::loadFromFile(const std::string& path) {
 }
 
 bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t size) {
-    bx::DefaultAllocator allocator;
+    static bx::DefaultAllocator allocator;
 
     bimg::ImageContainer* img = bimg::imageParse(&allocator, data, size);
 
@@ -183,7 +183,6 @@ bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
 
     if (!bgfx::isValid(tex)) {
-        bimg::imageFree(img);
         fprintf(stderr, "[TextureManager] GPU texture creation failed (bimg).\n");
     }
     return tex;
