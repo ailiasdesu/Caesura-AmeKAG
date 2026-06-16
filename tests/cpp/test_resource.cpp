@@ -87,9 +87,10 @@ TEST_CASE("ProviderChain::read falls back to lower priority") {
     // Only write file in low-priority dir
     { std::ofstream out("test_low/fallback.txt"); out << "fallback"; }
     ProviderChain chain;
-    chain.addProvider(std::make_unique<DirAssetProvider>("test_high"));  // priority 5
-    chain.addProvider(std::make_unique<DirAssetProvider>("test_low"));   // priority 5, same priority
-    // Both have same priority — file should be found via second provider
+    // Both providers have default priority 5. File only in test_low —
+    // tests same-priority chaining (not priority ordering).
+    chain.addProvider(std::make_unique<DirAssetProvider>("test_high"));
+    chain.addProvider(std::make_unique<DirAssetProvider>("test_low"));
     CHECK(chain.exists("fallback.txt"));
     auto data = chain.read("fallback.txt");
     REQUIRE_FALSE(data.empty());
@@ -104,4 +105,13 @@ TEST_CASE("ProviderChain::providers accessor") {
     CHECK(chain.providers().empty());
     chain.addProvider(std::make_unique<DirAssetProvider>("some_dir"));
     CHECK(chain.providers().size() == 1);
+}
+
+TEST_CASE("DirAssetProvider::read nonexistent returns empty") {
+    namespace fs = std::filesystem;
+    fs::create_directories("test_empty");
+    DirAssetProvider provider("test_empty");
+    auto data = provider.read("nonexistent.txt");
+    CHECK(data.empty());
+    fs::remove_all("test_empty");
 }
