@@ -334,3 +334,26 @@ TEST_CASE("KAG: require module idempotency") {
 
     delete lm;
 }
+
+// =============================================================================
+// SECTION 6: P1 command expansion tests
+// =============================================================================
+
+TEST_CASE("KAG: unlock cg command adds to unlockedCG") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.system"));
+
+    const char* code =
+        "local System = require('kag.commands.system')\n"
+        "local ctx = {}\n"
+        "System.unlock(ctx, { type = 'cg', id = 'scene01' })\n"
+        "assert(ctx.unlockedCG ~= nil, 'unlockedCG should exist')\n"
+        "assert(ctx.unlockedCG['scene01'] == true, 'scene01 should be unlocked')\n"
+        "System.unlock(ctx, { type = 'music', id = 'track01' })\n"
+        "assert(ctx.unlockedMusic ~= nil, 'unlockedMusic should exist')\n"
+        "assert(ctx.unlockedMusic['track01'] == true, 'track01 should be unlocked')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}

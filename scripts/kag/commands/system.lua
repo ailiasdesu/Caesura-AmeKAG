@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — kag/commands/system.lua
 --  Phase 4/9: KAG system tag handlers — [wait], [emb], [eval]
 --  [wait]  — time-based blocking with CancelToken (spec [10.2.33])
@@ -191,4 +191,23 @@ function SystemCommands.history(ctx, params)
     return HistoryUI.show(ctx)
 end
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [unlock type="cg" id="scene01"] — unlock a gallery/music item
+--  Writes to ctx.unlockedCG (or ctx.unlockedMusic) for persistent tracking.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function SystemCommands.unlock(ctx, params)
+    local kind = params.type or "cg"
+    local id   = params.id or params.name or ""
+    if id == "" then return end
+
+    if kind == "cg" then
+        ctx.unlockedCG = ctx.unlockedCG or {}
+        ctx.unlockedCG[id] = true
+    elseif kind == "music" then
+        ctx.unlockedMusic = ctx.unlockedMusic or {}
+        ctx.unlockedMusic[id] = true
+    end
+end
 return SystemCommands
