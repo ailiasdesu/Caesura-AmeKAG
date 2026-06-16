@@ -23,8 +23,8 @@ ok("wait resumes in coroutine", ok2)
 -- history: toggles history mode
 local ctx = { show_history = false }
 System.history(ctx, {})
-ok("history exists", type(System.history) == "function")
-System.history(ctx, {})
+ok("history is callable", type(System.history) == "function")
+-- Note: history toggle depends on internal pipeline state; full behavior tested in E2E
 
 
 -- eval/emb: verify they exist (require sandbox for full execution)
@@ -66,6 +66,14 @@ t = tokenizer.parse("[stop]")
 ok("stop", t[1].cmd == "stop")
 t = tokenizer.parse("[return]")
 ok("return", t[1].cmd == "return")
+
+-- macro/endmacro/erasemacro
+t = tokenizer.parse("[macro name=\"greet\"]")
+ok("macro parsed", t[1].cmd == "macro")
+t = tokenizer.parse("[endmacro]")
+ok("endmacro parsed", t[1].cmd == "endmacro")
+t = tokenizer.parse("[erasemacro name=\"greet\"]")
+ok("erasemacro parsed", t[1].cmd == "erasemacro")
 
 print(string.format("\n%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) else os.exit(0) end
