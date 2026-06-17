@@ -8,12 +8,14 @@
 -- Cache sandbox-vulnerable globals before lockdown
 local _type    = type
 
+local System = require("system")
+
 local SaveCommands = {}
 
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Internal: serialize KAG context values to a flat Lua table
 --  Captures: f (global flags), sf (system flags), token_index, scene_path
---  Does NOT capture: tf (temp flags), co, call_stack (rebuild on load)
+--  Does NOT capture: tf (temp flags), co
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local function capture_state(ctx)
@@ -51,9 +53,12 @@ local function capture_state(ctx)
         for i = math.max(1, #ctx.backlog - 99), #ctx.backlog do
             local entry = ctx.backlog[i]
             state.backlog[#state.backlog + 1] = {
-                text      = entry.text or "",
-                voice     = entry.voice or "",
-                timestamp = entry.timestamp or 0,
+                name        = entry.name or "",
+                text        = entry.text or "",
+                voice       = entry.voice or "",
+                timestamp   = entry.timestamp or 0,
+                scene       = entry.scene or "",
+                token_index = entry.token_index or 1,
             }
         end
     end
@@ -71,8 +76,33 @@ local function capture_state(ctx)
     -- Save description
     state.description = ctx.saveDescription or ""
 
+    -- Unlock state (gallery CGs + music room tracks)
+    state.unlockedCG = {}
+    if ctx.unlockedCG then
+        for k, v in pairs(ctx.unlockedCG) do
+            state.unlockedCG[k] = v
+        end
+    end
+    state.unlockedMusic = {}
+    if ctx.unlockedMusic then
+        for k, v in pairs(ctx.unlockedMusic) do
+            state.unlockedMusic[k] = v
+        end
+    end
+
+    -- Call stack (for [call]/[return] nested execution)
+    state.call_stack = {}
+    if ctx.call_stack then
+        for _, frame in ipairs(ctx.call_stack) do
+            table.insert(state.call_stack, {
+                tokens = frame.tokens,
+                index  = frame.index or 1,
+            })
+        end
+    end
+
     -- Schema version (engine-defined)
-    state.schema_version = 1
+    state.schema_version = 2  -- bumped: added unlock state
 
     return state
 end
@@ -158,6 +188,28 @@ function SaveCommands.load(ctx, params)
         end
     end
 
+    -- Restore unlock state (gallery + music room)
+    if state.unlockedCG then
+        ctx.unlockedCG = ctx.unlockedCG or {}
+        for k, v in pairs(state.unlockedCG) do
+            ctx.unlockedCG[k] = v
+        end
+    end
+    if state.unlockedMusic then
+        ctx.unlockedMusic = ctx.unlockedMusic or {}
+        for k, v in pairs(state.unlockedMusic) do
+            ctx.unlockedMusic[k] = v
+        end
+    end
+
+    -- Restore call stack
+    if state.call_stack and #state.call_stack > 0 then
+        ctx.call_stack = {}
+        for _, frame in ipairs(state.call_stack) do
+            table.insert(ctx.call_stack, frame)
+        end
+    end
+
     -- Restore backlog
     if state.backlog then
         ctx.backlog = {}
@@ -201,6 +253,20 @@ function SaveCommands.listsaves(ctx, params)
     -- Also set as tf for immediate access
     ctx.tf = ctx.tf or {}
     ctx.tf.save_list = saves
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [saveplace] / [loadplace] — in-memory scene bookmarks
+--  Independent of save slots.  No disk writes.
+--  Delegates to System.saveplace / System.loadplace (scripts/system.lua).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function SaveCommands.saveplace(ctx, params)
+    System.saveplace(ctx)
+end
+
+function SaveCommands.loadplace(ctx, params)
+    System.loadplace(ctx)
 end
 
 return SaveCommands

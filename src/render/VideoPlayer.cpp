@@ -267,7 +267,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->width  = vs->width;
         frame->height = vs->height;
 
-        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
+        m_jobSystem->submit(
             [frame, vs]() {
                 auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
                 auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
@@ -310,7 +310,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             JobPriority::High
         );
 
-        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
+        m_jobSystem->waitIdle();
 
         if (frame->valid) {
             const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());
@@ -333,7 +333,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->width  = vs->width;
         frame->height = vs->height;
 
-        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
+        m_jobSystem->submit(
             [frame, plm]() {
                 plm_frame_t* f = plm_decode_video(plm);
                 plm_decode_audio(plm);
@@ -348,7 +348,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             JobPriority::High
         );
 
-        (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
+        m_jobSystem->waitIdle();
 
         if (frame->valid) {
             const bgfx::Memory* mem = bgfx::copy(frame->rgba.data(), (uint32_t)frame->rgba.size());

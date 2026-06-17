@@ -189,15 +189,19 @@ function TransCommands.trans(ctx, params)
     -- Capture current screen as "from" texture
     local fromTex = Transition.capture_screen and Transition.capture_screen(ctx) or nil
 
+    -- Trigger render to apply pending layer changes, then capture destination
+    if backend.render_frame then backend.render_frame() end
+    local toTex = Transition.capture_screen and Transition.capture_screen(ctx) or fromTex
+
     -- Start the transition on the GPU engine
     local tx
     if method == "rule" and rule then
         local ruleTex = Transition.preload_rule(rule)
-        tx = Transition.start_rule(dur, fromTex, nil, ruleTex, dur)
+        tx = Transition.start_rule(dur, fromTex, toTex, ruleTex, dur)
     elseif method == "wipe" then
-        tx = Transition.start_wipe(dur, fromTex, nil, dir)
+        tx = Transition.start_wipe(dur, fromTex, toTex, dir)
     else
-        tx = Transition.start_crossfade(dur, fromTex, nil, dur)
+        tx = Transition.start_crossfade(dur, fromTex, toTex, dur)
     end
 
     -- Block via coroutine.yield until transition completes or is cancelled

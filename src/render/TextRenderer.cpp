@@ -1,5 +1,6 @@
 ﻿#include "TextRenderer.h"
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
+#include "di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <cstdio>
@@ -308,6 +309,8 @@ bool TextRenderer::init(IRenderDevice* device) {
     m_cursor.lineHeight = (float)m_fontGlyphH;
     m_screenWidth  = device->getBackbufferWidth();
     m_screenHeight = device->getBackbufferHeight();
+    m_savedDevice = device;
+    BackendRegistry::instance().registerDeviceLostListener(this);
     m_initialized = true;
     printf("[TextRenderer] Initialized. Font: %dx%d, atlas: %d cols.\n",
            m_fontGlyphW, m_fontGlyphH, m_atlasCols);
@@ -315,6 +318,7 @@ bool TextRenderer::init(IRenderDevice* device) {
 }
 
 void TextRenderer::shutdown() {
+    BackendRegistry::instance().unregisterDeviceLostListener(this);
     if (bgfx::isValid(m_fontTexture)) {
         bgfx::destroy(m_fontTexture);
         m_fontTexture = BGFX_INVALID_HANDLE;
@@ -337,8 +341,15 @@ void TextRenderer::shutdown() {
     if (bgfx::isValid(m_cjkAtlas))   { bgfx::destroy(m_cjkAtlas);  m_cjkAtlas  = BGFX_INVALID_HANDLE; }
     m_cjkGlyphs.clear();
 
-    // m_fallbackProgram and m_posTexLayout are borrowed ??do NOT destroy
+    // m_fallbackProgram and m_posTexLayout are borrowed — do NOT destroy
     m_initialized = false;
+}
+
+void TextRenderer::onDeviceRestored() {
+    if (m_savedDevice) {
+        init(m_savedDevice);
+        printf("[TextRenderer] Device restored — reinitialized\n");
+    }
 }
 
 // ===========================================================================

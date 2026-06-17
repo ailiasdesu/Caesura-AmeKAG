@@ -1,5 +1,6 @@
 #pragma once
 #include "api/IVideoPlayer.h"
+#include "../job/api/IJobSystem.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -28,6 +29,8 @@ public:
 
     VideoPlayer(const VideoPlayer&) = delete;
     VideoPlayer& operator=(const VideoPlayer&) = delete;
+
+    void setJobSystem(IJobSystem& js) { m_jobSystem = &js; }
 
     VideoHandle open(const char* path) override;
     void close(VideoHandle handle) override;
@@ -78,6 +81,7 @@ private:
 
     std::unordered_map<uint32_t, VideoState> m_videos;
     uint32_t m_nextId = 1;
+    IJobSystem* m_jobSystem = nullptr;
 };
 
 } // namespace Caesura

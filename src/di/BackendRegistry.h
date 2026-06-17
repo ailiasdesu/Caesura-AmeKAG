@@ -1,115 +1,116 @@
 #pragma once
-#include "../audio/api/IAudioBackend.h"
-#include "../platform/api/IPlatformBackend.h"
-#include "../render/IRenderDevice.h"
 #include "../resource/ResourceHandle.h"
-#include "../render/api/IVideoPlayer.h"
-#include "../render/api/ITextureManager.h"
-#include "../render/api/IParticleSystem.h"
-#include "../debug/api/IDebugManager.h"
-#include "../resource/api/IAsyncLoader.h"
-#include "../minigame/api/IMiniGameBackend.h"
-#include "../live2d/api/IAnimationBackend.h"
-#include "../archive/api/ICryptoEngine.h"
-#include "../script/api/ILuaManager.h"
-#include "../job/api/IJobSystem.h"
-#include "../rpc/api/IRpcServer.h"
-#include "../rpc/api/IEditorServer.h"
-#include "api/ISandboxQuota.h"
-#include "../input/api/IInputRouter.h"
-#include "../di/api/ITextureBudget.h"
-#include "SandboxQuota.h"
-#include "../render/api/ILayerManager.h"
+#include "api/IDeviceLostListener.h"
+#include <typeindex>
 #include <unordered_map>
+#include <vector>
 #include <string>
-#include <memory>
 
 struct lua_State;
 
 namespace Caesura {
 
-// ============================================================================
-// BackendRegistry -- Singleton factory/registry for all engine backends
-// ============================================================================
-// All backends are stored as interface pointers. Concrete implementations
-// are created by main.cpp / Engine::init() and registered here.
+// Forward declarations only — no I*.h includes needed for consumers
+class IRenderDevice;
+class IAudioBackend;
+class IPlatformBackend;
+class IInputRouter;
+class IVideoPlayer;
+class ITextureManager;
+class ILayerManager;
+class IParticleSystem;
+class IDebugManager;
+class IAsyncLoader;
+class IMiniGameBackend;
+class IAnimationBackend;
+class ILuaManager;
+class IJobSystem;
+class IRpcServer;
+class IEditorServer;
+class ISandboxQuota;
+class ITextureBudget;
+namespace carc { class ICryptoEngine; }
 
 class BackendRegistry {
 public:
     static BackendRegistry& instance();
-
     BackendRegistry(const BackendRegistry&) = delete;
     BackendRegistry& operator=(const BackendRegistry&) = delete;
 
-    // -- Set active backends (called by Engine during init or Lua config) --
+    // -- Type-erased storage (header-only for template, needs complete type at call site)
+    template<typename I>
+    void setService(I* impl) { m_services[std::type_index(typeid(I))] = static_cast<void*>(impl); }
+
+    template<typename I>
+    I* getService() const {
+        auto it = m_services.find(std::type_index(typeid(I)));
+        return (it != m_services.end()) ? static_cast<I*>(it->second) : nullptr;
+    }
+
+    // -- Setters (out-of-line — need complete types in .cpp) --
     void setRenderDevice(IRenderDevice& device);
     void setAudioBackend(IAudioBackend& backend);
     void setPlatformBackend(IPlatformBackend& backend);
     void setInputRouter(IInputRouter* router);
-    void setLuaState(lua_State* L) { m_luaState = L; }
-
-    // -- SandboxQuota wrappers ---------------------------------------------
-    // When Lua state is not yet initialized, allow all allocations —
-    // consistent with SandboxQuota::tryAlloc(nullptr, ...) returning true.
-    bool tryAlloc(const char* kind) { return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : true; }
-    void release(const char* kind) { if (m_luaState) SandboxQuota::release(m_luaState, kind); }
-    lua_State* getLuaState() { return m_luaState; }
     void setMiniGameBackend(IMiniGameBackend* backend);
-    IMiniGameBackend* getMiniGameBackend() { return m_miniGameBackend; }
-
-    void setAnimationBackend(IAnimationBackend* backend) { m_animationBackend = backend; }
-    IAnimationBackend* getAnimationBackend() { return m_animationBackend; }
-
-    void setCryptoEngine(carc::ICryptoEngine* engine) { m_cryptoEngine = engine; }
-    carc::ICryptoEngine* getCryptoEngine() { return m_cryptoEngine; }
-
-    void setLuaManager(ILuaManager* mgr) { m_luaManager = mgr; }
-    ILuaManager* getLuaManager() { return m_luaManager; }
-
-    void setJobSystem(IJobSystem* js) { m_jobSystem = js; }
-    IJobSystem* getJobSystem() { return m_jobSystem; }
-
-    void setRpcServer(IRpcServer* rpc) { m_rpcServer = rpc; }
-    IRpcServer* getRpcServer() { return m_rpcServer; }
-
-    void setEditorServer(IEditorServer* es) { m_editorServer = es; }
-    IEditorServer* getEditorServer() { return m_editorServer; }
-
-    void setSandboxQuota(ISandboxQuota* sq) { m_sandboxQuota = sq; }
-    ISandboxQuota* getSandboxQuota() { return m_sandboxQuota; }
-
+    void setAnimationBackend(IAnimationBackend* be);
+    void setCryptoEngine(carc::ICryptoEngine* engine);
+    void setLuaManager(ILuaManager* mgr);
+    void setJobSystem(IJobSystem* js);
+    void setRpcServer(IRpcServer* rpc);
+    void setEditorServer(IEditorServer* es);
+    void setSandboxQuota(ISandboxQuota* sq);
     void setVideoPlayer(IVideoPlayer* player);
+    void setTextureManager(ITextureManager* mgr);
+    void setParticleSystem(IParticleSystem* ps);
+    void setDebugManager(IDebugManager* dm);
+    void setAsyncLoader(IAsyncLoader* al);
+    void setLayerManager(ILayerManager* mgr);
+    void setTextureBudget(ITextureBudget* tb);
+
+    void setLuaState(lua_State* L) { m_luaState = L; }
+    lua_State* getLuaState() { return m_luaState; }
+
+    // -- SandboxQuota wrappers (out-of-line — need SandboxQuota type) --
+    bool tryAlloc(const char* kind);
+    void release(const char* kind);
+
+    // -- Getters (out-of-line — need complete types in .cpp) --
+    IRenderDevice*    getRenderDevice();
+    IAudioBackend*    getAudioBackend();
+    IPlatformBackend* getPlatformBackend();
+    IInputRouter*     getInputRouter();
+    IVideoPlayer*     getVideoPlayer();
+    ITextureManager*  getTextureManager();
+    ILayerManager*    getLayerManager();
+    IParticleSystem*  getParticleSystem();
+    IDebugManager*    getDebugManager();
+    IAsyncLoader*     getAsyncLoader();
+    IMiniGameBackend* getMiniGameBackend();
+    IAnimationBackend* getAnimationBackend();
+    carc::ICryptoEngine* getCryptoEngine();
+    ILuaManager*      getLuaManager();
+    IJobSystem*       getJobSystem();
+    IRpcServer*       getRpcServer();
+    IEditorServer*    getEditorServer();
+    ISandboxQuota*    getSandboxQuota();
+    ITextureBudget*   getTextureBudget();
 
     void registerNullBackends();
-    void setTextureManager(ITextureManager* mgr);
-    void setParticleSystem(IParticleSystem* ps) { m_particleSystem = ps; }
-    IParticleSystem* getParticleSystem() { return m_particleSystem; }
-    void setDebugManager(IDebugManager* dm) { m_debugManager = dm; }
-    IDebugManager* getDebugManager() { return m_debugManager; }
-    void setAsyncLoader(IAsyncLoader* al) { m_asyncLoader = al; }
-    IAsyncLoader* getAsyncLoader() { return m_asyncLoader; }
-    void setLayerManager(ILayerManager* mgr);
 
-    // -- Get active backends -----------------------------------------------
-    IRenderDevice*    getRenderDevice()    { return m_renderDevice; }
-    IAudioBackend*    getAudioBackend()    { return m_audioBackend; }
-    IPlatformBackend* getPlatformBackend() { return m_platformBackend; }
-    IInputRouter*     getInputRouter()     { return m_inputRouter; }
-    IVideoPlayer*     getVideoPlayer()     { return m_videoPlayer; }
-    ITextureManager*  getTextureManager()  { return m_textureManager; }
-    ILayerManager*    getLayerManager()    { return m_layerManager; }
-    ITextureBudget*   getTextureBudget()   { return m_textureBudget; }
-    void setTextureBudget(ITextureBudget* tb) { m_textureBudget = tb; }
-
-    // -- Backend lookup: resolve by name (no allocation) --------------------
+    // -- Factories --
     IAudioBackend*    createAudioBackend(const char* name);
     IRenderDevice*    createRenderDevice(const char* name);
     IPlatformBackend* createPlatformBackend(const char* name);
 
-    // -- Lua binding: expose as Engine table functions ---------------------
-    static void registerEngineBindings(lua_State* L);
+    // -- Device loss recovery listeners --
+    void registerDeviceLostListener(IDeviceLostListener* listener);
+    void unregisterDeviceLostListener(IDeviceLostListener* listener);
+    void notifyDeviceLost();
+    void notifyDeviceRestored();
 
-    // -- Lua C function helpers --------------------------------------------
+    // -- Lua --
+    static void registerEngineBindings(lua_State* L);
     static IRenderDevice*    getRenderDeviceFromLua(lua_State* L);
     static IAudioBackend*    getAudioBackendFromLua(lua_State* L);
     static IPlatformBackend* getPlatformBackendFromLua(lua_State* L);
@@ -117,45 +118,18 @@ public:
     static IMiniGameBackend* getMiniGameBackendFromLua(lua_State* L);
     static IVideoPlayer*     getVideoPlayerFromLua(lua_State* L);
 
-    // -- ResourceHandle / Generation tracking -----------------------------------
+    // -- ResourceHandle / Generation tracking --
     GenerationTracker& generations() { return m_generations; }
-
-    bool isValidHandle(const ResourceHandle& h) const {
-        return h.id != 0 && m_generations.isCurrent(h);
-    }
-
-    void invalidateHandles(HandleType type) {
-        m_generations.invalidate(type);
-    }
-
-    ResourceHandle makeHandle(HandleType type, uint32_t id) {
-        return m_generations.makeHandle(type, id);
-    }
+    bool isValidHandle(const ResourceHandle& h) const { return h.id != 0 && m_generations.isCurrent(h); }
+    void invalidateHandles(HandleType type) { m_generations.invalidate(type); }
+    ResourceHandle makeHandle(HandleType type, uint32_t id) { return m_generations.makeHandle(type, id); }
 
 private:
     BackendRegistry() = default;
-
-    lua_State*         m_luaState        = nullptr;
-    IRenderDevice*    m_renderDevice    = nullptr;
-    IAudioBackend*    m_audioBackend    = nullptr;
-    IPlatformBackend* m_platformBackend = nullptr;
-    IInputRouter*     m_inputRouter     = nullptr;
-    GenerationTracker m_generations;
-    IMiniGameBackend*  m_miniGameBackend  = nullptr;
-    IAnimationBackend* m_animationBackend = nullptr;
-    carc::ICryptoEngine* m_cryptoEngine = nullptr;
-    ILuaManager*      m_luaManager      = nullptr;
-    IJobSystem*       m_jobSystem       = nullptr;
-    IRpcServer*       m_rpcServer       = nullptr;
-    IEditorServer*    m_editorServer    = nullptr;
-    ISandboxQuota*    m_sandboxQuota    = nullptr;
-    IVideoPlayer*      m_videoPlayer      = nullptr;
-    IParticleSystem*   m_particleSystem   = nullptr;
-    IDebugManager*     m_debugManager     = nullptr;
-    IAsyncLoader*      m_asyncLoader      = nullptr;
-    ITextureManager*   m_textureManager   = nullptr;
-    ILayerManager*     m_layerManager     = nullptr;
-    ITextureBudget*    m_textureBudget    = nullptr;
+    std::unordered_map<std::type_index, void*> m_services;
+    std::vector<IDeviceLostListener*> m_deviceLostListeners;
+    lua_State*         m_luaState    = nullptr;
+    GenerationTracker  m_generations;
 };
 
 } // namespace Caesura

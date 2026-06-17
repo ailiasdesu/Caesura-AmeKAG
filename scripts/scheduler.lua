@@ -58,12 +58,27 @@ function scheduler.run(ctx, tokens, start_index)
             if t.type then
                 if t.type == "label" then
                     tokens[j] = { "label", { name = t.name } }
-                else
-                    tokens[j] = { t.cmd or t.type, t.params or {} }
+            elseif t.type == "iscript" then
+                tokens[j] = { "iscript", { body = t.body or "" } }
+            else
+                tokens[j] = { t.cmd or t.type, t.params or {} }
                 end
             end
         end
     end
+    -- Normalize params: convert array-format {{key,val},...} to named access
+    -- so commands can use params.name, params.target, etc.
+    for j, t in ipairs(tokens) do
+        local params = t[2]
+        if type(params) == "table" then
+            for _, p in ipairs(params) do
+                if type(p) == "table" and type(p[1]) == "string" then
+                    params[p[1]] = p[2]
+                end
+            end
+        end
+    end
+
     local kag = require("kag")
     local cancel_token = require("kag.cancel_token")
     start_index = start_index or 1
@@ -77,13 +92,19 @@ function scheduler.run(ctx, tokens, start_index)
         -- Check stop flag
         if ctx.stop_flag then return end
 
+        -- Check for Lua-initiated flow control (from [iscript] or external Lua)
+        if ctx._next_index then
+            i = ctx._next_index
+            ctx._next_index = nil
+        end
+
         -- Flow control: [jump]
         if cmd == "jump" then
             local target = params.target or params.label or params.storage
             if not target then
                 print("[WARN] [jump] missing target/label/storage parameter")
-            elseif params.target then
-                -- Cross-scene jump: load new scene
+            elseif params.target and target:sub(1,1) ~= "*" then
+                -- Cross-scene jump: load new scene file
                 local path = "assets/script/" .. target
                 local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
                 if new_tokens then
@@ -99,14 +120,17 @@ function scheduler.run(ctx, tokens, start_index)
                     end
                     ctx.active_operations = {}
                     return
+                else
+                    print("[WARN] [jump] failed to load scene: " .. path)
                 end
             else
-                -- Intra-scene jump: find label
-                local idx = find_label(tokens, target)
+                -- Intra-scene jump: find label (target may be "label" or "*label")
+                local label = target:gsub("^*", "")  -- strip leading * if present
+                local idx = find_label(tokens, label)
                 if idx then
                     i = idx
                 else
-                    print("[WARN] [jump] label not found: " .. tostring(target))
+                    print("[WARN] [jump] label not found: " .. label)
                 end
             end
 
@@ -230,11 +254,65 @@ function scheduler.run(ctx, tokens, start_index)
 
         elseif cmd == "case" or cmd == "default" or cmd == "endswitch" then
             -- pass (handled by [switch] above)
-        -- Flow control: [eval]
+
+        -- Flow control: [iscript] — inline Lua code block
+        elseif cmd == "iscript" then
+            local code = params.body or ""
+            if #code > 0 then
+                local sandbox = {
+                    ctx       = ctx,
+                    f         = ctx.f or {},
+                    sf        = ctx.sf or {},
+                    tf        = ctx.tf or {},
+                    kag       = require("kag"),
+                    math      = math,
+                    string    = string,
+                    table     = table,
+                    os        = { clock = os.clock, date = os.date, time = os.time },
+                    tostring  = tostring,
+                    tonumber  = tonumber,
+                    type      = type,
+                    pairs     = pairs,
+                    ipairs    = ipairs,
+                    next      = next,
+                    print     = print,
+                    pcall     = pcall,
+                    select    = select,
+                    unpack    = unpack or table.unpack,
+                    error     = error,
+                    coroutine  = coroutine,
+                }
+                local fn, compileErr = load(code, "=iscript", "t", sandbox)
+                if fn then
+                    local ok, runtimeErr = pcall(fn)
+                    if not ok then
+                        print("[iscript] Runtime error: " .. tostring(runtimeErr))
+                    end
+                else
+                    print("[iscript] Compile error: " .. tostring(compileErr))
+                end
+            end
+
+        -- Flow control: [eval] — unified scope (ctx + f + sf + tf)
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""
-            local fn = load(code, "=eval", "t", ctx.f or {})
-            if fn then pcall(fn) end
+            local env = {
+                ctx = ctx,
+                f   = ctx.f or {},
+                sf  = ctx.sf or {},
+                tf  = ctx.tf or {},
+            }
+            setmetatable(env, { __index = _G })
+            local fn, compileErr = load(code, "=eval", "t", env)
+            if fn then
+                local ok, result = pcall(fn)
+                if ok and result ~= nil then
+                    ctx.tf = ctx.tf or {}
+                    ctx.tf.eval_result = result
+                end
+            else
+                print("[eval] Compile error: " .. tostring(compileErr))
+            end
 
         -- Flow control: [macro] / [endmacro]
         elseif cmd == "macro" then
@@ -252,20 +330,33 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.macros[name] = body
             end
 
-        elseif cmd == "endmacro" or cmd == "erasemacro" then
-            -- pass (handled by macro)
+        elseif cmd == "erasemacro" then
+            local name = params.name
+            if name and ctx.macros then
+                ctx.macros[name] = nil
+            end
+        elseif cmd == "endmacro" then
+            -- pass (handled by macro recording above)
 
         -- Regular command: dispatch to kag table
         else
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expand macro inline ?? merge params
-                local saved_tokens = tokens
-                tokens = macro_body
+                -- Splice macro body into token stream, replacing the invocation
+                local new_tokens = {}
+                for n = 1, i - 1 do
+                    table.insert(new_tokens, tokens[n])
+                end
+                for _, bt in ipairs(macro_body) do
+                    table.insert(new_tokens, {bt[1], bt[2]})
+                end
+                for n = i + 1, #tokens do
+                    table.insert(new_tokens, tokens[n])
+                end
+                tokens = new_tokens
                 ctx.tokens = tokens
-                i = 0
-                tokens = saved_tokens  -- restore after macro body
+                i = i - 1  -- will point to first body token after i = i + 1
             else
                 -- text chunks become [ch] commands
                 local handler = kag[cmd]

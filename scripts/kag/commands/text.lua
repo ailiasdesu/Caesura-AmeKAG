@@ -1,6 +1,6 @@
-﻿-- =============================================================================
---  Caesura (AmeKAG) �� kag/commands/text.lua
---  Phase 4: KAG text tag handlers �� [ch], [text], [l], [r], [er], [p]
+-- =============================================================================
+--  Caesura (AmeKAG) ?? kag/commands/text.lua
+--  Phase 4: KAG text tag handlers ?? [ch], [text], [l], [r], [er], [p]
 --  Manages character dialog display, backlog, and text cursor state.
 --  All rendering delegates to backend.font_render_text / backend.font_clear.
 -- =============================================================================
@@ -38,11 +38,13 @@ local TextCommands = {}
 local function push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
     local entry = {
-        name      = speaker or "",
-        text      = text or "",
-        voice     = voiceFile or "",
-        time      = os.date("%H:%M:%S"),
-        timestamp = os.time(),
+        name        = speaker or "",
+        text        = text or "",
+        voice       = voiceFile or "",
+        time        = os.date("%H:%M:%S"),
+        timestamp   = os.time(),
+        scene       = ctx.currentScene or "",
+        token_index = ctx.token_index or 1,
     }
     table.insert(ctx.backlog, entry)
 
@@ -63,24 +65,66 @@ function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
 
+    -- U1.3: pos parameter (left/center/right) for text alignment
+    local pos = params.pos or "center"
+    if pos ~= "left" and pos ~= "center" and pos ~= "right" then
+        pos = "center"
+    end
+
+    -- U1.3: ctx.characters registry -- track active on-screen characters
+    ctx.characters = ctx.characters or {}
+    if #speaker > 0 then
+        if not ctx.characters[speaker] then
+            ctx.characters[speaker] = { pos = pos }
+        else
+            -- Inherit stored position unless explicitly overridden
+            if params.pos then
+                ctx.characters[speaker].pos = pos
+            else
+                pos = ctx.characters[speaker].pos or "center"
+            end
+        end
+        if params.layer then
+            ctx.characters[speaker].layer = params.layer
+        end
+        if params.storage or params.file then
+            ctx.characters[speaker].sprite = params.storage or params.file
+        end
+    end
+
     -- Store in backlog
     push_backlog(ctx, speaker, message)
 
     -- Set up message layer if needed
-    local msgNode = layers.find(ctx, "message")
+    local msgNode = layers.get("message")
     if not msgNode then
-        msgNode = layers.add_layer(ctx, "message", layers.Type.LAYER_MESSAGE, {
+        msgNode = layers.add_layer(nil, {
+            name = "message",
+            layer_type = layers.Type.LAYER_MESSAGE,
             x = 0, y = 520, w = 1280, h = 200, visible = true,
         })
-        layers.set_z(ctx, msgNode, 2)
+        layers.set_z(msgNode, 2)
     end
 
     -- Clear previous text, render speaker + message
     backend.clear_text()
 
+    -- Calculate X positions based on "pos"
+    local nameX, msgX
+    if pos == "left" then
+        nameX = 48
+        msgX  = 48
+    elseif pos == "right" then
+        nameX = 1032
+        msgX  = 784    -- right-side text starts earlier for readability
+    else  -- center (default)
+        nameX = 540   -- speaker name centered
+        msgX  = 48     -- dialogue text left-aligned (standard galgame convention)
+    end
+
     -- Render speaker name if present
     if #speaker > 0 then
-        backend.render_text("��" .. speaker .. "��", 32, 48, 540, 1, 1, 1, 1)
+        backend.render_text("??" .. speaker .. "??", nameX, 48, 540, 1, 1, 1, 1)
     end
 
     -- Calculate y-position for message (below speaker if present)
@@ -95,14 +139,14 @@ function TextCommands.ch(ctx, params)
             local lineEnd = math.min(pos + charsPerLine - 1, #message)
             -- Don't break mid-character for CJK; find a natural break point
             local line = message:sub(pos, lineEnd)
-            backend.render_text(line, 32, 48, msgY, 1, 1, 1, 1)
+            backend.render_text(line, msgX, 48, msgY, 1, 1, 1, 1)
             msgY = msgY + lineHeight
             pos = lineEnd + 1
         end
     end
 
     -- Mark text cursor for [p] blocking
-    ctx.textCursorX = 32
+    ctx.textCursorX = msgX
     ctx.textCursorY = msgY
     ctx.waiting_input = true
     update_text_state(ctx, "ch")
@@ -140,7 +184,7 @@ function TextCommands.text(ctx, params)
 end
 
 -- =============================================================================
---  [l] �� line break: advance text cursor to next line
+--  [l] ?? line break: advance text cursor to next line
 -- =============================================================================
 
 function TextCommands.l(ctx, params)
@@ -151,7 +195,7 @@ function TextCommands.l(ctx, params)
 end
 
 -- =============================================================================
---  [r] �� carriage return: reset cursor to start of current line
+--  [r] ?? carriage return: reset cursor to start of current line
 -- =============================================================================
 
 function TextCommands.r(ctx, params)
@@ -160,7 +204,7 @@ function TextCommands.r(ctx, params)
 end
 
 -- =============================================================================
---  [er] �� erase: clear all text from message layer (backlog preserved)
+--  [er] ?? erase: clear all text from message layer (backlog preserved)
 -- =============================================================================
 
 function TextCommands.er(ctx, params)
@@ -172,7 +216,7 @@ function TextCommands.er(ctx, params)
 end
 
 -- =============================================================================
---  [p] �� page break / click-to-advance
+--  [p] ?? page break / click-to-advance
 --  Blocks the coroutine until user clicks or presses Enter/Space.
 --  The scheduler detects ctx.waiting_input and handles resume on input.
 -- =============================================================================
@@ -184,14 +228,14 @@ function TextCommands.p(ctx, params)
     -- Set state for scheduler to detect
     ctx.waiting_input = true
 
-    -- Yield the coroutine �� scheduler resumes on next click
+    -- Yield the coroutine ?? scheduler resumes on next click
     coroutine.yield()
     update_text_state(ctx, "p")
 end
 
 
 -- =============================================================================
---  [ruby text="�h��" ruby="����"]
+--  [ruby text="?h??" ruby="????"]
 --  Render base text with ruby (furigana) annotation above it.
 --  Delegates to backend.text_render_ruby for glyph layout.
 -- =============================================================================
@@ -219,7 +263,7 @@ function TextCommands.font(ctx, params)
 end
 
 -- =============================================================================
---  [skip] �� toggle skip mode
+--  [skip] ?? toggle skip mode
 --  When active, scheduler auto-advances without waiting for user click.
 -- =============================================================================
 
@@ -228,7 +272,7 @@ function TextCommands.skip(ctx, params)
 end
 
 -- =============================================================================
---  [reset] �� reset text state
+--  [reset] ?? reset text state
 --  Clears line/char_offset tracking and resets backend text renderer.
 --  Registered as KAG.reset via auto-iteration in kag.lua.
 -- =============================================================================
@@ -240,7 +284,7 @@ function TextCommands.reset(ctx, params)
 end
 
 -- =============================================================================
---  [pt speed=50] �� typewriter speed (ms per character)
+--  [pt speed=50] ?? typewriter speed (ms per character)
 --  Controls the delay between each character appearing in [ch] / [text].
 -- =============================================================================
 

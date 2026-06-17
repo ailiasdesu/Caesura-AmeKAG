@@ -11,6 +11,7 @@
 #include "SaveManager.h"
 #include "api/ISaveProvider.h"
 #include "../di/BackendRegistry.h"
+#include "../archive/api/ICryptoEngine.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 
@@ -116,7 +117,12 @@ std::string SaveManager::readFile(const std::string& path) {
         const auto* ct    = reinterpret_cast<const uint8_t*>(content.data() + 32);
         size_t ctLen = content.size() - 32;
 
-        auto plain = BackendRegistry::instance().getCryptoEngine()->decrypt(ct, ctLen, m_encryptKey, 32, nonce, 12, tag, 16);
+        auto* crypto = BackendRegistry::instance().getCryptoEngine();
+        if (!crypto) {
+            fprintf(stderr, "[SaveManager] CryptoEngine not initialized\n");
+            return "";
+        }
+        auto plain = crypto->decrypt(ct, ctLen, m_encryptKey, 32, nonce, 12, tag, 16);
         if (plain.empty()) {
             fprintf(stderr, "[SaveManager] Decryption failed (wrong key or corrupted data)\n");
             return "";
@@ -134,9 +140,14 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
     if (m_keySet) {
         uint8_t nonce[12];
         uint8_t tag[16];
-        BackendRegistry::instance().getCryptoEngine()->generateNonce(nonce, 12);
+        auto* crypto = BackendRegistry::instance().getCryptoEngine();
+        if (!crypto) {
+            fprintf(stderr, "[SaveManager] CryptoEngine not initialized\n");
+            return false;
+        }
+        crypto->generateNonce(nonce, 12);
 
-        auto cipher = BackendRegistry::instance().getCryptoEngine()->encrypt(            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
+        auto cipher = crypto->encrypt(            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
             m_encryptKey, 32, nonce, 12, tag, 16);
         if (cipher.empty()) {
             fprintf(stderr, "[SaveManager] Encryption failed\n");

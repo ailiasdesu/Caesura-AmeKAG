@@ -1,11 +1,24 @@
 ﻿#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../external/stb/stb_image_write.h"
 #include "RTTManager.h"
+#include "di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdio>
 
 namespace Caesura {
+
+// ===========================================================================
+// Lifecycle
+// ===========================================================================
+
+RTTManager::RTTManager(IRenderDevice& device) : m_device(device) {
+    BackendRegistry::instance().registerDeviceLostListener(this);
+}
+
+RTTManager::~RTTManager() {
+    BackendRegistry::instance().unregisterDeviceLostListener(this);
+}
 
 // ===========================================================================
 // Internal helpers

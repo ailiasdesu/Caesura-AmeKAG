@@ -1,6 +1,8 @@
 #pragma once
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
+#include "../di/api/IDeviceLostListener.h"
 #include <cstdint>
+#include <cstdio>
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
@@ -23,9 +25,10 @@ struct RTTEntry {
     bool inUse = false;
 };
 
-class RTTManager {
+class RTTManager : public IDeviceLostListener {
 public:
-    explicit RTTManager(IRenderDevice& device) : m_device(device) {}
+    explicit RTTManager(IRenderDevice& device);
+    ~RTTManager() override;
 
     // -- Pool-based canvas API (preferred) -----------------------------------
     // Acquire a canvas from the pool (or create new). Defaults to clear.
@@ -51,6 +54,16 @@ public:
 
     // -- Snapshot ------------------------------------------------------------
     bool captureSnapshot(const char* path, int w, int h);
+
+    // -- IDeviceLostListener --
+    void onDeviceLost() override {
+        clearAll();
+        printf("[RTTManager] Device lost — all canvases released\n");
+    }
+    void onDeviceRestored() override {
+        // RTTs are re-acquired on demand -- no action needed
+        (void)0;
+    }
 
 private:
     IRenderDevice& m_device;

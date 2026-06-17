@@ -7,6 +7,7 @@
 -- ===========================================================================
 
 local backend = require("backend")
+local layers  = require("layers")
 local VFX = {}
 
 local math_sin, math_abs, math_random = math.sin, math.abs, math.random
@@ -20,19 +21,20 @@ local math_sin, math_abs, math_random = math.sin, math.abs, math.random
 function VFX.quake(ctx, params)
     VFX._quakeActive = true
     local isCoroutine = coroutine.isyieldable()
-    VFX._quakeCtx = ctx
     local dur       = (tonumber(params.time) or 500) / 1000.0
     local ampl_x    = tonumber(params.amplitudex or params.intensity or params.strength or params.power) or 8
     local ampl_y    = tonumber(params.amplitudey or params.intensity or params.strength or params.power) or ampl_x or 8
     local decay     = params.decay ~= "false" and params.decay ~= false
     local elapsed   = 0
 
-    VFX._quakeOriginals = {}
-    for name, layer in pairs(ctx.layers or {}) do
-        if type(layer) == "table" then
-            VFX._quakeOriginals[name] = { x = layer.x or 0, y = layer.y or 0 }
+    -- Activate quake on all visible layers via the layers module
+    layers.forEach(function(id, node)
+        if node.visible then
+            node.quake.active = true
+            node.quake.amplitude_x = ampl_x
+            node.quake.amplitude_y = ampl_y
         end
-    end
+    end)
 
     while elapsed < dur do
         local dt = 0.016
@@ -46,23 +48,24 @@ function VFX.quake(ctx, params)
         local ox = (math_random() * 2.0 - 1.0) * ampl_x * decay_factor
         local oy = (math_random() * 2.0 - 1.0) * ampl_y * decay_factor
 
-        for name, layer in pairs(ctx.layers or {}) do
-            if type(layer) == "table" and VFX._quakeOriginals[name] then
-                layer.x = (VFX._quakeOriginals[name].x or 0) + ox
-                layer.y = (VFX._quakeOriginals[name].y or 0) + oy
-                layer.dirty = true
+        layers.forEach(function(id, node)
+            if node.visible and node.quake.active then
+                node.quake.offset_x = ox
+                node.quake.offset_y = oy
+                node.dirty = true
             end
-        end
+        end)
     end
 
-    -- Restore original positions
-    for name, layer in pairs(ctx.layers or {}) do
-        if type(layer) == "table" and VFX._quakeOriginals[name] then
-            layer.x = VFX._quakeOriginals[name].x
-            layer.y = VFX._quakeOriginals[name].y
-            layer.dirty = true
+    -- Deactivate quake on all layers
+    layers.forEach(function(id, node)
+        if node.quake.active then
+            node.quake.active = false
+            node.quake.offset_x = 0
+            node.quake.offset_y = 0
+            node.dirty = true
         end
-    end
+    end)
     VFX._quakeActive = false
 end
 
@@ -74,18 +77,17 @@ end
 function VFX.shake(ctx, params)
     VFX._shakeActive = true
     local isCoroutine = coroutine.isyieldable()
-    VFX._shakeCtx = ctx
     local dur       = (tonumber(params.time) or 500) / 1000.0
     local freq      = tonumber(params.frequency) or 20
     local amplitude = tonumber(params.amplitude or params.intensity) or 6
     local elapsed   = 0
 
-    VFX._shakeOriginals = {}
-    for name, layer in pairs(ctx.layers or {}) do
-        if type(layer) == "table" then
-            VFX._shakeOriginals[name] = { x = layer.x or 0, y = layer.y or 0 }
+    -- Activate shake on all visible layers via the layers module
+    layers.forEach(function(id, node)
+        if node.visible then
+            node.shake.active = true
         end
-    end
+    end)
 
     while elapsed < dur do
         local dt = 0.016
@@ -99,22 +101,24 @@ function VFX.shake(ctx, params)
         local ox = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed * freq) * decay
         local oy = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed * freq * 1.3 + 1.0) * decay
 
-        for name, layer in pairs(ctx.layers or {}) do
-            if type(layer) == "table" and VFX._shakeOriginals[name] then
-                layer.x = (VFX._shakeOriginals[name].x or 0) + ox
-                layer.y = (VFX._shakeOriginals[name].y or 0) + oy
-                layer.dirty = true
+        layers.forEach(function(id, node)
+            if node.visible and node.shake.active then
+                node.shake.offset_x = ox
+                node.shake.offset_y = oy
+                node.dirty = true
             end
-        end
+        end)
     end
 
-    for name, layer in pairs(ctx.layers or {}) do
-        if type(layer) == "table" and VFX._shakeOriginals[name] then
-            layer.x = VFX._shakeOriginals[name].x
-            layer.y = VFX._shakeOriginals[name].y
-            layer.dirty = true
+    -- Deactivate shake on all layers
+    layers.forEach(function(id, node)
+        if node.shake.active then
+            node.shake.active = false
+            node.shake.offset_x = 0
+            node.shake.offset_y = 0
+            node.dirty = true
         end
-    end
+    end)
     VFX._shakeActive = false
 end
 
@@ -309,19 +313,14 @@ end
 -- ===========================================================================
 function VFX.stop_quake()
     VFX._quakeActive = false
-    local ctx = VFX._quakeCtx
-    if ctx and VFX._quakeOriginals then
-        for name, orig in pairs(VFX._quakeOriginals) do
-            local layer = ctx.layers and ctx.layers[name]
-            if layer and type(layer) == "table" then
-                layer.x = orig.x
-                layer.y = orig.y
-                layer.dirty = true
-            end
+    layers.forEach(function(id, node)
+        if node.quake.active then
+            node.quake.active = false
+            node.quake.offset_x = 0
+            node.quake.offset_y = 0
+            node.dirty = true
         end
-    end
-    VFX._quakeOriginals = nil
-    VFX._quakeCtx = nil
+    end)
 end
 
 -- ===========================================================================
@@ -329,19 +328,14 @@ end
 -- ===========================================================================
 function VFX.stop_shake()
     VFX._shakeActive = false
-    local ctx = VFX._shakeCtx
-    if ctx and VFX._shakeOriginals then
-        for name, orig in pairs(VFX._shakeOriginals) do
-            local layer = ctx.layers and ctx.layers[name]
-            if layer and type(layer) == "table" then
-                layer.x = orig.x
-                layer.y = orig.y
-                layer.dirty = true
-            end
+    layers.forEach(function(id, node)
+        if node.shake.active then
+            node.shake.active = false
+            node.shake.offset_x = 0
+            node.shake.offset_y = 0
+            node.dirty = true
         end
-    end
-    VFX._shakeOriginals = nil
-    VFX._shakeCtx = nil
+    end)
 end
 
 -- ===========================================================================

@@ -4,6 +4,7 @@ extern "C" {
 }
 #include "DebugBinding.h"
 #include "../di/BackendRegistry.h"
+#include "../debug/api/IDebugManager.h"
 #include <cstdio>
 #include <string>
 

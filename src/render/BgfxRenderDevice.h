@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"
 #include "BgfxDraw.h"

@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include "../di/BackendRegistry.h"
+#include "../live2d/api/IAnimationBackend.h"
 #include "../archive/CARCWriter.h"
 #include "../script/vm/LuaManager.h"
 #include "../script/vm/LuaManager.h"

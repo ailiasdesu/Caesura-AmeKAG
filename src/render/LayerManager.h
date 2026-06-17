@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/ILayerManager.h"
+#include "../di/api/IDeviceLostListener.h"
 #include <bgfx/bgfx.h>
 #include <cstdint>
 #include <vector>
@@ -44,7 +45,7 @@ struct Layer {
 // LayerManager -- implements ILayerManager
 // ============================================================================
 
-class LayerManager : public ILayerManager {
+class LayerManager : public ILayerManager, public IDeviceLostListener {
 public:
     static LayerManager& instance();
 
@@ -54,7 +55,7 @@ public:
     void init() override;
     void shutdown() override;
 
-    // Accessors (not in interface ¡ª returns internal Layer& for direct manipulation)
+    // Accessors (not in interface ï¿½ï¿½ returns internal Layer& for direct manipulation)
     Layer& get(LayerType t);
     const Layer& get(LayerType t) const;
 
@@ -79,6 +80,10 @@ public:
     void render(uint16_t viewId, int screenW, int screenH,
                 uint32_t programId) override;
 
+    // -- IDeviceLostListener --
+    void onDeviceLost() override;
+    void onDeviceRestored() override;
+
 private:
     LayerManager() = default;
 
@@ -86,6 +91,8 @@ private:
 
     Layer m_layers[COUNT];
     bool  m_initialized = false;
+
+    bgfx::UniformHandle m_texUniform = BGFX_INVALID_HANDLE;
 
     DirtyRect m_dirtyRects[COUNT];
     DirtyRect m_mergedDirty;

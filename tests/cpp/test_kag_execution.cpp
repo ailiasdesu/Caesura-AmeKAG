@@ -334,3 +334,241 @@ TEST_CASE("KAG: require module idempotency") {
 
     delete lm;
 }
+
+// =============================================================================
+// SECTION 6: P1 command expansion tests
+// =============================================================================
+
+TEST_CASE("KAG: unlock cg command adds to unlockedCG") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.system"));
+
+    const char* code =
+        "local System = require('kag.commands.system')\n"
+        "local ctx = {}\n"
+        "System.unlock(ctx, { type = 'cg', id = 'scene01' })\n"
+        "assert(ctx.unlockedCG ~= nil, 'unlockedCG should exist')\n"
+        "assert(ctx.unlockedCG['scene01'] == true, 'scene01 should be unlocked')\n"
+        "System.unlock(ctx, { type = 'music', id = 'track01' })\n"
+        "assert(ctx.unlockedMusic ~= nil, 'unlockedMusic should exist')\n"
+        "assert(ctx.unlockedMusic['track01'] == true, 'track01 should be unlocked')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+
+TEST_CASE("KAG: saveplace and loadplace roundtrip") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "system"));
+    const char* code = "local System = require('system'); local ctx = { current_label = 'start', pc = 5, tf = { flag = true }, dialog_index = 3 }; System.saveplace(ctx); ctx.current_label = nil; ctx.pc = nil; ctx.tf = nil; local ok = System.loadplace(ctx); assert(ok ~= false); assert(ctx.current_label == 'start'); assert(ctx.pc == 5); assert(ctx.tf.flag == true); assert(ctx.dialog_index == 3);";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+// =============================================================================
+// SECTION 7: U1.3 -- [ch] multi-character position & state management
+// =============================================================================
+
+TEST_CASE("KAG: ch command with pos=left renders left-aligned") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello!', pos = 'left' })\n"
+        "assert(ctx.characters ~= nil, 'ctx.characters should exist')\n"
+        "assert(ctx.characters['Hero'] ~= nil, 'Hero should be registered')\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'Hero pos should be left')\n"
+        "assert(ctx.waiting_input == true, 'should wait for input')\n"
+        "assert(#ctx.backlog == 1, 'should have 1 backlog entry')\n"
+        "assert(ctx.backlog[1].name == 'Hero', 'backlog speaker should be Hero')\n"
+        "assert(ctx.backlog[1].text == 'Hello!', 'backlog text should match')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command with pos=right renders right-aligned") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Heroine', text = 'Hi!', pos = 'right' })\n"
+        "assert(ctx.characters['Heroine'] ~= nil, 'Heroine should be registered')\n"
+        "assert(ctx.characters['Heroine'].pos == 'right', 'pos should be right')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command defaults to center when pos omitted") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Narrator', text = 'Once upon a time...' })\n"
+        "assert(ctx.characters['Narrator'] ~= nil, 'should be registered')\n"
+        "assert(ctx.characters['Narrator'].pos == 'center', 'default pos should be center')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command tracks multiple characters independently") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello!', pos = 'left' })\n"
+        "Text.ch(ctx, { name = 'Heroine', text = 'Hi!', pos = 'right' })\n"
+        "assert(ctx.characters['Hero'] ~= nil, 'Hero should exist')\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'Hero pos should be left')\n"
+        "assert(ctx.characters['Heroine'] ~= nil, 'Heroine should exist')\n"
+        "assert(ctx.characters['Heroine'].pos == 'right', 'Heroine pos should be right')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command inherits position from stored character state") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'First line', pos = 'left' })\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Second line' })\n"
+        "-- Second call omits pos, should inherit left from stored state\n"
+        "assert(ctx.characters['Hero'].pos == 'left', 'pos should be inherited')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command handles invalid pos gracefully") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "-- Invalid pos values should fall back to center without crash\n"
+        "Text.ch(ctx, { name = 'Test', text = 'A', pos = 'top' })\n"
+        "assert(ctx.characters['Test'].pos == 'center', 'invalid pos should default to center')\n"
+        "Text.ch(ctx, { name = 'Test2', text = 'B', pos = '' })\n"
+        "assert(ctx.characters['Test2'].pos == 'center', 'empty pos should default to center')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: ch command stores layer and sprite info in character state") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "kag.commands.text"));
+    const char* code =
+        "local Text = require('kag.commands.text')\n"
+        "local ctx = {}\n"
+        "Text.ch(ctx, { name = 'Hero', text = 'Hello', layer = 'fg0', storage = 'hero.png' })\n"
+        "assert(ctx.characters['Hero'].layer == 'fg0', 'layer should be stored')\n"
+        "assert(ctx.characters['Hero'].sprite == 'hero.png', 'sprite should be stored')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+
+// =============================================================================
+
+// =============================================================================
+// SECTION 8: U1.5 -- macro record & erase (expansion via scheduler inline)
+// =============================================================================
+
+TEST_CASE("KAG: macro records body between macro and endmacro") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro name=\"greet\"]\n"
+        "[text text=\"Hello!\"]\n"
+        "[p]\n"
+        "[endmacro]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "assert(ctx.macros ~= nil, 'macros should exist')\n"
+        "assert(ctx.macros['greet'] ~= nil, 'macro greet should be recorded')\n"
+        "assert(#ctx.macros['greet'] == 2, 'body should have 2 tokens')\n"
+        "assert(ctx.macros['greet'][1][1] == 'text', 'first body token: text')\n"
+        "assert(ctx.macros['greet'][2][1] == 'p', 'second body token: p')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: erasemacro removes macro from registry") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro name=\"temp\"]\n"
+        "[text text=\"temp body\"]\n"
+        "[endmacro]\n"
+        "[erasemacro name=\"temp\"]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "assert(ctx.macros ~= nil, 'macros should exist')\n"
+        "assert(ctx.macros['temp'] == nil, 'macro temp should be erased')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: macro with no name is not recorded") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "scheduler"));
+    REQUIRE(requireModule(L, "tokenizer"));
+    const char* code =
+        "local scheduler = require('scheduler')\n"
+        "local tokenizer = require('tokenizer')\n"
+        "local script = [=[\n"
+        "[macro]\n"
+        "[text text=\"no name\"]\n"
+        "[endmacro]\n"
+        "]=]\n"
+        "local tokens = tokenizer.parse(script)\n"
+        "local ctx = {}\n"
+        "local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)\n"
+        "while coroutine.status(co) ~= 'dead' do coroutine.resume(co) end\n"
+        "local empty = (ctx.macros == nil) or (next(ctx.macros) == nil)\n"
+        "assert(empty, 'no macro should be recorded without name')\n";
+    CHECK(doString(L, code));
+    delete lm;
+}

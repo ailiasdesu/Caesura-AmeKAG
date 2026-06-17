@@ -3,11 +3,11 @@
 #include <lauxlib.h>
 }
 #include "UnifiedBinding.h"
-#include "../di/BackendRegistry.h"
 #include "../audio/api/IAudioBackend.h"
 #include "VFXBinding.h"
-#include "../di/BackendRegistry.h"
 #include "../minigame/api/IMiniGameBackend.h"
+#include "../resource/api/IAsyncLoader.h"
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 
@@ -18,6 +18,29 @@ namespace Caesura {
 //  ALL commands delegate to existing Render / KAG / DevCore globals.
 //  No duplicated logic; single source of truth.
 // =========================================================================
+
+// -- Backend accessors from Lua registry (set by Engine::initScriptingPhase)
+
+static IAudioBackend* getAudio(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.AudioBackend");
+    auto* be = (IAudioBackend*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return be;
+}
+
+static IAsyncLoader* getAsync(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.AsyncLoader");
+    auto* al = (IAsyncLoader*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return al;
+}
+
+static IMiniGameBackend* getMiniGame(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.MiniGameBackend");
+    auto* mg = (IMiniGameBackend*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return mg;  // nullable — optional subsystem
+}
 
 // -- Helpers: call global.func(args...) and return results ---------------
 
@@ -107,7 +130,7 @@ static int lua_Backend_render(lua_State* L) {
 
 static int lua_Backend_audio(lua_State* L) {
     const char* cmd = luaL_checkstring(L, 1);
-    IAudioBackend* audio = BackendRegistry::getAudioBackendFromLua(L);
+    IAudioBackend* audio = getAudio(L);
 
     // #9: is_playing with bus routing
     if (strcmp(cmd, "is_playing") == 0) {
@@ -120,7 +143,7 @@ static int lua_Backend_audio(lua_State* L) {
             return delegateToGlobalFunc(L, "KAG", "is_bgm_playing");
         } else if (strcmp(bus, "se") == 0) {
             int count = 0;
-            IAudioBackend* audio = BackendRegistry::getAudioBackendFromLua(L);
+            IAudioBackend* audio = getAudio(L);
             if (audio) count = audio->activeVoiceCount();
             lua_pushboolean(L, count > 0 ? 1 : 0);
             return 1;
@@ -259,7 +282,7 @@ static int lua_Backend_load_texture_async(lua_State* L) {
     lua_pushvalue(L, 2);  // copy callback
     int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    int reqId = BackendRegistry::instance().getAsyncLoader()->enqueue(path, "texture");
+    int reqId = getAsync(L)->enqueue(path, "texture");
     if (reqId < 0) {
         luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
         lua_pushboolean(L, 0);
@@ -285,7 +308,7 @@ static int lua_Backend_load_texture_async(lua_State* L) {
 }
 
 static int lua_Backend_cancel_async_loads(lua_State* L) {
-    BackendRegistry::instance().getAsyncLoader()->cancelAll();
+    getAsync(L)->cancelAll();
     // Release all stored callbacks
     lua_getglobal(L, "_ASYNC_CALLBACKS");
     if (lua_istable(L, -1)) {
@@ -313,7 +336,7 @@ static int lua_Backend_cancel_async_loads(lua_State* L) {
 
 static int lua_Backend_mini_game(lua_State* L) {
     const char* cmd = luaL_checkstring(L, 1);
-    IMiniGameBackend* mg = BackendRegistry::instance().getMiniGameBackend();
+    IMiniGameBackend* mg = getMiniGame(L);
     if (!mg) { lua_pushboolean(L, 0); lua_pushstring(L, "No mini-game backend registered"); return 2; }
 
     if (strcmp(cmd, "enter") == 0) {

@@ -55,4 +55,51 @@ end
 
 print("[Demo] Scene loaded: 5 objects, 2 point lights, 5 materials")
 print("[Demo] Gravity applied to: hero sphere + green sphere")
+
+-- ── WASD Player Controller ─────────────────────────────────────────────────
+-- Uses _GAME_KEY_W/A/S/D globals (set by Engine.cpp SDL event loop).
+-- Runs in a cooperative coroutine to avoid blocking the engine.
+
+local hero_velocity = 5.0
+local wasd_active = false
+
+function update_player_input()
+    local vx, vz = 0, 0
+    if _GAME_KEY_W then vz = vz - 1 end
+    if _GAME_KEY_S then vz = vz + 1 end
+    if _GAME_KEY_A then vx = vx - 1 end
+    if _GAME_KEY_D then vx = vx + 1 end
+
+    if vx ~= 0 or vz ~= 0 then
+        wasd_active = true
+        local speed = hero_velocity
+        local len = math.sqrt(vx * vx + vz * vz)
+        if len > 0 then
+            vx = vx / len * speed
+            vz = vz / len * speed
+        end
+        mini_game.set_velocity(hero_id, vx, 0, vz)
+    elseif wasd_active then
+        -- Stop when keys released
+        mini_game.set_velocity(hero_id, 0, 0, 0)
+        wasd_active = false
+    end
+end
+
+-- Register per-frame update via the scheduler's yield pattern
+local update_co = coroutine.create(function()
+    while true do
+        update_player_input()
+        coroutine.yield()
+    end
+end)
+
+-- Start the input loop (engine calls resume each frame when mini-game is active)
+local function _minigame_update()
+    if coroutine.status(update_co) ~= "dead" then
+        coroutine.resume(update_co)
+    end
+end
+
+print("[Demo] WASD input controller active (W/A/S/D to move hero)")
 print("[Demo] === Demo ready — entering 3D scene ===")

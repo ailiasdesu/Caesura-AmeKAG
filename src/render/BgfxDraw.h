@@ -2,7 +2,7 @@
 
 #include <bgfx/bgfx.h>
 #include <vector>
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
 #include "BgfxQuadBatch.h"
 #include <memory>
 #include <cstdint>

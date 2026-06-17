@@ -4,6 +4,7 @@
 #include <bx/bx.h>
 #include <cstdio>
 #include <cstdarg>
+#include <atomic>
 
 // BgfxDebugCallback -- captures bgfx internal error/warning messages.
 // Extracted from BgfxRenderDevice (U1).
@@ -12,7 +13,19 @@ class BgfxDebugCallback : public bgfx::CallbackI {
 public:
     bool m_shuttingDown = false;
 
+    // Device loss detection (set from bgfx fatal callback on any thread)
+    static std::atomic<bool> s_deviceLost;
+    static void flagDeviceLost() { s_deviceLost.store(true); }
+    static bool isDeviceLost() { return s_deviceLost.exchange(false); }
+
     void fatal(const char* _filePath, uint16_t _line, bgfx::Fatal::Enum _code, const char* _str) override {
+        // Device lost is non-fatal — flag it and let the main loop recover
+        if (_code == bgfx::Fatal::DeviceLost) {
+            fprintf(stderr, "[BgfxDebugCallback] Device lost detected (code=%d: %s)\n",
+                    (int)_code, _str);
+            flagDeviceLost();
+            return;
+        }
         BX_UNUSED(_code);
         if (!m_shuttingDown) {
             fprintf(stderr, "[bgfx WARN] %s(%d): %s\n", _filePath, (int)_line, _str);

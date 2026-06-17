@@ -221,7 +221,7 @@ set(ENGINE_HEADERS
     src/debug/DebugManager.h
     src/di/TextureBudget.h
     src/entry/ErrorUI.h
-    src/render/IRenderDevice.h
+    src/render/api/IRenderDevice.h
     src/render/BgfxRenderDevice.h
     src/render/BgfxShaderManager.h
     src/render/BgfxDeviceCore.h

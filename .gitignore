@@ -67,3 +67,4 @@ stdout*.txt
 
 external/ffmpeg/
 
+/config/music_room.lua
