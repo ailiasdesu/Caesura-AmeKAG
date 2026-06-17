@@ -19,7 +19,12 @@ function flow.load_scene(path)
     end
 
     local tokenizer = require("tokenizer")
-    local tokens = tokenizer.parse_file(path)
+    local ok, tokens_or_err = pcall(tokenizer.parse_file, path)
+    if not ok then
+        print("[Flow] Failed to load scene: " .. path .. " - " .. tostring(tokens_or_err))
+        return nil, tokens_or_err
+    end
+    local tokens = tokens_or_err
 
     -- Build label map: label_name → token_index
     local labels = {}

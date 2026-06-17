@@ -13,7 +13,7 @@ local SaveCommands = {}
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Internal: serialize KAG context values to a flat Lua table
 --  Captures: f (global flags), sf (system flags), token_index, scene_path
---  Does NOT capture: tf (temp flags), co, call_stack (rebuild on load)
+--  Does NOT capture: tf (temp flags), co
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local function capture_state(ctx)
@@ -51,6 +51,7 @@ local function capture_state(ctx)
         for i = math.max(1, #ctx.backlog - 99), #ctx.backlog do
             local entry = ctx.backlog[i]
             state.backlog[#state.backlog + 1] = {
+                name      = entry.name or "",
                 text      = entry.text or "",
                 voice     = entry.voice or "",
                 timestamp = entry.timestamp or 0,
@@ -82,6 +83,17 @@ local function capture_state(ctx)
     if ctx.unlockedMusic then
         for k, v in pairs(ctx.unlockedMusic) do
             state.unlockedMusic[k] = v
+        end
+    end
+
+    -- Call stack (for [call]/[return] nested execution)
+    state.call_stack = {}
+    if ctx.call_stack then
+        for _, frame in ipairs(ctx.call_stack) do
+            table.insert(state.call_stack, {
+                tokens = frame.tokens,
+                index  = frame.index or 1,
+            })
         end
     end
 
@@ -183,6 +195,14 @@ function SaveCommands.load(ctx, params)
         ctx.unlockedMusic = ctx.unlockedMusic or {}
         for k, v in pairs(state.unlockedMusic) do
             ctx.unlockedMusic[k] = v
+        end
+    end
+
+    -- Restore call stack
+    if state.call_stack and #state.call_stack > 0 then
+        ctx.call_stack = {}
+        for _, frame in ipairs(state.call_stack) do
+            table.insert(ctx.call_stack, frame)
         end
     end
 

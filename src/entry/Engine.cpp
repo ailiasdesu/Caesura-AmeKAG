@@ -51,12 +51,7 @@ extern "C" {
 
 
 namespace Caesura {
-
-// Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
-std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
- namespace detail { thread_local std::thread::id g_mainThreadId; }}
-
-namespace Caesura {
+namespace detail { thread_local std::thread::id g_mainThreadId; }
 
 // Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
@@ -196,10 +191,6 @@ bool Engine::initPlatformPhase() {
     DebugManager::instance().setInputInfo(ii);
 
     m_gpuMonitor = createGpuMonitor(m_config.headless);
-    if (m_config.headless)
-    m_gpuMonitor = createGpuMonitor(m_config.headless);
-    else
-    m_gpuMonitor = createGpuMonitor(m_config.headless);
 
     // SaveManager + TextureBudget + misc registrations
     SaveManager::instance().init("saves/");
@@ -320,7 +311,6 @@ bool Engine::initOptionalPhase() {
 
     // 3D mini-game backend (bgfx)
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
-    m_miniGameBackend->init();
     m_miniGameBackend->init();
     BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
     {

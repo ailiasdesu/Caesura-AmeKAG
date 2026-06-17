@@ -417,62 +417,6 @@ end
 --- System.load(slot, ctx) -- load game state from slot file
 function System.load(slot, ctx)
     local filename = saveDir .. "save_" .. slot .. ".lua"
-    
--- ===========================================================================
--- Quick-save / Quick-load / Auto-save (SU-3)
--- ===========================================================================
--- Called from C++ Engine when F5/F6 pressed or auto-save timer fires.
--- These call into the KAG save command flow via KAG.save_game/KAG.load_game.
-
-local QUICKSAVE_SLOT = -1
-local AUTOSAVE_SLOT  = -2
-
---- quicksave() — F5 hotkey handler
-function quicksave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quicksave] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
-end
-
---- quickload() — F6 hotkey handler
-function quickload()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quickload] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
-end
-
---- autosave() — auto-save timer handler (called from C++ Engine)
-function autosave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then return end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = AUTOSAVE_SLOT, desc = "Auto Save" })
-end
-
---- System.setAutoSaveInterval(seconds) — configure auto-save frequency
-function System.setAutoSaveInterval(seconds)
-    -- Set via C++ Engine (exposed as global)
-    pcall(function()
-        local engine = rawget(_G, "_CAESURA_ENGINE")
-        if engine and engine.setAutoSaveInterval then
-            engine:setAutoSaveInterval(tonumber(seconds) or 0)
-        end
-    end)
-end
-
--- Wire quicksave/quickload/autosave globals for C++ to call
-rawset(_G, "quicksave", quicksave)
-rawset(_G, "quickload", quickload)
-rawset(_G, "autosave", autosave)
-
 return System._load_from_file(filename, ctx)
 end
 
@@ -633,62 +577,6 @@ end
 
 --- System.quick_load(ctx) -- alias for loadplace (backward compat)
 function System.quick_load(ctx)
-    
--- ===========================================================================
--- Quick-save / Quick-load / Auto-save (SU-3)
--- ===========================================================================
--- Called from C++ Engine when F5/F6 pressed or auto-save timer fires.
--- These call into the KAG save command flow via KAG.save_game/KAG.load_game.
-
-local QUICKSAVE_SLOT = -1
-local AUTOSAVE_SLOT  = -2
-
---- quicksave() — F5 hotkey handler
-function quicksave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quicksave] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
-end
-
---- quickload() — F6 hotkey handler
-function quickload()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quickload] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
-end
-
---- autosave() — auto-save timer handler (called from C++ Engine)
-function autosave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then return end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = AUTOSAVE_SLOT, desc = "Auto Save" })
-end
-
---- System.setAutoSaveInterval(seconds) — configure auto-save frequency
-function System.setAutoSaveInterval(seconds)
-    -- Set via C++ Engine (exposed as global)
-    pcall(function()
-        local engine = rawget(_G, "_CAESURA_ENGINE")
-        if engine and engine.setAutoSaveInterval then
-            engine:setAutoSaveInterval(tonumber(seconds) or 0)
-        end
-    end)
-end
-
--- Wire quicksave/quickload/autosave globals for C++ to call
-rawset(_G, "quicksave", quicksave)
-rawset(_G, "quickload", quickload)
-rawset(_G, "autosave", autosave)
-
 return System.loadplace(ctx)
 end
 
@@ -805,62 +693,6 @@ function System.get_config(key)
     System._config = System._config or {}
     local val = System._config[key]
     if val ~= nil then return val end
-    
--- ===========================================================================
--- Quick-save / Quick-load / Auto-save (SU-3)
--- ===========================================================================
--- Called from C++ Engine when F5/F6 pressed or auto-save timer fires.
--- These call into the KAG save command flow via KAG.save_game/KAG.load_game.
-
-local QUICKSAVE_SLOT = -1
-local AUTOSAVE_SLOT  = -2
-
---- quicksave() — F5 hotkey handler
-function quicksave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quicksave] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
-end
-
---- quickload() — F6 hotkey handler
-function quickload()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quickload] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
-end
-
---- autosave() — auto-save timer handler (called from C++ Engine)
-function autosave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then return end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = AUTOSAVE_SLOT, desc = "Auto Save" })
-end
-
---- System.setAutoSaveInterval(seconds) — configure auto-save frequency
-function System.setAutoSaveInterval(seconds)
-    -- Set via C++ Engine (exposed as global)
-    pcall(function()
-        local engine = rawget(_G, "_CAESURA_ENGINE")
-        if engine and engine.setAutoSaveInterval then
-            engine:setAutoSaveInterval(tonumber(seconds) or 0)
-        end
-    end)
-end
-
--- Wire quicksave/quickload/autosave globals for C++ to call
-rawset(_G, "quicksave", quicksave)
-rawset(_G, "quickload", quickload)
-rawset(_G, "autosave", autosave)
-
 return System.defaults[key]
 end
 
@@ -935,62 +767,6 @@ function System.reset_config()
         System._config[k] = v
     end
     System.save_config(System._config, "settings/config.lua")
-    
--- ===========================================================================
--- Quick-save / Quick-load / Auto-save (SU-3)
--- ===========================================================================
--- Called from C++ Engine when F5/F6 pressed or auto-save timer fires.
--- These call into the KAG save command flow via KAG.save_game/KAG.load_game.
-
-local QUICKSAVE_SLOT = -1
-local AUTOSAVE_SLOT  = -2
-
---- quicksave() — F5 hotkey handler
-function quicksave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quicksave] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
-end
-
---- quickload() — F6 hotkey handler
-function quickload()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then
-        print("[Quickload] No KAG context available")
-        return
-    end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
-end
-
---- autosave() — auto-save timer handler (called from C++ Engine)
-function autosave()
-    local ctx = rawget(_G, "_CAESURA_CTX")
-    if not ctx then return end
-    local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = AUTOSAVE_SLOT, desc = "Auto Save" })
-end
-
---- System.setAutoSaveInterval(seconds) — configure auto-save frequency
-function System.setAutoSaveInterval(seconds)
-    -- Set via C++ Engine (exposed as global)
-    pcall(function()
-        local engine = rawget(_G, "_CAESURA_ENGINE")
-        if engine and engine.setAutoSaveInterval then
-            engine:setAutoSaveInterval(tonumber(seconds) or 0)
-        end
-    end)
-end
-
--- Wire quicksave/quickload/autosave globals for C++ to call
-rawset(_G, "quicksave", quicksave)
-rawset(_G, "quickload", quickload)
-rawset(_G, "autosave", autosave)
-
 return System._config
 end
 

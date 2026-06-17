@@ -95,8 +95,8 @@ function scheduler.run(ctx, tokens, start_index)
             local target = params.target or params.label or params.storage
             if not target then
                 print("[WARN] [jump] missing target/label/storage parameter")
-            elseif params.target then
-                -- Cross-scene jump: load new scene
+            elseif params.target and target:sub(1,1) ~= "*" then
+                -- Cross-scene jump: load new scene file
                 local path = "assets/script/" .. target
                 local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
                 if new_tokens then
@@ -112,14 +112,17 @@ function scheduler.run(ctx, tokens, start_index)
                     end
                     ctx.active_operations = {}
                     return
+                else
+                    print("[WARN] [jump] failed to load scene: " .. path)
                 end
             else
-                -- Intra-scene jump: find label
-                local idx = find_label(tokens, target)
+                -- Intra-scene jump: find label (target may be "label" or "*label")
+                local label = target:gsub("^*", "")  -- strip leading * if present
+                local idx = find_label(tokens, label)
                 if idx then
                     i = idx
                 else
-                    print("[WARN] [jump] label not found: " .. tostring(target))
+                    print("[WARN] [jump] label not found: " .. label)
                 end
             end
 

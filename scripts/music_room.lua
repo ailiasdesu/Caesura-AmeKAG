@@ -40,16 +40,18 @@ function MusicRoom.scan()
 end
 
 -- ===========================================================================
--- MusicRoom.list() -> {id, name, favorited}
+-- MusicRoom.list(ctx) -> {id, name, unlocked, favorited}
 -- ===========================================================================
-function MusicRoom.list()
+function MusicRoom.list(ctx)
     local tracks = MusicRoom.scan()
     MusicRoom._loadFavorites()
+    local unlocked = (ctx and ctx.unlockedMusic) or {}
     local result = {}
     for _, t in ipairs(tracks) do
         table.insert(result, {
             id = t.id,
             name = t.name,
+            unlocked = unlocked[t.id] == true,
             favorited = favorites[t.id] == true,
             path = t.path,
         })
@@ -141,15 +143,20 @@ end
 -- MusicRoom.show(ctx)
 -- ===========================================================================
 function MusicRoom.show(ctx)
-    local tracks = MusicRoom.list()
+    local tracks = MusicRoom.list(ctx)
     if #tracks == 0 then
         backend.render_text("[Music Room] No tracks found.", 32, 100)
         return
     end
     backend.render_text("=== Music Room ===", 32, 50)
     for i, t in ipairs(tracks) do
-        local fav = t.favorited and " <3" or ""
-        local line = string.format("%2d. %s%s", i, t.name, fav)
+        local status = ""
+        if not t.unlocked then
+            status = " ???"
+        elseif t.favorited then
+            status = " <3"
+        end
+        local line = string.format("%2d. %s%s", i, t.name, status)
         backend.render_text(line, 32, 50 + i * 24)
     end
     backend.render_text("Click a track to preview.", 32, 50 + (#tracks + 1) * 24)
