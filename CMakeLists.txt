@@ -372,6 +372,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying scripts to output directory..."
 )
 
+# Copy demo assets to output directory (separated from engine source)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/demo"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/demo"
+    COMMENT "Copying demo to output directory..."
+)
+
 # -- Debug / Release configuration ------------------------------------------
 # CAESURA_DEBUG: defaults ON for Debug builds, OFF for Release/MinSizeRel
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
