@@ -37,10 +37,6 @@ void BgfxDraw::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
             .end();
     }
 
-    if (!bgfx::isValid(m_state->shaders->getDefaultSampler())) {
-        m_state->shaders->getDefaultSampler() = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
-    }
-
     float sw = (float)m_state->device->getWidth();
     float sh = (float)m_state->device->getHeight();
     if (sw <= 0.0f || sh <= 0.0f) return;  // guard zero-size backbuffer

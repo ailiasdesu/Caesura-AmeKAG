@@ -146,49 +146,31 @@ bgfx::TextureHandle TextureManager::loadFromFile(const std::string& path) {
 bgfx::TextureHandle TextureManager::loadFromMemory(const uint8_t* data, uint32_t size) {
     static bx::DefaultAllocator allocator;
 
-    bimg::ImageContainer* img = bimg::imageParse(&allocator, data, size);
+    // Force RGBA8 — bimg may decode to R8/RGB8/etc without explicit format
+    bimg::ImageContainer* img = bimg::imageParse(&allocator, data, size,
+        bimg::TextureFormat::RGBA8);
 
     if (!img) {
-        // Fallback: stb_image
         int iw = 0, ih = 0, channels = 0;
         unsigned char* stbData = stbi_load_from_memory(
             data, (int)size, &iw, &ih, &channels, 4);
         if (!stbData) {
-            fprintf(stderr, "[TextureManager] Decode failed (bimg + stb).\n");
+            fprintf(stderr, "[TextureManager] Decode failed.\n");
             return BGFX_INVALID_HANDLE;
         }
         const bgfx::Memory* mem = bgfx::copy(stbData, (uint32_t)(iw * ih * 4));
         stbi_image_free(stbData);
-        bgfx::TextureHandle tex = bgfx::createTexture2D(
-            (uint16_t)iw, (uint16_t)ih, false, 1,
+        return bgfx::createTexture2D((uint16_t)iw, (uint16_t)ih, false, 1,
             bgfx::TextureFormat::RGBA8,
             BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
-        if (!bgfx::isValid(tex)) {
-            fprintf(stderr, "[TextureManager] GPU texture creation failed (stb).\n");
-        }
-        return tex;
     }
 
-    bgfx::TextureFormat::Enum fmt = bgfx::TextureFormat::RGBA8;
-    if (img->m_format == bimg::TextureFormat::BGRA8)
-        fmt = bgfx::TextureFormat::BGRA8;
-    else if (img->m_format == bimg::TextureFormat::RGB8)
-        fmt = bgfx::TextureFormat::RGB8;
-
-    const bgfx::Memory* mem = bgfx::makeRef(
-        img->m_data, img->m_size,
-        [](void*, void* ud) { bimg::imageFree((bimg::ImageContainer*)ud); },
-        img);
-
-    bgfx::TextureHandle tex = bgfx::createTexture2D(
-        uint16_t(img->m_width), uint16_t(img->m_height),
-        false, 1, fmt,
+    const bgfx::Memory* mem = bgfx::copy(img->m_data, img->m_size);
+    uint16_t w = uint16_t(img->m_width), h = uint16_t(img->m_height);
+    bimg::imageFree(img);
+    return bgfx::createTexture2D(w, h, false, 1,
+        bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
-
-    if (!bgfx::isValid(tex)) {
-        fprintf(stderr, "[TextureManager] GPU texture creation failed (bimg).\n");
-    }
-    return tex;
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,11 @@ public:
     bgfx::ProgramHandle getVFXProgram()         const { return m_vfxProgram; }
     bgfx::ProgramHandle getStretchProgram()     const { return m_stretchProgram; }
     bgfx::ProgramHandle getAffineProgram()      const { return m_affineProgram; }
-    bgfx::UniformHandle getDefaultSampler()     const { return m_texSampler; }
+    bgfx::UniformHandle getDefaultSampler() const {
+        if (!bgfx::isValid(m_texSampler))
+            m_texSampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
+        return m_texSampler;
+    }
     bgfx::UniformHandle getBlendParams()        const { return m_u_blendParams; }
     bgfx::UniformHandle getTransParams()        const { return m_u_transParams; }
     bgfx::UniformHandle getVFXParams()          const { return m_u_vfxParams; }
@@ -35,7 +39,7 @@ private:
     bgfx::ProgramHandle m_vfxProgram         = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_stretchProgram     = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_affineProgram      = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_texSampler         = BGFX_INVALID_HANDLE;
+    mutable bgfx::UniformHandle m_texSampler  = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_blendParams      = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_transParams      = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_vfxParams        = BGFX_INVALID_HANDLE;
