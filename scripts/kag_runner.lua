@@ -86,11 +86,11 @@ end
 function kag_runner.update(dt)
     if not kag_co then return end
 
+    -- Honour [p] click-wait: don't auto-advance when waiting for user input
+    if ctx and ctx.waiting_input then return end
+
     local status = coroutine.status(kag_co)
     if status == "dead" then
-        -- Check if scheduler just completed a cross-scene jump.
-        -- scheduler.run() sets ctx.tokens/token_index then returns,
-        -- which kills the coroutine. load_tokens() sets _scene_changed.
         if ctx._scene_changed then
             ctx._scene_changed = false
             kag_co = coroutine.create(function()
@@ -104,7 +104,6 @@ function kag_runner.update(dt)
         return
     end
 
-    -- Resume coroutine; pass dt for [wait] time accumulation
     local ok, err = coroutine.resume(kag_co, dt)
     if not ok then
         print("[KAG Runner] Coroutine error: " .. tostring(err))
@@ -117,10 +116,17 @@ end
 -- advance past click-blocking operations like [p] (page break).
 
 function kag_runner.on_click()
-    if not kag_co then return end
-    if coroutine.status(kag_co) == "dead" then return end
-    -- No dt needed; [p] and friends don't consume time on click advance
-    coroutine.resume(kag_co)
+    if not kag_co then print("[Click] no coroutine"); return end
+    if coroutine.status(kag_co) == "dead" then print("[Click] coroutine dead"); return end
+    if not ctx then print("[Click] no ctx"); return end
+    ctx.waiting_input = false
+    -- Batch resume through all non-blocking tokens until next [p]
+    local count = 0
+    while coroutine.status(kag_co) ~= "dead" and not ctx.waiting_input and count < 200 do
+        coroutine.resume(kag_co)
+        count = count + 1
+    end
+    print("[Click] resumed " .. count .. " tokens, waiting=" .. tostring(ctx.waiting_input))
 end
 
 return kag_runner

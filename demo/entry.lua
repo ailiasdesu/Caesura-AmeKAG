@@ -1,38 +1,40 @@
--- =============================================================================
---  Caesura (AmeKAG) — Galgame Demo Entry Point
---  Loads and runs demo/galgame_demo.ks via KAG runner + engine loop callbacks.
---  Place at: demo/entry.lua
---  To use: change config.lua entry_script to "demo/entry.lua"
--- =============================================================================
-
+-- Caesura (AmeKAG) — Galgame Demo Entry Point
 local kag_runner = require("kag_runner")
 local layers = require("layers")
 
--- ── Start the KAG demo ──────────────────────────────────────────────────────
+local function file_exists(path)
+    local f = io.open(path, "r")
+    if f then f:close(); return true end
+    return false
+end
 
-local started = kag_runner.start("demo/galgame_demo.ks")
-if not started then
-    print("[Demo Entry] FATAL: Failed to start galgame_demo.ks")
-    print("[Demo Entry] Check that demo/galgame_demo.ks exists and has valid syntax.")
+local demo_path = nil
+for _, p in ipairs({"demo/galgame_demo.ks", "galgame_demo.ks", "../demo/galgame_demo.ks"}) do
+    if file_exists(p) then demo_path = p; break end
+end
+
+if not demo_path then
+    print("[Demo Entry] FATAL: Cannot find galgame_demo.ks")
     return
 end
 
--- ── Engine loop callbacks ────────────────────────────────────────────────────
+print("[Demo Entry] Loading: " .. demo_path)
+local started = kag_runner.start(demo_path)
+if not started then
+    print("[Demo Entry] FATAL: Failed to start demo")
+    return
+end
 
---- engine_update(dt) — called every frame by Engine::run()
 function engine_update(dt)
     kag_runner.update(dt or 0.016)
 end
 
---- engine_render() — called every frame after engine_update
 function engine_render()
     layers.render()
 end
 
---- _KAG_onClick() — called when mouse button is pressed with KAG input focus
 function _KAG_onClick()
     kag_runner.on_click()
 end
 
-print("[Demo Entry] Galgame demo entry loaded. KAG+Lua hybrid scripting active.")
-print("[Demo Entry] Asset paths: assets/bg/ assets/fg/ assets/bgm/ assets/se/ assets/voice/")
+print("[Demo Entry] KAG+Lua hybrid scripting active.")

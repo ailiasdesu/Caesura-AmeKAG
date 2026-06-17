@@ -372,8 +372,6 @@ function scheduler.run(ctx, tokens, start_index)
                 if handler then
                     local status, err = pcall(handler, ctx, params)
                     if not status then
-                        -- Error ?? ErrorUI
-                        local ErrorUI = require("Core.ErrorUI")
                         -- Lua-side error reporting
                         print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
                         if ctx.handle_error then
