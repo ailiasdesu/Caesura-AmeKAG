@@ -455,6 +455,13 @@ void Engine::run() {
         // -- Reserved: 3D mini-game update hook (CPU work, future JobSystem target) --
         if (m_miniGameBackend && m_miniGameBackend->isActive()) {
             m_miniGameBackend->update(static_cast<float>(dt));
+            // U3.3: invoke Lua-side per-frame input callback if defined
+            lua_getglobal(L, "_minigame_update");
+            if (lua_isfunction(L, -1)) {
+                lua_pcall(L, 0, 0, 0);
+            } else {
+                lua_pop(L, 1);
+            }
         }
     }
 
@@ -558,10 +565,18 @@ void Engine::processEvents() {
             if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_F5) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5"); }
                 if (event.key.key == SDLK_F6) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F6"); }
+                if (event.key.key == SDLK_W)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_W"); }
+                if (event.key.key == SDLK_A)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_A"); }
+                if (event.key.key == SDLK_S)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_S"); }
+                if (event.key.key == SDLK_D)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_D"); }
             }
             if (event.type == SDL_EVENT_KEY_UP) {
                 if (event.key.key == SDLK_F5) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F5"); }
                 if (event.key.key == SDLK_F6) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F6"); }
+                if (event.key.key == SDLK_W)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_W"); }
+                if (event.key.key == SDLK_A)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_A"); }
+                if (event.key.key == SDLK_S)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_S"); }
+                if (event.key.key == SDLK_D)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_D"); }
             }
         }
         m_inputRouter->processEvent(event);

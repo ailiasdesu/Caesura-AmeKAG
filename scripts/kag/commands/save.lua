@@ -71,8 +71,22 @@ local function capture_state(ctx)
     -- Save description
     state.description = ctx.saveDescription or ""
 
+    -- Unlock state (gallery CGs + music room tracks)
+    state.unlockedCG = {}
+    if ctx.unlockedCG then
+        for k, v in pairs(ctx.unlockedCG) do
+            state.unlockedCG[k] = v
+        end
+    end
+    state.unlockedMusic = {}
+    if ctx.unlockedMusic then
+        for k, v in pairs(ctx.unlockedMusic) do
+            state.unlockedMusic[k] = v
+        end
+    end
+
     -- Schema version (engine-defined)
-    state.schema_version = 1
+    state.schema_version = 2  -- bumped: added unlock state
 
     return state
 end
@@ -158,6 +172,20 @@ function SaveCommands.load(ctx, params)
         end
     end
 
+    -- Restore unlock state (gallery + music room)
+    if state.unlockedCG then
+        ctx.unlockedCG = ctx.unlockedCG or {}
+        for k, v in pairs(state.unlockedCG) do
+            ctx.unlockedCG[k] = v
+        end
+    end
+    if state.unlockedMusic then
+        ctx.unlockedMusic = ctx.unlockedMusic or {}
+        for k, v in pairs(state.unlockedMusic) do
+            ctx.unlockedMusic[k] = v
+        end
+    end
+
     -- Restore backlog
     if state.backlog then
         ctx.backlog = {}
@@ -201,6 +229,20 @@ function SaveCommands.listsaves(ctx, params)
     -- Also set as tf for immediate access
     ctx.tf = ctx.tf or {}
     ctx.tf.save_list = saves
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [saveplace] / [loadplace] — in-memory scene bookmarks
+--  Independent of save slots.  No disk writes.
+--  Delegates to System.saveplace / System.loadplace (scripts/system.lua).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function SaveCommands.saveplace(ctx, params)
+    System.saveplace(ctx)
+end
+
+function SaveCommands.loadplace(ctx, params)
+    System.loadplace(ctx)
 end
 
 return SaveCommands

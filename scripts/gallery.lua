@@ -64,6 +64,14 @@ function Gallery.unlock(ctx, id)
 end
 
 -- ===========================================================================
+-- Gallery.isUnlocked(ctx, id) -> bool
+-- ===========================================================================
+function Gallery.isUnlocked(ctx, id)
+    if not ctx.unlockedCG then return false end
+    return ctx.unlockedCG[id] == true
+end
+
+-- ===========================================================================
 -- Gallery.show(ctx) — interactive gallery viewer
 -- ===========================================================================
 function Gallery.show(ctx, startId)
