@@ -58,8 +58,10 @@ function scheduler.run(ctx, tokens, start_index)
             if t.type then
                 if t.type == "label" then
                     tokens[j] = { "label", { name = t.name } }
-                else
-                    tokens[j] = { t.cmd or t.type, t.params or {} }
+            elseif t.type == "iscript" then
+                tokens[j] = { "iscript", { body = t.body or "" } }
+            else
+                tokens[j] = { t.cmd or t.type, t.params or {} }
                 end
             end
         end
@@ -89,6 +91,12 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Check stop flag
         if ctx.stop_flag then return end
+
+        -- Check for Lua-initiated flow control (from [iscript] or external Lua)
+        if ctx._next_index then
+            i = ctx._next_index
+            ctx._next_index = nil
+        end
 
         -- Flow control: [jump]
         if cmd == "jump" then
@@ -246,11 +254,65 @@ function scheduler.run(ctx, tokens, start_index)
 
         elseif cmd == "case" or cmd == "default" or cmd == "endswitch" then
             -- pass (handled by [switch] above)
-        -- Flow control: [eval]
+
+        -- Flow control: [iscript] — inline Lua code block
+        elseif cmd == "iscript" then
+            local code = params.body or ""
+            if #code > 0 then
+                local sandbox = {
+                    ctx       = ctx,
+                    f         = ctx.f or {},
+                    sf        = ctx.sf or {},
+                    tf        = ctx.tf or {},
+                    kag       = require("kag"),
+                    math      = math,
+                    string    = string,
+                    table     = table,
+                    os        = { clock = os.clock, date = os.date, time = os.time },
+                    tostring  = tostring,
+                    tonumber  = tonumber,
+                    type      = type,
+                    pairs     = pairs,
+                    ipairs    = ipairs,
+                    next      = next,
+                    print     = print,
+                    pcall     = pcall,
+                    select    = select,
+                    unpack    = unpack or table.unpack,
+                    error     = error,
+                    coroutine  = coroutine,
+                }
+                local fn, compileErr = load(code, "=iscript", "t", sandbox)
+                if fn then
+                    local ok, runtimeErr = pcall(fn)
+                    if not ok then
+                        print("[iscript] Runtime error: " .. tostring(runtimeErr))
+                    end
+                else
+                    print("[iscript] Compile error: " .. tostring(compileErr))
+                end
+            end
+
+        -- Flow control: [eval] — unified scope (ctx + f + sf + tf)
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""
-            local fn = load(code, "=eval", "t", ctx.f or {})
-            if fn then pcall(fn) end
+            local env = {
+                ctx = ctx,
+                f   = ctx.f or {},
+                sf  = ctx.sf or {},
+                tf  = ctx.tf or {},
+            }
+            setmetatable(env, { __index = _G })
+            local fn, compileErr = load(code, "=eval", "t", env)
+            if fn then
+                local ok, result = pcall(fn)
+                if ok and result ~= nil then
+                    ctx.tf = ctx.tf or {}
+                    ctx.tf.eval_result = result
+                end
+            else
+                print("[eval] Compile error: " .. tostring(compileErr))
+            end
 
         -- Flow control: [macro] / [endmacro]
         elseif cmd == "macro" then

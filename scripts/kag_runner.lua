@@ -46,12 +46,14 @@ function kag_runner.start(scene_path)
         tokens = {}, token_index = 1,
         call_stack = {}, layers = {}, backlog = {},
         active_operations = {}, stop_flag = false,
+        variables = {},
         characters = {},
         unlockedCG = {}, unlockedMusic = {},
         waiting_input = false,
         _scene_changed = false,
         load_tokens = load_tokens,
     }
+    rawset(_G, "_CAESURA_CTX", ctx)
 
     -- Load initial scene
     local scene = flow.load_scene(scene_path)
