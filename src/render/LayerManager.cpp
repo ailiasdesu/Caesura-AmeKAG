@@ -1,4 +1,5 @@
 #include "LayerManager.h"
+#include "di/BackendRegistry.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -23,6 +24,8 @@ void LayerManager::init() {
         m_layers[i] = Layer{};
         m_dirtyRects[i] = DirtyRect{};
     }
+    m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
+    BackendRegistry::instance().registerDeviceLostListener(this);
     m_initialized = true;
     printf("[LayerManager] Initialized.\n");
 }
@@ -30,6 +33,11 @@ void LayerManager::init() {
 void LayerManager::shutdown() {
     if (!m_initialized) return;
     clearAll();
+    if (bgfx::isValid(m_texUniform)) {
+        bgfx::destroy(m_texUniform);
+        m_texUniform = BGFX_INVALID_HANDLE;
+    }
+    BackendRegistry::instance().unregisterDeviceLostListener(this);
     m_initialized = false;
     printf("[LayerManager] Shutdown complete.\n");
 }
@@ -169,7 +177,6 @@ void LayerManager::clearDirtyRects() {
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
                            uint32_t programId) {
-    static bgfx::UniformHandle s_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler);
     if (!m_initialized) return;
     if (programId == 0) return;
 
@@ -232,7 +239,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         idx[0] = 0; idx[1] = 1; idx[2] = 2;
         idx[3] = 0; idx[4] = 2; idx[5] = 3;
 
-        bgfx::setTexture(0, s_texUniform, l.tex);
+        bgfx::setTexture(0, m_texUniform, l.tex);
         bgfx::setVertexBuffer(0, &tvb);
         bgfx::setIndexBuffer(&tib);
         bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
@@ -244,6 +251,31 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
 
     // Clear dirty rects after frame submission
     clearDirtyRects();
+}
+
+// ---------------------------------------------------------------------------
+// IDeviceLostListener
+// ---------------------------------------------------------------------------
+
+void LayerManager::onDeviceLost() {
+    // Layer textures become invalid — clear all layer texture references
+    for (int i = 0; i < COUNT; i++) {
+        m_layers[i].tex = BGFX_INVALID_HANDLE;
+        m_layers[i].dirty = true;
+    }
+    // Destroy and invalidate the uniform
+    if (bgfx::isValid(m_texUniform)) {
+        bgfx::destroy(m_texUniform);
+        m_texUniform = BGFX_INVALID_HANDLE;
+    }
+    printf("[LayerManager] Device lost — layer textures released\n");
+}
+
+void LayerManager::onDeviceRestored() {
+    // Recreate the uniform
+    m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
+    // Layers will get new textures when Lua re-calls setTexture()
+    printf("[LayerManager] Device restored — uniform recreated\n");
 }
 
 } // namespace Caesura

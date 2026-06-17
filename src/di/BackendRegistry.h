@@ -1,7 +1,9 @@
 #pragma once
 #include "../resource/ResourceHandle.h"
+#include "api/IDeviceLostListener.h"
 #include <typeindex>
 #include <unordered_map>
+#include <vector>
 #include <string>
 
 struct lua_State;
@@ -101,6 +103,12 @@ public:
     IRenderDevice*    createRenderDevice(const char* name);
     IPlatformBackend* createPlatformBackend(const char* name);
 
+    // -- Device loss recovery listeners --
+    void registerDeviceLostListener(IDeviceLostListener* listener);
+    void unregisterDeviceLostListener(IDeviceLostListener* listener);
+    void notifyDeviceLost();
+    void notifyDeviceRestored();
+
     // -- Lua --
     static void registerEngineBindings(lua_State* L);
     static IRenderDevice*    getRenderDeviceFromLua(lua_State* L);
@@ -119,6 +127,7 @@ public:
 private:
     BackendRegistry() = default;
     std::unordered_map<std::type_index, void*> m_services;
+    std::vector<IDeviceLostListener*> m_deviceLostListeners;
     lua_State*         m_luaState    = nullptr;
     GenerationTracker  m_generations;
 };

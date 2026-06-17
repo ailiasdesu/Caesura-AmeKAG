@@ -19,6 +19,7 @@ extern "C" {
 #include "../audio/SoLoudAudioEngine.h"
 #include "../script/bindings/RenderBinding.h"
 #include "../render/BgfxRenderDevice.h"
+#include "../render/BgfxDebugCallback.h"
 #include "../script/vm/LuaManager.h"
 #include "../storage/SaveManager.h"
 #include "../debug/HotReload.h"
@@ -353,6 +354,12 @@ void Engine::run() {
         PROFILE_SCOPE("frame");
         processEvents();
 
+        // --- GPU device loss recovery check (before any per-frame rendering) ---
+        if (BgfxDebugCallback::isDeviceLost()) {
+            recoverFromDeviceLoss();
+            continue;
+        }
+
         uint64_t now;
         if (m_config.headless) {
             now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -412,16 +419,18 @@ void Engine::run() {
 
         lua_State* L = m_lua->state();
         if (L) {
-            lua_getglobal(L, "engine_update");
-            if (lua_isfunction(L, -1)) {
-                lua_pushnumber(L, dt);
-                if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-                    const char* err = lua_tostring(L, -1);
-                    fprintf(stderr, "engine_update: %s\n", err ? err : "unknown");
-                    handleFatalError("engine_update", err);
-                    lua_pop(L, 1);
-                }
-            } else { lua_pop(L, 1); }
+            if (!m_luaPaused) {
+                lua_getglobal(L, "engine_update");
+                if (lua_isfunction(L, -1)) {
+                    lua_pushnumber(L, dt);
+                    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                        const char* err = lua_tostring(L, -1);
+                        fprintf(stderr, "engine_update: %s\n", err ? err : "unknown");
+                        handleFatalError("engine_update", err);
+                        lua_pop(L, 1);
+                    }
+                } else { lua_pop(L, 1); }
+            }
 
             lua_pushinteger(L, static_cast<int>(gpuQ));
             lua_setglobal(L, "_CAESURA_GPU_QUALITY");
@@ -452,15 +461,17 @@ void Engine::run() {
         if (m_miniGameBackend && m_miniGameBackend->isActive()) {
             m_miniGameBackend->update(static_cast<float>(dt));
             // U3.3: invoke Lua-side per-frame input callback if defined
-            lua_getglobal(L, "_minigame_update");
-            if (lua_isfunction(L, -1)) {
-                if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                    fprintf(stderr, "_minigame_update: %s\n",
-                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+            if (L && !m_luaPaused) {
+                lua_getglobal(L, "_minigame_update");
+                if (lua_isfunction(L, -1)) {
+                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                        fprintf(stderr, "_minigame_update: %s\n",
+                                lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                        lua_pop(L, 1);
+                    }
+                } else {
                     lua_pop(L, 1);
                 }
-            } else {
-                lua_pop(L, 1);
             }
         }
     }
@@ -484,6 +495,11 @@ void Engine::processEvents() {
     lua_State* L = m_lua->state();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // -- GPU device reset from SDL (triggers recovery at next loop iteration) --
+        if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
+            BgfxDebugCallback::flagDeviceLost();
+        }
+
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
         if (event.type == CAESURA_EVENT_ASYNC_LOAD && L) {
             auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
@@ -549,7 +565,7 @@ void Engine::processEvents() {
 
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                m_inputRouter->getFocus() == InputFocus::KAG) {
+                m_inputRouter->getFocus() == InputFocus::KAG && !m_luaPaused) {
                 lua_getglobal(L, "_KAG_onClick");
                 if (lua_isfunction(L, -1)) {
                     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -599,7 +615,7 @@ void Engine::render() {
 
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
-    if (L) {
+    if (L && !m_luaPaused) {
         lua_getglobal(L, "engine_render");
         if (lua_isfunction(L, -1)) {
             if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -687,7 +703,7 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
 void Engine::renderOneFrame() {
     if (m_config.headless && !m_config.editorMode) return;
     lua_State* L = m_lua->state();
-    if (L) {
+    if (L && !m_luaPaused) {
         lua_getglobal(L, "engine_update");
         if (lua_isfunction(L, -1)) {
             lua_pushnumber(L, 0.016);
@@ -732,7 +748,7 @@ std::string Engine::captureFrameForRpc(int w, int h) {
     // Render one frame first (submits draw calls without bgfx::frame)
     if (!m_config.headless) {
         lua_State* L = m_lua->state();
-        if (L) {
+        if (L && !m_luaPaused) {
             lua_getglobal(L, "engine_update");
             if (lua_isfunction(L, -1)) {
                 lua_pushnumber(L, 0.016);
@@ -791,6 +807,57 @@ void Engine::shutdown() {
     FreeTypeContext::instance().shutdown();
     if (m_platformBackend) m_platformBackend->shutdown();
     DebugManager::instance().shutdown();
+}
+
+void Engine::recoverFromDeviceLoss() {
+    fprintf(stderr, "[Engine] === GPU device lost — starting recovery ===\n");
+    m_luaPaused = true;
+
+    // Phase 1: Notify all listeners to release GPU resources
+    BackendRegistry::instance().notifyDeviceLost();
+
+    // Phase 2: Shutdown bgfx
+    setBgfxShuttingDown(true);
+    bgfx::shutdown();
+    setBgfxShuttingDown(false);
+    fprintf(stderr, "[Engine] bgfx shutdown complete\n");
+
+    // Phase 3: Reinitialize bgfx
+    void* nwh = nullptr;
+    if (m_platformBackend) {
+        nwh = m_platformBackend->getNativeWindowHandle();
+    }
+    int w = m_platformBackend ? m_platformBackend->getWindowWidth() : m_config.width;
+    int h = m_platformBackend ? m_platformBackend->getWindowHeight() : m_config.height;
+
+    bgfx::Init initCfg;
+    initCfg.type = bgfx::RendererType::Count; // auto-detect
+    initCfg.vendorId = BGFX_PCI_ID_NONE;
+    initCfg.platformData.nwh = nwh;
+    initCfg.resolution.width = uint32_t(w);
+    initCfg.resolution.height = uint32_t(h);
+    initCfg.resolution.reset = BGFX_RESET_VSYNC;
+
+    if (!bgfx::init(initCfg)) {
+        fprintf(stderr, "[Engine] FATAL: bgfx reinit failed after device loss\n");
+        handleFatalError("GPU Recovery", "bgfx::init() failed after device loss");
+        return;
+    }
+    fprintf(stderr, "[Engine] bgfx reinit success (%dx%d)\n", w, h);
+
+    // Phase 4: Notify all listeners to recreate GPU resources
+    BackendRegistry::instance().notifyDeviceRestored();
+
+    // Phase 5: Notify Lua scripts to reload textures
+    lua_State* L = m_lua->state();
+    if (L) {
+        lua_pushboolean(L, 1);
+        lua_setglobal(L, "_CAESURA_DEVICE_RESTORED");
+    }
+
+    m_luaPaused = false;
+    m_deviceLostRecovery = false;
+    fprintf(stderr, "[Engine] === GPU device recovery complete ===\n");
 }
 
 } // namespace Caesura

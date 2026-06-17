@@ -61,6 +61,7 @@ private:
 
     void handleFatalError(const char* context, const char* luaError);
     void shutdown();
+    void recoverFromDeviceLoss();
 
     // T2: Init phase methods
     bool initPlatformPhase();
@@ -73,6 +74,8 @@ private:
     bool         m_shutdownComplete = false;
     bool         m_audioVoiceWasPlaying = false;
     int  m_gcFrameCounter = 0;
+    bool         m_deviceLostRecovery = false;
+    bool         m_luaPaused = false;
     static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);
 
     EngineConfig m_config;

@@ -7,6 +7,7 @@
 #include <vector>
 #include <ft2build.h>
 #include "api/IRenderDevice.h"
+#include "../di/api/IDeviceLostListener.h"
 #include FT_FREETYPE_H
 
 namespace Caesura {
@@ -47,7 +48,7 @@ struct TextCursor {
 
 struct GlyphMetrics { int x, y, w, h, advance, offsetX, offsetY; };
 
-class TextRenderer {
+class TextRenderer : public IDeviceLostListener {
 public:
     TextRenderer() = default;
     ~TextRenderer();
@@ -90,6 +91,10 @@ public:
     bool loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath);
     bool isExpanding() const { return m_expanding; }
 
+    // -- IDeviceLostListener --
+    void onDeviceLost() override { shutdown(); }
+    void onDeviceRestored() override;
+
 private:
     struct GlyphQuad { float x, y, w, h, u0, v0, u1, v1; };
     GlyphQuad buildGlyph(char ch, float penX, float penY, float scaleW, float scaleH);
@@ -130,6 +135,7 @@ private:
     bgfx::UniformHandle m_u_color = BGFX_INVALID_HANDLE;
     MessageLayerCache m_msgCache;
 
+    IRenderDevice* m_savedDevice = nullptr;
     bool m_initialized = false;
     FontId m_currentFont = FontId::Small;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/ITextureManager.h"
+#include "../di/api/IDeviceLostListener.h"
 #include <bgfx/bgfx.h>
 #include <string>
 #include <unordered_map>
@@ -15,7 +16,7 @@ using TextureCallback = std::function<void(bgfx::TextureHandle)>;
 // TextureManager -- implements ITextureManager
 // ============================================================================
 
-class TextureManager : public ITextureManager {
+class TextureManager : public ITextureManager, public IDeviceLostListener {
 public:
     static TextureManager& instance();
 
@@ -47,6 +48,10 @@ public:
     void trackTexture(uint32_t id, uint32_t bytes) override;
     void untrackTexture(uint32_t id) override;
 
+    // IDeviceLostListener
+    void onDeviceLost() override;
+    void onDeviceRestored() override;
+
 private:
     TextureManager() = default;
 
@@ -63,6 +68,7 @@ private:
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
     bool m_devMode = true;
     std::unordered_map<uint32_t, uint32_t> m_textureSizes;
+    std::unordered_map<uint32_t, std::string> m_texturePaths;  // id -> file path for device-loss re-load
     std::list<uint32_t> m_textureLRU;
     uint64_t m_totalBytes = 0;
     uint32_t m_nextId = 1;

@@ -35,6 +35,7 @@ bool TextureManager::initialize() {
     m_nextId = 1;
     m_cache.clear();
     buildCheckerboardTexture();
+    BackendRegistry::instance().registerDeviceLostListener(this);
     m_initialized = true;
     printf("[TextureManager] Initialized.\n");
     return true;
@@ -42,6 +43,8 @@ bool TextureManager::initialize() {
 
 void TextureManager::shutdown() {
     if (!m_initialized) return;
+
+    BackendRegistry::instance().unregisterDeviceLostListener(this);
 
     for (auto& [id, tex] : m_cache) {
         if (bgfx::isValid(tex))
@@ -264,6 +267,7 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
 
     uint32_t id = m_nextId++;
     m_cache[id] = tex;
+    m_texturePaths[id] = path;  // preserve path for device loss recovery
     checkBudget(id, info.width, info.height);
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
     BackendRegistry::instance().tryAlloc("textures");
@@ -364,6 +368,7 @@ void TextureManager::destroyTexture(uint32_t id) {
         if (bgfx::isValid(it->second))
             bgfx::destroy(it->second);
         untrackTexture(id);
+        m_texturePaths.erase(id);
         m_cache.erase(it);
         BackendRegistry::instance().release("textures");
         printf("[TextureManager] Texture %u destroyed.\n", id);
@@ -407,6 +412,33 @@ void TextureManager::getTextureSizeById(uint32_t id,
         return;
     }
     width = 0; height = 0;
+}
+
+// ---------------------------------------------------------------------------
+// IDeviceLostListener — GPU device loss recovery
+// ---------------------------------------------------------------------------
+
+void TextureManager::onDeviceLost() {
+    size_t texCount = m_cache.size();
+    for (auto& [id, handle] : m_cache) {
+        if (bgfx::isValid(handle)) {
+            bgfx::destroy(handle);
+        }
+    }
+    m_cache.clear();
+    m_textureLRU.clear();
+    m_totalBytes = 0;
+    if (bgfx::isValid(m_placeholderTex)) {
+        bgfx::destroy(m_placeholderTex);
+    }
+    m_placeholderTex = BGFX_INVALID_HANDLE;
+    // m_texturePaths is preserved for potential re-load
+    printf("[TextureManager] Device lost — %zu textures released\n", texCount);
+}
+
+void TextureManager::onDeviceRestored() {
+    buildCheckerboardTexture();
+    printf("[TextureManager] Device restored — placeholder rebuilt. %zu textures pending reload.\n", m_texturePaths.size());
 }
 
 } // namespace Caesura

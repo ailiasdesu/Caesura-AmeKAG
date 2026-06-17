@@ -26,6 +26,7 @@
 #include "api/ISandboxQuota.h"
 #include "../input/api/IInputRouter.h"
 #include "../di/api/ITextureBudget.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -171,6 +172,31 @@ void BackendRegistry::registerNullBackends() {
     setService<IRenderDevice>(&s_nullRenderer);
     setService<IPlatformBackend>(&s_nullPlatform);
     printf("[BackendRegistry] Registered null backends (headless mode)\n");
+}
+
+// -- Device loss recovery listeners ---------------------------------------
+
+void BackendRegistry::registerDeviceLostListener(IDeviceLostListener* listener) {
+    if (listener) m_deviceLostListeners.push_back(listener);
+}
+
+void BackendRegistry::unregisterDeviceLostListener(IDeviceLostListener* listener) {
+    auto it = std::find(m_deviceLostListeners.begin(), m_deviceLostListeners.end(), listener);
+    if (it != m_deviceLostListeners.end()) m_deviceLostListeners.erase(it);
+}
+
+void BackendRegistry::notifyDeviceLost() {
+    printf("[BackendRegistry] Notifying %zu listeners: onDeviceLost\n", m_deviceLostListeners.size());
+    for (auto* listener : m_deviceLostListeners) {
+        listener->onDeviceLost();
+    }
+}
+
+void BackendRegistry::notifyDeviceRestored() {
+    printf("[BackendRegistry] Notifying %zu listeners: onDeviceRestored\n", m_deviceLostListeners.size());
+    for (auto* listener : m_deviceLostListeners) {
+        listener->onDeviceRestored();
+    }
 }
 
 // -- Backend factory -------------------------------------------------------
