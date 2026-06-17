@@ -3,8 +3,29 @@
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
+#include "SandboxQuota.h"
 #include "../input/InputRouter.h"
 #include "../render/BgfxRenderDevice.h"
+// All interface includes needed for getService<I>() / setService<I>() template instantiation
+#include "../audio/api/IAudioBackend.h"
+#include "../platform/api/IPlatformBackend.h"
+#include "../render/api/IRenderDevice.h"
+#include "../render/api/IVideoPlayer.h"
+#include "../render/api/ITextureManager.h"
+#include "../render/api/IParticleSystem.h"
+#include "../render/api/ILayerManager.h"
+#include "../debug/api/IDebugManager.h"
+#include "../resource/api/IAsyncLoader.h"
+#include "../minigame/api/IMiniGameBackend.h"
+#include "../live2d/api/IAnimationBackend.h"
+#include "../archive/api/ICryptoEngine.h"
+#include "../script/api/ILuaManager.h"
+#include "../job/api/IJobSystem.h"
+#include "../rpc/api/IRpcServer.h"
+#include "../rpc/api/IEditorServer.h"
+#include "api/ISandboxQuota.h"
+#include "../input/api/IInputRouter.h"
+#include "../di/api/ITextureBudget.h"
 #include <cstdio>
 #include <cstring>
 
@@ -79,31 +100,66 @@ BackendRegistry& BackendRegistry::instance() {
     return inst;
 }
 
-// -- Set active backends ---------------------------------------------------
+// -- SandboxQuota wrappers (defined here — need SandboxQuota complete type)
 
-void BackendRegistry::setRenderDevice(IRenderDevice& device) { m_renderDevice = &device; }
-
-void BackendRegistry::setAudioBackend(IAudioBackend& backend) { m_audioBackend = &backend; }
-
-void BackendRegistry::setPlatformBackend(IPlatformBackend& backend) { m_platformBackend = &backend; }
-
-void BackendRegistry::setInputRouter(IInputRouter* router) {
-    m_inputRouter = router;
+bool BackendRegistry::tryAlloc(const char* kind) {
+    return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : true;
 }
 
-void BackendRegistry::setMiniGameBackend(IMiniGameBackend* backend) { m_miniGameBackend = backend; }
-
-void BackendRegistry::setVideoPlayer(IVideoPlayer* player) {
-    m_videoPlayer = player;
+void BackendRegistry::release(const char* kind) {
+    if (m_luaState) SandboxQuota::release(m_luaState, kind);
 }
 
-void BackendRegistry::setTextureManager(ITextureManager* mgr) {
-    m_textureManager = mgr;
-}
+// -- Getter / Setter definitions (need complete types) --------------------
 
-void BackendRegistry::setLayerManager(ILayerManager* mgr) {
-    m_layerManager = mgr;
-}
+#define DEF_GETTER(Iface, method) \
+    Iface* BackendRegistry::get##method() { return getService<Iface>(); }
+
+#define DEF_SETTER(Iface, method) \
+    void BackendRegistry::set##method(Iface* p) { setService(p); }
+
+DEF_GETTER(IRenderDevice,    RenderDevice)
+DEF_GETTER(IAudioBackend,    AudioBackend)
+DEF_GETTER(IPlatformBackend, PlatformBackend)
+DEF_GETTER(IInputRouter,     InputRouter)
+DEF_GETTER(IVideoPlayer,     VideoPlayer)
+DEF_GETTER(ITextureManager,  TextureManager)
+DEF_GETTER(ILayerManager,    LayerManager)
+DEF_GETTER(IParticleSystem,  ParticleSystem)
+DEF_GETTER(IDebugManager,    DebugManager)
+DEF_GETTER(IAsyncLoader,     AsyncLoader)
+DEF_GETTER(IMiniGameBackend, MiniGameBackend)
+DEF_GETTER(IAnimationBackend, AnimationBackend)
+DEF_GETTER(carc::ICryptoEngine, CryptoEngine)
+DEF_GETTER(ILuaManager,      LuaManager)
+DEF_GETTER(IJobSystem,       JobSystem)
+DEF_GETTER(IRpcServer,       RpcServer)
+DEF_GETTER(IEditorServer,    EditorServer)
+DEF_GETTER(ISandboxQuota,    SandboxQuota)
+DEF_GETTER(ITextureBudget,   TextureBudget)
+
+void BackendRegistry::setRenderDevice(IRenderDevice& device)      { setService(&device); }
+void BackendRegistry::setAudioBackend(IAudioBackend& backend)      { setService(&backend); }
+void BackendRegistry::setPlatformBackend(IPlatformBackend& backend){ setService(&backend); }
+DEF_SETTER(IInputRouter,     InputRouter)
+DEF_SETTER(IMiniGameBackend, MiniGameBackend)
+DEF_SETTER(IAnimationBackend, AnimationBackend)
+DEF_SETTER(carc::ICryptoEngine, CryptoEngine)
+DEF_SETTER(ILuaManager,      LuaManager)
+DEF_SETTER(IJobSystem,       JobSystem)
+DEF_SETTER(IRpcServer,       RpcServer)
+DEF_SETTER(IEditorServer,    EditorServer)
+DEF_SETTER(ISandboxQuota,    SandboxQuota)
+DEF_SETTER(IVideoPlayer,     VideoPlayer)
+DEF_SETTER(ITextureManager,  TextureManager)
+DEF_SETTER(IParticleSystem,  ParticleSystem)
+DEF_SETTER(IDebugManager,    DebugManager)
+DEF_SETTER(IAsyncLoader,     AsyncLoader)
+DEF_SETTER(ILayerManager,    LayerManager)
+DEF_SETTER(ITextureBudget,   TextureBudget)
+
+#undef DEF_GETTER
+#undef DEF_SETTER
 
 // -- Null backend registration (headless mode) -------------------------------
 // Registers null stubs for render and platform backends so the engine
@@ -112,8 +168,8 @@ void BackendRegistry::setLayerManager(ILayerManager* mgr) {
 void BackendRegistry::registerNullBackends() {
     static NullRenderDevice  s_nullRenderer;
     static NullPlatformBackend s_nullPlatform;
-    m_renderDevice = &s_nullRenderer;
-    m_platformBackend = &s_nullPlatform;
+    setService<IRenderDevice>(&s_nullRenderer);
+    setService<IPlatformBackend>(&s_nullPlatform);
     printf("[BackendRegistry] Registered null backends (headless mode)\n");
 }
 
@@ -123,15 +179,15 @@ IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
     // Factory only returns pre-registered backend.
     // Engine owns lifecycle �� use setAudioBackend() to register first.
     if (strcmp(name, "soloud") == 0 || strcmp(name, "SoLoud") == 0) {
-        if (m_audioBackend) {
+        if (getService<IAudioBackend>()) {
             printf("[BackendRegistry] Using pre-registered audio backend: SoLoud\n");
-            return m_audioBackend;
+            return getService<IAudioBackend>();
         }
         fprintf(stderr, "[BackendRegistry] SoLoud backend not registered yet\n");
         return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        if (m_audioBackend) return m_audioBackend;
+        if (getService<IAudioBackend>()) return getService<IAudioBackend>();
         fprintf(stderr, "[BackendRegistry] Null audio backend not registered yet\n");
         return nullptr;
     }
@@ -143,15 +199,15 @@ IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
     // Factory only returns pre-registered backend.
     // Engine owns lifecycle �� use setRenderDevice() to register first.
     if (strcmp(name, "bgfx") == 0) {
-        if (m_renderDevice) {
+        if (getService<IRenderDevice>()) {
             printf("[BackendRegistry] Using pre-registered render backend: bgfx\n");
-            return m_renderDevice;
+            return getService<IRenderDevice>();
         }
         fprintf(stderr, "[BackendRegistry] bgfx backend not registered yet\n");
         return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        if (m_renderDevice) return m_renderDevice;
+        if (getService<IRenderDevice>()) return getService<IRenderDevice>();
         fprintf(stderr, "[BackendRegistry] Null render backend not registered yet\n");
         return nullptr;
     }
@@ -163,15 +219,15 @@ IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
     // Factory only returns pre-registered backend.
     // Engine owns lifecycle �� use setPlatformBackend() to register first.
     if (strcmp(name, "sdl3") == 0 || strcmp(name, "SDL3") == 0) {
-        if (m_platformBackend) {
+        if (getService<IPlatformBackend>()) {
             printf("[BackendRegistry] Using pre-registered platform backend: SDL3\n");
-            return m_platformBackend;
+            return getService<IPlatformBackend>();
         }
         fprintf(stderr, "[BackendRegistry] SDL3 backend not registered yet\n");
         return nullptr;
     }
     if (strcmp(name, "null") == 0 || strcmp(name, "Null") == 0) {
-        if (m_platformBackend) return m_platformBackend;
+        if (getService<IPlatformBackend>()) return getService<IPlatformBackend>();
         fprintf(stderr, "[BackendRegistry] Null platform backend not registered yet\n");
         return nullptr;
     }

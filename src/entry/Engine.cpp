@@ -12,7 +12,7 @@ extern "C" {
 #include "../platform/SDL3PlatformBackend.h"
 #include "../audio/api/IAudioBackend.h"
 #include "../di/TextureBudget.h"
-#include "../render/IRenderDevice.h"
+#include "../render/api/IRenderDevice.h"
 #include "../render/VideoPlayer.h"
 #include "../render/api/IGpuMonitor.h"
 #include "../render/FreeTypeContext.h"
@@ -33,9 +33,10 @@ extern "C" {
 #include "../steam/NullSteamBackend.h"
 #include "../script/bindings/SteamBinding.h"
 #include "../archive/CryptoEngine.h"
+#include "../archive/CARCReader.h"
+#include "../archive/CarcAssetProvider.h"
 #ifdef CAESURA_HAS_LIVE2D
 #include "../live2d/Live2D/Live2DBackend.h"
-#include "../render/BgfxRenderDevice.h"
 #endif
 #include <thread>
 #include <atomic>
@@ -230,6 +231,37 @@ bool Engine::initScriptingPhase() {
     BackendRegistry::instance().setLuaState(m_lua->state());
     BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
 
+    // Phase R2-U1: Push all backend pointers into Lua registry so binding
+    // files (KAG, Render, DevCore, Unified, VFX) can resolve them without
+    // including BackendRegistry.h.  Keys are the runtime contract between
+    // this init block and the binding files.
+    {
+        lua_State* L = m_lua->state();
+        lua_pushlightuserdata(L, m_renderDevice.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.RenderDevice");
+
+        lua_pushlightuserdata(L, m_audioBackend.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.AudioBackend");
+
+        lua_pushlightuserdata(L, m_platformBackend.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.PlatformBackend");
+
+        lua_pushlightuserdata(L, m_inputRouter.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.InputRouter");
+
+        lua_pushlightuserdata(L, m_videoPlayer.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.VideoPlayer");
+
+        lua_pushlightuserdata(L, static_cast<ITextureManager*>(&TextureManager::instance()));
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.TextureManager");
+
+        lua_pushlightuserdata(L, static_cast<IAsyncLoader*>(&AsyncLoader::instance()));
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.AsyncLoader");
+
+        lua_pushlightuserdata(L, static_cast<IDebugManager*>(&DebugManager::instance()));
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.DebugManager");
+    }
+
     // HotReload for scripts/ directory
     HotReload::instance().init("scripts/", m_lua->state());
 
@@ -250,9 +282,22 @@ bool Engine::initAssetPhase() {
     // Parallel task system
     JobSystem::instance().init();
     BackendRegistry::instance().setJobSystem(&JobSystem::instance());
+    m_videoPlayer->setJobSystem(JobSystem::instance());
 
     // Asset management
     AssetManager::instance().init();
+    // Inject CARC providers (moved from AssetManager to break resource→archive cycle)
+    {
+        const char* carcFiles[] = {"data.carc", "game.carc", "patch.carc"};
+        for (const char* fname : carcFiles) {
+            auto reader = std::make_unique<carc::CARCReader>();
+            if (reader->open(fname)) {
+                AssetManager::instance().addProvider(
+                    std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
+                printf("[Engine] Registered CARC: %s\n", fname);
+            }
+        }
+    }
     AsyncLoader::instance().init();
 
     return true;
@@ -277,6 +322,12 @@ bool Engine::initOptionalPhase() {
     m_miniGameBackend->setRenderDevice(m_renderDevice.get());
     m_miniGameBackend->init();
     m_miniGameBackend->init();
+    BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+    {
+        lua_State* L = m_lua->state();
+        lua_pushlightuserdata(L, m_miniGameBackend.get());
+        lua_setfield(L, LUA_REGISTRYINDEX, "Caesura.MiniGameBackend");
+    }
 
     // Animation backend (Live2D or Null)
 #ifdef CAESURA_HAS_LIVE2D

@@ -11,7 +11,6 @@ extern "C" {
 
 #include "HotReload.h"
 #include "DebugManager.h"
-#include "../script/state/GameState.h"
 #include <bgfx/bgfx.h>
 #include <SDL3/SDL.h>
 #include <chrono>
@@ -58,6 +57,16 @@ void HotReload::scanDirectory() {
     }
 }
 
+// Helper: push GameState ctx table from Lua registry (avoids script/ dependency)
+static bool pushGameState(lua_State* L) {
+    if (!L) return false;
+    if (lua_getfield(L, LUA_REGISTRYINDEX, "caesura_ctx") == LUA_TNIL) {
+        lua_pop(L, 1);
+        return false;
+    }
+    return true;
+}
+
 // Helper: cancel all active operations stored in ctx.active_operations.
 // Each entry is expected to be a CancelToken table with :mark_cancelled()
 // and :execute_callbacks().
@@ -65,7 +74,7 @@ static void cancelAllActiveOps(lua_State* L) {
     if (!L) return;
 
     // Push ctx from registry
-    if (!GameState::push(L)) return;  // stack: ctx
+    if (!pushGameState(L)) return;  // stack: ctx
 
     lua_getfield(L, -1, "active_operations");  // stack: ctx, ops
     if (!lua_istable(L, -1)) {
@@ -167,7 +176,7 @@ bool HotReload::checkAndReload() {
     // Cancellations are synchronous �� no sleep needed
 
     // Step 2: Close the KAG coroutine if running
-    if (GameState::push(m_L)) {
+    if (pushGameState(m_L)) {
         lua_getfield(m_L, -1, "co");
         if (lua_isthread(m_L, -1)) {
             // Set stop_flag so scheduler won't resume
@@ -190,7 +199,7 @@ bool HotReload::checkAndReload() {
     }
 
     // Step 3: Reset GameState (sf/f preserved)
-    if (GameState::push(m_L)) {
+    if (pushGameState(m_L)) {
         lua_newtable(m_L); lua_setfield(m_L, -2, "call_stack");
         lua_newtable(m_L); lua_setfield(m_L, -2, "tokens");
         lua_pushinteger(m_L, 1); lua_setfield(m_L, -2, "token_index");

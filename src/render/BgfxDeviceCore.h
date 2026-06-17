@@ -1,7 +1,7 @@
 #pragma once
 
 #include <bgfx/bgfx.h>
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
 #include <unordered_map>
 #include <cstdint>
 

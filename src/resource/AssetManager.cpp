@@ -1,7 +1,5 @@
 #include "AssetManager.h"
 #include "DirAssetProvider.h"
-#include "../archive/CarcAssetProvider.h"
-#include "../archive/CARCReader.h"
 #include <cstdio>
 #include <memory>
 
@@ -18,18 +16,12 @@ void AssetManager::init() {
     m_chain.addProvider(std::make_unique<caesura::DirAssetProvider>(""));
     m_chain.addProvider(std::make_unique<caesura::DirAssetProvider>("assets"));
 
-    const char* carcFiles[] = {"data.carc", "game.carc", "patch.carc"};
-    for (const char* fname : carcFiles) {
-        auto reader = std::make_unique<carc::CARCReader>();
-        if (reader->open(fname)) {
-            m_chain.addProvider(
-                std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
-            printf("[AssetManager] Registered CARC: %s\n", fname);
-        }
-    }
-
     m_initialized = true;
-    printf("[AssetManager] Initialized.\n");
+    printf("[AssetManager] Initialized (dir providers).\n");
+}
+
+void AssetManager::addProvider(std::unique_ptr<caesura::IAssetProvider> provider) {
+    m_chain.addProvider(std::move(provider));
 }
 
 void AssetManager::shutdown() {

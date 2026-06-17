@@ -11,6 +11,7 @@
 #include "SaveManager.h"
 #include "api/ISaveProvider.h"
 #include "../di/BackendRegistry.h"
+#include "../archive/api/ICryptoEngine.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 

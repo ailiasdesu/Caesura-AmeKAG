@@ -3,17 +3,36 @@
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
-#include "../di/BackendRegistry.h"
 #include "../input/InputRouter.h"
+#include "../platform/api/IPlatformBackend.h"
+#include "../render/api/IRenderDevice.h"
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 
 namespace Caesura {
 
-// -- Helper ----------------------------------------------------------------
+// -- Helpers ----------------------------------------------------------------
 
 static IInputRouter* getInput(lua_State* L) {
-    return BackendRegistry::getInputRouterFromLua(L);
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.InputRouter");
+    auto* router = (IInputRouter*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return router;
+}
+
+static IRenderDevice* getRender(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.RenderDevice");
+    auto* dev = (IRenderDevice*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return dev;
+}
+
+static IPlatformBackend* getPlatform(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.PlatformBackend");
+    auto* pb = (IPlatformBackend*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return pb;
 }
 
 // -- DevCore.set_input_focus(mode) ----------------------------------------
@@ -75,8 +94,8 @@ static int lua_DevCore_set_resolution(lua_State* L) {
     int w = (int)luaL_checkinteger(L, 1);
     int h = (int)luaL_checkinteger(L, 2);
     if (w <= 0 || h <= 0) { lua_pushboolean(L, 0); return 1; }
-    auto* renderer = BackendRegistry::getRenderDeviceFromLua(L);
-    auto* platform = BackendRegistry::getPlatformBackendFromLua(L);
+    auto* renderer = getRender(L);
+    auto* platform = getPlatform(L);
     if (!renderer) { lua_pushboolean(L, 0); return 1; }
     // Resize renderer (bgfx::reset + view re-setup)
     renderer->resize(w, h);
@@ -92,7 +111,7 @@ static int lua_DevCore_set_resolution(lua_State* L) {
 // -- DevCore.get_resolution() ------------------------------------------------------
 
 static int lua_DevCore_get_resolution(lua_State* L) {
-    auto* renderer = BackendRegistry::getRenderDeviceFromLua(L);
+    auto* renderer = getRender(L);
     if (!renderer) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
     lua_pushinteger(L, renderer->getBackbufferWidth());
     lua_pushinteger(L, renderer->getBackbufferHeight());
@@ -103,7 +122,7 @@ static int lua_DevCore_get_resolution(lua_State* L) {
 
 static int lua_DevCore_set_fullscreen(lua_State* L) {
     int enabled = lua_toboolean(L, 1);
-    auto* platform = BackendRegistry::getPlatformBackendFromLua(L);
+    auto* platform = getPlatform(L);
     if (!platform) { lua_pushboolean(L, 0); return 1; }
     platform->setFullscreen(enabled);
     printf("[DevCore] Fullscreen: %s\n", enabled ? "ON" : "OFF");

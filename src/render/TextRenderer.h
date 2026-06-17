@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <ft2build.h>
-#include "IRenderDevice.h"
+#include "api/IRenderDevice.h"
 #include FT_FREETYPE_H
 
 namespace Caesura {

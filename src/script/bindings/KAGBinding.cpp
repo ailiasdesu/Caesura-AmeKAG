@@ -3,9 +3,9 @@
 #include <lauxlib.h>
 }
 #include "KAGBinding.h"
-#include "../di/BackendRegistry.h"
 #include "../audio/api/IAudioBackend.h"
-#include "../render/IRenderDevice.h"
+#include "../render/api/IRenderDevice.h"
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -106,11 +106,17 @@ void registerKAGBinding(lua_State* L) {
 // -- Helpers ---------------------------------------------------------------
 
 static IAudioBackend* getAudio(lua_State* L) {
-    return BackendRegistry::getAudioBackendFromLua(L);
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.AudioBackend");
+    auto* be = (IAudioBackend*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return be;  // set by Engine::initScriptingPhase; null in test env OK
 }
 
 static IRenderDevice* getRender(lua_State* L) {
-    return BackendRegistry::getRenderDeviceFromLua(L);
+    lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.RenderDevice");
+    auto* dev = (IRenderDevice*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return dev;  // set by Engine::initScriptingPhase; null in test env OK
 }
 
 // -- KAG.play_bgm(file, fadeTime) -----------------------------------------

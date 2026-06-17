@@ -19,6 +19,9 @@ public:
     void init();
     void shutdown();
 
+    // Inject a pre-built asset provider (e.g. CARC from Engine)
+    void addProvider(std::unique_ptr<caesura::IAssetProvider> provider);
+
     std::vector<uint8_t> read(const std::string& path);
     bool exists(const std::string& path);
 
