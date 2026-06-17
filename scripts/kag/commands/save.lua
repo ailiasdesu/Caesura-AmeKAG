@@ -8,6 +8,8 @@
 -- Cache sandbox-vulnerable globals before lockdown
 local _type    = type
 
+local System = require("system")
+
 local SaveCommands = {}
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -51,10 +53,12 @@ local function capture_state(ctx)
         for i = math.max(1, #ctx.backlog - 99), #ctx.backlog do
             local entry = ctx.backlog[i]
             state.backlog[#state.backlog + 1] = {
-                name      = entry.name or "",
-                text      = entry.text or "",
-                voice     = entry.voice or "",
-                timestamp = entry.timestamp or 0,
+                name        = entry.name or "",
+                text        = entry.text or "",
+                voice       = entry.voice or "",
+                timestamp   = entry.timestamp or 0,
+                scene       = entry.scene or "",
+                token_index = entry.token_index or 1,
             }
         end
     end

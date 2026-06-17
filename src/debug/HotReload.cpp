@@ -90,7 +90,11 @@ static void cancelAllActiveOps(lua_State* L) {
             lua_getfield(L, -1, "mark_cancelled");
             if (lua_isfunction(L, -1)) {
                 lua_pushvalue(L, -2);  // push self
-                lua_pcall(L, 1, 0, 0);
+                if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                    fprintf(stderr, "[HotReload] mark_cancelled failed: %s\n",
+                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                    lua_pop(L, 1);
+                }
             } else { lua_pop(L, 1); }
         }
         lua_pop(L, 1);  // pop op
@@ -103,7 +107,11 @@ static void cancelAllActiveOps(lua_State* L) {
             lua_getfield(L, -1, "execute_callbacks");
             if (lua_isfunction(L, -1)) {
                 lua_pushvalue(L, -2);  // push self
-                lua_pcall(L, 1, 0, 0);
+                if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                    fprintf(stderr, "[HotReload] execute_callbacks failed: %s\n",
+                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                    lua_pop(L, 1);
+                }
             } else { lua_pop(L, 1); }
         }
         lua_pop(L, 1);  // pop op

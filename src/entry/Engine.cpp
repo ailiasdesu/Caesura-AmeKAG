@@ -385,7 +385,13 @@ void Engine::run() {
                 lua_getglobal(Lgc, "System");
                 if (lua_istable(Lgc, -1)) {
                     lua_getfield(Lgc, -1, "collect_full");
-                    if (lua_isfunction(Lgc, -1)) lua_pcall(Lgc, 0, 0, 0);
+                    if (lua_isfunction(Lgc, -1)) {
+                        if (lua_pcall(Lgc, 0, 0, 0) != LUA_OK) {
+                            fprintf(stderr, "System.collect_full: %s\n",
+                                    lua_tostring(Lgc, -1) ? lua_tostring(Lgc, -1) : "unknown");
+                            lua_pop(Lgc, 1);
+                        }
+                    }
                     else lua_pop(Lgc, 1);
                 }
                 lua_pop(Lgc, 1);
@@ -448,7 +454,11 @@ void Engine::run() {
             // U3.3: invoke Lua-side per-frame input callback if defined
             lua_getglobal(L, "_minigame_update");
             if (lua_isfunction(L, -1)) {
-                lua_pcall(L, 0, 0, 0);
+                if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                    fprintf(stderr, "_minigame_update: %s\n",
+                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                    lua_pop(L, 1);
+                }
             } else {
                 lua_pop(L, 1);
             }

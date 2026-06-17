@@ -38,11 +38,13 @@ local TextCommands = {}
 local function push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
     local entry = {
-        name      = speaker or "",
-        text      = text or "",
-        voice     = voiceFile or "",
-        time      = os.date("%H:%M:%S"),
-        timestamp = os.time(),
+        name        = speaker or "",
+        text        = text or "",
+        voice       = voiceFile or "",
+        time        = os.date("%H:%M:%S"),
+        timestamp   = os.time(),
+        scene       = ctx.currentScene or "",
+        token_index = ctx.token_index or 1,
     }
     table.insert(ctx.backlog, entry)
 
