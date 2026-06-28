@@ -3,6 +3,9 @@
 #include "../di/BackendRegistry.h"
 #include "../render/api/ITextureManager.h"
 #include "../render/api/IRenderDevice.h"
+#include "../render/BgfxShaderManager.h"
+#include <bgfx/bgfx.h>
+#include <bx/math.h>
 #include <cstdio>
 #include <algorithm>
 
@@ -103,9 +106,50 @@ void NullAnimationBackend::render(float /*dt*/) {
 
     for (auto& [handle, sprite] : m_sprites) {
         if (!sprite.visible || sprite.textureId == 0) continue;
-        // Submit static sprite via bgfx (simplified: use the render device)
-        // In a real implementation, this would submit a textured quad to bgfx
-        // For now, log the render attempt
+        // D10.1: Submit static sprite as textured quad on VIEW_MAIN
+        bgfx::TextureHandle tex = { static_cast<uint16_t>(sprite.textureId) };
+        if (!bgfx::isValid(tex)) continue;
+
+        // Use fixed screen placement (center, ~300px)
+        float l = -0.3f, t = 0.7f, r = 0.3f, b = 0.1f;
+
+        struct FsVertex { float x, y, u, v; };
+        bgfx::TransientVertexBuffer tvb;
+        bgfx::VertexLayout layout;
+        layout.begin()
+            .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .end();
+
+        if (bgfx::getAvailTransientVertexBuffer(4, layout) < 4) continue;
+        bgfx::allocTransientVertexBuffer(&tvb, 4, layout);
+        auto* v = reinterpret_cast<FsVertex*>(tvb.data);
+        v[0] = { l, t, 0.0f, 0.0f };
+        v[1] = { r, t, 1.0f, 0.0f };
+        v[2] = { r, b, 1.0f, 1.0f };
+        v[3] = { l, b, 0.0f, 1.0f };
+
+        uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
+        bgfx::TransientIndexBuffer tib;
+        if (bgfx::getAvailTransientIndexBuffer(6) < 6) continue;
+        bgfx::allocTransientIndexBuffer(&tib, 6);
+        bx::memCopy(tib.data, indices, sizeof(indices));
+
+        uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
+                       | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
+                                               BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+        // Use the default sampler (create if needed)
+        static bgfx::UniformHandle s_sampler = BGFX_INVALID_HANDLE;
+        if (!bgfx::isValid(s_sampler)) {
+            s_sampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
+        }
+
+        bgfx::setVertexBuffer(0, &tvb);
+        bgfx::setIndexBuffer(&tib);
+        bgfx::setTexture(0, s_sampler, tex);
+        bgfx::setState(state);
+        bgfx::submit(1 /* VIEW_MAIN */, rd->getFallbackProgram());
     }
 }
 

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "api/IMiniGameBackend.h"
+#include "../input/api/IInputRouter.h"
 #include "MiniMaterial.h"
 #include "MiniGeometry.h"
 #include "MiniLight.h"

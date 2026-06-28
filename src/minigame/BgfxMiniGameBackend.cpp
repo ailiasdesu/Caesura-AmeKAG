@@ -204,8 +204,20 @@ bool BgfxMiniGameBackend::checkCollision(uint32_t a,uint32_t b){
 
 uint32_t BgfxMiniGameBackend::loadScene(const std::string& p){printf("[MiniGame] loadScene: %s\n",p.c_str());return m_nextSceneId++;}
 void BgfxMiniGameBackend::unloadScene(uint32_t h){if(h==m_activeScene)leave();}
-void BgfxMiniGameBackend::enter(uint32_t h){if(!ensureGpuResources())return;m_activeScene=h;m_active=true;}
-void BgfxMiniGameBackend::leave(){m_active=false;}
+void BgfxMiniGameBackend::enter(uint32_t h){
+    if(!ensureGpuResources())return;
+    m_activeScene=h;
+    m_active=true;
+    // D9.4: Switch input focus to GAME when entering mini-game
+    auto* router = BackendRegistry::instance().getInputRouter();
+    if (router) router->setFocus(InputFocus::GAME);
+}
+void BgfxMiniGameBackend::leave(){
+    m_active=false;
+    // D9.4: Switch input focus back to KAG when leaving mini-game
+    auto* router = BackendRegistry::instance().getInputRouter();
+    if (router) router->setFocus(InputFocus::KAG);
+}
 
 // ==========================================================================
 // Game loop

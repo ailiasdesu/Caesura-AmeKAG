@@ -444,12 +444,20 @@ void Engine::run() {
             lua_setglobal(L, "_CAESURA_GPU_DEGRADED");
         }
 
-        // Audio voice-complete edge detection
+        // D4.6: Audio voice-complete edge detection + Lua callback
         if (m_audioBackend) {
             bool playing = m_audioBackend->isVoicePlaying();
             if (m_audioVoiceWasPlaying && !playing && L) {
                 lua_pushboolean(L, 1);
                 lua_setglobal(L, "_CAESURA_VOICE_COMPLETE");
+                // Invoke Lua callback if registered
+                lua_getglobal(L, "_onVoiceComplete");
+                if (lua_isfunction(L, -1)) {
+                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                        fprintf(stderr, "_onVoiceComplete: %s\n", lua_tostring(L, -1));
+                        lua_pop(L, 1);
+                    }
+                } else { lua_pop(L, 1); }
             }
             m_audioVoiceWasPlaying = playing;
         }
