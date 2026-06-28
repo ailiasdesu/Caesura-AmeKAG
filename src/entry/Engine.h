@@ -53,8 +53,6 @@ private:
     void processEvents();
     void render();
 
-    void setAutoSaveInterval(float seconds) { m_autoSaveInterval = seconds; }
-    float autoSaveInterval() const { return m_autoSaveInterval; }
     void triggerAutoSave();
     void quicksave();
     void quickload();
@@ -74,7 +72,6 @@ private:
     bool         m_shutdownComplete = false;
     bool         m_audioVoiceWasPlaying = false;
     int  m_gcFrameCounter = 0;
-    bool         m_deviceLostRecovery = false;
     bool         m_luaPaused = false;
     static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);
 
@@ -86,9 +83,6 @@ private:
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<IGpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend>  m_miniGameBackend;
-    float m_autoSaveInterval = 0.0f;
-    float m_autoSaveTimer = 0.0f;
-    float m_frameTime = 0.0f;
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;

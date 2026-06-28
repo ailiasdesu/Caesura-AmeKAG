@@ -371,7 +371,7 @@ void Engine::run() {
         m_lastTick = now;
         if (dt < 0.0f) dt = 0.0f;
         if (dt > 0.25f) dt = 0.25f;
-        m_frameTime = dt;
+        (void)dt; // reserved for frame-time tracking
 
         // -- Phase 8.1: HotReload check (per frame) -----------------------
         HotReload::instance().checkAndReload();
@@ -891,7 +891,6 @@ void Engine::recoverFromDeviceLoss() {
     }
 
     m_luaPaused = false;
-    m_deviceLostRecovery = false;
     fprintf(stderr, "[Engine] === GPU device recovery complete ===\n");
 }
 
