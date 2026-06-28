@@ -566,11 +566,24 @@ void Engine::processEvents() {
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                 m_inputRouter->getFocus() == InputFocus::KAG && !m_luaPaused) {
-                lua_getglobal(L, "_KAG_onClick");
+                const char* handler = (event.button.button == SDL_BUTTON_RIGHT) ? "_KAG_onRightClick" : "_KAG_onClick";
+                lua_getglobal(L, handler);
                 if (lua_isfunction(L, -1)) {
                     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
                         const char* err = lua_tostring(L, -1);
-                        fprintf(stderr, "_KAG_onClick: %s\n", err ? err : "unknown");
+                        fprintf(stderr, "%s: %s\n", handler, err ? err : "unknown");
+                        lua_pop(L, 1);
+                    }
+                } else { lua_pop(L, 1); }
+            }
+
+            // D9.7: Mouse wheel for backlog scrolling
+            if (event.type == SDL_EVENT_MOUSE_WHEEL && m_inputRouter->getFocus() == InputFocus::KAG) {
+                lua_pushnumber(L, event.wheel.y); lua_setglobal(L, "_KAG_MOUSE_WHEEL_Y");
+                lua_getglobal(L, "_KAG_onMouseWheel");
+                if (lua_isfunction(L, -1)) {
+                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                        fprintf(stderr, "_KAG_onMouseWheel: %s\n", lua_tostring(L, -1));
                         lua_pop(L, 1);
                     }
                 } else { lua_pop(L, 1); }
@@ -585,6 +598,13 @@ void Engine::processEvents() {
                 if (event.key.key == SDLK_A)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_A"); }
                 if (event.key.key == SDLK_S)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_S"); }
                 if (event.key.key == SDLK_D)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_D"); }
+                // D9.6: Ctrl triggers skip mode via Lua
+                if (event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) {
+                    lua_getglobal(L, "_KAG_onCtrlDown");
+                    if (lua_isfunction(L, -1)) {
+                        if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+                    } else { lua_pop(L, 1); }
+                }
             }
             if (event.type == SDL_EVENT_KEY_UP) {
                 if (event.key.key == SDLK_F5) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F5"); }
@@ -593,6 +613,13 @@ void Engine::processEvents() {
                 if (event.key.key == SDLK_A)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_A"); }
                 if (event.key.key == SDLK_S)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_S"); }
                 if (event.key.key == SDLK_D)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_D"); }
+                // D9.6: Ctrl skip mode toggle release
+                if (event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) {
+                    lua_getglobal(L, "_KAG_onCtrlUp");
+                    if (lua_isfunction(L, -1)) {
+                        if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
+                    } else { lua_pop(L, 1); }
+                }
             }
         }
         m_inputRouter->processEvent(event);
