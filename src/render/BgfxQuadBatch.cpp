@@ -47,16 +47,12 @@ void BgfxQuadBatch::flushBatch() {
     bgfx::allocTransientIndexBuffer(&tib, idxCount);
     uint16_t* indices = (uint16_t*)tib.data;
 
-    uint16_t currentView = 0;
-    uint32_t quadInBatch = 0;
-
     // Split into per-texture draw calls within the batch
     // (bgfx requires one texture set per submit)
-    uint32_t baseVert = 0;
-    uint32_t baseIdx  = 0;
 
     for (uint32_t qi = 0; qi < quadCount; qi++) {
         auto& q = m_state->batchQuads[qi];
+        uint32_t baseVert = qi * 4;
 
         // Build quad vertices
         v[qi * 4 + 0] = { q.x,       q.y,       0.0f, 0.0f };
@@ -71,7 +67,6 @@ void BgfxQuadBatch::flushBatch() {
         indices[qi * 6 + 3] = baseVert + 0;
         indices[qi * 6 + 4] = baseVert + 2;
         indices[qi * 6 + 5] = baseVert + 3;
-        baseVert += 4;
     }
 
     uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A

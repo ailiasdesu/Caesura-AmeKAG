@@ -61,12 +61,6 @@ static bgfx::TextureHandle resolveTexture(lua_State* L, uint32_t id, IRenderDevi
     return tex;
 }
 
-// Legacy wrapper for callers that don't have a device pointer
-static bgfx::TextureHandle getTexHandle(uint32_t texId, lua_State* L) {
-    uint32_t raw = getTexture(L)->getTextureHandle(texId);
-    return bgfx::TextureHandle{ uint16_t(raw) };
-}
-
 static int getTableInt(lua_State* L, const char* key, int def) {
     lua_getfield(L, -1, key);
     int v = lua_isnumber(L, -1) ? (int)lua_tointeger(L, -1) : def;

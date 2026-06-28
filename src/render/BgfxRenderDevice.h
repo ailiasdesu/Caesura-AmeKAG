@@ -7,8 +7,6 @@
 #include "TextRenderer.h"
 #include <memory>
 #include <bgfx/bgfx.h>
-#include <unordered_map>
-#include <memory>
 #include <string>
 
 namespace Caesura {
@@ -73,7 +71,6 @@ public:
     void flushAllRTT() override;
 
     bgfx::ProgramHandle getFallbackProgram() const override { return m_shaders->getFallbackProgram(); }
-    const bgfx::VertexLayout& getPosTexLayout() const { return m_posTexLayout; }
     bgfx::UniformHandle getDefaultSampler() const override { return m_shaders->getDefaultSampler(); }
 
     bgfx::ProgramHandle getBlendProgram()      const { return m_shaders->getBlendProgram(); }
@@ -107,32 +104,13 @@ private:
     int m_height = 720;
     bool m_bgfxInitialized = false;
 
-    bgfx::VertexLayout   m_posTexLayout;
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
     DrawState m_drawState;
     bool m_shutdownComplete = false;
     std::unique_ptr<BgfxDraw>         m_draw;
 
-    struct RTTEntry {
-        bgfx::FrameBufferHandle fb    = BGFX_INVALID_HANDLE;
-        bgfx::TextureHandle     tex   = BGFX_INVALID_HANDLE;
-        uint16_t                viewId = VIEW_RTT;
-    };
-
-    uint32_t m_nextHandle = 1;
-    std::unordered_map<uint32_t, RTTEntry> m_rttMap;
     std::unique_ptr<TextRenderer> m_textRenderer;
-
-    // Batch protocol (spec [0.3])
-    struct BatchQuad {
-        uint16_t viewId;
-        bgfx::TextureHandle tex;
-        float x, y, w, h;
-        uint8_t opacity;
-    };
-    bool m_batching = false;
-    std::vector<BatchQuad> m_batchQuads;
 };
 
 } // namespace Caesura

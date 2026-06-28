@@ -61,11 +61,6 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     m_deviceCore = std::make_unique<BgfxDeviceCore>();
     if (!m_deviceCore->init(nativeWindowHandle, width, height)) return false;
     m_shaders->initEmbeddedShaders();
-    m_posTexLayout
-        .begin()
-        .add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-        .end();
     m_drawState.shaders = m_shaders.get();
     m_drawState.device  = m_deviceCore.get();
     m_draw = std::make_unique<BgfxDraw>();
@@ -160,9 +155,6 @@ void BgfxRenderDevice::destroyRenderTarget(ViewportHandle h) { m_deviceCore->des
 
 void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
                                      float x, float y, float w, float h) {
-    auto it = m_rttMap.find(handle.id);
-    if (it == m_rttMap.end() || !bgfx::isValid(it->second.tex)) return;
-
     blitTexture(targetView, m_deviceCore->getViewportTexture(handle), x, y, w, h, 255);
 }
 
