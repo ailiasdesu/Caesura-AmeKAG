@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "storage/SaveManager.h"
+#include "TestPaths.h"
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -14,18 +15,18 @@ TEST_CASE("SaveManager::singleton") {
 
 TEST_CASE("SaveManager::init creates save directory") {
     namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    auto dir = TestPaths::uniqueTempDir("system_init");
+    fs::remove_all(dir);
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
-    CHECK(fs::exists("test_saves"));
-    fs::remove_all("test_saves");
+    sm.init(TestPaths::withTrailingSeparator(dir));
+    CHECK(fs::exists(dir));
+    fs::remove_all(dir);
 }
 
 TEST_CASE("SaveManager::save and load round-trip") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_roundtrip");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
 
     json data = {{"key", "value"}, {"nested", {{"a", 1}}}};
     CHECK(sm.save(1, data, "scene1", 42));
@@ -35,25 +36,20 @@ TEST_CASE("SaveManager::save and load round-trip") {
     CHECK_FALSE(loaded.empty());
     CHECK(loaded["key"] == "value");
     CHECK(loaded["nested"]["a"] == 1);
-
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::load nonexistent slot returns empty") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_nonexistent");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
     CHECK(sm.load(99).empty());
     CHECK_FALSE(sm.slotExists(99));
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::listSaves") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_list");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
 
     sm.save(1, {{"name", "one"}}, "s1", 0);
     sm.save(3, {{"name", "three"}}, "s3", 0);
@@ -61,30 +57,24 @@ TEST_CASE("SaveManager::listSaves") {
 
     auto saves = sm.listSaves();
     CHECK(saves.size() == 3);
-
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::deleteSlot") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_delete");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
 
     sm.save(1, {{"name", "one"}}, "s1", 0);
     CHECK(sm.slotExists(1));
     sm.deleteSlot(1);
     CHECK_FALSE(sm.slotExists(1));
     CHECK(sm.load(1).empty());
-
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::load with metadata") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_metadata");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
 
     sm.save(1, {{"text", "hello"}}, "MyScene", 100);
 
@@ -94,15 +84,12 @@ TEST_CASE("SaveManager::load with metadata") {
     CHECK(meta.slot == 1);
     CHECK(meta.sceneName == "MyScene");
     CHECK(meta.tokenIndex == 100);
-
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::json round-trip preserves types") {
-    namespace fs = std::filesystem;
-    fs::remove_all("test_saves");
+    TestPaths::ScopedTempDir dir("system_types");
     auto& sm = SaveManager::instance();
-    sm.init("test_saves/");
+    sm.init(dir.string());
 
     json original = {
         {"bool_true", true},
@@ -126,8 +113,6 @@ TEST_CASE("SaveManager::json round-trip preserves types") {
     CHECK(loaded["null_val"] == nullptr);
     CHECK(loaded["array_val"].size() == 3);
     CHECK(loaded["nested"]["a"] == 1);
-
-    fs::remove_all("test_saves");
 }
 
 TEST_CASE("SaveManager::ENGINE_VERSION is set") {

@@ -14,6 +14,17 @@
 
 namespace Caesura {
 
+namespace {
+
+bgfx::ProgramHandle toBgfx(RenderProgramHandle handle) {
+    if (!handle.isValid()) return BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle result;
+    result.idx = handle.idx;
+    return result;
+}
+
+} // namespace
+
 // ===========================================================================
 // UTF-8 Decode Helper ?? consume multi-byte sequences as single codepoints
 // ===========================================================================
@@ -275,7 +286,7 @@ bool TextRenderer::init(IRenderDevice* device) {
     }
 
     // Borrow shared resources from IRenderDevice
-    m_fallbackProgram = device->getFallbackProgram();
+    m_fallbackProgram = toBgfx(device->getFallbackProgram());
     if (!bgfx::isValid(m_fallbackProgram)) {
         fprintf(stderr, "[TextRenderer] Fallback program not ready. "
                 "Ensure device::init() runs first.\n");

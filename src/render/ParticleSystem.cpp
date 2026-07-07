@@ -11,6 +11,24 @@
 namespace Caesura {
 // Security: replaced rand() with std::mt19937 for proper RNG
 
+namespace {
+
+bgfx::ProgramHandle toBgfx(RenderProgramHandle handle) {
+    if (!handle.isValid()) return BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle result;
+    result.idx = handle.idx;
+    return result;
+}
+
+bgfx::UniformHandle toBgfx(RenderUniformHandle handle) {
+    if (!handle.isValid()) return BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle result;
+    result.idx = handle.idx;
+    return result;
+}
+
+} // namespace
+
 // ===========================================================================
 //  processSimBatch -- JobSystem worker payload (pure CPU, no GPU/alloc)
 // ===========================================================================
@@ -46,8 +64,8 @@ bool ParticleSystem::init() {
     m_particles.resize(MAX_PARTICLES);
 
     // Get handles from IRenderDevice abstraction (no concrete dependency)
-    m_texSampler = renderDev->getDefaultSampler();
-    m_program = renderDev->getFallbackProgram();
+    m_texSampler = toBgfx(renderDev->getDefaultSampler());
+    m_program = toBgfx(renderDev->getFallbackProgram());
     if (!bgfx::isValid(m_texSampler) || !bgfx::isValid(m_program)) {
         fprintf(stderr, "[ParticleSystem] Render device missing sampler or program\n");
         return false;

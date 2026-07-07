@@ -5,7 +5,6 @@
 #include "BackendRegistry.h"
 #include "SandboxQuota.h"
 #include "../input/InputRouter.h"
-#include "../render/BgfxRenderDevice.h"
 // All interface includes needed for getService<I>() / setService<I>() template instantiation
 #include "../audio/api/IAudioBackend.h"
 #include "../platform/api/IPlatformBackend.h"
@@ -45,18 +44,22 @@ public:
     void beginFrame() override {}
     void endFrame() override {}
     void commit_frame() override {}
+    void advanceFrame() override {}
     void setViewRect(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
     void setViewClear(uint16_t, uint16_t, uint32_t, float, uint8_t) override {}
     void touch(uint16_t) override {}
     ViewportHandle createRenderTarget(int, int) override { return ViewportHandle{}; }
     void destroyRenderTarget(ViewportHandle) override {}
-    bgfx::TextureHandle getViewportTexture(ViewportHandle) override { return BGFX_INVALID_HANDLE; }
+    RenderTextureHandle getViewportTexture(ViewportHandle) override { return {}; }
     void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
     int getBackbufferWidth() const override { return m_width; }
     int getBackbufferHeight() const override { return m_height; }
     void resize(int w, int h) override { m_width = w; m_height = h; }
     void blitTexture(uint16_t, uint32_t, float, float, float, float, uint8_t) override {}
     void setDebugName(uint16_t, const std::string&) override {}
+    void drawDebugOverlay(const std::string&) override {}
+    bool requestScreenshot(const std::string&) override { return false; }
+    bool recoverDevice(void*, int, int) override { return true; }
     void renderText(uint16_t, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void renderRuby(uint16_t, const std::string&, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}
@@ -66,12 +69,20 @@ public:
                    uint32_t, float, float, float, float,
                    const float*) override {}
     void beginBatch() override {}
-    void submitBlend(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, int, float, float, float) override {}
-    void submitTransition(uint16_t, bgfx::TextureHandle, bgfx::TextureHandle, bgfx::TextureHandle, int, float) override {}
-    void submitVFX(uint16_t, bgfx::TextureHandle, int, float, float, float, float, float, float, float) override {}
+    void submitBlend(uint16_t, RenderTextureHandle, RenderTextureHandle, int, float, float, float) override {}
+    void submitTransition(uint16_t, RenderTextureHandle, RenderTextureHandle, RenderTextureHandle, int, float) override {}
+    void submitVFX(uint16_t, RenderTextureHandle, int, float, float, float, float, float, float, float) override {}
     void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void flushBatch() override {}
     float textLineHeight() const override { return 0.0f; }
+    const char* getBackendName() const override { return "NullRender"; }
+    RenderRuntimeInfo getRuntimeInfo() const override {
+        RenderRuntimeInfo info;
+        info.backendName = getBackendName();
+        info.width = m_width;
+        info.height = m_height;
+        return info;
+    }
 private:
     int m_width = 0, m_height = 0;
 };
@@ -285,11 +296,8 @@ static int lua_Engine_select_render_backend(lua_State* L) {
     lua_pushlightuserdata(L, device);
     lua_setfield(L, LUA_REGISTRYINDEX, kRegistryKey_RenderDevice);
 
-    if (subBackend && strcmp(name, "bgfx") == 0) {
-        BgfxRenderDevice* bgfxDev = dynamic_cast<BgfxRenderDevice*>(device);
-        if (bgfxDev) {
-            bgfxDev->setPreferredBackend(subBackend);
-        }
+    if (subBackend) {
+        device->setPreferredBackend(subBackend);
     }
 
     lua_pushboolean(L, 1);
@@ -339,7 +347,7 @@ static int lua_Engine_get_backend_info(lua_State* L) {
 
     IRenderDevice* renderDev = registry.getRenderDevice();
     if (renderDev) {
-        lua_pushstring(L, "bgfx");
+        lua_pushstring(L, renderDev->getBackendName());
         lua_setfield(L, -2, "render");
     }
 

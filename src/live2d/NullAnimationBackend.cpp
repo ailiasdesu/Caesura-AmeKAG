@@ -3,7 +3,6 @@
 #include "../di/BackendRegistry.h"
 #include "../render/api/ITextureManager.h"
 #include "../render/api/IRenderDevice.h"
-#include "../render/BgfxShaderManager.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <cstdio>
@@ -149,7 +148,9 @@ void NullAnimationBackend::render(float /*dt*/) {
         bgfx::setIndexBuffer(&tib);
         bgfx::setTexture(0, s_sampler, tex);
         bgfx::setState(state);
-        bgfx::submit(1 /* VIEW_MAIN */, rd->getFallbackProgram());
+        RenderProgramHandle fallback = rd->getFallbackProgram();
+        if (!fallback.isValid()) continue;
+        bgfx::submit(1 /* VIEW_MAIN */, bgfx::ProgramHandle{fallback.idx});
     }
 }
 

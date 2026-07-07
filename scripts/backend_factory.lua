@@ -13,10 +13,21 @@ function BackendFactory.create(opts)
     local render_name   = opts.render   or "bgfx"
     local audio_name    = opts.audio    or "soloud"
     local platform_name = opts.platform or "sdl3"
+    local backend_info  = {}
 
     if Engine and Engine.select_platform_backend then
         Engine.select_platform_backend(platform_name)
     end
+    if Engine and Engine.get_backend_info then
+        local ok, info = pcall(Engine.get_backend_info)
+        if ok and type(info) == "table" then
+            backend_info = info
+        end
+    end
+
+    local actual_render_name   = backend_info.render   or render_name
+    local actual_audio_name    = backend_info.audio    or audio_name
+    local actual_platform_name = backend_info.platform or platform_name
 
     if not KAG then error("[BackendFactory] KAG C binding not available.") end
     if not Render then error("[BackendFactory] Render C binding not available.") end
@@ -27,7 +38,7 @@ function BackendFactory.create(opts)
     -- Render subsystem --------------------------------------------------
     backend.render = function(cmd, ...)
         if cmd == "ping" then return true
-        elseif cmd == "name" then return render_name
+        elseif cmd == "name" then return actual_render_name
         elseif cmd == "submit_batch" then return Render.submit_batch(...)
         elseif cmd == "submit_blend" then return Render.submit_blend(...)
         elseif cmd == "submit_transition" then return Render.submit_transition(...)
@@ -55,7 +66,7 @@ function BackendFactory.create(opts)
     -- Audio subsystem ----------------------------------------------------
     backend.audio = function(cmd, ...)
         if cmd == "ping" then return true
-        elseif cmd == "name" then return audio_name
+        elseif cmd == "name" then return actual_audio_name
         elseif cmd == "play_bgm" then return KAG.play_bgm(...)
         elseif cmd == "stop_bgm" then return KAG.stop_bgm(...)
         elseif cmd == "play_voice" then return KAG.play_voice(...)
@@ -80,7 +91,7 @@ function BackendFactory.create(opts)
     -- Platform subsystem -------------------------------------------------
     backend.platform = function(cmd, ...)
         if cmd == "ping" then return true
-        elseif cmd == "name" then return platform_name
+        elseif cmd == "name" then return actual_platform_name
         elseif cmd == "set_input_focus" then return DevCore.set_input_focus(...)
         elseif cmd == "get_input_focus" then return DevCore.get_input_focus()
         elseif cmd == "set_resolution" then return DevCore.set_resolution(...)
@@ -98,7 +109,7 @@ function BackendFactory.create(opts)
 
     rawset(_G, "_CAESURA_BACKEND", backend)
     print(string.format("[BackendFactory] Created: render=%s audio=%s platform=%s",
-        render_name, audio_name, platform_name))
+        actual_render_name, actual_audio_name, actual_platform_name))
     return backend
 end
 

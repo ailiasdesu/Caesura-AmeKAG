@@ -17,12 +17,12 @@ end
 function Backend.audio_play(bus, file, opts)
     opts = opts or {}
     local be = get_backend()
-    if b then
-        if bus == "bgm" then return b.audio("play_bgm", file, tonumber(opts.fadein) or 1.0)
-        elseif bus == "voice" then return b.audio("play_voice", file)
+    if be then
+        if bus == "bgm" then return be.audio("play_bgm", file, tonumber(opts.fadein) or 1.0)
+        elseif bus == "voice" then return be.audio("play_voice", file)
         elseif bus == "se" then
-            if opts.x and opts.y then return b.audio("play_se_3d", file, opts.x, opts.y, opts.z or 0)
-            else return b.audio("play_se", file) end
+            if opts.x and opts.y then return be.audio("play_se_3d", file, opts.x, opts.y, opts.z or 0)
+            else return be.audio("play_se", file) end
         end
     else
         if bus == "bgm" then return KAG.play_bgm(file, tonumber(opts.fadein) or 1.0)
@@ -38,10 +38,10 @@ end
 function Backend.audio_stop(bus, opts)
     opts = opts or {}
     local be = get_backend()
-    if b then
-        if bus == "bgm" then return b.audio("stop_bgm", tonumber(opts.fadeout) or 1.0)
-        elseif bus == "voice" then return b.audio("stop_voice")
-        elseif bus == "se" then return b.audio("stop_se") end
+    if be then
+        if bus == "bgm" then return be.audio("stop_bgm", tonumber(opts.fadeout) or 1.0)
+        elseif bus == "voice" then return be.audio("stop_voice")
+        elseif bus == "se" then return be.audio("stop_se") end
     else
         if bus == "bgm" then return KAG.stop_bgm(tonumber(opts.fadeout) or 1.0)
         elseif bus == "voice" then return KAG.stop_voice()
@@ -52,10 +52,10 @@ end
 
 function Backend.audio_is_playing(bus)
     local be = get_backend()
-    if b then
-        if bus == "voice" then return b.audio("is_voice_playing") end
-        if bus == "bgm"   then return b.audio("is_bgm_playing") end
-        if bus == "se"    then return b.audio("is_playing", "se") end
+    if be then
+        if bus == "voice" then return be.audio("is_voice_playing") end
+        if bus == "bgm"   then return be.audio("is_bgm_playing") end
+        if bus == "se"    then return be.audio("is_playing", "se") end
     else
         if bus == "voice" then return KAG.is_voice_playing() end
         if bus == "bgm"   then return KAG.is_bgm_playing() end
@@ -224,7 +224,11 @@ end
 -- System / Platform
 -- =========================================================================
 
-function Backend.set_resolution(w, h) return DevCore.set_resolution(w, h) end
+function Backend.set_resolution(w, h)
+    local be = get_backend()
+    if be then return be.platform("set_resolution", w, h)
+    else return DevCore.set_resolution(w, h) end
+end
 
 function Backend.get_resolution()
     local be = get_backend()

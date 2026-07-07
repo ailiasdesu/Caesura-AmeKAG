@@ -1,5 +1,4 @@
 ﻿#pragma once
-struct lua_State;
 #include "../audio/api/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
@@ -22,7 +21,6 @@ namespace Caesura {
 class SoLoudAudioEngine : public IAudioBackend {
 public:
     SoLoudAudioEngine() = default;
-    void setLuaState(lua_State* L) { m_luaState = L; }
     ~SoLoudAudioEngine() override;
 
     SoLoudAudioEngine(const SoLoudAudioEngine&) = delete;
@@ -81,7 +79,6 @@ private:
     std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file);
 
     SoLoud::Soloud m_soloud;
-    lua_State* m_luaState = nullptr;
     SoLoud::Bus    m_bgmBus;
     SoLoud::Bus    m_voiceBus;
     SoLoud::Bus    m_seBus;
@@ -110,7 +107,6 @@ private:
 };
 
 } // namespace Caesura
-
 
 
 

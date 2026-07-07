@@ -1,12 +1,12 @@
 #pragma once
 #include <cstdint>
 #include <string>
-#include <bgfx/bgfx.h>
+#include "RenderTypes.h"
 
 namespace Caesura {
 
 // -- View ID constants -----------------------------------------------------
-// Render order enforced via bgfx::setViewOrder in IRenderDevice::init()
+// Render order enforced by IRenderDevice::init()
 // VIEW_RTT (0) renders first   VIEW_MAIN (1) composites second   VIEW_DEBUG (2) last
 constexpr uint16_t VIEW_RTT   = 0;  // Offscreen render-to-texture canvas
 constexpr uint16_t VIEW_MAIN  = 1;  // Primary compositing pipeline (KAG UI)
@@ -22,6 +22,14 @@ struct ViewportHandle {
     bool operator!=(const ViewportHandle& o) const { return id != o.id; }
 };
 
+struct RenderRuntimeInfo {
+    std::string backendName;
+    int width = 0;
+    int height = 0;
+    int viewCount = 0;
+    bool shaderReady = false;
+};
+
 // -- Abstract Render Device ------------------------------------------------
 
 class IRenderDevice {
@@ -30,12 +38,13 @@ public:
 
     // Lifecycle
     virtual bool init(void* nativeWindowHandle, int width, int height) = 0;
+    virtual void beginShutdown() {}
 
-    // -- IMPORTANT: shutdown() internally calls flushAllRTT() then bgfx::shutdown() --
+    // -- IMPORTANT: shutdown() internally calls flushAllRTT() then renderer shutdown --
     // The teardown contract is:
     //   1. flushAllRTT()   release all GPU-side framebuffers and textures
     //      while the GPU context is still alive
-    //   2. bgfx::shutdown()   destroy GPU context
+    //   2. renderer shutdown   destroy GPU context
     // Callers must ensure Lua VM is already dead before calling this.
     virtual void shutdown() = 0;
 
@@ -47,6 +56,7 @@ public:
     virtual void beginFrame() = 0;
     virtual void endFrame() = 0;
     virtual void commit_frame() = 0;
+    virtual void advanceFrame() = 0;
 
     // View management
     virtual void setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
@@ -63,8 +73,8 @@ public:
     virtual void blitViewport(ViewportHandle handle, uint16_t targetView,
                               float x, float y, float w, float h) = 0;
 
-    // Get the bgfx texture from a viewport handle (rt->tex mapping for submit_batch)
-    virtual bgfx::TextureHandle getViewportTexture(ViewportHandle handle) = 0;
+    // Get an opaque texture handle from a viewport handle.
+    virtual RenderTextureHandle getViewportTexture(ViewportHandle handle) = 0;
 
     // Resolution query
     virtual int getBackbufferWidth() const = 0;
@@ -109,6 +119,11 @@ public:
 
     // Debug marker
     virtual void setDebugName(uint16_t viewId, const std::string& name) = 0;
+    virtual void drawDebugOverlay(const std::string& title) = 0;
+    virtual bool requestScreenshot(const std::string& path) = 0;
+    virtual bool recoverDevice(void* nativeWindowHandle, int width, int height) = 0;
+    virtual void flagDeviceLost() {}
+    virtual bool consumeDeviceLost() { return false; }
 
     // -- Text rendering (bitmap font via embedded atlas) --------------
     virtual void renderText(uint16_t viewId, const std::string& text,
@@ -122,20 +137,31 @@ public:
     virtual float textLineHeight() const = 0;
 
     // -- Blend / Transition / VFX submission (P1: abstract interface methods) --
-    virtual void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
-                             bgfx::TextureHandle blendTex, int mode,
+    virtual void submitBlend(uint16_t viewId, RenderTextureHandle baseTex,
+                             RenderTextureHandle blendTex, int mode,
                              float baseAlpha, float blendAlpha, float globalAlpha) = 0;
-    virtual void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
-                                  bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex,
+    virtual void submitTransition(uint16_t viewId, RenderTextureHandle fromTex,
+                                  RenderTextureHandle toTex, RenderTextureHandle ruleTex,
                                   int method, float progress) = 0;
-    virtual void submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
+    virtual void submitVFX(uint16_t viewId, RenderTextureHandle srcTex,
                            int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB,
                            float blurRadius, float quakeX, float quakeY) = 0;
     virtual void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
 
     // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
-    virtual bgfx::UniformHandle getDefaultSampler() const { return BGFX_INVALID_HANDLE; }
-    virtual bgfx::ProgramHandle getFallbackProgram() const { return BGFX_INVALID_HANDLE; }
+    virtual RenderUniformHandle getDefaultSampler() const { return {}; }
+    virtual RenderProgramHandle getFallbackProgram() const { return {}; }
+
+    // Backend identification --------------------------------------------
+    virtual const char* getBackendName() const = 0;
+    virtual RenderRuntimeInfo getRuntimeInfo() const {
+        RenderRuntimeInfo info;
+        info.backendName = getBackendName();
+        info.width = getBackbufferWidth();
+        info.height = getBackbufferHeight();
+        return info;
+    }
+    virtual bool setPreferredBackend(const char*) { return false; }
 };
 
 } // namespace Caesura

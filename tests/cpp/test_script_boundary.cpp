@@ -275,7 +275,7 @@ TEST_CASE("E3 GameState: survives coroutine context switch") {
     lua_pushstring(L, "cross_coro_value");
     lua_setfield(L, -2, "coro_key");
     lua_pop(L, 1);
-    // Create and resume a coroutine ¡ª GameState table should still be on the
+    // Create and resume a coroutine -- GameState table should still be on the
     // registry and accessible from any lua_State sharing the same Lua universe
     int r = luaL_dostring(L,
         "local co = coroutine.create(function() return 42 end); "
@@ -299,7 +299,7 @@ TEST_CASE("E3 Bindings: Render load_texture nil path does not crash") {
     lua_getfield(L, -1, "load_texture");
     lua_pushnil(L);
     int r = lua_pcall(L, 1, 1, 0);
-    CHECK((r == LUA_OK || r == LUA_ERRRUN));  // nil â†?error is acceptable
+    CHECK((r == LUA_OK || r == LUA_ERRRUN));  // nil ->error is acceptable
     lua_pop(L, 2);
     delete lm;
 }
@@ -308,7 +308,7 @@ TEST_CASE("E3 Bindings: Render destroy_texture invalid id does not crash") {
     auto* lm = initBindingLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
-    // This test requires TextureManager to be registered ¡ª skip if not available
+    // This test requires TextureManager to be registered -- skip if not available
     if (!BackendRegistry::instance().getTextureManager()) {
         delete lm;
         return;

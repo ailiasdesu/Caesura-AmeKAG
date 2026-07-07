@@ -344,7 +344,7 @@ local function apply()
 
 	print(string.format(
         "[config] Backends ready: render=%s audio=%s platform=%s",
-        config.render_backend, config.audio_backend, config.platform_backend
+        backend.render("name"), backend.audio("name"), backend.platform("name")
     ))
 
     -- Apply persisted window settings (post-init resize)

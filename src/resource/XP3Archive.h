@@ -7,7 +7,7 @@
 namespace Caesura {
 
 // ============================================================================
-// XP3Archive ¡ª Kirikiri XP3 archive packer / unpacker
+// XP3Archive -- Kirikiri XP3 archive packer / unpacker
 // ============================================================================
 // Format (simplified from krkrz):
 //   [Header ] "XP3\r\n" magic (5 bytes) + index_offset (8 bytes LE)

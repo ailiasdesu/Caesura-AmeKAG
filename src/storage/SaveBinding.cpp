@@ -297,6 +297,8 @@ static int lua_Get_save_dir(lua_State* L) {
 // ============================================================================
 
 void registerSaveBinding(lua_State* L) {
+    SaveManager::instance().init("saves/");
+
     // Get or create the global KAG table
     lua_getglobal(L, "KAG");
     bool hasKAG = lua_istable(L, -1);

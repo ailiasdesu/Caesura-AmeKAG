@@ -248,7 +248,7 @@ bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile
     fwrite(zlibIndex.data(), 1, zlibIndex.size(), out);
 
     // Seek back to write actual index offset
-    fseek(out, magicLen, SEEK_SET);
+    fseek(out, static_cast<long>(magicLen), SEEK_SET);
     fwrite(&indexOffset, 8, 1, out);
     fclose(out);
 

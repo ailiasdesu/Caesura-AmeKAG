@@ -1,6 +1,7 @@
 // test_save_roundtrip.cpp - save/load roundtrip integration tests
 #include "doctest.h"
 #include "storage/SaveManager.h"
+#include "TestPaths.h"
 #include <filesystem>
 #include <cstdio>
 
@@ -20,16 +21,10 @@ static void ensureCryptoRegistered() {
     }
 }
 
-static const char* TEST_DIR = "test_roundtrip/";
-
-static void cleanTestDir() {
-    std::filesystem::remove_all(TEST_DIR);
-}
-
 TEST_CASE("SaveManager: save -> load data integrity") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_integrity");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
     sm.clearEncryptionKey();
 
     // Save complex JSON
@@ -51,25 +46,21 @@ TEST_CASE("SaveManager: save -> load data integrity") {
     CHECK(loaded["flags"]["flag_b"] == false);
     CHECK(loaded["player_name"] == "Hero");
     CHECK(loaded["hp"] == 100);
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: nonexistent slot returns empty JSON") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_nonexistent");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     json data = sm.load(99);
     CHECK(data.empty());
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: listSaves returns correct slot list") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_list");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     // Empty initially
     auto saves = sm.listSaves();
@@ -93,14 +84,12 @@ TEST_CASE("SaveManager: listSaves returns correct slot list") {
     CHECK(found1);
     CHECK(found3);
     CHECK(found5);
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: deleteSlot removes save") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_delete");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     sm.save(1, {{"data", "test"}}, "test", 0);
     CHECK(sm.slotExists(1));
@@ -110,15 +99,13 @@ TEST_CASE("SaveManager: deleteSlot removes save") {
 
     // Deleting already-deleted slot returns false or no-op
     CHECK_FALSE(sm.deleteSlot(1));
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: encryption roundtrip preserves data") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_encryption");
     ensureCryptoRegistered();
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     // Set a test encryption key (32 bytes)
     uint8_t key[32] = {};
@@ -137,15 +124,13 @@ TEST_CASE("SaveManager: encryption roundtrip preserves data") {
     CHECK_FALSE(decrypted.empty());
     CHECK(decrypted["secret"] == "classified_info");
     CHECK(decrypted["value"] == 12345);
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: wrong key returns empty JSON") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_wrong_key");
     ensureCryptoRegistered();
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     // Save with key A
     uint8_t keyA[32] = {};
@@ -167,14 +152,12 @@ TEST_CASE("SaveManager: wrong key returns empty JSON") {
     json loaded2 = sm.load(1);
     CHECK_FALSE(loaded2.empty());
     CHECK(loaded2["data"] == "encrypted");
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: save without encryption when key is cleared") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_plain");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
     sm.clearEncryptionKey();
     CHECK_FALSE(sm.isEncryptionEnabled());
 
@@ -184,14 +167,12 @@ TEST_CASE("SaveManager: save without encryption when key is cleared") {
     json loaded = sm.load(1);
     CHECK_FALSE(loaded.empty());
     CHECK(loaded["plain"] == "text");
-
-    cleanTestDir();
 }
 
 TEST_CASE("SaveManager: multiple save/load cycles do not leak or corrupt") {
-    cleanTestDir();
+    TestPaths::ScopedTempDir dir("roundtrip_cycles");
     auto& sm = SaveManager::instance();
-    sm.init(TEST_DIR);
+    sm.init(dir.string());
 
     for (int i = 0; i < 10; ++i) {
         json data = {{"iteration", i}, {"message", "cycle_" + std::to_string(i)}};
@@ -206,6 +187,4 @@ TEST_CASE("SaveManager: multiple save/load cycles do not leak or corrupt") {
     CHECK(sm.slotExists(0));
     CHECK(sm.slotExists(1));
     CHECK(sm.slotExists(2));
-
-    cleanTestDir();
 }

@@ -24,6 +24,7 @@ public:
     TextureManager& operator=(const TextureManager&) = delete;
 
     bool initialize() override;
+    bool initialize(bool gpuAvailable);
     void shutdown() override;
     void setDevMode(bool dev) override;
 
@@ -67,6 +68,7 @@ private:
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
     bool m_devMode = true;
+    bool m_gpuAvailable = true;
     std::unordered_map<uint32_t, uint32_t> m_textureSizes;
     std::unordered_map<uint32_t, std::string> m_texturePaths;  // id -> file path for device-loss re-load
     std::list<uint32_t> m_textureLRU;

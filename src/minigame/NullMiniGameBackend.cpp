@@ -18,7 +18,7 @@ void NullMiniGameBackend::shutdown() {
 }
 
 uint32_t NullMiniGameBackend::loadScene(const std::string& path) {
-    printf("[MiniGame] Reserved: loadScene('%s') ¡ú handle %u (no-op)\n",
+    printf("[MiniGame] Reserved: loadScene('%s') -> handle %u (no-op)\n",
            path.c_str(), m_nextSceneHandle);
     return m_nextSceneHandle++;
 }

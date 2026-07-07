@@ -11,9 +11,9 @@ namespace Caesura::carc {
 
 /// Operating mode for CRL checking
 enum class CRLMode {
-    Offline,  ///< Use only locally cached CRL
-    Online,   ///< Fetch CRL from remote URL
-    Hybrid    ///< Try online first, fallback to local cache on timeout
+    Offline,  // Use only locally cached CRL
+    Online,   // Fetch CRL from remote URL
+    Hybrid    // Try online first, fallback to local cache on timeout
 };
 
 /// Certificate Revocation List Manager
@@ -24,7 +24,7 @@ public:
     CRLManager() = default;
     ~CRLManager() = default;
 
-    // ©¤©¤ Configuration ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // -- Configuration ---------------------------------------------------
 
     /// Set operating mode (default: Hybrid)
     void setMode(CRLMode mode) { m_mode = mode; }
@@ -40,7 +40,7 @@ public:
     /// Set the root Ed25519 public key for CRL signature verification
     void setRootPublicKey(const uint8_t key[32]);
 
-    // ©¤©¤ CRL Operations ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // -- CRL Operations --------------------------------------------------
 
     /// Verify whether a certificate (by fingerprint) is revoked.
     /// Returns true if the cert is NOT revoked (i.e., passes CRL check).
@@ -67,7 +67,7 @@ public:
     /// Clear the in-memory revoked set.
     void clear();
 
-    // ©¤©¤ Serialization ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // -- Serialization ---------------------------------------------------
 
     /// Parse CRL JSON and populate revoked set.
     /// Expected format: { "version":1, "timestamp":..., "revoked_fingerprints":["hex...",...], "signature":"hex..." }
@@ -77,7 +77,7 @@ public:
     /// Generate CRL JSON from current revoked set.
     std::string generateCRL() const;
 
-    // ©¤©¤ Utility ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // -- Utility ---------------------------------------------------------
 
     /// Compute SHA-256 fingerprint of binary public key data as hex string
     static std::string computeFingerprint(const uint8_t* data, size_t len);
@@ -90,10 +90,10 @@ private:
     uint8_t m_rootPublicKey[32] = {};
     bool m_hasRootKey = false;
 
-    std::unordered_set<std::string> m_revoked;  ///< SHA-256 hex fingerprints of revoked certs
+    std::unordered_set<std::string> m_revoked;  // SHA-256 hex fingerprints of revoked certs
 
-    uint64_t m_crlTimestamp = 0;  ///< Timestamp from last loaded/parsed CRL
-    uint32_t m_crlVersion = 0;    ///< Version from last loaded/parsed CRL
+    uint64_t m_crlTimestamp = 0;  // Timestamp from last loaded/parsed CRL
+    uint32_t m_crlVersion = 0;    // Version from last loaded/parsed CRL
 };
 
 } // namespace Caesura::carc

@@ -17,6 +17,29 @@
 
 namespace Caesura {
 
+namespace {
+
+RenderTextureHandle toRenderHandle(bgfx::TextureHandle handle) {
+    return bgfx::isValid(handle) ? RenderTextureHandle{handle.idx} : RenderTextureHandle{};
+}
+
+RenderProgramHandle toRenderHandle(bgfx::ProgramHandle handle) {
+    return bgfx::isValid(handle) ? RenderProgramHandle{handle.idx} : RenderProgramHandle{};
+}
+
+RenderUniformHandle toRenderHandle(bgfx::UniformHandle handle) {
+    return bgfx::isValid(handle) ? RenderUniformHandle{handle.idx} : RenderUniformHandle{};
+}
+
+bgfx::TextureHandle toBgfx(RenderTextureHandle handle) {
+    if (!handle.isValid()) return BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle result;
+    result.idx = handle.idx;
+    return result;
+}
+
+} // namespace
+
 BgfxRenderDevice::~BgfxRenderDevice() {
     shutdown();
 }
@@ -69,6 +92,8 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     if (!m_textRenderer->init(this)) { m_textRenderer.reset(); }
     return true;
 }
+
+void BgfxRenderDevice::beginShutdown() { setBgfxShuttingDown(true); }
 
 void BgfxRenderDevice::resize(int width, int height) { m_deviceCore->resize(width, height); }
 
@@ -128,6 +153,9 @@ void BgfxRenderDevice::endFrame() { m_deviceCore->endFrame(); }
 void BgfxRenderDevice::commit_frame() { m_deviceCore->commit_frame(); }
 
 
+void BgfxRenderDevice::advanceFrame() { m_deviceCore->commit_frame(); }
+
+
 
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 // View-management pass-throughs
@@ -158,7 +186,11 @@ void BgfxRenderDevice::blitViewport(ViewportHandle handle, uint16_t targetView,
     blitTexture(targetView, m_deviceCore->getViewportTexture(handle), x, y, w, h, 255);
 }
 
-bgfx::TextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { return m_deviceCore->getViewportTexture(h); }
+RenderTextureHandle BgfxRenderDevice::getViewportTexture(ViewportHandle h) { return toRenderHandle(m_deviceCore->getViewportTexture(h)); }
+
+RenderProgramHandle BgfxRenderDevice::getFallbackProgram() const { return toRenderHandle(m_shaders->getFallbackProgram()); }
+
+RenderUniformHandle BgfxRenderDevice::getDefaultSampler() const { return toRenderHandle(m_shaders->getDefaultSampler()); }
 
 
 
@@ -198,6 +230,69 @@ float BgfxRenderDevice::textLineHeight() const {
 
 void BgfxRenderDevice::setDebugName(uint16_t v, const std::string& n) { m_deviceCore->setDebugName(v, n.c_str()); }
 
+void BgfxRenderDevice::drawDebugOverlay(const std::string& title) {
+    const bgfx::Caps* caps = bgfx::getCaps();
+    if (!caps) return;
+
+    bgfx::dbgTextClear();
+    bgfx::dbgTextPrintf(0, 0, 0x0F, "%s", title.c_str());
+    bgfx::dbgTextPrintf(0, 1, 0x0F, "Renderer: %s  %dx%d",
+                        bgfx::getRendererName(caps->rendererType),
+                        getBackbufferWidth(), getBackbufferHeight());
+}
+
+bool BgfxRenderDevice::requestScreenshot(const std::string& path) {
+    if (path.empty()) return false;
+    bgfx::requestScreenShot(BGFX_INVALID_HANDLE, path.c_str());
+    return true;
+}
+
+bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int height) {
+    if (!m_deviceCore) return false;
+
+    if (m_textRenderer) {
+        m_textRenderer->shutdown();
+        m_textRenderer.reset();
+    }
+    m_draw.reset();
+    m_shaders.reset();
+    m_deviceCore->flushAllRTT();
+
+    setBgfxShuttingDown(true);
+    bgfx::shutdown();
+    setBgfxShuttingDown(false);
+
+    if (!m_deviceCore->init(nativeWindowHandle, width, height)) {
+        return false;
+    }
+
+    m_shaders = std::make_unique<BgfxShaderManager>();
+    m_shaders->initEmbeddedShaders();
+    m_drawState.shaders = m_shaders.get();
+    m_drawState.device  = m_deviceCore.get();
+    m_draw = std::make_unique<BgfxDraw>();
+    m_draw->init(&m_drawState);
+    m_textRenderer = std::make_unique<TextRenderer>();
+    if (!m_textRenderer->init(this)) {
+        m_textRenderer.reset();
+    }
+    return true;
+}
+
+void BgfxRenderDevice::flagDeviceLost() { BgfxDebugCallback::flagDeviceLost(); }
+
+bool BgfxRenderDevice::consumeDeviceLost() { return BgfxDebugCallback::isDeviceLost(); }
+
+RenderRuntimeInfo BgfxRenderDevice::getRuntimeInfo() const {
+    RenderRuntimeInfo info;
+    info.backendName = getBackendName();
+    info.width = getBackbufferWidth();
+    info.height = getBackbufferHeight();
+    info.viewCount = 3;
+    info.shaderReady = m_shaders && bgfx::isValid(m_shaders->getFallbackProgram());
+    return info;
+}
+
 
 
 // ===========================================================================
@@ -221,7 +316,7 @@ void BgfxRenderDevice::fillViewport(ViewportHandle h, uint8_t r, uint8_t g, uint
 // submitFullscreenQuad → BgfxDraw
 
 
-void BgfxRenderDevice::submitBlend(uint16_t v, bgfx::TextureHandle base, bgfx::TextureHandle blend, int mode, float ba, float bla, float ga) { m_draw->submitBlend(v,base,blend,mode,ba,bla,ga); }
+void BgfxRenderDevice::submitBlend(uint16_t v, RenderTextureHandle base, RenderTextureHandle blend, int mode, float ba, float bla, float ga) { m_draw->submitBlend(v,toBgfx(base),toBgfx(blend),mode,ba,bla,ga); }
 
 
 // ===========================================================================
@@ -231,14 +326,14 @@ void BgfxRenderDevice::submitBlend(uint16_t v, bgfx::TextureHandle base, bgfx::T
 // Spec [10.2.25]: @Beta 闂?Pre-bake rule images into a LUT texture atlas for batch
 // transition rendering. Currently each transition passes its rule texture
 // individually via texture slot 2. A pre-baked atlas would reduce draw calls.
-void BgfxRenderDevice::submitTransition(uint16_t v, bgfx::TextureHandle from, bgfx::TextureHandle to, bgfx::TextureHandle rule, int method, float progress) { m_draw->submitTransition(v,from,to,rule,method,progress); }
+void BgfxRenderDevice::submitTransition(uint16_t v, RenderTextureHandle from, RenderTextureHandle to, RenderTextureHandle rule, int method, float progress) { m_draw->submitTransition(v,toBgfx(from),toBgfx(to),toBgfx(rule),method,progress); }
 
 
 // ===========================================================================
 //  GPU Effect: VFX ?? fade / blur / quake post-processing
 // ===========================================================================
 
-void BgfxRenderDevice::submitVFX(uint16_t v, bgfx::TextureHandle src, int e, float fa, float fr, float fg, float fb, float br, float qx, float qy) { m_draw->submitVFX(v,src,e,fa,fr,fg,fb,br,qx,qy); }
+void BgfxRenderDevice::submitVFX(uint16_t v, RenderTextureHandle src, int e, float fa, float fr, float fg, float fb, float br, float qx, float qy) { m_draw->submitVFX(v,toBgfx(src),e,fa,fr,fg,fb,br,qx,qy); }
 
 
 // ===========================================================================

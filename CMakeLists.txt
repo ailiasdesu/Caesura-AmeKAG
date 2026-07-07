@@ -133,7 +133,12 @@ target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
 set(ENGINE_SOURCES
     src/main.cpp
     src/entry/Engine.cpp
+    src/entry/Engine_Assets.cpp
+    src/entry/Engine_Backends.cpp
     src/entry/Engine_Gpu.cpp
+    src/entry/Engine_LuaRegistry.cpp
+    src/entry/StartupScripts.cpp
+    src/entry/StartupValidation.cpp
     src/job/JobSystem.cpp
     src/input/InputRouter.cpp
     src/di/BackendRegistry.cpp
@@ -519,4 +524,5 @@ include(CPack)
 add_subdirectory(tools/carc_pack)
 
 # -- Unit Tests
+enable_testing()
 add_subdirectory(tests)

@@ -19,15 +19,17 @@ public:
     BgfxRenderDevice(const BgfxRenderDevice&) = delete;
     BgfxRenderDevice& operator=(const BgfxRenderDevice&) = delete;
 
-    static bool setPreferredBackend(const char* name) { return BgfxDeviceCore::setPreferredBackend(name); }
-    const char* getBackendName() const { return m_deviceCore ? m_deviceCore->getBackendName() : ""; }
+    bool setPreferredBackend(const char* name) override { return BgfxDeviceCore::setPreferredBackend(name); }
+    const char* getBackendName() const override { return m_deviceCore ? m_deviceCore->getBackendName() : "bgfx"; }
 
     bool init(void* nativeWindowHandle, int width, int height) override;
+    void beginShutdown() override;
     void resize(int width, int height) override;
     void shutdown() override;
     void beginFrame() override;
     void endFrame() override;
     void commit_frame() override;
+    void advanceFrame() override;
     void setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
                      uint16_t width, uint16_t height) override;
     void setViewClear(uint16_t viewId, uint16_t flags,
@@ -41,7 +43,7 @@ public:
                       float x, float y, float w, float h, uint8_t opacity);
     void blitViewport(ViewportHandle handle, uint16_t targetView,
                       float x, float y, float w, float h) override;
-    bgfx::TextureHandle getViewportTexture(ViewportHandle handle) override;
+    RenderTextureHandle getViewportTexture(ViewportHandle handle) override;
     int getBackbufferWidth() const override { return m_deviceCore ? m_deviceCore->getWidth() : m_width; }
     int getBackbufferHeight() const override { return m_deviceCore ? m_deviceCore->getHeight() : m_height; }
 
@@ -59,6 +61,12 @@ public:
                     const float matrix[6]) override;
 
     void setDebugName(uint16_t viewId, const std::string& name) override;
+    void drawDebugOverlay(const std::string& title) override;
+    bool requestScreenshot(const std::string& path) override;
+    bool recoverDevice(void* nativeWindowHandle, int width, int height) override;
+    void flagDeviceLost() override;
+    bool consumeDeviceLost() override;
+    RenderRuntimeInfo getRuntimeInfo() const override;
     void renderText(uint16_t viewId, const std::string& text,
                     float x, float y,
                     uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
@@ -70,8 +78,8 @@ public:
     float textLineHeight() const override;
     void flushAllRTT() override;
 
-    bgfx::ProgramHandle getFallbackProgram() const override { return m_shaders->getFallbackProgram(); }
-    bgfx::UniformHandle getDefaultSampler() const override { return m_shaders->getDefaultSampler(); }
+    RenderProgramHandle getFallbackProgram() const override;
+    RenderUniformHandle getDefaultSampler() const override;
 
     bgfx::ProgramHandle getBlendProgram()      const { return m_shaders->getBlendProgram(); }
     bgfx::ProgramHandle getTransitionProgram() const { return m_shaders->getTransitionProgram(); }
@@ -86,9 +94,9 @@ public:
     bgfx::UniformHandle getStretchParams()     const { return m_shaders->getStretchParams(); }
     bgfx::UniformHandle getAffineParams()      const { return m_shaders->getAffineParams(); }
 
-    void submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex, bgfx::TextureHandle blendTex, int mode, float baseAlpha, float blendAlpha, float globalAlpha) override;
-    void submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex, bgfx::TextureHandle toTex, bgfx::TextureHandle ruleTex, int method, float progress) override;
-    void submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex, int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB, float blurRadius, float quakeX, float quakeY) override;
+    void submitBlend(uint16_t viewId, RenderTextureHandle baseTex, RenderTextureHandle blendTex, int mode, float baseAlpha, float blendAlpha, float globalAlpha) override;
+    void submitTransition(uint16_t viewId, RenderTextureHandle fromTex, RenderTextureHandle toTex, RenderTextureHandle ruleTex, int method, float progress) override;
+    void submitVFX(uint16_t viewId, RenderTextureHandle srcTex, int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB, float blurRadius, float quakeX, float quakeY) override;
     void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
 
     // -- Batch protocol (spec [0.3])

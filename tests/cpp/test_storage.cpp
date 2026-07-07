@@ -2,21 +2,22 @@
 #include "doctest.h"
 #include "storage/api/ISaveManager.h"
 #include "storage/SaveManager.h"
+#include "TestPaths.h"
 #include <filesystem>
 #include <cstring>
+#include <memory>
 
 using namespace Caesura;
 
 namespace {
-    std::string g_tempDir;
+    std::unique_ptr<TestPaths::ScopedTempDir> g_tempDir;
 
     void setupTempDir() {
-        g_tempDir = std::filesystem::temp_directory_path().string() + "/caesura_test_storage/";
-        std::filesystem::create_directories(g_tempDir);
+        g_tempDir = std::make_unique<TestPaths::ScopedTempDir>("storage");
     }
 
     void cleanupTempDir() {
-        std::filesystem::remove_all(g_tempDir);
+        g_tempDir.reset();
     }
 }
 
@@ -28,7 +29,7 @@ TEST_CASE("Storage: SaveManager singleton is accessible") {
 TEST_CASE("Storage: SaveManager init with temp directory") {
     setupTempDir();
     auto& sm = SaveManager::instance();
-    sm.init(g_tempDir);
+    sm.init(g_tempDir->string());
     cleanupTempDir();
     CHECK(true);
 }
@@ -36,7 +37,7 @@ TEST_CASE("Storage: SaveManager init with temp directory") {
 TEST_CASE("Storage: SaveManager listSaves on empty directory") {
     setupTempDir();
     auto& sm = SaveManager::instance();
-    sm.init(g_tempDir);
+    sm.init(g_tempDir->string());
     auto saves = sm.listSaves();
     CHECK(saves.empty());
     cleanupTempDir();
@@ -70,7 +71,7 @@ TEST_CASE("Storage: ISaveManager interface upcast") {
 TEST_CASE("Storage: SaveManager default save provider exists after init") {
     setupTempDir();
     auto& sm = SaveManager::instance();
-    sm.init(g_tempDir);
+    sm.init(g_tempDir->string());
     // Save provider is nullptr by default (must be set via setSaveProvider)
     // init does not automatically create a LocalFileSaveProvider
     CHECK(sm.getSaveProvider() == nullptr);

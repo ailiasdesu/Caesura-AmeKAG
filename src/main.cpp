@@ -5,70 +5,21 @@ extern "C" {
 }
 #include "render/BgfxRenderDevice.h"
 #include "audio/SoLoudAudioEngine.h"
-#include "audio/NullAudioBackend.h"
 #include "platform/SDL3PlatformBackend.h"
 #include "minigame/BgfxMiniGameBackend.h"
-#include "minigame/NullMiniGameBackend.h"
-#include "live2d/NullAnimationBackend.h"
-#include "steam/NullSteamBackend.h"
-#include "steam/SteamBackend.h"
 #include "script/vm/LuaManager.h"
-#include "input/InputRouter.h"
-#include "render/GpuMonitor.h"
-#include "render/VideoPlayer.h"
-#include "di/BackendRegistry.h"
 #include "entry/Engine.h"
-#include "render/TextureManager.h"
-#include "script/vm/LuaManager.h"
 #include <cstdio>
 #include <string>
-#include <string>
-#include "archive/CARCReader.h"
 #include "rpc/RpcServer.h"
 #include <thread>
 #include <atomic>
 
-static std::string discoverScriptDir() {
-    if (FILE* f = fopen("scripts/kag/init.lua", "r")) { fclose(f); return "scripts/"; }
-    if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); return "../../scripts/"; }
-    if (FILE* f = fopen("../../../scripts/kag/init.lua", "r")) { fclose(f); return "../../../scripts/"; }
-    fprintf(stderr, "[main] Warning: Cannot find scripts directory.\n");
-    return "scripts/";
-}
-static void setupLuaPath(Caesura::Engine& engine, const std::string& scriptDir) {
-    lua_State* L = engine.lua().state();
-    if (!L) return;
-    lua_getglobal(L, "package");
-    lua_getfield(L, -1, "path");
-    std::string currentPath = lua_tostring(L, -1);
-    lua_pop(L, 1);
-    std::string newPath = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + currentPath;
-    lua_pushstring(L, newPath.c_str());
-    lua_setfield(L, -2, "path");
-    lua_pop(L, 1);
-}
-static void validateCarcOnStartup(Caesura::Engine& engine) {
-    lua_State* L = engine.lua().state();
-    if (!L) return;
-    lua_getglobal(L, "config");
-    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
-    lua_getfield(L, -1, "carc_verify_on_startup");
-    bool verifyCarc = lua_toboolean(L, -1) != 0;
-    lua_pop(L, 1);
-    if (!verifyCarc) { lua_pop(L, 1); return; }
-    lua_pop(L, 1);
-
-    printf("[main] CARC startup validation enabled.\n");
-    namespace carc_ns = Caesura::carc;
-    const char* dataFiles[] = {"data.carc", "game.carc", "patch.carc"};
-    for (const char* fname : dataFiles) {
-        carc_ns::CARCReader reader;
-        if (reader.open(fname)) {
-            bool ok = reader.verifySignature();
-            printf("[main] CARC %s: signature %s\n", fname, ok ? "OK" : "FAILED");
-            reader.close();
-        }
-    }
+namespace Caesura {
+std::string discoverStartupScriptDir();
+void configureStartupLuaPath(lua_State* L, const std::string& scriptDir);
+void applyDevModeToTextureManager(lua_State* L);
+void validateCarcOnStartup(lua_State* L);
 }
 int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);
@@ -101,17 +52,13 @@ int main(int argc, char* argv[]) {
     config.headless   = headless;
     config.editorMode = editorMode;
 
-    // Create all concrete implementations here (composition root)
-    config.platform  = new Caesura::SDL3PlatformBackend();
-    config.render    = new Caesura::BgfxRenderDevice();
-    config.audio     = new Caesura::SoLoudAudioEngine();
-    config.miniGame  = new Caesura::BgfxMiniGameBackend();
-    config.animation = new Caesura::NullAnimationBackend();
-    config.steam     = new Caesura::NullSteamBackend();
-    config.lua         = new Caesura::LuaManager();
-    config.inputRouter = new Caesura::InputRouter();
-    config.gpuMonitor  = new Caesura::GpuMonitor();
-    config.videoPlayer = new Caesura::VideoPlayer();
+    // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
+    if (!headless || editorMode) {
+        config.platform = new Caesura::SDL3PlatformBackend();
+        config.render   = new Caesura::BgfxRenderDevice();
+        config.audio    = new Caesura::SoLoudAudioEngine();
+        config.miniGame = new Caesura::BgfxMiniGameBackend();
+    }
 
     Caesura::Engine engine(config);
 
@@ -124,29 +71,9 @@ int main(int argc, char* argv[]) {
     if (editorMode) {
         fprintf(stderr, "[main] Editor mode: JSON-RPC on stdin/stdout (GPU enabled)\n");
 
-        std::string scriptDir = "scripts/";
-        if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
-            fclose(f);
-        } else {
-            scriptDir = "../../scripts/";
-            if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
-            else { scriptDir = "../../../scripts/"; }
-        }
-    // Set Lua package.path BEFORE loading any scripts
-    {
-        lua_State* L = engine.lua().state();
-            if (L) {
-                lua_getglobal(L, "package");
-                lua_getfield(L, -1, "path");
-                std::string cp = lua_tostring(L, -1);
-                lua_pop(L, 1);
-                std::string np = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + cp;
-                lua_pushstring(L, np.c_str());
-                lua_setfield(L, -2, "path");
-                lua_pop(L, 1);
-            }
-        }
-        engine.lua().loadScript("scripts/config.lua");
+        std::string scriptDir = Caesura::discoverStartupScriptDir();
+        Caesura::configureStartupLuaPath(engine.lua().state(), scriptDir);
+        engine.lua().loadScript((scriptDir + "config.lua").c_str());
         engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
         engine.lua().lockdownScriptEnv();
 
@@ -166,29 +93,9 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[main] Headless mode: JSON-RPC on stdin/stdout\n");
 
         // Load minimal config for Lua VM
-        std::string scriptDir = "scripts/";
-        if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
-            fclose(f);
-        } else {
-            scriptDir = "../../scripts/";
-            if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) { fclose(f); }
-            else { scriptDir = "../../../scripts/"; }
-        }
-        // Set Lua package.path BEFORE loading any scripts
-        {
-            lua_State* L = engine.lua().state();
-            if (L) {
-                lua_getglobal(L, "package");
-                lua_getfield(L, -1, "path");
-                std::string cp = lua_tostring(L, -1);
-                lua_pop(L, 1);
-                std::string np = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + scriptDir + "kag/?.lua;" + cp;
-                lua_pushstring(L, np.c_str());
-                lua_setfield(L, -2, "path");
-                lua_pop(L, 1);
-            }
-        }
-        engine.lua().loadScript("scripts/config.lua");
+        std::string scriptDir = Caesura::discoverStartupScriptDir();
+        Caesura::configureStartupLuaPath(engine.lua().state(), scriptDir);
+        engine.lua().loadScript((scriptDir + "config.lua").c_str());
         engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
         engine.lua().lockdownScriptEnv();
 
@@ -198,53 +105,15 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // Script directory discovery (3-level fallback)
-    std::string scriptDir = "scripts/";
-
-    if (FILE* f = fopen("scripts/kag/init.lua", "r")) {
-        fclose(f);
-    } else {
-        scriptDir = "../../scripts/";
-        if (FILE* f = fopen("../../scripts/kag/init.lua", "r")) {
-            fclose(f);
-        } else {
-            scriptDir = "../../../scripts/";
-            if (FILE* f = fopen("../../../scripts/kag/init.lua", "r")) {
-                fclose(f);
-            } else {
-                fprintf(stderr, "[main] Warning: Cannot find scripts directory.\n");
-                scriptDir = "scripts/";
-            }
-        }
-    }
-
-    // Add scripts dir to Lua package.path
+    std::string scriptDir = Caesura::discoverStartupScriptDir();
     lua_State* L = engine.lua().state();
-    if (L) {
-        lua_getglobal(L, "package");
-        lua_getfield(L, -1, "path");
-        std::string currentPath = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        std::string newPath = scriptDir + "?.lua;" + scriptDir + "?/init.lua;" + currentPath;
-        lua_pushstring(L, newPath.c_str());
-        lua_setfield(L, -2, "path");
-        lua_pop(L, 1);
-    }
+    Caesura::configureStartupLuaPath(L, scriptDir);
 
     // Load config first (backend selection happens here)
     engine.lua().loadScript((scriptDir + "config.lua").c_str());
 
     // [10.2.57] Apply dev mode to placeholder texture
-    if (L) {
-        lua_getglobal(L, "config");
-        if (lua_istable(L, -1)) {
-            lua_getfield(L, -1, "dev_mode");
-            bool devMode = lua_toboolean(L, -1) != 0;
-            lua_pop(L, 1);
-            Caesura::BackendRegistry::instance().getTextureManager()->setDevMode(devMode);
-        }
-        lua_pop(L, 1);
-    }
+    Caesura::applyDevModeToTextureManager(L);
 
     // Load KAG init (loads all Lua libraries)
     if (!engine.lua().loadScript((scriptDir + "kag/init.lua").c_str())) {
@@ -252,29 +121,7 @@ int main(int argc, char* argv[]) {
     }
 
     // [10.2.30] CARC startup validation
-    if (L) {
-        lua_getglobal(L, "config");
-        if (lua_istable(L, -1)) {
-            lua_getfield(L, -1, "carc_verify_on_startup");
-            bool verifyCarc = lua_toboolean(L, -1) != 0;
-            lua_pop(L, 1);
-            if (verifyCarc) {
-                printf("[main] CARC startup validation enabled.\n");
-                // Scan for .carc archives in current directory and verify
-                namespace carc_ns = Caesura::carc;
-                const char* dataFiles[] = {"data.carc", "game.carc", "patch.carc"};
-                for (const char* fname : dataFiles) {
-                    carc_ns::CARCReader reader;
-                    if (reader.open(fname)) {
-                        bool ok = reader.verifySignature();
-                        printf("[main] CARC %s: signature %s\n", fname, ok ? "OK" : "FAILED");
-                        reader.close();
-                    }
-                }
-            }
-        }
-        lua_pop(L, 1);
-    }
+    Caesura::validateCarcOnStartup(L);
 
     // Load main game logic (entry point from config) [10.2.30]
     std::string entryScript = "game_logic.lua";
@@ -290,7 +137,7 @@ int main(int argc, char* argv[]) {
         lua_pop(L, 1);
     }
 
-if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
+    if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
         fprintf(stderr, "Warning: Failed to load game_logic.lua.\n");
         return 1;
     }
@@ -319,4 +166,3 @@ if (!engine.lua().loadScript((scriptDir + entryScript).c_str())) {
     printf("Caesura (AmeKAG) shut down cleanly.\n");
     return 0;
 }
-

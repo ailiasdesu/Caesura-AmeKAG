@@ -9,6 +9,7 @@ set(TEST_SOURCES
     cpp/test_core.cpp
     cpp/test_carc.cpp
     cpp/test_system.cpp
+    cpp/test_source_encoding.cpp
     cpp/test_resource.cpp
     cpp/test_debug.cpp
     cpp/test_hotreload_integration.cpp
@@ -46,6 +47,7 @@ set(TEST_SOURCES
     cpp/test_kag_binding.cpp
     cpp/test_kag_integration.cpp
     cpp/test_kag_execution.cpp
+    cpp/test_galgame_startup.cpp
     cpp/test_sandbox_quota.cpp
     cpp/test_particle_system.cpp
     cpp/test_engine_lifecycle.cpp
@@ -63,7 +65,11 @@ set(TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/src/entry/ErrorUI.cpp
     ${CMAKE_SOURCE_DIR}/src/input/InputRouter.cpp
     ${CMAKE_SOURCE_DIR}/src/entry/Engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/Engine_Assets.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/Engine_Backends.cpp
     ${CMAKE_SOURCE_DIR}/src/entry/Engine_Gpu.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/Engine_LuaRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/entry/StartupScripts.cpp
     ${CMAKE_SOURCE_DIR}/src/rpc/EditorServer.cpp
     ${CMAKE_SOURCE_DIR}/src/job/JobSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/SDL3PlatformBackend.cpp
@@ -182,18 +188,106 @@ if(MSVC)
 endif()
 
 enable_testing()
-add_test(NAME CaesuraUnitTests COMMAND CaesuraTests)
+
+file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
+    CONTENT "
+file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/scripts]])
+file(COPY [[${CMAKE_SOURCE_DIR}/tests/audio/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/tests/audio]])
+file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/demo]])
+file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/scripts]])
+"
+)
+
+add_test(
+    NAME CaesuraSyncTestAssets
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
+)
+set_tests_properties(CaesuraSyncTestAssets PROPERTIES
+    FIXTURES_SETUP caesura-test-assets
+    LABELS "setup;assets"
+)
+
+function(add_caesura_doctest name)
+    set(options RUN_SERIAL)
+    set(oneValueArgs RESOURCE_LOCK)
+    set(multiValueArgs LABELS ARGS)
+    cmake_parse_arguments(CAESURA_TEST "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    add_test(NAME ${name} COMMAND $<TARGET_FILE:CaesuraTests> ${CAESURA_TEST_ARGS})
+    set_tests_properties(${name} PROPERTIES
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraTests>"
+        FIXTURES_REQUIRED caesura-test-assets
+    )
+    if(CAESURA_TEST_LABELS)
+        set_tests_properties(${name} PROPERTIES LABELS "${CAESURA_TEST_LABELS}")
+    endif()
+    if(CAESURA_TEST_RUN_SERIAL)
+        set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
+    endif()
+    if(CAESURA_TEST_RESOURCE_LOCK)
+        set_tests_properties(${name} PROPERTIES RESOURCE_LOCK "${CAESURA_TEST_RESOURCE_LOCK}")
+    endif()
+endfunction()
+
+add_caesura_doctest(CaesuraUnitTests
+    LABELS full regression
+    RUN_SERIAL
+    RESOURCE_LOCK global-singletons
+)
+add_caesura_doctest(CaesuraEntryTests
+    LABELS entry lifecycle
+    RESOURCE_LOCK global-singletons
+    ARGS --source-file=*test_entry.cpp,*test_engine_lifecycle.cpp,*test_galgame_startup.cpp
+)
+add_caesura_doctest(CaesuraStorageTests
+    LABELS storage filesystem
+    RESOURCE_LOCK save-files
+    ARGS --source-file=*test_storage.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp
+)
+add_caesura_doctest(CaesuraScriptTests
+    LABELS script lua
+    RESOURCE_LOCK global-singletons
+    ARGS --source-file=*test_lua_manager.cpp,*test_script_bindings.cpp,*test_script_boundary.cpp,*test_kag_binding.cpp,*test_kag_integration.cpp,*test_kag_execution.cpp,*test_game_state.cpp
+)
+add_caesura_doctest(CaesuraRenderResourceTests
+    LABELS render resource
+    RESOURCE_LOCK global-singletons
+    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_image_decoder.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
+)
+add_caesura_doctest(CaesuraAudioTests
+    LABELS audio
+    RUN_SERIAL
+    RESOURCE_LOCK audio-device
+    ARGS --source-file=*test_audio.cpp,*test_audio_integration.cpp
+)
+
+add_test(
+    NAME CaesuraHeadlessCliSmoke
+    COMMAND $<TARGET_FILE:CaesuraAmeKAG> --headless
+)
+set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
+    LABELS "entry;headless;cli"
+    RUN_SERIAL TRUE
+    RESOURCE_LOCK "global-singletons"
+    FIXTURES_REQUIRED caesura-test-assets
+    PASS_REGULAR_EXPRESSION "Backends ready: render=NullRender audio=NullAudio platform=NullPlatform"
+    FAIL_REGULAR_EXPRESSION "Backends ready: render=bgfx audio=soloud platform=sdl3|\\[SDL3\\] Platform backend initialized|\\[BgfxRenderDevice\\] nwh=|\\[Audio\\] SoLoud initialized"
+    WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
+)
 
 # Copy scripts to test output directory so sandbox.lua et al are found
 add_custom_command(TARGET CaesuraTests POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/scripts"
     "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
-    COMMENT "Copying scripts to test output directory..."
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/tests/audio"
     "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
-    COMMENT "Copying test audio files..."
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/demo"
+    "$<TARGET_FILE_DIR:CaesuraTests>/demo"
+    COMMENT "Copying test scripts and audio files..."
 )
 
 # Copy FFmpeg DLLs to test output so VideoPlayer can load them

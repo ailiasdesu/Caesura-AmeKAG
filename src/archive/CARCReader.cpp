@@ -266,9 +266,9 @@ std::string CARCReader::pathHashToHex(const uint8_t hash[PATH_HASH_SIZE])
     return oss.str();
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// ==========================================================================
 //  Phase 9: Chain Trust (spec [10.2.63])
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// ==========================================================================
 
 // ==========================================================================
 //  setRootPublicKey
@@ -390,7 +390,7 @@ bool CARCReader::verifyChainTrust(const uint8_t* childPublicKey,
         }
         payload += "\n}";
 
-        // Decode signature hex ¡ú binary
+        // Decode signature hex -> binary
         const std::string& sigHex = cert.signature;
         if (sigHex.size() != 128) return false; // Ed25519 sig = 64 bytes = 128 hex chars
 

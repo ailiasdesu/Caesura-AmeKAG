@@ -3,7 +3,6 @@
 // keeping the composition root free of render-level implementation details.
 #include "../render/GpuMonitor.h"
 #include "../render/NullGpuMonitor.h"
-#include "render/api/IGpuMonitor.h"
 #include <memory>
 
 namespace Caesura {

@@ -31,10 +31,19 @@ TextureManager& TextureManager::instance() {
 // ---------------------------------------------------------------------------
 
 bool TextureManager::initialize() {
+    return initialize(true);
+}
+
+bool TextureManager::initialize(bool gpuAvailable) {
     if (m_initialized) return true;
     m_nextId = 1;
     m_cache.clear();
-    buildCheckerboardTexture();
+    m_gpuAvailable = gpuAvailable;
+    if (m_gpuAvailable) {
+        buildCheckerboardTexture();
+    } else {
+        printf("[TextureManager] Initialized without GPU placeholder.\n");
+    }
     BackendRegistry::instance().registerDeviceLostListener(this);
     m_initialized = true;
     printf("[TextureManager] Initialized.\n");
@@ -54,6 +63,7 @@ void TextureManager::shutdown() {
     m_textureSizes.clear();
     m_textureLRU.clear();
     m_totalBytes = 0;
+    m_gpuAvailable = true;
 
     if (bgfx::isValid(m_placeholderTex)) {
         bgfx::destroy(m_placeholderTex);
@@ -71,6 +81,11 @@ void TextureManager::shutdown() {
 void TextureManager::setDevMode(bool dev) {
     if (m_devMode == dev) return;
     m_devMode = dev;
+    if (!m_gpuAvailable) {
+        printf("[TextureManager] Placeholder mode deferred until GPU is available: %s\n",
+               dev ? "checkerboard (dev)" : "transparent (release)");
+        return;
+    }
     if (bgfx::isValid(m_placeholderTex)) {
         bgfx::destroy(m_placeholderTex);
         m_placeholderTex = BGFX_INVALID_HANDLE;
@@ -85,6 +100,8 @@ void TextureManager::setDevMode(bool dev) {
 // ---------------------------------------------------------------------------
 
 bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
+    if (!m_gpuAvailable)
+        return BGFX_INVALID_HANDLE;
     if (bgfx::isValid(m_placeholderTex))
         return m_placeholderTex;
 
@@ -116,6 +133,8 @@ bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
 }
 
 uint32_t TextureManager::getPlaceholderTexture() {
+    if (!m_gpuAvailable)
+        return 0;
     if (!bgfx::isValid(m_placeholderTex))
         buildCheckerboardTexture();
     return m_placeholderTex.idx;
@@ -226,6 +245,10 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
         fprintf(stderr, "[TextureManager] Not initialized.\n");
         return 0;
     }
+    if (!m_gpuAvailable) {
+        fprintf(stderr, "[TextureManager] GPU unavailable; cannot load texture: %s\n", path.c_str());
+        return 0;
+    }
 
     // Reject path traversal
     if (path.find("..") != std::string::npos) {
@@ -259,6 +282,10 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
 uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
                                              const std::string& cacheKey) {
     CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_gpuAvailable) {
+        fprintf(stderr, "[TextureManager] GPU unavailable; cannot create RGBA texture.\n");
+        return 0;
+    }
     if (!m_initialized || !rgba || w == 0 || h == 0) {
         fprintf(stderr, "[TextureManager] Invalid RGBA input.\n");
         return 0;
@@ -291,6 +318,10 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
         fprintf(stderr, "[TextureManager] Not initialized.\n");
         return 0;
     }
+    if (!m_gpuAvailable) {
+        fprintf(stderr, "[TextureManager] GPU unavailable; cannot load texture from memory.\n");
+        return 0;
+    }
 
     bgfx::TextureHandle tex = loadFromMemory(data, size);
     if (!bgfx::isValid(tex)) {
@@ -317,6 +348,10 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
 
 uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
                                              uint8_t b, uint8_t a) {
+    if (!m_gpuAvailable) {
+        fprintf(stderr, "[TextureManager] GPU unavailable; cannot create solid texture.\n");
+        return 0;
+    }
     uint32_t pixel = (uint32_t(a) << 24) | (uint32_t(b) << 16) |
                      (uint32_t(g) << 8) | uint32_t(r);
     const bgfx::Memory* mem = bgfx::alloc(4);
@@ -401,6 +436,7 @@ void TextureManager::getTextureSizeById(uint32_t id,
 // ---------------------------------------------------------------------------
 
 void TextureManager::onDeviceLost() {
+    m_gpuAvailable = false;
     size_t texCount = m_cache.size();
     for (auto& [id, handle] : m_cache) {
         if (bgfx::isValid(handle)) {
@@ -419,6 +455,7 @@ void TextureManager::onDeviceLost() {
 }
 
 void TextureManager::onDeviceRestored() {
+    m_gpuAvailable = true;
     buildCheckerboardTexture();
     printf("[TextureManager] Device restored — placeholder rebuilt. %zu textures pending reload.\n", m_texturePaths.size());
 }
