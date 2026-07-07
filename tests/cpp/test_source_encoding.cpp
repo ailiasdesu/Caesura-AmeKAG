@@ -239,6 +239,16 @@ TEST_CASE("Install layout includes configured demo entry script") {
     CHECK(cmake.find("install(DIRECTORY demo/ DESTINATION demo)") != std::string::npos);
 }
 
+TEST_CASE("Install layout includes FFmpeg runtime DLLs when FFmpeg is bundled") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string cmake = readFile(repoRoot / "CMakeLists.txt");
+    CHECK(cmake.find("file(COPY ${FFMPEG_BIN_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/${CFG}") != std::string::npos);
+    CHECK(cmake.find("install(DIRECTORY ${FFMPEG_BIN_DIR}/ DESTINATION .") != std::string::npos);
+    CHECK(cmake.find("FILES_MATCHING PATTERN \"*.dll\"") != std::string::npos);
+}
+
 TEST_CASE("Engine core avoids unused concrete adapter dependencies") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());
