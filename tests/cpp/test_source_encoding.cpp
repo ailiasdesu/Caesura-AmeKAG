@@ -227,6 +227,18 @@ TEST_CASE("Main entry point delegates CARC startup validation") {
     CHECK(helper.find("verifySignature()") != std::string::npos);
 }
 
+TEST_CASE("Install layout includes configured demo entry script") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string config = readFile(repoRoot / "scripts" / "config.lua");
+    CHECK(config.find("config.entry_script = \"../demo/entry.lua\"") != std::string::npos);
+
+    const std::string cmake = readFile(repoRoot / "CMakeLists.txt");
+    CHECK(cmake.find("install(DIRECTORY scripts/ DESTINATION scripts)") != std::string::npos);
+    CHECK(cmake.find("install(DIRECTORY demo/ DESTINATION demo)") != std::string::npos);
+}
+
 TEST_CASE("Engine core avoids unused concrete adapter dependencies") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());

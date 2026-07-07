@@ -504,6 +504,7 @@ message(STATUS "Caesura (AmeKAG) configured successfully.")
 # -- CPack Release packaging ------------------------------------------------
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
 install(DIRECTORY scripts/ DESTINATION scripts)
+install(DIRECTORY demo/ DESTINATION demo)
 install(DIRECTORY assets/ DESTINATION assets)
 install(DIRECTORY shaders/ DESTINATION shaders OPTIONAL)
 install(FILES README.md LICENSE DESTINATION . OPTIONAL)
