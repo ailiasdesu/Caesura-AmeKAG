@@ -3,13 +3,32 @@
 --  集成测试: KAG tokenizer, 存档/读档, CARC header 验证
 -- =============================================================================
 
+package.path = "scripts/?.lua;scripts/kag/?.lua;scripts/kag/commands/?.lua;" .. package.path
+
 local has_lpeg, lpeg = pcall(require, "lpeg")
+
+-- [FIX] Resolve project root for standalone lua.exe (not run from engine)
+-- When run as: lua.exe tests/scripts/test_integration.lua
+-- Find project root 2 levels up from test script location
+local testScriptPath = (arg and arg[0]) or debug.getinfo(1, "S").source:sub(2)
+local rootFromTest = testScriptPath:match("(.*)[/\\]tests[/\\]scripts[/\\]")
+if rootFromTest then
+    -- Add paths relative to project root
+    package.path = rootFromTest .. "scripts/?.lua;" ..
+                   rootFromTest .. "scripts/?/init.lua;" ..
+                   rootFromTest .. "scripts/kag/?.lua;" ..
+                   rootFromTest .. "scripts/kag/commands/?.lua;" ..
+                   package.path
+end
 
 local testDir = arg and arg[0] and arg[0]:match("(.*[/\\])") or ""
 if testDir == "" then testDir = "tests/" end
 
 local function findScript(path)
-    local candidates = { "scripts/" .. path, "../scripts/" .. path }
+    local candidates = { path, "scripts/" .. path, "../scripts/" .. path }
+    if rootFromTest then
+        candidates[#candidates + 1] = rootFromTest .. "scripts/" .. path
+    end
     for _, cand in ipairs(candidates) do
         local f = io.open(cand, "r")
         if f then f:close(); return cand end
@@ -150,7 +169,7 @@ end)
 
 test("Parse full integration_test.ks file", function()
     local tok = require("tokenizer")
-    local ksPath = testDir .. "scripts/integration_test.ks"
+    local ksPath = rootFromTest and rootFromTest .. "tests/scripts/integration_test.ks" or "tests/scripts/integration_test.ks"
     local f = io.open(ksPath, "r")
     assert_not_nil(f, "Cannot open " .. ksPath)
     local content = f:read("*a")
@@ -351,12 +370,12 @@ end)
 
 test("All key source files exist", function()
     local files = {
-        "src/Main.cpp",
-        "src/Carc/CARCFormat.h",
-        "src/Carc/CARCReader.h",
-        "src/Carc/CARCReader.cpp",
-        "src/Carc/CARCWriter.h",
-        "src/Carc/CARCWriter.cpp",
+        "src/main.cpp",
+        "src/archive/CARCFormat.h",
+        "src/archive/CARCReader.h",
+        "src/archive/CARCReader.cpp",
+        "src/archive/CARCWriter.h",
+        "src/archive/CARCWriter.cpp",
         "tools/carc_pack/main.cpp",
     }
     for _, path in ipairs(files) do
