@@ -20,7 +20,14 @@ local state = {
     items = {},         -- { {label, key, type, value, min, max, step, action}, ... }
     bgLayer = nil,
     cursorLayer = nil,
+    panelLayer = nil,   -- centered panel background
+    borderLayer = nil,  -- panel border
 }
+
+-- Helper: safe solid texture
+local function solid(r, g, b, a)
+    return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
 
 -- ===========================================================================
 -- Settings defaults
@@ -74,22 +81,53 @@ function Settings.show(ctx)
     -- Switch input focus to GAME to prevent KAG text advancement
     backend.set_input_focus("GAME")
 
-    -- Create dimmed background layer
     local w, h = backend.get_resolution()
-    local bg = layers.ensure(ctx, "_settings_bg", 95)
+    w = w or 1280
+    h = h or 720
+
+    -- Panel dimensions (centered, with border)
+    local panelW = 680
+    local panelH = 420
+    local panelX = (w - panelW) / 2
+    local panelY = (h - panelH) / 2
+
+    -- Layer 1: Dark semi-transparent full-screen background
+    local bg = layers.ensure(ctx, "_settings_bg", 94)
     bg.visible = true
     bg.x, bg.y = 0, 0
-    bg.w, bg.h = w or 1280, h or 720
-    bg.texture = backend.create_solid_texture(0, 0, 0, 180)  -- semi-transparent dark
+    bg.w, bg.h = w, h
+    bg.texture = solid(0, 0, 0, 160)
     state.bgLayer = bg
 
-    -- Create cursor highlight layer
-    local cursor = layers.ensure(ctx, "_settings_cursor", 96)
+    -- Layer 2: Panel border (2px visible border around the panel)
+    local border = layers.ensure(ctx, "_settings_border", 95)
+    border.visible = true
+    border.x, border.y = panelX - 2, panelY - 2
+    border.w, border.h = panelW + 4, panelH + 4
+    border.texture = solid(80, 80, 180, 255)
+    state.borderLayer = border
+
+    -- Layer 3: Panel background (slightly dark blue-ish panel)
+    local panel = layers.ensure(ctx, "_settings_panel", 96)
+    panel.visible = true
+    panel.x, panel.y = panelX, panelY
+    panel.w, panel.h = panelW, panelH
+    panel.texture = solid(15, 15, 40, 235)
+    state.panelLayer = panel
+
+    -- Layer 4: Cursor highlight layer (colored rectangle behind selected row)
+    local cursor = layers.ensure(ctx, "_settings_cursor", 97)
     cursor.visible = true
-    cursor.texture = backend.create_solid_texture(255, 255, 255, 60)
-    cursor.w = 600
-    cursor.h = 30
+    cursor.texture = solid(60, 100, 200, 100)
+    cursor.w = panelW - 80
+    cursor.h = 28
     state.cursorLayer = cursor
+
+    -- Store panel geometry for rendering
+    state.panelX = panelX
+    state.panelY = panelY
+    state.panelW = panelW
+    state.panelH = panelH
 
     Settings._render(ctx)
     print("[Settings] Menu opened. Up/Down to navigate, Left/Right to adjust, Enter/Click to confirm.")
@@ -101,7 +139,7 @@ end
 function Settings.hide(ctx)
     state.active = false
     ctx._settingsActive = false
-    for _, name in ipairs({"_settings_bg", "_settings_cursor"}) do
+    for _, name in ipairs({"_settings_bg", "_settings_border", "_settings_panel", "_settings_cursor"}) do
         local layer = layers.find(name)
         if layer then
             layer.visible = false
@@ -114,7 +152,18 @@ function Settings.hide(ctx)
     end
     backend.set_input_focus("KAG")
     state.items = {}
+    state.panelX = nil; state.panelY = nil; state.panelW = nil; state.panelH = nil
     print("[Settings] Menu closed.")
+end
+
+-- ===========================================================================
+-- Settings._renderVolumeBar(value, max) -> string
+-- ===========================================================================
+function Settings._renderVolumeBar(value, max)
+    local blocks = math.floor(value / (max / 10))  -- 10 segments
+    local filled = string.rep("|", blocks)
+    local empty = string.rep(" ", 10 - blocks)
+    return "[" .. filled .. empty .. "] " .. tostring(value) .. "%"
 end
 
 -- ===========================================================================
@@ -123,32 +172,61 @@ end
 function Settings._render(ctx)
     if not state.active then return end
     local w, h = backend.get_resolution()
-    local startY = 120
-    local lineH = 32
+    w = w or 1280
+    h = h or 720
+    local px = state.panelX or 340
+    local py = state.panelY or 120
+    local pw = state.panelW or 600
+    local ph = state.panelH or 360
 
-    -- Title
-    backend.render_text("=== " .. i18n.t("settings") .. " ===", 400, startY - 40)
+    local startY = py + 50
+    local lineH = 30
+
+    -- Title: "Settings / 設置" at top of panel
+    local titleStr = "Settings / 設置"
+    local titleX = px + (pw - #titleStr * 9) / 2  -- rough centering
+    backend.render_text(titleStr, titleX, py + 12, 255, 200, 60, 255)
+
+    -- Title separator line
+    backend.render_text(string.rep("-", math.floor(pw / 9)), px + 20, py + 28, 80, 80, 140, 200)
 
     -- Menu items
     for i, item in ipairs(state.items) do
-        local prefix = (i == state.cursor) and " > " or "   "
+        local lineY = startY + (i - 1) * lineH
+        local isSelected = (i == state.cursor)
+        local prefix = isSelected and " > " or "   "
+
+        -- Build value display string
         local valStr = ""
         if item.type == "slider" then
-            valStr = " [" .. string.rep("#", math.floor(item.value / 10)) .. string.rep("-", 10 - math.floor(item.value / 10)) .. "] " .. tostring(item.value)
+            valStr = " " .. Settings._renderVolumeBar(item.value, item.max or 100)
         elseif item.type == "toggle" then
             valStr = item.value and " [ON]" or " [OFF]"
         elseif item.type == "cycle" then
             valStr = " <" .. tostring(item.value) .. ">"
         end
+
         local line = prefix .. item.label .. valStr
-        backend.render_text(line, 300, startY + (i - 1) * lineH)
+        local r, g, b = 220, 220, 255  -- default text color
+        if isSelected then
+            r, g, b = 255, 255, 150  -- yellow for selected
+        elseif item.type == "action" then
+            r, g, b = 180, 180, 200  -- dim for action items
+        elseif item.type == "toggle" and item.value then
+            r, g, b = 100, 255, 100  -- green for ON toggles
+        end
+        backend.render_text(line, px + 30, lineY, r, g, b, 255)
     end
 
-    -- Cursor position indicator
+    -- Cursor highlight position (position behind the selected row)
     if state.cursorLayer then
-        state.cursorLayer.x = 290
+        state.cursorLayer.x = px + 26
         state.cursorLayer.y = startY + (state.cursor - 1) * lineH - 2
     end
+
+    -- Footer inside panel
+    local footerY = py + ph - 24
+    backend.render_text("Arrow Keys: Navigate | Left/Right: Adjust | Enter: Confirm | ESC: Back", px + 20, footerY, 150, 150, 200, 255)
 end
 
 -- ===========================================================================
@@ -250,10 +328,11 @@ end
 -- ===========================================================================
 function Settings.onClick(ctx, x, y)
     if not state.active then return false end
-    -- Map y coordinate to menu item
-    local w, h = backend.get_resolution()
-    local startY = 120
-    local lineH = 32
+    -- Map y coordinate to menu item within the panel
+    local px = state.panelX or 340
+    local py = state.panelY or 120
+    local startY = py + 50
+    local lineH = 30
     local clickedIdx = math.floor((y - startY) / lineH) + 1
     if clickedIdx >= 1 and clickedIdx <= #state.items then
         state.cursor = clickedIdx

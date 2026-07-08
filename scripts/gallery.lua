@@ -12,6 +12,14 @@ local fileutil = require("fileutil")
 -- Cache of scanned CG entries
 local cgCache = nil
 
+-- Helper: safe texture creation
+local function solid(r, g, b, a)
+    return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
+
+-- Help textures owned by this module (cleaned on hide)
+local ownedTextures = {}
+
 -- ===========================================================================
 -- Gallery.scan(ctx) -> { {id, path, name}, ... }
 -- Scans assets/cg/ for .png/.dds/.jpg files. Cross-platform (W7).
@@ -72,6 +80,18 @@ function Gallery.isUnlocked(ctx, id)
 end
 
 -- ===========================================================================
+-- Gallery._cleanupTextures() — destroy all module-owned textures
+-- ===========================================================================
+function Gallery._cleanupTextures()
+    for _, texId in pairs(ownedTextures) do
+        if texId and texId > 0 then
+            pcall(function() backend.destroy_texture(texId) end)
+        end
+    end
+    ownedTextures = {}
+end
+
+-- ===========================================================================
 -- Gallery.show(ctx) — interactive gallery viewer
 -- ===========================================================================
 function Gallery.show(ctx, startId)
@@ -105,15 +125,32 @@ function Gallery.show(ctx, startId)
         cgs = unlocked,
         index = math.max(1, math.min(idx, #unlocked)),
         bgLayer = nil,
+        overlayLayer = nil,
+        flashTimer = 0,     -- navigation flash indicator
     }
 
+    -- Switch input focus to GAME to prevent KAG text advancement
     backend.set_input_focus("GAME")
 
+    local w, h = backend.get_resolution()
+    w = w or 1280
+    h = h or 720
+
+    -- Layer 1: Dark semi-transparent full-screen overlay background
+    local overlayTex = solid(0, 0, 0, 180)
+    ownedTextures["_gallery_overlay"] = overlayTex
+    local overlay = layers.ensure(ctx, "_gallery_overlay", 95)
+    overlay.visible = true
+    overlay.x, overlay.y = 0, 0
+    overlay.w, overlay.h = w, h
+    overlay.texture = overlayTex
+    ctx.galleryState.overlayLayer = overlay
+
+    -- Layer 2: CG image layer (drawn on top of overlay)
     local layer = layers.ensure(ctx, "_gallery", 100)
     layer.visible = true
     layer.x, layer.y = 0, 0
-    local w, h = backend.get_resolution()
-    layer.w, layer.h = w or 1280, h or 720
+    layer.w, layer.h = w, h
     ctx.galleryState.bgLayer = layer
 
     Gallery._renderCurrent(ctx)
@@ -125,11 +162,15 @@ end
 -- ===========================================================================
 function Gallery.hide(ctx)
     if not ctx.galleryState then return end
-    local layer = layers.find("_gallery")
-    if layer then
-        layer.visible = false
-        if layer.texture then backend.destroy_texture(layer.texture); layer.texture = nil end
+    local layerNames = {"_gallery", "_gallery_overlay"}
+    for _, name in ipairs(layerNames) do
+        local layer = layers.find(name)
+        if layer then
+            layer.visible = false
+            if layer.texture then backend.destroy_texture(layer.texture); layer.texture = nil end
+        end
     end
+    Gallery._cleanupTextures()
     ctx.galleryState = nil
     backend.set_input_focus("KAG")
     print("[Gallery] Closed.")
@@ -145,20 +186,59 @@ function Gallery._renderCurrent(ctx)
     local layer = gs.bgLayer
     if not layer or not cg then return end
 
+    local w, h = backend.get_resolution()
+    w = w or 1280
+    h = h or 720
+
+    -- Load CG texture (centered, with padding)
     local tex = backend.load_texture(cg.path)
     if tex and tex > 0 then
         if layer.texture then backend.destroy_texture(layer.texture) end
         layer.texture = tex
+        -- Center CG with 60px padding from edges
+        local padW = 60
+        local padH = 80  -- extra top/bottom for title/footer
+        layer.x = padW
+        layer.y = padH
+        layer.w = w - padW * 2
+        layer.h = h - padH - 80
     else
-        local h = 0
-        for c in cg.id:gmatch(".") do h = (h * 31 + c:byte()) % 16777216 end
-        local r, g, b = (h >> 16) & 0xFF, (h >> 8) & 0xFF, h & 0xFF
+        -- Fallback: colored placeholder
+        local hash = 0
+        for c in cg.id:gmatch(".") do hash = (hash * 31 + c:byte()) % 16777216 end
+        local r, g, b = (hash >> 16) & 0xFF, (hash >> 8) & 0xFF, hash & 0xFF
         if layer.texture then backend.destroy_texture(layer.texture); layer.texture = nil end
-        layer.texture = backend.create_solid_texture(r, g, b, 255)
+        layer.texture = solid(r, g, b, 255)
+        layer.x, layer.y = 60, 80
+        layer.w, layer.h = w - 120, h - 160
     end
 
-    local caption = cg.name .. " (" .. gs.index .. "/" .. #gs.cgs .. ")"
-    backend.render_text(caption, 32, 680)
+    -- Title bar: "CG Gallery" on top
+    backend.render_text("CG Gallery", 32, 16, 255, 200, 60, 255)
+
+    -- CG name and unlock status
+    local statusStr = "[Unlocked]"
+    local statusR, statusG, statusB = 60, 220, 100  -- green for unlocked
+    backend.render_text(statusStr, 200, 16, statusR, statusG, statusB, 255)
+    backend.render_text(cg.name, 340, 16, 255, 255, 255, 255)
+
+    -- Page indicator: "CG 3 / 12"
+    local pageStr = "CG " .. gs.index .. " / " .. #gs.cgs
+    backend.render_text(pageStr, w - 220, 16, 200, 200, 255, 255)
+
+    -- Bottom navigation hints
+    local footerY = h - 36
+    backend.render_text("Left/Right: Navigate | ESC/Click: Close", 32, footerY, 180, 180, 200, 255)
+    backend.render_text(pageStr, w - 220, footerY, 180, 180, 200, 255)
+
+    -- Navigation flash indicator (brief highlight on navigate)
+    if gs.flashTimer and gs.flashTimer > 0 then
+        local flashAlpha = math.floor(80 * (gs.flashTimer / 0.15))  -- fade over 150ms
+        backend.render_text("< >", w / 2 - 20, h / 2, 255, 255, 255, flashAlpha)
+    end
+
+    -- Also render caption in classic position (backward compat)
+    backend.render_text(cg.name .. " (" .. gs.index .. "/" .. #gs.cgs .. ")", 32, h - 60, 160, 160, 180, 255)
 end
 
 -- ===========================================================================
@@ -174,6 +254,8 @@ function Gallery.navigate(ctx, direction)
         gs.index = gs.index + 1
         if gs.index > #gs.cgs then gs.index = 1 end
     end
+    -- Set flash timer for smooth navigation feedback
+    gs.flashTimer = 0.15
     Gallery._renderCurrent(ctx)
 end
 

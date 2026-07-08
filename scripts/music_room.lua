@@ -16,6 +16,14 @@ local currentPreview = nil
 -- [P1-2] Capture os.execute before potential sandboxing
 local _os_execute = os.execute
 
+-- Helper: safe solid texture
+local function solid(r, g, b, a)
+    return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
+
+-- Module-owned textures (cleaned on hide)
+local ownedTextures = {}
+
 -- ===========================================================================
 -- MusicRoom.scan() -> { {id, path, name}, ... }
 -- Cross-platform scan (W7).
@@ -140,6 +148,18 @@ function MusicRoom._saveFavorites()
 end
 
 -- ===========================================================================
+-- MusicRoom._cleanupTextures() — destroy all module-owned textures
+-- ===========================================================================
+function MusicRoom._cleanupTextures()
+    for _, texId in pairs(ownedTextures) do
+        if texId and texId > 0 then
+            pcall(function() backend.destroy_texture(texId) end)
+        end
+    end
+    ownedTextures = {}
+end
+
+-- ===========================================================================
 -- MusicRoom.show(ctx)
 -- ===========================================================================
 function MusicRoom.show(ctx)
@@ -148,18 +168,95 @@ function MusicRoom.show(ctx)
         backend.render_text("[Music Room] No tracks found.", 32, 100)
         return
     end
-    backend.render_text("=== Music Room ===", 32, 50)
-    for i, t in ipairs(tracks) do
-        local status = ""
-        if not t.unlocked then
-            status = " ???"
-        elseif t.favorited then
-            status = " <3"
-        end
-        local line = string.format("%2d. %s%s", i, t.name, status)
-        backend.render_text(line, 32, 50 + i * 24)
+
+    local w, h = backend.get_resolution()
+    w = w or 1280
+    h = h or 720
+
+    -- Dark overlay background layer (semi-transparent full-screen)
+    local overlayTex = solid(0, 0, 0, 180)
+    ownedTextures["_music_overlay"] = overlayTex
+    pcall(function()
+        local layers = require("layers")
+        local overlay = layers.ensure(ctx, "_music_overlay", 95)
+        overlay.visible = true
+        overlay.x, overlay.y = 0, 0
+        overlay.w, overlay.h = w, h
+        overlay.texture = overlayTex
+    end)
+
+    -- Title header bar background
+    -- Title: "Music Room / 音楽室"
+    backend.render_text("Music Room / 音楽室", 32, 18, 255, 200, 60, 255)
+
+    -- Currently playing info
+    if currentPreview then
+        local npColor = {r=100, g=220, b=255}
+        backend.render_text("▶ Now Playing: " .. currentPreview, 32, 44, npColor.r, npColor.g, npColor.b, 255)
+    else
+        backend.render_text("  No track playing", 32, 44, 140, 140, 160, 255)
     end
-    backend.render_text("Click a track to preview.", 32, 50 + (#tracks + 1) * 24)
+
+    -- Separator line
+    backend.render_text(string.rep("-", 80), 32, 58, 80, 80, 120, 220)
+
+    -- Track list with alternating backgrounds
+    local startY = 70
+    local lineH = 26
+    local maxVisible = math.min(#tracks, 22)  -- Fit ~22 tracks on screen
+    for i = 1, maxVisible do
+        local t = tracks[i]
+        local y = startY + (i - 1) * lineH
+
+        -- Build status indicators
+        local favMark = t.favorited and "★ " or "  "
+        local lockStatus = t.unlocked and "" or " [Locked]"
+
+        -- Track line: "★ 03. track_name [Locked]"
+        local idxStr = string.format("%2d.", i)
+        local line = favMark .. idxStr .. " " .. t.name .. lockStatus
+        local r, g2, bVal = 220, 220, 255  -- default white-blue
+        if not t.unlocked then
+            r, g2, bVal = 100, 100, 120  -- dim for locked
+        elseif currentPreview == t.id then
+            r, g2, bVal = 100, 255, 255  -- cyan highlight for playing
+        elseif t.favorited then
+            r, g2, bVal = 255, 220, 80   -- gold for favorited
+        elseif i % 2 == 0 then
+            r, g2, bVal = 160, 160, 200  -- alternating row: slightly dimmer
+        end
+        backend.render_text(line, 40, y, r, g2, bVal, 255)
+    end
+
+    -- Footer: navigation hints
+    local footerY = startY + maxVisible * lineH + 20
+    backend.render_text(string.rep("-", 80), 32, footerY, 80, 80, 120, 220)
+    backend.render_text("Up/Down: Navigate | Enter: Play/Stop | F: Favorite | ESC: Close", 32, footerY + 14, 160, 160, 200, 255)
+    backend.render_text(tracks.favoritedCount or "Total: " .. #tracks .. " tracks", w - 220, footerY + 14, 160, 160, 200, 255)
+
+    -- Favorite summary
+    local favCount = 0
+    for _, t in ipairs(tracks) do if t.favorited then favCount = favCount + 1 end end
+    backend.render_text("★ " .. favCount .. " favorites", 40, footerY + 14, 255, 220, 80, 255)
+
+    print("[MusicRoom] Displayed " .. #tracks .. " tracks.")
+end
+
+-- ===========================================================================
+-- MusicRoom.hide(ctx) — cleanup and restore input focus
+-- ===========================================================================
+function MusicRoom.hide(ctx)
+    pcall(function()
+        local layers = require("layers")
+        local overlay = layers.find("_music_overlay")
+        if overlay then
+            overlay.visible = false
+            overlay.texture = nil  -- texture owned by module; cleaned below
+        end
+    end)
+    MusicRoom._cleanupTextures()
+    backend.set_input_focus("KAG")
+    print("[MusicRoom] Closed.")
 end
 
 return MusicRoom

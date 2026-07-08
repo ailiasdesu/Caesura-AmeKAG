@@ -15,6 +15,12 @@ function HistoryUI.show(ctx)
         return
     end
 
+    -- Set input focus explicitly on entry
+    pcall(function()
+        local backend = require("backend")
+        backend.set_input_focus("GAME")
+    end)
+
     ctx.input_focus = "history"
     local selected = #ctx.backlog
     local scroll   = 0
@@ -23,24 +29,87 @@ function HistoryUI.show(ctx)
     while true do
         local backend = require("backend")
 
-        -- ── Render: semi-transparent dark overlay ──
+        -- ── Clear and render dark overlay background ──
         backend.debug_clear()
-        backend.debug_rect(0, 0, 1280, 720, 0x80000000)
+        backend.debug_rect(0, 0, 1280, 720, 0xD0000000)  -- darker overlay (alpha ~208)
+
+        -- ── Title bar: "Backlog / 消息记录" ──
+        backend.debug_rect(0, 0, 1280, 40, 0xE0101030)    -- dark blue title bar
+        local titleStr = "Backlog / 消息记录"
+        backend.debug_text(20, 8, 0x0E, titleStr)           -- bright yellow for title
+
+        -- ── Entry count indicator: "Entry 5 / 45" ──
+        local posStr = "Entry " .. selected .. " / " .. #ctx.backlog
+        backend.debug_text(640, 8, 0x0A, posStr)            -- green indicator at center
+
+        -- ── Entry separator line under title bar ──
+        backend.debug_rect(0, 40, 1280, 1, 0x604060A0)      -- subtle separator
 
         -- ── Render: scrollable entry list ──
-        local y = 20
+        local y = 52
+        local entryH = 22     -- line height per entry
         local lastVisible = math.min(scroll + ITEMS, #ctx.backlog)
         for i = scroll + 1, lastVisible do
-            local e       = ctx.backlog[i]
-            local prefix  = (i == selected) and ">" or " "
+            local e = ctx.backlog[i]
+            local isSelected = (i == selected)
+
+            -- Highlight background for selected entry
+            if isSelected then
+                backend.debug_rect(10, y - 1, 1260, entryH + 2, 0x602040A0)  -- blue highlight
+            end
+
+            -- Entry prefix: selection indicator
+            local prefix = isSelected and ">" or " "
+
+            -- Truncated preview text
             local preview = (e.text or ""):sub(1, 60)
-            local color   = (i == selected) and 0x0E or 0x0F
-            backend.debug_text(10, y, color, string.format("%s %s", prefix, preview))
-            y = y + 18
+            if #(e.text or "") > 60 then preview = preview .. "..." end
+
+            -- Speaker / scene name
+            local speaker = e.name or ""
+            if speaker == "" then speaker = "(Narration)" end
+            local speakerPreview = speaker:sub(1, 16)
+
+            -- Voice indicator
+            local voiceIndicator = ""
+            if e.voice and #e.voice > 0 then
+                voiceIndicator = " [V]"  -- voice available
+            end
+
+            -- Render entry line: " > [Speaker] preview text... [V]"
+            local color = isSelected and 0x0E or 0x0F
+            local line = string.format("%s %-17s %s%s", prefix, "[" .. speakerPreview .. "]", preview, voiceIndicator)
+            backend.debug_text(20, y + 1, color, line)
+
+            -- Timestamp on the right
+            if e.time then
+                backend.debug_text(1150, y + 1, 0x08, e.time)  -- dim gray timestamp
+            elseif e.timestamp then
+                local ts = os.date("%H:%M", e.timestamp)
+                backend.debug_text(1150, y + 1, 0x08, ts)
+            end
+
+            -- Scene name indicator (if available)
+            if e.scene and #e.scene > 0 then
+                local sceneShort = e.scene:match("[^/\\]+$") or e.scene
+                sceneShort = sceneShort:sub(1, 20)
+                backend.debug_text(750, y + 1, 0x09, "[" .. sceneShort .. "]")  -- blue scene tag
+            end
+
+            -- Thin separator line between entries
+            backend.debug_rect(30, y + entryH, 1220, 1, 0x30102030)
+
+            y = y + entryH + 2   -- 2px gap for separator
         end
 
-        -- ── Render: help bar ──
-        backend.debug_text(10, 700, 0x0A, "[↑↓]Scroll  [Enter]Jump  [Esc]Close  [V]Replay Voice")
+        -- ── Render: help bar at bottom ──
+        local footerY = 690
+        backend.debug_rect(0, footerY - 4, 1280, 34, 0xE0101030)   -- footer background
+        local helpStr = "[Up/Down] Navigate  [Enter] Jump to Scene  [V] Replay Voice  [Esc] Close"
+        backend.debug_text(20, footerY + 3, 0x0A, helpStr)
+
+        -- Footer: position info on right
+        backend.debug_text(1100, footerY + 3, 0x0A, posStr)
 
         -- ── Yield to engine frame ──
         coroutine.yield()
@@ -57,6 +126,10 @@ function HistoryUI.show(ctx)
                 local e = ctx.backlog[selected]
                 if e and e.scene and e.token_index then
                     ctx.input_focus = "kag"
+                    -- Restore input focus before returning
+                    pcall(function()
+                        require("backend").set_input_focus("KAG")
+                    end)
                     return { jump = true, scene = e.scene, index = e.token_index }
                 end
             elseif key == "V" then
@@ -66,6 +139,10 @@ function HistoryUI.show(ctx)
                 end
             elseif key == "ESC" then
                 ctx.input_focus = "kag"
+                -- Restore input focus on exit
+                pcall(function()
+                    require("backend").set_input_focus("KAG")
+                end)
                 return
             end
 
