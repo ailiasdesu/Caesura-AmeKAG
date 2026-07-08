@@ -192,3 +192,13 @@ Three-platform CI (`.github/workflows/ci.yml`): Windows MSVC (Debug+Release), ma
 - Implementation files: PascalCase (`BgfxRenderDevice.cpp`)
 - Namespace: `Caesura::` for all public types
 - Include paths: relative `../<module>/` or bare from `src/` root (CMake-configured)
+
+## Design Decisions (Recorded)
+
+### No ImGui / Immediate-Mode GUI Framework
+[R10-FIX] The engine intentionally does NOT use ImGui or any immediate-mode GUI framework.
+Rationale:
+- "Engine UI" (ErrorUI) uses direct bgfx rendering for crash resilience — no GUI framework dependency means no framework state corruption can block error display.
+- All game-facing UI (Gallery, MusicRoom, Settings, History) is written in Lua using backend.render_text() + backend.create_solid_texture() + backend.draw_viewport().
+- This keeps the C++ surface area minimal and gives content creators full control over UI appearance via Lua scripts.
+- If a developer needs an editor/debug UI panel, they should add it via the Lua DevCore binding, not by linking ImGui into the engine binary.

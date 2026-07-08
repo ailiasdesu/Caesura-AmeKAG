@@ -14,6 +14,13 @@ local rtt       = require("rtt")
 local pool       = require("pool")
 local blend_lib = require("blend")
 
+-- [R11-FIX] This Lua layer tree (7 types) operates ABOVE the C++ ILayerManager (3 slots).
+-- Each Lua layer node gets its own RTT and bgfx viewport ID.
+-- Final composition happens via backend.submit_batch() -> C++ IRenderDevice.
+-- The C++ BG/FG/MSG slots are bypassed for the tree-based pipeline.
+-- The tree-based approach provides independent per-layer RTTs, Z-sorting,
+-- and dirty-rectangle propagation across child-parent boundaries.
+
 local Layers = {}
 
 -- ═══════════════════════════════════════════════════════════════════════════
