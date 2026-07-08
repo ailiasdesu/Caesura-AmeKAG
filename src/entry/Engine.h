@@ -19,6 +19,18 @@ class IMiniGameBackend;
 class IAnimationBackend;
 class ISteamBackend;
 
+// [R1-FIX] GameState Architecture Note:
+// There are TWO ctx tables in the system:
+//   1. C++ GameState ctx (Lua registry key "caesura_ctx", 13 fields)
+//      - Created by GameState::create(L) during LuaManager::init()
+//      - Used by: scheduler.lua, save.lua, all KAG commands
+//      - Persisted by: SaveManager (C++ JSON path via KAG.save_game)
+//   2. Legacy Conductor local ctx (Lua table in conductor.lua, 12 fields)
+//      - Created by Conductor.execute() for backward compat
+//      - Contains: skipMode, autoMode, readFile, waiting_input
+//      - NOT persisted - values are ephemeral per-scene
+//   Migration: All scripts should use the C++ GameState ctx (ctx1).
+//   Conductor is deprecated and no longer auto-loaded by kag/init.lua.
 class Engine {
 public:
     Engine(const EngineConfig& config);

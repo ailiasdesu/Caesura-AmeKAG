@@ -1,4 +1,8 @@
-﻿// @deprecated: BackendFactory (scripts/backend_factory.lua) now creates _CAESURA_BACKEND.
+﻿// ⚠ DEPRECATED — _CAESURA_BACKEND proxy is superseded by direct Render/KAG/DevCore bindings.
+// This module is NO LONGER REGISTERED by LuaManager::registerModules().
+// Retained for reference. backend.lua in Lua scripts handles the fallback path.
+// Remove this file entirely after a deprecation period if no issues arise.
+// @deprecated: BackendFactory (scripts/backend_factory.lua) now creates _CAESURA_BACKEND.
 // UnifiedBinding is no longer registered. Keep file for reference only.
 #pragma once
 

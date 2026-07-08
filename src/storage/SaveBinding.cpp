@@ -297,6 +297,12 @@ static int lua_Get_save_dir(lua_State* L) {
 // ============================================================================
 
 void registerSaveBinding(lua_State* L) {
+    // [R12-FIX] Registration order note:
+    // SaveBinding functions are appended to the existing "KAG" global table.
+    // This requires that KAGBinding already registered the KAG table first.
+    // LuaManager::registerModules() ensures this order (KAGBinding at line ~102,
+    // SaveBinding at line ~108). If reordering, maintain this dependency.
+
     SaveManager::instance().init("saves/");
 
     // Get or create the global KAG table

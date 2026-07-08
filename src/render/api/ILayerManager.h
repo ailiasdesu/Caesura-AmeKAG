@@ -10,6 +10,19 @@ namespace Caesura {
 
 class ILayerManager {
 public:
+    // [R11-FIX] Layer architecture note:
+    // C++ ILayerManager provides 3 low-level composition slots (BG/FG/MSG).
+    // This is the HARDWARE composition layer - simple Z-ordered texture blitting.
+    //
+    // Lua layers.lua provides a 7-type high-level scene graph on top:
+    //   LAYER_BASE(1) / LAYER_LAYER0(2) / LAYER_LAYER1(3) / LAYER_FORE(4) /
+    //   LAYER_UI(5) / LAYER_MESSAGE(6) / LAYER_EFFECT(7)
+    //
+    // The Lua layer tree composes into RTTs and submits batches via
+    // Render.submit_batch() -> IRenderDevice::beginBatch()/flushBatch(),
+    // bypassing the simple 3-slot compositor for production rendering.
+    //
+    // The 3-slot compositor is retained for simple use cases and backward compat.
     enum LayerType : uint8_t {
         BG  = 0,
         FG  = 1,

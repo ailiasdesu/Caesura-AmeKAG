@@ -8,6 +8,10 @@
 #include "../bindings/RenderBinding.h"
 #include "../bindings/DevCoreBinding.h"
 #include "../bindings/DebugBinding.h"
+// [R8-FIX] UnifiedBinding is deprecated as of spec [0.3].
+// The _CAESURA_BACKEND proxy is no longer registered by default.
+// Lua scripts use backend.lua which falls back to direct KAG/Render/DevCore calls.
+// UnifiedBinding.h/.cpp are retained for reference only - they are NOT compiled into the engine.
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "../bindings/VFXBinding.h"
 #include "../storage/SaveBinding.h"
@@ -105,6 +109,9 @@ void LuaManager::registerModules() {
     registerDevCoreBinding(m_L);
     registerDebugBinding(m_L);
     // registerUnifiedBackendBinding(m_L);  // deprecated, replaced by BackendFactory
+    // [R12-FIX] SaveBinding must be registered AFTER KAGBinding (line ~103)
+    // because it appends functions to the existing KAG global table.
+    // Do not reorder these two calls.
     registerSaveBinding(m_L);
     registerVFXBinding(m_L);
 
