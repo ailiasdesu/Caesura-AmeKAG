@@ -142,6 +142,12 @@ end
 --- System.push_backlog(ctx, text, voice_file) -- push entry to backlog
 --- BacklogEntry: { text, voice, layers, timestamp, chapter, scene, token_index }
 function System.push_backlog(ctx, text, voice_file)
+    -- [R5-FIX] Delegated to canonical implementation in text commands
+    local kag_text = require("kag.commands.text")
+    if kag_text.push_backlog then
+        return kag_text.push_backlog(ctx, "", text, voice_file)
+    end
+    -- Fallback if text module not available
     if not ctx then return end
     ctx.backlog = ctx.backlog or {}
     ctx.backlog_max = ctx.backlog_max or 500
@@ -328,6 +334,10 @@ end
 
 --- System.save(slot, ctx) -- save game state to slot file
 function System.save(slot, ctx)
+    -- ⚠ DEPRECATED [R2-FIX] Legacy Lua serialization path.
+    -- Use KAG.save_game() / KAG.load_game() (C++ JSON path) instead.
+    -- This legacy path will be removed in a future version.
+
     -- Ensure save directory exists (cross-platform)
     if _IS_WINDOWS then
         _os_execute('if not exist "' .. saveDir:gsub("/$", "") .. '" mkdir "' .. saveDir:gsub("/$", "") .. '"')
@@ -416,6 +426,10 @@ end
 
 --- System.load(slot, ctx) -- load game state from slot file
 function System.load(slot, ctx)
+    -- ⚠ DEPRECATED [R2-FIX] Legacy Lua serialization path.
+    -- Use KAG.save_game() / KAG.load_game() (C++ JSON path) instead.
+    -- This legacy path will be removed in a future version.
+
     local filename = saveDir .. "save_" .. slot .. ".lua"
 return System._load_from_file(filename, ctx)
 end

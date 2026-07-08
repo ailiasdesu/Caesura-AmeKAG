@@ -49,6 +49,8 @@ function kag_runner.start(scene_path)
         variables = {},
         characters = {},
         unlockedCG = {}, unlockedMusic = {},
+        -- [R7-FIX] Seen-flag tracking for Read Skip feature
+        seen_scenes = {},
         waiting_input = false,
         _scene_changed = false,
         load_tokens = load_tokens,

@@ -1,4 +1,9 @@
-﻿-- ===========================================================================
+﻿-- ⚠ DEPRECATED - superseded by tokenizer.lua (spec 1.1)
+-- This module is no longer auto-loaded by kag/init.lua.
+-- Old scripts that explicitly require() this module will still work,
+-- but new code should use tokenizer.lua + scheduler.lua directly.
+-- See docs/ for migration guide.
+-- ===========================================================================
 --  Caesura (AmeKAG) — kag/parser.lua
 --  KAG script parser — legacy backward-compatibility wrapper.
 --  [P1] NOTE: This module is superseded by tokenizer.lua (spec [1.1]).

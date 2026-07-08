@@ -33,9 +33,10 @@ local TextCommands = {}
 
 -- =============================================================================
 --  Internal: push a message entry to the ctx.backlog (spec [4.1])
+--  [R5-FIX] Exported for system.lua delegation
 -- =============================================================================
 
-local function push_backlog(ctx, speaker, text, voiceFile)
+function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
     local entry = {
         name        = speaker or "",
@@ -52,6 +53,14 @@ local function push_backlog(ctx, speaker, text, voiceFile)
     local maxEntries = ctx.backlog_max or 500
     while #ctx.backlog > maxEntries do
         table.remove(ctx.backlog, 1)
+    end
+
+    -- [R7-FIX] Mark text as seen for Read Skip
+    local scene = ctx.currentScene or ""
+    if scene and scene ~= "" and ctx.token_index then
+        if not ctx.seen_scenes then ctx.seen_scenes = {} end
+        if not ctx.seen_scenes[scene] then ctx.seen_scenes[scene] = {} end
+        ctx.seen_scenes[scene][ctx.token_index] = true
     end
 end
 
@@ -93,7 +102,7 @@ function TextCommands.ch(ctx, params)
     end
 
     -- Store in backlog
-    push_backlog(ctx, speaker, message)
+    TextCommands.push_backlog(ctx, speaker, message)
 
     -- Set up message layer if needed
     local msgNode = layers.get("message")
@@ -161,7 +170,7 @@ function TextCommands.text(ctx, params)
     local message = params.text or params.message or params.content or ""
     if #message == 0 then return end
 
-    push_backlog(ctx, "", message)
+    TextCommands.push_backlog(ctx, "", message)
 
     backend.clear_text()
 
@@ -296,11 +305,26 @@ end
 
 -- =============================================================================
 --  [button text="Choice 1" target="*label_a"]
---  [button text="Choice 2" target="*label_b"]  
+--  [button text="Choice 2" target="*label_b"]
 --  [endbutton]
 --  Interactive choice buttons. Blocks coroutine until user selects.
 --  Each [button] renders a clickable choice. [endbutton] executes the block.
 --  On selection, jumps to the target label within current scene.
+--
+--[[
+[R4-FIX] Choice/Branch System Design Note:
+The choice system is implemented purely in Lua (no C++ ChoiceController class).
+This is intentional - the visual novel choice system is a UI concern that benefits
+from Lua's flexibility for layout, styling, and animation.
+Architecture:
+  1. [button text="..." target="*label"] registers choices into ctx._choiceButtons[]
+  2. [endbutton] renders all buttons, blocks the coroutine via coroutine.yield(),
+     and jumps to ctx._selectedChoice.target on resume
+  3. Intermediate state fields: ctx._choiceButtons (staging), ctx._choiceButtonsActive (active),
+     ctx._choiceMode (bool), ctx._selectedChoice (result)
+  4. _KAG_onClick is temporarily overridden for hit-testing during choice mode
+Future enhancement: extract to a standalone ChoiceController Lua class if complexity grows.
+--]]
 -- =============================================================================
 
 function TextCommands.button(ctx, params)

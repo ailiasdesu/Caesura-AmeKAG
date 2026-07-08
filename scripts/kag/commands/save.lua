@@ -104,6 +104,13 @@ local function capture_state(ctx)
     -- Schema version (engine-defined)
     state.schema_version = 2  -- bumped: added unlock state
 
+    -- [R6-FIX] Persist skip/auto mode so they survive save/load cycles
+    state.skip_mode = ctx.skip_mode or false
+    state.auto_mode = ctx.auto_mode or false
+
+    -- [R7-FIX] Persist seen flags for Read Skip
+    state.seen_scenes = ctx.seen_scenes or {}
+
     return state
 end
 
@@ -217,6 +224,13 @@ function SaveCommands.load(ctx, params)
             ctx.backlog[#ctx.backlog + 1] = entry
         end
     end
+
+    -- [R6-FIX] Restore skip/auto mode
+    ctx.skip_mode = state.skip_mode or false
+    ctx.auto_mode = state.auto_mode or false
+
+    -- [R7-FIX] Restore seen flags
+    ctx.seen_scenes = state.seen_scenes or {}
 
     -- Set token position for resume
     ctx.token_index = state.token_index or 1

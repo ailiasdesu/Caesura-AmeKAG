@@ -38,9 +38,11 @@ local pool       = require("pool")
 local i18n       = require("i18n")
 local settings   = require("settings")
 
--- Legacy (backward compat)
-local parser     = require("kag.parser")
-local conductor  = require("kag.conductor")
+-- Legacy (backward compat) — removed from auto-load
+-- [R3-FIX] Legacy parser/conductor removed from auto-load. Use tokenizer + scheduler directly.
+-- These modules remain available for explicit require() if old scripts need them.
+-- local parser     = require("kag.parser")
+-- local conductor  = require("kag.conductor")
 
 -- Register global _T shortcut for i18n
 _G._T = i18n.t

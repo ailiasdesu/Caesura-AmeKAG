@@ -5,6 +5,10 @@
 --  Coroutine-based: yields on blocking ops, resumes next frame from token_index.
 -- =============================================================================
 
+-- [R4-FIX] Note: The [button]/[endbutton] choice/branch system is implemented
+-- purely in Lua (kag/commands/text.lua). Flow control here handles [switch]/[case]
+-- for data-driven branching. See text.lua for interactive user choices.
+
 local scheduler = {}
 
 -- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
@@ -389,6 +393,11 @@ function scheduler.run(ctx, tokens, start_index)
 end
 
 -- ???? Resume from saved state ??????????????????????????????????????????????????????????????????????????????????????????????????
+
+-- [R7-FIX] Read Skip: if skip_mode is "seen", only advance past already-seen tokens
+-- Usage: [skip mode=seen] to skip only previously-read text
+-- NOTE: Full implementation requires hooking into the token advance loop.
+-- Current implementation: context variable is set so Lua scripts can check it.
 
 function scheduler.resume(ctx)
     if not ctx.tokens or not ctx.token_index then return end

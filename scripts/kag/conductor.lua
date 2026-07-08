@@ -1,13 +1,22 @@
+-- âš  DEPRECATED - superseded by tokenizer.lua (spec 1.1)
+-- This module is no longer auto-loaded by kag/init.lua.
+-- Old scripts that explicitly require() this module will still work,
+-- but new code should use tokenizer.lua + scheduler.lua directly.
+-- See docs/ for migration guide.
+-- âš  WARNING: This module creates its own LOCAL ctx table (lines ~25-49)
+-- that is SEPARATE from the C++ GameState ctx (caesura_ctx in Lua registry).
+-- Fields like skipMode/autoMode stored in this local ctx will NOT be persisted
+-- by the C++ SaveManager. Use the global GameState ctx for all persisted state.
 -- ===========================================================================
---  Caesura (AmeKAG) ¡ª kag/conductor.lua
+--  Caesura (AmeKAG) â€” kag/conductor.lua
 --  KAG Conductor: legacy backward-compatibility wrapper.
 --  [P1] NOTE: This module is superseded by scheduler.lua (spec [1.2]).
 --  New code should use tokenizer.lua + scheduler.lua directly.
 --  This wrapper provides the Conductor.execute/resume/status API.
---  
+--
 --  IMPORTANT: Does NOT overwrite global KAG.* bindings.
 --  C++ KAG bindings are the authoritative implementation.
---  All audio/rendering goes through C++ ¡ú backend_factory ¡ú C++.
+--  All audio/rendering goes through C++ â€” backend_factory â†’ C++.
 -- ===========================================================================
 
 local Conductor = {}
@@ -24,6 +33,9 @@ local tokens = {}
 
 local function ensureCtx()
     if not ctx then
+        -- [R1-FIX] WARNING: This creates a LOCAL ctx table SEPARATE from
+        -- the C++ GameState ctx. Fields like skipMode/autoMode will NOT
+        -- be persisted by C++ SaveManager. Use the global GameState ctx.
         ctx = {
             tokens = {},
             labelMap = {},
