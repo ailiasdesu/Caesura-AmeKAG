@@ -204,6 +204,11 @@ void EditorServer::serverLoop(int port) {
         {
             std::ofstream ofs(tmpPath);
             ofs << script;
+            if (!ofs.good()) {
+                res.status = 500;
+                res.set_content("Failed to write temp script file", "text/plain");
+                return;
+            }
         }
 
         pushLog("info", "Running scene script...");

@@ -473,11 +473,11 @@ void Engine::processEvents() {
         }
 
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
-        if (event.type == CAESURA_EVENT_ASYNC_LOAD && L) {
+        if (event.type == CAESURA_EVENT_ASYNC_LOAD) {
             auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
             if (completed) {
                 uint32_t texId = 0;
-                if (completed->success && completed->type == "texture" &&
+                if (L && completed->success && completed->type == "texture" &&
                     !completed->rgba.empty() && completed->width > 0) {
                     CAESURA_ASSERT_MAIN_THREAD();
                     texId = TextureManager::instance().loadTextureFromRGBA(

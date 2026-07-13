@@ -45,6 +45,7 @@ std::string CloudSaveProvider::readFile(const std::string& path) {
 
 bool CloudSaveProvider::writeFile(const std::string& path, const std::string& content) {
     if (!m_steam) return false;
+    if (content.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) return false;
     int32_t size = static_cast<int32_t>(content.size());
     // Small files: direct write
     if (size <= kChunkSize) {
@@ -60,8 +61,8 @@ bool CloudSaveProvider::writeFile(const std::string& path, const std::string& co
     for (int32_t i = 0; i < numChunks; ++i) {
         std::ostringstream chunkName;
         chunkName << path << ".chunk" << std::setfill('0') << std::setw(3) << i;
-        int32_t offset = i * kChunkSize;
-        int32_t chunkLen = (offset + kChunkSize > size) ? (size - offset) : kChunkSize;
+        int64_t offset = static_cast<int64_t>(i) * kChunkSize;
+        int32_t chunkLen = (offset + kChunkSize > size) ? (size - static_cast<int32_t>(offset)) : kChunkSize;
         if (!m_steam->cloudWrite(chunkName.str().c_str(), content.data() + offset, chunkLen)) return false;
     }
     return true;

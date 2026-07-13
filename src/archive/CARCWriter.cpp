@@ -50,7 +50,10 @@ bool CARCWriter::addFile(const std::string& relativePath,
 bool CARCWriter::finalize()
 {
     if (!m_output.is_open()) return false;
-    if (m_pendingFiles.empty()) return false;
+    if (m_pendingFiles.empty()) {
+        m_output.close();
+        return false;
+    }
 
     uint64_t contentPos = 0;
 

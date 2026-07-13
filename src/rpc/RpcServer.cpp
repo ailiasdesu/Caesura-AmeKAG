@@ -191,6 +191,12 @@ std::string RpcServer::handleRun(int id, const std::string& script) {
     {
         std::ofstream ofs(tmpPath);
         ofs << script;
+        if (!ofs.good()) {
+            pushLog("error", "Failed to write temp script file");
+            std::ostringstream out;
+            out << "{\"id\":" << id << ",\"error\":\"Failed to write temp file\"}";
+            return out.str();
+        }
     }
 
     pushLog("info", "Running scene script...");

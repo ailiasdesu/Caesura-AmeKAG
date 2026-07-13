@@ -86,6 +86,7 @@ public:
     /// Get the public key read from this CARC
     const uint8_t* publicKey() const { return m_publicKey; }
     bool hasPublicKey() const { return m_hasPublicKey; }
+    bool verifySignature();
 
 private:
     CARCHeader m_header;
@@ -98,7 +99,6 @@ private:
     uint8_t m_publicKey[PUBLICKEY_SIZE];
     bool m_hasPublicKey = false;
 
-    bool verifySignature();
     bool decryptIndex(std::vector<uint8_t>& outIndexData);
 
     // Read public key from end of file (format: [data...][64B signature][32B pubkey])

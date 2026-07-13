@@ -29,6 +29,7 @@ bool SDL3PlatformBackend::init(const char* title, int width, int height) {
 
     if (!m_window) {
         fprintf(stderr, "[SDL3] CreateWindow failed: %s\n", SDL_GetError());
+        SDL_Quit();
         return false;
     }
 

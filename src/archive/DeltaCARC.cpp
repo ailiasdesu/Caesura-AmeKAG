@@ -180,18 +180,31 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     // Parse delta entries
     const uint8_t* p = deltaBody.data();
     const uint8_t* end = p + deltaBody.size();
-    while (p < end) {
+    while (p + 4 < end) {
         DeltaFlag flag = (DeltaFlag)*p++;
         uint32_t hashLen = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24); p += 4;
+        if (p + hashLen > end) {
+            fprintf(stderr, "[DeltaCARC] Corrupt delta: hashLen %u exceeds buffer\n", hashLen);
+            return false;
+        }
         std::string hashHex(reinterpret_cast<const char*>(p), hashLen); p += hashLen;
 
         if (flag == DeltaFlag::Remove) {
             index.erase(hashHex);
             // Remove from fileList (match by hash later in CARCWriter)
         } else {
+            if (p + 8 > end) {
+                fprintf(stderr, "[DeltaCARC] Corrupt delta: size field truncated\n");
+                return false;
+            }
             uint64_t size = 0;
             for (int i = 0; i < 8; i++) size |= ((uint64_t)p[i] << (i * 8));
             p += 8;
+            if (p + size > end) {
+                fprintf(stderr, "[DeltaCARC] Corrupt delta: data size %llu exceeds buffer\n",
+                        (unsigned long long)size);
+                return false;
+            }
             // Raw entry data — will be repacked by CARCWriter
             // For now, skip — CARCWriter handles repacking
             p += size;

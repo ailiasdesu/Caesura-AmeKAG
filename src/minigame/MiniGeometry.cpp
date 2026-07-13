@@ -72,6 +72,7 @@ GeometryData createCubeGeometry() {
 
 GeometryData createSphereGeometry(uint32_t segments) {
     GeometryData geo;
+    if (segments < 3) segments = 3; // min 3 rings to produce valid geometry
     uint32_t latSteps = segments;
     uint32_t lonSteps = segments * 2;
 
@@ -146,6 +147,8 @@ GeometryData createSphereGeometry(uint32_t segments) {
 GeometryData createPlaneGeometry(float width, float depth,
                                   uint32_t subdivX, uint32_t subdivZ) {
     GeometryData geo;
+    if (subdivX == 0) subdivX = 1;
+    if (subdivZ == 0) subdivZ = 1;
     float hw = width * 0.5f;
     float hd = depth * 0.5f;
 

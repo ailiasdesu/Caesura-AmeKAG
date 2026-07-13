@@ -846,7 +846,11 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
     std::vector<uint8_t> data(size);
-    fread(data.data(), 1, size, f);
+    if (fread(data.data(), 1, size, f) != (size_t)size) {
+        fclose(f);
+        fprintf(stderr, "[TextRenderer] CJK atlas read incomplete: %s\n", atlasPath.c_str());
+        return false;
+    }
     fclose(f);
 
     const uint16_t cjkW = 4096, cjkH = 4096;
@@ -866,11 +870,16 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
         return false;
     }
     uint32_t count = 0;
-    fread(&count, sizeof(count), 1, mf);
+    if (fread(&count, sizeof(count), 1, mf) != 1) {
+        fclose(mf);
+        fprintf(stderr, "[TextRenderer] CJK metadata read failed\n");
+        bgfx::destroy(m_cjkAtlas); m_cjkAtlas = BGFX_INVALID_HANDLE;
+        return false;
+    }
     m_cjkGlyphs.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t cp; CjkGlyph g;
-        fread(&cp, sizeof(cp), 1, mf);
+        if (fread(&cp, sizeof(cp), 1, mf) != 1) break;
         fread(&g.x, sizeof(g.x), 1, mf);
         fread(&g.y, sizeof(g.y), 1, mf);
         fread(&g.w, sizeof(g.w), 1, mf);

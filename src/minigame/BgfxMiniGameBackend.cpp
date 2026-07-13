@@ -24,6 +24,10 @@ static bgfx::ShaderHandle buildMiniGameShader(const uint8_t* bytecode, uint32_t 
     const uint16_t uniformCount = 0;
     const uint32_t totalSize = 4 + 4 + 4 + 2 + 4 + codeSize + 1 + 1 + 2 * numAttrs + 2;
     const bgfx::Memory* mem = bgfx::alloc(totalSize);
+    if (!mem) {
+        fprintf(stderr, "[MiniGame] bgfx::alloc failed for %u bytes\n", totalSize);
+        return BGFX_INVALID_HANDLE;
+    }
     bx::StaticMemoryBlockWriter writer(mem->data, mem->size);
     bx::ErrorAssert err;
     const uint32_t magic = fragment
@@ -157,7 +161,7 @@ void BgfxMiniGameBackend::shutdown() {
     for(int i=0;i<3;++i){if(bgfx::isValid(m_u_lightPos[i]))bgfx::destroy(m_u_lightPos[i]);if(bgfx::isValid(m_u_lightCol[i]))bgfx::destroy(m_u_lightCol[i]);}
     if(bgfx::isValid(m_u_lightCount))bgfx::destroy(m_u_lightCount);
     m_objects.clear(); m_materials.clear(); m_pointLights.clear();
-    m_active=false;
+    m_active=false; m_gpuReady=false;
 }
 
 // ==========================================================================

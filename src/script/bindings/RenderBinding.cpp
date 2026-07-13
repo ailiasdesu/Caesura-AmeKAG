@@ -166,7 +166,8 @@ static int lua_Render_set_view_name(lua_State* L) {
     uint16_t viewId = (uint16_t)luaL_checkinteger(L, 1);
     const char* name = luaL_checkstring(L, 2);
     IRenderDevice* dev = getRender(L);
-    if (dev) dev->setDebugName(viewId, name);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    dev->setDebugName(viewId, name);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -415,7 +416,8 @@ static int lua_Render_destroy_viewport(lua_State* L) {
     ViewportHandle vp{ id };
 
     IRenderDevice* dev = getRender(L);
-    if (dev) dev->destroyRenderTarget(vp);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    dev->destroyRenderTarget(vp);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -447,7 +449,8 @@ static int lua_Render_resize(lua_State* L) {
     int w = (int)luaL_checkinteger(L, 1);
     int h = (int)luaL_checkinteger(L, 2);
     IRenderDevice* dev = getRender(L);
-    if (dev) dev->resize(w, h);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    dev->resize(w, h);
     lua_pushboolean(L, 1);
     return 1;
 }

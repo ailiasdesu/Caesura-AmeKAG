@@ -355,7 +355,7 @@ uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
     uint32_t pixel = (uint32_t(a) << 24) | (uint32_t(b) << 16) |
                      (uint32_t(g) << 8) | uint32_t(r);
     const bgfx::Memory* mem = bgfx::alloc(4);
-    *reinterpret_cast<uint32_t*>(mem->data) = pixel;
+    memcpy(mem->data, &pixel, sizeof(uint32_t));
     bgfx::TextureHandle tex = bgfx::createTexture2D(
         1, 1, false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);

@@ -403,9 +403,11 @@ std::string SaveManager::captureThumbnailPNG(int width, int height) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) return "";
     std::streamsize size = file.tellg();
+    if (size <= 0) return "";
     file.seekg(0, std::ios::beg);
-    std::vector<unsigned char> buffer(size);
+    std::vector<unsigned char> buffer(static_cast<size_t>(size));
     file.read(reinterpret_cast<char*>(buffer.data()), size);
+    if (!file.good()) { file.close(); std::remove(path); return ""; }
     file.close();
     std::remove(path);
     static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

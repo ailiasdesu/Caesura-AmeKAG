@@ -19,6 +19,7 @@ std::string LocalFileSaveProvider::readFile(const std::string& path) {
     std::string content(static_cast<size_t>(sz), '\0');
     in.seekg(0, std::ios::beg);
     in.read(&content[0], sz);
+    if (!in.good()) return "";
     return content;
 }
 

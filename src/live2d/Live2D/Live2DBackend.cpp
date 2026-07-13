@@ -61,9 +61,11 @@ static std::vector<char> readFile(const std::string& path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) return {};
     size_t size = file.tellg();
+    if (size == 0) return {};
     file.seekg(0);
     std::vector<char> data(size);
     file.read(data.data(), size);
+    if (!file.good()) return {};
     return data;
 }
 
@@ -198,6 +200,9 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     model.settingJson = readFile(model.dir);
     if (model.settingJson.empty()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read: %s", model.dir.c_str());
+        // Note: model.setting was set to nullptr by cubismLog, but model.settingJson
+        // was already consumed. We should NOT try to clean up model.setting here
+        // (the null destructor guard handles it). Just bail.
         return false;
     }
     model.setting = new CubismModelSettingJson(
@@ -236,8 +241,6 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
                 SDL_Log("[Live2D] Texture %d loaded: %dx%d", i, w, h);
             } else {
                 SDL_Log("[Live2D] Texture %d failed to decode: %s", i, texPath.c_str());
-            if (!motionData.empty()) {
-                model.motionCache[motionPath] = std::move(motionData);
             }
         }
     }

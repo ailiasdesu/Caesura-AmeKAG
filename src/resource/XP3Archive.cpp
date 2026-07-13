@@ -106,15 +106,20 @@ static std::vector<uint8_t> ReadFileBytes(const std::string& path) {
 #endif
     if (sz <= 0) { fclose(f); return {}; }
     std::vector<uint8_t> out((size_t)sz);
-    fread(out.data(), 1, (size_t)sz, f);
+    size_t bytesRead = fread(out.data(), 1, (size_t)sz, f);
     fclose(f);
+    if (bytesRead != (size_t)sz) return {};
     return out;
 }
 
 static bool WriteFileBytes(const std::string& path, const uint8_t* data, size_t size) {
     FILE* f = fopen(path.c_str(), "wb");
     if (!f) return false;
-    if (size > 0) fwrite(data, 1, size, f);
+    if (size > 0) {
+        size_t written = fwrite(data, 1, size, f);
+        fclose(f);
+        return written == size;
+    }
     fclose(f);
     return true;
 }

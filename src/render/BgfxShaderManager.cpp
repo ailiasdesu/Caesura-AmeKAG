@@ -39,6 +39,10 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
                              + 2;
 
     const bgfx::Memory* mem = bgfx::alloc(totalSize);
+    if (!mem) {
+        fprintf(stderr, "[BgfxShaderManager] bgfx::alloc failed for %u bytes\n", totalSize);
+        return BGFX_INVALID_HANDLE;
+    }
     bx::StaticMemoryBlockWriter writer(mem->data, mem->size);
     bx::ErrorAssert err;
 
@@ -72,6 +76,10 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
 // engine-wide fallback for 2-D quad rendering and RTT blits.
 
 void BgfxShaderManager::initEmbeddedShaders() {
+    static bool s_initialized = false;
+    if (s_initialized) return;
+    s_initialized = true;
+
     const bgfx::RendererType::Enum renderer = bgfx::getCaps()->rendererType;
 
     printf("[BgfxShaderManager] initEmbeddedShaders: renderer=%s\n",
@@ -179,7 +187,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
             kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size,
             kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size, "StretchBlt");
 
-        m_affineProgram = createProgramFromDXBC(
+    m_affineProgram = createProgramFromDXBC(
             kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size,
             kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size, "AffineBlt");
 
@@ -205,7 +213,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
             CompositeShaderKey key = { (uint8_t)mode };
             CompositeShaderCache::instance().registerProgram(key, m_blendProgram);
         }
-        printf("[BgfxShaderManager] Registered 10 blend modes with ShaderCache.\\n");
+        printf("[BgfxShaderManager] Registered 10 blend modes with ShaderCache.\n");
     }
     CompositeShaderCache::instance().precompileCommon();
     if (bgfx::isValid(m_fallbackProgram)) {

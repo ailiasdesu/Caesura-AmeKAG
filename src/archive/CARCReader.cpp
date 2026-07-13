@@ -124,11 +124,12 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
         return false;
     }
 
-    const FileEntry* entries = reinterpret_cast<const FileEntry*>(
-        indexData.data() + sizeof(uint32_t));
-
+    // Use memcpy for alignment-safe reads (FileEntry contains uint64_t fields
+    // but indexData may be only 4-byte aligned on the heap)
+    const uint8_t* entryPtr = indexData.data() + sizeof(uint32_t);
     for (uint32_t i = 0; i < count; ++i) {
-        const FileEntry& e = entries[i];
+        FileEntry e;
+        memcpy(&e, entryPtr + i * sizeof(FileEntry), sizeof(FileEntry));
         if (e.offset > m_header.contentSize ||
             e.compressedSize > m_header.contentSize - e.offset ||
             e.compressedSize > kMaxCarcEntrySize ||
