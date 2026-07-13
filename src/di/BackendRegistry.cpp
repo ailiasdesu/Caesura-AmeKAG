@@ -39,6 +39,7 @@ class NullRenderDevice : public IRenderDevice {
 public:
     NullRenderDevice() { printf("[BackendRegistry] Using NullRenderDevice.\n"); }
     bool init(void*, int w, int h) override { m_width = w; m_height = h; return true; }
+    void beginShutdown() override {}
     void shutdown() override {}
     void flushAllRTT() override {}
     void beginFrame() override {}
@@ -60,6 +61,8 @@ public:
     void drawDebugOverlay(const std::string&) override {}
     bool requestScreenshot(const std::string&) override { return false; }
     bool recoverDevice(void*, int, int) override { return true; }
+    void flagDeviceLost() override {}
+    bool consumeDeviceLost() override { return false; }
     void renderText(uint16_t, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void renderRuby(uint16_t, const std::string&, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}
@@ -75,6 +78,8 @@ public:
     void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void flushBatch() override {}
     float textLineHeight() const override { return 0.0f; }
+    RenderUniformHandle getDefaultSampler() const override { return {}; }
+    RenderProgramHandle getFallbackProgram() const override { return {}; }
     const char* getBackendName() const override { return "NullRender"; }
     RenderRuntimeInfo getRuntimeInfo() const override {
         RenderRuntimeInfo info;
@@ -83,6 +88,7 @@ public:
         info.height = m_height;
         return info;
     }
+    bool setPreferredBackend(const char*) override { return false; }
 private:
     int m_width = 0, m_height = 0;
 };

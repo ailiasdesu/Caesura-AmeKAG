@@ -5,6 +5,7 @@
 #include "archive/CARCWriter.h"
 #include "archive/CARCReader.h"
 #include "archive/CRLManager.h"
+#include "TestPaths.h"
 #include <cstring>
 #include <cstdio>
 #include <vector>
@@ -170,6 +171,57 @@ TEST_CASE("CARCReader::open corrupt magic bytes returns false") {
     CHECK_FALSE(r.open(path));
 
     fs::remove(path);
+}
+
+TEST_CASE("CARCReader rejects signed index smaller than authentication tag") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("carc_short_index");
+    const fs::path archivePath = temp.path() / "short-index.carc";
+    const fs::path privateKeyPath = temp.path() / "short-index.key";
+    const fs::path publicKeyPath = temp.path() / "short-index.pub";
+
+    {
+        CARCWriter writer;
+        REQUIRE(writer.create(archivePath.string(), privateKeyPath.string(),
+                              publicKeyPath.string()));
+        REQUIRE(writer.addFile("data.txt", reinterpret_cast<const uint8_t*>("payload"), 7));
+        REQUIRE(writer.finalize());
+    }
+
+    std::ifstream input(archivePath, std::ios::binary | std::ios::ate);
+    REQUIRE(input.is_open());
+    const auto byteCount = input.tellg();
+    REQUIRE(byteCount > static_cast<std::streamoff>(sizeof(CARCHeader) +
+                                                    SIGNATURE_SIZE + PUBLICKEY_SIZE));
+    std::vector<uint8_t> bytes(static_cast<size_t>(byteCount));
+    input.seekg(0, std::ios::beg);
+    input.read(reinterpret_cast<char*>(bytes.data()), byteCount);
+    input.close();
+
+    CARCHeader header{};
+    std::memcpy(&header, bytes.data(), sizeof(header));
+    header.indexSize = AES_TAG_SIZE - 1;
+    std::memcpy(bytes.data(), &header, sizeof(header));
+
+    uint8_t privateKey[64] = {};
+    REQUIRE(CryptoEngine::readPrivateKey(privateKeyPath.string(), privateKey));
+    uint8_t signature[SIGNATURE_SIZE] = {};
+    const uint64_t signedSize = header.indexOffset + header.indexSize;
+    REQUIRE(signedSize < bytes.size() - SIGNATURE_SIZE - PUBLICKEY_SIZE);
+    REQUIRE(CryptoEngine::sign(bytes.data(), static_cast<size_t>(signedSize),
+                               privateKey, signature));
+    const size_t signatureOffset = bytes.size() - SIGNATURE_SIZE - PUBLICKEY_SIZE;
+    std::memcpy(bytes.data() + signatureOffset, signature, SIGNATURE_SIZE);
+
+    std::ofstream output(archivePath, std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    output.close();
+
+    CARCReader reader;
+    bool opened = false;
+    CHECK_NOTHROW(opened = reader.open(archivePath.string()));
+    CHECK_FALSE(opened);
 }
 
 TEST_CASE("CryptoEngine::encrypt with wrong key length returns empty") {

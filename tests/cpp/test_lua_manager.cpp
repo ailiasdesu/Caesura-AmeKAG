@@ -48,6 +48,26 @@ TEST_CASE("LuaManager::lockdownScriptEnv removes dangerous globals") {
     lua_getglobal(L, "require");
     CHECK(lua_isfunction(L, -1));
     lua_pop(L, 1);
+
+    // io.input/output/lines bypass io.open internally and can still access
+    // arbitrary files unless each entry point is removed explicitly.
+    lua_getglobal(L, "io");
+    REQUIRE(lua_istable(L, -1));
+    const char* dangerousIoFunctions[] = {"input", "output", "lines", "read", "tmpfile"};
+    for (const char* name : dangerousIoFunctions) {
+        lua_getfield(L, -1, name);
+        CAPTURE(name);
+        CHECK(lua_isnil(L, -1));
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+
+    // Environment variables commonly contain credentials and build secrets.
+    lua_getglobal(L, "os");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "getenv");
+    CHECK(lua_isnil(L, -1));
+    lua_pop(L, 2);
 }
 
 TEST_CASE("LuaManager::loadScript fails on nonexistent file") {
@@ -76,26 +96,24 @@ TEST_CASE("LuaManager::instruction budget set/get round-trip") {
 }
 
 TEST_CASE("LuaManager::instruction budget interrupts infinite loop") {
-    LuaManager lm;
+    auto& singleton = LuaManager::instance();
+    const int oldSingletonBudget = singleton.getInstructionBudget();
+    singleton.resetInstructionBudget();
+    singleton.setInstructionBudget(1);
 
-    // Set very low budget (100 instructions) and run an infinite loop
-    // The instruction hook fires on LuaManager::instance(), not on locals.
-    auto& mgr = LuaManager::instance();
-    REQUIRE(mgr.init());
-    lua_State* L = mgr.state();
+    LuaManager manager;
+    manager.setInstructionBudget(100);
+    REQUIRE(manager.init());
+    lua_State* L = manager.state();
     REQUIRE(L != nullptr);
 
-    // Save budget to restore after test
-    int oldBudget = mgr.getInstructionBudget();
-    mgr.setInstructionBudget(100);
-    // With budget=100 and hook firing every 1000 instrs, the loop will
-    // be interrupted after multiple hook invocations. Verify it doesn't hang.
     int result = luaL_dostring(L, "while true do end");
-    // The loop should be interrupted (not hang forever)
     CHECK(result != LUA_OK);
-    mgr.resetInstructionBudget();
-    mgr.setInstructionBudget(oldBudget);  // Restore for other tests
-    CHECK_FALSE(mgr.isInstructionBudgetExceeded());
+    CHECK(manager.isInstructionBudgetExceeded());
+    CHECK_FALSE(singleton.isInstructionBudgetExceeded());
+
+    singleton.resetInstructionBudget();
+    singleton.setInstructionBudget(oldSingletonBudget);
 }
 
 TEST_CASE("LuaManager::update does not crash") {

@@ -2,7 +2,7 @@
 #include "AssetManager.h"
 #include "ImageDecoder.h"
 #include "../di/BackendRegistry.h"
-#include "../job/JobSystem.h"
+#include "../job/api/IJobSystem.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <memory>
@@ -34,7 +34,9 @@ void AsyncLoader::shutdown() {
     m_running = false;
     m_cancelRequested = true;
 
-    (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->waitIdle();
+    if (auto* jobSystem = BackendRegistry::instance().getJobSystem()) {
+        jobSystem->waitIdle();
+    }
 
     {
         std::lock_guard<std::mutex> lock(m_completeMutex);
@@ -92,6 +94,12 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
         return -1;
     }
 
+    auto* jobSystem = BackendRegistry::instance().getJobSystem();
+    if (!jobSystem || !jobSystem->isRunning()) {
+        fprintf(stderr, "[AsyncLoader] JobSystem unavailable; rejecting: %s\n", path.c_str());
+        return -1;
+    }
+
     m_cancelRequested.store(false);
 
     int id = m_nextId.fetch_add(1);
@@ -99,7 +107,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     auto result = std::make_shared<CompletedLoad>();
     auto cancelled = std::make_shared<std::atomic<bool>>(false);
 
-    (BackendRegistry::instance().getJobSystem() ? BackendRegistry::instance().getJobSystem() : &JobSystem::instance())->submit(
+    const uint64_t jobId = jobSystem->submit(
         [req, result, cancelled, this]() {
             if (m_cancelRequested.load()) {
                 cancelled->store(true);
@@ -116,6 +124,11 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
             std::lock_guard<std::mutex> lock(m_completeMutex);
             m_completed.push_back(std::move(*result));
         });
+
+    if (jobId == 0) {
+        fprintf(stderr, "[AsyncLoader] Job submission failed: %s\n", path.c_str());
+        return -1;
+    }
 
     m_pendingCount++;
     printf("[AsyncLoader] Enqueued #%d: %s (%s) [pending=%d]\n",

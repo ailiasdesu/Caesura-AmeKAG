@@ -2,9 +2,6 @@
 #include "../di/thread/ThreadAssert.h"
 #include <cstdio>
 #include <chrono>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace Caesura {
 
@@ -82,27 +79,9 @@ void JobSystem::shutdown() {
     waitIdle();
     notifyWorkers();
 
-    // Join workers with timeout -- prevent indefinite hang on stuck workers.
-    // Uses native Windows handle for WaitForSingleObject with 500ms deadline;
-    // falls back to detach with warning if a worker doesn't stop in time.
-#ifdef _WIN32
-    constexpr DWORD kTimeoutMs = 500;
-    for (auto& t : m_workers) {
-        if (!t.joinable()) continue;
-        DWORD rc = WaitForSingleObject(t.native_handle(), kTimeoutMs);
-        if (rc == WAIT_OBJECT_0) {
-            t.join();  // immediately returns since thread already exited
-        } else {
-            t.detach();
-            fprintf(stderr, "[JobSystem] Worker %u timed out after %lums -- detached\n",
-                    GetThreadId(t.native_handle()), kTimeoutMs);
-        }
-    }
-#else
     for (auto& t : m_workers) {
         if (t.joinable()) t.join();
     }
-#endif
     m_workers.clear();
     m_workerThreadIds.clear();
     m_queues.clear();
@@ -156,9 +135,12 @@ void JobSystem::pollMainThreadJobs() {
 
 void JobSystem::waitIdle() {
     CAESURA_ASSERT_MAIN_THREAD();
-    for (int spin = 0; spin < 5000 && m_pendingJobs.load() > 0; ++spin) {
+    while (m_pendingJobs.load() > 0) {
         pollMainThreadJobs();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::unique_lock<std::mutex> lock(m_waitMutex);
+        m_cv.wait_for(lock, std::chrono::milliseconds(10), [this] {
+            return m_pendingJobs.load() == 0;
+        });
     }
 }
 

@@ -3,7 +3,7 @@
 //  Local filesystem save provider implementation.
 // ===========================================================================
 
-#include "api/ISaveProvider.h"
+#include "LocalFileSaveProvider.h"
 #include <fstream>
 #include <cstdio>
 #include <filesystem>
@@ -53,6 +53,14 @@ std::vector<std::string> LocalFileSaveProvider::listFiles(const std::string& pat
         // Directory may not exist — return empty
     }
     return result;
+}
+
+bool LocalFileSaveProvider::pushToCloud(const std::string&) {
+    return false;
+}
+
+bool LocalFileSaveProvider::pullFromCloud(const std::string&) {
+    return false;
 }
 
 } // namespace Caesura

@@ -84,6 +84,7 @@ if _G.os then
     _G.os.remove  = function(path) return nil, "sandboxed" end
     _G.os.rename  = function() return nil, "sandboxed" end
     _G.os.exit    = function() error("os.exit disabled", 2) end
+    _G.os.getenv  = nil
 end
 
 -- ---------------------------------------------------------------------------
@@ -98,6 +99,11 @@ if _G.io then
         return nil, "io.open write disabled"
     end
     _G.io.popen = function() return nil, "io.popen disabled" end
+    _G.io.input = nil
+    _G.io.output = nil
+    _G.io.lines = nil
+    _G.io.read = nil
+    _G.io.tmpfile = nil
 end
 
 -- ===========================================================================

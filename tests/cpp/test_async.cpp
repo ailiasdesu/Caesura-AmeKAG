@@ -12,12 +12,14 @@ using namespace Caesura;
 static void initJobInfra() {
     detail::g_mainThreadId = std::this_thread::get_id();
     JobSystem::instance().init();
+    BackendRegistry::instance().setJobSystem(&JobSystem::instance());
     AsyncLoader::instance().init();
 }
 
 static void shutdownJobInfra() {
     AsyncLoader::instance().shutdown();
     JobSystem::instance().shutdown();
+    BackendRegistry::instance().setJobSystem(nullptr);
 }
 
 // NullJobSystem infrastructure (for synchronous unit tests)
@@ -112,4 +114,18 @@ TEST_CASE("AsyncLoader with NullJobSystem: rejects path traversal") {
     int id = AsyncLoader::instance().enqueue("../secret.png", "texture");
     CHECK(id < 0);
     shutdownNullJobInfra();
+}
+
+TEST_CASE("AsyncLoader rejects enqueue when registered job system is stopped") {
+    detail::g_mainThreadId = std::this_thread::get_id();
+    NullJobSystem stoppedJobSystem;
+    BackendRegistry::instance().setJobSystem(&stoppedJobSystem);
+    auto& loader = AsyncLoader::instance();
+    loader.init();
+
+    CHECK(loader.enqueue("test.png", "texture") < 0);
+    CHECK(loader.pendingCount() == 0);
+
+    loader.shutdown();
+    BackendRegistry::instance().setJobSystem(nullptr);
 }

@@ -87,7 +87,7 @@ public:
     const uint8_t* publicKey() const { return m_publicKey; }
     bool hasPublicKey() const { return m_hasPublicKey; }
 
-public:
+private:
     CARCHeader m_header;
     // pathHash (32-byte as hex string) �� FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;

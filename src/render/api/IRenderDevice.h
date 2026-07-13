@@ -38,7 +38,7 @@ public:
 
     // Lifecycle
     virtual bool init(void* nativeWindowHandle, int width, int height) = 0;
-    virtual void beginShutdown() {}
+    virtual void beginShutdown() = 0;
 
     // -- IMPORTANT: shutdown() internally calls flushAllRTT() then renderer shutdown --
     // The teardown contract is:
@@ -122,8 +122,8 @@ public:
     virtual void drawDebugOverlay(const std::string& title) = 0;
     virtual bool requestScreenshot(const std::string& path) = 0;
     virtual bool recoverDevice(void* nativeWindowHandle, int width, int height) = 0;
-    virtual void flagDeviceLost() {}
-    virtual bool consumeDeviceLost() { return false; }
+    virtual void flagDeviceLost() = 0;
+    virtual bool consumeDeviceLost() = 0;
 
     // -- Text rendering (bitmap font via embedded atlas) --------------
     virtual void renderText(uint16_t viewId, const std::string& text,
@@ -149,19 +149,13 @@ public:
     virtual void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
 
     // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
-    virtual RenderUniformHandle getDefaultSampler() const { return {}; }
-    virtual RenderProgramHandle getFallbackProgram() const { return {}; }
+    virtual RenderUniformHandle getDefaultSampler() const = 0;
+    virtual RenderProgramHandle getFallbackProgram() const = 0;
 
     // Backend identification --------------------------------------------
     virtual const char* getBackendName() const = 0;
-    virtual RenderRuntimeInfo getRuntimeInfo() const {
-        RenderRuntimeInfo info;
-        info.backendName = getBackendName();
-        info.width = getBackbufferWidth();
-        info.height = getBackbufferHeight();
-        return info;
-    }
-    virtual bool setPreferredBackend(const char*) { return false; }
+    virtual RenderRuntimeInfo getRuntimeInfo() const = 0;
+    virtual bool setPreferredBackend(const char*) = 0;
 };
 
 } // namespace Caesura

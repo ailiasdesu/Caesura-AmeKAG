@@ -3,6 +3,7 @@
 #include <cstring>
 #include <algorithm>
 #include <filesystem>
+#include <limits>
 
 // miniz single-header ?? need to define MINIZ_HEADER_FILE_ONLY first
 // then include the .c in one TU later (in CMake)
@@ -11,6 +12,13 @@
 namespace fs = std::filesystem;
 
 namespace Caesura {
+
+namespace {
+constexpr size_t kMaxIndexSize = 256u * 1024u * 1024u;
+constexpr uint64_t kMaxExtractedFileSize = 1024ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxTotalExtractedSize = 8ull * 1024ull * 1024ull * 1024ull;
+constexpr size_t kMaxPathCodeUnits = 4096;
+}
 
 // ============================================================================
 //  Byte-order helpers (little-endian read/write)
@@ -54,6 +62,30 @@ static std::vector<uint8_t> ZlibDecompress(const uint8_t* data, size_t size, siz
         return {};
     out.resize(dstLen);
     return out;
+}
+
+static bool DecodeIndex(const uint8_t* data, size_t size, std::vector<uint8_t>& output) {
+    if (!data || size == 0 || size > kMaxIndexSize) return false;
+
+    size_t capacity = size > kMaxIndexSize / 4 ? kMaxIndexSize : size * 4;
+    capacity = std::max<size_t>(capacity, 1024);
+    capacity = std::min(capacity, kMaxIndexSize);
+
+    while (true) {
+        output.resize(capacity);
+        mz_ulong outputSize = static_cast<mz_ulong>(capacity);
+        const int result = mz_uncompress(output.data(), &outputSize, data,
+                                         static_cast<mz_ulong>(size));
+        if (result == MZ_OK) {
+            output.resize(static_cast<size_t>(outputSize));
+            return true;
+        }
+        if (result != MZ_BUF_ERROR || capacity == kMaxIndexSize) {
+            output.clear();
+            return false;
+        }
+        capacity = std::min(kMaxIndexSize, capacity * 2);
+    }
 }
 
 // ============================================================================
@@ -105,17 +137,32 @@ static std::vector<uint8_t> EncodeFileName(const std::wstring& name) {
     return out;
 }
 
-static std::wstring DecodeFileName(const uint8_t*& p) {
-    std::wstring result;
-    while (true) {
-        wchar_t ch = (wchar_t)ReadU32(p);
-        if (ch == 0) break;
-        result += ch;
-        p += 2;
+static bool ReadU32Checked(const uint8_t*& cursor, const uint8_t* end, uint32_t& value) {
+    if (static_cast<size_t>(end - cursor) < sizeof(uint32_t)) return false;
+    value = ReadU32(cursor);
+    cursor += sizeof(uint32_t);
+    return true;
+}
+
+static bool ReadU64Checked(const uint8_t*& cursor, const uint8_t* end, uint64_t& value) {
+    if (static_cast<size_t>(end - cursor) < sizeof(uint64_t)) return false;
+    value = ReadU64(cursor);
+    cursor += sizeof(uint64_t);
+    return true;
+}
+
+static bool DecodeFileName(const uint8_t*& cursor, const uint8_t* end,
+                           std::wstring& result) {
+    result.clear();
+    while (static_cast<size_t>(end - cursor) >= 2) {
+        const uint16_t codeUnit = static_cast<uint16_t>(cursor[0]) |
+                                  (static_cast<uint16_t>(cursor[1]) << 8);
+        cursor += 2;
+        if (codeUnit == 0) return true;
+        if (result.size() >= kMaxPathCodeUnits) return false;
+        result.push_back(static_cast<wchar_t>(codeUnit));
     }
-    p += 2; // skip null terminator
-    // byte align: skip padding byte if present
-    return result;
+    return false;
 }
 
 // ============================================================================
@@ -145,27 +192,100 @@ static std::vector<uint8_t> BuildIndex(const std::vector<XP3Archive::FileEntry>&
 //  Parse index from decompressed buffer
 // ============================================================================
 
-static std::vector<XP3Archive::FileEntry> ParseIndex(const uint8_t* data, size_t size) {
-    std::vector<XP3Archive::FileEntry> files;
+static bool ParseIndex(const uint8_t* data, size_t size,
+                       std::vector<XP3Archive::FileEntry>& files) {
+    files.clear();
+    if (!data || size == 0 || size > kMaxIndexSize) return false;
+
+    const uint8_t* cursor = data;
     const uint8_t* end = data + size;
-    while (data < end) {
+    while (cursor < end) {
         XP3Archive::FileEntry fe;
-        fe.flags   = ReadU32(data);  data += 4;
-        fe.orgSize = ReadU64(data);  data += 8;
-        fe.arcSize = ReadU64(data);  data += 8;
-        fe.name = DecodeFileName(data);
-        uint32_t segCount = ReadU32(data); data += 4;
+        if (!ReadU32Checked(cursor, end, fe.flags) ||
+            !ReadU64Checked(cursor, end, fe.orgSize) ||
+            !ReadU64Checked(cursor, end, fe.arcSize) ||
+            !DecodeFileName(cursor, end, fe.name)) {
+            return false;
+        }
+
+        uint32_t segCount = 0;
+        if (!ReadU32Checked(cursor, end, segCount)) return false;
+        constexpr size_t kSegmentRecordSize = 4 + 8 + 8 + 8;
+        if (segCount == 0 ||
+            segCount > static_cast<size_t>(end - cursor) / kSegmentRecordSize) {
+            return false;
+        }
+
+        uint64_t totalOriginal = 0;
+        uint64_t totalArchived = 0;
         for (uint32_t j = 0; j < segCount; ++j) {
             XP3Archive::SegEntry seg;
-            seg.flags   = ReadU32(data);  data += 4;
-            seg.offset  = ReadU64(data);  data += 8;
-            seg.orgSize = ReadU64(data);  data += 8;
-            seg.arcSize = ReadU64(data);  data += 8;
+            if (!ReadU32Checked(cursor, end, seg.flags) ||
+                !ReadU64Checked(cursor, end, seg.offset) ||
+                !ReadU64Checked(cursor, end, seg.orgSize) ||
+                !ReadU64Checked(cursor, end, seg.arcSize)) {
+                return false;
+            }
+
+            const uint32_t compression = seg.flags & XP3Archive::XP3_SEGM_MASK;
+            if (compression != XP3Archive::XP3_ENC_RAW &&
+                compression != XP3Archive::XP3_ENC_ZLIB) {
+                return false;
+            }
+            if (compression == XP3Archive::XP3_ENC_RAW && seg.orgSize != seg.arcSize) {
+                return false;
+            }
+            if (seg.orgSize > kMaxExtractedFileSize ||
+                totalOriginal > std::numeric_limits<uint64_t>::max() - seg.orgSize ||
+                totalArchived > std::numeric_limits<uint64_t>::max() - seg.arcSize) {
+                return false;
+            }
+            totalOriginal += seg.orgSize;
+            totalArchived += seg.arcSize;
             fe.segments.push_back(seg);
+        }
+        if (fe.name.empty() || totalOriginal != fe.orgSize || totalArchived != fe.arcSize ||
+            fe.orgSize > kMaxExtractedFileSize) {
+            return false;
         }
         files.push_back(std::move(fe));
     }
-    return files;
+    return cursor == end;
+}
+
+static bool ValidateEntries(const std::vector<XP3Archive::FileEntry>& files,
+                            uint64_t indexOffset) {
+    uint64_t totalExtracted = 0;
+    for (const auto& file : files) {
+        if (totalExtracted > kMaxTotalExtractedSize - file.orgSize) return false;
+        totalExtracted += file.orgSize;
+        for (const auto& segment : file.segments) {
+            if (segment.offset < 13 || segment.offset > indexOffset ||
+                segment.arcSize > indexOffset - segment.offset) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool ResolveOutputPath(const fs::path& outputRoot, const std::wstring& name,
+                              fs::path& resolved) {
+    std::string relativePath(name.begin(), name.end());
+    std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+    fs::path relative(relativePath);
+    if (relative.empty() || relative.is_absolute() || relative.has_root_name()) return false;
+    for (const auto& part : relative) {
+        if (part == "..") return false;
+    }
+
+    resolved = (outputRoot / relative).lexically_normal();
+    const fs::path checkedRelative = resolved.lexically_relative(outputRoot);
+    if (checkedRelative.empty() || checkedRelative.is_absolute()) return false;
+    for (const auto& part : checkedRelative) {
+        if (part == "..") return false;
+    }
+    return true;
 }
 
 // ============================================================================
@@ -277,16 +397,16 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
     }
 
     uint64_t indexOff = ReadU64(raw.data() + 5);
-
-    // Read index segment (from indexOff to end of file)
-    size_t indexRawSize = raw.size() - (size_t)indexOff;
-    if (indexOff >= raw.size() || indexRawSize == 0) {
+    if (indexOff < 13 || indexOff >= raw.size()) {
         fprintf(stderr, "[XP3] Invalid index offset.\n");
         return false;
     }
+    const size_t indexOffset = static_cast<size_t>(indexOff);
+
+    // Read index segment (from indexOff to end of file)
+    size_t indexRawSize = raw.size() - indexOffset;
 
     // M1: prevent decompression bomb (cap at 256 MB)
-    constexpr size_t kMaxIndexSize = 256 * 1024 * 1024;
     if (indexRawSize > kMaxIndexSize) {
         fprintf(stderr, "[XP3] Index too large (%.1f MB > 256 MB limit).\n",
                 (double)indexRawSize / (1024.0 * 1024.0));
@@ -294,71 +414,63 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
     }
 
     // Decompress index (try zlib first, then assume raw)
-    size_t estimateOut = indexRawSize * 4;
-    if (estimateOut > kMaxIndexSize) estimateOut = kMaxIndexSize;
-    auto decompIndex = ZlibDecompress(raw.data() + indexOff, indexRawSize, estimateOut);
-    const uint8_t* idxData = nullptr;
-    size_t idxSize = 0;
-    if (!decompIndex.empty()) {
-        idxData = decompIndex.data();
-        idxSize = decompIndex.size();
-    } else {
-        // Might be raw (uncompressed) index
-        idxData = raw.data() + indexOff;
-        idxSize = indexRawSize;
-    }
+    std::vector<uint8_t> decompIndex;
+    const bool indexCompressed = DecodeIndex(raw.data() + indexOffset, indexRawSize, decompIndex);
+    const uint8_t* idxData = indexCompressed ? decompIndex.data() : raw.data() + indexOffset;
+    const size_t idxSize = indexCompressed ? decompIndex.size() : indexRawSize;
 
-    auto files = ParseIndex(idxData, idxSize);
+    std::vector<FileEntry> files;
+    if (!ParseIndex(idxData, idxSize, files) || !ValidateEntries(files, indexOff)) {
+        fprintf(stderr, "[XP3] Invalid index contents.\n");
+        return false;
+    }
     int total = (int)files.size();
 
-    fs::create_directories(outputDir);
+    const fs::path outputRoot = fs::absolute(outputDir).lexically_normal();
+    std::vector<fs::path> outputPaths;
+    outputPaths.reserve(files.size());
+    for (const auto& file : files) {
+        fs::path outputPath;
+        if (!ResolveOutputPath(outputRoot, file.name, outputPath)) {
+            fprintf(stderr, "[XP3] Rejected unsafe output path.\n");
+            return false;
+        }
+        outputPaths.push_back(std::move(outputPath));
+    }
+
+    std::error_code ec;
+    fs::create_directories(outputRoot, ec);
+    if (ec) return false;
 
     for (int i = 0; i < total; ++i) {
         auto& fe = files[i];
-        // Build output path from UTF-16LE name
-        std::string relPath(fe.name.begin(), fe.name.end());
-        std::replace(relPath.begin(), relPath.end(), '\\', '/');
-
-        // C2: path traversal guard ?? reject ".." components
-        if (relPath.find("..") != std::string::npos) {
-            fprintf(stderr, "[XP3] Rejected path traversal: %s\n", relPath.c_str());
-            continue;
+        const fs::path& outputPath = outputPaths[static_cast<size_t>(i)];
+        if (outputPath.has_parent_path()) {
+            fs::create_directories(outputPath.parent_path(), ec);
+            if (ec) return false;
         }
-
-        fs::path outAbs = fs::absolute(outputDir).lexically_normal();
-        fs::path filePath = (outAbs / relPath).lexically_normal();
-        // Verify filePath prefix is within outputDir
-        std::string outAbsStr = outAbs.string();
-        std::string filePathStr = filePath.string();
-        if (filePathStr.size() < outAbsStr.size() ||
-            filePathStr.compare(0, outAbsStr.size(), outAbsStr) != 0) {
-            fprintf(stderr, "[XP3] Rejected path escape: %s\n", relPath.c_str());
-            continue;
-        }
-        std::string outPath = filePathStr;
-
-        // Create parent directories
-        fs::path p(outPath);
-        if (p.has_parent_path())
-            fs::create_directories(p.parent_path());
 
         // Extract segments
         std::vector<uint8_t> outData;
+        outData.reserve(static_cast<size_t>(fe.orgSize));
         for (auto& seg : fe.segments) {
-            if (seg.offset + seg.arcSize > raw.size()) continue;
-            const uint8_t* segData = raw.data() + seg.offset;
+            const size_t segmentOffset = static_cast<size_t>(seg.offset);
+            const size_t archivedSize = static_cast<size_t>(seg.arcSize);
+            const size_t originalSize = static_cast<size_t>(seg.orgSize);
+            const uint8_t* segData = raw.data() + segmentOffset;
             bool compressed = (seg.flags & XP3_SEGM_MASK) == XP3_ENC_ZLIB;
 
             if (compressed) {
-                auto d = ZlibDecompress(segData, (size_t)seg.arcSize, (size_t)seg.orgSize);
-                if (!d.empty())
-                    outData.insert(outData.end(), d.begin(), d.end());
+                auto d = ZlibDecompress(segData, archivedSize, originalSize);
+                if (d.size() != originalSize) return false;
+                outData.insert(outData.end(), d.begin(), d.end());
             } else {
-                outData.insert(outData.end(), segData, segData + (size_t)seg.orgSize);
+                outData.insert(outData.end(), segData, segData + archivedSize);
             }
         }
+        if (outData.size() != fe.orgSize) return false;
 
-        WriteFileBytes(outPath, outData.data(), outData.size());
+        if (!WriteFileBytes(outputPath.string(), outData.data(), outData.size())) return false;
         if (progressCb) progressCb(i + 1, total);
     }
 
@@ -378,19 +490,20 @@ std::vector<XP3Archive::FileEntry> XP3Archive::list(const std::string& xp3File) 
     if (memcmp(raw.data(), magic, 5) != 0) return {};
 
     uint64_t indexOff = ReadU64(raw.data() + 5);
-    size_t indexRawSize = raw.size() - (size_t)indexOff;
-    if (indexOff >= raw.size() || indexRawSize == 0) return {};
+    if (indexOff < 13 || indexOff >= raw.size()) return {};
+    const size_t indexOffset = static_cast<size_t>(indexOff);
+    size_t indexRawSize = raw.size() - indexOffset;
 
     // M1: prevent decompression bomb (cap at 256 MB) �� same as unpack()
-    constexpr size_t kMaxIndexSize = 256 * 1024 * 1024;
     if (indexRawSize > kMaxIndexSize) return {};
-    size_t estimateOut = indexRawSize * 4;
-    if (estimateOut > kMaxIndexSize) estimateOut = kMaxIndexSize;
-    auto decompIndex = ZlibDecompress(raw.data() + indexOff, indexRawSize, estimateOut);
-    const uint8_t* idxData = decompIndex.empty() ? raw.data() + indexOff : decompIndex.data();
-    size_t idxSize = decompIndex.empty() ? indexRawSize : decompIndex.size();
+    std::vector<uint8_t> decompIndex;
+    const bool indexCompressed = DecodeIndex(raw.data() + indexOffset, indexRawSize, decompIndex);
+    const uint8_t* idxData = indexCompressed ? decompIndex.data() : raw.data() + indexOffset;
+    const size_t idxSize = indexCompressed ? decompIndex.size() : indexRawSize;
 
-    return ParseIndex(idxData, idxSize);
+    std::vector<FileEntry> files;
+    if (!ParseIndex(idxData, idxSize, files) || !ValidateEntries(files, indexOff)) return {};
+    return files;
 }
 
 } // namespace Caesura

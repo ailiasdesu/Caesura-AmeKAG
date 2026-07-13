@@ -20,8 +20,14 @@
 #include "../di/BackendRegistry.h"
 #include "../di/thread/ThreadAssert.h"
 #include <cstdio>
+#include <limits>
 
 namespace Caesura {
+
+namespace {
+char kLuaManagerRegistryKey;
+constexpr int kInstructionHookInterval = 1000;
+}
 
 LuaManager& LuaManager::instance() {
     static LuaManager mgr;
@@ -34,13 +40,23 @@ LuaManager& LuaManager::instance() {
 // ===========================================================================
 
 void LuaManager::instructionHook(lua_State* L, lua_Debug* /*ar*/) {
-    auto& mgr = LuaManager::instance();
-    mgr.m_instructionCount++;
-    if (mgr.m_instructionCount > mgr.m_instructionBudget) {
-        mgr.m_budgetExceeded = true;
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &kLuaManagerRegistryKey);
+    auto* manager = static_cast<LuaManager*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    if (!manager) return;
+
+    if (manager->m_instructionCount >
+        std::numeric_limits<int>::max() - kInstructionHookInterval) {
+        manager->m_instructionCount = std::numeric_limits<int>::max();
+    } else {
+        manager->m_instructionCount += kInstructionHookInterval;
+    }
+
+    if (manager->m_instructionCount > manager->m_instructionBudget) {
+        manager->m_budgetExceeded = true;
         // Force a Lua error to unwind the stack
         luaL_error(L, "Sandbox: instruction budget exceeded (%d instructions)",
-                   mgr.m_instructionBudget);
+                   manager->m_instructionBudget);
     }
 }
 
@@ -61,8 +77,11 @@ bool LuaManager::init() {
 
     registerModules();
 
+    lua_pushlightuserdata(m_L, this);
+    lua_rawsetp(m_L, LUA_REGISTRYINDEX, &kLuaManagerRegistryKey);
+
     // Track 3: Instruction-count hook for CPU budget (every 1000 instructions)
-    lua_sethook(m_L, instructionHook, LUA_MASKCOUNT, 1000);
+    lua_sethook(m_L, instructionHook, LUA_MASKCOUNT, kInstructionHookInterval);
 
     m_initialized = true;
     printf("[Lua] VM initialized.\n");
@@ -140,4 +159,3 @@ void LuaManager::resumeKAGCoroutine() {
     // Reserved for future use
 }
 } // namespace Caesura
-

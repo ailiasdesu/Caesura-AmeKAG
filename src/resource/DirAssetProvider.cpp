@@ -1,34 +1,48 @@
-﻿#include "DirAssetProvider.h"
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <sys/stat.h>
-#endif
+#include "DirAssetProvider.h"
+#include <filesystem>
 #include <fstream>
+
+namespace fs = std::filesystem;
 
 namespace caesura {
 
 std::string DirAssetProvider::fullPath(const std::string& path) const
 {
-    if (m_rootDir.empty()) return path;
-#ifdef _WIN32
-    if (m_rootDir.back() == '\\' || m_rootDir.back() == '/')
-        return m_rootDir + path;
-    return m_rootDir + "\\" + path;
-#else
-    if (m_rootDir.back() == '/')
-        return m_rootDir + path;
-    return m_rootDir + "/" + path;
-#endif
+    if (path.empty()) return {};
+
+    const fs::path requested(path);
+    if (requested.is_absolute() || requested.has_root_name()) return {};
+    for (const auto& part : requested) {
+        if (part == "..") return {};
+    }
+
+    std::error_code ec;
+    fs::path root = m_rootDir.empty()
+        ? fs::current_path(ec)
+        : fs::absolute(fs::path(m_rootDir), ec);
+    if (ec) return {};
+    root = fs::weakly_canonical(root, ec);
+    if (ec) return {};
+
+    const fs::path candidate = fs::weakly_canonical(root / requested, ec);
+    if (ec) return {};
+    const fs::path relative = candidate.lexically_relative(root);
+    if (relative.empty() || relative.is_absolute()) return {};
+    for (const auto& part : relative) {
+        if (part == "..") return {};
+    }
+    return candidate.string();
 }
 
 std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
 {
-    std::string fp = fullPath(path);
+    const std::string fp = fullPath(path);
+    if (fp.empty()) return {};
+
     std::ifstream file(fp, std::ios::binary | std::ios::ate);
     if (!file.is_open()) return {};
 
-    std::streamsize size = file.tellg();
+    const std::streamsize size = file.tellg();
     if (size <= 0) return {};
 
     file.seekg(0, std::ios::beg);
@@ -40,14 +54,10 @@ std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
 
 bool DirAssetProvider::exists(const std::string& path)
 {
-    std::string fp = fullPath(path);
-#ifdef _WIN32
-    DWORD attr = GetFileAttributesA(fp.c_str());
-    return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
-#else
-    struct stat st;
-    return (stat(fp.c_str(), &st) == 0 && S_ISREG(st.st_mode));
-#endif
+    const std::string fp = fullPath(path);
+    if (fp.empty()) return false;
+    std::error_code ec;
+    return fs::is_regular_file(fs::path(fp), ec) && !ec;
 }
 
 } // namespace caesura

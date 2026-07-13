@@ -3,6 +3,8 @@
 #include "entry/Engine.h"
 #include <atomic>
 #include <chrono>
+#include <fstream>
+#include <sstream>
 #include <thread>
 
 using namespace Caesura;
@@ -115,4 +117,12 @@ TEST_CASE("JobSystem::parallel jobs") {
     CHECK(counter.load() == kJobs);
 
     js.shutdown();
+}
+
+TEST_CASE("JobSystem shutdown never detaches workers from owned state") {
+    std::ifstream source("../../../src/job/JobSystem.cpp", std::ios::binary);
+    REQUIRE(source.is_open());
+    const std::string contents((std::istreambuf_iterator<char>(source)),
+                               std::istreambuf_iterator<char>());
+    CHECK(contents.find(".detach()") == std::string::npos);
 }

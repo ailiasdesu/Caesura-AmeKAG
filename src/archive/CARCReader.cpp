@@ -8,8 +8,22 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+#include <limits>
 
 namespace Caesura::carc {
+
+namespace {
+constexpr uint64_t kCarcTrailerSize = SIGNATURE_SIZE + PUBLICKEY_SIZE;
+constexpr uint64_t kMaxCarcIndexSize = 64ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxCarcEntrySize = 512ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxCarcSignedSize = 1024ull * 1024ull * 1024ull;
+
+bool checkedAdd(uint64_t left, uint64_t right, uint64_t& result) {
+    if (left > std::numeric_limits<uint64_t>::max() - right) return false;
+    result = left + right;
+    return true;
+}
+}
 
 // ==========================================================================
 // open -- load and verify a CARC file
@@ -28,6 +42,38 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
         return false;
     }
     if (m_header.version != CARC_VERSION) {
+        close();
+        return false;
+    }
+
+    m_stream.seekg(0, std::ios::end);
+    const std::streampos endPosition = m_stream.tellg();
+    if (endPosition < 0) {
+        close();
+        return false;
+    }
+    const uint64_t fileSize = static_cast<uint64_t>(endPosition);
+    uint64_t contentEnd = 0;
+    uint64_t indexEnd = 0;
+    uint64_t expectedPlainIndexSize = 0;
+    uint64_t expectedEncryptedIndexSize = 0;
+    const bool headerValid =
+        fileSize >= sizeof(CARCHeader) + kCarcTrailerSize &&
+        m_header.contentOffset == sizeof(CARCHeader) &&
+        m_header.indexSize >= AES_TAG_SIZE &&
+        m_header.indexSize <= kMaxCarcIndexSize &&
+        checkedAdd(m_header.contentOffset, m_header.contentSize, contentEnd) &&
+        contentEnd == m_header.indexOffset &&
+        checkedAdd(m_header.indexOffset, m_header.indexSize, indexEnd) &&
+        indexEnd <= kMaxCarcSignedSize &&
+        indexEnd == fileSize - kCarcTrailerSize &&
+        m_header.numFiles <= (kMaxCarcIndexSize - sizeof(uint32_t)) / sizeof(FileEntry) &&
+        checkedAdd(sizeof(uint32_t),
+                   static_cast<uint64_t>(m_header.numFiles) * sizeof(FileEntry),
+                   expectedPlainIndexSize) &&
+        checkedAdd(expectedPlainIndexSize, AES_TAG_SIZE, expectedEncryptedIndexSize) &&
+        m_header.indexSize == expectedEncryptedIndexSize;
+    if (!headerValid) {
         close();
         return false;
     }
@@ -72,8 +118,8 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
         return false;
     }
 
-    size_t expectedSize = sizeof(uint32_t) + count * sizeof(FileEntry);
-    if (indexData.size() < expectedSize) {
+    size_t expectedSize = sizeof(uint32_t) + static_cast<size_t>(count) * sizeof(FileEntry);
+    if (indexData.size() != expectedSize) {
         close();
         return false;
     }
@@ -83,6 +129,13 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
 
     for (uint32_t i = 0; i < count; ++i) {
         const FileEntry& e = entries[i];
+        if (e.offset > m_header.contentSize ||
+            e.compressedSize > m_header.contentSize - e.offset ||
+            e.compressedSize > kMaxCarcEntrySize ||
+            e.originalSize > kMaxCarcEntrySize) {
+            close();
+            return false;
+        }
         std::string hexHash = pathHashToHex(e.pathHash);
 
         CarcFileInfo info;
@@ -130,14 +183,23 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
 
     // Read encrypted + compressed data from content block.
     // Mutex guards the shared ifstream across concurrent JobSystem workers.
-    std::vector<uint8_t> encrypted(info.compressedSize);
+    if (info.compressedSize > kMaxCarcEntrySize || info.originalSize > kMaxCarcEntrySize ||
+        info.offset > m_header.contentSize ||
+        info.compressedSize > m_header.contentSize - info.offset) {
+        return {};
+    }
+    std::vector<uint8_t> encrypted(static_cast<size_t>(info.compressedSize));
+    bool readSucceeded = false;
     {
         std::lock_guard<std::mutex> lock(m_streamMutex);
+        m_stream.clear();
         m_stream.seekg(m_header.contentOffset + info.offset, std::ios::beg);
         if (!m_stream) return {};
-        m_stream.read(reinterpret_cast<char*>(encrypted.data()), info.compressedSize);
+        m_stream.read(reinterpret_cast<char*>(encrypted.data()),
+                      static_cast<std::streamsize>(info.compressedSize));
+        readSucceeded = static_cast<bool>(m_stream);
     }
-    if (!m_stream) return {};
+    if (!readSucceeded) return {};
 
     // AES-GCM decrypt
     std::vector<uint8_t> compressed = CryptoEngine::decrypt(
@@ -147,8 +209,8 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
     if (compressed.size() == info.originalSize && info.compressedSize == info.originalSize) {
         return compressed;
     }
-    size_t destLen = info.originalSize;
-    std::vector<uint8_t> decompressed(info.originalSize);
+    size_t destLen = static_cast<size_t>(info.originalSize);
+    std::vector<uint8_t> decompressed(destLen);
     size_t result = ZSTD_decompress(decompressed.data(), destLen,
                                     compressed.data(), compressed.size());
     if (ZSTD_isError(result)) {
@@ -157,7 +219,7 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
         }
         return {};
     }
-    decompressed.resize(result);
+    if (result != destLen) return {};
     return decompressed;
 }
 
@@ -200,10 +262,15 @@ bool CARCReader::verifySignature()
     if (!m_stream) return false;
 
     // Data covered: header + content + index
-    uint64_t dataSize = m_header.indexOffset + m_header.indexSize;
+    uint64_t dataSize = 0;
+    if (!checkedAdd(m_header.indexOffset, m_header.indexSize, dataSize) ||
+        dataSize > kMaxCarcSignedSize || dataSize > std::numeric_limits<size_t>::max()) {
+        return false;
+    }
     m_stream.seekg(0, std::ios::beg);
     std::vector<uint8_t> signedData(static_cast<size_t>(dataSize));
-    m_stream.read(reinterpret_cast<char*>(signedData.data()), dataSize);
+    m_stream.read(reinterpret_cast<char*>(signedData.data()),
+                  static_cast<std::streamsize>(dataSize));
     if (!m_stream) return false;
 
     return CryptoEngine::verify(signedData.data(), signedData.size(),
@@ -215,6 +282,9 @@ bool CARCReader::verifySignature()
 // ==========================================================================
 bool CARCReader::decryptIndex(std::vector<uint8_t>& outIndexData)
 {
+    if (m_header.indexSize < AES_TAG_SIZE || m_header.indexSize > kMaxCarcIndexSize) {
+        return false;
+    }
     m_stream.seekg(m_header.indexOffset, std::ios::beg);
     if (!m_stream) return false;
 
@@ -233,7 +303,8 @@ bool CARCReader::decryptIndex(std::vector<uint8_t>& outIndexData)
 
     m_stream.seekg(m_header.indexOffset, std::ios::beg);
     std::vector<uint8_t> encryptedIndex(static_cast<size_t>(encryptedDataSize));
-    m_stream.read(reinterpret_cast<char*>(encryptedIndex.data()), encryptedDataSize);
+    m_stream.read(reinterpret_cast<char*>(encryptedIndex.data()),
+                  static_cast<std::streamsize>(encryptedDataSize));
     if (!m_stream) return false;
 
     outIndexData = CryptoEngine::decrypt(

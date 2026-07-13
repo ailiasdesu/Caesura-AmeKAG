@@ -142,6 +142,25 @@ TEST_CASE("Render device interface does not expose bgfx handle types") {
     CHECK(source.find("bgfx::") == std::string::npos);
 }
 
+TEST_CASE("Backend interfaces do not provide concrete default behavior") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string render = readFile(repoRoot / "src" / "render" / "api" / "IRenderDevice.h");
+    CHECK(render.find("virtual void beginShutdown() {") == std::string::npos);
+    CHECK(render.find("virtual void flagDeviceLost() {") == std::string::npos);
+    CHECK(render.find("virtual bool consumeDeviceLost() {") == std::string::npos);
+    CHECK(render.find("virtual RenderUniformHandle getDefaultSampler() const {") == std::string::npos);
+    CHECK(render.find("virtual RenderProgramHandle getFallbackProgram() const {") == std::string::npos);
+    CHECK(render.find("virtual RenderRuntimeInfo getRuntimeInfo() const {") == std::string::npos);
+    CHECK(render.find("virtual bool setPreferredBackend(const char*) {") == std::string::npos);
+
+    const std::string saves = readFile(repoRoot / "src" / "storage" / "api" / "ISaveProvider.h");
+    CHECK(saves.find("virtual bool pushToCloud(const std::string& slotPath) {") == std::string::npos);
+    CHECK(saves.find("virtual bool pullFromCloud(const std::string& slotPath) {") == std::string::npos);
+    CHECK(saves.find("virtual bool supportsCloudSync() const {") == std::string::npos);
+}
+
 TEST_CASE("Main entry point delegates script bootstrap helpers") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());
