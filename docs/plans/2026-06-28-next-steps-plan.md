@@ -1,6 +1,9 @@
 # Caesura (AmeKAG) — 下一步修改方案
 
 > 2026-06-28 | 基于 76 项就绪度审计结果 | 不出代码，仅方案
+>
+> 该文件包含在分支 `codex/engine-audit-hardening` 中。
+> 对应的 master 分支（20073e29）还包括本分支中已实施的 18 项加固 + 架构重构。
 
 ---
 
@@ -11,8 +14,8 @@
 | 通过率 | 68/76 (89%) |
 | P2延期 | 7项 |
 | P0阻塞 | 0 |
-| 测试 | 412 passed |
-| 远程 | 20073e29 |
+| 测试 | 412 passed (master) / 18项加固待测 (codex/engine-audit-hardening) |
+| 远程分支 | codex/engine-audit-hardening @ 6d1958c4 |
 
 ---
 
@@ -181,3 +184,12 @@ end
 ```
 
 总计: ~8h 工作量，可在 3人并行下 2-3天完成。
+
+---
+
+## 本分支与其他分支的关系
+
+- `master` (20073e29) — 稳定生产分支。512 项测试全绿，6 个已修复缺陷，2 轮代码简化，仅保留 7 个 P2 延期项。
+- `codex/engine-audit-hardening` (6d1958c4) — 本分支。在 master 67 提交之后进行的一系列防御性加固。你当前在此分支。
+  - 18 项安全/正确性加固（see `b4157053`）、架构重构（BackendRegistry、模块拆分）、新 Null 后端（render/platform）。
+  - 此分支尚未推送回 master。
