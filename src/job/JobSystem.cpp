@@ -1,14 +1,9 @@
 ﻿#include "JobSystem.h"
-#include "../di/thread/ThreadAssert.h"
+#include "../di/api/ThreadAssert.h"
 #include <cstdio>
 #include <chrono>
 
 namespace Caesura {
-
-JobSystem& JobSystem::instance() {
-    static JobSystem s;
-    return s;
-}
 
 JobSystem::~JobSystem() {
     shutdown();
@@ -203,4 +198,3 @@ void JobSystem::workerLoop(int workerIndex) {
 }
 
 } // namespace Caesura
-

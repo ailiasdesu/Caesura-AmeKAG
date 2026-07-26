@@ -28,6 +28,18 @@ set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/zstd/build/cmake ${CMAKE_BINARY_DIR}/zstd)
 
 # Dependencies
+# The repository ships a Windows SDL3 package. Prefer it when callers have not
+# selected another package so a fresh configure does not depend on user caches.
+if(WIN32 AND NOT SDL3_DIR)
+    set(_CAESURA_BUNDLED_SDL3_DIR
+        "${CMAKE_SOURCE_DIR}/external/SDL3/SDL3-3.2.0/cmake")
+    if(EXISTS "${_CAESURA_BUNDLED_SDL3_DIR}/SDL3Config.cmake")
+        set(SDL3_DIR "${_CAESURA_BUNDLED_SDL3_DIR}" CACHE PATH
+            "Directory containing SDL3Config.cmake" FORCE)
+        message(STATUS "SDL3: bundled (external/SDL3/SDL3-3.2.0)")
+    endif()
+    unset(_CAESURA_BUNDLED_SDL3_DIR)
+endif()
 find_package(SDL3 REQUIRED)
 
 # -- FFmpeg (hardware-accelerated video decoding, ON by default) -----------
@@ -101,16 +113,6 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/bgfx/bgfx ${CMAKE_BINARY_DIR}/bgfx
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/soloud/contrib ${CMAKE_BINARY_DIR}/soloud)
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/lua ${CMAKE_BINARY_DIR}/lua)
 
-# -- Miniz (zlib replacement) single-source library -------------------------
-add_library(miniz STATIC
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz/miniz.c
-)
-target_include_directories(miniz PUBLIC
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
-)
-target_compile_definitions(miniz PRIVATE _CRT_SECURE_NO_WARNINGS)
-
-
 # -- ed25519 (public-domain Ed25519 implementation) -------------------------
 set(ED25519_SOURCES
     external/ed25519/fe.c
@@ -128,175 +130,40 @@ target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
 # LPeg is pure-Lua (scripts/lpeg.lua) 锟斤拷??no C build needed
 
-# Engine sources
+# -- Engine modules ----------------------------------------------------------
+# CAESURA_DEBUG follows the existing single-config default. For multi-config
+# generators, Debug is enabled per configuration below; explicitly setting the
+# option ON continues to force debug logging in every configuration.
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    option(CAESURA_DEBUG "Enable debug logging and assertions" ON)
+else()
+    option(CAESURA_DEBUG "Enable debug logging and assertions" OFF)
+endif()
+option(CAESURA_HAS_STEAM "Enable Steamworks integration" OFF)
 
-set(ENGINE_SOURCES
-    src/main.cpp
-    src/entry/Engine.cpp
-    src/entry/Engine_Assets.cpp
-    src/entry/Engine_Backends.cpp
-    src/entry/Engine_Gpu.cpp
-    src/entry/Engine_LuaRegistry.cpp
-    src/entry/StartupScripts.cpp
-    src/entry/StartupValidation.cpp
-    src/job/JobSystem.cpp
-    src/input/InputRouter.cpp
-    src/di/BackendRegistry.cpp
-    src/debug/DebugManager.cpp
-    src/di/TextureBudget.cpp
-    src/di/SandboxQuota.cpp
-    src/rpc/RpcServer.h
-    src/rpc/EditorServer.h
-    src/rpc/RpcServer.cpp
-    src/rpc/EditorServer.cpp
-    src/entry/ErrorUI.cpp
-    src/platform/SDL3PlatformBackend.cpp
-    src/resource/XP3Archive.cpp
-    src/render/BgfxRenderDevice.cpp
-    src/render/BgfxDeviceCore.cpp
-    src/render/BgfxDraw_Batch.cpp
-    src/render/BgfxDraw_Blit.cpp
-    src/render/BgfxDraw_Effects.cpp
-    src/render/BgfxQuadBatch.cpp
-    src/render/BgfxShaderManager.cpp
-    src/render/BgfxDebugCallback.cpp
-    src/render/RTTManager.cpp
-    src/render/EmbeddedShaders.cpp
-    src/render/EmbeddedShaders_MiniGame.cpp
-    src/render/EmbeddedShaders_MiniGame_GLSL.cpp
-    src/render/EmbeddedShaders_MiniGame_Metal.cpp
-    src/render/TextRenderer.cpp
-    src/render/ParticleSystem.cpp
-    src/render/GpuMonitor.cpp
-    src/render/VideoPlayer.cpp
-    src/render/TextureManager.cpp
-    src/render/FreeTypeContext.cpp
-    src/render/LayerManager.cpp
-    src/minigame/NullMiniGameBackend.cpp
-    src/minigame/BgfxMiniGameBackend.cpp
-    src/minigame/MiniGeometry.cpp
-    src/minigame/MiniCollision.cpp
-    src/live2d/NullAnimationBackend.cpp
-    src/render/ShaderCache.cpp
-    src/audio/SoLoudAudioEngine.cpp
-    src/audio/NullAudioBackend.cpp
-    src/script/vm/LuaManager.cpp
-    src/script/bindings/KAGBinding.cpp
-    src/script/state/GameState.cpp
-    src/script/bindings/RenderBinding.cpp
-    src/script/bindings/VFXBinding.cpp
-    src/script/bindings/DevCoreBinding.cpp
-    src/script/bindings/DebugBinding.cpp
-    src/script/bindings/UnifiedBinding.cpp
-    src/script/bindings/SteamBinding.cpp
-    src/storage/SaveManager.cpp
-    src/storage/ISaveProvider.cpp
-    src/storage/SaveBinding.cpp
-    src/archive/CryptoEngine.cpp
-    src/archive/CARCReader.cpp
-    src/archive/CARCWriter.cpp
-    src/archive/CarcAssetProvider.cpp
-    src/resource/DirAssetProvider.cpp
-    src/resource/ProviderChain.cpp
-    src/resource/AssetManager.cpp
-    src/resource/ImageDecoder.cpp
-    src/resource/AsyncLoader.cpp
-    # Phase 8: Dev Tools
-    src/debug/HotReload.cpp
-    src/debug/DebugProtocol.cpp
-    # Phase 9: Security & Platform
-    src/archive/CRLManager.cpp
-    src/archive/DeltaCARC.cpp
-    src/platform/MobileAdapter.cpp
-)
+include(cmake/CaesuraModules.cmake)
 
-set(ENGINE_HEADERS
-    src/entry/Engine.h
-    src/entry/EngineConfig.h
-    src/job/JobSystem.h
-    src/input/InputRouter.h
-    src/audio/api/IAudioBackend.h
-    src/platform/api/IPlatformBackend.h
-    src/platform/SDL3PlatformBackend.h
-    src/resource/XP3Archive.h
-    src/di/BackendRegistry.h
-    src/di/SandboxQuota.h
-    src/di/thread/ThreadAssert.h
-    src/resource/ResourceHandle.h
-    src/debug/DebugManager.h
-    src/di/TextureBudget.h
-    src/entry/ErrorUI.h
-    src/render/api/IRenderDevice.h
-    src/render/BgfxRenderDevice.h
-    src/render/BgfxShaderManager.h
-    src/render/BgfxDeviceCore.h
-    src/render/BgfxDraw.h
-    src/render/BgfxQuadBatch.h
-    src/render/BgfxDebugCallback.h
-    src/render/RTTManager.h
-    src/render/EmbeddedShaders.h
-    src/render/TextRenderer.h
-    src/render/ParticleSystem.h
-    src/render/GpuMonitor.h
-    src/render/api/IGpuMonitor.h
-    src/render/VideoPlayer.h
-    src/render/TextureManager.h
-    src/render/LayerManager.h
-    src/minigame/api/IMiniGameBackend.h
-    src/minigame/NullMiniGameBackend.h
-    src/minigame/BgfxMiniGameBackend.h
-    src/minigame/MiniMaterial.h
-    src/minigame/MiniLight.h
-    src/minigame/MiniGeometry.h
-    src/minigame/MiniCollision.h
-    src/live2d/api/IAnimationBackend.h
-    src/live2d/NullAnimationBackend.h
-    src/render/ShaderCache.h
-    src/audio/SoLoudAudioEngine.h
-    src/audio/NullAudioBackend.h
-    src/script/vm/LuaManager.h
-    src/script/bindings/KAGBinding.h
-    src/script/state/GameState.h
-    src/script/bindings/RenderBinding.h
-    src/script/bindings/VFXBinding.h
-    src/script/bindings/DevCoreBinding.h
-    src/script/bindings/DebugBinding.h
-    src/script/bindings/UnifiedBinding.h
-    src/script/bindings/SteamBinding.h
-    src/storage/SaveManager.h
-    src/storage/api/ISaveProvider.h
-    src/storage/SaveBinding.h
-    src/archive/CARCFormat.h
-    src/archive/CryptoEngine.h
-    src/archive/CARCReader.h
-    src/archive/CARCWriter.h
-    src/archive/CarcAssetProvider.h
-    src/resource/api/IAssetProvider.h
-    src/resource/DirAssetProvider.h
-    src/resource/ProviderChain.h
-    src/resource/AssetManager.h
-    src/resource/ImageDecoder.h
-    src/resource/AsyncLoader.h
-    # Phase 8: Dev Tools
-    src/debug/HotReload.h
-    src/debug/DebugProtocol.h
-    # Phase 9: Security & Platform
-    src/archive/CRLManager.h
-    src/archive/DeltaCARC.h
-    src/platform/MobileAdapter.h
-)
+# CMAKE_BUILD_TYPE is empty for Visual Studio and other multi-config
+# generators. Add the default Debug definition at generation time without
+# leaking it into Release-family configurations.
+if(CMAKE_CONFIGURATION_TYPES AND NOT CAESURA_DEBUG)
+    target_compile_definitions(CaesuraBuildOptions INTERFACE
+        $<$<CONFIG:Debug>:CAESURA_DEBUG=1>
+    )
+endif()
 
-# Executable
-add_executable(${PROJECT_NAME} ${ENGINE_SOURCES} ${ENGINE_HEADERS})
-
-# -- pl_mpeg (header-only MPEG-1 decoder, zero-dep fallback) ---------------
-target_include_directories(${PROJECT_NAME} PRIVATE external/pl_mpeg)
+# The distributable remains one executable; production sources live in the
+# module libraries above and are compiled exactly once.
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE Caesura::Engine Caesura::Rpc)
 
 # -- FFmpeg (apply if found above) -----------------------------------------
 if(CAESURA_FFMPEG_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_VIDEO_FFMPEG)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_INCLUDE_DIRS})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
+    # VideoPlayer.h changes layout under this flag, so consumers must inherit
+    # the same definition as the render module.
+    target_compile_definitions(CaesuraRender PUBLIC CAESURA_VIDEO_FFMPEG)
+    target_include_directories(CaesuraRender PRIVATE ${CAESURA_FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(CaesuraRender PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
     # Copy FFmpeg DLLs to output at configure time (avoids MSBuild Unicode path issues)
     if(WIN32)
         # Copy DLLs from bin/ (where prebuilt FFmpeg keeps them), not lib/
@@ -307,65 +174,19 @@ if(CAESURA_FFMPEG_FOUND)
     endif()
 endif()
 
-
-target_include_directories(${PROJECT_NAME} PRIVATE 
-    src 
-    src/Platform
-    ${CMAKE_SOURCE_DIR}/external
-    ${CMAKE_SOURCE_DIR}/external/soloud/include 
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bx/include 
-    external/cpp-httplib
-    external/json
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/include 
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/include 
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty
-    # stb single-headers
-    ${CMAKE_SOURCE_DIR}/external/stb
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/stb
-    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty/stb
-    # pl_mpeg single-header
-    ${CMAKE_SOURCE_DIR}/external/pl_mpeg
-    # FreeType + zstd (external/)
-    ${CMAKE_SOURCE_DIR}/external/freetype/include
-    ${CMAKE_SOURCE_DIR}/external/zstd/lib
-)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 bgfx bimg bx soloud lua miniz ed25519 freetype libzstd_static)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>$<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>)
-
 # Copy SDL3 DLL to output directory for runtime
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3>"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/SDL3.dll"
-    COMMENT "Copying SDL3.dll to output"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/$<TARGET_FILE_NAME:SDL3::SDL3>"
+    COMMENT "Copying SDL3 runtime to output"
+    VERBATIM
 )
 
 
 
 if(MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
-    target_compile_options(${PROJECT_NAME} PRIVATE /W3 /wd4100 /wd4189 /wd4244 /Zc:__cplusplus /Zc:preprocessor /utf-8 /FS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN __STDC_LIMITS_MACROS __STDC_FORMAT_MACROS __STDC_CONSTANT_MACROS)
-endif()
-
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler)
-    # BCrypt is built into Windows; no extra OpenSSL needed
-elseif(APPLE)
-    find_library(COCOA_LIBRARY Cocoa REQUIRED)
-    find_library(IOKIT_LIBRARY IOKit REQUIRED)
-    find_library(METAL_LIBRARY Metal REQUIRED)
-    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
-    find_library(QUARTZCORE QuartzCore REQUIRED)
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE} ${FOUNDATION_LIBRARY} pthread OpenSSL::SSL OpenSSL::Crypto)
-elseif(UNIX)
-    find_package(Threads REQUIRED)
-    find_package(X11 REQUIRED)
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads dl X11::X11 OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 
@@ -385,22 +206,12 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying demo to output directory..."
 )
 
-# -- Debug / Release configuration ------------------------------------------
-# CAESURA_DEBUG: defaults ON for Debug builds, OFF for Release/MinSizeRel
-if(CMAKE_BUILD_TYPE MATCHES "Debug")
-    option(CAESURA_DEBUG "Enable debug logging and assertions" ON)
-else()
-    option(CAESURA_DEBUG "Enable debug logging and assertions" OFF)
-endif()
-if(CAESURA_DEBUG)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_DEBUG)
-endif()
-
 # -- Steam (optional)
 if(CAESURA_HAS_STEAM)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_STEAM)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${STEAM_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${STEAM_LIBRARY})
+    target_compile_definitions(CaesuraSteam PRIVATE CAESURA_HAS_STEAM)
+    target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_STEAM)
+    target_include_directories(CaesuraSteam PRIVATE ${STEAM_INCLUDE_DIR})
+    target_link_libraries(CaesuraSteam PRIVATE ${STEAM_LIBRARY})
 endif()
 
 # -- Live2D Cubism animation (optional, proprietary SDK) ---------------------
@@ -408,27 +219,74 @@ option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK downl
 
 if(CAESURA_LIVE2D)
     set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root")
-    set(GLEW_ROOT "C:/glew/glew-2.2.0")
 
     if(NOT EXISTS "${CUBISM_SDK_ROOT}/Core/include/Live2DCubismCore.h")
         message(WARNING "Cubism SDK not found at ${CUBISM_SDK_ROOT}. Download from live2d.com")
     else()
-        message(STATUS "Live2D SDK + GLEW found")
-
         set(CUBISM_CORE_DIR "${CUBISM_SDK_ROOT}/Core")
         set(CUBISM_FRAMEWORK_DIR "${CUBISM_SDK_ROOT}/Framework")
+        set(CAESURA_CUBISM_ARCH "${CMAKE_SYSTEM_PROCESSOR}" CACHE STRING
+            "Cubism Core architecture directory (for example x86_64 or arm64)")
+        set(CUBISM_ENGINE_RENDER_PATH_SRCS)
+        set(CUBISM_OPENGL_RENDER_PATH_SRCS
+            src/live2d/Live2D/OpenGLReadbackRenderPath.h
+            src/live2d/Live2D/OpenGLReadbackRenderPath.cpp
+            src/live2d/Live2D/OpenGLSharedRenderPath.h
+            src/live2d/Live2D/OpenGLSharedRenderPath.cpp
+        )
+        set(CUBISM_PLATFORM_DEFINITION)
+        set(CUBISM_PLATFORM_LIBRARIES)
 
         # --- Cubism Core (prebuilt) ---
         add_library(Live2DCubismCore STATIC IMPORTED)
         if(WIN32)
+            if(NOT MSVC)
+                message(FATAL_ERROR "Live2D Cubism Core on Windows requires MSVC")
+            endif()
             set_target_properties(Live2DCubismCore PROPERTIES
-                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib")
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib"
+                IMPORTED_LOCATION_DEBUG "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MTd.lib"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
+            )
+            set(CUBISM_FRAMEWORK_RENDERER D3D11)
+            list(APPEND CUBISM_PLATFORM_LIBRARIES d3d11 d3dcompiler)
+            list(APPEND CUBISM_ENGINE_RENDER_PATH_SRCS
+                src/live2d/Live2D/D3D11NativeRenderPath.h
+                src/live2d/Live2D/D3D11NativeRenderPath.cpp
+            )
+        elseif(APPLE)
+            set_target_properties(Live2DCubismCore PROPERTIES
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/macos/${CAESURA_CUBISM_ARCH}/libLive2DCubismCore.a"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
+            )
+            set(CUBISM_FRAMEWORK_RENDERER OpenGL)
+            set(CUBISM_PLATFORM_DEFINITION CSM_TARGET_MAC_GL)
+            list(APPEND CUBISM_ENGINE_RENDER_PATH_SRCS
+                ${CUBISM_OPENGL_RENDER_PATH_SRCS}
+                src/live2d/Live2D/MetalNativeRenderPath.h
+                src/live2d/Live2D/MetalNativeRenderPath.cpp
+            )
         elseif(UNIX)
             set_target_properties(Live2DCubismCore PROPERTIES
-                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/x86_64/libLive2DCubismCore.a")
+                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/${CAESURA_CUBISM_ARCH}/libLive2DCubismCore.a"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
+            )
+            set(CUBISM_FRAMEWORK_RENDERER OpenGL)
+            set(CUBISM_PLATFORM_DEFINITION CSM_TARGET_LINUX_GL)
+            list(APPEND CUBISM_ENGINE_RENDER_PATH_SRCS
+                ${CUBISM_OPENGL_RENDER_PATH_SRCS}
+            )
+        else()
+            message(FATAL_ERROR "Live2D is not configured for ${CMAKE_SYSTEM_NAME}")
         endif()
 
-        # --- Cubism Framework + OpenGL ES2 backend ---
+        if(NOT WIN32)
+            find_package(OpenGL REQUIRED)
+            find_package(GLEW REQUIRED)
+            list(APPEND CUBISM_PLATFORM_LIBRARIES OpenGL::GL GLEW::GLEW)
+        endif()
+
+        # --- Cubism Framework + one platform renderer ---
         file(GLOB_RECURSE CUBISM_FRAMEWORK_SRCS
             "${CUBISM_FRAMEWORK_DIR}/src/CubismCdiJson.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/CubismDefaultParameterId.cpp"
@@ -442,8 +300,7 @@ if(CAESURA_LIVE2D)
             "${CUBISM_FRAMEWORK_DIR}/src/Physics/*.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Rendering/csmBlendMode.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Rendering/CubismRenderer.cpp"
-            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/OpenGL/*.cpp"
-            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/*.cpp"  # Windows only (D3D11)
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/${CUBISM_FRAMEWORK_RENDERER}/*.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Type/*.cpp"
             "${CUBISM_FRAMEWORK_DIR}/src/Utils/*.cpp"
         )
@@ -454,47 +311,42 @@ if(CAESURA_LIVE2D)
             "${CUBISM_CORE_DIR}/include"
         )
         target_include_directories(CubismFramework PRIVATE
-            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/OpenGL"
-            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11"  # Windows only
+            "${CUBISM_FRAMEWORK_DIR}/src/Rendering/${CUBISM_FRAMEWORK_RENDERER}"
         )
-        if(WIN32)
-            target_include_directories(CubismFramework PRIVATE "${GLEW_ROOT}/include")
-            target_link_libraries(CubismFramework PRIVATE
-                debug "${GLEW_ROOT}/lib/Release/x64/glew32s.lib"
-                optimized "${GLEW_ROOT}/lib/Release/x64/glew32s.lib")
+        target_link_libraries(CubismFramework PRIVATE
+            Live2DCubismCore
+            ${CUBISM_PLATFORM_LIBRARIES}
+        )
+        if(CUBISM_PLATFORM_DEFINITION)
+            target_compile_definitions(CubismFramework PUBLIC
+                ${CUBISM_PLATFORM_DEFINITION}
+            )
         endif()
-        target_compile_definitions(CubismFramework PRIVATE
-            CSM_TARGET_WIN_GL
-            _CRT_SECURE_NO_WARNINGS
-            GLEW_STATIC
-        )
+        if(MSVC)
+            target_compile_definitions(CubismFramework PRIVATE
+                _CRT_SECURE_NO_WARNINGS
+            )
+        endif()
 
         # --- Engine Live2D backend ---
-        target_sources(${PROJECT_NAME} PRIVATE
+        target_sources(CaesuraLive2D PRIVATE
             src/live2d/Live2D/Live2DBackend.h
             src/live2d/Live2D/Live2DBackend.cpp
             src/live2d/Live2D/ILive2DRenderPath.h
-            src/live2d/Live2D/OpenGLReadbackRenderPath.h
-            src/live2d/Live2D/OpenGLReadbackRenderPath.cpp
-            src/live2d/Live2D/D3D11NativeRenderPath.h
-            src/live2d/Live2D/D3D11NativeRenderPath.cpp
-            src/live2d/Live2D/OpenGLSharedRenderPath.h
-            src/live2d/Live2D/OpenGLSharedRenderPath.cpp
-            src/live2d/Live2D/MetalNativeRenderPath.h
-            src/live2d/Live2D/MetalNativeRenderPath.cpp
+            ${CUBISM_ENGINE_RENDER_PATH_SRCS}
         )
-        target_link_libraries(${PROJECT_NAME} PRIVATE CubismFramework Live2DCubismCore)
-        target_include_directories(${PROJECT_NAME} PRIVATE
+        target_link_libraries(CaesuraLive2D PRIVATE
+            CubismFramework
+            Live2DCubismCore
+            ${CUBISM_PLATFORM_LIBRARIES}
+        )
+        target_include_directories(CaesuraLive2D PRIVATE
             "${CUBISM_CORE_DIR}/include"
             "${CUBISM_FRAMEWORK_DIR}/src"
         )
-        if(WIN32)
-            target_include_directories(${PROJECT_NAME} PRIVATE "${GLEW_ROOT}/include")
-            target_link_libraries(${PROJECT_NAME} PRIVATE
-                debug "${GLEW_ROOT}/lib/Release/x64/glew32s.lib"
-                optimized "${GLEW_ROOT}/lib/Release/x64/glew32s.lib")
-        endif()
-        target_compile_definitions(${PROJECT_NAME} PRIVATE CAESURA_HAS_LIVE2D)
+        target_compile_definitions(CaesuraLive2D PRIVATE CAESURA_HAS_LIVE2D)
+        target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_LIVE2D)
+        message(STATUS "Live2D: ${CUBISM_FRAMEWORK_RENDERER} renderer for ${CMAKE_SYSTEM_NAME}/${CAESURA_CUBISM_ARCH}")
     endif()
 endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")

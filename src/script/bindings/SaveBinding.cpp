@@ -13,11 +13,16 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "SaveBinding.h"
-#include "SaveManager.h"
+#include "../../di/BackendRegistry.h"
+#include "../../storage/api/ISaveManager.h"
 #include <cstdio>
 #include <ctime>
 
 namespace Caesura {
+
+static ISaveManager* getSaveManager() {
+    return BackendRegistry::instance().getSaveManager();
+}
 
 // -- Lua table -> nlohmann::json (recursive) -------------------------------
 // Detect if a Lua table is a dense array (all keys are 1..N positive integers)
@@ -182,8 +187,9 @@ static int lua_Save_game(lua_State* L) {
     // Convert Lua table to structured JSON
     json gameData = luaTableToJson(L, 2);
 
-    bool ok = SaveManager::instance().save(slot, gameData, sceneName,
-                                           tokenIndex, thumbnail);
+    auto* manager = getSaveManager();
+    bool ok = manager && manager->save(slot, gameData, sceneName,
+                                       tokenIndex, thumbnail);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
@@ -193,8 +199,15 @@ static int lua_Save_game(lua_State* L) {
 static int lua_Load_game(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
 
+    auto* manager = getSaveManager();
+    if (!manager) {
+        lua_pushnil(L);
+        lua_pushstring(L, "Save manager is not available");
+        return 2;
+    }
+
     SaveMeta meta;
-    json data = SaveManager::instance().load(slot, &meta);
+    json data = manager->load(slot, &meta);
 
     if (data.is_null() || data.empty()) {
         lua_pushnil(L);
@@ -224,7 +237,8 @@ static int lua_Load_game(lua_State* L) {
 // -- lua_List_saves ---------------------------------------------------------
 // KAG.list_saves() -> {{slot=N, timestamp=T, scene=S, token_index=I}, ...}
 static int lua_List_saves(lua_State* L) {
-    auto saves = SaveManager::instance().listSaves();
+    auto* manager = getSaveManager();
+    const auto saves = manager ? manager->listSaves() : std::vector<SaveMeta>{};
 
     lua_newtable(L);
     int idx = 1;
@@ -250,7 +264,8 @@ static int lua_List_saves(lua_State* L) {
 // KAG.delete_save(slot) -> bool
 static int lua_Delete_save(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
-    bool ok = SaveManager::instance().deleteSlot(slot);
+    auto* manager = getSaveManager();
+    bool ok = manager && manager->deleteSlot(slot);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
@@ -259,7 +274,8 @@ static int lua_Delete_save(lua_State* L) {
 // KAG.save_exists(slot) -> bool
 static int lua_Save_exists(lua_State* L) {
     int slot = (int)luaL_checkinteger(L, 1);
-    bool ok = SaveManager::instance().slotExists(slot);
+    auto* manager = getSaveManager();
+    bool ok = manager && manager->slotExists(slot);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
@@ -270,18 +286,23 @@ static int lua_Save_exists(lua_State* L) {
 static int lua_SetEncryptionKey(lua_State* L) {
     size_t len; const char* keyStr = luaL_checklstring(L, 1, &len);
     if (len != 32) { lua_pushboolean(L, 0); lua_pushstring(L, "Key must be 32 bytes"); return 2; }
-    SaveManager::instance().setEncryptionKey(reinterpret_cast<const uint8_t*>(keyStr));
+    auto* manager = getSaveManager();
+    if (!manager) { lua_pushboolean(L, 0); return 1; }
+    manager->setEncryptionKey(reinterpret_cast<const uint8_t*>(keyStr));
     lua_pushboolean(L, 1); return 1;
 }
 
 // -- lua_ClearEncryptionKey -------------------------------------------------
 static int lua_ClearEncryptionKey(lua_State* L) {
-    SaveManager::instance().clearEncryptionKey(); return 0;
+    if (auto* manager = getSaveManager()) manager->clearEncryptionKey();
+    return 0;
 }
 
 // -- lua_CaptureThumbnail ---------------------------------------------------
 static int lua_CaptureThumbnail(lua_State* L) {
-    std::string b64 = SaveManager::instance().captureThumbnailPNG(320, 180);
+    auto* manager = getSaveManager();
+    if (!manager) { lua_pushnil(L); return 1; }
+    std::string b64 = manager->captureThumbnailPNG(320, 180);
     if (b64.empty()) { lua_pushnil(L); return 1; }
     lua_pushlstring(L, b64.c_str(), b64.size()); return 1;
 }
@@ -302,8 +323,6 @@ void registerSaveBinding(lua_State* L) {
     // This requires that KAGBinding already registered the KAG table first.
     // LuaManager::registerModules() ensures this order (KAGBinding at line ~102,
     // SaveBinding at line ~108). If reordering, maintain this dependency.
-
-    SaveManager::instance().init("saves/");
 
     // Get or create the global KAG table
     lua_getglobal(L, "KAG");

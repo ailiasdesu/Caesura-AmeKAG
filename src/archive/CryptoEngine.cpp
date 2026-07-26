@@ -24,15 +24,6 @@ extern "C" {
 namespace Caesura::carc {
 
 // ==========================================================================
-// Singleton
-// ==========================================================================
-
-CryptoEngine& CryptoEngine::instance() {
-    static CryptoEngine inst;
-    return inst;
-}
-
-// ==========================================================================
 // Helpers
 // ==========================================================================
 
@@ -311,7 +302,7 @@ bool CryptoEngine::writePrivateKey(const std::string& path, const uint8_t* key, 
 }
 
 // ==========================================================================
-// Static wrappers (delegate to instance)
+// Static wrappers (backward compatibility for the standalone archive API)
 // ==========================================================================
 
 std::vector<uint8_t> CryptoEngine::encrypt(
@@ -320,7 +311,9 @@ std::vector<uint8_t> CryptoEngine::encrypt(
     uint8_t nonce[AES_NONCE_SIZE],
     uint8_t tag[AES_TAG_SIZE])
 {
-    return instance().encrypt(plaintext, plaintextLen, key, AES_KEY_SIZE, nonce, AES_NONCE_SIZE, tag, AES_TAG_SIZE);
+    CryptoEngine engine;
+    return engine.encrypt(plaintext, plaintextLen, key, AES_KEY_SIZE,
+                          nonce, AES_NONCE_SIZE, tag, AES_TAG_SIZE);
 }
 
 std::vector<uint8_t> CryptoEngine::decrypt(
@@ -329,62 +322,75 @@ std::vector<uint8_t> CryptoEngine::decrypt(
     const uint8_t nonce[AES_NONCE_SIZE],
     const uint8_t tag[AES_TAG_SIZE])
 {
-    return instance().decrypt(ciphertext, ciphertextLen, key, AES_KEY_SIZE, nonce, AES_NONCE_SIZE, tag, AES_TAG_SIZE);
+    CryptoEngine engine;
+    return engine.decrypt(ciphertext, ciphertextLen, key, AES_KEY_SIZE,
+                          nonce, AES_NONCE_SIZE, tag, AES_TAG_SIZE);
 }
 
 void CryptoEngine::sha256(const uint8_t* data, size_t len, uint8_t hash[PATH_HASH_SIZE])
 {
-    instance().sha256(data, len, hash, PATH_HASH_SIZE);
+    CryptoEngine engine;
+    engine.sha256(data, len, hash, PATH_HASH_SIZE);
 }
 
 bool CryptoEngine::sign(const uint8_t* data, size_t len,
                         const uint8_t privateKey[64],
                         uint8_t signature[SIGNATURE_SIZE])
 {
-    return instance().sign(data, len, privateKey, 64, signature, SIGNATURE_SIZE);
+    CryptoEngine engine;
+    return engine.sign(data, len, privateKey, 64, signature, SIGNATURE_SIZE);
 }
 
 bool CryptoEngine::verify(const uint8_t* data, size_t len,
                           const uint8_t publicKey[PUBLICKEY_SIZE],
                           const uint8_t signature[SIGNATURE_SIZE])
 {
-    return instance().verify(data, len, publicKey, PUBLICKEY_SIZE, signature, SIGNATURE_SIZE);
+    CryptoEngine engine;
+    return engine.verify(data, len, publicKey, PUBLICKEY_SIZE,
+                         signature, SIGNATURE_SIZE);
 }
 
 void CryptoEngine::generateKey(uint8_t key[AES_KEY_SIZE])
 {
-    instance().generateKey(key, AES_KEY_SIZE);
+    CryptoEngine engine;
+    engine.generateKey(key, AES_KEY_SIZE);
 }
 
 void CryptoEngine::generateNonce(uint8_t nonce[AES_NONCE_SIZE])
 {
-    instance().generateNonce(nonce, AES_NONCE_SIZE);
+    CryptoEngine engine;
+    engine.generateNonce(nonce, AES_NONCE_SIZE);
 }
 
 void CryptoEngine::generateKeyPair(uint8_t publicKey[PUBLICKEY_SIZE],
                                    uint8_t privateKey[64])
 {
-    instance().generateKeyPair(publicKey, PUBLICKEY_SIZE, privateKey, 64);
+    CryptoEngine engine;
+    engine.generateKeyPair(publicKey, PUBLICKEY_SIZE, privateKey, 64);
 }
 
 bool CryptoEngine::readPublicKey(const std::string& path, uint8_t key[PUBLICKEY_SIZE])
 {
-    return instance().readPublicKey(path, key, PUBLICKEY_SIZE);
+    CryptoEngine engine;
+    return engine.readPublicKey(path, key, PUBLICKEY_SIZE);
 }
 
 bool CryptoEngine::readPrivateKey(const std::string& path, uint8_t key[64])
 {
-    return instance().readPrivateKey(path, key, 64);
+    CryptoEngine engine;
+    return engine.readPrivateKey(path, key, 64);
 }
 
 bool CryptoEngine::writePublicKey(const std::string& path, const uint8_t key[PUBLICKEY_SIZE])
 {
-    return instance().writePublicKey(path, key, PUBLICKEY_SIZE);
+    CryptoEngine engine;
+    return engine.writePublicKey(path, key, PUBLICKEY_SIZE);
 }
 
 bool CryptoEngine::writePrivateKey(const std::string& path, const uint8_t key[64])
 {
-    return instance().writePrivateKey(path, key, 64);
+    CryptoEngine engine;
+    return engine.writePrivateKey(path, key, 64);
 }
 
 } // namespace Caesura::carc

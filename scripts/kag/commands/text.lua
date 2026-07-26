@@ -7,12 +7,14 @@
 
 local backend = require("backend")
 local layers  = require("layers")
+local Operation = require("kag.operation")
+local TextScene = require("kag.text_scene")
 
 -- =============================================================================
 --  Internal: update text_state for save/load position tracking
 -- =============================================================================
 
-local function update_text_state(ctx, action)
+local function update_text_state(ctx, action, char_count)
     ctx.text_state = ctx.text_state or {}
     ctx.text_state.line = ctx.text_state.line or 1
     ctx.text_state.char_offset = ctx.text_state.char_offset or 0
@@ -25,7 +27,85 @@ local function update_text_state(ctx, action)
         ctx.text_state.line = 1
         ctx.text_state.char_offset = 0
     elseif action == "ch" or action == "text" then
-        ctx.text_state.char_offset = ctx.text_state.char_offset + 1
+        ctx.text_state.char_offset =
+            ctx.text_state.char_offset + (tonumber(char_count) or 1)
+    end
+end
+
+local function clamp_byte(value)
+    value = tonumber(value) or 0
+    return math.max(0, math.min(255, value))
+end
+
+local function parse_hex_color(value)
+    if type(value) ~= "string" then return nil end
+    local hex = value:match("^#?(%x%x%x%x%x%x)$")
+    if not hex then return nil end
+    return {
+        r = tonumber(hex:sub(1, 2), 16),
+        g = tonumber(hex:sub(3, 4), 16),
+        b = tonumber(hex:sub(5, 6), 16),
+        a = 255,
+    }
+end
+
+local function resolve_color(ctx, params)
+    local state = TextScene.get_state(ctx)
+    local color = parse_hex_color(params.color)
+        or parse_hex_color(state.font_color)
+        or { r = 255, g = 255, b = 255, a = 255 }
+    color.r = clamp_byte(params.r or color.r)
+    color.g = clamp_byte(params.g or color.g)
+    color.b = clamp_byte(params.b or color.b)
+    color.a = clamp_byte(params.a or color.a)
+    return color
+end
+
+local function resolve_line_height(ctx)
+    local state = TextScene.get_state(ctx)
+    local line_height = tonumber(backend.line_height())
+        or tonumber(state.font_size)
+        or 24
+    if line_height <= 0 then return 24 end
+    return line_height
+end
+
+local function resolve_max_width(ctx, params, x)
+    local explicit = tonumber(params.max_width)
+    if explicit and explicit > 0 then return explicit end
+
+    local chars_per_line = tonumber(params.chars_per_line)
+    if chars_per_line and chars_per_line > 0 then
+        local state = TextScene.get_state(ctx)
+        return chars_per_line * (tonumber(state.font_size) or 24)
+    end
+    return math.max(1, 1280 - x - 48)
+end
+
+local function animate_text_opacity(ctx, params)
+    local duration = tonumber(params.fade_time or params.fade) or 0
+    local target = clamp_byte(params.opacity or params.fade_to or 255)
+    if duration <= 0 then
+        TextScene.set_opacity(ctx, target)
+        return
+    end
+
+    local from = clamp_byte(params.fade_from or 0)
+    TextScene.set_opacity(ctx, from)
+
+    local operation <close> = Operation.start(ctx)
+    local elapsed = 0
+    while elapsed < duration and not operation.token.cancelled do
+        local delta_ms = tonumber(coroutine.yield()) or 16
+        if operation.token.cancelled then break end
+        elapsed = math.min(duration, elapsed + math.max(delta_ms, 0))
+        local progress = elapsed / duration
+        TextScene.set_opacity(ctx, from + (target - from) * progress)
+    end
+
+    if not operation.token.cancelled then
+        TextScene.set_opacity(ctx, target)
+        operation:complete()
     end
 end
 
@@ -115,8 +195,10 @@ function TextCommands.ch(ctx, params)
         layers.set_z(msgNode, 2)
     end
 
-    -- Clear previous text, render speaker + message
+    -- Replace the persistent message draw list. The render loop submits it
+    -- every frame, so text remains visible after the command returns.
     backend.clear_text()
+    TextScene.clear(ctx)
 
     -- Calculate X positions based on "pos"
     local nameX, msgX
@@ -131,34 +213,35 @@ function TextCommands.ch(ctx, params)
         msgX  = 48     -- dialogue text left-aligned (standard galgame convention)
     end
 
+    local color = resolve_color(ctx, params)
+    local lineHeight = resolve_line_height(ctx)
+
     -- Render speaker name if present
     if #speaker > 0 then
-        backend.render_text("??" .. speaker .. "??", nameX, 48, 540, 1, 1, 1, 1)
+        TextScene.add_text(
+            ctx, "[" .. speaker .. "]", nameX, 540, color)
     end
 
     -- Calculate y-position for message (below speaker if present)
     local msgY = 580
 
-    -- Auto-wrap long text: split into lines of ~40 chars per line for 1280 screen
     if #message > 0 then
-        local lineHeight = backend.line_height() or 24
-        local charsPerLine = params.chars_per_line or 48
-        local pos = 1
-        while pos <= #message do
-            local lineEnd = math.min(pos + charsPerLine - 1, #message)
-            -- Don't break mid-character for CJK; find a natural break point
-            local line = message:sub(pos, lineEnd)
-            backend.render_text(line, msgX, 48, msgY, 1, 1, 1, 1)
-            msgY = msgY + lineHeight
-            pos = lineEnd + 1
-        end
+        msgY = TextScene.add_wrapped(ctx, message, {
+            x = msgX,
+            y = msgY,
+            max_width = resolve_max_width(ctx, params, msgX),
+            line_height = lineHeight,
+            font_size = tonumber(TextScene.get_state(ctx).font_size)
+                or lineHeight,
+            color = color,
+        })
     end
 
-    -- Mark text cursor for [p] blocking
     ctx.textCursorX = msgX
     ctx.textCursorY = msgY
+    animate_text_opacity(ctx, params)
     ctx.waiting_input = true
-    update_text_state(ctx, "ch")
+    update_text_state(ctx, "ch", utf8.len(message) or #message)
 end
 
 -- =============================================================================
@@ -173,23 +256,24 @@ function TextCommands.text(ctx, params)
     TextCommands.push_backlog(ctx, "", message)
 
     backend.clear_text()
+    TextScene.clear(ctx)
 
-    local lineHeight = backend.line_height() or 24
-    local charsPerLine = params.chars_per_line or 48
-    local y = 580
-    local pos = 1
-    while pos <= #message do
-        local lineEnd = math.min(pos + charsPerLine - 1, #message)
-        local line = message:sub(pos, lineEnd)
-        backend.render_text(line, 32, 48, y, 1, 1, 1, 1)
-        y = y + lineHeight
-        pos = lineEnd + 1
-    end
+    local lineHeight = resolve_line_height(ctx)
+    local y = TextScene.add_wrapped(ctx, message, {
+        x = 32,
+        y = 580,
+        max_width = resolve_max_width(ctx, params, 32),
+        line_height = lineHeight,
+        font_size = tonumber(TextScene.get_state(ctx).font_size)
+            or lineHeight,
+        color = resolve_color(ctx, params),
+    })
 
     ctx.textCursorX = 32
     ctx.textCursorY = y
+    animate_text_opacity(ctx, params)
     ctx.waiting_input = true
-    update_text_state(ctx, "text")
+    update_text_state(ctx, "text", utf8.len(message) or #message)
 end
 
 -- =============================================================================
@@ -197,9 +281,12 @@ end
 -- =============================================================================
 
 function TextCommands.l(ctx, params)
-    local lineHeight = backend.line_height() or 24
+    local lineHeight = resolve_line_height(ctx)
     ctx.textCursorY = (ctx.textCursorY or 600) + lineHeight
     ctx.textCursorX = 32
+    local state = TextScene.get_state(ctx)
+    state.cursor_x = ctx.textCursorX
+    state.cursor_y = ctx.textCursorY
     update_text_state(ctx, "l")
 end
 
@@ -209,6 +296,7 @@ end
 
 function TextCommands.r(ctx, params)
     ctx.textCursorX = 32
+    TextScene.get_state(ctx).cursor_x = ctx.textCursorX
     update_text_state(ctx, "r")
 end
 
@@ -218,8 +306,7 @@ end
 
 function TextCommands.er(ctx, params)
     backend.clear_text()
-    ctx.textCursorX = 32
-    ctx.textCursorY = 580
+    TextScene.clear(ctx)
     ctx.waiting_input = false
     update_text_state(ctx, "er")
 end
@@ -231,14 +318,13 @@ end
 -- =============================================================================
 
 function TextCommands.p(ctx, params)
-    -- Clear any previous text rendering state
-    backend.clear_text()
-
-    -- Set state for scheduler to detect
     ctx.waiting_input = true
 
-    -- Yield the coroutine ?? scheduler resumes on next click
+    -- Keep the current page visible while waiting, then clear it only after
+    -- the scheduler resumes this coroutine for the accepted click.
     coroutine.yield()
+    backend.clear_text()
+    TextScene.clear(ctx)
     update_text_state(ctx, "p")
 end
 
@@ -252,8 +338,21 @@ end
 function TextCommands.ruby(ctx, params)
     local text = params.text or ""
     local ruby_text = params.ruby or ""
-    local backend = require("backend")
-    backend.render_ruby(text, ruby_text, 0, 0)
+    if text == "" then return end
+
+    local lineHeight = resolve_line_height(ctx)
+    local startX = tonumber(params.start_x) or 32
+    TextScene.add_ruby(ctx, text, ruby_text, {
+        x = tonumber(params.x),
+        y = tonumber(params.y),
+        start_x = startX,
+        max_width = resolve_max_width(ctx, params, startX),
+        line_height = lineHeight,
+        font_size = tonumber(TextScene.get_state(ctx).font_size)
+            or lineHeight,
+        ruby_scale = tonumber(params.ruby_scale) or 0.5,
+        color = resolve_color(ctx, params),
+    })
 end
 
 -- =============================================================================
@@ -287,8 +386,7 @@ end
 -- =============================================================================
 
 function TextCommands.reset(ctx, params)
-    ctx.text_state = { line = 1, char_offset = 0 }
-    local backend = require("backend")
+    TextScene.reset(ctx)
     backend.text_reset_state()
 end
 
@@ -340,14 +438,16 @@ function TextCommands.endbutton(ctx, params)
         return
     end
 
-    local backend = require("backend")
-    
-    -- Render choice buttons on screen
+    TextScene.remove_group(ctx, "choices")
+
+    -- Store choice draws in the persistent text scene.
     local startY = 450
-    local lineHeight = backend.line_height() or 30
+    local lineHeight = resolve_line_height(ctx)
     for idx, choice in ipairs(ctx._choiceButtons) do
         local y = startY + (idx - 1) * (lineHeight + 8)
-        backend.render_text((idx) .. ". " .. choice.text, 32, 48, y, 1, 1, 0, 1)
+        TextScene.add_text(
+            ctx, idx .. ". " .. choice.text, 32, y,
+            { r = 255, g = 255, b = 0, a = 255 }, "choices")
         -- Store button region for hit testing
         choice.y = y
         choice.h = lineHeight
@@ -392,6 +492,7 @@ function TextCommands.endbutton(ctx, params)
     
     -- Ensure click handler is restored
     _G._KAG_onClick = oldClick
+    TextScene.remove_group(ctx, "choices")
     
     if selected and selected.target then
         ctx._pendingJump = selected.target

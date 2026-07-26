@@ -106,6 +106,8 @@ private:
 
     // TTF atlas
     struct TTFState {
+        ~TTFState();
+
         FT_Library ftLib = nullptr;
         FT_Face    ftFace = nullptr;
         float ascent = 0.0f, descent = 0.0f, lineGap = 0.0f;

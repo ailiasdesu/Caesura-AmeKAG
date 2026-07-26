@@ -2,6 +2,9 @@
 #include "doctest.h"
 #include "di/BackendRegistry.h"
 #include "render/BgfxRenderDevice.h"
+#include "render/NullRenderDevice.h"
+#include "platform/NullPlatformBackend.h"
+#include "resource/ResourceHandle.h"
 
 extern "C" {
 #include <lua.h>
@@ -20,26 +23,37 @@ TEST_CASE("BackendRegistry::setRenderDevice/getRenderDevice round-trip") {
     auto& reg = BackendRegistry::instance();
     BgfxRenderDevice rd;
     IRenderDevice* oldRd = reg.getRenderDevice();
-    reg.setRenderDevice(rd);
+    reg.setRenderDevice(&rd);
     CHECK(reg.getRenderDevice() == &rd);
-    reg.setRenderDevice(*oldRd);  // Restore
+    reg.setRenderDevice(oldRd);  // Restore
 }
 
 TEST_CASE("BackendRegistry::ResourceHandle invalid handle") {
     auto& reg = BackendRegistry::instance();
+    GenerationTracker tracker;
+    auto* old = reg.getResourceGenerationTracker();
+    reg.setResourceGenerationTracker(&tracker);
     ResourceHandle invalid;
     invalid.id = 0;
     invalid.generation = 0;
-    CHECK(reg.isValidHandle(invalid) == false);
+    const bool invalidIsCurrent =
+        invalid.id != 0 && reg.getResourceGenerationTracker()->isCurrent(invalid);
+    CHECK_FALSE(invalidIsCurrent);
+    reg.setResourceGenerationTracker(old);
 }
 
 TEST_CASE("BackendRegistry::invalidateHandles verifies effect") {
     auto& reg = BackendRegistry::instance();
+    GenerationTracker tracker;
+    auto* old = reg.getResourceGenerationTracker();
+    reg.setResourceGenerationTracker(&tracker);
     // Create a valid handle, invalidate its type, verify it becomes invalid
-    ResourceHandle h = reg.makeHandle(HandleType::TEXTURE, 42);
-    CHECK(reg.isValidHandle(h));
-    reg.invalidateHandles(HandleType::TEXTURE);
-    CHECK_FALSE(reg.isValidHandle(h));
+    ResourceHandle h = tracker.makeHandle(HandleType::TEXTURE, 42);
+    const bool handleIsCurrent = h.id != 0 && tracker.isCurrent(h);
+    CHECK(handleIsCurrent);
+    tracker.invalidate(HandleType::TEXTURE);
+    CHECK_FALSE(tracker.isCurrent(h));
+    reg.setResourceGenerationTracker(old);
 }
 
 TEST_CASE("BackendRegistry::setJobSystem/getJobSystem") {
@@ -73,8 +87,18 @@ TEST_CASE("BackendRegistry::setLuaManager/getLuaManager") {
 // Expanded coverage
 // =============================================================================
 
-TEST_CASE("BackendRegistry::registerNullBackends compiles and runs") {
-    (void)&BackendRegistry::registerNullBackends;
+TEST_CASE("BackendRegistry accepts externally owned null backends") {
+    NullRenderDevice render;
+    NullPlatformBackend platform;
+    auto& reg = BackendRegistry::instance();
+    auto* oldRender = reg.getRenderDevice();
+    auto* oldPlatform = reg.getPlatformBackend();
+    reg.setRenderDevice(&render);
+    reg.setPlatformBackend(&platform);
+    CHECK(reg.getRenderDevice() == &render);
+    CHECK(reg.getPlatformBackend() == &platform);
+    reg.setRenderDevice(oldRender);
+    reg.setPlatformBackend(oldPlatform);
 }
 
 TEST_CASE("BackendRegistry::createBackend factory rejects unknown names") {

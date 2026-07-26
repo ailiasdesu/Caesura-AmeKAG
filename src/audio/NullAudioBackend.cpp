@@ -52,6 +52,7 @@ void NullAudioBackend::flushWaveCache() {}
 
 // -- State query -------------------------------------------------------
 
+unsigned int NullAudioBackend::consumeVoiceCompletions() { return 0; }
 bool NullAudioBackend::isVoicePlaying() { return false; }
 bool NullAudioBackend::isBGMPlaying()  { return false; }
 bool NullAudioBackend::isSEPlaying()  { return false; }

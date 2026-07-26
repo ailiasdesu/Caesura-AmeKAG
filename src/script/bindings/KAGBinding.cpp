@@ -3,8 +3,8 @@
 #include <lauxlib.h>
 }
 #include "KAGBinding.h"
-#include "../audio/api/IAudioBackend.h"
-#include "../render/api/IRenderDevice.h"
+#include "../../audio/api/IAudioBackend.h"
+#include "../../render/api/IRenderDevice.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>

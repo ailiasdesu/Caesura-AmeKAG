@@ -1,7 +1,7 @@
  #include "BgfxRenderDevice.h"
 #include "BgfxDebugCallback.h"
 #include "ShaderCache.h"
-#include "../di/thread/ThreadAssert.h"
+#include "../di/api/ThreadAssert.h"
 #include <bgfx/bgfx.h>
 // #include <bgfx/embedded_shader.h> -- using bgfx::createShader with raw bytecode instead
 #include <bx/math.h>
@@ -46,7 +46,9 @@ BgfxRenderDevice::~BgfxRenderDevice() {
 
 
 
-void BgfxRenderDevice::flushAllRTT() { m_deviceCore->flushAllRTT(); }
+void BgfxRenderDevice::flushAllRTT() {
+    if (m_bgfxInitialized && m_deviceCore) m_deviceCore->flushAllRTT();
+}
 
 
 // ===========================================================================
@@ -80,9 +82,16 @@ static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3
 
 
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
+    m_bgfxInitialized = false;
+    m_shutdownComplete = false;
     m_shaders = std::make_unique<BgfxShaderManager>();
     m_deviceCore = std::make_unique<BgfxDeviceCore>();
-    if (!m_deviceCore->init(nativeWindowHandle, width, height)) return false;
+    if (!m_deviceCore->init(nativeWindowHandle, width, height)) {
+        m_deviceCore.reset();
+        m_shaders.reset();
+        return false;
+    }
+    m_bgfxInitialized = true;
     m_shaders->initEmbeddedShaders();
     m_drawState.shaders = m_shaders.get();
     m_drawState.device  = m_deviceCore.get();
@@ -93,12 +102,21 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     return true;
 }
 
-void BgfxRenderDevice::beginShutdown() { setBgfxShuttingDown(true); }
+void BgfxRenderDevice::beginShutdown() {
+    if (m_bgfxInitialized) setBgfxShuttingDown(true);
+}
 
 void BgfxRenderDevice::resize(int width, int height) { m_deviceCore->resize(width, height); }
 
 
-void BgfxRenderDevice::shutdown() { if (m_shutdownComplete) return; m_shutdownComplete = true; if (m_textRenderer) m_textRenderer.reset(); m_shaders.reset(); if (m_deviceCore) m_deviceCore->shutdown(); }
+void BgfxRenderDevice::shutdown() {
+    if (m_shutdownComplete) return;
+    m_shutdownComplete = true;
+    if (m_textRenderer) m_textRenderer.reset();
+    m_shaders.reset();
+    if (m_deviceCore) m_deviceCore->shutdown();
+    m_bgfxInitialized = false;
+}
 
 
 
@@ -144,16 +162,24 @@ void BgfxRenderDevice::shutdown() { if (m_shutdownComplete) return; m_shutdownCo
 // Frame-management pass-throughs
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 
-void BgfxRenderDevice::beginFrame() { m_deviceCore->beginFrame(); }
+void BgfxRenderDevice::beginFrame() {
+    if (m_bgfxInitialized && m_deviceCore) m_deviceCore->beginFrame();
+}
 
 
-void BgfxRenderDevice::endFrame() { m_deviceCore->endFrame(); }
+void BgfxRenderDevice::endFrame() {
+    if (m_bgfxInitialized && m_deviceCore) m_deviceCore->endFrame();
+}
 
 
-void BgfxRenderDevice::commit_frame() { m_deviceCore->commit_frame(); }
+void BgfxRenderDevice::commit_frame() {
+    if (m_bgfxInitialized && m_deviceCore) m_deviceCore->commit_frame();
+}
 
 
-void BgfxRenderDevice::advanceFrame() { m_deviceCore->commit_frame(); }
+void BgfxRenderDevice::advanceFrame() {
+    if (m_bgfxInitialized && m_deviceCore) m_deviceCore->commit_frame();
+}
 
 
 
@@ -248,7 +274,7 @@ bool BgfxRenderDevice::requestScreenshot(const std::string& path) {
 }
 
 bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int height) {
-    if (!m_deviceCore) return false;
+    if (!m_bgfxInitialized || !m_deviceCore) return false;
 
     if (m_textRenderer) {
         m_textRenderer->shutdown();
@@ -256,15 +282,14 @@ bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int he
     }
     m_draw.reset();
     m_shaders.reset();
-    m_deviceCore->flushAllRTT();
-
-    setBgfxShuttingDown(true);
-    bgfx::shutdown();
+    m_bgfxInitialized = false;
+    m_deviceCore->shutdown();
     setBgfxShuttingDown(false);
 
     if (!m_deviceCore->init(nativeWindowHandle, width, height)) {
         return false;
     }
+    m_bgfxInitialized = true;
 
     m_shaders = std::make_unique<BgfxShaderManager>();
     m_shaders->initEmbeddedShaders();
@@ -351,5 +376,3 @@ void BgfxRenderDevice::affineBlt(uint16_t v, uint32_t d, float dx, float dy, flo
 
 
 } // namespace Caesura
-
-

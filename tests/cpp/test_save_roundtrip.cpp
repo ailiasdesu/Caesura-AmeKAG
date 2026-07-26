@@ -2,7 +2,10 @@
 #include "doctest.h"
 #include "storage/SaveManager.h"
 #include "TestPaths.h"
+#include <algorithm>
+#include <array>
 #include <filesystem>
+#include <new>
 #include <cstdio>
 
 using namespace Caesura;
@@ -10,20 +13,29 @@ using namespace Caesura;
 #include "di/BackendRegistry.h"
 #include "archive/CryptoEngine.h"
 
-// Ensure CryptoEngine is registered before any encryption test runs.
-// When running storage tests in isolation, no other test module
-// registers it, causing SIGSEGV on encrypt/decrypt paths.
-static void ensureCryptoRegistered() {
-    static bool done = false;
-    if (!done) {
-        BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
-        done = true;
+namespace {
+
+class ScopedCryptoRegistration {
+public:
+    ScopedCryptoRegistration()
+        : m_previous(BackendRegistry::instance().getCryptoEngine()) {
+        BackendRegistry::instance().setCryptoEngine(&m_engine);
     }
-}
+
+    ~ScopedCryptoRegistration() {
+        BackendRegistry::instance().setCryptoEngine(m_previous);
+    }
+
+private:
+    carc::CryptoEngine m_engine;
+    carc::ICryptoEngine* m_previous;
+};
+
+} // namespace
 
 TEST_CASE("SaveManager: save -> load data integrity") {
     TestPaths::ScopedTempDir dir("roundtrip_integrity");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
     sm.clearEncryptionKey();
 
@@ -50,7 +62,7 @@ TEST_CASE("SaveManager: save -> load data integrity") {
 
 TEST_CASE("SaveManager: nonexistent slot returns empty JSON") {
     TestPaths::ScopedTempDir dir("roundtrip_nonexistent");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     json data = sm.load(99);
@@ -59,7 +71,7 @@ TEST_CASE("SaveManager: nonexistent slot returns empty JSON") {
 
 TEST_CASE("SaveManager: listSaves returns correct slot list") {
     TestPaths::ScopedTempDir dir("roundtrip_list");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     // Empty initially
@@ -88,7 +100,7 @@ TEST_CASE("SaveManager: listSaves returns correct slot list") {
 
 TEST_CASE("SaveManager: deleteSlot removes save") {
     TestPaths::ScopedTempDir dir("roundtrip_delete");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     sm.save(1, {{"data", "test"}}, "test", 0);
@@ -103,8 +115,8 @@ TEST_CASE("SaveManager: deleteSlot removes save") {
 
 TEST_CASE("SaveManager: encryption roundtrip preserves data") {
     TestPaths::ScopedTempDir dir("roundtrip_encryption");
-    ensureCryptoRegistered();
-    auto& sm = SaveManager::instance();
+    ScopedCryptoRegistration cryptoRegistration;
+    SaveManager sm;
     sm.init(dir.string());
 
     // Set a test encryption key (32 bytes)
@@ -128,8 +140,8 @@ TEST_CASE("SaveManager: encryption roundtrip preserves data") {
 
 TEST_CASE("SaveManager: wrong key returns empty JSON") {
     TestPaths::ScopedTempDir dir("roundtrip_wrong_key");
-    ensureCryptoRegistered();
-    auto& sm = SaveManager::instance();
+    ScopedCryptoRegistration cryptoRegistration;
+    SaveManager sm;
     sm.init(dir.string());
 
     // Save with key A
@@ -156,7 +168,7 @@ TEST_CASE("SaveManager: wrong key returns empty JSON") {
 
 TEST_CASE("SaveManager: save without encryption when key is cleared") {
     TestPaths::ScopedTempDir dir("roundtrip_plain");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
     sm.clearEncryptionKey();
     CHECK_FALSE(sm.isEncryptionEnabled());
@@ -167,11 +179,30 @@ TEST_CASE("SaveManager: save without encryption when key is cleared") {
     json loaded = sm.load(1);
     CHECK_FALSE(loaded.empty());
     CHECK(loaded["plain"] == "text");
+
+    alignas(SaveManager) unsigned char storage[sizeof(SaveManager)];
+    std::fill(storage, storage + sizeof(storage), 0xA5);
+    auto* scopedManager = ::new (storage) SaveManager();
+
+    std::array<uint8_t, 32> transientKey{};
+    for (size_t i = 0; i < transientKey.size(); ++i) {
+        transientKey[i] = static_cast<uint8_t>(0x40 + i);
+    }
+    scopedManager->setEncryptionKey(transientKey.data());
+
+    const auto keyInObjectStorage = [&]() {
+        return std::search(storage, storage + sizeof(storage),
+                           transientKey.begin(), transientKey.end()) != storage + sizeof(storage);
+    };
+    REQUIRE(keyInObjectStorage());
+
+    scopedManager->~SaveManager();
+    CHECK_FALSE(keyInObjectStorage());
 }
 
 TEST_CASE("SaveManager: multiple save/load cycles do not leak or corrupt") {
     TestPaths::ScopedTempDir dir("roundtrip_cycles");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     for (int i = 0; i < 10; ++i) {

@@ -31,7 +31,7 @@ src/
 
 - **每个模块只能通过 `api/` 子目录对外暴露符号。** 例如 `render/api/IRenderDevice.h`。
 - **禁止模块间直接 include 具体实现头文件。** 只允许 include 接口头文件 (`I*.h`)。
-- **唯一例外：`entry/` 和 `main.cpp`** ——它们是组合根，可以 include 任何具体头文件来创建对象。
+- **唯一例外：`src/entry/` 和 `src/main.cpp`** ——它们共同构成组合根，可以 include 具体头文件来创建对象。
 - **`di/BackendRegistry.h` 只 include `I*.h` 接口头文件。** 绝不 include 具体实现。
 
 ## 2. 接口规范
@@ -68,11 +68,11 @@ auto* L = LuaManager::instance().state(); // 绕过注册表
 
 ## 4. 组合根（Composition Root）
 
-**`main.cpp` + `entry/Engine.cpp` 是唯一创建具体对象的地方。**
+**`src/main.cpp` + `src/entry/` 是唯一创建具体后端对象的地方。**
 
 ```
-main.cpp:        new 具体后端 → 填入 EngineConfig → 传给 Engine
-Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
+src/main.cpp:      new 具体后端 → 填入 EngineConfig → 传给 Engine
+src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注册到 BackendRegistry
 ```
 
 **禁止在其他模块中 `new` 或 `make_unique` 具体后端类型。**
@@ -80,13 +80,21 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 ## 5. 构建与测试（不可协商）
 
 - **代码合并前必须通过全量构建：** `cmake --build . --config Debug` 零错误。
-- **测试必须全绿：** `149/149 passed, 0 failed, 0 skipped`。
+- **测试必须全绿：** `CaesuraTests` 发现的全部用例通过，`0 failed, 0 skipped`。
 - **禁止**合并导致测试数量减少或新增失败的 PR。
 - 测试从 `build/tests/Debug/` 目录执行（CWD 需匹配资源路径）。
 
 ## 6. 命名与风格
 
-- **模块目录：全部小写**（`audio/`, `render/`, `script/`，不是 `Audio/`, `Render/`）。`n`n- **大小写必须与 git 索引一致。** 16 个模块目录已统一为全小写。新增模块必须使用小写目录名。Windows 文件系统不区分大小写但 git 区分——在 Windows 上创建 `src/NewModule/` 后，git 索引会记录为 `src/NewModule/`，必须在提交前修正：`n  ```powershell`n  git mv src/NewModule src/newmodule_tmp`n  git mv src/newmodule_tmp src/newmodule`n  ````n  Linux/macOS 构建会因大小写不匹配而失败。`n
+- **模块目录：全部小写**（`audio/`, `render/`, `script/`，不是 `Audio/`, `Render/`）。
+- **大小写必须与 git 索引一致。** 16 个模块目录已统一为全小写。新增模块必须使用小写目录名。Windows 文件系统不区分大小写但 git 区分。在 Windows 上创建 `src/NewModule/` 后，git 索引会记录为 `src/NewModule/`，必须在提交前修正：
+
+  ```powershell
+  git mv src/NewModule src/newmodule_tmp
+  git mv src/newmodule_tmp src/newmodule
+  ```
+
+  Linux/macOS 构建会因大小写不匹配而失败。
 - **接口文件名：** `I` 前缀 + PascalCase（`IRenderDevice.h`, `IAudioBackend.h`）。
 - **实现文件名：** PascalCase（`BgfxRenderDevice.h`, `SoLoudAudioEngine.cpp`）。
 - **命名空间：** 所有公共类型在 `Caesura::` 下。
@@ -96,7 +104,7 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 
 1. **禁止循环依赖。** 如果 A 依赖 B，B 不能依赖 A。使用接口打破循环。
 2. **禁止头文件级具体类型依赖。** `.h` 文件不能 include 其他模块的非 `api/` 头文件。
-3. **禁止在接口中暴露实现细节。** 例如 `IRenderDevice` 不应有 `bgfx::TextureHandle`（可以用 `uint32_t` 或不透明句柄代替）——注：当前接口仍有 bgfx 类型，后续迭代应替换。
+3. **禁止在接口中暴露实现细节。** 渲染接口使用 `RenderTextureHandle` 等引擎自有不透明句柄；不得重新暴露 `bgfx::TextureHandle` 等第三方具体类型。
 4. **禁止绕过 BackendRegistry 访问后端单例。** 宏（`DEBUG_*`）可以调用 `DebugManager::instance()` 直接访问——这是唯一的例外，用于零开销日志。
 5. **禁止在非组合根位置创建具体后端对象。**
 6. **禁止提交包含 `../../../` 或绝对路径的 include。**
@@ -127,7 +135,7 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 2. 更新所有实现类（添加 `override`）
 3. 更新 `BackendRegistry`（如果需要新 getter/setter）
 4. 更新 `Engine::init()`（如果需要新注册调用）
-5. 全量构建 → 149 测试全绿 → 提交
+5. 全量构建 → `CaesuraTests` 与 CTest 全绿 → 提交
 
 ## 11. 已文档化的解决方案
 
@@ -137,7 +145,7 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 
 
 
-## 11. 文档分类
+## 12. 文档分类
 
 引擎文档按用途分为 5 类，放在 `docs/` 下：
 
@@ -145,15 +153,15 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 | 文件 | 内容 |
 |------|------|
 | `api/kag-commands.md` | 68 个 KAG 命令的完整参考（签名/参数/示例） |
-| `api/lua-modules.md` | 6 个 Lua 模块的 API 参考 |
+| `api/lua-modules.md` | 7 个 Lua 模块的 API 参考 |
 
 ### design/ — 架构与设计文档
 | 文件 | 内容 |
 |------|------|
 | `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
-| `design/engine-capability-matrix.md` | 79 项能力的完成状态矩阵 |
+| `design/engine-capability-matrix.md` | 41 项能力的完成状态矩阵 |
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
-| `design/engine-topology-mermaid.md` | 4 张 Mermaid 拓扑图源码 |
+| `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
 
 ### guides/ — 用户与开发者指南
@@ -167,11 +175,11 @@ Engine::init():  接收 EngineConfig → init → 注册到 BackendRegistry
 ### plans/ — 执行记录与当前计划
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-06-12-null-jobsystem-plan.md` | 当前活跃计划 |
-| `plans/T1-T5-execution-summary.md` | T1-T5 执行记录 |
-| `plans/R1-R5-execution-summary.md` | R1-R5 执行记录 |
-| `plans/F1-F4-execution-summary.md` | F1-F4 执行记录 |
-| `plans/null-jobsystem-execution-summary.md` | NullJobSystem 执行记录 |
+| `plans/2026-06-17-001-feat-engine-stability-hardening-plan.md` | 引擎稳定性加固计划 |
+| `plans/2026-06-18-galgame-core-readiness-audit.md` | Galgame 核心就绪度排查方案 |
+| `plans/2026-07-02-architecture-hardening-summary.md` | 架构硬化执行总结 |
+| `plans/2026-07-03-continued-hardening-summary.md` | 后续架构硬化总结 |
+| `plans/2026-07-16-001-modular-static-library-migration-summary.md` | 模块静态库架构迁移总结 |
 
 ### solutions/ — 经验与模式
 | 文件 | 内容 |

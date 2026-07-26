@@ -3,10 +3,9 @@
 #include "OpenGLReadbackRenderPath.h"
 
 // GL MUST come before Cubism headers
-#ifdef _WIN32
 #include <GL/glew.h>
-#elif defined(__APPLE__)
-#include <OpenGL/gl3.h>
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
 #else
 #include <GL/gl.h>
 #include <GL/glext.h>
@@ -29,7 +28,6 @@ bool OpenGLReadbackRenderPath::init(int width, int height) {
     m_height = height;
     m_pixelBuffer.resize(width * height * 4);
 
-#ifdef _WIN32
     if (!m_glInitialized) {
         GLenum glewErr = glewInit();
         if (glewErr != GLEW_OK) {
@@ -37,7 +35,6 @@ bool OpenGLReadbackRenderPath::init(int width, int height) {
                 "[Live2D/GL] GLEW init warning: %s", glewGetErrorString(glewErr));
         }
     }
-#endif
     m_glInitialized = true;
 
     // Create FBO for Cubism rendering (isolate from bgfx's GL state)

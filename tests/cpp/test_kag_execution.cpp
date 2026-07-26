@@ -86,6 +86,7 @@ TEST_CASE("KAG: Lua modules load without error") {
     CHECK(requireModule(L, "kag.commands.video"));
     CHECK(requireModule(L, "kag.commands.resource"));
     CHECK(requireModule(L, "kag.commands.save"));
+    CHECK(requireModule(L, "kag.operation"));
 
     delete lm;
 }
@@ -291,6 +292,198 @@ TEST_CASE("KAG: scheduler runs non-blocking commands without crash") {
         "end)\n"
         "local ok, err = coroutine.resume(co)\n"
         "assert(type(ok) == 'boolean', 'coroutine.resume should return boolean')\n";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG runner arbitrates scheduler and debugger resume ownership") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        package.loaded['kag_runner'] = nil
+        package.loaded['flow'] = {
+            load_scene = function(path)
+                return { tokens = { 1, 2, 3, 4 }, labels = {}, path = path }
+            end
+        }
+        package.loaded['scheduler'] = {
+            run = function(ctx, tokens, start_index)
+                for i = start_index or 1, #tokens do
+                    ctx.token_index = i
+                    ctx.executed = (ctx.executed or 0) + 1
+                    coroutine.yield()
+                end
+            end
+        }
+
+        local live_pause = true
+        _CAESURA_DEBUG_IS_PAUSED = function() return live_pause end
+        _CAESURA_DEBUG_PAUSED = false
+        local runner = require('kag_runner')
+        local probe_ok, probe_reason = runner.start('blocked-by-live-probe.ks')
+        assert(not probe_ok and probe_reason == 'debug-paused')
+        live_pause = false
+
+        _CAESURA_DEBUG_IS_PAUSED = nil
+        _CAESURA_DEBUG_PAUSED = true
+        local ok, reason = runner.start('blocked-by-default-gate.ks')
+        assert(not ok and reason == 'debug-paused')
+        _CAESURA_DEBUG_PAUSED = false
+
+        local paused = false
+        local resumes = {}
+        local scheduler_co = nil
+        runner.set_resume_adapter({
+            is_paused = function()
+                return paused
+            end,
+            resume = function(origin, co, value)
+                resumes[#resumes + 1] = origin
+                scheduler_co = co
+                return coroutine.resume(co, value)
+            end
+        })
+
+        assert(runner.start('scene.ks'))
+        local ctx = _CAESURA_CTX
+        assert(ctx.executed == 1)
+        assert(#resumes == 1 and resumes[1] == 'start')
+
+        paused = true
+        ok, reason = runner.update(0.016)
+        assert(not ok and reason == 'debug-paused')
+        assert(ctx.executed == 1 and #resumes == 1)
+
+        ctx.waiting_input = true
+        ok, reason = runner.on_click()
+        assert(not ok and reason == 'debug-paused')
+        assert(ctx.waiting_input == true)
+        assert(ctx.executed == 1 and #resumes == 1)
+
+        assert(not runner.start('replacement.ks'))
+        assert(_CAESURA_CTX == ctx)
+
+        paused = false
+        local resumed, resume_error = coroutine.resume(scheduler_co)
+        assert(resumed, resume_error)
+        assert(ctx.executed == 2)
+        assert(#resumes == 1)
+
+        ok, reason = runner.debug_resume()
+        assert(ok and reason == 'suspended')
+        assert(ctx.executed == 2 and #resumes == 1)
+
+        ok, reason = runner.update(0.016)
+        assert(not ok and reason == 'waiting-input')
+        assert(ctx.executed == 2 and #resumes == 1)
+
+        ctx.waiting_input = false
+        assert(runner.update(0.016))
+        assert(ctx.executed == 3)
+        assert(#resumes == 2 and resumes[2] == 'update')
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG operation scope cleans up tokens and cancellation callbacks on error") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        local Operation = require('kag.operation')
+        local ctx = {}
+        local callback_count = 0
+        local token = nil
+        local co = coroutine.create(function()
+            local operation <close> = Operation.start(ctx)
+            token = operation.token
+            token:register(function()
+                callback_count = callback_count + 1
+            end)
+            error('forced operation failure')
+        end)
+
+        local ok = coroutine.resume(co)
+        assert(not ok)
+        local closed = coroutine.close(co)
+        assert(not closed)
+        assert(token.cancelled)
+        assert(callback_count == 1)
+        assert(#ctx.active_operations == 0)
+
+        Operation.cancel_all(ctx)
+        assert(callback_count == 1)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG layer fade is immediate at zero duration and preserves cancellation state") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        local Layers = require('layers')
+        local Commands = require('kag.commands.transition')
+        Layers.init()
+        local node = Layers.add_layer(Layers.get_root(), {
+            name = 'fg',
+            tag = 'fg',
+            x = 1,
+            y = 2,
+            opacity = 255,
+        })
+        local ctx = {}
+
+        Commands.fade(ctx, { layer = 'fg', from = 0, to = 210, time = 0 })
+        assert(node.opacity == 210)
+        assert(#(ctx.active_operations or {}) == 0)
+
+        Commands.move(ctx, { layer = 'fg', x = 12, y = 34, time = 0 })
+        assert(node.x == 12 and node.y == 34)
+
+        local co = coroutine.create(function()
+            Commands.fade(ctx, {
+                layer = 'fg',
+                from = 10,
+                to = 210,
+                time = 100,
+            })
+        end)
+        assert(coroutine.resume(co))
+        assert(node.opacity == 10)
+        assert(#ctx.active_operations == 1)
+
+        assert(coroutine.resume(co, 25))
+        assert(math.abs(node.opacity - 60) < 0.001)
+        ctx.active_operations[1]:mark_cancelled()
+        assert(coroutine.resume(co, 25))
+        assert(coroutine.status(co) == 'dead')
+        assert(math.abs(node.opacity - 60) < 0.001)
+        assert(#ctx.active_operations == 0)
+
+        local natural = coroutine.create(function()
+            Commands.fade(ctx, {
+                layer = 'fg',
+                from = 0,
+                to = 200,
+                time = 100,
+            })
+        end)
+        assert(coroutine.resume(natural))
+        assert(coroutine.resume(natural, 100))
+        assert(coroutine.status(natural) == 'dead')
+        assert(node.opacity == 200)
+        assert(#ctx.active_operations == 0)
+    )lua";
     CHECK(doString(L, code));
 
     delete lm;

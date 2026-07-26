@@ -1,7 +1,7 @@
 ﻿# Caesura (AmeKAG) — Editor Developer API Reference
 
 > **面向 web-editor 前端开发者的完整接口文档**
-> 最后更新: 2026-06-12
+> 最后更新: 2026-07-26
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 层 | 协议 | 用途 | 详细文档 |
 |---|------|------|---------|
-| **RPC** | HTTP (localhost:9876) | 编辑器控制：状态查询、资源列表、脚本执行、打包 | [§1 HTTP RPC 端点](#1-http-rpc-api) |
+| **RPC** | HTTP / stdio DTO dispatcher | 编辑器控制、调试状态、资源列表与打包 | [§1 HTTP RPC 端点](#1-http-rpc-api) |
 | **Lua 绑定** | Lua C API | KAG 脚本调用的引擎能力（音频、渲染、存档等） | [§2 Lua 绑定模块](#2-lua-binding-modules) |
 | **KAG 脚本** | `.ks` 文本 | galgame 场景描述语言 | [§3 KAG 命令参考](#3-kag-command-reference) |
 | **C++ 接口** | C++ 虚函数 | 引擎内部架构（供引擎开发者参考） | [cpp-interfaces.md](cpp-interfaces.md) |
@@ -23,6 +23,15 @@
 **Base URL**: `http://localhost:9876`
 **Content-Type**: `application/json`
 **CORS**: 已启用 (`Access-Control-Allow-Origin: *`)
+
+> 当前状态：默认 `--editor` 启动 HTTP `EditorServer` 并监听 9876；
+> `--editor-stdio` 启动 GPU + stdin/stdout 换行分隔 JSON-RPC，`--headless` 启动
+> 无 GPU 的 stdio RPC。两种传输都只提交 DTO，由 Engine owner thread dispatcher
+> 执行；transport worker 不持有或访问 `lua_State`。
+>
+> stdio 已接入 breakpoint、Continue、Step、变量检查和调试状态命令。
+> `run` / `eval` 尚未迁移到 managed coroutine，目前明确返回
+> `unsupported_yieldable_execution`，不会回退到不可 yield 的 Lua 主状态执行。
 
 ### 1.1 健康检查
 
@@ -82,18 +91,18 @@
 
 **`POST /api/run`**
 
-将脚本内容写入临时文件并执行。
+该路由已保留，但当前不会执行脚本。为避免不可 yield 的 Lua 主状态绕过调试器，
+在 managed coroutine 执行入口完成前统一返回 `unsupported_yieldable_execution`。
 
 ```
 → "playbgm('theme.ogg')\nbg('scene01.png')\nch('Hero', 'Hello world!')\np()"
-← {"status":"ok"}
+← {"status":"invalid_request","code":"unsupported_yieldable_execution",...}
 ```
 
 错误响应 (4xx/5xx)：
 ```
-← {"error":"Lua not initialized"}
 ← {"error":"Empty script"}
-← {"status":"error","message":"<lua error message>"}
+← {"status":"invalid_request","code":"unsupported_yieldable_execution",...}
 ```
 
 ---
@@ -102,7 +111,7 @@
 
 **`POST /api/stop`**
 
-设置全局标志 `_CAESURA_QUIT = true`，脚本在下一个 yield 点退出。
+向 owner-thread dispatcher 提交停止命令，Engine 在当前帧结束后退出。
 
 ```
 → (no body)
@@ -133,38 +142,60 @@
 
 ---
 
-### 1.7 Live2D 模型列表
+### 1.7 Live2D 模型与静态立绘列表
 
 **`GET /api/live2d/models`**
 
-扫描 `models/`, `assets/models/`, `assets/live2d/` 目录中的模型文件。
+扫描 `models/`, `assets/models/`, `assets/live2d/` 目录中的动画模型与
+静态立绘文件。返回数组按 `path` 排序，文件名和路径会进行标准 JSON 转义。
 
 ```
 → (no body)
 ← [
     {"name":"haru.moc","path":"models/haru.moc"},
-    {"name":"shizuku.model.json","path":"assets/models/shizuku.model.json"}
+    {"name":"shizuku.model.json","path":"assets/models/shizuku.model.json"},
+    {"name":"hero.PNG","path":"assets/live2d/hero.PNG"}
   ]
 ```
 
-文件过滤：`.moc`, `.json`, 或文件名含 `.model`。
+文件过滤不区分扩展名大小写：
+
+- Cubism/模型：`.moc`, `.moc3`, `.json`，或文件名含 `.model`。
+- 静态立绘：`.png`, `.jpg`, `.jpeg`, `.bmp`。
 
 ---
 
-### 1.8 加载 Live2D 模型
+### 1.8 加载并展示动画模型或静态立绘
 
 **`POST /api/live2d/load`**
 
 ```
-→ {"modelPath":"models/haru.moc"}
-← {"status":"ok","modelId":1,"name":"models/haru.moc"}
+→ {"modelPath":"assets/live2d/hero.png","x":420,"y":80,"scale":1.25}
+← {"status":"ok","modelId":1,"name":"hero"}
 ```
 
-错误响应：
+| 请求字段 | 类型 | 必填 | 默认值 | 说明 |
+|---------|------|------|--------|------|
+| `modelPath` | string | 是 | — | 模型或静态图片路径 |
+| `x` | number | 否 | `0` | 展示位置 X；必须是有限数值 |
+| `y` | number | 否 | `0` | 展示位置 Y；必须是有限数值 |
+| `scale` | number | 否 | `1` | 展示缩放；必须是有限正数 |
+| `show` | bool | 否 | `true` | 加载成功后是否立即展示 |
+
+省略 `show` 时，owner thread dispatcher 会在 `loadModel()` 成功后调用
+`showModel(modelId, x, y, scale)`。传入 `"show": false` 时只加载资源，
+保持隐藏，供后续编辑器操作使用。HTTP worker 只解析并提交 DTO，不直接访问
+Engine、Lua 或动画后端。
+
+非法 JSON、错误字段类型、非有限坐标或 `scale <= 0` 返回 HTTP 400：
+
 ```
-← {"error":"modelPath required"}
-← {"error":"Animation backend not available"}
-← {"error":"Failed to load model"}
+← {
+    "status":"invalid_request",
+    "code":"invalid_animation_request",
+    "error":"scale must be greater than zero",
+    "message":"scale must be greater than zero"
+  }
 ```
 
 ---
@@ -323,6 +354,12 @@ Render.submit_batch({
 | `profile_start` | `(name)` | 开始性能采样 |
 | `profile_end` | `(name)` | 结束性能采样 |
 
+这里的 `Debug` Lua 表只提供日志、断言与性能分析绑定。`DebugProtocol` 由 `Engine`
+按 Lua VM 生命周期持有，支持可 yield KAG 协程的非阻塞断点、继续、step
+into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同一 resume 仲裁入口，
+暂停期间的 frame update、点击批处理及其他 Lua 回调不会越过断点。完整调试命令当前
+通过 stdio RPC 暴露；HTTP 调试路由尚未开放。
+
 ### 2.5 DevCore 模块
 
 ```lua
@@ -471,18 +508,18 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 引擎内部架构文档，供需要修改引擎核心的合作开发者参考。
 
-→ [cpp-interfaces.md](cpp-interfaces.md) — 30 个 `I*` 纯虚接口，16 模块，BackendRegistry 完整 getter 列表。
+→ [cpp-interfaces.md](cpp-interfaces.md) — 28 个 `I*` 纯虚接口，16 模块，BackendRegistry 完整 getter 列表。
 
 ---
 
 ## 附录 A: 快速开始 — 编辑器工作流
 
 ```
-1. 启动引擎（含 --editor 标志）
-   → 引擎启动 EditorServer，监听 http://localhost:9876
+1. 启动 HTTP 编辑器宿主
+   → `CaesuraAmeKAG --editor`，监听 http://localhost:9876
 
-2. 浏览器打开 web-editor（静态文件由引擎托管）
-   → GET /api/ping 确认连接
+2. 编辑器客户端连接 HTTP API
+   → GET /api/ping 确认连接；仓库当前不附带静态 web-editor 前端
 
 3. 浏览资源
    → GET /api/assets?type=image  列出所有图片
@@ -490,7 +527,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
    → GET /api/assets?type=script 列出所有脚本
 
 4. 编写 KAG 场景
-   → POST /api/run 发送脚本内容，引擎即时执行预览
+   → 当前 POST /api/run 返回 unsupported；需等待 managed coroutine 执行入口
 
 5. 调试
    → GET /api/logs 查看执行日志
@@ -504,7 +541,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 - **命名空间**: 所有 C++ 公共类型在 `Caesura::` 下（archive 在 `Caesura::carc::`）
 - **Lua 全局变量**: 绑定模块注册为 Lua 全局变量（`KAG`, `Render`, `VFX`, `Debug`, `DevCore`, `Save`, `Steam`）
-- **BackendRegistry**: 所有后端访问的唯一入口点（参见 [cpp-interfaces.md §A](cpp-interfaces.md#附录-a-backendregistry-完整-getter-列表)）
+- **BackendRegistry**: 运行时引擎后端访问的唯一入口点；`DebugProtocol` 与 RPC/HTTP 传输由组合根持有，不进入 Registry（参见 [cpp-interfaces.md §A](cpp-interfaces.md#附录-a-backendregistry-完整-getter-列表)）
 - **接口文件**: `src/<module>/api/I<Name>.h`，纯虚类，不包含实现
 - **构建**: `cmake --build build --config Debug`
-- **测试**: `build/tests/Debug/CaesuraTests.exe`（当前 324/324 passed）
+- **测试**: `build/tests/Debug/CaesuraTests.exe --no-skip`（以当前 fresh build 输出为准）

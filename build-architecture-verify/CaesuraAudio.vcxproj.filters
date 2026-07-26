@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\SoLoudAudioEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\NullAudioBackend.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\文件存放处\codex\Caesura(AmeKAG)\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{212F4385-37EC-34C7-B8BA-2EFECC7AE6E5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

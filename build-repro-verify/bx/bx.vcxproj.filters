@@ -1,0 +1,231 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\allocator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\bounds.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\bx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\commandline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\crtnone.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\debug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\dtoa.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\easing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\file.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\filepath.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\hash.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\math.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\mutex.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\os.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\process.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\semaphore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\settings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\sort.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\string.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\thread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\timer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\src\url.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\bounds.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\bx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\commandline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\cpu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\easing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\endian.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\error.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\filepath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\float4x4_t.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\handlealloc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\hash.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\macros.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\mpscqueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\mutex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\os.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\pixelformat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\process.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\readerwriter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\ringbuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\rng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\semaphore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\simd_t.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\sort.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\spscqueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\string.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\thread.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\timer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\typetraits.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\bx\url.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\freebsd\dirent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\freebsd\malloc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\freebsd\signal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\ios\malloc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\linux\sal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\mingw\dirent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\mingw\sal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\mingw\salieri.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\mingw\specstrings_strict.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\mingw\specstrings_undef.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\msvc\dirent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include\compat\osx\malloc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{EDF92F56-8280-36C0-886E-5FC65160EC50}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{5E2E2E67-C1D9-3769-A95A-2FDAA7ED2E0A}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -2,15 +2,20 @@
 
 #include "entry/EngineConfig.h"
 #include "platform/api/IPlatformBackend.h"
-#include "di/thread/ThreadAssert.h"
+#include "di/api/ThreadAssert.h"
+#include <functional>
 #include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace Caesura {
 
 class IRenderDevice;
 class IAudioBackend;
 class LuaManager;
+class HotReload;
+class DebugProtocol;
 class InputRouter;
 class IGpuMonitor;
 class VideoPlayer;
@@ -18,6 +23,18 @@ class DebugManager;
 class IMiniGameBackend;
 class IAnimationBackend;
 class ISteamBackend;
+class IParticleSystem;
+class IResourceGenerationTracker;
+class ITextureBudget;
+class ITextureManager;
+class ILayerManager;
+class ISandboxQuota;
+class AssetManager;
+class IAsyncLoader;
+class IJobSystem;
+class ISaveManager;
+struct CompletedLoad;
+namespace carc { class ICryptoEngine; }
 
 // [R1-FIX] GameState Architecture Note:
 // There are TWO ctx tables in the system:
@@ -33,45 +50,54 @@ class ISteamBackend;
 //   Conductor is deprecated and no longer auto-loaded by kag/init.lua.
 class Engine {
 public:
-    Engine(const EngineConfig& config);
+    using OwnerPump = std::function<void()>;
+
+    explicit Engine(EngineConfig&& config);
     ~Engine();
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
     bool init();
-    void run();
-    void runRpc();
+    void run(const OwnerPump& ownerPump = {});
+    void shutdown();
 
     bool isHeadless() const { return m_config.headless; }
     bool isEditorMode() const { return m_config.editorMode; }
     void renderOneFrame();
     std::string captureFrameForRpc(int w, int h);
+    bool reloadScriptsNow();
     void quit();
+    DebugProtocol* debugProtocol() noexcept { return m_debugProtocol.get(); }
+    const DebugProtocol* debugProtocol() const noexcept { return m_debugProtocol.get(); }
 
     IRenderDevice& renderDevice();
     IAudioBackend& audio();
     IPlatformBackend& platform();
-    IMiniGameBackend& miniGame() { return *m_miniGameBackend; }
-    IAnimationBackend& animation() { return *m_animationBackend; }
-    LuaManager&   lua()           { return *m_lua; }
-    InputRouter&  input()         { return *m_inputRouter; }
-    IGpuMonitor&  gpuMonitor()    { return *m_gpuMonitor; }
-    VideoPlayer&  videoPlayer()   { return *m_videoPlayer; }
+    IMiniGameBackend& miniGame() { requireInitialized(); return *m_miniGameBackend; }
+    IAnimationBackend& animation() { requireInitialized(); return *m_animationBackend; }
+    LuaManager&   lua()           { requireInitialized(); return *m_lua; }
+    InputRouter&  input()         { requireInitialized(); return *m_inputRouter; }
+    IGpuMonitor&  gpuMonitor()    { requireInitialized(); return *m_gpuMonitor; }
+    VideoPlayer&  videoPlayer()   { requireInitialized(); return *m_videoPlayer; }
 
     const EngineConfig& config() const { return m_config; }
 
 private:
+    void requireInitialized() const;
     void processEvents();
-    void render();
+    void render(float dt);
 
     void triggerAutoSave();
     void quicksave();
     void quickload();
 
     void handleFatalError(const char* context, const char* luaError);
-    void shutdown();
     void recoverFromDeviceLoss();
+    bool pumpDebugger();
+    bool isLuaExecutionPaused() const;
+    void publishDebugPauseState();
+    void notifyKagDebugResume();
 
     // T2: Init phase methods
     bool initPlatformPhase();
@@ -81,10 +107,28 @@ private:
 
     bool         m_running  = false;
     uint64_t     m_lastTick = 0;
+    bool         m_initAttempted = false;
+    bool         m_initialized = false;
     bool         m_shutdownComplete = false;
-    bool         m_audioVoiceWasPlaying = false;
+    bool         m_debugInitialized = false;
+    bool         m_debugProtocolInitialized = false;
+    bool         m_platformInitialized = false;
+    bool         m_renderInitialized = false;
+    bool         m_audioInitialized = false;
+    bool         m_textureManagerInitialized = false;
+    bool         m_layerManagerInitialized = false;
+    bool         m_sandboxQuotaBound = false;
+    bool         m_luaInitialized = false;
+    bool         m_jobSystemInitialized = false;
+    bool         m_assetManagerInitialized = false;
+    bool         m_asyncLoaderInitialized = false;
+    bool         m_steamInitialized = false;
+    bool         m_miniGameInitialized = false;
+    bool         m_animationInitialized = false;
+    unsigned int m_audioVoiceCompletionsPending = 0;
     int  m_gcFrameCounter = 0;
-    bool         m_luaPaused = false;
+    bool         m_deviceRecoveryPaused = false;
+    bool         m_skipLuaCallbacksThisFrame = false;
     static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);
 
     EngineConfig m_config;
@@ -92,12 +136,26 @@ private:
     std::unique_ptr<IAudioBackend>     m_audioBackend;
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
     std::unique_ptr<LuaManager>        m_lua;
+    std::unique_ptr<HotReload>         m_hotReload;
+    std::unique_ptr<DebugProtocol>      m_debugProtocol;
     std::unique_ptr<InputRouter>       m_inputRouter;
     std::unique_ptr<IGpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend>  m_miniGameBackend;
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
     std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
+    std::unique_ptr<IParticleSystem>   m_particleSystem;
+    std::unique_ptr<IResourceGenerationTracker> m_resourceGenerationTracker;
+    std::unique_ptr<ITextureBudget>    m_textureBudget;
+    std::unique_ptr<ITextureManager>   m_textureManager;
+    std::unique_ptr<ILayerManager>     m_layerManager;
+    std::unique_ptr<ISandboxQuota>     m_sandboxQuota;
+    std::unique_ptr<IJobSystem>        m_jobSystem;
+    std::unique_ptr<AssetManager>      m_assetManager;
+    std::unique_ptr<IAsyncLoader>      m_asyncLoader;
+    std::unique_ptr<ISaveManager>      m_saveManager;
+    std::unique_ptr<carc::ICryptoEngine> m_cryptoEngine;
+    std::vector<std::unique_ptr<CompletedLoad>> m_deferredAsyncLoads;
 };
 
 } // namespace Caesura

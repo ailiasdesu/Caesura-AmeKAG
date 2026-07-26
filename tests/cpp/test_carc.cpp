@@ -225,7 +225,7 @@ TEST_CASE("CARCReader rejects signed index smaller than authentication tag") {
 }
 
 TEST_CASE("CryptoEngine::encrypt with wrong key length returns empty") {
-    auto& ce = CryptoEngine::instance();
+    CryptoEngine ce;
     uint8_t key[16] = {};
     uint8_t nonce[12] = {};
     uint8_t tag[16] = {};
@@ -239,7 +239,7 @@ TEST_CASE("CryptoEngine::encrypt with wrong key length returns empty") {
 }
 
 TEST_CASE("CryptoEngine::decrypt with wrong nonce length returns empty") {
-    auto& ce = CryptoEngine::instance();
+    CryptoEngine ce;
     uint8_t key[32] = {};
     uint8_t nonce[8] = {};
     uint8_t tag[16] = {};

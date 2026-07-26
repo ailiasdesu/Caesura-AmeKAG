@@ -7,8 +7,13 @@
 #include <unordered_map>
 #include <functional>
 #include <list>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace Caesura {
+
+class ISandboxQuota;
 
 using TextureCallback = std::function<void(bgfx::TextureHandle)>;
 
@@ -18,13 +23,13 @@ using TextureCallback = std::function<void(bgfx::TextureHandle)>;
 
 class TextureManager : public ITextureManager, public IDeviceLostListener {
 public:
-    static TextureManager& instance();
+    TextureManager() = default;
 
     TextureManager(const TextureManager&) = delete;
     TextureManager& operator=(const TextureManager&) = delete;
 
     bool initialize() override;
-    bool initialize(bool gpuAvailable);
+    bool initialize(bool gpuAvailable) override;
     void shutdown() override;
     void setDevMode(bool dev) override;
 
@@ -45,8 +50,8 @@ public:
     bool isValid(uint32_t id) const override;
 
     uint64_t totalTextureBytes() const override { return m_totalBytes; }
-    void checkBudget(uint32_t id, uint16_t w, uint16_t h) override;
-    void trackTexture(uint32_t id, uint32_t bytes) override;
+    bool checkBudget(uint32_t id, uint16_t w, uint16_t h) override;
+    void trackTexture(uint32_t id, uint64_t bytes) override;
     void untrackTexture(uint32_t id) override;
 
     // IDeviceLostListener
@@ -54,23 +59,47 @@ public:
     void onDeviceRestored() override;
 
 private:
-    TextureManager() = default;
+    enum class RestoreSourceKind : uint8_t {
+        Encoded,
+        Rgba
+    };
+
+    struct RestoreSource {
+        RestoreSourceKind kind = RestoreSourceKind::Encoded;
+        std::vector<uint8_t> bytes;
+        uint16_t width = 0;
+        uint16_t height = 0;
+    };
+
+    class QuotaReservation;
 
     bgfx::TextureHandle buildCheckerboardTexture();
-    bgfx::TextureHandle loadFromFile(const std::string& path);
-    bgfx::TextureHandle loadFromMemory(const uint8_t* data, uint32_t size);
-    void getTextureSize(bgfx::TextureHandle handle, uint16_t& width,
-                        uint16_t& height) const;
+    bgfx::TextureHandle loadFromFile(const std::string& path,
+                                     uint16_t& width, uint16_t& height,
+                                     std::vector<uint8_t>& encodedBytes);
+    bgfx::TextureHandle loadFromMemory(const uint8_t* data, uint32_t size,
+                                       uint16_t& width, uint16_t& height);
+    bgfx::TextureHandle createFromRGBA(const uint8_t* rgba,
+                                       uint16_t width, uint16_t height);
+    bgfx::TextureHandle restoreTexture(const RestoreSource& source,
+                                       uint16_t& width, uint16_t& height);
+    bool validateTextureDimensions(uint32_t width, uint32_t height,
+                                   uint64_t& rgbaBytes) const;
 
     // Internally create bgfx texture and register in cache, return TM ID.
-    uint32_t registerTexture(bgfx::TextureHandle tex);
+    uint32_t registerTexture(bgfx::TextureHandle tex,
+                             uint16_t width, uint16_t height,
+                             RestoreSource&& restoreSource,
+                             QuotaReservation& quotaReservation);
 
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
     bool m_devMode = true;
     bool m_gpuAvailable = true;
-    std::unordered_map<uint32_t, uint32_t> m_textureSizes;
-    std::unordered_map<uint32_t, std::string> m_texturePaths;  // id -> file path for device-loss re-load
+    std::unordered_map<uint32_t, uint64_t> m_textureSizes;
+    std::unordered_map<uint32_t, std::pair<uint16_t, uint16_t>> m_textureDimensions;
+    std::unordered_map<uint32_t, RestoreSource> m_restoreSources;
+    std::unordered_map<uint32_t, ISandboxQuota*> m_quotaReservations;
     std::list<uint32_t> m_textureLRU;
     uint64_t m_totalBytes = 0;
     uint32_t m_nextId = 1;

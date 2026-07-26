@@ -1,7 +1,6 @@
-// test_render_pipeline.cpp - TextRenderer + FreeTypeContext + ShaderCache tests
+// test_render_pipeline.cpp - TextRenderer + ShaderCache tests
 #include "doctest.h"
 #include "render/TextRenderer.h"
-#include "render/FreeTypeContext.h"
 #include "render/ShaderCache.h"
 #include <memory>
 
@@ -12,21 +11,25 @@ TEST_CASE("TextRenderer::construct no-crash") {
     CHECK(tr.get() != nullptr);
 }
 
-TEST_CASE("FreeTypeContext::singleton") {
-    FreeTypeContext& a = FreeTypeContext::instance();
-    FreeTypeContext& b = FreeTypeContext::instance();
-    CHECK(&a == &b);
+TEST_CASE("TextRenderer::default state uses bitmap font") {
+    TextRenderer tr;
+    CHECK_FALSE(tr.isInitialized());
+    CHECK(tr.currentFont() == FontId::Small);
+    CHECK(tr.lineHeight() == doctest::Approx(16.0f));
 }
 
-TEST_CASE("FreeTypeContext::init succeeds") {
-    CHECK(FreeTypeContext::instance().init());
-    FreeTypeContext::instance().shutdown();
+TEST_CASE("TextRenderer::init rejects null device") {
+    TextRenderer tr;
+    CHECK_FALSE(tr.init(nullptr));
+    CHECK_FALSE(tr.isInitialized());
 }
 
-TEST_CASE("FreeTypeContext::double init idempotent") {
-    CHECK(FreeTypeContext::instance().init());
-    CHECK(FreeTypeContext::instance().init());
-    FreeTypeContext::instance().shutdown();
+TEST_CASE("TextRenderer::missing TTF fails repeatedly") {
+    TextRenderer tr;
+    constexpr const char* missingFont = "__caesura_missing_font_for_raii_test__.ttf";
+    CHECK_FALSE(tr.loadTTF(missingFont));
+    CHECK_FALSE(tr.loadTTF(missingFont));
+    CHECK(tr.currentFont() == FontId::Small);
 }
 
 TEST_CASE("ShaderCache::default empty") {

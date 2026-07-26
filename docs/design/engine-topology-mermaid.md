@@ -1,25 +1,31 @@
-﻿# Engine Architecture Topology (Mermaid)
+# Engine Architecture Topology (Mermaid)
+
+当前构建由 **16 个内部静态库**（15 个子系统 + `CaesuraEntry`）和
+**15 个 API `INTERFACE` target** 组成，最终统一链接到单一应用程序。
+下图中实线表示当前源码/CMake 的直接模块依赖，虚线表示
+`BackendRegistry` 保存的非拥有运行时服务关系；两者不是同一种依赖。
 
 ```mermaid
 graph TB
-    subgraph "Composition Root"
-        main["main.cpp<br/>Create backends<br/>→ Engine"]
-        engine["entry/Engine<br/>4-phase init<br/>registers to Registry"]
+    subgraph "Composition Root & Host"
+        main["main.cpp<br/>owns Engine + RpcServer<br/>EditorServer not wired"]
+        engine["entry / CaesuraEntry<br/>composition root · lifecycle<br/>4-phase init"]
+        rpc["rpc / CaesuraRpc<br/>stdio JSON-RPC active<br/>HTTP implementation unwired"]
     end
 
     subgraph "Dependency Injection"
-        registry["di/BackendRegistry<br/>26 I* pointers<br/>Singleton access"]
+        registry["di / BackendRegistry<br/>20 non-owning services<br/>budget · quota · device-loss listeners"]
     end
 
     subgraph "Runtime Core"
         script["script (Lua 5.4)<br/>VM · coroutines · KAG bindings<br/>GameState · tokenizer<br/>instruction-budget sandbox"]
         render["render (bgfx)<br/>GPU device · layers<br/>textures · particles<br/>video · GPU monitor"]
         audio["audio (SoLoud)<br/>BGM/Voice/SE buses<br/>3D spatial · fade"]
-        resource["resource<br/>async loader · asset providers<br/>image decoder"]
+        resource["resource<br/>async loader · asset providers<br/>image decoder · generations"]
     end
 
     subgraph "Content Systems"
-        live2d["live2d<br/>Cubism SDK / PNG fallback<br/>model · motion · expression"]
+        live2d["live2d<br/>Cubism SDK / image fallback<br/>model · motion · expression"]
         minigame["minigame<br/>3D scenes<br/>enter → update → render → leave"]
         storage["storage<br/>encrypted save/load<br/>schema migration<br/>cloud sync"]
         archive["archive<br/>CARC packaging<br/>AES-256-GCM · Ed25519"]
@@ -28,91 +34,115 @@ graph TB
     subgraph "Platform & Infrastructure"
         platform["platform (SDL3)<br/>window · events · timing<br/>native handles"]
         input["input<br/>KAG ↔ Game focus<br/>resize callbacks"]
-        job["job<br/>thread pool<br/>onComplete callbacks"]
+        job["job<br/>thread pool<br/>main-thread completion callbacks"]
         steam["steam<br/>achievements · stats<br/>cloud saves"]
-        rpc["rpc<br/>HTTP editor server<br/>9 endpoints"]
         debug["debug<br/>structured logging<br/>frame profiling"]
-        di_core["di<br/>texture budget 6 tiers<br/>sandbox quota"]
     end
 
-    main --> engine
-    engine --> registry
+    main -->|"owns"| engine
+    main -->|"owns current transport"| rpc
+    engine -->|"registers services"| registry
 
-    registry -.->|"IRenderDevice*"| render
-    registry -.->|"ILuaManager*"| script
-    registry -.->|"IAudioBackend*"| audio
-    registry -.->|"IAsyncLoader*"| resource
-    registry -.->|"IAnimationBackend*"| live2d
-    registry -.->|"IMiniGameBackend*"| minigame
-    registry -.->|"ISaveManager*"| storage
-    registry -.->|"IArchiveReader*"| archive
-    registry -.->|"IPlatformBackend*"| platform
-    registry -.->|"IInputRouter*"| input
-    registry -.->|"IJobSystem*"| job
-    registry -.->|"ISteamBackend*"| steam
-    registry -.->|"IEditorServer*"| rpc
-    registry -.->|"IDebugManager*"| debug
-    registry -.->|"ITextureBudget*"| di_core
+    registry -.->|"5 render services"| render
+    registry -.->|"ILuaManager"| script
+    registry -.->|"IAudioBackend"| audio
+    registry -.->|"loader + generation tracker"| resource
+    registry -.->|"IAnimationBackend"| live2d
+    registry -.->|"IMiniGameBackend"| minigame
+    registry -.->|"ISaveManager"| storage
+    registry -.->|"ICryptoEngine"| archive
+    registry -.->|"IPlatformBackend"| platform
+    registry -.->|"IInputRouter"| input
+    registry -.->|"IJobSystem"| job
+    registry -.->|"ISteamBackend"| steam
+    registry -.->|"IDebugManager"| debug
 
-    script -->|"KAG commands →"| audio
-    script -->|"KAG commands →"| render
-    script -->|"KAG commands →"| storage
-    script -->|"KAG commands →"| resource
-    script -->|"KAG commands →"| live2d
-    script -->|"KAG commands →"| minigame
-
-    render -->|"flush RTT on shutdown"| platform
-    audio -->|"decode on worker"| job
-    resource -->|"image decode on worker"| job
-    minigame -->|"update() on worker"| job
+    rpc -->|"Archive API"| archive
+    archive -->|"Resource API"| resource
+    audio -->|"registry access"| registry
+    job -->|"registry access"| registry
+    live2d -->|"registry access"| registry
+    live2d -->|"Render API"| render
+    minigame -->|"registry access"| registry
+    minigame -->|"Input API"| input
+    minigame -->|"Render API"| render
+    render -->|"registry access"| registry
+    render -->|"debug implementation"| debug
+    render -->|"Job API"| job
+    resource -->|"registry access"| registry
+    resource -->|"Job API"| job
+    script -->|"registry access"| registry
+    script -->|"Audio API"| audio
+    script -->|"Debug API"| debug
+    script -->|"Input API"| input
+    script -->|"MiniGame API"| minigame
+    script -->|"Platform API"| platform
+    script -->|"Render API"| render
+    script -->|"Resource API"| resource
+    script -->|"Steam API"| steam
+    script -->|"Storage API"| storage
+    storage -->|"registry access"| registry
+    storage -->|"Archive API"| archive
+    storage -->|"Steam API"| steam
 ```
+
+为保持图可读，`CaesuraEntry` 对各 Engine 后端的所有权/链接边汇总在 `engine`
+节点中，未逐条重复绘制；模块间实线边与 `cmake/CaesuraModules.cmake` 一致。
 
 ## Module Descriptions
 
-### Composition Root (entry/)
-- **entry/Engine.cpp** — The only place that creates concrete backend objects.
+### Composition Root (main.cpp + entry/)
+
+- **main.cpp / entry/** — The only production locations that create concrete backend objects.
 - Four-phase init: `initPlatformPhase()` → `initScriptingPhase()` → `initAssetPhase()` → `initOptionalPhase()`.
-- Registers all backends into `BackendRegistry` for the rest of the engine to access.
+- Registers Engine-owned backends into `BackendRegistry` for runtime access.
+- Host code owns inbound transport adapters outside Engine and injects only callbacks or commands. The current `main.cpp` creates `RpcServer`; `EditorServer` is compiled but not instantiated.
 
 ### Dependency Injection (di/)
-- **BackendRegistry** — Singleton storing 26 non-owning `I*` pointers. All subsystem access goes through `::instance().get*()`.
-- **TextureBudget** — Auto-detects 6 memory tiers (128MB–4GB), LRU eviction on overflow.
-- **SandboxQuota** — Resource counting for Lua sandbox (textures, emitters, handles).
+
+- **BackendRegistry** — Singleton storing 20 non-owning engine-service pointers. Runtime backend access goes through `::instance().get*()`; host transports and device-loss listeners are excluded from that count.
+- **TextureBudget** — Auto-detects 6 memory tiers (128MB–4GB) and exposes the selected budget to texture management.
+- **SandboxQuotaService** — Engine-owned Lua sandbox resource counting (textures, emitters, handles).
+- **IDeviceLostListener** — Main-thread callback contract. Listeners release GPU handles before renderer shutdown and rebuild them after restoration.
 
 ### Runtime Core
-- **render** (22 .cpp, 6 interfaces) — bgfx-based GPU rendering. IRenderDevice for draw calls, ILayerManager for BG/FG/MSG compositing with dirty-rect optimization, ITextureManager for async texture lifecycle with budget enforcement, IParticleSystem for 2D GPU particles, IGpuMonitor for adaptive quality, IVideoPlayer for MPEG-1/FFmpeg playback.
-- **script** (9 .cpp, 1 interface) — Lua 5.4 VM with instruction-budget sandbox. KAG tokenizer and scheduler (coroutine-based). 7 Lua binding modules (Render, VFX, KAG, Debug, DevCore, Save, Steam).
-- **audio** (2 .cpp, 1 interface) — SoLoud 3-bus audio. BGM (cross-fade), Voice (interrupt), SE (2D/3D spatial). Per-bus volume, playback position query.
-- **resource** (6 .cpp, 2 interfaces) — Async asset loading pipeline. IAssetProvider chain (Dir → CARC, priority-ordered). Worker-thread image decode (bimg + stb fallback).
+
+- **render** (6 interfaces) — bgfx-based GPU rendering. IRenderDevice for draw calls, ILayerManager for BG/FG/MSG compositing, ITextureManager for texture lifecycle, IParticleSystem for 2D particles, IGpuMonitor for adaptive quality, and IVideoPlayer for playback.
+- **script** (1 interface) — Lua 5.4 VM with instruction-budget sandbox. KAG tokenizer and coroutine scheduler, plus 7 binding modules (Render, VFX, KAG, Debug, DevCore, Save, Steam).
+- **audio** (1 interface) — SoLoud 3-bus audio. BGM (cross-fade), Voice (interrupt), SE (2D/3D spatial), per-bus volume, and playback position queries.
+- **resource** (3 interfaces) — Asset-provider chain, Engine-owned asset manager, asynchronous loading, worker-thread image decoding, and resource-generation tracking.
 
 ### Content Systems
-- **live2d** (6 .cpp, 1 interface) — Animation backend abstraction. Live2DBackend (requires Cubism 5 SDK) or NullAnimationBackend (PNG/JPG static sprite fallback).
-- **minigame** (4 .cpp, 1 interface) — 3D mini-game framework. Enter/update/render/leave lifecycle. update() safe for worker threads, render() main-thread only. Lua bridge.
-- **storage** (4 .cpp, 2 interfaces) — JSON save/load with AES-256-GCM encryption. Schema migration (v1–v5). ISaveProvider abstraction (local filesystem / cloud).
-- **archive** (6 .cpp, 3 interfaces) — CARC archive format. AES-256-GCM encryption + Ed25519 signing. Reader/writer with key management.
+
+- **live2d** (1 interface) — Animation backend abstraction. Live2DBackend is conditionally added when Cubism 5 SDK is available; NullAnimationBackend provides static-image fallback.
+- **minigame** (1 interface) — 3D mini-game framework with enter/update/render/leave lifecycle. The current Engine loop invokes update and render on the main thread.
+- **storage** (2 interfaces) — JSON save/load with AES-256-GCM encryption, schema migration, and local/cloud provider abstraction.
+- **archive** (3 interfaces) — CARC archive format with AES-256-GCM encryption, Ed25519 signing, reader/writer, and key management.
 
 ### Platform & Infrastructure
-- **platform** (2 .cpp, 1 interface) — SDL3 window, event polling, native handles for bgfx.
-- **input** (1 .cpp, 1 interface) — SDL event router with KAG/Game focus switching.
-- **job** (1 .cpp, 1 interface) — Multi-threaded task system. submit() with priority + onComplete callback. NullJobSystem mock for synchronous testing.
-- **steam** (1 .cpp, 1 interface) — Steamworks achievements, stats, cloud saves. Conditional compile.
-- **rpc** (2 .cpp, 2 interfaces) — HTTP editor server (9 endpoints: ping, status, assets, run, stop, logs, Live2D models/load, build). CORS enabled.
-- **debug** (3 .cpp, 1 interface) — Structured logging (ring buffer), frame profiling, subsystem stats, GPU submit tracking.
+
+- **platform** (1 interface) — SDL3 window, event polling, timing, and native window handles.
+- **input** (1 interface) — SDL event router with KAG/Game focus switching.
+- **job** (1 interface) — Multi-threaded task system with priority and main-thread `onComplete` callbacks. NullJobSystem is the synchronous test implementation.
+- **steam** (1 interface) — Steamworks achievements, stats, and cloud saves; the real SDK backend is conditionally compiled.
+- **rpc** (2 interfaces) — Host-owned inbound transport adapters. Stdio JSON-RPC is wired for `--headless`/`--editor`; HTTP remains unwired until commands can be dispatched to the main thread.
+- **debug** (1 interface) — Structured logging, frame profiling, subsystem stats, and GPU submit tracking.
 
 ## Game Frame Data Flow
 
 ```
-SDL3 pollEvent() → InputRouter → KAG callback
+Engine::processEvents() → Steam callbacks / overlay gate → SDL3 events → InputRouter
   → Lua coroutine resume
   → scheduler.run() processes tokens
   → KAG commands dispatch to C++ bindings
   → BackendRegistry.get*() → concrete backend calls
 
 Per frame:
-  1. platform::pollEvent()    → input routing
-  2. job::pollMainThreadJobs() → collect async results
-  3. script::update(dt)       → resume Lua coroutine
-  4. audio::update(dt)       → SoLoud tick
-  5. debug::endFrameProfile() → record GPU submits
-  6. render::beginFrame() → LayerManager::render() → endFrame() → commit_frame()
+  1. processEvents() → Steam callbacks, overlay gate, SDL/Input routing
+  2. consumeDeviceLost() → recover before any frame work when required
+  3. HotReload check → JobSystem callbacks → AsyncLoader completion polling
+  4. Lua memory/instruction checks → GPU monitor → engine_update(dt)
+  5. voice-complete edge detection → Lua callback
+  6. render() → engine_render() / debug overlay / active mini-game render
+  7. RenderDevice::advanceFrame() → active mini-game update
 ```

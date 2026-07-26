@@ -7,7 +7,7 @@
   - 需要同意 Live2D 专有许可协议
 - 支持的平台:
   - Windows (D3D11 渲染路径)
-  - macOS (Metal 渲染路径，自动回退 OpenGL)
+  - macOS (OpenGL 路径；Metal 路径尚未完成生产验证)
   - Linux (OpenGL 渲染路径)
 
 ## 无 SDK 环境
@@ -36,37 +36,35 @@ CubismSdkForNative/
 
 ### 2. 放置 SDK 文件
 
-将 SDK 放置到项目的 `external/Live2D/` 目录下：
+将 SDK 放在项目根目录，或通过 `CUBISM_SDK_ROOT` 指定其他位置：
 
 ```
 Caesura(AmeKAG)/
-└── external/
-    └── Live2D/
-        ├── Core/
-        │   ├── include/       # Cubism 核心头文件
-        │   │   ├── Live2DCubismCore.h
-        │   │   └── ...
-        │   └── lib/           # 平台相关库文件
-        │       ├── windows/x86_64/
-        │       ├── macos/
-        │       └── linux/x86_64/
-        ├── CubismNativeFramework/
-        │   └── src/           # Live2D 框架源码
-        └── Framework/
-            └── src/           # Live2D 渲染框架
+└── CubismSdkForNative-5-r.5/
+    ├── Core/
+    │   ├── include/       # Cubism 核心头文件
+    │   │   ├── Live2DCubismCore.h
+    │   │   └── ...
+    │   └── lib/           # 平台相关库文件
+    │       ├── windows/x86_64/
+    │       ├── macos/
+    │       └── linux/x86_64/
+    └── Framework/
+        └── src/           # Live2D 框架源码
 ```
 
 ### 3. CMake 配置
 
 ```bash
 # 启用 Live2D 支持
-cmake -B build -DCAESURA_ENABLE_LIVE2D=ON
+cmake -B build -DCAESURA_LIVE2D=ON \
+  -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative-5-r.5"
 
 # 构建
 cmake --build build --config Debug --parallel
 ```
 
-CMake 会自动检测 `external/Live2D/` 目录并：
+CMake 会检测 `CUBISM_SDK_ROOT`（默认是项目根目录下的 `CubismSdkForNative-5-r.5`）并：
 - 定义 `CAESURA_HAS_LIVE2D` 预处理器宏
 - 链接对应平台的 Cubism Core 库
 - 编译 `Live2DBackend` 替代 `NullAnimationBackend`
@@ -107,7 +105,7 @@ assets/live2d/
 | 宏 | 说明 |
 |-----|------|
 | `CAESURA_HAS_LIVE2D` | SDK 可用时自动定义，启用 Live2DBackend |
-| `CAESURA_ENABLE_LIVE2D` | CMake 选项，用户手动设置 |
+| `CAESURA_LIVE2D` | CMake 选项，用户手动设置 |
 
 ## 渲染路径
 
@@ -116,24 +114,24 @@ assets/live2d/
 | 平台 | 首选 | 回退 |
 |------|------|------|
 | Windows | D3D11 | — |
-| macOS | Metal | OpenGL |
+| macOS | OpenGL | Metal 路径当前为 stub；失败后回退到 NullAnimation |
 | Linux | OpenGL | — |
 
 渲染路径实现在 `src/live2d/Live2D/` 下：
-- `Live2DD3D11RenderPath.cpp`
-- `Live2DMetalRenderPath.cpp`
-- `Live2DOpenGLRenderPath.cpp`
+- `D3D11NativeRenderPath.cpp`
+- `MetalNativeRenderPath.cpp`
+- `OpenGLSharedRenderPath.cpp` / `OpenGLReadbackRenderPath.cpp`
 
 ## 常见问题
 
 **Q: 构建提示找不到 `Live2DCubismCore.h`**
-A: 确认 SDK 文件在 `external/Live2D/Core/include/` 下的目录结构正确。
+A: 确认 `CUBISM_SDK_ROOT/Core/include/Live2DCubismCore.h` 存在。
 
 **Q: 运行时崩溃 "Cubism Core not initialized"**
 A: 确认 `.moc3` 和 `.model3.json` 文件路径正确。检查模型文件版本是否与 SDK 版本兼容。
 
 **Q: macOS 上 Metal 渲染不工作**
-A: 自动回退到 OpenGL 渲染路径。确保系统安装了 Metal 框架（macOS 10.15+ 默认）。
+A: 当前 Metal 路径仍是 stub，不应作为发布能力启用；请使用 OpenGL renderer，或保持默认 NullAnimation 降级。
 
 **Q: 能否在 Release 构建中去掉 Live2D？**
-A: 可以。不设置 `-DCAESURA_ENABLE_LIVE2D=ON`，引擎将使用 `NullAnimationBackend`（仅支持静态 PNG 立绘）。
+A: 可以。不设置 `-DCAESURA_LIVE2D=ON`，引擎将使用 `NullAnimationBackend`（仅支持静态 PNG 立绘）。

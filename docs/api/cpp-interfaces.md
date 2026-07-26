@@ -1,7 +1,7 @@
 ﻿# Caesura (AmeKAG) — C++ API Interface Reference
 
-> **30 个纯虚接口，16 个模块，统一通过 `BackendRegistry` 访问**
-> 最后更新: 2026-06-12
+> **28 个纯虚接口，16 个模块；20 个运行时引擎服务通过 `BackendRegistry` 访问**
+> 最后更新: 2026-07-18
 
 ---
 
@@ -28,7 +28,7 @@
 
 ## 访问规则
 
-所有后端通过 `BackendRegistry::instance()` 访问：
+引擎运行时后端通过 `BackendRegistry::instance()` 访问：
 
 ```cpp
 auto* renderer = BackendRegistry::instance().getRenderDevice();
@@ -36,9 +36,10 @@ auto* audio    = BackendRegistry::instance().getAudioBackend();
 auto* lua      = BackendRegistry::instance().getLuaState();
 ```
 
-- BackendRegistry 存储非拥有指针（`I*`），Engine 持有 `unique_ptr` 所有权。
+- BackendRegistry 存储非拥有指针（`I*`），Engine 持有对应后端的 `unique_ptr` 所有权。
 - 子系统通过 `set*()` 注册，通过 `get*()` 访问。
 - 禁止绕过 BackendRegistry 直接访问单例（DEBUG_* 宏除外）。
+- RPC/Editor 属于宿主入站传输适配器，不注册到 BackendRegistry。宿主负责其所有权；当前 `main.cpp` 只实例化 `RpcServer`，`EditorServer` 尚未接入。
 
 ---
 
@@ -228,7 +229,7 @@ public:
 
 ---
 
-## 4. di — 依赖注入与资源配额
+## 4. di — 依赖注入、资源配额与设备恢复
 
 ### 4.1 ISandboxQuota
 
@@ -255,15 +256,30 @@ Lua 沙箱资源配额管理，防止脚本资源泄漏。
 | `getTierName` | `const char*` | 预算等级名称 |
 | `isAutoDetected` | `bool` | 是否自动检测（false=手动设置） |
 
+### 4.3 IDeviceLostListener
+
+GPU 设备丢失恢复的监听契约。持有 GPU 资源的模块通过
+`BackendRegistry::registerDeviceLostListener()` 注册；它不是 20 个服务槽位之一。
+
+| 方法 | 调用时机 | 说明 |
+|------|----------|------|
+| `onDeviceLost()` | 渲染后端关闭前 | 销毁 GPU 句柄，保留文件路径、像素缓冲等 CPU 侧恢复数据 |
+| `onDeviceRestored()` | 渲染后端重新初始化成功后 | 从 CPU 侧数据重建 GPU 资源 |
+
+两个回调都在主线程、Lua 暂停期间执行；回调中不得提交绘制或推进渲染帧。
+
 ---
 
 ## 5. entry — 引擎组合根
 
-**无独立接口**（`entry/` 是唯一可以 include 具体实现头文件来创建对象的模块）。
+**无独立接口**（`main.cpp` 与 `entry/` 共同构成组合根，是生产代码中允许
+include 具体实现头文件并创建后端对象的位置）。
 
 核心类型：
-- `EngineConfig` — 聚合结构体，承载所有后端配置
+- `EngineConfig` — move-only 依赖包；构造 `Engine(std::move(config))` 时转移所有注入后端的所有权
 - `Engine` — 四阶段初始化：`initPlatformPhase()` → `initScriptingPhase()` → `initAssetPhase()` → `initOptionalPhase()`
+
+`Engine::init()` 每个实例只允许调用一次。任一必需阶段失败会立即回滚；公开服务访问器只在初始化成功后可用。关闭顺序保证异步加载先停止，再关闭资产管理器和任务系统，最后清空 `BackendRegistry` 的非拥有指针。
 
 参见 [Engine.cpp](/src/entry/Engine.cpp) 和 [AGENTS.md](/AGENTS.md) 第 4 节。
 
@@ -347,6 +363,9 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 
 **降级行为**：无 Cubism SDK 时，NullAnimationBackend 支持 PNG/JPG/BMP 静态图片作为立绘，通过 TextureManager 加载。
 
+当前没有注册 `live2d` 全局 Lua 表；后续脚本绑定必须位于 Script 模块，并在调用时经
+`BackendRegistry::getAnimationBackend()` 解析接口。
+
 ---
 
 ## 9. minigame — 3D 小游戏
@@ -372,7 +391,9 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 | `setRenderDevice(dev)` | 注入渲染设备 |
 | `getBackendName` | 后端名称 |
 
-**生命周期**：KAG 场景 → `mini_game:enter` → active loop (update+render) → `mini_game:leave` → KAG 场景
+**预期生命周期**：KAG 场景 → `enter` → active loop (update+render) → `leave` → KAG 场景。
+Engine 已驱动 active loop，但当前 `LuaManager` 不注册 `mini_game` 全局表；脚本适配器仍需在
+Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端中保存全局指针。
 
 ---
 
@@ -403,7 +424,9 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 
 ### 11.1 IRenderDevice
 
-**核心渲染设备抽象**。不在 `api/` 目录（直接位于 `src/render/`），因为它是最核心的渲染契约。
+**核心渲染设备抽象**，位于 `src/render/api/IRenderDevice.h`。接口使用
+`RenderTextureHandle`、`RenderProgramHandle` 和 `RenderUniformHandle` 等不透明句柄，
+不向调用方暴露 bgfx 类型。
 
 **视图 ID 常量**：
 | 常量 | 值 | 用途 |
@@ -415,20 +438,22 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 
 | 分类 | 方法 | 说明 |
 |------|------|------|
-| **生命周期** | `init(hwnd, w, h)` | 初始化 bgfx 渲染设备 |
-| | `shutdown` | 先 `flushAllRTT` 再 `bgfx::shutdown` |
+| **生命周期** | `init(hwnd, w, h)` | 初始化渲染设备 |
+| | `beginShutdown` | 通知后端进入关闭阶段 |
+| | `shutdown` | 先 `flushAllRTT` 再关闭具体渲染后端 |
 | | `flushAllRTT` | 释放所有 RTT framebuffer（GPU 上下文仍存） |
 | | `resize(w, h)` | 窗口大小变化时重建 backbuffer |
 | **帧管理** | `beginFrame` | 开始帧 |
 | | `endFrame` | 结束帧 |
 | | `commit_frame` | 提交帧到 GPU |
+| | `advanceFrame` | 推进后端帧并处理延迟完成工作 |
 | **视图** | `setViewRect(viewId, x, y, w, h)` | 设置视图矩形 |
 | | `setViewClear(viewId, flags, rgba, depth, stencil)` | 设置视图清除 |
 | | `touch(viewId)` | 标记视图为活跃 |
 | **离屏渲染** | `createRenderTarget(w, h)` | 创建 RTT，返回 `ViewportHandle` |
 | | `destroyRenderTarget(handle)` | 销毁 RTT |
 | | `blitViewport(handle, viewId, x, y, w, h)` | 将 RTT 纹理绘制到目标视图 |
-| | `getViewportTexture(handle)` | 获取 RTT 的 bgfx 纹理（bgfx::TextureHandle） |
+| | `getViewportTexture(handle)` | 获取 RTT 的不透明 `RenderTextureHandle` |
 | | `fillViewport(handle, r, g, b, a)` | 纯色填充 RTT |
 | **纹理 Blit** | `blitTexture(viewId, texId, x, y, w, h, opacity)` | 将纹理（TM ID）绘制到视图 |
 | | `stretchBlt(viewId, dstTexId, dx, dy, dw, dh, srcTexId, sx, sy, sw, sh, filter)` | 缩放 Blit |
@@ -443,7 +468,11 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 | | `submitTransition(viewId, fromTex, toTex, ruleTex, method, progress)` | 转场特效 |
 | | `submitVFX(viewId, srcTex, effect, ...)` | 视觉特效 |
 | **调试** | `setDebugName(viewId, name)` | 设置视图调试名称 |
-| **着色器** | `getDefaultSampler` / `getFallbackProgram` | 着色器/采样器访问 |
+| | `drawDebugOverlay(title)` | 绘制调试覆盖层 |
+| | `requestScreenshot(path)` | 请求帧截图 |
+| **设备恢复** | `recoverDevice(hwnd, w, h)` | 重建丢失的渲染设备 |
+| | `flagDeviceLost` / `consumeDeviceLost` | 在线程/帧边界间传递设备丢失状态 |
+| **着色器** | `getDefaultSampler` / `getFallbackProgram` | 返回不透明采样器/程序句柄 |
 
 ### 11.2 ILayerManager
 
@@ -452,7 +481,7 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 | 方法 | 说明 |
 |------|------|
 | `init` / `shutdown` | 生命周期 |
-| `setTexture(t, texId)` | 设置图层纹理（bgfx idx） |
+| `setTexture(t, texId)` | 设置图层纹理（不透明后端纹理 ID） |
 | `setVisible(t, visible)` | 设置图层可见性 |
 | `setOpacity(t, opacity)` | 设置图层不透明度 |
 | `setPosition(t, x, y)` | 设置图层位置 |
@@ -473,21 +502,22 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 
 | 方法 | 返回值 | 说明 |
 |------|--------|------|
-| `initialize` | `bool` | 初始化纹理管理器 |
+| `initialize()` | `bool` | 使用 GPU 默认模式初始化纹理管理器 |
+| `initialize(gpuAvailable)` | `bool` | 显式选择 GPU 或 headless 模式初始化 |
 | `shutdown` | — | 释放所有纹理 |
 | `setDevMode(bool)` | — | Dev=true 显示棋盘格占位纹理 |
 | `loadTexture(path)` | `uint32_t` | 从文件加载，返回 TM ID |
 | `loadTextureFromMemory(data, size, cacheKey)` | `uint32_t` | 从内存加载 |
 | `loadTextureFromRGBA(rgba, w, h, cacheKey)` | `uint32_t` | 从 RGBA 像素数据加载 |
 | `createSolidTexture(r, g, b, a)` | `uint32_t` | 创建 1×1 纯色纹理，返回 TM ID |
-| `getPlaceholderTexture` | `uint32_t` | 占位纹理 bgfx idx |
+| `getPlaceholderTexture` | `uint32_t` | 占位纹理的不透明后端 ID |
 | `destroyTexture(id)` | — | 销毁纹理 |
-| `getTextureHandle(id)` | `uint32_t` | TM ID → bgfx idx（0=无效） |
+| `getTextureHandle(id)` | `uint32_t` | TM ID → 不透明后端纹理 ID（0=无效） |
 | `getTextureSizeById(id, w, h)` | — | 查询纹理尺寸 |
 | `isValid(id)` | `bool` | 纹理 ID 是否有效 |
 | `totalTextureBytes` | `uint64_t` | 总纹理内存占用 |
-| `checkBudget(id, w, h)` | — | 预算检查，超限时 LRU 驱逐 |
-| `trackTexture(id, bytes)` | — | 跟踪纹理 |
+| `checkBudget(id, w, h)` | `bool` | 预算检查，超限时 LRU 驱逐；无法容纳时返回 false |
+| `trackTexture(id, bytes)` | — | 以 64 位字节数跟踪纹理 |
 | `untrackTexture(id)` | — | 取消跟踪 |
 
 ### 11.4 IParticleSystem
@@ -544,8 +574,8 @@ struct VideoHandle { uint32_t id = 0; explicit operator bool() const; };
 |------|------|
 | `open(path)` | 打开视频文件，返回 `VideoHandle` |
 | `close(handle)` | 关闭视频 |
-| `update(handle, dt)` | 解码下一帧到 bgfx 纹理 |
-| `getTexture(handle)` | 返回当前帧 bgfx 纹理 idx |
+| `update(handle, dt)` | 解码下一帧到后端纹理 |
+| `getTexture(handle)` | 返回当前帧的不透明后端纹理 ID |
 | `isPlaying(handle)` | 是否播放中 |
 | `hasEnded(handle)` | 是否播放完毕 |
 | `width(handle)` / `height(handle)` | 视频尺寸 |
@@ -593,6 +623,19 @@ struct CompletedLoad {
 | `pendingCount` | 待处理加载数 |
 | `isRunning` | 加载器是否运行中 |
 
+### 12.3 IResourceGenerationTracker
+
+资源句柄代际服务。热重载使某类资源失效时递增对应代际，旧句柄随后无法通过
+`isCurrent` 校验。具体 `GenerationTracker` 由组合根创建、`Engine` 持有，并以
+非拥有接口指针注册到 `BackendRegistry`。
+
+| 方法 | 说明 |
+|------|------|
+| `current(type)` | 返回指定资源类型的当前代际 |
+| `invalidate(type)` | 递增指定资源类型的代际 |
+| `isCurrent(handle)` | 判断句柄代际是否仍有效 |
+| `makeHandle(type, id)` | 使用当前代际创建资源句柄 |
+
 ---
 
 ## 13. rpc — HTTP/JSON-RPC 服务器
@@ -608,8 +651,12 @@ Web 编辑器 HTTP 服务器。
 | `isRunning` | 服务器是否运行中 |
 | `port` | 当前端口号 |
 | `pushLog(level, message)` | 推送日志到编辑器前端 |
-| `setLuaState(L)` | 注入 Lua 状态机 |
+| `setDispatcher(dispatcher)` | 注入线程安全的 RPC DTO dispatcher |
 | `setWebRoot(path)` | 设置 Web 前端静态文件根目录 |
+| `setArchiveWriterFactory(factory)` | 注入 `IArchiveWriter` 工厂；具体 CARC writer 由组合根创建 |
+
+`EditorServer` 运行在后台线程，只提交自包含 DTO。Lua VM、Engine 和动画后端仅由
+组合根 dispatcher 在 owner thread 访问；HTTP handler 不持有 `lua_State*`。
 
 **已注册端点**：
 | 方法 | 路径 | 说明 |
@@ -617,9 +664,12 @@ Web 编辑器 HTTP 服务器。
 | GET | `/api/ping` | 健康检查 → `{"status":"ok"}` |
 | GET | `/api/status` | 引擎状态（Lua 可用性、端口） |
 | GET | `/api/assets` | 列出项目资源（支持 `?type=image/audio/script` 过滤） |
-| POST | `/api/run` | 执行 Lua 脚本 |
+| POST | `/api/run` | 当前返回 `unsupported_yieldable_execution` |
 | POST | `/api/stop` | 停止执行 |
 | GET | `/api/logs` | 近期日志 |
+| GET | `/api/live2d/models` | 列出可用 Live2D 模型 |
+| POST | `/api/live2d/load` | 通过 owner-thread dispatcher 加载 Live2D 模型 |
+| POST | `/api/build` | 将 `scripts/` 与 `assets/` 打包为 CARC 归档 |
 
 ### 13.2 IRpcServer
 
@@ -630,7 +680,7 @@ JSON-RPC 服务器接口。
 | `run` | 启动 RPC 服务器 |
 | `stop` | 停止 |
 | `isRunning` | 是否运行中 |
-| `setFrameCaptureCallback(cb)` | 设置帧截图回调 |
+| `setDispatcher(dispatcher)` | 注入线程安全的 RPC DTO dispatcher |
 | `pushLog(level, message)` | 推送日志 |
 
 ---
@@ -638,7 +688,7 @@ JSON-RPC 服务器接口。
 ## 14. script — Lua 虚拟机
 
 **实现**: LuaManager
-**注册**: `BackendRegistry::instance().setLuaState()`
+**注册**: `BackendRegistry::instance().setLuaManager()`；原生状态指针另通过 `setLuaState()` 提供给绑定层
 
 ### ILuaManager
 
@@ -736,12 +786,12 @@ class BackendRegistry {
     IRenderDevice*       getRenderDevice();
     IPlatformBackend*    getPlatformBackend();
     IAudioBackend*       getAudioBackend();
-    ILuaManager*         getLuaState();          // alias: getLuaManager()
+    ILuaManager*         getLuaManager();
+    lua_State*           getLuaState();
     IInputRouter*        getInputRouter();
     ITextureManager*     getTextureManager();
     ILayerManager*       getLayerManager();
     IParticleSystem*     getParticleSystem();
-    IGpuMonitor*         getGpuMonitor();
     IVideoPlayer*        getVideoPlayer();
     IDebugManager*       getDebugManager();
     IJobSystem*          getJobSystem();
@@ -749,15 +799,11 @@ class BackendRegistry {
     IAnimationBackend*   getAnimationBackend();
     IMiniGameBackend*    getMiniGameBackend();
     ISaveManager*        getSaveManager();
-    ISaveProvider*       getSaveProvider();
-    IEditorServer*       getEditorServer();
     ITextureBudget*      getTextureBudget();
-    ISteamBackend*       getSteamBackend();
+    IResourceGenerationTracker* getResourceGenerationTracker();
     ISandboxQuota*       getSandboxQuota();
-    // archive
     ICryptoEngine*       getCryptoEngine();
-    IArchiveReader*      getArchiveReader();
-    IArchiveWriter*      getArchiveWriter();
+    ISteamBackend*       getSteamBackend();
 
     // Lua helpers
     static IRenderDevice*   getRenderDeviceFromLua(lua_State* L);

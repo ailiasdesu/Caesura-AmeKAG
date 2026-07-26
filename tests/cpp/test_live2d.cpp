@@ -1,65 +1,332 @@
-// test_live2d.cpp — Live2D/Animation backend tests
 #include "doctest.h"
-#include "live2d/api/IAnimationBackend.h"
+
+#include "di/BackendRegistry.h"
 #include "live2d/NullAnimationBackend.h"
+#include "live2d/api/IAnimationBackend.h"
+#include "render/api/IRenderDevice.h"
+#include "render/api/ITextureManager.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 using namespace Caesura;
 
-TEST_CASE("NullAnimationBackend::init returns true") {
-    NullAnimationBackend anim;
-    CHECK(anim.init() == true);
+namespace {
+
+class FakeTextureManager final : public ITextureManager {
+public:
+    bool initialize() override { return true; }
+    bool initialize(bool) override { return true; }
+    void shutdown() override {}
+    void setDevMode(bool) override {}
+
+    uint32_t loadTexture(const std::string& path) override {
+        loadedPaths.push_back(path);
+        if (failLoads) return 0;
+        const uint32_t id = nextId++;
+        liveIds.insert(id);
+        return id;
+    }
+
+    uint32_t loadTextureFromMemory(const uint8_t*, uint32_t,
+                                   const std::string&) override {
+        return 0;
+    }
+    uint32_t loadTextureFromRGBA(const uint8_t*, uint16_t, uint16_t,
+                                 const std::string&) override {
+        return 0;
+    }
+    uint32_t createSolidTexture(uint8_t, uint8_t, uint8_t, uint8_t) override {
+        return 0;
+    }
+    uint32_t getPlaceholderTexture() override { return 0; }
+
+    void destroyTexture(uint32_t id) override {
+        destroyedIds.push_back(id);
+        liveIds.erase(id);
+    }
+
+    uint32_t getTextureHandle(uint32_t id) const override {
+        return isValid(id) ? rawHandleBase + id : 0;
+    }
+
+    void getTextureSizeById(uint32_t id, uint16_t& width,
+                            uint16_t& height) const override {
+        if (!isValid(id)) {
+            width = 0;
+            height = 0;
+            return;
+        }
+        width = textureWidth;
+        height = textureHeight;
+    }
+
+    bool isValid(uint32_t id) const override {
+        return liveIds.contains(id);
+    }
+
+    uint64_t totalTextureBytes() const override { return 0; }
+    bool checkBudget(uint32_t, uint16_t, uint16_t) override { return true; }
+    void trackTexture(uint32_t, uint64_t) override {}
+    void untrackTexture(uint32_t) override {}
+
+    bool failLoads = false;
+    uint32_t nextId = 11;
+    uint32_t rawHandleBase = 80;
+    uint16_t textureWidth = 100;
+    uint16_t textureHeight = 200;
+    std::vector<std::string> loadedPaths;
+    std::vector<uint32_t> destroyedIds;
+    std::unordered_set<uint32_t> liveIds;
+};
+
+class RecordingRenderDevice final : public IRenderDevice {
+public:
+    struct Blit {
+        uint16_t view = 0;
+        uint32_t texture = 0;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        uint8_t opacity = 0;
+    };
+
+    bool init(void*, int width, int height) override {
+        backbufferWidth = width;
+        backbufferHeight = height;
+        return true;
+    }
+    void beginShutdown() override {}
+    void shutdown() override {}
+    void flushAllRTT() override {}
+    void beginFrame() override {}
+    void endFrame() override {}
+    void commit_frame() override {}
+    void advanceFrame() override {}
+    void setViewRect(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
+    void setViewClear(uint16_t, uint16_t, uint32_t, float, uint8_t) override {}
+    void touch(uint16_t) override {}
+    ViewportHandle createRenderTarget(int, int) override { return {}; }
+    void destroyRenderTarget(ViewportHandle) override {}
+    void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
+    RenderTextureHandle getViewportTexture(ViewportHandle) override { return {}; }
+    int getBackbufferWidth() const override { return backbufferWidth; }
+    int getBackbufferHeight() const override { return backbufferHeight; }
+    void resize(int width, int height) override {
+        backbufferWidth = width;
+        backbufferHeight = height;
+    }
+    void blitTexture(uint16_t view, uint32_t texture, float x, float y,
+                     float width, float height, uint8_t opacity) override {
+        blits.push_back({view, texture, x, y, width, height, opacity});
+    }
+    void stretchBlt(uint16_t, uint32_t, float, float, float, float,
+                    uint32_t, float, float, float, float, int) override {}
+    void affineBlt(uint16_t, uint32_t, float, float, float, float,
+                   uint32_t, float, float, float, float,
+                   const float[6]) override {}
+    void beginBatch() override {}
+    void flushBatch() override {}
+    void setDebugName(uint16_t, const std::string&) override {}
+    void drawDebugOverlay(const std::string&) override {}
+    bool requestScreenshot(const std::string&) override { return false; }
+    bool recoverDevice(void*, int width, int height) override {
+        resize(width, height);
+        return true;
+    }
+    void flagDeviceLost() override {}
+    bool consumeDeviceLost() override { return false; }
+    void renderText(uint16_t, const std::string&, float, float,
+                    uint8_t, uint8_t, uint8_t, uint8_t) override {}
+    void renderRuby(uint16_t, const std::string&, const std::string&, float, float,
+                    uint8_t, uint8_t, uint8_t, uint8_t) override {}
+    void setFont(int) override {}
+    float textLineHeight() const override { return 0.0f; }
+    void submitBlend(uint16_t, RenderTextureHandle, RenderTextureHandle, int,
+                     float, float, float) override {}
+    void submitTransition(uint16_t, RenderTextureHandle, RenderTextureHandle,
+                          RenderTextureHandle, int, float) override {}
+    void submitVFX(uint16_t, RenderTextureHandle, int, float, float, float,
+                   float, float, float, float) override {}
+    void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
+    RenderUniformHandle getDefaultSampler() const override { return {}; }
+    RenderProgramHandle getFallbackProgram() const override { return {}; }
+    const char* getBackendName() const override { return "RecordingRender"; }
+    RenderRuntimeInfo getRuntimeInfo() const override {
+        return {getBackendName(), backbufferWidth, backbufferHeight, 0, true};
+    }
+    bool setPreferredBackend(const char*) override { return false; }
+
+    int backbufferWidth = 1280;
+    int backbufferHeight = 720;
+    std::vector<Blit> blits;
+};
+
+class RegistryScope final {
+public:
+    RegistryScope(ITextureManager* textureManager, IRenderDevice* renderDevice)
+        : registry(BackendRegistry::instance())
+        , previousTextureManager(registry.getTextureManager())
+        , previousRenderDevice(registry.getRenderDevice()) {
+        registry.setTextureManager(textureManager);
+        registry.setRenderDevice(renderDevice);
+    }
+
+    ~RegistryScope() {
+        registry.setTextureManager(previousTextureManager);
+        registry.setRenderDevice(previousRenderDevice);
+    }
+
+private:
+    BackendRegistry& registry;
+    ITextureManager* previousTextureManager = nullptr;
+    IRenderDevice* previousRenderDevice = nullptr;
+};
+
+struct NullAnimationFixture {
+    FakeTextureManager textures;
+    RecordingRenderDevice renderer;
+    RegistryScope registry{&textures, &renderer};
+    NullAnimationBackend animation;
+};
+
+} // namespace
+
+TEST_CASE("NullAnimationBackend requires init and recognizes static images") {
+    NullAnimationFixture fixture;
+
+    CHECK(fixture.animation.loadModel("hero.png", "hero") == 0);
+    CHECK(fixture.textures.loadedPaths.empty());
+    CHECK(fixture.animation.init());
+    CHECK(fixture.animation.init());
+    CHECK(std::string(fixture.animation.name()) == "NullAnimation+PNG");
+
+    const int handle = fixture.animation.loadModel("hero.PNG", "hero");
+    CHECK(handle == 1);
+    CHECK(fixture.animation.isLoaded(handle));
+    CHECK(fixture.textures.loadedPaths == std::vector<std::string>{"hero.PNG"});
+
+    CHECK(fixture.animation.loadModel("hero.model3.json", "hero") == 0);
+    CHECK(fixture.animation.loadModel("", "hero") == 0);
+    CHECK(fixture.textures.loadedPaths.size() == 1);
+    fixture.animation.shutdown();
 }
 
-TEST_CASE("NullAnimationBackend::name") {
-    NullAnimationBackend anim;
-    CHECK(std::string(anim.name()) == "NullAnimation+PNG");
+TEST_CASE("NullAnimationBackend exposes load failures without allocating handles") {
+    NullAnimationFixture fixture;
+    fixture.textures.failLoads = true;
+    REQUIRE(fixture.animation.init());
+
+    CHECK(fixture.animation.loadModel("missing.png", "missing") == 0);
+    CHECK_FALSE(fixture.animation.isLoaded(0));
+    CHECK(fixture.textures.destroyedIds.empty());
+    fixture.animation.shutdown();
 }
 
-TEST_CASE("NullAnimationBackend::model lifecycle returns safe defaults") {
-    NullAnimationBackend anim;
-    int handle = anim.loadModel("model.model3.json", "test_model");
-    CHECK(handle == 0);  // always returns 0 (no model loaded)
-    CHECK(anim.isLoaded(handle) == false);
-    anim.unloadModel(handle);  // should not crash
+TEST_CASE("NullAnimationBackend rejects and releases textures without dimensions") {
+    NullAnimationFixture fixture;
+    fixture.textures.textureWidth = 0;
+    REQUIRE(fixture.animation.init());
+
+    CHECK(fixture.animation.loadModel("empty.png", "empty") == 0);
+    CHECK_FALSE(fixture.animation.isLoaded(1));
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11});
+    CHECK(fixture.textures.liveIds.empty());
+    fixture.animation.shutdown();
+    CHECK(fixture.textures.destroyedIds.size() == 1);
 }
 
-TEST_CASE("NullAnimationBackend::rendering methods are no-ops") {
-    NullAnimationBackend anim;
-    anim.showModel(1, 100.0f, 200.0f, 1.5f);
-    anim.hideModel(1);
-    anim.setOpacity(1, 0.5f);
-    anim.render(0.016f);
-    // No crash = pass
+TEST_CASE("NullAnimationBackend stays optional without a texture service") {
+    RecordingRenderDevice renderer;
+    RegistryScope registry(nullptr, &renderer);
+    NullAnimationBackend animation;
+
+    CHECK(animation.init());
+    CHECK(animation.loadModel("hero.png", "hero") == 0);
+    CHECK_FALSE(animation.isLoaded(1));
+    animation.shutdown();
+    animation.shutdown();
 }
 
-TEST_CASE("NullAnimationBackend::animation control returns false/void") {
-    NullAnimationBackend anim;
-    CHECK(anim.playMotion(1, "idle") == false);
-    anim.setExpression(1, "happy");
-    anim.setParameter(1, "ParamAngleX", 30.0f);
-    // No crash = pass
+TEST_CASE("NullAnimationBackend renders PNG state through abstract backends") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    const int handle = fixture.animation.loadModel("hero.png", "hero");
+    REQUIRE(handle == 1);
+
+    fixture.animation.showModel(handle, 10.0f, 20.0f, 1.5f);
+    fixture.animation.setOpacity(handle, 0.25f);
+    fixture.animation.render(0.016f);
+
+    REQUIRE(fixture.renderer.blits.size() == 1);
+    const auto& first = fixture.renderer.blits.front();
+    CHECK(first.view == VIEW_MAIN);
+    CHECK(first.texture == fixture.textures.rawHandleBase + 11);
+    CHECK(first.x == doctest::Approx(10.0f));
+    CHECK(first.y == doctest::Approx(20.0f));
+    CHECK(first.width == doctest::Approx(150.0f));
+    CHECK(first.height == doctest::Approx(300.0f));
+    CHECK(first.opacity == 64);
+
+    fixture.animation.hideModel(handle);
+    fixture.animation.render(0.016f);
+    CHECK(fixture.renderer.blits.size() == 1);
+
+    fixture.animation.showModel(handle, 30.0f, 40.0f, 2.0f);
+    fixture.animation.setOpacity(handle, 2.0f);
+    fixture.animation.render(0.016f);
+    REQUIRE(fixture.renderer.blits.size() == 2);
+    CHECK(fixture.renderer.blits.back().opacity == 255);
+    CHECK(fixture.renderer.blits.back().width == doctest::Approx(200.0f));
+    CHECK(fixture.renderer.blits.back().height == doctest::Approx(400.0f));
+
+    fixture.animation.unloadModel(handle);
+    CHECK_FALSE(fixture.animation.isLoaded(handle));
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11});
+    fixture.animation.unloadModel(handle);
+    CHECK(fixture.textures.destroyedIds.size() == 1);
+    fixture.animation.shutdown();
+    CHECK(fixture.textures.destroyedIds.size() == 1);
 }
 
-TEST_CASE("NullAnimationBackend::shutdown is idempotent") {
-    NullAnimationBackend anim;
-    anim.shutdown();
-    anim.shutdown();  // second call should not crash
+TEST_CASE("NullAnimationBackend shutdown releases each PNG once and resets handles") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    const int first = fixture.animation.loadModel("left.png", "left");
+    const int second = fixture.animation.loadModel("right.png", "right");
+    REQUIRE(first == 1);
+    REQUIRE(second == 2);
+
+    fixture.animation.shutdown();
+    CHECK_FALSE(fixture.animation.isLoaded(first));
+    CHECK_FALSE(fixture.animation.isLoaded(second));
+    std::sort(fixture.textures.destroyedIds.begin(), fixture.textures.destroyedIds.end());
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11, 12});
+
+    fixture.animation.shutdown();
+    CHECK(fixture.textures.destroyedIds.size() == 2);
+
+    REQUIRE(fixture.animation.init());
+    CHECK(fixture.animation.loadModel("again.png", "again") == 1);
+    fixture.animation.shutdown();
+    CHECK(fixture.textures.destroyedIds.size() == 3);
 }
 
-TEST_CASE("IAnimationBackend interface completeness") {
-    // Verify the interface is usable through base pointer
-    IAnimationBackend* iface = new NullAnimationBackend();
-    CHECK(iface->init() == true);
-    CHECK(std::string(iface->name()) == "NullAnimation+PNG");
-    CHECK(iface->isLoaded(0) == false);
-    iface->render(0.0f);
-    iface->shutdown();
-    delete iface;
-}
+TEST_CASE("NullAnimationBackend remains safe through IAnimationBackend") {
+    NullAnimationFixture fixture;
+    IAnimationBackend* animation = &fixture.animation;
 
-TEST_CASE("NullAnimationBackend::loadModel with empty strings") {
-    NullAnimationBackend anim;
-    int handle = anim.loadModel("", "");
-    CHECK(handle == 0);
-    anim.unloadModel(handle);
+    REQUIRE(animation->init());
+    CHECK_FALSE(animation->playMotion(999, "idle"));
+    animation->showModel(999, 0.0f, 0.0f, 1.0f);
+    animation->setOpacity(999, 0.5f);
+    animation->hideModel(999);
+    animation->unloadModel(999);
+    animation->render(0.0f);
+    CHECK(fixture.renderer.blits.empty());
+    animation->shutdown();
 }

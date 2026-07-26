@@ -3,14 +3,15 @@
 #include "entry/Engine.h"
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <thread>
 
 using namespace Caesura;
 
-TEST_CASE("JobSystem::singleton and lifecycle") {
-    auto& js = JobSystem::instance();
+TEST_CASE("JobSystem local instance lifecycle") {
+    JobSystem js;
     js.init();
     CHECK(js.isRunning());
     CHECK(js.workerCount() >= 1);
@@ -22,7 +23,7 @@ TEST_CASE("JobSystem::singleton and lifecycle") {
 // =============================================================================
 
 TEST_CASE("JobSystem::pendingJobs tracks active work") {
-    auto& js = JobSystem::instance();
+    JobSystem js;
     js.init();
     CHECK(js.pendingJobs() == 0);
 
@@ -47,7 +48,7 @@ TEST_CASE("JobSystem::pendingJobs tracks active work") {
 }
 
 TEST_CASE("JobSystem::both priority levels execute correctly") {
-    auto& js = JobSystem::instance();
+    JobSystem js;
     js.init();
 
     std::atomic<bool> normalRan{false}, lowRan{false};
@@ -61,12 +62,12 @@ TEST_CASE("JobSystem::both priority levels execute correctly") {
 }
 
 TEST_CASE("JobSystem::submit runs work on worker") {
-    auto& js = JobSystem::instance();
+    JobSystem js;
     js.init();
 
     std::atomic<bool> ran{false};
-    js.submit([&ran]() {
-        CHECK(JobSystem::instance().isWorkerThread());
+    js.submit([&js, &ran]() {
+        CHECK(js.isWorkerThread());
         ran.store(true);
     });
 
@@ -78,7 +79,7 @@ TEST_CASE("JobSystem::submit runs work on worker") {
 }
 
 TEST_CASE("JobSystem::main thread callback") {
-    auto& js = JobSystem::instance();
+    JobSystem js;
     js.init();
 
     std::atomic<bool> workerDone{false};
@@ -104,7 +105,7 @@ TEST_CASE("JobSystem::main thread callback") {
 }
 
 TEST_CASE("JobSystem::parallel jobs") {
-    auto& js = JobSystem::instance();
+    JobSystem js;
     js.init();
 
     std::atomic<int> counter{0};
@@ -120,7 +121,9 @@ TEST_CASE("JobSystem::parallel jobs") {
 }
 
 TEST_CASE("JobSystem shutdown never detaches workers from owned state") {
-    std::ifstream source("../../../src/job/JobSystem.cpp", std::ios::binary);
+    const auto sourcePath = std::filesystem::path(CAESURA_SOURCE_DIR) /
+                            "src/job/JobSystem.cpp";
+    std::ifstream source(sourcePath, std::ios::binary);
     REQUIRE(source.is_open());
     const std::string contents((std::istreambuf_iterator<char>(source)),
                                std::istreambuf_iterator<char>());

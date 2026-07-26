@@ -1,7 +1,6 @@
 ﻿#include "ParticleSystem.h"
 #include "../di/BackendRegistry.h"
 #include "../render/api/IRenderDevice.h"
-#include "../job/JobSystem.h"
 #include <bx/math.h>
 #include <cmath>
 #include <cstdio>
@@ -92,16 +91,19 @@ void ParticleSystem::shutdown() {
     m_initialized = false;
 }
 
-int ParticleSystem::createEmitter(const Emitter& cfg) {
+int ParticleSystem::createEmitter(const ParticleEmitterConfig& cfg) {
     int id = (int)m_emitters.size();
-    m_emitters.push_back(cfg);
+    m_emitters.emplace_back(cfg);
     printf("[ParticleSystem] Emitter %d created\n", id);
     return id;
 }
 
-void ParticleSystem::destroyEmitter(int id) {
-    if (id >= 0 && id < (int)m_emitters.size())
-        m_emitters[id].active = false;
+bool ParticleSystem::destroyEmitter(int id) {
+    if (id < 0 || id >= (int)m_emitters.size() || !m_emitters[id].active) {
+        return false;
+    }
+    m_emitters[id].active = false;
+    return true;
 }
 
 void ParticleSystem::emit(int emitterId, int count) {

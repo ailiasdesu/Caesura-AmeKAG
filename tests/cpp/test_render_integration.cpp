@@ -2,7 +2,7 @@
 #include "doctest.h"
 #include "render/BgfxRenderDevice.h"
 #include "render/ParticleSystem.h"
-#include "render/FreeTypeContext.h"
+#include "render/TextRenderer.h"
 
 using namespace Caesura;
 
@@ -56,9 +56,9 @@ TEST_CASE("Render: ParticleSystem emit without init") {
     ps.destroyEmitter(eid);
 }
 
-TEST_CASE("Render: FreeTypeContext init/shutdown cycle") {
-    auto& ft = FreeTypeContext::instance();
-    CHECK(ft.init());
-    ft.shutdown();
-    ft.shutdown();
+TEST_CASE("Render: TextRenderer shutdown is idempotent before init") {
+    TextRenderer renderer;
+    renderer.shutdown();
+    renderer.shutdown();
+    CHECK_FALSE(renderer.isInitialized());
 }

@@ -5,8 +5,8 @@
 
 using namespace Caesura;
 
-TEST_CASE("LayerManager::singleton accessible") {
-    LayerManager& lm = LayerManager::instance();
+TEST_CASE("LayerManager is independently constructible") {
+    LayerManager lm;
     (void)lm;
 }
 
@@ -21,7 +21,7 @@ TEST_CASE("GpuMonitor::current quality is HIGH by default") {
 }
 
 TEST_CASE("LayerManager::setVisible/setOpacity/setPosition no-crash") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     auto t = ILayerManager::LayerType::BG;
     lm.setVisible(t, true);
     lm.setOpacity(t, 0.5f);
@@ -29,7 +29,7 @@ TEST_CASE("LayerManager::setVisible/setOpacity/setPosition no-crash") {
 }
 
 TEST_CASE("LayerManager::markDirty") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     lm.markDirty(ILayerManager::LayerType::BG, 0, 0, 100, 100);
 }
 
@@ -38,19 +38,19 @@ TEST_CASE("LayerManager::markDirty") {
 // =============================================================================
 
 TEST_CASE("LayerManager::setScale no-crash") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     lm.setScale(ILayerManager::LayerType::BG, 1.5f, 1.5f);
     lm.setScale(ILayerManager::LayerType::FG, 0.5f, 0.5f);
 }
 
 TEST_CASE("LayerManager::setBlendMode no-crash") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     lm.setBlendMode(ILayerManager::LayerType::BG, 0);
     lm.setBlendMode(ILayerManager::LayerType::FG, 1);
 }
 
 TEST_CASE("LayerManager::clear and clearAll no-crash") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     lm.clear(ILayerManager::LayerType::BG);
     lm.clear(ILayerManager::LayerType::FG);
     lm.clear(ILayerManager::LayerType::MSG);
@@ -58,19 +58,19 @@ TEST_CASE("LayerManager::clear and clearAll no-crash") {
 }
 
 TEST_CASE("LayerManager::markAllDirty no-crash") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     lm.markAllDirty();
 }
 
 TEST_CASE("LayerManager::markDirtyWithTransparency propagates") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     // Marking FG dirty with transparency should also mark BG dirty
     lm.markDirtyWithTransparency(ILayerManager::LayerType::FG, 0, 0, 100, 100);
     // Should not crash
 }
 
 TEST_CASE("LayerManager::get returns valid reference") {
-    LayerManager& lm = LayerManager::instance();
+    LayerManager lm;
     auto& bgLayer = lm.get(ILayerManager::LayerType::BG);
     (void)bgLayer;  // should not crash
 }

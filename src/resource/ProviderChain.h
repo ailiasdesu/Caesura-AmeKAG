@@ -12,6 +12,9 @@ public:
     // Add a provider -- re-sorts by priority descending after insertion.
     void addProvider(std::unique_ptr<IAssetProvider> provider);
 
+    // Release all owned providers. Safe to call repeatedly.
+    void clear() noexcept;
+
     // Read: try each provider in priority order, return first non-empty result.
     std::vector<uint8_t> read(const std::string& path);
 

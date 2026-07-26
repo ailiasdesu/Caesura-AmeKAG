@@ -79,3 +79,32 @@ TEST_CASE("SandboxQuota::unknown kind returns 0") {
     CHECK_EQ(SandboxQuota::maxLimit(L, "nonexistent"), 0);
     lua_close(L);
 }
+
+TEST_CASE("SandboxQuotaService follows production sandbox.lua resource keys") {
+    lua_State* L = luaL_newstate();
+    REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+
+    const int loadStatus = luaL_dofile(L, "scripts/sandbox.lua");
+    if (loadStatus != LUA_OK) {
+        CAPTURE(lua_tostring(L, -1));
+    }
+    REQUIRE(loadStatus == LUA_OK);
+
+    SandboxQuotaService quota;
+    quota.setLuaState(L);
+    CHECK(quota.maxLimit("textures") == 256);
+    CHECK(quota.maxLimit("audio_handles") == 64);
+    CHECK(quota.maxLimit("rtt_canvases") == 8);
+    CHECK(quota.maxLimit("particles_emitters") == 16);
+
+    for (int i = 0; i < 64; ++i) {
+        REQUIRE(quota.tryAlloc("audio_handles"));
+    }
+    CHECK_FALSE(quota.tryAlloc("audio_handles"));
+    CHECK(quota.count("audio_handles") == 64);
+
+    quota.setLuaState(nullptr);
+    CHECK(quota.tryAlloc("audio_handles"));
+    lua_close(L);
+}

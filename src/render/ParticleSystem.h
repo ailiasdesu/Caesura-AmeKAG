@@ -15,15 +15,11 @@ struct Particle {
     bool  alive = false;
 };
 
-struct Emitter {
-    float x = 0, y = 0;
-    float rate = 10.0f;
-    float lifeMin = 0.5f, lifeMax = 2.0f;
-    float speedMin = 10.0f, speedMax = 50.0f;
-    float angleMin = 0.0f, angleMax = 6.283f;
-    float sizeMin = 2.0f, sizeMax = 8.0f;
-    float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
-    float gravityX = 0.0f, gravityY = 0.0f;
+struct Emitter : ParticleEmitterConfig {
+    Emitter() = default;
+    explicit Emitter(const ParticleEmitterConfig& config)
+        : ParticleEmitterConfig(config) {}
+
     bool  active = true;
     float timer = 0.0f;
 };
@@ -55,14 +51,15 @@ public:
     bool init() override;
     void shutdown() override;
 
-    int  createEmitter(const Emitter& cfg) override;
-    void destroyEmitter(int id) override;
+    int  createEmitter(const ParticleEmitterConfig& cfg) override;
+    bool destroyEmitter(int id) override;
     void emit(int emitterId, int count) override;
 
     void update(float dt, uint32_t screenW, uint32_t screenH) override;
     void render(uint16_t viewId) override;
 
     int aliveCount() const override { return m_aliveCount; }
+    bool isInitialized() const override { return m_initialized; }
 
 private:
     std::vector<Particle> m_particles;

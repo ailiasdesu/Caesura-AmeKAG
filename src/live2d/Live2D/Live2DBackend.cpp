@@ -2,14 +2,6 @@
 
 #include "Live2DBackend.h"
 
-// GL MUST come before Cubism headers (CSM_TARGET_WIN_GL needs GL types)
-#ifdef _WIN32
-#include <GL/glew.h>
-#ifdef _MSC_VER
-#pragma comment(lib, "opengl32.lib")
-#endif
-#endif
-
 // Cubism Framework
 #include <CubismFramework.hpp>
 #include <Model/CubismMoc.hpp>
@@ -33,16 +25,15 @@
 // Engine
 #include "Live2DUserModel.h"
 #include "ILive2DRenderPath.h"
-#include "OpenGLReadbackRenderPath.h"
+#ifdef _WIN32
 #include "D3D11NativeRenderPath.h"
+#else
+#include "OpenGLReadbackRenderPath.h"
 #include "OpenGLSharedRenderPath.h"
+#ifdef __APPLE__
 #include "MetalNativeRenderPath.h"
-
-// Lua
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-}
+#endif
+#endif
 
 #include <fstream>
 #include <vector>
@@ -123,6 +114,31 @@ Live2DBackend::Live2DModel::~Live2DModel() {
 // init / shutdown
 // ============================================================
 bool Live2DBackend::init() {
+    const auto rendererType = bgfx::getRendererType();
+#ifdef _WIN32
+    if (rendererType != bgfx::RendererType::Direct3D11) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+            "[Live2D] Windows build requires the bgfx D3D11 renderer");
+        return false;
+    }
+#elif defined(__APPLE__)
+    if (rendererType != bgfx::RendererType::OpenGL &&
+        rendererType != bgfx::RendererType::OpenGLES &&
+        rendererType != bgfx::RendererType::Metal) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+            "[Live2D] Unsupported macOS bgfx renderer: %s",
+            bgfx::getRendererName(rendererType));
+        return false;
+    }
+#else
+    if (rendererType != bgfx::RendererType::OpenGL &&
+        rendererType != bgfx::RendererType::OpenGLES) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+            "[Live2D] Linux build requires the bgfx OpenGL renderer");
+        return false;
+    }
+#endif
+
     static EngineAllocator allocator;
     CubismFramework::Option option;
     option.LogFunction = cubismLog;
@@ -133,38 +149,47 @@ bool Live2DBackend::init() {
         return false;
     }
     CubismFramework::Initialize();
-
-    // Select render path based on bgfx backend
-    const auto rendererType = bgfx::getRendererType();
-    switch (rendererType) {
-    case bgfx::RendererType::Direct3D11: {
-        auto* path = new D3D11NativeRenderPath();
-        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
-        else { delete path; goto fallback; }
-        break;
-    }
-    case bgfx::RendererType::OpenGL:
-    case bgfx::RendererType::OpenGLES: {
-        auto* path = new OpenGLSharedRenderPath();
-        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
-        else { delete path; goto fallback; }
-        break;
-    }
-    case bgfx::RendererType::Metal: {
-        // Try Metal first (stub until macOS developer validates)
-        auto* path = new MetalNativeRenderPath();
-        if (path->init(1280, 720)) { delete m_renderPath; m_renderPath = path; }
-        else { delete path; goto fallback; }
-        break;
-    }
-    default:
-    fallback:
-        m_renderPath = new OpenGLReadbackRenderPath();
-        m_renderPath->init(1280, 720);
-        break;
-    }
-
     m_initialized = true;
+
+#ifdef _WIN32
+    auto* d3dPath = new D3D11NativeRenderPath();
+    if (!d3dPath->init(1280, 720)) {
+        delete d3dPath;
+        shutdown();
+        return false;
+    }
+    delete m_renderPath;
+    m_renderPath = d3dPath;
+#else
+#ifdef __APPLE__
+    if (rendererType == bgfx::RendererType::Metal) {
+        auto* metalPath = new MetalNativeRenderPath();
+        if (!metalPath->init(1280, 720)) {
+            delete metalPath;
+            shutdown();
+            return false;
+        }
+        delete m_renderPath;
+        m_renderPath = metalPath;
+    } else
+#endif
+    {
+        ILive2DRenderPath* glPath = new OpenGLSharedRenderPath();
+        if (!glPath->init(1280, 720)) {
+            delete glPath;
+            auto* readbackPath = new OpenGLReadbackRenderPath();
+            if (!readbackPath->init(1280, 720)) {
+                delete readbackPath;
+                shutdown();
+                return false;
+            }
+            glPath = readbackPath;
+        }
+        delete m_renderPath;
+        m_renderPath = glPath;
+    }
+#endif
+
     SDL_Log("[Live2D] CubismFramework 5 initialized (render path: %s)", m_renderPath->name());
     return true;
 }
@@ -428,55 +453,6 @@ void Live2DBackend::setOpacity(int handle, float opacity) {
     auto it = m_models.find(handle);
     if (it != m_models.end()) it->second->opacity = opacity;
 }
-
-// ============================================================
-// Lua bindings
-// ============================================================
-static Live2DBackend* g_live2d = nullptr;
-
-static int lua_l2d_load_model(lua_State* L) {
-    if (!g_live2d) { lua_pushinteger(L, -1); return 1; }
-    int handle = g_live2d->loadModel(luaL_checkstring(L, 1), luaL_optstring(L, 2, "model"));
-    lua_pushinteger(L, handle);
-    return 1;
-}
-
-static int lua_l2d_unload_model(lua_State* L) { if (g_live2d) g_live2d->unloadModel((int)luaL_checkinteger(L, 1)); return 0; }
-static int lua_l2d_show_model(lua_State* L) { if (g_live2d) g_live2d->showModel((int)luaL_checkinteger(L, 1), (float)luaL_optnumber(L, 2, 0), (float)luaL_optnumber(L, 3, 0), (float)luaL_optnumber(L, 4, 1.0)); return 0; }
-static int lua_l2d_hide_model(lua_State* L) { if (g_live2d) g_live2d->hideModel((int)luaL_checkinteger(L, 1)); return 0; }
-static int lua_l2d_set_opacity(lua_State* L) { if (g_live2d) g_live2d->setOpacity((int)luaL_checkinteger(L, 1), (float)luaL_checknumber(L, 2)); return 0; }
-
-static int lua_l2d_play_motion(lua_State* L) {
-    bool ok = g_live2d && g_live2d->playMotion((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2));
-    lua_pushboolean(L, ok ? 1 : 0);
-    return 1;
-}
-
-static int lua_l2d_set_expression(lua_State* L) { if (g_live2d) g_live2d->setExpression((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2)); return 0; }
-static int lua_l2d_set_parameter(lua_State* L) { if (g_live2d) g_live2d->setParameter((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2), (float)luaL_checknumber(L, 3)); return 0; }
-static int lua_l2d_is_loaded(lua_State* L) { lua_pushboolean(L, g_live2d && g_live2d->isLoaded((int)luaL_checkinteger(L, 1)) ? 1 : 0); return 1; }
-
-static const luaL_Reg l2d_functions[] = {
-    { "load_model",    lua_l2d_load_model    },
-    { "unload_model",  lua_l2d_unload_model  },
-    { "show_model",    lua_l2d_show_model    },
-    { "hide_model",    lua_l2d_hide_model    },
-    { "set_opacity",   lua_l2d_set_opacity   },
-    { "play_motion",   lua_l2d_play_motion   },
-    { "set_expression",lua_l2d_set_expression},
-    { "set_parameter", lua_l2d_set_parameter },
-    { "is_loaded",     lua_l2d_is_loaded     },
-    { nullptr, nullptr }
-};
-
-void registerLive2DBinding(void* luaState) {
-    auto* L = static_cast<lua_State*>(luaState);
-    luaL_newlib(L, l2d_functions);
-    lua_setglobal(L, "live2d");
-    SDL_Log("[Live2D] Lua bindings registered (live2d.*)");
-}
-
-void Live2DBackend_setGlobal(Live2DBackend* backend) { g_live2d = backend; }
 
 } // namespace Caesura
 

@@ -1,0 +1,371 @@
+# Caesura engine module targets.
+#
+# Each subsystem is compiled once as a static library. API-only targets keep
+# BackendRegistry dependencies at the interface layer so implementation
+# targets remain acyclic.
+
+add_library(CaesuraBuildOptions INTERFACE)
+add_library(Caesura::BuildOptions ALIAS CaesuraBuildOptions)
+
+target_compile_features(CaesuraBuildOptions INTERFACE cxx_std_20)
+target_include_directories(CaesuraBuildOptions INTERFACE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}/external/soloud/include
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bx/include
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/include
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/include
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty
+    ${CMAKE_SOURCE_DIR}/external/stb
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/stb
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bgfx/3rdparty/stb
+    ${CMAKE_SOURCE_DIR}/external/pl_mpeg
+    ${CMAKE_SOURCE_DIR}/external/freetype/include
+    ${CMAKE_SOURCE_DIR}/external/zstd/lib
+    ${CMAKE_SOURCE_DIR}/external/cpp-httplib
+    ${CMAKE_SOURCE_DIR}/external/json
+    ${CMAKE_SOURCE_DIR}/external/lua
+    ${CMAKE_SOURCE_DIR}/external/ed25519
+)
+target_compile_definitions(CaesuraBuildOptions INTERFACE
+    SDL_MAIN_HANDLED
+    $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>
+    $<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>
+)
+
+if(CAESURA_DEBUG)
+    target_compile_definitions(CaesuraBuildOptions INTERFACE CAESURA_DEBUG)
+endif()
+
+if(MSVC)
+    target_compile_options(CaesuraBuildOptions INTERFACE
+        /W3 /wd4100 /wd4189 /wd4244
+        /Zc:__cplusplus /Zc:preprocessor /utf-8 /FS
+    )
+    target_compile_definitions(CaesuraBuildOptions INTERFACE
+        _CRT_SECURE_NO_WARNINGS
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+        __STDC_LIMITS_MACROS
+        __STDC_FORMAT_MACROS
+        __STDC_CONSTANT_MACROS
+    )
+endif()
+
+add_library(CaesuraSystemDependencies INTERFACE)
+add_library(Caesura::SystemDependencies ALIAS CaesuraSystemDependencies)
+
+if(WIN32)
+    target_link_libraries(CaesuraSystemDependencies INTERFACE
+        bcrypt winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler
+    )
+elseif(APPLE)
+    find_library(COCOA_LIBRARY Cocoa REQUIRED)
+    find_library(IOKIT_LIBRARY IOKit REQUIRED)
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraSystemDependencies INTERFACE
+        ${COCOA_LIBRARY}
+        ${IOKIT_LIBRARY}
+        ${METAL_LIBRARY}
+        ${QUARTZCORE_LIBRARY}
+        ${FOUNDATION_LIBRARY}
+        pthread
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+elseif(UNIX)
+    find_package(Threads REQUIRED)
+    find_package(X11 REQUIRED)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(CaesuraSystemDependencies INTERFACE
+        Threads::Threads
+        dl
+        X11::X11
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+endif()
+
+set(CAESURA_API_INCLUDE_ROOT "${CMAKE_BINARY_DIR}/caesura_api_include")
+
+function(caesura_add_api module)
+    string(TOLOWER "${module}" module_dir)
+    set(module_api_dir "${CMAKE_SOURCE_DIR}/src/${module_dir}/api")
+    set(module_api_view "${CAESURA_API_INCLUDE_ROOT}/${module_dir}/api")
+    file(MAKE_DIRECTORY "${module_api_view}")
+    file(GLOB module_api_headers CONFIGURE_DEPENDS "${module_api_dir}/*.h")
+    foreach(header IN LISTS module_api_headers)
+        get_filename_component(header_name "${header}" NAME)
+        configure_file("${header}" "${module_api_view}/${header_name}" COPYONLY)
+    endforeach()
+
+    add_library(Caesura${module}Api INTERFACE)
+    add_library(Caesura::${module}Api ALIAS Caesura${module}Api)
+    target_compile_features(Caesura${module}Api INTERFACE cxx_std_20)
+    target_include_directories(Caesura${module}Api INTERFACE
+        $<BUILD_INTERFACE:${CAESURA_API_INCLUDE_ROOT}>
+    )
+    set_target_properties(Caesura${module}Api PROPERTIES FOLDER "Caesura/API")
+endfunction()
+
+foreach(module IN ITEMS
+        Archive Audio Debug Di Input Job Live2D MiniGame Platform Render
+        Resource Rpc Script Steam Storage)
+    caesura_add_api(${module})
+endforeach()
+
+# Public interfaces that expose third-party types propagate those usage
+# requirements to consumers.
+target_link_libraries(CaesuraInputApi INTERFACE SDL3::SDL3)
+target_link_libraries(CaesuraRpcApi INTERFACE CaesuraArchiveApi)
+target_include_directories(CaesuraStorageApi INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/json>
+)
+
+function(caesura_add_module module)
+    add_library(Caesura${module} STATIC ${ARGN})
+    add_library(Caesura::${module} ALIAS Caesura${module})
+    target_link_libraries(Caesura${module}
+        PUBLIC Caesura${module}Api
+        PRIVATE CaesuraBuildOptions
+    )
+    string(TOLOWER "${module}" module_output_name)
+    set_target_properties(Caesura${module} PROPERTIES
+        FOLDER "Caesura/Modules"
+        OUTPUT_NAME "caesura_${module_output_name}"
+    )
+endfunction()
+
+caesura_add_module(Archive
+    src/archive/CryptoEngine.cpp
+    src/archive/CARCReader.cpp
+    src/archive/CARCWriter.cpp
+    src/archive/CarcAssetProvider.cpp
+    src/archive/CRLManager.cpp
+    src/archive/DeltaCARC.cpp
+)
+
+caesura_add_module(Audio
+    src/audio/SoLoudAudioEngine.cpp
+    src/audio/NullAudioBackend.cpp
+)
+
+caesura_add_module(Debug
+    src/debug/DebugManager.cpp
+    src/debug/HotReload.cpp
+    src/debug/DebugProtocol.cpp
+)
+
+caesura_add_module(Di
+    src/di/BackendRegistry.cpp
+    src/di/TextureBudget.cpp
+    src/di/SandboxQuota.cpp
+    src/di/thread/ThreadAssert.cpp
+)
+
+caesura_add_module(Input
+    src/input/InputRouter.cpp
+)
+
+caesura_add_module(Job
+    src/job/JobSystem.cpp
+)
+
+caesura_add_module(Live2D
+    src/live2d/NullAnimationBackend.cpp
+)
+
+caesura_add_module(MiniGame
+    src/minigame/NullMiniGameBackend.cpp
+    src/minigame/BgfxMiniGameBackend.cpp
+    src/minigame/EmbeddedShaders_MiniGame.cpp
+    src/minigame/EmbeddedShaders_MiniGame_GLSL.cpp
+    src/minigame/EmbeddedShaders_MiniGame_Metal.cpp
+    src/minigame/MiniGeometry.cpp
+    src/minigame/MiniCollision.cpp
+)
+
+caesura_add_module(Platform
+    src/platform/NullPlatformBackend.cpp
+    src/platform/SDL3PlatformBackend.cpp
+    src/platform/MobileAdapter.cpp
+)
+
+caesura_add_module(Render
+    src/render/NullRenderDevice.cpp
+    src/render/BgfxRenderDevice.cpp
+    src/render/BgfxDeviceCore.cpp
+    src/render/BgfxDraw_Batch.cpp
+    src/render/BgfxDraw_Blit.cpp
+    src/render/BgfxDraw_Effects.cpp
+    src/render/BgfxQuadBatch.cpp
+    src/render/BgfxShaderManager.cpp
+    src/render/BgfxDebugCallback.cpp
+    src/render/RTTManager.cpp
+    src/render/EmbeddedShaders.cpp
+    src/render/TextRenderer.cpp
+    src/render/ParticleSystem.cpp
+    src/render/GpuMonitor.cpp
+    src/render/VideoPlayer.cpp
+    src/render/TextureManager.cpp
+    src/render/LayerManager.cpp
+    src/render/ShaderCache.cpp
+)
+
+caesura_add_module(Resource
+    src/resource/XP3Archive.cpp
+    src/resource/DirAssetProvider.cpp
+    src/resource/ProviderChain.cpp
+    src/resource/AssetManager.cpp
+    src/resource/ImageDecoder.cpp
+    src/resource/AsyncLoader.cpp
+)
+
+caesura_add_module(Rpc
+    src/rpc/RpcServer.cpp
+    src/rpc/EditorServer.cpp
+)
+
+caesura_add_module(Script
+    src/script/vm/LuaManager.cpp
+    src/script/state/GameState.cpp
+    src/script/bindings/KAGBinding.cpp
+    src/script/bindings/RenderBinding.cpp
+    src/script/bindings/VFXBinding.cpp
+    src/script/bindings/DevCoreBinding.cpp
+    src/script/bindings/DebugBinding.cpp
+    src/script/bindings/UnifiedBinding.cpp
+    src/script/bindings/SteamBinding.cpp
+    src/script/bindings/SaveBinding.cpp
+)
+
+caesura_add_module(Steam
+    src/steam/SteamBackend.cpp
+)
+
+caesura_add_module(Storage
+    src/storage/SaveManager.cpp
+    src/storage/ISaveProvider.cpp
+    src/storage/CloudSaveProvider.cpp
+)
+
+# BackendRegistry only knows API targets. Implementations may depend on the
+# registry without creating implementation-level cycles.
+target_link_libraries(CaesuraDi
+    PUBLIC
+        CaesuraArchiveApi
+        CaesuraAudioApi
+        CaesuraDebugApi
+        CaesuraInputApi
+        CaesuraJobApi
+        CaesuraLive2DApi
+        CaesuraMiniGameApi
+        CaesuraPlatformApi
+        CaesuraRenderApi
+        CaesuraResourceApi
+        CaesuraScriptApi
+        CaesuraSteamApi
+        CaesuraStorageApi
+    PRIVATE
+        lua
+)
+
+target_link_libraries(CaesuraArchive PRIVATE
+    CaesuraResourceApi libzstd_static ed25519 CaesuraSystemDependencies
+)
+target_link_libraries(CaesuraAudio PRIVATE CaesuraDi soloud)
+target_link_libraries(CaesuraDebug PRIVATE lua bgfx SDL3::SDL3)
+target_link_libraries(CaesuraInput PRIVATE SDL3::SDL3)
+target_link_libraries(CaesuraJob PRIVATE CaesuraDi CaesuraSystemDependencies)
+target_link_libraries(CaesuraLive2D PRIVATE
+    CaesuraDi CaesuraRenderApi bgfx bx
+)
+target_link_libraries(CaesuraMiniGame PRIVATE
+    CaesuraDi CaesuraInputApi CaesuraRenderApi bgfx bx lua
+)
+target_link_libraries(CaesuraPlatform PRIVATE SDL3::SDL3 lua)
+target_link_libraries(CaesuraRender PRIVATE
+    CaesuraDi CaesuraDebug CaesuraJobApi
+    bgfx bimg bx freetype CaesuraSystemDependencies
+)
+target_link_libraries(CaesuraResource PRIVATE
+    CaesuraDi CaesuraJobApi SDL3::SDL3 bimg bx
+)
+target_include_directories(CaesuraResource PRIVATE
+    ${CMAKE_SOURCE_DIR}/external/bgfx/bimg/3rdparty/tinyexr/deps/miniz
+)
+target_link_libraries(CaesuraScript PRIVATE
+    CaesuraDi CaesuraInputApi CaesuraRenderApi CaesuraStorageApi
+    CaesuraAudioApi CaesuraDebugApi CaesuraMiniGameApi
+    CaesuraPlatformApi CaesuraResourceApi CaesuraSteamApi lua
+)
+target_link_libraries(CaesuraSteam PRIVATE CaesuraSystemDependencies)
+target_link_libraries(CaesuraStorage PRIVATE
+    CaesuraDi CaesuraArchiveApi CaesuraSteamApi bgfx
+)
+
+add_library(CaesuraEntry STATIC
+    src/entry/Engine.cpp
+    src/entry/Engine_Assets.cpp
+    src/entry/Engine_Backends.cpp
+    src/entry/Engine_Gpu.cpp
+    src/entry/Engine_LuaRegistry.cpp
+    src/entry/StartupScripts.cpp
+    src/entry/StartupValidation.cpp
+    src/entry/ErrorUI.cpp
+)
+add_library(Caesura::Entry ALIAS CaesuraEntry)
+target_link_libraries(CaesuraEntry
+    PUBLIC CaesuraBuildOptions
+    PRIVATE
+        CaesuraArchive
+        CaesuraAudio
+        CaesuraDebug
+        CaesuraDi
+        CaesuraInput
+        CaesuraJob
+        CaesuraLive2D
+        CaesuraMiniGame
+        CaesuraPlatform
+        CaesuraRender
+        CaesuraResource
+        CaesuraScript
+        CaesuraSteam
+        CaesuraStorage
+        SDL3::SDL3
+        bgfx
+        lua
+        CaesuraSystemDependencies
+)
+set_target_properties(CaesuraEntry PROPERTIES
+    FOLDER "Caesura/Modules"
+    OUTPUT_NAME "caesura_entry"
+)
+
+# Convenience target for the application and tests. It has no compiled
+# sources; consumers receive the complete static engine graph.
+add_library(CaesuraEngine INTERFACE)
+add_library(Caesura::Engine ALIAS CaesuraEngine)
+target_link_libraries(CaesuraEngine INTERFACE
+    CaesuraBuildOptions
+    CaesuraSystemDependencies
+    CaesuraEntry
+    CaesuraArchive
+    CaesuraAudio
+    CaesuraDebug
+    CaesuraDi
+    CaesuraInput
+    CaesuraJob
+    CaesuraLive2D
+    CaesuraMiniGame
+    CaesuraPlatform
+    CaesuraRender
+    CaesuraResource
+    CaesuraScript
+    CaesuraSteam
+    CaesuraStorage
+)
+set_target_properties(CaesuraEngine PROPERTIES FOLDER "Caesura")

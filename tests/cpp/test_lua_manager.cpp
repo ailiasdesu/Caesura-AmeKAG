@@ -1,10 +1,14 @@
 ﻿#include "doctest.h"
+#include "debug/DebugProtocol.h"
+#include "debug/HotReload.h"
 #include "script/vm/LuaManager.h"
 
 extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
+
+#include <cstring>
 
 using namespace Caesura;
 
@@ -96,10 +100,9 @@ TEST_CASE("LuaManager::instruction budget set/get round-trip") {
 }
 
 TEST_CASE("LuaManager::instruction budget interrupts infinite loop") {
-    auto& singleton = LuaManager::instance();
-    const int oldSingletonBudget = singleton.getInstructionBudget();
-    singleton.resetInstructionBudget();
-    singleton.setInstructionBudget(1);
+    LuaManager independentManager;
+    independentManager.resetInstructionBudget();
+    independentManager.setInstructionBudget(1);
 
     LuaManager manager;
     manager.setInstructionBudget(100);
@@ -110,10 +113,131 @@ TEST_CASE("LuaManager::instruction budget interrupts infinite loop") {
     int result = luaL_dostring(L, "while true do end");
     CHECK(result != LUA_OK);
     CHECK(manager.isInstructionBudgetExceeded());
-    CHECK_FALSE(singleton.isInstructionBudgetExceeded());
+    CHECK_FALSE(independentManager.isInstructionBudgetExceeded());
+}
 
-    singleton.resetInstructionBudget();
-    singleton.setInstructionBudget(oldSingletonBudget);
+TEST_CASE("DebugProtocol preserves LuaManager instruction budget") {
+    LuaManager manager;
+    manager.setInstructionBudget(100);
+    REQUIRE(manager.init());
+    lua_State* L = manager.state();
+    REQUIRE(L != nullptr);
+
+    const lua_Hook budgetHook = lua_gethook(L);
+    const int budgetMask = lua_gethookmask(L);
+    const int budgetCount = lua_gethookcount(L);
+
+    HotReload reload;
+    reload.init("__missing_hotreload_dir__", L);
+    DebugProtocol protocol(reload);
+    REQUIRE(protocol.init(L));
+    CHECK((lua_gethookmask(L) & LUA_MASKCOUNT) != 0);
+    CHECK(lua_gethookcount(L) == budgetCount);
+
+    const int result = luaL_dostring(
+        L, "local total = 0; for i = 1, 100000 do total = total + i end");
+    if (result != LUA_OK) {
+        CAPTURE(lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+    CHECK(result != LUA_OK);
+    CHECK(manager.isInstructionBudgetExceeded());
+
+    protocol.shutdown();
+    CHECK(lua_gethook(L) == budgetHook);
+    CHECK(lua_gethookmask(L) == budgetMask);
+    CHECK(lua_gethookcount(L) == budgetCount);
+    reload.shutdown();
+    manager.shutdown();
+}
+
+TEST_CASE("Coroutine budget survives DebugProtocol destruction") {
+    LuaManager manager;
+    manager.setInstructionBudget(100);
+    REQUIRE(manager.init());
+    lua_State* L = manager.state();
+    REQUIRE(L != nullptr);
+
+    const lua_Hook budgetHook = lua_gethook(L);
+    const int budgetMask = lua_gethookmask(L);
+    const int budgetCount = lua_gethookcount(L);
+    lua_State* coroutine = nullptr;
+    lua_Hook coroutineBridge = nullptr;
+
+    HotReload reload;
+    reload.init("__missing_hotreload_dir__", L);
+    {
+        DebugProtocol protocol(reload);
+        REQUIRE(protocol.init(L));
+        coroutine = lua_newthread(L);
+        REQUIRE(coroutine != nullptr);
+        coroutineBridge = lua_gethook(coroutine);
+        CHECK(coroutineBridge != nullptr);
+        CHECK(coroutineBridge != budgetHook);
+        CHECK((lua_gethookmask(coroutine) & LUA_MASKCOUNT) != 0);
+        REQUIRE(luaL_loadstring(coroutine,
+            "local total = 0; for i = 1, 100000 do total = total + i end") == LUA_OK);
+    }
+
+    CHECK(lua_gethook(L) == budgetHook);
+    CHECK(lua_gethookmask(L) == budgetMask);
+    CHECK(lua_gethookcount(L) == budgetCount);
+    CHECK(lua_gethook(coroutine) == coroutineBridge);
+
+    reload.shutdown();
+    manager.resetInstructionBudget();
+    int resultCount = 0;
+    const int result = lua_resume(coroutine, L, 0, &resultCount);
+    if (result != LUA_OK) {
+        CAPTURE(lua_tostring(coroutine, -1));
+    }
+    CHECK(result != LUA_OK);
+    CHECK(manager.isInstructionBudgetExceeded());
+    manager.shutdown();
+}
+
+TEST_CASE("LuaManager instruction budget survives debugger pause and resume") {
+    LuaManager manager;
+    manager.setInstructionBudget(2000);
+    REQUIRE(manager.init());
+    lua_State* L = manager.state();
+    REQUIRE(L != nullptr);
+
+    HotReload reload;
+    reload.init("__missing_hotreload_dir__", L);
+    DebugProtocol protocol(reload);
+    REQUIRE(protocol.init(L));
+    protocol.setBreakpoint("debug_budget.lua", 2);
+
+    constexpr const char* script =
+        "local total = 0\n"
+        "for i = 1, 100000 do\n"
+        "    total = total + i\n"
+        "end\n"
+        "return total\n";
+    lua_State* coroutine = lua_newthread(L);
+    REQUIRE(coroutine != nullptr);
+    REQUIRE(luaL_loadbuffer(coroutine, script, std::strlen(script),
+                            "debug_budget.lua") == LUA_OK);
+
+    int resultCount = 0;
+    REQUIRE(lua_resume(coroutine, L, 0, &resultCount) == LUA_YIELD);
+    CHECK(protocol.runState() == DebugProtocol::RunState::Paused);
+    CHECK_FALSE(manager.isInstructionBudgetExceeded());
+
+    protocol.clearAllBreakpoints();
+    auto commands = protocol.commandSink();
+    REQUIRE(commands(protocol.currentPauseId(), DebugProtocol::Command::Continue));
+    protocol.pumpCommands();
+    resultCount = 0;
+    const int status = protocol.resumePausedCoroutine(&resultCount);
+    CHECK(status != LUA_OK);
+    CHECK(status != LUA_YIELD);
+    CHECK(manager.isInstructionBudgetExceeded());
+
+    protocol.shutdown();
+    reload.shutdown();
+    manager.shutdown();
 }
 
 TEST_CASE("LuaManager::update does not crash") {

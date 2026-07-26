@@ -7,13 +7,26 @@ extern "C" {
 #include "audio/SoLoudAudioEngine.h"
 #include "platform/SDL3PlatformBackend.h"
 #include "minigame/BgfxMiniGameBackend.h"
+#include "live2d/api/IAnimationBackend.h"
 #include "script/vm/LuaManager.h"
 #include "entry/Engine.h"
-#include <cstdio>
-#include <string>
+#include "debug/DebugProtocol.h"
+#include "rpc/EditorServer.h"
 #include "rpc/RpcServer.h"
-#include <thread>
+#include "rpc/api/IRpcDispatcher.h"
 #include <atomic>
+#include <cmath>
+#include <condition_variable>
+#include <cstdio>
+#include <deque>
+#include <exception>
+#include <filesystem>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <type_traits>
+#include <utility>
 
 namespace Caesura {
 std::string discoverStartupScriptDir();
@@ -21,6 +34,358 @@ void configureStartupLuaPath(lua_State* L, const std::string& scriptDir);
 void applyDevModeToTextureManager(lua_State* L);
 void validateCarcOnStartup(lua_State* L);
 }
+
+namespace {
+
+Caesura::RpcReply rpcError(Caesura::RpcReplyStatus status,
+                           const char* code,
+                           const char* message) {
+    return {status, code, message, {}};
+}
+
+Caesura::RpcReply rpcOk() {
+    return {Caesura::RpcReplyStatus::Ok, {}, {}, {}};
+}
+
+class EngineRpcDispatcher final : public Caesura::IRpcDispatcher {
+public:
+    explicit EngineRpcDispatcher(Caesura::Engine& engine)
+        : m_engine(engine), m_ownerThread(std::this_thread::get_id()) {}
+
+    ~EngineRpcDispatcher() override { close(); }
+
+    Caesura::RpcReply dispatch(const Caesura::RpcRequest& request) override {
+        if (std::this_thread::get_id() == m_ownerThread) {
+            {
+                std::lock_guard<std::mutex> lock(m_queueMutex);
+                if (!m_accepting) return unavailable();
+            }
+            return executeSafely(request);
+        }
+
+        auto pending = std::make_shared<Pending>(request);
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            if (!m_accepting) return unavailable();
+            m_pending.push_back(pending);
+        }
+
+        std::unique_lock<std::mutex> lock(pending->mutex);
+        pending->ready.wait(lock, [&pending] { return pending->completed; });
+        return pending->reply;
+    }
+
+    void pump() {
+        std::deque<std::shared_ptr<Pending>> batch;
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            batch.swap(m_pending);
+        }
+        for (const auto& pending : batch) {
+            complete(pending, executeSafely(pending->request));
+        }
+    }
+
+    void close() {
+        std::deque<std::shared_ptr<Pending>> cancelled;
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            if (!m_accepting) return;
+            m_accepting = false;
+            cancelled.swap(m_pending);
+        }
+        for (const auto& pending : cancelled) {
+            complete(pending, unavailable());
+        }
+    }
+
+private:
+    struct Pending {
+        explicit Pending(const Caesura::RpcRequest& value) : request(value) {}
+
+        Caesura::RpcRequest request;
+        std::mutex mutex;
+        std::condition_variable ready;
+        bool completed = false;
+        Caesura::RpcReply reply;
+    };
+
+    static Caesura::RpcReply unavailable() {
+        return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                        "dispatcher_closed",
+                        "Engine RPC dispatcher is closed");
+    }
+
+    static void complete(const std::shared_ptr<Pending>& pending,
+                         Caesura::RpcReply reply) {
+        {
+            std::lock_guard<std::mutex> lock(pending->mutex);
+            if (pending->completed) return;
+            pending->reply = std::move(reply);
+            pending->completed = true;
+        }
+        pending->ready.notify_one();
+    }
+
+    Caesura::RpcReply executeSafely(const Caesura::RpcRequest& request) {
+        try {
+            return execute(request);
+        } catch (const std::exception& error) {
+            return {Caesura::RpcReplyStatus::Failed,
+                    "owner_dispatch_exception", error.what(), {}};
+        } catch (...) {
+            return rpcError(Caesura::RpcReplyStatus::Failed,
+                            "owner_dispatch_exception",
+                            "Owner dispatcher threw an unknown exception");
+        }
+    }
+
+    Caesura::RpcReply execute(const Caesura::RpcRequest& request) {
+        return std::visit([this](const auto& operation) -> Caesura::RpcReply {
+            using Operation = std::decay_t<decltype(operation)>;
+
+            if constexpr (std::is_same_v<Operation, Caesura::RpcStatusRequest>) {
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = Caesura::RpcStatusResult{
+                    m_engine.lua().state() != nullptr};
+                return reply;
+            } else if constexpr (
+                std::is_same_v<Operation, Caesura::RpcRunScriptRequest> ||
+                std::is_same_v<Operation, Caesura::RpcEvaluateRequest>) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "unsupported_yieldable_execution",
+                                "run/eval require a managed coroutine and are not enabled yet");
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcStopRequest>) {
+                m_engine.quit();
+                return rpcOk();
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcGetStateRequest>) {
+                lua_State* L = m_engine.lua().state();
+                if (!L) return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                                        "lua_unavailable", "Lua VM is unavailable");
+                const int stackTop = lua_gettop(L);
+                lua_getglobal(L, "_KAG_SceneName");
+                std::string scene;
+                if (lua_isstring(L, -1)) scene = lua_tostring(L, -1);
+                lua_settop(L, stackTop);
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = Caesura::RpcStateResult{std::move(scene)};
+                return reply;
+            } else if constexpr (
+                std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {
+                std::string frame = m_engine.captureFrameForRpc(
+                    operation.width, operation.height);
+                if (frame.empty()) {
+                    return rpcError(Caesura::RpcReplyStatus::Failed,
+                                    "capture_failed", "Frame capture failed");
+                }
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = Caesura::RpcFrameResult{std::move(frame)};
+                return reply;
+            } else if constexpr (
+                std::is_same_v<Operation, Caesura::RpcReloadScriptsRequest>) {
+                if (!m_engine.reloadScriptsNow()) {
+                    return rpcError(Caesura::RpcReplyStatus::Failed,
+                                    "reload_rejected",
+                                    "Reload is unavailable while Lua is paused");
+                }
+                return rpcOk();
+            } else if constexpr (
+                std::is_same_v<Operation, Caesura::RpcLoadAnimationRequest>) {
+                if (operation.modelPath.empty()) {
+                    return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                    "invalid_model_path", "Model path is empty");
+                }
+                if (!std::isfinite(operation.x) || !std::isfinite(operation.y) ||
+                    !std::isfinite(operation.scale) || operation.scale <= 0.0f) {
+                    return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                    "invalid_animation_transform",
+                                    "Animation transform must be finite and scale must be positive");
+                }
+                const std::string name = std::filesystem::path(
+                    operation.modelPath).stem().string();
+                const int modelId = m_engine.animation().loadModel(
+                    operation.modelPath, name);
+                if (modelId <= 0) {
+                    return rpcError(Caesura::RpcReplyStatus::Failed,
+                                    "animation_load_failed", "Animation load failed");
+                }
+                if (operation.show) {
+                    try {
+                        m_engine.animation().showModel(
+                            modelId, operation.x, operation.y, operation.scale);
+                    } catch (...) {
+                        m_engine.animation().unloadModel(modelId);
+                        throw;
+                    }
+                }
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = Caesura::RpcAnimationResult{modelId, name};
+                return reply;
+            } else {
+                return executeDebug(operation);
+            }
+        }, request.payload);
+    }
+
+    template <typename Operation>
+    Caesura::RpcReply executeDebug(const Operation& operation) {
+        Caesura::DebugProtocol* protocol = m_engine.debugProtocol();
+
+        if constexpr (std::is_same_v<Operation, Caesura::RpcGetDebugStateRequest>) {
+            Caesura::RpcDebugStateResult result;
+            if (protocol) {
+                switch (protocol->runState()) {
+                    case Caesura::DebugProtocol::RunState::Detached:
+                        result.state = Caesura::RpcDebugRunState::Detached;
+                        break;
+                    case Caesura::DebugProtocol::RunState::Running:
+                        result.state = Caesura::RpcDebugRunState::Running;
+                        break;
+                    case Caesura::DebugProtocol::RunState::Paused:
+                        result.state = Caesura::RpcDebugRunState::Paused;
+                        break;
+                    case Caesura::DebugProtocol::RunState::ResumePending:
+                        result.state = Caesura::RpcDebugRunState::ResumePending;
+                        break;
+                }
+                result.source = protocol->currentSource();
+                result.line = protocol->currentLine();
+                result.pauseId = protocol->currentPauseId();
+                result.nonYieldableHitCount = protocol->nonYieldableHitCount();
+            }
+            Caesura::RpcReply reply = rpcOk();
+            reply.payload = std::move(result);
+            return reply;
+        }
+
+        if (!protocol) {
+            return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                            "debugger_disabled", "Debugger is not enabled");
+        }
+
+        if constexpr (std::is_same_v<Operation, Caesura::RpcSetBreakpointRequest>) {
+            if (operation.source.empty() || operation.line <= 0) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "invalid_breakpoint", "Breakpoint source or line is invalid");
+            }
+            protocol->setBreakpoint(operation.source, operation.line);
+            return rpcOk();
+        } else if constexpr (
+            std::is_same_v<Operation, Caesura::RpcRemoveBreakpointRequest>) {
+            if (operation.source.empty() || operation.line <= 0) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "invalid_breakpoint", "Breakpoint source or line is invalid");
+            }
+            protocol->removeBreakpoint(operation.source, operation.line);
+            return rpcOk();
+        } else if constexpr (
+            std::is_same_v<Operation, Caesura::RpcClearBreakpointsRequest>) {
+            protocol->clearAllBreakpoints();
+            return rpcOk();
+        } else if constexpr (
+            std::is_same_v<Operation, Caesura::RpcDebugResumeRequest>) {
+            Caesura::DebugProtocol::Command command =
+                Caesura::DebugProtocol::Command::Continue;
+            switch (operation.mode) {
+                case Caesura::RpcDebugResumeMode::Continue:
+                    command = Caesura::DebugProtocol::Command::Continue;
+                    break;
+                case Caesura::RpcDebugResumeMode::StepInto:
+                    command = Caesura::DebugProtocol::Command::StepInto;
+                    break;
+                case Caesura::RpcDebugResumeMode::StepOver:
+                    command = Caesura::DebugProtocol::Command::StepOver;
+                    break;
+                case Caesura::RpcDebugResumeMode::StepOut:
+                    command = Caesura::DebugProtocol::Command::StepOut;
+                    break;
+            }
+            if (!protocol->commandSink()(operation.pauseId, command)) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "stale_pause", "Pause id is stale or no pause is active");
+            }
+            return rpcOk();
+        } else if constexpr (
+            std::is_same_v<Operation, Caesura::RpcInspectLocalRequest>) {
+            if (!protocol->isDebugActive() || operation.frame < 0 ||
+                operation.name.empty()) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "inspection_unavailable",
+                                "Local inspection requires an active pause");
+            }
+            Caesura::RpcReply reply = rpcOk();
+            reply.payload = Caesura::RpcInspectionResult{
+                protocol->inspectLocal(operation.frame, operation.name)};
+            return reply;
+        } else if constexpr (
+            std::is_same_v<Operation, Caesura::RpcInspectGlobalRequest>) {
+            if (!protocol->isDebugActive() || operation.name.empty()) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "inspection_unavailable",
+                                "Global inspection requires an active pause");
+            }
+            Caesura::RpcReply reply = rpcOk();
+            reply.payload = Caesura::RpcInspectionResult{
+                protocol->inspectGlobal(operation.name)};
+            return reply;
+        } else {
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "unknown_owner_command", "Unknown owner command");
+        }
+    }
+
+    Caesura::Engine& m_engine;
+    std::thread::id m_ownerThread;
+    std::mutex m_queueMutex;
+    std::deque<std::shared_ptr<Pending>> m_pending;
+    bool m_accepting = true;
+};
+
+void runStdioRpc(Caesura::Engine& engine) {
+    auto dispatcher = std::make_shared<EngineRpcDispatcher>(engine);
+    Caesura::RpcServer rpc;
+    rpc.setDispatcher(dispatcher);
+
+    std::atomic<bool> transportFinished{false};
+    std::thread transport([&rpc, &transportFinished]() {
+        rpc.run();
+        transportFinished.store(true, std::memory_order_release);
+    });
+
+    engine.run([&]() {
+        dispatcher->pump();
+        if (transportFinished.load(std::memory_order_acquire)) engine.quit();
+    });
+
+    dispatcher->close();
+    rpc.stop();
+    rpc.setDispatcher({});
+    if (transport.joinable()) transport.join();
+    engine.shutdown();
+}
+
+bool runHttpEditor(Caesura::Engine& engine) {
+    auto dispatcher = std::make_shared<EngineRpcDispatcher>(engine);
+    Caesura::EditorServer editor;
+    editor.setDispatcher(dispatcher);
+    if (!editor.start(9876)) {
+        editor.setDispatcher({});
+        dispatcher->close();
+        engine.shutdown();
+        return false;
+    }
+
+    engine.run([&]() { dispatcher->pump(); });
+
+    dispatcher->close();
+    editor.setDispatcher({});
+    editor.stop();
+    engine.shutdown();
+    return true;
+}
+
+} // namespace
+
 int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
@@ -29,12 +394,16 @@ int main(int argc, char* argv[]) {
     // -- Parse CLI flags -------------------------------------------------
     bool headless = false;
     bool editorMode = false;
+    bool editorStdio = false;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
             headless = true;
         } else if (arg == "--editor") {
             editorMode = true;
+        } else if (arg == "--editor-stdio") {
+            editorMode = true;
+            editorStdio = true;
         }
     }
 
@@ -51,6 +420,7 @@ int main(int argc, char* argv[]) {
     config.height     = 720;
     config.headless   = headless;
     config.editorMode = editorMode;
+    config.enableDebugger = headless || editorMode;
 
     // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
     if (!headless || editorMode) {
@@ -60,16 +430,18 @@ int main(int argc, char* argv[]) {
         config.miniGame = new Caesura::BgfxMiniGameBackend();
     }
 
-    Caesura::Engine engine(config);
+    Caesura::Engine engine(std::move(config));
 
     if (!engine.init()) {
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }
 
-    // -- Editor mode: hidden window + GPU + JSON-RPC ------------------------
+    // -- Editor mode: hidden window + owner-thread RPC dispatcher ----------
     if (editorMode) {
-        fprintf(stderr, "[main] Editor mode: JSON-RPC on stdin/stdout (GPU enabled)\n");
+        fprintf(stderr, editorStdio
+            ? "[main] Editor mode: JSON-RPC on stdin/stdout (GPU enabled)\n"
+            : "[main] Editor mode: HTTP editor on port 9876 (GPU enabled)\n");
 
         std::string scriptDir = Caesura::discoverStartupScriptDir();
         Caesura::configureStartupLuaPath(engine.lua().state(), scriptDir);
@@ -77,13 +449,10 @@ int main(int argc, char* argv[]) {
         engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
         engine.lua().lockdownScriptEnv();
 
-        // Wire up frame capture for getFrame RPC
-        Caesura::RpcServer::instance().setFrameCaptureCallback(
-            [&engine](int w, int h) -> std::string {
-                return engine.captureFrameForRpc(w, h);
-            });
-
-        engine.runRpc();
+        const bool editorOk = editorStdio
+            ? (runStdioRpc(engine), true)
+            : runHttpEditor(engine);
+        if (!editorOk) return 1;
         printf("Caesura (AmeKAG) shut down cleanly.\n");
         return 0;
     }
@@ -99,8 +468,7 @@ int main(int argc, char* argv[]) {
         engine.lua().loadScript((scriptDir + "kag/init.lua").c_str());
         engine.lua().lockdownScriptEnv();
 
-        // Enter RPC loop (blocks until stdin EOF or quit command)
-        engine.runRpc();
+        runStdioRpc(engine);
         printf("Caesura (AmeKAG) shut down cleanly.\n");
         return 0;
     }
@@ -162,6 +530,7 @@ int main(int argc, char* argv[]) {
     engine.lua().lockdownScriptEnv();
 
     engine.run();
+    engine.shutdown();
 
     printf("Caesura (AmeKAG) shut down cleanly.\n");
     return 0;

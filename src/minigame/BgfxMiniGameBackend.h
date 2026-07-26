@@ -136,8 +136,6 @@ private:
     lua_State* m_L = nullptr;
 };
 
-void registerMiniGameBinding(lua_State* L, BgfxMiniGameBackend* backend);
 } // namespace Caesura
-
 
 

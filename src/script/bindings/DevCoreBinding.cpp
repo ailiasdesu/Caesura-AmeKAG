@@ -3,10 +3,9 @@
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
-#include "../input/InputRouter.h"
-#include "../platform/api/IPlatformBackend.h"
-#include "../render/api/IRenderDevice.h"
-#include <cassert>
+#include "../../input/api/IInputRouter.h"
+#include "../../platform/api/IPlatformBackend.h"
+#include "../../render/api/IRenderDevice.h"
 #include <cstdio>
 #include <cstring>
 
@@ -38,10 +37,19 @@ static IPlatformBackend* getPlatform(lua_State* L) {
 // -- DevCore.set_input_focus(mode) ----------------------------------------
 
 static int lua_DevCore_set_input_focus(lua_State* L) {
-    const char* mode = luaL_checkstring(L, 1);
+    if (lua_type(L, 1) != LUA_TSTRING) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "Focus must be 'KAG' or 'GAME'.");
+        return 2;
+    }
+    const char* mode = lua_tostring(L, 1);
 
     IInputRouter* router = getInput(L);
-    if (!router) { lua_pushboolean(L, 0); return 1; }
+    if (!router) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "Input router is unavailable.");
+        return 2;
+    }
 
     if (strcmp(mode, "KAG") == 0 || strcmp(mode, "kag") == 0) {
         router->setFocus(InputFocus::KAG);
@@ -65,7 +73,7 @@ static int lua_DevCore_get_input_focus(lua_State* L) {
     IInputRouter* router = getInput(L);
     if (!router) { lua_pushstring(L, "KAG"); return 1; }
 
-    lua_pushstring(L, inputFocusToString(router->getFocus()));
+    lua_pushstring(L, router->getFocus() == InputFocus::GAME ? "GAME" : "KAG");
     return 1;
 }
 

@@ -6,15 +6,6 @@
 namespace Caesura {
 
 // ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-LayerManager& LayerManager::instance() {
-    static LayerManager mgr;
-    return mgr;
-}
-
-// ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
@@ -24,8 +15,10 @@ void LayerManager::init() {
         m_layers[i] = Layer{};
         m_dirtyRects[i] = DirtyRect{};
     }
-    m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
-    BackendRegistry::instance().registerDeviceLostListener(this);
+    if (m_gpuEnabled) {
+        m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
+        BackendRegistry::instance().registerDeviceLostListener(this);
+    }
     m_initialized = true;
     printf("[LayerManager] Initialized.\n");
 }
@@ -33,11 +26,13 @@ void LayerManager::init() {
 void LayerManager::shutdown() {
     if (!m_initialized) return;
     clearAll();
-    if (bgfx::isValid(m_texUniform)) {
+    if (m_gpuEnabled && bgfx::isValid(m_texUniform)) {
         bgfx::destroy(m_texUniform);
         m_texUniform = BGFX_INVALID_HANDLE;
     }
-    BackendRegistry::instance().unregisterDeviceLostListener(this);
+    if (m_gpuEnabled) {
+        BackendRegistry::instance().unregisterDeviceLostListener(this);
+    }
     m_initialized = false;
     printf("[LayerManager] Shutdown complete.\n");
 }
@@ -155,7 +150,7 @@ void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
 
     m_useScissor = shouldUseScissor(screenW, screenH);
 
-    if (m_useScissor) {
+    if (m_gpuEnabled && m_useScissor) {
         // bgfx scissor uses absolute pixel coords from top-left
         bgfx::setScissor(m_mergedDirty.x, m_mergedDirty.y,
                          m_mergedDirty.w, m_mergedDirty.h);
@@ -177,7 +172,7 @@ void LayerManager::clearDirtyRects() {
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
                            uint32_t programId) {
-    if (!m_initialized) return;
+    if (!m_initialized || !m_gpuEnabled) return;
     if (programId == 0) return;
 
     // Update dirty regions for scissor optimization
@@ -258,6 +253,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
 // ---------------------------------------------------------------------------
 
 void LayerManager::onDeviceLost() {
+    if (!m_gpuEnabled) return;
     // Layer textures become invalid — clear all layer texture references
     for (int i = 0; i < COUNT; i++) {
         m_layers[i].tex = BGFX_INVALID_HANDLE;
@@ -272,6 +268,7 @@ void LayerManager::onDeviceLost() {
 }
 
 void LayerManager::onDeviceRestored() {
+    if (!m_gpuEnabled) return;
     // Recreate the uniform
     m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
     // Layers will get new textures when Lua re-calls setTexture()

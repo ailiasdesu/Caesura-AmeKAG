@@ -109,4 +109,21 @@ int maxLimit(lua_State* L, const char* kind) {
 }
 
 } // namespace SandboxQuota
+
+bool SandboxQuotaService::tryAlloc(const char* kind) {
+    return SandboxQuota::tryAlloc(m_L, kind);
+}
+
+void SandboxQuotaService::release(const char* kind) {
+    SandboxQuota::release(m_L, kind);
+}
+
+int SandboxQuotaService::count(const char* kind) {
+    return SandboxQuota::count(m_L, kind);
+}
+
+int SandboxQuotaService::maxLimit(const char* kind) {
+    return SandboxQuota::maxLimit(m_L, kind);
+}
+
 } // namespace Caesura

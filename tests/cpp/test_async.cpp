@@ -1,131 +1,164 @@
-// test_async.cpp - AsyncLoader tests using NullJobSystem (IU-3)
+// test_async.cpp - AsyncLoader instance lifecycle and job integration tests
 #include "doctest.h"
 #include "job/JobSystem.h"
+#include "resource/AssetManager.h"
 #include "resource/AsyncLoader.h"
-#include "entry/Engine.h"
 #include "di/BackendRegistry.h"
+#include "di/api/ThreadAssert.h"
 #include "mocks/NullJobSystem.h"
+
+#include <thread>
 
 using namespace Caesura;
 
-// Real JobSystem infrastructure (for thread-safety tests)
-static void initJobInfra() {
-    detail::g_mainThreadId = std::this_thread::get_id();
-    JobSystem::instance().init();
-    BackendRegistry::instance().setJobSystem(&JobSystem::instance());
-    AsyncLoader::instance().init();
+namespace {
+
+template <typename JobSystemT>
+class AsyncLoaderFixture {
+public:
+    explicit AsyncLoaderFixture(bool startJobs = true)
+        : loader(&assets) {
+        detail::g_mainThreadId = std::this_thread::get_id();
+        if (startJobs) jobs.init();
+        BackendRegistry::instance().setJobSystem(&jobs);
+        assets.init();
+        loader.init();
+    }
+
+    ~AsyncLoaderFixture() {
+        loader.shutdown();
+        assets.shutdown();
+        BackendRegistry::instance().setJobSystem(nullptr);
+        jobs.shutdown();
+    }
+
+    AsyncLoaderFixture(const AsyncLoaderFixture&) = delete;
+    AsyncLoaderFixture& operator=(const AsyncLoaderFixture&) = delete;
+
+    JobSystemT jobs;
+    AssetManager assets;
+    AsyncLoader loader;
+};
+
+void checkJobRegistryCleared() {
+    CHECK(BackendRegistry::instance().getJobSystem() == nullptr);
 }
 
-static void shutdownJobInfra() {
-    AsyncLoader::instance().shutdown();
-    JobSystem::instance().shutdown();
-    BackendRegistry::instance().setJobSystem(nullptr);
-}
+} // namespace
 
-// NullJobSystem infrastructure (for synchronous unit tests)
-static NullJobSystem g_nullJob;
-
-static void initNullJobInfra() {
-    detail::g_mainThreadId = std::this_thread::get_id();
-    g_nullJob.init();
-    BackendRegistry::instance().setJobSystem(&g_nullJob);
-    AsyncLoader::instance().init();
-}
-
-static void shutdownNullJobInfra() {
-    AsyncLoader::instance().shutdown();
-    g_nullJob.shutdown();
-    BackendRegistry::instance().setJobSystem(nullptr);
-}
-
-// Original tests — retained for real JobSystem thread-safety validation
-TEST_CASE("AsyncLoader::singleton") {
-    auto& a = AsyncLoader::instance();
-    auto& b = AsyncLoader::instance();
-    CHECK(&a == &b);
+TEST_CASE("AsyncLoader local instances have independent lifecycle") {
+    {
+        AsyncLoaderFixture<NullJobSystem> infra;
+        AsyncLoader other(&infra.assets);
+        CHECK(infra.loader.isRunning());
+        CHECK_FALSE(other.isRunning());
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader::shutdown is idempotent") {
-    initJobInfra();
-    AsyncLoader::instance().shutdown();
-    AsyncLoader::instance().shutdown();
-    shutdownJobInfra();
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        infra.loader.shutdown();
+        infra.loader.shutdown();
+    }
+    checkJobRegistryCleared();
+}
+
+TEST_CASE("AsyncLoader::shutdown drains queued completion callbacks") {
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        CHECK(infra.loader.enqueue("test.png", "texture") > 0);
+
+        infra.loader.shutdown();
+        infra.jobs.pollMainThreadJobs();
+
+        CHECK_FALSE(infra.loader.poll());
+        CHECK(infra.loader.pendingCount() == 0);
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader::enqueue returns positive id") {
-    initJobInfra();
-    int id = AsyncLoader::instance().enqueue("test.png", "texture");
-    CHECK(id > 0);
-    AsyncLoader::instance().cancelAll();
-    shutdownJobInfra();
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        int id = infra.loader.enqueue("test.png", "texture");
+        CHECK(id > 0);
+        infra.loader.cancelAll();
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader::rejects path traversal") {
-    initJobInfra();
-    int id = AsyncLoader::instance().enqueue("../secret.png", "texture");
-    CHECK(id < 0);
-    shutdownJobInfra();
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        int id = infra.loader.enqueue("../secret.png", "texture");
+        CHECK(id < 0);
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader::cancelAll clears queue") {
-    initJobInfra();
-    auto& al = AsyncLoader::instance();
-    al.enqueue("a.png", "texture");
-    al.enqueue("b.png", "texture");
-    al.cancelAll();
-    JobSystem::instance().waitIdle();
-    JobSystem::instance().pollMainThreadJobs();
-    al.poll();
-    CHECK(al.pendingCount() == 0);
-    shutdownJobInfra();
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        infra.loader.enqueue("a.png", "texture");
+        infra.loader.enqueue("b.png", "texture");
+        infra.loader.cancelAll();
+        infra.jobs.waitIdle();
+        infra.jobs.pollMainThreadJobs();
+        infra.loader.poll();
+        CHECK(infra.loader.pendingCount() == 0);
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader::poll does not crash") {
-    initJobInfra();
-    JobSystem::instance().pollMainThreadJobs();
-    bool has = AsyncLoader::instance().poll();
-    (void)has;
-    shutdownJobInfra();
+    {
+        AsyncLoaderFixture<JobSystem> infra;
+        infra.jobs.pollMainThreadJobs();
+        bool has = infra.loader.poll();
+        (void)has;
+    }
+    checkJobRegistryCleared();
 }
 
-// NullJobSystem variants — synchronous, no threads, faster
 TEST_CASE("AsyncLoader with NullJobSystem: enqueue + poll") {
-    initNullJobInfra();
-    int id = AsyncLoader::instance().enqueue("test.png", "texture");
-    CHECK(id > 0);
-    bool has = AsyncLoader::instance().poll();
-    (void)has;
-    shutdownNullJobInfra();
+    {
+        AsyncLoaderFixture<NullJobSystem> infra;
+        int id = infra.loader.enqueue("test.png", "texture");
+        CHECK(id > 0);
+        bool has = infra.loader.poll();
+        (void)has;
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader with NullJobSystem: cancelAll") {
-    initNullJobInfra();
-    auto& al = AsyncLoader::instance();
-    al.enqueue("a.png", "texture");
-    al.enqueue("b.png", "texture");
-    al.cancelAll();
-    al.poll();
-    CHECK(al.pendingCount() == 0);
-    shutdownNullJobInfra();
+    {
+        AsyncLoaderFixture<NullJobSystem> infra;
+        infra.loader.enqueue("a.png", "texture");
+        infra.loader.enqueue("b.png", "texture");
+        infra.loader.cancelAll();
+        infra.loader.poll();
+        CHECK(infra.loader.pendingCount() == 0);
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader with NullJobSystem: rejects path traversal") {
-    initNullJobInfra();
-    int id = AsyncLoader::instance().enqueue("../secret.png", "texture");
-    CHECK(id < 0);
-    shutdownNullJobInfra();
+    {
+        AsyncLoaderFixture<NullJobSystem> infra;
+        int id = infra.loader.enqueue("../secret.png", "texture");
+        CHECK(id < 0);
+    }
+    checkJobRegistryCleared();
 }
 
 TEST_CASE("AsyncLoader rejects enqueue when registered job system is stopped") {
-    detail::g_mainThreadId = std::this_thread::get_id();
-    NullJobSystem stoppedJobSystem;
-    BackendRegistry::instance().setJobSystem(&stoppedJobSystem);
-    auto& loader = AsyncLoader::instance();
-    loader.init();
-
-    CHECK(loader.enqueue("test.png", "texture") < 0);
-    CHECK(loader.pendingCount() == 0);
-
-    loader.shutdown();
-    BackendRegistry::instance().setJobSystem(nullptr);
+    {
+        AsyncLoaderFixture<NullJobSystem> infra(false);
+        CHECK(infra.loader.enqueue("test.png", "texture") < 0);
+        CHECK(infra.loader.pendingCount() == 0);
+    }
+    checkJobRegistryCleared();
 }

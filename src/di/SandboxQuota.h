@@ -1,4 +1,5 @@
 #pragma once
+#include "api/ISandboxQuota.h"
 // Note: counters below are lock-free (plain Lua table integer fields).
 // Safe under a single Lua VM; not safe for concurrent multi-VM access.
 // ===========================================================================
@@ -28,4 +29,17 @@ int  count(lua_State* L, const char* kind);
 int  maxLimit(lua_State* L, const char* kind);
 
 } // namespace SandboxQuota
+
+class SandboxQuotaService final : public ISandboxQuota {
+public:
+    void setLuaState(lua_State* L) override { m_L = L; }
+    bool tryAlloc(const char* kind) override;
+    void release(const char* kind) override;
+    int count(const char* kind) override;
+    int maxLimit(const char* kind) override;
+
+private:
+    lua_State* m_L = nullptr;
+};
+
 } // namespace Caesura

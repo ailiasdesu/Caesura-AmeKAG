@@ -9,6 +9,7 @@
 #include "script/bindings/UnifiedBinding.h"
 #include "script/state/GameState.h"
 #include "di/BackendRegistry.h"
+#include "render/ParticleSystem.h"
 
 extern "C" {
 #include <lua.h>
@@ -249,6 +250,8 @@ TEST_CASE("E3 VFX: create_emitter rejects negative rate") {
 }
 
 TEST_CASE("E3 VFX: create_emitter clamps lifeMax below lifeMin") {
+    ParticleSystem particles;
+    BackendRegistry::instance().setParticleSystem(&particles);
     auto* lm = initBindingLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
@@ -262,6 +265,7 @@ TEST_CASE("E3 VFX: create_emitter clamps lifeMax below lifeMin") {
     CHECK(lua_tointeger(L, -1) >= 0);  // should succeed with clamped values
     lua_pop(L, 2);
     delete lm;
+    BackendRegistry::instance().setParticleSystem(nullptr);
 }
 
 // -- E3 Step 6: GameState survives coroutine context switch --

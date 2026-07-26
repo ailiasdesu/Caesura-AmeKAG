@@ -9,7 +9,7 @@ using namespace Caesura;
 
 TEST_CASE("SaveManager::migration chain — v1 to v2 adds playtime") {
     TestPaths::ScopedTempDir dir("migration_chain");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     json data = {{"val", 1}};
@@ -24,7 +24,7 @@ TEST_CASE("SaveManager::migration chain — v1 to v2 adds playtime") {
 
 TEST_CASE("SaveManager::json nil round-trip") {
     TestPaths::ScopedTempDir dir("migration_nil");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     json data = {{"nil_val", nullptr}, {"str_val", "hello"}};
@@ -36,12 +36,15 @@ TEST_CASE("SaveManager::json nil round-trip") {
 }
 
 TEST_CASE("SaveManager::schema version is tracked") {
-    CHECK(SaveManager::instance().currentSchemaVersion() >= 2);
+    TestPaths::ScopedTempDir dir("migration_schema");
+    SaveManager sm;
+    sm.init(dir.string());
+    CHECK(sm.currentSchemaVersion() >= 2);
 }
 
 TEST_CASE("SaveManager::JSON parse error returns empty") {
     TestPaths::ScopedTempDir dir("migration_parse_error");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     // Write invalid JSON manually

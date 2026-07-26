@@ -3,8 +3,6 @@
 #include <lauxlib.h>
 }
 #include "BackendRegistry.h"
-#include "SandboxQuota.h"
-#include "../input/InputRouter.h"
 // All interface includes needed for getService<I>() / setService<I>() template instantiation
 #include "../audio/api/IAudioBackend.h"
 #include "../platform/api/IPlatformBackend.h"
@@ -15,101 +13,22 @@
 #include "../render/api/ILayerManager.h"
 #include "../debug/api/IDebugManager.h"
 #include "../resource/api/IAsyncLoader.h"
+#include "../resource/api/IResourceGenerationTracker.h"
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../archive/api/ICryptoEngine.h"
 #include "../script/api/ILuaManager.h"
 #include "../job/api/IJobSystem.h"
-#include "../rpc/api/IRpcServer.h"
-#include "../rpc/api/IEditorServer.h"
 #include "api/ISandboxQuota.h"
 #include "../input/api/IInputRouter.h"
 #include "../di/api/ITextureBudget.h"
+#include "../storage/api/ISaveManager.h"
+#include "../steam/api/ISteamBackend.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 
 namespace Caesura {
-
-// ============================================================================
-//  Null backends -- safe no-op fallbacks when a backend is unavailable
-// ============================================================================
-
-class NullRenderDevice : public IRenderDevice {
-public:
-    NullRenderDevice() { printf("[BackendRegistry] Using NullRenderDevice.\n"); }
-    bool init(void*, int w, int h) override { m_width = w; m_height = h; return true; }
-    void beginShutdown() override {}
-    void shutdown() override {}
-    void flushAllRTT() override {}
-    void beginFrame() override {}
-    void endFrame() override {}
-    void commit_frame() override {}
-    void advanceFrame() override {}
-    void setViewRect(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
-    void setViewClear(uint16_t, uint16_t, uint32_t, float, uint8_t) override {}
-    void touch(uint16_t) override {}
-    ViewportHandle createRenderTarget(int, int) override { return ViewportHandle{}; }
-    void destroyRenderTarget(ViewportHandle) override {}
-    RenderTextureHandle getViewportTexture(ViewportHandle) override { return {}; }
-    void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
-    int getBackbufferWidth() const override { return m_width; }
-    int getBackbufferHeight() const override { return m_height; }
-    void resize(int w, int h) override { m_width = w; m_height = h; }
-    void blitTexture(uint16_t, uint32_t, float, float, float, float, uint8_t) override {}
-    void setDebugName(uint16_t, const std::string&) override {}
-    void drawDebugOverlay(const std::string&) override {}
-    bool requestScreenshot(const std::string&) override { return false; }
-    bool recoverDevice(void*, int, int) override { return true; }
-    void flagDeviceLost() override {}
-    bool consumeDeviceLost() override { return false; }
-    void renderText(uint16_t, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
-    void renderRuby(uint16_t, const std::string&, const std::string&, float, float, uint8_t, uint8_t, uint8_t, uint8_t) override {}
-    void setFont(int) override {}
-    void stretchBlt(uint16_t, uint32_t, float, float, float, float,
-                    uint32_t, float, float, float, float, int) override {}
-    void affineBlt(uint16_t, uint32_t, float, float, float, float,
-                   uint32_t, float, float, float, float,
-                   const float*) override {}
-    void beginBatch() override {}
-    void submitBlend(uint16_t, RenderTextureHandle, RenderTextureHandle, int, float, float, float) override {}
-    void submitTransition(uint16_t, RenderTextureHandle, RenderTextureHandle, RenderTextureHandle, int, float) override {}
-    void submitVFX(uint16_t, RenderTextureHandle, int, float, float, float, float, float, float, float) override {}
-    void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
-    void flushBatch() override {}
-    float textLineHeight() const override { return 0.0f; }
-    RenderUniformHandle getDefaultSampler() const override { return {}; }
-    RenderProgramHandle getFallbackProgram() const override { return {}; }
-    const char* getBackendName() const override { return "NullRender"; }
-    RenderRuntimeInfo getRuntimeInfo() const override {
-        RenderRuntimeInfo info;
-        info.backendName = getBackendName();
-        info.width = m_width;
-        info.height = m_height;
-        return info;
-    }
-    bool setPreferredBackend(const char*) override { return false; }
-private:
-    int m_width = 0, m_height = 0;
-};
-
-class NullPlatformBackend : public IPlatformBackend {
-public:
-    NullPlatformBackend() { printf("[BackendRegistry] Using NullPlatformBackend.\n"); }
-    bool init(const char*, int w, int h) override { m_width = w; m_height = h; return true; }
-    void shutdown() override {}
-    bool pollEvent() override { return false; }
-    MouseState getMouseState() const override { return MouseState{}; }
-    uint64_t getTicksMs() const override { return 0; }
-    void* getNativeWindowHandle() const override { return nullptr; }
-    int getWindowWidth() const override { return m_width; }
-    int getWindowHeight() const override { return m_height; }
-    void setFullscreen(bool) override {}
-    void resizeWindow(int, int) override {}
-    const char* getBackendName() const override { return "NullPlatform"; }
-private:
-    int m_width = 0, m_height = 0;
-};
 
 // -- Singleton -------------------------------------------------------------
 
@@ -118,14 +37,15 @@ BackendRegistry& BackendRegistry::instance() {
     return inst;
 }
 
-// -- SandboxQuota wrappers (defined here — need SandboxQuota complete type)
+// -- SandboxQuota wrappers --------------------------------------------------
 
 bool BackendRegistry::tryAlloc(const char* kind) {
-    return m_luaState ? SandboxQuota::tryAlloc(m_luaState, kind) : true;
+    auto* quota = getSandboxQuota();
+    return quota ? quota->tryAlloc(kind) : true;
 }
 
 void BackendRegistry::release(const char* kind) {
-    if (m_luaState) SandboxQuota::release(m_luaState, kind);
+    if (auto* quota = getSandboxQuota()) quota->release(kind);
 }
 
 // -- Getter / Setter definitions (need complete types) --------------------
@@ -151,22 +71,21 @@ DEF_GETTER(IAnimationBackend, AnimationBackend)
 DEF_GETTER(carc::ICryptoEngine, CryptoEngine)
 DEF_GETTER(ILuaManager,      LuaManager)
 DEF_GETTER(IJobSystem,       JobSystem)
-DEF_GETTER(IRpcServer,       RpcServer)
-DEF_GETTER(IEditorServer,    EditorServer)
 DEF_GETTER(ISandboxQuota,    SandboxQuota)
 DEF_GETTER(ITextureBudget,   TextureBudget)
+DEF_GETTER(ISaveManager,     SaveManager)
+DEF_GETTER(IResourceGenerationTracker, ResourceGenerationTracker)
+DEF_GETTER(ISteamBackend,    SteamBackend)
 
-void BackendRegistry::setRenderDevice(IRenderDevice& device)      { setService(&device); }
-void BackendRegistry::setAudioBackend(IAudioBackend& backend)      { setService(&backend); }
-void BackendRegistry::setPlatformBackend(IPlatformBackend& backend){ setService(&backend); }
+DEF_SETTER(IRenderDevice,    RenderDevice)
+DEF_SETTER(IAudioBackend,    AudioBackend)
+DEF_SETTER(IPlatformBackend, PlatformBackend)
 DEF_SETTER(IInputRouter,     InputRouter)
 DEF_SETTER(IMiniGameBackend, MiniGameBackend)
 DEF_SETTER(IAnimationBackend, AnimationBackend)
 DEF_SETTER(carc::ICryptoEngine, CryptoEngine)
 DEF_SETTER(ILuaManager,      LuaManager)
 DEF_SETTER(IJobSystem,       JobSystem)
-DEF_SETTER(IRpcServer,       RpcServer)
-DEF_SETTER(IEditorServer,    EditorServer)
 DEF_SETTER(ISandboxQuota,    SandboxQuota)
 DEF_SETTER(IVideoPlayer,     VideoPlayer)
 DEF_SETTER(ITextureManager,  TextureManager)
@@ -175,21 +94,12 @@ DEF_SETTER(IDebugManager,    DebugManager)
 DEF_SETTER(IAsyncLoader,     AsyncLoader)
 DEF_SETTER(ILayerManager,    LayerManager)
 DEF_SETTER(ITextureBudget,   TextureBudget)
+DEF_SETTER(ISaveManager,     SaveManager)
+DEF_SETTER(IResourceGenerationTracker, ResourceGenerationTracker)
+DEF_SETTER(ISteamBackend,    SteamBackend)
 
 #undef DEF_GETTER
 #undef DEF_SETTER
-
-// -- Null backend registration (headless mode) -------------------------------
-// Registers null stubs for render and platform backends so the engine
-// can operate without a GPU or window. Other backends (audio, input, etc.)
-// are left unregistered — they should be set separately or checked for null.
-void BackendRegistry::registerNullBackends() {
-    static NullRenderDevice  s_nullRenderer;
-    static NullPlatformBackend s_nullPlatform;
-    setService<IRenderDevice>(&s_nullRenderer);
-    setService<IPlatformBackend>(&s_nullPlatform);
-    printf("[BackendRegistry] Registered null backends (headless mode)\n");
-}
 
 // -- Device loss recovery listeners ---------------------------------------
 

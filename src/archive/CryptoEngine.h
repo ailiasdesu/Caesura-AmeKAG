@@ -13,8 +13,6 @@ namespace Caesura::carc {
 
 class CryptoEngine : public ICryptoEngine {
 public:
-    static CryptoEngine& instance();
-
     // --- ICryptoEngine interface (pointer+length) ---
     std::vector<uint8_t> encrypt(
         const uint8_t* plaintext, size_t plaintextLen,

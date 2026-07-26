@@ -20,12 +20,35 @@ TEST_CASE("BgfxRenderDevice::backbuffer dimensions default") {
 TEST_CASE("BgfxRenderDevice::shutdown without init is safe") {
     BgfxRenderDevice rd;
     rd.shutdown();
+
+    BgfxDeviceCore core;
+    core.shutdown();
+    core.shutdown();
 }
 
 TEST_CASE("BgfxRenderDevice::double shutdown is idempotent") {
     BgfxRenderDevice rd;
     rd.shutdown();
     rd.shutdown();
+}
+
+TEST_CASE("Bgfx frame entry points are safe outside an initialized lifetime") {
+    BgfxRenderDevice rd;
+    CHECK_NOTHROW(rd.beginFrame());
+    CHECK_NOTHROW(rd.endFrame());
+    CHECK_NOTHROW(rd.commit_frame());
+    CHECK_NOTHROW(rd.advanceFrame());
+
+    rd.shutdown();
+    CHECK_NOTHROW(rd.beginFrame());
+    CHECK_NOTHROW(rd.endFrame());
+    CHECK_NOTHROW(rd.commit_frame());
+    CHECK_NOTHROW(rd.advanceFrame());
+
+    BgfxDeviceCore core;
+    CHECK_NOTHROW(core.beginFrame());
+    CHECK_NOTHROW(core.endFrame());
+    CHECK_NOTHROW(core.commit_frame());
 }
 
 TEST_CASE("RTTManager::construct with device") {

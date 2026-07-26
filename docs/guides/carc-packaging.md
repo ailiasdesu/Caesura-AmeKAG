@@ -93,11 +93,15 @@ carc_pack <input_dir> <output.carc> [public.key] [private.key]
 引擎通过 `CarcAssetProvider` 处理 `carc://` 协议的资源请求：
 
 ```cpp
-// 引擎内部 (自动处理，无需手动编码)
-auto* provider = new CarcAssetProvider("game.carc");
-provider->loadKey("game.key.pub");
-AssetManager::instance().addProvider(provider);
+// 组合根内部（Engine 启动时自动处理，无需游戏代码手动注册）
+auto reader = std::make_unique<carc::CARCReader>();
+if (reader->open("game.carc")) {
+    assetManager.addProvider(
+        std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
+}
 ```
+
+`assetManager` 由 `Engine` 独占持有并注入组合根辅助函数，不通过全局单例访问。
 
 ## 安全注意事项
 

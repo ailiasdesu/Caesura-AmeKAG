@@ -3,7 +3,7 @@
 // ==================================================================
 // IU-4: Multi-light system (1 directional + up to 3 point lights)
 
-#include "EmbeddedShaders.h"
+#include "EmbeddedMiniGameShaders.h"
 
 namespace Caesura {
 

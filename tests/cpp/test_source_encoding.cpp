@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -46,6 +47,27 @@ size_t countOccurrences(std::string_view text, std::string_view needle) {
         pos += needle.size();
     }
     return count;
+}
+
+size_t findMatchingBrace(std::string_view text, size_t openingBrace) {
+    int depth = 0;
+    for (size_t i = openingBrace; i < text.size(); ++i) {
+        if (text[i] == '{') {
+            ++depth;
+        } else if (text[i] == '}' && --depth == 0) {
+            return i;
+        }
+    }
+    return std::string_view::npos;
+}
+
+bool containsInstanceAccessor(std::string_view text) {
+    std::string compact;
+    compact.reserve(text.size());
+    for (const unsigned char c : text) {
+        if (!std::isspace(c)) compact.push_back(static_cast<char>(c));
+    }
+    return compact.find("instance(") != std::string::npos;
 }
 
 bool isValidUtf8(std::string_view bytes) {
@@ -122,13 +144,19 @@ TEST_CASE("C++ source files are valid UTF-8") {
     CHECK(invalid.empty());
 }
 
-TEST_CASE("BackendRegistry implementation depends only on render interface") {
+TEST_CASE("BackendRegistry depends only on module interfaces") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());
 
     const std::string source = readFile(repoRoot / "src" / "di" / "BackendRegistry.cpp");
     CHECK(source.find("BgfxRenderDevice") == std::string::npos);
     CHECK(source.find("../render/BgfxRenderDevice.h") == std::string::npos);
+    CHECK(source.find("class NullRenderDevice") == std::string::npos);
+    CHECK(source.find("class NullPlatformBackend") == std::string::npos);
+
+    const std::string header = readFile(repoRoot / "src" / "di" / "BackendRegistry.h");
+    CHECK(header.find("../resource/ResourceHandle.h") == std::string::npos);
+    CHECK(header.find("GenerationTracker  m_generations") == std::string::npos);
 }
 
 TEST_CASE("Render device interface does not expose bgfx handle types") {
@@ -252,10 +280,32 @@ TEST_CASE("Install layout includes configured demo entry script") {
 
     const std::string config = readFile(repoRoot / "scripts" / "config.lua");
     CHECK(config.find("config.entry_script = \"../demo/entry.lua\"") != std::string::npos);
+    CHECK(config.find("config.thumbnail_quality = 90") != std::string::npos);
+    CHECK(config.find("config.thumbnail_format  = \"png\"") != std::string::npos);
 
     const std::string cmake = readFile(repoRoot / "CMakeLists.txt");
     CHECK(cmake.find("install(DIRECTORY scripts/ DESTINATION scripts)") != std::string::npos);
     CHECK(cmake.find("install(DIRECTORY demo/ DESTINATION demo)") != std::string::npos);
+}
+
+TEST_CASE("Engine input loop keeps wheel and save shortcuts reachable") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string source = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
+    const auto pointerBranch = source.find(
+        "if ((event.type == SDL_EVENT_MOUSE_MOTION ||");
+    const auto pointerOpen = source.find('{', pointerBranch);
+    const auto pointerClose = findMatchingBrace(source, pointerOpen);
+    const auto wheelBranch = source.find("if (event.type == SDL_EVENT_MOUSE_WHEEL");
+
+    REQUIRE(pointerBranch != std::string::npos);
+    REQUIRE(pointerOpen != std::string::npos);
+    REQUIRE(pointerClose != std::string::npos);
+    REQUIRE(wheelBranch != std::string::npos);
+    CHECK(wheelBranch > pointerClose);
+    CHECK(source.find("if (!event.key.repeat) quicksave();") != std::string::npos);
+    CHECK(source.find("if (!event.key.repeat) quickload();") != std::string::npos);
 }
 
 TEST_CASE("Install layout includes FFmpeg runtime DLLs when FFmpeg is bundled") {
@@ -279,6 +329,23 @@ TEST_CASE("Engine core avoids unused concrete adapter dependencies") {
     CHECK(source.find("../render/BgfxRenderDevice.h") == std::string::npos);
     CHECK(source.find("../script/bindings/RenderBinding.h") == std::string::npos);
     CHECK(source.find("../minigame/BgfxMiniGameBackend.h") == std::string::npos);
+    CHECK(source.find("../rpc/RpcServer.h") == std::string::npos);
+    CHECK(source.find("RpcServer::instance()") == std::string::npos);
+
+    const std::string miniGame = readFile(
+        repoRoot / "src" / "minigame" / "BgfxMiniGameBackend.cpp");
+    CHECK(miniGame.find("../render/EmbeddedShaders.h") == std::string::npos);
+    CHECK(miniGame.find("EmbeddedMiniGameShaders.h") != std::string::npos);
+
+    const std::string editor = readFile(repoRoot / "src" / "rpc" / "EditorServer.cpp");
+    CHECK(editor.find("../archive/CARCWriter.h") == std::string::npos);
+    CHECK(editor.find("carc::CARCWriter") == std::string::npos);
+    CHECK(editor.find("m_archiveWriterFactory") != std::string::npos);
+
+    const std::string textures = readFile(repoRoot / "src" / "render" / "TextureManager.cpp");
+    CHECK(textures.find("../di/TextureBudget.h") == std::string::npos);
+    CHECK(textures.find("TextureBudget::instance()") == std::string::npos);
+    CHECK(textures.find("getTextureBudget()") != std::string::npos);
 }
 
 TEST_CASE("Engine core delegates renderer runtime operations to render interface") {
@@ -291,6 +358,33 @@ TEST_CASE("Engine core delegates renderer runtime operations to render interface
     CHECK(source.find("BGFX_") == std::string::npos);
     CHECK(source.find("bgfx shutdown complete") == std::string::npos);
     CHECK(source.find("bgfx reinit") == std::string::npos);
+}
+
+TEST_CASE("Editor frame capture renders even when headless is also set") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string source = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
+    const auto captureStart = source.find("std::string Engine::captureFrameForRpc");
+    REQUIRE(captureStart != std::string::npos);
+    const auto captureOpen = source.find('{', captureStart);
+    REQUIRE(captureOpen != std::string::npos);
+    const auto captureClose = findMatchingBrace(source, captureOpen);
+    REQUIRE(captureClose != std::string::npos);
+
+    const std::string_view captureBody(source.data() + captureOpen,
+                                       captureClose - captureOpen + 1);
+    CHECK(captureBody.find("if (!m_config.headless || m_config.editorMode)") !=
+          std::string_view::npos);
+}
+
+TEST_CASE("Bgfx fallback does not shut down an initialization that failed") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    const std::string source = readFile(
+        repoRoot / "src" / "render" / "BgfxDeviceCore.cpp");
+    CHECK(countOccurrences(source, "bgfx::shutdown();") == 1);
 }
 
 TEST_CASE("Engine core delegates CARC asset provider registration") {
@@ -322,18 +416,166 @@ TEST_CASE("Engine core delegates default backend construction") {
     CHECK(source.find("std::make_unique<NullSteamBackend>") == std::string::npos);
     CHECK(source.find("Live2DBackend") == std::string::npos);
     CHECK(source.find("static_cast<Live2DBackend&>") == std::string::npos);
+
+    const std::string live2dSource = readFile(
+        repoRoot / "src" / "live2d" / "Live2D" / "Live2DBackend.cpp");
+    const std::string live2dHeader = readFile(
+        repoRoot / "src" / "live2d" / "Live2D" / "Live2DBackend.h");
+    const std::string miniGameSource = readFile(
+        repoRoot / "src" / "minigame" / "BgfxMiniGameBackend.cpp");
+    const std::string miniGameHeader = readFile(
+        repoRoot / "src" / "minigame" / "BgfxMiniGameBackend.h");
+    REQUIRE_FALSE(live2dSource.empty());
+    REQUIRE_FALSE(live2dHeader.empty());
+    REQUIRE_FALSE(miniGameSource.empty());
+    REQUIRE_FALSE(miniGameHeader.empty());
+    CHECK(live2dSource.find("g_live2d") == std::string::npos);
+    CHECK(live2dSource.find("registerLive2DBinding") == std::string::npos);
+    CHECK(live2dSource.find("#include <lua.h>") == std::string::npos);
+    CHECK(live2dHeader.find("Live2DBackend_setGlobal") == std::string::npos);
+    CHECK(live2dHeader.find("registerLive2DBinding") == std::string::npos);
+    CHECK(miniGameSource.find("g_mg") == std::string::npos);
+    CHECK(miniGameSource.find("registerMiniGameBinding") == std::string::npos);
+    CHECK(miniGameHeader.find("registerMiniGameBinding") == std::string::npos);
 }
 
-TEST_CASE("Engine core leaves save system initialization to storage binding") {
+TEST_CASE("Engine composition root owns save system initialization") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());
 
     const std::string engine = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
     CHECK(engine.find("../storage/SaveManager.h") == std::string::npos);
-    CHECK(engine.find("SaveManager::instance().init(\"saves/\")") == std::string::npos);
+    CHECK(engine.find("SaveManager::instance()") == std::string::npos);
+    CHECK(engine.find("m_saveManager->init(\"saves/\")") != std::string::npos);
+    CHECK(engine.find("setSaveManager(m_saveManager.get())") != std::string::npos);
+    CHECK(engine.find("setSteamBackend(") != std::string::npos);
 
-    const std::string binding = readFile(repoRoot / "src" / "storage" / "SaveBinding.cpp");
-    CHECK(binding.find("SaveManager::instance().init(\"saves/\")") != std::string::npos);
+    const std::string factories = readFile(
+        repoRoot / "src" / "entry" / "Engine_Backends.cpp");
+    CHECK(factories.find("std::make_unique<SaveManager>()") != std::string::npos);
+    CHECK(factories.find("std::make_unique<TextureBudget>()") != std::string::npos);
+    CHECK(factories.find("std::make_unique<TextureManager>()") != std::string::npos);
+    CHECK(factories.find("std::make_unique<AssetManager>()") != std::string::npos);
+    CHECK(factories.find("std::make_unique<AsyncLoader>(assetManager)") != std::string::npos);
+    CHECK(factories.find("std::make_unique<JobSystem>()") != std::string::npos);
+    CHECK(factories.find("std::make_unique<carc::CryptoEngine>()") != std::string::npos);
+
+    CHECK(engine.find("TextureBudget::instance()") == std::string::npos);
+    CHECK(engine.find("TextureManager::instance()") == std::string::npos);
+    CHECK(engine.find("AssetManager::instance()") == std::string::npos);
+    CHECK(engine.find("AsyncLoader::instance()") == std::string::npos);
+    CHECK(engine.find("JobSystem::instance()") == std::string::npos);
+    CHECK(engine.find("carc::CryptoEngine::instance()") == std::string::npos);
+
+    const std::string steamBinding = readFile(
+        repoRoot / "src" / "script" / "bindings" / "SteamBinding.cpp");
+    CHECK(steamBinding.find("static ISteamBackend*") == std::string::npos);
+    CHECK(steamBinding.find("getSteamBackend()") != std::string::npos);
+
+    const auto asyncShutdown = engine.find("m_asyncLoader->shutdown()");
+    const auto assetShutdown = engine.find("m_assetManager->shutdown()");
+    const auto jobShutdown = engine.find("m_jobSystem->shutdown()");
+    const auto unregisterAsync = engine.find("setAsyncLoader(nullptr)");
+    const auto unregisterJob = engine.find("setJobSystem(nullptr)");
+    REQUIRE(asyncShutdown != std::string::npos);
+    REQUIRE(assetShutdown != std::string::npos);
+    REQUIRE(jobShutdown != std::string::npos);
+    REQUIRE(unregisterAsync != std::string::npos);
+    REQUIRE(unregisterJob != std::string::npos);
+    CHECK(asyncShutdown < assetShutdown);
+    CHECK(assetShutdown < jobShutdown);
+    CHECK(jobShutdown < unregisterAsync);
+    CHECK(jobShutdown < unregisterJob);
+
+    const std::string engineHeader = readFile(
+        repoRoot / "src" / "entry" / "Engine.h");
+    const auto jobMember = engineHeader.find("std::unique_ptr<IJobSystem>");
+    const auto assetMember = engineHeader.find("std::unique_ptr<AssetManager>");
+    const auto asyncMember = engineHeader.find("std::unique_ptr<IAsyncLoader>");
+    REQUIRE(jobMember != std::string::npos);
+    REQUIRE(assetMember != std::string::npos);
+    REQUIRE(asyncMember != std::string::npos);
+    CHECK(jobMember < assetMember);
+    CHECK(assetMember < asyncMember);
+
+    const std::string binding = readFile(repoRoot / "src" / "script" / "bindings" / "SaveBinding.cpp");
+    CHECK(binding.find("SaveManager::instance()") == std::string::npos);
+    CHECK(binding.find("storage/api/ISaveManager.h") != std::string::npos);
+
+    const std::string asyncLoader = readFile(
+        repoRoot / "src" / "resource" / "AsyncLoader.cpp");
+    CHECK(asyncLoader.find("AssetManager::instance()") == std::string::npos);
+    CHECK(asyncLoader.find("m_assetManager->read(req.path)") != std::string::npos);
+
+    const std::string assetManager = readFile(
+        repoRoot / "src" / "resource" / "AssetManager.cpp");
+    CHECK(assetManager.find("AssetManager::instance()") == std::string::npos);
+
+    const std::string assetManagerHeader = readFile(
+        repoRoot / "src" / "resource" / "AssetManager.h");
+    CHECK(assetManagerHeader.find("static AssetManager& instance()") == std::string::npos);
+}
+
+TEST_CASE("Runtime services do not expose singleton accessors") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    struct RuntimeService {
+        const char* header;
+        const char* implementation;
+        const char* typeName;
+    };
+    const RuntimeService services[] = {
+        {"src/di/TextureBudget.h", "src/di/TextureBudget.cpp", "TextureBudget"},
+        {"src/render/TextureManager.h", "src/render/TextureManager.cpp", "TextureManager"},
+        {"src/render/LayerManager.h", "src/render/LayerManager.cpp", "LayerManager"},
+        {"src/di/SandboxQuota.h", "src/di/SandboxQuota.cpp", "SandboxQuotaService"},
+        {"src/job/JobSystem.h", "src/job/JobSystem.cpp", "JobSystem"},
+        {"src/resource/AssetManager.h", "src/resource/AssetManager.cpp", "AssetManager"},
+        {"src/resource/AsyncLoader.h", "src/resource/AsyncLoader.cpp", "AsyncLoader"},
+        {"src/script/vm/LuaManager.h", "src/script/vm/LuaManager.cpp", "LuaManager"},
+        {"src/debug/HotReload.h", "src/debug/HotReload.cpp", "HotReload"},
+        {"src/debug/DebugProtocol.h", "src/debug/DebugProtocol.cpp", "DebugProtocol"},
+        {"src/storage/SaveManager.h", "src/storage/SaveManager.cpp", "SaveManager"},
+        {"src/archive/CryptoEngine.h", "src/archive/CryptoEngine.cpp", "CryptoEngine"},
+    };
+
+    for (const auto& service : services) {
+        CAPTURE(service.typeName);
+        const std::string header = readFile(repoRoot / service.header);
+        const std::string implementation = readFile(repoRoot / service.implementation);
+        REQUIRE_FALSE(header.empty());
+        REQUIRE_FALSE(implementation.empty());
+        CHECK_FALSE(containsInstanceAccessor(header));
+        CHECK(implementation.find(std::string(service.typeName) + "::instance") ==
+              std::string::npos);
+    }
+
+    const std::string engine = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
+    const std::string engineHeader = readFile(repoRoot / "src" / "entry" / "Engine.h");
+    CHECK(engine.find("HotReload::instance()") == std::string::npos);
+    CHECK(engineHeader.find("std::unique_ptr<HotReload>") != std::string::npos);
+}
+
+TEST_CASE("TextRenderer owns FreeType without a global context") {
+    const auto repoRoot = findRepoRoot();
+    REQUIRE_FALSE(repoRoot.empty());
+
+    CHECK_FALSE(std::filesystem::exists(
+        repoRoot / "src" / "render" / "FreeTypeContext.h"));
+    CHECK_FALSE(std::filesystem::exists(
+        repoRoot / "src" / "render" / "FreeTypeContext.cpp"));
+
+    const std::string engine = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
+    const std::string engineHeader = readFile(repoRoot / "src" / "entry" / "Engine.h");
+    const std::string renderer = readFile(repoRoot / "src" / "render" / "TextRenderer.cpp");
+    const std::string modules = readFile(repoRoot / "cmake" / "CaesuraModules.cmake");
+
+    CHECK(engine.find("FreeTypeContext") == std::string::npos);
+    CHECK(engineHeader.find("freeTypeInitialized") == std::string::npos);
+    CHECK(renderer.find("FreeTypeContext") == std::string::npos);
+    CHECK(renderer.find("FT_Init_FreeType(&nextTtf->ftLib)") != std::string::npos);
+    CHECK(modules.find("FreeTypeContext.cpp") == std::string::npos);
 }
 
 TEST_CASE("Engine core delegates Lua registry service injection") {
@@ -357,6 +599,8 @@ TEST_CASE("Engine core delegates Lua registry service injection") {
     REQUIRE(std::filesystem::exists(helperPath));
 
     const std::string helper = readFile(helperPath);
+    CHECK(helper.find("TextureManager::instance()") == std::string::npos);
+    CHECK(helper.find("AsyncLoader::instance()") == std::string::npos);
     CHECK(countOccurrences(helper, "\"Caesura.RenderDevice\"") == 1);
     CHECK(countOccurrences(helper, "\"Caesura.AudioBackend\"") == 1);
     CHECK(countOccurrences(helper, "\"Caesura.PlatformBackend\"") == 1);

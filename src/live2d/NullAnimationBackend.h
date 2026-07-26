@@ -4,7 +4,10 @@
 
 namespace Caesura {
 
-// NullAnimationBackend — no-op animation backend with PNG fallback (R2.1)
+class IRenderDevice;
+class ITextureManager;
+
+// SDK-less animation backend with a static-image fallback.
 // When Cubism SDK is unavailable, loads PNG/JPG/BMP as static textures.
 class NullAnimationBackend : public IAnimationBackend {
 public:
@@ -32,10 +35,14 @@ private:
         float x = 0, y = 0;
         float scale = 1.0f;
         float opacity = 1.0f;
+        uint16_t width = 0;
+        uint16_t height = 0;
         bool visible = false;
     };
 
     std::unordered_map<int, StaticSprite> m_sprites;
+    ITextureManager* m_textureManager = nullptr;
+    IRenderDevice* m_renderDevice = nullptr;
     int m_nextHandle = 1;
     bool m_initialized = false;
 

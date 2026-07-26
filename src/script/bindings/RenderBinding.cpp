@@ -3,11 +3,12 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
-#include "../di/BackendRegistry.h"
-#include "../render/api/IRenderDevice.h"
-#include "../render/api/ITextureManager.h"
-#include "../render/api/IVideoPlayer.h"
-#include "../resource/api/IAsyncLoader.h"
+#include "../../di/BackendRegistry.h"
+#include "../../render/api/IRenderDevice.h"
+#include "../../render/api/ITextureManager.h"
+#include "../../render/api/IVideoPlayer.h"
+#include "../../resource/api/IAsyncLoader.h"
+#include "../../resource/api/IResourceGenerationTracker.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -583,7 +584,9 @@ static int lua_Render_invalidate_handles(lua_State* L) {
     int typeInt = (int)luaL_checkinteger(L, 1);
     if (typeInt < 0 || typeInt > 7) { lua_pushboolean(L, 0); return 1; }
     HandleType type = static_cast<HandleType>(typeInt);
-    BackendRegistry::instance().invalidateHandles(type);
+    auto* tracker = BackendRegistry::instance().getResourceGenerationTracker();
+    if (!tracker) { lua_pushboolean(L, 0); return 1; }
+    tracker->invalidate(type);
     printf("[Render] Handles invalidated: %s\n", handleTypeName(type));
     lua_pushboolean(L, 1);
     return 1;

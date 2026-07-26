@@ -1,5 +1,5 @@
 ﻿#include "SoLoudAudioEngine.h"
-#include "di/thread/ThreadAssert.h"
+#include "di/api/ThreadAssert.h"
 #include "di/BackendRegistry.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
@@ -8,6 +8,7 @@
 #include <memory>
 #include <algorithm>
 #include <list>
+#include <limits>
 namespace Caesura {
 
 
@@ -70,6 +71,7 @@ SoLoudAudioEngine::~SoLoudAudioEngine() {
 bool SoLoudAudioEngine::init(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (m_initialized) return true;
+    m_voiceCompletionsPending = 0;
 
     SoLoud::result res = m_soloud.init(
         SoLoud::Soloud::CLIP_ROUNDOFF,
@@ -117,15 +119,28 @@ bool SoLoudAudioEngine::init(){
 void SoLoudAudioEngine::shutdown(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
+
+    const std::size_t allocatedHandles = m_activeSE.size()
+        + m_retiringBGM.size()
+        + m_retiringVoice.size()
+        + (m_currentBGM != 0 ? 1u : 0u)
+        + (m_currentVoice != 0 ? 1u : 0u);
     m_soloud.stopAll();
     m_soloud.deinit();
     m_waveCache.clear();
     m_waveLRU.clear();
     m_waveLRUMap.clear();
     m_activeSE.clear();
+    m_retiringBGM.clear();
+    m_retiringVoice.clear();
     m_initialized = false;
     m_currentBGM = 0;
     m_currentVoice = 0;
+    m_voiceCompletionsPending = 0;
+    m_bgmBusHandle = 0;
+    m_voiceBusHandle = 0;
+    m_seBusHandle = 0;
+    releaseAudioHandles(allocatedHandles);
     printf("[Audio] SoLoud shut down.\n");
 }
 
@@ -133,12 +148,88 @@ void SoLoudAudioEngine::update(float /*deltaTime*/){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     m_soloud.update3dAudio();
+    cullFinishedHandles();
+}
 
-    // Cull finished SE handles
-    m_activeSE.erase(
-        std::remove_if(m_activeSE.begin(), m_activeSE.end(),
-            [this](SoLoud::handle h) { return !m_soloud.isValidVoiceHandle(h); }),
-        m_activeSE.end());
+void SoLoudAudioEngine::releaseAudioHandles(std::size_t count) {
+    auto& registry = BackendRegistry::instance();
+    for (std::size_t i = 0; i < count; ++i) {
+        registry.release("audio_handles");
+    }
+}
+
+void SoLoudAudioEngine::retireHandle(
+    SoLoud::handle handle,
+    float fadeTime,
+    std::vector<SoLoud::handle>& retiringHandles) {
+    if (handle == 0) return;
+
+    if (!m_soloud.isValidVoiceHandle(handle)) {
+        releaseAudioHandles(1);
+        return;
+    }
+
+    if (fadeTime <= 0.0f) {
+        m_soloud.stop(handle);
+        releaseAudioHandles(1);
+        return;
+    }
+
+    m_soloud.fadeVolume(handle, 0.0f, fadeTime);
+    m_soloud.scheduleStop(handle, fadeTime);
+    retiringHandles.push_back(handle);
+}
+
+void SoLoudAudioEngine::stopRetiringHandles(
+    std::vector<SoLoud::handle>& retiringHandles) {
+    const std::size_t handleCount = retiringHandles.size();
+    for (SoLoud::handle handle : retiringHandles) {
+        if (m_soloud.isValidVoiceHandle(handle)) {
+            m_soloud.stop(handle);
+        }
+    }
+    retiringHandles.clear();
+    releaseAudioHandles(handleCount);
+}
+
+void SoLoudAudioEngine::cullFinishedHandles() {
+    std::size_t released = 0;
+
+    if (m_currentBGM != 0 && !m_soloud.isValidVoiceHandle(m_currentBGM)) {
+        m_currentBGM = 0;
+        ++released;
+    }
+    if (m_currentVoice != 0 && !m_soloud.isValidVoiceHandle(m_currentVoice)) {
+        m_currentVoice = 0;
+        if (m_voiceCompletionsPending <
+            std::numeric_limits<unsigned int>::max()) {
+            ++m_voiceCompletionsPending;
+        }
+        ++released;
+    }
+
+    const auto firstFinished = std::remove_if(
+        m_activeSE.begin(), m_activeSE.end(),
+        [this, &released](SoLoud::handle handle) {
+            if (m_soloud.isValidVoiceHandle(handle)) return false;
+            ++released;
+            return true;
+        });
+    m_activeSE.erase(firstFinished, m_activeSE.end());
+
+    const auto cullRetiring = [this, &released](auto& retiringHandles) {
+        const auto firstInvalid = std::remove_if(
+            retiringHandles.begin(), retiringHandles.end(),
+            [this, &released](SoLoud::handle handle) {
+                if (m_soloud.isValidVoiceHandle(handle)) return false;
+                ++released;
+                return true;
+            });
+        retiringHandles.erase(firstInvalid, retiringHandles.end());
+    };
+    cullRetiring(m_retiringBGM);
+    cullRetiring(m_retiringVoice);
+    releaseAudioHandles(released);
 }
 
 // -- Global volume ---------------------------------------------------------
@@ -197,32 +288,38 @@ unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime)
     auto wav = loadWave(file);
     if (!wav) return 0;
 
-    // Cross-fade out the current BGM if playing
-    if (m_currentBGM != 0 && m_soloud.isValidVoiceHandle(m_currentBGM)) {
-        m_soloud.fadeVolume(m_currentBGM, 0.0f, fadeTime);
-        m_soloud.scheduleStop(m_currentBGM, fadeTime);
-    }
+    cullFinishedHandles();
+    auto& registry = BackendRegistry::instance();
+    if (!registry.tryAlloc("audio_handles")) return 0;
 
     // Start new BGM at volume 0, then fade in
     SoLoud::handle h = m_bgmBus.play(*wav, 0.0f);
-    if (h == 0) return 0;
+    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+        registry.release("audio_handles");
+        return 0;
+    }
+
+    // Retire the previous BGM only after replacement creation succeeds. Its
+    // quota remains held until the physical SoLoud voice actually stops.
+    if (m_currentBGM != 0) {
+        retireHandle(m_currentBGM, fadeTime, m_retiringBGM);
+    }
 
     m_soloud.fadeVolume(h, 1.0f, fadeTime);
     m_currentBGM = h;
 
     printf("[Audio] BGM: %s (handle %u, fade %.1fs)\n", file.c_str(), h, fadeTime);
-    BackendRegistry::instance().tryAlloc("audio_handles");
     return static_cast<unsigned int>(h);
 }
 
 void SoLoudAudioEngine::stopBGM(float fadeTime) {
-    if (!m_initialized || m_currentBGM == 0) return;
-    if (m_soloud.isValidVoiceHandle(m_currentBGM)) {
-        m_soloud.fadeVolume(m_currentBGM, 0.0f, fadeTime);
-        m_soloud.scheduleStop(m_currentBGM, fadeTime);
-    }
+    if (!m_initialized) return;
+    stopRetiringHandles(m_retiringBGM);
+    if (m_currentBGM == 0) return;
+
+    const SoLoud::handle current = m_currentBGM;
     m_currentBGM = 0;
-    BackendRegistry::instance().release("audio_handles");
+    retireHandle(current, fadeTime, m_retiringBGM);
 }
 
 // -- VOICE -----------------------------------------------------------------
@@ -234,38 +331,44 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
     auto wav = loadWave(file);
     if (!wav) return 0;
 
-    if (m_currentVoice != 0 && m_soloud.isValidVoiceHandle(m_currentVoice)) {
-        m_soloud.fadeVolume(m_currentVoice, 0.0f, 0.05f);
-        m_soloud.scheduleStop(m_currentVoice, 0.05f);
-    }
+    cullFinishedHandles();
+    auto& registry = BackendRegistry::instance();
+    if (!registry.tryAlloc("audio_handles")) return 0;
 
     SoLoud::handle h = m_voiceBus.play(*wav);
-    if (h == 0) return 0;
+    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+        registry.release("audio_handles");
+        return 0;
+    }
+
+    if (m_currentVoice != 0) {
+        retireHandle(m_currentVoice, 0.05f, m_retiringVoice);
+    }
 
     m_currentVoice = h;
     printf("[Audio] Voice: %s (handle %u)\n", file.c_str(), h);
-    BackendRegistry::instance().tryAlloc("audio_handles");
     return static_cast<unsigned int>(h);
 }
 
 void SoLoudAudioEngine::stopVoice(){
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized || m_currentVoice == 0) return;
-    if (m_soloud.isValidVoiceHandle(m_currentVoice)) {
-        m_soloud.fadeVolume(m_currentVoice, 0.0f, 0.05f);
-        m_soloud.scheduleStop(m_currentVoice, 0.05f);
-    }
+    if (!m_initialized) return;
+    stopRetiringHandles(m_retiringVoice);
+    if (m_currentVoice == 0) return;
+
+    const SoLoud::handle current = m_currentVoice;
     m_currentVoice = 0;
-    BackendRegistry::instance().release("audio_handles");
+    retireHandle(current, 0.05f, m_retiringVoice);
 }
 
 // -- SE --------------------------------------------------------------------
 // SE handles are tracked in m_activeSE for mass-stop via stopSE().
-// Cleanup: dead handles are culled on each playSE/playSE3D call.
+// Dead handles are culled during update, state queries, and before playback.
 
 void SoLoudAudioEngine::stopSE(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
+    const std::size_t handleCount = m_activeSE.size();
     for (auto h : m_activeSE) {
         if (m_soloud.isValidVoiceHandle(h)) {
             m_soloud.stop(h);
@@ -273,7 +376,7 @@ void SoLoudAudioEngine::stopSE(){
     }
     m_activeSE.clear();
     printf("[Audio] SE: all sound effects stopped.\n");
-    BackendRegistry::instance().release("audio_handles");
+    releaseAudioHandles(handleCount);
 }
 
 unsigned int SoLoudAudioEngine::playSE(const std::string& file){
@@ -282,18 +385,17 @@ unsigned int SoLoudAudioEngine::playSE(const std::string& file){
     auto wav = loadWave(file);
     if (!wav) return 0;
 
-    // Cull dead handles before adding new one
-    m_activeSE.erase(
-        std::remove_if(m_activeSE.begin(), m_activeSE.end(),
-            [this](SoLoud::handle h) { return !m_soloud.isValidVoiceHandle(h); }),
-        m_activeSE.end());
+    cullFinishedHandles();
+    auto& registry = BackendRegistry::instance();
+    if (!registry.tryAlloc("audio_handles")) return 0;
 
     SoLoud::handle h = m_seBus.play(*wav);
-    if (h != 0) {
-        m_activeSE.push_back(h);
+    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+        registry.release("audio_handles");
+        return 0;
     }
+    m_activeSE.push_back(h);
     printf("[Audio] SE: %s (handle %u)\n", file.c_str(), h);
-    BackendRegistry::instance().tryAlloc("audio_handles");
     return static_cast<unsigned int>(h);
 }
 
@@ -304,19 +406,18 @@ unsigned int SoLoudAudioEngine::playSE3D(const std::string& file,
     auto wav = loadWave(file);
     if (!wav) return 0;
 
-    // Cull dead handles
-    m_activeSE.erase(
-        std::remove_if(m_activeSE.begin(), m_activeSE.end(),
-            [this](SoLoud::handle h) { return !m_soloud.isValidVoiceHandle(h); }),
-        m_activeSE.end());
+    cullFinishedHandles();
+    auto& registry = BackendRegistry::instance();
+    if (!registry.tryAlloc("audio_handles")) return 0;
 
     SoLoud::handle h = m_seBus.play3d(*wav, x, y, z);
-    if (h != 0) {
-        m_activeSE.push_back(h);
+    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+        registry.release("audio_handles");
+        return 0;
     }
+    m_activeSE.push_back(h);
     printf("[Audio] SE 3D: %s at (%.1f,%.1f,%.1f) h=%u\n",
            file.c_str(), x, y, z, h);
-    BackendRegistry::instance().tryAlloc("audio_handles");
     return static_cast<unsigned int>(h);
 }
 
@@ -333,22 +434,27 @@ void SoLoudAudioEngine::update3dListener(float posX, float posY, float posZ,
 
 // -- State query -----------------------------------------------------------
 
+unsigned int SoLoudAudioEngine::consumeVoiceCompletions() {
+    const unsigned int completed = m_voiceCompletionsPending;
+    m_voiceCompletionsPending = 0;
+    return completed;
+}
+
 bool SoLoudAudioEngine::isVoicePlaying() {
-    return m_initialized && m_currentVoice != 0
-        && m_soloud.isValidVoiceHandle(m_currentVoice);
+    if (!m_initialized) return false;
+    cullFinishedHandles();
+    return m_currentVoice != 0;
 }
 
 bool SoLoudAudioEngine::isBGMPlaying() {
-    return m_initialized && m_currentBGM != 0
-        && m_soloud.isValidVoiceHandle(m_currentBGM);
+    if (!m_initialized) return false;
+    cullFinishedHandles();
+    return m_currentBGM != 0;
 }
 
 bool SoLoudAudioEngine::isSEPlaying() {
     if (!m_initialized) return false;
-    m_activeSE.erase(
-        std::remove_if(m_activeSE.begin(), m_activeSE.end(),
-            [this](SoLoud::handle h) { return !m_soloud.isValidVoiceHandle(h); }),
-        m_activeSE.end());
+    cullFinishedHandles();
     return !m_activeSE.empty();
 }
 
@@ -416,15 +522,14 @@ float SoLoudAudioEngine::getSEVolume(unsigned int handle) {
 void SoLoudAudioEngine::stopSEHandle(unsigned int handle){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized || handle == 0) return;
-    m_soloud.stop(handle);
-    // Remove from active SE tracking
     auto it = std::find(m_activeSE.begin(), m_activeSE.end(), handle);
-    if (it != m_activeSE.end()) m_activeSE.erase(it);
+    if (it == m_activeSE.end()) return;
+
+    if (m_soloud.isValidVoiceHandle(handle)) {
+        m_soloud.stop(handle);
+    }
+    m_activeSE.erase(it);
+    BackendRegistry::instance().release("audio_handles");
 }
 
 } // namespace Caesura
-
-
-
-
-

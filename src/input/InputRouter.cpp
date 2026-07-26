@@ -3,6 +3,14 @@
 
 namespace Caesura {
 
+namespace {
+
+bool isValidFocus(InputFocus focus) {
+    return focus == InputFocus::KAG || focus == InputFocus::GAME;
+}
+
+} // namespace
+
 const char* inputFocusToString(InputFocus focus) {
     switch (focus) {
         case InputFocus::KAG:  return "KAG";
@@ -31,14 +39,13 @@ void InputRouter::processEvent(const SDL_Event& event) {
             // In KAG mode, mouse clicks and keyboard advance the story
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_KEY_DOWN) {
+                // Publish before callbacks so a handler can consume this input.
+                m_kagClickPending = true;
 
-                // Forward to KAG callbacks (typically resumes Lua coroutine)
                 for (auto& cb : m_kagCallbacks) {
+                    if (m_focus != InputFocus::KAG) break;
                     cb(event);
                 }
-
-                // Mark a click as pending for wait_click() consumption
-                m_kagClickPending = true;
             }
             break;
         }
@@ -47,6 +54,7 @@ void InputRouter::processEvent(const SDL_Event& event) {
             // KAG callbacks are NEVER invoked here   this is the
             // boundary that prevents story-advancement leaks.
             for (auto& cb : m_gameCallbacks) {
+                if (m_focus != InputFocus::GAME) break;
                 cb(event);
             }
             break;
@@ -60,9 +68,8 @@ void InputRouter::processEvent(const SDL_Event& event) {
 //
 //  When switching:
 //      GAME: Drains all pending KAG click state.
-//            Any in-flight KAG coroutine resume from a click that
-//            happened BEFORE this call has already been processed
-//            (SDL events are synchronous). Future clicks route to GAME.
+//            This includes the event currently being dispatched when a
+//            KAG callback changes focus. Future events route to GAME.
 //
 //      KAG:  Resets the click-pending flag to false.
 //            The GAME-mode callbacks have had their last event.
@@ -73,6 +80,10 @@ void InputRouter::processEvent(const SDL_Event& event) {
 // -------------------------------------------------------------------------------
 
 void InputRouter::setFocus(InputFocus focus) {
+    if (!isValidFocus(focus)) {
+        printf("[InputRouter] Ignoring invalid focus: %d\n", static_cast<int>(focus));
+        return;
+    }
     if (m_focus == focus) return;
 
     InputFocus oldFocus = m_focus;
@@ -81,8 +92,7 @@ void InputRouter::setFocus(InputFocus focus) {
     // -- Boundary hardening ----------------------------------------------
     // When switching TO GAME, forcefully drain any pending KAG click state.
     // This guarantees no phantom click leaks through when focus returns
-    // to KAG later. The click that triggered the switch (if any) was
-    // already consumed by the KAG callback before setFocus was called.
+    // to KAG later, including a click that triggered the switch itself.
     //
     // When switching TO KAG, also drain the flag. This ensures a clean
     // slate   the next user click sets the flag, rather than a stale
@@ -96,6 +106,7 @@ void InputRouter::setFocus(InputFocus focus) {
 
     // Notify focus change callbacks (e.g. for UI state updates)
     for (auto& cb : m_focusChangeCallbacks) {
+        if (m_focus != focus) break;
         cb(focus);
     }
 }

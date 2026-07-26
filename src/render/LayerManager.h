@@ -47,7 +47,7 @@ struct Layer {
 
 class LayerManager : public ILayerManager, public IDeviceLostListener {
 public:
-    static LayerManager& instance();
+    explicit LayerManager(bool gpuEnabled = false) : m_gpuEnabled(gpuEnabled) {}
 
     LayerManager(const LayerManager&) = delete;
     LayerManager& operator=(const LayerManager&) = delete;
@@ -85,12 +85,11 @@ public:
     void onDeviceRestored() override;
 
 private:
-    LayerManager() = default;
-
     bool shouldUseScissor(uint16_t screenW, uint16_t screenH) const;
 
     Layer m_layers[COUNT];
     bool  m_initialized = false;
+    bool  m_gpuEnabled = false;
 
     bgfx::UniformHandle m_texUniform = BGFX_INVALID_HANDLE;
 

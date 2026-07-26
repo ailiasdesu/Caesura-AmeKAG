@@ -9,13 +9,13 @@
 
 namespace Caesura {
 
+class AssetManager;
+
 struct AsyncLoadRequest {
     int         id = 0;
     std::string path;
     std::string type;
 };
-
-static constexpr uint32_t CAESURA_EVENT_ASYNC_LOAD = 0x8000;
 
 // ============================================================================
 // AsyncLoader -- implements IAsyncLoader
@@ -26,8 +26,8 @@ public:
     // Backward-compat alias (CompletedLoad now in IAsyncLoader)
     using CompletedLoad = Caesura::CompletedLoad;
 public:
-    static AsyncLoader& instance();
-
+    explicit AsyncLoader(AssetManager* assetManager);
+    ~AsyncLoader() override;
     AsyncLoader(const AsyncLoader&) = delete;
     AsyncLoader& operator=(const AsyncLoader&) = delete;
 
@@ -42,13 +42,11 @@ public:
     bool isRunning()   const override { return m_running; }
 
 private:
-    AsyncLoader() = default;
-    ~AsyncLoader() override;
-
-    static CompletedLoad processRequest(const AsyncLoadRequest& req);
+    CompletedLoad processRequest(const AsyncLoadRequest& req);
     void postCompleteEvent(int requestId, const std::string& path,
                            const std::vector<uint8_t>& data, bool success);
 
+    AssetManager* m_assetManager = nullptr;
     std::atomic<bool> m_running{false};
     std::atomic<int>  m_pendingCount{0};
     std::atomic<int>  m_nextId{1};

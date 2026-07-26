@@ -12,72 +12,57 @@
 #include <cstdint>
 #include <functional>
 #include <unordered_map>
-#include "../external/json/nlohmann_json.hpp"
 #include "api/ISaveManager.h"
 
 struct lua_State;
 
 namespace Caesura {
 
-using json = nlohmann::json;
-
-struct SaveMeta {
-    int         slot         = 0;
-    uint64_t    timestamp    = 0;
-    std::string sceneName;
-    std::string thumbnail;
-    int         tokenIndex    = 1;
-    int         schemaVersion = 1;
-};
-
-using MigrationFn = std::function<json(json)>;
-
 class SaveManager : public ISaveManager {
 public:
-    static SaveManager& instance();
+    SaveManager();
+    ~SaveManager() override;
     static const char* ENGINE_VERSION;
 
     SaveManager(const SaveManager&) = delete;
     SaveManager& operator=(const SaveManager&) = delete;
 
-    void init(const std::string& saveDir);
+    void init(const std::string& saveDir) override;
 
     // Save a structured JSON object (engine wraps it with metadata)
     bool save(int slot, const json& gameData,
               const std::string& sceneName,
               int tokenIndex,
-              const std::string& thumbnailPng = "");
+              const std::string& thumbnailPng = "") override;
 
     // Load: returns the "data" sub-object, or empty json on failure
-    json load(int slot, SaveMeta* outMeta = nullptr);
+    json load(int slot, SaveMeta* outMeta = nullptr) override;
 
-    std::vector<SaveMeta> listSaves();
-    bool slotExists(int slot);
-    bool deleteSlot(int slot);
+    std::vector<SaveMeta> listSaves() override;
+    bool slotExists(int slot) override;
+    bool deleteSlot(int slot) override;
 
     // Migration
-    void registerMigration(int fromVersion, int toVersion, MigrationFn fn);
+    void registerMigration(int fromVersion, int toVersion, MigrationFn fn) override;
     json migrate(const json& data, int fromVersion);
 
-    int currentSchemaVersion() const { return m_currentSchemaVersion; }
+    int currentSchemaVersion() const override { return m_currentSchemaVersion; }
 
     // Encryption (AES-256-GCM via CryptoEngine)
     static constexpr uint32_t ENCRYPT_MAGIC = 0x53454143;
-    void setEncryptionKey(const uint8_t key[32]);
-    void clearEncryptionKey();
-    bool isEncryptionEnabled() const { return m_keySet; }
+    void setEncryptionKey(const uint8_t key[32]) override;
+    void clearEncryptionKey() override;
+    bool isEncryptionEnabled() const override { return m_keySet; }
 
     // Thumbnail capture (SU-4 stub — bgfx readback deferred)
 
     // Pluggable storage provider (SU-6) — default: LocalFileSaveProvider
-    void setSaveProvider(std::unique_ptr<class ISaveProvider> provider);
-    ISaveProvider* getSaveProvider() const { return m_saveProvider.get(); }
+    void setSaveProvider(std::unique_ptr<class ISaveProvider> provider) override;
+    ISaveProvider* getSaveProvider() const override { return m_saveProvider.get(); }
 
-    std::string captureThumbnailPNG(int width = 320, int height = 180);
+    std::string captureThumbnailPNG(int width = 320, int height = 180) override;
 
 private:
-    SaveManager() = default;
-
     std::string m_saveDir;
     int m_currentSchemaVersion = 1;
         bool m_keySet = false;

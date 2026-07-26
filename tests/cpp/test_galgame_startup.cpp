@@ -4,6 +4,7 @@
 #include "script/vm/LuaManager.h"
 
 #include <string>
+#include <utility>
 
 extern "C" {
 #include <lua.h>
@@ -60,7 +61,7 @@ TEST_CASE("Galgame startup smoke: headless loads config, KAG init, and configure
     EngineConfig cfg;
     cfg.headless = true;
 
-    Engine engine(cfg);
+    Engine engine(std::move(cfg));
     REQUIRE(engine.init());
 
     lua_State* L = engine.lua().state();

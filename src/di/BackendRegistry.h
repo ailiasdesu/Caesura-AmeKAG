@@ -1,5 +1,4 @@
 #pragma once
-#include "../resource/ResourceHandle.h"
 #include "api/IDeviceLostListener.h"
 #include <typeindex>
 #include <unordered_map>
@@ -25,10 +24,11 @@ class IMiniGameBackend;
 class IAnimationBackend;
 class ILuaManager;
 class IJobSystem;
-class IRpcServer;
-class IEditorServer;
 class ISandboxQuota;
 class ITextureBudget;
+class ISaveManager;
+class IResourceGenerationTracker;
+class ISteamBackend;
 namespace carc { class ICryptoEngine; }
 
 class BackendRegistry {
@@ -48,17 +48,15 @@ public:
     }
 
     // -- Setters (out-of-line — need complete types in .cpp) --
-    void setRenderDevice(IRenderDevice& device);
-    void setAudioBackend(IAudioBackend& backend);
-    void setPlatformBackend(IPlatformBackend& backend);
+    void setRenderDevice(IRenderDevice* device);
+    void setAudioBackend(IAudioBackend* backend);
+    void setPlatformBackend(IPlatformBackend* backend);
     void setInputRouter(IInputRouter* router);
     void setMiniGameBackend(IMiniGameBackend* backend);
     void setAnimationBackend(IAnimationBackend* be);
     void setCryptoEngine(carc::ICryptoEngine* engine);
     void setLuaManager(ILuaManager* mgr);
     void setJobSystem(IJobSystem* js);
-    void setRpcServer(IRpcServer* rpc);
-    void setEditorServer(IEditorServer* es);
     void setSandboxQuota(ISandboxQuota* sq);
     void setVideoPlayer(IVideoPlayer* player);
     void setTextureManager(ITextureManager* mgr);
@@ -67,11 +65,14 @@ public:
     void setAsyncLoader(IAsyncLoader* al);
     void setLayerManager(ILayerManager* mgr);
     void setTextureBudget(ITextureBudget* tb);
+    void setSaveManager(ISaveManager* manager);
+    void setResourceGenerationTracker(IResourceGenerationTracker* tracker);
+    void setSteamBackend(ISteamBackend* backend);
 
     void setLuaState(lua_State* L) { m_luaState = L; }
     lua_State* getLuaState() { return m_luaState; }
 
-    // -- SandboxQuota wrappers (out-of-line — need SandboxQuota type) --
+    // -- SandboxQuota wrappers (delegate to the registered interface) --
     bool tryAlloc(const char* kind);
     void release(const char* kind);
 
@@ -91,12 +92,11 @@ public:
     carc::ICryptoEngine* getCryptoEngine();
     ILuaManager*      getLuaManager();
     IJobSystem*       getJobSystem();
-    IRpcServer*       getRpcServer();
-    IEditorServer*    getEditorServer();
     ISandboxQuota*    getSandboxQuota();
     ITextureBudget*   getTextureBudget();
-
-    void registerNullBackends();
+    ISaveManager*     getSaveManager();
+    IResourceGenerationTracker* getResourceGenerationTracker();
+    ISteamBackend*    getSteamBackend();
 
     // -- Factories --
     IAudioBackend*    createAudioBackend(const char* name);
@@ -118,18 +118,11 @@ public:
     static IMiniGameBackend* getMiniGameBackendFromLua(lua_State* L);
     static IVideoPlayer*     getVideoPlayerFromLua(lua_State* L);
 
-    // -- ResourceHandle / Generation tracking --
-    GenerationTracker& generations() { return m_generations; }
-    bool isValidHandle(const ResourceHandle& h) const { return h.id != 0 && m_generations.isCurrent(h); }
-    void invalidateHandles(HandleType type) { m_generations.invalidate(type); }
-    ResourceHandle makeHandle(HandleType type, uint32_t id) { return m_generations.makeHandle(type, id); }
-
 private:
     BackendRegistry() = default;
     std::unordered_map<std::type_index, void*> m_services;
     std::vector<IDeviceLostListener*> m_deviceLostListeners;
     lua_State*         m_luaState    = nullptr;
-    GenerationTracker  m_generations;
 };
 
 } // namespace Caesura

@@ -14,11 +14,11 @@
 // UnifiedBinding.h/.cpp are retained for reference only - they are NOT compiled into the engine.
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "../bindings/VFXBinding.h"
-#include "../storage/SaveBinding.h"
+#include "../bindings/SaveBinding.h"
 #include "../bindings/SteamBinding.h"
 #include "../state/GameState.h"
-#include "../di/BackendRegistry.h"
-#include "../di/thread/ThreadAssert.h"
+#include "../../di/BackendRegistry.h"
+#include "../../di/api/ThreadAssert.h"
 #include <cstdio>
 #include <limits>
 
@@ -28,12 +28,6 @@ namespace {
 char kLuaManagerRegistryKey;
 constexpr int kInstructionHookInterval = 1000;
 }
-
-LuaManager& LuaManager::instance() {
-    static LuaManager mgr;
-    return mgr;
-}
-
 
 // ===========================================================================
 //  Track 3: Instruction-count hook for CPU budget enforcement

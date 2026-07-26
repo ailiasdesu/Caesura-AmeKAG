@@ -7,10 +7,9 @@ extern "C" {
 #include "../di/BackendRegistry.h"
 #include "../input/api/IInputRouter.h"
 #include "../minigame/api/IMiniGameBackend.h"
-#include "../render/TextureManager.h"
 #include "../render/api/ITextureManager.h"
 #include "../render/api/IVideoPlayer.h"
-#include "../resource/AsyncLoader.h"
+#include "../render/api/IParticleSystem.h"
 #include "../resource/api/IAsyncLoader.h"
 
 namespace Caesura {
@@ -26,7 +25,10 @@ void setRegistryLightUserData(lua_State* L, const char* key, void* value) {
 
 void registerEngineLuaRegistryServices(lua_State* L,
                                        IInputRouter* inputRouter,
-                                       IVideoPlayer* videoPlayer) {
+                                       IVideoPlayer* videoPlayer,
+                                       IParticleSystem* particleSystem,
+                                       ITextureManager* textureManager,
+                                       IAsyncLoader* asyncLoader) {
     if (!L) return;
 
     auto& registry = BackendRegistry::instance();
@@ -35,10 +37,9 @@ void registerEngineLuaRegistryServices(lua_State* L,
     setRegistryLightUserData(L, "Caesura.PlatformBackend", registry.getPlatformBackend());
     setRegistryLightUserData(L, "Caesura.InputRouter", inputRouter);
     setRegistryLightUserData(L, "Caesura.VideoPlayer", videoPlayer);
-    setRegistryLightUserData(L, "Caesura.TextureManager",
-                             static_cast<ITextureManager*>(&TextureManager::instance()));
-    setRegistryLightUserData(L, "Caesura.AsyncLoader",
-                             static_cast<IAsyncLoader*>(&AsyncLoader::instance()));
+    setRegistryLightUserData(L, "Caesura.ParticleSystem", particleSystem);
+    setRegistryLightUserData(L, "Caesura.TextureManager", textureManager);
+    setRegistryLightUserData(L, "Caesura.AsyncLoader", asyncLoader);
     setRegistryLightUserData(L, "Caesura.DebugManager",
                              static_cast<IDebugManager*>(&DebugManager::instance()));
 }

@@ -4,7 +4,7 @@
 // Phong lighting: 1 directional + up to 3 point lights + PBR params
 // ==================================================================
 
-#include "EmbeddedShaders.h"
+#include "EmbeddedMiniGameShaders.h"
 
 namespace Caesura {
 

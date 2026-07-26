@@ -55,6 +55,7 @@ public:
     void flushWaveCache() override;
 
     // -- State query -------------------------------------------------------
+    unsigned int consumeVoiceCompletions() override;
     bool isVoicePlaying() override;
     bool isBGMPlaying() override;
     bool isSEPlaying() override;
@@ -70,4 +71,3 @@ public:
 };
 
 } // namespace Caesura
-

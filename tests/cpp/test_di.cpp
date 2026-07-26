@@ -8,12 +8,12 @@
 #include "platform/api/IPlatformBackend.h"
 #include "live2d/api/IAnimationBackend.h"
 #include "input/api/IInputRouter.h"
-#include "rpc/api/IRpcServer.h"
-#include "rpc/api/IEditorServer.h"
 #include "render/api/IParticleSystem.h"
+#include "storage/api/ISaveManager.h"
 #include "debug/api/IDebugManager.h"
 #include "resource/api/IAsyncLoader.h"
 #include "render/api/ILayerManager.h"
+#include "steam/api/ISteamBackend.h"
 
 using namespace Caesura;
 
@@ -54,15 +54,39 @@ TEST_CASE("DI: BackendRegistry setSandboxQuota/getSandboxQuota") {
     CHECK(reg.getSandboxQuota() == nullptr);
 }
 
-// -- TextureBudget singleton access -------------------------------------
+TEST_CASE("DI: BackendRegistry quota wrappers delegate to registered service") {
+    class CountingQuota final : public ISandboxQuota {
+    public:
+        void setLuaState(lua_State*) override {}
+        bool tryAlloc(const char*) override { ++tryCalls; return false; }
+        void release(const char*) override { ++releaseCalls; }
+        int count(const char*) override { return 0; }
+        int maxLimit(const char*) override { return 0; }
 
-TEST_CASE("DI: TextureBudget singleton instance is accessible") {
-    auto& tb = TextureBudget::instance();
-    CHECK(&tb != nullptr);
+        int tryCalls = 0;
+        int releaseCalls = 0;
+    } quota;
+
+    auto& reg = BackendRegistry::instance();
+    auto* previous = reg.getSandboxQuota();
+    reg.setSandboxQuota(&quota);
+    CHECK_FALSE(reg.tryAlloc("textures"));
+    reg.release("textures");
+    CHECK(quota.tryCalls == 1);
+    CHECK(quota.releaseCalls == 1);
+    reg.setSandboxQuota(previous);
+}
+
+// -- TextureBudget instance behavior ------------------------------------
+
+TEST_CASE("DI: TextureBudget instance is accessible through its interface") {
+    TextureBudget tb;
+    ITextureBudget* budget = &tb;
+    CHECK(budget->getBudgetMB() > 0);
 }
 
 TEST_CASE("DI: TextureBudget default tier is 1") {
-    auto& tb = TextureBudget::instance();
+    TextureBudget tb;
     // Default tier after detect() is tier 1 (256 MB)
     // detect() auto-senses system RAM and picks an appropriate tier.
     // The exact value is machine-dependent, but it should be in [0, 5].
@@ -73,44 +97,31 @@ TEST_CASE("DI: TextureBudget default tier is 1") {
 }
 
 TEST_CASE("DI: TextureBudget setTier/getTier round-trip") {
-    auto& tb = TextureBudget::instance();
-    // Save state to restore after test
-    int oldTier = tb.getTier();
-    bool oldAuto = tb.isAutoDetected();
+    TextureBudget tb;
 
     tb.setTier(3);
     CHECK(tb.getTier() == 3);
     CHECK(tb.isAutoDetected() == false);
-
-    // Restore
-    tb.setTier(oldTier);
-    // Note: isAutoDetected cannot be restored (it's set to false by setTier);
-    // call detect() to re-enable auto-detection if it was on before
-    if (oldAuto) tb.detect();
 }
 
 TEST_CASE("DI: TextureBudget getBudgetMB returns positive value") {
-    auto& tb = TextureBudget::instance();
-    int oldTier = tb.getTier();
+    TextureBudget tb;
     CHECK(tb.getBudgetMB() > 0);
-    tb.setTier(oldTier);
 }
 
 TEST_CASE("DI: TextureBudget tier names are non-empty") {
-    auto& tb = TextureBudget::instance();
-    int oldTier = tb.getTier();
+    TextureBudget tb;
     for (int t = 0; t <= 5; ++t) {
         tb.setTier(t);
         CHECK(tb.getTierName() != nullptr);
     }
-    tb.setTier(oldTier);
 }
 
-// -- SandboxQuota namespace interface -----------------------------------
+// -- SandboxQuota low-level functions -----------------------------------
 
 TEST_CASE("DI: SandboxQuota namespace is accessible") {
-    // SandboxQuota is a namespace with static functions,
-    // not a singleton class. Verify compilation.
+    // The namespace remains the low-level Lua table implementation used by
+    // the Engine-owned SandboxQuotaService.
     CHECK(true);
 }
 
@@ -122,9 +133,9 @@ TEST_CASE("DI: BackendRegistry setPlatformBackend/getPlatformBackend") {
     auto& reg = BackendRegistry::instance();
     IPlatformBackend* sentinel = reinterpret_cast<IPlatformBackend*>(0x1);
     IPlatformBackend* old = reg.getPlatformBackend();
-    reg.setPlatformBackend(*sentinel);
+    reg.setPlatformBackend(sentinel);
     CHECK(reg.getPlatformBackend() == sentinel);
-    if (old) reg.setPlatformBackend(*old);
+    reg.setPlatformBackend(old);
 }
 
 TEST_CASE("DI: BackendRegistry setInputRouter/getInputRouter") {
@@ -136,24 +147,6 @@ TEST_CASE("DI: BackendRegistry setInputRouter/getInputRouter") {
     CHECK(reg.getInputRouter() == nullptr);
 }
 
-TEST_CASE("DI: BackendRegistry setRpcServer/getRpcServer") {
-    auto& reg = BackendRegistry::instance();
-    IRpcServer* sentinel = reinterpret_cast<IRpcServer*>(0x1);
-    reg.setRpcServer(sentinel);
-    CHECK(reg.getRpcServer() == sentinel);
-    reg.setRpcServer(nullptr);
-    CHECK(reg.getRpcServer() == nullptr);
-}
-
-TEST_CASE("DI: BackendRegistry setEditorServer/getEditorServer") {
-    auto& reg = BackendRegistry::instance();
-    IEditorServer* sentinel = reinterpret_cast<IEditorServer*>(0x1);
-    reg.setEditorServer(sentinel);
-    CHECK(reg.getEditorServer() == sentinel);
-    reg.setEditorServer(nullptr);
-    CHECK(reg.getEditorServer() == nullptr);
-}
-
 TEST_CASE("DI: BackendRegistry setParticleSystem/getParticleSystem") {
     auto& reg = BackendRegistry::instance();
     IParticleSystem* sentinel = reinterpret_cast<IParticleSystem*>(0x1);
@@ -161,6 +154,15 @@ TEST_CASE("DI: BackendRegistry setParticleSystem/getParticleSystem") {
     CHECK(reg.getParticleSystem() == sentinel);
     reg.setParticleSystem(nullptr);
     CHECK(reg.getParticleSystem() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setSaveManager/getSaveManager") {
+    auto& reg = BackendRegistry::instance();
+    ISaveManager* sentinel = reinterpret_cast<ISaveManager*>(0x1);
+    reg.setSaveManager(sentinel);
+    CHECK(reg.getSaveManager() == sentinel);
+    reg.setSaveManager(nullptr);
+    CHECK(reg.getSaveManager() == nullptr);
 }
 
 TEST_CASE("DI: BackendRegistry setDebugManager/getDebugManager") {
@@ -188,4 +190,13 @@ TEST_CASE("DI: BackendRegistry setLayerManager/getLayerManager") {
     CHECK(reg.getLayerManager() == sentinel);
     reg.setLayerManager(nullptr);
     CHECK(reg.getLayerManager() == nullptr);
+}
+
+TEST_CASE("DI: BackendRegistry setSteamBackend/getSteamBackend") {
+    auto& reg = BackendRegistry::instance();
+    auto* previous = reg.getSteamBackend();
+    auto* sentinel = reinterpret_cast<ISteamBackend*>(0x1);
+    reg.setSteamBackend(sentinel);
+    CHECK(reg.getSteamBackend() == sentinel);
+    reg.setSteamBackend(previous);
 }

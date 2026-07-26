@@ -30,8 +30,10 @@ TEST_CASE("DebugManager::singleton") {
     CHECK(&a == &b);
 }
 
-TEST_CASE("JobSystem::singleton") {
-    auto& a = Caesura::JobSystem::instance();
-    auto& b = Caesura::JobSystem::instance();
-    CHECK(&a == &b);
+TEST_CASE("JobSystem instances are independently owned") {
+    Caesura::JobSystem a;
+    Caesura::JobSystem b;
+    CHECK(&a != &b);
+    CHECK_FALSE(a.isRunning());
+    CHECK_FALSE(b.isRunning());
 }

@@ -1,17 +1,19 @@
 ﻿#pragma once
 
 #include "ProviderChain.h"
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdint>
 
 namespace Caesura {
 
-// Singleton asset reader backed by ProviderChain (Dir + CARC).
+// Asset reader backed by ProviderChain (Dir + CARC).
 // Thread-safe for concurrent reads from a single worker thread.
 class AssetManager {
 public:
-    static AssetManager& instance();
+    AssetManager() = default;
+    ~AssetManager();
 
     AssetManager(const AssetManager&) = delete;
     AssetManager& operator=(const AssetManager&) = delete;
@@ -26,8 +28,6 @@ public:
     bool exists(const std::string& path);
 
 private:
-    AssetManager() = default;
-
     caesura::ProviderChain m_chain;
     bool m_initialized = false;
 };

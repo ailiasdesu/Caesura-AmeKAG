@@ -3,10 +3,10 @@
 #include <lauxlib.h>
 }
 #include "UnifiedBinding.h"
-#include "../audio/api/IAudioBackend.h"
+#include "../../audio/api/IAudioBackend.h"
 #include "VFXBinding.h"
-#include "../minigame/api/IMiniGameBackend.h"
-#include "../resource/api/IAsyncLoader.h"
+#include "../../minigame/api/IMiniGameBackend.h"
+#include "../../resource/api/IAsyncLoader.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -64,19 +64,22 @@ static int delegateToTable(lua_State* L, const char* tableName, const char* func
         lua_pushfstring(L, "Function '%s.%s' not found", tableName, funcName);
         return 2;
     }
-    lua_insert(L, -1 - nargs);
-    lua_pop(L, 1);
+    lua_remove(L, -2);
+    lua_insert(L, -(nargs + 1));
     if (lua_pcall(L, nargs, LUA_MULTRET, 0) != LUA_OK) {
+        const char* error = lua_tostring(L, -1);
         lua_pushnil(L);
-        lua_pushfstring(L, "%s.%s error: %s", tableName, funcName, lua_tostring(L, -1));
+        lua_pushfstring(L, "%s.%s error: %s", tableName, funcName,
+                        error ? error : "unknown error");
+        lua_remove(L, -3);
         return 2;
     }
     return lua_gettop(L);
 }
 
 static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char* funcName) {
-    int nargs = lua_gettop(L) - 1;
-    lua_remove(L, 1);
+    // Dispatchers remove their command selector before entering this helper.
+    const int nargs = lua_gettop(L);
     return delegateToTable(L, tableName, funcName, nargs);
 }
 
@@ -86,6 +89,11 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 
 static int lua_Backend_render(lua_State* L) {
     const char* cmd = luaL_checkstring(L, 1);
+    if (strcmp(cmd, "render_text") == 0) {
+        lua_remove(L, 1);
+        return delegateToGlobalFunc(L, "KAG", "render_text");
+    }
+
     // -- Render table commands
     static const struct { const char* cmd; const char* func; } map[] = {
         {"create_viewport","create_viewport"}, {"destroy_viewport","destroy_viewport"},
@@ -141,10 +149,10 @@ static int lua_Backend_audio(lua_State* L) {
     if (strcmp(cmd, "is_playing") == 0) {
         const char* bus = luaL_optstring(L, 2, "voice");
         if (strcmp(bus, "voice") == 0) {
-            lua_remove(L, 1); lua_remove(L, 1);
+            lua_settop(L, 0);
             return delegateToGlobalFunc(L, "KAG", "is_voice_playing");
         } else if (strcmp(bus, "bgm") == 0) {
-            lua_remove(L, 1); lua_remove(L, 1);
+            lua_settop(L, 0);
             return delegateToGlobalFunc(L, "KAG", "is_bgm_playing");
         } else if (strcmp(bus, "se") == 0) {
             int count = 0;
@@ -393,4 +401,3 @@ void registerUnifiedBackendBinding(lua_State* L) {
 }
 
 } // namespace Caesura
-

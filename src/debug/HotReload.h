@@ -1,7 +1,7 @@
 ﻿// ===========================================================================
 //  Caesura (AmeKAG) -- HotReload.h
 //  Phase 8.1: File monitoring + coroutine rebuild for .ks/.lua scripts.
-//  Singleton, called per-frame in Engine::run().
+//  Engine-owned file monitor, called per-frame in Engine::run().
 // ===========================================================================
 
 #pragma once
@@ -24,7 +24,8 @@ enum class ScriptState {
 
 class HotReload {
 public:
-    static HotReload& instance();
+    HotReload() = default;
+    ~HotReload() = default;
 
     HotReload(const HotReload&) = delete;
     HotReload& operator=(const HotReload&) = delete;
@@ -32,6 +33,7 @@ public:
     // Initialize -- scan scriptDir recursively for .ks/.lua files.
     // Stores initial last_write_time for each file.
     void init(const std::string& scriptDir, lua_State* L);
+    void shutdown();
 
     // Per-frame check. Returns true if a reload was triggered.
     // On change: cancel all active ops → coroutine.close() →
@@ -47,11 +49,7 @@ public:
     // Force a reload next frame (used by ErrorUI retry)
     void requestReload() { m_reloadRequested = true; }
 
-public:
-    ~HotReload() = default;
 private:
-    HotReload() = default;
-
     void scanDirectory();
     void showWarningOverlay(const std::string& message);
 

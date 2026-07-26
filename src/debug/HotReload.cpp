@@ -19,17 +19,13 @@ extern "C" {
 
 namespace Caesura {
 
-HotReload& HotReload::instance() {
-    static HotReload s;
-    return s;
-}
-
 void HotReload::init(const std::string& scriptDir, lua_State* L) {
-    if (m_initialized) return;
-
     m_scriptDir = scriptDir;
     m_L = L;
     m_fileTimes.clear();
+    m_scriptState = ScriptState::IDLE;
+    m_reloadRequested = false;
+    m_warningFrames = 0;
 
     scanDirectory();
 
@@ -37,6 +33,16 @@ void HotReload::init(const std::string& scriptDir, lua_State* L) {
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                "HotReload initialized -- monitoring %zu files in %s",
                m_fileTimes.size(), scriptDir.c_str());
+}
+
+void HotReload::shutdown() {
+    m_L = nullptr;
+    m_scriptDir.clear();
+    m_fileTimes.clear();
+    m_initialized = false;
+    m_scriptState = ScriptState::IDLE;
+    m_reloadRequested = false;
+    m_warningFrames = 0;
 }
 
 void HotReload::scanDirectory() {
@@ -126,6 +132,9 @@ static void cancelAllActiveOps(lua_State* L) {
 
 bool HotReload::checkAndReload() {
     if (!m_initialized || !m_L) return false;
+    // A paused coroutine is strongly anchored by DebugProtocol. Defer both
+    // file scanning and forced reloads until that protocol resumes or detaches.
+    if (m_scriptState == ScriptState::DEBUG_ACTIVE) return false;
 
     // Check for changes
     bool changed = m_reloadRequested;
@@ -195,7 +204,7 @@ bool HotReload::checkAndReload() {
             if (lua_istable(m_L, -1)) {
                 lua_getfield(m_L, -1, "close");
                 if (lua_isfunction(m_L, -1)) {
-                    lua_pushvalue(m_L, -4);  // push co
+                    lua_pushvalue(m_L, -3);  // push co
                     if (lua_pcall(m_L, 1, 0, 0) != LUA_OK) {
                         lua_pop(m_L, 1);  // co may already be dead
                     }
@@ -224,6 +233,17 @@ bool HotReload::checkAndReload() {
     }
 
     // Step 4: Reload script modules
+    lua_getglobal(m_L, "package");
+    if (lua_istable(m_L, -1)) {
+        lua_getfield(m_L, -1, "loaded");
+        if (lua_istable(m_L, -1)) {
+            lua_pushnil(m_L);
+            lua_setfield(m_L, -2, "kag");
+        }
+        lua_pop(m_L, 1);
+    }
+    lua_pop(m_L, 1);
+
     lua_getglobal(m_L, "require");
     lua_pushstring(m_L, "kag");
     if (lua_pcall(m_L, 1, 0, 0) != LUA_OK) {

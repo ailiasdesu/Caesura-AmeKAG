@@ -1,4 +1,4 @@
-#ifdef CAESURA_HAS_LIVE2D
+#if defined(CAESURA_HAS_LIVE2D) && defined(_WIN32)
 
 #include "D3D11NativeRenderPath.h"
 

@@ -1,6 +1,6 @@
 ﻿#include "BgfxMiniGameBackend.h"
 #include "../di/BackendRegistry.h"
-#include "../render/EmbeddedShaders.h"
+#include "EmbeddedMiniGameShaders.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/readerwriter.h>
@@ -351,46 +351,4 @@ void BgfxMiniGameBackend::setGravity(uint32_t objId,bool enabled){
     auto it=m_objects.find(objId);if(it==m_objects.end())return;it->second.useGravity=enabled;
 }
 
-// ==========================================================================
-// Lua bindings
-// ==========================================================================
-
-static BgfxMiniGameBackend* g_mg=nullptr;
-
-#define MG(name,body) static int lua_mg_##name(lua_State*L){if(!g_mg){lua_pushinteger(L,0);return 1;}body}
-MG(spawn_cube,lua_pushinteger(L,g_mg->spawnCube((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,1),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(uint32_t)luaL_optinteger(L,8,0)));return 1;)
-MG(spawn_sphere,lua_pushinteger(L,g_mg->spawnSphere((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,1),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(uint32_t)luaL_optinteger(L,8,0)));return 1;)
-MG(spawn_plane,lua_pushinteger(L,g_mg->spawnPlane((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,10),(float)luaL_optnumber(L,5,10),(float)luaL_optnumber(L,6,.5),(float)luaL_optnumber(L,7,.5),(float)luaL_optnumber(L,8,.5),(uint32_t)luaL_optinteger(L,9,0)));return 1;)
-MG(remove_object,g_mg->removeObject((uint32_t)luaL_checkinteger(L,1));return 0;)
-MG(set_camera,g_mg->setCamera((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_checknumber(L,5),(float)luaL_checknumber(L,6));return 0;)
-MG(create_material,lua_pushinteger(L,g_mg->createMaterial((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,.5),(float)luaL_optnumber(L,5,0),(float)luaL_optnumber(L,6,.5),luaL_optstring(L,7,"")));return 1;)
-MG(set_material,lua_pushboolean(L,g_mg->setObjectMaterial((uint32_t)luaL_checkinteger(L,1),(uint32_t)luaL_checkinteger(L,2))?1:0);return 1;)
-MG(set_ambient,g_mg->setAmbient((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3));return 0;)
-MG(set_directional,g_mg->setDirectional((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,1),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1));return 0;)
-MG(add_point_light,lua_pushinteger(L,g_mg->addPointLight((float)luaL_checknumber(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_optnumber(L,4,1),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,10),luaL_optstring(L,9,"")));return 1;)
-MG(remove_light,lua_pushboolean(L,g_mg->removeLight((uint32_t)luaL_checkinteger(L,1))?1:0);return 1;)
-MG(check_collision,lua_pushboolean(L,g_mg->checkCollision((uint32_t)luaL_checkinteger(L,1),(uint32_t)luaL_checkinteger(L,2))?1:0);return 1;)
-MG(set_collision,g_mg->setCollisionEnabled(lua_toboolean(L,1)!=0);return 0;)
-MG(set_velocity,g_mg->setVelocity((uint32_t)luaL_checkinteger(L,1),(float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4));return 0;)
-MG(set_gravity,g_mg->setGravity((uint32_t)luaL_checkinteger(L,1),lua_toboolean(L,2)!=0);return 0;)
-#undef MG
-
-static const luaL_Reg mg_functions[]={
-    {"spawn_cube",lua_mg_spawn_cube},{"spawn_sphere",lua_mg_spawn_sphere},{"spawn_plane",lua_mg_spawn_plane},
-    {"remove_object",lua_mg_remove_object},{"set_camera",lua_mg_set_camera},
-    {"create_material",lua_mg_create_material},{"set_material",lua_mg_set_material},
-    {"set_ambient",lua_mg_set_ambient},{"set_directional",lua_mg_set_directional},
-    {"add_point_light",lua_mg_add_point_light},{"remove_light",lua_mg_remove_light},
-    {"check_collision",lua_mg_check_collision},{"set_collision",lua_mg_set_collision},
-    {"set_velocity",lua_mg_set_velocity},{"set_gravity",lua_mg_set_gravity},
-    {nullptr,nullptr}
-};
-
-void registerMiniGameBinding(lua_State* L,BgfxMiniGameBackend* backend){
-    g_mg=backend; backend->setLuaState(L);
-    luaL_newlib(L,mg_functions); lua_setglobal(L,"mini_game");
-    printf("[MiniGame] Lua bindings ¡ª 15 functions\n");
-}
-
 } // namespace Caesura
-

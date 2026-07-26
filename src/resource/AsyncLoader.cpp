@@ -13,10 +13,8 @@ static bool isPathSafe(const std::string& path) {
     return !path.empty() && path.find("..") == std::string::npos;
 }
 
-AsyncLoader& AsyncLoader::instance() {
-    static AsyncLoader s;
-    return s;
-}
+AsyncLoader::AsyncLoader(AssetManager* assetManager)
+    : m_assetManager(assetManager) {}
 
 AsyncLoader::~AsyncLoader() {
     shutdown();
@@ -36,6 +34,7 @@ void AsyncLoader::shutdown() {
 
     if (auto* jobSystem = BackendRegistry::instance().getJobSystem()) {
         jobSystem->waitIdle();
+        jobSystem->pollMainThreadJobs();
     }
 
     {
@@ -53,7 +52,13 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
     result.path = req.path;
     result.type = req.type;
 
-    std::vector<uint8_t> raw = AssetManager::instance().read(req.path);
+    if (!m_assetManager) {
+        fprintf(stderr, "[AsyncLoader] AssetManager unavailable: %s\n", req.path.c_str());
+        result.success = false;
+        return result;
+    }
+
+    std::vector<uint8_t> raw = m_assetManager->read(req.path);
     if (raw.empty()) {
         fprintf(stderr, "[AsyncLoader] Asset not found: %s\n", req.path.c_str());
         result.success = false;
@@ -84,6 +89,10 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
 
 int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     if (!m_running) return -1;
+    if (!m_assetManager) {
+        fprintf(stderr, "[AsyncLoader] AssetManager unavailable; rejecting: %s\n", path.c_str());
+        return -1;
+    }
     if (!isPathSafe(path)) {
         fprintf(stderr, "[AsyncLoader] Path rejected: %s\n", path.c_str());
         return -1;

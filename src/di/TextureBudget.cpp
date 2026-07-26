@@ -15,11 +15,6 @@ static constexpr const char* kTierNames[] = {
     "128MB (Low)", "256MB (Entry)", "512MB (Mid)", "1GB (Mainstream)", "2GB (High)", "4GB (DevOverride)"
 };
 
-TextureBudget& TextureBudget::instance() {
-    static TextureBudget tb;
-    return tb;
-}
-
 void TextureBudget::detect() {
 #ifdef _WIN32
     MEMORYSTATUSEX memStatus = {};

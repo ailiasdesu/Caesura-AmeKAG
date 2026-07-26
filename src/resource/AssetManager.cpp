@@ -5,9 +5,8 @@
 
 namespace Caesura {
 
-AssetManager& AssetManager::instance() {
-    static AssetManager s;
-    return s;
+AssetManager::~AssetManager() {
+    shutdown();
 }
 
 void AssetManager::init() {
@@ -26,6 +25,7 @@ void AssetManager::addProvider(std::unique_ptr<caesura::IAssetProvider> provider
 
 void AssetManager::shutdown() {
     m_initialized = false;
+    m_chain.clear();
 }
 
 std::vector<uint8_t> AssetManager::read(const std::string& path) {

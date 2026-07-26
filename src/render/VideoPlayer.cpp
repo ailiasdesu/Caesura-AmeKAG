@@ -9,7 +9,6 @@
 #include "VideoPlayer.h"
 #include "../debug/DebugManager.h"
 #include "../di/BackendRegistry.h"
-#include "../job/JobSystem.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
 extern "C" {

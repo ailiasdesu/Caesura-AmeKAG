@@ -31,16 +31,24 @@
 
 namespace Caesura {
 
+namespace {
+
+void secureErase(void* memory, size_t size) noexcept {
+    auto* bytes = static_cast<volatile uint8_t*>(memory);
+    while (size-- > 0) {
+        *bytes++ = 0;
+    }
+}
+
+} // namespace
+
 // Engine version string (Spec U6: archive version management)
 const char* SaveManager::ENGINE_VERSION = "1.0.0";
 
-// ============================================================================
-//  Singleton
-// ============================================================================
-
-SaveManager& SaveManager::instance() {
-    static SaveManager inst;
-    return inst;
+SaveManager::SaveManager() = default;
+SaveManager::~SaveManager() {
+    secureErase(m_encryptKey, sizeof(m_encryptKey));
+    m_keySet = false;
 }
 
 // ============================================================================
@@ -78,8 +86,8 @@ void SaveManager::setEncryptionKey(const uint8_t key[32]) {
 }
 
 void SaveManager::clearEncryptionKey() {
+    secureErase(m_encryptKey, sizeof(m_encryptKey));
     m_keySet = false;
-    std::memset(m_encryptKey, 0, sizeof(m_encryptKey));
     printf("[SaveManager] Encryption key cleared\n");
 }
 

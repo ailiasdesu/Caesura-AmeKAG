@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. 16 modules, 30 pure-virtual interfaces, zero circular dependencies. See `AGENTS.md` for the authoritative module-boundary and interface rules that all agents must follow.
+Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 28 pure-virtual interfaces, then linked into one executable. See `AGENTS.md` for the authoritative module-boundary and interface rules that all agents must follow.
 
 ## Plugin Requirements
 
@@ -52,7 +52,7 @@ cmake -B build -DCAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative
 # Normal launch
 ./build/Debug/CaesuraAmeKAG.exe
 
-# Launch with HTTP RPC editor server (port 9876)
+# Launch editor mode with stdin/stdout JSON-RPC and a hidden GPU window
 ./build/Debug/CaesuraAmeKAG.exe --editor
 ```
 
@@ -69,14 +69,14 @@ cd build/tests/Debug && ./CaesuraTests.exe
 ./CaesuraTests.exe -s                      # show success output even for passing tests
 ./CaesuraTests.exe -d                      # show test durations
 
-# Run tests via CTest
-cd build && ctest --output-on-failure
+# Run tests via CTest (specify the configuration for multi-config generators)
+ctest -C Debug --test-dir build --output-on-failure
 
 # Coupling analysis
 python scripts/count_coupling.py --ci
 ```
 
-Tests live in `tests/cpp/test_<module>.cpp` (~400 cases across 48 files). Each engine source file is recompiled into the test binary (not linked as a library). `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
+Test sources are explicitly listed in `tests/CMakeLists.txt` (currently 51 `test_*.cpp` files, including `test_main.cpp`). `CaesuraTests` links the same internal static module libraries as the application through `Caesura::Engine`, plus `Caesura::Rpc`; it does not recompile a second copy of the production sources. The runner reports the authoritative test-case total, and every discovered case must pass. `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
 
 ## Lint & Format
 
@@ -111,7 +111,7 @@ main.cpp  →  creates concrete backends  →  EngineConfig  →  Engine::init()
                                               all other modules call BackendRegistry::instance().getXxx()
 ```
 
-**Only `main.cpp` and `entry/Engine.cpp` may `new` or `make_unique` concrete backend types.** Every other module accesses backends exclusively through `BackendRegistry::instance().getXxx()` returning pure-virtual interface pointers.
+**Only `src/main.cpp` and files under `src/entry/` may `new` or `make_unique` concrete backend types.** Every other module accesses backends exclusively through `BackendRegistry::instance().getXxx()` returning pure-virtual interface pointers.
 
 ### Module Boundary Rules (from AGENTS.md §1–3)
 
@@ -133,7 +133,7 @@ main.cpp  →  creates concrete backends  →  EngineConfig  →  Engine::init()
 | `archive` | CARC format, AES-256-GCM, Ed25519 signing | `IArchiveReader`, `IArchiveWriter`, `ICryptoEngine` |
 | `storage` | Save/load with encryption, schema migration | `ISaveManager`, `ISaveProvider` |
 | `platform` | SDL3 window, events, timing | `IPlatformBackend` |
-| `rpc` | HTTP editor server (port 9876), JSON-RPC | `IEditorServer`, `IRpcServer` |
+| `rpc` | stdin/stdout JSON-RPC plus an unwired HTTP editor implementation | `IEditorServer`, `IRpcServer` |
 | `input` | SDL event routing (KAG ↔ Game focus switch) | `IInputRouter` |
 | `job` | Multi-threaded task system | `IJobSystem` |
 | `live2d` | Animation (Cubism SDK or PNG fallback) | `IAnimationBackend` |
@@ -151,11 +151,11 @@ Both modes support **KAG+Lua hybrid scripting**: `[eval]`, `[emb]`, and `[iscrip
 
 ### Editor / RPC Server
 
-Launch with `--editor` to start the HTTP RPC server on port 9876 (9 endpoints, JSON-RPC). The web-based editor frontend (React) is maintained separately. RPC endpoints are documented in `docs/api/editor-api-reference.md`.
+Launch with `--editor` to start newline-delimited JSON-RPC on stdin/stdout with a hidden GPU window. `EditorServer` contains a separate HTTP implementation, but the CLI does not currently start it.
 
 ### Test Architecture
 
-Tests compile engine sources directly (no shared library). Each `test_<module>.cpp` uses doctest. The `test_main.cpp` file defines `main()`. Tests that need GPU resources should use default-construction + accessor verification, not real GPU context creation, since CI runners lack GPU.
+Tests link the same internal static module libraries as the application. Each `test_<module>.cpp` uses doctest and `test_main.cpp` defines `main()`. Tests that need GPU resources should use default-construction + accessor verification unless they explicitly provide a GPU-capable environment.
 
 ### Coupling Budget
 
@@ -173,10 +173,10 @@ Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first)
 - `docs/api/kag-commands.md` — 68 KAG script commands reference
 - `docs/api/lua-modules.md` — Lua binding API reference
-- `docs/api/cpp-interfaces.md` — all 30 C++ interface definitions
+- `docs/api/cpp-interfaces.md` — all 28 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
-- `docs/design/engine-capability-matrix.md` — 79 capabilities across modules
+- `docs/design/engine-capability-matrix.md` — 41 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
 - `docs/superpowers/specs/` — design specs for architecture decoupling, GPU recovery, KAG+Lua hybrid scripting

@@ -5,37 +5,130 @@
 #include "EditorServer.h"
 #include "../../external/cpp-httplib/httplib.h"
 
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-}
+#include <nlohmann_json.hpp>
 
-#include "../di/BackendRegistry.h"
-#include "../live2d/api/IAnimationBackend.h"
-#include "../archive/CARCWriter.h"
-#include "../script/vm/LuaManager.h"
-#include "../script/vm/LuaManager.h"
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
-#include <sstream>
-#include <fstream>
+#include <exception>
 #include <filesystem>
+#include <fstream>
+#include <limits>
+#include <sstream>
 
 namespace fs = std::filesystem;
 namespace Caesura {
 
-// =========================================================================
-// Singleton
-// =========================================================================
+namespace {
 
-EditorServer& EditorServer::instance() {
-    static EditorServer s;
-    return s;
+using Json = nlohmann::json;
+
+std::string dumpJson(const Json& value) {
+    return value.dump(-1, ' ', false, Json::error_handler_t::replace);
 }
+
+std::string pathToUtf8(const fs::path& path) {
+    const auto value = path.generic_u8string();
+    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
+}
+
+std::string lowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
+}
+
+bool isAnimationAsset(const fs::path& path) {
+    const std::string extension = lowerAscii(path.extension().string());
+    if (extension == ".png" || extension == ".jpg" ||
+        extension == ".jpeg" || extension == ".bmp" ||
+        extension == ".moc" || extension == ".moc3" ||
+        extension == ".json") {
+        return true;
+    }
+
+    return lowerAscii(path.filename().string()).find(".model") !=
+        std::string::npos;
+}
+
+bool readOptionalFloat(const Json& body,
+                       const char* field,
+                       float defaultValue,
+                       float& result,
+                       std::string& error) {
+    const auto it = body.find(field);
+    if (it == body.end()) {
+        result = defaultValue;
+        return true;
+    }
+    if (!it->is_number()) {
+        error = std::string(field) + " must be a finite number";
+        return false;
+    }
+
+    double value = 0.0;
+    try {
+        value = it->get<double>();
+    } catch (const Json::exception&) {
+        error = std::string(field) + " must be a finite number";
+        return false;
+    }
+
+    constexpr double maxFloat =
+        static_cast<double>(std::numeric_limits<float>::max());
+    if (!std::isfinite(value) || value < -maxFloat || value > maxFloat) {
+        error = std::string(field) + " must be a finite number";
+        return false;
+    }
+
+    result = static_cast<float>(value);
+    return true;
+}
+
+RpcReply invalidAnimationRequest(const std::string& message) {
+    return {RpcReplyStatus::InvalidRequest, "invalid_animation_request",
+        message, {}};
+}
+
+void setDispatchError(httplib::Response& response, const RpcReply& reply) {
+    const char* status = "error";
+    int httpStatus = 500;
+    if (reply.status == RpcReplyStatus::InvalidRequest) {
+        status = "invalid_request";
+        httpStatus = 400;
+    } else if (reply.status == RpcReplyStatus::Unavailable) {
+        status = "unavailable";
+        httpStatus = 503;
+    }
+
+    const std::string code = reply.code.empty() ? "rpc_failed" : reply.code;
+    const std::string message = reply.message.empty() ? "RPC request failed" : reply.message;
+    response.status = httpStatus;
+    response.set_content(dumpJson({
+        {"status", status},
+        {"code", code},
+        {"error", message},
+        {"message", message},
+    }), "application/json");
+}
+
+RpcReply invalidDispatcherReply(const std::string& message) {
+    return {RpcReplyStatus::Failed, "invalid_dispatcher_reply", message, {}};
+}
+
+} // namespace
 
 // =========================================================================
 // Lifecycle
 // =========================================================================
+
+EditorServer::EditorServer() = default;
+
+EditorServer::~EditorServer() {
+    stop();
+}
 
 bool EditorServer::start(int port) {
     if (m_running) {
@@ -43,9 +136,21 @@ bool EditorServer::start(int port) {
         return true;
     }
 
-    m_port = port;
+    if (m_thread.joinable()) stop();
+
+    m_server = std::make_unique<httplib::Server>();
+    const int boundPort = port == 0
+        ? m_server->bind_to_any_port("127.0.0.1")
+        : (m_server->bind_to_port("127.0.0.1", port) ? port : -1);
+    if (boundPort < 0) {
+        m_server.reset();
+        m_port = 0;
+        return false;
+    }
+
+    m_port = boundPort;
     m_running = true;
-    m_thread = std::thread(&EditorServer::serverLoop, this, port);
+    m_thread = std::thread(&EditorServer::serverLoop, this, boundPort);
 
     // Give the server a moment to start
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -57,13 +162,41 @@ bool EditorServer::start(int port) {
     return false;
 }
 
+void EditorServer::setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    m_dispatcher = std::move(dispatcher);
+}
+
+RpcReply EditorServer::dispatchRequest(RpcRequest request) const {
+    std::shared_ptr<IRpcDispatcher> dispatcher;
+    {
+        std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+        dispatcher = m_dispatcher;
+    }
+
+    if (!dispatcher) {
+        return {RpcReplyStatus::Unavailable, "dispatcher_unavailable",
+            "RPC dispatcher is unavailable", {}};
+    }
+
+    try {
+        return dispatcher->dispatch(request);
+    } catch (const std::exception& ex) {
+        return {RpcReplyStatus::Failed, "dispatcher_exception", ex.what(), {}};
+    } catch (...) {
+        return {RpcReplyStatus::Failed, "dispatcher_exception",
+            "RPC dispatcher threw an unknown exception", {}};
+    }
+}
+
 void EditorServer::stop() {
-    if (!m_running) return;
-    m_running = false;
+    const bool wasRunning = m_running.exchange(false);
+    if (m_server) m_server->stop();
     if (m_thread.joinable()) {
         m_thread.join();
     }
-    printf("[EditorServer] Stopped.\n");
+    m_server.reset();
+    if (wasRunning) printf("[EditorServer] Stopped.\n");
 }
 
 // =========================================================================
@@ -89,7 +222,7 @@ void EditorServer::pushLog(const std::string& level, const std::string& message)
 // =========================================================================
 
 void EditorServer::serverLoop(int port) {
-    httplib::Server svr;
+    httplib::Server& svr = *m_server;
 
     // ---------------------------------------------------------------------
     // CORS middleware - allow web editor from any origin
@@ -116,7 +249,20 @@ void EditorServer::serverLoop(int port) {
     // GET /api/status -- detailed engine status (R1.1)
     // ---------------------------------------------------------------------
     svr.Get("/api/status", [this](const httplib::Request&, httplib::Response& res) {
-        const char* luaOk = (m_L || BackendRegistry::instance().getLuaState()) ? "true" : "false";
+        RpcReply reply = dispatchRequest(RpcRequest{RpcStatusRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+
+        const auto* status = std::get_if<RpcStatusResult>(&reply.payload);
+        if (!status) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Status reply did not contain runtime status"));
+            return;
+        }
+
+        const char* luaOk = status->luaReady ? "true" : "false";
         char buf[256];
         snprintf(buf, sizeof(buf),
             "{\"status\":\"ok\",\"engine\":\"CaesuraAmeKAG\",\"lua\":%s,\"port\":%d}",
@@ -192,55 +338,42 @@ void EditorServer::serverLoop(int port) {
             return;
         }
 
-        lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-        if (!L) {
-            res.set_content("{\"error\":\"Lua not initialized\"}", "application/json");
-            res.status = 500;
+        pushLog("info", "Running scene script...");
+        RpcReply reply = dispatchRequest(RpcRequest{RpcRunScriptRequest{script}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            pushLog("error", reply.message);
+            setDispatchError(res, reply);
             return;
         }
 
-        // Write script to temp file and execute
-        std::string tmpPath = "temp_editor_scene.lua";
-        {
-            std::ofstream ofs(tmpPath);
-            ofs << script;
-            if (!ofs.good()) {
-                res.status = 500;
-                res.set_content("Failed to write temp script file", "text/plain");
-                return;
-            }
-        }
-
-        pushLog("info", "Running scene script...");
-
-        // Capture Lua output via a custom print
-        lua_getglobal(L, "print");
-        // Temporarily override print to capture output
-        // For now, just run the script
-        if (luaL_dofile(L, tmpPath.c_str()) != LUA_OK) {
-            std::string err = lua_tostring(L, -1);
-            lua_pop(L, 1);
-            pushLog("error", err);
-            res.set_content("{\"status\":\"error\",\"message\":\"" + err + "\"}", "application/json");
-        } else {
-            pushLog("info", "Scene script completed.");
-            res.set_content("{\"status\":\"ok\"}", "application/json");
-        }
-
-        // Clean up temp file
-        fs::remove(tmpPath);
+        pushLog("info", "Scene script completed.");
+        res.set_content("{\"status\":\"ok\"}", "application/json");
     });
 
     // ---------------------------------------------------------------------
     // POST /api/stop -- stop execution
     // ---------------------------------------------------------------------
     svr.Post("/api/stop", [this](const httplib::Request&, httplib::Response& res) {
-        lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-        if (L) {
-            lua_pushboolean(L, 1);
-            lua_setglobal(L, "_CAESURA_QUIT");
+        RpcReply reply = dispatchRequest(RpcRequest{RpcStopRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
         }
+
         pushLog("info", "Stop requested.");
+        res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/reload -- request an owner-thread script reload
+    // ---------------------------------------------------------------------
+    svr.Post("/api/reload", [this](const httplib::Request&, httplib::Response& res) {
+        RpcReply reply = dispatchRequest(RpcRequest{RpcReloadScriptsRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+
         res.set_content("{\"status\":\"ok\"}", "application/json");
     });
 
@@ -266,82 +399,117 @@ void EditorServer::serverLoop(int port) {
     // GET /api/live2d/models -- list available Live2D models (R1.2)
     // ---------------------------------------------------------------------
     svr.Get("/api/live2d/models", [](const httplib::Request&, httplib::Response& res) {
-        std::string json = "[";
-        bool first = true;
+        struct ModelEntry {
+            std::string name;
+            std::string path;
+        };
+
+        std::vector<ModelEntry> models;
         const char* dirs[] = {"models", "assets/models", "assets/live2d"};
         for (const char* dir : dirs) {
             if (!fs::exists(dir)) continue;
             try {
                 for (const auto& entry : fs::directory_iterator(dir)) {
                     if (!entry.is_regular_file()) continue;
-                    std::string name = entry.path().filename().string();
-                    // Filter for Live2D model files
-                    bool isModel = false;
-                    if (name.size() > 4) {
-                        std::string ext = name.substr(name.size() - 4);
-                        if (ext == ".moc" || ext == ".json" || name.find(".model") != std::string::npos) isModel = true;
-                    }
-                    if (!isModel) continue;
-                    if (!first) json += ",";
-                    first = false;
-                    std::string path = (std::string(dir) + "/" + name);
-                    json += "{\"name\":\"" + name + "\",\"path\":\"" + path + "\"}";
+                    if (!isAnimationAsset(entry.path())) continue;
+                    models.push_back({
+                        pathToUtf8(entry.path().filename()),
+                        pathToUtf8(entry.path()),
+                    });
                 }
             } catch (...) {}
         }
-        json += "]";
-        res.set_content(json, "application/json");
+
+        std::sort(models.begin(), models.end(),
+            [](const ModelEntry& lhs, const ModelEntry& rhs) {
+                return lhs.path < rhs.path;
+            });
+
+        Json response = Json::array();
+        for (const auto& model : models) {
+            response.push_back({
+                {"name", model.name},
+                {"path", model.path},
+            });
+        }
+        res.set_content(dumpJson(response), "application/json");
     });
 
     // ---------------------------------------------------------------------
     // POST /api/live2d/load -- load a Live2D model (R1.2)
     // ---------------------------------------------------------------------
-    svr.Post("/api/live2d/load", [](const httplib::Request& req, httplib::Response& res) {
-        // Parse modelPath from JSON body
-        std::string body = req.body;
-        std::string modelPath;
-        auto pos = body.find("\"modelPath\"");
-        if (pos != std::string::npos) {
-            auto start = body.find("\"", pos + 12);
-            if (start != std::string::npos) {
-                auto end = body.find("\"", start + 1);
-                if (end != std::string::npos) {
-                    modelPath = body.substr(start + 1, end - start - 1);
-                }
+    svr.Post("/api/live2d/load", [this](const httplib::Request& req, httplib::Response& res) {
+        Json body;
+        try {
+            body = Json::parse(req.body);
+        } catch (const Json::exception&) {
+            setDispatchError(res, invalidAnimationRequest(
+                "Request body must be a valid JSON object"));
+            return;
+        }
+
+        if (!body.is_object()) {
+            setDispatchError(res, invalidAnimationRequest(
+                "Request body must be a JSON object"));
+            return;
+        }
+
+        const auto modelPathIt = body.find("modelPath");
+        if (modelPathIt == body.end() || !modelPathIt->is_string() ||
+            modelPathIt->get_ref<const std::string&>().empty()) {
+            setDispatchError(res, invalidAnimationRequest(
+                "modelPath must be a non-empty string"));
+            return;
+        }
+
+        RpcLoadAnimationRequest request;
+        request.modelPath = modelPathIt->get<std::string>();
+        std::string error;
+        if (!readOptionalFloat(body, "x", 0.0f, request.x, error) ||
+            !readOptionalFloat(body, "y", 0.0f, request.y, error) ||
+            !readOptionalFloat(body, "scale", 1.0f, request.scale, error)) {
+            setDispatchError(res, invalidAnimationRequest(error));
+            return;
+        }
+        if (request.scale <= 0.0f) {
+            setDispatchError(res, invalidAnimationRequest(
+                "scale must be greater than zero"));
+            return;
+        }
+
+        const auto showIt = body.find("show");
+        if (showIt != body.end()) {
+            if (!showIt->is_boolean()) {
+                setDispatchError(res, invalidAnimationRequest(
+                    "show must be a boolean"));
+                return;
             }
+            request.show = showIt->get<bool>();
         }
 
-        if (modelPath.empty()) {
-            res.set_content("{\"error\":\"modelPath required\"}", "application/json");
-            res.status = 400;
+        RpcReply reply = dispatchRequest(RpcRequest{std::move(request)});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
             return;
         }
 
-        auto* anim = BackendRegistry::instance().getAnimationBackend();
-        if (!anim) {
-            res.set_content("{\"error\":\"Animation backend not available\"}", "application/json");
-            res.status = 500;
-            return;
-        }
-
-        anim->init();
-        int handle = anim->loadModel(modelPath.c_str(), modelPath.c_str());
-        if (handle > 0) {
-            char buf[128];
-            snprintf(buf, sizeof(buf),
-                "{\"status\":\"ok\",\"modelId\":%d,\"name\":\"%s\"}",
-                handle, modelPath.c_str());
-            res.set_content(buf, "application/json");
+        const auto* animation = std::get_if<RpcAnimationResult>(&reply.payload);
+        if (animation && animation->modelId > 0) {
+            res.set_content(dumpJson({
+                {"status", "ok"},
+                {"modelId", animation->modelId},
+                {"name", animation->name},
+            }), "application/json");
         } else {
-            res.set_content("{\"error\":\"Failed to load model\"}", "application/json");
-            res.status = 500;
+            setDispatchError(res, invalidDispatcherReply(
+                "Animation reply did not contain a valid model"));
         }
     });
 
     // ---------------------------------------------------------------------
     // POST /api/build -- one-click CARC packaging (R1.3)
     // ---------------------------------------------------------------------
-    svr.Post("/api/build", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Post("/api/build", [this](const httplib::Request& req, httplib::Response& res) {
         std::string outputPath = "build/game.carc";
         std::string keyPath = "build/game.key";
 
@@ -385,9 +553,13 @@ void EditorServer::serverLoop(int port) {
         // Create output directory
         fs::create_directories("build");
 
-        // Package using CARCWriter
-        Caesura::carc::CARCWriter writer;
-        if (!writer.create(outputPath, keyPath, keyPath + ".pub")) {
+        auto writer = m_archiveWriterFactory ? m_archiveWriterFactory() : nullptr;
+        if (!writer) {
+            res.set_content("{\"error\":\"Archive writer is not configured\"}", "application/json");
+            res.status = 503;
+            return;
+        }
+        if (!writer->create(outputPath, keyPath, keyPath + ".pub")) {
             res.set_content("{\"error\":\"Failed to create CARC archive\"}", "application/json");
             res.status = 500;
             return;
@@ -398,10 +570,10 @@ void EditorServer::serverLoop(int port) {
             if (!ifs.is_open()) continue;
             std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)),
                                        std::istreambuf_iterator<char>());
-            writer.addFile(relPath, data.data(), data.size());
+            writer->addFile(relPath, data.data(), data.size());
         }
 
-        if (!writer.finalize()) {
+        if (!writer->finalize()) {
             res.set_content("{\"error\":\"Failed to finalize CARC archive\"}", "application/json");
             res.status = 500;
             return;
@@ -426,11 +598,11 @@ void EditorServer::serverLoop(int port) {
     // ---------------------------------------------------------------------
     // Start listening
     // ---------------------------------------------------------------------
-    printf("[EditorServer] Binding to port %d...\n", port);
-    if (!svr.listen("127.0.0.1", port)) {
-        fprintf(stderr, "[EditorServer] Failed to bind to port %d\n", port);
-        m_running = false;
+    printf("[EditorServer] Listening on port %d...\n", port);
+    if (!svr.listen_after_bind()) {
+        fprintf(stderr, "[EditorServer] Failed to listen on port %d\n", port);
     }
+    m_running = false;
 }
 
 } // namespace Caesura

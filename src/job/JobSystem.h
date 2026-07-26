@@ -18,8 +18,8 @@ namespace Caesura {
 // - MainThreadFn callbacks are queued and run via pollMainThreadJobs() (red zone).
 class JobSystem : public IJobSystem {
 public:
-    static JobSystem& instance();
-
+    JobSystem() = default;
+    ~JobSystem() override;
     JobSystem(const JobSystem&) = delete;
     JobSystem& operator=(const JobSystem&) = delete;
 
@@ -45,9 +45,6 @@ public:
     bool isWorkerThread() const;
 
 private:
-    JobSystem() = default;
-    ~JobSystem();
-
     struct Job {
         JobFn          work;
         MainThreadFn   onComplete;

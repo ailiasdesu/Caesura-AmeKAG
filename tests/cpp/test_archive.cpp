@@ -12,13 +12,27 @@
 
 using namespace Caesura;
 
-static void ensureCryptoRegistered() {
-    static bool done = false;
-    if (!done) {
-        BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
-        done = true;
+namespace {
+
+class ScopedCryptoRegistration {
+public:
+    ScopedCryptoRegistration()
+        : m_previous(BackendRegistry::instance().getCryptoEngine()) {
+        BackendRegistry::instance().setCryptoEngine(&m_engine);
     }
-}
+
+    ~ScopedCryptoRegistration() {
+        BackendRegistry::instance().setCryptoEngine(m_previous);
+    }
+
+    carc::CryptoEngine* engine() { return &m_engine; }
+
+private:
+    carc::CryptoEngine m_engine;
+    carc::ICryptoEngine* m_previous;
+};
+
+} // namespace
 
 TEST_CASE("CARCReader::open invalid file returns false") {
     carc::CARCReader reader;
@@ -27,7 +41,7 @@ TEST_CASE("CARCReader::open invalid file returns false") {
 }
 
 TEST_CASE("ICryptoEngine encrypt/decrypt round-trip") {
-    ensureCryptoRegistered();
+    ScopedCryptoRegistration cryptoRegistration;
     uint8_t key[32], nonce[12], tag[16];
     carc::CryptoEngine::generateKey(key);
     carc::CryptoEngine::generateNonce(nonce);
@@ -42,7 +56,7 @@ TEST_CASE("ICryptoEngine encrypt/decrypt round-trip") {
 }
 
 TEST_CASE("ICryptoEngine SHA-256 produces known hash") {
-    ensureCryptoRegistered();
+    ScopedCryptoRegistration cryptoRegistration;
     const char* msg = "hello";
     uint8_t hash[32];
     carc::CryptoEngine::sha256(reinterpret_cast<const uint8_t*>(msg), 5, hash);
@@ -56,7 +70,7 @@ TEST_CASE("ICryptoEngine SHA-256 produces known hash") {
 }
 
 TEST_CASE("ICryptoEngine key generation produces non-zero keys") {
-    ensureCryptoRegistered();
+    ScopedCryptoRegistration cryptoRegistration;
     uint8_t publicKey[32] = {}, privateKey[64] = {};
     carc::CryptoEngine::generateKeyPair(publicKey, privateKey);
     bool pubNonZero = false, privNonZero = false;
@@ -81,13 +95,17 @@ TEST_CASE("IArchiveWriter interface completeness check") {
 }
 
 TEST_CASE("BackendRegistry::getCryptoEngine returns registered engine") {
-    ensureCryptoRegistered();
-    auto* crypto = BackendRegistry::instance().getCryptoEngine();
-    CHECK(crypto != nullptr);
+    auto& registry = BackendRegistry::instance();
+    auto* previous = registry.getCryptoEngine();
+    {
+        ScopedCryptoRegistration cryptoRegistration;
+        CHECK(registry.getCryptoEngine() == cryptoRegistration.engine());
+    }
+    CHECK(registry.getCryptoEngine() == previous);
 }
 
 TEST_CASE("ICryptoEngine interface through BackendRegistry") {
-    ensureCryptoRegistered();
+    ScopedCryptoRegistration cryptoRegistration;
     auto* iface = BackendRegistry::instance().getCryptoEngine();
     REQUIRE(iface != nullptr);
     uint8_t key[32], nonce[12], tag[16];

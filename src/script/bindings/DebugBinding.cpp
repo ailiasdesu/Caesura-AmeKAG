@@ -3,8 +3,8 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "DebugBinding.h"
-#include "../di/BackendRegistry.h"
-#include "../debug/api/IDebugManager.h"
+#include "../../di/BackendRegistry.h"
+#include "../../debug/api/IDebugManager.h"
 #include <cstdio>
 #include <string>
 

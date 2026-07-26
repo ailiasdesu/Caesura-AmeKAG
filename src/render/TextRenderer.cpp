@@ -10,7 +10,6 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include "render/FreeTypeContext.h"
 
 namespace Caesura {
 
@@ -278,6 +277,17 @@ TextRenderer::~TextRenderer() {
     shutdown();
 }
 
+TextRenderer::TTFState::~TTFState() {
+    if (ftFace) {
+        FT_Done_Face(ftFace);
+        ftFace = nullptr;
+    }
+    if (ftLib) {
+        FT_Done_FreeType(ftLib);
+        ftLib = nullptr;
+    }
+}
+
 bool TextRenderer::init(IRenderDevice* device) {
     if (m_initialized) return true;
     if (!device) {
@@ -337,11 +347,6 @@ void TextRenderer::shutdown() {
     if (bgfx::isValid(m_texSampler)) {
         bgfx::destroy(m_texSampler);
         m_texSampler = BGFX_INVALID_HANDLE;
-    }
-    // FreeType cleanup
-    if (m_ttf) {
-        if (m_ttf->ftFace) { FT_Done_Face(m_ttf->ftFace); m_ttf->ftFace = nullptr; }
-        // ftLib now owned by FreeTypeContext singleton
     }
     m_ttf.reset();
 
@@ -668,22 +673,32 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
 // ===========================================================================
 
 bool TextRenderer::loadTTF(const char* path, float fontSize) {
-    // Initialize FreeType via shared context
-    m_ttf = std::make_unique<TTFState>();
-    m_ttf->ftLib = FreeTypeContext::instance().getLibrary();
-    if (!m_ttf->ftLib) {
-        fprintf(stderr, "[TextRenderer] FreeTypeContext not initialized\n");
-        m_ttf.reset(); return false;
+    if (!path || path[0] == '\0' || fontSize <= 0.0f) {
+        fprintf(stderr, "[TextRenderer] Invalid TTF load request\n");
+        return false;
     }
 
-    FT_Error ftErr = FT_New_Face(m_ttf->ftLib, path, 0, &m_ttf->ftFace);
+    auto nextTtf = std::make_unique<TTFState>();
+    FT_Error ftErr = FT_Init_FreeType(&nextTtf->ftLib);
+    if (ftErr) {
+        fprintf(stderr, "[TextRenderer] FT_Init_FreeType failed (err=%d)\n", (int)ftErr);
+        return false;
+    }
+
+    ftErr = FT_New_Face(nextTtf->ftLib, path, 0, &nextTtf->ftFace);
     if (ftErr) {
         fprintf(stderr, "[TextRenderer] FT_New_Face failed: %s (err=%d)\n", path, (int)ftErr);
-        m_ttf.reset(); return false;
+        return false;
     }
 
-    FT_Set_Pixel_Sizes(m_ttf->ftFace, 0, (FT_UInt)fontSize);
+    ftErr = FT_Set_Pixel_Sizes(nextTtf->ftFace, 0, (FT_UInt)fontSize);
+    if (ftErr) {
+        fprintf(stderr, "[TextRenderer] FT_Set_Pixel_Sizes failed: %s (err=%d)\n",
+                path, (int)ftErr);
+        return false;
+    }
 
+    m_ttf = std::move(nextTtf);
     m_ttf->ascent  = m_ttf->ftFace->size->metrics.ascender / 64.0f;
     m_ttf->descent = m_ttf->ftFace->size->metrics.descender / 64.0f;
     m_ttf->lineGap = 0.0f;

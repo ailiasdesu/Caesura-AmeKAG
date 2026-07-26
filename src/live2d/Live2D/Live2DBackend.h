@@ -86,9 +86,6 @@ private:
     bool createRenderer(Live2DModel& model);
 };
 
-void registerLive2DBinding(void* luaState);
-void Live2DBackend_setGlobal(Live2DBackend* backend);
-
 } // namespace Caesura
 
 #endif

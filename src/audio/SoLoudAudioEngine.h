@@ -2,6 +2,7 @@
 #include "../audio/api/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <list>
@@ -14,7 +15,7 @@ namespace Caesura {
 // SoLoudAudioEngine   Concrete IAudioBackend using SoLoud
 // ---------------------------------------------------------------------------
 // Three audio buses: BGM, VOICE, SE.
-// Managed via BackendRegistry; created by factory at Lua init time.
+// Owned by the Engine composition root and registered through BackendRegistry.
 // Waveform cache uses LRU eviction (spec [10.2.69]) with O(1) touch via
 // unordered_map + list.  Cache is a class member, not a global static.
 
@@ -57,6 +58,7 @@ public:
 
     void flushWaveCache() override;
 
+    unsigned int consumeVoiceCompletions() override;
     bool isVoicePlaying() override;
     bool isBGMPlaying() override;
     bool isSEPlaying() override;
@@ -77,6 +79,11 @@ public:
 private:
     // -- Internal helpers -------------------------------------------------
     std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file);
+    void cullFinishedHandles();
+    void releaseAudioHandles(std::size_t count);
+    void retireHandle(SoLoud::handle handle, float fadeTime,
+                      std::vector<SoLoud::handle>& retiringHandles);
+    void stopRetiringHandles(std::vector<SoLoud::handle>& retiringHandles);
 
     SoLoud::Soloud m_soloud;
     SoLoud::Bus    m_bgmBus;
@@ -88,6 +95,9 @@ private:
 
     unsigned int m_currentVoice = 0;
     unsigned int m_currentBGM   = 0;
+    unsigned int m_voiceCompletionsPending = 0;
+    std::vector<SoLoud::handle> m_retiringBGM;
+    std::vector<SoLoud::handle> m_retiringVoice;
 
     // SE handles: tracked per-play for mass-stop via stopSE()
     std::vector<SoLoud::handle> m_activeSE;
@@ -107,6 +117,3 @@ private:
 };
 
 } // namespace Caesura
-
-
-

@@ -107,6 +107,9 @@ TEST_CASE("ProviderChain::providers accessor") {
     CHECK(chain.providers().empty());
     chain.addProvider(std::make_unique<DirAssetProvider>("some_dir"));
     CHECK(chain.providers().size() == 1);
+    chain.clear();
+    CHECK(chain.providers().empty());
+    CHECK_NOTHROW(chain.clear());
 }
 
 TEST_CASE("DirAssetProvider::read nonexistent returns empty") {

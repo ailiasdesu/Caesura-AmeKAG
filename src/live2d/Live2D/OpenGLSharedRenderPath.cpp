@@ -3,8 +3,9 @@
 #include "OpenGLSharedRenderPath.h"
 
 // GL MUST come before Cubism headers
-#ifdef _WIN32
 #include <GL/glew.h>
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
 #else
 #include <GL/gl.h>
 #include <GL/glext.h>
@@ -30,6 +31,11 @@ using namespace Csm::Rendering;
 // init / shutdown
 // ============================================================
 bool OpenGLSharedRenderPath::init(int width, int height) {
+    const GLenum glewErr = glewInit();
+    if (glewErr != GLEW_OK) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+            "[Live2D/GL] GLEW init warning: %s", glewGetErrorString(glewErr));
+    }
     m_width = width;
     m_height = height;
     return createTargetTexture(width, height);

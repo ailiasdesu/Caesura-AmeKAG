@@ -1,0 +1,617 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BB9E3378-F11E-3FC3-9BD1-791722BE14A5}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>CaesuraAmeKAG</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CaesuraAmeKAG.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CaesuraAmeKAG</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CaesuraAmeKAG.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CaesuraAmeKAG</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">CaesuraAmeKAG.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">CaesuraAmeKAG</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">CaesuraAmeKAG.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">CaesuraAmeKAG</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/include" /Zc:__cplusplus /utf-8 /FS</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <BufferSecurityCheck></BufferSecurityCheck>
+      <CallingConvention></CallingConvention>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4100;4189;4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel></FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=1;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_DEBUG=1;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR="Debug"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=1;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_DEBUG=1;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>Copying SDL3 runtime to output	Copying scripts to output directory...	Copying demo to output directory...</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/lib/x64/SDL3.dll D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Debug/SDL3.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/scripts D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Debug/scripts
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/demo D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Debug/demo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>Debug\caesura_rpc.lib;Debug\caesura_entry.lib;Debug\caesura_archive.lib;zstd\lib\Debug\zstd_static.lib;Debug\ed25519.lib;Debug\caesura_audio.lib;soloud\Debug\soloud.lib;Debug\caesura_input.lib;Debug\caesura_job.lib;Debug\caesura_live2d.lib;Debug\caesura_minigame.lib;Debug\caesura_platform.lib;Debug\caesura_render.lib;Debug\caesura_debug.lib;freetype\Debug\freetyped.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avcodec.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avformat.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\swscale.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avutil.lib;Debug\caesura_resource.lib;Debug\caesura_script.lib;Debug\caesura_steam.lib;bcrypt.lib;winmm.lib;ws2_32.lib;psapi.lib;ole32.lib;d3d11.lib;dxgi.lib;d3dcompiler.lib;Debug\caesura_storage.lib;Debug\caesura_di.lib;lua\Debug\lua.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\lib\x64\SDL3.lib;bgfx_lib\Debug\bgfx.lib;bimg\Debug\bimg.lib;bx\Debug\bx.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Debug/CaesuraAmeKAG.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Debug/CaesuraAmeKAG.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/include" /Zc:__cplusplus /utf-8 /FS</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck></BufferSecurityCheck>
+      <CallingConvention></CallingConvention>
+      <DisableSpecificWarnings>4100;4189;4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel></FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR="Release"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>Copying SDL3 runtime to output	Copying scripts to output directory...	Copying demo to output directory...</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/lib/x64/SDL3.dll D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Release/SDL3.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/scripts D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Release/scripts
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/demo D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Release/demo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>Release\caesura_rpc.lib;Release\caesura_entry.lib;Release\caesura_archive.lib;zstd\lib\Release\zstd_static.lib;Release\ed25519.lib;Release\caesura_audio.lib;soloud\Release\soloud.lib;Release\caesura_input.lib;Release\caesura_job.lib;Release\caesura_live2d.lib;Release\caesura_minigame.lib;Release\caesura_platform.lib;Release\caesura_render.lib;Release\caesura_debug.lib;freetype\Release\freetype.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avcodec.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avformat.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\swscale.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avutil.lib;Release\caesura_resource.lib;Release\caesura_script.lib;Release\caesura_steam.lib;bcrypt.lib;winmm.lib;ws2_32.lib;psapi.lib;ole32.lib;d3d11.lib;dxgi.lib;d3dcompiler.lib;Release\caesura_storage.lib;Release\caesura_di.lib;lua\Release\lua.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\lib\x64\SDL3.lib;bgfx_lib\Release\bgfx.lib;bimg\Release\bimg.lib;bx\Release\bx.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Release/CaesuraAmeKAG.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/Release/CaesuraAmeKAG.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/include" /Zc:__cplusplus /utf-8 /FS</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck></BufferSecurityCheck>
+      <CallingConvention></CallingConvention>
+      <DisableSpecificWarnings>4100;4189;4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel></FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR="MinSizeRel"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>Copying SDL3 runtime to output	Copying scripts to output directory...	Copying demo to output directory...</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/lib/x64/SDL3.dll D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/MinSizeRel/SDL3.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/scripts D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/MinSizeRel/scripts
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/demo D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/MinSizeRel/demo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>MinSizeRel\caesura_rpc.lib;MinSizeRel\caesura_entry.lib;MinSizeRel\caesura_archive.lib;zstd\lib\MinSizeRel\zstd_static.lib;MinSizeRel\ed25519.lib;MinSizeRel\caesura_audio.lib;soloud\MinSizeRel\soloud.lib;MinSizeRel\caesura_input.lib;MinSizeRel\caesura_job.lib;MinSizeRel\caesura_live2d.lib;MinSizeRel\caesura_minigame.lib;MinSizeRel\caesura_platform.lib;MinSizeRel\caesura_render.lib;MinSizeRel\caesura_debug.lib;freetype\MinSizeRel\freetype.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avcodec.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avformat.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\swscale.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avutil.lib;MinSizeRel\caesura_resource.lib;MinSizeRel\caesura_script.lib;MinSizeRel\caesura_steam.lib;bcrypt.lib;winmm.lib;ws2_32.lib;psapi.lib;ole32.lib;d3d11.lib;dxgi.lib;d3dcompiler.lib;MinSizeRel\caesura_storage.lib;MinSizeRel\caesura_di.lib;lua\MinSizeRel\lua.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\lib\x64\SDL3.lib;bgfx_lib\MinSizeRel\bgfx.lib;bimg\MinSizeRel\bimg.lib;bx\MinSizeRel\bx.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/MinSizeRel/CaesuraAmeKAG.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/MinSizeRel/CaesuraAmeKAG.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/include" /Zc:__cplusplus /utf-8 /FS</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck></BufferSecurityCheck>
+      <CallingConvention></CallingConvention>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4100;4189;4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel></FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR="RelWithDebInfo"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;SDL_MAIN_HANDLED;BX_CONFIG_DEBUG=0;_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;__STDC_LIMITS_MACROS;__STDC_FORMAT_MACROS;__STDC_CONSTANT_MACROS;CAESURA_VIDEO_FFMPEG;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>D:\文件存放处\codex\Caesura(AmeKAG)\src;D:\文件存放处\codex\Caesura(AmeKAG)\external;D:\文件存放处\codex\Caesura(AmeKAG)\external\soloud\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty;D:\文件存放处\codex\Caesura(AmeKAG)\external\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bimg\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\bgfx\bgfx\3rdparty\stb;D:\文件存放处\codex\Caesura(AmeKAG)\external\pl_mpeg;D:\文件存放处\codex\Caesura(AmeKAG)\external\freetype\include;D:\文件存放处\codex\Caesura(AmeKAG)\external\zstd\lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\cpp-httplib;D:\文件存放处\codex\Caesura(AmeKAG)\external\json;D:\文件存放处\codex\Caesura(AmeKAG)\external\lua;D:\文件存放处\codex\Caesura(AmeKAG)\external\ed25519;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\caesura_api_include;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>Copying SDL3 runtime to output	Copying scripts to output directory...	Copying demo to output directory...</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different D:/文件存放处/codex/Caesura(AmeKAG)/external/SDL3/SDL3-3.2.0/lib/x64/SDL3.dll D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/RelWithDebInfo/SDL3.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/scripts D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/RelWithDebInfo/scripts
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory D:/文件存放处/codex/Caesura(AmeKAG)/demo D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/RelWithDebInfo/demo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>RelWithDebInfo\caesura_rpc.lib;RelWithDebInfo\caesura_entry.lib;RelWithDebInfo\caesura_archive.lib;zstd\lib\RelWithDebInfo\zstd_static.lib;RelWithDebInfo\ed25519.lib;RelWithDebInfo\caesura_audio.lib;soloud\RelWithDebInfo\soloud.lib;RelWithDebInfo\caesura_input.lib;RelWithDebInfo\caesura_job.lib;RelWithDebInfo\caesura_live2d.lib;RelWithDebInfo\caesura_minigame.lib;RelWithDebInfo\caesura_platform.lib;RelWithDebInfo\caesura_render.lib;RelWithDebInfo\caesura_debug.lib;freetype\RelWithDebInfo\freetype.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avcodec.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avformat.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\swscale.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\ffmpeg\lib\avutil.lib;RelWithDebInfo\caesura_resource.lib;RelWithDebInfo\caesura_script.lib;RelWithDebInfo\caesura_steam.lib;bcrypt.lib;winmm.lib;ws2_32.lib;psapi.lib;ole32.lib;d3d11.lib;dxgi.lib;d3dcompiler.lib;RelWithDebInfo\caesura_storage.lib;RelWithDebInfo\caesura_di.lib;lua\RelWithDebInfo\lua.lib;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\lib\x64\SDL3.lib;bgfx_lib\RelWithDebInfo\bgfx.lib;bimg\RelWithDebInfo\bimg.lib;bx\RelWithDebInfo\bx.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/RelWithDebInfo/CaesuraAmeKAG.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/RelWithDebInfo/CaesuraAmeKAG.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\文件存放处\codex\Caesura(AmeKAG)\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule D:/文件存放处/codex/Caesura(AmeKAG)/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify --check-stamp-file D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPack.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPackComponent.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\FeatureSummary.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\WindowsPaths.cmake;C:\Program Files\CMake\share\cmake-4.3\Templates\CPackConfig.cmake.in;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCXXCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeRCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeSystem.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\cmake.verify_globs;D:\文件存放处\codex\Caesura(AmeKAG)\cmake\CaesuraModules.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3Config.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3ConfigVersion.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\sdlcpu.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveReader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveWriter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\ICryptoEngine.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\api\IAudioBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\debug\api\IDebugManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\IDeviceLostListener.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ISandboxQuota.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ITextureBudget.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ThreadAssert.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\input\api\IInputRouter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\job\api\IJobSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\live2d\api\IAnimationBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\minigame\api\IMiniGameBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\platform\api\IPlatformBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IGpuMonitor.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ILayerManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IParticleSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IRenderDevice.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ITextureManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IVideoPlayer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\RenderTypes.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAssetProvider.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAsyncLoader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IResourceGenerationTracker.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IEditorServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcDispatcher.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\script\api\ILuaManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\steam\api\ISteamBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveProvider.h;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule D:/文件存放处/codex/Caesura(AmeKAG)/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify --check-stamp-file D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPack.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPackComponent.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\FeatureSummary.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\WindowsPaths.cmake;C:\Program Files\CMake\share\cmake-4.3\Templates\CPackConfig.cmake.in;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCXXCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeRCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeSystem.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\cmake.verify_globs;D:\文件存放处\codex\Caesura(AmeKAG)\cmake\CaesuraModules.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3Config.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3ConfigVersion.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\sdlcpu.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveReader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveWriter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\ICryptoEngine.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\api\IAudioBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\debug\api\IDebugManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\IDeviceLostListener.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ISandboxQuota.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ITextureBudget.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ThreadAssert.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\input\api\IInputRouter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\job\api\IJobSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\live2d\api\IAnimationBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\minigame\api\IMiniGameBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\platform\api\IPlatformBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IGpuMonitor.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ILayerManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IParticleSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IRenderDevice.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ITextureManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IVideoPlayer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\RenderTypes.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAssetProvider.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAsyncLoader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IResourceGenerationTracker.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IEditorServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcDispatcher.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\script\api\ILuaManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\steam\api\ISteamBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveProvider.h;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule D:/文件存放处/codex/Caesura(AmeKAG)/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify --check-stamp-file D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPack.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPackComponent.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\FeatureSummary.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\WindowsPaths.cmake;C:\Program Files\CMake\share\cmake-4.3\Templates\CPackConfig.cmake.in;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCXXCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeRCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeSystem.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\cmake.verify_globs;D:\文件存放处\codex\Caesura(AmeKAG)\cmake\CaesuraModules.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3Config.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3ConfigVersion.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\sdlcpu.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveReader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveWriter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\ICryptoEngine.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\api\IAudioBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\debug\api\IDebugManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\IDeviceLostListener.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ISandboxQuota.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ITextureBudget.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ThreadAssert.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\input\api\IInputRouter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\job\api\IJobSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\live2d\api\IAnimationBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\minigame\api\IMiniGameBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\platform\api\IPlatformBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IGpuMonitor.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ILayerManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IParticleSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IRenderDevice.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ITextureManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IVideoPlayer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\RenderTypes.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAssetProvider.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAsyncLoader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IResourceGenerationTracker.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IEditorServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcDispatcher.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\script\api\ILuaManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\steam\api\ISteamBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveProvider.h;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule D:/文件存放处/codex/Caesura(AmeKAG)/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify --check-stamp-file D:/文件存放处/codex/Caesura(AmeKAG)/build-current-verify/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPack.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\CPackComponent.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\FeatureSummary.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.3\Modules\Platform\WindowsPaths.cmake;C:\Program Files\CMake\share\cmake-4.3\Templates\CPackConfig.cmake.in;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeCXXCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeRCCompiler.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\4.3.3\CMakeSystem.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\cmake.verify_globs;D:\文件存放处\codex\Caesura(AmeKAG)\cmake\CaesuraModules.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3Config.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\SDL3ConfigVersion.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\external\SDL3\SDL3-3.2.0\cmake\sdlcpu.cmake;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveReader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\IArchiveWriter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\archive\api\ICryptoEngine.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\audio\api\IAudioBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\debug\api\IDebugManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\IDeviceLostListener.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ISandboxQuota.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ITextureBudget.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\di\api\ThreadAssert.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\input\api\IInputRouter.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\job\api\IJobSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\live2d\api\IAnimationBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\minigame\api\IMiniGameBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\platform\api\IPlatformBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IGpuMonitor.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ILayerManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IParticleSystem.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IRenderDevice.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\ITextureManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\IVideoPlayer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\render\api\RenderTypes.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAssetProvider.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IAsyncLoader.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\resource\api\IResourceGenerationTracker.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IEditorServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcDispatcher.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\rpc\api\IRpcServer.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\script\api\ILuaManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\steam\api\ISteamBackend.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveManager.h;D:\文件存放处\codex\Caesura(AmeKAG)\src\storage\api\ISaveProvider.h;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="D:\文件存放处\codex\Caesura(AmeKAG)\src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\ZERO_CHECK.vcxproj">
+      <Project>{B775F7D0-693D-3883-9F06-808371BDC8B5}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraArchive.vcxproj">
+      <Project>{0587F2B2-7A52-3B13-8B99-18012D1E771C}</Project>
+      <Name>CaesuraArchive</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraAudio.vcxproj">
+      <Project>{5D940BE4-4FCB-3A4A-A87E-24C873401354}</Project>
+      <Name>CaesuraAudio</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraDebug.vcxproj">
+      <Project>{469BFBFE-5A17-37FF-8B52-E322744FB6F7}</Project>
+      <Name>CaesuraDebug</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraDi.vcxproj">
+      <Project>{B208E24E-1E01-3CAD-BF08-10B7609E0681}</Project>
+      <Name>CaesuraDi</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraEntry.vcxproj">
+      <Project>{FC181221-85C1-33C7-928F-64CE3C2144B0}</Project>
+      <Name>CaesuraEntry</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraInput.vcxproj">
+      <Project>{9156024D-0E3F-3852-AAE7-87B1EAFE60D8}</Project>
+      <Name>CaesuraInput</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraJob.vcxproj">
+      <Project>{6A26AE31-3746-35BD-8E82-DE42521E8A4C}</Project>
+      <Name>CaesuraJob</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraLive2D.vcxproj">
+      <Project>{B7E944EE-6567-3003-889F-191803BB6B05}</Project>
+      <Name>CaesuraLive2D</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraMiniGame.vcxproj">
+      <Project>{019EC68C-7AB9-3637-9F32-E2725EEB58E7}</Project>
+      <Name>CaesuraMiniGame</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraPlatform.vcxproj">
+      <Project>{509801D8-EA02-381E-BF38-87DBF61544E5}</Project>
+      <Name>CaesuraPlatform</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraRender.vcxproj">
+      <Project>{D52BA461-514B-3FF7-A8FE-132D8FBA72F8}</Project>
+      <Name>CaesuraRender</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraResource.vcxproj">
+      <Project>{95F464D3-36DC-30E2-9149-60C7D2CE6479}</Project>
+      <Name>CaesuraResource</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraRpc.vcxproj">
+      <Project>{75F1A7E9-0C53-3EF5-992E-C24B9F50931B}</Project>
+      <Name>CaesuraRpc</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraScript.vcxproj">
+      <Project>{4FBD66D4-902A-3375-9703-5B766A2BD0FC}</Project>
+      <Name>CaesuraScript</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraSteam.vcxproj">
+      <Project>{4ABD456F-D4F5-37A4-A93A-758C56DD9AAA}</Project>
+      <Name>CaesuraSteam</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\CaesuraStorage.vcxproj">
+      <Project>{73DE5204-BCE9-3E0C-AFE1-8D63C8B5683A}</Project>
+      <Name>CaesuraStorage</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\bgfx_lib\bgfx.vcxproj">
+      <Project>{8D82C10D-BD6B-3A65-B912-FE766EAB5273}</Project>
+      <Name>bgfx</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\bimg\bimg.vcxproj">
+      <Project>{E0402E4F-6162-33B6-8C1F-4FBC93F0F7A2}</Project>
+      <Name>bimg</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\bx\bx.vcxproj">
+      <Project>{2DBA7090-8A29-3F71-B7D5-0120DB053F3A}</Project>
+      <Name>bx</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\ed25519.vcxproj">
+      <Project>{F6C32849-5F33-3390-B4CC-46CF7E35B30A}</Project>
+      <Name>ed25519</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\freetype\freetype.vcxproj">
+      <Project>{38CF567B-9922-3892-9FBC-3A3AFA0557AA}</Project>
+      <Name>freetype</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\zstd\lib\libzstd_static.vcxproj">
+      <Project>{1E4123B3-855A-3226-B552-C331AC27640B}</Project>
+      <Name>libzstd_static</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\lua\lua.vcxproj">
+      <Project>{657697E6-DDEA-3A67-903F-14817A52A35F}</Project>
+      <Name>lua</Name>
+    </ProjectReference>
+    <ProjectReference Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-current-verify\soloud\soloud.vcxproj">
+      <Project>{17E83C92-9A42-3ECF-80EF-B3A824FD4C72}</Project>
+      <Name>soloud</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

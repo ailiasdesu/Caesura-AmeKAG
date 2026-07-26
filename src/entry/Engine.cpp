@@ -7,25 +7,30 @@ extern "C" {
 #include "../input/InputRouter.h"
 #include "../di/BackendRegistry.h"
 #include "../debug/DebugManager.h"
-#include "../rpc/RpcServer.h"
 #include "ErrorUI.h"
 #include "../audio/api/IAudioBackend.h"
-#include "../di/TextureBudget.h"
+#include "../di/api/ITextureBudget.h"
+#include "../di/api/ISandboxQuota.h"
 #include "../render/api/IRenderDevice.h"
+#include "../render/api/ITextureManager.h"
+#include "../render/api/ILayerManager.h"
 #include "../render/VideoPlayer.h"
 #include "../render/api/IGpuMonitor.h"
-#include "../render/FreeTypeContext.h"
+#include "../render/api/IParticleSystem.h"
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../script/vm/LuaManager.h"
 #include "../debug/HotReload.h"
-#include "../job/JobSystem.h"
-#include "../resource/AsyncLoader.h"
+#include "../debug/DebugProtocol.h"
+#include "../job/api/IJobSystem.h"
+#include "../resource/api/IAsyncLoader.h"
 #include "../resource/AssetManager.h"
-#include "../render/TextureManager.h"
+#include "../resource/api/IResourceGenerationTracker.h"
 #include "../steam/api/ISteamBackend.h"
 #include "../script/bindings/SteamBinding.h"
-#include "../archive/CryptoEngine.h"
+#include "../script/bindings/VFXBinding.h"
+#include "../storage/api/ISaveManager.h"
+#include "../archive/api/ICryptoEngine.h"
 #include <SDL3/SDL.h>
 #include <thread>
 #include <atomic>
@@ -34,26 +39,90 @@ extern "C" {
 #include <vector>
 #include <cmath>
 #include <chrono>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 
 
 namespace Caesura {
-namespace detail { thread_local std::thread::id g_mainThreadId; }
+
+namespace {
+
+constexpr const char* kDebugPausedGlobal = "_CAESURA_DEBUG_PAUSED";
+constexpr const char* kDebugPauseProbeGlobal = "_CAESURA_DEBUG_IS_PAUSED";
+
+int debugPauseProbe(lua_State* L) {
+    auto* protocol = static_cast<DebugProtocol*>(
+        lua_touserdata(L, lua_upvalueindex(1)));
+    lua_pushboolean(L, protocol && protocol->isDebugActive() ? 1 : 0);
+    return 1;
+}
+
+void installDebugPauseProbe(lua_State* L, DebugProtocol* protocol) {
+    if (!L) return;
+    lua_pushlightuserdata(L, protocol);
+    lua_pushcclosure(L, debugPauseProbe, 1);
+    lua_setglobal(L, kDebugPauseProbeGlobal);
+    lua_pushboolean(L, 0);
+    lua_setglobal(L, kDebugPausedGlobal);
+}
+
+void removeDebugPauseProbe(lua_State* L) {
+    if (!L) return;
+    lua_pushnil(L);
+    lua_setglobal(L, kDebugPauseProbeGlobal);
+    lua_pushboolean(L, 0);
+    lua_setglobal(L, kDebugPausedGlobal);
+}
+
+} // namespace
 
 // Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
-std::unique_ptr<ISteamBackend> createDefaultSteamIntegration(ISteamBackend* configured);
+std::unique_ptr<ISteamBackend> createDefaultSteamIntegration();
 std::unique_ptr<IAudioBackend> createHeadlessAudioBackend();
+std::unique_ptr<IRenderDevice> createHeadlessRenderDevice();
+std::unique_ptr<IPlatformBackend> createHeadlessPlatformBackend();
 std::unique_ptr<IMiniGameBackend> createFallbackMiniGameBackend();
+std::unique_ptr<IParticleSystem> createParticleSystem();
+std::unique_ptr<IResourceGenerationTracker> createResourceGenerationTracker();
+std::unique_ptr<ITextureBudget> createTextureBudget();
+std::unique_ptr<ITextureManager> createTextureManager();
+std::unique_ptr<ILayerManager> createLayerManager(IRenderDevice* renderDevice);
+std::unique_ptr<ISandboxQuota> createSandboxQuota();
+std::unique_ptr<AssetManager> createAssetManager();
+std::unique_ptr<IAsyncLoader> createAsyncLoader(AssetManager* assetManager);
+std::unique_ptr<IJobSystem> createJobSystem();
+std::unique_ptr<ISaveManager> createSaveManager();
+std::unique_ptr<carc::ICryptoEngine> createCryptoEngine();
 std::unique_ptr<IAnimationBackend> createDefaultAnimationBackend();
 std::unique_ptr<IAnimationBackend> createFallbackAnimationBackend();
 void attachRenderDeviceToAnimationBackend(IAnimationBackend* animationBackend,
-                                          IRenderDevice* renderDevice);
-void registerDefaultAssetProviders();
+                                           IRenderDevice* renderDevice);
+void registerDefaultAssetProviders(AssetManager& assetManager);
 void registerEngineLuaRegistryServices(lua_State* L,
                                        IInputRouter* inputRouter,
-                                       IVideoPlayer* videoPlayer);
+                                       IVideoPlayer* videoPlayer,
+                                       IParticleSystem* particleSystem,
+                                       ITextureManager* textureManager,
+                                       IAsyncLoader* asyncLoader);
 void registerMiniGameLuaRegistryService(lua_State* L,
-                                        IMiniGameBackend* miniGameBackend);
+                                         IMiniGameBackend* miniGameBackend);
+
+EngineConfig::~EngineConfig() {
+    delete steam;
+    delete animation;
+    delete miniGame;
+    delete sandboxQuota;
+    delete layerManager;
+    delete videoPlayer;
+    delete gpuMonitor;
+    delete inputRouter;
+    delete lua;
+    delete platform;
+    delete audio;
+    delete render;
+}
 
 
 // -- Phase G8-U1: lua_Alloc hook for per-allocation memory check ---------------
@@ -65,38 +134,72 @@ static void* s_luaAllocFn(void* ud, void* ptr, size_t osize, size_t nsize) {
     return realloc(ptr, nsize);
 }
 
-Engine::Engine(const EngineConfig& config)
-    : m_config(config)
-    , m_lua(config.lua ? std::unique_ptr<LuaManager>(config.lua) : std::make_unique<LuaManager>())
-    , m_inputRouter(config.inputRouter ? std::unique_ptr<InputRouter>(config.inputRouter) : std::make_unique<InputRouter>())
-    , m_videoPlayer(config.videoPlayer ? std::unique_ptr<VideoPlayer>(config.videoPlayer) : std::make_unique<VideoPlayer>())
-    , m_steamBackend(createDefaultSteamIntegration(config.steam))
-    
-{}
+Engine::Engine(EngineConfig&& config)
+    : m_config(std::move(config))
+    , m_renderDevice(std::exchange(m_config.render, nullptr))
+    , m_audioBackend(std::exchange(m_config.audio, nullptr))
+    , m_platformBackend(std::exchange(m_config.platform, nullptr))
+    , m_lua(std::exchange(m_config.lua, nullptr))
+    , m_hotReload(std::make_unique<HotReload>())
+    , m_inputRouter(std::exchange(m_config.inputRouter, nullptr))
+    , m_gpuMonitor(std::exchange(m_config.gpuMonitor, nullptr))
+    , m_miniGameBackend(std::exchange(m_config.miniGame, nullptr))
+    , m_animationBackend(std::exchange(m_config.animation, nullptr))
+    , m_steamBackend(std::exchange(m_config.steam, nullptr))
+    , m_videoPlayer(std::exchange(m_config.videoPlayer, nullptr))
+    , m_layerManager(std::exchange(m_config.layerManager, nullptr))
+    , m_sandboxQuota(std::exchange(m_config.sandboxQuota, nullptr))
+{
+    // Acquire every injected pointer before any default allocation can throw.
+    if (!m_lua) m_lua = std::make_unique<LuaManager>();
+    if (!m_inputRouter) m_inputRouter = std::make_unique<InputRouter>();
+    if (!m_videoPlayer) m_videoPlayer = std::make_unique<VideoPlayer>();
+    if (!m_steamBackend) m_steamBackend = createDefaultSteamIntegration();
+    if (!m_sandboxQuota) m_sandboxQuota = createSandboxQuota();
+}
 
 Engine::~Engine() {
     if (!m_shutdownComplete) shutdown();
 }
 
-IRenderDevice& Engine::renderDevice() { return *BackendRegistry::instance().getRenderDevice(); }
-IAudioBackend& Engine::audio() { return *BackendRegistry::instance().getAudioBackend(); }
-IPlatformBackend& Engine::platform() { return *BackendRegistry::instance().getPlatformBackend(); }
+void Engine::requireInitialized() const {
+    if (!m_initialized) {
+        throw std::logic_error("Engine service access requires a successful init()");
+    }
+}
+
+IRenderDevice& Engine::renderDevice() { requireInitialized(); return *m_renderDevice; }
+IAudioBackend& Engine::audio() { requireInitialized(); return *m_audioBackend; }
+IPlatformBackend& Engine::platform() { requireInitialized(); return *m_platformBackend; }
 
 bool Engine::init() {
-    // Take ownership of DI-injected implementations
-    if (m_config.platform)  m_platformBackend.reset(static_cast<IPlatformBackend*>(m_config.platform));
-    if (m_config.render)    m_renderDevice.reset(static_cast<IRenderDevice*>(m_config.render));
-    if (m_config.audio)     m_audioBackend.reset(static_cast<IAudioBackend*>(m_config.audio));
-    if (m_config.miniGame)  m_miniGameBackend.reset(static_cast<IMiniGameBackend*>(m_config.miniGame));
-    if (m_config.animation) m_animationBackend.reset(static_cast<IAnimationBackend*>(m_config.animation));
-    if (m_config.gpuMonitor) m_gpuMonitor.reset(static_cast<IGpuMonitor*>(m_config.gpuMonitor));
+    if (m_initAttempted) {
+        fprintf(stderr, "[Engine] init() may only be called once per Engine instance.\n");
+        return false;
+    }
+    m_initAttempted = true;
 
-    if (m_config.headless && !m_audioBackend) {
+    const bool useHeadlessDefaults = m_config.headless && !m_config.editorMode;
+    if (useHeadlessDefaults && !m_audioBackend) {
         m_audioBackend = createHeadlessAudioBackend();
     }
-    if (m_config.headless && !m_miniGameBackend) {
+    if (useHeadlessDefaults && !m_renderDevice) {
+        m_renderDevice = createHeadlessRenderDevice();
+    }
+    if (useHeadlessDefaults && !m_platformBackend) {
+        m_platformBackend = createHeadlessPlatformBackend();
+    }
+    if (useHeadlessDefaults && !m_miniGameBackend) {
         m_miniGameBackend = createFallbackMiniGameBackend();
     }
+    if (!m_layerManager) m_layerManager = createLayerManager(m_renderDevice.get());
+    if (!m_textureBudget) m_textureBudget = createTextureBudget();
+    if (!m_textureManager) m_textureManager = createTextureManager();
+    if (!m_assetManager) m_assetManager = createAssetManager();
+    if (!m_asyncLoader) m_asyncLoader = createAsyncLoader(m_assetManager.get());
+    if (!m_jobSystem) m_jobSystem = createJobSystem();
+    if (!m_saveManager) m_saveManager = createSaveManager();
+    if (!m_cryptoEngine) m_cryptoEngine = createCryptoEngine();
 
     detail::g_mainThreadId = std::this_thread::get_id();
 
@@ -107,19 +210,21 @@ bool Engine::init() {
         fprintf(stderr, "[Engine] Running in HEADLESS mode (no window, no GPU)\n");
     }
 
-    if (!DebugManager::instance().init("logs")) {
+    m_debugInitialized = DebugManager::instance().init("logs");
+    if (!m_debugInitialized) {
         fprintf(stderr, "[Engine] DebugManager init failed - continuing.\n");
     }
 
     // T2: Phase-split initialization
-    if (!initPlatformPhase()) return false;
-    if (!initScriptingPhase()) return false;
-    if (!initAssetPhase()) return false;
+    if (!initPlatformPhase()) { shutdown(); return false; }
+    if (!initScriptingPhase()) { shutdown(); return false; }
+    if (!initAssetPhase()) { shutdown(); return false; }
     if (!initOptionalPhase()) {
         fprintf(stderr, "[Engine] Optional subsystems init had issues (non-fatal).\n");
     }
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
+    m_initialized = true;
     return true;
 }
 
@@ -131,42 +236,39 @@ bool Engine::initPlatformPhase() {
     int width  = m_config.width;
     int height = m_config.height;
     const char* title = m_config.title;
+    const bool gpuMode = !m_config.headless || m_config.editorMode;
 
-    if (!m_config.headless || m_config.editorMode || m_config.platform) {
-        if (!m_platformBackend || !m_renderDevice || !m_audioBackend) {
-            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
-                        "Platform, render, and audio backends are required for GPU mode.");
-            return false;
-        }
-        if (!m_platformBackend->init(title, width, height)) {
-            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
-                        "SDL3 platform backend init failed.");
-            return false;
-        }
-        BackendRegistry::instance().setPlatformBackend(*m_platformBackend);
+    if (!m_platformBackend || !m_renderDevice || !m_audioBackend) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
+                    "Platform, render, and audio backends are required.");
+        return false;
+    }
+    if (!m_platformBackend->init(title, width, height)) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
+                    "Platform backend init failed.");
+        return false;
+    }
+    m_platformInitialized = true;
+    BackendRegistry::instance().setPlatformBackend(m_platformBackend.get());
 
-        if (m_config.editorMode) {
-            SDL_HideWindow(static_cast<SDL_Window*>(
-                m_platformBackend->getNativeWindowHandle()));
-        }
-
-        void* nwh = m_platformBackend->getNativeWindowHandle();
-        DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
-
-        if (!m_renderDevice->init(nwh, width, height)) {
-            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
-                        "Render device init failed.");
-            return false;
-        }
-        BackendRegistry::instance().setRenderDevice(*m_renderDevice);
-    } else {
-        // Headless: register null backends for safe no-op operations
-        BackendRegistry::instance().registerNullBackends();
-        BackendRegistry::instance().setAudioBackend(*m_audioBackend);
+    if (m_config.editorMode) {
+        SDL_HideWindow(static_cast<SDL_Window*>(
+            m_platformBackend->getNativeWindowHandle()));
     }
 
+    void* nwh = gpuMode ? m_platformBackend->getNativeWindowHandle() : nullptr;
+    DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
+
+    if (!m_renderDevice->init(nwh, width, height)) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
+                    "Render device init failed.");
+        return false;
+    }
+    m_renderInitialized = true;
+    BackendRegistry::instance().setRenderDevice(m_renderDevice.get());
+
     // Render info (GPU caps)
-    if (!m_config.headless || m_config.editorMode || m_config.platform) {
+    if (gpuMode) {
         const RenderRuntimeInfo renderInfo = m_renderDevice->getRuntimeInfo();
         DebugManager::RenderInfo ri;
         ri.backendName = renderInfo.backendName;
@@ -177,17 +279,13 @@ bool Engine::initPlatformPhase() {
         DebugManager::instance().setRenderInfo(ri);
     }
 
-    // Audio backend init
-    if (!m_config.headless || m_config.editorMode || m_config.platform) {
-        if (!m_audioBackend->init()) {
-            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
-                        "Audio backend init failed.");
-            return false;
-        }
-        BackendRegistry::instance().setAudioBackend(*m_audioBackend);
-    } else {
-        printf("[Engine] Headless mode: skipping audio init\n");
+    if (!m_audioBackend->init()) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
+                    "Audio backend init failed.");
+        return false;
     }
+    m_audioInitialized = true;
+    BackendRegistry::instance().setAudioBackend(m_audioBackend.get());
 
     DebugManager::AudioInfo ai;
     ai.initialized = true; ai.bgmBusReady = true;
@@ -205,12 +303,27 @@ bool Engine::initPlatformPhase() {
     }
 
     // Texture budget + shared backend registrations
-    TextureBudget::instance().detect();
-    BackendRegistry::instance().setTextureBudget(&TextureBudget::instance());
-    BackendRegistry::instance().setTextureManager(&TextureManager::instance());
-    TextureManager::instance().initialize(!m_config.headless || m_config.editorMode || m_config.platform);
+    m_textureBudget->detect();
+    BackendRegistry::instance().setTextureBudget(m_textureBudget.get());
+    if (!m_textureManager->initialize(gpuMode)) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
+                    "Texture manager init failed.");
+        return false;
+    }
+    m_textureManagerInitialized = true;
+    BackendRegistry::instance().setTextureManager(m_textureManager.get());
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
-    BackendRegistry::instance().setAsyncLoader(&AsyncLoader::instance());
+    BackendRegistry::instance().setAsyncLoader(m_asyncLoader.get());
+    m_saveManager->init("saves/");
+    BackendRegistry::instance().setSaveManager(m_saveManager.get());
+    if (!m_particleSystem) {
+        m_particleSystem = createParticleSystem();
+    }
+    BackendRegistry::instance().setParticleSystem(m_particleSystem.get());
+
+    BackendRegistry::instance().setLayerManager(m_layerManager.get());
+    m_layerManager->init();
+    m_layerManagerInitialized = true;
 
     return true;
 }
@@ -224,25 +337,39 @@ bool Engine::initScriptingPhase() {
         fprintf(stderr, "[Engine] Lua VM init failed.\n");
         return false;
     }
+    m_luaInitialized = true;
 
     // Phase G8-U1: install lua_Alloc hook for memory monitoring
     lua_setallocf(m_lua->state(), s_luaAllocFn, m_lua->state());
     BackendRegistry::instance().setLuaState(m_lua->state());
+    BackendRegistry::instance().setLuaManager(m_lua.get());
+    m_sandboxQuota->setLuaState(m_lua->state());
+    m_sandboxQuotaBound = true;
+    BackendRegistry::instance().setSandboxQuota(m_sandboxQuota.get());
     BackendRegistry::instance().setVideoPlayer(m_videoPlayer.get());
 
     // Phase R2-U1: Push all backend pointers into Lua registry so binding
     // files (KAG, Render, DevCore, Unified, VFX) can resolve them without
     // including BackendRegistry.h. Keys are the runtime contract with bindings.
-    registerEngineLuaRegistryServices(m_lua->state(), m_inputRouter.get(), m_videoPlayer.get());
+    registerEngineLuaRegistryServices(m_lua->state(), m_inputRouter.get(),
+                                      m_videoPlayer.get(), m_particleSystem.get(),
+                                      m_textureManager.get(), m_asyncLoader.get());
 
     // HotReload for scripts/ directory
-    HotReload::instance().init("scripts/", m_lua->state());
+    m_hotReload->init("scripts/", m_lua->state());
 
-    // Shared FreeType (before any text/font subsystem uses it)
-    if (!FreeTypeContext::instance().init()) {
-        fprintf(stderr, "[Engine] FreeTypeContext init failed.\n");
-        return false;
+    if (m_config.enableDebugger) {
+        m_debugProtocol = std::make_unique<DebugProtocol>(*m_hotReload);
+        if (!m_debugProtocol->init(m_lua->state())) {
+            fprintf(stderr, "[Engine] DebugProtocol init failed.\n");
+            m_debugProtocol.reset();
+            return false;
+        }
+        m_debugProtocolInitialized = true;
     }
+    installDebugPauseProbe(m_lua->state(), m_debugProtocol.get());
+    lua_pushboolean(m_lua->state(), 0);
+    lua_setglobal(m_lua->state(), "_CAESURA_VOICE_COMPLETE");
 
     return true;
 }
@@ -252,16 +379,25 @@ bool Engine::initScriptingPhase() {
 // ============================================================================
 
 bool Engine::initAssetPhase() {
+    if (!m_resourceGenerationTracker) {
+        m_resourceGenerationTracker = createResourceGenerationTracker();
+    }
+    BackendRegistry::instance().setResourceGenerationTracker(
+        m_resourceGenerationTracker.get());
+
     // Parallel task system
-    JobSystem::instance().init();
-    BackendRegistry::instance().setJobSystem(&JobSystem::instance());
-    m_videoPlayer->setJobSystem(JobSystem::instance());
+    m_jobSystem->init();
+    m_jobSystemInitialized = true;
+    BackendRegistry::instance().setJobSystem(m_jobSystem.get());
+    m_videoPlayer->setJobSystem(*m_jobSystem);
 
     // Asset management
-    AssetManager::instance().init();
+    m_assetManager->init();
+    m_assetManagerInitialized = true;
     // Inject CARC providers (moved from AssetManager to break resource→archive cycle)
-    registerDefaultAssetProviders();
-    AsyncLoader::instance().init();
+    registerDefaultAssetProviders(*m_assetManager);
+    m_asyncLoader->init();
+    m_asyncLoaderInitialized = true;
 
     return true;
 }
@@ -274,12 +410,15 @@ bool Engine::initOptionalPhase() {
     bool allOk = true;
 
     // Steam init (optional, no-op if SDK not present)
-    if (m_steamBackend->init()) {
-        registerSteamBinding(m_lua->state(), m_steamBackend.get());
+    m_steamInitialized = m_steamBackend && m_steamBackend->init();
+    BackendRegistry::instance().setSteamBackend(
+        m_steamInitialized ? m_steamBackend.get() : nullptr);
+    if (m_steamInitialized) {
+        registerSteamBinding(m_lua->state());
     }
 
     // Crypto engine registration (moved OUT of Steam if-block - bug fix)
-    BackendRegistry::instance().setCryptoEngine(&carc::CryptoEngine::instance());
+    BackendRegistry::instance().setCryptoEngine(m_cryptoEngine.get());
 
     if (!m_miniGameBackend) {
         m_miniGameBackend = createFallbackMiniGameBackend();
@@ -287,24 +426,40 @@ bool Engine::initOptionalPhase() {
 
     // 3D mini-game backend (bgfx or null)
     m_miniGameBackend->setRenderDevice(BackendRegistry::instance().getRenderDevice());
-    m_miniGameBackend->init();
-    BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
-    registerMiniGameLuaRegistryService(m_lua->state(), m_miniGameBackend.get());
+    m_miniGameInitialized = m_miniGameBackend->init();
+    if (!m_miniGameInitialized) {
+        m_miniGameBackend->shutdown();
+        m_miniGameBackend = createFallbackMiniGameBackend();
+        m_miniGameBackend->setRenderDevice(BackendRegistry::instance().getRenderDevice());
+        m_miniGameInitialized = m_miniGameBackend->init();
+        allOk = false;
+    }
+    if (m_miniGameInitialized) {
+        BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
+        registerMiniGameLuaRegistryService(m_lua->state(), m_miniGameBackend.get());
+    }
 
     // Animation backend
     if (!m_animationBackend) m_animationBackend = createDefaultAnimationBackend();
-    if (!m_animationBackend->init()) {
-
+    m_animationInitialized = m_animationBackend->init();
+    if (!m_animationInitialized) {
+        m_animationBackend->shutdown();
         m_animationBackend = createFallbackAnimationBackend();
-        m_animationBackend->init();
+        m_animationInitialized = m_animationBackend->init();
         allOk = false;
     }
-    BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
-    attachRenderDeviceToAnimationBackend(m_animationBackend.get(), m_renderDevice.get());
+    if (m_animationInitialized) {
+        BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
+        attachRenderDeviceToAnimationBackend(m_animationBackend.get(), m_renderDevice.get());
+    }
 
     return allOk;
 }
-void Engine::run() {
+void Engine::run(const OwnerPump& ownerPump) {
+    if (!m_initialized) {
+        fprintf(stderr, "[Engine] run() requires a successful init().\n");
+        return;
+    }
     m_running = true;
     if (m_config.headless) {
         m_lastTick = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -316,6 +471,10 @@ void Engine::run() {
 
     while (m_running) {
         PROFILE_SCOPE("frame");
+        m_skipLuaCallbacksThisFrame = false;
+        if (ownerPump) ownerPump();
+        m_skipLuaCallbacksThisFrame = pumpDebugger();
+        publishDebugPauseState();
         processEvents();
 
         // --- GPU device loss recovery check (before any per-frame rendering) ---
@@ -337,16 +496,19 @@ void Engine::run() {
         if (dt > 0.25f) dt = 0.25f;
         (void)dt; // reserved for frame-time tracking
 
-        // -- Phase 8.1: HotReload check (per frame) -----------------------
-        HotReload::instance().checkAndReload();
+        // Keep reload and Lua GC stopped while a coroutine is suspended.
+        // Rendering and transport pumping remain active.
+        if (!isLuaExecutionPaused()) {
+            m_hotReload->checkAndReload();
+        }
 
         // JobSystem main-thread callbacks + async load SDL events
-        JobSystem::instance().pollMainThreadJobs();
-        AsyncLoader::instance().poll();
+        m_jobSystem->pollMainThreadJobs();
+        m_asyncLoader->poll();
 
         // -- Phase G8-U1: Lua memory budget check \(every frame\) ---------------
         lua_State* Lgc = m_lua->state();
-        if (Lgc) {
+        if (Lgc && !isLuaExecutionPaused()) {
             int memKB = lua_gc(Lgc, LUA_GCCOUNT, 0);
             if (memKB > 204 * 1024) {  // 80% = 204MB
                 lua_gc(Lgc, LUA_GCSTEP, 50);
@@ -383,7 +545,7 @@ void Engine::run() {
 
         lua_State* L = m_lua->state();
         if (L) {
-            if (!m_luaPaused) {
+            if (!isLuaExecutionPaused()) {
                 lua_getglobal(L, "engine_update");
                 if (lua_isfunction(L, -1)) {
                     lua_pushnumber(L, dt);
@@ -395,6 +557,7 @@ void Engine::run() {
                     }
                 } else { lua_pop(L, 1); }
             }
+            publishDebugPauseState();
 
             lua_pushinteger(L, static_cast<int>(gpuQ));
             lua_setglobal(L, "_CAESURA_GPU_QUALITY");
@@ -408,32 +571,55 @@ void Engine::run() {
             lua_setglobal(L, "_CAESURA_GPU_DEGRADED");
         }
 
-        // D4.6: Audio voice-complete edge detection + Lua callback
+        // D4.6: Consume backend-owned voice completion events. A counter keeps
+        // multiple natural completions lossless while Lua is debugger-paused.
         if (m_audioBackend) {
-            bool playing = m_audioBackend->isVoicePlaying();
-            if (m_audioVoiceWasPlaying && !playing && L) {
+            m_audioBackend->update(static_cast<float>(dt));
+            const unsigned int completed =
+                m_audioBackend->consumeVoiceCompletions();
+            const unsigned int capacity =
+                std::numeric_limits<unsigned int>::max() -
+                m_audioVoiceCompletionsPending;
+            m_audioVoiceCompletionsPending +=
+                completed > capacity ? capacity : completed;
+
+            if (m_audioBackend->isVoicePlaying() && L) {
+                lua_pushboolean(L, 0);
+                lua_setglobal(L, "_CAESURA_VOICE_COMPLETE");
+            }
+
+            while (m_audioVoiceCompletionsPending > 0 &&
+                   !isLuaExecutionPaused() && L) {
                 lua_pushboolean(L, 1);
                 lua_setglobal(L, "_CAESURA_VOICE_COMPLETE");
-                // Invoke Lua callback if registered
                 lua_getglobal(L, "_onVoiceComplete");
                 if (lua_isfunction(L, -1)) {
                     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                        fprintf(stderr, "_onVoiceComplete: %s\n", lua_tostring(L, -1));
+                        const char* error = lua_tostring(L, -1);
+                        fprintf(stderr, "_onVoiceComplete: %s\n",
+                                error ? error : "non-string Lua error");
                         lua_pop(L, 1);
                     }
                 } else { lua_pop(L, 1); }
+                --m_audioVoiceCompletionsPending;
             }
-            m_audioVoiceWasPlaying = playing;
+
+            // A completion callback may start the next line immediately.
+            if (m_audioBackend->isVoicePlaying() && L) {
+                lua_pushboolean(L, 0);
+                lua_setglobal(L, "_CAESURA_VOICE_COMPLETE");
+            }
         }
 
-        render();
+        render(static_cast<float>(dt));
         if (m_renderDevice) m_renderDevice->advanceFrame();
 
         // -- Reserved: 3D mini-game update hook (CPU work, future JobSystem target) --
-        if (m_miniGameBackend && m_miniGameBackend->isActive()) {
+        if (m_miniGameBackend && m_miniGameBackend->isActive() &&
+            !isLuaExecutionPaused()) {
             m_miniGameBackend->update(static_cast<float>(dt));
             // U3.3: invoke Lua-side per-frame input callback if defined
-            if (L && !m_luaPaused) {
+            if (L) {
                 lua_getglobal(L, "_minigame_update");
                 if (lua_isfunction(L, -1)) {
                     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -448,12 +634,83 @@ void Engine::run() {
         }
     }
 
-    shutdown();
+}
+
+bool Engine::pumpDebugger() {
+    if (!m_debugProtocolInitialized || !m_debugProtocol) return false;
+
+    m_debugProtocol->pumpCommands();
+    const DebugProtocol::ResumeOutcome outcome =
+        m_debugProtocol->resumePausedCoroutineManaged();
+    if (outcome.status == DebugProtocol::NoResume) return false;
+
+    if (!outcome.error.empty()) {
+        fprintf(stderr, "[Debug] Coroutine resume failed: %s\n",
+                outcome.error.c_str());
+    }
+    notifyKagDebugResume();
+    return true;
+}
+
+bool Engine::isLuaExecutionPaused() const {
+    return m_deviceRecoveryPaused || m_skipLuaCallbacksThisFrame ||
+           (m_debugProtocol && m_debugProtocol->isDebugActive());
+}
+
+void Engine::publishDebugPauseState() {
+    if (!m_luaInitialized || !m_lua || !m_lua->state()) return;
+    lua_pushboolean(m_lua->state(), isLuaExecutionPaused() ? 1 : 0);
+    lua_setglobal(m_lua->state(), kDebugPausedGlobal);
+}
+
+void Engine::notifyKagDebugResume() {
+    lua_State* L = m_lua ? m_lua->state() : nullptr;
+    if (!L) return;
+
+    const int stackTop = lua_gettop(L);
+    lua_getglobal(L, "package");
+    if (!lua_istable(L, -1)) {
+        lua_settop(L, stackTop);
+        return;
+    }
+    lua_getfield(L, -1, "loaded");
+    if (!lua_istable(L, -1)) {
+        lua_settop(L, stackTop);
+        return;
+    }
+    lua_getfield(L, -1, "kag_runner");
+    if (!lua_istable(L, -1)) {
+        lua_settop(L, stackTop);
+        return;
+    }
+    lua_getfield(L, -1, "debug_resume");
+    if (lua_isfunction(L, -1) && lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        fprintf(stderr, "[Debug] kag_runner.debug_resume: %s\n",
+                lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+    }
+    lua_settop(L, stackTop);
+}
+
+void Engine::quit() {
+    m_running = false;
 }
 
 void Engine::processEvents() {
     // Steam callbacks every frame
     m_steamBackend->runCallbacks();
+
+    lua_State* L = m_lua->state();
+    if (L) {
+        lua_getglobal(L, "_CAESURA_QUIT");
+        const bool quitRequested =
+            lua_isboolean(L, -1) && lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        if (quitRequested) {
+            m_running = false;
+            return;
+        }
+    }
+
     // Pause input while Steam overlay is active
     if (m_steamBackend->isOverlayActive()) return;
     // Track 3: Reset Lua instruction budget each frame
@@ -464,7 +721,17 @@ void Engine::processEvents() {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
     }
-    lua_State* L = m_lua->state();
+    if (!isLuaExecutionPaused() && !m_deferredAsyncLoads.empty()) {
+        for (auto& completed : m_deferredAsyncLoads) {
+            SDL_Event deferred;
+            SDL_zero(deferred);
+            deferred.type = CAESURA_EVENT_ASYNC_LOAD;
+            auto* rawCompletion = completed.release();
+            deferred.user.data1 = rawCompletion;
+            if (!SDL_PushEvent(&deferred)) delete rawCompletion;
+        }
+        m_deferredAsyncLoads.clear();
+    }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         // -- GPU device reset from SDL (triggers recovery at next loop iteration) --
@@ -474,13 +741,17 @@ void Engine::processEvents() {
 
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
         if (event.type == CAESURA_EVENT_ASYNC_LOAD) {
-            auto* completed = static_cast<AsyncLoader::CompletedLoad*>(event.user.data1);
+            auto* completed = static_cast<CompletedLoad*>(event.user.data1);
+            if (completed && isLuaExecutionPaused()) {
+                m_deferredAsyncLoads.emplace_back(completed);
+                continue;
+            }
             if (completed) {
                 uint32_t texId = 0;
                 if (L && completed->success && completed->type == "texture" &&
                     !completed->rgba.empty() && completed->width > 0) {
                     CAESURA_ASSERT_MAIN_THREAD();
-                    texId = TextureManager::instance().loadTextureFromRGBA(
+                    texId = m_textureManager->loadTextureFromRGBA(
                         completed->rgba.data(), completed->width, completed->height,
                         completed->path);
                     if (texId == 0) completed->success = false;
@@ -537,7 +808,8 @@ void Engine::processEvents() {
 
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                m_inputRouter->getFocus() == InputFocus::KAG && !m_luaPaused) {
+                m_inputRouter->getFocus() == InputFocus::KAG &&
+                !isLuaExecutionPaused()) {
                 const char* handler = (event.button.button == SDL_BUTTON_RIGHT) ? "_KAG_onRightClick" : "_KAG_onClick";
                 lua_getglobal(L, handler);
                 if (lua_isfunction(L, -1)) {
@@ -549,29 +821,40 @@ void Engine::processEvents() {
                 } else { lua_pop(L, 1); }
             }
 
-            // D9.7: Mouse wheel for backlog scrolling
-            if (event.type == SDL_EVENT_MOUSE_WHEEL && m_inputRouter->getFocus() == InputFocus::KAG) {
-                lua_pushnumber(L, event.wheel.y); lua_setglobal(L, "_KAG_MOUSE_WHEEL_Y");
-                lua_getglobal(L, "_KAG_onMouseWheel");
-                if (lua_isfunction(L, -1)) {
-                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                        fprintf(stderr, "_KAG_onMouseWheel: %s\n", lua_tostring(L, -1));
-                        lua_pop(L, 1);
-                    }
-                } else { lua_pop(L, 1); }
-            }
+        }
+
+        // D9.7: Mouse wheel is a distinct SDL event, not a mouse-button event.
+        if (event.type == SDL_EVENT_MOUSE_WHEEL && L &&
+            m_inputRouter->getFocus() == InputFocus::KAG &&
+            !isLuaExecutionPaused()) {
+            lua_pushnumber(L, event.wheel.y); lua_setglobal(L, "_KAG_MOUSE_WHEEL_Y");
+            lua_getglobal(L, "_KAG_onMouseWheel");
+            if (lua_isfunction(L, -1)) {
+                if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                    const char* err = lua_tostring(L, -1);
+                    fprintf(stderr, "_KAG_onMouseWheel: %s\n", err ? err : "unknown");
+                    lua_pop(L, 1);
+                }
+            } else { lua_pop(L, 1); }
         }
 
         if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && L) {
             if (event.type == SDL_EVENT_KEY_DOWN) {
-                if (event.key.key == SDLK_F5) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5"); }
-                if (event.key.key == SDLK_F6) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F6"); }
+                if (event.key.key == SDLK_F5) {
+                    lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5");
+                    if (!event.key.repeat && !isLuaExecutionPaused()) quicksave();
+                }
+                if (event.key.key == SDLK_F6) {
+                    lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F6");
+                    if (!event.key.repeat && !isLuaExecutionPaused()) quickload();
+                }
                 if (event.key.key == SDLK_W)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_W"); }
                 if (event.key.key == SDLK_A)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_A"); }
                 if (event.key.key == SDLK_S)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_S"); }
                 if (event.key.key == SDLK_D)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_D"); }
                 // D9.6: Ctrl triggers skip mode via Lua
-                if (event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) {
+                if ((event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) &&
+                    !isLuaExecutionPaused()) {
                     lua_getglobal(L, "_KAG_onCtrlDown");
                     if (lua_isfunction(L, -1)) {
                         if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
@@ -586,7 +869,8 @@ void Engine::processEvents() {
                 if (event.key.key == SDLK_S)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_S"); }
                 if (event.key.key == SDLK_D)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_D"); }
                 // D9.6: Ctrl skip mode toggle release
-                if (event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) {
+                if ((event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) &&
+                    !isLuaExecutionPaused()) {
                     lua_getglobal(L, "_KAG_onCtrlUp");
                     if (lua_isfunction(L, -1)) {
                         if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
@@ -596,25 +880,15 @@ void Engine::processEvents() {
         }
         m_inputRouter->processEvent(event);
     }
-
-    if (!L) return;
-
-    lua_getglobal(L, "_CAESURA_QUIT");
-    if (lua_isboolean(L, -1) && lua_toboolean(L, -1)) {
-        lua_pop(L, 1);
-        m_running = false;
-        return;
-    }
-    lua_pop(L, 1);
 }
 
-void Engine::render() {
+void Engine::render(float dt) {
     // Headless mode (not editor): no GPU rendering
     if (m_config.headless && !m_config.editorMode) return;
 
     m_lua->resetInstructionBudget();
     lua_State* L = m_lua->state();
-    if (L && !m_luaPaused) {
+    if (L && !isLuaExecutionPaused()) {
         lua_getglobal(L, "engine_render");
         if (lua_isfunction(L, -1)) {
             if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -623,6 +897,10 @@ void Engine::render() {
                 lua_pop(L, 1);
             }
         } else { lua_pop(L, 1); }
+    }
+
+    if (m_animationInitialized && m_animationBackend) {
+        m_animationBackend->render(isLuaExecutionPaused() ? 0.0f : dt);
     }
 
     if (m_renderDevice) {
@@ -641,18 +919,21 @@ void Engine::render() {
 //  Save helpers (SU-3)
 // ============================================================================
 void Engine::quicksave() {
+    if (isLuaExecutionPaused()) return;
     lua_State* L = m_lua->state(); if (!L) return;
     lua_getglobal(L, "quicksave");
     if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quicksave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
     else { lua_pop(L, 1); }
 }
 void Engine::quickload() {
+    if (isLuaExecutionPaused()) return;
     lua_State* L = m_lua->state(); if (!L) return;
     lua_getglobal(L, "quickload");
     if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "quickload: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
     else { lua_pop(L, 1); }
 }
 void Engine::triggerAutoSave() {
+    if (isLuaExecutionPaused()) return;
     lua_State* L = m_lua->state(); if (!L) return;
     lua_getglobal(L, "autosave");
     if (lua_isfunction(L, -1)) { if (lua_pcall(L, 0, 0, 0) != LUA_OK) { fprintf(stderr, "autosave: %s\n", lua_tostring(L, -1)); lua_pop(L, 1); } }
@@ -678,7 +959,7 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
         case ErrorAction::Retry:
             DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "ErrorUI: Retry requested");
             // Request hot reload retry
-            HotReload::instance().requestReload();
+            m_hotReload->requestReload();
             break;
         case ErrorAction::Title:
             DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "ErrorUI: Title requested");
@@ -694,17 +975,25 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
 
 
 void Engine::renderOneFrame() {
+    if (!m_initialized || !m_renderInitialized) return;
     if (m_config.headless && !m_config.editorMode) return;
     lua_State* L = m_lua->state();
-    if (L && !m_luaPaused) {
+    if (L && !isLuaExecutionPaused()) {
         lua_getglobal(L, "engine_update");
         if (lua_isfunction(L, -1)) {
             lua_pushnumber(L, 0.016);
             if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
         } else { lua_pop(L, 1); }
     }
-    render();
+    render(0.016f);
     if (m_renderDevice) m_renderDevice->advanceFrame();
+}
+
+bool Engine::reloadScriptsNow() {
+    requireInitialized();
+    if (isLuaExecutionPaused()) return false;
+    m_hotReload->requestReload();
+    return m_hotReload->checkAndReload();
 }
 
 static std::string captureFrameBase64(IRenderDevice& renderer, int w, int h) {
@@ -740,84 +1029,134 @@ static std::string captureFrameBase64(IRenderDevice& renderer, int w, int h) {
 }
 
 std::string Engine::captureFrameForRpc(int w, int h) {
+    if (!m_initialized || !m_renderInitialized) return "";
     // Render one frame first; screenshot capture advances the renderer frame.
-    if (!m_config.headless) {
+    if (!m_config.headless || m_config.editorMode) {
         lua_State* L = m_lua->state();
-        if (L && !m_luaPaused) {
+        if (L && !isLuaExecutionPaused()) {
             lua_getglobal(L, "engine_update");
             if (lua_isfunction(L, -1)) {
                 lua_pushnumber(L, 0.016);
                 if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
             } else { lua_pop(L, 1); }
         }
-        render();
+        render(0.016f);
     }
     if (!m_renderDevice) return "";
     return captureFrameBase64(*m_renderDevice, w, h);
 }
 
-void Engine::runRpc() {
-    fprintf(stderr, "[Engine] Starting JSON-RPC loop (stdin/stdout)\n");
-    RpcServer::instance().setLuaState(m_lua->state());
-    RpcServer::instance().setFrameCaptureCallback([this](int w, int h) { return captureFrameForRpc(w, h); });
-    RpcServer::instance().run();
-}
-
 void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
+    m_initialized = false;
+
+    // A never-initialized Engine owns its injected objects but no global state.
+    if (!m_initAttempted) return;
+
     auto& registry = BackendRegistry::instance();
 
-    if (m_renderDevice) {
+    VFXBinding_Shutdown(m_particleSystem.get());
+
+    if (m_renderInitialized) {
         m_renderDevice->beginShutdown();
+    }
+
+    if (m_layerManagerInitialized) {
+        m_layerManager->shutdown();
+        m_layerManagerInitialized = false;
+        registry.setLayerManager(nullptr);
     }
 
     // Reset error crash counters on clean shutdown
     ErrorUI::resetCounters();
 
-    if (m_miniGameBackend) { m_miniGameBackend->shutdown(); m_miniGameBackend.reset(); }
+    if (m_miniGameInitialized) m_miniGameBackend->shutdown();
+    m_miniGameBackend.reset();
     registry.setMiniGameBackend(nullptr);
+
+    if (m_asyncLoaderInitialized) m_asyncLoader->shutdown();
+    if (m_assetManagerInitialized) m_assetManager->shutdown();
+    if (m_jobSystemInitialized) m_jobSystem->shutdown();
+    if (m_steamInitialized) {
+        m_steamBackend->shutdown();
+    }
+    registry.setSteamBackend(nullptr);
+    if (m_videoPlayer) m_videoPlayer->shutdown();
+    if (m_luaInitialized) {
+        removeDebugPauseProbe(m_lua->state());
+    }
+    if (m_debugProtocolInitialized && m_debugProtocol) {
+        if (!m_debugProtocol->shutdown()) {
+            fprintf(stderr, "[Engine] DebugProtocol shutdown rejected off owner thread.\n");
+        }
+        m_debugProtocolInitialized = false;
+    }
+    m_debugProtocol.reset();
+    if (m_luaInitialized) m_hotReload->shutdown();
+    if (m_audioInitialized) m_audioBackend->shutdown();
+
+    // Flush renderer pipeline before touching shared animation resources.
+    if (m_renderInitialized) { m_renderDevice->flushAllRTT(); }
+
+    // Process one final renderer frame to drain pending GPU commands.
+    if (m_renderInitialized) { m_renderDevice->advanceFrame(); }
+
+    // Animation shuts down after renderer pipeline is drained.
+    if (m_animationInitialized) {
+        m_animationBackend->shutdown();
+        m_animationInitialized = false;
+    }
+    m_animationBackend.reset();
     registry.setAnimationBackend(nullptr);
+
+    // Animation can release textures through ITextureManager during shutdown.
+    if (m_textureManagerInitialized) {
+        m_textureManager->shutdown();
+        m_textureManagerInitialized = false;
+        registry.setTextureManager(nullptr);
+    }
+
+    // Drain texture destruction before unregistering quota/Lua services.
+    if (m_renderInitialized) { m_renderDevice->advanceFrame(); }
+
+    if (m_sandboxQuotaBound) {
+        registry.setSandboxQuota(nullptr);
+        m_sandboxQuota->setLuaState(nullptr);
+        m_sandboxQuotaBound = false;
+    }
+    if (m_luaInitialized) m_lua->shutdown();
+    m_deferredAsyncLoads.clear();
+
+    if (m_renderInitialized) { m_renderDevice->shutdown(); }
+    if (m_platformInitialized) m_platformBackend->shutdown();
+
     registry.setVideoPlayer(nullptr);
     registry.setInputRouter(nullptr);
     registry.setTextureManager(nullptr);
+    registry.setLayerManager(nullptr);
+    registry.setSandboxQuota(nullptr);
+    registry.setTextureBudget(nullptr);
     registry.setDebugManager(nullptr);
     registry.setAsyncLoader(nullptr);
     registry.setJobSystem(nullptr);
     registry.setCryptoEngine(nullptr);
+    registry.setParticleSystem(nullptr);
+    registry.setSaveManager(nullptr);
+    registry.setResourceGenerationTracker(nullptr);
+    registry.setSteamBackend(nullptr);
+    registry.setRenderDevice(nullptr);
+    registry.setAudioBackend(nullptr);
+    registry.setPlatformBackend(nullptr);
+    registry.setLuaManager(nullptr);
     registry.setLuaState(nullptr);
 
-    AsyncLoader::instance().shutdown();
-    AssetManager::instance().shutdown();
-    JobSystem::instance().shutdown();
-    unregisterSteamBinding(m_steamBackend.get());
-    if (m_steamBackend) m_steamBackend->shutdown();
-    if (m_videoPlayer) m_videoPlayer->shutdown();
-    if (m_lua) m_lua->shutdown();
-    if (m_audioBackend) m_audioBackend->shutdown();
-    TextureManager::instance().shutdown();
-
-    // Flush renderer pipeline before touching shared animation resources.
-    if (m_renderDevice) { m_renderDevice->flushAllRTT(); }
-
-    // Process one final renderer frame to drain pending GPU commands.
-    if (m_renderDevice) { m_renderDevice->advanceFrame(); }
-
-    // Animation shuts down after renderer pipeline is drained.
-    if (m_animationBackend) { m_animationBackend->shutdown(); m_animationBackend.reset(); }
-
-    // Final renderer frame after animation cleanup.
-    if (m_renderDevice) { m_renderDevice->advanceFrame(); }
-    
-    if (m_renderDevice) { m_renderDevice->shutdown(); }
-    FreeTypeContext::instance().shutdown();
-    if (m_platformBackend) m_platformBackend->shutdown();
-    DebugManager::instance().shutdown();
+    if (m_debugInitialized) DebugManager::instance().shutdown();
 }
 
 void Engine::recoverFromDeviceLoss() {
     fprintf(stderr, "[Engine] === GPU device lost — starting recovery ===\n");
-    m_luaPaused = true;
+    m_deviceRecoveryPaused = true;
 
     // Phase 1: Notify all listeners to release GPU resources
     BackendRegistry::instance().notifyDeviceLost();
@@ -847,7 +1186,7 @@ void Engine::recoverFromDeviceLoss() {
         lua_setglobal(L, "_CAESURA_DEVICE_RESTORED");
     }
 
-    m_luaPaused = false;
+    m_deviceRecoveryPaused = false;
     fprintf(stderr, "[Engine] === GPU device recovery complete ===\n");
 }
 

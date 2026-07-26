@@ -1,0 +1,10 @@
+^D:\文件存放处\CODEX\CAESURA(AMEKAG)\BUILD-REPRO-VERIFY\CMAKEFILES\3E2E0FE12EDFAC02D56540D1ADA07F30\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-repro-verify --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file D:/文件存放处/codex/Caesura(AmeKAG)/build-repro-verify/CaesuraAmeKAG.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

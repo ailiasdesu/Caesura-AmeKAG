@@ -25,6 +25,7 @@ end
 
 function engine_render()
     layers.render()
+    kag_runner.render()
 end
 
 -- ── Input callback (called by C++ processEvents on mouse click, KAG focus) ───

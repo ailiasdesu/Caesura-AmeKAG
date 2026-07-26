@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="D:\文件存放处\codex\Caesura(AmeKAG)\build-repro-verify\CMakeFiles\764040576bde66b9604177ea39f47f3a\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{C6AC20B7-4AFF-3CE6-96F7-1CD91190ECFE}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

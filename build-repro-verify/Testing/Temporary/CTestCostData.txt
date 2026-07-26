@@ -1,0 +1,9 @@
+CaesuraSyncTestAssets 3 0.039282
+CaesuraUnitTests 1 5.42654
+CaesuraEntryTests 1 0.208494
+CaesuraStorageTests 1 0.12431
+CaesuraScriptTests 3 0.224477
+CaesuraRenderResourceTests 1 0.121932
+CaesuraAudioTests 1 3.26286
+CaesuraHeadlessCliSmoke 1 0.168731
+---

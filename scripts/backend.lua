@@ -288,10 +288,13 @@ function Backend.clear_text()
     else return KAG.clear_text() end
 end
 
-function Backend.render_ruby(text, ruby, x, y)
+function Backend.render_ruby(text, ruby, x, y, r, g, b, a)
     local be = get_backend()
-    if be then return be.render("render_ruby", text, ruby, x, y)
-    else return KAG.render_ruby(text, ruby, x, y) end
+    if be then
+        return be.render("render_ruby", text, ruby, x, y, r, g, b, a)
+    else
+        return KAG.render_ruby(text, ruby, x, y, r, g, b, a)
+    end
 end
 
 function Backend.set_font(id)

@@ -10,7 +10,7 @@ namespace Caesura {
 
 class TextureBudget : public ITextureBudget {
 public:
-    static TextureBudget& instance();
+    TextureBudget() = default;
 
     TextureBudget(const TextureBudget&) = delete;
     TextureBudget& operator=(const TextureBudget&) = delete;
@@ -24,8 +24,6 @@ public:
     bool isAutoDetected() const override { return m_autoDetected; }
 
 private:
-    TextureBudget() = default;
-
     int m_tier = 1;
     bool m_autoDetected = true;
     uint64_t m_systemRAMBytes = 0;

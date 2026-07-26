@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 30 interfaces · 324 tests · 0 circular dependencies**
+> **16 modules · 28 interfaces · 480 tests · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 
 Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. KAG 3.0 script compatible.
@@ -13,11 +13,11 @@ Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games
 
 ```bash
 # Windows (MSVC)
-cmake -B build -DCAESURA_ENABLE_LIVE2D=OFF
+cmake -B build -DCAESURA_LIVE2D=OFF
 cmake --build build --config Debug --parallel
 
 # macOS / Linux
-cmake -B build -DCAESURA_ENABLE_LIVE2D=OFF
+cmake -B build -DCAESURA_LIVE2D=OFF
 cmake --build build -j$(nproc)
 ```
 
@@ -25,12 +25,12 @@ cmake --build build -j$(nproc)
 
 ```bash
 cd build/tests/Debug
-./CaesuraTests.exe        # 324/324 passed
+./CaesuraTests.exe --no-skip
 ```
 
 ### Launch Editor
 
-The web-based editor is maintained separately by frontend collaborators. Start the engine with `--editor` to activate the HTTP RPC server (port 9876), then open the editor frontend.
+`--editor` starts the HTTP editor host on `http://localhost:9876` with a hidden GPU window. Use `--editor-stdio` for newline-delimited JSON-RPC with GPU, or `--headless` for stdio RPC without GPU.
 
 ### Your First KAG Script
 
@@ -42,7 +42,7 @@ The web-based editor is maintained separately by frontend collaborators. Start t
 [end]
 ```
 
-Save as `.ks` and execute via the editor's Run button or `POST /api/run`.
+Save as `.ks` and execute it through the runtime. Remote `run`/`eval` currently return `unsupported_yieldable_execution` until their managed-coroutine path is implemented.
 
 ---
 
@@ -50,10 +50,16 @@ Save as `.ks` and execute via the editor's Run button or `POST /api/run`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    Web Editor (React)                    │
-│              HTTP RPC (9 endpoints) :9876                │
-├──────────────────────────────────────────────────────────┤
-│                   Engine (C++20 entry/)                  │
+│                 Editor / automation client               │
+└────────────────────────────┬─────────────────────────────┘
+                             │ HTTP or stdin/stdout RPC DTO
+┌────────────────────────────▼─────────────────────────────┐
+│                 Host transport (main.cpp)                │
+│       RpcServer / EditorServer · no direct Lua access    │
+└────────────────────────────┬─────────────────────────────┘
+                             │ owner-thread dispatcher pump
+┌────────────────────────────▼─────────────────────────────┐
+│                 Engine (C++20 src/entry/)                │
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
 │  │ render  │ │  audio   │ │  script  │ │  resource   │   │
 │  │  bgfx   │ │  SoLoud  │ │  Lua 5.4 │ │  async load │   │
@@ -67,41 +73,51 @@ Save as `.ks` and execute via the editor's Run button or `POST /api/run`.
 │  │  SDL3   │ │  router  │ │  thread  │ │  Steamworks │   │
 │  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
 │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
-│  │  rpc    │ │  debug   │ │   di     │ │             │   │
-│  │  HTTP   │ │ log+prof │ │ registry │ │             │   │
+│  │  debug  │ │    di    │ │          │ │             │   │
+│  │log+debug│ │ registry │ │          │ │             │   │
 │  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
 └──────────────────────────────────────────────────────────┘
 ```
 
-**16 modules, all communicating through `BackendRegistry` via 30 pure-virtual interfaces.**
-Zero circular dependencies. Zero concrete `#include` across module boundaries.
+**16 modules with runtime backend access centralized through `BackendRegistry` and 29
+pure-virtual interfaces.** The current CMake target graph has no circular dependencies;
+remaining implementation-level dependencies are tracked in the architecture topology.
+
+The engine is built as 16 internal static module libraries (15 subsystem libraries plus
+the `entry` composition root) and 15 API-only `INTERFACE` targets. Applications and tests
+link the source-free `Caesura::Engine` aggregate target; host applications and tests link
+`Caesura::Rpc` explicitly. Production sources are compiled once while the shipped artifact
+remains a single executable.
 
 ### Module Map
 
 | # | Module | .cpp/.h | API | Role |
 |---|--------|---------|-----|------|
-| 1 | `render` | 22/25 | 6 | bgfx GPU rendering, layers, particles, video, GPU monitor |
-| 2 | `script` | 9/10 | 1 | Lua VM, KAG bindings, GameState, tokenizer, scheduler |
-| 3 | `resource` | 6/9 | 2 | Async asset loading, asset provider chain, image decode |
+| 1 | `render` | 20/26 | 6 | bgfx GPU rendering, layers, particles, video, GPU monitor |
+| 2 | `script` | 10/11 | 1 | Lua VM, KAG bindings, GameState, tokenizer, scheduler |
+| 3 | `resource` | 6/10 | 3 | Async asset loading, asset provider chain, image decode |
 | 4 | `live2d` | 6/9 | 1 | Animation backend (Cubism SDK or PNG fallback) |
 | 5 | `archive` | 6/10 | 3 | CARC archive format, AES-256-GCM, Ed25519 signing |
-| 6 | `minigame` | 4/7 | 1 | 3D mini-game scenes (enter/update/render/leave loop) |
-| 7 | `storage` | 4/5 | 2 | Save/load with encryption, schema migration, cloud sync |
+| 6 | `minigame` | 7/8 | 1 | 3D mini-game scenes (enter/update/render/leave loop) |
+| 7 | `storage` | 3/5 | 2 | Save/load with encryption, schema migration, cloud sync |
 | 8 | `audio` | 2/3 | 1 | SoLoud 3-bus audio (BGM/Voice/SE), 3D spatial |
-| 9 | `entry` | 3/3 | — | Composition root: Engine + EngineConfig + 4-phase init |
-| 10 | `di` | 3/6 | 2 | BackendRegistry + texture budget + sandbox quota |
+| 9 | `entry` | 8/3 | — | Composition root: Engine + EngineConfig + 4-phase init |
+| 10 | `di` | 4/7 | 3 | BackendRegistry + texture budget + sandbox quota |
 | 11 | `debug` | 3/4 | 1 | Structured logging, frame profiling, subsystem stats |
-| 12 | `platform` | 2/3 | 1 | SDL3 window, events, timing, native handles |
-| 13 | `rpc` | 2/4 | 2 | HTTP editor server (9 endpoints), JSON-RPC |
+| 12 | `platform` | 3/4 | 1 | SDL3/Null window, events, timing, native handles |
+| 13 | `rpc` | 2/5 | 3 | HTTP/stdio transports plus owner-thread command DTO interface |
 | 14 | `input` | 1/2 | 1 | SDL event routing (KAG ↔ Game focus switch) |
 | 15 | `job` | 1/2 | 1 | Multi-threaded task system + NullJobSystem mock |
 | 16 | `steam` | 1/3 | 1 | Steamworks achievements, stats, cloud saves (conditional) |
 
 ---
 
-## 30 Abstract Interfaces
+## 29 Abstract Interfaces
 
-All subsystem access through `BackendRegistry::instance()`. Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
+Runtime engine services are accessed through `BackendRegistry::instance()`. Host transport
+adapters stay outside Engine/Registry and submit self-contained DTOs through `IRpcDispatcher`.
+`main.cpp` owns `RpcServer` or `EditorServer`; neither transport holds `lua_State*`.
+Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 
 | Interface | Module | Implementation |
 |-----------|--------|---------------|
@@ -114,6 +130,7 @@ All subsystem access through `BackendRegistry::instance()`. Every interface is a
 | `ILuaManager` | script | LuaManager (Lua 5.4, instruction budget) |
 | `IAssetProvider` | resource | DirProvider / CARCProvider chain |
 | `IAsyncLoader` | resource | AsyncLoader (worker-thread decode) |
+| `IResourceGenerationTracker` | resource | GenerationTracker (hot-reload handle generations) |
 | `IAnimationBackend` | live2d | Live2DBackend / NullAnimationBackend |
 | `IArchiveReader` | archive | CARCReader |
 | `IArchiveWriter` | archive | CARCWriter |
@@ -123,11 +140,13 @@ All subsystem access through `BackendRegistry::instance()`. Every interface is a
 | `ISaveProvider` | storage | LocalFileSaveProvider / Cloud |
 | `IAudioBackend` | audio | SoLoudAudioEngine |
 | `ITextureBudget` | di | TextureBudget (auto-detect 6 tiers) |
-| `ISandboxQuota` | di | SandboxQuota (Lua resource limits) |
+| `ISandboxQuota` | di | SandboxQuotaService (Lua resource limits) |
+| `IDeviceLostListener` | di | GPU resource loss/restoration observer contract |
 | `IDebugManager` | debug | DebugManager (ring buffer, profiling) |
 | `IPlatformBackend` | platform | SDL3PlatformBackend |
 | `IEditorServer` | rpc | EditorServer (httplib, 9 endpoints) |
 | `IRpcServer` | rpc | RpcServer (JSON-RPC) |
+| `IRpcDispatcher` | rpc | Composition-root owner-thread dispatcher |
 | `IInputRouter` | input | InputRouter (KAG/Game focus) |
 | `IJobSystem` | job | JobSystem / NullJobSystem |
 | `ISteamBackend` | steam | SteamBackend (conditional compile) |
@@ -174,14 +193,14 @@ CI workflow: `.github/workflows/ci.yml` — build + test on all 3 platforms.
 | Windowing | SDL 3.4 |
 | Audio | SoLoud (BGM / Voice / SE buses) |
 | Scripting | Lua 5.4 + sandbox + instruction budget |
-| Text | FreeType (embedded atlas + CJK) |
+| Text | FreeType + ASCII fallback atlas (CJK font asset not bundled) |
 | Crypto | BCrypt (Win) / OpenSSL (Unix) |
 | Networking | cpp-httplib (HTTP), nlohmann/json |
 | Video | pl_mpeg (MPEG-1) + FFmpeg (optional) |
 | Live2D | Cubism 5 SDK (optional, not bundled) |
 | Archive | CARC format (AES-256-GCM + Ed25519) |
-| Testing | doctest (324/324) |
-| Editor | React + Vite (separate repo by collaborators) |
+| Testing | doctest + CTest (use current fresh-build output) |
+| Editor | HTTP on `--editor`; stdio RPC on `--editor-stdio` / `--headless` |
 
 ---
 
@@ -189,7 +208,7 @@ CI workflow: `.github/workflows/ci.yml` — build + test on all 3 platforms.
 
 ```
 Caesura(AmeKAG)/
-├── src/                    C++ engine (76 .cpp, 105 .h)
+├── src/                    C++ engine (84 .cpp)
 │   ├── archive/            CARC format + crypto
 │   ├── audio/              SoLoud backend
 │   ├── debug/              Logging + profiling
@@ -207,7 +226,7 @@ Caesura(AmeKAG)/
 │   ├── steam/              Steamworks (conditional)
 │   └── storage/            Save/load system
 ├── scripts/                Lua runtime (kag/, tokenizer, scheduler)
-├── tests/                  48 test files (324/324)
+├── tests/                  51 test files (480/480)
 │   └── mocks/              NullJobSystem for synchronous testing
 ├── docs/
 │   ├── api/                Interface docs (Lua, KAG, C++, RPC)
@@ -228,12 +247,12 @@ Caesura(AmeKAG)/
 |----------|----------|---------|
 | [AGENTS.md](AGENTS.md) | AI agents & contributors | Module boundaries, interface rules, build/test gates |
 | [editor-api-reference.md](docs/api/editor-api-reference.md) | Editor developers | RPC endpoints, Lua bindings, KAG commands, C++ interfaces |
-| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 30 I* pure-virtual interfaces |
+| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces |
 | [kag-commands.md](docs/api/kag-commands.md) | Script authors | 68 KAG commands with parameter types |
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | Architects | Module dependency topology, data flow |
-| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 79 capabilities across modules |
+| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 42 tracked capabilities and readiness limits |
 | [engine-safety-and-qa-mechanisms.md](docs/design/engine-safety-and-qa-mechanisms.md) | QA engineers | Thread safety, sandbox, audit mechanisms |
 
 ---

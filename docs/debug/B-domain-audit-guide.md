@@ -110,7 +110,7 @@ src/render/BgfxRenderDevice.cpp    - GPU渲染设备
 src/render/LayerManager.cpp         - 3层合成
 src/render/TextureManager.cpp       - 纹理管理
 src/render/TextRenderer.cpp         - 文字渲染
-src/render/FreeTypeContext.cpp      - FreeType字体
+src/render/TextRenderer.cpp         - FreeType字体生命周期与文字渲染
 src/render/BgfxDraw_Blit.cpp       - 纹理blit
 src/render/BgfxQuadBatch.cpp       - 批量提交
 src/render/BgfxShaderManager.cpp   - 着色器

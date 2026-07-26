@@ -21,29 +21,37 @@ TEST_CASE("BackendRegistry::null-backend getters") {
 
 TEST_CASE("BackendRegistry::ResourceHandle generation tracking") {
     auto& reg = BackendRegistry::instance();
-    auto h1 = reg.makeHandle(HandleType::TEXTURE, 1);
-    auto h2 = reg.makeHandle(HandleType::TEXTURE, 2);
+    GenerationTracker tracker;
+    auto* old = reg.getResourceGenerationTracker();
+    reg.setResourceGenerationTracker(&tracker);
+    auto h1 = tracker.makeHandle(HandleType::TEXTURE, 1);
+    auto h2 = tracker.makeHandle(HandleType::TEXTURE, 2);
     CHECK(h1.id != 0);
     CHECK(h2.id != 0);
     CHECK(h1.id != h2.id);
-    CHECK(reg.isValidHandle(h1));
+    CHECK(tracker.isCurrent(h1));
     ResourceHandle zero;
-    CHECK_FALSE(reg.isValidHandle(zero));
-    reg.invalidateHandles(HandleType::TEXTURE);
-    CHECK_FALSE(reg.isValidHandle(h1));
-    CHECK_FALSE(reg.isValidHandle(h2));
-    auto h3 = reg.makeHandle(HandleType::AUDIO, 1);
-    CHECK(reg.isValidHandle(h3));
+    const bool zeroIsValid = zero.id != 0 && tracker.isCurrent(zero);
+    CHECK_FALSE(zeroIsValid);
+    tracker.invalidate(HandleType::TEXTURE);
+    CHECK_FALSE(tracker.isCurrent(h1));
+    CHECK_FALSE(tracker.isCurrent(h2));
+    auto h3 = tracker.makeHandle(HandleType::AUDIO, 1);
+    CHECK(tracker.isCurrent(h3));
+    reg.setResourceGenerationTracker(old);
 }
 
-TEST_CASE("TextureBudget::singleton") {
-    auto& a = TextureBudget::instance();
-    auto& b = TextureBudget::instance();
-    CHECK(&a == &b);
+TEST_CASE("TextureBudget instances keep independent state") {
+    TextureBudget a;
+    TextureBudget b;
+    a.setTier(0);
+    b.setTier(5);
+    CHECK(a.getTier() == 0);
+    CHECK(b.getTier() == 5);
 }
 
 TEST_CASE("TextureBudget::detect produces valid tier") {
-    auto& tb = TextureBudget::instance();
+    TextureBudget tb;
     tb.detect();
     int tier = tb.getTier();
     CHECK(tier >= 0);
@@ -55,7 +63,7 @@ TEST_CASE("TextureBudget::detect produces valid tier") {
 }
 
 TEST_CASE("TextureBudget::manual override") {
-    auto& tb = TextureBudget::instance();
+    TextureBudget tb;
     tb.setTier(5);
     CHECK(tb.getTier() == 5);
     CHECK_FALSE(tb.isAutoDetected());
@@ -66,7 +74,7 @@ TEST_CASE("TextureBudget::manual override") {
 }
 
 TEST_CASE("TextureBudget::tier names non-null") {
-    auto& tb = TextureBudget::instance();
+    TextureBudget tb;
     tb.setTier(0);
     CHECK(strlen(tb.getTierName()) > 0);
     tb.setTier(5);

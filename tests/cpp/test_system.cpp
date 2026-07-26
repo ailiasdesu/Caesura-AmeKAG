@@ -7,17 +7,22 @@
 
 using namespace Caesura;
 
-TEST_CASE("SaveManager::singleton") {
-    auto& a = SaveManager::instance();
-    auto& b = SaveManager::instance();
-    CHECK(&a == &b);
+TEST_CASE("SaveManager instances are independently constructible through the interface") {
+    SaveManager first;
+    SaveManager second;
+    ISaveManager* interface = &first;
+
+    CHECK(interface == &first);
+    CHECK(&first != &second);
+    CHECK_FALSE(first.isEncryptionEnabled());
+    CHECK_FALSE(second.isEncryptionEnabled());
 }
 
 TEST_CASE("SaveManager::init creates save directory") {
     namespace fs = std::filesystem;
     auto dir = TestPaths::uniqueTempDir("system_init");
     fs::remove_all(dir);
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(TestPaths::withTrailingSeparator(dir));
     CHECK(fs::exists(dir));
     fs::remove_all(dir);
@@ -25,7 +30,7 @@ TEST_CASE("SaveManager::init creates save directory") {
 
 TEST_CASE("SaveManager::save and load round-trip") {
     TestPaths::ScopedTempDir dir("system_roundtrip");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     json data = {{"key", "value"}, {"nested", {{"a", 1}}}};
@@ -40,7 +45,7 @@ TEST_CASE("SaveManager::save and load round-trip") {
 
 TEST_CASE("SaveManager::load nonexistent slot returns empty") {
     TestPaths::ScopedTempDir dir("system_nonexistent");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
     CHECK(sm.load(99).empty());
     CHECK_FALSE(sm.slotExists(99));
@@ -48,7 +53,7 @@ TEST_CASE("SaveManager::load nonexistent slot returns empty") {
 
 TEST_CASE("SaveManager::listSaves") {
     TestPaths::ScopedTempDir dir("system_list");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     sm.save(1, {{"name", "one"}}, "s1", 0);
@@ -61,7 +66,7 @@ TEST_CASE("SaveManager::listSaves") {
 
 TEST_CASE("SaveManager::deleteSlot") {
     TestPaths::ScopedTempDir dir("system_delete");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     sm.save(1, {{"name", "one"}}, "s1", 0);
@@ -73,7 +78,7 @@ TEST_CASE("SaveManager::deleteSlot") {
 
 TEST_CASE("SaveManager::load with metadata") {
     TestPaths::ScopedTempDir dir("system_metadata");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     sm.save(1, {{"text", "hello"}}, "MyScene", 100);
@@ -88,7 +93,7 @@ TEST_CASE("SaveManager::load with metadata") {
 
 TEST_CASE("SaveManager::json round-trip preserves types") {
     TestPaths::ScopedTempDir dir("system_types");
-    auto& sm = SaveManager::instance();
+    SaveManager sm;
     sm.init(dir.string());
 
     json original = {

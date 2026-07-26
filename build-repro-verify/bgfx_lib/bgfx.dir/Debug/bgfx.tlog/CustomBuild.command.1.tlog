@@ -1,0 +1,10 @@
+^D:\文件存放处\CODEX\CAESURA(AMEKAG)\EXTERNAL\BGFX\BGFX\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/文件存放处/codex/Caesura(AmeKAG) -BD:/文件存放处/codex/Caesura(AmeKAG)/build-repro-verify --check-stamp-file D:/文件存放处/codex/Caesura(AmeKAG)/build-repro-verify/bgfx_lib/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

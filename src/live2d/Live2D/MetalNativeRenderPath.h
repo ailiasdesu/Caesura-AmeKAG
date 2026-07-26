@@ -1,5 +1,5 @@
 ﻿#pragma once
-#ifdef CAESURA_HAS_LIVE2D
+#if defined(CAESURA_HAS_LIVE2D) && defined(__APPLE__)
 
 #include "ILive2DRenderPath.h"
 

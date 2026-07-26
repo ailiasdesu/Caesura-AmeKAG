@@ -5,66 +5,293 @@
 // ===========================================================================
 
 #include "RpcServer.h"
-#include "../script/vm/LuaManager.h"
-#include "../di/BackendRegistry.h"
 
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-}
-
+#include <chrono>
+#include <condition_variable>
 #include <cstdio>
-#include <ctime>
+#include <exception>
 #include <sstream>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <string>
+
+#if defined(_WIN32)
+#include <Windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 namespace Caesura {
 
-// =========================================================================
-// Singleton
-// =========================================================================
+namespace {
 
-RpcServer& RpcServer::instance() {
-    static RpcServer s;
-    return s;
+void stripUtf8Bom(std::string& line) {
+    if (line.size() >= 3 &&
+        static_cast<unsigned char>(line[0]) == 0xEF &&
+        static_cast<unsigned char>(line[1]) == 0xBB &&
+        static_cast<unsigned char>(line[2]) == 0xBF) {
+        line.erase(0, 3);
+    }
 }
+
+void trimCarriageReturn(std::string& line) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+}
+
+class StdioLineReader {
+public:
+    StdioLineReader() {
+#if defined(_WIN32)
+        m_input = GetStdHandle(STD_INPUT_HANDLE);
+#else
+        if (::pipe(m_cancelPipe) == 0) {
+            for (int fd : m_cancelPipe) {
+                const int flags = ::fcntl(fd, F_GETFL, 0);
+                if (flags >= 0) ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+            }
+        } else {
+            m_cancelPipe[0] = -1;
+            m_cancelPipe[1] = -1;
+        }
+#endif
+    }
+
+    ~StdioLineReader() {
+        cancel();
+#if !defined(_WIN32)
+        if (m_cancelPipe[0] >= 0) ::close(m_cancelPipe[0]);
+        if (m_cancelPipe[1] >= 0) ::close(m_cancelPipe[1]);
+#endif
+    }
+
+    RpcLineReadResult readLine(std::string& line) {
+        line.clear();
+        for (;;) {
+            if (m_cancelled.load(std::memory_order_acquire)) {
+                return RpcLineReadResult::Cancelled;
+            }
+
+            const std::size_t newline = m_buffer.find('\n');
+            if (newline != std::string::npos) {
+                line.assign(m_buffer, 0, newline);
+                m_buffer.erase(0, newline + 1);
+                trimCarriageReturn(line);
+                return RpcLineReadResult::Line;
+            }
+
+            if (m_endOfInput) {
+                if (!m_buffer.empty()) {
+                    line.swap(m_buffer);
+                    trimCarriageReturn(line);
+                    return RpcLineReadResult::Line;
+                }
+                return RpcLineReadResult::EndOfInput;
+            }
+
+            const RpcLineReadResult result = readMore();
+            if (result != RpcLineReadResult::Line) {
+                if (result == RpcLineReadResult::EndOfInput) {
+                    m_endOfInput = true;
+                    continue;
+                }
+                return result;
+            }
+        }
+    }
+
+    void cancel() {
+        if (m_cancelled.exchange(true, std::memory_order_acq_rel)) return;
+
+#if defined(_WIN32)
+        std::unique_lock<std::mutex> lock(m_readMutex);
+        while (m_readInProgress) {
+            if (m_readerThread) CancelSynchronousIo(m_readerThread);
+            if (m_input && m_input != INVALID_HANDLE_VALUE) {
+                CancelIoEx(m_input, nullptr);
+            }
+            if (m_readInProgress) {
+                m_readFinished.wait_for(lock, std::chrono::milliseconds(2));
+            }
+        }
+#else
+        if (m_cancelPipe[1] >= 0) {
+            const char wake = 1;
+            const ssize_t ignored = ::write(m_cancelPipe[1], &wake, sizeof(wake));
+            (void)ignored;
+        }
+#endif
+    }
+
+private:
+    RpcLineReadResult readMore() {
+#if defined(_WIN32)
+        if (!m_input || m_input == INVALID_HANDLE_VALUE) {
+            return RpcLineReadResult::EndOfInput;
+        }
+
+        HANDLE readerThread = nullptr;
+        if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                             GetCurrentProcess(), &readerThread, 0, FALSE,
+                             DUPLICATE_SAME_ACCESS)) {
+            return RpcLineReadResult::EndOfInput;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_readMutex);
+            if (m_cancelled.load(std::memory_order_acquire)) {
+                CloseHandle(readerThread);
+                return RpcLineReadResult::Cancelled;
+            }
+            m_readerThread = readerThread;
+            m_readInProgress = true;
+        }
+
+        char bytes[4096];
+        DWORD bytesRead = 0;
+        const BOOL ok = ReadFile(
+            m_input, bytes, static_cast<DWORD>(sizeof(bytes)), &bytesRead, nullptr);
+        const DWORD error = ok ? ERROR_SUCCESS : GetLastError();
+
+        {
+            std::lock_guard<std::mutex> lock(m_readMutex);
+            m_readInProgress = false;
+            m_readerThread = nullptr;
+        }
+        CloseHandle(readerThread);
+        m_readFinished.notify_all();
+
+        if (m_cancelled.load(std::memory_order_acquire) ||
+            (!ok && error == ERROR_OPERATION_ABORTED)) {
+            return RpcLineReadResult::Cancelled;
+        }
+        if (!ok || bytesRead == 0) return RpcLineReadResult::EndOfInput;
+
+        m_buffer.append(bytes, static_cast<std::size_t>(bytesRead));
+        return RpcLineReadResult::Line;
+#else
+        if (m_cancelPipe[0] < 0) return RpcLineReadResult::EndOfInput;
+
+        pollfd descriptors[2] = {
+            {STDIN_FILENO, POLLIN | POLLHUP | POLLERR, 0},
+            {m_cancelPipe[0], POLLIN | POLLHUP | POLLERR, 0},
+        };
+
+        int ready = 0;
+        do {
+            ready = ::poll(descriptors, 2, -1);
+        } while (ready < 0 && errno == EINTR &&
+                 !m_cancelled.load(std::memory_order_acquire));
+
+        if (m_cancelled.load(std::memory_order_acquire) ||
+            (descriptors[1].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+            return RpcLineReadResult::Cancelled;
+        }
+        if (ready < 0) return RpcLineReadResult::EndOfInput;
+
+        char bytes[4096];
+        ssize_t bytesRead = 0;
+        do {
+            bytesRead = ::read(STDIN_FILENO, bytes, sizeof(bytes));
+        } while (bytesRead < 0 && errno == EINTR);
+
+        if (bytesRead < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return RpcLineReadResult::Line;
+        }
+        if (bytesRead <= 0) return RpcLineReadResult::EndOfInput;
+
+        m_buffer.append(bytes, static_cast<std::size_t>(bytesRead));
+        return RpcLineReadResult::Line;
+#endif
+    }
+
+    std::atomic<bool> m_cancelled{false};
+    std::string m_buffer;
+    bool m_endOfInput = false;
+
+#if defined(_WIN32)
+    HANDLE m_input = INVALID_HANDLE_VALUE;
+    std::mutex m_readMutex;
+    std::condition_variable m_readFinished;
+    HANDLE m_readerThread = nullptr;
+    bool m_readInProgress = false;
+#else
+    int m_cancelPipe[2] = {-1, -1};
+#endif
+};
+
+RpcLineSource makeStdioLineSource() {
+    auto reader = std::make_shared<StdioLineReader>();
+    return {
+        [reader](std::string& line) { return reader->readLine(line); },
+        [reader]() { reader->cancel(); },
+    };
+}
+
+} // namespace
 
 // =========================================================================
 // Lifecycle
 // =========================================================================
 
+RpcServer::RpcServer()
+    : RpcServer(makeStdioLineSource()) {}
+
+RpcServer::RpcServer(RpcLineSource lineSource)
+    : m_lineSource(std::move(lineSource)) {}
+
+RpcServer::~RpcServer() {
+    stop();
+}
+
 void RpcServer::run() {
-    m_running = true;
+    if (m_stopRequested.load(std::memory_order_acquire)) return;
+    if (!m_lineSource.readLine) {
+        fprintf(stderr, "[RpcServer] No input line source.\n");
+        return;
+    }
+
+    m_running.store(true, std::memory_order_release);
+    if (m_stopRequested.load(std::memory_order_acquire)) {
+        m_running.store(false, std::memory_order_release);
+        return;
+    }
+
     std::string line;
 
     fprintf(stderr, "[RpcServer] JSON-RPC ready on stdin/stdout\n");
 
-    while (m_running && std::getline(std::cin, line)) {
+    while (!m_stopRequested.load(std::memory_order_acquire)) {
+        const RpcLineReadResult readResult = m_lineSource.readLine(line);
+        if (readResult != RpcLineReadResult::Line) break;
+        stripUtf8Bom(line);
         if (line.empty()) continue;
         if (line[0] != '{') continue;  // skip non-JSON
 
-        std::string response = handleRequest(line);
+        std::string response = processRequestLine(line);
         if (!response.empty()) {
             writeLine(response);
         }
-
-        if (m_shutdownRequested) {
-            m_running = false;
-            break;
-        }
     }
 
+    m_running.store(false, std::memory_order_release);
     fprintf(stderr, "[RpcServer] Shutdown.\n");
 }
 
 void RpcServer::stop() {
-    m_running = false;
-    m_shutdownRequested = true;
-    // Write a dummy line to unblock getline
-    std::cout << std::endl;
+    m_stopRequested.store(true, std::memory_order_release);
+    m_running.store(false, std::memory_order_release);
+    if (m_lineSource.cancel) m_lineSource.cancel();
+}
+
+void RpcServer::setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    m_dispatcher = std::move(dispatcher);
 }
 
 // =========================================================================
@@ -142,7 +369,31 @@ static int safeStoi(const std::string& s) {
     try { return std::stoi(s); }
     catch (...) { return 0; }
 }
-std::string RpcServer::handleRequest(const std::string& jsonLine) {
+
+static std::uint64_t safeStoull(const std::string& s) {
+    if (s.empty()) return 0;
+    try { return std::stoull(s); }
+    catch (...) { return 0; }
+}
+
+static const char* debugStateName(RpcDebugRunState state) {
+    switch (state) {
+        case RpcDebugRunState::Detached: return "detached";
+        case RpcDebugRunState::Running: return "running";
+        case RpcDebugRunState::Paused: return "paused";
+        case RpcDebugRunState::ResumePending: return "resume_pending";
+    }
+    return "detached";
+}
+
+std::string RpcServer::processRequestLine(const std::string& jsonLine) {
+    if (jsonLine.size() >= 3 &&
+        static_cast<unsigned char>(jsonLine[0]) == 0xEF &&
+        static_cast<unsigned char>(jsonLine[1]) == 0xBB &&
+        static_cast<unsigned char>(jsonLine[2]) == 0xBF) {
+        return processRequestLine(jsonLine.substr(3));
+    }
+
     std::string method = extractMethod(jsonLine);
     int id = parseId(jsonLine);
 
@@ -156,6 +407,32 @@ std::string RpcServer::handleRequest(const std::string& jsonLine) {
         safeStoi(extractField(jsonLine, "w")),
         safeStoi(extractField(jsonLine, "h")));
     if (method == "getState") return handleGetState(id);
+    if (method == "reload")   return handleReload(id);
+    if (method == "setBreakpoint") return handleDebugAction(id,
+        RpcRequest{RpcSetBreakpointRequest{
+            extractField(jsonLine, "source"), safeStoi(extractField(jsonLine, "line"))}});
+    if (method == "removeBreakpoint") return handleDebugAction(id,
+        RpcRequest{RpcRemoveBreakpointRequest{
+            extractField(jsonLine, "source"), safeStoi(extractField(jsonLine, "line"))}});
+    if (method == "clearBreakpoints") return handleDebugAction(id,
+        RpcRequest{RpcClearBreakpointsRequest{}});
+    if (method == "continue") return handleDebugAction(id,
+        RpcRequest{RpcDebugResumeRequest{
+            safeStoull(extractField(jsonLine, "pauseId")), RpcDebugResumeMode::Continue}});
+    if (method == "stepInto") return handleDebugAction(id,
+        RpcRequest{RpcDebugResumeRequest{
+            safeStoull(extractField(jsonLine, "pauseId")), RpcDebugResumeMode::StepInto}});
+    if (method == "stepOver") return handleDebugAction(id,
+        RpcRequest{RpcDebugResumeRequest{
+            safeStoull(extractField(jsonLine, "pauseId")), RpcDebugResumeMode::StepOver}});
+    if (method == "stepOut") return handleDebugAction(id,
+        RpcRequest{RpcDebugResumeRequest{
+            safeStoull(extractField(jsonLine, "pauseId")), RpcDebugResumeMode::StepOut}});
+    if (method == "inspectLocal") return handleInspectLocal(id,
+        safeStoi(extractField(jsonLine, "frame")), extractField(jsonLine, "name"));
+    if (method == "inspectGlobal") return handleInspectGlobal(id,
+        extractField(jsonLine, "name"));
+    if (method == "getDebugState") return handleGetDebugState(id);
 
     // Unknown method
     std::ostringstream err;
@@ -174,45 +451,20 @@ std::string RpcServer::handlePing(int id) {
 }
 
 std::string RpcServer::handleRun(int id, const std::string& script) {
-    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-    if (!L) {
-        std::ostringstream err;
-        err << "{\"id\":" << id << ",\"error\":\"Lua not initialized\"}";
-        return err.str();
-    }
     if (script.empty()) {
         std::ostringstream err;
         err << "{\"id\":" << id << ",\"error\":\"Empty script\"}";
         return err.str();
     }
 
-    // Write to temp file and execute
-    std::string tmpPath = "temp_editor_scene.lua";
-    {
-        std::ofstream ofs(tmpPath);
-        ofs << script;
-        if (!ofs.good()) {
-            pushLog("error", "Failed to write temp script file");
-            std::ostringstream out;
-            out << "{\"id\":" << id << ",\"error\":\"Failed to write temp file\"}";
-            return out.str();
-        }
-    }
-
     pushLog("info", "Running scene script...");
-
-    if (luaL_dofile(L, tmpPath.c_str()) != LUA_OK) {
-        std::string err = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        pushLog("error", err);
-        fs::remove(tmpPath);
-        std::ostringstream out;
-        out << "{\"id\":" << id << ",\"status\":\"error\",\"message\":\"" << jsonEscape(err) << "\"}";
-        return out.str();
+    RpcReply reply = dispatchRequest(RpcRequest{RpcRunScriptRequest{script}});
+    if (reply.status != RpcReplyStatus::Ok) {
+        pushLog("error", reply.message);
+        return replyError(id, reply);
     }
 
     pushLog("info", "Scene script completed.");
-    fs::remove(tmpPath);
 
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"status\":\"ok\"}";
@@ -220,11 +472,10 @@ std::string RpcServer::handleRun(int id, const std::string& script) {
 }
 
 std::string RpcServer::handleStop(int id) {
-    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-    if (L) {
-        lua_pushboolean(L, 1);
-        lua_setglobal(L, "_CAESURA_QUIT");
-    }
+    RpcReply reply = dispatchRequest(RpcRequest{RpcStopRequest{}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    stop();
     pushLog("info", "Stop requested.");
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"result\":\"ok\"}";
@@ -273,74 +524,170 @@ std::string RpcServer::handleAssets(int id, const std::string& type) {
 }
 
 std::string RpcServer::handleEval(int id, const std::string& code) {
-    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-    if (!L) {
-        std::ostringstream err;
-        err << "{\"id\":" << id << ",\"error\":\"Lua not initialized\"}";
-        return err.str();
-    }
     if (code.empty()) {
         std::ostringstream err;
         err << "{\"id\":" << id << ",\"error\":\"Empty code\"}";
         return err.str();
     }
 
-    if (luaL_dostring(L, code.c_str()) != LUA_OK) {
-        std::string err = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        std::ostringstream out;
-        out << "{\"id\":" << id << ",\"status\":\"error\",\"message\":\"" << jsonEscape(err) << "\"}";
-        return out.str();
-    }
+    RpcReply reply = dispatchRequest(RpcRequest{RpcEvaluateRequest{code}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
 
-    // Get return value if any
-    std::string result = "nil";
-    if (lua_gettop(L) > 0) {
-        if (lua_isstring(L, -1)) result = lua_tostring(L, -1);
-        else if (lua_isnumber(L, -1)) result = std::to_string(lua_tonumber(L, -1));
-        else if (lua_isboolean(L, -1)) result = lua_toboolean(L, -1) ? "true" : "false";
-        lua_pop(L, 1);
+    const auto* result = std::get_if<RpcEvaluateResult>(&reply.payload);
+    if (!result) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Evaluate reply did not contain a value", {}});
     }
 
     std::ostringstream out;
-    out << "{\"id\":" << id << ",\"status\":\"ok\",\"result\":\"" << jsonEscape(result) << "\"}";
+    out << "{\"id\":" << id << ",\"status\":\"ok\",\"result\":\""
+        << jsonEscape(result->value) << "\"}";
     return out.str();
 }
 
 std::string RpcServer::handleGetFrame(int id, int w, int h) {
-    if (!m_frameCaptureCb) {
-        std::ostringstream err;
-        err << "{\"id\":" << id << ",\"error\":\"Frame capture not available (editor mode only)\"}";
-        return err.str();
-    }
     if (w <= 0) w = 1280;
     if (h <= 0) h = 720;
-    std::string b64 = m_frameCaptureCb(w, h);
-    if (b64.empty()) {
-        std::ostringstream err;
-        err << "{\"id\":" << id << ",\"error\":\"Screenshot capture failed\"}";
-        return err.str();
+
+    RpcReply reply = dispatchRequest(RpcRequest{RpcCaptureFrameRequest{w, h}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* frame = std::get_if<RpcFrameResult>(&reply.payload);
+    if (!frame || frame->base64.empty()) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "capture_failed", "Screenshot capture failed", {}});
     }
+
     std::ostringstream out;
-    out << "{\"id\":" << id << ",\"frame\":\"" << b64 << "\"}";
+    out << "{\"id\":" << id << ",\"frame\":\""
+        << jsonEscape(frame->base64) << "\"}";
     return out.str();
 }
 
 std::string RpcServer::handleGetState(int id) {
-    lua_State* L = m_L ? m_L : BackendRegistry::instance().getLuaState();
-    std::ostringstream out;
-    out << "{\"id\":" << id << ",\"state\":{";
+    RpcReply reply = dispatchRequest(RpcRequest{RpcGetStateRequest{}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
 
-    if (L) {
-        // Read current scene name
-        lua_getglobal(L, "_KAG_SceneName");
-        if (lua_isstring(L, -1)) {
-            out << "\"scene\":\"" << jsonEscape(lua_tostring(L, -1)) << "\"";
-        }
-        lua_pop(L, 1);
+    const auto* state = std::get_if<RpcStateResult>(&reply.payload);
+    if (!state) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "State reply did not contain engine state", {}});
     }
 
-    out << "}}";
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"state\":{\"scene\":\""
+        << jsonEscape(state->scene) << "\"}}";
+    return out.str();
+}
+
+std::string RpcServer::handleReload(int id) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcReloadScriptsRequest{}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"status\":\"ok\"}";
+    return out.str();
+}
+
+std::string RpcServer::handleDebugAction(int id, RpcRequest request) {
+    RpcReply reply = dispatchRequest(std::move(request));
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"status\":\"ok\"}";
+    return out.str();
+}
+
+std::string RpcServer::handleInspectLocal(
+    int id, int frame, const std::string& name) {
+    RpcReply reply = dispatchRequest(
+        RpcRequest{RpcInspectLocalRequest{frame, name}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* inspection = std::get_if<RpcInspectionResult>(&reply.payload);
+    if (!inspection) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Local inspection reply did not contain a value", {}});
+    }
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"status\":\"ok\",\"value\":\""
+        << jsonEscape(inspection->value) << "\"}";
+    return out.str();
+}
+
+std::string RpcServer::handleInspectGlobal(int id, const std::string& name) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcInspectGlobalRequest{name}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* inspection = std::get_if<RpcInspectionResult>(&reply.payload);
+    if (!inspection) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Global inspection reply did not contain a value", {}});
+    }
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"status\":\"ok\",\"value\":\""
+        << jsonEscape(inspection->value) << "\"}";
+    return out.str();
+}
+
+std::string RpcServer::handleGetDebugState(int id) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcGetDebugStateRequest{}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* state = std::get_if<RpcDebugStateResult>(&reply.payload);
+    if (!state) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Debug state reply did not contain debug state", {}});
+    }
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"debug\":{\"state\":\""
+        << debugStateName(state->state)
+        << "\",\"source\":\"" << jsonEscape(state->source)
+        << "\",\"line\":" << state->line
+        << ",\"pauseId\":" << state->pauseId
+        << ",\"nonYieldableHitCount\":" << state->nonYieldableHitCount
+        << "}}";
+    return out.str();
+}
+
+RpcReply RpcServer::dispatchRequest(RpcRequest request) const {
+    std::shared_ptr<IRpcDispatcher> dispatcher;
+    {
+        std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+        dispatcher = m_dispatcher;
+    }
+
+    if (!dispatcher) {
+        return {RpcReplyStatus::Unavailable, "dispatcher_unavailable",
+            "RPC dispatcher is unavailable", {}};
+    }
+
+    try {
+        return dispatcher->dispatch(request);
+    } catch (const std::exception& ex) {
+        return {RpcReplyStatus::Failed, "dispatcher_exception", ex.what(), {}};
+    } catch (...) {
+        return {RpcReplyStatus::Failed, "dispatcher_exception",
+            "RPC dispatcher threw an unknown exception", {}};
+    }
+}
+
+std::string RpcServer::replyError(int id, const RpcReply& reply) const {
+    const char* status = "error";
+    if (reply.status == RpcReplyStatus::InvalidRequest) status = "invalid_request";
+    if (reply.status == RpcReplyStatus::Unavailable) status = "unavailable";
+
+    const std::string message = reply.message.empty() ? "RPC request failed" : reply.message;
+    const std::string code = reply.code.empty() ? "rpc_failed" : reply.code;
+    std::ostringstream out;
+    out << "{\"id\":" << id
+        << ",\"status\":\"" << status
+        << "\",\"code\":\"" << jsonEscape(code)
+        << "\",\"error\":\"" << jsonEscape(message)
+        << "\",\"message\":\"" << jsonEscape(message) << "\"}";
     return out.str();
 }
 

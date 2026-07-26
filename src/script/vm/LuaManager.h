@@ -7,8 +7,6 @@ namespace Caesura {
 
 class LuaManager : public ILuaManager {
 public:
-    static LuaManager& instance();
-
     LuaManager(const LuaManager&) = delete;
     LuaManager& operator=(const LuaManager&) = delete;
 

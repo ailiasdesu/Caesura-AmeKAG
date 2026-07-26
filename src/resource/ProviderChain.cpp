@@ -8,6 +8,11 @@ void ProviderChain::addProvider(std::unique_ptr<IAssetProvider> provider)
     sortByPriority();
 }
 
+void ProviderChain::clear() noexcept
+{
+    m_providers.clear();
+}
+
 void ProviderChain::sortByPriority()
 {
     std::sort(m_providers.begin(), m_providers.end(),

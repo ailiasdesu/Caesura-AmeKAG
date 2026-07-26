@@ -1,6 +1,6 @@
 #include "BgfxDeviceCore.h"
 #include "BgfxDebugCallback.h"
-#include "../di/thread/ThreadAssert.h"
+#include "../di/api/ThreadAssert.h"
 #include <bx/math.h>
 #include <bx/bx.h>
 #include <cstdio>
@@ -40,6 +40,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
     m_width  = width;
     m_height = height;
+    m_bgfxInitialized = false;
     m_shutdownComplete = false;
 
         // -- bgfx platform setup
@@ -67,7 +68,6 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
         const char* preferredName = bgfx::getRendererName(s_preferredBackend);
         fprintf(stderr, "[BgfxRenderDevice] %s init failed; trying auto-select...\n",
                 preferredName);
-        bgfx::shutdown();
         initParams.type = bgfx::RendererType::Count;
         printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
     if (!bgfx::init(initParams)) {
@@ -75,6 +75,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
             return false;
         }
     }
+    m_bgfxInitialized = true;
 
     const bgfx::Caps* caps = bgfx::getCaps();
     const char* rendererName = bgfx::getRendererName(caps->rendererType);
@@ -119,6 +120,7 @@ void BgfxDeviceCore::shutdown() {
     CAESURA_ASSERT_MAIN_THREAD();
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
+    if (!m_bgfxInitialized) return;
     // 1. Release all RTT framebuffers while GPU context is alive
     flushAllRTT();
     // Destroy text renderer (GPU resources)
@@ -148,10 +150,12 @@ void BgfxDeviceCore::shutdown() {
 
     // 4. Destroy GPU context
     bgfx::shutdown();
+    m_bgfxInitialized = false;
 printf("[BgfxRenderDevice] Shutdown complete.\n");
 }
 
 void BgfxDeviceCore::beginFrame() {
+    if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
     // No-op: bgfx::frame() in endFrame() handles frame pacing.
     // The debug-text overlay in VIEW_DEBUG + explicit submit calls
@@ -159,11 +163,13 @@ void BgfxDeviceCore::beginFrame() {
 }
 
 void BgfxDeviceCore::endFrame() {
+    if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
     bgfx::frame();
 }
 
 void BgfxDeviceCore::commit_frame() {
+    if (!m_bgfxInitialized) return;
     bgfx::frame();
 }
 
