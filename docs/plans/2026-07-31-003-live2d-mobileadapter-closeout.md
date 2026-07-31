@@ -42,16 +42,17 @@
 3. **`onLongPress`**：保持右键点击合成，注释明确按压计时（>500ms）由平台层负责。
 4. 头文件注释更新为真实状态（不再声称 "placeholder stubs"）。
 
-### 测试（`tests/cpp/test_mobile_adapter.cpp`，+10 用例）
+### 测试（`tests/cpp/test_mobile_adapter.cpp`，+11 用例）
 利用 SDL3 `SDL_PushEvent` 在入队前**同步**调用 `SDL_AddEventWatch` watcher 的机制，无需
 `SDL_Init`/窗口即可确定性验证事件注入（watcher 以 RAII guard 管理，REQUIRE 失败时安全清理）：
 - 多指计数、重复 down 不重复计数、越界/负数 fingerId 忽略、up 未 down 不下溢
 - 注入事件坐标按 `displayScale` 缩放（down/motion/up 全链路），`button.down` 语义正确
 - 重复 down 与未跟踪手指 motion 不注入事件；长按注入右键 down+up 对
 - pinch 基线→增量→回缩→无增量不注入；`resetPinch` 结束手势；onResume 携带 savedData 回调
+- NaN/Inf 输入拒绝（5 个事件入口 + setDisplayScale，防 pinch 基线被毒化）
 
 ### 降级文档化
-- capability matrix 新增 **P7** 条目：核心映射已实现并测试（17 用例）；**未接入 Engine 生命周期、
+- capability matrix 新增 **P7** 条目：核心映射已实现并测试（18 用例）；**未接入 Engine 生命周期、
   无移动平台原生集成**（接入时需按 AGENTS.md 流程：`I*` 接口 → 实现 → BackendRegistry → Engine::init 注册）。
 
 ## 3. 验证结果（Windows 本地）
@@ -59,7 +60,7 @@
 | 检查 | 结果 |
 |------|------|
 | `cmake --build build-repro-verify --config Debug --parallel` | ✅ 零错误 |
-| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **547/547**（537 + 10 新增），断言 2668/2668 |
+| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **548/548**（537 + 11 新增），断言 2679/2679 |
 | `ctest -C Debug --test-dir build-repro-verify` | ✅ 全部通过（13.45s） |
 | `python scripts/count_coupling.py --ci` | ✅ PASS（platform 0/4 跨模块） |
 

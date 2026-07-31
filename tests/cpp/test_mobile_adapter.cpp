@@ -52,7 +52,7 @@ TEST_CASE("MobileAdapter::lifecycle stubs do not crash") {
     CHECK_FALSE(ma.isPaused());
 }
 
-TEST_CASE("MobileAdapter::lifecycle passes saved data to resume callback") {
+TEST_CASE("MobileAdapter::lifecycle resume with null state and saved data") {
     MobileAdapter ma;
     // No Lua state available in unit tests: nullptr must be safe and
     // the paused flag must still toggle.
