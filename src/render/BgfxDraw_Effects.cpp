@@ -4,6 +4,7 @@
 #include "BgfxDeviceCore.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
+#include <cstdint>
 #include <cstdio>
 
 namespace Caesura {
@@ -102,12 +103,21 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
 
     bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), srcTex);
 
-    float vfxData[12] = {
-        fadeR, fadeG, fadeB, fadeAlpha,
-        blurRadius, blurRadius, quakeX, quakeY,
-        (float)effect, 0, 0, 0
+    struct VFXParams {
+        float color[4];
+        float blurQuake[4];
+        int32_t effect;
+        float padding[3];
     };
-    bgfx::setUniform(m_state->shaders->getVFXParams(), vfxData, 3);
+    static_assert(sizeof(VFXParams) == 48);
+
+    const VFXParams params = {
+        { fadeR, fadeG, fadeB, fadeAlpha },
+        { blurRadius, blurRadius, quakeX, quakeY },
+        effect,
+        { 0.0f, 0.0f, 0.0f }
+    };
+    bgfx::setUniform(m_state->shaders->getVFXParams(), &params, 3);
 
     submitFullscreenQuad(viewId, m_state->shaders->getVFXProgram(), 0, 0, (float)m_state->device->getWidth(), (float)m_state->device->getHeight(), srcTex, m_state->shaders->getDefaultSampler(), BGFX_INVALID_HANDLE, nullptr, 0);
 }

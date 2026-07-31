@@ -2,7 +2,8 @@
 --  Caesura (AmeKAG) -- vfx.lua
 --  GPU-backed visual effects: Quake, Shake, Flash, Fade, Blur.
 --  All blocking functions use coroutine.yield for frame-stepped animation.
---  All time values in params are in milliseconds (converted to seconds here).
+--  KAG durations and coroutine frame deltas are milliseconds. Convert to
+--  seconds only for time-domain math such as sinusoidal shake frequency.
 --  Spec [2.5]: quake = random offset × linear decay | shake = random × sin(freq)
 -- ===========================================================================
 
@@ -11,6 +12,12 @@ local layers  = require("layers")
 local VFX = {}
 
 local math_sin, math_abs, math_random = math.sin, math.abs, math.random
+local DEFAULT_FRAME_MS = 16
+
+local function next_frame_ms(is_coroutine)
+    if not is_coroutine then return DEFAULT_FRAME_MS end
+    return tonumber(coroutine.yield()) or DEFAULT_FRAME_MS
+end
 
 -- ===========================================================================
 -- VFX.quake(ctx, params) -- BLOCKING random screen shake
@@ -21,11 +28,11 @@ local math_sin, math_abs, math_random = math.sin, math.abs, math.random
 function VFX.quake(ctx, params)
     VFX._quakeActive = true
     local isCoroutine = coroutine.isyieldable()
-    local dur       = (tonumber(params.time) or 500) / 1000.0
+    local dur_ms    = tonumber(params.time) or 500
     local ampl_x    = tonumber(params.amplitudex or params.intensity or params.strength or params.power) or 8
     local ampl_y    = tonumber(params.amplitudey or params.intensity or params.strength or params.power) or ampl_x or 8
     local decay     = params.decay ~= "false" and params.decay ~= false
-    local elapsed   = 0
+    local elapsed_ms = 0
 
     -- Activate quake on all visible layers via the layers module
     layers.forEach(function(id, node)
@@ -36,11 +43,9 @@ function VFX.quake(ctx, params)
         end
     end)
 
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         -- Spec [2.5]: random offset × linear decay
@@ -77,10 +82,10 @@ end
 function VFX.shake(ctx, params)
     VFX._shakeActive = true
     local isCoroutine = coroutine.isyieldable()
-    local dur       = (tonumber(params.time) or 500) / 1000.0
+    local dur_ms    = tonumber(params.time) or 500
     local freq      = tonumber(params.frequency) or 20
     local amplitude = tonumber(params.amplitude or params.intensity) or 6
-    local elapsed   = 0
+    local elapsed_ms = 0
 
     -- Activate shake on all visible layers via the layers module
     layers.forEach(function(id, node)
@@ -89,17 +94,16 @@ function VFX.shake(ctx, params)
         end
     end)
 
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         -- Spec [2.5]: random offset × sin(frequency) with decay
         local decay = 1.0 - t
-        local ox = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed * freq) * decay
-        local oy = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed * freq * 1.3 + 1.0) * decay
+        local elapsed_s = elapsed_ms / 1000.0
+        local ox = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed_s * freq) * decay
+        local oy = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed_s * freq * 1.3 + 1.0) * decay
 
         layers.forEach(function(id, node)
             if node.visible and node.shake.active then
@@ -128,24 +132,22 @@ end
 -- ===========================================================================
 function VFX.fade(ctx, params)
     local isCoroutine = coroutine.isyieldable()
-    local dur       = (tonumber(params.time) or 1000) / 1000.0
+    local dur_ms    = tonumber(params.time) or 1000
     local direction = params.direction or params.dir or "out"
     local r = tonumber(params.r or params.red)   or 0
     local g = tonumber(params.g or params.green) or 0
     local b = tonumber(params.b or params.blue)  or 0
-    local elapsed   = 0
+    local elapsed_ms = 0
 
     local texId = ctx._bgTexture or 0
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         local alpha = (direction == "in") and (1.0 - t) or t
         if texId > 0 then
-            backend.submit_vfx(1, texId, 1, alpha, r/255, g/255, b/255, 0, 0, 0)
+            backend.submit_vfx(texId, 1, alpha, r/255, g/255, b/255, 0, 0, 0)
         end
     end
 end
@@ -156,16 +158,14 @@ end
 -- ===========================================================================
 function VFX.fade_layer(ctx, layer, params)
     local isCoroutine = coroutine.isyieldable()
-    local dur       = (tonumber(params.time) or 1000) / 1000.0
+    local dur_ms    = tonumber(params.time) or 1000
     local direction = params.direction or params.dir or "in"
-    local elapsed   = 0
+    local elapsed_ms = 0
 
     local origAlpha = layer.alpha or 1.0
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         layer.alpha = (direction == "in") and (origAlpha * t) or (origAlpha * (1 - t))
@@ -182,10 +182,10 @@ end
 -- ===========================================================================
 function VFX.blur(ctx, params)
     local isCoroutine = coroutine.isyieldable()
-    local dur      = (tonumber(params.time) or 500) / 1000.0
+    local dur_ms   = tonumber(params.time) or 500
     local strength = tonumber(params.strength or params.intensity or params.blurlevel) or 4
     local targetLayer = params.layer or ""
-    local elapsed  = 0
+    local elapsed_ms = 0
     local rtt = require("rtt")
 
     -- Find layer texture
@@ -201,16 +201,14 @@ function VFX.blur(ctx, params)
     local tmpA = rtt and rtt.alloc(ctx._width or 1280, ctx._height or 720) or 0
     local tmpB = rtt and rtt.alloc(ctx._width or 1280, ctx._height or 720) or 0
 
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         local radius = strength * t
         if texId > 0 then
-            backend.submit_vfx(1, texId, 2, 0, 0, 0, 0, radius, 0, 0)
+            backend.submit_vfx(texId, 2, 0, 0, 0, 0, radius, 0, 0)
         end
     end
 
@@ -227,25 +225,27 @@ end
 -- ===========================================================================
 function VFX.blur_layer(layer, params, co)
     if not layer or type(layer) ~= "table" then return end
-    local dur      = (tonumber(params.time) or 500) / 1000.0
+    local dur_ms   = tonumber(params.time) or 500
     local strength = tonumber(params.strength or params.blurlevel) or 4
-    local elapsed  = 0
+    local elapsed_ms = 0
     local rtt = require("rtt")
 
     local origTexture = layer.texture
     local tmpA = rtt and rtt.alloc(1280, 720) or 0
     local tmpB = rtt and rtt.alloc(1280, 720) or 0
 
-    while elapsed < dur do
-        local dt = 0.016
-        if co and coroutine.isyieldable() then dt = co.yield() or 0.016 end
-        elapsed = elapsed + dt
-        local t = elapsed / dur
+    while elapsed_ms < dur_ms do
+        if co and coroutine.isyieldable() then
+            elapsed_ms = elapsed_ms + (tonumber(co.yield()) or DEFAULT_FRAME_MS)
+        else
+            elapsed_ms = elapsed_ms + DEFAULT_FRAME_MS
+        end
+        local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
         local radius = strength * t
         if layer.texture and layer.texture > 0 then
-            backend.submit_vfx(layer.z or 1, layer.texture, 2, 0, 0, 0, 0, radius, 0, 0)
+            backend.submit_vfx(layer.texture, 2, 0, 0, 0, 0, radius, 0, 0)
         end
         layer.dirty = true
     end
@@ -262,11 +262,11 @@ end
 -- ===========================================================================
 function VFX.flash(ctx, params)
     local isCoroutine = coroutine.isyieldable()
-    local dur    = (tonumber(params.time) or 200) / 1000.0
+    local dur_ms = tonumber(params.time) or 200
     local r = tonumber(params.r or params.red)   or 255
     local g = tonumber(params.g or params.green) or 255
     local b = tonumber(params.b or params.blue)  or 255
-    local elapsed = 0
+    local elapsed_ms = 0
 
     -- Create flash layer if not exists
     local flashLayer = ctx._flashLayer
@@ -278,18 +278,16 @@ function VFX.flash(ctx, params)
         ctx.layers["__flash"] = flashLayer
     end
 
-    local midPoint = dur / 2
+    local midPoint_ms = dur_ms / 2
 
-    while elapsed < dur do
-        local dt = 0.016
-        if isCoroutine then dt = coroutine.yield() or 0.016 end
-        elapsed = elapsed + dt
+    while elapsed_ms < dur_ms do
+        elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
 
         local alpha_val
-        if elapsed < midPoint then
-            alpha_val = elapsed / midPoint
+        if elapsed_ms < midPoint_ms then
+            alpha_val = elapsed_ms / midPoint_ms
         else
-            alpha_val = (dur - elapsed) / midPoint
+            alpha_val = (dur_ms - elapsed_ms) / midPoint_ms
         end
         if alpha_val < 0 then alpha_val = 0 end
         if alpha_val > 1 then alpha_val = 1 end

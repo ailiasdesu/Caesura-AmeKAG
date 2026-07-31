@@ -89,9 +89,16 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 
 static int lua_Backend_render(lua_State* L) {
     const char* cmd = luaL_checkstring(L, 1);
-    if (strcmp(cmd, "render_text") == 0) {
-        lua_remove(L, 1);
-        return delegateToGlobalFunc(L, "KAG", "render_text");
+    static const struct { const char* cmd; const char* func; } textMap[] = {
+        {"render_text", "render_text"}, {"render_ruby", "render_ruby"},
+        {"clear_text", "clear_text"}, {"set_font", "set_font"},
+        {"line_height", "line_height"}, {nullptr, nullptr}
+    };
+    for (auto* m = textMap; m->cmd; ++m) {
+        if (strcmp(cmd, m->cmd) == 0) {
+            lua_remove(L, 1);
+            return delegateToGlobalFunc(L, "KAG", m->func);
+        }
     }
 
     // -- Render table commands
@@ -104,8 +111,6 @@ static int lua_Backend_render(lua_State* L) {
         {"submit_batch","submit_batch"}, {"submit_blend","submit_blend"},
         {"submit_transition","submit_transition"}, {"submit_vfx","submit_vfx"},
         {"submit_stretch_blt","submit_stretch_blt"}, {"submit_affine_blt","submit_affine_blt"},
-        {"clear_text","clear_text"}, {"render_ruby","render_ruby"},
-        {"set_font","set_font"}, {"line_height","line_height"},
         {"begin_batch","begin_batch"}, {"flush_batch","flush_batch"},
         {"resize","resize"}, {"load_texture_async","load_texture_async"}, {"cancel_async_loads","cancel_async_loads"}, {nullptr,nullptr}
     };

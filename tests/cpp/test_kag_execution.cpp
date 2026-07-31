@@ -87,6 +87,8 @@ TEST_CASE("KAG: Lua modules load without error") {
     CHECK(requireModule(L, "kag.commands.resource"));
     CHECK(requireModule(L, "kag.commands.save"));
     CHECK(requireModule(L, "kag.operation"));
+    CHECK(requireModule(L, "kag.text_layout"));
+    CHECK(requireModule(L, "kag.text_scene"));
 
     delete lm;
 }
@@ -335,6 +337,7 @@ TEST_CASE("KAG runner arbitrates scheduler and debugger resume ownership") {
 
         local paused = false
         local resumes = {}
+        local resume_values = {}
         local scheduler_co = nil
         runner.set_resume_adapter({
             is_paused = function()
@@ -342,6 +345,8 @@ TEST_CASE("KAG runner arbitrates scheduler and debugger resume ownership") {
             end,
             resume = function(origin, co, value)
                 resumes[#resumes + 1] = origin
+                resume_values[#resumes] =
+                    value == nil and '<nil>' or value
                 scheduler_co = co
                 return coroutine.resume(co, value)
             end
@@ -351,6 +356,7 @@ TEST_CASE("KAG runner arbitrates scheduler and debugger resume ownership") {
         local ctx = _CAESURA_CTX
         assert(ctx.executed == 1)
         assert(#resumes == 1 and resumes[1] == 'start')
+        assert(resume_values[1] == '<nil>')
 
         paused = true
         ok, reason = runner.update(0.016)
@@ -384,6 +390,87 @@ TEST_CASE("KAG runner arbitrates scheduler and debugger resume ownership") {
         assert(runner.update(0.016))
         assert(ctx.executed == 3)
         assert(#resumes == 2 and resumes[2] == 'update')
+        assert(resume_values[2] == 16)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG runner converts fractional-second frame deltas to milliseconds") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        package.loaded['kag_runner'] = nil
+        package.loaded['flow'] = {
+            load_scene = function(path)
+                return { tokens = { 1, 2, 3 }, labels = {}, path = path }
+            end
+        }
+        package.loaded['scheduler'] = {
+            run = function(ctx, tokens, start_index)
+                for i = start_index or 1, #tokens do
+                    ctx.token_index = i
+                    ctx.executed = (ctx.executed or 0) + 1
+                    coroutine.yield()
+                end
+            end
+        }
+
+        local resumes = {}
+        local runner = require('kag_runner')
+        runner.set_resume_adapter({
+            is_paused = function() return false end,
+            resume = function(origin, co, value)
+                resumes[#resumes + 1] = { origin, value }
+                return coroutine.resume(co, value)
+            end
+        })
+
+        assert(runner.start('fractional.ks'))
+        assert(runner.update(0.025))
+        assert(resumes[2][1] == 'update')
+        assert(resumes[2][2] == 25)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG VFX consumes runner frame deltas as milliseconds") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        package.loaded['backend'] = {
+            submit_vfx = function(...)
+                _G.__vfx_calls = _G.__vfx_calls or {}
+                _G.__vfx_calls[#__vfx_calls + 1] = table.pack(...)
+            end,
+        }
+        package.loaded['vfx'] = nil
+        local VFX = require('vfx')
+        local ctx = { _bgTexture = 7 }
+        local co = coroutine.create(function()
+            VFX.fade(ctx, { time = 50, direction = 'out', r = 255, g = 0, b = 0 })
+        end)
+
+        assert(coroutine.resume(co))
+        assert(coroutine.status(co) == 'suspended')
+        assert(coroutine.resume(co, 25))
+        assert(coroutine.status(co) == 'suspended')
+        assert(__vfx_calls[1][1] == 7)
+        assert(__vfx_calls[1][2] == 1)
+        assert(math.abs(__vfx_calls[1][3] - 0.5) < 0.0001)
+        assert(__vfx_calls[1][4] == 1 and __vfx_calls[1][5] == 0)
+
+        assert(coroutine.resume(co, 25))
+        assert(coroutine.status(co) == 'dead')
+        assert(#__vfx_calls == 2)
+        assert(math.abs(__vfx_calls[2][3] - 1.0) < 0.0001)
     )lua";
     CHECK(doString(L, code));
 
@@ -483,6 +570,197 @@ TEST_CASE("KAG layer fade is immediate at zero duration and preserves cancellati
         assert(coroutine.status(natural) == 'dead')
         assert(node.opacity == 200)
         assert(#ctx.active_operations == 0)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG text layout wraps UTF-8 with punctuation and word boundaries") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        local Layout = require('kag.text_layout')
+        local one = function() return 1 end
+        local ni = utf8.char(0x4F60)
+        local hao = utf8.char(0x597D)
+        local shi = utf8.char(0x4E16)
+        local jie = utf8.char(0x754C)
+        local open = utf8.char(0xFF08)
+        local close = utf8.char(0xFF09)
+        local comma = utf8.char(0xFF0C)
+        local stop = utf8.char(0x3002)
+
+        local sample = ni .. open .. hao .. close .. shi .. jie .. stop
+        local lines = Layout.wrap(sample, {
+            max_width = 3,
+            measure_char = one,
+        })
+        assert(table.concat({
+            lines[1].text, lines[2].text, lines[3].text,
+        }) == sample)
+        for _, line in ipairs(lines) do
+            assert(line.width <= 3)
+            assert(not Layout.is_closing_punctuation(
+                utf8.char(utf8.codepoint(line.text, 1))))
+            local last
+            for _, cp in utf8.codes(line.text) do last = cp end
+            assert(not Layout.is_opening_punctuation(utf8.char(last)))
+        end
+
+        local cjk = Layout.wrap(
+            ni .. hao .. comma .. shi .. jie .. stop,
+            { max_width = 3, measure_char = one })
+        assert(#cjk == 2)
+        assert(cjk[1].text == ni .. hao .. comma)
+        assert(cjk[2].text == shi .. jie .. stop)
+
+        local word = 'encyclopedia'
+        local split = Layout.wrap(
+            word, { max_width = 4, measure_char = one })
+        assert(table.concat({
+            split[1].text, split[2].text, split[3].text,
+        }) == word)
+        for _, line in ipairs(split) do assert(line.width <= 4) end
+
+        local boundary = Layout.wrap(
+            'abcd ef', { max_width = 4, measure_char = one })
+        assert(#boundary == 2)
+        assert(boundary[1].text == 'abcd')
+        assert(boundary[2].text == 'ef')
+
+        local ruby = Layout.measure_ruby('AB', '123456', {
+            measure_char = one,
+            ruby_scale = 0.5,
+        })
+        assert(ruby.base_width == 2)
+        assert(ruby.ruby_width == 3)
+        assert(ruby.width == 3)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG text scene persists exact draw arguments across frames") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        local Scene = require('kag.text_scene')
+        local ctx = {}
+        local calls = {}
+        local fake = {
+            render_text = function(...)
+                calls[#calls + 1] = { kind = 'text', args = table.pack(...) }
+            end,
+            render_ruby = function(...)
+                calls[#calls + 1] = { kind = 'ruby', args = table.pack(...) }
+            end,
+        }
+
+        Scene.add_text(ctx, 'dialogue', 12.5, 34.25, {
+            r = 10, g = 20, b = 30, a = 40,
+        })
+        Scene.add_ruby(ctx, 'A', 'a', {
+            x = 50,
+            y = 60,
+            start_x = 0,
+            max_width = 100,
+            font_size = 20,
+            color = { r = 1, g = 2, b = 3, a = 255 },
+        })
+        Scene.set_opacity(ctx, 128)
+
+        assert(Scene.render(ctx, fake) == 2)
+        assert(Scene.render(ctx, fake) == 2)
+        assert(#calls == 4)
+
+        local text = calls[1]
+        assert(text.kind == 'text' and text.args.n == 7)
+        assert(text.args[1] == 'dialogue')
+        assert(text.args[2] == 12.5 and text.args[3] == 34.25)
+        assert(text.args[4] == 10 and text.args[5] == 20)
+        assert(text.args[6] == 30 and text.args[7] == 20)
+
+        local ruby = calls[2]
+        assert(ruby.kind == 'ruby' and ruby.args.n == 8)
+        assert(ruby.args[1] == 'A' and ruby.args[2] == 'a')
+        assert(ruby.args[3] == 50 and ruby.args[4] == 60)
+        assert(ruby.args[5] == 1 and ruby.args[6] == 2)
+        assert(ruby.args[7] == 3 and ruby.args[8] == 128)
+    )lua";
+    CHECK(doString(L, code));
+
+    delete lm;
+}
+
+TEST_CASE("KAG text fade uses operation lifecycle and preserves cancellation value") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        package.loaded['backend'] = {
+            clear_text = function() end,
+            line_height = function() return 20 end,
+            text_set_font = function() end,
+            text_reset_state = function() end,
+        }
+        package.loaded['kag.commands.text'] = nil
+        local Commands = require('kag.commands.text')
+
+        local immediate = {}
+        Commands.text(immediate, {
+            text = 'instant',
+            fade_time = 0,
+            opacity = 200,
+            max_width = 100,
+        })
+        assert(immediate.text_state.opacity == 200)
+        assert(#immediate.text_state.draws == 1)
+        assert(#(immediate.active_operations or {}) == 0)
+
+        local ctx = {}
+        local co = coroutine.create(function()
+            Commands.text(ctx, {
+                text = 'fade',
+                fade_time = 100,
+                fade_from = 10,
+                opacity = 210,
+                max_width = 100,
+            })
+        end)
+        assert(coroutine.resume(co))
+        assert(ctx.text_state.opacity == 10)
+        assert(#ctx.active_operations == 1)
+
+        assert(coroutine.resume(co, 25))
+        assert(math.abs(ctx.text_state.opacity - 60) < 0.001)
+        ctx.active_operations[1]:mark_cancelled()
+        assert(coroutine.resume(co, 25))
+        assert(coroutine.status(co) == 'dead')
+        assert(math.abs(ctx.text_state.opacity - 60) < 0.001)
+        assert(#ctx.active_operations == 0)
+
+        local natural = {}
+        local natural_co = coroutine.create(function()
+            Commands.text(natural, {
+                text = 'fade',
+                fade_time = 100,
+                fade_from = 0,
+                opacity = 200,
+                max_width = 100,
+            })
+        end)
+        assert(coroutine.resume(natural_co))
+        assert(coroutine.resume(natural_co, 100))
+        assert(coroutine.status(natural_co) == 'dead')
+        assert(natural.text_state.opacity == 200)
+        assert(#natural.active_operations == 0)
     )lua";
     CHECK(doString(L, code));
 

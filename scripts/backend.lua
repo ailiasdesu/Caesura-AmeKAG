@@ -176,9 +176,9 @@ function Backend.submit_transition(viewId, fromId, toId, ruleId, method, progres
     else return false end
 end
 
-function Backend.submit_vfx(viewId, texId, effect, fadeAlpha, fadeR, fadeG, fadeB, blurRadius, quakeX, quakeY)
+function Backend.submit_vfx(texId, effect, fadeAlpha, fadeR, fadeG, fadeB, blurRadius, quakeX, quakeY)
     local be = get_backend()
-    if be then return be.render("submit_vfx", viewId, texId, effect, fadeAlpha, fadeR, fadeG, fadeB, blurRadius, quakeX, quakeY)
+    if be then return be.render("submit_vfx", texId, effect, fadeAlpha, fadeR, fadeG, fadeB, blurRadius, quakeX, quakeY)
     else return false end
 end
 

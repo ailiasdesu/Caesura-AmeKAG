@@ -5,6 +5,7 @@
 #include <bx/readerwriter.h>
 #include <bx/error.h>
 #include <cstdio>
+#include <cstring>
 
 namespace Caesura {
 
@@ -23,17 +24,35 @@ BgfxShaderManager::~BgfxShaderManager() {
     if (bgfx::isValid(m_u_affineParams))     bgfx::destroy(m_u_affineParams);
 }
 
-static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t codeSize,
-                                            bool fragment, uint8_t numAttrs, const uint16_t* attrIds) {
+struct ShaderUniformMetadata {
+    const char* name = nullptr;
+    uint8_t type = 0;
+    uint8_t num = 0;
+    uint16_t regIndex = 0;
+    uint16_t regCount = 0;
+    uint16_t constantBufferSize = 0;
+};
+
+static bgfx::ShaderHandle buildBgfxShader(
+    const uint8_t* bytecode,
+    uint32_t codeSize,
+    bool fragment,
+    uint8_t numAttrs,
+    const uint16_t* attrIds,
+    const ShaderUniformMetadata* uniform = nullptr) {
     // [10.2.3] Shader safety: reject bytecode > 64 KB (SPIR-V/DXBC limit)
     if (codeSize > 65536) {
         fprintf(stderr, "[BgfxShaderManager] Shader rejected: %u bytes exceeds 64 KB limit.\n", codeSize);
         return BGFX_INVALID_HANDLE;
     }
 
-    const uint16_t uniformCount = 0;
+    const uint16_t uniformCount = uniform ? 1 : 0;
+    const uint32_t uniformSize = uniform
+        ? 1 + uint32_t(std::strlen(uniform->name)) + 1 + 1 + 2 + 2 + 1 + 1 + 2
+        : 0;
 
     const uint32_t totalSize = 4 + 4 + 4 + 2
+                             + uniformSize
                              + 4 + codeSize + 1
                              + 1 + 2 * numAttrs
                              + 2;
@@ -54,6 +73,20 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
     bx::write(&writer, uint32_t(0), err);
     bx::write(&writer, uniformCount, err);
 
+    if (uniform) {
+        const uint8_t nameSize = uint8_t(std::strlen(uniform->name));
+        bx::write(&writer, nameSize, err);
+        for (uint8_t i = 0; i < nameSize; ++i)
+            bx::write(&writer, uniform->name[i], err);
+        bx::write(&writer, uniform->type, err);
+        bx::write(&writer, uniform->num, err);
+        bx::write(&writer, uniform->regIndex, err);
+        bx::write(&writer, uniform->regCount, err);
+        bx::write(&writer, uint8_t(0), err);
+        bx::write(&writer, uint8_t(0), err);
+        bx::write(&writer, uint16_t(0), err);
+    }
+
     bx::write(&writer, codeSize, err);
     for (uint32_t i = 0; i < codeSize; ++i)
         bx::write(&writer, bytecode[i], err);
@@ -63,7 +96,7 @@ static bgfx::ShaderHandle buildBgfxShader(const uint8_t* bytecode, uint32_t code
     for (uint8_t i = 0; i < numAttrs; ++i)
         bx::write(&writer, attrIds[i], err);
 
-    bx::write(&writer, uint16_t(0), err);
+    bx::write(&writer, uniform ? uniform->constantBufferSize : uint16_t(0), err);
 
     return bgfx::createShader(mem);
 }
@@ -143,14 +176,16 @@ void BgfxShaderManager::initEmbeddedShaders() {
     // -- Create effect shader programs from embedded DXBC -------------
     auto createProgramFromDXBC = [&](const uint8_t* vsData, size_t vsSize,
                                       const uint8_t* fsData, size_t fsSize,
-                                      const char* name) -> bgfx::ProgramHandle {
+                                      const char* name,
+                                      const ShaderUniformMetadata* fragmentUniform = nullptr) -> bgfx::ProgramHandle {
         if (!vsData || !fsData || vsSize == 0 || fsSize == 0) {
             printf("[BgfxShaderManager] %s: no embedded data.\n", name);
             return BGFX_INVALID_HANDLE;
         }
         const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
         bgfx::ShaderHandle vs = buildBgfxShader(vsData, (uint32_t)vsSize, false, 2, vsAttrs);
-        bgfx::ShaderHandle fs = buildBgfxShader(fsData, (uint32_t)fsSize, true, 0, nullptr);
+        bgfx::ShaderHandle fs = buildBgfxShader(
+            fsData, (uint32_t)fsSize, true, 0, nullptr, fragmentUniform);
         if (!bgfx::isValid(vs) || !bgfx::isValid(fs)) {
             printf("[BgfxShaderManager] %s: shader build failed.\n", name);
             if (bgfx::isValid(vs)) bgfx::destroy(vs);
@@ -165,6 +200,15 @@ void BgfxShaderManager::initEmbeddedShaders() {
 
     if (renderer == bgfx::RendererType::Direct3D11 ||
         renderer == bgfx::RendererType::Direct3D12) {
+        constexpr uint8_t kUniformFragmentBit = 0x10;
+        const ShaderUniformMetadata vfxParams = {
+            "VFXParams",
+            uint8_t(bgfx::UniformType::Vec4) | kUniformFragmentBit,
+            3,
+            0,
+            3,
+            48
+        };
 
         m_blendProgram = createProgramFromDXBC(
             kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
@@ -176,7 +220,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
 
         m_vfxProgram = createProgramFromDXBC(
             kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX");
+            kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX", &vfxParams);
     }
         // Verify fallback program is valid before registering
     if (!bgfx::isValid(m_fallbackProgram)) {
