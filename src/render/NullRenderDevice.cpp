@@ -50,6 +50,7 @@ void NullRenderDevice::renderText(uint16_t, const std::string&, float, float,
 void NullRenderDevice::renderRuby(uint16_t, const std::string&, const std::string&,
                                   float, float, uint8_t, uint8_t, uint8_t, uint8_t) {}
 void NullRenderDevice::setFont(int) {}
+bool NullRenderDevice::loadTTF(const char*, float) { return false; }
 void NullRenderDevice::stretchBlt(uint16_t, uint32_t, float, float, float, float,
                                   uint32_t, float, float, float, float, int) {}
 void NullRenderDevice::affineBlt(uint16_t, uint32_t, float, float, float, float,

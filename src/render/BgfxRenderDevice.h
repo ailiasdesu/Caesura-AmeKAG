@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "api/IRenderDevice.h"
 #include "BgfxShaderManager.h"
@@ -75,6 +75,7 @@ public:
                     float x, float y,
                     uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
     void setFont(int fontId) override;
+    bool loadTTF(const char* path, float fontSize) override;
     float textLineHeight() const override;
     void flushAllRTT() override;
 

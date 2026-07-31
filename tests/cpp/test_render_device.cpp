@@ -3,6 +3,7 @@
 #include "render/BgfxRenderDevice.h"
 #include "render/RTTManager.h"
 #include "render/EmbeddedShaders.h"
+#include "render/NullRenderDevice.h"
 
 using namespace Caesura;
 
@@ -65,4 +66,16 @@ TEST_CASE("EmbeddedShaders::DX11 VS binary present") {
 TEST_CASE("EmbeddedShaders::DX11 FS binary present") {
     CHECK(kEmbeddedFS_TextureSize > 0);
     CHECK(static_cast<const void*>(kEmbeddedFS_Texture) != nullptr);
+}
+
+TEST_CASE("Render: TTF load rejects missing file without GPU") {
+    BgfxRenderDevice rd;
+    // loadTTF performs FreeType initialization and file open before any
+    // bgfx texture upload; a missing path must fail cleanly.
+    CHECK_FALSE(rd.loadTTF("__missing_font__.ttf", 24.0f));
+}
+
+TEST_CASE("Render: NullRenderDevice loadTTF is a safe no-op") {
+    NullRenderDevice rd;
+    CHECK_FALSE(rd.loadTTF("any.ttf", 24.0f));
 }

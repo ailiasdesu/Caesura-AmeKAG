@@ -18,6 +18,13 @@
 [ch name="Narrator" text="Welcome to the Caesura full-pipeline demo."]
 [p]
 
+; ---- CJK font (TTF face) ----
+[font face="assets/fonts/NotoSansCJKsc-Regular.otf" size=24]
+[ch name="Narrator" text="现在是中文与日文渲染测试。"]
+[p]
+[er]
+[font face="default" size=22]
+
 ; ---- Ruby (furigana) ----
 [ch name="Narrator" text="Ruby annotation:"]
 [ruby text="日本語" ruby="にほんご"]

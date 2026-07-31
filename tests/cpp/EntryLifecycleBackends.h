@@ -176,6 +176,7 @@ public:
     void renderRuby(uint16_t, const std::string&, const std::string&, float, float,
                     uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}
+    bool loadTTF(const char*, float) override { return false; }
     float textLineHeight() const override { return 0.0f; }
     void submitBlend(uint16_t, RenderTextureHandle, RenderTextureHandle, int,
                      float, float, float) override {}

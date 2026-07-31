@@ -594,13 +594,33 @@ static int lua_Render_invalidate_handles(lua_State* L) {
 
 
 // -- text_set_font(face, size, color) — stores font settings for renderText ---------
+// -- text_set_font(face, size, color) -- switch font face/size -------------------
 static int lua_Render_text_set_font(lua_State* L) {
-    // Font settings are managed in Lua ctx.text_state.
-    // C++ renderText uses the current font atlas; dynamic font face/size/color
-    // switching is reserved for future implementation. For now, this is a safe no-op
-    // that allows the Lua [font] command to call backend.text_set_font without error.
-    (void)L;  // params consumed by Lua caller
-    return 0;
+    const char* face = luaL_optstring(L, 1, "default");
+    const float size = (float)luaL_optnumber(L, 2, 24.0);
+
+    IRenderDevice* dev = getRender(L);
+    if (!dev) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    const std::string faceStr = face;
+    if (faceStr.empty() || faceStr == "default") {
+        dev->setFont(0);  // reset to built-in bitmap font
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+
+    if (dev->loadTTF(face, size)) {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+
+    fprintf(stderr, "[Render] text_set_font: failed to load TTF: %s\n", face);
+    dev->setFont(0);  // fall back to built-in font
+    lua_pushboolean(L, 0);
+    return 1;
 }
 
 // -- text_reset_state() — reset text renderer state -------------------------------

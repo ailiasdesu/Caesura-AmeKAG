@@ -250,6 +250,10 @@ void BgfxRenderDevice::setFont(int fontId) {
         m_textRenderer->setFont(static_cast<FontId>(fontId));
 }
 
+bool BgfxRenderDevice::loadTTF(const char* path, float fontSize) {
+    return m_textRenderer && m_textRenderer->loadTTF(path, fontSize);
+}
+
 float BgfxRenderDevice::textLineHeight() const {
     return m_textRenderer ? m_textRenderer->lineHeight() : 16.0f;
 }

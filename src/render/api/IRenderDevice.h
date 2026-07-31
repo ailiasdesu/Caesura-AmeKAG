@@ -134,6 +134,7 @@ public:
                              float x, float y,
                              uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
     virtual void setFont(int fontId) = 0;
+    virtual bool loadTTF(const char* path, float fontSize) = 0;
     virtual float textLineHeight() const = 0;
 
     // -- Blend / Transition / VFX submission (P1: abstract interface methods) --
