@@ -118,7 +118,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested; Cubism is optional and Metal is a stub |
+| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. Cubism requires manual SDK download — without it all render paths are never compiled. D3D11 (Windows) + OpenGL paths are code-ready but unverified; Metal is a stub. See `docs/guides/live2d-setup.md` |
 | C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | Skeleton: lifecycle exists; scene loading is not implemented |
 | C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |
@@ -145,13 +145,14 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 480 cases) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 547 cases) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
+| P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `MobileAdapter` (platform) | Partial: core mapping implemented + 17 unit tests; not wired into Engine lifecycle, no native mobile SDK integration |
 
 ---
 
-**Total: 42 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 43 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.

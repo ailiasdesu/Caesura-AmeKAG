@@ -113,14 +113,42 @@ assets/live2d/
 
 | 平台 | 首选 | 回退 |
 |------|------|------|
-| Windows | D3D11 | — |
-| macOS | OpenGL | Metal 路径当前为 stub；失败后回退到 NullAnimation |
-| Linux | OpenGL | — |
+| Windows | D3D11（bgfx 渲染器必须为 D3D11，否则初始化失败） | — |
+| macOS | 取决于 bgfx 渲染器：OpenGL/GLES → OpenGLShared；Metal → MetalNative（stub，`init()` 恒失败） | OpenGL/GLES 分支：OpenGLReadback；Metal 分支：引擎层回退 NullAnimation |
+| Linux | OpenGL | OpenGLReadback |
 
 渲染路径实现在 `src/live2d/Live2D/` 下：
 - `D3D11NativeRenderPath.cpp`
 - `MetalNativeRenderPath.cpp`
 - `OpenGLSharedRenderPath.cpp` / `OpenGLReadbackRenderPath.cpp`
+
+## 当前实现状态（2026-07-31 审计）
+
+> 审计结论：**Cubism SDK 不在仓库内**（`CubismSdkForNative-5-r.5` 不存在），`CAESURA_LIVE2D` 默认 OFF（CMakeLists.txt 第 248 行）。所有位于 `#if defined(CAESURA_HAS_LIVE2D)`（及 `&& defined(_WIN32)` / `&& defined(__APPLE__)`）守卫内的 Cubism 代码，在 CI 与本地构建中**从未被编译**。因此下表所有 Cubism 渲染路径均为「代码就绪但未验证」；唯一经过测试的是 `NullAnimationBackend`。
+
+| 渲染路径 | 平台 | 状态 | 说明 |
+|----------|------|------|------|
+| `D3D11NativeRenderPath` | Windows | 代码就绪·未验证 | 无 SDK 从未编译。要点：经 `bgfx::getInternalData()` 共享 bgfx 的 D3D11 设备，创建 R8G8B8A8 共享纹理（RTV+SRV），`CubismRenderer_D3D11::DrawModel()` 渲染到其中，`CopyResource` 拷回后经 `bgfx::overrideInternal()` 交给 bgfx |
+| `OpenGLSharedRenderPath` | Windows/Linux/macOS | 代码就绪·未验证 | 从未编译。注意：CMake 目前只在 Apple/Linux 平台加入该源文件，Windows 仅编译 D3D11 路径 |
+| `OpenGLReadbackRenderPath` | Windows/Linux/macOS | 代码就绪·未验证 | FBO + `glReadPixels` + `bgfx::updateTexture2D` 读回方案；OpenGL 分支 init 失败时的回退路径 |
+| `MetalNativeRenderPath` | macOS/iOS | STUB 未实现 | `name()` 返回 `"MetalNative(STUB)"`，`init()` 恒返回 false；需要 macOS 开发者实现并验证 |
+| `NullAnimationBackend`（PNG 静态降级） | 全部平台 | ✅ 已测试的默认降级 | 无 SDK 时的默认路径，由 `tests/cpp/test_live2d.cpp` 覆盖；仅支持静态 PNG 立绘 |
+
+要点：
+
+- **SDK 不在仓库内**：`CubismSdkForNative-5-r.5` 未随仓库提供，需按上文「安装步骤」手动下载。
+- **CI 不编译任何 Cubism 路径**：没有 SDK 就没有 `CAESURA_HAS_LIVE2D` 宏，`Live2DBackend` 及其全部渲染路径都不会进入构建。
+- **D3D11 方案要点**：共享 bgfx 的 D3D11 设备与纹理（RTV+SRV）→ Cubism 渲染进共享纹理 → `CopyResource` 拷回 → `bgfx::overrideInternal()` 挂给 bgfx。逻辑完整但从未被编译/运行过。
+- **Metal 需要 macOS 开发者实现**：当前 stub 的 `init()` 恒失败。注意 stub 日志声称「Falling back to OpenGL readback」，但实际代码路径是 `Live2DBackend::init()` 失败后由引擎层（`Engine::init()`，Engine.cpp 第 443-448 行）整体回退到 `NullAnimationBackend`。
+
+### 验证路线图
+
+有 SDK 访问权限的开发者应按以下顺序验证，并在完成后更新状态：
+
+1. 下载 Cubism SDK for Native（R5），放到项目根目录（默认查找 `CubismSdkForNative-5-r.5`）或通过 `CUBISM_SDK_ROOT` 指定位置。
+2. 执行 `cmake -B build -DCAESURA_LIVE2D=ON`，确认 `CAESURA_HAS_LIVE2D` 被定义、`Live2DBackend` 编译通过（此时各渲染路径才第一次真正进入编译）。
+3. Windows 上以 D3D11 渲染器运行，加载 `.moc3` 模型并渲染，验证 D3D11Native 路径。
+4. 逐路径验证其余平台（Linux/macOS 的 OpenGLShared → OpenGLReadback → MetalNative），修复发现的问题后，同步更新能力矩阵（`docs/design/engine-capability-matrix.md` 的 C1 行）与本文档的状态表。
 
 ## 常见问题
 
