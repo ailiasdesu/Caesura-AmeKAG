@@ -76,4 +76,4 @@
 2. **MobileAdapter**：未接线（无 I* 接口、无 Engine 生命周期挂钩）；SoLoud 暂停逻辑未实现；
    pinch 映射系数（`kPinchToWheelScale = 100`）为经验值，接入真实设备后可调。
 3. 交接文档第 3 节第 5 项（删除 `codex/engine-audit-hardening` 分支）已完成；
-   第 4 项 DeltaCARC 已完成（v2：真实增量应用 + 5 个测试用例）；**SaveManager 最终清理**仍未处理，为可选后续。
+   第 4 项 DeltaCARC 已完成（v2：真实增量应用 + 7 个测试用例）；**SaveManager 最终清理**仍未处理，为可选后续。
