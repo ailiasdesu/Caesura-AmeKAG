@@ -1138,3 +1138,38 @@ TEST_CASE("KAG: save_game/load_game are C bindings, not Lua wrappers") {
     CHECK(doString(L, code));
     delete lm;
 }
+
+TEST_CASE("KAG: transition Bezier math evaluates deterministically") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        local TransCommands = require('kag.commands.transition')
+        assert(type(TransCommands.trans) == 'function')
+        assert(type(TransCommands.move) == 'function')
+        assert(type(TransCommands.quake) == 'function')
+        assert(type(TransCommands.fade) == 'function')
+
+        local Bezier = TransCommands.Bezier
+        assert(type(Bezier.eval) == 'function')
+        -- endpoints are exact
+        assert(Bezier.eval(0,0,1,1,0.0) == 0.0)
+        assert(Bezier.eval(0,0,1,1,1.0) == 1.0)
+        -- midpoints stay inside [0,1] and are monotone for the identity curve
+        local prev = 0
+        for i = 1, 20 do
+            local t = i / 21
+            local v = Bezier.eval(0,0,1,1,t)
+            assert(v >= 0.0 and v <= 1.0)
+            assert(v >= prev, 'identity curve must be non-decreasing')
+            prev = v
+        end
+        -- solve_y inverts the y curve
+        local y = Bezier.eval(0.42, 0, 0.58, 1, 0.5)
+        local t = Bezier.solve_y(0.42, 0, 0.58, 1, y)
+        assert(math.abs(t - 0.5) < 0.05)
+    )lua";
+    CHECK(doString(L, code));
+    delete lm;
+}

@@ -242,3 +242,12 @@ TEST_CASE("VideoPlayer::default state") {
     CHECK_FALSE(vp.isPlaying(VideoHandle{}));
     // hasEnded with invalid handle is implementation-defined
 }
+
+TEST_CASE("VideoPlayer::open missing file returns invalid handle") {
+    VideoPlayer vp;
+    const VideoHandle handle = vp.open("__missing_video__.mpg");
+    CHECK_FALSE(static_cast<bool>(handle));
+    CHECK(vp.activeCount() == 0);
+    vp.close(handle);  // safe no-op
+    vp.shutdown();
+}
