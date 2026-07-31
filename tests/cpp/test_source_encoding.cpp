@@ -304,8 +304,8 @@ TEST_CASE("Engine input loop keeps wheel and save shortcuts reachable") {
     REQUIRE(pointerClose != std::string::npos);
     REQUIRE(wheelBranch != std::string::npos);
     CHECK(wheelBranch > pointerClose);
-    CHECK(source.find("if (!event.key.repeat) quicksave();") != std::string::npos);
-    CHECK(source.find("if (!event.key.repeat) quickload();") != std::string::npos);
+    CHECK(source.find("if (!event.key.repeat && !isLuaExecutionPaused()) quicksave();") != std::string::npos);
+    CHECK(source.find("if (!event.key.repeat && !isLuaExecutionPaused()) quickload();") != std::string::npos);
 }
 
 TEST_CASE("Install layout includes FFmpeg runtime DLLs when FFmpeg is bundled") {
