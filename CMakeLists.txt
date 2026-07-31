@@ -40,10 +40,12 @@ if(WIN32 AND NOT SDL3_DIR)
     endif()
     unset(_CAESURA_BUNDLED_SDL3_DIR)
 endif()
-find_package(SDL3 REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 
-# Normalize the SDL3 target name: package managers may provide SDL3::SDL3,
-# SDL3::SDL3-shared, SDL3::SDL3-static, or a bare SDL3 target.
+# Normalize the SDL3 target name: package managers (vcpkg) may expose
+# SDL3::SDL3, SDL3::SDL3-shared, SDL3::SDL3-static, or a bare SDL3 target.
+# When none is defined, fall back to an interface shim so the rest of the
+# build can always reference SDL3::SDL3.
 if(NOT TARGET SDL3::SDL3)
     if(TARGET SDL3::SDL3-shared)
         add_library(SDL3::SDL3 ALIAS SDL3::SDL3-shared)
@@ -51,6 +53,15 @@ if(NOT TARGET SDL3::SDL3)
         add_library(SDL3::SDL3 ALIAS SDL3::SDL3-static)
     elseif(TARGET SDL3)
         add_library(SDL3::SDL3 ALIAS SDL3)
+    else()
+        add_library(SDL3::SDL3 INTERFACE IMPORTED)
+        find_path(SDL3_INCLUDE_DIR SDL3/SDL.h)
+        if(SDL3_INCLUDE_DIR)
+            set_target_properties(SDL3::SDL3 PROPERTIES
+                INTERFACE_INCLUDE_DIRECTORIES "${SDL3_INCLUDE_DIR}")
+        endif()
+        set_target_properties(SDL3::SDL3 PROPERTIES
+            INTERFACE_LINK_LIBRARIES "SDL3")
     endif()
 endif()
 
@@ -387,7 +398,9 @@ set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
 # Include SDL3 DLL in package
-install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+if(TARGET SDL3::SDL3)
+    install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+endif()
 if(CAESURA_FFMPEG_FOUND AND WIN32)
     install(DIRECTORY ${FFMPEG_BIN_DIR}/ DESTINATION .
         FILES_MATCHING PATTERN "*.dll")
