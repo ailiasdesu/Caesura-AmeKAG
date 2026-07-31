@@ -48,7 +48,7 @@
 - 多指计数、重复 down 不重复计数、越界/负数 fingerId 忽略、up 未 down 不下溢
 - 注入事件坐标按 `displayScale` 缩放（down/motion/up 全链路），`button.down` 语义正确
 - 重复 down 与未跟踪手指 motion 不注入事件；长按注入右键 down+up 对
-- pinch 基线→增量→回缩→无增量不注入；`resetPinch` 结束手势；onResume 携带 savedData 回调
+- pinch 基线→增量→回缩→无增量不注入；`resetPinch` 结束手势；onResume 在 null Lua 状态下携带 savedData 参数安全（Lua 回调路径未在单测覆盖）
 - NaN/Inf 输入拒绝（5 个事件入口 + setDisplayScale，防 pinch 基线被毒化）
 
 ### 降级文档化

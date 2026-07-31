@@ -124,6 +124,9 @@ void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
 }
 
 void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
+    // Note: rejecting non-finite up coordinates intentionally leaves the
+    // finger tracked (asserted by the non-finite-inputs test) -- the
+    // platform layer must send the up with valid coordinates.
     if (!validCoord(x) || !validCoord(y)) return; // non-finite input
     if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
         return; // out of range -- ignore

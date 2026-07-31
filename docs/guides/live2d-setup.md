@@ -139,7 +139,7 @@ assets/live2d/
 - **SDK 不在仓库内**：`CubismSdkForNative-5-r.5` 未随仓库提供，需按上文「安装步骤」手动下载。
 - **CI 不编译任何 Cubism 路径**：没有 SDK 就没有 `CAESURA_HAS_LIVE2D` 宏，`Live2DBackend` 及其全部渲染路径都不会进入构建。
 - **D3D11 方案要点**：共享 bgfx 的 D3D11 设备与纹理（RTV+SRV）→ Cubism 渲染进共享纹理 → `CopyResource` 拷回 → `bgfx::overrideInternal()` 挂给 bgfx。逻辑完整但从未被编译/运行过。
-- **Metal 需要 macOS 开发者实现**：当前 stub 的 `init()` 恒失败。注意 stub 日志声称「Falling back to OpenGL readback」，但实际代码路径是 `Live2DBackend::init()` 失败后由引擎层（`Engine::init()`，Engine.cpp 第 443-448 行）整体回退到 `NullAnimationBackend`。
+- **Metal 需要 macOS 开发者实现**：当前 stub 的 `init()` 恒失败。注意 stub 日志声称「Falling back to OpenGL readback」，但实际代码路径是 `Live2DBackend::init()` 失败后由引擎层（`Engine::init()`，Engine.cpp 第 443-450 行）整体回退到 `NullAnimationBackend`。
 
 ### 验证路线图
 
