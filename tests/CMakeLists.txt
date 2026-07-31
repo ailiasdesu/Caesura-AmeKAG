@@ -199,8 +199,8 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
 # implementation. Keep the runtime beside the fresh test binary instead of
 # relying on a DLL left behind by another build directory.
 if(TARGET SDL3::SDL3)
-    get_target_property(_sdl3_tests_imported SDL3::SDL3 IMPORTED)
-    if(NOT _sdl3_tests_imported)
+    get_target_property(_sdl3_tests_type SDL3::SDL3 TYPE)
+    if(_sdl3_tests_type MATCHES "SHARED_LIBRARY|STATIC_LIBRARY|MODULE_LIBRARY")
         add_custom_command(TARGET CaesuraTests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:SDL3::SDL3>"

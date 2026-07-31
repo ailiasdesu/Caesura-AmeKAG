@@ -30,7 +30,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/zstd/build/cmake ${CMAKE_BINARY_DI
 # Dependencies
 # The repository ships a Windows SDL3 package. Prefer it when callers have not
 # selected another package so a fresh configure does not depend on user caches.
-if(WIN32 AND NOT SDL3_DIR)
+if(WIN32 AND NOT SDL3_DIR AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(_CAESURA_BUNDLED_SDL3_DIR
         "${CMAKE_SOURCE_DIR}/external/SDL3/SDL3-3.2.0/cmake")
     if(EXISTS "${_CAESURA_BUNDLED_SDL3_DIR}/SDL3Config.cmake")
@@ -197,11 +197,12 @@ if(CAESURA_FFMPEG_FOUND)
     endif()
 endif()
 
-# Copy SDL3 DLL to output directory for runtime (skipped when SDL3 comes
-# from a package manager: those provide imported targets without a build file).
+# Copy SDL3 DLL to output directory for runtime. Only meaningful when the
+# target resolves to a real library file (bundled SDL3); package-manager
+# SDL3 (vcpkg) already installs the DLL alongside the build outputs.
 if(TARGET SDL3::SDL3)
-    get_target_property(_sdl3_imported SDL3::SDL3 IMPORTED)
-    if(NOT _sdl3_imported)
+    get_target_property(_sdl3_type SDL3::SDL3 TYPE)
+    if(_sdl3_type MATCHES "SHARED_LIBRARY|STATIC_LIBRARY|MODULE_LIBRARY")
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:SDL3::SDL3>"
