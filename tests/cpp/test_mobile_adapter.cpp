@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "platform/MobileAdapter.h"
 #include <SDL3/SDL.h>
+#include <cmath>
 
 using namespace Caesura;
 
@@ -243,4 +244,34 @@ TEST_CASE("MobileAdapter::resetPinch ends gesture") {
     ma.onPinch(100.0f, 100.0f, 2.0f);          // new gesture: baseline only
     CHECK(g.probe.count == 0);
     CHECK(ma.getLastPinchScale() == doctest::Approx(2.0f));
+}
+
+TEST_CASE("MobileAdapter::non-finite inputs are rejected") {
+    EventProbeGuard g;
+
+    MobileAdapter ma;
+    ma.onFingerDown(NAN, 10.0f, 0);            // NaN x: ignored
+    ma.onFingerDown(10.0f, INFINITY, 1);       // Inf y: ignored
+    CHECK(ma.activeTouchCount() == 0);
+    CHECK(g.probe.count == 0);
+
+    ma.onPinch(100.0f, 100.0f, NAN);           // NaN scale: no baseline poison
+    CHECK(ma.getLastPinchScale() == 0.0f);
+    ma.onPinch(100.0f, 100.0f, 1.5f);          // still a fresh baseline
+    CHECK(g.probe.count == 0);
+    CHECK(ma.getLastPinchScale() == doctest::Approx(1.5f));
+
+    ma.onFingerDown(10.0f, 10.0f, 0);
+    CHECK(ma.activeTouchCount() == 1);
+    ma.onFingerMotion(NAN, 10.0f, 0);          // NaN motion: ignored
+    CHECK(g.probe.count == 1);                 // only the valid down event
+    ma.onFingerUp(10.0f, NAN, 0);              // NaN up: state unchanged
+    CHECK(ma.activeTouchCount() == 1);
+    CHECK(ma.isFingerDown(0));
+
+    ma.onLongPress(INFINITY, 10.0f);           // Inf long press: ignored
+    CHECK(g.probe.count == 1);
+
+    ma.setDisplayScale(NAN);                   // NaN scale rejected -> 1.0
+    CHECK(ma.getDisplayScale() == doctest::Approx(1.0f));
 }

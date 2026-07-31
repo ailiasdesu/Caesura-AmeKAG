@@ -2,6 +2,7 @@
 // Spec [10.2.64]: touch input mapping, lifecycle events, DPI scaling.
 // Core mapping is implemented; native mobile SDK integration is not wired.
 #include "MobileAdapter.h"
+#include <cmath>
 #include <cstring>
 #include <cstdio>
 #include <SDL3/SDL.h>
@@ -13,6 +14,12 @@ extern "C" {
 }
 
 namespace Caesura {
+
+// Reject non-finite (NaN/Inf) coordinates from the OS layer before they can
+// poison touch state or flow into injected SDL events / Lua globals.
+static bool validCoord(float v) {
+    return std::isfinite(v);
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  onPause -- backgrounding
@@ -73,6 +80,7 @@ void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
 // ══════════════════════════════════════════════════════════════════════════
 
 void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
+    if (!validCoord(x) || !validCoord(y)) return; // non-finite input
     if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
         return; // out of range -- ignore
     }
@@ -97,6 +105,7 @@ void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
 }
 
 void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
+    if (!validCoord(x) || !validCoord(y)) return; // non-finite input
     if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
         return; // out of range -- ignore
     }
@@ -115,6 +124,7 @@ void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
 }
 
 void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
+    if (!validCoord(x) || !validCoord(y)) return; // non-finite input
     if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
         return; // out of range -- ignore
     }
@@ -143,6 +153,9 @@ void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
 static constexpr float kPinchToWheelScale = 100.0f;
 
 void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
+    if (!validCoord(centerX) || !validCoord(centerY) || !validCoord(scale)) {
+        return; // non-finite input -- must not poison the scale baseline
+    }
     if (m_lastPinchScale <= 0.0f) {
         // First event of a new pinch gesture: establish the baseline.
         m_lastPinchScale = scale;
@@ -162,6 +175,7 @@ void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
 }
 
 void MobileAdapter::onLongPress(float x, float y) {
+    if (!validCoord(x) || !validCoord(y)) return; // non-finite input
     // Long press → right mouse button click.
     // Note: press-duration tracking (>500ms) is done by the platform layer;
     // this adapter only maps the detected press to a right-click.

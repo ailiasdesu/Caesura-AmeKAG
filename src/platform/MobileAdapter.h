@@ -4,6 +4,7 @@
 // platform integration is not wired into the Engine yet.
 // Namespace: Caesura (consistent with engine layering).
 #pragma once
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -76,8 +77,10 @@ public:
     /// Desktop returns 1.0; mobile returns actual DPI scale.
     float getDisplayScale() const;
 
-    /// Set display scale for testing.
-    void setDisplayScale(float scale) { m_displayScale = scale; }
+    /// Set display scale for testing. Non-finite values are rejected.
+    void setDisplayScale(float scale) {
+        m_displayScale = std::isfinite(scale) ? scale : 1.0f;
+    }
 
     // ── State ──────────────────────────────────────────────────────────
 
