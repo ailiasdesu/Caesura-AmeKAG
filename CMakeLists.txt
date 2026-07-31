@@ -42,6 +42,18 @@ if(WIN32 AND NOT SDL3_DIR)
 endif()
 find_package(SDL3 REQUIRED)
 
+# Normalize the SDL3 target name: package managers may provide SDL3::SDL3,
+# SDL3::SDL3-shared, SDL3::SDL3-static, or a bare SDL3 target.
+if(NOT TARGET SDL3::SDL3)
+    if(TARGET SDL3::SDL3-shared)
+        add_library(SDL3::SDL3 ALIAS SDL3::SDL3-shared)
+    elseif(TARGET SDL3::SDL3-static)
+        add_library(SDL3::SDL3 ALIAS SDL3::SDL3-static)
+    elseif(TARGET SDL3)
+        add_library(SDL3::SDL3 ALIAS SDL3)
+    endif()
+endif()
+
 # -- FFmpeg (hardware-accelerated video decoding, ON by default) -----------
 option(CAESURA_ENABLE_FFMPEG "Enable FFmpeg video decoding" ON)
 if(CAESURA_ENABLE_FFMPEG)
