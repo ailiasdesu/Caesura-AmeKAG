@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — tokenizer.lua (KAG 3.0 full grammar)
 -- =============================================================================
 --  Design: cmd_pat (generic [command param=value ...]) handles 95% of KAG 3.0
@@ -61,8 +61,9 @@ local eval_pat = Ct(P"[eval" * wsp * Cc("cmd") * Cc("eval") * attrs * P"]")
 
 -- Embedded script block: [iscript] ... [endscript]
 -- Captured as single token with raw body for Lua execution.
-local iscript_body = C((P(1) - P"[endscript]")^0)
-local iscript_pat = Ct(Cc("iscript") * P"[iscript]" * skip * iscript_body * skip * P"[endscript]")
+local iscript_close = P"[endscript]" + P"[/endscript]"
+local iscript_body = C((P(1) - P"[endscript]" - P"[/endscript]")^0)
+local iscript_pat = Ct(Cc("iscript") * P"[iscript]" * skip * iscript_body * skip * iscript_close)
 
 -- Full grammar: explicit patterns first, then generic cmd_pat, then label/text
 local explicit_cmds = iscript_pat + eval_pat + P_se + P_stopse + P_fadebgm + P_fadevoice + P_fadese + P_wait + P_delay + P_skip + cmd_pat

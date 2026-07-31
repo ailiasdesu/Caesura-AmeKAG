@@ -491,6 +491,10 @@ int main(int argc, char* argv[]) {
     // [10.2.30] CARC startup validation
     Caesura::validateCarcOnStartup(L);
 
+    // One-time startup loads are separate budget windows from the per-frame
+    // game loop: reset the instruction budget before parsing the entry scene.
+    engine.lua().resetInstructionBudget();
+
     // Load main game logic (entry point from config) [10.2.30]
     std::string entryScript = "game_logic.lua";
     if (L) {

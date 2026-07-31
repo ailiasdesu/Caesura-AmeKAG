@@ -43,7 +43,7 @@ private:
     bool m_initialized = false;
 
     int  m_instructionCount = 0;
-    int  m_instructionBudget = 500000;
+    int  m_instructionBudget = 2000000;
     bool m_budgetExceeded = false;
 };
 
