@@ -26,7 +26,11 @@ void MobileAdapter::onPause(lua_State* L) {
         lua_getglobal(L, "_G");
         lua_getfield(L, -1, "onPause");
         if (lua_isfunction(L, -1)) {
-            lua_pcall(L, 0, 0, 0);
+            // On callback error Lua leaves the error object on the stack;
+            // pop it so _G below stays balanced (error-path only).
+            if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                lua_pop(L, 1);
+            }
         } else {
             lua_pop(L, 1); // pop non-function value
         }
@@ -45,11 +49,17 @@ void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
         lua_getglobal(L, "_G");
         lua_getfield(L, -1, "onResume");
         if (lua_isfunction(L, -1)) {
+            int result;
             if (!savedData.empty()) {
                 lua_pushstring(L, savedData.c_str());
-                lua_pcall(L, 1, 0, 0);
+                result = lua_pcall(L, 1, 0, 0);
             } else {
-                lua_pcall(L, 0, 0, 0);
+                result = lua_pcall(L, 0, 0, 0);
+            }
+            // Pop the error object pushed by a failed callback so the
+            // _G pop below keeps the stack balanced.
+            if (result != LUA_OK) {
+                lua_pop(L, 1);
             }
         } else {
             lua_pop(L, 1);
