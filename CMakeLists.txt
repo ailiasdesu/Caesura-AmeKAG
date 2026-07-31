@@ -174,16 +174,19 @@ if(CAESURA_FFMPEG_FOUND)
     endif()
 endif()
 
-# Copy SDL3 DLL to output directory for runtime (skipped for vcpkg imported targets)
-get_target_property(_sdl3_imported SDL3::SDL3 IMPORTED)
-if(NOT _sdl3_imported)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:SDL3::SDL3>"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/$<TARGET_FILE_NAME:SDL3::SDL3>"
-    COMMENT "Copying SDL3 runtime to output"
-    VERBATIM
-)
+# Copy SDL3 DLL to output directory for runtime (skipped when SDL3 comes
+# from a package manager: those provide imported targets without a build file).
+if(TARGET SDL3::SDL3)
+    get_target_property(_sdl3_imported SDL3::SDL3 IMPORTED)
+    if(NOT _sdl3_imported)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3::SDL3>"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/$<TARGET_FILE_NAME:SDL3::SDL3>"
+            COMMENT "Copying SDL3 runtime to output"
+            VERBATIM
+        )
+    endif()
 endif()
 
 

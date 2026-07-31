@@ -37,11 +37,21 @@ TEST_CASE("JobSystem::pendingJobs tracks active work") {
     js.submit([&]() { startCount.fetch_add(1); spin(); });
     js.submit([&]() { startCount.fetch_add(1); spin(); });
 
-    // Wait for both jobs to actually start before checking pending
-    for (int i = 0; i < 200 && startCount.load() < 2; ++i) {
+    // With a single worker (hw < 4 systems) only one job can run at a time;
+    // the concurrency assertion is only meaningful with 2+ workers.
+    const bool concurrent = js.workerCount() >= 2;
+
+    // Wait for jobs to start (both when concurrent, one otherwise)
+    const int target = concurrent ? 2 : 1;
+    for (int i = 0; i < 200 && startCount.load() < target; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    CHECK(startCount.load() == 2);  // both jobs started
+    if (concurrent) {
+        CHECK(startCount.load() == 2);  // both jobs started concurrently
+    } else {
+        CHECK(startCount.load() >= 1);
+        MESSAGE("Single-worker system; skipping 2-job concurrency assertion");
+    }
     CHECK(js.pendingJobs() > 0);
 
     done.store(true);
