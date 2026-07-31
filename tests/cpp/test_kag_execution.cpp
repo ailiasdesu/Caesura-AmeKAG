@@ -1043,3 +1043,76 @@ TEST_CASE("KAG: macro with no name is not recorded") {
     CHECK(doString(L, code));
     delete lm;
 }
+
+TEST_CASE("KAG: layers.fade_to animates opacity across frames") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "layers"));
+
+    const char* code = R"lua(
+        local layers = require('layers')
+        local node = { name = 'fadetest', tag = 'fadetest',
+                       opacity = 255, alpha = 1.0, dirty = false }
+        local co = coroutine.create(function()
+            layers.fade_to(node, 0, 500)
+        end)
+        local steps = 0
+        local prev = 255
+        while coroutine.status(co) ~= 'dead' and steps < 100 do
+            steps = steps + 1
+            local ok, err = coroutine.resume(co, 16)
+            assert(ok, tostring(err))
+            assert(node.opacity <= prev,
+                   'opacity must not increase during fade-out')
+            prev = node.opacity
+        end
+        assert(coroutine.status(co) == 'dead', 'fade did not finish')
+        assert(node.opacity == 0, 'final opacity should be 0, got ' .. node.opacity)
+        assert(steps > 20, 'fade should span multiple frames, got ' .. steps)
+        assert(node.alpha == 0, 'alpha should track opacity')
+
+        -- Instant path: duration <= 0 jumps straight to target
+        node.opacity = 255
+        layers.fade_to(node, 128, 0)
+        assert(node.opacity == 128)
+    )lua";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: [layfade] command fades a registered layer") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    REQUIRE(requireModule(L, "layers"));
+    REQUIRE(requireModule(L, "kag.commands.layer"));
+
+    const char* code = R"lua(
+        local layers = require('layers')
+        local LayerCommands = require('kag.commands.layer')
+        local root = layers.get_root()
+        local node = layers.add_layer(root, {
+            name = 'fadetest', tag = 'fadetest', z = 1,
+            x = 0, y = 0, w = 16, h = 16, visible = true,
+        })
+        assert(node, 'layer should be created')
+        node.opacity = 255
+
+        local ctx = { layers = {} }
+        local co = coroutine.create(function()
+            LayerCommands.layfade(ctx, { layer = 'fadetest', opacity = 0, time = 300 })
+        end)
+        local steps = 0
+        while coroutine.status(co) ~= 'dead' and steps < 100 do
+            steps = steps + 1
+            local ok, err = coroutine.resume(co, 16)
+            assert(ok, tostring(err))
+        end
+        assert(node.opacity == 0,
+               'layer should end at opacity 0, got ' .. node.opacity)
+        assert(steps > 10, 'layfade should take multiple frames')
+    )lua";
+    CHECK(doString(L, code));
+    delete lm;
+}

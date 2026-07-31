@@ -201,4 +201,25 @@ function LayerCommands.layopt(ctx, params)
     layers.set_options(layerName, opts)
 end
 
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [layfade layer="bg" opacity=0 time=500]
+--  Frame-stepped opacity transition for an existing layer (D2.6).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function LayerCommands.layfade(ctx, params)
+    local layerName = params.layer or params.name or params[1] or "bg"
+    local node = layers.get(layerName)
+    if not node then
+        print("[LayerCmd] layfade: layer not found: " .. tostring(layerName))
+        return
+    end
+    local target = tonumber(params.opacity or params.alpha)
+    if not target then
+        print("[LayerCmd] layfade: opacity (0-255) required")
+        return
+    end
+    local duration = tonumber(params.time or params.duration) or 500
+    layers.fade_to(node, target, duration)
+end
+
 return LayerCommands

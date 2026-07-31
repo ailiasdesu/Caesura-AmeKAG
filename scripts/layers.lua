@@ -1,4 +1,4 @@
-﻿-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — layers.lua
 --  Layer tree manager. Full implementation per spec [2.1].
 --  Each layer supports: z-order, blend mode, visibility, opacity, position,
@@ -586,6 +586,34 @@ function Layers.set_layer_opacity(node, opacity)
     node.opacity = math.max(0, math.min(255, tonumber(opacity) or 255))
     node.alpha = node.opacity / 255.0
     Layers.mark_dirty(node)
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Layers.fade_to(node, target_opacity, duration_ms) — frame-stepped opacity
+--  transition (D2.6). In coroutine context each yield consumes the scheduler
+--  frame delta (ms); outside coroutines it steps at a 16 ms default.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.fade_to(node, target_opacity, duration_ms)
+    if not node then return end
+    duration_ms = tonumber(duration_ms)
+    if not duration_ms or duration_ms <= 0 then
+        Layers.set_layer_opacity(node, target_opacity)
+        return
+    end
+
+    local from = tonumber(node.opacity) or 255
+    local to = math.max(0, math.min(255, tonumber(target_opacity) or 255))
+    local elapsed_ms = 0
+    local is_coroutine = coroutine.isyieldable()
+    while elapsed_ms < duration_ms do
+        local delta_ms = 16
+        if is_coroutine then delta_ms = tonumber(coroutine.yield()) or 16 end
+        elapsed_ms = elapsed_ms + math.max(delta_ms, 0)
+        local t = math.min(1, elapsed_ms / duration_ms)
+        Layers.set_layer_opacity(node, from + (to - from) * t)
+    end
+    Layers.set_layer_opacity(node, to)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
