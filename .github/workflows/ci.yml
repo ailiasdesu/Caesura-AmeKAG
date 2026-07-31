@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -53,9 +53,7 @@ jobs:
 
       - name: Test
         shell: pwsh
-        run: |
-          Push-Location "build/tests/${{ matrix.config }}"
-          & ".\CaesuraTests.exe" 2>&1 | Select-Object -Last 10
+        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
           Pop-Location
 
       - name: Smoke Test
@@ -86,7 +84,7 @@ jobs:
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
-        run: ./build/tests/CaesuraTests
+        run: ctest --test-dir build --output-on-failure
 
   # ============================================================
   # Linux GCC
@@ -123,7 +121,7 @@ jobs:
         run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
 
       - name: Test
-        run: ./build/tests/CaesuraTests
+        run: ctest --test-dir build --output-on-failure
 
       - name: Coupling Count
         run: python3 scripts/count_coupling.py --ci

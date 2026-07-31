@@ -62,7 +62,7 @@ void BgfxDraw::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
     }
 
     bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), baseTex);
-    bgfx::setTexture(1, m_state->shaders->getDefaultSampler(), blendTex);
+    bgfx::setTexture(1, m_state->shaders->getSampler1(), blendTex);
 
     float params[8] = { baseAlpha, blendAlpha, globalAlpha, (float)mode, 0, 0, 0, 0 };
     bgfx::setUniform(m_state->shaders->getBlendParams(), params, 2);
@@ -81,9 +81,9 @@ void BgfxDraw::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
     }
 
     bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), fromTex);
-    bgfx::setTexture(1, m_state->shaders->getDefaultSampler(), toTex);
+    bgfx::setTexture(1, m_state->shaders->getSampler1(), toTex);
     if (bgfx::isValid(ruleTex))
-        bgfx::setTexture(2, m_state->shaders->getDefaultSampler(), ruleTex);
+        bgfx::setTexture(2, m_state->shaders->getSampler2(), ruleTex);
 
     float params[4] = { progress, (float)method, 0, 0 };
     bgfx::setUniform(m_state->shaders->getTransParams(), params, 1);

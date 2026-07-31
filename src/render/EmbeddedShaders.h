@@ -57,4 +57,53 @@ extern const uint8_t  kEmbeddedDXBC_affine_blt_fs[];
 extern const size_t   kEmbeddedDXBC_affine_blt_fs_size;
 
 
+// ---------------------------------------------------------------------------
+// Precompiled OpenGL GLSL bytecodes (OpenGL / OpenGLES backends)
+// Compiled from shaders/glsl/*.sc via bgfx shaderc (--platform linux)
+// ---------------------------------------------------------------------------
+extern const uint8_t  kEmbeddedGL_vs_sprite[];
+extern const size_t   kEmbeddedGL_vs_sprite_size;
+extern const uint8_t  kEmbeddedGL_vs_fullscreen[];
+extern const size_t   kEmbeddedGL_vs_fullscreen_size;
+extern const uint8_t  kEmbeddedGL_stretch_blt_vs[];
+extern const size_t   kEmbeddedGL_stretch_blt_vs_size;
+extern const uint8_t  kEmbeddedGL_affine_blt_vs[];
+extern const size_t   kEmbeddedGL_affine_blt_vs_size;
+extern const uint8_t  kEmbeddedGL_fs_texture[];
+extern const size_t   kEmbeddedGL_fs_texture_size;
+extern const uint8_t  kEmbeddedGL_fs_blend[];
+extern const size_t   kEmbeddedGL_fs_blend_size;
+extern const uint8_t  kEmbeddedGL_fs_transition[];
+extern const size_t   kEmbeddedGL_fs_transition_size;
+extern const uint8_t  kEmbeddedGL_fs_vfx[];
+extern const size_t   kEmbeddedGL_fs_vfx_size;
+extern const uint8_t  kEmbeddedGL_stretch_blt_fs[];
+extern const size_t   kEmbeddedGL_stretch_blt_fs_size;
+extern const uint8_t  kEmbeddedGL_affine_blt_fs[];
+extern const size_t   kEmbeddedGL_affine_blt_fs_size;
+
+// ---------------------------------------------------------------------------
+// Precompiled Metal MSL bytecodes (Metal backend)
+// Compiled from shaders/glsl/*.sc via bgfx shaderc (--platform osx)
+// ---------------------------------------------------------------------------
+extern const uint8_t  kEmbeddedMetal_vs_sprite[];
+extern const size_t   kEmbeddedMetal_vs_sprite_size;
+extern const uint8_t  kEmbeddedMetal_vs_fullscreen[];
+extern const size_t   kEmbeddedMetal_vs_fullscreen_size;
+extern const uint8_t  kEmbeddedMetal_stretch_blt_vs[];
+extern const size_t   kEmbeddedMetal_stretch_blt_vs_size;
+extern const uint8_t  kEmbeddedMetal_affine_blt_vs[];
+extern const size_t   kEmbeddedMetal_affine_blt_vs_size;
+extern const uint8_t  kEmbeddedMetal_fs_texture[];
+extern const size_t   kEmbeddedMetal_fs_texture_size;
+extern const uint8_t  kEmbeddedMetal_fs_blend[];
+extern const size_t   kEmbeddedMetal_fs_blend_size;
+extern const uint8_t  kEmbeddedMetal_fs_transition[];
+extern const size_t   kEmbeddedMetal_fs_transition_size;
+extern const uint8_t  kEmbeddedMetal_fs_vfx[];
+extern const size_t   kEmbeddedMetal_fs_vfx_size;
+extern const uint8_t  kEmbeddedMetal_stretch_blt_fs[];
+extern const size_t   kEmbeddedMetal_stretch_blt_fs_size;
+extern const uint8_t  kEmbeddedMetal_affine_blt_fs[];
+extern const size_t   kEmbeddedMetal_affine_blt_fs_size;
 } // namespace Caesura

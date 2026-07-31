@@ -69,3 +69,6 @@ stdout*.txt
 external/ffmpeg/
 
 /config/music_room.lua
+
+# --- Shader intermediates (regenerate via shaders/embed_to_c.py) ---
+shaders/compiled/

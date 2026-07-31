@@ -1,4 +1,4 @@
-﻿# Caesura (AmeKAG) - Shader Pipeline
+# Caesura (AmeKAG) - Shader Pipeline
 
 ## Directory Layout
 ```

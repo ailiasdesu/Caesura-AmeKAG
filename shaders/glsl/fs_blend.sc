@@ -1,4 +1,4 @@
-﻿// Caesura (AmeKAG) - Full 28-mode Blend Fragment Shader (GLSL)
+// Caesura (AmeKAG) - Full 28-mode Blend Fragment Shader (GLSL)
 // bgfx shaderc variant — all Photoshop-compatible blend modes
 // Mode index constants: see BlendMode enum in ShaderCache.h
 
@@ -6,14 +6,14 @@ $input v_texcoord0
 
 #include <bgfx_shader.sh>
 
-SAMPLER2D(s_baseTex,  0);
-SAMPLER2D(s_blendTex, 1);
+SAMPLER2D(s_texture,  0);
+SAMPLER2D(s_texture1, 1);
 
-uniform vec4 u_blendParams;       // x=baseAlpha, y=blendAlpha, z=globalAlpha, w=mode
-#define u_opacity     u_blendParams.x
-#define u_blendAlpha  u_blendParams.y
-#define u_globalAlpha u_blendParams.z
-#define u_blendMode   int(u_blendParams.w)
+uniform vec4 BlendParams;       // x=baseAlpha, y=blendAlpha, z=globalAlpha, w=mode
+#define u_opacity     BlendParams.x
+#define u_blendAlpha  BlendParams.y
+#define u_globalAlpha BlendParams.z
+#define u_blendMode   int(BlendParams.w)
 
 // -- Helper: luminance (Rec.709) --------------------------------------------
 float lum(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
@@ -58,11 +58,13 @@ vec3 bSubtract(   vec3 a, vec3 b) { return a - b; }
 vec3 bDivide(     vec3 a, vec3 b) { return a / b; }
 vec3 bLinearBurn( vec3 a, vec3 b) { return a + b - vec3(1.0); }
 vec3 bLinearDodge(vec3 a, vec3 b) { return a + b; }
+float fColorDodge(float a, float b) { return b >= 1.0 ? 1.0 : min(1.0, a / (1.0 - b)); }
+float fColorBurn(float a, float b) { return b <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - a) / b); }
 vec3 bVividLight( vec3 a, vec3 b) {
     vec3 r;
-    r.r = b.r < 0.5 ? bColorBurn(a.r, 2.0 * b.r) : bColorDodge(a.r, 2.0 * (b.r - 0.5));
-    r.g = b.g < 0.5 ? bColorBurn(a.g, 2.0 * b.g) : bColorDodge(a.g, 2.0 * (b.g - 0.5));
-    r.b = b.b < 0.5 ? bColorBurn(a.b, 2.0 * b.b) : bColorDodge(a.b, 2.0 * (b.b - 0.5));
+    r.r = b.r < 0.5 ? fColorBurn(a.r, 2.0 * b.r) : fColorDodge(a.r, 2.0 * (b.r - 0.5));
+    r.g = b.g < 0.5 ? fColorBurn(a.g, 2.0 * b.g) : fColorDodge(a.g, 2.0 * (b.g - 0.5));
+    r.b = b.b < 0.5 ? fColorBurn(a.b, 2.0 * b.b) : fColorDodge(a.b, 2.0 * (b.b - 0.5));
     return r;
 }
 vec3 bLinearLight(vec3 a, vec3 b) { return bLinearDodge(a, 2.0 * b - vec3(1.0)); }
@@ -83,8 +85,8 @@ vec3 bHardMix(    vec3 a, vec3 b) {
 
 void main()
 {
-    vec4 base  = texture2D(s_baseTex,  v_texcoord0) * u_opacity;
-    vec4 blend = texture2D(s_blendTex, v_texcoord0) * u_blendAlpha;
+    vec4 base  = texture2D(s_texture,  v_texcoord0) * u_opacity;
+    vec4 blend = texture2D(s_texture1, v_texcoord0) * u_blendAlpha;
     vec3 c;
     float alpha;
 

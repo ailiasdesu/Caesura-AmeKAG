@@ -17,6 +17,8 @@ BgfxShaderManager::~BgfxShaderManager() {
     if (bgfx::isValid(m_stretchProgram))     bgfx::destroy(m_stretchProgram);
     if (bgfx::isValid(m_affineProgram))      bgfx::destroy(m_affineProgram);
     if (bgfx::isValid(m_texSampler))         bgfx::destroy(m_texSampler);
+    if (bgfx::isValid(m_texSampler1))        bgfx::destroy(m_texSampler1);
+    if (bgfx::isValid(m_texSampler2))        bgfx::destroy(m_texSampler2);
     if (bgfx::isValid(m_u_blendParams))      bgfx::destroy(m_u_blendParams);
     if (bgfx::isValid(m_u_transParams))      bgfx::destroy(m_u_transParams);
     if (bgfx::isValid(m_u_vfxParams))        bgfx::destroy(m_u_vfxParams);
@@ -120,127 +122,129 @@ void BgfxShaderManager::initEmbeddedShaders() {
     // Initialize ShaderCache before registering any programs
     CompositeShaderCache::instance().init();
 
-    const uint8_t*  vsCode     = nullptr;
-    uint32_t        vsCodeSize = 0;
-    const uint8_t*  fsCode     = nullptr;
-    uint32_t        fsCodeSize = 0;
+    struct Bytecode {
+        const uint8_t* data = nullptr;
+        size_t size = 0;
+    };
 
-    // bgfx RendererType: 2=Direct3D11, 3=Direct3D12, 9=Vulkan
-    if (renderer == bgfx::RendererType::Vulkan) {
-        if (kEmbeddedVS_SpriteSize > 0 && kEmbeddedFS_TextureSize > 0) {
-            vsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite);
-            vsCodeSize = uint32_t(kEmbeddedVS_SpriteSize * sizeof(uint32_t));
-            fsCode     = reinterpret_cast<const uint8_t*>(kEmbeddedFS_Texture);
-            fsCodeSize = uint32_t(kEmbeddedFS_TextureSize * sizeof(uint32_t));
-        }
+    // Per-renderer bytecode selection. SPIR-V arrays are stored as dwords.
+    const bool isVulkan = renderer == bgfx::RendererType::Vulkan;
+    const bool isD3D = renderer == bgfx::RendererType::Direct3D11 ||
+                       renderer == bgfx::RendererType::Direct3D12;
+    const bool isGL = renderer == bgfx::RendererType::OpenGL ||
+                      renderer == bgfx::RendererType::OpenGLES;
+    const bool isMetal = renderer == bgfx::RendererType::Metal;
 
-    } else if (renderer == bgfx::RendererType::Direct3D11 ||
-               renderer == bgfx::RendererType::Direct3D12) {
-        if (kEmbeddedDXBC_VS_Sprite_size > 0 && kEmbeddedDXBC_FS_Texture_size > 0) {
-            vsCode     = kEmbeddedDXBC_VS_Sprite;
-            vsCodeSize = uint32_t(kEmbeddedDXBC_VS_Sprite_size);
-            fsCode     = kEmbeddedDXBC_FS_Texture;
-            fsCodeSize = uint32_t(kEmbeddedDXBC_FS_Texture_size);
-        }
+    Bytecode vsSprite, fsTexture, vsFullscreen, fsBlend, fsTransition, fsVfx;
+    Bytecode stretchVs, stretchFs, affineVs, affineFs;
+
+    if (isVulkan) {
+        vsSprite   = { reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite),
+                       kEmbeddedVS_SpriteSize * sizeof(uint32_t) };
+        fsTexture  = { reinterpret_cast<const uint8_t*>(kEmbeddedFS_Texture),
+                       kEmbeddedFS_TextureSize * sizeof(uint32_t) };
+        vsFullscreen = { reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_vs_fullscreen),
+                         kEmbeddedSPIRV_vs_fullscreen_size * sizeof(uint32_t) };
+        fsBlend    = { reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_blend),
+                       kEmbeddedSPIRV_fs_blend_size * sizeof(uint32_t) };
+        fsTransition = { reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_transition),
+                         kEmbeddedSPIRV_fs_transition_size * sizeof(uint32_t) };
+        fsVfx      = { reinterpret_cast<const uint8_t*>(kEmbeddedSPIRV_fs_vfx),
+                       kEmbeddedSPIRV_fs_vfx_size * sizeof(uint32_t) };
+    } else if (isD3D) {
+        vsSprite   = { kEmbeddedDXBC_VS_Sprite, kEmbeddedDXBC_VS_Sprite_size };
+        fsTexture  = { kEmbeddedDXBC_FS_Texture, kEmbeddedDXBC_FS_Texture_size };
+        vsFullscreen = { kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size };
+        fsBlend    = { kEmbeddedDXBC_fs_blend, kEmbeddedDXBC_fs_blend_size };
+        fsTransition = { kEmbeddedDXBC_fs_transition, kEmbeddedDXBC_fs_transition_size };
+        fsVfx      = { kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size };
+        stretchVs  = { kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size };
+        stretchFs  = { kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size };
+        affineVs   = { kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size };
+        affineFs   = { kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size };
+    } else if (isGL) {
+        vsSprite   = { kEmbeddedGL_vs_sprite, kEmbeddedGL_vs_sprite_size };
+        fsTexture  = { kEmbeddedGL_fs_texture, kEmbeddedGL_fs_texture_size };
+        vsFullscreen = { kEmbeddedGL_vs_fullscreen, kEmbeddedGL_vs_fullscreen_size };
+        fsBlend    = { kEmbeddedGL_fs_blend, kEmbeddedGL_fs_blend_size };
+        fsTransition = { kEmbeddedGL_fs_transition, kEmbeddedGL_fs_transition_size };
+        fsVfx      = { kEmbeddedGL_fs_vfx, kEmbeddedGL_fs_vfx_size };
+        stretchVs  = { kEmbeddedGL_stretch_blt_vs, kEmbeddedGL_stretch_blt_vs_size };
+        stretchFs  = { kEmbeddedGL_stretch_blt_fs, kEmbeddedGL_stretch_blt_fs_size };
+        affineVs   = { kEmbeddedGL_affine_blt_vs, kEmbeddedGL_affine_blt_vs_size };
+        affineFs   = { kEmbeddedGL_affine_blt_fs, kEmbeddedGL_affine_blt_fs_size };
+    } else if (isMetal) {
+        vsSprite   = { kEmbeddedMetal_vs_sprite, kEmbeddedMetal_vs_sprite_size };
+        fsTexture  = { kEmbeddedMetal_fs_texture, kEmbeddedMetal_fs_texture_size };
+        vsFullscreen = { kEmbeddedMetal_vs_fullscreen, kEmbeddedMetal_vs_fullscreen_size };
+        fsBlend    = { kEmbeddedMetal_fs_blend, kEmbeddedMetal_fs_blend_size };
+        fsTransition = { kEmbeddedMetal_fs_transition, kEmbeddedMetal_fs_transition_size };
+        fsVfx      = { kEmbeddedMetal_fs_vfx, kEmbeddedMetal_fs_vfx_size };
+        stretchVs  = { kEmbeddedMetal_stretch_blt_vs, kEmbeddedMetal_stretch_blt_vs_size };
+        stretchFs  = { kEmbeddedMetal_stretch_blt_fs, kEmbeddedMetal_stretch_blt_fs_size };
+        affineVs   = { kEmbeddedMetal_affine_blt_vs, kEmbeddedMetal_affine_blt_vs_size };
+        affineFs   = { kEmbeddedMetal_affine_blt_fs, kEmbeddedMetal_affine_blt_fs_size };
     }
 
-    if (!vsCode || !fsCode) {
+    // Stretch/affine fall back to sprite+texture on platforms without
+    // dedicated blit bytecode (Vulkan today): no src-rect UV mapping.
+    if (stretchVs.size == 0) { stretchVs = vsSprite; stretchFs = fsTexture; }
+    if (affineVs.size == 0)  { affineVs  = vsSprite; affineFs  = fsTexture; }
+
+    if (!vsSprite.data || vsSprite.size == 0 ||
+        !fsTexture.data || fsTexture.size == 0) {
         printf("[BgfxShaderManager] No embedded shaders for %s. "
                "Debug text only.\n", bgfx::getRendererName(renderer));
         return;
     }
 
-    // Vertex shader input: Position (0x0001) + TexCoord0 (0x0010)
-    const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
-
-    bgfx::ShaderHandle vs = buildBgfxShader(vsCode, vsCodeSize, false, 2, vsAttrs);
-    bgfx::ShaderHandle fs = buildBgfxShader(fsCode, fsCodeSize, true,  0, nullptr);
-
-    if (!bgfx::isValid(vs) || !bgfx::isValid(fs)) {
-        fprintf(stderr, "[BgfxShaderManager] buildBgfxShader failed.\n");
-        if (bgfx::isValid(vs)) bgfx::destroy(vs);
-        if (bgfx::isValid(fs)) bgfx::destroy(fs);
-        return;
-    }
-
-    printf("[BgfxShaderManager] Shader binaries built (VS=%u B, FS=%u B).\n",
-           vsCodeSize, fsCodeSize);
-
-    m_fallbackProgram = bgfx::createProgram(vs, fs, true);
-
-    if (!bgfx::isValid(m_fallbackProgram)) {
-        fprintf(stderr, "[BgfxShaderManager] createProgram rejected shaders. "
-                "Debug text only.\n");
-    } else {
-        
-    // -- Create effect shader programs from embedded DXBC -------------
-    auto createProgramFromDXBC = [&](const uint8_t* vsData, size_t vsSize,
-                                      const uint8_t* fsData, size_t fsSize,
-                                      const char* name,
-                                      const ShaderUniformMetadata* fragmentUniform = nullptr) -> bgfx::ProgramHandle {
-        if (!vsData || !fsData || vsSize == 0 || fsSize == 0) {
+    auto buildProgram = [&](const Bytecode& vs, const Bytecode& fs,
+                            const char* name,
+                            const ShaderUniformMetadata* fragmentUniform) -> bgfx::ProgramHandle {
+        if (!vs.data || !fs.data || vs.size == 0 || fs.size == 0) {
             printf("[BgfxShaderManager] %s: no embedded data.\n", name);
             return BGFX_INVALID_HANDLE;
         }
         const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
-        bgfx::ShaderHandle vs = buildBgfxShader(vsData, (uint32_t)vsSize, false, 2, vsAttrs);
-        bgfx::ShaderHandle fs = buildBgfxShader(
-            fsData, (uint32_t)fsSize, true, 0, nullptr, fragmentUniform);
-        if (!bgfx::isValid(vs) || !bgfx::isValid(fs)) {
+        bgfx::ShaderHandle vsHandle = buildBgfxShader(
+            vs.data, (uint32_t)vs.size, false, 2, vsAttrs);
+        bgfx::ShaderHandle fsHandle = buildBgfxShader(
+            fs.data, (uint32_t)fs.size, true, 0, nullptr, fragmentUniform);
+        if (!bgfx::isValid(vsHandle) || !bgfx::isValid(fsHandle)) {
             printf("[BgfxShaderManager] %s: shader build failed.\n", name);
-            if (bgfx::isValid(vs)) bgfx::destroy(vs);
-            if (bgfx::isValid(fs)) bgfx::destroy(fs);
+            if (bgfx::isValid(vsHandle)) bgfx::destroy(vsHandle);
+            if (bgfx::isValid(fsHandle)) bgfx::destroy(fsHandle);
             return BGFX_INVALID_HANDLE;
         }
-        bgfx::ProgramHandle prog = bgfx::createProgram(vs, fs, true);
+        bgfx::ProgramHandle prog = bgfx::createProgram(vsHandle, fsHandle, true);
         printf("[BgfxShaderManager] %s program %s.\n", name,
                bgfx::isValid(prog) ? "READY" : "FAILED");
         return prog;
     };
 
-    if (renderer == bgfx::RendererType::Direct3D11 ||
-        renderer == bgfx::RendererType::Direct3D12) {
-        constexpr uint8_t kUniformFragmentBit = 0x10;
-        const ShaderUniformMetadata vfxParams = {
-            "VFXParams",
-            uint8_t(bgfx::UniformType::Vec4) | kUniformFragmentBit,
-            3,
-            0,
-            3,
-            48
-        };
+    constexpr uint8_t kUniformFragmentBit = 0x10;
+    const ShaderUniformMetadata vfxParams = {
+        "VFXParams",
+        uint8_t(bgfx::UniformType::Vec4) | kUniformFragmentBit,
+        3, 0, 3, 48
+    };
 
-        m_blendProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_blend, kEmbeddedDXBC_fs_blend_size, "Blend");
+    m_fallbackProgram = buildProgram(vsSprite, fsTexture, "Fallback", nullptr);
+    m_blendProgram = buildProgram(vsFullscreen, fsBlend, "Blend", nullptr);
+    m_transitionProgram = buildProgram(vsFullscreen, fsTransition, "Transition", nullptr);
+    m_vfxProgram = buildProgram(vsFullscreen, fsVfx, "VFX", &vfxParams);
+    m_stretchProgram = buildProgram(stretchVs, stretchFs, "StretchBlt", nullptr);
+    m_affineProgram = buildProgram(affineVs, affineFs, "AffineBlt", nullptr);
 
-        m_transitionProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_transition, kEmbeddedDXBC_fs_transition_size, "Transition");
-
-        m_vfxProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_vs_fullscreen, kEmbeddedDXBC_vs_fullscreen_size,
-            kEmbeddedDXBC_fs_vfx, kEmbeddedDXBC_fs_vfx_size, "VFX", &vfxParams);
-    }
-        // Verify fallback program is valid before registering
+    // Verify fallback program is valid before registering
     if (!bgfx::isValid(m_fallbackProgram)) {
         fprintf(stderr, "[BgfxShaderManager] FALLBACK PROGRAM INVALID, all rendering disabled!\n");
     }
-
-    m_stretchProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_stretch_blt_vs, kEmbeddedDXBC_stretch_blt_vs_size,
-            kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size, "StretchBlt");
-
-    m_affineProgram = createProgramFromDXBC(
-            kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size,
-            kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size, "AffineBlt");
 
     // -- Create uniform handles for effect cbuffers -------------------
     m_u_blendParams = bgfx::createUniform("BlendParams",  bgfx::UniformType::Vec4, 2);
     m_u_transParams = bgfx::createUniform("TransParams",  bgfx::UniformType::Vec4, 1);
     m_u_vfxParams   = bgfx::createUniform("VFXParams",    bgfx::UniformType::Vec4, 3);
-
-    // -- Stretch / Affine uniforms ----------------------------------
     m_u_stretchParams = bgfx::createUniform("StretchParams", bgfx::UniformType::Vec4, 1);
     m_u_affineParams  = bgfx::createUniform("AffineParams",  bgfx::UniformType::Vec4, 4);
 
@@ -266,4 +270,3 @@ void BgfxShaderManager::initEmbeddedShaders() {
     }
 }
 } // namespace Caesura
-}
