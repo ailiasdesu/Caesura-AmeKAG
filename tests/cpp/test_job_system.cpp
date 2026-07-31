@@ -31,11 +31,14 @@ TEST_CASE("JobSystem::pendingJobs tracks active work") {
 
     // Allow jobs to start, then check pending count
     std::atomic<int> startCount{0};
-    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
-    js.submit([&]() { startCount.fetch_add(1); while (!done.load()) {} });
+    const auto spin = [&done]() {
+        while (!done.load()) std::this_thread::yield();
+    };
+    js.submit([&]() { startCount.fetch_add(1); spin(); });
+    js.submit([&]() { startCount.fetch_add(1); spin(); });
 
     // Wait for both jobs to actually start before checking pending
-    for (int i = 0; i < 100 && startCount.load() < 2; ++i) {
+    for (int i = 0; i < 200 && startCount.load() < 2; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     CHECK(startCount.load() == 2);  // both jobs started

@@ -27,7 +27,10 @@ TEST_CASE("Audio: playSE before init returns 0") {
 
 TEST_CASE("Audio: bus volume set/get includes SE bus") {
     SoLoudAudioEngine eng;
-    eng.init();
+    if (!eng.init()) {
+        MESSAGE("Audio device unavailable, skipping");
+        return;
+    }
     eng.setBusVolume("bgm", 0.75f);
     CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.75f));
     eng.setBusVolume("voice", 0.5f);

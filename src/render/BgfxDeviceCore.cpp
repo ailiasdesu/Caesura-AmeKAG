@@ -4,6 +4,7 @@
 #include <bx/math.h>
 #include <bx/bx.h>
 #include <cstdio>
+#include <cstring>
 
 namespace Caesura {
 
