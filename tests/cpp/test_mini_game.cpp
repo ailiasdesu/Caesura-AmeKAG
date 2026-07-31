@@ -99,9 +99,11 @@ TEST_CASE("BgfxMiniGameBackend::construct and shutdown without GPU") {
 TEST_CASE("BgfxMiniGameBackend::scene load/unload without GPU") {
     BgfxMiniGameBackend mg;
     mg.init();
-    uint32_t h = mg.loadScene("test.glb");
-    CHECK(h > 0);
-    mg.unloadScene(h);  // safe (not the active scene)
+    // A missing scene file must fail cleanly (returns 0)
+    uint32_t h = mg.loadScene("__missing_scene__.glb");
+    CHECK(h == 0);
+    // Unknown-handle unload is a safe no-op
+    mg.unloadScene(999);
     mg.shutdown();
 }
 

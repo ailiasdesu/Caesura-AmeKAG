@@ -1,6 +1,8 @@
 ﻿#include "BgfxMiniGameBackend.h"
 #include "../di/BackendRegistry.h"
 #include "EmbeddedMiniGameShaders.h"
+#include <nlohmann_json.hpp>
+#include <fstream>
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <bx/readerwriter.h>
@@ -206,12 +208,176 @@ bool BgfxMiniGameBackend::checkCollision(uint32_t a,uint32_t b){
 // Scene
 // ==========================================================================
 
-uint32_t BgfxMiniGameBackend::loadScene(const std::string& p){printf("[MiniGame] loadScene: %s\n",p.c_str());return m_nextSceneId++;}
-void BgfxMiniGameBackend::unloadScene(uint32_t h){if(h==m_activeScene)leave();}
+bool BgfxMiniGameBackend::sceneFromJson(const std::string& jsonText, MiniScene& out) {
+    using json = nlohmann::json;
+    try {
+        const json doc = json::parse(jsonText);
+        if (doc.contains("name") && doc["name"].is_string()) {
+            out.name = doc["name"].get<std::string>();
+        }
+        if (doc.contains("camera") && doc["camera"].is_object()) {
+            const auto& cam = doc["camera"];
+            if (cam.contains("eye") && cam["eye"].is_array() && cam["eye"].size() >= 3) {
+                out.eyeX = cam["eye"][0].get<float>();
+                out.eyeY = cam["eye"][1].get<float>();
+                out.eyeZ = cam["eye"][2].get<float>();
+            }
+            if (cam.contains("at") && cam["at"].is_array() && cam["at"].size() >= 3) {
+                out.atX = cam["at"][0].get<float>();
+                out.atY = cam["at"][1].get<float>();
+                out.atZ = cam["at"][2].get<float>();
+            }
+        }
+        if (doc.contains("lights") && doc["lights"].is_object()) {
+            const auto& lights = doc["lights"];
+            if (lights.contains("ambient") && lights["ambient"].is_array() &&
+                lights["ambient"].size() >= 3) {
+                out.lights.ambient[0] = lights["ambient"][0].get<float>();
+                out.lights.ambient[1] = lights["ambient"][1].get<float>();
+                out.lights.ambient[2] = lights["ambient"][2].get<float>();
+            }
+            if (lights.contains("directional") && lights["directional"].is_object()) {
+                const auto& dir = lights["directional"];
+                out.lights.hasDirectional = true;
+                if (dir.contains("dir") && dir["dir"].is_array() && dir["dir"].size() >= 3) {
+                    out.lights.dir[0] = dir["dir"][0].get<float>();
+                    out.lights.dir[1] = dir["dir"][1].get<float>();
+                    out.lights.dir[2] = dir["dir"][2].get<float>();
+                }
+                if (dir.contains("color") && dir["color"].is_array() && dir["color"].size() >= 3) {
+                    out.lights.dirColor[0] = dir["color"][0].get<float>();
+                    out.lights.dirColor[1] = dir["color"][1].get<float>();
+                    out.lights.dirColor[2] = dir["color"][2].get<float>();
+                }
+                if (dir.contains("intensity")) out.lights.dirIntensity = dir["intensity"].get<float>();
+            }
+        }
+        if (doc.contains("objects") && doc["objects"].is_array()) {
+            for (const auto& item : doc["objects"]) {
+                if (!item.is_object()) continue;
+                MiniObject obj;
+                obj.id = m_nextObjId++;
+                const std::string type = item.contains("type") && item["type"].is_string()
+                    ? item["type"].get<std::string>() : "cube";
+                if (type == "sphere")      obj.geoType = MiniGeoType::Sphere;
+                else if (type == "plane")  obj.geoType = MiniGeoType::Plane;
+                else if (type == "quad")   obj.geoType = MiniGeoType::Quad;
+                else                       obj.geoType = MiniGeoType::Cube;
+                const auto readVec = [&item](const char* key, float& x, float& y, float& z) {
+                    if (!item.contains(key) || !item[key].is_array() || item[key].size() < 3) return;
+                    x = item[key][0].get<float>();
+                    y = item[key][1].get<float>();
+                    z = item[key][2].get<float>();
+                };
+                readVec("pos", obj.posX, obj.posY, obj.posZ);
+                readVec("rot", obj.rotX, obj.rotY, obj.rotZ);
+                if (item.contains("scale") && item["scale"].is_array() && item["scale"].size() >= 3) {
+                    obj.scaleX = item["scale"][0].get<float>();
+                    obj.scaleY = item["scale"][1].get<float>();
+                    obj.scaleZ = item["scale"][2].get<float>();
+                } else if (item.contains("scale") && item["scale"].is_number()) {
+                    const float s = item["scale"].get<float>();
+                    obj.scaleX = obj.scaleY = obj.scaleZ = s;
+                }
+                if (item.contains("color") && item["color"].is_array() && item["color"].size() >= 3) {
+                    obj.r = item["color"][0].get<float>();
+                    obj.g = item["color"][1].get<float>();
+                    obj.b = item["color"][2].get<float>();
+                }
+                if (item.contains("gravity") && item["gravity"].is_boolean()) {
+                    obj.useGravity = item["gravity"].get<bool>();
+                }
+                if (item.contains("material") && item["material"].is_number()) {
+                    obj.materialId = item["material"].get<uint32_t>();
+                }
+                out.objects.push_back(obj);
+            }
+        }
+        return true;
+    } catch (const std::exception& error) {
+        fprintf(stderr, "[MiniGame] sceneFromJson failed: %s\n", error.what());
+        return false;
+    }
+}
+
+uint32_t BgfxMiniGameBackend::loadScene(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        fprintf(stderr, "[MiniGame] loadScene: cannot open %s\n", path.c_str());
+        return 0;
+    }
+    std::string jsonText((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+    MiniScene scene;
+    if (!sceneFromJson(jsonText, scene)) {
+        fprintf(stderr, "[MiniGame] loadScene: invalid scene file %s\n", path.c_str());
+        return 0;
+    }
+    scene.id = m_nextSceneId++;
+    m_scenes[scene.id] = std::move(scene);
+    printf("[MiniGame] loadScene: %s -> scene %u (%zu objects)\n",
+           path.c_str(), scene.id, m_scenes[scene.id].objects.size());
+    return scene.id;
+}
+
+void BgfxMiniGameBackend::unloadScene(uint32_t h) {
+    auto it = m_scenes.find(h);
+    if (it == m_scenes.end()) return;
+    auto spawned = m_sceneObjects.find(h);
+    if (spawned != m_sceneObjects.end()) {
+        for (uint32_t objId : spawned->second) m_objects.erase(objId);
+        m_sceneObjects.erase(spawned);
+    }
+    if (h == m_activeScene) {
+        m_active = false;
+        m_activeScene = 0;
+        auto* router = BackendRegistry::instance().getInputRouter();
+        if (router) router->setFocus(InputFocus::KAG);
+    }
+    m_scenes.erase(it);
+}
+
 void BgfxMiniGameBackend::enter(uint32_t h){
+    auto it = m_scenes.find(h);
+    if (it == m_scenes.end()) {
+        fprintf(stderr, "[MiniGame] enter: unknown scene %u\n", h);
+        return;
+    }
     if(!ensureGpuResources())return;
-    m_activeScene=h;
-    m_active=true;
+
+    // Leave the previous scene first (remove its objects)
+    if (m_activeScene != 0 && m_activeScene != h) {
+        const uint32_t prev = m_activeScene;
+        m_active = false;
+        auto spawned = m_sceneObjects.find(prev);
+        if (spawned != m_sceneObjects.end()) {
+            for (uint32_t objId : spawned->second) m_objects.erase(objId);
+            m_sceneObjects.erase(spawned);
+        }
+    }
+
+    const MiniScene& scene = it->second;
+    m_camera.eyeX = scene.eyeX; m_camera.eyeY = scene.eyeY; m_camera.eyeZ = scene.eyeZ;
+    m_camera.atX  = scene.atX;  m_camera.atY  = scene.atY;  m_camera.atZ  = scene.atZ;
+    m_ambientLight.r = scene.lights.ambient[0];
+    m_ambientLight.g = scene.lights.ambient[1];
+    m_ambientLight.b = scene.lights.ambient[2];
+    if (scene.lights.hasDirectional) {
+        m_dirLight.dirX = scene.lights.dir[0]; m_dirLight.dirY = scene.lights.dir[1]; m_dirLight.dirZ = scene.lights.dir[2];
+        m_dirLight.r = scene.lights.dirColor[0]; m_dirLight.g = scene.lights.dirColor[1]; m_dirLight.b = scene.lights.dirColor[2];
+        m_dirLight.intensity = scene.lights.dirIntensity;
+    }
+
+    std::vector<uint32_t> spawned;
+    spawned.reserve(scene.objects.size());
+    for (const MiniObject& obj : scene.objects) {
+        m_objects[obj.id] = obj;
+        spawned.push_back(obj.id);
+    }
+    m_sceneObjects[h] = std::move(spawned);
+
+    m_activeScene = h;
+    m_active = true;
     // D9.4: Switch input focus to GAME when entering mini-game
     auto* router = BackendRegistry::instance().getInputRouter();
     if (router) router->setFocus(InputFocus::GAME);

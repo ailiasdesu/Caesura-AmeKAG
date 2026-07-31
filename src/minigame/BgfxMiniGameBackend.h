@@ -1,10 +1,11 @@
-﻿#pragma once
+#pragma once
 #include "api/IMiniGameBackend.h"
 #include "../input/api/IInputRouter.h"
 #include "MiniMaterial.h"
 #include "MiniGeometry.h"
 #include "MiniLight.h"
 #include "MiniCollision.h"
+#include "MiniScene.h"
 #include "../render/api/IRenderDevice.h"
 #include <bgfx/bgfx.h>
 #include <vector>
@@ -17,20 +18,6 @@ struct MiniCamera {
     float atX = 0, atY = 0, atZ = 0;
     float fov  = 60.0f;
     float nearPlane = 0.1f, farPlane = 100.0f;
-};
-
-struct MiniObject {
-    uint32_t id;
-    float posX = 0, posY = 0, posZ = 0;
-    float scaleX = 1, scaleY = 1, scaleZ = 1;
-    float rotX = 0, rotY = 0, rotZ = 0;
-    MiniGeoType geoType = MiniGeoType::Cube;
-    uint32_t materialId = 0;
-    float r = 1, g = 1, b = 1;
-    bool enableCollision = true;
-    float velX = 0, velY = 0, velZ = 0;
-    float accelX = 0, accelY = 0, accelZ = 0;
-    bool useGravity = false;
 };
 
 class BgfxMiniGameBackend : public IMiniGameBackend {
@@ -90,6 +77,11 @@ public:
 
     void setRenderDevice(IRenderDevice* dev) { m_renderDevice = dev; }
 
+    // Scene introspection (no GPU required)
+    uint32_t sceneCount() const { return static_cast<uint32_t>(m_scenes.size()); }
+    uint32_t objectCount() const { return static_cast<uint32_t>(m_objects.size()); }
+    uint32_t activeScene() const { return m_activeScene; }
+
 private:
     void initGeometryCache();
     void setLightUniforms();
@@ -123,6 +115,9 @@ private:
     static constexpr int MAX_POINT_LIGHTS = 3;
 
     std::unordered_map<uint32_t, MiniObject> m_objects;
+    std::unordered_map<uint32_t, MiniScene> m_scenes;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> m_sceneObjects;
+    bool sceneFromJson(const std::string& jsonText, MiniScene& out);
     std::unordered_map<uint32_t, MiniMaterial> m_materials;
     uint32_t m_nextMaterialId = 1;
 
