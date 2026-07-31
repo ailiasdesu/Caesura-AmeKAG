@@ -198,6 +198,8 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
 # CaesuraTests links production modules, including the SDL-backed platform
 # implementation. Keep the runtime beside the fresh test binary instead of
 # relying on a DLL left behind by another build directory.
+get_target_property(_sdl3_tests_imported SDL3::SDL3 IMPORTED)
+if(NOT _sdl3_tests_imported)
 add_custom_command(TARGET CaesuraTests POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3>"
@@ -205,10 +207,11 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
     COMMENT "Copying SDL3 runtime to test output directory..."
     VERBATIM
 )
+endif()
 
 # Copy FFmpeg DLLs to test output so VideoPlayer can load them
 if(CAESURA_FFMPEG_FOUND AND WIN32)
-    add_custom_command(TARGET CaesuraTests POST_BUILD
+add_custom_command(TARGET CaesuraTests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${FFMPEG_BIN_DIR}"
         "$<TARGET_FILE_DIR:CaesuraTests>"

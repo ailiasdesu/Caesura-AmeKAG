@@ -3,6 +3,7 @@
 #include "../steam/api/ISteamBackend.h"
 #include <cstring>
 #include <sstream>
+#include <limits>
 #include <iomanip>
 
 namespace Caesura {

@@ -174,7 +174,9 @@ if(CAESURA_FFMPEG_FOUND)
     endif()
 endif()
 
-# Copy SDL3 DLL to output directory for runtime
+# Copy SDL3 DLL to output directory for runtime (skipped for vcpkg imported targets)
+get_target_property(_sdl3_imported SDL3::SDL3 IMPORTED)
+if(NOT _sdl3_imported)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3>"
@@ -182,6 +184,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying SDL3 runtime to output"
     VERBATIM
 )
+endif()
 
 
 
