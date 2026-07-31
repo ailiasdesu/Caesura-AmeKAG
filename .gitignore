@@ -1,5 +1,6 @@
 # --- Build artifacts ---
 /build/
+/build-*/
 bin/
 cmake-build*/
 out/
@@ -40,7 +41,7 @@ settings/
 scripts/game_logic.lua
 
 # --- Reference source (not engine) ---
-krkrz²Î¿¼Ô´Âë/
+krkrzï¿½Î¿ï¿½Ô´ï¿½ï¿½/
 
 # --- OS files ---
 .DS_Store
