@@ -40,7 +40,7 @@ bool CARCWriter::addFile(const std::string& relativePath,
     PendingFile pf;
     pf.relativePath = relativePath;
     pf.originalSize = size;
-    pf.data.assign(data, data + size);
+    if (size > 0) pf.data.assign(data, data + size);
     CryptoEngine::sha256(reinterpret_cast<const uint8_t*>(relativePath.data()),
                          relativePath.size(), pf.pathHash);
     m_pendingFiles.push_back(std::move(pf));
@@ -55,7 +55,7 @@ bool CARCWriter::addFileByHash(const uint8_t pathHash[PATH_HASH_SIZE],
     PendingFile pf;
     pf.relativePath.clear();
     pf.originalSize = size;
-    pf.data.assign(data, data + size);
+    if (size > 0) pf.data.assign(data, data + size);
     memcpy(pf.pathHash, pathHash, PATH_HASH_SIZE);
     m_pendingFiles.push_back(std::move(pf));
     return true;

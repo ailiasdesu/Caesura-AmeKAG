@@ -16,9 +16,10 @@ enum class DeltaFlag : uint8_t { Remove = 0, Add = 1, Replace = 2 };
 
 // --- Delta Header (80 bytes) ---
 inline constexpr uint32_t DELTA_MAGIC = 0x4341524B; // 'CARK' (Caesura Delta)
-// v2: entries carry plaintext relative paths and, for Add/Replace,
-// plaintext file data (v1 stored path hashes + opaque packed blobs,
-// which could not be repacked on apply).
+// v2: entries carry the CARC path-hash (hex) and, for Add/Replace, the
+// plaintext file data. CARC indexes are path-hash addressed and plaintext
+// paths are not recoverable, so hashes are the stable identifier
+// (v1 stored opaque packed blobs that could not be repacked on apply).
 inline constexpr uint32_t DELTA_VERSION = 2;
 
 #pragma pack(push, 1)
@@ -43,12 +44,14 @@ public:
                          const std::string& deltaPath);
 
     // Apply delta to source CARC, producing output CARC.
-    // Verifies SHA-256 of output against delta header.
+    // Verifies the source SHA-256 against the delta header and validates
+    // the repacked output's index set against (source − removed) + updates.
     static bool apply(const std::string& sourcePath,
                       const std::string& deltaPath,
                       const std::string& outputPath);
 
-    // Verify delta integrity (signature + hash chain).
+    // Verify delta integrity: header magic/version, decryptable GCM body
+    // with a fully bounds-checked entry walk matching the header count.
     static bool verify(const std::string& deltaPath);
 };
 
