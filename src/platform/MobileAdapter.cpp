@@ -1,6 +1,6 @@
-﻿// MobileAdapter implementation -- mobile platform stubs (P2 reserved).
-// Spec [10.2.64]: All methods are placeholder stubs for future mobile port.
-// No actual mobile SDK code -- just the interface wiring.
+﻿// MobileAdapter implementation -- mobile platform adapter.
+// Spec [10.2.64]: touch input mapping, lifecycle events, DPI scaling.
+// Core mapping is implemented; native mobile SDK integration is not wired.
 #include "MobileAdapter.h"
 #include <cstring>
 #include <cstdio>
@@ -63,9 +63,16 @@ void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
 // ══════════════════════════════════════════════════════════════════════════
 
 void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
-    if (fingerId >= 0 && fingerId < MAX_TOUCH_POINTS) {
-        m_touchPoints[fingerId] = TouchPoint{ x, y, fingerId, true };
+    if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
+        return; // out of range -- ignore
     }
+    if (m_touchPoints[fingerId].active) {
+        // Finger already tracked (duplicate down): update position only.
+        m_touchPoints[fingerId].x = x;
+        m_touchPoints[fingerId].y = y;
+        return;
+    }
+    m_touchPoints[fingerId] = TouchPoint{ x, y, fingerId, true };
     m_activeTouches++;
 
     // Touch-to-mouse: inject SDL mouse button down event
@@ -74,15 +81,20 @@ void MobileAdapter::onFingerDown(float x, float y, int fingerId) {
     ev.button.x = x * m_displayScale;
     ev.button.y = y * m_displayScale;
     ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.down = true;
     ev.button.clicks = 1;
     SDL_PushEvent(&ev);
 }
 
 void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
-    if (fingerId >= 0 && fingerId < MAX_TOUCH_POINTS) {
-        m_touchPoints[fingerId].x = x;
-        m_touchPoints[fingerId].y = y;
+    if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
+        return; // out of range -- ignore
     }
+    if (!m_touchPoints[fingerId].active) {
+        return; // motion only valid for a tracked finger
+    }
+    m_touchPoints[fingerId].x = x;
+    m_touchPoints[fingerId].y = y;
 
     // Touch-to-mouse: inject SDL mouse motion event
     SDL_Event ev = {};
@@ -93,9 +105,13 @@ void MobileAdapter::onFingerMotion(float x, float y, int fingerId) {
 }
 
 void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
-    if (fingerId >= 0 && fingerId < MAX_TOUCH_POINTS) {
-        m_touchPoints[fingerId].active = false;
+    if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) {
+        return; // out of range -- ignore
     }
+    if (!m_touchPoints[fingerId].active) {
+        return; // finger was never down -- ignore (no underflow)
+    }
+    m_touchPoints[fingerId] = TouchPoint{ x, y, fingerId, false };
     if (m_activeTouches > 0) m_activeTouches--;
 
     // Touch-to-mouse: inject SDL mouse button up event
@@ -104,32 +120,52 @@ void MobileAdapter::onFingerUp(float x, float y, int fingerId) {
     ev.button.x = x * m_displayScale;
     ev.button.y = y * m_displayScale;
     ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.down = false;
     ev.button.clicks = 1;
     SDL_PushEvent(&ev);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  Gestures (reserved)
+//  Gestures
 // ══════════════════════════════════════════════════════════════════════════
 
+// Wheel delta emitted per unit of pinch scale change.
+static constexpr float kPinchToWheelScale = 100.0f;
+
 void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
-    // Reserved for future pinch-to-zoom implementation.
-    (void)centerX;
-    (void)centerY;
-    (void)scale;
+    if (m_lastPinchScale <= 0.0f) {
+        // First event of a new pinch gesture: establish the baseline.
+        m_lastPinchScale = scale;
+        return;
+    }
+    const float delta = scale - m_lastPinchScale;
+    m_lastPinchScale = scale;
+    if (delta == 0.0f) return;
+
+    // Map pinch scale delta to a vertical mouse-wheel (zoom) event.
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_WHEEL;
+    ev.wheel.y = delta * kPinchToWheelScale;
+    ev.wheel.mouse_x = centerX * m_displayScale;
+    ev.wheel.mouse_y = centerY * m_displayScale;
+    SDL_PushEvent(&ev);
 }
 
 void MobileAdapter::onLongPress(float x, float y) {
-    // Long press → right mouse button click
+    // Long press → right mouse button click.
+    // Note: press-duration tracking (>500ms) is done by the platform layer;
+    // this adapter only maps the detected press to a right-click.
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.x = x * m_displayScale;
     ev.button.y = y * m_displayScale;
     ev.button.button = SDL_BUTTON_RIGHT;
+    ev.button.down = true;
     ev.button.clicks = 1;
     SDL_PushEvent(&ev);
     // Synthesize immediate button-up
     ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    ev.button.down = false;
     SDL_PushEvent(&ev);
 }
 

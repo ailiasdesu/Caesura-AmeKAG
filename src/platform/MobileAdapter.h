@@ -1,6 +1,7 @@
-﻿// MobileAdapter -- Mobile platform interface stubs (P2 reserved).
+﻿// MobileAdapter -- Mobile platform adapter.
 // Spec [10.2.64]: Touch input mapping, lifecycle events, DPI scaling.
-// All methods are stubs for future mobile port -- no actual mobile code.
+// Core mapping is implemented and unit-tested (see class doc); native mobile
+// platform integration is not wired into the Engine yet.
 // Namespace: Caesura (consistent with engine layering).
 #pragma once
 #include <cstdint>
@@ -20,7 +21,10 @@ struct TouchPoint {
 };
 
 /// Mobile platform adapter -- lifecycle + touch → input mapping.
-/// P2 reserved: all implementations are placeholder stubs.
+/// Core mapping (touch → SDL mouse/wheel events, DPI scale, pause/resume
+/// Lua callbacks) is implemented and unit-tested. Native mobile platform
+/// integration (real OS lifecycle hooks, SoLoud pause wiring) is NOT wired
+/// into the Engine yet -- the platform layer must call these methods.
 class MobileAdapter {
 public:
     MobileAdapter() = default;
@@ -47,12 +51,23 @@ public:
     /// Finger lifted -- maps to left mouse button release at (x, y).
     void onFingerUp(float x, float y, int fingerId = 0);
 
-    // ── Gesture Input (reserved) ───────────────────────────────────────
+    // ── Gesture Input ──────────────────────────────────────────────────
 
-    /// Pinch gesture -- zoom in/out (reserved for future).
+    /// Pinch gesture -- zoom in/out.
+    /// `scale` is the cumulative gesture scale (starts at 1.0f). Each call
+    /// maps the scale delta to a vertical mouse-wheel event (zoom). Call
+    /// `resetPinch()` when the gesture ends (all fingers lifted).
     void onPinch(float centerX, float centerY, float scale);
 
-    /// Long press > 500ms -- maps to right mouse button click.
+    /// End the active pinch gesture (resets the scale baseline).
+    void resetPinch() { m_lastPinchScale = 0.0f; }
+
+    /// Current pinch scale baseline (0 = no active pinch gesture).
+    float getLastPinchScale() const { return m_lastPinchScale; }
+
+    /// Long press -- maps to right mouse button click.
+    /// Press-duration tracking (>500ms) is the platform layer's
+    /// responsibility; this callback fires once when the press is detected.
     void onLongPress(float x, float y);
 
     // ── Display ────────────────────────────────────────────────────────
@@ -78,6 +93,7 @@ public:
 private:
     bool  m_paused = false;
     float m_displayScale = 1.0f;
+    float m_lastPinchScale = 0.0f;
     int   m_activeTouches = 0;
 
     /// Last known positions per finger (up to 10 simultaneous touches)
