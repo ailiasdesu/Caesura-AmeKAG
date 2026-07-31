@@ -116,6 +116,8 @@ bool DeltaCARC::generate(const std::string& oldPath,
     // Files added (absent in old) or replaced (different content).
     // Compressed size is a cheap first test; equal sizes fall through to
     // a plaintext comparison so content changes never slip through.
+    // Note: readFileByHash returns {} for both empty content and failure,
+    // so originalSize is used to tell them apart.
     for (const auto& [hashHex, info] : newIdx) {
         auto oldIt = oldIdx.find(hashHex);
         if (oldIt != oldIdx.end() && oldIt->second.compressedSize == info.compressedSize) {
@@ -123,7 +125,9 @@ bool DeltaCARC::generate(const std::string& oldPath,
             if (!hexDecode(hashHex, hash)) return false;
             auto oldData = oldReader.readFileByHash(hash);
             auto newData = newReader.readFileByHash(hash);
-            if (!oldData.empty() && oldData == newData) {
+            if ((!oldData.empty() || oldIt->second.originalSize == 0) &&
+                (!newData.empty() || info.originalSize == 0) &&
+                oldData == newData) {
                 continue; // unchanged
             }
         }
@@ -133,7 +137,7 @@ bool DeltaCARC::generate(const std::string& oldPath,
             return false;
         }
         auto data = newReader.readFileByHash(hash);
-        if (data.empty()) {
+        if (data.empty() && info.originalSize != 0) {
             fprintf(stderr, "[DeltaCARC] Cannot read new file: %s\n", hashHex.c_str());
             return false;
         }
@@ -157,7 +161,7 @@ bool DeltaCARC::generate(const std::string& oldPath,
 
     // Encrypt delta body. An empty body (no changes between archives) is
     // valid: the delta carries just the header.
-    uint8_t key[AES_KEY_SIZE], nonce[AES_NONCE_SIZE], tag[AES_TAG_SIZE];
+    uint8_t key[AES_KEY_SIZE] = {}, nonce[AES_NONCE_SIZE] = {}, tag[AES_TAG_SIZE] = {};
     CryptoEngine::generateKey(key);
     CryptoEngine::generateNonce(nonce);
     std::vector<uint8_t> encrypted;
@@ -220,6 +224,9 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     if (encSize > 0) {
         deltaBody = CryptoEngine::decrypt(encrypted.data(), encSize, key, nonce, tag);
         if (deltaBody.empty()) { fprintf(stderr, "[DeltaCARC] Decrypt failed\n"); return false; }
+    } else if (hdr.entryCount > 0) {
+        fprintf(stderr, "[DeltaCARC] Corrupt delta: empty body with %u entries\n", hdr.entryCount);
+        return false;
     }
     if (memcmp(actualSHA, hdr.sourceSHA, PATH_HASH_SIZE) != 0) {
         fprintf(stderr, "[DeltaCARC] Source SHA mismatch — delta not for this file\n");
@@ -229,6 +236,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     // Parse delta entries: removed hashes + replacement/added data
     std::unordered_set<std::string> removes;
     std::unordered_map<std::string, std::vector<uint8_t>> updates;
+    uint32_t parsed = 0;
     {
         const uint8_t* p = deltaBody.data();
         const uint8_t* end = p + deltaBody.size();
@@ -250,6 +258,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
 
             if (flag == DeltaFlag::Remove) {
                 removes.insert(hashHex);
+                parsed++;
                 continue;
             }
             if (flag != DeltaFlag::Add && flag != DeltaFlag::Replace) {
@@ -259,19 +268,38 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             uint64_t dataLen = 0;
             if (!readU64(p, end, dataLen)) return false;
             p += 8;
-            if (p + dataLen > end) {
+            // Compare lengths as uint64 before any pointer arithmetic:
+            // p + dataLen would wrap for dataLen >= 2^63 (UB / DoS).
+            if (dataLen > static_cast<uint64_t>(end - p)) {
                 fprintf(stderr, "[DeltaCARC] Corrupt delta: data size %llu exceeds buffer\n",
                         (unsigned long long)dataLen);
                 return false;
             }
             updates[hashHex].assign(p, p + dataLen);
             p += dataLen;
+            parsed++;
         }
+    }
+    if (parsed != hdr.entryCount) {
+        fprintf(stderr, "[DeltaCARC] Corrupt delta: entry count mismatch (header %u, body %u)\n",
+                hdr.entryCount, parsed);
+        return false;
     }
 
     // Open source CARC and repack into the output
     CARCReader src;
     if (!src.open(sourcePath)) return false;
+
+    // Snapshot the expected output index set before repack mutates `updates`.
+    std::unordered_set<std::string> expectedIndex;
+    for (const auto& [hashHex, info] : src.index()) {
+        (void)info;
+        if (removes.count(hashHex) == 0) expectedIndex.insert(hashHex);
+    }
+    for (const auto& [hashHex, data] : updates) {
+        (void)data;
+        expectedIndex.insert(hashHex);
+    }
 
     CARCWriter writer;
     if (!writer.create(outputPath)) return false;
@@ -292,7 +320,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             uint8_t hash[PATH_HASH_SIZE];
             if (!hexDecode(hashHex, hash)) return false;
             auto data = src.readFileByHash(hash);
-            if (data.empty()) {
+            if (data.empty() && info.originalSize != 0) {
                 fprintf(stderr, "[DeltaCARC] Cannot read source file: %s\n", hashHex.c_str());
                 return false;
             }
@@ -310,12 +338,25 @@ bool DeltaCARC::apply(const std::string& sourcePath,
 
     // The output is freshly packed (new keys/nonces), so byte-exact SHA
     // equality with the original target is not achievable; the header SHA
-    // is kept for provenance, and output validity is confirmed by opening
-    // the result with CARCReader (magic/signature/index verified).
+    // is kept for provenance. Repack correctness is verified structurally:
+    // the output must open with CARCReader and its index set must equal
+    // (source index − removed) + updated/added hashes.
     CARCReader check;
     if (!check.open(outputPath)) {
         fprintf(stderr, "[DeltaCARC] Output CARC failed verification\n");
         return false;
+    }
+    if (check.numFiles() != expectedIndex.size()) {
+        fprintf(stderr, "[DeltaCARC] Output index mismatch: %zu files, expected %zu\n",
+                check.numFiles(), expectedIndex.size());
+        return false;
+    }
+    for (const auto& [hashHex, info] : check.index()) {
+        (void)info;
+        if (expectedIndex.count(hashHex) == 0) {
+            fprintf(stderr, "[DeltaCARC] Output index mismatch: unexpected %s\n", hashHex.c_str());
+            return false;
+        }
     }
 
     printf("[DeltaCARC] Delta applied: %u entries → %s (%zu files)\n",
@@ -374,7 +415,9 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
             uint64_t dataLen = 0;
             if (!readU64(p, end, dataLen)) return false;
             p += 8;
-            if (p + dataLen > end) return false;
+            // Compare lengths as uint64 before any pointer arithmetic:
+            // p + dataLen would wrap for dataLen >= 2^63 (UB / DoS).
+            if (dataLen > static_cast<uint64_t>(end - p)) return false;
             p += dataLen;
         } else if (flag != DeltaFlag::Remove) {
             return false; // unknown flag

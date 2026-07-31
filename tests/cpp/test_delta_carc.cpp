@@ -156,6 +156,62 @@ TEST_CASE("DeltaCARC::apply rejects mismatched source") {
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("DeltaCARC::round-trip handles zero-byte files") {
+    auto dir = makeTempDir();
+    auto oldPath = buildCarc(dir, "old.carc", {
+        {"empty.txt", ""},      // zero-byte file
+        {"keep.txt", "data"},
+    });
+    auto newPath = buildCarc(dir, "new.carc", {
+        {"empty.txt", ""},      // unchanged zero-byte
+        {"keep.txt", "data v2"},
+        {"added_empty.txt", ""},// added zero-byte
+    });
+    auto deltaPath = (std::filesystem::path(dir) / "delta.bin").string();
+    auto outPath = (std::filesystem::path(dir) / "out.carc").string();
+
+    REQUIRE(oldPath.size() > 0);
+    REQUIRE(newPath.size() > 0);
+
+    CHECK(carc::DeltaCARC::generate(oldPath, newPath, deltaPath));
+    CHECK(carc::DeltaCARC::apply(oldPath, deltaPath, outPath));
+
+    carc::CARCReader out;
+    REQUIRE(out.open(outPath));
+    CHECK(out.numFiles() == 3);
+    CHECK(out.readFile("empty.txt").empty());
+    CHECK(out.readFile("added_empty.txt").empty());
+    CHECK(readText(out, "keep.txt") == "data v2");
+
+    out.close();
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("DeltaCARC::identical archives produce empty delta that applies as no-op") {
+    auto dir = makeTempDir();
+    auto arcPath = buildCarc(dir, "same.carc", {
+        {"a.txt", "hello"},
+        {"b.txt", "world"},
+    });
+    auto deltaPath = (std::filesystem::path(dir) / "delta.bin").string();
+    auto outPath = (std::filesystem::path(dir) / "out.carc").string();
+
+    REQUIRE(arcPath.size() > 0);
+
+    CHECK(carc::DeltaCARC::generate(arcPath, arcPath, deltaPath));
+    CHECK(carc::DeltaCARC::verify(deltaPath));
+    CHECK(carc::DeltaCARC::apply(arcPath, deltaPath, outPath));
+
+    carc::CARCReader out;
+    REQUIRE(out.open(outPath));
+    CHECK(out.numFiles() == 2);
+    CHECK(readText(out, "a.txt") == "hello");
+    CHECK(readText(out, "b.txt") == "world");
+
+    out.close();
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("DeltaCARC::verify rejects corrupt deltas") {
     auto dir = makeTempDir();
     auto oldPath = buildCarc(dir, "old.carc", {{"a.txt", "one"}});

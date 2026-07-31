@@ -1,6 +1,8 @@
 ﻿// DeltaCARC — differential update format for .carc archives
 // Uses file-level comparison: changed/added files copied, removed files listed.
-// Entire delta is AES-256-GCM encrypted + Ed25519 signed.
+// Entire delta is AES-256-GCM encrypted (key/nonce/tag in-band); authenticity
+// relies on the trusted distribution channel (same as CARC files) plus the
+// source-SHA binding verified on apply.
 #pragma once
 #include "CARCFormat.h"
 #include <vector>
