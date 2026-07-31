@@ -342,7 +342,13 @@ static std::string extractField(const std::string& json, const std::string& key)
         pos += search.size();
         // Skip whitespace
         while (pos < json.size() && json[pos] == ' ') pos++;
-        // Read until , or } or \n
+        // Quoted value: read until the closing quote
+        if (pos < json.size() && json[pos] == '"') {
+            size_t end = json.find('"', pos + 1);
+            if (end == std::string::npos) return "";
+            return json.substr(pos + 1, end - pos - 1);
+        }
+        // Unquoted value: read until , or } or \n
         size_t end = json.find_first_of(",}", pos);
         if (end == std::string::npos) end = json.size();
         std::string val = json.substr(pos, end - pos);
@@ -457,14 +463,14 @@ std::string RpcServer::handleRun(int id, const std::string& script) {
         return err.str();
     }
 
-    pushLog("info", "Running scene script...");
+    pushLog("info", "Submitting scene script...");
     RpcReply reply = dispatchRequest(RpcRequest{RpcRunScriptRequest{script}});
     if (reply.status != RpcReplyStatus::Ok) {
         pushLog("error", reply.message);
         return replyError(id, reply);
     }
 
-    pushLog("info", "Scene script completed.");
+    pushLog("info", "Scene script submitted.");
 
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"status\":\"ok\"}";

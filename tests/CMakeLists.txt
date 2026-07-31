@@ -1,4 +1,5 @@
-﻿cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)
+find_package(Python3 COMPONENTS Interpreter QUIET)
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 
@@ -161,6 +162,24 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
     TIMEOUT 15
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
 )
+
+if(Python3_EXECUTABLE)
+    add_test(
+        NAME CaesuraHeadlessRpcSmoke
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/headless_rpc_smoke.py
+                $<TARGET_FILE:CaesuraAmeKAG>
+    )
+    set_tests_properties(CaesuraHeadlessRpcSmoke PROPERTIES
+        LABELS "entry;headless;cli;rpc"
+        RUN_SERIAL TRUE
+        RESOURCE_LOCK "global-singletons"
+        FIXTURES_REQUIRED caesura-test-assets
+        PASS_REGULAR_EXPRESSION "ALL HEADLESS RPC TESTS PASSED"
+        TIMEOUT 60
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
+    )
+endif()
 
 # Copy scripts to test output directory so sandbox.lua et al are found
 add_custom_command(TARGET CaesuraTests POST_BUILD

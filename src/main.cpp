@@ -84,6 +84,7 @@ public:
         for (const auto& pending : batch) {
             complete(pending, executeSafely(pending->request));
         }
+        pumpManagedRuns();
     }
 
     void close() {
@@ -97,6 +98,7 @@ public:
         for (const auto& pending : cancelled) {
             complete(pending, unavailable());
         }
+        abortManagedRuns();
     }
 
 private:
@@ -149,13 +151,12 @@ private:
                 reply.payload = Caesura::RpcStatusResult{
                     m_engine.lua().state() != nullptr};
                 return reply;
-            } else if constexpr (
-                std::is_same_v<Operation, Caesura::RpcRunScriptRequest> ||
-                std::is_same_v<Operation, Caesura::RpcEvaluateRequest>) {
-                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
-                                "unsupported_yieldable_execution",
-                                "run/eval require a managed coroutine and are not enabled yet");
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcRunScriptRequest>) {
+                return startManagedRun(operation.script);
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcEvaluateRequest>) {
+                return evaluate(operation.code);
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcStopRequest>) {
+                abortManagedRuns();
                 m_engine.quit();
                 return rpcOk();
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcGetStateRequest>) {
@@ -334,10 +335,122 @@ private:
         }
     }
 
+    // -- Managed run/eval execution ------------------------------------
+
+    struct ManagedRun {
+        lua_State* co = nullptr;
+        int slot = 0;
+    };
+
+    Caesura::RpcReply evaluate(const std::string& code) {
+        lua_State* L = m_engine.lua().state();
+        if (!L) {
+            return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                            "lua_unavailable", "Lua VM is unavailable");
+        }
+        const int top = lua_gettop(L);
+        if (luaL_loadstring(L, code.c_str()) != LUA_OK) {
+            const char* err = lua_tostring(L, -1);
+            const std::string msg = err ? err : "compile error";
+            lua_settop(L, top);
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "eval_compile_error", msg.c_str());
+        }
+        const int callStatus = lua_pcall(L, 0, 1, 0);
+        if (callStatus != LUA_OK) {
+            const char* err = lua_tostring(L, -1);
+            const std::string msg = (callStatus == LUA_YIELD)
+                ? "eval cannot yield"
+                : (err ? err : "evaluation failed");
+            lua_settop(L, top);
+            return rpcError(Caesura::RpcReplyStatus::Failed,
+                            "eval_error", msg.c_str());
+        }
+        std::string value = "nil";
+        if (!lua_isnil(L, -1)) {
+            size_t len = 0;
+            const char* str = luaL_tolstring(L, -1, &len);
+            if (str) value.assign(str, len);
+        }
+        lua_settop(L, top);
+        Caesura::RpcReply reply = rpcOk();
+        reply.payload = Caesura::RpcEvaluateResult{std::move(value)};
+        return reply;
+    }
+
+    Caesura::RpcReply startManagedRun(const std::string& script) {
+        lua_State* L = m_engine.lua().state();
+        if (!L) {
+            return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                            "lua_unavailable", "Lua VM is unavailable");
+        }
+        if (script.empty()) {
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "empty_script", "Script must not be empty");
+        }
+        lua_State* co = lua_newthread(L);
+        if (luaL_loadstring(co, script.c_str()) != LUA_OK) {
+            const char* err = lua_tostring(co, -1);
+            const std::string msg = err ? err : "compile error";
+            lua_pop(co, 1);
+            lua_pop(L, 1);  // drop the thread
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "run_compile_error", msg.c_str());
+        }
+        const int slot = 0x5100 + static_cast<int>(m_managedRuns.size());
+        m_managedRuns.push_back(ManagedRun{co, slot});
+        // Keep the thread alive across GC: registry holds a strong reference.
+        lua_pushvalue(L, -1);
+        lua_rawseti(L, LUA_REGISTRYINDEX, slot);
+        lua_pop(L, 1);
+        Caesura::RpcReply reply = rpcOk();
+        reply.message = "started";
+        return reply;
+    }
+
+    void pumpManagedRuns() {
+        if (m_managedRuns.empty()) return;
+        lua_State* L = m_engine.lua().state();
+        if (!L) {
+            m_managedRuns.clear();
+            return;
+        }
+        for (auto it = m_managedRuns.begin(); it != m_managedRuns.end();) {
+            int nresults = 0;
+            const int status = lua_resume(it->co, L, 0, &nresults);
+            if (status == LUA_YIELD) {
+                ++it;
+                continue;
+            }
+            if (status != LUA_OK) {
+                const char* err = lua_tostring(it->co, -1);
+                fprintf(stderr, "[RpcRun] script finished with error: %s\n",
+                        err ? err : "unknown error");
+            }
+            lua_settop(it->co, 0);
+            lua_pushnil(L);
+            lua_rawseti(L, LUA_REGISTRYINDEX, it->slot);
+            it = m_managedRuns.erase(it);
+        }
+    }
+
+    void abortManagedRuns() {
+        if (m_managedRuns.empty()) return;
+        lua_State* L = m_engine.lua().state();
+        if (L) {
+            for (const auto& run : m_managedRuns) {
+                lua_pushnil(L);
+                lua_rawseti(L, LUA_REGISTRYINDEX, run.slot);
+            }
+        }
+        m_managedRuns.clear();
+    }
+
     Caesura::Engine& m_engine;
     std::thread::id m_ownerThread;
     std::mutex m_queueMutex;
     std::deque<std::shared_ptr<Pending>> m_pending;
+    std::deque<ManagedRun> m_managedRuns;
     bool m_accepting = true;
 };
 
