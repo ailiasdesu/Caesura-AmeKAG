@@ -55,6 +55,7 @@ set(TEST_SOURCES
     cpp/test_steam.cpp
     cpp/test_live2d.cpp
     cpp/test_archive.cpp
+    cpp/test_delta_carc.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})

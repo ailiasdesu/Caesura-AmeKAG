@@ -14,7 +14,10 @@ enum class DeltaFlag : uint8_t { Remove = 0, Add = 1, Replace = 2 };
 
 // --- Delta Header (80 bytes) ---
 inline constexpr uint32_t DELTA_MAGIC = 0x4341524B; // 'CARK' (Caesura Delta)
-inline constexpr uint32_t DELTA_VERSION = 1;
+// v2: entries carry plaintext relative paths and, for Add/Replace,
+// plaintext file data (v1 stored path hashes + opaque packed blobs,
+// which could not be repacked on apply).
+inline constexpr uint32_t DELTA_VERSION = 2;
 
 #pragma pack(push, 1)
 struct DeltaHeader {

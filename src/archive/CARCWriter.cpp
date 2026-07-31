@@ -47,6 +47,20 @@ bool CARCWriter::addFile(const std::string& relativePath,
     return true;
 }
 
+bool CARCWriter::addFileByHash(const uint8_t pathHash[PATH_HASH_SIZE],
+                               const uint8_t* data, size_t size)
+{
+    if (!m_output.is_open()) return false;
+
+    PendingFile pf;
+    pf.relativePath.clear();
+    pf.originalSize = size;
+    pf.data.assign(data, data + size);
+    memcpy(pf.pathHash, pathHash, PATH_HASH_SIZE);
+    m_pendingFiles.push_back(std::move(pf));
+    return true;
+}
+
 bool CARCWriter::finalize()
 {
     if (!m_output.is_open()) return false;

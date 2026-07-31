@@ -31,6 +31,11 @@ public:
     bool addFile(const std::string& relativePath,
                  const uint8_t* data, size_t size);
 
+    // Add a file by its precomputed path hash (used by DeltaCARC apply,
+    // where plaintext paths are not recoverable from CARC indexes).
+    bool addFileByHash(const uint8_t pathHash[PATH_HASH_SIZE],
+                       const uint8_t* data, size_t size);
+
     // Finalize: encrypt index, write header, sign, write signature + public key.
     bool finalize();
 

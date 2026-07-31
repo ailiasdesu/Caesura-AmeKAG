@@ -75,4 +75,5 @@
 1. **Live2D**：需 SDK 才能编译验证全部 Cubism 路径；Metal 需 macOS 开发者实现。
 2. **MobileAdapter**：未接线（无 I* 接口、无 Engine 生命周期挂钩）；SoLoud 暂停逻辑未实现；
    pinch 映射系数（`kPinchToWheelScale = 100`）为经验值，接入真实设备后可调。
-3. 交接文档第 3 节第 4/5 项（DeltaCARC、SaveManager 清理、删除 `codex/engine-audit-hardening` 分支）未处理，仍为可选后续。
+3. 交接文档第 3 节第 5 项（删除 `codex/engine-audit-hardening` 分支）已完成；
+   第 4 项 DeltaCARC 已完成（v2：真实增量应用 + 5 个测试用例）；**SaveManager 最终清理**仍未处理，为可选后续。
