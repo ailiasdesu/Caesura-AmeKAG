@@ -66,7 +66,7 @@ cafcf3b6 chore(git): stop tracking CMake build directories (build-*-verify)
 1. **确认 CI 绿**（已完成 ✅，如需复查 `gh run list --workflow=ci.yml --limit 1`）
 2. **P3-2 Live2D**：下载 Cubism SDK（`CAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT=...`），验证 Windows D3D11 路径，修复 Metal STUB。无 SDK 则文档化状态。
 3. **P4-3 MobileAdapter**：实现或降级文档化。
-4. 可选：DeltaCARC 增量归档（当前是占位拷贝 `src/archive/DeltaCARC.cpp:216`）；SaveManager 最终清理。
+4. 可选：DeltaCARC 增量归档（**已完成**：`src/archive/DeltaCARC.cpp` v2 真实增量应用，见 `docs/plans/2026-07-31-003-live2d-mobileadapter-closeout.md`）；SaveManager 最终清理。
 5. 可选：将 `codex/engine-audit-hardening` 分支删除（已合入 master）。
 
 ## 4. 关键技术上下文（新 agent 必读）

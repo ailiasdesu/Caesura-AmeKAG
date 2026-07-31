@@ -241,7 +241,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
         const uint8_t* p = deltaBody.data();
         const uint8_t* end = p + deltaBody.size();
         while (p < end) {
-            if (p + 1 + 4 > end) {
+            if (static_cast<size_t>(end - p) < 5) {
                 fprintf(stderr, "[DeltaCARC] Corrupt delta: truncated entry header\n");
                 return false;
             }
@@ -249,7 +249,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             uint32_t hashLen = 0;
             if (!readU32(p, end, hashLen)) return false;
             p += 4;
-            if (p + hashLen > end) {
+            if (hashLen > static_cast<size_t>(end - p)) {
                 fprintf(stderr, "[DeltaCARC] Corrupt delta: hashLen %u exceeds buffer\n", hashLen);
                 return false;
             }
@@ -404,12 +404,12 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
     const uint8_t* end = p + deltaBody.size();
     uint32_t parsed = 0;
     while (p < end) {
-        if (p + 1 + 4 > end) return false;
+        if (static_cast<size_t>(end - p) < 5) return false;
         DeltaFlag flag = (DeltaFlag)*p++;
         uint32_t hashLen = 0;
         if (!readU32(p, end, hashLen)) return false;
         p += 4;
-        if (p + hashLen > end) return false;
+        if (hashLen > static_cast<size_t>(end - p)) return false;
         p += hashLen;
         if (flag == DeltaFlag::Add || flag == DeltaFlag::Replace) {
             uint64_t dataLen = 0;
