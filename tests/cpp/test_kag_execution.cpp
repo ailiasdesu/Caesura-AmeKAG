@@ -7,6 +7,7 @@
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
 #include "script/bindings/UnifiedBinding.h"
+#include "script/bindings/SaveBinding.h"
 
 extern "C" {
 #include <lua.h>
@@ -34,6 +35,7 @@ static LuaManager* initKAGLua() {
     registerDebugBinding(L);
     registerDevCoreBinding(L);
     registerUnifiedBackendBinding(L);
+    registerSaveBinding(L);
     return lm;
 }
 
@@ -1112,6 +1114,26 @@ TEST_CASE("KAG: [layfade] command fades a registered layer") {
         assert(node.opacity == 0,
                'layer should end at opacity 0, got ' .. node.opacity)
         assert(steps > 10, 'layfade should take multiple frames')
+    )lua";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
+TEST_CASE("KAG: save_game/load_game are C bindings, not Lua wrappers") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    // The SaveBinding C functions must not be shadowed by Lua-level wrappers:
+    // the binding signature is save_game(slot, data, scene, token) -> bool and
+    // must return a value instead of recursing into kag.commands.save.
+    const char* code = R"lua(
+        assert(type(KAG.save_game) == 'function')
+        assert(type(KAG.load_game) == 'function')
+        local ok = KAG.save_game(1, { x = 1 }, 'scene', 1)
+        assert(type(ok) == 'boolean', 'save_game must return a boolean')
+        local state, meta = KAG.load_game(1)
+        assert(state == nil, 'no SaveManager registered in test VM')
     )lua";
     CHECK(doString(L, code));
     delete lm;

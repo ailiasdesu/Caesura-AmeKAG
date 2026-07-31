@@ -333,6 +333,7 @@ function System.get_save_info(slot)
 end
 
 --- System.save(slot, ctx) -- save game state to slot file
+-- DEPRECATED (Path B): use KAG.save_game binding (Path A) instead.
 function System.save(slot, ctx)
     -- ⚠ DEPRECATED [R2-FIX] Legacy Lua serialization path.
     -- Use KAG.save_game() / KAG.load_game() (C++ JSON path) instead.
@@ -425,6 +426,7 @@ function System._write_save_file(filename, data)
 end
 
 --- System.load(slot, ctx) -- load game state from slot file
+-- DEPRECATED (Path B): use KAG.load_game binding (Path A) instead.
 function System.load(slot, ctx)
     -- ⚠ DEPRECATED [R2-FIX] Legacy Lua serialization path.
     -- Use KAG.save_game() / KAG.load_game() (C++ JSON path) instead.

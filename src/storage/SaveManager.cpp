@@ -189,10 +189,9 @@ bool SaveManager::save(int slot, const json& gameData,
                        int tokenIndex,
                        const std::string& thumbnailPng) {
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
-    // Legacy Lua serialization path (Path B) in scripts/system.lua is deprecated.
-    // TODO: Remove or merge Path B after all scripts migrate to Path A.
-    // Migration guide: use KAG.save_game() / KAG.load_game() binding functions
-    // instead of System.save() / System.load().
+    // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
+    // is deprecated; all KAG [save]/[load] commands and scripts use the
+    // KAG.save_game() / KAG.load_game() bindings which route here.
 
     if (m_saveDir.empty()) {
         fprintf(stderr, "[SaveManager] Not initialized; call init() first.\n");
@@ -225,10 +224,9 @@ bool SaveManager::save(int slot, const json& gameData,
 
 json SaveManager::load(int slot, SaveMeta* outMeta) {
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
-    // Legacy Lua serialization path (Path B) in scripts/system.lua is deprecated.
-    // TODO: Remove or merge Path B after all scripts migrate to Path A.
-    // Migration guide: use KAG.save_game() / KAG.load_game() binding functions
-    // instead of System.save() / System.load().
+    // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
+    // is deprecated; all KAG [save]/[load] commands and scripts use the
+    // KAG.save_game() / KAG.load_game() bindings which route here.
 
     std::string contents = readFile(slotPath(slot));
     if (contents.empty()) return json();

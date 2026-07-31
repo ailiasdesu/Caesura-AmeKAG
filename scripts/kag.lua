@@ -209,17 +209,9 @@ function KAG.return_to_caller(ctx)
     end
 end
 
--- Convenience wrappers for save/load from Lua
-function KAG.save_game(ctx, slot, desc)
-    if not ctx then return end
-    local save_cmds = require("kag.commands.save")
-    save_cmds.save(ctx, { slot = slot, desc = desc or "" })
-end
-
-function KAG.load_game(ctx, slot)
-    if not ctx then return end
-    local save_cmds = require("kag.commands.save")
-    save_cmds.load(ctx, { slot = slot })
-end
+-- NOTE: KAG.save_game / KAG.load_game are C bindings registered by
+-- SaveBinding (src/script/bindings/SaveBinding.cpp). Do not redefine them
+-- here: a Lua-level redefinition shadows the C functions and breaks the
+-- [save]/[load] command path.
 
 return KAG
