@@ -18,6 +18,7 @@ extern "C" {
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <exception>
 #include <filesystem>
@@ -509,7 +510,12 @@ int main(int argc, char* argv[]) {
     bool headless = false;
     bool editorMode = false;
     bool editorStdio = false;
-    std::string editorToken;
+    // Editor auth token comes from the environment, not argv: argv is
+    // world-readable via /proc/<pid>/cmdline on Linux, so a CLI flag would
+    // not protect against other local users. Set CAESURA_EDITOR_TOKEN to
+    // require a bearer token on every HTTP editor request.
+    const char* envToken = std::getenv("CAESURA_EDITOR_TOKEN");
+    std::string editorToken = envToken ? envToken : "";
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
@@ -519,8 +525,6 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--editor-stdio") {
             editorMode = true;
             editorStdio = true;
-        } else if (arg == "--editor-token" && i + 1 < argc) {
-            editorToken = argv[++i];
         }
     }
 

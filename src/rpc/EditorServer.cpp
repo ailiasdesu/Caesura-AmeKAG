@@ -268,19 +268,33 @@ void EditorServer::serverLoop(int port) {
         }
         // Optional bearer-token gate. When configured, requests must present
         // "Authorization: Bearer <token>"; this protects the local editor on
-        // multi-user machines (any local process could otherwise drive it).
-        const std::string auth = req.get_header_value("Authorization");
-        const std::string token = m_authToken;
-        if (!token.empty()) {
-            const std::string expected = "Bearer " + token;
-            if (auth != expected) {
-                res.status = 401;
-                res.set_content("{\"error\":\"Unauthorized\"}", "application/json");
-                return httplib::Server::HandlerResponse::Handled;
+        // multi-user machines. CORS preflight (OPTIONS) carries no
+        // Authorization header and must not be gated, or the browser web
+        // editor breaks; the actual request behind the preflight is checked.
+        if (req.method != "OPTIONS") {
+            const std::string auth = req.get_header_value("Authorization");
+            std::string token;
+            {
+                std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+                token = m_authToken;
+            }
+            if (!token.empty()) {
+                const std::string expected = "Bearer " + token;
+                // Constant-time comparison: token length is public, contents
+                // are not; avoid short-circuit timing leaks on a shared box.
+                bool match = auth.size() == expected.size();
+                for (size_t i = 0; match && i < expected.size(); ++i) {
+                    match = (auth[i] == expected[i]);
+                }
+                if (!match) {
+                    res.status = 401;
+                    res.set_content("{\"error\":\"Unauthorized\"}", "application/json");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
             }
         }
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
         if (req.method == "OPTIONS") {
             res.status = 204;
             return httplib::Server::HandlerResponse::Handled;
