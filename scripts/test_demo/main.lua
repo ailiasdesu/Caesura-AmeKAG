@@ -224,7 +224,7 @@ local function s6_init()
 end
 local function s6_update()
     center(40,"=== Scene 07: Save & Load ===",C.gold,1.8)
-    local items = {"System.save(slot,data)","System.load(slot)","Auto migration v1->v5","AES-256-GCM encryption"}
+    local items = {"KAG.save_game(slot,data)","KAG.load_game(slot)","Auto migration v1->v5","AES-256-GCM encryption"}
     for i,item in ipairs(items) do
         draw_text(100,160+(i-1)*45,"* "..item,C.white,1.2)
     end
