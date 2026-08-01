@@ -506,6 +506,210 @@ void EditorServer::serverLoop(int port) {
         }
     });
 
+
+    // ---------------------------------------------------------------------
+    // POST /api/eval -- evaluate Lua code and return its stringified value
+    // ---------------------------------------------------------------------
+    svr.Post("/api/eval", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string code = req.body;
+        if (code.empty()) {
+            res.set_content("{\"error\":\"Empty code\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{RpcEvaluateRequest{code}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* result = std::get_if<RpcEvaluateResult>(&reply.payload);
+        if (!result) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Eval reply did not contain a result value"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"result", result->value},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // GET /api/debug/getState -- current scene / debug state
+    // ---------------------------------------------------------------------
+    svr.Get("/api/debug/getState", [this](const httplib::Request&, httplib::Response& res) {
+        RpcReply reply = dispatchRequest(RpcRequest{RpcGetStateRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* state = std::get_if<RpcStateResult>(&reply.payload);
+        if (!state) {
+            setDispatchError(res, invalidDispatcherReply(
+                "State reply did not contain a scene"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"scene", state->scene},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // GET /api/debug/getFrame -- capture the current frame as base64 PNG
+    // ---------------------------------------------------------------------
+    svr.Get("/api/debug/getFrame", [this](const httplib::Request& req, httplib::Response& res) {
+        int w = 1280, h = 720;
+        if (req.has_param("w")) w = std::atoi(req.get_param_value("w").c_str());
+        if (req.has_param("h")) h = std::atoi(req.get_param_value("h").c_str());
+        if (w <= 0 || h <= 0 || w > 8192 || h > 8192) {
+            res.set_content("{\"error\":\"Invalid frame dimensions\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+        RpcReply reply = dispatchRequest(
+            RpcRequest{RpcCaptureFrameRequest{w, h}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* frame = std::get_if<RpcFrameResult>(&reply.payload);
+        if (!frame) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Frame reply did not contain a capture"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"base64", frame->base64},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/debug/setBreakpoint -- set a source line breakpoint
+    // ---------------------------------------------------------------------
+    svr.Post("/api/debug/setBreakpoint", [this](const httplib::Request& req, httplib::Response& res) {
+        Json body;
+        try {
+            body = Json::parse(req.body);
+        } catch (const Json::exception&) {
+            setDispatchError(res, invalidAnimationRequest(
+                "Request body must be a valid JSON object"));
+            return;
+        }
+        if (!body.is_object() || !body.contains("source") ||
+            !body["source"].is_string() || !body.contains("line") ||
+            !body["line"].is_number_integer()) {
+            setDispatchError(res, invalidAnimationRequest(
+                "source (string) and line (integer) are required"));
+            return;
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{RpcSetBreakpointRequest{
+            body["source"].get<std::string>(), body["line"].get<int>()}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/debug/removeBreakpoint -- remove a source line breakpoint
+    // ---------------------------------------------------------------------
+    svr.Post("/api/debug/removeBreakpoint", [this](const httplib::Request& req, httplib::Response& res) {
+        Json body;
+        try {
+            body = Json::parse(req.body);
+        } catch (const Json::exception&) {
+            setDispatchError(res, invalidAnimationRequest(
+                "Request body must be a valid JSON object"));
+            return;
+        }
+        if (!body.is_object() || !body.contains("source") ||
+            !body["source"].is_string() || !body.contains("line") ||
+            !body["line"].is_number_integer()) {
+            setDispatchError(res, invalidAnimationRequest(
+                "source (string) and line (integer) are required"));
+            return;
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{RpcRemoveBreakpointRequest{
+            body["source"].get<std::string>(), body["line"].get<int>()}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/debug/clearBreakpoints -- remove all breakpoints
+    // ---------------------------------------------------------------------
+    svr.Post("/api/debug/clearBreakpoints", [this](const httplib::Request&, httplib::Response& res) {
+        RpcReply reply = dispatchRequest(RpcRequest{RpcClearBreakpointsRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // POST /api/debug/continue -- resume a paused debugger run
+    // ---------------------------------------------------------------------
+    svr.Post("/api/debug/continue", [this](const httplib::Request& req, httplib::Response& res) {
+        RpcDebugResumeRequest request;
+        request.mode = RpcDebugResumeMode::Continue;
+        Json body;
+        try {
+            body = Json::parse(req.body);
+        } catch (const Json::exception&) {
+            // Empty/absent body is allowed; defaults apply.
+        }
+        if (body.is_object() && body.contains("pauseId") &&
+            body["pauseId"].is_number_unsigned()) {
+            request.pauseId = body["pauseId"].get<std::uint64_t>();
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{std::move(request)});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // GET /api/debug/inspect -- inspect a Lua local or global variable
+    // ---------------------------------------------------------------------
+    svr.Get("/api/debug/inspect", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_param("name") || req.get_param_value("name").empty()) {
+            res.set_content("{\"error\":\"name parameter is required\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+        const std::string name = req.get_param_value("name");
+        int frame = 0;
+        if (req.has_param("frame")) frame = std::atoi(req.get_param_value("frame").c_str());
+        RpcReply reply;
+        if (req.has_param("global")) {
+            reply = dispatchRequest(RpcRequest{RpcInspectGlobalRequest{name}});
+        } else {
+            reply = dispatchRequest(RpcRequest{RpcInspectLocalRequest{frame, name}});
+        }
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* inspection = std::get_if<RpcInspectionResult>(&reply.payload);
+        if (!inspection) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Inspect reply did not contain a value"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"value", inspection->value},
+        }), "application/json");
+    });
     // ---------------------------------------------------------------------
     // POST /api/build -- one-click CARC packaging (R1.3)
     // ---------------------------------------------------------------------

@@ -176,6 +176,7 @@ caesura_add_module(Job
 
 caesura_add_module(Live2D
     src/live2d/NullAnimationBackend.cpp
+    src/live2d/PathConfinement.cpp
 )
 
 caesura_add_module(MiniGame

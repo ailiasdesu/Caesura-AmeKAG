@@ -180,6 +180,21 @@ if(Python3_EXECUTABLE)
         TIMEOUT 60
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
     )
+    add_test(
+        NAME CaesuraHeadlessHttpSmoke
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/headless_http_smoke.py
+                $<TARGET_FILE:CaesuraAmeKAG>
+    )
+    set_tests_properties(CaesuraHeadlessHttpSmoke PROPERTIES
+        LABELS "entry;headless;cli;rpc;http"
+        RUN_SERIAL TRUE
+        RESOURCE_LOCK "global-singletons"
+        FIXTURES_REQUIRED caesura-test-assets
+        PASS_REGULAR_EXPRESSION "ALL HEADLESS HTTP SMOKE TESTS PASSED"
+        TIMEOUT 90
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
+    )
 endif()
 
 # Copy scripts to test output directory so sandbox.lua et al are found

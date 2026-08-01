@@ -2,12 +2,16 @@
 
 #include "di/BackendRegistry.h"
 #include "live2d/NullAnimationBackend.h"
+#include "live2d/PathConfinement.h"
 #include "live2d/api/IAnimationBackend.h"
 #include "render/api/IRenderDevice.h"
 #include "render/api/ITextureManager.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -330,4 +334,75 @@ TEST_CASE("NullAnimationBackend remains safe through IAnimationBackend") {
     animation->render(0.0f);
     CHECK(fixture.renderer.blits.empty());
     animation->shutdown();
+}
+
+TEST_CASE("confineToModelRoot rejects absolute paths outside the working directory") {
+    // Absolute path outside the process CWD (model root) must be rejected.
+    CHECK(Caesura::confineToModelRoot("C:/Windows/win.ini").empty());
+    CHECK(Caesura::confineToModelRoot("C:/Program Files").empty());
+#ifdef _WIN32
+    // Root-relative drive path (no drive letter) resolves relative to CWD drive.
+    CHECK(Caesura::confineToModelRoot("\\server\\share\\file").empty());
+#endif
+}
+
+TEST_CASE("confineToModelRoot rejects dot-dot escapes") {
+    // Escaping upward from the CWD via .. is rejected.
+    CHECK(Caesura::confineToModelRoot("../escape.txt").empty());
+    CHECK(Caesura::confineToModelRoot("../../escape.txt").empty());
+    CHECK(Caesura::confineToModelRoot("a/../../escape.txt").empty());
+}
+
+TEST_CASE("confineToModelRoot handles dot components") {
+    // "." resolves to the working directory itself, which is the model root
+    // and is allowed (the guard explicitly permits the root).
+    const std::string root = Caesura::confineToModelRoot(".");
+    CHECK_FALSE(root.empty());
+    // ".." resolves to the parent of the root and must be rejected.
+    CHECK(Caesura::confineToModelRoot("..").empty());
+}
+
+TEST_CASE("confineToModelRoot accepts paths inside the working directory") {
+    // A path under the CWD is confined and returned non-empty.
+    const std::string confined = Caesura::confineToModelRoot(".");
+    CHECK_FALSE(confined.empty());
+    // A plain relative file name under the root passes (may not exist on disk,
+    // but containment is a lexical/canonical property of the prefix).
+    const std::string file = Caesura::confineToModelRoot("live2d_test/Haru/Haru.model3.json");
+    CHECK_FALSE(file.empty());
+}
+
+TEST_CASE("confineToModelRoot rejects prefix look-alike outside the root") {
+    // A sibling whose name starts with the root string must not pass the
+    // naive prefix check (boundary: root + "/" is required).
+    const std::string root = std::filesystem::current_path().string();
+    const std::string lookalike = root + "X";
+    if (std::filesystem::exists(lookalike)) {
+        CHECK(Caesura::confineToModelRoot(lookalike).empty());
+    } else {
+        // Lookalike does not exist; containment still resolves canonically
+        // outside the root and must be rejected.
+        CHECK(Caesura::confineToModelRoot(lookalike + "/f.txt").empty());
+    }
+}
+
+TEST_CASE("confineToModelRoot resolves symlinks and keeps containment") {
+    // Create a temp dir with a symlink that points outside the root; the
+    // symlinked path must be rejected (resolved target escapes the root).
+    namespace fs = std::filesystem;
+    const fs::path tmp = fs::temp_directory_path() / ("pc_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::remove_all(tmp);
+    fs::create_directories(tmp);
+    const fs::path target = tmp / "target.txt";
+    { std::ofstream(target) << "x"; }
+    const fs::path link = tmp / "link.txt";
+    std::error_code ec;
+    fs::create_symlink(target, link, ec);
+    if (!ec) {
+        // The symlink target lives outside the model root (CWD) unless the
+        // temp dir happens to be inside it; either way the link path itself
+        // is outside the CWD and must be rejected.
+        CHECK(Caesura::confineToModelRoot(link.string()).empty());
+    }
+    fs::remove_all(tmp);
 }

@@ -132,7 +132,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Partial: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` implemented + headless smoke tests; HTTP debug routes remain |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py`) and HTTP smoke (`headless_http_smoke.py`, 14 assertions) end-to-end tested via ctest |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
