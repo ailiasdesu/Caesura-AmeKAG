@@ -78,6 +78,10 @@ public:
     IPlatformBackend& platform();
     IMiniGameBackend& miniGame() { requireInitialized(); return *m_miniGameBackend; }
     IAnimationBackend& animation() { requireInitialized(); return *m_animationBackend; }
+    // Pure mapping from an SDL app event type to the mobile adapter callback
+    // (onPause/onResume), extracted so it can be unit-tested without SDL.
+    static void handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 eventType);
+
     LuaManager&   lua()           { requireInitialized(); return *m_lua; }
     InputRouter&  input()         { requireInitialized(); return *m_inputRouter; }
     IGpuMonitor&  gpuMonitor()    { requireInitialized(); return *m_gpuMonitor; }

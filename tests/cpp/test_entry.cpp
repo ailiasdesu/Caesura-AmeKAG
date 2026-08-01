@@ -831,3 +831,27 @@ TEST_CASE("Entry: mobile adapter registered, lifecycle callbacks work, unregiste
     engine.shutdown();
     CHECK(BackendRegistry::instance().getMobileAdapter() == nullptr);
 }
+
+TEST_CASE("Entry: Engine::handleAppLifecycle maps SDL app events to adapter callbacks") {
+    EngineConfig cfg;
+    cfg.headless = true;
+    Engine engine(std::move(cfg));
+    REQUIRE(engine.init());
+    auto* adapter = BackendRegistry::instance().getMobileAdapter();
+    REQUIRE(adapter != nullptr);
+
+    // Pure static mapping — no SDL event push needed (app events are
+    // watch-delivered only and cannot be queued from tests).
+    CHECK_FALSE(adapter->isPaused());
+    Engine::handleAppLifecycle(adapter, nullptr, SDL_EVENT_WILL_ENTER_BACKGROUND);
+    CHECK(adapter->isPaused());
+    Engine::handleAppLifecycle(adapter, nullptr, SDL_EVENT_DID_ENTER_FOREGROUND);
+    CHECK_FALSE(adapter->isPaused());
+
+    // Unrelated event types and null adapter are safe no-ops.
+    Engine::handleAppLifecycle(adapter, nullptr, SDL_EVENT_KEY_DOWN);
+    CHECK_FALSE(adapter->isPaused());
+    Engine::handleAppLifecycle(nullptr, nullptr, SDL_EVENT_WILL_ENTER_BACKGROUND);
+
+    engine.shutdown();
+}

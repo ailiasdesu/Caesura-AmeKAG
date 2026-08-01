@@ -1060,25 +1060,29 @@ std::string Engine::captureFrameForRpc(int w, int h) {
 // layer must deliver these on the engine/main thread (true on iOS/Android);
 // when a native mobile layer lands on a platform that dispatches elsewhere,
 // events must be marshalled to the engine thread before touching Lua.
-bool Engine::appLifecycleWatch(void* userdata, SDL_Event* event) {
-    auto* engine = static_cast<Engine*>(userdata);
-    if (!engine) return true;
-    switch (event->type) {
+//
+// Pure decision logic lives in handleAppLifecycle (unit-testable without
+// SDL); the watcher only extracts Engine state and forwards the event type.
+void Engine::handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 eventType) {
+    if (!adapter) return;
+    switch (eventType) {
         case SDL_EVENT_WILL_ENTER_BACKGROUND:
-            if (engine->m_mobileAdapter) {
-                engine->m_mobileAdapter->onPause(
-                    engine->m_lua ? engine->m_lua->state() : nullptr);
-            }
+            adapter->onPause(L);
             break;
         case SDL_EVENT_DID_ENTER_FOREGROUND:
-            if (engine->m_mobileAdapter) {
-                engine->m_mobileAdapter->onResume(
-                    engine->m_lua ? engine->m_lua->state() : nullptr);
-            }
+            adapter->onResume(L);
             break;
         default:
             break;
     }
+}
+
+bool Engine::appLifecycleWatch(void* userdata, SDL_Event* event) {
+    auto* engine = static_cast<Engine*>(userdata);
+    if (!engine) return true;
+    handleAppLifecycle(engine->m_mobileAdapter.get(),
+                       engine->m_lua ? engine->m_lua->state() : nullptr,
+                       event->type);
     return true; // allow other watchers / the queue to see the event
 }
 
