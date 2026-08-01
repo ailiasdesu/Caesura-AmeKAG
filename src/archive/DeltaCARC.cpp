@@ -27,7 +27,10 @@ static bool computeSHA256(const std::string& path, uint8_t out[PATH_HASH_SIZE]) 
     size_t size = f.tellg();
     f.seekg(0);
     std::vector<uint8_t> data(size);
-    f.read(reinterpret_cast<char*>(data.data()), size);
+    if (size > 0) {
+        f.read(reinterpret_cast<char*>(data.data()), size);
+        if (f.gcount() != static_cast<std::streamsize>(size)) return false; // short read
+    }
     CryptoEngine::sha256(data.data(), size, out);
     return true;
 }
@@ -49,13 +52,13 @@ static void writeBytes(std::vector<uint8_t>& buf, const uint8_t* data, size_t le
 
 // Read a little-endian u32 from buf at *p; advances *p.
 static bool readU32(const uint8_t* p, const uint8_t* end, uint32_t& out) {
-    if (p + 4 > end) return false;
+    if (static_cast<size_t>(end - p) < 4) return false;
     out = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
     return true;
 }
 
 static bool readU64(const uint8_t* p, const uint8_t* end, uint64_t& out) {
-    if (p + 8 > end) return false;
+    if (static_cast<size_t>(end - p) < 8) return false;
     out = 0;
     for (int i = 0; i < 8; i++) out |= ((uint64_t)p[i] << (i * 8));
     return true;
