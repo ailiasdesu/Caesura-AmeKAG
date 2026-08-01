@@ -15,12 +15,8 @@ local serialize_table
 -- Cache sandbox-vulnerable globals before lockdown (C3 + W8)
 local _os_execute = os.execute
 local _io_open = io.open
-local _os_remove = os.remove
-local _os_rename = os.rename
 
 local _IS_WINDOWS = package.config:sub(1,1) == "\""
-
-local saveDir = "saves/"
 
 -- ===========================================================================
 -- escape_string(str) -> Lua-safe string literal
@@ -296,44 +292,6 @@ function System.capture_screenshot(ctx)
     return nil
 end
 
---- System.get_save_info(slot) -> {timestamp, scene, screenshot}
---- Spec [4.2]: read save metadata without loading full state
-function System.get_save_info(slot)
-    local filename = saveDir .. "save_" .. slot .. ".lua"
-    local f, err = _io_open(filename, "r")
-    if not f then return nil end
-    -- Read only header lines to avoid loading full save
-    local header = ""
-    for i = 1, 50 do
-        local line = f:read("*l")
-        if not line then break end
-        header = header .. line .. "\n"
-        if line:match("^%s*timestamp%s*=")
-        or line:match("^%s*scene%s*=") then
-            -- Continue reading relevant fields
-        end
-    end
-    f:close()
-
-    -- Parse full save for metadata
-    local f2 = _io_open(filename, "r")
-    if not f2 then return nil end
-    local code = f2:read("*a")
-    f2:close()
-
-    local chunk, loadErr = load(code, "save_info", "t", {})
-    if not chunk then return nil end
-    local ok, data = pcall(chunk)
-    if not ok or type(data) ~= "table" then return nil end
-
-    return {
-        timestamp  = data.timestamp or 0,
-        scene      = data.scene or "",
-        save_title = data.save_title or "",
-        token_ptr  = data.token_ptr or 1,
-    }
-end
-
 -- Saveplace / Loadplace -- in-memory scene bookmark
 -- Spec [10.2.38]: independent temporary slot, no disk writes.
 -- ===========================================================================
@@ -385,15 +343,6 @@ end
 --- System.quick_load(ctx) -- alias for loadplace (backward compat)
 function System.quick_load(ctx)
 return System.loadplace(ctx)
-end
-
---- System.clear_saves() -- delete all save files
-function System.clear_saves()
-    for slot = 0, 99 do
-        local filename = saveDir .. "save_" .. slot .. ".lua"
-        _os_remove(filename)
-    end
-    print("[System] All saves cleared.")
 end
 
 -- ===========================================================================
