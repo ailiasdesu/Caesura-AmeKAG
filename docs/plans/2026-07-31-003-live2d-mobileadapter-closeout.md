@@ -60,7 +60,7 @@
 | 检查 | 结果 |
 |------|------|
 | `cmake --build build-repro-verify --config Debug --parallel` | ✅ 零错误 |
-| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **548/548**（537 + 11 新增），断言 2679/2679 |
+| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **548/548**（537 + 11 新增），断言 2679/2679（此后 DeltaCARC 新增 7 用例，最终套件 **555/555**、断言 2736） |
 | `ctest -C Debug --test-dir build-repro-verify` | ✅ 全部通过（13.45s） |
 | `python scripts/count_coupling.py --ci` | ✅ PASS（platform 0/4 跨模块） |
 
