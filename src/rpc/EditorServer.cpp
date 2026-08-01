@@ -231,9 +231,20 @@ void EditorServer::serverLoop(int port) {
         // Only allow same-origin / localhost web editor frontends. A bare "*"
         // would let any website drive the local editor over CORS.
         const std::string origin = req.get_header_value("Origin");
-        const bool localOrigin = origin.empty() ||
-            origin.rfind("http://localhost", 0) == 0 ||
-            origin.rfind("http://127.0.0.1", 0) == 0;
+        // Exact host match: http://localhost[:port] or http://127.0.0.1[:port].
+        // A raw prefix match would let http://localhost.evil.com (attacker-owned
+        // parent domain) pass and read/drive the local editor from a browser.
+        bool localOrigin = origin.empty();
+        if (!localOrigin) {
+            const std::string suffix = origin.substr(7);  // strip "http://"
+            const auto slash = suffix.find('/');
+            const std::string authority = slash == std::string::npos
+                ? suffix : suffix.substr(0, slash);
+            const auto colon = authority.find(':');
+            const std::string host = colon == std::string::npos
+                ? authority : authority.substr(0, colon);
+            localOrigin = (host == "localhost" || host == "127.0.0.1");
+        }
         if (!localOrigin) {
             res.status = 403;
             res.set_content("{\"error\":\"Origin not allowed\"}", "application/json");
@@ -783,11 +794,14 @@ void EditorServer::serverLoop(int port) {
         // and ".." escapes so a local caller cannot overwrite arbitrary files.
         auto confineToBuild = [](std::string p) -> std::string {
             if (p.empty()) return {};
+            for (auto& ch : p) {
+                if (ch == static_cast<char>(92)) ch = '/';  // normalize backslash
+            }
             if (p.find("..") != std::string::npos) return {};
             if (p.find(':') != std::string::npos) return {};  // drive / scheme
-            if (p[0] == '/' || p[0] == static_cast<char>(92)) return {};  // absolute
+            if (p[0] == '/') return {};                        // absolute
             // Force everything under build/ regardless of what the caller sent.
-            if (p.rfind("build/", 0) != 0 && p.rfind("build" + std::string(1, static_cast<char>(92)), 0) != 0) {
+            if (p.rfind("build/", 0) != 0) {
                 p = "build/" + p;
             }
             return p;
@@ -853,11 +867,12 @@ void EditorServer::serverLoop(int port) {
         }
 
         auto fileSize = fs::file_size(outputPath);
-        char buf[256];
-        snprintf(buf, sizeof(buf),
-            "{\"status\":\"ok\",\"path\":\"%s\",\"size\":%llu,\"files\":%zu}",
-            outputPath.c_str(), (unsigned long long)fileSize, files.size());
-        res.set_content(buf, "application/json");
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"path", outputPath},
+            {"size", static_cast<unsigned long long>(fileSize)},
+            {"files", files.size()},
+        }), "application/json");
     });
 
     // ---------------------------------------------------------------------
