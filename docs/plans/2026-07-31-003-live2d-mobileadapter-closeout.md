@@ -52,15 +52,17 @@
 - NaN/Inf 输入拒绝（5 个事件入口 + setDisplayScale，防 pinch 基线被毒化）
 
 ### 降级文档化
-- capability matrix 新增 **P7** 条目：核心映射已实现并测试（18 用例）；**未接入 Engine 生命周期、
-  无移动平台原生集成**（接入时需按 AGENTS.md 流程：`I*` 接口 → 实现 → BackendRegistry → Engine::init 注册）。
+- capability matrix **P7** 条目：核心映射已实现并测试（18 用例）；**已接入 Engine 生命周期**
+  （`7303fef4` 按 AGENTS.md 流程完成：`IMobileAdapter` 接口 → `MobileAdapter` 实现 →
+  `BackendRegistry::set/getMobileAdapter` → Engine::init 注册 + SDL app-lifecycle watcher）；
+  **无移动平台原生集成**。
 
 ## 3. 验证结果（Windows 本地）
 
 | 检查 | 结果 |
 |------|------|
 | `cmake --build build-repro-verify --config Debug --parallel` | ✅ 零错误 |
-| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **548/548**（537 + 11 新增），断言 2679/2679（此后 DeltaCARC 新增 7 用例，最终套件 **555/555**、断言 2736） |
+| `CaesuraTests.exe`（build/tests/Debug CWD） | ✅ **548/548**（537 + 11 新增），断言 2679/2679（此后 DeltaCARC 新增 7 用例、MobileAdapter 接线新增 1 用例，最终套件 **557/557**、断言 **2748**） |
 | `ctest -C Debug --test-dir build-repro-verify` | ✅ 全部通过（13.45s） |
 | `python scripts/count_coupling.py --ci` | ✅ PASS（platform 0/4 跨模块） |
 
@@ -73,7 +75,20 @@
 ## 5. 遗留事项
 
 1. **Live2D**：需 SDK 才能编译验证全部 Cubism 路径；Metal 需 macOS 开发者实现。
-2. **MobileAdapter**：未接线（无 I* 接口、无 Engine 生命周期挂钩）；SoLoud 暂停逻辑未实现；
-   pinch 映射系数（`kPinchToWheelScale = 100`）为经验值，接入真实设备后可调。
+2. **MobileAdapter**：**已接线**——`IMobileAdapter` 接口（`src/platform/api/IMobileAdapter.h`，14 方法）+
+   `BackendRegistry::set/getMobileAdapter` + Engine SDL app-lifecycle watcher（WILL_ENTER_BACKGROUND/
+   DID_ENTER_FOREGROUND → onPause/onResume，commit `7303fef4`）；剩余：SoLoud 暂停逻辑未接入
+   （移动端后台时音频暂停未实现）；pinch 映射系数（`kPinchToWheelScale = 100`）为经验值，
+   接入真实设备后可调；**原生移动 SDK 集成未落地**。
 3. 交接文档第 3 节第 5 项（删除 `codex/engine-audit-hardening` 分支）已完成；
-   第 4 项 DeltaCARC 已完成（v2：真实增量应用 + 7 个测试用例）；**SaveManager 最终清理**仍未处理，为可选后续。
+   第 4 项 DeltaCARC 已完成（v2：真实增量应用 + 7 个测试用例）；**SaveManager 最终清理已完成**
+   （`c0eb64b0` 移除 System.save/load/_write_save_file/_load_from_file → `98a7af52` 移除 _apply_config
+   → `a519a662` 迁移受跟踪 fixtures → `205054e2` 移除 get_save_info/clear_saves/saveDir），无遗留。
+
+---
+
+> **补充（2026-08-01）**：本地 doctest 套件现为 **557/557**（556 + 1 个新增 handleAppLifecycle 直调用例），断言 **2748**；
+> MobileAdapter 的 Engine 接线（BackendRegistry 注册 / onPause / onResume / shutdown 注销）由
+> `tests/cpp/test_entry.cpp` 覆盖（`Entry: mobile adapter registered, lifecycle callbacks work, unregistered on shutdown`）；
+> SDL app-lifecycle 事件仅经 watcher 分发、不可从测试推送；`Engine::handleAppLifecycle` 纯映射
+> 已抽离并由 `test_entry.cpp` 直调单测覆盖，watcher 仅做 userdata 解包转发。
