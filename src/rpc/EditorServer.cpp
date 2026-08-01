@@ -228,7 +228,21 @@ void EditorServer::serverLoop(int port) {
     // CORS middleware - allow web editor from any origin
     // ---------------------------------------------------------------------
     svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
-        res.set_header("Access-Control-Allow-Origin", "*");
+        // Only allow same-origin / localhost web editor frontends. A bare "*"
+        // would let any website drive the local editor over CORS.
+        const std::string origin = req.get_header_value("Origin");
+        const bool localOrigin = origin.empty() ||
+            origin.rfind("http://localhost", 0) == 0 ||
+            origin.rfind("http://127.0.0.1", 0) == 0;
+        if (!localOrigin) {
+            res.status = 403;
+            res.set_content("{\"error\":\"Origin not allowed\"}", "application/json");
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        if (!origin.empty()) {
+            res.set_header("Access-Control-Allow-Origin", origin.c_str());
+            res.set_header("Vary", "Origin");
+        }
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type");
         if (req.method == "OPTIONS") {
@@ -695,7 +709,11 @@ void EditorServer::serverLoop(int port) {
         }
         if (body.is_object() && body.contains("pauseId") &&
             body["pauseId"].is_number_unsigned()) {
-            request.pauseId = body["pauseId"].get<std::uint64_t>();
+            try {
+                request.pauseId = body["pauseId"].get<std::uint64_t>();
+            } catch (const Json::exception&) {
+                // Malformed pauseId: fall through with default 0.
+            }
         }
         RpcReply reply = dispatchRequest(RpcRequest{std::move(request)});
         if (reply.status != RpcReplyStatus::Ok) {
@@ -760,6 +778,29 @@ void EditorServer::serverLoop(int port) {
         std::string customKey = findParam("keyPath");
         if (!customOutput.empty()) outputPath = customOutput;
         if (!customKey.empty()) keyPath = customKey;
+
+        // Security: confine output paths under build/ -- reject absolute paths
+        // and ".." escapes so a local caller cannot overwrite arbitrary files.
+        auto confineToBuild = [](std::string p) -> std::string {
+            if (p.empty()) return {};
+            if (p.find("..") != std::string::npos) return {};
+            if (p.find(':') != std::string::npos) return {};  // drive / scheme
+            if (p[0] == '/' || p[0] == static_cast<char>(92)) return {};  // absolute
+            // Force everything under build/ regardless of what the caller sent.
+            if (p.rfind("build/", 0) != 0 && p.rfind("build" + std::string(1, static_cast<char>(92)), 0) != 0) {
+                p = "build/" + p;
+            }
+            return p;
+        };
+        outputPath = confineToBuild(outputPath);
+        keyPath = confineToBuild(keyPath);
+        if (outputPath.empty() || keyPath.empty()) {
+            res.set_content(
+                "{\"error\":\"outputPath/keyPath must be relative paths under build/\"}",
+                "application/json");
+            res.status = 400;
+            return;
+        }
 
         // Collect files from scripts/ and assets/
         std::vector<std::pair<std::string, std::string>> files; // relPath, diskPath
