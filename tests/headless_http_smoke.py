@@ -74,7 +74,12 @@ def main():
         # That is an environment limitation, not an HTTP-route regression --
         # the same routes are covered locally and by the stdio smoke. Skip
         # with ctest SKIP_RETURN_CODE (77) instead of failing the pipeline.
-        rc = proc.poll() if proc.poll() is not None else -1
+        # Skip only when the engine genuinely exited non-zero (GPU-less
+        # runners: bgfx init fails, process exits). If the engine is still
+        # alive but the server never became ready, that is a real route or
+        # startup regression and must fail, not skip. A single poll() call
+        # avoids a TOCTOU between two checks.
+        rc = proc.poll()
         if rc is not None and rc != 0:
             print("HTTP smoke: skipped (editor needs GPU, engine exited rc=%d)" % rc)
             print("HTTP SMOKE SKIPPED: NO GPU")
