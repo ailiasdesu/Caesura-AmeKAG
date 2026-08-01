@@ -236,6 +236,11 @@ void EditorServer::serverLoop(int port) {
         // parent domain) pass and read/drive the local editor from a browser.
         bool localOrigin = origin.empty();
         if (!localOrigin) {
+            // Only http(s) origins are eligible; guard length so substr cannot
+            // throw on short headers such as "Origin: http:/".
+            if (origin.size() < 7 || origin.rfind("http://", 0) != 0) {
+                localOrigin = false;
+            } else {
             const std::string suffix = origin.substr(7);  // strip "http://"
             const auto slash = suffix.find('/');
             const std::string authority = slash == std::string::npos
@@ -244,6 +249,7 @@ void EditorServer::serverLoop(int port) {
             const std::string host = colon == std::string::npos
                 ? authority : authority.substr(0, colon);
             localOrigin = (host == "localhost" || host == "127.0.0.1");
+            }
         }
         if (!localOrigin) {
             res.status = 403;
