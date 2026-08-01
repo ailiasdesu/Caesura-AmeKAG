@@ -177,7 +177,11 @@ bool DeltaCARC::generate(const std::string& oldPath,
     out.write(reinterpret_cast<const char*>(key), AES_KEY_SIZE);
     out.write(reinterpret_cast<const char*>(nonce), AES_NONCE_SIZE);
     out.write(reinterpret_cast<const char*>(tag), AES_TAG_SIZE);
-    out.write(reinterpret_cast<const char*>(encrypted.data()), encrypted.size());
+    // Empty body (identical archives): skip the write to avoid the
+    // nullptr+0 ofstream::write edge (strictly UB with a null data()).
+    if (!encrypted.empty()) {
+        out.write(reinterpret_cast<const char*>(encrypted.data()), encrypted.size());
+    }
 
     printf("[DeltaCARC] Generated delta: %u entries, %zu → %zu bytes\n",
            entryCount, deltaBody.size(), encrypted.size());
