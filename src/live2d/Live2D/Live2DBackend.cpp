@@ -82,6 +82,12 @@ static std::string confineToModelRoot(const std::string& path) {
             const fs::path parentCanon = fs::canonical(abs.parent_path(), ec2);
             if (ec2) return {};
             canon = parentCanon / abs.filename();
+            // The final component is re-attached lexically; reject when it is a
+            // symlink so it cannot point outside the root (directories are
+            // already contained by the canonicalized parent).
+            std::error_code ec3;
+            const fs::file_status st = fs::symlink_status(canon, ec3);
+            if (!ec3 && fs::is_symlink(st)) return {};
         }
     }
     fs::path rootNorm = fs::weakly_canonical(root, ec);
@@ -90,7 +96,11 @@ static std::string confineToModelRoot(const std::string& path) {
     auto norm = [](std::string s) {
         for (char& ch : s) {
             if (ch == static_cast<char>(92)) ch = '/';  // backslash
+#ifdef _WIN32
+            // Case-insensitive comparison only on Windows (POSIX is
+            // case-sensitive; folding there would widen containment).
             ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+#endif
         }
         return s;
     };
