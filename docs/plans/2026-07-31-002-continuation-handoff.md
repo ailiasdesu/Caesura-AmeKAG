@@ -58,7 +58,7 @@ cafcf3b6 chore(git): stop tracking CMake build directories (build-*-verify)
 
 ### Phase 4 — 工程质量（部分）
 - **P4-1 ✅** 补齐 minigame/video/transition/cloud 测试（VideoPlayer 缺失文件、transition Bezier 数学、云存档）
-- **P4-2 ✅** Save Path A/B 收敛：移除 `kag.lua` 中遮蔽性 Lua 包装（C 绑定 `KAG.save_game/load_game` 为准），`System.save/load` 标记弃用，迁移 `scripts/test_demo/main.lua`；`game_logic.lua` 在 .gitignore 中（本地脚本，迁移未入库）
+- **P4-2 ✅** Save Path A/B 收敛：移除 `kag.lua` 中遮蔽性 Lua 包装（C 绑定 `KAG.save_game/load_game` 为准），`System.save/load` 及其私有 helper 已彻底删除（见 `docs/plans/2026-07-31-003-live2d-mobileadapter-closeout.md`），迁移 `scripts/test_demo/main.lua`；`game_logic.lua` 在 .gitignore 中（本地脚本，迁移未入库）
 - **P4-3 ❌ 未做** MobileAdapter：仍是占位 stub，需真实实现或文档化降级
 
 ## 3. 后续工作建议（按优先级）

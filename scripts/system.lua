@@ -284,6 +284,8 @@ end
 
 --- System.capture_screenshot(ctx) -> binary PNG (C++ backend)
 --- Spec [4.2]: uses bgfx requestScreenCap / readScreenCap
+-- Public utility API (kept after the Path B save/load removal; usable by
+-- content scripts, e.g. custom screenshot features).
 function System.capture_screenshot(ctx)
     local b = rawget(_G, "_CAESURA_BACKEND")
     if b then
@@ -499,34 +501,6 @@ function System.get_config(key)
     local val = System._config[key]
     if val ~= nil then return val end
 return System.defaults[key]
-end
-
---- System._apply_config(ctx) -- apply all stored config to subsystems
-function System._apply_config(ctx)
-    local cfg = System._config or System.defaults
-
-    -- Apply volumes
-    pcall(function()
-        local Audio = require("audio")
-        if Audio and Audio.set_bus_volume then
-            if cfg.bgm_volume   then Audio.set_bus_volume("bgm",   cfg.bgm_volume) end
-            if cfg.voice_volume then Audio.set_bus_volume("voice", cfg.voice_volume) end
-            if cfg.se_volume    then Audio.set_bus_volume("se",    cfg.se_volume) end
-        end
-    end)
-
-    -- Apply display
-    pcall(function()
-        local backend = require("backend")
-        if backend then
-            if cfg.screen_width and cfg.screen_height and backend.set_resolution then
-                backend.set_resolution(cfg.screen_width, cfg.screen_height)
-            end
-            if backend.set_fullscreen and cfg.fullscreen ~= nil then
-                backend.set_fullscreen(cfg.fullscreen)
-            end
-        end
-    end)
 end
 
 --- System.load_config(filepath) -> config table
