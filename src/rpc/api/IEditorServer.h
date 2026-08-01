@@ -22,6 +22,10 @@ public:
     virtual int  port() const = 0;
     virtual void pushLog(const std::string& level, const std::string& message) = 0;
     virtual void setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) = 0;
+    // Optional bearer token for the HTTP editor. When non-empty, every
+    // request must carry "Authorization: Bearer <token>"; requests without a
+    // matching token are rejected with 401.
+    virtual void setAuthToken(const std::string& token) = 0;
     virtual void setWebRoot(const std::string& path) = 0;
     virtual void setArchiveWriterFactory(ArchiveWriterFactory factory) = 0;
 };

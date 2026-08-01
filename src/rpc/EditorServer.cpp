@@ -167,6 +167,11 @@ void EditorServer::setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) {
     m_dispatcher = std::move(dispatcher);
 }
 
+void EditorServer::setAuthToken(const std::string& token) {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    m_authToken = token;
+}
+
 RpcReply EditorServer::dispatchRequest(RpcRequest request) const {
     std::shared_ptr<IRpcDispatcher> dispatcher;
     {
@@ -227,7 +232,7 @@ void EditorServer::serverLoop(int port) {
     // ---------------------------------------------------------------------
     // CORS middleware - allow web editor from any origin
     // ---------------------------------------------------------------------
-    svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+    svr.set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
         // Only allow same-origin / localhost web editor frontends. A bare "*"
         // would let any website drive the local editor over CORS.
         const std::string origin = req.get_header_value("Origin");
@@ -236,19 +241,20 @@ void EditorServer::serverLoop(int port) {
         // parent domain) pass and read/drive the local editor from a browser.
         bool localOrigin = origin.empty();
         if (!localOrigin) {
-            // Only http(s) origins are eligible; guard length so substr cannot
-            // throw on short headers such as "Origin: http:/".
+            // Only http origins are eligible (https is rejected by design);
+            // guard length so substr cannot throw on short headers such as
+            // "Origin: http:/".
             if (origin.size() < 7 || origin.rfind("http://", 0) != 0) {
                 localOrigin = false;
             } else {
-            const std::string suffix = origin.substr(7);  // strip "http://"
-            const auto slash = suffix.find('/');
-            const std::string authority = slash == std::string::npos
-                ? suffix : suffix.substr(0, slash);
-            const auto colon = authority.find(':');
-            const std::string host = colon == std::string::npos
-                ? authority : authority.substr(0, colon);
-            localOrigin = (host == "localhost" || host == "127.0.0.1");
+                const std::string suffix = origin.substr(7);  // strip "http://"
+                const auto slash = suffix.find('/');
+                const std::string authority = slash == std::string::npos
+                    ? suffix : suffix.substr(0, slash);
+                const auto colon = authority.find(':');
+                const std::string host = colon == std::string::npos
+                    ? authority : authority.substr(0, colon);
+                localOrigin = (host == "localhost" || host == "127.0.0.1");
             }
         }
         if (!localOrigin) {
@@ -259,6 +265,19 @@ void EditorServer::serverLoop(int port) {
         if (!origin.empty()) {
             res.set_header("Access-Control-Allow-Origin", origin.c_str());
             res.set_header("Vary", "Origin");
+        }
+        // Optional bearer-token gate. When configured, requests must present
+        // "Authorization: Bearer <token>"; this protects the local editor on
+        // multi-user machines (any local process could otherwise drive it).
+        const std::string auth = req.get_header_value("Authorization");
+        const std::string token = m_authToken;
+        if (!token.empty()) {
+            const std::string expected = "Bearer " + token;
+            if (auth != expected) {
+                res.status = 401;
+                res.set_content("{\"error\":\"Unauthorized\"}", "application/json");
+                return httplib::Server::HandlerResponse::Handled;
+            }
         }
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type");

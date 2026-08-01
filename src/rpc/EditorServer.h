@@ -38,6 +38,9 @@ public:
 
     // Post a log entry for the web editor to poll.
     void pushLog(const std::string& level, const std::string& message) override;
+    // Optional bearer token; when set, requests must present
+    // "Authorization: Bearer <token>".
+    void setAuthToken(const std::string& token) override;
 
     void setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) override;
 
@@ -59,6 +62,7 @@ private:
     ArchiveWriterFactory m_archiveWriterFactory;
     mutable std::mutex m_dispatcherMutex;
     std::shared_ptr<IRpcDispatcher> m_dispatcher;
+    std::string m_authToken;
 
     // Log buffer (ring buffer, max 200 entries)
     struct LogEntry {

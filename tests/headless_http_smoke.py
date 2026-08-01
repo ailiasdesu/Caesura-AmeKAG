@@ -30,10 +30,12 @@ def check(name, ok, detail=""):
         print("FAIL", name, detail)
 
 
-def request(path, data=None, timeout=30):
+def request(path, data=None, timeout=30, headers=None):
+    hdrs = {"Content-Type": "application/json"}
+    if headers:
+        hdrs.update(headers)
     req = urllib.request.Request(
-        BASE + path, data=data,
-        headers={"Content-Type": "application/json"},
+        BASE + path, data=data, headers=hdrs,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -130,6 +132,20 @@ def main():
                                         "x": 0, "y": 0, "scale": 1, "show": True}).encode(),
                        timeout=40)
     check("live2d-load-route", st in (200, 500) and "raw" not in resp, "%s %s" % (st, resp))
+
+    # CORS: only localhost/127.0.0.1 origins are allowed.
+    st, resp = request("/api/status", headers={"Origin": "http://evil.example.com"})
+    check("cors-evil-origin-rejected", st == 403, "%s %s" % (st, resp))
+    st, resp = request("/api/status", headers={"Origin": "http://localhost.evil.com"})
+    check("cors-evil-subdomain-rejected", st == 403, "%s %s" % (st, resp))
+    # Short / malformed Origin headers must not crash the editor.
+    st, resp = request("/api/status", headers={"Origin": "http:/"})
+    check("cors-short-origin-no-crash", st == 403, "%s %s" % (st, resp))
+    st, resp = request("/api/status", headers={"Origin": "http://localhost:5173"})
+    check("cors-localhost-allowed", st == 200, "%s %s" % (st, resp))
+    # No token configured in the default editor launch: requests stay open.
+    st, resp = request("/api/status")
+    check("no-token-open", st == 200, "%s %s" % (st, resp))
 
     time.sleep(1)
     check("engine-alive", proc.poll() is None)

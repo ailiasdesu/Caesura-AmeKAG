@@ -477,10 +477,11 @@ void runStdioRpc(Caesura::Engine& engine) {
     engine.shutdown();
 }
 
-bool runHttpEditor(Caesura::Engine& engine) {
+bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken) {
     auto dispatcher = std::make_shared<EngineRpcDispatcher>(engine);
     Caesura::EditorServer editor;
     editor.setDispatcher(dispatcher);
+    if (!authToken.empty()) editor.setAuthToken(authToken);
     if (!editor.start(9876)) {
         editor.setDispatcher({});
         dispatcher->close();
@@ -508,6 +509,7 @@ int main(int argc, char* argv[]) {
     bool headless = false;
     bool editorMode = false;
     bool editorStdio = false;
+    std::string editorToken;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
@@ -517,6 +519,8 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--editor-stdio") {
             editorMode = true;
             editorStdio = true;
+        } else if (arg == "--editor-token" && i + 1 < argc) {
+            editorToken = argv[++i];
         }
     }
 
@@ -564,7 +568,7 @@ int main(int argc, char* argv[]) {
 
         const bool editorOk = editorStdio
             ? (runStdioRpc(engine), true)
-            : runHttpEditor(engine);
+            : runHttpEditor(engine, editorToken);
         if (!editorOk) return 1;
         printf("Caesura (AmeKAG) shut down cleanly.\n");
         return 0;
