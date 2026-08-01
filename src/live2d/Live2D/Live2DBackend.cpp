@@ -81,13 +81,22 @@ static std::string confineToModelRoot(const std::string& path) {
             // file name. If even the parent cannot be resolved, reject.
             const fs::path parentCanon = fs::canonical(abs.parent_path(), ec2);
             if (ec2) return {};
-            canon = parentCanon / abs.filename();
-            // The final component is re-attached lexically; reject when it is a
-            // symlink so it cannot point outside the root (directories are
-            // already contained by the canonicalized parent).
+            const fs::path leaf = abs.filename();
+            // Reject dot components: they are only reachable when
+            // weakly_canonical errored and could bypass the prefix check.
+            if (leaf == "." || leaf == "..") return {};
+            canon = parentCanon / leaf;
+            // The final component is re-attached lexically; reject when it is
+            // a symlink so it cannot point outside the root (directories are
+            // already contained by the canonicalized parent). Fail closed on
+            // stat errors, and reject Windows junctions explicitly (MSVC
+            // is_symlink reports file_type::junction as false).
             std::error_code ec3;
             const fs::file_status st = fs::symlink_status(canon, ec3);
-            if (!ec3 && fs::is_symlink(st)) return {};
+            if (ec3 || fs::is_symlink(st)) return {};
+#ifdef _WIN32
+            if (st.type() == fs::file_type::junction) return {};
+#endif
         }
     }
     fs::path rootNorm = fs::weakly_canonical(root, ec);
