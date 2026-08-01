@@ -41,6 +41,9 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include <cctype>
+#include <filesystem>
+#include <limits>
 #include <SDL3/SDL.h>
 
 namespace Caesura {
@@ -52,7 +55,43 @@ using namespace Live2D::Cubism::Core;
 // ============================================================
 // File helpers
 // ============================================================
+
+// Security: every file read triggered by model loading (model3.json, .moc3,
+// textures, expressions, FrameworkShaders/*.fx via cubismLoadFile) must stay
+// under the process working directory ("model root"). Rejects `..` escapes and
+// absolute paths outside the root. Symlinks are resolved when possible;
+// on failure we fall back to lexical normalization so UTF-8/Chinese paths
+// keep working under Windows ACP.
+static std::string confineToModelRoot(const std::string& path) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path root = fs::current_path(ec);
+    if (ec) return {};
+
+    fs::path abs = fs::absolute(fs::path(path), ec);
+    if (ec) return {};
+    fs::path canon = fs::weakly_canonical(abs, ec);
+    if (ec) canon = abs.lexically_normal();
+    fs::path rootNorm = fs::weakly_canonical(root, ec);
+    if (ec) rootNorm = root.lexically_normal();
+
+    auto norm = [](std::string s) {
+        for (char& ch : s) {
+            if (ch == static_cast<char>(92)) ch = '/';  // backslash
+            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        }
+        return s;
+    };
+    const std::string r = norm(rootNorm.string());
+    const std::string c = norm(canon.string());
+    if (c == r) return canon.string();              // the root itself
+    if (c.rfind(r + "/", 0) == 0) return canon.string();  // under the root
+    return {};                                      // escaped or outside root
+}
+
 static std::vector<char> readFile(const std::string& path) {
+    const std::string confined = confineToModelRoot(path);
+    if (confined.empty()) return {};
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) return {};
     size_t size = file.tellg();
@@ -96,8 +135,16 @@ namespace {
 
     // CubismFramework file loader (used for FrameworkShaders/*.fx).
     static csmByte* cubismLoadFile(const std::string filePath, csmSizeInt* size) {
-        auto data = readFile(filePath);
+        auto data = readFile(filePath);  // confined to model root inside readFile
         if (data.empty()) {
+            if (size) *size = 0;
+            return nullptr;
+        }
+        // shaders/motions are small; cap to avoid csmSizeInt truncation and
+        // unbounded allocation from a malicious file.
+        constexpr size_t kMaxCubismFileBytes = 64u * 1024u * 1024u;
+        if (data.size() > kMaxCubismFileBytes ||
+            data.size() > static_cast<size_t>(std::numeric_limits<csmSizeInt>::max())) {
             if (size) *size = 0;
             return nullptr;
         }
@@ -119,8 +166,14 @@ namespace {
     static bgfx::TextureHandle createBgfxTexture(int width, int height,
                                                  const unsigned char* pixels) {
         if (width <= 0 || height <= 0 || !pixels) return BGFX_INVALID_HANDLE;
-        const bgfx::Memory* mem = bgfx::copy(pixels,
-            static_cast<uint32_t>(width) * static_cast<uint32_t>(height) * 4);
+        // stb dimensions come from an untrusted texture header: validate before
+        // narrowing to uint16 / computing the block size (no wrap, no truncation).
+        constexpr int kMaxTextureDim = 0x7FFF;  // createTexture2D takes uint16
+        constexpr uint64_t kMaxTextureBytes = 256ull * 1024ull * 1024ull;
+        if (width > kMaxTextureDim || height > kMaxTextureDim) return BGFX_INVALID_HANDLE;
+        const uint64_t total = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u;
+        if (total == 0 || total > kMaxTextureBytes) return BGFX_INVALID_HANDLE;
+        const bgfx::Memory* mem = bgfx::copy(pixels, static_cast<uint32_t>(total));
         return bgfx::createTexture2D(static_cast<uint16_t>(width),
             static_cast<uint16_t>(height), false, 1, bgfx::TextureFormat::RGBA8,
             BGFX_TEXTURE_NONE | BGFX_SAMPLER_POINT, mem);
@@ -495,9 +548,15 @@ void Live2DBackend::setParameter(int handle, const std::string& param, float val
 // Model lifecycle
 // ============================================================
 int Live2DBackend::loadModel(const std::string& path, const std::string& name) {
+    const std::string confined = confineToModelRoot(path);
+    if (confined.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+            "[Live2D] Model path outside model root: %s", path.c_str());
+        return -1;
+    }
     int handle = m_nextHandle++;
     auto model = std::make_unique<Live2DModel>();
-    model->dir = path;
+    model->dir = confined;
     model->name = name;
     if (!loadModelInternal(*model)) {
 #ifdef _WIN32

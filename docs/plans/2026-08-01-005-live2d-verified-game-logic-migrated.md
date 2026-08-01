@@ -55,6 +55,24 @@
 - `docs/design/engine-capability-matrix.md`、`docs/guides/live2d-setup.md`
 - `scripts/game_logic.lua`（本地未入库，不提交）
 
+## 安全修复（2026-08-01，security_review 跟进）
+
+`security_review`（sa_20260801_104841_000000000_6fb1e128fe71）在 loadAnimation RPC 代码路径发现：
+
+- **HIGH 路径穿越**：`POST /api/live2d/load` 的 `modelPath`（及 model3.json 内 `GetModelFileName/GetTextureFileName/GetExpressionFileName` 派生路径）直达 `readFile`，可 `../` 逃逸任意文件读取 + 解析器 DoS（moc3/stb/JSON）。
+- **MEDIUM**：`createBgfxTexture` 对不可信纹理头尺寸做 `uint32(w*h*4)` 计算可回绕、`uint16` 截断 → OOB 读。
+- **LOW**：`cubismLoadFile` 尺寸转 `csmSizeInt` 截断 + 无界分配；FrameworkShaders 相对 CWD 加载。
+
+已修复（`Live2DBackend.cpp`）：
+- 新增 `confineToModelRoot()`：所有模型相关读取（model3.json/.moc3/纹理/表情/`cubismLoadFile`）强制位于进程工作目录（model root）内；拒绝绝对路径与 `..` 逃逸；symlink 解析失败时回退词法归一（保护中文路径）。
+- `loadModel()` 入口先 confine，越界即拒绝（`animation_load_failed`）。
+- `createBgfxTexture`：尺寸上限 0x7FFF + 字节数上限 256MB（uint64 计算防回绕）。
+- `cubismLoadFile`：文件上限 64MB + `csmSizeInt` 上限校验。
+
+验证：安全测试 4/4 PASS（绝对路径拒绝、`..` 逃逸拒绝、Haru 正常加载、引擎存活）；`CaesuraTests` 557/557；耦合度 PASS。
+
+> 注意：模型文件必须位于引擎工作目录（CWD）下，例如 `assets/live2d/` 或验证用的 `live2d_test/`。
+
 ## 测试与回归
 - 无 Live2D 主构建（build-repro-verify 重建，修复 CMakeCache 旧路径）：零错误、557/557、ctest 9/9。
 - Live2D 构建（build-live2d）：零错误、557/557、ctest 9/9。
