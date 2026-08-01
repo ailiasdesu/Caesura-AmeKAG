@@ -84,6 +84,11 @@ def main():
     st, resp = request("/api/debug/getState")
     check("getState", st == 200 and resp.get("status") == "ok", "%s %s" % (st, resp))
 
+    # Rejected: line must be a positive int32.
+    st, resp = request("/api/debug/setBreakpoint",
+                       data=json.dumps({"source": "demo_story.ks", "line": 0}).encode())
+    check("setBreakpoint-line0-rejected", st == 400, "%s %s" % (st, resp))
+
     st, resp = request("/api/debug/setBreakpoint",
                        data=json.dumps({"source": "demo_story.ks", "line": 10}).encode())
     check("setBreakpoint", st == 200 and resp.get("status") == "ok", "%s %s" % (st, resp))

@@ -604,12 +604,13 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
-        const int line = body["line"].get<int>();
-        if (line <= 0) {
+        const std::int64_t line64 = body["line"].get<std::int64_t>();
+        if (line64 <= 0 || line64 > (std::numeric_limits<int>::max)()) {
             setDispatchError(res, invalidAnimationRequest(
-                "line must be a positive integer"));
+                "line must be a positive integer in int32 range"));
             return;
         }
+        const int line = static_cast<int>(line64);
         RpcReply reply = dispatchRequest(RpcRequest{RpcSetBreakpointRequest{
             body["source"].get<std::string>(), line}});
         if (reply.status != RpcReplyStatus::Ok) {
@@ -638,12 +639,13 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
-        const int line = body["line"].get<int>();
-        if (line <= 0) {
+        const std::int64_t line64 = body["line"].get<std::int64_t>();
+        if (line64 <= 0 || line64 > (std::numeric_limits<int>::max)()) {
             setDispatchError(res, invalidAnimationRequest(
-                "line must be a positive integer"));
+                "line must be a positive integer in int32 range"));
             return;
         }
+        const int line = static_cast<int>(line64);
         RpcReply reply = dispatchRequest(RpcRequest{RpcRemoveBreakpointRequest{
             body["source"].get<std::string>(), line}});
         if (reply.status != RpcReplyStatus::Ok) {
