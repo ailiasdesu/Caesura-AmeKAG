@@ -3,7 +3,7 @@
 
 #include "ILive2DRenderPath.h"
 
-#include <vector>
+#include <unordered_map>
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -23,20 +23,26 @@ public:
 
     ID3D11ShaderResourceView* createModelTexture(int width, int height,
                                                  const unsigned char* pixels);
+    // Release the per-model render target when the model is unloaded.
+    void releaseModelTarget(CsmRendering::CubismRenderer* renderer);
     void beginFrame(CsmRendering::CubismRenderer* renderer) override;
     void endFrame(CsmRendering::CubismRenderer* renderer, bgfx::TextureHandle bgfxTex) override;
     void resize(int width, int height) override;
     const char* name() const override { return "D3D11Native"; }
 
 private:
-    bool createSharedTexture(int width, int height);
+    // One render target per model so simultaneous visible models do not
+    // overwrite each other (each model keeps its own texture/rtv pair).
+    struct ModelTarget {
+        ID3D11Texture2D* tex = nullptr;
+        ID3D11RenderTargetView* rtv = nullptr;
+    };
+    bool createModelTarget(CsmRendering::CubismRenderer* renderer, int width, int height);
 
     ID3D11Device*        m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
-    ID3D11Texture2D*     m_sharedTex = nullptr;
-    ID3D11RenderTargetView*   m_rtv = nullptr;
-    ID3D11ShaderResourceView* m_srv = nullptr;
-    std::vector<ID3D11ShaderResourceView*> m_modelSrvs;
+    ID3D11Texture2D*     m_lastOverriddenTex = nullptr;
+    std::unordered_map<CsmRendering::CubismRenderer*, ModelTarget> m_targets;
 
     int m_width = 1280;
     int m_height = 720;

@@ -18,6 +18,8 @@
 #include <Rendering/CubismRenderer.hpp>
 #ifdef _WIN32
 #include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#include <Rendering/D3D11/CubismDeviceInfo_D3D11.hpp>
+#include <d3d11.h>
 #else
 #include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
 #endif
@@ -144,6 +146,12 @@ Live2DBackend::Live2DModel::~Live2DModel() {
         if (bgfx::isValid(tex)) bgfx::destroy(tex);
     }
     textures.clear();
+#ifdef _WIN32
+    for (ID3D11ShaderResourceView* srv : textureSrvs) {
+        if (srv) srv->Release();
+    }
+    textureSrvs.clear();
+#endif
 }
 
 // ============================================================
@@ -242,6 +250,12 @@ void Live2DBackend::shutdown() {
         m_renderPath = nullptr;
     }
     if (m_initialized) {
+#ifdef _WIN32
+        // CubismFramework::Dispose() does not release the D3D11 render-state
+        // / shader objects held in the static device-info map; release them
+        // while the device is still alive.
+        CubismDeviceInfo_D3D11::ReleaseAllDeviceInfo();
+#endif
         CubismFramework::Dispose();
         m_initialized = false;
     }
@@ -306,8 +320,11 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
                 if (m_renderPath) {
                     auto* d3dPath = static_cast<D3D11NativeRenderPath*>(m_renderPath);
                     ID3D11ShaderResourceView* srv = d3dPath->createModelTexture(w, h, pixels);
-                    if (srv && model.renderer) {
-                        static_cast<CubismRenderer_D3D11*>(model.renderer)->BindTexture(i, srv);
+                    if (srv) {
+                        model.textureSrvs.push_back(srv);  // owned by the model
+                        if (model.renderer) {
+                            static_cast<CubismRenderer_D3D11*>(model.renderer)->BindTexture(i, srv);
+                        }
                     }
                 }
 #else
@@ -482,12 +499,33 @@ int Live2DBackend::loadModel(const std::string& path, const std::string& name) {
     auto model = std::make_unique<Live2DModel>();
     model->dir = path;
     model->name = name;
-    if (!loadModelInternal(*model)) return -1;
+    if (!loadModelInternal(*model)) {
+#ifdef _WIN32
+        releaseModelTarget(*model);
+#endif
+        return -1;
+    }
     m_models[handle] = std::move(model);
     return handle;
 }
 
-void Live2DBackend::unloadModel(int handle) { m_models.erase(handle); }
+void Live2DBackend::unloadModel(int handle) {
+    auto it = m_models.find(handle);
+    if (it == m_models.end()) return;
+#ifdef _WIN32
+    releaseModelTarget(*it->second);
+#endif
+    m_models.erase(handle);
+}
+
+#ifdef _WIN32
+void Live2DBackend::releaseModelTarget(Live2DModel& model) {
+    if (m_renderPath && model.renderer) {
+        static_cast<D3D11NativeRenderPath*>(m_renderPath)->releaseModelTarget(
+            static_cast<CubismRenderer*>(model.renderer));
+    }
+}
+#endif
 bool Live2DBackend::isLoaded(int handle) const { return m_models.count(handle) > 0; }
 
 void Live2DBackend::showModel(int handle, float x, float y, float scale) {

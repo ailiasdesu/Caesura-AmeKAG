@@ -14,6 +14,8 @@ namespace Live2D { namespace Cubism { namespace Framework {
 } } }
 namespace Csm = Live2D::Cubism::Framework;
 
+struct ID3D11ShaderResourceView;
+
 namespace Caesura {
 
 class ILive2DRenderPath;
@@ -71,6 +73,11 @@ private:
         std::unordered_map<std::string, std::vector<char>> motionCache;
         std::unordered_map<std::string, std::vector<char>> expressionCache;
 
+#ifdef _WIN32
+        // D3D11 model-texture SRVs (owned; released in ~Live2DModel)
+        std::vector<ID3D11ShaderResourceView*> textureSrvs;
+#endif
+
         ~Live2DModel();
     };
 
@@ -85,6 +92,9 @@ private:
 
     bool loadModelInternal(Live2DModel& model);
     bool createRenderer(Live2DModel& model);
+#ifdef _WIN32
+    void releaseModelTarget(Live2DModel& model);
+#endif
 };
 
 } // namespace Caesura
