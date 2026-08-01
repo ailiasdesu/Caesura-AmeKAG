@@ -190,7 +190,7 @@ bool SaveManager::save(int slot, const json& gameData,
                        const std::string& thumbnailPng) {
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
     // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
-    // is deprecated; all KAG [save]/[load] commands and scripts use the
+    // was removed; all KAG [save]/[load] commands and scripts use the
     // KAG.save_game() / KAG.load_game() bindings which route here.
 
     if (m_saveDir.empty()) {
@@ -225,7 +225,7 @@ bool SaveManager::save(int slot, const json& gameData,
 json SaveManager::load(int slot, SaveMeta* outMeta) {
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
     // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
-    // is deprecated; all KAG [save]/[load] commands and scripts use the
+    // was removed; all KAG [save]/[load] commands and scripts use the
     // KAG.save_game() / KAG.load_game() bindings which route here.
 
     std::string contents = readFile(slotPath(slot));

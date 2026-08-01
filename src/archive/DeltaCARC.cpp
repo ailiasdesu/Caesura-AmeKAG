@@ -146,7 +146,9 @@ bool DeltaCARC::generate(const std::string& oldPath,
         writeU32(deltaBody, (uint32_t)hashHex.size());
         writeBytes(deltaBody, (const uint8_t*)hashHex.data(), hashHex.size());
         writeU64(deltaBody, data.size());
-        writeBytes(deltaBody, data.data(), data.size());
+        if (!data.empty()) {
+            writeBytes(deltaBody, data.data(), data.size());
+        }
         entryCount++;
     }
 
@@ -216,7 +218,9 @@ bool DeltaCARC::apply(const std::string& sourcePath,
 
     size_t encSize = dfSize - sizeof(DeltaHeader) - AES_KEY_SIZE - AES_NONCE_SIZE - AES_TAG_SIZE;
     std::vector<uint8_t> encrypted(encSize);
-    df.read(reinterpret_cast<char*>(encrypted.data()), encSize);
+    if (encSize > 0) {
+        df.read(reinterpret_cast<char*>(encrypted.data()), encSize);
+    }
     df.close();
 
     // Verify source SHA
@@ -241,7 +245,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     std::unordered_set<std::string> removes;
     std::unordered_map<std::string, std::vector<uint8_t>> updates;
     uint32_t parsed = 0;
-    {
+    if (!deltaBody.empty()) {
         const uint8_t* p = deltaBody.data();
         const uint8_t* end = p + deltaBody.size();
         while (p < end) {
@@ -393,7 +397,9 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
 
     size_t encSize = dfSize - sizeof(DeltaHeader) - AES_KEY_SIZE - AES_NONCE_SIZE - AES_TAG_SIZE;
     std::vector<uint8_t> encrypted(encSize);
-    df.read(reinterpret_cast<char*>(encrypted.data()), encSize);
+    if (encSize > 0) {
+        df.read(reinterpret_cast<char*>(encrypted.data()), encSize);
+    }
     df.close();
 
     // An empty body means the archives were identical (no changes).
@@ -404,10 +410,11 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
     }
 
     // Walk every entry with bounds checks — malformed bodies fail here.
-    const uint8_t* p = deltaBody.data();
-    const uint8_t* end = p + deltaBody.size();
     uint32_t parsed = 0;
-    while (p < end) {
+    if (!deltaBody.empty()) {
+        const uint8_t* p = deltaBody.data();
+        const uint8_t* end = p + deltaBody.size();
+        while (p < end) {
         if (static_cast<size_t>(end - p) < 5) return false;
         DeltaFlag flag = (DeltaFlag)*p++;
         uint32_t hashLen = 0;
@@ -427,6 +434,7 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
             return false; // unknown flag
         }
         parsed++;
+        }
     }
     if (parsed != hdr.entryCount) {
         fprintf(stderr, "[DeltaCARC] Entry count mismatch: header %u, body %u\n",
