@@ -60,6 +60,7 @@ private:
         // bgfx texture
         bgfx::TextureHandle bgfxTex = BGFX_INVALID_HANDLE;
         bool bgfxTexValid = false;
+        std::vector<bgfx::TextureHandle> textures; // model textures (RGBA8)
 
         // Cached raw asset data (owned)
         std::vector<char> mocData;     // .moc3 raw bytes (aligned)

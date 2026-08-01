@@ -377,6 +377,14 @@ if(CAESURA_LIVE2D)
         target_compile_definitions(CaesuraLive2D PRIVATE CAESURA_HAS_LIVE2D)
         target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_LIVE2D)
         message(STATUS "Live2D: ${CUBISM_FRAMEWORK_RENDERER} renderer for ${CMAKE_SYSTEM_NAME}/${CAESURA_CUBISM_ARCH}")
+
+        # CubismRenderer_D3D11 loads FrameworkShaders/*.fx at runtime (relative
+        # to the working directory); copy them next to the executable.
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/Shaders"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/FrameworkShaders"
+            COMMENT "Copying Cubism FrameworkShaders to output directory...")
     endif()
 endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")

@@ -118,7 +118,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. Cubism requires manual SDK download — without it all render paths are never compiled. D3D11 (Windows) + OpenGL paths are code-ready but unverified; Metal is a stub. See `docs/guides/live2d-setup.md` |
+| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. **D3D11 (Windows) path verified 2026-08-01** (first real compile + Haru.moc3 load/render via HTTP RPC, no device loss); OpenGL paths still unverified; Metal is a stub. Cubism requires manual SDK download — without it all render paths are never compiled. See `docs/guides/live2d-setup.md` |
 | C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | Partial: lifecycle + JSON scene loading implemented (`loadScene`/`enter`/`unloadScene`, `MiniScene.h`, 9 tests); GPU enter/render not verified in headless CI |
 | C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |

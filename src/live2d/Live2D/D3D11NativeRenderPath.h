@@ -3,6 +3,8 @@
 
 #include "ILive2DRenderPath.h"
 
+#include <vector>
+
 struct ID3D11Device;
 struct ID3D11DeviceContext;
 struct ID3D11Texture2D;
@@ -18,6 +20,9 @@ public:
     bool init(int width, int height) override;
     void shutdown() override;
     CsmRendering::CubismRenderer* createRenderer() override;
+
+    ID3D11ShaderResourceView* createModelTexture(int width, int height,
+                                                 const unsigned char* pixels);
     void beginFrame(CsmRendering::CubismRenderer* renderer) override;
     void endFrame(CsmRendering::CubismRenderer* renderer, bgfx::TextureHandle bgfxTex) override;
     void resize(int width, int height) override;
@@ -31,6 +36,7 @@ private:
     ID3D11Texture2D*     m_sharedTex = nullptr;
     ID3D11RenderTargetView*   m_rtv = nullptr;
     ID3D11ShaderResourceView* m_srv = nullptr;
+    std::vector<ID3D11ShaderResourceView*> m_modelSrvs;
 
     int m_width = 1280;
     int m_height = 720;

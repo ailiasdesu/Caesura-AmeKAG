@@ -25,6 +25,7 @@
 // Engine
 #include "Live2DUserModel.h"
 #include "ILive2DRenderPath.h"
+#include "../../render/api/IRenderDevice.h"
 #ifdef _WIN32
 #include "D3D11NativeRenderPath.h"
 #else
@@ -37,6 +38,7 @@
 
 #include <fstream>
 #include <vector>
+#include <cstring>
 #include <SDL3/SDL.h>
 
 namespace Caesura {
@@ -89,6 +91,38 @@ namespace {
     static void cubismLog(const csmChar* message) {
         SDL_Log("[Live2D] %s", message);
     }
+
+    // CubismFramework file loader (used for FrameworkShaders/*.fx).
+    static csmByte* cubismLoadFile(const std::string filePath, csmSizeInt* size) {
+        auto data = readFile(filePath);
+        if (data.empty()) {
+            if (size) *size = 0;
+            return nullptr;
+        }
+        csmByte* buf = static_cast<csmByte*>(SDL_malloc(data.size()));
+        if (!buf) {
+            if (size) *size = 0;
+            return nullptr;
+        }
+        std::memcpy(buf, data.data(), data.size());
+        if (size) *size = static_cast<csmSizeInt>(data.size());
+        return buf;
+    }
+
+    static void cubismReleaseBytes(csmByte* buffer) {
+        SDL_free(buffer);
+    }
+
+    // Create an RGBA8 bgfx texture from decoded pixels (model texture).
+    static bgfx::TextureHandle createBgfxTexture(int width, int height,
+                                                 const unsigned char* pixels) {
+        if (width <= 0 || height <= 0 || !pixels) return BGFX_INVALID_HANDLE;
+        const bgfx::Memory* mem = bgfx::copy(pixels,
+            static_cast<uint32_t>(width) * static_cast<uint32_t>(height) * 4);
+        return bgfx::createTexture2D(static_cast<uint16_t>(width),
+            static_cast<uint16_t>(height), false, 1, bgfx::TextureFormat::RGBA8,
+            BGFX_TEXTURE_NONE | BGFX_SAMPLER_POINT, mem);
+    }
 }
 
 // ============================================================
@@ -99,15 +133,17 @@ Live2DBackend::Live2DModel::~Live2DModel() {
         delete setting;
         setting = nullptr;
     }
-    if (renderer) {
-        CubismRenderer::Delete(static_cast<CubismRenderer*>(renderer));
-        renderer = nullptr;
-    }
+    // renderer is owned by CubismUserModel (~CubismUserModel calls DeleteRenderer);
+    // an explicit CubismRenderer::Delete here would double-free.
     userModel.reset();
     if (bgfxTexValid && bgfx::isValid(bgfxTex)) {
         bgfx::destroy(bgfxTex);
         bgfxTexValid = false;
     }
+    for (bgfx::TextureHandle tex : textures) {
+        if (bgfx::isValid(tex)) bgfx::destroy(tex);
+    }
+    textures.clear();
 }
 
 // ============================================================
@@ -140,9 +176,11 @@ bool Live2DBackend::init() {
 #endif
 
     static EngineAllocator allocator;
-    CubismFramework::Option option;
+    static CubismFramework::Option option;
     option.LogFunction = cubismLog;
     option.LoggingLevel = CubismFramework::Option::LogLevel_Verbose;
+    option.LoadFileFunction = cubismLoadFile;
+    option.ReleaseBytesFunction = cubismReleaseBytes;
 
     if (!CubismFramework::StartUp(&allocator, &option)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] StartUp failed");
@@ -251,6 +289,8 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     if (!createRenderer(model)) return false;
 
     // 5. Load textures
+    model.textures.resize(static_cast<size_t>(model.setting->GetTextureCount()),
+                          BGFX_INVALID_HANDLE);
     for (csmInt32 i = 0; i < model.setting->GetTextureCount(); ++i) {
         std::string texPath = joinPath(dir, model.setting->GetTextureFileName(i));
         auto texData = readFile(texPath);
@@ -261,7 +301,18 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
                 reinterpret_cast<const stbi_uc*>(texData.data()),
                 static_cast<int>(texData.size()), &w, &h, &comp, 4);
             if (pixels) {
-                model.textures[i] = ILive2DRenderPath::createTexture(w, h, pixels);
+#ifdef _WIN32
+                // D3D11: hand the model texture to Cubism as a shader-resource view.
+                if (m_renderPath) {
+                    auto* d3dPath = static_cast<D3D11NativeRenderPath*>(m_renderPath);
+                    ID3D11ShaderResourceView* srv = d3dPath->createModelTexture(w, h, pixels);
+                    if (srv && model.renderer) {
+                        static_cast<CubismRenderer_D3D11*>(model.renderer)->BindTexture(i, srv);
+                    }
+                }
+#else
+                model.textures[i] = createBgfxTexture(w, h, pixels);
+#endif
                 stbi_image_free(pixels);
                 SDL_Log("[Live2D] Texture %d loaded: %dx%d", i, w, h);
             } else {
@@ -327,6 +378,8 @@ void Live2DBackend::render(float dt) {
         // Update model (motions, expressions)
         static_cast<Live2DUserModel*>(model->userModel.get())->motionManager()->UpdateMotion(cubismModel, dt);
         static_cast<Live2DUserModel*>(model->userModel.get())->expressionManager()->UpdateMotion(cubismModel, dt);
+        // Recompute model vertices/deformations before drawing (csmUpdateModel).
+        cubismModel->Update();
 
         // Cubism render �?bgfx (via pluggable render path)
         m_renderPath->beginFrame(static_cast<CubismRenderer*>(model->renderer));
@@ -334,7 +387,7 @@ void Live2DBackend::render(float dt) {
 
         // Blit bgfx texture to screen
         if (m_renderDevice && model->bgfxTexValid) {
-            m_renderDevice->blitTexture(0, model->bgfxTex,
+            m_renderDevice->blitTexture(0, model->bgfxTex.idx,
                 model->x, model->y,
                 static_cast<float>(model->renderWidth)  * model->scale,
                 static_cast<float>(model->renderHeight) * model->scale,
