@@ -32,6 +32,8 @@ cd build/tests/Debug
 
 `--editor` starts the HTTP editor host on `http://localhost:9876` with a hidden GPU window. Use `--editor-stdio` for newline-delimited JSON-RPC with GPU, or `--headless` for stdio RPC without GPU.
 
+Set the environment variable `CAESURA_EDITOR_TOKEN` to require a bearer token on every HTTP editor request (sent as `Authorization: Bearer <token>`); when unset or empty, the editor stays open to local callers (loopback trust boundary). The token is visible to same-UID processes and inherited by child processes.
+
 ### Your First KAG Script
 
 ```kag
