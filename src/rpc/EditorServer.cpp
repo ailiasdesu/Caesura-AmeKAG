@@ -604,7 +604,14 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
-        const std::int64_t line64 = body["line"].get<std::int64_t>();
+        std::int64_t line64 = 0;
+        try {
+            line64 = body["line"].get<std::int64_t>();
+        } catch (const Json::exception&) {
+            setDispatchError(res, invalidAnimationRequest(
+                "line must be a positive integer in int32 range"));
+            return;
+        }
         if (line64 <= 0 || line64 > (std::numeric_limits<int>::max)()) {
             setDispatchError(res, invalidAnimationRequest(
                 "line must be a positive integer in int32 range"));
@@ -639,7 +646,14 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
-        const std::int64_t line64 = body["line"].get<std::int64_t>();
+        std::int64_t line64 = 0;
+        try {
+            line64 = body["line"].get<std::int64_t>();
+        } catch (const Json::exception&) {
+            setDispatchError(res, invalidAnimationRequest(
+                "line must be a positive integer in int32 range"));
+            return;
+        }
         if (line64 <= 0 || line64 > (std::numeric_limits<int>::max)()) {
             setDispatchError(res, invalidAnimationRequest(
                 "line must be a positive integer in int32 range"));
