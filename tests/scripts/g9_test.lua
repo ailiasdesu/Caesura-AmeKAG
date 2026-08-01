@@ -71,20 +71,17 @@ end
 -- Phase 3: Save/Load round-trip (G9 U3)
 local function phase_saveload()
     print("\n=== [G9:P3] Save/Load Cycle ===")
-    ctx.token_index = 42
-    ctx.scene_path = "tests/scripts/full_story.ks"
-    ctx.f = { flag_seen = true, affection = 5 }
-    ctx.sf = { volume_bgm = 0.8 }
-    local ok1 = System.save(1, ctx)
-    CHECK(ok1 ~= nil, "Save slot 1 written")
+    -- Canonical Path A: KAG.save_game / KAG.load_game (C++ JSON save).
+    -- The legacy System.save/load Lua path was removed.
+    local ok1 = KAG.save_game(1, { flag_seen = true, affection = 5 },
+                              "tests/scripts/full_story.ks", 42)
+    CHECK(ok1, "Save slot 1 written")
 
-    -- Simulate fresh ctx
-    local fresh = { f = {}, sf = {}, tf = {}, layers = {}, backlog = {} }
-    local ok2 = System.load(1, fresh)
-    CHECK(ok2 ~= nil, "Load slot 1 restored")
-    CHECK(fresh.token_index == 42, "token_index preserved: " .. tostring(fresh.token_index))
-    CHECK(fresh.f.flag_seen == true, "f.flag_seen preserved")
-    CHECK(fresh.sf.volume_bgm == 0.8, "sf.volume_bgm preserved")
+    -- Simulate fresh load
+    local data, meta = KAG.load_game(1)
+    CHECK(data ~= nil, "Load slot 1 restored")
+    CHECK(meta ~= nil and meta.token_index == 42, "token_index preserved: " .. tostring(meta and meta.token_index))
+    CHECK(data.flag_seen == true, "f.flag_seen preserved")
 end
 
 -- Phase 4: GpuMonitor reads (G9 U8 baseline)

@@ -53,8 +53,6 @@ function levels.L1()
     CHECK(type(backend.render_text) == "function", "render_text")
     CHECK(type(backend.create_viewport) == "function", "create_viewport")
     CHECK(type(backend.fill_viewport) == "function", "fill_viewport")
-    CHECK(type(System.save) == "function", "System.save")
-    CHECK(type(System.load) == "function", "System.load")
 end
 
 function levels.L2()
@@ -130,14 +128,14 @@ function levels.L3d()
     -- After sandbox lockdown, load() is safe but may be restricted; test via pcall
     local ok3d, res3d = pcall(function() return load("return 42*2")() end)
     CHECK(ok3d and res3d == 84, "eval 42*2=84")
-    local ok = System.save(0, ctx)
+    -- Canonical Path A: KAG.save_game / KAG.load_game (C++ JSON save).
+    -- The legacy System.save/load Lua path was removed.
+    local saved = { scene = "L3d", token_ptr = ctx.token_ptr or 1 }
+    local ok = KAG.save_game(0, saved, "L3d", ctx.token_ptr or 1)
     CHECK(ok, "Save file created")
-    local oldPtr = ctx.token_ptr
-    local loaded = System.load(0, ctx)
-    CHECK(loaded ~= nil, "Load restores token_ptr")
-    System.save(0, ctx)
-    local loaded2 = System.load(0, ctx)
-    CHECK(loaded2 ~= nil, "Quick save/load OK")
+    local data, meta = KAG.load_game(0)
+    CHECK(data ~= nil, "Load restores token_ptr")
+    CHECK(meta ~= nil and meta.token_index == (ctx.token_ptr or 1), "Quick save/load OK")
 end
 
 function levels.L5()
