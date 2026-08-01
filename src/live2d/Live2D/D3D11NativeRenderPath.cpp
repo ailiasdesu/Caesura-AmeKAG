@@ -125,6 +125,9 @@ void D3D11NativeRenderPath::releaseModelTarget(CsmRendering::CubismRenderer* ren
 ID3D11ShaderResourceView* D3D11NativeRenderPath::createModelTexture(
     int width, int height, const unsigned char* pixels) {
     if (!m_device || width <= 0 || height <= 0 || !pixels) return nullptr;
+    // D3D11 hardware texture dimension limit (defense in depth; the backend
+    // already validates the header before decode).
+    if (width > 16384 || height > 16384) return nullptr;
 
     D3D11_TEXTURE2D_DESC desc = {};
     desc.Width  = static_cast<UINT>(width);

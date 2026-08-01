@@ -70,8 +70,20 @@ static std::string confineToModelRoot(const std::string& path) {
 
     fs::path abs = fs::absolute(fs::path(path), ec);
     if (ec) return {};
-    fs::path canon = fs::weakly_canonical(abs, ec);
-    if (ec) canon = abs.lexically_normal();
+    fs::path canon;
+    {
+        std::error_code ec2;
+        canon = fs::weakly_canonical(abs, ec2);
+        if (ec2) {
+            // Canonicalization failed (e.g. non-ASCII path under Windows ACP).
+            // Resolve the existing parent prefix so symlinked/junctioned
+            // directories are still containment-checked, then re-attach the
+            // file name. If even the parent cannot be resolved, reject.
+            const fs::path parentCanon = fs::canonical(abs.parent_path(), ec2);
+            if (ec2) return {};
+            canon = parentCanon / abs.filename();
+        }
+    }
     fs::path rootNorm = fs::weakly_canonical(root, ec);
     if (ec) rootNorm = root.lexically_normal();
 
@@ -92,13 +104,17 @@ static std::string confineToModelRoot(const std::string& path) {
 static std::vector<char> readFile(const std::string& path) {
     const std::string confined = confineToModelRoot(path);
     if (confined.empty()) return {};
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    // Cap the size before allocating: a malicious (or zip-bomb style) file
+    // inside the root must not force a multi-GB allocation or a narrowing
+    // truncation downstream.
+    constexpr uint64_t kMaxModelFileBytes = 256ull * 1024ull * 1024ull;
+    std::ifstream file(confined, std::ios::binary | std::ios::ate);
     if (!file) return {};
-    size_t size = file.tellg();
-    if (size == 0) return {};
+    const uint64_t size = static_cast<uint64_t>(file.tellg());
+    if (size == 0 || size > kMaxModelFileBytes) return {};
     file.seekg(0);
-    std::vector<char> data(size);
-    file.read(data.data(), size);
+    std::vector<char> data(static_cast<size_t>(size));
+    file.read(data.data(), static_cast<std::streamsize>(size));
     if (!file.good()) return {};
     return data;
 }
@@ -362,6 +378,22 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
         std::string texPath = joinPath(dir, model.setting->GetTextureFileName(i));
         auto texData = readFile(texPath);
         if (!texData.empty()) {
+            // Validate the image header before decoding: D3D11 caps at 16384
+            // and the decoded w*h*4 must stay within the texture budget.
+            int iw = 0, ih = 0, ic = 0;
+            if (!stbi_info_from_memory(
+                    reinterpret_cast<const stbi_uc*>(texData.data()),
+                    static_cast<int>(texData.size()), &iw, &ih, &ic)) {
+                SDL_Log("[Live2D] Texture %d: invalid image header: %s", i, texPath.c_str());
+                continue;
+            }
+            constexpr int kMaxTextureDim = 16384;
+            constexpr uint64_t kMaxTextureBytes = 256ull * 1024ull * 1024ull;
+            if (iw <= 0 || ih <= 0 || iw > kMaxTextureDim || ih > kMaxTextureDim ||
+                static_cast<uint64_t>(iw) * static_cast<uint64_t>(ih) * 4u > kMaxTextureBytes) {
+                SDL_Log("[Live2D] Texture %d: dimensions out of range: %dx%d", i, iw, ih);
+                continue;
+            }
             // Create Cubism texture from loaded PNG data
             int w, h, comp;
             unsigned char* pixels = stbi_load_from_memory(
