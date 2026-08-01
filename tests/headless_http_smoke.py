@@ -104,9 +104,12 @@ def main():
     check("inspect-reachable", st == 400 and "inspection_unavailable" in str(resp),
           "%s %s" % (st, resp))
 
+    # --editor runs with GPU enabled, so a real frame capture may succeed
+    # (200 + base64) or fail (500 + capture_failed); either is a valid answer.
     st, resp = request("/api/debug/getFrame?w=320&h=240")
-    check("getFrame-reachable", st == 500 and "capture_failed" in str(resp),
-          "%s %s" % (st, resp))
+    ok_frame = (st == 200 and isinstance(resp.get("base64"), str) and resp.get("base64"))
+    ok_frame = ok_frame or (st == 500 and "capture_failed" in str(resp))
+    check("getFrame-reachable", ok_frame, "%s %s" % (st, resp))
 
     # Live2D model-load route must respond (Haru lives under live2d_test in
     # the build output; load may fail if the file is absent, but the route

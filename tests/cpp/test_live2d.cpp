@@ -337,12 +337,15 @@ TEST_CASE("NullAnimationBackend remains safe through IAnimationBackend") {
 }
 
 TEST_CASE("confineToModelRoot rejects absolute paths outside the working directory") {
-    // Absolute path outside the process CWD (model root) must be rejected.
+    // Absolute paths outside the process CWD (model root) must be rejected.
+#ifdef _WIN32
     CHECK(Caesura::confineToModelRoot("C:/Windows/win.ini").empty());
     CHECK(Caesura::confineToModelRoot("C:/Program Files").empty());
-#ifdef _WIN32
     // Root-relative drive path (no drive letter) resolves relative to CWD drive.
     CHECK(Caesura::confineToModelRoot("\\server\\share\\file").empty());
+#else
+    CHECK(Caesura::confineToModelRoot("/etc/passwd").empty());
+    CHECK(Caesura::confineToModelRoot("/usr/share").empty());
 #endif
 }
 

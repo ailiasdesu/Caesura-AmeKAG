@@ -604,8 +604,14 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
+        const int line = body["line"].get<int>();
+        if (line <= 0) {
+            setDispatchError(res, invalidAnimationRequest(
+                "line must be a positive integer"));
+            return;
+        }
         RpcReply reply = dispatchRequest(RpcRequest{RpcSetBreakpointRequest{
-            body["source"].get<std::string>(), body["line"].get<int>()}});
+            body["source"].get<std::string>(), line}});
         if (reply.status != RpcReplyStatus::Ok) {
             setDispatchError(res, reply);
             return;
@@ -632,8 +638,14 @@ void EditorServer::serverLoop(int port) {
                 "source (string) and line (integer) are required"));
             return;
         }
+        const int line = body["line"].get<int>();
+        if (line <= 0) {
+            setDispatchError(res, invalidAnimationRequest(
+                "line must be a positive integer"));
+            return;
+        }
         RpcReply reply = dispatchRequest(RpcRequest{RpcRemoveBreakpointRequest{
-            body["source"].get<std::string>(), body["line"].get<int>()}});
+            body["source"].get<std::string>(), line}});
         if (reply.status != RpcReplyStatus::Ok) {
             setDispatchError(res, reply);
             return;
