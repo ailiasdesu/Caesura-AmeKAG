@@ -89,7 +89,7 @@ graph LR
 | R4 | 2D GPU particle system (emitters, physics, colour) | `IParticleSystem` | ✓ |
 | R5 | Video playback (MPEG-1 via pl_mpeg, FFmpeg optional) | `IVideoPlayer` | ✓ |
 | R6 | Adaptive GPU quality monitor with automatic degradation | `IGpuMonitor` | ✓ |
-| R7 | Text rendering (FreeType atlas, CJK support, ruby/furigana) | `IRenderDevice` | Partial: no distributable CJK font; font switching still incomplete |
+| R7 | Text rendering (FreeType atlas, CJK support, ruby/furigana) | `IRenderDevice` | Partial: CJK font shipped (NotoSansCJKsc, OFL) + `text_set_font` face switching implemented; FreeType atlas edge cases remain |
 | R8 | Transition effects (blend, wipe, custom shader) | `IRenderDevice` | Partial: non-D3D shader coverage is incomplete |
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
@@ -119,7 +119,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. Cubism requires manual SDK download — without it all render paths are never compiled. D3D11 (Windows) + OpenGL paths are code-ready but unverified; Metal is a stub. See `docs/guides/live2d-setup.md` |
-| C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | Skeleton: lifecycle exists; scene loading is not implemented |
+| C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | Partial: lifecycle + JSON scene loading implemented (`loadScene`/`enter`/`unloadScene`, `MiniScene.h`, 9 tests); GPU enter/render not verified in headless CI |
 | C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |
 | C5 | CARC archive packaging (compress, encrypt, sign) | `IArchiveWriter` | ✓ |
@@ -132,7 +132,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Partial: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` and HTTP debug routes remain |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Partial: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` implemented + headless smoke tests; HTTP debug routes remain |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
@@ -150,7 +150,7 @@ graph LR
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
-| P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `MobileAdapter` (platform) | Partial: core mapping implemented + 18 unit tests; not wired into Engine lifecycle, no native mobile SDK integration |
+| P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | Partial: core mapping implemented + 18 unit tests; wired into Engine lifecycle (SDL app-event watch → onPause/onResume, registered via BackendRegistry); no native mobile SDK integration |
 
 ---
 

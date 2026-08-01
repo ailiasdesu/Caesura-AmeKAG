@@ -251,6 +251,14 @@ bool Engine::initPlatformPhase() {
     m_platformInitialized = true;
     BackendRegistry::instance().setPlatformBackend(m_platformBackend.get());
 
+    // Mobile adapter: touch/lifecycle mapping (registered for editor/RPC
+    // and future mobile ports; wired to SDL background/foreground events).
+    m_mobileAdapter = std::make_unique<MobileAdapter>();
+    BackendRegistry::instance().setMobileAdapter(m_mobileAdapter.get());
+    // SDL app-lifecycle events are delivered only via event watches
+    // (they are never queued); register once here.
+    SDL_AddEventWatch(&Engine::appLifecycleWatch, this);
+
     if (m_config.editorMode) {
         SDL_HideWindow(static_cast<SDL_Window*>(
             m_platformBackend->getNativeWindowHandle()));
@@ -1046,10 +1054,42 @@ std::string Engine::captureFrameForRpc(int w, int h) {
     return captureFrameBase64(*m_renderDevice, w, h);
 }
 
+// -- App lifecycle watcher -------------------------------------------------
+// SDL delivers WILL_ENTER_BACKGROUND/DID_ENTER_FOREGROUND exclusively to
+// event watches (they never enter the poll queue). Contract: the platform
+// layer must deliver these on the engine/main thread (true on iOS/Android);
+// when a native mobile layer lands on a platform that dispatches elsewhere,
+// events must be marshalled to the engine thread before touching Lua.
+bool Engine::appLifecycleWatch(void* userdata, SDL_Event* event) {
+    auto* engine = static_cast<Engine*>(userdata);
+    if (!engine) return true;
+    switch (event->type) {
+        case SDL_EVENT_WILL_ENTER_BACKGROUND:
+            if (engine->m_mobileAdapter) {
+                engine->m_mobileAdapter->onPause(
+                    engine->m_lua ? engine->m_lua->state() : nullptr);
+            }
+            break;
+        case SDL_EVENT_DID_ENTER_FOREGROUND:
+            if (engine->m_mobileAdapter) {
+                engine->m_mobileAdapter->onResume(
+                    engine->m_lua ? engine->m_lua->state() : nullptr);
+            }
+            break;
+        default:
+            break;
+    }
+    return true; // allow other watchers / the queue to see the event
+}
+
 void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
     m_initialized = false;
+
+    // Unregister the SDL app-lifecycle watch first: a background event
+    // delivered after this point must not reach Lua state being torn down.
+    SDL_RemoveEventWatch(&Engine::appLifecycleWatch, this);
 
     // A never-initialized Engine owns its injected objects but no global state.
     if (!m_initAttempted) return;
@@ -1145,6 +1185,7 @@ void Engine::shutdown() {
     registry.setSaveManager(nullptr);
     registry.setResourceGenerationTracker(nullptr);
     registry.setSteamBackend(nullptr);
+    registry.setMobileAdapter(nullptr);
     registry.setRenderDevice(nullptr);
     registry.setAudioBackend(nullptr);
     registry.setPlatformBackend(nullptr);

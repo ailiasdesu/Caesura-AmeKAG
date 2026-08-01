@@ -24,6 +24,7 @@
 #include "../di/api/ITextureBudget.h"
 #include "../storage/api/ISaveManager.h"
 #include "../steam/api/ISteamBackend.h"
+#include "../platform/api/IMobileAdapter.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -76,6 +77,7 @@ DEF_GETTER(ITextureBudget,   TextureBudget)
 DEF_GETTER(ISaveManager,     SaveManager)
 DEF_GETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_GETTER(ISteamBackend,    SteamBackend)
+DEF_GETTER(IMobileAdapter,   MobileAdapter)
 
 DEF_SETTER(IRenderDevice,    RenderDevice)
 DEF_SETTER(IAudioBackend,    AudioBackend)
@@ -97,6 +99,7 @@ DEF_SETTER(ITextureBudget,   TextureBudget)
 DEF_SETTER(ISaveManager,     SaveManager)
 DEF_SETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_SETTER(ISteamBackend,    SteamBackend)
+DEF_SETTER(IMobileAdapter,   MobileAdapter)
 
 #undef DEF_GETTER
 #undef DEF_SETTER

@@ -2,7 +2,9 @@
 
 #include "entry/EngineConfig.h"
 #include "platform/api/IPlatformBackend.h"
+#include "platform/MobileAdapter.h"
 #include "di/api/ThreadAssert.h"
+#include <SDL3/SDL.h>
 #include <functional>
 #include <memory>
 #include <string>
@@ -135,7 +137,13 @@ private:
     std::unique_ptr<IRenderDevice>     m_renderDevice;
     std::unique_ptr<IAudioBackend>     m_audioBackend;
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
+    std::unique_ptr<MobileAdapter>     m_mobileAdapter;
     std::unique_ptr<LuaManager>        m_lua;
+
+    // App-lifecycle watcher: SDL app events (WILL_ENTER_BACKGROUND etc.) are
+    // delivered exclusively via SDL_AddEventWatch — they never enter the
+    // poll queue. Registered on init, removed on shutdown.
+    static bool SDLCALL appLifecycleWatch(void* userdata, SDL_Event* event);
     std::unique_ptr<HotReload>         m_hotReload;
     std::unique_ptr<DebugProtocol>      m_debugProtocol;
     std::unique_ptr<InputRouter>       m_inputRouter;

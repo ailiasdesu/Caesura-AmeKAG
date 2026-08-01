@@ -7,6 +7,7 @@
 #include "render/api/IGpuMonitor.h"
 #include "script/vm/LuaManager.h"
 #include "EntryLifecycleBackends.h"
+#include <SDL3/SDL.h>
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>
@@ -805,4 +806,28 @@ TEST_CASE("Entry: Engine headless Lua registry services back KAG bindings") {
     CHECK(runLuaBoolean("return type(KAG.save_game) == 'function'"));
     CHECK(runLuaBoolean("return type(KAG.load_game) == 'function'"));
     CHECK(runLuaBoolean("return type(KAG.list_saves) == 'function'"));
+}
+
+TEST_CASE("Entry: mobile adapter registered, lifecycle callbacks work, unregistered on shutdown") {
+    EngineConfig cfg;
+    cfg.headless = true;
+    Engine engine(std::move(cfg));
+    REQUIRE(engine.init());
+
+    // Adapter is registered via BackendRegistry (interface access).
+    auto* adapter = BackendRegistry::instance().getMobileAdapter();
+    REQUIRE(adapter != nullptr);
+    CHECK_FALSE(adapter->isPaused());
+
+    // Lifecycle callbacks through the interface drive the pause state.
+    // (SDL app-lifecycle events are delivered via event watches and are
+    // not pushable from tests; the Engine::appLifecycleWatch bridge is
+    // verified by review.)
+    adapter->onPause(nullptr);
+    CHECK(adapter->isPaused());
+    adapter->onResume(nullptr);
+    CHECK_FALSE(adapter->isPaused());
+
+    engine.shutdown();
+    CHECK(BackendRegistry::instance().getMobileAdapter() == nullptr);
 }
