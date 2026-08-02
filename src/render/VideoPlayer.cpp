@@ -508,9 +508,11 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         // Frame-rate pacing: advance the playhead by dt and decode enough
         // frames to catch up (bounded so a stall cannot block the frame).
         const double plmNow = plm_get_time(plm);
-        if (plmNow < vs->lastPlmTime) {
-            // Loop rewound (plm_set_loop resets internal time to 0): re-sync
-            // the playhead so the video does not fast-forward each loop.
+        // Loop rewound (plm_set_loop resets internal time to 0): re-sync the
+        // playhead so the video does not fast-forward each loop. Hysteresis
+        // of 0.25s ignores the sub-frame regressions the audio/video decoder
+        // interleave can produce; real rewinds regress by ~duration.
+        if (plmNow < vs->lastPlmTime - 0.25) {
             vs->playhead = 0.0;
         }
         vs->lastPlmTime = plmNow;
@@ -671,8 +673,11 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
         if (vs->plm) {
             plm_seek(static_cast<plm_t*>(vs->plm), time, 0);
             // Re-sync the pacing playhead with the decoded position so the
-            // frame-rate accumulator does not over-decode after a seek.
+            // frame-rate accumulator does not over-decode after a seek, and
+            // update lastPlmTime so the loop-regression check in update()
+            // cannot mistake this seek for a loop rewind.
             vs->playhead = time;
+            vs->lastPlmTime = time;
         }
     }
     vs->hasFrame = false;
