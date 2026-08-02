@@ -122,14 +122,16 @@ void BackendRegistry::unregisterDeviceLostListener(IDeviceLostListener* listener
 
 void BackendRegistry::notifyDeviceLost() {
     printf("[BackendRegistry] Notifying %zu listeners: onDeviceLost\n", m_deviceLostListeners.size());
-    for (auto* listener : m_deviceLostListeners) {
+    const auto listeners = m_deviceLostListeners;  // copy: listeners may unregister during the callback
+    for (auto* listener : listeners) {
         listener->onDeviceLost();
     }
 }
 
 void BackendRegistry::notifyDeviceRestored() {
     printf("[BackendRegistry] Notifying %zu listeners: onDeviceRestored\n", m_deviceLostListeners.size());
-    for (auto* listener : m_deviceLostListeners) {
+    const auto listeners = m_deviceLostListeners;  // copy: listeners may unregister during the callback
+    for (auto* listener : listeners) {
         listener->onDeviceRestored();
     }
 }

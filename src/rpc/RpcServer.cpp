@@ -711,7 +711,17 @@ std::string RpcServer::jsonEscape(const std::string& s) {
             case '\n': out += "\\n";  break;
             case '\r': out += "\\r";  break;
             case '\t': out += "\\t";  break;
-            default:   out += c;
+            default:
+                // Escape remaining control chars (backslash-u 00XX) so log
+                // payloads with embedded control bytes cannot break JSON framing.
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    out += buf;
+                } else {
+                    out += c;
+                }
+
         }
     }
     return out;

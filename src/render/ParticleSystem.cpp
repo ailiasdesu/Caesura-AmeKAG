@@ -130,6 +130,7 @@ void ParticleSystem::emit(int emitterId, int count) {
         p.life = life; p.maxLife = life;
         p.size = em.sizeMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.sizeMax - em.sizeMin);
         p.r = em.r; p.g = em.g; p.b = em.b; p.a = em.a;
+        p.emitterId = emitterId;
         p.alive = true;
         m_aliveCount++;
     }
@@ -159,13 +160,21 @@ void ParticleSystem::update(float dt, uint32_t screenW, uint32_t screenH) {
             m_aliveCount--;
             continue;
         }
-        // Find emitter for gravity
-        for (auto& em : m_emitters) {
-            if (em.active) {
-                p.vx += em.gravityX * dt;
-                p.vy += em.gravityY * dt;
-                break;
+        // Per-emitter gravity: a particle keeps the gravity of the emitter
+        // that spawned it (previously every particle used the first active
+        // emitter's gravity; after that emitter died the wrong gravity drove
+        // all particles). Falls back to the first active emitter if the
+        // owning one was destroyed.
+        int g = p.emitterId;
+        if (g < 0 || g >= (int)m_emitters.size() || !m_emitters[g].active) {
+            g = -1;
+            for (int ei = 0; ei < (int)m_emitters.size(); ++ei) {
+                if (m_emitters[ei].active) { g = ei; break; }
             }
+        }
+        if (g >= 0) {
+            p.vx += m_emitters[g].gravityX * dt;
+            p.vy += m_emitters[g].gravityY * dt;
         }
         p.x += p.vx * dt;
         p.y += p.vy * dt;

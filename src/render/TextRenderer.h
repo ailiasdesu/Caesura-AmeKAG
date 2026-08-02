@@ -92,7 +92,10 @@ public:
     bool isExpanding() const { return m_expanding; }
 
     // -- IDeviceLostListener --
-    void onDeviceLost() override { shutdown(); }
+    // Releases GPU resources only -- does NOT unregister: the listener list
+    // is iterated during notifyDeviceLost (erase during iteration is UB) and
+    // restore must still reach us to reinitialize. Defined in the .cpp.
+    void onDeviceLost() override;
     void onDeviceRestored() override;
 
 private:

@@ -361,6 +361,29 @@ void TextRenderer::shutdown() {
     m_initialized = false;
 }
 
+void TextRenderer::onDeviceLost() {
+    // Release GPU resources WITHOUT unregistering: the registry iterates a
+    // copy during notify (no erase-UB), and staying registered lets
+    // notifyDeviceRestored reach us. shutdown() keeps the unregister for
+    // explicit destruction; re-registering here would double-register across
+    // repeated loss/restore cycles.
+    if (bgfx::isValid(m_fontTexture)) {
+        bgfx::destroy(m_fontTexture);
+        m_fontTexture = BGFX_INVALID_HANDLE;
+    }
+    if (bgfx::isValid(m_texSampler)) {
+        bgfx::destroy(m_texSampler);
+        m_texSampler = BGFX_INVALID_HANDLE;
+    }
+    m_ttf.reset();
+    if (bgfx::isValid(m_msgCache.vb)) { bgfx::destroy(m_msgCache.vb); m_msgCache.vb = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_msgCache.ib)) { bgfx::destroy(m_msgCache.ib); m_msgCache.ib = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_u_color))    { bgfx::destroy(m_u_color);   m_u_color   = BGFX_INVALID_HANDLE; }
+    if (bgfx::isValid(m_cjkAtlas))   { bgfx::destroy(m_cjkAtlas);  m_cjkAtlas  = BGFX_INVALID_HANDLE; }
+    m_cjkGlyphs.clear();
+    m_initialized = false;
+}
+
 void TextRenderer::onDeviceRestored() {
     if (m_savedDevice) {
         init(m_savedDevice);

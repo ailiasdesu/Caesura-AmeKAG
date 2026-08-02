@@ -201,16 +201,20 @@ function TransCommands.trans(ctx, params)
     if backend.render_frame then backend.render_frame() end
     local toTex = Transition.capture_screen and Transition.capture_screen(ctx) or fromTex
 
-    -- Start the transition on the GPU engine
-    local tx
+    -- Start the transition on the GPU engine. Transition.start_rule/
+    -- start_wipe/start_crossfade do not exist in scripts/transition.lua --
+    -- the real API is Transition.start(fromTex, toTex, params) driven by
+    -- Transition.tick(dt) (previously every [trans] call threw
+    -- "attempt to call a nil value", silently swallowed by the scheduler).
+    local params = {
+        method    = method,
+        duration  = dur,
+        direction = dir or "left",
+    }
     if method == "rule" and rule then
-        local ruleTex = Transition.preload_rule(rule)
-        tx = Transition.start_rule(dur, fromTex, toTex, ruleTex, dur)
-    elseif method == "wipe" then
-        tx = Transition.start_wipe(dur, fromTex, toTex, dir)
-    else
-        tx = Transition.start_crossfade(dur, fromTex, toTex, dur)
+        params.rule_tex = Transition.preload_rule(rule)
     end
+    Transition.start(fromTex, toTex, params)
 
     -- Block via coroutine.yield until transition completes or is cancelled
     local elapsed = 0

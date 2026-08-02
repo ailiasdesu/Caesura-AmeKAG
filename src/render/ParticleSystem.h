@@ -12,6 +12,7 @@ struct Particle {
     float life, maxLife;
     float size;
     float r, g, b, a;
+    int   emitterId = -1;  // owning emitter for per-emitter gravity
     bool  alive = false;
 };
 
