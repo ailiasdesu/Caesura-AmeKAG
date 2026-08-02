@@ -17,6 +17,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
 }
 #endif
 
@@ -88,11 +90,54 @@ VideoHandle VideoPlayer::open(const char* path) {
         }
         vs.videoStreamIndex = videoIdx;
 
+        // Optional audio stream: decode + resample to interleaved float PCM,
+        // queued into audioQueue and drained by drainAudio() like the pl_mpeg
+        // path. Videos without an audio track are unaffected.
+        for (unsigned i = 0; i < avFormat->nb_streams; i++) {
+            if (avFormat->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+                vs.audioStreamIndex = (int)i;
+                break;
+            }
+        }
+        if (vs.audioStreamIndex >= 0) {
+            AVStream* aStream = avFormat->streams[vs.audioStreamIndex];
+            const AVCodec* aCodec = avcodec_find_decoder(aStream->codecpar->codec_id);
+            if (aCodec) {
+                AVCodecContext* aCtx = avcodec_alloc_context3(aCodec);
+                if (aCtx && avcodec_parameters_to_context(aCtx, aStream->codecpar) >= 0
+                    && avcodec_open2(aCtx, aCodec, nullptr) >= 0) {
+                    vs.avAudioCodec = aCtx;
+                    vs.avAudioFrame = av_frame_alloc();
+                    vs.sampleRate = aCtx->sample_rate > 0 ? aCtx->sample_rate : 44100;
+                    vs.audioEnabled = true;
+                    // Resampler: any input format -> interleaved float stereo
+                    // (modern API: swr_alloc_set_opts2 with AVChannelLayout).
+                    AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
+                    SwrContext* swr = nullptr;
+                    if (swr_alloc_set_opts2(&swr, &outLayout, AV_SAMPLE_FMT_FLT,
+                            aCtx->sample_rate, &aCtx->ch_layout,
+                            aCtx->sample_fmt, aCtx->sample_rate, 0, nullptr) >= 0
+                        && swr_init(swr) >= 0) {
+                        vs.swrCtx = swr;
+                    } else {
+                        if (swr) swr_free(&swr);
+                    }
+                } else {
+                    if (aCtx) avcodec_free_context(&aCtx);
+                    vs.audioStreamIndex = -1;
+                    vs.audioEnabled = false;
+                }
+            }
+        }
+
         AVStream* vStream = avFormat->streams[videoIdx];
         const AVCodec* codec = avcodec_find_decoder(vStream->codecpar->codec_id);
         if (!codec) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "VideoPlayer: unsupported codec in '%s'", path);
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             avformat_close_input(&avFormat);
             return VideoHandle{};
         }
@@ -101,6 +146,9 @@ VideoHandle VideoPlayer::open(const char* path) {
         if (!avCodec) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "VideoPlayer: avcodec_alloc_context3 failed");
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             avformat_close_input(&avFormat);
             return VideoHandle{};
         }
@@ -114,6 +162,9 @@ VideoHandle VideoPlayer::open(const char* path) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "VideoPlayer: avcodec_open2 failed");
             avcodec_free_context(&avCodec);
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             avformat_close_input(&avFormat);
             return VideoHandle{};
         }
@@ -143,6 +194,9 @@ VideoHandle VideoPlayer::open(const char* path) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "VideoPlayer: sws_getContext failed");
             avcodec_free_context(&avCodec);
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             avformat_close_input(&avFormat);
             return VideoHandle{};
         }
@@ -153,6 +207,9 @@ VideoHandle VideoPlayer::open(const char* path) {
         if (!avFrame || !avFrameRGB) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "VideoPlayer: av_frame_alloc failed");
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             sws_freeContext(sws);
             av_frame_free(&avFrame);
             av_frame_free(&avFrameRGB);
@@ -176,6 +233,9 @@ VideoHandle VideoPlayer::open(const char* path) {
             bgfx::TextureFormat::RGBA8,
             BGFX_TEXTURE_NONE | BGFX_SAMPLER_POINT);
         if (!bgfx::isValid(vs.texture)) {
+            if (auto* swra = static_cast<SwrContext*>(vs.swrCtx)) { swr_free(&swra); }
+            if (auto* afa = static_cast<AVFrame*>(vs.avAudioFrame)) { av_frame_free(&afa); }
+            if (auto* aca = static_cast<AVCodecContext*>(vs.avAudioCodec)) { avcodec_free_context(&aca); }
             DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
                       "VideoPlayer: texture creation failed %dx%d", vs.width, vs.height);
             sws_freeContext(sws);
@@ -251,6 +311,15 @@ VideoHandle VideoPlayer::open(const char* path) {
     return handle;
 }
 
+double VideoPlayer::clampSeekTime(double time, double duration) {
+    // The bound is deliberately FFmpeg-independent (AV_TIME_BASE lives behind
+    // the CAESURA_VIDEO_FFMPEG guard) and far above any real media duration.
+    constexpr double kMaxSeekSeconds = 1e6;  // ~11.6 days
+    if (!std::isfinite(time) || time <= 0.0 || time > kMaxSeekSeconds) return 0.0;
+    if (duration > 0.0 && time > duration) return duration;
+    return time;
+}
+
 VideoPlayer::DrainPlan VideoPlayer::planDrain(size_t chunkFloats,
                                             size_t framesPerChunk,
                                             bool playFailed) {
@@ -274,10 +343,13 @@ void VideoPlayer::drainAudio(VideoState& vs) {
     auto* audio = BackendRegistry::instance().getAudioBackend();
     if (!audio) return;  // no backend: nothing could play it; chunk is dropped
     // Roughly one chunk per second of audio: 2 channels x sampleRate frames.
+    // The chunk-count math lives in planDrain so tests and production share
+    // one source of truth.
     const unsigned int numFrames = static_cast<unsigned int>(vs.sampleRate);
+    const DrainPlan plan = planDrain(chunk.size(), numFrames, /*playFailed=*/false);
     unsigned int offset = 0;
     bool playFailed = false;
-    while (offset + numFrames * 2 <= chunk.size()) {
+    for (size_t n = 0; n < plan.chunks; ++n) {
         const unsigned int h = audio->playRawPCM(
             chunk.data() + offset, numFrames,
             static_cast<unsigned int>(vs.sampleRate), 2);
@@ -340,7 +412,7 @@ void VideoPlayer::setLoop(VideoHandle handle, bool loop) {
     VideoState* vs = find(handle);
     if (!vs) return;
     if (vs->useFFmpeg) {
-        // FFmpeg path: rewind handled via seek(0) on end in update().
+        // FFmpeg path: rewind is done inside update() (av_seek_frame to 0 on EOF).
         vs->loop = loop;
     } else if (vs->plm) {
         plm_set_loop(static_cast<plm_t*>(vs->plm), loop ? 1 : 0);
@@ -417,7 +489,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->height = vs->height;
 
         m_jobSystem->submit(
-            [frame, vs]() {
+            [frame, vs, this]() {
                 auto* fmt  = static_cast<AVFormatContext*>(vs->avFormat);
                 auto* cc   = static_cast<AVCodecContext*>(vs->avCodec);
                 auto* f    = static_cast<AVFrame*>(vs->avFrame);
@@ -439,6 +511,9 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                             const int sret = av_seek_frame(fmt, -1, 0, AVSEEK_FLAG_BACKWARD);
                             if (sret < 0) { av_packet_unref(pkt); break; }
                             avcodec_flush_buffers(cc);
+                            if (auto* aca = static_cast<AVCodecContext*>(vs->avAudioCodec)) {
+                                avcodec_flush_buffers(aca);
+                            }
                             continue;
                         }
                         ret = avcodec_send_packet(cc, nullptr);
@@ -454,6 +529,34 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                         ret = avcodec_send_packet(cc, pkt);
                         if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
                             gotFrame = true;
+                    } else if (vs->audioEnabled && vs->swrCtx &&
+                               pkt->stream_index == vs->audioStreamIndex) {
+                        // Decode one audio packet and resample to interleaved
+                        // float stereo into the shared audio queue.
+                        auto* ac = static_cast<AVCodecContext*>(vs->avAudioCodec);
+                        auto* af = static_cast<AVFrame*>(vs->avAudioFrame);
+                        auto* swr = static_cast<SwrContext*>(vs->swrCtx);
+                        if (ac && af && swr && avcodec_send_packet(ac, pkt) >= 0) {
+                            while (avcodec_receive_frame(ac, af) >= 0) {
+                                const int64_t outSamples =
+                                    av_rescale_rnd(swr_get_delay(swr, af->sample_rate)
+                                        + af->nb_samples, af->sample_rate,
+                                        af->sample_rate, AV_ROUND_UP);
+                                std::vector<float> buf(static_cast<size_t>(outSamples) * 2);
+                                uint8_t* out[2] = {
+                                    reinterpret_cast<uint8_t*>(buf.data()),
+                                    reinterpret_cast<uint8_t*>(buf.data()) + outSamples * sizeof(float) };
+                                const int converted = swr_convert(swr, out, (int)outSamples,
+                                    const_cast<const uint8_t**>(af->data), af->nb_samples);
+                                if (converted > 0) {
+                                    std::lock_guard<std::mutex> lock(m_audioMutex);
+                                    if (vs->audioQueue.size() < 8 * 1024 * 1024 / sizeof(float)) {
+                                        vs->audioQueue.insert(vs->audioQueue.end(),
+                                            buf.data(), buf.data() + converted * 2);
+                                    }
+                                }
+                            }
+                        }
                     }
                     av_packet_unref(pkt);
                 }
@@ -493,9 +596,12 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
                                   (uint16_t)frame->width, (uint16_t)frame->height, mem);
             vs->hasFrame = true;
-            return true;
         }
-        return false;
+        // Drain decoded audio regardless of whether a new video frame arrived
+        // (mirrors the pl_mpeg path; without this the queued PCM is never
+        // played).
+        drainAudio(*vs);
+        return frame->valid;
 #else
         // FFmpeg not compiled �� fall through to pl_mpeg below
 #endif
@@ -662,16 +768,7 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     vs->audioStarted = false;
     { std::lock_guard<std::mutex> lk(m_audioMutex); vs->audioQueue.clear(); }
 
-    // Clamp to the media range. NaN and -Inf fail the comparison -> 0; +Inf
-    // and huge finite values must be rejected explicitly so the
-    // (int64_t)(time * AV_TIME_BASE) conversion below can never be UB.
-    // isfinite() alone still passes huge finite values (e.g. 1e300) when the
-    // duration is unknown, so bound the time before the conversion. The bound
-    // is deliberately FFmpeg-independent (AV_TIME_BASE lives behind the
-    // CAESURA_VIDEO_FFMPEG guard) and far above any real media duration.
-    constexpr double kMaxSeekSeconds = 1e6;  // ~11.6 days
-    if (!std::isfinite(time) || time <= 0.0 || time > kMaxSeekSeconds) time = 0.0;
-    if (vs->duration > 0.0 && time > vs->duration) time = vs->duration;
+    time = clampSeekTime(time, vs->duration);
 
     if (vs->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
@@ -681,6 +778,9 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
         int ret = av_seek_frame(fmt, -1, ts, AVSEEK_FLAG_BACKWARD);
         if (ret >= 0 && cc) {
             avcodec_flush_buffers(cc);
+            if (auto* aca = static_cast<AVCodecContext*>(vs->avAudioCodec)) {
+                avcodec_flush_buffers(aca);
+            }
         }
         vs->playhead = time;  // re-sync pacing (mirrors the plm branch)
 #endif
@@ -744,6 +844,24 @@ void VideoPlayer::destroyTexture(VideoState& vs) {
         bgfx::destroy(vs.texture);
         vs.texture = BGFX_INVALID_HANDLE;
     }
+#ifdef CAESURA_VIDEO_FFMPEG
+    // Release FFmpeg audio resources (decoder context, frame, resampler).
+    // The stored fields are void*; cast through typed locals for the free APIs.
+    if (auto* swr = static_cast<SwrContext*>(vs.swrCtx)) {
+        swr_free(&swr);
+        vs.swrCtx = nullptr;
+    }
+    if (auto* af = static_cast<AVFrame*>(vs.avAudioFrame)) {
+        av_frame_free(&af);
+        vs.avAudioFrame = nullptr;
+    }
+    if (auto* ac = static_cast<AVCodecContext*>(vs.avAudioCodec)) {
+        avcodec_free_context(&ac);
+        vs.avAudioCodec = nullptr;
+    }
+    vs.audioStreamIndex = -1;
+    vs.audioEnabled = false;
+#endif
 }
 
 } // namespace Caesura

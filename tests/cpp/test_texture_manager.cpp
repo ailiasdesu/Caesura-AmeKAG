@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <limits>
 
 using namespace Caesura;
 
@@ -279,4 +280,31 @@ TEST_CASE("VideoPlayer::planDrain requeues partial chunk, drops on failure") {
     // Zero frames guard.
     auto p5 = VideoPlayer::planDrain(100, 0, false);
     CHECK(p5.chunks == 0);
+}
+
+
+TEST_CASE("VideoPlayer::clampSeekTime rejects invalid input and clamps") {
+    using V = VideoPlayer;
+    const double dur = 10.0;
+
+    // Valid values pass through.
+    CHECK(V::clampSeekTime(0.0, dur) == 0.0);
+    CHECK(V::clampSeekTime(5.0, dur) == 5.0);
+    CHECK(V::clampSeekTime(dur, dur) == dur);
+
+    // Over-duration clamps to duration.
+    CHECK(V::clampSeekTime(999.0, dur) == dur);
+
+    // NaN / Inf / negative -> 0.
+    CHECK(V::clampSeekTime(std::numeric_limits<double>::quiet_NaN(), dur) == 0.0);
+    CHECK(V::clampSeekTime(std::numeric_limits<double>::infinity(), dur) == 0.0);
+    CHECK(V::clampSeekTime(-std::numeric_limits<double>::infinity(), dur) == 0.0);
+    CHECK(V::clampSeekTime(-1.0, dur) == 0.0);
+
+    // Huge finite values beyond the hard bound -> 0.
+    CHECK(V::clampSeekTime(1e300, dur) == 0.0);
+
+    // Unknown duration (<= 0) skips the upper clamp but keeps the hard bound.
+    CHECK(V::clampSeekTime(5.0, 0.0) == 5.0);
+    CHECK(V::clampSeekTime(1e7, 0.0) == 0.0);  // beyond the 1e6 hard bound
 }

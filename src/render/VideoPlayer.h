@@ -70,6 +70,10 @@ public:
     };
     static DrainPlan planDrain(size_t chunkFloats, size_t framesPerChunk,
                                bool playFailed);
+    // Clamp a seek time to [0, duration]. NaN/-Inf/huge finite values and
+    // values beyond the bound resolve to 0; duration <= 0 (unknown) skips
+    // the upper clamp. Pure, unit-testable.
+    static double clampSeekTime(double time, double duration);
 
 private:
     struct VideoState {
@@ -107,6 +111,11 @@ private:
         void*  avFrameRGB = nullptr;
         void*  swsCtx   = nullptr;
         int    videoStreamIndex = -1;
+        // FFmpeg audio: stream index, decoder context, frame and resampler.
+        int    audioStreamIndex = -1;
+        void*  avAudioCodec = nullptr;
+        void*  avAudioFrame = nullptr;
+        void*  swrCtx = nullptr;
         std::vector<uint8_t> rgbaBuffer;
 #endif
     };

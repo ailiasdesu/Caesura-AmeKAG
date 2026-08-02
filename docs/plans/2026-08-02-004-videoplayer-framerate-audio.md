@@ -46,3 +46,12 @@
 - **loop/volume 参数**：IVideoPlayer::setLoop/setVolume + 绑定解析 {loop, volume}；plm_set_loop / FFmpeg EOF 重绕；volume clamp [0,1] 应用
 - **drainAudio 可测化**：planDrain 纯函数 + 单测（568/568 +1）；锁不变量注释
 - **3 个 LOW**：insert 同 vector UB 修复、audioHandles 上限 4、close 无锁 erase 注释说明
+
+---
+
+## 非阻塞信息项解决（2026-08-02）
+
+- **FFmpeg 音频解码**：open 找音频流 + swr_alloc_set_opts2 初始化（现代 API）；update worker 音频包解码 + swr_convert 入队（8MB 上限）；destroyTexture 释放（swr/avFrame/avCodec）；CMake 加 swresample（3 方法）
+- **planDrain 生产接线**：drainAudio 改用 planDrain 计算块数（测试与生产同源）
+- **clampSeekTime 纯函数**：seek 输入守卫提取为静态函数 + 表驱动单测（NaN/±Inf/负值/超时长/巨大有限/未知时长，11 断言）
+- **注释措辞**：setLoop FFmpeg rewind 注释修正（update 内 av_seek_frame 直接实现）
