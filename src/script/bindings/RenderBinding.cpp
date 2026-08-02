@@ -346,16 +346,20 @@ static int lua_Render_affine_blt(lua_State* L) {
     float    sh = (float)luaL_checknumber(L, 10);
 
     float matrix[6] = { 1, 0, 0, 1, 0, 0 };
+    bool  namedMatrix = false;
 
     if (lua_istable(L, 11)) {
-        lua_getfield(L, 11, "a");  if (lua_isnumber(L, -1)) matrix[0] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
-        lua_getfield(L, 11, "b");  if (lua_isnumber(L, -1)) matrix[1] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
-        lua_getfield(L, 11, "c");  if (lua_isnumber(L, -1)) matrix[2] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
-        lua_getfield(L, 11, "d");  if (lua_isnumber(L, -1)) matrix[3] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
-        lua_getfield(L, 11, "tx"); if (lua_isnumber(L, -1)) matrix[4] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
-        lua_getfield(L, 11, "ty"); if (lua_isnumber(L, -1)) matrix[5] = (float)lua_tonumber(L, -1); lua_pop(L, 1);
+        lua_getfield(L, 11, "a");  if (lua_isnumber(L, -1)) { matrix[0] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
+        lua_getfield(L, 11, "b");  if (lua_isnumber(L, -1)) { matrix[1] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
+        lua_getfield(L, 11, "c");  if (lua_isnumber(L, -1)) { matrix[2] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
+        lua_getfield(L, 11, "d");  if (lua_isnumber(L, -1)) { matrix[3] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
+        lua_getfield(L, 11, "tx"); if (lua_isnumber(L, -1)) { matrix[4] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
+        lua_getfield(L, 11, "ty"); if (lua_isnumber(L, -1)) { matrix[5] = (float)lua_tonumber(L, -1); namedMatrix = true; } lua_pop(L, 1);
 
-        if (!lua_isnumber(L, -1)) {
+        // Array form only when no named fields were provided: previously the
+        // condition tested the table itself (always true), so the array always
+        // overwrote the named matrix.
+        if (!namedMatrix) {
             for (int i = 0; i < 6; i++) {
                 lua_rawgeti(L, 11, i + 1);
                 if (lua_isnumber(L, -1)) matrix[i] = (float)lua_tonumber(L, -1);

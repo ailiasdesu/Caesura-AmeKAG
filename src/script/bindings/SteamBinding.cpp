@@ -1,4 +1,6 @@
-// SteamBinding -- Lua bindings: steam.unlock_achievement, steam.set_stat, steam.cloud_*
+// SteamBinding -- Lua bindings: steam.unlock_achievement, steam.set_stat,
+// steam.get_stat_int/float, steam.store_stats, steam.reset_achievement(s).
+// (cloud_* APIs exist on ISteamBackend but are not yet exposed to Lua.)
 #include "SteamBinding.h"
 #include "../../di/BackendRegistry.h"
 #include "../../steam/api/ISteamBackend.h"
@@ -11,68 +13,68 @@ extern "C" {
 
 namespace Caesura {
 
-#define STEAM_BODY(name, code) \
+#define STEAM_BODY(name, nullFallback, code) \
     static int lua_steam_##name(lua_State* L) { \
         auto* steam = BackendRegistry::instance().getSteamBackend(); \
-        if (!steam) { lua_pushboolean(L, 0); return 1; } \
+        if (!steam) { nullFallback return 1; } \
         code \
     }
 
-STEAM_BODY(unlock_achievement, {
+STEAM_BODY(unlock_achievement, lua_pushboolean(L, 0);, {
     const char* id = luaL_checkstring(L, 1);
     lua_pushboolean(L, steam->unlockAchievement(id) ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(is_achievement_unlocked, {
+STEAM_BODY(is_achievement_unlocked, lua_pushboolean(L, 0);, {
     const char* id = luaL_checkstring(L, 1);
     lua_pushboolean(L, steam->isAchievementUnlocked(id) ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(reset_achievement, {
+STEAM_BODY(reset_achievement, lua_pushboolean(L, 0);, {
     const char* id = luaL_checkstring(L, 1);
     lua_pushboolean(L, steam->resetAchievement(id) ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(reset_all_achievements, {
+STEAM_BODY(reset_all_achievements, lua_pushboolean(L, 0);, {
     lua_pushboolean(L, steam->resetAllAchievements() ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(set_stat_int, {
+STEAM_BODY(set_stat_int, lua_pushboolean(L, 0);, {
     const char* name = luaL_checkstring(L, 1);
     lua_Integer val = luaL_checkinteger(L, 2);
     lua_pushboolean(L, steam->setStatInt(name, (int32_t)val) ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(get_stat_int, {
+STEAM_BODY(get_stat_int, lua_pushinteger(L, 0);, {
     const char* name = luaL_checkstring(L, 1);
     lua_pushinteger(L, steam->getStatInt(name));
     return 1;
 })
 
-STEAM_BODY(set_stat_float, {
+STEAM_BODY(set_stat_float, lua_pushboolean(L, 0);, {
     const char* name = luaL_checkstring(L, 1);
     float val = (float)luaL_checknumber(L, 2);
     lua_pushboolean(L, steam->setStatFloat(name, val) ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(get_stat_float, {
+STEAM_BODY(get_stat_float, lua_pushnumber(L, 0.0);, {
     const char* name = luaL_checkstring(L, 1);
     lua_pushnumber(L, steam->getStatFloat(name));
     return 1;
 })
 
-STEAM_BODY(store_stats, {
+STEAM_BODY(store_stats, lua_pushboolean(L, 0);, {
     lua_pushboolean(L, steam->storeStats() ? 1 : 0);
     return 1;
 })
 
-STEAM_BODY(is_overlay_active, {
+STEAM_BODY(is_overlay_active, lua_pushboolean(L, 0);, {
     lua_pushboolean(L, steam->isOverlayActive() ? 1 : 0);
     return 1;
 })
