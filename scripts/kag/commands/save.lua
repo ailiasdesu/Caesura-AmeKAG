@@ -44,8 +44,9 @@ local function capture_state(ctx)
     -- Token position
     state.token_index = ctx.token_index or 1
 
-    -- Scene path
-    state.scene_path = ctx.currentScene or ""
+    -- Scene path: scheduler writes current_scene (snake_case) on
+    -- jump/call/link; currentScene is the legacy camelCase alias.
+    state.scene_path = ctx.current_scene or ctx.currentScene or ""
 
     -- Backlog (recent N entries)
     state.backlog = {}
