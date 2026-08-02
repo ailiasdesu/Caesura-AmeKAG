@@ -507,6 +507,13 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 
         // Frame-rate pacing: advance the playhead by dt and decode enough
         // frames to catch up (bounded so a stall cannot block the frame).
+        const double plmNow = plm_get_time(plm);
+        if (plmNow < vs->lastPlmTime) {
+            // Loop rewound (plm_set_loop resets internal time to 0): re-sync
+            // the playhead so the video does not fast-forward each loop.
+            vs->playhead = 0.0;
+        }
+        vs->lastPlmTime = plmNow;
         if (dt > 0.0 && vs->frameRate > 0.0) {
             vs->playhead += dt;
         }

@@ -96,6 +96,7 @@ private:
         // decoded until plm_get_time() catches up (bounded per call).
         double frameRate = 0.0;
         double playhead  = 0.0;
+        double lastPlmTime = 0.0;  // loop detection: plm time regresses on rewind
         std::shared_ptr<DecodedFrame> m_readyFrame;
         std::shared_ptr<DecodedFrame> m_nextFrame;
 
