@@ -59,6 +59,7 @@ private:
     ScriptState                m_scriptState = ScriptState::IDLE;
     bool                       m_reloadRequested = false;
     int                        m_warningFrames = 0;
+    std::string                m_warningText;
 
     // file path → last_write_time
     using Clock = std::filesystem::file_time_type;

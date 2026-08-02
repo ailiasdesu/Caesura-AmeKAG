@@ -178,7 +178,7 @@ bool HotReload::checkAndReload() {
     if (!changed) {
         if (m_warningFrames > 0) {
             m_warningFrames--;
-            showWarningOverlay("SCRIPTS RELOADED -- Changes applied.");
+            showWarningOverlay(m_warningText);
         }
         return false;
     }
@@ -247,13 +247,22 @@ bool HotReload::checkAndReload() {
     lua_getglobal(m_L, "require");
     lua_pushstring(m_L, "kag");
     if (lua_pcall(m_L, 1, 0, 0) != LUA_OK) {
+        const char* err = lua_tostring(m_L, -1);
         fprintf(stderr, "[HotReload] kag reload failed: %s\n",
-                lua_tostring(m_L, -1));
+                err ? err : "(unknown error)");
         lua_pop(m_L, 1);
+        // Surface the failure instead of pretending the reload succeeded.
+        m_warningFrames = 120;
+        m_warningText = "KAG reload FAILED";
+        m_scriptState = ScriptState::IDLE;
+        DEBUG_ERROR(SubSys::Dbg, ErrCode::Script_LoadFailed,
+                    "HotReload: script reload failed after state reset.");
+        return false;
     }
 
     // Step 5: Show warning overlay for ~2 seconds
     m_warningFrames = 120;
+    m_warningText = "SCRIPTS RELOADED -- Changes applied.";
     m_scriptState = ScriptState::IDLE;
 
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok, "HotReload: reload complete.");

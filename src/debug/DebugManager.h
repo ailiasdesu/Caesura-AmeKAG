@@ -93,11 +93,11 @@ public:
     void log(DbgLevel level, SubSys subsystem, ErrCode code, const char* fmt, ...) override;
     void log(DbgLevel level, SubSys subsystem, const char* fmt, ...) override;
 
-    const LogEntry* lastError() const override;
+    LogEntry lastError() const override;
     uint32_t errorCount() const override;
     uint32_t entryCount() const override;
     uint32_t subsystemErrorCount(SubSys s) const override;
-    const std::deque<LogEntry>& ringBuffer() const override { return m_ringBuffer; }
+    std::deque<LogEntry> ringBuffer() const override;
 
     SubsystemStats getSubsystemStats(SubSys s) const override;
     std::string    dumpFullReport() override;
@@ -112,6 +112,7 @@ public:
     }
     void recordLuaGc(double ms) override { m_frameProfile.luaGcMs += ms; }
     const FrameProfile& getFrameProfile() const override { return m_frameProfile; }
+    void beginFrameProfile() override;
     void endFrameProfile() override;
 
     RenderInfo getRenderInfo() const override;
@@ -130,7 +131,8 @@ private:
     void writeToConsole(const LogEntry& entry);
 
     bool m_initialized = false;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;  // const queries lock it
+    std::mutex m_ioMutex;        // serializes console/file I/O outside m_mutex
     std::ofstream m_logFile;
     std::string m_logFilePath;
 

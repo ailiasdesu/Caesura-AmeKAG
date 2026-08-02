@@ -908,7 +908,9 @@ void Engine::render(float dt) {
     }
 
     if (m_animationInitialized && m_animationBackend) {
+        DebugManager::instance().beginFrameProfile();
         m_animationBackend->render(isLuaExecutionPaused() ? 0.0f : dt);
+        DebugManager::instance().endFrameProfile();
     }
 
     if (m_renderDevice) {

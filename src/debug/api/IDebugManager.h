@@ -93,11 +93,13 @@ public:
     virtual void log(DbgLevel level, SubSys subsystem, ErrCode code, const char* fmt, ...) = 0;
     virtual void log(DbgLevel level, SubSys subsystem, const char* fmt, ...) = 0;
 
-    virtual const LogEntry* lastError() const = 0;
+    // By-value: the entry is copied under the log mutex so callers never
+    // race with a concurrent log() overwriting the shared entry.
+    virtual LogEntry lastError() const = 0;
     virtual uint32_t errorCount() const = 0;
     virtual uint32_t entryCount() const = 0;
     virtual uint32_t subsystemErrorCount(SubSys s) const = 0;
-    virtual const std::deque<LogEntry>& ringBuffer() const = 0;
+    virtual std::deque<LogEntry> ringBuffer() const = 0;
 
     virtual SubsystemStats getSubsystemStats(SubSys s) const = 0;
     virtual std::string    dumpFullReport() = 0;
@@ -109,6 +111,7 @@ public:
     virtual void recordTransientAlloc(uint32_t count, uint32_t bytes) = 0;
     virtual void recordLuaGc(double ms) = 0;
     virtual const FrameProfile& getFrameProfile() const = 0;
+    virtual void beginFrameProfile() = 0;
     virtual void endFrameProfile() = 0;
 
     // -- Subsystem info structs (owned by the interface) --------------------

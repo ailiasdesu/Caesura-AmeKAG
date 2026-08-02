@@ -6,6 +6,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 // no filesystem needed
 
 #if defined(_WIN32)
@@ -16,6 +17,39 @@
 #endif
 
 namespace Caesura {
+
+// Per-frame profile sample cap: PROFILE_SCOPE runs every frame and samples
+// were never cleared -- without a cap a long session grows without bound.
+// Minimal JSON string escaping for log/report output (quotes, backslash,
+// control chars).
+static std::string escapeJson(const std::string& s) {
+    // Escape via explicit byte comparison to keep the C++ source free of
+    // backslash-heavy literals: quotes, backslash, and control chars.
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (unsigned char c : s) {
+        if (c == 34) {            // double quote
+            out += static_cast<char>(92); out += static_cast<char>(34);
+        } else if (c == 92) {     // backslash
+            out += static_cast<char>(92); out += static_cast<char>(92);
+        } else if (c == 10) {     // LF
+            out += static_cast<char>(92); out += 'n';
+        } else if (c == 13) {     // CR
+            out += static_cast<char>(92); out += 'r';
+        } else if (c == 9) {      // TAB
+            out += static_cast<char>(92); out += 't';
+        } else if (c < 0x20) {
+            char buf[8];
+            snprintf(buf, sizeof(buf), "\u%04x", c);
+            out += buf;
+        } else {
+            out += static_cast<char>(c);
+        }
+    }
+    return out;
+}
+
+static constexpr size_t kMaxFrameSamples = 4096;
 
 // ============================================================================
 //  Utility helpers
@@ -34,7 +68,7 @@ static std::string formatTimestamp() {
 #endif
     std::ostringstream oss;
     oss << std::put_time(&localTm, "%Y-%m-%d %H:%M:%S")
-        << '.' << std::setfill('0') << std::setw(3) << ms.count();
+            << '.' << std::setfill('0') << std::setw(3) << ms.count();
     return oss.str();
 }
 
@@ -132,6 +166,7 @@ DebugManager::~DebugManager() {
 bool DebugManager::init(const char* logDir) {
     // [TD-15] Step-by-step restore to isolate stack overrun
     if (m_initialized) return true;
+    if (!logDir) logDir = "logs";  // null -> default log directory
     if (logDir && strstr(logDir, "..")) {
         fprintf(stderr, "[DebugManager] init: path traversal blocked: %s\n", logDir);
         return false;
@@ -174,6 +209,7 @@ bool DebugManager::init(const char* logDir) {
 }
 
 void DebugManager::shutdown() {
+    std::lock_guard<std::mutex> ioLock(m_ioMutex);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_initialized) return;
 
@@ -217,10 +253,11 @@ void DebugManager::log(DbgLevel level, SubSys subsystem, ErrCode code,
         if (level == DbgLevel::Warn) {
             if (idx < m_warnCounts.size()) m_warnCounts[idx]++;
         }
-
-        writeToConsole(entry);
-        writeToFile(entry);
     }
+
+    // I/O outside the lock: a slow console/disk must not stall log writers.
+    writeToConsole(entry);
+    writeToFile(entry);
 }
 
 // -- log (without error code) -----------------------------------------------
@@ -237,6 +274,7 @@ void DebugManager::log(DbgLevel level, SubSys subsystem, const char* fmt, ...) {
 // -- writeToConsole ---------------------------------------------------------
 
 void DebugManager::writeToConsole(const LogEntry& entry) {
+    std::lock_guard<std::mutex> ioLock(m_ioMutex);
     if (entry.level == DbgLevel::Trace) return;
     FILE* out = (entry.level >= DbgLevel::Err) ? stderr : stdout;
 
@@ -262,6 +300,7 @@ void DebugManager::writeToConsole(const LogEntry& entry) {
 // -- writeToFile ------------------------------------------------------------
 
 void DebugManager::writeToFile(const LogEntry& entry) {
+    std::lock_guard<std::mutex> ioLock(m_ioMutex);
     if (!m_logFile.is_open()) return;
     auto t  = std::chrono::system_clock::to_time_t(entry.timestamp);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -278,26 +317,35 @@ void DebugManager::writeToFile(const LogEntry& entry) {
               << " [" << SubSysName(entry.subsystem) << "]"
               << " " << ErrCodeName(entry.errorCode)
               << " | " << entry.message << "\n";
-    m_logFile.flush();
 }
 
 // -- query API --------------------------------------------------------------
 
-const LogEntry* DebugManager::lastError() const {
-    return m_hasLastError ? &m_lastErrorEntry : nullptr;
+LogEntry DebugManager::lastError() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_hasLastError) return LogEntry{};
+    return m_lastErrorEntry;  // copy under lock
 }
 
 uint32_t DebugManager::errorCount() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     uint32_t total = 0;
     for (auto c : m_errorCounts) total += c;
     return total;
 }
 
 uint32_t DebugManager::entryCount() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return static_cast<uint32_t>(m_ringBuffer.size());
 }
 
+std::deque<LogEntry> DebugManager::ringBuffer() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ringBuffer;  // snapshot copy under lock
+}
+
 uint32_t DebugManager::subsystemErrorCount(SubSys s) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     size_t idx = static_cast<size_t>(s);
     if (idx >= m_errorCounts.size()) return 0;
     return m_errorCounts[idx];
@@ -306,6 +354,7 @@ uint32_t DebugManager::subsystemErrorCount(SubSys s) const {
 // -- Subsystem stats --------------------------------------------------------
 
 SubsystemStats DebugManager::getSubsystemStats(SubSys s) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
     SubsystemStats st;
     size_t idx = static_cast<size_t>(s);
     if (idx < m_totalCounts.size()) {
@@ -326,62 +375,51 @@ SubsystemStats DebugManager::getSubsystemStats(SubSys s) const {
 // -- dumpFullReport ---------------------------------------------------------
 
 std::string DebugManager::dumpFullReport() {
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::ostringstream oss;
-    oss << "{\n";
-    oss << "  \"engine\": \"Caesura (AmeKAG) v1.0.0\",\n";
-    oss << "  \"timestamp\": \"" << formatTimestamp() << "\",\n";
-    oss << "  \"total_entries\": " << entryCount() << ",\n";
-    oss << "  \"total_errors\": " << errorCount() << ",\n";
-    oss << "  \"subsystems\": {\n";
+    oss << "{" << "\n";
+    oss << "  \"engine\": \"Caesura (AmeKAG) v1.0.0\"," << "\n";
+    oss << "  \"timestamp\": \"" << formatTimestamp() << "\"," << "\n";
+    oss << "  \"total_entries\": " << m_ringBuffer.size() << "," << "\n";
+    oss << "  \"total_errors\": " << std::accumulate(
+        m_errorCounts.begin(), m_errorCounts.end(), 0u) << "," << "\n";
+    oss << "  \"subsystems\": {" << "\n";
 
     const SubSys subs[] = { SubSys::Render, SubSys::Audio, SubSys::Scripting,
         SubSys::Input, SubSys::Platform, SubSys::Engine, SubSys::Dbg };
     for (size_t i = 0; i < 7; i++) {
-        auto st = getSubsystemStats(subs[i]);
+        const size_t si = static_cast<size_t>(subs[i]);
+        SubsystemStats st;
+        st.totalCalls = si < m_totalCounts.size() ? m_totalCounts[si] : 0;
+        st.errorCount = si < m_errorCounts.size() ? m_errorCounts[si] : 0;
+        st.warnCount  = si < m_warnCounts.size() ? m_warnCounts[si] : 0;
+        st.lastErrorMessage.clear();
+        for (auto it = m_ringBuffer.rbegin(); it != m_ringBuffer.rend(); ++it) {
+            if (it->subsystem == subs[i] && it->level >= DbgLevel::Err) {
+                st.lastErrorCode    = static_cast<uint32_t>(it->errorCode);
+                st.lastErrorMessage = it->message;
+                break;
+            }
+        }
         oss << "    \"" << SubSysName(subs[i]) << "\": {"
             << "\"calls\":" << st.totalCalls
             << ",\"errors\":" << st.errorCount
             << ",\"warns\":" << st.warnCount
-            << ",\"lastErrorCode\":" << st.lastErrorCode
+            << ",\"lastErrorMessage\":" << escapeJson(st.lastErrorMessage) << ",\"lastErrorCode\":" << st.lastErrorCode
             << "}";
         if (i < 6) oss << ",";
         oss << "\n";
     }
-    oss << "  },\n";
-
-    oss << "  \"render\": {"
-        << "\"backend\":\"" << m_renderInfo.backendName << "\""
-        << ",\"resolution\":\"" << m_renderInfo.width << "x" << m_renderInfo.height << "\""
-        << ",\"views\":" << m_renderInfo.viewCount
-        << ",\"shaderReady\":" << (m_renderInfo.shaderReady ? "true" : "false")
-        << "},\n";
-
-    oss << "  \"audio\": {"
-        << "\"initialized\":" << (m_audioInfo.initialized ? "true" : "false")
-        << ",\"activeVoices\":" << m_audioInfo.activeVoices
-        << ",\"activeBGM\":" << m_audioInfo.activeBGM
-        << ",\"globalVolume\":" << m_audioInfo.globalVolume
-        << "},\n";
-
-    oss << "  \"input\": {"
-        << "\"focus\":\"" << m_inputInfo.currentFocus << "\""
-        << ",\"kagCbCount\":" << m_inputInfo.kagCallbackCount
-        << ",\"gameCbCount\":" << m_inputInfo.gameCallbackCount
-        << ",\"clickPending\":" << (m_inputInfo.clickPending ? "true" : "false")
-        << "}\n";
-
-    oss << "}\n";
-
-    // Also write to separate file
-    std::string reportPath = "logs/caesura_report_" + formatTimestampFile() + ".json";
-    try {
-        std::ofstream rf(reportPath);
-        if (rf.is_open()) { rf << oss.str(); rf.close(); }
-    } catch (...) {}
-
+    oss << "  }," << "\n";
+    oss << "  \"render\": {" << "\n"
+            << "\"backend\":\"" << m_renderInfo.backendName << "\"" << "\n"
+            << ",\"views\":" << m_renderInfo.viewCount
+            << ",\"shaderReady\":" << (m_renderInfo.shaderReady ? "true" : "false")
+            << "}," << "\n";
+    oss << "  \"log_file\": \"" << escapeJson(m_logFilePath) << "\"" << "\n";
+    oss << "}" << "\n";
     return oss.str();
 }
-
 // -- Mutable info setters/getters -------------------------------------------
 
 void DebugManager::setRenderInfo(const RenderInfo& ri) { m_renderInfo = ri; }
@@ -415,9 +453,19 @@ void DebugManager::endProfile(const char* label) {
     }
     auto now = std::chrono::high_resolution_clock::now();
     s.elapsedMs = std::chrono::duration<double, std::milli>(now - s.start).count();
-    m_frameProfile.samples.push_back(s);
+    if (m_frameProfile.samples.size() < kMaxFrameSamples) {
+        m_frameProfile.samples.push_back(s);
+    }
     m_activeSamples.pop_back();
     m_profileDepth--;
+}
+
+void DebugManager::beginFrameProfile() {
+    m_frameStart = std::chrono::high_resolution_clock::now();
+    m_frameProfile.samples.clear();
+    m_frameProfile.gpuSubmitCount = 0;
+    m_frameProfile.transientAllocCount = 0;
+    m_frameProfile.transientAllocBytes = 0;
 }
 
 void DebugManager::endFrameProfile() {

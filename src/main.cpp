@@ -188,7 +188,7 @@ private:
                 if (!m_engine.reloadScriptsNow()) {
                     return rpcError(Caesura::RpcReplyStatus::Failed,
                                     "reload_rejected",
-                                    "Reload is unavailable while Lua is paused");
+                                    "Reload rejected (Lua paused or script reload failed)");
                 }
                 return rpcOk();
             } else if constexpr (

@@ -80,7 +80,8 @@ static inline IDebugManager* getDM(lua_State* L) {
 static int lua_Debug_get_last_error(lua_State* L) {
     auto* dm = getDM(L);
     if (!dm) return 2;
-    pushErrorEntry(L, dm->lastError());
+    const auto entry = dm->lastError();  // by-value copy (thread-safe)
+    pushErrorEntry(L, entry.message.empty() ? nullptr : &entry);
     return 1;
 }
 
