@@ -662,8 +662,10 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     vs->audioStarted = false;
     { std::lock_guard<std::mutex> lk(m_audioMutex); vs->audioQueue.clear(); }
 
-    // Clamp to the media range; also rejects NaN (comparisons false -> 0).
-    if (!(time > 0.0)) time = 0.0;
+    // Clamp to the media range. NaN and -Inf fail the comparison -> 0; +Inf
+    // and huge finite values must be rejected explicitly so the
+    // (int64_t)(time * AV_TIME_BASE) conversion below can never be UB.
+    if (!std::isfinite(time) || time <= 0.0) time = 0.0;
     if (vs->duration > 0.0 && time > vs->duration) time = vs->duration;
 
     if (vs->useFFmpeg) {
