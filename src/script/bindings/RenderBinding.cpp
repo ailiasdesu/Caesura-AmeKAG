@@ -470,6 +470,29 @@ static int lua_Render_load_texture_async(lua_State* L) {
         return 1;
     }
     int id = async->enqueue(path, "texture");
+    if (id < 0) {
+        lua_pushinteger(L, id);
+        return 1;
+    }
+    // Optional callback(success, path, texId): store as a registry ref in the
+    // _ASYNC_CALLBACKS table; Engine::dispatchAsyncLoad looks it up by id.
+    if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
+        lua_getglobal(L, "_ASYNC_CALLBACKS");
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            lua_newtable(L);
+            lua_pushvalue(L, -1);
+            lua_setglobal(L, "_ASYNC_CALLBACKS");
+        }
+        // Stack: [callback, callbacks-table]. luaL_ref needs the callback on
+        // top, so move the table below it with a single insert.
+        lua_insert(L, -2);                 // [callbacks-table, callback]
+        int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);  // pops the callback -> [table]
+        lua_pushinteger(L, id);
+        lua_pushinteger(L, cbRef);
+        lua_settable(L, -3);
+        lua_pop(L, 1);
+    }
     lua_pushinteger(L, id);
     return 1;
 }
@@ -479,6 +502,19 @@ static int lua_Render_load_texture_async(lua_State* L) {
 static int lua_Render_cancel_async_loads(lua_State* L) {
     auto* async = getAsync(L);
     if (async) async->cancelAll();
+    // Release all stored callbacks so they never fire for cancelled loads.
+    lua_getglobal(L, "_ASYNC_CALLBACKS");
+    if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            int cbRef = (int)lua_tointeger(L, -1);
+            luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+            lua_pop(L, 1);
+        }
+        lua_newtable(L);
+        lua_setglobal(L, "_ASYNC_CALLBACKS");
+    }
+    lua_pop(L, 1);
     lua_pushboolean(L, 1);
     return 1;
 }

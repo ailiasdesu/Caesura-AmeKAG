@@ -173,6 +173,14 @@ bool AsyncLoader::poll() {
     return true;
 }
 
+std::vector<AsyncLoader::CompletedLoad> AsyncLoader::drainCompleted() {
+    std::lock_guard<std::mutex> lock(m_completeMutex);
+    std::vector<CompletedLoad> out;
+    out.swap(m_completed);
+    m_pendingCount -= static_cast<int>(out.size());
+    return out;
+}
+
 void AsyncLoader::postCompleteEvent(int requestId, const std::string& path,
                                      const std::vector<uint8_t>& data, bool success) {
     auto* completed = new CompletedLoad{};

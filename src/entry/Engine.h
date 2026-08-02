@@ -167,6 +167,10 @@ private:
     std::unique_ptr<IAsyncLoader>      m_asyncLoader;
     std::unique_ptr<ISaveManager>      m_saveManager;
     std::unique_ptr<carc::ICryptoEngine> m_cryptoEngine;
+    // Dispatch one completed async load (texture upload + Lua callback).
+    // Used by both the SDL event path and the headless/editor drain path.
+    void dispatchAsyncLoad(CompletedLoad* completed);
+
     std::vector<std::unique_ptr<CompletedLoad>> m_deferredAsyncLoads;
 };
 

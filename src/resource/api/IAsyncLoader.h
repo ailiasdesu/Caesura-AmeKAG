@@ -34,6 +34,11 @@ public:
     virtual void cancelAll() = 0;
     virtual bool poll() = 0;
 
+    // Non-SDL delivery for hosts without an SDL event loop (headless/editor
+    // mode): returns and removes all completed loads; the caller owns the
+    // results and must dispatch them (texture upload + Lua callback).
+    virtual std::vector<CompletedLoad> drainCompleted() = 0;
+
     virtual int  pendingCount() const = 0;
     virtual bool isRunning()   const = 0;
 };

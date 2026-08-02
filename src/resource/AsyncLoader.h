@@ -37,6 +37,7 @@ public:
     int  enqueue(const std::string& path, const std::string& type) override;
     void cancelAll() override;
     bool poll() override;
+    std::vector<CompletedLoad> drainCompleted() override;
 
     int  pendingCount() const override { return m_pendingCount.load(); }
     bool isRunning()   const override { return m_running; }

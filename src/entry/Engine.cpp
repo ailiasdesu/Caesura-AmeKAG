@@ -512,7 +512,9 @@ void Engine::run(const OwnerPump& ownerPump) {
 
         // JobSystem main-thread callbacks + async load SDL events
         m_jobSystem->pollMainThreadJobs();
-        m_asyncLoader->poll();
+        if (!(m_config.headless || m_config.editorMode)) {
+            m_asyncLoader->poll();
+        }
 
         // -- Phase G8-U1: Lua memory budget check \(every frame\) ---------------
         lua_State* Lgc = m_lua->state();
@@ -703,6 +705,58 @@ void Engine::quit() {
     m_running = false;
 }
 
+
+void Engine::dispatchAsyncLoad(CompletedLoad* completed) {
+    lua_State* L = m_lua ? m_lua->state() : nullptr;
+    if (!L) {
+        delete completed;
+        return;
+    }
+
+    uint32_t texId = 0;
+    if (completed->success && completed->type == "texture" &&
+        !completed->rgba.empty() && completed->width > 0) {
+        CAESURA_ASSERT_MAIN_THREAD();
+        texId = m_textureManager->loadTextureFromRGBA(
+            completed->rgba.data(), completed->width, completed->height,
+            completed->path);
+        if (texId == 0) completed->success = false;
+    }
+
+    lua_getglobal(L, "_ASYNC_CALLBACKS");
+    if (lua_istable(L, -1)) {
+        lua_pushinteger(L, completed->id);
+        lua_gettable(L, -2);
+        int cbRef = (int)lua_tointeger(L, -1);
+        lua_pop(L, 2);
+        if (cbRef > 0) {
+            lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
+            if (lua_isfunction(L, -1)) {
+                lua_pushboolean(L, completed->success ? 1 : 0);
+                lua_pushstring(L, completed->path.c_str());
+                lua_pushinteger(L, static_cast<lua_Integer>(texId));
+                if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+                    fprintf(stderr, "[AsyncLoader] callback error: %s\n",
+                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+                    lua_pop(L, 1);
+                }
+                printf("[AsyncLoader] Callback #%d: %s (%s)\n",
+                       completed->id, completed->path.c_str(),
+                       completed->success ? "ok" : "fail");
+            } else { lua_pop(L, 1); }
+            luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+            lua_getglobal(L, "_ASYNC_CALLBACKS");
+            if (lua_istable(L, -1)) {
+                lua_pushinteger(L, completed->id);
+                lua_pushnil(L);
+                lua_settable(L, -3);
+            }
+            lua_pop(L, 1);
+        }
+    } else { lua_pop(L, 1); }
+    delete completed;
+}
+
 void Engine::processEvents() {
     // Steam callbacks every frame
     m_steamBackend->runCallbacks();
@@ -724,11 +778,19 @@ void Engine::processEvents() {
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
 
-    // Headless/Editor mode: no SDL events, minimal sleep
+    // Headless/Editor mode: no SDL event loop -- deliver completed async
+    // loads directly (texture upload + Lua callback) instead of queueing
+    // SDL events that nothing would ever consume.
     if (m_config.headless || m_config.editorMode) {
+        for (auto& c : m_asyncLoader->drainCompleted()) {
+            dispatchAsyncLoad(new CompletedLoad(std::move(c)));
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
     }
+    // Deferred loads (Lua paused): re-dispatch when unpaused. This must run
+    // for both modes, so it stays after the headless early return only for
+    // GPU mode -- headless/editor never pause-loads (no SDL event source).
     if (!isLuaExecutionPaused() && !m_deferredAsyncLoads.empty()) {
         for (auto& completed : m_deferredAsyncLoads) {
             SDL_Event deferred;
@@ -755,51 +817,12 @@ void Engine::processEvents() {
                 continue;
             }
             if (completed) {
-                uint32_t texId = 0;
-                if (L && completed->success && completed->type == "texture" &&
-                    !completed->rgba.empty() && completed->width > 0) {
-                    CAESURA_ASSERT_MAIN_THREAD();
-                    texId = m_textureManager->loadTextureFromRGBA(
-                        completed->rgba.data(), completed->width, completed->height,
-                        completed->path);
-                    if (texId == 0) completed->success = false;
-                }
-
-                lua_getglobal(L, "_ASYNC_CALLBACKS");
-                if (lua_istable(L, -1)) {
-                    lua_pushinteger(L, completed->id);
-                    lua_gettable(L, -2);
-                    int cbRef = (int)lua_tointeger(L, -1);
-                    lua_pop(L, 2);
-                    if (cbRef > 0) {
-                        lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
-                        if (lua_isfunction(L, -1)) {
-                            lua_pushboolean(L, completed->success ? 1 : 0);
-                            lua_pushstring(L, completed->path.c_str());
-                            lua_pushinteger(L, static_cast<lua_Integer>(texId));
-                            if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-                                fprintf(stderr, "[AsyncLoader] callback error: %s\n",
-                                        lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
-                                lua_pop(L, 1);
-                            }
-                            printf("[AsyncLoader] Callback #%d: %s (%s)\n",
-                                   completed->id, completed->path.c_str(),
-                                   completed->success ? "ok" : "fail");
-                        } else { lua_pop(L, 1); }
-                        luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
-                        lua_getglobal(L, "_ASYNC_CALLBACKS");
-                        if (lua_istable(L, -1)) {
-                            lua_pushinteger(L, completed->id);
-                            lua_pushnil(L);
-                            lua_settable(L, -3);
-                        }
-                        lua_pop(L, 1);
-                    }
-                } else { lua_pop(L, 1); }
-                delete completed;
+                dispatchAsyncLoad(completed);
+                continue;
             }
-            continue;
         }
+        // (original dispatch body moved to Engine::dispatchAsyncLoad)
+        // (dispatch body moved to Engine::dispatchAsyncLoad)
 
         if ((event.type == SDL_EVENT_MOUSE_MOTION ||
              event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
