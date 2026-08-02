@@ -251,7 +251,7 @@ void VideoPlayer::drainAudio(VideoState& vs) {
         chunk.swap(vs.audioQueue);
     }
     auto* audio = BackendRegistry::instance().getAudioBackend();
-    if (!audio) return;
+    if (!audio) return;  // no backend: nothing could play it; chunk is dropped
     // Roughly one chunk per second of audio: 2 channels x sampleRate frames.
     const unsigned int numFrames = static_cast<unsigned int>(vs.sampleRate);
     unsigned int offset = 0;
@@ -280,10 +280,6 @@ void VideoPlayer::drainAudio(VideoState& vs) {
                                 chunk.begin() + offset, chunk.end());
         }
     }
-    // On playback failure (handle budget exhausted / no backend) drop the
-    // remainder instead of requeueing it: requeueing grows audioQueue
-    // unboundedly while playRawPCM keeps failing.
-    (void)offset;  // remainder intentionally dropped
 }
 
 void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
