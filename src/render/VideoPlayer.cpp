@@ -110,6 +110,7 @@ VideoHandle VideoPlayer::open(const char* path) {
                     vs.avAudioFrame = av_frame_alloc();
                     vs.sampleRate = aCtx->sample_rate > 0 ? aCtx->sample_rate : 44100;
                     vs.audioEnabled = (vs.avAudioFrame != nullptr);
+                    if (!vs.audioEnabled) vs.audioStreamIndex = -1;
                     // Resampler: any input format -> interleaved float stereo
                     // (modern API: swr_alloc_set_opts2 with AVChannelLayout).
                     AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
@@ -119,6 +120,13 @@ VideoHandle VideoPlayer::open(const char* path) {
                             aCtx->sample_fmt, aCtx->sample_rate, 0, nullptr) >= 0
                         && swr_init(swr) >= 0) {
                         vs.swrCtx = swr;
+                        // Capture the configured input format for per-frame
+                        // validation (the codec context is not a stable
+                        // reference: it moves with the frame on format change).
+                        vs.expectedSampleFmt = aCtx->sample_fmt;
+                        vs.expectedSampleRate = aCtx->sample_rate;
+                        vs.expectedChLayout[0] = aCtx->ch_layout.u.mask;
+                        vs.expectedChLayout[1] = 0;
                     } else {
                         if (swr) swr_free(&swr);
                         // The audio flag was set optimistically above; without a
@@ -533,8 +541,10 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                             if (ac && af && swr && avcodec_send_packet(ac, nullptr) >= 0) {
                                 while (avcodec_receive_frame(ac, af) >= 0) {
                                     if (af->sample_rate <= 0 ||
-                                        af->format != ac->sample_fmt ||
-                                        av_channel_layout_compare(&af->ch_layout, &ac->ch_layout) != 0) {
+                                        af->format != vs->expectedSampleFmt ||
+                                    af->sample_rate != vs->expectedSampleRate ||
+                                        av_channel_layout_compare(&af->ch_layout,
+                                        reinterpret_cast<const AVChannelLayout*>(&vs->expectedChLayout)) != 0) {
                                         continue;
                                     }
                                     const int64_t outSamples =
@@ -582,8 +592,10 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                                 // (heap OOB). Also guards sample_rate == 0,
                                 // which would divide by zero in av_rescale_rnd.
                                 if (af->sample_rate <= 0 ||
-                                    af->format != ac->sample_fmt ||
-                                    av_channel_layout_compare(&af->ch_layout, &ac->ch_layout) != 0) {
+                                    af->format != vs->expectedSampleFmt ||
+                                    af->sample_rate != vs->expectedSampleRate ||
+                                    av_channel_layout_compare(&af->ch_layout,
+                                        reinterpret_cast<const AVChannelLayout*>(&vs->expectedChLayout)) != 0) {
                                     continue;
                                 }
                                 const int64_t outSamples =

@@ -116,6 +116,12 @@ private:
         void*  avAudioCodec = nullptr;
         void*  avAudioFrame = nullptr;
         void*  swrCtx = nullptr;
+        // Expected decoded-frame format captured when swr was configured;
+        // frames are validated against these (NOT the live codec context,
+        // which moves in lockstep with the frame on a mid-stream change).
+        int    expectedSampleFmt = -1;
+        int    expectedSampleRate = 0;
+        long long expectedChLayout[2] = {0, 0};
         std::vector<uint8_t> rgbaBuffer;
 #endif
     };
