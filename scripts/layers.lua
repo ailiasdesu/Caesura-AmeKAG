@@ -188,6 +188,19 @@ end
 --    Look up a layer by its name field (set at construction).
 -- ═══════════════════════════════════════════════════════════════════════════
 
+--  Layers.ensure(ctx, name, z) → LayerNode
+--    Return the layer with the given name (or id), creating it under the root
+--    if missing. Used by settings/gallery/music_room overlays; the caller then
+--    sets size/position/texture.
+function Layers.ensure(ctx, name, z)
+    local node = Layers.get(name) or Layers.find(name) or Layers.get_layer(name)
+    if node then
+        if z ~= nil then node.z = z end
+        return node
+    end
+    return Layers.add_layer(Layers.get_root(), { name = name, id = name, z = z or 0 })
+end
+
 function Layers.get(layer_name)
     if not layer_name then return nil end
     for _, node in pairs(layerMap) do

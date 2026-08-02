@@ -63,7 +63,9 @@ end
 
 local function resolve_line_height(ctx)
     local state = TextScene.get_state(ctx)
-    local line_height = tonumber(backend.line_height())
+    -- line_height() may return extra values; wrap in parens to keep only
+    -- the first, otherwise tonumber gets >1 args and errors.
+    local line_height = tonumber((backend.line_height()))
         or tonumber(state.font_size)
         or 24
     if line_height <= 0 then return 24 end
@@ -135,13 +137,9 @@ function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
         table.remove(ctx.backlog, 1)
     end
 
-    -- [R7-FIX] Mark text as seen for Read Skip
-    local scene = ctx.currentScene or ""
-    if scene and scene ~= "" and ctx.token_index then
-        if not ctx.seen_scenes then ctx.seen_scenes = {} end
-        if not ctx.seen_scenes[scene] then ctx.seen_scenes[scene] = {} end
-        ctx.seen_scenes[scene][ctx.token_index] = true
-    end
+    -- [R7-FIX] Seen-marking moved to the click handler (kag_runner.on_click):
+    -- marking here made every line "seen" the moment it was displayed, so
+    -- read-skip could never distinguish unread text.
 end
 
 -- =============================================================================

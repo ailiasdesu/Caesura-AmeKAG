@@ -153,7 +153,9 @@ function TextScene.render(ctx, render_backend)
 
     -- Typewriter reveal: if the current message is animating, truncate each
     -- text draw to the visible character count (state.reveal_chars > 0).
-    local reveal = state.reveal_chars or 0
+    -- reveal_chars == 0 must also truncate (animation not started); using
+    -- "~= nil" avoids flashing the full line for one frame at reveal start.
+    local reveal = state.reveal_chars
 
     for _, draw in ipairs(state.draws) do
         local alpha = math.floor(
@@ -165,7 +167,7 @@ function TextScene.render(ctx, render_backend)
                     draw.r, draw.g, draw.b, alpha)
             else
                 local shown = draw.text
-                if reveal > 0 and draw.typewriter then
+                if reveal ~= nil and draw.typewriter then
                     shown = utf8.sub(draw.text, 1, reveal)
                 end
                 render_backend.render_text(

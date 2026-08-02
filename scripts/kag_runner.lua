@@ -184,7 +184,7 @@ end
 -- [wait] and [trans] which accumulate elapsed time from coroutine.yield()
 -- return values.
 
-local auto_advance_frames = 0  -- frames remaining before auto-mode advances
+local auto_advance_ms = 0  -- accumulated ms before auto-mode advances
 
 function kag_runner.update(dt)
     if not kag_co then return false, "not-running" end
@@ -193,7 +193,7 @@ function kag_runner.update(dt)
 
     -- Typewriter reveal: advance the visible character count by the
     -- configured text speed (ms per char). Skip/auto modes reveal instantly.
-    if ctx and ctx.reveal and not ctx.skip_mode and not ctx.auto_mode then
+    if ctx and ctx.reveal and not ctx.skip_mode then
         local speed = tonumber(ctx.text_speed) or 50
         if speed > 0 then
             ctx.reveal.elapsed = ctx.reveal.elapsed + delta_ms
@@ -216,12 +216,12 @@ function kag_runner.update(dt)
                 local wasSeen = seen and seen[ctx.token_index or 0] == true
                 if not wasSeen then
                     -- Unseen text: stop read-skipping (fall back to manual).
-                    auto_advance_frames = 0
+                    auto_advance_ms = 0
                     return false, "waiting-input"
                 end
             end
             -- Skip mode: advance immediately, no delay.
-            auto_advance_frames = 0
+            auto_advance_ms = 0
             if ctx.reveal then
                 local st = require("kag.text_scene").get_state(ctx)
                 st.reveal_chars = ctx.reveal.total
@@ -229,15 +229,15 @@ function kag_runner.update(dt)
             return kag_runner.on_click()
         end
         if ctx.auto_mode then
-            auto_advance_frames = auto_advance_frames + 1
-            if auto_advance_frames >= 90 then  -- ~1.5s at 60fps
-                auto_advance_frames = 0
+            auto_advance_ms = auto_advance_ms + delta_ms
+            if auto_advance_ms >= 1500 then  -- ~1.5s regardless of fps
+                auto_advance_ms = 0
                 return kag_runner.on_click()
             end
         end
         return false, "waiting-input"
     end
-    auto_advance_frames = 0
+    auto_advance_ms = 0
 
     local status = coroutine.status(kag_co)
     if status == "dead" then
@@ -285,6 +285,15 @@ function kag_runner.on_click()
 
     local allowed, reason = can_resume()
     if not allowed then return false, reason end
+
+    -- Mark the current line as seen for read-skip: only text the player
+    -- actually clicked through counts as read.
+    local scene = ctx.currentScene or ""
+    if scene ~= "" and ctx.token_index then
+        ctx.seen_scenes = ctx.seen_scenes or {}
+        ctx.seen_scenes[scene] = ctx.seen_scenes[scene] or {}
+        ctx.seen_scenes[scene][ctx.token_index] = true
+    end
 
     ctx.waiting_input = false
     -- Batch resume through all non-blocking tokens until next [p]
