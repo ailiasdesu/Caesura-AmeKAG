@@ -109,7 +109,7 @@ VideoHandle VideoPlayer::open(const char* path) {
                     vs.avAudioCodec = aCtx;
                     vs.avAudioFrame = av_frame_alloc();
                     vs.sampleRate = aCtx->sample_rate > 0 ? aCtx->sample_rate : 44100;
-                    vs.audioEnabled = true;
+                    vs.audioEnabled = (vs.avAudioFrame != nullptr);
                     // Resampler: any input format -> interleaved float stereo
                     // (modern API: swr_alloc_set_opts2 with AVChannelLayout).
                     AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
@@ -532,6 +532,11 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                             auto* swr = static_cast<SwrContext*>(vs->swrCtx);
                             if (ac && af && swr && avcodec_send_packet(ac, nullptr) >= 0) {
                                 while (avcodec_receive_frame(ac, af) >= 0) {
+                                    if (af->sample_rate <= 0 ||
+                                        af->format != ac->sample_fmt ||
+                                        av_channel_layout_compare(&af->ch_layout, &ac->ch_layout) != 0) {
+                                        continue;
+                                    }
                                     const int64_t outSamples =
                                         av_rescale_rnd(swr_get_delay(swr, af->sample_rate)
                                             + af->nb_samples, af->sample_rate,
@@ -571,6 +576,16 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                         auto* swr = static_cast<SwrContext*>(vs->swrCtx);
                         if (ac && af && swr && avcodec_send_packet(ac, pkt) >= 0) {
                             while (avcodec_receive_frame(ac, af) >= 0) {
+                                // Reject frames whose format/rate/layout differ
+                                // from the swr configuration: converting them
+                                // would read planes with the wrong sample size
+                                // (heap OOB). Also guards sample_rate == 0,
+                                // which would divide by zero in av_rescale_rnd.
+                                if (af->sample_rate <= 0 ||
+                                    af->format != ac->sample_fmt ||
+                                    av_channel_layout_compare(&af->ch_layout, &ac->ch_layout) != 0) {
+                                    continue;
+                                }
                                 const int64_t outSamples =
                                     av_rescale_rnd(swr_get_delay(swr, af->sample_rate)
                                         + af->nb_samples, af->sample_rate,
