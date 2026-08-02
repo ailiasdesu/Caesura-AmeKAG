@@ -133,7 +133,7 @@ function SaveCommands.save(ctx, params)
     end
 
     -- Call C++ SaveManager via KAG binding
-    local sceneName = ctx.currentScene or "unknown"
+    local sceneName = ctx.current_scene or ctx.currentScene or "unknown"
     local tokenIdx  = ctx.token_index or 1
 
     local ok = KAG.save_game(slot, state, sceneName, tokenIdx, thumbnail)
@@ -236,9 +236,11 @@ function SaveCommands.load(ctx, params)
     -- Set token position for resume
     ctx.token_index = state.token_index or 1
 
-    -- Set scene path for reload
+    -- Set scene path for reload (both aliases: the runner reads the
+    -- snake_case variant during the coroutine-death window).
     if state.scene_path and #state.scene_path > 0 then
         ctx.currentScene = state.scene_path
+        ctx.current_scene = state.scene_path
         -- Set stop_flag so the current script execution stops
         -- and the engine reloads from the saved scene
         ctx.stop_flag = true
