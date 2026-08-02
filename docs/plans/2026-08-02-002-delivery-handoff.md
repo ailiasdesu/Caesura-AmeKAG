@@ -6,15 +6,16 @@
 
 ## 1. 当前状态
 
-- **分支**：`master`，HEAD = **`1181538a`**（`docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit`——本文档提交，上一代码提交为 `19aca04b`）
-- **CI**：三平台全绿；HEAD 对应 run **30727177787 = success**（五 job：Linux GCC / macOS Clang / Windows MSVC Debug+Release / Release Package，`gh run list` 可查）
+- **分支**：`master`。HEAD 为本文档的最新修订（doc 提交，代码基线见下）；当前文档链快照自 `git log --first-parent 7303fef4..HEAD` 生成，后续 agent 请以该命令为权威提交列表
+- **CI**：三平台全绿（`gh run list --limit 1` 查最新；快照时 run 30727177787 = success，五 job 全过）
 - **本地验证基线**：doctest **564/564**（断言 **2770**）；ctest **10/10**；HTTP smoke **21/21**；
   `python scripts/count_coupling.py --ci` **PASS**
 - **工作树**：干净（仅 `.reasonix/` 未跟踪，非项目产物，勿提交）
 
-### 最近提交（自上轮交接 7303fef4 起，共 22 个，按时间序；完整列表 `git log --first-parent 7303fef4..HEAD`）
+### 最近提交（自上轮交接 7303fef4 起；**权威列表 = `git log --first-parent 7303fef4..HEAD`**，下文为生成时刻快照）
 ```
-1181538a  docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit  ← 本文档
+67a78e3e  docs(plans): handoff 008 refresh — HEAD 1181538a, full 22-commit list, CI run  ← 本文档修订
+1181538a  docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit
 19aca04b  test(rpc): extract constantTimeEquals with unit coverage; closeout 007
 31afd181  test(rpc): fix inverted skip condition in HTTP smoke (blocking review finding)
 1d12fd9b  test(rpc): skip HTTP smoke on GPU-less CI runners (SKIP_RETURN_CODE 77)
