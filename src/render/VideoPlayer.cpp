@@ -255,15 +255,30 @@ void VideoPlayer::drainAudio(VideoState& vs) {
     // Roughly one chunk per second of audio: 2 channels x sampleRate frames.
     const unsigned int numFrames = static_cast<unsigned int>(vs.sampleRate);
     unsigned int offset = 0;
+    bool playFailed = false;
     while (offset + numFrames * 2 <= chunk.size()) {
         const unsigned int h = audio->playRawPCM(
             chunk.data() + offset, numFrames,
             static_cast<unsigned int>(vs.sampleRate), 2);
-        if (h == 0) break;
+        if (h == 0) { playFailed = true; break; }
         vs.audioHandle = h;
         vs.audioHandles.push_back(h);
         vs.audioStarted = true;
         offset += numFrames * 2;
+    }
+    if (offset < chunk.size()) {
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        if (playFailed) {
+            // Backend unavailable / budget exhausted: drop the remainder
+            // (requeueing would grow audioQueue unboundedly). The 8MB cap
+            // in onAudioDecoded bounds the producer side too.
+        } else {
+            // Not enough data for a full second yet: keep it for the next
+            // drain (dropping here would make pl_mpeg audio permanently
+            // silent, since each update decodes only a few frames).
+            vs.audioQueue.insert(vs.audioQueue.begin(),
+                                chunk.begin() + offset, chunk.end());
+        }
     }
     // On playback failure (handle budget exhausted / no backend) drop the
     // remainder instead of requeueing it: requeueing grows audioQueue
