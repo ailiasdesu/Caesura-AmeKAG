@@ -5,6 +5,7 @@
 #include "rpc/api/IRpcServer.h"
 #include "rpc/api/IEditorServer.h"
 #include "rpc/api/IRpcDispatcher.h"
+#include "rpc/ConstantTime.h"
 #include "entry/Engine.h"
 #include "script/vm/LuaManager.h"
 #include <httplib.h>
@@ -684,4 +685,19 @@ TEST_CASE("EditorServer reports dispatcher unavailable over HTTP") {
     CHECK(response->body.find("\"code\":\"dispatcher_unavailable\"") !=
         std::string::npos);
     es.stop();
+}
+
+TEST_CASE("constantTimeEquals matches only byte-identical strings") {
+    using Caesura::constantTimeEquals;
+    CHECK(constantTimeEquals("abc", "abc"));
+    CHECK(constantTimeEquals("", ""));
+    CHECK_FALSE(constantTimeEquals("abc", "abd"));
+    CHECK_FALSE(constantTimeEquals("abc", "ab"));
+    CHECK_FALSE(constantTimeEquals("ab", "abc"));
+    CHECK_FALSE(constantTimeEquals("abc", "ABC"));
+    // Bearer-prefixed token form used by the editor gate.
+    CHECK(constantTimeEquals("Bearer s3cret", "Bearer s3cret"));
+    CHECK_FALSE(constantTimeEquals("Bearer s3cret", "Bearer wrong"));
+    CHECK_FALSE(constantTimeEquals("", "Bearer s3cret"));
+    CHECK_FALSE(constantTimeEquals("Bearer s3cret", ""));
 }

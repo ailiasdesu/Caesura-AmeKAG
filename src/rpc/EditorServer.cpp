@@ -3,6 +3,7 @@
 // ===========================================================================
 
 #include "EditorServer.h"
+#include "ConstantTime.h"
 #include "../../external/cpp-httplib/httplib.h"
 
 #include <nlohmann_json.hpp>
@@ -280,21 +281,7 @@ void EditorServer::serverLoop(int port) {
             }
             if (!token.empty()) {
                 const std::string expected = "Bearer " + token;
-                // Constant-time comparison: token length is public, contents
-                // are not. Loop over every byte unconditionally (no early
-                // exit on the first mismatch) so response latency cannot
-                // reveal the first-differing position on a shared box.
-                unsigned char diff = 0;
-                const size_t n = expected.size();
-                if (auth.size() != n) {
-                    diff = 1;
-                }
-                for (size_t i = 0; i < n; ++i) {
-                    const unsigned char a = (i < auth.size())
-                        ? static_cast<unsigned char>(auth[i]) : 0;
-                    diff |= static_cast<unsigned char>(a ^ static_cast<unsigned char>(expected[i]));
-                }
-                if (diff != 0) {
+                if (!constantTimeEquals(auth, expected)) {
                     res.status = 401;
                     res.set_content("{\"error\":\"Unauthorized\"}", "application/json");
                     return httplib::Server::HandlerResponse::Handled;
