@@ -251,3 +251,32 @@ TEST_CASE("VideoPlayer::open missing file returns invalid handle") {
     vp.close(handle);  // safe no-op
     vp.shutdown();
 }
+
+
+TEST_CASE("VideoPlayer::planDrain requeues partial chunk, drops on failure") {
+    using Plan = VideoPlayer::DrainPlan;
+    const size_t fps = 44100;
+
+    // Exactly one chunk: 1 full chunk, remainder 0.
+    auto p1 = VideoPlayer::planDrain(fps * 2, fps, false);
+    CHECK(p1.chunks == 1);
+    CHECK_FALSE(p1.dropRemainder);
+
+    // Partial data (a few decoded frames ~ 2*1152 floats): 0 chunks, requeue.
+    auto p2 = VideoPlayer::planDrain(2 * 1152, fps, false);
+    CHECK(p2.chunks == 0);
+    CHECK_FALSE(p2.dropRemainder);  // requeue, not drop
+
+    // Two chunks' worth.
+    auto p3 = VideoPlayer::planDrain(fps * 4 + 100, fps, false);
+    CHECK(p3.chunks == 2);
+    CHECK_FALSE(p3.dropRemainder);
+
+    // Playback failure: drop remainder regardless of size.
+    auto p4 = VideoPlayer::planDrain(2 * 1152, fps, true);
+    CHECK(p4.dropRemainder);
+
+    // Zero frames guard.
+    auto p5 = VideoPlayer::planDrain(100, 0, false);
+    CHECK(p5.chunks == 0);
+}

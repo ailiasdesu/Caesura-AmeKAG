@@ -23,6 +23,10 @@ public:
 
     virtual VideoHandle open(const char* path) = 0;
     virtual void close(VideoHandle handle) = 0;
+    // Loop mode (pl_mpeg: plm_set_loop; FFmpeg: rewind on end).
+    virtual void setLoop(VideoHandle handle, bool loop) = 0;
+    // Playback volume [0..1] applied to the video audio handles.
+    virtual void setVolume(VideoHandle handle, float volume) = 0;
     virtual bool update(VideoHandle handle, double dt) = 0;
     // Advance every playing video by dt (called by the engine frame loop).
     virtual void updateAll(double dt) = 0;

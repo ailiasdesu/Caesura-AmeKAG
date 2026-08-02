@@ -527,6 +527,17 @@ static int lua_Render_video_play(lua_State* L) {
     if (!vp) { lua_pushnil(L); lua_pushstring(L, "VideoPlayer not available"); return 2; }
     VideoHandle h = vp->open(path);
     if (!h) { lua_pushnil(L); lua_pushstring(L, "Failed to open video"); return 2; }
+
+    // Optional options table: { loop = bool, volume = number }
+    if (lua_istable(L, 2)) {
+        lua_getfield(L, 2, "loop");
+        if (lua_isboolean(L, -1)) vp->setLoop(h, lua_toboolean(L, -1) != 0);
+        lua_pop(L, 1);
+        lua_getfield(L, 2, "volume");
+        if (lua_isnumber(L, -1)) vp->setVolume(h, (float)lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+
     lua_pushinteger(L, (lua_Integer)h.id);
     return 1;
 }

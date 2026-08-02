@@ -124,6 +124,15 @@ VideoHandle VideoPlayer::open(const char* path) {
         vs.playing  = true;
         vs.ended    = false;
         vs.hasFrame = false;
+        // Frame-rate pacing: prefer avg_frame_rate, fall back to r_frame_rate.
+        if (vStream->avg_frame_rate.num > 0 && vStream->avg_frame_rate.den > 0) {
+            vs.frameRate = av_q2d(vStream->avg_frame_rate);
+        } else if (vStream->r_frame_rate.num > 0 && vStream->r_frame_rate.den > 0) {
+            vs.frameRate = av_q2d(vStream->r_frame_rate);
+        } else {
+            vs.frameRate = 30.0;
+        }
+        vs.playhead = 0.0;
 
         // SwsContext for YUV �� RGBA
         SwsContext* sws = sws_getContext(
@@ -242,6 +251,18 @@ VideoHandle VideoPlayer::open(const char* path) {
     return handle;
 }
 
+VideoPlayer::DrainPlan VideoPlayer::planDrain(size_t chunkFloats,
+                                            size_t framesPerChunk,
+                                            bool playFailed) {
+    DrainPlan plan;
+    if (framesPerChunk == 0) return plan;
+    const size_t floatsPerChunk = framesPerChunk * 2;  // stereo
+    if (floatsPerChunk == 0) return plan;
+    plan.chunks = chunkFloats / floatsPerChunk;
+    plan.dropRemainder = playFailed;
+    return plan;
+}
+
 void VideoPlayer::drainAudio(VideoState& vs) {
     if (!vs.audioEnabled || vs.sampleRate <= 0) return;
     std::vector<float> chunk;
@@ -263,7 +284,14 @@ void VideoPlayer::drainAudio(VideoState& vs) {
         if (h == 0) { playFailed = true; break; }
         vs.audioHandle = h;
         vs.audioHandles.push_back(h);
+        if (vs.audioHandles.size() > 4) {
+            // Cap concurrent chunks: stop the oldest so a long video cannot
+            // stack an unbounded number of overlapping 1-second voices.
+            audio->stopSEHandle(vs.audioHandles.front());
+            vs.audioHandles.erase(vs.audioHandles.begin());
+        }
         vs.audioStarted = true;
+        if (vs.volume != 1.0f) audio->setSEVolume(h, vs.volume);
         offset += numFrames * 2;
     }
     if (offset < chunk.size()) {
@@ -276,12 +304,20 @@ void VideoPlayer::drainAudio(VideoState& vs) {
             // Not enough data for a full second yet: keep it for the next
             // drain (dropping here would make pl_mpeg audio permanently
             // silent, since each update decodes only a few frames).
+            // Copy the remainder first: inserting from chunk into the same
+            // underlying vector via begin() iterators is formally UB.
+            const std::vector<float> remainder(chunk.begin() + offset, chunk.end());
             vs.audioQueue.insert(vs.audioQueue.begin(),
-                                chunk.begin() + offset, chunk.end());
+                                remainder.begin(), remainder.end());
         }
     }
 }
 
+// Locking invariant: onAudioDecoded (worker) iterates m_videos under
+// m_audioMutex; open()/close() mutate the map without it. This is safe
+// because update() blocks in m_jobSystem->waitIdle() before the main thread
+// touches the map, serializing worker vs. main. Keep that ordering if new
+// asynchronous call sites are added.
 void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
     auto* samples = static_cast<plm_samples_t*>(samplesRaw);
     if (!samples) return;
@@ -300,6 +336,27 @@ void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
         }
     }
 }
+void VideoPlayer::setLoop(VideoHandle handle, bool loop) {
+    VideoState* vs = find(handle);
+    if (!vs) return;
+    if (vs->useFFmpeg) {
+        // FFmpeg path: rewind handled via seek(0) on end in update().
+        vs->loop = loop;
+    } else if (vs->plm) {
+        plm_set_loop(static_cast<plm_t*>(vs->plm), loop ? 1 : 0);
+    }
+}
+
+void VideoPlayer::setVolume(VideoHandle handle, float volume) {
+    VideoState* vs = find(handle);
+    if (!vs) return;
+    vs->volume = (volume < 0.0f) ? 0.0f : (volume > 1.0f ? 1.0f : volume);
+    auto* audio = BackendRegistry::instance().getAudioBackend();
+    if (audio) {
+        for (const auto h : vs->audioHandles) audio->setSEVolume(h, vs->volume);
+    }
+}
+
 void VideoPlayer::close(VideoHandle handle) {
     auto* audio = BackendRegistry::instance().getAudioBackend();
     if (audio && m_videos.count(handle.id)) {
@@ -349,6 +406,8 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
     if (!vs || !vs->playing || vs->ended) return false;
 
     if (vs->useFFmpeg) {
+        // Frame-rate pacing: advance the playhead by dt (same policy as the pl_mpeg path).
+        if (dt > 0.0 && vs->frameRate > 0.0) vs->playhead += dt;
 #ifdef CAESURA_VIDEO_FFMPEG
         // Offload read+decode+convert to JobSystem worker.
         // State is exclusive: main thread waits before touching FFmpeg objects.
@@ -366,11 +425,21 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 
                 AVPacket* pkt = av_packet_alloc();
                 bool gotFrame = false;
+                int decodeBudget = 30;  // bounded catch-up per update
 
-                while (!gotFrame) {
+                while (!gotFrame && decodeBudget-- > 0) {
                     int ret = av_read_frame(fmt, pkt);
                     if (ret == AVERROR_EOF) {
                         av_packet_unref(pkt);
+                        if (vs->loop) {
+                            // Rewind and keep decoding (loop mode); reset the
+                            // pacing playhead so it does not fast-forward.
+                            vs->playhead = 0.0;
+                            const int sret = av_seek_frame(fmt, -1, 0, AVSEEK_FLAG_BACKWARD);
+                            if (sret < 0) { av_packet_unref(pkt); break; }
+                            avcodec_flush_buffers(cc);
+                            continue;
+                        }
                         ret = avcodec_send_packet(cc, nullptr);
                         if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
                             gotFrame = true;
@@ -388,6 +457,23 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                     av_packet_unref(pkt);
                 }
                 av_packet_free(&pkt);
+
+                // Frame-rate pacing (mirrors the pl_mpeg path): decode up to
+                // the budget, keeping the latest frame whose pts is not
+                // beyond the playhead. A frame that is not yet due is never
+                // dropped -- the loop simply continues until one is due.
+                if (gotFrame && vs->playhead > 0.0) {
+                    AVRational tb = fmt
+                        ? fmt->streams[vs->videoStreamIndex]->time_base
+                        : AVRational{1, 1};
+                    if (f && f->pts != AV_NOPTS_VALUE) {
+                        const double ptsSec = (double)f->pts * av_q2d(tb);
+                        if (ptsSec > vs->playhead) {
+                            // Not due yet: continue decoding (bounded by budget).
+                            gotFrame = false;
+                        }
+                    }
+                }
 
                 if (gotFrame && cc && sws && fRGB) {
                     sws_scale(sws, f->data, f->linesize, 0, cc->height,
@@ -572,6 +658,7 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
         if (ret >= 0 && cc) {
             avcodec_flush_buffers(cc);
         }
+        vs->playhead = time;  // re-sync pacing (mirrors the plm branch)
 #endif
     } else {
         if (vs->plm) {

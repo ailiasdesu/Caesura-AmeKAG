@@ -36,6 +36,8 @@ public:
 
     VideoHandle open(const char* path) override;
     void close(VideoHandle handle) override;
+    void setLoop(VideoHandle handle, bool loop) override;
+    void setVolume(VideoHandle handle, float volume) override;
     bool update(VideoHandle handle, double dt) override;
     void updateAll(double dt) override;
     uint32_t getTexture(VideoHandle handle) const override;
@@ -58,6 +60,17 @@ public:
     // C types out of this header; the .cpp casts.
     void onAudioDecoded(void* plm, void* samples);
 
+    // -- drain-plan helper (pure, unit-testable) ---------------------------
+    // Decides how many whole 1-second chunks fit in `chunkFloats` and whether
+    // the remainder should be requeued (size-bound exit) or dropped (playback
+    // failure). Returns { chunks, dropRemainder }.
+    struct DrainPlan {
+        size_t chunks = 0;         // whole chunks that fit
+        bool   dropRemainder = false;  // true = playRawPCM failed
+    };
+    static DrainPlan planDrain(size_t chunkFloats, size_t framesPerChunk,
+                               bool playFailed);
+
 private:
     struct VideoState {
         void*  plm = nullptr;
@@ -77,6 +90,8 @@ private:
         unsigned int audioHandle = 0;
         std::vector<unsigned int> audioHandles;  // all live chunks (stop all on close/seek)
         bool   audioStarted = false;
+        float  volume = 1.0f;
+        bool   loop = false;
         // Frame-rate pacing: playhead advances by dt each update; frames are
         // decoded until plm_get_time() catches up (bounded per call).
         double frameRate = 0.0;
