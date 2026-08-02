@@ -376,7 +376,14 @@ end
 -- =============================================================================
 
 function TextCommands.skip(ctx, params)
-    ctx.skip_mode = not ctx.skip_mode
+    local mode = params.mode
+    if mode == "seen" then
+        -- Skip only already-seen text ([skip mode=seen]); plain [skip] toggles
+        -- the all-mode on/off.
+        ctx.skip_mode = (ctx.skip_mode == "seen") and false or "seen"
+    else
+        ctx.skip_mode = not ctx.skip_mode
+    end
 end
 
 -- =============================================================================

@@ -196,6 +196,17 @@ function kag_runner.update(dt)
     -- visual-novel auto-play button).
     if ctx and ctx.waiting_input then
         if ctx.skip_mode then
+            if ctx.skip_mode == "seen" then
+                -- Read-skip: only advance past text this scene already saw.
+                local scene = ctx.currentScene or ""
+                local seen = ctx.seen_scenes and ctx.seen_scenes[scene]
+                local wasSeen = seen and seen[ctx.token_index or 0] == true
+                if not wasSeen then
+                    -- Unseen text: stop read-skipping (fall back to manual).
+                    auto_advance_frames = 0
+                    return false, "waiting-input"
+                end
+            end
             -- Skip mode: advance immediately, no delay.
             auto_advance_frames = 0
             return kag_runner.on_click()

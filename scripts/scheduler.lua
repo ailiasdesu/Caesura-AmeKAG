@@ -350,18 +350,25 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Splice macro body into token stream, replacing the invocation
-                local new_tokens = {}
-                for n = 1, i - 1 do
-                    table.insert(new_tokens, tokens[n])
+                -- Splice macro body into token stream, replacing the invocation.
+                -- Copy the body (shallow, per-token) and shift the tail in place
+                -- to avoid rebuilding the whole array with 3 inserts per call.
+                local tailStart = i + 1
+                local tailCount = #tokens - tailStart + 1
+                local bodyCount = #macro_body
+                -- Grow the array by bodyCount - 1 (the invocation is replaced
+                -- by bodyCount tokens).
+                local grow = bodyCount - 1
+                if grow > 0 then
+                    for _ = 1, grow do table.insert(tokens, nil) end
+                    table.move(tokens, tailStart, #tokens - grow, tailStart + grow)
+                elseif grow < 0 then
+                    table.move(tokens, tailStart, #tokens, tailStart + grow)
+                    for _ = 1, -grow do table.remove(tokens) end
                 end
-                for _, bt in ipairs(macro_body) do
-                    table.insert(new_tokens, {bt[1], bt[2]})
+                for n = 1, bodyCount do
+                    tokens[i - 1 + n] = {macro_body[n][1], macro_body[n][2]}
                 end
-                for n = i + 1, #tokens do
-                    table.insert(new_tokens, tokens[n])
-                end
-                tokens = new_tokens
                 ctx.tokens = tokens
                 i = i - 1  -- will point to first body token after i = i + 1
             else
