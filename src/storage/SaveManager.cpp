@@ -257,6 +257,14 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
         return json();
     }
 
+    // A valid JSON value that is not an object ([] / "x" / 42) would make the
+    // value() reads below throw type_error.306 across the Lua C boundary --
+    // treat it as corrupt and fail gracefully instead of crashing.
+    if (!envelope.is_object()) {
+        fprintf(stderr, "[SaveManager] Save envelope is not a JSON object; treating as corrupt\n");
+        return json();
+    }
+
     uint64_t ts       = envelope.value("timestamp", uint64_t(0));
     std::string scene = envelope.value("scene", "");
     int tokenIdx      = envelope.value("token_index", 0);
@@ -314,6 +322,7 @@ std::vector<SaveMeta> SaveManager::listSaves() {
         } catch (const json::exception&) {
             continue;
         }
+        if (!envelope.is_object()) continue;  // corrupt: not an object envelope
 
         SaveMeta meta;
         meta.slot          = slot;
@@ -365,6 +374,10 @@ void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn 
 }
 
 json SaveManager::migrate(const json& data, int fromVersion) {
+    if (!data.is_object()) {
+        fprintf(stderr, "[SaveManager] Migration input is not an object; skipping\n");
+        return data;
+    }
     json current = data;
     int ver = fromVersion;
 

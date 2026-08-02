@@ -209,8 +209,11 @@ bool DebugManager::init(const char* logDir) {
 }
 
 void DebugManager::shutdown() {
-    std::lock_guard<std::mutex> ioLock(m_ioMutex);
+    // Lock order must match init()/log() (m_mutex -> m_ioMutex); a reversed
+    // order could deadlock if a concurrent init ever replays the ring buffer
+    // while shutdown closes the file.
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> ioLock(m_ioMutex);
     if (!m_initialized) return;
 
     if (m_logFile.is_open()) {

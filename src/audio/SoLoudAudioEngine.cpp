@@ -48,13 +48,29 @@ std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::stri
         src = wav;
     }
 
-    // LRU eviction: remove least recently used when >= 128 entries
+    // LRU eviction: remove least recently used when >= 128 entries, but never
+    // evict a source that SoLoud is still playing -- play() holds a raw
+    // pointer into the shared_ptr, so deleting it would be a use-after-free
+    // in the audio thread. Active sources are re-queued to the LRU tail
+    // instead (they become evictable once playback finishes).
     if (m_waveCache.size() >= 128) {
-        std::string lruFile = m_waveLRU.back();
-        m_waveLRU.pop_back();
-        m_waveLRUMap.erase(lruFile);
-        m_waveCache.erase(lruFile);
-        fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
+        for (int attempts = 0; attempts < 4 && m_waveCache.size() >= 128; ++attempts) {
+            std::string lruFile = m_waveLRU.back();
+            m_waveLRU.pop_back();
+            m_waveLRUMap.erase(lruFile);
+            auto it = m_waveCache.find(lruFile);
+            if (it == m_waveCache.end()) continue;
+            if (m_soloud.countAudioSource(*it->second) > 0) {
+                // Still playing: keep it, requeue at the front (fresh LRU).
+                m_waveCache[lruFile] = it->second;
+                m_waveLRU.push_front(lruFile);
+                m_waveLRUMap[lruFile] = m_waveLRU.begin();
+                continue;
+            }
+            m_waveCache.erase(it);
+            fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
+            break;
+        }
     }
     m_waveCache[file] = src;
     m_waveLRU.push_front(file);

@@ -103,6 +103,20 @@ bool CloudSaveProvider::deleteFile(const std::string& path) {
             m_steam->cloudRead(metaName.c_str(), metaBuf, sizeof(metaBuf));
             int32_t totalSize = 0, numChunks = 0;
             sscanf(metaBuf, "%d,%d", &totalSize, &numChunks);
+            // Same guards as readFile: a forged .meta must not drive a
+            // multi-billion-iteration delete loop.
+            if (totalSize <= 0 || totalSize > kMaxChunkedSize) {
+                // Forged meta: still remove it (and the main file below) so a
+                // later small re-save to this path is not poisoned by it.
+                m_steam->cloudDelete(metaName.c_str());
+                return m_steam->cloudDelete(path.c_str());
+            }
+            const int64_t maxChunks =
+                (static_cast<int64_t>(totalSize) + kChunkSize - 1) / kChunkSize;
+            if (numChunks <= 0 || static_cast<int64_t>(numChunks) > maxChunks) {
+                m_steam->cloudDelete(metaName.c_str());
+                return m_steam->cloudDelete(path.c_str());
+            }
             for (int32_t i = 0; i < numChunks; ++i) {
                 std::ostringstream chunkName;
                 chunkName << path << ".chunk" << std::setfill('0') << std::setw(3) << i;
