@@ -37,3 +37,12 @@
 
 - build-repro-verify Debug 零错误；CaesuraTests 567/567（+1）、2788 assertions、SUCCESS
 - ctest 10/10、耦合度 PASS
+
+---
+
+## 遗留解决（2026-08-02，提交 1125d17e）
+
+- **FFmpeg pts 步进**：frameRate（avg/r_frame_rate）+ playhead + 30 帧限步 + 保留 pts≤playhead 最后一帧（review blocking 修复：不丢未到期帧防冻结）；loop 重绕 + seek 重置 playhead
+- **loop/volume 参数**：IVideoPlayer::setLoop/setVolume + 绑定解析 {loop, volume}；plm_set_loop / FFmpeg EOF 重绕；volume clamp [0,1] 应用
+- **drainAudio 可测化**：planDrain 纯函数 + 单测（568/568 +1）；锁不变量注释
+- **3 个 LOW**：insert 同 vector UB 修复、audioHandles 上限 4、close 无锁 erase 注释说明
