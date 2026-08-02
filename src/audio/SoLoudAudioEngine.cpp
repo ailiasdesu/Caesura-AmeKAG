@@ -436,7 +436,10 @@ unsigned int SoLoudAudioEngine::playRawPCM(const float* samples,
     // loadRawWave takes raw interleaved float PCM directly (loadMem
     // expects a WAV file with header). Copy mode keeps our buffer valid.
     auto wav = std::make_shared<SoLoud::Wav>();
-    if (wav->loadRawWave(const_cast<float*>(samples), numFrames,
+    // loadRawWave's length argument is the total sample (float) count, not
+    // the frame count -- passing numFrames played back at half speed and
+    // dropped half the PCM for stereo.
+    if (wav->loadRawWave(const_cast<float*>(samples), numFrames * channels,
                          static_cast<float>(sampleRate), channels,
                          /*aCopy=*/true, /*aTakeOwnership=*/true) != SoLoud::SO_NO_ERROR) {
         registry.release("audio_handles");

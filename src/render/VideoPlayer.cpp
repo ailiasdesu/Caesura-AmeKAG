@@ -265,11 +265,10 @@ void VideoPlayer::drainAudio(VideoState& vs) {
         vs.audioStarted = true;
         offset += numFrames * 2;
     }
-    // Keep any remainder for the next drain (rare; stream end may cut it).
-    if (offset < chunk.size()) {
-        std::lock_guard<std::mutex> lock(m_audioMutex);
-        vs.audioQueue.insert(vs.audioQueue.begin(), chunk.begin() + offset, chunk.end());
-    }
+    // On playback failure (handle budget exhausted / no backend) drop the
+    // remainder instead of requeueing it: requeueing grows audioQueue
+    // unboundedly while playRawPCM keeps failing.
+    (void)offset;  // remainder intentionally dropped
 }
 
 void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
@@ -279,9 +278,13 @@ void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
     for (auto& kv : m_videos) {
         if (kv.second.plm == plmRaw) {
             // Interleaved float PCM: samples->count * 2 (stereo interleave).
-            kv.second.audioQueue.insert(kv.second.audioQueue.end(),
-                samples->interleaved,
-                samples->interleaved + samples->count * 2);
+            // Cap the queue: if the consumer (drainAudio) is failing or the
+            // audio backend is absent, drop audio instead of growing forever.
+            if (kv.second.audioQueue.size() < 8 * 1024 * 1024 / sizeof(float)) {
+                kv.second.audioQueue.insert(kv.second.audioQueue.end(),
+                    samples->interleaved,
+                    samples->interleaved + samples->count * 2);
+            }
             return;
         }
     }
