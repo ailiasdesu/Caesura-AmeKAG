@@ -75,3 +75,4 @@ shaders/compiled/
 
 # Reasonix runtime data (skills, mental-seal goals, arch baseline, session state)
 .reasonix/
+tests/scripts/config/
