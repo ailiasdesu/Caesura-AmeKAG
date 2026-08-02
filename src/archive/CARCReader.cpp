@@ -412,7 +412,11 @@ bool CARCReader::parseCertificate(const std::string& json, CarcCertificate& cert
             pos++;
         }
         if (num.empty()) return 0;
-        return std::stoll(num);
+        try {
+            return std::stoll(num);
+        } catch (const std::exception&) {
+            return 0;  // malformed cert payload: treat field as absent
+        }
     };
 
     cert.childPubKeyHash = findString(json, "child_pubkey_hash");

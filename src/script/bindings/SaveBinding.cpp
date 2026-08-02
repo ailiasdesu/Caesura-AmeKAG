@@ -33,7 +33,13 @@ static bool isLuaArray(lua_State* L, int absIdx) {
     return (count > 0 && maxKey == count);
 }
 
-static json luaTableToJson(lua_State* L, int index) {
+// Recursion depth cap: malicious self-referential Lua tables or deeply nested
+// corrupt save files must not blow the C stack (the save path is not wrapped
+// in lua_pcall, so LUAI_MAXCCALLS does not apply).
+static constexpr int kMaxTableDepth = 64;
+
+static json luaTableToJson(lua_State* L, int index, int depth = 0) {
+    if (depth > kMaxTableDepth) return nullptr;
     json result;
 
     // Normalize negative indices
@@ -48,7 +54,7 @@ static json luaTableToJson(lua_State* L, int index) {
                 case LUA_TBOOLEAN: arr.push_back((bool)lua_toboolean(L, -1)); break;
                 case LUA_TNUMBER:  arr.push_back(lua_isinteger(L, -1) ? (json)(int64_t)lua_tointeger(L, -1) : (json)(double)lua_tonumber(L, -1)); break;
                 case LUA_TSTRING:  arr.push_back(std::string(lua_tostring(L, -1))); break;
-                case LUA_TTABLE:   arr.push_back(luaTableToJson(L, -1)); break;
+                case LUA_TTABLE:   arr.push_back(luaTableToJson(L, -1, depth + 1)); break;
                 default:           arr.push_back(nullptr); break;
             }
             lua_pop(L, 1);
@@ -86,7 +92,7 @@ static json luaTableToJson(lua_State* L, int index) {
                 result[key] = std::string(lua_tostring(L, -1));
                 break;
             case LUA_TTABLE:
-                result[key] = luaTableToJson(L, -1);
+                result[key] = luaTableToJson(L, -1, depth + 1);
                 break;
             case LUA_TNIL:
                 result[key] = nullptr;
@@ -102,7 +108,8 @@ static json luaTableToJson(lua_State* L, int index) {
 }
 
 // -- nlohmann::json -> Lua table (recursive) -------------------------------
-static void jsonToLuaTable(lua_State* L, const json& j) {
+static void jsonToLuaTable(lua_State* L, const json& j, int depth = 0) {
+    if (depth > kMaxTableDepth) return;  // corrupt save: truncate instead of crashing
     lua_newtable(L);
 
     if (j.is_object()) {
@@ -130,10 +137,10 @@ static void jsonToLuaTable(lua_State* L, const json& j) {
                     lua_pushstring(L, value.get<std::string>().c_str());
                     break;
                 case json::value_t::array:
-                    jsonToLuaTable(L, value);  // array -> indexed table
+                    jsonToLuaTable(L, value, depth + 1);  // array -> indexed table
                     break;
                 case json::value_t::object:
-                    jsonToLuaTable(L, value);
+                    jsonToLuaTable(L, value, depth + 1);
                     break;
                 default:
                     lua_pushnil(L);
@@ -164,7 +171,7 @@ static void jsonToLuaTable(lua_State* L, const json& j) {
                     break;
                 case json::value_t::array:
                 case json::value_t::object:
-                    jsonToLuaTable(L, elem);
+                    jsonToLuaTable(L, elem, depth + 1);
                     break;
                 default:
                     lua_pushnil(L);
@@ -209,7 +216,9 @@ static int lua_Load_game(lua_State* L) {
     SaveMeta meta;
     json data = manager->load(slot, &meta);
 
-    if (data.is_null() || data.empty()) {
+    // Only a missing/corrupt save (load() returns json()) is a failure. An
+    // empty table {} or [] saved by the game is a valid save and must load.
+    if (data.is_null()) {
         lua_pushnil(L);
         lua_pushfstring(L, "Failed to load save slot %d", slot);
         return 2;

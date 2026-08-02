@@ -194,6 +194,13 @@ static int lua_VFX_particles_clear(lua_State* L) {
     auto* particles = getParticleSystem(L);
     if (!particles) { lua_pushboolean(L, 0); return 1; }
     particles->shutdown();
+    // Return the sandbox quota that shutdown() just freed: emitter counters
+    // only track create_emitter/destroy_emitter, so without this the count
+    // drifts and later create_emitter calls hit the cap permanently.
+    const int emitters = BackendRegistry::instance().count("particles_emitters");
+    for (int i = 0; i < emitters; ++i) {
+        BackendRegistry::instance().release("particles_emitters");
+    }
     const bool initialized = particles->init();
     lua_pushboolean(L, initialized ? 1 : 0);
     return 1;

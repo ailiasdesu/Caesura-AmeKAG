@@ -49,6 +49,11 @@ void BackendRegistry::release(const char* kind) {
     if (auto* quota = getSandboxQuota()) quota->release(kind);
 }
 
+int BackendRegistry::count(const char* kind) {
+    auto* quota = getSandboxQuota();
+    return quota ? quota->count(kind) : 0;
+}
+
 // -- Getter / Setter definitions (need complete types) --------------------
 
 #define DEF_GETTER(Iface, method) \

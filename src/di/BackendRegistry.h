@@ -77,6 +77,8 @@ public:
     // -- SandboxQuota wrappers (delegate to the registered interface) --
     bool tryAlloc(const char* kind);
     void release(const char* kind);
+    // Current sandbox-quota count for `kind` (0 when no quota is installed).
+    int count(const char* kind);
 
     // -- Getters (out-of-line — need complete types in .cpp) --
     IRenderDevice*    getRenderDevice();

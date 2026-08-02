@@ -272,17 +272,19 @@ bool CRLManager::parseCRL(const std::string& json) {
             sigBytes[i] = static_cast<uint8_t>(strtoul(hex, nullptr, 16));
         }
 
-        // If signature is 64 bytes, verify with Ed25519
-        if (sigBytes.size() == 64) {
-            if (!CryptoEngine::verify(
-                    reinterpret_cast<const uint8_t*>(payload.data()),
-                    payload.size(),
-                    m_rootPublicKey,
-                    sigBytes.data())) {
-                return false; // signature verification failed
-            }
+        // Ed25519 signatures are exactly 64 bytes. Anything else is a
+        // malformed or tampered CRL and must be rejected, never silently
+        // accepted (the old "skip for dev/testing" path was a trust gap).
+        if (sigBytes.size() != 64) {
+            return false; // invalid signature length
         }
-        // If no root key or invalid sig size, skip verification (allow for dev/testing)
+        if (!CryptoEngine::verify(
+                reinterpret_cast<const uint8_t*>(payload.data()),
+                payload.size(),
+                m_rootPublicKey,
+                sigBytes.data())) {
+            return false; // signature verification failed
+        }
     }
 
     // Populate revoked set
