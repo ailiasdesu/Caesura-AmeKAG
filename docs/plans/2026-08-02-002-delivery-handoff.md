@@ -7,14 +7,15 @@
 ## 1. 当前状态
 
 - **分支**：`master`。HEAD 为本文档的最新修订（doc 提交，代码基线见下）；当前文档链快照自 `git log --first-parent 7303fef4..HEAD` 生成，后续 agent 请以该命令为权威提交列表
-- **CI**：三平台全绿（`gh run list --limit 1` 查最新；快照时 run 30727177787 = success，五 job 全过）
+- **CI**：快照时三平台全绿（run 30727177787 = success，五 job 全过）；`gh run list --limit 1` 查最新
 - **本地验证基线**：doctest **564/564**（断言 **2770**）；ctest **10/10**；HTTP smoke **21/21**；
   `python scripts/count_coupling.py --ci` **PASS**
 - **工作树**：干净（仅 `.reasonix/` 未跟踪，非项目产物，勿提交）
 
 ### 最近提交（自上轮交接 7303fef4 起；**权威列表 = `git log --first-parent 7303fef4..HEAD`**，下文为生成时刻快照）
 ```
-67a78e3e  docs(plans): handoff 008 refresh — HEAD 1181538a, full 22-commit list, CI run  ← 本文档修订
+fde7df91  docs(plans): handoff 008 — self-healing state lines            ← 本文档修订（快照首行）
+67a78e3e  docs(plans): handoff 008 refresh — HEAD 1181538a, commit list
 1181538a  docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit
 19aca04b  test(rpc): extract constantTimeEquals with unit coverage; closeout 007
 31afd181  test(rpc): fix inverted skip condition in HTTP smoke (blocking review finding)
@@ -28,6 +29,7 @@ b96ffb6f  fix(rpc): confine /api/build outputs to build/; localhost-only CORS; g
 eb7d4a45  fix(rpc): wrap breakpoint line int64 read in try/catch (400 on parse error)
 c2aa8b4f  test(rpc): regression-guard int-overflow breakpoint line rejection
 0979d921  fix(rpc): reject int-overflow breakpoint lines via int64 bound check
+b053ebc4  fix(rpc): bound-check breakpoint line; make smoke/test paths cross-platform
 8b8436c5  feat(rpc): HTTP debug routes + live2d path-confinement tests   ← closeout 006
 059d4558  fix(live2d): fail closed on stat error; reject dot components and junctions
 6510bd90  fix(live2d): reject symlink final component in fallback; case-fold Windows only
