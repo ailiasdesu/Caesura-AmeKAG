@@ -350,6 +350,7 @@ void VideoPlayer::setLoop(VideoHandle handle, bool loop) {
 void VideoPlayer::setVolume(VideoHandle handle, float volume) {
     VideoState* vs = find(handle);
     if (!vs) return;
+    if (!std::isfinite(volume)) return;  // NaN/Inf: reject (never clamp to a valid value)
     vs->volume = (volume < 0.0f) ? 0.0f : (volume > 1.0f ? 1.0f : volume);
     auto* audio = BackendRegistry::instance().getAudioBackend();
     if (audio) {
@@ -660,6 +661,10 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     vs->audioHandle = 0;
     vs->audioStarted = false;
     { std::lock_guard<std::mutex> lk(m_audioMutex); vs->audioQueue.clear(); }
+
+    // Clamp to the media range; also rejects NaN (comparisons false -> 0).
+    if (!(time > 0.0)) time = 0.0;
+    if (vs->duration > 0.0 && time > vs->duration) time = vs->duration;
 
     if (vs->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
