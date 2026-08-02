@@ -195,6 +195,11 @@ function kag_runner.update(dt)
     -- EXCEPT in auto mode, which advances after a short delay (like a
     -- visual-novel auto-play button).
     if ctx and ctx.waiting_input then
+        if ctx.skip_mode then
+            -- Skip mode: advance immediately, no delay.
+            auto_advance_frames = 0
+            return kag_runner.on_click()
+        end
         if ctx.auto_mode then
             auto_advance_frames = auto_advance_frames + 1
             if auto_advance_frames >= 90 then  -- ~1.5s at 60fps
