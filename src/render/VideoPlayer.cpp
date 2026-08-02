@@ -665,7 +665,12 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     // Clamp to the media range. NaN and -Inf fail the comparison -> 0; +Inf
     // and huge finite values must be rejected explicitly so the
     // (int64_t)(time * AV_TIME_BASE) conversion below can never be UB.
-    if (!std::isfinite(time) || time <= 0.0) time = 0.0;
+    // isfinite() alone still passes huge finite values (e.g. 1e300) when the
+    // duration is unknown, so bound the time before the conversion.
+    constexpr double kMaxSeekSeconds =
+        static_cast<double>(std::numeric_limits<int64_t>::max()) /
+        static_cast<double>(AV_TIME_BASE);
+    if (!std::isfinite(time) || time <= 0.0 || time > kMaxSeekSeconds) time = 0.0;
     if (vs->duration > 0.0 && time > vs->duration) time = vs->duration;
 
     if (vs->useFFmpeg) {
