@@ -40,7 +40,7 @@ static std::string escapeJson(const std::string& s) {
             out += static_cast<char>(92); out += 't';
         } else if (c < 0x20) {
             char buf[8];
-            snprintf(buf, sizeof(buf), "\\u%04x", c);
+            snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
             out += buf;
         } else {
             out += static_cast<char>(c);
