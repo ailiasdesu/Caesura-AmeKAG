@@ -198,7 +198,10 @@ function Layers.ensure(ctx, name, z)
         if z ~= nil then node.z = z end
         return node
     end
-    return Layers.add_layer(Layers.get_root(), { name = name, id = name, z = z or 0 })
+    -- tag mirrors name so Layers.find(name) (which matches tags) works for
+    -- hide(); without it the settings/gallery/music_room overlays could
+    -- never be found, hidden, or destroyed (and reopen would leak view ids).
+    return Layers.add_layer(Layers.get_root(), { name = name, id = name, tag = name, z = z or 0 })
 end
 
 function Layers.get(layer_name)
@@ -506,10 +509,11 @@ function Layers.render()
 
         -- emit commands for dirty nodes with tex/rt and view_id
         -- Root-level nodes may have tex but no rt; include them
-        if node.dirty and node.view_id and (node.rt or (node.tex and node.tex ~= 0)) then
+        local nodeTex = node.tex or node.texture or 0
+        if node.dirty and node.view_id and (node.rt or (nodeTex and nodeTex ~= 0)) then
             batch.commands[#batch.commands + 1] = {
                 view_id    = node.view_id,
-                tex        = node.tex or 0,
+                tex        = nodeTex,
                 rt         = node.rt,
                 x          = wx,
                 y          = wy,

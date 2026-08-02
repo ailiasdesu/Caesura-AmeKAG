@@ -121,6 +121,27 @@ local function load_tokens(path)
     return nil
 end
 
+-- Resume a previously saved game: reload the saved scene and start from the
+-- saved token index ([load] support; the pending fields are set by
+-- SaveCommands.load and consumed here when the current script ends).
+local function resume_from_save()
+    local path = ctx._pendingLoadScene
+    if not path or #path == 0 then return false end
+    local scene = flow.load_scene(path)
+    if not scene then
+        print("[KAG Runner] Failed to load saved scene: " .. path)
+        ctx._pendingLoadScene = nil
+        return false
+    end
+    ctx.labelMap = scene.labels
+    ctx.tokens = scene.tokens
+    ctx.token_index = ctx._pendingLoadToken or 1
+    ctx.currentScene = path
+    ctx._pendingLoadScene = nil
+    ctx._pendingLoadToken = nil
+    return true
+end
+
 -- ── kag_runner.start(scene_path) → boolean ───────────────────────────────────
 -- Load a .ks scene and begin executing it. Returns true on success.
 
@@ -244,6 +265,12 @@ function kag_runner.update(dt)
         close_scheduler_coroutine()
         if ctx._scene_changed then
             ctx._scene_changed = false
+            kag_co = coroutine.create(function()
+                scheduler.run(ctx, ctx.tokens, ctx.token_index)
+            end)
+            return resume_scheduler("update", delta_ms)
+        elseif resume_from_save() then
+            -- [load]: restart the saved scene at the saved token.
             kag_co = coroutine.create(function()
                 scheduler.run(ctx, ctx.tokens, ctx.token_index)
             end)
