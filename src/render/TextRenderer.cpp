@@ -892,10 +892,17 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
     fclose(f);
 
     const uint16_t cjkW = 4096, cjkH = 4096;
+    const uint32_t expected = static_cast<uint32_t>(cjkW) * cjkH * 4;  // 64MB
+    if (static_cast<size_t>(size) != expected) {
+        fprintf(stderr,
+            "[TextRenderer] CJK atlas size mismatch: %ld bytes, expected %u (skipping)\n",
+            size, expected);
+        return false;
+    }
     m_cjkAtlas = bgfx::createTexture2D(cjkW, cjkH, false, 1,
         bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP,
-        bgfx::copy(data.data(), (uint32_t)(cjkW * cjkH * 4)));
+        bgfx::copy(data.data(), expected));
     if (!bgfx::isValid(m_cjkAtlas)) {
         fprintf(stderr, "[TextRenderer] CJK atlas texture creation failed\n");
         return false;
