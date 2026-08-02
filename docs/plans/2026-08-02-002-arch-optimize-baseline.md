@@ -8,7 +8,7 @@
 - dep_graph：**circular_deps = []（零循环依赖）**——符合 AGENTS.md 模块边界铁律；main 扇出 9（组合根）、entry 2、render/audio/archive 各 1
 
 ## 阶段二 风险诊断（src/，201 文件，178 发现）
-- 分布：R1 认知过载 116、R2 变更传播 166、R3 知识重复 66、R4 偶发复杂 8（R5/R6 无——无循环依赖/依赖方向正确）
+- 分布（risk 标记计数，单条 finding 可多标记）：R1 认知过载 116、R2 变更传播 166、R3 知识重复 66、R4 偶发复杂 8（R5/R6 无——无循环依赖/依赖方向正确）；178 条 finding、201 文件
 - 启发式 health_score 0/危险（92C+84W）——**正则+花括号粗粒度统计，假阳性率高**，不作为绝对评分
 - 热点模块：script/bindings 72、render 48、archive 40、minigame 34、debug 30
 
