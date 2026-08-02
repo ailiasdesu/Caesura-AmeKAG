@@ -137,6 +137,11 @@ local function resume_from_save()
     ctx.tokens = scene.tokens
     ctx.token_index = ctx._pendingLoadToken or 1
     ctx.currentScene = path
+    -- The saved [load] set stop_flag to end the running script; clear it so
+    -- the resumed coroutine actually executes tokens (scheduler returns
+    -- immediately while stop_flag is set).
+    ctx.stop_flag = false
+    ctx.current_scene = path  -- snake_case variant read by system.lua
     ctx._pendingLoadScene = nil
     ctx._pendingLoadToken = nil
     return true
