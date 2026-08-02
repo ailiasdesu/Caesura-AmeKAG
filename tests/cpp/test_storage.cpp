@@ -78,6 +78,9 @@ TEST_CASE("Storage: SaveManager ENGINE_VERSION is not empty") {
 class MockSteamBackend final : public ISteamBackend {
 public:
     std::map<std::string, std::string> files;
+    // When >= 0, cloudWrite fails for chunk indexes >= this value (for
+    // rollback testing). Only applied to .chunkNNN writes.
+    int failCloudWritesFrom = -1;
 
     bool init() override { return true; }
     void shutdown() override {}
@@ -94,6 +97,11 @@ public:
     bool storeStats() override { return true; }
     bool cloudWrite(const char* fileName, const void* data, int32_t size) override {
         if (!fileName || size < 0) return false;
+        if (failCloudWritesFrom >= 0 && std::strstr(fileName, ".chunk")) {
+            int idx = 0;
+            if (std::sscanf(std::strrchr(fileName, 'k') + 1, "%d", &idx) == 1 && idx >= failCloudWritesFrom)
+                return false;
+        }
         files[fileName] = std::string(static_cast<const char*>(data), static_cast<size_t>(size));
         return true;
     }
@@ -153,6 +161,53 @@ TEST_CASE("Storage: CloudSaveProvider large-file chunked roundtrip") {
     REQUIRE(provider.deleteFile("big_save.json"));
     CHECK_FALSE(steam.cloudFileExists("big_save.json.meta"));
     CHECK_FALSE(steam.cloudFileExists("big_save.json.chunk000"));
+}
+
+
+
+TEST_CASE("Storage: CloudSaveProvider rejects forged chunked .meta") {
+    MockSteamBackend steam;
+    CloudSaveProvider provider(&steam);
+
+    // Absurd totalSize / numChunks must be rejected, not reserve GBs or loop.
+    steam.files["f.meta"] = "2147483647,2147483647";
+    CHECK(provider.readFile("f").empty());
+
+    // numChunks far above what totalSize can legitimately use.
+    steam.files["f.meta"] = "100,1000000";
+    CHECK(provider.readFile("f").empty());
+
+    // Missing chunks -> empty, not partial data.
+    steam.files["f.meta"] = "300,2";
+    steam.files["f.chunk000"] = std::string(256 * 1024, 'a');
+    CHECK(provider.readFile("f").empty());
+
+    // A chunk longer than the bytes still expected must be rejected.
+    steam.files.clear();
+    steam.files["g.meta"] = "10,1";
+    steam.files["g.chunk000"] = std::string(20, 'a');
+    CHECK(provider.readFile("g").empty());
+
+    // Assembled length != totalSize must be rejected.
+    steam.files.clear();
+    steam.files["h.meta"] = "10,1";
+    steam.files["h.chunk000"] = std::string(5, 'a');
+    CHECK(provider.readFile("h").empty());
+}
+
+TEST_CASE("Storage: CloudSaveProvider chunked write failure rolls back meta") {
+    MockSteamBackend steam;
+    CloudSaveProvider provider(&steam);
+
+    // 600KB payload -> 3 chunks; make the 2nd chunk write fail.
+    std::string payload(600000, 'x');
+    steam.failCloudWritesFrom = 1;  // fail chunk index 1 (0-based)
+    CHECK_FALSE(provider.writeFile("roll.json", payload));
+
+    // .meta and every chunk written so far must be gone.
+    CHECK_FALSE(steam.cloudFileExists("roll.json.meta"));
+    CHECK_FALSE(steam.cloudFileExists("roll.json.chunk000"));
+    CHECK_FALSE(steam.cloudFileExists("roll.json.chunk001"));
 }
 
 TEST_CASE("Storage: CloudSaveProvider null backend is a safe no-op") {

@@ -24,6 +24,9 @@ public:
 private:
     ISteamBackend* m_steam;
     static constexpr int32_t kChunkSize = 256 * 1024; // 256KB Steam limit
+    // Hard cap on a single chunked save; protects against corrupt .meta
+    // triggering multi-GB reserves / billion-iteration loops.
+    static constexpr int32_t kMaxChunkedSize = 64 * 1024 * 1024; // 64MB
 };
 
 } // namespace Caesura

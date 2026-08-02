@@ -24,6 +24,11 @@ std::string CloudSaveProvider::readFile(const std::string& path) {
         int32_t numChunks = 0;
         sscanf(metaBuf, "%d,%d", &totalSize, &numChunks);
         if (totalSize <= 0 || numChunks <= 0) return "";
+        // Never trust .meta: reject absurd sizes and chunk counts up front.
+        if (totalSize > kMaxChunkedSize) return "";
+        const int64_t maxChunks =
+            (static_cast<int64_t>(totalSize) + kChunkSize - 1) / kChunkSize;
+        if (static_cast<int64_t>(numChunks) > maxChunks) return "";
         std::string result;
         result.reserve(totalSize);
         for (int32_t i = 0; i < numChunks; ++i) {
@@ -31,9 +36,16 @@ std::string CloudSaveProvider::readFile(const std::string& path) {
             chunkName << path << ".chunk" << std::setfill('0') << std::setw(3) << i;
             int32_t chunkLen = m_steam->cloudFileSize(chunkName.str().c_str());
             if (chunkLen <= 0) return "";
+            // A chunk must never exceed the bytes still expected, so a lying
+            // .meta/chunk cannot drive the buffer past totalSize.
+            if (static_cast<int64_t>(chunkLen) >
+                static_cast<int64_t>(totalSize) - static_cast<int64_t>(result.size()))
+                return "";
             result.resize(result.size() + chunkLen);
             m_steam->cloudRead(chunkName.str().c_str(), &result[result.size() - chunkLen], chunkLen);
         }
+        // Assembled length must exactly match the declared total.
+        if (result.size() != static_cast<size_t>(totalSize)) return "";
         return result;
     }
     // Single file read
@@ -64,7 +76,18 @@ bool CloudSaveProvider::writeFile(const std::string& path, const std::string& co
         chunkName << path << ".chunk" << std::setfill('0') << std::setw(3) << i;
         int64_t offset = static_cast<int64_t>(i) * kChunkSize;
         int32_t chunkLen = (offset + kChunkSize > size) ? (size - static_cast<int32_t>(offset)) : kChunkSize;
-        if (!m_steam->cloudWrite(chunkName.str().c_str(), content.data() + offset, chunkLen)) return false;
+        if (!m_steam->cloudWrite(chunkName.str().c_str(), content.data() + offset, chunkLen)) {
+            // Rollback: remove the just-written meta and the chunks written so
+            // far, so a failed write never leaves a .meta pointing at missing
+            // chunks (which would read back as an empty save forever).
+            m_steam->cloudDelete(metaName.c_str());
+            for (int32_t j = 0; j <= i; ++j) {
+                std::ostringstream n;
+                n << path << ".chunk" << std::setfill('0') << std::setw(3) << j;
+                m_steam->cloudDelete(n.str().c_str());
+            }
+            return false;
+        }
     }
     return true;
 }

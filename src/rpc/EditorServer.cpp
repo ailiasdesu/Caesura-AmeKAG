@@ -791,21 +791,43 @@ void EditorServer::serverLoop(int port) {
         std::string outputPath = "build/game.carc";
         std::string keyPath = "build/game.key";
 
-        // Parse optional outputPath and keyPath from body
-        std::string body = req.body;
-        auto findParam = [&](const std::string& name) -> std::string {
-            auto pos = body.find("\"" + name + "\"");
-            if (pos == std::string::npos) return "";
-            auto start = body.find("\"", pos + name.size() + 3);
-            if (start == std::string::npos) return "";
-            auto end = body.find("\"", start + 1);
-            if (end == std::string::npos) return "";
-            return body.substr(start + 1, end - start - 1);
-        };
-        std::string customOutput = findParam("outputPath");
-        std::string customKey = findParam("keyPath");
-        if (!customOutput.empty()) outputPath = customOutput;
-        if (!customKey.empty()) keyPath = customKey;
+        // Parse optional outputPath and keyPath from body. An empty body keeps
+        // the defaults (backward compatible); malformed JSON is a 400. The old
+        // hand-rolled scanner truncated values containing escaped quotes and
+        // mis-matched on literal "outputPath" inside a value.
+        Json body;
+        try {
+            body = req.body.empty() ? Json::object() : Json::parse(req.body);
+        } catch (const Json::exception&) {
+            res.set_content("{\"error\":\"Request body must be valid JSON\"}",
+                            "application/json");
+            res.status = 400;
+            return;
+        }
+        if (!body.is_object()) {
+            res.set_content("{\"error\":\"Request body must be a JSON object\"}",
+                            "application/json");
+            res.status = 400;
+            return;
+        }
+        if (body.contains("outputPath")) {
+            if (!body["outputPath"].is_string()) {
+                res.set_content("{\"error\":\"outputPath must be a string\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            const std::string v = body["outputPath"].get<std::string>();
+            if (!v.empty()) outputPath = v;
+        }
+        if (body.contains("keyPath")) {
+            if (!body["keyPath"].is_string()) {
+                res.set_content("{\"error\":\"keyPath must be a string\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            const std::string v = body["keyPath"].get<std::string>();
+            if (!v.empty()) keyPath = v;
+        }
 
         // Security: confine output paths under build/ -- reject absolute paths
         // and ".." escapes so a local caller cannot overwrite arbitrary files.
