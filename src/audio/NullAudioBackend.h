@@ -29,6 +29,8 @@ public:
 
     // -- SE bus (2D + 3D) --------------------------------------------------
     unsigned int playSE(const std::string& file) override;
+    unsigned int playRawPCM(const float* samples, unsigned int numFrames,
+                            unsigned int sampleRate, unsigned int channels) override;
     unsigned int playSE3D(const std::string& file,
                           float x, float y, float z) override;
     void stopSE() override;

@@ -215,6 +215,7 @@ public:
     unsigned int playVoice(const std::string&) override { return 0; }
     void stopVoice() override {}
     unsigned int playSE(const std::string&) override { return 0; }
+    unsigned int playRawPCM(const float*, unsigned int, unsigned int, unsigned int) override { return 0; }
     unsigned int playSE3D(const std::string&, float, float, float) override { return 0; }
     void stopSE() override {}
     void setSEVolume(unsigned int, float) override {}

@@ -2,6 +2,7 @@
 #include "../audio/api/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
+#include <soloud_wav.h>
 #include <cstddef>
 #include <string>
 #include <unordered_map>
@@ -39,6 +40,8 @@ public:
     void stopVoice() override;
 
     unsigned int playSE(const std::string& file) override;
+    unsigned int playRawPCM(const float* samples, unsigned int numFrames,
+                            unsigned int sampleRate, unsigned int channels) override;
     unsigned int playSE3D(const std::string& file, float x, float y, float z) override;
     void stopSE() override;
     void setSEVolume(unsigned int handle, float volume) override;
@@ -89,6 +92,8 @@ private:
     SoLoud::Bus    m_bgmBus;
     SoLoud::Bus    m_voiceBus;
     SoLoud::Bus    m_seBus;
+    // Raw-PCM Wavs kept alive while their voice plays (playRawPCM).
+    std::unordered_map<unsigned int, std::shared_ptr<SoLoud::Wav>> m_rawWaveCache;
     SoLoud::handle m_bgmBusHandle   = 0;
     SoLoud::handle m_voiceBusHandle = 0;
     SoLoud::handle m_seBusHandle    = 0;

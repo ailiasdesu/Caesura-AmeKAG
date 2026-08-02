@@ -158,6 +158,8 @@ void SoLoudAudioEngine::shutdown(){
     m_seBusHandle = 0;
     releaseAudioHandles(allocatedHandles);
     printf("[Audio] SoLoud shut down.\n");
+
+    m_rawWaveCache.clear();
 }
 
 void SoLoudAudioEngine::update(float /*deltaTime*/){
@@ -229,6 +231,7 @@ void SoLoudAudioEngine::cullFinishedHandles() {
         [this, &released](SoLoud::handle handle) {
             if (m_soloud.isValidVoiceHandle(handle)) return false;
             ++released;
+            m_rawWaveCache.erase(handle);  // finished raw-PCM Wav is dead
             return true;
         });
     m_activeSE.erase(firstFinished, m_activeSE.end());
@@ -391,6 +394,7 @@ void SoLoudAudioEngine::stopSE(){
         }
     }
     m_activeSE.clear();
+    m_rawWaveCache.clear();
     printf("[Audio] SE: all sound effects stopped.\n");
     releaseAudioHandles(handleCount);
 }
@@ -412,6 +416,42 @@ unsigned int SoLoudAudioEngine::playSE(const std::string& file){
     }
     m_activeSE.push_back(h);
     printf("[Audio] SE: %s (handle %u)\n", file.c_str(), h);
+    return static_cast<unsigned int>(h);
+}
+
+unsigned int SoLoudAudioEngine::playRawPCM(const float* samples,
+                                          unsigned int numFrames,
+                                          unsigned int sampleRate,
+                                          unsigned int channels) {
+    CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_initialized || !samples || numFrames == 0 || sampleRate == 0 ||
+        (channels != 1 && channels != 2)) {
+        return 0;
+    }
+
+    cullFinishedHandles();
+    auto& registry = BackendRegistry::instance();
+    if (!registry.tryAlloc("audio_handles")) return 0;
+
+    // loadRawWave takes raw interleaved float PCM directly (loadMem
+    // expects a WAV file with header). Copy mode keeps our buffer valid.
+    auto wav = std::make_shared<SoLoud::Wav>();
+    if (wav->loadRawWave(const_cast<float*>(samples), numFrames,
+                         static_cast<float>(sampleRate), channels,
+                         /*aCopy=*/true, /*aTakeOwnership=*/true) != SoLoud::SO_NO_ERROR) {
+        registry.release("audio_handles");
+        return 0;
+    }
+
+    SoLoud::handle h = m_seBus.play(*wav);
+    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+        registry.release("audio_handles");
+        return 0;
+    }
+    m_activeSE.push_back(h);
+    m_rawWaveCache[h] = wav;  // keep the Wav alive while playing
+    printf("[Audio] Raw PCM: %u frames @ %u Hz (%u ch, handle %u)\n",
+           numFrames, sampleRate, channels, h);
     return static_cast<unsigned int>(h);
 }
 

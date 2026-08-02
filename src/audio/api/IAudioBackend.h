@@ -29,6 +29,13 @@ public:
 
     // -- SE bus: sound effects (2D and 3D spatial) ------------------------
     virtual unsigned int playSE(const std::string& file) = 0;
+
+    // -- Raw PCM playback (video audio etc.) ------------------------------
+    // Plays interleaved float PCM [-1,1] on the SE bus; the engine copies the
+    // samples, so the caller may free them after the call. Returns a handle
+    // usable with stopSEHandle/setSEVolume, or 0 on failure.
+    virtual unsigned int playRawPCM(const float* samples, unsigned int numFrames,
+                                    unsigned int sampleRate, unsigned int channels) = 0;
     virtual unsigned int playSE3D(const std::string& file,
                                    float x, float y, float z) = 0;
     virtual void stopSE() = 0;

@@ -24,6 +24,8 @@ public:
     virtual VideoHandle open(const char* path) = 0;
     virtual void close(VideoHandle handle) = 0;
     virtual bool update(VideoHandle handle, double dt) = 0;
+    // Advance every playing video by dt (called by the engine frame loop).
+    virtual void updateAll(double dt) = 0;
     // Returns raw bgfx TextureHandle.idx, or 0 if no frame available.
     virtual uint32_t getTexture(VideoHandle handle) const = 0;
 

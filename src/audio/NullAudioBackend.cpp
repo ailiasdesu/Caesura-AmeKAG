@@ -26,6 +26,8 @@ void NullAudioBackend::stopVoice() {}
 // -- SE bus (2D + 3D) --------------------------------------------------
 
 unsigned int NullAudioBackend::playSE(const std::string& /*file*/) { return 0; }
+unsigned int NullAudioBackend::playRawPCM(const float* /*samples*/, unsigned int /*numFrames*/,
+                                          unsigned int /*sampleRate*/, unsigned int /*channels*/) { return 0; }
 unsigned int NullAudioBackend::playSE3D(const std::string& /*file*/,
                                          float /*x*/, float /*y*/, float /*z*/) { return 0; }
 void NullAudioBackend::stopSE() {}

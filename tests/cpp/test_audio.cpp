@@ -607,3 +607,37 @@ TEST_CASE("SoLoudAudioEngine shutdown releases all remaining handle quotas once"
     eng.shutdown();
     CHECK(quota.releaseCalls == 6);
 }
+
+
+TEST_CASE("SoLoudAudioEngine playRawPCM plays and stops cleanly") {
+    SoLoudAudioEngine eng;
+    REQUIRE(eng.init());
+    // init() starts the three bus voices; baseline counts them.
+    const int baseline = static_cast<int>(eng.activeVoiceCount());
+    CHECK(baseline >= 3);
+
+    // 0.25s of 440Hz sine at 44.1kHz stereo (interleaved float)
+    const unsigned int sr = 44100;
+    const unsigned int frames = sr / 4;
+    std::vector<float> pcm(frames * 2);
+    for (unsigned int i = 0; i < frames; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(sr);
+        const float v = 0.25f * std::sin(2.0f * 3.14159265f * 440.0f * t);
+        pcm[i * 2] = v;
+        pcm[i * 2 + 1] = v;
+    }
+
+    const unsigned int h = eng.playRawPCM(pcm.data(), frames, sr, 2);
+    REQUIRE(h != 0);
+    CHECK(static_cast<int>(eng.activeVoiceCount()) > baseline);
+
+    // Invalid parameters are rejected without crashing.
+    CHECK(eng.playRawPCM(nullptr, 100, sr, 2) == 0);
+    CHECK(eng.playRawPCM(pcm.data(), 0, sr, 2) == 0);
+    CHECK(eng.playRawPCM(pcm.data(), 100, 0, 2) == 0);
+    CHECK(eng.playRawPCM(pcm.data(), 100, sr, 3) == 0);
+
+    eng.stopSEHandle(h);
+    eng.shutdown();
+    CHECK(eng.activeVoiceCount() == 0);
+}

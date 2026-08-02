@@ -918,6 +918,8 @@ void Engine::render(float dt) {
     if (m_config.headless && !m_config.editorMode) return;
 
     m_lua->resetInstructionBudget();
+    // Drive active videos by real frame time (frame-rate pacing inside).
+    if (m_videoPlayer) m_videoPlayer->updateAll(dt);
     lua_State* L = m_lua->state();
     if (L && !isLuaExecutionPaused()) {
         lua_getglobal(L, "engine_render");

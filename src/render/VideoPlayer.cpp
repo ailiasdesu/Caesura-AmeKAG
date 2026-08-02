@@ -9,6 +9,7 @@
 #include "VideoPlayer.h"
 #include "../debug/DebugManager.h"
 #include "../di/BackendRegistry.h"
+#include "../audio/api/IAudioBackend.h"
 
 #ifdef CAESURA_VIDEO_FFMPEG
 extern "C" {
@@ -28,6 +29,16 @@ static bool shouldUsePlmpeg(const char* path) {
     // case-insensitive comparison
     const char* lower = ext;
     return (strcmp(lower, ".mpg") == 0 || strcmp(lower, ".mpeg") == 0);
+}
+
+// pl_mpeg audio callback: appends decoded interleaved float PCM to the
+// owning VideoState queue (the callback runs on the thread that calls
+// plm_decode_video/audio -- our worker -- so the queue is protected by
+// the VideoPlayer mutex only where shared with the main thread; here the
+// queue is only touched from the worker via this callback).
+static void onPlmAudio(plm_t* plm, plm_samples_t* samples, void* user) {
+    auto* self = static_cast<VideoPlayer*>(user);
+    self->onAudioDecoded(plm, samples);
 }
 
 VideoPlayer::VideoPlayer()  = default;
@@ -195,6 +206,18 @@ VideoHandle VideoPlayer::open(const char* path) {
     vs.playing  = true;
     vs.ended    = false;
     vs.hasFrame = false;
+    vs.frameRate = plm_get_framerate(plm);
+    if (vs.frameRate <= 0.0) vs.frameRate = 30.0;  // defensive default
+    vs.playhead  = 0.0;
+
+    // Enable audio: decoded PCM is queued by onPlmAudio and drained into the
+    // audio backend during update(). No-op when the stream has no audio.
+    vs.audioEnabled = true;
+    vs.sampleRate   = plm_get_samplerate(plm);
+    if (vs.sampleRate > 0) {
+        plm_set_audio_enabled(plm, 1);
+        plm_set_audio_decode_callback(plm, onPlmAudio, this);
+    }
 
     vs.texture = bgfx::createTexture2D(
         (uint16_t)vs.width, (uint16_t)vs.height,
@@ -219,7 +242,60 @@ VideoHandle VideoPlayer::open(const char* path) {
     return handle;
 }
 
+void VideoPlayer::drainAudio(VideoState& vs) {
+    if (!vs.audioEnabled || vs.sampleRate <= 0) return;
+    std::vector<float> chunk;
+    {
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        if (vs.audioQueue.empty()) return;
+        chunk.swap(vs.audioQueue);
+    }
+    auto* audio = BackendRegistry::instance().getAudioBackend();
+    if (!audio) return;
+    // Roughly one chunk per second of audio: 2 channels x sampleRate frames.
+    const unsigned int numFrames = static_cast<unsigned int>(vs.sampleRate);
+    unsigned int offset = 0;
+    while (offset + numFrames * 2 <= chunk.size()) {
+        const unsigned int h = audio->playRawPCM(
+            chunk.data() + offset, numFrames,
+            static_cast<unsigned int>(vs.sampleRate), 2);
+        if (h == 0) break;
+        vs.audioHandle = h;
+        vs.audioHandles.push_back(h);
+        vs.audioStarted = true;
+        offset += numFrames * 2;
+    }
+    // Keep any remainder for the next drain (rare; stream end may cut it).
+    if (offset < chunk.size()) {
+        std::lock_guard<std::mutex> lock(m_audioMutex);
+        vs.audioQueue.insert(vs.audioQueue.begin(), chunk.begin() + offset, chunk.end());
+    }
+}
+
+void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
+    auto* samples = static_cast<plm_samples_t*>(samplesRaw);
+    if (!samples) return;
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    for (auto& kv : m_videos) {
+        if (kv.second.plm == plmRaw) {
+            // Interleaved float PCM: samples->count * 2 (stereo interleave).
+            kv.second.audioQueue.insert(kv.second.audioQueue.end(),
+                samples->interleaved,
+                samples->interleaved + samples->count * 2);
+            return;
+        }
+    }
+}
 void VideoPlayer::close(VideoHandle handle) {
+    auto* audio = BackendRegistry::instance().getAudioBackend();
+    if (audio && m_videos.count(handle.id)) {
+        auto& vs = m_videos[handle.id];
+        for (const auto h : vs.audioHandles) audio->stopSEHandle(h);
+        vs.audioHandles.clear();
+        vs.audioHandle = 0;
+        vs.audioStarted = false;
+        { std::lock_guard<std::mutex> lk(m_audioMutex); vs.audioQueue.clear(); }
+    }
     VideoState* vs = find(handle);
     if (!vs) return;
 
@@ -328,20 +404,32 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
     // Only reached when CAESURA_VIDEO_FFMPEG is OFF, or FFmpeg open() failed.
     {
         plm_t* plm = static_cast<plm_t*>(vs->plm);
+
+        // Frame-rate pacing: advance the playhead by dt and decode enough
+        // frames to catch up (bounded so a stall cannot block the frame).
+        if (dt > 0.0 && vs->frameRate > 0.0) {
+            vs->playhead += dt;
+        }
+
+        const int maxFrames = 30;
         auto frame = std::make_shared<DecodedFrame>();
         frame->width  = vs->width;
         frame->height = vs->height;
 
         m_jobSystem->submit(
-            [frame, plm]() {
-                plm_frame_t* f = plm_decode_video(plm);
-                plm_decode_audio(plm);
-                if (f) {
-                    frame->rgba.resize(frame->width * frame->height * 4);
-                    plm_frame_to_rgba(f, frame->rgba.data(), frame->width * 4);
-                    frame->valid = true;
-                } else {
-                    frame->valid = false;
+            [frame, plm, vs]() {
+                for (int n = 0; n < maxFrames; ++n) {
+                    plm_frame_t* f = plm_decode_video(plm);
+                    plm_decode_audio(plm);
+                    if (f) {
+                        frame->rgba.resize(frame->width * frame->height * 4);
+                        plm_frame_to_rgba(f, frame->rgba.data(), frame->width * 4);
+                        frame->valid = true;
+                    }
+                    // Stop once the decoded position reaches the playhead.
+                    if (vs->frameRate <= 0.0 || plm_get_time(plm) >= vs->playhead - 0.5 / vs->frameRate)
+                        break;
+                    if (plm_has_ended(plm)) break;
                 }
             },
             JobPriority::High
@@ -354,7 +442,6 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             bgfx::updateTexture2D(vs->texture, 0, 0, 0, 0,
                                   (uint16_t)frame->width, (uint16_t)frame->height, mem);
             vs->hasFrame = true;
-            return true;
         }
 
         if (plm_has_ended(plm)) {
@@ -363,7 +450,22 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
             DEBUG_INFO(SubSys::Render, ErrCode::Ok,
                        "VideoPlayer: video %u ended", handle.id);
         }
-        return false;
+
+        drainAudio(*vs);
+        return frame->valid;
+    }
+
+}
+
+void VideoPlayer::updateAll(double dt) {
+    // Snapshot the ids: update() may stop/end videos (and close() may be
+    // called from Lua mid-frame), so iterating the map directly is unsafe.
+    std::vector<uint32_t> ids;
+    ids.reserve(m_videos.size());
+    for (const auto& kv : m_videos) ids.push_back(kv.first);
+    for (const auto id : ids) {
+        auto* vs = find(VideoHandle{id});
+        if (vs && vs->playing && !vs->ended) update(VideoHandle{id}, dt);
     }
 }
 
@@ -437,6 +539,16 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     VideoState* vs = find(handle);
     if (!vs) return;
 
+    // Stop and flush audio so post-seek PCM does not mix with pre-seek audio.
+    auto* audio = BackendRegistry::instance().getAudioBackend();
+    if (audio) {
+        for (const auto h : vs->audioHandles) audio->stopSEHandle(h);
+    }
+    vs->audioHandles.clear();
+    vs->audioHandle = 0;
+    vs->audioStarted = false;
+    { std::lock_guard<std::mutex> lk(m_audioMutex); vs->audioQueue.clear(); }
+
     if (vs->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
         auto* fmt = static_cast<AVFormatContext*>(vs->avFormat);
@@ -450,6 +562,9 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     } else {
         if (vs->plm) {
             plm_seek(static_cast<plm_t*>(vs->plm), time, 0);
+            // Re-sync the pacing playhead with the decoded position so the
+            // frame-rate accumulator does not over-decode after a seek.
+            vs->playhead = time;
         }
     }
     vs->hasFrame = false;

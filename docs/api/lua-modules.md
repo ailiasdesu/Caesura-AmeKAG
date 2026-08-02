@@ -77,7 +77,7 @@ Each quad entry:
 |----------|-----------|---------|-------------|
 | `video_play` | `(path)` | `handle` | Open and start playing video |
 | `video_stop` | `(handle)` | `bool` | Close video and release resources |
-| `video_update` | `(handle)` | `bool` | Decode next frame. True if new frame available. |
+| `video_update` | `(handle)` | `bool` | Decode next frame (manual drive; the engine frame loop already advances all playing videos automatically with frame-rate pacing). |
 | `video_get_texture` | `(handle)` | `texId` | Get current frame as texture ID (0=no frame) |
 | `video_is_playing` | `(handle)` | `bool` | Is video currently playing |
 | `video_has_ended` | `(handle)` | `bool` | Has video reached the end |
