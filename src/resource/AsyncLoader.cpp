@@ -163,7 +163,12 @@ bool AsyncLoader::poll() {
         SDL_zero(event);
         event.type = CAESURA_EVENT_ASYNC_LOAD;
         event.user.data1 = new CompletedLoad(std::move(c));
-        SDL_PushEvent(&event);
+        if (SDL_PushEvent(&event) != 0) {
+            // Event queue full: free the payload instead of leaking it.
+            delete static_cast<CompletedLoad*>(event.user.data1);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
+        }
     }
     return true;
 }
@@ -179,7 +184,11 @@ void AsyncLoader::postCompleteEvent(int requestId, const std::string& path,
     SDL_zero(event);
     event.type = CAESURA_EVENT_ASYNC_LOAD;
     event.user.data1 = completed;
-    SDL_PushEvent(&event);
+    if (SDL_PushEvent(&event) != 0) {
+        delete completed;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+            "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
+    }
 }
 
 } // namespace Caesura

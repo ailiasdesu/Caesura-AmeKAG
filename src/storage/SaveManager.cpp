@@ -171,13 +171,31 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
         dataToWrite = content;
     }
 
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    // Atomic write: write to a temp file next to the target, flush, then
+    // rename. A crash mid-write leaves the previous save intact instead of
+    // truncating it (rename is atomic on the same filesystem).
+    const std::string tmpPath = path + ".tmp";
+    std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
     if (!out) {
-        fprintf(stderr, "[SaveManager] Failed to open file for writing: %s\n", path.c_str());
+        fprintf(stderr, "[SaveManager] Failed to open file for writing: %s\n", tmpPath.c_str());
         return false;
     }
     out.write(dataToWrite.c_str(), static_cast<std::streamsize>(dataToWrite.size()));
-    return out.good();
+    out.flush();
+    if (!out.good()) {
+        fprintf(stderr, "[SaveManager] Write failed for %s\n", tmpPath.c_str());
+        std::filesystem::remove(tmpPath);  // no stale partial temp file
+        return false;
+    }
+    out.close();
+    std::error_code ec;
+    std::filesystem::rename(tmpPath, path, ec);
+    if (ec) {
+        fprintf(stderr, "[SaveManager] Rename failed: %s\n", ec.message().c_str());
+        std::filesystem::remove(tmpPath);
+        return false;
+    }
+    return true;
 }
 
 // ============================================================================
@@ -335,6 +353,10 @@ bool SaveManager::deleteSlot(int slot) {
 // ============================================================================
 
 void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn fn) {
+    if (toVersion <= fromVersion) {
+        fprintf(stderr, "[SaveManager] Rejected migration v%d -> v%d (must increase)\n", fromVersion, toVersion);
+        return;
+    }
     m_migrations[fromVersion] = {toVersion, fn};
     if (toVersion > m_currentSchemaVersion) {
         m_currentSchemaVersion = toVersion;
@@ -346,7 +368,8 @@ json SaveManager::migrate(const json& data, int fromVersion) {
     json current = data;
     int ver = fromVersion;
 
-    while (true) {
+    int steps = 0;
+    while (steps < 64) {
         auto it = m_migrations.find(ver);
         if (it == m_migrations.end()) break;
 
@@ -354,8 +377,11 @@ json SaveManager::migrate(const json& data, int fromVersion) {
         printf("[SaveManager] Applying migration v%d -> v%d\n", ver, nextVer);
         current = it->second.second(current);
         ver = nextVer;
+        steps++;
     }
-
+    if (steps >= 64) {
+        fprintf(stderr, "[SaveManager] Migration chain exceeded 64 steps (cycle?) at v%d\n", ver);
+    }
     return current;
 }
 

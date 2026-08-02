@@ -335,24 +335,8 @@ void EditorServer::serverLoop(int port) {
     svr.Get("/api/assets", [](const httplib::Request& req, httplib::Response& res) {
         std::string type = req.get_param_value("type");  // "image", "audio", "script", "" = all
 
-        auto pushType = [&](const std::string& dir, const std::string& kind) {
-            if (!type.empty() && type != kind) return;
-            std::string path = "assets/" + dir;
-            if (!fs::exists(path)) return;
-            try {
-                for (const auto& entry : fs::directory_iterator(path)) {
-                    if (entry.is_regular_file()) {
-                        std::string name = entry.path().filename().string();
-                        res.set_chunked_content_provider("application/json",
-                            [](size_t, httplib::DataSink&) { return true; });
-                    }
-                }
-            } catch (...) {}
-        };
-
         // Build JSON array
-        std::string json = "[";
-        bool first = true;
+        Json arr = Json::array();
 
         auto addFiles = [&](const std::string& dir, const std::string& kind) {
             if (!type.empty() && type != kind) return;
@@ -361,14 +345,13 @@ void EditorServer::serverLoop(int port) {
             try {
                 for (const auto& entry : fs::directory_iterator(path)) {
                     if (entry.is_regular_file()) {
-                        if (!first) json += ",";
-                        first = false;
                         std::string name = entry.path().filename().string();
                         std::string relPath = "assets/" + dir + "/" + name;
-                        // Escape for JSON
-                        std::string escapedPath = relPath;
-                        std::string escapedName = name;
-                        json += "{\"path\":\"" + escapedPath + "\",\"name\":\"" + escapedName + "\",\"type\":\"" + kind + "\"}";
+                        Json obj;
+                        obj["path"] = relPath;
+                        obj["name"] = name;
+                        obj["type"] = kind;
+                        arr.push_back(obj);
                     }
                 }
             } catch (...) {}
@@ -382,8 +365,7 @@ void EditorServer::serverLoop(int port) {
         addFiles("se", "audio");
         addFiles("scripts", "script");
 
-        json += "]";
-        res.set_content(json, "application/json");
+        res.set_content(dumpJson(arr), "application/json");
     });
 
     // ---------------------------------------------------------------------
@@ -442,14 +424,15 @@ void EditorServer::serverLoop(int port) {
     svr.Get("/api/logs", [this](const httplib::Request&, httplib::Response& res) {
         std::lock_guard<std::mutex> lock(m_logMutex);
 
-        std::string json = "[";
-        for (size_t i = 0; i < m_logs.size(); i++) {
-            if (i > 0) json += ",";
-            auto& entry = m_logs[i];
-            json += "{\"level\":\"" + entry.level + "\",\"message\":\"" + entry.message + "\",\"time\":\"" + entry.time + "\"}";
+        Json arr = Json::array();
+        for (const auto& entry : m_logs) {
+            Json obj;
+            obj["level"] = entry.level;
+            obj["message"] = entry.message;
+            obj["time"] = entry.time;
+            arr.push_back(obj);
         }
-        json += "]";
-        res.set_content(json, "application/json");
+        res.set_content(dumpJson(arr), "application/json");
     });
 
     // ---------------------------------------------------------------------
