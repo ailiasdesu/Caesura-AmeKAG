@@ -313,9 +313,12 @@ TEST_CASE("Install layout includes FFmpeg runtime DLLs when FFmpeg is bundled") 
     REQUIRE_FALSE(repoRoot.empty());
 
     const std::string cmake = readFile(repoRoot / "CMakeLists.txt");
-    CHECK(cmake.find("file(COPY ${FFMPEG_BIN_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/${CFG}") != std::string::npos);
-    CHECK(cmake.find("install(DIRECTORY ${FFMPEG_BIN_DIR}/ DESTINATION .") != std::string::npos);
-    CHECK(cmake.find("FILES_MATCHING PATTERN \"*.dll\"") != std::string::npos);
+    // Only the five linked DLLs are copied/installed (avfilter/avdevice and
+    // the CLI tools are unused); the list is explicit so a restored FFmpeg
+    // bin/ cannot silently blow up the build output again.
+    CHECK(cmake.find("avcodec-62.dll avformat-62.dll avutil-60.dll") != std::string::npos);
+    CHECK(cmake.find("swscale-9.dll swresample-6.dll") != std::string::npos);
+    CHECK(cmake.find("install(FILES") != std::string::npos);
 }
 
 TEST_CASE("Engine core avoids unused concrete adapter dependencies") {

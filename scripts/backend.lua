@@ -272,11 +272,7 @@ end
 -- Texture management (name-based)
 -- =========================================================================
 
-function Backend.free_texture(name)
-    local be = get_backend()
-    if be then return be.render("free_texture", name)
-    else return false end
-end
+
 
 -- =========================================================================
 -- Text rendering helpers
@@ -324,28 +320,13 @@ end
 -- Particle effects (stubs for pure Lua fallback)
 -- =========================================================================
 
-function Backend.begin_particles()
-    local be = get_backend()
-    if be then return be.render("begin_particles")
-    else return true end
-end
-
-function Backend.draw_particle(x, y, size, ptype)
-    local be = get_backend()
-    if be then return be.render("draw_particle", x, y, size, ptype)
-    else return true end
-end
-
-function Backend.end_particles()
-    local be = get_backend()
-    if be then return be.render("end_particles")
-    else return true end
-end
-
+-- clear_particles maps to the VFX binding (the render factory has no
+-- "clear_particles" route; the dead begin/draw/end wrappers were removed).
 function Backend.clear_particles()
-    local be = get_backend()
-    if be then return be.render("clear_particles")
-    else return true end
+    if VFX and VFX.particles_clear then
+        return VFX.particles_clear()
+    end
+    return false
 end
 
 

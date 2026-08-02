@@ -136,6 +136,16 @@ bool HotReload::checkAndReload() {
     // file scanning and forced reloads until that protocol resumes or detaches.
     if (m_scriptState == ScriptState::DEBUG_ACTIVE) return false;
 
+    // Throttle: do not stat the whole scripts/ tree every frame. A forced
+    // reload request bypasses the interval.
+    const long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (!m_reloadRequested && m_lastScanMs >= 0 &&
+        (now - m_lastScanMs) < kScanIntervalMs) {
+        return false;
+    }
+    m_lastScanMs = now;
+
     // Check for changes
     bool changed = m_reloadRequested;
     m_reloadRequested = false;

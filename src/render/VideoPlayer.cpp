@@ -737,6 +737,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
 }
 
 void VideoPlayer::updateAll(double dt) {
+    if (m_videos.empty()) return;  // common case: no videos playing
     // Snapshot the ids: update() may stop/end videos (and close() may be
     // called from Lua mid-frame), so iterating the map directly is unsafe.
     std::vector<uint32_t> ids;

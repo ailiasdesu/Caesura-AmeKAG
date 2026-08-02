@@ -191,10 +191,17 @@ if(CAESURA_FFMPEG_FOUND)
     target_link_libraries(CaesuraRender PRIVATE ${CAESURA_FFMPEG_LIBRARIES})
     # Copy FFmpeg DLLs to output at configure time (avoids MSBuild Unicode path issues)
     if(WIN32)
-        # Copy DLLs from bin/ (where prebuilt FFmpeg keeps them), not lib/
+        # Copy only the DLLs the engine links (avcodec/avformat/avutil/
+        # swscale/swresample); avfilter/avdevice and the CLI tools are unused.
+        set(CAESURA_FFMPEG_DLLS
+            avcodec-62.dll avformat-62.dll avutil-60.dll
+            swscale-9.dll swresample-6.dll)
         foreach(CFG Debug Release RelWithDebInfo MinSizeRel)
-            file(COPY ${FFMPEG_BIN_DIR}/ DESTINATION ${CMAKE_BINARY_DIR}/${CFG}
-                FILES_MATCHING PATTERN "*.dll")
+            foreach(DLL ${CAESURA_FFMPEG_DLLS})
+                if(EXISTS "${FFMPEG_BIN_DIR}/${DLL}")
+                    file(COPY "${FFMPEG_BIN_DIR}/${DLL}" DESTINATION ${CMAKE_BINARY_DIR}/${CFG})
+                endif()
+            endforeach()
         endforeach()
     endif()
 endif()
@@ -413,8 +420,13 @@ if(TARGET SDL3::SDL3)
     install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
 endif()
 if(CAESURA_FFMPEG_FOUND AND WIN32)
-    install(DIRECTORY ${FFMPEG_BIN_DIR}/ DESTINATION .
-        FILES_MATCHING PATTERN "*.dll")
+    install(FILES
+        ${FFMPEG_BIN_DIR}/avcodec-62.dll
+        ${FFMPEG_BIN_DIR}/avformat-62.dll
+        ${FFMPEG_BIN_DIR}/avutil-60.dll
+        ${FFMPEG_BIN_DIR}/swscale-9.dll
+        ${FFMPEG_BIN_DIR}/swresample-6.dll
+        DESTINATION . OPTIONAL)
 endif()
 
 include(CPack)

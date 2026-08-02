@@ -53,6 +53,12 @@ private:
     void scanDirectory();
     void showWarningOverlay(const std::string& message);
 
+    // Scan throttling: filesystem polling every frame (60-160 stat syscalls
+    // per frame) was a measurable hot path; scans run at most every
+    // kScanIntervalMs.
+    static constexpr long long kScanIntervalMs = 500;
+    long long m_lastScanMs = -1;
+
     std::string                m_scriptDir;
     lua_State*                 m_L = nullptr;
     bool                       m_initialized = false;
