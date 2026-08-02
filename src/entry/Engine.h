@@ -172,6 +172,12 @@ private:
     void dispatchAsyncLoad(CompletedLoad* completed);
 
     std::vector<std::unique_ptr<CompletedLoad>> m_deferredAsyncLoads;
+    // Cached last-written GPU-state globals: written to Lua only when the
+    // value changes (avoid per-frame global-table hashing for near-constant
+    // values).
+    int      m_lastGpuQuality = -1;
+    bool     m_lastVfxEnabled = false;
+    bool     m_lastGpuDegraded = false;
 };
 
 } // namespace Caesura

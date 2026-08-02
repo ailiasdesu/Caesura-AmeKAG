@@ -78,7 +78,11 @@ bool ParticleSystem::init() {
         .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
         .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-        .end();m_initialized = true;
+        .end();
+    m_freeSlots.clear();
+    m_freeSlots.reserve(MAX_PARTICLES);
+    for (int i = MAX_PARTICLES - 1; i >= 0; --i) m_freeSlots.push_back(i);
+    m_initialized = true;
     printf("[ParticleSystem] Initialized (max %d particles)\n", MAX_PARTICLES);
     return true;
 }
@@ -113,11 +117,9 @@ void ParticleSystem::emit(int emitterId, int count) {
     if (!em.active) return;
 
     for (int n = 0; n < count; n++) {
-        int slot = -1;
-        for (int i = 0; i < MAX_PARTICLES; i++) {
-            if (!m_particles[i].alive) { slot = i; break; }
-        }
-        if (slot < 0) break; // pool full
+        if (m_freeSlots.empty()) break;  // pool full
+        const int slot = m_freeSlots.back();
+        m_freeSlots.pop_back();
 
         float angle = em.angleMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.angleMax - em.angleMin);
         float speed = em.speedMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.speedMax - em.speedMin);
@@ -158,6 +160,7 @@ void ParticleSystem::update(float dt, uint32_t screenW, uint32_t screenH) {
         if (p.life <= 0) {
             p.alive = false;
             m_aliveCount--;
+            m_freeSlots.push_back(static_cast<int>(&p - m_particles.data()));
             continue;
         }
         // Per-emitter gravity: a particle keeps the gravity of the emitter

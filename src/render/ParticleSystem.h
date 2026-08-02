@@ -64,6 +64,8 @@ public:
 
 private:
     std::vector<Particle> m_particles;
+    // Free-slot stack: O(1) slot acquisition instead of a linear scan.
+    std::vector<int> m_freeSlots;
     std::vector<Emitter>  m_emitters;
     int m_aliveCount = 0;
 

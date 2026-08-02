@@ -569,16 +569,28 @@ void Engine::run(const OwnerPump& ownerPump) {
             }
             publishDebugPauseState();
 
-            lua_pushinteger(L, static_cast<int>(gpuQ));
-            lua_setglobal(L, "_CAESURA_GPU_QUALITY");
-            lua_pushboolean(L, m_gpuMonitor->vfxEnabled() ? 1 : 0);
-            lua_setglobal(L, "_CAESURA_VFX_ENABLED");
+            const int gpuQv = static_cast<int>(gpuQ);
+            if (gpuQv != m_lastGpuQuality) {
+                m_lastGpuQuality = gpuQv;
+                lua_pushinteger(L, gpuQv);
+                lua_setglobal(L, "_CAESURA_GPU_QUALITY");
+            }
+            const bool vfxOn = m_gpuMonitor->vfxEnabled();
+            if (vfxOn != m_lastVfxEnabled) {
+                m_lastVfxEnabled = vfxOn;
+                lua_pushboolean(L, vfxOn ? 1 : 0);
+                lua_setglobal(L, "_CAESURA_VFX_ENABLED");
+            }
             lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().gpuTimeMs));
             lua_setglobal(L, "_CAESURA_GPU_TIME_MS");
             lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().rollingAvgMs));
             lua_setglobal(L, "_CAESURA_GPU_AVG_MS");
-            lua_pushboolean(L, m_gpuMonitor->metrics().degraded ? 1 : 0);
-            lua_setglobal(L, "_CAESURA_GPU_DEGRADED");
+            const bool degraded = m_gpuMonitor->metrics().degraded;
+            if (degraded != m_lastGpuDegraded) {
+                m_lastGpuDegraded = degraded;
+                lua_pushboolean(L, degraded ? 1 : 0);
+                lua_setglobal(L, "_CAESURA_GPU_DEGRADED");
+            }
         }
 
         // D4.6: Consume backend-owned voice completion events. A counter keeps
