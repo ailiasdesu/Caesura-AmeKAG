@@ -72,6 +72,7 @@ function TextScene.add_text(ctx, text, x, y, color, group)
         b = color_value(color, "b", 3, 255),
         a = color_value(color, "a", 4, 255),
         group = group,
+        typewriter = true,  -- may be truncated by the reveal animation
     }
     state.draws[#state.draws + 1] = draw
     return draw
@@ -150,6 +151,10 @@ function TextScene.render(ctx, render_backend)
     render_backend = render_backend or require("backend")
     local submitted = 0
 
+    -- Typewriter reveal: if the current message is animating, truncate each
+    -- text draw to the visible character count (state.reveal_chars > 0).
+    local reveal = state.reveal_chars or 0
+
     for _, draw in ipairs(state.draws) do
         local alpha = math.floor(
             clamp_byte(draw.a) * state.opacity / 255 + 0.5)
@@ -159,8 +164,12 @@ function TextScene.render(ctx, render_backend)
                     draw.text, draw.ruby, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha)
             else
+                local shown = draw.text
+                if reveal > 0 and draw.typewriter then
+                    shown = utf8.sub(draw.text, 1, reveal)
+                end
                 render_backend.render_text(
-                    draw.text, draw.x, draw.y,
+                    shown, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha)
             end
             submitted = submitted + 1

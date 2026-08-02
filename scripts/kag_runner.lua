@@ -191,6 +191,19 @@ function kag_runner.update(dt)
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
     local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
 
+    -- Typewriter reveal: advance the visible character count by the
+    -- configured text speed (ms per char). Skip/auto modes reveal instantly.
+    if ctx and ctx.reveal and not ctx.skip_mode and not ctx.auto_mode then
+        local speed = tonumber(ctx.text_speed) or 50
+        if speed > 0 then
+            ctx.reveal.elapsed = ctx.reveal.elapsed + delta_ms
+            local shown = math.min(ctx.reveal.total,
+                math.floor(ctx.reveal.elapsed / speed))
+            local st = require("kag.text_scene").get_state(ctx)
+            st.reveal_chars = shown
+        end
+    end
+
     -- Honour [p] click-wait: don't auto-advance when waiting for user input,
     -- EXCEPT in auto mode, which advances after a short delay (like a
     -- visual-novel auto-play button).
@@ -209,6 +222,10 @@ function kag_runner.update(dt)
             end
             -- Skip mode: advance immediately, no delay.
             auto_advance_frames = 0
+            if ctx.reveal then
+                local st = require("kag.text_scene").get_state(ctx)
+                st.reveal_chars = ctx.reveal.total
+            end
             return kag_runner.on_click()
         end
         if ctx.auto_mode then
@@ -255,6 +272,16 @@ function kag_runner.on_click()
     if not kag_co then print("[Click] no coroutine"); return false, "not-running" end
     if coroutine.status(kag_co) == "dead" then print("[Click] coroutine dead"); return false, "dead" end
     if not ctx then print("[Click] no ctx"); return false, "no-context" end
+
+    -- Click during the typewriter animation reveals the rest instantly
+    -- (standard VN behavior: first click completes the line, second advances).
+    if ctx.reveal then
+        local st = require("kag.text_scene").get_state(ctx)
+        if st.reveal_chars < ctx.reveal.total then
+            st.reveal_chars = ctx.reveal.total
+            return true, "revealed"
+        end
+    end
 
     local allowed, reason = can_resume()
     if not allowed then return false, reason end
