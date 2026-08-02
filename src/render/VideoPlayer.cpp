@@ -121,6 +121,10 @@ VideoHandle VideoPlayer::open(const char* path) {
                         vs.swrCtx = swr;
                     } else {
                         if (swr) swr_free(&swr);
+                        // The audio flag was set optimistically above; without a
+                        // working resampler the path must be disabled cleanly.
+                        vs.audioEnabled = false;
+                        vs.audioStreamIndex = -1;
                     }
                 } else {
                     if (aCtx) avcodec_free_context(&aCtx);
@@ -385,7 +389,8 @@ void VideoPlayer::drainAudio(VideoState& vs) {
     }
 }
 
-// Locking invariant: onAudioDecoded (worker) iterates m_videos under
+// Locking invariant: onAudioDecoded and the FFmpeg worker lambda (both
+// capture `this` for m_audioMutex) touch audioQueue/m_videos under
 // m_audioMutex; open()/close() mutate the map without it. This is safe
 // because update() blocks in m_jobSystem->waitIdle() before the main thread
 // touches the map, serializing worker vs. main. Keep that ordering if new
@@ -519,6 +524,34 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                         ret = avcodec_send_packet(cc, nullptr);
                         if (ret >= 0 && avcodec_receive_frame(cc, f) == 0)
                             gotFrame = true;
+                        // Drain any remaining buffered audio frames so the
+                        // tail of the track is not truncated.
+                        if (vs->audioEnabled && vs->swrCtx) {
+                            auto* ac = static_cast<AVCodecContext*>(vs->avAudioCodec);
+                            auto* af = static_cast<AVFrame*>(vs->avAudioFrame);
+                            auto* swr = static_cast<SwrContext*>(vs->swrCtx);
+                            if (ac && af && swr && avcodec_send_packet(ac, nullptr) >= 0) {
+                                while (avcodec_receive_frame(ac, af) >= 0) {
+                                    const int64_t outSamples =
+                                        av_rescale_rnd(swr_get_delay(swr, af->sample_rate)
+                                            + af->nb_samples, af->sample_rate,
+                                            af->sample_rate, AV_ROUND_UP);
+                                    std::vector<float> buf(static_cast<size_t>(outSamples) * 2);
+                                    uint8_t* out[2] = {
+                                        reinterpret_cast<uint8_t*>(buf.data()),
+                                        reinterpret_cast<uint8_t*>(buf.data()) + outSamples * sizeof(float) };
+                                    const int converted = swr_convert(swr, out, (int)outSamples,
+                                        const_cast<const uint8_t**>(af->data), af->nb_samples);
+                                    if (converted > 0) {
+                                        std::lock_guard<std::mutex> lock(m_audioMutex);
+                                        if (vs->audioQueue.size() < 8 * 1024 * 1024 / sizeof(float)) {
+                                            vs->audioQueue.insert(vs->audioQueue.end(),
+                                                buf.data(), buf.data() + converted * 2);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         vs->ended = true;
                         vs->playing = false;
                         break;
