@@ -6,14 +6,15 @@
 
 ## 1. 当前状态
 
-- **分支**：`master`，HEAD = **`19aca04b`**（`test(rpc): extract constantTimeEquals with unit coverage; closeout 007`）
-- **CI**：三平台全绿；HEAD 对应 run **30726580418 = success**（五 job：Linux GCC / macOS Clang / Windows MSVC Debug+Release / Release Package，`gh run list` 可查）
+- **分支**：`master`，HEAD = **`1181538a`**（`docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit`——本文档提交，上一代码提交为 `19aca04b`）
+- **CI**：三平台全绿；HEAD 对应 run **30727177787 = success**（五 job：Linux GCC / macOS Clang / Windows MSVC Debug+Release / Release Package，`gh run list` 可查）
 - **本地验证基线**：doctest **564/564**（断言 **2770**）；ctest **10/10**；HTTP smoke **21/21**；
   `python scripts/count_coupling.py --ci` **PASS**
 - **工作树**：干净（仅 `.reasonix/` 未跟踪，非项目产物，勿提交）
 
-### 最近提交（自上轮交接 7303fef4 起，按时间序）
+### 最近提交（自上轮交接 7303fef4 起，共 22 个，按时间序；完整列表 `git log --first-parent 7303fef4..HEAD`）
 ```
+1181538a  docs(plans): handoff 008 + closeout 007 refresh; note watcher re-entrancy audit  ← 本文档
 19aca04b  test(rpc): extract constantTimeEquals with unit coverage; closeout 007
 31afd181  test(rpc): fix inverted skip condition in HTTP smoke (blocking review finding)
 1d12fd9b  test(rpc): skip HTTP smoke on GPU-less CI runners (SKIP_RETURN_CODE 77)
@@ -26,10 +27,15 @@ b96ffb6f  fix(rpc): confine /api/build outputs to build/; localhost-only CORS; g
 eb7d4a45  fix(rpc): wrap breakpoint line int64 read in try/catch (400 on parse error)
 c2aa8b4f  test(rpc): regression-guard int-overflow breakpoint line rejection
 0979d921  fix(rpc): reject int-overflow breakpoint lines via int64 bound check
-8b8436c5  feat(rpc): HTTP debug routes (eval/getState/getFrame/breakpoints/continue/inspect)
-            + live2d path-confinement tests   ← 上轮 closeout 006 交付
+8b8436c5  feat(rpc): HTTP debug routes + live2d path-confinement tests   ← closeout 006
 059d4558  fix(live2d): fail closed on stat error; reject dot components and junctions
-            ← 上轮 Live2D 安全四轮收尾（closeout 005）
+6510bd90  fix(live2d): reject symlink final component in fallback; case-fold Windows only
+82e45b83  fix(live2d): cap file size before allocation; keep symlink checks in fallback
+e81fdf4c  fix(live2d): confine model file reads to working dir; cap texture/file sizes
+9f39aa14  fix(live2d): per-model render targets + model-texture SRV ownership
+5ed07a39  feat(live2d): first real Cubism SDK build — D3D11 path verified end-to-end
+e8a2bfc6  test(entry): extract Engine::handleAppLifecycle for unit testing  ← watcher 注释相关
+08845e5a  docs: closeout 003 refresh + handoff 004   ← 上轮交接基线
 ```
 
 ## 2. 架构要点（本轮变化）
