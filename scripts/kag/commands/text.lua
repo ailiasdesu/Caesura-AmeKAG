@@ -380,6 +380,16 @@ function TextCommands.skip(ctx, params)
 end
 
 -- =============================================================================
+--  [auto] ?? toggle auto-advance mode
+--  In auto mode the runner advances past click-waits ([p]) after ~1.5s,
+--  like a visual-novel auto-play button. State is persisted by [save].
+-- =============================================================================
+
+function TextCommands.auto(ctx, params)
+    ctx.auto_mode = not ctx.auto_mode
+end
+
+-- =============================================================================
 --  [reset] ?? reset text state
 --  Clears line/char_offset tracking and resets backend text renderer.
 --  Registered as KAG.reset via auto-iteration in kag.lua.

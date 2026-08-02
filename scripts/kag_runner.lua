@@ -184,13 +184,27 @@ end
 -- [wait] and [trans] which accumulate elapsed time from coroutine.yield()
 -- return values.
 
+local auto_advance_frames = 0  -- frames remaining before auto-mode advances
+
 function kag_runner.update(dt)
     if not kag_co then return false, "not-running" end
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
     local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
 
-    -- Honour [p] click-wait: don't auto-advance when waiting for user input
-    if ctx and ctx.waiting_input then return false, "waiting-input" end
+    -- Honour [p] click-wait: don't auto-advance when waiting for user input,
+    -- EXCEPT in auto mode, which advances after a short delay (like a
+    -- visual-novel auto-play button).
+    if ctx and ctx.waiting_input then
+        if ctx.auto_mode then
+            auto_advance_frames = auto_advance_frames + 1
+            if auto_advance_frames >= 90 then  -- ~1.5s at 60fps
+                auto_advance_frames = 0
+                return kag_runner.on_click()
+            end
+        end
+        return false, "waiting-input"
+    end
+    auto_advance_frames = 0
 
     local status = coroutine.status(kag_co)
     if status == "dead" then
