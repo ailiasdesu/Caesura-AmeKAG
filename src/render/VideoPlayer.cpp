@@ -666,10 +666,10 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     // and huge finite values must be rejected explicitly so the
     // (int64_t)(time * AV_TIME_BASE) conversion below can never be UB.
     // isfinite() alone still passes huge finite values (e.g. 1e300) when the
-    // duration is unknown, so bound the time before the conversion.
-    constexpr double kMaxSeekSeconds =
-        static_cast<double>(std::numeric_limits<int64_t>::max()) /
-        static_cast<double>(AV_TIME_BASE);
+    // duration is unknown, so bound the time before the conversion. The bound
+    // is deliberately FFmpeg-independent (AV_TIME_BASE lives behind the
+    // CAESURA_VIDEO_FFMPEG guard) and far above any real media duration.
+    constexpr double kMaxSeekSeconds = 1e6;  // ~11.6 days
     if (!std::isfinite(time) || time <= 0.0 || time > kMaxSeekSeconds) time = 0.0;
     if (vs->duration > 0.0 && time > vs->duration) time = vs->duration;
 
