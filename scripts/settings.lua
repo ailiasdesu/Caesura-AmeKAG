@@ -237,9 +237,12 @@ function Settings._applyAll(ctx)
     if not sv then return end
     if sv.volume_bgm then audio.set_bgm_volume(sv.volume_bgm / 100) end
     if sv.volume_se then audio.set_se_volume(sv.volume_se / 100) end
-    if sv.text_speed then ctx.textSpeed = sv.text_speed end
-    if sv.skip_mode ~= nil then ctx.skipMode = sv.skip_mode end
-    if sv.auto_mode ~= nil then ctx.autoMode = sv.auto_mode end
+    -- Keys must match the runner/commands (snake_case); camelCase variants
+    -- were silently ignored by kag_runner/TextCommands.
+    if sv.text_speed then ctx.text_speed = sv.text_speed end
+    if sv.skip_mode ~= nil then ctx.skip_mode = sv.skip_mode end
+    if sv.auto_mode ~= nil then ctx.auto_mode = sv.auto_mode end
+    if sv.volume_voice then audio.set_voice_volume(sv.volume_voice / 100) end
     if sv.fullscreen ~= nil then backend.set_fullscreen(sv.fullscreen) end
 end
 

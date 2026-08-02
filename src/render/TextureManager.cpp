@@ -447,6 +447,13 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     if (path.empty()) {
         fprintf(stderr, "[TextureManager] Empty path.\n");
         return 0;
+
+    // Cache hit: same path already loaded and still alive -> reuse the id
+    // (avoids re-decode + GPU upload for repeated backgrounds/sprites).
+    auto hit = m_pathToId.find(path);
+    if (hit != m_pathToId.end() && m_cache.count(hit->second)) {
+        return hit->second;
+    }
     }
 
     QuotaReservation quotaReservation;
@@ -487,6 +494,7 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
         return 0;
     }
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
+    m_pathToId[path] = id;
     return id;
 }
 
@@ -703,6 +711,10 @@ void TextureManager::destroyTexture(uint32_t id) {
 
     untrackTexture(id);
     m_textureDimensions.erase(id);
+    for (auto it = m_pathToId.begin(); it != m_pathToId.end();) {
+        if (it->second == id) it = m_pathToId.erase(it);
+        else ++it;
+    }
     const bool hadRestoreSource = m_restoreSources.erase(id) != 0;
     bool hadQuota = false;
     const auto quotaReservation = m_quotaReservations.find(id);

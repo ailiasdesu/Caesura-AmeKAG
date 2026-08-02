@@ -44,6 +44,10 @@ public:
     uint32_t getPlaceholderTexture() override;
 
     void destroyTexture(uint32_t id) override;
+    // Path -> last texture id cache: repeated loads of the same file (the
+    // common VN pattern of reusing backgrounds/sprites) reuse the existing
+    // GPU texture instead of re-decoding + re-uploading.
+    std::unordered_map<std::string, uint32_t> m_pathToId;
     uint32_t getTextureHandle(uint32_t id) const override;
     void getTextureSizeById(uint32_t id, uint16_t& width,
                             uint16_t& height) const override;

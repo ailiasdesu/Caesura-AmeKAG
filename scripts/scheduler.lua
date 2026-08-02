@@ -11,6 +11,11 @@
 
 local scheduler = {}
 
+-- Expression chunk cache: [if] conditions are re-compiled on every hit;
+-- looping scripts recompile the same strings each iteration (compile is
+-- 10-100x more expensive than executing). Cache by source string.
+local exprCache = {}
+
 -- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
 
 local flow_commands = {
@@ -188,7 +193,12 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "if" then
             local expr = params.exp or "false"
             local ok, result = pcall(function()
-                local fn = load("return " .. expr, "=if", "t", ctx.f or {})
+                local src = "return " .. expr
+                local fn = exprCache[src]
+                if not fn then
+                    fn = load(src, "=if", "t", ctx.f or {})
+                    exprCache[src] = fn
+                end
                 return fn()
             end)
             if not (ok and result) then
