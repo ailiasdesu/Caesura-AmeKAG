@@ -72,3 +72,6 @@ external/ffmpeg/
 
 # --- Shader intermediates (regenerate via shaders/embed_to_c.py) ---
 shaders/compiled/
+
+# Reasonix runtime data (skills, mental-seal goals, arch baseline, session state)
+.reasonix/
