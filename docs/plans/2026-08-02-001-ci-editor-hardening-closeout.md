@@ -51,6 +51,7 @@ driver 下 `nwh=0` → `bgfx::init` 失败 → 引擎启动即退出（exit 1）
 - 其余见 closeout 006（路由/token/CORS/build 均已在 006 的提交链中记录）
 
 ## 五、遗留（非阻塞）
-- token 常量时间比较无自动化单测（建议提取为 rpc 模块可测函数——见下一步）
+- ~~token 常量时间比较无自动化单测~~（已解决：`19aca04b` 提取 `src/rpc/ConstantTime.h` + `test_rpc.cpp` 10 断言，套件 564/564）
 - 非零退出均视为"无 GPU"跳过（信号死亡/启动崩溃在无 GPU runner 也会被跳过——stdio smoke 已覆盖路由，可接受）
 - 固定端口 9876 无占用检查；多用户机器 token 经 env（同 UID 可见，已文档化）
+- handoff 004 §4 (d)：watcher 回调 Lua push SDL 事件自死锁理论（LOW，移动层落地时复查）

@@ -1063,6 +1063,13 @@ std::string Engine::captureFrameForRpc(int w, int h) {
 //
 // Pure decision logic lives in handleAppLifecycle (unit-testable without
 // SDL); the watcher only extracts Engine state and forwards the event type.
+//
+// Re-entrancy note (handoff 008 §4.1): SDL3 invokes event watchers from the
+// push path too. A user Lua onPause/onResume callback that itself pushes an
+// SDL event would re-enter this watcher synchronously inside the event-queue
+// lock -> theoretical self-deadlock (LOW, handoff 004 (d)). The engine
+// currently exposes no Lua binding that pushes SDL events, so the path is
+// unreachable; re-audit when a mobile input/marshalling layer lands.
 void Engine::handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 eventType) {
     if (!adapter) return;
     switch (eventType) {
