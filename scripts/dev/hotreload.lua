@@ -9,8 +9,9 @@ local hotreload = {}
 -- Cancel all active operations tracked in ctx.active_operations.
 -- Each entry should be a CancelToken table with :cancel().
 -- Returns the number of operations cancelled.
-function hotreload.cancel_all_active()
-    local ctx = require("kag.ctx")
+function hotreload.cancel_all_active(ctx)
+    -- ctx comes from the caller (there is no kag/ctx module; the old
+    -- require("kag.ctx") would error whenever this was invoked).
     if not ctx or not ctx.active_operations then
         return 0
     end
