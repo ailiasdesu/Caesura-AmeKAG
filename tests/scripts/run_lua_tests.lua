@@ -23,6 +23,7 @@ local tests = {
     "test_choice",
     "test_toast",
     "test_title_menu",
+    "test_title_entry",
     "test_sandbox",
 }
 
