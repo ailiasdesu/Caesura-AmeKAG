@@ -622,6 +622,15 @@ uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
         fprintf(stderr, "[TextureManager] Not initialized.\n");
         return 0;
     }
+    // Solid-color dedup: UIs re-request the same RGBA every open (settings,
+    // history, gallery, flash effects). Cache the registered id so repeated
+    // calls cost zero GPU allocations/uploads (and never leak textures).
+    const uint32_t key = static_cast<uint32_t>(r) | (static_cast<uint32_t>(g) << 8) |
+                         (static_cast<uint32_t>(b) << 16) | (static_cast<uint32_t>(a) << 24);
+    auto cached = m_solidCache.find(key);
+    if (cached != m_solidCache.end()) {
+        return cached->second;
+    }
     QuotaReservation quotaReservation;
     if (!quotaReservation) {
         fprintf(stderr, "[TextureManager] Texture quota exceeded (solid).\n");
@@ -638,8 +647,12 @@ uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
     restoreSource.height = 1;
     bgfx::TextureHandle tex =
         createFromRGBA(restoreSource.bytes.data(), 1, 1);
-    return registerTexture(
+    const uint32_t id = registerTexture(
         tex, 1, 1, std::move(restoreSource), quotaReservation);
+    if (id != 0) {
+        m_solidCache[key] = id;
+    }
+    return id;
 }
 
 // ---------------------------------------------------------------------------

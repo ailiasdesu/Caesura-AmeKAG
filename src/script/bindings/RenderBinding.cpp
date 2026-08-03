@@ -146,8 +146,7 @@ static int lua_Render_create_solid_texture(lua_State* L) {
     if (texId == 0) {
         lua_pushnil(L); lua_pushstring(L, "GPU solid tex failed"); return 2;
     }
-    printf("[Render] Solid texture RGBA(%d,%d,%d,%d) -> %u\n", r, g, b, a, texId);
-    lua_pushinteger(L, (lua_Integer)texId);
+        lua_pushinteger(L, (lua_Integer)texId);
     return 1;
 }
 

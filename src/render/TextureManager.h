@@ -39,6 +39,9 @@ public:
     uint32_t loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
                                  const std::string& cacheKey = "") override;
 
+    // RGBA(32-bit) -> registered texture id for solid-color dedup.
+    std::unordered_map<uint32_t, uint32_t> m_solidCache;
+
     uint32_t createSolidTexture(uint8_t r, uint8_t g, uint8_t b,
                                 uint8_t a = 255) override;
     uint32_t getPlaceholderTexture() override;

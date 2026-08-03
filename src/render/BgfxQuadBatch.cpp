@@ -60,13 +60,9 @@ void BgfxQuadBatch::flushBatch() {
         v[qi * 4 + 2] = { q.x + q.w, q.y + q.h, 1.0f, 1.0f };
         v[qi * 4 + 3] = { q.x,       q.y + q.h, 0.0f, 1.0f };
 
-        // Build indices
-        indices[qi * 6 + 0] = baseVert + 0;
-        indices[qi * 6 + 1] = baseVert + 1;
-        indices[qi * 6 + 2] = baseVert + 2;
-        indices[qi * 6 + 3] = baseVert + 0;
-        indices[qi * 6 + 4] = baseVert + 2;
-        indices[qi * 6 + 5] = baseVert + 3;
+        // Indices are written once, with local offsets, by the merge loop
+        // below (bgfx interprets index values relative to the submit's
+        // startVertex) -- the previous absolute-index fill was dead store.
     }
 
     uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A

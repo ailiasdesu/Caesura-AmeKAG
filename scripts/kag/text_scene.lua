@@ -168,7 +168,14 @@ function TextScene.render(ctx, render_backend)
             else
                 local shown = draw.text
                 if reveal ~= nil and draw.typewriter then
-                    shown = utf8.sub(draw.text, 1, reveal)
+                    -- Cache per-draw: typewriter re-slices every frame while
+                    -- animating; static lines keep the same substring. Only
+                    -- re-slice when the reveal position advanced.
+                    if draw._shown_len ~= reveal then
+                        draw._shown = utf8.sub(draw.text, 1, reveal)
+                        draw._shown_len = reveal
+                    end
+                    shown = draw._shown
                 end
                 render_backend.render_text(
                     shown, draw.x, draw.y,
