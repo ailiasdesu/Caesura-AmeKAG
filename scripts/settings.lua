@@ -40,6 +40,7 @@ local defaults = {
     fullscreen   = false,
     skip_mode    = false,
     auto_mode    = false,
+    autosave_interval = 60,   -- seconds; 0 disables the auto-save timer
 }
 
 -- ===========================================================================
@@ -63,6 +64,10 @@ function Settings._buildMenu(ctx)
         {label = i18n.t("language") .. ": " .. (i18n.current or "zh"),
          key = "language", type = "cycle", value = i18n.current,
          options = i18n.available()},
+        {label = i18n.t("autosave_interval") .. ": " ..
+             (sv.autosave_interval > 0 and sv.autosave_interval .. "s" or "Off"),
+         key = "autosave_interval", type = "cycle", value = sv.autosave_interval,
+         options = {30, 60, 120, 0}},
         {label = i18n.t("back"), key = "back", type = "action"},
     }
     return items
@@ -297,12 +302,24 @@ function Settings.adjust(ctx, direction)
             if curIdx > #opts then curIdx = 1 end
             item.value = opts[curIdx]
             sv[item.key] = item.value
-            -- Update label for display
-            item.label = i18n.t("language") .. ": " .. item.value
-            -- Hot-switch language
-            i18n.load(item.value)
-            -- Rebuild menu items with new translations
-            state.items = Settings._buildMenu(ctx)
+            if item.key == "language" then
+                -- Update label for display
+                item.label = i18n.t("language") .. ": " .. item.value
+                -- Hot-switch language
+                i18n.load(item.value)
+                -- Rebuild menu items with new translations
+                state.items = Settings._buildMenu(ctx)
+            elseif item.key == "autosave_interval" then
+                item.label = i18n.t("autosave_interval") .. ": " ..
+                    (item.value > 0 and item.value .. "s" or "Off")
+                -- Apply the interval to the engine timer
+                pcall(function()
+                    local engine = rawget(_G, "_CAESURA_ENGINE")
+                    if engine and engine.setAutoSaveInterval then
+                        engine:setAutoSaveInterval(item.value)
+                    end
+                end)
+            end
         end
     end
     Settings._render(ctx)

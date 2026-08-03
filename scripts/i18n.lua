@@ -108,6 +108,7 @@ function i18n._loadBuiltin(langCode)
     local builtins = {
         zh = {
             title_screen = "标题画面",
+            autosave_interval = "自动存档间隔",
             new_game = "新游戏",
             continue = "继续",
             load_game = "读取存档",
@@ -130,6 +131,7 @@ function i18n._loadBuiltin(langCode)
         },
         en = {
             title_screen = "Title Screen",
+            autosave_interval = "Auto-Save Interval",
             new_game = "New Game",
             continue = "Continue",
             load_game = "Load Game",
@@ -152,6 +154,7 @@ function i18n._loadBuiltin(langCode)
         },
         ja = {
             title_screen = "タイトル",
+            autosave_interval = "オートセーブ間隔",
             new_game = "ニューゲーム",
             continue = "コンティニュー",
             load_game = "ロード",
