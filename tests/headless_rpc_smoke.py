@@ -35,7 +35,10 @@ while time.monotonic() < startup_deadline:
     if "Backends ready" in line:
         break
 if not boot_line or "Backends ready" not in boot_line:
-    proc.kill()
+    try:
+        proc.kill()
+    except Exception:
+        pass  # child may already have exited
     raise RuntimeError("engine did not reach 'Backends ready' within 45s "
                        "(last line: %r)" % (boot_line or "<none>"))
 
