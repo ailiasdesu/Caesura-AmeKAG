@@ -24,6 +24,7 @@ local tests = {
     "test_toast",
     "test_title_menu",
     "test_title_entry",
+    "test_benchmark",
     "test_sandbox",
 }
 
