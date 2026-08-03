@@ -102,10 +102,13 @@ try:
     r = request({"id": 3, "method": "eval", "code": "error('boom')"})
     check("eval-error-propagates", "error" in r)
 
+    # The first managed run may take longer on slow CI runners (the engine
+    # must reach its per-frame pump loop before the run is serviced); give
+    # it the same window as the boot deadline instead of the default 20s.
     r = request({"id": 4, "method": "run",
                  "script": "print('managed-run-start'); "
                            "coroutine.yield(); "
-                           "print('managed-run-resumed')"})
+                           "print('managed-run-resumed')"}, timeout=45)
     check("run-started", r.get("status") == "ok")
 
     # Give the managed coroutine time to yield and be resumed across frames.
