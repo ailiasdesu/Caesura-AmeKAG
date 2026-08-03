@@ -1132,7 +1132,8 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
     bgfx::ProgramHandle prog = bgfx::isValid(program) ? program : m_fallbackProgram;
     if (!bgfx::isValid(prog)) return x;
 
-    if (!m_msgCache.matches(viewId, text, x, y)) {
+    bool keyHit = m_msgCache.matches(viewId, text, x, y);
+    if (!keyHit) {
         // Key mismatch (text, view, or position): recompute the dirty range
         // and force a rebuild with the new key.
         if (text != m_msgCache.cachedText) updateDirtyRange(text);
@@ -1142,8 +1143,12 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
         m_msgCache.cachedY = y;
     }
 
-    if (m_msgCache.isDirty())
-        return rebuildCache(viewId, text, x, y, color, prog);
+    if (m_msgCache.isDirty()) {
+        const float pen = rebuildCache(viewId, text, x, y, color, prog);
+        // Store the pen advance (pen - x) so a cache hit skips the O(n) walk.
+        m_msgCache.cachedPenAdvance = pen - x;
+        return pen;
+    }
 
     if (!ensureCacheBuffers()) return x;
 
@@ -1156,16 +1161,9 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
     bgfx::submit(viewId, prog);
 
-    float penX = x;
-    const uint8_t* td = reinterpret_cast<const uint8_t*>(text.data());
-    int tl = (int)text.size();
-    for (int i = 0; i < tl; ) {
-        int clen = utf8_char_len(td[i]);
-        if (i + clen > tl) clen = tl - i;
-        i += clen;
-        penX += getTTFGlyph(utf8_codepoint(&td[i - clen], clen)).advance;
-    }
-    return penX;
+    // Cache hit: the pen advance was computed once at rebuild time; skip the
+    // per-frame O(n) glyph-advance walk.
+    return x + m_msgCache.cachedPenAdvance;
 }
 
 

@@ -30,6 +30,7 @@ struct MessageLayerCache {
     // draw when multiple draws share a text but differ in view/position).
     uint16_t cachedViewId = 0xFFFF;
     float    cachedX = 0.0f, cachedY = 0.0f;
+    float    cachedPenAdvance = 0.0f;  // sum of glyph advances for cachedText
     bool matches(uint16_t viewId, const std::string& text, float x, float y) const {
         return cachedViewId == viewId && cachedText == text && cachedX == x && cachedY == y;
     }
