@@ -22,6 +22,17 @@ cmake -B build -S . -G "Visual Studio 17 2022" -A x64 `
 cmake --build build --config Debug --parallel
 ```
 
+> **运行要求（重要）**：引擎从 **项目根目录** 启动（`assets/` 等资源
+> 路径是相对 CWD 解析的）。从构建目录启动会导致资源加载失败
+> （背景/音频缺失，画面异常）：
+>
+> ```bash
+> # 从项目根运行（Windows）
+> ./build/Debug/CaesuraAmeKAG.exe
+> # 从项目根运行（macOS/Linux）
+> ./build/CaesuraAmeKAG
+> ```
+
 ### Linux
 
 ```bash
