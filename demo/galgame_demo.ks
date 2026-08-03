@@ -13,6 +13,8 @@
 [ch name="Narrator" text="This is a test of the KAG scripting system."]
 [p]
 
+*chapter_01
+
 ; Scene 1 — Classroom
 [cl]
 [bg storage="assets/bg/classroom.png"]
@@ -25,6 +27,8 @@
 [ch name="Teacher" text="Welcome to our class. Today we learn something interesting."
      voice="assets/voice/line01.wav" sprite="assets/fg/girl_uniform.png"]
 [p]
+
+*chapter_02
 
 ; Scene 2 — Hallway (flash + crossfade transition demo)
 [flash time=300 r=255 g=255 b=255]
@@ -64,3 +68,5 @@
 [p]
 
 [end]
+
+*chapter_03

@@ -267,4 +267,17 @@ do
         passed = passed + 1 print("  [PASS] flash command registered")
     else failed = failed + 1 end
 end
+
+-- Chapter select: command registered + collect() scans chapter_ labels
+do
+    local sys_src = io.open("scripts/kag/commands/system.lua", "r"):read("*a")
+    if sys_src:find("function SystemCommands.chapter", 1, true)
+       and sys_src:find("_pendingJump", 1, true) then
+        passed = passed + 1 print("  [PASS] chapter command registered")
+    else failed = failed + 1 end
+    local cs = io.open("scripts/chapter_select.lua", "r"):read("*a")
+    if cs:find("chapter_", 1, true) then
+        passed = passed + 1 print("  [PASS] chapter collect scans labels")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

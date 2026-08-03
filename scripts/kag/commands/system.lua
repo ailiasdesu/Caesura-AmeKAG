@@ -214,6 +214,22 @@ function SystemCommands.music(ctx, params)
     require("music_room").show(ctx)
 end
 
+-- [chapter] — chapter selection overlay; jumps to the chosen *chapter_*
+-- label via _pendingJump (the runner's dead-coroutine branch consumes it).
+function SystemCommands.chapter(ctx, params)
+    local ChapterSelect = require("chapter_select")
+    local chosen = ChapterSelect.show(ctx)
+    if chosen then
+        -- Same signal as history/choice jumps: the scheduler discards
+        -- handler returns, so route through ctx.
+        ctx._pendingJump = { scene = ctx.current_scene or ctx.currentScene,
+                             index = ctx.labelMap and ctx.labelMap[chosen] or 1,
+                             target = chosen }
+        ctx.stop_flag = true
+    end
+    return chosen
+end
+
 function SystemCommands.rollback(ctx, params)
     if not ctx then return false end
     local ok, reason = require("kag_runner").rollback()
