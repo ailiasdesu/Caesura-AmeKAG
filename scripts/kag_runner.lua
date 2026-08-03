@@ -135,7 +135,9 @@ local function resume_from_save()
     end
     ctx.labelMap = scene.labels
     ctx.tokens = scene.tokens
-    ctx.token_index = ctx._pendingLoadToken or 1
+    -- Coerce the restored token index: crafted saves may carry a string or
+    -- table; scheduler.run compares `i <= #tokens` numerically.
+    ctx.token_index = tonumber(ctx._pendingLoadToken) or 1
     ctx.currentScene = path
     -- The saved [load] set stop_flag to end the running script; clear it so
     -- the resumed coroutine actually executes tokens (scheduler returns

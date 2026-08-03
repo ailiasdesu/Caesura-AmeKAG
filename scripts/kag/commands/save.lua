@@ -242,8 +242,14 @@ function SaveCommands.load(ctx, params)
     -- assets/scripts (or demo/) so [load] cannot point the tokenizer at
     -- an arbitrary readable local file.
     local sp = state.scene_path or ""
-    local safeScene = (#sp > 0)
-        and (sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
+    -- Real layout: production entry is scripts/demo_story.ks and scheduler
+    -- jumps write assets/script/<t>.ks (singular); assets/scripts and
+    -- demo/ are also accepted. Reject any ".." segment so traversal cannot
+    -- smuggle an arbitrary file past the prefix check.
+    local noTraversal = type(sp) == "string" and not sp:find("%.%.", 1, true)
+    local safeScene = noTraversal and type(sp) == "string" and #sp > 0
+        and (sp:find("^scripts/") == 1 or sp:find("^assets/script/") == 1
+             or sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
              or sp:find("^tests/scripts/") == 1)
         and sp:find("%.ks$") ~= nil
     if safeScene then
@@ -254,6 +260,13 @@ function SaveCommands.load(ctx, params)
         ctx.stop_flag = true
         ctx._pendingLoadScene = state.scene_path
         ctx._pendingLoadToken = state.token_index
+    else
+        -- Rejected path: still harden state so a crafted save cannot
+        -- leave a stale call_stack / non-table seen_scenes live (the
+        -- continuing script could hit [return] into a crafted frame).
+        ctx.stop_flag = true
+        ctx.call_stack = nil
+        if type(ctx.seen_scenes) ~= "table" then ctx.seen_scenes = {} end
     end
 
     -- Set load result flag for UI feedback
