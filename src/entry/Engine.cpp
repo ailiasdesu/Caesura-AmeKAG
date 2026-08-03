@@ -904,6 +904,19 @@ void Engine::processEvents() {
 
         if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && L) {
             if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_F4) {
+                    lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F4");
+                    if (!event.key.repeat && !isLuaExecutionPaused()) {
+                        lua_getglobal(L, "_KAG_onF4");
+                        if (lua_isfunction(L, -1)) {
+                            if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                                const char* err = lua_tostring(L, -1);
+                                fprintf(stderr, "_KAG_onF4: %s\n", err ? err : "unknown");
+                                lua_pop(L, 1);
+                            }
+                        } else { lua_pop(L, 1); }
+                    }
+                }
                 if (event.key.key == SDLK_F5) {
                     lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F5");
                     if (!event.key.repeat && !isLuaExecutionPaused()) quicksave();
@@ -936,6 +949,7 @@ void Engine::processEvents() {
                 }
             }
             if (event.type == SDL_EVENT_KEY_UP) {
+                if (event.key.key == SDLK_F4) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F4"); }
                 if (event.key.key == SDLK_F5) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F5"); }
                 if (event.key.key == SDLK_F6) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F6"); }
                 if (event.key.key == SDLK_W)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_W"); }

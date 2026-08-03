@@ -22,6 +22,12 @@ kag_runner.start("scripts/demo_story.ks")
 local history_co = nil
 
 function engine_update(dt)
+    -- F4: toggle the developer HUD (perf overlay)
+    if _G._GAME_KEY_F4 then
+        _G._GAME_KEY_F4 = false
+        require("dev_hud").toggle()
+    end
+    require("dev_hud").update(dt * 1000)
     -- H key: open the backlog overlay ([history] command).
     if _G._GAME_KEY_H then
         _G._GAME_KEY_H = false

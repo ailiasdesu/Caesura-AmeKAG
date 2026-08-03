@@ -160,6 +160,7 @@ local _G_whitelist = {
     _GAME_MOUSE_X   = true,
     _GAME_MOUSE_Y   = true,
     _GAME_MOUSE_DOWN = true,
+    _GAME_KEY_F4    = true,
     _GAME_KEY_F5    = true,
     _GAME_KEY_F6    = true,
     _GAME_KEY_W     = true,
