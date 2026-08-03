@@ -22,6 +22,7 @@ local tests = {
     "test_kag3_compat",
     "test_choice",
     "test_toast",
+    "test_title_menu",
     "test_sandbox",
 }
 
