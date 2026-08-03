@@ -142,6 +142,11 @@ local function resume_from_save()
     -- immediately while stop_flag is set).
     ctx.stop_flag = false
     ctx.current_scene = path  -- snake_case variant read by system.lua
+    -- A crafted save may carry non-table seen_scenes or a stale call_stack;
+    -- validate the former and drop the latter so [return] cannot redirect
+    -- into stale frames.
+    if type(ctx.seen_scenes) ~= "table" then ctx.seen_scenes = {} end
+    ctx.call_stack = nil
     ctx._pendingLoadScene = nil
     ctx._pendingLoadToken = nil
     return true
@@ -238,8 +243,10 @@ function kag_runner.update(dt)
             if ctx.skip_mode == "seen" then
                 -- Read-skip: only advance past text this scene already saw.
                 local scene = ctx.current_scene or ctx.currentScene or ""
-                local seen = ctx.seen_scenes and ctx.seen_scenes[scene]
-                local wasSeen = seen and seen[ctx.token_index or 0] == true
+                local seen = type(ctx.seen_scenes) == "table"
+                             and ctx.seen_scenes[scene]
+                local wasSeen = type(seen) == "table"
+                             and seen[ctx.token_index or 0] == true
                 if not wasSeen then
                     -- Unseen text: stop read-skipping (fall back to manual).
                     auto_advance_ms = 0
@@ -321,10 +328,11 @@ function kag_runner.on_click()
     -- Mark the current line as seen for read-skip: only text the player
     -- actually clicked through counts as read.
     local scene = ctx.current_scene or ctx.currentScene or ""
-    if scene ~= "" and ctx.token_index then
+    if scene ~= "" and type(ctx.token_index) == "number" then
         ctx.seen_scenes = ctx.seen_scenes or {}
-        ctx.seen_scenes[scene] = ctx.seen_scenes[scene] or {}
-        ctx.seen_scenes[scene][ctx.token_index] = true
+        local st = ctx.seen_scenes[scene]
+        if type(st) ~= "table" then st = {}; ctx.seen_scenes[scene] = st end
+        st[ctx.token_index] = true
     end
 
     ctx.waiting_input = false

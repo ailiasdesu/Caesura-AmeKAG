@@ -237,10 +237,18 @@ function SaveCommands.load(ctx, params)
     ctx.token_index = state.token_index or 1
 
     -- Set scene path for reload (both aliases: the runner reads the
-    -- snake_case variant during the coroutine-death window).
-    if state.scene_path and #state.scene_path > 0 then
-        ctx.currentScene = state.scene_path
-        ctx.current_scene = state.scene_path
+    -- snake_case variant during the coroutine-death window). The path is
+    -- attacker-controlled in crafted saves: allowlist it to a .ks under
+    -- assets/scripts (or demo/) so [load] cannot point the tokenizer at
+    -- an arbitrary readable local file.
+    local sp = state.scene_path or ""
+    local safeScene = (#sp > 0)
+        and (sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
+             or sp:find("^tests/scripts/") == 1)
+        and sp:find("%.ks$") ~= nil
+    if safeScene then
+        ctx.currentScene = sp
+        ctx.current_scene = sp
         -- Set stop_flag so the current script execution stops
         -- and the engine reloads from the saved scene
         ctx.stop_flag = true
