@@ -290,6 +290,27 @@ function kag_runner.update(dt)
             end)
             return resume_scheduler("update", delta_ms)
         end
+        if ctx._pendingJump then
+            -- History/choice jump: reload the target scene and resume at the
+            -- requested token (cleared on failure so we don't loop).
+            local target = ctx._pendingJump
+            ctx._pendingJump = nil
+            local scene = flow.load_scene(target.scene or target)
+            if scene then
+                ctx.tokens = scene.tokens
+                ctx.labelMap = scene.labels
+                ctx.current_scene = target.scene or target
+                ctx.currentScene = target.scene or target
+                ctx.token_index = tonumber(target.index) or 1
+                ctx.stop_flag = false
+                ctx._undoStack = {}
+                kag_co = coroutine.create(function()
+                    scheduler.run(ctx, ctx.tokens, ctx.token_index)
+                end)
+                return resume_scheduler("update", delta_ms)
+            end
+            print("[KAG Runner] Failed to load jump target: " .. tostring(target.scene or target))
+        end
         if ctx._scene_changed then
             ctx._scene_changed = false
             -- Scene changes (jump/call/link) invalidate every snapshot.
@@ -346,6 +367,10 @@ end
 -- advance past click-blocking operations like [p] (page break).
 
 function kag_runner.on_click()
+    -- History/backlog overlay owns the pointer while open: ignore clicks so
+    -- the overlay coroutine is not batch-resumed underneath. (Checked first:
+    -- the guard must hold even when no coroutine is running yet.)
+    if ctx and ctx.input_focus == "history" then return false, "history-open" end
     if not kag_co then print("[Click] no coroutine"); return false, "not-running" end
     if coroutine.status(kag_co) == "dead" then print("[Click] coroutine dead"); return false, "dead" end
     if not ctx then print("[Click] no ctx"); return false, "no-context" end

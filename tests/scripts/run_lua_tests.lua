@@ -18,6 +18,7 @@ local tests = {
     "test_kag_commands",
     "test_scheduler",
     "test_rollback",
+    "test_backlog",
     "test_sandbox",
 }
 

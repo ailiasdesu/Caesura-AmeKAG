@@ -1,13 +1,33 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) — history_ui.lua
 --  Backlog display interface. Renders scrollable semi-transparent overlay
 --  with text history entries, supports jump-to-scene and voice replay.
 --  Spec: U3 backlog display — [history] tag triggers HistoryUI.show(ctx).
 --
---  Controller: [↑↓] navigate, [Enter] jump, [V] replay voice, [Esc] close.
+--  Controller: [↑↓] navigate, [Enter] jump, [V] replay voice, [Esc] close,
+--              mouse wheel scrolls, click selects/closes.
+--  Renders via the layer system (settings.lua pattern) + backend.render_text;
+--  input via the _GAME_KEY_* polled globals (Engine.cpp dispatches them).
 -- ===========================================================================
 
 local HistoryUI = {}
+local backend = require("backend")
+local layers  = require("layers")
+
+-- Reusable solid-color texture
+local function solid(r, g, b, a)
+    return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
+
+-- Consume a one-shot key (engine sets true on down, false on up)
+local function key_consumed(name)
+    local v = _G[name]
+    if v then
+        _G[name] = false  -- one-shot semantics for menu navigation
+        return true
+    end
+    return false
+end
 
 function HistoryUI.show(ctx)
     -- Guard: nothing to show
@@ -15,141 +35,139 @@ function HistoryUI.show(ctx)
         return
     end
 
-    -- Set input focus explicitly on entry
-    pcall(function()
-        local backend = require("backend")
-        backend.set_input_focus("GAME")
-    end)
-
     ctx.input_focus = "history"
     local selected = #ctx.backlog
     local scroll   = 0
     local ITEMS    = 12
 
+    -- Overlay layers (created once, reused per frame)
+    local bgLayer   = layers.ensure(ctx, "_history_bg", 94)
+    local titleLayer = layers.ensure(ctx, "_history_title", 95)
+    local footerLayer = layers.ensure(ctx, "_history_footer", 97)
+    bgLayer.visible = true
+    titleLayer.visible = true
+    footerLayer.visible = true
+
     while true do
-        local backend = require("backend")
+        local w, h = 1280, 720
 
-        -- ── Clear and render dark overlay background ──
-        backend.debug_clear()
-        backend.debug_rect(0, 0, 1280, 720, 0xD0000000)  -- darker overlay (alpha ~208)
+        -- Full-screen dark overlay
+        bgLayer.x, bgLayer.y = 0, 0
+        bgLayer.w, bgLayer.h = w, h
+        bgLayer.texture = solid(0, 0, 0, 200)
 
-        -- ── Title bar: "Backlog / 消息记录" ──
-        backend.debug_rect(0, 0, 1280, 40, 0xE0101030)    -- dark blue title bar
-        local titleStr = "Backlog / 消息记录"
-        backend.debug_text(20, 8, 0x0E, titleStr)           -- bright yellow for title
+        -- Title bar strip
+        titleLayer.x, titleLayer.y = 0, 0
+        titleLayer.w, titleLayer.h = w, 40
+        titleLayer.texture = solid(16, 16, 48, 224)
 
-        -- ── Entry count indicator: "Entry 5 / 45" ──
-        local posStr = "Entry " .. selected .. " / " .. #ctx.backlog
-        backend.debug_text(640, 8, 0x0A, posStr)            -- green indicator at center
+        backend.render_text("Backlog / 消息记录", 20, 8, 255, 200, 60, 255)
+        backend.render_text("Entry " .. selected .. " / " .. #ctx.backlog, 640, 8, 60, 200, 120, 255)
 
-        -- ── Entry separator line under title bar ──
-        backend.debug_rect(0, 40, 1280, 1, 0x604060A0)      -- subtle separator
+        -- Separator under title
+        local sep = layers.ensure(ctx, "_history_sep", 96)
+        sep.visible = true
+        sep.x, sep.y, sep.w, sep.h = 0, 40, w, 1
+        sep.texture = solid(96, 64, 160, 255)
 
-        -- ── Render: scrollable entry list ──
+        -- Scrollable entries
         local y = 52
-        local entryH = 22     -- line height per entry
+        local entryH = 22
         local lastVisible = math.min(scroll + ITEMS, #ctx.backlog)
         for i = scroll + 1, lastVisible do
             local e = ctx.backlog[i]
             local isSelected = (i == selected)
 
-            -- Highlight background for selected entry
+            -- Highlight selected entry
             if isSelected then
-                backend.debug_rect(10, y - 1, 1260, entryH + 2, 0x602040A0)  -- blue highlight
+                local hl = layers.ensure(ctx, "_history_hl" .. i, 98)
+                hl.visible = true
+                hl.x, hl.y = 10, y - 1
+                hl.w, hl.h = 1260, entryH + 2
+                hl.texture = solid(32, 64, 160, 100)
             end
 
-            -- Entry prefix: selection indicator
-            local prefix = isSelected and ">" or " "
-
-            -- Truncated preview text
+            local prefix = isSelected and "> " or "  "
             local preview = (e.text or ""):sub(1, 60)
             if #(e.text or "") > 60 then preview = preview .. "..." end
-
-            -- Speaker / scene name
             local speaker = e.name or ""
             if speaker == "" then speaker = "(Narration)" end
-            local speakerPreview = speaker:sub(1, 16)
-
-            -- Voice indicator
             local voiceIndicator = ""
-            if e.voice and #e.voice > 0 then
-                voiceIndicator = " [V]"  -- voice available
-            end
+            if e.voice and #e.voice > 0 then voiceIndicator = " [V]" end
 
-            -- Render entry line: " > [Speaker] preview text... [V]"
-            local color = isSelected and 0x0E or 0x0F
-            local line = string.format("%s %-17s %s%s", prefix, "[" .. speakerPreview .. "]", preview, voiceIndicator)
-            backend.debug_text(20, y + 1, color, line)
+            local r, g, b = 255, 255, 255
+            if isSelected then r, g, b = 255, 220, 80 end
+            local line = string.format("%s[%s] %s%s", prefix, speaker, preview, voiceIndicator)
+            backend.render_text(line, 20, y + 1, r, g, b, 255)
 
-            -- Timestamp on the right
+            -- Timestamp
             if e.time then
-                backend.debug_text(1150, y + 1, 0x08, e.time)  -- dim gray timestamp
+                backend.render_text(e.time, 1150, y + 1, 140, 140, 160, 255)
             elseif e.timestamp then
-                local ts = os.date("%H:%M", e.timestamp)
-                backend.debug_text(1150, y + 1, 0x08, ts)
+                backend.render_text(os.date("%H:%M", e.timestamp), 1150, y + 1, 140, 140, 160, 255)
             end
 
-            -- Scene name indicator (if available)
+            -- Scene tag
             if e.scene and #e.scene > 0 then
-                local sceneShort = e.scene:match("[^/\\]+$") or e.scene
+                local sceneShort = e.scene:match("[^/]+$") or e.scene
                 sceneShort = sceneShort:sub(1, 20)
-                backend.debug_text(750, y + 1, 0x09, "[" .. sceneShort .. "]")  -- blue scene tag
+                backend.render_text("[" .. sceneShort .. "]", 750, y + 1, 90, 150, 255, 255)
             end
-
-            -- Thin separator line between entries
-            backend.debug_rect(30, y + entryH, 1220, 1, 0x30102030)
-
-            y = y + entryH + 2   -- 2px gap for separator
+            y = y + entryH + 2
+        end
+        -- Hide stale highlight layers beyond the visible window
+        for i = lastVisible + 1, #ctx.backlog do
+            local stale = layers.get(ctx, "_history_hl" .. i)
+            if stale then stale.visible = false end
         end
 
-        -- ── Render: help bar at bottom ──
-        local footerY = 690
-        backend.debug_rect(0, footerY - 4, 1280, 34, 0xE0101030)   -- footer background
-        local helpStr = "[Up/Down] Navigate  [Enter] Jump to Scene  [V] Replay Voice  [Esc] Close"
-        backend.debug_text(20, footerY + 3, 0x0A, helpStr)
+        -- Footer
+        footerLayer.x, footerLayer.y = 0, 690
+        footerLayer.w, footerLayer.h = w, 30
+        footerLayer.texture = solid(16, 16, 48, 224)
+        backend.render_text("[Up/Down] Navigate  [Enter] Jump to Scene  [V] Replay Voice  [Esc] Close", 20, 693, 60, 200, 120, 255)
 
-        -- Footer: position info on right
-        backend.debug_text(1100, footerY + 3, 0x0A, posStr)
-
-        -- ── Yield to engine frame ──
+        -- Yield to engine frame
         coroutine.yield()
 
-        -- ── Input handling ──
-        if ctx.key_pressed then
-            local key = ctx.key_pressed
-
-            if key == "UP" then
-                selected = math.max(1, selected - 1)
-            elseif key == "DOWN" then
-                selected = math.min(#ctx.backlog, selected + 1)
-            elseif key == "ENTER" then
-                local e = ctx.backlog[selected]
-                if e and e.scene and e.token_index then
-                    ctx.input_focus = "kag"
-                    -- Restore input focus before returning
-                    pcall(function()
-                        require("backend").set_input_focus("KAG")
-                    end)
-                    return { jump = true, scene = e.scene, index = e.token_index }
-                end
-            elseif key == "V" then
-                local e = ctx.backlog[selected]
-                if e and e.voice and #e.voice > 0 then
-                    backend.audio_play("voice", e.voice)
-                end
-            elseif key == "ESC" then
+        -- Input handling (polled one-shot globals)
+        local wheel = _G._KAG_MOUSE_WHEEL_Y or 0
+        if wheel ~= 0 then
+            _G._KAG_MOUSE_WHEEL_Y = 0
+            if wheel > 0 then selected = math.max(1, selected - 1)
+            else selected = math.min(#ctx.backlog, selected + 1) end
+        end
+        if key_consumed("_GAME_KEY_UP") then
+            selected = math.max(1, selected - 1)
+        elseif key_consumed("_GAME_KEY_DOWN") then
+            selected = math.min(#ctx.backlog, selected + 1)
+        elseif key_consumed("_GAME_KEY_ENTER") then
+            local e = ctx.backlog[selected]
+            if e and e.scene and e.token_index then
                 ctx.input_focus = "kag"
-                -- Restore input focus on exit
-                pcall(function()
-                    require("backend").set_input_focus("KAG")
-                end)
-                return
+                pcall(function() backend.set_input_focus("KAG") end)
+                -- Clean up overlay layers before jumping
+                bgLayer.visible = false; titleLayer.visible = false
+                footerLayer.visible = false; sep.visible = false
+                return { jump = true, scene = e.scene, index = e.token_index }
             end
-
-            ctx.key_pressed = nil
+        elseif key_consumed("_GAME_KEY_ESC") then
+            ctx.input_focus = "kag"
+            pcall(function() backend.set_input_focus("KAG") end)
+            bgLayer.visible = false; titleLayer.visible = false
+            footerLayer.visible = false; sep.visible = false
+            return
+        end
+        -- V: replay voice
+        if _G._GAME_KEY_V or _G._GAME_KEY_V == true then
+            _G._GAME_KEY_V = false
+            local e = ctx.backlog[selected]
+            if e and e.voice and #e.voice > 0 then
+                backend.audio_play("voice", e.voice)
+            end
         end
 
-        -- ── Scroll clamping ──
+        -- Scroll clamping
         if selected <= scroll then
             scroll = selected - 1
         elseif selected >= scroll + ITEMS then

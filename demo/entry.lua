@@ -26,6 +26,14 @@ if not started then
 end
 
 function engine_update(dt)
+    -- H key: open the backlog overlay ([history] command)
+    if _G._GAME_KEY_H then
+        _G._GAME_KEY_H = false
+        local ctx = _G._CAESURA_CTX
+        if ctx and not ctx.input_focus == "history" then
+            require("kag.commands.system").history(ctx, {})
+        end
+    end
     kag_runner.update(dt or 0.016)
 end
 

@@ -183,7 +183,14 @@ end
 
 function SystemCommands.history(ctx, params)
     local HistoryUI = require("history_ui")
-    return HistoryUI.show(ctx)
+    local result = HistoryUI.show(ctx)
+    if type(result) == "table" and result.jump then
+        -- The scheduler discards handler return values; signal the jump
+        -- through ctx so the runner's dead-coroutine branch consumes it.
+        ctx._pendingJump = { scene = result.scene, index = result.index }
+        ctx.stop_flag = true
+    end
+    return result
 end
 
 

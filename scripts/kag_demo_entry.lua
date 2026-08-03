@@ -16,6 +16,14 @@ kag_runner.start("scripts/demo_story.ks")
 -- ── Engine update callback (called each frame by C++ Engine::run) ────────────
 
 function engine_update(dt)
+    -- H key: open the backlog overlay ([history] command)
+    if _G._GAME_KEY_H then
+        _G._GAME_KEY_H = false
+        local ctx = _G._CAESURA_CTX
+        if ctx and not ctx.input_focus == "history" then
+            require("kag.commands.system").history(ctx, {})
+        end
+    end
     kag_runner.update(dt)
 end
 
