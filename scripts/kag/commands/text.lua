@@ -126,7 +126,7 @@ function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
         voice       = voiceFile or "",
         time        = os.date("%H:%M:%S"),
         timestamp   = os.time(),
-        scene       = ctx.currentScene or "",
+        scene       = ctx.current_scene or ctx.currentScene or "",
         token_index = ctx.token_index or 1,
     }
     table.insert(ctx.backlog, entry)

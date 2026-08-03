@@ -237,7 +237,7 @@ function kag_runner.update(dt)
         if ctx.skip_mode then
             if ctx.skip_mode == "seen" then
                 -- Read-skip: only advance past text this scene already saw.
-                local scene = ctx.currentScene or ""
+                local scene = ctx.current_scene or ctx.currentScene or ""
                 local seen = ctx.seen_scenes and ctx.seen_scenes[scene]
                 local wasSeen = seen and seen[ctx.token_index or 0] == true
                 if not wasSeen then
@@ -320,7 +320,7 @@ function kag_runner.on_click()
 
     -- Mark the current line as seen for read-skip: only text the player
     -- actually clicked through counts as read.
-    local scene = ctx.currentScene or ""
+    local scene = ctx.current_scene or ctx.currentScene or ""
     if scene ~= "" and ctx.token_index then
         ctx.seen_scenes = ctx.seen_scenes or {}
         ctx.seen_scenes[scene] = ctx.seen_scenes[scene] or {}
