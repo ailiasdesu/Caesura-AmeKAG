@@ -107,7 +107,10 @@ finally:
     try:
         proc.wait(timeout=15)
     except Exception:
-        proc.kill()
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 failed = [name for name, ok in results if not ok]
 if failed:
