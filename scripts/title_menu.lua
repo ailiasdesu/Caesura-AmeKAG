@@ -15,7 +15,7 @@ local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
 end
 
-local MENU_ITEMS = { "new_game", "load_game", "gallery", "music", "settings", "exit" }
+local MENU_ITEMS = { "new_game", "load_game", "settings", "exit" }
 
 --- TitleMenu.show(ctx) → "new"|"load"|"settings"|"exit"|nil
 function TitleMenu.show(ctx)
@@ -60,8 +60,6 @@ function TitleMenu.show(ctx)
             local key = MENU_ITEMS[cursor]
             if key == "new_game" then return "new"
             elseif key == "load_game" then return "load"
-            elseif key == "gallery" then return "gallery"
-            elseif key == "music" then return "music"
             elseif key == "settings" then return "settings"
             else return "exit" end
         elseif _G._GAME_KEY_ESC == true then

@@ -40,26 +40,6 @@ function engine_update(dt)
                     kag_runner.start("scripts/demo_story.ks")
                 end
                 started = true
-            elseif action == "gallery" then
-                local ctx = _G._CAESURA_CTX
-                if ctx then
-                    local co = coroutine.create(function()
-                        require("gallery").show(ctx)
-                    end)
-                    coroutine.resume(co)
-                end
-                kag_runner.start("scripts/demo_story.ks")
-                started = true
-            elseif action == "music" then
-                local ctx = _G._CAESURA_CTX
-                if ctx then
-                    local co = coroutine.create(function()
-                        require("music_room").show(ctx)
-                    end)
-                    coroutine.resume(co)
-                end
-                kag_runner.start("scripts/demo_story.ks")
-                started = true
             elseif action == "settings" then
                 -- Open the settings overlay from the title screen (modal;
                 -- Settings.show drives its own coroutine loop)
