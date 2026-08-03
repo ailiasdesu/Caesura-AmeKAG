@@ -258,4 +258,13 @@ do
         passed = passed + 1 print("  [PASS] character sprite layer wired")
     else failed = failed + 1 end
 end
+
+-- [flash] command registered (KiriKiri classic white-flash effect)
+do
+    local tr_src = io.open("scripts/kag/commands/transition.lua", "r"):read("*a")
+    if tr_src:find("function TransCommands.flash", 1, true)
+       and tr_src:find('require("vfx")', 1, true) then
+        passed = passed + 1 print("  [PASS] flash command registered")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

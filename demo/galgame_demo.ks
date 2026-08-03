@@ -26,9 +26,11 @@
      voice="assets/voice/line01.wav" sprite="assets/fg/girl_uniform.png"]
 [p]
 
-; Scene 2 — Hallway
+; Scene 2 — Hallway (flash + crossfade transition demo)
+[flash time=300 r=255 g=255 b=255]
 [cl]
 [bg storage="assets/bg/hana.png"]
+[trans time=500 method=crossfade]
 [wait time=400]
 
 [ch name="Narrator" text="After class, you walk to the hallway."]

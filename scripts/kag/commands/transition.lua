@@ -151,6 +151,16 @@ end
 --  preloaded textures are ready.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- [flash time=200 r=255 g=255 b=255] — full-screen color flash
+-- (KiriKiri classic white-flash / colored flash effect). Non-blocking:
+-- VFX.flash runs its own coroutine-yield loop and returns.
+function TransCommands.flash(ctx, params)
+    local VFX = require("vfx")
+    if VFX.flash then
+        VFX.flash(ctx, params)
+    end
+end
+
 function TransCommands.trans(ctx, params)
     local dur     = tonumber(params.time or params.duration or 500)
     local method  = resolve_method(params)
