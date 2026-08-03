@@ -549,7 +549,8 @@ function quicksave()
         return
     end
     local SaveCommands = require("kag.commands.save")
-    SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
+    local ok = SaveCommands.save(ctx, { slot = QUICKSAVE_SLOT, desc = "Quick Save" })
+    require("toast").show(ok and "已保存" or "保存失败", 1.5)
 end
 
 --- quickload() — F6 hotkey handler
@@ -560,7 +561,8 @@ function quickload()
         return
     end
     local SaveCommands = require("kag.commands.save")
-    SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
+    local ok = SaveCommands.load(ctx, { slot = QUICKSAVE_SLOT })
+    require("toast").show(ok ~= false and "已读档" or "读档失败", 1.5)
 end
 
 --- autosave() — auto-save timer handler (called from C++ Engine)
