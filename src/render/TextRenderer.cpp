@@ -1132,7 +1132,15 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
     bgfx::ProgramHandle prog = bgfx::isValid(program) ? program : m_fallbackProgram;
     if (!bgfx::isValid(prog)) return x;
 
-    if (text != m_msgCache.cachedText) updateDirtyRange(text);
+    if (!m_msgCache.matches(viewId, text, x, y)) {
+        // Key mismatch (text, view, or position): recompute the dirty range
+        // and force a rebuild with the new key.
+        if (text != m_msgCache.cachedText) updateDirtyRange(text);
+        else m_msgCache.markAllDirty();
+        m_msgCache.cachedViewId = viewId;
+        m_msgCache.cachedX = x;
+        m_msgCache.cachedY = y;
+    }
 
     if (m_msgCache.isDirty())
         return rebuildCache(viewId, text, x, y, color, prog);

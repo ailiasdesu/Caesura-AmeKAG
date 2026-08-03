@@ -233,8 +233,11 @@ void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, f
 void BgfxRenderDevice::renderText(uint16_t viewId, const std::string& text,
                                      float x, float y,
                                      uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    // Cached path: static text (same text/view/position every frame) reuses
+    // its glyph geometry with zero rebuild; the full key guarantees a cache
+    // hit is only ever served for identical parameters (see matches()).
     if (m_textRenderer)
-        m_textRenderer->renderText(viewId, text, x, y, TextColor{r,g,b,a});
+        m_textRenderer->renderTextCached(viewId, text, x, y, TextColor{r,g,b,a});
 }
 
 void BgfxRenderDevice::renderRuby(uint16_t viewId, const std::string& text,

@@ -25,6 +25,14 @@ struct MessageLayerCache {
     uint32_t maxGlyphs = 2048;
     uint32_t dirtyStart = 0, dirtyEnd = 0, glyphCount = 0;
     std::string cachedText;
+    // Full cache key: geometry is only reused when EVERY parameter matches
+    // (a single-slot cache keyed on text alone would mis-render the second
+    // draw when multiple draws share a text but differ in view/position).
+    uint16_t cachedViewId = 0xFFFF;
+    float    cachedX = 0.0f, cachedY = 0.0f;
+    bool matches(uint16_t viewId, const std::string& text, float x, float y) const {
+        return cachedViewId == viewId && cachedText == text && cachedX == x && cachedY == y;
+    }
     bool        cacheIsCjk = false;     // TD-13: whether cached text uses CJK atlas
 
     bool isDirty() const { return dirtyStart < dirtyEnd; }
