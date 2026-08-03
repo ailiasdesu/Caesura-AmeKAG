@@ -188,6 +188,13 @@ static int lua_Render_submit_batch(lua_State* L) {
 
     dev->beginBatch();
 
+    // Batch-level texture resolution cache: many quads share the same texId
+    // (a layer tree repeats the same image), so resolve each id once instead
+    // of hitting the TextureManager map per quad.
+    RenderTextureHandle texCache[256];
+    uint32_t texCacheId[256];
+    uint32_t texCacheN = 0;
+
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, 1, i);
         if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
@@ -198,12 +205,26 @@ static int lua_Render_submit_batch(lua_State* L) {
         float    h      = getTableFloat(L, "h", 128);
         int      opacity = getTableInt(L, "opacity", 255);
 
-        RenderTextureHandle tex = resolveTexture(L,texId, dev);
-        // Also try explicit "rt" key for forward-compat
+        RenderTextureHandle tex;
+        uint32_t hit = 0;
+        if (texId != 0) {
+            for (uint32_t c = 0; c < texCacheN; c++) {
+                if (texCacheId[c] == texId) { tex = texCache[c]; hit = 1; break; }
+            }
+            if (!hit) {
+                tex = resolveTexture(L, texId, dev);
+                if (texCacheN < 256) {
+                    texCache[texCacheN] = tex;
+                    texCacheId[texCacheN] = texId;
+                    texCacheN++;
+                }
+            }
+        }
+        // Also try explicit "rt" key for forward-compat (uncached; rare)
         if (!tex.isValid()) {
             uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
             if (rtId != 0) {
-                tex = resolveTexture(L,rtId, dev);
+                tex = resolveTexture(L, rtId, dev);
             }
         }
         if (tex.isValid()) {
