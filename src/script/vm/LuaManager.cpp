@@ -26,7 +26,7 @@ namespace Caesura {
 
 namespace {
 char kLuaManagerRegistryKey;
-constexpr int kInstructionHookInterval = 1000;
+constexpr int kInstructionHookInterval = 10000;
 }
 
 // ===========================================================================

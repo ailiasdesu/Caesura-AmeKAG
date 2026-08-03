@@ -266,6 +266,8 @@ void DebugManager::log(DbgLevel level, SubSys subsystem, ErrCode code,
 // -- log (without error code) -----------------------------------------------
 
 void DebugManager::log(DbgLevel level, SubSys subsystem, const char* fmt, ...) {
+    // Trace is dropped by every sink; skip formatting entirely for it.
+    if (level == DbgLevel::Trace) return;
     char msgBuf[1024];
     va_list args;
     va_start(args, fmt);
