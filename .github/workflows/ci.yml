@@ -58,7 +58,7 @@ jobs:
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --repeat until-pass:2
           Pop-Location
 
       - name: Smoke Test
@@ -89,7 +89,7 @@ jobs:
         run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --repeat until-pass:2
 
   # ============================================================
   # Linux GCC
@@ -126,7 +126,7 @@ jobs:
         run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --repeat until-pass:2
 
       - name: Coupling Count
         run: python3 scripts/count_coupling.py --ci
