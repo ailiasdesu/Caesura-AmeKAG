@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import threading
 import sys
 import time
 
@@ -50,7 +51,24 @@ def request(req, timeout=20):
     proc.stdin.flush()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        line = proc.stdout.readline()
+        # readline() alone can block forever if the engine hangs (no
+        # data); wrap it in a reader thread so the per-request timeout
+        # actually fires and the failure is diagnosed instead of a
+        # ctest-level timeout.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("timeout waiting for response to " + json.dumps(req))
+        line = None
+        done = threading.Event()
+        def _read():
+            nonlocal line
+            line = proc.stdout.readline()
+            done.set()
+        t = threading.Thread(target=_read, daemon=True)
+        t.start()
+        done.wait(timeout=min(remaining, 5.0))
+        if not done.is_set():
+            continue  # still within the request deadline; poll again
         if not line:
             raise RuntimeError("engine closed stdout")
         try:
