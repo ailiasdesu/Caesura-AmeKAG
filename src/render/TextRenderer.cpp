@@ -487,9 +487,12 @@ TextRenderer::GlyphQuad TextRenderer::buildGlyph(
 TextRenderer::GlyphQuad TextRenderer::buildGlyph(
     uint32_t cp, float penX, float penY, float scaleW, float scaleH)
 {
-    // TTF path
-    if (m_ttf && m_ttf->glyphs.count(cp)) {
-        const auto& gm = m_ttf->glyphs.at(cp);
+    // TTF path (single unordered_map lookup: find() covers the existence
+    // check that the old count()+at() pair did with two probes)
+    if (m_ttf) {
+        auto it = m_ttf->glyphs.find(cp);
+        if (it != m_ttf->glyphs.end()) {
+            const auto& gm = it->second;
         float gw = (float)gm.w * scaleW;
         float gh = (float)gm.h * scaleH;
         float atlasW = (float)m_ttf->atlasW;
@@ -502,6 +505,7 @@ TextRenderer::GlyphQuad TextRenderer::buildGlyph(
         q.u1 = (float)(gm.x + gm.w) / atlasW; q.v1 = (float)(gm.y + gm.h) / atlasH;
         q.w = (float)gm.advance * scaleW;
         return q;
+        }
     }
 
     // Bitmap fallback
