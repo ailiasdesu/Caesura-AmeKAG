@@ -177,7 +177,7 @@ if(Python3_EXECUTABLE)
         RESOURCE_LOCK "global-singletons"
         FIXTURES_REQUIRED caesura-test-assets
         PASS_REGULAR_EXPRESSION "ALL HEADLESS RPC TESTS PASSED"
-        TIMEOUT 60
+        TIMEOUT 120
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
     )
     add_test(

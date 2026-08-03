@@ -21,6 +21,24 @@ proc = subprocess.Popen(
     errors="replace",
 )
 
+# The engine boot window (Lua runtime init, script scan) is NOT covered by
+# the per-request timeout below -- on a loaded CI runner the first ping can
+# arrive >20s after spawn and flake. Wait for the headless-ready banner with
+# a generous startup deadline before issuing any request.
+startup_deadline = time.monotonic() + 45.0
+boot_line = None
+while time.monotonic() < startup_deadline:
+    line = proc.stdout.readline()
+    if not line:
+        break
+    boot_line = line.strip()
+    if "Backends ready" in line:
+        break
+if not boot_line or "Backends ready" not in boot_line:
+    proc.kill()
+    raise RuntimeError("engine did not reach 'Backends ready' within 45s "
+                       "(last line: %r)" % (boot_line or "<none>"))
+
 results = []
 
 
