@@ -145,6 +145,26 @@
 
 ---
 
+## KAG 3.0 Compatibility Aliases (13)
+
+日系 KiriKiri/KAG3 标签集的兼容别名（差异化：KAG3 脚本可基本不改运行）。
+
+| Command | Parameters | Maps to | Description |
+|---------|-----------|---------|-------------|
+| `r` | — | `l`/`br` | Line break (KAG3) |
+| `s` | `ms` (default 250) | delay loop | Short wait then continue |
+| `delay` | `ms` | wait | Wait N milliseconds |
+| `clear` | — | `cl` | Clear text layer |
+| `ld` | `layer` | layers | Delete/hide a layer |
+| `shake` | — | vfx | Screen shake |
+| `quake` | — | `shake` | Screen shake (KAG3 classic) |
+| `play` | `file` | `playbgm` | Play BGM |
+| `playstop` | — | `stopbgm` | Stop BGM |
+| `voice` | `file` | `playvoice` | Play voice |
+| `bgm` | `file` | `play` | Play BGM (alternate) |
+| `se` | `file` | `playse` | Play SE |
+| `clear` | — | `cl` | Clear text layer |
+
 ## Total: 68 commands across 10 categories
 
 | Category | Count | Commands |

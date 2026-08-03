@@ -166,6 +166,93 @@ function KAG.endmacro(ctx, params) end
 function KAG.erasemacro(ctx, params) end
 
 -- ===========================================================================
+--  KAG 3.0 compatibility aliases
+--  Lets scripts written for the Japanese KiriKiri/KAG3 tag set run mostly
+--  unchanged on Caesura (differentiator vs Ren'Py/Tyrano).
+-- ===========================================================================
+
+-- [r] -- line break (KAG3); same as [l]
+KAG.r = KAG.l or KAG.br
+
+-- [s] -- short wait then continue (KAG3 control char)
+function KAG.s(ctx, params)
+    -- short wait then continue (KAG3 control char)
+    local Operation = require("kag.operation")
+    local ms = tonumber(params.ms) or 250
+    if ms <= 0 then return end
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
+    local elapsed = 0
+    while elapsed < ms and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+    end
+    if not ct.cancelled then operation:complete() end
+end
+-- [delay ms=N] -- wait N ms (KAG3 delay)
+function KAG.delay(ctx, params)
+    -- wait N ms (KAG3 delay)
+    local Operation = require("kag.operation")
+    local ms = tonumber(params.ms) or tonumber(params[1]) or 500
+    if ms <= 0 then return end
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
+    local elapsed = 0
+    while elapsed < ms and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+    end
+    if not ct.cancelled then operation:complete() end
+end
+-- [clear] -- clear text layer (KAG3); alias for [cl]
+KAG.clear = KAG.cl
+
+-- [ld] -- delete layer (KAG3 layer delete)
+function KAG.ld(ctx, params)
+    local layers = require("layers")
+    local name = params.layer or params.name or params[1]
+    if name then
+        local node = layers.get_layer(name)
+        if node then
+            node.visible = false
+            node.texture = nil
+        end
+    end
+end
+
+-- [shake] / [quake] -- screen shake (KAG3 classic effect)
+function KAG.shake(ctx, params)
+    local vfx = require("kag.commands.vfx")
+    if vfx.shake then vfx.shake(ctx, params) end
+end
+KAG.quake = KAG.shake
+
+-- [play file=X] -- play BGM (KAG3)
+function KAG.play(ctx, params)
+    local audio = require("kag.commands.audio")
+    audio.playbgm(ctx, { file = params.file or params[1], loop = true })
+end
+
+-- [playstop] -- stop BGM (KAG3)
+function KAG.playstop(ctx, params)
+    local audio = require("kag.commands.audio")
+    audio.stopbgm(ctx, params)
+end
+
+-- [voice file=X] -- play voice (KAG3)
+function KAG.voice(ctx, params)
+    local audio = require("kag.commands.audio")
+    audio.playvoice(ctx, { file = params.file or params[1] })
+end
+
+-- [bgm file=X] -- play BGM (KAG3 alternate)
+KAG.bgm = KAG.play
+
+-- [se file=X] -- play SE (KAG3)
+function KAG.se(ctx, params)
+    local audio = require("kag.commands.audio")
+    audio.playse(ctx, { file = params.file or params[1] })
+end
+
+-- ===========================================================================
 --  Lua → KAG flow-control API
 --  Called from [iscript] blocks, [emb] expressions, or external Lua scripts.
 --  These set ctx._next_index so the scheduler takes the jump on the next
