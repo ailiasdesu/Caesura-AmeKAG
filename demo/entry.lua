@@ -25,18 +25,30 @@ if not started then
     return
 end
 
+-- History overlay coroutine: HistoryUI.show yields once per frame, so the
+-- wrapper must be resumed every frame until it finishes (a single resume
+-- would render one frame then freeze with ctx.input_focus stuck on
+-- "history", deadlocking clicks/skip/auto).
+local history_co = nil
+
 function engine_update(dt)
-    -- H key: open the backlog overlay ([history] command). HistoryUI.show
-    -- yields, and engine_update runs via plain lua_pcall -- wrap in a
-    -- coroutine so the yield is legal (mirrors scheduler command flow).
+    -- H key: open the backlog overlay ([history] command).
     if _G._GAME_KEY_H then
         _G._GAME_KEY_H = false
         local ctx = _G._CAESURA_CTX
-        if ctx and ctx.input_focus ~= "history" then
-            local co = coroutine.create(function()
+        if ctx and ctx.input_focus ~= "history" and not history_co then
+            history_co = coroutine.create(function()
                 require("kag.commands.system").history(ctx, {})
             end)
-            coroutine.resume(co)
+        end
+    end
+    if history_co then
+        local ok, err = coroutine.resume(history_co)
+        if not ok then
+            print("[History] overlay error: " .. tostring(err))
+            history_co = nil
+        elseif coroutine.status(history_co) == "dead" then
+            history_co = nil
         end
     end
     kag_runner.update(dt or 0.016)

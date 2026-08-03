@@ -171,6 +171,7 @@ local _G_whitelist = {
     _GAME_KEY_ENTER = true,
     _GAME_KEY_ESC   = true,
     _GAME_KEY_H     = true,
+    _GAME_KEY_V     = true,
     _KAG_MOUSE_WHEEL_Y = true,
     _CAESURA_AUDIO_EVENT = true,
     _CAESURA_VOICE_COMPLETE = true,

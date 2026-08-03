@@ -66,4 +66,15 @@ local runner_src = io.open("scripts/kag_runner.lua", "r"):read("*a")
 local guard_present = runner_src:find('input_focus == "history"', 1, true) ~= nil
 check("on_click history guard wired", guard_present)
 
+-- Entry hotkey wiring: the overlay coroutine must be resumed every frame
+-- (single-resume orphans it: renders one frame, then ctx.input_focus stays
+-- "history" and the game soft-locks). Source-level invariant check.
+local entry_src = io.open("scripts/kag_demo_entry.lua", "r"):read("*a")
+check("entry resumes history coroutine per frame",
+      entry_src:find("coroutine.resume(history_co)", 1, true) ~= nil)
+check("entry clears history_co when dead",
+      entry_src:find('coroutine.status(history_co) == "dead"', 1, true) ~= nil)
+check("entry guards re-open while active",
+      entry_src:find("not history_co", 1, true) ~= nil)
+
 print("BACKLOG TESTS DONE")
