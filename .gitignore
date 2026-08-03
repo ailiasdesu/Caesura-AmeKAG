@@ -27,7 +27,6 @@ out/
 
 # --- Node.js ---
 node_modules/
-web-editor/dist/
 web-editor/node_modules/
 web-editor/release/
 

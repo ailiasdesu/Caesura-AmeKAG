@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Caesura Web Editor</title>
+<style>
+:root { --bg:#1e1e28; --panel:#262636; --fg:#d8d8e0; --accent:#5c8dff; --ok:#3fb96f; --err:#e05555; }
+* { box-sizing:border-box; margin:0; }
+body { background:var(--bg); color:var(--fg); font:13px/1.5 Consolas,monospace; display:flex; height:100vh; }
+#sidebar { width:220px; background:var(--panel); padding:10px; display:flex; flex-direction:column; gap:6px; }
+#main { flex:1; display:flex; flex-direction:column; }
+#log { flex:1; overflow:auto; padding:8px; font-size:12px; }
+.panel { background:var(--panel); padding:8px; margin:6px; border-radius:4px; }
+#tabs { display:flex; gap:4px; padding:6px 6px 0; }
+#tabs button { background:var(--panel); border:0; color:var(--fg); padding:5px 12px; cursor:pointer; }
+#tabs button.active { background:#334; color:#fff; }
+.tab { display:none; flex:1; overflow:auto; padding:10px; }
+.tab.active { display:block; }
+textarea { width:100%; height:200px; background:#14141c; color:var(--fg); border:1px solid #444; font:12px Consolas,monospace; }
+button { background:#334; color:var(--fg); border:0; padding:5px 10px; cursor:pointer; }
+button:hover { background:#445; } button.primary { background:var(--accent); color:#fff; }
+input[type=text] { background:#14141c; color:var(--fg); border:1px solid #444; padding:4px 6px; width:100%; }
+.row { display:flex; gap:6px; margin:6px 0; align-items:center; }
+#framePreview { max-width:100%; background:#000; border:1px solid #444; }
+#assets, #models { list-style:none; padding:0; max-height:240px; overflow:auto; }
+#assets li, #models li { padding:3px 6px; cursor:pointer; }
+#assets li:hover, #models li:hover { background:#334; }
+.badge { font-size:11px; padding:1px 6px; border-radius:8px; background:#445; }
+.badge.ok { background:var(--ok); }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div><b>Caesura Editor</b> <span id="status" class="badge">?</span></div>
+  <div>端口: <span id="port">-</span></div>
+  <div>Lua: <span id="lua">-</span></div>
+  <button onclick="refreshStatus()">刷新状态</button>
+  <hr>
+  <b>资源</b>
+  <ul id="assets"></ul>
+  <b>Live2D 模型</b>
+  <ul id="models"></ul>
+</div>
+<div id="main">
+  <div id="tabs">
+    <button class="active" onclick="showTab('script')">脚本</button>
+    <button onclick="showTab('debug')">调试</button>
+    <button onclick="showTab('capture')">帧捕获</button>
+    <button onclick="showTab('log')">日志</button>
+  </div>
+  <div id="tab-script" class="tab active">
+    <div class="panel">
+      <div class="row"><b>Lua 脚本</b><span class="badge">/api/run</span></div>
+      <textarea id="scriptArea">print("hello from web editor")</textarea>
+      <div class="row">
+        <button class="primary" onclick="runScript()">运行</button>
+        <button onclick="evalExpr()">求值</button>
+        <button onclick="apiCall('reload')">热重载</button>
+        <button onclick="apiCall('stop')">停止</button>
+      </div>
+      <div class="row"><input type="text" id="evalInput" placeholder="Lua 表达式，如 return 1+1"></div>
+    </div>
+    <div class="panel"><b>结果</b><pre id="scriptResult" style="white-space:pre-wrap">-</pre></div>
+  </div>
+  <div id="tab-debug" class="tab">
+    <div class="panel">
+      <div class="row"><b>断点</b> <input type="text" id="bpLine" placeholder="行号" style="width:80px">
+        <button onclick="addBreakpoint()">添加</button>
+        <button onclick="clearBreakpoints()">清空</button></div>
+      <div class="row"><button onclick="debugContinue()">继续</button>
+        <button onclick="inspectVars()">检查变量</button></div>
+      <div class="row"><b>当前场景:</b> <span id="scene">-</span></div>
+    </div>
+  </div>
+  <div id="tab-capture" class="tab">
+    <div class="panel">
+      <div class="row"><b>帧捕获</b> <button onclick="captureFrame()">捕获</button>
+        <label>宽 <input type="number" id="capW" value="640" style="width:70px"></label>
+        <label>高 <input type="number" id="capH" value="360" style="width:70px"></label></div>
+      <img id="framePreview" alt="frame preview">
+    </div>
+  </div>
+  <div id="tab-log" class="tab">
+    <div class="panel"><button onclick="loadLogs()">刷新日志</button> <span class="badge">/api/logs</span></div>
+    <div id="log"></div>
+  </div>
+</div>
+<script>
+async function apiCall(method, body) {
+  const r = await fetch('/api/' + method, {
+    method: body ? 'POST' : 'GET',
+    headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r.json();
+}
+function showTab(name) {
+  document.querySelectorAll('#tabs button').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  var map = {script:'脚本', debug:'调试', capture:'帧捕获', log:'日志'};
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('#tabs button').forEach(function(b){
+    if (b.textContent === map[name]) b.classList.add('active');
+  });
+}
+async function refreshStatus() {
+  try {
+    var s = await apiCall('status');
+    var el = document.getElementById('status');
+    el.textContent = s.status || '?';
+    el.className = 'badge' + (s.status === 'ok' ? ' ok' : '');
+    document.getElementById('port').textContent = s.port ?? '-';
+    document.getElementById('lua').textContent = s.lua_available ? '可用' : '不可用';
+  } catch(e) { document.getElementById('status').textContent = 'ERR'; }
+}
+async function loadAssets() {
+  try {
+    var r = await apiCall('assets?type=script');
+    var ul = document.getElementById('assets'); ul.innerHTML = '';
+    var items = Array.isArray(r) ? r : (r.items || []);
+    items.forEach(function(a){
+      var li = document.createElement('li');
+      li.textContent = typeof a === 'string' ? a : (a.path || a.name || JSON.stringify(a));
+      ul.appendChild(li);
+    });
+  } catch(e) {}
+}
+async function loadModels() {
+  try {
+    var r = await apiCall('live2d/models');
+    var ul = document.getElementById('models'); ul.innerHTML = '';
+    var items = Array.isArray(r) ? r : (r.models || []);
+    items.forEach(function(m){
+      var li = document.createElement('li');
+      li.textContent = typeof m === 'string' ? m : (m.name || m.path || JSON.stringify(m));
+      li.onclick = function(){ apiCall('live2d/load', { model: li.textContent }); };
+      ul.appendChild(li);
+    });
+  } catch(e) {}
+}
+async function runScript() {
+  var r = await apiCall('run', { script: document.getElementById('scriptArea').value });
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function evalExpr() {
+  var v = document.getElementById('evalInput').value;
+  var r = await apiCall('eval', { code: v });
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function addBreakpoint() {
+  var line = parseInt(document.getElementById('bpLine').value, 10);
+  if (!line) return;
+  var r = await apiCall('debug/setBreakpoint', { line: line });
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function clearBreakpoints() {
+  var r = await apiCall('debug/clearBreakpoints');
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function debugContinue() {
+  var r = await apiCall('debug/continue');
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function inspectVars() {
+  var r = await apiCall('debug/inspect');
+  document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+}
+async function captureFrame() {
+  var w = document.getElementById('capW').value, h = document.getElementById('capH').value;
+  var r = await apiCall('debug/getFrame?width=' + w + '&height=' + h);
+  if (r && r.png_base64) {
+    document.getElementById('framePreview').src = 'data:image/png;base64,' + r.png_base64;
+  } else {
+    document.getElementById('scriptResult').textContent = JSON.stringify(r, null, 2);
+  }
+}
+async function loadLogs() {
+  try {
+    var r = await apiCall('logs');
+    var items = Array.isArray(r) ? r : (r.logs || []);
+    var log = document.getElementById('log'); log.innerHTML = '';
+    items.forEach(function(e){
+      var d = document.createElement('div');
+      var lvl = String(e.level || 'INFO').toUpperCase();
+      d.className = 'lvl-' + lvl;
+      d.textContent = '[' + lvl + '] ' + (e.message || e.text || JSON.stringify(e));
+      log.appendChild(d);
+    });
+  } catch(e) {}
+}
+refreshStatus(); loadAssets(); loadModels(); loadLogs();
+setInterval(refreshStatus, 5000);
+setInterval(loadLogs, 5000);
+</script>
+</body>
+</html>
