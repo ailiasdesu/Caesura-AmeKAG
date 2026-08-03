@@ -38,6 +38,16 @@ _G._GAME_KEY_ESC = true
 local ok4, act4 = coroutine.resume(co)
 check("esc returns nil", ok4 and act4 == nil)
 
+-- Extended menu: gallery/music items exist and route correctly
+do
+    local src = io.open("scripts/title_menu.lua", "r"):read("*a")
+    check("menu has gallery item", src:find('"gallery"', 1, true) ~= nil)
+    check("menu has music item", src:find('"music"', 1, true) ~= nil)
+    local entry_src = io.open("scripts/title_demo_entry.lua", "r"):read("*a")
+    check("entry routes gallery", entry_src:find('action == "gallery"', 1, true) ~= nil)
+    check("entry routes music", entry_src:find('action == "music"', 1, true) ~= nil)
+end
+
 -- Exit non-zero on any failure so the harness reports red
 local failed = 0
 for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
