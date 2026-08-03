@@ -234,10 +234,13 @@ function SaveCommands.load(ctx, params)
         end
     end
 
-    -- Restore backlog
+    -- Restore backlog (capped: history UI iterates it per frame, and a
+    -- crafted save could inflate it to stall the loop)
     if state.backlog then
         ctx.backlog = {}
+        local cap = ctx.backlog_max or 500
         for _, entry in ipairs(state.backlog) do
+            if #ctx.backlog >= cap then break end
             ctx.backlog[#ctx.backlog + 1] = entry
         end
     end

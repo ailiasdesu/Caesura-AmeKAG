@@ -295,15 +295,23 @@ function kag_runner.update(dt)
         end
         if ctx._pendingJump then
             -- History/choice jump: reload the target scene and resume at the
-            -- requested token (cleared on failure so we don't loop).
+            -- requested token (cleared on failure so we don't loop). The
+            -- scene comes from backlog entries (crafted saves can carry an
+            -- arbitrary path); apply the same allowlist as [load] before
+            -- touching the filesystem.
             local target = ctx._pendingJump
             ctx._pendingJump = nil
-            local scene = flow.load_scene(target.scene or target)
+            local path = target.scene or target
+            if type(path) ~= "string" or not require("kag.commands.save")._safeScenePath(path) then
+                print("[KAG Runner] Rejected unsafe jump target: " .. tostring(path))
+                return false, "unsafe-jump-target"
+            end
+            local scene = flow.load_scene(path)
             if scene then
                 ctx.tokens = scene.tokens
                 ctx.labelMap = scene.labels
-                ctx.current_scene = target.scene or target
-                ctx.currentScene = target.scene or target
+                ctx.current_scene = path
+                ctx.currentScene = path
                 ctx.token_index = tonumber(target.index) or 1
                 ctx.stop_flag = false
                 ctx._undoStack = {}

@@ -174,7 +174,10 @@ function HistoryUI.show(ctx)
         if _G._GAME_KEY_V == true then
             _G._GAME_KEY_V = false
             local e = ctx.backlog[selected]
-            if e and e.voice and #e.voice > 0 then
+            -- Voice file from a crafted save: require an audio extension so
+            -- SoLoud never attempts to decode an arbitrary file.
+            if e and e.voice and #e.voice > 0
+                and (e.voice:match("%.ogg$") or e.voice:match("%.wav$")) then
                 backend.audio_play("voice", e.voice)
             end
         end
