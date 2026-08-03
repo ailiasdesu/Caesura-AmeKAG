@@ -29,7 +29,12 @@ jobs:
 
       - name: Install SDL3 (vcpkg)
         shell: pwsh
-        run: vcpkg install sdl3 --triplet x64-windows
+        run: |
+          # vcpkg's recent bootstrap requires cmake >= 4.3.3, which the
+          # hosted runner may lag; install a current cmake via pip first.
+          python -m pip install --quiet --upgrade cmake
+          $env:Path = "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts;" + $env:Path
+          vcpkg install sdl3 --triplet x64-windows
 
       - name: Configure
         shell: pwsh
@@ -141,7 +146,12 @@ jobs:
 
       - name: Install SDL3 (vcpkg)
         shell: pwsh
-        run: vcpkg install sdl3 --triplet x64-windows
+        run: |
+          # vcpkg's recent bootstrap requires cmake >= 4.3.3, which the
+          # hosted runner may lag; install a current cmake via pip first.
+          python -m pip install --quiet --upgrade cmake
+          $env:Path = "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts;" + $env:Path
+          vcpkg install sdl3 --triplet x64-windows
 
       - name: Configure Release
         shell: pwsh
