@@ -18,7 +18,7 @@
 
 ### DI 与数据流
 - BackendRegistry 存非拥有 I* 指针，Engine 持 unique_ptr；init 四阶段幂等回滚
-- .ks → tokenizer.lua（LPeg，167 KAG 3.0 命令语法）→ scheduler.lua（协程+流控）→ kag[cmd]
+- .ks → tokenizer.lua（LPeg，KAG 3.0 命令语法）→ scheduler.lua（协程+流控）→ kag[cmd]
 - KAG+Lua 混合：eval/emb/iscript 内嵌，kag.* 反向回调
 
 ## 二、能力清单（43 项 · 6 域）
@@ -26,7 +26,7 @@
 | 状态 | 能力 |
 |---|---|
 | ✅ | 3 层合成+脏矩形、异步纹理+预算+LRU、2D GPU 粒子、视频（pl_mpeg+FFmpeg+音频+帧率步进）、GPU 降级、FreeType/CJK/ruby 文字、RTT、批量绘制 |
-| ✅ | Lua 5.4 协程、KAG 68 命令、流控、指令预算、热重载、错误恢复、打字机/auto/skip/read-skip |
+| ✅ | Lua 5.4 协程、KAG 68 命令、流控、指令预算、热重载、错误恢复、打字机/skip（auto/read-skip 为脚本层实现，未单测） |
 | ✅ | 三总线音频、3D 音效、原始 PCM、加密存档（AES-GCM）、schema 迁移、CARC+签名、资产链、编辑器 RPC（HTTP 18 路由+stdio 14 操作）、调试器、无头模式 |
 | ⚠️ | Live2D（D3D11 验证；GL 未验、Metal stub）、FFmpeg 真机调参、minigame GPU、Steam/云存档远程、非 D3D shader |
 
