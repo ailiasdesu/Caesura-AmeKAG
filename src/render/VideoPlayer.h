@@ -1,5 +1,6 @@
 #pragma once
 #include "api/IVideoPlayer.h"
+#include "../di/api/IDeviceLostListener.h"
 #include "../job/api/IJobSystem.h"
 #include <cstdint>
 #include <string>
@@ -24,10 +25,15 @@ struct DecodedFrame {
 // VideoPlayer -- MPEG1/FFmpeg video playback, implements IVideoPlayer
 // ============================================================================
 
-class VideoPlayer : public IVideoPlayer {
+class VideoPlayer : public IVideoPlayer, public IDeviceLostListener {
 public:
     VideoPlayer();
     ~VideoPlayer() override;
+
+    // IDeviceLostListener: GPU loss invalidates every video texture; mark
+    // them so the next frame re-uploads instead of submitting stale handles.
+    void onDeviceLost() override;
+    void onDeviceRestored() override {}
 
     VideoPlayer(const VideoPlayer&) = delete;
     VideoPlayer& operator=(const VideoPlayer&) = delete;

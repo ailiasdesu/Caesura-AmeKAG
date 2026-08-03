@@ -43,8 +43,23 @@ static void onPlmAudio(plm_t* plm, plm_samples_t* samples, void* user) {
     self->onAudioDecoded(plm, samples);
 }
 
-VideoPlayer::VideoPlayer()  = default;
-VideoPlayer::~VideoPlayer() { shutdown(); }
+VideoPlayer::VideoPlayer() {
+    BackendRegistry::instance().registerDeviceLostListener(this);
+}
+
+VideoPlayer::~VideoPlayer() {
+    BackendRegistry::instance().unregisterDeviceLostListener(this);
+    shutdown();
+}
+
+void VideoPlayer::onDeviceLost() {
+    // All video textures are GPU-owned; invalidate them so the update loop
+    // re-uploads the next decoded frame (no stale-handle submits).
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    for (auto& [id, vs] : m_videos) {
+        vs.texture = BGFX_INVALID_HANDLE;
+    }
+}
 
 VideoHandle VideoPlayer::open(const char* path) {
     // If FFmpeg is available, prefer it for all formats (hardware decode, SIMD).
