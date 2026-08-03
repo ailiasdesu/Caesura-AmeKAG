@@ -249,4 +249,13 @@ do
         passed = passed + 1 print("  [PASS] gallery/music UIs exist")
     else failed = failed + 1 end
 end
+
+-- Character sprite: [ch sprite=] shows a standing portrait layer
+do
+    local text_src = io.open("scripts/kag/commands/text.lua", "r"):read("*a")
+    if text_src:find('"_char_" .. speaker', 1, true)
+       and text_src:find("backend.load_texture(sprite)", 1, true) then
+        passed = passed + 1 print("  [PASS] character sprite layer wired")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

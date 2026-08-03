@@ -196,6 +196,33 @@ function TextCommands.ch(ctx, params)
         end)
     end
 
+    -- Character sprite (KAG-style standing portrait): if the speaker has a
+    -- registered sprite (via [ch sprite=] or a previous [ch storage=]), show
+    -- it on a dedicated layer, positioned by the speaker's registered pos.
+    if #speaker > 0 and ctx.characters and ctx.characters[speaker]
+       and ctx.characters[speaker].sprite then
+        local sprite = ctx.characters[speaker].sprite
+        local spritePos = ctx.characters[speaker].pos or "center"
+        local charLayerName = "_char_" .. speaker
+        local node = layers.get(charLayerName)
+        if not node then
+            node = layers.add_layer(nil, {
+                name = charLayerName, layer_type = 0,
+                x = 0, y = 200, w = 400, h = 520, visible = true,
+            })
+            layers.set_z(node, 1)
+        end
+        if spritePos == "left" then
+            node.x, node.y = 40, 200
+        elseif spritePos == "right" then
+            node.x, node.y = 840, 200
+        else
+            node.x, node.y = 440, 200
+        end
+        node.texture = backend.load_texture(sprite)
+        node.visible = true
+    end
+
     -- Store in backlog
     TextCommands.push_backlog(ctx, speaker, message, voiceFile)
 

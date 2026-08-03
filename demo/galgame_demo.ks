@@ -23,7 +23,7 @@
 [playse storage="assets/se/click.wav"]
 
 [ch name="Teacher" text="Welcome to our class. Today we learn something interesting."
-     voice="assets/voice/line01.wav"]
+     voice="assets/voice/line01.wav" sprite="assets/fg/girl_uniform.png"]
 [p]
 
 ; Scene 2 — Hallway
