@@ -22,7 +22,8 @@
 
 [playse storage="assets/se/click.wav"]
 
-[ch name="Teacher" text="Welcome to our class. Today we learn something interesting."]
+[ch name="Teacher" text="Welcome to our class. Today we learn something interesting."
+     voice="assets/voice/line01.wav"]
 [p]
 
 ; Scene 2 — Hallway

@@ -179,8 +179,17 @@ function TextCommands.ch(ctx, params)
         end
     end
 
+    -- Voice: [ch voice="assets/voice/x.wav"] plays the line and stores the
+    -- file in the backlog entry so the history overlay's V key can replay it.
+    local voiceFile = params.voice or params.voicefile or ""
+    if #voiceFile > 0 then
+        pcall(function()
+            require("kag.commands.audio").playvoice(ctx, { file = voiceFile })
+        end)
+    end
+
     -- Store in backlog
-    TextCommands.push_backlog(ctx, speaker, message)
+    TextCommands.push_backlog(ctx, speaker, message, voiceFile)
 
     -- Set up message layer if needed
     local msgNode = layers.get("message")

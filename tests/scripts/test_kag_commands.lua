@@ -200,4 +200,14 @@ print("\n" .. string.rep("=", 50))
 print(string.format("  KAG Commands: %d passed, %d failed, %d total",
     passed, failed, passed + failed))
 print(string.rep("=", 50))
+
+-- [ch voice=] stores the voice file in the backlog for V-key replay
+do
+    local ctx2 = { backlog = {}, f = {}, sf = {}, characters = {}, text_state = { draws = {} }, textCursorX = 32, textCursorY = 580 }
+    local TextCommands2 = require("kag.commands.text")
+    pcall(function() TextCommands2.ch(ctx2, { name = "Ame", text = "Hi", voice = "assets/voice/line01.wav" }) end)
+    if ctx2.backlog and ctx2.backlog[1] and ctx2.backlog[1].voice == "assets/voice/line01.wav" then
+        passed = passed + 1 print("  [PASS] ch voice stored in backlog")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
