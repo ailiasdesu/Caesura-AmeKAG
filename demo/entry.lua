@@ -47,6 +47,15 @@ function engine_update(dt)
         if not ok then
             print("[History] overlay error: " .. tostring(err))
             history_co = nil
+            -- The overlay may have set input_focus="history" before dying;
+            -- reset it or clicks/H re-open stay deadlocked (soft-lock).
+            local ctx = _G._CAESURA_CTX
+            if ctx then
+                ctx.input_focus = "kag"
+                pcall(function()
+                    require("history_ui")._hideAll(ctx)
+                end)
+            end
         elseif coroutine.status(history_co) == "dead" then
             history_co = nil
         end
