@@ -602,9 +602,13 @@ void Engine::run(const OwnerPump& ownerPump) {
                 if (lua_isfunction(L, -1)) {
                     lua_pushnumber(L, dt);
                     if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                        // S6: a per-frame script error is NOT fatal -- log it
+                        // and keep the frame loop alive (the game continues;
+                        // the KAG runner/scheduler has its own error recovery).
+                        // Only OOM / render-loop failures stay fatal.
                         const char* err = lua_tostring(L, -1);
-                        fprintf(stderr, "engine_update: %s\n", err ? err : "unknown");
-                        handleFatalError("engine_update", err);
+                        fprintf(stderr, "engine_update (recoverable): %s\n",
+                                err ? err : "unknown");
                         lua_pop(L, 1);
                     }
                 } else { lua_pop(L, 1); }
