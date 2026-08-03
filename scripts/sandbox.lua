@@ -156,6 +156,7 @@ local _G_whitelist = {
     _CAESURA_GPU_DEGRADED = true,
     _CAESURA_VOICE_COMPLETE = true,
     _CAESURA_CTX = true,
+    _CAESURA_ENGINE = true,
     _ASYNC_CALLBACKS = true,  -- async load callback registry (RenderBinding)
     _GAME_MOUSE_X   = true,
     _GAME_MOUSE_Y   = true,

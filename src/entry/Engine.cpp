@@ -58,6 +58,14 @@ int debugPauseProbe(lua_State* L) {
     return 1;
 }
 
+// Lua-visible engine handle: _CAESURA_ENGINE = { setAutoSaveInterval = fn }.
+static int lua_engine_setAutoSaveInterval(lua_State* L) {
+    Engine* engine = static_cast<Engine*>(lua_touserdata(L, lua_upvalueindex(1)));
+    if (!engine) return 0;
+    engine->setAutoSaveInterval(static_cast<double>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
 void installDebugPauseProbe(lua_State* L, DebugProtocol* protocol) {
     if (!L) return;
     lua_pushlightuserdata(L, protocol);
@@ -379,6 +387,16 @@ bool Engine::initScriptingPhase() {
     lua_pushboolean(m_lua->state(), 0);
     lua_setglobal(m_lua->state(), "_CAESURA_VOICE_COMPLETE");
 
+    // Expose the engine handle to Lua (System.setAutoSaveInterval uses it).
+    lua_State* engineL = m_lua->state();
+    if (engineL) {
+        lua_newtable(engineL);
+        lua_pushlightuserdata(engineL, this);
+        lua_pushcclosure(engineL, lua_engine_setAutoSaveInterval, 1);
+        lua_setfield(engineL, -2, "setAutoSaveInterval");
+        lua_setglobal(engineL, "_CAESURA_ENGINE");
+    }
+
     return true;
 }
 
@@ -552,6 +570,17 @@ void Engine::run(const OwnerPump& ownerPump) {
         }
 
         GpuQuality gpuQ = m_gpuMonitor->update(static_cast<double>(dt));
+
+        // Auto-save timer (0 disables; Lua System.setAutoSaveInterval).
+        if (m_autoSaveIntervalSec > 0.0 && dt > 0.0 && !isLuaExecutionPaused()) {
+            m_autoSaveAccum += static_cast<double>(dt);
+            if (m_autoSaveAccum >= m_autoSaveIntervalSec) {
+                m_autoSaveAccum = 0.0;
+                triggerAutoSave();
+            }
+        } else {
+            m_autoSaveAccum = 0.0;
+        }
 
         lua_State* L = m_lua->state();
         if (L) {

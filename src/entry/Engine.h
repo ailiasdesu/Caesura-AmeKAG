@@ -64,6 +64,10 @@ public:
     void run(const OwnerPump& ownerPump = {});
     void shutdown();
 
+    // Auto-save interval (seconds; 0 disables). Called from Lua via the
+    // _CAESURA_ENGINE table (System.setAutoSaveInterval).
+    void setAutoSaveInterval(double seconds) { m_autoSaveIntervalSec = seconds > 0 ? seconds : 0.0; }
+
     bool isHeadless() const { return m_config.headless; }
     bool isEditorMode() const { return m_config.editorMode; }
     void renderOneFrame();
@@ -121,6 +125,10 @@ private:
     // Coalesce mouse clicks: at most one _KAG_onClick dispatch per frame
     // (event storms from auto-clickers/touch ghosts must not batch-resume).
     bool         m_clickPending = false;
+    // Auto-save timer: triggerAutoSave() fires every m_autoSaveIntervalSec
+    // of accumulated frame time (0 disables; Lua System.setAutoSaveInterval).
+    double       m_autoSaveAccum = 0.0;
+    double       m_autoSaveIntervalSec = 60.0;
     bool         m_platformInitialized = false;
     bool         m_renderInitialized = false;
     bool         m_audioInitialized = false;
