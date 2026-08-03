@@ -939,9 +939,10 @@ void Engine::processEvents() {
                 if (event.key.key == SDLK_V && !event.key.repeat) {
                     lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_V");
                 }
-                // D9.6: Ctrl triggers skip mode via Lua
+                // D9.6: Ctrl triggers skip mode via Lua (only on the initial
+                // press -- key-repeat events would re-toggle skip ~30x/sec)
                 if ((event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) &&
-                    !isLuaExecutionPaused()) {
+                    !event.key.repeat && !isLuaExecutionPaused()) {
                     lua_getglobal(L, "_KAG_onCtrlDown");
                     if (lua_isfunction(L, -1)) {
                         if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
