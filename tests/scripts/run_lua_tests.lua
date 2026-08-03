@@ -20,6 +20,7 @@ local tests = {
     "test_rollback",
     "test_backlog",
     "test_kag3_compat",
+    "test_choice",
     "test_sandbox",
 }
 

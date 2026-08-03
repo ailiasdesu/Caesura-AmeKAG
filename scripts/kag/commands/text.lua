@@ -481,13 +481,16 @@ function TextCommands.endbutton(ctx, params)
     ctx._choiceMode = true
     ctx.waiting_input = true
 
-    -- Override the global click callback for choice detection
+    -- Override the global click callback for choice detection. The engine
+    -- dispatches clicks with no arguments (coalesced); read the mouse
+    -- position from the per-frame globals instead.
     local oldClick = _G._KAG_onClick
-    _G._KAG_onClick = function(x, y)
+    _G._KAG_onClick = function()
         if not ctx._choiceMode then
-            if oldClick then oldClick(x, y) end
+            if oldClick then oldClick() end
             return
         end
+        local x, y = _G._GAME_MOUSE_X, _G._GAME_MOUSE_Y
         -- Hit-test against button regions
         local buttons = ctx._choiceButtonsActive
         if not buttons then return end
