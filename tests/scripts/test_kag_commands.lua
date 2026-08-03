@@ -289,11 +289,18 @@ do
        and sl_src:find("function SaveLoad.show", 1, true) then
         passed = passed + 1 print("  [PASS] saveload menu wired")
     else failed = failed + 1 end
-    -- Audio parameter handling: playbgm forwards volume/fadein(ms->s)/loop
+    -- Audio parameter handling: playbgm forwards volume/fadein(ms->s)/loop.
+    -- Anchor to the playbgm body (playbgmstop shares two of the strings).
     local au_src = io.open("scripts/kag/commands/audio.lua", "r"):read("*a")
-    if au_src:find("fadein / 1000.0", 1, true)
-       and au_src:find("params.loop ~= false", 1, true)
-       and au_src:find('audio_play("bgm"', 1, true) then
+    -- Slice from the playbgm function header up to the next function header:
+    -- the body may contain its own 'end' (early-return branches), so the
+    -- next "function AudioCommands." marker is the reliable boundary.
+    local pb_start = au_src:find("function AudioCommands.playbgm", 1, true)
+    local pb_end = pb_start and au_src:find("function AudioCommands.stopbgm", pb_start, true) or 0
+    local pb_body = pb_start and pb_end and au_src:sub(pb_start, pb_end) or ""
+    if pb_body:find("fadein / 1000.0", 1, true)
+       and pb_body:find("params.loop ~= false", 1, true)
+       and pb_body:find("volume = volume", 1, true) then
         passed = passed + 1 print("  [PASS] playbgm parameter mapping")
     else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
