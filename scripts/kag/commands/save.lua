@@ -124,6 +124,10 @@ local function capture_state(ctx)
     -- [R6-FIX] Persist skip/auto mode so they survive save/load cycles
     state.skip_mode = ctx.skip_mode or false
     state.auto_mode = ctx.auto_mode or false
+    -- Persist the UI language (settings hot-switch) so a reloaded save
+    -- restores the player's locale instead of resetting to zh.
+    state.language = (ctx.settingsValues and ctx.settingsValues.language)
+        or require("i18n").current or "zh"
 
     -- [R7-FIX] Persist seen flags for Read Skip
     state.seen_scenes = ctx.seen_scenes or {}
@@ -248,6 +252,12 @@ function SaveCommands.load(ctx, params)
     -- [R6-FIX] Restore skip/auto mode
     ctx.skip_mode = state.skip_mode or false
     ctx.auto_mode = state.auto_mode or false
+    -- Restore the UI language and hot-switch the locale
+    if type(state.language) == "string" and #state.language > 0 then
+        ctx.settingsValues = ctx.settingsValues or {}
+        ctx.settingsValues.language = state.language
+        pcall(function() require("i18n").load(state.language) end)
+    end
 
     -- [R7-FIX] Restore seen flags
     ctx.seen_scenes = state.seen_scenes or {}

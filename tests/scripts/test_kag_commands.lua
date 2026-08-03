@@ -210,4 +210,15 @@ do
         passed = passed + 1 print("  [PASS] ch voice stored in backlog")
     else failed = failed + 1 end
 end
+
+-- Language persistence (source-level: capture stores it, restore applies it)
+do
+    local src4 = io.open("scripts/kag/commands/save.lua", "r"):read("*a")
+    if src4:find("state.language = ", 1, true) then
+        passed = passed + 1 print("  [PASS] save captures language")
+    else failed = failed + 1 end
+    if src4:find('settingsValues.language = state.language', 1, true) then
+        passed = passed + 1 print("  [PASS] restore reapplies language")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
