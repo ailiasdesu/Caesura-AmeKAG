@@ -12,6 +12,22 @@ local System = require("system")
 
 local SaveCommands = {}
 
+-- Scene-path allowlist (pure, unit-tested). Real layout: production entry
+-- is scripts/demo_story.ks and scheduler jumps write assets/script/<t>.ks
+-- (singular); assets/scripts and demo/ are also accepted. Any ".." segment
+-- rejects so traversal cannot smuggle an arbitrary file past the prefix
+-- check. Non-string/empty -> false.
+function SaveCommands._safeScenePath(sp)
+    if _type(sp) ~= "string" or #sp == 0 then return false end
+    if sp:find("..", 1, true) then return false end
+    if sp:find("^scripts/") == 1 or sp:find("^assets/script/") == 1
+        or sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
+        or sp:find("^tests/scripts/") == 1 then
+        return sp:find("%.ks$") ~= nil
+    end
+    return false
+end
+
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Internal: serialize KAG context values to a flat Lua table
 --  Captures: f (global flags), sf (system flags), token_index, scene_path
@@ -242,17 +258,7 @@ function SaveCommands.load(ctx, params)
     -- assets/scripts (or demo/) so [load] cannot point the tokenizer at
     -- an arbitrary readable local file.
     local sp = state.scene_path or ""
-    -- Real layout: production entry is scripts/demo_story.ks and scheduler
-    -- jumps write assets/script/<t>.ks (singular); assets/scripts and
-    -- demo/ are also accepted. Reject any ".." segment so traversal cannot
-    -- smuggle an arbitrary file past the prefix check.
-    local noTraversal = type(sp) == "string" and not sp:find("..", 1, true)
-    local safeScene = noTraversal and type(sp) == "string" and #sp > 0
-        and (sp:find("^scripts/") == 1 or sp:find("^assets/script/") == 1
-             or sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
-             or sp:find("^tests/scripts/") == 1)
-        and sp:find("%.ks$") ~= nil
-    if safeScene then
+    if SaveCommands._safeScenePath(sp) then
         ctx.currentScene = sp
         ctx.current_scene = sp
         -- Set stop_flag so the current script execution stops

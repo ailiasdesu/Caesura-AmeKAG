@@ -151,6 +151,18 @@ do
     local SaveCommands = require("kag.commands.save")
     check("save handler exists", type(SaveCommands.save) == "function")
     check("load handler exists", type(SaveCommands.load) == "function")
+
+    -- [load] scene-path allowlist regression (was a silent no-op once)
+    local safe = SaveCommands._safeScenePath
+    check("guard rejects traversal ../", not safe("demo/../x.ks"))
+    check("guard rejects traversal ../ nested", not safe("tests/scripts/../../y.ks"))
+        check("guard rejects nested traversal", not safe("demo/../sub/x.ks"))
+    check("guard rejects non-ks", not safe("scripts/x.txt"))
+    check("guard rejects absolute", not safe("/etc/passwd"))
+    check("guard rejects empty", not safe(""))
+    check("guard rejects non-string", not safe(42))
+    check("guard accepts entry", safe("scripts/demo_story.ks"))
+    check("guard accepts jump path", safe("assets/script/x.ks"))
     check("listsaves handler exists", type(SaveCommands.listsaves) == "function")
 end
 
