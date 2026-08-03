@@ -289,6 +289,13 @@ do
        and sl_src:find("function SaveLoad.show", 1, true) then
         passed = passed + 1 print("  [PASS] saveload menu wired")
     else failed = failed + 1 end
+    -- Audio parameter handling: playbgm forwards volume/fadein(ms->s)/loop
+    local au_src = io.open("scripts/kag/commands/audio.lua", "r"):read("*a")
+    if au_src:find("fadein / 1000.0", 1, true)
+       and au_src:find("params.loop ~= false", 1, true)
+       and au_src:find('audio_play("bgm"', 1, true) then
+        passed = passed + 1 print("  [PASS] playbgm parameter mapping")
+    else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
     if sv_src:find("state.language", 1, true)
        and sv_src:find("state.seen_scenes", 1, true)
