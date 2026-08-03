@@ -84,6 +84,32 @@ end
 -- 5. Scheduler.resume forwards to run
 check("resume exists", type(scheduler.resume) == "function")
 
+-- 6. Bare-text tokens (KAG3 style) become [ch text=...]
+do
+    local tokenizer = require("tokenizer")
+    -- This file pre-loads a kag_mock (package.loaded["kag"]) whose commands
+    -- record into ctx.dispatched; bare text must dispatch as [ch] with the
+    -- content as params.text (KAG3 style bare dialogue lines).
+    local tokenizer = require("tokenizer")
+    local parsed = tokenizer.parse("Hello world!")
+    local ctx = make_ctx()
+    local ok = pcall(run_in_coro, ctx, parsed)
+    local found = false
+    for _, d in ipairs(ctx.dispatched) do
+        if d.cmd == "ch" and d.params and d.params.text == "Hello world!" then
+            found = true
+        end
+    end
+    check("bare text dispatched as ch", ok and found)
+end
+
+-- 7. Malformed flow params do not kill the coroutine chain
+do
+    local ctx = make_ctx()
+    local ok = pcall(run_in_coro, ctx, { {"jump", { target = 123 }} })
+    check("malformed jump target no-crash", ok)
+end
+
 
 print("  [PASS] switch basic parse no-error")
 print("  [PASS] switch case match routes correctly")

@@ -555,6 +555,19 @@ void Engine::run(const OwnerPump& ownerPump) {
 
         lua_State* L = m_lua->state();
         if (L) {
+            // Dispatch at most one coalesced click per frame, before the
+            // Lua update (mirrors the pre-existing _KAG_onClick behavior).
+            if (m_clickPending && !isLuaExecutionPaused()) {
+                m_clickPending = false;
+                lua_getglobal(L, "_KAG_onClick");
+                if (lua_isfunction(L, -1)) {
+                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                        const char* err = lua_tostring(L, -1);
+                        fprintf(stderr, "_KAG_onClick: %s\n", err ? err : "unknown");
+                        lua_pop(L, 1);
+                    }
+                } else { lua_pop(L, 1); }
+            }
             if (!isLuaExecutionPaused()) {
                 lua_getglobal(L, "engine_update");
                 if (lua_isfunction(L, -1)) {
@@ -853,15 +866,23 @@ void Engine::processEvents() {
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                 m_inputRouter->getFocus() == InputFocus::KAG &&
                 !isLuaExecutionPaused()) {
-                const char* handler = (event.button.button == SDL_BUTTON_RIGHT) ? "_KAG_onRightClick" : "_KAG_onClick";
-                lua_getglobal(L, handler);
-                if (lua_isfunction(L, -1)) {
-                    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-                        const char* err = lua_tostring(L, -1);
-                        fprintf(stderr, "%s: %s\n", handler, err ? err : "unknown");
-                        lua_pop(L, 1);
-                    }
-                } else { lua_pop(L, 1); }
+                if (event.button.button == SDL_BUTTON_RIGHT) {
+                    // Right-click dispatches immediately (not the advance path).
+                    lua_getglobal(L, "_KAG_onRightClick");
+                    if (lua_isfunction(L, -1)) {
+                        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                            const char* err = lua_tostring(L, -1);
+                            fprintf(stderr, "_KAG_onRightClick: %s\n", err ? err : "unknown");
+                            lua_pop(L, 1);
+                        }
+                    } else { lua_pop(L, 1); }
+                } else {
+                    // Coalesce left clicks: the frame loop dispatches at
+                    // most one _KAG_onClick per frame (event storms must
+                    // not batch-resume the scheduler or deep-copy rollback
+                    // snapshots per event).
+                    m_clickPending = true;
+                }
             }
 
         }

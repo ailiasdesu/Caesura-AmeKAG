@@ -7,6 +7,16 @@
 
 namespace Caesura {
 
+// Cap decoded dimensions (mirrors TextureManager::validateTextureDimensions):
+// a forged header could declare absurd sizes and exhaust memory.
+static constexpr uint32_t kMaxDim = 16384;
+static constexpr uint64_t kMaxPixels = 256ull * 1024 * 1024;  // 256MP
+static bool dimensionsValid(int w, int h) {
+    if (w <= 0 || h <= 0) return false;
+    if (static_cast<uint32_t>(w) > kMaxDim || static_cast<uint32_t>(h) > kMaxDim) return false;
+    return static_cast<uint64_t>(w) * static_cast<uint64_t>(h) <= kMaxPixels;
+}
+
 static DecodedImage fromStb(const uint8_t* data, size_t size) {
     DecodedImage out;
     int w = 0, h = 0, channels = 0;
@@ -18,6 +28,7 @@ static DecodedImage fromStb(const uint8_t* data, size_t size) {
     }
     out.width  = static_cast<uint16_t>(w);
     out.height = static_cast<uint16_t>(h);
+    if (!dimensionsValid(w, h)) return {};
     out.rgba.assign(pixels, pixels + static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
     stbi_image_free(pixels);
     out.ok = true;
@@ -25,6 +36,10 @@ static DecodedImage fromStb(const uint8_t* data, size_t size) {
 }
 
 static DecodedImage fromBimg(bimg::ImageContainer* img) {
+    if (!img || !dimensionsValid(static_cast<int>(img->m_width),
+                                 static_cast<int>(img->m_height))) {
+        return {};
+    }
     DecodedImage out;
     if (!img || img->m_width == 0 || img->m_height == 0) return out;
 

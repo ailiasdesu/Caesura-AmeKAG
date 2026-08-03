@@ -118,6 +118,9 @@ private:
     bool         m_shutdownComplete = false;
     bool         m_debugInitialized = false;
     bool         m_debugProtocolInitialized = false;
+    // Coalesce mouse clicks: at most one _KAG_onClick dispatch per frame
+    // (event storms from auto-clickers/touch ghosts must not batch-resume).
+    bool         m_clickPending = false;
     bool         m_platformInitialized = false;
     bool         m_renderInitialized = false;
     bool         m_audioInitialized = false;

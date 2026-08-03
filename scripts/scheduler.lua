@@ -67,6 +67,9 @@ function scheduler.run(ctx, tokens, start_index)
             if t.type then
                 if t.type == "label" then
                     tokens[j] = { "label", { name = t.name } }
+            elseif t.type == "text" then
+                -- Bare dialogue line (KAG3 style): [ch text="..."]
+                tokens[j] = { "ch", { text = t.content or "" } }
             elseif t.type == "iscript" then
                 tokens[j] = { "iscript", { body = t.body or "" } }
             else
@@ -393,7 +396,7 @@ function scheduler.run(ctx, tokens, start_index)
                         -- Lua-side error reporting
                         print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
                         if ctx.handle_error then
-                            ctx.handle_error(actual_cmd, tostring(err), i)
+                            pcall(ctx.handle_error, actual_cmd, tostring(err), i)
                         end
                     end
                 end

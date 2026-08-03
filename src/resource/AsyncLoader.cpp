@@ -52,6 +52,11 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
     result.path = req.path;
     result.type = req.type;
 
+
+    // Any decode/read exception (e.g. std::bad_alloc on a forged oversized
+    // image header) would otherwise std::terminate the worker thread and
+    // kill the process. Surface it as a failed load instead.
+    try {
     if (!m_assetManager) {
         fprintf(stderr, "[AsyncLoader] AssetManager unavailable: %s\n", req.path.c_str());
         result.success = false;
@@ -83,6 +88,15 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
         result.success = true;
         printf("[AsyncLoader] Loaded #%d: %s (%zu bytes)\n",
                req.id, req.path.c_str(), result.data.size());
+    }
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[AsyncLoader] Exception loading %s: %s\n",
+                req.path.c_str(), e.what());
+        result.success = false;
+    } catch (...) {
+        fprintf(stderr, "[AsyncLoader] Unknown exception loading %s: %s\n",
+                req.path.c_str(), "?");
+        result.success = false;
     }
     return result;
 }
