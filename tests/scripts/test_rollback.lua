@@ -51,9 +51,21 @@ check("restore seen_scenes", ctx.seen_scenes["demo/rollback_demo.ks"][5] == true
 
 -- --- runner wiring ----------------------------------------------------------
 local kag_runner = require("kag_runner")
--- on_click pushes a snapshot when no reveal is animating (mocked coroutine)
 check("rollback exists", type(kag_runner.rollback) == "function")
-check("rollback empty stack returns false",
-      kag_runner.rollback() == false or kag_runner.rollback() ~= true)
+
+-- Source-level invariants that unit tests cannot reach without a live
+-- coroutine + engine frame: (1) the rollback respawn branch clears
+-- stop_flag (else scheduler.run returns immediately and the script halts);
+-- (2) the snapshot push is unconditional (not gated on reveal==nil, which
+-- [ch]/[text] always set -- that bug left the undo stack permanently empty).
+local runner_src = io.open("scripts/kag_runner.lua", "r"):read("*a")
+local idx = runner_src:find("_pendingRollback", 1, true)
+local respawn_blk = idx and runner_src:sub(idx, idx + 400) or ""
+check("rollback respawn clears stop_flag",
+      respawn_blk:find("stop_flag = false", 1, true) ~= nil)
+check("snapshot push not gated on reveal==nil",
+      not runner_src:find('if ctx.reveal == nil then', 1, true))
+check("snapshot push calls capture",
+      runner_src:find('require("kag.snapshot").capture(ctx)', 1, true) ~= nil)
 
 print("ROLLBACK TESTS DONE")

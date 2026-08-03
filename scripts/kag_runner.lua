@@ -284,7 +284,10 @@ function kag_runner.update(dt)
         if ctx._pendingRollback then
             -- Rollback: a snapshot was already restored into ctx by
             -- rollback(); re-spawn the scheduler at the saved position.
+            -- rollback() set stop_flag to end the old coroutine; clear it
+            -- or scheduler.run returns immediately and the script halts.
             ctx._pendingRollback = nil
+            ctx.stop_flag = false
             kag_co = coroutine.create(function()
                 scheduler.run(ctx, ctx.tokens, ctx.token_index)
             end)
@@ -400,17 +403,17 @@ function kag_runner.on_click()
 
     -- Push a rollback snapshot BEFORE advancing: restore returns to the
     -- line the player just finished (token_index = last completed token).
-    -- Skip push while reveal is still animating (first click only completes
-    -- the line, does not advance).
-    if ctx.reveal == nil then
-        local snap = require("kag.snapshot").capture(ctx)
-        if snap then
-            local stack = ctx._undoStack
-            if type(stack) ~= "table" then stack = {}; ctx._undoStack = stack end
-            stack[#stack + 1] = snap
-            if #stack > (ctx._undoLimit or 64) then
-                table.remove(stack, 1)
-            end
+    -- The reveal-complete early return above already excluded the animating
+    -- first click, so every click that reaches here actually advances and
+    -- gets a snapshot. (Gating on ctx.reveal==nil would never fire: [ch]/
+    -- [text] always set reveal.)
+    local snap = require("kag.snapshot").capture(ctx)
+    if snap then
+        local stack = ctx._undoStack
+        if type(stack) ~= "table" then stack = {}; ctx._undoStack = stack end
+        stack[#stack + 1] = snap
+        if #stack > (ctx._undoLimit or 64) then
+            table.remove(stack, 1)
         end
     end
 

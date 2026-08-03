@@ -74,7 +74,7 @@ function snapshot.restore(ctx, snap)
     ctx.token_index = snap.token_index or 1
     ctx.call_stack = deep_copy(snap.call_stack)
     ctx.seen_scenes = deep_copy(snap.seen_scenes) or {}
-    if type(ctx.backlog) == "table" and snap.backlog_len then
+    if type(ctx.backlog) == "table" and type(snap.backlog_len) == "number" then
         -- Truncate replay duplicates: the replayed [ch] pushes again.
         for i = #ctx.backlog, snap.backlog_len + 1, -1 do
             ctx.backlog[i] = nil

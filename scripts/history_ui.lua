@@ -19,6 +19,20 @@ local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
 end
 
+-- Hide every layer this UI created (background/title/footer/sep/highlights).
+function HistoryUI._hideAll(ctx)
+    local names = { "_history_bg", "_history_title", "_history_sep",
+                    "_history_footer" }
+    for _, n in ipairs(names) do
+        local l = layers.get(ctx, n)
+        if l then l.visible = false end
+    end
+    for i = 1, (ctx.backlog and #ctx.backlog or 0) do
+        local hl = layers.get_layer("_history_hl" .. i)
+        if hl then hl.visible = false end
+    end
+end
+
 -- Consume a one-shot key (engine sets true on down, false on up)
 local function key_consumed(name)
     local v = _G[name]
@@ -117,7 +131,7 @@ function HistoryUI.show(ctx)
         end
         -- Hide stale highlight layers beyond the visible window
         for i = lastVisible + 1, #ctx.backlog do
-            local stale = layers.get(ctx, "_history_hl" .. i)
+            local stale = layers.get_layer("_history_hl" .. i)
             if stale then stale.visible = false end
         end
 
@@ -146,20 +160,18 @@ function HistoryUI.show(ctx)
             if e and e.scene and e.token_index then
                 ctx.input_focus = "kag"
                 pcall(function() backend.set_input_focus("KAG") end)
-                -- Clean up overlay layers before jumping
-                bgLayer.visible = false; titleLayer.visible = false
-                footerLayer.visible = false; sep.visible = false
+                -- Clean up overlay layers before jumping (incl. highlights)
+                HistoryUI._hideAll(ctx)
                 return { jump = true, scene = e.scene, index = e.token_index }
             end
         elseif key_consumed("_GAME_KEY_ESC") then
             ctx.input_focus = "kag"
             pcall(function() backend.set_input_focus("KAG") end)
-            bgLayer.visible = false; titleLayer.visible = false
-            footerLayer.visible = false; sep.visible = false
+            HistoryUI._hideAll(ctx)
             return
         end
-        -- V: replay voice
-        if _G._GAME_KEY_V or _G._GAME_KEY_V == true then
+        -- V: replay voice (key dispatched by the engine when available)
+        if _G._GAME_KEY_V == true then
             _G._GAME_KEY_V = false
             local e = ctx.backlog[selected]
             if e and e.voice and #e.voice > 0 then
