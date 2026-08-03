@@ -307,6 +307,20 @@ end
 --  Used by save/load UI to display slots.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- [saveload mode=save|load] — slot-selection UI (scheduler-driven)
+function SaveCommands.saveload(ctx, params)
+    local SaveLoad = require("saveload_menu")
+    local chosen = SaveLoad.show(ctx, params.mode or params[1] or "save")
+    if chosen then
+        if chosen.action == "save" then
+            SaveCommands.save(ctx, { slot = chosen.slot })
+        else
+            SaveCommands.load(ctx, { slot = chosen.slot })
+        end
+    end
+    return chosen
+end
+
 function SaveCommands.listsaves(ctx, params)
     local saves = KAG.list_saves()
     ctx.sf = ctx.sf or {}
