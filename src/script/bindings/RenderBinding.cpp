@@ -181,6 +181,8 @@ static int lua_Render_submit_batch(lua_State* L) {
     if (!dev) { lua_pushboolean(L, 0); return 1; }
 
     int n = (int)lua_rawlen(L, 1);
+    if (n > 1024) n = 1024;  // per-frame batch cap: a runaway table must
+                             // not submit thousands of GPU draws in one frame
     if (n == 0) { lua_pushboolean(L, 1); return 1; }
 
 
@@ -404,6 +406,12 @@ static int lua_Render_fill_viewport(lua_State* L) {
 static int lua_Render_create_viewport(lua_State* L) {
     int w = (int)luaL_checkinteger(L, 1);
     int h = (int)luaL_checkinteger(L, 2);
+    // Reject nonsense dimensions (a huge value would truncate into a
+    // plausible small RTT on the uint16 path, silently miscreating it).
+    if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
 
     IRenderDevice* dev = getRender(L);
     if (!dev) { lua_pushinteger(L, 0); return 1; }

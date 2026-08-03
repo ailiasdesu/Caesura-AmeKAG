@@ -81,5 +81,12 @@ print("  [PASS] wait time param present")
 print("  [PASS] delay tag parsed")
 print("  [PASS] skip tag parsed")
 
+-- Error reporting: parse failure carries a line number (binary search)
+do
+    local ok, err = pcall(function() tokenizer.parse("[") end)
+    if ok then failed = failed + 1 else passed = passed + 1 print("  [PASS] parse failure raises") end
+    if not ok and tostring(err):find("line") then passed = passed + 1 print("  [PASS] parse failure has line") else failed = failed + 1 end
+end
+
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

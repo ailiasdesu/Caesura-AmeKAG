@@ -113,9 +113,27 @@ function tokenizer.parse(ks_text)
     -- BOM is 3 bytes (EF BB BF). Grammar also has optional BOM prefix.
     if ks_text:byte(1)==0xEF and ks_text:byte(2)==0xBB and ks_text:byte(3)==0xBF then
         ks_text = ks_text:sub(4) end
+    -- Locate the failure offset for actionable errors: try the grammar,
+    -- then report where the longest successful prefix stopped.
     local raw = lpeg.match(grammar, ks_text)
     if not raw then
-        error("Tokenizer: parse failed -- check .ks syntax")
+        -- Report the failing line via binary search on the longest
+        -- successful prefix (grammar matches prefix-free up to the error).
+        local lo, hi = 1, #ks_text
+        while lo < hi do
+            local mid = math.floor((lo + hi + 1) / 2)
+            if lpeg.match(grammar, ks_text:sub(1, mid)) then
+                lo = mid
+            else
+                hi = mid - 1
+            end
+        end
+        local line = 1
+        for i = 1, lo do
+            if ks_text:byte(i) == 10 then line = line + 1 end
+        end
+        error(string.format("Tokenizer: parse failed near line %d (byte %d)",
+                            line, lo))
     end
     return normalize(raw)
 end
@@ -123,6 +141,16 @@ end
 function tokenizer.parse_file(path)
     local f = io.open(path, "r")
     if not f then error("Tokenizer: cannot open file: " .. path) end
+    -- Cap scene size (16MB) so a corrupted/giant .ks cannot exhaust the
+    -- Lua memory limit and trigger the fatal-error dialog.
+    f:seek("end")
+    local size = f:seek("cur")
+    f:seek("set")
+    if size > 16 * 1024 * 1024 then
+        f:close()
+        error("Tokenizer: scene too large (>" .. (16 * 1024 * 1024) ..
+              " bytes): " .. path)
+    end
     local content = f:read("*a")
     f:close()
     return tokenizer.parse(content)
