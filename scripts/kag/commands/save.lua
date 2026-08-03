@@ -246,7 +246,7 @@ function SaveCommands.load(ctx, params)
     -- jumps write assets/script/<t>.ks (singular); assets/scripts and
     -- demo/ are also accepted. Reject any ".." segment so traversal cannot
     -- smuggle an arbitrary file past the prefix check.
-    local noTraversal = type(sp) == "string" and not sp:find("%.%.", 1, true)
+    local noTraversal = type(sp) == "string" and not sp:find("..", 1, true)
     local safeScene = noTraversal and type(sp) == "string" and #sp > 0
         and (sp:find("^scripts/") == 1 or sp:find("^assets/script/") == 1
              or sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
@@ -258,6 +258,10 @@ function SaveCommands.load(ctx, params)
         -- Set stop_flag so the current script execution stops
         -- and the engine reloads from the saved scene
         ctx.stop_flag = true
+        -- The save JSON may carry a crafted call_stack; resume_from_save
+        -- would clear it, but drop it here too so a valid-path crafted save
+        -- cannot [return] into a forged frame before the resume runs.
+        ctx.call_stack = nil
         ctx._pendingLoadScene = state.scene_path
         ctx._pendingLoadToken = state.token_index
     else
