@@ -289,5 +289,13 @@ do
        and sl_src:find("function SaveLoad.show", 1, true) then
         passed = passed + 1 print("  [PASS] saveload menu wired")
     else failed = failed + 1 end
+    -- Save capture completeness: all persistent fields present
+    if sv_src:find("state.language", 1, true)
+       and sv_src:find("state.seen_scenes", 1, true)
+       and sv_src:find("state.backlog", 1, true)
+       and sv_src:find("state.call_stack", 1, true)
+       and sv_src:find("state.schema_version", 1, true) then
+        passed = passed + 1 print("  [PASS] save captures all persistent fields")
+    else failed = failed + 1 end
 end
 if failed > 0 then os.exit(1) end
