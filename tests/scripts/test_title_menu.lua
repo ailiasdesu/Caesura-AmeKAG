@@ -38,4 +38,8 @@ _G._GAME_KEY_ESC = true
 local ok4, act4 = coroutine.resume(co)
 check("esc returns nil", ok4 and act4 == nil)
 
+-- Exit non-zero on any failure so the harness reports red
+local failed = 0
+for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
+if failed > 0 then os.exit(1) end
 print("TITLE MENU TESTS DONE")

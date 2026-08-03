@@ -183,8 +183,16 @@ function TextCommands.ch(ctx, params)
     -- file in the backlog entry so the history overlay's V key can replay it.
     local voiceFile = params.voice or params.voicefile or ""
     if #voiceFile > 0 then
+        -- Non-blocking voice: playvoice() yields until the clip ends, which
+        -- would stall the script (and swallow clicks) for the whole line.
+        -- Fire-and-forget matches VN behavior: the line's voice plays while
+        -- the text is on screen; clicking continues immediately.
         pcall(function()
-            require("kag.commands.audio").playvoice(ctx, { file = voiceFile })
+            local audio = require("kag.commands.audio")
+            local file = voiceFile
+            -- resolve_file lives on the audio module; reuse its resolution
+            -- via a direct play with the raw path when valid.
+            backend.audio_play("voice", file, {})
         end)
     end
 
