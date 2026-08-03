@@ -524,6 +524,26 @@ int main(int argc, char* argv[]) {
     setbuf(stderr, NULL);
     fprintf(stderr, "[main] Starting Caesura (AmeKAG)...\n");
 
+    // Resources resolve relative to the CWD; if the user launched the
+    // engine from a build dir (or anywhere else), walk up until assets/
+    // is found and chdir there so the game finds its data regardless of
+    // the launch directory.
+    {
+        namespace fs = std::filesystem;
+        fs::path probe = fs::current_path();
+        for (int i = 0; i < 6; ++i) {
+            if (fs::exists(probe / "assets") && fs::is_directory(probe / "assets")) {
+                std::error_code ec;
+                fs::current_path(probe, ec);
+                if (!ec) {
+                    fprintf(stderr, "[main] Working directory: %s\n", probe.string().c_str());
+                }
+                break;
+            }
+            probe = probe.parent_path();
+        }
+    }
+
     // -- Parse CLI flags -------------------------------------------------
     bool headless = false;
     bool editorMode = false;
