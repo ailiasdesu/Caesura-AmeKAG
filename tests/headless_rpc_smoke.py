@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import queue
 import threading
 import sys
 import time
@@ -46,30 +47,35 @@ if not boot_line or "Backends ready" not in boot_line:
 results = []
 
 
+# Singleton stdout reader: one daemon thread pumps readline() into a queue.
+# A fresh reader thread per request would race for lines with the previous
+# (still-blocked) reader and swallow responses -- the request timeout then
+# fires even though the engine replied.
+_line_queue = queue.Queue()
+
+def _reader_loop():
+    while True:
+        line = proc.stdout.readline()
+        if not line:
+            _line_queue.put(None)  # EOF sentinel
+            break
+        _line_queue.put(line)
+
+threading.Thread(target=_reader_loop, daemon=True).start()
+
 def request(req, timeout=20):
     proc.stdin.write(json.dumps(req) + "\n")
     proc.stdin.flush()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        # readline() alone can block forever if the engine hangs (no
-        # data); wrap it in a reader thread so the per-request timeout
-        # actually fires and the failure is diagnosed instead of a
-        # ctest-level timeout.
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise RuntimeError("timeout waiting for response to " + json.dumps(req))
-        line = None
-        done = threading.Event()
-        def _read():
-            nonlocal line
-            line = proc.stdout.readline()
-            done.set()
-        t = threading.Thread(target=_read, daemon=True)
-        t.start()
-        done.wait(timeout=min(remaining, 5.0))
-        if not done.is_set():
-            continue  # still within the request deadline; poll again
-        if not line:
+        try:
+            line = _line_queue.get(timeout=min(remaining, 5.0))
+        except queue.Empty:
+            continue  # no line yet; keep polling within the deadline
+        if line is None:
             raise RuntimeError("engine closed stdout")
         try:
             parsed = json.loads(line)
