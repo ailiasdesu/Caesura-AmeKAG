@@ -185,6 +185,10 @@ function kag_runner.start(scene_path)
         waiting_input = false,
         _scene_changed = false,
         load_tokens = load_tokens,
+        -- Token-level rollback stack (see kag/snapshot.lua); cleared on
+        -- [load] and on scene changes. Bounded to cap memory.
+        _undoStack = {},
+        _undoLimit = 64,
     }
     rawset(_G, "_CAESURA_CTX", ctx)
 
@@ -277,8 +281,19 @@ function kag_runner.update(dt)
     local status = coroutine.status(kag_co)
     if status == "dead" then
         close_scheduler_coroutine()
+        if ctx._pendingRollback then
+            -- Rollback: a snapshot was already restored into ctx by
+            -- rollback(); re-spawn the scheduler at the saved position.
+            ctx._pendingRollback = nil
+            kag_co = coroutine.create(function()
+                scheduler.run(ctx, ctx.tokens, ctx.token_index)
+            end)
+            return resume_scheduler("update", delta_ms)
+        end
         if ctx._scene_changed then
             ctx._scene_changed = false
+            -- Scene changes (jump/call/link) invalidate every snapshot.
+            ctx._undoStack = {}
             kag_co = coroutine.create(function()
                 scheduler.run(ctx, ctx.tokens, ctx.token_index)
             end)
@@ -303,6 +318,27 @@ end
 function kag_runner.render()
     if not ctx then return false, "no-context" end
     return true, require("kag.text_scene").render(ctx)
+end
+
+-- ── kag_runner.rollback() → boolean ─────────────────────────────────────────
+-- Pop the newest snapshot and restore ctx to it. The running coroutine is
+-- stopped via stop_flag; update() re-spawns it at the saved token.
+
+function kag_runner.rollback()
+    if not ctx then return false, "no-context" end
+    if type(ctx._undoStack) ~= "table" or #ctx._undoStack == 0 then
+        return false, "nothing-to-rollback"
+    end
+    -- Can't roll back while a choice menu is open (stack cleared on choice).
+    if ctx._choiceMode then return false, "choice-open" end
+    local snap = table.remove(ctx._undoStack)
+    if not require("kag.snapshot").restore(ctx, snap) then
+        return false, "restore-failed"
+    end
+    ctx.stop_flag = true
+    ctx._pendingRollback = true
+    ctx.waiting_input = false
+    return true
 end
 
 -- ── kag_runner.on_click() ────────────────────────────────────────────────────
@@ -335,6 +371,22 @@ function kag_runner.on_click()
         local st = ctx.seen_scenes[scene]
         if type(st) ~= "table" then st = {}; ctx.seen_scenes[scene] = st end
         st[ctx.token_index] = true
+    end
+
+    -- Push a rollback snapshot BEFORE advancing: restore returns to the
+    -- line the player just finished (token_index = last completed token).
+    -- Skip push while reveal is still animating (first click only completes
+    -- the line, does not advance).
+    if ctx.reveal == nil then
+        local snap = require("kag.snapshot").capture(ctx)
+        if snap then
+            local stack = ctx._undoStack
+            if type(stack) ~= "table" then stack = {}; ctx._undoStack = stack end
+            stack[#stack + 1] = snap
+            if #stack > (ctx._undoLimit or 64) then
+                table.remove(stack, 1)
+            end
+        end
     end
 
     ctx.waiting_input = false

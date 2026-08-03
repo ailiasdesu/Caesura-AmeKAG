@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 28 interfaces · 480 tests · 0 circular dependencies**
+> **16 modules · 30 interfaces · 569 tests · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 
 Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. KAG 3.0 script compatible.
@@ -81,7 +81,7 @@ Save as `.ks` and execute it through the runtime. Remote `run`/`eval` currently 
 └──────────────────────────────────────────────────────────┘
 ```
 
-**16 modules with runtime backend access centralized through `BackendRegistry` and 29
+**16 modules with runtime backend access centralized through `BackendRegistry` and 30
 pure-virtual interfaces.** The current CMake target graph has no circular dependencies;
 remaining implementation-level dependencies are tracked in the architecture topology.
 
@@ -114,7 +114,7 @@ remains a single executable.
 
 ---
 
-## 29 Abstract Interfaces
+## 30 Abstract Interfaces
 
 Runtime engine services are accessed through `BackendRegistry::instance()`. Host transport
 adapters stay outside Engine/Registry and submit self-contained DTOs through `IRpcDispatcher`.
@@ -146,7 +146,7 @@ Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 | `IDeviceLostListener` | di | GPU resource loss/restoration observer contract |
 | `IDebugManager` | debug | DebugManager (ring buffer, profiling) |
 | `IPlatformBackend` | platform | SDL3PlatformBackend |
-| `IEditorServer` | rpc | EditorServer (httplib, 9 endpoints) |
+| `IEditorServer` | rpc | EditorServer (httplib, 18 endpoints) |
 | `IRpcServer` | rpc | RpcServer (JSON-RPC) |
 | `IRpcDispatcher` | rpc | Composition-root owner-thread dispatcher |
 | `IInputRouter` | input | InputRouter (KAG/Game focus) |
@@ -228,7 +228,7 @@ Caesura(AmeKAG)/
 │   ├── steam/              Steamworks (conditional)
 │   └── storage/            Save/load system
 ├── scripts/                Lua runtime (kag/, tokenizer, scheduler)
-├── tests/                  51 test files (480/480)
+├── tests/                  52 test files (569/569)
 │   └── mocks/              NullJobSystem for synchronous testing
 ├── docs/
 │   ├── api/                Interface docs (Lua, KAG, C++, RPC)
@@ -254,7 +254,7 @@ Caesura(AmeKAG)/
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | Architects | Module dependency topology, data flow |
-| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 42 tracked capabilities and readiness limits |
+| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 43 tracked capabilities and readiness limits |
 | [engine-safety-and-qa-mechanisms.md](docs/design/engine-safety-and-qa-mechanisms.md) | QA engineers | Thread safety, sandbox, audit mechanisms |
 
 ---

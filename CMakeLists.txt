@@ -257,7 +257,15 @@ endif()
 option(CAESURA_LIVE2D "Enable Live2D Cubism animation (requires manual SDK download)" OFF)
 
 if(CAESURA_LIVE2D)
-    set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root")
+    # Prefer an explicit -DCUBISM_SDK_ROOT; otherwise probe the repo-local
+    # thirdparty/ location (user-installed SDK, gitignored), then the root.
+    if(NOT CUBISM_SDK_ROOT)
+        if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/CubismSdkForNative-5-r.5/Core/include/Live2DCubismCore.h")
+            set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root" FORCE)
+        else()
+            set(CUBISM_SDK_ROOT "${CMAKE_SOURCE_DIR}/CubismSdkForNative-5-r.5" CACHE PATH "Path to Live2D Cubism SDK root")
+        endif()
+    endif()
 
     if(NOT EXISTS "${CUBISM_SDK_ROOT}/Core/include/Live2DCubismCore.h")
         message(WARNING "Cubism SDK not found at ${CUBISM_SDK_ROOT}. Download from live2d.com")

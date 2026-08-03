@@ -6,7 +6,7 @@
   - 免费获取: [Live2D 官网下载页](https://www.live2d.com/download/cubism-sdk/)
   - 需要同意 Live2D 专有许可协议
 - 支持的平台:
-  - Windows (D3D11 渲染路径)
+  - Windows (D3D11 渲染路径，需 **MSVC (VS2022 v143 工具集)**；MinGW/Clang-cl 不支持)
   - macOS (OpenGL 路径；Metal 路径尚未完成生产验证)
   - Linux (OpenGL 渲染路径)
 
@@ -36,11 +36,12 @@ CubismSdkForNative/
 
 ### 2. 放置 SDK 文件
 
-将 SDK 放在项目根目录，或通过 `CUBISM_SDK_ROOT` 指定其他位置：
+**SDK 是专有许可，不可随仓库分发（`.gitignore` 已排除 `CubismSdkForNative-*/`），需你自行下载并解压到本地。** 推荐放在 `thirdparty/CubismSdkForNative-5-r.5/`（CMake 会自动探测该位置，无需传参）：
 
 ```
 Caesura(AmeKAG)/
-└── CubismSdkForNative-5-r.5/
+└── thirdparty/            # 本地依赖目录（不入库）
+    └── CubismSdkForNative-5-r.5/
     ├── Core/
     │   ├── include/       # Cubism 核心头文件
     │   │   ├── Live2DCubismCore.h
@@ -53,6 +54,8 @@ Caesura(AmeKAG)/
         └── src/           # Live2D 框架源码
 ```
 
+也可放在项目根目录（`CubismSdkForNative-5-r.5/`，同样自动探测），或通过 `CUBISM_SDK_ROOT` 指定任意位置。
+
 ### 3. CMake 配置
 
 ```bash
@@ -64,7 +67,7 @@ cmake -B build -DCAESURA_LIVE2D=ON \
 cmake --build build --config Debug --parallel
 ```
 
-CMake 会检测 `CUBISM_SDK_ROOT`（默认是项目根目录下的 `CubismSdkForNative-5-r.5`）并：
+CMake 探测顺序：显式 `CUBISM_SDK_ROOT` → `thirdparty/CubismSdkForNative-5-r.5` → 项目根目录 `CubismSdkForNative-5-r.5`。找到后：
 - 定义 `CAESURA_HAS_LIVE2D` 预处理器宏
 - 链接对应平台的 Cubism Core 库
 - 编译 `Live2DBackend` 替代 `NullAnimationBackend`

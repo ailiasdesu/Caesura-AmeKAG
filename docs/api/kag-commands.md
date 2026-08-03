@@ -58,7 +58,7 @@
 
 ---
 
-## System Commands (4)
+## System Commands (6)
 
 | Command | Parameters | Types | Description |
 |---------|-----------|-------|-------------|
@@ -66,10 +66,12 @@
 | `eval` | `exp` (Lua expr) | string | Evaluate Lua expression in `ctx.f` environment. Result stored in `ctx`. |
 | `emb` | `exp` (Lua code) | string | Execute embedded Lua in sandboxed environment. |
 | `history` | — | — | Open scrollable backlog overlay UI. Supports ↑↓ navigation, V=voice replay, Enter=jump. |
+| `unlock` | `cg`/`music` | string | Unlock a CG or music entry (persisted in save). |
+| `rollback` | — | — | Pop the newest token-level snapshot and re-run from there (VN rollback; voice stops, BGM does not rewind). |
 
 ---
 
-## Flow Control (11)
+## Flow Control (17)
 
 | Command | Parameters | Types | Description |
 |---------|-----------|-------|-------------|
@@ -121,7 +123,7 @@
 
 ---
 
-## Resource Commands (6)
+## Resource Commands (5)
 
 | Command | Parameters | Types | Description |
 |---------|-----------|-------|-------------|
@@ -143,7 +145,7 @@
 
 ---
 
-## Total: 68 commands across 8 categories
+## Total: 68 commands across 10 categories
 
 | Category | Count | Commands |
 |----------|-------|----------|
@@ -151,9 +153,9 @@
 | Layer | 6 | bg, fg, cl, image, position, layopt |
 | Text | 13 | ch, text, l, r, er, p, ruby, font, skip, reset, pt, button, endbutton |
 | System | 4 | wait, eval, emb, history |
-| Flow | 16 | if, else, endif, switch, case, default, endswitch, jump, call, return, link, label, macro, endmacro, erasemacro, end, stop |
+| Flow | 17 | if, else, endif, switch, case, default, endswitch, jump, call, return, link, label, macro, endmacro, erasemacro, end, stop |
 | Transition | 4 | trans, move, quake, fade |
 | VFX | 1 | vfx |
 | Video | 2 | video, stopvideo |
-| Resource | 6 | preload, get_texture, is_loaded, is_pending, flush_cache |
+| Resource | 5 | preload, get_texture, is_loaded, is_pending, flush_cache |
 | Save/Load | 3 | save, load, listsaves |

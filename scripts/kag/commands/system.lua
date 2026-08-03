@@ -192,6 +192,19 @@ end
 --  Writes to ctx.unlockedCG (or ctx.unlockedMusic) for persistent tracking.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- [rollback] — pop the newest token-level snapshot and re-run from there.
+-- Returns false (no error) when there is nothing to roll back; the runner
+-- surfaces that as a click with no effect.
+function SystemCommands.rollback(ctx, params)
+    if not ctx then return false end
+    local ok, reason = require("kag_runner").rollback()
+    if not ok then
+        print("[rollback] unavailable: " .. tostring(reason))
+        return false
+    end
+    return true
+end
+
 function SystemCommands.unlock(ctx, params)
     local kind = params.type or "cg"
     local id   = params.id or params.name or ""

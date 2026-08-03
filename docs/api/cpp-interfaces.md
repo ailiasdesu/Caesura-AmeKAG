@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) — C++ API Interface Reference
 
-> **28 个纯虚接口，16 个模块；20 个运行时引擎服务通过 `BackendRegistry` 访问**
+> **30 个纯虚接口，16 个模块；21 个运行时引擎服务通过 `BackendRegistry` 访问**
 > 最后更新: 2026-07-18
 
 ---
@@ -39,7 +39,7 @@ auto* lua      = BackendRegistry::instance().getLuaState();
 - BackendRegistry 存储非拥有指针（`I*`），Engine 持有对应后端的 `unique_ptr` 所有权。
 - 子系统通过 `set*()` 注册，通过 `get*()` 访问。
 - 禁止绕过 BackendRegistry 直接访问单例（DEBUG_* 宏除外）。
-- RPC/Editor 属于宿主入站传输适配器，不注册到 BackendRegistry。宿主负责其所有权；当前 `main.cpp` 只实例化 `RpcServer`，`EditorServer` 尚未接入。
+- RPC/Editor 属于宿主入站传输适配器，不注册到 BackendRegistry。宿主负责其所有权；当前 `main.cpp` 实例化 `RpcServer`（stdio），`--editor` 模式下另启动 `EditorServer`（HTTP，18 端点）。
 
 ---
 

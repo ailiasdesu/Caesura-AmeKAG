@@ -17,6 +17,7 @@ local tests = {
     "test_tokenizer",
     "test_kag_commands",
     "test_scheduler",
+    "test_rollback",
     "test_sandbox",
 }
 

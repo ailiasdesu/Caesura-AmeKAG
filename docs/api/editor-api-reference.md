@@ -22,7 +22,7 @@
 
 **Base URL**: `http://localhost:9876`
 **Content-Type**: `application/json`
-**CORS**: 已启用 (`Access-Control-Allow-Origin: *`)
+**CORS**: 仅放行 localhost/127.0.0.1 来源（回显具体 origin，不设 `*`）
 
 > 当前状态：默认 `--editor` 启动 HTTP `EditorServer` 并监听 9876；
 > `--editor-stdio` 启动 GPU + stdin/stdout 换行分隔 JSON-RPC，`--headless` 启动
@@ -30,8 +30,8 @@
 > 执行；transport worker 不持有或访问 `lua_State`。
 >
 > stdio 已接入 breakpoint、Continue、Step、变量检查和调试状态命令。
-> `run` / `eval` 尚未迁移到 managed coroutine，目前明确返回
-> `unsupported_yieldable_execution`，不会回退到不可 yield 的 Lua 主状态执行。
+> `run` / `eval` 已迁移到 managed coroutine（`startManagedRun` + `pumpManagedRuns`），
+> 可正常执行含 `coroutine.yield()` 的脚本；不再返回 `unsupported_yieldable_execution`。
 
 ### 1.1 健康检查
 
@@ -124,7 +124,7 @@
 
 **`GET /api/logs`**
 
-返回最近 500 条日志。
+返回最近 200 条日志。
 
 ```
 → (no body)
@@ -358,7 +358,7 @@ Render.submit_batch({
 按 Lua VM 生命周期持有，支持可 yield KAG 协程的非阻塞断点、继续、step
 into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同一 resume 仲裁入口，
 暂停期间的 frame update、点击批处理及其他 Lua 回调不会越过断点。完整调试命令当前
-通过 stdio RPC 暴露；HTTP 调试路由尚未开放。
+通过 stdio RPC 暴露；HTTP 调试路由已开放（8 条 `/api/debug/*`）。
 
 ### 2.5 DevCore 模块
 
@@ -508,7 +508,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 引擎内部架构文档，供需要修改引擎核心的合作开发者参考。
 
-→ [cpp-interfaces.md](cpp-interfaces.md) — 28 个 `I*` 纯虚接口，16 模块，BackendRegistry 完整 getter 列表。
+→ [cpp-interfaces.md](cpp-interfaces.md) — 30 个 `I*` 纯虚接口，16 模块，BackendRegistry 完整 getter 列表。
 
 ---
 
