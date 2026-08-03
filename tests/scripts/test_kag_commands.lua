@@ -234,4 +234,19 @@ do
         passed = passed + 1 print("  [PASS] i18n autosave label")
     else failed = failed + 1 end
 end
+
+-- [gallery]/[music] commands exist and load their UI modules
+do
+    local sys_src = io.open("scripts/kag/commands/system.lua", "r"):read("*a")
+    if sys_src:find("function SystemCommands.gallery", 1, true)
+       and sys_src:find("function SystemCommands.music", 1, true) then
+        passed = passed + 1 print("  [PASS] gallery/music commands defined")
+    else failed = failed + 1 end
+    local gal_src = io.open("scripts/gallery.lua", "r"):read("*a")
+    local mus_src = io.open("scripts/music_room.lua", "r"):read("*a")
+    if gal_src:find("function Gallery.show", 1, true)
+       and mus_src:find("function MusicRoom.show", 1, true) then
+        passed = passed + 1 print("  [PASS] gallery/music UIs exist")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

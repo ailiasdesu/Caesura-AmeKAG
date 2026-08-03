@@ -202,6 +202,18 @@ end
 -- [rollback] — pop the newest token-level snapshot and re-run from there.
 -- Returns false (no error) when there is nothing to roll back; the runner
 -- surfaces that as a click with no effect.
+-- [gallery] — open the CG gallery (browse unlocked art; [unlock cg=] adds)
+function SystemCommands.gallery(ctx, params)
+    local Gallery = require("gallery")
+    local startId = params.id or params[1] or nil
+    Gallery.show(ctx, startId)
+end
+
+-- [music] — open the music room (preview unlocked BGM tracks)
+function SystemCommands.music(ctx, params)
+    require("music_room").show(ctx)
+end
+
 function SystemCommands.rollback(ctx, params)
     if not ctx then return false end
     local ok, reason = require("kag_runner").rollback()
