@@ -483,6 +483,24 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken) {
     Caesura::EditorServer editor;
     editor.setDispatcher(dispatcher);
     if (!authToken.empty()) editor.setAuthToken(authToken);
+    // Serve the bundled web-editor frontend (web-editor/dist). Resolve it
+    // relative to the current directory, walking up a few levels so the
+    // editor works whether launched from the repo root or a build dir
+    // (e.g. build/Debug -> ../../web-editor/dist).
+    {
+        namespace fs = std::filesystem;
+        std::string webRoot;
+        fs::path probe = fs::current_path();
+        for (int i = 0; i < 4 && webRoot.empty(); ++i) {
+            auto candidate = probe / "web-editor" / "dist" / "index.html";
+            if (fs::exists(candidate)) {
+                webRoot = (probe / "web-editor" / "dist").string();
+            }
+            probe = probe.parent_path();
+        }
+        if (!webRoot.empty()) editor.setWebRoot(webRoot);
+        else fprintf(stderr, "[EditorServer] web-editor/dist not found; serving API only\n");
+    }
     if (!editor.start(9876)) {
         editor.setDispatcher({});
         dispatcher->close();

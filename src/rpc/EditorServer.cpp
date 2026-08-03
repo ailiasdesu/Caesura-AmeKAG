@@ -192,7 +192,7 @@ RpcReply EditorServer::dispatchRequest(RpcRequest request) const {
     } catch (...) {
         return {RpcReplyStatus::Failed, "dispatcher_exception",
             "RPC dispatcher threw an unknown exception", {}};
-    }
+        }
 }
 
 void EditorServer::stop() {
@@ -916,9 +916,28 @@ void EditorServer::serverLoop(int port) {
 
     // ---------------------------------------------------------------------
     // Static file serving -- web editor frontend
+    // Static file serving -- web editor frontend
     // ---------------------------------------------------------------------
+    // Serve the single-file editor (web-editor/dist/index.html). We read the
+    // file through our own ifstream instead of httplib set_mount_point: on
+    // Windows, non-ASCII (e.g. CJK) directory paths in the mount dir are
+    // re-encoded by the narrow-string CRT layer and silently 404. The
+    // explicit handler keeps the path as-is end to end.
     if (!m_webRoot.empty() && fs::exists(m_webRoot)) {
-        svr.set_mount_point("/", m_webRoot);
+        const auto indexFile = (fs::path(m_webRoot) / "index.html").string();
+        auto serveIndex = [indexFile](const httplib::Request&, httplib::Response& res) {
+            std::ifstream f(indexFile, std::ios::binary);
+            if (!f) {
+                res.status = 404;
+                res.set_content("index.html not found", "text/plain");
+                return;
+            }
+            std::string body((std::istreambuf_iterator<char>(f)),
+                             std::istreambuf_iterator<char>());
+            res.set_content(body, "text/html; charset=utf-8");
+        };
+        svr.Get("/", serveIndex);
+        svr.Get("/index.html", serveIndex);
         printf("[EditorServer] Serving web editor from: %s\n", m_webRoot.c_str());
     }
 
