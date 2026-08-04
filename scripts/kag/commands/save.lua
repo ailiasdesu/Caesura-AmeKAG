@@ -263,7 +263,7 @@ function SaveCommands.load(ctx, params)
     ctx.seen_scenes = state.seen_scenes or {}
 
     -- Set token position for resume
-    ctx.token_index = state.token_index or 1
+    ctx.token_index = math.max(1, tonumber(state.token_index) or 1)
 
     -- Set scene path for reload (both aliases: the runner reads the
     -- snake_case variant during the coroutine-death window). The path is
