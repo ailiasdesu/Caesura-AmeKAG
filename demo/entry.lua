@@ -60,6 +60,20 @@ function engine_update(dt)
             history_co = nil
         end
     end
+    -- V key: replay the current line's voice (backlog latest entry).
+    if _G._GAME_KEY_V then
+        _G._GAME_KEY_V = false
+        local ctx = _G._CAESURA_CTX
+        if ctx and ctx.input_focus ~= "history" and ctx.backlog and ctx.backlog[1] then
+            local e = ctx.backlog[1]
+            local v = e.voice
+            if type(v) == "string" and #v > 0
+                and not v:find("..", 1, true)
+                and (v:match("%.ogg$") or v:match("%.wav$")) then
+                pcall(function() backend.audio_play("voice", v) end)
+            end
+        end
+    end
     kag_runner.update(dt or 0.016)
 end
 

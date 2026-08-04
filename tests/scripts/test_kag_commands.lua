@@ -414,4 +414,17 @@ do
         passed = passed + 1 print("  [PASS] skip_auto in i18n")
     else failed = failed + 1 end
 end
+
+-- V-key re-voice (gameplay)
+do
+    local src = nil
+    local f = io.open("scripts/kag_demo_entry.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("_GAME_KEY_V", 1, true) and src:find("audio_play", 1, true) and src:find("backlog[1]", 1, true) then
+        passed = passed + 1 print("  [PASS] V re-voice in entry")
+    else failed = failed + 1 end
+    if src and src:find("not v:find(", 1, true) and src:find("%%.ogg$", 1, true) then
+        passed = passed + 1 print("  [PASS] V re-voice guards path")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
