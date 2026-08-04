@@ -1068,11 +1068,13 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
             d.gx = penX + (fromCjk ? (float)gm.offsetX : gm.offsetX);
             d.gy = penY - (fromCjk ? (float)gm.offsetY : gm.offsetY) 
                    + (m_ttf && !fromCjk ? m_ttf->ascent : 8.0f);
+            d.w = (float)gm.w;
+            d.h = (float)gm.h;
             d.u0 = gm.x * iw;  d.v0 = gm.y * ih;
             d.u1 = (gm.x + gm.w) * iw;  d.v1 = (gm.y + gm.h) * ih;
             draws.push_back(d);
         } else {
-            draws.push_back({0,0,0,0,0,0});
+            draws.push_back({0,0,0,0,0,0,0,0});
         }
         glyphFromCjk.push_back(fromCjk);
         penX += gm.advance;
@@ -1087,15 +1089,32 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
     verts.reserve(m_msgCache.glyphCount * 6);
     indices.reserve(m_msgCache.glyphCount * 6);
 
+    // Pixel -> NDC (the fallback VS is passthrough) and use the glyph's real
+    // width/height -- the previous code drew every glyph as a 1px quad (its
+    // UV swizzle was the only way it looked anything like text) and at pixel
+    // coordinates that were culled entirely.
+    const float sw = (float)m_screenWidth;
+    const float sh = (float)m_screenHeight;
+    const bool ndcOk = sw > 0.0f && sh > 0.0f;
+
     for (uint32_t gi = 0; gi < m_msgCache.glyphCount; ++gi) {
         const GlyphDraw& d = draws[gi];
         uint32_t vbase = gi * 6;
-        verts.push_back({ d.gx,       d.gy,       d.u0, d.v0 });
-        verts.push_back({ d.gx + 1.0f, d.gy,       d.u1, d.v0 });
-        verts.push_back({ d.gx + 1.0f, d.gy + 1.0f, d.u1, d.v1 });
-        verts.push_back({ d.gx,       d.gy,       d.u0, d.v0 });
-        verts.push_back({ d.gx + 1.0f, d.gy + 1.0f, d.u1, d.v1 });
-        verts.push_back({ d.gx,       d.gy + 1.0f, d.u0, d.v1 });
+        float nx0, ny0, nx1, ny1;
+        if (ndcOk) {
+            nx0 = (d.gx / sw) * 2.0f - 1.0f;
+            ny0 = 1.0f - (d.gy / sh) * 2.0f;
+            nx1 = ((d.gx + d.w) / sw) * 2.0f - 1.0f;
+            ny1 = 1.0f - ((d.gy + d.h) / sh) * 2.0f;
+        } else {
+            nx0 = d.gx; ny0 = d.gy; nx1 = d.gx + d.w; ny1 = d.gy + d.h;
+        }
+        verts.push_back({ nx0, ny0, d.u0, d.v0 });
+        verts.push_back({ nx1, ny0, d.u1, d.v0 });
+        verts.push_back({ nx1, ny1, d.u1, d.v1 });
+        verts.push_back({ nx0, ny0, d.u0, d.v0 });
+        verts.push_back({ nx1, ny1, d.u1, d.v1 });
+        verts.push_back({ nx0, ny1, d.u0, d.v1 });
 
         indices.push_back(vbase);     indices.push_back(vbase + 1); indices.push_back(vbase + 2);
         indices.push_back(vbase);     indices.push_back(vbase + 2); indices.push_back(vbase + 3);

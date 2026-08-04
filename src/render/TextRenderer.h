@@ -134,7 +134,7 @@ private:
     GlyphMetrics getTTFGlyph(uint32_t codepoint);
 
     // -- Batch cache internals (Track 2) --
-    struct GlyphDraw { float gx, gy, u0, v0, u1, v1; };
+    struct GlyphDraw { float gx, gy, w, h, u0, v0, u1, v1; };
     void updateDirtyRange(const std::string& newText);
     float rebuildCache(uint16_t viewId, const std::string& text,
                        float x, float y, TextColor color,
