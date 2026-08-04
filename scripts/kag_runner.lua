@@ -137,7 +137,7 @@ local function resume_from_save()
     ctx.tokens = scene.tokens
     -- Coerce the restored token index: crafted saves may carry a string or
     -- table; scheduler.run compares `i <= #tokens` numerically.
-    ctx.token_index = tonumber(ctx._pendingLoadToken) or 1
+    ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
     ctx.currentScene = path
     -- The saved [load] set stop_flag to end the running script; clear it so
     -- the resumed coroutine actually executes tokens (scheduler returns
@@ -312,7 +312,7 @@ function kag_runner.update(dt)
                 ctx.labelMap = scene.labels
                 ctx.current_scene = path
                 ctx.currentScene = path
-                ctx.token_index = tonumber(target.index) or 1
+                ctx.token_index = math.max(1, tonumber(target.index) or 1)
                 ctx.stop_flag = false
                 ctx._undoStack = {}
                 kag_co = coroutine.create(function()
