@@ -316,6 +316,14 @@ do
        and tr_src3:find('VFX.blur', 1, true) then
         passed = passed + 1 print("  [PASS] blur command registered")
     else failed = failed + 1 end
+    -- Crafted-save token_index clamp (regression: 0/negative/string -> 1)
+    local sv_src2 = io.open("scripts/kag/commands/save.lua", "r"):read("*a")
+    local kr_src2 = io.open("scripts/kag_runner.lua", "r"):read("*a")
+    if sv_src2:find("math.max(1, tonumber(state.token_index) or 1)", 1, true)
+       and kr_src2:find("math.max(1, tonumber(ctx._pendingLoadToken) or 1)", 1, true)
+       and kr_src2:find("math.max(1, tonumber(target.index) or 1)", 1, true) then
+        passed = passed + 1 print("  [PASS] crafted-save token clamp present")
+    else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
     if sv_src:find("state.language", 1, true)
        and sv_src:find("state.seen_scenes", 1, true)
