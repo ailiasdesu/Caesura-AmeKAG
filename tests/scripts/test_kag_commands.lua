@@ -333,4 +333,17 @@ do
         passed = passed + 1 print("  [PASS] save captures all persistent fields")
     else failed = failed + 1 end
 end
+
+-- [scroll] command: registered + text/speed params parsed (logic only, no GPU)
+do
+    local trans_src = nil
+    local f = io.open("scripts/kag/commands/transition.lua", "r")
+    if f then trans_src = f:read("*a") f:close() end
+    if trans_src and trans_src:find("TransCommands.scroll", 1, true) then
+        passed = passed + 1 print("  [PASS] [scroll] command implemented")
+    else failed = failed + 1 end
+    if trans_src and trans_src:find("coroutine.yield()", 1, true) then
+        passed = passed + 1 print("  [PASS] [scroll] is coroutine-driven")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

@@ -158,6 +158,30 @@ end
 --  preloaded textures are ready.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- [scroll text=... speed=60] — vertical scrolling text (KiriKiri ED credits).
+-- Coroutine yield loop (same pattern as VFX.flash): draws the text at an
+-- upward-shifting y each frame until it exits the viewport, then clears.
+function TransCommands.scroll(ctx, params)
+    local text = params.text or params[1] or ""
+    local speed = tonumber(params.speed) or 60  -- px/sec
+    local size = tonumber(params.size) or 28
+    local color = params.color or "white"
+    local width = (ctx.viewport and ctx.viewport.width) or 1280
+    local height = (ctx.viewport and ctx.viewport.height) or 720
+    if #text == 0 then return end
+
+    local y = height
+    local lifetime = 0
+    local duration = (height + 64) / math.max(1, speed)
+    while lifetime < duration do
+        local dt = (coroutine.yield() or 16) / 1000.0
+        lifetime = lifetime + dt
+        y = y - speed * dt
+        backend.render_text(text, size, 32, y, color)
+    end
+    backend.font_clear()
+end
+
 -- [flash time=200 r=255 g=255 b=255] — full-screen color flash
 -- (KiriKiri classic white-flash / colored flash effect). Non-blocking:
 -- VFX.flash runs its own coroutine-yield loop and returns.
