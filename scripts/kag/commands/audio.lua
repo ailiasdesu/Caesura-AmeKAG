@@ -172,6 +172,10 @@ end
 
 function AudioCommands.stopvoice(ctx, params)
     backend.audio_stop("voice")
+    -- Signal the voice_end edge-trigger so a pending playvoice wait loop
+    -- (which polls _CAESURA_AUDIO_EVENT) unblocks immediately instead of
+    -- spinning until SoLoud reports the handle invalid.
+    _G._CAESURA_AUDIO_EVENT = "voice_end"
 end
 
 -- =============================================================================
