@@ -34,7 +34,7 @@
 [flash time=300 r=255 g=255 b=255]
 [cl]
 [bg storage="assets/bg/hana.png"]
-[trans time=500 method=crossfade]
+[trans time=500 method=dissolve]
 [wait time=400]
 
 [ch name="Narrator" text="After class, you walk to the hallway."]

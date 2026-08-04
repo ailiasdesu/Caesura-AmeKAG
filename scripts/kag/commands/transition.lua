@@ -129,6 +129,13 @@ local function resolve_method(params)
         universal   = "crossfade",
         scroll      = "wipe",
         ["scroll_right"] = "wipe",
+        -- KiriKiri-style aliases: dissolve/gradient are crossfade variants,
+        -- mask is a rule-image transition, slide is a directional wipe.
+        dissolve    = "crossfade",
+        gradient    = "crossfade",
+        mask        = "rule",
+        slide       = "wipe",
+        fade        = "crossfade",
     }
     return map[kind] or "crossfade"
 end

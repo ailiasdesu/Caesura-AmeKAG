@@ -303,6 +303,13 @@ do
        and pb_body:find("volume = volume", 1, true) then
         passed = passed + 1 print("  [PASS] playbgm parameter mapping")
     else failed = failed + 1 end
+    -- Transition aliases (KiriKiri): dissolve/gradient->crossfade, mask->rule
+    local tr_src2 = io.open("scripts/kag/commands/transition.lua", "r"):read("*a")
+    if tr_src2:find('dissolve    = "crossfade"', 1, true)
+       and tr_src2:find('mask        = "rule"', 1, true)
+       and tr_src2:find('slide       = "wipe"', 1, true) then
+        passed = passed + 1 print("  [PASS] transition aliases")
+    else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
     if sv_src:find("state.language", 1, true)
        and sv_src:find("state.seen_scenes", 1, true)
