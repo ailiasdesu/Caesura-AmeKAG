@@ -67,6 +67,16 @@
 [ch name="Narrator" text="Thank you for watching the Caesura AmeKAG demo."]
 [p]
 
+; Unlock the good ending (title menu Endings gallery)
+[ending id=good_end name="Good End — Home"]
+[p]
+
+; ED credits via the [scroll] effect
+[scroll text="Caesura AmeKAG" speed=80]
+[scroll text="A cross-platform visual novel engine" speed=80]
+[scroll text="bgfx rendering / SDL3 / Lua 5.4 / KAG scripting" speed=80]
+[p]
+
 [end]
 
 *chapter_03
