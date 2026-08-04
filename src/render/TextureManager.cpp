@@ -448,12 +448,13 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
         fprintf(stderr, "[TextureManager] Empty path.\n");
         return 0;
 
+    }
+
     // Cache hit: same path already loaded and still alive -> reuse the id
     // (avoids re-decode + GPU upload for repeated backgrounds/sprites).
     auto hit = m_pathToId.find(path);
     if (hit != m_pathToId.end() && m_cache.count(hit->second)) {
         return hit->second;
-    }
     }
 
     QuotaReservation quotaReservation;
