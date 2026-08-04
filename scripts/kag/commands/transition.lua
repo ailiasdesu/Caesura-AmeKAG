@@ -179,7 +179,7 @@ function TransCommands.scroll(ctx, params)
         y = y - speed * dt
         backend.render_text(text, size, 32, y, color)
     end
-    backend.font_clear()
+    backend.clear_text()
 end
 
 -- [flash time=200 r=255 g=255 b=255] — full-screen color flash
