@@ -291,10 +291,20 @@ float SoLoudAudioEngine::getBusVolume(const char* bus) const {
 }
 
 void SoLoudAudioEngine::flushWaveCache() {
-    m_waveCache.clear();
+    // Only drop entries that are NOT currently playing: destroying a Wav
+    // that SoLoud is still reading is a use-after-free. countAudioSource
+    // reports live sources referencing the sample.
+    for (auto it = m_waveCache.begin(); it != m_waveCache.end();) {
+        if (!it->second) { it = m_waveCache.erase(it); continue; }
+        if (m_soloud.countAudioSource(*it->second) > 0) {
+            ++it;  // keep playing entries
+        } else {
+            it = m_waveCache.erase(it);
+        }
+    }
     m_waveLRU.clear();
     m_waveLRUMap.clear();
-    printf("[Audio] Wave cache flushed.\n");
+    printf("[Audio] Wave cache flushed (playing entries kept).\n");
 }
 
 // -- BGM: with cross-fade support (Spec [3.1][3.2]) ------------------------
