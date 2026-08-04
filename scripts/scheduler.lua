@@ -13,8 +13,12 @@ local scheduler = {}
 
 -- Expression chunk cache: [if] conditions are re-compiled on every hit;
 -- looping scripts recompile the same strings each iteration (compile is
--- 10-100x more expensive than executing). Cache by source string.
+-- 10-100x more expensive than executing). Cache by source string only:
+-- chunks are compiled with a fresh _ENV per call (ctx.f), so a cached
+-- chunk never pins an old env table. Bounded to 128 entries so a
+-- scripted loop over many distinct expressions cannot grow unbounded.
 local exprCache = {}
+local EXPR_CACHE_MAX = 128
 
 -- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
 
@@ -197,16 +201,28 @@ function scheduler.run(ctx, tokens, start_index)
             local expr = params.exp or "false"
             local ok, result = pcall(function()
                 local src = "return " .. expr
-                -- Key includes the env identity: ctx.f may be replaced by
-                -- [eval]/[emb] or a new game, and a cached chunk would keep
-                -- reading the old _ENV.
-                local key = src .. string.char(0) .. tostring(ctx.f)
-                local fn = exprCache[key]
+                -- Cache by source; the chunk is compiled with the CURRENT
+                -- ctx.f as _ENV each time (load(...) re-binds), so no stale
+                -- env is ever captured. Bounded cache prevents unbounded
+                -- growth from expression-heavy loops.
+                local fn = exprCache[src]
                 if not fn then
                     fn = load(src, "=if", "t", ctx.f or {})
-                    exprCache[key] = fn
+                    if fn then
+                        exprCache[src] = fn
+                        -- Bounded: count via pairs (a string-keyed table's #
+                        -- is not meaningful), reset when over the cap.
+                        local n = 0
+                        for _ in pairs(exprCache) do n = n + 1 end
+                        if n > EXPR_CACHE_MAX then
+                            exprCache = {}
+                        end
+                    end
                 end
-                return fn()
+                if fn then
+                    return fn()
+                end
+                return false
             end)
             if not (ok and result) then
                 i = skip_to(tokens, i, {
