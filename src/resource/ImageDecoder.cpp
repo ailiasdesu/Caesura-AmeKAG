@@ -28,7 +28,10 @@ static DecodedImage fromStb(const uint8_t* data, size_t size) {
     }
     out.width  = static_cast<uint16_t>(w);
     out.height = static_cast<uint16_t>(h);
-    if (!dimensionsValid(w, h)) return {};
+    if (!dimensionsValid(w, h)) {
+        stbi_image_free(pixels);  // free the decoded buffer before rejecting
+        return {};
+    }
     out.rgba.assign(pixels, pixels + static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
     stbi_image_free(pixels);
     out.ok = true;
