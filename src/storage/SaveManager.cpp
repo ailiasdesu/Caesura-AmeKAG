@@ -206,6 +206,12 @@ bool SaveManager::save(int slot, const json& gameData,
                        const std::string& sceneName,
                        int tokenIndex,
                        const std::string& thumbnailPng) {
+    // Slot bound: negative or absurd slots fabricate paths outside the save
+    // dir; the UI only uses 0..99. Guard at the boundary.
+    if (slot < 0 || slot > 99) {
+        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        return false;
+    }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
     // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
     // was removed; all KAG [save]/[load] commands and scripts use the
@@ -241,6 +247,10 @@ bool SaveManager::save(int slot, const json& gameData,
 // ============================================================================
 
 json SaveManager::load(int slot, SaveMeta* outMeta) {
+    if (slot < 0 || slot > 99) {
+        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        return {};
+    }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
     // Legacy Lua serialization path (Path B, scripts/system.lua System.save/load)
     // was removed; all KAG [save]/[load] commands and scripts use the
