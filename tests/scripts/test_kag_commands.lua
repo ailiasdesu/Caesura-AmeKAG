@@ -310,6 +310,12 @@ do
        and tr_src2:find('slide       = "wipe"', 1, true) then
         passed = passed + 1 print("  [PASS] transition aliases")
     else failed = failed + 1 end
+    -- [blur] command registered (VFX.blur was command-less dead code)
+    local tr_src3 = io.open("scripts/kag/commands/transition.lua", "r"):read("*a")
+    if tr_src3:find("function TransCommands.blur", 1, true)
+       and tr_src3:find('VFX.blur', 1, true) then
+        passed = passed + 1 print("  [PASS] blur command registered")
+    else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
     if sv_src:find("state.language", 1, true)
        and sv_src:find("state.seen_scenes", 1, true)

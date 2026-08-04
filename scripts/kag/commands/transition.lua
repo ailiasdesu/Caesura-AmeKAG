@@ -168,6 +168,15 @@ function TransCommands.flash(ctx, params)
     end
 end
 
+-- [blur time=500 strength=2.0] — full-screen blur effect
+-- (KAG3-adjacent visual effect; VFX.blur existed but had no command).
+function TransCommands.blur(ctx, params)
+    local VFX = require("vfx")
+    if VFX.blur then
+        VFX.blur(ctx, params)
+    end
+end
+
 function TransCommands.trans(ctx, params)
     local dur     = tonumber(params.time or params.duration or 500)
     local method  = resolve_method(params)
