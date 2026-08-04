@@ -131,6 +131,7 @@ local function capture_state(ctx)
 
     -- [R7-FIX] Persist seen flags for Read Skip
     state.seen_scenes = ctx.seen_scenes or {}
+    state.seen_endings = ctx.seen_endings or {}
 
     return state
 end
@@ -261,6 +262,7 @@ function SaveCommands.load(ctx, params)
 
     -- [R7-FIX] Restore seen flags
     ctx.seen_scenes = state.seen_scenes or {}
+    ctx.seen_endings = state.seen_endings or {}
 
     -- Set token position for resume
     ctx.token_index = math.max(1, tonumber(state.token_index) or 1)

@@ -356,4 +356,26 @@ do
         passed = passed + 1 print("  [PASS] chapter read badge present")
     else failed = failed + 1 end
 end
+
+-- [ending] command + title endings sub-screen
+do
+    local sys = nil
+    local f = io.open("scripts/kag/commands/system.lua", "r")
+    if f then sys = f:read("*a") f:close() end
+    if sys and sys:find("SystemCommands.ending", 1, true) and sys:find("seen_endings", 1, true) then
+        passed = passed + 1 print("  [PASS] [ending] command present")
+    else failed = failed + 1 end
+    local tm = nil
+    f = io.open("scripts/title_menu.lua", "r")
+    if f then tm = f:read("*a") f:close() end
+    if tm and tm:find("showEndings", 1, true) and tm:find("endings_title", 1, true) then
+        passed = passed + 1 print("  [PASS] title endings sub-screen present")
+    else failed = failed + 1 end
+    local sv = nil
+    f = io.open("scripts/kag/commands/save.lua", "r")
+    if f then sv = f:read("*a") f:close() end
+    if sv and sv:find("state.seen_endings", 1, true) and sv:find("ctx.seen_endings = state.seen_endings", 1, true) then
+        passed = passed + 1 print("  [PASS] endings persisted in save")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

@@ -230,6 +230,16 @@ function SystemCommands.chapter(ctx, params)
     return chosen
 end
 
+-- [ending id=end01 name="Good End"] — record an unlocked ending.
+-- Persisted in ctx.seen_endings (captured by save capture + restored).
+function SystemCommands.ending(ctx, params)
+    local id = params.id or params[1] or "end"
+    local name = params.name or params[2] or ("Ending " .. id)
+    if type(ctx.seen_endings) ~= "table" then ctx.seen_endings = {} end
+    ctx.seen_endings[id] = { name = name, at = os.time() }
+    print(string.format("[ending] unlocked %s (%s)", id, name))
+end
+
 function SystemCommands.rollback(ctx, params)
     if not ctx then return false end
     local ok, reason = require("kag_runner").rollback()

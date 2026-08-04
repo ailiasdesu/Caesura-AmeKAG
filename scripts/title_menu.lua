@@ -15,7 +15,39 @@ local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
 end
 
-local MENU_ITEMS = { "new_game", "load_game", "settings", "exit" }
+local MENU_ITEMS = { "new_game", "load_game", "settings", "endings", "exit" }
+
+--- TitleMenu.showEndings(ctx) — inline sub-screen (no separate coroutine:
+-- keeps the same yield-loop pattern as the title itself, so no orphan
+-- coroutine soft-lock like the gallery/music experiment). Lists unlocked
+-- endings from ctx.seen_endings ([ending id=] records them).
+local function showEndings(ctx)
+    local endings = ctx.seen_endings
+    if type(endings) ~= "table" then endings = {} end
+    local names = {}
+    for id, info in pairs(endings) do
+        names[#names + 1] = (type(info) == "table" and info.name) or id
+    end
+    table.sort(names)
+    while true do
+        backend.render_text(i18n.t("endings_title") or "Endings", 1280 / 2 - 60, 180, 220, 180, 80, 255)
+        if #names == 0 then
+            backend.render_text("(none yet)", 1280 / 2 - 60, 300, 120, 120, 160, 255)
+        else
+            local y = 300
+            for _, n in ipairs(names) do
+                backend.render_text("[OK] " .. n, 1280 / 2 - 80, y, 180, 180, 200, 255)
+                y = y + 40
+            end
+        end
+        backend.render_text("[Esc] Back", 20, 690, 120, 120, 160, 255)
+        coroutine.yield()
+        if _G._GAME_KEY_ESC == true then
+            _G._GAME_KEY_ESC = false
+            return
+        end
+    end
+end
 
 --- TitleMenu.show(ctx) → "new"|"load"|"settings"|"exit"|nil
 function TitleMenu.show(ctx)
@@ -61,6 +93,7 @@ function TitleMenu.show(ctx)
             if key == "new_game" then return "new"
             elseif key == "load_game" then return "load"
             elseif key == "settings" then return "settings"
+            elseif key == "endings" then showEndings(ctx)
             else return "exit" end
         elseif _G._GAME_KEY_ESC == true then
             _G._GAME_KEY_ESC = false
