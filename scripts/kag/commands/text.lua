@@ -461,7 +461,15 @@ end
 -- =============================================================================
 
 function TextCommands.pt(ctx, params)
-    ctx.text_speed = tonumber(params.speed) or 50
+    local v = tonumber(params.speed) or 50
+    if v < 8 then
+        print(string.format("[pt] clamped speed %s ms to 8 (floor)", tostring(params.speed)))
+        v = 8
+    elseif v > 5000 then
+        print(string.format("[pt] clamped speed %s ms to 5000 (cap)", tostring(params.speed)))
+        v = 5000
+    end
+    ctx.text_speed = v
 end
 
 

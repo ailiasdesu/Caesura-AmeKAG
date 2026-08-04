@@ -29,6 +29,12 @@ local SystemCommands = {}
 function SystemCommands.wait(ctx, params)
     local ms = tonumber(params.time or params.ms or params.duration or 1000)
     if ms <= 0 then return end
+    -- Hard cap: a typo/crafted [wait time=99999999] must not freeze the
+    -- game for hours; 60s is beyond any legitimate scripted pause.
+    if ms > 60000 then
+        print(string.format("[wait] clamped %d ms to 60000 (hard cap)", ms))
+        ms = 60000
+    end
 
     local operation <close> = Operation.start(ctx)
     local ct = operation.token
