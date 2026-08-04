@@ -91,11 +91,15 @@ void BgfxQuadBatch::flushBatch() {
     for (uint32_t qi = 0; qi < quadCount; qi++) {
         auto& q = m_state->batchQuads[qi];
 
-        // Check if next quad shares same texture ??merge if so
+        // Check if next quad shares same texture ??merge if so. Opacity is
+        // part of the batch uniform (blendParams), so quads with different
+        // opacity must NOT merge -- the merged submit would apply only the
+        // first quad's alpha to all of them.
         uint32_t mergeEnd = qi + 1;
         while (mergeEnd < quadCount &&
                m_state->batchQuads[mergeEnd].tex.idx == q.tex.idx &&
-               m_state->batchQuads[mergeEnd].viewId == q.viewId) {
+               m_state->batchQuads[mergeEnd].viewId == q.viewId &&
+               m_state->batchQuads[mergeEnd].opacity == q.opacity) {
             mergeEnd++;
         }
 
