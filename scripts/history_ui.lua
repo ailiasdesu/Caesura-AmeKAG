@@ -54,6 +54,34 @@ function HistoryUI.show(ctx)
     local scroll   = 0
     local ITEMS    = 12
 
+    -- Filter state: F key cycles 0=all, 1=voice-only, 2=sprite-only.
+    local filter = 0
+    local function filteredIndex(i)  -- backlog index of the i-th filtered entry
+        if filter == 0 then return i end
+        local n = 0
+        for idx = 1, #ctx.backlog do
+            local e = ctx.backlog[idx]
+            local keep = (filter == 1 and e.voice and #e.voice > 0)
+                      or (filter == 2 and e.sprite and #e.sprite > 0)
+            if keep then
+                n = n + 1
+                if n == i then return idx end
+            end
+        end
+        return nil
+    end
+    local function filteredCount()
+        if filter == 0 then return #ctx.backlog end
+        local n = 0
+        for _, e in ipairs(ctx.backlog) do
+            if (filter == 1 and e.voice and #e.voice > 0)
+            or (filter == 2 and e.sprite and #e.sprite > 0) then
+                n = n + 1
+            end
+        end
+        return n
+    end
+
     -- Overlay layers (created once, reused per frame)
     local bgLayer   = layers.ensure(ctx, "_history_bg", 94)
     local titleLayer = layers.ensure(ctx, "_history_title", 95)
@@ -87,10 +115,11 @@ function HistoryUI.show(ctx)
         -- Scrollable entries
         local y = 52
         local entryH = 22
-        local lastVisible = math.min(scroll + ITEMS, #ctx.backlog)
+        local totalShown = filteredCount()
+        local lastVisible = math.min(scroll + ITEMS, totalShown)
         for i = scroll + 1, lastVisible do
-            local e = ctx.backlog[i]
-            local isSelected = (i == selected)
+            local e = ctx.backlog[filteredIndex(i)]
+            local isSelected = (filteredIndex(i) == selected)
 
             -- Highlight selected entry
             if isSelected then
@@ -139,7 +168,10 @@ function HistoryUI.show(ctx)
         footerLayer.x, footerLayer.y = 0, 690
         footerLayer.w, footerLayer.h = w, 30
         footerLayer.texture = solid(16, 16, 48, 224)
-        backend.render_text("[Up/Down] Navigate  [Enter] Jump to Scene  [V] Replay Voice  [Esc] Close", 20, 693, 60, 200, 120, 255)
+        local filterLabel = (filter == 0) and "All"
+                         or (filter == 1) and "Voice-only"
+                         or "Sprite-only"
+        backend.render_text("[Up/Down] Navigate  [Enter] Jump  [V] Voice  [F] Filter: " .. filterLabel .. "  [Esc] Close", 20, 693, 60, 200, 120, 255)
 
         -- Yield to engine frame
         coroutine.yield()
@@ -149,12 +181,16 @@ function HistoryUI.show(ctx)
         if wheel ~= 0 then
             _G._KAG_MOUSE_WHEEL_Y = 0
             if wheel > 0 then selected = math.max(1, selected - 1)
-            else selected = math.min(#ctx.backlog, selected + 1) end
+            else selected = math.min(filteredCount(), selected + 1) end
         end
-        if key_consumed("_GAME_KEY_UP") then
+        if key_consumed("_GAME_KEY_F") then
+            -- Cycle filter; reselect the last filtered entry.
+            filter = (filter + 1) % 3
+            selected = filteredCount()
+        elseif key_consumed("_GAME_KEY_UP") then
             selected = math.max(1, selected - 1)
         elseif key_consumed("_GAME_KEY_DOWN") then
-            selected = math.min(#ctx.backlog, selected + 1)
+            selected = math.min(filteredCount(), selected + 1)
         elseif key_consumed("_GAME_KEY_ENTER") then
             local e = ctx.backlog[selected]
             if e and e.scene and e.token_index then

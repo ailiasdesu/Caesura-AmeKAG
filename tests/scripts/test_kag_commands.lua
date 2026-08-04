@@ -427,4 +427,17 @@ do
         passed = passed + 1 print("  [PASS] V re-voice guards path")
     else failed = failed + 1 end
 end
+
+-- backlog F-key filter (voice/sprite)
+do
+    local src = nil
+    local f = io.open("scripts/history_ui.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("_GAME_KEY_F", 1, true) and src:find("filteredCount()", 1, true) then
+        passed = passed + 1 print("  [PASS] backlog filter key present")
+    else failed = failed + 1 end
+    if src and src:find("filteredIndex(i)", 1, true) and src:find("math.min(filteredCount()", 1, true) then
+        passed = passed + 1 print("  [PASS] filter bounds navigation")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
