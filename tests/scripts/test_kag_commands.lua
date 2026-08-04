@@ -394,4 +394,24 @@ do
         passed = passed + 1 print("  [PASS] continue loads autosave")
     else failed = failed + 1 end
 end
+
+-- skip_auto force-skip (runner + settings + i18n)
+do
+    local src = nil
+    local f = io.open("scripts/kag_runner.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("ctx.skip_auto", 1, true) and src:find("ctx.skip_rate", 1, true) then
+        passed = passed + 1 print("  [PASS] skip_auto in runner")
+    else failed = failed + 1 end
+    f = io.open("scripts/settings.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("skip_auto", 1, true) then
+        passed = passed + 1 print("  [PASS] skip_auto in settings")
+    else failed = failed + 1 end
+    f = io.open("scripts/i18n.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("skip_auto", 1, true) then
+        passed = passed + 1 print("  [PASS] skip_auto in i18n")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

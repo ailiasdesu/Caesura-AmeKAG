@@ -39,6 +39,7 @@ local defaults = {
     text_speed   = 50,   -- ms per char
     fullscreen   = false,
     skip_mode    = false,
+    skip_auto    = false,  -- read-skip: force-past unseen text at 2x instead of stopping
     auto_mode    = false,
     autosave_interval = 60,   -- seconds; 0 disables the auto-save timer
 }
@@ -59,6 +60,7 @@ function Settings._buildMenu(ctx)
         {label = i18n.t("volume_voice"), key = "volume_voice", type = "slider", value = sv.volume_voice, min = 0, max = 100},
         {label = i18n.t("text_speed"),   key = "text_speed",   type = "slider", value = sv.text_speed,   min = 10, max = 200},
         {label = i18n.t("skip_mode"),    key = "skip_mode",    type = "toggle", value = sv.skip_mode},
+        {label = i18n.t("skip_auto"),    key = "skip_auto",    type = "toggle", value = sv.skip_auto},
         {label = i18n.t("auto_mode"),    key = "auto_mode",    type = "toggle", value = sv.auto_mode},
         {label = i18n.t("fullscreen"),   key = "fullscreen",   type = "toggle", value = sv.fullscreen},
         {label = i18n.t("language") .. ": " .. (i18n.current or "zh"),
@@ -246,6 +248,7 @@ function Settings._applyAll(ctx)
     -- were silently ignored by kag_runner/TextCommands.
     if sv.text_speed then ctx.text_speed = sv.text_speed end
     if sv.skip_mode ~= nil then ctx.skip_mode = sv.skip_mode end
+    if sv.skip_auto ~= nil then ctx.skip_auto = sv.skip_auto end
     if sv.auto_mode ~= nil then ctx.auto_mode = sv.auto_mode end
     if sv.volume_voice then audio.set_voice_volume(sv.volume_voice / 100) end
     if sv.fullscreen ~= nil then backend.set_fullscreen(sv.fullscreen) end

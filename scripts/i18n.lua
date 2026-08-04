@@ -127,6 +127,7 @@ function i18n._loadBuiltin(langCode)
             fullscreen = "全屏",
             language = "语言",
             skip_mode = "跳过模式",
+            skip_auto = "强制跳过",
             auto_mode = "自动模式",
         },
         en = {
@@ -150,6 +151,7 @@ function i18n._loadBuiltin(langCode)
             fullscreen = "Fullscreen",
             language = "Language",
             skip_mode = "Skip Mode",
+            skip_auto = "Force Skip",
             auto_mode = "Auto Mode",
         },
         ja = {
@@ -173,6 +175,7 @@ function i18n._loadBuiltin(langCode)
             fullscreen = "フルスクリーン",
             language = "言語",
             skip_mode = "スキップ",
+            skip_auto = "強制スキップ",
             auto_mode = "オート",
         },
     }

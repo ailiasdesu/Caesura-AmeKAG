@@ -254,9 +254,16 @@ function kag_runner.update(dt)
                 local wasSeen = type(seen) == "table"
                              and seen[ctx.token_index or 0] == true
                 if not wasSeen then
-                    -- Unseen text: stop read-skipping (fall back to manual).
-                    auto_advance_ms = 0
-                    return false, "waiting-input"
+                    -- Unseen text: with skip_auto ("force") keep advancing at
+                    -- an accelerated rate (2x) so players can rush past new
+                    -- content without mashing; without it, stop read-skipping
+                    -- (fall back to manual) -- classic read-skip behavior.
+                    if ctx.skip_auto then
+                        auto_advance_ms = ctx.skip_rate or 60
+                    else
+                        auto_advance_ms = 0
+                        return false, "waiting-input"
+                    end
                 end
             end
             -- Skip mode: advance immediately, no delay.
