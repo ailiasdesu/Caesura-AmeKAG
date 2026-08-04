@@ -154,8 +154,12 @@ void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
         // bgfx scissor uses absolute pixel coords from top-left
         bgfx::setScissor(m_mergedDirty.x, m_mergedDirty.y,
                          m_mergedDirty.w, m_mergedDirty.h);
+    } else if (m_gpuEnabled) {
+        // Full frame: explicitly clear the scissor -- bgfx keeps the state
+        // per frame, so a layer that scissored earlier would otherwise
+        // clip every later full-frame submit.
+        bgfx::setScissor();
     }
-    // else: full frame -- no scissor set (or clear scissor)
 }
 
 void LayerManager::clearDirtyRects() {
