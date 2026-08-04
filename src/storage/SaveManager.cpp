@@ -355,10 +355,15 @@ std::vector<SaveMeta> SaveManager::listSaves() {
 }
 
 bool SaveManager::slotExists(int slot) {
+    if (slot < 0 || slot > 99) return false;
     return !readFile(slotPath(slot)).empty();
 }
 
 bool SaveManager::deleteSlot(int slot) {
+    if (slot < 0 || slot > 99) {
+        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        return false;
+    }
     std::string path = slotPath(slot);
     if (m_saveProvider) return m_saveProvider->deleteFile(path);
     if (remove(path.c_str()) == 0) {
