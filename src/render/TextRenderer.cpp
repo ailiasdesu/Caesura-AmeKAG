@@ -1131,6 +1131,7 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
     // TD-13: Use CJK atlas texture when CJK-only text is detected
     bool allCjk = hasCjk && !glyphFromCjk.empty();
     for (bool c : glyphFromCjk) { if (!c) { allCjk = false; break; } }
+    m_msgCache.cacheIsCjk = allCjk;
     bgfx::TextureHandle useTex = (allCjk && bgfx::isValid(m_cjkAtlas)) ? m_cjkAtlas : tex;
     bgfx::setTexture(0, m_texSampler, useTex);
     bgfx::setVertexBuffer(0, m_msgCache.vb, 0, nv);
@@ -1173,8 +1174,10 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
 
     float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
     bgfx::setUniform(m_u_color, fc);
-    bgfx::setTexture(0, m_texSampler,
-        (m_ttf && bgfx::isValid(m_fontTexture)) ? m_fontTexture : m_fontTexture);
+    // Cache-hit texture: a cached CJK-only line samples the CJK atlas --
+    // binding the TTF texture for it would sample wrong glyphs.
+    const bool needCjk = m_msgCache.cacheIsCjk && bgfx::isValid(m_cjkAtlas);
+    bgfx::setTexture(0, m_texSampler, needCjk ? m_cjkAtlas : m_fontTexture);
     bgfx::setVertexBuffer(0, m_msgCache.vb, 0, m_msgCache.glyphCount * 6);
     bgfx::setIndexBuffer(m_msgCache.ib, 0, m_msgCache.glyphCount * 6);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
