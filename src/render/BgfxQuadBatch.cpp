@@ -1,6 +1,7 @@
 #include "BgfxQuadBatch.h"
 #include "BgfxDraw.h"
 #include "BgfxShaderManager.h"
+#include "BgfxDeviceCore.h"  // getWidth/getHeight for pixel->NDC conversion
 #include <bgfx/bgfx.h>
 
 namespace Caesura {
@@ -50,19 +51,28 @@ void BgfxQuadBatch::flushBatch() {
     // Split into per-texture draw calls within the batch
     // (bgfx requires one texture set per submit)
 
+    // Pixel -> NDC conversion: the fallback vertex shader is passthrough
+    // (gl_Position = vec4(a_position, 0, 1)), so all other draw paths convert
+    // on the CPU side. Without it, pixel coords (0..1280, 0..720) lie outside
+    // clip space [-1,1] and the whole batch is culled -- invisible UI.
+    const float sw = (float)m_state->device->getWidth();
+    const float sh = (float)m_state->device->getHeight();
+    if (sw <= 0.0f || sh <= 0.0f) { m_state->batching = false; return; }
+
     for (uint32_t qi = 0; qi < quadCount; qi++) {
         auto& q = m_state->batchQuads[qi];
         uint32_t baseVert = qi * 4;
 
-        // Build quad vertices
-        v[qi * 4 + 0] = { q.x,       q.y,       0.0f, 0.0f };
-        v[qi * 4 + 1] = { q.x + q.w, q.y,       1.0f, 0.0f };
-        v[qi * 4 + 2] = { q.x + q.w, q.y + q.h, 1.0f, 1.0f };
-        v[qi * 4 + 3] = { q.x,       q.y + q.h, 0.0f, 1.0f };
+        const float nx0 = (q.x / sw) * 2.0f - 1.0f;
+        const float ny0 = 1.0f - (q.y / sh) * 2.0f;
+        const float nx1 = ((q.x + q.w) / sw) * 2.0f - 1.0f;
+        const float ny1 = 1.0f - ((q.y + q.h) / sh) * 2.0f;
 
-        // Indices are written once, with local offsets, by the merge loop
-        // below (bgfx interprets index values relative to the submit's
-        // startVertex) -- the previous absolute-index fill was dead store.
+        // Build quad vertices (NDC)
+        v[baseVert + 0] = { nx0, ny0, 0.0f, 0.0f };
+        v[baseVert + 1] = { nx1, ny0, 1.0f, 0.0f };
+        v[baseVert + 2] = { nx1, ny1, 1.0f, 1.0f };
+        v[baseVert + 3] = { nx0, ny1, 0.0f, 1.0f };
     }
 
     uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
@@ -93,9 +103,12 @@ void BgfxQuadBatch::flushBatch() {
         uint32_t mergeIdxCount = mergeCount * 6;
 
         bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), q.tex);
-        // Set opacity as a uniform if needed
-        float alpha = q.opacity / 255.0f;
-        bgfx::setUniform(m_state->shaders->getBlendParams(), &alpha, 1);
+        // Set opacity as a uniform. blendParams is declared Vec4 x2 (8 floats);
+        // passing a 1-float address with _num=1 made bgfx read 16 bytes from a
+        // 4-byte stack slot (out-of-bounds read, UB). Always pass 8 floats.
+        float bp[8] = { q.opacity / 255.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 0.0f };
+        bgfx::setUniform(m_state->shaders->getBlendParams(), bp, 2);
 
         // Rebase indices relative to merge group start: bgfx interprets
         // index values as offsets from setVertexBuffer startVertex.
