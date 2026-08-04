@@ -275,10 +275,21 @@ function kag_runner.update(dt)
             return kag_runner.on_click()
         end
         if ctx.auto_mode then
-            auto_advance_ms = auto_advance_ms + delta_ms
-            if auto_advance_ms >= 1500 then  -- ~1.5s regardless of fps
+            -- Galgame-standard auto pacing: while a voice line is playing,
+            -- hold the advance timer (players read along with the audio);
+            -- the 1.5s countdown only runs once the voice finished (or none).
+            local voicePlaying = false
+            pcall(function()
+                voicePlaying = backend.audio_is_playing and backend.audio_is_playing("voice")
+            end)
+            if voicePlaying then
                 auto_advance_ms = 0
-                return kag_runner.on_click()
+            else
+                auto_advance_ms = auto_advance_ms + delta_ms
+                if auto_advance_ms >= (ctx.auto_delay or 1500) then
+                    auto_advance_ms = 0
+                    return kag_runner.on_click()
+                end
             end
         end
         return false, "waiting-input"

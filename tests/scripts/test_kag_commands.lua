@@ -455,4 +455,17 @@ do
         passed = passed + 1 print("  [PASS] [pt] clamp present")
     else failed = failed + 1 end
 end
+
+-- auto-mode voice pacing
+do
+    local src = nil
+    local f = io.open("scripts/kag_runner.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("audio_is_playing", 1, true) and src:find("auto_delay", 1, true) then
+        passed = passed + 1 print("  [PASS] auto waits for voice")
+    else failed = failed + 1 end
+    if src and src:find("voicePlaying then", 1, true) and src:find("auto_advance_ms = 0", 1, true) then
+        passed = passed + 1 print("  [PASS] voice holds advance timer")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
