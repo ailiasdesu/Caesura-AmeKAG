@@ -15,7 +15,13 @@ local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
 end
 
-local MENU_ITEMS = { "new_game", "load_game", "settings", "endings", "exit" }
+-- Continue (slot 0 / autosave) is offered only when a save actually
+-- exists: polled once on entry via KAG.save_exists (C++ storage layer).
+local hasAutosave = (type(KAG) == "table" and KAG.save_exists and KAG.save_exists(0)) or false
+local MENU_ITEMS = { "new_game", hasAutosave and "continue" or nil, "load_game", "settings", "endings", "exit" }
+for i = #MENU_ITEMS, 1, -1 do
+    if MENU_ITEMS[i] == nil then table.remove(MENU_ITEMS, i) end
+end
 
 --- TitleMenu.showEndings(ctx) — inline sub-screen (no separate coroutine:
 -- keeps the same yield-loop pattern as the title itself, so no orphan
@@ -91,6 +97,7 @@ function TitleMenu.show(ctx)
             bg.visible = false
             local key = MENU_ITEMS[cursor]
             if key == "new_game" then return "new"
+            elseif key == "continue" then return "continue"
             elseif key == "load_game" then return "load"
             elseif key == "settings" then return "settings"
             elseif key == "endings" then showEndings(ctx)

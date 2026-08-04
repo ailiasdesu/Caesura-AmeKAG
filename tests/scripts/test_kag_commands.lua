@@ -378,4 +378,20 @@ do
         passed = passed + 1 print("  [PASS] endings persisted in save")
     else failed = failed + 1 end
 end
+
+-- title continue item (autosave slot 0)
+do
+    local tm = nil
+    local f = io.open("scripts/title_menu.lua", "r")
+    if f then tm = f:read("*a") f:close() end
+    if tm and tm:find("continue", 1, true) and tm:find("KAG.save_exists", 1, true) then
+        passed = passed + 1 print("  [PASS] title continue item present")
+    else failed = failed + 1 end
+    local te = nil
+    f = io.open("scripts/title_demo_entry.lua", "r")
+    if f then te = f:read("*a") f:close() end
+    if te and te:find("action == \"continue\"", 1, true) and te:find("slot = 0", 1, true) then
+        passed = passed + 1 print("  [PASS] continue loads autosave")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

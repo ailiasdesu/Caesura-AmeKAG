@@ -31,9 +31,15 @@ function engine_update(dt)
             if action == "new" then
                 kag_runner.start("scripts/demo_story.ks")
                 started = true
-            elseif action == "load" then
+            elseif action == "load" or action == "continue" then
+                -- continue = load the autosave (slot 0); plain load picks
+                -- the default slot via the saveload menu.
                 local ok_load, err = pcall(function()
-                    require("kag.commands.save").load(_G._CAESURA_CTX, {})
+                    if action == "continue" then
+                        require("kag.commands.save").load(_G._CAESURA_CTX, { slot = 0 })
+                    else
+                        require("kag.commands.save").load(_G._CAESURA_CTX, {})
+                    end
                 end)
                 if not ok_load then
                     print("[TitleMenu] load failed: " .. tostring(err))
