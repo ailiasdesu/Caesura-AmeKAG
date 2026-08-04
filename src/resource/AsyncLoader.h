@@ -52,6 +52,10 @@ private:
     std::atomic<int>  m_pendingCount{0};
     std::atomic<int>  m_nextId{1};
     std::atomic<bool> m_cancelRequested{false};
+    // Generation counter: cancelAll() increments it; jobs snapshot it at
+    // enqueue and abort if it changed before they run -- fixing the race
+    // where enqueue's reset of the boolean flag undid a cancelAll.
+    std::atomic<uint64_t> m_cancelGeneration{0};
 
     std::mutex m_completeMutex;
     std::vector<CompletedLoad> m_completed;

@@ -161,6 +161,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
 
 void AsyncLoader::cancelAll() {
     m_cancelRequested.store(true);
+    m_cancelGeneration.fetch_add(1);
     printf("[AsyncLoader] All loads cancelled.\n");
 }
 
