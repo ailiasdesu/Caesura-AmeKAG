@@ -31,24 +31,48 @@ local function showEndings(ctx)
     local endings = ctx.seen_endings
     if type(endings) ~= "table" then endings = {} end
     local names = {}
+    local scenes = {}
     for id, info in pairs(endings) do
-        names[#names + 1] = (type(info) == "table" and info.name) or id
+        local n = (type(info) == "table" and info.name) or id
+        names[#names + 1] = n
+        scenes[n] = (type(info) == "table" and info.scene) or ""
     end
     table.sort(names)
+    local cursor = 1
     while true do
         backend.render_text(i18n.t("endings_title") or "Endings", 1280 / 2 - 60, 180, 220, 180, 80, 255)
         if #names == 0 then
             backend.render_text("(none yet)", 1280 / 2 - 60, 300, 120, 120, 160, 255)
         else
             local y = 300
-            for _, n in ipairs(names) do
-                backend.render_text("[OK] " .. n, 1280 / 2 - 80, y, 180, 180, 200, 255)
+            for i, n in ipairs(names) do
+                local prefix = (i == cursor) and "> " or "  "
+                local r, g, b = 255, 255, 255
+                if i == cursor then r, g, b = 255, 220, 80 end
+                backend.render_text(prefix .. "[OK] " .. n, 1280 / 2 - 80, y, r, g, b, 255)
                 y = y + 40
             end
         end
-        backend.render_text("[Esc] Back", 20, 690, 120, 120, 160, 255)
+        backend.render_text("[Up/Down] Select  [Enter] Replay  [Esc] Back", 20, 690, 120, 120, 160, 255)
         coroutine.yield()
-        if _G._GAME_KEY_ESC == true then
+        if _G._GAME_KEY_UP == true then
+            _G._GAME_KEY_UP = false
+            cursor = cursor - 1
+            if cursor < 1 then cursor = #names end
+        elseif _G._GAME_KEY_DOWN == true then
+            _G._GAME_KEY_DOWN = false
+            cursor = cursor + 1
+            if cursor > #names then cursor = 1 end
+        elseif _G._GAME_KEY_ENTER == true then
+            _G._GAME_KEY_ENTER = false
+            local target = scenes[names[cursor]]
+            if target and #target > 0 then
+                -- Replay: jump to the ending scene (runner handles the
+                -- cross-scene load via _pendingJump).
+                ctx._pendingJump = { scene = target }
+                return
+            end
+        elseif _G._GAME_KEY_ESC == true then
             _G._GAME_KEY_ESC = false
             return
         end

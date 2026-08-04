@@ -242,7 +242,7 @@ function SystemCommands.ending(ctx, params)
     local id = params.id or params[1] or "end"
     local name = params.name or params[2] or ("Ending " .. id)
     if type(ctx.seen_endings) ~= "table" then ctx.seen_endings = {} end
-    ctx.seen_endings[id] = { name = name, at = os.time() }
+    ctx.seen_endings[id] = { name = name, at = os.time(), scene = ctx.current_scene or ctx.currentScene or "" }
     print(string.format("[ending] unlocked %s (%s)", id, name))
 end
 

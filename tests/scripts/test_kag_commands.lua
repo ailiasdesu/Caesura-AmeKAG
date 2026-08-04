@@ -468,4 +468,19 @@ do
         passed = passed + 1 print("  [PASS] voice holds advance timer")
     else failed = failed + 1 end
 end
+
+-- ending replay (scene recorded + title Enter jump)
+do
+    local src = nil
+    local f = io.open("scripts/kag/commands/system.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("scene = ctx.current_scene", 1, true) then
+        passed = passed + 1 print("  [PASS] ending records scene")
+    else failed = failed + 1 end
+    f = io.open("scripts/title_menu.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("_pendingJump", 1, true) and src:find("Replay", 1, true) then
+        passed = passed + 1 print("  [PASS] endings replay via jump")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
