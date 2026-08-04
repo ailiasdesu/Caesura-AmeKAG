@@ -48,4 +48,8 @@ local fakeNode = { visible = true, texture = "x" }
 local ok3, err3 = pcall(function() KAG.ld(ctx3, { layer = "nonexistent" }) end)
 check("KAG3 [ld] no-crash unknown layer", ok3)
 
+-- [ct] aliases [cl]; [waitforclick] blocks until click
+check("KAG3 [ct] aliases [cl]", KAG.ct == KAG.cl)
+check("KAG3 [waitforclick] registered", type(KAG.waitforclick) == "function")
+
 print("KAG3 COMPAT TESTS DONE")

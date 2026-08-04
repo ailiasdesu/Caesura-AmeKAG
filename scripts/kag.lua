@@ -205,6 +205,18 @@ end
 -- [clear] -- clear text layer (KAG3); alias for [cl]
 KAG.clear = KAG.cl
 
+-- [ct] -- clear text/message (KAG3); same as [clear]
+KAG.ct = KAG.cl
+
+-- [waitforclick] -- block until the player clicks (KAG3 control flow)
+function KAG.waitforclick(ctx, params)
+    if not ctx then return end
+    ctx.waiting_input = true
+    while ctx.waiting_input do
+        coroutine.yield()
+    end
+end
+
 -- [ld] -- delete layer (KAG3 layer delete)
 function KAG.ld(ctx, params)
     local layers = require("layers")
