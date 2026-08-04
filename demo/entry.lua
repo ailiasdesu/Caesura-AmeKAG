@@ -31,6 +31,25 @@ end
 -- "history", deadlocking clicks/skip/auto).
 local history_co = nil
 
+-- Ctrl hold-to-skip: D9.6 dispatches _KAG_onCtrlDown/Up from Engine.cpp
+-- (key-repeat guarded); wire them so Ctrl skips while held and releases
+-- restore the previous skip mode -- standard VN hold-skip behavior.
+local _prevSkipMode = nil
+
+function _KAG_onCtrlDown()
+    local ctx = _G._CAESURA_CTX
+    if not ctx then return end
+    if _prevSkipMode == nil then _prevSkipMode = ctx.skip_mode end
+    ctx.skip_mode = true
+end
+
+function _KAG_onCtrlUp()
+    local ctx = _G._CAESURA_CTX
+    if not ctx then return end
+    ctx.skip_mode = _prevSkipMode
+    _prevSkipMode = nil
+end
+
 function engine_update(dt)
     -- H key: open the backlog overlay ([history] command).
     if _G._GAME_KEY_H then

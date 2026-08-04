@@ -483,4 +483,17 @@ do
         passed = passed + 1 print("  [PASS] endings replay via jump")
     else failed = failed + 1 end
 end
+
+-- Ctrl hold-to-skip wiring
+do
+    local src = nil
+    local f = io.open("scripts/kag_demo_entry.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("function _KAG_onCtrlDown()", 1, true) and src:find("_prevSkipMode", 1, true) then
+        passed = passed + 1 print("  [PASS] Ctrl hold-skip wired")
+    else failed = failed + 1 end
+    if src and src:find("ctx.skip_mode = _prevSkipMode", 1, true) then
+        passed = passed + 1 print("  [PASS] Ctrl release restores mode")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end
