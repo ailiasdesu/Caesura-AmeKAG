@@ -18,10 +18,22 @@ end
 function ChapterSelect.collect(ctx)
     local out = {}
     if not ctx or not ctx.labelMap then return out end
+    -- A chapter is "read" when its scene appears in seen_scenes (the
+    -- crafted-save-validated set the runner maintains) OR the label was
+    -- actually visited this session (labelMap is built from the loaded
+    -- scene's labels; mark labels already jumped to via _visited_labels).
+    local seen = ctx.seen_scenes
+    local visited = ctx._visited_labels
+    if type(seen) ~= "table" then seen = {} end
+    if type(visited) ~= "table" then visited = {} end
     for label in pairs(ctx.labelMap) do
         if label:match("^chapter_") or label:match("^chapter%d") then
             local name = label:gsub("^chapter_", ""):gsub("^chapter", "第")
-            table.insert(out, { label = label, name = name })
+            local sceneName = ctx.current_scene or ""
+            local read = visited[label] == true
+                or (type(seen[sceneName]) == "number" and seen[sceneName] > 0)
+                or seen[sceneName] == true
+            table.insert(out, { label = label, name = name, read = read })
         end
     end
     table.sort(out, function(a, b) return a.label < b.label end)
@@ -51,7 +63,9 @@ function ChapterSelect.show(ctx)
             local prefix = (i == cursor) and "> " or "  "
             local r, g, b = 255, 255, 255
             if i == cursor then r, g, b = 255, 220, 80 end
-            backend.render_text(prefix .. ch.name, 30, y, r, g, b, 255)
+            -- Read badge: ✓ read / · new (seen_scenes-driven, per collect)
+            local badge = ch.read and "[OK] " or "[..] "
+            backend.render_text(prefix .. badge .. ch.name, 30, y, r, g, b, 255)
             y = y + 44
         end
         backend.render_text("[Up/Down] Select  [Enter] Jump  [Esc] Cancel", 20, 690, 120, 120, 160, 255)
