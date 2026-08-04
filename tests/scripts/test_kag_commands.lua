@@ -496,4 +496,14 @@ do
         passed = passed + 1 print("  [PASS] Ctrl release restores mode")
     else failed = failed + 1 end
 end
+
+-- A-key auto toggle
+do
+    local src = nil
+    local f = io.open("scripts/kag_demo_entry.lua", "r")
+    if f then src = f:read("*a") f:close() end
+    if src and src:find("_GAME_KEY_A == true", 1, true) and src:find("ctx.auto_mode = not ctx.auto_mode", 1, true) then
+        passed = passed + 1 print("  [PASS] A toggles auto")
+    else failed = failed + 1 end
+end
 if failed > 0 then os.exit(1) end

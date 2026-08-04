@@ -93,6 +93,17 @@ function engine_update(dt)
             end
         end
     end
+    -- A key: toggle auto mode in-game (Ren'Py-style quick toggle).
+    if _G._GAME_KEY_A == true then
+        _G._GAME_KEY_A = false
+        local ctx = _G._CAESURA_CTX
+        if ctx then
+            ctx.auto_mode = not ctx.auto_mode
+            if require("toast") and toast ~= nil then
+                pcall(function() toast.show(ctx, ctx.auto_mode and "Auto ON" or "Auto OFF") end)
+            end
+        end
+    end
     kag_runner.update(dt or 0.016)
 end
 
