@@ -27,8 +27,11 @@ void JobSystem::WorkQueue::push(Job job) {
 bool JobSystem::WorkQueue::pop(Job& out) {
     std::lock_guard<std::mutex> lock(mutex);
     if (jobs.empty()) return false;
-    out = std::move(jobs.back());
-    jobs.pop_back();
+    // FIFO from the front: push places High jobs at the front, so popping
+    // the front honors priority. Popping the back (LIFO) inverted it --
+    // High jobs were drained LAST despite being pushed first.
+    out = std::move(jobs.front());
+    jobs.pop_front();
     return true;
 }
 
