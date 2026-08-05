@@ -1,4 +1,4 @@
--- test_schema.lua — next-gen command contract tests
+-- test_schema.lua — Neo-Genesis command contract tests
 local check = function(name, cond)
     if cond then print("  [PASS] " .. name) passed = (passed or 0) + 1
     else print("  [FAIL] " .. name) failed = (failed or 0) + 1 end

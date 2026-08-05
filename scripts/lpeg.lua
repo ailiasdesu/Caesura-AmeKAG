@@ -292,7 +292,7 @@ function lpeg.C(pat)
     end }, Pattern)
 end
 
--- ── Position Capture (next-gen addition: token byte offsets) ──────────────
+-- ── Position Capture (Neo-Genesis addition: token byte offsets) ──────────────
 
 function lpeg.Cp()
     -- Captures the current subject position (like LPeg's C API Cp()).
@@ -302,7 +302,7 @@ function lpeg.Cp()
     end }, Pattern)
 end
 
--- ── Named Capture (next-gen addition: Cg) ─────────────────────────────────
+-- ── Named Capture (Neo-Genesis addition: Cg) ─────────────────────────────────
 
 function lpeg.Cg(pat, name)
     local inner = lpeg.P(pat)

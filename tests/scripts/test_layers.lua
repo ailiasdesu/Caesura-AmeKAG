@@ -1,4 +1,4 @@
--- test_layers.lua — custom layers + pooled RTT/view recycling (next-gen)
+-- test_layers.lua — custom layers + pooled RTT/view recycling (Neo-Genesis)
 local check = function(name, cond)
     if cond then print("  [PASS] " .. name) passed = (passed or 0) + 1
     else print("  [FAIL] " .. name) failed = (failed or 0) + 1 end

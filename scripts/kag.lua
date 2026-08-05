@@ -171,7 +171,7 @@ function KAG.erasemacro(ctx, params) end
 --  unchanged on Caesura (differentiator vs Ren'Py/Tyrano).
 -- ===========================================================================
 
--- Next-gen contracts: KAG3-compat commands typed + validated.
+-- Neo-Genesis contracts: KAG3-compat commands typed + validated.
 local _schema = require("kag.schema")
 _schema.define("saveplace", {})
 _schema.define("loadplace", {})
@@ -209,7 +209,7 @@ KAG.s = function(ctx, params)
     })
 end
 -- [delay ms=N] -- KAG3 duplicate of [wait]; unified through the wait
--- command + its schema contract (next-gen: one implementation, aliases
+-- command + its schema contract (Neo-Genesis: one implementation, aliases
 -- share it). delay's ms param maps onto wait's ms field.
 KAG.delay = function(ctx, params)
     return require("kag.commands.system").wait(ctx, params)
@@ -277,10 +277,10 @@ function KAG.se(ctx, params)
     audio.playse(ctx, { file = params.file or params[1], storage = params.storage, volume = params.volume })
 end
 
--- [play bus=bgm|se|voice file=X volume=...] -- next-gen unified audio
+-- [play bus=bgm|se|voice file=X volume=...] -- Neo-Genesis unified audio
 -- command: one entry for all three buses (KAG3 needed play/bgm/se/voice
 -- as separate commands with duplicated param handling).
--- Next-gen contract: unified audio entry gets typed params (bus choices
+-- Neo-Genesis contract: unified audio entry gets typed params (bus choices
 -- replace the manual string compare; volume clamped like the audio cmds).
 require("kag.schema").define("play", {
     bus     = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },

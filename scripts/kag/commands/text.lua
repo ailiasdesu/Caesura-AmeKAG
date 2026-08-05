@@ -118,7 +118,7 @@ local TextCommands = {}
 --  [R5-FIX] Exported for system.lua delegation
 -- =============================================================================
 
--- Next-gen contracts: typed + clamped via kag/schema.
+-- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("ch", {
     name   = { type = "string", default = "" },
@@ -145,7 +145,7 @@ schema.define("font", {
     size = { type = "number", default = 22, min = 4, max = 256 },
     color = { type = "string", default = "white" },  -- KAG3 color param
 })
--- Text-flow family (next-gen: typed + validated like every command).
+-- Text-flow family (Neo-Genesis: typed + validated like every command).
 schema.define("l", {})          -- line break (no params)
 schema.define("r", {})          -- carriage return (no params)
 schema.define("er", {})         -- erase line (no params)
@@ -187,7 +187,7 @@ end
 --  appends to backlog, and blocks until click (via [p] semantics).
 -- =============================================================================
 
--- [textbox] -- next-gen message-window styling (KAG3 needed TJS ext).
+-- [textbox] -- Neo-Genesis message-window styling (KAG3 needed TJS ext).
 -- Configures the message layer: position, size, background color and
 -- opacity. State persists in ctx.textbox_style and is re-applied on
 -- [cl] (clearscreen rebuilds the window).
@@ -223,7 +223,7 @@ function TextCommands.textbox(ctx, params)
     layers.mark_dirty(bg)
 end
 
--- [nameplate] -- next-gen character-name plate (KAG3 needed TJS ext).
+-- [nameplate] -- Neo-Genesis character-name plate (KAG3 needed TJS ext).
 -- Styles the speaker name display above the message window. When
 -- configured, [ch name=X] shows the plate with the character's name;
 -- the style persists in ctx.nameplate_style.
@@ -285,7 +285,7 @@ function TextCommands.ch(ctx, params)
         pos = "center"
     end
 
-    -- Next-gen: show the nameplate when a speaker is present.
+    -- Neo-Genesis: show the nameplate when a speaker is present.
     ctx.current_speaker = speaker
     if ctx.nameplate_style and #speaker > 0 then
         TextCommands._renderNameplate(ctx, speaker)
@@ -572,7 +572,7 @@ end
 --  like a visual-novel auto-play button. State is persisted by [save].
 -- =============================================================================
 
--- Next-gen: explicit mode param (on/off/toggle) beyond KAG3's bare toggle.
+-- Neo-Genesis: explicit mode param (on/off/toggle) beyond KAG3's bare toggle.
 schema.define("auto", {
     mode = { type = "string", choices = { ["on"] = true, ["off"] = true, ["toggle"] = true } },
 })
@@ -585,7 +585,7 @@ function TextCommands.auto(ctx, params)
 end
 
 -- [voice_off] -- mute/unmute voice without stopping the engine bus
--- (next-gen convenience: KAG3 needed stopvoice + a saved setting to mute).
+-- (Neo-Genesis convenience: KAG3 needed stopvoice + a saved setting to mute).
 schema.define("voice_off", {
     on = { type = "boolean", default = true },
 })
@@ -611,7 +611,7 @@ end
 --  Controls the delay between each character appearing in [ch] / [text].
 -- =============================================================================
 
--- Next-gen contract: typed + clamped (replaces the inline clamps).
+-- Neo-Genesis contract: typed + clamped (replaces the inline clamps).
 require("kag.schema").define("pt", {
     speed = { type = "number", default = 50, min = 8, max = 5000 },
 })
