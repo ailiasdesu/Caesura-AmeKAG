@@ -269,9 +269,12 @@ function SaveCommands.load(ctx, params)
         pcall(function() require("i18n").load(state.language) end)
     end
 
-    -- [R7-FIX] Restore seen flags
-    ctx.seen_scenes = state.seen_scenes or {}
-    ctx.seen_endings = state.seen_endings or {}
+    -- [R7-FIX] Restore seen flags -- type-guarded: a crafted save with a
+    -- non-table seen_scenes would crash the first on_click (security LOW).
+    ctx.seen_scenes =
+        (type(state.seen_scenes) == "table") and state.seen_scenes or {}
+    ctx.seen_endings =
+        (type(state.seen_endings) == "table") and state.seen_endings or {}
 
     -- Set token position for resume
     ctx.token_index = math.max(1, tonumber(state.token_index) or 1)
