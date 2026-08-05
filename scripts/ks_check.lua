@@ -46,15 +46,27 @@ local function checkScene(path)
         report(path, 0, "tokenize failed")
         return
     end
-    local line = 1
+    -- Pre-compute newline offsets for accurate line numbers.
+    local LF = string.char(10)
+    local offsets = {}
+    local n = 0
+    for part in (text .. LF):gmatch("(.-)" .. LF) do
+        offsets[#offsets + 1] = n
+        n = n + #part + 1
+    end
+    local pos = 1
     for _, tok in ipairs(tokens) do
+        local line = 1
         if tok.type == "command" then
+            for li = #offsets, 1, -1 do
+                if offsets[li] <= pos then line = li break end
+            end
             local cmd = tok.cmd
             if type(cmd) == "string" and schema.isMigrated(cmd) then
                 local params = {}
                 for _, pair in ipairs(tok.params or {}) do
                     if type(pair) == "table" and pair[1] then
-                        local k = pair[1][1] or pair[1]
+                        local k = pair[1]  -- param name (already the string)
                         params[k] = pair[2]
                     end
                 end
@@ -66,9 +78,7 @@ local function checkScene(path)
                 end
             end
         end
-        if tok.type == "text" then
-            line = line + 1
-        end
+        pos = pos + #(tok.content or tok.cmd or "") + 1
     end
 end
 
