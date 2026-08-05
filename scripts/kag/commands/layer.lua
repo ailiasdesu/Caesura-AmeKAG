@@ -36,6 +36,24 @@ end
 --  Set background layer (z=0) texture.
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
+-- Next-gen contracts: typed + clamped via kag/schema.
+local schema = require("kag.schema")
+schema.define("position", {
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    scale = { type = "number", default = 1.0, min = 0.01, max = 16 },
+})
+schema.define("layopt", {
+    opacity = { type = "number", default = 1.0, min = 0, max = 1.0 },
+    visible = { type = "boolean", default = true },
+})
+schema.define("fadeout", {
+    opacity = { type = "number", default = 0, min = 0, max = 1.0 },
+    alpha = { type = "number", default = 0, min = 0, max = 1.0 },
+    time = { type = "number", default = 500, min = 0, max = 30000 },
+    duration = { type = "number", default = 500, min = 0, max = 30000 },
+})
+
 function LayerCommands.bg(ctx, params)
     local file = resolve_file(params)
     if not file then
@@ -144,13 +162,13 @@ function LayerCommands.image(ctx, params)
     layers.set_layer_visible(node, true)
 
     if params.x or params.y then
-        local x = tonumber(params.x) or 0
-        local y = tonumber(params.y) or 0
+        local x = params.x or 0
+        local y = params.y or 0
         layers.move_layer(node, x, y)
     end
 
     if params.opacity then
-        local op = tonumber(params.opacity)
+        local op = params.opacity
         if op then layers.set_layer_opacity(node, op) end
     end
 
@@ -170,9 +188,9 @@ end
 
 function LayerCommands.position(ctx, params)
     local layerName = params.layer or "fg"
-    local x = tonumber(params.x) or 0
-    local y = tonumber(params.y) or 0
-    local scale = tonumber(params.scale) or 1.0
+    local x = params.x or 0
+    local y = params.y or 0
+    local scale = params.scale or 1.0
     local unit = params.unit or "ndc"
     layers.set_position(layerName, x, y, scale, unit)
 end
@@ -186,7 +204,7 @@ function LayerCommands.layopt(ctx, params)
     local layerName = params.layer or "fg"
     local opts = {}
     if params.opacity then
-        opts.opacity = tonumber(params.opacity)
+        opts.opacity = params.opacity
     end
     if params.visible ~= nil then
         if type(params.visible) == "string" then
@@ -213,12 +231,12 @@ function LayerCommands.layfade(ctx, params)
         print("[LayerCmd] layfade: layer not found: " .. tostring(layerName))
         return
     end
-    local target = tonumber(params.opacity or params.alpha)
+    local target = params.opacity or params.alpha
     if not target then
         print("[LayerCmd] layfade: opacity (0-255) required")
         return
     end
-    local duration = tonumber(params.time or params.duration) or 500
+    local duration = params.time or params.duration or 500
     layers.fade_to(node, target, duration)
 end
 

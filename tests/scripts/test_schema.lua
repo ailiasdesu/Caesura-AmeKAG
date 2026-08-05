@@ -68,6 +68,17 @@ check("trans migrated", Schema.isMigrated("trans"))
 check("move migrated", Schema.isMigrated("move"))
 check("quake migrated", Schema.isMigrated("quake"))
 
+-- layer commands migrated
+for _, c in ipairs({ "position", "layopt", "fadeout" }) do
+    check(c .. " migrated", Schema.isMigrated(c))
+end
+p = Schema.coerce("position", { scale = "99" }, {})
+check("position scale clamped", p.scale == 16)
+p = Schema.coerce("layopt", { opacity = "2" }, {})
+check("layopt opacity clamped", p.opacity == 1.0)
+p = Schema.coerce("fadeout", { time = "99999" }, {})
+check("fadeout time clamped", p.time == 30000)
+
 -- text commands migrated
 for _, c in ipairs({ "ch", "text", "ruby", "font" }) do
     check(c .. " migrated", Schema.isMigrated(c))
