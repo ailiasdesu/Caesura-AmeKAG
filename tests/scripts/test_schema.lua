@@ -130,6 +130,14 @@ do
     check("playbgmstop volume clamped", pv.volume == 1.5)
 end
 
+-- [bgm] command-name contract (security: pre-dispatch clamp)
+do
+    pcall(require, "kag")
+    check("bgm migrated", Schema.isMigrated("bgm"))
+    local pb = Schema.coerce("bgm", { file = "x.wav", volume = "9" }, {})
+    check("bgm volume clamped pre-dispatch", pb.volume == 1.5)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract

@@ -266,9 +266,9 @@ function KAG.play(ctx, params)
     local audio = require("kag.commands.audio")
     local bus = params.bus or "bgm"
     if bus == "bgm" then
-        return audio.playbgm(ctx, { file = params.file or params[1], volume = params.volume })
+        return audio.playbgm(ctx, { file = params.file or params[1], storage = params.storage, volume = params.volume })
     elseif bus == "se" then
-        return audio.playse(ctx, { file = params.file or params[1], volume = params.volume })
+        return audio.playse(ctx, { file = params.file or params[1], storage = params.storage, volume = params.volume })
     elseif bus == "voice" then
         return audio.playvoice(ctx, { file = params.file or params[1] })
     end
