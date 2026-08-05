@@ -154,7 +154,7 @@ function scheduler.run(ctx, tokens, start_index)
                     ctx.call_stack = {}
                     ctx.layers = {}
                     ctx.backlog = {}
-                    ctx.label_index = build_label_index(new_tokens)
+                    ctx.label_index = nil  -- raw tokens: entry lazy-builds
                     operation.cancel_all(ctx)
                     return
                 else
@@ -185,7 +185,7 @@ function scheduler.run(ctx, tokens, start_index)
                 tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
-                ctx.label_index = build_label_index(new_tokens)
+                ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 i = 0
             end
 
@@ -220,7 +220,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.tokens = tokens
                 ctx.token_index = 1
                 ctx.current_scene = path
-                ctx.label_index = build_label_index(new_tokens)
+                ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 i = 0
             end
 
