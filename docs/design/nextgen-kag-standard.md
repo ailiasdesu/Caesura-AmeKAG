@@ -60,7 +60,7 @@ Schema.define("playbgm", {
 - ✅ 契约→API 文档自动生成（schema_doc.lua → docs/api/command-contracts.md）
 - ✅ 脚本静态校验器（ks_check.lua + LPeg Cp 字节偏移 + CI 三平台门禁）
 - ✅ 表达式插值（`$f.var` + `${expr}` 完整表达式）
-- ⏳ 命令返回值（表达式上下文）
+- ✅ 命令返回值（`[eval]` 存 `tf.eval_result` → `${tf.eval_result}` 展开——表达式上下文闭环）
 
 ## 六、命令重构（新一代精简）
 
