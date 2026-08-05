@@ -93,7 +93,7 @@ scripts/scheduler.lua                 - KAG调度器
 scripts/tokenizer.lua                 - KAG解析器
 scripts/kag_runner.lua                - 上下文管理
 scripts/kag.lua                       - Lua↔KAG桥接
-scripts/kag/commands/                 - 9类68个命令实现
+scripts/kag/commands/                 - 9类69个命令实现
 scripts/system.lua                    - 系统设施(save/load/config)
 scripts/flow.lua                      - 场景流控制
 ```
@@ -101,7 +101,7 @@ scripts/flow.lua                      - 场景流控制
 ## KAG命令文档维护
 
 C同时负责KAG命令文档维护。在排查过程中：
-- 遇到未文档化的命令行为 → 记录到 docs/api/kag-commands.md
+- 遇到未文档化的命令行为 → 记录到 docs/api/command-contracts.md
 - 发现文档与实际行为不符 → 以实际行为为准更新文档
 - 新增命令 → 按文档模板添加
 

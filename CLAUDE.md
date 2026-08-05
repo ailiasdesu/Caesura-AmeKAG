@@ -176,7 +176,7 @@ Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps
 - `docs/api/cpp-interfaces.md` — all 28 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
-- `docs/design/engine-capability-matrix.md` — 41 tracked capabilities and readiness limits
+- `docs/design/engine-capability-matrix.md` — 48 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
 - `docs/superpowers/specs/` — design specs for architecture decoupling, GPU recovery, KAG+Lua hybrid scripting
