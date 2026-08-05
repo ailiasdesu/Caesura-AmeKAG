@@ -229,7 +229,7 @@ function TransCommands.blur(ctx, params)
 end
 
 function TransCommands.trans(ctx, params)
-    local dur     = tonumber(params.time or params.duration or 500)
+    local dur     = params.time or params.duration or 500
     local method  = resolve_method(params)
     local dir     = resolve_direction(params)
     local rule    = params.rule or params.rule_image or nil
@@ -317,9 +317,9 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function TransCommands.move(ctx, params)
-    local dur      = tonumber(params.time or params.duration or 300)
-    local targetX  = tonumber(params.x or 0)
-    local targetY  = tonumber(params.y or 0)
+    local dur      = params.time or params.duration or 300
+    local targetX  = params.x or 0
+    local targetY  = params.y or 0
     local layerName= params.layer or "fg"
     local easing   = params.easing or "ease-in-out"
 

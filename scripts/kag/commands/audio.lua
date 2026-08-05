@@ -93,7 +93,7 @@ end
 -- =============================================================================
 
 function AudioCommands.stopbgm(ctx, params)
-    local fadeout = tonumber(params.fadeout) or 0
+    local fadeout = params.fadeout  -- schema-typed
 
     if fadeout > 0 then
         backend.audio_fade_volume("bgm", 0, fadeout / 1000.0)
@@ -147,9 +147,16 @@ end
 --  Cross-fade: fade out current BGM, then start new BGM with fade-in.
 -- =============================================================================
 
+-- Next-gen contract: typed crossfade (time clamped).
+schema.define("xfadebgm", {
+    file  = { type = "string" },
+    storage = { type = "string" },
+    time  = { type = "number", default = 2000, min = 0, max = 30000 },
+})
+
 function AudioCommands.xfadebgm(ctx, params)
     local file  = resolve_file(params)
-    local time  = tonumber(params.time) or 2000
+    local time  = params.time  -- schema-typed
 
     backend.audio_xfade("bgm", file, time / 1000.0)
 end

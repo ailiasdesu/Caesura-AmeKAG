@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (32)
+## Commands (33)
 
 ### `[auto]`
 
@@ -125,6 +125,7 @@
 |---|---|---|---|---|
 | `bus` | string | - | bgm,se,voice | - |
 | `file` | string | - | - | - |
+| `storage` | string | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playbgm]`
@@ -279,4 +280,12 @@
 | `duration` | number | 1000 | 0..60000 | - |
 | `ms` | number | 1000 | 0..60000 | - |
 | `time` | number | 1000 | 0..60000 | - |
+
+### `[xfadebgm]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `storage` | string | - | - | - |
+| `time` | number | 2000 | 0..30000 | - |
 
