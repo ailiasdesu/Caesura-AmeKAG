@@ -350,7 +350,6 @@ function scheduler.run(ctx, tokens, start_index)
             -- whether the loop is still live (rewind) or was skipped
             -- because the condition turned false (pop and continue).
             while_stack[#while_stack + 1] = {
-                src = params.exp or "false",
                 pos = i,  -- loop head: endwhile rewinds to i-1
                 ended = not (ok and result),
             }
