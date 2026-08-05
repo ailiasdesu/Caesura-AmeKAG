@@ -30,11 +30,11 @@ function RTT.acquire(width, height)
     return RTT.create(width, height)
 end
 
-function RTT.release(handle)
+function RTT.release(handle, width, height)
     if not handle then return end
-    -- Return to pool (bounded: keep at most 8 per size).
-    local w, h = backend.get_viewport_size and backend.get_viewport_size(handle)
-    local key = (w or 1280) .. "x" .. (h or 720)
+    -- Return to pool keyed by the caller-known size (bounded 8 per size).
+    -- Callers pass w/h because the backend has no viewport-size getter.
+    local key = (width or 1280) .. "x" .. (height or 720)
     local bucket = pool[key] or {}
     if #bucket < 8 then
         bucket[#bucket + 1] = handle

@@ -298,8 +298,9 @@ function Layers.remove_layer(node)
 
     -- free RTT
     if node.rt then
-        rtt.release(node.rt)
+        rtt.release(node.rt, node.w or 0, node.h or 0)
         if node.view_id then freeViews[#freeViews + 1] = node.view_id end
+        node.view_id = nil
         node.rt = nil
     end
 
@@ -738,8 +739,7 @@ function Layers.resize_layer(node, w, h)
     if not node then return end
     if w ~= nil then node.w = w end
     if h ~= nil then node.h = h end
-    if node.rt then rtt.destroy(node.rt) end
-    if node.rt then rtt.release(node.rt) end
+    if node.rt then rtt.release(node.rt, node.w or 0, node.h or 0) end
     node.rt = rtt.acquire(node.w, node.h)
     Layers.mark_dirty(node)
 end
