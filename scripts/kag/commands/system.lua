@@ -212,6 +212,14 @@ end
 -- [gallery] — open the CG gallery (browse unlocked art; [unlock cg=] adds)
 -- Next-gen contracts: flow/UI commands typed + validated.
 local _schema = require("kag.schema")
+_schema.define("eval", {
+    exp = { type = "string", default = "" },
+    code = { type = "string", default = "" },
+})
+_schema.define("emb", {
+    exp = { type = "string", default = "" },
+    code = { type = "string", default = "" },
+})
 _schema.define("chapter", {
     label = { type = "string" },
     id = { type = "string" },

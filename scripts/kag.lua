@@ -173,6 +173,13 @@ function KAG.erasemacro(ctx, params) end
 
 -- Next-gen contracts: KAG3-compat commands typed + validated.
 local _schema = require("kag.schema")
+_schema.define("saveplace", {
+    slot = { type = "number", default = 0, min = 0, max = 99 },
+})
+_schema.define("loadplace", {
+    slot = { type = "number", default = 0, min = 0, max = 99 },
+})
+_schema.define("listsaves", {})
 _schema.define("br", {})
 _schema.define("hr", {})
 _schema.define("cancel", {

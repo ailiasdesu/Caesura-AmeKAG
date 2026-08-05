@@ -3,13 +3,20 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (54)
+## Commands (62)
 
 ### `[auto]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `mode` | string | - | off,on,toggle | - |
+
+### `[bg]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `storage` | string | - | - | - |
 
 ### `[bgm]`
 
@@ -60,6 +67,13 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[emb]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `code` | string |  | - | - |
+| `exp` | string |  | - | - |
+
 ### `[ending]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -71,6 +85,13 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[eval]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `code` | string |  | - | - |
+| `exp` | string |  | - | - |
 
 ### `[fadebgm]`
 
@@ -96,6 +117,13 @@
 | `time` | number | 1000 | 0..30000 | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
+### `[fg]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `storage` | string | - | - | - |
+
 ### `[font]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -120,6 +148,18 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[image]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `h` | number | 0 | 0..8192 | - |
+| `layer` | string | fg | - | - |
+| `storage` | string | - | - | - |
+| `w` | number | 0 | 0..8192 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
 ### `[l]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -140,7 +180,18 @@
 | `layer` | string | - | - | - |
 | `name` | string | - | - | - |
 
+### `[listsaves]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[load]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `slot` | number | 0 | 0..99 | - |
+
+### `[loadplace]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -303,6 +354,12 @@
 | `ms` | number | 250 | 0..60000 | - |
 
 ### `[save]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `slot` | number | 0 | 0..99 | - |
+
+### `[saveplace]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|

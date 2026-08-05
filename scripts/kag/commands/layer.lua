@@ -41,6 +41,23 @@ local schema = require("kag.schema")
 schema.define("cl", {
     layer = { type = "string", default = "all" },  -- unified clear entry
 })
+schema.define("bg", {
+    storage = { type = "string" },
+    file = { type = "string" },
+})
+schema.define("fg", {
+    storage = { type = "string" },
+    file = { type = "string" },
+})
+schema.define("image", {
+    storage = { type = "string" },
+    file = { type = "string" },
+    layer = { type = "string", default = "fg" },
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    w = { type = "number", default = 0, min = 0, max = 8192 },
+    h = { type = "number", default = 0, min = 0, max = 8192 },
+})
 schema.define("position", {
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
