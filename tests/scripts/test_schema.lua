@@ -152,6 +152,29 @@ do
     check("bgm volume clamped pre-dispatch", pb.volume == 1.5)
 end
 
+-- [nameplate]/[textbox] contracts (message-window modernization)
+do
+    pcall(require, "kag.commands.text")
+    check("nameplate migrated", Schema.isMigrated("nameplate"))
+    check("textbox migrated", Schema.isMigrated("textbox"))
+    local pn = Schema.coerce("nameplate", {}, {})
+    check("nameplate defaults", pn.x == 32 and pn.w == 220 and pn.opacity == 220)
+    local pn2 = Schema.coerce("nameplate", { size = "99" }, {})
+    check("nameplate size passthrough (no contract)", pn2.size == "99")
+    local doc = io.open("docs/api/command-contracts.md", "r")
+    local docTxt = doc and doc:read("*a") or ""
+    if doc then doc:close() end
+    local sizeRow = docTxt:match("### `%[nameplate%]`.-```") or docTxt
+    check("nameplate docs lack size row", not docTxt:match("nameplate.-%| `size`") or true)
+    -- strict check: the nameplate section (between headers) must not contain | `size` |
+    local _, secEnd = docTxt:find("### `%[nameplate%]`")
+    local _, nextSec = docTxt:find("### `%[", secEnd and secEnd + 1 or 1)
+    local section = secEnd and (docTxt:sub(secEnd, nextSec or #docTxt)) or ""
+    check("nameplate section has no size param", not section:find("| `size`", 1, true))
+    local pt = Schema.coerce("textbox", { w = "99999" }, {})
+    check("textbox w clamped", pt.w == 4096)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
