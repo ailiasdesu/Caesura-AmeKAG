@@ -314,6 +314,45 @@ function TextCommands.sprite_fade(ctx, params)
     end
 end
 
+-- [sprite_move] -- character-sprite slide (entrance/exit performance).
+-- Animates the _char_<speaker> layer x/y toward a target position.
+schema.define("sprite_move", {
+    speaker = { type = "string", required = true },
+    x = { type = "number", default = 440 },
+    y = { type = "number", default = 200 },
+    time = { type = "number", default = 400, min = 0, max = 30000 },
+})
+
+function TextCommands.sprite_move(ctx, params)
+    local layers = require("layers")
+    local name = "_char_" .. (params.speaker or "")
+    local node = layers.get(name) or layers.find(name)
+    if not node then
+        print("[sprite_move] no sprite layer: " .. name)
+        return
+    end
+    local fromX, fromY = node.x or 0, node.y or 0
+    local toX, toY = params.x, params.y
+    local dur = params.time
+    if dur <= 0 or (fromX == toX and fromY == toY) then
+        layers.move_layer(node, toX, toY)
+        return
+    end
+    local operation <close> = require("kag.operation").start(ctx)
+    local ct = operation.token
+    local elapsed = 0
+    while elapsed < dur and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+        local t = math.min(1, elapsed / dur)
+        layers.move_layer(node, fromX + (toX - fromX) * t,
+                               fromY + (toY - fromY) * t)
+    end
+    if not ct.cancelled then
+        layers.move_layer(node, toX, toY)
+        operation:complete()
+    end
+end
+
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""

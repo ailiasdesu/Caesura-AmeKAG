@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (64)
+## Commands (65)
 
 ### `[auto]`
 
@@ -405,6 +405,15 @@
 | `speaker` | string | - | - | yes |
 | `time` | number | 300 | 0..30000 | - |
 | `to` | number | 255 | 0..255 | - |
+
+### `[sprite_move]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `speaker` | string | - | - | yes |
+| `time` | number | 400 | 0..30000 | - |
+| `x` | number | 440 | - | - |
+| `y` | number | 200 | - | - |
 
 ### `[stopbgm]`
 
