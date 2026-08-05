@@ -189,6 +189,23 @@ do
     check("clamp bound 0", a:find("math.max(0", 1, true) ~= nil)
 end
 
+-- sprite performance commands (fade/move)
+do
+    pcall(require, "kag.commands.text")
+    check("sprite_fade migrated", Schema.isMigrated("sprite_fade"))
+    check("sprite_move migrated", Schema.isMigrated("sprite_move"))
+    local ok, err = pcall(function() Schema.coerce("sprite_fade", {}, {}) end)
+    check("sprite_fade speaker required", not ok)
+    local ps = Schema.coerce("sprite_fade", { speaker = "A", to = "999", time = "99999" }, {})
+    check("sprite_fade to/time clamped", ps.to == 255 and ps.time == 30000)
+    ps = Schema.coerce("sprite_move", { speaker = "A", x = "0", y = "0", time = "-5" }, {})
+    check("sprite_move time min clamped", ps.time == 0)
+    local src = io.open("scripts/kag/commands/text.lua", "r")
+    local t = src and src:read("*a") or ""
+    if src then src:close() end
+    check("sprite_fade no-layer guard", t:find("no sprite layer", 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
