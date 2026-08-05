@@ -35,6 +35,7 @@ local tests = {
     "test_scene_restore",
     "test_elseif",
     "test_if_nested",
+    "test_switch",
 }
 
 local passed, failed = 0, 0

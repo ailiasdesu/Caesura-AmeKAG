@@ -144,6 +144,9 @@ function scheduler.run(ctx, tokens, start_index)
     -- so later elseif/else in the SAME chain are skipped (nested chains
     -- are independent via the stack).
     local if_stack = {}
+    -- switch/case state: taken case bodies must not fall through into
+    -- later cases (KAG3 semantics -- a matched case runs alone).
+    local switch_stack = {}
 
     -- Normalize params: convert array-format {{key,val},...} to named access
     -- so commands can use params.name, params.target, etc.
@@ -354,7 +357,8 @@ function scheduler.run(ctx, tokens, start_index)
             end
 
             if caseStart then
-                i = caseStart  -- jump into case body, scheduler.run will execute
+                switch_stack[#switch_stack + 1] = true  -- a case was taken
+                i = caseStart - 1  -- loop's i+1 lands ON the first body token
             else
                 -- No match: skip to endswitch
                 while i <= #tokens and tokens[i][1] ~= "endswitch" do
@@ -362,8 +366,19 @@ function scheduler.run(ctx, tokens, start_index)
                 end
             end
 
-        elseif cmd == "case" or cmd == "default" or cmd == "endswitch" then
-            -- pass (handled by [switch] above)
+        elseif cmd == "case" or cmd == "default" then
+            if switch_stack[#switch_stack] then
+                -- A case was already taken: this case body must NOT run
+                -- (no fall-through). Skip the rest of the switch.
+                while i <= #tokens and tokens[i][1] ~= "endswitch" do
+                    i = i + 1
+                end
+            end
+            -- (not taken: this case belongs to a switch whose case body
+            -- is currently executing -- fall through and run its body)
+
+        elseif cmd == "endswitch" then
+            switch_stack[#switch_stack] = nil  -- pop the switch
 
         -- Flow control: [iscript] — inline Lua code block
         elseif cmd == "iscript" then
