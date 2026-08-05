@@ -117,6 +117,15 @@ end
 
 function LayerCommands.cl(ctx, params)
     local target = params.layer or "all"
+    -- Next-gen: re-apply the [textbox] style when the message window is
+    -- cleared (the style persists across scenes; [cl] rebuilds it).
+    if target == "all" or target == "message" then
+        local style = ctx.textbox_style
+        if style then
+            local Text = require("kag.commands.text")
+            if Text.textbox then Text.textbox(ctx, style) end
+        end
+    end
 
     if target == "all" or target == "bg" then
         local node = layers.find( "bg")

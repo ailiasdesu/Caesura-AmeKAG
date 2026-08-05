@@ -196,7 +196,7 @@ function TextCommands.textbox(ctx, params)
         color = params.color, opacity = params.opacity, visible = params.visible,
     }
     local layers = require("layers")
-    local bg = layers.ensure(ctx, "_textbox", 93)
+    local bg = layers.ensure(ctx, "_textbox", 2)  -- below message text
     bg.visible = params.visible
     bg.x, bg.y = params.x, params.y
     bg.w, bg.h = params.w, params.h
@@ -206,6 +206,8 @@ function TextCommands.textbox(ctx, params)
         bg.texture = backend.create_solid_texture(
             math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
             math.floor(tonumber(b) or 0), math.floor(params.opacity))
+    else
+        bg.texture = nil  -- unparseable color: clear stale texture
     end
     layers.mark_dirty(bg)
 end
