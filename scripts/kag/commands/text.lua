@@ -386,7 +386,10 @@ function TextCommands.ch(ctx, params)
             ctx.characters[speaker].layer = params.layer
         end
         if params.storage or params.file then
-            ctx.characters[speaker].sprite = params.storage or params.file
+            -- sprite= is the contract-advertised param; storage/file are the
+            -- KAG3 aliases. All three register the standing portrait.
+            ctx.characters[speaker].sprite =
+                params.sprite or params.storage or params.file
         end
     end
 

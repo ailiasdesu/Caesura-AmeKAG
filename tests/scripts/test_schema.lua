@@ -206,6 +206,14 @@ do
     check("sprite_fade no-layer guard", t:find("no sprite layer", 1, true) ~= nil)
 end
 
+-- [ch] sprite= param consumed by the handler (was dead — review)
+do
+    local src = io.open("scripts/kag/commands/text.lua", "r")
+    local t = src and src:read("*a") or ""
+    if src then src:close() end
+    check("ch handler reads params.sprite", t:find("params.sprite or params.storage or params.file", 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
