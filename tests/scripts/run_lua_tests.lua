@@ -49,6 +49,7 @@ local tests = {
     "test_sandbox_create",
     "test_select",
     "test_label_jump",
+    "test_end_title",
 }
 
 local passed, failed = 0, 0

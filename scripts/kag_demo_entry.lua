@@ -107,7 +107,34 @@ function engine_update(dt)
             end
         end
     end
-    kag_runner.update(dt)
+    local ok, reason = kag_runner.update(dt)
+    if reason == "ended" and not title_co then
+        -- [end]: the script finished -- return to the title menu
+        -- (KAG3 semantics; the previous code just stopped).
+        print("[KAG] Script ended -- returning to title")
+        local ctx = _G._CAESURA_CTX
+        if ctx then
+            title_co = coroutine.create(function()
+                return require("title_menu").show(ctx)
+            end)
+        end
+    end
+    if title_co then
+        -- Resume the title overlay once per frame; the show() return
+        -- value (the chosen action) arrives on the resume that makes it
+        -- dead -- resume()'s second result carries it.
+        local ok2, action = coroutine.resume(title_co)
+        if not ok2 then
+            print("[Title] overlay error: " .. tostring(action))
+            title_co = nil
+        elseif coroutine.status(title_co) == "dead" then
+            title_co = nil
+            if action == "new" then
+                local ctx = _G._CAESURA_CTX
+                if ctx then kag_runner.start("scripts/demo_story.ks") end
+            end
+        end
+    end
 end
 
 -- ── Engine render callback (called each frame after update) ──────────────────
