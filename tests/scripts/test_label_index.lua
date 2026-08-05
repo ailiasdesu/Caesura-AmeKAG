@@ -72,6 +72,8 @@ end
 do
     local caller = {
         { "label", { name = "dup" } },
+        { "call", { target = "call.ks" } },
+        { "jump", { target = "*dup" } },   -- must land on the CALLER's dup
         { "ch", { name = "C", text = "caller-dup" } },
     }
     local callee = {
@@ -90,15 +92,14 @@ do
         token_index = 1, label_index = { dup = 1 },
         load_tokens = function(p) return loaded[p] end,
     }
-    local co3 = coroutine.create(function()
-        scheduler.run(cctx, caller, 2)  -- dispatch C, then call
-    end)
+    local co3 = coroutine.create(function() scheduler.run(cctx, caller, 2) end)
     while coroutine.status(co3) ~= "dead" do coroutine.resume(co3) end
     package.loaded["kag"] = kag3
+    -- The [call] built the callee's index (dup -> callee pos), [return]
+    -- restored the caller's (dup -> 1). The [jump *dup] then must land
+    -- on the CALLER's dup (index restored) and dispatch C, not D.
     check("caller index restored after call", cctx.label_index.dup == 1)
-    -- (the call itself needs a [call] token -- simplified: index restore
-    -- is verified by frame bookkeeping above; full call flow is covered
-    -- by test_scheduler)
+    check("post-return jump lands on caller label", jd2[2] and jd2[2][2].text == "caller-dup")
 end
 
 local failed = 0
