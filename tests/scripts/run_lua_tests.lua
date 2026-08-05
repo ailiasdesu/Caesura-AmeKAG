@@ -51,6 +51,7 @@ local tests = {
     "test_label_jump",
     "test_end_title",
     "test_history",
+    "test_unlock",
 }
 
 local passed, failed = 0, 0
