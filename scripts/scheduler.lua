@@ -335,22 +335,30 @@ function scheduler.run(ctx, tokens, start_index)
                 switchVal = switchExpr
             end
 
-            -- Scan forward to find matching case
+            -- Scan forward to find matching case. Depth-aware: a nested
+            -- switch's case tokens belong to IT, not us -- only depth-1
+            -- cases match (review note: the flat scan landed on a nested
+            -- switch's matching case inside a no-match outer body).
             local caseStart = nil
-            local scanIdx = i
+            local scanIdx = i + 1  -- start AFTER our own token
+            local scanDepth = 1
             while scanIdx <= #tokens do
                 local stok = tokens[scanIdx]
-                if stok[1] == "case" then
+                local scmd = stok[1]
+                if scmd == "switch" then
+                    scanDepth = scanDepth + 1
+                elseif scmd == "endswitch" then
+                    if scanDepth == 1 then break end  -- OUR endswitch
+                    scanDepth = scanDepth - 1
+                elseif scanDepth == 1 and scmd == "case" then
                     local caseParams = stok[2] or {}
                     local caseVal = caseParams[1] or ""
                     if tostring(caseVal) == switchVal then
                         caseStart = scanIdx + 1
                         break
                     end
-                elseif stok[1] == "default" then
+                elseif scanDepth == 1 and scmd == "default" then
                     caseStart = scanIdx + 1
-                    break
-                elseif stok[1] == "endswitch" then
                     break
                 end
                 scanIdx = scanIdx + 1

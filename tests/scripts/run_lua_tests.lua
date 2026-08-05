@@ -37,6 +37,7 @@ local tests = {
     "test_if_nested",
     "test_switch",
     "test_switch_exotic",
+    "test_switch_scan",
 }
 
 local passed, failed = 0, 0
