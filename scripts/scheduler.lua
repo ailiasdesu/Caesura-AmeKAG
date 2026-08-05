@@ -38,6 +38,8 @@ local flow_commands = {
 -- Neo-Genesis: label index. One pass per scene build (at load) turns
 -- [jump *label] from O(n) scan into O(1) lookup. The index is rebuilt
 -- whenever a macro splice mutates the stream (see invalidate below).
+-- Exported for tests and tooling (ks_check could reuse it); the
+-- scheduler itself calls the local.
 local function build_label_index(tokens)
     local idx = {}
     for i, tok in ipairs(tokens) do
@@ -531,4 +533,5 @@ function scheduler.resume(ctx)
     scheduler.run(ctx, ctx.tokens, ctx.token_index)
 end
 
+scheduler.build_label_index = build_label_index
 return scheduler

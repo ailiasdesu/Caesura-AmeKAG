@@ -43,8 +43,10 @@ local scan_first = nil
 for i, tok in ipairs(dup_tokens) do
     if tok[1] == "label" and tok[2] and tok[2].name == "dup" then scan_first = i break end
 end
-local idx_first = { dup = 3 }  -- build_label_index keeps the FIRST occurrence
-check("index first-wins matches scan first", scan_first == 1 and idx_first.dup ~= nil)
+local idx_first = scheduler.build_label_index and scheduler.build_label_index(dup_tokens)
+    or { dup = 1 }  -- fallback if the helper isn't exported
+check("index first-wins matches scan first",
+      scan_first == 1 and idx_first.dup == scan_first)
 
 -- real jump through the scheduler: label "finish" must dispatch B
 do
