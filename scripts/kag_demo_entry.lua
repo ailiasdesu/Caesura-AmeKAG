@@ -20,6 +20,7 @@ kag_runner.start("scripts/demo_story.ks")
 -- would render one frame then freeze with ctx.input_focus stuck on
 -- "history", deadlocking clicks/skip/auto).
 local history_co = nil
+local _toast = pcall(require, "toast") and require("toast") or nil
 
 -- Ctrl hold-to-skip: D9.6 dispatches _KAG_onCtrlDown/Up from Engine.cpp
 -- (key-repeat guarded); wire them so Ctrl skips while held and releases
@@ -96,9 +97,8 @@ function engine_update(dt)
         local ctx = _G._CAESURA_CTX
         if ctx then
             ctx.auto_mode = not ctx.auto_mode
-            local toast = require("toast")
-            if toast then
-                pcall(function() toast.show(ctx.auto_mode and "Auto ON" or "Auto OFF") end)
+            if _toast then
+                pcall(function() _toast.show(ctx.auto_mode and "Auto ON" or "Auto OFF") end)
             end
         end
     end
