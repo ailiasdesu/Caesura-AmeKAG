@@ -47,7 +47,10 @@ function engine_update(dt)
         _G._GAME_KEY_F4 = false
         require("dev_hud").toggle()
     end
-    require("dev_hud").update(dt * 1000)
+    local _devHud = pcall(require, "dev_hud") and require("dev_hud") or nil
+    if _devHud then
+        pcall(function() _devHud.update(dt * 1000) end)
+    end
     if _toast then
         pcall(function() _toast.update(dt) end)
     end
