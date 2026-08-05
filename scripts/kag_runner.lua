@@ -35,6 +35,23 @@ function kag_runner.resolve_label_index(ctx, label)
     end
     return idx
 end
+
+-- Resolve a "*label" choice target and stage the resume on ctx. The
+-- update() branch calls this; tests call the same function so a broken
+-- call site cannot pass CI (review warn).
+-- Returns true when the label was found and ctx.token_index was staged.
+function kag_runner.stage_label_jump(ctx, path)
+    if type(path) ~= "string" or path:sub(1, 1) ~= "*" then
+        return false
+    end
+    local idx = kag_runner.resolve_label_index(ctx, path:sub(2))
+    if not idx then
+        return false
+    end
+    ctx.token_index = idx
+    ctx.stop_flag = false
+    return true
+end
 local kag_co = nil
 local ctx = nil
 
@@ -345,8 +362,7 @@ function kag_runner.update(dt)
                 -- target="*label" -- review should-fix: the scene-path
                 -- allowlist rejected these, so classic choice scripts never
                 -- resolved their targets).
-                local label = path:sub(2)
-                local idx = kag_runner.resolve_label_index(ctx, label)
+                local idx = kag_runner.resolve_label_index(ctx, path:sub(2))
                 if idx then
                     ctx.token_index = idx
                     ctx.stop_flag = false

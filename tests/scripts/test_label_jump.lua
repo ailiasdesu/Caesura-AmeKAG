@@ -54,7 +54,6 @@ do
         f = {}, tf = {}, sf = {}, mp = {}, variables = {},
         _whileIterByScene = { ["t.ks"] = 0 },
         current_scene = "t.ks", token_index = 1,
-        _pendingJump = "*north",
         stop_flag = false, _undoStack = {},
         tokens = {
             { "ch", { text = "intro" } },
@@ -63,20 +62,14 @@ do
         },
         label_index = { north = 2 },
     }
-    rawset(_G, "_CAESURA_CTX", ctx)
-    -- the * branch lives in kag_runner.update; call it directly
-    local ok, err = pcall(function()
-        local r = kag_runner.resolve_label_index(ctx, "north")
-        if r == 2 then
-            ctx.token_index = r
-            ctx._pendingJump = nil
-        else
-            error("resolve failed: " .. tostring(r))
-        end
-    end)
-    check("label branch resolves (smoke)", ok and ctx.token_index == 2
-          and ctx._pendingJump == nil)
-    rawset(_G, "_CAESURA_CTX", nil)
+    -- drive the REAL update() branch path via the shared staging helper
+    local ok = kag_runner.stage_label_jump(ctx, "*north")
+    local ok2 = not kag_runner.stage_label_jump(ctx, "scripts/x.ks")
+    local ok3 = not kag_runner.stage_label_jump(ctx, "*missing")
+    check("label branch stages resume (smoke)",
+          ok and ctx.token_index == 2 and ctx.stop_flag == false)
+    check("non-star rejected by stage", ok2)
+    check("missing label rejected by stage", ok3)
 end
 
 if failed > 0 then os.exit(1) end
