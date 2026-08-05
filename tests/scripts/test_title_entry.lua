@@ -1,8 +1,8 @@
 -- Title-demo entry tests: action routing (new -> kag_runner.start, etc).
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 package.path = "scripts/?.lua;scripts/?/init.lua;" .. package.path

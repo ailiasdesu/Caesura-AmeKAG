@@ -1,10 +1,10 @@
 -- Benchmark module: measures scheduler/tokenizer throughput so perf
 -- regressions are visible (structural pivot: from feature work to
 -- measurement). Pure Lua, environment-independent, runs in the suite.
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 -- Mock backend (benchmark runs without a GPU; commands must not raise)

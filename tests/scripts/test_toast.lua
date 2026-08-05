@@ -1,8 +1,8 @@
 -- Toast notification tests: show/update lifecycle (TTL-based auto-hide).
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 -- Mock backend via package.preload so require("backend") returns the stub

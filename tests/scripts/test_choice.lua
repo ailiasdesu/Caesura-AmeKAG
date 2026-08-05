@@ -1,9 +1,9 @@
 -- Choice button hit-test tests: the engine dispatches clicks without
 -- coordinates (coalesced), so the choice handler reads _GAME_MOUSE_X/Y.
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 local TextCommands = require("kag.commands.text")

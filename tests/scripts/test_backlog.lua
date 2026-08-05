@@ -1,8 +1,8 @@
 -- Backlog unit tests: entry structure + [history] jump signaling + guards.
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 -- Mock the engine-side APIs history_ui requires (no GPU in unit tests)

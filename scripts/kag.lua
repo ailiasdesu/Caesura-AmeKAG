@@ -223,12 +223,6 @@ function KAG.shake(ctx, params)
 end
 KAG.quake = KAG.shake
 
--- [play file=X] -- play BGM (KAG3)
-function KAG.play(ctx, params)
-    local audio = require("kag.commands.audio")
-    audio.playbgm(ctx, { file = params.file or params[1], loop = true })
-end
-
 -- [playstop] -- stop BGM (KAG3)
 function KAG.playstop(ctx, params)
     local audio = require("kag.commands.audio")

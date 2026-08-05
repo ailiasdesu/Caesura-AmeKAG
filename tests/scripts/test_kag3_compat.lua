@@ -1,9 +1,9 @@
 -- KAG 3.0 compatibility alias tests: Japanese tag-set commands map to
 -- existing Caesura commands (differentiator vs Ren'Py/Tyrano).
+local results = {}  -- file scope: runner shares globals
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    local results = {}  -- local: runner shares globals
-    results[#results + 1] = cond
+        results[#results + 1] = cond
 end
 
 -- Load kag fresh (aliases registered in kag.lua)
