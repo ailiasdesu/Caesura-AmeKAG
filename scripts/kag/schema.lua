@@ -102,6 +102,18 @@ function Schema.coerce(cmd, params, ctx)
         ctx and ctx.token_index or "?")
     local out = {}
 
+    -- Any-of requirement: at least one of these params must be present.
+    if specs._require_any then
+        local found = false
+        for _, n in ipairs(specs._require_any) do
+            local raw = params[n]
+            if raw ~= nil and raw ~= "" then found = true break end
+        end
+        if not found then
+            error(where .. ": requires one of {" .. table.concat(specs._require_any, ",") .. "}", 0)
+        end
+    end
+
     -- Coerce declared params.
     for name, spec in pairs(specs) do
         local raw = params[name]

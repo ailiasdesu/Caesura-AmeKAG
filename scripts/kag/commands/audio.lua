@@ -23,13 +23,17 @@ end
 -- Next-gen contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("playbgm", {
-    file   = { type = "string", required = true },
+    _require_any = { "file", "storage" },
+    file    = { type = "string" },
+    storage = { type = "string" },  -- KAG3 alias for file
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
     loop   = { type = "boolean", default = true },
 })
 schema.define("playse", {
-    file   = { type = "string", required = true },
+    _require_any = { "file", "storage" },
+    file    = { type = "string" },
+    storage = { type = "string" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })

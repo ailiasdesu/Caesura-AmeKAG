@@ -143,6 +143,7 @@ schema.define("ruby", {
 schema.define("font", {
     face = { type = "string", default = "default" },
     size = { type = "number", default = 22, min = 4, max = 256 },
+    color = { type = "string", default = "white" },  -- KAG3 color param
 })
 
 function TextCommands.push_backlog(ctx, speaker, text, voiceFile)

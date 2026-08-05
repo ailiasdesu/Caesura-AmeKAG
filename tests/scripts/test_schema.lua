@@ -169,11 +169,13 @@ check("font bad size throws", not ok)
 for _, c in ipairs({ "playbgm", "playse", "stopbgm", "stopse", "fadebgm", "fadevol" }) do
     check(c .. " migrated", Schema.isMigrated(c))
 end
--- playbgm volume clamp + required file
+-- playbgm volume clamp + file/storage alias
 local ok, err = pcall(function()
     Schema.coerce("playbgm", { volume = "9" }, {})
 end)
-check("playbgm missing file throws", not ok)
+check("playbgm missing file+storage throws", not ok)
+p = Schema.coerce("playbgm", { storage = "x.wav", volume = "9" }, {})
+check("playbgm storage alias works", p.volume == 1.5)
 p = Schema.coerce("playbgm", { file = "x.wav", volume = "9" }, {})
 check("playbgm volume clamped", p.volume == 1.5)
 p = Schema.coerce("playbgm", { file = "x.wav" }, {})

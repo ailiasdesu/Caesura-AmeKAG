@@ -42,10 +42,14 @@ schema.define("position", {
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
     scale = { type = "number", default = 1.0, min = 0.01, max = 16 },
+    layer = { type = "string", default = "" },  -- KAG3 layer name
+    name  = { type = "string", default = "" },
+    pos   = { type = "string", default = "" },  -- left/center/right
 })
 schema.define("layopt", {
     opacity = { type = "number", default = 1.0, min = 0, max = 1.0 },
     visible = { type = "boolean", default = true },
+    layer   = { type = "string", default = "" },  -- KAG3 layer name
 })
 schema.define("fadeout", {
     opacity = { type = "number", default = 0, min = 0, max = 1.0 },
