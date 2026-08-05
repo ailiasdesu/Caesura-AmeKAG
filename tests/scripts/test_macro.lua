@@ -272,14 +272,15 @@ do
         macros = nil, macro_args = nil, f = {},
         current_scene = "test.ks", token_index = 1,
     }
-    scheduler.run(tokens, ctx)
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
     package.loaded["kag"] = kag_orig
 
     local ok = true
     if #dispatched ~= 2 then ok = false
     elseif dispatched[1][2].name ~= "Sakura" or dispatched[1][2].text ~= "Hello!" then ok = false
     elseif dispatched[2][2].name ~= "Kaito" or dispatched[2][2].text ~= "Yo!" then ok = false
-    elseif ctx.macros.say_hi[1][2] ~= "%who%" then ok = false
+    elseif ctx.macros.say_hi[1][2].name ~= "%who%" then ok = false
     end
     if ok then passed = passed + 1 else
         failed = failed + 1

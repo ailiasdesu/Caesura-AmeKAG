@@ -391,16 +391,28 @@ function scheduler.run(ctx, tokens, start_index)
                 -- shared body is never mutated (multiple calls reuse it).
                 local argNames = ctx.macro_args and ctx.macro_args[cmd]
                 if argNames and #argNames > 0 then
+                    -- Substitute %arg% placeholders inside the params
+                    -- table (token t[2] is ALWAYS the params table -- the
+                    -- string content lives in params values).
+                    local function fill(v)
+                        if type(v) == "string" then
+                            return (v:gsub("%%([%w_]+)%%", function(an)
+                                return params[an] or ("%" .. an .. "%")
+                            end))
+                        elseif type(v) == "table" then
+                            -- Deep COPY: the body params table is shared by
+                            -- every invocation -- in-place substitution
+                            -- would poison later calls (review caught this).
+                            local out = {}
+                            for k, vv in pairs(v) do out[k] = fill(vv) end
+                            return out
+                        end
+                        return v
+                    end
                     local sub = {}
                     for n = 1, #macro_body do
                         local t = macro_body[n]
-                        local content = t[2]
-                        if type(content) == "string" then
-                            content = content:gsub("%%([%w_]+)%%", function(an)
-                                return params[an] or ("%" .. an .. "%")
-                            end)
-                        end
-                        sub[n] = { t[1], content }
+                        sub[n] = { t[1], fill(t[2]) }
                     end
                     macro_body = sub
                 end
