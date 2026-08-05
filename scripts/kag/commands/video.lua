@@ -21,12 +21,23 @@ end
 --  Click during video triggers CancelToken → stop video → resume script.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Next-gen contract: typed + clamped via kag/schema.
+require("kag.schema").define("video", {
+    file = { type = "string", required = true },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    loop = { type = "boolean", default = false },
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    w = { type = "number", default = 0, min = 0, max = 8192 },
+    h = { type = "number", default = 0, min = 0, max = 8192 },
+})
+
 function VideoCommands.video(ctx, params)
     local file   = resolve_file(params)
     local loop   = params.loop
     if loop == nil or loop == "false" then loop = false
     elseif loop == "true" then loop = true end
-    local volume = tonumber(params.volume) or 1.0
+    local volume = params.volume  -- schema-typed
 
     if not file then
         print("[VideoCmd] video: no file specified")

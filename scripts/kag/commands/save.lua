@@ -137,8 +137,17 @@ local function capture_state(ctx)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Next-gen contracts: slot typed + bounded 0..99 (matches the C++
+-- SaveManager guard; a crafted [save slot=-1] now errors with location).
+require("kag.schema").define("save", {
+    slot = { type = "number", default = 0, min = 0, max = 99 },
+})
+require("kag.schema").define("load", {
+    slot = { type = "number", default = 0, min = 0, max = 99 },
+})
+
 function SaveCommands.save(ctx, params)
-    local slot = tonumber(params.slot or params[1] or 0)
+    local slot = params.slot or 0  -- schema-typed (0..99)
     local desc = params.desc or params.description or ""
 
     -- Capture context state
@@ -181,7 +190,7 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function SaveCommands.load(ctx, params)
-    local slot = tonumber(params.slot or params[1] or 0)
+    local slot = params.slot or 0  -- schema-typed (0..99)
 
     -- Call C++ SaveManager via KAG binding
     local state, meta = KAG.load_game(slot)    if not state or type(state) ~= "table" then

@@ -77,6 +77,19 @@ check("particles sizeMax clamped", p.sizeMax == 512)
 p = Schema.coerce("particles", { r = "300" }, {})
 check("particles color clamped", p.r == 255)
 
+-- video/save/load migrated
+for _, c in ipairs({ "video", "save", "load" }) do
+    check(c .. " migrated", Schema.isMigrated(c))
+end
+p = Schema.coerce("video", { volume = "9" }, {})
+check("video volume clamped", p.volume == 1.5)
+ok, err = pcall(function() Schema.coerce("video", {}, {}) end)
+check("video missing file throws", not ok)
+p = Schema.coerce("save", { slot = "150" }, {})
+check("save slot clamped to 99", p.slot == 99)
+p = Schema.coerce("save", { slot = "-5" }, {})
+check("save slot clamped to 0", p.slot == 0)
+
 -- layer commands migrated
 for _, c in ipairs({ "position", "layopt", "fadeout" }) do
     check(c .. " migrated", Schema.isMigrated(c))
