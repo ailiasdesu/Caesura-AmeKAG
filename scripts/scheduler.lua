@@ -166,6 +166,7 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [call]
         elseif cmd == "call" then
             local target = params.target or params.storage
+            ctx.call_stack = ctx.call_stack or {}  -- lazy: entry scene has none
             table.insert(ctx.call_stack, {
                 tokens = tokens, index = i + 1,
                 label_index = ctx.label_index,  -- restore the CALLER's scene index

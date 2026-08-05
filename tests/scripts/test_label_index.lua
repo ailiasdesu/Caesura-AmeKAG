@@ -70,13 +70,19 @@ end
 
 -- call/return restores the caller's label index (review blocking fix)
 do
+    -- caller dup sits AFTER the jump (landing terminates); callee dup is
+    -- at position 2 vs caller position 5 -- a stale callee index lands on
+    -- the [call] token instead and loops (distinguishable).
     local caller = {
-        { "label", { name = "dup" } },
+        { "ch", { name = "C", text = "caller-start" } },
         { "call", { target = "call.ks" } },
-        { "jump", { target = "*dup" } },   -- must land on the CALLER's dup
-        { "ch", { name = "C", text = "caller-dup" } },
+        { "jump", { target = "*dup" } },
+        { "ch", { name = "C2", text = "never-reached" } },
+        { "label", { name = "dup" } },
+        { "ch", { name = "C3", text = "caller-dup" } },
     }
     local callee = {
+        { "ch", { name = "DF", text = "callee-filler" } },
         { "label", { name = "dup" } },
         { "ch", { name = "D", text = "callee-dup" } },
         { "return" },
@@ -89,17 +95,24 @@ do
     end})
     local cctx = {
         macros = nil, macro_args = nil, f = {}, current_scene = "main.ks",
-        token_index = 1, label_index = { dup = 1 },
+        token_index = 1, label_index = { dup = 5 },  -- caller's dup position
         load_tokens = function(p) return loaded[p] end,
     }
-    local co3 = coroutine.create(function() scheduler.run(cctx, caller, 2) end)
+    local co3 = coroutine.create(function() scheduler.run(cctx, caller, 1) end)
     while coroutine.status(co3) ~= "dead" do coroutine.resume(co3) end
     package.loaded["kag"] = kag3
-    -- The [call] built the callee's index (dup -> callee pos), [return]
-    -- restored the caller's (dup -> 1). The [jump *dup] then must land
-    -- on the CALLER's dup (index restored) and dispatch C, not D.
-    check("caller index restored after call", cctx.label_index.dup == 1)
-    check("post-return jump lands on caller label", jd2[2] and jd2[2][2].text == "caller-dup")
+    -- [call] built the callee's index (dup -> 2), [return] restored the
+    -- caller's (dup -> 5). The post-return [jump *dup] must land on the
+    -- CALLER's dup and dispatch C3 -- never C2 (the jump was taken).
+    check("caller index restored after call", cctx.label_index.dup == 5)
+    check("post-return jump lands on caller label",
+          jd2[#jd2] and jd2[#jd2][2].text == "caller-dup")
+    check("callee ran (D dispatched)", (function()
+        for _, d in ipairs(jd2) do if d[2].text == "callee-dup" then return true end end
+        return false end)())
+    check("C2 never reached (jump skipped it)", (function()
+        for _, d in ipairs(jd2) do if d[2].text == "never-reached" then return false end end
+        return true end)())
 end
 
 local failed = 0
