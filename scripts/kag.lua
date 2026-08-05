@@ -173,12 +173,8 @@ function KAG.erasemacro(ctx, params) end
 
 -- Next-gen contracts: KAG3-compat commands typed + validated.
 local _schema = require("kag.schema")
-_schema.define("saveplace", {
-    slot = { type = "number", default = 0, min = 0, max = 99 },
-})
-_schema.define("loadplace", {
-    slot = { type = "number", default = 0, min = 0, max = 99 },
-})
+_schema.define("saveplace", {})
+_schema.define("loadplace", {})
 _schema.define("listsaves", {})
 _schema.define("br", {})
 _schema.define("hr", {})
@@ -192,9 +188,9 @@ _schema.define("ld", {
     name = { type = "string" },
 })
 _schema.define("shake", {
-    time = { type = "number", default = 300, min = 0, max = 30000 },
-    intensity = { type = "number", default = 5, min = 0, max = 100 },
-    amplitude = { type = "number", default = 5, min = 0, max = 100 },
+    time = { type = "number", default = 500, min = 0, max = 30000 },
+    intensity = { type = "number", default = 6, min = 0, max = 100 },
+    amplitude = { type = "number", min = 0, max = 100 },  -- no default: handler prefers it
 })
 _schema.define("playstop", {
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },

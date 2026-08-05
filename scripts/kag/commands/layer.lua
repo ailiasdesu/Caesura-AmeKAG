@@ -53,10 +53,10 @@ schema.define("image", {
     storage = { type = "string" },
     file = { type = "string" },
     layer = { type = "string", default = "fg" },
-    x = { type = "number", default = 0 },
-    y = { type = "number", default = 0 },
-    w = { type = "number", default = 0, min = 0, max = 8192 },
-    h = { type = "number", default = 0, min = 0, max = 8192 },
+    x = { type = "number" },  -- no default: handler checks ~= nil
+    y = { type = "number" },
+    w = { type = "number", min = 0, max = 8192 },
+    h = { type = "number", min = 0, max = 8192 },
 })
 schema.define("position", {
     x = { type = "number", default = 0 },

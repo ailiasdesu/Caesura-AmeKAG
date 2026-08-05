@@ -71,8 +71,8 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `code` | string |  | - | - |
-| `exp` | string |  | - | - |
+| `code` | string | - | - | - |
+| `exp` | string | - | - | - |
 
 ### `[ending]`
 
@@ -90,8 +90,8 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `code` | string |  | - | - |
-| `exp` | string |  | - | - |
+| `code` | string | - | - | - |
+| `exp` | string | - | - | - |
 
 ### `[fadebgm]`
 
@@ -153,12 +153,12 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `file` | string | - | - | - |
-| `h` | number | 0 | 0..8192 | - |
+| `h` | number | - | 0..8192 | - |
 | `layer` | string | fg | - | - |
 | `storage` | string | - | - | - |
-| `w` | number | 0 | 0..8192 | - |
-| `x` | number | 0 | - | - |
-| `y` | number | 0 | - | - |
+| `w` | number | - | 0..8192 | - |
+| `x` | number | - | - | - |
+| `y` | number | - | - | - |
 
 ### `[l]`
 
@@ -195,7 +195,6 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `slot` | number | 0 | 0..99 | - |
 
 ### `[move]`
 
@@ -363,7 +362,6 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `slot` | number | 0 | 0..99 | - |
 
 ### `[scroll]`
 
@@ -396,9 +394,9 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `amplitude` | number | 5 | 0..100 | - |
-| `intensity` | number | 5 | 0..100 | - |
-| `time` | number | 300 | 0..30000 | - |
+| `amplitude` | number | - | 0..100 | - |
+| `intensity` | number | 6 | 0..100 | - |
+| `time` | number | 500 | 0..30000 | - |
 
 ### `[stopbgm]`
 

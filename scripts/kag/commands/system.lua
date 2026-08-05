@@ -213,12 +213,12 @@ end
 -- Next-gen contracts: flow/UI commands typed + validated.
 local _schema = require("kag.schema")
 _schema.define("eval", {
-    exp = { type = "string", default = "" },
-    code = { type = "string", default = "" },
+    exp = { type = "string" },   -- no default: "" is truthy and would shadow
+    code = { type = "string" }, -- the handler's positional/code fallbacks
 })
 _schema.define("emb", {
-    exp = { type = "string", default = "" },
-    code = { type = "string", default = "" },
+    exp = { type = "string" },
+    code = { type = "string" },
 })
 _schema.define("chapter", {
     label = { type = "string" },
