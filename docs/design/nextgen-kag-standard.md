@@ -54,10 +54,22 @@ Schema.define("playbgm", {
 - **可文档化**：契约即 API 文档（类型/范围/默认值自动可生成）
 - **可扩展**：新命令先声明契约再写实现；工具链（编辑器/校验器）可直接读契约
 
-## 五、演进方向（下一步）
+## 五、演进状态（2026-08-05 更新——路线图 1-4 已完成）
 
-1. 剩余命令迁移（video/save/layer 残留）
-2. 契约→API 文档自动生成（编辑器/校验器消费）
-3. 脚本静态校验器（CI 前置检查 .ks 契约合规）
-4. 表达式参数类型化（`[ch text="$var"]` 类型推断）
-5. 命令返回值（表达式上下文）
+- ✅ 剩余命令迁移：全部命令族契约化（27 命令）
+- ✅ 契约→API 文档自动生成（schema_doc.lua → docs/api/command-contracts.md）
+- ✅ 脚本静态校验器（ks_check.lua + LPeg Cp 字节偏移 + CI 三平台门禁）
+- ✅ 表达式插值（`$f.var` + `${expr}` 完整表达式）
+- ⏳ 命令返回值（表达式上下文）
+
+## 六、命令重构（新一代精简）
+
+| 重构 | 说明 |
+|---|---|
+| [delay]/[s] → [wait] | KAG3 三个手写协程等待循环统一为一个契约实现（-26 行） |
+| [play bus=] | KAG3 的 play/bgm/se/voice 五个入口统一为一个命令（bus choices 契约） |
+| [bgm]/[se]/[voice] 别名 | 保留 KAG3 兼容，委托到统一实现 |
+| [cl] 契约化 | clear/ct/clearscreen 别名统一入口契约 |
+| [auto mode=] | 显式 on/off/toggle（KAG3 仅 toggle） |
+| [voice_off] | 静音命令（保 voice_end 防卡——KAG3 需 stopvoice+设置） |
+| 测试门禁真实化 | 8 测试文件 results 局部化 + 退出门禁（FAIL 静默漏洞全闭） |
