@@ -142,6 +142,17 @@ function Schema.isMigrated(cmd)
     return migrated[cmd] == true
 end
 
+--- Schema.dumpContracts() → { cmd = { param = spec } } — public snapshot
+--  of the registry for doc generation / editor tooling. The contracts
+--  are the single source of truth; docs and editors consume this.
+function Schema.dumpContracts()
+    local out = {}
+    for cmd, specs in pairs(registry) do
+        out[cmd] = specs
+    end
+    return out
+end
+
 --- Schema.registrySize() → number (for tests)
 function Schema.registrySize()
     local n = 0
