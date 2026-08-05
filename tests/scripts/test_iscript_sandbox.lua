@@ -36,10 +36,10 @@ check("iscript whitelist works", ok1 and v1.x == "2AB")
 local ok2, v2 = runIs([[
 local reachable = {}
 for k in pairs(os) do reachable[#reachable + 1] = k end
+table.sort(reachable)
 f.oskeys = table.concat(reachable, ",")
 ]], {})
-check("os restricted to whitelist", ok2 and v2.oskeys == "clock,date,time"
-      or (v2.oskeys and v2.oskeys:find("execute") == nil))
+check("os restricted to whitelist", ok2 and v2.oskeys == "clock,date,time")
 
 -- require/debug/io/load are NOT reachable
 local ok3, v3 = runIs([[
@@ -55,8 +55,10 @@ check("io unreachable", v3.i == "nil")
 check("load unreachable", v3.l == "nil")
 check("dofile unreachable", v3.dof == "nil")
 
--- sandboxed code errors are caught (no crash)
-local ok4, v4 = runIs([[f.y = nil_field_xyz]], {})
+-- sandboxed code errors are caught (no crash): CALLING a nil must
+-- raise -- a plain read returns nil and never hits the pcall path
+-- (review should-fix).
+local ok4, v4 = runIs([[f.y = nil_field_xyz()]], {})
 check("iscript runtime error caught", ok4 == true)
 
 if failed > 0 then os.exit(1) end
