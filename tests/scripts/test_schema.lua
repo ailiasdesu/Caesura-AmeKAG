@@ -215,6 +215,22 @@ do
     check("ch guard admits sprite-only", t:find("params.sprite and params.sprite ~=", 1, true) ~= nil)
 end
 
+-- set_screen_offset reachable under strict sandbox (review regression)
+do
+    local src = io.open("scripts/sandbox.lua", "r")
+    local snd = src and src:read("*a") or ""
+    if src then src:close() end
+    check("RENDER_WHITELIST has set_screen_offset",
+          snd:find("RENDER_WHITELIST", 1, true) ~= nil
+          and snd:find("set_screen_offset%s*=%s*true", 1) ~= nil)
+    check("_G_whitelist lacks it (moved)",
+          not snd:match("_G_whitelist.-}") or not snd:sub(1, snd:find("RENDER_WHITELIST") or 0):find("set_screen_offset", 1, true))
+    local fac = io.open("scripts/backend_factory.lua", "r")
+    local f2 = fac and fac:read("*a") or ""
+    if fac then fac:close() end
+    check("factory dispatch case present", f2:find('cmd == "set_screen_offset"', 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
