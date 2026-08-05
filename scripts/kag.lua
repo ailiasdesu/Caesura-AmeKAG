@@ -104,6 +104,12 @@ for name, handler in pairs(trans_cmds) do
         KAG[name] = handler
     end
 end
+-- Fallback invariant (review nit): if vfx.lua ever drops the flash
+-- export, keep [flash] registered from the transition table rather than
+-- silently unregistered. (shake/quake are bound by explicit wrappers.)
+if not KAG.flash then
+    KAG.flash = trans_cmds.flash
+end
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 --  Video commands �� [video], [stopvideo]
