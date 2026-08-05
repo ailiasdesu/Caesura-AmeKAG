@@ -44,6 +44,7 @@ local tests = {
     "test_loop_control",
     "test_effect_aliases",
     "test_waitclick",
+    "test_iscript_sandbox",
 }
 
 local passed, failed = 0, 0
