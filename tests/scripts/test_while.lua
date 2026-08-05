@@ -15,7 +15,7 @@ local function run(tokens, variables, pre_iter)
     end})
     local vars = variables or {}
     local ctx = { f = vars, tf = {}, sf = {}, mp = {}, variables = {},
-        _whileIterCount = pre_iter or 0,
+        _whileIterByScene = { ["t.ks"] = pre_iter or 0 },
         macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
     local co = coroutine.create(function()
         scheduler.run(ctx, tokens, 1)

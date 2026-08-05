@@ -331,14 +331,19 @@ function scheduler.run(ctx, tokens, start_index)
         
         -- Flow control: [while]/[endwhile] -- bounded data-driven loops.
         elseif cmd == "while" then
-            -- Total-iteration guard: cumulative across ALL loops in this
-            -- run (entries are popped per iteration now, so a per-entry
-            -- counter would reset every loop -- the bound must live on
-            -- ctx). A runaway script cannot hang the runner.
-            ctx._whileIterCount = (ctx._whileIterCount or 0) + 1
-            if ctx._whileIterCount > WHILE_MAX_ITERS then
+            -- Total-iteration guard, PER SCENE: entries are popped each
+            -- iteration, so the bound must live outside the stack; and a
+            -- session-global counter would permanently disable [while]
+            -- after 65k total executions across scenes (security LOW).
+            -- Keying by scene lets each scene budget its own 65k.
+            local wscene = ctx.current_scene or "?"
+            ctx._whileIterByScene = ctx._whileIterByScene or {}
+            ctx._whileIterByScene[wscene] =
+                (ctx._whileIterByScene[wscene] or 0) + 1
+            if ctx._whileIterByScene[wscene] > WHILE_MAX_ITERS then
                 error("[while] exceeded " .. WHILE_MAX_ITERS
-                    .. " total iterations (bounded loop guard)", 0)
+                    .. " total iterations in scene '" .. wscene
+                    .. "' (bounded loop guard)", 0)
             end
             local ok, result = eval_expr(ctx, params.exp or "false")
             -- ALWAYS push (ended flag): the matching endwhile must know
