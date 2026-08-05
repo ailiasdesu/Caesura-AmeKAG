@@ -38,6 +38,9 @@ end
 
 -- Next-gen contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
+schema.define("cl", {
+    layer = { type = "string", default = "all" },  -- unified clear entry
+})
 schema.define("position", {
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
