@@ -181,6 +181,7 @@ local _G_whitelist = {
     _GAME_KEY_A     = true,
     _GAME_KEY_S     = true,
     _GAME_KEY_D     = true,
+    set_screen_offset = true,
     _GAME_KEY_UP    = true,
     _GAME_KEY_DOWN  = true,
     _GAME_KEY_ENTER = true,
