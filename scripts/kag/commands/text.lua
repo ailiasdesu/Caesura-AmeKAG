@@ -73,10 +73,10 @@ local function resolve_line_height(ctx)
 end
 
 local function resolve_max_width(ctx, params, x)
-    local explicit = tonumber(params.max_width)
+    local explicit = params.max_width
     if explicit and explicit > 0 then return explicit end
 
-    local chars_per_line = tonumber(params.chars_per_line)
+    local chars_per_line = params.chars_per_line
     if chars_per_line and chars_per_line > 0 then
         local state = TextScene.get_state(ctx)
         return chars_per_line * (tonumber(state.font_size) or 24)
@@ -85,7 +85,7 @@ local function resolve_max_width(ctx, params, x)
 end
 
 local function animate_text_opacity(ctx, params)
-    local duration = tonumber(params.fade_time or params.fade) or 0
+    local duration = params.fade_time or params.fade or 0
     local target = clamp_byte(params.opacity or params.fade_to or 255)
     if duration <= 0 then
         TextScene.set_opacity(ctx, target)
@@ -117,6 +117,33 @@ local TextCommands = {}
 --  Internal: push a message entry to the ctx.backlog (spec [4.1])
 --  [R5-FIX] Exported for system.lua delegation
 -- =============================================================================
+
+-- Next-gen contracts: typed + clamped via kag/schema.
+local schema = require("kag.schema")
+schema.define("ch", {
+    name   = { type = "string", default = "" },
+    text   = { type = "string", default = "" },
+    voice  = { type = "string", default = "" },
+    sprite = { type = "string", default = "" },
+    max_width = { type = "number", default = 0, min = 0, max = 4096 },
+    chars_per_line = { type = "number", default = 0, min = 0, max = 512 },
+})
+schema.define("text", {
+    text = { type = "string", default = "" },
+    fade_time = { type = "number", default = 0, min = 0, max = 30000 },
+    fade = { type = "number", default = 0, min = 0, max = 30000 },
+})
+schema.define("ruby", {
+    text = { type = "string", default = "" },
+    ruby = { type = "string", default = "" },
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    ruby_scale = { type = "number", default = 0.5, min = 0.1, max = 2.0 },
+})
+schema.define("font", {
+    face = { type = "string", default = "default" },
+    size = { type = "number", default = 22, min = 4, max = 256 },
+})
 
 function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
@@ -388,16 +415,16 @@ function TextCommands.ruby(ctx, params)
     if text == "" then return end
 
     local lineHeight = resolve_line_height(ctx)
-    local startX = tonumber(params.start_x) or 32
+    local startX = params.start_x or 32
     TextScene.add_ruby(ctx, text, ruby_text, {
-        x = tonumber(params.x),
-        y = tonumber(params.y),
+        x = params.x,
+        y = params.y,
         start_x = startX,
         max_width = resolve_max_width(ctx, params, startX),
         line_height = lineHeight,
         font_size = tonumber(TextScene.get_state(ctx).font_size)
             or lineHeight,
-        ruby_scale = tonumber(params.ruby_scale) or 0.5,
+        ruby_scale = params.ruby_scale or 0.5,
         color = resolve_color(ctx, params),
     })
 end
@@ -411,7 +438,7 @@ end
 function TextCommands.font(ctx, params)
     ctx.text_state = ctx.text_state or {}
     if params.face then ctx.text_state.font_face = params.face end
-    if params.size then ctx.text_state.font_size = tonumber(params.size) end
+    if params.size then ctx.text_state.font_size = params.size end
     if params.color then ctx.text_state.font_color = params.color end
     local backend = require("backend")
     backend.text_set_font(ctx.text_state.font_face, ctx.text_state.font_size, ctx.text_state.font_color)

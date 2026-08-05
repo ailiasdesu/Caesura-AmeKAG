@@ -68,6 +68,19 @@ check("trans migrated", Schema.isMigrated("trans"))
 check("move migrated", Schema.isMigrated("move"))
 check("quake migrated", Schema.isMigrated("quake"))
 
+-- text commands migrated
+for _, c in ipairs({ "ch", "text", "ruby", "font" }) do
+    check(c .. " migrated", Schema.isMigrated(c))
+end
+p = Schema.coerce("ch", { max_width = "99999" }, {})
+check("ch max_width clamped", p.max_width == 4096)
+p = Schema.coerce("ruby", { ruby_scale = "9" }, {})
+check("ruby scale clamped", p.ruby_scale == 2.0)
+p = Schema.coerce("font", { size = "1" }, {})
+check("font size clamped to min", p.size == 4)
+ok, err = pcall(function() Schema.coerce("font", { size = "abc" }, {}) end)
+check("font bad size throws", not ok)
+
 -- audio commands migrated
 for _, c in ipairs({ "playbgm", "playse", "stopbgm", "stopse", "fadebgm", "fadevol" }) do
     check(c .. " migrated", Schema.isMigrated(c))
