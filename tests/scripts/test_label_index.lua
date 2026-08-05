@@ -83,6 +83,7 @@ do
     }
     local callee = {
         { "ch", { name = "DF", text = "callee-filler" } },
+        { "ch", { name = "DF2", text = "callee-filler2" } },
         { "label", { name = "dup" } },
         { "ch", { name = "D", text = "callee-dup" } },
         { "return" },
