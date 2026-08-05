@@ -416,8 +416,8 @@ end
 -- extension glue for a smooth camera drift; this animates the engine's
 -- screen offset from (0,0) to (x,y) and back, cancel-safe.
 schema.define("camera", {
-    x = { type = "number", default = 0, min = -2000, max = 2000 },
-    y = { type = "number", default = 0, min = -2000, max = 2000 },
+    x = { type = "number", default = 0, min = 0, max = 2000 },  -- rect path pans right/down
+    y = { type = "number", default = 0, min = 0, max = 2000 },
     time = { type = "number", default = 500, min = 0, max = 30000 },
     restore = { type = "boolean", default = true },
 })
