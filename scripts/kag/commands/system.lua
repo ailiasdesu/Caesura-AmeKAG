@@ -213,16 +213,16 @@ end
 -- Next-gen contracts: flow/UI commands typed + validated.
 local _schema = require("kag.schema")
 _schema.define("chapter", {
-    label = { type = "string", default = "" },
-    id = { type = "string", default = "" },
+    label = { type = "string" },
+    id = { type = "string" },
 })
 _schema.define("gallery", {
-    id = { type = "string", default = "" },
+    id = { type = "string" },  -- no default: handler's positional fallback
 })
 _schema.define("music", {})
 _schema.define("ending", {
-    id = { type = "string", default = "end" },
-    name = { type = "string", default = "" },
+    id = { type = "string" },   -- handler falls back to "end" / params[1]
+    name = { type = "string" }, -- handler builds "Ending <id>" when absent
 })
 _schema.define("history", {})
 
