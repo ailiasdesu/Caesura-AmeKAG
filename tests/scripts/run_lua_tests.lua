@@ -40,6 +40,7 @@ local tests = {
     "test_switch_scan",
     "test_switch_taken_nested",
     "test_while",
+    "test_for",
 }
 
 local passed, failed = 0, 0

@@ -147,10 +147,12 @@ function scheduler.run(ctx, tokens, start_index)
     -- switch/case state: taken case bodies must not fall through into
     -- later cases (KAG3 semantics -- a matched case runs alone).
     local switch_stack = {}
-    -- while state: {src, pos, iters}. Bounded -- a runaway loop in a
-    -- script (a variable that never changes) must not hang the runner.
-    -- KAG3 had no bound; Neo-Genesis caps iterations and errors loudly.
+    -- while state. Bounded -- a runaway loop in a script (a variable
+    -- that never changes) must not hang the runner. KAG3 had no bound;
+    -- Neo-Genesis caps iterations and errors loudly.
     local while_stack = {}
+    -- for-loop state (numeric counter loops, same bounded regime).
+    local for_stack = {}
     local WHILE_MAX_ITERS = 65536
 
     -- Normalize params: convert array-format {{key,val},...} to named access
@@ -377,6 +379,81 @@ function scheduler.run(ctx, tokens, start_index)
                     -- iteration guard always fires first -- dead code.)
                     while_stack[#while_stack] = nil
                     i = w.pos - 1  -- loop head: re-evaluate next iteration
+                end
+            end
+
+        -- Flow control: [for var="i" start="0" end="3" step="1"]...[endfor]
+        -- numeric loops (Neo-Genesis; KAG3 had no counter loop). Shares
+        -- the while per-scene guard: a step=0 loop cannot hang the runner.
+        elseif cmd == "for" then
+            -- Shared total-iteration guard (per scene, same as [while]).
+            local wscene = ctx.current_scene or "?"
+            ctx._whileIterByScene = ctx._whileIterByScene or {}
+            ctx._whileIterByScene[wscene] =
+                (ctx._whileIterByScene[wscene] or 0) + 1
+            if ctx._whileIterByScene[wscene] > WHILE_MAX_ITERS then
+                error("[for] exceeded " .. WHILE_MAX_ITERS
+                    .. " total iterations in scene '" .. wscene
+                    .. "' (bounded loop guard)", 0)
+            end
+            local vname = params.var or "i"
+            local ok0, sval = eval_expr(ctx, tostring(params.start or "0"))
+            local ok1, eval = eval_expr(ctx, tostring(params["end"] or "0"))
+            local ok2, sstep = eval_expr(ctx, tostring(params.step or "1"))
+            if ok0 and ok1 and ok2 then
+                local sv = tonumber(sval) or 0
+                local ev = tonumber(eval) or 0
+                local sp = tonumber(sstep) or 1
+                if sp == 0 then sp = 1 end  -- degenerate step: treat as 1
+                ctx.f = ctx.f or {}
+                -- FIRST entry sets the counter; a re-entry (endfor
+                -- rewound here) must KEEP the incremented value or the
+                -- loop restarts from start forever. Same-named nested
+                -- loops are a script anti-pattern (documented).
+                ctx._forStackMarks = ctx._forStackMarks or {}
+                if not ctx._forStackMarks[vname] then
+                    ctx.f[vname] = sv
+                end
+                for_stack[#for_stack + 1] = {
+                    var = vname, endv = ev, step = sp, pos = i,
+                    ended = not ((sp > 0 and sv <= ev) or (sp < 0 and sv >= ev)),
+                }
+                ctx._forStackMarks[vname] = true
+                if for_stack[#for_stack].ended then
+                    -- start already past the end: skip the body
+                    i = skip_to(tokens, i, {
+                        ["endfor"] = true,
+                        opens = {["for"] = true}
+                    }, {["endfor"] = true}) - 1
+                end
+            else
+                -- bad numbers: skip the body (evaluated loudly already)
+                i = skip_to(tokens, i, {
+                    ["endfor"] = true,
+                    opens = {["for"] = true}
+                }, {["endfor"] = true}) - 1
+            end
+
+        elseif cmd == "endfor" then
+            local w = for_stack[#for_stack]
+            if w then
+                if w.ended then
+                    for_stack[#for_stack] = nil  -- loop over: pop
+                else
+                    local cur = tonumber(ctx.f and ctx.f[w.var]) or 0
+                    cur = cur + w.step
+                    ctx.f[w.var] = cur
+                    local over = (w.step > 0 and cur > w.endv)
+                        or (w.step < 0 and cur < w.endv)
+                    if over then
+                        for_stack[#for_stack] = nil  -- done: pop
+                        if ctx._forStackMarks then
+                            ctx._forStackMarks[w.var] = nil
+                        end
+                    else
+                        for_stack[#for_stack] = nil  -- pop; next [for] re-pushes
+                        i = w.pos - 1  -- loop head
+                    end
                 end
             end
 
