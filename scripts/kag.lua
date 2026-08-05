@@ -234,6 +234,31 @@ KAG.s = function(ctx, params)
         ms = tonumber(params.ms) or 250,
     })
 end
+-- [waitclick] -- wait for a click WITHOUT clearing the page (KAG3
+-- semantics; [p] clears). Same runner contract: waiting_input blocks
+-- the scheduler until the click resumes it.
+function KAG.waitclick(ctx, params)
+    if ctx then ctx.waiting_input = true end
+    if coroutine.running() then
+        coroutine.yield()
+    end
+end
+
+-- KAG.wait_click() -- the backend.wait_click() forwarding target (was
+-- undefined: the demo's direct-API path called into nil). Coroutine
+-- context suspends like [waitclick]; a direct-API call without a
+-- coroutine errors loudly instead of hanging the frame loop.
+function KAG.wait_click()
+    if coroutine.running() then
+        local ctx = rawget(_G, "_CAESURA_CTX")
+        if ctx then ctx.waiting_input = true end
+        coroutine.yield()
+        return true
+    end
+    error("wait_click() outside a coroutine: use it from a KAG scene "
+        .. "or a frame callback (it cannot block the direct API)", 0)
+end
+
 -- [delay ms=N] -- KAG3 duplicate of [wait]; unified through the wait
 -- command + its schema contract (Neo-Genesis: one implementation, aliases
 -- share it). delay's ms param maps onto wait's ms field.
