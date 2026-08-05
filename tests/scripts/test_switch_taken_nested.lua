@@ -47,5 +47,47 @@ check("later outer case skipped", (function()
     return true end)())
 check("final runs", d[3] and d[3][2].text == "final")
 
+
+-- Distinguishing shape (review nit): the skip path itself must traverse a
+-- nested switch -- taken case, then a LATER case, then nested switch +
+-- its endswitch + a ch, then the outer endswitch. The ch after the nested
+-- endswitch must NEVER run (old flat skip stopped at the nested endswitch
+-- and resumed the rest of the skipped body).
+do
+    local scheduler = require("scheduler")
+    local tokens = {
+        { "switch", { "mode" } },
+        { "case", { "fast" } },
+        { "ch", { name = "A", text = "taken-fast" } },
+        { "case", { "later" } },
+        { "switch", { "mode" } },
+        { "case", { "x" } },
+        { "ch", { name = "B", text = "inner-x" } },
+        { "endswitch" },
+        { "ch", { name = "C", text = "resumed-ghost" } },  -- must NOT run
+        { "endswitch" },
+        { "ch", { name = "D", text = "final" } },
+    }
+    local d = {}
+    local kag_orig = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d[#d + 1] = { k, p2 } end
+    end})
+    local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = { mode = "fast" },
+        macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
+    package.loaded["kag"] = kag_orig
+
+    local ok = true
+    if not (d[1] and d[1][2].text == "taken-fast") then ok = false end
+    for _, x in ipairs(d) do
+        if x[2].text == "inner-x" or x[2].text == "resumed-ghost" then ok = false end
+    end
+    if not (d[#d] and d[#d][2].text == "final") then ok = false end
+    if ok then print("PASS taken-case skip traverses nested switch") passed = passed + 1
+    else print("FAIL taken-case skip traverses nested switch") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("SWITCH TAKEN NESTED TESTS DONE")
