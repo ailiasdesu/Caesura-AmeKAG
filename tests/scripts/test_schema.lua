@@ -249,6 +249,20 @@ do
     check("camera min 0", tc:find('min = 0, max = 2000', 1, true) ~= nil)
 end
 
+-- [sprite_swap] contract (re-dress)
+do
+    pcall(require, "kag.commands.text")
+    check("sprite_swap migrated", Schema.isMigrated("sprite_swap"))
+    local ok, err = pcall(function() Schema.coerce("sprite_swap", { speaker = "A" }, {}) end)
+    check("sprite_swap sprite required", not ok)
+    ok, err = pcall(function() Schema.coerce("sprite_swap", { sprite = "x.png" }, {}) end)
+    check("sprite_swap speaker required", not ok)
+    local src = io.open("scripts/kag/commands/text.lua", "r")
+    local t = src and src:read("*a") or ""
+    if src then src:close() end
+    check("sprite_swap load-guard", t:find("failed to load", 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract

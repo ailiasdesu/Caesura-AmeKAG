@@ -410,7 +410,12 @@ function TextCommands.sprite_swap(ctx, params)
         print("[sprite_swap] no sprite layer: " .. name)
         return
     end
-    node.texture = backend.load_texture(params.sprite)
+    local tex = backend.load_texture(params.sprite)
+    if not tex or tex == 0 then
+        print("[sprite_swap] failed to load: " .. params.sprite)
+        return  -- keep the current outfit visible
+    end
+    node.texture = tex
     layers.mark_dirty(node)
     -- Re-register so later [ch name=<speaker>] keeps the new outfit.
     ctx.characters = ctx.characters or {}
