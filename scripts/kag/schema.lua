@@ -73,6 +73,19 @@ local function coerceValue(name, spec, raw, where, ctx)
         -- Next-gen interpolation: "$f.name" / "$sf.x" / "$tf.y" / "$mp.z"
         -- expand from the ctx variable tables (KAG3 needed [eval] glue).
         if spec.interpolate and type(v) == "string" and v:find("$", 1, true) then
+            -- ${expr}: full expression evaluated in a sandbox env with the
+            -- ctx variable tables (f/sf/tf/mp) -- beyond KAG3's eval-glue.
+            v = v:gsub("%${([^{}]+)}", function(expr)
+                -- env exposes the ctx variable tables directly: the
+                -- expression f.hp*2 works (env.f = ctx.f, etc).
+                local env = { f = ctx and ctx.f, sf = ctx and ctx.sf,
+                              tf = ctx and ctx.tf, mp = ctx and ctx.mp }
+                local f2 = load("return (" .. expr .. ")", "=ks_interp", "t", env)
+                if not f2 then return "${" .. expr .. "}" end  -- syntax error
+                local ok2, val2 = pcall(f2)
+                if ok2 then return tostring(val2) end
+                return "${" .. expr .. "}"
+            end)
             v = v:gsub("%$(%a+)%.([%w_]+)", function(tbl, key)
                 local vars = ({ f = "f", sf = "sf", tf = "tf", mp = "mp" })[tbl]
                 local t = vars and ctx and ctx[vars]

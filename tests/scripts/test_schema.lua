@@ -102,6 +102,18 @@ do
     check("bare text coerced as ch", sched:find('schema.coerce("ch", params, ctx)', 1, true) ~= nil)
 end
 
+-- ${expr} full-expression interpolation
+do
+    local ctx = { f = { hp = 42, name = "Ame" }, sf = { score = 7 } }
+    local p2 = Schema.coerce("_interp_test",
+        { text = "hp ${f.hp*2} n ${f.name} s ${sf.score+1}" }, ctx)
+    check("expr interpolation evaluates", p2.text == "hp 84 n Ame s 8")
+    local p3 = Schema.coerce("_interp_test", { text = "bad ${1+}" }, ctx)
+    check("bad expr stays literal", p3.text == "bad ${1+}")
+    local p4 = Schema.coerce("_interp_test", { text = "mixed $f.name ${f.hp}" }, ctx)
+    check("var + expr mixed", p4.text == "mixed Ame 42")
+end
+
 -- registry
 check("registry non-empty", Schema.registrySize() >= 3)
 check("isMigrated", Schema.isMigrated("_test_cmd") and not Schema.isMigrated("_not_migrated"))
