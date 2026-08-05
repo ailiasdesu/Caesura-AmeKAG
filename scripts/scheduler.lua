@@ -147,6 +147,11 @@ function scheduler.run(ctx, tokens, start_index)
     -- switch/case state: taken case bodies must not fall through into
     -- later cases (KAG3 semantics -- a matched case runs alone).
     local switch_stack = {}
+    -- while state: {src, pos, iters}. Bounded -- a runaway loop in a
+    -- script (a variable that never changes) must not hang the runner.
+    -- KAG3 had no bound; Neo-Genesis caps iterations and errors loudly.
+    local while_stack = {}
+    local WHILE_MAX_ITERS = 65536
 
     -- Normalize params: convert array-format {{key,val},...} to named access
     -- so commands can use params.name, params.target, etc.
@@ -324,12 +329,69 @@ function scheduler.run(ctx, tokens, start_index)
             if_stack[#if_stack] = nil  -- pop the chain
 
         
+        -- Flow control: [while]/[endwhile] -- bounded data-driven loops.
+        elseif cmd == "while" then
+            -- Total-iteration guard: cumulative across ALL loops in this
+            -- run (entries are popped per iteration now, so a per-entry
+            -- counter would reset every loop -- the bound must live on
+            -- ctx). A runaway script cannot hang the runner.
+            ctx._whileIterCount = (ctx._whileIterCount or 0) + 1
+            if ctx._whileIterCount > WHILE_MAX_ITERS then
+                error("[while] exceeded " .. WHILE_MAX_ITERS
+                    .. " total iterations (bounded loop guard)", 0)
+            end
+            local ok, result = eval_expr(ctx, params.exp or "false")
+            -- ALWAYS push (ended flag): the matching endwhile must know
+            -- whether the loop is still live (rewind) or was skipped
+            -- because the condition turned false (pop and continue).
+            while_stack[#while_stack + 1] = {
+                src = params.exp or "false",
+                pos = i,  -- loop head: endwhile rewinds to i-1
+                iters = 0,
+                ended = not (ok and result),
+            }
+            if not (ok and result) then
+                -- Skip the body: depth-aware (nested while has its own
+                -- endwhile). i stops on the endwhile so it pops.
+                i = skip_to(tokens, i, {
+                    ["endwhile"] = true,
+                    opens = {["while"] = true}
+                }, {["endwhile"] = true}) - 1
+            end
+
+        elseif cmd == "endwhile" then
+            local w = while_stack[#while_stack]
+            if w then
+                if w.ended then
+                    while_stack[#while_stack] = nil  -- loop over: pop
+                else
+                    w.iters = w.iters + 1
+                    if w.iters > WHILE_MAX_ITERS then
+                        error("[while] exceeded " .. WHILE_MAX_ITERS
+                            .. " iterations (bounded loop guard) -- exp: "
+                            .. w.src, 0)
+                    end
+                    -- POP before rewinding: the next [while] re-pushes a
+                    -- fresh entry. Without this, a live loop's entry stays
+                    -- on the stack and the ENDWHILE of an OUTER loop grabs
+                    -- the stale inner entry (pos) and rewinds into the
+                    -- inner body -- an infinite inner re-run.
+                    while_stack[#while_stack] = nil
+                    i = w.pos - 1  -- loop head: re-evaluate next iteration
+                end
+            end
+
         -- Flow control: [switch]/[case]/[default]/[endswitch] (spec [1.4])
         elseif cmd == "switch" then
             -- switch/case dispatch (Alpha: flat only, single-level)
             local switchExpr = params[1] or ""
             local switchVal = nil
-            if ctx.variables and ctx.variables[switchExpr] ~= nil then
+            -- Script variables live in ctx.f (the eval env, shared with
+            -- [if]/[while]); ctx.variables is the legacy binding-layer
+            -- table. f wins, variables is the fallback.
+            if ctx.f and ctx.f[switchExpr] ~= nil then
+                switchVal = tostring(ctx.f[switchExpr])
+            elseif ctx.variables and ctx.variables[switchExpr] ~= nil then
                 switchVal = tostring(ctx.variables[switchExpr])
             else
                 switchVal = switchExpr

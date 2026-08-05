@@ -1,0 +1,137 @@
+-- test_while.lua — bounded [while] (Neo-Genesis)
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
+local passed, failed = 0, 0
+local function check(name, cond)
+    if cond then print("PASS " .. name) passed = passed + 1
+    else print("FAIL " .. name) failed = failed + 1 end
+end
+
+local scheduler = require("scheduler")
+local function run(tokens, variables, pre_iter)
+    local d = {}
+    local kag_orig = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d[#d + 1] = { k, p2 } end
+    end})
+    local vars = variables or {}
+    local ctx = { f = vars, tf = {}, sf = {}, mp = {}, variables = {},
+        _whileIterCount = pre_iter or 0,
+        macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+    local co = coroutine.create(function()
+        scheduler.run(ctx, tokens, 1)
+    end)
+    local ok, err = true
+    while coroutine.status(co) ~= "dead" do
+        ok, err = coroutine.resume(co)
+        if not ok then break end
+    end
+    package.loaded["kag"] = kag_orig
+    return d, ok, err
+end
+
+-- bounded true loop: counter variable 0..2 (3 iterations), then done
+local tokens = {
+    { "while", { exp = "i < 3" } },
+    { "ch", { name = "A", text = "loop-body" } },
+    { "eval", { exp = "i = i + 1" } },
+    { "endwhile" },
+    { "ch", { name = "B", text = "after" } },
+}
+-- eval must be dispatched (KAG binds it) -- capture the counter via the
+-- ch handler only; use a plain while over a decrementing var instead:
+local tokens2 = {
+    { "while", { exp = "n > 0" } },
+    { "ch", { name = "A", text = "body" } },
+    { "endwhile" },
+    { "ch", { name = "B", text = "after" } },
+}
+-- n starts 0: body skipped
+local d = run(tokens2, { n = 0 })
+check("false while skips body", #d == 1 and d[1][2].text == "after")
+
+-- n starts 3: body runs, but n never changes -- the bound must trip.
+-- Instead of erroring, verify the loop guard fires via a small run.
+local d2arr, d2ok, d2err = run(tokens2, { n = 3 }, 65536)
+-- pre-seeded near the cap: the guard fires instantly, no long spin
+-- the guard errors after WHILE_MAX_ITERS; coroutine.resume returns
+-- false + the error message. Check it errors loudly and does NOT hang:
+check("runaway loop errors loudly", d2ok == false)
+check("error mentions iterations", type(d2err) == "string" and
+      d2err:find("iterations", 1, true) ~= nil)
+
+-- bounded via a changing variable (eval increments): 3 iterations
+local tokens3 = {
+    { "while", { exp = "k < 3" } },
+    { "ch", { name = "A", text = "body" } },
+    { "eval", { exp = "f.k = f.k + 1" } },
+    { "endwhile" },
+    { "ch", { name = "B", text = "after" } },
+}
+-- eval dispatch is implemented as a KAG command; mock it to mutate k
+local kag_orig = package.loaded["kag"]
+local mut = { k = 0 }
+package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+    return function(c2, p2)
+        -- [eval] runs INLINE in the scheduler (env.f = ctx.f) -- the mock
+        -- must not mutate again; it only records the dispatch.
+    end
+end})
+local ctx = { f = mut, tf = {}, sf = {}, mp = {}, variables = {},
+    macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+local d3 = {}
+local co3 = coroutine.create(function()
+    scheduler.run(ctx, tokens3, 1)
+end)
+local ok3 = true
+while coroutine.status(co3) ~= "dead" do
+    ok3 = coroutine.resume(co3)
+end
+package.loaded["kag"] = kag_orig
+check("bounded loop terminates", ok3)
+check("loop ran 3 times", mut.k == 3)
+
+-- nested while: inner loop completes, outer continues
+local tokens4 = {
+    { "while", { exp = "a < 2" } },
+    { "ch", { name = "A", text = "outer" } },
+    { "eval", { exp = "f.b = 0" } },  -- reset inner counter each outer round
+    { "while", { exp = "b < 2" } },
+    { "ch", { name = "B", text = "inner" } },
+    { "eval", { exp = "f.b = f.b + 1" } },
+    { "endwhile" },
+    { "eval", { exp = "f.a = f.a + 1" } },
+    { "endwhile" },
+    { "ch", { name = "C", text = "final" } },
+}
+local mut2 = { a = 0, b = 0 }
+local counts = { outer = 0, inner = 0 }
+local d4 = {}
+local kag_orig2 = package.loaded["kag"]
+package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+    return function(c2, p2)
+        if k == "eval" then
+            -- scheduler runs [eval] inline; mock only observes
+        elseif k == "ch" then
+            d4[#d4 + 1] = { k, p2 }
+            if p2.text == "outer" then counts.outer = counts.outer + 1
+            elseif p2.text == "inner" then counts.inner = counts.inner + 1 end
+        end
+    end
+end})
+local ctx4 = { f = mut2, tf = {}, sf = {}, mp = {}, variables = {},
+    macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+local co4 = coroutine.create(function()
+    scheduler.run(ctx4, tokens4, 1)
+end)
+local ok4 = true
+while coroutine.status(co4) ~= "dead" do
+    ok4 = coroutine.resume(co4)
+end
+package.loaded["kag"] = kag_orig2
+check("nested loop terminates", ok4)
+check("outer ran twice", counts.outer == 2)
+check("inner ran four times", counts.inner == 4)
+check("final runs", d4[#d4] and d4[#d4][2].text == "final")
+
+if failed > 0 then os.exit(1) end
+print("WHILE TESTS DONE")
