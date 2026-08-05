@@ -4,6 +4,16 @@ local check = function(name, cond)
     else print("  [FAIL] " .. name) failed = (failed or 0) + 1 end
 end
 local Schema = require("kag.schema")
+-- Load every command module so their contracts register even when this
+-- test runs standalone (the suite order otherwise masks missing requires).
+pcall(require, "kag.commands.text")
+pcall(require, "kag.commands.system")
+pcall(require, "kag.commands.audio")
+pcall(require, "kag.commands.transition")
+pcall(require, "kag.commands.layer")
+pcall(require, "kag.commands.vfx")
+pcall(require, "kag.commands.video")
+pcall(require, "kag.commands.save")
 
 -- define a test contract
 Schema.define("_test_cmd", {

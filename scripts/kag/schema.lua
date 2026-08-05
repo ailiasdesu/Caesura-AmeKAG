@@ -33,7 +33,7 @@ function Schema.define(cmd, specs)
     migrated[cmd] = true
 end
 
-local function coerceValue(name, spec, raw, where)
+local function coerceValue(name, spec, raw, where, ctx)
     local v = raw
     if spec.type == "number" then
         if type(v) == "number" then
@@ -111,7 +111,7 @@ function Schema.coerce(cmd, params, ctx)
             end
             if spec.default ~= nil then out[name] = spec.default end
         else
-            out[name] = coerceValue(name, spec, raw, where)
+            out[name] = coerceValue(name, spec, raw, where, ctx)
         end
     end
     -- Copy undeclared params through (compat), but warn on unknown names.
