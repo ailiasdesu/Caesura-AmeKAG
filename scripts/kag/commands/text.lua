@@ -353,6 +353,72 @@ function TextCommands.sprite_move(ctx, params)
     end
 end
 
+-- [sprite_scale] -- character-sprite zoom (performance emphasis).
+-- Animates the _char_<speaker> layer scaleX/scaleY toward a target.
+schema.define("sprite_scale", {
+    speaker = { type = "string", required = true },
+    scale = { type = "number", default = 1.0, min = 0.1, max = 4.0 },
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+})
+
+function TextCommands.sprite_scale(ctx, params)
+    local layers = require("layers")
+    local name = "_char_" .. (params.speaker or "")
+    local node = layers.get(name) or layers.find(name)
+    if not node then
+        print("[sprite_scale] no sprite layer: " .. name)
+        return
+    end
+    local from = node.scaleX or node.scale or 1.0
+    local to = params.scale
+    local dur = params.time
+    if dur <= 0 or math.abs(from - to) < 0.001 then
+        node.scaleX, node.scaleY = to, to
+        layers.mark_dirty(node)
+        return
+    end
+    local operation <close> = require("kag.operation").start(ctx)
+    local ct = operation.token
+    local elapsed = 0
+    while elapsed < dur and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+        local t = math.min(1, elapsed / dur)
+        local sc = from + (to - from) * t
+        node.scaleX, node.scaleY = sc, sc
+        layers.mark_dirty(node)
+    end
+    if not ct.cancelled then
+        node.scaleX, node.scaleY = to, to
+        layers.mark_dirty(node)
+        operation:complete()
+    end
+end
+
+-- [sprite_swap] -- character re-dress / expression swap (performance
+-- idiom: KAG3 needed layeredit + reload glue). Swaps the standing
+-- portrait's texture and re-registers the sprite for future [ch].
+schema.define("sprite_swap", {
+    speaker = { type = "string", required = true },
+    sprite = { type = "string", required = true },
+})
+
+function TextCommands.sprite_swap(ctx, params)
+    local layers = require("layers")
+    local name = "_char_" .. (params.speaker or "")
+    local node = layers.get(name) or layers.find(name)
+    if not node then
+        print("[sprite_swap] no sprite layer: " .. name)
+        return
+    end
+    node.texture = backend.load_texture(params.sprite)
+    layers.mark_dirty(node)
+    -- Re-register so later [ch name=<speaker>] keeps the new outfit.
+    ctx.characters = ctx.characters or {}
+    if ctx.characters[params.speaker] then
+        ctx.characters[params.speaker].sprite = params.sprite
+    end
+end
+
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
