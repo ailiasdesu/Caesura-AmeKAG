@@ -178,6 +178,7 @@ function scheduler.run(ctx, tokens, start_index)
             table.insert(ctx.call_stack, {
                 tokens = tokens, index = i + 1,
                 label_index = ctx.label_index,  -- restore the CALLER's scene index
+                scene = ctx.current_scene,      -- restore the CALLER's scene name
             })
             local path = "assets/script/" .. target
             local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
@@ -195,6 +196,7 @@ function scheduler.run(ctx, tokens, start_index)
             local frame = table.remove(ctx.call_stack)
             if frame then
                 ctx.label_index = frame.label_index  -- caller scene again
+                ctx.current_scene = frame.scene       -- caller scene NAME again
             end
             if frame then
                 tokens = frame.tokens

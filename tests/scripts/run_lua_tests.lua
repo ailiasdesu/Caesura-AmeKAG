@@ -32,6 +32,7 @@ local tests = {
     "test_expr_cache",
     "test_bg_dedup",
     "test_macro_nested",
+    "test_scene_restore",
 }
 
 local passed, failed = 0, 0
