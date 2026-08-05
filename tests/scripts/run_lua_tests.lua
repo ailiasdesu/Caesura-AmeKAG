@@ -50,6 +50,7 @@ local tests = {
     "test_select",
     "test_label_jump",
     "test_end_title",
+    "test_history",
 }
 
 local passed, failed = 0, 0
