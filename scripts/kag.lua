@@ -171,6 +171,29 @@ function KAG.erasemacro(ctx, params) end
 --  unchanged on Caesura (differentiator vs Ren'Py/Tyrano).
 -- ===========================================================================
 
+-- Next-gen contracts: KAG3-compat commands typed + validated.
+local _schema = require("kag.schema")
+_schema.define("br", {})
+_schema.define("hr", {})
+_schema.define("cancel", {
+    layer = { type = "string", default = "" },
+    all = { type = "boolean", default = false },
+})
+_schema.define("close", {})
+_schema.define("ld", {
+    layer = { type = "string" },
+    name = { type = "string" },
+})
+_schema.define("shake", {
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    intensity = { type = "number", default = 5, min = 0, max = 100 },
+    amplitude = { type = "number", default = 5, min = 0, max = 100 },
+})
+_schema.define("playstop", {
+    fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+})
+_schema.define("waitforclick", {})
+
 -- [r] -- line break (KAG3); same as [l]
 KAG.r = KAG.l or KAG.br
 

@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (48)
+## Commands (54)
 
 ### `[auto]`
 
@@ -24,6 +24,13 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[cancel]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `all` | boolean | false | - | - |
+| `layer` | string |  | - | - |
+
 ### `[ch]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -39,8 +46,8 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `id` | string |  | - | - |
-| `label` | string |  | - | - |
+| `id` | string | - | - | - |
+| `label` | string | - | - | - |
 
 ### `[cl]`
 
@@ -48,12 +55,17 @@
 |---|---|---|---|---|
 | `layer` | string | all | - | - |
 
+### `[close]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[ending]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `id` | string | end | - | - |
-| `name` | string |  | - | - |
+| `id` | string | - | - | - |
+| `name` | string | - | - | - |
 
 ### `[er]`
 
@@ -96,7 +108,7 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `id` | string |  | - | - |
+| `id` | string | - | - | - |
 
 ### `[history]`
 
@@ -120,6 +132,13 @@
 | `layer` | string |  | - | - |
 | `opacity` | number | 1.0 | 0..1.0 | - |
 | `visible` | boolean | true | - | - |
+
+### `[ld]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `layer` | string | - | - | - |
+| `name` | string | - | - | - |
 
 ### `[load]`
 
@@ -225,6 +244,12 @@
 | `storage` | string | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
+### `[playstop]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `fadeout` | number | 0 | 0..30000 | - |
+
 ### `[position]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -310,6 +335,14 @@
 |---|---|---|---|---|
 | `volume` | number | 1.0 | 0..1.5 | - |
 
+### `[shake]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amplitude` | number | 5 | 0..100 | - |
+| `intensity` | number | 5 | 0..100 | - |
+| `time` | number | 300 | 0..30000 | - |
+
 ### `[stopbgm]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -375,6 +408,11 @@
 | `duration` | number | 1000 | 0..60000 | - |
 | `ms` | number | 1000 | 0..60000 | - |
 | `time` | number | 1000 | 0..60000 | - |
+
+### `[waitforclick]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[xfadebgm]`
 
