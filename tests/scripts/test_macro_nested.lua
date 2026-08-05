@@ -31,7 +31,7 @@ package.loaded["kag"] = kag_orig
 check("nested macro dispatches inner", dispatched[1] and dispatched[1][2].name == "Sakura")
 check("inner text", dispatched[1] and dispatched[1][2].text == "inner-line")
 check("outer continues", dispatched[2] and dispatched[2][2].text == "outer-line")
-check("args flow through nesting", dispatched[1] and dispatched[1][2].name == "Sakura")
+check("inner dispatches as ch", dispatched[1] and dispatched[1][1] == "ch")
 
 if failed > 0 then os.exit(1) end
 print("NESTED MACRO TESTS DONE")
