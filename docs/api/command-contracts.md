@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (34)
+## Commands (35)
 
 ### `[auto]`
 
@@ -90,6 +90,19 @@
 | `time` | number | 300 | 0..30000 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[nameplate]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `color` | string | 0,0,0 | - | - |
+| `h` | number | 36 | 16..256 | - |
+| `opacity` | number | 220 | 0..255 | - |
+| `size` | number | 20 | 8..64 | - |
+| `text_color` | string | 255,255,255 | - | - |
+| `w` | number | 220 | 32..1024 | - |
+| `x` | number | 32 | - | - |
+| `y` | number | 480 | - | - |
 
 ### `[particles]`
 

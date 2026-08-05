@@ -212,6 +212,55 @@ function TextCommands.textbox(ctx, params)
     layers.mark_dirty(bg)
 end
 
+-- [nameplate] -- next-gen character-name plate (KAG3 needed TJS ext).
+-- Styles the speaker name display above the message window. When
+-- configured, [ch name=X] shows the plate with the character's name;
+-- the style persists in ctx.nameplate_style.
+schema.define("nameplate", {
+    x       = { type = "number", default = 32 },
+    y       = { type = "number", default = 480 },
+    w       = { type = "number", default = 220, min = 32, max = 1024 },
+    h       = { type = "number", default = 36, min = 16, max = 256 },
+    color   = { type = "string", default = "0,0,0" },
+    opacity = { type = "number", default = 220, min = 0, max = 255 },
+    text_color = { type = "string", default = "255,255,255" },
+    size    = { type = "number", default = 20, min = 8, max = 64 },
+})
+
+function TextCommands.nameplate(ctx, params)
+    ctx.nameplate_style = {
+        x = params.x, y = params.y, w = params.w, h = params.h,
+        color = params.color, opacity = params.opacity,
+        text_color = params.text_color, size = params.size,
+    }
+    -- Re-render the current speaker's plate immediately.
+    if ctx and ctx.current_speaker and #ctx.current_speaker > 0 then
+        TextCommands._renderNameplate(ctx, ctx.current_speaker)
+    end
+end
+
+-- Render the nameplate layer for a speaker (called by [ch] and [nameplate]).
+function TextCommands._renderNameplate(ctx, speaker)
+    local layers = require("layers")
+    local bg = layers.ensure(ctx, "_nameplate", 3)  -- above textbox, below text
+    local st = ctx.nameplate_style or {
+        x = 32, y = 480, w = 220, h = 36,
+        color = "0,0,0", opacity = 220,
+        text_color = "255,255,255", size = 20,
+    }
+    bg.visible = true
+    bg.x, bg.y, bg.w, bg.h = st.x, st.y, st.w, st.h
+    local r, g, b = st.color:match("(%d+),%s*(%d+),%s*(%d+)")
+    if r then
+        bg.texture = backend.create_solid_texture(
+            math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
+            math.floor(tonumber(b) or 0), math.floor(st.opacity))
+    end
+    layers.mark_dirty(bg)
+    -- Speaker name text (drawn via the font pass; simple x-offset overlay).
+    backend.render_text(speaker, st.size, st.x + 8, st.y + 6, "white")
+end
+
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
@@ -220,6 +269,12 @@ function TextCommands.ch(ctx, params)
     local pos = params.pos or "center"
     if pos ~= "left" and pos ~= "center" and pos ~= "right" then
         pos = "center"
+    end
+
+    -- Next-gen: show the nameplate when a speaker is present.
+    ctx.current_speaker = speaker
+    if ctx.nameplate_style and #speaker > 0 then
+        TextCommands._renderNameplate(ctx, speaker)
     end
 
     -- U1.3: ctx.characters registry -- track active on-screen characters
