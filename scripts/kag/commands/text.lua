@@ -713,9 +713,16 @@ end
 function TextCommands.skip(ctx, params)
     local mode = params.mode
     if mode == "seen" then
-        -- Skip only already-seen text ([skip mode=seen]); plain [skip] toggles
-        -- the all-mode on/off.
-        ctx.skip_mode = (ctx.skip_mode == "seen") and false or "seen"
+        -- Skip only already-seen text ([skip mode=seen]); a second
+        -- [skip mode=seen] turns it OFF. (Audit fix: the old
+        -- `cond and false or "seen"` is a value-selector, NOT a branch --
+        -- it ALWAYS yielded "seen", so seen-skip could never be turned
+        -- off.)
+        if ctx.skip_mode == "seen" then
+            ctx.skip_mode = false
+        else
+            ctx.skip_mode = "seen"
+        end
     else
         ctx.skip_mode = not ctx.skip_mode
     end
