@@ -161,12 +161,13 @@ void BgfxDeviceCore::beginFrame() {
     // Screen-offset pan: shift VIEW_MAIN's rect by the camera/quakes offset
     // (clamped so the view never leaves the backbuffer entirely).
     if (m_screenOffsetX != 0 || m_screenOffsetY != 0) {
-        // Symmetric clamp: allow panning in all four directions while the
-        // view rect stays at least partially inside the backbuffer.
+        // The bgfx rect API is uint16 -- negative offsets would wrap to
+        // ~65436 and intersect to a zero-area view (blank frame). Clamp
+        // negatives to 0 (pan-right/down only via this path).
         const int32_t limX = static_cast<int32_t>(m_width) - 1;
         const int32_t limY = static_cast<int32_t>(m_height) - 1;
-        const int32_t vx = std::max<int32_t>(-limX, std::min<int32_t>(m_screenOffsetX, limX));
-        const int32_t vy = std::max<int32_t>(-limY, std::min<int32_t>(m_screenOffsetY, limY));
+        const int32_t vx = std::max<int32_t>(0, std::min<int32_t>(m_screenOffsetX, limX));
+        const int32_t vy = std::max<int32_t>(0, std::min<int32_t>(m_screenOffsetY, limY));
         bgfx::setViewRect(VIEW_MAIN, static_cast<uint16_t>(vx),
                           static_cast<uint16_t>(vy),
                           static_cast<uint16_t>(m_width),

@@ -3,6 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
+#include <cmath>
 #include "../../di/BackendRegistry.h"
 #include "../../render/api/IRenderDevice.h"
 #include "../../render/api/ITextureManager.h"
