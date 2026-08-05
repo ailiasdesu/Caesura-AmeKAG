@@ -132,6 +132,6 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 
 ## Next Steps
 
-- Read the [KAG Command Reference](api/kag-commands.md) for all available commands
+- Read the [Command Contracts](api/command-contracts.md) for all available commands (auto-generated, authoritative)
 - Read the [Lua Module API](api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
