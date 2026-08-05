@@ -231,6 +231,24 @@ do
     check("factory dispatch case present", f2:find('cmd == "set_screen_offset"', 1, true) ~= nil)
 end
 
+-- set_screen_offset runtime path (fractional + negative args)
+do
+    local src = io.open("src/script/bindings/RenderBinding.cpp", "r")
+    local rb = src and src:read("*a") or ""
+    if src then src:close() end
+    check("binding uses checknumber", rb:find("luaL_checknumber", 1, true) ~= nil)
+    check("binding rounds", rb:find("llround", 1, true) ~= nil)
+    local core = io.open("src/render/BgfxDeviceCore.cpp", "r")
+    local cc = core and core:read("*a") or ""
+    if core then core:close() end
+    check("core clamps negatives", cc:find("max<int32_t>(0", 1, true) ~= nil)
+    check("core uint16 safe", cc:find("static_cast<uint16_t>(vx)", 1, true) ~= nil)
+    local cam = io.open("scripts/kag/commands/transition.lua", "r")
+    local tc = cam and cam:read("*a") or ""
+    if cam then cam:close() end
+    check("camera min 0", tc:find('min = 0, max = 2000', 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
