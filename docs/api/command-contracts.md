@@ -103,6 +103,7 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+| **requires one of** | — | — | file, storage | yes |
 | `fadein` | number | 0 | 0..30000 | - |
 | `file` | string | - | - | - |
 | `loop` | boolean | true | - | - |
@@ -113,6 +114,7 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+| **requires one of** | — | — | file, storage | yes |
 | `fadein` | number | 0 | 0..30000 | - |
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |

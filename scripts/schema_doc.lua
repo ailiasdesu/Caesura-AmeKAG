@@ -42,6 +42,11 @@ for _, cmd in ipairs(cmds) do
     out[#out + 1] = ""
     out[#out + 1] = "| Param | Type | Default | Range / Choices | Required |"
     out[#out + 1] = "|---|---|---|---|---|"
+    if specs._require_any then
+        out[#out + 1] = string.format(
+            "| **requires one of** | — | — | %s | yes |",
+            table.concat(specs._require_any, ", "))
+    end
     local params = {}
     for name in pairs(specs) do
         if name:sub(1, 1) ~= "_" then params[#params + 1] = name end

@@ -142,13 +142,28 @@ function Schema.isMigrated(cmd)
     return migrated[cmd] == true
 end
 
---- Schema.dumpContracts() → { cmd = { param = spec } } — public snapshot
+--- Schema.dumpContracts() → { cmd = { param = spec } } — public DEEP copy
 --  of the registry for doc generation / editor tooling. The contracts
 --  are the single source of truth; docs and editors consume this.
+--  Deep-copied so a caller cannot mutate live clamping/coercion.
 function Schema.dumpContracts()
     local out = {}
     for cmd, specs in pairs(registry) do
-        out[cmd] = specs
+        local copy = {}
+        for name, spec in pairs(specs) do
+            local sc = {}
+            for k, v in pairs(spec) do
+                if type(v) == "table" then
+                    local t = {}
+                    for kk, vv in pairs(v) do t[kk] = vv end
+                    sc[k] = t
+                else
+                    sc[k] = v
+                end
+            end
+            copy[name] = sc
+        end
+        out[cmd] = copy
     end
     return out
 end
