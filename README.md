@@ -169,7 +169,7 @@ Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 [link target="chapter2"]
 ```
 
-See: [KAG Command Reference](docs/api/kag-commands.md)
+See: [Command Contracts](docs/api/command-contracts.md) (auto-generated, authoritative)
 
 ---
 
