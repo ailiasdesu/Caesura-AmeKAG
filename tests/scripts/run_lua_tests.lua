@@ -34,6 +34,7 @@ local tests = {
     "test_macro_nested",
     "test_scene_restore",
     "test_elseif",
+    "test_if_nested",
 }
 
 local passed, failed = 0, 0
