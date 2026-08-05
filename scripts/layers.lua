@@ -124,6 +124,7 @@ function Layers.init()
     layerMap = {}
     rootNode = nil
     nextView = 1
+    freeViews = {}  -- clear recycled view ids on reset (duplicate-handout guard)
     Layers.get_root()
 end
 
@@ -275,6 +276,10 @@ end
 
 function Layers.remove_layer(node)
     if not node then return false end
+    if node.id == "root" or node.is_root then
+        print("[layers] refusing to remove the root layer")
+        return false
+    end
 
     -- detach from parent
     if node.parent and node.parent.children then

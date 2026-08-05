@@ -28,6 +28,11 @@ check("pool bounded at 8/size", rtt_src:find("#bucket < 8", 1, true) ~= nil)
 check("freeViews list exists", layers_src:find("freeViews", 1, true) ~= nil)
 check("view recycled on remove", layers_src:find("freeViews[#freeViews + 1] = node.view_id", 1, true) ~= nil)
 
+-- 5) reset hygiene (security MEDIUM: init clears the view free-list)
+check("init clears freeViews", layers_src:find("freeViews = {}", 1, true) ~= nil)
+-- 6) root removal guard (security LOW: view_id 0 must not recycle)
+check("root removal refused", layers_src:find("refusing to remove the root", 1, true) ~= nil)
+
 -- 4) lazy RTT allocation
 check("lazy acquire in render", layers_src:find("Lazy RTT", 1, true) ~= nil)
 check("invisible layers cost nothing", layers_src:find("node.dirty and node.view_id and not node.rt", 1, true) ~= nil)
