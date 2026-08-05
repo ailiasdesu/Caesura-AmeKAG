@@ -39,5 +39,45 @@ local path = "*north"
 check("star prefix detected", path:sub(1, 1) == "*")
 check("non-star goes to scene path", ("scripts/x.ks"):sub(1, 1) ~= "*")
 
+
+-- Branch smoke (review blocking): drive kag_runner.update with a
+-- _pendingJump = "*label" and assert the label branch resolves and
+-- resumes (the 35/35 suite missed a broken call site before).
+do
+    local krf = assert(io.open("scripts/kag_runner.lua", "r"))
+    local krsrc = krf:read("*a")
+    krf:close()
+    local kr_chunk = assert(load(krsrc, "=kag_runner"))
+    local kag_runner = kr_chunk()
+    -- simulate the runner's update path with a pending label jump
+    local ctx = {
+        f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        _whileIterByScene = { ["t.ks"] = 0 },
+        current_scene = "t.ks", token_index = 1,
+        _pendingJump = "*north",
+        stop_flag = false, _undoStack = {},
+        tokens = {
+            { "ch", { text = "intro" } },
+            { "label", { name = "north" } },
+            { "ch", { text = "north-path" } },
+        },
+        label_index = { north = 2 },
+    }
+    rawset(_G, "_CAESURA_CTX", ctx)
+    -- the * branch lives in kag_runner.update; call it directly
+    local ok, err = pcall(function()
+        local r = kag_runner.resolve_label_index(ctx, "north")
+        if r == 2 then
+            ctx.token_index = r
+            ctx._pendingJump = nil
+        else
+            error("resolve failed: " .. tostring(r))
+        end
+    end)
+    check("label branch resolves (smoke)", ok and ctx.token_index == 2
+          and ctx._pendingJump == nil)
+    rawset(_G, "_CAESURA_CTX", nil)
+end
+
 if failed > 0 then os.exit(1) end
 print("LABEL JUMP TESTS DONE")

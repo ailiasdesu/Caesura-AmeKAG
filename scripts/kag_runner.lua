@@ -346,7 +346,7 @@ function kag_runner.update(dt)
                 -- allowlist rejected these, so classic choice scripts never
                 -- resolved their targets).
                 local label = path:sub(2)
-                local idx = resolve_label_index(ctx, label)
+                local idx = kag_runner.resolve_label_index(ctx, label)
                 if idx then
                     ctx.token_index = idx
                     ctx.stop_flag = false
