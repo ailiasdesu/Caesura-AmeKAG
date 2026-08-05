@@ -10,6 +10,11 @@
 local kag_runner = require("kag_runner")
 local layers = require("layers")
 
+-- [end] returns to the title: the title overlay coroutine (spawned when
+-- the runner reports "ended", resumed once per frame -- review should-fix:
+-- this must be a LOCAL, not an undeclared global).
+local title_co = nil
+
 -- Start the demo story
 kag_runner.start("scripts/demo_story.ks")
 
@@ -107,7 +112,7 @@ function engine_update(dt)
             end
         end
     end
-    local ok, reason = kag_runner.update(dt)
+    local _, reason = kag_runner.update(dt)
     if reason == "ended" and not title_co then
         -- [end]: the script finished -- return to the title menu
         -- (KAG3 semantics; the previous code just stopped).
