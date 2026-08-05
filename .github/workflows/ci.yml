@@ -56,6 +56,20 @@ jobs:
           $sdlBin = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed/x64-windows/bin/SDL3.dll"
           if (Test-Path $sdlBin) { Copy-Item $sdlBin "build/tests/${{ matrix.config }}/" }
 
+      - name: Static contract check (.ks scenes)
+        shell: pwsh
+        run: |
+          # Next-gen standard gate: every demo scene must pass the
+          # declarative command contracts (ks_check.lua) before tests.
+          $lua = Get-ChildItem -Recurse build/lua -Filter "lua.exe" | Select-Object -First 1
+          if (-not $lua) { $lua = Get-ChildItem -Recurse build -Filter "lua.exe" | Select-Object -First 1 }
+          if ($lua) {
+            & $lua.FullName scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Host "lua.exe not found - skipping static contract check"
+          }
+
       - name: Test
         shell: pwsh
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --repeat until-pass:2
