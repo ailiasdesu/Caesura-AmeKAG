@@ -41,24 +41,17 @@ local function checkScene(path)
     end
     local text = f:read("*a")
     f:close()
-    local tokens = tokenizer.parse(text)
+    -- Next-gen: tokenizer.parse_with_offsets yields exact byte offsets
+    -- (pure-Lua LPeg Cp capture), so line numbers are source-accurate --
+    -- no find-hack, no sequential scanning.
+    local tokens = tokenizer.parse_with_offsets(text)
     if not tokens then
         report(path, 0, "tokenize failed")
         return
     end
-    -- Line numbers: find each command's bracket text in the source and
-    -- count newlines before it (tokenizer skips comments/blank lines, so
-    -- a synthetic accumulator would misreport).
     local LF = string.char(10)
-    -- Sequential plain find: each command's bracket text is located at or
-    -- after the previous match, so repeated commands get distinct lines
-    -- (a global find would always return the FIRST occurrence).
-    local searchFrom = 1
-    local function lineOf(cmd)
-        local idx = text:find("[" .. cmd, searchFrom, true)
-        if not idx then return 1 end
-        searchFrom = idx + 1
-        local before = text:sub(1, idx - 1)
+    local function lineOf(offset)
+        local before = text:sub(1, offset - 1)
         local _, nl = before:gsub(LF, "")
         return nl + 1
     end
@@ -73,7 +66,7 @@ local function checkScene(path)
                         params[k] = pair[2]
                     end
                 end
-                local line = lineOf(cmd)
+                local line = lineOf(tok.offset or 1)
                 local ok, err2 = pcall(function()
                     schema.coerce(cmd, params, { current_scene = path, token_index = line })
                 end)
