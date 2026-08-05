@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (68)
+## Commands (69)
 
 ### `[auto]`
 
@@ -504,6 +504,12 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `on` | boolean | true | - | - |
+
+### `[voice_wait]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `timeout` | number | 30000 | 0..300000 | - |
 
 ### `[wait]`
 

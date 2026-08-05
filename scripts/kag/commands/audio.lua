@@ -231,6 +231,27 @@ function AudioCommands.playvoice(ctx, params)
 end
 
 -- =============================================================================
+--  [voice_wait] ¡ª wait for the voice line but let a click skip it (the
+--  standard VN pacing idiom: the player can cut a long line short).
+--  KAG3 needed stopvoice glue + a hand-rolled loop for this.
+-- =============================================================================
+function AudioCommands.voice_wait(ctx, params)
+    while backend.audio_is_playing and backend.audio_is_playing("voice") do
+        -- A click while waiting skips the rest of the line.
+        if _G._KAG_onClick or (_G._GAME_KEY_ENTER == true) or
+           (_G._GAME_KEY_SPACE == true) then
+            _G._GAME_KEY_ENTER = false
+            _G._GAME_KEY_SPACE = false
+            pcall(function() backend.audio_stop("voice") end)
+            _G._CAESURA_AUDIO_EVENT = "voice_end"
+            break
+        end
+        coroutine.yield()
+    end
+    _G._CAESURA_AUDIO_EVENT = nil
+end
+
+-- =============================================================================
 --  [stopvoice]
 --  Immediately stop the current voice line.
 -- =============================================================================

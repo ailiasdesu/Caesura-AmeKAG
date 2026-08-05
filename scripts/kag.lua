@@ -200,6 +200,14 @@ _schema.define("waitforclick", {})
 -- [r] -- line break (KAG3); same as [l]
 KAG.r = KAG.l or KAG.br
 
+-- [voice_wait] -- wait for voice with click-to-skip (Neo-Genesis).
+require("kag.schema").define("voice_wait", {
+    timeout = { type = "number", default = 30000, min = 0, max = 300000 },
+})
+KAG.voice_wait = function(ctx, params)
+    return require("kag.commands.audio").voice_wait(ctx, params)
+end
+
 -- [s] -- KAG3 short-wait control char; unified through [wait]
 -- (default 250ms matches KAG3's s-char pacing).
 KAG.s = function(ctx, params)
