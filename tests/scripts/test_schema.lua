@@ -164,13 +164,17 @@ do
     local doc = io.open("docs/api/command-contracts.md", "r")
     local docTxt = doc and doc:read("*a") or ""
     if doc then doc:close() end
-    local sizeRow = docTxt:match("### `%[nameplate%]`.-```") or docTxt
-    check("nameplate docs lack size row", not docTxt:match("nameplate.-%| `size`") or true)
-    -- strict check: the nameplate section (between headers) must not contain | `size` |
-    local _, secEnd = docTxt:find("### `%[nameplate%]`")
-    local _, nextSec = docTxt:find("### `%[", secEnd and secEnd + 1 or 1)
-    local section = secEnd and (docTxt:sub(secEnd, nextSec or #docTxt)) or ""
-    check("nameplate section has no size param", not section:find("| `size`", 1, true))
+    -- strict check: the nameplate section (between headers) must exist
+    -- and must not contain a | `size` | row (dead knob verified absent).
+    local secEnd = docTxt:find("### `%[nameplate%]`")
+    check("nameplate docs section found", secEnd ~= nil)
+    if secEnd then
+        local _, nextSec = docTxt:find("### `%[", secEnd + 1)
+        local section = docTxt:sub(secEnd, nextSec or #docTxt)
+        check("nameplate section has no size param", not section:find("| `size`", 1, true))
+    else
+        failed = (failed or 0) + 1  -- vacuous-pass guard: no section, no pass
+    end
     local pt = Schema.coerce("textbox", { w = "99999" }, {})
     check("textbox w clamped", pt.w == 4096)
 end
