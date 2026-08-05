@@ -53,5 +53,24 @@ do
     else print("FAIL sandbox env immutable") failed = failed + 1 end
 end
 
+
+-- Real mutation attempt (review nit): sandboxed code tries to corrupt
+-- the shared whitelist via the env's visible tables; the next env must
+-- be unaffected.
+do
+    local Sandbox = require("sandbox")
+    local envA = Sandbox.create({ mode = "dev" })
+    local okMut, errMut = pcall(load([[
+        -- dev-mode os/io come through the metatable: try to nil them
+        rawset(os, "clock", nil)
+        return true
+    ]], "=mut", "t", envA))
+    local envB = Sandbox.create({ mode = "dev" })
+    local fnB = load([[return type(os.clock)]], "=b", "t", envB)
+    local okB = fnB ~= nil and fnB() == "function"
+    if okB then print("PASS whitelist survives mutation") passed = passed + 1
+    else print("FAIL whitelist survives mutation") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("SANDBOX CREATE TESTS DONE")

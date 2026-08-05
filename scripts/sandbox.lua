@@ -393,7 +393,18 @@ function Sandbox.create(opts)
     -- Read-only proxy: the shared whitelist must not be mutable through
     -- getmetatable(env) + rawset from sandboxed code (review LOW).
     local whitelist = {}
-    for k, v in pairs(SANDBOX_WHITELIST) do whitelist[k] = v end
+    for k, v in pairs(SANDBOX_WHITELIST) do
+        -- Deep-copy the restricted os/io tables too: dev-mode envs resolve
+        -- them through the metatable and a sandboxed rawset(nil) would
+        -- corrupt the shared tables for later sandboxes (review LOW).
+        if type(v) == "table" then
+            local t = {}
+            for k2, v2 in pairs(v) do t[k2] = v2 end
+            whitelist[k] = t
+        else
+            whitelist[k] = v
+        end
+    end
     setmetatable(env, { __index = whitelist, __metatable = "sandbox" })
     if mode == "release" then
         env.os = { clock = os.clock, date = os.date, time = os.time, difftime = os.difftime }
