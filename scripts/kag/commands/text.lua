@@ -124,7 +124,7 @@ schema.define("ch", {
     name   = { type = "string", default = "" },
     text   = { type = "string", default = "", interpolate = true },
     voice  = { type = "string", default = "" },
-    sprite = { type = "string", default = "" },
+    sprite = { type = "string" },  -- no default: "" is truthy and would shadow storage/file
     max_width = { type = "number", default = 0, min = 0, max = 4096 },
     chars_per_line = { type = "number", default = 0, min = 0, max = 512 },
 })
@@ -385,11 +385,14 @@ function TextCommands.ch(ctx, params)
         if params.layer then
             ctx.characters[speaker].layer = params.layer
         end
-        if params.storage or params.file then
+        -- Guard must admit sprite-only lines (storage/file are nil then)
+        -- and reject the contract's "" sprite default (truthy -> would
+        -- shadow storage/file and create a bogus empty layer).
+        if (params.sprite and params.sprite ~= "") or params.storage or params.file then
             -- sprite= is the contract-advertised param; storage/file are the
             -- KAG3 aliases. All three register the standing portrait.
             ctx.characters[speaker].sprite =
-                params.sprite or params.storage or params.file
+                (params.sprite ~= "" and params.sprite) or params.storage or params.file
         end
     end
 

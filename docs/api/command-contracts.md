@@ -45,7 +45,7 @@
 | `chars_per_line` | number | 0 | 0..512 | - |
 | `max_width` | number | 0 | 0..4096 | - |
 | `name` | string |  | - | - |
-| `sprite` | string |  | - | - |
+| `sprite` | string | - | - | - |
 | `text` | string |  | - | - |
 | `voice` | string |  | - | - |
 

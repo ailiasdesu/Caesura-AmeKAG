@@ -211,7 +211,8 @@ do
     local src = io.open("scripts/kag/commands/text.lua", "r")
     local t = src and src:read("*a") or ""
     if src then src:close() end
-    check("ch handler reads params.sprite", t:find("params.sprite or params.storage or params.file", 1, true) ~= nil)
+    check("ch handler reads params.sprite", t:find('params.sprite ~= "" and params.sprite', 1, true) ~= nil)
+    check("ch guard admits sprite-only", t:find("params.sprite and params.sprite ~=", 1, true) ~= nil)
 end
 
 -- [play] contract (unified audio entry)
