@@ -164,8 +164,10 @@ static int lua_Render_get_resolution(lua_State* L) {
 // Screen-offset pan (camera/quakes): shifts VIEW_MAIN's rect. dx/dy are
 // pixel ints; Lua's [camera]/[quake] drive this.
 static int lua_Render_set_screen_offset(lua_State* L) {
-    int dx = (int)luaL_checkinteger(L, 1);
-    int dy = (int)luaL_checkinteger(L, 2);
+    // Camera/quake pass fractional offsets every frame (ease products,
+    // random shakes) -- luaL_checkinteger would reject them. Round.
+    int dx = (int)llround(luaL_checknumber(L, 1));
+    int dy = (int)llround(luaL_checknumber(L, 2));
     auto* dev = getRender(L);
     if (dev) dev->setScreenOffset(dx, dy);
     lua_pushboolean(L, 1);
