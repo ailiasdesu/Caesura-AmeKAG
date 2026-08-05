@@ -467,8 +467,26 @@ end
 --  like a visual-novel auto-play button. State is persisted by [save].
 -- =============================================================================
 
+-- Next-gen: explicit mode param (on/off/toggle) beyond KAG3's bare toggle.
+schema.define("auto", {
+    mode = { type = "string", choices = { ["on"] = true, ["off"] = true, ["toggle"] = true } },
+})
+
 function TextCommands.auto(ctx, params)
-    ctx.auto_mode = not ctx.auto_mode
+    local m = params.mode or "toggle"
+    if m == "on" then ctx.auto_mode = true
+    elseif m == "off" then ctx.auto_mode = false
+    else ctx.auto_mode = not ctx.auto_mode end
+end
+
+-- [voice_off] -- mute/unmute voice without stopping the engine bus
+-- (next-gen convenience: KAG3 needed stopvoice + a saved setting to mute).
+schema.define("voice_off", {
+    on = { type = "boolean", default = true },
+})
+
+function TextCommands.voice_off(ctx, params)
+    ctx.voice_muted = params.on ~= false
 end
 
 -- =============================================================================

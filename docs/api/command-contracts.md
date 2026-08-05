@@ -3,7 +3,13 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (23)
+## Commands (26)
+
+### `[auto]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `mode` | string | - | off,on,toggle | - |
 
 ### `[ch]`
 
@@ -15,6 +21,12 @@
 | `sprite` | string |  | - | - |
 | `text` | string |  | - | - |
 | `voice` | string |  | - | - |
+
+### `[cl]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `layer` | string | all | - | - |
 
 ### `[fadebgm]`
 
@@ -210,6 +222,12 @@
 | `w` | number | 0 | 0..8192 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[voice_off]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `on` | boolean | true | - | - |
 
 ### `[wait]`
 

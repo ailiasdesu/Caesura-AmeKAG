@@ -173,6 +173,12 @@ end
 -- =============================================================================
 
 function AudioCommands.playvoice(ctx, params)
+    -- [voice_off] mute: skip playback but keep the event flow (the wait
+    -- loop still completes instantly -- no stuck dialogue).
+    if ctx and ctx.voice_muted then
+        _G._CAESURA_AUDIO_EVENT = "voice_end"
+        return
+    end
     local file = resolve_file(params)
     if not file then
         print("[AudioCmd] playvoice: no file specified")
