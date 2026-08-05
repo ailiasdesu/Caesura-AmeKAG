@@ -35,6 +35,7 @@ schema.define("setvoicevolume", {
 })
 schema.define("playbgmstop", {
     file = { type = "string" },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })

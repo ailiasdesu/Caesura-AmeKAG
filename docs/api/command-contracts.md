@@ -137,6 +137,7 @@
 | `fadein` | number | 0 | 0..30000 | - |
 | `fadeout` | number | 0 | 0..30000 | - |
 | `file` | string | - | - | - |
+| `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playse]`
 

@@ -114,6 +114,22 @@ do
     check("var + expr mixed", p4.text == "mixed Ame 42")
 end
 
+-- volume setter contracts (clamp regression class)
+do
+    pcall(require, "kag.commands.audio")
+    for _, c in ipairs({ "setbgmvolume", "setsevolume", "setvoicevolume", "playbgmstop" }) do
+        check(c .. " migrated", Schema.isMigrated(c))
+    end
+    local pv = Schema.coerce("setbgmvolume", { volume = "9" }, {})
+    check("setbgmvolume clamped", pv.volume == 1.5)
+    pv = Schema.coerce("setvoicevolume", { volume = "-1" }, {})
+    check("setvoicevolume min clamped", pv.volume == 0)
+    pv = Schema.coerce("playbgmstop", { fadeout = "99999" }, {})
+    check("playbgmstop fade clamped", pv.fadeout == 30000)
+    pv = Schema.coerce("playbgmstop", { volume = "9" }, {})
+    check("playbgmstop volume clamped", pv.volume == 1.5)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
