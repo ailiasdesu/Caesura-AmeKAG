@@ -83,5 +83,53 @@ check("break outside errors", ok4 == false)
 check("break error message", type(err4) == "string"
       and err4:find("outside a loop", 1, true) ~= nil)
 
+
+-- Mixed nesting (review nit): break inside a for nested in a while must
+-- exit the FOR only; the while continues.
+do
+    local scheduler = require("scheduler")
+    local tokens = {
+        { "while", { exp = "n > 0" } },
+        { "eval", { exp = "f.n = f.n - 1" } },
+        { "for", { var = "i", start = "0", ["end"] = "9", step = "1" } },
+        { "if", { exp = "i == 1" } },
+        { "break" },  -- breaks the FOR, not the while
+        { "endif" },
+        { "ch", { name = "A", text = "inner" } },
+        { "endfor" },
+        { "ch", { name = "B", text = "outer" } },
+        { "endwhile" },
+        { "ch", { name = "C", text = "final" } },
+    }
+    local d = {}
+    local kag_orig = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d[#d + 1] = { k, p2 } end
+    end})
+    local vars = { n = 2 }
+    local ctx = { f = vars, tf = {}, sf = {}, mp = {}, variables = {},
+        _whileIterByScene = { ["t.ks"] = 0 },
+        macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    local ok = true
+    while coroutine.status(co) ~= "dead" do ok = coroutine.resume(co) end
+    package.loaded["kag"] = kag_orig
+
+    local inner = 0
+    local outer = 0
+    for _, x in ipairs(d) do
+        if x[2].text == "inner" then inner = inner + 1
+        elseif x[2].text == "outer" then outer = outer + 1 end
+    end
+    -- n=2,1: each while round runs i=0 only (break at i==1) -> 2 inner,
+    -- 2 outer; final runs
+    local okall = ok and inner == 2 and outer == 2
+        and d[#d] and d[#d][2].text == "final"
+    if okall then print("PASS for-in-while break exits for only")
+        passed = passed + 1
+    else print("FAIL for-in-while break exits for only")
+        failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("LOOP CONTROL TESTS DONE")

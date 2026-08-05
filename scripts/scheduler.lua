@@ -478,7 +478,6 @@ function scheduler.run(ctx, tokens, start_index)
             end
             -- the innermost loop is the one whose head token is LAST
             local inWhile = wpos > fpos
-            local ecmd = inWhile and "endwhile" or "endfor"
             local tgt = {
                 ["endwhile"] = true, ["endfor"] = true,
                 opens = {["while"] = true, ["for"] = true}
