@@ -395,7 +395,7 @@ function Sandbox.create(opts)
     -- getmetatable(env) + rawset from sandboxed code (review LOW).
     local whitelist = {}
     for k, v in pairs(SANDBOX_WHITELIST) do
-        -- Deep-copy the restricted os/io tables too: dev-mode envs resolve
+        -- Copy the restricted os/io tables too: dev-mode envs resolve
         -- them through the metatable and a sandboxed rawset(nil) would
         -- corrupt the shared tables for later sandboxes (review LOW).
         if type(v) == "table" then
