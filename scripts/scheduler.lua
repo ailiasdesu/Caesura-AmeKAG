@@ -356,14 +356,20 @@ function scheduler.run(ctx, tokens, start_index)
                 scanIdx = scanIdx + 1
             end
 
+            -- ALWAYS push (taken flag): the matching endswitch pops OUR
+            -- entry -- a no-match switch that skipped its body must not
+            -- let its endswitch pop the OUTER switch's entry.
             if caseStart then
-                switch_stack[#switch_stack + 1] = true  -- a case was taken
+                switch_stack[#switch_stack + 1] = true
                 i = caseStart - 1  -- loop's i+1 lands ON the first body token
             else
-                -- No match: skip to endswitch
-                while i <= #tokens and tokens[i][1] ~= "endswitch" do
-                    i = i + 1
-                end
+                switch_stack[#switch_stack + 1] = false  -- no case taken
+                -- Skip to OUR endswitch, depth-aware (a nested switch in
+                -- the skipped body has its own endswitch).
+                i = skip_to(tokens, i, {
+                    ["endswitch"] = true,
+                    opens = {["switch"] = true}
+                }, {["endswitch"] = true}) - 1
             end
 
         elseif cmd == "case" or cmd == "default" then
