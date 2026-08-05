@@ -80,12 +80,6 @@ end
 
 function scheduler.run(ctx, tokens, start_index)
     if not tokens or #tokens == 0 then return end
-    -- Lazy label index: entry scenes and runner-driven scene swaps have
-    -- no index yet -- build once so intra-scene jumps stay O(1).
-    if ctx and ctx.label_index == nil then
-        ctx.label_index = build_label_index(tokens)
-    end
-
     -- Normalize token format: tokenizer returns {type, cmd, params}
     -- scheduler expects {[1]=cmd, [2]=params}
     -- If first token has .type field, convert all to array format
@@ -105,6 +99,13 @@ function scheduler.run(ctx, tokens, start_index)
             end
         end
     end
+    -- Lazy label index AFTER normalization: build_label_index expects the
+    -- array format ({"label", {name=...}}), not the tokenizer's raw
+    -- records -- building too early produced a sticky EMPTY index.
+    if ctx and ctx.label_index == nil then
+        ctx.label_index = build_label_index(tokens)
+    end
+
     -- Normalize params: convert array-format {{key,val},...} to named access
     -- so commands can use params.name, params.target, etc.
     for j, t in ipairs(tokens) do
