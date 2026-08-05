@@ -275,6 +275,45 @@ function TextCommands._renderNameplate(ctx, speaker)
         tonumber(tr) or 255, tonumber(tg) or 255, tonumber(tb) or 255, 255)
 end
 
+-- [sprite_fade] -- character-sprite fade in/out (performance idiom:
+-- KAG3 needed layeredit + tween glue for this). Animates the
+-- _char_<speaker> layer opacity 0..255 via an operation yield loop.
+schema.define("sprite_fade", {
+    speaker = { type = "string", required = true },
+    to = { type = "number", default = 255, min = 0, max = 255 },
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+})
+
+function TextCommands.sprite_fade(ctx, params)
+    local layers = require("layers")
+    local name = "_char_" .. (params.speaker or "")
+    local node = layers.get(name) or layers.find(name)
+    if not node then
+        print("[sprite_fade] no sprite layer: " .. name)
+        return
+    end
+    local from = node.opacity or 255
+    local to = params.to
+    local dur = params.time
+    if dur <= 0 then
+        layers.set_layer_opacity(node, to)
+        return
+    end
+    local operation <close> = require("kag.operation").start(ctx)
+    local ct = operation.token
+    local elapsed = 0
+    while elapsed < dur and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+        local t = math.min(1, elapsed / dur)
+        local o = math.floor(from + (to - from) * t)
+        layers.set_layer_opacity(node, o)
+    end
+    if not ct.cancelled then
+        layers.set_layer_opacity(node, to)
+        operation:complete()
+    end
+end
+
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
