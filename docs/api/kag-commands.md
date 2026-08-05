@@ -1,3 +1,7 @@
+> **DEPRECATED reference — superseded by [command-contracts.md](command-contracts.md)**
+> (auto-generated from the declarative contracts; counts and signatures there are authoritative).
+> This page is kept for historical KAG3-compat context.
+
 ﻿# KAG Command Reference — Complete
 
 > Caesura (AmeKAG) KAG 3.0 script syntax. Commands use `[command param="value"]` format in `.ks` files.
