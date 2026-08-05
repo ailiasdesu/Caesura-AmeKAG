@@ -406,11 +406,16 @@ function scheduler.run(ctx, tokens, start_index)
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then
-                    -- Unrecognized text ?? treat as [ch]
+                    -- Unrecognized text ?? treat as [ch] -- through the ch
+                    -- contract so interpolation ($f.name) and type coercion
+                    -- apply to plain dialogue lines too (the main use case).
                     handler = kag["ch"]
                     if handler then
                         params = {text = cmd}
                         actual_cmd = "ch"
+                        if schema.isMigrated("ch") then
+                            params = schema.coerce("ch", params, ctx)
+                        end
                     end
                 end
                 if handler then
