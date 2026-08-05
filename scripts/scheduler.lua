@@ -463,6 +463,44 @@ function scheduler.run(ctx, tokens, start_index)
                 end
             end
 
+        -- Flow control: [break]/[continue] inside while/for loops
+        -- (Neo-Genesis; KAG3 had neither). break pops the innermost loop
+        -- and jumps past its end token; continue skips the rest of the
+        -- body so the end token runs (endfor increments / endwhile
+        -- re-evaluates).
+        elseif cmd == "break" or cmd == "continue" then
+            local wl = while_stack[#while_stack]
+            local fl = for_stack[#for_stack]
+            local wpos = wl and wl.pos or -1
+            local fpos = fl and fl.pos or -1
+            if wpos < 0 and fpos < 0 then
+                error("[" .. cmd .. "] outside a loop", 0)
+            end
+            -- the innermost loop is the one whose head token is LAST
+            local inWhile = wpos > fpos
+            local ecmd = inWhile and "endwhile" or "endfor"
+            local tgt = {
+                ["endwhile"] = true, ["endfor"] = true,
+                opens = {["while"] = true, ["for"] = true}
+            }
+            local cls = {["endwhile"] = true, ["endfor"] = true}
+            if cmd == "break" then
+                -- pop the loop we are leaving; its end token must NOT run
+                -- (it would pop again / rewind into the body)
+                if inWhile then
+                    while_stack[#while_stack] = nil
+                else
+                    if ctx._forStackMarks then
+                        ctx._forStackMarks[fl.var] = nil
+                    end
+                    for_stack[#for_stack] = nil
+                end
+                i = skip_to(tokens, i, tgt, cls)  -- +1 skips the end token
+            else  -- continue
+                -- skip to the end token; -1 lets the loop process it
+                i = skip_to(tokens, i, tgt, cls) - 1
+            end
+
         -- Flow control: [switch]/[case]/[default]/[endswitch] (spec [1.4])
         elseif cmd == "switch" then
             -- switch/case dispatch (Alpha: flat only, single-level)
