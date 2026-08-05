@@ -224,7 +224,10 @@ function Backend.clear_screen()
 end
 
 function Backend.wait_click()
-    return KAG.wait_click()
+    -- Explicit require: the global KAG table is never set (review
+    -- should-fix) -- the demo's direct-API path called into nil here.
+    local kag_mod = require("kag")
+    return kag_mod.wait_click()
 end
 
 -- =========================================================================

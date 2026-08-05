@@ -43,16 +43,20 @@ check("wait_click error message", type(err) == "string"
 -- KAG.wait_click() inside a coroutine suspends until the flag clears
 package.loaded["kag"] = kag_orig
 local called = false
+-- set the ctx BEFORE the coroutine starts so the flag path is real
+rawset(_G, "_CAESURA_CTX", ctx)
+ctx.waiting_input = false
 local co2 = coroutine.create(function()
     local r = KAG.wait_click()
     called = (r == true)
 end)
 coroutine.resume(co2)
 check("wait_click suspends", coroutine.status(co2) == "suspended")
-rawset(_G, "_CAESURA_CTX", ctx)
+check("wait_click set flag", ctx.waiting_input == true)
 ctx.waiting_input = false
 coroutine.resume(co2)
 check("wait_click returns after resume", called)
+rawset(_G, "_CAESURA_CTX", nil)
 
 if failed > 0 then os.exit(1) end
 print("WAITCLICK TESTS DONE")
