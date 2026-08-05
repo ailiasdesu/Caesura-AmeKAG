@@ -244,16 +244,21 @@ function AudioCommands.voice_wait(ctx, params)
     -- batch-resuming. So we block WHILE it is true and treat a clear as
     -- the click-to-skip signal (mirrors waitforclick semantics).
     if ctx then ctx.waiting_input = true end
-    while backend.audio_is_playing and backend.audio_is_playing("voice") do
-        if ctx and not ctx.waiting_input then  -- click cleared it: skip
-            pcall(function() backend.audio_stop("voice") end)
-            _G._CAESURA_AUDIO_EVENT = "voice_end"
-            break
+    local ok, err = pcall(function()
+        while backend.audio_is_playing and backend.audio_is_playing("voice") do
+            if ctx and not ctx.waiting_input then  -- click cleared it: skip
+                pcall(function() backend.audio_stop("voice") end)
+                _G._CAESURA_AUDIO_EVENT = "voice_end"
+                break
+            end
+            coroutine.yield()
         end
-        coroutine.yield()
-    end
+    end)
+    -- Unconditional cleanup: even if the body raised, the flag and the
+    -- event are cleared so the runner never stays blocked (LOW-1).
     if ctx then ctx.waiting_input = false end
     _G._CAESURA_AUDIO_EVENT = nil
+    if not ok then error(err, 0) end  -- re-raise for the scheduler pcall
 end
 
 -- =============================================================================
