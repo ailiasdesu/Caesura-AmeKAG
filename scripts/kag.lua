@@ -197,11 +197,8 @@ _schema.define("ld", {
     layer = { type = "string" },
     name = { type = "string" },
 })
-_schema.define("shake", {
-    time = { type = "number", default = 500, min = 0, max = 30000 },
-    intensity = { type = "number", default = 6, min = 0, max = 100 },
-    amplitude = { type = "number", min = 0, max = 100 },  -- no default: handler prefers it
-})
+-- (no shake define here: vfx.lua owns the [shake] contract -- a
+-- duplicate would silently override its frequency clamp)
 _schema.define("playstop", {
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
 })
@@ -266,12 +263,17 @@ function KAG.ld(ctx, params)
     end
 end
 
--- [shake] / [quake] -- screen shake (KAG3 classic effect)
+-- [shake] / [quake] -- screen shake (KAG3 classic effect).
+-- quake routes through the vfx handler (review should-fix: binding it
+-- to KAG.shake made standalone [quake] run a shake).
 function KAG.shake(ctx, params)
     local vfx = require("kag.commands.vfx")
     if vfx.shake then vfx.shake(ctx, params) end
 end
-KAG.quake = KAG.shake
+function KAG.quake(ctx, params)
+    local vfx = require("kag.commands.vfx")
+    if vfx.quake then vfx.quake(ctx, params) end
+end
 
 -- [playstop] -- stop BGM (KAG3)
 function KAG.playstop(ctx, params)
