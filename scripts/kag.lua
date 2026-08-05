@@ -97,7 +97,12 @@ end
 
 local trans_cmds = require("kag.commands.transition")
 for name, handler in pairs(trans_cmds) do
-    KAG[name] = handler
+    -- Skip-list (review nit): flash/quake have standalone aliases bound
+    -- explicitly later (vfx routing) -- the transition handlers would
+    -- silently override them here if their names ever collide again.
+    if name ~= "flash" and name ~= "quake" then
+        KAG[name] = handler
+    end
 end
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
