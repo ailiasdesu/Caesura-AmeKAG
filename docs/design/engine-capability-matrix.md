@@ -1,6 +1,6 @@
 ﻿# Engine Capability Matrix (Mermaid)
 
-> 2026-07-24 readiness audit: this matrix tracks 43 code-level capability surfaces.
+> 2026-07-24 readiness audit: this matrix tracks 48 code-level capability surfaces.
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -31,7 +31,7 @@ graph LR
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG 3.0 Parser<br/>tokenizer · 68 commands"]
+        s2["KAG 3.0 Parser<br/>tokenizer · 69 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
@@ -159,5 +159,5 @@ graph LR
 
 ---
 
-**Total: 43 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 48 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
