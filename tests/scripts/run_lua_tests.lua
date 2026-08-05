@@ -31,6 +31,7 @@ local tests = {
     "test_label_index",
     "test_expr_cache",
     "test_bg_dedup",
+    "test_macro_nested",
 }
 
 local passed, failed = 0, 0
