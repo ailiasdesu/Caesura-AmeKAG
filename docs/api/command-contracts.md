@@ -98,7 +98,6 @@
 | `color` | string | 0,0,0 | - | - |
 | `h` | number | 36 | 16..256 | - |
 | `opacity` | number | 220 | 0..255 | - |
-| `size` | number | 20 | 8..64 | - |
 | `text_color` | string | 255,255,255 | - | - |
 | `w` | number | 220 | 32..1024 | - |
 | `x` | number | 32 | - | - |

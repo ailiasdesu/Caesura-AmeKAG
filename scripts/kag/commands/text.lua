@@ -224,7 +224,6 @@ schema.define("nameplate", {
     color   = { type = "string", default = "0,0,0" },
     opacity = { type = "number", default = 220, min = 0, max = 255 },
     text_color = { type = "string", default = "255,255,255" },
-    size    = { type = "number", default = 20, min = 8, max = 64 },
 })
 
 function TextCommands.nameplate(ctx, params)
@@ -255,10 +254,14 @@ function TextCommands._renderNameplate(ctx, speaker)
         bg.texture = backend.create_solid_texture(
             math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
             math.floor(tonumber(b) or 0), math.floor(st.opacity))
+    else
+        bg.texture = nil  -- unparseable color: clear stale plate
     end
     layers.mark_dirty(bg)
-    -- Speaker name text (drawn via the font pass; simple x-offset overlay).
-    backend.render_text(speaker, st.size, st.x + 8, st.y + 6, "white")
+    -- Speaker name text: backend.render_text(text, x, y, r, g, b, a).
+    local tr, tg, tb = st.text_color:match("(%d+),%s*(%d+),%s*(%d+)")
+    backend.render_text(speaker, st.x + 8, st.y + 6,
+        tonumber(tr) or 255, tonumber(tg) or 255, tonumber(tb) or 255, 255)
 end
 
 function TextCommands.ch(ctx, params)
