@@ -26,6 +26,7 @@ local tests = {
     "test_title_entry",
     "test_benchmark",
     "test_schema",
+    "test_layers",
     "test_sandbox",
 }
 

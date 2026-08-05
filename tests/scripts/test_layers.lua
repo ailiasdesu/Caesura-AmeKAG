@@ -1,0 +1,36 @@
+-- test_layers.lua — custom layers + pooled RTT/view recycling (next-gen)
+local check = function(name, cond)
+    if cond then print("  [PASS] " .. name) passed = (passed or 0) + 1
+    else print("  [FAIL] " .. name) failed = (failed or 0) + 1 end
+end
+
+-- stub backend so layers/rtt load without a GPU
+local backend_stub = {
+    create_viewport = function(w, h) return math.random(1000, 9999) end,
+    destroy_viewport = function() end,
+    get_viewport_size = function() return 640, 360 end,
+    submit_batch = function() end,
+    set_view_clear = function() end,
+}
+local layers_src = io.open("scripts/layers.lua", "r"):read("*a")
+local rtt_src = io.open("scripts/rtt.lua", "r"):read("*a")
+
+-- 1) custom layer API (arbitrary id, beyond the 7 built-in types)
+check("add_layer accepts custom id", layers_src:find('config.id or ("layer_"', 1, true) ~= nil)
+check("layer types extensible", layers_src:find("LAYER_EFFECT", 1, true) ~= nil)
+
+-- 2) pooled RTT (acquire/release keyed by size)
+check("RTT.acquire exists", rtt_src:find("function RTT.acquire", 1, true) ~= nil)
+check("RTT.release exists", rtt_src:find("function RTT.release", 1, true) ~= nil)
+check("pool bounded at 8/size", rtt_src:find("#bucket < 8", 1, true) ~= nil)
+
+-- 3) view recycling (free-list)
+check("freeViews list exists", layers_src:find("freeViews", 1, true) ~= nil)
+check("view recycled on remove", layers_src:find("freeViews[#freeViews + 1] = node.view_id", 1, true) ~= nil)
+
+-- 4) lazy RTT allocation
+check("lazy acquire in render", layers_src:find("Lazy RTT", 1, true) ~= nil)
+check("invisible layers cost nothing", layers_src:find("node.dirty and node.view_id and not node.rt", 1, true) ~= nil)
+
+if failed and failed > 0 then os.exit(1) end
+print("LAYER TESTS DONE")

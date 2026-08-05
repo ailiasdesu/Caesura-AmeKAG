@@ -49,6 +49,7 @@ Layers.TypeName = {
 local layerMap  = {}   -- id → LayerNode lookup
 local rootNode  = nil  -- scene root
 local nextView  = 1    -- bgfx View ID allocator
+local freeViews = {}  -- recycled view IDs (returned on remove)
 local maxView   = 256  -- bgfx View limit (bgfx caps at 256)
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -237,19 +238,26 @@ function Layers.add_layer(parent, config)
     local node = newLayerNode(id, config)
     node.parent = parent
 
-    -- allocate RTT if size is known
+    -- allocate RTT from the pool if size is known (lazy: visible-only
+    -- allocation happens in render; a pooled handle is reused across
+    -- add/remove cycles so GPU viewports are not churned)
     local nw = node.w or 0
     local nh = node.h or 0
     if nw > 0 and nh > 0 then
-        node.rt = rtt.create(nw, nh)
+        node.rt = rtt.acquire(nw, nh)
     end
 
-    -- assign bgfx View ID
-    if nextView >= maxView then
-        error("[layers] bgfx View ID exhausted (max=" .. tostring(maxView) .. ")")
+    -- assign bgfx View ID (recycled from the free-list; monotonic
+    -- allocation would exhaust 256 views on repeated add/remove)
+    if #freeViews > 0 then
+        node.view_id = table.remove(freeViews)
+    else
+        if nextView >= maxView then
+            error("[layers] bgfx View ID exhausted (max=" .. tostring(maxView) .. ")")
+        end
+        node.view_id = nextView
+        nextView = nextView + 1
     end
-    node.view_id = nextView
-    nextView = nextView + 1
 
     -- insert in z-order
     parent.children = parent.children or {}
@@ -290,7 +298,8 @@ function Layers.remove_layer(node)
 
     -- free RTT
     if node.rt then
-        rtt.destroy(node.rt)
+        rtt.release(node.rt)
+        if node.view_id then freeViews[#freeViews + 1] = node.view_id end
         node.rt = nil
     end
 
@@ -510,6 +519,14 @@ function Layers.render()
         -- emit commands for dirty nodes with tex/rt and view_id
         -- Root-level nodes may have tex but no rt; include them
         local nodeTex = node.tex or node.texture or 0
+        -- Lazy RTT: a layer with content but no pooled rt (e.g. added with
+        -- size 0 then resized at runtime, or texture-only until now) gets
+        -- its viewport allocated here, once, from the pool -- invisible
+        -- layers cost zero GPU memory until they actually render.
+        if node.dirty and node.view_id and not node.rt and nodeTex and nodeTex ~= 0
+            and (node.w or 0) > 0 and (node.h or 0) > 0 then
+            node.rt = rtt.acquire(node.w, node.h)
+        end
         if node.dirty and node.view_id and (node.rt or (nodeTex and nodeTex ~= 0)) then
             batch.commands[#batch.commands + 1] = {
                 view_id    = node.view_id,
@@ -722,7 +739,8 @@ function Layers.resize_layer(node, w, h)
     if w ~= nil then node.w = w end
     if h ~= nil then node.h = h end
     if node.rt then rtt.destroy(node.rt) end
-    node.rt = rtt.create(node.w, node.h)
+    if node.rt then rtt.release(node.rt) end
+    node.rt = rtt.acquire(node.w, node.h)
     Layers.mark_dirty(node)
 end
 
