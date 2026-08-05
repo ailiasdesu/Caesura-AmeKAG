@@ -57,3 +57,70 @@
 6. Steam 实机验证
 7. Live2D OpenGL 路径验证 + minigame GPU CI
 8. KAG3 脚本导入器（生态入口）
+
+
+---
+
+# 2026-08-05 更新：迭代后能力、性能与市场定位（119 提交）
+
+> 2026-08-03 至 08-05 期间 master 线性推进 119 个提交（60ae346b..20d2a4bf），
+> 全部 CI 三平台验证、review/security_review 覆盖、569/569 测试 + Lua 12/12 全绿。
+
+## 一、迭代后能力增量（相对初版文档）
+
+### 性能（实测，见下）
+- 纯色纹理 RGBA 去重、纹理 path→id 缓存、字形查找合并探测、提交批级纹理解析缓存
+- 打字机切片缓存、文本渲染完整 key 缓存（零字形遍历）、pen advance 缓存
+- 粒子 O(1) 槽分配、Debug 热路径跳过格式化、Lua 指令钩子间隔 10 倍化
+- 性能基准模块（test_benchmark.lua）作为回归守门 oracle
+
+### 差异化功能（31 项）
+- **标题菜单全家桶**：New/Load/Settings/Exit + Continue（autosave 槽 0）+ Endings 画廊
+- **剧情系统**：[ending] 解锁/重播、[chapter] 章节选择+已读徽标、token 级 [rollback]
+- **文本与节奏**：打字机、[auto] 自动前进（等语音）、read-skip + skip_auto 强制跳过、
+  Ctrl 按住跳过、A 键 auto 热键、[wait]/[pt] 钳制
+- **语音**：[ch voice=] 播放+backlog 存储、V 键游戏内重播、backlog F 键过滤
+- **特效**：[scroll] ED 滚动、[flash]/[blur] 复活、KiriKiri 转场方法别名（dissolve/gradient/mask/slide）
+- **KAG3 兼容**：13 个日系命令别名（r/s/delay/clear/ld/shake/play/voice/se…）+ [ct]/[waitforclick]
+- **UI**：backlog 重写可用、F4 开发 HUD、toast 通知、快速存读档反馈、自动存档定时器+设置
+- **其他**：立绘随说话人显示（[ch sprite=]）、内置 Web 编辑器（18 RPC 路由）、
+  语言持久化、CWD 无关启动、存档槽位 API 全守卫
+
+### 稳定性（多智能体审查 17+ 真实缺陷修复）
+- **BLOCKER 级**：UI 整体不可见（NDC 缺失+setUniform OOB）、文本 1px 方块、
+  纹理重复加载泄漏、音频 UAF、任务 High 优先级饿死、孤儿协程软锁×2、
+  rollback 实际不可用×2、io.open 沙箱过严致跨场景失败
+- **HIGH/MEDIUM**：解码缓冲泄漏、表达式缓存无界、异步取消竞态、历史跳转白名单、
+  backlog 语音路径校验、token_index 钳制、槽位边界、scissor/opacity 渲染污染
+
+## 二、性能实测（vs 2026-08-03 初始基线）
+
+| 指标 | 初始基线 | 当前 | 提升 |
+|---|---|---|---|
+| tokenizer | 587ms / 146.75ms-per-1000tok | 478-541ms / 119.50-135.25ms | **快 8-19%** |
+| scheduler | 4001 resumes / 14ms（≈286k tok/s） | 4001 resumes / 13.0ms（≈308k tok/s） | **快 ≈8%** |
+
+零退化；基准文档：docs/plans/2026-08-04-006-perf-baseline-update.md
+
+## 三、市场定位更新（9 引擎，2026-08 在线核实）
+
+| 引擎 | 维护 | 许可 | 与 Caesura 对比 |
+|---|---|---|---|
+| Ren'Py 8.5.3 | 活跃 | MIT+LGPL | 生态/平台最全；Caesura 的 KAG 标签+GPU 多后端+内置编辑器为差异化 |
+| 吉里吉里Z 1.4.0r2 | 低维护（2021 后无提交） | BSD | **Caesura 是 KiriKiri 路线的现代重构**（KAG 标签兼容 + Lua + bgfx 跨平台）——继承日系语法免学习，补其跨平台/维护短板 |
+| 吉里吉里2/KAG3 | 停更（2010） | GPL/专有 | 同 KAG 语法；Caesura 活跃维护 + 跨平台 |
+| NScripter | 停更（2018） | 专有免费 | 纯 2D 时代；Caesura 支持其 [r]/[s] 类基础命令 |
+| ONScripter | 半休眠（2023） | GPL | 老游戏兼容层；Caesura 面向新作 |
+| Tyrano V6 | 活跃 | 免费商用 | HTML5 多端；Caesura 原生性能 + C++ 后端更强 |
+| Unity+Naninovel | 活跃 | 付费闭源 | 全套但付费；Caesura 免费开源 KAG 路线 |
+| Unity+Fungus→Amanita | 官方停更/社区续 | MIT | 节点式；Caesura 文本脚本可维护性更强 |
+| Godot+DialogueManager | 活跃 | MIT | 仅对话系统；Caesura 是完整 VN 引擎（标题/存档/画廊/结局/回滚） |
+
+## 四、结论与剩余差距
+
+- **定位**：KiriKiri 语法兼容 + 活跃维护 + 跨平台 + 免费开源的现代 VN 引擎——
+  占据"日系老引擎（停更）→ 现代引擎"迁移空白
+- **差异化已达成**：内置 Web 编辑器、token 级回滚、KAG3 兼容层、结局/章节/画廊闭环、
+  31 项新功能（对比 9 引擎无一项同时具备）
+- **剩余差距**：生态（作品/插件）需时间积累；E-mote 类商业中间件授权不可移植；
+  移动端发布管线未验证；rollback 的内存成本在超长对话场景需压测
