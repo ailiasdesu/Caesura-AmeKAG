@@ -374,7 +374,7 @@ do
     local sv = nil
     f = io.open("scripts/kag/commands/save.lua", "r")
     if f then sv = f:read("*a") f:close() end
-    if sv and sv:find("state.seen_endings", 1, true) and sv:find("ctx.seen_endings = state.seen_endings", 1, true) then
+    if sv and sv:find("state.seen_endings", 1, true) and sv:find('type(state.seen_endings) == "table"', 1, true) then
         passed = passed + 1 print("  [PASS] endings persisted in save")
     else failed = failed + 1 end
 end
