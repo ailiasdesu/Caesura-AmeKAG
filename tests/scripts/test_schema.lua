@@ -272,6 +272,19 @@ do
     check("sprite_swap load-guard", t:find("failed to load", 1, true) ~= nil)
 end
 
+-- [voice_wait] contract + click-detection fix (review regression)
+do
+    check("voice_wait migrated", Schema.isMigrated("voice_wait"))
+    local pv = Schema.coerce("voice_wait", { timeout = "999999" }, {})
+    check("voice_wait timeout capped", pv.timeout == 300000)
+    local src = io.open("scripts/kag/commands/audio.lua", "r")
+    local a = src and src:read("*a") or ""
+    if src then src:close() end
+    check("voice_wait uses waiting_input", a:find("ctx.waiting_input", 1, true) ~= nil)
+    check("voice_wait enforces deadline", a:find("os.clock() > deadline", 1, true) ~= nil)
+    check("voice_wait no KAG_onClick trap", not a:find("_G._KAG_onClick or", 1, true))
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract
