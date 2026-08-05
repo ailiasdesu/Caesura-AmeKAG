@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (35)
+## Commands (43)
 
 ### `[auto]`
 
@@ -18,6 +18,11 @@
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
+
+### `[br]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[ch]`
 
@@ -35,6 +40,11 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `layer` | string | all | - | - |
+
+### `[er]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[fadebgm]`
 
@@ -67,6 +77,16 @@
 | `color` | string | white | - | - |
 | `face` | string | default | - | - |
 | `size` | number | 22 | 4..256 | - |
+
+### `[hr]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
+### `[l]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[layopt]`
 
@@ -102,6 +122,11 @@
 | `w` | number | 220 | 32..1024 | - |
 | `x` | number | 32 | - | - |
 | `y` | number | 480 | - | - |
+
+### `[p]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[particles]`
 
@@ -196,6 +221,16 @@
 | `intensity` | number | 5 | 0..100 | - |
 | `time` | number | 300 | 0..30000 | - |
 
+### `[r]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
+### `[reset]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[ruby]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -205,6 +240,12 @@
 | `text` | string |  | - | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[s]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `ms` | number | 250 | 0..60000 | - |
 
 ### `[save]`
 

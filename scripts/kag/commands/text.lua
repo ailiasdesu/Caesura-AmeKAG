@@ -145,6 +145,17 @@ schema.define("font", {
     size = { type = "number", default = 22, min = 4, max = 256 },
     color = { type = "string", default = "white" },  -- KAG3 color param
 })
+-- Text-flow family (next-gen: typed + validated like every command).
+schema.define("l", {})          -- line break (no params)
+schema.define("r", {})          -- carriage return (no params)
+schema.define("er", {})         -- erase line (no params)
+schema.define("br", {})         -- KAG3 line-break alias (no params)
+schema.define("hr", {})         -- horizontal rule (decorative)
+schema.define("p", {})          -- click-to-advance (no params)
+schema.define("reset", {})      -- reset text state (no params)
+schema.define("s", {            -- KAG3 short-wait
+    ms = { type = "number", default = 250, min = 0, max = 60000 },
+})
 
 function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
     ctx.backlog = ctx.backlog or {}
