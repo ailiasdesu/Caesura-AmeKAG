@@ -396,6 +396,13 @@ function scheduler.run(ctx, tokens, start_index)
                 i = i - 1  -- will point to first body token after i = i + 1
             else
                 -- text chunks become [ch] commands
+                -- Next-gen rules: coerce typed params BEFORE dispatch so
+                -- handlers get numbers/booleans and bad input is reported
+                -- with location instead of silently swallowed.
+                local schema = require("kag.schema")
+                if schema.isMigrated(cmd) then
+                    params = schema.coerce(cmd, params, ctx)
+                end
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then

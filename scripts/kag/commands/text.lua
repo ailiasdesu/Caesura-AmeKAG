@@ -460,16 +460,13 @@ end
 --  Controls the delay between each character appearing in [ch] / [text].
 -- =============================================================================
 
+-- Next-gen contract: typed + clamped (replaces the inline clamps).
+require("kag.schema").define("pt", {
+    speed = { type = "number", default = 50, min = 8, max = 5000 },
+})
+
 function TextCommands.pt(ctx, params)
-    local v = tonumber(params.speed) or 50
-    if v < 8 then
-        print(string.format("[pt] clamped speed %s ms to 8 (floor)", tostring(params.speed)))
-        v = 8
-    elseif v > 5000 then
-        print(string.format("[pt] clamped speed %s ms to 5000 (cap)", tostring(params.speed)))
-        v = 5000
-    end
-    ctx.text_speed = v
+    ctx.text_speed = params.speed
 end
 
 

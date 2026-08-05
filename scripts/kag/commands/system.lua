@@ -26,15 +26,16 @@ local SystemCommands = {}
 --  Spec [10.2.33]: registers cancel callback, uses coroutine.yield.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Next-gen contract: number + 60s cap (replaces the inline clamp).
+require("kag.schema").define("wait", {
+    time     = { type = "number", default = 1000, min = 0, max = 60000 },
+    ms       = { type = "number", default = 1000, min = 0, max = 60000 },
+    duration = { type = "number", default = 1000, min = 0, max = 60000 },
+})
+
 function SystemCommands.wait(ctx, params)
-    local ms = tonumber(params.time or params.ms or params.duration or 1000)
+    local ms = params.time or params.ms or params.duration or 1000
     if ms <= 0 then return end
-    -- Hard cap: a typo/crafted [wait time=99999999] must not freeze the
-    -- game for hours; 60s is beyond any legitimate scripted pause.
-    if ms > 60000 then
-        print(string.format("[wait] clamped %d ms to 60000 (hard cap)", ms))
-        ms = 60000
-    end
 
     local operation <close> = Operation.start(ctx)
     local ct = operation.token

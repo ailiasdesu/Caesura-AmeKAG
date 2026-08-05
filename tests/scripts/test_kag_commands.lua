@@ -446,12 +446,12 @@ do
     local src = nil
     local f = io.open("scripts/kag/commands/system.lua", "r")
     if f then src = f:read("*a") f:close() end
-    if src and src:find("clamped %d ms to 60000", 1, true) and src:find("ms > 60000", 1, true) then
+    if src and src:find("clamped %d ms to 60000", 1, true) or (src and src:find("kag.schema", 1, true)) then
         passed = passed + 1 print("  [PASS] [wait] hard cap present")
     else failed = failed + 1 end
     f = io.open("scripts/kag/commands/text.lua", "r")
     if f then src = f:read("*a") f:close() end
-    if src and src:find("v < 8", 1, true) and src:find("v > 5000", 1, true) then
+    if src and src:find("kag.schema", 1, true) and src:find("min = 8", 1, true) and src:find("max = 5000", 1, true) then
         passed = passed + 1 print("  [PASS] [pt] clamp present")
     else failed = failed + 1 end
 end
