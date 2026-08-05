@@ -176,6 +176,40 @@ end
 --  appends to backlog, and blocks until click (via [p] semantics).
 -- =============================================================================
 
+-- [textbox] -- next-gen message-window styling (KAG3 needed TJS ext).
+-- Configures the message layer: position, size, background color and
+-- opacity. State persists in ctx.textbox_style and is re-applied on
+-- [cl] (clearscreen rebuilds the window).
+schema.define("textbox", {
+    x       = { type = "number", default = 0 },
+    y       = { type = "number", default = 520 },
+    w       = { type = "number", default = 1280, min = 64, max = 4096 },
+    h       = { type = "number", default = 200, min = 32, max = 1024 },
+    color   = { type = "string", default = "0,0,0" },
+    opacity = { type = "number", default = 200, min = 0, max = 255 },
+    visible = { type = "boolean", default = true },
+})
+
+function TextCommands.textbox(ctx, params)
+    ctx.textbox_style = {
+        x = params.x, y = params.y, w = params.w, h = params.h,
+        color = params.color, opacity = params.opacity, visible = params.visible,
+    }
+    local layers = require("layers")
+    local bg = layers.ensure(ctx, "_textbox", 93)
+    bg.visible = params.visible
+    bg.x, bg.y = params.x, params.y
+    bg.w, bg.h = params.w, params.h
+    -- color "r,g,b" -> solid texture (backend.create_solid_texture)
+    local r, g, b = params.color:match("(%d+),%s*(%d+),%s*(%d+)")
+    if r then
+        bg.texture = backend.create_solid_texture(
+            math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
+            math.floor(tonumber(b) or 0), math.floor(params.opacity))
+    end
+    layers.mark_dirty(bg)
+end
+
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""

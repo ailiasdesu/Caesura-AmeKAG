@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (33)
+## Commands (34)
 
 ### `[auto]`
 
@@ -246,6 +246,18 @@
 | `fade` | number | 0 | 0..30000 | - |
 | `fade_time` | number | 0 | 0..30000 | - |
 | `text` | string |  | - | - |
+
+### `[textbox]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `color` | string | 0,0,0 | - | - |
+| `h` | number | 200 | 32..1024 | - |
+| `opacity` | number | 200 | 0..255 | - |
+| `visible` | boolean | true | - | - |
+| `w` | number | 1280 | 64..4096 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 520 | - | - |
 
 ### `[trans]`
 
