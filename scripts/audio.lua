@@ -26,8 +26,14 @@ function Audio.stop_bgm(fadeout)
     return backend.audio_stop("bgm", { fadeout = tonumber(fadeout) or 1.0 })
 end
 
+-- Clamp volume at every setter (crafted settings files must not
+-- amplify; mirrors kag.commands.audio's clampVolume).
+local function clampVol(v)
+    return math.min(1.5, math.max(0, tonumber(v) or 1.0))
+end
+
 function Audio.set_bgm_volume(vol)
-    return backend.audio_set_bus_volume("bgm", vol)
+    return backend.audio_set_bus_volume("bgm", clampVol(vol))
 end
 
 function Audio.get_bgm_volume()
@@ -51,7 +57,7 @@ function Audio.stop_voice()
 end
 
 function Audio.set_voice_volume(vol)
-    return backend.audio_set_bus_volume("voice", vol)
+    return backend.audio_set_bus_volume("voice", clampVol(vol))
 end
 
 function Audio.get_voice_volume()
@@ -82,7 +88,7 @@ function Audio.play_se_3d(file, x, y, z, opts)
 end
 
 function Audio.set_se_volume(vol)
-    return backend.audio_set_bus_volume("se", vol)
+    return backend.audio_set_bus_volume("se", clampVol(vol))
 end
 
 function Audio.get_se_volume()
