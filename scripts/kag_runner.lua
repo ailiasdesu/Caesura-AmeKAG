@@ -135,6 +135,7 @@ local function resume_from_save()
     end
     ctx.labelMap = scene.labels
     ctx.tokens = scene.tokens
+    ctx.label_index = nil  -- scene swap bypasses the scheduler: rebuild
     -- Coerce the restored token index: crafted saves may carry a string or
     -- table; scheduler.run compares `i <= #tokens` numerically.
     ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
@@ -200,6 +201,7 @@ function kag_runner.start(scene_path)
     end
     ctx.tokens = scene.tokens
     ctx.labelMap = scene.labels
+    ctx.label_index = nil  -- resume path: rebuild for the restored scene
     ctx.current_scene = scene_path
     ctx.currentScene = scene_path  -- also set camelCase for text/save commands
 
@@ -328,6 +330,7 @@ function kag_runner.update(dt)
             if scene then
                 ctx.tokens = scene.tokens
                 ctx.labelMap = scene.labels
+                ctx.label_index = nil  -- history/choice jump: rebuild
                 ctx.current_scene = path
                 ctx.currentScene = path
                 ctx.token_index = math.max(1, tonumber(target.index) or 1)
