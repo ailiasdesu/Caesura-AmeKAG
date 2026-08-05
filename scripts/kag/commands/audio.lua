@@ -20,6 +20,35 @@ end
 --  Load + play on BGM bus with optional fade-in and loop.
 -- =============================================================================
 
+-- Next-gen contracts: typed + clamped via kag/schema.
+local schema = require("kag.schema")
+schema.define("playbgm", {
+    file   = { type = "string", required = true },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    fadein = { type = "number", default = 0, min = 0, max = 30000 },
+    loop   = { type = "boolean", default = true },
+})
+schema.define("playse", {
+    file   = { type = "string", required = true },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    fadein = { type = "number", default = 0, min = 0, max = 30000 },
+})
+schema.define("stopbgm", {
+    fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+})
+schema.define("stopse", {
+    fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+})
+schema.define("fadebgm", {
+    volume = { type = "number", default = 0, min = 0, max = 1.5 },
+    time   = { type = "number", default = 1000, min = 0, max = 30000 },
+    fadein = { type = "number", default = 0, min = 0, max = 30000 },
+})
+schema.define("fadevol", {
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    time   = { type = "number", default = 1000, min = 0, max = 30000 },
+})
+
 function AudioCommands.playbgm(ctx, params)
     local file = resolve_file(params)
     if not file then
@@ -27,8 +56,8 @@ function AudioCommands.playbgm(ctx, params)
         return
     end
 
-    local volume = tonumber(params.volume) or 1.0
-    local fadein = tonumber(params.fadein) or 0
+    local volume = params.volume  -- schema-typed
+    local fadein = params.fadein
 
     backend.audio_play("bgm", file, {
         fadein = fadein / 1000.0,   -- KAG uses ms, backend uses seconds
@@ -61,8 +90,8 @@ end
 
 function AudioCommands.playbgmstop(ctx, params)
     local file = resolve_file(params)
-    local fadeout = tonumber(params.fadeout) or 0
-    local fadein  = tonumber(params.fadein)  or 0
+    local fadeout = params.fadeout
+    local fadein  = params.fadein
 
     if fadeout > 0 then
         backend.audio_fade_volume("bgm", 0, fadeout / 1000.0)
@@ -74,7 +103,7 @@ function AudioCommands.playbgmstop(ctx, params)
     if file then
         backend.audio_play("bgm", file, {
             fadein = fadein / 1000.0,
-            volume = tonumber(params.volume) or 1.0,
+            volume = params.volume,
         })
     end
 end
@@ -86,8 +115,8 @@ end
 -- =============================================================================
 
 function AudioCommands.fadebgm(ctx, params)
-    local target = tonumber(params.volume) or 1.0
-    local time   = tonumber(params.time)   or 1000
+    local target = params.volume
+    local time   = params.time
 
     backend.audio_fade_volume("bgm", target, time / 1000.0)
 end

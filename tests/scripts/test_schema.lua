@@ -68,6 +68,20 @@ check("trans migrated", Schema.isMigrated("trans"))
 check("move migrated", Schema.isMigrated("move"))
 check("quake migrated", Schema.isMigrated("quake"))
 
+-- audio commands migrated
+for _, c in ipairs({ "playbgm", "playse", "stopbgm", "stopse", "fadebgm", "fadevol" }) do
+    check(c .. " migrated", Schema.isMigrated(c))
+end
+-- playbgm volume clamp + required file
+local ok, err = pcall(function()
+    Schema.coerce("playbgm", { volume = "9" }, {})
+end)
+check("playbgm missing file throws", not ok)
+p = Schema.coerce("playbgm", { file = "x.wav", volume = "9" }, {})
+check("playbgm volume clamped", p.volume == 1.5)
+p = Schema.coerce("playbgm", { file = "x.wav" }, {})
+check("playbgm defaults", p.volume == 1.0 and p.loop == true)
+
 -- scroll contract behavior (typed + clamped)
 p = Schema.coerce("scroll", { speed = "5000" }, {})
 check("scroll speed clamped to 1000", p.speed == 1000)
