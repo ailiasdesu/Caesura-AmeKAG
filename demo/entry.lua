@@ -100,9 +100,8 @@ function engine_update(dt)
         local ctx = _G._CAESURA_CTX
         if ctx then
             ctx.auto_mode = not ctx.auto_mode
-            local toast = require("toast")
-            if toast then
-                pcall(function() toast.show(ctx.auto_mode and "Auto ON" or "Auto OFF") end)
+            if _toast then
+                pcall(function() _toast.show(ctx.auto_mode and "Auto ON" or "Auto OFF") end)
             end
         end
     end
