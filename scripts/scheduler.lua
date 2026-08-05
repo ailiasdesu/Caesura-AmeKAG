@@ -166,7 +166,10 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [call]
         elseif cmd == "call" then
             local target = params.target or params.storage
-            table.insert(ctx.call_stack, {tokens = tokens, index = i + 1})
+            table.insert(ctx.call_stack, {
+                tokens = tokens, index = i + 1,
+                label_index = ctx.label_index,  -- restore the CALLER's scene index
+            })
             local path = "assets/script/" .. target
             local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
             if new_tokens then
@@ -181,6 +184,9 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "return" then
             local frame = table.remove(ctx.call_stack)
             if frame then
+                ctx.label_index = frame.label_index  -- caller scene again
+            end
+            if frame then
                 tokens = frame.tokens
                 ctx.tokens = tokens
                 i = frame.index - 1
@@ -190,6 +196,7 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [link]
         elseif cmd == "link" then
+            -- (index rebuilt below with the swapped stream)
             local target = params.target or params.storage
             -- Clear everything and jump
             ctx.layers = {}
@@ -203,6 +210,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.tokens = tokens
                 ctx.token_index = 1
                 ctx.current_scene = path
+                ctx.label_index = build_label_index(new_tokens)
                 i = 0
             end
 
