@@ -71,6 +71,8 @@ function snapshot.restore(ctx, snap)
 
     ctx.current_scene = snap.scene
     ctx.currentScene = snap.scene
+    ctx.label_index = nil  -- security: a rollback across a [call] span must
+    -- not reuse the callee's label index (stale cross-scene jump hazard)
     ctx.token_index = snap.token_index or 1
     ctx.call_stack = deep_copy(snap.call_stack)
     ctx.seen_scenes = deep_copy(snap.seen_scenes) or {}
