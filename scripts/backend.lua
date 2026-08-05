@@ -14,6 +14,12 @@ end
 -- Audio
 -- =========================================================================
 
+-- Screen-offset pan (camera/quakes): shifts the main view rect.
+function Backend.set_screen_offset(dx, dy)
+    if be then return be.render("set_screen_offset", dx, dy)
+    else return KAG.set_screen_offset(dx, dy) end
+end
+
 function Backend.audio_play(bus, file, opts)
     opts = opts or {}
     local be = get_backend()

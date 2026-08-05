@@ -141,6 +141,7 @@ public:
     void endFrame() override {}
     void commit_frame() override {}
     void advanceFrame() override { ++m_probe.advanceCalls; }
+    void setScreenOffset(int, int) override {}
     void setViewRect(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
     void setViewClear(uint16_t, uint16_t, uint32_t, float, uint8_t) override {}
     void touch(uint16_t) override {}

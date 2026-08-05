@@ -24,6 +24,8 @@ public:
     const char* getBackendName() const;
 
     bool init(void* nativeWindowHandle, int width, int height);
+    // Screen-offset pan (camera/quakes): shifts VIEW_MAIN's rect each frame.
+    void setScreenOffset(int dx, int dy) { m_screenOffsetX = dx; m_screenOffsetY = dy; }
     void resize(int width, int height);
     void shutdown();
     void beginFrame();
@@ -42,6 +44,8 @@ public:
     int getHeight() const { return m_height; }
 
 private:
+    int m_screenOffsetX = 0;
+    int m_screenOffsetY = 0;
     void setupDefaultViews();
     int m_width  = 1280;
     int m_height = 720;

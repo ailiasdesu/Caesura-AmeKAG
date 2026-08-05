@@ -30,6 +30,7 @@ public:
     void endFrame() override;
     void commit_frame() override;
     void advanceFrame() override;
+    void setScreenOffset(int dx, int dy) override;
     void setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
                      uint16_t width, uint16_t height) override;
     void setViewClear(uint16_t viewId, uint16_t flags,

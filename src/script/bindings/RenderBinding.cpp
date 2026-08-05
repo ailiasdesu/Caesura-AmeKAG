@@ -160,6 +160,18 @@ static int lua_Render_get_resolution(lua_State* L) {
     return 2;
 }
 
+// -- Render.set_screen_offset(dx, dy) ----------------------------------------
+// Screen-offset pan (camera/quakes): shifts VIEW_MAIN's rect. dx/dy are
+// pixel ints; Lua's [camera]/[quake] drive this.
+static int lua_Render_set_screen_offset(lua_State* L) {
+    int dx = (int)luaL_checkinteger(L, 1);
+    int dy = (int)luaL_checkinteger(L, 2);
+    auto* dev = getRender(L);
+    if (dev) dev->setScreenOffset(dx, dy);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // -- Render.set_view_name(id, name) -----------------------------------------
 
 static int lua_Render_set_view_name(lua_State* L) {
@@ -724,6 +736,7 @@ static const luaL_Reg render_functions[] = {
     { "create_solid_texture", lua_Render_create_solid_texture },
     { "get_resolution",     lua_Render_get_resolution     },
     { "set_view_name",      lua_Render_set_view_name      },
+    { "set_screen_offset",  lua_Render_set_screen_offset  },
     { "submit_batch",       lua_Render_submit_batch       },
     { "submit_blend",       lua_Render_submit_blend       },
     { "submit_transition",  lua_Render_submit_transition  },

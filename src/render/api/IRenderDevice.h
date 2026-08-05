@@ -59,6 +59,7 @@ public:
     virtual void advanceFrame() = 0;
 
     // View management
+    virtual void setScreenOffset(int dx, int dy) = 0;
     virtual void setViewRect(uint16_t viewId, uint16_t x, uint16_t y,
                              uint16_t width, uint16_t height) = 0;
     virtual void setViewClear(uint16_t viewId, uint16_t flags,

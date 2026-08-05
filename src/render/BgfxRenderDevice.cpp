@@ -187,6 +187,10 @@ void BgfxRenderDevice::advanceFrame() {
 // View-management pass-throughs
 //   T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T  T
 
+void BgfxRenderDevice::setScreenOffset(int dx, int dy) {
+    if (m_deviceCore) m_deviceCore->setScreenOffset(dx, dy);
+}
+
 void BgfxRenderDevice::setViewRect(uint16_t v, uint16_t x, uint16_t y, uint16_t w, uint16_t h) { m_deviceCore->setViewRect(v, x, y, w, h); }
 
 

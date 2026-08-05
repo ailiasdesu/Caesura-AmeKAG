@@ -158,7 +158,19 @@ printf("[BgfxRenderDevice] Shutdown complete.\n");
 void BgfxDeviceCore::beginFrame() {
     if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
-    // No-op: bgfx::frame() in endFrame() handles frame pacing.
+    // Screen-offset pan: shift VIEW_MAIN's rect by the camera/quakes offset
+    // (clamped so the view never leaves the backbuffer entirely).
+    if (m_screenOffsetX != 0 || m_screenOffsetY != 0) {
+        const int32_t vx = std::max<int32_t>(0, std::min<int32_t>(m_screenOffsetX, static_cast<int32_t>(m_width) - 1));
+        const int32_t vy = std::max<int32_t>(0, std::min<int32_t>(m_screenOffsetY, static_cast<int32_t>(m_height) - 1));
+        bgfx::setViewRect(VIEW_MAIN, static_cast<uint16_t>(vx),
+                          static_cast<uint16_t>(vy),
+                          static_cast<uint16_t>(m_width),
+                          static_cast<uint16_t>(m_height));
+    } else {
+        bgfx::setViewRect(VIEW_MAIN, 0, 0, static_cast<uint16_t>(m_width),
+                          static_cast<uint16_t>(m_height));
+    }
     // The debug-text overlay in VIEW_DEBUG + explicit submit calls
     // in blitTexture/blitViewport drive VIEW_MAIN and VIEW_RTT.
 }
