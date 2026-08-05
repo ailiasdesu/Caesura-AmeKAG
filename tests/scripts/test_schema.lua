@@ -274,7 +274,15 @@ end
 
 -- [voice_wait] contract + click-detection fix (review regression)
 do
+    pcall(require, "kag")  -- voice_wait registers here (standalone-safe)
     check("voice_wait migrated", Schema.isMigrated("voice_wait"))
+    local pv = Schema.coerce("voice_wait", { timeout = "1" }, {})
+    -- Unknown params pass through by design; the doc row is gone instead.
+    local doc = io.open("docs/api/command-contracts.md", "r")
+    local dt = doc and doc:read("*a") or ""
+    if doc then doc:close() end
+    local vs = dt:match("### `%[voice_wait%]`(.-)### `%[") or ""
+    check("voice_wait docs have no timeout row", not vs:find("timeout", 1, true))
     -- (timeout was dropped: unreachable in this runner -- see review)
     local src = io.open("scripts/kag/commands/audio.lua", "r")
     local a = src and src:read("*a") or ""

@@ -509,7 +509,6 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `timeout` | number | 30000 | 0..300000 | - |
 
 ### `[wait]`
 
