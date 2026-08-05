@@ -370,16 +370,30 @@ end
 
 local Sandbox = {}
 
+-- Restricted whitelist for the release-mode fallback lookup (audit
+-- should-fix): the old `__index = _G` let loadfile/dofile/require/debug
+-- fall through -- env.loadfile = nil was shadowed by _G.loadfile, so
+-- the strict sandbox path (emb/eval via sandbox.execute) was open.
+local SANDBOX_WHITELIST = {
+    math = math, string = string, table = table,
+    tostring = tostring, tonumber = tonumber, type = type,
+    pairs = pairs, ipairs = ipairs, next = next, print = print,
+    pcall = pcall, select = select, unpack = unpack or table.unpack,
+    error = error, coroutine = coroutine,
+    rawget = rawget, rawset = rawset,
+    setmetatable = setmetatable, getmetatable = getmetatable,
+    os = { clock = os.clock, date = os.date, time = os.time, difftime = os.difftime },
+    io = { write = io.write },
+}
+
 function Sandbox.create(opts)
     opts = opts or {}
     local mode = opts.mode or "release"
     local env = {}
-    setmetatable(env, { __index = _G })
+    setmetatable(env, { __index = SANDBOX_WHITELIST })
     if mode == "release" then
         env.os = { clock = os.clock, date = os.date, time = os.time, difftime = os.difftime }
         env.io = { write = io.write }
-        env.loadfile = nil
-        env.dofile = nil
     end
     return env
 end
