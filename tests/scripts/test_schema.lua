@@ -77,11 +77,16 @@ check("particles sizeMax clamped", p.sizeMax == 512)
 p = Schema.coerce("particles", { r = "300" }, {})
 check("particles color clamped", p.r == 255)
 
+-- load the command modules so their contracts register (schema.define
+-- runs at module load; test_schema alone only has _test_cmd)
+pcall(require, "kag.commands.video")
+pcall(require, "kag.commands.save")
+
 -- video/save/load migrated
 for _, c in ipairs({ "video", "save", "load" }) do
     check(c .. " migrated", Schema.isMigrated(c))
 end
-p = Schema.coerce("video", { volume = "9" }, {})
+p = Schema.coerce("video", { file = "x.mp4", volume = "9" }, {})
 check("video volume clamped", p.volume == 1.5)
 ok, err = pcall(function() Schema.coerce("video", {}, {}) end)
 check("video missing file throws", not ok)
