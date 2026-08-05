@@ -383,12 +383,15 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "case" or cmd == "default" then
             if switch_stack[#switch_stack] then
                 -- A case was already taken: this case body must NOT run
-                -- (no fall-through). Skip the rest of the switch, leaving
-                -- i ON the endswitch so the loop processes it and POPS
-                -- (mirror of the if-chain convention).
-                while i < #tokens and tokens[i + 1][1] ~= "endswitch" do
-                    i = i + 1
-                end
+                -- (no fall-through). Skip to OUR endswitch (depth-aware --
+                -- a nested switch inside the skipped case body has its
+                -- own endswitch; stopping at the nearest one would pop
+                -- the wrong entry and resume the skipped body), leaving
+                -- i ON the endswitch so the loop processes it and POPS.
+                i = skip_to(tokens, i, {
+                    ["endswitch"] = true,
+                    opens = {["switch"] = true}
+                }, {["endswitch"] = true}) - 1
             end
             -- (not taken: this case belongs to a switch whose case body
             -- is currently executing -- fall through and run its body)
