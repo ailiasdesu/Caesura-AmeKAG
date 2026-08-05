@@ -374,6 +374,44 @@ end
 --  Blocks coroutine until complete. Cancelable.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- [vib] -- message-layer vibration (KiriKiri text vib standard).
+-- Shakes the message layer's offset like quake but scoped to the text
+-- window; classic emphasis effect for dialogue.
+schema.define("vib", {
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    intensity = { type = "number", default = 3, min = 0, max = 50 },
+    amplitude = { type = "number", min = 0, max = 50 },
+})
+
+function TransCommands.vib(ctx, params)
+    local dur = params.time or 300
+    local amp = params.amplitude or params.intensity or 3
+    if dur <= 0 then return end
+    local layers = require("layers")
+    local msg = layers.get_layer("message") or layers.find("message")
+    if not msg then return end
+    local operation <close> = require("kag.operation").start(ctx)
+    local ct = operation.token
+    ct:register(function()
+        if msg then msg.x, msg.y = msg.base_x or 0, msg.base_y or 0 end
+    end)
+    local baseX, baseY = msg.x or 0, msg.y or 0
+    msg.base_x, msg.base_y = baseX, baseY
+    local elapsed = 0
+    while elapsed < dur and not ct.cancelled do
+        elapsed = elapsed + (coroutine.yield() or 16)
+        local t = elapsed / math.max(1, dur)
+        local wob = math.sin(elapsed * 0.05) * amp * (1 - t)
+        msg.x = baseX + wob
+        msg.y = baseY + (math.cos(elapsed * 0.07) * amp * 0.5) * (1 - t)
+        layers.mark_dirty(msg)
+    end
+    if not ct.cancelled then
+        msg.x, msg.y = baseX, baseY
+        operation:complete()
+    end
+end
+
 function TransCommands.quake(ctx, params)
     local dur       = params.time or params.duration or 300
     local intensity = params.intensity or params.amplitude or 5

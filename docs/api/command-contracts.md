@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (62)
+## Commands (63)
 
 ### `[auto]`
 
@@ -437,6 +437,14 @@
 | `duration` | number | 500 | 0..30000 | - |
 | `method` | string | crossfade | - | - |
 | `time` | number | 500 | 0..30000 | - |
+
+### `[vib]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amplitude` | number | - | 0..50 | - |
+| `intensity` | number | 3 | 0..50 | - |
+| `time` | number | 300 | 0..30000 | - |
 
 ### `[video]`
 
