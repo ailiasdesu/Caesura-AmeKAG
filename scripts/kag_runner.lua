@@ -361,17 +361,15 @@ function kag_runner.update(dt)
                 -- Same-scene label jump (KAG3 [select]/[button] convention:
                 -- target="*label" -- review should-fix: the scene-path
                 -- allowlist rejected these, so classic choice scripts never
-                -- resolved their targets).
-                local idx = kag_runner.resolve_label_index(ctx, path:sub(2))
-                if idx then
-                    ctx.token_index = idx
-                    ctx.stop_flag = false
+                -- resolved their targets). Delegates to the shared staging
+                -- helper so tests exercise the SAME code path.
+                if kag_runner.stage_label_jump(ctx, path) then
                     kag_co = coroutine.create(function()
                         scheduler.run(ctx, ctx.tokens, ctx.token_index)
                     end)
                     return resume_scheduler("update", delta_ms)
                 end
-                print("[KAG Runner] Choice label not found: " .. label)
+                print("[KAG Runner] Choice label not found: " .. tostring(path:sub(2)))
                 return false, "label-not-found"
             end
             if type(path) ~= "string" or not require("kag.commands.save")._safeScenePath(path) then
