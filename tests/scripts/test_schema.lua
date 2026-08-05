@@ -179,6 +179,16 @@ do
     check("textbox w clamped", pt.w == 4096)
 end
 
+-- positional set*volume clamps (the default-removal regression class)
+do
+    local src = io.open("scripts/kag/commands/audio.lua", "r")
+    local a = src and src:read("*a") or ""
+    if src then src:close() end
+    check("set*volume clamp helper present", a:find("clampVolume", 1, true) ~= nil)
+    check("clamp bound 1.5", a:find("math.min(1.5", 1, true) ~= nil)
+    check("clamp bound 0", a:find("math.max(0", 1, true) ~= nil)
+end
+
 -- [play] contract (unified audio entry)
 do
     pcall(require, "kag")  -- registers the play contract

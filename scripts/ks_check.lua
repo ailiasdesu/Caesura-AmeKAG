@@ -115,11 +115,11 @@ local function auditDefaults()
         print("AUDIT: " .. #suspects .. " default-shadowing suspect(s):")
         for _, s in ipairs(suspects) do print("  " .. s) end
     end
+    return #suspects
 end
 
 if arg[1] == "--audit-defaults" then
-    auditDefaults()
-    os.exit(0)
+    os.exit(auditDefaults() > 0 and 1 or 0)  -- CI gate: nonzero on suspects
 end
 
 if #arg == 0 then

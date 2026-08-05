@@ -269,18 +269,24 @@ end
 --  [setbgmvolume volume=0.8] / [setsevolume volume=0.5] / [setvoicevolume v=1.0]
 -- =============================================================================
 
+-- Positional path is live after the contract default removal: clamp it
+-- here so [setbgmvolume 9] can't amplify (SoLoud has no clamp).
+local function clampVolume(v)
+    return math.min(1.5, math.max(0, v or 1.0))
+end
+
 function AudioCommands.setbgmvolume(ctx, params)
-    local vol = tonumber(params.volume) or tonumber(params[1]) or 1.0
+    local vol = clampVolume(tonumber(params.volume) or tonumber(params[1]) or 1.0)
     backend.audio_set_bus_volume("bgm", vol)
 end
 
 function AudioCommands.setsevolume(ctx, params)
-    local vol = tonumber(params.volume) or tonumber(params[1]) or 1.0
+    local vol = clampVolume(tonumber(params.volume) or tonumber(params[1]) or 1.0)
     backend.audio_set_bus_volume("se", vol)
 end
 
 function AudioCommands.setvoicevolume(ctx, params)
-    local vol = tonumber(params.volume) or tonumber(params[1]) or 1.0
+    local vol = clampVolume(tonumber(params.volume) or tonumber(params[1]) or 1.0)
     backend.audio_set_bus_volume("voice", vol)
 end
 
