@@ -369,8 +369,10 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "case" or cmd == "default" then
             if switch_stack[#switch_stack] then
                 -- A case was already taken: this case body must NOT run
-                -- (no fall-through). Skip the rest of the switch.
-                while i <= #tokens and tokens[i][1] ~= "endswitch" do
+                -- (no fall-through). Skip the rest of the switch, leaving
+                -- i ON the endswitch so the loop processes it and POPS
+                -- (mirror of the if-chain convention).
+                while i < #tokens and tokens[i + 1][1] ~= "endswitch" do
                     i = i + 1
                 end
             end
