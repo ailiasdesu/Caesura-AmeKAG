@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (65)
+## Commands (66)
 
 ### `[auto]`
 
@@ -30,6 +30,15 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[camera]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `restore` | boolean | true | - | - |
+| `time` | number | 500 | 0..30000 | - |
+| `x` | number | 0 | -2000..2000 | - |
+| `y` | number | 0 | -2000..2000 | - |
 
 ### `[cancel]`
 

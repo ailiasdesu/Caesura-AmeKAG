@@ -412,6 +412,46 @@ function TransCommands.vib(ctx, params)
     end
 end
 
+-- [camera] -- screen-offset pan (cinematic emphasis). KAG3 needed TJS
+-- extension glue for a smooth camera drift; this animates the engine's
+-- screen offset from (0,0) to (x,y) and back, cancel-safe.
+schema.define("camera", {
+    x = { type = "number", default = 0, min = -2000, max = 2000 },
+    y = { type = "number", default = 0, min = -2000, max = 2000 },
+    time = { type = "number", default = 500, min = 0, max = 30000 },
+    restore = { type = "boolean", default = true },
+})
+
+function TransCommands.camera(ctx, params)
+    local toX, toY = params.x, params.y
+    local dur = params.time
+    if dur <= 0 then
+        backend.set_screen_offset(toX, toY)
+        return
+    end
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
+    ct:register(function() backend.set_screen_offset(0, 0) end)
+    local elapsed = 0
+    while elapsed < dur and not ct.cancelled do
+        local dt = coroutine.yield() or 16
+        if ct.cancelled then break end
+        elapsed = elapsed + dt
+        local t = math.min(1, elapsed / dur)
+        -- ease-in-out
+        local e = t < 0.5 and 2 * t * t or 1 - math.pow(-2 * t + 2, 2) / 2
+        backend.set_screen_offset(toX * e, toY * e)
+    end
+    if not ct.cancelled then
+        if params.restore ~= false then
+            backend.set_screen_offset(0, 0)  -- drift back after the beat
+        else
+            backend.set_screen_offset(toX, toY)  -- hold the offset
+        end
+        operation:complete()
+    end
+end
+
 function TransCommands.quake(ctx, params)
     local dur       = params.time or params.duration or 300
     local intensity = params.intensity or params.amplitude or 5
