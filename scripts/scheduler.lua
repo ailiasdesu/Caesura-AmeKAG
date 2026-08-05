@@ -347,7 +347,6 @@ function scheduler.run(ctx, tokens, start_index)
             while_stack[#while_stack + 1] = {
                 src = params.exp or "false",
                 pos = i,  -- loop head: endwhile rewinds to i-1
-                iters = 0,
                 ended = not (ok and result),
             }
             if not (ok and result) then
@@ -365,17 +364,13 @@ function scheduler.run(ctx, tokens, start_index)
                 if w.ended then
                     while_stack[#while_stack] = nil  -- loop over: pop
                 else
-                    w.iters = w.iters + 1
-                    if w.iters > WHILE_MAX_ITERS then
-                        error("[while] exceeded " .. WHILE_MAX_ITERS
-                            .. " iterations (bounded loop guard) -- exp: "
-                            .. w.src, 0)
-                    end
                     -- POP before rewinding: the next [while] re-pushes a
                     -- fresh entry. Without this, a live loop's entry stays
                     -- on the stack and the ENDWHILE of an OUTER loop grabs
                     -- the stale inner entry (pos) and rewinds into the
                     -- inner body -- an infinite inner re-run.
+                    -- (The per-entry iters guard was removed: ctx's total
+                    -- iteration guard always fires first -- dead code.)
                     while_stack[#while_stack] = nil
                     i = w.pos - 1  -- loop head: re-evaluate next iteration
                 end
