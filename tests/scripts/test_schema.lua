@@ -249,6 +249,15 @@ do
     check("camera min 0", tc:find('min = 0, max = 2000', 1, true) ~= nil)
 end
 
+-- [sprite_scale] contract (zoom — bundled with the swap commit)
+do
+    check("sprite_scale migrated", Schema.isMigrated("sprite_scale"))
+    local ps = Schema.coerce("sprite_scale", { speaker = "A", scale = "99" }, {})
+    check("sprite_scale scale clamped", ps.scale == 4.0)
+    ps = Schema.coerce("sprite_scale", { speaker = "A", scale = "-1" }, {})
+    check("sprite_scale min clamped", ps.scale == 0.1)
+end
+
 -- [sprite_swap] contract (re-dress)
 do
     pcall(require, "kag.commands.text")
