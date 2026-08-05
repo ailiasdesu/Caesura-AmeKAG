@@ -322,6 +322,33 @@ function kag_runner.update(dt)
             local target = ctx._pendingJump
             ctx._pendingJump = nil
             local path = target.scene or target
+            if type(path) == "string" and path:sub(1, 1) == "*" then
+                -- Same-scene label jump (KAG3 [select]/[button] convention:
+                -- target="*label" -- review should-fix: the scene-path
+                -- allowlist rejected these, so classic choice scripts never
+                -- resolved their targets).
+                local label = path:sub(2)
+                local idx = ctx.label_index and ctx.label_index[label]
+                if not idx then
+                    for i, tok in ipairs(ctx.tokens) do
+                        if tok[1] == "label" and tok[2]
+                           and tok[2].name == label then
+                            idx = i + 1
+                            break
+                        end
+                    end
+                end
+                if idx then
+                    ctx.token_index = idx
+                    ctx.stop_flag = false
+                    kag_co = coroutine.create(function()
+                        scheduler.run(ctx, ctx.tokens, ctx.token_index)
+                    end)
+                    return resume_scheduler("update", delta_ms)
+                end
+                print("[KAG Runner] Choice label not found: " .. label)
+                return false, "label-not-found"
+            end
             if type(path) ~= "string" or not require("kag.commands.save")._safeScenePath(path) then
                 print("[KAG Runner] Rejected unsafe jump target: " .. tostring(path))
                 return false, "unsafe-jump-target"

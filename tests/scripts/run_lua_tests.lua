@@ -48,6 +48,7 @@ local tests = {
     "test_eval_env",
     "test_sandbox_create",
     "test_select",
+    "test_label_jump",
 }
 
 local passed, failed = 0, 0
