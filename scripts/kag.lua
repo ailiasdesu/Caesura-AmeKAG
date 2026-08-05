@@ -18,6 +18,16 @@ local flow = require("flow")
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
 local layer_cmds = require("kag.commands.layer")
+-- Standalone effect aliases ([flash]/[shake]/[quake]) route through the
+-- vfx handler table (registered before layer_cmds so the plain names
+-- dispatch without a [vfx] wrapper).
+local vfx_cmds = require("kag.commands.vfx")
+for name, handler in pairs(vfx_cmds) do
+    if name ~= "particles" then
+        KAG[name] = handler
+    end
+end
+
 for name, handler in pairs(layer_cmds) do
     KAG[name] = handler
 end

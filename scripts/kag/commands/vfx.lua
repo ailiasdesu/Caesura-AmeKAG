@@ -23,6 +23,21 @@ local VFXCommands = {}
 
 -- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
+-- Standalone [flash]/[shake]/[quake] (KAG3 names; routed to VFX).
+schema.define("flash", {
+    r = { type = "number", default = 255, min = 0, max = 255 },
+    g = { type = "number", default = 255, min = 0, max = 255 },
+    b = { type = "number", default = 255, min = 0, max = 255 },
+    time = { type = "number", default = 200, min = 0, max = 10000 },
+})
+schema.define("shake", {
+    time = { type = "number", default = 500, min = 0, max = 10000 },
+    frequency = { type = "number", default = 20, min = 1, max = 120 },
+    amplitude = { type = "number", default = 6, min = 0, max = 100 },
+})
+-- NOTE: [quake] has NO schema here -- transition.lua owns the quake
+-- contract (time/duration/intensity/amplitude); re-defining it would
+-- silently override that richer contract (schema.define overwrites).
 schema.define("particles", {
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
@@ -128,6 +143,21 @@ function VFXCommands.vfx(ctx, params)
             ctx._particleEmitters = {}
         end
     end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Standalone command aliases (KAG3 names, Neo-Genesis contracts).
+-- ═══════════════════════════════════════════════════════════════════════════
+function VFXCommands.flash(ctx, params)
+    VFX.flash(ctx, params)
+end
+
+function VFXCommands.shake(ctx, params)
+    VFX.shake(ctx, params)
+end
+
+function VFXCommands.quake(ctx, params)
+    VFX.quake(ctx, params)
 end
 
 return VFXCommands

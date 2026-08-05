@@ -42,6 +42,7 @@ local tests = {
     "test_while",
     "test_for",
     "test_loop_control",
+    "test_effect_aliases",
 }
 
 local passed, failed = 0, 0
