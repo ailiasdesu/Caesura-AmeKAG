@@ -390,6 +390,13 @@ function scheduler.run(ctx, tokens, start_index)
                 -- %arg% placeholders filled from the call's params. The
                 -- shared body is never mutated (multiple calls reuse it).
                 local argNames = ctx.macro_args and ctx.macro_args[cmd]
+                -- Deep-copy helper (splice scope: no-arg macros use it).
+                local function deepCopy(t)
+                    if type(t) ~= "table" then return t end
+                    local out = {}
+                    for k, v in pairs(t) do out[k] = deepCopy(v) end
+                    return out
+                end
                 if argNames and #argNames > 0 then
                     -- Substitute %arg% placeholders inside the params
                     -- table (token t[2] is ALWAYS the params table -- the
@@ -433,7 +440,10 @@ function scheduler.run(ctx, tokens, start_index)
                     for _ = 1, -grow do table.remove(tokens) end
                 end
                 for n = 1, bodyCount do
-                    tokens[i - 1 + n] = {macro_body[n][1], macro_body[n][2]}
+                    -- Deep-copy every token: no-arg macros share the body's
+                    -- params tables by reference today (security info item)
+                    -- and a handler mutating them would poison later calls.
+                    tokens[i - 1 + n] = {macro_body[n][1], deepCopy(macro_body[n][2])}
                 end
                 ctx.tokens = tokens
                 i = i - 1  -- will point to first body token after i = i + 1
