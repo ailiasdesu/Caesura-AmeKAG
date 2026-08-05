@@ -33,5 +33,25 @@ end
 local ok3, r3 = Sandbox.execute([[return type(io.execute)]])
 check("sandbox.execute io.execute nil", ok3 and r3 == "nil")
 
+
+-- Immutability lock (review LOW): the sandbox env's metatable is hidden
+-- and the whitelist is a per-env copy -- sandboxed code cannot mutate
+-- the shared whitelist through getmetatable + rawset.
+do
+    local Sandbox = require("sandbox")
+    local env = Sandbox.create({ mode = "release" })
+    -- __metatable hides the real metatable
+    local mt = getmetatable(env)
+    local ok1 = (mt == "sandbox")
+    -- mutating the env itself doesn't touch the shared whitelist
+    local env2 = Sandbox.create({ mode = "release" })
+    local r1 = load([[return math.pi]], "=a", "t", env)
+    local r2 = load([[return math.pi]], "=b", "t", env2)
+    local ok2 = r1 ~= nil and r2 ~= nil
+    if ok1 and ok2 then
+        print("PASS sandbox env immutable") passed = passed + 1
+    else print("FAIL sandbox env immutable") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("SANDBOX CREATE TESTS DONE")

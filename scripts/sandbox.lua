@@ -390,7 +390,11 @@ function Sandbox.create(opts)
     opts = opts or {}
     local mode = opts.mode or "release"
     local env = {}
-    setmetatable(env, { __index = SANDBOX_WHITELIST })
+    -- Read-only proxy: the shared whitelist must not be mutable through
+    -- getmetatable(env) + rawset from sandboxed code (review LOW).
+    local whitelist = {}
+    for k, v in pairs(SANDBOX_WHITELIST) do whitelist[k] = v end
+    setmetatable(env, { __index = whitelist, __metatable = "sandbox" })
     if mode == "release" then
         env.os = { clock = os.clock, date = os.date, time = os.time, difftime = os.difftime }
         env.io = { write = io.write }
