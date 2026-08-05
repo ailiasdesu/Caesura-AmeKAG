@@ -84,20 +84,24 @@ function LayerCommands.bg(ctx, params)
         print("[LayerCmd] bg: no file specified")
         return
     end
-    -- Dedup: re-setting the SAME background skips the texture reload
-    -- (common when scenes re-assert their bg after transitions).
-    if ctx.layers and ctx.layers.bg == file then
-        return
+    -- Dedup: re-setting the SAME background reuses the loaded texture
+    -- (common when scenes re-assert their bg after transitions) -- but
+    -- visibility/z are ALWAYS re-applied so [layopt]/[ld] hiding the
+    -- layer is still restored by the next [bg].
+    local same = ctx.layers and ctx.layers.bg == file
+    local tex
+    if not same then
+        tex = backend.load_texture(file)  -- (and/or would ALWAYS load)
     end
-
-    local tex = backend.load_texture(file)
-    if not tex then
+    if not same and not tex then
         print("[LayerCmd] bg: failed to load " .. file)
         return
     end
 
     local node = get_or_create_layer( "bg", layers.Type.LAYER_BASE)
-    layers.set_layer_image(node, tex, nil, nil, nil, nil)
+    if tex then
+        layers.set_layer_image(node, tex, nil, nil, nil, nil)
+    end
     layers.set_layer_visible(node, true)
     layers.set_z( node, 0)
 
