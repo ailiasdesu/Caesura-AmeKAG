@@ -36,7 +36,7 @@ end
 --  Set background layer (z=0) texture.
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
--- Next-gen contracts: typed + clamped via kag/schema.
+-- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("cl", {
     layer = { type = "string", default = "all" },  -- unified clear entry
@@ -134,7 +134,7 @@ end
 
 function LayerCommands.cl(ctx, params)
     local target = params.layer or "all"
-    -- Next-gen: re-apply the [textbox] style when the message window is
+    -- Neo-Genesis: re-apply the [textbox] style when the message window is
     -- cleared (the style persists across scenes; [cl] rebuilds it).
     if target == "all" or target == "message" then
         local style = ctx.textbox_style

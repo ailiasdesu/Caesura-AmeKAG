@@ -70,7 +70,7 @@ local function coerceValue(name, spec, raw, where, ctx)
         end
     elseif spec.type == "string" then
         v = tostring(v)
-        -- Next-gen interpolation: "$f.name" / "$sf.x" / "$tf.y" / "$mp.z"
+        -- Neo-Genesis interpolation: "$f.name" / "$sf.x" / "$tf.y" / "$mp.z"
         -- expand from the ctx variable tables (KAG3 needed [eval] glue).
         if spec.interpolate and type(v) == "string" and v:find("$", 1, true) then
             -- ${expr}: full expression evaluated in a sandbox env with the

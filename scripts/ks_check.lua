@@ -41,7 +41,7 @@ local function checkScene(path)
     end
     local text = f:read("*a")
     f:close()
-    -- Next-gen: tokenizer.parse_with_offsets yields exact byte offsets
+    -- Neo-Genesis: tokenizer.parse_with_offsets yields exact byte offsets
     -- (pure-Lua LPeg Cp capture), so line numbers are source-accurate --
     -- no find-hack, no sequential scanning.
     local tokens = tokenizer.parse_with_offsets(text)

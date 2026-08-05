@@ -21,7 +21,7 @@ local VFXCommands = {}
 --  [vfx type="blur" time=500 strength=4]
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Next-gen contracts: typed + clamped via kag/schema.
+-- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("particles", {
     x = { type = "number", default = 0 },

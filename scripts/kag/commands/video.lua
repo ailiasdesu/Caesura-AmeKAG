@@ -21,7 +21,7 @@ end
 --  Click during video triggers CancelToken → stop video → resume script.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Next-gen contract: typed + clamped via kag/schema.
+-- Neo-Genesis contract: typed + clamped via kag/schema.
 require("kag.schema").define("video", {
     file = { type = "string", required = true },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },

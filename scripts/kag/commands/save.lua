@@ -137,7 +137,7 @@ local function capture_state(ctx)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Next-gen contracts: slot typed + bounded 0..99 (matches the C++
+-- Neo-Genesis contracts: slot typed + bounded 0..99 (matches the C++
 -- SaveManager guard; a crafted [save slot=-1] now errors with location).
 require("kag.schema").define("save", {
     slot = { type = "number", default = 0, min = 0, max = 99 },

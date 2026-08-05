@@ -161,7 +161,7 @@ end
 -- [scroll text=... speed=60] — vertical scrolling text (KiriKiri ED credits).
 -- Coroutine yield loop (same pattern as VFX.flash): draws the text at an
 -- upward-shifting y each frame until it exits the viewport, then clears.
--- Next-gen contracts: typed + clamped via kag/schema (replaces inline
+-- Neo-Genesis contracts: typed + clamped via kag/schema (replaces inline
 -- tonumber fallbacks; contract violations report cmd@scene:token).
 local schema = require("kag.schema")
 schema.define("scroll", {

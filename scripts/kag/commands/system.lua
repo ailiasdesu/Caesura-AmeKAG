@@ -26,7 +26,7 @@ local SystemCommands = {}
 --  Spec [10.2.33]: registers cancel callback, uses coroutine.yield.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Next-gen contract: number + 60s cap (replaces the inline clamp).
+-- Neo-Genesis contract: number + 60s cap (replaces the inline clamp).
 require("kag.schema").define("wait", {
     time     = { type = "number", default = 1000, min = 0, max = 60000 },
     ms       = { type = "number", default = 1000, min = 0, max = 60000 },
@@ -210,7 +210,7 @@ end
 -- Returns false (no error) when there is nothing to roll back; the runner
 -- surfaces that as a click with no effect.
 -- [gallery] — open the CG gallery (browse unlocked art; [unlock cg=] adds)
--- Next-gen contracts: flow/UI commands typed + validated.
+-- Neo-Genesis contracts: flow/UI commands typed + validated.
 local _schema = require("kag.schema")
 _schema.define("eval", {
     exp = { type = "string" },   -- no default: "" is truthy and would shadow

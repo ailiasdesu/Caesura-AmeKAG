@@ -20,7 +20,7 @@ end
 --  Load + play on BGM bus with optional fade-in and loop.
 -- =============================================================================
 
--- Next-gen contracts: typed + clamped via kag/schema.
+-- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 -- Volume setter family: clamped 0..1.5 like every other volume param
 -- (security: no amplification through the set*volume entry points).
@@ -147,7 +147,7 @@ end
 --  Cross-fade: fade out current BGM, then start new BGM with fade-in.
 -- =============================================================================
 
--- Next-gen contract: typed crossfade (time clamped).
+-- Neo-Genesis contract: typed crossfade (time clamped).
 schema.define("xfadebgm", {
     file  = { type = "string" },
     storage = { type = "string" },
