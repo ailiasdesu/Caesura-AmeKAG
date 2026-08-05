@@ -276,7 +276,9 @@ end
 
 function Layers.remove_layer(node)
     if not node then return false end
-    if node.id == "root" or node.is_root then
+    -- The root node has view_id 0 (truthy in Lua): recycling it would
+    -- hand view 0 out twice. Compare by reference (id is "_root").
+    if node == Layers.get_root() or node.view_id == 0 then
         print("[layers] refusing to remove the root layer")
         return false
     end
