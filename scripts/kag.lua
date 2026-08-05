@@ -235,9 +235,6 @@ function KAG.voice(ctx, params)
     audio.playvoice(ctx, { file = params.file or params[1] })
 end
 
--- [bgm file=X] -- KAG3 alternate; unified through [play bus=bgm]
-KAG.bgm = KAG.play
-
 -- [se file=X] -- KAG3 alternate; unified through [play bus=se]
 function KAG.se(ctx, params)
     local audio = require("kag.commands.audio")
@@ -259,6 +256,10 @@ function KAG.play(ctx, params)
     end
     print("[play] unknown bus: " .. tostring(bus))
 end
+
+-- [bgm file=X] -- KAG3 alternate; unified through [play bus=bgm]
+-- (defined AFTER the unified play so it binds the bus-aware handler)
+KAG.bgm = KAG.play
 
 -- ===========================================================================
 --  Lua → KAG flow-control API

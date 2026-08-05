@@ -52,4 +52,8 @@ check("KAG3 [ld] no-crash unknown layer", ok3)
 check("KAG3 [ct] aliases [cl]", KAG.ct == KAG.cl)
 check("KAG3 [waitforclick] registered", type(KAG.waitforclick) == "function")
 
+-- Exit non-zero on any failure (runner gate).
+local failed = 0
+for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
+if failed > 0 then os.exit(1) end
 print("KAG3 COMPAT TESTS DONE")
