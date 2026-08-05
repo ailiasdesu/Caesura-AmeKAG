@@ -94,13 +94,18 @@ graph LR
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
 
-### Scripting (6 capabilities)
+### Scripting (11 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
-| S2 | KAG 3.0 script parser (68 commands, 9 categories) | Lua tokenizer | ✓ |
+| S2 | KAG Neo-Genesis parser (69 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
+| S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
+| S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
+| S9 | Parameterized macros (args + %arg% substitution, nested expansion, deep-copied splice) | Lua scheduler | ✓ |
+| S10 | Label index (O(1) jump, scene-scoped, restored/invalidated on swap) | Lua scheduler | ✓ |
+| S11 | [if] expr cache keyed by env identity (no stale variables across scenes) | Lua scheduler | ✓ |
 | S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) |
 | S5 | Hot reload (watch scripts/, live-reload without restart) | Engine-owned `HotReload` instance | ✓ |
 | S6 | Error recovery (pcall guards, ErrorUI, graceful degradation) | scheduler + bindings | ✓ |
