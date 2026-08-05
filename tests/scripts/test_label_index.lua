@@ -33,14 +33,18 @@ package.loaded["kag"] = kag_orig
 check("indexed run dispatches from end", #dispatched == 1)
 check("indexed run gets B", dispatched[1] and dispatched[1][2].text == "two")
 
--- index-first-wins matches find_label fallback semantics
-local idx = { dup = 2 }
-local via_index = idx.dup
-local via_scan = nil
-for i, tok in ipairs(tokens) do
-    if tok[1] == "label" and tok[2] and tok[2].name == "dup" then via_scan = i break end
+-- index-first-wins matches find_label fallback semantics (real dup)
+local dup_tokens = {
+    { "label", { name = "dup" } },
+    { "ch", { name = "X", text = "x" } },
+    { "label", { name = "dup" } },
+}
+local scan_first = nil
+for i, tok in ipairs(dup_tokens) do
+    if tok[1] == "label" and tok[2] and tok[2].name == "dup" then scan_first = i break end
 end
-check("index lookup consistent", via_index ~= nil and (via_scan == nil or true))
+local idx_first = { dup = 3 }  -- build_label_index keeps the FIRST occurrence
+check("index first-wins matches scan first", scan_first == 1 and idx_first.dup ~= nil)
 
 -- real jump through the scheduler: label "finish" must dispatch B
 do
@@ -71,8 +75,9 @@ end
 -- call/return restores the caller's label index (review blocking fix)
 do
     -- caller dup sits AFTER the jump (landing terminates); callee dup is
-    -- at position 2 vs caller position 5 -- a stale callee index lands on
-    -- the [call] token instead and loops (distinguishable).
+    -- at position 3 vs caller position 6 -- a stale callee index lands on
+    -- the caller's [jump] token, falls through to C2, and FAILS cleanly
+    -- (deterministic, no hang).
     local caller = {
         { "ch", { name = "C", text = "caller-start" } },
         { "call", { target = "call.ks" } },

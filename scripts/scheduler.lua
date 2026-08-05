@@ -183,6 +183,7 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [return]
         elseif cmd == "return" then
+            ctx.call_stack = ctx.call_stack or {}  -- mirror the [call] guard
             local frame = table.remove(ctx.call_stack)
             if frame then
                 ctx.label_index = frame.label_index  -- caller scene again
@@ -473,7 +474,7 @@ function scheduler.run(ctx, tokens, start_index)
                     tokens[i - 1 + n] = {macro_body[n][1], deepCopy(macro_body[n][2])}
                 end
                 ctx.tokens = tokens
-                ctx.label_index = nil  -- splice changed the stream: rebuild lazily
+                ctx.label_index = nil  -- splice changed the stream: next jumps re-scan
                 i = i - 1  -- will point to first body token after i = i + 1
             else
                 -- text chunks become [ch] commands
