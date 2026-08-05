@@ -1,4 +1,4 @@
--- schema_doc.lua — generate API docs from command contracts (next-gen)
+-- schema_doc.lua — generate API docs from command contracts (KAG Neo-Genesis)
 -- Usage: lua scripts/schema_doc.lua > docs/api/command-contracts.md
 -- The schema registry is the single source of truth: types, defaults,
 -- ranges, choices and required flags are documented from the contracts

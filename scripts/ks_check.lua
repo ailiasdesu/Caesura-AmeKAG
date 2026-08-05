@@ -1,4 +1,4 @@
--- ks_check.lua — static .ks contract checker (next-gen standard tool)
+-- ks_check.lua — static .ks contract checker (KAG Neo-Genesis tool)
 -- Usage: lua scripts/ks_check.lua <scene.ks> [more.ks ...]
 -- Tokenizes each scene, runs every migrated command's contract over its
 -- params, and reports contract violations with scene:line locations.

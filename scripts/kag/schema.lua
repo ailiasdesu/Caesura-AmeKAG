@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
---  kag/schema.lua — Declarative command contracts (next-gen KAG rules)
+--  kag/schema.lua — Declarative command contracts (KAG Neo-Genesis rules)
 --
 --  KAG3 commands read params as raw strings and each handler re-parses
 --  (tonumber(params.x) or default) with silent fallbacks on bad input.
