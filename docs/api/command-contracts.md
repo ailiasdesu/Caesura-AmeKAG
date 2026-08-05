@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (26)
+## Commands (27)
 
 ### `[auto]`
 
@@ -110,6 +110,14 @@
 | `speed_max` | number | 10 | 0..10000 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[play]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `bus` | string | - | bgm,se,voice | - |
+| `file` | string | - | - | - |
+| `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playbgm]`
 

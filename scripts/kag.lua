@@ -244,6 +244,14 @@ end
 -- [play bus=bgm|se|voice file=X volume=...] -- next-gen unified audio
 -- command: one entry for all three buses (KAG3 needed play/bgm/se/voice
 -- as separate commands with duplicated param handling).
+-- Next-gen contract: unified audio entry gets typed params (bus choices
+-- replace the manual string compare; volume clamped like the audio cmds).
+require("kag.schema").define("play", {
+    bus    = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },
+    file   = { type = "string" },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+
 function KAG.play(ctx, params)
     local audio = require("kag.commands.audio")
     local bus = params.bus or "bgm"
