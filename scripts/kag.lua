@@ -248,6 +248,11 @@ function KAG.ld(ctx, params)
             node.visible = false
             node.texture = nil
         end
+        -- Clear the dedup state so the next [bg] reloads (review nit:
+        -- a hidden-then-reasserted bg must not reuse a nil texture).
+        if name == "bg" and ctx and ctx.layers then
+            ctx.layers.bg = nil
+        end
     end
 end
 
