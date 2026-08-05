@@ -244,7 +244,7 @@ function scheduler.run(ctx, tokens, start_index)
                 -- Cache key = source + the f-table identity: a cached chunk
                 -- binds its FIRST env table, so a different ctx.f (new scene,
                 -- save restore) must recompile or it reads stale variables.
-                local key = src .. " " .. tostring(ctx.f)
+                local key = src .. "\0" .. tostring(ctx.f)
                 local fn = exprCache[key]
                 if not fn then
                     fn = load(src, "=if", "t", ctx.f or {})
