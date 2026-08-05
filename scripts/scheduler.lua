@@ -439,6 +439,12 @@ function scheduler.run(ctx, tokens, start_index)
             if w then
                 if w.ended then
                     for_stack[#for_stack] = nil  -- loop over: pop
+                    -- An empty/skipped loop set the mark too: clear it or
+                    -- a later same-name [for] reuses the stale counter
+                    -- (review should-fix).
+                    if ctx._forStackMarks then
+                        ctx._forStackMarks[w.var] = nil
+                    end
                 else
                     local cur = tonumber(ctx.f and ctx.f[w.var]) or 0
                     cur = cur + w.step

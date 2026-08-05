@@ -85,5 +85,43 @@ check("nested for runs 4 times", #d5 == 5)  -- 4 bodies + after
 check("nested counters independent", ctx5.f.a == 2 and ctx5.f.b == 2)
 check("nested after runs", d5[#d5] and d5[#d5][2].text == "after")
 
+
+-- Sequential same-name for after an EMPTY for: the mark must be cleared
+-- (review should-fix) or the second loop reuses the stale counter.
+do
+    local scheduler = require("scheduler")
+    local tokens = {
+        { "for", { var = "i", start = "9", ["end"] = "1", step = "1" } },  -- empty
+        { "ch", { name = "A", text = "skip" } },
+        { "endfor" },
+        { "for", { var = "i", start = "0", ["end"] = "1", step = "1" } },  -- 2 iters
+        { "ch", { name = "B", text = "body" } },
+        { "endfor" },
+    }
+    local d = {}
+    local kag_orig = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d[#d + 1] = { k, p2 } end
+    end})
+    local vars = {}
+    local ctx = { f = vars, tf = {}, sf = {}, mp = {}, variables = {},
+        _whileIterByScene = { ["t.ks"] = 0 },
+        macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    local ok = true
+    while coroutine.status(co) ~= "dead" do ok = coroutine.resume(co) end
+    package.loaded["kag"] = kag_orig
+
+    local bodyc = 0
+    for _, x in ipairs(d) do if x[2].text == "body" then bodyc = bodyc + 1 end end
+    local skipc = 0
+    for _, x in ipairs(d) do if x[2].text == "skip" then skipc = skipc + 1 end end
+    local okall = ok and bodyc == 2 and skipc == 0 and vars.i == 2
+    if okall then print("PASS empty-for mark cleared; second for runs 2x")
+        passed = passed + 1
+    else print("FAIL empty-for mark cleared; second for runs 2x")
+        failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("FOR TESTS DONE")
