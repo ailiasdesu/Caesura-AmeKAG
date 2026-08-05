@@ -12,7 +12,8 @@ local s = src and src:read("*a") or ""
 if src then src:close() end
 
 check("cache half-evicts", s:find("math.floor(#keys / 2)", 1, true) ~= nil)
-check("no full clear in evict", not s:find("exprCache = {}%s*$", 1))
+check("evict halves not clears", s:find("math.floor(#keys / 2)", 1, true) ~= nil
+      and not s:find("if n > EXPR_CACHE_MAX then%s*$", 1))
 check("error report has location", s:find('ctx.current_scene or "?"', 1, true) ~= nil)
 check("error report has token", s:find("ctx.token_index or 0", 1, true) ~= nil)
 
@@ -37,7 +38,8 @@ do
     check("if true dispatches inside", dispatched[1] and dispatched[1][2].text == "high")
     check("if true continues after", dispatched[2] and dispatched[2][2].text == "after")
 
-    -- ctx.f content mutation is visible to cached closures (same table ref)
+    -- env isolation: a NEW ctx.f table recompiles (cached chunk bound to
+    -- the first env must not leak the old scene's variables)
     local ctx2 = { f = { score = 2 }, tf = {}, sf = {}, mp = {},
         macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
     local d2 = {}
@@ -48,6 +50,18 @@ do
     while coroutine.status(co2) ~= "dead" do coroutine.resume(co2) end
     package.loaded["kag"] = kag_orig
     check("if false skips inside", d2[1] and d2[1][2].text == "after")
+
+    -- same-table mutation: the shared reference makes content changes
+    -- visible to the cached chunk WITHOUT recompilation
+    ctx2.f.score = 15  -- same table object
+    local d3 = {}
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d3[#d3 + 1] = { k, p2 } end
+    end})
+    local co3 = coroutine.create(function() scheduler.run(ctx2, tokens, 1) end)
+    while coroutine.status(co3) ~= "dead" do coroutine.resume(co3) end
+    package.loaded["kag"] = kag_orig
+    check("same-table mutation visible", d3[1] and d3[1][2].text == "high")
 end
 
 local failed = 0
