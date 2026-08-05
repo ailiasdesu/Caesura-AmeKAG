@@ -231,14 +231,24 @@ end
 
 -- [voice file=X] -- play voice (KAG3)
 function KAG.voice(ctx, params)
+    local schema = require("kag.schema")
+    if schema.isMigrated("play") then
+        params = schema.coerce("play", params, ctx)
+    end
     local audio = require("kag.commands.audio")
     audio.playvoice(ctx, { file = params.file or params[1] })
 end
 
 -- [se file=X] -- KAG3 alternate; unified through [play bus=se]
 function KAG.se(ctx, params)
+    -- Route through the play contract so volume is clamped here too
+    -- (the alias bypasses the [play] dispatch coerce).
+    local schema = require("kag.schema")
+    if schema.isMigrated("play") then
+        params = schema.coerce("play", params, ctx)
+    end
     local audio = require("kag.commands.audio")
-    audio.playse(ctx, { file = params.file or params[1] })
+    audio.playse(ctx, { file = params.file or params[1], volume = params.volume })
 end
 
 -- [play bus=bgm|se|voice file=X volume=...] -- next-gen unified audio
