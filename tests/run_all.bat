@@ -20,7 +20,7 @@ if exist "%BUILD_DIR%\tests\Debug\CaesuraTests.exe" (
         echo [FAIL] C++ tests failed!
         exit /b 1
     )
-    echo [PASS] C++ tests passed (78/78).
+    echo [PASS] C++ tests passed (569/569).
 ) else (
     echo [SKIP] CaesuraTests.exe not found. Run cmake --build first.
 )
@@ -36,7 +36,7 @@ if exist "%LUA%" (
         echo [FAIL] Lua tests failed!
         exit /b 1
     )
-    echo [PASS] Lua tests passed (25/25).
+    echo [PASS] Lua tests passed (18/18).
 ) else (
     echo [SKIP] lua.exe not found at %LUA%
 )
@@ -45,6 +45,6 @@ REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
 echo   Test Suite Complete ? All Passed
-echo   C++: 78/78  |  Lua: 25/25
+echo   C++: 569/569  |  Lua: 18/18
 echo ============================================
 exit /b 0
