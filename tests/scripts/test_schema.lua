@@ -130,6 +130,20 @@ do
     check("playbgmstop volume clamped", pv.volume == 1.5)
 end
 
+-- storage forwarding through play (contract-advertised)
+do
+    local audio = require("kag.commands.audio")
+    local orig = audio.playbgm
+    local got
+    audio.playbgm = function(_, p) got = p end
+    local kag2 = require("kag")
+    if kag2 and kag2.play then
+        kag2.play({}, { bus = "bgm", storage = "x.ogg", volume = "1" })
+    end
+    audio.playbgm = orig
+    check("play forwards storage to playbgm", got and got.storage == "x.ogg")
+end
+
 -- [bgm] command-name contract (security: pre-dispatch clamp)
 do
     pcall(require, "kag")

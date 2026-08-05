@@ -236,7 +236,7 @@ function KAG.voice(ctx, params)
         params = schema.coerce("play", params, ctx)
     end
     local audio = require("kag.commands.audio")
-    audio.playvoice(ctx, { file = params.file or params[1] })
+    audio.playvoice(ctx, { file = params.file or params[1], storage = params.storage })
 end
 
 -- [se file=X] -- KAG3 alternate; unified through [play bus=se]
@@ -248,7 +248,7 @@ function KAG.se(ctx, params)
         params = schema.coerce("play", params, ctx)
     end
     local audio = require("kag.commands.audio")
-    audio.playse(ctx, { file = params.file or params[1], volume = params.volume })
+    audio.playse(ctx, { file = params.file or params[1], storage = params.storage, volume = params.volume })
 end
 
 -- [play bus=bgm|se|voice file=X volume=...] -- next-gen unified audio
@@ -257,9 +257,10 @@ end
 -- Next-gen contract: unified audio entry gets typed params (bus choices
 -- replace the manual string compare; volume clamped like the audio cmds).
 require("kag.schema").define("play", {
-    bus    = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },
-    file   = { type = "string" },
-    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    bus     = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },
+    file    = { type = "string" },
+    storage = { type = "string" },  -- KAG3 alias
+    volume  = { type = "number", default = 1.0, min = 0, max = 1.5 },
 })
 
 function KAG.play(ctx, params)
@@ -270,7 +271,7 @@ function KAG.play(ctx, params)
     elseif bus == "se" then
         return audio.playse(ctx, { file = params.file or params[1], storage = params.storage, volume = params.volume })
     elseif bus == "voice" then
-        return audio.playvoice(ctx, { file = params.file or params[1] })
+        return audio.playvoice(ctx, { file = params.file or params[1], storage = params.storage })
     end
     print("[play] unknown bus: " .. tostring(bus))
 end

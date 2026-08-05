@@ -79,6 +79,10 @@ print(string.format("  [bench] scheduler: %d resumes in %.1f ms", steps, tSched 
 -- 3) Baseline assertion: 2000-line script fully parsed + dispatched fast enough
 check("total under 3s", (tParse + tSched) < 3.0)
 
+-- restore the real modules for subsequent tests
+package.loaded["kag"] = _saved_kag
+package.loaded["scheduler"] = _saved_sched
+
 local failed = 0
 for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end
