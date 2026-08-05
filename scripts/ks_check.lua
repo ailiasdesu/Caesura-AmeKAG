@@ -78,8 +78,53 @@ local function checkScene(path)
     end
 end
 
+-- ── Default-shadowing audit (Neo-Genesis regression guard) ────────────
+-- Contract defaults fill absent params during coerce; if the handler
+-- falls back to params[1] (positional form), the default shadows it.
+-- This bit us three times (ending/gallery/image/set*volume). The audit
+-- lists every migrated command whose handler mentions params[N] while
+-- the contract declares a non-nil default for a named param.
+local function auditDefaults()
+    local contracts = schema.dumpContracts()
+    local suspects = {}
+    local function scanFile(path, cmds)
+        local f = io.open(path, "r")
+        if not f then return end
+        local src = f:read("*a")
+        f:close()
+        if not src:find("params%[%d%]", 1) then return end  -- no positional use
+        for cmd in pairs(cmds) do
+            local specs = contracts[cmd]
+            if specs then
+                for name, spec in pairs(specs) do
+                    if spec.default ~= nil then
+                        suspects[#suspects + 1] = string.format(
+                            "%s: %s.default=%s (handler uses params[N])",
+                            cmd, name, tostring(spec.default))
+                    end
+                end
+            end
+        end
+    end
+    -- command-module files with positional fallbacks
+    scanFile(here .. "kag/commands/audio.lua", { ["setbgmvolume"] = true, ["setsevolume"] = true, ["setvoicevolume"] = true })
+    scanFile(here .. "kag.lua", { ["ld"] = true, ["play"] = true, ["se"] = true, ["voice"] = true, ["bgm"] = true })
+    if #suspects == 0 then
+        print("AUDIT: no default-shadowing suspects")
+    else
+        print("AUDIT: " .. #suspects .. " default-shadowing suspect(s):")
+        for _, s in ipairs(suspects) do print("  " .. s) end
+    end
+end
+
+if arg[1] == "--audit-defaults" then
+    auditDefaults()
+    os.exit(0)
+end
+
 if #arg == 0 then
     print("usage: lua scripts/ks_check.lua <scene.ks> [more ...]")
+    print("       lua scripts/ks_check.lua --audit-defaults")
     os.exit(2)
 end
 for _, p in ipairs(arg) do

@@ -24,14 +24,16 @@ end
 local schema = require("kag.schema")
 -- Volume setter family: clamped 0..1.5 like every other volume param
 -- (security: no amplification through the set*volume entry points).
+-- No default: the handler falls back to the positional params[1]
+-- ([setbgmvolume 0.5]); a default would shadow it (coerce fills volume).
 schema.define("setbgmvolume", {
-    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("setsevolume", {
-    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("setvoicevolume", {
-    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("playbgmstop", {
     file = { type = "string" },

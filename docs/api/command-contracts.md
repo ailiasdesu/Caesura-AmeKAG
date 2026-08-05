@@ -24,7 +24,7 @@
 |---|---|---|---|---|
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |
-| `volume` | number | 1.0 | 0..1.5 | - |
+| `volume` | number | - | 0..1.5 | - |
 
 ### `[br]`
 
@@ -262,7 +262,7 @@
 | `bus` | string | - | bgm,se,voice | - |
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |
-| `volume` | number | 1.0 | 0..1.5 | - |
+| `volume` | number | - | 0..1.5 | - |
 
 ### `[playbgm]`
 
@@ -376,19 +376,19 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `volume` | number | 1.0 | 0..1.5 | - |
+| `volume` | number | - | 0..1.5 | - |
 
 ### `[setsevolume]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `volume` | number | 1.0 | 0..1.5 | - |
+| `volume` | number | - | 0..1.5 | - |
 
 ### `[setvoicevolume]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `volume` | number | 1.0 | 0..1.5 | - |
+| `volume` | number | - | 0..1.5 | - |
 
 ### `[shake]`
 

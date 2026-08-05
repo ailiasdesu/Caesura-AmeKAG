@@ -188,7 +188,7 @@ do
     p = Schema.coerce("play", { bus = "se", file = "x.wav", volume = "9" }, {})
     check("play se + volume clamped", p.bus == "se" and p.volume == 1.5)
     p = Schema.coerce("play", { file = "y.wav" }, {})
-    check("play default volume", p.volume == 1.0)
+    check("play volume no default (positional)", p.volume == nil)
 end
 
 -- registry

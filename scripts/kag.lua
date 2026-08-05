@@ -286,7 +286,7 @@ require("kag.schema").define("play", {
     bus     = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },
     file    = { type = "string" },
     storage = { type = "string" },  -- KAG3 alias
-    volume  = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    volume  = { type = "number", min = 0, max = 1.5 },  -- no default: positional
 })
 
 function KAG.play(ctx, params)
@@ -309,7 +309,7 @@ end
 require("kag.schema").define("bgm", {
     file   = { type = "string" },
     storage = { type = "string" },
-    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+    volume = { type = "number", min = 0, max = 1.5 },  -- no default: positional
 })
 KAG.bgm = KAG.play
 
