@@ -174,33 +174,19 @@ function KAG.erasemacro(ctx, params) end
 -- [r] -- line break (KAG3); same as [l]
 KAG.r = KAG.l or KAG.br
 
--- [s] -- short wait then continue (KAG3 control char)
-function KAG.s(ctx, params)
-    -- short wait then continue (KAG3 control char)
-    local Operation = require("kag.operation")
-    local ms = tonumber(params.ms) or 250
-    if ms <= 0 then return end
-    local operation <close> = Operation.start(ctx)
-    local ct = operation.token
-    local elapsed = 0
-    while elapsed < ms and not ct.cancelled do
-        elapsed = elapsed + (coroutine.yield() or 16)
-    end
-    if not ct.cancelled then operation:complete() end
+-- [s] -- KAG3 short-wait control char; unified through [wait]
+-- (default 250ms matches KAG3's s-char pacing).
+KAG.s = function(ctx, params)
+    params = params or {}
+    return require("kag.commands.system").wait(ctx, {
+        ms = tonumber(params.ms) or 250,
+    })
 end
--- [delay ms=N] -- wait N ms (KAG3 delay)
-function KAG.delay(ctx, params)
-    -- wait N ms (KAG3 delay)
-    local Operation = require("kag.operation")
-    local ms = tonumber(params.ms) or tonumber(params[1]) or 500
-    if ms <= 0 then return end
-    local operation <close> = Operation.start(ctx)
-    local ct = operation.token
-    local elapsed = 0
-    while elapsed < ms and not ct.cancelled do
-        elapsed = elapsed + (coroutine.yield() or 16)
-    end
-    if not ct.cancelled then operation:complete() end
+-- [delay ms=N] -- KAG3 duplicate of [wait]; unified through the wait
+-- command + its schema contract (next-gen: one implementation, aliases
+-- share it). delay's ms param maps onto wait's ms field.
+KAG.delay = function(ctx, params)
+    return require("kag.commands.system").wait(ctx, params)
 end
 -- [clear] -- clear text layer (KAG3); alias for [cl]
 KAG.clear = KAG.cl
