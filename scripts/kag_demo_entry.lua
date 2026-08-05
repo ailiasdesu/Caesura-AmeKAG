@@ -21,6 +21,7 @@ kag_runner.start("scripts/demo_story.ks")
 -- "history", deadlocking clicks/skip/auto).
 local history_co = nil
 local _toast = pcall(require, "toast") and require("toast") or nil
+local _devHud = pcall(require, "dev_hud") and require("dev_hud") or nil
 
 -- Ctrl hold-to-skip: D9.6 dispatches _KAG_onCtrlDown/Up from Engine.cpp
 -- (key-repeat guarded); wire them so Ctrl skips while held and releases
@@ -45,9 +46,8 @@ function engine_update(dt)
     -- F4: toggle the developer HUD (perf overlay)
     if _G._GAME_KEY_F4 then
         _G._GAME_KEY_F4 = false
-        require("dev_hud").toggle()
+        if _devHud then pcall(function() _devHud.toggle() end) end
     end
-    local _devHud = pcall(require, "dev_hud") and require("dev_hud") or nil
     if _devHud then
         pcall(function() _devHud.update(dt * 1000) end)
     end

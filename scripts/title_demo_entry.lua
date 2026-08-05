@@ -13,9 +13,13 @@ local layers = require("layers")
 local title_co = nil
 local started = false
 
+
+local _toast = pcall(require, "toast") and require("toast") or nil
+local _devHud = pcall(require, "dev_hud") and require("dev_hud") or nil
+
 function engine_update(dt)
-    require("dev_hud").update(dt * 1000)
-    require("toast").update(dt)
+    if _devHud then pcall(function() _devHud.update(dt * 1000) end) end
+    if _toast then pcall(function() _toast.update(dt) end) end
 
     -- Drive the title menu until an action is chosen
     if title_co then
