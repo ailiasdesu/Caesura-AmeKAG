@@ -43,7 +43,8 @@
 [position layer="fg" pos="right"]
 
 [playvoice storage="assets/voice/line01.wav"]
-[ch name="Sakura" text="Hello! Are you a new student? My name is Sakura."]
+[ch name="Sakura" text="Hello! Are you a new student? My name is Sakura."
+     sprite="assets/fg/girl_uniform.png"]
 [p]
 
 ; Neo-Genesis performance demo: sprite slide-in, fade emphasis, text vib
