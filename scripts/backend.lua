@@ -27,6 +27,17 @@ local function resolve(fn_name)
     return nil
 end
 
+-- Guarded call (review should-fix): a missing binding must return nil
+-- (direct-API contexts) instead of throwing "attempt to call a nil".
+local function call_resolved(name, ...)
+    local fn = resolve(name)
+    if not fn then
+        print("[backend] '" .. name .. "' unavailable (no KAG binding)")
+        return nil
+    end
+    return fn(...)
+end
+
 -- =========================================================================
 -- Audio
 -- =========================================================================
@@ -49,11 +60,11 @@ function Backend.audio_play(bus, file, opts)
             else return be.audio("play_se", file) end
         end
     else
-        if bus == "bgm" then return resolve("play_bgm")(file, tonumber(opts.fadein) or 1.0)
-        elseif bus == "voice" then return resolve("play_voice")(file)
+        if bus == "bgm" then return call_resolved("play_bgm", file, tonumber(opts.fadein) or 1.0)
+        elseif bus == "voice" then return call_resolved("play_voice", file)
         elseif bus == "se" then
-            if opts.x and opts.y then return resolve("play_se_3d")(file, opts.x, opts.y, opts.z or 0)
-            else return resolve("play_se")(file) end
+            if opts.x and opts.y then return call_resolved("play_se_3d", file, opts.x, opts.y, opts.z or 0)
+            else return call_resolved("play_se", file) end
         end
     end
     return false
@@ -67,9 +78,9 @@ function Backend.audio_stop(bus, opts)
         elseif bus == "voice" then return be.audio("stop_voice")
         elseif bus == "se" then return be.audio("stop_se") end
     else
-        if bus == "bgm" then return resolve("stop_bgm")(tonumber(opts.fadeout) or 1.0)
-        elseif bus == "voice" then return resolve("stop_voice")()
-        elseif bus == "se" then resolve("stop_se")() end
+        if bus == "bgm" then return call_resolved("stop_bgm", tonumber(opts.fadeout) or 1.0)
+        elseif bus == "voice" then return call_resolved("stop_voice")
+        elseif bus == "se" then call_resolved("stop_se") end
     end
     return false
 end
@@ -81,9 +92,9 @@ function Backend.audio_is_playing(bus)
         if bus == "bgm"   then return be.audio("is_bgm_playing") end
         if bus == "se"    then return be.audio("is_playing", "se") end
     else
-        if bus == "voice" then return resolve("is_voice_playing")() end
-        if bus == "bgm"   then return resolve("is_bgm_playing")() end
-        if bus == "se"    then return resolve("is_se_playing")() end
+        if bus == "voice" then return call_resolved("is_voice_playing") end
+        if bus == "bgm"   then return call_resolved("is_bgm_playing") end
+        if bus == "se"    then return call_resolved("is_se_playing") end
     end
     return false
 end
@@ -91,19 +102,19 @@ end
 function Backend.audio_set_listener(px, py, pz, ax, ay, az)
     local be = get_backend()
     if be then return be.audio("set_listener", px or 0, py or 0, pz or 0, ax or 0, ay or 1, az or 0)
-    else return resolve("set_listener")(px, py, pz, ax, ay, az) end
+    else return call_resolved("set_listener", px, py, pz, ax, ay, az) end
 end
 
 function Backend.audio_set_bus_volume(bus, vol)
     local be = get_backend()
     if be then return be.audio("set_bus_volume", bus, vol)
-    else return resolve("set_bus_volume")(bus, vol) end
+    else return call_resolved("set_bus_volume", bus, vol) end
 end
 
 function Backend.audio_get_bus_volume(bus)
     local be = get_backend()
     if be then return be.audio("get_bus_volume", bus)
-    else return resolve("get_bus_volume")(bus) end
+    else return call_resolved("get_bus_volume", bus) end
 end
 
 function Backend.audio_fade_volume(bus, target_vol, fade_time)
@@ -127,13 +138,13 @@ end
 function Backend.stop_se()
     local be = get_backend()
     if be then return be.audio("stop_se")
-    else return resolve("stop_se")() end
+    else return call_resolved("stop_se") end
 end
 
 function Backend.flush_wave_cache()
     local be = get_backend()
     if be then return be.audio("flush_wave_cache")
-    else return resolve("flush_wave_cache")() end
+    else return call_resolved("flush_wave_cache") end
 end
 
 -- =========================================================================
@@ -225,19 +236,19 @@ end
 function Backend.render_text(text, x, y, r, g, b, a)
     local be = get_backend()
     if be then return be.render("render_text", text, x, y, r, g, b, a)
-    else return resolve("render_text")(text, x, y, r, g, b, a) end
+    else return call_resolved("render_text", text, x, y, r, g, b, a) end
 end
 
 function Backend.show_text(text)
-    return resolve("show_text")(text)
+    return call_resolved("show_text", text)
 end
 
 function Backend.show_image(file, x, y)
-    return resolve("show_image")(file, x or 0, y or 0)
+    return call_resolved("show_image", file, x or 0, y or 0)
 end
 
 function Backend.clear_screen()
-    return resolve("clear_screen")()
+    return call_resolved("clear_screen")
 end
 
 function Backend.wait_click()
@@ -308,7 +319,7 @@ end
 function Backend.clear_text()
     local be = get_backend()
     if be then return be.render("clear_text")
-    else return resolve("clear_text")() end
+    else return call_resolved("clear_text") end
 end
 
 function Backend.render_ruby(text, ruby, x, y, r, g, b, a)
@@ -316,14 +327,14 @@ function Backend.render_ruby(text, ruby, x, y, r, g, b, a)
     if be then
         return be.render("render_ruby", text, ruby, x, y, r, g, b, a)
     else
-        return resolve("render_ruby")(text, ruby, x, y, r, g, b, a)
+        return call_resolved("render_ruby", text, ruby, x, y, r, g, b, a)
     end
 end
 
 function Backend.set_font(id)
     local be = get_backend()
     if be then return be.render("set_font", id)
-    else return resolve("set_font")(id) end
+    else return call_resolved("set_font", id) end
 end
 
 function Backend.line_height()
