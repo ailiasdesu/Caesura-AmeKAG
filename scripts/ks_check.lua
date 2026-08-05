@@ -50,9 +50,14 @@ local function checkScene(path)
     -- count newlines before it (tokenizer skips comments/blank lines, so
     -- a synthetic accumulator would misreport).
     local LF = string.char(10)
+    -- Sequential plain find: each command's bracket text is located at or
+    -- after the previous match, so repeated commands get distinct lines
+    -- (a global find would always return the FIRST occurrence).
+    local searchFrom = 1
     local function lineOf(cmd)
-        local idx = text:find("[" .. cmd, 1, true)  -- plain find: '[' is a pattern char
+        local idx = text:find("[" .. cmd, searchFrom, true)
         if not idx then return 1 end
+        searchFrom = idx + 1
         local before = text:sub(1, idx - 1)
         local _, nl = before:gsub(LF, "")
         return nl + 1
