@@ -68,6 +68,15 @@ check("trans migrated", Schema.isMigrated("trans"))
 check("move migrated", Schema.isMigrated("move"))
 check("quake migrated", Schema.isMigrated("quake"))
 
+-- particles migrated
+check("particles migrated", Schema.isMigrated("particles"))
+p = Schema.coerce("particles", { rate = "99999" }, {})
+check("particles rate clamped", p.rate == 1000)
+p = Schema.coerce("particles", { sizeMax = "999" }, {})
+check("particles sizeMax clamped", p.sizeMax == 512)
+p = Schema.coerce("particles", { r = "300" }, {})
+check("particles color clamped", p.r == 255)
+
 -- layer commands migrated
 for _, c in ipairs({ "position", "layopt", "fadeout" }) do
     check(c .. " migrated", Schema.isMigrated(c))

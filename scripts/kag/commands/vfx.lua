@@ -21,6 +21,34 @@ local VFXCommands = {}
 --  [vfx type="blur" time=500 strength=4]
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Next-gen contracts: typed + clamped via kag/schema.
+local schema = require("kag.schema")
+schema.define("particles", {
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    rate = { type = "number", default = 10, min = 0, max = 1000 },
+    lifeMin = { type = "number", default = 0.5, min = 0, max = 60 },
+    life_max = { type = "number", default = 0.5, min = 0, max = 60 },
+    lifeMax = { type = "number", default = 2.0, min = 0, max = 60 },
+    speedMin = { type = "number", default = 10, min = 0, max = 10000 },
+    speed_max = { type = "number", default = 10, min = 0, max = 10000 },
+    speedMax = { type = "number", default = 50, min = 0, max = 10000 },
+    angleMin = { type = "number", default = 0 },
+    angle_max = { type = "number", default = 0 },
+    angleMax = { type = "number", default = 6.283 },
+    sizeMin = { type = "number", default = 2, min = 0, max = 512 },
+    size_max = { type = "number", default = 2, min = 0, max = 512 },
+    sizeMax = { type = "number", default = 8, min = 0, max = 512 },
+    r = { type = "number", default = 1, min = 0, max = 255 },
+    red = { type = "number", default = 1, min = 0, max = 255 },
+    g = { type = "number", default = 1, min = 0, max = 255 },
+    green = { type = "number", default = 1, min = 0, max = 255 },
+    b = { type = "number", default = 1, min = 0, max = 255 },
+    blue = { type = "number", default = 1, min = 0, max = 255 },
+    a = { type = "number", default = 1, min = 0, max = 255 },
+    alpha = { type = "number", default = 1, min = 0, max = 255 },
+})
+
 function VFXCommands.vfx(ctx, params)
     local vtype = params.type or params.effect or "particle"
 
@@ -30,21 +58,21 @@ function VFXCommands.vfx(ctx, params)
 
         if action == "create" then
             local cfg = {
-                x        = tonumber(params.x) or 0,
-                y        = tonumber(params.y) or 0,
-                rate     = tonumber(params.rate) or 10,
-                lifeMin  = tonumber(params.lifeMin or params.life_min) or 0.5,
-                lifeMax  = tonumber(params.lifeMax or params.life_max) or 2.0,
-                speedMin = tonumber(params.speedMin or params.speed_min) or 10,
-                speedMax = tonumber(params.speedMax or params.speed_max) or 50,
-                angleMin = tonumber(params.angleMin or params.angle_min) or 0,
-                angleMax = tonumber(params.angleMax or params.angle_max) or 6.283,
-                sizeMin  = tonumber(params.sizeMin or params.size_min) or 2,
-                sizeMax  = tonumber(params.sizeMax or params.size_max) or 8,
-                r = tonumber(params.r or params.red)   or 1,
-                g = tonumber(params.g or params.green) or 1,
-                b = tonumber(params.b or params.blue)  or 1,
-                a = tonumber(params.a or params.alpha) or 1,
+                x        = params.x or 0,
+                y        = params.y or 0,
+                rate     = params.rate or 10,
+                lifeMin  = params.lifeMin or params.life_min or 0.5,
+                lifeMax  = params.lifeMax or params.life_max or 2.0,
+                speedMin = params.speedMin or params.speed_min or 10,
+                speedMax = params.speedMax or params.speed_max or 50,
+                angleMin = params.angleMin or params.angle_min or 0,
+                angleMax = params.angleMax or params.angle_max or 6.283,
+                sizeMin  = params.sizeMin or params.size_min or 2,
+                sizeMax  = params.sizeMax or params.size_max or 8,
+                r = params.r or params.red or 1,
+                g = params.g or params.green or 1,
+                b = params.b or params.blue or 1,
+                a = params.a or params.alpha or 1,
                 gravityX = tonumber(params.gravityX or params.gravity_x) or 0,
                 gravityY = tonumber(params.gravityY or params.gravity_y) or 0,
             }
