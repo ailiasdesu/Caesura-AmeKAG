@@ -3,13 +3,21 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (31)
+## Commands (32)
 
 ### `[auto]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `mode` | string | - | off,on,toggle | - |
+
+### `[bgm]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `storage` | string | - | - | - |
+| `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[ch]`
 

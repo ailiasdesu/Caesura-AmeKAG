@@ -277,6 +277,13 @@ end
 
 -- [bgm file=X] -- KAG3 alternate; unified through [play bus=bgm]
 -- (defined AFTER the unified play so it binds the bus-aware handler)
+-- The "bgm" command name itself is contract-migrated so the scheduler
+-- coerces [bgm volume=9] BEFORE dispatch (security: no amplification).
+require("kag.schema").define("bgm", {
+    file   = { type = "string" },
+    storage = { type = "string" },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
 KAG.bgm = KAG.play
 
 -- ===========================================================================
