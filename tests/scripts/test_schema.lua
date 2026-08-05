@@ -281,7 +281,9 @@ do
     local a = src and src:read("*a") or ""
     if src then src:close() end
     check("voice_wait uses waiting_input", a:find("ctx.waiting_input", 1, true) ~= nil)
-    check("voice_wait enforces deadline", a:find("os.clock() > deadline", 1, true) ~= nil)
+    check("voice_wait enforces deadline", a:find("os.time() > deadline", 1, true) ~= nil)
+    check("voice_wait blocks while waiting", a:find("ctx.waiting_input = true", 1, true) ~= nil)
+    check("voice_wait skips on clear", a:find("not ctx.waiting_input", 1, true) ~= nil)
     check("voice_wait no KAG_onClick trap", not a:find("_G._KAG_onClick or", 1, true))
 end
 
