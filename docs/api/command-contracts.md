@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (27)
+## Commands (31)
 
 ### `[auto]`
 
@@ -130,6 +130,14 @@
 | `storage` | string | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
+### `[playbgmstop]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `fadein` | number | 0 | 0..30000 | - |
+| `fadeout` | number | 0 | 0..30000 | - |
+| `file` | string | - | - | - |
+
 ### `[playse]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -190,6 +198,24 @@
 | `size` | number | 28 | 8..128 | - |
 | `speed` | number | 60 | 1..1000 | - |
 | `text` | string |  | - | - |
+
+### `[setbgmvolume]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `volume` | number | 1.0 | 0..1.5 | - |
+
+### `[setsevolume]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `volume` | number | 1.0 | 0..1.5 | - |
+
+### `[setvoicevolume]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[stopbgm]`
 

@@ -22,6 +22,22 @@ end
 
 -- Next-gen contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
+-- Volume setter family: clamped 0..1.5 like every other volume param
+-- (security: no amplification through the set*volume entry points).
+schema.define("setbgmvolume", {
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+schema.define("setsevolume", {
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+schema.define("setvoicevolume", {
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+schema.define("playbgmstop", {
+    file = { type = "string" },
+    fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+    fadein = { type = "number", default = 0, min = 0, max = 30000 },
+})
 schema.define("playbgm", {
     _require_any = { "file", "storage" },
     file    = { type = "string" },
