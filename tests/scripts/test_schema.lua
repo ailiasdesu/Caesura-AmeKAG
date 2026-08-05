@@ -138,9 +138,9 @@ do
     audio.playbgm = function(_, p) got = p end
     local kag2 = require("kag")
     if kag2 and kag2.play then
-        kag2.play({}, { bus = "bgm", storage = "x.ogg", volume = "1" })
+        pcall(function() kag2.play({}, { bus = "bgm", storage = "x.ogg", volume = "1" }) end)
     end
-    audio.playbgm = orig
+    audio.playbgm = orig  -- restore even if play raised
     check("play forwards storage to playbgm", got and got.storage == "x.ogg")
 end
 

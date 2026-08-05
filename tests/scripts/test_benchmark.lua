@@ -46,6 +46,9 @@ print(string.format("  [bench] tokenizer: %d tokens in %.1f ms (%.2f ms/1000tok)
 -- 2) Scheduler dispatch throughput: rebuild a pure mock command table so
 -- the measurement is immune to suite ordering (test_scheduler swaps
 -- package.loaded["kag"]). The benchmark measures the scheduler loop.
+-- Capture BEFORE clearing so the restore puts the REAL modules back.
+local _saved_kag = package.loaded["kag"]
+local _saved_sched = package.loaded["scheduler"]
 package.loaded["kag"] = nil
 package.loaded["scheduler"] = nil
 local mock_kag = {}
