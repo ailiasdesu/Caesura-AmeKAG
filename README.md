@@ -157,7 +157,7 @@ Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 
 ## KAG Script Compatibility
 
-68 KAG 3.0 commands across 9 categories: audio (13), layer (6), text (13), system (4), flow control (16), transition (4), VFX (1), video (2), resource/save (9).
+69 KAG Neo-Genesis commands with declarative contracts across 9 categories (generated from `docs/api/command-contracts.md`): audio, layer, text, system, flow control, transition, VFX, video, resource/save.
 
 ```kag
 *start
