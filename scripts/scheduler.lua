@@ -621,13 +621,33 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [eval] — unified scope (ctx + f + sf + tf)
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""
+            -- Whitelist env (audit): the old `__index = _G` exposed the
+            -- ENTIRE global table -- os.execute and friends reachable from
+            -- a [eval] tag -- while the strict-sandbox path (SystemCommands
+            -- via sandbox.execute) never ran because this branch intercepts
+            -- first. Same whitelist as [iscript]: os restricted to
+            -- clock/date/time, no require/debug/io/load.
             local env = {
-                ctx = ctx,
-                f   = ctx.f or {},
-                sf  = ctx.sf or {},
-                tf  = ctx.tf or {},
+                ctx       = ctx,
+                f         = ctx.f or {},
+                sf        = ctx.sf or {},
+                tf        = ctx.tf or {},
+                math      = math,
+                string    = string,
+                table     = table,
+                os        = { clock = os.clock, date = os.date, time = os.time },
+                tostring  = tostring,
+                tonumber  = tonumber,
+                type      = type,
+                pairs     = pairs,
+                ipairs    = ipairs,
+                next      = next,
+                print     = print,
+                pcall     = pcall,
+                select    = select,
+                unpack    = unpack or table.unpack,
+                error     = error,
             }
-            setmetatable(env, { __index = _G })
             local fn, compileErr = load(code, "=eval", "t", env)
             if fn then
                 local ok, result = pcall(fn)
