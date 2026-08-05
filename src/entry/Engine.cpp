@@ -959,7 +959,11 @@ void Engine::processEvents() {
                     if (!event.key.repeat && !isLuaExecutionPaused()) quickload();
                 }
                 if (event.key.key == SDLK_W)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_W"); }
-                if (event.key.key == SDLK_A)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_A"); }
+                // A: auto-mode toggle -- key-repeat guarded like V/Ctrl so a
+                // held A doesn't flap auto_mode ~30x/sec via SDL auto-repeat.
+                if (event.key.key == SDLK_A && !event.key.repeat) {
+                    lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_A");
+                }
                 if (event.key.key == SDLK_S)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_S"); }
                 if (event.key.key == SDLK_D)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_D"); }
                 if (event.key.key == SDLK_UP)   { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_UP"); }

@@ -105,6 +105,9 @@ function engine_update(dt)
             end
         end
     end
+    if require("toast") then
+        pcall(function() require("toast").update(dt or 0.016) end)
+    end
     kag_runner.update(dt or 0.016)
 end
 
