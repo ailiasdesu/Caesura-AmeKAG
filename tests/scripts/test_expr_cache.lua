@@ -52,16 +52,22 @@ do
     check("if false skips inside", d2[1] and d2[1][2].text == "after")
 
     -- same-table mutation: the shared reference makes content changes
-    -- visible to the cached chunk WITHOUT recompilation
+    -- visible to the cached chunk -- and the cache HIT is proven by a
+    -- load-counter (no recompilation on run 3)
     ctx2.f.score = 15  -- same table object
+    local realLoad = load
+    local compiles = 0
+    load = function(...) compiles = compiles + 1 return realLoad(...) end
     local d3 = {}
     package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
         return function(c2, p2) d3[#d3 + 1] = { k, p2 } end
     end})
     local co3 = coroutine.create(function() scheduler.run(ctx2, tokens, 1) end)
     while coroutine.status(co3) ~= "dead" do coroutine.resume(co3) end
+    load = realLoad
     package.loaded["kag"] = kag_orig
     check("same-table mutation visible", d3[1] and d3[1][2].text == "high")
+    check("cached chunk NOT recompiled", compiles == 0)
 end
 
 local failed = 0
