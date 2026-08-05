@@ -72,5 +72,26 @@ do
     else print("FAIL whitelist survives mutation") failed = failed + 1 end
 end
 
+
+-- Shared-table isolation (info item): rawset on a sandbox math member
+-- must not corrupt the real global math table.
+do
+    local Sandbox = require("sandbox")
+    local envA = Sandbox.create({ mode = "dev" })
+    pcall(load([[
+        rawset(math, "pi", 3)
+        return true
+    ]], "=m", "t", envA))
+    local envB = Sandbox.create({ mode = "dev" })
+    local fnB = load([[return math.pi]], "=b", "t", envB)
+    local ok = fnB ~= nil and math.abs(fnB() - 3.1415926535898) < 1e-9
+    -- assert/xpcall reachable (info item 2)
+    local fnC = load([[return type(assert) .. type(xpcall)]], "=c", "t", envB)
+    local ok2 = fnC ~= nil and fnC() == "functionfunction"
+    if ok and ok2 then
+        print("PASS shared tables isolated + assert/xpcall") passed = passed + 1
+    else print("FAIL shared tables isolated + assert/xpcall") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("SANDBOX CREATE TESTS DONE")

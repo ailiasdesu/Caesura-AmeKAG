@@ -378,7 +378,8 @@ local SANDBOX_WHITELIST = {
     math = math, string = string, table = table,
     tostring = tostring, tonumber = tonumber, type = type,
     pairs = pairs, ipairs = ipairs, next = next, print = print,
-    pcall = pcall, select = select, unpack = unpack or table.unpack,
+    pcall = pcall, xpcall = xpcall, assert = assert,
+    select = select, unpack = unpack or table.unpack,
     error = error, coroutine = coroutine,
     rawget = rawget, rawset = rawset,
     setmetatable = setmetatable, getmetatable = getmetatable,
@@ -398,6 +399,10 @@ function Sandbox.create(opts)
         -- them through the metatable and a sandboxed rawset(nil) would
         -- corrupt the shared tables for later sandboxes (review LOW).
         if type(v) == "table" then
+            -- Shallow-copy ALL table members (math/string/table/coroutine
+            -- included): sandboxed rawset on a member REPLACES it only in
+            -- this env's copy -- the shared globals stay intact (info
+            -- item; member FUNCTIONS are shared closures, still safe).
             local t = {}
             for k2, v2 in pairs(v) do t[k2] = v2 end
             whitelist[k] = t
