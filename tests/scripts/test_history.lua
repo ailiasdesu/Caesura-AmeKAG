@@ -42,7 +42,8 @@ package.loaded["history_ui"] = { show = function()
 end }
 local ctxN = { backlog = { { text = "x" } }, f = {}, tf = {}, sf = {}, mp = {},
     variables = {}, stop_flag = false }
-pcall(KAG.history, ctxN, {})
+local okN = pcall(KAG.history, ctxN, {})
+check("no-jump handler runs", okN == true)
 check("no-jump result is a no-op", ctxN.stop_flag == false
       and ctxN._pendingJump == nil)
 
