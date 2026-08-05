@@ -114,6 +114,18 @@ do
     check("var + expr mixed", p4.text == "mixed Ame 42")
 end
 
+-- [play] contract (unified audio entry)
+do
+    pcall(require, "kag")  -- registers the play contract
+    check("play migrated", Schema.isMigrated("play"))
+    local ok, err = pcall(function() Schema.coerce("play", { bus = "bogus" }, {}) end)
+    check("play bogus bus throws", not ok)
+    p = Schema.coerce("play", { bus = "se", file = "x.wav", volume = "9" }, {})
+    check("play se + volume clamped", p.bus == "se" and p.volume == 1.5)
+    p = Schema.coerce("play", { file = "y.wav" }, {})
+    check("play default volume", p.volume == 1.0)
+end
+
 -- registry
 check("registry non-empty", Schema.registrySize() >= 3)
 check("isMigrated", Schema.isMigrated("_test_cmd") and not Schema.isMigrated("_not_migrated"))

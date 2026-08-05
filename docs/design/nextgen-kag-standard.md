@@ -68,7 +68,8 @@ Schema.define("playbgm", {
 |---|---|
 | [delay]/[s] → [wait] | KAG3 三个手写协程等待循环统一为一个契约实现（-26 行） |
 | [play bus=] | KAG3 的 play/bgm/se/voice 五个入口统一为一个命令（bus choices 契约） |
-| [bgm]/[se]/[voice] 别名 | 保留 KAG3 兼容，委托到统一实现 |
+| [bgm] 别名 | 保留 KAG3 兼容，绑定统一 [play]（bus 契约生效） |
+| [se]/[voice] 别名 | 保留 KAG3 兼容，直调 audio 模块（不经 play 契约） |
 | [cl] 契约化 | clear/ct/clearscreen 别名统一入口契约 |
 | [auto mode=] | 显式 on/off/toggle（KAG3 仅 toggle） |
 | [voice_off] | 静音命令（保 voice_end 防卡——KAG3 需 stopvoice+设置） |
