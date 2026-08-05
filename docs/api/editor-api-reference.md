@@ -401,6 +401,10 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 
 ---
 
+> **Note:** the authoritative command reference is the auto-generated
+> [command-contracts.md](command-contracts.md) (69 contract commands). The
+> hand-maintained list below is legacy context.
+
 ## 3. KAG Command Reference
 
 KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
