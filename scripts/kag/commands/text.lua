@@ -878,4 +878,18 @@ function TextCommands.endbutton(ctx, params)
     end
 end
 
+-- KAG3 select syntax: [select] opens the block (no-op), [sel] registers
+-- an option (same fields as [button]), [endselect] renders + blocks
+-- (same as [endbutton]). The choice engine is shared; no schema is
+-- needed (button itself is unmigrated -- raw params pass through).
+function TextCommands.select(ctx, params)
+    ctx._choiceButtons = ctx._choiceButtons or {}
+end
+
+TextCommands.sel = TextCommands.button
+
+function TextCommands.endselect(ctx, params)
+    return TextCommands.endbutton(ctx, params)
+end
+
 return TextCommands

@@ -47,6 +47,7 @@ local tests = {
     "test_iscript_sandbox",
     "test_eval_env",
     "test_sandbox_create",
+    "test_select",
 }
 
 local passed, failed = 0, 0
