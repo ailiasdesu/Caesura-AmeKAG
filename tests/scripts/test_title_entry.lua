@@ -15,6 +15,10 @@ package.preload["backend"] = function()
 end
 package.loaded["backend"] = nil
 
+-- (suite hygiene: capture the ORIGINAL preload BEFORE the mock -- the
+-- restore at the end must put back nil, not the mock itself)
+local _preload_kr = package.preload["kag_runner"]
+
 -- Mock kag_runner: record start() calls
 package.preload["kag_runner"] = function()
     return {
@@ -63,5 +67,7 @@ check("exit quits engine", _G._mock_quit == true)
 
 local failed = 0
 for _, okv in ipairs(results or {}) do if not okv then failed = failed + 1 end end
+package.preload["kag_runner"] = _preload_kr
+
 if failed > 0 then os.exit(1) end
 print("TITLE ENTRY TESTS DONE")

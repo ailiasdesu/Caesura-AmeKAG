@@ -8,15 +8,33 @@
 --  hooks that the engine loop calls each frame.
 --
 --  Cross-scene jumps ([jump], [call], [link]) are handled by the scheduler
---  via ctx.load_tokens. When a cross-scene [jump] sets new tokens and
---  token_index, the scheduler returns (coroutine dies); we detect this via
---  a _scene_changed flag and re-spawn the coroutine on the next update.
+--  via ctx.load_tokens.
+--  When a cross-scene [jump] sets new tokens and token_index, the
+--  scheduler returns (coroutine dies); we detect this via a
+--  _scene_changed flag and re-spawn the coroutine on the next update.
 -- =============================================================================
 
 local flow = require("flow")
 local scheduler = require("scheduler")
 
 local kag_runner = {}
+
+-- Resolve a "*label" choice target to a token index: label_index
+-- (built by the scheduler) first, token-scan fallback. Both resume AT
+-- the label token itself ([label] is a no-op, matching the [jump]
+-- convention -- review nit: the two paths must agree).
+function kag_runner.resolve_label_index(ctx, label)
+    local idx = ctx.label_index and ctx.label_index[label]
+    if not idx then
+        for i, tok in ipairs(ctx.tokens) do
+            if tok[1] == "label" and tok[2] and tok[2].name == label then
+                idx = i
+                break
+            end
+        end
+    end
+    return idx
+end
 local kag_co = nil
 local ctx = nil
 
@@ -328,16 +346,7 @@ function kag_runner.update(dt)
                 -- allowlist rejected these, so classic choice scripts never
                 -- resolved their targets).
                 local label = path:sub(2)
-                local idx = ctx.label_index and ctx.label_index[label]
-                if not idx then
-                    for i, tok in ipairs(ctx.tokens) do
-                        if tok[1] == "label" and tok[2]
-                           and tok[2].name == label then
-                            idx = i + 1
-                            break
-                        end
-                    end
-                end
+                local idx = resolve_label_index(ctx, label)
                 if idx then
                     ctx.token_index = idx
                     ctx.stop_flag = false

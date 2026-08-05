@@ -6,21 +6,17 @@ local function check(name, cond)
     else print("FAIL " .. name) failed = failed + 1 end
 end
 
--- The runner resolves "*label" targets to a token index via the label
--- index (or a scan). Extract and lock that resolution logic here so the
--- runner branch is testable without a full runner harness.
-local function resolveLabel(ctx, label)
-    local idx = ctx.label_index and ctx.label_index[label]
-    if not idx then
-        for i, tok in ipairs(ctx.tokens) do
-            if tok[1] == "label" and tok[2] and tok[2].name == label then
-                idx = i + 1
-                break
-            end
-        end
-    end
-    return idx
-end
+-- Lock the REAL resolver used by the runner branch (review warning: a
+-- duplicated copy would let a runner regression pass CI).
+-- The sandbox wraps _G.require (preloaded-only) and nils loadfile/dofile
+-- after test_sandbox, and test_title_entry leaves a 3-key mock in
+-- package.preload -- io.open + load (both retained) is the reliable path.
+local krf = assert(io.open("scripts/kag_runner.lua", "r"))
+local krsrc = krf:read("*a")
+krf:close()
+local kr_chunk = assert(load(krsrc, "=kag_runner"))
+local kag_runner = kr_chunk()
+local resolveLabel = kag_runner.resolve_label_index
 
 local tokens = {
     { "ch", { text = "intro" } },
@@ -30,11 +26,11 @@ local tokens = {
     { "ch", { text = "south-path" } },
 }
 -- via label_index (built by the scheduler)
-local idx1 = resolveLabel({ tokens = tokens, label_index = { north = 3 } }, "north")
-check("label_index hit", idx1 == 3)
+local idx1 = resolveLabel({ tokens = tokens, label_index = { north = 2 } }, "north")
+check("label_index hit", idx1 == 2)
 -- via fallback scan
 local idx2 = resolveLabel({ tokens = tokens, label_index = {} }, "south")
-check("scan fallback", idx2 == 5)
+check("scan fallback", idx2 == 4)
 -- missing label -> nil (runner errors loudly)
 local idx3 = resolveLabel({ tokens = tokens, label_index = {} }, "missing")
 check("missing label nil", idx3 == nil)
