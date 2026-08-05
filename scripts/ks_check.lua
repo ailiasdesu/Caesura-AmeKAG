@@ -46,21 +46,19 @@ local function checkScene(path)
         report(path, 0, "tokenize failed")
         return
     end
-    -- Pre-compute newline offsets for accurate line numbers.
+    -- Line numbers: find each command's bracket text in the source and
+    -- count newlines before it (tokenizer skips comments/blank lines, so
+    -- a synthetic accumulator would misreport).
     local LF = string.char(10)
-    local offsets = {}
-    local n = 0
-    for part in (text .. LF):gmatch("(.-)" .. LF) do
-        offsets[#offsets + 1] = n
-        n = n + #part + 1
+    local function lineOf(cmd)
+        local idx = text:find("[" .. cmd, 1, true)  -- plain find: '[' is a pattern char
+        if not idx then return 1 end
+        local before = text:sub(1, idx - 1)
+        local _, nl = before:gsub(LF, "")
+        return nl + 1
     end
-    local pos = 1
     for _, tok in ipairs(tokens) do
-        local line = 1
         if tok.type == "command" then
-            for li = #offsets, 1, -1 do
-                if offsets[li] <= pos then line = li break end
-            end
             local cmd = tok.cmd
             if type(cmd) == "string" and schema.isMigrated(cmd) then
                 local params = {}
@@ -70,6 +68,7 @@ local function checkScene(path)
                         params[k] = pair[2]
                     end
                 end
+                local line = lineOf(cmd)
                 local ok, err2 = pcall(function()
                     schema.coerce(cmd, params, { current_scene = path, token_index = line })
                 end)
@@ -78,7 +77,6 @@ local function checkScene(path)
                 end
             end
         end
-        pos = pos + #(tok.content or tok.cmd or "") + 1
     end
 end
 
