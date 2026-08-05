@@ -129,10 +129,8 @@ end
 --  Loaded from kag/commands/vfx.lua, wired to vfx.lua + particle system.
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
-local vfx_cmds = require("kag.commands.vfx")
-for name, handler in pairs(vfx_cmds) do
-    KAG[name] = handler
-end
+-- (vfx commands registered at the top with the standalone aliases --
+-- this second loop was redundant; folded per review nit)
 --  Legacy aliases �� backward compatibility
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
