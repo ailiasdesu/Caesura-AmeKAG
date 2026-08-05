@@ -358,12 +358,25 @@ function scheduler.run(ctx, tokens, start_index)
             if name then
                 ctx.macros = ctx.macros or {}
                 ctx.macros[name] = body
+                -- Neo-Genesis: parameterized macros (KAG3 args feature).
+                -- args="who,what" declares the params; invocations fill
+                -- %who% / %what% placeholders in the body.
+                ctx.macro_args = ctx.macro_args or {}
+                local args = {}
+                if type(params.args) == "string" then
+                    for a in params.args:gmatch("[^,]+") do
+                        a = a:match("^%s*(.-)%s*$")  -- trim
+                        if #a > 0 then args[#args + 1] = a end
+                    end
+                end
+                ctx.macro_args[name] = args
             end
 
         elseif cmd == "erasemacro" then
             local name = params.name
             if name and ctx.macros then
                 ctx.macros[name] = nil
+                if ctx.macro_args then ctx.macro_args[name] = nil end
             end
         elseif cmd == "endmacro" then
             -- pass (handled by macro recording above)
@@ -373,6 +386,24 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
+                -- Parameter substitution: build a per-invocation copy with
+                -- %arg% placeholders filled from the call's params. The
+                -- shared body is never mutated (multiple calls reuse it).
+                local argNames = ctx.macro_args and ctx.macro_args[cmd]
+                if argNames and #argNames > 0 then
+                    local sub = {}
+                    for n = 1, #macro_body do
+                        local t = macro_body[n]
+                        local content = t[2]
+                        if type(content) == "string" then
+                            content = content:gsub("%%([%w_]+)%%", function(an)
+                                return params[an] or ("%" .. an .. "%")
+                            end)
+                        end
+                        sub[n] = { t[1], content }
+                    end
+                    macro_body = sub
+                end
                 -- Splice macro body into token stream, replacing the invocation.
                 -- Copy the body (shallow, per-token) and shift the tail in place
                 -- to avoid rebuilding the whole array with 3 inserts per call.
