@@ -30,6 +30,7 @@ local tests = {
     "test_sandbox",
     "test_label_index",
     "test_expr_cache",
+    "test_bg_dedup",
 }
 
 local passed, failed = 0, 0

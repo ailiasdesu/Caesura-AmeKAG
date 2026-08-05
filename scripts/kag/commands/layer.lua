@@ -84,6 +84,11 @@ function LayerCommands.bg(ctx, params)
         print("[LayerCmd] bg: no file specified")
         return
     end
+    -- Dedup: re-setting the SAME background skips the texture reload
+    -- (common when scenes re-assert their bg after transitions).
+    if ctx.layers and ctx.layers.bg == file then
+        return
+    end
 
     local tex = backend.load_texture(file)
     if not tex then
