@@ -48,7 +48,9 @@ function engine_update(dt)
         require("dev_hud").toggle()
     end
     require("dev_hud").update(dt * 1000)
-    require("toast").update(dt)
+    if _toast then
+        pcall(function() _toast.update(dt) end)
+    end
     -- H key: open the backlog overlay ([history] command).
     if _G._GAME_KEY_H then
         _G._GAME_KEY_H = false
