@@ -161,11 +161,38 @@ end
 -- [scroll text=... speed=60] — vertical scrolling text (KiriKiri ED credits).
 -- Coroutine yield loop (same pattern as VFX.flash): draws the text at an
 -- upward-shifting y each frame until it exits the viewport, then clears.
+-- Next-gen contracts: typed + clamped via kag/schema (replaces inline
+-- tonumber fallbacks; contract violations report cmd@scene:token).
+local schema = require("kag.schema")
+schema.define("scroll", {
+    text  = { type = "string", default = "" },
+    speed = { type = "number", default = 60, min = 1, max = 1000 },
+    size  = { type = "number", default = 28, min = 8, max = 128 },
+    color = { type = "string", default = "white" },
+})
+schema.define("trans", {
+    method = { type = "string", default = "crossfade" },
+    time   = { type = "number", default = 500, min = 0, max = 30000 },
+    duration = { type = "number", default = 500, min = 0, max = 30000 },
+})
+schema.define("move", {
+    x = { type = "number", default = 0 },
+    y = { type = "number", default = 0 },
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    duration = { type = "number", default = 300, min = 0, max = 30000 },
+})
+schema.define("quake", {
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    duration = { type = "number", default = 300, min = 0, max = 30000 },
+    intensity = { type = "number", default = 5, min = 0, max = 100 },
+    amplitude = { type = "number", default = 5, min = 0, max = 100 },
+})
+
 function TransCommands.scroll(ctx, params)
     local text = params.text or params[1] or ""
-    local speed = tonumber(params.speed) or 60  -- px/sec
-    local size = tonumber(params.size) or 28
-    local color = params.color or "white"
+    local speed = params.speed  -- schema-typed
+    local size = params.size
+    local color = params.color
     local width = (ctx.viewport and ctx.viewport.width) or 1280
     local height = (ctx.viewport and ctx.viewport.height) or 720
     if #text == 0 then return end
@@ -348,8 +375,8 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function TransCommands.quake(ctx, params)
-    local dur       = tonumber(params.time or params.duration or 300)
-    local intensity = tonumber(params.intensity or params.amplitude or 5)
+    local dur       = params.time or params.duration or 300
+    local intensity = params.intensity or params.amplitude or 5
     local freq      = tonumber(params.freq or params.frequency or 0.05)
 
     if dur <= 0 then

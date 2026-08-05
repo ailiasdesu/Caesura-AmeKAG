@@ -60,5 +60,21 @@ check("unmigrated passthrough", raw.speed == "abc")
 check("registry non-empty", Schema.registrySize() >= 3)
 check("isMigrated", Schema.isMigrated("_test_cmd") and not Schema.isMigrated("_not_migrated"))
 
+-- migrated production commands
+check("pt migrated", Schema.isMigrated("pt"))
+check("wait migrated", Schema.isMigrated("wait"))
+check("scroll migrated", Schema.isMigrated("scroll"))
+check("trans migrated", Schema.isMigrated("trans"))
+check("move migrated", Schema.isMigrated("move"))
+check("quake migrated", Schema.isMigrated("quake"))
+
+-- scroll contract behavior (typed + clamped)
+p = Schema.coerce("scroll", { speed = "5000" }, {})
+check("scroll speed clamped to 1000", p.speed == 1000)
+p = Schema.coerce("scroll", { size = "0" }, {})
+check("scroll size clamped to 8", p.size == 8)
+p = Schema.coerce("scroll", {}, {})
+check("scroll defaults", p.speed == 60 and p.size == 28 and p.text == "")
+
 if failed and failed > 0 then os.exit(1) end
 print("SCHEMA TESTS DONE")
