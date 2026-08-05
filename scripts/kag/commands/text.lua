@@ -230,7 +230,7 @@ function TextCommands.nameplate(ctx, params)
     ctx.nameplate_style = {
         x = params.x, y = params.y, w = params.w, h = params.h,
         color = params.color, opacity = params.opacity,
-        text_color = params.text_color, size = params.size,
+        text_color = params.text_color,
     }
     -- Re-render the current speaker's plate immediately.
     if ctx and ctx.current_speaker and #ctx.current_speaker > 0 then
@@ -245,7 +245,7 @@ function TextCommands._renderNameplate(ctx, speaker)
     local st = ctx.nameplate_style or {
         x = 32, y = 480, w = 220, h = 36,
         color = "0,0,0", opacity = 220,
-        text_color = "255,255,255", size = 20,
+        text_color = "255,255,255",
     }
     bg.visible = true
     bg.x, bg.y, bg.w, bg.h = st.x, st.y, st.w, st.h
