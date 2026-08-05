@@ -244,15 +244,10 @@ function AudioCommands.voice_wait(ctx, params)
     -- batch-resuming. So we block WHILE it is true and treat a clear as
     -- the click-to-skip signal (mirrors waitforclick semantics).
     if ctx then ctx.waiting_input = true end
-    local deadline = os.time() + math.floor((params.timeout or 30000) / 1000)
     while backend.audio_is_playing and backend.audio_is_playing("voice") do
         if ctx and not ctx.waiting_input then  -- click cleared it: skip
             pcall(function() backend.audio_stop("voice") end)
             _G._CAESURA_AUDIO_EVENT = "voice_end"
-            break
-        end
-        if os.time() > deadline then  -- contract cap: never wait forever
-            pcall(function() backend.audio_stop("voice") end)
             break
         end
         coroutine.yield()

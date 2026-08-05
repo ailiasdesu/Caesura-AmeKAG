@@ -201,9 +201,10 @@ _schema.define("waitforclick", {})
 KAG.r = KAG.l or KAG.br
 
 -- [voice_wait] -- wait for voice with click-to-skip (Neo-Genesis).
-require("kag.schema").define("voice_wait", {
-    timeout = { type = "number", default = 30000, min = 0, max = 300000 },
-})
+-- No timeout param: the waiting_input token isn't frame-resumed in this
+-- runner, so a deadline check can never fire. Promise nothing we can't
+-- keep (see the review chain).
+require("kag.schema").define("voice_wait", {})
 KAG.voice_wait = function(ctx, params)
     return require("kag.commands.audio").voice_wait(ctx, params)
 end

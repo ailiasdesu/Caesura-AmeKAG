@@ -275,13 +275,12 @@ end
 -- [voice_wait] contract + click-detection fix (review regression)
 do
     check("voice_wait migrated", Schema.isMigrated("voice_wait"))
-    local pv = Schema.coerce("voice_wait", { timeout = "999999" }, {})
-    check("voice_wait timeout capped", pv.timeout == 300000)
+    -- (timeout was dropped: unreachable in this runner -- see review)
     local src = io.open("scripts/kag/commands/audio.lua", "r")
     local a = src and src:read("*a") or ""
     if src then src:close() end
     check("voice_wait uses waiting_input", a:find("ctx.waiting_input", 1, true) ~= nil)
-    check("voice_wait enforces deadline", a:find("os.time() > deadline", 1, true) ~= nil)
+    check("voice_wait no dead deadline", not a:find("os.time() > deadline", 1, true))
     check("voice_wait blocks while waiting", a:find("ctx.waiting_input = true", 1, true) ~= nil)
     check("voice_wait skips on clear", a:find("not ctx.waiting_input", 1, true) ~= nil)
     check("voice_wait no KAG_onClick trap", not a:find("_G._KAG_onClick or", 1, true))
