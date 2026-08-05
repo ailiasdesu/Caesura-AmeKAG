@@ -35,7 +35,23 @@ local flow_commands = {
 
 -- ???? Internal helpers ????????????????????????????????????????????????????????????????????????????????????????????????????????????????
 
-local function find_label(tokens, name)
+-- Neo-Genesis: label index. One pass per scene build (at load) turns
+-- [jump *label] from O(n) scan into O(1) lookup. The index is rebuilt
+-- whenever a macro splice mutates the stream (see invalidate below).
+local function build_label_index(tokens)
+    local idx = {}
+    for i, tok in ipairs(tokens) do
+        if tok[1] == "label" and tok[2] and type(tok[2].name) == "string" then
+            idx[tok[2].name] = idx[tok[2].name] or i  -- first wins (KAG3)
+        end
+    end
+    return idx
+end
+
+local function find_label(tokens, name, label_index)
+    if label_index and label_index[name] then
+        return label_index[name]
+    end
     for i, tok in ipairs(tokens) do
         if tok[1] == "label" and tok[2] and tok[2].name == name then
             return i
@@ -130,6 +146,7 @@ function scheduler.run(ctx, tokens, start_index)
                     ctx.call_stack = {}
                     ctx.layers = {}
                     ctx.backlog = {}
+                    ctx.label_index = build_label_index(new_tokens)
                     operation.cancel_all(ctx)
                     return
                 else
@@ -138,7 +155,7 @@ function scheduler.run(ctx, tokens, start_index)
             else
                 -- Intra-scene jump: find label (target may be "label" or "*label")
                 local label = target:gsub("^*", "")  -- strip leading * if present
-                local idx = find_label(tokens, label)
+                local idx = find_label(tokens, label, ctx.label_index)
                 if idx then
                     i = idx
                 else
@@ -156,6 +173,7 @@ function scheduler.run(ctx, tokens, start_index)
                 tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
+                ctx.label_index = build_label_index(new_tokens)
                 i = 0
             end
 
@@ -446,6 +464,7 @@ function scheduler.run(ctx, tokens, start_index)
                     tokens[i - 1 + n] = {macro_body[n][1], deepCopy(macro_body[n][2])}
                 end
                 ctx.tokens = tokens
+                ctx.label_index = nil  -- splice changed the stream: rebuild lazily
                 i = i - 1  -- will point to first body token after i = i + 1
             else
                 -- text chunks become [ch] commands

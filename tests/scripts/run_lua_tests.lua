@@ -28,6 +28,7 @@ local tests = {
     "test_schema",
     "test_layers",
     "test_sandbox",
+    "test_label_index",
 }
 
 local passed, failed = 0, 0
