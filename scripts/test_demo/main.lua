@@ -153,7 +153,7 @@ local function s3_update()
     for i,item in ipairs(items) do
         draw_text(100,180+(i-1)*50,"* "..item,C.white,1.2)
     end
-    draw_text(80,340,"Tokenizer + Scheduler + 68 KAG Commands",C.blue,1.2)
+    draw_text(80,340,"Tokenizer + Scheduler + 69 KAG Neo-Genesis Commands",C.blue,1.2)
     draw_text(80,h-50,"Click to continue",C.dim,0.9)
 end
 
