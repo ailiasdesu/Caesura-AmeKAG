@@ -210,6 +210,22 @@ end
 -- Returns false (no error) when there is nothing to roll back; the runner
 -- surfaces that as a click with no effect.
 -- [gallery] — open the CG gallery (browse unlocked art; [unlock cg=] adds)
+-- Next-gen contracts: flow/UI commands typed + validated.
+local _schema = require("kag.schema")
+_schema.define("chapter", {
+    label = { type = "string", default = "" },
+    id = { type = "string", default = "" },
+})
+_schema.define("gallery", {
+    id = { type = "string", default = "" },
+})
+_schema.define("music", {})
+_schema.define("ending", {
+    id = { type = "string", default = "end" },
+    name = { type = "string", default = "" },
+})
+_schema.define("history", {})
+
 function SystemCommands.gallery(ctx, params)
     local Gallery = require("gallery")
     local startId = params.id or params[1] or nil

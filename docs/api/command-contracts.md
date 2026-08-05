@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (43)
+## Commands (48)
 
 ### `[auto]`
 
@@ -35,11 +35,25 @@
 | `text` | string |  | - | - |
 | `voice` | string |  | - | - |
 
+### `[chapter]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `id` | string |  | - | - |
+| `label` | string |  | - | - |
+
 ### `[cl]`
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `layer` | string | all | - | - |
+
+### `[ending]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `id` | string | end | - | - |
+| `name` | string |  | - | - |
 
 ### `[er]`
 
@@ -78,6 +92,17 @@
 | `face` | string | default | - | - |
 | `size` | number | 22 | 4..256 | - |
 
+### `[gallery]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `id` | string |  | - | - |
+
+### `[history]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[hr]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -110,6 +135,11 @@
 | `time` | number | 300 | 0..30000 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[music]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[nameplate]`
 
