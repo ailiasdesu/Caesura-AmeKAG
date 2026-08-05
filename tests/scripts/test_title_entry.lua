@@ -1,7 +1,7 @@
 -- Title-demo entry tests: action routing (new -> kag_runner.start, etc).
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    results = results or {}
+    local results = {}  -- local: runner shares globals
     results[#results + 1] = cond
 end
 

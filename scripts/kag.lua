@@ -241,13 +241,29 @@ function KAG.voice(ctx, params)
     audio.playvoice(ctx, { file = params.file or params[1] })
 end
 
--- [bgm file=X] -- play BGM (KAG3 alternate)
+-- [bgm file=X] -- KAG3 alternate; unified through [play bus=bgm]
 KAG.bgm = KAG.play
 
--- [se file=X] -- play SE (KAG3)
+-- [se file=X] -- KAG3 alternate; unified through [play bus=se]
 function KAG.se(ctx, params)
     local audio = require("kag.commands.audio")
     audio.playse(ctx, { file = params.file or params[1] })
+end
+
+-- [play bus=bgm|se|voice file=X volume=...] -- next-gen unified audio
+-- command: one entry for all three buses (KAG3 needed play/bgm/se/voice
+-- as separate commands with duplicated param handling).
+function KAG.play(ctx, params)
+    local audio = require("kag.commands.audio")
+    local bus = params.bus or "bgm"
+    if bus == "bgm" then
+        return audio.playbgm(ctx, { file = params.file or params[1], volume = params.volume })
+    elseif bus == "se" then
+        return audio.playse(ctx, { file = params.file or params[1], volume = params.volume })
+    elseif bus == "voice" then
+        return audio.playvoice(ctx, { file = params.file or params[1] })
+    end
+    print("[play] unknown bus: " .. tostring(bus))
 end
 
 -- ===========================================================================

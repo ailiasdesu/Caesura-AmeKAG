@@ -1,7 +1,7 @@
 -- Title menu tests: navigation + action mapping (no GPU).
+local results = {}  -- local: the runner shares globals across test files
 local check = function(name, cond)
     if cond then print("PASS " .. name) else print("FAIL " .. name) end
-    results = results or {}
     results[#results + 1] = cond
 end
 
