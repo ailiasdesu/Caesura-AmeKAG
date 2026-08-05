@@ -296,12 +296,16 @@ function Layers.remove_layer(node)
         end
     end
 
-    -- free RTT
+    -- free RTT (pooled; release destroys when the bucket is full)
     if node.rt then
         rtt.release(node.rt, node.w or 0, node.h or 0)
-        if node.view_id then freeViews[#freeViews + 1] = node.view_id end
-        node.view_id = nil
         node.rt = nil
+    end
+    -- recycle the bgfx view id ALWAYS (rt-less layers never rendered
+    -- must not leak view ids -- ~256 add/remove cycles would exhaust)
+    if node.view_id then
+        freeViews[#freeViews + 1] = node.view_id
+        node.view_id = nil
     end
 
     layerMap[node.id] = nil
@@ -737,9 +741,10 @@ end
 
 function Layers.resize_layer(node, w, h)
     if not node then return end
+    local ow, oh = node.w or 0, node.h or 0  -- old size for the pool key
     if w ~= nil then node.w = w end
     if h ~= nil then node.h = h end
-    if node.rt then rtt.release(node.rt, node.w or 0, node.h or 0) end
+    if node.rt then rtt.release(node.rt, ow, oh) end
     node.rt = rtt.acquire(node.w, node.h)
     Layers.mark_dirty(node)
 end
