@@ -250,7 +250,8 @@ Caesura(AmeKAG)/
 | [AGENTS.md](AGENTS.md) | AI agents & contributors | Module boundaries, interface rules, build/test gates |
 | [editor-api-reference.md](docs/api/editor-api-reference.md) | Editor developers | RPC endpoints, Lua bindings, KAG commands, C++ interfaces |
 | [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces |
-| [kag-commands.md](docs/api/kag-commands.md) | Script authors | 69 KAG commands with parameter types |
+| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 69 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
+| [kag-commands.md](docs/api/kag-commands.md) | Script authors | Deprecated KAG3-compat reference (see command-contracts.md) |
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | Architects | Module dependency topology, data flow |

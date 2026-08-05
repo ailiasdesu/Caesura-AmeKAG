@@ -31,7 +31,7 @@ graph LR
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG 3.0 Parser<br/>tokenizer · 69 commands"]
+        s2["KAG Neo-Genesis Parser<br/>tokenizer · 69 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
