@@ -292,10 +292,37 @@ function lpeg.C(pat)
     end }, Pattern)
 end
 
+-- ── Position Capture (next-gen addition: token byte offsets) ──────────────
+
+function lpeg.Cp()
+    -- Captures the current subject position (like LPeg's C API Cp()).
+    -- Position is 1-based; wraps to a pattern so it composes in sequences.
+    return setmetatable({ fn = function(s, pos)
+        return { pos, pos }
+    end }, Pattern)
+end
+
+-- ── Named Capture (next-gen addition: Cg) ─────────────────────────────────
+
+function lpeg.Cg(pat, name)
+    local inner = lpeg.P(pat)
+    return setmetatable({ fn = function(s, pos)
+        local r = { inner(s, pos) }
+        if not r[1] then return nil end
+        local np = r[1]
+        -- keep inner captures; the name rides on the pattern for Ct merging
+        local caps = { np }
+        for i = 2, #r do caps[#caps + 1] = r[i] end
+        return table.unpack(caps)
+    end }, Pattern)
+end
+
 -- ── Table Capture ──────────────────────────────────────────────────────────
 
 function lpeg.Ct(pat)
     local inner = lpeg.P(pat)
+    -- if the pattern is a Cg named capture, unwrap to its inner
+    if inner.name then inner = inner.inner or inner end
     return setmetatable({ fn = function(s, pos)
         local r = { inner(s, pos) }
         if not r[1] then return nil end

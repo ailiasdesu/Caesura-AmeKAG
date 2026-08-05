@@ -8,7 +8,7 @@
 -- =============================================================================
 
 local lpeg = require("lpeg")
-local P, S, R, C, Ct, Cc = lpeg.P, lpeg.S, lpeg.R, lpeg.C, lpeg.Ct, lpeg.Cc
+local P, S, R, C, Ct, Cc, Cg, Cp = lpeg.P, lpeg.S, lpeg.R, lpeg.C, lpeg.Ct, lpeg.Cc, lpeg.Cg, lpeg.Cp
 
 local tokenizer = { _VERSION = "2.0.0" }
 
@@ -75,6 +75,11 @@ local grammar = Ct(
     skip * -1
 )
 
+-- One-token pattern with an END-position capture: used by parse_with_offsets
+-- to advance through the source token by token (LPeg's init argument gives
+-- the next match start; the captured end position is the offset).
+local one_token = Ct(skip * (explicit_cmds + label_pat + text_body) * Cp())
+
 -- ---- Normalization ----
 local function normalize(raw_tokens)
     local result = {}
@@ -105,6 +110,44 @@ local function normalize(raw_tokens)
         ::continue::
     end
     return result
+end
+
+--- tokenizer.parse_with_offsets(text) → tokens with a byte `offset` each.
+--  Advances through the source with lpeg.match(one_token, text, init): the
+--  LPeg `init` argument starts each match after the previous token's end,
+--  and a Cp() end-position capture yields the exact byte offset. Comments
+--  and blank lines are consumed by the pattern between tokens, so offsets
+--  are source-accurate (the durable fix for ks_check line numbers).
+function tokenizer.parse_with_offsets(ks_text)
+    if not ks_text or ks_text == "" then return {} end
+    if ks_text:byte(1) == 0xEF and ks_text:byte(2) == 0xBB and ks_text:byte(3) == 0xBF then
+        ks_text = ks_text:sub(4)
+    end
+    local out = {}
+    local init = 1
+    while true do
+        local cap = lpeg.match(one_token, ks_text, init)
+        if not cap then break end
+        local endpos = cap[#cap] or init  -- trailing Cp() capture
+        local t = cap[1]
+        if type(t) == "table" and t[1] then
+            local tok = { offset = init }
+            local typ = t[1]
+            if typ == "cmd" then
+                tok.type = "command"; tok.cmd = t[2]; tok.params = t[3] or {}
+            elseif typ == "text" then
+                tok.type = "text"; tok.content = t[2] or ""
+            elseif typ == "label" then
+                tok.type = "label"; tok.name = t[2]
+            elseif typ == "iscript" then
+                tok.type = "iscript"; tok.body = t[3] or ""
+            end
+            out[#out + 1] = tok
+        end
+        init = endpos + 1
+        if init > #ks_text then break end
+    end
+    return out
 end
 
 function tokenizer.parse(ks_text)
