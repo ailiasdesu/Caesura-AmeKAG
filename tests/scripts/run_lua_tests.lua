@@ -33,6 +33,7 @@ local tests = {
     "test_bg_dedup",
     "test_macro_nested",
     "test_scene_restore",
+    "test_elseif",
 }
 
 local passed, failed = 0, 0
