@@ -70,6 +70,19 @@ local function coerceValue(name, spec, raw, where)
         end
     elseif spec.type == "string" then
         v = tostring(v)
+        -- Next-gen interpolation: "$f.name" / "$sf.x" / "$tf.y" / "$mp.z"
+        -- expand from the ctx variable tables (KAG3 needed [eval] glue).
+        if spec.interpolate and type(v) == "string" and v:find("$", 1, true) then
+            v = v:gsub("%$(%a+)%.([%w_]+)", function(tbl, key)
+                local vars = ({ f = "f", sf = "sf", tf = "tf", mp = "mp" })[tbl]
+                local t = vars and ctx and ctx[vars]
+                if type(t) == "table" then
+                    local val = t[key]
+                    if val ~= nil then return tostring(val) end
+                end
+                return "$" .. tbl .. "." .. key  -- leave unresolved as-is
+            end)
+        end
     end
     if spec.choices and not spec.choices[v] then
         error(string.format("%s: param '%s' must be one of {%s}, got %q",

@@ -56,6 +56,28 @@ check("unknown param passthrough", p.legacy_param == "x")
 local raw = Schema.coerce("_not_migrated", { speed = "abc" }, {})
 check("unmigrated passthrough", raw.speed == "abc")
 
+-- interpolation ($f.var in interpolate=true params)
+do
+    local ctx = { f = { name = "Ame", hp = 42 }, sf = { score = 7 } }
+    local ok2, err2 = pcall(function()
+        Schema.coerce("ch", { name = "Ame", text = "Hi $f.name (hp $f.hp)", voice = "v.ogg", sprite = "s.png" }, ctx)
+    end)
+    if ok2 then
+        -- ch contract interpolates text; capture via a local redefine
+        -- (simplest: coerce directly with the ch contract from text.lua)
+        -- fall back to checking the mechanism via a local contract:
+        Schema.define("_interp_test", { text = { type = "string", default = "", interpolate = true } })
+        local p2 = Schema.coerce("_interp_test", { text = "Hi $f.name ($sf.score)" }, ctx)
+        check("interpolation expands f/sf vars", p2.text == "Hi Ame (7)")
+        local p3 = Schema.coerce("_interp_test", { text = "unknown $f.nope stays" }, ctx)
+        check("unresolved var left as-is", p3.text == "unknown $f.nope stays")
+        local p4 = Schema.coerce("_interp_test", { text = "no vars" }, {})
+        check("plain text unchanged", p4.text == "no vars")
+    else
+        check("ch coerce ok", false)
+    end
+end
+
 -- registry
 check("registry non-empty", Schema.registrySize() >= 3)
 check("isMigrated", Schema.isMigrated("_test_cmd") and not Schema.isMigrated("_not_migrated"))

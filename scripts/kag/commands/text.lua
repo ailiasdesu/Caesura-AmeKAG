@@ -122,14 +122,14 @@ local TextCommands = {}
 local schema = require("kag.schema")
 schema.define("ch", {
     name   = { type = "string", default = "" },
-    text   = { type = "string", default = "" },
+    text   = { type = "string", default = "", interpolate = true },
     voice  = { type = "string", default = "" },
     sprite = { type = "string", default = "" },
     max_width = { type = "number", default = 0, min = 0, max = 4096 },
     chars_per_line = { type = "number", default = 0, min = 0, max = 512 },
 })
 schema.define("text", {
-    text = { type = "string", default = "" },
+    text = { type = "string", default = "", interpolate = true },
     fade_time = { type = "number", default = 0, min = 0, max = 30000 },
     fade = { type = "number", default = 0, min = 0, max = 30000 },
 })
