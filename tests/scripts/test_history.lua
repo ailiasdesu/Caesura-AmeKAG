@@ -30,10 +30,21 @@ end }
 local ctx2 = { backlog = { { text = "x" } }, f = {}, tf = {}, sf = {}, mp = {},
     variables = {}, stop_flag = false, _pendingJump = nil }
 local ok = pcall(KAG.history, ctx2, {})
+check("history handler runs", ok == true)
 check("history jump sets pendingJump", ctx2._pendingJump ~= nil
       and ctx2._pendingJump.scene == "scripts/demo_story.ks"
       and ctx2._pendingJump.index == 42)
 check("history jump sets stop_flag", ctx2.stop_flag == true)
+
+-- negative: a show() result WITHOUT the jump gate sets no signal
+package.loaded["history_ui"] = { show = function()
+    return { scene = "scripts/x.ks", index = 1 }  -- no jump field
+end }
+local ctxN = { backlog = { { text = "x" } }, f = {}, tf = {}, sf = {}, mp = {},
+    variables = {}, stop_flag = false }
+pcall(KAG.history, ctxN, {})
+check("no-jump result is a no-op", ctxN.stop_flag == false
+      and ctxN._pendingJump == nil)
 
 -- [history] with no backlog returns without side effects
 package.loaded["history_ui"] = { show = function() return nil end }
