@@ -241,17 +241,27 @@ function scheduler.run(ctx, tokens, start_index)
                 -- ctx.f as _ENV each time (load(...) re-binds), so no stale
                 -- env is ever captured. Bounded cache prevents unbounded
                 -- growth from expression-heavy loops.
-                local fn = exprCache[src]
+                -- Cache key = source + the f-table identity: a cached chunk
+                -- binds its FIRST env table, so a different ctx.f (new scene,
+                -- save restore) must recompile or it reads stale variables.
+                local key = src .. " " .. tostring(ctx.f)
+                local fn = exprCache[key]
                 if not fn then
                     fn = load(src, "=if", "t", ctx.f or {})
                     if fn then
-                        exprCache[src] = fn
+                        exprCache[key] = fn
                         -- Bounded: count via pairs (a string-keyed table's #
                         -- is not meaningful), reset when over the cap.
                         local n = 0
                         for _ in pairs(exprCache) do n = n + 1 end
                         if n > EXPR_CACHE_MAX then
-                            exprCache = {}
+                            -- Half-evict: a full clear forces recompilation
+                            -- of the next 128 expressions (churn in loops).
+                            local keys = {}
+                            for k in pairs(exprCache) do keys[#keys + 1] = k end
+                            for j = 1, math.floor(#keys / 2) do
+                                exprCache[keys[j]] = nil
+                            end
                         end
                     end
                 end
@@ -377,7 +387,9 @@ function scheduler.run(ctx, tokens, start_index)
                     ctx.tf.eval_result = result
                 end
             else
-                print("[eval] Compile error: " .. tostring(compileErr))
+                print(string.format("[eval] Compile error @ %s:%d: %s",
+                    ctx.current_scene or "?", ctx.token_index or 0,
+                    tostring(compileErr)))
             end
 
         -- Flow control: [macro] / [endmacro]

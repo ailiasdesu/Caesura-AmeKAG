@@ -29,6 +29,7 @@ local tests = {
     "test_layers",
     "test_sandbox",
     "test_label_index",
+    "test_expr_cache",
 }
 
 local passed, failed = 0, 0
