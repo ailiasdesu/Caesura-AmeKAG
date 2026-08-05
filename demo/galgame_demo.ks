@@ -46,6 +46,13 @@
 [ch name="Sakura" text="Hello! Are you a new student? My name is Sakura."]
 [p]
 
+; Neo-Genesis performance demo: sprite slide-in, fade emphasis, text vib
+[sprite_move speaker="Sakura" x=120 y=200 time=500]
+[sprite_fade speaker="Sakura" to=200 time=300]
+[ch name="Sakura" text="(she leans in, a little shy)"]
+[vib time=200 intensity=2]
+[p]
+
 ; Scene 3 — Library
 [cl]
 [bg storage="assets/bg/classroom.png"]
