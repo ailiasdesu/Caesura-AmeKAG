@@ -143,7 +143,7 @@
 
 | Command | Parameters | Types | Description |
 |---------|-----------|-------|-------------|
-| `save` | `slot` (int) | int | Save game state (scene, token_index, variables, flags) to slot. |
+| `save` | `slot` (int; bare `[save 3]`) | int | Save game state to slot; bare positional supported, clamped 0..99; negatives (-1 quicksave / -2 autosave) pass through to the C++ guard |
 | `load` | `slot` (int) | int | Load game state from slot. Resumes from saved token index. |
 | `listsaves` | — | — | List all save slots. Outputs slot number and timestamp. |
 
@@ -157,7 +157,12 @@
 |---------|-----------|---------|-------------|
 | `r` | — | `l`/`br` | Line break (KAG3) |
 | `s` | `ms` (default 250) | delay loop | Short wait then continue |
-| `delay` | `ms` | wait | Wait N milliseconds |
+| `delay` | `ms` (or bare `[delay 500]`) | wait | Wait N milliseconds; bare positional supported |
+| `wait` | `time`/`ms`/`duration` (or bare `[wait 200]`) | — | Block N ms; explicit aliases beat the 1000ms default; capped 60s |
+| `se`/`voice`/`play` | `file` (or bare `[se 1]`) | bus | Play one-shot; bare arg is the file |
+| `jump`/`call`/`link` | `target` (or bare `[jump next.ks]`) | flow | Cross-scene requires `assets/script/` paths (allowlisted, no `..`); bare `*label` works |
+| `unlock` | `id` (or bare `[unlock cg1]`) | system | Unlock entry; bare id recorded |
+| `macro` | `name` (or bare `[macro m ...]`) | system | Definition name is positional; `%1%` placeholders fill bare call args |
 | `clear` | — | `cl` | Clear text layer |
 | `ld` | `layer` | layers | Delete/hide a layer |
 | `shake` | — | vfx | Screen shake |
