@@ -71,30 +71,39 @@ local function coerceValue(name, spec, raw, where, ctx)
     elseif spec.type == "string" then
         v = tostring(v)
         -- Neo-Genesis interpolation: "$f.name" / "$sf.x" / "$tf.y" / "$mp.z"
-        -- expand from the ctx variable tables (KAG3 needed [eval] glue).
-        if spec.interpolate and type(v) == "string" and v:find("$", 1, true) then
+        -- / "$lf.y" expand from the ctx variable tables; legacy KAG3's
+        -- %var% syntax ("%f.hp%") is supported too. ${expr} evaluates a
+        -- full expression (beyond KAG3's eval-glue).
+        if spec.interpolate and type(v) == "string"
+            and (v:find("$", 1, true) or v:find("%", 1, true)) then
             -- ${expr}: full expression evaluated in a sandbox env with the
-            -- ctx variable tables (f/sf/tf/mp) -- beyond KAG3's eval-glue.
+            -- ctx variable tables (f/sf/tf/mp/lf) -- beyond KAG3's eval-glue.
             v = v:gsub("%${([^{}]+)}", function(expr)
                 -- env exposes the ctx variable tables directly: the
                 -- expression f.hp*2 works (env.f = ctx.f, etc).
                 local env = { f = ctx and ctx.f, sf = ctx and ctx.sf,
-                              tf = ctx and ctx.tf, mp = ctx and ctx.mp }
+                              tf = ctx and ctx.tf, mp = ctx and ctx.mp,
+                              lf = ctx and ctx.lf }
                 local f2 = load("return (" .. expr .. ")", "=ks_interp", "t", env)
                 if not f2 then return "${" .. expr .. "}" end  -- syntax error
                 local ok2, val2 = pcall(f2)
                 if ok2 then return tostring(val2) end
                 return "${" .. expr .. "}"
             end)
-            v = v:gsub("%$(%a+)%.([%w_]+)", function(tbl, key)
-                local vars = ({ f = "f", sf = "sf", tf = "tf", mp = "mp" })[tbl]
+            -- $tbl.key / %tbl.key% variable lookup (f/sf/tf/mp/lf). The
+            -- %...% form is KAG3-compatible; bare %ident% stays untouched
+            -- (macro placeholders are expanded earlier by the scheduler).
+            local varLookup = function(tbl, key)
+                local vars = ({ f = "f", sf = "sf", tf = "tf", mp = "mp", lf = "lf" })[tbl]
                 local t = vars and ctx and ctx[vars]
                 if type(t) == "table" then
                     local val = t[key]
                     if val ~= nil then return tostring(val) end
                 end
                 return "$" .. tbl .. "." .. key  -- leave unresolved as-is
-            end)
+            end
+            v = v:gsub("%$(%a+)%.([%w_]+)", varLookup)
+            v = v:gsub("%%(%a+)%.([%w_]+)%%", varLookup)
         end
     end
     if spec.choices and not spec.choices[v] then

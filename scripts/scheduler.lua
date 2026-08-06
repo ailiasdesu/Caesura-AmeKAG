@@ -128,6 +128,12 @@ function scheduler.run(ctx, tokens, start_index)
     -- so later elseif/else in the SAME chain are skipped (nested chains
     -- are independent via the stack).
     local if_stack = {}
+    -- KAG3 variable frames: ctx.lf is the local (call-frame) variable
+    -- table -- [call] pushes a fresh frame, [return] pops it. ctx.mp is
+    -- the message-parameter table (KAG3 [call ... mp="x"]); ensure both
+    -- exist for expression envs and interpolation.
+    if ctx.lf == nil then ctx.lf = {} end
+    if ctx.mp == nil then ctx.mp = {} end
     -- switch/case state: taken case bodies must not fall through into
     -- later cases (KAG3 semantics -- a matched case runs alone).
     local switch_stack = {}
@@ -237,7 +243,10 @@ function scheduler.run(ctx, tokens, start_index)
                     tokens = tokens, index = i + 1,
                     label_index = ctx.label_index,
                     scene = ctx.current_scene,
+                    lf = ctx.lf,          -- restore on [return] (KAG3 lf frame)
+                    mp = ctx.mp,
                 })
+                ctx.lf = {}               -- fresh local frame for the callee
                 tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
@@ -253,6 +262,8 @@ function scheduler.run(ctx, tokens, start_index)
             if frame then
                 ctx.label_index = frame.label_index  -- caller scene again
                 ctx.current_scene = frame.scene       -- caller scene NAME again
+                if frame.lf ~= nil then ctx.lf = frame.lf end  -- pop lf frame
+                if frame.mp ~= nil then ctx.mp = frame.mp end
             end
             if frame then
                 tokens = frame.tokens
@@ -653,6 +664,8 @@ function scheduler.run(ctx, tokens, start_index)
                 f         = ctx.f or {},
                 sf        = ctx.sf or {},
                 tf        = ctx.tf or {},
+                mp        = ctx.mp or {},
+                lf        = ctx.lf or {},
                 math      = math,
                 string    = string,
                 table     = table,
