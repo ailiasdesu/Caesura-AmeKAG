@@ -147,6 +147,57 @@ Emitter config table (`cfg`):
 
 ---
 
+## MiniGame (3D)
+
+```lua
+-- Global: mini_game
+-- Backend: BackendRegistry::instance().getMiniGameBackend()
+```
+
+Programmatic 3D scenes: spawn objects/materials/lights from Lua, then
+`enter(0)` to activate (renders the spawned object set without a JSON scene).
+JSON scenes load via `load_scene(path)` + `enter(handle)`.
+
+### Lifecycle
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `load_scene` | `(path) → handle` | Load a JSON scene descriptor; 0 on failure |
+| `unload_scene` | `(handle)` | Unload a loaded scene |
+| `enter` | `(handle)` | Activate a scene; `0` activates spawned objects (programmatic mode) |
+| `leave` | `()` | Deactivate the active scene |
+| `is_active` | `() → bool` | True while a scene is active |
+
+### Objects
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `spawn_cube` | `(x, y, z, scale?, r?, g?, b?, matId?) → id` | Spawn a cube |
+| `spawn_sphere` | `(x, y, z, scale?, r?, g?, b?, matId?) → id` | Spawn a sphere |
+| `spawn_plane` | `(x, y, z, w?, h?, r?, g?, b?, matId?) → id` | Spawn a plane |
+| `remove_object` | `(id)` | Remove an object |
+| `set_material` | `(objId, matId)` | Assign a material to an object |
+| `set_velocity` | `(id, vx, vy, vz)` | Set linear velocity |
+| `set_gravity` | `(id, enabled)` | Toggle gravity for an object |
+| `set_camera` | `(eyeX, eyeY, eyeZ, atX, atY, atZ)` | Position the camera |
+
+### Materials & Lighting
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `create_material` | `(r, g, b, rough?, metal?, spec?, name?) → id` | Create a PBR material |
+| `set_ambient` | `(r, g, b)` | Ambient light color |
+| `set_directional` | `(x, y, z, r?, g?, b?, intensity?)` | Directional light |
+| `add_point_light` | `(x, y, z, r?, g?, b?, intensity?, range?, name?) → id` | Add a point light |
+| `remove_light` | `(id)` | Remove a point light |
+
+### Physics
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `check_collision` | `(idA, idB) → bool` | Test object pair collision |
+| `set_collision` | `(enabled)` | Toggle the collision system |
+
 ## Debug
 
 ```lua
