@@ -36,8 +36,6 @@ check("empty text no-op", ctx4.waiting_input == false)
 local scheduler = require("scheduler")
 local tokens = { { "p" }, { "ch", { text = "after" } } }
 local dispatched = {}
-local kag_orig = package.loaded["kag"]
-package.loaded["kag"] = KAG
 local real_ch = KAG.ch
 KAG.ch = function(c2, p2) dispatched[#dispatched + 1] = p2.text end
 local ctx5 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
