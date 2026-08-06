@@ -308,7 +308,9 @@ KAG.fadeout = function(ctx, params)
     -- 0..255 -- pass an explicit opacity straight through would fade
     -- [fadeout opacity=0.5] to 0.5/255 ~= transparent (review
     -- should-fix). Convert here, like layopt's set_options does.
-    local opacity255 = math.floor((params.opacity or params.alpha or 0) * 255)
+    -- tonumber first: a non-numeric opacity string would raise in the
+    -- multiplication (audit: string-param crash sweep)
+    local opacity255 = math.floor((tonumber(params.opacity or params.alpha) or 0) * 255)
     return Layer.layfade(ctx, {
         layer = params.layer or params.name or "bg",
         opacity = opacity255,

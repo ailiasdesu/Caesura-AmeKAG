@@ -28,5 +28,23 @@ local schema = require("kag.schema")
 local coerced = schema.coerce("video", { file = "op.avi", volume = "9" })
 check("volume clamped", coerced.volume == 1.5)
 
+-- string-param sweep (audit): loop="true" (direct call, no coerce)
+-- must loop; non-numeric opacity on fadeout must not raise
+local Video2 = package.loaded["kag.commands.video"] or require("kag.commands.video")
+local v_calls = {}
+local be2 = _G._CAESURA_BACKEND
+_G._CAESURA_BACKEND = { render = function(cmd, ...)
+    if cmd == "video_play" then v_calls[#v_calls + 1] = { ... } end
+    return true end }
+local ctxV = { f = {}, tf = {}, sf = {}, mp = {}, variables = {}, viewport = { width = 1280, height = 720 } }
+local okV = pcall(Video2.video, ctxV, { file = "a.mpg", loop = "true", time = 1 })
+check("loop string tolerated", okV and v_calls[1] and v_calls[1][3] == true)
+_G._CAESURA_BACKEND = be2
+
+local okF = pcall(KAG.fadeout, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
+                  { layer = "bg", opacity = "abc", time = 1 })
+check("fadeout bad opacity no raise", okF)
+_G._CAESURA_BACKEND = be2
+
 if failed > 0 then os.exit(1) end
 print("VIDEO TESTS DONE")

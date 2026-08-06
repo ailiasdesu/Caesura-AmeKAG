@@ -36,7 +36,9 @@ function VideoCommands.video(ctx, params)
     local file   = resolve_file(params)
     -- schema already coerces loop to a boolean (the string forms below
     -- were dead after the schema contract landed -- audit cleanup)
-    local loop   = params.loop == true
+    -- schema coerces loop to boolean; tolerate direct-call strings too
+    -- (== never raises in 5.4, but 'true' would silently not loop)
+    local loop   = params.loop == true or params.loop == "true" or params.loop == 1
     local volume = params.volume  -- schema-typed
 
     if not file then
