@@ -34,7 +34,9 @@ check("resolve order", src:find("params.storage or params.path or params.file", 
 local f2 = assert(io.open("scripts/kag/commands/audio.lua", "r"))
 local asrc = f2:read("*a")
 f2:close()
-local mute_pos = asrc:find("ctx.voice_muted", 1, true)
+-- Anchor the FULL branch text: a bare substring could match a comment
+-- mentioning voice_muted above the call (security LOW).
+local mute_pos = asrc:find("if ctx and ctx.voice_muted then", 1, true)
 local play_pos = asrc:find('backend.audio_play("voice"', 1, true)
 check("mute branch precedes backend call",
       mute_pos ~= nil and play_pos ~= nil and mute_pos < play_pos)
