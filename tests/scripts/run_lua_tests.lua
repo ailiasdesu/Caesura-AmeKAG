@@ -68,6 +68,7 @@ local tests = {
     "test_emb_sync",
     "test_operation",
     "test_fade_audio",
+    "test_volume",
 }
 
 local passed, failed = 0, 0
