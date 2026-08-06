@@ -4,7 +4,7 @@ REM  run_all.bat ? Caesura Full Test Suite Runner
 REM =============================================================================
 setlocal enabledelayedexpansion
 set TEST_DIR=%~dp0
-set BUILD_DIR=%TEST_DIR%..\build
+if not defined BUILD_DIR set BUILD_DIR=%TEST_DIR%..\build
 set LUA=%TEST_DIR%..\external\lua\lua.exe
 
 echo ============================================
@@ -20,7 +20,7 @@ if exist "%BUILD_DIR%\tests\Debug\CaesuraTests.exe" (
         echo [FAIL] C++ tests failed!
         exit /b 1
     )
-    echo [PASS] C++ tests passed (569/569).
+    echo [PASS] C++ tests passed (570/570).
 ) else (
     echo [SKIP] CaesuraTests.exe not found. Run cmake --build first.
 )
@@ -45,6 +45,6 @@ REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
 echo   Test Suite Complete ? All Passed
-echo   C++: 569/569  |  Lua: 76/76
+echo   C++: 570/570  |  Lua: 76/76
 echo ============================================
 exit /b 0
