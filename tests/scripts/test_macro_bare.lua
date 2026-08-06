@@ -60,7 +60,7 @@ check("erasemacro bare works", #dispatched3 == 1
 
 -- mismatched arg usage: numeric args= declared but named-only call --
 -- params[1] holds the pair table; fill must keep the literal, not raise
-local toks4 = tokenizer.parse("[macro x args="1"][ch text="p=%1%"][endmacro][x who=Alice]")
+local toks4 = tokenizer.parse("[macro x args='1'][ch text='p=%1%'][endmacro][x who=Alice]")
 local dispatched4 = {}
 package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
     return function(c2, p2) dispatched4[#dispatched4 + 1] = { k, p2 } end
