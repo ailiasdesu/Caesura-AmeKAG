@@ -269,7 +269,10 @@ _schema.define("history", {})
 
 function SystemCommands.gallery(ctx, params)
     local Gallery = require("gallery")
-    local startId = params.id or params[1] or nil
+    local startId = params.id
+    if type(startId) ~= "string" and type(params[1]) == "string" then
+        startId = params[1]
+    end
     Gallery.show(ctx, startId)
 end
 
@@ -297,7 +300,11 @@ end
 -- [ending id=end01 name="Good End"] — record an unlocked ending.
 -- Persisted in ctx.seen_endings (captured by save capture + restored).
 function SystemCommands.ending(ctx, params)
-    local id = params.id or params[1] or "end"
+    local id = params.id
+    if type(id) ~= "string" and type(params[1]) == "string" then
+        id = params[1]
+    end
+    id = id or "end"
     local name = params.name or params[2] or ("Ending " .. id)
     if type(ctx.seen_endings) ~= "table" then ctx.seen_endings = {} end
     ctx.seen_endings[id] = { name = name, at = os.time(), scene = ctx.current_scene or ctx.currentScene or "" }
