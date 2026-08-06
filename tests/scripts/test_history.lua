@@ -57,9 +57,10 @@ check("empty history no-op", ctx3.stop_flag == false
 
 if failed > 0 then os.exit(1) end
 -- real show() input loop (audit): scroll + exit
--- restore the REAL module first (the mock stubs above persisted)
-package.loaded["history_ui"] = require("history_ui")
-local HistoryUI = package.loaded["history_ui"]
+-- restore the REAL module first (the mock stubs above persisted in
+-- the cache -- require() would return them; clear + reload)
+package.loaded["history_ui"] = nil
+local HistoryUI = require("history_ui")
 local be_b = _G._CAESURA_BACKEND
 _G._CAESURA_BACKEND = { render = function() return true end,
     platform = function(cmd)
