@@ -61,6 +61,7 @@ local tests = {
     "test_vib_camera",
     "test_transitions",
     "test_layer_cmds",
+    "test_scroll",
 }
 
 local passed, failed = 0, 0
