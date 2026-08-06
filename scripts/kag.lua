@@ -298,6 +298,19 @@ KAG.g = function(ctx, params)
     return KAG.bg(ctx, params)
 end
 
+-- [fadeout layer="bg" opacity=0 time=500] -- fade a layer out (KAG3);
+-- schema existed but NO handler was registered, so the scheduler's
+-- fallback rendered 'fadeout' as dialogue (audit: same class as the
+-- [delay] gap). Delegates to layfade with opacity defaulting to 0.
+KAG.fadeout = function(ctx, params)
+    local Layer = require("kag.commands.layer")
+    return Layer.layfade(ctx, {
+        layer = params.layer or params.name or "fg",
+        opacity = params.opacity or params.alpha or 0,
+        time = params.time or params.duration or 500,
+    })
+end
+
 -- [waitforclick] -- block until the player clicks (KAG3 control flow)
 function KAG.waitforclick(ctx, params)
     if not ctx then return end
