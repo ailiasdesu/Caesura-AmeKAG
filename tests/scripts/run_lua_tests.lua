@@ -33,6 +33,7 @@ local tests = {
     "test_variables",
     "test_control_flow",
     "test_modern_commands",
+    "test_multiline",
     "test_bg_dedup",
     "test_macro_nested",
     "test_scene_restore",

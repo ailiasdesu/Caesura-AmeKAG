@@ -88,13 +88,16 @@ local iscript_close = P"[endscript]" + P"[/endscript]"
 local iscript_body = C((P(1) - P"[endscript]" - P"[/endscript]")^0)
 local iscript_pat = Ct(Cc("iscript") * P"[iscript]" * skip * iscript_body * skip * iscript_close)
 
--- Full grammar: explicit patterns first, then generic cmd_pat, then label/text
+-- Full grammar: explicit patterns first, then generic cmd_pat, then label,
+-- multi-line text block (""" ... """), then single-line text
+local block_text = Ct(Cc("blocktext") * P('"""')
+    * C((P(1) - P('"""'))^0) * P('"""'))
 local explicit_cmds = iscript_pat + eval_pat + P_se + P_stopse + P_fadebgm + P_fadevoice + P_fadese + P_wait + P_delay + P_skip + cmd_pat
 
 local grammar = Ct(
     bom * skip *
-    (explicit_cmds + label_pat + text_body) *
-    (skip * (explicit_cmds + label_pat + text_body))^0 *
+    (explicit_cmds + label_pat + block_text + text_body) *
+    (skip * (explicit_cmds + label_pat + block_text + text_body))^0 *
     skip * -1
 )
 
@@ -106,7 +109,7 @@ local grammar = Ct(
 -- '['), the second the match end for advancing. Audit: the old form
 -- reported the match START including leading comments, so editor
 -- jumps landed on the comment, not the command.
-local one_token = Ct(skip * Cp() * (explicit_cmds + label_pat + text_body) * Cp())
+local one_token = Ct(skip * Cp() * (explicit_cmds + label_pat + block_text + text_body) * Cp())
 
 -- ---- Normalization ----
 local function normalize(raw_tokens)
@@ -126,6 +129,14 @@ local function normalize(raw_tokens)
             result[#result + 1] = { type = "command", cmd = tokenizer.normalize_cmd(t[2]), params = params }
         elseif typ == "text" then
             local txt = t[2] or ""
+            if not txt:match("^%s*$") then
+                result[#result + 1] = { type = "text", content = txt }
+            end
+        elseif typ == "blocktext" then
+            -- Multi-line text block: """ ... """ -- content keeps newlines
+            -- (trim one leading/trailing line break from the delimiters);
+            -- the scheduler renders it as one [ch] (multi-line dialogue).
+            local txt = (t[2] or ""):gsub("^\r?\n", ""):gsub("\r?\n$", "")
             if not txt:match("^%s*$") then
                 result[#result + 1] = { type = "text", content = txt }
             end
