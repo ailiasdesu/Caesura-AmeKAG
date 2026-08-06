@@ -17,14 +17,8 @@ check("delay delegates to wait",
 
 -- schema coercion: [delay ms="500"] -> numeric 500 (no comparison error)
 local schema = require("kag.schema")
-local coerced = schema.coerce and schema.coerce("delay", { ms = "500" }) or nil
-if not coerced then
-    -- fallback: look up the definition via the registered schema table
-    local ok, def = pcall(function() return schema.get("delay") end)
-    check("delay schema defined", ok and type(def) == "table")
-else
-    check("ms coerced to number", type(coerced.ms) == "number" and coerced.ms == 500)
-end
+local coerced = schema.coerce("delay", { ms = "500" })
+check("ms coerced to number", type(coerced.ms) == "number" and coerced.ms == 500)
 
 -- behavior: KAG.delay(500) yields until elapsed >= 500ms (direct path)
 local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
