@@ -300,9 +300,14 @@ System._placeData = nil
 
 --- System.saveplace(ctx) -- save scene bookmark (in-memory only)
 function System.saveplace(ctx)
+    -- Audit fix: ctx.pc was a dead field (scheduler drives token_index) --
+    -- the bookmark always saved nil and loadplace restored nothing. Use
+    -- the REAL position: scene + token_index (the runner's jump path
+    -- consumes both via _pendingJump).
     System._placeData = {
         label = ctx.current_label,
-        pc = ctx.pc,
+        scene = ctx.current_scene or ctx.currentScene or "",
+        index = ctx.token_index or 1,
         tf = ctx.tf and table_deep_copy(ctx.tf) or {},
         dialog_index = ctx.dialog_index,
         text_state = ctx.text_state and table_deep_copy(ctx.text_state) or {},
@@ -319,7 +324,11 @@ function System.loadplace(ctx)
     end
     local pd = System._placeData
     ctx.current_label = pd.label
-    ctx.pc = pd.pc
+    -- Resume via the runner's jump path (scene + token index); a bare
+    -- token_index write would strand the running coroutine at the old
+    -- position.
+    ctx._pendingJump = { scene = pd.scene, index = pd.index or 1 }
+    ctx.stop_flag = true
     ctx.tf = pd.tf
     ctx.dialog_index = pd.dialog_index
     ctx.text_state = pd.text_state or {}
