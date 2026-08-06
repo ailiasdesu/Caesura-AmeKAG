@@ -34,7 +34,23 @@ local tokens = { { "jump", { target = "../evil.ks" } }, { "ch", { text = "after"
 local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
 while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
 check("load_tokens never called", #calls == 0)
-check("execution continues", true)  -- did not abort the scene
+check("execution continues", true)
+-- stronger: the next token still executes (the scene did not abort)
+local dispatched = {}
+local kag_orig = package.loaded["kag"]
+package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+    return function(c2, p2) dispatched[#dispatched + 1] = { k, p2 } end
+end})
+local ctxB = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function(path) calls[#calls + 1] = path return { { "ch", {} } } end }
+local tokensB = { { "jump", { target = "../evil.ks" } }, { "ch", { text = "after" } } }
+local coB = coroutine.create(function() scheduler.run(ctxB, tokensB, 1) end)
+while coroutine.status(coB) ~= "dead" do coroutine.resume(coB) end
+package.loaded["kag"] = kag_orig
+check("next token executes after block", #dispatched == 1
+      and dispatched[1][2].text == "after")
 
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")

@@ -240,12 +240,6 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [call]
         elseif cmd == "call" then
             local target = params.target or params.storage
-            ctx.call_stack = ctx.call_stack or {}  -- lazy: entry scene has none
-            table.insert(ctx.call_stack, {
-                tokens = tokens, index = i + 1,
-                label_index = ctx.label_index,  -- restore the CALLER's scene index
-                scene = ctx.current_scene,      -- restore the CALLER's scene name
-            })
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
@@ -254,6 +248,13 @@ function scheduler.run(ctx, tokens, start_index)
                 new_tokens = ctx.load_tokens and ctx.load_tokens(path)
             end
             if new_tokens then
+                ctx.call_stack = ctx.call_stack or {}
+                table.insert(ctx.call_stack, {
+                    tokens = tokens, index = i + 1,
+                    label_index = ctx.label_index,
+                    scene = ctx.current_scene,
+                })
+                tokens = new_tokens
                 tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
