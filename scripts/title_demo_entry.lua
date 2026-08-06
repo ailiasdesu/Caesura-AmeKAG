@@ -24,7 +24,10 @@ function engine_update(dt)
 
     -- Drive the title menu until an action is chosen
     if settings_co then
-        local okS = coroutine.resume(settings_co)
+        local okS, errS = coroutine.resume(settings_co)
+        if not okS then
+            print("[TitleDemo] settings error: " .. tostring(errS))
+        end
         if not okS or coroutine.status(settings_co) == "dead" then
             settings_co = nil
             -- settings closed: now start the demo
