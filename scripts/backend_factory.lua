@@ -62,6 +62,11 @@ function BackendFactory.create(opts)
         elseif cmd == "clear_text" then return KAG.clear_text(...)
         elseif cmd == "set_font" then return KAG.set_font(...)
         elseif cmd == "line_height" then return KAG.line_height(...)
+        elseif cmd == "text_set_font" then return Render.text_set_font(...)
+        elseif cmd == "text_reset_state" then return Render.text_reset_state(...)
+        elseif cmd == "video_play" then return Render.video_play(...)
+        elseif cmd == "video_stop" then return Render.video_stop(...)
+        elseif cmd == "video_is_playing" then return Render.video_is_playing(...)
         else error("[BackendFactory] Unknown render: " .. tostring(cmd)) end
     end
 

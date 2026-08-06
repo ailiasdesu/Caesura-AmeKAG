@@ -54,5 +54,18 @@ end
 check("all backend fns nil-safe", allSafe, firstErr)
 check("backend count", #calls >= 20)
 
+-- backend_factory whitelist: the 5 new render commands must route
+-- (security review MEDIUM: production registers the factory table as
+-- _CAESURA_BACKEND and its render() whitelist ERRORED on unknown
+-- commands -- [video] threw instead of playing)
+-- source-level (the suite sandbox gates the require; the file is
+-- always readable)
+local fh = assert(io.open("scripts/backend_factory.lua", "r"))
+local src = fh:read("*a")
+fh:close()
+check("factory text_set_font", src:find('"text_set_font" then return Render.text_set_font', 1, true) ~= nil)
+check("factory video_play", src:find('"video_play" then return Render.video_play', 1, true) ~= nil)
+check("factory video_is_playing", src:find('"video_is_playing" then return Render.video_is_playing', 1, true) ~= nil)
+
 if failed > 0 then os.exit(1) end
 print("BACKEND GUARD TESTS DONE")
