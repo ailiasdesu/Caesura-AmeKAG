@@ -46,5 +46,23 @@ check("font set", src:find("pcall(backend.text_set_font", 1, true) ~= nil)
 check("render 7-arg", src:find("render_text(line, 32, y + (i - 1) * lineHeight,", 1, true) ~= nil)
 check("multi-line split", src:find("gmatch(\"(.-)", 1, true) ~= nil)
 
+-- normalize + multi-newline direct assertions (review nit)
+local renders2 = {}
+_G._CAESURA_BACKEND = { render = function(cmd, ...)
+    if cmd == "render_text" then renders2[#renders2 + 1] = { ... } end
+    return true end }
+local co2 = coroutine.create(function()
+    T.scroll(ctx, { text = "A
+B
+
+", speed = 5000, size = 28, color = "RED" })
+end)
+coroutine.resume(co2)
+coroutine.resume(co2, 16)
+check("RED normalizes", renders2[1] and renders2[1][4] == 255
+      and renders2[1][5] == 0 and renders2[1][6] == 0)
+check("multi-newline no empty line", #renders2 == 2)
+_G._CAESURA_BACKEND = backend_backup
+
 if failed > 0 then os.exit(1) end
 print("SCROLL TESTS DONE")
