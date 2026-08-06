@@ -190,6 +190,7 @@ function MusicRoom.show(ctx)
     -- per-frame pattern as ChapterSelect: the scheduler coroutine
     -- drives coroutine.yield, and the engine routes _G._GAME_KEY_*.
     local cursor, scroll, ITEMS = 1, 0, 10
+    local _printed = false
     while true do
     -- Title header bar background
     -- Title: "Music Room / 音楽室"
@@ -226,7 +227,7 @@ function MusicRoom.show(ctx)
         local idxStr = string.format("%2d.", i)
         local line = prefix .. favMark .. idxStr .. " " .. t.name .. lockStatus
         local r, g2, bVal = 220, 220, 255  -- default white-blue
-        if i == cursor then
+        if scroll + i == cursor then
             r, g2, bVal = 255, 220, 80    -- cursor gold
         elseif not t.unlocked then
             r, g2, bVal = 100, 100, 120  -- dim for locked
@@ -251,8 +252,9 @@ function MusicRoom.show(ctx)
     for _, t in ipairs(tracks) do if t.favorited then favCount = favCount + 1 end end
     backend.render_text("★ " .. favCount .. " favorites", 40, footerY + 14, 255, 220, 80, 255)
 
-    if scroll == 0 then
+    if not _printed then
         print("[MusicRoom] Displayed " .. #tracks .. " tracks.")
+        _printed = true
     end
         coroutine.yield()
 
