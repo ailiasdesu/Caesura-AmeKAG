@@ -36,5 +36,39 @@ check("saveload load branch",
 check("saveload no-choice guard",
       src:find("if chosen then", 1, true) ~= nil)
 
+-- visual/text state round-trip (audit: capture + restore font/style)
+local Save = package.loaded["kag.commands.save"] or require("kag.commands.save")
+local ctxV = { f = { hero = 1 }, sf = {}, tf = {}, mp = {}, variables = {},
+    token_index = 5, current_scene = "s.ks", backlog = {},
+    seen_scenes = {}, seen_endings = {}, saveDescription = "v",
+    text_state = { font_face = "serif", font_size = 30, font_color = "255,0,0" },
+    textbox_style = { x = 0, y = 520, w = 1280, h = 200,
+        color = "0,0,0", opacity = 200, visible = true } }
+local captured = Save.capture_state(ctxV)
+check("text_state captured", captured.text_state
+      and captured.text_state.font_face == "serif"
+      and captured.text_state.font_size == 30)
+check("textbox_style captured", captured.textbox_style
+      and captured.textbox_style.w == 1280)
+-- restore is inline in load(); drive it end-to-end via the mock
+local loaded_state = captured
+local kag_backup = _G.KAG
+_G.KAG = { load_game = function() return loaded_state, {} end,
+    save_game = function() return true end }
+local ctxR = { f = {}, sf = {}, tf = {}, mp = {}, variables = {},
+    tokens = {}, token_index = 1 }
+pcall(Save.load, ctxR, { slot = 0 })
+_G.KAG = kag_backup
+check("font restored", ctxR.text_state and ctxR.text_state.font_face == "serif"
+      and ctxR.text_state.font_size == 30)
+check("style restored", ctxR.textbox_style and ctxR.textbox_style.w == 1280
+      and ctxR.textbox_style.opacity == 200)
+-- crafted non-table visual state cannot crash load
+_G.KAG = { load_game = function() return { text_state = "evil", textbox_style = 42 }, {} end }
+local ctxC = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, tokens = {} }
+local okC = pcall(Save.load, ctxC, { slot = 0 })
+_G.KAG = kag_backup
+check("crafted visual safe", okC)
+
 if failed > 0 then os.exit(1) end
 print("SAVELOAD TESTS DONE")

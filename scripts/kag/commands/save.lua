@@ -146,6 +146,29 @@ local function capture_state(ctx)
     state.seen_scenes = ctx.seen_scenes or {}
     state.seen_endings = ctx.seen_endings or {}
 
+    -- Visual/text state (audit: saves restored logic but not the
+    -- message-window style or font -- a reloaded save reset the look).
+    -- Only plain string/number fields are captured (no handles/tables).
+    if ctx.text_state and type(ctx.text_state) == "table" then
+        local ts = ctx.text_state
+        local vis = {}
+        if type(ts.font_face) == "string" then vis.font_face = ts.font_face end
+        if type(ts.font_size) == "number" then vis.font_size = ts.font_size end
+        if type(ts.font_color) == "string" then vis.font_color = ts.font_color end
+        if next(vis) then state.text_state = vis end
+    end
+    if ctx.textbox_style and type(ctx.textbox_style) == "table" then
+        local st = ctx.textbox_style
+        if type(st.w) == "number" and type(st.h) == "number" then
+            state.textbox_style = {
+                x = st.x or 0, y = st.y or 0, w = st.w, h = st.h,
+                color = type(st.color) == "string" and st.color or "0,0,0",
+                opacity = st.opacity or 200,
+                visible = st.visible ~= false,
+            }
+        end
+    end
+
     return state
 end
 
@@ -170,6 +193,8 @@ require("kag.schema").define("load", {
 -- Resolve the save slot: named slot= (schema-typed 0..99), else the
 -- KAG3 bare positional [save 1], clamped here too (the numeric key
 -- bypasses schema coerce -- same pattern as the wait clamp).
+SaveCommands.capture_state = capture_state
+
 local function resolve_slot(params)
     -- tonumber(params.slot): a direct caller could pass a string
     -- (review nit -- coerce + all callers pass numbers today)
@@ -305,6 +330,31 @@ function SaveCommands.load(ctx, params)
     ctx.skip_mode = (sm == true or sm == "seen") and sm or false
     ctx.auto_mode = (state.auto_mode == true)
     ctx.voice_muted = (state.voice_muted == true)
+    -- Restore visual/text state (audit completion)
+    if type(state.text_state) == "table" then
+        ctx.text_state = ctx.text_state or {}
+        if type(state.text_state.font_face) == "string" then
+            ctx.text_state.font_face = state.text_state.font_face
+        end
+        if type(state.text_state.font_size) == "number" then
+            ctx.text_state.font_size = state.text_state.font_size
+        end
+        if type(state.text_state.font_color) == "string" then
+            ctx.text_state.font_color = state.text_state.font_color
+        end
+    end
+    if type(state.textbox_style) == "table" then
+        local st = state.textbox_style
+        if type(st.w) == "number" then
+            ctx.textbox_style = {
+                x = st.x or 0, y = st.y or 0, w = st.w, h = st.h,
+                color = type(st.color) == "string" and st.color or "0,0,0",
+                opacity = st.opacity or 200,
+                visible = st.visible ~= false,
+            }
+        end
+    end
+
     -- Restore the UI language and hot-switch the locale
     if type(state.language) == "string" and #state.language > 0 then
         ctx.settingsValues = ctx.settingsValues or {}
