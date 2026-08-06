@@ -8,11 +8,13 @@ end
 
 local layers = require("layers")
 -- 5 layers with visible nodes (worst-case-ish render walk)
-local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
 for i = 1, 5 do
-    local st = layers.ensure(ctx, "layer_" .. i, i)
+    local st = layers.ensure(nil, "layer_" .. i, i)
     st.visible = true
 end
+local cnt = 0
+for _ in pairs(layers.get_root()) do cnt = cnt + 1 end
+check("five layers present", cnt >= 5)
 local N = 5000
 local t0 = os.clock()
 for _ = 1, N do
