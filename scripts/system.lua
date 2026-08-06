@@ -299,6 +299,17 @@ end
 System._placeData = nil
 
 --- System.saveplace(ctx) -- save scene bookmark (in-memory only)
+-- Shared style-only text-state copy for the bookmark (audit nits:
+-- single field list, type-checked)
+function System._copyPlaceTextState(ts)
+    if type(ts) ~= "table" then return {} end
+    local st = {}
+    for _, k in ipairs({ "font_face", "font_size", "font_color", "line", "char_offset" }) do
+        if ts[k] ~= nil then st[k] = ts[k] end
+    end
+    return st
+end
+
 function System.saveplace(ctx)
     -- Audit fix: ctx.pc was a dead field (scheduler drives token_index) --
     -- the bookmark always saved nil and loadplace restored nothing. Use
@@ -313,17 +324,7 @@ function System.saveplace(ctx)
         -- STYLE-ONLY text state (audit: deep-copying the whole
         -- text_state dragged per-frame draws + stale texture handles
         -- into the bookmark; only the font/layout fields matter)
-        text_state = (function()
-            local ts = ctx.text_state
-            if type(ts) ~= "table" then return {} end
-            local st = {}
-            if type(ts.font_face) == "string" then st.font_face = ts.font_face end
-            if type(ts.font_size) == "number" then st.font_size = ts.font_size end
-            if type(ts.font_color) == "string" then st.font_color = ts.font_color end
-            if type(ts.line) == "number" then st.line = ts.line end
-            if type(ts.char_offset) == "number" then st.char_offset = ts.char_offset end
-            return st
-        end)(),
+        text_state = System._copyPlaceTextState(ctx.text_state),
         layers = ctx.layers,  -- reference is fine
     }
     print("[System] Place saved (temporary bookmark).")
@@ -346,17 +347,12 @@ function System.loadplace(ctx)
     ctx.dialog_index = pd.dialog_index
     -- style-only restore: never resurrect stale per-frame draws
     -- (audit: their texture handles may belong to a previous scene)
-    ctx.text_state = {}
-    if type(pd.text_state) == "table" then
-        for _, k in ipairs({ "font_face", "font_size", "font_color", "line", "char_offset" }) do
-            if pd.text_state[k] ~= nil then ctx.text_state[k] = pd.text_state[k] end
-        end
-    end
+    ctx.text_state = System._copyPlaceTextState(pd.text_state)
     if pd.text_state and pd.text_state.line then
         pcall(function()
             local layers = require("layers")
             if layers and layers.restore_text_state then
-                layers.restore_text_state(pd.text_state)
+                layers.restore_text_state(ctx.text_state)
             end
         end)
     end
