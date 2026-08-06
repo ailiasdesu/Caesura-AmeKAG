@@ -239,6 +239,32 @@ function Backend.render_text(text, x, y, r, g, b, a)
     else return call_resolved("render_text", text, x, y, r, g, b, a) end
 end
 
+-- Text-to-speech (accessibility): engine-level TTS is not wired yet --
+-- these entry points let game scripts probe and request speech synthesis
+-- without crashing when the backend is absent. A future TTS backend
+-- (Windows SAPI / external RPC) implements tts_available() and
+-- tts_speak(); until then both report the feature as unavailable.
+function Backend.tts_available()
+    local be = get_backend()
+    if be and be.tts_available then
+        local ok, r = pcall(be.tts_available)
+        return ok and r == true
+    end
+    return false
+end
+
+function Backend.tts_speak(text, rate)
+    if not Backend.tts_available() then
+        return false
+    end
+    local be = get_backend()
+    if be and be.tts_speak then
+        local ok, r = pcall(be.tts_speak, text, rate or 1.0)
+        return ok and r ~= false
+    end
+    return false
+end
+
 function Backend.show_text(text)
     return call_resolved("show_text", text)
 end

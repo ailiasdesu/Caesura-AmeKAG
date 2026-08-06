@@ -251,6 +251,16 @@ function kag_runner.start(scene_path)
         seen_scenes = {},
         waiting_input = false,
         _scene_changed = false,
+        -- Accessibility: cc_mode (closed captions) synced from config at
+        -- startup (pcall: degraded contexts without the backend factory
+        -- must not fail the runner); Settings._applyAll updates it live.
+        cc_mode = (function()
+            local okC, config = pcall(require, "config")
+            if okC and config.accessibility then
+                return config.accessibility.cc_mode == true
+            end
+            return false
+        end)(),
         load_tokens = load_tokens,
         -- Token-level rollback stack (see kag/snapshot.lua); cleared on
         -- [load] and on scene changes. Bounded to cap memory.
@@ -456,9 +466,40 @@ end
 
 -- Submit persistent KAG text after the layer tree so dialogue stays above
 -- scene content and is re-issued on every frame.
+local cc_bar_tex = nil  -- cached solid texture for the CC backing bar
 function kag_runner.render()
     if not ctx then return false, "no-context" end
-    return true, require("kag.text_scene").render(ctx)
+    local ok, n = true, require("kag.text_scene").render(ctx)
+    -- Closed captions (accessibility): a voiced line is drawn at a fixed
+    -- bottom position, independent of the textbox, while cc_mode is on.
+    -- Single source of truth: ctx.cc_mode (set by Settings._applyAll,
+    -- game scripts, or the runner's startup sync from config).
+    if ctx.cc_mode == true and ctx.cc_text
+       and #(ctx.cc_text.text or "") > 0 then
+        local backend = require("backend")
+        local vp = ctx.viewport or {}
+        local w = vp.width or 1280
+        local h = vp.height or 720
+        local text = ctx.cc_text.text
+        local speaker = ctx.cc_text.speaker or ""
+        if #speaker > 0 then
+            text = speaker .. "：" .. text
+        end
+        local x = math.floor(w / 2)
+        local y = h - 60
+        -- Black backing bar for readability over any scene content
+        -- (texture cached: one solid texture, re-issued every frame).
+        if not cc_bar_tex then
+            pcall(function()
+                cc_bar_tex = backend.create_solid_texture(0, 0, 0, 150)
+            end)
+        end
+        if cc_bar_tex then
+            pcall(backend.draw_viewport, cc_bar_tex, x - 620, y - 8, 1240, 44)
+        end
+        pcall(backend.render_text, text, x, y, 255, 255, 255, 255)
+    end
+    return ok, n
 end
 
 -- ── kag_runner.rollback() → boolean ─────────────────────────────────────────

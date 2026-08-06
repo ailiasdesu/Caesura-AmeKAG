@@ -496,8 +496,20 @@ function TextCommands.ch(ctx, params)
 
     -- Voice: [ch voice="assets/voice/x.wav"] plays the line and stores the
     -- file in the backlog entry so the history overlay's V key can replay it.
+    -- Accessibility: with cc_mode enabled the CURRENT line becomes the
+    -- closed-caption text (drawn at a fixed bottom position by
+    -- kag_runner.render) while a voice line is on screen.
     local voiceFile = params.voice or params.voicefile or ""
     if #voiceFile > 0 then
+        -- Closed captions: with cc_mode enabled the voiced line becomes
+        -- the standing caption until the next voiced (or voiceless) line.
+        -- cc_mode lives on ctx (set by Settings._applyAll, game scripts,
+        -- or the runner's startup sync from config) -- ch NEVER loads
+        -- config itself (its require chain is unavailable in degraded
+        -- contexts and would disturb suite ordering).
+        if ctx.cc_mode == true then
+            ctx.cc_text = { speaker = speaker, text = message }
+        end
         -- Non-blocking voice: playvoice() yields until the clip ends, which
         -- would stall the script (and swallow clicks) for the whole line.
         -- Fire-and-forget matches VN behavior: the line's voice plays while
@@ -509,6 +521,10 @@ function TextCommands.ch(ctx, params)
             -- via a direct play with the raw path when valid.
             backend.audio_play("voice", file, {})
         end)
+    else
+        -- No voice on this line: clear any standing caption (CC shows only
+        -- lines that are actually voiced; the textbox itself stays).
+        ctx.cc_text = nil
     end
 
     -- Character sprite (KAG-style standing portrait): if the speaker has a

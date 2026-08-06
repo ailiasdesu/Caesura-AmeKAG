@@ -39,6 +39,15 @@ config.window_title   = "Caesura"
 config.thumbnail_quality = 90
 config.thumbnail_format  = "png"
 
+-- Accessibility (Neo-Genesis): cc_mode draws voiced dialogue as fixed
+-- closed captions; high_contrast strengthens text/backing contrast;
+-- text_scale multiplies the dialogue text size (1.0 = default).
+config.accessibility = {
+    cc_mode = false,
+    high_contrast = false,
+    text_scale = 1.0,
+}
+
 -- Per-bus volume defaults (persisted across sessions)
 config.bgm_volume   = 1.0
 config.voice_volume = 1.0

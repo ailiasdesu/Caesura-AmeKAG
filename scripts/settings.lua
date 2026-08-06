@@ -36,6 +36,7 @@ local defaults = {
     volume_bgm   = 80,
     volume_se    = 80,
     volume_voice = 100,
+    cc_mode      = false,  -- accessibility: closed captions for voiced lines
     text_speed   = 50,   -- ms per char
     fullscreen   = false,
     skip_mode    = false,
@@ -62,6 +63,9 @@ function Settings._buildMenu(ctx)
         {label = i18n.t("skip_mode"),    key = "skip_mode",    type = "toggle", value = sv.skip_mode},
         {label = i18n.t("skip_auto"),    key = "skip_auto",    type = "toggle", value = sv.skip_auto},
         {label = i18n.t("auto_mode"),    key = "auto_mode",    type = "toggle", value = sv.auto_mode},
+        -- Accessibility (Neo-Genesis): closed captions draw voiced
+        -- dialogue at a fixed bottom position (see kag_runner.render).
+        {label = i18n.t("cc_mode"),      key = "cc_mode",      type = "toggle", value = sv.cc_mode},
         {label = i18n.t("fullscreen"),   key = "fullscreen",   type = "toggle", value = sv.fullscreen},
         {label = i18n.t("language") .. ": " .. (i18n.current or "zh"),
          key = "language", type = "cycle", value = i18n.current,
@@ -305,6 +309,17 @@ function Settings._applyAll(ctx)
     if sv.auto_mode ~= nil then ctx.auto_mode = sv.auto_mode end
     if sv.volume_voice then audio.set_voice_volume(sv.volume_voice / 100) end
     if sv.fullscreen ~= nil then backend.set_fullscreen(sv.fullscreen) end
+    -- Accessibility: closed captions mirror into BOTH the context flag
+    -- (read by TextCommands.ch / kag_runner.render; no module coupling)
+    -- and config (persisted default).
+    if sv.cc_mode ~= nil then
+        ctx.cc_mode = sv.cc_mode == true
+        local okC, config = pcall(require, "config")
+        if okC then
+            config.accessibility = config.accessibility or {}
+            config.accessibility.cc_mode = ctx.cc_mode
+        end
+    end
 end
 
 -- ===========================================================================

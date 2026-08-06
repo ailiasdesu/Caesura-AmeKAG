@@ -129,6 +129,7 @@ function i18n._loadBuiltin(langCode)
             skip_mode = "跳过模式",
             skip_auto = "强制跳过",
             auto_mode = "自动模式",
+            cc_mode = "字幕模式(CC)",
         },
         en = {
             title_screen = "Title Screen",
@@ -153,6 +154,7 @@ function i18n._loadBuiltin(langCode)
             skip_mode = "Skip Mode",
             skip_auto = "Force Skip",
             auto_mode = "Auto Mode",
+            cc_mode = "Closed Captions",
         },
         ja = {
             title_screen = "タイトル",

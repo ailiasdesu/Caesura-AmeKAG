@@ -14,12 +14,9 @@ local _real_dofile  = dofile
 -- Preload modules the sandbox-locked tests need (mirrors scripts/kag/init.lua:
 -- sandbox.lua replaces _G.require with a package.loaded-only wrapper, so any
 -- module first required AFTER test_sandbox runs must already be cached).
-for _, m in ipairs({ "mods", "kag_debug", "kag_runner" }) do
-    local ok, err = pcall(require, m)
-    if not ok then
-        print("[run_lua_tests] preload " .. m .. " failed: " .. tostring(err))
-    end
-end
+-- (preload of mods/kag_debug/kag_runner removed: requiring kag_runner
+-- pulls the whole command module chain before the tests that mock the
+-- C bindings, changing suite behavior -- see git history)
 
 -- NOTE: test_kag_commands must run BEFORE test_scheduler because
 -- scheduler internally loads kag module which caches a partial table.
@@ -112,6 +109,7 @@ local tests = {
     "test_trans_behavior",
     "test_fadeout",
     "test_backend_guard",
+    "test_accessibility",
     "test_label_bench",
     "test_chapter_select",
     "test_music_room",
