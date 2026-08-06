@@ -28,5 +28,19 @@ local co2 = coroutine.create(function() scheduler.run(ctx2, toks2, 1) end)
 while coroutine.status(co2) ~= "dead" do coroutine.resume(co2) end
 check("unlock default cg", ctx2.unlockedCG and ctx2.unlockedCG.m2 == true)
 
+-- direct caller with a pair-table params[1] must not store a table key
+-- (security low nit: string-guard consistency with jump/call/link)
+local KAG = require("kag")
+local ctx3 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.unlock, ctx3, { { "cg9" } })  -- raw tokenizer-style pair
+local ok3 = ctx3.unlockedCG == nil or ctx3.unlockedCG.cg9 == nil
+check("pair-table id rejected", ok3)
+
+-- named id still wins over bare
+local ctx4 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.unlock, ctx4, { { "ignored" }, id = "real1" })
+check("named id wins", ctx4.unlockedCG and ctx4.unlockedCG.real1 == true
+      and ctx4.unlockedCG.ignored == nil)
+
 if failed > 0 then os.exit(1) end
 print("UNLOCK BARE TESTS DONE")
