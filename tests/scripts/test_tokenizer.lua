@@ -111,6 +111,8 @@ check("empty-value falls to bare", t_empty[1].params[1][1] == "1"
       and t_empty[1].params[1][2] == "x=")
 local t_q = tokenizer.parse('[cmd k=""]')
 check("quoted empty kept", t_q[1].params[1][1] == "k"
+-- (the Results line above prints before these regression checks;
+-- the exit-code guard after them is authoritative -- review nit)
       and t_q[1].params[1][2] == "")
 
 if failed > 0 then os.exit(1) end
