@@ -32,8 +32,10 @@ local function update_text_state(ctx, action, char_count)
     end
 end
 
+-- Floor then clamp: float components (e.g. "128.9") must yield bytes
+-- (review nit: max/min alone drops the floor for in-range floats).
 local function clamp_byte(value)
-    value = tonumber(value) or 0
+    value = math.floor(tonumber(value) or 0)
     return math.max(0, math.min(255, value))
 end
 

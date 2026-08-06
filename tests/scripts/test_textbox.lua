@@ -14,7 +14,7 @@ local src = f:read("*a")
 f:close()
 
 -- clamp_byte exists and is used in all three color paths
-check("clamp helper", src:find("local function clamp_byte", 1, true) ~= nil)
+check("clamp helper floors", src:find("math.floor(tonumber(value) or 0)", 1, true) ~= nil)
 local c1 = src:find("clamp_byte(r), clamp_byte(g), clamp_byte(b)", 1, true)
 local c2 = src:find("clamp_byte(tr or 255)", 1, true)
 check("textbox color clamps", c1 ~= nil and c2 ~= nil)
