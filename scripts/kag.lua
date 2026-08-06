@@ -285,6 +285,19 @@ KAG.clear = KAG.cl
 -- [ct] -- clear text/message (KAG3); same as [clear]
 KAG.ct = KAG.cl
 
+-- [endtag] -- generic block end (KAG3 legacy; no-op -- the Neo-Genesis
+-- grammar already closes iscript/macro blocks explicitly)
+KAG.endtag = function() end
+
+-- [endform] -- KAG3 form-system end (forms are not implemented; safe
+-- no-op so legacy scripts do not error)
+KAG.endform = function() end
+
+-- [g storage=x] -- KAG3 graphic display; same as [bg]
+KAG.g = function(ctx, params)
+    return KAG.bg(ctx, params)
+end
+
 -- [waitforclick] -- block until the player clicks (KAG3 control flow)
 function KAG.waitforclick(ctx, params)
     if not ctx then return end

@@ -41,5 +41,17 @@ check("hr parses", tokenizer.parse("[hr]")[1].cmd == "hr")
 check("close parses", tokenizer.parse("[close]")[1].cmd == "close")
 check("vib parses", tokenizer.parse("[vib time=200]")[1].cmd == "vib")
 
+-- KAG3 legacy gaps (audit): endtag/endform no-op safe, g -> bg
+check("endtag registered", type(KAG.endtag) == "function")
+local okE = pcall(KAG.endtag, {}, {})
+check("endtag no-op safe", okE)
+check("endform registered", type(KAG.endform) == "function")
+local okF = pcall(KAG.endform, {}, {})
+check("endform no-op safe", okF)
+check("g registered", type(KAG.g) == "function")
+local toksG = tokenizer.parse('[g storage="bg.png"]')
+check("g parses with storage", toksG[1].cmd == "g"
+      and toksG[1].params[1][2] == "bg.png")
+
 if failed > 0 then os.exit(1) end
 print("FOUR CMDS TESTS DONE")
