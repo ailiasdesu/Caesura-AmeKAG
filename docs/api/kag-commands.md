@@ -160,7 +160,7 @@
 | `delay` | `ms` (or bare `[delay 500]`) | wait | Wait N milliseconds; bare positional supported |
 | `wait` | `time`/`ms`/`duration` (or bare `[wait 200]`) | — | Block N ms; explicit aliases beat the 1000ms default; capped 60s |
 | `se` | `file` (or bare `[se 1]`) | se bus | Fire-and-forget one-shot; bare arg is the file |
-| `voice` | `file` (or bare `[voice 2]`) | voice bus | Plays voice; `[voice_wait]` blocks until done |
+| `voice` | `file` (or bare `[voice 2]`) | voice bus | Plays voice and blocks until done; `[voice_wait]` adds click-to-skip |
 | `play` | `file` (or bare `[play 3]`) | bgm bus | Plays BGM (defaults to looping); bare arg is the file |
 | `jump`/`call`/`link` | `target` (or bare `[jump next.ks]`) | flow | Cross-scene requires `assets/script/` paths (allowlisted, no `..`); bare `*label` works |
 | `unlock` | `id` (or bare `[unlock cg1]`) | system | Unlock entry; bare id recorded |
