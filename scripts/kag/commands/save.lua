@@ -434,7 +434,13 @@ end
 -- [saveload mode=save|load] — slot-selection UI (scheduler-driven)
 function SaveCommands.saveload(ctx, params)
     local SaveLoad = require("saveload_menu")
-    local chosen = SaveLoad.show(ctx, params.mode or params[1] or "save")
+    -- string guard on the bare mode (audit: a pair table from named
+    -- params must not reach the menu as the mode)
+    local mode = params.mode
+    if type(mode) ~= "string" and type(params[1]) == "string" then
+        mode = params[1]
+    end
+    local chosen = SaveLoad.show(ctx, mode or "save")
     if chosen then
         if chosen.action == "save" then
             SaveCommands.save(ctx, { slot = chosen.slot })

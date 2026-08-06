@@ -98,5 +98,22 @@ pcall(Save.save, ctxTh2, { slot = 0 })
 check("binding fallback safe", thumbs[1] ~= nil)
 _G.KAG = kag_backup2
 
+-- saveload mode guard (audit): named params must not leak the pair
+-- table as the mode; bare [saveload load] still works
+local sl_show = {}
+local sl_b = package.loaded["saveload_menu"]
+package.loaded["saveload_menu"] = { show = function(ctx, mode) sl_show[#sl_show + 1] = mode
+    return nil end }
+local ctxSL = { f = {}, sf = {}, tf = {}, mp = {}, variables = {} }
+pcall(Save.saveload, ctxSL, { mode = "load" })
+check("saveload named mode", sl_show[1] == "load")
+sl_show = {}
+pcall(Save.saveload, ctxSL, { "save" })
+check("saveload bare mode", sl_show[1] == "save")
+sl_show = {}
+pcall(Save.saveload, ctxSL, { { "mod", "x" } })
+check("saveload pair safe", sl_show[1] == nil or sl_show[1] == "save")
+package.loaded["saveload_menu"] = sl_b
+
 if failed > 0 then os.exit(1) end
 print("SAVELOAD TESTS DONE")
