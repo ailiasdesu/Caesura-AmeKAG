@@ -51,17 +51,30 @@ local wsp   = space
 local attrs = Ct(param * space)^0
 
 -- Audio/flow commands with special handling
-local P_se        = Ct(P"[se"      * wsp * Cc("cmd") * Cc("se")        * attrs * P"]")
-local P_stopse    = Ct(P"[stopse"  * P"]"   * Cc("cmd") * Cc("stopse")   * Cc({}))
-local P_fadebgm   = Ct(P"[fadebgm" * wsp * Cc("cmd") * Cc("fadebgm")   * attrs * P"]")
-local P_fadevoice = Ct(P"[fadevoice" * wsp * Cc("cmd") * Cc("fadevoice") * attrs * P"]")
-local P_fadese    = Ct(P"[fadese"  * wsp * Cc("cmd") * Cc("fadese")    * attrs * P"]")
-local P_wait      = Ct(P"[wait"    * wsp * Cc("cmd") * Cc("wait")      * attrs * P"]")
-local P_delay     = Ct(P"[delay"   * wsp * Cc("cmd") * Cc("delay")     * attrs * P"]")
-local P_skip      = Ct(P"[skip"    * wsp * Cc("cmd") * Cc("skip")      * attrs * P"]")
+-- Command-prefix boundary: after "[se" the next char must not be an
+-- identifier char, else P_se would match "[setbgmvolume ...]" once the
+-- bare-value param branch swallowed the tail (C++ demo e2e regression).
+-- NOTE: the pure-Lua lpeg's unary minus is OPTIONAL, not a negative
+-- lookahead -- a zero-width function pattern does the real boundary.
+local function cmd_pre(s)
+    return P("[" .. s) * P(function(sub, pos)
+        local c = sub:sub(pos, pos)
+        if c == "" or c:match("[%s%]=]") then return { pos } end
+        return nil
+    end)
+end
+
+local P_se        = Ct(cmd_pre("se")      * wsp * Cc("cmd") * Cc("se")        * attrs * P"]")
+local P_stopse    = Ct(cmd_pre("stopse")  * P"]"   * Cc("cmd") * Cc("stopse")   * Cc({}))
+local P_fadebgm   = Ct(cmd_pre("fadebgm") * wsp * Cc("cmd") * Cc("fadebgm")   * attrs * P"]")
+local P_fadevoice = Ct(cmd_pre("fadevoice") * wsp * Cc("cmd") * Cc("fadevoice") * attrs * P"]")
+local P_fadese    = Ct(cmd_pre("fadese")  * wsp * Cc("cmd") * Cc("fadese")    * attrs * P"]")
+local P_wait      = Ct(cmd_pre("wait")    * wsp * Cc("cmd") * Cc("wait")      * attrs * P"]")
+local P_delay     = Ct(cmd_pre("delay")   * wsp * Cc("cmd") * Cc("delay")     * attrs * P"]")
+local P_skip      = Ct(cmd_pre("skip")    * wsp * Cc("cmd") * Cc("skip")      * attrs * P"]")
 
 -- Inline expression
-local eval_pat = Ct(P"[eval" * wsp * Cc("cmd") * Cc("eval") * attrs * P"]")
+local eval_pat = Ct(cmd_pre("eval") * wsp * Cc("cmd") * Cc("eval") * attrs * P"]")
 
 -- Embedded script block: [iscript] ... [endscript]
 -- Captured as single token with raw body for Lua execution.
