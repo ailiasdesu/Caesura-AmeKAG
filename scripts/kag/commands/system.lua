@@ -307,8 +307,9 @@ function SystemCommands.rollback(ctx, params)
 end
 
 function SystemCommands.unlock(ctx, params)
+    -- bare [unlock cg1] -> params[1] as the id (KAG3-style positional)
     local kind = params.type or "cg"
-    local id   = params.id or params.name or ""
+    local id   = params.id or params.name or params[1] or ""
     if id == "" then return end
 
     if kind == "cg" then

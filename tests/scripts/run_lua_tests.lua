@@ -83,6 +83,7 @@ local tests = {
     "test_jump_path",
     "test_bareval",
     "test_alias_bare",
+    "test_unlock_bare",
 }
 
 local passed, failed = 0, 0
