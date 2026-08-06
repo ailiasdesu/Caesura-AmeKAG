@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (69)
+## Commands (72)
 
 ### `[auto]`
 
@@ -76,6 +76,14 @@
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[delay]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `duration` | number | - | 0..60000 | - |
+| `ms` | number | - | 0..60000 | - |
+| `time` | number | 1000 | 0..60000 | - |
+
 ### `[emb]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -132,6 +140,15 @@
 |---|---|---|---|---|
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |
+
+### `[flash]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `b` | number | 255 | 0..255 | - |
+| `g` | number | 255 | 0..255 | - |
+| `r` | number | 255 | 0..255 | - |
+| `time` | number | 200 | 0..10000 | - |
 
 ### `[font]`
 
@@ -198,7 +215,7 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `slot` | number | 0 | 0..99 | - |
+| `slot` | number | - | -2..99 | - |
 
 ### `[loadplace]`
 
@@ -213,6 +230,18 @@
 | `time` | number | 300 | 0..30000 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[moveto]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `layer` | string | - | - | - |
+| `left` | number | - | - | - |
+| `scale` | number | 1.0 | 0.01..16 | - |
+| `top` | number | - | - | - |
+| `unit` | string | ndc | - | - |
+| `x` | number | - | - | - |
+| `y` | number | - | - | - |
 
 ### `[music]`
 
@@ -365,7 +394,7 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `slot` | number | 0 | 0..99 | - |
+| `slot` | number | - | -2..99 | - |
 
 ### `[saveplace]`
 
@@ -403,9 +432,9 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `amplitude` | number | - | 0..100 | - |
-| `intensity` | number | 6 | 0..100 | - |
-| `time` | number | 500 | 0..30000 | - |
+| `amplitude` | number | 6 | 0..100 | - |
+| `frequency` | number | 20 | 1..120 | - |
+| `time` | number | 500 | 0..10000 | - |
 
 ### `[sprite_fade]`
 
@@ -514,8 +543,8 @@
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `duration` | number | 1000 | 0..60000 | - |
-| `ms` | number | 1000 | 0..60000 | - |
+| `duration` | number | - | 0..60000 | - |
+| `ms` | number | - | 0..60000 | - |
 | `time` | number | 1000 | 0..60000 | - |
 
 ### `[waitforclick]`
