@@ -92,10 +92,10 @@ function SystemCommands.emb(ctx, params)
 
         if ok then
             if type(ctx.tf) ~= "table" then ctx.tf = {} end
-            ctx.tf.emb_result = result
+            rawset(ctx.tf, "emb_result", result)  -- security LOW: no __newindex trap
         else
             if type(ctx.tf) ~= "table" then ctx.tf = {} end
-            ctx.tf.emb_result = nil
+            rawset(ctx.tf, "emb_result", nil)
         end
         return
     end
@@ -180,11 +180,11 @@ function SystemCommands.eval(ctx, params)
 
     if ok then
         if type(ctx.tf) ~= "table" then ctx.tf = {} end
-        ctx.tf.eval_result = result
+        rawset(ctx.tf, "eval_result", result)  -- security LOW: no __newindex trap
     else
         print("[SystemCmd] eval error: " .. tostring(result))
         if type(ctx.tf) ~= "table" then ctx.tf = {} end
-        ctx.tf.eval_result = nil
+        rawset(ctx.tf, "eval_result", nil)
     end
 end
 
