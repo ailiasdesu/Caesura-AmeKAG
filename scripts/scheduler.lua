@@ -779,7 +779,15 @@ function scheduler.run(ctx, tokens, start_index)
                                 -- scheduler normalizes "1" to a NUMBER
                                 -- key, so params["1"] was always nil)
                                 local key = tonumber(an) or an
-                                return params[key] or ("%" .. an .. "%")
+                                -- string-only: a mismatched arg usage
+                                -- leaves the raw pair table at params[1]
+                                -- and gsub would raise on a table value
+                                -- (review nit -- keep the literal instead)
+                                local val = params[key]
+                                if type(val) == "string" then
+                                    return val
+                                end
+                                return ("%" .. an .. "%")
                             end))
                         elseif type(v) == "table" then
                             -- Deep COPY: the body params table is shared by
