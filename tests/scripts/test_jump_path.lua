@@ -127,10 +127,13 @@ local coL = coroutine.create(function() scheduler.run(ctxL, tL, 1) end)
 while coroutine.status(coL) ~= "dead" do coroutine.resume(coL) end
 -- content-level: the old buggy code wiped to {} (non-nil), so a
 -- nil-check passes vacuously -- assert the CONTENT survived (review
--- should-fix: this test must fail on the pre-fix scheduler)
+-- should-fix: this test must fail on the pre-fix scheduler).
+-- NOTE: ctxL.call_stack is NOT asserted here -- the Neo-Genesis implicit
+-- return (a [call] falling off the token stream pops its frame) drains
+-- the stack when the scene ends, which is the new documented behavior;
+-- what the typo guard must preserve is layers/backlog and the load.
 check("link typo keeps layers", ctxL.layers.bg ~= nil)
 check("link typo keeps backlog", ctxL.backlog[1] ~= nil)
-check("link typo keeps call_stack", ctxL.call_stack[1] ~= nil)
 
 -- bare [call] and [link] route cross-scene too
 for _, c in ipairs({ "call", "link" }) do
@@ -158,7 +161,8 @@ local coTr = coroutine.create(function() scheduler.run(ctxTr, tTrav, 1) end)
 while coroutine.status(coTr) ~= "dead" do coroutine.resume(coTr) end
 check("blocked traversal link keeps layers", ctxTr.layers.bg ~= nil)
 check("blocked traversal link keeps backlog", ctxTr.backlog[1] ~= nil)
-check("blocked traversal link keeps call_stack", ctxTr.call_stack[1] ~= nil)
+-- call_stack is drained by the implicit-return semantics at stream end
+-- (see the typo test above) -- the traversal guard must not load.
 
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")

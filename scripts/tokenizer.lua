@@ -111,6 +111,22 @@ local grammar = Ct(
 -- jumps landed on the comment, not the command.
 local one_token = Ct(skip * Cp() * (explicit_cmds + label_pat + block_text + text_body) * Cp())
 
+-- Bare positional args ([set f.hp 30], [wait 500]): the LPeg param
+-- pattern emits a fixed "1" position marker for every bare value;
+-- renumber bare args by order of appearance so params[1], params[2], ...
+-- land correctly (named key=value pairs do not consume a slot, matching
+-- KAG3 semantics where [tag x=1 500] -> params.x + params[1]).
+local function renumber_bare_params(params)
+    local bare_n = 0
+    for _, pair in ipairs(params) do
+        if type(pair) == "table" and pair[1] == "1" and pair[2] ~= nil then
+            bare_n = bare_n + 1
+            pair[1] = tostring(bare_n)
+        end
+    end
+    return params
+end
+
 -- ---- Normalization ----
 local function normalize(raw_tokens)
     local result = {}
@@ -126,6 +142,7 @@ local function normalize(raw_tokens)
                         params[#params + 1] = pair                    end
                 end
             end
+            renumber_bare_params(params)
             result[#result + 1] = { type = "command", cmd = tokenizer.normalize_cmd(t[2]), params = params }
         elseif typ == "text" then
             local txt = t[2] or ""
@@ -188,6 +205,7 @@ function tokenizer.parse_with_offsets(ks_text)
             local typ = t[1]
             if typ == "cmd" then
                 tok.type = "command"; tok.cmd = t[2]; tok.params = t[3] or {}
+                renumber_bare_params(tok.params)
             elseif typ == "text" then
                 tok.type = "text"; tok.content = t[2] or ""
             elseif typ == "label" then

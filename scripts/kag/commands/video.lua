@@ -29,7 +29,9 @@ end
 -- Neo-Genesis contract: typed + clamped via kag/schema.
 require("kag.schema").define("video", {
     _meta = { category = "video", blocking = true, desc = "KAG3-compatible video command" },
-    file = { type = "string", required = true },
+    file = { type = "string", positional_index = 1 },
+    storage = { type = "string" },  -- KAG3 alias for file
+    _require_any = { "file", "storage" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     loop = { type = "boolean", default = false },
     x = { type = "number", default = 0 },

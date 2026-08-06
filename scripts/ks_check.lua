@@ -35,7 +35,7 @@ for _, c in ipairs({
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
     "break", "continue", "jump", "call", "return", "macro", "endmacro",
     "switch", "endswitch", "case", "endcase", "default", "label", "eval",
-    "emb", "iscript", "endiscript", "wait", "delay", "ch", "text",
+    "emb", "iscript", "endiscript", "wait", "delay", "ch", "text", "link",
 }) do
     KNOWN_NONHANDLER[c] = true
 end
@@ -131,11 +131,20 @@ local function checkScene(path)
                 end
                 if type(exp) == "string" and exp ~= "" then
                     local exprLang = require("kag.expr")
-                    local chunk = exp
-                    if cmd ~= "eval" then
-                        chunk = "return " .. exprLang.translate(exp)
+                    local fn = nil
+                    if cmd == "eval" or cmd == "emb" then
+                        -- STATEMENT semantic (assignments); the runtime
+                        -- wraps plain expressions in `return`, so accept
+                        -- either form here (no false positives on
+                        -- `[eval exp="ctx.f.score + 50"]`).
+                        fn = load("return " .. exp, "=ks_expr_check", "t", {})
+                        if not fn then
+                            fn = load(exp, "=ks_expr_check", "t", {})
+                        end
+                    else
+                        fn = load("return " .. exprLang.translate(exp),
+                            "=ks_expr_check", "t", {})
                     end
-                    local fn = load(chunk, "=ks_expr_check", "t", {})
                     if not fn then
                         report(path, lineOf(tok.offset or 1),
                             "expression in [" .. cmd .. "] does not compile: "

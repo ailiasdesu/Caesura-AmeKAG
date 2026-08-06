@@ -74,10 +74,12 @@ schema.define("playse", {
 schema.define("stopbgm", {
     _meta = { category = "audio", blocking = false, desc = "KAG3-compatible stopbgm command" },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+    time = { type = "number", default = 0, min = 0, max = 30000 },  -- KAG3 alias
 })
 schema.define("stopse", {
     _meta = { category = "audio", blocking = false, desc = "KAG3-compatible stopse command" },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
+    time = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("fadebgm", {
     _meta = { category = "audio", blocking = true, desc = "KAG3-compatible fadebgm command" },
@@ -122,7 +124,7 @@ end
 -- =============================================================================
 
 function AudioCommands.stopbgm(ctx, params)
-    local fadeout = params.fadeout  -- schema-typed
+    local fadeout = params.fadeout or params.time or 0  -- KAG3 `time` alias
 
     if fadeout > 0 then
         backend.audio_fade_volume("bgm", 0, fadeout / 1000.0)

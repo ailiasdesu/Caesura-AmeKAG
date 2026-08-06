@@ -174,6 +174,7 @@ schema.define("scroll", {
 schema.define("trans", {
     _meta = { category = "transition", blocking = true, desc = "KAG3-compatible trans command" },
     method = { type = "string", default = "crossfade" },
+    type = { type = "string", default = "crossfade" },  -- KAG3 alias (kind)
     time   = { type = "number", default = 500, min = 0, max = 30000 },
     duration = { type = "number", default = 500, min = 0, max = 30000 },
 })
@@ -183,6 +184,8 @@ schema.define("move", {
     y = { type = "number", default = 0 },
     time = { type = "number", default = 300, min = 0, max = 30000 },
     duration = { type = "number", default = 300, min = 0, max = 30000 },
+    layer = { type = "string", default = "" },  -- KAG3 layer name
+    name = { type = "string", default = "" },
 })
 schema.define("quake", {
     _meta = { category = "transition", blocking = true, desc = "KAG3-compatible quake command" },

@@ -161,10 +161,19 @@ function Schema.coerce(cmd, params, ctx)
     for name, spec in pairs(specs) do
         local raw = params[name]
         if raw == nil or raw == "" then
-            if spec.required then
+            -- `positional_index = N`: the param may also arrive as the Nth
+            -- bare positional arg (KAG3 style, e.g. [set f.hp 30]); the
+            -- required check is skipped while that positional slot is filled.
+            local pos_filled = spec.positional_index
+                and params[spec.positional_index] ~= nil
+                and params[spec.positional_index] ~= ""
+            if spec.required and not pos_filled then
                 error(where .. ": missing required param '" .. name .. "'", 0)
             end
-            if spec.default ~= nil then out[name] = spec.default end
+            -- When the positional slot is filled (pos_filled), do NOT
+            -- write spec.default -- the handler falls back to params[N]
+            -- itself, and a default would shadow the positional value.
+            if spec.default ~= nil and not pos_filled then out[name] = spec.default end
         else
             out[name] = coerceValue(name, spec, raw, where, ctx)
         end

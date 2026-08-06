@@ -455,35 +455,50 @@ function SystemCommands.assert(ctx, params)
             .. ":" .. tostring(ctx.token_index or ctx.tokenIndex or "?")
         local msg = params.msg or ("assertion failed: " .. exp)
         local full = string.format("[KAG] [assert] %s at %s", msg, where)
-        print(full)
-        if ctx.handle_error then
-            pcall(ctx.handle_error, "assert", full, ctx.token_index or 0)
-        end
+        -- Raise only: scheduler.run's pcall reports once with scene:line and
+        -- invokes ctx.handle_error exactly once (no duplicate diagnostics).
         error(full, 0)
     end
+end
+
+function SystemCommands.random(ctx, params)
+    local var = params.var
+    if type(var) ~= "string" and type(params[1]) == "string" then
+        var = params[1]
+    end
+    -- Integer-only range (math.random(N, M) requires integers on LuaJIT).
+    local min = math.floor(tonumber(params.min or params[2] or 0) or 0)
+    local max = math.floor(tonumber(params.max or params[3] or 100) or 100)
+    local t, key = resolve_var(ctx, var)
+    if not t then
+        print("[WARN] [random] unknown variable scope: " .. tostring(var))
+        return
+    end
+    if min > max then min, max = max, min end
+    t[key] = math.random(min, max)
 end
 
 
 -- Modern utility contracts (Neo-Genesis additions)
 _schema.define("set", {
     _meta = { category = "system", blocking = false, desc = "typed variable assignment (f.x/sf.x/tf.x/mp.x/lf.x)" },
-    var   = { type = "string", required = true },
-    value = { type = "string", required = true },
+    var   = { type = "string", required = true, positional_index = 1 },
+    value = { type = "string", required = true, positional_index = 2 },
 })
 _schema.define("inc", {
     _meta = { category = "system", blocking = false, desc = "increment a numeric variable (by default 1)" },
-    var = { type = "string", required = true },
-    by  = { type = "number", default = 1 },
+    var = { type = "string", required = true, positional_index = 1 },
+    by  = { type = "number", default = 1, positional_index = 2 },
 })
 _schema.define("random", {
     _meta = { category = "system", blocking = false, desc = "write a random integer into a variable" },
-    var = { type = "string", required = true },
-    min = { type = "number", default = 0 },
-    max = { type = "number", default = 100 },
+    var = { type = "string", required = true, positional_index = 1 },
+    min = { type = "number", default = 0, positional_index = 2 },
+    max = { type = "number", default = 100, positional_index = 3 },
 })
 _schema.define("assert", {
     _meta = { category = "system", blocking = false, desc = "development-time assertion on an expression" },
-    exp = { type = "string", required = true },
+    exp = { type = "string", required = true, positional_index = 1 },
     msg = { type = "string" },
 })
 

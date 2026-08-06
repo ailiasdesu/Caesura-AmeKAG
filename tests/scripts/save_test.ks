@@ -5,14 +5,14 @@
 *start
 [bg file="assets/bg/room.jpg"]
 [fg file="assets/fg/npc.png" layer=1]
-[play_bgm file="assets/bgm/room.ogg" loop=true]
+[playbgm file="assets/bgm/room.ogg" loop=true]
 
 ; Save state at this point
 [save slot=1]
 
 ; Change state
 [bg file="assets/bg/park.jpg" time=300]
-[play_bgm file="assets/bgm/park.ogg"]
+[playbgm file="assets/bgm/park.ogg"]
 
 ; Load back
 [load slot=1]

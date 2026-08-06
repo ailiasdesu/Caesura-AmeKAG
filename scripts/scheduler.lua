@@ -206,6 +206,7 @@ function scheduler.run(ctx, tokens, start_index)
                         ctx.token_index = 1
                         ctx.current_scene = path
                         ctx.call_stack = {}
+                        ctx.lf = {}  -- jump starts a fresh local frame
                         ctx.layers = {}
                         ctx.backlog = {}
                         ctx.label_index = nil  -- raw tokens: entry lazy-builds
@@ -319,6 +320,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.backlog = {}
                 operation.cancel_all(ctx)
                 ctx.call_stack = {}
+                ctx.lf = {}  -- new scene, new local frame
                 new_tokens = ctx.load_tokens and ctx.load_tokens(path)
             end
             if new_tokens then
@@ -880,13 +882,20 @@ function scheduler.run(ctx, tokens, start_index)
                     -- Unrecognized tag: KAG3 semantics render it as text, but
                     -- a typo'd command name (e.g. [elsif] before aliasing,
                     -- [wait] vs [wait]) would otherwise be invisible to the
-                    -- author -- warn once per scene so scripts stay honest.
-                    print(string.format(
-                        "[WARN] unknown KAG command '%s' treated as text "
-                        .. "(typo?) at %s:%s",
-                        cmd,
-                        ctx.current_scene or ctx.currentScene or "?",
-                        tostring(ctx.token_index or ctx.tokenIndex or "?")))
+                    -- author -- warn ONCE per scene+command so scripts stay
+                    -- honest without flooding logs in [while] loops.
+                    ctx._warned_cmds = ctx._warned_cmds or {}
+                    local wkey = (ctx.current_scene or ctx.currentScene or "?")
+                        .. "|" .. cmd
+                    if not ctx._warned_cmds[wkey] then
+                        ctx._warned_cmds[wkey] = true
+                        print(string.format(
+                            "[WARN] unknown KAG command '%s' treated as text "
+                            .. "(typo?) at %s:%s",
+                            cmd,
+                            ctx.current_scene or ctx.currentScene or "?",
+                            tostring(ctx.token_index or ctx.tokenIndex or "?")))
+                    end
                     -- Unrecognized text ?? treat as [ch] -- through the ch
                     -- contract so interpolation ($f.name) and type coercion
                     -- apply to plain dialogue lines too (the main use case).
@@ -919,6 +928,20 @@ function scheduler.run(ctx, tokens, start_index)
 
         ctx.token_index = i
         i = i + 1
+        -- Implicit return: a [call] whose subroutine falls off the END of
+        -- the token stream (no [return] tag before the last token) must not
+        -- leave a stale call frame -- pop it and resume at the saved return
+        -- index (KAG3 semantics; also keeps ctx.lf consistent across jumps).
+        while i > #tokens and ctx.call_stack and #ctx.call_stack > 0 do
+            local frame = table.remove(ctx.call_stack)
+            ctx.label_index = frame.label_index
+            ctx.current_scene = frame.scene
+            if frame.lf ~= nil then ctx.lf = frame.lf end
+            if frame.mp ~= nil then ctx.mp = frame.mp end
+            tokens = frame.tokens
+            ctx.tokens = tokens
+            i = (frame.index or 1)
+        end
         coroutine.yield()
     end
 end
