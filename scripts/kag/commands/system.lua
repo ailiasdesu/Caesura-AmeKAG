@@ -130,11 +130,11 @@ function SystemCommands.emb(ctx, params)
     local ok, result = pcall(fn)
     if ok then
         ctx.tf = ctx.tf or {}
-        ctx.tf.emb_result = result
+        rawset(ctx.tf, "emb_result", result)  -- uniform no-trap invariant
     else
         print("[SystemCmd] emb runtime error: " .. tostring(result))
         ctx.tf = ctx.tf or {}
-        ctx.tf.emb_result = nil
+        rawset(ctx.tf, "emb_result", nil)
     end
 end
 

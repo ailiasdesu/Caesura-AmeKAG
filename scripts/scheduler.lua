@@ -653,7 +653,7 @@ function scheduler.run(ctx, tokens, start_index)
                 local ok, result = pcall(fn)
                 if ok and result ~= nil then
                     ctx.tf = ctx.tf or {}
-                    ctx.tf.eval_result = result
+                    rawset(ctx.tf, "eval_result", result)  -- no-trap invariant
                 end
             else
                 print(string.format("[eval] Compile error @ %s:%d: %s",
