@@ -151,7 +151,7 @@ Both modes support **KAG+Lua hybrid scripting**: `[eval]`, `[emb]`, and `[iscrip
 
 ### Editor / RPC Server
 
-Launch with `--editor` to start newline-delimited JSON-RPC on stdin/stdout with a hidden GPU window. `EditorServer` contains a separate HTTP implementation, but the CLI does not currently start it.
+Launch with `--editor` to start newline-delimited JSON-RPC on stdin/stdout with a hidden GPU window; `--editor-stdio` forces stdio (default), and `--editor` without it starts the HTTP editor on port 9876 (bearer token via `CAESURA_EDITOR_TOKEN`). Both transports are verified by `tests/headless_http_smoke.py` (21/21) and `tests/headless_rpc_smoke.py`.
 
 ### Test Architecture
 
