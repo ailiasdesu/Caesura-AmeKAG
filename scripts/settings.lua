@@ -75,6 +75,28 @@ function Settings._buildMenu(ctx)
     return items
 end
 
+-- Settings._adjust(ctx, dir) — slider +/- / toggle flip / cycle next
+function Settings._adjust(ctx, dir)
+    local item = state.items and state.items[state.cursor]
+    if not item then return end
+    local sv = ctx.settingsValues or {}
+    if item.type == "slider" then
+        local v = (sv[item.key] or item.value or 0) + dir * 5
+        sv[item.key] = math.max(item.min, math.min(item.max, v))
+    elseif item.type == "toggle" then
+        sv[item.key] = not (sv[item.key] == true)
+    elseif item.type == "cycle" then
+        local opts = item.options or {}
+        local idx = 0
+        for i, o in ipairs(opts) do if o == sv[item.key] then idx = i break end end
+        idx = ((idx + dir - 1) % #opts) + 1
+        sv[item.key] = opts[idx]
+        if item.key == "language" and i18n and i18n.load then
+            pcall(function() i18n.load(opts[idx]) end)
+        end
+    end
+end
+
 -- ===========================================================================
 -- Settings.show(ctx) — open settings menu
 -- ===========================================================================
@@ -136,8 +158,39 @@ function Settings.show(ctx)
     state.panelW = panelW
     state.panelH = panelH
 
-    Settings._render(ctx)
-    print("[Settings] Menu opened. Up/Down to navigate, Left/Right to adjust, Enter/Click to confirm.")
+    -- INPUT LOOP (audit: show() rendered once and returned -- the
+    -- 'Up/Down to navigate' hint was a lie; the settings menu was
+    -- dead). Same per-frame pattern as Gallery/MusicRoom.
+    while true do
+        Settings._render(ctx)
+        coroutine.yield()
+
+        if _G._GAME_KEY_UP == true then
+            _G._GAME_KEY_UP = false
+            state.cursor = math.max(1, state.cursor - 1)
+        elseif _G._GAME_KEY_DOWN == true then
+            _G._GAME_KEY_DOWN = false
+            state.cursor = math.min(#state.items, state.cursor + 1)
+        elseif _G._GAME_KEY_LEFT == true then
+            _G._GAME_KEY_LEFT = false
+            Settings._adjust(ctx, -1)
+        elseif _G._GAME_KEY_RIGHT == true then
+            _G._GAME_KEY_RIGHT = false
+            Settings._adjust(ctx, 1)
+        elseif _G._GAME_KEY_ENTER == true then
+            _G._GAME_KEY_ENTER = false
+            local item = state.items[state.cursor]
+            if item and item.type == "action" then
+                if item.key == "back" then break end
+            else
+                Settings._adjust(ctx, 1)
+            end
+        elseif _G._GAME_KEY_ESC == true then
+            _G._GAME_KEY_ESC = false
+            break
+        end
+    end
+    Settings.hide(ctx)
 end
 
 -- ===========================================================================

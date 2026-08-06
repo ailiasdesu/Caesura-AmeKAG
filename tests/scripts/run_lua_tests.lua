@@ -99,6 +99,7 @@ local tests = {
     "test_chapter_select",
     "test_music_room",
     "test_gallery_loop",
+    "test_settings",
 }
 
 local passed, failed = 0, 0
