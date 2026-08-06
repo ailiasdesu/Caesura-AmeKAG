@@ -58,10 +58,18 @@ local function checkScene(path)
     -- The offset stream can stop mid-scene on malformed input while
     -- earlier tokens parsed -- fail loudly instead of reporting OK for
     -- a truncated scene. end_offset is the last consumed byte.
+    -- Trailing COMMENT lines are consumed by the grammar's skip but
+    -- never become tokens -- strip them from the tail so a scene
+    -- ending in "; done" does not false-positive (review should-fix).
     local consumed = tokens[#tokens] and tokens[#tokens].end_offset or 0
-    if consumed > 0 and text:sub(consumed + 1):find("%S") then
-        report(path, lineOf(consumed + 1), "parse stream stopped before end of input")
-        return
+    if consumed > 0 then
+        local tail = text:sub(consumed + 1):gsub("^%s*;[^
+]*", "")
+        local first = tail:find("%S")
+        if first then
+            report(path, lineOf(consumed + first), "parse stream stopped before end of input")
+            return
+        end
     end
     for _, tok in ipairs(tokens) do
         if tok.type == "command" then
