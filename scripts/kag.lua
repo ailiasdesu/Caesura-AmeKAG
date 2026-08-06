@@ -304,9 +304,14 @@ end
 -- [delay] gap). Delegates to layfade with opacity defaulting to 0.
 KAG.fadeout = function(ctx, params)
     local Layer = require("kag.commands.layer")
+    -- the fadeout SCHEMA is 0..1, but layfade/fade_to operate in
+    -- 0..255 -- pass an explicit opacity straight through would fade
+    -- [fadeout opacity=0.5] to 0.5/255 ~= transparent (review
+    -- should-fix). Convert here, like layopt's set_options does.
+    local opacity255 = math.floor((params.opacity or params.alpha or 0) * 255)
     return Layer.layfade(ctx, {
-        layer = params.layer or params.name or "fg",
-        opacity = params.opacity or params.alpha or 0,
+        layer = params.layer or params.name or "bg",
+        opacity = opacity255,
         time = params.time or params.duration or 500,
     })
 end
