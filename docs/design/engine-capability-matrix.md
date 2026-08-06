@@ -1,6 +1,6 @@
 ﻿# Engine Capability Matrix (Mermaid)
 
-> 2026-07-24 readiness audit: this matrix tracks 52 code-level capability surfaces.
+> 2026-07-24 readiness audit: this matrix tracks 54 code-level capability surfaces.
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
