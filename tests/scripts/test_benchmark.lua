@@ -101,10 +101,10 @@ package.loaded["scheduler"] = _saved_sched
 
 local failed = 0
 for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
-if package.loaded["backend"] == nil and benchmark_backend then
-    package.loaded["backend"] = benchmark_backend
-end
-if package.preload["backend"] == nil and benchmark_preload_backend then
+-- restore unconditionally (review nit: the nil-conditional left the
+-- preload mock lingering after standalone runs)
+if benchmark_backend then package.loaded["backend"] = benchmark_backend end
+if benchmark_preload_backend then
     package.preload["backend"] = benchmark_preload_backend
 end
 if failed > 0 then os.exit(1) end
