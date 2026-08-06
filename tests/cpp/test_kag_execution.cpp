@@ -1121,6 +1121,53 @@ TEST_CASE("KAG: [layfade] command fades a registered layer") {
     delete lm;
 }
 
+TEST_CASE("KAG: skip mode auto-advances past waiting_input") {
+    auto* lm = initKAGLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+
+    const char* code = R"lua(
+        package.loaded['kag_runner'] = nil
+        package.loaded['flow'] = {
+            load_scene = function(path)
+                return { tokens = { 1 }, labels = {}, path = path }
+            end
+        }
+        package.loaded['scheduler'] = {
+            run = function(ctx, tokens, start_index)
+                for i = start_index or 1, #tokens do
+                    ctx.token_index = i
+                    ctx.executed = (ctx.executed or 0) + 1
+                    -- a [p]-style wait: block until waiting_input clears
+                    ctx.waiting_input = true
+                    while ctx.waiting_input do coroutine.yield() end
+                    ctx.executed = (ctx.executed or 0) + 1
+                end
+            end
+        }
+        _CAESURA_DEBUG_PAUSED = false
+        local runner = require('kag_runner')
+        _CAESURA_RUNNER = runner
+
+        assert(runner.start('scene.ks'))
+        local ctx = _CAESURA_CTX
+        assert(ctx.executed == 1)
+        -- block: update returns waiting-input
+        local ok, reason = runner.update(0.016)
+        assert(not ok and reason == 'waiting-input')
+        assert(ctx.executed == 1)
+
+        -- SKIP mode: update auto-advances past the wait (on_click path)
+        ctx.skip_mode = 'all'
+        ok, reason = runner.update(0.016)
+        assert(ok, 'skip must advance past waiting_input')
+        assert(ctx.executed == 2, 'skip resumed past the yield')
+        ctx.skip_mode = nil
+    )lua";
+    CHECK(doString(L, code));
+    delete lm;
+}
+
 TEST_CASE("KAG: save_game/load_game are C bindings, not Lua wrappers") {
     auto* lm = initKAGLua();
     REQUIRE(lm != nullptr);
