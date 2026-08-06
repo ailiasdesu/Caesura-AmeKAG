@@ -77,6 +77,7 @@ local tests = {
     "test_textbox",
     "test_vfx_clamp",
     "test_delay",
+    "test_wait_audio",
 }
 
 local passed, failed = 0, 0

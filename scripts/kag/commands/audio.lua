@@ -279,9 +279,16 @@ end
 --  Block until all SE on the SE bus have finished playing.
 -- =============================================================================
 
+-- Bounded wait: a broken/muted track must not hang the runner forever
+-- (audit: voice_wait had click-skip + pcall cleanup, these had none --
+-- a stuck backend would yield indefinitely). 60s cap matches the
+-- schema max; normal tracks finish far sooner.
+local WAIT_AUDIO_LIMIT_MS = 60000
+
 function AudioCommands.waitsound(ctx, params)
-    while backend.audio_is_playing("se") do
-        coroutine.yield()
+    local elapsed = 0
+    while backend.audio_is_playing("se") and elapsed < WAIT_AUDIO_LIMIT_MS do
+        elapsed = elapsed + (coroutine.yield() or 16)
     end
 end
 
@@ -291,8 +298,9 @@ end
 -- =============================================================================
 
 function AudioCommands.waitbgm(ctx, params)
-    while backend.audio_is_playing("bgm") do
-        coroutine.yield()
+    local elapsed = 0
+    while backend.audio_is_playing("bgm") and elapsed < WAIT_AUDIO_LIMIT_MS do
+        elapsed = elapsed + (coroutine.yield() or 16)
     end
 end
 
