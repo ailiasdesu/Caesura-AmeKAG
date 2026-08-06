@@ -73,6 +73,7 @@ local tests = {
     "test_playbgmstop",
     "test_layout",
     "test_resolve",
+    "test_sprite_family",
 }
 
 local passed, failed = 0, 0
