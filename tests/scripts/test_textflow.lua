@@ -47,10 +47,11 @@ local co = coroutine.create(function() scheduler.run(ctx5, tokens, 1) end)
 coroutine.resume(co)
 check("p sets waiting_input", ctx5.waiting_input == true)
 check("p blocks advance", #dispatched == 0)
+check("p suspends the coroutine", coroutine.status(co) == "suspended")
 ctx5.waiting_input = false
 while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
 check("p resumes past", #dispatched == 1 and dispatched[1] == "after")
-package.loaded["kag"] = kag_orig
+KAG.ch = real_ch  -- restore (security LOW: the stub must not persist)
 
 if failed > 0 then os.exit(1) end
 print("TEXTFLOW TESTS DONE")
