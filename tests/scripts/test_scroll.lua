@@ -52,10 +52,7 @@ _G._CAESURA_BACKEND = { render = function(cmd, ...)
     if cmd == "render_text" then renders2[#renders2 + 1] = { ... } end
     return true end }
 local co2 = coroutine.create(function()
-    T.scroll(ctx, { text = "A
-B
-
-", speed = 5000, size = 28, color = "RED" })
+    T.scroll(ctx, { text = "A" .. string.char(10) .. "B" .. string.char(10) .. string.char(10), speed = 5000, size = 28, color = "RED" })
 end)
 coroutine.resume(co2)
 coroutine.resume(co2, 16)
