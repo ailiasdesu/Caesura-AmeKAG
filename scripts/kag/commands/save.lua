@@ -153,14 +153,28 @@ end
 -- Neo-Genesis contracts: slot typed + bounded 0..99 (matches the C++
 -- SaveManager guard; a crafted [save slot=-1] now errors with location).
 require("kag.schema").define("save", {
-    slot = { type = "number", default = 0, min = 0, max = 99 },
+    -- NO default: coerce would inject slot=0 and shadow the bare
+    -- positional [save 3] (same pattern as the wait aliases)
+    slot = { type = "number", min = 0, max = 99 },
 })
 require("kag.schema").define("load", {
-    slot = { type = "number", default = 0, min = 0, max = 99 },
+    -- NO default: coerce would inject slot=0 and shadow the bare
+    -- positional [save 3] (same pattern as the wait aliases)
+    slot = { type = "number", min = 0, max = 99 },
 })
 
+-- Resolve the save slot: named slot= (schema-typed 0..99), else the
+-- KAG3 bare positional [save 1], clamped here too (the numeric key
+-- bypasses schema coerce -- same pattern as the wait clamp).
+local function resolve_slot(params)
+    local slot = params.slot or tonumber(params[1]) or 0
+    if slot < 0 then return 0 end
+    if slot > 99 then return 99 end
+    return math.floor(slot)
+end
+
 function SaveCommands.save(ctx, params)
-    local slot = params.slot or 0  -- schema-typed (0..99)
+    local slot = resolve_slot(params)
     local desc = params.desc or params.description or ""
 
     -- Capture context state
@@ -203,7 +217,7 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function SaveCommands.load(ctx, params)
-    local slot = params.slot or 0  -- schema-typed (0..99)
+    local slot = resolve_slot(params)
 
     -- Call C++ SaveManager via KAG binding
     local state, meta = kag_binding("load_game")(slot)    if not state or type(state) ~= "table" then
