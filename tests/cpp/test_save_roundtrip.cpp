@@ -191,7 +191,8 @@ TEST_CASE("SaveManager: tampered ciphertext rejected (GCM auth)") {
     json original = {{"secret", "classified_info"}};
     REQUIRE(sm.save(1, original, "tamper_test", 0));
 
-    // Flip a byte in the ciphertext region (after "CAES"+nonce+tag)
+    // Flip a byte inside the GCM tag region (index 30 = 4 CAES + 12
+    // nonce + 14 -- bytes 16..31 are the tag)
     std::filesystem::path p = dir.path() / "save_1.json";
     std::ifstream in(p, std::ios::binary);
     std::string data((std::istreambuf_iterator<char>(in)),
