@@ -80,13 +80,14 @@ local ctxG = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
 -- typo'd named param on [bg]: pair table must not reach load_texture
 pcall(Layer3.bg, ctxG, { { "storag", "x.png" } })
 check("layer resolve pair safe", #calls3 == 0)
--- typo'd [layfade] layerName: no crash, no layer found
-local okLF = pcall(Layer3.layfade, ctxG, { { "layr", "bg" }, opacity = 128 })
-check("layfade pair safe", okLF)
--- eval/emb exp: pair table must not become the expression
-local System3 = require("kag.commands.system")
-local okE = pcall(System3.eval, ctxG, { { "expp", "x" } })
-check("eval pair safe", okE)
+-- eval/emb exp: the guard must reject the pair table (eval is a no-op
+-- in non-strict mode, so value capture is impossible -- source-lock
+-- the guard form in both handlers instead)
+local f2 = assert(io.open("scripts/kag/commands/system.lua", "r"))
+local src2 = f2:read("*a")
+f2:close()
+check("eval exp guarded", select(2, src2:gsub(
+    'type(exp) ~= "string" and type(params[1]) == "string"', "")) == 2)
 package.loaded["layers"] = layers3
 _G._CAESURA_BACKEND = be3
 

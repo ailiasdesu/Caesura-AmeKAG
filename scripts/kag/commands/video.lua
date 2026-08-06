@@ -11,7 +11,12 @@ local backend     = require("backend")
 local VideoCommands = {}
 
 local function resolve_file(params)
-    return params.storage or params.path or params.file or params[1]
+    -- string-only bare fallback (audit sweep: same as audio/layer)
+    local f = params.storage or params.path or params.file
+    if type(f) ~= "string" and type(params[1]) == "string" then
+        f = params[1]
+    end
+    return f
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
