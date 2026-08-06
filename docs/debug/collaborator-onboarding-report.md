@@ -122,7 +122,7 @@ cd build\tests\Debug
 | `docs/debug/C-domain-audit-guide.md` | C域排查执行指南 |
 | `docs/solutions/architecture-patterns/galgame-engine-readiness-audit.md` | 经验文档 |
 | `docs/api/cpp-interfaces.md` | 30个C++接口参考 |
-| `docs/api/command-contracts.md` | 69个KAG Neo-Genesis 命令契约参考（自动生成，权威） |
+| `docs/api/command-contracts.md` | 72个KAG Neo-Genesis 命令契约参考（自动生成，权威） |
 | `docs/design/engine-topology-mermaid.md` | Mermaid拓扑图源码 |
 
 ## 9. 下一步

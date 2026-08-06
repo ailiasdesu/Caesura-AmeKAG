@@ -163,5 +163,5 @@ graph LR
 
 ---
 
-**Total: 48 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 52 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.

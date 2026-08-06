@@ -93,7 +93,7 @@ scripts/scheduler.lua                 - KAG调度器
 scripts/tokenizer.lua                 - KAG解析器
 scripts/kag_runner.lua                - 上下文管理
 scripts/kag.lua                       - Lua↔KAG桥接
-scripts/kag/commands/                 - 9类69个命令实现
+scripts/kag/commands/                 - 9类72个命令实现
 scripts/system.lua                    - 系统设施(save/load/config)
 scripts/flow.lua                      - 场景流控制
 ```
