@@ -973,6 +973,7 @@ void Engine::processEvents() {
                 }
                 if (event.key.key == SDLK_ESCAPE) { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_ESC"); }
                 if (event.key.key == SDLK_H)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_H"); }
+                if (event.key.key == SDLK_F)    { lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_F"); }
                 if (event.key.key == SDLK_V && !event.key.repeat) {
                     lua_pushboolean(L, 1); lua_setglobal(L, "_GAME_KEY_V");
                 }
@@ -1001,6 +1002,7 @@ void Engine::processEvents() {
                 }
                 if (event.key.key == SDLK_ESCAPE) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_ESC"); }
                 if (event.key.key == SDLK_H)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_H"); }
+                if (event.key.key == SDLK_F)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_F"); }
                 if (event.key.key == SDLK_V)    { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_V"); }
                 // D9.6: Ctrl skip mode toggle release
                 if ((event.key.key == SDLK_LCTRL || event.key.key == SDLK_RCTRL) &&
