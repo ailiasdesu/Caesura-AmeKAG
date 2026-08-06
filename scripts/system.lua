@@ -310,7 +310,20 @@ function System.saveplace(ctx)
         index = ctx.token_index or 1,
         tf = ctx.tf and table_deep_copy(ctx.tf) or {},
         dialog_index = ctx.dialog_index,
-        text_state = ctx.text_state and table_deep_copy(ctx.text_state) or {},
+        -- STYLE-ONLY text state (audit: deep-copying the whole
+        -- text_state dragged per-frame draws + stale texture handles
+        -- into the bookmark; only the font/layout fields matter)
+        text_state = (function()
+            local ts = ctx.text_state
+            if type(ts) ~= "table" then return {} end
+            local st = {}
+            if type(ts.font_face) == "string" then st.font_face = ts.font_face end
+            if type(ts.font_size) == "number" then st.font_size = ts.font_size end
+            if type(ts.font_color) == "string" then st.font_color = ts.font_color end
+            if type(ts.line) == "number" then st.line = ts.line end
+            if type(ts.char_offset) == "number" then st.char_offset = ts.char_offset end
+            return st
+        end)(),
         layers = ctx.layers,  -- reference is fine
     }
     print("[System] Place saved (temporary bookmark).")
@@ -331,7 +344,14 @@ function System.loadplace(ctx)
     ctx.stop_flag = true
     ctx.tf = pd.tf
     ctx.dialog_index = pd.dialog_index
-    ctx.text_state = pd.text_state or {}
+    -- style-only restore: never resurrect stale per-frame draws
+    -- (audit: their texture handles may belong to a previous scene)
+    ctx.text_state = {}
+    if type(pd.text_state) == "table" then
+        for _, k in ipairs({ "font_face", "font_size", "font_color", "line", "char_offset" }) do
+            if pd.text_state[k] ~= nil then ctx.text_state[k] = pd.text_state[k] end
+        end
+    end
     if pd.text_state and pd.text_state.line then
         pcall(function()
             local layers = require("layers")
