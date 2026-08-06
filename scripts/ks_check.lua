@@ -49,6 +49,14 @@ local function checkScene(path)
         report(path, 0, "tokenize failed")
         return
     end
+    -- Should-fix: the offset stream can stop mid-scene on malformed
+    -- input while earlier tokens parsed -- fail loudly instead of
+    -- reporting OK for a truncated scene.
+    local consumed = tokens[#tokens] and tokens[#tokens].offset or 0
+    if consumed > 0 and text:sub(consumed):find("%S") then
+        report(path, lineOf(consumed), "parse stream stopped before end of input")
+        return
+    end
     local LF = string.char(10)
     local function lineOf(offset)
         local before = text:sub(1, offset - 1)

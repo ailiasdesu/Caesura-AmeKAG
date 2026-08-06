@@ -169,11 +169,15 @@ function tokenizer.parse_with_offsets(ks_text)
             elseif typ == "label" then
                 tok.type = "label"; tok.name = t[2]
             elseif typ == "iscript" then
-                tok.type = "iscript"; tok.body = t[3] or ""
+                tok.type = "iscript"; tok.body = t[2] or ""
             end
             out[#out + 1] = tok
         end
-        init = endpos + 1
+        -- Cp() returns the position AFTER the match (index of the next
+        -- char) -- advancing +1 skips a byte and a mid-line command
+        -- ([ch] following text on the same line) would be re-tokenized
+        -- as text (review blocking). endpos IS the next start.
+        init = endpos
         if init > #ks_text then break end
     end
     return out
