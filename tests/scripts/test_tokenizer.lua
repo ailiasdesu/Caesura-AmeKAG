@@ -100,4 +100,17 @@ do
 end
 
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
+-- REGRESSION (lpeg ^1 batch zero-width guard, review should-fix):
+-- [cmd k=v ] must NOT gain an empty bare param; [cmd x=] falls to the
+-- bare-value shape, never an empty named value
+local t_trail = tokenizer.parse("[cmd k=v ]")
+check("trailing-space param count", #t_trail[1].params == 1
+      and t_trail[1].params[1][1] == "k" and t_trail[1].params[1][2] == "v")
+local t_empty = tokenizer.parse("[cmd x=]")
+check("empty-value falls to bare", t_empty[1].params[1][1] == "1"
+      and t_empty[1].params[1][2] == "x=")
+local t_q = tokenizer.parse('[cmd k=""]')
+check("quoted empty kept", t_q[1].params[1][1] == "k"
+      and t_q[1].params[1][2] == "")
+
 if failed > 0 then os.exit(1) end
