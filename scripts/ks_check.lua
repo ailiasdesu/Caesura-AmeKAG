@@ -63,14 +63,7 @@ local function checkScene(path)
     -- ending in "; done" does not false-positive (review should-fix).
     local consumed = tokens[#tokens] and tokens[#tokens].end_offset or 0
     if consumed > 0 then
-        local tail = text:sub(consumed + 1)
-        -- strip repeated trailing comment lines (review should-fix:
-        -- one gsub only handled a single "; done" tail)
-        while true do
-            local stripped = tail:gsub("^%s*;[\r\n]*", "")
-            if stripped == tail then break end
-            tail = stripped
-        end
+        local tail = strip_tail(text, consumed)
         local first = tail:find("%S")
         if first then
             report(path, lineOf(consumed + first), "parse stream stopped before end of input")
@@ -143,6 +136,16 @@ end
 -- Module guard: tests require this file for its functions; only run
 -- the CLI main when invoked as a script (audit: requiring it called
 -- os.exit and killed the test process).
+local function strip_tail(text, consumed)
+    local tail = text:sub(consumed + 1)
+    while true do
+        local stripped = tail:gsub("^%s*;[^\r\n]*", "")
+        if stripped == tail then break end
+        tail = stripped
+    end
+    return tail
+end
+
 -- exact basename: "test_ks_check.lua" must NOT count (it embeds
 -- ks_check.lua as a suffix) -- audit: the test process hit usage/exit
 local function base_name(p)
@@ -169,3 +172,5 @@ if is_script then
     print("OK: all scenes pass contract checks")
     os.exit(0)
 end
+
+return { strip_tail = strip_tail }
