@@ -54,6 +54,7 @@ local tests = {
     "test_unlock",
     "test_settings",
     "test_saveplace",
+    "test_story_meta",
 }
 
 local passed, failed = 0, 0
