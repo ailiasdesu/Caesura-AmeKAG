@@ -19,13 +19,20 @@ check("pbs fadein clamped", p.fadein == 0)
 check("playbgmstop registered", type(KAG.playbgmstop) == "function")
 
 -- source-level: stop-then-play chain, race guard on fadeout, file optional
+-- anchored to the playbgmstop function's line range (review nit: the
+-- shared substrings also exist in playbgm/stopbgm -- presence alone is
+-- not discriminating).
 local f = assert(io.open("scripts/kag/commands/audio.lua", "r"))
 local src = f:read("*a")
 f:close()
-check("stop first", src:find('backend.audio_stop("bgm"', 1, true) ~= nil)
-check("play after stop", src:find('backend.audio_play("bgm", file, {', 1, true) ~= nil)
-check("race guard +0.1", src:find("fadeout / 1000.0 + 0.1", 1, true) ~= nil)
-check("file optional", src:find("if file then", 1, true) ~= nil)
+local sstart = src:find("function AudioCommands.playbgmstop", 1, true)
+local send = src:find("function AudioCommands.fadebgm", sstart or 1, true)
+local body = sstart and send and src:sub(sstart, send) or ""
+check("pbs body found", #body > 0)
+check("stop in pbs body", body:find('backend.audio_stop("bgm"', 1, true) ~= nil)
+check("play in pbs body", body:find('backend.audio_play("bgm", file, {', 1, true) ~= nil)
+check("race guard in pbs body", body:find("fadeout / 1000.0 + 0.1", 1, true) ~= nil)
+check("file optional in pbs body", body:find("if file then", 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("PLAYBGMSTOP TESTS DONE")
