@@ -28,12 +28,6 @@ check("scroll empty text guard", src:find('if #text == 0 then return end', 1, tr
 check("scroll clears on exit", src:find("backend.clear_text()", 1, true) ~= nil)
 check("scroll yield loop", src:find("coroutine.yield() or 16", 1, true) ~= nil)
 
--- empty text dispatch is a no-op (no render calls)
-local called = false
-local backend_orig = package.loaded["backend"]
--- backend captured at require time -- lock via source is above; just
--- verify the handler exists and the schema path is sound
-package.loaded["backend"] = backend_orig
 check("scroll schema migrated", schema.isMigrated("scroll") == true)
 
 if failed > 0 then os.exit(1) end
