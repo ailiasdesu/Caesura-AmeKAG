@@ -52,6 +52,17 @@ check("g registered", type(KAG.g) == "function")
 local toksG = tokenizer.parse('[g storage="bg.png"]')
 check("g parses with storage", toksG[1].cmd == "g"
       and toksG[1].params[1][2] == "bg.png")
+-- end-to-end: g routes to bg and registers the layer (review nit)
+local layer_backup = package.loaded["layers"]
+package.loaded["layers"] = {
+    ensure = function(ctx2, name) ctx2.layers = ctx2.layers or {}
+        ctx2.layers[name] = { name = name } return ctx2.layers[name] end,
+    get_layer = function() return nil end,
+}
+local ctxG = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+local okG = pcall(KAG.g, ctxG, { storage = "bg.png" })
+package.loaded["layers"] = layer_backup
+check("g routes to bg layer", okG and ctxG.layers and ctxG.layers.bg ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("FOUR CMDS TESTS DONE")
