@@ -74,7 +74,7 @@ bool LuaManager::init() {
     lua_pushlightuserdata(m_L, this);
     lua_rawsetp(m_L, LUA_REGISTRYINDEX, &kLuaManagerRegistryKey);
 
-    // Track 3: Instruction-count hook for CPU budget (every 1000 instructions)
+    // Track 3: Instruction-count hook for CPU budget (every 10000 instructions)
     lua_sethook(m_L, instructionHook, LUA_MASKCOUNT, kInstructionHookInterval);
 
     m_initialized = true;
