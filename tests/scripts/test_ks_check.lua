@@ -76,6 +76,12 @@ if package.searchers and #package.searchers > 0 and ks then
     local consumedF = toksF[#toksF].end_offset or 0
     local tailF = ks.strip_tail(content, consumedF)
     check("fixture tail stripped", tailF:find("%S") == nil)
+    -- drive the FULL checkScene path (review nit: direct strip_tail
+    -- calls would not catch an ordering regression inside checkScene)
+    if ks.checkScene then
+        local okCS = pcall(ks.checkScene, fixture)
+        check("checkScene no crash", okCS)
+    end
     os.remove(fixture)
 end
 

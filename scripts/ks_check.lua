@@ -173,4 +173,4 @@ if is_script then
     os.exit(0)
 end
 
-return { strip_tail = strip_tail }
+return { strip_tail = strip_tail, checkScene = checkScene }
