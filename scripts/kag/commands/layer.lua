@@ -232,13 +232,17 @@ end
 -- position command's x/y/layer semantics (Neo-Genesis alias).
 -- Schema mirrors position (security LOW: the alias must clamp scale
 -- the same way -- raw pass-through allowed unclamped render math).
+-- NO defaults on left/top/x/y/layer (review blocking): coerce fills
+-- defaults, and a filled "" layer or 0 left would SHADOW the handler's
+-- `or`-fallbacks (layer-less moveto silently no-ops; x fallback dead).
+-- Typed without default -- like image's x/y -- keeps nil pass-through.
 schema.define("moveto", {
-    left  = { type = "number", default = 0 },
-    top   = { type = "number", default = 0 },
-    x     = { type = "number", default = 0 },
-    y     = { type = "number", default = 0 },
+    left  = { type = "number" },
+    top   = { type = "number" },
+    x     = { type = "number" },
+    y     = { type = "number" },
     scale = { type = "number", default = 1.0, min = 0.01, max = 16 },
-    layer = { type = "string", default = "" },
+    layer = { type = "string" },
     unit  = { type = "string", default = "ndc" },
 })
 function LayerCommands.moveto(ctx, params)
