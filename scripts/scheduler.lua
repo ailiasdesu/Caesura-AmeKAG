@@ -763,6 +763,15 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
+                -- Expansion budget (audit): a self-recursive macro
+                -- ([macro m][m][endmacro]) would splice its body forever,
+                -- growing the token array until the C++ instruction budget
+                -- aborts -- an explicit per-scene cap fails fast instead.
+                ctx._macroExpansions = (ctx._macroExpansions or 0) + 1
+                if ctx._macroExpansions > 1000 then
+                    error("[macro] expansion budget exceeded (possible "
+                          .. "self-recursive macro at " .. cmd .. ")")
+                end
                 -- Parameter substitution: build a per-invocation copy with
                 -- %arg% placeholders filled from the call's params. The
                 -- shared body is never mutated (multiple calls reuse it).
