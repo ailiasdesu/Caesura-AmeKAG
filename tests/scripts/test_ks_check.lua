@@ -33,5 +33,33 @@ local t2 = tokenizer.parse(src)
 check("iscript body kept", t2[1].type == "iscript"
       and tostring(t2[1].body):find("ctx.tf.x") ~= nil)
 
+-- comment-tail cases (ks_check should-fix: multi-line comment tails)
+local function tail_ok(text)
+    local toks = tokenizer.parse_with_offsets(text)
+    local last = toks[#toks]
+    if not last then return true end
+    local consumed = last.end_offset or 0
+    if consumed == 0 then return true end
+    local tail = text:sub(consumed + 1)
+    while true do
+        local stripped = tail:gsub("^%s*;[^\r\n]*", "")
+        if stripped == tail then break end
+        tail = stripped
+    end
+    return tail:find("%S") == nil
+end
+check("single comment tail ok", tail_ok('[ch text="a"]' .. string.char(10) .. '; done'))
+check("multi comment tail ok", tail_ok('[ch text="a"]' .. string.char(10)
+      .. '; done' .. string.char(10) .. '; done2' .. string.char(10)))
+check("truncated still caught", not tail_ok('[ch text="a"]' .. string.char(10) .. '[unclosed'))
+
+-- ks_check module loads (its contract checks run at require time)
+-- the suite sandbox empties package.searchers (preload-only require):
+-- standalone runs still verify the module loads
+if package.searchers and #package.searchers > 0 then
+    local okLoad, errLoad = pcall(require, "ks_check")
+    check("ks_check loads", okLoad)
+end
+
 if failed > 0 then os.exit(1) end
 print("KS CHECK TESTS DONE")

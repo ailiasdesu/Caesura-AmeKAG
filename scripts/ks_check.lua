@@ -63,8 +63,14 @@ local function checkScene(path)
     -- ending in "; done" does not false-positive (review should-fix).
     local consumed = tokens[#tokens] and tokens[#tokens].end_offset or 0
     if consumed > 0 then
-        local tail = text:sub(consumed + 1):gsub("^%s*;[^
-]*", "")
+        local tail = text:sub(consumed + 1)
+        -- strip repeated trailing comment lines (review should-fix:
+        -- one gsub only handled a single "; done" tail)
+        while true do
+            local stripped = tail:gsub("^%s*;[\r\n]*", "")
+            if stripped == tail then break end
+            tail = stripped
+        end
         local first = tail:find("%S")
         if first then
             report(path, lineOf(consumed + first), "parse stream stopped before end of input")
@@ -134,21 +140,32 @@ local function auditDefaults()
     return #suspects
 end
 
-if arg[1] == "--audit-defaults" then
+-- Module guard: tests require this file for its functions; only run
+-- the CLI main when invoked as a script (audit: requiring it called
+-- os.exit and killed the test process).
+-- exact basename: "test_ks_check.lua" must NOT count (it embeds
+-- ks_check.lua as a suffix) -- audit: the test process hit usage/exit
+local function base_name(p)
+    return p:match("([^/\\]+)$")
+end
+local is_script = arg and arg[0] and base_name(arg[0]) == "ks_check.lua"
+if is_script and arg[1] == "--audit-defaults" then
     os.exit(auditDefaults() > 0 and 1 or 0)  -- CI gate: nonzero on suspects
 end
 
-if #arg == 0 then
+if is_script and #arg == 0 then
     print("usage: lua scripts/ks_check.lua <scene.ks> [more ...]")
     print("       lua scripts/ks_check.lua --audit-defaults")
     os.exit(2)
 end
-for _, p in ipairs(arg) do
-    checkScene(p)
+if is_script then
+    for _, p in ipairs(arg) do
+        checkScene(p)
+    end
+    if issues > 0 then
+        print(string.format("%d contract violation(s) found", issues))
+        os.exit(1)
+    end
+    print("OK: all scenes pass contract checks")
+    os.exit(0)
 end
-if issues > 0 then
-    print(string.format("%d contract violation(s) found", issues))
-    os.exit(1)
-end
-print("OK: all scenes pass contract checks")
-os.exit(0)
