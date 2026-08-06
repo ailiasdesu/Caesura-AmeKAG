@@ -151,7 +151,7 @@ end
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Neo-Genesis contracts: slot typed + bounded 0..99 (matches the C++
--- SaveManager guard; a crafted [save slot=-1] now errors with location).
+-- SaveManager guard; out-of-range values clamp to the bound).
 require("kag.schema").define("save", {
     -- NO default: coerce would inject slot=0 and shadow the bare
     -- positional [save 3] (same pattern as the wait aliases)
@@ -167,7 +167,9 @@ require("kag.schema").define("load", {
 -- KAG3 bare positional [save 1], clamped here too (the numeric key
 -- bypasses schema coerce -- same pattern as the wait clamp).
 local function resolve_slot(params)
-    local slot = params.slot or tonumber(params[1]) or 0
+    -- tonumber(params.slot): a direct caller could pass a string
+    -- (review nit -- coerce + all callers pass numbers today)
+    local slot = tonumber(params.slot) or tonumber(params[1]) or 0
     if slot < 0 then return 0 end
     if slot > 99 then return 99 end
     return math.floor(slot)
