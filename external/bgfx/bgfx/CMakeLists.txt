@@ -14,6 +14,7 @@ add_library(bgfx STATIC ${BGFX_SOURCES} ${BGFX_HEADERS})
 target_include_directories(bgfx PUBLIC 
     ${BGFX_DIR}/include 
     ${BGFX_DIR}/3rdparty
+    ${BGFX_DIR}/3rdparty/khronos
     ${BGFX_DIR}/3rdparty/directx-headers/include/directx
     ${BGFX_DIR}/../bx/include
     ${BGFX_DIR}/../bimg/include
@@ -26,7 +27,7 @@ target_compile_definitions(bgfx PRIVATE
 )
 
 if(WIN32)
-    target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_DIRECT3D11=1 BGFX_CONFIG_RENDERER_DIRECT3D12=0 BGFX_CONFIG_RENDERER_OPENGL=0)
+    target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_DIRECT3D11=1 BGFX_CONFIG_RENDERER_DIRECT3D12=0 BGFX_CONFIG_RENDERER_OPENGL=43)
 elseif(APPLE)
     target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_METAL=1)
 endif()
