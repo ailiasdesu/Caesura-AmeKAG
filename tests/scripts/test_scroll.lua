@@ -22,7 +22,7 @@ local T = package.loaded["kag.commands.transition"] or require("kag.commands.tra
 local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     viewport = { width = 1280, height = 720 } }
 local co = coroutine.create(function()
-    T.scroll(ctx, { text = "L1\nL2\nL3", speed = 5000, size = 28, color = "255,0,0" })
+    T.scroll(ctx, { text = "L1\nL2\nL3", speed = 5000, size = 28, color = "red" })
 end)
 local r1 = coroutine.resume(co)
 local r2 = coroutine.resume(co, 16)

@@ -202,6 +202,14 @@ function TransCommands.scroll(ctx, params)
     -- the old call passed (text, size, 32, y, color), silently
     -- shifting every argument (audit: size became x, the color
     -- string became a byte channel and clamped to 0).
+    local named_colors = {
+        white = "255,255,255", black = "0,0,0", red = "255,0,0",
+        green = "0,255,0", blue = "0,0,255", yellow = "255,255,0",
+        gray = "128,128,128", grey = "128,128,128",
+    }
+    if type(color) == "string" and named_colors[color] then
+        color = named_colors[color]
+    end
     local cr, cg, cb = 255, 255, 255
     if type(color) == "string" then
         local r0, g0, b0 = color:match("(%d+),%s*(%d+),%s*(%d+)")
@@ -219,11 +227,12 @@ function TransCommands.scroll(ctx, params)
     -- with a line stride so the whole block scrolls as one unit
     -- (audit: the old loop rendered only the first line).
     local lines = {}
-    local text_with_nl = text .. "\n"
+    local text_clean = text:gsub("\n$", "")
+    local text_with_nl = text_clean .. "\n"
     for line in text_with_nl:gmatch("(.-)\n") do
         lines[#lines + 1] = line
     end
-    if #lines == 0 then lines = { text } end
+    if #lines == 0 then lines = { text_clean } end
     local lineHeight = size + 10
     local blockHeight = #lines * lineHeight
 
