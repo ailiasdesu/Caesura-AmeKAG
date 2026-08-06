@@ -24,10 +24,12 @@ _G._CAESURA_BACKEND = { render = function(cmd, ...)
 Transition.capture_screen = function() return { id = 11 } end
 Transition.cancel = function() end
 Transition.tick = function() end
+-- real Transition.tick() submits; the mock start() synthesizes a
+-- tick-style call with the FULL 6-value contract (viewId, fromId,
+-- toId, ruleId, method_id, progress)
 Transition.start = function(fromTex, toTex, params)
-    -- mirror the real contract (scripts/transition.lua): 6 args with
-    -- viewId, method id, progress
-    _G._CAESURA_BACKEND.render("submit_transition", 1, fromTex.id, toTex.id, 0, 0.0)
+    _G._CAESURA_BACKEND.render("submit_transition", 1, fromTex.id,
+                               toTex.id, 0, 2, 0.0)  -- WIPE_LEFT=2
     return true
 end
 -- is_active=false: the trans wait loop exits on the first check, so the
@@ -43,7 +45,8 @@ local r1 = coroutine.resume(co)
 -- the whole handler (submit happened inside)
 check("trans coroutine completes", r1 and coroutine.status(co) == "dead")
 check("submit called with real contract", #calls >= 1
-      and calls[1][1] == 1 and calls[1][2] == 11 and calls[1][5] == 0)
+      and calls[1][1] == 1 and calls[1][2] == 11
+      and calls[1][5] == 2 and calls[1][6] == 0.0)
 
 -- zero/negative duration: immediate promote + no submit
 calls = {}
