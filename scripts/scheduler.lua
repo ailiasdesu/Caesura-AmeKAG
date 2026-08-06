@@ -169,6 +169,10 @@ function scheduler.run(ctx, tokens, start_index)
     while i <= #tokens do
         local tok = tokens[i]
         local cmd = tok[1]
+        -- KAG3 command-name aliases (elsif -> elseif): tokens produced by
+        -- tokenizer.parse are already normalized, but macro bodies and
+        -- hand-built token streams may not be -- normalize defensively.
+        if cmd == "elsif" then cmd = "elseif" end
         local params = tok[2] or {}
 
         -- Check stop flag
@@ -229,6 +233,26 @@ function scheduler.run(ctx, tokens, start_index)
             if type(params[1]) == "string" then target = target or params[1] end
             if not target then
                 print("[WARN] [call] missing target/storage parameter")
+            elseif target:sub(1, 1) == "*" then
+                -- Intra-scene call (KAG3): push the current position and
+                -- jump to the label; [return] pops back. lf gets a fresh
+                -- frame exactly like cross-scene calls.
+                local label = target:gsub("^*", "")
+                local idx = find_label(tokens, label, ctx.label_index)
+                if idx then
+                    ctx.call_stack = ctx.call_stack or {}
+                    table.insert(ctx.call_stack, {
+                        tokens = tokens, index = i + 1,
+                        label_index = ctx.label_index,
+                        scene = ctx.current_scene,
+                        lf = ctx.lf,
+                        mp = ctx.mp,
+                    })
+                    ctx.lf = {}
+                    i = idx
+                else
+                    print("[WARN] [call] label not found: " .. label)
+                end
             else
             local path = "assets/script/" .. target
             local new_tokens = nil
@@ -324,7 +348,7 @@ function scheduler.run(ctx, tokens, start_index)
                 -- Skip to the next elseif/else/endif; the target is NOT
                 -- consumed (i-1) so an elseif evaluates its own expression.
                 i = skip_to(tokens, i, {
-                    ["elseif"] = true, ["else"] = true, ["endif"] = true,
+                    ["elseif"] = true, ["elsif"] = true, ["else"] = true, ["endif"] = true,
                     opens = {["if"] = true}
                 }, {["endif"] = true}) - 1
             end
@@ -334,7 +358,7 @@ function scheduler.run(ctx, tokens, start_index)
             if taken then
                 -- A previous branch was taken: skip the rest of the chain.
                 i = skip_to(tokens, i, {
-                    ["elseif"] = true, ["else"] = true, ["endif"] = true,
+                    ["elseif"] = true, ["elsif"] = true, ["else"] = true, ["endif"] = true,
                     opens = {["if"] = true}
                 }, {["endif"] = true}) - 1
             else
@@ -343,7 +367,7 @@ function scheduler.run(ctx, tokens, start_index)
                 if_stack[#if_stack] = taken
                 if not taken then
                     i = skip_to(tokens, i, {
-                        ["elseif"] = true, ["else"] = true, ["endif"] = true,
+                        ["elseif"] = true, ["elsif"] = true, ["else"] = true, ["endif"] = true,
                         opens = {["if"] = true}
                     }, {["endif"] = true}) - 1
                 end
@@ -653,6 +677,16 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [eval] — unified scope (ctx + f + sf + tf)
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""
+            if #code == 0 then
+                -- KAG3 requires [eval exp="..."]; a bare [eval lf.x = 1]
+                -- parses as positional pairs and silently did nothing.
+                -- Surface it so scripts stay honest.
+                print(string.format(
+                    "[WARN] [eval] without exp= at %s:%s (KAG3 form: "
+                    .. "[eval exp=\"...\"])",
+                    ctx.current_scene or ctx.currentScene or "?",
+                    tostring(ctx.token_index or ctx.tokenIndex or "?")))
+            end
             -- Whitelist env (audit): the old `__index = _G` exposed the
             -- ENTIRE global table -- os.execute and friends reachable from
             -- a [eval] tag -- while the strict-sandbox path (SystemCommands
@@ -843,6 +877,16 @@ function scheduler.run(ctx, tokens, start_index)
                 local handler = kag[cmd]
                 local actual_cmd = cmd
                 if not handler and type(cmd) == "string" and #cmd > 0 then
+                    -- Unrecognized tag: KAG3 semantics render it as text, but
+                    -- a typo'd command name (e.g. [elsif] before aliasing,
+                    -- [wait] vs [wait]) would otherwise be invisible to the
+                    -- author -- warn once per scene so scripts stay honest.
+                    print(string.format(
+                        "[WARN] unknown KAG command '%s' treated as text "
+                        .. "(typo?) at %s:%s",
+                        cmd,
+                        ctx.current_scene or ctx.currentScene or "?",
+                        tostring(ctx.token_index or ctx.tokenIndex or "?")))
                     -- Unrecognized text ?? treat as [ch] -- through the ch
                     -- contract so interpolation ($f.name) and type coercion
                     -- apply to plain dialogue lines too (the main use case).

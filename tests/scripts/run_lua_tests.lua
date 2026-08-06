@@ -31,6 +31,7 @@ local tests = {
     "test_expr_cache",
     "test_expr_lang",
     "test_variables",
+    "test_control_flow",
     "test_bg_dedup",
     "test_macro_nested",
     "test_scene_restore",

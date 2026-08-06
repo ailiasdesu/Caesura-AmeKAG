@@ -120,11 +120,10 @@ local function normalize(raw_tokens)
                 if type(t[i]) == "table" then
                     local pair = t[i][1]
                     if type(pair) == "table" and pair[1] then
-                        params[#params + 1] = pair
-                    end
+                        params[#params + 1] = pair                    end
                 end
             end
-            result[#result + 1] = { type = "command", cmd = t[2], params = params }
+            result[#result + 1] = { type = "command", cmd = tokenizer.normalize_cmd(t[2]), params = params }
         elseif typ == "text" then
             local txt = t[2] or ""
             if not txt:match("^%s*$") then
@@ -138,6 +137,20 @@ local function normalize(raw_tokens)
         ::continue::
     end
     return result
+end
+
+-- KAG3 command-name aliases: normalize at the token level so the scheduler,
+-- skip_to and ks_check all see one spelling.
+local ALIASES = {
+    elsif = "elseif",   -- KAG3 spelling
+}
+for alias, canonical in pairs(ALIASES) do
+    ALIASES[alias] = canonical
+end
+
+--- tokenizer.normalize_cmd(name) → canonical command name (aliases applied).
+function tokenizer.normalize_cmd(name)
+    return ALIASES[name] or name
 end
 
 --- tokenizer.parse_with_offsets(text) → tokens with a byte `offset` each.
