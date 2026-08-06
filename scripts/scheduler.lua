@@ -713,7 +713,9 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [macro] / [endmacro]
         elseif cmd == "macro" then
-            local name = params.name
+            -- bare [macro m args=...] -> params[1] (KAG3 syntax: the
+            -- macro name is a positional arg -- audit fix)
+            local name = params.name or params[1]
             -- Collect macro body until [endmacro]
             local body = {}
             i = i + 1
@@ -740,7 +742,8 @@ function scheduler.run(ctx, tokens, start_index)
             end
 
         elseif cmd == "erasemacro" then
-            local name = params.name
+            -- bare [erasemacro m] -> params[1]
+            local name = params.name or params[1]
             if name and ctx.macros then
                 ctx.macros[name] = nil
                 if ctx.macro_args then ctx.macro_args[name] = nil end
@@ -771,7 +774,12 @@ function scheduler.run(ctx, tokens, start_index)
                     local function fill(v)
                         if type(v) == "string" then
                             return (v:gsub("%%([%w_]+)%%", function(an)
-                                return params[an] or ("%" .. an .. "%")
+                                -- numeric placeholders (%1%) map to the
+                                -- bare positional key params[1] (audit:
+                                -- scheduler normalizes "1" to a NUMBER
+                                -- key, so params["1"] was always nil)
+                                local key = tonumber(an) or an
+                                return params[key] or ("%" .. an .. "%")
                             end))
                         elseif type(v) == "table" then
                             -- Deep COPY: the body params table is shared by
