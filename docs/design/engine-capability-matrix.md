@@ -94,7 +94,7 @@ graph LR
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
 
-### Scripting (15 capabilities)
+### Scripting (17 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
@@ -113,6 +113,8 @@ graph LR
 | S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) |
 | S5 | Hot reload (watch scripts/, live-reload without restart) | Engine-owned `HotReload` instance | ✓ |
 | S6 | Error recovery (pcall guards, ErrorUI, graceful degradation) | scheduler + bindings | ✓ |
+| S6a | Modal UI input loops (settings/music_room/gallery/chapter select -- per-frame yield + GAME key routing: UP/DOWN/LEFT/RIGHT/ENTER/ESC/F/mouse) | ui modules + Engine input | ✓ |
+| S6b | UI state persistence (settings values, favorites, unlock sets, visual text state) | settings/music_room/save | ✓ |
 
 ### Audio (4 capabilities)
 
@@ -163,5 +165,5 @@ graph LR
 
 ---
 
-**Total: 52 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 54 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
