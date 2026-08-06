@@ -94,6 +94,7 @@ local tests = {
     "test_audio_fade",
     "test_trans_behavior",
     "test_fadeout",
+    "test_backend_guard",
 }
 
 local passed, failed = 0, 0

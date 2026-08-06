@@ -10,6 +10,22 @@ local function get_backend()
     return rawget(_G, "_CAESURA_BACKEND")
 end
 
+
+local function render_or_guard(method, ...)
+    local be = get_backend()
+    if be then return be.render(method, ...) end
+    if Render and Render[method] then return Render[method](...) end
+    return false
+end
+
+local function devcore_or_guard(method, ...)
+    local be = get_backend()
+    if be then return be.platform(method, ...) end
+    if DevCore and DevCore[method] then return DevCore[method](...) end
+    return false
+end
+
+
 -- Resolution chain for backend convenience calls (audit: backend.lua
 -- called a bare global KAG.* 18 times -- the ENGINE sets _G.KAG (a C++
 -- binding table) so it worked there, but direct-API contexts had nil).
@@ -44,9 +60,7 @@ end
 
 -- Screen-offset pan (camera/quakes): shifts the main view rect.
 function Backend.set_screen_offset(dx, dy)
-    local be = get_backend()
-    if be then return be.render("set_screen_offset", dx, dy)
-    else return Render.set_screen_offset(dx, dy) end
+    return render_or_guard("set_screen_offset", dx, dy)
 end
 
 function Backend.audio_play(bus, file, opts)
@@ -152,45 +166,31 @@ end
 -- =========================================================================
 
 function Backend.create_viewport(w, h)
-    local be = get_backend()
-    if be then return be.render("create_viewport", w, h)
-    else return Render.create_viewport(w, h) end
+    return render_or_guard("create_viewport", w, h)
 end
 
 function Backend.destroy_viewport(vpId)
-    local be = get_backend()
-    if be then return be.render("destroy_viewport", vpId)
-    else return Render.destroy_viewport(vpId) end
+    return render_or_guard("destroy_viewport", vpId)
 end
 
 function Backend.draw_viewport(vpId, x, y, w, h)
-    local be = get_backend()
-    if be then return be.render("draw_viewport", vpId, x, y, w, h)
-    else return Render.draw_viewport(vpId, x, y, w, h) end
+    return render_or_guard("draw_viewport", vpId, x, y, w, h)
 end
 
 function Backend.fill_viewport(handleId, r, g, b, a)
-    local bb = get_backend()
-    if bb then return bb.render("fill_viewport", handleId, r, g, b, a)
-    else return Render.fill_viewport(handleId, r, g, b, a) end
+    return render_or_guard("fill_viewport", handleId, r, g, b, a)
 end
 
 function Backend.load_texture(file)
-    local be = get_backend()
-    if be then return be.render("load_texture", file)
-    else return Render.load_texture(file) end
+    return render_or_guard("load_texture", file)
 end
 
 function Backend.destroy_texture(id)
-    local be = get_backend()
-    if be then return be.render("destroy_texture", id)
-    else return Render.destroy_texture(id) end
+    return render_or_guard("destroy_texture", id)
 end
 
 function Backend.create_solid_texture(r, g, b, a)
-    local bb = get_backend()
-    if bb then return bb.render("create_solid_texture", r, g, b, a)
-    else return Render.create_solid_texture(r, g, b, a) end
+    return render_or_guard("create_solid_texture", r, g, b, a)
 end
 
 function Backend.submit_batch(batch)
@@ -254,8 +254,12 @@ end
 function Backend.wait_click()
     -- Explicit require: the global KAG table is never set (review
     -- should-fix) -- the demo's direct-API path called into nil here.
-    local kag_mod = require("kag")
-    return kag_mod.wait_click()
+    -- package.loaded direct: sandbox-safe (audit, same as audio_xfade)
+    local kag_mod = package.loaded["kag"] or require("kag")
+    if kag_mod and kag_mod.wait_click then
+        return kag_mod.wait_click()
+    end
+    return false
 end
 
 -- =========================================================================
@@ -263,33 +267,37 @@ end
 -- =========================================================================
 
 function Backend.set_resolution(w, h)
-    local be = get_backend()
-    if be then return be.platform("set_resolution", w, h)
-    else return DevCore.set_resolution(w, h) end
+    return devcore_or_guard("set_resolution", w, h)
 end
 
 function Backend.get_resolution()
-    local be = get_backend()
-    if be then return be.platform("get_resolution")
-    else return DevCore.get_resolution() end
+    return devcore_or_guard("get_resolution")
 end
 
 function Backend.set_input_focus(mode)
-    local be = get_backend()
-    if be then return be.platform("set_input_focus", mode)
-    else return DevCore.set_input_focus(mode) end
+    return devcore_or_guard("set_input_focus", mode)
 end
 
 function Backend.get_input_focus()
-    local be = get_backend()
-    if be then return be.platform("get_input_focus")
-    else return DevCore.get_input_focus() end
+    return devcore_or_guard("get_input_focus")
+end
+
+-- Video trio: the Render binding owns these; the commands' `and`
+-- guards masked their absence (video silently no-op'd) -- audit.
+function Backend.video_play(file, opts)
+    return render_or_guard("video_play", file, opts)
+end
+
+function Backend.video_stop()
+    return render_or_guard("video_stop")
+end
+
+function Backend.video_is_playing()
+    return render_or_guard("video_is_playing")
 end
 
 function Backend.set_fullscreen(enabled)
-    local be = get_backend()
-    if be then return be.platform("set_fullscreen", enabled)
-    else return DevCore.set_fullscreen(enabled) end
+    return devcore_or_guard("set_fullscreen", enabled)
 end
 
 
@@ -301,8 +309,13 @@ function Backend.audio_xfade(bus, new_file, fade_time)
     local be = get_backend()
     if be then return be.audio("xfade", bus, new_file, fade_time)
     else
-        local Audio = require("audio")
-        return Audio.crossfade_bgm(new_file, fade_time / 1000)
+        -- package.loaded direct: require() is sandbox-wrapped in the
+        -- suite and 'audio' may not be preloaded -- audit
+        local Audio = package.loaded["audio"]
+        if Audio and Audio.crossfade_bgm then
+            return Audio.crossfade_bgm(new_file, fade_time / 1000)
+        end
+        return false
     end
 end
 
@@ -413,10 +426,11 @@ end
 -- =============================================================================
 
 function Backend.text_set_font(face, size, color)
-    Render.text_set_font(face, size, color)
+    return render_or_guard("text_set_font", face, size, color)
 end
 
 function Backend.text_reset_state()
-    Render.text_reset_state()
+    return render_or_guard("text_reset_state")
 end
+
 return Backend
