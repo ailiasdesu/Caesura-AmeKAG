@@ -69,6 +69,14 @@ local ctxC = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, tokens = {} }
 local okC = pcall(Save.load, ctxC, { slot = 0 })
 _G.KAG = kag_backup
 check("crafted visual safe", okC)
+-- crafted FIELD types also safe (review warn: h string / opacity table
+-- used to flow into ctx.textbox_style and crash the next [cl] rebuild)
+_G.KAG = { load_game = function()
+    return { textbox_style = { w = 1280, h = "wide", x = 0, y = 520, opacity = {} } }, {} end }
+local ctxD = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, tokens = {} }
+local okD = pcall(Save.load, ctxD, { slot = 0 })
+_G.KAG = kag_backup
+check("crafted fields safe", okD and ctxD.textbox_style == nil)
 
 if failed > 0 then os.exit(1) end
 print("SAVELOAD TESTS DONE")

@@ -343,13 +343,18 @@ function SaveCommands.load(ctx, params)
             ctx.text_state.font_color = state.text_state.font_color
         end
     end
-    if type(state.textbox_style) == "table" then
+    if _type(state.textbox_style) == "table" then
         local st = state.textbox_style
-        if type(st.w) == "number" then
+        -- EVERY numeric field type-guarded (review warn: h/x/y/opacity
+        -- were nil-guards only -- a crafted save injected a string/table
+        -- that crashed the next [cl] rebuild via math.floor(opacity))
+        if _type(st.w) == "number" and _type(st.h) == "number"
+           and _type(st.x) == "number" and _type(st.y) == "number"
+           and _type(st.opacity) == "number" then
             ctx.textbox_style = {
-                x = st.x or 0, y = st.y or 0, w = st.w, h = st.h,
-                color = type(st.color) == "string" and st.color or "0,0,0",
-                opacity = st.opacity or 200,
+                x = st.x, y = st.y, w = st.w, h = st.h,
+                color = _type(st.color) == "string" and st.color or "0,0,0",
+                opacity = st.opacity,
                 visible = st.visible ~= false,
             }
         end
