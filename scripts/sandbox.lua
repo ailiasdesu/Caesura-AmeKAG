@@ -422,7 +422,12 @@ function Sandbox.execute(code, env)
     env = env or Sandbox.create()
     local fn, err = load(code, "=sandbox", "t", env)
     if not fn then return false, err end
-    return pcall(fn)
+    local ok, result = pcall(fn)
+    -- Return the ENV as the third value: [emb]'s strict path syncs
+    -- envOut.tf/f/sf/mp back -- without it that sync was dead code and
+    -- a script REPLACING tf (rather than writing f.x) lost the change
+    -- (audit fix).
+    return ok, result, env
 end
 
 function Sandbox.is_strict()

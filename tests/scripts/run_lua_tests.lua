@@ -65,6 +65,7 @@ local tests = {
     "test_layopt",
     "test_text_deco",
     "test_reset_pt",
+    "test_emb_sync",
 }
 
 local passed, failed = 0, 0
