@@ -89,6 +89,7 @@ local tests = {
     "test_gallery_bare",
     "test_offsets",
     "test_ks_check",
+    "test_four_remaining",
 }
 
 local passed, failed = 0, 0

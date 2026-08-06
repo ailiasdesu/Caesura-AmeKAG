@@ -1,0 +1,45 @@
+-- test_four_remaining.lua — br/close/hr/vib coverage (audit)
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
+local passed, failed = 0, 0
+local function check(name, cond)
+    if cond then print("PASS " .. name) passed = passed + 1
+    else print("FAIL " .. name) failed = failed + 1 end
+end
+
+local KAG = require("kag")
+local tokenizer = require("tokenizer")
+local scheduler = require("scheduler")
+
+-- [br] delegates to [l] (line break)
+local l_calls = 0
+local real_l = KAG.l
+KAG.l = function() l_calls = l_calls + 1 end
+local ok = pcall(KAG.br, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }, {})
+KAG.l = real_l
+check("br delegates to l", ok and l_calls == 1)
+
+-- [hr] is a decorative no-op (never crashes)
+local ok2 = pcall(KAG.hr, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }, {})
+check("hr no-op safe", ok2)
+
+-- [close] returns the stop signal
+local ctxC = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+local r = KAG.close(ctxC, {})
+check("close returns stop", r == "stop")
+
+-- [vib] schema clamps (time <= 30000, intensity <= 50)
+local schema = require("kag.schema")
+local c = schema.coerce("vib", { time = "999999", intensity = "999" }, {})
+check("vib clamped", c.time == 30000 and c.intensity == 50)
+-- vib handler no-crash (no message layer -> early return)
+local ok3 = pcall(KAG.vib, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }, { time = 100, intensity = 3 })
+check("vib no layer no crash", ok3)
+
+-- end-to-end parse shapes
+check("br parses", tokenizer.parse("[br]")[1].cmd == "br")
+check("hr parses", tokenizer.parse("[hr]")[1].cmd == "hr")
+check("close parses", tokenizer.parse("[close]")[1].cmd == "close")
+check("vib parses", tokenizer.parse("[vib time=200]")[1].cmd == "vib")
+
+if failed > 0 then os.exit(1) end
+print("FOUR CMDS TESTS DONE")
