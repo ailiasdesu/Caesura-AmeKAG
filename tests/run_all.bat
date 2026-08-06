@@ -1,6 +1,6 @@
 @echo off
 REM =============================================================================
-REM  run_all.bat ? Caesura Full Test Suite Runner
+REM  run_all.bat - Caesura Full Test Suite Runner
 REM =============================================================================
 setlocal enabledelayedexpansion
 set "TEST_DIR=%~dp0"
@@ -32,7 +32,7 @@ echo [SKIP] CaesuraTests.exe not found. Run cmake --build first.
 REM -- Phase 2: Lua Script Tests -----------------------------------------------
 echo.
 echo [2/3] Running Lua script tests...
-set "LUA_PATH=%TEST_DIR%..\scripts\?.lua;%TEST_DIR%scripts\?.lua;%LUA_PATH%"
+set "LUA_PATH=%TEST_DIR%..\scripts\-.lua;%TEST_DIR%scripts\-.lua;%LUA_PATH%"
 
 if not exist "%LUA%" goto lua_skip
 cd /d "%TEST_DIR%.."
@@ -50,7 +50,7 @@ echo [SKIP] lua.exe not found at %LUA%
 REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
-echo   Test Suite Complete ? All Passed
+echo   Test Suite Complete - All Passed
 echo   C++: 570/570 ^| Lua: 80/80
 echo ============================================
 exit /b 0
