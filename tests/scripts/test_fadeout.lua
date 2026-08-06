@@ -82,8 +82,9 @@ check("particles emit forwards", #p_calls == 2 and p_calls[2][1] == "emit"
       and p_calls[2][2] == 7 and p_calls[2][3] == 5)
 pcall(KAG.particles, ctxP, { action = "destroy", emitter = 7 })
 check("particles destroy tracked", ctxP._particleEmitters[7] == nil)
-pcall(KAG.particles, ctxP, { action = "clear" })
-check("particles clear no crash", true)
+local okClear = pcall(KAG.particles, ctxP, { action = "clear" })
+check("particles clear ok", okClear and ctxP._particleEmitters ~= nil
+      and next(ctxP._particleEmitters) == nil)
 _G.VFX = vfx_backup
 
 if failed > 0 then os.exit(1) end
