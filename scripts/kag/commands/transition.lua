@@ -207,8 +207,9 @@ function TransCommands.scroll(ctx, params)
         green = "0,255,0", blue = "0,0,255", yellow = "255,255,0",
         gray = "128,128,128", grey = "128,128,128",
     }
-    if type(color) == "string" and named_colors[color] then
-        color = named_colors[color]
+    if type(color) == "string" then
+        local key = color:lower():gsub("%s", "")
+        if named_colors[key] then color = named_colors[key] end
     end
     local cr, cg, cb = 255, 255, 255
     if type(color) == "string" then
@@ -227,7 +228,7 @@ function TransCommands.scroll(ctx, params)
     -- with a line stride so the whole block scrolls as one unit
     -- (audit: the old loop rendered only the first line).
     local lines = {}
-    local text_clean = text:gsub("\n$", "")
+    local text_clean = text:gsub("\n+$", "")
     local text_with_nl = text_clean .. "\n"
     for line in text_with_nl:gmatch("(.-)\n") do
         lines[#lines + 1] = line
