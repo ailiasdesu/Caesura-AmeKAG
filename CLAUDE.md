@@ -171,12 +171,12 @@ Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps
 ## Key Documentation
 
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first)
-- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (69 commands; supersedes kag-commands.md)
+- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (72 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
 - `docs/api/cpp-interfaces.md` — all 28 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
-- `docs/design/engine-capability-matrix.md` — 48 tracked capabilities and readiness limits
+- `docs/design/engine-capability-matrix.md` — 52 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
 - `docs/superpowers/specs/` — design specs for architecture decoupling, GPU recovery, KAG+Lua hybrid scripting
