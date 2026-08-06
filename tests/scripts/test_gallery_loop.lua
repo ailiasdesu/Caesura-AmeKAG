@@ -45,15 +45,21 @@ check("left back", ctx.galleryState.index == 2)
 _G._GAME_KEY_LEFT = true
 coroutine.resume(co)
 check("left clamps at 1", ctx.galleryState.index == 1)
--- render cache: repeated frames do not re-render (no texture churn)
-local renders = 0
-Gallery._renderCurrent = function(ctx2)
-    renders = renders + 1
+-- render cache: repeated frames do not re-load the texture (the real
+-- _renderCurrent caches per index -- assert via load_texture calls)
+local loads = 0
+local real_backend_render = _G._CAESURA_BACKEND.render
+_G._CAESURA_BACKEND.render = function(cmd, ...)
+    if cmd == "load_texture" then loads = loads + 1 end
+    return real_backend_render(cmd, ...)
 end
 _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
 coroutine.resume(co)
-check("render cached on repeat", renders == 1)
+check("texture cached on repeat", loads == 0)
+_G._GAME_KEY_RIGHT = true
+coroutine.resume(co)
+check("right to 3 loads once", loads == 1)
 _G._GAME_KEY_ESC = true
 coroutine.resume(co)
 check("esc closes", coroutine.status(co) == "dead" and ctx.galleryState == nil)
