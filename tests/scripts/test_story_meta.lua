@@ -48,6 +48,9 @@ check("ending type-guard reset", type(ctx3.seen_endings) == "table"
       and ctx3.seen_endings.e1 ~= nil)
 
 -- [chapter] routes via _pendingJump (labelMap index) when a choice is made
+-- (save + restore the module -- the mock PERSISTS in package.loaded
+-- and poisoned the later test_chapter_select suite run -- audit)
+local _cs_real = package.loaded["chapter_select"]
 package.loaded["chapter_select"] = { show = function() return "chapter_2" end }
 local ctx4 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     current_scene = "scripts/demo_story.ks",
@@ -64,6 +67,7 @@ package.loaded["chapter_select"] = { show = function() return nil end }
 local ctx5 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     current_scene = "s.ks", labelMap = {}, stop_flag = false }
 pcall(KAG.chapter, ctx5, {})
+package.loaded["chapter_select"] = _cs_real
 check("chapter no-choice no-op", ctx5.stop_flag == false
       and ctx5._pendingJump == nil)
 

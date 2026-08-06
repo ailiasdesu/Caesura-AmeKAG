@@ -27,6 +27,9 @@ _G.KAG = {
     play_se_3d=function()return true end, set_global_volume=function()end,
     get_global_volume=function()return 1.0 end, replay_voice=function()end,
 }
+-- preload chapter_select so sandboxed later tests can require it
+package.loaded["chapter_select"] = require("chapter_select")
+
 _G.Render = {
     text_set_font = function() end,
     text_reset_state = function() end,
