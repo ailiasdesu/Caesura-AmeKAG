@@ -197,14 +197,47 @@ function TransCommands.scroll(ctx, params)
     local height = (ctx.viewport and ctx.viewport.height) or 720
     if #text == 0 then return end
 
+    -- Resolve the color to components: "r,g,b" string or named.
+    -- render_text's real contract is (text, x, y, r, g, b, a) --
+    -- the old call passed (text, size, 32, y, color), silently
+    -- shifting every argument (audit: size became x, the color
+    -- string became a byte channel and clamped to 0).
+    local cr, cg, cb = 255, 255, 255
+    if type(color) == "string" then
+        local r0, g0, b0 = color:match("(%d+),%s*(%d+),%s*(%d+)")
+        if r0 then
+            cr = tonumber(r0) or 255
+            cg = tonumber(g0) or 255
+            cb = tonumber(b0) or 255
+        end
+    end
+    -- The scroll size applies via the font state (pcall: headless
+    -- test environments have no Render binding)
+    pcall(backend.text_set_font, "default", size, color)
+
+    -- Multi-line ED credits: split on newline and render each line
+    -- with a line stride so the whole block scrolls as one unit
+    -- (audit: the old loop rendered only the first line).
+    local lines = {}
+    local text_with_nl = text .. "\n"
+    for line in text_with_nl:gmatch("(.-)\n") do
+        lines[#lines + 1] = line
+    end
+    if #lines == 0 then lines = { text } end
+    local lineHeight = size + 10
+    local blockHeight = #lines * lineHeight
+
     local y = height
     local lifetime = 0
-    local duration = (height + 64) / math.max(1, speed)
+    local duration = (height + blockHeight + 64) / math.max(1, speed)
     while lifetime < duration do
         local dt = (coroutine.yield() or 16) / 1000.0
         lifetime = lifetime + dt
         y = y - speed * dt
-        backend.render_text(text, size, 32, y, color)
+        for i, line in ipairs(lines) do
+            backend.render_text(line, 32, y + (i - 1) * lineHeight,
+                                cr, cg, cb, 255)
+        end
     end
     backend.clear_text()
 end

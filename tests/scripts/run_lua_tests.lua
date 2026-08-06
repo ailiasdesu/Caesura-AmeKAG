@@ -90,6 +90,7 @@ local tests = {
     "test_offsets",
     "test_ks_check",
     "test_four_remaining",
+    "test_scroll",
 }
 
 local passed, failed = 0, 0
