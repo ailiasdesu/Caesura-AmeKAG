@@ -38,7 +38,7 @@ if not exist "%LUA%" goto lua_skip
 cd /d "%TEST_DIR%.."
 "%LUA%" "%TEST_DIR%scripts\run_lua_tests.lua"
 if errorlevel 1 goto lua_fail
-echo [PASS] Lua tests passed (77/77).
+echo [PASS] Lua tests passed (80/80).
 goto lua_done
 :lua_fail
 echo [FAIL] Lua tests failed!
@@ -51,6 +51,6 @@ REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
 echo   Test Suite Complete ? All Passed
-echo   C++: 570/570 ^| Lua: 77/77
+echo   C++: 570/570 ^| Lua: 80/80
 echo ============================================
 exit /b 0
