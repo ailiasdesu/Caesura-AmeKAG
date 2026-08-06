@@ -255,7 +255,7 @@ Caesura(AmeKAG)/
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | Architects | Module dependency topology, data flow |
-| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 52 tracked capabilities and readiness limits |
+| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 54 tracked capabilities and readiness limits |
 | [engine-safety-and-qa-mechanisms.md](docs/design/engine-safety-and-qa-mechanisms.md) | QA engineers | Thread safety, sandbox, audit mechanisms |
 
 ---

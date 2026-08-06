@@ -159,7 +159,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | 文件 | 内容 |
 |------|------|
 | `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
-| `design/engine-capability-matrix.md` | 52 项能力的完成状态矩阵 |
+| `design/engine-capability-matrix.md` | 54 项能力的完成状态矩阵 |
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
