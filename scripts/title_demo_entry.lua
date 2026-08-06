@@ -11,6 +11,7 @@ local layers = require("layers")
 -- Title-menu coroutine: TitleMenu.show yields per frame; resume it every
 -- frame until it returns an action (same pattern as the history overlay).
 local title_co = nil
+local settings_co = nil
 local started = false
 
 
@@ -22,6 +23,17 @@ function engine_update(dt)
     if _toast then pcall(function() _toast.update(dt) end) end
 
     -- Drive the title menu until an action is chosen
+    if settings_co then
+        local okS = coroutine.resume(settings_co)
+        if not okS or coroutine.status(settings_co) == "dead" then
+            settings_co = nil
+            -- settings closed: now start the demo
+            if not started then
+                kag_runner.start("scripts/demo_story.ks")
+                started = true
+            end
+        end
+    end
     if title_co then
         local ok, action = coroutine.resume(title_co)
         if not ok then
@@ -52,17 +64,16 @@ function engine_update(dt)
                 started = true
             elseif action == "settings" then
                 -- Open the settings overlay from the title screen (modal;
-                -- Settings.show drives its own coroutine loop)
+                -- Settings.show yields per frame -- drive it every frame
+                -- like title_co; the demo starts only AFTER it closes
+                -- (review blocking: single resume left it hanging).
                 local ctx = _G._CAESURA_CTX
                 if ctx then
-                    local co = coroutine.create(function()
+                    settings_co = coroutine.create(function()
                         require("settings").show(ctx)
                     end)
-                    coroutine.resume(co)
+                    coroutine.resume(settings_co)
                 end
-                -- Settings is modal; after it closes, start the demo
-                kag_runner.start("scripts/demo_story.ks")
-                started = true
             elseif action == "exit" then
                 local engine = rawget(_G, "_CAESURA_ENGINE")
                 if engine and engine.quit then engine:quit() end
