@@ -34,9 +34,9 @@ require("kag.schema").define("video", {
 
 function VideoCommands.video(ctx, params)
     local file   = resolve_file(params)
-    local loop   = params.loop
-    if loop == nil or loop == "false" then loop = false
-    elseif loop == "true" then loop = true end
+    -- schema already coerces loop to a boolean (the string forms below
+    -- were dead after the schema contract landed -- audit cleanup)
+    local loop   = params.loop == true
     local volume = params.volume  -- schema-typed
 
     if not file then
@@ -63,9 +63,14 @@ function VideoCommands.video(ctx, params)
         return
     end
 
-    -- Block until video ends or user cancels
-    while backend.video_is_playing and backend.video_is_playing() and not ct.cancelled do
-        coroutine.yield()
+    -- Block until video ends, user cancels, or the 60s cap (a stuck
+    -- decoder must not hang the runner -- same bound as waitsound).
+    -- loop=true videos therefore auto-stop after the cap; scripts that
+    -- need longer loops should re-issue [video] or use [stopvideo].
+    local elapsed = 0
+    while backend.video_is_playing and backend.video_is_playing()
+          and not ct.cancelled and elapsed < 60000 do
+        elapsed = elapsed + (coroutine.yield() or 16)
     end
 
     -- Cleanup: stop video and free decoder resources
