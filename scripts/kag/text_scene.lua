@@ -210,13 +210,13 @@ function TextScene.render(ctx, render_backend)
                     shown, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha)
             end
-            -- consumed advances for typewriter lines even when alpha=0
-            -- skips the draw, so a fade-in frame cannot over-show the
-            -- next line (review nit)
-            if draw.typewriter then
-                consumed = consumed + (utf8.len(draw.text) or #draw.text)
-            end
             submitted = submitted + 1
+        end
+        -- consumed advances OUTSIDE the alpha guard (review blocking:
+        -- inside the guard, alpha=0 frames skipped the whole body and
+        -- the next line over-showed during fades)
+        if draw.typewriter then
+            consumed = consumed + (utf8.len(draw.text) or #draw.text)
         end
     end
     return submitted

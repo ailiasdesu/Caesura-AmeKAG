@@ -7,6 +7,11 @@ local check = function(name, cond)
         results[#results + 1] = cond
 end
 
+-- captured BEFORE the mocks below (review: capturing after would
+-- restore the mock itself)
+local benchmark_preload_backend = package.preload["backend"]
+local benchmark_backend = package.loaded["backend"]
+
 -- Mock backend (benchmark runs without a GPU; commands must not raise)
 package.preload["backend"] = function()
     return {
@@ -24,8 +29,6 @@ end
 -- require("backend") under the suite sandbox ("not preloaded") --
 -- font/video/wait tests all died in the suite because of this
 -- (audit: pre-existing pollution the sandbox exposed).
-local benchmark_preload_backend = package.preload["backend"]
-local benchmark_backend = package.loaded["backend"]
 package.loaded["backend"] = nil
 
 package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path

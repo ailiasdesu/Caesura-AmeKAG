@@ -50,5 +50,22 @@ check("no reveal full", rendered[1][1] == "AAAAA" and rendered[2][1] == "BBBBB")
 
 _G._CAESURA_BACKEND = backend_backup
 
+-- alpha=0 frames still advance consumed (review blocking: the reveal
+-- offset must not over-show line 2 while line 1 fades in)
+_G._CAESURA_BACKEND = { render = function(cmd, ...)
+    if cmd == "render_text" then rendered[#rendered + 1] = { ... } end
+    return true end }
+local ctx2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+local st2 = TextScene.get_state(ctx2)
+st2.draws = {
+    { kind = "text", typewriter = true, text = "AAAAA", x = 10, y = 10, r = 255, g = 255, b = 255, a = 0 },
+    { kind = "text", typewriter = true, text = "BBBBB", x = 10, y = 30, r = 255, g = 255, b = 255, a = 255 },
+}
+st2.reveal_chars = 7
+rendered = {}
+TextScene.render(ctx2)
+_G._CAESURA_BACKEND = backend_backup
+check("alpha-skip advances consumed", rendered[1] and rendered[1][1] == "BB")
+
 if failed > 0 then os.exit(1) end
 print("REVEAL TESTS DONE")
