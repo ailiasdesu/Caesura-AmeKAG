@@ -53,8 +53,9 @@ check("left clamps at 1", ctx.galleryState.index == 1)
 local right = _G._GAME_KEY_RIGHT
 _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
-_G._GAME_KEY_RIGHT = right
+_G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
+_G._GAME_KEY_RIGHT = right
 check("nav after cache section", ctx.galleryState.index == 3)
 _G._GAME_KEY_ESC = true
 coroutine.resume(co)
