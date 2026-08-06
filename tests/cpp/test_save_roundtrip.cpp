@@ -119,6 +119,25 @@ TEST_CASE("SaveManager: listSaves returns correct slot list") {
     CHECK(found5);
 }
 
+TEST_CASE("SaveManager: out-of-range slots rejected on all ops") {
+    TestPaths::ScopedTempDir dir("roundtrip_oob");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    // save/load/delete/list must refuse slots outside 0..99 (audit:
+    // the guards exist but were untested; a negative slot would write
+    // save_-1.json, an oversized one save_100.json)
+    CHECK_FALSE(sm.save(100, {{"n", 1}}, "s", 0));
+    CHECK_FALSE(sm.save(-1, {{"n", 1}}, "s", 0));
+    CHECK(sm.load(100).empty());
+    CHECK(sm.load(-1).empty());
+    CHECK_FALSE(sm.deleteSlot(100));
+    CHECK_FALSE(sm.deleteSlot(-1));
+    // the filesystem stayed clean
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_100.json"));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_-1.json"));
+}
+
 TEST_CASE("SaveManager: deleteSlot removes save") {
     TestPaths::ScopedTempDir dir("roundtrip_delete");
     SaveManager sm;
