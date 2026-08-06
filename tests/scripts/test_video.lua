@@ -37,7 +37,11 @@ _G._CAESURA_BACKEND = { render = function(cmd, ...)
     if cmd == "video_play" then v_calls[#v_calls + 1] = { ... } end
     return true end }
 local ctxV = { f = {}, tf = {}, sf = {}, mp = {}, variables = {}, viewport = { width = 1280, height = 720 } }
-local okV = pcall(Video2.video, ctxV, { file = "a.mpg", loop = "true", time = 1 })
+-- coroutine drive: video yields while waiting (non-coroutine pcall dies)
+local coV = coroutine.create(function()
+    Video2.video(ctxV, { file = "a.mpg", loop = "true", time = 1 })
+end)
+local okV = coroutine.resume(coV)
 check("loop string tolerated", okV and v_calls[1] and v_calls[1][2].loop == true)
 _G._CAESURA_BACKEND = be2
 
