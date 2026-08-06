@@ -11,7 +11,13 @@ local LayerCommands = {}
 
 -- Internal: resolve file path (storage > path > file > positional)
 local function resolve_file(params)
-    return params.storage or params.path or params.file or params[1]
+    -- string-only bare fallback (audit: pair table from named params
+    -- must not reach the backend binding)
+    local f = params.storage or params.path or params.file
+    if type(f) ~= "string" and type(params[1]) == "string" then
+        f = params[1]
+    end
+    return f
 end
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
@@ -294,7 +300,11 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function LayerCommands.layfade(ctx, params)
-    local layerName = params.layer or params.name or params[1] or "bg"
+    local layerName = params.layer or params.name
+    if type(layerName) ~= "string" and type(params[1]) == "string" then
+        layerName = params[1]
+    end
+    layerName = layerName or "bg"
     local node = layers.get(layerName)
     if not node then
         print("[LayerCmd] layfade: layer not found: " .. tostring(layerName))

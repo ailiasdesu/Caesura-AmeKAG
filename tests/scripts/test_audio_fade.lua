@@ -63,5 +63,32 @@ Audio.xfadebgm(ctx, { { "storag", "x.ogg" }, time = 1000 })
 check("xfade typo pair safe", #calls == 0)
 _G._CAESURA_BACKEND = real_backend
 
+-- guard sweep (audit): layer resolve_file + layfade layerName +
+-- eval/emb exp all reject the pair table from named params
+local Layer3 = require("kag.commands.layer")
+local calls3 = {}
+local be3 = _G._CAESURA_BACKEND
+_G._CAESURA_BACKEND = { render = function(cmd, ...)
+    if cmd == "load_texture" then calls3[#calls3 + 1] = { ... } end
+    return true end,
+    platform = function() return true end }
+local layers3 = package.loaded["layers"]
+package.loaded["layers"] = { get = function() return nil end,
+    add_layer = function() return { visible = true } end,
+    set_layer_opacity = function() end, mark_dirty = function() end }
+local ctxG = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+-- typo'd named param on [bg]: pair table must not reach load_texture
+pcall(Layer3.bg, ctxG, { { "storag", "x.png" } })
+check("layer resolve pair safe", #calls3 == 0)
+-- typo'd [layfade] layerName: no crash, no layer found
+local okLF = pcall(Layer3.layfade, ctxG, { { "layr", "bg" }, opacity = 128 })
+check("layfade pair safe", okLF)
+-- eval/emb exp: pair table must not become the expression
+local System3 = require("kag.commands.system")
+local okE = pcall(System3.eval, ctxG, { { "expp", "x" } })
+check("eval pair safe", okE)
+package.loaded["layers"] = layers3
+_G._CAESURA_BACKEND = be3
+
 if failed > 0 then os.exit(1) end
 print("AUDIO FADE TESTS DONE")

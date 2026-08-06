@@ -83,7 +83,11 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function SystemCommands.emb(ctx, params)
-    local exp = params.exp or params.code or params[1] or ""
+    local exp = params.exp or params.code
+    if type(exp) ~= "string" and type(params[1]) == "string" then
+        exp = params[1]
+    end
+    exp = exp or ""
     if #exp == 0 then return end
 
     -- Check if sandbox enforcement is active
@@ -166,7 +170,11 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function SystemCommands.eval(ctx, params)
-    local exp = params.exp or params.code or params[1] or ""
+    local exp = params.exp or params.code
+    if type(exp) ~= "string" and type(params[1]) == "string" then
+        exp = params[1]
+    end
+    exp = exp or ""
     if #exp == 0 then return end
 
     -- If not strict, let scheduler handle it inline (backward compat)
