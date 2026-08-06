@@ -3,7 +3,16 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (72)
+## Commands (77)
+
+### `[assert]`
+
+_Category: system · Blocking: no (fire-and-forget) · development-time assertion on an expression_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `exp` | string | - | - | yes |
+| `msg` | string | - | - | - |
 
 ### `[auto]`
 
@@ -20,6 +29,8 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible bg command
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `file` | string | - | - | - |
+| `layer` | string | bg | - | - |
+| `path` | string | - | - | - |
 | `storage` | string | - | - | - |
 
 ### `[bgm]`
@@ -171,7 +182,10 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible fg command
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+| `clear` | boolean | false | - | - |
 | `file` | string | - | - | - |
+| `layer` | string | fg | - | - |
+| `path` | string | - | - | - |
 | `storage` | string | - | - | - |
 
 ### `[flash]`
@@ -231,6 +245,15 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible image comm
 | `x` | number | - | - | - |
 | `y` | number | - | - | - |
 
+### `[inc]`
+
+_Category: system · Blocking: no (fire-and-forget) · increment a numeric variable (by default 1)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `by` | number | 1 | - | - |
+| `var` | string | - | - | yes |
+
 ### `[l]`
 
 _Category: text · Blocking: no (fire-and-forget) · line break_
@@ -280,6 +303,8 @@ _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `duration` | number | 300 | 0..30000 | - |
+| `layer` | string |  | - | - |
+| `name` | string |  | - | - |
 | `time` | number | 300 | 0..30000 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
@@ -446,6 +471,25 @@ _Category: text · Blocking: no (fire-and-forget) · carriage return_
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[random]`
+
+_Category: system · Blocking: no (fire-and-forget) · write a random integer into a variable_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `max` | number | 100 | - | - |
+| `min` | number | 0 | - | - |
+| `var` | string | - | - | yes |
+
+### `[replay]`
+
+_Category: system · Blocking: no (fire-and-forget) · input recording/playback control_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | string | - | - | - |
+| `mode` | string | - | - | yes |
+
 ### `[reset]`
 
 _Category: text · Blocking: no (fire-and-forget) · reset text state_
@@ -496,6 +540,15 @@ _Category: transition · Blocking: no (fire-and-forget) · KAG3-compatible scrol
 | `size` | number | 28 | 8..128 | - |
 | `speed` | number | 60 | 1..1000 | - |
 | `text` | string |  | - | - |
+
+### `[set]`
+
+_Category: system · Blocking: no (fire-and-forget) · typed variable assignment (f.x/sf.x/tf.x/mp.x/lf.x)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `value` | string | - | - | yes |
+| `var` | string | - | - | yes |
 
 ### `[setbgmvolume]`
 
@@ -578,6 +631,7 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopbgm co
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `fadeout` | number | 0 | 0..30000 | - |
+| `time` | number | 0 | 0..30000 | - |
 
 ### `[stopse]`
 
@@ -586,6 +640,7 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopse com
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `fadeout` | number | 0 | 0..30000 | - |
+| `time` | number | 0 | 0..30000 | - |
 
 ### `[text]`
 
@@ -620,6 +675,7 @@ _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible
 | `duration` | number | 500 | 0..30000 | - |
 | `method` | string | crossfade | - | - |
 | `time` | number | 500 | 0..30000 | - |
+| `type` | string | crossfade | - | - |
 
 ### `[vib]`
 
@@ -637,9 +693,11 @@ _Category: video · Blocking: yes (waits for completion) · KAG3-compatible vide
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `file` | string | - | - | yes |
+| **requires one of** | — | — | file, storage | yes |
+| `file` | string | - | - | - |
 | `h` | number | 0 | 0..8192 | - |
 | `loop` | boolean | false | - | - |
+| `storage` | string | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 | `w` | number | 0 | 0..8192 | - |
 | `x` | number | 0 | - | - |

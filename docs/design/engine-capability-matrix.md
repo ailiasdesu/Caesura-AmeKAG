@@ -107,7 +107,11 @@ graph LR
 | S2g | Modern utility commands (`[set]` typed, `[inc]`, `[random]`, `[assert]`) | system commands | ✓ |
 | S2h | Command metadata (category/blocking/desc on all 61 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
-| S2c | Parser performance (full-parse 1.37s -> ~0.9s; text-run batch skip ~37x, see test_benchmark.lua) | lpeg.lua | ✓ |
+| S2c | Parser performance (4000 tokens 362ms -> 259ms, 64.75ms/1000tok after dropping 9 redundant prefix patterns) | lpeg.lua | ✓ |
+| S2i | KAG scene-level debugger (breakpoints on scene+cmd/line, single-step, scope inspection; RPC kagSetBreakpoint/kagDebugContinue/kagDebugStep/kagInspectScopes) | `kag_debug.lua` + scheduler + RPC | ✓ |
+| S2j | Mod loader (scene/resource override by priority; mods/<name>/<path> wins over base; path-traversal guarded) | `mods.lua` + flow + resolve_file | ✓ |
+| S2k | Input recording/playback (auto-demo + regression; [replay] command, JSON persistence, choice coordinates) | `replay.lua` + kag_runner | ✓ |
+| S2l | Accessibility (closed captions for voiced lines, settings toggle, TTS interface probe) | text commands + settings | ✓ |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |

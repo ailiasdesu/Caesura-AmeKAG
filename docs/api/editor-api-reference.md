@@ -549,3 +549,25 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 - **接口文件**: `src/<module>/api/I<Name>.h`，纯虚类，不包含实现
 - **构建**: `cmake --build build --config Debug`
 - **测试**: `build/tests/Debug/CaesuraTests.exe --no-skip`（以当前 fresh build 输出为准）
+
+## 附录 B：KAG 场景调试 JSON-RPC 方法
+
+`--headless` / `--editor` 的 stdin/stdout JSON-RPC 除 Lua 调试器（`setBreakpoint`/`stepInto`/`inspectLocal`…）外，还提供 **KAG 场景层调试**（Lua 调试器看不到 KAG token）：
+
+| 方法 | 参数 | 说明 |
+|---|---|---|
+| `kagSetBreakpoint` | `scene`（必填）+ `cmd`（命令名）或 `line`（token 序号） | 设置场景断点；命中后调度器 yield `__kag_pause`，runner 停止推进 |
+| `kagClearBreakpoints` | `scene`（可选；缺省清全部） | 清除断点 |
+| `kagDebugContinue` | — | 恢复执行 |
+| `kagDebugStep` | — | 单步：下一个 token 前暂停 |
+| `kagInspectScopes` | `scope`（`f`/`sf`/`tf`/`mp`/`lf`/`all`，缺省 all） | 返回变量作用域 JSON |
+
+示例：
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"kagSetBreakpoint","params":{"scene":"assets/script/main.ks","cmd":"ch"}}
+{"jsonrpc":"2.0","id":2,"method":"kagDebugContinue"}
+{"jsonrpc":"2.0","id":3,"method":"kagInspectScopes","params":{"scope":"f"}}
+```
+
+Lua 侧 API：`require("kag_debug")`（`set_breakpoint`/`step`/`continue_run`/`inspect`/`serialize_json`）。运行中通过编辑器 `eval` 也可直接调用 `kag_runner.debug_resume()` / `kag_runner.debug_step()`。
