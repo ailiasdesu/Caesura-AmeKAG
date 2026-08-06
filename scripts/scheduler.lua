@@ -205,11 +205,14 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [jump]
         if cmd == "jump" then
+            -- bare [jump next.ks] -> params[1] (KAG3 syntax)
             local target = params.target or params.label or params.storage
+                          or params[1]
             if not target then
                 print("[WARN] [jump] missing target/label/storage parameter")
-            elseif params.target and target:sub(1,1) ~= "*" then
-                -- Cross-scene jump: load new scene file
+            elseif target:sub(1,1) ~= "*" then
+                -- Cross-scene jump: load new scene file (bare [jump x.ks]
+                -- and named target= both land here -- audit fix)
                 local path = "assets/script/" .. target
                 if not is_safe_scene_path(path) then
                     print("[WARN] [jump] blocked scene path: " .. path)
@@ -242,7 +245,8 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [call]
         elseif cmd == "call" then
-            local target = params.target or params.storage
+            -- bare [call next.ks] -> params[1]
+            local target = params.target or params.storage or params[1]
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
@@ -283,7 +287,8 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [link]
         elseif cmd == "link" then
             -- (index rebuilt below with the swapped stream)
-            local target = params.target or params.storage
+            -- bare [link next.ks] -> params[1]
+            local target = params.target or params.storage or params[1]
             -- Clear everything and jump
             ctx.layers = {}
             ctx.backlog = {}

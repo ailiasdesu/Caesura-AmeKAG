@@ -52,5 +52,32 @@ package.loaded["kag"] = kag_orig
 check("next token executes after block", #dispatched == 1
       and dispatched[1][2].text == "after")
 
+-- BARE [jump next.ks] (KAG3 syntax) reaches load_tokens with the safe
+-- path (audit: the cross-scene branch required params.target -- bare
+-- values fell into the intra-scene label search)
+local tokenizer = require("tokenizer")
+local toksB = tokenizer.parse("[jump next.ks]")
+local callsB = {}
+local ctxB2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function(path) callsB[#callsB + 1] = path
+        return { { "ch", {} } } end }
+local coB2 = coroutine.create(function() scheduler.run(ctxB2, toksB, 1) end)
+while coroutine.status(coB2) ~= "dead" do coroutine.resume(coB2) end
+check("bare jump routes cross-scene", callsB[1] == "assets/script/next.ks")
+
+-- bare traversal is still blocked by the allowlist
+local toksT = tokenizer.parse("[jump ../evil.ks]")
+local callsT = {}
+local ctxT = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function(path) callsT[#callsT + 1] = path
+        return { { "ch", {} } } end }
+local coT = coroutine.create(function() scheduler.run(ctxT, toksT, 1) end)
+while coroutine.status(coT) ~= "dead" do coroutine.resume(coT) end
+check("bare traversal still blocked", #callsT == 0)
+
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")
