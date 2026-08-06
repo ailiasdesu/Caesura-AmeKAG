@@ -133,7 +133,7 @@ local function normalize(raw_tokens)
         elseif typ == "label" then
             result[#result + 1] = { type = "label", name = t[2] }
         elseif typ == "iscript" then
-            result[#result + 1] = { type = "iscript", body = t[3] or "" }
+            result[#result + 1] = { type = "iscript", body = t[2] or "" }
         end
         ::continue::
     end
@@ -160,7 +160,7 @@ function tokenizer.parse_with_offsets(ks_text)
         local t = cap[2]                -- the token capture table
         local endpos = cap[3] or init   -- match end
         if type(t) == "table" and t[1] then
-            local tok = { offset = startpos }
+            local tok = { offset = startpos, end_offset = endpos - 1 }
             local typ = t[1]
             if typ == "cmd" then
                 tok.type = "command"; tok.cmd = t[2]; tok.params = t[3] or {}
