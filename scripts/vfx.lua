@@ -260,12 +260,20 @@ end
 -- VFX.flash(ctx, params) -- BLOCKING white/colored flash
 -- params: { time=200, r=255, g=255, b=255 }
 -- ===========================================================================
+-- Byte clamp for flash color components (security info: vfx flash fed
+-- script numbers straight to create_solid_texture -- "999" reached the
+-- backend unclamped; same pattern as the textbox clamp audit).
+local function clamp_byte(v)
+    v = math.floor(tonumber(v) or 0)
+    return math.max(0, math.min(255, v))
+end
+
 function VFX.flash(ctx, params)
     local isCoroutine = coroutine.isyieldable()
     local dur_ms = tonumber(params.time) or 200
-    local r = tonumber(params.r or params.red)   or 255
-    local g = tonumber(params.g or params.green) or 255
-    local b = tonumber(params.b or params.blue)  or 255
+    local r = clamp_byte(params.r or params.red or 255)
+    local g = clamp_byte(params.g or params.green or 255)
+    local b = clamp_byte(params.b or params.blue or 255)
     local elapsed_ms = 0
 
     -- Create flash layer if not exists
