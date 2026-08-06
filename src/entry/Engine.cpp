@@ -275,6 +275,15 @@ bool Engine::initPlatformPhase() {
     void* nwh = gpuMode ? m_platformBackend->getNativeWindowHandle() : nullptr;
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Native window handle: %p", nwh);
 
+    // Optional explicit GPU backend selection (e.g. "opengl", "vulkan").
+    if (m_config.renderBackend) {
+        if (!m_renderDevice->setPreferredBackend(m_config.renderBackend)) {
+            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
+                        "Unknown render backend requested: %s", m_config.renderBackend);
+            return false;
+        }
+    }
+
     if (!m_renderDevice->init(nwh, width, height)) {
         DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_RenderInitFailed,
                     "Render device init failed.");

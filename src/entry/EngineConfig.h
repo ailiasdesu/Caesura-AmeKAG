@@ -47,7 +47,8 @@ struct EngineConfig {
         , height(other.height)
         , headless(other.headless)
         , editorMode(other.editorMode)
-        , enableDebugger(other.enableDebugger) {}
+        , enableDebugger(other.enableDebugger)
+        , renderBackend(other.renderBackend) {}
 
     // Required core subsystems in GPU mode (Engine owns via unique_ptr)
     IRenderDevice*    render          = nullptr;
@@ -78,6 +79,10 @@ struct EngineConfig {
     bool              headless        = false;
     bool              editorMode      = false;
     bool              enableDebugger  = false;
+
+    // Optional GPU backend override for the render device, e.g. "opengl",
+    // "vulkan", "dx11", "dx12", "metal", "webgpu". nullptr = driver default.
+    const char*       renderBackend   = nullptr;
 };
 
 } // namespace Caesura

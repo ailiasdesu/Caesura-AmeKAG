@@ -548,6 +548,8 @@ int main(int argc, char* argv[]) {
     bool headless = false;
     bool editorMode = false;
     bool editorStdio = false;
+    // Optional GPU backend override: --backend <opengl|vulkan|dx11|dx12|metal|webgpu>
+    std::string renderBackend;
     // Editor auth token comes from the environment, not argv: argv is
     // world-readable via /proc/<pid>/cmdline on Linux, so a CLI flag would
     // not protect against other local users. Set CAESURA_EDITOR_TOKEN to
@@ -563,6 +565,8 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--editor-stdio") {
             editorMode = true;
             editorStdio = true;
+        } else if (arg == "--backend" && i + 1 < argc) {
+            renderBackend = argv[++i];
         }
     }
 
@@ -580,6 +584,7 @@ int main(int argc, char* argv[]) {
     config.headless   = headless;
     config.editorMode = editorMode;
     config.enableDebugger = headless || editorMode;
+    config.renderBackend  = renderBackend.empty() ? nullptr : renderBackend.c_str();
 
     // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
     if (!headless || editorMode) {
