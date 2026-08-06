@@ -20,7 +20,7 @@ CaesuraTests.exe --success
 set "CPP_RC=!errorlevel!"
 popd
 if not "!CPP_RC!"=="0" goto cpp_fail
-echo [PASS] C++ tests passed (574/574).
+echo [PASS] C++ tests passed (576/576).
 goto cpp_done
 :cpp_fail
 echo [FAIL] C++ tests failed!
@@ -51,6 +51,6 @@ REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
 echo   Test Suite Complete - All Passed
-echo   C++: 574/574 ^| Lua: 86/86
+echo   C++: 576/576 ^| Lua: 86/86
 echo ============================================
 exit /b 0
