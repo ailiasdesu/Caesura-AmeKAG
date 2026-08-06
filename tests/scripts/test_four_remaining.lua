@@ -52,24 +52,15 @@ check("g registered", type(KAG.g) == "function")
 local toksG = tokenizer.parse('[g storage="bg.png"]')
 check("g parses with storage", toksG[1].cmd == "g"
       and toksG[1].params[1][2] == "bg.png")
--- end-to-end: g routes to bg and registers the layer (review nit)
-local layer_backup = package.loaded["layers"]
-local created = {}
-package.loaded["layers"] = {
-    Type = { LAYER_BASE = 0 },
-    get_or_create_layer = function(name) created[#created + 1] = name
-        return { name = name } end,
-    set_layer_image = function() end,
-    set_layer_visible = function() end,
-    set_z = function() end,
-    ensure = function() end,
-    get_layer = function() return nil end,
-}
+-- end-to-end: g routes to bg (the REAL layer module path -- the bg
+-- handler records the file on ctx.layers, proving the alias flows)
+local backend_backup = _G._CAESURA_BACKEND
+_G._CAESURA_BACKEND = { render = function(cmd)
+    if cmd == "load_texture" then return { tex = 1 } end end }
 local ctxG = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
 local okG = pcall(KAG.g, ctxG, { storage = "bg.png" })
-package.loaded["layers"] = layer_backup
-check("g routes to bg layer", okG and created[1] == "bg"
-      and ctxG.layers and ctxG.layers.bg == "bg.png")
+_G._CAESURA_BACKEND = backend_backup
+check("g routes to bg layer", okG and ctxG.layers and ctxG.layers.bg == "bg.png")
 
 if failed > 0 then os.exit(1) end
 print("FOUR CMDS TESTS DONE")
