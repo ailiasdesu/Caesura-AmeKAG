@@ -59,7 +59,8 @@ coroutine.resume(co)
 check("texture cached on repeat", loads == 0)
 _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
-check("right to 3 loads once", loads == 1)
+-- open rendered index 1 (1 load) + this navigation to index 3 (1 load)
+check("right to 3 loads once", loads == 2)
 _G._GAME_KEY_ESC = true
 coroutine.resume(co)
 check("esc closes", coroutine.status(co) == "dead" and ctx.galleryState == nil)
