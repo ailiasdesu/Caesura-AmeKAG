@@ -96,6 +96,25 @@ while coroutine.status(coT2) ~= "dead" do
 end
 check("typo param no crash", okT2 and #callsT2 == 0)
 
+-- typo'd named params on call/link must WARN, not crash (review warn:
+-- nil target reached "assets/script/" .. nil -- threw)
+for _, c in ipairs({ "call", "link" }) do
+    local tT = tokenizer.parse("[" .. c .. " storag=next.ks]")
+    local callsT3 = {}
+    local ctxT3 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+        current_scene = "assets/script/main.ks", label_index = {},
+        load_tokens = function(path) callsT3[#callsT3 + 1] = path
+            return { { "ch", {} } } end }
+    local coT3 = coroutine.create(function() scheduler.run(ctxT3, tT, 1) end)
+    local okT3 = true
+    while coroutine.status(coT3) ~= "dead" do
+        local r, e = coroutine.resume(coT3)
+        if not r then okT3 = false break end
+    end
+    check("[" .. c .. "] typo no crash", okT3 and #callsT3 == 0)
+end
+
 -- bare [call] and [link] route cross-scene too
 for _, c in ipairs({ "call", "link" }) do
     local tC = tokenizer.parse("[" .. c .. " next.ks]")

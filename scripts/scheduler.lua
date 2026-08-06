@@ -250,6 +250,10 @@ function scheduler.run(ctx, tokens, start_index)
             -- bare [call next.ks] -> params[1] (string-only guard)
             local target = params.target or params.storage
             if type(params[1]) == "string" then target = target or params[1] end
+            if not target then
+                print("[WARN] [call] missing target/storage parameter")
+                target = ""
+            end
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
@@ -293,6 +297,10 @@ function scheduler.run(ctx, tokens, start_index)
             -- bare [link next.ks] -> params[1] (string-only guard)
             local target = params.target or params.storage
             if type(params[1]) == "string" then target = target or params[1] end
+            if not target then
+                print("[WARN] [link] missing target/storage parameter")
+                target = ""
+            end
             -- Clear everything and jump
             ctx.layers = {}
             ctx.backlog = {}
