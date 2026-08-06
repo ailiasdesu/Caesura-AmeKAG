@@ -144,6 +144,9 @@ private:
     bool         m_animationInitialized = false;
     unsigned int m_audioVoiceCompletionsPending = 0;
     int  m_gcFrameCounter = 0;
+    // Rendered-frame counter; when m_config.frameLimit > 0 the main loop
+    // stops deterministically after that many frames (--frames N).
+    uint32_t m_frameCount = 0;
     bool         m_deviceRecoveryPaused = false;
     bool         m_skipLuaCallbacksThisFrame = false;
     static void* luaAllocHook(void* ud, void* ptr, size_t osize, size_t nsize);

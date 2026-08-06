@@ -714,6 +714,16 @@ void Engine::run(const OwnerPump& ownerPump) {
                 }
             }
         }
+
+        // -- Deterministic frame limit (--frames N): lets CI drive a real
+        // GPU window for N frames, then exits cleanly with code 0. --
+        if (m_config.frameLimit > 0 &&
+            ++m_frameCount >= m_config.frameLimit) {
+            DEBUG_INFO(SubSys::Engine, ErrCode::Ok,
+                       "Frame limit reached (%u frames); exiting.",
+                       m_config.frameLimit);
+            m_running = false;
+        }
     }
 
 }

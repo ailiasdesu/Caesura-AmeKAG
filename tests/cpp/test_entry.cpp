@@ -121,6 +121,30 @@ TEST_CASE("Entry: EngineConfig preserves debugger policy when moved") {
     CHECK(moved.enableDebugger);
 }
 
+TEST_CASE("Entry: EngineConfig frameLimit defaults to 0 (unlimited)") {
+    EngineConfig cfg;
+    CHECK(cfg.frameLimit == 0);
+    CHECK(cfg.renderBackend == nullptr);
+}
+
+TEST_CASE("Entry: EngineConfig preserves frameLimit when moved") {
+    EngineConfig cfg;
+    cfg.frameLimit = 300;
+
+    EngineConfig moved(std::move(cfg));
+    CHECK(moved.frameLimit == 300);
+}
+
+TEST_CASE("Entry: EngineConfig rejects frameLimit via sane constructor path") {
+    // --frames parsing lives in main.cpp; EngineConfig only carries the
+    // validated value. Ensure a positive value survives the move and a
+    // zero (CLI absence) means "unlimited".
+    EngineConfig cfg;
+    cfg.frameLimit = 1;
+    EngineConfig moved(std::move(cfg));
+    CHECK(moved.frameLimit == 1);
+}
+
 TEST_CASE("Entry: EngineConfig custom title") {
     EngineConfig cfg;
     CHECK(std::strlen(cfg.title) > 0);

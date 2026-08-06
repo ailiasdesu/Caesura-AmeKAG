@@ -48,7 +48,8 @@ struct EngineConfig {
         , headless(other.headless)
         , editorMode(other.editorMode)
         , enableDebugger(other.enableDebugger)
-        , renderBackend(other.renderBackend) {}
+        , renderBackend(other.renderBackend)
+        , frameLimit(other.frameLimit) {}
 
     // Required core subsystems in GPU mode (Engine owns via unique_ptr)
     IRenderDevice*    render          = nullptr;
@@ -83,6 +84,10 @@ struct EngineConfig {
     // Optional GPU backend override for the render device, e.g. "opengl",
     // "vulkan", "dx11", "dx12", "metal", "webgpu". nullptr = driver default.
     const char*       renderBackend   = nullptr;
+
+    // Maximum frames to render before Engine::run() exits (0 = unlimited).
+    // Enables deterministic, CI-reproducible GPU smoke runs via --frames N.
+    uint32_t          frameLimit      = 0;
 };
 
 } // namespace Caesura

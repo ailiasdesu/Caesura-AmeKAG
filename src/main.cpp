@@ -550,6 +550,8 @@ int main(int argc, char* argv[]) {
     bool editorStdio = false;
     // Optional GPU backend override: --backend <opengl|vulkan|dx11|dx12|metal|webgpu>
     std::string renderBackend;
+    // Optional deterministic frame limit: --frames N (GPU smoke runs; 0 = unlimited)
+    uint32_t frameLimit = 0;
     // Editor auth token comes from the environment, not argv: argv is
     // world-readable via /proc/<pid>/cmdline on Linux, so a CLI flag would
     // not protect against other local users. Set CAESURA_EDITOR_TOKEN to
@@ -567,6 +569,15 @@ int main(int argc, char* argv[]) {
             editorStdio = true;
         } else if (arg == "--backend" && i + 1 < argc) {
             renderBackend = argv[++i];
+        } else if (arg == "--frames" && i + 1 < argc) {
+            char* end = nullptr;
+            const long v = strtol(argv[++i], &end, 10);
+            if (end && *end == '\0' && v > 0 && v <= 1000000L) {
+                frameLimit = static_cast<uint32_t>(v);
+            } else {
+                fprintf(stderr, "Invalid --frames value: %s\n", argv[i]);
+                return 1;
+            }
         }
     }
 
@@ -585,6 +596,7 @@ int main(int argc, char* argv[]) {
     config.editorMode = editorMode;
     config.enableDebugger = headless || editorMode;
     config.renderBackend  = renderBackend.empty() ? nullptr : renderBackend.c_str();
+    config.frameLimit     = frameLimit;
 
     // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
     if (!headless || editorMode) {
