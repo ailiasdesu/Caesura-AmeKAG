@@ -63,7 +63,7 @@ Schema.define("playbgm", {
 | 5 | position, layopt, fadeout |
 | 6 | particles（22 参数） |
 
-## 四、收益
+## 五、收益
 
 - **可靠性**：坏参数从"静默错误"变"定位报错"（crafted/typo 脚本快速暴露）
 - **可维护性**：命令契约集中声明，处理体只读类型化参数（tonumber 减少 40+ 处）
