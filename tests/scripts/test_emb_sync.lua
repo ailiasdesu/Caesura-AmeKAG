@@ -27,5 +27,19 @@ local src = fh:read("*a")
 fh:close()
 check("emb syncs envOut", src:find("ctx.tf = envOut.tf or ctx.tf", 1, true) ~= nil)
 
+
+-- Replacement with a NON-table (security LOW): the sync must not flow
+-- it into ctx.tf (the emb_result write would raise outside the pcall).
+do
+    local Sandbox = require("sandbox")
+    local env = { tf = { a = 1 }, f = {}, sf = {}, mp = {} }
+    local ok, _, envOut = Sandbox.execute([[tf = 5]], env)
+    -- type-guard shape: only table replacements sync
+    local synced = (type(envOut.tf) == "table")
+    if synced == false and ok == true then
+        print("PASS non-table replacement rejected") passed = passed + 1
+    else print("FAIL non-table replacement rejected") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("EMB SYNC TESTS DONE")

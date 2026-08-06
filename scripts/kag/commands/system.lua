@@ -79,12 +79,15 @@ function SystemCommands.emb(ctx, params)
 
         local ok, result, envOut = getSandbox().execute(exp, env)
 
-        -- Sync back any mutations to the environment
+        -- Sync back any mutations to the environment. Type-guarded
+        -- (security LOW): a script REPLACING tf with a non-table would
+        -- flow it into ctx.tf and the emb_result write below would raise
+        -- OUTSIDE the sandbox pcall.
         if envOut then
-            ctx.tf = envOut.tf or ctx.tf
-            ctx.f  = envOut.f  or ctx.f
-            ctx.sf = envOut.sf or ctx.sf
-            ctx.mp = envOut.mp or ctx.mp
+            if type(envOut.tf) == "table" then ctx.tf = envOut.tf end
+            if type(envOut.f) == "table" then ctx.f = envOut.f end
+            if type(envOut.sf) == "table" then ctx.sf = envOut.sf end
+            if type(envOut.mp) == "table" then ctx.mp = envOut.mp end
         end
 
         if ok then
