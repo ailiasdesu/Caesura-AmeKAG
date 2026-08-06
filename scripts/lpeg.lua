@@ -79,9 +79,18 @@ function Pattern:__pow(n)
         -- escape pattern specials: sets containing ] or [
         -- (e.g. the tokenizer whitespace set) would break the class
         local set = pat._excludeSet:gsub("(%W)", "%%%1")
+        local min_one = (n == 1)
         return lpeg.P(function(s, pos)
             local stop = s:find("[" .. set .. "]", pos)
-            if stop then return { stop } end
+            if stop then
+                -- ^1 must consume AT LEAST one char: a stop AT pos is a
+                -- zero-width success -- the per-char loop failed there
+                -- (review blocking: [cmd k=v ] gained an empty bare
+                -- param; [cmd x=] parsed as empty instead of failing)
+                if min_one and stop == pos then return nil end
+                return { stop }
+            end
+            if min_one and pos > #s then return nil end
             return { #s + 1 }
         end)
     end
