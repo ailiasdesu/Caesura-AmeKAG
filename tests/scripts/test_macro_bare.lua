@@ -73,7 +73,7 @@ local ok4 = pcall(function()
 end)
 package.loaded["kag"] = kag_orig
 check("mismatch no crash", ok4)
-check("literal kept", dispatched4[1] and dispatched4[1][2].text == "p=%%1%%")
+check("literal kept", dispatched4[1] and dispatched4[1][2].text == "p=%1%")
 
 if failed > 0 then os.exit(1) end
 print("MACRO BARE TESTS DONE")
