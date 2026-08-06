@@ -72,6 +72,7 @@ local tests = {
     "test_ch_state",
     "test_playbgmstop",
     "test_layout",
+    "test_resolve",
 }
 
 local passed, failed = 0, 0
