@@ -91,5 +91,19 @@ check("particles clear ok", okClear and ctxP._particleEmitters ~= nil
       and next(ctxP._particleEmitters) == nil)
 _G.VFX = vfx_backup
 
+-- layfade scale (audit): <=1 treated as 0..1 fraction, >1 as 0..255
+local Layer2 = require("kag.commands.layer")
+local targets = {}
+local layers_b = package.loaded["layers"]
+package.loaded["layers"] = { get = function() return { opacity = 255 } end,
+    fade_to = function(node, t) targets[#targets + 1] = t end,
+    set_layer_opacity = function() end }
+pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }, { opacity = 0.5 })
+check("layfade fraction scaled", targets[1] == 127)
+targets = {}
+pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }, { opacity = 128 })
+check("layfade 0-255 passthrough", targets[1] == 128)
+package.loaded["layers"] = layers_b
+
 if failed > 0 then os.exit(1) end
 print("FADEOUT TESTS DONE")

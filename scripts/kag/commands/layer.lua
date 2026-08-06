@@ -302,8 +302,15 @@ function LayerCommands.layfade(ctx, params)
     end
     local target = params.opacity or params.alpha
     if not target then
-        print("[LayerCmd] layfade: opacity (0-255) required")
+        print("[LayerCmd] layfade: opacity required")
         return
+    end
+    -- Scale ambiguity (audit): layopt's schema is 0..1 but fade_to /
+    -- set_layer_opacity operate in 0..255. Accept BOTH: values <= 1
+    -- are treated as 0..1 fractions (0.5 -> 128), larger values pass
+    -- through as 0..255 (legacy [layfade opacity=128]). Non-breaking.
+    if target <= 1 then
+        target = math.floor(target * 255)
     end
     local duration = params.time or params.duration or 500
     layers.fade_to(node, target, duration)
