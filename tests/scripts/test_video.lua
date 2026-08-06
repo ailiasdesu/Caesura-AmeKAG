@@ -38,7 +38,7 @@ _G._CAESURA_BACKEND = { render = function(cmd, ...)
     return true end }
 local ctxV = { f = {}, tf = {}, sf = {}, mp = {}, variables = {}, viewport = { width = 1280, height = 720 } }
 local okV = pcall(Video2.video, ctxV, { file = "a.mpg", loop = "true", time = 1 })
-check("loop string tolerated", okV and v_calls[1] and v_calls[1][3] == true)
+check("loop string tolerated", okV and v_calls[1] and v_calls[1][2].loop == true)
 _G._CAESURA_BACKEND = be2
 
 local okF = pcall(KAG.fadeout, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
