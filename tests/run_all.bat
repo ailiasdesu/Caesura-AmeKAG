@@ -36,7 +36,7 @@ if exist "%LUA%" (
         echo [FAIL] Lua tests failed!
         exit /b 1
     )
-    echo [PASS] Lua tests passed (18/18).
+    echo [PASS] Lua tests passed (45/45).
 ) else (
     echo [SKIP] lua.exe not found at %LUA%
 )
