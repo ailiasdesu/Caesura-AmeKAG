@@ -714,8 +714,12 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [macro] / [endmacro]
         elseif cmd == "macro" then
             -- bare [macro m args=...] -> params[1] (KAG3 syntax: the
-            -- macro name is a positional arg -- audit fix)
-            local name = params.name or params[1]
+            -- macro name is a positional arg -- audit fix); string-only
+            -- guard (named-only params leave a pair table at params[1])
+            local name = params.name
+            if type(name) ~= "string" and type(params[1]) == "string" then
+                name = params[1]
+            end
             -- Collect macro body until [endmacro]
             local body = {}
             i = i + 1
@@ -742,8 +746,11 @@ function scheduler.run(ctx, tokens, start_index)
             end
 
         elseif cmd == "erasemacro" then
-            -- bare [erasemacro m] -> params[1]
-            local name = params.name or params[1]
+            -- bare [erasemacro m] -> params[1] (string-only guard)
+            local name = params.name
+            if type(name) ~= "string" and type(params[1]) == "string" then
+                name = params[1]
+            end
             if name and ctx.macros then
                 ctx.macros[name] = nil
                 if ctx.macro_args then ctx.macro_args[name] = nil end
