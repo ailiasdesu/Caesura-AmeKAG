@@ -74,6 +74,7 @@ local tests = {
     "test_layout",
     "test_resolve",
     "test_sprite_family",
+    "test_toast",
 }
 
 local passed, failed = 0, 0

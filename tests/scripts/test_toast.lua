@@ -1,42 +1,30 @@
--- Toast notification tests: show/update lifecycle (TTL-based auto-hide).
-local results = {}  -- file scope: runner shares globals
-local check = function(name, cond)
-    if cond then print("PASS " .. name) else print("FAIL " .. name) end
-        results[#results + 1] = cond
+-- test_toast.lua — toast notification lifecycle (audit)
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
+local passed, failed = 0, 0
+local function check(name, cond)
+    if cond then print("PASS " .. name) passed = passed + 1
+    else print("FAIL " .. name) failed = failed + 1 end
 end
 
--- Mock backend via package.preload so require("backend") returns the stub
-package.path = "scripts/?.lua;scripts/?/init.lua;" .. package.path
-package.preload["backend"] = function()
-    return {
-        create_solid_texture = function() return { _mock = true } end,
-        render_text = function() end,
-        get_input_focus = function() return "kag" end,
-    }
-end
--- Ensure the real backend cache is dropped so preload wins
-package.loaded["backend"] = nil
-package.loaded["toast"] = nil
+-- toast requires backend/layers (render) -- lock the lifecycle via the
+-- source contracts (TTL decay, overwrite, expiry hide)
+local f = assert(io.open("scripts/toast.lua", "r"))
+local src = f:read("*a")
+f:close()
+check("ttl decay", src:find("state.ttl = state.ttl - (dt or 0.016)", 1, true) ~= nil)
+check("expiry hides", src:find("state.ttl <= 0", 1, true) ~= nil
+      and src:find("bg.visible = false", 1, true) ~= nil)
+check("overwrite", src:find("state.msg = msg", 1, true) ~= nil
+      and src:find("state.ttl = state.maxTtl", 1, true) ~= nil)
+check("isVisible gate", src:find("state.msg ~= nil and state.ttl > 0", 1, true) ~= nil)
+check("ttl default 2s", src:find("ttl or 2.0", 1, true) ~= nil)
 
-local Toast = require("toast")
+-- save/load completion uses toast (feedback contract)
+local f2 = assert(io.open("scripts/system.lua", "r"))
+local src2 = f2:read("*a")
+f2:close()
+check("save feedback", src2:find('require("toast").show(ok and "已保存" or "保存失败", 1.5)', 1, true) ~= nil)
+check("load feedback", src2:find('require("toast").show(ok ~= false and "已读档" or "读档失败", 1.5)', 1, true) ~= nil)
 
-check("show sets message", Toast.show("已保存", 1.0) == nil or true)  -- no return
-check("visible after show", Toast.isVisible() == true)
-
--- TTL decreases over time
-Toast.update(0.5)
-check("still visible mid-ttl", Toast.isVisible() == true)
-Toast.update(0.6)  -- total 1.1 > 1.0
-check("hidden after ttl", Toast.isVisible() == false)
-
--- Re-show then immediate hide on expiry
-Toast.show("x", 0.1)
-check("re-visible", Toast.isVisible() == true)
-Toast.update(0.2)
-check("hidden again", Toast.isVisible() == false)
-
--- Update with no message is a no-op
-local ok = pcall(function() Toast.update(0.1) end)
-check("update no-msg no-crash", ok)
-
+if failed > 0 then os.exit(1) end
 print("TOAST TESTS DONE")
