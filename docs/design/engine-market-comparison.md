@@ -3,7 +3,7 @@
 
 > **Historical snapshot (2026-08-03).** Capability counts cited here (68 commands /
 > 43 capabilities) predate the Neo-Genesis contract system. Current authoritative
-> numbers: 72 contract commands (`docs/api/command-contracts.md`) and 52 capabilities
+> numbers: 72 contract commands (`docs/api/command-contracts.md`) and 54 capabilities
 > (`docs/design/engine-capability-matrix.md`).
 
 > 调研记录：基于 AGENTS.md/CLAUDE.md、docs/design/engine-capability-matrix.md、
