@@ -175,6 +175,8 @@ function VFXCommands.particles(ctx, params)
             lifeMax = tonumber(params.lifeMax or params.life_max) or 2.0,
             speedMin = tonumber(params.speedMin or params.speed_min) or 10,
             speedMax = tonumber(params.speedMax or params.speed_max) or 50,
+            sizeMin = tonumber(params.sizeMin or params.size_min) or 1,
+            sizeMax = tonumber(params.sizeMax or params.size_max) or 8,
             angleMin = tonumber(params.angleMin or params.angle_min) or 0,
             angleMax = tonumber(params.angleMax or params.angle_max) or 6.283,
             r = tonumber(params.r or params.red) or 1,
@@ -196,7 +198,10 @@ function VFXCommands.particles(ctx, params)
         backend.particles_destroy_emitter(emitter)
         if ctx._particleEmitters then ctx._particleEmitters[emitter] = nil end
     elseif action == "clear" then
-        backend.particles_clear()
+        -- the backend name is clear_particles (review blocking: the
+        -- nonexistent particles_clear crashed every [particles
+        -- action=clear])
+        backend.clear_particles()
         if ctx._particleEmitters then ctx._particleEmitters = {} end
     end
 end
