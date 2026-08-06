@@ -180,11 +180,10 @@ function SystemCommands.eval(ctx, params)
 
     if ok then
         if type(ctx.tf) ~= "table" then ctx.tf = {} end
-        ctx.tf = ctx.tf or {}
         ctx.tf.eval_result = result
     else
         print("[SystemCmd] eval error: " .. tostring(result))
-        ctx.tf = ctx.tf or {}
+        if type(ctx.tf) ~= "table" then ctx.tf = {} end
         ctx.tf.eval_result = nil
     end
 end
