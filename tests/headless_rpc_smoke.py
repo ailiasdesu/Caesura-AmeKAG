@@ -126,6 +126,34 @@ try:
     time.sleep(0.5)
     r = request({"id": 8, "method": "eval", "code": "return 7 + 7"})
     check("eval-after-failing-run", r.get("status") == "ok" and r.get("result") == "14")
+
+    # ---- KAG scene-level debugger (Neo-Genesis) ---------------------------
+    r = request({"id": 9, "method": "kagSetBreakpoint",
+                 "params": {"scene": "assets/script/main.ks", "cmd": "ch"}})
+    check("kag-set-breakpoint", r.get("status") == "ok" and r.get("result") == "true")
+
+    r = request({"id": 10, "method": "kagSetBreakpoint",
+                 "params": {"scene": "assets/script/main.ks", "line": 42}})
+    check("kag-set-breakpoint-line", r.get("status") == "ok")
+
+    r = request({"id": 11, "method": "kagSetBreakpoint",
+                 "params": {"scene": "assets/script/main.ks"}})
+    check("kag-bad-breakpoint-rejected", r.get("error") is not None)
+
+    r = request({"id": 12, "method": "kagInspectScopes", "params": {"scope": "f"}})
+    check("kag-inspect-scope", r.get("status") == "ok")
+
+    r = request({"id": 13, "method": "kagInspectScopes"})
+    check("kag-inspect-all", r.get("status") == "ok")
+
+    r = request({"id": 14, "method": "kagDebugStep"})
+    check("kag-debug-step", r.get("status") == "ok")
+
+    r = request({"id": 15, "method": "kagDebugContinue"})
+    check("kag-debug-continue", r.get("status") == "ok")
+
+    r = request({"id": 16, "method": "kagClearBreakpoints"})
+    check("kag-clear-breakpoints", r.get("status") == "ok")
 finally:
     try:
         proc.stdin.close()

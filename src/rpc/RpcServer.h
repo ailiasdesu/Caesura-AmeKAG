@@ -64,6 +64,12 @@ private:
     std::string handleInspectGlobal(int id, const std::string& name);
     std::string handleGetDebugState(int id);
 
+    // KAG scene-level debugger: dispatch helper (defined in RpcServer.cpp).
+    std::string handleKagDebug(int id, const std::string& scene,
+                               const std::string& cmd, int line,
+                               const std::string& action,
+                               const std::string& scope);
+
     RpcReply dispatchRequest(RpcRequest request) const;
     std::string replyError(int id, const RpcReply& reply) const;
 

@@ -9,6 +9,8 @@
 local kag        = require("kag")
 local tokenizer  = require("tokenizer")
 local scheduler  = require("scheduler")
+local kag_debug  = require("kag_debug")   -- KAG scene debugger (preload for sandbox)
+local kag_runner = require("kag_runner")  -- KAG coroutine bridge (preload for sandbox)
 local flow       = require("flow")
 
 -- Graphics

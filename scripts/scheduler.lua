@@ -163,6 +163,7 @@ function scheduler.run(ctx, tokens, start_index)
 
     local kag = require("kag")
     local operation = require("kag.operation")
+    local kagDebug = require("kag_debug")
     start_index = start_index or 1
 
     local i = start_index
@@ -174,6 +175,18 @@ function scheduler.run(ctx, tokens, start_index)
         -- hand-built token streams may not be -- normalize defensively.
         if cmd == "elsif" then cmd = "elseif" end
         local params = tok[2] or {}
+
+        -- KAG scene debugger (Neo-Genesis): breakpoint/step check BEFORE
+        -- dispatch. A hit yields "__kag_pause" and waits for the runner
+        -- (or RPC) to resume with "continue" or "step"); the token is then
+        -- executed as usual. Zero cost when no breakpoints are armed.
+        if kagDebug.check(ctx, cmd, i) == "pause" then
+            kagDebug.set_paused(true)
+            local resume_act = coroutine.yield("__kag_pause")
+            kagDebug.set_paused(false)
+            if resume_act == "step" then kagDebug.step() end
+            if ctx.stop_flag then return end
+        end
 
         -- Check stop flag
         if ctx.stop_flag then return end

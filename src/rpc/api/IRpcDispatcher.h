@@ -71,6 +71,18 @@ struct RpcInspectGlobalRequest {
 
 struct RpcGetDebugStateRequest {};
 
+// KAG scene-level debugger (Neo-Genesis): breakpoints on scene+command
+// or scene+line, continue/step, and variable-scope inspection. The Lua
+// debugger (DebugProtocol) cannot see KAG tokens; these operations drive
+// the kag_debug.lua API through the Lua state.
+struct RpcKagDebugRequest {
+    std::string action;   // setBreakpoint | clearBreakpoints | continue | step | inspect
+    std::string scene;    // setBreakpoint / clearBreakpoints (exact scheduler scene path)
+    std::string cmd;      // setBreakpoint: command name (mutually exclusive with line)
+    int line = 0;         // setBreakpoint: 1-based token line
+    std::string scope;    // inspect: f | sf | tf | mp | lf | all (default all)
+};
+
 using RpcRequestPayload = std::variant<
     RpcStatusRequest,
     RpcRunScriptRequest,
@@ -86,7 +98,8 @@ using RpcRequestPayload = std::variant<
     RpcDebugResumeRequest,
     RpcInspectLocalRequest,
     RpcInspectGlobalRequest,
-    RpcGetDebugStateRequest>;
+    RpcGetDebugStateRequest,
+    RpcKagDebugRequest>;
 
 struct RpcRequest {
     RpcRequestPayload payload;
@@ -104,6 +117,12 @@ struct RpcStatusResult {
 };
 
 struct RpcEvaluateResult {
+    std::string value;
+};
+
+// KAG scene debugger result: inspect returns a JSON object describing the
+// requested variable scope(s); other actions return "ok".
+struct RpcKagDebugResult {
     std::string value;
 };
 
@@ -147,7 +166,8 @@ using RpcReplyPayload = std::variant<
     RpcFrameResult,
     RpcAnimationResult,
     RpcInspectionResult,
-    RpcDebugStateResult>;
+    RpcDebugStateResult,
+    RpcKagDebugResult>;
 
 struct RpcReply {
     RpcReplyStatus status = RpcReplyStatus::Unavailable;

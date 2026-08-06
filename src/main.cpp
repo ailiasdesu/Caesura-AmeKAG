@@ -156,6 +156,8 @@ private:
                 return startManagedRun(operation.script);
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcEvaluateRequest>) {
                 return evaluate(operation.code);
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcKagDebugRequest>) {
+                return kagDebugAction(operation);
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcStopRequest>) {
                 abortManagedRuns();
                 m_engine.quit();
@@ -343,13 +345,104 @@ private:
         int slot = 0;
     };
 
-    Caesura::RpcReply evaluate(const std::string& code) {
+    Caesura::RpcReply kagDebugAction(const Caesura::RpcKagDebugRequest& op) {
+        // Drive the kag_debug.lua API through the Lua state. Each action
+        // maps to a small Lua snippet so the editor never touches raw
+        // Lua; results (inspect) come back as JSON text.
         lua_State* L = m_engine.lua().state();
         if (!L) {
             return rpcError(Caesura::RpcReplyStatus::Unavailable,
                             "lua_unavailable", "Lua VM is unavailable");
         }
+        std::string code;
+        if (op.action == "setBreakpoint") {
+            if (op.scene.empty()
+                || (op.cmd.empty() && op.line <= 0)) {
+                return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                "invalid_kag_breakpoint",
+                                "scene plus cmd (string) or line (int) required");
+            }
+            code = "local kd = require('kag_debug'); "
+                   "return tostring(kd.set_breakpoint("
+                   + luaQuote(op.scene) + ", "
+                   + (op.cmd.empty()
+                       ? std::to_string(op.line)
+                       : luaQuote(op.cmd))
+                   + "))";
+        } else if (op.action == "clearBreakpoints") {
+            code = "local kd = require('kag_debug'); kd.clear_breakpoints("
+                   + (op.scene.empty() ? "nil" : luaQuote(op.scene)) + "); "
+                   + "return 'ok'";
+        } else if (op.action == "continue") {
+            code = "local kr = require('kag_runner'); "
+                   "local ok = pcall(kr.debug_resume); "
+                   "return ok and 'ok' or 'runner-not-ready'";
+        } else if (op.action == "step") {
+            code = "local kr = require('kag_runner'); "
+                   "local ok = pcall(kr.debug_step); "
+                   "return ok and 'ok' or 'runner-not-ready'";
+        } else if (op.action == "inspect") {
+            code = "local kd = require('kag_debug'); "
+                   "local ctx = require('kag_runner').get_ctx(); "
+                   "if not ctx then return '{}' end; "
+                   "return kd.serialize_json(ctx, "
+                   + (op.scope.empty() ? "nil" : luaQuote(op.scope)) + ")";
+        } else {
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "unknown_kag_debug_action",
+                            ("unknown action: " + op.action).c_str());
+        }
+
         const int top = lua_gettop(L);
+        if (luaL_loadstring(L, code.c_str()) != LUA_OK) {
+            const char* err = lua_tostring(L, -1);
+            const std::string msg = err ? err : "compile error";
+            lua_settop(L, top);
+            return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                            "kag_debug_compile_error", msg.c_str());
+        }
+        const int callStatus = lua_pcall(L, 0, 1, 0);
+        if (callStatus != LUA_OK) {
+            const char* err = lua_tostring(L, -1);
+            const std::string msg = err ? err : "kag debug action failed";
+            lua_settop(L, top);
+            return rpcError(Caesura::RpcReplyStatus::Failed,
+                            "kag_debug_error", msg.c_str());
+        }
+        std::string value = "nil";
+        if (!lua_isnil(L, -1)) {
+            size_t len = 0;
+            const char* str = luaL_tolstring(L, -1, &len);
+            if (str) value.assign(str, len);
+        }
+        lua_settop(L, top);
+        Caesura::RpcReply reply = rpcOk();
+        reply.payload = Caesura::RpcKagDebugResult{std::move(value)};
+        return reply;
+    }
+
+    // Quote a string as a Lua literal (single-quoted with escapes).
+    static std::string luaQuote(const std::string& s) {
+        std::string out = "'";
+        for (char c : s) {
+            switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '\'': out += "\\'"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            default: out += c; break;
+            }
+        }
+        out += "'";
+        return out;
+    }
+
+    Caesura::RpcReply evaluate(const std::string& code) {
+        lua_State* L = m_engine.lua().state();
+        if (!L) {
+            return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                            "lua_unavailable", "Lua VM is unavailable");
+        }        const int top = lua_gettop(L);
         if (luaL_loadstring(L, code.c_str()) != LUA_OK) {
             const char* err = lua_tostring(L, -1);
             const std::string msg = err ? err : "compile error";

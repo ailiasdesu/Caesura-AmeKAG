@@ -36,7 +36,7 @@ function kag_runner.resolve_label_index(ctx, label)
     return idx
 end
 
--- Resolve a "*label" choice target and stage the resume on ctx. The
+--- Resolve a "*label" choice target and stage the resume on ctx. The
 -- update() branch calls this; tests call the same function so a broken
 -- call site cannot pass CI (review warn).
 -- Returns true when the label was found and ctx.token_index was staged.
@@ -95,6 +95,26 @@ local function close_scheduler_coroutine()
     return closed, close_error
 end
 
+-- KAG scene debugger resume entry points (called from the RPC eval
+-- channel / editor): clear the runner's pause flag and let the scheduler
+-- continue. continue_run() just resumes; step() arms a one-token pause.
+function kag_runner.debug_resume()
+    if ctx then ctx._kag_debug_paused = false end
+    require("kag_debug").continue_run()
+    return true
+end
+
+function kag_runner.debug_step()
+    if ctx then ctx._kag_debug_paused = false end
+    require("kag_debug").step()
+    return true
+end
+
+--- kag_runner.get_ctx() — expose the live KAG context (RPC inspection).
+function kag_runner.get_ctx()
+    return ctx
+end
+
 local function resume_scheduler(origin, value)
     if not kag_co then return false, "not-running" end
     if coroutine.status(kag_co) == "dead" then return false, "dead" end
@@ -121,6 +141,17 @@ local function resume_scheduler(origin, value)
         end
         return false, result
     end
+    -- KAG scene debugger pause: the scheduler yielded "__kag_pause"
+    -- (breakpoint/step hit). Stop advancing until the editor resumes
+    -- (KAGDebug.continue_run/step from RPC); update() checks the flag.
+    if result == "__kag_pause" then
+        ctx._kag_debug_paused = true
+        local kagDebug = require("kag_debug")
+        kagDebug.set_paused(true)
+        return true, "kag-paused"
+    end
+    -- DebugProtocol resume notification: the anchored coroutine was
+    -- advanced directly; report the same state the caller expects.
     return true, result
 end
 
@@ -262,6 +293,13 @@ local auto_advance_ms = 0  -- accumulated ms before auto-mode advances
 
 function kag_runner.update(dt)
     if not kag_co then return false, "not-running" end
+    -- KAG scene debugger pause: while a breakpoint/step holds the
+    -- scheduler, do not advance. The editor resumes by calling
+    -- KAGDebug.continue_run() (or KAGDebug.step()) via RPC; the next
+    -- update() then resumes the coroutine normally.
+    if ctx and ctx._kag_debug_paused then
+        return false, "kag-paused"
+    end
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
     local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
 

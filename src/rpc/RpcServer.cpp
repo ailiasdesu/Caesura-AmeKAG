@@ -440,6 +440,19 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
         extractField(jsonLine, "name"));
     if (method == "getDebugState") return handleGetDebugState(id);
 
+    // KAG scene-level debugger (Neo-Genesis)
+    if (method == "kagSetBreakpoint") return handleKagDebug(id,
+        extractField(jsonLine, "scene"), extractField(jsonLine, "cmd"),
+        safeStoi(extractField(jsonLine, "line")), "setBreakpoint", "");
+    if (method == "kagClearBreakpoints") return handleKagDebug(id,
+        extractField(jsonLine, "scene"), "", 0, "clearBreakpoints", "");
+    if (method == "kagDebugContinue") return handleKagDebug(id,
+        "", "", 0, "continue", "");
+    if (method == "kagDebugStep") return handleKagDebug(id,
+        "", "", 0, "step", "");
+    if (method == "kagInspectScopes") return handleKagDebug(id,
+        "", "", 0, "inspect", extractField(jsonLine, "scope"));
+
     // Unknown method
     std::ostringstream err;
     err << "{\"id\":" << id << ",\"error\":\"Unknown method: " << jsonEscape(method) << "\"}";
@@ -635,6 +648,35 @@ std::string RpcServer::handleInspectGlobal(int id, const std::string& name) {
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"status\":\"ok\",\"value\":\""
         << jsonEscape(inspection->value) << "\"}";
+    return out.str();
+}
+
+// KAG scene-level debugger dispatch: build a RpcKagDebugRequest from the
+// extracted JSON-RPC fields and forward to the owner-thread dispatcher.
+std::string RpcServer::handleKagDebug(int id, const std::string& scene,
+                                      const std::string& cmd, int line,
+                                      const std::string& action,
+                                      const std::string& scope) {
+    if (action == "setBreakpoint"
+        && (scene.empty() || (cmd.empty() && line <= 0))) {
+        std::ostringstream err;
+        err << "{\"id\":" << id
+            << ",\"error\":\"scene plus cmd (string) or line (int) required\"}";
+        return err.str();
+    }
+    RpcKagDebugRequest op;
+    op.action = action;
+    op.scene = scene;
+    op.cmd = cmd;
+    op.line = line;
+    op.scope = scope;
+    RpcReply reply = dispatchRequest(RpcRequest{op});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* result = std::get_if<RpcKagDebugResult>(&reply.payload);
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"status\":\"ok\",\"result\":\""
+        << jsonEscape(result ? result->value : std::string("ok")) << "\"}";
     return out.str();
 }
 
