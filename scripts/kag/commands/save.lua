@@ -263,9 +263,13 @@ function SaveCommands.load(ctx, params)
     end
 
     -- [R6-FIX] Restore skip/auto mode
-    ctx.skip_mode = state.skip_mode or false
-    ctx.auto_mode = state.auto_mode or false
-    ctx.voice_muted = state.voice_muted or false
+    -- Whitelist-normalize (security LOW): `or false` is a nil-guard, not
+    -- a type-guard -- a crafted save could inject a truthy non-boolean
+    -- (behaviorally equivalent, but the pattern should not spread).
+    local sm = state.skip_mode
+    ctx.skip_mode = (sm == true or sm == "seen") and sm or false
+    ctx.auto_mode = (state.auto_mode == true)
+    ctx.voice_muted = (state.voice_muted == true)
     -- Restore the UI language and hot-switch the locale
     if type(state.language) == "string" and #state.language > 0 then
         ctx.settingsValues = ctx.settingsValues or {}

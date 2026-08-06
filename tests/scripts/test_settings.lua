@@ -54,7 +54,10 @@ local src = f:read("*a")
 f:close()
 check("save captures voice_muted",
       src:find("state.voice_muted", 1, true) ~= nil
-      and src:find("ctx.voice_muted = state.voice_muted", 1, true) ~= nil)
+      and src:find("ctx.voice_muted = (state.voice_muted == true)", 1, true) ~= nil)
+check("save type-guards restore",
+      src:find("(state.auto_mode == true)", 1, true) ~= nil
+      and src:find('(sm == true or sm == "seen")', 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("SETTINGS TESTS DONE")
