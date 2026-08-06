@@ -14,9 +14,13 @@ check("flash clamps r", src:find("clamp_byte(params.r or params.red or 255)", 1,
 check("flash clamps g", src:find("clamp_byte(params.g or params.green or 255)", 1, true) ~= nil)
 check("flash clamps b", src:find("clamp_byte(params.b or params.blue or 255)", 1, true) ~= nil)
 check("clamp floors", src:find("math.floor(tonumber(v) or 0)", 1, true) ~= nil)
--- no raw tonumber feed into create_solid_texture inside VFX.flash
-local flash = src:match("function VFX.flash(.-)end", 1)
-check("flash body clamped", flash and not flash:find("create_solid_texture%(r, g, b", 1, true))
+-- the ONLY create_solid_texture call site in vfx.lua feeds the clamped
+-- r/g/b (review warn: the earlier (.-)end capture truncated at the
+-- first 'end' and plain=true made %( a literal -- vacuous. This form
+-- checks the real call site with a proper pattern.)
+local site = src:match("create_solid_texture%(([^)]*)%)")
+check("solid texture call exists", site ~= nil)
+check("feed is clamped vars", site == "r, g, b, 255")
 
 if failed > 0 then os.exit(1) end
 print("VFX CLAMP TESTS DONE")
