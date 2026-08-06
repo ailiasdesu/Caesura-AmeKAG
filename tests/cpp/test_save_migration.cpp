@@ -65,4 +65,3 @@ TEST_CASE("SaveManager thumbnail capture guards on gfx readiness") {
     CHECK(tm.isGfxReady());
     tm.setGfxReady(false);
 }
-}
