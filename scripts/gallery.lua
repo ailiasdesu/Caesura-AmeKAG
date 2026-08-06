@@ -153,8 +153,30 @@ function Gallery.show(ctx, startId)
     layer.w, layer.h = w, h
     ctx.galleryState.bgLayer = layer
 
-    Gallery._renderCurrent(ctx)
-    print("[Gallery] Opened. Left/Right to navigate. Click to close.")
+    -- INPUT LOOP (audit: show() rendered once and returned -- the
+    -- 'Left/Right to navigate' hint was a lie; navigation was dead).
+    -- Same per-frame pattern as MusicRoom/ChapterSelect.
+    while true do
+        Gallery._renderCurrent(ctx)
+        coroutine.yield()
+
+        if _G._GAME_KEY_LEFT == true then
+            _G._GAME_KEY_LEFT = false
+            ctx.galleryState.index = math.max(1, ctx.galleryState.index - 1)
+        elseif _G._GAME_KEY_RIGHT == true then
+            _G._GAME_KEY_RIGHT = false
+            ctx.galleryState.index =
+                math.min(#ctx.galleryState.cgs, ctx.galleryState.index + 1)
+        elseif _G._GAME_KEY_ESC == true then
+            _G._GAME_KEY_ESC = false
+            break
+        elseif _G._GAME_MOUSE_DOWN == true then
+            _G._GAME_MOUSE_DOWN = false
+            break
+        end
+    end
+    Gallery.hide(ctx)
+    print("[Gallery] Closed.")
 end
 
 -- ===========================================================================
