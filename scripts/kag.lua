@@ -21,9 +21,9 @@ local layer_cmds = require("kag.commands.layer")
 -- Standalone effect aliases ([flash]/[shake]/[quake]) route through the
 -- vfx handler table (registered before layer_cmds so the plain names
 -- dispatch without a [vfx] wrapper).
--- NOTE: the vfx command table only holds handler keys ({vfx, flash,
--- shake, quake}) -- "particles" is a schema name, not a handler key,
--- so no filter is needed (security review info item).
+-- NOTE: "particles" is ALSO a schema name; VFX.particles (added in
+-- the schema-vs-handler audit) is a REAL handler key, so the pairs
+-- loop registers [particles] as a command -- no filter needed.
 local vfx_cmds = require("kag.commands.vfx")
 for name, handler in pairs(vfx_cmds) do
     KAG[name] = handler

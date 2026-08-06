@@ -49,5 +49,38 @@ local schema = require("kag.schema")
 local c = schema.coerce("fadeout", { opacity = "9", time = "1" }, {})
 check("fadeout opacity clamped", c.opacity == 1.0)
 
+-- schema-vs-handler audit: fadevol + particles now have handlers
+local Audio = require("kag.commands.audio")
+check("fadevol registered", type(KAG.fadevol) == "function")
+local fade_calls = {}
+local be_backup = _G._CAESURA_BACKEND
+_G._CAESURA_BACKEND = { render = function() return true end,
+    audio = function(cmd, ...)
+        if cmd == "fade_volume" then fade_calls[#fade_calls + 1] = { ... } end
+        return true end }
+pcall(Audio.fadevol, ctx, { volume = 0.5, time = 2000 })
+check("fadevol delegates", fade_calls[1] and fade_calls[1][2] == 0.5
+      and fade_calls[1][3] == 2.0)
+_G._CAESURA_BACKEND = be_backup
+
+check("particles registered", type(KAG.particles) == "function")
+local p_calls = {}
+-- the backend forwards the emitter trio to the GLOBAL VFX binding
+local vfx_backup = _G.VFX
+_G.VFX = {
+    particles_create_emitter = function(cfg) p_calls[#p_calls + 1] = cfg return 7 end,
+    particles_emit = function(e, n) p_calls[#p_calls + 1] = { "emit", e, n } end,
+    particles_destroy_emitter = function() end,
+    particles_clear = function() end,
+}
+local ctxP = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+local okP = pcall(KAG.particles, ctxP, { action = "create", x = 10, rate = 20 })
+check("particles create", okP and p_calls[1] and p_calls[1].rate == 20
+      and ctxP._particleEmitters and ctxP._particleEmitters[7] == true)
+pcall(KAG.particles, ctxP, { action = "emit", emitter = 7, count = 5 })
+check("particles emit forwards", #p_calls == 2 and p_calls[2][1] == "emit"
+      and p_calls[2][2] == 7 and p_calls[2][3] == 5)
+_G.VFX = vfx_backup
+
 if failed > 0 then os.exit(1) end
 print("FADEOUT TESTS DONE")

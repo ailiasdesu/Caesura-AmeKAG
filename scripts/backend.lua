@@ -367,6 +367,30 @@ function Backend.clear_particles()
     return false
 end
 
+-- The emitter trio was missing -- [vfx type="particle" action="create"]
+-- (and the new [particles] command) called backend.particles_create_emitter
+-- and CRASHED with 'attempt to call a nil value' (audit: pre-existing).
+function Backend.particles_create_emitter(cfg)
+    if VFX and VFX.particles_create_emitter then
+        return VFX.particles_create_emitter(cfg)
+    end
+    return false
+end
+
+function Backend.particles_emit(emitter, count)
+    if VFX and VFX.particles_emit then
+        return VFX.particles_emit(emitter, count)
+    end
+    return false
+end
+
+function Backend.particles_destroy_emitter(emitter)
+    if VFX and VFX.particles_destroy_emitter then
+        return VFX.particles_destroy_emitter(emitter)
+    end
+    return false
+end
+
 
 -- ══════════════════════════════════════════════════════
 -- 异步加载 API (G11-U3)

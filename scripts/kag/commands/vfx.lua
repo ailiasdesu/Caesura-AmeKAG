@@ -160,4 +160,45 @@ function VFXCommands.quake(ctx, params)
     VFX.quake(ctx, params)
 end
 
+-- [particles action="create" x=0 y=0 rate=10 ...] -- standalone form
+-- of [vfx type="particle" ...] (schema-vs-handler audit: the schema
+-- existed with no handler key; the scheduler fallback rendered
+-- 'particles' as dialogue). Same dispatch as the vfx wrapper.
+function VFXCommands.particles(ctx, params)
+    local action = params.action or "create"
+    if action == "create" then
+        local cfg = {
+            x = tonumber(params.x) or 0,
+            y = tonumber(params.y) or 0,
+            rate = tonumber(params.rate) or 10,
+            lifeMin = tonumber(params.lifeMin or params.life_min) or 0.5,
+            lifeMax = tonumber(params.lifeMax or params.life_max) or 2.0,
+            speedMin = tonumber(params.speedMin or params.speed_min) or 10,
+            speedMax = tonumber(params.speedMax or params.speed_max) or 50,
+            angleMin = tonumber(params.angleMin or params.angle_min) or 0,
+            angleMax = tonumber(params.angleMax or params.angle_max) or 6.283,
+            r = tonumber(params.r or params.red) or 1,
+            g = tonumber(params.g or params.green) or 1,
+            b = tonumber(params.b or params.blue) or 1,
+            a = tonumber(params.a or params.alpha) or 1,
+            gravityX = tonumber(params.gravityX or params.gravity_x) or 0,
+            gravityY = tonumber(params.gravityY or params.gravity_y) or 0,
+        }
+        local id = backend.particles_create_emitter(cfg)
+        ctx._particleEmitters = ctx._particleEmitters or {}
+        ctx._particleEmitters[id] = true
+    elseif action == "emit" then
+        local emitter = tonumber(params.emitter or params.id) or 0
+        local count = tonumber(params.count) or 1
+        backend.particles_emit(emitter, count)
+    elseif action == "destroy" then
+        local emitter = tonumber(params.emitter or params.id) or 0
+        backend.particles_destroy_emitter(emitter)
+        if ctx._particleEmitters then ctx._particleEmitters[emitter] = nil end
+    elseif action == "clear" then
+        backend.particles_clear()
+        if ctx._particleEmitters then ctx._particleEmitters = {} end
+    end
+end
+
 return VFXCommands

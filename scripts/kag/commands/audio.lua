@@ -72,6 +72,14 @@ schema.define("fadevol", {
     time   = { type = "number", default = 1000, min = 0, max = 30000 },
 })
 
+-- [fadevol volume=0.5 time=1000] -- smooth volume change on a bus
+-- (schema existed with NO handler -- the scheduler fallback rendered
+-- 'fadevol' as dialogue; audit: same class as [fadeout]/[delay]).
+function AudioCommands.fadevol(ctx, params)
+    local bus = params.bus or params.target or "bgm"
+    backend.audio_fade_volume(bus, params.volume, params.time / 1000.0)
+end
+
 function AudioCommands.playbgm(ctx, params)
     local file = resolve_file(params)
     if not file then
