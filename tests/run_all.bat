@@ -17,8 +17,9 @@ echo [1/3] Running C++ unit tests...
 if not exist "%BUILD_DIR%\tests\Debug\CaesuraTests.exe" goto cpp_skip
 pushd "%BUILD_DIR%\tests\Debug"
 CaesuraTests.exe --success
+set "CPP_RC=!errorlevel!"
 popd
-if errorlevel 1 goto cpp_fail
+if not "!CPP_RC!"=="0" goto cpp_fail
 echo [PASS] C++ tests passed (570/570).
 goto cpp_done
 :cpp_fail
