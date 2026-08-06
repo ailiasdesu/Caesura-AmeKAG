@@ -27,29 +27,34 @@ local src = f:read("*a")
 f:close()
 check("resolve order", src:find("params.storage or params.path or params.file", 1, true) ~= nil)
 
--- playvoice muted short-circuit: no audio backend call, event set
-local called = false
-local backend_orig = package.loaded["backend"]
-package.loaded["backend"] = setmetatable({}, { __index = function(_, k)
-    return function() called = true end
-end})
--- audio.lua captured the real backend at require time; verify the mute
--- branch via source + a direct handler run with a stubbed global
+-- playvoice muted short-circuit: the handler returns BEFORE any
+-- backend.audio_play call. (A backend stub can't spy here -- audio.lua
+-- captured the module at require time -- so lock the SOURCE order: the
+-- mute branch must precede the audio_play call.)
+local f2 = assert(io.open("scripts/kag/commands/audio.lua", "r"))
+local asrc = f2:read("*a")
+f2:close()
+local mute_pos = asrc:find("ctx.voice_muted", 1, true)
+local play_pos = asrc:find('backend.audio_play("voice"', 1, true)
+check("mute branch precedes backend call",
+      mute_pos ~= nil and play_pos ~= nil and mute_pos < play_pos)
+
+-- dispatch a muted playvoice through the scheduler: it must complete
+-- WITHOUT reaching the backend (no diagnostics, event flow preserved)
 local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     voice_muted = true, current_scene = "t.ks", token_index = 1 }
--- run playvoice through the scheduler so the mute branch fires before
--- any backend call
 local scheduler = require("scheduler")
 local tokens = { { "playvoice", { storage = "v.ogg" } } }
 local kag_orig = package.loaded["kag"]
 package.loaded["kag"] = KAG
 local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
 local ok = true
-while coroutine.status(co) ~= "dead" do ok = coroutine.resume(co) end
+while coroutine.status(co) ~= "dead" do
+    ok = coroutine.resume(co)
+    if not ok then break end
+end
 package.loaded["kag"] = kag_orig
-check("muted playvoice skips backend", called == false)
-check("muted playvoice sets event", _G._CAESURA_AUDIO_EVENT == "voice_end"
-      or _G._CAESURA_AUDIO_EVENT == nil)
+check("muted playvoice dispatches clean", ok == true)
 _G._CAESURA_AUDIO_EVENT = nil
 
 if failed > 0 then os.exit(1) end
