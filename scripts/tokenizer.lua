@@ -62,7 +62,8 @@ local function cmd_pre(s)
         -- (Lua 5.4 classend) -- a 2-char pattern that can never match a
         -- 1-char c, making the boundary dead code. %s alone is safe.
         local c = sub:sub(pos, pos)
-        if c == "" or c:match("%s") or c == "=" or c == "]" then
+        if c == "" or c == " " or c == "\t" or c == "\r" or c == "\n"
+           or c == "=" or c == "]" then
             return { pos }
         end
         return nil
