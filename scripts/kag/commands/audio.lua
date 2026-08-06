@@ -159,6 +159,10 @@ schema.define("xfadebgm", {
 function AudioCommands.xfadebgm(ctx, params)
     local file  = resolve_file(params)
     local time  = params.time  -- schema-typed
+    if not file then
+        print("[AudioCmd] xfadebgm: no file specified")
+        return
+    end
 
     backend.audio_xfade("bgm", file, time / 1000.0)
 end
