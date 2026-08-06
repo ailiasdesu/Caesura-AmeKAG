@@ -255,7 +255,6 @@ function scheduler.run(ctx, tokens, start_index)
                     scene = ctx.current_scene,
                 })
                 tokens = new_tokens
-                tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
                 ctx.label_index = nil  -- raw tokens: run() entry rebuilds
