@@ -102,13 +102,21 @@ local node1 = real_layers.add_layer(nil, {
     visible = true, opacity = 255 })
 pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
       { layer = "_lf1", opacity = 0.5, time = 1 })
-check("layfade fraction scaled", node1.opacity == 127)
+check("layfade fraction scaled", node1.opacity == 128)
 local node2 = real_layers.add_layer(nil, {
     name = "_lf2", layer_type = 0, x = 0, y = 0, w = 10, h = 10,
     visible = true, opacity = 255 })
 pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
       { layer = "_lf2", opacity = 128, time = 1 })
 check("layfade 0-255 passthrough", node2.opacity == 128)
+-- STRING params (tokenizer/scheduler shape -- review should-fix: the
+-- raw string used to raise on the <= compare)
+local node3 = real_layers.add_layer(nil, {
+    name = "_lf3", layer_type = 0, x = 0, y = 0, w = 10, h = 10,
+    visible = true, opacity = 255 })
+local okStr = pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
+      { layer = "_lf3", opacity = "0.5", time = 1 })
+check("layfade string param safe", okStr and node3.opacity == 128)
 
 if failed > 0 then os.exit(1) end
 print("FADEOUT TESTS DONE")

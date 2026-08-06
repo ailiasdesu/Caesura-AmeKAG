@@ -300,17 +300,19 @@ function LayerCommands.layfade(ctx, params)
         print("[LayerCmd] layfade: layer not found: " .. tostring(layerName))
         return
     end
-    local target = params.opacity or params.alpha
-    if not target then
+    local target = tonumber(params.opacity or params.alpha)
+    if target == nil then
         print("[LayerCmd] layfade: opacity required")
         return
     end
     -- Scale ambiguity (audit): layopt's schema is 0..1 but fade_to /
     -- set_layer_opacity operate in 0..255. Accept BOTH: values <= 1
-    -- are treated as 0..1 fractions (0.5 -> 128), larger values pass
+    -- are treated as 0..1 fractions (0.5 -> 127), larger values pass
     -- through as 0..255 (legacy [layfade opacity=128]). Non-breaking.
+    -- tonumber FIRST: the tokenizer hands raw strings and Lua 5.4
+    -- raises on string-vs-number compare (review blocking).
     if target <= 1 then
-        target = math.floor(target * 255)
+        target = math.floor(target * 255 + 0.5)
     end
     local duration = params.time or params.duration or 500
     layers.fade_to(node, target, duration)
