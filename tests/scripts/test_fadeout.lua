@@ -82,6 +82,10 @@ check("particles emit forwards", #p_calls == 2 and p_calls[2][1] == "emit"
       and p_calls[2][2] == 7 and p_calls[2][3] == 5)
 pcall(KAG.particles, ctxP, { action = "destroy", emitter = 7 })
 check("particles destroy tracked", ctxP._particleEmitters[7] == nil)
+-- recreate an emitter so the clear reset actually has work to do
+-- (review nit: destroy already emptied the table, making the empty
+-- half vacuous)
+pcall(KAG.particles, ctxP, { action = "create", rate = 5 })
 local okClear = pcall(KAG.particles, ctxP, { action = "clear" })
 check("particles clear ok", okClear and ctxP._particleEmitters ~= nil
       and next(ctxP._particleEmitters) == nil)
