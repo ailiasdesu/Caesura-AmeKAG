@@ -2,6 +2,7 @@
 --  test_tokenizer.lua — Tokenizer unit tests
 -- =============================================================================
 
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 local tokenizer = require("tokenizer")
 
 local passed, failed = 0, 0
@@ -71,15 +72,25 @@ local tokens_se = tokenizer.parse("[se file=\"click.wav\" loop=0]")
 local tokens_stopse = tokenizer.parse("[stopse]")
 local tokens_wait = tokenizer.parse("[wait time=500]")
 
-print("  [PASS] se tag parsed")
-print("  [PASS] se file param present")
-print("  [PASS] stopse tag parsed")
-print("  [PASS] fadebgm tag parsed")
-print("  [PASS] fadese tag parsed")
-print("  [PASS] wait tag parsed")
-print("  [PASS] wait time param present")
-print("  [PASS] delay tag parsed")
-print("  [PASS] skip tag parsed")
+-- REGRESSION (C++ demo e2e): the explicit P_se prefix must NOT shadow
+-- longer command names once bare-value params exist
+local t_setbgm = tokenizer.parse("[setbgmvolume volume=0.6]")
+check("setbgmvolume distinct", t_setbgm[1].cmd == "setbgmvolume")
+local t_waitbgm = tokenizer.parse("[waitbgm]")
+check("waitbgm distinct", t_waitbgm[1].cmd == "waitbgm")
+local t_setse = tokenizer.parse("[setsevolume v=1]")
+check("setsevolume distinct", t_setse[1].cmd == "setsevolume")
+
+check("se tag parsed", tokens_se[1].cmd == "se")
+check("se file param present",
+      type(tokens_se[1].params) == "table" and tokens_se[1].params[1][2] == "click.wav")
+check("stopse tag parsed", tokens_stopse[1].cmd == "stopse")
+check("fadebgm tag parsed", tokenizer.parse("[fadebgm time=1000]")[1].cmd == "fadebgm")
+check("fadese tag parsed", tokenizer.parse("[fadese 200]")[1].cmd == "fadese")
+check("wait tag parsed", tokens_wait[1].cmd == "wait")
+check("wait time param present", tokens_wait[1].params[1][2] == "500")
+check("delay tag parsed", tokenizer.parse("[delay 500]")[1].cmd == "delay")
+check("skip tag parsed", tokenizer.parse("[skip]")[1].cmd == "skip")
 
 -- Error reporting: parse failure carries a line number (binary search)
 do

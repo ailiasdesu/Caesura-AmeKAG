@@ -58,8 +58,13 @@ local attrs = Ct(param * space)^0
 -- lookahead -- a zero-width function pattern does the real boundary.
 local function cmd_pre(s)
     return P("[" .. s) * P(function(sub, pos)
+        -- review should-fix: "[%s%]=]" is a CLASS{ws,=} + literal ']'
+        -- (Lua 5.4 classend) -- a 2-char pattern that can never match a
+        -- 1-char c, making the boundary dead code. %s alone is safe.
         local c = sub:sub(pos, pos)
-        if c == "" or c:match("[%s%]=]") then return { pos } end
+        if c == "" or c:match("%s") or c == "=" or c == "]" then
+            return { pos }
+        end
         return nil
     end)
 end
