@@ -41,8 +41,11 @@ local real_ch = KAG.ch
 KAG.ch = function(c2, p2) dispatched[#dispatched + 1] = p2.text end
 -- (KAG.ch restored at the end of the file -- the stub must not leak
 -- to later tests: it shadows the real ch handler)
--- stub TextScene so the render path is a no-op in tests
-package.loaded["kag.commands.text"] = nil  -- fresh? no: keep real, patch scene
+-- NOTE: do NOT clear package.loaded["kag.commands.text"] here -- the
+-- suite sandbox gates module preloads, so a cleared cache would make
+-- every later require("kag.commands.text") fail with "not preloaded"
+-- (this poisoned test_textbox until removed). We only verify BLOCK
+-- behavior + selection; the render path stays real.
 local ctx2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     _whileIterByScene = { ["t.ks"] = 0 },
     macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }

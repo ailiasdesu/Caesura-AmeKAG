@@ -215,8 +215,8 @@ function TextCommands.textbox(ctx, params)
     local r, g, b = params.color:match("(%d+),%s*(%d+),%s*(%d+)")
     if r then
         bg.texture = backend.create_solid_texture(
-            math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
-            math.floor(tonumber(b) or 0), math.floor(params.opacity))
+            clamp_byte(r), clamp_byte(g), clamp_byte(b),
+            math.floor(params.opacity))
     else
         bg.texture = nil  -- unparseable color: clear stale texture
     end
@@ -263,8 +263,8 @@ function TextCommands._renderNameplate(ctx, speaker)
     local r, g, b = st.color:match("(%d+),%s*(%d+),%s*(%d+)")
     if r then
         bg.texture = backend.create_solid_texture(
-            math.floor(tonumber(r) or 0), math.floor(tonumber(g) or 0),
-            math.floor(tonumber(b) or 0), math.floor(st.opacity))
+            clamp_byte(r), clamp_byte(g), clamp_byte(b),
+            math.floor(st.opacity))
     else
         bg.texture = nil  -- unparseable color: clear stale plate
     end
@@ -272,7 +272,7 @@ function TextCommands._renderNameplate(ctx, speaker)
     -- Speaker name text: backend.render_text(text, x, y, r, g, b, a).
     local tr, tg, tb = st.text_color:match("(%d+),%s*(%d+),%s*(%d+)")
     backend.render_text(speaker, st.x + 8, st.y + 6,
-        tonumber(tr) or 255, tonumber(tg) or 255, tonumber(tb) or 255, 255)
+        clamp_byte(tr or 255), clamp_byte(tg or 255), clamp_byte(tb or 255), 255)
 end
 
 -- [sprite_fade] -- character-sprite fade in/out (performance idiom:
