@@ -748,16 +748,25 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
     std::vector<uint8_t> atlas(m_ttf->atlasW * m_ttf->atlasH, 0);
 
     // Rasterize ASCII 32-126
+    size_t failed = 0;
     for (uint32_t cp = 32; cp <= 126; cp++)
-        rasterizeTTFGlyph(cp, atlas);
+        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
 
     // Rasterize CJK Unified (partial: most common 500 chars)
     for (uint32_t cp = 0x4E00; cp < 0x4E00 + 500 && cp <= 0x9FFF; cp++)
-        rasterizeTTFGlyph(cp, atlas);
+        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
 
     // Rasterize Hiragana + Katakana
     for (uint32_t cp = 0x3040; cp <= 0x30FF; cp++)
-        rasterizeTTFGlyph(cp, atlas);
+        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
+
+    if (failed > 0) {
+        fprintf(stderr,
+                "[TextRenderer] Warning: %zu of %zu glyphs failed to "
+                "rasterize (missing glyph or atlas full); they will fall "
+                "back to the bitmap font.\n",
+                failed, m_ttf->glyphs.size() + failed);
+    }
 
     // Upload atlas as bgfx texture
     if (bgfx::isValid(m_fontTexture))

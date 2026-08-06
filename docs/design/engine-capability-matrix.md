@@ -83,14 +83,14 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| R1 | Multi-backend GPU (D3D11/OpenGL/Metal) | `IRenderDevice` | Partial: Windows path covered; GL/Metal shader/runtime validation incomplete |
+| R1 | Multi-backend GPU (D3D11/OpenGL/Metal) | `IRenderDevice` | Partial: **D3D11 + OpenGL 4.3 real-GPU verified 2026-08-06** (`--backend opengl` renders demo 240 frames, all 6 embedded GLSL 430 programs compile, clean exit; `--backend dx11` baseline green); Metal still requires macOS hardware |
 | R2 | 3-layer compositing (BG/FG/MSG) with dirty-rect optimisation | `ILayerManager` | ✓ |
 | R3 | Async texture loading with budget enforcement + LRU eviction | `ITextureManager` | ✓ |
 | R4 | 2D GPU particle system (emitters, physics, colour) | `IParticleSystem` | ✓ |
 | R5 | Video playback (MPEG-1 via pl_mpeg, FFmpeg optional) | `IVideoPlayer` | ✓ |
 | R6 | Adaptive GPU quality monitor with automatic degradation | `IGpuMonitor` | ✓ |
-| R7 | Text rendering (FreeType atlas, CJK support, ruby/furigana) | `IRenderDevice` | Partial: CJK font shipped (NotoSansCJKsc, OFL) + `text_set_font` face switching implemented; FreeType atlas edge cases remain |
-| R8 | Transition effects (blend, wipe, custom shader) | `IRenderDevice` | Partial: non-D3D shader coverage is incomplete |
+| R7 | Text rendering (FreeType atlas, CJK support, ruby/furigana) | `IRenderDevice` | ✓ CJK font (NotoSansCJKsc, OFL) + `text_set_font` face switching; D3D11 GPU smoke test loads real OTF (786 glyphs), renders CJK + ruby; `loadTTF` guarded against uninitialized GPU + glyph-failure diagnostics |
+| R8 | Transition effects (blend, wipe, custom shader) | `IRenderDevice` | ✓ blend/wipe/custom-shader paths; Transition program compiled on D3D11 + OpenGL 4.3, demo flash+crossfade rendered on both backends (2026-08-06) |
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
 
@@ -130,7 +130,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. **D3D11 (Windows) path verified 2026-08-01** (first real compile + Haru.moc3 load/render via HTTP RPC, no device loss); OpenGL paths still unverified; Metal is a stub. Cubism requires manual SDK download — without it all render paths are never compiled. See `docs/guides/live2d-setup.md` |
-| C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | Partial: lifecycle + JSON scene loading implemented (`loadScene`/`enter`/`unloadScene`, `MiniScene.h`, 9 tests); GPU enter/render not verified in headless CI |
+| C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | ✓ lifecycle + JSON scenes + 20-API Lua binding (`mini_game` global, sandbox-whitelisted); real-GPU D3D11 child-process test (enter→update→render→leave) + programmatic `enter(0)` mode; demo_minigame.lua runs end-to-end on D3D11 and OpenGL 4.3 |
 | C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |
 | C5 | CARC archive packaging (compress, encrypt, sign) | `IArchiveWriter` | ✓ |
@@ -156,7 +156,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 576 cases, 2026-08-06 verified after full rebuild) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 586 cases, 2026-08-06 verified after full rebuild) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |

@@ -67,7 +67,7 @@
 
 ### 1.4 工程与质量（证据：`tests/CMakeLists.txt`、能力矩阵 P2）
 
-- **52 个 `test_*.cpp`**（`tests/cpp/` 实测 glob 与 CMakeLists 列表完全一致，无漂移）→ **C++ doctest 576 用例 / 2828 assertions 全绿 + Lua 86/86 全绿**（2026-08-06 全量重建后实测，见文末验证记录）；测试与产品链接同一批静态库（非二编译）。
+- **52 个 `test_*.cpp`**（`tests/cpp/` 实测 glob 与 CMakeLists 列表完全一致，无漂移）→ **C++ doctest 586 用例 / 2865 assertions 全绿 + Lua 86/86 全绿**（2026-08-06 全量重建后实测，见文末验证记录）；测试与产品链接同一批静态库（非二编译）。
 - CI：三平台（Windows MSVC / macOS Clang / Linux GCC）+ 耦合度门禁（`scripts/count_coupling.py --ci`）。
 - 性能基准（`docs/plans/2026-08-04-006-perf-baseline-update.md`）：tokenizer 478–541ms、scheduler 4001 resumes ≈13ms（≈308k tok/s），较 08-03 基线快 8–19%。
 - 迭代速度：截至分析基准 e9b11b04，2026-08-03 00:00 (+0800) 以来共 **561 提交**全 CI 验证（`git rev-list --count --since="2026-08-03 00:00:00 +0800" e9b11b04` = 561，可复现）。
@@ -189,9 +189,9 @@ Caesura 在**架构纪律（16 模块接口隔离、52 测试文件全绿、耦�
 - **本地重扫**（read-only 子代理）：16 模块/30 接口/72 命令/52 测试文件全部与 HEAD e9b11b04 核实一致；LICENSE 存在（MIT, f7ee6184）。
 - **市面数据**：GitHub API 实时抓取（renpy、krkrz、ogapee/onscripter、umineko-project/onscripter-ru、ShikemokuMK/tyranoscript、nathanhoad/godot_dialogue_manager、OpenWebGAL/WebGAL、Monogatari/Monogatari）+ renpy.org + itch.io + Unity Asset Store + Steam 商店页（tyranobuilder.com 抓取失败，以 GitHub/Steam 替代）。
 - **全量重建 + 完整测试（2026-08-06 20:18–20:22 实测）**：仓库自 `codex\` 路径迁至 `code\` 后旧 build 缓存失效（CMakeCache 指向已消失目录）；已 `rm -rf build` 从零全量重建（`cmake -B build -DCAESURA_LIVE2D=OFF && cmake --build build --config Debug --parallel`，0 错误）。
-  - **C++ doctest：576 test cases / 2828 assertions — 576 passed, 0 failed, 0 skipped**
+  - **C++ doctest：586 test cases / 2865 assertions — 586 passed, 0 failed, 0 skipped**
   - **Lua 脚本测试：86 passed, 0 failed, 86 total**（`external/lua/lua.exe tests/scripts/run_lua_tests.lua`）
-  - 注：`tests/run_all.bat` 中 "574/574 | Lua: 86/86" 为过时硬编码，已同步修正为 576/86；能力矩阵 P2 中 "569 cases" 为 2026-07-24 旧快照，**已于 2026-08-06 同步更新为 576**（commit ff76733e），README 与 market-comparison 中的 569/12 亦已同步修正。
+  - 注：`tests/run_all.bat` 中 "574/574 | Lua: 86/86" 为过时硬编码，已同步修正为 576/86；能力矩阵 P2 中 "569 cases" 为 2026-07-24 旧快照，**已于 2026-08-06 同步更新为 586**，README 与 market-comparison 中的 569/12 亦已同步修正（2026-08-06 再更新为 586）。
 - **耦合度门禁**：`python scripts/count_coupling.py --ci` → PASS（所有模块在阈值内）。
 
 *证据索引：接口清单 = `glob src/*/api/*.h`（30 个 I*.h）；能力矩阵 = `docs/design/engine-capability-matrix.md`；命令契约 = `docs/api/command-contracts.md`（562 行，schema_doc.lua 自动生成）+ `scripts/kag/commands/`（9 文件）+ `scripts/kag.lua`（13 命令，去重后 72）；测试 = `tests/CMakeLists.txt`（52 test_*.cpp 与磁盘 glob 一致）；构建模块 = `cmake/CaesuraModules.cmake`（16 静态库）；LICENSE = 根目录 MIT（f7ee6184）。*
