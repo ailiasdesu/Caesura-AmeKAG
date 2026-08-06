@@ -72,7 +72,7 @@ schema.define("layopt", {
     layer   = { type = "string", default = "" },  -- KAG3 layer name
 })
 schema.define("fadeout", {
-        layer = { type = "string", default = "bg" },
+    layer = { type = "string", default = "bg" },
     opacity = { type = "number", default = 0, min = 0, max = 1.0 },
     alpha = { type = "number", default = 0, min = 0, max = 1.0 },
     time = { type = "number", default = 500, min = 0, max = 30000 },
