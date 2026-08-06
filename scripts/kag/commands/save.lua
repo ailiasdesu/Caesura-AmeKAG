@@ -437,8 +437,8 @@ function SaveCommands.saveload(ctx, params)
     -- string guard on the bare mode (audit: a pair table from named
     -- params must not reach the menu as the mode)
     local mode = params.mode
-    if type(mode) ~= "string" and type(params[1]) == "string" then
-        mode = params[1]
+    if type(mode) ~= "string" then
+        mode = (type(params[1]) == "string") and params[1] or nil
     end
     local chosen = SaveLoad.show(ctx, mode or "save")
     if chosen then
