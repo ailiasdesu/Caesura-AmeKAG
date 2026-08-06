@@ -95,6 +95,7 @@ local tests = {
     "test_trans_behavior",
     "test_fadeout",
     "test_backend_guard",
+    "test_label_bench",
 }
 
 local passed, failed = 0, 0

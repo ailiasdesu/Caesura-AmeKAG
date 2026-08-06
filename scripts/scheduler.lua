@@ -895,4 +895,5 @@ end
 
 scheduler.build_label_index = build_label_index
 scheduler.is_safe_scene_path = is_safe_scene_path
+scheduler.find_label = find_label
 return scheduler
