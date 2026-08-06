@@ -42,6 +42,18 @@ check("right clamps", ctx.galleryState.index == 3)
 _G._GAME_KEY_LEFT = true
 coroutine.resume(co)
 check("left back", ctx.galleryState.index == 2)
+_G._GAME_KEY_LEFT = true
+coroutine.resume(co)
+check("left clamps at 1", ctx.galleryState.index == 1)
+-- render cache: repeated frames do not re-render (no texture churn)
+local renders = 0
+Gallery._renderCurrent = function(ctx2)
+    renders = renders + 1
+end
+_G._GAME_KEY_RIGHT = true
+coroutine.resume(co)
+coroutine.resume(co)
+check("render cached on repeat", renders == 1)
 _G._GAME_KEY_ESC = true
 coroutine.resume(co)
 check("esc closes", coroutine.status(co) == "dead" and ctx.galleryState == nil)

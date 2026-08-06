@@ -176,7 +176,6 @@ function Gallery.show(ctx, startId)
         end
     end
     Gallery.hide(ctx)
-    print("[Gallery] Closed.")
 end
 
 -- ===========================================================================
@@ -207,6 +206,11 @@ function Gallery._renderCurrent(ctx)
     local cg = gs.cgs[gs.index]
     local layer = gs.bgLayer
     if not layer or not cg then return end
+    -- Cache per index (review should-fix: the loop called this every
+    -- frame, reloading + destroying the CG texture from disk each
+    -- iteration). Only re-render when the index moved.
+    if gs._renderedIndex == gs.index then return end
+    gs._renderedIndex = gs.index
 
     local w, h = backend.get_resolution()
     w = w or 1280
