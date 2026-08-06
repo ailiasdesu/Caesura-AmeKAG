@@ -15,6 +15,7 @@ local real_transition = {
     cancel = Transition.cancel,
     tick = Transition.tick,
     start = Transition.start,
+    is_active = Transition.is_active,
 }
 _G._CAESURA_BACKEND = { render = function(cmd, ...)
     if cmd == "submit_transition" then calls[#calls + 1] = { ... } end
@@ -24,9 +25,9 @@ Transition.capture_screen = function() return { id = 11 } end
 Transition.cancel = function() end
 Transition.tick = function() end
 Transition.start = function(fromTex, toTex, params)
-    -- the real start() drives submit_transition; the mock forwards so
-    -- the backend contract is still exercised
-    _G._CAESURA_BACKEND.render("submit_transition", 0, fromTex.id, toTex.id, params.method, 0.0)
+    -- mirror the real contract (scripts/transition.lua): 6 args with
+    -- viewId, method id, progress
+    _G._CAESURA_BACKEND.render("submit_transition", 1, fromTex.id, toTex.id, 0, 0.0)
     return true
 end
 -- is_active=false: the trans wait loop exits on the first check, so the
@@ -41,7 +42,8 @@ local r1 = coroutine.resume(co)
 -- is_active=false => the wait loop exits immediately; one resume runs
 -- the whole handler (submit happened inside)
 check("trans coroutine completes", r1 and coroutine.status(co) == "dead")
-check("submit called", #calls >= 1)
+check("submit called with real contract", #calls >= 1
+      and calls[1][1] == 1 and calls[1][2] == 11 and calls[1][5] == 0)
 
 -- zero/negative duration: immediate promote + no submit
 calls = {}
@@ -55,6 +57,7 @@ Transition.capture_screen = real_transition.capture_screen
 Transition.cancel = real_transition.cancel
 Transition.tick = real_transition.tick
 Transition.start = real_transition.start
+Transition.is_active = real_transition.is_active
 
 if failed > 0 then os.exit(1) end
 print("TRANS BEHAVIOR TESTS DONE")
