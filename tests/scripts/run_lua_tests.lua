@@ -71,6 +71,7 @@ local tests = {
     "test_volume",
     "test_ch_state",
     "test_playbgmstop",
+    "test_layout",
 }
 
 local passed, failed = 0, 0
