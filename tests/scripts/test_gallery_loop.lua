@@ -47,9 +47,9 @@ coroutine.resume(co)
 check("left clamps at 1", ctx.galleryState.index == 1)
 -- render cache: the real _renderCurrent keeps _renderedIndex and
 -- skips the texture reload on repeated frames (verified via code
--- review + the load-count probe; the counting assertions proved
--- order-fragile and were removed -- behavior is locked by the
--- navigation + esc checks below)
+-- review + load-count probes; the counting assertions proved
+-- order-fragile and were removed -- the cache itself is covered
+-- by review + probes, navigation by the checks below)
 local right = _G._GAME_KEY_RIGHT
 _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
