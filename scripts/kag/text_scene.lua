@@ -209,9 +209,12 @@ function TextScene.render(ctx, render_backend)
                 render_backend.render_text(
                     shown, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha)
-                if draw.typewriter then
-                    consumed = consumed + (utf8.len(draw.text) or #draw.text)
-                end
+            end
+            -- consumed advances for typewriter lines even when alpha=0
+            -- skips the draw, so a fade-in frame cannot over-show the
+            -- next line (review nit)
+            if draw.typewriter then
+                consumed = consumed + (utf8.len(draw.text) or #draw.text)
             end
             submitted = submitted + 1
         end

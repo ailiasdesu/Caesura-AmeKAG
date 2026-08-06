@@ -6,6 +6,7 @@ local check = function(name, cond)
 end
 
 package.path = "scripts/?.lua;scripts/?/init.lua;" .. package.path
+local _preload_backend = package.preload["backend"]
 package.preload["backend"] = function()
     return {
         create_solid_texture = function() return { _mock = true } end,
@@ -16,7 +17,8 @@ end
 -- suite hygiene: the preload mock + cache clear PERSIST past this
 -- file -- under the suite sandbox later require("backend") fails with
 -- "not preloaded" (font/video tests died). Save both, restore at end.
-local _preload_backend = package.preload["backend"]
+-- captured BEFORE the mock below (review nit: capturing after would
+-- restore the mock itself)
 local _loaded_backend = package.loaded["backend"]
 package.loaded["backend"] = nil
 

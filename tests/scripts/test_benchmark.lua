@@ -24,6 +24,7 @@ end
 -- require("backend") under the suite sandbox ("not preloaded") --
 -- font/video/wait tests all died in the suite because of this
 -- (audit: pre-existing pollution the sandbox exposed).
+local benchmark_preload_backend = package.preload["backend"]
 local benchmark_backend = package.loaded["backend"]
 package.loaded["backend"] = nil
 
@@ -99,6 +100,9 @@ local failed = 0
 for _, ok in ipairs(results or {}) do if not ok then failed = failed + 1 end end
 if package.loaded["backend"] == nil and benchmark_backend then
     package.loaded["backend"] = benchmark_backend
+end
+if package.preload["backend"] == nil and benchmark_preload_backend then
+    package.preload["backend"] = benchmark_preload_backend
 end
 if failed > 0 then os.exit(1) end
 print("BENCHMARK TESTS DONE")
