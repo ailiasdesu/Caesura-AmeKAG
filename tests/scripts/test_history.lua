@@ -96,8 +96,11 @@ for _ = 1, 25 do
 end
 check("history scroll no crash", okH and coroutine.status(coH) == "suspended")
 _G._GAME_KEY_ESC = true
-coroutine.resume(coH)
-check("history esc exits", coroutine.status(coH) == "dead")
+local rEsc = coroutine.resume(coH)
+check("history esc exits", rEsc and coroutine.status(coH) == "dead")
+-- suite hygiene: restore the saved real module (a later [history]
+-- test would otherwise hit the last mock)
+package.loaded["history_ui"] = _hu_saved or package.loaded["history_ui"]
 package.loaded["layers"] = layers_b2
 _G._CAESURA_BACKEND = be_b
 
