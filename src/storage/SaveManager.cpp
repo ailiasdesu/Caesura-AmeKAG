@@ -316,18 +316,17 @@ std::vector<SaveMeta> SaveManager::listSaves() {
     std::vector<SaveMeta> result;
     if (m_saveDir.empty()) return result;
 
-    int consecutiveEmpty = 0;
     // Scan the bounded slot range (0..99, same as the save/load guard):
-    // legacy files beyond 99 would otherwise be enumerated here.
+    // legacy files beyond 99 would otherwise be enumerated here. NO
+    // early break: a consecutive-empty optimization would hide sparse
+    // slots (audit: a save at slot 99 vanished from the list when slots
+    // 6..13 were empty). 100 stat calls are cheap for a low-frequency
+    // list operation.
     for (int slot = 0; slot <= 99; slot++) {
         std::string contents = readFile(slotPath(slot));
         if (contents.empty()) {
-            consecutiveEmpty++;
-            if (consecutiveEmpty >= 8) break;
             continue;
         }
-        consecutiveEmpty = 0;
-
         json envelope;
         try {
             envelope = json::parse(contents);

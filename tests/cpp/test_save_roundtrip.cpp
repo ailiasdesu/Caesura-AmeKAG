@@ -93,6 +93,18 @@ TEST_CASE("SaveManager: listSaves returns correct slot list") {
         if (s.slot == 3) found3 = true;
         if (s.slot == 5) found5 = true;
     }
+
+    // Slot 99 (the upper bound) lists; slot 100 must NOT (audit: the
+    // scan is bounded 0..99 -- a legacy/out-of-range file must not
+    // enumerate)
+    sm.save(99, {{"n", 99}}, "s99", 0);
+    saves = sm.listSaves();
+    bool found99 = false;
+    for (const auto& s : saves) if (s.slot == 99) found99 = true;
+    CHECK(found99);
+    bool found100 = false;
+    for (const auto& s : saves) if (s.slot == 100) found100 = true;
+    CHECK_FALSE(found100);
     CHECK(found1);
     CHECK(found3);
     CHECK(found5);
