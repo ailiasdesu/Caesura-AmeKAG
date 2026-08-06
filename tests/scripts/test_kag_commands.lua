@@ -32,6 +32,7 @@ pcall(function() package.loaded["chapter_select"] = require("chapter_select") en
 pcall(function() package.loaded["music_room"] = require("music_room") end)
 pcall(function() package.loaded["gallery"] = require("gallery") end)
 pcall(function() package.loaded["settings"] = require("settings") end)
+pcall(function() package.loaded["history_ui"] = require("history_ui") end)
 
 _G.Render = {
     text_set_font = function() end,
