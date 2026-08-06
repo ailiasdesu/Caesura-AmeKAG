@@ -34,4 +34,17 @@ check("outer continues", dispatched[2] and dispatched[2][2].text == "outer-line"
 check("inner dispatches as ch", dispatched[1] and dispatched[1][1] == "ch")
 
 if failed > 0 then os.exit(1) end
+-- expansion budget (audit): a self-recursive macro must fail fast
+-- (not grow the token array until the C++ instruction budget)
+local tokenizer2 = require("tokenizer")
+local scheduler2 = require("scheduler")
+local toksR = tokenizer2.parse("[macro m][m][endmacro][m]")
+local ctxR = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    tokens = toksR, token_index = 1, current_scene = "t.ks",
+    label_index = {}, _whileIterByScene = { ["t.ks"] = 0 } }
+local coR = coroutine.create(function() scheduler2.run(ctxR, toksR, 1) end)
+local okR, errR = coroutine.resume(coR)
+check("recursive macro budgeted", not okR
+      and tostring(errR):find("expansion budget") ~= nil)
+
 print("NESTED MACRO TESTS DONE")
