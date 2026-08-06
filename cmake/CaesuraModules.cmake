@@ -240,6 +240,7 @@ caesura_add_module(Script
     src/script/bindings/VFXBinding.cpp
     src/script/bindings/DevCoreBinding.cpp
     src/script/bindings/DebugBinding.cpp
+    src/script/bindings/MiniGameBinding.cpp
     src/script/bindings/UnifiedBinding.cpp
     src/script/bindings/SteamBinding.cpp
     src/script/bindings/SaveBinding.cpp

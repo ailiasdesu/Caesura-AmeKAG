@@ -77,6 +77,16 @@ bool BgfxMiniGameBackend::init() {
 bool BgfxMiniGameBackend::ensureGpuResources() {
     if (m_gpuReady) return true;
 
+    // Guard: all shader/uniform/geometry creation below calls bgfx APIs,
+    // which is undefined behaviour before bgfx::init. The render device is
+    // authoritative for GPU availability (engine inits it before wiring the
+    // mini-game backend; tests may pass an uninitialized/null device).
+    if (!m_renderDevice || !m_renderDevice->isInitialized()) {
+        fprintf(stderr, "[MiniGame] ensureGpuResources: render device not "
+                        "initialized; refusing GPU resource creation\n");
+        return false;
+    }
+
     bgfx::ShaderHandle vs, fs;
     const bgfx::RendererType::Enum rt = bgfx::getRendererType();
     bool shaderOk = false;
@@ -341,6 +351,26 @@ void BgfxMiniGameBackend::unloadScene(uint32_t h) {
 }
 
 void BgfxMiniGameBackend::enter(uint32_t h){
+    if (h == 0) {
+        // Programmatic mode: activate whatever objects were spawned via the
+        // Lua API (spawn_cube/sphere/plane) without a JSON scene descriptor.
+        // leave() deactivates; render() draws the current m_objects set.
+        if (!ensureGpuResources()) return;
+        if (m_activeScene != 0) {
+            // Switch away from a JSON scene: drop its spawned objects.
+            m_active = false;
+            auto spawned = m_sceneObjects.find(m_activeScene);
+            if (spawned != m_sceneObjects.end()) {
+                for (uint32_t objId : spawned->second) m_objects.erase(objId);
+                m_sceneObjects.erase(spawned);
+            }
+        }
+        m_activeScene = 0;
+        m_active = true;
+        printf("[MiniGame] Programmatic scene activated (%zu objects)\n",
+               m_objects.size());
+        return;
+    }
     auto it = m_scenes.find(h);
     if (it == m_scenes.end()) {
         fprintf(stderr, "[MiniGame] enter: unknown scene %u\n", h);

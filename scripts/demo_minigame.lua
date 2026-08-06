@@ -103,3 +103,8 @@ end
 
 print("[Demo] WASD input controller active (W/A/S/D to move hero)")
 print("[Demo] === Demo ready — entering 3D scene ===")
+
+-- Activate the programmatic scene: enter(0) starts rendering the objects
+-- spawned above without a JSON scene descriptor (C2).
+local act_ok = mini_game.enter(0)
+print("[Demo] mini_game.enter(0) ->", tostring(act_ok), "active =", tostring(mini_game.is_active()))

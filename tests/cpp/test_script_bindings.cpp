@@ -4,6 +4,7 @@
 #include "script/bindings/KAGBinding.h"
 #include "script/bindings/RenderBinding.h"
 #include "script/bindings/VFXBinding.h"
+#include "script/bindings/MiniGameBinding.h"
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
 #include "script/bindings/UnifiedBinding.h"
@@ -63,6 +64,7 @@ static LuaManager* initBindingLua() {
     registerKAGBinding(L);
     registerRenderBinding(L);
     registerVFXBinding(L);
+    registerMiniGameBinding(L);
     registerDebugBinding(L);
     registerDevCoreBinding(L);
     registerUnifiedBackendBinding(L);
@@ -141,6 +143,67 @@ TEST_CASE("Bindings: VFX particles functions exist") {
     lua_getfield(L, -1, "particles_alive_count");
     CHECK(lua_isfunction(L, -1));
     lua_pop(L, 1);
+    lua_pop(L, 1);
+    delete lm;
+}
+
+TEST_CASE("Bindings: mini_game module registered as global") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "mini_game");
+    CHECK(lua_istable(L, -1));
+    lua_pop(L, 1);
+    delete lm;
+}
+
+TEST_CASE("Bindings: mini_game exposes all 20 documented APIs") {
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    lua_getglobal(L, "mini_game");
+    REQUIRE(lua_istable(L, -1));
+    const char* methods[] = {
+        "spawn_cube", "spawn_sphere", "spawn_plane", "remove_object",
+        "set_camera", "create_material", "set_material", "set_ambient",
+        "set_directional", "add_point_light", "remove_light",
+        "check_collision", "set_collision", "set_velocity", "set_gravity",
+        "load_scene", "unload_scene", "enter", "leave", "is_active",
+    };
+    for (const char* m : methods) {
+        lua_getfield(L, -1, m);
+        CHECK_MESSAGE(lua_isfunction(L, -1), m);
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    delete lm;
+}
+
+TEST_CASE("Bindings: mini_game methods are safe without a backend") {
+    // No "Caesura.MiniGameBackend" registry entry in this test context:
+    // every binding must return a safe value instead of crashing.
+    auto* lm = initBindingLua();
+    REQUIRE(lm != nullptr);
+    lua_State* L = lm->state();
+    const char* script =
+        "local mg = mini_game\n"
+        "local h = mg.load_scene('missing.json')\n"
+        "assert(type(h) == 'number')\n"
+        "mg.enter(1)\n"
+        "mg.leave()\n"
+        "assert(mg.is_active() == false)\n"
+        "local ok, err = mg.spawn_cube(0, 0, 0)\n"
+        "assert(ok == false or type(ok) == 'number', tostring(err))\n"
+        "local mat = mg.create_material(1, 0, 0)\n"
+        "assert(mat == false or type(mat) == 'number')\n"
+        "mg.set_camera(0, 0, 0, 0, 0, 0)\n"
+        "mg.set_ambient(0.1, 0.1, 0.1)\n"
+        "mg.set_directional(0, -1, 0)\n"
+        "mg.set_gravity(1, true)\n"
+        "mg.set_velocity(1, 1, 0, 0)\n"
+        "mg.remove_object(1)\n"
+        "return 'ok'\n";
+    REQUIRE(luaL_dostring(L, script) == LUA_OK);
     lua_pop(L, 1);
     delete lm;
 }

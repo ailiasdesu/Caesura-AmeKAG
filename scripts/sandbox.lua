@@ -150,6 +150,7 @@ local _G_whitelist = {
     Engine     = true,
     Render     = true,
     VFX        = true,
+    mini_game  = true,
     DevCore    = true,
     _CAESURA_BACKEND = true,
     _CAESURA_CONFIG  = true,

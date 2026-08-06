@@ -14,6 +14,7 @@
 // UnifiedBinding.h/.cpp are retained for reference only - they are NOT compiled into the engine.
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "../bindings/VFXBinding.h"
+#include "../bindings/MiniGameBinding.h"
 #include "../bindings/SaveBinding.h"
 #include "../bindings/SteamBinding.h"
 #include "../state/GameState.h"
@@ -127,6 +128,7 @@ void LuaManager::registerModules() {
     // Do not reorder these two calls.
     registerSaveBinding(m_L);
     registerVFXBinding(m_L);
+    registerMiniGameBinding(m_L);
 
     printf("[Lua] Engine (backend selection) module registered.\n");
     printf("[Lua] KAG module registered (32 APIs, via BackendRegistry).\n");

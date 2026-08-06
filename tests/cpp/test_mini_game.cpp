@@ -107,6 +107,19 @@ TEST_CASE("BgfxMiniGameBackend::scene load/unload without GPU") {
     mg.shutdown();
 }
 
+TEST_CASE("BgfxMiniGameBackend::enter(0) programmatic activation without GPU") {
+    // enter(0) activates objects spawned via the Lua API; without a GPU
+    // context ensureGpuResources() fails gracefully and nothing activates.
+    BgfxMiniGameBackend mg;
+    mg.init();
+    mg.enter(0);
+    CHECK_FALSE(mg.isActive());
+    mg.enter(1);  // unknown scene: safe no-op
+    CHECK_FALSE(mg.isActive());
+    mg.leave();
+    mg.shutdown();
+}
+
 TEST_CASE("BgfxMiniGameBackend::setRenderDevice") {
     BgfxMiniGameBackend mg;
     mg.setRenderDevice(nullptr);  // should not crash
