@@ -60,5 +60,17 @@ local n3 = coroutine.resume(coN, 450)
 local n4 = coroutine.resume(coN)
 check("named ms done at 550ms", n3 and n4 and coroutine.status(coN) == "dead")
 
+-- bare values are clamped to the schema max (security minor: the
+-- numeric key bypasses coerce -- the handler clamps instead)
+local toksC = tokenizer.parse("[wait 999999]")
+local ctxC = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
+local coC = coroutine.create(function() scheduler.run(ctxC, toksC, 1) end)
+local c1 = coroutine.resume(coC)
+local c2 = coroutine.resume(coC, 60000)
+local c3 = coroutine.resume(coC)
+check("bare wait clamped at 60s", c1 and c2 and c3
+      and coroutine.status(coC) == "dead")
+
 if failed > 0 then os.exit(1) end
 print("BAREVAL TESTS DONE")

@@ -52,7 +52,10 @@ function SystemCommands.wait(ctx, params)
     -- bare positional [wait 200] -> params[1] (tokenizer bare-value)
     local ms = params.ms or tonumber(params[1]) or params.duration
                or params.time or 1000
+    -- clamp here too: bare positional args bypass schema's 0..60000
+    -- (security minor: [wait 999999] must not block for 16 minutes)
     if ms <= 0 then return end
+    if ms > 60000 then ms = 60000 end
 
     local operation <close> = Operation.start(ctx)
     local ct = operation.token
