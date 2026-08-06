@@ -185,6 +185,12 @@ function MusicRoom.show(ctx)
         overlay.texture = overlayTex
     end)
 
+    -- INPUT LOOP (audit: show() rendered once and returned -- no way to
+    -- select/play/favorite; play()/favorite() had no callers). Same
+    -- per-frame pattern as ChapterSelect: the scheduler coroutine
+    -- drives coroutine.yield, and the engine routes _G._GAME_KEY_*.
+    local cursor, scroll, ITEMS = 1, 0, 10
+    while true do
     -- Title header bar background
     -- Title: "Music Room / 音楽室"
     backend.render_text("Music Room / 音楽室", 32, 18, 255, 200, 60, 255)
@@ -212,11 +218,14 @@ function MusicRoom.show(ctx)
         local favMark = t.favorited and "★ " or "  "
         local lockStatus = t.unlocked and "" or " [Locked]"
 
-        -- Track line: "★ 03. track_name [Locked]"
+        -- Track line: "> ★ 03. track_name [Locked]"
+        local prefix = (i == cursor) and "> " or "  "
         local idxStr = string.format("%2d.", i)
-        local line = favMark .. idxStr .. " " .. t.name .. lockStatus
+        local line = prefix .. favMark .. idxStr .. " " .. t.name .. lockStatus
         local r, g2, bVal = 220, 220, 255  -- default white-blue
-        if not t.unlocked then
+        if i == cursor then
+            r, g2, bVal = 255, 220, 80    -- cursor gold
+        elseif not t.unlocked then
             r, g2, bVal = 100, 100, 120  -- dim for locked
         elseif currentPreview == t.id then
             r, g2, bVal = 100, 255, 255  -- cyan highlight for playing
@@ -240,6 +249,35 @@ function MusicRoom.show(ctx)
     backend.render_text("★ " .. favCount .. " favorites", 40, footerY + 14, 255, 220, 80, 255)
 
     print("[MusicRoom] Displayed " .. #tracks .. " tracks.")
+        coroutine.yield()
+
+        if _G._GAME_KEY_UP == true then
+            _G._GAME_KEY_UP = false
+            cursor = math.max(1, cursor - 1)
+        elseif _G._GAME_KEY_DOWN == true then
+            _G._GAME_KEY_DOWN = false
+            cursor = math.min(#tracks, cursor + 1)
+        elseif _G._GAME_KEY_ENTER == true then
+            _G._GAME_KEY_ENTER = false
+            local t = tracks[cursor]
+            if t and not t.unlocked then
+                print("[MusicRoom] Track locked: " .. t.name)
+            elseif t then
+                MusicRoom.play(t.id)
+            end
+        elseif _G._GAME_KEY_F == true then
+            _G._GAME_KEY_F = false
+            local t = tracks[cursor]
+            if t then MusicRoom.favorite(t.id) end
+        elseif _G._GAME_KEY_ESC == true then
+            _G._GAME_KEY_ESC = false
+            break
+        end
+        if cursor <= scroll then scroll = cursor - 1
+        elseif cursor >= scroll + ITEMS then scroll = cursor - ITEMS + 1 end
+        scroll = math.max(0, math.min(#tracks - ITEMS, scroll))
+    end
+    MusicRoom.hide(ctx)
 end
 
 -- ===========================================================================

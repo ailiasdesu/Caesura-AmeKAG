@@ -97,6 +97,7 @@ local tests = {
     "test_backend_guard",
     "test_label_bench",
     "test_chapter_select",
+    "test_music_room",
 }
 
 local passed, failed = 0, 0

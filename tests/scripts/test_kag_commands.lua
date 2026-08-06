@@ -29,6 +29,7 @@ _G.KAG = {
 }
 -- preload chapter_select so sandboxed later tests can require it
 pcall(function() package.loaded["chapter_select"] = require("chapter_select") end)
+pcall(function() package.loaded["music_room"] = require("music_room") end)
 
 _G.Render = {
     text_set_font = function() end,
