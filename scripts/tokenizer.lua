@@ -101,7 +101,12 @@ local grammar = Ct(
 -- One-token pattern with an END-position capture: used by parse_with_offsets
 -- to advance through the source token by token (LPeg's init argument gives
 -- the next match start; the captured end position is the offset).
-local one_token = Ct(skip * (explicit_cmds + label_pat + text_body) * Cp())
+-- Two Cp() captures: the first records the position AFTER leading
+-- whitespace/comments (the command's own start -- the exact byte of
+-- '['), the second the match end for advancing. Audit: the old form
+-- reported the match START including leading comments, so editor
+-- jumps landed on the comment, not the command.
+local one_token = Ct(skip * Cp() * (explicit_cmds + label_pat + text_body) * Cp())
 
 -- ---- Normalization ----
 local function normalize(raw_tokens)
@@ -151,10 +156,11 @@ function tokenizer.parse_with_offsets(ks_text)
     while true do
         local cap = lpeg.match(one_token, ks_text, init)
         if not cap then break end
-        local endpos = cap[#cap] or init  -- trailing Cp() capture
-        local t = cap[1]
+        local startpos = cap[1] or init  -- after leading skip (cmd's '[')
+        local t = cap[2]                -- the token capture table
+        local endpos = cap[3] or init   -- match end
         if type(t) == "table" and t[1] then
-            local tok = { offset = init }
+            local tok = { offset = startpos }
             local typ = t[1]
             if typ == "cmd" then
                 tok.type = "command"; tok.cmd = t[2]; tok.params = t[3] or {}
