@@ -102,6 +102,14 @@ TEST_CASE("SaveManager: listSaves returns correct slot list") {
     bool found99 = false;
     for (const auto& s : saves) if (s.slot == 99) found99 = true;
     CHECK(found99);
+    // Create an actual out-of-range file (review nit: the vacuous
+    // check would pass without one -- this truly locks the 0..99 bound)
+    {
+        std::ofstream out100(dir.path() / "save_100.json");
+        out100 << "{\"n\":100}";
+        out100.close();
+    }
+    saves = sm.listSaves();
     bool found100 = false;
     for (const auto& s : saves) if (s.slot == 100) found100 = true;
     CHECK_FALSE(found100);
