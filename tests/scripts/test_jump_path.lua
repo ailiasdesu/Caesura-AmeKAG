@@ -158,6 +158,7 @@ local coTr = coroutine.create(function() scheduler.run(ctxTr, tTrav, 1) end)
 while coroutine.status(coTr) ~= "dead" do coroutine.resume(coTr) end
 check("blocked traversal link keeps layers", ctxTr.layers.bg ~= nil)
 check("blocked traversal link keeps backlog", ctxTr.backlog[1] ~= nil)
+check("blocked traversal link keeps call_stack", ctxTr.call_stack[1] ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")
