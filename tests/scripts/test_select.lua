@@ -39,6 +39,8 @@ local kag_orig = package.loaded["kag"]
 package.loaded["kag"] = KAG
 local real_ch = KAG.ch
 KAG.ch = function(c2, p2) dispatched[#dispatched + 1] = p2.text end
+-- (KAG.ch restored at the end of the file -- the stub must not leak
+-- to later tests: it shadows the real ch handler)
 -- stub TextScene so the render path is a no-op in tests
 package.loaded["kag.commands.text"] = nil  -- fresh? no: keep real, patch scene
 local ctx2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
@@ -66,6 +68,8 @@ ctx2._choiceButtonsActive = nil
 while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
 check("pending jump set", ctx2._pendingJump == "*a")
 package.loaded["kag"] = kag_orig
+
+KAG.ch = real_ch  -- restore the real handler (suite hygiene)
 
 if failed > 0 then os.exit(1) end
 print("SELECT TESTS DONE")

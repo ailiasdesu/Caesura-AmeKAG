@@ -58,5 +58,8 @@ coroutine.resume(co2)
 check("wait_click returns after resume", called)
 rawset(_G, "_CAESURA_CTX", nil)
 
+KAG.ch = real_ch  -- restore the real handler (suite hygiene: the stub
+-- would leak to later tests and shadow ch's speaker state machine)
+
 if failed > 0 then os.exit(1) end
 print("WAITCLICK TESTS DONE")
