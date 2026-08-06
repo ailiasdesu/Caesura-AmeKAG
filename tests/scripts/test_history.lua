@@ -22,6 +22,9 @@ check("backlog fields", ctx.backlog[1].name == "spk"
       and ctx.backlog[1].scene == "t.ks"
       and ctx.backlog[1].token_index == 7)
 
+-- save the REAL module before the mocks (restored at the scroll test)
+local _hu_saved = package.loaded["history_ui"]
+
 -- [history] with a jump result sets _pendingJump + stop_flag (the
 -- runner's dead branch consumes it). Patch HistoryUI to return a jump.
 package.loaded["history_ui"] = { show = function(c2)
@@ -57,10 +60,9 @@ check("empty history no-op", ctx3.stop_flag == false
 
 if failed > 0 then os.exit(1) end
 -- real show() input loop (audit): scroll + exit
--- restore the REAL module first (the mock stubs above persisted in
--- the cache -- require() would return them; clear + reload)
-package.loaded["history_ui"] = nil
-local HistoryUI = require("history_ui")
+-- restore the REAL module (saved before the mocks -- sandbox-safe;
+-- standalone runs where nothing was preloaded reload via require)
+local HistoryUI = _hu_saved or require("history_ui")
 local be_b = _G._CAESURA_BACKEND
 _G._CAESURA_BACKEND = { render = function() return true end,
     platform = function(cmd)

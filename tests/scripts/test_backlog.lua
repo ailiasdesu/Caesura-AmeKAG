@@ -48,16 +48,18 @@ check("backlog keeps newest", ctx.backlog[3].text == "line6")
 -- [history] command: mock HistoryUI.show returning a jump
 local SystemCommands = require("kag.commands.system")
 local history_ui_path = "history_ui"
-local orig_require = require
--- The system command requires history_ui; stub it to return a jump table.
-package.preload[history_ui_path] = function()
-    return { show = function() return { jump = true, scene = "scripts/demo_story.ks", index = 42 } end }
-end
+-- The suite preloads the REAL history_ui (pre-sandbox), so a preload
+-- stub is invisible to require -- replace the LOADED module instead
+-- and restore it (audit fix)
+local hu_real = package.loaded[history_ui_path]
+package.loaded[history_ui_path] = {
+    show = function() return { jump = true, scene = "scripts/demo_story.ks", index = 42 } end,
+}
 local result = SystemCommands.history(ctx, {})
 check("history returns jump", type(result) == "table" and result.jump == true)
 check("history sets _pendingJump", ctx._pendingJump ~= nil and ctx._pendingJump.index == 42)
 check("history stops script", ctx.stop_flag == true)
-package.preload[history_ui_path] = nil
+package.loaded[history_ui_path] = hu_real
 
 -- on_click guard: the runner's ctx is a module-local upvalue, so the guard
 -- cannot be exercised without a live coroutine; verify it is wired in the
