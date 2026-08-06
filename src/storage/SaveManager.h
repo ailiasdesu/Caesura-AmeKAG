@@ -62,6 +62,7 @@ public:
 
     std::string captureThumbnailPNG(int width = 320, int height = 180) override;
     void setGfxReady(bool ready) override { s_gfxReady = ready; }
+    bool isGfxReady() const { return s_gfxReady; }
     static bool s_gfxReady;
 
 private:

@@ -186,11 +186,6 @@ bool Engine::init() {
         return false;
     }
     m_initAttempted = true;
-    // Thumbnail capture needs bgfx initialized (audit SIGSEGV guard:
-    // requestScreenShot + frame with no init guard crashed before this)
-    if (m_saveManager) {
-        m_saveManager->setGfxReady(m_renderDevice != nullptr);
-    }
 
     const bool useHeadlessDefaults = m_config.headless && !m_config.editorMode;
     if (useHeadlessDefaults && !m_audioBackend) {
@@ -337,6 +332,11 @@ bool Engine::initPlatformPhase() {
     BackendRegistry::instance().setAsyncLoader(m_asyncLoader.get());
     m_saveManager->init("saves/");
     BackendRegistry::instance().setSaveManager(m_saveManager.get());
+    // Thumbnail capture needs bgfx initialized (audit SIGSEGV guard).
+    // Set AFTER the manager exists AND the render device is up -- the
+    // render-initialized flag, not the raw pointer (which is non-null
+    // from construction even before bgfx init -- review blocking).
+    m_saveManager->setGfxReady(m_renderInitialized);
     if (!m_particleSystem) {
         m_particleSystem = createParticleSystem();
     }

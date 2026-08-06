@@ -55,3 +55,14 @@ TEST_CASE("SaveManager::JSON parse error returns empty") {
     json data = sm.load(0);
     CHECK(data.empty());
 }
+
+TEST_CASE("SaveManager thumbnail capture guards on gfx readiness") {
+    SaveManager tm;
+    tm.setGfxReady(false);  // reset: the flag is static, Engine tests set it
+    CHECK_FALSE(tm.isGfxReady());
+    CHECK(tm.captureThumbnailPNG(320, 180) == "");  // skipped, no crash
+    tm.setGfxReady(true);
+    CHECK(tm.isGfxReady());
+    tm.setGfxReady(false);
+}
+}
