@@ -307,10 +307,15 @@ function SystemCommands.rollback(ctx, params)
 end
 
 function SystemCommands.unlock(ctx, params)
-    -- bare [unlock cg1] -> params[1] as the id (KAG3-style positional)
+    -- bare [unlock cg1] -> params[1] as the id (KAG3-style positional);
+    -- string-only guard matches the jump/call/link pattern (a raw pair
+    -- table at params[1] from a direct caller must not become a key)
     local kind = params.type or "cg"
-    local id   = params.id or params.name or params[1] or ""
-    if id == "" then return end
+    local id   = params.id or params.name
+    if type(id) ~= "string" and type(params[1]) == "string" then
+        id = params[1]
+    end
+    if type(id) ~= "string" or id == "" then return end
 
     if kind == "cg" then
         ctx.unlockedCG = ctx.unlockedCG or {}
