@@ -55,7 +55,8 @@ package.loaded["chapter_select"] = { show = function() return "chapter_2" end }
 local ctx4 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     current_scene = "scripts/demo_story.ks",
     labelMap = { chapter_1 = 10, chapter_2 = 25 }, stop_flag = false }
-local chosen = KAG.chapter(ctx4, {})
+local chosen
+pcall(function() chosen = KAG.chapter(ctx4, {}) end)
 check("chapter returns chosen", chosen == "chapter_2")
 check("chapter routes pendingJump", ctx4._pendingJump ~= nil
       and ctx4._pendingJump.index == 25

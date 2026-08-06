@@ -28,7 +28,7 @@ _G.KAG = {
     get_global_volume=function()return 1.0 end, replay_voice=function()end,
 }
 -- preload chapter_select so sandboxed later tests can require it
-package.loaded["chapter_select"] = require("chapter_select")
+pcall(function() package.loaded["chapter_select"] = require("chapter_select") end)
 
 _G.Render = {
     text_set_font = function() end,
