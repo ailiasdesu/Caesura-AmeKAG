@@ -1,6 +1,6 @@
 ﻿# Engine Capability Matrix (Mermaid)
 
-> 2026-07-24 readiness audit: this matrix tracks 54 code-level capability surfaces.
+> 2026-08-06 readiness audit (updated after GPU verification iteration): this matrix tracks 54 code-level capability surfaces.
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -8,8 +8,8 @@
 | Layer | Completion | Evidence boundary |
 |---|---:|---|
 | Modular architecture migration | 98% | Static/API targets, composition ownership, Engine-owned DebugProtocol, owner-thread RPC DTO dispatch, Lua-hook coexistence, shared production linkage and source-level gates are in place |
-| Core visual-novel usability | 62% | Headless/KAG/save/audio unit paths are strong; real GPU, font assets and end-to-end interaction remain incomplete |
-| Cross-platform product release | 30% | Multi-platform CI builds exist, but real GPU pixels, optional SDKs and non-Windows packages are not release-verified |
+| Core visual-novel usability | 74% | Headless/KAG/save/audio unit paths strong; R7/R8/C2 verified on real GPU (D3D11 + OpenGL 4.3); mini-game Lua binding + demo end-to-end; remaining gap: Metal backend and macOS/Linux hardware validation |
+| Cross-platform product release | 34% | Multi-platform CI builds exist; Windows D3D11+GL real-GPU pixels verified; optional SDKs (Steam/Live2D) and non-Windows packages not release-verified |
 
 The percentages are deliberately conservative. Unit-test success demonstrates regression coverage,
 not that optional SDKs, assets, drivers or editor transport have been exercised in production conditions.
