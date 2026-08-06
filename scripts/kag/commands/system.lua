@@ -27,22 +27,28 @@ local SystemCommands = {}
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Neo-Genesis contract: number + 60s cap (replaces the inline clamp).
+-- NOTE: ms/duration deliberately carry NO default (security fix): coerce
+-- injects defaults for absent fields, so time's default (1000) would
+-- shadow an explicit [delay ms=500]; the handler prefers ms, and only
+-- time carries the fallback default.
 require("kag.schema").define("wait", {
     time     = { type = "number", default = 1000, min = 0, max = 60000 },
-    ms       = { type = "number", default = 1000, min = 0, max = 60000 },
-    duration = { type = "number", default = 1000, min = 0, max = 60000 },
+    ms       = { type = "number", min = 0, max = 60000 },
+    duration = { type = "number", min = 0, max = 60000 },
 })
 -- [delay ms=500] -- KAG3 duplicate of [wait]; its OWN schema so the ms
 -- string from the tokenizer coerces to a number before the wait loop's
 -- ms<=0 comparison (audit: without this, "500" <= 0 raised, pcall'd).
 require("kag.schema").define("delay", {
     time     = { type = "number", default = 1000, min = 0, max = 60000 },
-    ms       = { type = "number", default = 1000, min = 0, max = 60000 },
-    duration = { type = "number", default = 1000, min = 0, max = 60000 },
+    ms       = { type = "number", min = 0, max = 60000 },
+    duration = { type = "number", min = 0, max = 60000 },
 })
 
 function SystemCommands.wait(ctx, params)
-    local ms = params.time or params.ms or params.duration or 1000
+    -- ms first: it is the explicit alias; time only carries the default
+    -- (so [delay ms=500] waits 500ms, not the injected 1000ms default)
+    local ms = params.ms or params.time or params.duration or 1000
     if ms <= 0 then return end
 
     local operation <close> = Operation.start(ctx)

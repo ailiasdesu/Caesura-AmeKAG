@@ -48,5 +48,20 @@ local src = f:read("*a")
 f:close()
 check("delay schema defined", src:find('define("delay"', 1, true) ~= nil)
 
+-- REGRESSION (security LOW): an explicit alias must NOT be shadowed by
+-- the injected time default. coerce([delay ms=500]) then wait must wait
+-- 500ms, not 1000ms. End-to-end through the coerce + handler path.
+local full = schema.coerce("delay", { ms = "500" })
+local ctxS = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
+local coS = coroutine.create(function()
+    KAG.delay(ctxS, full)
+end)
+local o1 = coroutine.resume(coS)
+local o2 = coroutine.resume(coS, 100)   -- 100 < 500: still waiting
+local o3 = coroutine.resume(coS, 450)   -- 100+450 = 550 >= 500: done
+check("coerced ms=500 waits 500 (no default shadow)",
+      o1 and o2 and o3 and coroutine.status(coS) == "dead")
+
 if failed > 0 then os.exit(1) end
 print("DELAY TESTS DONE")
