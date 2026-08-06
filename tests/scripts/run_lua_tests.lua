@@ -103,6 +103,7 @@ local tests = {
     "test_save_slot",
     "test_gallery_bare",
     "test_offsets",
+    "test_scene_preload",
     "test_ks_check",
     "test_four_remaining",
     "test_scroll",

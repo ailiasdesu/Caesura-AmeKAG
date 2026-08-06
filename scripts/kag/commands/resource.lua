@@ -118,14 +118,17 @@ local function load_audio(path, ctx)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  [preload type="texture|audio" path="bg/01.png,bg/02.png" wait="true|false"]
+--  [preload type="texture|audio|scene" path="bg/01.png,bg/02.png" wait="true|false"]
 --
 --  Preload assets before they are needed in script.
 --
---  type:  "texture" or "audio" — what kind of asset to preload
+--  type:  "texture", "audio" or "scene" — what kind of asset to preload
 --  path:  comma-separated list of asset paths (relative to game root)
 --  wait:  "true" = block coroutine until all loaded (sync)
 --         "false" = load in background, placeholder shown if used early
+--  scene paths resolve through mods and are cached (flow.scene_cache),
+--  so [preload type="scene" path="act2.ks"] before a [trans] removes the
+--  parse stall from the transition.
 --
 --  Placeholder textures:
 --    Dev mode:    magenta solid (RGBA 180,0,180,160) — unmistakable
@@ -172,6 +175,21 @@ function ResourceCommands.preload(ctx, params)
             local ok = load_audio(path, ctx)
             if isWait and not ok then
                 print("[Resource] preload: sync load failed for " .. path)
+            end
+        end
+
+    elseif assetType == "scene" then
+        -- Scene preloading (Neo-Genesis): parse the target .ks NOW so a
+        -- later [jump]/[call]/[link] hits flow.scene_cache and skips the
+        -- parse stall mid-transition. wait=false is meaningless here (the
+        -- parse is synchronous and cheap) but accepted for symmetry.
+        local flow = require("flow")
+        for _, path in ipairs(paths) do
+            local scene = flow.load_scene(path)
+            if scene then
+                print("[Resource] preload scene OK: " .. path)
+            else
+                print("[Resource] preload scene FAILED: " .. path)
             end
         end
 
