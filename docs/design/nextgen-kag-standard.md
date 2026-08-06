@@ -37,7 +37,22 @@ Schema.define("playbgm", {
 - 报错：`cmd [pt]@scene.ks:42: param 'speed' expects a number, got "abc"`
 - 增量：未迁移命令透传（行为不变），命令逐个迁移
 
-## 三、已迁移命令（20）
+## 三、防挂防护（无限执行防护）
+
+| 面 | 机制 | 上限 |
+|---|---|---|
+| `[iscript]`/`[eval]` Lua 指令 | C++ `lua_sethook` 指令计数（LuaManager） | 200 万指令/帧（每帧重置；超出 `luaL_error` 强制展开） |
+| `[while]` 循环 | `_whileIterByScene` 迭代计数（Lua scheduler） | 上限触发报错（含场景定位） |
+| `[for]` 循环 | `_forIterByScene` 迭代计数（`step=0` 退化为 1） | 同上 |
+| `[wait]`/`[delay]` 阻塞 | 显式别名优先 + handler 钳制 | 60s 上限（裸值绕过 schema 也钳制） |
+| `[waitsound]`/`[waitbgm]` | 有界等待循环 | 60s 上限 |
+| `[video]` 等待 | 播放状态循环 | 60s 上限（loop 视频自动停） |
+| `[trans]` 转场 | elapsed 循环 | duration 有限（schema 30s 上限） |
+
+测试锁定：`test_lua_manager.cpp`（指令预算 round-trip/无限循环中断/实例隔离）、
+`test_while.lua`（guard 触发）、`test_for.lua`（step=0 退化 + guard）。
+
+## 四、已迁移命令（20）
 
 | 批次 | 命令 |
 |---|---|
