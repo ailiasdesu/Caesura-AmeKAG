@@ -837,7 +837,9 @@ TEST_CASE("KAG: saveplace and loadplace roundtrip") {
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
     REQUIRE(requireModule(L, "system"));
-    const char* code = "local System = require('system'); local ctx = { current_label = 'start', pc = 5, tf = { flag = true }, dialog_index = 3 }; System.saveplace(ctx); ctx.current_label = nil; ctx.pc = nil; ctx.tf = nil; local ok = System.loadplace(ctx); assert(ok ~= false); assert(ctx.current_label == 'start'); assert(ctx.pc == 5); assert(ctx.tf.flag == true); assert(ctx.dialog_index == 3);";
+    // Audit fix (ab85be20): saveplace captures scene+token_index (ctx.pc
+    // was a dead field) and loadplace routes through _pendingJump.
+    const char* code = "local System = require('system'); local ctx = { current_label = 'start', scene = 'scripts/demo_story.ks', token_index = 5, tf = { flag = true }, dialog_index = 3 }; System.saveplace(ctx); ctx.current_label = nil; ctx.scene = nil; ctx.token_index = nil; ctx.tf = nil; local ok = System.loadplace(ctx); assert(ok ~= false); assert(ctx.current_label == 'start'); assert(ctx._pendingJump ~= nil and ctx._pendingJump.scene == 'scripts/demo_story.ks' and ctx._pendingJump.index == 5); assert(ctx.stop_flag == true); assert(ctx.tf.flag == true); assert(ctx.dialog_index == 3);";
     CHECK(doString(L, code));
     delete lm;
 }
