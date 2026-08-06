@@ -24,7 +24,11 @@ local sq_esc  = P("\\") * P("'")           -- \' escape
 local qval    = dquote * C((dq_esc + (1 - dquote))^0) * dquote
               + squote * C((sq_esc + (1 - squote))^0) * squote
 local uval    = C((1 - S(" \t\r\n]"))^1)
+-- Bare positional value (KAG3 syntax: [delay 500], [se 1], [gallery 2]):
+-- params[1] gets the raw string; handlers tonumber it. Comes AFTER the
+-- ident=value branch so "x=5" never parses as a bare value.
 local param   = Ct(C(ident) * space * "=" * space * (qval + uval))
+              + Ct(Cc("1") * C(uval))
 
 -- Command body: ["cmd", name, {{key,val},...}]
 local cmd_body = Ct(Cc("cmd") * C(ident) * space * Ct(param * space)^0)

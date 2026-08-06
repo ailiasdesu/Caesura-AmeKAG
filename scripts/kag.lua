@@ -269,6 +269,11 @@ end
 -- command + its schema contract (Neo-Genesis: one implementation, aliases
 -- share it). delay's ms param maps onto wait's ms field.
 KAG.delay = function(ctx, params)
+    -- bare positional [delay 500] -> params[1] (tokenizer bare-value
+    -- support); ms is explicit so wait prefers it over the default
+    if params[1] ~= nil then
+        params.ms = tonumber(params[1])
+    end
     return require("kag.commands.system").wait(ctx, params)
 end
 -- [clear] -- clear text layer (KAG3); alias for [cl]

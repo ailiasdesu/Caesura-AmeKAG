@@ -175,7 +175,10 @@ function scheduler.run(ctx, tokens, start_index)
         if type(params) == "table" then
             for _, p in ipairs(params) do
                 if type(p) == "table" and type(p[1]) == "string" then
-                    params[p[1]] = p[2]
+                    -- numeric-string keys ("1") become NUMBER keys so
+                    -- handlers read params[1] (bare KAG3 positional args)
+                    local key = tonumber(p[1]) or p[1]
+                    params[key] = p[2]
                 end
             end
         end
