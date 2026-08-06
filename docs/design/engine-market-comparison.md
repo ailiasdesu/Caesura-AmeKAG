@@ -113,7 +113,7 @@
 | 引擎 | 维护 | 许可 | 与 Caesura 对比 |
 |---|---|---|---|
 | Ren'Py 8.5.3 | 活跃 | MIT+LGPL | 生态/平台最全；Caesura 的 KAG 标签+GPU 多后端+内置编辑器为差异化 |
-| 吉里吉里Z 1.4.0r2 | 低维护（2021 后无提交） | BSD | **Caesura 是 KiriKiri 路线的现代重构**（KAG 标签兼容 + Lua + bgfx 跨平台）——继承日系语法免学习，补其跨平台/维护短板 |
+| 吉里吉里Z 1.4.0r2 | 低维护（2021 后无提交） | BSD | **Caesura 的 KAG 层是 KAG Neo-Genesis（新一代标准——非克隆）**（KAG 标签兼容 + Lua + bgfx 跨平台）——继承日系语法免学习，补其跨平台/维护短板 |
 | 吉里吉里2/KAG3 | 停更（2010） | GPL/专有 | 同 KAG 语法；Caesura 活跃维护 + 跨平台 |
 | NScripter | 停更（2018） | 专有免费 | 纯 2D 时代；Caesura 支持其 [r]/[s] 类基础命令 |
 | ONScripter | 半休眠（2023） | GPL | 老游戏兼容层；Caesura 面向新作 |
