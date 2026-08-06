@@ -70,7 +70,7 @@
 - **52 个 `test_*.cpp`**（`tests/cpp/` 实测 glob 与 CMakeLists 列表完全一致，无漂移）→ **C++ doctest 576 用例 / 2828 assertions 全绿 + Lua 86/86 全绿**（2026-08-06 全量重建后实测，见文末验证记录）；测试与产品链接同一批静态库（非二编译）。
 - CI：三平台（Windows MSVC / macOS Clang / Linux GCC）+ 耦合度门禁（`scripts/count_coupling.py --ci`）。
 - 性能基准（`docs/plans/2026-08-04-006-perf-baseline-update.md`）：tokenizer 478–541ms、scheduler 4001 resumes ≈13ms（≈308k tok/s），较 08-03 基线快 8–19%。
-- 迭代速度：08-03→08-06 共 **561 提交**全 CI 验证（`git rev-list --count --since="2026-08-03 00:00:00 +0800" e9b11b04` = 561，分析基准实测；含 08-06 当天 4 个文档提交后为 565）。
+- 迭代速度：截至分析基准 e9b11b04，2026-08-03 00:00 (+0800) 以来共 **561 提交**全 CI 验证（`git rev-list --count --since="2026-08-03 00:00:00 +0800" e9b11b04` = 561，可复现）。
 - 近期提交（最近 30 条）全部为既有能力的审计加固：宏展开预算、history 恢复、gallery/ending/saveload 守卫、存储 GCM 篡改检测/越界槽位——**无新模块、新命令类别**，报告覆盖面与 HEAD 一致。
 
 ### 1.5 差异化亮点（相对市面引擎）
