@@ -124,7 +124,10 @@ bool BgfxMiniGameBackend::ensureGpuResources() {
     m_u_lightColor= bgfx::createUniform("u_lightColor",bgfx::UniformType::Vec4);
     m_u_ambient   = bgfx::createUniform("u_ambient",   bgfx::UniformType::Vec4);
     m_u_cameraPos = bgfx::createUniform("u_cameraPos", bgfx::UniformType::Vec4);
-    m_u_viewProj  = bgfx::createUniform("u_viewProj",  bgfx::UniformType::Mat4);
+    // NOTE: "u_viewProj" is a bgfx PredefinedUniform name (auto-bound camera
+    // matrix); user code must not create a uniform with that name, or
+    // bgfx::createUniform fails identifier validation. Use a custom name.
+    m_u_viewProj  = bgfx::createUniform("u_miniViewProj", bgfx::UniformType::Mat4);
     m_u_material  = bgfx::createUniform("u_material",  bgfx::UniformType::Vec4);
     m_u_lightPos[0]=bgfx::createUniform("u_lightPos0", bgfx::UniformType::Vec4);
     m_u_lightCol[0]=bgfx::createUniform("u_lightCol0", bgfx::UniformType::Vec4);

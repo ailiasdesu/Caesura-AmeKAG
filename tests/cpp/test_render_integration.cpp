@@ -3,6 +3,7 @@
 #include "render/BgfxRenderDevice.h"
 #include "render/ParticleSystem.h"
 #include "render/TextRenderer.h"
+#include "minigame/BgfxMiniGameBackend.h"
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -13,6 +14,7 @@
 #include <bgfx/bgfx.h>
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #endif
 
@@ -25,30 +27,38 @@ constexpr wchar_t kVfxGpuChildEnv[] = L"CAESURA_VFX_GPU_SMOKE_CHILD";
 constexpr wchar_t kVfxGpuTestCase[] =
     L"Render: D3D11 VFX fade produces deterministic offscreen pixels";
 
-bool isVfxGpuChildProcess() {
+constexpr wchar_t kFontGpuChildEnv[] = L"CAESURA_FONT_GPU_SMOKE_CHILD";
+constexpr wchar_t kFontGpuTestCase[] =
+    L"Render: D3D11 CJK TTF load and render smoke";
+
+constexpr wchar_t kMiniGameGpuChildEnv[] = L"CAESURA_MINIGAME_GPU_SMOKE_CHILD";
+constexpr wchar_t kMiniGameGpuTestCase[] =
+    L"Render: D3D11 mini-game scene enter/render/leave smoke";
+
+bool isGpuChildProcess(const wchar_t* envName) {
     wchar_t value[2] = {};
-    return GetEnvironmentVariableW(kVfxGpuChildEnv, value, 2) > 0;
+    return GetEnvironmentVariableW(envName, value, 2) > 0;
 }
 
-DWORD runVfxGpuChildProcess() {
+DWORD runGpuChildProcess(const wchar_t* envName, const wchar_t* testCaseName) {
     wchar_t executable[MAX_PATH] = {};
     const DWORD length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
     if (length == 0 || length >= MAX_PATH) return ERROR_INSUFFICIENT_BUFFER;
 
-    const DWORD previousSize = GetEnvironmentVariableW(kVfxGpuChildEnv, nullptr, 0);
+    const DWORD previousSize = GetEnvironmentVariableW(envName, nullptr, 0);
     std::wstring previousValue;
     if (previousSize > 0) {
         previousValue.resize(previousSize);
         GetEnvironmentVariableW(
-            kVfxGpuChildEnv, previousValue.data(), previousSize);
+            envName, previousValue.data(), previousSize);
         previousValue.resize(previousSize - 1);
     }
 
-    if (!SetEnvironmentVariableW(kVfxGpuChildEnv, L"1")) return GetLastError();
+    if (!SetEnvironmentVariableW(envName, L"1")) return GetLastError();
 
     std::wstring command =
         L"\"" + std::wstring(executable) + L"\" --test-case=\"" +
-        kVfxGpuTestCase + L"\" --no-version";
+        testCaseName + L"\" --no-version";
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
@@ -66,7 +76,7 @@ DWORD runVfxGpuChildProcess() {
     const DWORD createError = created ? ERROR_SUCCESS : GetLastError();
 
     SetEnvironmentVariableW(
-        kVfxGpuChildEnv,
+        envName,
         previousSize > 0 ? previousValue.c_str() : nullptr);
     if (!created) return createError;
 
@@ -220,8 +230,8 @@ TEST_CASE("Render: TextRenderer shutdown is idempotent before init") {
 
 #if defined(_WIN32)
 TEST_CASE("Render: D3D11 VFX fade produces deterministic offscreen pixels") {
-    if (!isVfxGpuChildProcess()) {
-        CHECK(runVfxGpuChildProcess() == ERROR_SUCCESS);
+    if (!isGpuChildProcess(kVfxGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kVfxGpuChildEnv, kVfxGpuTestCase) == ERROR_SUCCESS);
         return;
     }
 
@@ -299,6 +309,107 @@ TEST_CASE("Render: D3D11 VFX fade produces deterministic offscreen pixels") {
     }
 
     bgfx::frame();
+    device.shutdown();
+}
+
+TEST_CASE("Render: D3D11 CJK TTF load and render smoke") {
+    if (!isGpuChildProcess(kFontGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kFontGpuChildEnv, kFontGpuTestCase) == ERROR_SUCCESS);
+        return;
+    }
+
+    constexpr uint16_t kWidth = 128;
+    constexpr uint16_t kHeight = 64;
+    HiddenSdlWindow window(kWidth, kHeight);
+    REQUIRE(window);
+    REQUIRE(window.nativeHandle() != nullptr);
+
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), kWidth, kHeight));
+
+    TextRenderer text;
+    REQUIRE(text.init(&device));
+
+    // Locate the shipped CJK font (test CWD is build/tests/Debug).
+    const char* candidates[] = {
+        "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+        "assets/fonts/NotoSansCJKsc-Regular.otf",
+        "../../assets/fonts/NotoSansCJKsc-Regular.otf",
+    };
+    const char* fontPath = nullptr;
+    for (const char* c : candidates) {
+        if (std::filesystem::exists(c)) { fontPath = c; break; }
+    }
+    REQUIRE_MESSAGE(fontPath != nullptr, "CJK font asset not found");
+
+    // R7: real face load (OTF via FreeType) + ASCII/CJK atlas rasterization
+    // + GPU atlas upload + face switch to FontId::TTF.
+    REQUIRE(text.loadTTF(fontPath, 24.0f));
+    CHECK(text.currentFont() == FontId::TTF);
+    CHECK(text.lineHeight() > 16.0f);
+    CHECK(bgfx::isValid(text.fontTexture()));
+
+    // R7: CJK + ruby rendering on a real GPU frame must not crash.
+    constexpr uint16_t kTextView = 10;
+    bgfx::setViewRect(kTextView, 0, 0, kWidth, kHeight);
+    bgfx::setViewClear(kTextView, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
+    text.renderText(kTextView, "Caesura 引擎测试 ABC 123",
+                    4.0f, 4.0f, TextColor::White());
+    text.renderRuby(kTextView, "漢字", "かんじ",
+                    4.0f, 24.0f, TextColor::White());
+    bgfx::frame();
+
+    // TextRenderer must release its bgfx resources while the GPU context is
+    // still alive: bgfx::destroy after bgfx::shutdown is undefined behaviour.
+    text.shutdown();
+    device.shutdown();
+}
+
+TEST_CASE("Render: D3D11 mini-game scene enter/render/leave smoke") {
+    if (!isGpuChildProcess(kMiniGameGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kMiniGameGpuChildEnv, kMiniGameGpuTestCase) == ERROR_SUCCESS);
+        return;
+    }
+
+    constexpr uint16_t kWidth = 128;
+    constexpr uint16_t kHeight = 72;
+    HiddenSdlWindow window(kWidth, kHeight);
+    REQUIRE(window);
+    REQUIRE(window.nativeHandle() != nullptr);
+
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), kWidth, kHeight));
+
+    BgfxMiniGameBackend miniGame;
+    miniGame.setRenderDevice(&device);
+    REQUIRE(miniGame.init());
+
+    const char* sceneCandidates[] = {
+        "../../../demo/minigame_scene.json",
+        "demo/minigame_scene.json",
+        "../../demo/minigame_scene.json",
+    };
+    const char* scenePath = nullptr;
+    for (const char* c : sceneCandidates) {
+        if (std::filesystem::exists(c)) { scenePath = c; break; }
+    }
+    REQUIRE_MESSAGE(scenePath != nullptr, "minigame scene JSON not found");
+
+    // C2: GPU lifecycle -- enter -> update -> render -> leave with a real
+    // scene descriptor (previously only verified without a GPU context).
+    const uint32_t scene = miniGame.loadScene(scenePath);
+    REQUIRE(scene != 0);
+    miniGame.enter(scene);
+    CHECK(miniGame.isActive());
+    CHECK(miniGame.update(0.016f));
+    miniGame.render();
+    bgfx::frame();
+    miniGame.leave();
+    CHECK_FALSE(miniGame.isActive());
+
+    miniGame.shutdown();
     device.shutdown();
 }
 #endif

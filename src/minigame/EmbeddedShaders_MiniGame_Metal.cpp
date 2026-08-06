@@ -26,7 +26,7 @@ struct VertexOut {
 
 struct Uniforms {
     float4x4 u_mtx;
-    float4x4 u_viewProj;
+    float4x4 u_miniViewProj;
 };
 
 vertex VertexOut miniGameVS(VertexIn in [[stage_in]],
@@ -35,7 +35,7 @@ vertex VertexOut miniGameVS(VertexIn in [[stage_in]],
     float4 worldPos = uniforms.u_mtx * float4(in.position, 1.0);
     out.worldPos = worldPos.xyz;
     out.normal = normalize((uniforms.u_mtx * float4(in.normal, 0.0)).xyz);
-    out.clipPos = uniforms.u_viewProj * worldPos;
+    out.clipPos = uniforms.u_miniViewProj * worldPos;
     return out;
 }
 )";

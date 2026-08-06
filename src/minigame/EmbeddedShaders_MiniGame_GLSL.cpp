@@ -16,7 +16,7 @@ layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 
 uniform mat4 u_mtx;       // model matrix
-uniform mat4 u_viewProj;  // view-projection matrix
+uniform mat4 u_miniViewProj;  // view-projection matrix (custom name: u_viewProj is reserved by bgfx)
 
 out vec3 v_worldPos;
 out vec3 v_normal;
@@ -25,7 +25,7 @@ void main() {
     vec4 worldPos = u_mtx * vec4(a_position, 1.0);
     v_worldPos = worldPos.xyz;
     v_normal = normalize(mat3(u_mtx) * a_normal);
-    gl_Position = u_viewProj * worldPos;
+    gl_Position = u_miniViewProj * worldPos;
 }
 )";
 
@@ -42,7 +42,6 @@ uniform vec4 u_lightColor;   // directional light color
 uniform vec4 u_ambient;      // ambient color
 uniform vec4 u_cameraPos;    // camera world position
 uniform vec4 u_material;     // x=roughness, y=metallic, z=specular, w=unused
-uniform vec4 u_viewProj[4];  // view-projection matrix (4 rows)
 
 // Point lights (up to 3)
 uniform vec4 u_lightPos0;    // xyz=position, w=intensity
