@@ -454,8 +454,14 @@ void SaveManager::registerBuiltinMigrations() {
 // ============================================================================
 //  Thumbnail capture (SU-4 stub)
 // ============================================================================
+bool SaveManager::s_gfxReady = false;
+
 std::string SaveManager::captureThumbnailPNG(int width, int height) {
     (void)width; (void)height;
+    if (!s_gfxReady) {
+        fprintf(stderr, "[SaveManager] Thumbnail skipped: gfx not ready\n");
+        return "";
+    }
     char path[256];
     static int thumbCounter = 0;
     snprintf(path, sizeof(path), "save_thumb_%d.png", thumbCounter++);

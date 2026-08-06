@@ -186,6 +186,11 @@ bool Engine::init() {
         return false;
     }
     m_initAttempted = true;
+    // Thumbnail capture needs bgfx initialized (audit SIGSEGV guard:
+    // requestScreenShot + frame with no init guard crashed before this)
+    if (m_saveManager) {
+        m_saveManager->setGfxReady(m_renderDevice != nullptr);
+    }
 
     const bool useHeadlessDefaults = m_config.headless && !m_config.editorMode;
     if (useHeadlessDefaults && !m_audioBackend) {

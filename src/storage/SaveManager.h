@@ -61,6 +61,8 @@ public:
     ISaveProvider* getSaveProvider() const override { return m_saveProvider.get(); }
 
     std::string captureThumbnailPNG(int width = 320, int height = 180) override;
+    void setGfxReady(bool ready) override { s_gfxReady = ready; }
+    static bool s_gfxReady;
 
 private:
     std::string m_saveDir;
