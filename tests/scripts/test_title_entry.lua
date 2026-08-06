@@ -77,6 +77,15 @@ for _, okv in ipairs(results or {}) do if not okv then failed = failed + 1 end e
 package.preload["kag_runner"] = _preload_kr
 package.preload["backend"] = _preload_backend
 package.loaded["backend"] = _loaded_backend
+-- The mock left package.loaded["kag_runner"] = 3-key stub (start/update/
+-- on_click). Reload the REAL module so later suite tests (and the
+-- replay/debug features) see the full API -- native require still works
+-- here (before test_sandbox locks require to package.loaded).
+package.loaded["kag_runner"] = nil
+local okr, kr = pcall(require, "kag_runner")
+if not okr then
+    print("[test_title_entry] kag_runner reload failed: " .. tostring(kr))
+end
 
 if failed > 0 then os.exit(1) end
 print("TITLE ENTRY TESTS DONE")

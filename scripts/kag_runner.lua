@@ -310,6 +310,24 @@ function kag_runner.update(dt)
     if ctx and ctx._kag_debug_paused then
         return false, "kag-paused"
     end
+    -- Replay system: record mode advances the capture clock every frame;
+    -- playback mode fires due clicks before normal input processing -- the
+    -- recorded event drives the same on_click path the player used
+    -- (coordinates restored so choice buttons resolve).
+    local replay = require("replay")
+    local replay_mode = replay.get_mode()
+    if replay_mode ~= "off" then
+        local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
+        if replay_mode == "record" then
+            replay.tick(delta_ms, nil)
+        elseif replay_mode == "playback" then
+            replay.tick(delta_ms, function(x, y)
+                if x ~= nil then _G._GAME_MOUSE_X = x end
+                if y ~= nil then _G._GAME_MOUSE_Y = y end
+                kag_runner.on_click()
+            end)
+        end
+    end
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
     local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
 
@@ -532,6 +550,14 @@ function kag_runner.on_click()
     -- the overlay coroutine is not batch-resumed underneath. (Checked first:
     -- the guard must hold even when no coroutine is running yet.)
     if ctx and ctx.input_focus == "history" then return false, "history-open" end
+
+    -- Replay system (record mode): log the click with the current mouse
+    -- position (choice coordinates included) before advancing.
+    local replay = require("replay")
+    if replay.get_mode() == "record" then
+        replay.record("click",
+            _G._GAME_MOUSE_X or 0, _G._GAME_MOUSE_Y or 0)
+    end
     if not kag_co then print("[Click] no coroutine"); return false, "not-running" end
     if coroutine.status(kag_co) == "dead" then print("[Click] coroutine dead"); return false, "dead" end
     if not ctx then print("[Click] no ctx"); return false, "no-context" end

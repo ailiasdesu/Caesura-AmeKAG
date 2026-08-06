@@ -502,4 +502,48 @@ _schema.define("assert", {
     msg = { type = "string" },
 })
 
+-- Input recording / playback control (Neo-Genesis):
+--   [replay mode="record"] ... [replay mode="save" file="demo.json"]
+--   [replay mode="load" file="demo.json"] [replay mode="playback"]
+--   [replay mode="off"]
+_schema.define("replay", {
+    _meta = { category = "system", blocking = false, desc = "input recording/playback control" },
+    mode = { type = "string", required = true, positional_index = 1 },
+    file = { type = "string" },
+})
+
+function SystemCommands.replay(ctx, params)
+    local replay = require("replay")
+    local mode = params.mode
+    if type(mode) ~= "string" and type(params[1]) == "string" then
+        mode = params[1]
+    end
+    local file = params.file
+    if mode == "save" then
+        local ok, err = replay.save(file)
+        if not ok then
+            print("[replay] save failed: " .. tostring(err))
+        else
+            print("[replay] saved " .. tostring(replay.event_count()) .. " events -> " .. file)
+        end
+        return ok
+    end
+    if mode == "load" then
+        local n, err = replay.load(file)
+        if not n then
+            print("[replay] load failed: " .. tostring(err))
+        else
+            print("[replay] loaded " .. tostring(n) .. " events <- " .. file)
+        end
+        return n ~= nil
+    end
+    if mode ~= "off" and mode ~= "record" and mode ~= "playback" then
+        print("[replay] unknown mode: " .. tostring(mode))
+        return false
+    end
+    replay.set_mode(mode, file)
+    print("[replay] mode -> " .. mode .. (file and (" (" .. file .. ")") or ""))
+    return true
+end
+
 return SystemCommands
