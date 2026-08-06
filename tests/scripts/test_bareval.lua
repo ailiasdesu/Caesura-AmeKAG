@@ -47,5 +47,18 @@ local w2 = coroutine.resume(co4, 250)
 local w3 = coroutine.resume(co4)
 check("wait bare done", w1 and w2 and w3 and coroutine.status(co4) == "dead")
 
+-- NAMED [delay ms=N] still wins through the real parse+scheduler path
+-- (review blocking regression: the bare-value wrapper clobbered ms)
+local toksN = tokenizer.parse("[delay ms=500]")
+local ctxN = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
+local coN = coroutine.create(function() scheduler.run(ctxN, toksN, 1) end)
+local n1 = coroutine.resume(coN)
+local n2 = coroutine.resume(coN, 100)
+check("named ms waiting at 100ms", n1 and n2 and coroutine.status(coN) == "suspended")
+local n3 = coroutine.resume(coN, 450)
+local n4 = coroutine.resume(coN)
+check("named ms done at 550ms", n3 and n4 and coroutine.status(coN) == "dead")
+
 if failed > 0 then os.exit(1) end
 print("BAREVAL TESTS DONE")

@@ -142,8 +142,12 @@ function Schema.coerce(cmd, params, ctx)
     -- Copy undeclared params through (compat), but warn on unknown names.
     for name, v in pairs(params) do
         if specs[name] == nil then
-            print(string.format("[schema] %s: unknown param '%s' ignored",
-                cmd, tostring(name)))
+            -- numeric keys (bare positional args) pass through silently;
+            -- named unknowns still warn
+            if type(name) ~= "number" then
+                print(string.format("[schema] %s: unknown param '%s' ignored",
+                    cmd, tostring(name)))
+            end
             out[name] = v  -- pass through for compat
         end
     end

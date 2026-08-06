@@ -270,8 +270,11 @@ end
 -- share it). delay's ms param maps onto wait's ms field.
 KAG.delay = function(ctx, params)
     -- bare positional [delay 500] -> params[1] (tokenizer bare-value
-    -- support); ms is explicit so wait prefers it over the default
-    if params[1] ~= nil then
+    -- support). STRING-only guard: with [delay ms=500] the scheduler's
+    -- key normalization leaves params[1] as the raw pair table
+    -- ({"ms","500"}) -- tonumber of that is nil and must NOT clobber
+    -- the coerced ms (review blocking: it silently fell to 1000ms).
+    if type(params[1]) == "string" and params.ms == nil then
         params.ms = tonumber(params[1])
     end
     return require("kag.commands.system").wait(ctx, params)
