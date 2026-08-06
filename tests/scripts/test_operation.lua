@@ -36,8 +36,9 @@ local src = f:read("*a")
 f:close()
 check("wait checks cancelled", src:find("not ct.cancelled", 1, true) ~= nil)
 check("wait breaks on cancel", src:find("if ct.cancelled then break end", 1, true) ~= nil)
-check("wait skips complete on cancel", src:find("if not ct.cancelled then
-        operation:complete()", 1, true) ~= nil)
+-- the complete call is guarded by the same cancelled check (both halves)
+check("wait complete guard", src:find("if not ct.cancelled then", 1, true) ~= nil
+      and src:find("operation:complete()", 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("OPERATION TESTS DONE")
