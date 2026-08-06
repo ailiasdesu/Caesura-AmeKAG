@@ -75,7 +75,11 @@ function engine_update(dt)
                     settings_co = coroutine.create(function()
                         require("settings").show(ctx)
                     end)
-                    coroutine.resume(settings_co)
+                    local ok0, err0 = coroutine.resume(settings_co)
+                    if not ok0 then
+                        print("[TitleDemo] settings setup error: " .. tostring(err0))
+                        settings_co = nil
+                    end
                 end
             elseif action == "exit" then
                 local engine = rawget(_G, "_CAESURA_ENGINE")

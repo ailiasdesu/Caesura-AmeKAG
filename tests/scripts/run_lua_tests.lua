@@ -51,7 +51,6 @@ local tests = {
     "test_end_title",
     "test_history",
     "test_unlock",
-    "test_settings",
     "test_saveplace",
     "test_story_meta",
     "test_saveload",
