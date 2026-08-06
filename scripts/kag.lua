@@ -88,6 +88,12 @@ do
     KAG.save = save_cmds.save
     KAG.load = save_cmds.load
     KAG.listsaves = save_cmds.listsaves
+    -- Audit fix: saveload/saveplace/loadplace existed in SaveCommands but
+    -- were NEVER registered -- [saveload] etc. in a .ks script hit a nil
+    -- handler (silent no-op at best, error at worst).
+    KAG.saveload = save_cmds.saveload
+    KAG.saveplace = save_cmds.saveplace
+    KAG.loadplace = save_cmds.loadplace
 end
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T

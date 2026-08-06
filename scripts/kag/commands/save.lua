@@ -17,6 +17,16 @@ local SaveCommands = {}
 -- (singular); assets/scripts and demo/ are also accepted. Any ".." segment
 -- rejects so traversal cannot smuggle an arbitrary file past the prefix
 -- check. Non-string/empty -> false.
+-- C++ bindings live on the global KAG table (set by KAGBinding.cpp);
+-- direct-API contexts (tests, editor) have none -- resolve like
+-- backend.lua does (audit fix).
+local function kag_binding(name)
+    local g = rawget(_G, "KAG")
+    local v = g and g[name]
+    if type(v) == "function" then return v end
+    return nil
+end
+
 function SaveCommands._safeScenePath(sp)
     if _type(sp) ~= "string" or #sp == 0 then return false end
     if sp:find("..", 1, true) then return false end
@@ -169,7 +179,7 @@ function SaveCommands.save(ctx, params)
     local sceneName = ctx.current_scene or ctx.currentScene or "unknown"
     local tokenIdx  = ctx.token_index or 1
 
-    local ok = KAG.save_game(slot, state, sceneName, tokenIdx, thumbnail)
+    local ok = kag_binding("save_game")(slot, state, sceneName, tokenIdx, thumbnail)
     -- Phase G8-U1: explicit GC collect after save
     pcall(function() collectgarbage("collect") end)
 
@@ -196,7 +206,7 @@ function SaveCommands.load(ctx, params)
     local slot = params.slot or 0  -- schema-typed (0..99)
 
     -- Call C++ SaveManager via KAG binding
-    local state, meta = KAG.load_game(slot)    if not state or type(state) ~= "table" then
+    local state, meta = kag_binding("load_game")(slot)    if not state or type(state) ~= "table" then
         print("[SaveCmd] Load failed for slot " .. slot .. ": " .. tostring(meta or "unknown error"))
         ctx.tf = ctx.tf or {}
         ctx.tf.load_result = "error"
@@ -344,7 +354,7 @@ function SaveCommands.saveload(ctx, params)
 end
 
 function SaveCommands.listsaves(ctx, params)
-    local saves = KAG.list_saves()
+    local saves = kag_binding("list_saves")()
     ctx.sf = ctx.sf or {}
     ctx.sf.save_list = saves
     -- Also set as tf for immediate access
