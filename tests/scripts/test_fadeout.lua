@@ -92,25 +92,23 @@ check("particles clear ok", okClear and ctxP._particleEmitters ~= nil
 _G.VFX = vfx_backup
 
 -- layfade scale (audit): <=1 treated as 0..1 fraction, >1 as 0..255.
--- The REAL fade_to runs synchronously outside a coroutine; its final
--- set_layer_opacity lands on the node -- assert the node value.
+-- Drive through the REAL layer tree (the module's local layers
+-- binding cannot be mocked -- a mock get() returned nothing, so
+-- layfade bailed with 'layer not found').
 local Layer2 = require("kag.commands.layer")
-local node1 = { opacity = 255 }
-local layers_b = package.loaded["layers"]
-package.loaded["layers"] = { get = function() return node1 end,
-    set_layer_opacity = function(node, o) node.opacity = o end,
-    mark_dirty = function() end }
+local real_layers = require("layers")
+local node1 = real_layers.add_layer(nil, {
+    name = "_lf1", layer_type = 0, x = 0, y = 0, w = 10, h = 10,
+    visible = true, opacity = 255 })
 pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
-      { opacity = 0.5, time = 1 })
+      { layer = "_lf1", opacity = 0.5, time = 1 })
 check("layfade fraction scaled", node1.opacity == 127)
-local node2 = { opacity = 255 }
-package.loaded["layers"] = { get = function() return node2 end,
-    set_layer_opacity = function(node, o) node.opacity = o end,
-    mark_dirty = function() end }
+local node2 = real_layers.add_layer(nil, {
+    name = "_lf2", layer_type = 0, x = 0, y = 0, w = 10, h = 10,
+    visible = true, opacity = 255 })
 pcall(Layer2.layfade, { f = {}, tf = {}, sf = {}, mp = {}, variables = {} },
-      { opacity = 128, time = 1 })
+      { layer = "_lf2", opacity = 128, time = 1 })
 check("layfade 0-255 passthrough", node2.opacity == 128)
-package.loaded["layers"] = layers_b
 
 if failed > 0 then os.exit(1) end
 print("FADEOUT TESTS DONE")
