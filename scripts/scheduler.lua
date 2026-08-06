@@ -302,16 +302,17 @@ function scheduler.run(ctx, tokens, start_index)
                 -- layers/backlog/call_stack -- WARN and keep scene state
                 print("[WARN] [link] missing target/storage parameter")
             else
-            -- Clear everything and jump
-            ctx.layers = {}
-            ctx.backlog = {}
-            operation.cancel_all(ctx)
-            ctx.call_stack = {}
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
                 print("[WARN] [link] blocked scene path: " .. path)
             else
+                -- security info: clear ONLY after the allowlist accepts
+                -- (a blocked traversal link must not wipe scene state)
+                ctx.layers = {}
+                ctx.backlog = {}
+                operation.cancel_all(ctx)
+                ctx.call_stack = {}
                 new_tokens = ctx.load_tokens and ctx.load_tokens(path)
             end
             if new_tokens then

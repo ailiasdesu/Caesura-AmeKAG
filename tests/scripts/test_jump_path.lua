@@ -146,5 +146,18 @@ for _, c in ipairs({ "call", "link" }) do
     check("bare [" .. c .. "] routes", callsC[1] == "assets/script/next.ks")
 end
 
+-- blocked TRAVERSAL [link] must also keep scene state (security info:
+-- the wipe used to run before the allowlist check)
+local tTrav = tokenizer.parse("[link ../evil.ks]")
+local ctxTr = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    layers = { bg = {} }, backlog = { { "old" } }, call_stack = { { 1 } },
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function() return { { "ch", {} } } end }
+local coTr = coroutine.create(function() scheduler.run(ctxTr, tTrav, 1) end)
+while coroutine.status(coTr) ~= "dead" do coroutine.resume(coTr) end
+check("blocked traversal link keeps layers", ctxTr.layers.bg ~= nil)
+check("blocked traversal link keeps backlog", ctxTr.backlog[1] ~= nil)
+
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")
