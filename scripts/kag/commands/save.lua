@@ -219,10 +219,22 @@ function SaveCommands.save(ctx, params)
 
 
 
-    -- Thumbnail: capture if available (engine provides via ctx)
+    -- Thumbnail: capture if available (engine provides via ctx; the
+    -- KAG.capture_thumbnail binding is the fallback -- audit: saves
+    -- previously had NO thumbnail, the C++ capture path was never
+    -- wired into the save flow)
     local thumbnail = params.thumbnail or ""
-    if #thumbnail == 0 and ctx.captureThumbnail then
-        thumbnail = ctx.captureThumbnail() or ""
+    if #thumbnail == 0 then
+        if ctx.captureThumbnail then
+            thumbnail = ctx.captureThumbnail() or ""
+        else
+            local okT, thumb = pcall(function()
+                return kag_binding("capture_thumbnail")()
+            end)
+            if okT and type(thumb) == "string" and #thumb > 0 then
+                thumbnail = thumb
+            end
+        end
     end
 
     -- Call C++ SaveManager via KAG binding

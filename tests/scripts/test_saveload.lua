@@ -78,5 +78,25 @@ local okD = pcall(Save.load, ctxD, { slot = 0 })
 _G.KAG = kag_backup
 check("crafted fields safe", okD and ctxD.textbox_style == nil)
 
+-- thumbnail wiring (audit): ctx.captureThumbnail wins; the KAG
+-- binding fallback fires when the ctx hook is absent; missing
+-- bindings degrade to "" without crashing
+local thumbs = {}
+local kag_backup2 = _G.KAG
+_G.KAG = { save_game = function(slot, state, scene, token, thumb)
+    thumbs[#thumbs + 1] = thumb return true end }
+local ctxTh = { f = {}, sf = {}, tf = {}, mp = {}, variables = {},
+    current_scene = "s.ks", token_index = 1,
+    captureThumbnail = function() return "B64CTX" end }
+pcall(Save.save, ctxTh, { slot = 0 })
+check("ctx thumbnail used", thumbs[1] == "B64CTX")
+-- no ctx hook -> KAG binding fallback (pcall-safe when nil)
+thumbs = {}
+local ctxTh2 = { f = {}, sf = {}, tf = {}, mp = {}, variables = {},
+    current_scene = "s.ks", token_index = 1 }
+pcall(Save.save, ctxTh2, { slot = 0 })
+check("binding fallback safe", thumbs[1] ~= nil)
+_G.KAG = kag_backup2
+
 if failed > 0 then os.exit(1) end
 print("SAVELOAD TESTS DONE")
