@@ -24,19 +24,17 @@ local Pattern = {}
 Pattern.__index = Pattern
 
 function Pattern:__call(s, pos)
-    local packed = table.pack(self.fn(s, pos or 1))
-    if not packed[1] then return nil end
-    -- packed[1] is position, packed[2..n] are captures
-    -- If only position (no captures), return just the number
-    if packed.n == 1 then
-        local r = packed[1]
-        if type(r) == "table" then
-            return table.unpack(r)
-        end
-        return r
+    -- Every internal fn returns a single table ({pos} or {pos, cap...});
+    -- table.pack/unpack per invocation was the parser hot cost (audit:
+    -- full-pipeline parse ~1.3s for 340KB; this trims per-char allocs).
+    local r = self.fn(s, pos or 1)
+    if not r or not r[1] then return nil end
+    if #r == 1 then
+        local v = r[1]
+        if type(v) == "table" then return table.unpack(v) end
+        return v
     end
-    -- Return all values: position, cap1, cap2, ...
-    return table.unpack(packed, 1, packed.n)
+    return table.unpack(r)
 end
 
 -- Sequence: a * b
@@ -52,7 +50,7 @@ function Pattern:__mul(other)
         local result = { r2[1] }
         for i = 2, #r do result[#result+1] = r[i] end
         for i = 2, #r2 do result[#result+1] = r2[i] end
-        return table.unpack(result)
+        return result
     end)
 end
 
@@ -61,8 +59,10 @@ function Pattern:__add(other)
     local a, b = self, lpeg.P(other)
     return lpeg.P(function(s, pos)
         local r = { a(s, pos) }
-        if r[1] then return table.unpack(r) end
-        return b(s, pos)
+        if r[1] then return r end
+        local rb = { b(s, pos) }
+        if not rb[1] then return nil end
+        return rb
     end)
 end
 
@@ -72,6 +72,19 @@ end
 function Pattern:__pow(n)
     local pat = self
     if type(n) ~= "number" then error("__pow expects number") end
+    -- Batch fast path: exclusion-class repetition ((1 - S(set))^n) --
+    -- find the next excluded char in one C-level call instead of
+    -- per-char pattern invocations (audit: ~100x on text runs).
+    if pat._excludeSet and (n == 0 or n == 1) then
+        -- escape pattern specials: sets containing ] or [
+        -- (e.g. the tokenizer whitespace set) would break the class
+        local set = pat._excludeSet:gsub("(%W)", "%%%1")
+        return lpeg.P(function(s, pos)
+            local stop = s:find("[" .. set .. "]", pos)
+            if stop then return { stop } end
+            return { #s + 1 }
+        end)
+    end
     if n == 0 then  -- zero or more (star)
         return lpeg.P(function(s, pos)
             local caps = {}
@@ -85,7 +98,7 @@ function Pattern:__pow(n)
             end
             local result = { p }
             for _, v in ipairs(caps) do result[#result+1] = v end
-            return table.unpack(result)
+            return result
         end)
     elseif n == 1 then  -- one or more (plus, greedy)
         return lpeg.P(function(s, pos)
@@ -103,7 +116,7 @@ function Pattern:__pow(n)
             if count == 0 then return nil end
             local result = { p }
             for _, v in ipairs(caps) do result[#result+1] = v end
-            return table.unpack(result)
+            return result
         end)
     elseif n >= 2 then  -- exactly n
         return lpeg.P(function(s, pos)
@@ -120,7 +133,7 @@ function Pattern:__pow(n)
             end
             local result = { p }
             for _, v in ipairs(caps) do result[#result+1] = v end
-            return table.unpack(result)
+            return result
         end)
     elseif n == -1 then  -- optional (zero or one, greedy)
         return lpeg.P(function(s, pos)
@@ -130,7 +143,7 @@ function Pattern:__pow(n)
                 for i = 2, #r do caps[#caps+1] = r[i] end
                 local result = { r[1] }
                 for _, v in ipairs(caps) do result[#result+1] = v end
-                return table.unpack(result)
+                return result
             end
             return { pos }
         end)
@@ -150,7 +163,7 @@ function Pattern:__pow(n)
             end
             local result = { p }
             for _, v in ipairs(caps) do result[#result+1] = v end
-            return table.unpack(result)
+            return result
         end)
     else
         error("__pow: unsupported exponent " .. tostring(n))
@@ -161,7 +174,7 @@ function Pattern:__unm()
     local pat = self
     return lpeg.P(function(s, pos)
         local r = { pat(s, pos) }
-        if r[1] then return table.unpack(r) end
+        if r[1] then return r end
         return { pos }
     end)
 end
@@ -176,11 +189,30 @@ function Pattern:__sub(other)
     if type(other) ~= "table" or getmetatable(other) ~= Pattern then
         return self:__sub(lpeg.P(other))
     end
+    -- Batch fast path: "any single char" minus a tagged S() set. The
+    -- exclusion pattern is the tokenizer hot shape ((1 - S(...))^1 over
+    -- text); string.find skips runs ~100x faster than per-char calls.
+    -- BIDIRECTIONAL: Lua evaluates `1 - S` as S.__sub(S, 1), so either
+    -- operand may be the any-char marker (audit: the first cut only
+    -- checked a._isAnyChar and silently fell back to per-char).
     local a, b = self, other
+    if (a._isAnyChar and b._set) or (b._isAnyChar and a._set) then
+        local set = a._set or b._set
+        local pat = lpeg.P(function(s, pos)
+            local c = s:sub(pos, pos)
+            if c == "" then return nil end
+            if set:find(c, 1, true) then return nil end
+            return { pos + 1 }
+        end)
+        pat._excludeSet = set
+        return pat
+    end
     return lpeg.P(function(s, pos)
         local r2 = { b(s, pos) }
         if r2[1] then return nil end  -- b matched here, fail
-        return a(s, pos)
+        local ra = { a(s, pos) }
+        if not ra[1] then return nil end
+        return ra
     end)
 end
 
@@ -188,6 +220,15 @@ end
 
 function lpeg.P(val)
     local t = type(val)
+    if t == "number" and val == 1 then
+        local pat = setmetatable({ fn = function(s, pos)
+            local c = s:sub(pos, pos)
+            if c == "" then return nil end
+            return { pos + 1 }
+        end }, Pattern)
+        pat._isAnyChar = true
+        return pat
+    end
     if t == "string" then
         local n = #val
         if n == 0 then
@@ -255,7 +296,7 @@ function lpeg.S(set)
             return { pos + 1 }
         end
         return nil
-    end }, Pattern)
+    end, _set = set }, Pattern)
 end
 
 -- ── Range ──────────────────────────────────────────────────────────────────
@@ -313,7 +354,7 @@ function lpeg.Cg(pat, name)
         -- keep inner captures; the name rides on the pattern for Ct merging
         local caps = { np }
         for i = 2, #r do caps[#caps + 1] = r[i] end
-        return table.unpack(caps)
+        return caps
     end }, Pattern)
 end
 
@@ -352,7 +393,12 @@ function lpeg.V(name)
         if not g then error("lpeg.V('" .. tostring(vpat.vname) .. "'): no grammar context") end
         local rule = g[vpat.vname]
         if not rule then error("lpeg.V: undefined rule '" .. tostring(vpat.vname) .. "'") end
-        return rule(s, pos)
+        -- rule() may return a bare position (single return) or unpacked
+        -- captures; the __call convention is TABLE-only -- pack here
+        -- (V is cold; table.pack cost is fine)
+        local r = table.pack(rule(s, pos))
+        if not r[1] then return nil end
+        return r
     end
     return vpat
 end
