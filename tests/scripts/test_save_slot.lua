@@ -31,10 +31,11 @@ calls = {}
 run(tokenizer.parse("[save 999]"))
 check("clamped 99", calls[1] == 99)
 
--- negative -> 0
+-- negative -> passed through (SYSTEM slots -1/-2 must not map to 0:
+-- F5/autosave would overwrite the manual slot -- review warn)
 calls = {}
 run(tokenizer.parse("[save -5]"))
-check("negative 0", calls[1] == 0)
+check("negative passthrough", calls[1] == -5)
 
 -- no arg -> 0
 calls = {}

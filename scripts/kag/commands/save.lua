@@ -170,7 +170,12 @@ local function resolve_slot(params)
     -- tonumber(params.slot): a direct caller could pass a string
     -- (review nit -- coerce + all callers pass numbers today)
     local slot = tonumber(params.slot) or tonumber(params[1]) or 0
-    if slot < 0 then return 0 end
+    -- NEGATIVE slots are SYSTEM slots (quicksave=-1, autosave=-2):
+    -- do NOT clamp them to 0 -- that would make F5/autosave silently
+    -- overwrite the player's manual slot 0 (security review warn).
+    -- They pass through; the C++ SaveManager 0..99 guard rejects them,
+    -- so system slots stay inert until a dedicated mapping lands.
+    if slot < 0 then return slot end
     if slot > 99 then return 99 end
     return math.floor(slot)
 end
