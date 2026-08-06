@@ -80,6 +80,7 @@ local tests = {
     "test_wait_audio",
     "test_video",
     "test_font",
+    "test_jump_path",
 }
 
 local passed, failed = 0, 0

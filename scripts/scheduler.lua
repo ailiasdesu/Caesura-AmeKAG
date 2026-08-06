@@ -40,6 +40,19 @@ local flow_commands = {
 -- whenever a macro splice mutates the stream (see invalidate below).
 -- Exported for tests and tooling (ks_check could reuse it); the
 -- scheduler itself calls the local.
+-- Scene-path allowlist for cross-scene jumps (security: jump/call/link
+-- concatenate target onto assets/script/ and tokenizer.parse_file does
+-- io.open -- a crafted target like ../evil.ks would traverse out of the
+-- game dir and EXECUTE an arbitrary .ks as a scene. Same predicate
+-- family as SaveCommands._safeScenePath; kept local to avoid a
+-- dependency cycle (scheduler is the bottom of the stack).
+local function is_safe_scene_path(path)
+    if type(path) ~= "string" or #path == 0 then return false end
+    if path:find("..", 1, true) then return false end
+    if path:find("^assets/script/") ~= 1 then return false end
+    return path:find("%.ks$") ~= nil
+end
+
 local function build_label_index(tokens)
     local idx = {}
     for i, tok in ipairs(tokens) do
@@ -195,19 +208,23 @@ function scheduler.run(ctx, tokens, start_index)
             elseif params.target and target:sub(1,1) ~= "*" then
                 -- Cross-scene jump: load new scene file
                 local path = "assets/script/" .. target
-                local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
-                if new_tokens then
-                    ctx.tokens = new_tokens
-                    ctx.token_index = 1
-                    ctx.current_scene = path
-                    ctx.call_stack = {}
-                    ctx.layers = {}
-                    ctx.backlog = {}
-                    ctx.label_index = nil  -- raw tokens: entry lazy-builds
-                    operation.cancel_all(ctx)
-                    return
+                if not is_safe_scene_path(path) then
+                    print("[WARN] [jump] blocked scene path: " .. path)
                 else
-                    print("[WARN] [jump] failed to load scene: " .. path)
+                    local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+                    if new_tokens then
+                        ctx.tokens = new_tokens
+                        ctx.token_index = 1
+                        ctx.current_scene = path
+                        ctx.call_stack = {}
+                        ctx.layers = {}
+                        ctx.backlog = {}
+                        ctx.label_index = nil  -- raw tokens: entry lazy-builds
+                        operation.cancel_all(ctx)
+                        return
+                    else
+                        print("[WARN] [jump] failed to load scene: " .. path)
+                    end
                 end
             else
                 -- Intra-scene jump: find label (target may be "label" or "*label")
@@ -230,7 +247,12 @@ function scheduler.run(ctx, tokens, start_index)
                 scene = ctx.current_scene,      -- restore the CALLER's scene name
             })
             local path = "assets/script/" .. target
-            local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            local new_tokens = nil
+            if not is_safe_scene_path(path) then
+                print("[WARN] [call] blocked scene path: " .. path)
+            else
+                new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            end
             if new_tokens then
                 tokens = new_tokens
                 ctx.tokens = tokens
@@ -265,7 +287,12 @@ function scheduler.run(ctx, tokens, start_index)
             operation.cancel_all(ctx)
             ctx.call_stack = {}
             local path = "assets/script/" .. target
-            local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            local new_tokens = nil
+            if not is_safe_scene_path(path) then
+                print("[WARN] [link] blocked scene path: " .. path)
+            else
+                new_tokens = ctx.load_tokens and ctx.load_tokens(path)
+            end
             if new_tokens then
                 tokens = new_tokens
                 ctx.tokens = tokens
@@ -821,4 +848,5 @@ function scheduler.resume(ctx)
 end
 
 scheduler.build_label_index = build_label_index
+scheduler.is_safe_scene_path = is_safe_scene_path
 return scheduler
