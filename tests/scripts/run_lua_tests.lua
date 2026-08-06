@@ -58,6 +58,7 @@ local tests = {
     "test_saveload",
     "test_audio_cmds",
     "test_textflow",
+    "test_vib_camera",
 }
 
 local passed, failed = 0, 0
