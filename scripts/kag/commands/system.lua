@@ -91,10 +91,10 @@ function SystemCommands.emb(ctx, params)
         end
 
         if ok then
-            ctx.tf = ctx.tf or {}
+            if type(ctx.tf) ~= "table" then ctx.tf = {} end
             ctx.tf.emb_result = result
         else
-            ctx.tf = ctx.tf or {}
+            if type(ctx.tf) ~= "table" then ctx.tf = {} end
             ctx.tf.emb_result = nil
         end
         return
@@ -168,15 +168,18 @@ function SystemCommands.eval(ctx, params)
     local code = "return " .. exp
     local ok, result, envOut = getSandbox().execute(code, env)
 
-    -- Sync back mutations
+    -- Sync back mutations -- type-guarded like [emb] (review warn: this
+    -- path is dead today -- the scheduler intercepts [eval] -- but the
+    -- invariant must hold if it ever becomes reachable).
     if envOut then
-        ctx.tf = envOut.tf or ctx.tf
-        ctx.f  = envOut.f  or ctx.f
-        ctx.sf = envOut.sf or ctx.sf
-        ctx.mp = envOut.mp or ctx.mp
+        if type(envOut.tf) == "table" then ctx.tf = envOut.tf end
+        if type(envOut.f) == "table" then ctx.f = envOut.f end
+        if type(envOut.sf) == "table" then ctx.sf = envOut.sf end
+        if type(envOut.mp) == "table" then ctx.mp = envOut.mp end
     end
 
     if ok then
+        if type(ctx.tf) ~= "table" then ctx.tf = {} end
         ctx.tf = ctx.tf or {}
         ctx.tf.eval_result = result
     else

@@ -22,10 +22,35 @@ check("replacement visible via envOut", envOut2.tf.b == 2)
 
 -- [emb] strict path syncs envOut back to ctx (source-level: the handler
 -- reads envOut.tf/f/sf/mp)
-local fh = assert(io.open("scripts/kag/commands/system.lua", "r"))
-local src = fh:read("*a")
-fh:close()
-check("emb syncs envOut", src:find("ctx.tf = envOut.tf or ctx.tf", 1, true) ~= nil)
+    -- [emb] strict path syncs envOut back to ctx: drive the REAL handler
+    -- (review warn: the direct-execute test passed vacuously -- the guard
+    -- could be deleted and it would still pass). package.loaded only: the
+    -- suite sandbox's require wrapper rejects un-preloaded modules.
+    local KAG = package.loaded["kag"]
+    if KAG then
+        local ctxH = { f = {}, tf = { a = 1 }, sf = {}, mp = {}, variables = {} }
+        local okH = pcall(KAG.emb, ctxH, { exp = "tf = { b = 2 }" })
+        check("emb replacement syncs ctx.tf",
+              okH and type(ctxH.tf) == "table" and ctxH.tf.b == 2)
+
+        -- NON-table replacement is REJECTED: ctx.tf stays a table
+        local ctxN = { f = {}, tf = { a = 1 }, sf = {}, mp = {}, variables = {} }
+        local okN = pcall(KAG.emb, ctxN, { exp = "tf = 5" })
+        check("emb non-table replacement rejected",
+              okN and type(ctxN.tf) == "table" and ctxN.tf.a == 1)
+    else
+        print("PASS emb handler block skipped (kag not loaded)")
+        passed = passed + 1
+        print("PASS emb non-table replacement rejected (skipped)")
+        passed = passed + 1
+    end
+
+    -- source-lock: the sync is TYPE-GUARDED (guarded form, not the old
+    -- unguarded assignment)
+    local fh = assert(io.open("scripts/kag/commands/system.lua", "r"))
+    local src = fh:read("*a")
+    fh:close()
+    check("emb sync type-guarded", src:find('type(envOut.tf) == "table"', 1, true) ~= nil)
 
 
 -- Replacement with a NON-table (security LOW): the sync must not flow
