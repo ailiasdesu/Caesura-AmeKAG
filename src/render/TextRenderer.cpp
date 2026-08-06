@@ -705,6 +705,18 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
         return false;
     }
 
+    // Guard: the atlas upload below calls bgfx::createTexture2D, which is
+    // undefined behaviour before bgfx::init. Fail gracefully instead of
+    // crashing in headless/test/device-lost contexts. m_initialized is the
+    // authoritative GPU-availability flag (set by init(), cleared by
+    // shutdown() and onDeviceLost()); bgfx::getCaps() itself is not safe
+    // to call before bgfx::init.
+    if (!m_initialized) {
+        fprintf(stderr, "[TextRenderer] loadTTF: renderer not initialized; "
+                        "refusing GPU atlas upload\n");
+        return false;
+    }
+
     auto nextTtf = std::make_unique<TTFState>();
     FT_Error ftErr = FT_Init_FreeType(&nextTtf->ftLib);
     if (ftErr) {

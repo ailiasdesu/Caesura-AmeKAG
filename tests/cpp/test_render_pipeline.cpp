@@ -2,6 +2,7 @@
 #include "doctest.h"
 #include "render/TextRenderer.h"
 #include "render/ShaderCache.h"
+#include <filesystem>
 #include <memory>
 
 using namespace Caesura;
@@ -30,6 +31,29 @@ TEST_CASE("TextRenderer::missing TTF fails repeatedly") {
     CHECK_FALSE(tr.loadTTF(missingFont));
     CHECK_FALSE(tr.loadTTF(missingFont));
     CHECK(tr.currentFont() == FontId::Small);
+}
+
+TEST_CASE("TextRenderer::loadTTF refuses without GPU context") {
+    // R7 edge case: loadTTF ends with a bgfx atlas upload, so calling it
+    // before bgfx::init is UB. A real font file on disk must be refused
+    // gracefully (no crash) while the GPU is not initialized.
+    TextRenderer tr;
+    const char* candidates[] = {
+        "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+        "assets/fonts/NotoSansCJKsc-Regular.otf",
+        "../../assets/fonts/NotoSansCJKsc-Regular.otf",
+    };
+    const char* realFont = nullptr;
+    for (const char* c : candidates) {
+        if (std::filesystem::exists(c)) { realFont = c; break; }
+    }
+    if (!realFont) {
+        MESSAGE("CJK font asset not present; skipping GPU-guard check");
+        return;
+    }
+    CHECK_FALSE(tr.loadTTF(realFont, 24.0f));
+    CHECK(tr.currentFont() == FontId::Small);
+    CHECK(tr.lineHeight() == doctest::Approx(16.0f));
 }
 
 TEST_CASE("ShaderCache::default empty") {
