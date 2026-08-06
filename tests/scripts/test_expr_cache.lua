@@ -1,4 +1,4 @@
--- test_expr_cache.lua — [if] expression cache (Neo-Genesis)
+-- test_expr_cache.lua — [if] expression cache (Neo-Genesis, via kag/expr.lua)
 package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 local results = {}  -- file scope: runner shares globals
 local function check(name, cond)
@@ -7,15 +7,14 @@ local function check(name, cond)
 end
 
 local scheduler = require("scheduler")
-local src = io.open("scripts/scheduler.lua", "r")
+local exprLang = require("kag.expr")
+local src = io.open("scripts/kag/expr.lua", "r")
 local s = src and src:read("*a") or ""
 if src then src:close() end
 
 check("cache half-evicts", s:find("math.floor(#keys / 2)", 1, true) ~= nil)
-check("evict halves not clears", s:find("math.floor(#keys / 2)", 1, true) ~= nil
-      and not s:find("if n > EXPR_CACHE_MAX then%s*$", 1))
-check("error report has location", s:find('ctx.current_scene or "?"', 1, true) ~= nil)
-check("error report has token", s:find("ctx.token_index or 0", 1, true) ~= nil)
+check("error report has location", s:find('ctx.current_scene or ctx.currentScene', 1, true) ~= nil)
+check("error report has token", s:find("ctx.token_index or ctx.tokenIndex", 1, true) ~= nil)
 
 -- behavioral: if evaluation against a stable ctx.f table
 do

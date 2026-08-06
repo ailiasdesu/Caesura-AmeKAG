@@ -29,6 +29,7 @@ local tests = {
     "test_sandbox",
     "test_label_index",
     "test_expr_cache",
+    "test_expr_lang",
     "test_bg_dedup",
     "test_macro_nested",
     "test_scene_restore",

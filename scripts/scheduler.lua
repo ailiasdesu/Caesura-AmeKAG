@@ -11,15 +11,6 @@
 
 local scheduler = {}
 
--- Expression chunk cache: [if] conditions are re-compiled on every hit;
--- looping scripts recompile the same strings each iteration (compile is
--- 10-100x more expensive than executing). Cache by source string only:
--- chunks are compiled with a fresh _ENV per call (ctx.f), so a cached
--- chunk never pins an old env table. Bounded to 128 entries so a
--- scripted loop over many distinct expressions cannot grow unbounded.
-local exprCache = {}
-local EXPR_CACHE_MAX = 128
-
 -- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
 
 local flow_commands = {
@@ -75,33 +66,13 @@ local function find_label(tokens, name, label_index)
     return nil
 end
 
--- Shared [if]/[elseif] expression evaluation (env-identity cache).
+-- Shared [if]/[elseif]/[while]/[for] expression evaluation.
+-- Neo-Genesis: delegates to kag/expr.lua, which translates TJS-style
+-- operators (&& || ! != ?:) into Lua and reports compile/runtime errors
+-- visibly (scene:line) instead of silently taking the else branch.
+local exprLang = require("kag.expr")
 local function eval_expr(ctx, expr)
-    local ok, result = pcall(function()
-        local src = "return " .. expr
-        local key = src .. "\0" .. tostring(ctx.f)
-        local fn = exprCache[key]
-        if not fn then
-            fn = load(src, "=if", "t", ctx.f or {})
-            if fn then
-                exprCache[key] = fn
-                local n = 0
-                for _ in pairs(exprCache) do n = n + 1 end
-                if n > EXPR_CACHE_MAX then
-                    local keys = {}
-                    for k in pairs(exprCache) do keys[#keys + 1] = k end
-                    for j = 1, math.floor(#keys / 2) do
-                        exprCache[keys[j]] = nil
-                    end
-                end
-            end
-        end
-        if fn then
-            return fn()
-        end
-        return false
-    end)
-    return ok, result
+    return exprLang.evaluate(ctx, expr)
 end
 
 
