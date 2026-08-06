@@ -33,6 +33,16 @@ require("kag.schema").define("wait", {
     duration = { type = "number", default = 1000, min = 0, max = 60000 },
 })
 
+-- [delay ms] -- KAG3 blocking delay; positional arg form of [wait].
+-- (audit gap: tokenizer parsed [delay] but NO handler was registered,
+-- so the scheduler's unknown-command fallback rendered the delay text
+-- as dialogue! Same ms loop + cancel semantics as [wait].)
+function SystemCommands.delay(ctx, params)
+    local p = params[1] or params.time or params.ms or params.duration
+    params.time = p
+    return SystemCommands.wait(ctx, params)
+end
+
 function SystemCommands.wait(ctx, params)
     local ms = params.time or params.ms or params.duration or 1000
     if ms <= 0 then return end
