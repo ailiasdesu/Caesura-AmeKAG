@@ -1,6 +1,6 @@
 ﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 30 interfaces · 569 tests · 0 circular dependencies**
+> **16 modules · 30 interfaces · 576 tests · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 
 Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. KAG 3.0 script compatible.
@@ -228,7 +228,7 @@ Caesura(AmeKAG)/
 │   ├── steam/              Steamworks (conditional)
 │   └── storage/            Save/load system
 ├── scripts/                Lua runtime (kag/, tokenizer, scheduler)
-├── tests/                  52 test files (569/569)
+├── tests/                  52 test files (576/576)
 │   └── mocks/              NullJobSystem for synchronous testing
 ├── docs/
 │   ├── api/                Interface docs (Lua, KAG, C++, RPC)

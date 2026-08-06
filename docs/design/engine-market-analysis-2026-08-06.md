@@ -191,7 +191,7 @@ Caesura 在**架构纪律（16 模块接口隔离、52 测试文件全绿、耦�
 - **全量重建 + 完整测试（2026-08-06 20:18–20:22 实测）**：仓库自 `codex\` 路径迁至 `code\` 后旧 build 缓存失效（CMakeCache 指向已消失目录）；已 `rm -rf build` 从零全量重建（`cmake -B build -DCAESURA_LIVE2D=OFF && cmake --build build --config Debug --parallel`，0 错误）。
   - **C++ doctest：576 test cases / 2828 assertions — 576 passed, 0 failed, 0 skipped**
   - **Lua 脚本测试：86 passed, 0 failed, 86 total**（`external/lua/lua.exe tests/scripts/run_lua_tests.lua`）
-  - 注：`tests/run_all.bat` 中 "574/574 | Lua: 86/86" 为过时硬编码，已同步修正为 576/86；能力矩阵 P2 中 "569 cases" 为 2026-07-24 旧快照，以本记录为准。
+  - 注：`tests/run_all.bat` 中 "574/574 | Lua: 86/86" 为过时硬编码，已同步修正为 576/86；能力矩阵 P2 中 "569 cases" 为 2026-07-24 旧快照，**已于 2026-08-06 同步更新为 576**（commit ff76733e），README 与 market-comparison 中的 569/12 亦已同步修正。
 - **耦合度门禁**：`python scripts/count_coupling.py --ci` → PASS（所有模块在阈值内）。
 
 *证据索引：接口清单 = `glob src/*/api/*.h`（30 个 I*.h）；能力矩阵 = `docs/design/engine-capability-matrix.md`；命令契约 = `docs/api/command-contracts.md`（562 行，schema_doc.lua 自动生成）+ `scripts/kag/commands/`（9 文件）+ `scripts/kag.lua`（13 命令，去重后 72）；测试 = `tests/CMakeLists.txt`（52 test_*.cpp 与磁盘 glob 一致）；构建模块 = `cmake/CaesuraModules.cmake`（16 静态库）；LICENSE = 根目录 MIT（f7ee6184）。*
