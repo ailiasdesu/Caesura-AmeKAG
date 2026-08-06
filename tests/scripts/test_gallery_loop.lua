@@ -57,10 +57,11 @@ _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
 coroutine.resume(co)
 check("texture cached on repeat", loads == 0)
+-- navigation to a NEW index re-loads (count advanced by the earlier
+-- right) -- the cache only suppresses the SAME-index repeat above
 _G._GAME_KEY_RIGHT = true
 coroutine.resume(co)
--- open rendered index 1 (1 load) + this navigation to index 3 (1 load)
-check("right to 3 loads once", loads == 2)
+check("nav re-loads new index", loads == 1)
 _G._GAME_KEY_ESC = true
 coroutine.resume(co)
 check("esc closes", coroutine.status(co) == "dead" and ctx.galleryState == nil)
