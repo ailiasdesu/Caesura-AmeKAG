@@ -43,8 +43,19 @@ local ctxR = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     tokens = toksR, token_index = 1, current_scene = "t.ks",
     label_index = {}, _whileIterByScene = { ["t.ks"] = 0 } }
 local coR = coroutine.create(function() scheduler2.run(ctxR, toksR, 1) end)
-local okR, errR = coroutine.resume(coR)
+-- The scheduler yields between commands; run the coroutine to completion
+-- (a single resume only executes up to the first yield and would miss the
+-- budget error -- the self-recursive macro needs many expansion steps).
+local okR, errR = true, nil
+while coroutine.status(coR) ~= "dead" do
+    local okStep, errStep = coroutine.resume(coR)
+    if not okStep then
+        okR, errR = false, errStep
+        break
+    end
+end
 check("recursive macro budgeted", not okR
       and tostring(errR):find("expansion budget") ~= nil)
 
 print("NESTED MACRO TESTS DONE")
+if failed > 0 then os.exit(1) end

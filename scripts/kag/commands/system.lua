@@ -351,4 +351,140 @@ function SystemCommands.unlock(ctx, params)
         ctx.unlockedMusic[id] = true
     end
 end
+
+-- =============================================================================
+--  Modern utility commands (KAG Neo-Genesis additions)
+-- =============================================================================
+
+-- Resolve "f.x" / "sf.x" / "tf.x" / "mp.x" / "lf.x" / bare "x" (-> f.x)
+-- to { table = ctx.f, key = "x" }; returns nil for unknown scopes.
+local function resolve_var(ctx, var)
+    if type(var) ~= "string" or var == "" then return nil end
+    local scope, key
+    local tname, k = var:match("^([%a_]+)%.([%w_]+)$")
+    if tname then
+        scope = ({ f = "f", sf = "sf", tf = "tf", mp = "mp", lf = "lf" })[tname]
+        key = k
+    else
+        scope, key = "f", var
+    end
+    local t = scope and ctx[scope]
+    if type(t) ~= "table" then return nil end
+    return t, key
+end
+
+-- Type inference for [set]/[inc]: "true"/"false" -> boolean, integer ->
+-- number, decimal -> number, else string.
+local function infer_value(value)
+    if type(value) ~= "string" then return value end
+    if value == "true" then return true end
+    if value == "false" then return false end
+    if value:match("^%-?%d+$") then return tonumber(value) end
+    if value:match("^%-?%d+%.%d+$") then return tonumber(value) end
+    return value
+end
+
+--- [set var="f.hp" value="30"] / [set f.hp 30] — typed variable assignment.
+--  KAG3 needed [eval tf.x = ...]; [set] is the declarative modern form.
+function SystemCommands.set(ctx, params)
+    local var = params.var
+    if type(var) ~= "string" and type(params[1]) == "string" then
+        var = params[1]
+    end
+    local value = params.value
+    if value == nil and type(params[2]) == "string" then value = params[2] end
+    if value == nil and params[2] ~= nil then value = tostring(params[2]) end
+    local t, key = resolve_var(ctx, var)
+    if not t then
+        print("[WARN] [set] unknown variable scope: " .. tostring(var))
+        return
+    end
+    t[key] = infer_value(value)
+end
+
+--- [inc var="f.count"] / [inc var="f.count" by=2] — increment (KAG3 staple).
+--  Also handles decrement with by=-1; nil-safe (missing var starts at 0).
+function SystemCommands.inc(ctx, params)
+    local var = params.var
+    if type(var) ~= "string" and type(params[1]) == "string" then
+        var = params[1]
+    end
+    local by = tonumber(params.by or params[2] or 1) or 1
+    local t, key = resolve_var(ctx, var)
+    if not t then
+        print("[WARN] [inc] unknown variable scope: " .. tostring(var))
+        return
+    end
+    t[key] = (tonumber(t[key]) or 0) + by
+end
+
+--- [random var="f.dice" min=1 max=6] — write a random integer.
+function SystemCommands.random(ctx, params)
+    local var = params.var
+    if type(var) ~= "string" and type(params[1]) == "string" then
+        var = params[1]
+    end
+    local min = tonumber(params.min or params[2] or 0) or 0
+    local max = tonumber(params.max or params[3] or 100) or 100
+    local t, key = resolve_var(ctx, var)
+    if not t then
+        print("[WARN] [random] unknown variable scope: " .. tostring(var))
+        return
+    end
+    if min > max then min, max = max, min end
+    t[key] = math.random(min, max)
+end
+
+--- [assert exp="f.hp > 0" msg="hp must be positive"] — development-time
+--  assertion: on failure prints a scene:line diagnostic and raises through
+--  the engine error path (ctx.handle_error when present) so dev builds
+--  catch bad state; release scripts can omit asserts wholesale.
+function SystemCommands.assert(ctx, params)
+    local exp = params.exp
+    if type(exp) ~= "string" and type(params[1]) == "string" then
+        exp = params[1]
+    end
+    if type(exp) ~= "string" or exp == "" then
+        print("[WARN] [assert] missing exp=")
+        return
+    end
+    local exprLang = require("kag.expr")
+    local ok, value = exprLang.evaluate(ctx, exp)
+    if not (ok and value) then
+        local where = (ctx.current_scene or ctx.currentScene or "?")
+            .. ":" .. tostring(ctx.token_index or ctx.tokenIndex or "?")
+        local msg = params.msg or ("assertion failed: " .. exp)
+        local full = string.format("[KAG] [assert] %s at %s", msg, where)
+        print(full)
+        if ctx.handle_error then
+            pcall(ctx.handle_error, "assert", full, ctx.token_index or 0)
+        end
+        error(full, 0)
+    end
+end
+
+
+-- Modern utility contracts (Neo-Genesis additions)
+_schema.define("set", {
+    _meta = { category = "system", blocking = false, desc = "typed variable assignment (f.x/sf.x/tf.x/mp.x/lf.x)" },
+    var   = { type = "string", required = true },
+    value = { type = "string", required = true },
+})
+_schema.define("inc", {
+    _meta = { category = "system", blocking = false, desc = "increment a numeric variable (by default 1)" },
+    var = { type = "string", required = true },
+    by  = { type = "number", default = 1 },
+})
+_schema.define("random", {
+    _meta = { category = "system", blocking = false, desc = "write a random integer into a variable" },
+    var = { type = "string", required = true },
+    min = { type = "number", default = 0 },
+    max = { type = "number", default = 100 },
+})
+_schema.define("assert", {
+    _meta = { category = "system", blocking = false, desc = "development-time assertion on an expression" },
+    exp = { type = "string", required = true },
+    msg = { type = "string" },
+})
+
 return SystemCommands

@@ -95,7 +95,7 @@ while true do
     gcount = gcount + 1
     pos = p + 1
 end
-check("eval exp guarded", gcount == 2)
+check("eval exp guarded", gcount == 3)
 package.loaded["layers"] = layers3
 _G._CAESURA_BACKEND = be3
 
