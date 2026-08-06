@@ -62,6 +62,7 @@ local tests = {
     "test_transitions",
     "test_layer_cmds",
     "test_scroll",
+    "test_layopt",
 }
 
 local passed, failed = 0, 0
