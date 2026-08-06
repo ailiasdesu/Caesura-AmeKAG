@@ -61,7 +61,14 @@ check("cap constant", src:find("WAIT_AUDIO_LIMIT_MS = 60000", 1, true) ~= nil)
 check("waitsound bounded", src:find('audio_is_playing("se") and elapsed < WAIT_AUDIO_LIMIT_MS', 1, true) ~= nil)
 check("waitbgm bounded", src:find('audio_is_playing("bgm") and elapsed < WAIT_AUDIO_LIMIT_MS', 1, true) ~= nil)
 
-package.loaded["backend"] = real_backend
+-- restore both caches (security LOW: the re-required audio module holds
+-- the mock via its local backend capture -- restore it too, and make
+-- the restore failure-safe by running it before the exit check)
+local audio_backup = package.loaded["kag.commands.audio"]
+if not sandboxed then
+    package.loaded["backend"] = real_backend
+    if audio_backup then package.loaded["kag.commands.audio"] = audio_backup end
+end
 
 if failed > 0 then os.exit(1) end
 print("WAIT AUDIO TESTS DONE")

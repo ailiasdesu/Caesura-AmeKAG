@@ -22,7 +22,7 @@
 | `playvoice` | `storage` (path), `volume` (0–1) | string, float | Play voice line (interrupts previous voice). |
 | `stopvoice` | — | — | Stop current voice. |
 | `waitsound` | — | — | Block until current SE finishes playing. |
-| `waitbgm` | — | — | Block until BGM fade completes. |
+| `waitbgm` | — | — | Block until BGM fade completes; bounded at 60s so a looping/stuck track cannot hang the runner. |
 | `setbgmvolume` | `volume` (0–1) | float | Set BGM bus volume. |
 | `setsevolume` | `volume` (0–1) | float | Set SE bus volume. |
 | `setvoicevolume` | `volume` (0–1) | float | Set Voice bus volume. |
