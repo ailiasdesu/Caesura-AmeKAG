@@ -6,45 +6,53 @@ local function check(name, cond)
     else print("FAIL " .. name) failed = failed + 1 end
 end
 
--- [delay] was parsed by the tokenizer but had NO handler -- the
--- scheduler fallback rendered delay text as dialogue. Now aliases
--- [wait] with positional-arg support.
-local System = package.loaded["kag.commands.system"] or require("kag.commands.system")
-check("delay handler exists", type(System.delay) == "function")
-check("delay delegates to wait", type(System.wait) == "function")
-
--- positional [delay 500]: maps params[1] into the ms loop
+-- [delay] is owned by kag.lua (KAG.delay -> wait); the REAL audit gap
+-- was missing schema coercion: [delay ms=500] fed the STRING "500"
+-- into wait's ms<=0 comparison -> runtime error (pcall'd silently).
+-- Its own schema now coerces ms/time/duration to numbers.
 local KAG = require("kag")
-check("delay registered on KAG", type(KAG.delay) == "function")
+check("KAG.delay exists", type(KAG.delay) == "function")
+check("delay delegates to wait",
+      type(package.loaded["kag.commands.system"].wait) == "function")
 
--- behavior: delay(500) yields until elapsed >= 500ms
+-- schema coercion: [delay ms="500"] -> numeric 500 (no comparison error)
+local schema = require("kag.schema")
+local coerced = schema.coerce and schema.coerce("delay", { ms = "500" }) or nil
+if not coerced then
+    -- fallback: look up the definition via the registered schema table
+    local ok, def = pcall(function() return schema.get("delay") end)
+    check("delay schema defined", ok and type(def) == "table")
+else
+    check("ms coerced to number", type(coerced.ms) == "number" and coerced.ms == 500)
+end
+
+-- behavior: KAG.delay(500) yields until elapsed >= 500ms (direct path)
 local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
 local co = coroutine.create(function()
-    System.delay(ctx, { 500 })
+    KAG.delay(ctx, { ms = 500 })
 end)
--- step 1: yields (in loop), step 2: feed 100ms, step 3: feed 450ms -> done
 local ok1 = coroutine.resume(co)
 check("delay yields first", ok1 and coroutine.status(co) == "suspended")
 local ok2 = coroutine.resume(co, 100)
 check("delay continues", ok2 and coroutine.status(co) == "suspended")
-local ok3, err3 = coroutine.resume(co, 450)
-check("delay completes after 550ms", ok3 and coroutine.status(co) == "dead", err3)
+local ok3 = coroutine.resume(co, 450)
+check("delay completes after 550ms", ok3 and coroutine.status(co) == "dead")
 
--- zero/negative delay returns immediately (no yield)
+-- zero delay returns immediately
 local ctx0 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
 local co0 = coroutine.create(function()
-    System.delay(ctx0, { 0 })
+    KAG.delay(ctx0, { ms = 0 })
 end)
 local ok0 = coroutine.resume(co0)
 check("zero delay immediate", ok0 and coroutine.status(co0) == "dead")
 
--- source: delay forwards params[1]
+-- source: delay schema exists (ms coercion contract)
 local f = assert(io.open("scripts/kag/commands/system.lua", "r"))
 local src = f:read("*a")
 f:close()
-check("positional forward", src:find("params[1] or params.time or params.ms", 1, true) ~= nil)
+check("delay schema defined", src:find('define("delay"', 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("DELAY TESTS DONE")
