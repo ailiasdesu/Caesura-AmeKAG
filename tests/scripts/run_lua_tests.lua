@@ -79,6 +79,7 @@ local tests = {
     "test_delay",
     "test_wait_audio",
     "test_video",
+    "test_font",
 }
 
 local passed, failed = 0, 0
