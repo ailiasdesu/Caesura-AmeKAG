@@ -51,7 +51,8 @@ end
 do
     local schema = require("kag.schema")
     -- coerce-level lock: defaults must NOT fill left/top/x/y/layer (a
-    -- filled '' layer or 0 left would shadow the handler's or-fallbacks)
+    -- filled '' layer or 0 left would shadow the handler's or-fallbacks).
+    -- The handler contract itself is locked by the source greps above.
     local m = schema.coerce("moveto", { left = "100", top = "50", scale = "99" }, {})
     local ok = m.left == 100 and m.top == 50 and m.scale == 16 and m.layer == nil
     local m2 = schema.coerce("moveto", { x = "0.5" }, {})
