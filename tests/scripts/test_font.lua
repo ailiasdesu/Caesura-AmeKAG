@@ -10,7 +10,17 @@ end
 -- _G.Render.text_set_font -- standalone runs must not depend on it.
 -- pcall: the sandbox forbids modifying Render in the suite, where the
 -- stub already exists anyway.
-if type(_G.Render and _G.Render.text_set_font) ~= "function" then
+-- pcall the whole probe: the sandbox BLOCKS reads of unknown Render
+-- fields ("blocked in strict mode"), and the suite-wide stub already
+-- exists (test_kag_commands sets it pre-sandbox) -- standalone runs
+-- install it here.
+local probe_ok, stub_exists = pcall(function()
+    return type(_G.Render and _G.Render.text_set_font) == "function"
+end)
+-- pcall's FIRST return is the success flag; the probe's own return is
+-- the existence flag (audit: has_stub = pcall(...) was always true,
+-- so standalone runs skipped the stub install and font crashed)
+if not (probe_ok and stub_exists) then
     pcall(function()
         if _G.Render == nil then _G.Render = {} end
         _G.Render.text_set_font = function() end

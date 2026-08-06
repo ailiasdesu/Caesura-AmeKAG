@@ -27,7 +27,10 @@ _G.KAG = {
     play_se_3d=function()return true end, set_global_volume=function()end,
     get_global_volume=function()return 1.0 end, replay_voice=function()end,
 }
-_G.Render = {}
+_G.Render = {
+    text_set_font = function() end,
+    text_reset_state = function() end,
+}
 _G.DevCore = {}
 _G.Engine = {select_platform_backend=function()return true end}
 
@@ -54,7 +57,7 @@ end
 
 print("\n=== KAG Commands Test Suite ===\n")
 
--- ¨T¨T¨T Layer Commands ¨T¨T¨T
+-- â•â•â• Layer Commands â•â•â•
 print("--- Layer Commands ---")
 do
     local LayerCommands = require("kag.commands.layer")
@@ -68,7 +71,7 @@ do
     check("layopt handler exists", type(LayerCommands.layopt) == "function")
 end
 
--- ¨T¨T¨T Text Commands ¨T¨T¨T
+-- â•â•â• Text Commands â•â•â•
 print("\n--- Text Commands ---")
 do
     local TextCommands = require("kag.commands.text")
@@ -91,7 +94,7 @@ do
     check("endbutton handler exists", type(TextCommands.endbutton) == "function")
 end
 
--- ¨T¨T¨T Audio Commands ¨T¨T¨T
+-- â•â•â• Audio Commands â•â•â•
 print("\n--- Audio Commands ---")
 do
     local AudioCommands = require("kag.commands.audio")
@@ -108,7 +111,7 @@ do
     check("playbgmstop handler exists", type(AudioCommands.playbgmstop) == "function")
 end
 
--- ¨T¨T¨T System Commands ¨T¨T¨T
+-- â•â•â• System Commands â•â•â•
 print("\n--- System Commands ---")
 do
     local SystemCommands = require("kag.commands.system")
@@ -119,7 +122,7 @@ do
     check("history handler exists", type(SystemCommands.history) == "function")
 end
 
--- ¨T¨T¨T Transition Commands ¨T¨T¨T
+-- â•â•â• Transition Commands â•â•â•
 print("\n--- Transition Commands ---")
 do
     local TransCommands = require("kag.commands.transition")
@@ -130,14 +133,14 @@ do
     check("fade handler exists", type(TransCommands.fade) == "function")
 end
 
--- ¨T¨T¨T VFX Commands ¨T¨T¨T
+-- â•â•â• VFX Commands â•â•â•
 print("\n--- VFX Commands ---")
 do
     local VFXCommands = require("kag.commands.vfx")
     check("vfx handler exists", type(VFXCommands.vfx) == "function")
 end
 
--- ¨T¨T¨T Video Commands ¨T¨T¨T
+-- â•â•â• Video Commands â•â•â•
 print("\n--- Video Commands ---")
 do
     local VideoCommands = require("kag.commands.video")
@@ -145,7 +148,7 @@ do
     check("stopvideo handler exists", type(VideoCommands.stopvideo) == "function")
 end
 
--- ¨T¨T¨T Save Commands ¨T¨T¨T
+-- â•â•â• Save Commands â•â•â•
 print("\n--- Save Commands ---")
 do
     local SaveCommands = require("kag.commands.save")
@@ -166,7 +169,7 @@ do
     check("listsaves handler exists", type(SaveCommands.listsaves) == "function")
 end
 
--- ¨T¨T¨T Resource Commands ¨T¨T¨T
+-- â•â•â• Resource Commands â•â•â•
 print("\n--- Resource Commands ---")
 do
     local ResourceCommands = require("kag.commands.resource")
@@ -174,7 +177,7 @@ do
     check("flush_cache exists", type(ResourceCommands.flush_cache) == "function")
 end
 
--- ¨T¨T¨T KAG Module Integration ¨T¨T¨T
+-- â•â•â• KAG Module Integration â•â•â•
 print("\n--- KAG Module Integration ---")
 do
     local KAG = require("kag")
@@ -195,7 +198,7 @@ do
     check("KAG.cancel exists", type(KAG.cancel) == "function")
 end
 
--- ¨T¨T¨T Results ¨T¨T¨T
+-- â•â•â• Results â•â•â•
 print("\n" .. string.rep("=", 50))
 print(string.format("  KAG Commands: %d passed, %d failed, %d total",
     passed, failed, passed + failed))

@@ -1,5 +1,25 @@
 -- Persistent, serializable text draw state for the KAG render loop.
 
+-- The standalone test Lua (external/lua) ships a REDUCED utf8 lib
+-- (len/codes/char, no sub). The engine's embedded Lua has the full
+-- 5.4 lib. This fallback keeps text_scene testable in both.
+local utf8_sub
+if type(utf8) == "table" and utf8.sub then
+    utf8_sub = utf8.sub
+else
+    utf8_sub = function(s, i, j)
+        local out, n = {}, 0
+        for _, cp in utf8.codes(s) do
+            n = n + 1
+            if n >= i and (j == nil or n <= j) then
+                out[#out + 1] = utf8.char(cp)
+            end
+            if j and n > j then break end
+        end
+        return table.concat(out)
+    end
+end
+
 local TextLayout = require("kag.text_layout")
 
 local TextScene = {}
@@ -157,6 +177,14 @@ function TextScene.render(ctx, render_backend)
     -- "~= nil" avoids flashing the full line for one frame at reveal start.
     local reveal = state.reveal_chars
 
+    -- Multi-line typewriter: reveal is a GLOBAL char count across the
+    -- wrapped lines -- each typewriter draw consumes its own length, so
+    -- line N truncates at reveal - (sum of previous line lengths). The
+    -- old code sliced every line with the global reveal, over-showing
+    -- later lines by the earlier lines' length (audit: two 5-char lines
+    -- at reveal=7 showed 7 chars on line 2 instead of 2).
+    local consumed = 0
+
     for _, draw in ipairs(state.draws) do
         local alpha = math.floor(
             clamp_byte(draw.a) * state.opacity / 255 + 0.5)
@@ -168,18 +196,22 @@ function TextScene.render(ctx, render_backend)
             else
                 local shown = draw.text
                 if reveal ~= nil and draw.typewriter then
-                    -- Cache per-draw: typewriter re-slices every frame while
-                    -- animating; static lines keep the same substring. Only
-                    -- re-slice when the reveal position advanced.
-                    if draw._shown_len ~= reveal then
-                        draw._shown = utf8.sub(draw.text, 1, reveal)
-                        draw._shown_len = reveal
+                    local line_len = utf8.len(draw.text) or #draw.text
+                    local visible = math.max(0,
+                        math.min(line_len, reveal - consumed))
+                    -- Cache per-draw: re-slice only when the position moved
+                    if draw._shown_len ~= visible then
+                        draw._shown = utf8_sub(draw.text, 1, visible)
+                        draw._shown_len = visible
                     end
                     shown = draw._shown
                 end
                 render_backend.render_text(
                     shown, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha)
+                if draw.typewriter then
+                    consumed = consumed + (utf8.len(draw.text) or #draw.text)
+                end
             end
             submitted = submitted + 1
         end

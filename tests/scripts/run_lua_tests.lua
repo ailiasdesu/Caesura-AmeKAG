@@ -90,6 +90,7 @@ local tests = {
     "test_ks_check",
     "test_four_remaining",
     "test_scroll",
+    "test_reveal",
 }
 
 local passed, failed = 0, 0

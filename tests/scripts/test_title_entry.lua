@@ -13,6 +13,11 @@ package.preload["backend"] = function()
         get_input_focus = function() return "kag" end,
     }
 end
+-- suite hygiene: the preload mock + cache clear PERSIST past this
+-- file -- under the suite sandbox later require("backend") fails with
+-- "not preloaded" (font/video tests died). Save both, restore at end.
+local _preload_backend = package.preload["backend"]
+local _loaded_backend = package.loaded["backend"]
 package.loaded["backend"] = nil
 
 -- (suite hygiene: capture the ORIGINAL preload BEFORE the mock -- the
@@ -68,6 +73,8 @@ check("exit quits engine", _G._mock_quit == true)
 local failed = 0
 for _, okv in ipairs(results or {}) do if not okv then failed = failed + 1 end end
 package.preload["kag_runner"] = _preload_kr
+package.preload["backend"] = _preload_backend
+package.loaded["backend"] = _loaded_backend
 
 if failed > 0 then os.exit(1) end
 print("TITLE ENTRY TESTS DONE")

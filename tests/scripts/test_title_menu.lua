@@ -13,6 +13,11 @@ package.preload["backend"] = function()
         get_input_focus = function() return "kag" end,
     }
 end
+-- suite hygiene: the preload mock + cache clear PERSIST past this
+-- file -- under the suite sandbox later require("backend") fails with
+-- "not preloaded" (font/video tests died). Save both, restore at end.
+local _preload_backend = package.preload["backend"]
+local _loaded_backend = package.loaded["backend"]
 package.loaded["backend"] = nil
 
 local TitleMenu = require("title_menu")
@@ -37,6 +42,10 @@ coroutine.resume(co)
 _G._GAME_KEY_ESC = true
 local ok4, act4 = coroutine.resume(co)
 check("esc returns nil", ok4 and act4 == nil)
+
+-- suite hygiene: restore the backend preload/cache the mock cleared
+package.preload["backend"] = _preload_backend
+package.loaded["backend"] = _loaded_backend
 
 -- Exit non-zero on any failure so the harness reports red
 local failed = 0
