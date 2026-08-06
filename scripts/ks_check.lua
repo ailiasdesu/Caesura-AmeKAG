@@ -117,6 +117,32 @@ local function checkScene(path)
                             .. "' (will render as text at runtime)")
                 end
             end
+            -- Expression pre-check (covers BOTH migrated commands and flow
+            -- commands like [if]/[while]): exp fields run through the KAG
+            -- expression translator at runtime -- validate they COMPILE so
+            -- typos fail statically. [eval] is a STATEMENT (assignments
+            -- like ctx.tf.x = 1), so it gets a plain chunk check.
+            if type(cmd) == "string" then
+                local exp = nil
+                for _, pair in ipairs(tok.params or {}) do
+                    if type(pair) == "table" and pair[1] == "exp" then
+                        exp = pair[2]
+                    end
+                end
+                if type(exp) == "string" and exp ~= "" then
+                    local exprLang = require("kag.expr")
+                    local chunk = exp
+                    if cmd ~= "eval" then
+                        chunk = "return " .. exprLang.translate(exp)
+                    end
+                    local fn = load(chunk, "=ks_expr_check", "t", {})
+                    if not fn then
+                        report(path, lineOf(tok.offset or 1),
+                            "expression in [" .. cmd .. "] does not compile: "
+                                .. exp)
+                    end
+                end
+            end
             if type(cmd) == "string" and schema.isMigrated(cmd) then
                 local params = {}
                 for _, pair in ipairs(tok.params or {}) do

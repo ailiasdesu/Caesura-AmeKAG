@@ -902,8 +902,13 @@ function scheduler.run(ctx, tokens, start_index)
                 if handler then
                     local status, err = pcall(handler, ctx, params)
                     if not status then
-                        -- Lua-side error reporting
-                        print("[ERROR] KAG command '" .. actual_cmd .. "' failed: " .. tostring(err))
+                        -- Lua-side error reporting (with scene:line)
+                        print(string.format(
+                            "[ERROR] KAG command '%s' failed at %s:%s: %s",
+                            actual_cmd,
+                            ctx.current_scene or ctx.currentScene or "?",
+                            tostring(ctx.token_index or ctx.tokenIndex or "?"),
+                            tostring(err)))
                         if ctx.handle_error then
                             pcall(ctx.handle_error, actual_cmd, tostring(err), i)
                         end
