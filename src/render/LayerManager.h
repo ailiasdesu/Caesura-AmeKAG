@@ -55,7 +55,7 @@ public:
     void init() override;
     void shutdown() override;
 
-    // Accessors (not in interface �� returns internal Layer& for direct manipulation)
+    // Accessors (not in interface →→ returns internal Layer& for direct manipulation)
     Layer& get(LayerType t);
     const Layer& get(LayerType t) const;
 

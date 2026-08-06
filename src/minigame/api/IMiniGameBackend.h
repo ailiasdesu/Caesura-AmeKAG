@@ -5,7 +5,7 @@
 // Abstract 3D mini-game backend interface.
 // Reserved for future 3D mini-game scenes embedded in visual novel flow.
 //
-// Lifecycle:  KAG scene �� mini_game:enter �� active loop �� mini_game:leave �� KAG
+// Lifecycle:  KAG scene →→ mini_game:enter →→ active loop →→ mini_game:leave →→ KAG
 //
 // Thread safety:
 //   - update() may be dispatched to JobSystem workers (pure CPU: physics,
@@ -96,15 +96,15 @@ virtual const char* getBackendName() const = 0;
 
 // SDL user event codes reserved for mini-game interop
 enum class MiniGameEvent : uint32_t {
-    Entered     = 0x9000,  // mini-game activated �� Lua callback
-    Left        = 0x9001,  // mini-game deactivated �� Lua callback
+    Entered     = 0x9000,  // mini-game activated →→ Lua callback
+    Left        = 0x9001,  // mini-game deactivated →→ Lua callback
     Transition  = 0x9002,  // mini-game wants to transition back to KAG
     Error       = 0x9003,  // mini-game fatal error
 };
 
 // Reserved KAG <-> MiniGame transition types
 enum class MiniGameTransition : uint8_t {
-    FadeToBlack     = 0,  // fade �� load �� fade in (default)
+    FadeToBlack     = 0,  // fade →→ load →→ fade in (default)
     Instant         = 1,  // instant switch, no transition
     Portal          = 2,  // custom transition effect
 };

@@ -38,7 +38,10 @@ const char* BgfxDeviceCore::getBackendName() const {
 }
 
 bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
-    // [10.2.22] main-thread-only guarantee 闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳婀遍埀顒傛嚀鐎氼參宕崇壕瀣ㄤ汗闁圭儤鍨归崐鐐烘偡濠婂喚妯€鐎殿喗鎮傚浠嬵敇閻斿搫骞愰梻浣规偠閸庮垶宕曢柆宥嗗€堕柍鍝勫暟绾惧ジ鏌熼柇锕€寮炬繛鍫熺矒閺屸€崇暆閳ь剟宕伴弽顓炵畺鐟滄柨鐣锋總鍛婂亜闁告繂瀚▓銉╂⒒閸屾瑧顦﹂柟璇х節瀹曞湱鎲撮崟顒€寮块梺鍦檸閸犳牠鎮″鈧弻鐔告綇妤ｅ啯顎嶉梺绋款儐閸旀瑩骞冨Δ鍛嵍妞ゆ挾鍊姀掳浜滈柕澶涘缁犳绱?architecture enforces, SDL_IsMainThread not in all SDL3 builds
+    // [10.2.22] main-thread-only guarantee: bgfx must be driven from
+    // the thread that created the context. SDL_IsMainThread is not
+    // available in all SDL3 builds, so the engine relies on the
+    // existing owner-thread discipline instead.
     m_width  = width;
     m_height = height;
     m_bgfxInitialized = false;
@@ -49,7 +52,7 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
 
     // Platform data will be set via initParams.platformData directly
 
-    //                                                     ?bgfx init                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 ?
+    // -- bgfx platform setup (native window handle from SDL) --
     bgfx::Init initParams;
     initParams.platformData.nwh = nativeWindowHandle;
     initParams.type     = s_preferredBackend;
@@ -70,7 +73,8 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
         fprintf(stderr, "[BgfxRenderDevice] %s init failed; trying auto-select...\n",
                 preferredName);
         initParams.type = bgfx::RendererType::Count;
-        printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
+        printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=auto-select\n",
+               nativeWindowHandle, width, height);
     if (!bgfx::init(initParams)) {
             fprintf(stderr, "[BgfxRenderDevice] Fatal: bgfx::init failed.\n");
             return false;
@@ -90,10 +94,10 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     setupDefaultViews();
     fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
 
-    //                                                     ?Init embedded shader fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ?
-    // initEmbeddedShaders called by BgfxRenderDevice::init()
+    // -- Embedded shader fallback (initEmbeddedShaders is called by
+    // BgfxRenderDevice::init after this point) --
 
-    //                                                     ?Explicit View Order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+    // -- Explicit view order (RTT -> MAIN -> DEBUG -> TRANSITION) --
         // Enforce: VIEW_RTT (0) -> VIEW_MAIN (1) -> VIEW_DEBUG (2)
     bgfx::ViewId viewOrder[] = { VIEW_RTT, VIEW_MAIN, VIEW_DEBUG, VIEW_TRANSITION };
     bgfx::setViewOrder(0, 4, viewOrder);

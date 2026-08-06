@@ -84,7 +84,7 @@ static int delegateToGlobalFunc(lua_State* L, const char* tableName, const char*
 }
 
 // =========================================================================
-//  b:render(cmd, ...) -- render �� Render, particles �� VFX
+//  b:render(cmd, ...) -- render →→ Render, particles →→ VFX
 // =========================================================================
 
 static int lua_Backend_render(lua_State* L) {
@@ -193,7 +193,7 @@ static int lua_Backend_audio(lua_State* L) {
         return 1;
     }
 
-    // get_length / get_position �� IAudioBackend (Spec [3.3])
+    // get_length / get_position →→ IAudioBackend (Spec [3.3])
     if (strcmp(cmd, "get_length") == 0) {
         const char* bus = luaL_checkstring(L, 2);
         float len = audio ? audio->getLength(bus) : 0.0f;
@@ -252,7 +252,7 @@ static int lua_Backend_platform(lua_State* L) {
 }
 
 // =========================================================================
-//  UI convenience �� self-contained (no delegation to KAG)
+//  UI convenience →→ self-contained (no delegation to KAG)
 //  U3 de-duplication: KAGBinding no longer carries these; UnifiedBinding is
 //  now the single source of truth for cross-backend convenience methods.
 // =========================================================================

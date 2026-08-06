@@ -212,7 +212,7 @@ VideoHandle VideoPlayer::open(const char* path) {
         }
         vs.playhead = 0.0;
 
-        // SwsContext for YUV �� RGBA
+        // SwsContext for YUV →→ RGBA
         SwsContext* sws = sws_getContext(
             avCodec->width, avCodec->height, avCodec->pix_fmt,
             avCodec->width, avCodec->height, AV_PIX_FMT_RGBA,
@@ -678,7 +678,7 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         drainAudio(*vs);
         return frame->valid;
 #else
-        // FFmpeg not compiled �� fall through to pl_mpeg below
+        // FFmpeg not compiled →→ fall through to pl_mpeg below
 #endif
     }
 

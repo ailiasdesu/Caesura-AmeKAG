@@ -200,7 +200,7 @@ bool HotReload::checkAndReload() {
     // Step 1: Cancel all active operations
     cancelAllActiveOps(m_L);
 
-    // Cancellations are synchronous �� no sleep needed
+    // Cancellations are synchronous →→ no sleep needed
 
     // Step 2: Close the KAG coroutine if running
     if (pushGameState(m_L)) {

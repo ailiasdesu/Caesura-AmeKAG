@@ -140,7 +140,7 @@ void BackendRegistry::notifyDeviceRestored() {
 
 IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
     // Factory only returns pre-registered backend.
-    // Engine owns lifecycle �� use setAudioBackend() to register first.
+    // Engine owns lifecycle →→ use setAudioBackend() to register first.
     if (strcmp(name, "soloud") == 0 || strcmp(name, "SoLoud") == 0) {
         if (getService<IAudioBackend>()) {
             printf("[BackendRegistry] Using pre-registered audio backend: SoLoud\n");
@@ -160,7 +160,7 @@ IAudioBackend* BackendRegistry::createAudioBackend(const char* name) {
 
 IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
     // Factory only returns pre-registered backend.
-    // Engine owns lifecycle �� use setRenderDevice() to register first.
+    // Engine owns lifecycle →→ use setRenderDevice() to register first.
     if (strcmp(name, "bgfx") == 0) {
         if (getService<IRenderDevice>()) {
             printf("[BackendRegistry] Using pre-registered render backend: bgfx\n");
@@ -180,7 +180,7 @@ IRenderDevice* BackendRegistry::createRenderDevice(const char* name) {
 
 IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
     // Factory only returns pre-registered backend.
-    // Engine owns lifecycle �� use setPlatformBackend() to register first.
+    // Engine owns lifecycle →→ use setPlatformBackend() to register first.
     if (strcmp(name, "sdl3") == 0 || strcmp(name, "SDL3") == 0) {
         if (getService<IPlatformBackend>()) {
             printf("[BackendRegistry] Using pre-registered platform backend: SDL3\n");

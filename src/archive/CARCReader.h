@@ -61,7 +61,7 @@ public:
     // Utility: hash a path string to 32-byte SHA-256
     static void hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE]);
 
-    // ���� Phase 9: Chain Trust (spec [10.2.63]) ����������������������������������������������������
+    // →→→→ Phase 9: Chain Trust (spec [10.2.63]) →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
     /// Verify chain trust: a child CARC is authorized by a certificate
     /// stored in this (parent) CARC. The certificate is a JSON blob at
@@ -90,7 +90,7 @@ public:
 
 private:
     CARCHeader m_header;
-    // pathHash (32-byte as hex string) �� FileInfo
+    // pathHash (32-byte as hex string) →→ FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;
     std::vector<std::string> m_fileList;
     std::ifstream m_stream;
@@ -106,7 +106,7 @@ private:
 
     static std::string pathHashToHex(const uint8_t hash[PATH_HASH_SIZE]);
 
-    // ���� Chain trust ����
+    // →→→→ Chain trust →→→→
     CRLManager* m_crlManager = nullptr;
     uint8_t m_rootPublicKey[PUBLICKEY_SIZE] = {};
     bool m_hasRootKey = false;

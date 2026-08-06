@@ -499,7 +499,7 @@ std::vector<XP3Archive::FileEntry> XP3Archive::list(const std::string& xp3File) 
     const size_t indexOffset = static_cast<size_t>(indexOff);
     size_t indexRawSize = raw.size() - indexOffset;
 
-    // M1: prevent decompression bomb (cap at 256 MB) �� same as unpack()
+    // M1: prevent decompression bomb (cap at 256 MB) →→ same as unpack()
     if (indexRawSize > kMaxIndexSize) return {};
     std::vector<uint8_t> decompIndex;
     const bool indexCompressed = DecodeIndex(raw.data() + indexOffset, indexRawSize, decompIndex);

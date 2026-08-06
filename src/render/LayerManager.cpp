@@ -171,7 +171,7 @@ void LayerManager::clearDirtyRects() {
 }
 
 // ---------------------------------------------------------------------------
-// Z-order submit -- BG �� FG �� MSG
+// Z-order submit -- BG →→ FG →→ MSG
 // ---------------------------------------------------------------------------
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
@@ -211,7 +211,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         float rw = (float)screenW * l.sx;
         float rh = (float)screenH * l.sy;
 
-        // Convert to NDC: screen coordinates �� [-1, 1]
+        // Convert to NDC: screen coordinates →→ [-1, 1]
         float nx0 = (lx / (screenW * 0.5f)) - 1.0f;
         float ny0 = 1.0f - (ly / (screenH * 0.5f));  // flip Y
         float nx1 = ((lx + rw) / (screenW * 0.5f)) - 1.0f;
