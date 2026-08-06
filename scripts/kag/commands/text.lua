@@ -813,8 +813,13 @@ Future enhancement: extract to a standalone ChoiceController Lua class if comple
 function TextCommands.button(ctx, params)
     ctx._choiceButtons = ctx._choiceButtons or {}
     local text = params.text or params.caption or ""
-    local target = params.target or params.storage or ""
-    table.insert(ctx._choiceButtons, { text = text, target = target })
+    -- bare [button *route_a text="..."] -> params[1] as target
+    -- (consistency with jump/call/link -- audit)
+    local target = params.target or params.storage
+    if target == nil and type(params[1]) == "string" then
+        target = params[1]
+    end
+    table.insert(ctx._choiceButtons, { text = text, target = target or "" })
 end
 
 function TextCommands.endbutton(ctx, params)

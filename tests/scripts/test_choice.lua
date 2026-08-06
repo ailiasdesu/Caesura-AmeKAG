@@ -54,4 +54,11 @@ local h2 = _G._KAG_onClick
 pcall(h2)
 check("out-of-box click not selected", ctx2._selectedChoice == nil)
 
+-- bare target (audit): [button *route_a text="A"] collects the label
+local KAG2 = require("kag")
+local ctxB = { f = {}, tf = {}, sf = {}, mp = {}, variables = {}, _choiceButtons = {} }
+pcall(KAG2.button, ctxB, { "*route_a", text = "A" })
+check("bare target collected", ctxB._choiceButtons[1]
+      and ctxB._choiceButtons[1].target == "*route_a")
+
 print("CHOICE TESTS DONE")
