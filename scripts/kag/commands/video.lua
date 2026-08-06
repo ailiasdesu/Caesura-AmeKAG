@@ -16,6 +16,11 @@ local function resolve_file(params)
     if type(f) ~= "string" and type(params[1]) == "string" then
         f = params[1]
     end
+    -- Mod resolution: enabled mods may override base assets
+    -- (mods/<name>/<path>); falls back to the base path.
+    if type(f) == "string" and #f > 0 then
+        f = require("mods").resolve(f)
+    end
     return f
 end
 

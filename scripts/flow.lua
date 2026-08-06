@@ -13,15 +13,20 @@ flow.scene_cache = {}
 -- ── flow.load_scene(path) → {tokens, labels} ────────────────────────────────
 
 function flow.load_scene(path)
-    -- Check cache
-    if flow.scene_cache[path] then
-        return flow.scene_cache[path]
+    -- Check cache (cache keyed by the RESOLVED path so a mod override
+    -- that appears after a base scene was cached still wins).
+    -- Mod resolution: enabled mods may override base scenes
+    -- (mods/<name>/<path>); the resolved path is cached independently.
+    local mods = require("mods")
+    local resolved = mods.resolve_scene(path)
+    if flow.scene_cache[resolved] then
+        return flow.scene_cache[resolved]
     end
 
     local tokenizer = require("tokenizer")
-    local ok, tokens_or_err = pcall(tokenizer.parse_file, path)
+    local ok, tokens_or_err = pcall(tokenizer.parse_file, resolved)
     if not ok then
-        print("[Flow] Failed to load scene: " .. path .. " - " .. tostring(tokens_or_err))
+        print("[Flow] Failed to load scene: " .. resolved .. " - " .. tostring(tokens_or_err))
         return nil, tokens_or_err
     end
     local tokens = tokens_or_err
@@ -34,8 +39,9 @@ function flow.load_scene(path)
         end
     end
 
-    local scene = {tokens = tokens, labels = labels, path = path}
-    flow.scene_cache[path] = scene
+    local scene = {tokens = tokens, labels = labels, path = resolved,
+                   base_path = path}
+    flow.scene_cache[resolved] = scene
     return scene
 end
 

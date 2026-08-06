@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  run_lua_tests.lua — Standalone Lua test runner
 --  Usage: lua tests/scripts/run_lua_tests.lua
 -- =============================================================================
@@ -10,6 +10,16 @@ package.path = test_dir .. "../../scripts/?.lua;" .. test_dir .. "?.lua;" .. pac
 -- Save globals that sandbox may replace
 local _real_os_exit = os.exit
 local _real_dofile  = dofile
+
+-- Preload modules the sandbox-locked tests need (mirrors scripts/kag/init.lua:
+-- sandbox.lua replaces _G.require with a package.loaded-only wrapper, so any
+-- module first required AFTER test_sandbox runs must already be cached).
+for _, m in ipairs({ "mods", "kag_debug", "kag_runner" }) do
+    local ok, err = pcall(require, m)
+    if not ok then
+        print("[run_lua_tests] preload " .. m .. " failed: " .. tostring(err))
+    end
+end
 
 -- NOTE: test_kag_commands must run BEFORE test_scheduler because
 -- scheduler internally loads kag module which caches a partial table.
@@ -26,6 +36,7 @@ local tests = {
     "test_benchmark",
     "test_schema",
     "test_layers",
+    "test_mods",
     "test_sandbox",
     "test_label_index",
     "test_expr_cache",
