@@ -92,6 +92,7 @@ local tests = {
     "test_scroll",
     "test_reveal",
     "test_audio_fade",
+    "test_trans_behavior",
 }
 
 local passed, failed = 0, 0
