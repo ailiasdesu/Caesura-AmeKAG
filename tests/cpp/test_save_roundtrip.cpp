@@ -179,6 +179,36 @@ TEST_CASE("SaveManager: encryption roundtrip preserves data") {
     CHECK(decrypted["value"] == 12345);
 }
 
+TEST_CASE("SaveManager: tampered ciphertext rejected (GCM auth)") {
+    TestPaths::ScopedTempDir dir("roundtrip_tamper");
+    ScopedCryptoRegistration cryptoRegistration;
+    SaveManager sm;
+    sm.init(dir.string());
+    uint8_t key[32] = {};
+    for (int i = 0; i < 32; ++i) key[i] = static_cast<uint8_t>(i + 1);
+    sm.setEncryptionKey(key);
+
+    json original = {{"secret", "classified_info"}};
+    REQUIRE(sm.save(1, original, "tamper_test", 0));
+
+    // Flip a byte in the ciphertext region (after "CAES"+nonce+tag)
+    std::filesystem::path p = dir.path() / "save_1.json";
+    std::ifstream in(p, std::ios::binary);
+    std::string data((std::istreambuf_iterator<char>(in)),
+                     std::istreambuf_iterator<char>());
+    in.close();
+    REQUIRE(data.size() > 40);  // "CAES" + 12 nonce + 16 tag + payload
+    data[30] = static_cast<char>(data[30] ^ 0xFF);  // flip a tag/cipher byte
+
+    std::ofstream out(p, std::ios::binary | std::ios::trunc);
+    out.write(data.data(), static_cast<std::streamsize>(data.size()));
+    out.close();
+
+    // GCM authentication must reject the tampered save
+    json tampered = sm.load(1);
+    CHECK(tampered.empty());
+}
+
 TEST_CASE("SaveManager: wrong key returns empty JSON") {
     TestPaths::ScopedTempDir dir("roundtrip_wrong_key");
     ScopedCryptoRegistration cryptoRegistration;
