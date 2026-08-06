@@ -79,5 +79,36 @@ local coT = coroutine.create(function() scheduler.run(ctxT, toksT, 1) end)
 while coroutine.status(coT) ~= "dead" do coroutine.resume(coT) end
 check("bare traversal still blocked", #callsT == 0)
 
+-- typo'd named param must WARN, not crash (review should-fix: the raw
+-- pair table at params[1] used to reach target:sub / path concat)
+local toksT2 = tokenizer.parse("[jump storag=next.ks]")
+local callsT2 = {}
+local ctxT2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function(path) callsT2[#callsT2 + 1] = path
+        return { { "ch", {} } } end }
+local coT2 = coroutine.create(function() scheduler.run(ctxT2, toksT2, 1) end)
+local okT2 = true
+while coroutine.status(coT2) ~= "dead" do
+    local r, e = coroutine.resume(coT2)
+    if not r then okT2 = false break end
+end
+check("typo param no crash", okT2 and #callsT2 == 0)
+
+-- bare [call] and [link] route cross-scene too
+for _, c in ipairs({ "call", "link" }) do
+    local tC = tokenizer.parse("[" .. c .. " next.ks]")
+    local callsC = {}
+    local ctxC = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+        current_scene = "assets/script/main.ks", label_index = {},
+        load_tokens = function(path) callsC[#callsC + 1] = path
+            return { { "ch", {} } } end }
+    local coC = coroutine.create(function() scheduler.run(ctxC, tC, 1) end)
+    while coroutine.status(coC) ~= "dead" do coroutine.resume(coC) end
+    check("bare [" .. c .. "] routes", callsC[1] == "assets/script/next.ks")
+end
+
 if failed > 0 then os.exit(1) end
 print("JUMP PATH TESTS DONE")

@@ -205,9 +205,11 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [jump]
         if cmd == "jump" then
-            -- bare [jump next.ks] -> params[1] (KAG3 syntax)
+            -- bare [jump next.ks] -> params[1] (KAG3 syntax); STRING-only:
+            -- with named params (even a typo), params[1] is the raw pair
+            -- table and target:sub would throw (review should-fix)
             local target = params.target or params.label or params.storage
-                          or params[1]
+            if type(params[1]) == "string" then target = target or params[1] end
             if not target then
                 print("[WARN] [jump] missing target/label/storage parameter")
             elseif target:sub(1,1) ~= "*" then
@@ -245,8 +247,9 @@ function scheduler.run(ctx, tokens, start_index)
 
         -- Flow control: [call]
         elseif cmd == "call" then
-            -- bare [call next.ks] -> params[1]
-            local target = params.target or params.storage or params[1]
+            -- bare [call next.ks] -> params[1] (string-only guard)
+            local target = params.target or params.storage
+            if type(params[1]) == "string" then target = target or params[1] end
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
@@ -287,8 +290,9 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [link]
         elseif cmd == "link" then
             -- (index rebuilt below with the swapped stream)
-            -- bare [link next.ks] -> params[1]
-            local target = params.target or params.storage or params[1]
+            -- bare [link next.ks] -> params[1] (string-only guard)
+            local target = params.target or params.storage
+            if type(params[1]) == "string" then target = target or params[1] end
             -- Clear everything and jump
             ctx.layers = {}
             ctx.backlog = {}
