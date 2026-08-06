@@ -1,6 +1,6 @@
 ﻿# Engine Capability Matrix (Mermaid)
 
-> 2026-07-24 readiness audit: this matrix tracks 48 code-level capability surfaces.
+> 2026-07-24 readiness audit: this matrix tracks 52 code-level capability surfaces.
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -31,7 +31,7 @@ graph LR
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG Neo-Genesis Parser<br/>tokenizer · 69 commands"]
+        s2["KAG Neo-Genesis Parser<br/>tokenizer · 72 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
@@ -94,15 +94,15 @@ graph LR
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
 
-### Scripting (11 capabilities)
+### Scripting (15 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
 | S2 | KAG Neo-Genesis parser (72 contract commands, 9 categories) | Lua tokenizer | ✓ |
-| S2a | KAG3 bare positional args (13 command families: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
+| S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
-| S2c | Parser performance (1.55x full-parse, 37x text-run batch skip) | lpeg.lua | ✓ |
+| S2c | Parser performance (full-parse 1.37s -> ~0.9s; text-run batch skip ~37x, see test_benchmark.lua) | lpeg.lua | ✓ |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
