@@ -33,6 +33,11 @@ public:
     // Initialize -- scan scriptDir recursively for .ks/.lua files.
     // Stores initial last_write_time for each file.
     void init(const std::string& scriptDir, lua_State* L);
+
+    // Add another directory to the watch set (e.g. assets/script/ for
+    // scene files, mods/ for mod content). Scanned immediately.
+    void addWatchRoot(const std::string& dir);
+
     void shutdown();
 
     // Per-frame check. Returns true if a reload was triggered.
@@ -60,6 +65,7 @@ private:
     long long m_lastScanMs = -1;
 
     std::string                m_scriptDir;
+    std::vector<std::string>   m_watchRoots;
     lua_State*                 m_L = nullptr;
     bool                       m_initialized = false;
     ScriptState                m_scriptState = ScriptState::IDLE;

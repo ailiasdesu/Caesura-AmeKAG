@@ -154,6 +154,15 @@ try:
 
     r = request({"id": 16, "method": "kagClearBreakpoints"})
     check("kag-clear-breakpoints", r.get("status") == "ok")
+
+    # ---- scene hot reload (editor workflow) --------------------------------
+    r = request({"id": 17, "method": "kagReloadScene",
+                 "params": {"scene": "assets/script/__missing__.ks"}})
+    check("kag-reload-scene-missing-graceful",
+        r.get("status") == "ok" and "error" in (r.get("result") or ""))
+    r = request({"id": 18, "method": "kagReloadScene"})
+    check("kag-reload-scene-no-scene-graceful",
+        r.get("status") == "ok")
 finally:
     try:
         proc.stdin.close()

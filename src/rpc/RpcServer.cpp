@@ -450,6 +450,8 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
         "", "", 0, "continue", "");
     if (method == "kagDebugStep") return handleKagDebug(id,
         "", "", 0, "step", "");
+    if (method == "kagReloadScene") return handleKagDebug(id,
+        extractField(jsonLine, "scene"), "", 0, "reloadScene", "");
     if (method == "kagInspectScopes") return handleKagDebug(id,
         "", "", 0, "inspect", extractField(jsonLine, "scope"));
 

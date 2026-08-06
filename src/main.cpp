@@ -381,6 +381,16 @@ private:
             code = "local kr = require('kag_runner'); "
                    "local ok = pcall(kr.debug_step); "
                    "return ok and 'ok' or 'runner-not-ready'";
+        } else if (op.action == "reloadScene") {
+            // Scene hot reload (editor workflow): re-parse the given (or
+            // current) .ks through kag_runner.reload_scene -- preserves
+            // game state and remaps the execution position.
+            code = "local kr = require('kag_runner'); "
+                   "local ok, r = kr.reload_scene("
+                   + (op.scene.empty() ? "nil" : luaQuote(op.scene))
+                   + "); "
+                   "return ok and ('ok:' .. tostring(r)) "
+                   "or ('error:' .. tostring(r))";
         } else if (op.action == "inspect") {
             code = "local kd = require('kag_debug'); "
                    "local ctx = require('kag_runner').get_ctx(); "

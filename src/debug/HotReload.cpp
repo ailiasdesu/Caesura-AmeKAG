@@ -27,12 +27,23 @@ void HotReload::init(const std::string& scriptDir, lua_State* L) {
     m_reloadRequested = false;
     m_warningFrames = 0;
 
+    m_watchRoots.clear();
+    m_watchRoots.push_back(scriptDir);
     scanDirectory();
 
     m_initialized = true;
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                "HotReload initialized -- monitoring %zu files in %s",
                m_fileTimes.size(), scriptDir.c_str());
+}
+
+void HotReload::addWatchRoot(const std::string& dir) {
+    if (dir.empty()) return;
+    m_watchRoots.push_back(dir);
+    scanDirectory();
+    DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
+               "HotReload: added watch root %s (total %zu files)",
+               dir.c_str(), m_fileTimes.size());
 }
 
 void HotReload::shutdown() {
@@ -50,11 +61,14 @@ void HotReload::scanDirectory() {
 
     namespace fs = std::filesystem;
     try {
-        for (const auto& entry : fs::recursive_directory_iterator(m_scriptDir)) {
-            if (!entry.is_regular_file()) continue;
-            auto ext = entry.path().extension().string();
-            if (ext == ".ks" || ext == ".lua") {
-                m_fileTimes[entry.path().string()] = entry.last_write_time();
+        for (const auto& root : m_watchRoots) {
+            if (root.empty()) continue;
+            for (const auto& entry : fs::recursive_directory_iterator(root)) {
+                if (!entry.is_regular_file()) continue;
+                auto ext = entry.path().extension().string();
+                if (ext == ".ks" || ext == ".lua") {
+                    m_fileTimes[entry.path().string()] = entry.last_write_time();
+                }
             }
         }
     } catch (const fs::filesystem_error& e) {
@@ -149,6 +163,7 @@ bool HotReload::checkAndReload() {
     // Check for changes
     bool changed = m_reloadRequested;
     m_reloadRequested = false;
+    std::vector<std::string> changedKs;
 
     if (!changed) {
         namespace fs = std::filesystem;
@@ -159,6 +174,10 @@ bool HotReload::checkAndReload() {
             if (currentTime > lastTime) {
                 lastTime = currentTime;
                 changed = true;
+                if (path.size() >= 3
+                    && path.compare(path.size() - 3, 3, ".ks") == 0) {
+                    changedKs.push_back(path);
+                }
                 DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                            "HotReload: change detected in %s", path.c_str());
             }
@@ -169,16 +188,19 @@ bool HotReload::checkAndReload() {
         // Check for new files
         namespace fs = std::filesystem;
         try {
-            for (const auto& entry : fs::recursive_directory_iterator(m_scriptDir)) {
-                if (!entry.is_regular_file()) continue;
-                auto ext = entry.path().extension().string();
-                if (ext == ".ks" || ext == ".lua") {
-                    auto path = entry.path().string();
-                    if (m_fileTimes.find(path) == m_fileTimes.end()) {
-                        m_fileTimes[path] = entry.last_write_time();
-                        changed = true;
-                        DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
-                                   "HotReload: new file detected: %s", path.c_str());
+            for (const auto& root : m_watchRoots) {
+                for (const auto& entry : fs::recursive_directory_iterator(root)) {
+                    if (!entry.is_regular_file()) continue;
+                    auto ext = entry.path().extension().string();
+                    if (ext == ".ks" || ext == ".lua") {
+                        auto path = entry.path().string();
+                        if (m_fileTimes.find(path) == m_fileTimes.end()) {
+                            m_fileTimes[path] = entry.last_write_time();
+                            changed = true;
+                            if (ext == ".ks") changedKs.push_back(path);
+                            DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
+                                       "HotReload: new file detected: %s", path.c_str());
+                        }
                     }
                 }
             }
@@ -191,6 +213,50 @@ bool HotReload::checkAndReload() {
             showWarningOverlay(m_warningText);
         }
         return false;
+    }
+
+    // -- Surgical .ks reload -------------------------------------------------
+    // A scene file (.ks) changed and NO .lua changed: live re-parse the
+    // scene through kag_runner.reload_scene (mods-aware, cache-busting,
+    // position remapped, game state preserved) instead of the nuclear
+    // reset. The runner's Lua hook reports success/failure; a failure
+    // (parse error in the edited file) leaves the game running untouched.
+    if (!changedKs.empty()) {
+        int reloaded = 0;
+        for (const auto& path : changedKs) {
+            lua_getglobal(m_L, "require");
+            lua_pushstring(m_L, "kag_runner");
+            if (lua_pcall(m_L, 1, 1, 0) != LUA_OK || !lua_istable(m_L, -1)) {
+                const char* err = lua_tostring(m_L, -1);
+                fprintf(stderr, "[HotReload] kag_runner require failed: %s\n",
+                        err ? err : "(unknown)");
+                lua_settop(m_L, 0);
+                break;
+            }
+            lua_getfield(m_L, -1, "reload_scene");
+            if (lua_isfunction(m_L, -1)) {
+                lua_pushvalue(m_L, -2);  // self = module
+                lua_pushstring(m_L, path.c_str());
+                if (lua_pcall(m_L, 2, 1, 0) == LUA_OK) {
+                    const char* r = lua_tostring(m_L, -1);
+                    DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
+                               "HotReload: scene reload %s -> %s",
+                               path.c_str(), r ? r : "?");
+                    ++reloaded;
+                } else {
+                    const char* err = lua_tostring(m_L, -1);
+                    fprintf(stderr, "[HotReload] scene reload failed for %s: %s\n",
+                            path.c_str(), err ? err : "(unknown)");
+                }
+            }
+            lua_settop(m_L, 0);  // pop fn + module + result/err
+        }
+        if (reloaded > 0) {
+            m_warningText = "HotReload: " + std::to_string(reloaded)
+                + " scene(s) reloaded";
+            m_warningFrames = 120;
+        }
+        return true;
     }
 
     // -- Reload sequence --------------------------------------------------

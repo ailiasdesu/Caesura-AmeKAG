@@ -115,6 +115,86 @@ function kag_runner.get_ctx()
     return ctx
 end
 
+--- kag_runner.remap_token_index(old_tokens, old_index, new_tokens) → index
+--  Best resume position in a re-parsed scene stream:
+--  1. first token with the same cmd AND the same primary param
+--     (text/name/storage/file -- the content-bearing slot)
+--  2. nearest preceding *label* in the old stream, looked up by name in
+--     the new stream (labels are content-stable anchors)
+--  3. 1 (scene start)
+function kag_runner.remap_token_index(old_tokens, old_index, new_tokens)
+    local old = old_tokens and old_tokens[old_index]
+    if old and new_tokens then
+        local cmd = old[1]
+        local params = old[2] or {}
+        local prim = params.text or params.name or params.storage or params.file
+        for i, t in ipairs(new_tokens) do
+            if t[1] == cmd then
+                local np = t[2] or {}
+                local nprim = np.text or np.name or np.storage or np.file
+                if prim ~= nil and prim == nprim then
+                    return i
+                end
+            end
+        end
+        -- fallback: nearest preceding label in the OLD stream
+        for j = old_index, 1, -1 do
+            local t = old_tokens[j]
+            if t[1] == "label" and t[2] and t[2].name then
+                for i, nt in ipairs(new_tokens) do
+                    if nt[1] == "label" and nt[2] and nt[2].name == t[2].name then
+                        return i
+                    end
+                end
+                break
+            end
+        end
+    end
+    return 1
+end
+
+--- kag_runner.reload_scene(path?) — hot-reload a .ks scene (editor
+--  workflow). Re-parses through flow.reload_scene (mods-aware, cache-
+--  busting), preserves game state (f/sf/tf/layers/backlog/undo stack),
+--  remaps the execution position, and re-spawns the scheduler coroutine
+--  at the new token. When `path` is not the running scene, only the
+--  scene cache is invalidated. Returns true + status.
+function kag_runner.reload_scene(path)
+    if not ctx then return false, "no-context" end
+    local target = path
+    if not target or #target == 0 then
+        target = ctx.current_scene or ctx.currentScene
+    end
+    if not target or #target == 0 then return false, "no-scene" end
+
+    local flow = require("flow")
+    local scene = flow.reload_scene(target)
+    if not scene then return false, "reload-failed" end
+
+    local running = ctx.current_scene or ctx.currentScene
+    if target ~= running then
+        return true, "cached"  -- cache busted; not the live scene
+    end
+
+    local new_tokens = scene.tokens
+    local new_index = kag_runner.remap_token_index(
+        ctx.tokens or {}, ctx.token_index or 1, new_tokens)
+
+    -- Stage the swap: end the running coroutine (stop_flag) and let
+    -- update() re-spawn at the remapped position -- same pattern as
+    -- rollback/jump, so the debugger and backlog see one code path.
+    ctx.tokens = new_tokens
+    ctx.labelMap = scene.labels
+    ctx.label_index = nil      -- raw tokens: next jump re-scans
+    ctx.token_index = new_index
+    ctx.current_scene = target
+    ctx.currentScene = target
+    ctx.call_stack = nil       -- stale frames point into the old stream
+    ctx._pendingSceneReload = true
+    ctx.stop_flag = true
+    return true, "reloaded"
+end
+
 local function resume_scheduler(origin, value)
     if not kag_co then return false, "not-running" end
     if coroutine.status(kag_co) == "dead" then return false, "dead" end
@@ -402,6 +482,17 @@ function kag_runner.update(dt)
     local status = coroutine.status(kag_co)
     if status == "dead" then
         close_scheduler_coroutine()
+        if ctx._pendingSceneReload then
+            -- Scene hot reload: the .ks was re-parsed (flow.reload_scene)
+            -- and ctx.tokens/token_index remapped; re-spawn the scheduler
+            -- at the new position (stop_flag ended the old coroutine).
+            ctx._pendingSceneReload = nil
+            ctx.stop_flag = false
+            kag_co = coroutine.create(function()
+                scheduler.run(ctx, ctx.tokens, ctx.token_index)
+            end)
+            return resume_scheduler("update", delta_ms)
+        end
         if ctx._pendingRollback then
             -- Rollback: a snapshot was already restored into ctx by
             -- rollback(); re-spawn the scheduler at the saved position.

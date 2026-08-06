@@ -387,6 +387,10 @@ bool Engine::initScriptingPhase() {
 
     // HotReload for scripts/ directory
     m_hotReload->init("scripts/", m_lua->state());
+    // Scene (.ks) and mod content live outside scripts/: watch them too so
+    // editing a running scene hot-reloads surgically (kag_runner.reload_scene).
+    m_hotReload->addWatchRoot("assets/script/");
+    m_hotReload->addWatchRoot("mods/");
 
     if (m_config.enableDebugger) {
         m_debugProtocol = std::make_unique<DebugProtocol>(*m_hotReload);
