@@ -53,10 +53,23 @@ _G._CAESURA_BACKEND = real_backend
 MusicRoom.scan = real_scan
 
 -- scroll window (review warn): 25 tracks, cursor past the 22-row
--- window must still map to a rendered row
+-- window must still map to a rendered row; the gold highlight must
+-- follow the cursor (review nit: assert the rendered color)
 local big = {}
 for i = 1, 25 do big[#big + 1] = { id = "t" .. i, name = "T" .. i, path = "p" .. i } end
 MusicRoom.scan = function() return big end
+local goldRows = {}
+_G._CAESURA_BACKEND = { render = function(cmd, ...)
+    if cmd == "render_text" then
+        local a = { ... }
+        if a[4] == 255 and a[5] == 220 and a[6] == 80 then
+            goldRows[#goldRows + 1] = a[1]
+        end
+    end
+    return true end,
+    platform = function(cmd)
+        if cmd == "get_resolution" then return 1280, 720 end
+        return true end }
 local ctxB = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, unlockedMusic = {} }
 local coB = coroutine.create(function() MusicRoom.show(ctxB) end)
 coroutine.resume(coB)
@@ -69,6 +82,7 @@ end
 _G._GAME_KEY_ENTER = true
 local okB = coroutine.resume(coB)
 check("scroll cursor no crash", okB and coroutine.status(coB) == "suspended")
+check("gold follows cursor", #goldRows >= 1 and goldRows[#goldRows]:find("T25") ~= nil)
 _G._GAME_KEY_ESC = true
 coroutine.resume(coB)
 check("scroll esc exits", coroutine.status(coB) == "dead")
