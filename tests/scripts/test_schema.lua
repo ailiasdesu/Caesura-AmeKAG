@@ -343,7 +343,8 @@ check("video missing file throws", not ok)
 p = Schema.coerce("save", { slot = "150" }, {})
 check("save slot clamped to 99", p.slot == 99)
 p = Schema.coerce("save", { slot = "-5" }, {})
-check("save slot clamped to 0", p.slot == 0)
+-- min is -2 (system slots -1/-2 flow through; deeper negatives clamp)
+check("save slot min -2", p.slot == -2)
 
 -- layer commands migrated
 for _, c in ipairs({ "position", "layopt", "fadeout" }) do

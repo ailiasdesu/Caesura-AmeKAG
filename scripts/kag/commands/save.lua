@@ -154,13 +154,17 @@ end
 -- SaveManager guard; out-of-range values clamp to the bound).
 require("kag.schema").define("save", {
     -- NO default: coerce would inject slot=0 and shadow the bare
-    -- positional [save 3] (same pattern as the wait aliases)
-    slot = { type = "number", min = 0, max = 99 },
+    -- positional [save 3] (same pattern as the wait aliases).
+    -- min = -2: named negative slots (system -1/-2) must flow through
+    -- to the C++ guard, not clamp to 0 (review should-fix).
+    slot = { type = "number", min = -2, max = 99 },
 })
 require("kag.schema").define("load", {
     -- NO default: coerce would inject slot=0 and shadow the bare
-    -- positional [save 3] (same pattern as the wait aliases)
-    slot = { type = "number", min = 0, max = 99 },
+    -- positional [save 3] (same pattern as the wait aliases).
+    -- min = -2: named negative slots (system -1/-2) must flow through
+    -- to the C++ guard, not clamp to 0 (review should-fix).
+    slot = { type = "number", min = -2, max = 99 },
 })
 
 -- Resolve the save slot: named slot= (schema-typed 0..99), else the

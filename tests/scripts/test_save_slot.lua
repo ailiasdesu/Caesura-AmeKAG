@@ -54,5 +54,21 @@ _G.KAG = { load_game = function(slot) loadCalls[#loadCalls + 1] = slot
 run(tokenizer.parse("[load 2]"))
 check("load bare slot", loadCalls[1] == 2)
 
+-- NAMED negative [save slot=-1] flows through (schema min=-2) to the
+-- C++ guard -- never clamps to 0 (review should-fix)
+calls = {}
+_G.KAG = { save_game = function(slot) calls[#calls + 1] = slot return true end,
+           load_game = function() return {}, {} end }
+run(tokenizer.parse("[save slot=-1]"))
+check("named negative passthrough", calls[1] == -1)
+
+-- direct quicksave-style call (bypasses schema) also passes through
+calls = {}
+local Save = require("kag.commands.save")
+local ctxD = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    current_scene = "t.ks", token_index = 1 }
+pcall(Save.save, ctxD, { slot = -2, desc = "Autosave" })
+check("autosave slot passthrough", calls[1] == -2)
+
 if failed > 0 then os.exit(1) end
 print("SAVE SLOT TESTS DONE")

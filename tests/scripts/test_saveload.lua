@@ -14,7 +14,8 @@ local schema = require("kag.schema")
 local ps = schema.coerce("save", { slot = "500" }, {})
 check("save slot clamped", ps.slot == 99)
 local pl = schema.coerce("load", { slot = "-5" }, {})
-check("load slot clamped", pl.slot == 0)
+-- min is -2 (system slots flow through); deeper negatives clamp to -2
+check("load slot min -2", pl.slot == -2)
 
 -- [saveload] is REGISTERED (audit fix: it existed in SaveCommands but
 -- kag.lua never bound it -- .ks scripts hit nil)
