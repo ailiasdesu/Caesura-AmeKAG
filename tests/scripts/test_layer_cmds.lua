@@ -49,23 +49,13 @@ end
 -- Integration lock (review blocking): coerce + handler against a stub
 -- layers table -- layer-less moveto must move 'fg' and x must win.
 do
-    local KAG = require("kag")
     local schema = require("kag.schema")
-    local moved = nil
-    local layers_orig = package.loaded["layers"]
-    package.loaded["layers"] = { set_position = function(layerName, x, y, scale, unit)
-        moved = { layerName, x, y, scale, unit } end }
-    -- layer.lua captured layers at require time? NO -- it requires lazily
-    -- inside handlers only for some; check: it calls layers.set_position
-    -- via the module-level `layers` require. Re-require the handler module
-    -- with the stub in place is not possible (sandbox); instead invoke the
-    -- handler with a coerced params and a stubbed global is overkill --
-    -- verify via schema + source that nil pass-through is preserved:
+    -- coerce-level lock: defaults must NOT fill left/top/x/y/layer (a
+    -- filled '' layer or 0 left would shadow the handler's or-fallbacks)
     local m = schema.coerce("moveto", { left = "100", top = "50", scale = "99" }, {})
     local ok = m.left == 100 and m.top == 50 and m.scale == 16 and m.layer == nil
     local m2 = schema.coerce("moveto", { x = "0.5" }, {})
     local ok2 = m2.x == 0.5 and m2.left == nil
-    package.loaded["layers"] = layers_orig
     if ok and ok2 then print("PASS moveto nil pass-through") passed = passed + 1
     else print("FAIL moveto nil pass-through") failed = failed + 1 end
 end
