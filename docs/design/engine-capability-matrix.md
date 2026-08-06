@@ -101,6 +101,11 @@ graph LR
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
 | S2 | KAG Neo-Genesis parser (72 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
+| S2d | KAG3 expression compatibility (TJS `&& \|\| ! != ?:` translated string-aware; visible scene:line errors instead of silent else) | `kag/expr.lua` | ✓ |
+| S2e | KAG3 variable system (`%f.x%` interpolation, `lf` call-frame stack, `mp` message params, dual-style expression env) | schema + scheduler | ✓ |
+| S2f | KAG3 control-flow completeness (`[elsif]` alias, `[call *label]` intra-scene, `[end]`→ending, unknown-tag warnings) | tokenizer + scheduler | ✓ |
+| S2g | Modern utility commands (`[set]` typed, `[inc]`, `[random]`, `[assert]`) | system commands | ✓ |
+| S2h | Command metadata (category/blocking/desc on all 61 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
 | S2c | Parser performance (full-parse 1.37s -> ~0.9s; text-run batch skip ~37x, see test_benchmark.lua) | lpeg.lua | ✓ |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
