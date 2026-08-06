@@ -194,6 +194,16 @@ Emitter config table (`cfg`):
 | `stop_bgm` | `(fadeTime?)` | `bool` | Stop BGM with optional fade (ms) |
 | `play_se` | `(file, volume?)` | `bool` | Play sound effect |
 | `stop_se` | `()` | `bool` | Stop all sound effects |
+| `play_se_3d` | `(file, x, y, volume?)` | `bool` | Play a positional sound effect |
+| `is_se_playing` | `()` | `bool` | Whether the SE bus is active |
+| `audio_fade_volume` | `(bus, target, seconds)` | `bool` | Smooth volume change (bus: bgm/se/voice) |
+| `audio_get_length` | `(bus)` | `number` | Current track length (seconds) |
+| `audio_get_position` | `(bus)` | `number` | Current playback position (seconds) |
+| `clear_screen` | `()` | `bool` | Clear the screen layers |
+| `clear_text_layer` | `()` | `bool` | Clear the text layer |
+| `flush_wave_cache` | `()` | `bool` | Flush the decoded-wave cache |
+| `quake` | `(amplitude, duration?)` | `bool` | Screen shake (KAG3 classic) |
+| `render_ruby` | `(text, ruby, x, y)` | `bool` | Furigana annotation (also on Render) |
 | `play_voice` | `(file, volume?)` | `bool` | Play voice line |
 | `stop_voice` | `()` | `bool` | Stop current voice |
 | `set_global_volume` | `(vol)` | — | Master volume 0.0–1.0 |
