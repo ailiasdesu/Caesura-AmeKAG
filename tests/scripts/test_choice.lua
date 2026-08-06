@@ -6,6 +6,7 @@ local check = function(name, cond)
         results[#results + 1] = cond
 end
 
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 local TextCommands = require("kag.commands.text")
 local TextScene = require("kag.text_scene")
 
