@@ -34,7 +34,7 @@ check("char layer naming", src:find('"_char_" .. (params.speaker or "")', 1, tru
 check("missing-layer defense", src:find("no sprite layer", 1, true) ~= nil)
 check("cancel pattern", src:find("operation <close> = require(\"kag.operation\").start(ctx)", 1, true) ~= nil)
 
--- [sprite_set] loads the texture through the backend each set (the
+-- [ch sprite=] loads the texture through the backend each time (the
 -- C++ TextureManager path cache dedups repeated files -- audit: the
 -- Lua side must NOT cache ids, LRU eviction would invalidate them)
 local loads = 0
@@ -53,8 +53,9 @@ package.loaded["layers"] = { ensure = function() return { visible = true } end,
 -- backend (the C++ path cache dedups repeats -- audit)
 local ctxS = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, backlog = {},
     current_scene = "t.ks" }
-pcall(KAG.ch, ctxS, { name = "Hero", sprite = "hero.png", text = "hi" })
-check("ch sprite loads via backend", loads >= 1)
+local okS = pcall(KAG.ch, ctxS, { name = "Hero", sprite = "hero.png", text = "hi" })
+pcall(KAG.ch, ctxS, { name = "Hero", sprite = "hero.png", text = "hi2" })
+check("ch sprite loads via backend", okS and loads == 2)
 package.loaded["layers"] = layer_b
 _G._CAESURA_BACKEND = be_backup
 
