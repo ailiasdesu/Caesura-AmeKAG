@@ -298,9 +298,10 @@ function scheduler.run(ctx, tokens, start_index)
             local target = params.target or params.storage
             if type(params[1]) == "string" then target = target or params[1] end
             if not target then
+                -- review should-fix: a typo'd [link] must NOT wipe
+                -- layers/backlog/call_stack -- WARN and keep scene state
                 print("[WARN] [link] missing target/storage parameter")
-                target = ""
-            end
+            else
             -- Clear everything and jump
             ctx.layers = {}
             ctx.backlog = {}
@@ -320,6 +321,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.current_scene = path
                 ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 i = 0
+            end
             end
 
         -- Flow control: [end]

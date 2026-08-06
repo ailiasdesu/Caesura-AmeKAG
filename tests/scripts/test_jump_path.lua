@@ -115,6 +115,19 @@ for _, c in ipairs({ "call", "link" }) do
     check("[" .. c .. "] typo no crash", okT3 and #callsT3 == 0)
 end
 
+-- [link] typo must NOT wipe layers/backlog (review should-fix: the
+-- clearing used to run unconditionally before the path check)
+local tL = tokenizer.parse("[link storag=next.ks]")
+local ctxL = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    layers = { bg = {} }, backlog = { { "old" } }, call_stack = { { 1 } },
+    tokens = { { "ch", { text = "hi" } } }, token_index = 1,
+    current_scene = "assets/script/main.ks", label_index = {},
+    load_tokens = function() return { { "ch", {} } } end }
+local coL = coroutine.create(function() scheduler.run(ctxL, tL, 1) end)
+while coroutine.status(coL) ~= "dead" do coroutine.resume(coL) end
+check("link typo keeps state", ctxL.layers ~= nil and ctxL.backlog ~= nil
+      and ctxL.call_stack ~= nil)
+
 -- bare [call] and [link] route cross-scene too
 for _, c in ipairs({ "call", "link" }) do
     local tC = tokenizer.parse("[" .. c .. " next.ks]")
