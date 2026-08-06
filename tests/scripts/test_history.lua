@@ -60,9 +60,16 @@ check("empty history no-op", ctx3.stop_flag == false
 
 if failed > 0 then os.exit(1) end
 -- real show() input loop (audit): scroll + exit
--- restore the REAL module (saved before the mocks -- sandbox-safe;
--- standalone runs where nothing was preloaded reload via require)
-local HistoryUI = _hu_saved or require("history_ui")
+-- restore the REAL module: suite runs use the saved preload (sandbox
+-- blocks re-require); standalone runs CLEAR the mock cache first
+-- (require would otherwise return the stub)
+local HistoryUI
+if _hu_saved then
+    HistoryUI = _hu_saved
+else
+    package.loaded["history_ui"] = nil
+    HistoryUI = require("history_ui")
+end
 local be_b = _G._CAESURA_BACKEND
 _G._CAESURA_BACKEND = { render = function() return true end,
     platform = function(cmd)
