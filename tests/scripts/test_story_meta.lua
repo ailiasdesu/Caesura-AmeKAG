@@ -35,6 +35,9 @@ pcall(KAG.ending, ctxX, { id = "id=1", name = "Y" })
 pcall(KAG.ending, ctxX, { id = "0x5F", name = "Z" })
 check("exotic ids stored as data", ctxX.seen_endings["a..b"] ~= nil
       and ctxX.seen_endings["id=1"] ~= nil and ctxX.seen_endings["0x5F"] ~= nil)
+check("records intact", ctxX.seen_endings["a..b"].name == "X"
+      and ctxX.seen_endings["id=1"].name == "Y"
+      and ctxX.seen_endings["0x5F"].name == "Z")
 check("no metatable injected", getmetatable(ctxX.seen_endings) == nil)
 
 -- [ending] with a non-table seen_endings resets defensively
