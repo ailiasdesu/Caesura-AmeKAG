@@ -36,7 +36,7 @@ if exist "%LUA%" (
         echo [FAIL] Lua tests failed!
         exit /b 1
     )
-    echo [PASS] Lua tests passed (51/51).
+    echo [PASS] Lua tests passed (52/52).
 ) else (
     echo [SKIP] lua.exe not found at %LUA%
 )
@@ -45,6 +45,6 @@ REM -- Phase 3: Summary --------------------------------------------------------
 echo.
 echo ============================================
 echo   Test Suite Complete ? All Passed
-echo   C++: 569/569  |  Lua: 51/51
+echo   C++: 569/569  |  Lua: 52/52
 echo ============================================
 exit /b 0
