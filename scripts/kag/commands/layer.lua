@@ -228,6 +228,17 @@ end
 --  Set a layer's position. x,y in NDC [0-1] unless unit="px".
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
+-- [moveto] -- KAG3 layer-move syntax (left/top/layer) mapped onto the
+-- position command's x/y/layer semantics (Neo-Genesis alias).
+function LayerCommands.moveto(ctx, params)
+    local layerName = params.layer or "fg"
+    local x = params.left or params.x or 0
+    local y = params.top or params.y or 0
+    local scale = params.scale or 1.0
+    local unit = params.unit or "ndc"
+    layers.set_position(layerName, x, y, scale, unit)
+end
+
 function LayerCommands.position(ctx, params)
     local layerName = params.layer or "fg"
     local x = params.x or 0
