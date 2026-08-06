@@ -149,20 +149,20 @@ local function capture_state(ctx)
     -- Visual/text state (audit: saves restored logic but not the
     -- message-window style or font -- a reloaded save reset the look).
     -- Only plain string/number fields are captured (no handles/tables).
-    if ctx.text_state and type(ctx.text_state) == "table" then
+    if ctx.text_state and _type(ctx.text_state) == "table" then
         local ts = ctx.text_state
         local vis = {}
-        if type(ts.font_face) == "string" then vis.font_face = ts.font_face end
-        if type(ts.font_size) == "number" then vis.font_size = ts.font_size end
-        if type(ts.font_color) == "string" then vis.font_color = ts.font_color end
+        if _type(ts.font_face) == "string" then vis.font_face = ts.font_face end
+        if _type(ts.font_size) == "number" then vis.font_size = ts.font_size end
+        if _type(ts.font_color) == "string" then vis.font_color = ts.font_color end
         if next(vis) then state.text_state = vis end
     end
-    if ctx.textbox_style and type(ctx.textbox_style) == "table" then
+    if ctx.textbox_style and _type(ctx.textbox_style) == "table" then
         local st = ctx.textbox_style
-        if type(st.w) == "number" and type(st.h) == "number" then
+        if _type(st.w) == "number" and _type(st.h) == "number" then
             state.textbox_style = {
                 x = st.x or 0, y = st.y or 0, w = st.w, h = st.h,
-                color = type(st.color) == "string" and st.color or "0,0,0",
+                color = _type(st.color) == "string" and st.color or "0,0,0",
                 opacity = st.opacity or 200,
                 visible = st.visible ~= false,
             }
