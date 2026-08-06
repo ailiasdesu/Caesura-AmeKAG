@@ -48,5 +48,20 @@ check("playse volume clamped", c3.volume == 1.5)
 
 _G._CAESURA_BACKEND = real_backend
 
+-- bare file (audit): [xfadebgm next.ogg] -> params[1]
+-- (re-arm the mock: the earlier restore at line 48 removed it)
+_G._CAESURA_BACKEND = { render = function() return true end,
+    audio = function(cmd, ...)
+        calls[#calls + 1] = { cmd, ... }
+        return true end }
+calls = {}
+Audio.xfadebgm(ctx, { "next.ogg", time = 1000 })
+check("xfade bare file", calls[1] and calls[1][3] == "next.ogg")
+-- typo'd named param: params[1] is a pair table -- must not crash
+calls = {}
+Audio.xfadebgm(ctx, { { "storag", "x.ogg" }, time = 1000 })
+check("xfade typo pair safe", #calls == 0)
+_G._CAESURA_BACKEND = real_backend
+
 if failed > 0 then os.exit(1) end
 print("AUDIO FADE TESTS DONE")

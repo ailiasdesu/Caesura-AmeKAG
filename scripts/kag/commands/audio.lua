@@ -12,7 +12,14 @@ local AudioCommands = {}
 
 -- Internal: resolve file path (storage > path > file > positional)
 local function resolve_file(params)
-    return params.storage or params.path or params.file or params[1]
+    -- string-only: with named params (even a typo), params[1] is the
+    -- raw pair table -- a table would reach the backend binding and
+    -- raise (audit: same guard as jump/call/link)
+    local f = params.storage or params.path or params.file
+    if type(f) ~= "string" and type(params[1]) == "string" then
+        f = params[1]
+    end
+    return f
 end
 
 -- =============================================================================
