@@ -230,6 +230,17 @@ end
 
 -- [moveto] -- KAG3 layer-move syntax (left/top/layer) mapped onto the
 -- position command's x/y/layer semantics (Neo-Genesis alias).
+-- Schema mirrors position (security LOW: the alias must clamp scale
+-- the same way -- raw pass-through allowed unclamped render math).
+schema.define("moveto", {
+    left  = { type = "number", default = 0 },
+    top   = { type = "number", default = 0 },
+    x     = { type = "number", default = 0 },
+    y     = { type = "number", default = 0 },
+    scale = { type = "number", default = 1.0, min = 0.01, max = 16 },
+    layer = { type = "string", default = "" },
+    unit  = { type = "string", default = "ndc" },
+})
 function LayerCommands.moveto(ctx, params)
     local layerName = params.layer or "fg"
     local x = params.left or params.x or 0

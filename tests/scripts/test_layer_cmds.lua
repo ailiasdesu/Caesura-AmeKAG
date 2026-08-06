@@ -33,5 +33,17 @@ local im = schema.coerce("image", { storage = "x.png", w = "99999", h = "-1" }, 
 check("image w clamped", im.w == 8192)
 check("image h clamped", im.h == 0)
 
+
+-- moveto schema lock (security LOW): scale clamps like position
+do
+    local schema = require("kag.schema")
+    local m = schema.coerce("moveto", { left = "100", top = "50", scale = "99" }, {})
+    local ok = m.left == 100 and m.top == 50 and m.scale == 16
+    local m2 = schema.coerce("moveto", { scale = "-5" }, {})
+    local ok2 = m2.scale == 0.01
+    if ok and ok2 then print("PASS moveto schema clamps") passed = passed + 1
+    else print("FAIL moveto schema clamps") failed = failed + 1 end
+end
+
 if failed > 0 then os.exit(1) end
 print("LAYER CMDS TESTS DONE")
