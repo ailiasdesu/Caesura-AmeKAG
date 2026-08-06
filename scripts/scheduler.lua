@@ -252,8 +252,7 @@ function scheduler.run(ctx, tokens, start_index)
             if type(params[1]) == "string" then target = target or params[1] end
             if not target then
                 print("[WARN] [call] missing target/storage parameter")
-                target = ""
-            end
+            else
             local path = "assets/script/" .. target
             local new_tokens = nil
             if not is_safe_scene_path(path) then
@@ -273,6 +272,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.current_scene = path
                 ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 i = 0
+            end
             end
 
         -- Flow control: [return]

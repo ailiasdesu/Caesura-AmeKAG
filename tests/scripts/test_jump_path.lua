@@ -125,8 +125,12 @@ local ctxL = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     load_tokens = function() return { { "ch", {} } } end }
 local coL = coroutine.create(function() scheduler.run(ctxL, tL, 1) end)
 while coroutine.status(coL) ~= "dead" do coroutine.resume(coL) end
-check("link typo keeps state", ctxL.layers ~= nil and ctxL.backlog ~= nil
-      and ctxL.call_stack ~= nil)
+-- content-level: the old buggy code wiped to {} (non-nil), so a
+-- nil-check passes vacuously -- assert the CONTENT survived (review
+-- should-fix: this test must fail on the pre-fix scheduler)
+check("link typo keeps layers", ctxL.layers.bg ~= nil)
+check("link typo keeps backlog", ctxL.backlog[1] ~= nil)
+check("link typo keeps call_stack", ctxL.call_stack[1] ~= nil)
 
 -- bare [call] and [link] route cross-scene too
 for _, c in ipairs({ "call", "link" }) do
