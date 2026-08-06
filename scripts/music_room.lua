@@ -211,7 +211,10 @@ function MusicRoom.show(ctx)
     local lineH = 26
     local maxVisible = math.min(#tracks, 22)  -- Fit ~22 tracks on screen
     for i = 1, maxVisible do
-        local t = tracks[i]
+        -- scroll is APPLIED here (review warn: the cursor moved past
+        -- the visible window with >22 tracks -- marker vanished)
+        local t = tracks[scroll + i]
+        if not t then break end
         local y = startY + (i - 1) * lineH
 
         -- Build status indicators
@@ -219,7 +222,7 @@ function MusicRoom.show(ctx)
         local lockStatus = t.unlocked and "" or " [Locked]"
 
         -- Track line: "> ★ 03. track_name [Locked]"
-        local prefix = (i == cursor) and "> " or "  "
+        local prefix = (scroll + i == cursor) and "> " or "  "
         local idxStr = string.format("%2d.", i)
         local line = prefix .. favMark .. idxStr .. " " .. t.name .. lockStatus
         local r, g2, bVal = 220, 220, 255  -- default white-blue
@@ -248,7 +251,9 @@ function MusicRoom.show(ctx)
     for _, t in ipairs(tracks) do if t.favorited then favCount = favCount + 1 end end
     backend.render_text("★ " .. favCount .. " favorites", 40, footerY + 14, 255, 220, 80, 255)
 
-    print("[MusicRoom] Displayed " .. #tracks .. " tracks.")
+    if scroll == 0 then
+        print("[MusicRoom] Displayed " .. #tracks .. " tracks.")
+    end
         coroutine.yield()
 
         if _G._GAME_KEY_UP == true then

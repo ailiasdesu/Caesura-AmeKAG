@@ -52,5 +52,26 @@ package.loaded["layers"] = layers_backup
 _G._CAESURA_BACKEND = real_backend
 MusicRoom.scan = real_scan
 
+-- scroll window (review warn): 25 tracks, cursor past the 22-row
+-- window must still map to a rendered row
+local big = {}
+for i = 1, 25 do big[#big + 1] = { id = "t" .. i, name = "T" .. i, path = "p" .. i } end
+MusicRoom.scan = function() return big end
+local ctxB = { f = {}, sf = {}, tf = {}, mp = {}, variables = {}, unlockedMusic = {} }
+local coB = coroutine.create(function() MusicRoom.show(ctxB) end)
+coroutine.resume(coB)
+coroutine.resume(coB)
+for _ = 1, 24 do
+    _G._GAME_KEY_DOWN = true
+    coroutine.resume(coB)
+end
+-- cursor at 25; Enter must pick t25 (unlocked? no -- locked, so no play)
+_G._GAME_KEY_ENTER = true
+local okB = coroutine.resume(coB)
+check("scroll cursor no crash", okB and coroutine.status(coB) == "suspended")
+_G._GAME_KEY_ESC = true
+coroutine.resume(coB)
+check("scroll esc exits", coroutine.status(coB) == "dead")
+
 if failed > 0 then os.exit(1) end
 print("MUSIC ROOM TESTS DONE")
