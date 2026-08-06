@@ -165,23 +165,27 @@ end
 -- tonumber fallbacks; contract violations report cmd@scene:token).
 local schema = require("kag.schema")
 schema.define("scroll", {
+    _meta = { category = "transition", blocking = false, desc = "KAG3-compatible scroll command" },
     text  = { type = "string", default = "" },
     speed = { type = "number", default = 60, min = 1, max = 1000 },
     size  = { type = "number", default = 28, min = 8, max = 128 },
     color = { type = "string", default = "white" },
 })
 schema.define("trans", {
+    _meta = { category = "transition", blocking = true, desc = "KAG3-compatible trans command" },
     method = { type = "string", default = "crossfade" },
     time   = { type = "number", default = 500, min = 0, max = 30000 },
     duration = { type = "number", default = 500, min = 0, max = 30000 },
 })
 schema.define("move", {
+    _meta = { category = "transition", blocking = true, desc = "KAG3-compatible move command" },
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
     time = { type = "number", default = 300, min = 0, max = 30000 },
     duration = { type = "number", default = 300, min = 0, max = 30000 },
 })
 schema.define("quake", {
+    _meta = { category = "transition", blocking = true, desc = "KAG3-compatible quake command" },
     time = { type = "number", default = 300, min = 0, max = 30000 },
     duration = { type = "number", default = 300, min = 0, max = 30000 },
     intensity = { type = "number", default = 5, min = 0, max = 100 },
@@ -421,6 +425,7 @@ end
 -- Shakes the message layer's offset like quake but scoped to the text
 -- window; classic emphasis effect for dialogue.
 schema.define("vib", {
+    _meta = { category = "transition", blocking = true, desc = "KAG3-compatible vib command" },
     time = { type = "number", default = 300, min = 0, max = 30000 },
     intensity = { type = "number", default = 3, min = 0, max = 50 },
     amplitude = { type = "number", min = 0, max = 50 },
@@ -459,6 +464,7 @@ end
 -- extension glue for a smooth camera drift; this animates the engine's
 -- screen offset from (0,0) to (x,y) and back, cancel-safe.
 schema.define("camera", {
+    _meta = { category = "transition", blocking = false, desc = "KAG3-compatible camera command" },
     x = { type = "number", default = 0, min = 0, max = 2000 },  -- rect path pans right/down
     y = { type = "number", default = 0, min = 0, max = 2000 },
     time = { type = "number", default = 500, min = 0, max = 30000 },

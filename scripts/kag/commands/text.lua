@@ -123,6 +123,7 @@ local TextCommands = {}
 -- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("ch", {
+    _meta = { category = "text", blocking = true, desc = "KAG3-compatible ch command" },
     name   = { type = "string", default = "" },
     text   = { type = "string", default = "", interpolate = true },
     voice  = { type = "string", default = "" },
@@ -131,11 +132,13 @@ schema.define("ch", {
     chars_per_line = { type = "number", default = 0, min = 0, max = 512 },
 })
 schema.define("text", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible text command" },
     text = { type = "string", default = "", interpolate = true },
     fade_time = { type = "number", default = 0, min = 0, max = 30000 },
     fade = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("ruby", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible ruby command" },
     text = { type = "string", default = "" },
     ruby = { type = "string", default = "" },
     x = { type = "number", default = 0 },
@@ -143,19 +146,35 @@ schema.define("ruby", {
     ruby_scale = { type = "number", default = 0.5, min = 0.1, max = 2.0 },
 })
 schema.define("font", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible font command" },
     face = { type = "string", default = "default" },
     size = { type = "number", default = 22, min = 4, max = 256 },
     color = { type = "string", default = "white" },  -- KAG3 color param
 })
 -- Text-flow family (Neo-Genesis: typed + validated like every command).
-schema.define("l", {})          -- line break (no params)
-schema.define("r", {})          -- carriage return (no params)
-schema.define("er", {})         -- erase line (no params)
-schema.define("br", {})         -- KAG3 line-break alias (no params)
-schema.define("hr", {})         -- horizontal rule (decorative)
-schema.define("p", {})          -- click-to-advance (no params)
-schema.define("reset", {})      -- reset text state (no params)
-schema.define("s", {            -- KAG3 short-wait
+schema.define("l", {
+    _meta = { category = "text", blocking = false, desc = "line break" },
+})          -- line break (no params)
+schema.define("r", {
+    _meta = { category = "text", blocking = false, desc = "carriage return" },
+})          -- carriage return (no params)
+schema.define("er", {
+    _meta = { category = "text", blocking = false, desc = "erase line" },
+})         -- erase line (no params)
+schema.define("br", {
+    _meta = { category = "text", blocking = false, desc = "KAG3 line-break alias" },
+})         -- KAG3 line-break alias (no params)
+schema.define("hr", {
+    _meta = { category = "text", blocking = false, desc = "horizontal rule" },
+})         -- horizontal rule (decorative)
+schema.define("p", {
+    _meta = { category = "text", blocking = true, desc = "click-to-advance" },
+})          -- click-to-advance (no params)
+schema.define("reset", {
+    _meta = { category = "text", blocking = false, desc = "reset text state" },
+})      -- reset text state (no params)
+schema.define("s", {
+    _meta = { category = "text", blocking = true, desc = "KAG3 short-wait" },            -- KAG3 short-wait
     ms = { type = "number", default = 250, min = 0, max = 60000 },
 })
 
@@ -194,6 +213,7 @@ end
 -- opacity. State persists in ctx.textbox_style and is re-applied on
 -- [cl] (clearscreen rebuilds the window).
 schema.define("textbox", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible textbox command" },
     x       = { type = "number", default = 0 },
     y       = { type = "number", default = 520 },
     w       = { type = "number", default = 1280, min = 64, max = 4096 },
@@ -230,6 +250,7 @@ end
 -- configured, [ch name=X] shows the plate with the character's name;
 -- the style persists in ctx.nameplate_style.
 schema.define("nameplate", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible nameplate command" },
     x       = { type = "number", default = 32 },
     y       = { type = "number", default = 480 },
     w       = { type = "number", default = 220, min = 32, max = 1024 },
@@ -281,6 +302,7 @@ end
 -- KAG3 needed layeredit + tween glue for this). Animates the
 -- _char_<speaker> layer opacity 0..255 via an operation yield loop.
 schema.define("sprite_fade", {
+    _meta = { category = "text", blocking = true, desc = "KAG3-compatible sprite_fade command" },
     speaker = { type = "string", required = true },
     to = { type = "number", default = 255, min = 0, max = 255 },
     time = { type = "number", default = 300, min = 0, max = 30000 },
@@ -319,6 +341,7 @@ end
 -- [sprite_move] -- character-sprite slide (entrance/exit performance).
 -- Animates the _char_<speaker> layer x/y toward a target position.
 schema.define("sprite_move", {
+    _meta = { category = "text", blocking = true, desc = "KAG3-compatible sprite_move command" },
     speaker = { type = "string", required = true },
     x = { type = "number", default = 440 },
     y = { type = "number", default = 200 },
@@ -358,6 +381,7 @@ end
 -- [sprite_scale] -- character-sprite zoom (performance emphasis).
 -- Animates the _char_<speaker> layer scaleX/scaleY toward a target.
 schema.define("sprite_scale", {
+    _meta = { category = "text", blocking = true, desc = "KAG3-compatible sprite_scale command" },
     speaker = { type = "string", required = true },
     scale = { type = "number", default = 1.0, min = 0.1, max = 4.0 },
     time = { type = "number", default = 300, min = 0, max = 30000 },
@@ -400,6 +424,7 @@ end
 -- idiom: KAG3 needed layeredit + reload glue). Swaps the standing
 -- portrait's texture and re-registers the sprite for future [ch].
 schema.define("sprite_swap", {
+    _meta = { category = "text", blocking = true, desc = "KAG3-compatible sprite_swap command" },
     speaker = { type = "string", required = true },
     sprite = { type = "string", required = true },
 })
@@ -738,6 +763,7 @@ end
 
 -- Neo-Genesis: explicit mode param (on/off/toggle) beyond KAG3's bare toggle.
 schema.define("auto", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible auto command" },
     mode = { type = "string", choices = { ["on"] = true, ["off"] = true, ["toggle"] = true } },
 })
 
@@ -751,6 +777,7 @@ end
 -- [voice_off] -- mute/unmute voice without stopping the engine bus
 -- (Neo-Genesis convenience: KAG3 needed stopvoice + a saved setting to mute).
 schema.define("voice_off", {
+    _meta = { category = "text", blocking = false, desc = "KAG3-compatible voice_off command" },
     on = { type = "boolean", default = true },
 })
 
@@ -777,6 +804,7 @@ end
 
 -- Neo-Genesis contract: typed + clamped (replaces the inline clamps).
 require("kag.schema").define("pt", {
+    _meta = { category = "text", blocking = false, desc = "point text at position" },
     speed = { type = "number", default = 50, min = 8, max = 5000 },
 })
 

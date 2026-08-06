@@ -1,5 +1,5 @@
 -- =============================================================================
---  Caesura (AmeKAG) â€?kag/commands/audio.lua
+--  Caesura (AmeKAG) ï¿½?kag/commands/audio.lua
 --  KAG audio tag handlers: [playbgm], [stopbgm], [playse], [playvoice],
 --  [fadebgm], [xfadebgm]
 --  All audio calls route through backend.lua (unified C++ proxy).
@@ -36,21 +36,26 @@ local schema = require("kag.schema")
 -- No default: the handler falls back to the positional params[1]
 -- ([setbgmvolume 0.5]); a default would shadow it (coerce fills volume).
 schema.define("setbgmvolume", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible setbgmvolume command" },
     volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("setsevolume", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible setsevolume command" },
     volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("setvoicevolume", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible setvoicevolume command" },
     volume = { type = "number", min = 0, max = 1.5 },
 })
 schema.define("playbgmstop", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playbgmstop command" },
     file = { type = "string" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("playbgm", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playbgm command" },
     _require_any = { "file", "storage" },
     file    = { type = "string" },
     storage = { type = "string" },  -- KAG3 alias for file
@@ -59,6 +64,7 @@ schema.define("playbgm", {
     loop   = { type = "boolean", default = true },
 })
 schema.define("playse", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playse command" },
     _require_any = { "file", "storage" },
     file    = { type = "string" },
     storage = { type = "string" },
@@ -66,17 +72,21 @@ schema.define("playse", {
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("stopbgm", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible stopbgm command" },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("stopse", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible stopse command" },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("fadebgm", {
+    _meta = { category = "audio", blocking = true, desc = "KAG3-compatible fadebgm command" },
     volume = { type = "number", default = 0, min = 0, max = 1.5 },
     time   = { type = "number", default = 1000, min = 0, max = 30000 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })
 schema.define("fadevol", {
+    _meta = { category = "audio", blocking = true, desc = "KAG3-compatible fadevol command" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     time   = { type = "number", default = 1000, min = 0, max = 30000 },
 })
@@ -168,6 +178,7 @@ end
 
 -- Neo-Genesis contract: typed crossfade (time clamped).
 schema.define("xfadebgm", {
+    _meta = { category = "audio", blocking = true, desc = "KAG3-compatible xfadebgm command" },
     file  = { type = "string" },
     storage = { type = "string" },
     time  = { type = "number", default = 2000, min = 0, max = 30000 },
@@ -186,7 +197,7 @@ end
 
 -- =============================================================================
 --  [playse storage="click.wav" volume=0.8]
---  Play sound effect on SE bus â€?fire and forget (no blocking).
+--  Play sound effect on SE bus ï¿½?fire and forget (no blocking).
 -- =============================================================================
 
 function AudioCommands.playse(ctx, params)
@@ -214,7 +225,7 @@ end
 
 -- =============================================================================
 --  [playvoice storage="line001.ogg"]
---  Play voice line on VOICE bus â€?blocks until complete via coroutine.yield.
+--  Play voice line on VOICE bus ï¿½?blocks until complete via coroutine.yield.
 --  Each frame, the scheduler resumes and re-checks voice status.
 --  When voice finishes (or _CAESURA_AUDIO_EVENT fires), the command returns.
 -- =============================================================================
@@ -238,7 +249,7 @@ function AudioCommands.playvoice(ctx, params)
     -- Play the voice line
     backend.audio_play("voice", file, {})
 
-    -- Block until voice finishes â€?cooperative yield each frame.
+    -- Block until voice finishes ï¿½?cooperative yield each frame.
     -- Two exit conditions: SoLoud handle invalid (normal) or C++ edge trigger.
     while backend.audio_is_playing("voice") do
         coroutine.yield()
@@ -252,7 +263,7 @@ function AudioCommands.playvoice(ctx, params)
 end
 
 -- =============================================================================
---  [voice_wait] ¡ª wait for the voice line but let a click skip it (the
+--  [voice_wait] ï¿½ï¿½ wait for the voice line but let a click skip it (the
 --  standard VN pacing idiom: the player can cut a long line short).
 --  KAG3 needed stopvoice glue + a hand-rolled loop for this.
 -- =============================================================================

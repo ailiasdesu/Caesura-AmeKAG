@@ -32,6 +32,7 @@ local SystemCommands = {}
 -- shadow an explicit [delay ms=500]; the handler prefers ms, and only
 -- time carries the fallback default.
 require("kag.schema").define("wait", {
+    _meta = { category = "system", blocking = true, desc = "KAG3-compatible wait command" },
     time     = { type = "number", default = 1000, min = 0, max = 60000 },
     ms       = { type = "number", min = 0, max = 60000 },
     duration = { type = "number", min = 0, max = 60000 },
@@ -40,6 +41,7 @@ require("kag.schema").define("wait", {
 -- string from the tokenizer coerces to a number before the wait loop's
 -- ms<=0 comparison (audit: without this, "500" <= 0 raised, pcall'd).
 require("kag.schema").define("delay", {
+    _meta = { category = "system", blocking = true, desc = "KAG3-compatible delay command" },
     time     = { type = "number", default = 1000, min = 0, max = 60000 },
     ms       = { type = "number", min = 0, max = 60000 },
     duration = { type = "number", min = 0, max = 60000 },
@@ -246,26 +248,35 @@ end
 -- Neo-Genesis contracts: flow/UI commands typed + validated.
 local _schema = require("kag.schema")
 _schema.define("eval", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible eval command" },
     exp = { type = "string" },   -- no default: "" is truthy and would shadow
     code = { type = "string" }, -- the handler's positional/code fallbacks
 })
 _schema.define("emb", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible emb command" },
     exp = { type = "string" },
     code = { type = "string" },
 })
 _schema.define("chapter", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible chapter command" },
     label = { type = "string" },
     id = { type = "string" },
 })
 _schema.define("gallery", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible gallery command" },
     id = { type = "string" },  -- no default: handler's positional fallback
 })
-_schema.define("music", {})
+_schema.define("music", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible music command" },
+})
 _schema.define("ending", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible ending command" },
     id = { type = "string" },   -- handler falls back to "end" / params[1]
     name = { type = "string" }, -- handler builds "Ending <id>" when absent
 })
-_schema.define("history", {})
+_schema.define("history", {
+    _meta = { category = "system", blocking = false, desc = "KAG3-compatible history command" },
+})
 
 function SystemCommands.gallery(ctx, params)
     local Gallery = require("gallery")

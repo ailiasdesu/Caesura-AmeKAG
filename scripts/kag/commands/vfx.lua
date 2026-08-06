@@ -25,12 +25,14 @@ local VFXCommands = {}
 local schema = require("kag.schema")
 -- Standalone [flash]/[shake]/[quake] (KAG3 names; routed to VFX).
 schema.define("flash", {
+    _meta = { category = "vfx", blocking = true, desc = "KAG3-compatible flash command" },
     r = { type = "number", default = 255, min = 0, max = 255 },
     g = { type = "number", default = 255, min = 0, max = 255 },
     b = { type = "number", default = 255, min = 0, max = 255 },
     time = { type = "number", default = 200, min = 0, max = 10000 },
 })
 schema.define("shake", {
+    _meta = { category = "vfx", blocking = true, desc = "KAG3-compatible shake command" },
     time = { type = "number", default = 500, min = 0, max = 10000 },
     frequency = { type = "number", default = 20, min = 1, max = 120 },
     amplitude = { type = "number", default = 6, min = 0, max = 100 },
@@ -39,6 +41,7 @@ schema.define("shake", {
 -- contract (time/duration/intensity/amplitude); re-defining it would
 -- silently override that richer contract (schema.define overwrites).
 schema.define("particles", {
+    _meta = { category = "vfx", blocking = false, desc = "KAG3-compatible particles command" },
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
     rate = { type = "number", default = 10, min = 0, max = 1000 },

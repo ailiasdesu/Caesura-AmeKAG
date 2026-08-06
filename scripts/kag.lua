@@ -65,6 +65,11 @@ local system_cmds = require("kag.commands.system")
 for name, handler in pairs(system_cmds) do
     KAG[name] = handler
 end
+-- KAG3 compatibility aliases on the system table:
+--   [end]  -> ending (KAG3's standard end-of-game tag; the demo scenes use
+--            bare [end] and it must not render as text)
+--   NOTE: "end" is a Lua keyword, so bracket syntax is required.
+KAG["end"] = system_cmds.ending
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 --  Saveplace / Loadplace �� in-memory scene bookmarks

@@ -40,6 +40,15 @@ for _, cmd in ipairs(cmds) do
     local specs = contracts[cmd]
     out[#out + 1] = "### `[" .. cmd .. "]`"
     out[#out + 1] = ""
+    if specs._meta then
+        local m = specs._meta
+        out[#out + 1] = string.format(
+            "_Category: %s · Blocking: %s · %s_",
+            m.category or "-",
+            m.blocking and "yes (waits for completion)" or "no (fire-and-forget)",
+            m.desc or "")
+        out[#out + 1] = ""
+    end
     out[#out + 1] = "| Param | Type | Default | Range / Choices | Required |"
     out[#out + 1] = "|---|---|---|---|---|"
     if specs._require_any then

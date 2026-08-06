@@ -45,17 +45,21 @@ end
 -- Neo-Genesis contracts: typed + clamped via kag/schema.
 local schema = require("kag.schema")
 schema.define("cl", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible cl command" },
     layer = { type = "string", default = "all" },  -- unified clear entry
 })
 schema.define("bg", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible bg command" },
     storage = { type = "string" },
     file = { type = "string" },
 })
 schema.define("fg", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible fg command" },
     storage = { type = "string" },
     file = { type = "string" },
 })
 schema.define("image", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible image command" },
     storage = { type = "string" },
     file = { type = "string" },
     layer = { type = "string", default = "fg" },
@@ -65,6 +69,7 @@ schema.define("image", {
     h = { type = "number", min = 0, max = 8192 },
 })
 schema.define("position", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible position command" },
     x = { type = "number", default = 0 },
     y = { type = "number", default = 0 },
     scale = { type = "number", default = 1.0, min = 0.01, max = 16 },
@@ -73,11 +78,13 @@ schema.define("position", {
     pos   = { type = "string", default = "" },  -- left/center/right
 })
 schema.define("layopt", {
+    _meta = { category = "layer", blocking = false, desc = "KAG3-compatible layopt command" },
     opacity = { type = "number", default = 1.0, min = 0, max = 1.0 },
     visible = { type = "boolean", default = true },
     layer   = { type = "string", default = "" },  -- KAG3 layer name
 })
 schema.define("fadeout", {
+    _meta = { category = "layer", blocking = true, desc = "KAG3-compatible fadeout command" },
     layer = { type = "string", default = "bg" },
     opacity = { type = "number", default = 0, min = 0, max = 1.0 },
     alpha = { type = "number", default = 0, min = 0, max = 1.0 },
@@ -244,6 +251,7 @@ end
 -- `or`-fallbacks (layer-less moveto silently no-ops; x fallback dead).
 -- Typed without default -- like image's x/y -- keeps nil pass-through.
 schema.define("moveto", {
+    _meta = { category = "layer", blocking = true, desc = "KAG3-compatible moveto command" },
     left  = { type = "number" },
     top   = { type = "number" },
     x     = { type = "number" },

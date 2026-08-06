@@ -23,14 +23,35 @@ local Schema = {}
 -- cmd -> { paramName = spec } ; spec: {type, default, min, max, choices, required}
 local registry = {}
 local migrated = {}  -- set of migrated command names
+-- Command metadata (category / blocking / description) -- the schema
+-- registry stores typed param contracts; _meta carries tooling facts:
+--   category : text|audio|layer|transition|vfx|resource|save|system|video
+--   blocking : true when the command waits for completion (duration/input)
+--   desc     : one-line human summary (editor tooltips / docs)
+local registry_meta = {}
 
 --- Schema.define(cmd, specs) — register the contract for one command.
+--  `specs._meta = { category=..., blocking=..., desc=... }` is optional and
+--  stored separately (never treated as a parameter contract).
 function Schema.define(cmd, specs)
     if type(cmd) ~= "string" or type(specs) ~= "table" then
         error("schema.define: cmd(string) and specs(table) required", 2)
     end
+    if specs._meta ~= nil then
+        registry_meta[cmd] = specs._meta
+        local clean = {}
+        for k, v in pairs(specs) do
+            if k ~= "_meta" then clean[k] = v end
+        end
+        specs = clean
+    end
     registry[cmd] = specs
     migrated[cmd] = true
+end
+
+--- Schema.meta(cmd) → metadata table or nil
+function Schema.meta(cmd)
+    return registry_meta[cmd]
 end
 
 local function coerceValue(name, spec, raw, where, ctx)
@@ -188,6 +209,10 @@ function Schema.dumpContracts()
                 end
             end
             copy[name] = sc
+        end
+        if registry_meta[cmd] then
+            copy._meta = {}
+            for k, v in pairs(registry_meta[cmd]) do copy._meta[k] = v end
         end
         out[cmd] = copy
     end

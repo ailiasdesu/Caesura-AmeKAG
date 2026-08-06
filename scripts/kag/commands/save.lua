@@ -176,6 +176,7 @@ end
 -- Neo-Genesis contracts: slot typed + bounded 0..99 (matches the C++
 -- SaveManager guard; out-of-range values clamp to the bound).
 require("kag.schema").define("save", {
+    _meta = { category = "save", blocking = true, desc = "KAG3-compatible save command" },
     -- NO default: coerce would inject slot=0 and shadow the bare
     -- positional [save 3] (same pattern as the wait aliases).
     -- min = -2: named negative slots (system -1/-2) must flow through
@@ -183,6 +184,7 @@ require("kag.schema").define("save", {
     slot = { type = "number", min = -2, max = 99 },
 })
 require("kag.schema").define("load", {
+    _meta = { category = "save", blocking = true, desc = "KAG3-compatible load command" },
     -- NO default: coerce would inject slot=0 and shadow the bare
     -- positional [save 3] (same pattern as the wait aliases).
     -- min = -2: named negative slots (system -1/-2) must flow through

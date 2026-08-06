@@ -26,6 +26,20 @@ pcall(require, "kag.commands.video")
 pcall(require, "kag.commands.save")
 pcall(require, "kag")
 
+-- The kag command table (handlers) -- used for the unknown-command audit.
+local kag_cmd_table = package.loaded["kag"]
+
+-- Flow commands handled by the scheduler itself (no kag handler, no schema).
+local KNOWN_NONHANDLER = {}
+for _, c in ipairs({
+    "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
+    "break", "continue", "jump", "call", "return", "macro", "endmacro",
+    "switch", "endswitch", "case", "endcase", "default", "label", "eval",
+    "emb", "iscript", "endiscript", "wait", "delay", "ch", "text",
+}) do
+    KNOWN_NONHANDLER[c] = true
+end
+
 local issues = 0
 
 local function report(scene, line, msg)
@@ -50,6 +64,14 @@ local function checkScene(path)
     end
     local text = f:read("*a")
     f:close()
+    -- BOM alignment: tokenizer.parse_with_offsets strips a leading UTF-8
+    -- BOM before computing byte offsets; the tail-consumption check below
+    -- slices the raw text with those offsets, so strip the BOM here too
+    -- (a 3-byte mismatch left a trailing "]" and false-positived
+    -- "parse stream stopped before end of input" on BOM'd scenes).
+    if text:sub(1, 3) == "\239\187\191" then
+        text = text:sub(4)
+    end
     -- Neo-Genesis: tokenizer.parse_with_offsets yields exact byte offsets
     -- (pure-Lua LPeg Cp capture), so line numbers are source-accurate --
     -- no find-hack, no sequential scanning.
@@ -82,6 +104,19 @@ local function checkScene(path)
     for _, tok in ipairs(tokens) do
         if tok.type == "command" then
             local cmd = tok.cmd
+            -- Unknown-command audit: a tag that is neither a migrated
+            -- contract nor a known KAG handler will be rendered as text at
+            -- runtime (with a [WARN]); flag it statically so typos (e.g.
+            -- [elsif] pre-alias, [wait] vs [wiat]) fail the check.
+            if type(cmd) == "string" then
+                local knownHandler = kag_cmd_table and kag_cmd_table[cmd]
+                if not knownHandler and not schema.isMigrated(cmd)
+                    and not KNOWN_NONHANDLER[cmd] then
+                    report(path, lineOf(tok.offset or 1),
+                        "unknown KAG command '" .. cmd
+                            .. "' (will render as text at runtime)")
+                end
+            end
             if type(cmd) == "string" and schema.isMigrated(cmd) then
                 local params = {}
                 for _, pair in ipairs(tok.params or {}) do

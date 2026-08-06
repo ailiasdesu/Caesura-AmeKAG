@@ -7,11 +7,15 @@
 
 ### `[auto]`
 
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible auto command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `mode` | string | - | off,on,toggle | - |
 
 ### `[bg]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible bg command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -28,10 +32,14 @@
 
 ### `[br]`
 
+_Category: text · Blocking: no (fire-and-forget) · KAG3 line-break alias_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[camera]`
+
+_Category: transition · Blocking: no (fire-and-forget) · KAG3-compatible camera command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -49,6 +57,8 @@
 
 ### `[ch]`
 
+_Category: text · Blocking: yes (waits for completion) · KAG3-compatible ch command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `chars_per_line` | number | 0 | 0..512 | - |
@@ -60,12 +70,16 @@
 
 ### `[chapter]`
 
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible chapter command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `id` | string | - | - | - |
 | `label` | string | - | - | - |
 
 ### `[cl]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible cl command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -78,6 +92,8 @@
 
 ### `[delay]`
 
+_Category: system · Blocking: yes (waits for completion) · KAG3-compatible delay command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `duration` | number | - | 0..60000 | - |
@@ -86,12 +102,16 @@
 
 ### `[emb]`
 
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible emb command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `code` | string | - | - | - |
 | `exp` | string | - | - | - |
 
 ### `[ending]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible ending command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -100,10 +120,14 @@
 
 ### `[er]`
 
+_Category: text · Blocking: no (fire-and-forget) · erase line_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[eval]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible eval command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -111,6 +135,8 @@
 | `exp` | string | - | - | - |
 
 ### `[fadebgm]`
+
+_Category: audio · Blocking: yes (waits for completion) · KAG3-compatible fadebgm command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -120,14 +146,19 @@
 
 ### `[fadeout]`
 
+_Category: layer · Blocking: yes (waits for completion) · KAG3-compatible fadeout command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `alpha` | number | 0 | 0..1.0 | - |
 | `duration` | number | 500 | 0..30000 | - |
+| `layer` | string | bg | - | - |
 | `opacity` | number | 0 | 0..1.0 | - |
 | `time` | number | 500 | 0..30000 | - |
 
 ### `[fadevol]`
+
+_Category: audio · Blocking: yes (waits for completion) · KAG3-compatible fadevol command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -136,12 +167,16 @@
 
 ### `[fg]`
 
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible fg command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `file` | string | - | - | - |
 | `storage` | string | - | - | - |
 
 ### `[flash]`
+
+_Category: vfx · Blocking: yes (waits for completion) · KAG3-compatible flash command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -152,6 +187,8 @@
 
 ### `[font]`
 
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible font command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `color` | string | white | - | - |
@@ -160,21 +197,29 @@
 
 ### `[gallery]`
 
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible gallery command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `id` | string | - | - | - |
 
 ### `[history]`
 
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible history command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[hr]`
 
+_Category: text · Blocking: no (fire-and-forget) · horizontal rule_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[image]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible image command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -188,10 +233,14 @@
 
 ### `[l]`
 
+_Category: text · Blocking: no (fire-and-forget) · line break_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[layopt]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible layopt command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -213,6 +262,8 @@
 
 ### `[load]`
 
+_Category: save · Blocking: yes (waits for completion) · KAG3-compatible load command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `slot` | number | - | -2..99 | - |
@@ -224,6 +275,8 @@
 
 ### `[move]`
 
+_Category: transition · Blocking: yes (waits for completion) · KAG3-compatible move command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `duration` | number | 300 | 0..30000 | - |
@@ -232,6 +285,8 @@
 | `y` | number | 0 | - | - |
 
 ### `[moveto]`
+
+_Category: layer · Blocking: yes (waits for completion) · KAG3-compatible moveto command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -245,10 +300,14 @@
 
 ### `[music]`
 
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible music command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[nameplate]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible nameplate command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -262,10 +321,14 @@
 
 ### `[p]`
 
+_Category: text · Blocking: yes (waits for completion) · click-to-advance_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[particles]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · KAG3-compatible particles command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -304,6 +367,8 @@
 
 ### `[playbgm]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playbgm command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | **requires one of** | — | — | file, storage | yes |
@@ -315,6 +380,8 @@
 
 ### `[playbgmstop]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playbgmstop command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `fadein` | number | 0 | 0..30000 | - |
@@ -323,6 +390,8 @@
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playse]`
+
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playse command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -340,6 +409,8 @@
 
 ### `[position]`
 
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible position command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `layer` | string |  | - | - |
@@ -351,11 +422,15 @@
 
 ### `[pt]`
 
+_Category: text · Blocking: no (fire-and-forget) · point text at position_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `speed` | number | 50 | 8..5000 | - |
 
 ### `[quake]`
+
+_Category: transition · Blocking: yes (waits for completion) · KAG3-compatible quake command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -366,15 +441,21 @@
 
 ### `[r]`
 
+_Category: text · Blocking: no (fire-and-forget) · carriage return_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[reset]`
 
+_Category: text · Blocking: no (fire-and-forget) · reset text state_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
 ### `[ruby]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible ruby command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -386,11 +467,15 @@
 
 ### `[s]`
 
+_Category: text · Blocking: yes (waits for completion) · KAG3 short-wait_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `ms` | number | 250 | 0..60000 | - |
 
 ### `[save]`
+
+_Category: save · Blocking: yes (waits for completion) · KAG3-compatible save command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -403,6 +488,8 @@
 
 ### `[scroll]`
 
+_Category: transition · Blocking: no (fire-and-forget) · KAG3-compatible scroll command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `color` | string | white | - | - |
@@ -412,11 +499,15 @@
 
 ### `[setbgmvolume]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible setbgmvolume command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `volume` | number | - | 0..1.5 | - |
 
 ### `[setsevolume]`
+
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible setsevolume command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -424,11 +515,15 @@
 
 ### `[setvoicevolume]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible setvoicevolume command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `volume` | number | - | 0..1.5 | - |
 
 ### `[shake]`
+
+_Category: vfx · Blocking: yes (waits for completion) · KAG3-compatible shake command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -438,6 +533,8 @@
 
 ### `[sprite_fade]`
 
+_Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprite_fade command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `speaker` | string | - | - | yes |
@@ -445,6 +542,8 @@
 | `to` | number | 255 | 0..255 | - |
 
 ### `[sprite_move]`
+
+_Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprite_move command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -455,6 +554,8 @@
 
 ### `[sprite_scale]`
 
+_Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprite_scale command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `scale` | number | 1.0 | 0.1..4.0 | - |
@@ -463,6 +564,8 @@
 
 ### `[sprite_swap]`
 
+_Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprite_swap command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `speaker` | string | - | - | yes |
@@ -470,17 +573,23 @@
 
 ### `[stopbgm]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopbgm command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `fadeout` | number | 0 | 0..30000 | - |
 
 ### `[stopse]`
 
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopse command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `fadeout` | number | 0 | 0..30000 | - |
 
 ### `[text]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible text command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -489,6 +598,8 @@
 | `text` | string |  | - | - |
 
 ### `[textbox]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible textbox command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -502,6 +613,8 @@
 
 ### `[trans]`
 
+_Category: transition · Blocking: yes (waits for completion) · KAG3-compatible trans command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `duration` | number | 500 | 0..30000 | - |
@@ -510,6 +623,8 @@
 
 ### `[vib]`
 
+_Category: transition · Blocking: yes (waits for completion) · KAG3-compatible vib command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `amplitude` | number | - | 0..50 | - |
@@ -517,6 +632,8 @@
 | `time` | number | 300 | 0..30000 | - |
 
 ### `[video]`
+
+_Category: video · Blocking: yes (waits for completion) · KAG3-compatible video command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -530,6 +647,8 @@
 
 ### `[voice_off]`
 
+_Category: text · Blocking: no (fire-and-forget) · KAG3-compatible voice_off command_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `on` | boolean | true | - | - |
@@ -540,6 +659,8 @@
 |---|---|---|---|---|
 
 ### `[wait]`
+
+_Category: system · Blocking: yes (waits for completion) · KAG3-compatible wait command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -553,6 +674,8 @@
 |---|---|---|---|---|
 
 ### `[xfadebgm]`
+
+_Category: audio · Blocking: yes (waits for completion) · KAG3-compatible xfadebgm command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
