@@ -134,6 +134,7 @@ public:
         m_height = height;
         return m_probe.initResult;
     }
+    bool isInitialized() const override { return m_probe.initResult; }
     void beginShutdown() override { ++m_probe.beginShutdownCalls; }
     void shutdown() override { ++m_probe.shutdownCalls; }
     void flushAllRTT() override { ++m_probe.flushCalls; }

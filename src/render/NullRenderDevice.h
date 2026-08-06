@@ -9,6 +9,7 @@ public:
     NullRenderDevice();
 
     bool init(void* nativeWindowHandle, int width, int height) override;
+    bool isInitialized() const override { return false; }
     void beginShutdown() override;
     void shutdown() override;
     void flushAllRTT() override;

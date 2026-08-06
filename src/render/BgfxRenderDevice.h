@@ -13,8 +13,7 @@ namespace Caesura {
 
 class BgfxRenderDevice final : public IRenderDevice {
 public:
-    BgfxRenderDevice() = default;
-    ~BgfxRenderDevice() override;
+    BgfxRenderDevice() = default;    ~BgfxRenderDevice() override;
 
     BgfxRenderDevice(const BgfxRenderDevice&) = delete;
     BgfxRenderDevice& operator=(const BgfxRenderDevice&) = delete;
@@ -23,6 +22,7 @@ public:
     const char* getBackendName() const override { return m_deviceCore ? m_deviceCore->getBackendName() : "bgfx"; }
 
     bool init(void* nativeWindowHandle, int width, int height) override;
+    bool isInitialized() const override { return m_bgfxInitialized; }
     void beginShutdown() override;
     void resize(int width, int height) override;
     void shutdown() override;

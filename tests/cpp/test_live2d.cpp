@@ -104,6 +104,7 @@ public:
         backbufferHeight = height;
         return true;
     }
+    bool isInitialized() const override { return true; }
     void beginShutdown() override {}
     void shutdown() override {}
     void flushAllRTT() override {}

@@ -38,6 +38,7 @@ public:
 
     // Lifecycle
     virtual bool init(void* nativeWindowHandle, int width, int height) = 0;
+    virtual bool isInitialized() const = 0;
     virtual void beginShutdown() = 0;
 
     // -- IMPORTANT: shutdown() internally calls flushAllRTT() then renderer shutdown --
