@@ -124,9 +124,10 @@ TEST_CASE("SaveManager: out-of-range slots rejected on all ops") {
     SaveManager sm;
     sm.init(dir.string());
 
-    // save/load/delete/list must refuse slots outside 0..99 (audit:
-    // the guards exist but were untested; a negative slot would write
-    // save_-1.json, an oversized one save_100.json)
+    // save/load/delete must refuse slots outside 0..99 (audit: the
+    // guards existed but were untested; a negative slot would write
+    // save_-1.json, an oversized one save_100.json; the LIST bound is
+    // covered by the preceding test case)
     CHECK_FALSE(sm.save(100, {{"n", 1}}, "s", 0));
     CHECK_FALSE(sm.save(-1, {{"n", 1}}, "s", 0));
     CHECK(sm.load(100).empty());
