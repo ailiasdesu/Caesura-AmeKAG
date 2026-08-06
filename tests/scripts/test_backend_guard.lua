@@ -64,7 +64,9 @@ local fh = assert(io.open("scripts/backend_factory.lua", "r"))
 local src = fh:read("*a")
 fh:close()
 check("factory text_set_font", src:find('"text_set_font" then return Render.text_set_font', 1, true) ~= nil)
+check("factory text_reset_state", src:find('"text_reset_state" then return Render.text_reset_state', 1, true) ~= nil)
 check("factory video_play", src:find('"video_play" then return Render.video_play', 1, true) ~= nil)
+check("factory video_stop", src:find('"video_stop" then return Render.video_stop', 1, true) ~= nil)
 check("factory video_is_playing", src:find('"video_is_playing" then return Render.video_is_playing', 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end

@@ -273,6 +273,9 @@ local RENDER_WHITELIST = {
     -- Text rendering state (font face/size/color)
     text_set_font       = true,
     text_reset_state    = true,
+    -- NOTE: video_play/video_stop/video_is_playing are deliberately NOT
+    -- whitelisted -- AI scripts may not drive video; the BackendFactory
+    -- closure captures the real Render, so engine scripts are unaffected.
 }
 
 -- Whitelist: DevCore module -- allowed functions for AI scripts
