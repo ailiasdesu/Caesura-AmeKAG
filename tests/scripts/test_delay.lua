@@ -63,5 +63,18 @@ local o3 = coroutine.resume(coS, 450)   -- 100+450 = 550 >= 500: done
 check("coerced ms=500 waits 500 (no default shadow)",
       o1 and o2 and o3 and coroutine.status(coS) == "dead")
 
+-- same guard for duration= (review warn: it was still shadowed)
+local fullD = schema.coerce("delay", { duration = "2000" })
+local ctxD = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    _whileIterByScene = { ["t.ks"] = 0 }, current_scene = "t.ks", token_index = 1 }
+local coD = coroutine.create(function()
+    KAG.delay(ctxD, fullD)
+end)
+local d1 = coroutine.resume(coD)
+local d2 = coroutine.resume(coD, 1500)  -- 1500 < 2000: still waiting
+local d3 = coroutine.resume(coD, 600)   -- 2100 >= 2000: done
+check("coerced duration=2000 waits 2000", d1 and d2 and d3
+      and coroutine.status(coD) == "dead")
+
 if failed > 0 then os.exit(1) end
 print("DELAY TESTS DONE")

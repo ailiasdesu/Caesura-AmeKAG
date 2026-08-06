@@ -46,9 +46,10 @@ require("kag.schema").define("delay", {
 })
 
 function SystemCommands.wait(ctx, params)
-    -- ms first: it is the explicit alias; time only carries the default
-    -- (so [delay ms=500] waits 500ms, not the injected 1000ms default)
-    local ms = params.ms or params.time or params.duration or 1000
+    -- Explicit aliases (ms/duration) first; time only carries the
+    -- default (so [delay ms=500] waits 500ms, not the injected 1000ms
+    -- default -- and [delay duration=2000] gets 2000, review warn)
+    local ms = params.ms or params.duration or params.time or 1000
     if ms <= 0 then return end
 
     local operation <close> = Operation.start(ctx)
