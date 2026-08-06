@@ -33,6 +33,7 @@ f:close()
 check("layfade missing-layer guard", src:find("layfade: layer not found", 1, true) ~= nil)
 check("cl textbox reapply", src:find("if Text.textbox then Text.textbox(ctx, style) end", 1, true) ~= nil)
 check("cl clears bg dedup", src:find("if ctx.layers then ctx.layers.bg = nil end", 1, true) ~= nil)
+check("cl clears fg dedup", src:find("if ctx.layers then ctx.layers.fg = nil end", 1, true) ~= nil)
 
 if failed > 0 then os.exit(1) end
 print("LAYOPT TESTS DONE")
