@@ -18,8 +18,15 @@ check("clear resets cursor_y", src:find("state.cursor_y = 580", 1, true) ~= nil)
 check("clear empties draws", src:find("state.draws = {}", 1, true) ~= nil)
 
 -- add_wrapped advances y per line and updates both cursor state copies
-check("wrapped advances y", src:find("y = y + line_height", 1, true) ~= nil)
-check("wrapped updates ctx cursor", src:find("ctx.textCursorY = y", 1, true) ~= nil)
+-- (anchored to the function's body -- the y-advance line also exists in
+-- add_ruby, review nit)
+local ws = src:find("function TextScene.add_wrapped", 1, true)
+local we = src:find("function TextScene.add_ruby", ws or 1, true)
+local wbody = ws and we and src:sub(ws, we) or ""
+check("wrapped body found", #wbody > 0)
+check("wrapped advances y", wbody:find("y = y + line_height", 1, true) ~= nil)
+check("wrapped state cursor", wbody:find("state.cursor_y = y", 1, true) ~= nil)
+check("wrapped ctx cursor", wbody:find("ctx.textCursorY = y", 1, true) ~= nil)
 
 -- reset rebuilds the full text_state (line/char_offset/opacity)
 check("reset full state", src:find("char_offset = 0", 1, true) ~= nil
