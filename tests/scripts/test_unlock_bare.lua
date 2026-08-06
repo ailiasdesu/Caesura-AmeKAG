@@ -29,12 +29,14 @@ while coroutine.status(co2) ~= "dead" do coroutine.resume(co2) end
 check("unlock default cg", ctx2.unlockedCG and ctx2.unlockedCG.m2 == true)
 
 -- direct caller with a pair-table params[1] must not store a table key
--- (security low nit: string-guard consistency with jump/call/link)
+-- (security low nit: string-guard consistency with jump/call/link).
+-- unlockedCG == nil discriminates: the guard returns BEFORE creating
+-- the table, the buggy code created it and stored a table key.
 local KAG = require("kag")
+check("unlock handler exists", type(KAG.unlock) == "function")
 local ctx3 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
-pcall(KAG.unlock, ctx3, { { "cg9" } })  -- raw tokenizer-style pair
-local ok3 = ctx3.unlockedCG == nil or ctx3.unlockedCG.cg9 == nil
-check("pair-table id rejected", ok3)
+pcall(KAG.unlock, ctx3, { { "cg9" } })
+check("pair-table id rejected", ctx3.unlockedCG == nil)
 
 -- named id still wins over bare
 local ctx4 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
