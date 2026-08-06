@@ -32,7 +32,7 @@ echo [SKIP] CaesuraTests.exe not found. Run cmake --build first.
 REM -- Phase 2: Lua Script Tests -----------------------------------------------
 echo.
 echo [2/3] Running Lua script tests...
-set "LUA_PATH=%TEST_DIR%..\scripts\-.lua;%TEST_DIR%scripts\-.lua;%LUA_PATH%"
+set "LUA_PATH=%TEST_DIR%..\scripts\?.lua;%TEST_DIR%scripts\?.lua;%LUA_PATH%"
 
 if not exist "%LUA%" goto lua_skip
 cd /d "%TEST_DIR%.."
