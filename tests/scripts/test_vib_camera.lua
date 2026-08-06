@@ -33,6 +33,8 @@ local f = assert(io.open("scripts/kag/commands/transition.lua", "r"))
 local src = f:read("*a")
 f:close()
 check("vib restores base", src:find("msg.x, msg.y = baseX, baseY", 1, true) ~= nil)
+-- the CANCEL path restores the base position too (Operation <close>)
+check("vib cancel restores base", src:find('msg.x, msg.y = msg.base_x or 0, msg.base_y or 0', 1, true) ~= nil)
 check("camera restore flag", src:find("params.restore", 1, true) ~= nil
       and src:find('restore = { type = "boolean", default = true }', 1, true) ~= nil)
 
