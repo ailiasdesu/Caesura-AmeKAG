@@ -16,6 +16,10 @@ check("trans method default", t.method == "crossfade")
 local t2 = schema.coerce("trans", { method = "rule", duration = "1" }, {})
 check("trans method kept", t2.method == "rule")
 check("trans duration kept", t2.duration == 1)
+local t3 = schema.coerce("trans", { duration = "99999" }, {})
+check("trans duration clamped", t3.duration == 30000)
+local m2 = schema.coerce("move", { duration = "99999" }, {})
+check("move duration clamped", m2.duration == 30000)
 
 -- move schema: x/y passthrough, time/duration clamps
 local m = schema.coerce("move", { x = "-50", y = "120", time = "0" }, {})
