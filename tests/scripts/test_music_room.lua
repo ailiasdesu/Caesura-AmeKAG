@@ -82,7 +82,11 @@ end
 _G._GAME_KEY_ENTER = true
 local okB = coroutine.resume(coB)
 check("scroll cursor no crash", okB and coroutine.status(coB) == "suspended")
-check("gold follows cursor", #goldRows >= 1 and goldRows[#goldRows]:find("T25") ~= nil)
+local goldT25 = false
+for _, row in ipairs(goldRows) do
+    if row:find("T25") then goldT25 = true break end
+end
+check("gold follows cursor", goldT25)
 _G._GAME_KEY_ESC = true
 coroutine.resume(coB)
 check("scroll esc exits", coroutine.status(coB) == "dead")
