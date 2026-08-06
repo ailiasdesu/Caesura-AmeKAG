@@ -27,6 +27,16 @@ pcall(KAG.ending, ctx2, {})
 check("ending defaults", ctx2.seen_endings["end"]
       and ctx2.seen_endings["end"].name == "Ending end")
 
+-- [ending] exotic id keys (security: id is a plain table key -- no
+-- metatable on seen_endings, no injection; keys survive as data)
+local ctxX = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.ending, ctxX, { id = "a..b", name = "X" })
+pcall(KAG.ending, ctxX, { id = "id=1", name = "Y" })
+pcall(KAG.ending, ctxX, { id = "0x5F", name = "Z" })
+check("exotic ids stored as data", ctxX.seen_endings["a..b"] ~= nil
+      and ctxX.seen_endings["id=1"] ~= nil and ctxX.seen_endings["0x5F"] ~= nil)
+check("no metatable injected", getmetatable(ctxX.seen_endings) == nil)
+
 -- [ending] with a non-table seen_endings resets defensively
 local ctx3 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
     seen_endings = "corrupted" }
