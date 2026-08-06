@@ -86,8 +86,16 @@ check("layer resolve pair safe", #calls3 == 0)
 local f2 = assert(io.open("scripts/kag/commands/system.lua", "r"))
 local src2 = f2:read("*a")
 f2:close()
-check("eval exp guarded", select(2, src2:gsub(
-    'type(exp) ~= "string" and type(params[1]) == "string"', "")) == 2)
+local gcount = 0
+local pos = 1
+local needle = 'type(exp) ~= "string" and type(params[1]) == "string"'
+while true do
+    local p = src2:find(needle, pos, true)
+    if not p then break end
+    gcount = gcount + 1
+    pos = p + 1
+end
+check("eval exp guarded", gcount == 2)
 package.loaded["layers"] = layers3
 _G._CAESURA_BACKEND = be3
 
