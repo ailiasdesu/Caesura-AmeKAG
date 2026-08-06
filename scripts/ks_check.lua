@@ -33,6 +33,15 @@ local function report(scene, line, msg)
     print(string.format("%s:%d: %s", scene, line, msg))
 end
 
+local function strip_tail(text, consumed)
+    local tail = text:sub(consumed + 1)
+    while true do
+        local stripped = tail:gsub("^%s*;[^\r\n]*", "")
+        if stripped == tail then break end
+        tail = stripped
+    end
+    return tail
+end
 local function checkScene(path)
     local f = io.open(path, "r")
     if not f then
@@ -136,15 +145,6 @@ end
 -- Module guard: tests require this file for its functions; only run
 -- the CLI main when invoked as a script (audit: requiring it called
 -- os.exit and killed the test process).
-local function strip_tail(text, consumed)
-    local tail = text:sub(consumed + 1)
-    while true do
-        local stripped = tail:gsub("^%s*;[^\r\n]*", "")
-        if stripped == tail then break end
-        tail = stripped
-    end
-    return tail
-end
 
 -- exact basename: "test_ks_check.lua" must NOT count (it embeds
 -- ks_check.lua as a suffix) -- audit: the test process hit usage/exit

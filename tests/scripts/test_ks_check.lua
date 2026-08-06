@@ -61,5 +61,23 @@ if package.searchers and #package.searchers > 0 then
     check("ks_check loads", okLoad)
 end
 
+-- fixture-driven tail path (review blocking: the strip_tail forward
+-- reference crashed every real CLI run -- this drives the exported
+-- helper against a real file so the shipped path is exercised)
+if package.searchers and #package.searchers > 0 and ks then
+    local fixture = os.tmpname()
+    local fh = assert(io.open(fixture, "w"))
+    fh:write('[ch text="a"]' .. string.char(10) .. '; done')
+    fh:close()
+    local fh2 = assert(io.open(fixture, "r"))
+    local content = fh2:read("*a")
+    fh2:close()
+    local toksF = tokenizer.parse_with_offsets(content)
+    local consumedF = toksF[#toksF].end_offset or 0
+    local tailF = ks.strip_tail(content, consumedF)
+    check("fixture tail stripped", tailF:find("%S") == nil)
+    os.remove(fixture)
+end
+
 if failed > 0 then os.exit(1) end
 print("KS CHECK TESTS DONE")
