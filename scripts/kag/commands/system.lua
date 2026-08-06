@@ -546,4 +546,79 @@ function SystemCommands.replay(ctx, params)
     return true
 end
 
+-- AI-driven dialogue line (Neo-Genesis, distinctive):
+--   [ai_dialog name="Aoi" prompt="回应主角的告白" system="你是傲娇青梅竹马" fallback="…"]
+-- Queries config.ai endpoint (OpenAI-compatible / Ollama) ASYNCHRONOUSLY
+-- (the render loop keeps running while the LLM thinks), waits up to
+-- max_wait_ms, then shows the reply as a normal [ch] line. Unavailable
+-- service / timeout -> fallback text (or a visible placeholder), never
+-- a script error.
+_schema.define("ai_dialog", {
+    _meta = { category = "system", blocking = true, desc = "AI-driven dialogue line (LLM, async)" },
+    name       = { type = "string", default = "" },
+    prompt     = { type = "string", required = true, positional_index = 1 },
+    system     = { type = "string", default = "" },
+    model      = { type = "string", default = "" },
+    fallback   = { type = "string", default = "" },
+    max_wait_ms = { type = "number", default = 15000, min = 100, max = 120000 },
+})
+
+function SystemCommands.ai_dialog(ctx, params)
+    local backend = require("backend")
+    local prompt = params.prompt
+    local text = nil
+    local err = nil
+
+    if backend.ai_available() then
+        local done, result, aerr = false, nil, nil
+        local ok = backend.ai_query_async(prompt, {
+            system = params.system,
+            model = params.model,
+        }, function(r, e)
+            result, aerr = r, e
+            done = true
+        end)
+        if ok then
+            local waited = 0
+            while not done do
+                local dt = coroutine.yield() or 16
+                waited = waited + (tonumber(dt) or 16)
+                if waited >= (params.max_wait_ms or 15000) then
+                    backend.ai_cancel()
+                    break
+                end
+            end
+            if done and result and #result > 0 then
+                text = result
+            else
+                err = aerr or "timeout"
+            end
+        else
+            err = "async-unavailable"
+        end
+    else
+        err = "ai-unavailable"
+    end
+
+    if not text then
+        text = params.fallback
+        if not text or #text == 0 then
+            text = err and ("(" .. err .. ")") or "(AI unavailable)"
+        end
+        print("[ai_dialog] fallback used: " .. tostring(err))
+    end
+
+    -- Present as a normal dialogue line (nameplate + textbox + backlog)
+    -- through the SAME dispatch table the scheduler uses, so mocks,
+    -- hot-reload hooks, and command layering all see one path.
+    local kag = require("kag")
+    local tc = require("kag.commands.text")
+    if kag and type(kag.ch) == "function" then
+        kag.ch(ctx, { name = params.name, text = text })
+    else
+        tc.ch(ctx, { name = params.name, text = text })
+    end
+    return true
+end
+
 return SystemCommands

@@ -41,6 +41,7 @@ set(TEST_SOURCES
     cpp/test_render_pipeline.cpp
     cpp/test_render_integration.cpp
     cpp/test_rpc.cpp
+    cpp/test_ai.cpp
     cpp/test_backend_registry.cpp
     cpp/test_layer_manager.cpp
     cpp/test_texture_manager.cpp

@@ -39,6 +39,7 @@ local tests = {
     "test_mods",
     "test_replay",
     "test_scene_reload",
+    "test_ai",
     "test_sandbox",
     "test_label_index",
     "test_expr_cache",

@@ -17,6 +17,7 @@
 #include "../bindings/MiniGameBinding.h"
 #include "../bindings/SaveBinding.h"
 #include "../bindings/SteamBinding.h"
+#include "../bindings/AIBinding.h"
 #include "../state/GameState.h"
 #include "../../di/BackendRegistry.h"
 #include "../../di/api/ThreadAssert.h"
@@ -129,6 +130,7 @@ void LuaManager::registerModules() {
     registerSaveBinding(m_L);
     registerVFXBinding(m_L);
     registerMiniGameBinding(m_L);
+    registerAIBinding(m_L);
 
     printf("[Lua] Engine (backend selection) module registered.\n");
     printf("[Lua] KAG module registered (32 APIs, via BackendRegistry).\n");

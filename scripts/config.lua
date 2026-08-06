@@ -48,6 +48,18 @@ config.accessibility = {
     text_scale = 1.0,
 }
 
+-- AI dialogue (Neo-Genesis): LLM-driven character lines. endpoint is an
+-- OpenAI-compatible (/v1/...) or Ollama (default) HTTP service; format
+-- auto-detected from the URL. ai_dialog degrades to fallback text when
+-- the service is unreachable (connection timeout 2s + read timeout).
+config.ai = {
+    endpoint = "http://127.0.0.1:11434",  -- Ollama default; "" disables
+    model = "",        -- "" = service default
+    api_key = "",      -- optional Bearer token (OpenAI-compatible)
+    system = "",       -- default persona/system prompt
+    timeout_ms = 15000,
+}
+
 -- Per-bus volume defaults (persisted across sessions)
 config.bgm_volume   = 1.0
 config.voice_volume = 1.0

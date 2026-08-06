@@ -265,6 +265,38 @@ function Backend.tts_speak(text, rate)
     return false
 end
 
+-- AI dialogue (Neo-Genesis): LLM query through the `AI` C++ binding.
+-- Degrades to false/nil when the binding or service is unavailable --
+-- the [ai_dialog] command falls back to its fallback= text.
+function Backend.ai_available()
+    local ai = rawget(_G, "AI")
+    if not ai or type(ai.available) ~= "function" then return false end
+    local ok, r = pcall(ai.available)
+    return ok and r == true
+end
+
+function Backend.ai_query(prompt, opts)
+    local ai = rawget(_G, "AI")
+    if not ai or type(ai.query) ~= "function" then return nil, "no-binding" end
+    return ai.query(prompt, opts or {})
+end
+
+function Backend.ai_query_async(prompt, opts, callback)
+    local ai = rawget(_G, "AI")
+    if not ai or type(ai.query_async) ~= "function" then return false end
+    if type(callback) ~= "function" then return false end
+    if type(opts) == "function" then opts = { } end
+    local ok, r = pcall(ai.query_async, prompt, opts or {}, callback)
+    return ok and r == true
+end
+
+function Backend.ai_cancel()
+    local ai = rawget(_G, "AI")
+    if not ai or type(ai.cancel) ~= "function" then return false end
+    local ok, r = pcall(ai.cancel)
+    return ok and r ~= false
+end
+
 function Backend.show_text(text)
     return call_resolved("show_text", text)
 end
