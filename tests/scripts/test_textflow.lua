@@ -51,5 +51,21 @@ while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
 check("p resumes past", #dispatched == 1 and dispatched[1] == "after")
 KAG.ch = real_ch  -- restore (security LOW: the stub must not persist)
 
+-- [text text=...] param path: wraps + backlog (audit)
+local Text2 = require("kag.commands.text")
+local TextScene2 = require("kag.text_scene")
+local wraps = {}
+local real_add_wrapped = TextScene2.add_wrapped
+TextScene2.add_wrapped = function(ctx, msg, opts)
+    wraps[#wraps + 1] = { msg, opts }
+    return 1
+end
+local ctxT = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+    backlog = {}, text_state = {}, textCursorX = 32, textCursorY = 580 }
+pcall(Text2.text, ctxT, { text = "hello world" })
+check("text wraps message", wraps[1] and wraps[1][1] == "hello world")
+check("text wraps at y 580", wraps[1] and wraps[1][2].y == 580)
+TextScene2.add_wrapped = real_add_wrapped
+
 if failed > 0 then os.exit(1) end
 print("TEXTFLOW TESTS DONE")
