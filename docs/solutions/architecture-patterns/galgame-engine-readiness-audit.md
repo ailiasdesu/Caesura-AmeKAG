@@ -24,7 +24,7 @@ Group validation items into meaningful galgame domains (D1-D11):
 - D2: Background & Layer Display (visual rendering)
 - D3: Text Rendering (FreeType, CJK, Ruby)
 - D4: Audio System (BGM/Voice/SE buses)
-- D5: KAG Script System (tokenizer, scheduler, 68 commands — historical; Neo-Genesis now has 69 contract commands)
+- D5: KAG Script System (tokenizer, scheduler, 68 commands — historical; Neo-Genesis now has 72 contract commands)
 - D6: Save/Load (AES-256-GCM, schema migration)
 - D7: Transitions & VFX (crossfade, wipe, rule, quake)
 - D8: Resource Pipeline (async loading, LRU budget)
