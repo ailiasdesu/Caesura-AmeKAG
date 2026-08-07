@@ -33,6 +33,8 @@ public:
     bool cloudDelete(const char* fileName) override;
     int32_t cloudQuotaTotal() const override;
     int32_t cloudQuotaUsed() const override;
+    int32_t cloudFileCount() const override;
+    const char* cloudFileNameAt(int32_t index) const override;
 
     const char* name() const override { return "Steam"; }
 

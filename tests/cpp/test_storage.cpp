@@ -125,6 +125,15 @@ public:
     }
     int32_t cloudQuotaTotal() const override { return 8 * 1024 * 1024; }
     int32_t cloudQuotaUsed() const override { return 0; }
+    int32_t cloudFileCount() const override { return static_cast<int32_t>(files.size()); }
+    const char* cloudFileNameAt(int32_t index) const override {
+        if (index < 0) return "";
+        int32_t i = 0;
+        for (const auto& [name, _] : files) {
+            if (i++ == index) return name.c_str();
+        }
+        return "";
+    }
     const char* name() const override { return "mock-steam"; }
 };
 

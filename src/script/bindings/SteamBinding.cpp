@@ -1,10 +1,14 @@
 // SteamBinding -- Lua bindings: steam.unlock_achievement, steam.set_stat,
-// steam.get_stat_int/float, steam.store_stats, steam.reset_achievement(s).
-// (cloud_* APIs exist on ISteamBackend but are not yet exposed to Lua.)
+// steam.get_stat_int/float, steam.store_stats, steam.reset_achievement(s),
+// steam.cloud_write/read/list/delete/quota (full ISteamBackend surface).
+// Registered unconditionally: without the Steam SDK the Null backend is in
+// the registry and every call returns a safe default instead of nil-error.
 #include "SteamBinding.h"
 #include "../../di/BackendRegistry.h"
 #include "../../steam/api/ISteamBackend.h"
 #include <cstdio>
+#include <climits>
+#include <vector>
 
 extern "C" {
 #include <lua.h>
@@ -79,6 +83,72 @@ STEAM_BODY(is_overlay_active, lua_pushboolean(L, 0);, {
     return 1;
 })
 
+// ---- Cloud saves (Steam Remote Storage) ----------------------------------
+
+STEAM_BODY(cloud_write, lua_pushboolean(L, 0);, {
+    const char* file = luaL_checkstring(L, 1);
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 2, &len);
+    if (len > INT32_MAX) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, steam->cloudWrite(file, data, (int32_t)len) ? 1 : 0);
+    return 1;
+})
+
+STEAM_BODY(cloud_read, lua_pushstring(L, "");, {
+    const char* file = luaL_checkstring(L, 1);
+    const int32_t size = steam->cloudFileSize(file);
+    if (size <= 0 || size > 16 * 1024 * 1024) {
+        lua_pushnil(L);
+        return 1;
+    }
+    std::vector<char> buf(static_cast<size_t>(size));
+    const int32_t got = steam->cloudRead(file, buf.data(), size);
+    if (got <= 0) { lua_pushnil(L); return 1; }
+    lua_pushlstring(L, buf.data(), static_cast<size_t>(got));
+    return 1;
+})
+
+STEAM_BODY(cloud_file_size, lua_pushinteger(L, 0);, {
+    const char* file = luaL_checkstring(L, 1);
+    lua_pushinteger(L, steam->cloudFileSize(file));
+    return 1;
+})
+
+STEAM_BODY(cloud_file_exists, lua_pushboolean(L, 0);, {
+    const char* file = luaL_checkstring(L, 1);
+    lua_pushboolean(L, steam->cloudFileExists(file) ? 1 : 0);
+    return 1;
+})
+
+STEAM_BODY(cloud_delete, lua_pushboolean(L, 0);, {
+    const char* file = luaL_checkstring(L, 1);
+    lua_pushboolean(L, steam->cloudDelete(file) ? 1 : 0);
+    return 1;
+})
+
+STEAM_BODY(cloud_quota_total, lua_pushinteger(L, 0);, {
+    lua_pushinteger(L, steam->cloudQuotaTotal());
+    return 1;
+})
+
+STEAM_BODY(cloud_quota_used, lua_pushinteger(L, 0);, {
+    lua_pushinteger(L, steam->cloudQuotaUsed());
+    return 1;
+})
+
+STEAM_BODY(cloud_list, lua_newtable(L);, {
+    lua_newtable(L);  // result table (rawseti targets -2 inside the fn stack)
+    const int32_t count = steam->cloudFileCount();
+    for (int32_t i = 0; i < count && i < 256; ++i) {
+        const char* name = steam->cloudFileNameAt(i);
+        if (name && name[0]) {
+            lua_pushstring(L, name);
+            lua_rawseti(L, -2, i + 1);
+        }
+    }
+    return 1;
+})
+
 #undef STEAM_BODY
 
 static const luaL_Reg steam_functions[] = {
@@ -92,13 +162,21 @@ static const luaL_Reg steam_functions[] = {
     {"get_stat_float",          lua_steam_get_stat_float},
     {"store_stats",             lua_steam_store_stats},
     {"is_overlay_active",       lua_steam_is_overlay_active},
+    {"cloud_write",             lua_steam_cloud_write},
+    {"cloud_read",              lua_steam_cloud_read},
+    {"cloud_file_size",         lua_steam_cloud_file_size},
+    {"cloud_file_exists",       lua_steam_cloud_file_exists},
+    {"cloud_delete",            lua_steam_cloud_delete},
+    {"cloud_quota_total",       lua_steam_cloud_quota_total},
+    {"cloud_quota_used",        lua_steam_cloud_quota_used},
+    {"cloud_list",              lua_steam_cloud_list},
     {nullptr, nullptr}
 };
 
 void registerSteamBinding(lua_State* L) {
     luaL_newlib(L, steam_functions);
     lua_setglobal(L, "steam");
-    printf("[Lua] Steam module registered (10 APIs).\n");
+    printf("[Lua] Steam module registered (19 APIs).\n");
 }
 
 } // namespace Caesura

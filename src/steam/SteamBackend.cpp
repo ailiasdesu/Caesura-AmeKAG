@@ -241,6 +241,30 @@ int32_t SteamBackend::cloudQuotaUsed() const {
 #endif
 }
 
+int32_t SteamBackend::cloudFileCount() const {
+#ifdef CAESURA_HAS_STEAM
+    if (!m_initialized) return 0;
+    return SteamRemoteStorage()->GetFileCount();
+#else
+    return 0;
+#endif
+}
+
+const char* SteamBackend::cloudFileNameAt(int32_t index) const {
+#ifdef CAESURA_HAS_STEAM
+    if (!m_initialized || index < 0) return "";
+    static char s_name[256];
+    int32_t size = 0;
+    const char* name = SteamRemoteStorage()->GetFileNameAndSize(index, &size);
+    if (!name) return "";
+    snprintf(s_name, sizeof(s_name), "%s", name);
+    return s_name;
+#else
+    (void)index;
+    return "";
+#endif
+}
+
 #ifdef CAESURA_HAS_STEAM
 void SteamBackend::OnUserStatsReceived(UserStatsReceived_t* pCallback) {
     if (!pCallback) return;

@@ -1,5 +1,6 @@
 // test_script_bindings.cpp - script bindings unit tests (R4.1)
 #include "doctest.h"
+#include <map>
 #include "script/vm/LuaManager.h"
 #include "script/bindings/KAGBinding.h"
 #include "script/bindings/RenderBinding.h"
@@ -342,5 +343,133 @@ TEST_CASE("Bindings: Steam module resolves backend through BackendRegistry") {
     REQUIRE(lua_pcall(lua.state(), 1, 1, 0) == LUA_OK);
     CHECK(lua_toboolean(lua.state(), -1));
     CHECK(steam.lastAchievement == "FIRST_SCENE");
+    lua_pop(lua.state(), 2);
+}
+
+// ---- Steam cloud-save bindings (no SDK required) -------------------------
+
+class RecordingCloudBackend final : public NullSteamBackend {
+public:
+    std::map<std::string, std::string> files;
+    std::string lastWritten;
+    std::string lastRead;
+    std::string lastDeleted;
+
+    bool cloudWrite(const char* fileName, const void* data, int32_t size) override {
+        lastWritten = fileName ? fileName : "";
+        files[lastWritten] = std::string(static_cast<const char*>(data),
+                                         static_cast<size_t>(size));
+        return true;
+    }
+    int32_t cloudRead(const char* fileName, void* buffer, int32_t maxSize) override {
+        lastRead = fileName ? fileName : "";
+        const auto it = files.find(lastRead);
+        if (it == files.end() || !buffer || maxSize <= 0) return 0;
+        const int32_t n = std::min<int32_t>(maxSize,
+                                            static_cast<int32_t>(it->second.size()));
+        std::memcpy(buffer, it->second.data(), static_cast<size_t>(n));
+        return n;
+    }
+    int32_t cloudFileSize(const char* fileName) const override {
+        const auto it = files.find(fileName ? fileName : "");
+        return it == files.end() ? 0 : static_cast<int32_t>(it->second.size());
+    }
+    bool cloudFileExists(const char* fileName) const override {
+        return files.count(fileName ? fileName : "") > 0;
+    }
+    bool cloudDelete(const char* fileName) override {
+        lastDeleted = fileName ? fileName : "";
+        files.erase(lastDeleted);
+        return true;
+    }
+    int32_t cloudFileCount() const override { return static_cast<int32_t>(files.size()); }
+    const char* cloudFileNameAt(int32_t index) const override {
+        if (index < 0) return "";
+        int32_t i = 0;
+        for (const auto& [name, _] : files) {
+            if (i++ == index) return name.c_str();
+        }
+        return "";
+    }
+};
+
+TEST_CASE("Bindings: Steam cloud_save/load round trip through Lua") {
+    LuaManager lua;
+    REQUIRE(lua.init());
+
+    RecordingCloudBackend steam;
+    ScopedSteamRegistration registration(&steam);
+    registerSteamBinding(lua.state());
+
+    lua_State* L = lua.state();
+    // cloud_write("slot_3", "hello cloud")
+    lua_getglobal(L, "steam");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "cloud_write");
+    lua_pushstring(L, "slot_3");
+    lua_pushstring(L, "hello cloud");
+    REQUIRE(lua_pcall(L, 2, 1, 0) == LUA_OK);
+    CHECK(lua_toboolean(L, -1));
+    lua_pop(L, 1);
+    CHECK(steam.files["slot_3"] == "hello cloud");
+
+    // cloud_read("slot_3") -> "hello cloud"
+    lua_getfield(L, -1, "cloud_read");
+    lua_pushstring(L, "slot_3");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    CHECK(std::string(lua_tostring(L, -1)) == "hello cloud");
+    lua_pop(L, 1);
+
+    // cloud_file_exists / cloud_file_size
+    lua_getfield(L, -1, "cloud_file_exists");
+    lua_pushstring(L, "slot_3");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    CHECK(lua_toboolean(L, -1));
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "cloud_file_size");
+    lua_pushstring(L, "slot_3");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    CHECK(lua_tointeger(L, -1) == 11);
+    lua_pop(L, 1);
+
+    // cloud_list() -> { "slot_3" }
+    lua_getfield(L, -1, "cloud_list");
+    REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
+    REQUIRE(lua_istable(L, -1));
+    lua_geti(L, -1, 1);
+    CHECK(std::string(lua_tostring(L, -1)) == "slot_3");
+    lua_pop(L, 1);
+    lua_pop(L, 1);
+
+    // cloud_delete("slot_3")
+    lua_getfield(L, -1, "cloud_delete");
+    lua_pushstring(L, "slot_3");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    CHECK(lua_toboolean(L, -1));
+    lua_pop(L, 1);
+    CHECK(steam.files.empty());
+
+    // cloud_read of a missing file -> nil (graceful)
+    lua_getfield(L, -1, "cloud_read");
+    lua_pushstring(L, "nope");
+    REQUIRE(lua_pcall(L, 1, 1, 0) == LUA_OK);
+    CHECK(lua_isnil(L, -1));
+    lua_pop(L, 1);
+
+    lua_pop(L, 1);  // steam table
+}
+
+TEST_CASE("Bindings: Steam module registered without backend (Null fallback)") {
+    LuaManager lua;
+    REQUIRE(lua.init());
+    // No backend in the registry: the table still exists and every call
+    // returns a safe default (no nil-function error).
+    registerSteamBinding(lua.state());
+    lua_getglobal(lua.state(), "steam");
+    REQUIRE(lua_istable(lua.state(), -1));
+    lua_getfield(lua.state(), -1, "cloud_quota_total");
+    REQUIRE(lua_pcall(lua.state(), 0, 1, 0) == LUA_OK);
+    CHECK(lua_tointeger(lua.state(), -1) == 0);
     lua_pop(lua.state(), 2);
 }

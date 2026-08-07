@@ -45,6 +45,10 @@ public:
     virtual bool cloudDelete(const char* fileName) = 0;
     virtual int32_t cloudQuotaTotal() const = 0;     // total bytes available
     virtual int32_t cloudQuotaUsed() const = 0;      // bytes currently used
+    // Remote-storage enumeration (Steam: GetFileCount/GetFileNameAndSize;
+    // Null backend: 0 / empty). Enables Lua cloud_list.
+    virtual int32_t cloudFileCount() const = 0;
+    virtual const char* cloudFileNameAt(int32_t index) const = 0;
 
     virtual const char* name() const = 0;
 };

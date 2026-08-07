@@ -30,6 +30,8 @@ public:
     bool cloudDelete(const char*) override { return false; }
     int32_t cloudQuotaTotal() const override { return 0; }
     int32_t cloudQuotaUsed() const override { return 0; }
+    int32_t cloudFileCount() const override { return 0; }
+    const char* cloudFileNameAt(int32_t) const override { return ""; }
 
     const char* name() const override { return "NullSteam"; }
 };

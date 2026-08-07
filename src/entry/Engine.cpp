@@ -453,13 +453,13 @@ bool Engine::initAssetPhase() {
 bool Engine::initOptionalPhase() {
     bool allOk = true;
 
-    // Steam init (optional, no-op if SDK not present)
+    // Steam init (optional, no-op if SDK not present). The binding is
+    // registered UNCONDITIONALLY with the (possibly Null) backend in the
+    // registry, so scripts can always call steam.* -- without the SDK every
+    // call returns a safe default instead of a nil-function error.
     m_steamInitialized = m_steamBackend && m_steamBackend->init();
-    BackendRegistry::instance().setSteamBackend(
-        m_steamInitialized ? m_steamBackend.get() : nullptr);
-    if (m_steamInitialized) {
-        registerSteamBinding(m_lua->state());
-    }
+    BackendRegistry::instance().setSteamBackend(m_steamBackend.get());
+    registerSteamBinding(m_lua->state());
 
     // Crypto engine registration (moved OUT of Steam if-block - bug fix)
     BackendRegistry::instance().setCryptoEngine(m_cryptoEngine.get());
