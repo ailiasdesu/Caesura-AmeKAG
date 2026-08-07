@@ -125,6 +125,27 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
 
     m_cancelRequested.store(false);
 
+    // Cache hit: a previous successful decode of this (path, type) is
+    // still resident -- complete immediately without touching the job
+    // system (no IO, no decode, no worker round trip). Scene re-entry is
+    // the common case in VNs (back to title, gallery thumbnails).
+    const std::string cacheKey = path + "|" + type;
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        auto it = m_rgbaCache.find(cacheKey);
+        if (it != m_rgbaCache.end()) {
+            const int id = m_nextId.fetch_add(1);
+            CompletedLoad hit = it->second;
+            hit.id = id;
+            {
+                std::lock_guard<std::mutex> lock2(m_completeMutex);
+                m_completed.push_back(std::move(hit));
+            }
+            printf("[AsyncLoader] Cache hit: %s (%s)\n", path.c_str(), type.c_str());
+            return id;
+        }
+    }
+
     int id = m_nextId.fetch_add(1);
     AsyncLoadRequest req{id, path, type};
     auto result = std::make_shared<CompletedLoad>();
@@ -144,6 +165,31 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
                 m_pendingCount--;
                 return;
             }
+            // Successful decode -> keep in the bounded cache (main thread).
+            if (result->success && !result->rgba.empty()) {
+                std::lock_guard<std::mutex> lock(m_cacheMutex);
+                const std::string key = result->path + "|" + result->type;
+                if (m_rgbaCache.find(key) == m_rgbaCache.end()) {
+                    const size_t bytes = result->rgba.size()
+                                       + result->data.size();
+                    m_rgbaCache[key] = *result;
+                    m_cacheOrder.push_back(key);
+                    m_cacheBytes += bytes;
+                    // FIFO eviction by bytes then entry count.
+                    while ((m_cacheBytes > kCacheLimitBytes
+                            || m_cacheOrder.size() > kCacheMaxEntries)
+                           && !m_cacheOrder.empty()) {
+                        const std::string victim = m_cacheOrder.front();
+                        m_cacheOrder.erase(m_cacheOrder.begin());
+                        auto vit = m_rgbaCache.find(victim);
+                        if (vit != m_rgbaCache.end()) {
+                            m_cacheBytes -= vit->second.rgba.size()
+                                          + vit->second.data.size();
+                            m_rgbaCache.erase(vit);
+                        }
+                    }
+                }
+            }
             std::lock_guard<std::mutex> lock(m_completeMutex);
             m_completed.push_back(std::move(*result));
         });
@@ -161,7 +207,14 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
 
 void AsyncLoader::cancelAll() {
     m_cancelRequested.store(true);
-    m_cancelGeneration.fetch_add(1);
+    // The cache contract mirrors cancelAll: everything in flight is
+    // invalidated, so cached decodes go too (hot-reload-safe).
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        m_rgbaCache.clear();
+        m_cacheOrder.clear();
+        m_cacheBytes = 0;
+    }
     printf("[AsyncLoader] All loads cancelled.\n");
 }
 

@@ -52,13 +52,21 @@ private:
     std::atomic<int>  m_pendingCount{0};
     std::atomic<int>  m_nextId{1};
     std::atomic<bool> m_cancelRequested{false};
-    // Generation counter: cancelAll() increments it; jobs snapshot it at
-    // enqueue and abort if it changed before they run -- fixing the race
-    // where enqueue's reset of the boolean flag undid a cancelAll.
-    std::atomic<uint64_t> m_cancelGeneration{0};
 
     std::mutex m_completeMutex;
     std::vector<CompletedLoad> m_completed;
+
+    // Decoded-resource cache (modern resource pipeline): successful loads
+    // are kept (bounded by total bytes) so re-entering the same scene does
+    // not re-read + re-decode the same files. cancelAll() clears it (its
+    // contract is "invalidate everything"). Guarded by m_cacheMutex; the
+    // engine touches it from the main thread, tests may use several.
+    std::mutex m_cacheMutex;
+    std::unordered_map<std::string, CompletedLoad> m_rgbaCache;
+    std::vector<std::string> m_cacheOrder;  // FIFO eviction order
+    size_t m_cacheBytes = 0;
+    static constexpr size_t kCacheLimitBytes = 96 * 1024 * 1024;
+    static constexpr size_t kCacheMaxEntries = 512;
 };
 
 } // namespace Caesura

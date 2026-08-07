@@ -88,15 +88,20 @@ DecodedImage ImageDecoder::decode(const uint8_t* data, size_t size) {
     DecodedImage out;
     if (!data || size == 0) return out;
 
+    // stb first: it covers the common game formats (PNG/JPEG/BMP/TGA/GIF)
+    // and is hardened against malformed/edge-case inputs (a 1x1 PNG used
+    // to crash bimg::imageParse with an access violation). bimg remains
+    // the fallback for DDS/KTX-style containers stb cannot read.
+    out = fromStb(data, size);
+    if (out.ok) return out;
+
     bx::DefaultAllocator allocator;
     bimg::ImageContainer* img = bimg::imageParse(&allocator, data, static_cast<uint32_t>(size));
     if (img) {
         out = fromBimg(img);
         bimg::imageFree(img);
-        if (out.ok) return out;
     }
-
-    return fromStb(data, size);
+    return out;
 }
 
 } // namespace Caesura
