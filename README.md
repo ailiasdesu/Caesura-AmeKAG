@@ -1,11 +1,29 @@
 ﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 30 interfaces · 586 tests · 0 circular dependencies**
+> **16 modules · 30 interfaces · 605 tests / 2968 assertions · 77 KAG commands · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
+> Live API census: `python scripts/api_stats.py` → `docs/api/api-stats.md`
 
 Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. KAG 3.0 script compatible.
 
 ---
+
+## Features
+
+- **KAG 3.0 scripting** — full command set (77 contract commands), expression evaluator, variables, control flow, `[expr]`/`[iscript]` Lua hybrid embedding, label/choice jumps, scenes, chapter routing
+- **Lua-first runtime** — direct `backend.*`/`layers.*` API or KAG scheduler; sandboxed strict mode with per-module whitelists
+- **Multi-backend GPU** — D3D11 + OpenGL 4.3 verified on real GPUs; Metal render path complete (embedded GLSL/DXBC/Metal shaders)
+- **Live2D Cubism 5** — D3D11 verified with zero shader warnings; OpenGL/Metal render paths implemented (SDK bundled in `thirdparty/`)
+- **Scene-level debugger** — breakpoints, step/continue, pause-driven state inspection over RPC (editor workflow)
+- **Hot scene reload** — edit `.ks` files and re-apply to the running scene without restart
+- **Mod loader** — drop-in mods with merged config, script hooks and asset overrides
+- **Recording / playback** — input capture drives auto-demo; replay → deterministic PNG frame export (`--export-replay`)
+- **Accessibility** — closed captions, TTS hook, colorblind/contrast filter presets (deuteranopia/protanopia/tritanopia/grayscale/high-contrast)
+- **Cloud saves** — pluggable providers: local, Steam Remote Storage (full Lua surface), HTTP REST endpoint with offline degrade
+- **Steamworks** — achievements, stats, rich presence, cloud list/write/read/delete/quota; unconditionally registered with safe Null defaults
+- **Mobile-ready** — SDL finger-event bridge, orientation change events, touch→mouse injection (P7)
+- **AI-assisted authoring** — local LLM integration (`[ai_dialog]`), DevCore RPC `eval`/`run`
+- **Editor host** — HTTP editor on :9876 + stdin/stdout JSON-RPC; web-editor frontend served when built
 
 ## Quick Start
 
@@ -228,10 +246,10 @@ Caesura(AmeKAG)/
 │   ├── steam/              Steamworks (conditional)
 │   └── storage/            Save/load system
 ├── scripts/                Lua runtime (kag/, tokenizer, scheduler)
-├── tests/                  52 test files (586/586)
+├── tests/                  52 test files (605 cases / 2968 assertions)
 │   └── mocks/              NullJobSystem for synchronous testing
 ├── docs/
-│   ├── api/                Interface docs (Lua, KAG, C++, RPC)
+│   ├── api/                Interface docs (Lua, KAG, C++, RPC, API statistics)
 │   ├── design/             Architecture topology, safety, capability matrix
 │   ├── guides/             Getting started, asset pipeline, Live2D setup
 │   └── plans/              Execution plans and summaries
@@ -248,9 +266,10 @@ Caesura(AmeKAG)/
 | Document | Audience | Content |
 |----------|----------|---------|
 | [AGENTS.md](AGENTS.md) | AI agents & contributors | Module boundaries, interface rules, build/test gates |
+| [api-stats.md](docs/api/api-stats.md) | Everyone | Live API census (auto-generated: interfaces, bindings, RPC, tests) |
 | [editor-api-reference.md](docs/api/editor-api-reference.md) | Editor developers | RPC endpoints, Lua bindings, KAG commands, C++ interfaces |
-| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces |
-| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 72 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
+| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces (30 headers) |
+| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 77 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
 | [kag-commands.md](docs/api/kag-commands.md) | Script authors | Deprecated KAG3-compat reference (see command-contracts.md) |
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
