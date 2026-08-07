@@ -132,8 +132,8 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 
 ## Next Steps
 
-- Read the [Command Contracts](api/command-contracts.md) for all available commands (auto-generated, authoritative)
-- Read the [Lua Module API](api/lua-modules.md) for scripting APIs
+- Read the [Command Contracts](../api/command-contracts.md) for all available commands (auto-generated, authoritative)
+- Read the [Lua Module API](../api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
 
 ## Demo/视频导出（差异化功能）

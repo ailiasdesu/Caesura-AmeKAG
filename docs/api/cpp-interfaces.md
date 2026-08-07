@@ -281,7 +281,7 @@ include 具体实现头文件并创建后端对象的位置）。
 
 `Engine::init()` 每个实例只允许调用一次。任一必需阶段失败会立即回滚；公开服务访问器只在初始化成功后可用。关闭顺序保证异步加载先停止，再关闭资产管理器和任务系统，最后清空 `BackendRegistry` 的非拥有指针。
 
-参见 [Engine.cpp](/src/entry/Engine.cpp) 和 [AGENTS.md](/AGENTS.md) 第 4 节。
+参见 [Engine.cpp](../../src/entry/Engine.cpp) 和 [AGENTS.md](../../AGENTS.md) 第 4 节。
 
 ---
 

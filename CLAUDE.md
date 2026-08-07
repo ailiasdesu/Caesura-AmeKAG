@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 28 pure-virtual interfaces, then linked into one executable. See `AGENTS.md` for the authoritative module-boundary and interface rules that all agents must follow.
+Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 30 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. See `AGENTS.md` for the authoritative module-boundary and interface rules that all agents must follow.
 
 ## Plugin Requirements
 
@@ -76,7 +76,7 @@ ctest -C Debug --test-dir build --output-on-failure
 python scripts/count_coupling.py --ci
 ```
 
-Test sources are explicitly listed in `tests/CMakeLists.txt` (currently 51 `test_*.cpp` files, including `test_main.cpp`). `CaesuraTests` links the same internal static module libraries as the application through `Caesura::Engine`, plus `Caesura::Rpc`; it does not recompile a second copy of the production sources. The runner reports the authoritative test-case total, and every discovered case must pass. `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
+Test sources are explicitly listed in `tests/CMakeLists.txt` (currently 55 `test_*.cpp` files, including `test_main.cpp`). `CaesuraTests` links the same internal static module libraries as the application through `Caesura::Engine`, plus `Caesura::Rpc`; it does not recompile a second copy of the production sources. The runner reports the authoritative test-case total, and every discovered case must pass. `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
 
 ## Lint & Format
 
@@ -171,9 +171,9 @@ Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps
 ## Key Documentation
 
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first)
-- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (72 commands; supersedes kag-commands.md)
+- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (78 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
-- `docs/api/cpp-interfaces.md` — all 28 C++ interface definitions
+- `docs/api/cpp-interfaces.md` — all 30 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
 - `docs/design/engine-capability-matrix.md` — 54 tracked capabilities and readiness limits
