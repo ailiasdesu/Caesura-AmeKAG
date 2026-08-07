@@ -17,6 +17,11 @@ bool SteamBackend::init() {
     if (m_initialized) return true;
     if (!SteamAPI_Init()) return false;
     m_initialized = true;
+    // User stats arrive asynchronously; unlock/stat calls before
+    // UserStatsReceived_t may silently no-op, so request them up front.
+    m_statsRequested = true;
+    m_statsReceived  = false;
+    SteamUserStats()->RequestCurrentStats();
     return true;
 #else
     (void)m_initialized;
@@ -36,12 +41,26 @@ void SteamBackend::shutdown() {
 void SteamBackend::runCallbacks() {
 #ifdef CAESURA_HAS_STEAM
     SteamAPI_RunCallbacks();
+    // Batch StoreStats: unlock/reset mark m_statsDirty and the network
+    // round trip happens at most once per second here (never on the Lua
+    // binding call path).
+    if (m_statsDirty) {
+        const double now = (double)clock() / CLOCKS_PER_SEC;
+        if (now - m_lastStoreStats >= 1.0) {
+            m_lastStoreStats = now;
+            m_statsDirty = false;
+            SteamUserStats()->StoreStats();
+        }
+    }
 #endif
 }
 
 bool SteamBackend::isOverlayActive() const {
 #ifdef CAESURA_HAS_STEAM
-    return SteamUtils() && SteamUtils()->IsOverlayEnabled();
+    // GameOverlayActivated_t callback tracks the ACTUAL overlay state;
+    // IsOverlayEnabled() only reports feature availability (usually true),
+    // so using it here would permanently pause game input.
+    return m_overlayActive;
 #else
     return false;
 #endif
@@ -50,8 +69,10 @@ bool SteamBackend::isOverlayActive() const {
 bool SteamBackend::unlockAchievement(const char* id) {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized || !id) return false;
-    SteamUserStats()->SetAchievement(id);
-    return SteamUserStats()->StoreStats();
+    if (!m_statsReceived) return false;  // stats not loaded yet; caller retries
+    if (!SteamUserStats()->SetAchievement(id)) return false;
+    m_statsDirty = true;
+    return true;
 #else
     (void)id;
     return false;
@@ -73,8 +94,10 @@ bool SteamBackend::isAchievementUnlocked(const char* id) const {
 bool SteamBackend::resetAchievement(const char* id) {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized || !id) return false;
-    SteamUserStats()->ClearAchievement(id);
-    return SteamUserStats()->StoreStats();
+    if (!m_statsReceived) return false;
+    if (!SteamUserStats()->ClearAchievement(id)) return false;
+    m_statsDirty = true;
+    return true;
 #else
     (void)id;
     return false;
@@ -84,8 +107,10 @@ bool SteamBackend::resetAchievement(const char* id) {
 bool SteamBackend::resetAllAchievements() {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized) return false;
+    if (!m_statsReceived) return false;
     SteamUserStats()->ResetAllStats(true);
-    return SteamUserStats()->StoreStats();
+    m_statsDirty = true;
+    return true;
 #else
     return false;
 #endif
@@ -215,5 +240,16 @@ int32_t SteamBackend::cloudQuotaUsed() const {
     return 0;
 #endif
 }
+
+#ifdef CAESURA_HAS_STEAM
+void SteamBackend::OnUserStatsReceived(UserStatsReceived_t* pCallback) {
+    if (!pCallback) return;
+    m_statsReceived = pCallback->m_eResult == k_EResultOK;
+}
+void SteamBackend::OnGameOverlayActivated(GameOverlayActivated_t* pCallback) {
+    if (!pCallback) return;
+    m_overlayActive = pCallback->m_bActive != 0;
+}
+#endif
 
 } // namespace Caesura

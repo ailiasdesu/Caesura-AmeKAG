@@ -645,10 +645,18 @@ void Engine::run(const OwnerPump& ownerPump) {
                 lua_pushboolean(L, vfxOn ? 1 : 0);
                 lua_setglobal(L, "_CAESURA_VFX_ENABLED");
             }
-            lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().gpuTimeMs));
-            lua_setglobal(L, "_CAESURA_GPU_TIME_MS");
-            lua_pushnumber(L, static_cast<lua_Number>(m_gpuMonitor->metrics().rollingAvgMs));
-            lua_setglobal(L, "_CAESURA_GPU_AVG_MS");
+            const float gpuTime = m_gpuMonitor->metrics().gpuTimeMs;
+            if (gpuTime != m_lastGpuTimeMs) {
+                m_lastGpuTimeMs = gpuTime;
+                lua_pushnumber(L, static_cast<lua_Number>(gpuTime));
+                lua_setglobal(L, "_CAESURA_GPU_TIME_MS");
+            }
+            const float gpuAvg = m_gpuMonitor->metrics().rollingAvgMs;
+            if (gpuAvg != m_lastGpuAvgMs) {
+                m_lastGpuAvgMs = gpuAvg;
+                lua_pushnumber(L, static_cast<lua_Number>(gpuAvg));
+                lua_setglobal(L, "_CAESURA_GPU_AVG_MS");
+            }
             const bool degraded = m_gpuMonitor->metrics().degraded;
             if (degraded != m_lastGpuDegraded) {
                 m_lastGpuDegraded = degraded;
@@ -902,6 +910,16 @@ void Engine::processEvents() {
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // -- Window resize: propagate to registered callbacks (layer tree
+        // rebuild + dirty marking). Was documented-but-unwired: the
+        // InputRouter callback list never fired because no event handler
+        // existed here.
+        if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+            if (m_inputRouter) {
+                m_inputRouter->notifyResize(event.window.data1,
+                                            event.window.data2);
+            }
+        }
         // -- GPU device reset from SDL (triggers recovery at next loop iteration) --
         if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
             if (m_renderDevice) m_renderDevice->flagDeviceLost();
@@ -1066,7 +1084,8 @@ void Engine::render(float dt) {
     // Headless mode (not editor): no GPU rendering
     if (m_config.headless && !m_config.editorMode) return;
 
-    m_lua->resetInstructionBudget();
+    // NOTE: instruction budget was reset once in processEvents this frame;
+    // resetting again here would double the per-frame allowance.
     // Drive active videos by real frame time (frame-rate pacing inside).
     if (m_videoPlayer) m_videoPlayer->updateAll(dt);
     lua_State* L = m_lua->state();

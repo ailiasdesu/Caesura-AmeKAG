@@ -39,6 +39,19 @@ public:
 private:
     bool m_initialized = false;
     bool m_statsRequested = false;
+    bool m_statsReceived  = false;
+    bool m_overlayActive  = false;
+    bool m_statsDirty     = false;
+    double m_lastStoreStats = 0.0;  // throttle seconds (clock())
+
+#ifdef CAESURA_HAS_STEAM
+    // Steam callback listeners (dispatched by SteamAPI_RunCallbacks on the
+    // owner thread): overlay activation state and user-stats availability.
+    STEAM_CALLBACK(SteamBackend, OnUserStatsReceived, UserStatsReceived_t,
+                   m_callbackUserStatsReceived);
+    STEAM_CALLBACK(SteamBackend, OnGameOverlayActivated, GameOverlayActivated_t,
+                   m_callbackOverlayActivated);
+#endif
 };
 
 } // namespace Caesura

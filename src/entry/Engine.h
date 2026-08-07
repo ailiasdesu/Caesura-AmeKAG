@@ -192,6 +192,8 @@ private:
     int      m_lastGpuQuality = -1;
     bool     m_lastVfxEnabled = false;
     bool     m_lastGpuDegraded = false;
+    float    m_lastGpuTimeMs = -1.0f;
+    float    m_lastGpuAvgMs  = -1.0f;
 };
 
 } // namespace Caesura
