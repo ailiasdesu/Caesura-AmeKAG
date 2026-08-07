@@ -232,12 +232,14 @@ bool SaveManager::save(int slot, const json& gameData,
     envelope["data"]           = gameData;
 
     std::string path    = slotPath(slot);
-    std::string jsonStr = envelope.dump(2);  // 2-space indent
+    // Compact JSON (no indentation): saves run frequently (quicksave/auto)
+    // and the envelope is re-read by listSaves -- ~40% smaller files.
+    std::string jsonStr = envelope.dump();
 
     bool ok = writeFile(path, jsonStr);
     if (ok) {
-        printf("[SaveManager] Saved slot %d (%s, token %d)\n",
-               slot, sceneName.c_str(), tokenIndex);
+        printf("[SaveManager] Saved slot %d (%s, token %d, %zu bytes)\n",
+               slot, sceneName.c_str(), tokenIndex, jsonStr.size());
     }
     return ok;
 }
