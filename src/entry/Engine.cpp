@@ -924,6 +924,36 @@ void Engine::processEvents() {
         if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
             if (m_renderDevice) m_renderDevice->flagDeviceLost();
         }
+        // -- Mobile touch (P7): SDL finger events -> MobileAdapter (which
+        // injects mouse events and tracks multi-touch). Finger coords are
+        // normalized 0..1; the adapter expects window pixels.
+        if (m_mobileAdapter) {
+            // SDL finger coordinates are normalized 0..1; scale to window
+            // pixels for the adapter's touch -> mouse injection.
+            const float winW = m_platformBackend
+                ? static_cast<float>(m_platformBackend->getWindowWidth()) : 1280.0f;
+            const float winH = m_platformBackend
+                ? static_cast<float>(m_platformBackend->getWindowHeight()) : 720.0f;
+            switch (event.type) {
+                case SDL_EVENT_FINGER_DOWN:
+                    m_mobileAdapter->onFingerDown(
+                        event.tfinger.x * winW, event.tfinger.y * winH,
+                        static_cast<int>(event.tfinger.fingerID));
+                    break;
+                case SDL_EVENT_FINGER_MOTION:
+                    m_mobileAdapter->onFingerMotion(
+                        event.tfinger.x * winW, event.tfinger.y * winH,
+                        static_cast<int>(event.tfinger.fingerID));
+                    break;
+                case SDL_EVENT_FINGER_UP:
+                    m_mobileAdapter->onFingerUp(
+                        event.tfinger.x * winW, event.tfinger.y * winH,
+                        static_cast<int>(event.tfinger.fingerID));
+                    break;
+                default:
+                    break;
+            }
+        }
 
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
         if (event.type == CAESURA_EVENT_ASYNC_LOAD) {
@@ -1274,6 +1304,20 @@ void Engine::handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 ev
         case SDL_EVENT_DID_ENTER_FOREGROUND:
             adapter->onResume(L);
             break;
+        case SDL_EVENT_DISPLAY_ORIENTATION: {
+            // P7: report orientation changes to scripts (portrait/landscape
+            // etc.) so game UIs can reflow without a native plugin.
+            const char* name = "unknown";
+            switch (SDL_GetCurrentDisplayOrientation(0)) {
+                case SDL_ORIENTATION_LANDSCAPE:          name = "landscape"; break;
+                case SDL_ORIENTATION_LANDSCAPE_FLIPPED:  name = "landscape_flipped"; break;
+                case SDL_ORIENTATION_PORTRAIT:           name = "portrait"; break;
+                case SDL_ORIENTATION_PORTRAIT_FLIPPED:   name = "portrait_flipped"; break;
+                default: break;
+            }
+            adapter->onOrientationChanged(L, name);
+            break;
+        }
         default:
             break;
     }

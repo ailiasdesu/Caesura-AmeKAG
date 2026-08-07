@@ -35,6 +35,9 @@ public:
     // -- Display -----------------------------------------------------------
     virtual float getDisplayScale() const = 0;
     virtual void setDisplayScale(float scale) = 0;
+    // Orientation change (P7): SDL_EVENT_DISPLAY_ORIENTATION -> Lua
+    // _G.onOrientationChanged("portrait"|"landscape"|...) when registered.
+    virtual void onOrientationChanged(lua_State* L, const char* orientation) = 0;
 
     // -- State -------------------------------------------------------------
     virtual bool isPaused() const = 0;

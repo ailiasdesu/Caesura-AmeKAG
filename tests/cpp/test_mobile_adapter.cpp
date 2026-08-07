@@ -1,5 +1,10 @@
 #include "doctest.h"
 #include "platform/MobileAdapter.h"
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
 #include <SDL3/SDL.h>
 #include <cmath>
 
@@ -274,4 +279,30 @@ TEST_CASE("MobileAdapter::non-finite inputs are rejected") {
 
     ma.setDisplayScale(NAN);                   // NaN scale rejected -> 1.0
     CHECK(ma.getDisplayScale() == doctest::Approx(1.0f));
+}
+
+// ---- Orientation change (P7) ----------------------------------------------
+
+TEST_CASE("MobileAdapter onOrientationChanged invokes Lua callback") {
+    lua_State* L = luaL_newstate();
+    REQUIRE(L);
+    luaL_openlibs(L);
+    // Register a Lua recorder.
+    REQUIRE(luaL_dostring(L, "received = nil; function _G.onOrientationChanged(o) received = o end") == LUA_OK);
+
+    MobileAdapter adapter;
+    adapter.onOrientationChanged(L, "portrait");
+    lua_getglobal(L, "received");
+    REQUIRE(lua_isstring(L, -1));
+    CHECK(std::string(lua_tostring(L, -1)) == "portrait");
+    lua_pop(L, 1);
+
+    // Unknown orientation strings pass through; null state is a no-op.
+    adapter.onOrientationChanged(nullptr, "landscape");
+    adapter.onOrientationChanged(L, "face_up");
+    lua_getglobal(L, "received");
+    CHECK(std::string(lua_tostring(L, -1)) == "face_up");
+    lua_pop(L, 1);
+
+    lua_close(L);
 }

@@ -42,6 +42,9 @@ public:
     /// Resumes audio and invokes Lua _G.onResume(savedData).
     void onResume(lua_State* L, const std::string& savedData = "") override;
 
+    /// Display orientation change -> Lua _G.onOrientationChanged(name).
+    void onOrientationChanged(lua_State* L, const char* orientation) override;
+
     // ── Touch → Mouse Mapping ──────────────────────────────────────────
 
     /// Single finger down -- maps to left mouse button press at (x, y).

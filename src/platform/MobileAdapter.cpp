@@ -22,6 +22,24 @@ static bool validCoord(float v) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+//  onOrientationChanged -- display orientation change (P7)
+// ══════════════════════════════════════════════════════════════════════════
+void MobileAdapter::onOrientationChanged(lua_State* L, const char* orientation) {
+    if (!L || !orientation || !*orientation) return;
+    lua_getglobal(L, "_G");
+    lua_getfield(L, -1, "onOrientationChanged");
+    if (lua_isfunction(L, -1)) {
+        lua_pushstring(L, orientation);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            lua_pop(L, 1);  // error object
+        }
+    } else {
+        lua_pop(L, 1);  // non-function
+    }
+    lua_pop(L, 1);  // _G
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 //  onPause -- backgrounding
 // ══════════════════════════════════════════════════════════════════════════
 void MobileAdapter::onPause(lua_State* L) {
