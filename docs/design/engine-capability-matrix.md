@@ -191,3 +191,30 @@ the distinction between architecture completion, core usability and release read
 - ks_check.lineOf: line-start index + binary search replaces per-token
   O(n) text scanning (O(n²) -> O(n log n)) — editor keystroke latency.
 - expr.translate: bounded compiled-chunk cache (per-env identity).
+
+### Module hardening pass (2026-08-07, per-module sweep)
+
+- audio: 4-slot voice pool (overlapping lines fade, not cut) + BGM
+  ducking (35% while a voice plays, exact restore); wave-cache LRU
+  UB fixed (flushWaveCache rebuilt the LRU index; eviction guards)
+- steam: overlay state via GameOverlayActivated_t (was IsOverlayEnabled
+  -> permanent input pause); stats loaded via RequestCurrentStats +
+  UserStatsReceived_t; StoreStats batched (1s throttle)
+- input/entry: SDL_EVENT_WINDOW_RESIZED routed through
+  InputRouter::notifyResize (was documented but never wired); per-frame
+  GPU-time globals only written on change; single instruction-budget
+  reset per frame
+- archive: thread-local BCrypt key-handle cache (algorithm + key object
+  reused across blocks; move-semantic RAII); save JSON compact (-40%)
+- debug/job: LogEntry fixed char[256] (zero alloc per log call);
+  isWorkerThread O(1) thread_local (was O(n) scan); dead member removed
+- script/debug: RenderBinding getters cache backend pointers (registry
+  lookup per binding call removed); DebugProtocol line hook fast path
+  when no breakpoints/step
+- render: fillViewport solid-pixel texture cached per color (was a GPU
+  texture create per call); dead SimBatch worker + shouldUsePlmpeg
+  removed
+- minigame: sweep-and-prune collision detection (O(n^2) -> O(n log n))
+- resource: decoded-asset cache (instant scene re-entry, cancelAll
+  clears); ImageDecoder stb-first order fixed a 1x1-PNG crash in
+  bimg::imageParse; dead cancel-generation field removed
