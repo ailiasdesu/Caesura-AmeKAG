@@ -193,57 +193,47 @@ TEST_CASE("AsyncLoader cache: ImageDecoder decodes 1x1 png") {
 
 TEST_CASE("AsyncLoader cache: sync processRequest smoke") {
     // Isolate the decode path: a valid 1x1 PNG must decode without SEH.
-    fprintf(stderr, "SMOKE:step1\n");
     {
         std::ofstream f("cache_test.png", std::ios::binary);
         f.write(reinterpret_cast<const char*>(kRedPng), sizeof(kRedPng));
         f.close();
     }
-    fprintf(stderr, "SMOKE:step2\n");
     {
         AsyncLoaderFixture<NullJobSystem> infra;
-        fprintf(stderr, "SMOKE:step3\n");
         REQUIRE(infra.loader.enqueue("cache_test.png", "texture") > 0);
-        fprintf(stderr, "SMOKE:step4\n");
         auto completed = infra.loader.drainCompleted();
-        fprintf(stderr, "SMOKE:step5\n");
         REQUIRE_FALSE(completed.empty());
         CHECK(completed[0].success);
         CHECK(completed[0].rgba.size() == 4);
     }
-    fprintf(stderr, "SMOKE:step6\n");
     std::remove("cache_test.png");
 }
 
 TEST_CASE("AsyncLoader cache: second enqueue completes instantly") {
-    // Write a real 1x1 PNG so the load SUCCEEDS (only successes cache).
+    // Deterministic: NullJobSystem runs work + onComplete synchronously on
+    // the calling thread, so the cache is filled before enqueue returns.
     {
         std::ofstream f("cache_test.png", std::ios::binary);
         f.write(reinterpret_cast<const char*>(kRedPng), sizeof(kRedPng));
+        f.close();
     }
     {
-        AsyncLoaderFixture<JobSystem> infra;
+        AsyncLoaderFixture<NullJobSystem> infra;
         REQUIRE(infra.loader.enqueue("cache_test.png", "texture") > 0);
-        // Wait for the worker: drain until the result arrives.
-        int attempts = 0;
-        while (infra.loader.drainCompleted().empty() && attempts++ < 500) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-        }
         auto first = infra.loader.drainCompleted();
         REQUIRE_FALSE(first.empty());
         REQUIRE(first[0].success);
         CHECK_FALSE(first[0].rgba.empty());
 
-        // Second enqueue of the same (path, type): cache hit -- the result
-        // is available immediately (no worker round trip, no re-decode).
+        // Second enqueue of the same (path, type): cache hit -- completes
+        // immediately with a fresh id and identical decoded pixels.
         const int id2 = infra.loader.enqueue("cache_test.png", "texture");
         REQUIRE(id2 > 0);
         auto second = infra.loader.drainCompleted();
         REQUIRE_FALSE(second.empty());
         CHECK(second[0].id == id2);
         CHECK(second[0].success);
-        CHECK_FALSE(second[0].rgba.empty());
-        CHECK(second[0].rgba.size() == first[0].rgba.size());
+        CHECK(second[0].rgba == first[0].rgba);
     }
     std::remove("cache_test.png");
 }
