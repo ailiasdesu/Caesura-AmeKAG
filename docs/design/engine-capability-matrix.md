@@ -112,6 +112,10 @@ graph LR
 | S2j | Mod loader (scene/resource override by priority; mods/<name>/<path> wins over base; path-traversal guarded) | `mods.lua` + flow + resolve_file | ✓ |
 | S2k | Input recording/playback (auto-demo + regression; [replay] command, JSON persistence, choice coordinates) | `replay.lua` + kag_runner | ✓ |
 | S2l | Accessibility (closed captions for voiced lines, settings toggle, TTS interface probe) | text commands + settings | ✓ |
+| S2m | Scene hot reload (edit a running .ks -> re-parse + position remap + state preserved; HotReload watches assets/script + mods; RPC kagReloadScene) | `kag_runner.reload_scene` + HotReload + flow | ✓ |
+| S2n | LLM-driven dialogue ([ai_dialog] async query; OpenAI-compatible / Ollama endpoints; graceful fallback text; AI binding + sandbox whitelist) | `AIBinding` + system commands + backend | ✓ |
+| S2o | Demo/video export (recorded replay drives the game while each frame is captured to PNG; --export-replay/--export-dir; screenshot readback fixed) | `Engine::run` + `BgfxDebugCallback::screenShot` | ✓ |
+| S2p | Colorblind/high-contrast filter (config.accessibility.color_filter presets; VFX effect 4 matrix pass over RTT scene layers; D3D11 + GL shaders) | `IRenderDevice::setColorFilter` + fs_vfx effect 4 | ✓ (RTT scene layers; direct-drawn UI text unaffected) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
@@ -176,3 +180,14 @@ graph LR
 
 **Total: 54 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+### Performance notes (2026-08-07 pass)
+
+- Tokenizer: 4000-token scene parses in ~205 ms (52 ms/1000tok) after the
+  -28.5% prefix-pattern pass; scene cache avoids re-parsing.
+- Scheduler: 4001 coroutine resumes in ~16 ms (-36%): schema require
+  hoisted out of the per-token loop; schema.coerce builds its location
+  string lazily (error paths only).
+- ks_check.lineOf: line-start index + binary search replaces per-token
+  O(n) text scanning (O(n²) -> O(n log n)) — editor keystroke latency.
+- expr.translate: bounded compiled-chunk cache (per-env identity).
