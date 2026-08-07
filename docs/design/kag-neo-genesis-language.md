@@ -82,7 +82,7 @@ KAG3 的 TJS 风格表达式（`&&`/`||`/`!`/`? :`、`%tbl.key%` 表访问、
 [iscript]                           ; 多行 Lua 块
   local t = { 1, 2, 3 }
   f.sum = t[1] + t[2] + t[3]
-[endiscript]
+[/endscript]
 ```
 
 `.ks` 场景文件与 Lua 双向调用：`kag.jump`/`kag.call`/`kag.save_game`
@@ -142,7 +142,7 @@ KAG3 的 TJS 风格表达式（`&&`/`||`/`!`/`? :`、`%tbl.key%` 表访问、
   if f.gold > 200 then
     kag.jump("*bonus")
   end
-[endiscript]
+[/endscript]
 *end
 [ending]
 ```

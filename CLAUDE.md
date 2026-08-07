@@ -147,7 +147,7 @@ The Lua runtime lives in `scripts/` (copied to build output). Two execution mode
 - **Direct API**: Lua scripts call `backend.*` and `layers.*` directly (like Ren'Py)
 - **KAG .ks scripts**: `scheduler.lua` tokenizes `.ks` files and dispatches to command handlers in `scripts/kag/commands/`
 
-Both modes support **KAG+Lua hybrid scripting**: `[eval]`, `[emb]`, and `[iscript]...[endiscript]` tags embed Lua inside .ks files, and the `kag.*` API (`kag.jump`, `kag.call`, `kag.save_game`) enables Lua-to-KAG callbacks. Engine-side bindings are in `src/script/bindings/` — these expose C++ backends to Lua via the `ILuaManager` interface.
+Both modes support **KAG+Lua hybrid scripting**: `[eval]`, `[emb]`, and `[iscript]...[/endscript]` tags embed Lua inside .ks files, and the `kag.*` API (`kag.jump`, `kag.call`, `kag.save_game`) enables Lua-to-KAG callbacks. Engine-side bindings are in `src/script/bindings/` — these expose C++ backends to Lua via the `ILuaManager` interface.
 
 ### Editor / RPC Server
 

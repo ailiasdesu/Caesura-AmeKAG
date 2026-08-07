@@ -331,36 +331,105 @@ static int parseId(const std::string& json) {
     return val;
 }
 
-static std::string extractField(const std::string& json, const std::string& key) {
-    std::string search = "\"" + key + "\":\"";
-    size_t pos = json.find(search);
-    if (pos == std::string::npos) {
-        // Try unquoted value
-        search = "\"" + key + "\":";
-        pos = json.find(search);
-        if (pos == std::string::npos) return "";
-        pos += search.size();
-        // Skip whitespace
-        while (pos < json.size() && json[pos] == ' ') pos++;
-        // Quoted value: read until the closing quote
-        if (pos < json.size() && json[pos] == '"') {
-            size_t end = json.find('"', pos + 1);
-            if (end == std::string::npos) return "";
-            return json.substr(pos + 1, end - pos - 1);
+// Minimal JSON escape-sequence decoder (\n \t \r \" \\ \/ \uXXXX as UTF-8).
+static std::string jsonUnescape(const std::string& s);
+
+// Read a quoted JSON string starting at json[pos] == '"'; returns the
+// unescaped content and advances pos past the closing quote. Honoring \"
+// escapes means embedded quotes/newlines (multi-line Lua eval code) survive.
+static std::string readJsonString(const std::string& json, size_t& pos) {
+    std::string out;
+    if (pos >= json.size() || json[pos] != '"') return out;
+    ++pos;  // opening quote
+    while (pos < json.size()) {
+        const char c = json[pos];
+        if (c == '\\' && pos + 1 < json.size()) {
+            const char n = json[pos + 1];
+            if (n == 'n') { out.push_back('\n'); }
+            else if (n == 't') { out.push_back('\t'); }
+            else if (n == 'r') { out.push_back('\r'); }
+            else if (n == '"') { out.push_back('"'); }
+            else if (n == '\\') { out.push_back('\\'); }
+            else if (n == '/') { out.push_back('/'); }
+            else { out.push_back(c); out.push_back(n); }
+            pos += 2;
+            continue;
         }
-        // Unquoted value: read until , or } or \n
-        size_t end = json.find_first_of(",}", pos);
-        if (end == std::string::npos) end = json.size();
-        std::string val = json.substr(pos, end - pos);
-        // Trim whitespace
-        while (!val.empty() && val.front() == ' ') val.erase(0, 1);
-        while (!val.empty() && val.back() == ' ') val.pop_back();
-        return val;
+        if (c == '"') { ++pos; break; }
+        out.push_back(c);
+        ++pos;
     }
+    return out;
+}
+
+static std::string extractField(const std::string& json, const std::string& key) {
+    std::string search = "\"" + key + "\":";
+    size_t pos = json.find(search);
+    if (pos == std::string::npos) return "";
     pos += search.size();
-    size_t end = json.find('\"', pos);
-    if (end == std::string::npos) return "";
-    return json.substr(pos, end - pos);
+    // Skip whitespace between ':' and the value.
+    while (pos < json.size() && json[pos] == ' ') pos++;
+    // Quoted value: read until the closing quote (escape-aware).
+    if (pos < json.size() && json[pos] == '"') {
+        return readJsonString(json, pos);
+    }
+    // Unquoted value: read until , or } or \n
+    size_t end = json.find_first_of(",}", pos);
+    if (end == std::string::npos) end = json.size();
+    std::string val = json.substr(pos, end - pos);
+    // Trim whitespace
+    while (!val.empty() && val.front() == ' ') val.erase(0, 1);
+    while (!val.empty() && val.back() == ' ') val.pop_back();
+    return val;
+}
+
+// Minimal JSON escape-sequence decoder (\n \t \r \" \\ \/ \uXXXX as UTF-8).
+static std::string jsonUnescape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '\\' && i + 1 < s.size()) {
+            const char n = s[i + 1];
+            if (n == 'n') { out.push_back('\n'); ++i; }
+            else if (n == 't') { out.push_back('\t'); ++i; }
+            else if (n == 'r') { out.push_back('\r'); ++i; }
+            else if (n == '"') { out.push_back('"'); ++i; }
+            else if (n == '\\') { out.push_back('\\'); ++i; }
+            else if (n == '/') { out.push_back('/'); ++i; }
+            else if (n == 'u' && i + 5 < s.size()) {
+                // \uXXXX (basic multilingual plane only).
+                unsigned code = 0;
+                bool ok = true;
+                for (int k = 1; k <= 4; ++k) {
+                    const char h = s[i + 1 + k];
+                    code <<= 4;
+                    if (h >= '0' && h <= '9') code |= static_cast<unsigned>(h - '0');
+                    else if (h >= 'a' && h <= 'f') code |= static_cast<unsigned>(h - 'a' + 10);
+                    else if (h >= 'A' && h <= 'F') code |= static_cast<unsigned>(h - 'A' + 10);
+                    else { ok = false; break; }
+                }
+                if (ok && code <= 0x7F) {
+                    out.push_back(static_cast<char>(code));
+                } else if (ok && code <= 0x7FF) {
+                    out.push_back(static_cast<char>(0xC0 | (code >> 6)));
+                    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+                } else if (ok) {
+                    out.push_back(static_cast<char>(0xE0 | (code >> 12)));
+                    out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
+                    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+                } else {
+                    out.push_back('\\');
+                    out.push_back('u');
+                }
+                i += 5;
+            } else {
+                out.push_back('\\');
+            }
+        } else {
+            out.push_back(s[i]);
+        }
+    }
+    return out;
 }
 
 static std::string extractMethod(const std::string& json) {

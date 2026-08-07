@@ -62,7 +62,7 @@
 - **KAG 契约命令 72 个 · 9 类**（`docs/api/command-contracts.md` 562 行；`scripts/kag/commands/` 实测 9 个文件：audio/layer/resource/save/system/text/transition/vfx/video；schema 侧 61 个 `schema.define` + kag.lua 13 个 − 重复 2 = 72 唯一命令，由 `scripts/schema_doc.lua` 自动生成防漂移）。
 - **KAG3 兼容**：13 家族 15 命令裸位置参数（delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending）。
 - **新一代特性**：声明式命令契约（typed params、钳制、`$var/${expr}` 插值）、参数化宏（%arg% 嵌套展开）、O(1) 标签索引、`ks_check` 静态校验（CI 门禁）、LPeg tokenizer（全解析 ~0.9s，文本批跳过 ~37x）。
-- **混合脚本**：`.ks` 内嵌 `[eval]`/`[emb]`/`[iscript]…[endiscript]`，Lua 侧 `kag.jump/call/save_game` 反向回调。
+- **混合脚本**：`.ks` 内嵌 `[eval]`/`[emb]`/`[iscript]…[/endscript]`，Lua 侧 `kag.jump/call/save_game` 反向回调。
 - **安全**：指令预算防死循环（近两周新增宏展开预算 e9b11b04/b11ed15e）、pcall 错误恢复 + ErrorUI、io.open 白名单沙箱。
 
 ### 1.4 工程与质量（证据：`tests/CMakeLists.txt`、能力矩阵 P2）

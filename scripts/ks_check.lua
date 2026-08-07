@@ -35,7 +35,7 @@ for _, c in ipairs({
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
     "break", "continue", "jump", "call", "return", "macro", "endmacro",
     "switch", "endswitch", "case", "endcase", "default", "label", "eval",
-    "emb", "iscript", "endiscript", "wait", "delay", "ch", "text", "link",
+    "emb", "iscript", "wait", "delay", "ch", "text", "link",
 }) do
     KNOWN_NONHANDLER[c] = true
 end
