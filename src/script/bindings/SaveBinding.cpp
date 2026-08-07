@@ -23,7 +23,6 @@ namespace Caesura {
 static ISaveManager* getSaveManager() {
     return BackendRegistry::instance().getSaveManager();
 }
-
 // -- Lua table -> nlohmann::json (recursive) -------------------------------
 // Detect if a Lua table is a dense array (all keys are 1..N positive integers)
 static bool isLuaArray(lua_State* L, int absIdx) {
@@ -326,6 +325,31 @@ static int lua_Get_save_dir(lua_State* L) {
 //  Registration
 // ============================================================================
 
+// -- Cloud sync (C7): HTTP cloud-save endpoint + slot push/pull ------------
+// KAG.save.configure_cloud(endpoint) -- "" disables (back to local-only)
+// KAG.save.cloud_push(slot) / cloud_pull(slot) -- bool, offline-safe
+static int lua_ConfigureCloud(lua_State* L) {
+    auto* manager = getSaveManager();
+    if (!manager) { lua_pushboolean(L, 0); return 1; }
+    const char* endpoint = luaL_optstring(L, 1, "");
+    lua_pushboolean(L, manager->configureCloudSync(endpoint) ? 1 : 0);
+    return 1;
+}
+static int lua_CloudPush(lua_State* L) {
+    auto* manager = getSaveManager();
+    if (!manager) { lua_pushboolean(L, 0); return 1; }
+    const int slot = (int)luaL_checkinteger(L, 1);
+    lua_pushboolean(L, manager->pushSlotToCloud(slot) ? 1 : 0);
+    return 1;
+}
+static int lua_CloudPull(lua_State* L) {
+    auto* manager = getSaveManager();
+    if (!manager) { lua_pushboolean(L, 0); return 1; }
+    const int slot = (int)luaL_checkinteger(L, 1);
+    lua_pushboolean(L, manager->pullSlotFromCloud(slot) ? 1 : 0);
+    return 1;
+}
+
 void registerSaveBinding(lua_State* L) {
     // [R12-FIX] Registration order note:
     // SaveBinding functions are appended to the existing "KAG" global table.
@@ -342,7 +366,7 @@ void registerSaveBinding(lua_State* L) {
         lua_newtable(L);
     }
 
-    static const luaL_Reg saveFuncs[] = {
+static const luaL_Reg saveFuncs[] = {
         { "save_game",    lua_Save_game    },
         { "load_game",    lua_Load_game    },
         { "list_saves",   lua_List_saves   },
@@ -352,6 +376,9 @@ void registerSaveBinding(lua_State* L) {
         { "set_encryption_key",  lua_SetEncryptionKey  },
         { "clear_encryption_key", lua_ClearEncryptionKey },
         { "capture_thumbnail",    lua_CaptureThumbnail },
+        { "configure_cloud",     lua_ConfigureCloud },
+        { "cloud_push",          lua_CloudPush },
+        { "cloud_pull",          lua_CloudPull },
         { nullptr, nullptr }
     };
 

@@ -10,6 +10,8 @@
 
 #include "SaveManager.h"
 #include "api/ISaveProvider.h"
+#include "HttpCloudSaveProvider.h"
+#include "LocalFileSaveProvider.h"
 #include "../di/BackendRegistry.h"
 #include "../archive/api/ICryptoEngine.h"
 #include <bgfx/bgfx.h>
@@ -78,6 +80,28 @@ void SaveManager::init(const std::string& saveDir) {
 //  Encryption (SU-2) -- AES-256-GCM via CryptoEngine
 //  Encrypted save format: [4-byte "CAES"][12-byte nonce][16-byte tag][ciphertext]
 // ============================================================================
+
+// Cloud sync (C7): swap the provider for an HTTP-backed one (keeps the
+// local files as the offline source of truth), push/pull a slot's file.
+bool SaveManager::configureCloudSync(const std::string& endpoint) {
+    if (endpoint.empty()) {
+        m_saveProvider = std::make_unique<LocalFileSaveProvider>();
+        return true;
+    }
+    m_saveProvider = std::make_unique<HttpCloudSaveProvider>(endpoint);
+    printf("[SaveManager] Cloud sync configured: %s\n", endpoint.c_str());
+    return true;
+}
+
+bool SaveManager::pushSlotToCloud(int slot) {
+    if (!m_saveProvider) return false;
+    return m_saveProvider->pushToCloud(slotPath(slot));
+}
+
+bool SaveManager::pullSlotFromCloud(int slot) {
+    if (!m_saveProvider) return false;
+    return m_saveProvider->pullFromCloud(slotPath(slot));
+}
 
 void SaveManager::setEncryptionKey(const uint8_t key[32]) {
     std::memcpy(m_encryptKey, key, 32);

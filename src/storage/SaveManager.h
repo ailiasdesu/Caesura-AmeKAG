@@ -59,6 +59,9 @@ public:
     // Pluggable storage provider (SU-6) — default: LocalFileSaveProvider
     void setSaveProvider(std::unique_ptr<class ISaveProvider> provider) override;
     ISaveProvider* getSaveProvider() const override { return m_saveProvider.get(); }
+    bool configureCloudSync(const std::string& endpoint) override;
+    bool pushSlotToCloud(int slot) override;
+    bool pullSlotFromCloud(int slot) override;
 
     std::string captureThumbnailPNG(int width = 320, int height = 180) override;
     void setGfxReady(bool ready) override { s_gfxReady = ready; }

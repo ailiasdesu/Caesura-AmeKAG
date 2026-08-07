@@ -255,6 +255,7 @@ caesura_add_module(Storage
     src/storage/SaveManager.cpp
     src/storage/ISaveProvider.cpp
     src/storage/CloudSaveProvider.cpp
+    src/storage/HttpCloudSaveProvider.cpp
 )
 
 # BackendRegistry only knows API targets. Implementations may depend on the

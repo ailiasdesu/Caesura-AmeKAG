@@ -41,6 +41,12 @@ public:
     virtual bool isEncryptionEnabled() const = 0;
     virtual void setSaveProvider(std::unique_ptr<class ISaveProvider> provider) = 0;
     virtual class ISaveProvider* getSaveProvider() const = 0;
+    // Cloud sync (C7): configure an HTTP cloud-save provider ("" = local
+    // only) and push/pull individual slots. Offline failures return false
+    // and never touch the local slot files.
+    virtual bool configureCloudSync(const std::string& endpoint) = 0;
+    virtual bool pushSlotToCloud(int slot) = 0;
+    virtual bool pullSlotFromCloud(int slot) = 0;
     virtual int currentSchemaVersion() const = 0;
     virtual void registerMigration(int fromVersion, int toVersion,
                                    MigrationFn fn) = 0;
