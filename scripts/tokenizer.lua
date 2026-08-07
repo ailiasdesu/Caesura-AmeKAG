@@ -1,10 +1,11 @@
 -- =============================================================================
---  Caesura (AmeKAG) — tokenizer.lua (KAG 3.0 full grammar)
+--  Caesura (AmeKAG) — tokenizer.lua (KAG Neo-Genesis grammar)
 -- =============================================================================
---  Design: cmd_pat (generic [command param=value ...]) handles 95% of KAG 3.0
---  tags. Only non-standard syntax (labels, inline code, block markers) needs
+--  Design: cmd_pat (generic [command param=value ...]) handles 95% of the
+--  KAG3-compatible tag set (KAG Neo-Genesis is a superset of KAG3).
+--  Only non-standard syntax (labels, inline code, block markers) needs
 --  explicit LPeg patterns. This keeps the grammar compact while covering all
---  167 KAG 3.0 commands.
+--  167 KAG3-compatible commands plus the Neo-Genesis extensions.
 -- =============================================================================
 
 local lpeg = require("lpeg")

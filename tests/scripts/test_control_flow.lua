@@ -175,6 +175,47 @@ do
         table.concat(printed, " | "))
 end
 
+-- ---------------------------------------------------------------------------
+-- Neo-Genesis numeric loops: [for var= start= end= step=]...[endfor] + [break]
+-- (KAG3 had no counter loop; whitepaper example drives these).
+-- ---------------------------------------------------------------------------
+do
+    local loopToks = tokenizer.parse(
+        "[for var=\"i\" start=\"1\" end=\"3\"]" ..
+        "[ch text=\"iter %f.i%\"]" ..
+        "[endfor]" ..
+        "[for var=\"j\" start=\"0\" end=\"10\" step=\"2\"]" ..
+        "[ch text=\"j %f.j%\"]" ..
+        "[break]" ..
+        "[endfor]")
+    local lctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        tokens = loopToks, token_index = 1, current_scene = "loop.ks",
+        label_index = {}, characters = {} }
+    require("kag")  -- registers command schemas before the table is mocked
+    local ldisp = {}
+    local lkag = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) ldisp[#ldisp + 1] = { k, p2 } end
+    end})
+    local co = coroutine.create(function() scheduler.run(lctx, loopToks, 1) end)
+    local lerr
+    while coroutine.status(co) ~= "dead" do
+        local ok, e = coroutine.resume(co)
+        if not ok then lerr = e break end
+    end
+    package.loaded["kag"] = lkag
+    local iters = {}
+    for _, d in ipairs(ldisp) do
+        if d[1] == "ch" then iters[#iters + 1] = d[2].text end
+    end
+    results[#results + 1] = check("numeric for runs 1..3 (%f.i% interpolates)",
+        iters[1] == "iter 1" and iters[3] == "iter 3",
+        table.concat(iters, " | "))
+    -- [break] fires on the first iteration (j=0); step=2 loop never advances.
+    results[#results + 1] = check("for step=2 + break stops at j=0",
+        #iters == 4 and iters[4] == "j 0", table.concat(iters, " | "))
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

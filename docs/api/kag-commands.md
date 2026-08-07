@@ -4,7 +4,8 @@
 
 ﻿# KAG Command Reference — Complete
 
-> Caesura (AmeKAG) KAG 3.0 script syntax. Commands use `[command param="value"]` format in `.ks` files.
+> Caesura (AmeKAG) legacy KAG 3.0 (KAG3) script syntax — the KAG Neo-Genesis
+> contract reference lives in [command-contracts.md](command-contracts.md).
 > All commands are parsed by `scripts/tokenizer.lua` and dispatched by `scripts/scheduler.lua`.
 
 ---

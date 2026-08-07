@@ -1,16 +1,16 @@
 ﻿# Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 30 interfaces · 605 tests / 2968 assertions · 77 KAG commands · 0 circular dependencies**
+> **16 modules · 30 interfaces · 605 tests / 2968 assertions · 78 KAG commands · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 > Live API census: `python scripts/api_stats.py` → `docs/api/api-stats.md`
 
-Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. KAG 3.0 script compatible.
+Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. **Native KAG Neo-Genesis scripting** — the next-generation, modernized iteration of the KAG script language (evolved from KAG3, KAG3-compatible).
 
 ---
 
 ## Features
 
-- **KAG 3.0 scripting** — full command set (77 contract commands), expression evaluator, variables, control flow, `[expr]`/`[iscript]` Lua hybrid embedding, label/choice jumps, scenes, chapter routing
+- **KAG Neo-Genesis scripting** — the next-generation KAG language: 78 contract commands with declarative schemas, expression evaluator, variables, control flow, `[expr]`/`[iscript]` Lua hybrid embedding, label/choice jumps, scenes, chapter routing. See the [KAG Neo-Genesis language whitepaper](docs/design/kag-neo-genesis-language.md).
 - **Lua-first runtime** — direct `backend.*`/`layers.*` API or KAG scheduler; sandboxed strict mode with per-module whitelists
 - **Multi-backend GPU** — D3D11 + OpenGL 4.3 verified on real GPUs; Metal render path complete (embedded GLSL/DXBC/Metal shaders)
 - **Live2D Cubism 5** — D3D11 verified with zero shader warnings; OpenGL/Metal render paths implemented (SDK bundled in `thirdparty/`)
@@ -267,15 +267,16 @@ Caesura(AmeKAG)/
 |----------|----------|---------|
 | [AGENTS.md](AGENTS.md) | AI agents & contributors | Module boundaries, interface rules, build/test gates |
 | [api-stats.md](docs/api/api-stats.md) | Everyone | Live API census (auto-generated: interfaces, bindings, RPC, tests) |
+| [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md) | Script authors | KAG Neo-Genesis language whitepaper: next-generation design, advanced features, KAG3 evolution |
 | [editor-api-reference.md](docs/api/editor-api-reference.md) | Editor developers | RPC endpoints, Lua bindings, KAG commands, C++ interfaces |
 | [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces (30 headers) |
-| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 77 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
+| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 78 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
 | [kag-commands.md](docs/api/kag-commands.md) | Script authors | Deprecated KAG3-compat reference (see command-contracts.md) |
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | Architects | Module dependency topology, data flow |
 | [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | Evaluators | 54 tracked capabilities and readiness limits |
-| [engine-safety-and-qa-mechanisms.md](docs/design/engine-safety-and-qa-mechanisms.md) | QA engineers | Thread safety, sandbox, audit mechanisms |
+| [backend-registry-dependency-guide.md](docs/design/backend-registry-dependency-guide.md) | QA engineers | BackendRegistry dependency matrix; thread-safety, sandbox and audit mechanisms (JobSystem, Lua sandbox, quotas) |
 
 ---
 

@@ -29,7 +29,7 @@ end
 table.sort(cmds)
 
 local out = {}
-out[#out + 1] = "# KAG Command Contracts (auto-generated)"
+out[#out + 1] = "# KAG Neo-Genesis Command Contracts (auto-generated)"
 out[#out + 1] = ""
 out[#out + 1] = "> Generated from the declarative schema registry (`kag/schema.lua`) — do not edit."
 out[#out + 1] = "> Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`"

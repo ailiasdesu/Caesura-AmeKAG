@@ -1,9 +1,22 @@
-# KAG Command Contracts (auto-generated)
+# KAG Neo-Genesis Command Contracts (auto-generated)
 
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (77)
+## Commands (78)
+
+### `[ai_dialog]`
+
+_Category: system · Blocking: yes (waits for completion) · AI-driven dialogue line (LLM, async)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `fallback` | string |  | - | - |
+| `max_wait_ms` | number | 15000 | 100..120000 | - |
+| `model` | string |  | - | - |
+| `name` | string |  | - | - |
+| `prompt` | string | - | - | yes |
+| `system` | string |  | - | - |
 
 ### `[assert]`
 

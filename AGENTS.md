@@ -152,7 +152,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 ### api/ — API 参考文档
 | 文件 | 内容 |
 |------|------|
-| `api/command-contracts.md` | 72 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
+| `api/command-contracts.md` | 78 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
 | `api/lua-modules.md` | 7 个 Lua 模块的 API 参考 |
 
 ### design/ — 架构与设计文档

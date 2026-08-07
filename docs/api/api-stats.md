@@ -8,12 +8,12 @@
 
 | Metric | Count |
 |--------|-------|
-| Module libraries (src/) | 15 (16 with `entry/` — the composition root has no `api/` dir by design) |
+| Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 30 |
 | Pure-virtual interface methods | 270 |
 | Lua binding functions (luaL_Reg entries) | 160 |
 | KAG command handler files | 9 |
-| KAG contract commands (command-contracts.md) | 77 |
+| KAG contract commands (command-contracts.md) | 78 |
 | RPC HTTP endpoints (EditorServer) | 20 |
 | RPC stdin JSON-RPC methods | 25 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 64 |
