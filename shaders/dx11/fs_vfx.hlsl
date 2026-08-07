@@ -18,6 +18,14 @@ float4 main(PSInput i) : SV_TARGET {
         c /= 9.0;
     } else if (u_effect == 3) {
         c = s_tex.Sample(s_samp, uv + float2(u_qx, u_qy));
+    } else if (u_effect == 4) {
+        // Colorblind simulation / contrast matrix (3x3, row-major in the
+        // spare floats: m0 = u_color.rgb, m1 = (u_blurR.x, u_qx, u_qy),
+        // m2 = u_p.xyz). C++ fills these via setColorFilter(preset).
+        float3x3 m = float3x3(u_color.rgb,
+                              float3(u_blurR.x, u_qx, u_qy),
+                              u_p.xyz);
+        c = float4(mul(m, s_tex.Sample(s_samp, uv).rgb), 1.0);
     } else {
         c = s_tex.Sample(s_samp, uv);
     }

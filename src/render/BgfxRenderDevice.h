@@ -100,6 +100,7 @@ public:
     void submitTransition(uint16_t viewId, RenderTextureHandle fromTex, RenderTextureHandle toTex, RenderTextureHandle ruleTex, int method, float progress) override;
     void submitVFX(uint16_t viewId, RenderTextureHandle srcTex, int effect, float fadeAlpha, float fadeR, float fadeG, float fadeB, float blurRadius, float quakeX, float quakeY) override;
     void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
+    bool setColorFilter(ColorFilterPreset preset) override;
 
     // -- Batch protocol (spec [0.3])
     void beginBatch() override;

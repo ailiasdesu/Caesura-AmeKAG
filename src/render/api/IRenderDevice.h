@@ -151,6 +151,21 @@ public:
                            float blurRadius, float quakeX, float quakeY) = 0;
     virtual void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
 
+    // -- Accessibility color filter (Neo-Genesis) ---------------------------
+    // Presets: deuteranopia/protanopia/tritanopia simulation matrices
+    // (Machado et al.), grayscale, high-contrast. The active preset is
+    // applied by submitVFX(effect=4) full-screen passes; returns false on
+    // devices without post-processing support (Null).
+    enum class ColorFilterPreset {
+        None = 0,
+        Deuteranopia,
+        Protanopia,
+        Tritanopia,
+        Grayscale,
+        HighContrast,
+    };
+    virtual bool setColorFilter(ColorFilterPreset preset) = 0;
+
     // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
     virtual RenderUniformHandle getDefaultSampler() const = 0;
     virtual RenderProgramHandle getFallbackProgram() const = 0;

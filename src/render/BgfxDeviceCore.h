@@ -43,6 +43,24 @@ public:
     int getWidth()  const { return m_width; }
     int getHeight() const { return m_height; }
 
+    // Accessibility color filter (Neo-Genesis): the active preset matrix
+    // is filled into effect-4 full-screen VFX passes. nullptr = no filter.
+    void setColorFilterMatrix(const float* m) {
+        if (m) {
+            for (int i = 0; i < 9; ++i) m_colorFilter[i] = m[i];
+            m_colorFilterActive = true;
+        } else {
+            m_colorFilterActive = false;
+        }
+    }
+    const float* getColorFilterMatrix() const {
+        return m_colorFilterActive ? m_colorFilter : nullptr;
+    }
+
+private:
+    float  m_colorFilter[9] = { 0.0f };
+    bool   m_colorFilterActive = false;
+
 private:
     int m_screenOffsetX = 0;
     int m_screenOffsetY = 0;

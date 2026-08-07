@@ -46,6 +46,9 @@ config.accessibility = {
     cc_mode = false,
     high_contrast = false,
     text_scale = 1.0,
+    -- color_filter = "none"|"deuteranopia"|"protanopia"|"tritanopia"|
+    -- "grayscale"|"high_contrast" -- full-screen accessibility matrix.
+    color_filter = "grayscale",
 }
 
 -- AI dialogue (Neo-Genesis): LLM-driven character lines. endpoint is an

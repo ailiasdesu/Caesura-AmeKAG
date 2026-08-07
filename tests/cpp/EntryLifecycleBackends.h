@@ -187,6 +187,7 @@ public:
     void submitVFX(uint16_t, RenderTextureHandle, int, float, float, float,
                    float, float, float, float) override {}
     void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
+    bool setColorFilter(ColorFilterPreset) override { return true; }
     RenderUniformHandle getDefaultSampler() const override { return {}; }
     RenderProgramHandle getFallbackProgram() const override { return {}; }
     const char* getBackendName() const override { return "TestRender"; }

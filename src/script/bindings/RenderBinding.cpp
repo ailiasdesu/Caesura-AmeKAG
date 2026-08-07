@@ -310,6 +310,26 @@ static int lua_Render_submit_transition(lua_State* L) {
     return 1;
 }
 
+// -- Render.set_color_filter(preset) — accessibility color filter
+// "none" | "deuteranopia" | "protanopia" | "tritanopia" | "grayscale" | "high_contrast"
+static int lua_Render_set_color_filter(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    IRenderDevice::ColorFilterPreset preset = IRenderDevice::ColorFilterPreset::None;
+    if (strcmp(name, "deuteranopia") == 0) preset = IRenderDevice::ColorFilterPreset::Deuteranopia;
+    else if (strcmp(name, "protanopia") == 0) preset = IRenderDevice::ColorFilterPreset::Protanopia;
+    else if (strcmp(name, "tritanopia") == 0) preset = IRenderDevice::ColorFilterPreset::Tritanopia;
+    else if (strcmp(name, "grayscale") == 0) preset = IRenderDevice::ColorFilterPreset::Grayscale;
+    else if (strcmp(name, "high_contrast") == 0) preset = IRenderDevice::ColorFilterPreset::HighContrast;
+    else if (strcmp(name, "none") != 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    IRenderDevice* dev = getRender(L);
+    if (!dev) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, dev->setColorFilter(preset) ? 1 : 0);
+    return 1;
+}
+
 // -- Render.submit_vfx(srcTex, effect, fadeAlpha, fadeR, fadeG, fadeB, blurRadius, quakeX, quakeY)
 
 static int lua_Render_submit_vfx(lua_State* L) {
@@ -744,6 +764,7 @@ static const luaL_Reg render_functions[] = {
     { "submit_blend",       lua_Render_submit_blend       },
     { "submit_transition",  lua_Render_submit_transition  },
     { "submit_vfx",         lua_Render_submit_vfx         },
+    { "set_color_filter",   lua_Render_set_color_filter   },
     { "stretch_blt",        lua_Render_stretch_blt        },
     { "affine_blt",         lua_Render_affine_blt         },
     { "fill_viewport",      lua_Render_fill_viewport      },

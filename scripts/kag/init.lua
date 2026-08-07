@@ -13,6 +13,7 @@ local kag_debug  = require("kag_debug")   -- KAG scene debugger (preload for san
 local kag_runner = require("kag_runner")  -- KAG coroutine bridge (preload for sandbox)
 local mods       = require("mods")        -- mod loader (preload for sandbox)
 local replay     = require("replay")      -- input recording/playback (preload for sandbox)
+local layers     = require("layers")      -- layer tree (preload for sandbox; color filter submit)
 local flow       = require("flow")
 
 -- Graphics

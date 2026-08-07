@@ -568,6 +568,38 @@ function Layers.render()
         backend.submit_batch(batch.commands)
     end
 
+    -- Accessibility color filter (Neo-Genesis): config.accessibility
+    -- color_filter = "deuteranopia"|"protanopia"|"tritanopia"|"grayscale"
+    -- |"high_contrast" applies a full-screen matrix pass (VFX effect 4)
+    -- over the composited scene each frame. The preset matrix is synced
+    -- to C++ on every frame (cheap table write) so config changes apply
+    -- immediately; UI text drawn later via render_text is unaffected.
+    -- pcall: layers.render must stay usable in sandboxes/benches where
+    -- the config module is not preloaded (filter simply stays off).
+    local ok_cfg, config = pcall(require, "config")
+    local cf = ok_cfg and config.accessibility and config.accessibility.color_filter
+    if cf and cf ~= "none" then
+        local target = root and root.rt
+        if (not target or target == 0) then
+            -- fallback: topmost visible leaf RT (scene content)
+            local bestZ, bestRt = -1, 0
+            local function walk(n)
+                if not n or n.visible == false then return end
+                if n.rt and n.rt > 0 and (n.z or 0) > bestZ
+                   and not n.children then
+                    bestZ, bestRt = n.z or 0, n.rt
+                end
+                for _, c in ipairs(n.children or {}) do walk(c) end
+            end
+            walk(root)
+            target = bestRt
+        end
+        if target and target > 0 then
+            pcall(backend.set_color_filter, cf)
+            pcall(backend.submit_vfx, target, 4, 1.0, 0, 0, 0, 0, 0, 0)
+        end
+    end
+
     clearDirtyRecursive(root)
 end
 

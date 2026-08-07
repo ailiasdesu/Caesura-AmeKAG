@@ -4,8 +4,7 @@
 
 namespace Caesura {
 
-class NullRenderDevice final : public IRenderDevice {
-public:
+class NullRenderDevice final : public IRenderDevice {public:
     NullRenderDevice();
 
     bool init(void* nativeWindowHandle, int width, int height) override;
@@ -69,6 +68,7 @@ public:
                    float p3, float p4, float p5, float p6) override;
     void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g,
                       uint8_t b, uint8_t a) override;
+    bool setColorFilter(ColorFilterPreset preset) override { return false; }
     void flushBatch() override;
     float textLineHeight() const override;
     RenderUniformHandle getDefaultSampler() const override;

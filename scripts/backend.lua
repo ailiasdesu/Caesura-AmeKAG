@@ -217,6 +217,15 @@ function Backend.submit_vfx(texId, effect, fadeAlpha, fadeR, fadeG, fadeB, blurR
     else return false end
 end
 
+-- Accessibility color filter (Neo-Genesis): preset name -> C++ preset
+-- matrix (deuteranopia/protanopia/tritanopia/grayscale/high_contrast/
+-- none), applied by subsequent effect-4 VFX passes.
+function Backend.set_color_filter(preset)
+    local be = get_backend()
+    if be then return be.render("set_color_filter", preset)
+    else return false end
+end
+
 function Backend.submit_stretch_blt(dst_rt, dst_rect, src_rt, src_rect, filter_id)
     local be = get_backend()
     if be then return be.render("submit_stretch_blt", dst_rt, dst_rect, src_rt, src_rect, filter_id)

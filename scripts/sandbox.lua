@@ -276,6 +276,7 @@ local RENDER_WHITELIST = {
     submit_vfx          = true,
     submit_stretch_blt  = true,
     submit_affine_blt   = true,
+    set_color_filter    = true,  -- accessibility filter presets
     -- Text rendering state (font face/size/color)
     text_set_font       = true,
     text_reset_state    = true,

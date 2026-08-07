@@ -117,7 +117,22 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
         effect,
         { 0.0f, 0.0f, 0.0f }
     };
-    bgfx::setUniform(m_state->shaders->getVFXParams(), &params, 3);
+    // Effect 4 (colorblind/contrast filter): C++ fills the matrix rows
+    // from the active preset (setColorFilter); m0 = color.rgb, m1 =
+    // (blurQuake.x, blurQuake.z, blurQuake.w), m2 = padding.xyz.
+    VFXParams filtered = params;
+    if (effect == 4) {
+        const float* m = m_state->device->getColorFilterMatrix();
+        if (m) {
+            filtered.color[0] = m[0]; filtered.color[1] = m[1];
+            filtered.color[2] = m[2]; filtered.color[3] = fadeAlpha;
+            filtered.blurQuake[0] = m[3]; filtered.blurQuake[1] = 0.0f;
+            filtered.blurQuake[2] = m[4]; filtered.blurQuake[3] = m[5];
+            filtered.padding[0] = m[6]; filtered.padding[1] = m[7];
+            filtered.padding[2] = m[8];
+        }
+    }
+    bgfx::setUniform(m_state->shaders->getVFXParams(), &filtered, 3);
 
     submitFullscreenQuad(viewId, m_state->shaders->getVFXProgram(), 0, 0, (float)m_state->device->getWidth(), (float)m_state->device->getHeight(), srcTex, m_state->shaders->getDefaultSampler(), BGFX_INVALID_HANDLE, nullptr, 0);
 }

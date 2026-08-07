@@ -578,6 +578,7 @@ end
 local cc_bar_tex = nil  -- cached solid texture for the CC backing bar
 function kag_runner.render()
     if not ctx then return false, "no-context" end
+    local config = require("config")
     local ok, n = true, require("kag.text_scene").render(ctx)
     -- Closed captions (accessibility): a voiced line is drawn at a fixed
     -- bottom position, independent of the textbox, while cc_mode is on.
@@ -608,6 +609,7 @@ function kag_runner.render()
         end
         pcall(backend.render_text, text, x, y, 255, 255, 255, 255)
     end
+
     return ok, n
 end
 
