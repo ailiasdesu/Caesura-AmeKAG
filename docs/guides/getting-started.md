@@ -135,3 +135,18 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 - Read the [Command Contracts](api/command-contracts.md) for all available commands (auto-generated, authoritative)
 - Read the [Lua Module API](api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
+
+## Demo/视频导出（差异化功能）
+
+录制的回放（见 replay 系统）可以驱动游戏自身并逐帧导出 PNG 序列：
+
+```bash
+# 1) 录制一段输入（游戏中执行 [replay mode="record"] 或配置回放）
+# 2) 导出为帧序列（需要真实 GPU 窗口；--headless 会被自动忽略）
+./build/Debug/CaesuraAmeKAG.exe --export-replay demo_replay.json --export-dir export_out --frames 300
+# 3) 用 ffmpeg 合成视频
+ffmpeg -framerate 60 -i export_out/frame_%05d.png -c:v libx264 -pix_fmt yuv420p trailer.mp4
+```
+
+引擎截图回调（`BgfxDebugCallback::screenShot`）把 bgfx readback 写为
+PNG（RGBA/BGRA 自动处理），修复了此前 RPC `getFrame` 恒失败的缺陷。

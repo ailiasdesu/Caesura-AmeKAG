@@ -655,6 +655,11 @@ int main(int argc, char* argv[]) {
     std::string renderBackend;
     // Optional deterministic frame limit: --frames N (GPU smoke runs; 0 = unlimited)
     uint32_t frameLimit = 0;
+    // Optional demo/video export: --export-replay <replay.json> drives the
+    // recorded input while each rendered frame is written as PNG into
+    // --export-dir (default export_out). Bounded by --frames N.
+    std::string exportReplayFile;
+    std::string exportDir = "export_out";
     // Editor auth token comes from the environment, not argv: argv is
     // world-readable via /proc/<pid>/cmdline on Linux, so a CLI flag would
     // not protect against other local users. Set CAESURA_EDITOR_TOKEN to
@@ -681,7 +686,19 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Invalid --frames value: %s\n", argv[i]);
                 return 1;
             }
+        } else if (arg == "--export-replay" && i + 1 < argc) {
+            exportReplayFile = argv[++i];
+        } else if (arg == "--export-dir" && i + 1 < argc) {
+            exportDir = argv[++i];
         }
+    }
+
+    // Demo/video export needs a real GPU window (bgfx readback): --headless
+    // uses NullRenderDevice and cannot capture frames.
+    if (!exportReplayFile.empty() && headless) {
+        fprintf(stderr, "[main] --export-replay requires a GPU window;"
+                        " ignoring --headless.\n");
+        headless = false;
     }
 
     printf("============================================\n");
@@ -700,6 +717,8 @@ int main(int argc, char* argv[]) {
     config.enableDebugger = headless || editorMode;
     config.renderBackend  = renderBackend.empty() ? nullptr : renderBackend.c_str();
     config.frameLimit     = frameLimit;
+    config.exportReplayFile = exportReplayFile;
+    config.exportDir        = exportDir;
 
     // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
     if (!headless || editorMode) {
@@ -811,6 +830,35 @@ int main(int argc, char* argv[]) {
 
     // C3+W8: lockdown script env after ALL scripts are preloaded
     engine.lua().lockdownScriptEnv();
+
+    // Demo/video export: activate replay playback before the main loop.
+    // kag_runner.update() fires the recorded events (same on_click path);
+    // Engine::run writes one PNG per frame into the export dir.
+    if (!exportReplayFile.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(exportDir, ec);
+        lua_State* exL = engine.lua().state();
+        if (exL) {
+            lua_getglobal(exL, "require");
+            lua_pushstring(exL, "replay");
+            if (lua_pcall(exL, 1, 1, 0) == LUA_OK && lua_istable(exL, -1)) {
+                lua_getfield(exL, -1, "set_mode");
+                if (lua_isfunction(exL, -1)) {
+                    lua_pushvalue(exL, -2);  // self
+                    lua_pushstring(exL, "playback");
+                    lua_pushstring(exL, exportReplayFile.c_str());
+                    if (lua_pcall(exL, 3, 0, 0) != LUA_OK) {
+                        fprintf(stderr, "[main] replay set_mode failed: %s\n",
+                                lua_tostring(exL, -1) ? lua_tostring(exL, -1)
+                                                      : "unknown");
+                    }
+                }
+            }
+            lua_settop(exL, 0);
+        }
+        printf("[main] Export mode: replay %s -> %s (frames=%u)\n",
+               exportReplayFile.c_str(), exportDir.c_str(), frameLimit);
+    }
 
     engine.run();
     engine.shutdown();

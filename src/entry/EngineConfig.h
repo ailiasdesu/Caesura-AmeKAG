@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <string>
 #include <utility>
 
 // Minimal forward declarations to avoid transitive includes
@@ -49,7 +50,9 @@ struct EngineConfig {
         , editorMode(other.editorMode)
         , enableDebugger(other.enableDebugger)
         , renderBackend(other.renderBackend)
-        , frameLimit(other.frameLimit) {}
+        , frameLimit(other.frameLimit)
+        , exportReplayFile(std::move(other.exportReplayFile))
+        , exportDir(std::move(other.exportDir)) {}
 
     // Required core subsystems in GPU mode (Engine owns via unique_ptr)
     IRenderDevice*    render          = nullptr;
@@ -88,6 +91,15 @@ struct EngineConfig {
     // Maximum frames to render before Engine::run() exits (0 = unlimited).
     // Enables deterministic, CI-reproducible GPU smoke runs via --frames N.
     uint32_t          frameLimit      = 0;
+
+    // Demo/video export (Neo-Genesis): when exportReplayFile is non-empty
+    // the engine activates replay playback (scripts/replay.lua) before the
+    // main loop and writes one PNG per rendered frame into exportDir
+    // (frame_%05u.png). Requires a real GPU window; --frames N bounds the
+    // export length. The recorded input drives the game itself, producing
+    // a trailer/attract sequence deterministically.
+    std::string       exportReplayFile;
+    std::string       exportDir       = "export_out";
 };
 
 } // namespace Caesura

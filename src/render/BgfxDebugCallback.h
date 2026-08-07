@@ -42,7 +42,9 @@ public:
     uint32_t cacheReadSize(uint64_t) override { return 0; }
     bool cacheRead(uint64_t, void*, uint32_t) override { return false; }
     void cacheWrite(uint64_t, const void*, uint32_t) override {}
-    void screenShot(const char*, uint32_t, uint32_t, uint32_t, bgfx::TextureFormat::Enum, const void*, uint32_t, bool) override {}
+    void screenShot(const char* _name, uint32_t _width, uint32_t _height,
+                    uint32_t _depth, bgfx::TextureFormat::Enum _format,
+                    const void* _data, uint32_t _size, bool _flipY) override;
     void captureBegin(uint32_t, uint32_t, uint32_t, bgfx::TextureFormat::Enum, bool) override {}
     void captureEnd() override {}
     void captureFrame(const void*, uint32_t) override {}

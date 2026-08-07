@@ -698,6 +698,18 @@ void Engine::run(const OwnerPump& ownerPump) {
         }
 
         render(static_cast<float>(dt));
+
+        // -- Demo/video export: one PNG per rendered frame (--export-replay
+        // + --frames N). The screenshot is requested AFTER render() and
+        // BEFORE advanceFrame() so the readback fires on THIS frame's
+        // advance -- the debug callback writes frame_%05u.png.
+        if (!m_config.exportReplayFile.empty() && m_renderDevice) {
+            char shotPath[512];
+            snprintf(shotPath, sizeof(shotPath), "%s/frame_%05u.png",
+                     m_config.exportDir.c_str(), m_frameCount);
+            m_renderDevice->requestScreenshot(shotPath);
+        }
+
         if (m_renderDevice) m_renderDevice->advanceFrame();
 
         // -- Reserved: 3D mini-game update hook (CPU work, future JobSystem target) --
