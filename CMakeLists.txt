@@ -313,6 +313,11 @@ if(CAESURA_LIVE2D)
                 src/live2d/Live2D/MetalNativeRenderPath.h
                 src/live2d/Live2D/MetalNativeRenderPath.cpp
             )
+            # Metal render path uses Objective-C++ (id<MTLDevice> etc.).
+            set_source_files_properties(
+                ${CMAKE_SOURCE_DIR}/src/live2d/Live2D/MetalNativeRenderPath.cpp
+                PROPERTIES LANGUAGE OBJCXX
+            )
         elseif(UNIX)
             set_target_properties(Live2DCubismCore PROPERTIES
                 IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/${CAESURA_CUBISM_ARCH}/libLive2DCubismCore.a"
@@ -395,13 +400,18 @@ if(CAESURA_LIVE2D)
         target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_LIVE2D)
         message(STATUS "Live2D: ${CUBISM_FRAMEWORK_RENDERER} renderer for ${CMAKE_SYSTEM_NAME}/${CAESURA_CUBISM_ARCH}")
 
-        # CubismRenderer_D3D11 loads FrameworkShaders/*.fx at runtime (relative
-        # to the working directory); copy them next to the executable.
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CUBISM_FRAMEWORK_DIR}/src/Rendering/D3D11/Shaders"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/FrameworkShaders"
-            COMMENT "Copying Cubism FrameworkShaders to output directory...")
+        # Cubism renderers load FrameworkShaders/* at runtime (relative to
+        # the working directory); copy the shaders for the ACTIVE renderer:
+        # D3D11 loads .fx, OpenGL loads .vert/.frag (C1: the GL copy was
+        # missing -- models would render white/nothing on Linux/macOS).
+        set(CUBISM_SHADER_SRC_DIR "${CUBISM_FRAMEWORK_DIR}/src/Rendering/${CUBISM_FRAMEWORK_RENDERER}/Shaders")
+        if(EXISTS "${CUBISM_SHADER_SRC_DIR}")
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CUBISM_SHADER_SRC_DIR}"
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/FrameworkShaders"
+                COMMENT "Copying Cubism FrameworkShaders (${CUBISM_FRAMEWORK_RENDERER}) to output directory...")
+        endif()
     endif()
 endif()
 message(STATUS "Caesura (AmeKAG) configured successfully.")
