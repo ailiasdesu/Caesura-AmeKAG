@@ -561,6 +561,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 | `kagDebugContinue` | — | 恢复执行 |
 | `kagDebugStep` | — | 单步：下一个 token 前暂停 |
 | `kagInspectScopes` | `scope`（`f`/`sf`/`tf`/`mp`/`lf`/`all`，缺省 all） | 返回变量作用域 JSON |
+| `kagReloadScene` | `scene`（可选；缺省当前场景） | 场景热重载：重解析 .ks（缓存失效），按内容/最近 label 重映射执行位置，保留游戏状态；非当前场景仅失效缓存 |
 
 示例：
 
@@ -568,6 +569,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 {"jsonrpc":"2.0","id":1,"method":"kagSetBreakpoint","params":{"scene":"assets/script/main.ks","cmd":"ch"}}
 {"jsonrpc":"2.0","id":2,"method":"kagDebugContinue"}
 {"jsonrpc":"2.0","id":3,"method":"kagInspectScopes","params":{"scope":"f"}}
+{"jsonrpc":"2.0","id":4,"method":"kagReloadScene"}
 ```
 
 Lua 侧 API：`require("kag_debug")`（`set_breakpoint`/`step`/`continue_run`/`inspect`/`serialize_json`）。运行中通过编辑器 `eval` 也可直接调用 `kag_runner.debug_resume()` / `kag_runner.debug_step()`。
