@@ -24,15 +24,6 @@ extern "C" {
 
 namespace Caesura {
 
-// -- Helper: determine if a path should use pl_mpeg ------------------------
-static bool shouldUsePlmpeg(const char* path) {
-    const char* ext = strrchr(path, '.');
-    if (!ext) return false;
-    // case-insensitive comparison
-    const char* lower = ext;
-    return (strcmp(lower, ".mpg") == 0 || strcmp(lower, ".mpeg") == 0);
-}
-
 // pl_mpeg audio callback: appends decoded interleaved float PCM to the
 // owning VideoState queue (the callback runs on the thread that calls
 // plm_decode_video/audio -- our worker -- so the queue is protected by

@@ -78,16 +78,3 @@ TEST_CASE("ParticleSystem::aliveCount within MAX_PARTICLES") {
     Caesura::ParticleSystem ps;
     int cnt = ps.aliveCount(); CHECK(cnt <= 1024);
 }
-
-TEST_CASE("processSimBatch no crash on empty") {
-    Caesura::SimBatch batch;
-    batch.particles = nullptr;
-    batch.startIdx = 0;
-    batch.endIdx = 0;
-    batch.dt = 0.016f;
-    batch.gravityX = 0;
-    batch.gravityY = 0;
-    batch.deadCount = 0;
-    Caesura::processSimBatch(batch);
-    CHECK(batch.deadCount == 0);
-}

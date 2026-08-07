@@ -25,18 +25,6 @@ struct Emitter : ParticleEmitterConfig {
     float timer = 0.0f;
 };
 
-struct SimBatch {
-    Particle* particles = nullptr;
-    uint32_t  startIdx  = 0;
-    uint32_t  endIdx    = 0;
-    float     dt        = 0.0f;
-    float     gravityX  = 0.0f;
-    float     gravityY  = 0.0f;
-    int       deadCount = 0;
-};
-
-void processSimBatch(SimBatch& batch);
-
 // ============================================================================
 // ParticleSystem -- implements IParticleSystem
 // ============================================================================
