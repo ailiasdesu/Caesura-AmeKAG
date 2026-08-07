@@ -40,6 +40,10 @@ public:
     bgfx::TextureHandle getViewportTexture(ViewportHandle h);
     bgfx::FrameBufferHandle getRttFb(ViewportHandle h);
     void flushAllRTT();
+    // Cached 1x1 solid-color texture (fillViewport hot path): created once
+    // per color, destroyed with the other RTT resources. fillViewport used
+    // to create a texture EVERY call (per-frame GPU churn).
+    bgfx::TextureHandle getSolidPixel(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
     int getWidth()  const { return m_width; }
     int getHeight() const { return m_height; }
 
@@ -72,6 +76,8 @@ private:
     struct RTTEntry { bgfx::FrameBufferHandle fb = BGFX_INVALID_HANDLE; bgfx::TextureHandle tex = BGFX_INVALID_HANDLE; uint16_t viewId = VIEW_RTT; };
     uint32_t m_nextHandle = 1;
     std::unordered_map<uint32_t, RTTEntry> m_rttMap;
+    bgfx::TextureHandle m_solidPixel = BGFX_INVALID_HANDLE;
+    uint32_t            m_solidPixelKey = 0;
 };
 
 } // namespace Caesura

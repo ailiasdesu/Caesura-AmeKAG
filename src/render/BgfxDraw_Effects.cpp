@@ -144,10 +144,7 @@ void BgfxDraw::fillViewport(ViewportHandle handle,
     uint16_t vpView = BgfxDeviceCore::VIEW_RTT;
     bgfx::setViewFrameBuffer(vpView, fb);
 
-    uint8_t pixel[4] = { r, g, b, a };
-    const bgfx::Memory* mem = bgfx::makeRef(pixel, sizeof(pixel), nullptr, nullptr);
-    bgfx::TextureHandle colorTex = bgfx::createTexture2D(1, 1, false, 1,
-        bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_POINT, mem);
+    bgfx::TextureHandle colorTex = m_state->device->getSolidPixel(r, g, b, a);
 
     if (!bgfx::isValid(colorTex) || !bgfx::isValid(m_state->shaders->getFallbackProgram())) {
         bgfx::setViewFrameBuffer(vpView, BGFX_INVALID_HANDLE);
@@ -163,7 +160,6 @@ void BgfxDraw::fillViewport(ViewportHandle handle,
         .end();
 
     if (bgfx::getAvailTransientVertexBuffer(4, layout) < 4) {
-        bgfx::destroy(colorTex);
         bgfx::setViewFrameBuffer(vpView, BGFX_INVALID_HANDLE);
         return;
     }
@@ -178,7 +174,6 @@ void BgfxDraw::fillViewport(ViewportHandle handle,
     uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
     bgfx::TransientIndexBuffer tib;
     if (bgfx::getAvailTransientIndexBuffer(6) < 6) {
-        bgfx::destroy(colorTex);
         bgfx::setViewFrameBuffer(vpView, BGFX_INVALID_HANDLE);
         return;
     }

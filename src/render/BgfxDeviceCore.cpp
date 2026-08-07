@@ -308,6 +308,27 @@ void BgfxDeviceCore::flushAllRTT() {
         }
     }
     m_rttMap.clear();
+    if (bgfx::isValid(m_solidPixel)) {
+        bgfx::destroy(m_solidPixel);
+        m_solidPixel = BGFX_INVALID_HANDLE;
+        m_solidPixelKey = 0;
+    }
+}
+
+bgfx::TextureHandle BgfxDeviceCore::getSolidPixel(uint8_t r, uint8_t g,
+                                                  uint8_t b, uint8_t a) {
+    const uint32_t key = (uint32_t(r) << 24) | (uint32_t(g) << 16)
+                       | (uint32_t(b) << 8) | uint32_t(a);
+    if (bgfx::isValid(m_solidPixel) && key == m_solidPixelKey) {
+        return m_solidPixel;
+    }
+    if (bgfx::isValid(m_solidPixel)) bgfx::destroy(m_solidPixel);
+    const uint8_t pixel[4] = { r, g, b, a };
+    const bgfx::Memory* mem = bgfx::makeRef(pixel, sizeof(pixel), nullptr, nullptr);
+    m_solidPixel = bgfx::createTexture2D(1, 1, false, 1,
+        bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_POINT, mem);
+    m_solidPixelKey = key;
+    return m_solidPixel;
 }
 
 bgfx::FrameBufferHandle BgfxDeviceCore::getRttFb(ViewportHandle handle) {
