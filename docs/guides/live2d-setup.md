@@ -127,14 +127,15 @@ assets/live2d/
 
 ## 当前实现状态（2026-07-31 审计）
 
-> 状态更新（2026-08-01）：Cubism SDK for Native 5-r.5 已下载并在本地完成 **Windows D3D11 路径首次真实编译+运行验证**（详见下文「2026-08-01 验证记录」）。`CAESURA_LIVE2D` 默认仍 OFF，CI 不编译 Cubism 路径；D3D11 之外的 OpenGL 路径与 Metal stub 状态不变。
+> 状态更新（2026-08-07）：**D3D11 路径再次全量编译+运行验证**（`CAESURA_LIVE2D=ON` 全量构建零错误；editor HTTP RPC `POST /api/live2d/load {modelPath:"models/Haru.model3.json"}` 返回 modelId 1，模型加载成功）。**Metal 路径由 stub 完整实现**（ObjC++ 离屏读回）；**OpenGL shader 部署缺失已修复**（FrameworkShaders 随激活渲染器复制）。OpenGL/Metal 运行验证仍需 Linux/macOS 硬件。`CAESURA_LIVE2D` 默认仍 OFF。
 
 | 渲染路径 | 平台 | 状态 | 说明 |
 |----------|------|------|------|
 | `D3D11NativeRenderPath` | Windows | ✓ 已验证（2026-08-01） | 首次真实编译+运行：Haru.moc3 加载渲染成功、无设备丢失。要点：共享 bgfx D3D11 设备，`SetConstantSettings(1, device)`，Cubism 渲染进共享纹理（RTV），`bgfx::overrideInternal()` 交给 bgfx；模型纹理经 D3D11 SRV + `BindTexture`；shader 依赖 `FrameworkShaders/*.fx`（构建时复制到输出目录） |
 | `OpenGLSharedRenderPath` | Windows/Linux/macOS | 代码就绪·未验证 | 从未编译。注意：CMake 目前只在 Apple/Linux 平台加入该源文件，Windows 仅编译 D3D11 路径 |
 | `OpenGLReadbackRenderPath` | Windows/Linux/macOS | 代码就绪·未验证 | FBO + `glReadPixels` + `bgfx::updateTexture2D` 读回方案；OpenGL 分支 init 失败时的回退路径 |
-| `MetalNativeRenderPath` | macOS/iOS | STUB 未实现 | `name()` 返回 `"MetalNative(STUB)"`，`init()` 恒返回 false；需要 macOS 开发者实现并验证 |
+| `MetalNativeRenderPath` | macOS/iOS | 实现完成·待 macOS 验证 | 2026-08-07 由 stub 完整实现：共享 bgfx MTLDevice，每模型 Cubism 离屏目标 + 命令队列渲染，同步读回上传 bgfx 纹理（与 GL 读回同契约）。CMake 以 OBJCXX 编译（`set_source_files_properties`），仅 `__APPLE__` 生效。需 macOS 实机验证 |
+| OpenGL shader 部署 | Linux/macOS | ✓ 修复（2026-08-07） | FrameworkShaders 复制改为随激活渲染器（D3D11 .fx / OpenGL .vert+.frag）——此前 GL 复制缺失，Linux/macOS 模型运行时无 shader（C1 闭环） |
 | `NullAnimationBackend`（PNG 静态降级） | 全部平台 | ✅ 已测试的默认降级 | 无 SDK 时的默认路径，由 `tests/cpp/test_live2d.cpp` 覆盖；仅支持静态 PNG 立绘 |
 
 要点：
