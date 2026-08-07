@@ -16,6 +16,7 @@
 #include "platform/NullPlatformBackend.h"
 #include "steam/NullSteamBackend.h"
 
+#include <cstring>
 #include <string>
 
 extern "C" {
