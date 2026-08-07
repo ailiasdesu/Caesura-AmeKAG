@@ -83,7 +83,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| R1 | Multi-backend GPU (D3D11/OpenGL/Metal) | `IRenderDevice` | Partial: **D3D11 + OpenGL 4.3 real-GPU verified 2026-08-06** (`--backend opengl` renders demo 240 frames, all 6 embedded GLSL 430 programs compile, clean exit; `--backend dx11` baseline green); Metal still requires macOS hardware |
+| R1 | Multi-backend GPU (D3D11/OpenGL/Metal) | `IRenderDevice` | ✓ D3D11 + OpenGL 4.3 real-GPU verified; Metal engine-side complete (embedded shaders, backend selection, Live2D Metal render path implemented) -- runtime validation requires macOS hardware |
 | R2 | 3-layer compositing (BG/FG/MSG) with dirty-rect optimisation | `ILayerManager` | ✓ |
 | R3 | Async texture loading with budget enforcement + LRU eviction | `ITextureManager` | ✓ |
 | R4 | 2D GPU particle system (emitters, physics, colour) | `IParticleSystem` | ✓ |
@@ -142,14 +142,14 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback tested. **D3D11 (Windows) path verified 2026-08-01** (first real compile + Haru.moc3 load/render via HTTP RPC, no device loss); OpenGL paths still unverified; Metal is a stub. Cubism requires manual SDK download — without it all render paths are never compiled. See `docs/guides/live2d-setup.md` |
+| C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback + D3D11 (Windows) verified; **Metal render path fully implemented (was stub); GL shader deployment fixed (active-renderer FrameworkShaders copy)** -- GL/Metal runtime validation needs Linux/macOS hardware. SDK is bundled in thirdparty/. See `docs/guides/live2d-setup.md` |
 | C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | ✓ lifecycle + JSON scenes + 20-API Lua binding (`mini_game` global, sandbox-whitelisted); real-GPU D3D11 child-process test (enter→update→render→leave) + programmatic `enter(0)` mode; demo_minigame.lua runs end-to-end on D3D11 and OpenGL 4.3 |
 | C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |
 | C5 | CARC archive packaging (compress, encrypt, sign) | `IArchiveWriter` | ✓ |
 | C6 | Ed25519 digital signature (tamper detection for .carc files) | `ICryptoEngine` | ✓ |
-| C7 | Cloud save provider abstraction (local / remote pluggable) | `ISaveProvider` | Partial: provider abstraction/local path; remote provider not release-verified |
-| C8 | Steamworks integration (achievements, stats, cloud saves) | `ISteamBackend` | Conditional: SDK disabled by default; Null backend tested |
+| C7 | Cloud save provider abstraction (local / remote pluggable) | `ISaveProvider` | ✓ abstraction + local path + **HTTP cloud provider (push/pull/delete against a REST endpoint, offline degrade) + Lua save.configure_cloud/cloud_push/cloud_pull; mock-server round trip tested** |
+| C8 | Steamworks integration (achievements, stats, cloud saves) | `ISteamBackend` | Conditional (needs Steam SDK/account): full Lua surface (19 APIs incl. cloud list/write/read/delete/quota), overlay/stats/store fixes, Null-backend tested; real SDK round trip needs a Steam dev account |
 | C9 | Asset provider chain (Dir → CARC, priority-ordered, integrity check) | `IAssetProvider` | ✓ |
 
 ### Development Tools (7 capabilities)
@@ -174,7 +174,7 @@ graph LR
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
-| P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | Partial: core mapping implemented + 18 unit tests; wired into Engine lifecycle (SDL app-event watch → onPause/onResume, registered via BackendRegistry); no native mobile SDK integration |
+| P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | ✓ core mapping + lifecycle + **SDL finger events bridged (normalized -> pixel) + orientation change events (Lua _G.onOrientationChanged); 87 unit tests**; native mobile SDK integration still needs a device |
 
 ---
 
