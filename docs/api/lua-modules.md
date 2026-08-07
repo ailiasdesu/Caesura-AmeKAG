@@ -284,14 +284,18 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `load` | `(slot) → table` | Load game state from slot |
 | `list_saves` | `() → table` | List all save slots with metadata |
 | `delete_save` | `(slot)` | Delete save slot |
+| `configure_cloud` | `(endpoint) → bool` | Configure HTTP cloud-save endpoint ("" = local only); offline-safe |
+| `cloud_push` | `(slot) → bool` | Push slot file to the cloud |
+| `cloud_pull` | `(slot) → bool` | Pull slot file from the cloud |
 
 ---
 
-## Steam (Conditional)
+## Steam (unconditionally registered; safe Null defaults without the SDK)
 
 ```lua
--- Global: Steam
--- Only available when compiled with CAESURA_HAS_STEAM
+-- Global: steam
+-- Always present. Without the Steam SDK every call returns a safe
+-- default (false / 0 / "" / {}) instead of a nil-function error.
 ```
 
 | Function | Signature | Description |
@@ -300,3 +304,11 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `get_user_name` | `() → string` | Steam display name |
 | `unlock_achievement` | `(id)` | Unlock achievement by ID |
 | `set_rich_presence` | `(key, value)` | Set Rich Presence key-value pair |
+| `cloud_write` | `(name, data) → bool` | Write a cloud-save file (Remote Storage) |
+| `cloud_read` | `(name) → string/nil` | Read a cloud file; nil when missing |
+| `cloud_file_size` | `(name) → int` | Cloud file size in bytes |
+| `cloud_file_exists` | `(name) → bool` | Cloud file existence |
+| `cloud_delete` | `(name) → bool` | Delete a cloud file |
+| `cloud_quota_total` | `() → int` | Total cloud quota bytes |
+| `cloud_quota_used` | `() → int` | Used cloud bytes |
+| `cloud_list` | `() → table` | Cloud file name list (up to 256) |

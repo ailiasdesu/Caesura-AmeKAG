@@ -176,7 +176,7 @@
 
 | 请求字段 | 类型 | 必填 | 默认值 | 说明 |
 |---------|------|------|--------|------|
-| `modelPath` | string | 是 | — | 模型或静态图片路径 |
+| `modelPath` | string | 是 | — | 模型或静态图片路径。**Live2D 模型必须指向 `.model3.json`**（引擎把它当 setting 解析；指向 `.moc3` 会返回 500 `animation_load_failed`）。纹理/动作/物理文件按 setting 内的相对路径在模型同目录解析 |
 | `x` | number | 否 | `0` | 展示位置 X；必须是有限数值 |
 | `y` | number | 否 | `0` | 展示位置 Y；必须是有限数值 |
 | `scale` | number | 否 | `1` | 展示缩放；必须是有限正数 |
@@ -385,11 +385,14 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 | `load` | `(slot: int) → table` | 从槽位加载 |
 | `list_saves` | `() → table` | 列出所有存档 |
 | `delete_save` | `(slot: int)` | 删除存档 |
+| `configure_cloud` | `(endpoint: string) → bool` | 配置 HTTP 云存档端（`""` 恢复本地）；离线降级不抛错 |
+| `cloud_push` | `(slot: int) → bool` | 把槽位文件推送到云端 |
+| `cloud_pull` | `(slot: int) → bool` | 从云端拉取槽位文件到本地 |
 
-### 2.7 Steam 模块（条件编译）
+### 2.7 Steam 模块（无条件注册，无 SDK 时安全降级）
 
 ```lua
--- 全局变量: Steam（仅当 CAESURA_HAS_STEAM 定义时可用）
+-- 全局变量: Steam（始终可用；无 Steam SDK 时由 Null 后端返回安全默认值）
 ```
 
 | 函数 | 签名 | 说明 |
@@ -398,6 +401,14 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 | `get_user_name` | `() → string` | Steam 昵称 |
 | `unlock_achievement` | `(id)` | 解锁成就 |
 | `set_rich_presence` | `(key, value)` | 设置 Rich Presence |
+| `cloud_write` | `(name, data) → bool` | 写入云存档文件 |
+| `cloud_read` | `(name) → string/nil` | 读取云存档文件（不存在返回 nil） |
+| `cloud_file_size` | `(name) → int` | 云文件字节数 |
+| `cloud_file_exists` | `(name) → bool` | 云文件是否存在 |
+| `cloud_delete` | `(name) → bool` | 删除云文件 |
+| `cloud_quota_total` | `() → int` | 云配额总字节 |
+| `cloud_quota_used` | `() → int` | 云已用字节 |
+| `cloud_list` | `() → table` | 云文件列表（最多 256 项） |
 
 ---
 
