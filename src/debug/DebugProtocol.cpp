@@ -724,6 +724,10 @@ bool DebugProtocol::onLineHook(lua_State* L, lua_Debug* ar) {
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         if (!m_initialized || m_runState != RunState::Running) return false;
+        // Fast path: no breakpoints and no step mode -- the common case for
+        // a normally running game. Skip lua_getinfo/normalize/stackDepth
+        // (string ops per executed line) entirely.
+        if (m_breakpoints.empty() && m_stepMode == StepMode::None) return false;
     }
 
     if (m_hotReload.scriptState() == ScriptState::RELOADING) return false;

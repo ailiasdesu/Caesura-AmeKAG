@@ -19,36 +19,62 @@ extern "C" {
 namespace Caesura {
 
 // -- Helpers: resolve backend pointers from Lua registry (set by Engine::initScriptingPhase)
+// Hot-path optimization: registry string lookups happen on every binding
+// call (render_text/submit_batch run thousands of times per frame). Each
+// getter caches its pointer after first resolution; the caches are cleared
+// by registerRenderBinding (a fresh lua_State in tests must re-resolve
+// against its own registry). Backend instances are stable for the engine's
+// lifetime (device recovery mutates, never replaces).
+
+static ITextureManager* g_cachedTexture = nullptr;
+static IRenderDevice*   g_cachedRender  = nullptr;
+static IVideoPlayer*    g_cachedVideo   = nullptr;
+static IAsyncLoader*    g_cachedAsync   = nullptr;
+
+static void invalidateBindingCaches() {
+    g_cachedTexture = nullptr;
+    g_cachedRender  = nullptr;
+    g_cachedVideo   = nullptr;
+    g_cachedAsync   = nullptr;
+}
 
 static ITextureManager* getTexture(lua_State* L) {
+    if (g_cachedTexture) return g_cachedTexture;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.TextureManager");
     auto* tm = (ITextureManager*)lua_touserdata(L, -1);
     lua_pop(L, 1);
     if (!tm) tm = BackendRegistry::instance().getTextureManager();
+    g_cachedTexture = tm;
     return tm;  // set by Engine::initScriptingPhase; null in test env OK
 }
 
 static IRenderDevice* getRender(lua_State* L) {
+    if (g_cachedRender) return g_cachedRender;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.RenderDevice");
     auto* dev = (IRenderDevice*)lua_touserdata(L, -1);
     lua_pop(L, 1);
     if (!dev) dev = BackendRegistry::instance().getRenderDevice();
+    g_cachedRender = dev;
     return dev;
 }
 
 static IVideoPlayer* getVideo(lua_State* L) {
+    if (g_cachedVideo) return g_cachedVideo;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.VideoPlayer");
     auto* vp = (IVideoPlayer*)lua_touserdata(L, -1);
     lua_pop(L, 1);
     if (!vp) vp = BackendRegistry::instance().getVideoPlayer();
+    g_cachedVideo = vp;
     return vp;  // nullable — headless mode may not have VideoPlayer
 }
 
 static IAsyncLoader* getAsync(lua_State* L) {
+    if (g_cachedAsync) return g_cachedAsync;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.AsyncLoader");
     auto* al = (IAsyncLoader*)lua_touserdata(L, -1);
     lua_pop(L, 1);
     if (!al) al = BackendRegistry::instance().getAsyncLoader();
+    g_cachedAsync = al;
     return al;
 }
 
@@ -788,6 +814,9 @@ static const luaL_Reg render_functions[] = {
 };
 
 void registerRenderBinding(lua_State* L) {
+    // A fresh lua_State (test suites create many) must re-resolve backend
+    // pointers against its own registry -- clear the hot-path caches.
+    invalidateBindingCaches();
     luaL_newlib(L, render_functions);
     lua_setglobal(L, "Render");
     printf("[Lua] Render module registered (via BackendRegistry).\n");
