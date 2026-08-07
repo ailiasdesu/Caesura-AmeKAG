@@ -404,13 +404,18 @@ if(CAESURA_LIVE2D)
         # the working directory); copy the shaders for the ACTIVE renderer:
         # D3D11 loads .fx, OpenGL loads .vert/.frag (C1: the GL copy was
         # missing -- models would render white/nothing on Linux/macOS).
+        # The engine chdir()s to the source root at startup, so the shaders
+        # must ALSO live there (not just next to the executable).
         set(CUBISM_SHADER_SRC_DIR "${CUBISM_FRAMEWORK_DIR}/src/Rendering/${CUBISM_FRAMEWORK_RENDERER}/Shaders")
         if(EXISTS "${CUBISM_SHADER_SRC_DIR}")
             add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory
                     "${CUBISM_SHADER_SRC_DIR}"
                     "$<TARGET_FILE_DIR:${PROJECT_NAME}>/FrameworkShaders"
-                COMMENT "Copying Cubism FrameworkShaders (${CUBISM_FRAMEWORK_RENDERER}) to output directory...")
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CUBISM_SHADER_SRC_DIR}"
+                    "${CMAKE_SOURCE_DIR}/FrameworkShaders"
+                COMMENT "Copying Cubism FrameworkShaders (${CUBISM_FRAMEWORK_RENDERER}) to output + source root...")
         endif()
     endif()
 endif()
