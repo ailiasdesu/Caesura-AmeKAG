@@ -11,7 +11,11 @@
 
 local scheduler = {}
 
--- ???? Flow-control command set (handled inline, never dispatched to kag table) ????
+-- Hot path: hoisted schema reference (isMigrated/coerce run per token);
+-- require() itself is cached but the per-token lookup still costs.
+local schemaModule = require("kag.schema")
+
+-- ──── Flow-control command set (handled inline, never dispatched to kag table) ────
 
 local flow_commands = {
     ["if"] = true, ["else"] = true, ["endif"] = true,
@@ -885,9 +889,8 @@ function scheduler.run(ctx, tokens, start_index)
                 -- Neo-Genesis rules: coerce typed params BEFORE dispatch so
                 -- handlers get numbers/booleans and bad input is reported
                 -- with location instead of silently swallowed.
-                local schema = require("kag.schema")
-                if schema.isMigrated(cmd) then
-                    params = schema.coerce(cmd, params, ctx)
+                if schemaModule.isMigrated(cmd) then
+                    params = schemaModule.coerce(cmd, params, ctx)
                 end
                 local handler = kag[cmd]
                 local actual_cmd = cmd
@@ -916,8 +919,8 @@ function scheduler.run(ctx, tokens, start_index)
                     if handler then
                         params = {text = cmd}
                         actual_cmd = "ch"
-                        if schema.isMigrated("ch") then
-                            params = schema.coerce("ch", params, ctx)
+                        if schemaModule.isMigrated("ch") then
+                            params = schemaModule.coerce("ch", params, ctx)
                         end
                     end
                 end

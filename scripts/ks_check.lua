@@ -81,10 +81,20 @@ local function checkScene(path)
         return
     end
     local LF = string.char(10)
+    -- Line index: one scan builds line-start offsets; lineOf becomes a
+    -- binary search (O(log n)) instead of O(n) per call -- editors run
+    -- ks_check on every keystroke, so quadratic behavior mattered.
+    local lineStarts = { 1 }
+    for i = 1, #text do
+        if text:byte(i) == 10 then lineStarts[#lineStarts + 1] = i + 1 end
+    end
     local function lineOf(offset)
-        local before = text:sub(1, offset - 1)
-        local _, nl = before:gsub(LF, "")
-        return nl + 1
+        local lo, hi = 1, #lineStarts
+        while lo < hi do
+            local mid = (lo + hi + 1) // 2
+            if lineStarts[mid] <= offset then lo = mid else hi = mid - 1 end
+        end
+        return lo
     end
     -- The offset stream can stop mid-scene on malformed input while
     -- earlier tokens parsed -- fail loudly instead of reporting OK for

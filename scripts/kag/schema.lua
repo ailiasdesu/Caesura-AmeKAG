@@ -54,7 +54,7 @@ function Schema.meta(cmd)
     return registry_meta[cmd]
 end
 
-local function coerceValue(name, spec, raw, where, ctx)
+local function coerceValue(name, spec, raw, whereFn, ctx)
     local v = raw
     if spec.type == "number" then
         if type(v) == "number" then
@@ -63,15 +63,15 @@ local function coerceValue(name, spec, raw, where, ctx)
             v = tonumber(v)
         else
             error(string.format(
-                "%s: param '%s' expects a number, got %q", where, name, tostring(raw)), 0)
+                "%s: param '%s' expects a number, got %q", whereFn(), name, tostring(raw)), 0)
         end
         if spec.min and v < spec.min then
             print(string.format("[schema] %s: '%s' clamped %s -> %s (min)",
-                where, name, tostring(v), tostring(spec.min)))
+                whereFn(), name, tostring(v), tostring(spec.min)))
             v = spec.min
         elseif spec.max and v > spec.max then
             print(string.format("[schema] %s: '%s' clamped %s -> %s (max)",
-                where, name, tostring(v), tostring(spec.max)))
+                whereFn(), name, tostring(v), tostring(spec.max)))
             v = spec.max
         end
     elseif spec.type == "boolean" then
@@ -83,11 +83,11 @@ local function coerceValue(name, spec, raw, where, ctx)
             elseif low == "false" or low == "0" or low == "no" then v = false
             else
                 error(string.format(
-                    "%s: param '%s' expects boolean, got %q", where, name, tostring(raw)), 0)
+                    "%s: param '%s' expects boolean, got %q", whereFn(), name, tostring(raw)), 0)
             end
         else
             error(string.format(
-                "%s: param '%s' expects boolean, got %q", where, name, tostring(raw)), 0)
+                "%s: param '%s' expects boolean, got %q", whereFn(), name, tostring(raw)), 0)
         end
     elseif spec.type == "string" then
         v = tostring(v)
@@ -129,7 +129,7 @@ local function coerceValue(name, spec, raw, where, ctx)
     end
     if spec.choices and not spec.choices[v] then
         error(string.format("%s: param '%s' must be one of {%s}, got %q",
-            where, name, table.concat(spec.choices, ","), tostring(raw)), 0)
+            whereFn(), name, table.concat(spec.choices, ","), tostring(raw)), 0)
     end
     return v
 end
@@ -140,9 +140,17 @@ function Schema.coerce(cmd, params, ctx)
     local specs = registry[cmd]
     if not specs then return params end  -- unmigrated: pass-through
 
-    local where = string.format("cmd [%s]@%s:%s",
-        cmd, ctx and (ctx.current_scene or ctx.currentScene) or "?",
-        ctx and ctx.token_index or "?")
+    -- Lazily-built location string: the common path (params valid) never
+    -- formats it; only error paths pay for the string.format.
+    local where
+    local function W()
+        if not where then
+            where = string.format("cmd [%s]@%s:%s",
+                cmd, ctx and (ctx.current_scene or ctx.currentScene) or "?",
+                ctx and ctx.token_index or "?")
+        end
+        return where
+    end
     local out = {}
 
     -- Any-of requirement: at least one of these params must be present.
@@ -153,7 +161,7 @@ function Schema.coerce(cmd, params, ctx)
             if raw ~= nil and raw ~= "" then found = true break end
         end
         if not found then
-            error(where .. ": requires one of {" .. table.concat(specs._require_any, ",") .. "}", 0)
+            error(W() .. ": requires one of {" .. table.concat(specs._require_any, ",") .. "}", 0)
         end
     end
 
@@ -168,14 +176,14 @@ function Schema.coerce(cmd, params, ctx)
                 and params[spec.positional_index] ~= nil
                 and params[spec.positional_index] ~= ""
             if spec.required and not pos_filled then
-                error(where .. ": missing required param '" .. name .. "'", 0)
+                error(W() .. ": missing required param '" .. name .. "'", 0)
             end
             -- When the positional slot is filled (pos_filled), do NOT
             -- write spec.default -- the handler falls back to params[N]
             -- itself, and a default would shadow the positional value.
             if spec.default ~= nil and not pos_filled then out[name] = spec.default end
         else
-            out[name] = coerceValue(name, spec, raw, where, ctx)
+            out[name] = coerceValue(name, spec, raw, W, ctx)
         end
     end
     -- Copy undeclared params through (compat), but warn on unknown names.

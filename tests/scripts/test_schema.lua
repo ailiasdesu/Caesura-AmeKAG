@@ -99,7 +99,7 @@ do
     local src = io.open("scripts/scheduler.lua", "r")
     local sched = src and src:read("*a") or ""
     if src then src:close() end
-    check("bare text coerced as ch", sched:find('schema.coerce("ch", params, ctx)', 1, true) ~= nil)
+    check("bare text coerced as ch", sched:find('schemaModule.coerce("ch", params, ctx)', 1, true) ~= nil)
 end
 
 -- ${expr} full-expression interpolation
