@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <cstdint>  // uint32_t (GCC strict; MSVC used to get it transitively)
 #include <string>
 #include <utility>
 

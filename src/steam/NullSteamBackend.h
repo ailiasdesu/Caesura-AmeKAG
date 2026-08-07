@@ -2,6 +2,7 @@
 // Used when CAESURA_ENABLE_STEAM=OFF or Steamworks SDK not available
 #pragma once
 #include "api/ISteamBackend.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 

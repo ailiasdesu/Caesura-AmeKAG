@@ -1,6 +1,7 @@
-﻿// CarcAssetProvider -- wraps CARCReader as an IAssetProvider
+// CarcAssetProvider -- wraps CARCReader as an IAssetProvider
 #pragma once
 #include "resource/api/IAssetProvider.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include "CARCReader.h"
 #include <memory>
 

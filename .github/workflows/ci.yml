@@ -100,7 +100,9 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
 
       - name: Build
-        run: cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
+        run: |
+          set -o pipefail
+          cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --repeat until-pass:2
@@ -137,7 +139,9 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1
 
       - name: Build
-        run: cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
+        run: |
+          set -o pipefail
+          cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
 
       - name: Test
         run: |

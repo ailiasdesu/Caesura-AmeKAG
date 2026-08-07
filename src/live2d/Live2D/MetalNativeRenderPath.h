@@ -1,8 +1,9 @@
-﻿// MetalNativeRenderPath.h — macOS Metal render path (C1/R1).
+// MetalNativeRenderPath.h — macOS Metal render path (C1/R1).
 #pragma once
 #if defined(CAESURA_HAS_LIVE2D) && defined(__APPLE__)
 
 #include "ILive2DRenderPath.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <vector>
 #include <unordered_map>
 

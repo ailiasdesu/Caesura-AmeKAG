@@ -1,6 +1,7 @@
-﻿// ProviderChain -- ordered chain of IAssetProvider, checked by descending priority.
+// ProviderChain -- ordered chain of IAssetProvider, checked by descending priority.
 #pragma once
 #include "api/IAssetProvider.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <vector>
 #include <memory>
 #include <algorithm>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/ITextureManager.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include "../di/api/IDeviceLostListener.h"
 #include <bgfx/bgfx.h>
 #include <string>

@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "api/IAsyncLoader.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <string>
 #include <vector>
 #include <mutex>

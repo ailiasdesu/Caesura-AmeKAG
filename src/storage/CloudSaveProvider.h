@@ -2,6 +2,7 @@
 // Splits saves > 256KB into chunks (Steam Remote Storage per-file limit)
 #pragma once
 #include "api/ISaveProvider.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 class ISteamBackend;

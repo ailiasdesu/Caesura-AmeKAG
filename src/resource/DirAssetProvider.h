@@ -1,6 +1,7 @@
-﻿// DirAssetProvider -- reads files from a filesystem directory
+// DirAssetProvider -- reads files from a filesystem directory
 #pragma once
 #include "api/IAssetProvider.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <string>
 
 namespace caesura {

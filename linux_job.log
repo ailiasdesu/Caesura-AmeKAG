@@ -1,0 +1,2094 @@
+﻿2026-08-07T03:29:03.1015197Z Current runner version: '2.336.0'
+2026-08-07T03:29:03.1051045Z ##[group]Runner Image Provisioner
+2026-08-07T03:29:03.1052463Z Hosted Compute Agent
+2026-08-07T03:29:03.1053425Z Version: 20260707.563
+2026-08-07T03:29:03.1054529Z Commit: 02667638d2b423fbc733a8e32a88b44996a3ba6e
+2026-08-07T03:29:03.1055729Z Build Date: 2026-07-07T19:33:50Z
+2026-08-07T03:29:03.1056844Z Worker ID: {24f5487c-792f-42a2-b3d3-6cfb76570d53}
+2026-08-07T03:29:03.1058534Z Azure Region: eastus
+2026-08-07T03:29:03.1059572Z ##[endgroup]
+2026-08-07T03:29:03.1061816Z ##[group]Operating System
+2026-08-07T03:29:03.1062879Z Ubuntu
+2026-08-07T03:29:03.1063727Z 24.04.4
+2026-08-07T03:29:03.1064602Z LTS
+2026-08-07T03:29:03.1065438Z ##[endgroup]
+2026-08-07T03:29:03.1066346Z ##[group]Runner Image
+2026-08-07T03:29:03.1067407Z Image: ubuntu-24.04
+2026-08-07T03:29:03.1068691Z Version: 20260720.247.2
+2026-08-07T03:29:03.1071487Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260720.247/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-07T03:29:03.1074137Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260720.247
+2026-08-07T03:29:03.1075819Z ##[endgroup]
+2026-08-07T03:29:03.1078054Z ##[group]GITHUB_TOKEN Permissions
+2026-08-07T03:29:03.1081117Z Contents: read
+2026-08-07T03:29:03.1082030Z Metadata: read
+2026-08-07T03:29:03.1083056Z Packages: read
+2026-08-07T03:29:03.1083957Z ##[endgroup]
+2026-08-07T03:29:03.1087055Z Secret source: Actions
+2026-08-07T03:29:03.1089582Z Prepare workflow directory
+2026-08-07T03:29:03.1641874Z Prepare all required actions
+2026-08-07T03:29:03.1690904Z Getting action download info
+2026-08-07T03:29:03.3123011Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-08-07T03:29:03.6352344Z Complete job name: Linux · GCC
+2026-08-07T03:29:03.7243223Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-07T03:29:03.7252206Z ##[group]Run actions/checkout@v4
+2026-08-07T03:29:03.7252946Z with:
+2026-08-07T03:29:03.7253370Z   submodules: recursive
+2026-08-07T03:29:03.7253867Z   repository: ailiasdesu/Caesura-AmeKAG
+2026-08-07T03:29:03.7257615Z   token: ***
+2026-08-07T03:29:03.7258313Z   ssh-strict: true
+2026-08-07T03:29:03.7258754Z   ssh-user: git
+2026-08-07T03:29:03.7259193Z   persist-credentials: true
+2026-08-07T03:29:03.7259673Z   clean: true
+2026-08-07T03:29:03.7260106Z   sparse-checkout-cone-mode: true
+2026-08-07T03:29:03.7260613Z   fetch-depth: 1
+2026-08-07T03:29:03.7261030Z   fetch-tags: false
+2026-08-07T03:29:03.7261459Z   show-progress: true
+2026-08-07T03:29:03.7261940Z   lfs: false
+2026-08-07T03:29:03.7262349Z   set-safe-directory: true
+2026-08-07T03:29:03.7262848Z   allow-unsafe-pr-checkout: false
+2026-08-07T03:29:03.7263615Z env:
+2026-08-07T03:29:03.7264029Z   BUILD_TYPE: Debug
+2026-08-07T03:29:03.7264475Z ##[endgroup]
+2026-08-07T03:29:03.8315228Z Syncing repository: ailiasdesu/Caesura-AmeKAG
+2026-08-07T03:29:03.8318203Z ##[group]Getting Git version info
+2026-08-07T03:29:03.8319137Z Working directory is '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG'
+2026-08-07T03:29:03.8320682Z [command]/usr/bin/git version
+2026-08-07T03:29:03.8362766Z git version 2.54.0
+2026-08-07T03:29:03.8397984Z ##[endgroup]
+2026-08-07T03:29:03.8413739Z Temporarily overriding HOME='/home/runner/work/_temp/12ede6e0-fc30-4d83-b21f-b58922019def' before making global git config changes
+2026-08-07T03:29:03.8416428Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-07T03:29:03.8420722Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG
+2026-08-07T03:29:03.8475234Z Deleting the contents of '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG'
+2026-08-07T03:29:03.8485522Z ##[group]Initializing the repository
+2026-08-07T03:29:03.8496312Z [command]/usr/bin/git init /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG
+2026-08-07T03:29:03.8596771Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-07T03:29:03.8598187Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-07T03:29:03.8599679Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-07T03:29:03.8600467Z hint: call:
+2026-08-07T03:29:03.8600860Z hint:
+2026-08-07T03:29:03.8601391Z hint: 	git config --global init.defaultBranch <name>
+2026-08-07T03:29:03.8602331Z hint:
+2026-08-07T03:29:03.8603442Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-07T03:29:03.8604859Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-07T03:29:03.8605924Z hint:
+2026-08-07T03:29:03.8606776Z hint: 	git branch -m <name>
+2026-08-07T03:29:03.8607651Z hint:
+2026-08-07T03:29:03.8609130Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-07T03:29:03.8627630Z Initialized empty Git repository in /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/.git/
+2026-08-07T03:29:03.8630992Z [command]/usr/bin/git remote add origin https://github.com/ailiasdesu/Caesura-AmeKAG
+2026-08-07T03:29:03.8680282Z ##[endgroup]
+2026-08-07T03:29:03.8681045Z ##[group]Disabling automatic garbage collection
+2026-08-07T03:29:03.8685876Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-07T03:29:03.8719177Z ##[endgroup]
+2026-08-07T03:29:03.8720304Z ##[group]Setting up auth
+2026-08-07T03:29:03.8727386Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-07T03:29:03.8766128Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-07T03:29:03.9140832Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-07T03:29:03.9183828Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-07T03:29:03.9447069Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-07T03:29:03.9484959Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-07T03:29:03.9712922Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-07T03:29:03.9754301Z ##[endgroup]
+2026-08-07T03:29:03.9755175Z ##[group]Fetching the repository
+2026-08-07T03:29:03.9764542Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +6bed4fab86090de2d5720c343512960a92aad8cc:refs/remotes/origin/master
+2026-08-07T03:29:05.9562733Z From https://github.com/ailiasdesu/Caesura-AmeKAG
+2026-08-07T03:29:05.9565398Z  * [new ref]         6bed4fab86090de2d5720c343512960a92aad8cc -> origin/master
+2026-08-07T03:29:05.9599909Z ##[endgroup]
+2026-08-07T03:29:05.9601716Z ##[group]Determining the checkout info
+2026-08-07T03:29:05.9603477Z ##[endgroup]
+2026-08-07T03:29:05.9608751Z [command]/usr/bin/git sparse-checkout disable
+2026-08-07T03:29:05.9661405Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-07T03:29:05.9698363Z ##[group]Checking out the ref
+2026-08-07T03:29:05.9703118Z [command]/usr/bin/git checkout --progress --force -B master refs/remotes/origin/master
+2026-08-07T03:29:06.6495014Z Reset branch 'master'
+2026-08-07T03:29:06.6499580Z branch 'master' set up to track 'origin/master'.
+2026-08-07T03:29:06.6530807Z ##[endgroup]
+2026-08-07T03:29:06.6531392Z ##[group]Setting up auth for fetching submodules
+2026-08-07T03:29:06.6538184Z [command]/usr/bin/git config --global http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-07T03:29:06.6582428Z [command]/usr/bin/git config --global --unset-all url.https://github.com/.insteadOf
+2026-08-07T03:29:06.6615274Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf git@github.com:
+2026-08-07T03:29:06.6651391Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf org-124662072@github.com:
+2026-08-07T03:29:06.6682289Z ##[endgroup]
+2026-08-07T03:29:06.6683090Z ##[group]Fetching submodules
+2026-08-07T03:29:06.6687261Z [command]/usr/bin/git submodule sync --recursive
+2026-08-07T03:29:06.6925790Z [command]/usr/bin/git -c protocol.version=2 submodule update --init --force --depth=1 --recursive
+2026-08-07T03:29:06.7172059Z [command]/usr/bin/git submodule foreach --recursive git config --local gc.auto 0
+2026-08-07T03:29:06.7411631Z ##[endgroup]
+2026-08-07T03:29:06.7412685Z ##[group]Persisting credentials for submodules
+2026-08-07T03:29:06.7420034Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'url\.https\:\/\/github\.com\/\.insteadOf' && git config --local --unset-all 'url.https://github.com/.insteadOf' || :"
+2026-08-07T03:29:06.7659334Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local 'http.https://github.com/.extraheader' 'AUTHORIZATION: basic ***' && git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-08-07T03:29:06.7902314Z [command]/usr/bin/git submodule foreach --recursive git config --local --add 'url.https://github.com/.insteadOf' 'git@github.com:'
+2026-08-07T03:29:06.8149951Z [command]/usr/bin/git submodule foreach --recursive git config --local --add 'url.https://github.com/.insteadOf' 'org-124662072@github.com:'
+2026-08-07T03:29:06.8386106Z ##[endgroup]
+2026-08-07T03:29:06.8434898Z [command]/usr/bin/git log -1 --format=%H
+2026-08-07T03:29:06.8464288Z 6bed4fab86090de2d5720c343512960a92aad8cc
+2026-08-07T03:29:06.8691998Z ##[group]Run sudo apt-get update
+2026-08-07T03:29:06.8692463Z [36;1msudo apt-get update[0m
+2026-08-07T03:29:06.8693671Z [36;1msudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget[0m
+2026-08-07T03:29:06.8744152Z shell: /usr/bin/bash -e {0}
+2026-08-07T03:29:06.8744499Z env:
+2026-08-07T03:29:06.8744739Z   BUILD_TYPE: Debug
+2026-08-07T03:29:06.8744991Z ##[endgroup]
+2026-08-07T03:29:07.0033278Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-08-07T03:29:07.0365817Z Get:6 https://dl.google.com/linux/chrome-stable/deb stable InRelease [2548 B]
+2026-08-07T03:29:07.0602662Z Get:7 https://packages.microsoft.com/repos/azure-cli noble InRelease [3564 B]
+2026-08-07T03:29:07.0607271Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-08-07T03:29:07.1686337Z Get:9 https://dl.google.com/linux/chrome-stable/deb stable/main amd64 Packages [1411 B]
+2026-08-07T03:29:07.1949990Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-08-07T03:29:07.1966259Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-08-07T03:29:07.2037275Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-08-07T03:29:07.2063880Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-08-07T03:29:07.2074168Z Get:10 https://packages.microsoft.com/repos/azure-cli noble/main amd64 Packages [2375 B]
+2026-08-07T03:29:07.2572526Z Get:11 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.2 kB]
+2026-08-07T03:29:07.2600736Z Get:12 https://packages.microsoft.com/ubuntu/24.04/prod noble/main all Packages [643 B]
+2026-08-07T03:29:07.2628100Z Get:13 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [268 kB]
+2026-08-07T03:29:07.2686768Z Get:14 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [308 kB]
+2026-08-07T03:29:07.3697109Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1184 kB]
+2026-08-07T03:29:07.3777192Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [281 kB]
+2026-08-07T03:29:07.3804808Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [180 kB]
+2026-08-07T03:29:07.3829101Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1682 kB]
+2026-08-07T03:29:07.3913720Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [335 kB]
+2026-08-07T03:29:07.3949389Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+2026-08-07T03:29:07.3989855Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1414 kB]
+2026-08-07T03:29:07.4059905Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [320 kB]
+2026-08-07T03:29:07.4090079Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [45.4 kB]
+2026-08-07T03:29:07.4112840Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [12.3 kB]
+2026-08-07T03:29:07.4552914Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+2026-08-07T03:29:07.4571107Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5744 B]
+2026-08-07T03:29:07.4587123Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [31.0 kB]
+2026-08-07T03:29:07.4619177Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+2026-08-07T03:29:07.4889552Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [927 kB]
+2026-08-07T03:29:07.4949281Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [201 kB]
+2026-08-07T03:29:07.4971433Z Get:31 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.4 kB]
+2026-08-07T03:29:07.4990043Z Get:32 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1199 kB]
+2026-08-07T03:29:07.5063204Z Get:33 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [239 kB]
+2026-08-07T03:29:07.5089011Z Get:34 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+2026-08-07T03:29:07.5108930Z Get:35 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1320 kB]
+2026-08-07T03:29:07.5185091Z Get:36 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [302 kB]
+2026-08-07T03:29:07.5213643Z Get:37 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [40.3 kB]
+2026-08-07T03:29:07.5237529Z Get:38 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [10.6 kB]
+2026-08-07T03:29:12.0770089Z Fetched 11.2 MB in 1s (7693 kB/s)
+2026-08-07T03:29:12.8223298Z Reading package lists...
+2026-08-07T03:29:12.8528810Z Reading package lists...
+2026-08-07T03:29:13.0315476Z Building dependency tree...
+2026-08-07T03:29:13.0322859Z Reading state information...
+2026-08-07T03:29:13.1850912Z libzstd-dev is already the newest version (1.5.5+dfsg2-2build1.1).
+2026-08-07T03:29:13.1851892Z libzstd-dev set to manually installed.
+2026-08-07T03:29:13.1852613Z pkg-config is already the newest version (1.8.1-2build1).
+2026-08-07T03:29:13.1853104Z The following additional packages will be installed:
+2026-08-07T03:29:13.1853860Z   bzip2-doc cmake-data gir1.2-ibus-1.0 libasyncns0 libblkid-dev libbrotli-dev
+2026-08-07T03:29:13.1854851Z   libbz2-dev libdbus-1-dev libdrm-nouveau2 libdrm-radeon1 libflac12t64
+2026-08-07T03:29:13.1855487Z   libgirepository-2.0-0 libglib2.0-dev libglib2.0-dev-bin libibus-1.0-5
+2026-08-07T03:29:13.1856058Z   libjsoncpp25 libmount-dev libmp3lame0 libmpg123-0t64 libopus0
+2026-08-07T03:29:13.1856666Z   libpciaccess-dev libpng-dev libpng-tools libpthread-stubs0-dev
+2026-08-07T03:29:13.1857541Z   libpulse-mainloop-glib0 libpulse0 librhash0 libselinux1-dev libsepol-dev
+2026-08-07T03:29:13.1859102Z   libsndfile1 libssl3t64 libvorbisenc2 libwayland-bin libwayland-server0
+2026-08-07T03:29:13.1859577Z   libxau-dev libxcb1-dev libxdmcp-dev libxrender-dev openssl uuid-dev
+2026-08-07T03:29:13.1859972Z   x11proto-dev xorg-sgml-doctools xtrans-dev
+2026-08-07T03:29:13.1864168Z Suggested packages:
+2026-08-07T03:29:13.1864702Z   cmake-doc cmake-format elpa-cmake-mode ninja-build libasound2-doc
+2026-08-07T03:29:13.1865312Z   freetype2-doc gir1.2-glib-2.0-dev libglib2.0-doc libgdk-pixbuf2.0-bin
+2026-08-07T03:29:13.1865819Z   libxml2-utils opus-tools pulseaudio libssl-doc libwayland-doc libx11-doc
+2026-08-07T03:29:13.1866217Z   libxcb-doc libxext-doc
+2026-08-07T03:29:13.2486975Z The following NEW packages will be installed:
+2026-08-07T03:29:13.2488706Z   build-essential bzip2-doc cmake cmake-data gir1.2-ibus-1.0 libasound2-dev
+2026-08-07T03:29:13.2489738Z   libasyncns0 libblkid-dev libbrotli-dev libbz2-dev libdbus-1-dev libdrm-dev
+2026-08-07T03:29:13.2490528Z   libdrm-nouveau2 libdrm-radeon1 libflac12t64 libfreetype-dev libgbm-dev
+2026-08-07T03:29:13.2491108Z   libgirepository-2.0-0 libglib2.0-dev libglib2.0-dev-bin libibus-1.0-5
+2026-08-07T03:29:13.2491598Z   libibus-1.0-dev libjsoncpp25 libmount-dev libmp3lame0 libmpg123-0t64
+2026-08-07T03:29:13.2492141Z   libopus0 libpciaccess-dev libpng-dev libpng-tools libpthread-stubs0-dev
+2026-08-07T03:29:13.2493043Z   libpulse-dev libpulse-mainloop-glib0 libpulse0 librhash0 libselinux1-dev
+2026-08-07T03:29:13.2493721Z   libsepol-dev libsndfile1 libudev-dev libvorbisenc2 libwayland-bin
+2026-08-07T03:29:13.2494171Z   libwayland-dev libwayland-server0 libx11-dev libxau-dev libxcb1-dev
+2026-08-07T03:29:13.2494615Z   libxcursor-dev libxdmcp-dev libxext-dev libxfixes-dev libxi-dev
+2026-08-07T03:29:13.2497463Z   libxinerama-dev libxrandr-dev libxrender-dev uuid-dev x11proto-dev
+2026-08-07T03:29:13.2498427Z   xorg-sgml-doctools xtrans-dev
+2026-08-07T03:29:13.2505632Z The following packages will be upgraded:
+2026-08-07T03:29:13.2508298Z   libssl-dev libssl3t64 openssl wget
+2026-08-07T03:29:13.2693566Z 4 upgraded, 58 newly installed, 0 to remove and 82 not upgraded.
+2026-08-07T03:29:13.2694316Z Need to get 28.5 MB of archives.
+2026-08-07T03:29:13.2694904Z After this operation, 89.2 MB of additional disk space will be used.
+2026-08-07T03:29:13.2695623Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-08-07T03:29:13.2941324Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libssl-dev amd64 3.0.13-0ubuntu3.12 [2408 kB]
+2026-08-07T03:29:13.3419633Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libssl3t64 amd64 3.0.13-0ubuntu3.12 [1942 kB]
+2026-08-07T03:29:13.3970738Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 openssl amd64 3.0.13-0ubuntu3.12 [1003 kB]
+2026-08-07T03:29:13.4249929Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 wget amd64 1.21.4-1ubuntu4.4 [334 kB]
+2026-08-07T03:29:13.4424497Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 build-essential amd64 12.10ubuntu1 [4928 B]
+2026-08-07T03:29:13.4536799Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 bzip2-doc all 1.0.8-5.1build0.1 [499 kB]
+2026-08-07T03:29:13.4670178Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libjsoncpp25 amd64 1.9.5-6build1 [82.8 kB]
+2026-08-07T03:29:13.4780406Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 librhash0 amd64 1.4.3-3build1 [129 kB]
+2026-08-07T03:29:13.4887582Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 cmake-data all 3.28.3-1build7 [2155 kB]
+2026-08-07T03:29:13.5208807Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 cmake amd64 3.28.3-1build7 [11.2 MB]
+2026-08-07T03:29:13.7489375Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libibus-1.0-5 amd64 1.5.29-2 [181 kB]
+2026-08-07T03:29:13.7600105Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 gir1.2-ibus-1.0 amd64 1.5.29-2 [86.3 kB]
+2026-08-07T03:29:13.7702399Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libasound2-dev amd64 1.2.11-1ubuntu0.3 [115 kB]
+2026-08-07T03:29:13.7816816Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libasyncns0 amd64 0.8-6build4 [11.3 kB]
+2026-08-07T03:29:13.7904635Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libbrotli-dev amd64 1.1.0-2build2 [353 kB]
+2026-08-07T03:29:13.8056962Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libbz2-dev amd64 1.0.8-5.1build0.1 [33.6 kB]
+2026-08-07T03:29:13.8190909Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libdbus-1-dev amd64 1.14.10-4ubuntu4.1 [190 kB]
+2026-08-07T03:29:13.8371237Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libdrm-radeon1 amd64 2.4.125-1ubuntu0.1~24.04.2 [20.8 kB]
+2026-08-07T03:29:13.8463331Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libdrm-nouveau2 amd64 2.4.125-1ubuntu0.1~24.04.2 [17.6 kB]
+2026-08-07T03:29:13.8997612Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpciaccess-dev amd64 0.17-3ubuntu0.24.04.2 [22.0 kB]
+2026-08-07T03:29:13.9217533Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libdrm-dev amd64 2.4.125-1ubuntu0.1~24.04.2 [314 kB]
+2026-08-07T03:29:13.9432592Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libflac12t64 amd64 1.4.3+ds-2.1ubuntu2 [197 kB]
+2026-08-07T03:29:13.9568797Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpng-dev amd64 1.6.43-5ubuntu0.6 [265 kB]
+2026-08-07T03:29:13.9722264Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype-dev amd64 2.13.2+dfsg-1ubuntu0.1 [575 kB]
+2026-08-07T03:29:13.9953190Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgbm-dev amd64 25.2.8-0ubuntu0.24.04.2 [12.8 kB]
+2026-08-07T03:29:14.0063853Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgirepository-2.0-0 amd64 2.80.0-6ubuntu3.8 [73.6 kB]
+2026-08-07T03:29:14.0195006Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglib2.0-dev-bin amd64 2.80.0-6ubuntu3.8 [138 kB]
+2026-08-07T03:29:14.0426244Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 uuid-dev amd64 2.39.3-9ubuntu6.5 [33.5 kB]
+2026-08-07T03:29:14.0577410Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libblkid-dev amd64 2.39.3-9ubuntu6.5 [204 kB]
+2026-08-07T03:29:14.0839031Z Get:31 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libsepol-dev amd64 3.5-2build1 [384 kB]
+2026-08-07T03:29:14.1002712Z Get:32 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libselinux1-dev amd64 3.5-2ubuntu2.1 [164 kB]
+2026-08-07T03:29:14.1128440Z Get:33 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libmount-dev amd64 2.39.3-9ubuntu6.5 [14.9 kB]
+2026-08-07T03:29:14.1231065Z Get:34 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglib2.0-dev amd64 2.80.0-6ubuntu3.8 [1860 kB]
+2026-08-07T03:29:14.1696549Z Get:35 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libibus-1.0-dev amd64 1.5.29-2 [187 kB]
+2026-08-07T03:29:14.1818846Z Get:36 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libmp3lame0 amd64 3.100-6build1 [142 kB]
+2026-08-07T03:29:14.1929503Z Get:37 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libmpg123-0t64 amd64 1.32.5-1ubuntu1.1 [169 kB]
+2026-08-07T03:29:14.2051555Z Get:38 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libopus0 amd64 1.4-1build1 [208 kB]
+2026-08-07T03:29:14.2648535Z Get:39 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpng-tools amd64 1.6.43-5ubuntu0.6 [28.5 kB]
+2026-08-07T03:29:14.2728631Z Get:40 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpthread-stubs0-dev amd64 0.4-1build3 [4746 B]
+2026-08-07T03:29:14.2882096Z Get:41 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libvorbisenc2 amd64 1.3.7-1build3 [80.8 kB]
+2026-08-07T03:29:14.2931495Z Get:42 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libsndfile1 amd64 1.2.2-1ubuntu5.24.04.1 [209 kB]
+2026-08-07T03:29:14.3120664Z Get:43 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpulse0 amd64 1:16.1+dfsg1-2ubuntu10.1 [292 kB]
+2026-08-07T03:29:14.3304204Z Get:44 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpulse-mainloop-glib0 amd64 1:16.1+dfsg1-2ubuntu10.1 [12.2 kB]
+2026-08-07T03:29:14.3386300Z Get:45 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libpulse-dev amd64 1:16.1+dfsg1-2ubuntu10.1 [75.6 kB]
+2026-08-07T03:29:14.3484858Z Get:46 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libudev-dev amd64 255.4-1ubuntu8.16 [22.0 kB]
+2026-08-07T03:29:14.3571150Z Get:47 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libwayland-server0 amd64 1.22.0-2.1build1 [33.9 kB]
+2026-08-07T03:29:14.3656918Z Get:48 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xorg-sgml-doctools all 1:1.11-1.1 [10.9 kB]
+2026-08-07T03:29:14.3738948Z Get:49 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 x11proto-dev all 2023.2-1 [602 kB]
+2026-08-07T03:29:14.3915946Z Get:50 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxau-dev amd64 1:1.0.9-1build6 [9570 B]
+2026-08-07T03:29:14.3997573Z Get:51 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxdmcp-dev amd64 1:1.1.3-0ubuntu6 [26.5 kB]
+2026-08-07T03:29:14.4080142Z Get:52 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xtrans-dev all 1.4.0-1 [68.9 kB]
+2026-08-07T03:29:14.4173713Z Get:53 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcb1-dev amd64 1.15-1ubuntu2 [85.8 kB]
+2026-08-07T03:29:14.4312170Z Get:54 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libx11-dev amd64 2:1.8.7-1build1 [732 kB]
+2026-08-07T03:29:14.4522607Z Get:55 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxrender-dev amd64 1:0.9.10-1.1build1 [26.3 kB]
+2026-08-07T03:29:14.4601172Z Get:56 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxfixes-dev amd64 1:6.0.0-2build1 [12.1 kB]
+2026-08-07T03:29:14.4686842Z Get:57 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcursor-dev amd64 1:1.2.1-1build1 [31.8 kB]
+2026-08-07T03:29:14.5206658Z Get:58 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxext-dev amd64 2:1.3.4-1build2 [83.5 kB]
+2026-08-07T03:29:14.5298684Z Get:59 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxi-dev amd64 2:1.8.1-1build1 [194 kB]
+2026-08-07T03:29:14.5403912Z Get:60 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxinerama-dev amd64 2:1.1.4-3build1 [7988 B]
+2026-08-07T03:29:14.5524225Z Get:61 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxrandr-dev amd64 2:1.5.2-2build1 [26.4 kB]
+2026-08-07T03:29:14.5611282Z Get:62 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libwayland-bin amd64 1.22.0-2.1build1 [20.6 kB]
+2026-08-07T03:29:14.5699697Z Get:63 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libwayland-dev amd64 1.22.0-2.1build1 [71.3 kB]
+2026-08-07T03:29:14.8881396Z Fetched 28.5 MB in 1s (21.7 MB/s)
+2026-08-07T03:29:14.9556914Z (Reading database ... 
+2026-08-07T03:29:14.9557424Z (Reading database ... 5%
+2026-08-07T03:29:14.9558165Z (Reading database ... 10%
+2026-08-07T03:29:14.9558580Z (Reading database ... 15%
+2026-08-07T03:29:14.9558959Z (Reading database ... 20%
+2026-08-07T03:29:14.9559472Z (Reading database ... 25%
+2026-08-07T03:29:14.9559804Z (Reading database ... 30%
+2026-08-07T03:29:14.9560027Z (Reading database ... 35%
+2026-08-07T03:29:14.9560246Z (Reading database ... 40%
+2026-08-07T03:29:14.9560458Z (Reading database ... 45%
+2026-08-07T03:29:14.9560669Z (Reading database ... 50%
+2026-08-07T03:29:14.9810189Z (Reading database ... 55%
+2026-08-07T03:29:15.3051538Z (Reading database ... 60%
+2026-08-07T03:29:15.5725938Z (Reading database ... 65%
+2026-08-07T03:29:15.8270032Z (Reading database ... 70%
+2026-08-07T03:29:16.0329000Z (Reading database ... 75%
+2026-08-07T03:29:16.4597385Z (Reading database ... 80%
+2026-08-07T03:29:17.0378881Z (Reading database ... 85%
+2026-08-07T03:29:17.6081623Z (Reading database ... 90%
+2026-08-07T03:29:18.1821648Z (Reading database ... 95%
+2026-08-07T03:29:18.1822196Z (Reading database ... 100%
+2026-08-07T03:29:18.1822852Z (Reading database ... 202954 files and directories currently installed.)
+2026-08-07T03:29:18.1867604Z Preparing to unpack .../libssl-dev_3.0.13-0ubuntu3.12_amd64.deb ...
+2026-08-07T03:29:18.1915250Z Unpacking libssl-dev:amd64 (3.0.13-0ubuntu3.12) over (3.0.13-0ubuntu3.11) ...
+2026-08-07T03:29:18.3033125Z Preparing to unpack .../libssl3t64_3.0.13-0ubuntu3.12_amd64.deb ...
+2026-08-07T03:29:18.3071803Z Unpacking libssl3t64:amd64 (3.0.13-0ubuntu3.12) over (3.0.13-0ubuntu3.11) ...
+2026-08-07T03:29:18.3704531Z Setting up libssl3t64:amd64 (3.0.13-0ubuntu3.12) ...
+2026-08-07T03:29:18.4051731Z (Reading database ... 
+2026-08-07T03:29:18.4052028Z (Reading database ... 5%
+2026-08-07T03:29:18.4052294Z (Reading database ... 10%
+2026-08-07T03:29:18.4052521Z (Reading database ... 15%
+2026-08-07T03:29:18.4052734Z (Reading database ... 20%
+2026-08-07T03:29:18.4052951Z (Reading database ... 25%
+2026-08-07T03:29:18.4053160Z (Reading database ... 30%
+2026-08-07T03:29:18.4053365Z (Reading database ... 35%
+2026-08-07T03:29:18.4053574Z (Reading database ... 40%
+2026-08-07T03:29:18.4053934Z (Reading database ... 45%
+2026-08-07T03:29:18.4054174Z (Reading database ... 50%
+2026-08-07T03:29:18.4059544Z (Reading database ... 55%
+2026-08-07T03:29:18.4176971Z (Reading database ... 60%
+2026-08-07T03:29:18.4207621Z (Reading database ... 65%
+2026-08-07T03:29:18.4234865Z (Reading database ... 70%
+2026-08-07T03:29:18.4266116Z (Reading database ... 75%
+2026-08-07T03:29:18.4306330Z (Reading database ... 80%
+2026-08-07T03:29:18.4456510Z (Reading database ... 85%
+2026-08-07T03:29:18.4531081Z (Reading database ... 90%
+2026-08-07T03:29:18.4758673Z (Reading database ... 95%
+2026-08-07T03:29:18.4759448Z (Reading database ... 100%
+2026-08-07T03:29:18.4759989Z (Reading database ... 202954 files and directories currently installed.)
+2026-08-07T03:29:18.4802422Z Preparing to unpack .../00-openssl_3.0.13-0ubuntu3.12_amd64.deb ...
+2026-08-07T03:29:18.4831035Z Unpacking openssl (3.0.13-0ubuntu3.12) over (3.0.13-0ubuntu3.11) ...
+2026-08-07T03:29:18.6051137Z Preparing to unpack .../01-wget_1.21.4-1ubuntu4.4_amd64.deb ...
+2026-08-07T03:29:18.6081040Z Unpacking wget (1.21.4-1ubuntu4.4) over (1.21.4-1ubuntu4.3) ...
+2026-08-07T03:29:18.6401488Z Selecting previously unselected package build-essential.
+2026-08-07T03:29:18.6531784Z Preparing to unpack .../02-build-essential_12.10ubuntu1_amd64.deb ...
+2026-08-07T03:29:18.6545014Z Unpacking build-essential (12.10ubuntu1) ...
+2026-08-07T03:29:18.6752265Z Selecting previously unselected package bzip2-doc.
+2026-08-07T03:29:18.6877725Z Preparing to unpack .../03-bzip2-doc_1.0.8-5.1build0.1_all.deb ...
+2026-08-07T03:29:18.6887274Z Unpacking bzip2-doc (1.0.8-5.1build0.1) ...
+2026-08-07T03:29:18.7141663Z Selecting previously unselected package libjsoncpp25:amd64.
+2026-08-07T03:29:18.7266849Z Preparing to unpack .../04-libjsoncpp25_1.9.5-6build1_amd64.deb ...
+2026-08-07T03:29:18.7276981Z Unpacking libjsoncpp25:amd64 (1.9.5-6build1) ...
+2026-08-07T03:29:18.7504439Z Selecting previously unselected package librhash0:amd64.
+2026-08-07T03:29:18.7629824Z Preparing to unpack .../05-librhash0_1.4.3-3build1_amd64.deb ...
+2026-08-07T03:29:18.7639898Z Unpacking librhash0:amd64 (1.4.3-3build1) ...
+2026-08-07T03:29:18.7875763Z Selecting previously unselected package cmake-data.
+2026-08-07T03:29:18.7999715Z Preparing to unpack .../06-cmake-data_3.28.3-1build7_all.deb ...
+2026-08-07T03:29:18.8067164Z Unpacking cmake-data (3.28.3-1build7) ...
+2026-08-07T03:29:19.3617035Z Selecting previously unselected package cmake.
+2026-08-07T03:29:19.3757248Z Preparing to unpack .../07-cmake_3.28.3-1build7_amd64.deb ...
+2026-08-07T03:29:19.3767645Z Unpacking cmake (3.28.3-1build7) ...
+2026-08-07T03:29:19.5303085Z Selecting previously unselected package libibus-1.0-5:amd64.
+2026-08-07T03:29:19.5432074Z Preparing to unpack .../08-libibus-1.0-5_1.5.29-2_amd64.deb ...
+2026-08-07T03:29:19.5440959Z Unpacking libibus-1.0-5:amd64 (1.5.29-2) ...
+2026-08-07T03:29:19.5657552Z Selecting previously unselected package gir1.2-ibus-1.0:amd64.
+2026-08-07T03:29:19.5785105Z Preparing to unpack .../09-gir1.2-ibus-1.0_1.5.29-2_amd64.deb ...
+2026-08-07T03:29:19.5792618Z Unpacking gir1.2-ibus-1.0:amd64 (1.5.29-2) ...
+2026-08-07T03:29:19.6007522Z Selecting previously unselected package libasound2-dev:amd64.
+2026-08-07T03:29:19.6135791Z Preparing to unpack .../10-libasound2-dev_1.2.11-1ubuntu0.3_amd64.deb ...
+2026-08-07T03:29:19.6165575Z Unpacking libasound2-dev:amd64 (1.2.11-1ubuntu0.3) ...
+2026-08-07T03:29:19.6509281Z Selecting previously unselected package libasyncns0:amd64.
+2026-08-07T03:29:19.6637046Z Preparing to unpack .../11-libasyncns0_0.8-6build4_amd64.deb ...
+2026-08-07T03:29:19.6646197Z Unpacking libasyncns0:amd64 (0.8-6build4) ...
+2026-08-07T03:29:19.6842706Z Selecting previously unselected package libbrotli-dev:amd64.
+2026-08-07T03:29:19.6969108Z Preparing to unpack .../12-libbrotli-dev_1.1.0-2build2_amd64.deb ...
+2026-08-07T03:29:19.6977504Z Unpacking libbrotli-dev:amd64 (1.1.0-2build2) ...
+2026-08-07T03:29:19.7226800Z Selecting previously unselected package libbz2-dev:amd64.
+2026-08-07T03:29:19.7354062Z Preparing to unpack .../13-libbz2-dev_1.0.8-5.1build0.1_amd64.deb ...
+2026-08-07T03:29:19.7361399Z Unpacking libbz2-dev:amd64 (1.0.8-5.1build0.1) ...
+2026-08-07T03:29:19.7566486Z Selecting previously unselected package libdbus-1-dev:amd64.
+2026-08-07T03:29:19.7694545Z Preparing to unpack .../14-libdbus-1-dev_1.14.10-4ubuntu4.1_amd64.deb ...
+2026-08-07T03:29:19.7703383Z Unpacking libdbus-1-dev:amd64 (1.14.10-4ubuntu4.1) ...
+2026-08-07T03:29:19.7995805Z Selecting previously unselected package libdrm-radeon1:amd64.
+2026-08-07T03:29:19.8123048Z Preparing to unpack .../15-libdrm-radeon1_2.4.125-1ubuntu0.1~24.04.2_amd64.deb ...
+2026-08-07T03:29:19.8132390Z Unpacking libdrm-radeon1:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:19.8338457Z Selecting previously unselected package libdrm-nouveau2:amd64.
+2026-08-07T03:29:19.8467330Z Preparing to unpack .../16-libdrm-nouveau2_2.4.125-1ubuntu0.1~24.04.2_amd64.deb ...
+2026-08-07T03:29:19.8475100Z Unpacking libdrm-nouveau2:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:19.8664628Z Selecting previously unselected package libpciaccess-dev:amd64.
+2026-08-07T03:29:19.8792912Z Preparing to unpack .../17-libpciaccess-dev_0.17-3ubuntu0.24.04.2_amd64.deb ...
+2026-08-07T03:29:19.8802700Z Unpacking libpciaccess-dev:amd64 (0.17-3ubuntu0.24.04.2) ...
+2026-08-07T03:29:19.8999499Z Selecting previously unselected package libdrm-dev:amd64.
+2026-08-07T03:29:19.9126900Z Preparing to unpack .../18-libdrm-dev_2.4.125-1ubuntu0.1~24.04.2_amd64.deb ...
+2026-08-07T03:29:19.9133928Z Unpacking libdrm-dev:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:19.9483509Z Selecting previously unselected package libflac12t64:amd64.
+2026-08-07T03:29:19.9612226Z Preparing to unpack .../19-libflac12t64_1.4.3+ds-2.1ubuntu2_amd64.deb ...
+2026-08-07T03:29:19.9620542Z Unpacking libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+2026-08-07T03:29:19.9841235Z Selecting previously unselected package libpng-dev:amd64.
+2026-08-07T03:29:19.9970845Z Preparing to unpack .../20-libpng-dev_1.6.43-5ubuntu0.6_amd64.deb ...
+2026-08-07T03:29:19.9978704Z Unpacking libpng-dev:amd64 (1.6.43-5ubuntu0.6) ...
+2026-08-07T03:29:20.0244263Z Selecting previously unselected package libfreetype-dev:amd64.
+2026-08-07T03:29:20.0373492Z Preparing to unpack .../21-libfreetype-dev_2.13.2+dfsg-1ubuntu0.1_amd64.deb ...
+2026-08-07T03:29:20.0382642Z Unpacking libfreetype-dev:amd64 (2.13.2+dfsg-1ubuntu0.1) ...
+2026-08-07T03:29:20.0718327Z Selecting previously unselected package libgbm-dev:amd64.
+2026-08-07T03:29:20.0849728Z Preparing to unpack .../22-libgbm-dev_25.2.8-0ubuntu0.24.04.2_amd64.deb ...
+2026-08-07T03:29:20.0858487Z Unpacking libgbm-dev:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+2026-08-07T03:29:20.1076954Z Selecting previously unselected package libgirepository-2.0-0:amd64.
+2026-08-07T03:29:20.1205981Z Preparing to unpack .../23-libgirepository-2.0-0_2.80.0-6ubuntu3.8_amd64.deb ...
+2026-08-07T03:29:20.1214895Z Unpacking libgirepository-2.0-0:amd64 (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:20.1425048Z Selecting previously unselected package libglib2.0-dev-bin.
+2026-08-07T03:29:20.1552326Z Preparing to unpack .../24-libglib2.0-dev-bin_2.80.0-6ubuntu3.8_amd64.deb ...
+2026-08-07T03:29:20.1561353Z Unpacking libglib2.0-dev-bin (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:20.1833716Z Selecting previously unselected package uuid-dev:amd64.
+2026-08-07T03:29:20.1963587Z Preparing to unpack .../25-uuid-dev_2.39.3-9ubuntu6.5_amd64.deb ...
+2026-08-07T03:29:20.1972917Z Unpacking uuid-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:20.2230288Z Selecting previously unselected package libblkid-dev:amd64.
+2026-08-07T03:29:20.2362922Z Preparing to unpack .../26-libblkid-dev_2.39.3-9ubuntu6.5_amd64.deb ...
+2026-08-07T03:29:20.2371622Z Unpacking libblkid-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:20.2616084Z Selecting previously unselected package libsepol-dev:amd64.
+2026-08-07T03:29:20.2745509Z Preparing to unpack .../27-libsepol-dev_3.5-2build1_amd64.deb ...
+2026-08-07T03:29:20.2753586Z Unpacking libsepol-dev:amd64 (3.5-2build1) ...
+2026-08-07T03:29:20.3065716Z Selecting previously unselected package libselinux1-dev:amd64.
+2026-08-07T03:29:20.3194878Z Preparing to unpack .../28-libselinux1-dev_3.5-2ubuntu2.1_amd64.deb ...
+2026-08-07T03:29:20.3202354Z Unpacking libselinux1-dev:amd64 (3.5-2ubuntu2.1) ...
+2026-08-07T03:29:20.3660085Z Selecting previously unselected package libmount-dev:amd64.
+2026-08-07T03:29:20.3792282Z Preparing to unpack .../29-libmount-dev_2.39.3-9ubuntu6.5_amd64.deb ...
+2026-08-07T03:29:20.3800401Z Unpacking libmount-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:20.4010296Z Selecting previously unselected package libglib2.0-dev:amd64.
+2026-08-07T03:29:20.4143258Z Preparing to unpack .../30-libglib2.0-dev_2.80.0-6ubuntu3.8_amd64.deb ...
+2026-08-07T03:29:20.4151425Z Unpacking libglib2.0-dev:amd64 (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:20.5273643Z Selecting previously unselected package libibus-1.0-dev:amd64.
+2026-08-07T03:29:20.5405847Z Preparing to unpack .../31-libibus-1.0-dev_1.5.29-2_amd64.deb ...
+2026-08-07T03:29:20.5415567Z Unpacking libibus-1.0-dev:amd64 (1.5.29-2) ...
+2026-08-07T03:29:20.5777460Z Selecting previously unselected package libmp3lame0:amd64.
+2026-08-07T03:29:20.5912345Z Preparing to unpack .../32-libmp3lame0_3.100-6build1_amd64.deb ...
+2026-08-07T03:29:20.5921138Z Unpacking libmp3lame0:amd64 (3.100-6build1) ...
+2026-08-07T03:29:20.6163686Z Selecting previously unselected package libmpg123-0t64:amd64.
+2026-08-07T03:29:20.6297433Z Preparing to unpack .../33-libmpg123-0t64_1.32.5-1ubuntu1.1_amd64.deb ...
+2026-08-07T03:29:20.6309671Z Unpacking libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+2026-08-07T03:29:20.6548528Z Selecting previously unselected package libopus0:amd64.
+2026-08-07T03:29:20.6678400Z Preparing to unpack .../34-libopus0_1.4-1build1_amd64.deb ...
+2026-08-07T03:29:20.6687376Z Unpacking libopus0:amd64 (1.4-1build1) ...
+2026-08-07T03:29:20.6913084Z Selecting previously unselected package libpng-tools.
+2026-08-07T03:29:20.7045883Z Preparing to unpack .../35-libpng-tools_1.6.43-5ubuntu0.6_amd64.deb ...
+2026-08-07T03:29:20.7054091Z Unpacking libpng-tools (1.6.43-5ubuntu0.6) ...
+2026-08-07T03:29:20.7266169Z Selecting previously unselected package libpthread-stubs0-dev:amd64.
+2026-08-07T03:29:20.7399208Z Preparing to unpack .../36-libpthread-stubs0-dev_0.4-1build3_amd64.deb ...
+2026-08-07T03:29:20.7408161Z Unpacking libpthread-stubs0-dev:amd64 (0.4-1build3) ...
+2026-08-07T03:29:20.7629324Z Selecting previously unselected package libvorbisenc2:amd64.
+2026-08-07T03:29:20.7761949Z Preparing to unpack .../37-libvorbisenc2_1.3.7-1build3_amd64.deb ...
+2026-08-07T03:29:20.7771364Z Unpacking libvorbisenc2:amd64 (1.3.7-1build3) ...
+2026-08-07T03:29:20.8015594Z Selecting previously unselected package libsndfile1:amd64.
+2026-08-07T03:29:20.8148157Z Preparing to unpack .../38-libsndfile1_1.2.2-1ubuntu5.24.04.1_amd64.deb ...
+2026-08-07T03:29:20.8157418Z Unpacking libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+2026-08-07T03:29:20.8432386Z Selecting previously unselected package libpulse0:amd64.
+2026-08-07T03:29:20.8564735Z Preparing to unpack .../39-libpulse0_1%3a16.1+dfsg1-2ubuntu10.1_amd64.deb ...
+2026-08-07T03:29:20.8634328Z Unpacking libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:20.8895865Z Selecting previously unselected package libpulse-mainloop-glib0:amd64.
+2026-08-07T03:29:20.9028732Z Preparing to unpack .../40-libpulse-mainloop-glib0_1%3a16.1+dfsg1-2ubuntu10.1_amd64.deb ...
+2026-08-07T03:29:20.9037531Z Unpacking libpulse-mainloop-glib0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:20.9250850Z Selecting previously unselected package libpulse-dev:amd64.
+2026-08-07T03:29:20.9383535Z Preparing to unpack .../41-libpulse-dev_1%3a16.1+dfsg1-2ubuntu10.1_amd64.deb ...
+2026-08-07T03:29:20.9393632Z Unpacking libpulse-dev:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:20.9686491Z Selecting previously unselected package libudev-dev:amd64.
+2026-08-07T03:29:20.9818010Z Preparing to unpack .../42-libudev-dev_255.4-1ubuntu8.16_amd64.deb ...
+2026-08-07T03:29:20.9826658Z Unpacking libudev-dev:amd64 (255.4-1ubuntu8.16) ...
+2026-08-07T03:29:21.0110902Z Selecting previously unselected package libwayland-server0:amd64.
+2026-08-07T03:29:21.0244024Z Preparing to unpack .../43-libwayland-server0_1.22.0-2.1build1_amd64.deb ...
+2026-08-07T03:29:21.0252411Z Unpacking libwayland-server0:amd64 (1.22.0-2.1build1) ...
+2026-08-07T03:29:21.0464796Z Selecting previously unselected package xorg-sgml-doctools.
+2026-08-07T03:29:21.0598732Z Preparing to unpack .../44-xorg-sgml-doctools_1%3a1.11-1.1_all.deb ...
+2026-08-07T03:29:21.0610505Z Unpacking xorg-sgml-doctools (1:1.11-1.1) ...
+2026-08-07T03:29:21.0866894Z Selecting previously unselected package x11proto-dev.
+2026-08-07T03:29:21.1001339Z Preparing to unpack .../45-x11proto-dev_2023.2-1_all.deb ...
+2026-08-07T03:29:21.1009690Z Unpacking x11proto-dev (2023.2-1) ...
+2026-08-07T03:29:21.1552221Z Selecting previously unselected package libxau-dev:amd64.
+2026-08-07T03:29:21.1683138Z Preparing to unpack .../46-libxau-dev_1%3a1.0.9-1build6_amd64.deb ...
+2026-08-07T03:29:21.1692777Z Unpacking libxau-dev:amd64 (1:1.0.9-1build6) ...
+2026-08-07T03:29:21.1906827Z Selecting previously unselected package libxdmcp-dev:amd64.
+2026-08-07T03:29:21.2037564Z Preparing to unpack .../47-libxdmcp-dev_1%3a1.1.3-0ubuntu6_amd64.deb ...
+2026-08-07T03:29:21.2045264Z Unpacking libxdmcp-dev:amd64 (1:1.1.3-0ubuntu6) ...
+2026-08-07T03:29:21.2274034Z Selecting previously unselected package xtrans-dev.
+2026-08-07T03:29:21.2403479Z Preparing to unpack .../48-xtrans-dev_1.4.0-1_all.deb ...
+2026-08-07T03:29:21.2412528Z Unpacking xtrans-dev (1.4.0-1) ...
+2026-08-07T03:29:21.2663690Z Selecting previously unselected package libxcb1-dev:amd64.
+2026-08-07T03:29:21.2795184Z Preparing to unpack .../49-libxcb1-dev_1.15-1ubuntu2_amd64.deb ...
+2026-08-07T03:29:21.2804269Z Unpacking libxcb1-dev:amd64 (1.15-1ubuntu2) ...
+2026-08-07T03:29:21.3037358Z Selecting previously unselected package libx11-dev:amd64.
+2026-08-07T03:29:21.3166682Z Preparing to unpack .../50-libx11-dev_2%3a1.8.7-1build1_amd64.deb ...
+2026-08-07T03:29:21.3175392Z Unpacking libx11-dev:amd64 (2:1.8.7-1build1) ...
+2026-08-07T03:29:21.3593439Z Selecting previously unselected package libxrender-dev:amd64.
+2026-08-07T03:29:21.3724128Z Preparing to unpack .../51-libxrender-dev_1%3a0.9.10-1.1build1_amd64.deb ...
+2026-08-07T03:29:21.3732744Z Unpacking libxrender-dev:amd64 (1:0.9.10-1.1build1) ...
+2026-08-07T03:29:21.3943316Z Selecting previously unselected package libxfixes-dev:amd64.
+2026-08-07T03:29:21.4075980Z Preparing to unpack .../52-libxfixes-dev_1%3a6.0.0-2build1_amd64.deb ...
+2026-08-07T03:29:21.4084527Z Unpacking libxfixes-dev:amd64 (1:6.0.0-2build1) ...
+2026-08-07T03:29:21.4297278Z Selecting previously unselected package libxcursor-dev:amd64.
+2026-08-07T03:29:21.4426680Z Preparing to unpack .../53-libxcursor-dev_1%3a1.2.1-1build1_amd64.deb ...
+2026-08-07T03:29:21.4435231Z Unpacking libxcursor-dev:amd64 (1:1.2.1-1build1) ...
+2026-08-07T03:29:21.4688442Z Selecting previously unselected package libxext-dev:amd64.
+2026-08-07T03:29:21.4817239Z Preparing to unpack .../54-libxext-dev_2%3a1.3.4-1build2_amd64.deb ...
+2026-08-07T03:29:21.4824433Z Unpacking libxext-dev:amd64 (2:1.3.4-1build2) ...
+2026-08-07T03:29:21.5139364Z Selecting previously unselected package libxi-dev:amd64.
+2026-08-07T03:29:21.5270835Z Preparing to unpack .../55-libxi-dev_2%3a1.8.1-1build1_amd64.deb ...
+2026-08-07T03:29:21.5278985Z Unpacking libxi-dev:amd64 (2:1.8.1-1build1) ...
+2026-08-07T03:29:21.5612971Z Selecting previously unselected package libxinerama-dev:amd64.
+2026-08-07T03:29:21.5745642Z Preparing to unpack .../56-libxinerama-dev_2%3a1.1.4-3build1_amd64.deb ...
+2026-08-07T03:29:21.5754969Z Unpacking libxinerama-dev:amd64 (2:1.1.4-3build1) ...
+2026-08-07T03:29:21.5977282Z Selecting previously unselected package libxrandr-dev:amd64.
+2026-08-07T03:29:21.6109739Z Preparing to unpack .../57-libxrandr-dev_2%3a1.5.2-2build1_amd64.deb ...
+2026-08-07T03:29:21.6120369Z Unpacking libxrandr-dev:amd64 (2:1.5.2-2build1) ...
+2026-08-07T03:29:21.6346544Z Selecting previously unselected package libwayland-bin.
+2026-08-07T03:29:21.6479124Z Preparing to unpack .../58-libwayland-bin_1.22.0-2.1build1_amd64.deb ...
+2026-08-07T03:29:21.6490235Z Unpacking libwayland-bin (1.22.0-2.1build1) ...
+2026-08-07T03:29:21.6729096Z Selecting previously unselected package libwayland-dev:amd64.
+2026-08-07T03:29:21.6862850Z Preparing to unpack .../59-libwayland-dev_1.22.0-2.1build1_amd64.deb ...
+2026-08-07T03:29:21.6871594Z Unpacking libwayland-dev:amd64 (1.22.0-2.1build1) ...
+2026-08-07T03:29:21.7410701Z Setting up libglib2.0-dev-bin (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:21.9097062Z Setting up bzip2-doc (1.0.8-5.1build0.1) ...
+2026-08-07T03:29:21.9119375Z Setting up libwayland-server0:amd64 (1.22.0-2.1build1) ...
+2026-08-07T03:29:21.9140063Z Setting up libdrm-nouveau2:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:21.9160218Z Setting up libpciaccess-dev:amd64 (0.17-3ubuntu0.24.04.2) ...
+2026-08-07T03:29:21.9180006Z Setting up wget (1.21.4-1ubuntu4.4) ...
+2026-08-07T03:29:21.9216460Z Setting up libpng-tools (1.6.43-5ubuntu0.6) ...
+2026-08-07T03:29:21.9240991Z Setting up libgirepository-2.0-0:amd64 (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:21.9260645Z Setting up libdrm-radeon1:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:21.9289383Z Setting up libpng-dev:amd64 (1.6.43-5ubuntu0.6) ...
+2026-08-07T03:29:21.9309706Z Setting up libibus-1.0-5:amd64 (1.5.29-2) ...
+2026-08-07T03:29:21.9331894Z Setting up libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+2026-08-07T03:29:21.9353083Z Setting up libpthread-stubs0-dev:amd64 (0.4-1build3) ...
+2026-08-07T03:29:21.9373982Z Setting up libgbm-dev:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+2026-08-07T03:29:21.9396103Z Setting up xtrans-dev (1.4.0-1) ...
+2026-08-07T03:29:21.9423341Z Setting up libwayland-bin (1.22.0-2.1build1) ...
+2026-08-07T03:29:21.9450247Z Setting up libdbus-1-dev:amd64 (1.14.10-4ubuntu4.1) ...
+2026-08-07T03:29:22.1102033Z Setting up uuid-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:22.1121920Z Setting up libopus0:amd64 (1.4-1build1) ...
+2026-08-07T03:29:22.1142667Z Setting up libssl-dev:amd64 (3.0.13-0ubuntu3.12) ...
+2026-08-07T03:29:22.1168826Z Setting up libjsoncpp25:amd64 (1.9.5-6build1) ...
+2026-08-07T03:29:22.1194323Z Setting up libudev-dev:amd64 (255.4-1ubuntu8.16) ...
+2026-08-07T03:29:22.1214619Z Setting up libsepol-dev:amd64 (3.5-2build1) ...
+2026-08-07T03:29:22.1234703Z Setting up libasyncns0:amd64 (0.8-6build4) ...
+2026-08-07T03:29:22.1260009Z Setting up librhash0:amd64 (1.4.3-3build1) ...
+2026-08-07T03:29:22.1281476Z Setting up build-essential (12.10ubuntu1) ...
+2026-08-07T03:29:22.1303172Z Setting up xorg-sgml-doctools (1:1.11-1.1) ...
+2026-08-07T03:29:22.1334046Z Setting up cmake-data (3.28.3-1build7) ...
+2026-08-07T03:29:22.1403020Z Setting up libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+2026-08-07T03:29:22.1423622Z Setting up libasound2-dev:amd64 (1.2.11-1ubuntu0.3) ...
+2026-08-07T03:29:22.1443667Z Setting up openssl (3.0.13-0ubuntu3.12) ...
+2026-08-07T03:29:22.1484658Z Setting up gir1.2-ibus-1.0:amd64 (1.5.29-2) ...
+2026-08-07T03:29:22.1505590Z Setting up libbrotli-dev:amd64 (1.1.0-2build2) ...
+2026-08-07T03:29:22.1530100Z Setting up libmp3lame0:amd64 (3.100-6build1) ...
+2026-08-07T03:29:22.1550415Z Setting up libvorbisenc2:amd64 (1.3.7-1build3) ...
+2026-08-07T03:29:22.1573135Z Setting up libbz2-dev:amd64 (1.0.8-5.1build0.1) ...
+2026-08-07T03:29:22.1593143Z Setting up libblkid-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:22.1619324Z Setting up libdrm-dev:amd64 (2.4.125-1ubuntu0.1~24.04.2) ...
+2026-08-07T03:29:22.1640716Z Setting up libselinux1-dev:amd64 (3.5-2ubuntu2.1) ...
+2026-08-07T03:29:22.1662589Z Setting up libwayland-dev:amd64 (1.22.0-2.1build1) ...
+2026-08-07T03:29:22.1685592Z Setting up libfreetype-dev:amd64 (2.13.2+dfsg-1ubuntu0.1) ...
+2026-08-07T03:29:22.1705900Z Setting up cmake (3.28.3-1build7) ...
+2026-08-07T03:29:22.1728381Z Setting up libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+2026-08-07T03:29:22.1748779Z Setting up libmount-dev:amd64 (2.39.3-9ubuntu6.5) ...
+2026-08-07T03:29:22.1771122Z Setting up libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:22.1856588Z Setting up libglib2.0-dev:amd64 (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:22.1878381Z Setting up libpulse-mainloop-glib0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:22.1973800Z Processing triggers for sgml-base (1.31) ...
+2026-08-07T03:29:22.2176515Z Processing triggers for install-info (7.1-3build2) ...
+2026-08-07T03:29:22.4340906Z Setting up x11proto-dev (2023.2-1) ...
+2026-08-07T03:29:22.4368906Z Setting up libxau-dev:amd64 (1:1.0.9-1build6) ...
+2026-08-07T03:29:22.4422718Z Processing triggers for libc-bin (2.39-0ubuntu8.7) ...
+2026-08-07T03:29:22.5034434Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-08-07T03:29:22.5101600Z Not building database; man-db/auto-update is not 'true'.
+2026-08-07T03:29:22.5121349Z Setting up libxdmcp-dev:amd64 (1:1.1.3-0ubuntu6) ...
+2026-08-07T03:29:22.5146879Z Processing triggers for libglib2.0-0t64:amd64 (2.80.0-6ubuntu3.8) ...
+2026-08-07T03:29:22.5270739Z Setting up libpulse-dev:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+2026-08-07T03:29:22.5305356Z Setting up libxcb1-dev:amd64 (1.15-1ubuntu2) ...
+2026-08-07T03:29:22.5333272Z Setting up libx11-dev:amd64 (2:1.8.7-1build1) ...
+2026-08-07T03:29:22.5360982Z Setting up libibus-1.0-dev:amd64 (1.5.29-2) ...
+2026-08-07T03:29:22.5384815Z Setting up libxfixes-dev:amd64 (1:6.0.0-2build1) ...
+2026-08-07T03:29:22.5411231Z Setting up libxext-dev:amd64 (2:1.3.4-1build2) ...
+2026-08-07T03:29:22.5437421Z Setting up libxi-dev:amd64 (2:1.8.1-1build1) ...
+2026-08-07T03:29:22.5458472Z Setting up libxrender-dev:amd64 (1:0.9.10-1.1build1) ...
+2026-08-07T03:29:22.5482710Z Setting up libxcursor-dev:amd64 (1:1.2.1-1build1) ...
+2026-08-07T03:29:22.5509402Z Setting up libxrandr-dev:amd64 (2:1.5.2-2build1) ...
+2026-08-07T03:29:22.5531956Z Setting up libxinerama-dev:amd64 (2:1.1.4-3build1) ...
+2026-08-07T03:29:23.4896298Z 
+2026-08-07T03:29:23.4896941Z Running kernel seems to be up-to-date.
+2026-08-07T03:29:23.4897189Z 
+2026-08-07T03:29:23.4897284Z Restarting services...
+2026-08-07T03:29:23.5338409Z  /etc/needrestart/restart.d/systemd-manager
+2026-08-07T03:29:23.8747488Z  systemctl restart packagekit.service php8.3-fpm.service systemd-journald.service systemd-networkd.service systemd-resolved.service systemd-udevd.service udisks2.service
+2026-08-07T03:29:24.0783091Z 
+2026-08-07T03:29:24.0783609Z Service restarts being deferred:
+2026-08-07T03:29:24.0784180Z  systemctl restart hosted-compute-agent.service
+2026-08-07T03:29:24.0784728Z  systemctl restart systemd-logind.service
+2026-08-07T03:29:24.0785332Z  systemctl restart walinuxagent.service
+2026-08-07T03:29:24.0785638Z 
+2026-08-07T03:29:24.0786135Z No containers need to be restarted.
+2026-08-07T03:29:24.0786770Z 
+2026-08-07T03:29:24.0787209Z User sessions running outdated binaries:
+2026-08-07T03:29:24.0788217Z  runner @ user manager service: systemd[1154]
+2026-08-07T03:29:24.0864809Z 
+2026-08-07T03:29:24.0865191Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-08-07T03:29:24.9829444Z ##[group]Run wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+2026-08-07T03:29:24.9830207Z [36;1mwget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz[0m
+2026-08-07T03:29:24.9830689Z [36;1mtar xzf SDL3-3.2.0.tar.gz[0m
+2026-08-07T03:29:24.9830936Z [36;1mcd SDL3-3.2.0[0m
+2026-08-07T03:29:24.9831414Z [36;1mcmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local[0m
+2026-08-07T03:29:24.9831960Z [36;1mcmake --build build --parallel $(nproc)[0m
+2026-08-07T03:29:24.9832260Z [36;1msudo cmake --install build[0m
+2026-08-07T03:29:24.9832506Z [36;1msudo ldconfig[0m
+2026-08-07T03:29:24.9832708Z [36;1mcd ..[0m
+2026-08-07T03:29:24.9832919Z [36;1mrm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz[0m
+2026-08-07T03:29:24.9879070Z shell: /usr/bin/bash -e {0}
+2026-08-07T03:29:24.9879321Z env:
+2026-08-07T03:29:24.9879506Z   BUILD_TYPE: Debug
+2026-08-07T03:29:24.9879737Z ##[endgroup]
+2026-08-07T03:29:27.0146874Z -- The C compiler identification is GNU 13.3.0
+2026-08-07T03:29:27.1350658Z -- Detecting C compiler ABI info
+2026-08-07T03:29:27.3714203Z -- Detecting C compiler ABI info - done
+2026-08-07T03:29:27.3892726Z -- Check for working C compiler: /usr/bin/cc - skipped
+2026-08-07T03:29:27.3937882Z -- Detecting C compile features
+2026-08-07T03:29:27.3944362Z -- Detecting C compile features - done
+2026-08-07T03:29:27.5060453Z -- Found PkgConfig: /usr/bin/pkg-config (found version "1.8.1")
+2026-08-07T03:29:27.5174518Z -- Detecting Target CPU Architecture
+2026-08-07T03:29:33.9458856Z -- Detecting Target CPU Architecture - X64
+2026-08-07T03:29:33.9542509Z -- Performing Test HAVE_GCC_WALL
+2026-08-07T03:29:34.0053731Z -- Performing Test HAVE_GCC_WALL - Success
+2026-08-07T03:29:34.0062222Z -- Performing Test HAVE_GCC_WUNDEF
+2026-08-07T03:29:34.0581495Z -- Performing Test HAVE_GCC_WUNDEF - Success
+2026-08-07T03:29:34.0590031Z -- Performing Test HAVE_GCC_WFLOAT_CONVERSION
+2026-08-07T03:29:34.1108309Z -- Performing Test HAVE_GCC_WFLOAT_CONVERSION - Success
+2026-08-07T03:29:34.1116898Z -- Performing Test HAVE_GCC_NO_STRICT_ALIASING
+2026-08-07T03:29:34.1640587Z -- Performing Test HAVE_GCC_NO_STRICT_ALIASING - Success
+2026-08-07T03:29:34.1649399Z -- Performing Test HAVE_GCC_WDOCUMENTATION
+2026-08-07T03:29:34.1933228Z -- Performing Test HAVE_GCC_WDOCUMENTATION - Failed
+2026-08-07T03:29:34.1942060Z -- Performing Test HAVE_GCC_WDOCUMENTATION_UNKNOWN_COMMAND
+2026-08-07T03:29:34.2318642Z -- Performing Test HAVE_GCC_WDOCUMENTATION_UNKNOWN_COMMAND - Failed
+2026-08-07T03:29:34.2327211Z -- Performing Test HAVE_GCC_COMMENT_BLOCK_COMMANDS
+2026-08-07T03:29:34.2749093Z -- Performing Test HAVE_GCC_COMMENT_BLOCK_COMMANDS - Failed
+2026-08-07T03:29:34.2757710Z -- Performing Test HAVE_CLANG_COMMENT_BLOCK_COMMANDS
+2026-08-07T03:29:34.3096439Z -- Performing Test HAVE_CLANG_COMMENT_BLOCK_COMMANDS - Failed
+2026-08-07T03:29:34.3105324Z -- Performing Test HAVE_GCC_WSHADOW
+2026-08-07T03:29:34.3650008Z -- Performing Test HAVE_GCC_WSHADOW - Success
+2026-08-07T03:29:34.3659229Z -- Performing Test HAVE_GCC_WUNUSED_LOCAL_TYPEDEFS
+2026-08-07T03:29:34.4199783Z -- Performing Test HAVE_GCC_WUNUSED_LOCAL_TYPEDEFS - Success
+2026-08-07T03:29:34.4208257Z -- Performing Test HAVE_GCC_WIMPLICIT_FALLTHROUGH
+2026-08-07T03:29:34.4748422Z -- Performing Test HAVE_GCC_WIMPLICIT_FALLTHROUGH - Success
+2026-08-07T03:29:34.4757002Z -- Performing Test COMPILER_SUPPORTS_FDIAGNOSTICS_COLOR_ALWAYS
+2026-08-07T03:29:34.5363394Z -- Performing Test COMPILER_SUPPORTS_FDIAGNOSTICS_COLOR_ALWAYS - Success
+2026-08-07T03:29:34.5394106Z -- Looking for __GLIBC__
+2026-08-07T03:29:34.7423402Z -- Looking for __GLIBC__ - found
+2026-08-07T03:29:34.7428196Z -- Performing Test LINKER_SUPPORTS_VERSION_SCRIPT
+2026-08-07T03:29:34.8178851Z -- Performing Test LINKER_SUPPORTS_VERSION_SCRIPT - Success
+2026-08-07T03:29:34.8184483Z -- Performing Test COMPILER_SUPPORTS_GCC_ATOMICS
+2026-08-07T03:29:34.9997417Z -- Performing Test COMPILER_SUPPORTS_GCC_ATOMICS - Success
+2026-08-07T03:29:35.0000349Z -- Performing Test HAVE_GCC_FVISIBILITY
+2026-08-07T03:29:35.0657533Z -- Performing Test HAVE_GCC_FVISIBILITY - Success
+2026-08-07T03:29:35.0667503Z -- Performing Test LINKER_SUPPORTS_WL_NO_UNDEFINED
+2026-08-07T03:29:35.1222205Z -- Performing Test LINKER_SUPPORTS_WL_NO_UNDEFINED - Success
+2026-08-07T03:29:35.1225577Z -- Performing Test COMPILER_SUPPORTS_MMX
+2026-08-07T03:29:35.2135655Z -- Performing Test COMPILER_SUPPORTS_MMX - Success
+2026-08-07T03:29:35.2158817Z -- Performing Test COMPILER_SUPPORTS_SSE
+2026-08-07T03:29:35.3069128Z -- Performing Test COMPILER_SUPPORTS_SSE - Success
+2026-08-07T03:29:35.3071965Z -- Performing Test COMPILER_SUPPORTS_SSE2
+2026-08-07T03:29:35.3738554Z -- Performing Test COMPILER_SUPPORTS_SSE2 - Success
+2026-08-07T03:29:35.3741586Z -- Performing Test COMPILER_SUPPORTS_SSE3
+2026-08-07T03:29:35.4597716Z -- Performing Test COMPILER_SUPPORTS_SSE3 - Success
+2026-08-07T03:29:35.4600538Z -- Performing Test COMPILER_SUPPORTS_SSE4_1
+2026-08-07T03:29:35.5478488Z -- Performing Test COMPILER_SUPPORTS_SSE4_1 - Success
+2026-08-07T03:29:35.5481035Z -- Performing Test COMPILER_SUPPORTS_SSE4_2
+2026-08-07T03:29:35.6204074Z -- Performing Test COMPILER_SUPPORTS_SSE4_2 - Success
+2026-08-07T03:29:35.6206604Z -- Performing Test COMPILER_SUPPORTS_AVX
+2026-08-07T03:29:36.0068460Z -- Performing Test COMPILER_SUPPORTS_AVX - Success
+2026-08-07T03:29:36.0070852Z -- Performing Test COMPILER_SUPPORTS_AVX2
+2026-08-07T03:29:36.2833216Z -- Performing Test COMPILER_SUPPORTS_AVX2 - Success
+2026-08-07T03:29:36.2835571Z -- Performing Test COMPILER_SUPPORTS_AVX512F
+2026-08-07T03:29:36.5359046Z -- Performing Test COMPILER_SUPPORTS_AVX512F - Success
+2026-08-07T03:29:36.5402938Z -- Looking for alloca.h
+2026-08-07T03:29:36.5936769Z -- Looking for alloca.h - found
+2026-08-07T03:29:36.5939119Z -- Looking for float.h
+2026-08-07T03:29:36.6485105Z -- Looking for float.h - found
+2026-08-07T03:29:36.6486299Z -- Looking for iconv.h
+2026-08-07T03:29:36.7070518Z -- Looking for iconv.h - found
+2026-08-07T03:29:36.7071713Z -- Looking for inttypes.h
+2026-08-07T03:29:36.7627422Z -- Looking for inttypes.h - found
+2026-08-07T03:29:36.7628715Z -- Looking for limits.h
+2026-08-07T03:29:36.8424897Z -- Looking for limits.h - found
+2026-08-07T03:29:36.8425898Z -- Looking for malloc.h
+2026-08-07T03:29:36.9096708Z -- Looking for malloc.h - found
+2026-08-07T03:29:36.9097735Z -- Looking for math.h
+2026-08-07T03:29:37.0019750Z -- Looking for math.h - found
+2026-08-07T03:29:37.0020685Z -- Looking for memory.h
+2026-08-07T03:29:37.0614390Z -- Looking for memory.h - found
+2026-08-07T03:29:37.0615805Z -- Looking for signal.h
+2026-08-07T03:29:37.1692666Z -- Looking for signal.h - found
+2026-08-07T03:29:37.1693576Z -- Looking for stdarg.h
+2026-08-07T03:29:37.2216213Z -- Looking for stdarg.h - found
+2026-08-07T03:29:37.2217190Z -- Looking for stdbool.h
+2026-08-07T03:29:37.2738611Z -- Looking for stdbool.h - found
+2026-08-07T03:29:37.2739591Z -- Looking for stddef.h
+2026-08-07T03:29:37.3271088Z -- Looking for stddef.h - found
+2026-08-07T03:29:37.3272036Z -- Looking for stdint.h
+2026-08-07T03:29:37.3813044Z -- Looking for stdint.h - found
+2026-08-07T03:29:37.3814218Z -- Looking for stdio.h
+2026-08-07T03:29:37.4368528Z -- Looking for stdio.h - found
+2026-08-07T03:29:37.4370103Z -- Looking for stdlib.h
+2026-08-07T03:29:37.4948206Z -- Looking for stdlib.h - found
+2026-08-07T03:29:37.4949229Z -- Looking for string.h
+2026-08-07T03:29:37.5501365Z -- Looking for string.h - found
+2026-08-07T03:29:37.5502347Z -- Looking for strings.h
+2026-08-07T03:29:37.6053748Z -- Looking for strings.h - found
+2026-08-07T03:29:37.6055609Z -- Looking for sys/types.h
+2026-08-07T03:29:37.6658747Z -- Looking for sys/types.h - found
+2026-08-07T03:29:37.6660395Z -- Looking for time.h
+2026-08-07T03:29:37.7414638Z -- Looking for time.h - found
+2026-08-07T03:29:37.7415433Z -- Looking for wchar.h
+2026-08-07T03:29:37.8578235Z -- Looking for wchar.h - found
+2026-08-07T03:29:37.8580583Z -- Looking for pow in m
+2026-08-07T03:29:37.9228111Z -- Looking for pow in m - found
+2026-08-07T03:29:37.9233224Z -- Looking for abs
+2026-08-07T03:29:38.0147605Z -- Looking for abs - found
+2026-08-07T03:29:38.0150215Z -- Looking for acos
+2026-08-07T03:29:38.1044376Z -- Looking for acos - found
+2026-08-07T03:29:38.1047085Z -- Looking for acosf
+2026-08-07T03:29:38.1937515Z -- Looking for acosf - found
+2026-08-07T03:29:38.1940139Z -- Looking for asin
+2026-08-07T03:29:38.2811515Z -- Looking for asin - found
+2026-08-07T03:29:38.2814064Z -- Looking for asinf
+2026-08-07T03:29:38.3682856Z -- Looking for asinf - found
+2026-08-07T03:29:38.3685395Z -- Looking for atan
+2026-08-07T03:29:38.4554817Z -- Looking for atan - found
+2026-08-07T03:29:38.4557210Z -- Looking for atan2
+2026-08-07T03:29:38.5424754Z -- Looking for atan2 - found
+2026-08-07T03:29:38.5427196Z -- Looking for atan2f
+2026-08-07T03:29:38.6346503Z -- Looking for atan2f - found
+2026-08-07T03:29:38.6349284Z -- Looking for atanf
+2026-08-07T03:29:38.7237688Z -- Looking for atanf - found
+2026-08-07T03:29:38.7240685Z -- Looking for atof
+2026-08-07T03:29:38.8093967Z -- Looking for atof - found
+2026-08-07T03:29:38.8096397Z -- Looking for atoi
+2026-08-07T03:29:38.8945119Z -- Looking for atoi - found
+2026-08-07T03:29:38.8947590Z -- Looking for bcopy
+2026-08-07T03:29:38.9793621Z -- Looking for bcopy - found
+2026-08-07T03:29:38.9796453Z -- Looking for ceil
+2026-08-07T03:29:39.0679807Z -- Looking for ceil - found
+2026-08-07T03:29:39.0682216Z -- Looking for ceilf
+2026-08-07T03:29:39.1548951Z -- Looking for ceilf - found
+2026-08-07T03:29:39.1551603Z -- Looking for copysign
+2026-08-07T03:29:39.2417721Z -- Looking for copysign - found
+2026-08-07T03:29:39.2420429Z -- Looking for copysignf
+2026-08-07T03:29:39.3286986Z -- Looking for copysignf - found
+2026-08-07T03:29:39.3289897Z -- Looking for cos
+2026-08-07T03:29:39.4203574Z -- Looking for cos - found
+2026-08-07T03:29:39.4205939Z -- Looking for cosf
+2026-08-07T03:29:39.5085870Z -- Looking for cosf - found
+2026-08-07T03:29:39.5088485Z -- Looking for _Exit
+2026-08-07T03:29:39.5954201Z -- Looking for _Exit - found
+2026-08-07T03:29:39.5956850Z -- Looking for exp
+2026-08-07T03:29:39.6841931Z -- Looking for exp - found
+2026-08-07T03:29:39.6844533Z -- Looking for expf
+2026-08-07T03:29:39.7754084Z -- Looking for expf - found
+2026-08-07T03:29:39.7756928Z -- Looking for fabs
+2026-08-07T03:29:39.8661219Z -- Looking for fabs - found
+2026-08-07T03:29:39.8664549Z -- Looking for fabsf
+2026-08-07T03:29:39.9547276Z -- Looking for fabsf - found
+2026-08-07T03:29:39.9550917Z -- Looking for floor
+2026-08-07T03:29:40.0442114Z -- Looking for floor - found
+2026-08-07T03:29:40.0444915Z -- Looking for floorf
+2026-08-07T03:29:40.1351041Z -- Looking for floorf - found
+2026-08-07T03:29:40.1353806Z -- Looking for fmod
+2026-08-07T03:29:40.2253937Z -- Looking for fmod - found
+2026-08-07T03:29:40.2256723Z -- Looking for fmodf
+2026-08-07T03:29:40.3135693Z -- Looking for fmodf - found
+2026-08-07T03:29:40.3139096Z -- Looking for fopen64
+2026-08-07T03:29:40.4011192Z -- Looking for fopen64 - found
+2026-08-07T03:29:40.4013733Z -- Looking for fseeko
+2026-08-07T03:29:40.4886373Z -- Looking for fseeko - found
+2026-08-07T03:29:40.4889273Z -- Looking for fseeko64
+2026-08-07T03:29:40.5756486Z -- Looking for fseeko64 - found
+2026-08-07T03:29:40.5759524Z -- Looking for getenv
+2026-08-07T03:29:40.6616679Z -- Looking for getenv - found
+2026-08-07T03:29:40.6619604Z -- Looking for _i64toa
+2026-08-07T03:29:40.7213222Z -- Looking for _i64toa - not found
+2026-08-07T03:29:40.7215933Z -- Looking for index
+2026-08-07T03:29:40.8076371Z -- Looking for index - found
+2026-08-07T03:29:40.8079251Z -- Looking for itoa
+2026-08-07T03:29:40.8673393Z -- Looking for itoa - not found
+2026-08-07T03:29:40.8676058Z -- Looking for log
+2026-08-07T03:29:40.9556348Z -- Looking for log - found
+2026-08-07T03:29:40.9559325Z -- Looking for log10
+2026-08-07T03:29:41.0481525Z -- Looking for log10 - found
+2026-08-07T03:29:41.0484812Z -- Looking for log10f
+2026-08-07T03:29:41.1383944Z -- Looking for log10f - found
+2026-08-07T03:29:41.1386325Z -- Looking for logf
+2026-08-07T03:29:41.2296355Z -- Looking for logf - found
+2026-08-07T03:29:41.2299460Z -- Looking for lround
+2026-08-07T03:29:41.3218545Z -- Looking for lround - found
+2026-08-07T03:29:41.3220984Z -- Looking for lroundf
+2026-08-07T03:29:41.4112637Z -- Looking for lroundf - found
+2026-08-07T03:29:41.4115188Z -- Looking for _ltoa
+2026-08-07T03:29:41.4709839Z -- Looking for _ltoa - not found
+2026-08-07T03:29:41.4712859Z -- Looking for malloc
+2026-08-07T03:29:41.5613115Z -- Looking for malloc - found
+2026-08-07T03:29:41.5613683Z -- Looking for memcmp
+2026-08-07T03:29:41.6483416Z -- Looking for memcmp - found
+2026-08-07T03:29:41.6485772Z -- Looking for memcpy
+2026-08-07T03:29:41.7392803Z -- Looking for memcpy - found
+2026-08-07T03:29:41.7395261Z -- Looking for memmove
+2026-08-07T03:29:41.8281755Z -- Looking for memmove - found
+2026-08-07T03:29:41.8284940Z -- Looking for memset
+2026-08-07T03:29:41.9142997Z -- Looking for memset - found
+2026-08-07T03:29:41.9145569Z -- Looking for modf
+2026-08-07T03:29:42.0066200Z -- Looking for modf - found
+2026-08-07T03:29:42.0069054Z -- Looking for modff
+2026-08-07T03:29:42.0945307Z -- Looking for modff - found
+2026-08-07T03:29:42.0948940Z -- Looking for pow
+2026-08-07T03:29:42.1811511Z -- Looking for pow - found
+2026-08-07T03:29:42.1814483Z -- Looking for powf
+2026-08-07T03:29:42.2683723Z -- Looking for powf - found
+2026-08-07T03:29:42.2686704Z -- Looking for putenv
+2026-08-07T03:29:42.3531412Z -- Looking for putenv - found
+2026-08-07T03:29:42.3534669Z -- Looking for rindex
+2026-08-07T03:29:42.4394819Z -- Looking for rindex - found
+2026-08-07T03:29:42.4397988Z -- Looking for round
+2026-08-07T03:29:42.5258963Z -- Looking for round - found
+2026-08-07T03:29:42.5261368Z -- Looking for roundf
+2026-08-07T03:29:42.6158560Z -- Looking for roundf - found
+2026-08-07T03:29:42.6161408Z -- Looking for scalbn
+2026-08-07T03:29:42.7029746Z -- Looking for scalbn - found
+2026-08-07T03:29:42.7032281Z -- Looking for scalbnf
+2026-08-07T03:29:42.7949743Z -- Looking for scalbnf - found
+2026-08-07T03:29:42.7952638Z -- Looking for setenv
+2026-08-07T03:29:42.8798278Z -- Looking for setenv - found
+2026-08-07T03:29:42.8801383Z -- Looking for sin
+2026-08-07T03:29:42.9672781Z -- Looking for sin - found
+2026-08-07T03:29:42.9675895Z -- Looking for sinf
+2026-08-07T03:29:43.0544442Z -- Looking for sinf - found
+2026-08-07T03:29:43.0547412Z -- Looking for sqr
+2026-08-07T03:29:43.1121204Z -- Looking for sqr - not found
+2026-08-07T03:29:43.1124502Z -- Looking for sqrt
+2026-08-07T03:29:43.1995359Z -- Looking for sqrt - found
+2026-08-07T03:29:43.1998725Z -- Looking for sqrtf
+2026-08-07T03:29:43.2879971Z -- Looking for sqrtf - found
+2026-08-07T03:29:43.2882554Z -- Looking for sscanf
+2026-08-07T03:29:43.3736371Z -- Looking for sscanf - found
+2026-08-07T03:29:43.3740427Z -- Looking for strchr
+2026-08-07T03:29:43.4609688Z -- Looking for strchr - found
+2026-08-07T03:29:43.4612062Z -- Looking for strcmp
+2026-08-07T03:29:43.5485576Z -- Looking for strcmp - found
+2026-08-07T03:29:43.5488095Z -- Looking for strlcat
+2026-08-07T03:29:43.6364307Z -- Looking for strlcat - found
+2026-08-07T03:29:43.6366845Z -- Looking for strlcpy
+2026-08-07T03:29:43.7237620Z -- Looking for strlcpy - found
+2026-08-07T03:29:43.7240465Z -- Looking for strlen
+2026-08-07T03:29:43.8112742Z -- Looking for strlen - found
+2026-08-07T03:29:43.8115770Z -- Looking for strncmp
+2026-08-07T03:29:43.8991505Z -- Looking for strncmp - found
+2026-08-07T03:29:43.8994614Z -- Looking for strnlen
+2026-08-07T03:29:43.9843710Z -- Looking for strnlen - found
+2026-08-07T03:29:43.9846837Z -- Looking for strpbrk
+2026-08-07T03:29:44.0697635Z -- Looking for strpbrk - found
+2026-08-07T03:29:44.0701324Z -- Looking for strrchr
+2026-08-07T03:29:44.1551375Z -- Looking for strrchr - found
+2026-08-07T03:29:44.1554726Z -- Looking for strstr
+2026-08-07T03:29:44.2404802Z -- Looking for strstr - found
+2026-08-07T03:29:44.2408242Z -- Looking for strnstr
+2026-08-07T03:29:44.2978551Z -- Looking for strnstr - not found
+2026-08-07T03:29:44.2981215Z -- Looking for strtod
+2026-08-07T03:29:44.3847721Z -- Looking for strtod - found
+2026-08-07T03:29:44.3851059Z -- Looking for strtok_r
+2026-08-07T03:29:44.4704801Z -- Looking for strtok_r - found
+2026-08-07T03:29:44.4707246Z -- Looking for strtol
+2026-08-07T03:29:44.5575899Z -- Looking for strtol - found
+2026-08-07T03:29:44.5578793Z -- Looking for strtoll
+2026-08-07T03:29:44.6448740Z -- Looking for strtoll - found
+2026-08-07T03:29:44.6451591Z -- Looking for strtoul
+2026-08-07T03:29:44.7317141Z -- Looking for strtoul - found
+2026-08-07T03:29:44.7320240Z -- Looking for strtoull
+2026-08-07T03:29:44.8174544Z -- Looking for strtoull - found
+2026-08-07T03:29:44.8178772Z -- Looking for tan
+2026-08-07T03:29:44.9070540Z -- Looking for tan - found
+2026-08-07T03:29:44.9073199Z -- Looking for tanf
+2026-08-07T03:29:44.9963319Z -- Looking for tanf - found
+2026-08-07T03:29:44.9966428Z -- Looking for trunc
+2026-08-07T03:29:45.0849561Z -- Looking for trunc - found
+2026-08-07T03:29:45.0851992Z -- Looking for truncf
+2026-08-07T03:29:45.1720230Z -- Looking for truncf - found
+2026-08-07T03:29:45.1722509Z -- Looking for unsetenv
+2026-08-07T03:29:45.2586303Z -- Looking for unsetenv - found
+2026-08-07T03:29:45.2589538Z -- Looking for vsnprintf
+2026-08-07T03:29:45.3460288Z -- Looking for vsnprintf - found
+2026-08-07T03:29:45.3463286Z -- Looking for vsscanf
+2026-08-07T03:29:45.4319653Z -- Looking for vsscanf - found
+2026-08-07T03:29:45.4322023Z -- Looking for wcsnlen
+2026-08-07T03:29:45.5195244Z -- Looking for wcsnlen - found
+2026-08-07T03:29:45.5198433Z -- Looking for wcscmp
+2026-08-07T03:29:45.6074701Z -- Looking for wcscmp - found
+2026-08-07T03:29:45.6077290Z -- Looking for wcsdup
+2026-08-07T03:29:45.6963486Z -- Looking for wcsdup - found
+2026-08-07T03:29:45.6965836Z -- Looking for wcslcat
+2026-08-07T03:29:45.7855514Z -- Looking for wcslcat - found
+2026-08-07T03:29:45.7857981Z -- Looking for wcslcpy
+2026-08-07T03:29:45.8727090Z -- Looking for wcslcpy - found
+2026-08-07T03:29:45.8729983Z -- Looking for wcslen
+2026-08-07T03:29:45.9601505Z -- Looking for wcslen - found
+2026-08-07T03:29:45.9604400Z -- Looking for wcsncmp
+2026-08-07T03:29:46.0481675Z -- Looking for wcsncmp - found
+2026-08-07T03:29:46.0484444Z -- Looking for wcsstr
+2026-08-07T03:29:46.1357996Z -- Looking for wcsstr - found
+2026-08-07T03:29:46.1361341Z -- Looking for wcstol
+2026-08-07T03:29:46.2242283Z -- Looking for wcstol - found
+2026-08-07T03:29:46.2245000Z -- Looking for strcasestr
+2026-08-07T03:29:46.3119899Z -- Looking for strcasestr - found
+2026-08-07T03:29:46.3123366Z -- Performing Test LIBC_HAS_ISINF
+2026-08-07T03:29:46.4123291Z -- Performing Test LIBC_HAS_ISINF - Success
+2026-08-07T03:29:46.4124060Z -- Performing Test LIBC_ISINF_HANDLES_FLOAT
+2026-08-07T03:29:46.4846532Z -- Performing Test LIBC_ISINF_HANDLES_FLOAT - Success
+2026-08-07T03:29:46.4847319Z -- Performing Test LIBC_HAS_ISINFF
+2026-08-07T03:29:46.5559245Z -- Performing Test LIBC_HAS_ISINFF - Success
+2026-08-07T03:29:46.5560321Z -- Performing Test LIBC_HAS_ISNAN
+2026-08-07T03:29:46.6261542Z -- Performing Test LIBC_HAS_ISNAN - Success
+2026-08-07T03:29:46.6262667Z -- Performing Test LIBC_ISNAN_HANDLES_FLOAT
+2026-08-07T03:29:46.6963548Z -- Performing Test LIBC_ISNAN_HANDLES_FLOAT - Success
+2026-08-07T03:29:46.6964543Z -- Performing Test LIBC_HAS_ISNANF
+2026-08-07T03:29:46.7657358Z -- Performing Test LIBC_HAS_ISNANF - Success
+2026-08-07T03:29:46.7660637Z -- Looking for fdatasync
+2026-08-07T03:29:46.8225057Z -- Looking for fdatasync - found
+2026-08-07T03:29:46.8227723Z -- Looking for gethostname
+2026-08-07T03:29:46.8804890Z -- Looking for gethostname - found
+2026-08-07T03:29:46.8807422Z -- Looking for getpagesize
+2026-08-07T03:29:46.9391658Z -- Looking for getpagesize - found
+2026-08-07T03:29:46.9393448Z -- Looking for sigaction
+2026-08-07T03:29:46.9989064Z -- Looking for sigaction - found
+2026-08-07T03:29:46.9991378Z -- Looking for setjmp
+2026-08-07T03:29:47.0595674Z -- Looking for setjmp - found
+2026-08-07T03:29:47.0597688Z -- Looking for nanosleep
+2026-08-07T03:29:47.1163721Z -- Looking for nanosleep - found
+2026-08-07T03:29:47.1165808Z -- Looking for gmtime_r
+2026-08-07T03:29:47.1729152Z -- Looking for gmtime_r - found
+2026-08-07T03:29:47.1731681Z -- Looking for localtime_r
+2026-08-07T03:29:47.2294842Z -- Looking for localtime_r - found
+2026-08-07T03:29:47.2296725Z -- Looking for nl_langinfo
+2026-08-07T03:29:47.2896327Z -- Looking for nl_langinfo - found
+2026-08-07T03:29:47.2898383Z -- Looking for sysconf
+2026-08-07T03:29:47.3468673Z -- Looking for sysconf - found
+2026-08-07T03:29:47.3471071Z -- Looking for sysctlbyname
+2026-08-07T03:29:47.3832498Z -- Looking for sysctlbyname - not found
+2026-08-07T03:29:47.3834746Z -- Looking for getauxval
+2026-08-07T03:29:47.4470115Z -- Looking for getauxval - found
+2026-08-07T03:29:47.4472536Z -- Looking for elf_aux_info
+2026-08-07T03:29:47.4796800Z -- Looking for elf_aux_info - not found
+2026-08-07T03:29:47.4799074Z -- Looking for poll
+2026-08-07T03:29:47.5503232Z -- Looking for poll - found
+2026-08-07T03:29:47.5505343Z -- Looking for memfd_create
+2026-08-07T03:29:47.6133866Z -- Looking for memfd_create - found
+2026-08-07T03:29:47.6135800Z -- Looking for posix_fallocate
+2026-08-07T03:29:47.6789785Z -- Looking for posix_fallocate - found
+2026-08-07T03:29:47.6792171Z -- Performing Test ICONV_IN_LIBC
+2026-08-07T03:29:47.7364354Z -- Performing Test ICONV_IN_LIBC - Success
+2026-08-07T03:29:47.7366754Z -- Performing Test ICONV_IN_LIBICONV
+2026-08-07T03:29:47.7821969Z -- Performing Test ICONV_IN_LIBICONV - Failed
+2026-08-07T03:29:47.7824590Z -- Performing Test HAVE_SA_SIGACTION
+2026-08-07T03:29:47.8430876Z -- Performing Test HAVE_SA_SIGACTION - Success
+2026-08-07T03:29:47.8432929Z -- Performing Test HAVE_ST_MTIM
+2026-08-07T03:29:47.9662400Z -- Performing Test HAVE_ST_MTIM - Success
+2026-08-07T03:29:47.9707100Z -- Looking for dlopen
+2026-08-07T03:29:48.0305830Z -- Looking for dlopen - found
+2026-08-07T03:29:48.0309599Z -- Performing Test HAVE_O_CLOEXEC
+2026-08-07T03:29:48.0868145Z -- Performing Test HAVE_O_CLOEXEC - Success
+2026-08-07T03:29:48.0995302Z -- Found ALSA: /usr/lib/x86_64-linux-gnu/libasound.so (found version "1.2.11")
+2026-08-07T03:29:48.1005644Z -- dynamic libasound -> libasound.so.2
+2026-08-07T03:29:48.1012662Z -- Checking for module 'jack'
+2026-08-07T03:29:48.2146785Z --   Package 'jack', required by 'virtual:world', not found
+2026-08-07T03:29:48.2156070Z -- Checking for module 'libpipewire-0.3>=0.3.44'
+2026-08-07T03:29:48.2206706Z --   Package 'libpipewire-0.3', required by 'virtual:world', not found
+2026-08-07T03:29:48.2214013Z -- Checking for module 'libpulse>=0.9.15'
+2026-08-07T03:29:48.2306109Z --   Found libpulse, version 16.1
+2026-08-07T03:29:48.2532486Z -- dynamic libpulse -> libpulse.so.0
+2026-08-07T03:29:48.2539280Z -- Checking for module 'sndio'
+2026-08-07T03:29:48.2585774Z --   Package 'sndio', required by 'virtual:world', not found
+2026-08-07T03:29:48.3194781Z -- Found X11: /usr/include
+2026-08-07T03:29:48.3242108Z -- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so
+2026-08-07T03:29:48.3828504Z -- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so - found
+2026-08-07T03:29:48.3829591Z -- Looking for gethostbyname
+2026-08-07T03:29:48.4368175Z -- Looking for gethostbyname - found
+2026-08-07T03:29:48.4368731Z -- Looking for connect
+2026-08-07T03:29:48.4908830Z -- Looking for connect - found
+2026-08-07T03:29:48.4909338Z -- Looking for remove
+2026-08-07T03:29:48.5450386Z -- Looking for remove - found
+2026-08-07T03:29:48.5450921Z -- Looking for shmat
+2026-08-07T03:29:48.6020675Z -- Looking for shmat - found
+2026-08-07T03:29:48.6044752Z -- dynamic libX11 -> libX11.so.6
+2026-08-07T03:29:48.6055641Z -- dynamic libXext -> libXext.so.6
+2026-08-07T03:29:48.6065640Z -- dynamic libXcursor -> libXcursor.so.1
+2026-08-07T03:29:48.6073935Z -- dynamic libXi -> libXi.so.6
+2026-08-07T03:29:48.6081950Z -- dynamic libXfixes -> libXfixes.so.3
+2026-08-07T03:29:48.6089788Z -- dynamic libXrandr -> libXrandr.so.2
+2026-08-07T03:29:48.6097120Z -- dynamic libXrender -> libXrender.so.1
+2026-08-07T03:29:48.6124159Z -- Looking for shmat
+2026-08-07T03:29:48.6754046Z -- Looking for shmat - found
+2026-08-07T03:29:48.6756851Z -- Performing Test HAVE_XGENERICEVENT
+2026-08-07T03:29:48.7435096Z -- Performing Test HAVE_XGENERICEVENT - Success
+2026-08-07T03:29:48.7437284Z -- Looking for XkbLookupKeySym
+2026-08-07T03:29:48.8130869Z -- Looking for XkbLookupKeySym - found
+2026-08-07T03:29:48.8133450Z -- Performing Test HAVE_XINPUT2_MULTITOUCH
+2026-08-07T03:29:48.8770885Z -- Performing Test HAVE_XINPUT2_MULTITOUCH - Success
+2026-08-07T03:29:48.8772745Z -- Performing Test HAVE_XFIXES_H
+2026-08-07T03:29:48.9403071Z -- Performing Test HAVE_XFIXES_H - Success
+2026-08-07T03:29:48.9580852Z -- Could NOT find OpenGL (missing: OPENGL_opengl_LIBRARY OPENGL_glx_LIBRARY OPENGL_INCLUDE_DIR) 
+2026-08-07T03:29:48.9582977Z -- Performing Test HAVE_OPENGL_EGL
+2026-08-07T03:29:49.0159670Z -- Performing Test HAVE_OPENGL_EGL - Success
+2026-08-07T03:29:49.0167804Z -- Checking for module 'libdrm'
+2026-08-07T03:29:49.0262949Z --   Found libdrm, version 2.4.125
+2026-08-07T03:29:49.0489300Z -- Checking for module 'gbm'
+2026-08-07T03:29:49.0578922Z --   Found gbm, version 25.2.8-0ubuntu0.24.04.2
+2026-08-07T03:29:49.0806166Z -- dynamic libdrm -> libdrm.so.2
+2026-08-07T03:29:49.0816274Z -- dynamic libgbm -> libgbm.so.1
+2026-08-07T03:29:49.0820861Z -- Performing Test HAVE_OPENGL_GLX
+2026-08-07T03:29:49.1093177Z -- Performing Test HAVE_OPENGL_GLX - Failed
+2026-08-07T03:29:49.1094358Z -- Performing Test HAVE_OPENGL
+2026-08-07T03:29:49.1359395Z -- Performing Test HAVE_OPENGL - Failed
+2026-08-07T03:29:49.1362040Z -- Performing Test HAVE_OPENGLES_V1
+2026-08-07T03:29:49.1620202Z -- Performing Test HAVE_OPENGLES_V1 - Failed
+2026-08-07T03:29:49.1621600Z -- Performing Test HAVE_OPENGLES_V2
+2026-08-07T03:29:49.2219626Z -- Performing Test HAVE_OPENGLES_V2 - Success
+2026-08-07T03:29:49.2228384Z -- Checking for modules 'wayland-client>=1.18;wayland-egl;wayland-cursor;egl;xkbcommon>=0.5.0'
+2026-08-07T03:29:49.2325144Z --   Package 'egl', required by 'virtual:world', not found
+2026-08-07T03:29:49.2369663Z --   Package 'xkbcommon', required by 'virtual:world', not found
+2026-08-07T03:29:49.2379453Z -- Performing Test HAVE_LINUX_INPUT_H
+2026-08-07T03:29:49.3246718Z -- Performing Test HAVE_LINUX_INPUT_H - Success
+2026-08-07T03:29:49.3248211Z -- Performing Test HAVE_INPUT_KD
+2026-08-07T03:29:49.4141546Z -- Performing Test HAVE_INPUT_KD - Success
+2026-08-07T03:29:49.4142710Z -- Performing Test HAVE_LINUX_VIDEODEV2_H
+2026-08-07T03:29:49.5435704Z -- Performing Test HAVE_LINUX_VIDEODEV2_H - Success
+2026-08-07T03:29:49.5440060Z -- Looking for libudev.h
+2026-08-07T03:29:49.6061065Z -- Looking for libudev.h - found
+2026-08-07T03:29:49.6075511Z -- dynamic libudev -> libudev.so.1
+2026-08-07T03:29:49.6077261Z -- Looking for sys/inotify.h
+2026-08-07T03:29:49.6639964Z -- Looking for sys/inotify.h - found
+2026-08-07T03:29:49.6642481Z -- Looking for inotify_init
+2026-08-07T03:29:49.7201296Z -- Looking for inotify_init - found
+2026-08-07T03:29:49.7203926Z -- Looking for inotify_init1
+2026-08-07T03:29:49.7762833Z -- Looking for inotify_init1 - found
+2026-08-07T03:29:49.7765520Z -- Checking for one of the modules 'dbus-1;dbus'
+2026-08-07T03:29:49.8082223Z -- Checking for one of the modules 'ibus-1.0;ibus'
+2026-08-07T03:29:49.8456777Z -- Checking for one of the modules 'liburing-ffi'
+2026-08-07T03:29:49.8513454Z -- Performing Test LIBC_HAS_WORKING_LIBUNWIND
+2026-08-07T03:29:49.8780546Z -- Performing Test LIBC_HAS_WORKING_LIBUNWIND - Failed
+2026-08-07T03:29:49.8783458Z -- Performing Test LIBUNWIND_HAS_WORKINGLIBUNWIND
+2026-08-07T03:29:49.9043012Z -- Performing Test LIBUNWIND_HAS_WORKINGLIBUNWIND - Failed
+2026-08-07T03:29:49.9050243Z -- Checking for modules 'libunwind;libunwind-generic'
+2026-08-07T03:29:49.9099653Z --   Package 'libunwind', required by 'virtual:world', not found
+2026-08-07T03:29:49.9144611Z --   Package 'libunwind-generic', required by 'virtual:world', not found
+2026-08-07T03:29:49.9200152Z -- Checking for module 'libusb-1.0>=1.0.16'
+2026-08-07T03:29:49.9247432Z --   Package 'libusb-1.0', required by 'virtual:world', not found
+2026-08-07T03:29:49.9279309Z -- Could NOT find LibUSB (missing: LibUSB_LIBRARY LibUSB_INCLUDE_PATH) (found version "LibUSB_VERSION-NOTFOUND")
+2026-08-07T03:29:49.9285802Z -- Performing Test HAVE_PTHREADS
+2026-08-07T03:29:49.9974304Z -- Performing Test HAVE_PTHREADS - Success
+2026-08-07T03:29:49.9979256Z -- Performing Test HAVE_RECURSIVE_MUTEXES
+2026-08-07T03:29:50.0562328Z -- Performing Test HAVE_RECURSIVE_MUTEXES - Success
+2026-08-07T03:29:50.0563875Z -- Performing Test HAVE_PTHREADS_SEM
+2026-08-07T03:29:50.1158724Z -- Performing Test HAVE_PTHREADS_SEM - Success
+2026-08-07T03:29:50.1160603Z -- Performing Test COMPILER_HAS_SEM_TIMEDWAIT
+2026-08-07T03:29:50.1797189Z -- Performing Test COMPILER_HAS_SEM_TIMEDWAIT - Success
+2026-08-07T03:29:50.1798955Z -- Looking for pthread.h
+2026-08-07T03:29:50.2364626Z -- Looking for pthread.h - found
+2026-08-07T03:29:50.2366006Z -- Looking for pthread_np.h
+2026-08-07T03:29:50.2627627Z -- Looking for pthread_np.h - not found
+2026-08-07T03:29:50.2629581Z -- Performing Test HAVE_PTHREAD_SETNAME_NP
+2026-08-07T03:29:50.3198271Z -- Performing Test HAVE_PTHREAD_SETNAME_NP - Success
+2026-08-07T03:29:50.3202024Z -- Looking for clock_gettime in c
+2026-08-07T03:29:50.3750297Z -- Looking for clock_gettime in c - found
+2026-08-07T03:29:50.3765066Z -- Performing Test HAVE_ENABLE_NEW_DTAGS
+2026-08-07T03:29:50.4276313Z -- Performing Test HAVE_ENABLE_NEW_DTAGS - Success
+2026-08-07T03:29:50.4282965Z -- Performing Test HAVE_POSIX_SPAWN
+2026-08-07T03:29:50.4872501Z -- Performing Test HAVE_POSIX_SPAWN - Success
+2026-08-07T03:29:50.5491260Z -- 
+2026-08-07T03:29:50.5491789Z -- SDL3 was configured with the following options:
+2026-08-07T03:29:50.5492387Z -- 
+2026-08-07T03:29:50.5492798Z -- Platform: Linux-6.17.0-1020-azure
+2026-08-07T03:29:50.5493331Z -- 64-bit:   TRUE
+2026-08-07T03:29:50.5493754Z -- Compiler: /usr/bin/cc
+2026-08-07T03:29:50.5494242Z -- Revision: release-3.2.0-0-g535d80bad
+2026-08-07T03:29:50.5494767Z -- Vendor:   
+2026-08-07T03:29:50.5495135Z -- 
+2026-08-07T03:29:50.5495482Z -- Subsystems:
+2026-08-07T03:29:50.5495762Z --   Audio:    ON
+2026-08-07T03:29:50.5496094Z --   Video:    ON
+2026-08-07T03:29:50.5496394Z --   GPU:      ON
+2026-08-07T03:29:50.5496640Z --   Render:   ON
+2026-08-07T03:29:50.5496979Z --   Camera:   ON
+2026-08-07T03:29:50.5497215Z --   Joystick: ON
+2026-08-07T03:29:50.5497527Z --   Haptic:   ON
+2026-08-07T03:29:50.5498000Z --   Hidapi:   ON
+2026-08-07T03:29:50.5498349Z --   Power:    ON
+2026-08-07T03:29:50.5498663Z --   Sensor:   ON
+2026-08-07T03:29:50.5508696Z --   Dialog:   ON
+2026-08-07T03:29:50.5509022Z -- 
+2026-08-07T03:29:50.5509293Z -- Options:
+2026-08-07T03:29:50.5509613Z --   SDL_ALSA                    (Wanted: ON): ON
+2026-08-07T03:29:50.5510088Z --   SDL_ALSA_SHARED             (Wanted: ON): ON
+2026-08-07T03:29:50.5510556Z --   SDL_ALTIVEC                 (Wanted: OFF): OFF
+2026-08-07T03:29:50.5511015Z --   SDL_ARMNEON                 (Wanted: OFF): OFF
+2026-08-07T03:29:50.5511520Z --   SDL_ASAN                    (Wanted: OFF): OFF
+2026-08-07T03:29:50.5511885Z --   SDL_ASSEMBLY                (Wanted: ON): ON
+2026-08-07T03:29:50.5512436Z --   SDL_ASSERTIONS              (Wanted: auto): auto
+2026-08-07T03:29:50.5512766Z --   SDL_AVX                     (Wanted: ON): ON
+2026-08-07T03:29:50.5513213Z --   SDL_AVX2                    (Wanted: ON): ON
+2026-08-07T03:29:50.5513518Z --   SDL_AVX512F                 (Wanted: ON): ON
+2026-08-07T03:29:50.5513986Z --   SDL_BACKGROUNDING_SIGNAL    (Wanted: OFF): OFF
+2026-08-07T03:29:50.5514302Z --   SDL_CCACHE                  (Wanted: OFF): OFF
+2026-08-07T03:29:50.5514756Z --   SDL_CLANG_TIDY              (Wanted: OFF): OFF
+2026-08-07T03:29:50.5515058Z --   SDL_CLOCK_GETTIME           (Wanted: ON): ON
+2026-08-07T03:29:50.5515515Z --   SDL_COCOA                   (Wanted: OFF): OFF
+2026-08-07T03:29:50.5515817Z --   SDL_DBUS                    (Wanted: ON): ON
+2026-08-07T03:29:50.5516232Z --   SDL_DIRECTX                 (Wanted: OFF): OFF
+2026-08-07T03:29:50.5516600Z --   SDL_DISKAUDIO               (Wanted: ON): ON
+2026-08-07T03:29:50.5517337Z --   SDL_DUMMYAUDIO              (Wanted: ON): ON
+2026-08-07T03:29:50.5518406Z --   SDL_DUMMYCAMERA             (Wanted: ON): ON
+2026-08-07T03:29:50.5519135Z --   SDL_DUMMYVIDEO              (Wanted: ON): ON
+2026-08-07T03:29:50.5520041Z --   SDL_EXAMPLES                (Wanted: OFF): OFF
+2026-08-07T03:29:50.5520693Z --   SDL_EXAMPLES_LINK_SHARED    (Wanted: ON): OFF
+2026-08-07T03:29:50.5521487Z --   SDL_FOREGROUNDING_SIGNAL    (Wanted: OFF): OFF
+2026-08-07T03:29:50.5522299Z --   SDL_GCC_ATOMICS             (Wanted: ON): ON
+2026-08-07T03:29:50.5523101Z --   SDL_GPU_DXVK                (Wanted: OFF): OFF
+2026-08-07T03:29:50.5523908Z --   SDL_HIDAPI                  (Wanted: ON): ON
+2026-08-07T03:29:50.5524789Z --   SDL_HIDAPI_JOYSTICK         (Wanted: ON): ON
+2026-08-07T03:29:50.5525574Z --   SDL_HIDAPI_LIBUSB           (Wanted: ON): OFF
+2026-08-07T03:29:50.5526388Z --   SDL_HIDAPI_LIBUSB_SHARED    (Wanted: ON): OFF
+2026-08-07T03:29:50.5527220Z --   SDL_IBUS                    (Wanted: ON): ON
+2026-08-07T03:29:50.5528222Z --   SDL_INSTALL                 (Wanted: ON): OFF
+2026-08-07T03:29:50.5529110Z --   SDL_INSTALL_TESTS           (Wanted: OFF): OFF
+2026-08-07T03:29:50.5529880Z --   SDL_JACK                    (Wanted: ON): OFF
+2026-08-07T03:29:50.5530665Z --   SDL_JACK_SHARED             (Wanted: ON): OFF
+2026-08-07T03:29:50.5531533Z --   SDL_KMSDRM                  (Wanted: ON): ON
+2026-08-07T03:29:50.5532406Z --   SDL_KMSDRM_SHARED           (Wanted: ON): ON
+2026-08-07T03:29:50.5533241Z --   SDL_LASX                    (Wanted: OFF): OFF
+2026-08-07T03:29:50.5534328Z --   SDL_LIBC                    (Wanted: ON): ON
+2026-08-07T03:29:50.5535155Z --   SDL_LIBICONV                (Wanted: OFF): OFF
+2026-08-07T03:29:50.5536028Z --   SDL_LIBUDEV                 (Wanted: ON): ON
+2026-08-07T03:29:50.5536826Z --   SDL_LIBURING                (Wanted: ON): OFF
+2026-08-07T03:29:50.5537615Z --   SDL_LSX                     (Wanted: OFF): OFF
+2026-08-07T03:29:50.5538690Z --   SDL_METAL                   (Wanted: OFF): OFF
+2026-08-07T03:29:50.5539548Z --   SDL_MMX                     (Wanted: ON): ON
+2026-08-07T03:29:50.5540394Z --   SDL_OFFSCREEN               (Wanted: ON): ON
+2026-08-07T03:29:50.5541201Z --   SDL_OPENGL                  (Wanted: ON): OFF
+2026-08-07T03:29:50.5542068Z --   SDL_OPENGLES                (Wanted: ON): ON
+2026-08-07T03:29:50.5542843Z --   SDL_OPENVR                  (Wanted: OFF): OFF
+2026-08-07T03:29:50.5543649Z --   SDL_OSS                     (Wanted: OFF): OFF
+2026-08-07T03:29:50.5544424Z --   SDL_PIPEWIRE                (Wanted: ON): OFF
+2026-08-07T03:29:50.5545222Z --   SDL_PIPEWIRE_SHARED         (Wanted: ON): OFF
+2026-08-07T03:29:50.5546112Z --   SDL_PTHREADS                (Wanted: ON): ON
+2026-08-07T03:29:50.5546963Z --   SDL_PTHREADS_SEM            (Wanted: ON): ON
+2026-08-07T03:29:50.5548041Z --   SDL_PULSEAUDIO              (Wanted: ON): ON
+2026-08-07T03:29:50.5548986Z --   SDL_PULSEAUDIO_SHARED       (Wanted: ON): ON
+2026-08-07T03:29:50.5549798Z --   SDL_RENDER_D3D              (Wanted: OFF): OFF
+2026-08-07T03:29:50.5550593Z --   SDL_RENDER_D3D11            (Wanted: OFF): OFF
+2026-08-07T03:29:50.5551356Z --   SDL_RENDER_D3D12            (Wanted: OFF): OFF
+2026-08-07T03:29:50.5552216Z --   SDL_RENDER_GPU              (Wanted: ON): ON
+2026-08-07T03:29:50.5553052Z --   SDL_RENDER_METAL            (Wanted: ON): OFF
+2026-08-07T03:29:50.5553902Z --   SDL_RENDER_VULKAN           (Wanted: ON): ON
+2026-08-07T03:29:50.5554714Z --   SDL_ROCKCHIP                (Wanted: OFF): OFF
+2026-08-07T03:29:50.5555561Z --   SDL_RPATH                   (Wanted: ON): ON
+2026-08-07T03:29:50.5556345Z --   SDL_RPI                     (Wanted: OFF): OFF
+2026-08-07T03:29:50.5557154Z --   SDL_SNDIO                   (Wanted: ON): OFF
+2026-08-07T03:29:50.5558136Z --   SDL_SNDIO_SHARED            (Wanted: ON): OFF
+2026-08-07T03:29:50.5559059Z --   SDL_SSE                     (Wanted: ON): ON
+2026-08-07T03:29:50.5559911Z --   SDL_SSE2                    (Wanted: ON): ON
+2026-08-07T03:29:50.5560804Z --   SDL_SSE3                    (Wanted: ON): ON
+2026-08-07T03:29:50.5561867Z --   SDL_SSE4_1                  (Wanted: ON): ON
+2026-08-07T03:29:50.5562550Z --   SDL_SSE4_2                  (Wanted: ON): ON
+2026-08-07T03:29:50.5563466Z --   SDL_SYSTEM_ICONV            (Wanted: ON): ON
+2026-08-07T03:29:50.5564284Z --   SDL_TESTS                   (Wanted: OFF): OFF
+2026-08-07T03:29:50.5565078Z --   SDL_TESTS_LINK_SHARED       (Wanted: ON): OFF
+2026-08-07T03:29:50.5565874Z --   SDL_UNINSTALL               (Wanted: ON): OFF
+2026-08-07T03:29:50.5566723Z --   SDL_VIRTUAL_JOYSTICK        (Wanted: ON): ON
+2026-08-07T03:29:50.5567520Z --   SDL_VIVANTE                 (Wanted: OFF): OFF
+2026-08-07T03:29:50.5568628Z --   SDL_VULKAN                  (Wanted: ON): ON
+2026-08-07T03:29:50.5569374Z --   SDL_WASAPI                  (Wanted: OFF): OFF
+2026-08-07T03:29:50.5570149Z --   SDL_WAYLAND                 (Wanted: ON): OFF
+2026-08-07T03:29:50.5571046Z --   SDL_WAYLAND_LIBDECOR        (Wanted: ON): OFF
+2026-08-07T03:29:50.5571831Z --   SDL_WAYLAND_LIBDECOR_SHARED (Wanted: ON): OFF
+2026-08-07T03:29:50.5572615Z --   SDL_WAYLAND_SHARED          (Wanted: ON): OFF
+2026-08-07T03:29:50.5573496Z --   SDL_X11                     (Wanted: ON): ON
+2026-08-07T03:29:50.5574317Z --   SDL_X11_SHARED              (Wanted: ON): ON
+2026-08-07T03:29:50.5575200Z --   SDL_X11_XCURSOR             (Wanted: ON): ON
+2026-08-07T03:29:50.5576059Z --   SDL_X11_XDBE                (Wanted: ON): ON
+2026-08-07T03:29:50.5576921Z --   SDL_X11_XFIXES              (Wanted: ON): ON
+2026-08-07T03:29:50.5577756Z --   SDL_X11_XINPUT              (Wanted: ON): ON
+2026-08-07T03:29:50.5578951Z --   SDL_X11_XRANDR              (Wanted: ON): ON
+2026-08-07T03:29:50.5579725Z --   SDL_X11_XSCRNSAVER          (Wanted: ON): OFF
+2026-08-07T03:29:50.5580580Z --   SDL_X11_XSHAPE              (Wanted: ON): ON
+2026-08-07T03:29:50.5581431Z --   SDL_X11_XSYNC               (Wanted: ON): ON
+2026-08-07T03:29:50.5582240Z --   SDL_XINPUT                  (Wanted: OFF): OFF
+2026-08-07T03:29:50.5582810Z -- 
+2026-08-07T03:29:50.5583132Z --  Build Shared Library: ON
+2026-08-07T03:29:50.5583553Z --  Build Static Library: OFF
+2026-08-07T03:29:50.5583925Z -- 
+2026-08-07T03:29:50.5584311Z -- If something was not detected, although the libraries
+2026-08-07T03:29:50.5584894Z -- were installed, then make sure you have set the
+2026-08-07T03:29:50.5585519Z -- CMAKE_C_FLAGS and CMAKE_PREFIX_PATH CMake variables correctly.
+2026-08-07T03:29:50.5586075Z -- 
+2026-08-07T03:29:50.5595862Z -- Configuring done (24.7s)
+2026-08-07T03:29:50.6246227Z -- Generating done (0.1s)
+2026-08-07T03:29:50.6260596Z -- Build files have been written to: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/SDL3-3.2.0/build
+2026-08-07T03:29:50.6710000Z [  0%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_assert.c.o
+2026-08-07T03:29:50.6711174Z [  1%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_common.c.o
+2026-08-07T03:29:50.6713369Z [  1%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_atan2.c.o
+2026-08-07T03:29:50.6714367Z [  1%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_compare.c.o
+2026-08-07T03:29:50.8192899Z [  2%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_crc32.c.o
+2026-08-07T03:29:50.8409142Z [  3%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_exp.c.o
+2026-08-07T03:29:50.9416242Z [  3%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_fmod.c.o
+2026-08-07T03:29:51.2539183Z [  3%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_font.c.o
+2026-08-07T03:29:51.3828937Z [  4%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_log.c.o
+2026-08-07T03:29:51.4339188Z [  4%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_fuzzer.c.o
+2026-08-07T03:29:51.4428939Z [  5%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_harness.c.o
+2026-08-07T03:29:51.5629226Z [  5%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_log.c.o
+2026-08-07T03:29:51.6638965Z [  5%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_log10.c.o
+2026-08-07T03:29:51.6829311Z [  5%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_md5.c.o
+2026-08-07T03:29:51.7429218Z [  5%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_pow.c.o
+2026-08-07T03:29:51.9198700Z [  6%] Building C object CMakeFiles/SDL3_test.dir/src/test/SDL_test_memory.c.o
+2026-08-07T03:29:51.9628986Z [  7%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_rem_pio2.c.o
+2026-08-07T03:29:52.0759218Z [  7%] Linking C static library libSDL3_test.a
+2026-08-07T03:29:52.1983535Z [  7%] Built target SDL3_test
+2026-08-07T03:29:52.2016735Z [  7%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/e_sqrt.c.o
+2026-08-07T03:29:52.2289140Z [  7%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/k_cos.c.o
+2026-08-07T03:29:52.3788904Z [  8%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/k_rem_pio2.c.o
+2026-08-07T03:29:52.5639678Z [  8%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/k_sin.c.o
+2026-08-07T03:29:52.7931805Z [  8%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/k_tan.c.o
+2026-08-07T03:29:52.8059270Z [  9%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_atan.c.o
+2026-08-07T03:29:53.1819434Z [  9%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_copysign.c.o
+2026-08-07T03:29:53.1836323Z [ 10%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_cos.c.o
+2026-08-07T03:29:53.3735045Z [ 10%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_fabs.c.o
+2026-08-07T03:29:53.3978925Z [ 10%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_floor.c.o
+2026-08-07T03:29:53.7482567Z [ 11%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_isinf.c.o
+2026-08-07T03:29:53.7516102Z [ 11%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_isinff.c.o
+2026-08-07T03:29:53.9318986Z [ 11%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_isnan.c.o
+2026-08-07T03:29:53.9743079Z [ 12%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_isnanf.c.o
+2026-08-07T03:29:54.3069067Z [ 12%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_modf.c.o
+2026-08-07T03:29:54.3116698Z [ 12%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_scalbn.c.o
+2026-08-07T03:29:54.4869020Z [ 13%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_sin.c.o
+2026-08-07T03:29:54.5319067Z [ 13%] Building C object CMakeFiles/SDL_uclibc.dir/src/libm/s_tan.c.o
+2026-08-07T03:29:55.0231711Z [ 14%] Linking C static library libSDL_uclibc.a
+2026-08-07T03:29:55.1197852Z [ 14%] Built target SDL_uclibc
+2026-08-07T03:29:55.1416470Z [ 14%] Building C object CMakeFiles/SDL3-shared.dir/cmake_pch.h.gch
+2026-08-07T03:29:55.1418872Z [ 15%] Building C object CMakeFiles/SDL3-shared.dir/src/dynapi/SDL_dynapi.c.o
+2026-08-07T03:29:56.0360150Z [ 16%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL.c.o
+2026-08-07T03:29:56.0362648Z [ 16%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_assert.c.o
+2026-08-07T03:29:56.0363680Z [ 16%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_error.c.o
+2026-08-07T03:29:56.1089088Z [ 16%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_guid.c.o
+2026-08-07T03:29:56.1629274Z [ 17%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_hashtable.c.o
+2026-08-07T03:29:56.2107530Z [ 17%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_hints.c.o
+2026-08-07T03:29:56.2822315Z [ 17%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_list.c.o
+2026-08-07T03:29:56.3530343Z [ 18%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_log.c.o
+2026-08-07T03:29:56.3598914Z [ 18%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_properties.c.o
+2026-08-07T03:29:56.3809213Z [ 19%] Building C object CMakeFiles/SDL3-shared.dir/src/SDL_utils.c.o
+2026-08-07T03:29:56.5433200Z [ 19%] Building C object CMakeFiles/SDL3-shared.dir/src/atomic/SDL_atomic.c.o
+2026-08-07T03:29:56.5629196Z [ 19%] Building C object CMakeFiles/SDL3-shared.dir/src/atomic/SDL_spinlock.c.o
+2026-08-07T03:29:56.6109256Z [ 20%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audio.c.o
+2026-08-07T03:29:56.6199215Z [ 20%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiocvt.c.o
+2026-08-07T03:29:56.6869393Z [ 20%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiodev.c.o
+2026-08-07T03:29:56.7359092Z [ 21%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audioqueue.c.o
+2026-08-07T03:29:56.9509266Z [ 21%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audioresample.c.o
+2026-08-07T03:29:57.3189369Z [ 21%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiotypecvt.c.o
+2026-08-07T03:29:57.4053875Z [ 22%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_mixer.c.o
+2026-08-07T03:29:57.6139284Z [ 22%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/SDL_wave.c.o
+2026-08-07T03:29:57.8781536Z [ 23%] Building C object CMakeFiles/SDL3-shared.dir/src/camera/SDL_camera.c.o
+2026-08-07T03:29:58.0979142Z [ 23%] Building C object CMakeFiles/SDL3-shared.dir/src/core/SDL_core_unsupported.c.o
+2026-08-07T03:29:58.2225163Z [ 23%] Building C object CMakeFiles/SDL3-shared.dir/src/cpuinfo/SDL_cpuinfo.c.o
+2026-08-07T03:29:58.3229076Z [ 23%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_categories.c.o
+2026-08-07T03:29:58.3549129Z [ 23%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_clipboardevents.c.o
+2026-08-07T03:29:58.3997592Z [ 24%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_displayevents.c.o
+2026-08-07T03:29:58.4098744Z [ 24%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_dropevents.c.o
+2026-08-07T03:29:58.4264616Z [ 24%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_events.c.o
+2026-08-07T03:29:58.4769058Z [ 25%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_keyboard.c.o
+2026-08-07T03:29:58.5369186Z [ 25%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_keymap.c.o
+2026-08-07T03:29:58.7319176Z [ 26%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_keysym_to_keycode.c.o
+2026-08-07T03:29:58.7989282Z [ 26%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_keysym_to_scancode.c.o
+2026-08-07T03:29:58.8699230Z [ 26%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_mouse.c.o
+2026-08-07T03:29:58.9619149Z [ 27%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_pen.c.o
+2026-08-07T03:29:59.0639245Z [ 27%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_quit.c.o
+2026-08-07T03:29:59.1459219Z [ 27%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_scancode_tables.c.o
+2026-08-07T03:29:59.2089252Z [ 28%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_touch.c.o
+2026-08-07T03:29:59.3929237Z [ 28%] Building C object CMakeFiles/SDL3-shared.dir/src/events/SDL_windowevents.c.o
+2026-08-07T03:29:59.4231036Z [ 28%] Building C object CMakeFiles/SDL3-shared.dir/src/events/imKStoUCS.c.o
+2026-08-07T03:29:59.4259003Z [ 29%] Building C object CMakeFiles/SDL3-shared.dir/src/filesystem/SDL_filesystem.c.o
+2026-08-07T03:29:59.5059214Z [ 29%] Building C object CMakeFiles/SDL3-shared.dir/src/gpu/SDL_gpu.c.o
+2026-08-07T03:29:59.5959095Z [ 30%] Building C object CMakeFiles/SDL3-shared.dir/src/haptic/SDL_haptic.c.o
+2026-08-07T03:29:59.6678916Z [ 30%] Building C object CMakeFiles/SDL3-shared.dir/src/hidapi/SDL_hidapi.c.o
+2026-08-07T03:29:59.8779031Z [ 30%] Building C object CMakeFiles/SDL3-shared.dir/src/io/SDL_asyncio.c.o
+2026-08-07T03:30:00.0399059Z [ 31%] Building C object CMakeFiles/SDL3-shared.dir/src/io/SDL_iostream.c.o
+2026-08-07T03:30:00.3159323Z [ 31%] Building C object CMakeFiles/SDL3-shared.dir/src/io/generic/SDL_asyncio_generic.c.o
+2026-08-07T03:30:00.4399023Z [ 31%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/SDL_gamepad.c.o
+2026-08-07T03:30:00.5479505Z [ 32%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/SDL_joystick.c.o
+2026-08-07T03:30:00.5679481Z [ 32%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/SDL_steam_virtual_gamepad.c.o
+2026-08-07T03:30:00.6779340Z [ 32%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/controller_type.c.o
+2026-08-07T03:30:00.7071107Z [ 33%] Building C object CMakeFiles/SDL3-shared.dir/src/locale/SDL_locale.c.o
+2026-08-07T03:30:00.7879610Z [ 33%] Building C object CMakeFiles/SDL3-shared.dir/src/main/SDL_main_callbacks.c.o
+2026-08-07T03:30:00.8029231Z [ 34%] Building C object CMakeFiles/SDL3-shared.dir/src/main/SDL_runapp.c.o
+2026-08-07T03:30:00.8582881Z [ 34%] Building C object CMakeFiles/SDL3-shared.dir/src/misc/SDL_url.c.o
+2026-08-07T03:30:00.8689254Z [ 34%] Building C object CMakeFiles/SDL3-shared.dir/src/power/SDL_power.c.o
+2026-08-07T03:30:00.9139069Z [ 35%] Building C object CMakeFiles/SDL3-shared.dir/src/render/SDL_d3dmath.c.o
+2026-08-07T03:30:00.9279181Z [ 35%] Building C object CMakeFiles/SDL3-shared.dir/src/render/SDL_render.c.o
+2026-08-07T03:30:01.0049290Z [ 35%] Building C object CMakeFiles/SDL3-shared.dir/src/render/SDL_render_unsupported.c.o
+2026-08-07T03:30:01.0589285Z [ 36%] Building C object CMakeFiles/SDL3-shared.dir/src/render/SDL_yuv_sw.c.o
+2026-08-07T03:30:01.2569185Z [ 36%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d/SDL_render_d3d.c.o
+2026-08-07T03:30:01.3099236Z [ 36%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d/SDL_shaders_d3d.c.o
+2026-08-07T03:30:01.3649312Z [ 37%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d11/SDL_render_d3d11.c.o
+2026-08-07T03:30:01.4159497Z [ 37%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d11/SDL_shaders_d3d11.c.o
+2026-08-07T03:30:01.4689335Z [ 38%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d12/SDL_render_d3d12.c.o
+2026-08-07T03:30:01.5249551Z [ 38%] Building C object CMakeFiles/SDL3-shared.dir/src/render/direct3d12/SDL_shaders_d3d12.c.o
+2026-08-07T03:30:01.5300630Z [ 38%] Building C object CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_pipeline_gpu.c.o
+2026-08-07T03:30:01.5947206Z [ 39%] Building C object CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_render_gpu.c.o
+2026-08-07T03:30:01.6439209Z [ 39%] Building C object CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_shaders_gpu.c.o
+2026-08-07T03:30:01.7439130Z [ 39%] Building C object CMakeFiles/SDL3-shared.dir/src/render/opengl/SDL_render_gl.c.o
+2026-08-07T03:30:01.8006053Z [ 40%] Building C object CMakeFiles/SDL3-shared.dir/src/render/opengl/SDL_shaders_gl.c.o
+2026-08-07T03:30:01.8531881Z [ 40%] Building C object CMakeFiles/SDL3-shared.dir/src/render/opengles2/SDL_render_gles2.c.o
+2026-08-07T03:30:01.9509227Z [ 40%] Building C object CMakeFiles/SDL3-shared.dir/src/render/opengles2/SDL_shaders_gles2.c.o
+2026-08-07T03:30:02.0309153Z [ 41%] Building C object CMakeFiles/SDL3-shared.dir/src/render/ps2/SDL_render_ps2.c.o
+2026-08-07T03:30:02.0789065Z [ 41%] Building C object CMakeFiles/SDL3-shared.dir/src/render/psp/SDL_render_psp.c.o
+2026-08-07T03:30:02.1349206Z [ 42%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendfillrect.c.o
+2026-08-07T03:30:02.1419083Z [ 42%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendline.c.o
+2026-08-07T03:30:02.5932202Z [ 42%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendpoint.c.o
+2026-08-07T03:30:02.9289395Z [ 43%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_drawline.c.o
+2026-08-07T03:30:02.9849305Z [ 43%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_drawpoint.c.o
+2026-08-07T03:30:03.0699115Z [ 43%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_render_sw.c.o
+2026-08-07T03:30:03.1854036Z [ 44%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_rotate.c.o
+2026-08-07T03:30:03.4949252Z [ 44%] Building C object CMakeFiles/SDL3-shared.dir/src/render/software/SDL_triangle.c.o
+2026-08-07T03:30:03.6343275Z [ 44%] Building C object CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm.c.o
+2026-08-07T03:30:03.6859379Z [ 45%] Building C object CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm_memory.c.o
+2026-08-07T03:30:03.7359166Z [ 45%] Building C object CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm_tools.c.o
+2026-08-07T03:30:03.7839137Z [ 46%] Building C object CMakeFiles/SDL3-shared.dir/src/render/vulkan/SDL_render_vulkan.c.o
+2026-08-07T03:30:04.6839081Z [ 46%] Building C object CMakeFiles/SDL3-shared.dir/src/render/vulkan/SDL_shaders_vulkan.c.o
+2026-08-07T03:30:04.7539223Z [ 46%] Building C object CMakeFiles/SDL3-shared.dir/src/sensor/SDL_sensor.c.o
+2026-08-07T03:30:05.0278990Z [ 47%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_crc16.c.o
+2026-08-07T03:30:05.1219022Z [ 47%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_crc32.c.o
+2026-08-07T03:30:05.2009041Z [ 47%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_getenv.c.o
+2026-08-07T03:30:05.3229180Z [ 48%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_iconv.c.o
+2026-08-07T03:30:05.3410089Z [ 48%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_malloc.c.o
+2026-08-07T03:30:05.3664516Z [ 48%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memcpy.c.o
+2026-08-07T03:30:05.4098991Z [ 49%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memmove.c.o
+2026-08-07T03:30:05.4230460Z [ 49%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memset.c.o
+2026-08-07T03:30:05.4249073Z [ 50%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_mslibc.c.o
+2026-08-07T03:30:05.4621096Z [ 50%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_murmur3.c.o
+2026-08-07T03:30:05.4729465Z [ 50%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_qsort.c.o
+2026-08-07T03:30:05.4859007Z [ 51%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_random.c.o
+2026-08-07T03:30:05.5339062Z [ 51%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_stdlib.c.o
+2026-08-07T03:30:05.5579025Z [ 51%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_string.c.o
+2026-08-07T03:30:05.6898986Z [ 52%] Building C object CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_strtokr.c.o
+2026-08-07T03:30:05.7499071Z [ 52%] Building C object CMakeFiles/SDL3-shared.dir/src/storage/SDL_storage.c.o
+2026-08-07T03:30:05.8933093Z [ 52%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/SDL_thread.c.o
+2026-08-07T03:30:05.9169338Z [ 53%] Building C object CMakeFiles/SDL3-shared.dir/src/time/SDL_time.c.o
+2026-08-07T03:30:05.9429052Z [ 53%] Building C object CMakeFiles/SDL3-shared.dir/src/timer/SDL_timer.c.o
+2026-08-07T03:30:06.0079349Z [ 54%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_RLEaccel.c.o
+2026-08-07T03:30:06.0829030Z [ 54%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit.c.o
+2026-08-07T03:30:06.1059225Z [ 54%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_0.c.o
+2026-08-07T03:30:06.1482854Z [ 55%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_1.c.o
+2026-08-07T03:30:06.2199175Z [ 55%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_A.c.o
+2026-08-07T03:30:07.3789213Z [ 55%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_N.c.o
+2026-08-07T03:30:07.7579305Z [ 56%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_auto.c.o
+2026-08-07T03:30:07.8047662Z [ 56%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_copy.c.o
+2026-08-07T03:30:07.8923699Z [ 56%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_slow.c.o
+2026-08-07T03:30:08.6936680Z [ 57%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_bmp.c.o
+2026-08-07T03:30:08.9808975Z [ 57%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_clipboard.c.o
+2026-08-07T03:30:09.1949522Z [ 58%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_egl.c.o
+2026-08-07T03:30:09.5626882Z [ 58%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_fillrect.c.o
+2026-08-07T03:30:09.7079183Z [ 58%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_pixels.c.o
+2026-08-07T03:30:09.8109171Z [ 59%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_rect.c.o
+2026-08-07T03:30:10.1079082Z [ 59%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_stretch.c.o
+2026-08-07T03:30:10.1469170Z [ 59%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_surface.c.o
+2026-08-07T03:30:10.1979218Z [ 60%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_video.c.o
+2026-08-07T03:30:10.7549259Z [ 60%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_video_unsupported.c.o
+2026-08-07T03:30:10.8149264Z [ 60%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_vulkan_utils.c.o
+2026-08-07T03:30:11.0508998Z [ 61%] Building C object CMakeFiles/SDL3-shared.dir/src/video/SDL_yuv.c.o
+2026-08-07T03:30:11.4859241Z [ 61%] Building C object CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_lsx.c.o
+2026-08-07T03:30:11.5363794Z [ 62%] Building C object CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_sse.c.o
+2026-08-07T03:30:12.1279330Z [ 62%] Building C object CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_std.c.o
+2026-08-07T03:30:12.9476141Z [ 62%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/dummy/SDL_dummyaudio.c.o
+2026-08-07T03:30:13.0209386Z [ 63%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/disk/SDL_diskaudio.c.o
+2026-08-07T03:30:13.1139478Z [ 63%] Building C object CMakeFiles/SDL3-shared.dir/src/camera/dummy/SDL_camera_dummy.c.o
+2026-08-07T03:30:13.1806111Z [ 63%] Building C object CMakeFiles/SDL3-shared.dir/src/loadso/dlopen/SDL_sysloadso.c.o
+2026-08-07T03:30:13.2539643Z [ 64%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/virtual/SDL_virtualjoystick.c.o
+2026-08-07T03:30:13.6556151Z [ 64%] Building C object CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullevents.c.o
+2026-08-07T03:30:13.7239324Z [ 64%] Building C object CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullframebuffer.c.o
+2026-08-07T03:30:13.7299660Z [ 65%] Building C object CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullvideo.c.o
+2026-08-07T03:30:13.8169059Z [ 65%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/alsa/SDL_alsa_audio.c.o
+2026-08-07T03:30:13.8259266Z [ 66%] Building C object CMakeFiles/SDL3-shared.dir/src/audio/pulseaudio/SDL_pulseaudio.c.o
+2026-08-07T03:30:14.0748745Z [ 66%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11clipboard.c.o
+2026-08-07T03:30:14.1649275Z [ 66%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11dyn.c.o
+2026-08-07T03:30:14.2909272Z [ 67%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11events.c.o
+2026-08-07T03:30:14.3109312Z [ 67%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11framebuffer.c.o
+2026-08-07T03:30:14.4889027Z [ 67%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11keyboard.c.o
+2026-08-07T03:30:14.8368935Z [ 68%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11messagebox.c.o
+2026-08-07T03:30:14.8769076Z [ 68%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11modes.c.o
+2026-08-07T03:30:14.9069166Z [ 68%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11mouse.c.o
+2026-08-07T03:30:15.1589161Z [ 69%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11opengl.c.o
+2026-08-07T03:30:15.2339244Z [ 69%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11opengles.c.o
+2026-08-07T03:30:15.2662730Z [ 70%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11pen.c.o
+2026-08-07T03:30:15.2681669Z [ 70%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11settings.c.o
+2026-08-07T03:30:15.4139085Z [ 70%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11shape.c.o
+2026-08-07T03:30:15.4319330Z [ 71%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11touch.c.o
+2026-08-07T03:30:15.5139042Z [ 71%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11video.c.o
+2026-08-07T03:30:15.5559053Z [ 71%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11vulkan.c.o
+2026-08-07T03:30:15.5814130Z [ 72%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11window.c.o
+2026-08-07T03:30:15.7688272Z [ 72%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11xfixes.c.o
+2026-08-07T03:30:15.7946305Z [ 72%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11xinput2.c.o
+2026-08-07T03:30:15.9519507Z [ 73%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/SDL_x11xsync.c.o
+2026-08-07T03:30:16.0999103Z [ 73%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/edid-parse.c.o
+2026-08-07T03:30:16.1265703Z [ 74%] Building C object CMakeFiles/SDL3-shared.dir/src/video/x11/xsettings-client.c.o
+2026-08-07T03:30:16.2489197Z [ 74%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmdyn.c.o
+2026-08-07T03:30:16.4429913Z [ 74%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmevents.c.o
+2026-08-07T03:30:16.4949215Z [ 75%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmmouse.c.o
+2026-08-07T03:30:16.5099245Z [ 75%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmopengles.c.o
+2026-08-07T03:30:16.5279105Z [ 75%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmvideo.c.o
+2026-08-07T03:30:16.6249314Z [ 76%] Building C object CMakeFiles/SDL3-shared.dir/src/video/kmsdrm/SDL_kmsdrmvulkan.c.o
+2026-08-07T03:30:16.6509150Z [ 76%] Building C object CMakeFiles/SDL3-shared.dir/src/tray/unix/SDL_tray.c.o
+2026-08-07T03:30:16.8828979Z [ 76%] Building C object CMakeFiles/SDL3-shared.dir/src/core/unix/SDL_appid.c.o
+2026-08-07T03:30:16.9189056Z [ 77%] Building C object CMakeFiles/SDL3-shared.dir/src/core/unix/SDL_poll.c.o
+2026-08-07T03:30:16.9569126Z [ 77%] Building C object CMakeFiles/SDL3-shared.dir/src/camera/v4l2/SDL_camera_v4l2.c.o
+2026-08-07T03:30:16.9849058Z [ 78%] Building C object CMakeFiles/SDL3-shared.dir/src/haptic/linux/SDL_syshaptic.c.o
+2026-08-07T03:30:17.0509219Z [ 78%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_dbus.c.o
+2026-08-07T03:30:17.2876434Z [ 78%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_system_theme.c.o
+2026-08-07T03:30:17.2898722Z [ 79%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_ime.c.o
+2026-08-07T03:30:17.2923819Z [ 79%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_ibus.c.o
+2026-08-07T03:30:17.3879255Z [ 79%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_fcitx.c.o
+2026-08-07T03:30:17.5339049Z [ 80%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_udev.c.o
+2026-08-07T03:30:17.6131621Z [ 80%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_evdev.c.o
+2026-08-07T03:30:17.7543194Z [ 81%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_evdev_kbd.c.o
+2026-08-07T03:30:17.7559633Z [ 81%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_evdev_capabilities.c.o
+2026-08-07T03:30:17.8489156Z [ 81%] Building C object CMakeFiles/SDL3-shared.dir/src/core/linux/SDL_threadprio.c.o
+2026-08-07T03:30:17.9589380Z [ 82%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_combined.c.o
+2026-08-07T03:30:17.9769387Z [ 82%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_gamecube.c.o
+2026-08-07T03:30:18.0779213Z [ 82%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_luna.c.o
+2026-08-07T03:30:18.0949223Z [ 83%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps3.c.o
+2026-08-07T03:30:18.2079175Z [ 83%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps4.c.o
+2026-08-07T03:30:18.2249307Z [ 83%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps5.c.o
+2026-08-07T03:30:18.4461156Z [ 84%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_rumble.c.o
+2026-08-07T03:30:18.5739194Z [ 84%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_shield.c.o
+2026-08-07T03:30:18.5949555Z [ 84%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_stadia.c.o
+2026-08-07T03:30:18.6469352Z [ 85%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steam.c.o
+2026-08-07T03:30:18.7279245Z [ 85%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steam_hori.c.o
+2026-08-07T03:30:18.7969755Z [ 86%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steamdeck.c.o
+2026-08-07T03:30:18.8899293Z [ 86%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_switch.c.o
+2026-08-07T03:30:18.9489131Z [ 86%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_wii.c.o
+2026-08-07T03:30:19.0039184Z [ 87%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xbox360.c.o
+2026-08-07T03:30:19.1469150Z [ 87%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xbox360w.c.o
+2026-08-07T03:30:19.2929198Z [ 87%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xboxone.c.o
+2026-08-07T03:30:19.3709160Z [ 88%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapijoystick.c.o
+2026-08-07T03:30:19.6870067Z [ 88%] Building C object CMakeFiles/SDL3-shared.dir/src/joystick/linux/SDL_sysjoystick.c.o
+2026-08-07T03:30:19.7139092Z [ 88%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_systhread.c.o
+2026-08-07T03:30:19.8459171Z [ 89%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_sysmutex.c.o
+2026-08-07T03:30:19.8679130Z [ 89%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_syscond.c.o
+2026-08-07T03:30:19.9269245Z [ 90%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_sysrwlock.c.o
+2026-08-07T03:30:19.9659136Z [ 90%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_systls.c.o
+2026-08-07T03:30:20.0089132Z [ 90%] Building C object CMakeFiles/SDL3-shared.dir/src/thread/pthread/SDL_syssem.c.o
+2026-08-07T03:30:20.0409152Z [ 91%] Building C object CMakeFiles/SDL3-shared.dir/src/misc/unix/SDL_sysurl.c.o
+2026-08-07T03:30:20.0969032Z [ 91%] Building C object CMakeFiles/SDL3-shared.dir/src/power/linux/SDL_syspower.c.o
+2026-08-07T03:30:20.1179141Z [ 91%] Building C object CMakeFiles/SDL3-shared.dir/src/locale/unix/SDL_syslocale.c.o
+2026-08-07T03:30:20.1939242Z [ 92%] Building C object CMakeFiles/SDL3-shared.dir/src/filesystem/unix/SDL_sysfilesystem.c.o
+2026-08-07T03:30:20.3499213Z [ 92%] Building C object CMakeFiles/SDL3-shared.dir/src/storage/generic/SDL_genericstorage.c.o
+2026-08-07T03:30:20.3629244Z [ 92%] Building C object CMakeFiles/SDL3-shared.dir/src/storage/steam/SDL_steamstorage.c.o
+2026-08-07T03:30:20.4602198Z [ 93%] Building C object CMakeFiles/SDL3-shared.dir/src/filesystem/posix/SDL_sysfsops.c.o
+2026-08-07T03:30:20.4616184Z [ 93%] Building C object CMakeFiles/SDL3-shared.dir/src/time/unix/SDL_systime.c.o
+2026-08-07T03:30:20.4719062Z [ 94%] Building C object CMakeFiles/SDL3-shared.dir/src/timer/unix/SDL_systimer.c.o
+2026-08-07T03:30:20.5529242Z [ 94%] Building C object CMakeFiles/SDL3-shared.dir/src/dialog/SDL_dialog.c.o
+2026-08-07T03:30:20.5589048Z [ 94%] Building C object CMakeFiles/SDL3-shared.dir/src/dialog/SDL_dialog_utils.c.o
+2026-08-07T03:30:20.5924749Z [ 95%] Building C object CMakeFiles/SDL3-shared.dir/src/dialog/unix/SDL_unixdialog.c.o
+2026-08-07T03:30:20.6349427Z [ 95%] Building C object CMakeFiles/SDL3-shared.dir/src/dialog/unix/SDL_portaldialog.c.o
+2026-08-07T03:30:20.6655794Z [ 95%] Building C object CMakeFiles/SDL3-shared.dir/src/dialog/unix/SDL_zenitydialog.c.o
+2026-08-07T03:30:20.6704134Z [ 96%] Building C object CMakeFiles/SDL3-shared.dir/src/process/SDL_process.c.o
+2026-08-07T03:30:20.7749212Z [ 96%] Building C object CMakeFiles/SDL3-shared.dir/src/process/posix/SDL_posixprocess.c.o
+2026-08-07T03:30:20.8089630Z [ 96%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenevents.c.o
+2026-08-07T03:30:20.8349209Z [ 97%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenframebuffer.c.o
+2026-08-07T03:30:20.8799138Z [ 97%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenopengles.c.o
+2026-08-07T03:30:20.9079219Z [ 98%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenvideo.c.o
+2026-08-07T03:30:20.9539759Z [ 98%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenvulkan.c.o
+2026-08-07T03:30:20.9849237Z [ 98%] Building C object CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenwindow.c.o
+2026-08-07T03:30:20.9878906Z [ 99%] Building C object CMakeFiles/SDL3-shared.dir/src/tray/SDL_tray_utils.c.o
+2026-08-07T03:30:21.0559037Z [ 99%] Building C object CMakeFiles/SDL3-shared.dir/src/gpu/vulkan/SDL_gpu_vulkan.c.o
+2026-08-07T03:30:21.0618858Z [ 99%] Building C object CMakeFiles/SDL3-shared.dir/src/sensor/dummy/SDL_dummysensor.c.o
+2026-08-07T03:30:21.0872102Z [100%] Building C object CMakeFiles/SDL3-shared.dir/src/main/generic/SDL_sysmain_callbacks.c.o
+2026-08-07T03:30:23.9102791Z [100%] Linking C shared library libSDL3.so
+2026-08-07T03:30:24.0166401Z [100%] Built target SDL3-shared
+2026-08-07T03:30:24.0307500Z -- Install configuration: "Release"
+2026-08-07T03:30:24.0399781Z -- Installing: /usr/local/lib/pkgconfig/sdl3.pc
+2026-08-07T03:30:24.0402718Z -- Installing: /usr/local/lib/libSDL3.so.0.2.0
+2026-08-07T03:30:24.0444068Z -- Installing: /usr/local/lib/libSDL3.so.0
+2026-08-07T03:30:24.0445265Z -- Installing: /usr/local/lib/libSDL3.so
+2026-08-07T03:30:24.0446116Z -- Installing: /usr/local/lib/libSDL3_test.a
+2026-08-07T03:30:24.0451955Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3headersTargets.cmake
+2026-08-07T03:30:24.0454428Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3sharedTargets.cmake
+2026-08-07T03:30:24.0456834Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3sharedTargets-release.cmake
+2026-08-07T03:30:24.0459439Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3testTargets.cmake
+2026-08-07T03:30:24.0461912Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3testTargets-release.cmake
+2026-08-07T03:30:24.0463787Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3Config.cmake
+2026-08-07T03:30:24.0465852Z -- Installing: /usr/local/lib/cmake/SDL3/SDL3ConfigVersion.cmake
+2026-08-07T03:30:24.0469559Z -- Installing: /usr/local/include/SDL3/SDL.h
+2026-08-07T03:30:24.0471005Z -- Installing: /usr/local/include/SDL3/SDL_assert.h
+2026-08-07T03:30:24.0473455Z -- Installing: /usr/local/include/SDL3/SDL_asyncio.h
+2026-08-07T03:30:24.0475610Z -- Installing: /usr/local/include/SDL3/SDL_atomic.h
+2026-08-07T03:30:24.0477797Z -- Installing: /usr/local/include/SDL3/SDL_audio.h
+2026-08-07T03:30:24.0481177Z -- Installing: /usr/local/include/SDL3/SDL_begin_code.h
+2026-08-07T03:30:24.0482751Z -- Installing: /usr/local/include/SDL3/SDL_bits.h
+2026-08-07T03:30:24.0484984Z -- Installing: /usr/local/include/SDL3/SDL_blendmode.h
+2026-08-07T03:30:24.0486939Z -- Installing: /usr/local/include/SDL3/SDL_camera.h
+2026-08-07T03:30:24.0489054Z -- Installing: /usr/local/include/SDL3/SDL_clipboard.h
+2026-08-07T03:30:24.0490941Z -- Installing: /usr/local/include/SDL3/SDL_close_code.h
+2026-08-07T03:30:24.0492657Z -- Installing: /usr/local/include/SDL3/SDL_copying.h
+2026-08-07T03:30:24.0494650Z -- Installing: /usr/local/include/SDL3/SDL_cpuinfo.h
+2026-08-07T03:30:24.0496196Z -- Installing: /usr/local/include/SDL3/SDL_dialog.h
+2026-08-07T03:30:24.0498724Z -- Installing: /usr/local/include/SDL3/SDL_egl.h
+2026-08-07T03:30:24.0501983Z -- Installing: /usr/local/include/SDL3/SDL_endian.h
+2026-08-07T03:30:24.0503856Z -- Installing: /usr/local/include/SDL3/SDL_error.h
+2026-08-07T03:30:24.0505730Z -- Installing: /usr/local/include/SDL3/SDL_events.h
+2026-08-07T03:30:24.0508492Z -- Installing: /usr/local/include/SDL3/SDL_filesystem.h
+2026-08-07T03:30:24.0510837Z -- Installing: /usr/local/include/SDL3/SDL_gamepad.h
+2026-08-07T03:30:24.0513316Z -- Installing: /usr/local/include/SDL3/SDL_gpu.h
+2026-08-07T03:30:24.0516964Z -- Installing: /usr/local/include/SDL3/SDL_guid.h
+2026-08-07T03:30:24.0518675Z -- Installing: /usr/local/include/SDL3/SDL_haptic.h
+2026-08-07T03:30:24.0521390Z -- Installing: /usr/local/include/SDL3/SDL_hidapi.h
+2026-08-07T03:30:24.0523482Z -- Installing: /usr/local/include/SDL3/SDL_hints.h
+2026-08-07T03:30:24.0527187Z -- Installing: /usr/local/include/SDL3/SDL_init.h
+2026-08-07T03:30:24.0529541Z -- Installing: /usr/local/include/SDL3/SDL_intrin.h
+2026-08-07T03:30:24.0531647Z -- Installing: /usr/local/include/SDL3/SDL_iostream.h
+2026-08-07T03:30:24.0534124Z -- Installing: /usr/local/include/SDL3/SDL_joystick.h
+2026-08-07T03:30:24.0536493Z -- Installing: /usr/local/include/SDL3/SDL_keyboard.h
+2026-08-07T03:30:24.0538805Z -- Installing: /usr/local/include/SDL3/SDL_keycode.h
+2026-08-07T03:30:24.0541261Z -- Installing: /usr/local/include/SDL3/SDL_loadso.h
+2026-08-07T03:30:24.0545913Z -- Installing: /usr/local/include/SDL3/SDL_locale.h
+2026-08-07T03:30:24.0546522Z -- Installing: /usr/local/include/SDL3/SDL_log.h
+2026-08-07T03:30:24.0547083Z -- Installing: /usr/local/include/SDL3/SDL_main.h
+2026-08-07T03:30:24.0548903Z -- Installing: /usr/local/include/SDL3/SDL_main_impl.h
+2026-08-07T03:30:24.0550411Z -- Installing: /usr/local/include/SDL3/SDL_messagebox.h
+2026-08-07T03:30:24.0551694Z -- Installing: /usr/local/include/SDL3/SDL_metal.h
+2026-08-07T03:30:24.0553068Z -- Installing: /usr/local/include/SDL3/SDL_misc.h
+2026-08-07T03:30:24.0554395Z -- Installing: /usr/local/include/SDL3/SDL_mouse.h
+2026-08-07T03:30:24.0555969Z -- Installing: /usr/local/include/SDL3/SDL_mutex.h
+2026-08-07T03:30:24.0557723Z -- Installing: /usr/local/include/SDL3/SDL_oldnames.h
+2026-08-07T03:30:24.0560531Z -- Installing: /usr/local/include/SDL3/SDL_opengl.h
+2026-08-07T03:30:24.0563531Z -- Installing: /usr/local/include/SDL3/SDL_opengl_glext.h
+2026-08-07T03:30:24.0574697Z -- Installing: /usr/local/include/SDL3/SDL_opengles.h
+2026-08-07T03:30:24.0576368Z -- Installing: /usr/local/include/SDL3/SDL_opengles2.h
+2026-08-07T03:30:24.0578244Z -- Installing: /usr/local/include/SDL3/SDL_opengles2_gl2.h
+2026-08-07T03:30:24.0580452Z -- Installing: /usr/local/include/SDL3/SDL_opengles2_gl2ext.h
+2026-08-07T03:30:24.0584700Z -- Installing: /usr/local/include/SDL3/SDL_opengles2_gl2platform.h
+2026-08-07T03:30:24.0586371Z -- Installing: /usr/local/include/SDL3/SDL_opengles2_khrplatform.h
+2026-08-07T03:30:24.0588254Z -- Installing: /usr/local/include/SDL3/SDL_pen.h
+2026-08-07T03:30:24.0590021Z -- Installing: /usr/local/include/SDL3/SDL_pixels.h
+2026-08-07T03:30:24.0592407Z -- Installing: /usr/local/include/SDL3/SDL_platform.h
+2026-08-07T03:30:24.0594038Z -- Installing: /usr/local/include/SDL3/SDL_platform_defines.h
+2026-08-07T03:30:24.0595760Z -- Installing: /usr/local/include/SDL3/SDL_power.h
+2026-08-07T03:30:24.0597503Z -- Installing: /usr/local/include/SDL3/SDL_process.h
+2026-08-07T03:30:24.0599789Z -- Installing: /usr/local/include/SDL3/SDL_properties.h
+2026-08-07T03:30:24.0601617Z -- Installing: /usr/local/include/SDL3/SDL_rect.h
+2026-08-07T03:30:24.0603497Z -- Installing: /usr/local/include/SDL3/SDL_render.h
+2026-08-07T03:30:24.0606381Z -- Installing: /usr/local/include/SDL3/SDL_scancode.h
+2026-08-07T03:30:24.0608313Z -- Installing: /usr/local/include/SDL3/SDL_sensor.h
+2026-08-07T03:30:24.0610253Z -- Installing: /usr/local/include/SDL3/SDL_stdinc.h
+2026-08-07T03:30:24.0614071Z -- Installing: /usr/local/include/SDL3/SDL_storage.h
+2026-08-07T03:30:24.0616002Z -- Installing: /usr/local/include/SDL3/SDL_surface.h
+2026-08-07T03:30:24.0618393Z -- Installing: /usr/local/include/SDL3/SDL_system.h
+2026-08-07T03:30:24.0620647Z -- Installing: /usr/local/include/SDL3/SDL_thread.h
+2026-08-07T03:30:24.0622572Z -- Installing: /usr/local/include/SDL3/SDL_time.h
+2026-08-07T03:30:24.0624326Z -- Installing: /usr/local/include/SDL3/SDL_timer.h
+2026-08-07T03:30:24.0626142Z -- Installing: /usr/local/include/SDL3/SDL_touch.h
+2026-08-07T03:30:24.0628101Z -- Installing: /usr/local/include/SDL3/SDL_tray.h
+2026-08-07T03:30:24.0630153Z -- Installing: /usr/local/include/SDL3/SDL_version.h
+2026-08-07T03:30:24.0631787Z -- Installing: /usr/local/include/SDL3/SDL_video.h
+2026-08-07T03:30:24.0634888Z -- Installing: /usr/local/include/SDL3/SDL_vulkan.h
+2026-08-07T03:30:24.0636706Z -- Installing: /usr/local/include/SDL3/SDL_revision.h
+2026-08-07T03:30:24.0639506Z -- Installing: /usr/local/include/SDL3/SDL_test.h
+2026-08-07T03:30:24.0641408Z -- Installing: /usr/local/include/SDL3/SDL_test_assert.h
+2026-08-07T03:30:24.0643201Z -- Installing: /usr/local/include/SDL3/SDL_test_common.h
+2026-08-07T03:30:24.0645103Z -- Installing: /usr/local/include/SDL3/SDL_test_compare.h
+2026-08-07T03:30:24.0646684Z -- Installing: /usr/local/include/SDL3/SDL_test_crc32.h
+2026-08-07T03:30:24.0648365Z -- Installing: /usr/local/include/SDL3/SDL_test_font.h
+2026-08-07T03:30:24.0650627Z -- Installing: /usr/local/include/SDL3/SDL_test_fuzzer.h
+2026-08-07T03:30:24.0652448Z -- Installing: /usr/local/include/SDL3/SDL_test_harness.h
+2026-08-07T03:30:24.0654160Z -- Installing: /usr/local/include/SDL3/SDL_test_log.h
+2026-08-07T03:30:24.0655869Z -- Installing: /usr/local/include/SDL3/SDL_test_md5.h
+2026-08-07T03:30:24.0657621Z -- Installing: /usr/local/include/SDL3/SDL_test_memory.h
+2026-08-07T03:30:24.0660710Z -- Installing: /usr/local/share/licenses/SDL3/LICENSE.txt
+2026-08-07T03:30:24.2052407Z ##[group]Run cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1
+2026-08-07T03:30:24.2053128Z [36;1mcmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1[0m
+2026-08-07T03:30:24.2098886Z shell: /usr/bin/bash -e {0}
+2026-08-07T03:30:24.2099135Z env:
+2026-08-07T03:30:24.2099319Z   BUILD_TYPE: Debug
+2026-08-07T03:30:24.2099522Z ##[endgroup]
+2026-08-07T03:30:24.2632251Z -- The C compiler identification is GNU 13.3.0
+2026-08-07T03:30:25.0875556Z -- The CXX compiler identification is GNU 13.3.0
+2026-08-07T03:30:25.0961893Z -- Detecting C compiler ABI info
+2026-08-07T03:30:25.1485925Z -- Detecting C compiler ABI info - done
+2026-08-07T03:30:25.1661265Z -- Check for working C compiler: /usr/bin/cc - skipped
+2026-08-07T03:30:25.1664379Z -- Detecting C compile features
+2026-08-07T03:30:25.1669170Z -- Detecting C compile features - done
+2026-08-07T03:30:25.1831192Z -- Detecting CXX compiler ABI info
+2026-08-07T03:30:25.2821082Z -- Detecting CXX compiler ABI info - done
+2026-08-07T03:30:25.3002348Z -- Check for working CXX compiler: /usr/bin/c++ - skipped
+2026-08-07T03:30:25.3006091Z -- Detecting CXX compile features
+2026-08-07T03:30:25.3012886Z -- Detecting CXX compile features - done
+2026-08-07T03:30:25.3118865Z CMake Deprecation Warning at external/freetype/CMakeLists.txt:113 (cmake_minimum_required):
+2026-08-07T03:30:25.3119875Z   Compatibility with CMake < 3.10 will be removed from a future version of
+2026-08-07T03:30:25.3120508Z   CMake.
+2026-08-07T03:30:25.3120682Z 
+2026-08-07T03:30:25.3121004Z   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+2026-08-07T03:30:25.3121818Z   to tell CMake that the project requires at least <min> but has been updated
+2026-08-07T03:30:25.3122525Z   to work with policies introduced by <max> or earlier.
+2026-08-07T03:30:25.3122917Z 
+2026-08-07T03:30:25.3122923Z 
+2026-08-07T03:30:25.3173232Z -- Found PkgConfig: /usr/bin/pkg-config (found version "1.8.1")
+2026-08-07T03:30:25.3511975Z -- Found ZLIB: /usr/lib/x86_64-linux-gnu/libz.so (found version "1.3")
+2026-08-07T03:30:25.3514723Z -- Looking for unistd.h
+2026-08-07T03:30:25.4099814Z -- Looking for unistd.h - found
+2026-08-07T03:30:25.4100407Z -- Looking for fcntl.h
+2026-08-07T03:30:25.4666821Z -- Looking for fcntl.h - found
+2026-08-07T03:30:25.4812376Z CMake Deprecation Warning at external/zstd/build/cmake/CMakeLists.txt:10 (cmake_minimum_required):
+2026-08-07T03:30:25.4813022Z   Compatibility with CMake < 3.10 will be removed from a future version of
+2026-08-07T03:30:25.4813388Z   CMake.
+2026-08-07T03:30:25.4813489Z 
+2026-08-07T03:30:25.4813685Z   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+2026-08-07T03:30:25.4814175Z   to tell CMake that the project requires at least <min> but has been updated
+2026-08-07T03:30:25.4814605Z   to work with policies introduced by <max> or earlier.
+2026-08-07T03:30:25.4814831Z 
+2026-08-07T03:30:25.4814835Z 
+2026-08-07T03:30:25.4893224Z -- The ASM compiler identification is GNU
+2026-08-07T03:30:25.4915302Z -- Found assembler: /usr/bin/cc
+2026-08-07T03:30:25.5203762Z -- ZSTD VERSION: 1.5.6
+2026-08-07T03:30:25.5248341Z -- Performing Test C_FLAG_WALL
+2026-08-07T03:30:25.5791398Z -- Performing Test C_FLAG_WALL - Success
+2026-08-07T03:30:25.5799531Z -- Performing Test CXX_FLAG_WALL
+2026-08-07T03:30:25.6560726Z -- Performing Test CXX_FLAG_WALL - Success
+2026-08-07T03:30:25.6569743Z -- Performing Test C_FLAG_WEXTRA
+2026-08-07T03:30:25.7119035Z -- Performing Test C_FLAG_WEXTRA - Success
+2026-08-07T03:30:25.7127216Z -- Performing Test CXX_FLAG_WEXTRA
+2026-08-07T03:30:25.7788808Z -- Performing Test CXX_FLAG_WEXTRA - Success
+2026-08-07T03:30:25.7797435Z -- Performing Test C_FLAG_WUNDEF
+2026-08-07T03:30:25.8327137Z -- Performing Test C_FLAG_WUNDEF - Success
+2026-08-07T03:30:25.8335929Z -- Performing Test CXX_FLAG_WUNDEF
+2026-08-07T03:30:25.8966580Z -- Performing Test CXX_FLAG_WUNDEF - Success
+2026-08-07T03:30:25.8975506Z -- Performing Test C_FLAG_WSHADOW
+2026-08-07T03:30:25.9497019Z -- Performing Test C_FLAG_WSHADOW - Success
+2026-08-07T03:30:25.9504910Z -- Performing Test CXX_FLAG_WSHADOW
+2026-08-07T03:30:26.0138836Z -- Performing Test CXX_FLAG_WSHADOW - Success
+2026-08-07T03:30:26.0148054Z -- Performing Test C_FLAG_WCAST_ALIGN
+2026-08-07T03:30:26.0668072Z -- Performing Test C_FLAG_WCAST_ALIGN - Success
+2026-08-07T03:30:26.0676654Z -- Performing Test CXX_FLAG_WCAST_ALIGN
+2026-08-07T03:30:26.1302977Z -- Performing Test CXX_FLAG_WCAST_ALIGN - Success
+2026-08-07T03:30:26.1312240Z -- Performing Test C_FLAG_WCAST_QUAL
+2026-08-07T03:30:26.1827112Z -- Performing Test C_FLAG_WCAST_QUAL - Success
+2026-08-07T03:30:26.1835112Z -- Performing Test CXX_FLAG_WCAST_QUAL
+2026-08-07T03:30:26.2470853Z -- Performing Test CXX_FLAG_WCAST_QUAL - Success
+2026-08-07T03:30:26.2479483Z -- Performing Test C_FLAG_WSTRICT_PROTOTYPES
+2026-08-07T03:30:26.3002089Z -- Performing Test C_FLAG_WSTRICT_PROTOTYPES - Success
+2026-08-07T03:30:26.3011781Z -- Performing Test C_FLAG_DDEBUGLEVEL_1
+2026-08-07T03:30:26.3532252Z -- Performing Test C_FLAG_DDEBUGLEVEL_1 - Success
+2026-08-07T03:30:26.3540897Z -- Performing Test CXX_FLAG_DDEBUGLEVEL_1
+2026-08-07T03:30:26.4181365Z -- Performing Test CXX_FLAG_DDEBUGLEVEL_1 - Success
+2026-08-07T03:30:26.4190479Z -- Performing Test LD_FLAG_Z_NOEXECSTACK
+2026-08-07T03:30:26.4712939Z -- Performing Test LD_FLAG_Z_NOEXECSTACK - Success
+2026-08-07T03:30:26.4721663Z -- Performing Test C_FLAG_QUNUSED_ARGUMENTS
+2026-08-07T03:30:26.5025558Z -- Performing Test C_FLAG_QUNUSED_ARGUMENTS - Failed
+2026-08-07T03:30:26.5034272Z -- Performing Test CXX_FLAG_QUNUSED_ARGUMENTS
+2026-08-07T03:30:26.5338225Z -- Performing Test CXX_FLAG_QUNUSED_ARGUMENTS - Failed
+2026-08-07T03:30:26.5346467Z -- Performing Test C_FLAG_WA_NOEXECSTACK
+2026-08-07T03:30:26.5867290Z -- Performing Test C_FLAG_WA_NOEXECSTACK - Success
+2026-08-07T03:30:26.5875417Z -- Performing Test CXX_FLAG_WA_NOEXECSTACK
+2026-08-07T03:30:26.6508421Z -- Performing Test CXX_FLAG_WA_NOEXECSTACK - Success
+2026-08-07T03:30:26.6510667Z -- CMAKE_INSTALL_PREFIX: /usr/local
+2026-08-07T03:30:26.6511109Z -- CMAKE_INSTALL_LIBDIR: lib
+2026-08-07T03:30:26.6511528Z -- ZSTD_LEGACY_SUPPORT defined!
+2026-08-07T03:30:26.6511952Z -- ZSTD_MULTITHREAD_SUPPORT is enabled
+2026-08-07T03:30:26.6564955Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+2026-08-07T03:30:26.7141720Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+2026-08-07T03:30:26.7153084Z -- Found Threads: TRUE
+2026-08-07T03:30:26.7317925Z CMake Deprecation Warning at external/soloud/contrib/CMakeLists.txt:1 (cmake_minimum_required):
+2026-08-07T03:30:26.7319144Z   Compatibility with CMake < 3.10 will be removed from a future version of
+2026-08-07T03:30:26.7319780Z   CMake.
+2026-08-07T03:30:26.7319957Z 
+2026-08-07T03:30:26.7320284Z   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+2026-08-07T03:30:26.7321117Z   to tell CMake that the project requires at least <min> but has been updated
+2026-08-07T03:30:26.7321836Z   to work with policies introduced by <max> or earlier.
+2026-08-07T03:30:26.7322240Z 
+2026-08-07T03:30:26.7322247Z 
+2026-08-07T03:30:26.7322996Z [-] Build dynamic library disabled
+2026-08-07T03:30:26.7323741Z [+] Build static library enabled
+2026-08-07T03:30:26.7324490Z [-] Build C API disabled
+2026-08-07T03:30:26.7324813Z [-] Build demos disabled
+2026-08-07T03:30:26.7325077Z [+] NULL backend enabled
+2026-08-07T03:30:26.7325404Z [-] SDL2 backend disabled
+2026-08-07T03:30:26.7325735Z [-] ALSA backend disabled
+2026-08-07T03:30:26.7326044Z [-] CoreAudio backend disabled
+2026-08-07T03:30:26.7326383Z [-] OpenSLES backend disabled
+2026-08-07T03:30:26.7326682Z [-] XAudio2 backend disabled
+2026-08-07T03:30:26.7327024Z [-] WINMM backend disabled
+2026-08-07T03:30:26.7327380Z [-] WASAPI backend disabled
+2026-08-07T03:30:26.7328019Z [-] Generate Glue disabled
+2026-08-07T03:30:26.7898229Z -- Found X11: /usr/include
+2026-08-07T03:30:26.7901801Z -- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so
+2026-08-07T03:30:26.8472494Z -- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so - found
+2026-08-07T03:30:26.8473436Z -- Looking for gethostbyname
+2026-08-07T03:30:26.9001717Z -- Looking for gethostbyname - found
+2026-08-07T03:30:26.9002383Z -- Looking for connect
+2026-08-07T03:30:26.9530230Z -- Looking for connect - found
+2026-08-07T03:30:26.9530815Z -- Looking for remove
+2026-08-07T03:30:27.0052736Z -- Looking for remove - found
+2026-08-07T03:30:27.0053218Z -- Looking for shmat
+2026-08-07T03:30:27.0580782Z -- Looking for shmat - found
+2026-08-07T03:30:27.1033061Z -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.13")
+2026-08-07T03:30:27.1120725Z -- Caesura (AmeKAG) configured successfully.
+2026-08-07T03:30:27.2987097Z -- Configuring done (3.1s)
+2026-08-07T03:30:27.4365275Z CMake Warning:
+2026-08-07T03:30:27.4365753Z -- Generating done (0.1s)
+2026-08-07T03:30:27.4366438Z   Manually-specified variables were not used by the project:
+2026-08-07T03:30:27.4366817Z 
+2026-08-07T03:30:27.4366949Z     BX_CONFIG_DEBUG
+2026-08-07T03:30:27.4367111Z 
+2026-08-07T03:30:27.4367116Z 
+2026-08-07T03:30:27.4373969Z -- Build files have been written to: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build
+2026-08-07T03:30:27.4521190Z ##[group]Run cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
+2026-08-07T03:30:27.4521787Z [36;1mcmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40[0m
+2026-08-07T03:30:27.4566309Z shell: /usr/bin/bash -e {0}
+2026-08-07T03:30:27.4566551Z env:
+2026-08-07T03:30:27.4566736Z   BUILD_TYPE: Debug
+2026-08-07T03:30:27.4566941Z ##[endgroup]
+2026-08-07T03:31:30.7624498Z [ 84%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/Engine_Backends.cpp.o
+2026-08-07T03:31:30.7625152Z [ 85%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/Engine_Gpu.cpp.o
+2026-08-07T03:31:30.7625728Z In file included from /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.h:3,
+2026-08-07T03:31:30.7626292Z                  from /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp:6:
+2026-08-07T03:31:30.7630644Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/EngineConfig.h:93:5: error: ‘uint32_t’ does not name a type
+2026-08-07T03:31:30.7631529Z    93 |     uint32_t          frameLimit      = 0;
+2026-08-07T03:31:30.7631808Z       |     ^~~~~~~~
+2026-08-07T03:31:30.7632634Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/EngineConfig.h:5:1: note: ‘uint32_t’ is defined in header ‘<cstdint>’; did you forget to ‘#include <cstdint>’?
+2026-08-07T03:31:30.7633329Z     4 | #include <utility>
+2026-08-07T03:31:30.7633542Z   +++ |+#include <cstdint>
+2026-08-07T03:31:30.7633739Z     5 | 
+2026-08-07T03:31:30.7638973Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/EngineConfig.h: In constructor ‘Caesura::EngineConfig::EngineConfig(Caesura::EngineConfig&&)’:
+2026-08-07T03:31:30.7640250Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/EngineConfig.h:53:11: error: class ‘Caesura::EngineConfig’ does not have any field named ‘frameLimit’
+2026-08-07T03:31:30.7640973Z    53 |         , frameLimit(other.frameLimit)
+2026-08-07T03:31:30.7641243Z       |           ^~~~~~~~~~
+2026-08-07T03:31:30.7642264Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/EngineConfig.h:53:28: error: ‘struct Caesura::EngineConfig’ has no member named ‘frameLimit’
+2026-08-07T03:31:30.7642914Z    53 |         , frameLimit(other.frameLimit)
+2026-08-07T03:31:30.7643188Z       |                            ^~~~~~~~~~
+2026-08-07T03:31:30.7643601Z [ 85%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/Engine_LuaRegistry.cpp.o
+2026-08-07T03:31:30.7644156Z [ 85%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/StartupScripts.cpp.o
+2026-08-07T03:31:30.7644706Z [ 85%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/StartupValidation.cpp.o
+2026-08-07T03:31:30.7645589Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp: In member function ‘void Caesura::Engine::run(const OwnerPump&)’:
+2026-08-07T03:31:30.7646680Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp:744:22: error: ‘struct Caesura::EngineConfig’ has no member named ‘frameLimit’
+2026-08-07T03:31:30.7647335Z   744 |         if (m_config.frameLimit > 0 &&
+2026-08-07T03:31:30.7647598Z       |                      ^~~~~~~~~~
+2026-08-07T03:31:30.7648781Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp:745:40: error: ‘struct Caesura::EngineConfig’ has no member named ‘frameLimit’
+2026-08-07T03:31:30.7649468Z   745 |             ++m_frameCount >= m_config.frameLimit) {
+2026-08-07T03:31:30.7649779Z       |                                        ^~~~~~~~~~
+2026-08-07T03:31:30.7650215Z In file included from /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp:9:
+2026-08-07T03:31:30.7651144Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/Engine.cpp:748:33: error: ‘struct Caesura::EngineConfig’ has no member named ‘frameLimit’
+2026-08-07T03:31:30.7651783Z   748 |                        m_config.frameLimit);
+2026-08-07T03:31:30.7652061Z       |                                 ^~~~~~~~~~
+2026-08-07T03:31:30.7652938Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/src/entry/../debug/DebugManager.h:31:80: note: in definition of macro ‘DEBUG_INFO’
+2026-08-07T03:31:30.7653683Z    31 |     Caesura::DebugManager::instance().log((Caesura::DbgLevel)2, ss, ec, fmt, ##__VA_ARGS__)
+2026-08-07T03:31:30.7654156Z       |                                                                                ^~~~~~~~~~~
+2026-08-07T03:31:30.7654580Z [ 86%] Building CXX object CMakeFiles/CaesuraEntry.dir/src/entry/ErrorUI.cpp.o
+2026-08-07T03:31:30.7655195Z gmake[2]: *** [CMakeFiles/CaesuraEntry.dir/build.make:79: CMakeFiles/CaesuraEntry.dir/src/entry/Engine.cpp.o] Error 1
+2026-08-07T03:31:30.7655718Z gmake[2]: *** Waiting for unfinished jobs....
+2026-08-07T03:31:30.7656109Z gmake[1]: *** [CMakeFiles/Makefile2:927: CMakeFiles/CaesuraEntry.dir/all] Error 2
+2026-08-07T03:31:30.7656489Z gmake: *** [Makefile:166: all] Error 2
+2026-08-07T03:31:30.7682816Z ##[group]Run ctest --test-dir build --output-on-failure --repeat until-pass:2
+2026-08-07T03:31:30.7683364Z [36;1mctest --test-dir build --output-on-failure --repeat until-pass:2[0m
+2026-08-07T03:31:30.7726418Z shell: /usr/bin/bash -e {0}
+2026-08-07T03:31:30.7726651Z env:
+2026-08-07T03:31:30.7726869Z   BUILD_TYPE: Debug
+2026-08-07T03:31:30.7727068Z ##[endgroup]
+2026-08-07T03:31:31.1021921Z Internal ctest changing into directory: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build
+2026-08-07T03:31:31.1625671Z Test project /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build
+2026-08-07T03:31:31.2130739Z       Start  1: CaesuraSyncTestAssets
+2026-08-07T03:31:31.2409477Z  1/10 Test  #1: CaesuraSyncTestAssets ............   Passed    0.02 sec
+2026-08-07T03:31:31.2457346Z       Start  2: CaesuraUnitTests
+2026-08-07T03:31:31.2458615Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2459685Z Looked in the following places:
+2026-08-07T03:31:31.2460315Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2461147Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2462317Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2463231Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2464128Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2465015Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2465929Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2466874Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2468116Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2469295Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2470443Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2471563Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2472657Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2473703Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2474704Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2475652Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2476632Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2477603Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2478738Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2479577Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2480451Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2481318Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2482151Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2483001Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2494125Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2495036Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2495944Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2497154Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2498348Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2499101Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2499681Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2500236Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2500718Z  2/10 Test  #2: CaesuraUnitTests .................***Not Run   0.00 sec
+2026-08-07T03:31:31.2501066Z       Start  3: CaesuraEntryTests
+2026-08-07T03:31:31.2501497Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2501962Z Looked in the following places:
+2026-08-07T03:31:31.2502305Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2502785Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2503273Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2503988Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2504505Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2505007Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2505524Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2506064Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2506618Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2507190Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2507744Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2508600Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2509151Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2509699Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2510201Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2510662Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2511147Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2511658Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2512169Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2512671Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2513187Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2513722Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2514275Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2514836Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2515382Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2515904Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2516446Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2516986Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2517458Z  3/10 Test  #3: CaesuraEntryTests ................***Not Run   0.00 sec
+2026-08-07T03:31:31.2518173Z       Start  4: CaesuraStorageTests
+2026-08-07T03:31:31.2518650Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2519126Z Looked in the following places:
+2026-08-07T03:31:31.2519471Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2519934Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2520417Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2520935Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2521458Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2521968Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2522484Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2523072Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2523625Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2524331Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2524876Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2525404Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2525939Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2526486Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2526987Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2527443Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2528227Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2528755Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2529274Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2529770Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2530282Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2530815Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2531356Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2531920Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2532463Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2532998Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2533534Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2534078Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2534560Z  4/10 Test  #4: CaesuraStorageTests ..............***Not Run   0.00 sec
+2026-08-07T03:31:31.2534908Z       Start  5: CaesuraScriptTests
+2026-08-07T03:31:31.2535348Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2535809Z Looked in the following places:
+2026-08-07T03:31:31.2536149Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2536619Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2537103Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2537755Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2538523Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2539035Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2539549Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2540083Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2540633Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2541203Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2541752Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2542280Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2542822Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2543364Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2544007Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2544476Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2544959Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2545477Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2545980Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2546473Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2546984Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2547524Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2548399Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2548990Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2549551Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2550082Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2550620Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2551165Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2551651Z  5/10 Test  #5: CaesuraScriptTests ...............***Not Run   0.00 sec
+2026-08-07T03:31:31.2552011Z       Start  6: CaesuraRenderResourceTests
+2026-08-07T03:31:31.2552464Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2552926Z Looked in the following places:
+2026-08-07T03:31:31.2553276Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2553740Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2554228Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2554740Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2555258Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2555764Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2556294Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2556832Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2557387Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2558374Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2558943Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2559498Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2560040Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2560588Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2561115Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2561580Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2562062Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2562574Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2563087Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2563588Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2564230Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2564777Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2565327Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2565894Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2566441Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2566974Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2567614Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2568507Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2569127Z Unable to find executable: /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2569726Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2570288Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2570776Z  6/10 Test  #6: CaesuraRenderResourceTests .......***Not Run   0.00 sec
+2026-08-07T03:31:31.2571128Z       Start  7: CaesuraAudioTests
+2026-08-07T03:31:31.2571556Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2572015Z Looked in the following places:
+2026-08-07T03:31:31.2572359Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2572826Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2573323Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2573841Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2574356Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2574861Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2575391Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2575930Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2576484Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2577052Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2577601Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2578484Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2579028Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2579576Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2580082Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2580546Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/CaesuraTests
+2026-08-07T03:31:31.2581038Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2581549Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Release/CaesuraTests
+2026-08-07T03:31:31.2582056Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2582548Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Debug/CaesuraTests
+2026-08-07T03:31:31.2583066Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2583602Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/MinSizeRel/CaesuraTests
+2026-08-07T03:31:31.2584150Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2584878Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/RelWithDebInfo/CaesuraTests
+2026-08-07T03:31:31.2585423Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2585947Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Deployment/CaesuraTests
+2026-08-07T03:31:31.2586482Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2587017Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/tests/Development/CaesuraTests
+2026-08-07T03:31:31.2587485Z  7/10 Test  #7: CaesuraAudioTests ................***Not Run   0.00 sec
+2026-08-07T03:31:31.2588075Z       Start  8: CaesuraHeadlessCliSmoke
+2026-08-07T03:31:31.2588518Z Could not find executable /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2588956Z Looked in the following places:
+2026-08-07T03:31:31.2589283Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2589720Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2590175Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Release/CaesuraAmeKAG
+2026-08-07T03:31:31.2590661Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Release/CaesuraAmeKAG
+2026-08-07T03:31:31.2591136Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Debug/CaesuraAmeKAG
+2026-08-07T03:31:31.2591603Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Debug/CaesuraAmeKAG
+2026-08-07T03:31:31.2592093Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/MinSizeRel/CaesuraAmeKAG
+2026-08-07T03:31:31.2592597Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/MinSizeRel/CaesuraAmeKAG
+2026-08-07T03:31:31.2593113Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/RelWithDebInfo/CaesuraAmeKAG
+2026-08-07T03:31:31.2593641Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/RelWithDebInfo/CaesuraAmeKAG
+2026-08-07T03:31:31.2594154Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Deployment/CaesuraAmeKAG
+2026-08-07T03:31:31.2594658Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Deployment/CaesuraAmeKAG
+2026-08-07T03:31:31.2595171Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Development/CaesuraAmeKAG
+2026-08-07T03:31:31.2595678Z /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Development/CaesuraAmeKAG
+2026-08-07T03:31:31.2596146Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2596570Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG
+2026-08-07T03:31:31.2597022Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Release/CaesuraAmeKAG
+2026-08-07T03:31:31.2597500Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Release/CaesuraAmeKAG
+2026-08-07T03:31:31.2598343Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Debug/CaesuraAmeKAG
+2026-08-07T03:31:31.2598814Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Debug/CaesuraAmeKAG
+2026-08-07T03:31:31.2599297Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/MinSizeRel/CaesuraAmeKAG
+2026-08-07T03:31:31.2599795Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/MinSizeRel/CaesuraAmeKAG
+2026-08-07T03:31:31.2600308Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/RelWithDebInfo/CaesuraAmeKAG
+2026-08-07T03:31:31.2600836Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/RelWithDebInfo/CaesuraAmeKAG
+2026-08-07T03:31:31.2601346Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Deployment/CaesuraAmeKAG
+2026-08-07T03:31:31.2601836Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Deployment/CaesuraAmeKAG
+2026-08-07T03:31:31.2602333Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Development/CaesuraAmeKAG
+2026-08-07T03:31:31.2602837Z home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/Development/CaesuraAmeKAG
+2026-08-07T03:31:31.2603297Z  8/10 Test  #8: CaesuraHeadlessCliSmoke ..........***Not Run   0.00 sec
+2026-08-07T03:31:31.2603647Z       Start  9: CaesuraHeadlessRpcSmoke
+2026-08-07T03:31:31.3651268Z  9/10 Test  #9: CaesuraHeadlessRpcSmoke ..........***Failed  Required regular expression not found. Regex=[ALL HEADLESS RPC TESTS PASSED
+2026-08-07T03:31:31.3652142Z ]  0.12 sec
+2026-08-07T03:31:31.3652400Z Traceback (most recent call last):
+2026-08-07T03:31:31.3653601Z   File "/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/tests/headless_rpc_smoke.py", line 14, in <module>
+2026-08-07T03:31:31.3654637Z     proc = subprocess.Popen(
+2026-08-07T03:31:31.3655101Z            ^^^^^^^^^^^^^^^^^
+2026-08-07T03:31:31.3655688Z   File "/usr/lib/python3.12/subprocess.py", line 1026, in __init__
+2026-08-07T03:31:31.3656497Z     self._execute_child(args, executable, preexec_fn, close_fds,
+2026-08-07T03:31:31.3657209Z   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child
+2026-08-07T03:31:31.3657661Z     raise child_exception_type(errno_num, err_msg, err_filename)
+2026-08-07T03:31:31.3658563Z FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG'
+2026-08-07T03:31:31.3659037Z 
+2026-08-07T03:31:31.3659143Z       Start  9: CaesuraHeadlessRpcSmoke
+2026-08-07T03:31:31.4725889Z     Test  #9: CaesuraHeadlessRpcSmoke ..........***Failed  Required regular expression not found. Regex=[ALL HEADLESS RPC TESTS PASSED
+2026-08-07T03:31:31.4727106Z ]  0.11 sec
+2026-08-07T03:31:31.4727504Z Traceback (most recent call last):
+2026-08-07T03:31:31.4728752Z   File "/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/tests/headless_rpc_smoke.py", line 14, in <module>
+2026-08-07T03:31:31.4729560Z     proc = subprocess.Popen(
+2026-08-07T03:31:31.4729956Z            ^^^^^^^^^^^^^^^^^
+2026-08-07T03:31:31.4730300Z   File "/usr/lib/python3.12/subprocess.py", line 1026, in __init__
+2026-08-07T03:31:31.4730735Z     self._execute_child(args, executable, preexec_fn, close_fds,
+2026-08-07T03:31:31.4731194Z   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child
+2026-08-07T03:31:31.4731622Z     raise child_exception_type(errno_num, err_msg, err_filename)
+2026-08-07T03:31:31.4732237Z FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG'
+2026-08-07T03:31:31.4732696Z 
+2026-08-07T03:31:31.4732801Z       Start 10: CaesuraHeadlessHttpSmoke
+2026-08-07T03:31:31.5836139Z 10/10 Test #10: CaesuraHeadlessHttpSmoke .........***Failed  Required regular expression not found. Regex=[ALL HEADLESS HTTP SMOKE TESTS PASSED
+2026-08-07T03:31:31.5837428Z ]  0.11 sec
+2026-08-07T03:31:31.5838165Z Traceback (most recent call last):
+2026-08-07T03:31:31.5839146Z   File "/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/tests/headless_http_smoke.py", line 16, in <module>
+2026-08-07T03:31:31.5840220Z     proc = subprocess.Popen(
+2026-08-07T03:31:31.5840689Z            ^^^^^^^^^^^^^^^^^
+2026-08-07T03:31:31.5841581Z   File "/usr/lib/python3.12/subprocess.py", line 1026, in __init__
+2026-08-07T03:31:31.5842150Z     self._execute_child(args, executable, preexec_fn, close_fds,
+2026-08-07T03:31:31.5842808Z   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child
+2026-08-07T03:31:31.5843555Z     raise child_exception_type(errno_num, err_msg, err_filename)
+2026-08-07T03:31:31.5844583Z FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG'
+2026-08-07T03:31:31.5845479Z 
+2026-08-07T03:31:31.5848636Z       Start 10: CaesuraHeadlessHttpSmoke
+2026-08-07T03:31:31.6992782Z     Test #10: CaesuraHeadlessHttpSmoke .........***Failed  Required regular expression not found. Regex=[ALL HEADLESS HTTP SMOKE TESTS PASSED
+2026-08-07T03:31:31.6993594Z ]  0.12 sec
+2026-08-07T03:31:31.6993862Z Traceback (most recent call last):
+2026-08-07T03:31:31.6994497Z   File "/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/tests/headless_http_smoke.py", line 16, in <module>
+2026-08-07T03:31:31.6995166Z     proc = subprocess.Popen(
+2026-08-07T03:31:31.6995729Z            ^^^^^^^^^^^^^^^^^
+2026-08-07T03:31:31.6996357Z   File "/usr/lib/python3.12/subprocess.py", line 1026, in __init__
+2026-08-07T03:31:31.6997550Z     self._execute_child(args, executable, preexec_fn, close_fds,
+2026-08-07T03:31:31.6998706Z   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child
+2026-08-07T03:31:31.6999315Z     raise child_exception_type(errno_num, err_msg, err_filename)
+2026-08-07T03:31:31.7000089Z FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG/build/CaesuraAmeKAG'
+2026-08-07T03:31:31.7000921Z 
+2026-08-07T03:31:31.7000949Z 
+2026-08-07T03:31:31.7001166Z 10% tests passed, 9 tests failed out of 10
+2026-08-07T03:31:31.7001549Z 
+2026-08-07T03:31:31.7001715Z Label Time Summary:
+2026-08-07T03:31:31.7002158Z assets        =   0.02 sec*proc (1 test)
+2026-08-07T03:31:31.7002648Z audio         =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7002972Z cli           =   0.22 sec*proc (3 tests)
+2026-08-07T03:31:31.7003290Z entry         =   0.22 sec*proc (4 tests)
+2026-08-07T03:31:31.7003538Z filesystem    =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7003796Z full          =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7004046Z headless      =   0.22 sec*proc (3 tests)
+2026-08-07T03:31:31.7004294Z http          =   0.12 sec*proc (1 test)
+2026-08-07T03:31:31.7004544Z lifecycle     =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7004789Z lua           =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7005029Z regression    =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7005277Z render        =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7005525Z resource      =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7005770Z rpc           =   0.22 sec*proc (2 tests)
+2026-08-07T03:31:31.7006015Z script        =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7006263Z setup         =   0.02 sec*proc (1 test)
+2026-08-07T03:31:31.7006510Z storage       =   0.00 sec*proc (1 test)
+2026-08-07T03:31:31.7006680Z 
+2026-08-07T03:31:31.7006769Z Total Test time (real) =   0.54 sec
+2026-08-07T03:31:31.7006932Z 
+2026-08-07T03:31:31.7007018Z The following tests FAILED:
+2026-08-07T03:31:31.7007344Z 	  2 - CaesuraUnitTests (Not Run)                        full regression
+2026-08-07T03:31:31.7007783Z 	  3 - CaesuraEntryTests (Not Run)                       entry lifecycle
+2026-08-07T03:31:31.7008594Z 	  4 - CaesuraStorageTests (Not Run)                     filesystem storage
+2026-08-07T03:31:31.7009031Z 	  5 - CaesuraScriptTests (Not Run)                      lua script
+2026-08-07T03:31:31.7009453Z 	  6 - CaesuraRenderResourceTests (Not Run)              render resource
+2026-08-07T03:31:31.7009857Z 	  7 - CaesuraAudioTests (Not Run)                       audio
+2026-08-07T03:31:31.7010268Z 	  8 - CaesuraHeadlessCliSmoke (Not Run)                 cli entry headless
+2026-08-07T03:31:31.7010739Z 	  9 - CaesuraHeadlessRpcSmoke (Failed)                  cli entry headless rpc
+2026-08-07T03:31:31.7011432Z 	 10 - CaesuraHeadlessHttpSmoke (Failed)                 cli entry headless http rpc
+2026-08-07T03:31:31.7011852Z Errors while running CTest
+2026-08-07T03:31:31.7261543Z ##[error]Process completed with exit code 8.
+2026-08-07T03:31:31.7397047Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-07T03:31:31.7399005Z Post job cleanup.
+2026-08-07T03:31:31.8278159Z [command]/usr/bin/git version
+2026-08-07T03:31:31.8325378Z git version 2.54.0
+2026-08-07T03:31:31.8368805Z Temporarily overriding HOME='/home/runner/work/_temp/5cc8f209-76f4-49c1-99e5-dc5540d92191' before making global git config changes
+2026-08-07T03:31:31.8370059Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-07T03:31:31.8374806Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Caesura-AmeKAG/Caesura-AmeKAG
+2026-08-07T03:31:31.8419002Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-07T03:31:31.8458922Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-07T03:31:31.8723698Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-07T03:31:31.8762549Z http.https://github.com/.extraheader
+2026-08-07T03:31:31.8767700Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-08-07T03:31:31.8817730Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-07T03:31:31.9120024Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-07T03:31:31.9166790Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-07T03:31:31.9579786Z Cleaning up orphan processes
+2026-08-07T03:31:32.0044477Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

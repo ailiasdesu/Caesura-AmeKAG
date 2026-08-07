@@ -1,5 +1,6 @@
 #pragma once
 #include "api/IMiniGameBackend.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include "../input/api/IInputRouter.h"
 #include "MiniMaterial.h"
 #include "MiniGeometry.h"

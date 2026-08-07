@@ -1,5 +1,6 @@
 #pragma once
 #include "api/IAnimationBackend.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <unordered_map>
 
 namespace Caesura {

@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "api/IResourceGenerationTracker.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 

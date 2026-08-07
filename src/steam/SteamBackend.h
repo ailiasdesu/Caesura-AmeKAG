@@ -2,6 +2,7 @@
 // Requires Steamworks SDK 1.60+. Compiled only when CAESURA_HAS_STEAM is defined.
 #pragma once
 #include "api/ISteamBackend.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 

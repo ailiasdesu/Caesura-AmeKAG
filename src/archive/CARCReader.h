@@ -2,6 +2,7 @@
 // Phase 9: Chain trust verification (spec [10.2.63]) via verifyChainTrust().
 #pragma once
 #include "CARCFormat.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include "api/IArchiveReader.h"
 #include "CRLManager.h"
 #include <string>

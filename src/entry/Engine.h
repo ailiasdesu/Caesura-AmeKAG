@@ -1,6 +1,7 @@
 #pragma once
 
 #include "entry/EngineConfig.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 #include "platform/api/IPlatformBackend.h"
 #include "platform/MobileAdapter.h"
 #include "di/api/ThreadAssert.h"

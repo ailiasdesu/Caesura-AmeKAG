@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bgfx/bgfx.h>
+#include <cstdint>  // fixed-width types (GCC strict)
 #include <bx/bx.h>
 #include <cstdio>
 #include <cstdarg>

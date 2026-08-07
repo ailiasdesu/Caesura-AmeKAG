@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/IPlatformBackend.h"
+#include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 
