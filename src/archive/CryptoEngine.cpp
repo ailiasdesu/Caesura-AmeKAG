@@ -37,8 +37,75 @@ void checkBCrypt(NTSTATUS status, const char* op) {
     }
 }
 
-struct BcryptAlgHandle { BCRYPT_ALG_HANDLE h = nullptr; ~BcryptAlgHandle() { if (h) BCryptCloseAlgorithmProvider(h, 0); } };
-struct BcryptKeyHandle  { BCRYPT_KEY_HANDLE h = nullptr;  ~BcryptKeyHandle()  { if (h) BCryptDestroyKey(h); } };
+struct BcryptAlgHandle {
+    BCRYPT_ALG_HANDLE h = nullptr;
+    ~BcryptAlgHandle() { if (h) BCryptCloseAlgorithmProvider(h, 0); }
+    BcryptAlgHandle() = default;
+    BcryptAlgHandle(BcryptAlgHandle&& o) noexcept : h(o.h) { o.h = nullptr; }
+    BcryptAlgHandle& operator=(BcryptAlgHandle&& o) noexcept {
+        if (this != &o) {
+            if (h) BCryptCloseAlgorithmProvider(h, 0);
+            h = o.h; o.h = nullptr;
+        }
+        return *this;
+    }
+    BcryptAlgHandle(const BcryptAlgHandle&) = delete;
+    BcryptAlgHandle& operator=(const BcryptAlgHandle&) = delete;
+};
+struct BcryptKeyHandle {
+    BCRYPT_KEY_HANDLE h = nullptr;
+    ~BcryptKeyHandle() { if (h) BCryptDestroyKey(h); }
+    BcryptKeyHandle() = default;
+    BcryptKeyHandle(BcryptKeyHandle&& o) noexcept : h(o.h) { o.h = nullptr; }
+    BcryptKeyHandle& operator=(BcryptKeyHandle&& o) noexcept {
+        if (this != &o) {
+            if (h) BCryptDestroyKey(h);
+            h = o.h; o.h = nullptr;
+        }
+        return *this;
+    }
+    BcryptKeyHandle(const BcryptKeyHandle&) = delete;
+    BcryptKeyHandle& operator=(const BcryptKeyHandle&) = delete;
+};
+
+// Thread-local AES-GCM handle cache: the engine uses stable keys (one
+// archive key, one save key), so reopening the algorithm provider + key
+// object for every 4KB block was pure waste (BCryptOpenAlgorithmProvider +
+// BCryptImportKey per call). Single-slot cache keyed by the 32-byte key;
+// destroyed when the owning thread exits.
+struct BcryptKeyCache {
+    uint8_t         key[32] = { 0 };
+    bool            valid   = false;
+    BcryptAlgHandle alg;
+    BcryptKeyHandle keyObj;
+    ~BcryptKeyCache() = default;  // RAII members release on thread exit
+};
+static BcryptKeyCache& threadBcryptCache() {
+    thread_local BcryptKeyCache cache;
+    return cache;
+}
+static bool bcryptAcquire(const uint8_t* key, BcryptKeyCache& cache) {
+    if (cache.valid && memcmp(cache.key, key, 32) == 0) return true;
+    BcryptAlgHandle alg;
+    checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(AES)");
+    checkBCrypt(BCryptSetProperty(alg.h, BCRYPT_CHAINING_MODE,
+                 (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0), "SetProperty(GCM)");
+
+    struct { BCRYPT_KEY_DATA_BLOB_HEADER hdr; uint8_t data[32]; } blob;
+    blob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
+    blob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
+    blob.hdr.cbKeyData = 32;
+    memcpy(blob.data, key, 32);
+
+    BcryptKeyHandle keyObj;
+    checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB, &keyObj.h, nullptr, 0,
+                 (PUCHAR)&blob, sizeof(blob), 0), "ImportKey");
+    cache.alg = std::move(alg);
+    cache.keyObj = std::move(keyObj);
+    memcpy(cache.key, key, 32);
+    cache.valid = true;
+    return true;
+}
 
 } // anon
 #endif
@@ -56,20 +123,8 @@ std::vector<uint8_t> CryptoEngine::encrypt(
 
 #ifdef _WIN32
     try {
-        BcryptAlgHandle alg;
-        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(AES)");
-        checkBCrypt(BCryptSetProperty(alg.h, BCRYPT_CHAINING_MODE,
-                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0), "SetProperty(GCM)");
-
-        struct { BCRYPT_KEY_DATA_BLOB_HEADER hdr; uint8_t data[32]; } blob;
-        blob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
-        blob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
-        blob.hdr.cbKeyData = 32;
-        memcpy(blob.data, key, 32);
-
-        BcryptKeyHandle keyObj;
-        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB, &keyObj.h, nullptr, 0,
-                     (PUCHAR)&blob, sizeof(blob), 0), "ImportKey");
+        BcryptKeyCache& cache = threadBcryptCache();
+        if (!bcryptAcquire(key, cache)) return {};
 
         BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO auth;
         BCRYPT_INIT_AUTH_MODE_INFO(auth);
@@ -78,7 +133,7 @@ std::vector<uint8_t> CryptoEngine::encrypt(
 
         std::vector<uint8_t> out(plaintextLen);
         ULONG done = 0;
-        checkBCrypt(BCryptEncrypt(keyObj.h, (PUCHAR)plaintext, (ULONG)plaintextLen,
+        checkBCrypt(BCryptEncrypt(cache.keyObj.h, (PUCHAR)plaintext, (ULONG)plaintextLen,
                      &auth, nullptr, 0, out.data(), (ULONG)plaintextLen, &done, 0), "Encrypt");
         out.resize(done);
         return out;
@@ -121,20 +176,8 @@ std::vector<uint8_t> CryptoEngine::decrypt(
 
 #ifdef _WIN32
     try {
-        BcryptAlgHandle alg;
-        checkBCrypt(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_AES_ALGORITHM, nullptr, 0), "OpenAlgorithmProvider(AES)");
-        checkBCrypt(BCryptSetProperty(alg.h, BCRYPT_CHAINING_MODE,
-                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0), "SetProperty(GCM)");
-
-        struct { BCRYPT_KEY_DATA_BLOB_HEADER hdr; uint8_t data[32]; } blob;
-        blob.hdr.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
-        blob.hdr.dwVersion = BCRYPT_KEY_DATA_BLOB_VERSION1;
-        blob.hdr.cbKeyData = 32;
-        memcpy(blob.data, key, 32);
-
-        BcryptKeyHandle keyObj;
-        checkBCrypt(BCryptImportKey(alg.h, nullptr, BCRYPT_KEY_DATA_BLOB, &keyObj.h, nullptr, 0,
-                     (PUCHAR)&blob, sizeof(blob), 0), "ImportKey");
+        BcryptKeyCache& cache = threadBcryptCache();
+        if (!bcryptAcquire(key, cache)) return {};
 
         BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO auth;
         BCRYPT_INIT_AUTH_MODE_INFO(auth);
@@ -143,7 +186,7 @@ std::vector<uint8_t> CryptoEngine::decrypt(
 
         std::vector<uint8_t> out(ciphertextLen);
         ULONG done = 0;
-        checkBCrypt(BCryptDecrypt(keyObj.h, (PUCHAR)ciphertext, (ULONG)ciphertextLen,
+        checkBCrypt(BCryptDecrypt(cache.keyObj.h, (PUCHAR)ciphertext, (ULONG)ciphertextLen,
                      &auth, nullptr, 0, out.data(), (ULONG)ciphertextLen, &done, 0), "Decrypt");
         out.resize(done);
         return out;

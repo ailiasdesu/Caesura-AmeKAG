@@ -136,3 +136,26 @@ TEST_CASE("CARCWriter::finalize before create returns false") {
     carc::CARCWriter writer;
     CHECK(writer.finalize() == false);
 }
+
+TEST_CASE("Crypto: key-handle cache switches keys correctly") {
+    // The thread-local BCrypt handle cache must invalidate when the key
+    // changes; interleave two keys and verify round trips stay exact.
+    Caesura::carc::CryptoEngine crypto;
+    const std::string a = "key-A-key-A-key-A-key-A-key-A-key-A-key-A-key-A";  // 32B
+    const std::string b = "key-B-key-B-key-B-key-B-key-B-key-B-key-B-key-B";
+    const std::string msg = "the quick brown fox jumps over the lazy dog";
+    for (int i = 0; i < 8; ++i) {
+        const auto& key = (i % 2 == 0) ? a : b;
+        uint8_t nonce[12], tag[16];
+        crypto.generateNonce(nonce, sizeof(nonce));
+        auto ct = crypto.encrypt(
+            reinterpret_cast<const uint8_t*>(msg.data()), msg.size(),
+            reinterpret_cast<const uint8_t*>(key.data()), 32,
+            nonce, sizeof(nonce), tag, sizeof(tag));
+        REQUIRE_FALSE(ct.empty());
+        auto pt = crypto.decrypt(ct.data(), ct.size(),
+            reinterpret_cast<const uint8_t*>(key.data()), 32,
+            nonce, sizeof(nonce), tag, sizeof(tag));
+        CHECK(std::string(reinterpret_cast<char*>(pt.data()), pt.size()) == msg);
+    }
+}
