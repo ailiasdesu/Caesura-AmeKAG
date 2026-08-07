@@ -238,7 +238,8 @@ void DebugManager::log(DbgLevel level, SubSys subsystem, ErrCode code,
     entry.level     = level;
     entry.subsystem = subsystem;
     entry.errorCode = code;
-    entry.message   = msgBuf;
+    strncpy(entry.message, msgBuf, sizeof(entry.message) - 1);
+    entry.message[sizeof(entry.message) - 1] = '\0';
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -295,7 +296,7 @@ void DebugManager::writeToConsole(const LogEntry& entry) {
     fprintf(out, "[%s] [%s] %s\n",
             SubSysName(entry.subsystem),
             DbgLevelName(entry.level),
-            entry.message.c_str());
+            entry.message);
 
 #if defined(_WIN32)
     SetConsoleTextAttribute(hConsole, 7);

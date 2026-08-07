@@ -133,7 +133,7 @@ TEST_CASE("DebugManager::lastError returns most recent error") {
     dm.log(DbgLevel::Warn, SubSys::Audio, ErrCode::Ok, "audio warning");
     dm.log(DbgLevel::Err, SubSys::Engine, ErrCode::Engine_AudioInitFailed, "final error");
     const auto last = dm.lastError();  // by-value copy (thread-safe API)
-    CHECK(!last.message.empty());
+    CHECK(last.message[0] != '\0');
     CHECK(last.subsystem == SubSys::Engine);
     dm.shutdown();
 }

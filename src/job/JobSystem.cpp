@@ -56,14 +56,12 @@ void JobSystem::init() {
     m_queues.reserve(static_cast<size_t>(m_workerCount));
     for (int i = 0; i < m_workerCount; ++i) m_queues.emplace_back(std::make_unique<WorkQueue>());
     m_workers.reserve(static_cast<size_t>(m_workerCount));
-    m_workerThreadIds.reserve(static_cast<size_t>(m_workerCount));
 
     for (int i = 0; i < m_workerCount; ++i) {
         m_workers.emplace_back(&JobSystem::workerLoop, this, i);
     }
 
     for (auto& t : m_workers) {
-        m_workerThreadIds.push_back(t.get_id());
     }
 
     printf("[JobSystem] Initialized: %d worker(s) (hw=%u)\n",
@@ -81,7 +79,6 @@ void JobSystem::shutdown() {
         if (t.joinable()) t.join();
     }
     m_workers.clear();
-    m_workerThreadIds.clear();
     m_queues.clear();
     m_workerCount = 0;
 
@@ -142,12 +139,13 @@ void JobSystem::waitIdle() {
     }
 }
 
+// Thread-local worker flag: set once when a worker loop starts. The old
+// implementation scanned m_workerThreadIds (O(n)) on every call -- this
+// query runs on the hot path (task bodies checking thread affinity).
+static thread_local bool t_isWorkerThread = false;
+
 bool JobSystem::isWorkerThread() const {
-    auto id = std::this_thread::get_id();
-    for (const auto& w : m_workerThreadIds) {
-        if (w == id) return true;
-    }
-    return false;
+    return t_isWorkerThread;
 }
 
 void JobSystem::notifyWorkers() {
@@ -167,6 +165,7 @@ bool JobSystem::tryDequeueJob(int workerIndex, Job& out) {
 }
 
 void JobSystem::workerLoop(int workerIndex) {
+    t_isWorkerThread = true;
     printf("[JobSystem] Worker %d started.\n", workerIndex);
 
     while (m_running.load() || m_pendingJobs.load() > 0) {

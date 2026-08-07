@@ -73,7 +73,6 @@ private:
 
     std::vector<std::unique_ptr<WorkQueue>> m_queues;
     std::vector<std::thread>            m_workers;
-    std::vector<std::thread::id>        m_workerThreadIds;
 
     std::mutex              m_mainMutex;
     std::deque<MainThreadFn> m_mainJobs;

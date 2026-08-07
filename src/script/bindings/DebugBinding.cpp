@@ -53,7 +53,7 @@ static void pushErrorEntry(lua_State* L, const LogEntry* entry) {
         return;
     }
     lua_newtable(L);
-    lua_pushstring(L, entry->message.c_str());
+    lua_pushstring(L, entry->message);
     lua_setfield(L, -2, "message");
     lua_pushinteger(L, static_cast<lua_Integer>(entry->errorCode));
     lua_setfield(L, -2, "code");
@@ -81,7 +81,7 @@ static int lua_Debug_get_last_error(lua_State* L) {
     auto* dm = getDM(L);
     if (!dm) return 2;
     const auto entry = dm->lastError();  // by-value copy (thread-safe)
-    pushErrorEntry(L, entry.message.empty() ? nullptr : &entry);
+    pushErrorEntry(L, entry.message[0] == '\0' ? nullptr : &entry);
     return 1;
 }
 

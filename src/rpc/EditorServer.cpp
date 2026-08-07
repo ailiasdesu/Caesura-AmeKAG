@@ -428,7 +428,7 @@ void EditorServer::serverLoop(int port) {
         for (const auto& entry : m_logs) {
             Json obj;
             obj["level"] = entry.level;
-            obj["message"] = entry.message;
+            obj["message"] = std::string(entry.message);
             obj["time"] = entry.time;
             arr.push_back(obj);
         }

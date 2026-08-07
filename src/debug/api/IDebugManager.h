@@ -61,7 +61,10 @@ struct LogEntry {
     DbgLevel    level = DbgLevel::Info;
     SubSys      subsystem = SubSys::Dbg;
     ErrCode     errorCode = ErrCode::Ok;
-    std::string message;
+    // Fixed-size message: the log hot path allocates ZERO per entry
+    // (ring slots are pre-allocated; std::string per log call was the
+    // largest per-frame allocator churn in the debug path).
+    char        message[256];
 };
 
 struct SubsystemStats {
