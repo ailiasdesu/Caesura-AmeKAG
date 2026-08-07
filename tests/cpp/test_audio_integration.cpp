@@ -38,3 +38,21 @@ TEST_CASE("Audio: bus volume set/get includes SE bus") {
     eng.setBusVolume("se", 0.9f);
     CHECK(eng.getBusVolume("se") == doctest::Approx(0.9f));
 }
+
+TEST_CASE("Audio: voice pool overlap does not crash (device)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) {
+        MESSAGE("Audio device unavailable, skipping");
+        return;
+    }
+    // Two overlapping voice lines: the second displaces a pool slot; the
+    // first is retired (fade), never freed while playing.
+    const unsigned int h1 = eng.playVoice("tests/audio/silence.wav");
+    const unsigned int h2 = eng.playVoice("tests/audio/silence.wav");
+    CHECK(h1 != 0);
+    CHECK(h2 != 0);
+    CHECK(eng.isVoicePlaying() == true);
+    eng.stopVoice();
+    CHECK(eng.isVoicePlaying() == false);
+    eng.shutdown();
+}

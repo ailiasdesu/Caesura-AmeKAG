@@ -98,7 +98,10 @@ private:
     SoLoud::handle m_voiceBusHandle = 0;
     SoLoud::handle m_seBusHandle    = 0;
 
-    unsigned int m_currentVoice = 0;
+    static constexpr unsigned int kVoicePoolSize = 4;  // VN voice pool
+    unsigned int m_voicePool[kVoicePoolSize] = { 0 };  // round-robin voice slots
+    unsigned int m_voiceSlot    = 0;
+    bool         m_bgmDucked    = false;  // ducking state (voice lowers BGM)
     unsigned int m_currentBGM   = 0;
     unsigned int m_voiceCompletionsPending = 0;
     std::vector<SoLoud::handle> m_retiringBGM;

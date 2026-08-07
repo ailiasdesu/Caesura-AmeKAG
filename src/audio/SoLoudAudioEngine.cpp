@@ -53,8 +53,9 @@ std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::stri
     // pointer into the shared_ptr, so deleting it would be a use-after-free
     // in the audio thread. Active sources are re-queued to the LRU tail
     // instead (they become evictable once playback finishes).
-    if (m_waveCache.size() >= 128) {
-        for (int attempts = 0; attempts < 4 && m_waveCache.size() >= 128; ++attempts) {
+    if (m_waveCache.size() >= 128 && !m_waveLRU.empty()) {
+        for (int attempts = 0; attempts < 4 && m_waveCache.size() >= 128
+             && !m_waveLRU.empty(); ++attempts) {
             std::string lruFile = m_waveLRU.back();
             m_waveLRU.pop_back();
             m_waveLRUMap.erase(lruFile);
@@ -136,11 +137,11 @@ void SoLoudAudioEngine::shutdown(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
 
-    const std::size_t allocatedHandles = m_activeSE.size()
+    std::size_t allocatedHandles = m_activeSE.size()
         + m_retiringBGM.size()
         + m_retiringVoice.size()
-        + (m_currentBGM != 0 ? 1u : 0u)
-        + (m_currentVoice != 0 ? 1u : 0u);
+        + (m_currentBGM != 0 ? 1u : 0u);
+    for (const unsigned int h : m_voicePool) allocatedHandles += (h != 0 ? 1u : 0u);
     m_soloud.stopAll();
     m_soloud.deinit();
     m_waveCache.clear();
@@ -151,7 +152,8 @@ void SoLoudAudioEngine::shutdown(){
     m_retiringVoice.clear();
     m_initialized = false;
     m_currentBGM = 0;
-    m_currentVoice = 0;
+    for (auto& h : m_voicePool) h = 0;
+    m_bgmDucked = false;
     m_voiceCompletionsPending = 0;
     m_bgmBusHandle = 0;
     m_voiceBusHandle = 0;
@@ -217,13 +219,26 @@ void SoLoudAudioEngine::cullFinishedHandles() {
         m_currentBGM = 0;
         ++released;
     }
-    if (m_currentVoice != 0 && !m_soloud.isValidVoiceHandle(m_currentVoice)) {
-        m_currentVoice = 0;
-        if (m_voiceCompletionsPending <
-            std::numeric_limits<unsigned int>::max()) {
-            ++m_voiceCompletionsPending;
+    bool hadActiveVoice = false;
+    for (auto& h : m_voicePool) {
+        if (h != 0) {
+            if (m_soloud.isValidVoiceHandle(h)) {
+                hadActiveVoice = true;
+            } else {
+                h = 0;
+                if (m_voiceCompletionsPending <
+                    std::numeric_limits<unsigned int>::max()) {
+                    ++m_voiceCompletionsPending;
+                }
+                ++released;
+            }
         }
-        ++released;
+    }
+    // BGM ducking (VN standard): the moment the last voice finishes,
+    // restore the BGM bus to its configured volume.
+    if (!hadActiveVoice && m_bgmDucked) {
+        m_bgmDucked = false;
+        m_soloud.fadeVolume(m_bgmBusHandle, m_bgmVolume, 0.30f);
     }
 
     const auto firstFinished = std::remove_if(
@@ -302,9 +317,19 @@ void SoLoudAudioEngine::flushWaveCache() {
             it = m_waveCache.erase(it);
         }
     }
+    // Rebuild the LRU from the surviving (playing) entries so subsequent
+    // loadWave eviction never touches an empty list (UB fix: flush used to
+    // clear the LRU index while leaving entries in the cache).
     m_waveLRU.clear();
     m_waveLRUMap.clear();
-    printf("[Audio] Wave cache flushed (playing entries kept).\n");
+    for (auto& [file, wav] : m_waveCache) {
+        if (wav) {
+            m_waveLRU.push_front(file);
+            m_waveLRUMap[file] = m_waveLRU.begin();
+        }
+    }
+    printf("[Audio] Wave cache flushed (%zu playing entries kept).\n",
+           m_waveCache.size());
 }
 
 // -- BGM: with cross-fade support (Spec [3.1][3.2]) ------------------------
@@ -370,12 +395,27 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
         return 0;
     }
 
-    if (m_currentVoice != 0) {
-        retireHandle(m_currentVoice, 0.05f, m_retiringVoice);
+    // Round-robin 4-slot voice pool: rapid character voice overlap (a VN
+    // staple) no longer cuts the previous line; the displaced slot fades
+    // out over 0.05s instead of being killed instantly.
+    const unsigned int slot = m_voiceSlot % kVoicePoolSize;
+    m_voiceSlot = (m_voiceSlot + 1) % kVoicePoolSize;
+    if (m_voicePool[slot] != 0) {
+        retireHandle(m_voicePool[slot], 0.05f, m_retiringVoice);
+    }
+    m_voicePool[slot] = h;
+
+    // BGM ducking (VN standard): while a voice line plays, lower the BGM
+    // bus to 35% over 0.15s; cullFinishedHandles restores it when the
+    // last voice finishes. The configured bus volume (m_bgmVolume) is
+    // untouched so restoration is exact.
+    if (!m_bgmDucked && m_currentBGM != 0
+        && m_soloud.isValidVoiceHandle(m_currentBGM)) {
+        m_bgmDucked = true;
+        m_soloud.fadeVolume(m_bgmBusHandle, 0.35f, 0.15f);
     }
 
-    m_currentVoice = h;
-    printf("[Audio] Voice: %s (handle %u)\n", file.c_str(), h);
+    printf("[Audio] Voice: %s (handle %u, slot %u)\n", file.c_str(), h, slot);
     return static_cast<unsigned int>(h);
 }
 
@@ -383,11 +423,22 @@ void SoLoudAudioEngine::stopVoice(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
     stopRetiringHandles(m_retiringVoice);
-    if (m_currentVoice == 0) return;
-
-    const SoLoud::handle current = m_currentVoice;
-    m_currentVoice = 0;
-    retireHandle(current, 0.05f, m_retiringVoice);
+    bool any = false;
+    for (auto& h : m_voicePool) {
+        if (h != 0) {
+            const SoLoud::handle cur = h;
+            h = 0;
+            retireHandle(cur, 0.05f, m_retiringVoice);
+            any = true;
+        }
+    }
+    if (any) {
+        // Voice stop is also a ducking boundary: restore BGM immediately.
+        if (m_bgmDucked) {
+            m_bgmDucked = false;
+            m_soloud.fadeVolume(m_bgmBusHandle, m_bgmVolume, 0.20f);
+        }
+    }
 }
 
 // -- SE --------------------------------------------------------------------
@@ -512,7 +563,10 @@ unsigned int SoLoudAudioEngine::consumeVoiceCompletions() {
 bool SoLoudAudioEngine::isVoicePlaying() {
     if (!m_initialized) return false;
     cullFinishedHandles();
-    return m_currentVoice != 0;
+    for (const auto h : m_voicePool) {
+        if (h != 0) return true;
+    }
+    return false;
 }
 
 bool SoLoudAudioEngine::isBGMPlaying() {
@@ -537,8 +591,11 @@ float SoLoudAudioEngine::getPosition(const char* bus) {
     if (!m_initialized) return 0.0f;
     std::string b(bus);
     SoLoud::handle h = 0;
-    if (b == "voice") h = m_currentVoice;
-    else if (b == "bgm")   h = m_currentBGM;
+    if (b == "voice") {
+        for (const auto vh : m_voicePool) {
+            if (vh != 0) { h = vh; break; }
+        }
+    } else if (b == "bgm")   h = m_currentBGM;
     if (h != 0 && m_soloud.isValidVoiceHandle(h))
         return (float)m_soloud.getStreamPosition(h);
     return 0.0f;
@@ -548,8 +605,11 @@ float SoLoudAudioEngine::getLength(const char* bus) {
     if (!m_initialized) return 0.0f;
     std::string b(bus);
     SoLoud::handle h = 0;
-    if (b == "voice") h = m_currentVoice;
-    else if (b == "bgm")   h = m_currentBGM;
+    if (b == "voice") {
+        for (const auto vh : m_voicePool) {
+            if (vh != 0) { h = vh; break; }
+        }
+    } else if (b == "bgm")   h = m_currentBGM;
     if (h != 0 && m_soloud.isValidVoiceHandle(h))
         return (float)m_soloud.getStreamTime(h);
     return 0.0f;

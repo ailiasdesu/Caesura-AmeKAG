@@ -641,3 +641,12 @@ TEST_CASE("SoLoudAudioEngine playRawPCM plays and stops cleanly") {
     eng.shutdown();
     CHECK(eng.activeVoiceCount() == 0);
 }
+
+TEST_CASE("Audio: voice pool API safe before init") {
+    SoLoudAudioEngine eng;
+    // Uninitialized paths must not crash and return empty results.
+    CHECK(eng.playVoice("tests/audio/silence.wav") == 0);
+    eng.stopVoice();  // no-op, no crash
+    CHECK(eng.isVoicePlaying() == false);
+    eng.shutdown();   // idempotent
+}
