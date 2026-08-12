@@ -28,6 +28,7 @@ local tests = {
     "test_kag_commands",
     "test_scheduler",
     "test_compiler",
+    "test_bytecode_cache",
     "test_example_game",
     "test_rollback_memory",
     "test_rollback",

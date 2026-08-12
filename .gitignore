@@ -84,3 +84,4 @@ tests/scripts/config/
 FrameworkShaders/
 editor/tsconfig.tsbuildinfo
 tmp/
+cache/

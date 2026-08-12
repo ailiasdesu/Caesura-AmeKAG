@@ -71,14 +71,12 @@ do
             and scene.base_path == "assets/script/main.ks",
         scene and tostring(scene.path))
     local first = scene.tokens[1]
-    -- parse_file returns raw LPeg captures: {type="command", cmd=...,
-    -- params={{key,value},...}} -- the text value sits at params[1][2].
-    local p1 = first and first.params and first.params[1]
+    -- compile() normalizes record-format tokens to array format
+    -- {cmd, params} with params as a named table (compile-time front-end).
     check("mod scene tokens loaded",
-        first and first.cmd == "ch" and p1 and p1[1] == "text"
-            and p1[2] == "mod A scene",
-        first and tostring(first.cmd)
-            .. "/" .. tostring(p1 and p1[2]))
+        first and first[1] == "ch" and first[2] and first[2].text == "mod A scene",
+        first and tostring(first[1])
+            .. "/" .. tostring(first[2] and first[2].text))
     -- cache is keyed by resolved path: disabling A and reloading must
     -- NOT return the cached mod-A scene
     mods.disable("testmod_a")

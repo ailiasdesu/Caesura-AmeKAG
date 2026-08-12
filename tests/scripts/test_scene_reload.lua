@@ -72,16 +72,18 @@ do
     write_ks("[ch text=\"v1\"]\n")
     flow.reload_scene(TMP)  -- ensure fresh
     local s1 = flow.load_scene(TMP)
-    local p1 = s1.tokens[1].params and s1.tokens[1].params[1]
+    -- load_scene now returns the COMPILED stream: array format
+    -- {cmd, params} with a named params table (compile-time front-end).
+    local p1 = s1.tokens[1][2]
     check("initial parse v1",
-        p1 and p1[1] == "text" and p1[2] == "v1",
-        p1 and tostring(p1[2]))
+        p1 and p1.text == "v1",
+        p1 and tostring(p1.text))
     write_ks("[ch text=\"v2\"]\n")
     local s2 = flow.reload_scene(TMP)
-    local p2 = s2.tokens[1].params and s2.tokens[1].params[1]
+    local p2 = s2 and s2.tokens[1][2]
     check("reload_scene re-parses changed file",
-        s2 and p2 and p2[1] == "text" and p2[2] == "v2",
-        p2 and tostring(p2[2]))
+        s2 and p2 and p2.text == "v2",
+        p2 and tostring(p2.text))
 end
 
 -- ---- non-current scene: cache-only invalidation ---------------------------
