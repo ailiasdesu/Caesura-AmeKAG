@@ -8,10 +8,12 @@
 
 **已交付的缺口**：P0-2 生态配套（CONTRIBUTING/Issue·PR 模板/example_game）、
 P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主进程、
-Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）、**P0-3 移动管线**
-（Android 构建脚本 + IME 文档）、**P2-8 教程体系**（语言教程 + 演示场景）、
+Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）+ 1b 字节码持久化、
+**P0-3 移动管线**（Android 构建脚本 + IME 文档 + .ksc 预烘焙）、
+**P2-8 教程体系**（语言教程 + 演示场景）、
 **P2-9 E-mote 替代设计**（SMA 设计定稿 + S1 接口）。
-**未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P1-6（GL/Steam 实机）。
+**未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P1-6（GL/Steam 实机）、
+P0-3 真机验证（待设备）、1c/1d（⏳ 本机可闭环，见 §3 与交接 §3）。
 
 **性能基线**：tokenizer 52ms/1000tok、scheduler ~308k tok/s；表达式路径
 编译后 -32%（165ms vs 241ms）；长循环 O(n²)→O(1)；.ksc 预烘焙首载
@@ -76,7 +78,7 @@ Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）、**P0-3 移动管�
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | 5a | **P0-3 移动管线**：Android 构建脚本（NDK 交叉编译 .ks→字节码 预烘焙）+ IME 文档 | ✅ 已交付：`scripts/android_build.sh` + `docs/guides/mobile-pipeline.md`（799fa03b）+ **字节码预烘焙 `ks_bake.lua`（be763458，737ms→25ms 29× 首载加速）**；真机验证标注待设备 |
-| 5b | **P2-8 教程体系**：getting-started 扩充 + 5 个示例场景（flow/rollback/debugger/live2d/minigame） | 文档 + 示例可运行 |
+| 5b | **P2-8 教程体系**：getting-started 扩充 + 5 个示例场景（flow/rollback/debugger/live2d/minigame） | ✅ 已交付（d8b59ba4）：`kag-language-tour.md` 13 章 + demo_tutorial.ks + 附带修复 2 个真实解析 bug |
 | 5c | **P1-6 硬件验证**：Live2D GL（Linux CI）、Steam 实机——需硬件，排期靠后 | CI 三平台绿 |
 | 5d | **CARC 归档代差**：导入器支持 CARC 内 .ks 直接转换（归档内场景迁移） | ✅ 已交付（c9c4af0d）：carc_pack list/extract 子命令 + kag3_import --carc 模式（归档内 .ks 直接转换） |
 
