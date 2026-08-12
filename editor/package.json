@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "description": "Caesura (AmeKAG) visual novel engine — web editor front-end (P2-7). Talks to the engine's HTTP RPC server (localhost:9876).",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "electron": "electron .",
+    "electron:dev": "vite --port 5173 & electron ."
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

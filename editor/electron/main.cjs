@@ -3,26 +3,28 @@
 // :9876), opens the IDE window, proxies /api to the engine and recycles
 // the engine process on quit. VS Code-style desktop IDE (Electron is the
 // same shell VS Code uses).
+// CommonJS (.cjs): the Electron main process must be CJS regardless of
+// the renderer's "type": "module" (Vite requirement).
 
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
-import { spawn, ChildProcess } from 'node:child_process'
-import * as path from 'node:path'
-import * as fs from 'node:fs'
-import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+const { app, BrowserWindow, shell, ipcMain } = require('electron')
+const { spawn } = require('node:child_process')
+const path = require('node:path')
+const fs = require('node:fs')
+const { createServer, request } = require('node:http')
 
 const ENGINE_PORT = 9876
 const RENDERER_PORT = 5920 // dev-only static server port
 
-let engineProc: ChildProcess | null = null
-let rendererServer: ReturnType<typeof createServer> | null = null
-let mainWindow: BrowserWindow | null = null
+let engineProc = null
+let rendererServer = null
+let mainWindow = null
 
 // ---------------------------------------------------------------------------
 // Engine lifecycle: spawn the game engine in editor mode and keep it alive
 // for the whole IDE session; kill it on quit.
 // ---------------------------------------------------------------------------
 
-function resolveEngineExe(): string | null {
+function resolveEngineExe() {
   // 1) env override (packaged app: set CAESURA_ENGINE_EXE to the game exe)
   if (process.env.CAESURA_ENGINE_EXE) return process.env.CAESURA_ENGINE_EXE
   // 2) dev: sibling build/Debug/CaesuraAmeKAG.exe
@@ -41,7 +43,7 @@ function resolveEngineExe(): string | null {
   return null
 }
 
-function startEngine(): void {
+function startEngine() {
   if (engineProc) return
   const exe = resolveEngineExe()
   if (!exe) {
@@ -54,15 +56,15 @@ function startEngine(): void {
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  engineProc.stdout?.on('data', (d: Buffer) => process.stdout.write(`[engine] ${d}`))
-  engineProc.stderr?.on('data', (d: Buffer) => process.stderr.write(`[engine] ${d}`))
+  engineProc.stdout && engineProc.stdout.on('data', (d) => process.stdout.write(`[engine] ${d}`))
+  engineProc.stderr && engineProc.stderr.on('data', (d) => process.stderr.write(`[engine] ${d}`))
   engineProc.on('exit', (code) => {
     console.log('[ide] engine exited with code', code)
     engineProc = null
   })
 }
 
-function stopEngine(): void {
+function stopEngine() {
   if (engineProc) {
     engineProc.kill()
     engineProc = null
@@ -71,11 +73,9 @@ function stopEngine(): void {
 
 // ---------------------------------------------------------------------------
 // Dev renderer server: serve editor/dist when not running under vite dev.
-// (vite dev is for development; the packaged app loads dist/ via file://,
-// but a local static server keeps CORS/asset loading identical.)
 // ---------------------------------------------------------------------------
 
-const MIME: Record<string, string> = {
+const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
   '.css': 'text/css',
@@ -85,9 +85,9 @@ const MIME: Record<string, string> = {
   '.map': 'application/json',
 }
 
-function serveStatic(port: number): void {
+function serveStatic(port) {
   const root = path.join(__dirname, '..', 'dist')
-  rendererServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+  rendererServer = createServer((req, res) => {
     const url = (req.url || '/').split('?')[0]
     const rel = url === '/' ? 'index.html' : url.replace(/^\/+/, '')
     const file = path.join(root, rel)
@@ -118,15 +118,14 @@ function serveStatic(port: number): void {
 // same-origin; no CORS, no token exposure in the page).
 // ---------------------------------------------------------------------------
 
-function proxyApi(req: IncomingMessage, res: ServerResponse): void {
-  const { request } = require('node:http') as typeof import('node:http')
+function proxyApi(req, res) {
   const upstream = request(
     {
       host: '127.0.0.1',
       port: ENGINE_PORT,
       path: req.url,
       method: req.method,
-      headers: { ...req.headers, host: `127.0.0.1:${ENGINE_PORT}` },
+      headers: Object.assign({}, req.headers, { host: `127.0.0.1:${ENGINE_PORT}` }),
     },
     (upRes) => {
       res.writeHead(upRes.statusCode || 502, upRes.headers)
@@ -144,7 +143,7 @@ function proxyApi(req: IncomingMessage, res: ServerResponse): void {
 // Window
 // ---------------------------------------------------------------------------
 
-function createWindow(): void {
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -161,17 +160,17 @@ function createWindow(): void {
 
   // external links (if any) open in the system browser, never in-window
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    shell.openExternal(url)
     return { action: 'deny' }
   })
 
   // dev: vite dev server; prod: bundled dist via local static server
   const devUrl = process.env.VITE_DEV_SERVER_URL
   if (devUrl) {
-    void mainWindow.loadURL(devUrl)
+    mainWindow.loadURL(devUrl)
   } else {
     serveStatic(RENDERER_PORT)
-    void mainWindow.loadURL(`http://127.0.0.1:${RENDERER_PORT}`)
+    mainWindow.loadURL(`http://127.0.0.1:${RENDERER_PORT}`)
   }
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -187,8 +186,8 @@ ipcMain.handle('ide:engine-status', () => ({
   port: ENGINE_PORT,
 }))
 
-ipcMain.handle('ide:open-external', (_e, url: string) => {
-  if (typeof url === 'string') void shell.openExternal(url)
+ipcMain.handle('ide:open-external', (_e, url) => {
+  if (typeof url === 'string') shell.openExternal(url)
   return true
 })
 
