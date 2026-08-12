@@ -103,6 +103,50 @@ check("comment tail no false positive", #dc == 0)
 local dboth = lsp.diagnostics('[if exp="bad &&"]\n[bg storage="x"\n')
 check("expr+truncation both flagged", #dboth == 2)
 
+-- ---------------------------------------------------------------------------
+-- Navigation: definition / references
+-- ---------------------------------------------------------------------------
+local navText = "*start\n[ch text=\"hi\"]\n[jump target=*start]\n"
+    .. "*ending\n[call *ending]\n[link *start]back[/link]\n"
+-- [jump target=*start] is line 3, starts at col 8 (target value col 18)
+local d1 = lsp.definition(navText, 3, 18)
+check("definition: jump target -> label line", d1 ~= nil and d1.name == "start"
+      and d1.line == 1)
+local d2 = lsp.definition(navText, 1, 1)
+check("definition: on label itself", d2 ~= nil and d2.name == "start"
+      and d2.line == 1)
+local d3 = lsp.definition(navText, 5, 11)
+check("definition: call bare target", d3 ~= nil and d3.name == "ending"
+      and d3.line == 4)
+local d4 = lsp.definition(navText, 2, 5)
+check("definition: non-nav token -> nil", d4 == nil)
+local d5 = lsp.definition("[jump target=*missing]\n", 1, 18)
+check("definition: missing label -> name only", d5 ~= nil
+      and d5.name == "missing" and d5.line == nil)
+local d6 = lsp.definition("", 1, 1)
+check("definition: empty scene -> nil", d6 == nil)
+
+local r1 = lsp.references(navText, "start")
+check("references: label + 2 nav sites", #r1 == 3)
+local kinds = {}
+for _, r in ipairs(r1) do kinds[r.kind] = (kinds[r.kind] or 0) + 1 end
+check("references: one definition two references",
+      kinds.definition == 1 and kinds.reference == 2)
+local r2 = lsp.references(navText, "nope")
+check("references: unknown label -> empty", #r2 == 0)
+local r3 = lsp.references(navText, "")
+check("references: empty name -> empty", #r3 == 0)
+
+-- json bridge shapes
+local jd = lsp.json("definition", navText, 3, 18)
+check("json definition shape", jd:find('"name":"start"', 1, true) ~= nil
+      and jd:find('"line":1', 1, true) ~= nil)
+local jr = lsp.json("references", navText, "start")
+check("json references shape", jr:find('"kind":"reference"', 1, true) ~= nil)
+local jm = lsp.json("definition", "[jump target=*missing]\n", 1, 18)
+check("json missing label omits line", jm:find('"name":"missing"', 1, true) ~= nil
+      and jm:find('"line"', 1, true) == nil)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))

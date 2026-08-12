@@ -27,6 +27,18 @@ export interface DiagnosticItem {
   severity: number
 }
 
+export interface DefinitionItem {
+  name?: string
+  line?: number | null
+  col?: number
+}
+
+export interface ReferenceItem {
+  kind: 'definition' | 'reference'
+  line?: number | null
+  col?: number
+}
+
 export interface KagLspOptions {
   /** Debounce for diagnostics (ms). */
   diagnosticsDelay?: number
@@ -62,6 +74,8 @@ export class KagLsp {
     this.registerCompletion()
     this.registerHover()
     this.registerDiagnostics()
+    this.registerDefinition()
+    this.registerReferences()
   }
 
   private registerCompletion(): void {
@@ -140,6 +154,71 @@ export class KagLsp {
             }
           } catch {
             return null
+          }
+        },
+      }),
+    )
+  }
+
+  private registerDefinition(): void {
+    const m = this.monacoNs
+    this.disposables.push(
+      m.languages.registerDefinitionProvider('kag', {
+        provideDefinition: async (model, position) => {
+          // only on *label references and navigation targets
+          const line = model.getLineContent(position.lineNumber)
+          if (!line.includes('*')) return null
+          try {
+            const json = await lspCall(
+              this.client,
+              'definition',
+              model.getValue(),
+              position.lineNumber,
+              position.column,
+            )
+            const parsed = JSON.parse(json) as DefinitionItem[]
+            const def = parsed[0]
+            if (!def || def.line == null) return null // cross-scene target
+            return {
+              uri: model.uri,
+              range: new m.Range(def.line, def.col || 1, def.line, (def.col || 1) + 1),
+            }
+          } catch {
+            return null
+          }
+        },
+      }),
+    )
+  }
+
+  private registerReferences(): void {
+    const m = this.monacoNs
+    this.disposables.push(
+      m.languages.registerReferenceProvider('kag', {
+        provideReferences: async (model, position) => {
+          const line = model.getLineContent(position.lineNumber)
+          if (!line.includes('*')) return []
+          try {
+            const json = await lspCall(
+              this.client,
+              'definition',
+              model.getValue(),
+              position.lineNumber,
+              position.column,
+            )
+            const parsed = JSON.parse(json) as DefinitionItem[]
+            const def = parsed[0]
+            if (!def || def.name == null) return []
+            const refsJson = await lspCall(this.client, 'references', model.getValue(), def.name)
+            const refs = JSON.parse(refsJson) as ReferenceItem[]
+            return refs
+              .filter((r): r is ReferenceItem & { line: number } => r.line != null)
+              .map((r) => ({
+                uri: model.uri,
+                range: new m.Range(r.line, r.col || 1, r.line, (r.col || 1) + 1),
+              }))
+          } catch {
+            return []
           }
         },
       }),

@@ -282,6 +282,132 @@ function lsp.diagnostics(text)
     return issues
 end
 
+--- Navigation commands whose target param points at a *label.
+local NAV_CMDS = { jump = true, call = true, link = true }
+
+--- Extract the *label target of a navigation command token (nil otherwise).
+local function token_target(tok)
+    if tok.type ~= "command" or not NAV_CMDS[tok.cmd] then return nil end
+    for _, pair in ipairs(tok.params or {}) do
+        if type(pair) == "table" then
+            local v = pair[2]
+            if type(v) == "string" and v:sub(1, 1) == "*" then
+                return v:sub(2)
+            end
+        end
+    end
+    return nil
+end
+
+--- Build the offset -> (line, col) index for a scene text.
+local function build_index(text)
+    local lineStarts = { 1 }
+    for i = 1, #text do
+        if text:byte(i) == 10 then lineStarts[#lineStarts + 1] = i + 1 end
+    end
+    local function lineOf(offset)
+        local lo, hi = 1, #lineStarts
+        while lo < hi do
+            local mid = (lo + hi + 1) // 2
+            if lineStarts[mid] <= offset then lo = mid else hi = mid - 1 end
+        end
+        return lo
+    end
+    return {
+        lineStarts = lineStarts,
+        lineOf = lineOf,
+        colOf = function(offset) return offset - lineStarts[lineOf(offset)] + 1 end,
+    }
+end
+
+--- Parse a scene defensively (empty/malformed -> nil).
+local function parse_scene(text)
+    if not text or text == "" then return nil end
+    local ok, tokens = pcall(tokenizer.parse_with_offsets, text)
+    if not ok or not tokens then return nil end
+    return tokens
+end
+
+--- Collect every *label definition in the scene.
+local function collect_labels(tokens, idx)
+    local labels = {}
+    for _, tok in ipairs(tokens) do
+        if tok.type == "label" and tok.name then
+            labels[tok.name] = {
+                name = tok.name,
+                line = idx.lineOf(tok.offset),
+                col = idx.colOf(tok.offset),
+            }
+        end
+    end
+    return labels
+end
+
+--- lsp.definition(text, line, char) → {name, line, col} for the *label
+--  under the cursor: on a [jump]/[call]/[link] target resolves to the
+--  label definition line; on a *label itself returns its own location.
+--  Returns {name, line = nil} when the target label is not in THIS scene
+--  (labels are scene-scoped; cross-scene jumps land in another file).
+function lsp.definition(text, line, char)
+    local tokens = parse_scene(text)
+    if not tokens or not line then return nil end
+    local idx = build_index(text)
+    local start = idx.lineStarts[line] or 1
+    local pos = start + math.max(0, (char or 1) - 1)
+
+    local hit
+    for _, tok in ipairs(tokens) do
+        if pos >= tok.offset and pos <= tok.end_offset then
+            hit = tok
+            break
+        end
+    end
+    if not hit then return nil end
+
+    if hit.type == "label" and hit.name then
+        return {
+            name = hit.name,
+            line = idx.lineOf(hit.offset),
+            col = idx.colOf(hit.offset),
+        }
+    end
+    local target = token_target(hit)
+    if not target then return nil end
+    local labels = collect_labels(tokens, idx)
+    local def = labels[target]
+    if def then return def end
+    return { name = target, line = nil }
+end
+
+--- lsp.references(text, labelName) → [{kind = "definition"|"reference",
+--  line, col}] for every jump/call/link targeting labelName plus the
+--  label definition itself (Monaco highlights all of them).
+function lsp.references(text, labelName)
+    local tokens = parse_scene(text)
+    if not tokens or not labelName or labelName == "" then return {} end
+    local idx = build_index(text)
+    local refs = {}
+    for _, tok in ipairs(tokens) do
+        if tok.type == "label" and tok.name == labelName then
+            refs[#refs + 1] = {
+                kind = "definition",
+                line = idx.lineOf(tok.offset),
+                col = idx.colOf(tok.offset),
+            }
+        elseif tok.type == "command" then
+            local target = token_target(tok)
+            if target == labelName then
+                refs[#refs + 1] = {
+                    kind = "reference",
+                    line = idx.lineOf(tok.offset),
+                    col = idx.colOf(tok.offset),
+                }
+            end
+        end
+    end
+    return refs
+end
+
 --- JSON string escape (shared by the json encoder).
 local function json_str(s)
     s = tostring(s)
@@ -290,7 +416,7 @@ local function json_str(s)
 end
 
 --- lsp.json(method, ...) → JSON string for the IDE (via /api/eval).
---  method: "completion" | "hover" | "diagnostics"
+--  method: "completion" | "hover" | "diagnostics" | "definition" | "references"
 function lsp.json(method, ...)
     local result = nil
     if method == "completion" then
@@ -299,6 +425,10 @@ function lsp.json(method, ...)
         result = lsp.hover(...)
     elseif method == "diagnostics" then
         result = lsp.diagnostics(...)
+    elseif method == "definition" then
+        result = lsp.definition(...)
+    elseif method == "references" then
+        result = lsp.references(...)
     end
     if result == nil then result = {} end
     -- minimal JSON encoder for the result shapes (arrays of flat maps)
@@ -307,6 +437,17 @@ function lsp.json(method, ...)
         -- hover: {title, text}
         parts[#parts + 1] = "{\"title\":" .. json_str(result.title)
             .. ",\"text\":" .. json_str(result.text) .. "}"
+    elseif type(result) == "table" and result.name then
+        -- definition: single object {name, line, col}
+        local fields = {}
+        for k, v in pairs(result) do
+            if type(v) == "string" then
+                fields[#fields + 1] = json_str(k) .. ":" .. json_str(v)
+            elseif type(v) == "number" then
+                fields[#fields + 1] = json_str(k) .. ":" .. tostring(v)
+            end
+        end
+        parts[#parts + 1] = "{" .. table.concat(fields, ",") .. "}"
     else
         for _, item in ipairs(result) do
             local fields = {}
