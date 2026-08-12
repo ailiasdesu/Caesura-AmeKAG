@@ -35,6 +35,7 @@ local tests = {
     "test_title_entry",
     "test_benchmark",
     "test_schema",
+    "test_kag3_import",
     "test_layers",
     "test_mods",
     "test_replay",

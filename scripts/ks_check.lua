@@ -30,12 +30,15 @@ pcall(require, "kag")
 local kag_cmd_table = package.loaded["kag"]
 
 -- Flow commands handled by the scheduler itself (no kag handler, no schema).
+-- Must mirror scheduler.lua's flow_commands table: [end]/[stop] terminate
+-- the coroutine, [label] is a jump target, etc. (audit: [end]/[stop] were
+-- missing and ks_check flagged valid scenes that end with [stop]).
 local KNOWN_NONHANDLER = {}
 for _, c in ipairs({
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
     "break", "continue", "jump", "call", "return", "macro", "endmacro",
     "switch", "endswitch", "case", "endcase", "default", "label", "eval",
-    "emb", "iscript", "wait", "delay", "ch", "text", "link",
+    "emb", "iscript", "wait", "delay", "ch", "text", "link", "end", "stop",
 }) do
     KNOWN_NONHANDLER[c] = true
 end
