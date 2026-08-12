@@ -6,7 +6,7 @@
 
 import type * as monaco from 'monaco-editor'
 import type { EngineClient } from './rpc'
-import { luaString } from './luaString'
+import { luaString, luaValue } from './luaString'
 
 export interface CompletionItem {
   label: string
@@ -36,7 +36,7 @@ const LSP_LINE_LIMIT = 2000 // don't push huge files through eval
 
 function lspCall(client: EngineClient, method: string, ...args: unknown[]): Promise<string> {
   const argStr = args
-    .map((a) => (typeof a === 'string' ? luaString(a) : JSON.stringify(a)))
+    .map((a) => (typeof a === 'string' ? luaString(a) : luaValue(a)))
     .join(', ')
   const code =
     `local lsp = require('kag.lsp'); ` +
