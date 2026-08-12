@@ -221,7 +221,33 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 - 未知 `{标签}` 按字面文本显示，不影响内容
 - 回滚/历史/字幕使用去除标记后的纯文本；打字机逐字揭示按可见字符计数
 
-## 14. 完整示例
+## 14. 骨骼网格动画（SMA；E-mote 类动画）
+
+引擎内置骨骼网格动画管线（`docs/design/skeletal-mesh-animation.md`）：
+骨骼层级 + 顶点权重（每顶点 ≤2 根骨骼）+ 关键帧动画（rot/scale/offset
+线性插值）。数据为 JSON，经 `sma.register(name, data)`（Lua/[iscript]
+侧）注册：
+
+```lua
+[iscript]
+local sma = require("kag.sma")
+sma.register("hero", sma.load(io.open("assets/sma/hero.json"):read("*a")))
+[/iscript]
+```
+
+场景内使用：
+
+```kag
+[sma_play name="hero" asset="hero" anim="idle" x=440 y=200 scale=2 tex=0]
+[sma_stop name="hero"]
+```
+
+- 每帧自动推进动画时间并重蒙皮（引擎更新钩子已接）；绘制在图层树之后
+- 枢轴烘焙与骨骼链解析在驱动侧完成；权重混合在引擎 CPU 软变形路径
+- 无 GPU 环境（测试/CI）全链惰性空操作；纹理经现有纹理管线
+- 渲染器暂无粗体/斜体/字号变体时，`{b}`/`{i}`/`{size}` 为无操作（见 §13）
+
+## 15. 完整示例
 
 ```kag
 ; tutorial.ks — 综合演示
