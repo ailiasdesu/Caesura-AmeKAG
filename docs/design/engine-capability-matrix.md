@@ -121,6 +121,7 @@ graph LR
 | S2p | Colorblind/high-contrast filter (config.accessibility.color_filter presets; VFX effect 4 matrix pass over RTT scene layers; D3D11 + GL shaders) | `IRenderDevice::setColorFilter` + fs_vfx effect 4 | ✓ (RTT scene layers; direct-drawn UI text unaffected) |
 | S2q | Declarative conditional wait (`[until exp="..." timeout=ms]` — wait until a TJS expression is truthy; per-frame yield + cancellation; Ren'Py needs python loops for this) | scheduler + compiler (AOT exp/dump) | ✓ |
 | S2r | Conditional choices (`[button cond="f.x > 1"]` — false choices hidden at [endbutton]; Ren'Py menu `if` parity; all-hidden blocks dissolve) | `kag/commands/text.lua` + `kag/expr.lua` | ✓ |
+| S2s | Inline text markup (`{color=#rrggbb}`…`{/color}` per-span colors in `[ch]`/`[text]`; `{b}`/`{i}`/`{size}` parsed+consumed for Ren'Py source compat — renderer has no variants yet; unknown `{tags}` literal) | `kag/text_layout.lua` (parse_markup/wrap_spans) + `kag/text_scene.lua` (add_wrapped_spans) | ✓ (20 Lua assertions; typewriter reveal + backlog use stripped plain text) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
@@ -169,13 +170,15 @@ graph LR
 | D6 | Dev mode (checkerboard placeholder textures, verbose logging) | `ITextureManager` | ✓ |
 | D7 | Lua debugger (breakpoints, step control, inspection) | `DebugProtocol` | ✓ Engine lifecycle, KAG resume arbitration, stdio commands, stale pause rejection and managed result/error cleanup are tested |
 | D8 | AI dev assistant (`kag/aidev.lua`: local rule-based diagnostic explainer + structural scene review [flow balance / missing [end]]; LLM-enriched explanations, fix suggestions, full scene generation with self-review; exposed to the IDE via /api/eval) | `kag/aidev.lua` + `backend.ai_query` + AiPanel Dev Assist section | ✓ (26 Lua assertions; local paths work offline, LLM degrades gracefully) |
+| D9 | LSP navigation (goto-definition / find-all-references for `*label` ↔ `[jump]`/`[call]`/`[link]`; cross-scene targets return name-only) | `kag/lsp.lua` (definition/references) + Monaco providers | ✓ (12 Lua assertions; Ctrl+Click + context menu in IDE) |
+| D10 | Skeletal mesh animation (SMA S2/S3: CPU soft-skinning math + bgfx renderer + Lua driver [JSON/hierarchy/LERP] + `[sma_play]`/`[sma_stop]` contracts + `sma.*` binding) | `IMeshRenderer` + `SmaMeshRenderer` + `SmaSkinner` + `kag/sma.lua` + `SmaBinding` | ✓ (8 C++ + 25 Lua assertions; GPU deferred pattern; headless uses Null backend) |
 
 ### Platform Infrastructure (7 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 609 cases / 2980 asserts, Lua 113 files, 2026-08-12) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 617 cases / 3002 asserts, Lua 116 files, 2026-08-12) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
@@ -184,8 +187,16 @@ graph LR
 
 ---
 
-**Total: 57 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 59 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+### 2026-08-12 additions (generation-gap round 6)
+
+- S2s — inline text markup `{color=#rrggbb}`…`{/color}` (Ren'Py `{...}` parity;
+  b/i/size consumed for source compat; unknown tags literal).
+- D9 — LSP navigation: goto-definition / find-all-references for labels.
+- D10 — Skeletal mesh animation S2/S3 (CPU soft-skinning + bgfx renderer + Lua
+  driver + commands + binding).
 
 ### 2026-08-12 additions (generation-gap round 5)
 
