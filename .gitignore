@@ -29,6 +29,8 @@ out/
 node_modules/
 web-editor/node_modules/
 web-editor/release/
+editor/node_modules/
+editor/dist/
 
 # --- Runtime generated ---
 logs/
@@ -80,3 +82,5 @@ shaders/compiled/
 .reasonix/
 tests/scripts/config/
 FrameworkShaders/
+editor/tsconfig.tsbuildinfo
+tmp/

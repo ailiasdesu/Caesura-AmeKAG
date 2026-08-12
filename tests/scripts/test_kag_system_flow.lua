@@ -67,6 +67,27 @@ ok("stop", t[1].cmd == "stop")
 t = tokenizer.parse("[return]")
 ok("return", t[1].cmd == "return")
 
+-- [stop] terminates execution (regression: flow_commands declared stop
+-- but no scheduler branch handled it -- it fell through to the
+-- unknown-command path and rendered as dialogue text)
+do
+    local sched = require("scheduler")
+    local st = tokenizer.parse('[ch text="a"]\n[stop]\n[ch text="b"]')
+    local seen = {}
+    package.loaded["kag"] = { ch = function(_, p) seen[#seen + 1] = p.text end }
+    local sctx = { f = {}, sf = {}, tf = {}, mp = {},
+        tokens = st, token_index = 1, call_stack = {},
+        layers = {}, backlog = {}, macros = {}, stop_flag = false,
+        load_tokens = function() end }
+    local sco = coroutine.create(function() sched.run(sctx, st, 1) end)
+    local sn = 0
+    while coroutine.status(sco) == "suspended" and sn < 10 do
+        coroutine.resume(sco, 16)
+        sn = sn + 1
+    end
+    ok("stop halts execution", #seen == 1 and seen[1] == "a")
+end
+
 -- macro/endmacro/erasemacro
 t = tokenizer.parse("[macro name=\"greet\"]")
 ok("macro parsed", t[1].cmd == "macro")

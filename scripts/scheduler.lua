@@ -364,6 +364,14 @@ function scheduler.run(ctx, tokens, start_index)
         elseif cmd == "end" then
             return
 
+        -- Flow control: [stop] -- immediate stop (audit: flow_commands
+        -- declared stop but no branch handled it; it fell through to the
+        -- unknown-command path and rendered as dialogue text). Identical
+        -- to [end] (both terminate the coroutine); kept separate so
+        -- scripts can use the KAG3 spelling.
+        elseif cmd == "stop" then
+            return
+
         -- Flow control: [label] ?? no-op, used by jump/call
         elseif cmd == "label" then
             -- pass
