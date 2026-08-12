@@ -31,6 +31,8 @@ local tests = {
     "test_bytecode_cache",
     "test_lsp",
     "test_schema_types",
+    "test_determinism",
+    "test_fuzz",
     "test_example_game",
     "test_rollback_memory",
     "test_rollback",
