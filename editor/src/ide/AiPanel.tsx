@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { EngineClient } from '../lib/rpc'
-import { luaString } from '../lib/luaString'
+import { luaString, luaValue } from '../lib/luaString'
 import { useEditor } from '../store'
 
 interface Props {
@@ -32,7 +32,7 @@ export function AiPanel({ client }: Props) {
     setMsg('')
     try {
       const argStr = args
-        .map((a) => (typeof a === 'string' ? luaString(a) : JSON.stringify(a)))
+        .map((a) => (typeof a === 'string' ? luaString(a) : luaValue(a)))
         .join(', ')
       const code =
         `local aw = require('kag.aiwriter'); ` +
@@ -95,7 +95,7 @@ export function AiPanel({ client }: Props) {
     setBusy(true)
     try {
       const argStr = args
-        .map((a) => (typeof a === 'string' ? luaString(a) : JSON.stringify(a)))
+        .map((a) => (typeof a === 'string' ? luaString(a) : luaValue(a)))
         .join(', ')
       const code =
         `local ad = require('kag.aidev'); ` +
