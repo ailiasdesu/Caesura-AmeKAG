@@ -30,6 +30,7 @@ local tests = {
     "test_compiler",
     "test_bytecode_cache",
     "test_carc_import",
+    "test_ks_bake",
     "test_lsp",
     "test_schema_types",
     "test_determinism",

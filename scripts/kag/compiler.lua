@@ -478,6 +478,11 @@ end
 --  nil on read failure. Used for .ksc freshness checks. 32-bit is exact
 --  in Lua doubles and plenty for cache invalidation (a collision only
 --  costs a stale cache, never correctness).
+--- FNV-1a 32-bit content hash. Recalculated on every call: the scenes
+--  are small (<100KB) and correctness of the .ksc freshness check beats
+--  the ~1ms saving a cache would buy (a stale-cache bug silently loads
+--  old bytecode — not acceptable). readCache has its own (path,size,
+--  head) result cache for the hot path.
 function compiler.hashFile(path)
     local f = io.open(path, "rb")
     if not f then return nil end
@@ -524,9 +529,33 @@ end
 --- compiler.readCache(cachePath) → compiled token array or nil.
 --  The .ksc file is a Lua chunk; load() parses it natively (no manual
 --  string decoding) and the returned table is the compiled data.
+--- readCache result cache: the .ksc file rarely changes within a
+--  session; cache the deserialized token array keyed by (path, size).
+--  Same-size rewrite of a .ksc is not a real scenario (writeCache only
+--  rewrites when the source hash changed, which also changes the baked
+--  size in practice) — a size check is sufficient here.
+local read_cache = {}
+local READ_CACHE_MAX = 64
+
+local function file_head(fp)
+    fp:seek("set")
+    local head = fp:read(64) or ""
+    local h = 0
+    for i = 1, #head do h = (h * 31 + head:byte(i)) % 4294967296 end
+    return h
+end
+
 function compiler.readCache(cachePath)
     local f = io.open(cachePath, "r")
     if not f then return nil end
+    local size = f:seek("end")
+    local head = file_head(f)
+    f:seek("set")
+    local cached = read_cache[cachePath]
+    if cached and cached.size == size and cached.head == head then
+        f:close()
+        return cached.tokens
+    end
     local text = f:read("*a")
     f:close()
     if not text or #text == 0 then return nil end
@@ -534,7 +563,16 @@ function compiler.readCache(cachePath)
     if not chunk then return nil end
     local ok2, data = pcall(chunk)
     if not ok2 or type(data) ~= "table" then return nil end
-    return compiler.deserialize(data)
+    local tokens = compiler.deserialize(data)
+    local n = 0
+    for _ in pairs(read_cache) do n = n + 1 end
+    if n >= READ_CACHE_MAX then
+        local keys = {}
+        for k in pairs(read_cache) do keys[#keys + 1] = k end
+        for j = 1, math.floor(#keys / 2) do read_cache[keys[j]] = nil end
+    end
+    read_cache[cachePath] = { size = size, head = head, tokens = tokens }
+    return tokens
 end
 
 -- ---------------------------------------------------------------------------
