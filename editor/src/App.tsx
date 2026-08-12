@@ -4,6 +4,7 @@ import { registerKagLanguage } from './ide/kagLanguage'
 import { ActivityBar } from './ide/ActivityBar'
 import { StatusBar } from './ide/StatusBar'
 import { ExplorerView } from './ide/ExplorerView'
+import { SceneTree } from './ide/SceneTree'
 import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
 import { EditorArea } from './ide/EditorArea'
@@ -55,7 +56,12 @@ export function App() {
       <div className="workbench">
         <ActivityBar />
         <aside className="sidebar">
-          {sideView === 'explorer' && <ExplorerView client={clientRef.current} />}
+          {sideView === 'explorer' && (
+            <>
+              <ExplorerView client={clientRef.current} />
+              <SceneTree />
+            </>
+          )}
           {sideView === 'debug' && <DebugView client={clientRef.current} />}
           {sideView === 'visual' && <VisualView client={clientRef.current} />}
         </aside>

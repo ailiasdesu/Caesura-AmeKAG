@@ -127,6 +127,14 @@ export function ExplorerView({ client }: Props) {
             key={a.path}
             className="explorer-item"
             title={a.path}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                'application/x-caesura-asset',
+                JSON.stringify({ path: a.path, type: a.type }),
+              )
+              e.dataTransfer.effectAllowed = 'copy'
+            }}
             onDoubleClick={() => openImage(a)}
           >
             <span className="explorer-file-icon">🖼</span>
@@ -141,7 +149,19 @@ export function ExplorerView({ client }: Props) {
       <section className="explorer-section">
         <div className="explorer-section-title">AUDIO</div>
         {audio.map((a) => (
-          <div key={a.path} className="explorer-item" title={a.path}>
+          <div
+            key={a.path}
+            className="explorer-item"
+            title={a.path}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                'application/x-caesura-asset',
+                JSON.stringify({ path: a.path, type: a.type }),
+              )
+              e.dataTransfer.effectAllowed = 'copy'
+            }}
+          >
             <span className="explorer-file-icon">🎵</span>
             <span className="explorer-item-name">{a.name}</span>
           </div>

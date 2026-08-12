@@ -399,3 +399,47 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
   padding: 8px;
 }
 .model-select { flex: 1; min-width: 0; padding: 4px 6px; }
+
+/* -- Battle 4b: drop zone + scene tree -- */
+.drop-zone { position: relative; }
+.drop-zone.drag-over .frame-img { outline: 2px dashed var(--accent); }
+.drop-hint {
+  font-size: 11px;
+  color: var(--fg-dim);
+  margin-top: 4px;
+  text-align: center;
+}
+.scene-counts { font-size: 10px; color: var(--fg-dim); }
+.scene-tree {
+  overflow: auto;
+  max-height: 320px;
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+.scene-el {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  padding: 3px 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.scene-el:hover { background: var(--bg-input); }
+.scene-icon { flex: 0 0 auto; }
+.scene-text { font-family: 'Cascadia Code', monospace; color: var(--accent); }
+.scene-detail {
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-size: 11px;
+}
+.scene-line { color: var(--fg-dim); font-size: 10px; }
+.scene-label .scene-text { color: var(--paused); }
+.scene-ch .scene-text { color: var(--ok); }

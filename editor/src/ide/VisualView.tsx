@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { EngineClient, FrameReply, Live2DModel } from '../lib/rpc'
+import { useEditor } from '../store'
 
 interface Props {
   client: EngineClient
@@ -11,6 +12,8 @@ export function VisualView({ client }: Props) {
   const [models, setModels] = useState<Live2DModel[]>([])
   const [modelPath, setModelPath] = useState('')
   const [modelMsg, setModelMsg] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const insertIntoActive = useEditor((s) => s.insertIntoActive)
 
   const refreshFrame = async () => {
     setError('')
@@ -51,6 +54,26 @@ export function VisualView({ client }: Props) {
     }
   }
 
+  // -- Battle 4b: drag-drop asset -> generated tag into the active doc --
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const raw = e.dataTransfer.getData('application/x-caesura-asset')
+    if (!raw) return
+    const asset = JSON.parse(raw) as { path: string; type: string }
+    const storage = asset.path.replace(/^assets\//, '')
+    let tag: string
+    if (asset.type === 'image') {
+      tag = `[bg storage="${storage}"]\n`
+    } else if (asset.type === 'audio') {
+      tag = `[playbgm file="${storage}"]\n`
+    } else {
+      tag = `[ch text="${asset.path}"]\n`
+    }
+    insertIntoActive(tag)
+    setModelMsg(`Inserted: ${tag.trim()}`)
+  }
+
   return (
     <div className="sidebar-pane">
       <div className="panel-title">
@@ -60,11 +83,24 @@ export function VisualView({ client }: Props) {
       </div>
 
       {frame?.png ? (
-        <img
-          className="frame-img"
-          src={`data:image/png;base64,${frame.png}`}
-          alt="Engine frame"
-        />
+        <div
+          className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragOver(true)
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          <img
+            className="frame-img"
+            src={`data:image/png;base64,${frame.png}`}
+            alt="Engine frame"
+          />
+          <div className="drop-hint">
+            Drop images/audio here → inserts [bg]/[playbgm] into the active script
+          </div>
+        </div>
       ) : (
         <div className="frame-empty">{error || 'No frame yet'}</div>
       )}

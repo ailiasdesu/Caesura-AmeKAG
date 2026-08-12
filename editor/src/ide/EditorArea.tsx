@@ -1,8 +1,28 @@
 import Editor, { type OnMount } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
+import { useEffect, useRef } from 'react'
 import { useEditor } from '../store'
 import { KagLsp } from '../lib/kagLsp'
 import { EngineClient } from '../lib/rpc'
+
+// Battle 4b: module-level registry so the SceneTree (outside the Monaco
+// editor tree) can ask the mounted editor to reveal a line.
+type StandaloneEditor = monaco.editor.IStandaloneCodeEditor
+const editorRegistry = new Map<string, StandaloneEditor>()
+export function registerEditor(path: string, ed: StandaloneEditor): void {
+  editorRegistry.set(path, ed)
+}
+export function unregisterEditor(path: string, ed: StandaloneEditor): void {
+  if (editorRegistry.get(path) === ed) editorRegistry.delete(path)
+}
+export function revealEditorLine(path: string, line: number): void {
+  const ed = editorRegistry.get(path)
+  if (ed) {
+    ed.revealLineInCenter(Math.max(1, line))
+    ed.setPosition({ lineNumber: Math.max(1, line), column: 1 })
+    ed.focus()
+  }
+}
 
 export function EditorArea() {
   const docs = useEditor((s) => s.docs)
@@ -10,15 +30,30 @@ export function EditorArea() {
   const setActive = useEditor((s) => s.setActive)
   const updateDoc = useEditor((s) => s.updateDoc)
   const closeDoc = useEditor((s) => s.closeDoc)
+  const revealRequest = useEditor((s) => s.revealRequest)
+  const lastReveal = useRef(0)
 
   const active = docs.find((d) => d.path === activePath) ?? null
+
+  // Scene-tree jump: consume the reveal request
+  useEffect(() => {
+    if (!revealRequest) return
+    if (revealRequest.nonce === lastReveal.current) return
+    lastReveal.current = revealRequest.nonce
+    revealEditorLine(revealRequest.path, revealRequest.line)
+  }, [revealRequest])
 
   const handleMount: OnMount = (editor, monacoInstance) => {
     // KAG language service (Battle 2): completion / hover / diagnostics
     // bridged to the engine's declarative command contracts via /api/eval.
     const lsp = new KagLsp(new EngineClient(), monacoInstance as typeof monaco)
     lsp.register()
-    editor.onDidDispose(() => lsp.dispose())
+    // Battle 4b: register the editor for scene-tree jumps
+    if (active) registerEditor(active.path, editor)
+    editor.onDidDispose(() => {
+      lsp.dispose()
+      if (active) unregisterEditor(active.path, editor)
+    })
     // Ctrl+S marks the doc clean (saving via engine happens through the
     // debug/eval path in a later iteration; the store keeps dirty state).
     editor.addCommand(/* monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS */ 2049, () => {

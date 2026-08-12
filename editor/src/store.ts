@@ -22,12 +22,20 @@ interface EditorState {
   engineScene: string
   engineToken: number
   enginePaused: boolean
+  /** Battle 4b: reveal request — the editor scrolls to this line after
+   *  a scene-tree click (set by SceneTree, consumed by EditorArea). */
+  revealRequest: { path: string; line: number; nonce: number } | null
   openDoc: (doc: OpenDoc) => void
   updateDoc: (path: string, content: string) => void
   closeDoc: (path: string) => void
   setActive: (path: string) => void
   setSideView: (v: SideView) => void
   setEngine: (s: Partial<Pick<EditorState, 'engineConnected' | 'engineScene' | 'engineToken' | 'enginePaused'>>) => void
+  /** Insert generated tag text into the active document at the cursor
+   *  (or append); marks the doc dirty. */
+  insertIntoActive: (text: string) => void
+  /** Request the editor to reveal a line in a doc (scene-tree jump). */
+  requestReveal: (path: string, line: number) => void
 }
 
 export const useEditor = create<EditorState>((set) => ({
@@ -38,6 +46,7 @@ export const useEditor = create<EditorState>((set) => ({
   engineScene: '',
   engineToken: 0,
   enginePaused: false,
+  revealRequest: null,
   openDoc: (doc) =>
     set((s) => {
       const existing = s.docs.find((d) => d.path === doc.path)
@@ -64,4 +73,20 @@ export const useEditor = create<EditorState>((set) => ({
   setActive: (path) => set({ activePath: path }),
   setSideView: (v) => set({ sideView: v }),
   setEngine: (p) => set(p),
+  insertIntoActive: (text) =>
+    set((s) => {
+      if (!s.activePath) return {}
+      return {
+        docs: s.docs.map((d) =>
+          d.path === s.activePath
+            ? { ...d, content: d.content + text, dirty: true }
+            : d,
+        ),
+      }
+    }),
+  requestReveal: (path, line) =>
+    set((s) => ({
+      activePath: path,
+      revealRequest: { path, line, nonce: (s.revealRequest?.nonce ?? 0) + 1 },
+    })),
 }))
