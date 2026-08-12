@@ -79,18 +79,35 @@ end
 --  Hand-built streams may already use named tables ({text="a"}) -- those
 --  have no pair array part and pass through unchanged (identity, so
 --  handler mutation semantics match the legacy runtime path exactly).
-local function normalize_params(raw)
+--  When the command's contract declares positional_index for a param,
+--  bare args are ALSO mapped to the declared name (compile-time
+--  positional -> named resolution; the numeric key stays for legacy
+--  handlers that still read params[1]).
+local function normalize_params(cmd, raw)
     if type(raw) ~= "table" then return {} end
     local out = {}
     local has_pairs = false
+    local bare = {}
     for _, p in ipairs(raw) do
         if type(p) == "table" and type(p[1]) == "string" then
             has_pairs = true
             local key = tonumber(p[1]) or p[1]
             out[key] = p[2]
+            if type(key) == "number" then bare[key] = p[2] end
         end
     end
     if not has_pairs then return raw end  -- named table: keep identity
+    -- Compile-time positional -> named mapping via the contract's
+    -- positional_index declarations (e.g. [set f.hp 30] -> var="f.hp").
+    local specs = schemaModule.specs(cmd)
+    if specs then
+        for name, spec in pairs(specs) do
+            if spec.positional_index and bare[spec.positional_index] ~= nil
+                and out[name] == nil then
+                out[name] = bare[spec.positional_index]
+            end
+        end
+    end
     return out
 end
 
@@ -272,7 +289,7 @@ function compiler.compile(tokens)
             if FLOW[cmd] then
                 -- flow tokens: normalize params for the flow branches that
                 -- read them (if/while/for/jump/call/link/switch/macro/eval)
-                local p = normalize_params(at[2])
+                local p = normalize_params(cmd, at[2])
                 at[2] = p
                 params_by_idx[i] = p
                 compile_expr_param(cmd, p)
@@ -290,7 +307,7 @@ function compiler.compile(tokens)
                 if not kag then kag = require("kag") end
                 local handler = kag[cmd]
                 if handler then handlers[i] = handler end
-                local p = normalize_params(at[2])
+                local p = normalize_params(cmd, at[2])
                 at[2] = p
                 params_by_idx[i] = p
             end

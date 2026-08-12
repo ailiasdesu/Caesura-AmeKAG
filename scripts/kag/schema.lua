@@ -244,6 +244,13 @@ function Schema.isMigrated(cmd)
     return migrated[cmd] == true
 end
 
+--- Schema.specs(cmd) → contract specs table or nil (LIVE reference, no
+--  deep copy -- tooling that only reads positional_index etc. uses this;
+--  dumpContracts() remains the deep-copy API for doc generation).
+function Schema.specs(cmd)
+    return registry[cmd]
+end
+
 --- Schema.dumpContracts() → { cmd = { param = spec } } — public DEEP copy
 --  of the registry for doc generation / editor tooling. The contracts
 --  are the single source of truth; docs and editors consume this.

@@ -52,6 +52,18 @@ check("bare positional -> params[1] numeric", p1[1] == "500")
 local p2 = toks2._compiled.params[2]
 check("named params normalized", p2.text == "x" and p2.speed == "10")
 
+-- 2b. compile-time positional -> named via contract positional_index
+pcall(require, "kag.commands.system")
+pcall(require, "kag.commands.video")
+local toks2b = tokenizer.parse("[set f.hp 30][video test.mpg]")
+compiler.compile(toks2b)
+local ps = toks2b._compiled.params
+check("set bare -> var mapped", ps[1].var == "f.hp" and ps[1][1] == "f.hp")
+check("video bare -> file mapped", ps[2].file == "test.mpg")
+check("unmigrated bare keeps numeric key only",
+      toks2._compiled.params[1][1] == "500"
+      and toks2._compiled.params[1].ms == nil)
+
 -- ---------------------------------------------------------------------------
 -- 3. while/for/break/continue jump targets compiled
 -- ---------------------------------------------------------------------------
