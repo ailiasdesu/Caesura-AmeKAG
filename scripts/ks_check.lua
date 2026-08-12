@@ -114,6 +114,27 @@ local function checkScene(path)
             return
         end
     end
+    -- Local macro definitions: a [macro name=...] defines a tag that the
+    -- scheduler expands at runtime — its invocations are NOT unknown
+    -- commands. Scan once before the audit loop (audit: [shout] calls
+    -- after [macro shout ...] were falsely flagged).
+    local local_macros = {}
+    for _, mtok in ipairs(tokens) do
+        if mtok.type == "command" and mtok.cmd == "macro" then
+            local mname = nil
+            for _, pair in ipairs(mtok.params or {}) do
+                if type(pair) == "table" and pair[1] == "name" then
+                    mname = pair[2]
+                end
+            end
+            if mname == nil and mtok.params and mtok.params[1] then
+                mname = mtok.params[1][2]  -- bare [macro shout]
+            end
+            if type(mname) == "string" and mname ~= "" then
+                local_macros[mname] = true
+            end
+        end
+    end
     for _, tok in ipairs(tokens) do
         if tok.type == "command" then
             local cmd = tok.cmd
@@ -124,7 +145,8 @@ local function checkScene(path)
             if type(cmd) == "string" then
                 local knownHandler = kag_cmd_table and kag_cmd_table[cmd]
                 if not knownHandler and not schema.isMigrated(cmd)
-                    and not KNOWN_NONHANDLER[cmd] then
+                    and not KNOWN_NONHANDLER[cmd]
+                    and not local_macros[cmd] then
                     report(path, lineOf(tok.offset or 1),
                         "unknown KAG command '" .. cmd
                             .. "' (will render as text at runtime)")

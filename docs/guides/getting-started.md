@@ -132,9 +132,24 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 
 ## Next Steps
 
+- Read the [KAG Language Tour](../guides/kag-language-tour.md) — complete syntax guide
 - Read the [Command Contracts](../api/command-contracts.md) for all available commands (auto-generated, authoritative)
 - Read the [Lua Module API](../api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
+- Study `scripts/demo_tutorial.ks` for a capability-by-capability tour scene
+- Run the full example game `demo/example_game/` ("The Last Letter" —
+  multi-chapter flow, choices, three endings, macros, Lua hybrid):
+
+```bash
+# from the repo root
+lua demo/example_game/entry.lua
+# or from the build output (assets/scripts copied)
+cd build/Debug && lua ../../demo/example_game/entry.lua
+```
+
+- Migrate legacy KAG3 scripts: `lua scripts/kag3_import.lua <scene.ks>`
+  (see [kag3-import](../guides/kag3-import.md); CARC archives supported
+  via `--carc game.carc --path assets/script/main.ks`)
 
 ## Demo/视频导出（差异化功能）
 

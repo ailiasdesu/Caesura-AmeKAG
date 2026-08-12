@@ -180,7 +180,23 @@ function tokenizer.parse_with_offsets(ks_text)
             local tok = { offset = startpos, end_offset = endpos - 1 }
             local typ = t[1]
             if typ == "cmd" then
-                tok.type = "command"; tok.cmd = t[2]; tok.params = t[3] or {}
+                tok.type = "command"; tok.cmd = t[2]
+                -- one_token's Ct nesting wraps EACH param capture in its
+                -- own sub-array: t[3..#t] = { {pair} } per bare/named
+                -- arg (audit: the old `tok.params = t[3]` read only the
+                -- FIRST param's wrapper, dropping every later argument —
+                -- [set f.hp 80] lost "80" and ks_check mis-validated).
+                local params = {}
+                for i = 3, #t do
+                    if type(t[i]) == "table" then
+                        for _, p in ipairs(t[i]) do
+                            if type(p) == "table" and p[1] ~= nil then
+                                params[#params + 1] = p
+                            end
+                        end
+                    end
+                end
+                tok.params = params
                 renumber_bare_params(tok.params)
             elseif typ == "text" then
                 tok.type = "text"; tok.content = t[2] or ""
