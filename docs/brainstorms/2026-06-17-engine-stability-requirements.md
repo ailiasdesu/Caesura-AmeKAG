@@ -9,7 +9,7 @@ topic: engine-stability-e2e-demo
 
 ## Problem Frame
 
-引擎当前状态：16 模块、~400 测试通过，但端到端 galgame 流程跑不通。STRATEGY.md 记录了 5 个已知失败测试（音频加载、图片解码、Lua 脚本、bgfx null 崩溃）。用户反馈引擎崩溃、KAG 执行逻辑缺陷、渲染/音频表现异常、脚本绑定层断裂同时存在。在添加新功能之前，必须先让引擎稳定跑通一部完整的 galgame。
+引擎当前状态：16 模块、~400 测试通过，但端到端 galgame 流程跑不通。当时记录有 5 个已知失败测试（音频加载、图片解码、Lua 脚本、bgfx null 崩溃，详见当时的 STRATEGY.md，现已删除）。用户反馈引擎崩溃、KAG 执行逻辑缺陷、渲染/音频表现异常、脚本绑定层断裂同时存在。在添加新功能之前，必须先让引擎稳定跑通一部完整的 galgame。
 
 ## Key Decisions
 

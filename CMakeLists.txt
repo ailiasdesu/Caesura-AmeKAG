@@ -153,7 +153,7 @@ set(ED25519_SOURCES
 add_library(ed25519 STATIC ${ED25519_SOURCES})
 target_include_directories(ed25519 PUBLIC external/ed25519)
 target_compile_definitions(ed25519 PRIVATE _CRT_SECURE_NO_WARNINGS)
-# LPeg is pure-Lua (scripts/lpeg.lua) 锟斤拷??no C build needed
+# LPeg is pure-Lua (scripts/lpeg.lua) — no C build needed
 
 # -- Engine modules ----------------------------------------------------------
 # CAESURA_DEBUG follows the existing single-config default. For multi-config

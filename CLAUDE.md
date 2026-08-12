@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **角色分工**：`AGENTS.md` 是权威规则宪章（模块边界、接口规范、BackendRegistry、命名、耦合预算、文档分类）；本文件是 Claude 操作手册（插件、构建/测试命令、架构速览、提交规范），不重复规则内容。
+
 ## Project Overview
 
-Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 30 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. See `AGENTS.md` for the authoritative module-boundary and interface rules that all agents must follow.
+Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 30 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
 
 ## Plugin Requirements
 
@@ -111,14 +113,7 @@ main.cpp  →  creates concrete backends  →  EngineConfig  →  Engine::init()
                                               all other modules call BackendRegistry::instance().getXxx()
 ```
 
-**Only `src/main.cpp` and files under `src/entry/` may `new` or `make_unique` concrete backend types.** Every other module accesses backends exclusively through `BackendRegistry::instance().getXxx()` returning pure-virtual interface pointers.
-
-### Module Boundary Rules (from AGENTS.md §1–3)
-
-- Each module lives in `src/<module>/` and exposes only its `api/` subdirectory.
-- **Never** `#include` a concrete implementation header across module boundaries — only `api/I*.h` files.
-- `di/BackendRegistry.h` includes only `I*.h` interface headers, never concrete types.
-- Adding a new backend: create `src/<mod>/api/INewThing.h` → implement it → add `set`/`get` in `BackendRegistry` → register in `Engine::init()`.
+Rules (composition root privileges, registration order, `new`/`make_unique` restrictions) are in `AGENTS.md` §3–4 — not repeated here.
 
 ### Module Map
 
@@ -159,18 +154,11 @@ Tests link the same internal static module libraries as the application. Each `t
 
 ### Coupling Budget
 
-| Module | Max cross-module deps | Rationale |
-|--------|----------------------|-----------|
-| `entry` | ≤14 | Composition root, constructs all backends |
-| `di` | ≤14 | DI container, inherently knows all interface types |
-| `script` | ≤14 | Binding layer, touches all bound modules |
-| All others | ≤4 | Business modules, isolated via interfaces |
-
-Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps must be decoupled before adding features. Run `python scripts/count_coupling.py` to check.
+见 `AGENTS.md` §9（`entry`/`di`/`script` ≤14，其余模块 ≤4，超 5 个跨模块依赖必须先解耦）。检查命令：`python scripts/count_coupling.py`。
 
 ## Key Documentation
 
-- `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first)
+- `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first; 完整文档分类见 AGENTS.md §12)
 - `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (78 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
 - `docs/api/cpp-interfaces.md` — all 30 C++ interface definitions
@@ -179,7 +167,6 @@ Any non-composition-root/non-DI/non-binding module exceeding 5 cross-module deps
 - `docs/design/engine-capability-matrix.md` — 54 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
-- `docs/superpowers/specs/` — design specs for architecture decoupling, GPU recovery, KAG+Lua hybrid scripting
 
 ## CI
 
@@ -187,11 +174,7 @@ Three-platform CI (`.github/workflows/ci.yml`): Windows MSVC (Debug+Release), ma
 
 ## Naming Conventions
 
-- Module directories: **all lowercase** (`audio/`, not `Audio/`). Git is case-sensitive even on Windows — use `git mv` to fix casing if needed.
-- Interface files: `I` prefix + PascalCase (`IRenderDevice.h`)
-- Implementation files: PascalCase (`BgfxRenderDevice.cpp`)
-- Namespace: `Caesura::` for all public types
-- Include paths: relative `../<module>/` or bare from `src/` root (CMake-configured)
+见 `AGENTS.md` §6（模块目录全小写、`I` 前缀接口、PascalCase 实现、`Caesura::` 命名空间、include 路径约定）——规则不在此重复。
 
 ## Design Decisions (Recorded)
 

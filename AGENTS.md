@@ -153,7 +153,12 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | 文件 | 内容 |
 |------|------|
 | `api/command-contracts.md` | 78 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
-| `api/lua-modules.md` | 7 个 Lua 模块的 API 参考 |
+| `api/lua-modules.md` | Lua 模块 API 参考 |
+| `api/cpp-interfaces.md` | 全部 C++ 接口定义（30 个） |
+| `api/editor-api-reference.md` | 编辑器 RPC 端点参考 |
+| `api/api-stats.md` | 实时 API 普查（自动生成） |
+| `api/kag-commands.md` | 已弃用的 KAG3 兼容参考（被 command-contracts.md 取代） |
+| `api/kag-expression-language.md` | `[if]`/`[eval]`/`${}` 表达式语法参考 |
 
 ### design/ — 架构与设计文档
 | 文件 | 内容 |
@@ -163,6 +168,9 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
+| `design/nextgen-kag-standard.md` | KAG Neo-Genesis 标准定义 |
+| `design/engine-market-comparison.md` | 2026-08-03 市场对比（历史快照） |
+| `design/engine-market-analysis-2026-08-06.md` | 2026-08-06 市场分析（数据更新版） |
 
 ### guides/ — 用户与开发者指南
 | 文件 | 内容 |
@@ -173,8 +181,11 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `guides/live2d-setup.md` | Cubism SDK 集成步骤 |
 
 ### plans/ — 执行记录与当前计划
+按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
+| `plans/2026-08-02-002-delivery-handoff.md` | **最新状态**交接文档（008） |
+| `plans/2026-08-04-006-perf-baseline-update.md` | 性能基线更新 |
 | `plans/2026-06-17-001-feat-engine-stability-hardening-plan.md` | 引擎稳定性加固计划 |
 | `plans/2026-06-18-galgame-core-readiness-audit.md` | Galgame 核心就绪度排查方案 |
 | `plans/2026-07-02-architecture-hardening-summary.md` | 架构硬化执行总结 |
@@ -187,6 +198,8 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `solutions/architecture-patterns/engine-constructor-sigsegv-testing.md` | Engine 构造崩溃的 NullGpuMonitor 解决模式 |
 | `solutions/architecture-patterns/header-only-to-instance-class.md` | 头文件内联类重构为实例类模式 |
 | `solutions/build-errors/clean-build-include-path.md` | 全量构建 include 路径修复模式 |
+| `solutions/runtime-crashes/bgfx-predefined-uniform-name-conflict.md` | bgfx 预定义 uniform 命名冲突 |
+| `solutions/deferred-gpu-tests.md` | 无 GPU 环境下无法覆盖的测试项清单 |
 
 ### 规则
 - **新 API 文档** → `docs/api/`
@@ -194,4 +207,5 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 - **新使用指南** → `docs/guides/`
 - **执行计划与记录** → `docs/plans/`（按日期命名：`YYYY-MM-DD-NNN-描述.md`）
 - **可复用的经验/模式** → `docs/solutions/`
+- **历史需求文档** → `docs/brainstorms/`（仅保留被 plans/ 引用的 origin 需求，无引用后删除）
 - **禁止**将一次性执行提示词（prompts）留在 docs/ 中——执行完成后删除，仅保留执行总结

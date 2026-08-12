@@ -187,7 +187,7 @@
 
 ## 共享问题追踪表
 
-使用 `docs/debug/audit-tracker.md`（待创建），格式：
+审计期间使用共享问题追踪表（当时为 `docs/debug/audit-tracker.md`，审计结束后已删除；最终结果见下方勾选表与 `docs/design/engine-capability-matrix.md`），格式：
 
 ```markdown
 | ID | 域 | 验证项 | 状态 | 根因 | 修复方式 | 负责人 | 日期 |
