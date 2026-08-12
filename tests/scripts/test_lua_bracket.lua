@@ -24,34 +24,33 @@ local function luaString(s)
     return "[" .. eq .. "[" .. tostring(s) .. "]" .. eq .. "]"
 end
 
--- Marker: if the payload's code executes, this global gets set.
-local function buildChunk(payload, marker)
-    local chunk = "local s = " .. luaString(payload) .. "\n"
-        .. "if s ~= " .. string.format("%q", payload) .. " then error('mismatch') end\n"
-        .. marker .. " = 'PWNED'"
-    return chunk
-end
-
+-- Payloads may embed __MARK__ as their "code": if the bracket escaping
+-- lets the payload break out, the payload's statement executes and sets
+-- env[__MARK__] — the oracle detects it. Payloads without __MARK__ are
+-- checked by the round-trip assertion (a broken escape makes s ~= p and
+-- the chunk errors).
 local PAYLOADS = {
-    "]=] print('X') --",          -- level-1 terminator + comment swallow
-    "plain text",                 -- no equals at all
-    "a]=]b",                      -- single equals
-    "a]==]b",                     -- two equals
-    "x]=]=] os.exit(1)",          -- nested terminators
-    "y[==[z]=]",                  -- looks like an opener
-    "]=] print(1) -- ]=]",
-    "",
-    "= = =",                      -- equals runs separated
-    "]]]=]]] print('deep') --",   -- deep bracket level
+    "]=] __MARK__ = 'PWNED' --",        -- level-1 terminator + comment swallow
+    "plain text",                       -- no equals at all
+    "a]=]b",                            -- single equals, no code
+    "a]==]b",                           -- two equals, no code
+    "x]=]=] __MARK__ = 'PWNED'",        -- nested terminators
+    "y[==[z]=]",                        -- looks like an opener
+    "]=] __MARK__ = 'PWNED' -- ]=]",    -- double terminator
+    "",                                 -- empty
+    "= = =",                            -- equals runs separated
+    "]]]=]]] __MARK__ = 'PWNED' --",    -- deep bracket level
 }
 
 for i, payload in ipairs(PAYLOADS) do
     local marker = "PWN_" .. i
-    local chunk = buildChunk(payload, marker)
-    -- clear the marker, run the chunk in a sandboxed env
+    local p = payload:gsub("__MARK__", marker)
+    local chunk = "local s = " .. luaString(p) .. "\n"
+        .. "if s ~= " .. string.format("%q", p) .. " then error('mismatch') end"
+    -- run in a per-payload env; marker lands on the env (not _G) because
+    -- load() binds the chunk to `env`
     local env = { print = function() end, os = { exit = function() end },
                   error = error, string = string }
-    _G[marker] = nil
     local fn, lerr = load(chunk, "=bracket_test", "t", env)
     if not fn then
         -- compile failure is acceptable (DoS only, not code execution)
@@ -60,10 +59,9 @@ for i, payload in ipairs(PAYLOADS) do
     else
         local ok, rerr = pcall(fn)
         check("payload " .. i .. " does not execute (" .. payload .. ")",
-              ok == true and _G[marker] == nil,
-              tostring(rerr) .. " marker=" .. tostring(_G[marker]))
+              ok == true and env[marker] == nil,
+              tostring(rerr) .. " marker=" .. tostring(env[marker]))
     end
-    _G[marker] = nil
 end
 
 -- The escaped string must round-trip exactly (no data corruption).
