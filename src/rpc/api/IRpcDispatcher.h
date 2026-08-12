@@ -109,6 +109,7 @@ enum class RpcReplyStatus {
     Ok,
     InvalidRequest,
     Unavailable,
+    Busy, // engine main thread did not service the request in time
     Failed,
 };
 

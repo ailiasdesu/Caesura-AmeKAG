@@ -102,6 +102,9 @@ void setDispatchError(httplib::Response& response, const RpcReply& reply) {
     } else if (reply.status == RpcReplyStatus::Unavailable) {
         status = "unavailable";
         httpStatus = 503;
+    } else if (reply.status == RpcReplyStatus::Busy) {
+        status = "busy";
+        httpStatus = 503;
     }
 
     const std::string code = reply.code.empty() ? "rpc_failed" : reply.code;

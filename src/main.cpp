@@ -72,11 +72,30 @@ public:
         }
 
         std::unique_lock<std::mutex> lock(pending->mutex);
-        pending->ready.wait(lock, [&pending] { return pending->completed; });
+        // Bounded wait: a stalled engine main thread (e.g. a GPU/driver
+        // present hang) must not let HTTP worker threads pile up until the
+        // accept backlog exhausts (observed as connection-refused on the IDE).
+        // Default 5s; override with CAESURA_RPC_DISPATCH_TIMEOUT_MS.
+        if (!pending->ready.wait_for(
+                lock, std::chrono::milliseconds(dispatchTimeoutMs()),
+                [&pending] { return pending->completed; })) {
+            return rpcError(Caesura::RpcReplyStatus::Busy, "engine_busy",
+                            "Engine main thread did not service the request in time");
+        }
         return pending->reply;
     }
 
     void pump() {
+        if (const char* stall = std::getenv("CAESURA_TEST_STALL_MS")) {
+            // Diagnostic-only hook for end-to-end stall verification:
+            // simulates a stalled engine main thread so the bounded dispatch
+            // wait can be exercised without GPU/hardware involvement.
+            char* end = nullptr;
+            const long v = std::strtol(stall, &end, 10);
+            if (end && *end == '\0' && v > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(v));
+            }
+        }
         std::deque<std::shared_ptr<Pending>> batch;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -117,6 +136,18 @@ private:
         return rpcError(Caesura::RpcReplyStatus::Unavailable,
                         "dispatcher_closed",
                         "Engine RPC dispatcher is closed");
+    }
+
+    // Bounded dispatch-wait budget. Default 5000ms; override with
+    // CAESURA_RPC_DISPATCH_TIMEOUT_MS (diagnostics / slow-environment tuning).
+    static long dispatchTimeoutMs() {
+        const char* env = std::getenv("CAESURA_RPC_DISPATCH_TIMEOUT_MS");
+        if (env) {
+            char* end = nullptr;
+            const long v = std::strtol(env, &end, 10);
+            if (end && *end == '\0' && v > 0) return v;
+        }
+        return 5000L;
     }
 
     static void complete(const std::shared_ptr<Pending>& pending,
