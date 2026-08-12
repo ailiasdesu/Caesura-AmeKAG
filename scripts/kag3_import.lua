@@ -317,6 +317,7 @@ local is_script = arg and arg[0] and base_name(arg[0]) == "kag3_import.lua"
 
 if is_script then
     local outdir, strict, inputs = nil, false, {}
+    local carcPath, carcScene = nil, nil
     local i = 1
     while i <= #arg do
         local a = arg[i]
@@ -325,16 +326,54 @@ if is_script then
             outdir = arg[i]
         elseif a == "--strict" then
             strict = true
+        elseif a == "--carc" then
+            i = i + 1
+            carcPath = arg[i]
+        elseif a == "--path" then
+            i = i + 1
+            carcScene = arg[i]
         elseif a == "-h" or a == "--help" then
             print("Usage: lua scripts/kag3_import.lua [-o <outdir>] [--strict] <scene.ks> [more.ks ...]")
+            print("       lua scripts/kag3_import.lua --carc <archive.carc> --path <rel.ks> [-o <outdir>] [--strict]")
             print("  check mode:  reports conversions and unsupported commands (exit 0/1/2)")
             print("  convert mode (-o): writes imported .ks files into <outdir>")
             print("  --strict: exit code 2 if any unsupported command or iscript block exists")
+            print("  --carc + --path: extract one scene from a CARC archive, then import it")
             os.exit(0)
         else
             inputs[#inputs + 1] = a
         end
         i = i + 1
+    end
+
+    -- CARC mode: extract <rel.ks> from the archive into a temp dir and
+    -- treat the extracted scene as the single input (the CARC stores only
+    -- path hashes, so the caller must know the scene's relative path).
+    if carcPath and carcScene then
+        local tmpDir = "kag3_import_carc_tmp"
+        local exe = "bin/Debug/carc_pack.exe"
+        local f = io.open(exe, "r")
+        if not f then exe = "bin/Release/carc_pack.exe" end
+        if f then f:close() end
+        local sep = package.config:sub(1, 1)
+        -- CARC hashes the exact relative path string: the scene path must
+        -- keep forward slashes (as packed); only the exe/archive paths are
+        -- cmd-safe backslashes.
+        local cmd = string.format('%s extract "%s" "%s" --path "%s"',
+            exe:gsub("/", sep), carcPath:gsub("/", sep),
+            tmpDir, carcScene)
+        local ok = pcall(os.execute, cmd)
+        local sep2 = package.config:sub(1, 1)
+        local tmp = tmpDir .. sep2 .. carcScene:gsub("/", sep2)
+        local exists = io.open(tmp, "r") ~= nil
+        if not (ok and exists) then
+            print("error: carc extract failed (carc_pack available?): " .. carcPath)
+            os.exit(1)
+        end
+        inputs = { tmp }
+    elseif carcPath or carcScene then
+        print("error: --carc and --path must be used together")
+        os.exit(1)
     end
 
     if #inputs == 0 then
@@ -366,6 +405,10 @@ if is_script then
                 end
             end
         end
+    end
+    -- cleanup the CARC extraction temp dir (best-effort)
+    if carcPath and carcScene then
+        os.execute('rmdir /s /q "kag3_import_carc_tmp" 2>nul')
     end
     if errs > 0 then os.exit(1) end
     if blocking then os.exit(2) end
