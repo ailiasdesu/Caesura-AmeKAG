@@ -49,6 +49,7 @@ local FLOW = {
     ["iscript"] = true,
     ["while"] = true, ["endwhile"] = true,
     ["for"] = true, ["endfor"] = true,
+    ["until"] = true,
     ["break"] = true, ["continue"] = true,
     ["stop"] = true,
 }
@@ -57,6 +58,7 @@ local FLOW = {
 -- expressions that get compiled once (TJS->Lua translation).
 local EXPR_TOKENS = {
     ["if"] = "exp", ["elseif"] = "exp", ["while"] = "exp",
+    ["until"] = "exp",  -- declarative conditional wait (Neo-Genesis)
     ["for"] = nil,  -- handled specially below (three numeric exprs)
     ["switch"] = nil,  -- switch expr is a variable name, not TJS (KAG3 form)
 }
@@ -524,7 +526,7 @@ function compiler.compile(tokens)
                 -- flow tokens: params already normalized in pass 1
                 compile_expr_param(cmd, p)
                 if cmd == "if" or cmd == "elseif" or cmd == "while"
-                    or cmd == "for" then
+                    or cmd == "for" or cmd == "until" then
                     -- keep the translated source for the scheduler (it
                     -- loads with the ctx env at runtime, cached there)
                     if cmd == "for" then

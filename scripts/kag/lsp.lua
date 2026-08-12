@@ -43,7 +43,7 @@ local KIND = {
 -- Flow-control commands handled by the scheduler (completions too).
 local FLOW_CMDS = {
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
-    "break", "continue", "jump", "call", "return", "link", "label",
+    "until", "break", "continue", "jump", "call", "return", "link", "label",
     "macro", "endmacro", "erasemacro", "switch", "case", "endcase",
     "default", "endswitch", "eval", "emb", "iscript", "endscript",
     "select", "sel", "endselect", "end", "stop",

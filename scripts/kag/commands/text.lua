@@ -863,11 +863,35 @@ function TextCommands.button(ctx, params)
     if target == nil and type(params[1]) == "string" then
         target = params[1]
     end
-    table.insert(ctx._choiceButtons, { text = text, target = target or "" })
+    -- Neo-Genesis: [button cond="f.x > 1"] — conditional choice (Ren'Py
+    -- menu `if` parity). Evaluated when [endbutton] renders the block;
+    -- false choices are hidden. TJS syntax, runtime-translated.
+    table.insert(ctx._choiceButtons, {
+        text = text, target = target or "", cond = params.cond,
+    })
 end
 
 function TextCommands.endbutton(ctx, params)
     if not ctx._choiceButtons or #ctx._choiceButtons == 0 then
+        ctx._choiceButtons = nil
+        return
+    end
+
+    -- Neo-Genesis: [button cond=...] — drop choices whose condition is
+    -- false (Ren'Py menu `if` parity). All-hidden blocks just dissolve.
+    local exprLang = require("kag.expr")
+    local filtered = {}
+    for _, choice in ipairs(ctx._choiceButtons) do
+        local cond = choice.cond
+        if type(cond) == "string" and cond ~= "" then
+            local ok, v = exprLang.evaluate(ctx, cond)
+            if ok and v then filtered[#filtered + 1] = choice end
+        else
+            filtered[#filtered + 1] = choice
+        end
+    end
+    ctx._choiceButtons = filtered
+    if #filtered == 0 then
         ctx._choiceButtons = nil
         return
     end

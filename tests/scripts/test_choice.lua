@@ -63,4 +63,63 @@ pcall(KAG2.button, ctxB, { "*route_a", text = "A" })
 check("bare target collected", ctxB._choiceButtons[1]
       and ctxB._choiceButtons[1].target == "*route_a")
 
+-- ---------------------------------------------------------------------------
+-- [button cond=...] — conditional choices (Ren'Py menu `if` parity):
+-- false choices are dropped at [endbutton]; all-hidden blocks dissolve.
+-- ---------------------------------------------------------------------------
+local ctxC = {
+    f = { has_key = true }, sf = {}, tf = {}, mp = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+    textCursorX = 32, textCursorY = 580,
+    backlog = {}, layers = {},
+    _choiceButtons = {
+        { text = "Open door", target = "*door", cond = "f.has_key == true" },
+        { text = "Force door", target = "*force", cond = "f.has_key == false" },
+        { text = "Leave", target = "*leave" },
+    },
+}
+pcall(function() TextCommands.endbutton(ctxC, {}) end)
+check("cond filters false choices", ctxC._choiceButtonsActive ~= nil
+      and #ctxC._choiceButtonsActive == 2)
+check("cond keeps true choice", ctxC._choiceButtonsActive[1]
+      and ctxC._choiceButtonsActive[1].target == "*door")
+check("cond keeps unconditional choice", ctxC._choiceButtonsActive[2]
+      and ctxC._choiceButtonsActive[2].target == "*leave")
+local hC = _G._KAG_onClick
+_G._GAME_MOUSE_X = 100
+_G._GAME_MOUSE_Y = ctxC._choiceButtonsActive[1].y + 5
+pcall(hC)
+check("cond choice clickable", ctxC._selectedChoice ~= nil
+      and ctxC._selectedChoice.target == "*door")
+
+-- all hidden: the block dissolves without entering choice mode
+local ctxD = {
+    f = { has_key = false }, sf = {}, tf = {}, mp = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+    textCursorX = 32, textCursorY = 580,
+    backlog = {}, layers = {},
+    _choiceButtons = {
+        { text = "Open door", target = "*door", cond = "f.has_key == true" },
+    },
+}
+pcall(function() TextCommands.endbutton(ctxD, {}) end)
+check("all-hidden block dissolves", ctxD._choiceMode == nil
+      and ctxD._choiceButtons == nil)
+
+-- TJS short-circuit form: f.has_key && f.other (both must hold)
+local ctxE = {
+    f = { has_key = true, other = false }, sf = {}, tf = {}, mp = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+    textCursorX = 32, textCursorY = 580,
+    backlog = {}, layers = {},
+    _choiceButtons = {
+        { text = "Combo", target = "*c", cond = "f.has_key && f.other" },
+        { text = "Fallback", target = "*f" },
+    },
+}
+pcall(function() TextCommands.endbutton(ctxE, {}) end)
+check("cond TJS && short-circuit", ctxE._choiceButtonsActive ~= nil
+      and #ctxE._choiceButtonsActive == 1
+      and ctxE._choiceButtonsActive[1].target == "*f")
+
 print("CHOICE TESTS DONE")

@@ -110,6 +110,72 @@ do
     check("malformed jump target no-crash", ok)
 end
 
+-- ---------------------------------------------------------------------------
+-- 8. [until exp=... timeout=ms] — declarative conditional wait
+--    (driven with explicit dt so frame progression is deterministic)
+-- ---------------------------------------------------------------------------
+local function run_until(ctx, tokens, maxResumes, onFrame)
+    local co = coroutine.create(function() scheduler.run(ctx, tokens) end)
+    local n = 0
+    while coroutine.status(co) ~= "dead" and n < maxResumes do
+        n = n + 1
+        if onFrame then onFrame(n) end
+        coroutine.resume(co, 16)  -- 16ms per frame
+    end
+    return n
+end
+
+-- 8a. true immediately: no wait
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "1 == 1", timeout = 5000 }}, {"ch", { text = "done" }} }, 10)
+    check("until true-immediate does not block", n == 3)
+    check("until true-immediate dispatches after", #ctx.dispatched == 1)
+end
+
+-- 8b. waits until the flag flips, then proceeds
+do
+    local ctx = make_ctx()
+    local flagSetAt = nil
+    local n = run_until(ctx,
+        { {"until", { exp = "f.go == 1", timeout = 5000 }}, {"ch", { text = "done" }} },
+        20, function(frame)
+            if frame == 3 then ctx.f.go = 1; flagSetAt = frame end
+        end)
+    check("until waits until condition", flagSetAt == 3 and n == 5)
+    check("until dispatches after condition", #ctx.dispatched == 1
+          and ctx.dispatched[1].cmd == "ch")
+end
+
+-- 8c. timeout path: never true, bounded by timeout (48ms = 3 frames)
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 48 }}, {"ch", { text = "done" }} },
+        50)
+    check("until times out and continues", #ctx.dispatched == 1)
+    check("until timeout bounded frames", n <= 10)
+end
+
+-- 8d. empty exp is a no-op passthrough
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { timeout = 100 }}, {"ch", { text = "done" }} }, 5)
+    check("until empty exp passes through", n == 3 and #ctx.dispatched == 1)
+end
+
+-- 8e. TJS syntax works through compile-time translation (&& !=)
+do
+    local ctx = make_ctx()
+    ctx.f.a, ctx.f.b = 1, 2
+    local n = run_until(ctx,
+        { {"until", { exp = "f.a == 1 && f.b != 3", timeout = 5000 }},
+          {"ch", { text = "done" }} }, 10)
+    check("until TJS && != true-immediate", n == 3 and #ctx.dispatched == 1)
+end
+
 
 print("  [PASS] switch basic parse no-error")
 print("  [PASS] switch case match routes correctly")

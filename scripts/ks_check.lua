@@ -36,7 +36,7 @@ local kag_cmd_table = package.loaded["kag"]
 local KNOWN_NONHANDLER = {}
 for _, c in ipairs({
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
-    "break", "continue", "jump", "call", "return", "macro", "endmacro",
+    "until", "break", "continue", "jump", "call", "return", "macro", "endmacro",
     "switch", "endswitch", "case", "endcase", "default", "label", "eval",
     "emb", "iscript", "wait", "delay", "ch", "text", "link", "end", "stop",
 }) do

@@ -632,6 +632,36 @@ function scheduler.run(ctx, tokens, start_index)
                 end
             end
 
+        -- Flow control: [until exp="..." timeout=ms] — declarative
+        -- conditional wait (Neo-Genesis; Ren'Py needs python loops for
+        -- this). Waits until the expression is truthy or timeout elapses;
+        -- per-frame yield so input/rendering keep running. The exp is
+        -- AOT-translated at compile time (same path as [if]/[while]).
+        elseif cmd == "until" then
+            local uexp = params.exp
+            local timeout = tonumber(params.timeout) or 60000
+            if timeout < 0 then timeout = 0 end
+            if type(uexp) == "string" and uexp ~= "" then
+                local op <close> = operation.start(ctx)
+                local ct = op.token
+                local elapsed = 0
+                local frameTime = 16
+                while not ct.cancelled and elapsed < timeout do
+                    local src = compiled_exprs[i]
+                    local ok, v
+                    if src then
+                        ok, v = eval_expr_translated(ctx, src, uexp,
+                            compiled_exprDumps and compiled_exprDumps[i])
+                    else
+                        ok, v = eval_expr(ctx, uexp)
+                    end
+                    if ok and v then break end
+                    local dt = coroutine.yield() or frameTime
+                    elapsed = elapsed + dt
+                end
+                if not ct.cancelled then op:complete() end
+            end
+
         -- Flow control: [break]/[continue] inside while/for loops
         -- (Neo-Genesis; KAG3 had neither). break pops the innermost loop
         -- and jumps past its end token; continue skips the rest of the
