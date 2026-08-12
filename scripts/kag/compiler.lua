@@ -487,31 +487,41 @@ function compiler.compile(tokens)
     if not tokens or #tokens == 0 then return tokens end
     if tokens._compiled then return tokens end
 
-    -- 1) Static macro inlining (Battle 1d): statically-safe macro call
-    -- sites are expanded at compile time (zero runtime splice). The
-    -- stream may grow; normalization below handles the inlined tokens.
-    compiler.inlineStaticMacros(tokens)
-
-    -- 1.5) Normalize to array format + normalized params + handler binding.
+    -- 1) Normalize to array format + keyed params FIRST: tokenizer.parse
+    -- emits raw pair-array params ({{key,val},...}); macro definition
+    -- collection and call-site expansion read keyed params (name/args).
+    -- Inlining after normalization guarantees statically-safe macros are
+    -- expanded for real .ks scenes, not just hand-built streams (the
+    -- stream may grow here; binding below uses final indices).
     local norm = {}
-    local handlers = {}
-    local params_by_idx = {}
-    local exprs = {}
-    local exprDumps = {}  -- Battle 1c: AOT bytecode per expression token
-    local kag = nil  -- lazy: only needed when a handler lookup is required
     for i, tok in ipairs(tokens) do
         local at = to_array_tok(tok)
         if not at then
             norm[i] = tok  -- passthrough (unknown shape)
         else
+            at[2] = normalize_params(at[1], at[2])
             norm[i] = at
+        end
+    end
+
+    -- 2) Static macro inlining (Battle 1d) on the normalized stream:
+    -- statically-safe macro call sites are expanded at compile time
+    -- (zero runtime splice).
+    compiler.inlineStaticMacros(norm)
+
+    -- 3) Handler binding + expression precompile on the final stream.
+    local handlers = {}
+    local params_by_idx = {}
+    local exprs = {}
+    local exprDumps = {}  -- Battle 1c: AOT bytecode per expression token
+    local kag = nil  -- lazy: only needed when a handler lookup is required
+    for i, at in ipairs(norm) do
+        if type(at) == "table" and at[1] and not at.type then
             local cmd = at[1]
+            local p = at[2] or {}
+            params_by_idx[i] = p
             if FLOW[cmd] then
-                -- flow tokens: normalize params for the flow branches that
-                -- read them (if/while/for/jump/call/link/switch/macro/eval)
-                local p = normalize_params(cmd, at[2])
-                at[2] = p
-                params_by_idx[i] = p
+                -- flow tokens: params already normalized in pass 1
                 compile_expr_param(cmd, p)
                 if cmd == "if" or cmd == "elseif" or cmd == "while"
                     or cmd == "for" then
@@ -565,9 +575,6 @@ function compiler.compile(tokens)
                 if not kag then kag = require("kag") end
                 local handler = kag[cmd]
                 if handler then handlers[i] = handler end
-                local p = normalize_params(cmd, at[2])
-                at[2] = p
-                params_by_idx[i] = p
             end
         end
     end

@@ -158,6 +158,67 @@ local toks7 = tokenizer.parse("[ch text=\"plain\"]")
 compiler.compile(toks7)
 check("record-format stream compiled", toks7._compiled ~= nil)
 
+-- ---------------------------------------------------------------------------
+-- 8. Battle 1d regression: statically-safe macros inline at COMPILE time for
+--    real .ks scenes (tokenizer.parse raw pair-array params) — zero runtime
+--    splice; erasemacro / branch-defined macros keep the runtime path.
+-- ---------------------------------------------------------------------------
+local function count_cmd(stream, cmd)
+    local n = 0
+    for _, t in ipairs(stream) do
+        if type(t) == "table" and t[1] == cmd then n = n + 1 end
+    end
+    return n
+end
+
+-- static-safe: definition at depth 0, before calls, no erase/redef
+local toks8 = tokenizer.parse([[
+*start
+[macro shout args="who,msg"]
+[ch name="%who%" text="%msg%！"]
+[endmacro]
+[shout who="Hero" msg="参数化宏"]
+[shout who="Side" msg="second"]
+]])
+compiler.compile(toks8)
+check("8a: macro call sites inlined at compile time",
+      count_cmd(toks8, "shout") == 0)
+local texts8 = {}
+for _, t in ipairs(toks8) do
+    if t[1] == "ch" and t[2] and t[2].text then texts8[#texts8 + 1] = t[2].text end
+end
+check("8b: %arg% preserved at inlined call sites",
+      texts8[2] == "参数化宏！" and texts8[3] == "second！")
+check("8c: inlined body bound a handler",
+      toks8._compiled.handlers[5] ~= nil)
+
+-- erasemacro anywhere -> call site stays on the runtime splice path
+local toks9 = tokenizer.parse([[
+*start
+[macro shout args="who"]
+[ch text="%who%"]
+[endmacro]
+[erasemacro shout]
+[shout who="X"]
+]])
+compiler.compile(toks9)
+check("8d: erasemacro keeps runtime splice path",
+      count_cmd(toks9, "shout") == 1)
+
+-- definition inside a flow branch -> not statically safe
+local toks10 = tokenizer.parse([[
+*start
+[if exp="f.x > 1"]
+[macro inner args="a"]
+[ch text="%a%"]
+[endmacro]
+[endif]
+[inner a="Y"]
+]])
+compiler.compile(toks10)
+check("8e: branch-defined macro keeps runtime splice path",
+      count_cmd(toks10, "inner") == 1)
+
 if failed > 0 then
     print(string.format("COMPILER TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)
