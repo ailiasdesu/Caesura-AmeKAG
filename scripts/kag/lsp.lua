@@ -190,10 +190,59 @@ function lsp.diagnostics(text)
         }
     end
 
+    -- Truncation detection (ks_check parity): the offset stream can stop
+    -- mid-scene on malformed input while earlier tokens parsed — flag it
+    -- instead of reporting clean. Comments are consumed by the grammar's
+    -- skip, so a scene ending in "; done" does not false-positive.
+    local consumed = tokens[#tokens] and tokens[#tokens].end_offset or 0
+    if consumed > 0 then
+        local tail = text:sub(consumed + 1)
+        while true do
+            local stripped = tail:gsub("^%s*;[^\r\n]*", "")
+            if stripped == tail then break end
+            tail = stripped
+        end
+        local first = tail:find("%S")
+        if first then
+            addIssue(lineOf(consumed + first), 1,
+                "parse stream stopped before end of input", 1)
+        end
+    end
+
     for _, tok in ipairs(tokens) do
         if tok.type == "command" then
             local cmd = tok.cmd
             local specs = contracts[cmd]
+            -- Expression compile pre-check (ks_check parity): exp fields
+            -- run through the KAG expression translator at runtime —
+            -- validate they COMPILE so typos fail in the editor. [eval]/
+            -- [emb] are STATEMENTS (assignments), so they get a plain
+            -- chunk check (accept both return-wrapped and bare forms).
+            do
+                local exp = nil
+                for _, pair in ipairs(tok.params or {}) do
+                    if type(pair) == "table" and pair[1] == "exp" then
+                        exp = pair[2]
+                    end
+                end
+                if type(exp) == "string" and exp ~= "" then
+                    local exprLang = require("kag.expr")
+                    local fn = nil
+                    if cmd == "eval" or cmd == "emb" then
+                        fn = load("return " .. exp, "=ks_expr_check", "t", {})
+                        if not fn then
+                            fn = load(exp, "=ks_expr_check", "t", {})
+                        end
+                    else
+                        fn = load("return " .. exprLang.translate(exp),
+                            "=ks_expr_check", "t", {})
+                    end
+                    if not fn then
+                        addIssue(lineOf(tok.offset), 1,
+                            "expression in [" .. cmd .. "] does not compile: " .. exp, 1)
+                    end
+                end
+            end
             if specs then
                 local present = {}
                 for _, pair in ipairs(tok.params or {}) do

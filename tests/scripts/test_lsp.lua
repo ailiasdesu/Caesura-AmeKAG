@@ -86,6 +86,23 @@ local j2 = lsp.json("diagnostics", '[playbgm]\n')
 check("diagnostics json has severity+line",
       j2:find('"severity":1', 1, true) ~= nil and j2:find('"line":1', 1, true) ~= nil)
 
+-- ---------------------------------------------------------------------------
+-- 6. ks_check parity: expression compile + truncation (Battle 2c)
+-- ---------------------------------------------------------------------------
+local de = lsp.diagnostics('[if exp="f.x > &&"]\n')
+check("expr compile error flagged", #de == 1
+      and de[1].message:find("does not compile", 1, true) ~= nil
+      and de[1].severity == 1)
+local dg = lsp.diagnostics('[if exp="f.x > 5 && f.y != 0"]\n')
+check("valid expr clean", #dg == 0)
+local dt = lsp.diagnostics('[ch text="a"]\n[bg storage="x"\n')
+check("truncation flagged", #dt == 1
+      and dt[1].message:find("stopped before end", 1, true) ~= nil)
+local dc = lsp.diagnostics('[ch text="a"]\n; done\n')
+check("comment tail no false positive", #dc == 0)
+local dboth = lsp.diagnostics('[if exp="bad &&"]\n[bg storage="x"\n')
+check("expr+truncation both flagged", #dboth == 2)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))
