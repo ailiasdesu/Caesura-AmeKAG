@@ -84,7 +84,6 @@ def main():
         print(f"    {o}")
 
     print("\n=== 4. docs/ 无人引用的文档（不被任何 .md 链接）===")
-    md_files = [rel(p) for p in by_hash and []]
     all_docs = []
     for root, dirs, fs in os.walk("docs"):
         for f in fs:
@@ -116,12 +115,12 @@ def main():
         print(f"    {d}")
 
     print("\n=== 5. 顶层杂项 ===")
-    # Legacy top-level files that were removed in repo cleanup (2026-08):
-    # STRATEGY.md (stale, superseded by README/AGENTS/CLAUDE). If any of these
-    # reappear, flag them.
-    for f in []:
+    # Legacy top-level files removed during repo cleanup (2026-08-08):
+    # STRATEGY.md (stale, superseded by README/AGENTS/CLAUDE). Flag if any
+    # reappear.
+    for f in ["STRATEGY.md", "docs/design-decisions.md"]:
         if os.path.exists(f):
-            print(f"  {f}: {os.path.getsize(f)} bytes")
+            print(f"  [WARN] {f} reappeared: {os.path.getsize(f)} bytes")
     # .claude / .superpowers tracked?
     st = os.popen("git ls-files .claude .superpowers .reasonix").read().strip()
     print(f"  .claude/.superpowers/.reasonix 跟踪文件: {len(st.splitlines()) if st else 0}")
