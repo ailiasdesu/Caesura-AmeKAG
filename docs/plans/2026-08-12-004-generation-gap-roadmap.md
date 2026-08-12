@@ -7,13 +7,15 @@
 ## 1. 现状（2026-08-12 实测）
 
 **已交付的缺口**：P0-2 生态配套（CONTRIBUTING/Issue·PR 模板/example_game）、
-P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主进程
-（进行中）、Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）。
-**未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P0-3 移动管线、P1-6
-（GL/Steam 实机）、P2-8 教程体系、P2-9 E-mote 替代。
+P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主进程、
+Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）、**P0-3 移动管线**
+（Android 构建脚本 + IME 文档）、**P2-8 教程体系**（语言教程 + 演示场景）、
+**P2-9 E-mote 替代设计**（SMA 设计定稿 + S1 接口）。
+**未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P1-6（GL/Steam 实机）。
 
 **性能基线**：tokenizer 52ms/1000tok、scheduler ~308k tok/s；表达式路径
-编译后 -32%（165ms vs 241ms）；长循环 O(n²)→O(1)。测试：Lua 103/103。
+编译后 -32%（165ms vs 241ms）；长循环 O(n²)→O(1)；.ksc 预烘焙首载
+737ms→25ms（29×）。测试：Lua 112/112、C++ 609/609。
 
 ## 2. 市面引擎共性短板（代差机会）
 
@@ -37,8 +39,8 @@ P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主
 |---|---|---|
 | 1a ✅ | compiler.lua：flow 跳转表/表达式预编译/参数规范化/handler 绑定（Phase A/B/C） | 已交付：表达式 -32%、长循环 O(1) |
 | 1b | **字节码持久化**：编译产物（_compiled 表）序列化为 `.ksc` 缓存文件，按 (path, mtime) 失效；热重载/场景跳转零重编译 | ✅ 已交付（3f3646f2）：Lua-literal 格式 5ms/2500token（JSON 7× 提速）、FNV-1a hash 失效、cache/ksc 隔离、sandbox 容错 |
-| 1c | **表达式 AOT**：`expr.evaluateTranslated` 的运行时 `load()` 改为编译期字节码缓存——会话内用 `string.dump` 字节码，跨会话用编译产物 JSON 序列化（与 1b 同一缓存机制，见风险表） | 400-if 场景较当前再 -30% |
-| 1d | **宏编译期展开（验证收尾）**：Phase A 已实现宏展开的编译期识别与参数预解析；本阶段补充参数化宏在编译期内联（参数保留、运行时零 splice）并锁定行为等价 | test_macro_nested 全绿 + benchmark 无退化（与 1b 同轮执行） |
+| 1c ⏳ | **表达式 AOT**：`expr.evaluateTranslated` 的运行时 `load()` 改为编译期字节码缓存——会话内用 `string.dump` 字节码，跨会话用编译产物 JSON 序列化（与 1b 同一缓存机制，见风险表） | 待后续迭代（本机可闭环）；400-if 场景较当前再 -30% |
+| 1d ⏳ | **宏编译期展开（验证收尾）**：Phase A 已实现宏展开的编译期识别与参数预解析；本阶段补充参数化宏在编译期内联（参数保留、运行时零 splice）并锁定行为等价 | 待后续迭代（本机可闭环）；test_macro_nested 全绿 + benchmark 无退化 |
 
 ### Battle 2 — 语言层代差（Neo-Genesis 2.0）
 **目标**：标签语言具备现代 IDE 语言服务（市面标签引擎无类型系统/无 LSP）。
@@ -81,18 +83,18 @@ P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主
 ## 4. 执行顺序建议
 
 ```
-当前轮：1b/1c/1d（字节码 + 表达式 AOT + 宏展开验证）→ 4a 联调（Electron）
-第 2 轮：Battle 2（LSP）→ Battle 3（确定性）
-第 3 轮：Battle 4b/4c（可视化 + AI 创作）
-第 4 轮：Battle 5（移动/教程/硬件验证）
-每轮：全量构建 + Lua ≥103 + C++ 605 + ctest ≥10/10 + 耦合 PASS + benchmark 对比
+第 1 轮（已执行）：1b/1c/1d（字节码交付，1c/1d 转⏳）→ 4a 联调（主进程交付，运行时待网络）
+第 2 轮（已执行）：Battle 2（LSP）→ Battle 3（确定性）
+第 3 轮（已执行）：Battle 4b/4c（可视化 + AI 创作）
+第 4 轮（已执行）：Battle 5（移动/教程/CARC 导入）+ 4d S1 + 收尾交接
+每轮：全量构建 + Lua ≥112 + C++ 609 + ctest ≥10/10 + 耦合 PASS + benchmark 对比
 ```
 
 ## 5. 门禁（每轮强制）
 
 1. `git diff --check` 干净
 2. 全量重建零错误（rm -rf build → cmake -B build → --parallel）
-3. CaesuraTests 605/605、Lua ≥103/103、ctest ≥10/10（新增套件/测试只增不减）
+3. CaesuraTests ≥609/609、Lua ≥112/112、ctest ≥10/10（新增套件/测试只增不减）
 4. `python scripts/count_coupling.py --ci` PASS
 5. benchmark 无退化（tokenizer ≤52ms/1000tok、scheduler ≥308k tok/s、表达式 ≤165ms/400-if；较 08-04 基线 135ms/1000tok/308k tok/s 为收紧/对齐值，本文档门禁取代旧基线）
 
