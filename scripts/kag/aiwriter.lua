@@ -89,12 +89,19 @@ end
 --  Keeps lines that look like KAG tags ([...], *label, ; comment) and
 --  drops prose; wraps anything else as a ; comment so the scene stays
 --  valid. Called on every AI reply.
+--  Code-executing tags ([iscript]/[endscript]/[emb]/[eval]) are never
+--  kept from an AI reply: a prompt-injected spec could otherwise make
+--  the model emit an iscript block that executes in the scene (review
+--  should-fix). They are commented out so the author sees them.
 function aiwriter.sanitize_tags(text)
     local out = {}
     for line in (text .. "\n"):gmatch("(.-)\n") do
         local t = line:match("^%s*(.-)%s*$")
         if #t > 0 then
-            if t:match("^%[") or t:match("^%*") or t:match("^;") then
+            if t:match("^%[%s*iscript") or t:match("^%[%s*endscript")
+                or t:match("^%[%s*emb") or t:match("^%[%s*eval") then
+                out[#out + 1] = "; (ai) blocked: " .. t
+            elseif t:match("^%[") or t:match("^%*") or t:match("^;") then
                 out[#out + 1] = t
             else
                 out[#out + 1] = "; (ai) " .. t

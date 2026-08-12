@@ -11,6 +11,22 @@ interface AiReply {
   error: string
 }
 
+/** Lua long-bracket string literal safe for arbitrary content: picks an
+ *  equals-run longer than any `]=` sequence inside the string, so `]=]`
+ *  in user/mod content cannot break out into arbitrary Lua via /api/eval
+ *  (review should-fix). */
+function luaString(s: string): string {
+  const body = String(s)
+  let maxRun = 0
+  const re = /\]={1,}(?=\[)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body))) {
+    maxRun = Math.max(maxRun, m[0].length - 1)
+  }
+  const eq = '='.repeat(maxRun + 1)
+  return `[${eq}[${body}]${eq}]`
+}
+
 /** Battle 4c: AI-assisted scene writing panel.
  *  Calls the engine's aiwriter via /api/eval (local LLM, Ollama default),
  *  then inserts the generated KAG tags into the active document. */
@@ -31,7 +47,7 @@ export function AiPanel({ client }: Props) {
     setMsg('')
     try {
       const argStr = args
-        .map((a) => (typeof a === 'string' ? `[=[${a}]=]` : JSON.stringify(a)))
+        .map((a) => (typeof a === 'string' ? luaString(a) : JSON.stringify(a)))
         .join(', ')
       const code =
         `local aw = require('kag.aiwriter'); ` +
@@ -94,7 +110,7 @@ export function AiPanel({ client }: Props) {
     setBusy(true)
     try {
       const argStr = args
-        .map((a) => (typeof a === 'string' ? `[=[${a}]=]` : JSON.stringify(a)))
+        .map((a) => (typeof a === 'string' ? luaString(a) : JSON.stringify(a)))
         .join(', ')
       const code =
         `local ad = require('kag.aidev'); ` +

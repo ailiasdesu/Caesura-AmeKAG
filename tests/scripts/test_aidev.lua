@@ -155,6 +155,19 @@ end
 check("review finds stray endif", extra_endif)
 local r4 = aidev.review_scene("not a [scene at all !!!")
 check("review handles unparseable", type(r4) == "table" and #r4 >= 1)
+-- case-mismatched flow command flagged (runtime renders it as text)
+local r5 = aidev.review_scene("*start\n[ENDIF]\n[end]\n")
+local case_warn = false
+for _, w in ipairs(r5) do
+    if w.message:find("大小写", 1, true) then case_warn = true end
+end
+check("review flags case-mismatched flow", case_warn)
+-- json encoder escapes tabs / control chars from LLM replies
+install_mock_ai()
+mock_ai.response = "[ch text=\"a\tb\"]\n"
+local j4 = aidev.json("suggest_fix", "*start\n", { line = 1, message = "x" })
+check("json escapes tab", j4:find("a\\tb", 1, true) ~= nil)
+restore_ai()
 
 -- ---------------------------------------------------------------------------
 -- 6. json bridge for the IDE

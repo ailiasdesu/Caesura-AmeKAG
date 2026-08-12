@@ -161,6 +161,15 @@ local BLOCK_PAIRS = {
     { open = "macro", close = "endmacro" },
     { open = "button", close = "endbutton" },
 }
+-- Flow commands the runtime matches case-sensitively; a case-mismatched
+-- spelling renders as text (with [WARN]) instead of controlling flow.
+local FLOW_LOWER = {}
+for _, pair in ipairs(BLOCK_PAIRS) do
+    FLOW_LOWER[pair.open] = true
+    FLOW_LOWER[pair.close] = true
+end
+FLOW_LOWER["end"] = true
+FLOW_LOWER["stop"] = true
 function aidev.review_scene(sceneText, opts)
     opts = opts or {}
     local findings = {}
@@ -194,6 +203,15 @@ function aidev.review_scene(sceneText, opts)
     local seen_end = false
     for _, tok in ipairs(tokens) do
         local cmd = tok.type == "command" and tok.cmd or nil
+        -- case-mismatched flow command: runtime renders it as text
+        -- (with [WARN]); flag it so the review cannot pass it silently
+        if cmd and cmd ~= cmd:lower() and FLOW_LOWER[cmd:lower()] then
+            findings[#findings + 1] = {
+                line = lineOf(tok.offset or 1),
+                message = "大小写不匹配的流命令 [" .. cmd
+                    .. "]（运行时按文本渲染并告警，请改为 [" .. cmd:lower() .. "]）",
+            }
+        end
         if cmd == "end" or cmd == "stop" then seen_end = true end
         if closers[cmd] then
             local open = closers[cmd]
@@ -244,11 +262,17 @@ function aidev.review_scene(sceneText, opts)
     return findings
 end
 
---- JSON string escape (shared by the json encoder).
+--- JSON string escape (shared by the json encoder). Escapes backslash,
+--  quotes, \n \r \t and any remaining C0 control char (\uXXXX) so LLM
+--  replies with tabs/control bytes still yield valid JSON.
 local function json_str(s)
     s = tostring(s)
-    return '"' .. s:gsub("\\", "\\\\"):gsub('"', '\\"')
-        :gsub("\n", "\\n"):gsub("\r", "\\r") .. '"'
+    s = s:gsub("\\", "\\\\"):gsub('"', '\\"')
+        :gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    s = s:gsub("[%c]", function(c)
+        return string.format("\\u%04x", c:byte())
+    end)
+    return '"' .. s .. '"'
 end
 
 --- aidev.json(method, ...) → JSON string for the IDE (via /api/eval)

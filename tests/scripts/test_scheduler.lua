@@ -176,6 +176,38 @@ do
     check("until TJS && != true-immediate", n == 3 and #ctx.dispatched == 1)
 end
 
+-- 8f. scene abort (stop_flag) ends the wait immediately
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 60000 }},
+          {"ch", { text = "done" }} }, 10, function(frame)
+            if frame == 2 then ctx.stop_flag = true end
+        end)
+    check("until aborts on stop_flag", n == 3 and #ctx.dispatched == 0)
+end
+
+-- 8g. Lua-initiated jump (_next_index) ends the wait and is honored
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 60000 }},
+          {"label", { name = "later" }},
+          {"ch", { text = "done" }} }, 10, function(frame)
+            if frame == 2 then ctx._next_index = 2 end  -- jump to the label
+        end)
+    check("until honors _next_index", n == 5 and #ctx.dispatched == 1)
+end
+
+-- 8h. broken expression stops polling (no per-frame error flood)
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.x &&", timeout = 60000 }},
+          {"ch", { text = "done" }} }, 10)
+    check("until broken exp aborts wait", n == 3 and #ctx.dispatched == 1)
+end
+
 
 print("  [PASS] switch basic parse no-error")
 print("  [PASS] switch case match routes correctly")

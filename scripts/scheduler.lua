@@ -646,7 +646,12 @@ function scheduler.run(ctx, tokens, start_index)
                 local ct = op.token
                 local elapsed = 0
                 local frameTime = 16
-                while not ct.cancelled and elapsed < timeout do
+                -- Honor the main loop's flow controls: a scene abort
+                -- (stop_flag), a Lua-initiated jump (_next_index) or an
+                -- operation cancel ends the wait immediately instead of
+                -- blocking until timeout (review should-fix).
+                while not ct.cancelled and not ctx.stop_flag
+                      and not ctx._next_index and elapsed < timeout do
                     local src = compiled_exprs[i]
                     local ok, v
                     if src then
@@ -655,8 +660,12 @@ function scheduler.run(ctx, tokens, start_index)
                     else
                         ok, v = eval_expr(ctx, uexp)
                     end
-                    if ok and v then break end
-                    local dt = coroutine.yield() or frameTime
+                    -- a broken expression cannot become true: stop
+                    -- polling (the diagnostic already printed once)
+                    if not ok then break end
+                    if v then break end
+                    local dt = tonumber(coroutine.yield() or frameTime)
+                        or frameTime
                     elapsed = elapsed + dt
                 end
                 if not ct.cancelled then op:complete() end
