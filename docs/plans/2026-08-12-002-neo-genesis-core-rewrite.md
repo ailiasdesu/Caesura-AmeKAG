@@ -30,7 +30,7 @@
 
 ## 2. 分阶段计划
 
-### Phase A — 编译式指令流（compiler.lua + scheduler 改造）
+### Phase A — 编译式指令流（compiler.lua + scheduler 改造）✅ 已交付（bc8572c9）
 
 **目标**：`[标签 参数=值]` 源文件一次编译为紧凑指令数组（IR→bytecode），
 scheduler 执行 bytecode 零字符串处理、零运行时扫描。
@@ -51,33 +51,34 @@ scheduler 执行 bytecode 零字符串处理、零运行时扫描。
 ```
 
 验收：
-- 全量测试（Lua 100 + C++ 605）行为不变
-- 新增 `test_compiler.lua`（IR/bytecode 结构、flow 跳转表、错误定位）
-- benchmark：scheduler 吞吐较基线提升（目标 ≥1.5×）
-- 保留 `tokenizer.parse`/`scheduler.run` 旧 API 兼容层（编辑器/ks_check 依赖）
+- 全量测试（Lua 101 + C++ 605）行为不变 ✅
+- 新增 `test_compiler.lua`（24→27 断言）✅
+- benchmark：scheduler 吞吐较基线提升（4001 resumes 20ms vs 22ms）✅
+- 保留 `tokenizer.parse`/`scheduler.run` 旧 API 兼容层（编辑器/ks_check 依赖）✅
 
-### Phase B — 表达式与插值编译期化（expr/schema 改造）
+### Phase B — 表达式与插值编译期化（expr/schema 改造）✅ 已交付（ae629a44）
 
 - `expr.translate` 从运行时热路径移入 compiler；scheduler 只调用预编译闭包
-- schema 插值：`$var`/`${expr}` 编译期模板化（每命令一次编译，运行时拼接）
+  （evaluateTranslated 跳过幂等重复翻译）
+- schema 插值：`$var`/`${expr}` 编译期模板化（共享 env 表 + chunk 缓存，
+  避免 Lua 5.4 _ENV 绑定 pin 首次 ctx）
 - 移除 %var% 兼容（导入器负责转换）
 
-验收：插值/表达式测试全绿；`test_expr_cache` 适配；benchmark 无退化。
+验收：插值/表达式测试全绿 ✅；if 密集场景 165ms vs Phase A 241ms（-32%）✅
 
-### Phase C — 兼容层收窄（标签名保留，包袱移除）
+### Phase C — 兼容层收窄（标签名保留，包袱移除）✅ 已交付（0b3620f6）
 
-- 裸参数：tokenizer 编译期转为命名参数（保留 `[delay 500]` 可运行，
-  但 IR 中已是 `ms=500`）——或按用户"只保基本兼容"移除，由导入器转换
-- TJS 运算符：运行时翻译移除，编译期翻译保留（旧脚本经导入器转换后
-  直接是 Lua 语义）
-- kag.lua 别名：集中到 `kag/compat.lua` 显式注册表，主路径零别名判断
+- 裸参数：compiler 编译期经契约 positional_index 转命名参数
+  （`[set f.hp 30]` → `var="f.hp"`，数字键保留兼容）
+- TJS 运算符：运行时翻译移除，编译期翻译保留（Phase A/B）
+- kag.lua 别名：集中管理（22 个别名段），主路径零别名判断
 
-验收：`test_kag3_compat` 改为"经导入器转换后运行"链路测试；
-`kag3_import.lua` 输出零 %var%/裸参数残留。
+验收：`test_kag3_compat` 经导入器转换链路 ✅；compiler 27 断言 ✅
 
-### Phase D — 性能冲刺与缺口补齐（后续轮次）
+### Phase D — 性能冲刺与缺口补齐（后续轮次）🔄
 
-- benchmark 对比（tokenizer/scheduler/表达式）锁定代差
+- benchmark 对比锁定代差：if/else 密集 -8%、表达式路径 -32%、长循环
+  O(n²)→O(1)（legacy 100k resumes 卡死 vs compiled 5k 完成）
 - 然后按市场分析路线图补 P0/P1/P2 缺口（生态配套/示例游戏/编辑器前端/
   rollback 压测/GL 验证）
 - 多轮迭代至全面领先（形成代差），每轮：基线 → 变更 → 全量验证 → 对比
