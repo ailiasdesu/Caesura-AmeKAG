@@ -13,11 +13,11 @@ Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）+ 1b 字节码持久
 **P2-8 教程体系**（语言教程 + 演示场景）、
 **P2-9 E-mote 替代设计**（SMA 设计定稿 + S1 接口）。
 **未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P1-6（GL/Steam 实机）、
-P0-3 真机验证（待设备）、4a 运行时联调（待网络，见 §3 与交接 §3）。
+P0-3 真机验证（待设备）。4a 运行时联调本轮完成（见 §3 与交接 §3）。
 
 **性能基线**：tokenizer 52ms/1000tok、scheduler ~308k tok/s；表达式路径
 编译后 -32%（165ms vs 241ms）；长循环 O(n²)→O(1)；.ksc 预烘焙首载
-737ms→25ms（29×）。测试：Lua 112/112、C++ 609/609。
+737ms→25ms（29×）。测试：Lua 113/113、C++ 609/609。
 
 ## 2. 市面引擎共性短板（代差机会）
 
@@ -52,6 +52,7 @@ P0-3 真机验证（待设备）、4a 运行时联调（待网络，见 §3 与�
 | 2a | **LSP 服务**：利用 78 命令契约（schema.dumpContracts）实现 completion/hover/diagnostics，经 RPC 暴露给 Monaco | ✅ 已交付（dfb254f5）：kag/lsp.lua + Monaco providers + eval 桥接（零 C++ 改动） |
 | 2b | **类型系统深化**：契约增加 `list`/`enum`/`file` 类型 + 交叉验证（storage 路径存在性） | ✅ 已交付（bca6b925）：list 列表转换/enum 枚举校验/file 资产路径静态+运行时双重验证；7 处生产契约升级 |
 | 2c | **ks_check 语言服务化**：行内 diagnostics 推送（编辑器输入即校验） | ✅ 已交付（42fbd306）：lsp.diagnostics 与 ks_check 完全对齐（表达式编译/尾部截断/未知命令/契约）+ 宏感知修复 |
+| 2d | **表达力增强（对标 Ren'Py 强项）**：声明式条件等待 + 条件选择——Ren'Py 需 python 循环/if 块变通 | ✅ 已交付（本轮）：`[until exp timeout]` 声明式条件等待（AOT 表达式 + 每帧 yield + Operation 取消 + 超时兜底）；`[button cond=...]` 条件选择（[endbutton] 时过滤，Ren'Py menu `if` 对齐，全隐藏溶解）；test_scheduler 8a-8e + test_choice 条件用例 |
 
 ### Battle 3 — 确定性工程化代差
 **目标**：任何游戏可自动化验证（市面引擎无此概念）。
@@ -67,9 +68,10 @@ P0-3 真机验证（待设备）、4a 运行时联调（待网络，见 §3 与�
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 4a 🔄 | **Electron 桌面 IDE**：自动拉起引擎 + Monaco + 调试面板 + 可视化预览 dock（主进程已写） | ⚠️ 主进程完成 + CJS 修复（09d8cb71）；运行时验证待网络（Electron 二进制下载） |
+| 4a ✅ | **Electron 桌面 IDE**：自动拉起引擎 + Monaco + 调试面板 + 可视化预览 dock（主进程已写） | ✅ 已交付：主进程 + CJS 修复（09d8cb71）；**运行时验证完成（本轮）**：Electron 43.4 二进制（npmmirror 镜像下载）、引擎 DX11 隐藏窗拉起、渲染器 :5920 + HTTP RPC :9876 全链路实测（status/eval/logs/assets/ping 全 200；lsp/aidev eval 桥实测）。已知风险：偶发主线程停滞（预存问题，探针定位渲染路径，疑似 GPU/驱动时序，待后续轮次跟进） |
 | 4b | **可视化场景编辑**：拖拽角色/背景到画布 → 生成 `[ch]`/`[bg]` 标签；场景树 ↔ 编辑器双向同步 | ✅ 已交付（252e6b1a）：Explorer 拖拽 → VisualView drop 生成标签；SceneTree 解析 .ks 点击跳转 Monaco |
 | 4c | **AI 创作辅助**：基于已交付 [ai_dialog] 的本地 LLM 接口，IDE 内"AI 生成对话/续写场景" | ✅ 已交付（f7482b2c）：kag/aiwriter.lua（生成/续写/sanitize/降级）+ IDE AiPanel（✨ 活动栏）+ 16 断言 |
+| 4e | **AI 开发辅助（LLM 服务开发者）**：诊断解释/修复建议/场景生成/结构审查——本地规则路径离线可用，LLM 在线增强 | ✅ 已交付（本轮）：kag/aidev.lua（本地规则解释器 9 类诊断 + 结构审查[流程块配对/缺失 [end]] + LLM 解释增强/修复建议/整场景生成自检）+ AiPanel Dev Assist 区 + test_aidev 26 断言；全本地路径离线可用、LLM 降级优雅 |
 | 4d | **E-mote 替代（P2-9）**：骨骼/网格动画系统（自研）或 Live2D 扩展 | ✅ 设计定稿 `docs/design/skeletal-mesh-animation.md` + **S1 接口已实现（1e6ce1a5）**：IMeshRenderer + Null 后端 + BackendRegistry（C++ 609/609）；S2-S5 待后续 |
 
 ### Battle 5 — 生态与平台代差
@@ -89,6 +91,7 @@ P0-3 真机验证（待设备）、4a 运行时联调（待网络，见 §3 与�
 第 2 轮（已执行）：Battle 2（LSP）→ Battle 3（确定性）
 第 3 轮（已执行）：Battle 4b/4c（可视化 + AI 创作）
 第 4 轮（已执行）：Battle 5（移动/教程/CARC 导入）+ 4d S1 + 收尾交接
+第 5 轮（已执行）：2d 表达力（[until]/[button cond]）+ 4e AI 开发辅助（aidev + AiPanel Dev Assist）+ 能力矩阵 57 项
 每轮：全量构建 + Lua ≥112 + C++ 609 + ctest ≥10/10 + 耦合 PASS + benchmark 对比
 ```
 

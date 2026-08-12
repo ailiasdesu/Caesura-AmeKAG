@@ -36,6 +36,8 @@ graph LR
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
         s6["Error Recovery<br/>pcall guard · ErrorUI"]
+        s7["Conditional Wait<br/>[until exp timeout]"]
+        s8["Conditional Choices<br/>[button cond]"]
     end
 
     subgraph "Audio"
@@ -65,6 +67,7 @@ graph LR
         d5["Headless Mode<br/>no-GPU test env"]
         d6["Dev Mode<br/>checkerboard placeholder"]
         d7["Lua Debugger<br/>yield pause · owner bridge"]
+        d8["AI Dev Assistant<br/>explain · fix · review"]
     end
 
     subgraph "Platform"
@@ -116,6 +119,8 @@ graph LR
 | S2n | LLM-driven dialogue ([ai_dialog] async query; OpenAI-compatible / Ollama endpoints; graceful fallback text; AI binding + sandbox whitelist) | `AIBinding` + system commands + backend | ✓ |
 | S2o | Demo/video export (recorded replay drives the game while each frame is captured to PNG; --export-replay/--export-dir; screenshot readback fixed) | `Engine::run` + `BgfxDebugCallback::screenShot` | ✓ |
 | S2p | Colorblind/high-contrast filter (config.accessibility.color_filter presets; VFX effect 4 matrix pass over RTT scene layers; D3D11 + GL shaders) | `IRenderDevice::setColorFilter` + fs_vfx effect 4 | ✓ (RTT scene layers; direct-drawn UI text unaffected) |
+| S2q | Declarative conditional wait (`[until exp="..." timeout=ms]` — wait until a TJS expression is truthy; per-frame yield + cancellation; Ren'Py needs python loops for this) | scheduler + compiler (AOT exp/dump) | ✓ |
+| S2r | Conditional choices (`[button cond="f.x > 1"]` — false choices hidden at [endbutton]; Ren'Py menu `if` parity; all-hidden blocks dissolve) | `kag/commands/text.lua` + `kag/expr.lua` | ✓ |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
@@ -163,13 +168,14 @@ graph LR
 | D5 | Headless mode (no-GPU Engine init for CI/test environments) | `EngineConfig` | ✓ |
 | D6 | Dev mode (checkerboard placeholder textures, verbose logging) | `ITextureManager` | ✓ |
 | D7 | Lua debugger (breakpoints, step control, inspection) | `DebugProtocol` | ✓ Engine lifecycle, KAG resume arbitration, stdio commands, stale pause rejection and managed result/error cleanup are tested |
+| D8 | AI dev assistant (`kag/aidev.lua`: local rule-based diagnostic explainer + structural scene review [flow balance / missing [end]]; LLM-enriched explanations, fix suggestions, full scene generation with self-review; exposed to the IDE via /api/eval) | `kag/aidev.lua` + `backend.ai_query` + AiPanel Dev Assist section | ✓ (26 Lua assertions; local paths work offline, LLM degrades gracefully) |
 
 ### Platform Infrastructure (7 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 586 cases, 2026-08-06 verified after full rebuild) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 609 cases / 2980 asserts, Lua 113 files, 2026-08-12) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
@@ -178,8 +184,18 @@ graph LR
 
 ---
 
-**Total: 54 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 57 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+### 2026-08-12 additions (generation-gap round 5)
+
+- S2q `[until exp=... timeout=...]` — declarative conditional wait (AOT-compiled
+  expression, per-frame yield, Operation cancellation, timeout guard).
+- S2r `[button cond=...]` — conditional choices at [endbutton] (Ren'Py menu `if`
+  parity; TJS conditions evaluated per block; all-hidden blocks dissolve).
+- D8 `kag/aidev.lua` — AI-assisted development: local rule-based diagnostic
+  explainer, structural scene review, LLM fix suggestions + scene generation
+  with self-review; IDE surface via /api/eval (AiPanel Dev Assist section).
 
 ### Performance notes (2026-08-07 pass)
 
