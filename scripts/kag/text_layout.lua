@@ -124,7 +124,40 @@ local function append_line(lines, characters, first, last, options)
     }
 end
 
-local function wrap_paragraph(characters, options, lines)
+-- Span-aware append: groups consecutive characters that share the same
+-- inline color into segments so the caller can emit one draw per segment
+-- (per-span text color, Neo-Genesis {color=...} markup).
+local function append_line_segments(lines, characters, first, last, options)
+    while last >= first and is_space(characters[last]) do
+        last = last - 1
+    end
+    if last < first then return end
+
+    local segments = {}
+    local seg_first = first
+    local color = characters[first].color
+    for i = first + 1, last + 1 do
+        local c = characters[i]
+        if i > last or c.color ~= color then
+            segments[#segments + 1] = {
+                text = join_range(characters, seg_first, i - 1),
+                color = color,
+                width = measure_range(characters, seg_first, i - 1, options),
+            }
+            if i > last then break end
+            seg_first = i
+            color = c.color
+        end
+    end
+    lines[#lines + 1] = {
+        segments = segments,
+        width = measure_range(characters, first, last, options),
+        text = join_range(characters, first, last),
+    }
+end
+
+local function wrap_paragraph(characters, options, lines, append)
+    append = append or append_line
     if #characters == 0 then
         lines[#lines + 1] = { text = "", width = 0 }
         return
@@ -149,7 +182,7 @@ local function wrap_paragraph(characters, options, lines)
         end
 
         if last_fit >= #characters then
-            append_line(lines, characters, first, #characters, options)
+            append(lines, characters, first, #characters, options)
             break
         end
 
@@ -170,7 +203,7 @@ local function wrap_paragraph(characters, options, lines)
         end
         break_at = break_at or last_fit
 
-        append_line(lines, characters, first, break_at, options)
+        append(lines, characters, first, break_at, options)
         first = break_at + 1
     end
 end
@@ -234,6 +267,144 @@ function TextLayout.is_closing_punctuation(text)
     local characters = to_characters(text)
     return #characters == 1
         and CLOSING_PUNCTUATION[characters[1].codepoint] == true
+end
+
+-- ---------------------------------------------------------------------------
+-- Inline text markup (Neo-Genesis; Ren'Py `{...}` parity):
+--   {color=#RRGGBB} ... {/color}  — per-span text color (rendered)
+--   {b}/{/b}, {i}/{/i}, {size=N}/{/size} — parsed and consumed for source
+--     compatibility; the renderer has no bold/italic/size variants yet, so
+--     they are a visual no-op. Unknown {tags} pass through as literal text.
+-- ---------------------------------------------------------------------------
+
+local function parse_open_tag(tag)
+    local name = tag:match("^(%a+)")
+    if not name then return nil end
+    if name == "b" or name == "i" then return { kind = "noop" } end
+    if name == "size" then
+        return tag:match("^size%s*=%s*%d+%s*$") and { kind = "noop" } or nil
+    end
+    if name == "color" then
+        local hex = tag:match("^color%s*=%s*#?(%x%x%x%x%x%x)%s*$")
+        if hex then
+            return {
+                kind = "color",
+                r = tonumber(hex:sub(1, 2), 16),
+                g = tonumber(hex:sub(3, 4), 16),
+                b = tonumber(hex:sub(5, 6), 16),
+            }
+        end
+        return nil
+    end
+    return nil
+end
+
+local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true }
+
+--- TextLayout.parse_markup(text) → { spans = {{text, color}, ...}, plain }
+--  Splits a message into colored spans and returns the markup-stripped
+--  plain text (backlog / reveal counters use the visible characters only).
+function TextLayout.parse_markup(text)
+    text = tostring(text or "")
+    local spans = {}
+    local plain_parts = {}
+    local color_stack = {}
+    local current_color = nil
+    local buf = {}
+
+    local function flush()
+        if #buf == 0 then return end
+        local s = table.concat(buf)
+        buf = {}
+        spans[#spans + 1] = { text = s, color = current_color }
+        plain_parts[#plain_parts + 1] = s
+    end
+
+    local i, n = 1, #text
+    while i <= n do
+        if text:sub(i, i) ~= "{" then
+            buf[#buf + 1] = text:sub(i, i)
+            i = i + 1
+        else
+            local close_at = text:find("}", i, true)
+            if close_at then
+                local tag = text:sub(i + 1, close_at - 1)
+                local parsed = parse_open_tag(tag)
+                if parsed then
+                    flush()
+                    if parsed.kind == "color" then
+                        color_stack[#color_stack + 1] = parsed
+                        current_color = parsed
+                    end
+                    i = close_at + 1
+                else
+                    local close_name = tag:match("^%s*/(%a+)%s*$")
+                    if close_name and MARKUP_CLOSE_NAMES[close_name] then
+                        flush()
+                        if #color_stack > 0 then
+                            color_stack[#color_stack] = nil
+                            current_color = color_stack[#color_stack]
+                        end
+                        i = close_at + 1
+                    else
+                        buf[#buf + 1] = "{"
+                        i = i + 1
+                    end
+                end
+            else
+                buf[#buf + 1] = "{"
+                i = i + 1
+            end
+        end
+    end
+    flush()
+    if #spans == 0 then spans = { { text = text, color = nil } } end
+    return { spans = spans, plain = table.concat(plain_parts) }
+end
+
+local function span_characters(spans)
+    local characters = {}
+    for _, span in ipairs(spans) do
+        for _, codepoint in utf8.codes(span.text) do
+            characters[#characters + 1] = {
+                text = utf8.char(codepoint),
+                codepoint = codepoint,
+                color = span.color,
+            }
+        end
+    end
+    return characters
+end
+
+--- TextLayout.wrap_spans(spans, options) → lines of color-aware segments
+--  Same wrapping algorithm as wrap() but lines carry `segments`
+--  ({text, color, width}) so callers can emit per-span colored draws.
+function TextLayout.wrap_spans(spans, options)
+    options = options or {}
+    local max_width = tonumber(options.max_width)
+    assert(max_width and max_width > 0,
+        "text layout max_width must be a positive number")
+
+    local lines = {}
+    local paragraph = {}
+    local characters = span_characters(spans)
+    for _, character in ipairs(characters) do
+        if character.codepoint == 0x0A then
+            wrap_paragraph(paragraph, options, lines, append_line_segments)
+            paragraph = {}
+        elseif character.codepoint ~= 0x0D then
+            paragraph[#paragraph + 1] = character
+        end
+    end
+
+    if #paragraph > 0 or #characters == 0
+        or characters[#characters].codepoint ~= 0x0A then
+        wrap_paragraph(paragraph, options, lines, append_line_segments)
+    elseif characters[#characters].codepoint == 0x0A then
+        lines[#lines + 1] = { text = "", width = 0, segments = {} }
+    end
+
+    return lines
 end
 
 return TextLayout

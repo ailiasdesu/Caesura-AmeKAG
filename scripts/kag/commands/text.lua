@@ -9,6 +9,7 @@ local backend = require("backend")
 local layers  = require("layers")
 local Operation = require("kag.operation")
 local TextScene = require("kag.text_scene")
+local TextLayout = require("kag.text_layout")
 
 -- =============================================================================
 --  Internal: update text_state for save/load position tracking
@@ -455,6 +456,15 @@ function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
 
+    -- Neo-Genesis inline markup: {color=#rrggbb}...{/color} spans. The
+    -- backlog / closed captions / reveal counters use the stripped plain
+    -- text (visible characters only); drawing uses the colored spans.
+    local spans, plain = nil, message
+    if message:find("{", 1, true) then
+        local parsed = TextLayout.parse_markup(message)
+        spans, plain = parsed.spans, parsed.plain
+    end
+
     -- U1.3: pos parameter (left/center/right) for text alignment
     local pos = params.pos or "center"
     if pos ~= "left" and pos ~= "center" and pos ~= "right" then
@@ -508,7 +518,7 @@ function TextCommands.ch(ctx, params)
         -- config itself (its require chain is unavailable in degraded
         -- contexts and would disturb suite ordering).
         if ctx.cc_mode == true then
-            ctx.cc_text = { speaker = speaker, text = message }
+            ctx.cc_text = { speaker = speaker, text = plain }
         end
         -- Non-blocking voice: playvoice() yields until the clip ends, which
         -- would stall the script (and swallow clicks) for the whole line.
@@ -555,7 +565,7 @@ function TextCommands.ch(ctx, params)
     end
 
     -- Store in backlog
-    TextCommands.push_backlog(ctx, speaker, message, voiceFile)
+    TextCommands.push_backlog(ctx, speaker, plain, voiceFile)
 
     -- Set up message layer if needed
     local msgNode = layers.get("message")
@@ -599,24 +609,36 @@ function TextCommands.ch(ctx, params)
     local msgY = 580
 
     if #message > 0 then
-        msgY = TextScene.add_wrapped(ctx, message, {
-            x = msgX,
-            y = msgY,
-            max_width = resolve_max_width(ctx, params, msgX),
-            line_height = lineHeight,
-            font_size = tonumber(TextScene.get_state(ctx).font_size)
-                or lineHeight,
-            color = color,
-        })
+        if spans then
+            msgY = TextScene.add_wrapped_spans(ctx, spans, {
+                x = msgX,
+                y = msgY,
+                max_width = resolve_max_width(ctx, params, msgX),
+                line_height = lineHeight,
+                font_size = tonumber(TextScene.get_state(ctx).font_size)
+                    or lineHeight,
+                color = color,
+            })
+        else
+            msgY = TextScene.add_wrapped(ctx, message, {
+                x = msgX,
+                y = msgY,
+                max_width = resolve_max_width(ctx, params, msgX),
+                line_height = lineHeight,
+                font_size = tonumber(TextScene.get_state(ctx).font_size)
+                    or lineHeight,
+                color = color,
+            })
+        end
     end
 
     ctx.textCursorX = msgX
     ctx.textCursorY = msgY
     animate_text_opacity(ctx, params)
     ctx.waiting_input = true
-    update_text_state(ctx, "ch", utf8.len(message) or #message)
+    update_text_state(ctx, "ch", utf8.len(plain) or #plain)
     -- Typewriter reveal: animate chars in over text_speed ms/char.
-    ctx.reveal = { total = utf8.len(message) or #message, elapsed = 0 }
+    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 
@@ -629,28 +651,49 @@ function TextCommands.text(ctx, params)
     local message = params.text or params.message or params.content or ""
     if #message == 0 then return end
 
-    TextCommands.push_backlog(ctx, "", message)
+    -- Neo-Genesis inline markup (see [ch]): spans for drawing, plain for
+    -- backlog / reveal.
+    local spans, plain = nil, message
+    if message:find("{", 1, true) then
+        local parsed = TextLayout.parse_markup(message)
+        spans, plain = parsed.spans, parsed.plain
+    end
+
+    TextCommands.push_backlog(ctx, "", plain)
 
     backend.clear_text()
     TextScene.clear(ctx)
 
     local lineHeight = resolve_line_height(ctx)
-    local y = TextScene.add_wrapped(ctx, message, {
-        x = 32,
-        y = 580,
-        max_width = resolve_max_width(ctx, params, 32),
-        line_height = lineHeight,
-        font_size = tonumber(TextScene.get_state(ctx).font_size)
-            or lineHeight,
-        color = resolve_color(ctx, params),
-    })
+    local y
+    if spans then
+        y = TextScene.add_wrapped_spans(ctx, spans, {
+            x = 32,
+            y = 580,
+            max_width = resolve_max_width(ctx, params, 32),
+            line_height = lineHeight,
+            font_size = tonumber(TextScene.get_state(ctx).font_size)
+                or lineHeight,
+            color = resolve_color(ctx, params),
+        })
+    else
+        y = TextScene.add_wrapped(ctx, message, {
+            x = 32,
+            y = 580,
+            max_width = resolve_max_width(ctx, params, 32),
+            line_height = lineHeight,
+            font_size = tonumber(TextScene.get_state(ctx).font_size)
+                or lineHeight,
+            color = resolve_color(ctx, params),
+        })
+    end
 
     ctx.textCursorX = 32
     ctx.textCursorY = y
     animate_text_opacity(ctx, params)
     ctx.waiting_input = true
-    update_text_state(ctx, "text", utf8.len(message) or #message)
-    ctx.reveal = { total = utf8.len(message) or #message, elapsed = 0 }
+    update_text_state(ctx, "text", utf8.len(plain) or #plain)
+    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 
@@ -879,12 +922,21 @@ function TextCommands.endbutton(ctx, params)
 
     -- Neo-Genesis: [button cond=...] — drop choices whose condition is
     -- false (Ren'Py menu `if` parity). All-hidden blocks just dissolve.
+    -- cond is compile-time translated (TJS->Lua) in compiled streams;
+    -- evaluateTranslated then skips the runtime translate. Hand-built /
+    -- uncompiled contexts carry raw TJS (&& || ! != ?:) — detect and
+    -- translate on the fly there.
     local exprLang = require("kag.expr")
     local filtered = {}
     for _, choice in ipairs(ctx._choiceButtons) do
         local cond = choice.cond
         if type(cond) == "string" and cond ~= "" then
-            local ok, v = exprLang.evaluate(ctx, cond)
+            local ok, v
+            if cond:find("[&|!?]") then
+                ok, v = exprLang.evaluate(ctx, cond)
+            else
+                ok, v = exprLang.evaluateTranslated(ctx, cond, cond)
+            end
             if ok and v then filtered[#filtered + 1] = choice end
         else
             filtered[#filtered + 1] = choice

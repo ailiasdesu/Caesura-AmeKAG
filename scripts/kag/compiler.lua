@@ -59,6 +59,7 @@ local FLOW = {
 local EXPR_TOKENS = {
     ["if"] = "exp", ["elseif"] = "exp", ["while"] = "exp",
     ["until"] = "exp",  -- declarative conditional wait (Neo-Genesis)
+    ["button"] = "cond",  -- conditional choices: AOT at compile time
     ["for"] = nil,  -- handled specially below (three numeric exprs)
     ["switch"] = nil,  -- switch expr is a variable name, not TJS (KAG3 form)
 }
@@ -522,8 +523,9 @@ function compiler.compile(tokens)
             local cmd = at[1]
             local p = at[2] or {}
             params_by_idx[i] = p
-            if FLOW[cmd] then
-                -- flow tokens: params already normalized in pass 1
+            if FLOW[cmd] or EXPR_TOKENS[cmd] then
+                -- flow tokens + non-flow expression commands (e.g.
+                -- [button cond]): params already normalized in pass 1
                 compile_expr_param(cmd, p)
                 if cmd == "if" or cmd == "elseif" or cmd == "while"
                     or cmd == "for" or cmd == "until" then

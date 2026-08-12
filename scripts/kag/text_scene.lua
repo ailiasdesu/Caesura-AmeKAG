@@ -118,6 +118,35 @@ function TextScene.add_wrapped(ctx, text, options)
     return y, lines
 end
 
+--- TextScene.add_wrapped_spans(ctx, spans, options) — like add_wrapped but
+--  for parsed inline-markup spans: each line is emitted as per-segment draws
+--  ({text, color, width}) so {color=#rrggbb} spans render with their own
+--  color. Draw order (line → segment) keeps the typewriter reveal correct.
+function TextScene.add_wrapped_spans(ctx, spans, options)
+    options = options or {}
+    local x = tonumber(options.x) or 32
+    local y = tonumber(options.y) or 580
+    local line_height = tonumber(options.line_height) or 24
+    local lines = TextLayout.wrap_spans(spans, options)
+    for _, line in ipairs(lines) do
+        local seg_x = x
+        for _, seg in ipairs(line.segments) do
+            TextScene.add_text(
+                ctx, seg.text, seg_x, y,
+                seg.color or options.color, options.group)
+            seg_x = seg_x + seg.width
+        end
+        y = y + line_height
+    end
+
+    local state = ensure_state(ctx)
+    state.cursor_x = x
+    state.cursor_y = y
+    ctx.textCursorX = x
+    ctx.textCursorY = y
+    return y, lines
+end
+
 function TextScene.add_ruby(ctx, base_text, ruby_text, options)
     options = options or {}
     local state = ensure_state(ctx)

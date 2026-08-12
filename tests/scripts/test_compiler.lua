@@ -219,6 +219,23 @@ compiler.compile(toks10)
 check("8e: branch-defined macro keeps runtime splice path",
       count_cmd(toks10, "inner") == 1)
 
+-- ---------------------------------------------------------------------------
+-- 9. Non-flow expression commands: [button cond] AOT at compile time
+-- ---------------------------------------------------------------------------
+local toksB = tokenizer.parse("[button cond=\"f.hp != 0\" text=\"go\"]\n[endbutton]\n")
+compiler.compile(toksB)
+check("9a: [button cond] translated at compile time",
+      toksB[1][2] and toksB[1][2].cond == "f.hp ~= 0")
+local exprLang = require("kag.expr")
+local ctx9 = { f = { hp = 5 }, sf = {}, tf = {}, mp = {}, lf = {} }
+local ok9, v9 = exprLang.evaluateTranslated(ctx9, toksB[1][2].cond, toksB[1][2].cond)
+check("9b: translated cond evaluates via evaluateTranslated",
+      ok9 == true and v9 == true)
+ctx9.f.hp = 0
+local ok9b, v9b = exprLang.evaluateTranslated(ctx9, toksB[1][2].cond, toksB[1][2].cond)
+check("9c: translated cond respects variable change",
+      ok9b == true and v9b == false)
+
 if failed > 0 then
     print(string.format("COMPILER TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)

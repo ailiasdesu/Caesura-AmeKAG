@@ -45,6 +45,8 @@ local tests = {
     "test_backlog",
     "test_kag3_compat",
     "test_choice",
+    "test_text_markup",
+    "test_sma",
     "test_title_menu",
     "test_title_entry",
     "test_benchmark",

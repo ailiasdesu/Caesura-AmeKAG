@@ -196,12 +196,32 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 ## 12. 调试与工具
 
 - **静态校验**：`lua scripts/ks_check.lua scene.ks`（契约检查，CI 门禁）
-- **语言服务**：IDE 内补全/悬停/诊断（78 契约驱动）
+- **语言服务**：IDE 内补全/悬停/诊断（78 契约驱动）；`Ctrl+点击` 在
+  `[jump]/[call]/[link]` 目标与 `*label` 定义间跳转（goto-definition），
+  右键"查找所有引用"高亮全部导航点（references）
 - **确定性执行**：`require("kag.determinism").run_scene(...)` 无 GPU 跑场景
 - **导入器**：`lua scripts/kag3_import.lua --carc game.carc --path assets/script/main.ks`
   （KAG3 存量脚本迁移）
 
-## 13. 完整示例
+## 13. 内联文本标记（Neo-Genesis；Ren'Py `{...}` 对齐）
+
+`[ch]` / `[text]` 消息内可直接嵌着色标记，逐段渲染：
+
+```kag
+[ch text="普通文字{color=#ff0000}红色强调{/color}回到默认"]
+[text text="{color=#00ff00}绿色{/color}与{color=#0000ff}蓝色{/color}混排"]
+```
+
+规则：
+
+- `{color=#RRGGBB}` … `{/color}`：切换/恢复文字颜色（可嵌套，内层优先）
+- `{color=RRGGBB}`（无 `#`）同样合法
+- `{b}`/`{/b}`、`{i}`/`{/i}`、`{size=N}`/`{/size}`：为 Ren'Py 源码兼容而**解析并消费**
+  （渲染器暂无粗体/斜体/字号变体，视觉上无效果——限制已记录）
+- 未知 `{标签}` 按字面文本显示，不影响内容
+- 回滚/历史/字幕使用去除标记后的纯文本；打字机逐字揭示按可见字符计数
+
+## 14. 完整示例
 
 ```kag
 ; tutorial.ks — 综合演示
