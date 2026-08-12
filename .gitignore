@@ -47,6 +47,10 @@ krkrz参考源码/
 Thumbs.db
 desktop.ini
 
+# --- Python ---
+__pycache__/
+*.pyc
+
 # --- CMake generated ---
 CMakeCache.txt
 CMakeFiles/
