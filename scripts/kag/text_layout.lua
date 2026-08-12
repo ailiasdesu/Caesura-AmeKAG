@@ -93,7 +93,10 @@ local function measure_character(character, options)
     local measure = options.measure_char or default_measure
     local width = tonumber(measure(
         character.text, character.codepoint, options)) or 0
-    return math.max(width, 0)
+    width = math.max(width, 0)
+    -- {size=N} markup: scale the advance by the span's relative size
+    local scale = character.scale or 1
+    return width * scale
 end
 
 local function measure_range(characters, first, last, options)
@@ -125,8 +128,8 @@ local function append_line(lines, characters, first, last, options)
 end
 
 -- Span-aware append: groups consecutive characters that share the same
--- inline color into segments so the caller can emit one draw per segment
--- (per-span text color, Neo-Genesis {color=...} markup).
+-- inline style (color / scale / bold) into segments so the caller can
+-- emit one draw per segment (inline text markup: {color}/{size}/{b}).
 local function append_line_segments(lines, characters, first, last, options)
     while last >= first and is_space(characters[last]) do
         last = last - 1
@@ -136,17 +139,26 @@ local function append_line_segments(lines, characters, first, last, options)
     local segments = {}
     local seg_first = first
     local color = characters[first].color
+    local scale = characters[first].scale
+    local bold = characters[first].bold
+    local function same_style(a, b)
+        return a.color == b.color and a.scale == b.scale and a.bold == b.bold
+    end
     for i = first + 1, last + 1 do
         local c = characters[i]
-        if i > last or c.color ~= color then
+        if i > last or not same_style(c, characters[i - 1]) then
             segments[#segments + 1] = {
                 text = join_range(characters, seg_first, i - 1),
                 color = color,
+                scale = scale,
+                bold = bold,
                 width = measure_range(characters, seg_first, i - 1, options),
             }
             if i > last then break end
             seg_first = i
-            color = c.color
+            color = characters[i].color
+            scale = characters[i].scale
+            bold = characters[i].bold
         end
     end
     lines[#lines + 1] = {
@@ -280,9 +292,12 @@ end
 local function parse_open_tag(tag)
     local name = tag:match("^(%a+)")
     if not name then return nil end
-    if name == "b" or name == "i" then return { kind = "noop" } end
+    if name == "i" then return { kind = "noop" } end -- italic: no shear path yet
+    if name == "b" then return { kind = "bold" } end
     if name == "size" then
-        return tag:match("^size%s*=%s*%d+%s*$") and { kind = "noop" } or nil
+        local size = tonumber(tag:match("^size%s*=%s*(%d+)%s*$"))
+        if size then return { kind = "size", size = size } end
+        return nil
     end
     if name == "color" then
         local hex = tag:match("^color%s*=%s*#?(%x%x%x%x%x%x)%s*$")
@@ -301,22 +316,33 @@ end
 
 local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true }
 
---- TextLayout.parse_markup(text) → { spans = {{text, color}, ...}, plain }
---  Splits a message into colored spans and returns the markup-stripped
+--- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold}}, plain }
+--  Splits a message into styled spans and returns the markup-stripped
 --  plain text (backlog / reveal counters use the visible characters only).
+--  size is an absolute font size (px); bold is a boolean. {i} is parsed
+--  and consumed (renderer has no shear path yet — documented limitation).
 function TextLayout.parse_markup(text)
     text = tostring(text or "")
     local spans = {}
     local plain_parts = {}
     local color_stack = {}
+    local size_stack = {}
+    local bold_stack = {}
     local current_color = nil
+    local current_size = nil
+    local current_bold = false
     local buf = {}
 
     local function flush()
         if #buf == 0 then return end
         local s = table.concat(buf)
         buf = {}
-        spans[#spans + 1] = { text = s, color = current_color }
+        spans[#spans + 1] = {
+            text = s,
+            color = current_color,
+            size = current_size,
+            bold = current_bold,
+        }
         plain_parts[#plain_parts + 1] = s
     end
 
@@ -335,15 +361,29 @@ function TextLayout.parse_markup(text)
                     if parsed.kind == "color" then
                         color_stack[#color_stack + 1] = parsed
                         current_color = parsed
+                    elseif parsed.kind == "size" then
+                        size_stack[#size_stack + 1] = parsed.size
+                        current_size = parsed.size
+                    elseif parsed.kind == "bold" then
+                        bold_stack[#bold_stack + 1] = true
+                        current_bold = true
                     end
                     i = close_at + 1
                 else
                     local close_name = tag:match("^%s*/(%a+)%s*$")
                     if close_name and MARKUP_CLOSE_NAMES[close_name] then
                         flush()
-                        if #color_stack > 0 then
+                        if close_name == "color" and #color_stack > 0 then
                             color_stack[#color_stack] = nil
                             current_color = color_stack[#color_stack]
+                        elseif close_name == "size" and #size_stack > 0 then
+                            size_stack[#size_stack] = nil
+                            current_size = size_stack[#size_stack]
+                        elseif close_name == "b" and #bold_stack > 0 then
+                            bold_stack[#bold_stack] = nil
+                            current_bold = #bold_stack > 0
+                        elseif close_name == "i" then
+                            -- consumed; no visual effect (documented)
                         end
                         i = close_at + 1
                     else
@@ -358,18 +398,27 @@ function TextLayout.parse_markup(text)
         end
     end
     flush()
-    if #spans == 0 then spans = { { text = text, color = nil } } end
+    if #spans == 0 then
+        spans = { { text = text, color = nil, size = nil, bold = false } }
+    end
     return { spans = spans, plain = table.concat(plain_parts) }
 end
 
-local function span_characters(spans)
+local function span_characters(spans, options)
+    local baseSize = tonumber(options and options.font_size) or 24
     local characters = {}
     for _, span in ipairs(spans) do
+        local scale = 1.0
+        if span.size then
+            scale = baseSize > 0 and (span.size / baseSize) or 1.0
+        end
         for _, codepoint in utf8.codes(span.text) do
             characters[#characters + 1] = {
                 text = utf8.char(codepoint),
                 codepoint = codepoint,
                 color = span.color,
+                scale = scale,
+                bold = span.bold == true,
             }
         end
     end
@@ -387,7 +436,7 @@ function TextLayout.wrap_spans(spans, options)
 
     local lines = {}
     local paragraph = {}
-    local characters = span_characters(spans)
+    local characters = span_characters(spans, options)
     for _, character in ipairs(characters) do
         if character.codepoint == 0x0A then
             wrap_paragraph(paragraph, options, lines, append_line_segments)

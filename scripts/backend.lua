@@ -242,10 +242,13 @@ end
 -- Text / UI
 -- =========================================================================
 
-function Backend.render_text(text, x, y, r, g, b, a)
+function Backend.render_text(text, x, y, r, g, b, a, scale, bold)
     local be = get_backend()
-    if be then return be.render("render_text", text, x, y, r, g, b, a)
-    else return call_resolved("render_text", text, x, y, r, g, b, a) end
+    if be then
+        return be.render("render_text", text, x, y, r, g, b, a, scale, bold)
+    else
+        return call_resolved("render_text", text, x, y, r, g, b, a, scale, bold)
+    end
 end
 
 -- Text-to-speech (accessibility): engine-level TTS is not wired yet --

@@ -62,6 +62,10 @@ check("parse: nested colors", m5.plain == "ABCD"
 
 local m6 = TextLayout.parse_markup("{b}bold{/b}{i}it{/i}{size=30}sz{/size}")
 check("parse: b/i/size consumed", m6.plain == "bolditsz")
+check("parse: bold span flagged", m6.spans[1].bold == true
+      and m6.spans[2].bold == false)
+check("parse: size span carries size", m6.spans[3].size == 30
+      and m6.spans[2].size == nil)
 
 local m7 = TextLayout.parse_markup("X{/color}Y")
 check("parse: stray closer consumed", m7.plain == "XY")
@@ -95,6 +99,28 @@ check("wrap: color split across lines", #w2 == 2
       and #w2[2].segments == 1 and w2[2].segments[1].color == RED
       and w2[1].segments[1].text .. w2[2].segments[1].text == longText)
 
+-- {size=36} over font 24 -> scale 1.5; a 10-char run wraps earlier
+local w3 = TextLayout.wrap_spans(
+    { { text = "abcdefghij", size = 36, bold = true } },
+    { max_width = 120, font_size = 24 })
+check("wrap: scaled width wraps earlier", #w3 >= 2)
+check("wrap: segments carry scale and bold",
+      w3[1].segments[1].scale == 1.5 and w3[1].segments[1].bold == true)
+
+-- style boundary splits segments (color vs bold vs size)
+local w4 = TextLayout.wrap_spans(
+    {
+        { text = "ab", bold = true },
+        { text = "cd", color = RED },
+        { text = "ef", size = 36 },
+    },
+    { max_width = 1000, font_size = 24 })
+check("wrap: style boundaries split segments", #w4 == 1
+      and #w4[1].segments == 3
+      and w4[1].segments[1].bold == true
+      and w4[1].segments[2].color == RED
+      and w4[1].segments[3].scale == 1.5)
+
 -- ---------------------------------------------------------------------------
 -- 3. add_wrapped_spans — per-segment draws with advancing x
 -- ---------------------------------------------------------------------------
@@ -114,6 +140,21 @@ check("spans: default color on plain", draws[1].r == 255 and draws[1].g == 255
 check("spans: red span color", draws[2].r == 255 and draws[2].g == 0
       and draws[2].b == 0)
 check("spans: x advances by width", draws[2].x == draws[1].x + 24)
+
+-- {size}/{b} flow into draws
+local ctxT2 = {
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {} },
+    textCursorX = 32, textCursorY = 580,
+}
+TextScene.add_wrapped_spans(ctxT2,
+    { { text = "big", size = 36, bold = true }, { text = "xx", bold = true } },
+    { x = 32, y = 580, max_width = 1000, line_height = 24,
+      font_size = 24, color = { r = 255, g = 255, b = 255 } })
+local draws2 = ctxT2.text_state.draws
+check("spans: scale and bold on draws", #draws2 == 2
+      and draws2[1].scale == 1.5 and draws2[1].bold == true
+      and draws2[2].scale == 1 and draws2[2].bold == true)
 
 -- ---------------------------------------------------------------------------
 -- 4. [ch] integration — draws colored, backlog/reveal use plain text

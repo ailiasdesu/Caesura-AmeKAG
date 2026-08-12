@@ -612,17 +612,18 @@ void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
 // ===========================================================================
 
 void TextRenderer::renderText(uint16_t viewId, const std::string& text,
-                               float x, float y, TextColor color)
+                               float x, float y, TextColor color,
+                               float scale, bool bold)
 {
     if (text.empty() || !m_initialized) return;
 
-    // Build glyph quads
+    // Build glyph quads (scale != 1 => {size=N} markup; bold => synthetic
+    // bold via a second quad pass offset by ~8% of the glyph width).
     std::vector<GlyphQuad> quads;
-    quads.reserve(text.size());
+    quads.reserve(text.size() * (bold ? 2 : 1));
 
     float penX = x;
-    float scaleW = 1.0f;
-    float scaleH = 1.0f;
+    const float boldOffset = std::max(1.0f, 0.08f * m_fontGlyphW * scale);
 
     const auto* data = (const uint8_t*)text.data();
     int len = (int)text.size();
@@ -636,12 +637,17 @@ void TextRenderer::renderText(uint16_t viewId, const std::string& text,
             m_cursor.y += m_cursor.lineHeight;
             continue;
         }
-        GlyphQuad q = buildGlyph(cp, penX, y, scaleW, scaleH);
+        GlyphQuad q = buildGlyph(cp, penX, y, scale, scale);
         quads.push_back(q);
+        if (bold) {
+            GlyphQuad qb = q;
+            qb.x += boldOffset;
+            quads.push_back(qb);
+        }
         penX += q.w;
     }
 
-    submitGlyphQuads(viewId, quads.data(), (int)quads.size(), color, scaleW, scaleH);
+    submitGlyphQuads(viewId, quads.data(), (int)quads.size(), color, scale, scale);
     m_cursor.x = penX;
 }
 

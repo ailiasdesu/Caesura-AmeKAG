@@ -76,7 +76,8 @@ public:
     float lineHeight() const { return m_cursor.lineHeight; }
 
     void renderText(uint16_t viewId, const std::string& text,
-                    float x, float y, TextColor color);
+                    float x, float y, TextColor color,
+                    float scale = 1.0f, bool bold = false);
     void renderRuby(uint16_t viewId, const std::string& text,
                      const std::string& ruby, float x, float y, TextColor color);
 

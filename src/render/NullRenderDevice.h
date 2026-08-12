@@ -42,7 +42,8 @@ class NullRenderDevice final : public IRenderDevice {public:
     bool consumeDeviceLost() override;
     void renderText(uint16_t viewId, const std::string& text,
                     float x, float y, uint8_t r, uint8_t g,
-                    uint8_t b, uint8_t a) override;
+                    uint8_t b, uint8_t a,
+                    float scale = 1.0f, bool bold = false) override;
     void renderRuby(uint16_t viewId, const std::string& base,
                     const std::string& ruby, float x, float y,
                     uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;

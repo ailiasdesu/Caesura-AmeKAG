@@ -147,7 +147,8 @@ public:
     void flagDeviceLost() override {}
     bool consumeDeviceLost() override { return false; }
     void renderText(uint16_t, const std::string&, float, float,
-                    uint8_t, uint8_t, uint8_t, uint8_t) override {}
+                    uint8_t, uint8_t, uint8_t, uint8_t,
+                    float, bool) override {}
     void renderRuby(uint16_t, const std::string&, const std::string&, float, float,
                     uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}

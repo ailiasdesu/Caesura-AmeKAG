@@ -128,9 +128,12 @@ public:
     virtual bool consumeDeviceLost() = 0;
 
     // -- Text rendering (bitmap font via embedded atlas) --------------
+    // scale: glyph scale factor (1.0 = atlas size; {size=N} markup).
+    // bold:  synthetic bold (double-pass x-offset; {b} markup).
     virtual void renderText(uint16_t viewId, const std::string& text,
                              float x, float y,
-                             uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
+                             uint8_t r, uint8_t g, uint8_t b, uint8_t a,
+                             float scale = 1.0f, bool bold = false) = 0;
     virtual void renderRuby(uint16_t viewId, const std::string& text,
                              const std::string& ruby,
                              float x, float y,

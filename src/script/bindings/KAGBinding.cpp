@@ -279,10 +279,12 @@ static int lua_KAG_render_text(lua_State* L) {
     uint8_t g  = (uint8_t)luaL_optinteger(L, 5, 255);
     uint8_t b  = (uint8_t)luaL_optinteger(L, 6, 255);
     uint8_t a  = (uint8_t)luaL_optinteger(L, 7, 255);
+    float scale = (float)luaL_optnumber(L, 8, 1.0);   // {size=N} markup
+    bool  bold  = lua_toboolean(L, 9) != 0;           // {b} markup
 
     IRenderDevice* dev = getRender(L);
     if (!dev) { lua_pushboolean(L, 0); return 1; }
-    dev->renderText(VIEW_MAIN, text, x, y, r, g, b, a);
+    dev->renderText(VIEW_MAIN, text, x, y, r, g, b, a, scale, bold);
     lua_pushboolean(L, 1);
     return 1;
 }
