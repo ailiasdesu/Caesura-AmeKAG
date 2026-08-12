@@ -12,7 +12,7 @@ export interface OpenDoc {
   dirty: boolean
 }
 
-export type SideView = 'explorer' | 'debug' | 'visual'
+export type SideView = 'explorer' | 'debug' | 'visual' | 'ai'
 
 interface EditorState {
   docs: OpenDoc[]

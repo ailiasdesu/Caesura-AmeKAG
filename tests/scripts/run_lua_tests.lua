@@ -33,6 +33,7 @@ local tests = {
     "test_schema_types",
     "test_determinism",
     "test_fuzz",
+    "test_aiwriter",
     "test_example_game",
     "test_rollback_memory",
     "test_rollback",

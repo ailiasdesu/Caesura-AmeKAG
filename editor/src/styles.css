@@ -443,3 +443,12 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 .scene-line { color: var(--fg-dim); font-size: 10px; }
 .scene-label .scene-text { color: var(--paused); }
 .scene-ch .scene-text { color: var(--ok); }
+
+/* -- Battle 4c: AI writer panel -- */
+.ai-form { display: flex; flex-direction: column; gap: 8px; }
+.ai-label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--fg-dim); }
+.ai-label input { padding: 5px 8px; }
+.ai-lines { flex-direction: row; align-items: center; gap: 8px; }
+.ai-lines-input { width: 60px; }
+.ai-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ai-msg { white-space: pre-wrap; }

@@ -7,6 +7,7 @@ import { ExplorerView } from './ide/ExplorerView'
 import { SceneTree } from './ide/SceneTree'
 import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
+import { AiPanel } from './ide/AiPanel'
 import { EditorArea } from './ide/EditorArea'
 import { OutputPanel } from './ide/OutputPanel'
 import { ConnectionPanel } from './components/ConnectionPanel'
@@ -64,6 +65,7 @@ export function App() {
           )}
           {sideView === 'debug' && <DebugView client={clientRef.current} />}
           {sideView === 'visual' && <VisualView client={clientRef.current} />}
+          {sideView === 'ai' && <AiPanel client={clientRef.current} />}
         </aside>
 
         <main className="editor-col">

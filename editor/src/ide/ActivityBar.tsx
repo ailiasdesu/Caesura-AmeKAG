@@ -4,6 +4,7 @@ const VIEWS: { id: SideView; label: string; icon: string }[] = [
   { id: 'explorer', label: 'Explorer (assets)', icon: '📁' },
   { id: 'debug', label: 'Run and Debug', icon: '🐞' },
   { id: 'visual', label: 'Visual Preview', icon: '🎬' },
+  { id: 'ai', label: 'AI Writer', icon: '✨' },
 ]
 
 export function ActivityBar() {
