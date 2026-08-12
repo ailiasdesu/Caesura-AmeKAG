@@ -39,16 +39,15 @@ do
 
     -- env isolation: a NEW ctx.f table recompiles (cached chunk bound to
     -- the first env must not leak the old scene's variables)
+    -- NOTE: the compiled stream binds the handler at compile time (run1),
+    -- so a NEW mock table would not receive dispatches — reuse the same
+    -- table (cleared) for all three runs.
     local ctx2 = { f = { score = 2 }, tf = {}, sf = {}, mp = {},
         macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
-    local d2 = {}
-    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
-        return function(c2, p2) d2[#d2 + 1] = { k, p2 } end
-    end})
+    for i = 1, #dispatched do dispatched[i] = nil end
     local co2 = coroutine.create(function() scheduler.run(ctx2, tokens, 1) end)
     while coroutine.status(co2) ~= "dead" do coroutine.resume(co2) end
-    package.loaded["kag"] = kag_orig
-    check("if false skips inside", d2[1] and d2[1][2].text == "after")
+    check("if false skips inside", dispatched[1] and dispatched[1][2].text == "after")
 
     -- same-table mutation: the shared reference makes content changes
     -- visible to the cached chunk -- and the cache HIT is proven by a
@@ -57,15 +56,11 @@ do
     local realLoad = load
     local compiles = 0
     load = function(...) compiles = compiles + 1 return realLoad(...) end
-    local d3 = {}
-    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
-        return function(c2, p2) d3[#d3 + 1] = { k, p2 } end
-    end})
+    for i = 1, #dispatched do dispatched[i] = nil end
     local co3 = coroutine.create(function() scheduler.run(ctx2, tokens, 1) end)
     while coroutine.status(co3) ~= "dead" do coroutine.resume(co3) end
     load = realLoad
-    package.loaded["kag"] = kag_orig
-    check("same-table mutation visible", d3[1] and d3[1][2].text == "high")
+    check("same-table mutation visible", dispatched[1] and dispatched[1][2].text == "high")
     check("cached chunk NOT recompiled", compiles == 0)
 end
 

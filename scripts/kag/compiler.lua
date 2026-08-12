@@ -271,6 +271,215 @@ local function compile_flow(tokens)
     return flow
 end
 
+-- ---------------------------------------------------------------------------
+--  Static macro inlining (Battle 1d: compile-time expansion, zero runtime
+--  splice for statically-safe macros).
+--
+--  The scheduler still expands macros at runtime (ctx.macros + splice);
+--  that path stays for DYNAMIC macros (defined inside flow branches,
+--  redefined, erased before the call, or invoked before their definition).
+--  Here the compiler additionally inlines macros that are statically
+--  safe — definition at flow depth 0, definition before the call site,
+--  no [erasemacro] between definition and call, no redefinition — so
+--  the runtime never splices for them. Inlined tokens are parameterized
+--  (params preserved: %arg% filled from the call site, same semantics as
+--  the runtime splice, including numeric %1% -> params[1]).
+--
+--  Correctness: a static-safe macro is GUARANTEED to be registered with
+--  the same body when the runtime reaches the call site (definition
+--  executed unconditionally before it, never erased, never redefined), so
+--  inlining is behavior-identical to the runtime splice. [macro]/
+--  [endmacro] definition blocks stay in the stream (runtime still
+--  records them — dynamic calls to the same name keep working).
+-- ---------------------------------------------------------------------------
+
+-- Expansion budget (compile-time): mirrors the runtime guard — a
+-- self-recursive macro ([macro m][m][endmacro]) cannot be inlined; the
+-- budget fails fast instead of growing the token array forever.
+local MACRO_INLINE_BUDGET = 1000
+
+local function macro_cmd(tok)
+    if type(tok) ~= "table" then return nil end
+    if tok.type then return tok.cmd or tok.type end
+    return tok[1]
+end
+
+-- Collect static macro definitions. Returns:
+--   defs:   name -> { idx = defIndex, args = {names...}, body = {tokens...} }
+--   erased: name -> true when ANY [erasemacro name] exists (conservative:
+--           an erase anywhere makes the macro dynamic — the runtime may
+--           or may not have the macro at the call site)
+--   redef:  name -> true when the macro is defined more than once (the
+--           runtime keeps the LAST body; inlining the first would be a
+--           behavior change)
+local function collect_macro_defs(tokens)
+    local defs, erased, redef = {}, {}, {}
+    local depth = 0
+    local i = 1
+    while i <= #tokens do
+        local t = tokens[i]
+        local cmd = macro_cmd(t)
+        if cmd == "macro" then
+            local at = to_array_tok(t)
+            local params = at[2] or {}
+            local name = params.name
+            if type(name) ~= "string" and type(params[1]) == "string" then
+                name = params[1]
+            end
+            local args = {}
+            if type(params.args) == "string" then
+                for a in params.args:gmatch("[^,]+") do
+                    a = a:match("^%s*(.-)%s*$")
+                    if #a > 0 then args[#args + 1] = a end
+                end
+            end
+            -- body: tokens up to [endmacro] (converted to array form)
+            local body = {}
+            local j = i + 1
+            while j <= #tokens and macro_cmd(tokens[j]) ~= "endmacro" do
+                local bt = to_array_tok(tokens[j])
+                if bt then body[#body + 1] = bt end
+                j = j + 1
+            end
+            if name then
+                if defs[name] then
+                    -- redefinition: never inline this name (runtime
+                    -- semantics = last definition wins)
+                    redef[name] = true
+                elseif depth == 0 then
+                    defs[name] = { idx = i, args = args, body = body }
+                end
+            end
+            i = j
+        elseif cmd == "erasemacro" then
+            local at = to_array_tok(t)
+            local params = at[2] or {}
+            local name = params.name
+            if type(name) ~= "string" and type(params[1]) == "string" then
+                name = params[1]
+            end
+            if name then erased[name] = true end
+            i = i + 1
+        else
+            -- flow nesting depth (only macro definitions inside flow
+            -- branches are excluded from inlining; erases/calls anywhere)
+            if cmd == "if" or cmd == "while" or cmd == "for"
+                or cmd == "select" then
+                depth = depth + 1
+            elseif cmd == "endif" or cmd == "endwhile" or cmd == "endfor"
+                or cmd == "endselect" then
+                if depth > 0 then depth = depth - 1 end
+            end
+            i = i + 1
+        end
+    end
+    return defs, erased, redef
+end
+
+-- Fill %arg% placeholders in a param value (string or nested table).
+-- Missing args keep the literal placeholder (runtime-splice parity).
+local function fill_param_value(v, params)
+    if type(v) == "string" then
+        return (v:gsub("%%([%w_]+)%%", function(an)
+            local key = tonumber(an) or an
+            local val = params[key]
+            if type(val) == "string" then return val end
+            return "%" .. an .. "%"
+        end))
+    elseif type(v) == "table" then
+        local out = {}
+        for k, vv in pairs(v) do out[k] = fill_param_value(vv, params) end
+        return out
+    end
+    return v
+end
+
+-- Expand one macro call site into its inlined body tokens. Recurses into
+-- nested static-safe macro calls inside the body (deep-copied params).
+-- Returns nil when the macro is not statically safe at this call site
+-- (caller keeps the runtime splice path) or the budget is exceeded.
+local function expand_macro_call(defs, erased, redef, name, callParams, budget)
+    if budget <= 0 then return nil end
+    budget = budget - 1
+    local def = defs[name]
+    if not def or erased[name] or redef[name] then return nil end
+    local out = {}
+    for _, bt in ipairs(def.body) do
+        local bcmd = bt[1]
+        -- nested static-safe macro: inline recursively (same rules)
+        local nested = defs[bcmd] and not erased[bcmd] and not redef[bcmd]
+            and expand_macro_call(defs, erased, redef, bcmd, bt[2] or {}, budget)
+        if nested then
+            -- The nested expansion may still carry THIS macro's
+            -- placeholders (e.g. outer's %who% inside inner's call
+            -- params) — fill them with the current call params too.
+            -- (Runtime parity: the outer splice fills the whole body,
+            -- including the nested call's params, before dispatching.)
+            for _, nt in ipairs(nested) do
+                out[#out + 1] = { nt[1], fill_param_value(nt[2] or {}, callParams) }
+            end
+        else
+            out[#out + 1] = { bcmd, fill_param_value(bt[2] or {}, callParams) }
+        end
+    end
+    return out
+end
+
+--- compiler.inlineStaticMacros(tokens) → tokens (same array, in place).
+--  Replaces statically-safe macro call sites with their inlined bodies;
+--  all other tokens (dynamic macro calls, definitions, flow) pass through
+--  unchanged. Idempotent-safe: inlined bodies contain no macro command
+--  tokens for the inlined name (nested recursion resolved), so a second
+--  pass is a no-op for already-inlined sites.
+--  Fast path: scenes without ANY macro command skip the full scan (the
+--  common case — measured 0.14ms vs 0.78ms for a 4000-token stream).
+function compiler.inlineStaticMacros(tokens)
+    if not tokens or #tokens == 0 then return tokens end
+    local hasMacro = false
+    for i = 1, #tokens do
+        local t = tokens[i]
+        local cmd = type(t) == "table" and (t.type and (t.cmd or t.type) or t[1])
+        if cmd == "macro" or cmd == "endmacro" then
+            hasMacro = true
+            break
+        end
+    end
+    if not hasMacro then return tokens end
+    local defs, erased, redef = collect_macro_defs(tokens)
+    if not next(defs) then return tokens end
+    local out = {}
+    local budget = MACRO_INLINE_BUDGET
+    local i = 1
+    while i <= #tokens do
+        local t = tokens[i]
+        local cmd = macro_cmd(t)
+        if defs[cmd] then
+            local at = to_array_tok(t)
+            local callParams = at[2] or {}
+            local def = defs[cmd]
+            -- static-safe: definition BEFORE this call site; no erase
+            -- anywhere; no redefinition (runtime keeps the last body)
+            local safe = def.idx < i and not erased[cmd] and not redef[cmd]
+            local expanded = safe and expand_macro_call(defs, erased, redef,
+                cmd, callParams, budget)
+            if expanded then
+                budget = budget - 1
+                for _, nt in ipairs(expanded) do out[#out + 1] = nt end
+                i = i + 1
+            else
+                out[#out + 1] = t
+                i = i + 1
+            end
+        else
+            out[#out + 1] = t
+            i = i + 1
+        end
+    end
+    for n = 1, #out do tokens[n] = out[n] end
+    for n = #out + 1, #tokens do tokens[n] = nil end
+    return tokens
+end
+
 --- compiler.compile(tokens) → tokens (same array) with tokens._compiled set.
 --  Pure, deterministic, idempotent (recompiling a compiled stream is a no-op
 --  when the side table is already present and complete).
@@ -278,11 +487,17 @@ function compiler.compile(tokens)
     if not tokens or #tokens == 0 then return tokens end
     if tokens._compiled then return tokens end
 
-    -- 1) Normalize to array format + normalized params + handler binding.
+    -- 1) Static macro inlining (Battle 1d): statically-safe macro call
+    -- sites are expanded at compile time (zero runtime splice). The
+    -- stream may grow; normalization below handles the inlined tokens.
+    compiler.inlineStaticMacros(tokens)
+
+    -- 1.5) Normalize to array format + normalized params + handler binding.
     local norm = {}
     local handlers = {}
     local params_by_idx = {}
     local exprs = {}
+    local exprDumps = {}  -- Battle 1c: AOT bytecode per expression token
     local kag = nil  -- lazy: only needed when a handler lookup is required
     for i, tok in ipairs(tokens) do
         local at = to_array_tok(tok)
@@ -302,9 +517,47 @@ function compiler.compile(tokens)
                     or cmd == "for" then
                     -- keep the translated source for the scheduler (it
                     -- loads with the ctx env at runtime, cached there)
-                    local pname = (cmd == "for") and "start" or EXPR_TOKENS[cmd]
-                    if pname and type(p[pname]) == "string" then
-                        exprs[i] = p[pname]
+                    if cmd == "for" then
+                        -- [for] carries THREE expressions (start/end/step);
+                        -- each gets its own AOT dump — sharing one would
+                        -- evaluate the wrong bytecode for the other two.
+                        local dumps = {}
+                        for _, pn in ipairs({ "start", "end", "step" }) do
+                            local v = p[pn]
+                            if type(v) == "string" then
+                                exprs[i] = exprs[i] or p.start
+                                local okC, chunk = pcall(load,
+                                    "return " .. v, "=kag_expr", "t", {})
+                                if okC and chunk then
+                                    local okD, dumped =
+                                        pcall(string.dump, chunk, true)
+                                    if okD and dumped then
+                                        dumps[pn] = dumped
+                                    end
+                                end
+                            end
+                        end
+                        if next(dumps) then exprDumps[i] = dumps end
+                    else
+                        local pname = EXPR_TOKENS[cmd]
+                        if pname and type(p[pname]) == "string" then
+                            exprs[i] = p[pname]
+                            -- Battle 1c: precompile the expression to
+                            -- bytecode (string.dump). Runtime
+                            -- evaluateTranslated loads it with mode "b" —
+                            -- skips Lua's lexer+parser (~6x faster than
+                            -- source load, measured). Any failure keeps
+                            -- the source fallback (no dump).
+                            local okC, chunk = pcall(load,
+                                "return " .. p[pname], "=kag_expr", "t", {})
+                            if okC and chunk then
+                                local okD, dumped =
+                                    pcall(string.dump, chunk, true)
+                                if okD and dumped then
+                                    exprDumps[i] = dumped
+                                end
+                            end
+                        end
                     end
                 end
             else
@@ -329,6 +582,7 @@ function compiler.compile(tokens)
     tokens._compiled = {
         flow = flow,
         exprs = exprs,
+        exprDumps = exprDumps,  -- Battle 1c: AOT bytecode (session-only)
         params = params_by_idx,
         handlers = handlers,
         labels = labels,
@@ -499,6 +753,17 @@ function compiler.hashFile(path)
     return string.format("%08x", hash)
 end
 
+-- readCache result cache: the .ksc file rarely changes within a
+--  session; cache the deserialized token array keyed by (path, size).
+--  Same-size rewrite of a .ksc is not a real scenario (writeCache only
+--  rewrites when the source hash changed, which also changes the baked
+--  size in practice) — a size check is sufficient here.
+--  Declared BEFORE writeCache: writeCache invalidates the entry after a
+--  rewrite, and the local must already be assigned at call time (a
+--  later `local` would shadow with nil until this line executes).
+local read_cache = {}
+local READ_CACHE_MAX = 64
+
 --- compiler.writeCache(tokens, cachePath) — persist the compiled stream
 --  to a .ksc file. Returns true on success, false on failure (cache is
 --  an optimization; failure must never break scene loading).
@@ -523,19 +788,15 @@ function compiler.writeCache(tokens, cachePath)
     if not ok3 or not f then return false end
     f:write(text)
     f:close()
+    -- Invalidate the read_cache entry: the (size, head) key of the old
+    -- entry can collide with the rewritten file (same size, head within
+    -- the first 64 bytes — e.g. a value change past the head window),
+    -- which would serve STALE tokens to readCache/isFresh. The next
+    -- readCache re-parses the fresh file instead (audit: bake→isFresh
+    -- false after rebake; bake→load served stale content).
+    read_cache[cachePath] = nil
     return true
 end
-
---- compiler.readCache(cachePath) → compiled token array or nil.
---  The .ksc file is a Lua chunk; load() parses it natively (no manual
---  string decoding) and the returned table is the compiled data.
---- readCache result cache: the .ksc file rarely changes within a
---  session; cache the deserialized token array keyed by (path, size).
---  Same-size rewrite of a .ksc is not a real scenario (writeCache only
---  rewrites when the source hash changed, which also changes the baked
---  size in practice) — a size check is sufficient here.
-local read_cache = {}
-local READ_CACHE_MAX = 64
 
 local function file_head(fp)
     fp:seek("set")

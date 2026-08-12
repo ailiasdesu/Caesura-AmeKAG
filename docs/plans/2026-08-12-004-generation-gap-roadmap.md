@@ -13,7 +13,7 @@ Neo-Genesis 核心重构 Phase A/B/C（编译式指令流）+ 1b 字节码持久
 **P2-8 教程体系**（语言教程 + 演示场景）、
 **P2-9 E-mote 替代设计**（SMA 设计定稿 + S1 接口）。
 **未完成**：P0-1 发布就绪（GL/Metal 需硬件）、P1-6（GL/Steam 实机）、
-P0-3 真机验证（待设备）、1c/1d（⏳ 本机可闭环，见 §3 与交接 §3）。
+P0-3 真机验证（待设备）、4a 运行时联调（待网络，见 §3 与交接 §3）。
 
 **性能基线**：tokenizer 52ms/1000tok、scheduler ~308k tok/s；表达式路径
 编译后 -32%（165ms vs 241ms）；长循环 O(n²)→O(1)；.ksc 预烘焙首载
@@ -41,8 +41,8 @@ P0-3 真机验证（待设备）、1c/1d（⏳ 本机可闭环，见 §3 与交�
 |---|---|---|
 | 1a ✅ | compiler.lua：flow 跳转表/表达式预编译/参数规范化/handler 绑定（Phase A/B/C） | 已交付：表达式 -32%、长循环 O(1) |
 | 1b | **字节码持久化**：编译产物（_compiled 表）序列化为 `.ksc` 缓存文件，按 (path, mtime) 失效；热重载/场景跳转零重编译 | ✅ 已交付（3f3646f2）：Lua-literal 格式 5ms/2500token（JSON 7× 提速）、FNV-1a hash 失效、cache/ksc 隔离、sandbox 容错 |
-| 1c ⏳ | **表达式 AOT**：`expr.evaluateTranslated` 的运行时 `load()` 改为编译期字节码缓存——会话内用 `string.dump` 字节码，跨会话用编译产物 JSON 序列化（与 1b 同一缓存机制，见风险表） | 待后续迭代（本机可闭环）；400-if 场景较当前再 -30% |
-| 1d ⏳ | **宏编译期展开（验证收尾）**：Phase A 已实现宏展开的编译期识别与参数预解析；本阶段补充参数化宏在编译期内联（参数保留、运行时零 splice）并锁定行为等价 | 待后续迭代（本机可闭环）；test_macro_nested 全绿 + benchmark 无退化 |
+| 1c ✅ | **表达式 AOT**：`expr.evaluateTranslated` 的运行时 `load()` 改为编译期字节码缓存——会话内用 `string.dump` 字节码，跨会话用编译产物 JSON 序列化（与 1b 同一缓存机制，见风险表） | ✅ 已交付（本轮）：compile 预生成 string.dump 存 `_compiled.exprDumps`（[for] 三表达式独立子表）、evaluateTranslated 走 load(bc,'b') 路径（实测冷 1.35×/热 2.18×，符合 -30% 目标）、dump 失败回退源码、dump_cache 会话内共享 |
+| 1d ✅ | **宏编译期展开（验证收尾）**：Phase A 已实现宏展开的编译期识别与参数预解析；本阶段补充参数化宏在编译期内联（参数保留、运行时零 splice）并锁定行为等价 | ✅ 已交付（本轮）：`compiler.inlineStaticMacros` 静态安全宏编译期内联（flow 嵌套外定义/先于调用/无 erasemacro/无重复定义），%arg% 参数保留+嵌套递归展开，动态宏保持运行时 splice；test_macro 12/12、nested 5/5、bare 6/6 全绿 + benchmark 无退化（无宏场景快速路径 0.38ms） |
 
 ### Battle 2 — 语言层代差（Neo-Genesis 2.0）
 **目标**：标签语言具备现代 IDE 语言服务（市面标签引擎无类型系统/无 LSP）。
@@ -85,7 +85,7 @@ P0-3 真机验证（待设备）、1c/1d（⏳ 本机可闭环，见 §3 与交�
 ## 4. 执行顺序建议
 
 ```
-第 1 轮（已执行）：1b/1c/1d（字节码交付，1c/1d 转⏳）→ 4a 联调（主进程交付，运行时待网络）
+第 1 轮（已执行）：1b/1c/1d 全部交付（字节码持久化 + 表达式 AOT + 宏编译期内联）→ 4a 联调（主进程交付，运行时待网络）
 第 2 轮（已执行）：Battle 2（LSP）→ Battle 3（确定性）
 第 3 轮（已执行）：Battle 4b/4c（可视化 + AI 创作）
 第 4 轮（已执行）：Battle 5（移动/教程/CARC 导入）+ 4d S1 + 收尾交接

@@ -27,6 +27,15 @@ local expr = {}
 local cache = {}
 local CACHE_MAX = 128
 
+-- AOT bytecode cache (Battle 1c): translated source -> string.dump chunk.
+-- Loading a dumped chunk with `load(bc, name, "b", env)` skips Lua's
+-- lexer+parser (measured ~6x faster than source load). The compiler
+-- pre-generates dumps for compiled streams (_compiled.exprDumps); this
+-- table back-fills lazily for hand-built/deserialized streams, so the
+-- second env identity for the same source is already AOT.
+local dump_cache = {}
+local DUMP_CACHE_MAX = 128
+
 -- ---------------------------------------------------------------------------
 -- Character-level scanner helpers (string-literal aware)
 -- ---------------------------------------------------------------------------
@@ -238,7 +247,12 @@ end
 --  runtime hot path avoids re-scanning it on every [if]/[while] evaluation
 --  (measured: 400-if scene ~30% faster on the eval path). `original` is
 --  used only for error diagnostics (source shown to the author).
-function expr.evaluateTranslated(ctx, translated, original)
+--  Optional `dump` (Battle 1c): precompiled string.dump bytecode from the
+--  compiler (_compiled.exprDumps). Loading bytecode skips Lua's lexer+
+--  parser (~6x faster than source load, measured). The dump is bound to
+--  the caller's env at load time (mode "b" + env), so the same dump
+--  serves every env identity — a session-wide AOT win, not per-env.
+function expr.evaluateTranslated(ctx, translated, original, dump)
     if type(translated) ~= "string" then return true, translated end
     local f = ctx and ctx.f or {}
     -- Dual-style environment:
@@ -257,8 +271,51 @@ function expr.evaluateTranslated(ctx, translated, original)
     local key = translated .. "\0" .. tostring(f)
     local fn = cache[key]
     if not fn then
-        local okChunk, chunk = pcall(load, "return " .. translated,
-                                     "=kag_expr", "t", env)
+        -- AOT path: use the precompiled bytecode when available (either
+        -- supplied by the compiler or back-filled in dump_cache). Fall
+        -- back to source load on any dump failure (e.g. a dump produced
+        -- by a different Lua build) — correctness beats speed.
+        local bc = dump or dump_cache[translated]
+        local okChunk, chunk
+        if bc then
+            okChunk, chunk = pcall(load, bc, "=kag_expr", "b", env)
+            if okChunk and chunk and not dump_cache[translated] then
+                -- Share the compiler-supplied dump session-wide: a
+                -- deserialized (.ksc) stream evaluating the same
+                -- expression gets the AOT path too.
+                dump_cache[translated] = bc
+                local n = 0
+                for _ in pairs(dump_cache) do n = n + 1 end
+                if n > DUMP_CACHE_MAX then
+                    local keys = {}
+                    for k in pairs(dump_cache) do keys[#keys + 1] = k end
+                    for j = 1, math.floor(#keys / 2) do
+                        dump_cache[keys[j]] = nil
+                    end
+                end
+            end
+        end
+        if not bc or not okChunk or not chunk then
+            okChunk, chunk = pcall(load, "return " .. translated,
+                                   "=kag_expr", "t", env)
+            if okChunk and chunk and not dump_cache[translated] then
+                -- Back-fill: a hand-built/deserialized stream has no
+                -- compiler-supplied dump; make the NEXT env identity AOT.
+                local okDump, dumped = pcall(string.dump, chunk, true)
+                if okDump and dumped then
+                    dump_cache[translated] = dumped
+                    local n = 0
+                    for _ in pairs(dump_cache) do n = n + 1 end
+                    if n > DUMP_CACHE_MAX then
+                        local keys = {}
+                        for k in pairs(dump_cache) do keys[#keys + 1] = k end
+                        for j = 1, math.floor(#keys / 2) do
+                            dump_cache[keys[j]] = nil
+                        end
+                    end
+                end
+            end
+        end
         if okChunk and chunk then
             fn = chunk
             cache[key] = fn
@@ -301,6 +358,7 @@ end
 --- expr.reset_cache() — test/tooling hook.
 function expr.reset_cache()
     cache = {}
+    dump_cache = {}
 end
 
 return expr

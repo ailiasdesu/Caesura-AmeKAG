@@ -83,8 +83,10 @@ local function eval_expr(ctx, expr)
 end
 -- Compiled streams carry the pre-translated (TJS->Lua) source: evaluate
 -- directly without re-translating (the compiler did it once at load).
-local function eval_expr_translated(ctx, translated, original)
-    return exprLang.evaluateTranslated(ctx, translated, original)
+-- Optional `dump` (Battle 1c): precompiled bytecode from _compiled.exprDumps
+-- for this token — evaluateTranslated loads it with mode "b" (no parse).
+local function eval_expr_translated(ctx, translated, original, dump)
+    return exprLang.evaluateTranslated(ctx, translated, original, dump)
 end
 local function skip_to(tokens, start_idx, targets, closers)
     -- closers: which target commands CLOSE the enclosing chain (only
@@ -122,6 +124,7 @@ function scheduler.run(ctx, tokens, start_index)
     local compiled_handlers = compiled.handlers
     local compiled_flow = compiled.flow
     local compiled_exprs = compiled.exprs
+    local compiled_exprDumps = compiled.exprDumps
 
     -- Lazy label index AFTER normalization: build_label_index expects the
     -- array format ({"label", {name=...}}), not the tokenizer's raw
@@ -167,6 +170,7 @@ function scheduler.run(ctx, tokens, start_index)
         compiled_handlers = compiled.handlers
         compiled_flow = compiled.flow
         compiled_exprs = compiled.exprs
+        compiled_exprDumps = compiled.exprDumps
     end
 
     local i = start_index
@@ -385,7 +389,8 @@ function scheduler.run(ctx, tokens, start_index)
             local src = compiled_exprs[i]
             local ok, result
             if src then
-                ok, result = eval_expr_translated(ctx, src, params.exp)
+                ok, result = eval_expr_translated(ctx, src, params.exp,
+                    compiled_exprDumps and compiled_exprDumps[i])
             else
                 ok, result = eval_expr(ctx, params.exp or "false")
             end
@@ -423,7 +428,8 @@ function scheduler.run(ctx, tokens, start_index)
                 local src = compiled_exprs[i]
                 local ok, result
                 if src then
-                    ok, result = eval_expr_translated(ctx, src, params.exp)
+                    ok, result = eval_expr_translated(ctx, src, params.exp,
+                        compiled_exprDumps and compiled_exprDumps[i])
                 else
                     ok, result = eval_expr(ctx, params.exp or "false")
                 end
@@ -480,7 +486,8 @@ function scheduler.run(ctx, tokens, start_index)
             local src = compiled_exprs[i]
             local ok, result
             if src then
-                ok, result = eval_expr_translated(ctx, src, params.exp)
+                ok, result = eval_expr_translated(ctx, src, params.exp,
+                    compiled_exprDumps and compiled_exprDumps[i])
             else
                 ok, result = eval_expr(ctx, params.exp or "false")
             end
@@ -540,12 +547,18 @@ function scheduler.run(ctx, tokens, start_index)
             local vname = params.var or "i"
             -- compiler translates start/end/step to Lua at compile time;
             -- evaluateTranslated skips the idempotent re-translation.
+            -- AOT dumps (Battle 1c) skip the per-env source load; [for]
+            -- stores per-expression dumps (start/end/step sub-table).
+            local forDumps = compiled_exprDumps and compiled_exprDumps[i]
             local ok0, sval = eval_expr_translated(ctx,
-                tostring(params.start or "0"), tostring(params.start or "0"))
+                tostring(params.start or "0"), tostring(params.start or "0"),
+                forDumps and forDumps.start)
             local ok1, eval = eval_expr_translated(ctx,
-                tostring(params["end"] or "0"), tostring(params["end"] or "0"))
+                tostring(params["end"] or "0"), tostring(params["end"] or "0"),
+                forDumps and forDumps["end"])
             local ok2, sstep = eval_expr_translated(ctx,
-                tostring(params.step or "1"), tostring(params.step or "1"))
+                tostring(params.step or "1"), tostring(params.step or "1"),
+                forDumps and forDumps.step)
             if ok0 and ok1 and ok2 then
                 local sv = tonumber(sval) or 0
                 local ev = tonumber(eval) or 0
