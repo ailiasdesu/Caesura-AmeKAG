@@ -266,6 +266,22 @@ _schema.define("gallery", {
     _meta = { category = "system", blocking = false, desc = "KAG3-compatible gallery command" },
     id = { type = "string" },  -- no default: handler's positional fallback
 })
+_schema.define("sma_play", {
+    _meta = { category = "system", blocking = false,
+              desc = "SMA skeletal-mesh actor spawn (Battle 4d S3)" },
+    name = { type = "string" },   -- actor id
+    asset = { type = "string" },  -- registered SMA asset (sma.register)
+    anim = { type = "string" },   -- animation name (default "idle")
+    x = { type = "number" }, y = { type = "number" },
+    scale = { type = "number" }, opacity = { type = "number" },
+    tex = { type = "number" },    -- engine render-texture id
+    view = { type = "number" },   -- target bgfx view id
+})
+_schema.define("sma_stop", {
+    _meta = { category = "system", blocking = false,
+              desc = "SMA skeletal-mesh actor despawn (Battle 4d S3)" },
+    name = { type = "string" },
+})
 _schema.define("music", {
     _meta = { category = "system", blocking = false, desc = "KAG3-compatible music command" },
 })

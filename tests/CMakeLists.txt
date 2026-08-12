@@ -46,6 +46,7 @@ set(TEST_SOURCES
     cpp/test_ai.cpp
     cpp/test_backend_registry.cpp
     cpp/test_mesh_renderer.cpp
+    cpp/test_sma_skinner.cpp
     cpp/test_layer_manager.cpp
     cpp/test_texture_manager.cpp
     cpp/test_kag_binding.cpp

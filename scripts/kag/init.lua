@@ -14,6 +14,7 @@ local kag_runner = require("kag_runner")  -- KAG coroutine bridge (preload for s
 local lsp        = require("kag.lsp")     -- language service (Battle 2; preload for sandbox)
 local aiwriter   = require("kag.aiwriter") -- AI scene writing (Battle 4c; preload)
 local aidev      = require("kag.aidev")   -- AI dev assistant (Battle 4e; preload for sandbox)
+local sma        = require("kag.sma")     -- skeletal mesh animation (Battle 4d S3; preload for sandbox)
 local mods       = require("mods")        -- mod loader (preload for sandbox)
 local replay     = require("replay")      -- input recording/playback (preload for sandbox)
 local layers     = require("layers")      -- layer tree (preload for sandbox; color filter submit)

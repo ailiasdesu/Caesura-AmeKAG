@@ -198,6 +198,7 @@ caesura_add_module(Platform
 caesura_add_module(Render
     src/render/NullRenderDevice.cpp
     src/render/NullMeshRenderer.cpp
+    src/render/SmaMeshRenderer.cpp
     src/render/BgfxRenderDevice.cpp
     src/render/BgfxDeviceCore.cpp
     src/render/BgfxDraw_Batch.cpp
@@ -242,6 +243,7 @@ caesura_add_module(Script
     src/script/bindings/DevCoreBinding.cpp
     src/script/bindings/DebugBinding.cpp
     src/script/bindings/MiniGameBinding.cpp
+    src/script/bindings/SmaBinding.cpp
     src/script/bindings/UnifiedBinding.cpp
     src/script/bindings/SteamBinding.cpp
     src/script/bindings/SaveBinding.cpp

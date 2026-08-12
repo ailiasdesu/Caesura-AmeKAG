@@ -132,6 +132,15 @@ for name, handler in pairs(video_cmds) do
     KAG[name] = handler
 end
 
+-- ===========================================================================
+--  Skeletal mesh animation commands — [sma_play] / [sma_stop]
+--  Loaded from kag/sma.lua (SMA Battle 4d S3 driver).
+-- ===========================================================================
+local sma_cmds = require("kag.sma")
+for name, handler in pairs(sma_cmds.commands) do
+    KAG[name] = handler
+end
+
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T

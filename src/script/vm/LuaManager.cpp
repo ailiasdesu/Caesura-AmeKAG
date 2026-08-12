@@ -15,6 +15,7 @@
 // #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
 #include "../bindings/VFXBinding.h"
 #include "../bindings/MiniGameBinding.h"
+#include "../bindings/SmaBinding.h"
 #include "../bindings/SaveBinding.h"
 #include "../bindings/SteamBinding.h"
 #include "../bindings/AIBinding.h"
@@ -130,6 +131,7 @@ void LuaManager::registerModules() {
     registerSaveBinding(m_L);
     registerVFXBinding(m_L);
     registerMiniGameBinding(m_L);
+    registerSmaBinding(m_L);
     registerAIBinding(m_L);
 
     printf("[Lua] Engine (backend selection) module registered.\n");

@@ -151,6 +151,7 @@ local _G_whitelist = {
     Render     = true,
     VFX        = true,
     mini_game  = true,
+    sma        = true, -- skeletal mesh animation binding (SmaBinding)
     DevCore    = true,
     _CAESURA_BACKEND = true,
     _CAESURA_CONFIG  = true,
