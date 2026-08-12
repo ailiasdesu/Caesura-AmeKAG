@@ -106,8 +106,12 @@ function aiwriter.sanitize_tags(text)
                 -- (an allowed-tag line could smuggle [iscript] inline —
                 -- review should-fix) and case-insensitively ([ISCRIPT]
                 -- renders as text today but must not be relied on).
+                -- The slash form [/endscript] is a REAL iscript closer in
+                -- the tokenizer, so it is blocked too (a prompt-injected
+                -- reply must not be able to close an author's block).
                 local low = t:lower()
-                if low:match("%[%s*iscript") or low:match("%[%s*endscript")
+                if low:match("%[%s*/?%s*iscript")
+                    or low:match("%[%s*/?%s*endscript")
                     or low:match("%[%s*emb") or low:match("%[%s*eval") then
                     out[#out + 1] = "; (ai) blocked: " .. t
                 elseif t:match("^%[") or t:match("^%*") then

@@ -63,9 +63,10 @@ check("sanitize all-prose produces comment", empty:find("; (ai)", 1, true) ~= ni
 -- code-executing tags are blocked from AI output (review should-fix:
 -- prompt injection could otherwise emit an iscript block)
 local injected = aiwriter.sanitize_tags(
-    '[ch text="ok"]\n[iscript]\nbackend.show_text("pwned")\n[/iscript]\n[endscript]\n[emb exp="os.exit(0)"]\n[eval exp="ctx.f.x = 1"]\n')
+    '[ch text="ok"]\n[iscript]\nbackend.show_text("pwned")\n[/iscript]\n[endscript]\n[/endscript]\n[emb exp="os.exit(0)"]\n[eval exp="ctx.f.x = 1"]\n')
 check("sanitize blocks iscript", injected:find("; (ai) blocked: [iscript]", 1, true) ~= nil)
 check("sanitize blocks endscript", injected:find("blocked: [endscript]", 1, true) ~= nil)
+check("sanitize blocks slash endscript", injected:find("blocked: [/endscript]", 1, true) ~= nil)
 check("sanitize blocks emb", injected:find("blocked: [emb", 1, true) ~= nil)
 check("sanitize blocks eval", injected:find("blocked: [eval", 1, true) ~= nil)
 check("sanitize keeps safe tags beside blocked", injected:find('[ch text="ok"]', 1, true) ~= nil)
