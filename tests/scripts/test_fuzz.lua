@@ -151,6 +151,63 @@ end
 local okBig = pcall(tokenizer.parse, table.concat(big))
 check("large scene parses", okBig)
 
+-- ---------------------------------------------------------------------------
+-- expr.translate fuzz: random (often malformed) TJS expressions must never
+-- throw or hang — translate is total (returns a string or nil) and every
+-- translated chunk evaluates without crashing (compile errors are fine).
+-- ---------------------------------------------------------------------------
+local exprLang = require("kag.expr")
+local TJS_TOKENS = {
+    "f.x", "sf.a", "tf.b", "mp.c", "lf.d", "1", "2.5", "-0.5", "1e3", "0",
+    '"str"', "'lit'", "true", "false", "nil", "f.arr[1]", "f.tbl.key",
+    "f.fn()", "(f.x)", "not f.x", "-f.y", "f.a and f.b", "f.a or f.b",
+    "f.a == 1", "f.a != 1", "f.a < 1", "f.a <= 1", "f.a > 1", "f.a >= 1",
+    "f.a && f.b", "f.a || f.b", "!f.a", "f.a ? 1 : 2", "f.a ? f.b : f.c",
+    "1 + 2 * 3 - 4 / 2 % 2", "f.x .. \"s\"", "f.flag && !f.other",
+    "f.n > 3 ? \"big\" : \"small\"", "f.a == f.b == f.c", "f.x[1][2]",
+    "f.x.y.z", "f.a ? f.b", "f.a &&", "?", "!", "&& || !", "()", "[]",
+    "f.x = 1", "f.x ==", "f.x ?", "f.x : 2", "a.b.c.d.e.f.g", "0123",
+    "f.x %% 0", "f.x / 0", "f.x ..", ".. f.x", "f.x >", "f.x < y.z",
+}
+
+local function random_tjs_expr()
+    local n = rndInt(6)
+    local parts = {}
+    for _ = 1, n do
+        parts[#parts + 1] = TJS_TOKENS[rndInt(#TJS_TOKENS)]
+    end
+    local s = table.concat(parts, rnd() < 0.5 and " " or " + ")
+    if rnd() < 0.4 then
+        local mut = rndInt(5)
+        if mut == 1 then s = s:sub(1, rndInt(#s))
+        elseif mut == 2 then s = s .. " &&"
+        elseif mut == 3 then s = "(" .. s
+        elseif mut == 4 then s = s .. " ? "
+        else s = s:gsub("f", "f f") end
+    end
+    return s
+end
+
+local exprCtx = { f = { x = 1, a = true, b = false, n = 5, flag = true,
+    other = false, t = 1 }, sf = {}, tf = {}, mp = {}, lf = {} }
+local expr_throws, eval_crashes = 0, 0
+local translated_count = 0
+for _ = 1, 300 do
+    local raw = random_tjs_expr()
+    local okT, res = pcall(exprLang.translate, raw)
+    if not okT then expr_throws = expr_throws + 1 end
+    if okT and res ~= nil then
+        translated_count = translated_count + 1
+        local okE = pcall(exprLang.evaluateTranslated, exprCtx, res, raw)
+        if not okE then eval_crashes = eval_crashes + 1 end
+    end
+end
+check("expr fuzz: 300 random TJS never throw in translate", expr_throws == 0)
+check("expr fuzz: translated chunks never crash evaluation",
+      eval_crashes == 0)
+check("expr fuzz: translate succeeds on most inputs",
+      translated_count > 200)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("FUZZ TESTS: %d passed, %d FAILED", passed, failed))
