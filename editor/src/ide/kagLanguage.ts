@@ -9,23 +9,27 @@ const KAG_COMMANDS = [
   'endfor', 'break', 'continue', 'switch', 'case', 'default', 'endswitch',
   'jump', 'call', 'return', 'link', 'label', 'macro', 'endmacro',
   'erasemacro', 'end', 'stop', 'eval', 'emb', 'iscript', 'endscript',
+  'until',
   // text
   'ch', 'text', 'l', 'r', 'er', 'p', 'ruby', 'font', 'pt', 'button',
   'endbutton', 'sel', 'select', 'endselect', 'nameplate', 'textbox',
   'sprite_fade', 'sprite_move', 'sprite_scale', 'sprite_swap', 'history',
-  'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip',
+  'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto',
   // layer
   'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout',
-  'scroll', 'trans', 'move', 'quake', 'shake', 'vfx', 'flash', 'vib',
+  'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash',
+  'vib', 'camera', 'particles',
   // audio
-  'playbgm', 'playse', 'playvoice', 'stopbgm', 'stopse', 'fadebgm',
-  'fadevol', 'xfadebgm', 'play', 'bgm', 'se', 'voice', 'playstop',
-  'setbgmvolume', 'setsevolume', 'setvoicevolume', 'waitsound', 'waitbgm',
+  'playbgm', 'playbgmstop', 'playse', 'playvoice', 'stopbgm', 'stopse',
+  'fadebgm', 'fadevol', 'xfadebgm', 'play', 'bgm', 'se', 'voice',
+  'voice_off', 'playstop', 'setbgmvolume', 'setsevolume', 'setvoicevolume',
+  'waitsound', 'waitbgm',
   // system / resource / save
-  'wait', 'delay', 's', 'gallery', 'music', 'unlock', 'rollback', 'toast',
-  'save', 'load', 'listsaves', 'saveplace', 'loadplace', 'preload',
-  'get_texture', 'is_loaded', 'is_pending', 'flush_cache', 'video',
-  'stopvideo', 'ai_dialog', 'set', 'inc', 'random', 'assert',
+  'wait', 'delay', 's', 'chapter', 'ending', 'gallery', 'music', 'unlock',
+  'rollback', 'toast', 'replay', 'save', 'load', 'listsaves', 'saveplace',
+  'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
+  'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'set', 'inc', 'random',
+  'assert', 'sma_play', 'sma_stop',
   'clear', 'ct', 'endtag', 'endform', 'g', 'br', 'hr', 'cancel', 'close',
 ]
 
