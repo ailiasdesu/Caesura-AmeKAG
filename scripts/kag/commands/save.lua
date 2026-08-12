@@ -134,6 +134,9 @@ local function capture_state(ctx)
     -- [R6-FIX] Persist skip/auto mode so they survive save/load cycles
     state.skip_mode = ctx.skip_mode or false
     state.auto_mode = ctx.auto_mode or false
+    -- [nvl] mode persists with the save (a reloaded save must resume the
+    -- same full-screen text mode, not fall back to the message window).
+    state.nvl_mode = ctx.nvl_mode or false
     -- [voice_off] muting persists with the save (audit: it was the only
     -- playback setting NOT captured -- reload reset the mute).
     state.voice_muted = ctx.voice_muted or false
@@ -344,6 +347,7 @@ function SaveCommands.load(ctx, params)
     ctx.skip_mode = (sm == true or sm == "seen") and sm or false
     ctx.auto_mode = (state.auto_mode == true)
     ctx.voice_muted = (state.voice_muted == true)
+    ctx.nvl_mode = (state.nvl_mode == true)
     -- Restore visual/text state (audit completion)
     if type(state.text_state) == "table" then
         ctx.text_state = ctx.text_state or {}

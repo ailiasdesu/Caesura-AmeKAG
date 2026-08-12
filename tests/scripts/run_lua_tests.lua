@@ -111,6 +111,7 @@ local tests = {
     "test_sprite_family",
     "test_toast",
     "test_textbox",
+    "test_nvl",
     "test_vfx_clamp",
     "test_delay",
     "test_wait_audio",

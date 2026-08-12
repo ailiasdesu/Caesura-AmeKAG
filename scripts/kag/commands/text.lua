@@ -11,6 +11,25 @@ local Operation = require("kag.operation")
 local TextScene = require("kag.text_scene")
 local TextLayout = require("kag.text_layout")
 
+-- NVL mode (Ren'Py parity): full-screen accumulated text block. Text
+-- lines append below the previous one instead of replacing the message
+-- window; [nvl clear] / [p] break the page. The NVL cursor reuses
+-- textCursorX/Y (persisted in text_state -> save/rollback for free).
+local NVL_X = 48
+local NVL_Y0 = 160
+local NVL_MAX_WIDTH = 1184
+
+-- Reset the NVL cursor to the top of a fresh page. The cursor lives in
+-- text_state.cursor_x/y (persisted by snapshot/rollback) AND the ctx
+-- textCursorX/Y mirror (read by the next [ch]/[text]).
+local function nvl_reset_cursor(ctx)
+    ctx.textCursorX = NVL_X
+    ctx.textCursorY = NVL_Y0
+    local state = TextScene.get_state(ctx)
+    state.cursor_x = NVL_X
+    state.cursor_y = NVL_Y0
+end
+
 -- =============================================================================
 --  Internal: update text_state for save/load position tracking
 -- =============================================================================
@@ -455,6 +474,7 @@ end
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
+    local nvl = ctx.nvl_mode == true
 
     -- Neo-Genesis inline markup: {color=#rrggbb}...{/color} spans. The
     -- backlog / closed captions / reveal counters use the stripped plain
@@ -471,9 +491,11 @@ function TextCommands.ch(ctx, params)
         pos = "center"
     end
 
-    -- Neo-Genesis: show the nameplate when a speaker is present.
+    -- Neo-Genesis: show the nameplate when a speaker is present. NVL mode
+    -- uses an inline label instead (see the draw section below), so the
+    -- fixed-position plate is skipped.
     ctx.current_speaker = speaker
-    if ctx.nameplate_style and #speaker > 0 then
+    if not nvl and ctx.nameplate_style and #speaker > 0 then
         TextCommands._renderNameplate(ctx, speaker)
     end
 
@@ -580,12 +602,23 @@ function TextCommands.ch(ctx, params)
 
     -- Replace the persistent message draw list. The render loop submits it
     -- every frame, so text remains visible after the command returns.
-    backend.clear_text()
-    TextScene.clear(ctx)
+    -- NVL mode: text accumulates into a full-screen page instead of
+    -- replacing the message window (Ren'Py NVL parity).
+    if not nvl then
+        backend.clear_text()
+        TextScene.clear(ctx)
+    else
+        -- Seal the page: prior lines are already fully revealed, so the
+        -- typewriter only animates the line being appended.
+        TextScene.commit(ctx)
+    end
 
-    -- Calculate X positions based on "pos"
+    -- Calculate X positions based on "pos" (normal mode) or the fixed NVL
+    -- column (full-screen page).
     local nameX, msgX
-    if pos == "left" then
+    if nvl then
+        msgX = NVL_X
+    elseif pos == "left" then
         nameX = 48
         msgX  = 48
     elseif pos == "right" then
@@ -599,21 +632,36 @@ function TextCommands.ch(ctx, params)
     local color = resolve_color(ctx, params)
     local lineHeight = resolve_line_height(ctx)
 
+    -- Calculate y-position for message: normal mode draws below the fixed
+    -- speaker line; NVL mode continues at the accumulated cursor (reset by
+    -- [nvl]/[nvl clear]/[p] to the top of the page).
+    local msgY = nvl and (ctx.textCursorY or NVL_Y0) or 580
+
     -- Render speaker name if present
     if #speaker > 0 then
-        TextScene.add_text(
-            ctx, "[" .. speaker .. "]", nameX, 540, color)
+        if nvl then
+            -- Inline speaker label above the line (no fixed-position plate).
+            local st = ctx.nameplate_style
+            local tr, tg, tb = st and st.text_color and
+                st.text_color:match("(%d+),%s*(%d+),%s*(%d+)")
+            backend.render_text(speaker, NVL_X, msgY - lineHeight,
+                clamp_byte(tr or 255), clamp_byte(tg or 255),
+                clamp_byte(tb or 255), 255)
+        else
+            TextScene.add_text(
+                ctx, "[" .. speaker .. "]", nameX, 540, color)
+        end
     end
 
-    -- Calculate y-position for message (below speaker if present)
-    local msgY = 580
+    local maxWidth = nvl and NVL_MAX_WIDTH
+        or resolve_max_width(ctx, params, msgX)
 
     if #message > 0 then
         if spans then
             msgY = TextScene.add_wrapped_spans(ctx, spans, {
                 x = msgX,
                 y = msgY,
-                max_width = resolve_max_width(ctx, params, msgX),
+                max_width = maxWidth,
                 line_height = lineHeight,
                 font_size = tonumber(TextScene.get_state(ctx).font_size)
                     or lineHeight,
@@ -623,7 +671,7 @@ function TextCommands.ch(ctx, params)
             msgY = TextScene.add_wrapped(ctx, message, {
                 x = msgX,
                 y = msgY,
-                max_width = resolve_max_width(ctx, params, msgX),
+                max_width = maxWidth,
                 line_height = lineHeight,
                 font_size = tonumber(TextScene.get_state(ctx).font_size)
                     or lineHeight,
@@ -661,16 +709,25 @@ function TextCommands.text(ctx, params)
 
     TextCommands.push_backlog(ctx, "", plain)
 
-    backend.clear_text()
-    TextScene.clear(ctx)
+    local nvl = ctx.nvl_mode == true
+    if not nvl then
+        backend.clear_text()
+        TextScene.clear(ctx)
+    else
+        -- NVL accumulation: seal prior lines, append below the cursor.
+        TextScene.commit(ctx)
+    end
 
     local lineHeight = resolve_line_height(ctx)
-    local y
+    local x = nvl and NVL_X or 32
+    local y = nvl and (ctx.textCursorY or NVL_Y0) or 580
+    local maxWidth = nvl and NVL_MAX_WIDTH or resolve_max_width(ctx, params, x)
+
     if spans then
         y = TextScene.add_wrapped_spans(ctx, spans, {
-            x = 32,
-            y = 580,
-            max_width = resolve_max_width(ctx, params, 32),
+            x = x,
+            y = y,
+            max_width = maxWidth,
             line_height = lineHeight,
             font_size = tonumber(TextScene.get_state(ctx).font_size)
                 or lineHeight,
@@ -678,9 +735,9 @@ function TextCommands.text(ctx, params)
         })
     else
         y = TextScene.add_wrapped(ctx, message, {
-            x = 32,
-            y = 580,
-            max_width = resolve_max_width(ctx, params, 32),
+            x = x,
+            y = y,
+            max_width = maxWidth,
             line_height = lineHeight,
             font_size = tonumber(TextScene.get_state(ctx).font_size)
                 or lineHeight,
@@ -688,7 +745,7 @@ function TextCommands.text(ctx, params)
         })
     end
 
-    ctx.textCursorX = 32
+    ctx.textCursorX = x
     ctx.textCursorY = y
     animate_text_opacity(ctx, params)
     ctx.waiting_input = true
@@ -728,6 +785,10 @@ end
 function TextCommands.er(ctx, params)
     backend.clear_text()
     TextScene.clear(ctx)
+    if ctx.nvl_mode then
+        -- Erasing the NVL page also resets the accumulation cursor.
+        nvl_reset_cursor(ctx)
+    end
     ctx.waiting_input = false
     update_text_state(ctx, "er")
 end
@@ -746,7 +807,45 @@ function TextCommands.p(ctx, params)
     coroutine.yield()
     backend.clear_text()
     TextScene.clear(ctx)
+    if ctx.nvl_mode then
+        -- NVL page break: the next line starts a fresh page at the top.
+        nvl_reset_cursor(ctx)
+    end
     update_text_state(ctx, "p")
+end
+
+-- =============================================================================
+--  [nvl] / [nvl clear] / [nvl off] ?? NVL mode (Ren'Py parity)
+--  Full-screen accumulated text block. In NVL mode each [ch]/[text] line
+--  APPENDS below the previous one (instead of replacing the message
+--  window); [nvl clear] (or [p]) breaks the page, [nvl off] returns to the
+--  normal message window. The speaker name renders as an inline label.
+-- =============================================================================
+
+schema.define("nvl", {
+    _meta = { category = "text", blocking = false, desc = "NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit" },
+    mode = { type = "string" },  -- "clear"/"off"/omitted = enter (bare [nvl clear] passes via params[1])
+})
+
+function TextCommands.nvl(ctx, params)
+    -- Bare positional form: [nvl clear] -> params[1] == "clear".
+    local mode = params.mode or params[1]
+    if mode ~= "clear" and mode ~= "off" then mode = "enter" end
+
+    if mode == "off" then
+        ctx.nvl_mode = false
+        -- Drop the accumulated page so the normal window resumes clean.
+        backend.clear_text()
+        TextScene.clear(ctx)
+        return
+    end
+
+    -- enter / clear both start a fresh page at the top of the screen.
+    ctx.nvl_mode = true
+    backend.clear_text()
+    TextScene.clear(ctx)
+    nvl_reset_cursor(ctx)
+    update_text_state(ctx, "nvl")
 end
 
 

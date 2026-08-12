@@ -61,6 +61,23 @@ function TextScene.clear(ctx)
     ctx.textCursorY = state.cursor_y
 end
 
+--- TextScene.commit(ctx) — seal the current page for NVL accumulation.
+--  Marks every typewriter draw as already-revealed so a subsequent
+--  [ch]/[text] typewriter reveal animates ONLY the newly appended line,
+--  never re-truncating earlier lines (render() slices all typewriter draws
+--  against the single global reveal_chars counter).
+function TextScene.commit(ctx)
+    local state = ensure_state(ctx)
+    for _, draw in ipairs(state.draws) do
+        if draw.typewriter then
+            draw.typewriter = false
+            draw._shown = nil      -- drop the reveal slice cache
+            draw._shown_len = nil
+        end
+    end
+    return state
+end
+
 function TextScene.reset(ctx)
     ctx.text_state = {
         line = 1,

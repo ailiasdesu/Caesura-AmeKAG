@@ -14,7 +14,7 @@ const KAG_COMMANDS = [
   'ch', 'text', 'l', 'r', 'er', 'p', 'ruby', 'font', 'pt', 'button',
   'endbutton', 'sel', 'select', 'endselect', 'nameplate', 'textbox',
   'sprite_fade', 'sprite_move', 'sprite_scale', 'sprite_swap', 'history',
-  'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto',
+  'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto', 'nvl',
   // layer
   'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout',
   'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash',

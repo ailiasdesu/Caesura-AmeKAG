@@ -74,6 +74,7 @@ function snapshot.capture(ctx)
         text_speed = ctx.text_speed,
         skip_mode = ctx.skip_mode,
         auto_mode = ctx.auto_mode,
+        nvl_mode = ctx.nvl_mode,
         waiting_input = ctx.waiting_input,
         text_state = copy_text_state(text_state),
         reveal = (type(ctx.reveal) == "table") and {
@@ -111,6 +112,7 @@ function snapshot.restore(ctx, snap)
     ctx.text_speed = snap.text_speed
     ctx.skip_mode = snap.skip_mode
     ctx.auto_mode = snap.auto_mode
+    ctx.nvl_mode = snap.nvl_mode
     ctx.waiting_input = snap.waiting_input
 
     for _, k in ipairs(DEEP_COPY_KEYS) do
