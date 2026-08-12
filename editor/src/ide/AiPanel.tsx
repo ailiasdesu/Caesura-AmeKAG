@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { EngineClient } from '../lib/rpc'
+import { luaString } from '../lib/luaString'
 import { useEditor } from '../store'
 
 interface Props {
@@ -9,22 +10,6 @@ interface Props {
 interface AiReply {
   text: string
   error: string
-}
-
-/** Lua long-bracket string literal safe for arbitrary content: picks an
- *  equals-run longer than any `]=` sequence inside the string, so `]=]`
- *  in user/mod content cannot break out into arbitrary Lua via /api/eval
- *  (review should-fix). */
-function luaString(s: string): string {
-  const body = String(s)
-  let maxRun = 0
-  const re = /\]={1,}(?=\[)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(body))) {
-    maxRun = Math.max(maxRun, m[0].length - 1)
-  }
-  const eq = '='.repeat(maxRun + 1)
-  return `[${eq}[${body}]${eq}]`
 }
 
 /** Battle 4c: AI-assisted scene writing panel.

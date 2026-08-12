@@ -98,13 +98,23 @@ function aiwriter.sanitize_tags(text)
     for line in (text .. "\n"):gmatch("(.-)\n") do
         local t = line:match("^%s*(.-)%s*$")
         if #t > 0 then
-            if t:match("^%[%s*iscript") or t:match("^%[%s*endscript")
-                or t:match("^%[%s*emb") or t:match("^%[%s*eval") then
-                out[#out + 1] = "; (ai) blocked: " .. t
-            elseif t:match("^%[") or t:match("^%*") or t:match("^;") then
+            if t:match("^%s*;") then
+                -- comment lines always pass (even if they mention a tag)
                 out[#out + 1] = t
             else
-                out[#out + 1] = "; (ai) " .. t
+                -- code-executing tags are blocked ANYWHERE in the line
+                -- (an allowed-tag line could smuggle [iscript] inline —
+                -- review should-fix) and case-insensitively ([ISCRIPT]
+                -- renders as text today but must not be relied on).
+                local low = t:lower()
+                if low:match("%[%s*iscript") or low:match("%[%s*endscript")
+                    or low:match("%[%s*emb") or low:match("%[%s*eval") then
+                    out[#out + 1] = "; (ai) blocked: " .. t
+                elseif t:match("^%[") or t:match("^%*") then
+                    out[#out + 1] = t
+                else
+                    out[#out + 1] = "; (ai) " .. t
+                end
             end
         end
     end

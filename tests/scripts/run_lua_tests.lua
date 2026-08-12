@@ -37,6 +37,7 @@ local tests = {
     "test_fuzz",
     "test_aiwriter",
     "test_aidev",
+    "test_lua_bracket",
     "test_tutorial_scene",
     "test_example_game",
     "test_rollback_memory",

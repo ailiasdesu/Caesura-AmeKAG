@@ -6,6 +6,7 @@
 
 import type * as monaco from 'monaco-editor'
 import type { EngineClient } from './rpc'
+import { luaString } from './luaString'
 
 export interface CompletionItem {
   label: string
@@ -32,22 +33,6 @@ export interface KagLspOptions {
 }
 
 const LSP_LINE_LIMIT = 2000 // don't push huge files through eval
-
-/** Lua long-bracket string literal that is safe for arbitrary content:
- *  picks an equals-run longer than any `]=` sequence inside the string,
- *  so `]=]` in user/mod content cannot break out into code (review
- *  should-fix: scene text may come from downloaded mods). */
-function luaString(s: string): string {
-  const body = String(s)
-  let maxRun = 0
-  const re = /\]={1,}(?=\[)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(body))) {
-    maxRun = Math.max(maxRun, m[0].length - 1)
-  }
-  const eq = '='.repeat(maxRun + 1)
-  return `[${eq}[${body}]${eq}]`
-}
 
 function lspCall(client: EngineClient, method: string, ...args: unknown[]): Promise<string> {
   const argStr = args

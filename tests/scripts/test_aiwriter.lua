@@ -69,6 +69,19 @@ check("sanitize blocks endscript", injected:find("blocked: [endscript]", 1, true
 check("sanitize blocks emb", injected:find("blocked: [emb", 1, true) ~= nil)
 check("sanitize blocks eval", injected:find("blocked: [eval", 1, true) ~= nil)
 check("sanitize keeps safe tags beside blocked", injected:find('[ch text="ok"]', 1, true) ~= nil)
+-- inline smuggling: a tag line carrying [iscript] mid-line is blocked
+-- (review should-fix: [macro m][iscript]... could ride an allowed line)
+local smuggled = aiwriter.sanitize_tags(
+    '[macro m][iscript] os.execute("evil") [endscript][endmacro]\n')
+check("sanitize blocks inline smuggled iscript",
+      smuggled:find("; (ai) blocked: [macro m]", 1, true) ~= nil)
+-- uppercase variants blocked case-insensitively
+local upper = aiwriter.sanitize_tags('[ISCRIPT] print("x") [ENDSCRIPT]\n[EMB exp="y"]\n')
+check("sanitize blocks uppercase iscript", upper:find("blocked: [ISCRIPT]", 1, true) ~= nil)
+check("sanitize blocks uppercase emb", upper:find("blocked: [EMB", 1, true) ~= nil)
+-- comment lines pass even when they mention a code tag
+local commentOk = aiwriter.sanitize_tags('; note: [iscript] is disabled here\n[ch text="go"]\n')
+check("sanitize keeps comment lines", commentOk:find("; note: [iscript]", 1, true) ~= nil)
 
 -- ---------------------------------------------------------------------------
 -- 3. generate_dialogue with mock LLM
