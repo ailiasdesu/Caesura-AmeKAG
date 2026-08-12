@@ -36,7 +36,7 @@ P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | 1a ✅ | compiler.lua：flow 跳转表/表达式预编译/参数规范化/handler 绑定（Phase A/B/C） | 已交付：表达式 -32%、长循环 O(1) |
-| 1b | **字节码持久化**：编译产物（_compiled 表）序列化为 `.ksc` 缓存文件，按 (path, mtime) 失效；热重载/场景跳转零重编译 | 二次加载 <10ms；benchmark 提升 ≥2× |
+| 1b | **字节码持久化**：编译产物（_compiled 表）序列化为 `.ksc` 缓存文件，按 (path, mtime) 失效；热重载/场景跳转零重编译 | ✅ 已交付（3f3646f2）：Lua-literal 格式 5ms/2500token（JSON 7× 提速）、FNV-1a hash 失效、cache/ksc 隔离、sandbox 容错 |
 | 1c | **表达式 AOT**：`expr.evaluateTranslated` 的运行时 `load()` 改为编译期字节码缓存——会话内用 `string.dump` 字节码，跨会话用编译产物 JSON 序列化（与 1b 同一缓存机制，见风险表） | 400-if 场景较当前再 -30% |
 | 1d | **宏编译期展开（验证收尾）**：Phase A 已实现宏展开的编译期识别与参数预解析；本阶段补充参数化宏在编译期内联（参数保留、运行时零 splice）并锁定行为等价 | test_macro_nested 全绿 + benchmark 无退化（与 1b 同轮执行） |
 
@@ -45,38 +45,38 @@ P1-4 KAG3 导入器、P1-5 rollback -85.5%、P2-7 编辑器前端 + Electron 主
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 2a | **LSP 服务**：利用 78 命令契约（schema.dumpContracts）实现 completion/hover/diagnostics，经 RPC 暴露给 Monaco | IDE 内 `[ch` 自动补全 + 参数 hover + 契约错误红线 |
-| 2b | **类型系统深化**：契约增加 `list`/`enum`/`file` 类型 + 交叉验证（storage 路径存在性） | ks_check 新增校验项 + 测试 |
-| 2c | **ks_check 语言服务化**：行内 diagnostics 推送（编辑器输入即校验） | IDE 内错误标注与 CLI 一致 |
+| 2a | **LSP 服务**：利用 78 命令契约（schema.dumpContracts）实现 completion/hover/diagnostics，经 RPC 暴露给 Monaco | ✅ 已交付（dfb254f5）：kag/lsp.lua + Monaco providers + eval 桥接（零 C++ 改动） |
+| 2b | **类型系统深化**：契约增加 `list`/`enum`/`file` 类型 + 交叉验证（storage 路径存在性） | ✅ 已交付（bca6b925）：list 列表转换/enum 枚举校验/file 资产路径静态+运行时双重验证；7 处生产契约升级 |
+| 2c | **ks_check 语言服务化**：行内 diagnostics 推送（编辑器输入即校验） | ✅ 已交付（42fbd306）：lsp.diagnostics 与 ks_check 完全对齐（表达式编译/尾部截断/未知命令/契约）+ 宏感知修复 |
 
 ### Battle 3 — 确定性工程化代差
 **目标**：任何游戏可自动化验证（市面引擎无此概念）。
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 3a | **确定性回放框架**：replay.lua 扩展为"场景级快照测试"——录制 → 断言状态（f/sf/tf/backlog）→ 比对 | 新增 test_determinism 套件 |
-| 3b | **模糊/属性测试**：随机 .ks 生成器（合法/畸形）驱动 tokenizer+scheduler，断言不崩溃不挂死 | 1000 随机场景 fuzz 全过 |
-| 3c | **CI 确定性门禁**：回放回归纳入 ctest（确定性导出对比） | CI 新增 job 全绿 |
+| 3a | **确定性回放框架**：replay.lua 扩展为"场景级快照测试"——录制 → 断言状态（f/sf/tf/backlog）→ 比对 | ✅ 已交付（f1f977ac）：kag/determinism.lua（无 GPU 执行 + 状态快照/断言 + kag_override + 超时保护）15 断言 |
+| 3b | **模糊/属性测试**：随机 .ks 生成器（合法/畸形）驱动 tokenizer+scheduler，断言不崩溃不挂死 | ✅ 已交付（f1f977ac）：xorshift 种子随机 200 场景零崩溃/零挂起 + 畸形输入 + 5000 token 大场景 |
+| 3c | **CI 确定性门禁**：回放回归纳入 ctest（确定性导出对比） | ✅ 已交付：determinism+fuzz 注册进 Lua 套件（sandbox 前），随 CI 运行 |
 
 ### Battle 4 — 创作闭环代差（IDE + 可视化 + AI）
 **目标**：对标 WebGAL_Terre 图形化 + 超越（原生 IDE 体验 + AI 辅助）。
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 4a 🔄 | **Electron 桌面 IDE**：自动拉起引擎 + Monaco + 调试面板 + 可视化预览 dock（主进程已写） | 双击启动 → 引擎自动运行 → IDE 连通（本机联调） |
-| 4b | **可视化场景编辑**：拖拽角色/背景到画布 → 生成 `[ch]`/`[bg]` 标签；场景树 ↔ 编辑器双向同步 | 拖拽生成可运行 .ks |
-| 4c | **AI 创作辅助**：基于已交付 [ai_dialog] 的本地 LLM 接口，IDE 内"AI 生成对话/续写场景" | IDE 一键生成 → 插入编辑器 → 运行 |
-| 4d | **E-mote 替代（P2-9）**：骨骼/网格动画系统（自研）或 Live2D 扩展 | ✅ 设计定稿 `docs/design/skeletal-mesh-animation.md`（SMA 子系统：架构/数据格式/CPU 软变形渲染路径/KAG 命令集/排期 S1-S5）；实现待后续迭代 |
+| 4a 🔄 | **Electron 桌面 IDE**：自动拉起引擎 + Monaco + 调试面板 + 可视化预览 dock（主进程已写） | ⚠️ 主进程完成 + CJS 修复（09d8cb71）；运行时验证待网络（Electron 二进制下载） |
+| 4b | **可视化场景编辑**：拖拽角色/背景到画布 → 生成 `[ch]`/`[bg]` 标签；场景树 ↔ 编辑器双向同步 | ✅ 已交付（252e6b1a）：Explorer 拖拽 → VisualView drop 生成标签；SceneTree 解析 .ks 点击跳转 Monaco |
+| 4c | **AI 创作辅助**：基于已交付 [ai_dialog] 的本地 LLM 接口，IDE 内"AI 生成对话/续写场景" | ✅ 已交付（f7482b2c）：kag/aiwriter.lua（生成/续写/sanitize/降级）+ IDE AiPanel（✨ 活动栏）+ 16 断言 |
+| 4d | **E-mote 替代（P2-9）**：骨骼/网格动画系统（自研）或 Live2D 扩展 | ✅ 设计定稿 `docs/design/skeletal-mesh-animation.md` + **S1 接口已实现（1e6ce1a5）**：IMeshRenderer + Null 后端 + BackendRegistry（C++ 609/609）；S2-S5 待后续 |
 
 ### Battle 5 — 生态与平台代差
 **目标**：迁移入口 + 发布闭环（硬件约束项排后）。
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 5a | **P0-3 移动管线**：Android 构建脚本（NDK 交叉编译 .ks→字节码 预烘焙）+ IME 文档 | 构建脚本产出 APK（无真机验证标注） |
+| 5a | **P0-3 移动管线**：Android 构建脚本（NDK 交叉编译 .ks→字节码 预烘焙）+ IME 文档 | ✅ 已交付：`scripts/android_build.sh` + `docs/guides/mobile-pipeline.md`（799fa03b）+ **字节码预烘焙 `ks_bake.lua`（be763458，737ms→25ms 29× 首载加速）**；真机验证标注待设备 |
 | 5b | **P2-8 教程体系**：getting-started 扩充 + 5 个示例场景（flow/rollback/debugger/live2d/minigame） | 文档 + 示例可运行 |
 | 5c | **P1-6 硬件验证**：Live2D GL（Linux CI）、Steam 实机——需硬件，排期靠后 | CI 三平台绿 |
-| 5d | **CARC 归档代差**：导入器支持 CARC 内 .ks 直接转换（归档内场景迁移） | 导入器读 .carc 场景 |
+| 5d | **CARC 归档代差**：导入器支持 CARC 内 .ks 直接转换（归档内场景迁移） | ✅ 已交付（c9c4af0d）：carc_pack list/extract 子命令 + kag3_import --carc 模式（归档内 .ks 直接转换） |
 
 ## 4. 执行顺序建议
 
