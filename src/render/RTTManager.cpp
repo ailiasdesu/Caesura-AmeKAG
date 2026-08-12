@@ -199,7 +199,7 @@ ViewportHandle RTTManager::createCanvas(int width, int height) {
 
 void RTTManager::destroyCanvas(ViewportHandle handle) {
 
-    // Deferred destruction 鈥?flushed at end-of-frame by Engine::render()
+    // Deferred destruction — flushed at end-of-frame by Engine::render()
     destroyCanvasDeferred(handle);
 }
 

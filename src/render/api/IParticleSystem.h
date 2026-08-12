@@ -24,7 +24,7 @@ struct ParticleEmitterConfig {
 };
 
 // ============================================================================
-// IParticleSystem 鈥?pure virtual interface for particle effects
+// IParticleSystem — pure virtual interface for particle effects
 // ============================================================================
 // ParticleSystem implements this interface. BackendRegistry stores IParticleSystem*.
 

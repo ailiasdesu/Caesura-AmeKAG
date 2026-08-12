@@ -85,7 +85,7 @@ void removeDebugPauseProbe(lua_State* L) {
 
 } // namespace
 
-// Factory for GpuMonitor (defined in Engine_Gpu.cpp 鈥?F1)
+// Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
 std::unique_ptr<ISteamBackend> createDefaultSteamIntegration();
 std::unique_ptr<IAudioBackend> createHeadlessAudioBackend();
