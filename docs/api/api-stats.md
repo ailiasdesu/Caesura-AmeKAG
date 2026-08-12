@@ -9,17 +9,17 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 30 |
-| Pure-virtual interface methods | 270 |
-| Lua binding functions (luaL_Reg entries) | 160 |
+| API interface headers (src/*/api/I*.h) | 31 |
+| Pure-virtual interface methods | 274 |
+| Lua binding functions (luaL_Reg entries) | 166 |
 | KAG command handler files | 9 |
-| KAG contract commands (command-contracts.md) | 78 |
+| KAG contract commands (command-contracts.md) | 81 |
 | RPC HTTP endpoints (EditorServer) | 20 |
 | RPC stdin JSON-RPC methods | 25 |
-| Lua runtime scripts (scripts/, excl. demo/check) | 64 |
-| C++ test cases | 605 |
-| C++ assertions | 2968 |
-| Lua tests passed | 99 |
+| Lua runtime scripts (scripts/, excl. demo/check) | 72 |
+| C++ test cases | 617 |
+| C++ assertions | 3002 |
+| Lua tests passed | 117 |
 
 ## 2. C++ interfaces by module
 
@@ -41,6 +41,7 @@
 | platform | IPlatformBackend.h | 5 |
 | render | IGpuMonitor.h | 3 |
 | render | ILayerManager.h | 16 |
+| render | IMeshRenderer.h | 4 |
 | render | IParticleSystem.h | 7 |
 | render | IRenderDevice.h | 38 |
 | render | ITextureManager.h | 13 |
@@ -67,6 +68,7 @@
 | MiniGameBinding.cpp | 20 | mini_game |
 | RenderBinding.cpp | 33 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
 | SaveBinding.cpp | 12 | KAG |
+| SmaBinding.cpp | 6 | sma |
 | SteamBinding.cpp | 18 | steam |
 | UnifiedBinding.cpp | 8 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, _CAESURA_BACKEND |
 | VFXBinding.cpp | 10 | VFX |

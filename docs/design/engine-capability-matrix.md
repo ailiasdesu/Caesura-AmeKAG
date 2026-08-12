@@ -31,7 +31,7 @@ graph LR
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG Neo-Genesis Parser<br/>tokenizer · 72 commands"]
+        s2["KAG Neo-Genesis Parser<br/>tokenizer · 81 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
@@ -102,7 +102,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
-| S2 | KAG Neo-Genesis parser (72 contract commands, 9 categories) | Lua tokenizer | ✓ |
+| S2 | KAG Neo-Genesis parser (81 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
 | S2d | KAG3 expression compatibility (TJS `&& \|\| ! != ?:` translated string-aware; visible scene:line errors instead of silent else) | `kag/expr.lua` | ✓ |
 | S2e | KAG3 variable system (`%f.x%` interpolation, `lf` call-frame stack, `mp` message params, dual-style expression env) | schema + scheduler | ✓ |
@@ -122,6 +122,7 @@ graph LR
 | S2q | Declarative conditional wait (`[until exp="..." timeout=ms]` — wait until a TJS expression is truthy; per-frame yield + cancellation; Ren'Py needs python loops for this) | scheduler + compiler (AOT exp/dump) | ✓ |
 | S2r | Conditional choices (`[button cond="f.x > 1"]` — false choices hidden at [endbutton]; Ren'Py menu `if` parity; all-hidden blocks dissolve) | `kag/commands/text.lua` + `kag/expr.lua` | ✓ |
 | S2s | Inline text markup (`{color=#rrggbb}` per-span colors, `{size=N}` glyph scaling affecting wrap, `{b}` synthetic bold, `{i}` parsed+consumed — renderer has no shear path yet; unknown `{tags}` literal) | `kag/text_layout.lua` (parse_markup/wrap_spans) + `kag/text_scene.lua` (add_wrapped_spans) + `IRenderDevice::renderText(scale, bold)` | ✓ (26 Lua assertions; typewriter reveal + backlog use stripped plain text) |
+| S2t | NVL mode (`[nvl]` full-screen accumulated text block, Ren'Py parity; `[nvl clear]`/`[p]` page break, `[nvl off]` exit; inline speaker label; cursor reused from text_state so save/rollback persists the page) | `kag/commands/text.lua` (`nvl` handler + ch/text/p/er accumulation) + `kag/text_scene.lua` (`commit` seals prior reveal draws) + save/snapshot `nvl_mode` | ✓ (26 Lua assertions; typewriter only animates the appended line) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
@@ -187,8 +188,15 @@ graph LR
 
 ---
 
-**Total: 59 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 60 tracked capabilities across 6 domains.** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+### 2026-08-12 additions (generation-gap round 9)
+
+- S2t — NVL mode `[nvl]`/`[nvl clear]`/`[nvl off]`: full-screen accumulated
+  text (Ren'Py NVL parity) with page-break cursor reuse and save/rollback
+  persistence of the page.
+- S2 — command set census refreshed to 81 contracts (nvl + sma_play/sma_stop).
 
 ### 2026-08-12 additions (generation-gap round 6)
 

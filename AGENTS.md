@@ -184,7 +184,12 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-02-002-delivery-handoff.md` | **最新状态**交接文档（008） |
+| `plans/2026-08-12-009-delivery-handoff.md` | **最新状态**交接文档（009，NVL 模式） |
+| `plans/2026-08-12-008-delivery-handoff.md` | 交接文档（008，内联标记视觉化） |
+| `plans/2026-08-12-007-delivery-handoff.md` | 交接文档（007，SMA 游戏循环接驳） |
+| `plans/2026-08-12-006-delivery-handoff.md` | 交接文档（006，停滞修复 + 表达力扩展） |
+| `plans/2026-08-12-005-delivery-handoff.md` | 交接文档（005，[until]/[button cond]/aidev） |
+| `plans/2026-08-12-004-generation-gap-roadmap.md` | 代差路线图（五大战役，权威规划） |
 | `plans/2026-08-04-006-perf-baseline-update.md` | 性能基线更新 |
 | `plans/2026-06-17-001-feat-engine-stability-hardening-plan.md` | 引擎稳定性加固计划 |
 | `plans/2026-06-18-galgame-core-readiness-audit.md` | Galgame 核心就绪度排查方案 |

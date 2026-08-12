@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (78)
+## Commands (81)
 
 ### `[ai_dialog]`
 
@@ -41,10 +41,10 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible bg command
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `file` | string | - | - | - |
+| `file` | file | - | - | - |
 | `layer` | string | bg | - | - |
 | `path` | string | - | - | - |
-| `storage` | string | - | - | - |
+| `storage` | file | - | - | - |
 
 ### `[bgm]`
 
@@ -196,10 +196,10 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible fg command
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `clear` | boolean | false | - | - |
-| `file` | string | - | - | - |
+| `file` | file | - | - | - |
 | `layer` | string | fg | - | - |
 | `path` | string | - | - | - |
-| `storage` | string | - | - | - |
+| `storage` | file | - | - | - |
 
 ### `[flash]`
 
@@ -250,10 +250,10 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible image comm
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `file` | string | - | - | - |
+| `file` | file | - | - | - |
 | `h` | number | - | 0..8192 | - |
 | `layer` | string | fg | - | - |
-| `storage` | string | - | - | - |
+| `storage` | file | - | - | - |
 | `w` | number | - | 0..8192 | - |
 | `x` | number | - | - | - |
 | `y` | number | - | - | - |
@@ -357,6 +357,14 @@ _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible nameplate c
 | `x` | number | 32 | - | - |
 | `y` | number | 480 | - | - |
 
+### `[nvl]`
+
+_Category: text · Blocking: no (fire-and-forget) · NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `mode` | string | - | - | - |
+
 ### `[p]`
 
 _Category: text · Blocking: yes (waits for completion) · click-to-advance_
@@ -411,9 +419,9 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playbgm co
 |---|---|---|---|---|
 | **requires one of** | — | — | file, storage | yes |
 | `fadein` | number | 0 | 0..30000 | - |
-| `file` | string | - | - | - |
+| `file` | file | - | - | - |
 | `loop` | boolean | true | - | - |
-| `storage` | string | - | - | - |
+| `storage` | file | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playbgmstop]`
@@ -424,7 +432,7 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playbgmsto
 |---|---|---|---|---|
 | `fadein` | number | 0 | 0..30000 | - |
 | `fadeout` | number | 0 | 0..30000 | - |
-| `file` | string | - | - | - |
+| `file` | file | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playse]`
@@ -435,8 +443,8 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playse com
 |---|---|---|---|---|
 | **requires one of** | — | — | file, storage | yes |
 | `fadein` | number | 0 | 0..30000 | - |
-| `file` | string | - | - | - |
-| `storage` | string | - | - | - |
+| `file` | file | - | - | - |
+| `storage` | file | - | - | - |
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playstop]`
@@ -597,6 +605,30 @@ _Category: vfx · Blocking: yes (waits for completion) · KAG3-compatible shake 
 | `frequency` | number | 20 | 1..120 | - |
 | `time` | number | 500 | 0..10000 | - |
 
+### `[sma_play]`
+
+_Category: system · Blocking: no (fire-and-forget) · SMA skeletal-mesh actor spawn (Battle 4d S3)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `anim` | string | - | - | - |
+| `asset` | string | - | - | - |
+| `name` | string | - | - | - |
+| `opacity` | number | - | - | - |
+| `scale` | number | - | - | - |
+| `tex` | number | - | - | - |
+| `view` | number | - | - | - |
+| `x` | number | - | - | - |
+| `y` | number | - | - | - |
+
+### `[sma_stop]`
+
+_Category: system · Blocking: no (fire-and-forget) · SMA skeletal-mesh actor despawn (Battle 4d S3)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | - |
+
 ### `[sprite_fade]`
 
 _Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprite_fade command_
@@ -750,7 +782,7 @@ _Category: audio · Blocking: yes (waits for completion) · KAG3-compatible xfad
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `file` | string | - | - | - |
-| `storage` | string | - | - | - |
+| `file` | file | - | - | - |
+| `storage` | file | - | - | - |
 | `time` | number | 2000 | 0..30000 | - |
 
