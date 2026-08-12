@@ -964,18 +964,33 @@ function scheduler.run(ctx, tokens, start_index)
                 -- Splice macro body into token stream, replacing the invocation.
                 -- Copy the body (shallow, per-token) and shift the tail in place
                 -- to avoid rebuilding the whole array with 3 inserts per call.
+                -- NOTE: do NOT grow via table.insert(tokens, nil) -- nil
+                -- elements do not extend the array length (#tokens stays
+                -- put), so table.move's source range (#tokens - grow) was
+                -- wrong and the tail tokens (labels/end after the call
+                -- site) were OVERWRITTEN and lost. Shift the tail element
+                -- by element from the END backwards (no overwrite), then
+                -- clear the vacated slots (review: macro splice tail loss).
                 local tailStart = i + 1
-                local tailCount = #tokens - tailStart + 1
+                local old_len = #tokens
                 local bodyCount = #macro_body
                 -- Grow the array by bodyCount - 1 (the invocation is replaced
                 -- by bodyCount tokens).
                 local grow = bodyCount - 1
                 if grow > 0 then
-                    for _ = 1, grow do table.insert(tokens, nil) end
-                    table.move(tokens, tailStart, #tokens - grow, tailStart + grow)
+                    for n = old_len, tailStart, -1 do
+                        tokens[n + grow] = tokens[n]
+                    end
+                    for n = tailStart, tailStart + grow - 1 do
+                        tokens[n] = nil
+                    end
                 elseif grow < 0 then
-                    table.move(tokens, tailStart, #tokens, tailStart + grow)
-                    for _ = 1, -grow do table.remove(tokens) end
+                    for n = tailStart, old_len do
+                        tokens[n + grow] = tokens[n]
+                    end
+                    for n = old_len + grow + 1, old_len do
+                        tokens[n] = nil
+                    end
                 end
                 for n = 1, bodyCount do
                     -- Deep-copy every token: no-arg macros share the body's

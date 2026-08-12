@@ -169,7 +169,11 @@ local function checkScene(path)
                 local params = {}
                 for _, pair in ipairs(tok.params or {}) do
                     if type(pair) == "table" and pair[1] then
-                        local k = pair[1]  -- param name (already the string)
+                        -- numeric-string keys ("1") become NUMBER keys so
+                        -- positional_index contract checks (params[1])
+                        -- work here exactly as they do at runtime after
+                        -- compiler/scheduler normalization.
+                        local k = tonumber(pair[1]) or pair[1]
                         params[k] = pair[2]
                     end
                 end

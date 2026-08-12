@@ -28,6 +28,7 @@ local tests = {
     "test_kag_commands",
     "test_scheduler",
     "test_compiler",
+    "test_example_game",
     "test_rollback",
     "test_backlog",
     "test_kag3_compat",
