@@ -1,5 +1,8 @@
 import Editor, { type OnMount } from '@monaco-editor/react'
+import * as monaco from 'monaco-editor'
 import { useEditor } from '../store'
+import { KagLsp } from '../lib/kagLsp'
+import { EngineClient } from '../lib/rpc'
 
 export function EditorArea() {
   const docs = useEditor((s) => s.docs)
@@ -10,7 +13,12 @@ export function EditorArea() {
 
   const active = docs.find((d) => d.path === activePath) ?? null
 
-  const handleMount: OnMount = (editor) => {
+  const handleMount: OnMount = (editor, monacoInstance) => {
+    // KAG language service (Battle 2): completion / hover / diagnostics
+    // bridged to the engine's declarative command contracts via /api/eval.
+    const lsp = new KagLsp(new EngineClient(), monacoInstance as typeof monaco)
+    lsp.register()
+    editor.onDidDispose(() => lsp.dispose())
     // Ctrl+S marks the doc clean (saving via engine happens through the
     // debug/eval path in a later iteration; the store keeps dirty state).
     editor.addCommand(/* monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS */ 2049, () => {

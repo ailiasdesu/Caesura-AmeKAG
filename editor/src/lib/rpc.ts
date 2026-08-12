@@ -132,6 +132,28 @@ export class EngineClient {
     })
   }
 
+  /** Execute a Lua expression via /api/eval; returns the raw result
+   *  string (the engine JSON-escapes it as "result":"..." — parse twice
+   *  when the Lua side returns JSON). The engine reads the request body
+   *  as raw Lua code (not JSON-wrapped). */
+  async evalRaw(code: string): Promise<string> {
+    const res = await this.fetchImpl(this.base + '/eval', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'text/plain',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: code,
+    })
+    if (!res.ok) {
+      throw new RpcError(`HTTP ${res.status} on /eval`, res.status, null)
+    }
+    const body = (await res.json()) as { result?: string; error?: string }
+    if (body.error) throw new RpcError(body.error, res.status, body)
+    return body.result ?? ''
+  }
+
   stop(): Promise<{ status: string }> {
     return this.request<{ status: string }>('/stop', { method: 'POST' })
   }

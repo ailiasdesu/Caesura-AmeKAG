@@ -29,6 +29,7 @@ local tests = {
     "test_scheduler",
     "test_compiler",
     "test_bytecode_cache",
+    "test_lsp",
     "test_example_game",
     "test_rollback_memory",
     "test_rollback",
