@@ -81,6 +81,93 @@ export function AiPanel({ client }: Props) {
     setMsg(`Appended ${r.text.split('\n').length} lines`)
   }
 
+  // ------------------------------------------------------------------
+  // Dev Assist (Battle 4c extension): the LLM helps the DEVELOPER —
+  // explain diagnostics, review the active scene, generate scene
+  // skeletons. Same /api/eval bridge, kag/aidev module.
+  // ------------------------------------------------------------------
+  const [spec, setSpec] = useState('')
+  const [diagMsg, setDiagMsg] = useState('')
+  const [devMsg, setDevMsg] = useState('')
+
+  const devCall = async (method: string, args: unknown[]): Promise<AiReply | null> => {
+    setBusy(true)
+    try {
+      const argStr = args
+        .map((a) => (typeof a === 'string' ? `[=[${a}]=]` : JSON.stringify(a)))
+        .join(', ')
+      const code =
+        `local ad = require('kag.aidev'); ` +
+        `return ad.json('${method}'` +
+        (args.length > 0 ? ', ' + argStr : '') +
+        `)`
+      const json = await client.evalRaw(code)
+      const parsed = JSON.parse(json) as AiReply[]
+      return parsed[0] ?? null
+    } catch (e) {
+      setDevMsg(e instanceof Error ? e.message : String(e))
+      return null
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const explainDiag = async () => {
+    const line = diagMsg.match(/^(\d+)\s*[:：]/)
+    const diag = {
+      scene: active?.path ?? '',
+      line: line ? Number(line[1]) : 0,
+      message: diagMsg,
+    }
+    const r = await devCall('explain_diagnostic', [diag, { llm: true }])
+    if (!r) return
+    setDevMsg(r.error && !r.text ? `AI error: ${r.error}` : r.text)
+  }
+
+  const reviewScene = async () => {
+    if (!active) {
+      setDevMsg('Open a .ks script to review')
+      return
+    }
+    const r = await devCall('review_scene', [active.content.slice(-4000)])
+    if (!r) return
+    if (r.error && !r.text) {
+      setDevMsg(`AI error: ${r.error}`)
+      return
+    }
+    try {
+      const findings = JSON.parse(r.text) as { line: number; message: string }[]
+      if (findings.length === 0) {
+        setDevMsg('✅ 结构检查通过（无未闭合块、无缺失 [end]）')
+      } else {
+        setDevMsg(
+          findings.map((f) => `L${f.line}: ${f.message}`).join('\n')
+        )
+      }
+    } catch {
+      setDevMsg(r.text)
+    }
+  }
+
+  const genScene = async () => {
+    if (!spec.trim()) {
+      setDevMsg('Describe the scene first (e.g. "a rainy classroom confession")')
+      return
+    }
+    const r = await devCall('gen_scene', [spec])
+    if (!r) return
+    if (r.error && !r.text) {
+      setDevMsg(`AI error: ${r.error}`)
+      return
+    }
+    if (active) {
+      insertIntoActive('\n' + r.text + '\n')
+      setDevMsg(`Inserted ${r.text.split('\n').length} lines (review warnings appended as comments)`)
+    } else {
+      setDevMsg('Open a script first — generated:\n' + r.text)
+    }
+  }
+
   return (
     <div className="sidebar-pane">
       <div className="panel-title">
@@ -126,6 +213,49 @@ export function AiPanel({ client }: Props) {
           Uses the engine's local LLM (Ollama :11434 by default). Generated
           KAG tags are inserted at the end of the active script — sanitized so
           prose becomes comments.
+        </p>
+      </div>
+
+      <div className="panel-title dev-title">
+        Dev Assist
+        <span className="spacer" />
+        <span className="scene-counts">LLM + static</span>
+      </div>
+      <div className="ai-form">
+        <label className="ai-label">
+          Scene spec
+          <input
+            value={spec}
+            onChange={(e) => setSpec(e.target.value)}
+            placeholder="a rainy classroom confession with a choice"
+          />
+        </label>
+        <div className="ai-actions">
+          <button className="primary" onClick={() => void genScene()} disabled={busy}>
+            Generate Scene
+          </button>
+        </div>
+        <label className="ai-label">
+          Diagnostic (paste ks_check/LSP message, optional "N: " prefix)
+          <input
+            value={diagMsg}
+            onChange={(e) => setDiagMsg(e.target.value)}
+            placeholder="3: unknown KAG command 'wiat'"
+          />
+        </label>
+        <div className="ai-actions">
+          <button onClick={() => void explainDiag()} disabled={busy || !diagMsg.trim()}>
+            Explain Diagnostic
+          </button>
+          <button onClick={() => void reviewScene()} disabled={busy || !active}>
+            Review Scene
+          </button>
+        </div>
+        {devMsg && <div className="panel-msg ai-msg dev-msg">{devMsg}</div>}
+        <p className="visual-hint">
+          Dev Assist runs entirely in the engine: local rule-based explainer
+          and structural review work offline; the LLM enriches explanations
+          and generates skeletons (sanitized + self-reviewed).
         </p>
       </div>
     </div>
