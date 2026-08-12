@@ -25,6 +25,7 @@ class VideoPlayer;
 class DebugManager;
 class IMiniGameBackend;
 class IAnimationBackend;
+class IMeshRenderer;
 class ISteamBackend;
 class IParticleSystem;
 class IResourceGenerationTracker;
@@ -83,6 +84,7 @@ public:
     IPlatformBackend& platform();
     IMiniGameBackend& miniGame() { requireInitialized(); return *m_miniGameBackend; }
     IAnimationBackend& animation() { requireInitialized(); return *m_animationBackend; }
+    IMeshRenderer& meshRenderer() { requireInitialized(); return *m_meshRenderer; }
     // Pure mapping from an SDL app event type to the mobile adapter callback
     // (onPause/onResume), extracted so it can be unit-tested without SDL.
     static void handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 eventType);
@@ -169,6 +171,7 @@ private:
     std::unique_ptr<IGpuMonitor>        m_gpuMonitor;
     std::unique_ptr<IMiniGameBackend>  m_miniGameBackend;
     std::unique_ptr<IAnimationBackend>  m_animationBackend;
+    std::unique_ptr<IMeshRenderer>      m_meshRenderer;
     std::unique_ptr<ISteamBackend>      m_steamBackend;
     std::unique_ptr<VideoPlayer>       m_videoPlayer;
     std::unique_ptr<IParticleSystem>   m_particleSystem;

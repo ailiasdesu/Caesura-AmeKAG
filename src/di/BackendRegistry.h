@@ -30,6 +30,7 @@ class ISaveManager;
 class IResourceGenerationTracker;
 class ISteamBackend;
 class IMobileAdapter;
+class IMeshRenderer;
 namespace carc { class ICryptoEngine; }
 
 class BackendRegistry {
@@ -70,6 +71,7 @@ public:
     void setResourceGenerationTracker(IResourceGenerationTracker* tracker);
     void setSteamBackend(ISteamBackend* backend);
     void setMobileAdapter(IMobileAdapter* adapter);
+    void setMeshRenderer(IMeshRenderer* renderer);
 
     void setLuaState(lua_State* L) { m_luaState = L; }
     lua_State* getLuaState() { return m_luaState; }
@@ -102,6 +104,7 @@ public:
     IResourceGenerationTracker* getResourceGenerationTracker();
     ISteamBackend*    getSteamBackend();
     IMobileAdapter*   getMobileAdapter();
+    IMeshRenderer*    getMeshRenderer();
 
     // -- Factories --
     IAudioBackend*    createAudioBackend(const char* name);

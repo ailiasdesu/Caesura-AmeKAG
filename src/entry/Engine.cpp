@@ -17,6 +17,8 @@ extern "C" {
 #include "../render/VideoPlayer.h"
 #include "../render/api/IGpuMonitor.h"
 #include "../render/api/IParticleSystem.h"
+#include "../render/api/IMeshRenderer.h"
+#include "../render/NullMeshRenderer.h"
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../script/vm/LuaManager.h"
@@ -496,6 +498,14 @@ bool Engine::initOptionalPhase() {
         BackendRegistry::instance().setAnimationBackend(m_animationBackend.get());
         attachRenderDeviceToAnimationBackend(m_animationBackend.get(), m_renderDevice.get());
     }
+
+    // Skeletal mesh renderer (SMA, Battle 4d S1): default Null backend
+    // (no GPU work; the real bgfx implementation lands with S2). Always
+    // registered so the scripting layer can rely on the interface.
+    if (!m_meshRenderer) {
+        m_meshRenderer = std::make_unique<NullMeshRenderer>();
+    }
+    BackendRegistry::instance().setMeshRenderer(m_meshRenderer.get());
 
     return allOk;
 }

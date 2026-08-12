@@ -197,6 +197,7 @@ caesura_add_module(Platform
 
 caesura_add_module(Render
     src/render/NullRenderDevice.cpp
+    src/render/NullMeshRenderer.cpp
     src/render/BgfxRenderDevice.cpp
     src/render/BgfxDeviceCore.cpp
     src/render/BgfxDraw_Batch.cpp

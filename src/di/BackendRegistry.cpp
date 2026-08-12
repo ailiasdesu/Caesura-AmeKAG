@@ -11,6 +11,7 @@
 #include "../render/api/ITextureManager.h"
 #include "../render/api/IParticleSystem.h"
 #include "../render/api/ILayerManager.h"
+#include "../render/api/IMeshRenderer.h"
 #include "../debug/api/IDebugManager.h"
 #include "../resource/api/IAsyncLoader.h"
 #include "../resource/api/IResourceGenerationTracker.h"
@@ -83,6 +84,7 @@ DEF_GETTER(ISaveManager,     SaveManager)
 DEF_GETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_GETTER(ISteamBackend,    SteamBackend)
 DEF_GETTER(IMobileAdapter,   MobileAdapter)
+DEF_GETTER(IMeshRenderer,    MeshRenderer)
 
 DEF_SETTER(IRenderDevice,    RenderDevice)
 DEF_SETTER(IAudioBackend,    AudioBackend)
@@ -105,6 +107,7 @@ DEF_SETTER(ISaveManager,     SaveManager)
 DEF_SETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_SETTER(ISteamBackend,    SteamBackend)
 DEF_SETTER(IMobileAdapter,   MobileAdapter)
+DEF_SETTER(IMeshRenderer,    MeshRenderer)
 
 #undef DEF_GETTER
 #undef DEF_SETTER

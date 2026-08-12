@@ -45,6 +45,7 @@ set(TEST_SOURCES
     cpp/test_mini_collision.cpp
     cpp/test_ai.cpp
     cpp/test_backend_registry.cpp
+    cpp/test_mesh_renderer.cpp
     cpp/test_layer_manager.cpp
     cpp/test_texture_manager.cpp
     cpp/test_kag_binding.cpp
