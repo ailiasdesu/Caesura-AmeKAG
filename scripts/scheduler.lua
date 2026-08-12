@@ -81,6 +81,11 @@ local exprLang = require("kag.expr")
 local function eval_expr(ctx, expr)
     return exprLang.evaluate(ctx, expr)
 end
+-- Compiled streams carry the pre-translated (TJS->Lua) source: evaluate
+-- directly without re-translating (the compiler did it once at load).
+local function eval_expr_translated(ctx, translated, original)
+    return exprLang.evaluateTranslated(ctx, translated, original)
+end
 local function skip_to(tokens, start_idx, targets, closers)
     -- closers: which target commands CLOSE the enclosing chain (only
     -- endif does; elseif/else are branch markers and must not decrement
@@ -369,8 +374,13 @@ function scheduler.run(ctx, tokens, start_index)
             -- runtime evaluate re-translates (idempotent) and caches the
             -- compiled chunk keyed by env identity, so the hot path pays
             -- only the cache lookup.
-            local ok, result = eval_expr(ctx,
-                compiled_exprs[i] or params.exp or "false")
+            local src = compiled_exprs[i]
+            local ok, result
+            if src then
+                ok, result = eval_expr_translated(ctx, src, params.exp)
+            else
+                ok, result = eval_expr(ctx, params.exp or "false")
+            end
             local taken = ok and result or false
             if_stack[#if_stack + 1] = taken
             if not taken then
@@ -402,8 +412,13 @@ function scheduler.run(ctx, tokens, start_index)
                     }, {["endif"] = true}) - 1
                 end
             else
-                local ok, result = eval_expr(ctx,
-                    compiled_exprs[i] or params.exp or "false")
+                local src = compiled_exprs[i]
+                local ok, result
+                if src then
+                    ok, result = eval_expr_translated(ctx, src, params.exp)
+                else
+                    ok, result = eval_expr(ctx, params.exp or "false")
+                end
                 taken = ok and result or false
                 if_stack[#if_stack] = taken
                 if not taken then
@@ -454,8 +469,13 @@ function scheduler.run(ctx, tokens, start_index)
                     .. " total iterations in scene '" .. wscene
                     .. "' (bounded loop guard)", 0)
             end
-            local ok, result = eval_expr(ctx,
-                compiled_exprs[i] or params.exp or "false")
+            local src = compiled_exprs[i]
+            local ok, result
+            if src then
+                ok, result = eval_expr_translated(ctx, src, params.exp)
+            else
+                ok, result = eval_expr(ctx, params.exp or "false")
+            end
             -- ALWAYS push (ended flag): the matching endwhile must know
             -- whether the loop is still live (rewind) or was skipped
             -- because the condition turned false (pop and continue).
@@ -510,9 +530,14 @@ function scheduler.run(ctx, tokens, start_index)
                     .. "' (bounded loop guard)", 0)
             end
             local vname = params.var or "i"
-            local ok0, sval = eval_expr(ctx, tostring(params.start or "0"))
-            local ok1, eval = eval_expr(ctx, tostring(params["end"] or "0"))
-            local ok2, sstep = eval_expr(ctx, tostring(params.step or "1"))
+            -- compiler translates start/end/step to Lua at compile time;
+            -- evaluateTranslated skips the idempotent re-translation.
+            local ok0, sval = eval_expr_translated(ctx,
+                tostring(params.start or "0"), tostring(params.start or "0"))
+            local ok1, eval = eval_expr_translated(ctx,
+                tostring(params["end"] or "0"), tostring(params["end"] or "0"))
+            local ok2, sstep = eval_expr_translated(ctx,
+                tostring(params.step or "1"), tostring(params.step or "1"))
             if ok0 and ok1 and ok2 then
                 local sv = tonumber(sval) or 0
                 local ev = tonumber(eval) or 0

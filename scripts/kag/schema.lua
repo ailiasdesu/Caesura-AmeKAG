@@ -30,6 +30,18 @@ local migrated = {}  -- set of migrated command names
 --   desc     : one-line human summary (editor tooltips / docs)
 local registry_meta = {}
 
+-- ${expr} interpolation chunk cache: the expression text is a pure
+-- function of the scene source (compiled once), so load() per evaluation
+-- is waste -- the chunk is cached by expression string (bounded like the
+-- expr module's cache). The env is a SHARED table: Lua 5.4 binds _ENV at
+-- load time, so chunks load once against it and the f/sf/tf/mp/lf fields
+-- are updated to the current ctx tables before each evaluation (the
+-- scheduler is single-threaded -- no concurrent evaluation can observe a
+-- torn env).
+local interp_cache = {}
+local INTERP_CACHE_MAX = 128
+local interp_env = { f = {}, sf = {}, tf = {}, mp = {}, lf = {} }
+
 --- Schema.define(cmd, specs) — register the contract for one command.
 --  `specs._meta = { category=..., blocking=..., desc=... }` is optional and
 --  stored separately (never treated as a parameter contract).
@@ -99,14 +111,40 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
             and (v:find("$", 1, true) or v:find("%", 1, true)) then
             -- ${expr}: full expression evaluated in a sandbox env with the
             -- ctx variable tables (f/sf/tf/mp/lf) -- beyond KAG3's eval-glue.
+            -- Chunk cache: Lua 5.4 binds _ENV at load time, so the chunk is
+            -- loaded ONCE against a shared env table whose f/sf/tf/mp/lf
+            -- fields are updated to the current ctx tables before every
+            -- evaluation (the scheduler is single-threaded/serial, so no
+            -- concurrent evaluation can observe a torn env).
             v = v:gsub("%${([^{}]+)}", function(expr)
-                -- env exposes the ctx variable tables directly: the
-                -- expression f.hp*2 works (env.f = ctx.f, etc).
-                local env = { f = ctx and ctx.f, sf = ctx and ctx.sf,
-                              tf = ctx and ctx.tf, mp = ctx and ctx.mp,
-                              lf = ctx and ctx.lf }
-                local f2 = load("return (" .. expr .. ")", "=ks_interp", "t", env)
-                if not f2 then return "${" .. expr .. "}" end  -- syntax error
+                local f2 = interp_cache[expr]
+                if not f2 then
+                    interp_env.f = ctx and ctx.f or {}
+                    interp_env.sf = ctx and ctx.sf or {}
+                    interp_env.tf = ctx and ctx.tf or {}
+                    interp_env.mp = ctx and ctx.mp or {}
+                    interp_env.lf = ctx and ctx.lf or {}
+                    f2 = load("return (" .. expr .. ")", "=ks_interp", "t",
+                              interp_env)
+                    if not f2 then return "${" .. expr .. "}" end  -- syntax error
+                    interp_cache[expr] = f2
+                    local n = 0
+                    for _ in pairs(interp_cache) do n = n + 1 end
+                    if n > INTERP_CACHE_MAX then
+                        local keys = {}
+                        for k in pairs(interp_cache) do keys[#keys + 1] = k end
+                        for j = 1, math.floor(#keys / 2) do
+                            interp_cache[keys[j]] = nil
+                        end
+                    end
+                else
+                    -- update the shared env to the current ctx tables
+                    interp_env.f = ctx and ctx.f or {}
+                    interp_env.sf = ctx and ctx.sf or {}
+                    interp_env.tf = ctx and ctx.tf or {}
+                    interp_env.mp = ctx and ctx.mp or {}
+                    interp_env.lf = ctx and ctx.lf or {}
+                end
                 local ok2, val2 = pcall(f2)
                 if ok2 then return tostring(val2) end
                 return "${" .. expr .. "}"
