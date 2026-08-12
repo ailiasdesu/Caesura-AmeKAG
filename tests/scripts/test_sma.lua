@@ -142,6 +142,73 @@ sma.render(ctx2)
 check("update/render without binding: no crash", true)
 _G.sma = old
 
+-- ---------------------------------------------------------------------------
+-- 5. Scene-level determinism test (SMA S4): [sma_play]/[sma_stop] run
+-- through the real scheduler without a GPU.
+-- ---------------------------------------------------------------------------
+-- Load every command module so their schema contracts register (the
+-- determinism mock table is built from dumpContracts; without them the
+-- mock is empty and every command is flagged unknown).
+pcall(require, "kag.commands.text")
+pcall(require, "kag.commands.system")
+pcall(require, "kag.commands.audio")
+pcall(require, "kag.commands.layer")
+pcall(require, "kag.commands.transition")
+pcall(require, "kag.commands.vfx")
+pcall(require, "kag.commands.save")
+pcall(require, "kag.commands.video")
+
+local determinism = require("kag.determinism")
+-- Scene tests run the real no-GPU path: drop the recording mock so the
+-- binding is absent (handle 0, everything inert).
+_G.sma = nil
+sma.register("hero", asset)
+
+local scenePlay = "[sma_play name=\"hero\" asset=\"hero\" anim=\"idle\""
+    .. " x=100 y=50 scale=2]\n[p]\n[ch text=\"done\"]\n"
+local res1 = determinism.run_scene(scenePlay, {
+    scene = "sma_test.ks",
+    kag_override = {
+        sma_play = sma.commands.sma_play,
+        sma_stop = sma.commands.sma_stop,
+    },
+})
+check("scene: [sma_play] spawns actor", res1.sma_actors ~= nil
+      and res1.sma_actors.hero ~= nil)
+check("scene: actor state from params", res1.sma_actors.hero.anim == "idle"
+      and res1.sma_actors.hero.x == 100
+      and res1.sma_actors.hero.y == 50
+      and res1.sma_actors.hero.scale == 2)
+check("scene: handle 0 without GPU binding", res1.sma_actors.hero.handle == 0)
+check("scene: script continues after play", #res1.backlog == 1
+      and res1.backlog[1] == "done")
+
+local sceneStop = "[sma_play name=\"hero\" asset=\"hero\" anim=\"idle\"]\n"
+    .. "[sma_stop name=\"hero\"]\n[ch text=\"after\"]\n"
+local res2 = determinism.run_scene(sceneStop, {
+    scene = "sma_test.ks",
+    kag_override = {
+        sma_play = sma.commands.sma_play,
+        sma_stop = sma.commands.sma_stop,
+    },
+})
+check("scene: [sma_stop] despawns actor",
+      res2.sma_actors == nil or res2.sma_actors.hero == nil)
+check("scene: script continues after stop", #res2.backlog == 1
+      and res2.backlog[1] == "after")
+
+local sceneUnknown = "[sma_play name=\"a\" asset=\"nope\"]\n[ch text=\"ok\"]\n"
+local res3 = determinism.run_scene(sceneUnknown, {
+    scene = "sma_test.ks",
+    kag_override = {
+        sma_play = sma.commands.sma_play,
+        sma_stop = sma.commands.sma_stop,
+    },
+})
+check("scene: unknown asset inert, no crash",
+      (res3.sma_actors == nil or res3.sma_actors.a == nil)
+      and #res3.backlog == 1)
+
 if failed > 0 then
     print(string.format("SMA TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)

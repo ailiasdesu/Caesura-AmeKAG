@@ -72,8 +72,7 @@ function engine_update(dt)
     if history_co then
         local ok, err = coroutine.resume(history_co)
         if not ok then
-            print("[History] overlay error: " .. tostring(err))
-            history_co = nil
+            print("[History] overlay error: " .. tostring(err))            history_co = nil
             -- The overlay may have set input_focus="history" before dying;
             -- reset it or clicks/H re-open stay deadlocked (soft-lock).
             local ctx = _G._CAESURA_CTX
@@ -140,6 +139,14 @@ function engine_update(dt)
             end
         end
     end
+    -- SMA skeletal-mesh actors ([sma_play]): advance animation time and
+    -- re-skin every frame (inert when no actors / no sma module).
+    local ctxS = _G._CAESURA_CTX
+    if ctxS and ctxS.sma_actors then
+        pcall(function()
+            require("kag.sma").update(ctxS, dt)
+        end)
+    end
 end
 
 -- ── Engine render callback (called each frame after update) ──────────────────
@@ -149,6 +156,14 @@ end
 function engine_render()
     layers.render()
     kag_runner.render()
+    -- SMA skeletal-mesh actors: draw after the layer tree (inert when
+    -- no actors / no sma module / no GPU binding).
+    local ctxS = _G._CAESURA_CTX
+    if ctxS and ctxS.sma_actors then
+        pcall(function()
+            require("kag.sma").render(ctxS)
+        end)
+    end
 end
 
 -- ── Input callback (called by C++ processEvents on mouse click, KAG focus) ───
