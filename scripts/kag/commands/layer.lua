@@ -55,23 +55,23 @@ schema.define("cl", {
 })
 schema.define("bg", {
     _meta = { category = "layer", blocking = false, desc = "KAG3-compatible bg command" },
-    storage = { type = "string" },
-    file = { type = "string" },
+    storage = { type = "file" },
+    file = { type = "file" },
     path = { type = "string" },
     layer = { type = "string", default = "bg" },
 })
 schema.define("fg", {
     _meta = { category = "layer", blocking = false, desc = "KAG3-compatible fg command" },
-    storage = { type = "string" },
-    file = { type = "string" },
+    storage = { type = "file" },
+    file = { type = "file" },
     path = { type = "string" },
     layer = { type = "string", default = "fg" },
     clear = { type = "boolean", default = false },
 })
 schema.define("image", {
     _meta = { category = "layer", blocking = false, desc = "KAG3-compatible image command" },
-    storage = { type = "string" },
-    file = { type = "string" },
+    storage = { type = "file" },
+    file = { type = "file" },
     layer = { type = "string", default = "fg" },
     x = { type = "number" },  -- no default: handler checks ~= nil
     y = { type = "number" },

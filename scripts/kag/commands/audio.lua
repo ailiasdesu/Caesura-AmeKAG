@@ -54,7 +54,7 @@ schema.define("setvoicevolume", {
 })
 schema.define("playbgmstop", {
     _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playbgmstop command" },
-    file = { type = "string" },
+    file = { type = "file" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
@@ -62,8 +62,8 @@ schema.define("playbgmstop", {
 schema.define("playbgm", {
     _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playbgm command" },
     _require_any = { "file", "storage" },
-    file    = { type = "string" },
-    storage = { type = "string" },  -- KAG3 alias for file
+    file    = { type = "file" },
+    storage = { type = "file" },  -- KAG3 alias for file
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
     loop   = { type = "boolean", default = true },
@@ -71,8 +71,8 @@ schema.define("playbgm", {
 schema.define("playse", {
     _meta = { category = "audio", blocking = false, desc = "KAG3-compatible playse command" },
     _require_any = { "file", "storage" },
-    file    = { type = "string" },
-    storage = { type = "string" },
+    file    = { type = "file" },
+    storage = { type = "file" },
     volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
     fadein = { type = "number", default = 0, min = 0, max = 30000 },
 })
@@ -186,8 +186,8 @@ end
 -- Neo-Genesis contract: typed crossfade (time clamped).
 schema.define("xfadebgm", {
     _meta = { category = "audio", blocking = true, desc = "KAG3-compatible xfadebgm command" },
-    file  = { type = "string" },
-    storage = { type = "string" },
+    file  = { type = "file" },
+    storage = { type = "file" },
     time  = { type = "number", default = 2000, min = 0, max = 30000 },
 })
 

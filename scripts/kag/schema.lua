@@ -164,8 +164,95 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
             v = v:gsub("%$(%a+)%.([%w_]+)", varLookup)
             v = v:gsub("%%(%a+)%.([%w_]+)%%", varLookup)
         end
+    elseif spec.type == "list" then
+        -- Comma-separated value -> array, optionally typed per element.
+        -- e.g. colors="red,green,blue" -> {"red","green","blue"}
+        if type(v) == "table" then
+            -- already a list (programmatic callers may pass arrays)
+        elseif type(v) == "string" then
+            local out = {}
+            for item in v:gmatch("[^,]+") do
+                item = item:match("^%s*(.-)%s*$")  -- trim
+                if #item > 0 then
+                    if spec.item_type == "number" then
+                        local n = tonumber(item)
+                        if not n then
+                            error(string.format(
+                                "%s: param '%s' list element expects a number, got %q",
+                                whereFn(), name, item), 0)
+                        end
+                        item = n
+                    elseif spec.item_type == "boolean" then
+                        local low = item:lower()
+                        if low == "true" or low == "1" or low == "yes" then item = true
+                        elseif low == "false" or low == "0" or low == "no" then item = false
+                        else
+                            error(string.format(
+                                "%s: param '%s' list element expects boolean, got %q",
+                                whereFn(), name, item), 0)
+                        end
+                    end
+                    out[#out + 1] = item
+                end
+            end
+            v = out
+        else
+            error(string.format(
+                "%s: param '%s' expects a list, got %q", whereFn(), name, tostring(raw)), 0)
+        end
+    elseif spec.type == "enum" then
+        -- Explicit enum type: value must be one of spec.values (or the
+        -- legacy `choices` map). Kept as a string after validation.
+        local allowed = spec.values or spec.choices
+        if not allowed then
+            error(string.format(
+                "%s: param '%s' enum missing values", whereFn(), name), 0)
+        end
+        local ok = false
+        if type(allowed) == "table" then
+            if allowed[v] then
+                ok = true
+            else
+                for _, av in ipairs(allowed) do
+                    if tostring(av) == tostring(v) then ok = true break end
+                end
+            end
+        end
+        if not ok then
+            local list = {}
+            if type(allowed) == "table" then
+                for k in pairs(allowed) do list[#list + 1] = tostring(k) end
+            end
+            table.sort(list)
+            error(string.format(
+                "%s: param '%s' must be one of {%s}, got %q",
+                whereFn(), name, table.concat(list, ","), tostring(raw)), 0)
+        end
+        v = tostring(v)
+    elseif spec.type == "file" then
+        -- Asset path cross-validation: normalize to string; reject empty
+        -- and path traversal (static, no ctx needed); when a ctx with a
+        -- resolver is present, additionally verify the file exists.
+        v = tostring(v)
+        if v == "" then
+            error(string.format(
+                "%s: param '%s' file path must not be empty", whereFn(), name), 0)
+        end
+        if v:find("..", 1, true) or v:find("\\", 1, true) or v:sub(1, 1) == "/" then
+            error(string.format(
+                "%s: param '%s' invalid file path: %q (no traversal/absolute)",
+                whereFn(), name, tostring(raw)), 0)
+        end
+        if ctx and ctx.resolve_file and type(v) == "string" and #v > 0 then
+            local okF, resolved = pcall(ctx.resolve_file, v)
+            if okF and resolved == nil then
+                error(string.format(
+                    "%s: param '%s' file not found: %q (asset root)",
+                    whereFn(), name, tostring(raw)), 0)
+            end
+        end
     end
-    if spec.choices and not spec.choices[v] then
+    if spec.type ~= "list" and spec.choices and not spec.choices[v] then
         error(string.format("%s: param '%s' must be one of {%s}, got %q",
             whereFn(), name, table.concat(spec.choices, ","), tostring(raw)), 0)
     end
