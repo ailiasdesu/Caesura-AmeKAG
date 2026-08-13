@@ -46,6 +46,7 @@ local tests = {
     "test_kag3_compat",
     "test_choice",
     "test_text_markup",
+    "test_i18n",
     "test_sma",
     "test_title_menu",
     "test_title_entry",

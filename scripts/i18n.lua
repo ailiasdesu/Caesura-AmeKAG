@@ -2,7 +2,17 @@
 --  Caesura (AmeKAG) — i18n.lua  [P1.3]
 --  Multi-language internationalization.
 --  Loads string tables from assets/lang/xx.lua.
---  KAG text parser replaces {key} tokens with translated strings.
+--  Two mechanisms (both flow through i18n.localize, applied by the KAG
+--  text pipeline before markup parsing):
+--    1. Per-line translation: lang file `lines` table maps
+--       "<scene>:<fnv1a(message)>" -> localized text (Ren'Py-style line
+--       translation; keys are content-addressed so scene reordering or
+--       runtime-generated dialogue never shifts translations).
+--    2. {key} token expansion: "{key}" inside any text is replaced by
+--       i18n.t(key). Markup tag names (b/i/s/color/size) are whitelisted
+--       and never treated as keys (inline markup wins).
+--  Authoring: scripts/ks_i18n.lua scans scenes and emits/merges the
+--  `lines` template into assets/lang/<code>.lua.
 -- ===========================================================================
 
 local i18n = {}
@@ -13,6 +23,28 @@ i18n.current = "zh"
 i18n.strings = {}
 -- Fallback string table (always English)
 i18n.fallback = {}
+-- Per-line translations: ["<scene>:<hash>"] = localized text
+i18n.lines = {}
+
+-- Markup tag names that must never be treated as {key} translation tokens
+-- (inline text markup wins over i18n; see kag/text_layout.lua).
+local MARKUP_NAMES = { b = true, i = true, s = true, color = true, size = true }
+
+-- ===========================================================================
+-- i18n.fnv1a(text) -> 8-hex FNV-1a 32-bit hash of a string
+--  Content-addressed translation keys: stable under scene reordering and
+--  immune to runtime-generated dialogue. Same algorithm as
+--  compiler.hashFile (offset basis 2166136261, prime 16777619).
+-- ===========================================================================
+function i18n.fnv1a(text)
+    text = tostring(text or "")
+    local hash = 2166136261
+    for i = 1, #text do
+        hash = (hash ~ text:byte(i)) * 16777619
+        hash = hash % 4294967296
+    end
+    return string.format("%08x", hash)
+end
 
 -- ===========================================================================
 -- i18n.load(langCode) — load language table from assets/lang/<code>.lua
@@ -20,6 +52,7 @@ i18n.fallback = {}
 function i18n.load(langCode)
     langCode = langCode or "zh"
     i18n.current = langCode
+    i18n.lines = {}
 
     -- Try loading the language file
     local path = "assets/lang/" .. langCode .. ".lua"
@@ -28,11 +61,22 @@ function i18n.load(langCode)
         if not f then return nil end
         local txt = f:read("*a")
         f:close()
-        return load("return " .. txt, "i18n", "t", {})()
+        -- Hand-written lang files are bare table literals ({...}); tool
+        -- generated files (ks_i18n.lua) carry leading comments + an
+        -- explicit `return`. Accept both: strip leading comment lines,
+        -- then prepend `return ` only when the body lacks one.
+        local body = txt:gsub("^%s*%-%-[^\n]*\n", "")
+        local chunk = body:find("return", 1, true)
+            and load(body, "i18n", "t", {})
+            or load("return " .. body, "i18n", "t", {})
+        return chunk()
     end)
 
     if ok and type(data) == "table" then
         i18n.strings = data
+        if type(data.lines) == "table" then
+            i18n.lines = data.lines
+        end
         print("[i18n] Loaded " .. langCode .. " (" .. #data .. " keys)")
     else
         -- If file not found, try built-in fallback
@@ -76,12 +120,37 @@ end
 -- ===========================================================================
 -- i18n.expand(text) -> string with {key} replaced by translations
 -- Only replaces {key} tokens in text; non-token content passes through.
+-- Inline text markup tag names ({b}/{i}/{s}/{color}/{size}) are whitelisted
+-- and never treated as keys — the markup parser wins for those.
 -- ===========================================================================
 function i18n.expand(text)
     if not text or #text == 0 then return text or "" end
     return (text:gsub("{([%w_]+)}", function(key)
-        return i18n.t(key)
+        if MARKUP_NAMES[key] then return "{" .. key .. "}" end
+        local val = i18n.t(key)
+        -- Unknown key: keep the braced form so missing translations stay
+        -- visible (and literal {word} text is never destructively mangled).
+        if val == key then return "{" .. key .. "}" end
+        return val
     end))
+end
+
+-- ===========================================================================
+-- i18n.localize(text, scene) -> localized dialogue text
+--  Precedence:
+--    1. Per-line translation: lang file `lines["<scene>:<fnv1a(text)>"]`
+--       (Ren'Py-style line translation, content-addressed key).
+--    2. {key} token expansion (i18n.expand).
+--    3. Original text unchanged.
+--  Applied by the KAG text pipeline ([ch]/[text]) BEFORE markup parsing,
+--  so translated strings may themselves carry {color}/{size}/{b}/{i} markup.
+-- ===========================================================================
+function i18n.localize(text, scene)
+    if not text or #text == 0 then return text or "" end
+    local lineKey = tostring(scene or "") .. ":" .. i18n.fnv1a(text)
+    local line = i18n.lines[lineKey]
+    if line ~= nil and #tostring(line) > 0 then return tostring(line) end
+    return i18n.expand(text)
 end
 
 -- ===========================================================================

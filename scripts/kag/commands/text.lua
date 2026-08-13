@@ -474,6 +474,14 @@ end
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
+
+    -- Localization pipeline: per-line translation (lines[scene:hash]) first,
+    -- then {key} token expansion — applied BEFORE markup parsing so the
+    -- translated string may itself carry {color}/{size}/{b}/{i} markup.
+    if #message > 0 then
+        message = require("i18n").localize(message, ctx.current_scene)
+    end
+
     local nvl = ctx.nvl_mode == true
 
     -- Neo-Genesis inline markup: {color=#rrggbb}...{/color} spans. The
@@ -728,6 +736,10 @@ end
 function TextCommands.text(ctx, params)
     local message = params.text or params.message or params.content or ""
     if #message == 0 then return end
+
+    -- Localization pipeline (same as [ch]): per-line translation first,
+    -- then {key} token expansion, before markup parsing.
+    message = require("i18n").localize(message, ctx.current_scene)
 
     -- Neo-Genesis inline markup (see [ch]): spans for drawing, plain for
     -- backlog / reveal.
