@@ -273,11 +273,20 @@ sma.register("hero", sma.load(io.open("assets/sma/hero.json"):read("*a")))
 
 ```kag
 [sma_play name="hero" asset="hero" anim="idle" x=440 y=200 scale=2 tex=0]
+[sma_anim name="hero" anim="walk" blend_time=0.3]   ; 运行切换（可选淡入）
+[sma_ik name="hero" bone0=0 bone1=1 tx=300 ty=400 l2=80]  ; 两骨 IK 到达点
+[sma_variant name="hero" part="eye" variant="closed"]      ; 部件/表情变体
 [sma_stop name="hero"]
 ```
 
 - 每帧自动推进动画时间并重蒙皮（引擎更新钩子已接）；绘制在图层树之后
-- 枢轴烘焙与骨骼链解析在驱动侧完成；权重混合在引擎 CPU 软变形路径
+- 枢轴烘焙与骨骼链解析在驱动侧完成；权重混合默认走**GPU 计算蒙皮**
+  （S5：bgfx compute，D3D11/GL；`sma.set_skin_mode("auto"|"cpu"|"gpu")`
+  可切换，Metal/SPIR-V 自动回落 CPU 软变形——数学与 CPU 逐像素等价）
+- **播放控制**：`loop`（默认循环）、`rate` 倍速、`sma.pause/resume/seek/
+  set_rate`、非循环动画播完自动回退 `on_done_anim`
+- **高级动画**：crossfade 混合（`blend_time`）、两骨 IK（`sma.set_ik`）、
+  E-mote 风格部件/表情变体（资产 `parts` + `sma.set_variant`）
 - 无 GPU 环境（测试/CI）全链惰性空操作；纹理经现有纹理管线
 - 文本标记 `{color}`/`{size}`/`{b}`/`{i}` 均已渲染（见 §13）
 

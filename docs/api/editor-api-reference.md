@@ -1,4 +1,4 @@
-﻿# Caesura (AmeKAG) — Editor Developer API Reference
+# Caesura (AmeKAG) — Editor Developer API Reference
 
 > **面向 web-editor 前端开发者的完整接口文档**
 > 最后更新: 2026-07-26
@@ -59,6 +59,27 @@
 | `engine` | string | `"CaesuraAmeKAG"` |
 | `lua` | bool | Lua VM 是否已初始化 |
 | `port` | int | 服务器端口 |
+
+**`GET /api/state`**（round 18：IDE 预览面板引擎状态回显）
+
+```
+→ (no body)
+← {"status":"ok","scene":"demo/start.ks","token_index":42,
+   "nvl_mode":false,"language":"zh","backlog_count":3,"layer_count":5}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `status` | string | `"ok"` |
+| `scene` | string | 当前场景路径（无游戏运行时为空串） |
+| `token_index` | int | 当前脚本 token 位置 |
+| `nvl_mode` | bool | NVL 全屏文本模式是否激活 |
+| `language` | string | 当前 UI 语言（i18n.current） |
+| `backlog_count` | int | backlog 条目数 |
+| `layer_count` | int | 图层树节点数 |
+
+> 旧路径 `GET /api/debug/getState` 保留（返回相同字段）；stdio 传输的
+> `getState` 方法同样返回完整状态。
 
 ---
 

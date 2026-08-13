@@ -185,9 +185,42 @@ JSON 加载）；渲染测试走 deferred-gpu 模式（无 GPU 环境仅构造+�
 | S2 | CPU 软变形实现 + 顶点缓冲上传 + 绘制（复用 AffineBlt shader） | S1 |
 | S3 | `scripts/kag/sma.lua` 数据加载/动画驱动 + KAG 命令契约 | S1 |
 | S4 | 测试（确定性矩阵/权重/LERP + deferred-gpu 渲染） | S2/S3 |
-| S5 | GPU 蒙皮 shader（可选，性能触发） | S2 |
+| S5 | GPU 蒙皮（bgfx compute）——**已交付（round 18）**，见 §10 | S2 |
 
-## 9. 风险
+## 9. S5 GPU 蒙皮（bgfx compute，round 18）
+
+**管线**：每个网格在 `createMesh` 时上传**静态 compute 输入顶点缓冲**（
+pos+uv+bone0/bone1+w0/w1，32B/顶点；D3D11 禁止 DYNAMIC 用法带 SRV 绑定，
+故输入必须是静态）与**动态输出缓冲**（pos+uv，16B/顶点，COMPUTE_WRITE）；
+共享骨骼缓冲（64 骨骼 × vec4 + 槽 64/65 携带**绘制变换** (x,y,scale) 与视口
+尺寸 (sw,sh)）。`updateMesh` 只存姿势；`drawMesh` 时打包骨骼 → 上传 →
+**同 view dispatch**（compute 排序先于 draw，提交序保证）→ 计算着色器完成
+蒙皮 + NDC 变换 → 绘制复用引擎已验证的直通程序（vs_sprite + fs_texture）。
+
+**关键实现细节**：
+- D3D11 compute 缓冲是 **typed float4 视图**（非 structured）——HLSL 用
+  `Buffer<float4>`/（输出）`RWBuffer<float4> : register(u2)`（**寄存器必须
+  与绑定 stage 一致**；GLSL 用 std430 binding=0/1/2）。
+- 骨骼打包 `packBonePose`：vec4=(cos·scale, sin·scale, ox, oy)，与 CPU
+  `applyBonePose` 严格等价（shader 数学复刻单测 <1e-4）。
+- 内存生命周期：`bgfx::update`/create 的 makeRef 内存必须存活到
+  `bgfx::frame()`——一律用 `bgfx::copy` 移交所有权。
+- 回退：无 BGFX_CAPS_COMPUTE / Metal / SPIR-V → CPU 软变形（SkinMode::Auto）。
+- **验证**：D3D11 GPU 子测试（隐藏窗 + framebuffer 读回）——同一网格同一
+  姿势 GPU/CPU 两帧逐像素比对（容差 ±1 + 边缘预算）通过（14 断言）。
+
+## 9b. 播放控制与高级动画（round 18）
+
+- **播放控制**：`loop`（设计文档 §4 承诺，默认 true，t 按 duration 取模）、
+  `sma.duration`、`rate` 倍速、`pause`/`resume`/`seek`/`set_rate`、
+  `play_anim`（切换动画不重建网格）、非 loop 播完 `on_done_anim` 回退。
+- **crossfade 混合**：`play_anim(blend_time)` 双动画采样逐骨 LERP，完成后清除。
+- **2 骨 IK**：cosine-law 纯函数 `ik2bones`（可达/不可达/退化全分支），
+  `set_ik`/`clear_ik` 每帧覆盖链骨骼世界旋转使链条到达目标。
+- **部件/表情变体**（E-mote 风格）：资产 `parts` 多网格（每部件独立
+  变体几何），`set_variant` 销毁重建该部件网格；单 mesh 路径完全兼容。
+
+## 10. 风险
 
 | 风险 | 对策 |
 |---|---|
