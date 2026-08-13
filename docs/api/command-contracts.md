@@ -359,11 +359,12 @@ _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible nameplate c
 
 ### `[nvl]`
 
-_Category: text · Blocking: no (fire-and-forget) · NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit_
+_Category: text · Blocking: no (fire-and-forget) · NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit; [nvl prefix="「%s」："] customizes the speaker prefix format (%s = name)_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `mode` | string | - | - | - |
+| `prefix` | string | - | - | - |
 
 ### `[p]`
 

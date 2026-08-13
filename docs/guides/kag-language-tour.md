@@ -246,6 +246,8 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 规则：
 
 - `[nvl]` 进入（或重置页首）；`[nvl clear]` 清页；`[nvl off]` 退出
+- 说话人前缀格式可配：`[nvl prefix="%s："]`（`%s` = 说话人名字，
+  默认 `「%s」：`；设置后持续到下次修改；名字中的 `%` 安全）
 - 累积行位于屏幕上方（`x=48, y=160` 起），占满整行宽度；说话人以
   **行首内联前缀**「Name」： 显示（Ren'Py NVL 风格，颜色取
   `nameplate_style.text_color`，随行换行；空消息时回退为行内独立标签）
