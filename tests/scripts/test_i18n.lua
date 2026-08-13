@@ -126,6 +126,27 @@ check("ch: markup survives localization (bold span)",
       boldDraw and tailDraw and not literalB)
 
 -- ---------------------------------------------------------------------------
+-- 3c. [button]/[sel] choice labels
+-- ---------------------------------------------------------------------------
+local choiceKey = "scene.ks:" .. i18n.fnv1a("Choice A")
+i18n.lines[choiceKey] = "選択肢A"
+local ctxB = fresh_ctx()
+TextCommands.button(ctxB, { text = "Choice A", target = "*a" })
+pcall(function() TextCommands.endbutton(ctxB, {}) end)
+check("button: registered label localized",
+      ctxB._choiceButtonsActive ~= nil
+      and ctxB._choiceButtonsActive[1].text == "選択肢A")
+check("button: draw uses localized label", ctxB.text_state.draws[1] ~= nil
+      and ctxB.text_state.draws[1].text == "1. 選択肢A")
+
+-- [sel] alias shares the handler (KAG3 select syntax)
+local ctxS = fresh_ctx()
+TextCommands.sel(ctxS, { text = "Choice A", target = "*a" })
+check("sel: alias localizes too",
+      ctxS._choiceButtons ~= nil and ctxS._choiceButtons[1].text == "選択肢A")
+i18n.lines[choiceKey] = nil
+
+-- ---------------------------------------------------------------------------
 -- 3b. i18n.load reads a tool-generated lang file (comments + return shape)
 -- ---------------------------------------------------------------------------
 local saved2 = { current = i18n.current, strings = i18n.strings,
@@ -152,11 +173,12 @@ local tmpfile = os.tmpname():gsub("\\", "/")
 local tmpdir = tmpfile:match("^(.*)[/\\]")
 local fixture = "demo/x.ks"
 local f = io.open(tmpdir .. "/x.ks", "w")
-f:write('[ch name="A" text="Hello world"]\n[p]\nplain line\n[text text="Second"]\n')
+f:write('[ch name="A" text="Hello world"]\n[p]\nplain line\n[text text="Second"]\n'
+     .. '[button text="Yes" target="*y"]\n[endbutton]\n[sel text="No"]\n[endselect]\n')
 f:close()
 
 local body, total, scenes, kept = ks.build_template(tmpdir, nil)
-check("ks_i18n: 3 messages extracted", total == 3)
+check("ks_i18n: 5 messages extracted (incl. button/sel labels)", total == 5)
 check("ks_i18n: scene counted", scenes == 1)
 check("ks_i18n: hash keys present",
       body:find('x.ks:' .. i18n.fnv1a("Hello world"), 1, true) ~= nil)
@@ -164,6 +186,10 @@ check("ks_i18n: bare text token extracted",
       body:find('x.ks:' .. i18n.fnv1a("plain line"), 1, true) ~= nil)
 check("ks_i18n: [text] extracted",
       body:find('x.ks:' .. i18n.fnv1a("Second"), 1, true) ~= nil)
+check("ks_i18n: [button] label extracted",
+      body:find('x.ks:' .. i18n.fnv1a("Yes"), 1, true) ~= nil)
+check("ks_i18n: [sel] label extracted",
+      body:find('x.ks:' .. i18n.fnv1a("No"), 1, true) ~= nil)
 check("ks_i18n: original in comment",
       body:find("original: Hello world", 1, true) ~= nil)
 
@@ -175,9 +201,31 @@ local existing = {
 local merged, totalM = ks.build_template(tmpdir, existing)
 check("ks_i18n merge: keeps translation",
       merged:find('"Hallo Welt"', 1, true) ~= nil)
-check("ks_i18n merge: same key count", totalM == 3)
+check("ks_i18n merge: same key count", totalM == 5)
 check("ks_i18n merge: preserves other fields",
       merged:find('title_screen = "TITLE"', 1, true) ~= nil)
+
+-- load_lang must parse tool-generated files (comments + return) so a
+-- real --update round-trip never drops hand-authored settings keys.
+local genPath = tmpdir .. "/gen.lua"
+local g = io.open(genPath, "w")
+g:write(body)
+g:close()
+local reloaded = ks.load_lang(genPath)
+check("ks_i18n load_lang: generated file parses",
+      reloaded ~= nil and type(reloaded.lines) == "table")
+
+-- Hand-written lang files are bare table literals ({...}, no return).
+local handPath = tmpdir .. "/hand.lua"
+local h = io.open(handPath, "w")
+h:write('{\n  title_screen = "手書き",\n  lines = { ["a.ks:1"] = "x" },\n}\n')
+h:close()
+local reloadedHand = ks.load_lang(handPath)
+check("ks_i18n load_lang: hand-written literal parses",
+      reloadedHand ~= nil and reloadedHand.title_screen == "手書き"
+      and reloadedHand.lines["a.ks:1"] == "x")
+os.remove(handPath)
+os.remove(genPath)
 os.remove(tmpdir .. "/x.ks")
 
 -- ---------------------------------------------------------------------------

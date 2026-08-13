@@ -1041,6 +1041,13 @@ Future enhancement: extract to a standalone ChoiceController Lua class if comple
 function TextCommands.button(ctx, params)
     ctx._choiceButtons = ctx._choiceButtons or {}
     local text = params.text or params.caption or ""
+    -- Localization pipeline (same as [ch]): per-line translation then
+    -- {key} token expansion, at registration time so [endbutton] draws
+    -- and hit-testing use the localized label. [sel] (KAG3 alias) shares
+    -- this handler.
+    if #text > 0 then
+        text = require("i18n").localize(text, ctx.current_scene)
+    end
     -- bare [button *route_a text="..."] -> params[1] as target
     -- (consistency with jump/call/link -- audit)
     local target = params.target or params.storage

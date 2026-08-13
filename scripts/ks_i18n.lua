@@ -43,17 +43,24 @@ function M.extract_messages(ks_text)
             end
         elseif tok.type == "command" then
             local cmd = tok.cmd
-            if cmd == "ch" or cmd == "text" then
-                -- Tokenizer params are raw pair lists {{key,val},...};
-                -- the runtime compiler converts them to named fields, so
-                -- mirror that here (params.text / params.message).
-                local p = {}
-                for _, pair in ipairs(tok.params or {}) do
-                    if type(pair) == "table" and pair[1] then
-                        p[pair[1]] = pair[2]
-                    end
+            -- Tokenizer params are raw pair lists {{key,val},...};
+            -- the runtime compiler converts them to named fields, so
+            -- mirror that here (params.text / params.message).
+            local p = {}
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and pair[1] then
+                    p[pair[1]] = pair[2]
                 end
+            end
+            if cmd == "ch" or cmd == "text" then
                 local m = p.text or p.message
+                if type(m) == "string" and #m > 0 then
+                    msgs[#msgs + 1] = m
+                end
+            elseif cmd == "button" or cmd == "sel" then
+                -- Choice labels: same content-addressed key space (same
+                -- string in a [ch] and a [button] shares one translation).
+                local m = p.text or p.caption
                 if type(m) == "string" and #m > 0 then
                     msgs[#msgs + 1] = m
                 end
@@ -65,13 +72,19 @@ end
 
 -- ---------------------------------------------------------------------------
 --  Load an existing lang file as a table (for --update merge).
+--  Accepts both hand-written bare table literals and tool-generated
+--  files (leading comments + explicit `return`) — same comment-stripping
+--  strategy as i18n.load.
 -- ---------------------------------------------------------------------------
 function M.load_lang(path)
     local f = io.open(path, "r")
     if not f then return nil end
     local txt = f:read("*a")
     f:close()
-    local chunk = load("return " .. txt, "ks_i18n", "t", {})
+    local body = txt:gsub("^%s*%-%-[^\n]*\n", "")
+    local chunk = body:find("return", 1, true)
+        and load(body, "ks_i18n", "t", {})
+        or load("return " .. body, "ks_i18n", "t", {})
     if not chunk then return nil end
     local ok, data = pcall(chunk)
     if not ok or type(data) ~= "table" then return nil end
