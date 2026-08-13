@@ -373,3 +373,15 @@ lua scripts/ks_i18n.lua --missing --dir demo --lang ja  ; 未翻译清单（CI �
   存档持久化（save.lua 存 `state.language`，读档恢复）
 - 内置 zh/en/ja 界面词条；语言文件同时支持手写 `{...}` 字面量与工具
   生成的 `return {...}`（含注释头）两种形态
+
+**运行时热切换整页重绘**（**超 Ren'Py**：Ren'Py 已显示行保持原语言，
+本引擎切换后整页跟随新语言）：
+
+- 每个 `[ch]`/`[text]` 在显示时把**本地化前**的源文本（插值后）连同
+  布局参数记录进 `text_state.page_src`（与 draws 平行，随页面清空）
+- 设置菜单 Language 切换 → `i18n.load` → `relocalize_page(ctx)`：
+  当前页（消息窗 / NVL 累积页）按新语言重放重绘（译文变长折行时后续
+  行自动级联下移）；backlog 历史、激活的选择按钮标签、cc 字幕同步重译
+- 重绘行立即全显（typewriter 封存）；未翻译行回落原文；backlog 条目
+  随存档持久化 `src`（旧档无 `src` 的条目保持原样）；说话人名牌/
+  `[ruby]` 不参与（管线本就不译）
