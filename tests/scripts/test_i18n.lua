@@ -233,6 +233,30 @@ check("ks_i18n load_lang: hand-written literal parses",
       reloadedHand ~= nil and reloadedHand.title_screen == "手書き return テスト"
       and reloadedHand.lines["a.ks:1"] == "x")
 os.remove(handPath)
+
+-- ---------------------------------------------------------------------------
+-- 5. find_missing — untranslated report (CI gate for translators)
+-- ---------------------------------------------------------------------------
+local report = ks.find_missing(tmpdir, existing)
+check("find_missing: 4 of 5 missing (1 translated)",
+      report.total == 5 and report.missing == 4)
+local translatedMissing = false
+for _, e in ipairs(report.entries) do
+    if e.key == "x.ks:" .. i18n.fnv1a("Hello world") then
+        translatedMissing = true
+    end
+end
+check("find_missing: translated key excluded", not translatedMissing)
+check("find_missing: original text carried for context",
+      report.entries[1].original ~= nil and #report.entries[1].original > 0)
+local noLang = ks.find_missing(tmpdir, nil)
+check("find_missing: no lang data -> all missing", noLang.missing == 5)
+local fullLang = { lines = {} }
+for _, e in ipairs(ks.collect_entries(tmpdir)) do
+    fullLang.lines[e.key] = "x"
+end
+check("find_missing: fully translated -> zero missing",
+      ks.find_missing(tmpdir, fullLang).missing == 0)
 os.remove(genPath)
 os.remove(tmpdir .. "/x.ks")
 
