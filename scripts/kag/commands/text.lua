@@ -637,13 +637,43 @@ function TextCommands.ch(ctx, params)
     -- [nvl]/[nvl clear]/[p] to the top of the page).
     local msgY = nvl and (ctx.textCursorY or NVL_Y0) or 580
 
-    -- Render speaker name if present
-    if #speaker > 0 then
+    -- Render speaker name if present. NVL mode: inline prefix 「Name」：
+    -- at the line start (Ren'Py NVL style) — a styled span prepended to
+    -- the message spans so it wraps with the line and the accumulated
+    -- cursor keeps advancing via add_wrapped_spans (zero new state
+    -- fields; save/rollback paths untouched). The prefix is an "instant"
+    -- draw (no typewriter truncation — it was a standalone label before).
+    -- Empty-message [ch] keeps the standalone inline label.
+    if nvl and #speaker > 0 and #message > 0 then
+        local tr, tg, tb
+        if ctx.nameplate_style and ctx.nameplate_style.text_color then
+            -- Direct call: an `and` chain would truncate the match's
+            -- multi-return to one value (Lua binary-op adjustment).
+            tr, tg, tb = ctx.nameplate_style.text_color:match(
+                "(%d+),%s*(%d+),%s*(%d+)")
+        end
+        local prefix_span = {
+            text = "「" .. speaker .. "」：",
+            color = (tr and { r = clamp_byte(tr), g = clamp_byte(tg),
+                              b = clamp_byte(tb) }) or nil,
+            size = nil,
+            bold = false,
+            italic = false,
+            instant = true,
+        }
+        if not spans then
+            spans = { { text = message, color = nil, size = nil,
+                        bold = false, italic = false } }
+        end
+        table.insert(spans, 1, prefix_span)
+    elseif #speaker > 0 then
         if nvl then
             -- Inline speaker label above the line (no fixed-position plate).
-            local st = ctx.nameplate_style
-            local tr, tg, tb = st and st.text_color and
-                st.text_color:match("(%d+),%s*(%d+),%s*(%d+)")
+            local tr, tg, tb
+            if ctx.nameplate_style and ctx.nameplate_style.text_color then
+                tr, tg, tb = ctx.nameplate_style.text_color:match(
+                    "(%d+),%s*(%d+),%s*(%d+)")
+            end
             backend.render_text(speaker, NVL_X, msgY - lineHeight,
                 clamp_byte(tr or 255), clamp_byte(tg or 255),
                 clamp_byte(tb or 255), 255)

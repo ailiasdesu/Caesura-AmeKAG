@@ -141,8 +141,12 @@ local function append_line_segments(lines, characters, first, last, options)
     local color = characters[first].color
     local scale = characters[first].scale
     local bold = characters[first].bold
+    local italic = characters[first].italic
+    local instant = characters[first].instant
     local function same_style(a, b)
-        return a.color == b.color and a.scale == b.scale and a.bold == b.bold
+        return a.color == b.color and a.scale == b.scale
+            and a.bold == b.bold and a.italic == b.italic
+            and a.instant == b.instant
     end
     for i = first + 1, last + 1 do
         local c = characters[i]
@@ -152,6 +156,8 @@ local function append_line_segments(lines, characters, first, last, options)
                 color = color,
                 scale = scale,
                 bold = bold,
+                italic = italic,
+                instant = instant,
                 width = measure_range(characters, seg_first, i - 1, options),
             }
             if i > last then break end
@@ -159,6 +165,8 @@ local function append_line_segments(lines, characters, first, last, options)
             color = characters[i].color
             scale = characters[i].scale
             bold = characters[i].bold
+            italic = characters[i].italic
+            instant = characters[i].instant
         end
     end
     lines[#lines + 1] = {
@@ -284,15 +292,16 @@ end
 -- ---------------------------------------------------------------------------
 -- Inline text markup (Neo-Genesis; Ren'Py `{...}` parity):
 --   {color=#RRGGBB} ... {/color}  — per-span text color (rendered)
---   {b}/{/b}, {i}/{/i}, {size=N}/{/size} — parsed and consumed for source
---     compatibility; the renderer has no bold/italic/size variants yet, so
---     they are a visual no-op. Unknown {tags} pass through as literal text.
+--   {b}/{/b}                       — synthetic bold (rendered, double-pass)
+--   {i}/{/i}                       — italic shear (rendered, top-edge offset)
+--   {size=N}/{/size}               — absolute font size (rendered, scaling)
+--   Unknown {tags} pass through as literal text.
 -- ---------------------------------------------------------------------------
 
 local function parse_open_tag(tag)
     local name = tag:match("^(%a+)")
     if not name then return nil end
-    if name == "i" then return { kind = "noop" } end -- italic: no shear path yet
+    if name == "i" then return { kind = "italic" } end
     if name == "b" then return { kind = "bold" } end
     if name == "size" then
         local size = tonumber(tag:match("^size%s*=%s*(%d+)%s*$"))
@@ -316,11 +325,10 @@ end
 
 local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true }
 
---- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold}}, plain }
+--- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold, italic}}, plain }
 --  Splits a message into styled spans and returns the markup-stripped
 --  plain text (backlog / reveal counters use the visible characters only).
---  size is an absolute font size (px); bold is a boolean. {i} is parsed
---  and consumed (renderer has no shear path yet — documented limitation).
+--  size is an absolute font size (px); bold/italic are booleans.
 function TextLayout.parse_markup(text)
     text = tostring(text or "")
     local spans = {}
@@ -328,9 +336,11 @@ function TextLayout.parse_markup(text)
     local color_stack = {}
     local size_stack = {}
     local bold_stack = {}
+    local italic_stack = {}
     local current_color = nil
     local current_size = nil
     local current_bold = false
+    local current_italic = false
     local buf = {}
 
     local function flush()
@@ -342,6 +352,7 @@ function TextLayout.parse_markup(text)
             color = current_color,
             size = current_size,
             bold = current_bold,
+            italic = current_italic,
         }
         plain_parts[#plain_parts + 1] = s
     end
@@ -367,6 +378,9 @@ function TextLayout.parse_markup(text)
                     elseif parsed.kind == "bold" then
                         bold_stack[#bold_stack + 1] = true
                         current_bold = true
+                    elseif parsed.kind == "italic" then
+                        italic_stack[#italic_stack + 1] = true
+                        current_italic = true
                     end
                     i = close_at + 1
                 else
@@ -382,8 +396,9 @@ function TextLayout.parse_markup(text)
                         elseif close_name == "b" and #bold_stack > 0 then
                             bold_stack[#bold_stack] = nil
                             current_bold = #bold_stack > 0
-                        elseif close_name == "i" then
-                            -- consumed; no visual effect (documented)
+                        elseif close_name == "i" and #italic_stack > 0 then
+                            italic_stack[#italic_stack] = nil
+                            current_italic = #italic_stack > 0
                         end
                         i = close_at + 1
                     else
@@ -399,7 +414,8 @@ function TextLayout.parse_markup(text)
     end
     flush()
     if #spans == 0 then
-        spans = { { text = text, color = nil, size = nil, bold = false } }
+        spans = { { text = text, color = nil, size = nil, bold = false,
+                    italic = false } }
     end
     return { spans = spans, plain = table.concat(plain_parts) }
 end
@@ -419,6 +435,8 @@ local function span_characters(spans, options)
                 color = span.color,
                 scale = scale,
                 bold = span.bold == true,
+                italic = span.italic == true,
+                instant = span.instant == true,
             }
         end
     end

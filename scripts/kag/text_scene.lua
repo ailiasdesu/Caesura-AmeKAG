@@ -97,7 +97,7 @@ function TextScene.set_opacity(ctx, opacity)
     return state.opacity
 end
 
-function TextScene.add_text(ctx, text, x, y, color, group, scale, bold)
+function TextScene.add_text(ctx, text, x, y, color, group, scale, bold, italic, instant)
     local state = ensure_state(ctx)
     local draw = {
         kind = "text",
@@ -109,9 +109,10 @@ function TextScene.add_text(ctx, text, x, y, color, group, scale, bold)
         b = color_value(color, "b", 3, 255),
         a = color_value(color, "a", 4, 255),
         group = group,
-        scale = scale or 1,  -- {size=N} markup (glyph scale factor)
-        bold = bold == true, -- {b} markup (synthetic bold)
-        typewriter = true,  -- may be truncated by the reveal animation
+        scale = scale or 1,    -- {size=N} markup (glyph scale factor)
+        bold = bold == true,   -- {b} markup (synthetic bold)
+        italic = italic == true, -- {i} markup (top-edge shear)
+        typewriter = not (instant == true),  -- instant: shown immediately
     }
     state.draws[#state.draws + 1] = draw
     return draw
@@ -153,7 +154,8 @@ function TextScene.add_wrapped_spans(ctx, spans, options)
             TextScene.add_text(
                 ctx, seg.text, seg_x, y,
                 seg.color or options.color, options.group,
-                seg.scale or 1, seg.bold == true)
+                seg.scale or 1, seg.bold == true, seg.italic == true,
+                seg.instant == true)
             seg_x = seg_x + seg.width
         end
         y = y + line_height
@@ -258,7 +260,8 @@ function TextScene.render(ctx, render_backend)
                 render_backend.render_text(
                     shown, draw.x, draw.y,
                     draw.r, draw.g, draw.b, alpha,
-                    draw.scale or 1, draw.bold == true)
+                    draw.scale or 1, draw.bold == true,
+                    draw.italic == true)
             end
             submitted = submitted + 1
         end

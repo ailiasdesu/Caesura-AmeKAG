@@ -124,15 +124,33 @@ check("p resets nvl cursor", ctxB.textCursorY == 160
       and ctxB.text_state.cursor_y == 160)
 
 -- ---------------------------------------------------------------------------
--- 5. [ch] in NVL: inline speaker label (no fixed plate), one render_text
+-- 5. [ch] in NVL: speaker as 「Name」： inline prefix span (Ren'Py NVL
+--    style). The prefix is an instant draw prepended to the message spans
+--    (wraps with the line; no direct render_text during ch — submitted by
+--    TextScene.render). Empty-message [ch] keeps the standalone label.
 -- ---------------------------------------------------------------------------
 calls.render_text = 0
 local ctxC = fresh_ctx()
 ctxC.nameplate_style = { text_color = "255,255,255" }
 TextCommands.nvl(ctxC, {})
 TextCommands.ch(ctxC, { name = "Ame", text = "hi" })
-check("nvl ch draws inline name exactly once", calls.render_text == 1)
-check("nvl ch accumulates the line", #ctxC.text_state.draws == 1)
+check("nvl ch no direct render_text", calls.render_text == 0)
+check("nvl ch prefix + message draws", #ctxC.text_state.draws == 2)
+local dP, dM = ctxC.text_state.draws[1], ctxC.text_state.draws[2]
+check("nvl prefix draw instant + styled",
+      dP.text == "「Ame」：" and dP.typewriter == false
+      and dP.r == 255 and dP.g == 255 and dP.b == 255)
+check("nvl message draw typewriter",
+      dM.text == "hi" and dM.typewriter == true)
+check("nvl backlog plain excludes prefix",
+      ctxC.backlog[1] ~= nil and ctxC.backlog[1].text == "hi")
+
+calls.render_text = 0
+local ctxE = fresh_ctx()
+ctxE.nameplate_style = { text_color = "255,255,255" }
+TextCommands.nvl(ctxE, {})
+TextCommands.ch(ctxE, { name = "Ame" })
+check("nvl empty message keeps standalone label", calls.render_text == 1)
 
 -- ---------------------------------------------------------------------------
 -- 6. commit seals prior lines (typewriter only animates the appended line)

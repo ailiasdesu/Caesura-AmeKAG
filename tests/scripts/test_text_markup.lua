@@ -1,6 +1,6 @@
 -- test_text_markup.lua — Neo-Genesis inline text markup:
 --   {color=#rrggbb}...{/color} per-span colors in [ch]/[text] messages.
---   {b}/{i}/{size} are parsed+consumed (renderer has no variants yet).
+--   {b} synthetic bold, {i} italic shear, {size} glyph scaling — rendered.
 --   Unknown {tags} pass through literally.
 local results = {}
 local function check(name, cond)
@@ -66,6 +66,16 @@ check("parse: bold span flagged", m6.spans[1].bold == true
       and m6.spans[2].bold == false)
 check("parse: size span carries size", m6.spans[3].size == 30
       and m6.spans[2].size == nil)
+check("parse: italic span flagged", m6.spans[2].italic == true
+      and m6.spans[1].italic == false and m6.spans[3].italic == false)
+
+local m10 = TextLayout.parse_markup("{b}{i}both{/i}{/b}x")
+check("parse: bold+italic stackable", m10.spans[1].bold == true
+      and m10.spans[1].italic == true and m10.spans[2].italic == false)
+
+local m11 = TextLayout.parse_markup("a{i}b")
+check("parse: unclosed italic to end", m11.plain == "ab"
+      and m11.spans[2].italic == true)
 
 local m7 = TextLayout.parse_markup("X{/color}Y")
 check("parse: stray closer consumed", m7.plain == "XY")
@@ -121,6 +131,17 @@ check("wrap: style boundaries split segments", #w4 == 1
       and w4[1].segments[2].color == RED
       and w4[1].segments[3].scale == 1.5)
 
+-- instant spans (NVL speaker prefix) keep their own segment even when
+-- colors are nil, so the message stays a separate typewriter draw
+local w5 = TextLayout.wrap_spans(
+    { { text = "「A」：", instant = true }, { text = "msg" } },
+    { max_width = 1000, font_size = 24 })
+check("wrap: instant prefix keeps its own segment", #w5 == 1
+      and #w5[1].segments == 2
+      and w5[1].segments[1].instant == true
+      and w5[1].segments[1].text == "「A」："
+      and w5[1].segments[2].instant == false)
+
 -- ---------------------------------------------------------------------------
 -- 3. add_wrapped_spans — per-segment draws with advancing x
 -- ---------------------------------------------------------------------------
@@ -155,6 +176,21 @@ local draws2 = ctxT2.text_state.draws
 check("spans: scale and bold on draws", #draws2 == 2
       and draws2[1].scale == 1.5 and draws2[1].bold == true
       and draws2[2].scale == 1 and draws2[2].bold == true)
+
+-- instant draws skip the typewriter (NVL speaker prefix)
+local ctxT3 = {
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {} },
+    textCursorX = 32, textCursorY = 580,
+}
+TextScene.add_wrapped_spans(ctxT3,
+    { { text = "「A」：", instant = true }, { text = "x" } },
+    { x = 32, y = 580, max_width = 1000, line_height = 24,
+      font_size = 24, color = { r = 255, g = 255, b = 255 } })
+local draws3 = ctxT3.text_state.draws
+check("spans: instant draw not typewriter", #draws3 == 2
+      and draws3[1].typewriter == false
+      and draws3[2].typewriter == true)
 
 -- ---------------------------------------------------------------------------
 -- 4. [ch] integration — draws colored, backlog/reveal use plain text
