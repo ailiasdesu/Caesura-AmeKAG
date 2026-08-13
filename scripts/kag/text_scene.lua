@@ -34,6 +34,10 @@ local function ensure_state(ctx)
     ctx.text_state = ctx.text_state or {}
     local state = ctx.text_state
     state.draws = type(state.draws) == "table" and state.draws or {}
+    -- Per-line pre-localize sources for language hot-switch redraw
+    -- (see kag/commands/text.lua relocalize_page). Parallel to draws,
+    -- cleared wherever draws are cleared.
+    state.page_src = type(state.page_src) == "table" and state.page_src or {}
     state.opacity = clamp_byte(state.opacity == nil and 255 or state.opacity)
     state.cursor_x = tonumber(state.cursor_x) or tonumber(ctx.textCursorX) or 32
     state.cursor_y = tonumber(state.cursor_y) or tonumber(ctx.textCursorY) or 580
@@ -55,6 +59,7 @@ end
 function TextScene.clear(ctx)
     local state = ensure_state(ctx)
     state.draws = {}
+    state.page_src = {}
     state.cursor_x = 32
     state.cursor_y = 580
     ctx.textCursorX = state.cursor_x
@@ -86,6 +91,7 @@ function TextScene.reset(ctx)
         cursor_x = 32,
         cursor_y = 580,
         draws = {},
+        page_src = {},
     }
     ctx.textCursorX = 32
     ctx.textCursorY = 580

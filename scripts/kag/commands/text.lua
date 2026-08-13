@@ -133,6 +133,137 @@ local function animate_text_opacity(ctx, params)
     end
 end
 
+-- =============================================================================
+--  Internal: replay a recorded page source through the display pipeline.
+--  Localizes (current language), parses markup, builds the NVL speaker
+--  prefix span, then wraps into persistent text_scene draws. Shared by
+--  the [ch]/[text] handlers (display path) and relocalize_page (language
+--  hot-switch full-page redraw). yOverride shifts the line for the
+--  redraw layout cascade (translations may wrap to a different line
+--  count); returns the new end y and the stripped plain text.
+-- =============================================================================
+local function _drawMessage(ctx, entry, yOverride)
+    local opts = entry.opts or {}
+    local nvl = opts.nvl == true
+    local msgX = opts.msgX
+    local msgY = yOverride or opts.msgY or 0
+    local color = opts.color
+    local lineHeight = opts.lineHeight
+    -- Index of the first draw this call will append: every draw below is
+    -- marked as a page-source draw so a language hot-switch redraw can
+    -- drop exactly the old page and replay it (foreign draws like [ruby]
+    -- stay untouched).
+    local firstIdx = #TextScene.get_state(ctx).draws + 1
+
+    -- Localization pipeline (same as the handlers): per-line translation
+    -- then {key} token expansion, before markup parsing.
+    local message = require("i18n").localize(entry.src, entry.scene)
+    local spans, plain = nil, message
+    if message:find("{", 1, true) then
+        local parsed = TextLayout.parse_markup(message)
+        spans, plain = parsed.spans, parsed.plain
+    end
+
+    local speaker = entry.speaker or ""
+    if nvl and #speaker > 0 and #message > 0 then
+        -- Inline prefix (styled span; format from ctx.nvl_prefix_fmt).
+        -- The prefix is an "instant" draw (no typewriter truncation).
+        local tr, tg, tb
+        if ctx.nameplate_style and ctx.nameplate_style.text_color then
+            -- Direct call: an and-chain would truncate the match's
+            -- multi-return to one value (Lua binary-op adjustment).
+            tr, tg, tb = ctx.nameplate_style.text_color:match(
+                "(%d+),%s*(%d+),%s*(%d+)")
+        end
+        local prefix_span = {
+            -- Format string: "%s" = speaker name. gsub substitution keeps
+            -- stray "%" in names harmless -- both the pattern and the
+            -- replacement string interpret "%" (escape the name first).
+            text = (ctx.nvl_prefix_fmt or "「%s」：")
+                -- Parentheses truncate the inner gsub's second return
+                -- (match count) -- otherwise it lands in the outer gsub's
+                -- limit slot and blocks all replacements.
+                :gsub("%%s", (speaker:gsub("%%", "%%%%"))),
+            color = (tr and { r = clamp_byte(tr), g = clamp_byte(tg),
+                              b = clamp_byte(tb) }) or nil,
+            size = nil,
+            bold = false,
+            italic = false,
+            instant = true,
+        }
+        if not spans then
+            spans = { { text = message, color = nil, size = nil,
+                        bold = false, italic = false } }
+        end
+        table.insert(spans, 1, prefix_span)
+    elseif #speaker > 0 then
+        if nvl then
+            -- Inline speaker label above the line (no fixed-position plate).
+            local tr, tg, tb
+            if ctx.nameplate_style and ctx.nameplate_style.text_color then
+                tr, tg, tb = ctx.nameplate_style.text_color:match(
+                    "(%d+),%s*(%d+),%s*(%d+)")
+            end
+            backend.render_text(speaker, msgX, msgY - lineHeight,
+                clamp_byte(tr or 255), clamp_byte(tg or 255),
+                clamp_byte(tb or 255), 255)
+        else
+            TextScene.add_text(
+                ctx, "[" .. speaker .. "]", opts.nameX or 540, 540, color)
+        end
+    end
+
+    if #message > 0 then
+        if spans then
+            msgY = TextScene.add_wrapped_spans(ctx, spans, {
+                x = msgX,
+                y = msgY,
+                max_width = opts.maxWidth,
+                line_height = lineHeight,
+                font_size = opts.font_size or lineHeight,
+                color = color,
+            })
+        else
+            msgY = TextScene.add_wrapped(ctx, message, {
+                x = msgX,
+                y = msgY,
+                max_width = opts.maxWidth,
+                line_height = lineHeight,
+                font_size = opts.font_size or lineHeight,
+                color = color,
+            })
+        end
+    end
+
+    -- Mark the draws this call produced as page-source draws (see above).
+    local st = TextScene.get_state(ctx)
+    for i = firstIdx, #st.draws do
+        st.draws[i]._page_src = true
+    end
+    return msgY, plain
+end
+
+-- =============================================================================
+--  Internal: draw the choice button group (shared by [endbutton] and the
+--  language hot-switch redraw). Buttons keep their y/h regions so
+--  hit-testing and the active-block state survive re-rendering.
+-- =============================================================================
+local function _renderChoices(ctx, buttons)
+    TextScene.remove_group(ctx, "choices")
+    local startY = 450
+    local lineHeight = resolve_line_height(ctx)
+    for idx, choice in ipairs(buttons) do
+        local y = startY + (idx - 1) * (lineHeight + 8)
+        TextScene.add_text(
+            ctx, idx .. ". " .. choice.text, 32, y,
+            { r = 255, g = 255, b = 0, a = 255 }, "choices")
+        -- Store button region for hit testing
+        choice.y = y
+        choice.h = lineHeight
+        choice.index = idx
+    end
+end
+
 local TextCommands = {}
 
 -- =============================================================================
@@ -198,7 +329,7 @@ schema.define("s", {
     ms = { type = "number", default = 250, min = 0, max = 60000 },
 })
 
-function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
+function TextCommands.push_backlog(ctx, speaker, text, voiceFile, src)
     ctx.backlog = ctx.backlog or {}
     local entry = {
         name        = speaker or "",
@@ -208,6 +339,9 @@ function TextCommands.push_backlog(ctx, speaker, text, voiceFile)
         timestamp   = os.time(),
         scene       = ctx.current_scene or ctx.currentScene or "",
         token_index = ctx.token_index or 1,
+        -- Pre-localize message: the language hot-switch redraw re-localizes
+        -- the backlog from this source (entries without src keep their text).
+        src         = src,
     }
     table.insert(ctx.backlog, entry)
 
@@ -474,6 +608,10 @@ end
 function TextCommands.ch(ctx, params)
     local speaker = params.name or params.character or ""
     local message = params.text or params.message or ""
+    -- Pre-localize source (post-interpolation): the language hot-switch
+    -- redraw re-localizes the page from this text with the current
+    -- language (see relocalize_page / _drawMessage).
+    local src_message = message
 
     -- Localization pipeline: per-line translation (lines[scene:hash]) first,
     -- then {key} token expansion — applied BEFORE markup parsing so the
@@ -548,7 +686,12 @@ function TextCommands.ch(ctx, params)
         -- config itself (its require chain is unavailable in degraded
         -- contexts and would disturb suite ordering).
         if ctx.cc_mode == true then
-            ctx.cc_text = { speaker = speaker, text = plain }
+            ctx.cc_text = {
+                speaker = speaker, text = plain,
+                -- Pre-localize source for the hot-switch redraw.
+                src = src_message,
+                scene = ctx.current_scene or ctx.currentScene or "",
+            }
         end
         -- Non-blocking voice: playvoice() yields until the clip ends, which
         -- would stall the script (and swallow clicks) for the whole line.
@@ -594,8 +737,8 @@ function TextCommands.ch(ctx, params)
         node.visible = true
     end
 
-    -- Store in backlog
-    TextCommands.push_backlog(ctx, speaker, plain, voiceFile)
+    -- Store in backlog (src = pre-localize message for hot-switch redraw)
+    TextCommands.push_backlog(ctx, speaker, plain, voiceFile, src_message)
 
     -- Set up message layer if needed
     local msgNode = layers.get("message")
@@ -644,86 +787,32 @@ function TextCommands.ch(ctx, params)
     -- speaker line; NVL mode continues at the accumulated cursor (reset by
     -- [nvl]/[nvl clear]/[p] to the top of the page).
     local msgY = nvl and (ctx.textCursorY or NVL_Y0) or 580
-
-    -- Render speaker name if present. NVL mode: inline prefix 「Name」：
-    -- at the line start (Ren'Py NVL style) — a styled span prepended to
-    -- the message spans so it wraps with the line and the accumulated
-    -- cursor keeps advancing via add_wrapped_spans (zero new state
-    -- fields; save/rollback paths untouched). The prefix is an "instant"
-    -- draw (no typewriter truncation — it was a standalone label before).
-    -- Empty-message [ch] keeps the standalone inline label.
-    if nvl and #speaker > 0 and #message > 0 then
-        local tr, tg, tb
-        if ctx.nameplate_style and ctx.nameplate_style.text_color then
-            -- Direct call: an `and` chain would truncate the match's
-            -- multi-return to one value (Lua binary-op adjustment).
-            tr, tg, tb = ctx.nameplate_style.text_color:match(
-                "(%d+),%s*(%d+),%s*(%d+)")
-        end
-        local prefix_span = {
-            -- Format string: "%s" = speaker name. gsub substitution keeps
-            -- stray "%" in names harmless — both the pattern and the
-            -- replacement string interpret "%" (escape the name first).
-            text = (ctx.nvl_prefix_fmt or "「%s」：")
-                -- Parentheses truncate the inner gsub's second return
-                -- (match count) — otherwise it lands in the outer gsub's
-                -- `n` limit slot and blocks all replacements.
-                :gsub("%%s", (speaker:gsub("%%", "%%%%"))),
-            color = (tr and { r = clamp_byte(tr), g = clamp_byte(tg),
-                              b = clamp_byte(tb) }) or nil,
-            size = nil,
-            bold = false,
-            italic = false,
-            instant = true,
-        }
-        if not spans then
-            spans = { { text = message, color = nil, size = nil,
-                        bold = false, italic = false } }
-        end
-        table.insert(spans, 1, prefix_span)
-    elseif #speaker > 0 then
-        if nvl then
-            -- Inline speaker label above the line (no fixed-position plate).
-            local tr, tg, tb
-            if ctx.nameplate_style and ctx.nameplate_style.text_color then
-                tr, tg, tb = ctx.nameplate_style.text_color:match(
-                    "(%d+),%s*(%d+),%s*(%d+)")
-            end
-            backend.render_text(speaker, NVL_X, msgY - lineHeight,
-                clamp_byte(tr or 255), clamp_byte(tg or 255),
-                clamp_byte(tb or 255), 255)
-        else
-            TextScene.add_text(
-                ctx, "[" .. speaker .. "]", nameX, 540, color)
-        end
-    end
-
     local maxWidth = nvl and NVL_MAX_WIDTH
         or resolve_max_width(ctx, params, msgX)
 
-    if #message > 0 then
-        if spans then
-            msgY = TextScene.add_wrapped_spans(ctx, spans, {
-                x = msgX,
-                y = msgY,
-                max_width = maxWidth,
-                line_height = lineHeight,
-                font_size = tonumber(TextScene.get_state(ctx).font_size)
-                    or lineHeight,
-                color = color,
-            })
-        else
-            msgY = TextScene.add_wrapped(ctx, message, {
-                x = msgX,
-                y = msgY,
-                max_width = maxWidth,
-                line_height = lineHeight,
-                font_size = tonumber(TextScene.get_state(ctx).font_size)
-                    or lineHeight,
-                color = color,
-            })
-        end
-    end
+    -- Record the page source (pre-localize message + the exact layout
+    -- values used) so a language hot-switch can replay this line in the
+    -- new language (see relocalize_page). page_src lives in text_state
+    -- and is cleared wherever the draws are cleared (TextScene.clear).
+    local state = TextScene.get_state(ctx)
+    state.page_src = state.page_src or {}
+    local entry = {
+        kind = "ch",
+        src = src_message,
+        scene = ctx.current_scene or ctx.currentScene or "",
+        speaker = speaker,
+        opts = {
+            nvl = nvl, pos = pos, nameX = nameX,
+            color = color, lineHeight = lineHeight,
+            msgX = msgX, msgY = msgY, maxWidth = maxWidth,
+            font_size = tonumber(state.font_size) or lineHeight,
+        },
+    }
+    state.page_src[#state.page_src + 1] = entry
+    -- Draw the line through the shared replay path (also used by the
+    -- language hot-switch redraw): speaker prefix/label, markup spans,
+    -- wrap and persistent draws.
+    msgY = _drawMessage(ctx, entry)
 
     ctx.textCursorX = msgX
     ctx.textCursorY = msgY
@@ -743,6 +832,8 @@ end
 function TextCommands.text(ctx, params)
     local message = params.text or params.message or params.content or ""
     if #message == 0 then return end
+    -- Pre-localize source (post-interpolation; see [ch]).
+    local src_message = message
 
     -- Localization pipeline (same as [ch]): per-line translation first,
     -- then {key} token expansion, before markup parsing.
@@ -756,7 +847,7 @@ function TextCommands.text(ctx, params)
         spans, plain = parsed.spans, parsed.plain
     end
 
-    TextCommands.push_backlog(ctx, "", plain)
+    TextCommands.push_backlog(ctx, "", plain, src_message)
 
     local nvl = ctx.nvl_mode == true
     if not nvl then
@@ -772,27 +863,25 @@ function TextCommands.text(ctx, params)
     local y = nvl and (ctx.textCursorY or NVL_Y0) or 580
     local maxWidth = nvl and NVL_MAX_WIDTH or resolve_max_width(ctx, params, x)
 
-    if spans then
-        y = TextScene.add_wrapped_spans(ctx, spans, {
-            x = x,
-            y = y,
-            max_width = maxWidth,
-            line_height = lineHeight,
-            font_size = tonumber(TextScene.get_state(ctx).font_size)
-                or lineHeight,
+    -- Record the page source for the language hot-switch redraw, then
+    -- draw through the shared replay path (same as [ch]).
+    local state = TextScene.get_state(ctx)
+    state.page_src = state.page_src or {}
+    local entry = {
+        kind = "text",
+        src = src_message,
+        scene = ctx.current_scene or ctx.currentScene or "",
+        speaker = "",
+        opts = {
+            nvl = nvl,
             color = resolve_color(ctx, params),
-        })
-    else
-        y = TextScene.add_wrapped(ctx, message, {
-            x = x,
-            y = y,
-            max_width = maxWidth,
-            line_height = lineHeight,
-            font_size = tonumber(TextScene.get_state(ctx).font_size)
-                or lineHeight,
-            color = resolve_color(ctx, params),
-        })
-    end
+            lineHeight = lineHeight,
+            msgX = x, msgY = y, maxWidth = maxWidth,
+            font_size = tonumber(state.font_size) or lineHeight,
+        },
+    }
+    state.page_src[#state.page_src + 1] = entry
+    y = _drawMessage(ctx, entry)
 
     ctx.textCursorX = x
     ctx.textCursorY = y
@@ -1052,6 +1141,8 @@ Future enhancement: extract to a standalone ChoiceController Lua class if comple
 function TextCommands.button(ctx, params)
     ctx._choiceButtons = ctx._choiceButtons or {}
     local text = params.text or params.caption or ""
+    -- Pre-localize label source for the language hot-switch redraw.
+    local src_text = text
     -- Localization pipeline (same as [ch]): per-line translation then
     -- {key} token expansion, at registration time so [endbutton] draws
     -- and hit-testing use the localized label. [sel] (KAG3 alias) shares
@@ -1070,6 +1161,9 @@ function TextCommands.button(ctx, params)
     -- false choices are hidden. TJS syntax, runtime-translated.
     table.insert(ctx._choiceButtons, {
         text = text, target = target or "", cond = params.cond,
+        -- Pre-localize label source for the hot-switch redraw.
+        src = src_text,
+        scene = ctx.current_scene or ctx.currentScene or "",
     })
 end
 
@@ -1107,22 +1201,10 @@ function TextCommands.endbutton(ctx, params)
         return
     end
 
-    TextScene.remove_group(ctx, "choices")
+    -- Store choice draws in the persistent text scene (shared render
+    -- path with the language hot-switch redraw).
+    _renderChoices(ctx, ctx._choiceButtons)
 
-    -- Store choice draws in the persistent text scene.
-    local startY = 450
-    local lineHeight = resolve_line_height(ctx)
-    for idx, choice in ipairs(ctx._choiceButtons) do
-        local y = startY + (idx - 1) * (lineHeight + 8)
-        TextScene.add_text(
-            ctx, idx .. ". " .. choice.text, 32, y,
-            { r = 255, g = 255, b = 0, a = 255 }, "choices")
-        -- Store button region for hit testing
-        choice.y = y
-        choice.h = lineHeight
-        choice.index = idx
-    end
-    
     -- Install click handler for choice mode
     ctx._choiceButtonsActive = ctx._choiceButtons
     ctx._choiceButtons = nil
@@ -1183,6 +1265,138 @@ TextCommands.sel = TextCommands.button
 
 function TextCommands.endselect(ctx, params)
     return TextCommands.endbutton(ctx, params)
+end
+
+-- =============================================================================
+--  Language hot-switch full-page redraw (round 16).
+--
+--  Settings language cycle calls i18n.load then relocalize_page: the
+--  already-displayed page (message window / NVL accumulated block), the
+--  backlog, active choice labels and closed captions are re-localized
+--  with the NEW language and re-rendered in place. This exceeds Ren'Py,
+--  which keeps already-displayed lines in the original language.
+--
+--  Replay source: every [ch]/[text] records its pre-localize message
+--  plus the exact layout values into text_state.page_src (parallel to
+--  draws; cleared by TextScene.clear). Draws produced by the display
+--  path carry the _page_src marker so a redraw drops exactly the old
+--  page (foreign draws like [ruby] survive) and replays it. Redrawn
+--  lines are sealed (fully revealed, like TextScene.commit).
+-- =============================================================================
+
+-- Re-localize backlog entries in place (entries without a src -- e.g.
+-- older saves -- keep their stored text).
+function TextCommands.relocalize_backlog(ctx)
+    local bl = ctx.backlog
+    if type(bl) ~= "table" then return false end
+    local i18nMod = require("i18n")
+    for _, entry in ipairs(bl) do
+        if type(entry.src) == "string" and #entry.src > 0 then
+            entry.text = i18nMod.localize(
+                entry.src, entry.scene or ctx.current_scene)
+        end
+    end
+    return true
+end
+
+-- Re-localize choice labels: the staging list ([button]... before
+-- [endbutton]) and the active block. The active group is re-rendered
+-- (button y/h regions are preserved, so hit-testing stays valid).
+function TextCommands._relocalizeChoices(ctx)
+    local i18nMod = require("i18n")
+    local staging = ctx._choiceButtons
+    if type(staging) == "table" then
+        for _, choice in ipairs(staging) do
+            if type(choice.src) == "string" and #choice.src > 0 then
+                choice.text = i18nMod.localize(
+                    choice.src, choice.scene or ctx.current_scene)
+            end
+        end
+    end
+    local active = ctx._choiceButtonsActive
+    if type(active) == "table" and #active > 0 then
+        for _, choice in ipairs(active) do
+            if type(choice.src) == "string" and #choice.src > 0 then
+                choice.text = i18nMod.localize(
+                    choice.src, choice.scene or ctx.current_scene)
+            end
+        end
+        _renderChoices(ctx, active)
+    end
+end
+
+-- Re-localize the standing closed caption (cc_mode), stripping markup
+-- from the new text the same way [ch] strips the plain form.
+function TextCommands._relocalizeCC(ctx)
+    local cc = ctx.cc_text
+    if type(cc) ~= "table" or type(cc.src) ~= "string" or #cc.src == 0 then
+        return
+    end
+    local localized = require("i18n").localize(
+        cc.src, cc.scene or ctx.current_scene)
+    local plain = localized
+    if localized:find("{", 1, true) then
+        plain = TextLayout.parse_markup(localized).plain
+    end
+    cc.text = plain
+end
+
+--- TextCommands.relocalize_page(ctx) — full-page redraw after a
+--  language hot-switch. Returns true when anything was re-rendered;
+--  safe on bare/degraded contexts (callers wrap in pcall).
+function TextCommands.relocalize_page(ctx)
+    if type(ctx) ~= "table" then return false end
+    local state = TextScene.get_state(ctx)
+    local sources = state.page_src or {}
+
+    if #sources > 0 then
+        -- Drop the old page draws (marked at display time) and replay
+        -- every recorded source with the new language. A translation may
+        -- wrap to a different line count than the original: keep a
+        -- cumulative y-delta and shift each later line by it (layout
+        -- cascade). Entries are never mutated, so snapshots of the page
+        -- sources stay valid across redraws.
+        local kept = {}
+        for _, draw in ipairs(state.draws) do
+            if not draw._page_src then kept[#kept + 1] = draw end
+        end
+        state.draws = kept
+
+        local cascade = 0
+        local lastEnd, lastMsgX = nil, nil
+        for _, entry in ipairs(sources) do
+            local opts = entry.opts or {}
+            local origEnd = opts.msgY
+            lastMsgX = opts.msgX
+            local newEnd = _drawMessage(ctx, entry, (origEnd or 0) + cascade)
+            if origEnd and newEnd then
+                cascade = cascade + (newEnd - origEnd)
+            end
+            lastEnd = newEnd
+        end
+
+        -- Seal every redrawn line: no typewriter replay after the switch
+        -- (the player returned from the settings menu; the page is shown
+        -- in full, like TextScene.commit).
+        for _, draw in ipairs(state.draws) do
+            draw.typewriter = false
+            draw._shown = nil
+            draw._shown_len = nil
+        end
+
+        -- Cursor mirrors: the next [ch]/[text] (NVL accumulation) must
+        -- continue below the re-laid-out page.
+        if lastEnd then
+            ctx.textCursorY = lastEnd
+            state.cursor_y = lastEnd
+            if lastMsgX then ctx.textCursorX = lastMsgX end
+        end
+    end
+
+    TextCommands.relocalize_backlog(ctx)
+    TextCommands._relocalizeChoices(ctx)
+    TextCommands._relocalizeCC(ctx)
+    return true
 end
 
 return TextCommands

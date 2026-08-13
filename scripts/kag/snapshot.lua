@@ -47,13 +47,15 @@ local function copy_text_state(state)
     if type(state) ~= "table" then return state end
     local out = {}
     for k, v in pairs(state) do
-        if k == "draws" then
-            -- copy the ARRAY (new table), share the entries
+        if k == "draws" or k == "page_src" then
+            -- copy the ARRAY (new table), share the entries. page_src is
+            -- the language hot-switch replay source (parallel to draws:
+            -- append-only in play, replaced wholesale by redraws).
             local arr = {}
             if type(v) == "table" then
                 for i = 1, #v do arr[i] = v[i] end
             end
-            out.draws = arr
+            out[k] = arr
         else
             out[k] = v
         end

@@ -11,6 +11,18 @@ local layers  = require("layers")
 local audio   = require("audio")
 local i18n    = require("i18n")
 
+-- Language hot-switch full-page redraw: after i18n.load the already
+-- displayed page, backlog, choice labels and closed captions re-localize
+-- with the new language (exceeds Ren'Py, which keeps displayed lines in
+-- the original language). Lazy require keeps the settings menu decoupled
+-- from the KAG command chain at startup.
+local function relocalize_after_switch(ctx)
+    pcall(function()
+        local kt = require("kag.commands.text")
+        if kt and kt.relocalize_page then kt.relocalize_page(ctx) end
+    end)
+end
+
 -- ===========================================================================
 -- Settings state
 -- ===========================================================================
@@ -97,6 +109,7 @@ function Settings._adjust(ctx, dir)
         sv[item.key] = opts[idx]
         if item.key == "language" and i18n and i18n.load then
             pcall(function() i18n.load(opts[idx]) end)
+            relocalize_after_switch(ctx)
         end
     end
 end
@@ -378,6 +391,9 @@ function Settings.adjust(ctx, direction)
                 item.label = i18n.t("language") .. ": " .. item.value
                 -- Hot-switch language
                 i18n.load(item.value)
+                -- Full-page redraw: page/backlog/choices/cc re-localize
+                -- with the new language (see relocalize_page).
+                relocalize_after_switch(ctx)
                 -- Rebuild menu items with new translations
                 state.items = Settings._buildMenu(ctx)
             elseif item.key == "autosave_interval" then

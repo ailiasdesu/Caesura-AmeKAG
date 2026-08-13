@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — kag/commands/save.lua
 --  Phase 6: KAG save/load tag handlers — [save], [load]
 --  Serializes KAG context to JSON → C++ SaveManager → disk.
@@ -86,6 +86,10 @@ local function capture_state(ctx)
                 timestamp   = entry.timestamp or 0,
                 scene       = entry.scene or "",
                 token_index = entry.token_index or 1,
+                -- Pre-localize source: lets the language hot-switch
+                -- redraw re-localize a restored backlog too. Absent in
+                -- older saves -- those entries keep their stored text.
+                src         = entry.src,
             }
         end
     end
