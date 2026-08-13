@@ -57,10 +57,15 @@ config.accessibility = {
 -- the service is unreachable (connection timeout 2s + read timeout).
 config.ai = {
     endpoint = "http://127.0.0.1:11434",  -- Ollama default; "" disables
-    model = "",        -- "" = service default
+    -- "" = auto: OpenAI-compatible endpoints use the service default;
+    -- Ollama endpoints ask the server for its first available model
+    -- (GET /api/tags), falling back to "llama3" only when unreachable.
+    model = "",
     api_key = "",      -- optional Bearer token (OpenAI-compatible)
     system = "",       -- default persona/system prompt
-    timeout_ms = 15000,
+    -- HTTP read timeout: 60s so a cold local model (first load) can
+    -- respond; [ai_dialog] max_wait_ms still governs the in-game wait.
+    timeout_ms = 60000,
 }
 
 -- Per-bus volume defaults (persisted across sessions)

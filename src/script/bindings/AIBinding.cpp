@@ -14,6 +14,7 @@ extern "C" {
 #include "../../di/BackendRegistry.h"
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -38,7 +39,10 @@ struct AiConfig {
     std::string model;
     std::string apiKey;
     std::string system;
-    int timeoutMs = 15000;
+    // 60s: local models (Ollama) commonly take longer than 15s to load
+    // cold before the first token streams. Game-side waits ([ai_dialog]
+    // max_wait_ms) still decide the UX fallback independently.
+    int timeoutMs = 60000;
 };
 
 AiConfig readConfig(lua_State* L) {
@@ -87,9 +91,44 @@ void applyOpts(lua_State* L, int idx, AiConfig& cfg) {
     lua_pop(L, 1);
 }
 
-// ---- HTTP query -----------------------------------------------------------
+// ---- model auto-discovery (Ollama only) -----------------------------------
 
-// Do the actual HTTP round trip. Thread-safe (no Lua access).
+// An empty config.ai.model on an Ollama endpoint used to fall back to a
+// hardcoded "llama3", which 404s on servers that never pulled it. Instead
+// ask the server for its model list (GET /api/tags) and use the first
+// available model, cached for the process. Falls back to "llama3" only
+// when the discovery call itself fails.
+std::mutex g_modelMutex;
+std::string g_discoveredModel;
+
+std::string discoverOllamaModel(const std::string& host, int port) {
+    {
+        std::lock_guard<std::mutex> lock(g_modelMutex);
+        if (!g_discoveredModel.empty()) return g_discoveredModel;
+    }
+    std::string found;
+    httplib::Client cli(host, port);
+    cli.set_connection_timeout(2, 0);
+    cli.set_read_timeout(5, 0);
+    if (auto res = cli.Get("/api/tags")) {
+        if (res->status == 200) {
+            try {
+                auto j = nlohmann::json::parse(res->body);
+                const auto& models = j["models"];
+                if (models.is_array() && !models.empty()) {
+                    found = models[0].value("name", std::string());
+                }
+            } catch (const std::exception&) {
+                // fall through to the llama3 fallback below
+            }
+        }
+    }
+    std::lock_guard<std::mutex> lock(g_modelMutex);
+    g_discoveredModel = found;
+    return found;
+}
+
+// ---- HTTP query -----------------------------------------------------------
 void doQuery(const std::string& prompt, const AiConfig& cfg,
              std::string& outText, std::string& outErr) {
     if (cfg.endpoint.empty()) {
@@ -144,7 +183,14 @@ void doQuery(const std::string& prompt, const AiConfig& cfg,
         body["stream"] = false;
     } else {
         path = pathPrefix + "/api/generate";
-        body["model"] = cfg.model.empty() ? "llama3" : cfg.model;
+        std::string model = cfg.model;
+        if (model.empty()) {
+            // Auto-detect the server's first available model instead of
+            // assuming a default that may never have been pulled.
+            model = discoverOllamaModel(host, port);
+            if (model.empty()) model = "llama3";
+        }
+        body["model"] = model;
         body["prompt"] = prompt;
         if (!cfg.system.empty()) body["system"] = cfg.system;
         body["stream"] = false;
