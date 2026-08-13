@@ -359,6 +359,7 @@ return {
 ```bash
 lua scripts/ks_i18n.lua --dir demo --lang ja --out assets/lang/ja.lua
 lua scripts/ks_i18n.lua --dir demo --lang ja --update   ; 合并，保留已有译文
+lua scripts/ks_i18n.lua --missing --dir demo --lang ja  ; 未翻译清单（CI 门禁：有缺失退出码 1）
 ```
 
 - 提取 `[ch]`/`[text]` 的 text/message 与裸文本行，生成哈希键模板
