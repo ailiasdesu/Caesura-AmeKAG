@@ -682,13 +682,14 @@ TEST_CASE("KAG text scene persists exact draw arguments across frames") {
         assert(#calls == 4)
 
         local text = calls[1]
-        assert(text.kind == 'text' and text.args.n == 10)
+        assert(text.kind == 'text' and text.args.n == 11)
         assert(text.args[1] == 'dialogue')
         assert(text.args[2] == 12.5 and text.args[3] == 34.25)
         assert(text.args[4] == 10 and text.args[5] == 20)
         assert(text.args[6] == 30 and text.args[7] == 20)
         assert(text.args[8] == 1 and text.args[9] == false)
         assert(text.args[10] == false)  -- italic defaults off
+        assert(text.args[11] == false)  -- strike defaults off
 
         local ruby = calls[2]
         assert(ruby.kind == 'ruby' and ruby.args.n == 8)

@@ -344,6 +344,10 @@ void TextRenderer::shutdown() {
         bgfx::destroy(m_fontTexture);
         m_fontTexture = BGFX_INVALID_HANDLE;
     }
+    if (bgfx::isValid(m_strikeTexture)) {
+        bgfx::destroy(m_strikeTexture);
+        m_strikeTexture = BGFX_INVALID_HANDLE;
+    }
     if (bgfx::isValid(m_texSampler)) {
         bgfx::destroy(m_texSampler);
         m_texSampler = BGFX_INVALID_HANDLE;
@@ -370,6 +374,10 @@ void TextRenderer::onDeviceLost() {
     if (bgfx::isValid(m_fontTexture)) {
         bgfx::destroy(m_fontTexture);
         m_fontTexture = BGFX_INVALID_HANDLE;
+    }
+    if (bgfx::isValid(m_strikeTexture)) {
+        bgfx::destroy(m_strikeTexture);
+        m_strikeTexture = BGFX_INVALID_HANDLE;
     }
     if (bgfx::isValid(m_texSampler)) {
         bgfx::destroy(m_texSampler);
@@ -622,21 +630,93 @@ void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
     bgfx::submit(viewId, m_fallbackProgram);
 }
 
+void TextRenderer::ensureStrikeTexture()
+{
+    if (bgfx::isValid(m_strikeTexture)) return;
+    const uint8_t white[4] = { 255, 255, 255, 255 };
+    m_strikeTexture = bgfx::createTexture2D(
+        1, 1, false, 1, bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, bgfx::copy(white, 4));
+}
+
+void TextRenderer::submitStrikeBars(uint16_t viewId, const GlyphQuad* bars,
+                                     int count, TextColor color)
+{
+    if (count <= 0 || !bgfx::isValid(m_fallbackProgram)) return;
+    ensureStrikeTexture();
+    if (!bgfx::isValid(m_strikeTexture)) return;
+
+    float ortho[16];
+    const bgfx::Caps* caps = bgfx::getCaps();
+    bx::mtxOrtho(ortho, 0.0f, 1280.0f, 720.0f, 0.0f,
+                 -1.0f, 1.0f, 0.0f, caps ? caps->homogeneousDepth : false,
+                 bx::Handedness::Left);
+    bgfx::setViewTransform(viewId, nullptr, ortho);
+
+    struct PosTexVertex { float x, y, u, v; };
+
+    int vertCount = count * 4;
+    int idxCount  = count * 6;
+
+    bgfx::TransientVertexBuffer tvb;
+    if (bgfx::getAvailTransientVertexBuffer((uint32_t)vertCount,
+            m_posTexLayout) < (uint32_t)vertCount) return;
+    bgfx::allocTransientVertexBuffer(&tvb, (uint32_t)vertCount, m_posTexLayout);
+    auto* vtx = (PosTexVertex*)tvb.data;
+
+    bgfx::TransientIndexBuffer tib;
+    if (bgfx::getAvailTransientIndexBuffer((uint32_t)idxCount) < (uint32_t)idxCount) return;
+    bgfx::allocTransientIndexBuffer(&tib, (uint32_t)idxCount);
+    auto* idx = (uint16_t*)tib.data;
+
+    float sw = (float)m_screenWidth;
+    float sh = (float)m_screenHeight;
+    for (int i = 0; i < count; ++i) {
+        // Bars are axis-aligned (no shear); reuse the pure NDC math.
+        const NDCQuad v = glyphQuadToNDC(
+            bars[i].x, bars[i].y, bars[i].w, bars[i].h, 0.0f, sw, sh);
+        int vi = i * 4;
+        vtx[vi+0] = { v.x0, v.y0, 0, 0 };
+        vtx[vi+1] = { v.x1, v.y1, 1, 0 };
+        vtx[vi+2] = { v.x2, v.y2, 1, 1 };
+        vtx[vi+3] = { v.x3, v.y3, 0, 1 };
+
+        int ii = i * 6;
+        uint16_t base = (uint16_t)vi;
+        idx[ii+0] = base + 0; idx[ii+1] = base + 1; idx[ii+2] = base + 2;
+        idx[ii+3] = base + 0; idx[ii+4] = base + 2; idx[ii+5] = base + 3;
+    }
+
+    uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
+                   | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
+                                           BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+    bgfx::setVertexBuffer(0, &tvb);
+    bgfx::setIndexBuffer(&tib);
+    bgfx::setTexture(0, m_texSampler, m_strikeTexture);
+    bgfx::setState(state);
+    bgfx::submit(viewId, m_fallbackProgram);
+}
+
 // ===========================================================================
 // Public API
 // ===========================================================================
 
 void TextRenderer::renderText(uint16_t viewId, const std::string& text,
                                float x, float y, TextColor color,
-                               float scale, bool bold, bool italic)
+                               float scale, bool bold, bool italic,
+                               bool strike)
 {
     if (text.empty() || !m_initialized) return;
 
     // Build glyph quads (scale != 1 => {size=N} markup; bold => synthetic
     // bold via a second quad pass offset by ~8% of the glyph width;
-    // italic => top-edge shear of ~18% of the glyph height).
+    // italic => top-edge shear of ~18% of the glyph height; strike =>
+    // a solid bar across the glyph's vertical middle).
     std::vector<GlyphQuad> quads;
+    std::vector<GlyphQuad> strikeBars;
     quads.reserve(text.size() * (bold ? 2 : 1));
+    if (strike) strikeBars.reserve(text.size());
 
     float penX = x;
     const float boldOffset = std::max(1.0f, 0.08f * m_fontGlyphW * scale);
@@ -663,10 +743,24 @@ void TextRenderer::renderText(uint16_t viewId, const std::string& text,
             qb.x += boldOffset;
             quads.push_back(qb);
         }
+        if (strike) {
+            // Solid bar across the glyph's vertical middle: same advance
+            // width as the glyph, ~10% of its height.
+            GlyphQuad bar;
+            bar.x = q.x;
+            bar.y = q.y + q.h * 0.5f;
+            bar.w = q.w;
+            bar.h = std::max(1.0f, 0.1f * q.h);
+            bar.u0 = 0; bar.v0 = 0; bar.u1 = 1; bar.v1 = 1;
+            strikeBars.push_back(bar);
+        }
         penX += q.w;
     }
 
     submitGlyphQuads(viewId, quads.data(), (int)quads.size(), color, scale, scale);
+    if (!strikeBars.empty()) {
+        submitStrikeBars(viewId, strikeBars.data(), (int)strikeBars.size(), color);
+    }
     m_cursor.x = penX;
 }
 

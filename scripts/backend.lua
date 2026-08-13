@@ -242,12 +242,12 @@ end
 -- Text / UI
 -- =========================================================================
 
-function Backend.render_text(text, x, y, r, g, b, a, scale, bold, italic)
+function Backend.render_text(text, x, y, r, g, b, a, scale, bold, italic, strike)
     local be = get_backend()
     if be then
-        return be.render("render_text", text, x, y, r, g, b, a, scale, bold, italic)
+        return be.render("render_text", text, x, y, r, g, b, a, scale, bold, italic, strike)
     else
-        return call_resolved("render_text", text, x, y, r, g, b, a, scale, bold, italic)
+        return call_resolved("render_text", text, x, y, r, g, b, a, scale, bold, italic, strike)
     end
 end
 

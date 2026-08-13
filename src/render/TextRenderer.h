@@ -78,7 +78,7 @@ public:
     void renderText(uint16_t viewId, const std::string& text,
                     float x, float y, TextColor color,
                     float scale = 1.0f, bool bold = false,
-                    bool italic = false);
+                    bool italic = false, bool strike = false);
     void renderRuby(uint16_t viewId, const std::string& text,
                      const std::string& ruby, float x, float y, TextColor color);
 
@@ -128,6 +128,11 @@ private:
 
     void submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
                           int count, TextColor color, float scaleW, float scaleH);
+    // Strikethrough bars: solid-color quads across the glyph (1x1 white
+    // texture; lazily created, destroyed on shutdown/device loss).
+    void ensureStrikeTexture();
+    void submitStrikeBars(uint16_t viewId, const GlyphQuad* bars,
+                          int count, TextColor color);
     bool loadFontAtlas(FontId id);
 
     // TTF atlas
@@ -168,6 +173,7 @@ private:
     FontId m_currentFont = FontId::Small;
 
     bgfx::TextureHandle m_fontTexture    = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle m_strikeTexture  = BGFX_INVALID_HANDLE;
     bgfx::VertexLayout  m_posTexLayout;
     bgfx::UniformHandle m_texSampler      = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_fallbackProgram = BGFX_INVALID_HANDLE;

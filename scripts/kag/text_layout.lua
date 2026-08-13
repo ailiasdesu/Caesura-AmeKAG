@@ -142,11 +142,12 @@ local function append_line_segments(lines, characters, first, last, options)
     local scale = characters[first].scale
     local bold = characters[first].bold
     local italic = characters[first].italic
+    local strike = characters[first].strike
     local instant = characters[first].instant
     local function same_style(a, b)
         return a.color == b.color and a.scale == b.scale
             and a.bold == b.bold and a.italic == b.italic
-            and a.instant == b.instant
+            and a.strike == b.strike and a.instant == b.instant
     end
     for i = first + 1, last + 1 do
         local c = characters[i]
@@ -157,6 +158,7 @@ local function append_line_segments(lines, characters, first, last, options)
                 scale = scale,
                 bold = bold,
                 italic = italic,
+                strike = strike,
                 instant = instant,
                 width = measure_range(characters, seg_first, i - 1, options),
             }
@@ -166,6 +168,7 @@ local function append_line_segments(lines, characters, first, last, options)
             scale = characters[i].scale
             bold = characters[i].bold
             italic = characters[i].italic
+            strike = characters[i].strike
             instant = characters[i].instant
         end
     end
@@ -294,6 +297,7 @@ end
 --   {color=#RRGGBB} ... {/color}  — per-span text color (rendered)
 --   {b}/{/b}                       — synthetic bold (rendered, double-pass)
 --   {i}/{/i}                       — italic shear (rendered, top-edge offset)
+--   {s}/{/s}                       — strikethrough (rendered, middle bar)
 --   {size=N}/{/size}               — absolute font size (rendered, scaling)
 --   Unknown {tags} pass through as literal text.
 -- ---------------------------------------------------------------------------
@@ -303,6 +307,7 @@ local function parse_open_tag(tag)
     if not name then return nil end
     if name == "i" then return { kind = "italic" } end
     if name == "b" then return { kind = "bold" } end
+    if name == "s" then return { kind = "strike" } end
     if name == "size" then
         local size = tonumber(tag:match("^size%s*=%s*(%d+)%s*$"))
         if size then return { kind = "size", size = size } end
@@ -323,7 +328,8 @@ local function parse_open_tag(tag)
     return nil
 end
 
-local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true }
+local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true,
+                             s = true }
 
 --- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold, italic}}, plain }
 --  Splits a message into styled spans and returns the markup-stripped
@@ -337,10 +343,12 @@ function TextLayout.parse_markup(text)
     local size_stack = {}
     local bold_stack = {}
     local italic_stack = {}
+    local strike_stack = {}
     local current_color = nil
     local current_size = nil
     local current_bold = false
     local current_italic = false
+    local current_strike = false
     local buf = {}
 
     local function flush()
@@ -353,6 +361,7 @@ function TextLayout.parse_markup(text)
             size = current_size,
             bold = current_bold,
             italic = current_italic,
+            strike = current_strike,
         }
         plain_parts[#plain_parts + 1] = s
     end
@@ -381,6 +390,9 @@ function TextLayout.parse_markup(text)
                     elseif parsed.kind == "italic" then
                         italic_stack[#italic_stack + 1] = true
                         current_italic = true
+                    elseif parsed.kind == "strike" then
+                        strike_stack[#strike_stack + 1] = true
+                        current_strike = true
                     end
                     i = close_at + 1
                 else
@@ -399,6 +411,9 @@ function TextLayout.parse_markup(text)
                         elseif close_name == "i" and #italic_stack > 0 then
                             italic_stack[#italic_stack] = nil
                             current_italic = #italic_stack > 0
+                        elseif close_name == "s" and #strike_stack > 0 then
+                            strike_stack[#strike_stack] = nil
+                            current_strike = #strike_stack > 0
                         end
                         i = close_at + 1
                     else
@@ -415,7 +430,7 @@ function TextLayout.parse_markup(text)
     flush()
     if #spans == 0 then
         spans = { { text = text, color = nil, size = nil, bold = false,
-                    italic = false } }
+                    italic = false, strike = false } }
     end
     return { spans = spans, plain = table.concat(plain_parts) }
 end
@@ -436,6 +451,7 @@ local function span_characters(spans, options)
                 scale = scale,
                 bold = span.bold == true,
                 italic = span.italic == true,
+                strike = span.strike == true,
                 instant = span.instant == true,
             }
         end

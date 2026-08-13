@@ -131,11 +131,13 @@ public:
     // scale:  glyph scale factor (1.0 = atlas size; {size=N} markup).
     // bold:   synthetic bold (double-pass x-offset; {b} markup).
     // italic: italic shear (top-edge horizontal offset; {i} markup).
+    // strike: strikethrough bar across the glyph (solid 1px-ish bar;
+    //         {s} markup).
     virtual void renderText(uint16_t viewId, const std::string& text,
                              float x, float y,
                              uint8_t r, uint8_t g, uint8_t b, uint8_t a,
                              float scale = 1.0f, bool bold = false,
-                             bool italic = false) = 0;
+                             bool italic = false, bool strike = false) = 0;
     virtual void renderRuby(uint16_t viewId, const std::string& text,
                              const std::string& ruby,
                              float x, float y,

@@ -77,6 +77,18 @@ local m11 = TextLayout.parse_markup("a{i}b")
 check("parse: unclosed italic to end", m11.plain == "ab"
       and m11.spans[2].italic == true)
 
+local m12 = TextLayout.parse_markup("{s}struck{/s}x")
+check("parse: strike span flagged", m12.plain == "struckx"
+      and m12.spans[1].strike == true and m12.spans[2].strike == false)
+
+local m13 = TextLayout.parse_markup("{b}{s}both{/s}{/b}y")
+check("parse: bold+strike stackable", m13.spans[1].bold == true
+      and m13.spans[1].strike == true and m13.spans[2].strike == false)
+
+local m14 = TextLayout.parse_markup("z{s}w")
+check("parse: unclosed strike to end", m14.plain == "zw"
+      and m14.spans[2].strike == true)
+
 local m7 = TextLayout.parse_markup("X{/color}Y")
 check("parse: stray closer consumed", m7.plain == "XY")
 

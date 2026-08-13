@@ -105,3 +105,26 @@ TEST_CASE("TextRenderer::glyphQuadToNDC italic shears the top edge only") {
     // Advance metrics are unaffected: width spans bottom edge only.
     CHECK(v.x2 - v.x3 == doctest::Approx(u.x2 - u.x3));
 }
+
+TEST_CASE("TextRenderer::strike bar geometry crosses the glyph middle") {
+    const float sw = 1280.0f, sh = 720.0f;
+    // A strike bar is an axis-aligned quad at y + 0.5*h with 10% height
+    // (reuses glyphQuadToNDC with shear 0). Anchor the exact bar math
+    // used by renderText so geometry regressions surface headless.
+    const float x = 100.f, y = 200.f, w = 16.f, h = 16.f;
+    const float barH = 0.1f * h;                     // 1.6 (>= 1.0 floor)
+    const float barY = y + h * 0.5f;               // 208
+    auto v = TextRenderer::glyphQuadToNDC(x, barY, w, barH, 0.f, sw, sh);
+    CHECK(v.x0 == doctest::Approx((100.f / sw) * 2.f - 1.f));
+    CHECK(v.x1 == doctest::Approx((116.f / sw) * 2.f - 1.f));
+    CHECK(v.y0 == doctest::Approx(1.f - (208.f / sh) * 2.f));  // top edge
+    CHECK(v.y2 == doctest::Approx(1.f - (209.6f / sh) * 2.f)); // bottom edge
+    // NDC y grows upward: height is y0 - y2 (positive downward extent).
+    CHECK(v.y0 - v.y2 == doctest::Approx((barH / sh) * 2.f));
+    // Bar spans the full glyph advance width.
+    CHECK(v.x1 - v.x0 == doctest::Approx((w / sw) * 2.f));
+    // Vertical placement: bar TOP sits at the glyph's vertical middle
+    // (y + 0.5*h), so the bar crosses the center of the glyph.
+    auto g = TextRenderer::glyphQuadToNDC(x, y, w, h, 0.f, sw, sh);
+    CHECK(v.y0 == doctest::Approx((g.y0 + g.y2) / 2.f));
+}
