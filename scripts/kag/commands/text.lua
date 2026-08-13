@@ -661,7 +661,14 @@ function TextCommands.ch(ctx, params)
                 "(%d+),%s*(%d+),%s*(%d+)")
         end
         local prefix_span = {
-            text = "「" .. speaker .. "」：",
+            -- Format string: "%s" = speaker name. gsub substitution keeps
+            -- stray "%" in names harmless — both the pattern and the
+            -- replacement string interpret "%" (escape the name first).
+            text = (ctx.nvl_prefix_fmt or "「%s」：")
+                -- Parentheses truncate the inner gsub's second return
+                -- (match count) — otherwise it lands in the outer gsub's
+                -- `n` limit slot and blocks all replacements.
+                :gsub("%%s", (speaker:gsub("%%", "%%%%"))),
             color = (tr and { r = clamp_byte(tr), g = clamp_byte(tg),
                               b = clamp_byte(tb) }) or nil,
             size = nil,
@@ -865,8 +872,9 @@ end
 -- =============================================================================
 
 schema.define("nvl", {
-    _meta = { category = "text", blocking = false, desc = "NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit" },
+    _meta = { category = "text", blocking = false, desc = "NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit; [nvl prefix=\"「%s」：\"] customizes the speaker prefix format (%s = name)" },
     mode = { type = "string" },  -- "clear"/"off"/omitted = enter (bare [nvl clear] passes via params[1])
+    prefix = { type = "string" },  -- speaker prefix format for this NVL session ("%s" = speaker name)
 })
 
 function TextCommands.nvl(ctx, params)
@@ -884,6 +892,9 @@ function TextCommands.nvl(ctx, params)
 
     -- enter / clear both start a fresh page at the top of the screen.
     ctx.nvl_mode = true
+    if params.prefix ~= nil then
+        ctx.nvl_prefix_fmt = params.prefix  -- persists until changed
+    end
     backend.clear_text()
     TextScene.clear(ctx)
     nvl_reset_cursor(ctx)

@@ -152,6 +152,36 @@ TextCommands.nvl(ctxE, {})
 TextCommands.ch(ctxE, { name = "Ame" })
 check("nvl empty message keeps standalone label", calls.render_text == 1)
 
+-- 5b. [nvl prefix="..."] customizes the speaker prefix format
+local ctxP = fresh_ctx()
+ctxP.nameplate_style = { text_color = "255,255,255" }
+TextCommands.nvl(ctxP, { prefix = "%s: " })
+TextCommands.ch(ctxP, { name = "Ame", text = "hi" })
+check("nvl custom prefix format", ctxP.text_state.draws[1] ~= nil
+      and ctxP.text_state.draws[1].text == "Ame: ")
+
+-- custom brackets
+local ctxQ = fresh_ctx()
+TextCommands.nvl(ctxQ, { prefix = "（%s）" })
+TextCommands.ch(ctxQ, { name = "Ame", text = "hi" })
+check("nvl custom brackets", ctxQ.text_state.draws[1] ~= nil
+      and ctxQ.text_state.draws[1].text == "（Ame）")
+
+-- stray % in the speaker name must not break the substitution
+local ctxR = fresh_ctx()
+TextCommands.nvl(ctxR, {})
+TextCommands.ch(ctxR, { name = "100% Girl", text = "hi" })
+check("nvl prefix survives % in name", ctxR.text_state.draws[1] ~= nil
+      and ctxR.text_state.draws[1].text == "「100% Girl」：")
+
+-- prefix persists across lines until changed
+local ctxS2 = fresh_ctx()
+TextCommands.nvl(ctxS2, { prefix = "%s: " })
+TextCommands.ch(ctxS2, { name = "Ame", text = "one" })
+TextCommands.ch(ctxS2, { name = "B", text = "two" })
+check("nvl prefix persists", ctxS2.text_state.draws[3] ~= nil
+      and ctxS2.text_state.draws[3].text == "B: ")
+
 -- ---------------------------------------------------------------------------
 -- 6. commit seals prior lines (typewriter only animates the appended line)
 -- ---------------------------------------------------------------------------
