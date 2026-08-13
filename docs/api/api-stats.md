@@ -17,8 +17,8 @@
 | RPC HTTP endpoints (EditorServer) | 20 |
 | RPC stdin JSON-RPC methods | 25 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 73 |
-| C++ test cases | 618 |
-| C++ assertions | 3021 |
+| C++ test cases | 619 |
+| C++ assertions | 3028 |
 | Lua tests passed | 118 |
 
 ## 2. C++ interfaces by module
