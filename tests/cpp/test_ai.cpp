@@ -4,6 +4,7 @@
 // no service is listening.
 #include "doctest.h"
 #include <httplib.h>
+#include <nlohmann_json.hpp>
 #include <thread>
 #include <atomic>
 
@@ -131,5 +132,51 @@ TEST_CASE("AI.available false when endpoint unset") {
     lua_getfield(L, -1, "available");
     REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
     CHECK(lua_toboolean(L, -1) == false);
+    lua_close(L);
+}
+TEST_CASE("AI query against real Ollama (skipped when unreachable)") {
+    // Real end-to-end: requires a local Ollama server on 127.0.0.1:11434.
+    // Follows the test_audio pattern -- clean skip on machines without
+    // Ollama (CI), real verification where it is installed. Uses an EMPTY
+    // model so the binding exercises its auto-discovery (GET /api/tags)
+    // against the live server; discovery failure would fall back to
+    // "llama3" and surface as http-404 here.
+    httplib::Client probe("127.0.0.1", 11434);
+    probe.set_connection_timeout(1, 0);
+    probe.set_read_timeout(2, 0);
+    auto tags = probe.Get("/api/tags");
+    if (!tags || tags->status != 200) {
+        MESSAGE("Ollama unreachable (127.0.0.1:11434), skipping real-AI test");
+        return;
+    }
+    std::string model;
+    try {
+        auto j = nlohmann::json::parse(tags->body);
+        const auto& models = j["models"];
+        if (models.is_array() && !models.empty()) {
+            model = models[0].value("name", std::string());
+        }
+    } catch (const std::exception&) {}
+    REQUIRE(!model.empty());  // server reachable but no models pulled
+
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    luaL_dostring(L,
+        "config = { ai = { endpoint = 'http://127.0.0.1:11434',"
+        " model = '', timeout_ms = 120000 } }");
+    Caesura::registerAIBinding(L);
+
+    lua_getglobal(L, "AI");
+    lua_getfield(L, -1, "query");
+    lua_pushstring(L, "Reply with the single word: hello");
+    REQUIRE(lua_pcall(L, 1, 2, 0) == LUA_OK);
+    if (lua_isstring(L, -2)) {
+        std::string reply = lua_tostring(L, -2);
+        CHECK(!reply.empty());
+        MESSAGE("Real Ollama reply (auto-discovered model " << model
+                << "): " << reply.substr(0, 80));
+    } else {
+        FAIL("real ollama query returned nil: " << lua_tostring(L, -1));
+    }
     lua_close(L);
 }
