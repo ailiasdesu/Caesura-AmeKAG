@@ -81,9 +81,16 @@ function M.load_lang(path)
     if not f then return nil end
     local txt = f:read("*a")
     f:close()
-    local body = txt:gsub("^%s*%-%-[^\n]*\n", "")
-    local chunk = body:find("return", 1, true)
-        and load(body, "ks_i18n", "t", {})
+    -- Strip all leading comment lines, then detect a GENERATED file by an
+    -- anchored top-level `return` (a bare substring test would misfire on
+    -- hand-written files whose string values mention "return", silently
+    -- losing settings keys on --update). The `^` anchor matches once per
+    -- gsub pass, so loop until no comment line remains.
+    local body = txt
+    while body:match("^%s*%-%-") do
+        body = body:gsub("^%s*%-%-[^\n]*\n?", "", 1)
+    end
+    local chunk = body:match("^%s*return") and load(body, "ks_i18n", "t", {})
         or load("return " .. body, "ks_i18n", "t", {})
     if not chunk then return nil end
     local ok, data = pcall(chunk)

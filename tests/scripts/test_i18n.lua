@@ -130,6 +130,7 @@ check("ch: markup survives localization (bold span)",
 -- ---------------------------------------------------------------------------
 local choiceKey = "scene.ks:" .. i18n.fnv1a("Choice A")
 i18n.lines[choiceKey] = "選択肢A"
+local savedClick = _G._KAG_onClick
 local ctxB = fresh_ctx()
 TextCommands.button(ctxB, { text = "Choice A", target = "*a" })
 pcall(function() TextCommands.endbutton(ctxB, {}) end)
@@ -138,6 +139,11 @@ check("button: registered label localized",
       and ctxB._choiceButtonsActive[1].text == "選択肢A")
 check("button: draw uses localized label", ctxB.text_state.draws[1] ~= nil
       and ctxB.text_state.draws[1].text == "1. 選択肢A")
+-- endbutton's trailing yield raised inside pcall: the installed click
+-- closure is leaked unless restored (suite runs one process).
+_G._KAG_onClick = savedClick
+ctxB._choiceMode = nil
+ctxB._choiceButtonsActive = nil
 
 -- [sel] alias shares the handler (KAG3 select syntax)
 local ctxS = fresh_ctx()
@@ -216,13 +222,15 @@ check("ks_i18n load_lang: generated file parses",
       reloaded ~= nil and type(reloaded.lines) == "table")
 
 -- Hand-written lang files are bare table literals ({...}, no return).
+-- The value deliberately contains the word "return": a bare substring
+-- detection would misfire here and silently drop the file.
 local handPath = tmpdir .. "/hand.lua"
 local h = io.open(handPath, "w")
-h:write('{\n  title_screen = "手書き",\n  lines = { ["a.ks:1"] = "x" },\n}\n')
+h:write('{\n  title_screen = "手書き return テスト",\n  lines = { ["a.ks:1"] = "x" },\n}\n')
 h:close()
 local reloadedHand = ks.load_lang(handPath)
 check("ks_i18n load_lang: hand-written literal parses",
-      reloadedHand ~= nil and reloadedHand.title_screen == "手書き"
+      reloadedHand ~= nil and reloadedHand.title_screen == "手書き return テスト"
       and reloadedHand.lines["a.ks:1"] == "x")
 os.remove(handPath)
 os.remove(genPath)

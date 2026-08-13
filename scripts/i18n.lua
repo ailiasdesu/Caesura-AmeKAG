@@ -63,11 +63,15 @@ function i18n.load(langCode)
         f:close()
         -- Hand-written lang files are bare table literals ({...}); tool
         -- generated files (ks_i18n.lua) carry leading comments + an
-        -- explicit `return`. Accept both: strip leading comment lines,
-        -- then prepend `return ` only when the body lacks one.
-        local body = txt:gsub("^%s*%-%-[^\n]*\n", "")
-        local chunk = body:find("return", 1, true)
-            and load(body, "i18n", "t", {})
+        -- explicit `return`. Accept both: strip all leading comment
+        -- lines, then prepend `return ` only when the body lacks an
+        -- anchored top-level `return` (a bare substring test would
+        -- misfire on hand-written files whose values mention "return").
+        local body = txt
+        while body:match("^%s*%-%-") do
+            body = body:gsub("^%s*%-%-[^\n]*\n?", "", 1)
+        end
+        local chunk = body:match("^%s*return") and load(body, "i18n", "t", {})
             or load("return " .. body, "i18n", "t", {})
         return chunk()
     end)
