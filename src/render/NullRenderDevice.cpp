@@ -47,7 +47,7 @@ void NullRenderDevice::flagDeviceLost() {}
 bool NullRenderDevice::consumeDeviceLost() { return false; }
 void NullRenderDevice::renderText(uint16_t, const std::string&, float, float,
                                   uint8_t, uint8_t, uint8_t, uint8_t,
-                                  float, bool) {}
+                                  float, bool, bool) {}
 void NullRenderDevice::renderRuby(uint16_t, const std::string&, const std::string&,
                                   float, float, uint8_t, uint8_t, uint8_t, uint8_t) {}
 void NullRenderDevice::setFont(int) {}

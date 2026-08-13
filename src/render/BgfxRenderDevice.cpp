@@ -237,15 +237,15 @@ void BgfxRenderDevice::blitTexture(uint16_t v, bgfx::TextureHandle t, float x, f
 void BgfxRenderDevice::renderText(uint16_t viewId, const std::string& text,
                                      float x, float y,
                                      uint8_t r, uint8_t g, uint8_t b, uint8_t a,
-                                     float scale, bool bold) {
+                                     float scale, bool bold, bool italic) {
     // Cached path: static text (same text/view/position every frame) reuses
     // its glyph geometry with zero rebuild; the full key guarantees a cache
     // hit is only ever served for identical parameters (see matches()).
-    // Scaled/bold text ({size}/{b} markup) bypasses the cache (the geometry
-    // differs per scale) and goes straight to the direct path.
+    // Scaled/bold/italic text ({size}/{b}/{i} markup) bypasses the cache (the
+    // geometry differs per scale/shear) and goes straight to the direct path.
     if (!m_textRenderer) return;
-    if (scale != 1.0f || bold) {
-        m_textRenderer->renderText(viewId, text, x, y, TextColor{r,g,b,a}, scale, bold);
+    if (scale != 1.0f || bold || italic) {
+        m_textRenderer->renderText(viewId, text, x, y, TextColor{r,g,b,a}, scale, bold, italic);
     } else {
         m_textRenderer->renderTextCached(viewId, text, x, y, TextColor{r,g,b,a});
     }

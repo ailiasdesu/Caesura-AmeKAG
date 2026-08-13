@@ -77,9 +77,19 @@ public:
 
     void renderText(uint16_t viewId, const std::string& text,
                     float x, float y, TextColor color,
-                    float scale = 1.0f, bool bold = false);
+                    float scale = 1.0f, bool bold = false,
+                    bool italic = false);
     void renderRuby(uint16_t viewId, const std::string& text,
                      const std::string& ruby, float x, float y, TextColor color);
+
+    // -- Pure quad geometry (headless-testable) ---------------------------
+    // NDC vertex math for a glyph quad: the top edge is sheared right by
+    // `shear` px (italic), the bottom edge stays fixed, so advance metrics
+    // are unchanged. Extracted as a pure static so unit tests can pin the
+    // geometry without a GPU.
+    struct NDCQuad { float x0, y0, x1, y1, x2, y2, x3, y3; };
+    static NDCQuad glyphQuadToNDC(float x, float y, float w, float h,
+                                  float shear, float screenW, float screenH);
 
     void newline();
     void clearText(uint16_t viewId);
@@ -109,7 +119,10 @@ public:
     void onDeviceRestored() override;
 
 private:
-    struct GlyphQuad { float x, y, w, h, u0, v0, u1, v1; };
+    // GlyphQuad: axis-aligned quad + per-glyph italic shear (top-edge
+    // horizontal offset in px; 0 = upright). The bottom edge stays fixed,
+    // so advance metrics are unchanged by italics.
+    struct GlyphQuad { float x, y, w, h, shear = 0.0f, u0, v0, u1, v1; };
     GlyphQuad buildGlyph(char ch, float penX, float penY, float scaleW, float scaleH);
     GlyphQuad buildGlyph(uint32_t cp, float penX, float penY, float scaleW, float scaleH);
 

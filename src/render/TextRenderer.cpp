@@ -544,6 +544,25 @@ TextRenderer::GlyphQuad TextRenderer::buildGlyph(
 // Quad submission
 // ===========================================================================
 
+TextRenderer::NDCQuad TextRenderer::glyphQuadToNDC(
+    float x, float y, float w, float h, float shear,
+    float screenW, float screenH)
+{
+    // Pixel coords -> NDC (passthrough shader bypasses u_viewProj).
+    // Italic shear: the top edge moves right by `shear` px; the bottom
+    // edge stays fixed (a true slant, not a translation).
+    const float topX = x + shear;
+    const float bottomX = x;
+    const float invW = 2.0f / screenW;
+    const float invH = 2.0f / screenH;
+    NDCQuad v;
+    v.x0 = topX * invW - 1.0f;       v.y0 = 1.0f - y * invH;              // top-left
+    v.x1 = (topX + w) * invW - 1.0f; v.y1 = 1.0f - y * invH;              // top-right
+    v.x2 = (bottomX + w) * invW - 1.0f; v.y2 = 1.0f - (y + h) * invH;     // bottom-right
+    v.x3 = bottomX * invW - 1.0f;    v.y3 = 1.0f - (y + h) * invH;        // bottom-left
+    return v;
+}
+
 void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
                                      int count, TextColor color,
                                      float scaleW, float scaleH)
@@ -579,16 +598,12 @@ void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
     float sh = (float)m_screenHeight;
     for (int i = 0; i < quadCount; ++i) {
         const GlyphQuad& q = quads[i];
-        // Pixel coords -> NDC (passthrough shader bypasses u_viewProj)
-        float nx0 = (q.x / sw) * 2.0f - 1.0f;
-        float ny0 = 1.0f - (q.y / sh) * 2.0f;
-        float nx1 = ((q.x + q.w) / sw) * 2.0f - 1.0f;
-        float ny1 = 1.0f - ((q.y + q.h) / sh) * 2.0f;
+        const NDCQuad v = glyphQuadToNDC(q.x, q.y, q.w, q.h, q.shear, sw, sh);
         int vi = i * 4;
-        vtx[vi+0] = { nx0, ny0, q.u0, q.v0 };
-        vtx[vi+1] = { nx1, ny0, q.u1, q.v0 };
-        vtx[vi+2] = { nx1, ny1, q.u1, q.v1 };
-        vtx[vi+3] = { nx0, ny1, q.u0, q.v1 };
+        vtx[vi+0] = { v.x0, v.y0, q.u0, q.v0 };
+        vtx[vi+1] = { v.x1, v.y1, q.u1, q.v0 };
+        vtx[vi+2] = { v.x2, v.y2, q.u1, q.v1 };
+        vtx[vi+3] = { v.x3, v.y3, q.u0, q.v1 };
 
         int ii = i * 6;
         uint16_t base = (uint16_t)vi;
@@ -613,17 +628,20 @@ void TextRenderer::submitGlyphQuads(uint16_t viewId, const GlyphQuad* quads,
 
 void TextRenderer::renderText(uint16_t viewId, const std::string& text,
                                float x, float y, TextColor color,
-                               float scale, bool bold)
+                               float scale, bool bold, bool italic)
 {
     if (text.empty() || !m_initialized) return;
 
     // Build glyph quads (scale != 1 => {size=N} markup; bold => synthetic
-    // bold via a second quad pass offset by ~8% of the glyph width).
+    // bold via a second quad pass offset by ~8% of the glyph width;
+    // italic => top-edge shear of ~18% of the glyph height).
     std::vector<GlyphQuad> quads;
     quads.reserve(text.size() * (bold ? 2 : 1));
 
     float penX = x;
     const float boldOffset = std::max(1.0f, 0.08f * m_fontGlyphW * scale);
+    const float shear = italic
+        ? std::max(1.0f, 0.18f * m_fontGlyphH * scale) : 0.0f;
 
     const auto* data = (const uint8_t*)text.data();
     int len = (int)text.size();
@@ -638,6 +656,7 @@ void TextRenderer::renderText(uint16_t viewId, const std::string& text,
             continue;
         }
         GlyphQuad q = buildGlyph(cp, penX, y, scale, scale);
+        q.shear = shear;
         quads.push_back(q);
         if (bold) {
             GlyphQuad qb = q;
