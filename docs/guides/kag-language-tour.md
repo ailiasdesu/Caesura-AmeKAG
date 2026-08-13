@@ -320,3 +320,46 @@ sma.register("hero", sma.load(io.open("assets/sma/hero.json"):read("*a")))
 
 运行：`lua scripts/kag_runner.lua` 或通过 IDE 的 Run 按钮驱动。
 参考完整游戏：`demo/example_game/`（The Last Letter，选择分支 → 三结局）。
+
+## 17. 本地化（i18n；Ren'Py translate 对齐）
+
+对话与文本走**两级本地化管线**（`scripts/i18n.lua`，在 `[ch]`/`[text]`
+进入内联标记解析**之前**应用）：
+
+1. **逐行翻译**：语言文件的 `lines` 表按
+   `"<场景>:<FNV-1a(消息)>"` 键映射译文——内容寻址，场景重排/运行时
+   生成的对话不会错位。空占位符回退原文。
+2. **`{key}` 令牌展开**：`{key}` 按当前语言字符串表替换；未知 key
+   保留花括号（缺失翻译可见）；内联标记名（`{b}`/`{i}`/`{s}`/
+   `{color}`/`{size}`）白名单豁免，绝不当作 key。
+
+```lua
+-- assets/lang/ja.lua（工具生成，翻译者填空）
+return {
+  fullscreen = "フルスクリーン",
+  lines = {
+    -- galgame_demo.ks
+    ["galgame_demo.ks:21c6c4b9"] = "", -- original: Welcome to Caesura AmeKAG Engine Demo.
+  },
+}
+```
+
+```kag
+[ch text="Welcome to Caesura AmeKAG Engine Demo."]  ; ja 语言下显示译文
+[ch text="{greeting}"]                               ; {key} 令牌展开
+```
+
+**作者工作流**（`scripts/ks_i18n.lua`）：
+
+```bash
+lua scripts/ks_i18n.lua --dir demo --lang ja --out assets/lang/ja.lua
+lua scripts/ks_i18n.lua --dir demo --lang ja --update   ; 合并，保留已有译文
+```
+
+- 提取 `[ch]`/`[text]` 的 text/message 与裸文本行，生成哈希键模板
+  （附 `-- original:` 原文注释供翻译者参考）
+- `--update` 合并模式保留已有译文与 settings 等手写键
+- 运行时语言切换：设置菜单 Language 热切换（`i18n.load`）；语言随
+  存档持久化（save.lua 存 `state.language`，读档恢复）
+- 内置 zh/en/ja 界面词条；语言文件同时支持手写 `{...}` 字面量与工具
+  生成的 `return {...}`（含注释头）两种形态
