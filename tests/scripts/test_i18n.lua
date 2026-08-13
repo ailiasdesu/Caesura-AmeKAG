@@ -153,6 +153,165 @@ check("sel: alias localizes too",
 i18n.lines[choiceKey] = nil
 
 -- ---------------------------------------------------------------------------
+-- 3d. language hot-switch full-page redraw (relocalize_page)
+--  A [ch]/[text] records its pre-localize source; switching the string
+--  table and calling relocalize_page re-draws the page in the new
+--  language, re-localizes the backlog / active choices / cc_text and
+--  seals the typewriter (fully revealed).
+-- ---------------------------------------------------------------------------
+local ctxR = fresh_ctx()
+TextCommands.ch(ctxR, { name = "A", text = "hi" })
+check("redraw: page source recorded", #ctxR.text_state.page_src == 1
+      and ctxR.text_state.page_src[1].src == "hi")
+check("redraw: backlog carries src", ctxR.backlog[1] ~= nil
+      and ctxR.backlog[1].src == "hi"
+      and ctxR.backlog[1].text == "bonjour")
+local drawBefore = nil
+for _, d in ipairs(ctxR.text_state.draws) do
+    if d.text == "bonjour" then drawBefore = d end
+end
+check("redraw: draw marked as page source",
+      drawBefore ~= nil and drawBefore._page_src == true)
+
+-- Switch language: the same content-addressed key maps to a new text.
+i18n.lines["scene.ks:" .. i18n.fnv1a("hi")] = "hallo"
+TextCommands.relocalize_page(ctxR)
+local foundNew = false
+for _, d in ipairs(ctxR.text_state.draws) do
+    if d.text == "hallo" then foundNew = true end
+end
+check("redraw: current line re-localized", foundNew)
+local oldGone = true
+for _, d in ipairs(ctxR.text_state.draws) do
+    if d.text == "bonjour" then oldGone = false end
+end
+check("redraw: old draw dropped", oldGone)
+check("redraw: backlog re-localized from src",
+      ctxR.backlog[1] ~= nil and ctxR.backlog[1].text == "hallo")
+check("redraw: typewriter sealed", (function()
+    for _, d in ipairs(ctxR.text_state.draws) do
+        if d.typewriter then return false end
+    end
+    return true
+end)())
+check("redraw: page source entry not mutated",
+      ctxR.text_state.page_src[1].opts.msgY == 580
+      and ctxR.text_state.page_src[1].src == "hi")
+
+-- {key} tokens re-expand with the NEW string table on redraw.
+local ctxK = fresh_ctx()
+TextCommands.text(ctxK, { text = "say {greeting}" })
+i18n.strings.greeting = "Hello"
+TextCommands.relocalize_page(ctxK)
+local foundK = false
+for _, d in ipairs(ctxK.text_state.draws) do
+    if d.text == "say Hello" then foundK = true end
+end
+check("redraw: {key} re-expands with new strings", foundK)
+i18n.strings.greeting = "你好"
+
+-- Translated strings may carry markup: the redraw re-parses it.
+local mkKey = "scene.ks:" .. i18n.fnv1a("{b}bold{/b} hi")
+i18n.lines[mkKey] = "{b}fett{/b} hallo"
+local ctxM2 = fresh_ctx()
+TextCommands.ch(ctxM2, { text = "{b}bold{/b} hi" })
+TextCommands.relocalize_page(ctxM2)
+local boldAfter, halloAfter = false, false
+for _, d in ipairs(ctxM2.text_state.draws) do
+    if d.text == "fett" and d.bold == true then boldAfter = true end
+    -- The second span keeps its leading space (" hallo").
+    if d.text == " hallo" then halloAfter = true end
+end
+check("redraw: translated markup re-parsed", boldAfter and halloAfter)
+i18n.lines[mkKey] = nil
+
+-- Untranslated lines fall through unchanged.
+local ctxU = fresh_ctx()
+TextCommands.ch(ctxU, { text = "untouched line" })
+TextCommands.relocalize_page(ctxU)
+local foundU = false
+for _, d in ipairs(ctxU.text_state.draws) do
+    if d.text == "untouched line" then foundU = true end
+end
+check("redraw: untranslated line unchanged", foundU)
+
+-- NVL accumulated page: every line re-localizes; a translation that
+-- wraps to more lines shifts the following lines down (y cascade).
+local ctxN = fresh_ctx()
+ctxN.nvl_mode = true
+ctxN.nvl_prefix_fmt = "「%s」："
+TextCommands.ch(ctxN, { name = "A", text = "hi" })
+TextCommands.ch(ctxN, { name = "B", text = "hi" })
+check("redraw: nvl page sources recorded", #ctxN.text_state.page_src == 2)
+i18n.lines["scene.ks:" .. i18n.fnv1a("hi")] = string.rep("x", 200)
+TextCommands.relocalize_page(ctxN)
+local xCount, minY, maxY = 0, math.huge, -math.huge
+for _, d in ipairs(ctxN.text_state.draws) do
+    if d.text:find("^x+$") then
+        xCount = xCount + 1
+        if d.y < minY then minY = d.y end
+        if d.y > maxY then maxY = d.y end
+    end
+end
+check("redraw: nvl long translation wraps (>=4 lines)", xCount >= 4)
+check("redraw: nvl second line shifted down (cascade)",
+      maxY - minY >= 96)
+check("redraw: nvl cursor follows last line",
+      ctxN.textCursorY ~= nil and ctxN.textCursorY > 300)
+i18n.lines["scene.ks:" .. i18n.fnv1a("hi")] = "hallo"
+
+-- Active choice block: labels re-localize and the group re-renders.
+i18n.lines[choiceKey] = "選択肢A"
+local ctxCH = fresh_ctx()
+TextCommands.button(ctxCH, { text = "Choice A", target = "*a" })
+pcall(function() TextCommands.endbutton(ctxCH, {}) end)
+i18n.lines[choiceKey] = "新選択"
+TextCommands.relocalize_page(ctxCH)
+check("redraw: active choice re-localized",
+      ctxCH._choiceButtonsActive ~= nil
+      and ctxCH._choiceButtonsActive[1].text == "新選択")
+local choiceDraw = nil
+for _, d in ipairs(ctxCH.text_state.draws) do
+    if d.group == "choices" then choiceDraw = d end
+end
+check("redraw: choice group re-rendered",
+      choiceDraw ~= nil and choiceDraw.text == "1. 新選択")
+_G._KAG_onClick = savedClick
+ctxCH._choiceMode = nil
+ctxCH._choiceButtonsActive = nil
+i18n.lines[choiceKey] = nil
+
+-- Closed captions (cc_mode) re-localize from their recorded source.
+local ctxCC = fresh_ctx()
+ctxCC.cc_mode = true
+TextCommands.ch(ctxCC, { name = "A", text = "hi", voice = "v.wav" })
+check("redraw: cc source recorded", ctxCC.cc_text ~= nil
+      and ctxCC.cc_text.src == "hi")
+TextCommands.relocalize_page(ctxCC)
+check("redraw: cc re-localized", ctxCC.cc_text ~= nil
+      and ctxCC.cc_text.text == "hallo")
+
+-- Defense: bare ctx / empty page no-op.
+check("redraw: nil ctx no-op", TextCommands.relocalize_page(nil) == false)
+local ctxE = fresh_ctx()
+TextCommands.relocalize_page(ctxE)
+check("redraw: empty page no-op", #ctxE.text_state.draws == 0
+      and #ctxE.text_state.page_src == 0)
+
+-- Page source resets with the page (non-NVL [ch] clears both).
+local ctxP = fresh_ctx()
+TextCommands.ch(ctxP, { text = "hi" })
+TextCommands.ch(ctxP, { text = "hi" })
+check("redraw: page source reset per line",
+      #ctxP.text_state.page_src == 1)
+
+-- Backlog entries without a source (older saves) stay untouched.
+local blX = { { text = "old text", src = nil } }
+local ctxX = { backlog = blX, current_scene = "s.ks" }
+TextCommands.relocalize_backlog(ctxX)
+check("redraw: backlog without src untouched", blX[1].text == "old text")
+
+-- ---------------------------------------------------------------------------
 -- 3b. i18n.load reads a tool-generated lang file (comments + return shape)
 -- ---------------------------------------------------------------------------
 local saved2 = { current = i18n.current, strings = i18n.strings,
