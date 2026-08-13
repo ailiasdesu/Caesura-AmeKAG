@@ -3,6 +3,7 @@
 #include "render/BgfxRenderDevice.h"
 #include "render/ParticleSystem.h"
 #include "render/TextRenderer.h"
+#include "render/SmaMeshRenderer.h"
 #include "minigame/BgfxMiniGameBackend.h"
 
 #if defined(_WIN32)
@@ -12,8 +13,10 @@
 #include <windows.h>
 #include <SDL3/SDL.h>
 #include <bgfx/bgfx.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #endif
@@ -34,6 +37,10 @@ constexpr wchar_t kFontGpuTestCase[] =
 constexpr wchar_t kMiniGameGpuChildEnv[] = L"CAESURA_MINIGAME_GPU_SMOKE_CHILD";
 constexpr wchar_t kMiniGameGpuTestCase[] =
     L"Render: D3D11 mini-game scene enter/render/leave smoke";
+
+constexpr wchar_t kSmaGpuChildEnv[] = L"CAESURA_SMA_GPU_SMOKE_CHILD";
+constexpr wchar_t kSmaGpuTestCase[] =
+    L"Render: D3D11 SMA GPU skinning matches CPU skinning";
 
 bool isGpuChildProcess(const wchar_t* envName) {
     wchar_t value[2] = {};
@@ -410,6 +417,133 @@ TEST_CASE("Render: D3D11 mini-game scene enter/render/leave smoke") {
     CHECK_FALSE(miniGame.isActive());
 
     miniGame.shutdown();
+    device.shutdown();
+}
+
+TEST_CASE("Render: D3D11 SMA GPU skinning matches CPU skinning") {
+    if (!isGpuChildProcess(kSmaGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kSmaGpuChildEnv, kSmaGpuTestCase) == ERROR_SUCCESS);
+        return;
+    }
+
+    constexpr uint16_t kWidth = 128;
+    constexpr uint16_t kHeight = 72;
+    constexpr uint16_t kDrawView = 10;
+    constexpr uint16_t kReadbackView = 11;
+
+    HiddenSdlWindow window(kWidth, kHeight);
+    REQUIRE(window);
+    REQUIRE(window.nativeHandle() != nullptr);
+
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), kWidth, kHeight));
+
+    {
+        // The S5 compute pipeline must actually be engaged for this test
+        // to mean anything (a broken compute program would silently fall
+        // back to the CPU path and the pixel comparison would trivially
+        // pass). Declared inside the scope so it is destroyed before the
+        // device shuts down below (bgfx handles must die before bgfx::shutdown).
+        SmaMeshRenderer renderer;
+        renderer.init();
+        REQUIRE(renderer.isInitialized());
+        REQUIRE(renderer.gpuSkinAvailable());
+
+        // A white 1x1 solid texture for the mesh.
+        const uint8_t whitePx[4] = { 255, 255, 255, 255 };
+        bgfx::TextureHandle whiteTex = bgfx::createTexture2D(
+            1, 1, false, 1, bgfx::TextureFormat::RGBA8,
+            BGFX_SAMPLER_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP,
+            bgfx::copy(whitePx, sizeof(whitePx)));
+        REQUIRE(bgfx::isValid(whiteTex));
+
+        bgfx::TextureHandle outputTexture = bgfx::createTexture2D(
+            kWidth, kHeight, false, 1, bgfx::TextureFormat::RGBA8,
+            BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT
+                | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+        REQUIRE(bgfx::isValid(outputTexture));
+        BgfxFrameBuffer output(bgfx::createFrameBuffer(1, &outputTexture, true));
+        REQUIRE(output.valid());
+
+        auto makeReadback = [&]() {
+            return BgfxTexture(bgfx::createTexture2D(
+                kWidth, kHeight, false, 1, bgfx::TextureFormat::RGBA8,
+                BGFX_TEXTURE_BLIT_DST | BGFX_TEXTURE_READ_BACK));
+        };
+        BgfxTexture readbackGpu = makeReadback();
+        BgfxTexture readbackCpu = makeReadback();
+        REQUIRE(readbackGpu.valid());
+        REQUIRE(readbackCpu.valid());
+
+        bgfx::setViewRect(kDrawView, 0, 0, kWidth, kHeight);
+        bgfx::setViewClear(kDrawView, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
+        bgfx::setViewFrameBuffer(kDrawView, output.get());
+
+        // Two-bone quad: vertex 0 blends bone0/bone1 50/50, the rest
+        // follow bone0 only (matches the CPU reference mesh of S2 tests).
+        SMAMesh mesh;
+        mesh.vertices = {
+            { 0.f, 0.f, 0.f, 0.f, 0, 0.5f, 1, 0.5f },
+            { 40.f, 0.f, 1.f, 0.f, 0, 1.f, 1, 0.f },
+            { 40.f, 40.f, 1.f, 1.f, 0, 1.f, 1, 0.f },
+            { 0.f, 40.f, 0.f, 1.f, 0, 1.f, 1, 0.f },
+        };
+        mesh.indices = { 0, 1, 2, 0, 2, 3 };
+        const MeshHandle h = renderer.createMesh(mesh);
+        REQUIRE(h);
+
+        std::vector<BonePose> poses(2);
+        poses[0].rot = 0.3f;
+        poses[0].scale = 1.1f;
+        poses[0].ox = 30.f;
+        poses[0].oy = 10.f;
+        poses[1].ox = 60.f;
+        poses[1].oy = 20.f;
+
+        auto renderFrame = [&](SkinMode mode, bgfx::TextureHandle readback,
+                               std::array<uint8_t, 128 * 72 * 4>& out) {
+            renderer.setSkinMode(mode);
+            renderer.updateMesh(h, poses);
+            renderer.drawMesh(kDrawView, h, whiteTex.idx, 20.f, 5.f, 1.0f, 1.f);
+            bgfx::blit(kReadbackView, readback, 0, 0, outputTexture);
+            uint32_t currentFrame = bgfx::frame();
+            const uint32_t readyFrame = bgfx::readTexture(readback, out.data());
+            while (currentFrame < readyFrame) currentFrame = bgfx::frame();
+        };
+
+        std::array<uint8_t, kWidth * kHeight * 4> gpuPixels{};
+        std::array<uint8_t, kWidth * kHeight * 4> cpuPixels{};
+        renderFrame(SkinMode::Cpu, readbackCpu.get(), cpuPixels);
+        renderFrame(SkinMode::Gpu, readbackGpu.get(), gpuPixels);
+
+        // Same mesh, same pose, same draw transform: the GPU compute skin
+        // and the CPU soft-skinner must rasterize identically. Per-channel
+        // tolerance 1 covers float rounding; a small budget covers
+        // sub-pixel edge flips. A real skinning error shifts the whole
+        // quad (hundreds of pixels) and blows the budget.
+        int diffs = 0;
+        int whiteGpu = 0, whiteCpu = 0;
+        for (size_t i = 0; i < gpuPixels.size(); i += 4) {
+            const int a = gpuPixels[i + 0], b = cpuPixels[i + 0];
+            if (a < b - 1 || a > b + 1) ++diffs;
+            if (a > 250 && gpuPixels[i + 1] > 250 && gpuPixels[i + 2] > 250) ++whiteGpu;
+            if (b > 250 && cpuPixels[i + 1] > 250 && cpuPixels[i + 2] > 250) ++whiteCpu;
+        }
+        CHECK_MESSAGE(diffs < 128,
+                      "GPU/CPU skin mismatch on " << diffs << " channels");
+        // Coverage must agree too: a transform difference changes the
+        // drawn area (rotated/scaled quad), not just edge pixels.
+        CHECK(std::abs(whiteGpu - whiteCpu) <= std::max(2, whiteGpu / 50));
+
+        bgfx::setViewFrameBuffer(kDrawView, BGFX_INVALID_HANDLE);
+        bgfx::frame();
+        renderer.destroyMesh(h);
+        bgfx::destroy(whiteTex);
+        bgfx::frame();
+    }
+    // Scope block above releases every bgfx resource BEFORE the device is
+    // shut down (destroying handles after bgfx::shutdown is UB).
     device.shutdown();
 }
 #endif

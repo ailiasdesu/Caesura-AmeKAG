@@ -130,3 +130,157 @@ TEST_CASE("SmaMeshRenderer no-GPU contract (deferred)") {
     CHECK_NOTHROW(renderer.destroyMesh(h));
     CHECK_NOTHROW(renderer.drawMesh(0, h, 1, 0.f, 0.f, 1.f, 1.f));
 }
+
+// ===========================================================================
+// S5: GPU skinning math — packBonePoses + compute-shader replica must
+// agree with the CPU reference (skinMesh) exactly.
+// ===========================================================================
+
+TEST_CASE("S5 packBonePose matches applyBonePose") {
+    // Deterministic pseudo-random poses.
+    uint32_t seed = 0xC0FFEEu;
+    auto rnd = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;
+        return static_cast<float>((seed >> 8) & 0xFFFFFF) / 16777216.f;
+    };
+    for (int i = 0; i < 200; ++i) {
+        BonePose pose;
+        pose.rot = (rnd() - 0.5f) * 6.2831853f;
+        pose.scale = 0.2f + rnd() * 3.f;
+        pose.ox = (rnd() - 0.5f) * 200.f;
+        pose.oy = (rnd() - 0.5f) * 200.f;
+        const float px = (rnd() - 0.5f) * 10.f;
+        const float py = (rnd() - 0.5f) * 10.f;
+
+        float cpuX, cpuY;
+        applyBonePose(pose, px, py, cpuX, cpuY);
+        float packed[4];
+        packBonePose(pose, packed);
+        // Shader math: x' = m0*x - m1*y + ox; y' = m1*x + m0*y + oy.
+        const float gpuX = packed[0] * px - packed[1] * py + packed[2];
+        const float gpuY = packed[1] * px + packed[0] * py + packed[3];
+        CHECK(std::fabs(cpuX - gpuX) < 1e-5f);
+        CHECK(std::fabs(cpuY - gpuY) < 1e-5f);
+    }
+}
+
+// Replica of the S5 compute shader (same branch structure and math) so
+// the GPU skinning formula can be validated headless against skinMesh.
+namespace {
+void gpuSkinReplica(const SMAMesh& mesh,
+                    const std::vector<BonePose>& poses,
+                    std::vector<SmaSkinnedVertex>& out) {
+    std::vector<float> bones;
+    packBonePoses(poses, 64, bones);
+    out.resize(mesh.vertices.size());
+    for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+        const SMAMeshVertex& v = mesh.vertices[i];
+        const float wsum = v.w0 + v.w1;
+        float x = v.x, y = v.y;
+        if (wsum > 0.f) {
+            const int b0 = int(v.bone0 + 0.5f);
+            const float* m0 = &bones[size_t(b0) * 4];
+            const float p0x = m0[0] * v.x - m0[1] * v.y + m0[2];
+            const float p0y = m0[1] * v.x + m0[0] * v.y + m0[3];
+            if (v.w1 > 0.f && float(v.bone1) >= 0.f && float(v.bone1) < 64.f) {
+                const int b1 = int(v.bone1 + 0.5f);
+                const float* m1 = &bones[size_t(b1) * 4];
+                const float p1x = m1[0] * v.x - m1[1] * v.y + m1[2];
+                const float p1y = m1[1] * v.x + m1[0] * v.y + m1[3];
+                x = (p0x * v.w0 + p1x * v.w1) / wsum;
+                y = (p0y * v.w0 + p1y * v.w1) / wsum;
+            } else {
+                x = p0x;
+                y = p0y;
+            }
+        }
+        out[i] = { x, y, v.u, v.v };
+    }
+}
+} // namespace
+
+TEST_CASE("S5 compute-shader replica agrees with CPU skinMesh") {
+    // Randomized meshes + poses: 2-bone blends, single-bone, zero weight.
+    uint32_t seed = 0x5A17u;
+    auto rnd = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;
+        return static_cast<float>((seed >> 8) & 0xFFFFFF) / 16777216.f;
+    };
+    for (int iter = 0; iter < 30; ++iter) {
+        const int verts = 8 + int(rnd() * 40);
+        SMAMesh mesh;
+        mesh.vertices.resize(verts);
+        for (int i = 0; i < verts; ++i) {
+            auto& v = mesh.vertices[i];
+            v.x = (rnd() - 0.5f) * 20.f;
+            v.y = (rnd() - 0.5f) * 20.f;
+            v.u = rnd();
+            v.v = rnd();
+            v.bone0 = uint16_t(int(rnd() * 5));  // 0..4
+            v.w0 = rnd();
+            if (rnd() < 0.7f) {
+                v.bone1 = uint16_t(int(rnd() * 5));
+                v.w1 = rnd() * 2.f;
+            } else {
+                v.w1 = 0.f;
+            }
+        }
+        std::vector<BonePose> poses(5);
+        for (auto& p : poses) {
+            p.rot = (rnd() - 0.5f) * 3.f;
+            p.scale = 0.5f + rnd() * 2.f;
+            p.ox = (rnd() - 0.5f) * 100.f;
+            p.oy = (rnd() - 0.5f) * 100.f;
+        }
+        std::vector<SmaSkinnedVertex> cpu, gpu;
+        skinMesh(mesh, poses, cpu);
+        gpuSkinReplica(mesh, poses, gpu);
+        REQUIRE(cpu.size() == gpu.size());
+        for (size_t i = 0; i < cpu.size(); ++i) {
+            CHECK(std::fabs(cpu[i].x - gpu[i].x) < 1e-4f);
+            CHECK(std::fabs(cpu[i].y - gpu[i].y) < 1e-4f);
+            CHECK(std::fabs(cpu[i].u - gpu[i].u) < 1e-6f);
+            CHECK(std::fabs(cpu[i].v - gpu[i].v) < 1e-6f);
+        }
+    }
+}
+
+TEST_CASE("S5 packBonePoses identity rows for missing bones") {
+    std::vector<BonePose> poses(2);
+    poses[0].ox = 5.f;
+    poses[1].ox = 7.f;
+    std::vector<float> packed;
+    packBonePoses(poses, 64, packed);
+    REQUIRE(packed.size() == 64 * 4);
+    CHECK(std::fabs(packed[0] - 1.f) < 1e-6f);    // identity row 0
+    CHECK(std::fabs(packed[1]) < 1e-6f);
+    CHECK(std::fabs(packed[2] - 5.f) < 1e-6f);
+    CHECK(std::fabs(packed[3]) < 1e-6f);
+    const float* row2 = &packed[2 * 4];
+    CHECK(std::fabs(row2[0] - 1.f) < 1e-6f);      // unused bone 2 = identity
+    CHECK(std::fabs(row2[1]) < 1e-6f);
+    CHECK(std::fabs(row2[2]) < 1e-6f);
+    CHECK(std::fabs(row2[3]) < 1e-6f);
+}
+
+TEST_CASE("S5 SkinMode state machine (no-GPU contract)") {
+    SmaMeshRenderer renderer;
+    CHECK(renderer.skinMode() == SkinMode::Auto);
+    renderer.setSkinMode(SkinMode::Cpu);
+    CHECK(renderer.skinMode() == SkinMode::Cpu);
+    renderer.setSkinMode(SkinMode::Gpu);
+    CHECK(renderer.skinMode() == SkinMode::Gpu);
+    renderer.setSkinMode(SkinMode::Auto);
+    CHECK(renderer.skinMode() == SkinMode::Auto);
+
+    // Without bgfx everything stays a safe no-op regardless of mode.
+    SMAMesh mesh = makeQuad();
+    MeshHandle h = renderer.createMesh(mesh);
+    CHECK_FALSE(h);
+    std::vector<BonePose> poses(2);
+    poses[0].ox = 1.f;
+    renderer.setSkinMode(SkinMode::Gpu);
+    CHECK_NOTHROW(renderer.updateMesh(h, poses));
+    CHECK_NOTHROW(renderer.drawMesh(0, h, 1, 0.f, 0.f, 1.f, 1.f));
+    CHECK(renderer.meshCount() == 0);
+}
