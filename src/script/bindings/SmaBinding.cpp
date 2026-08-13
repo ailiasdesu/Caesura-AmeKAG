@@ -9,6 +9,7 @@ extern "C" {
 #include "SmaBinding.h"
 #include "../../render/api/IMeshRenderer.h"
 #include "../../di/BackendRegistry.h"
+#include <cstring>
 
 namespace Caesura {
 
@@ -123,15 +124,40 @@ static int lua_sma_initialized(lua_State* L) {
     return 1;
 }
 
+// S5: skinning mode ("auto" | "cpu" | "gpu").
+static int lua_sma_set_skin_mode(lua_State* L) {
+    IMeshRenderer* r = getMeshRenderer();
+    if (!r) return 0;
+    const char* mode = luaL_optstring(L, 1, "auto");
+    SkinMode m = SkinMode::Auto;
+    if (std::strcmp(mode, "cpu") == 0) m = SkinMode::Cpu;
+    else if (std::strcmp(mode, "gpu") == 0) m = SkinMode::Gpu;
+    r->setSkinMode(m);
+    return 0;
+}
+
+static int lua_sma_get_skin_mode(lua_State* L) {
+    IMeshRenderer* r = getMeshRenderer();
+    if (!r) { lua_pushstring(L, "cpu"); return 1; }
+    switch (r->skinMode()) {
+        case SkinMode::Cpu: lua_pushstring(L, "cpu"); break;
+        case SkinMode::Gpu: lua_pushstring(L, "gpu"); break;
+        default:            lua_pushstring(L, "auto"); break;
+    }
+    return 1;
+}
+
 // ===========================================================================
 
 static const luaL_Reg sma_functions[] = {
-    { "create_mesh",   lua_sma_create_mesh   },
-    { "destroy_mesh",  lua_sma_destroy_mesh  },
-    { "update_mesh",   lua_sma_update_mesh   },
-    { "draw_mesh",     lua_sma_draw_mesh     },
-    { "count",         lua_sma_count         },
-    { "initialized",   lua_sma_initialized   },
+    { "create_mesh",     lua_sma_create_mesh     },
+    { "destroy_mesh",    lua_sma_destroy_mesh    },
+    { "update_mesh",     lua_sma_update_mesh     },
+    { "draw_mesh",       lua_sma_draw_mesh       },
+    { "count",           lua_sma_count           },
+    { "initialized",     lua_sma_initialized     },
+    { "set_skin_mode",   lua_sma_set_skin_mode   },
+    { "get_skin_mode",   lua_sma_get_skin_mode   },
     { nullptr, nullptr },
 };
 

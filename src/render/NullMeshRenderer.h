@@ -15,6 +15,10 @@ public:
 
     bool isInitialized() const override { return true; }
 
+    // No GPU in the Null backend: skinning is always CPU.
+    void setSkinMode(SkinMode) override {}
+    SkinMode skinMode() const override { return SkinMode::Cpu; }
+
     MeshHandle createMesh(const SMAMesh& mesh) override;
     void destroyMesh(MeshHandle handle) override;
 

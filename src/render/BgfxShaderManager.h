@@ -57,6 +57,7 @@ private:
     bgfx::UniformHandle m_u_vfxParams        = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_stretchParams    = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_affineParams     = BGFX_INVALID_HANDLE;
+    bool m_embeddedInit = false;  // per-instance initEmbeddedShaders guard
 };
 
 } // namespace Caesura

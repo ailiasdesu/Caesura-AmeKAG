@@ -48,12 +48,25 @@ struct BonePose {
     float oy = 0.f;       // offset y (normalized 0..1)
 };
 
+// Skinning execution mode (SMA S5). Auto picks the GPU compute path
+// when the backend supports it (BGFX_CAPS_COMPUTE on D3D11/GL), falling
+// back to the CPU soft-skinner otherwise (Metal/SPIR-V/Noop/headless).
+enum class SkinMode {
+    Auto = 0,  // capability-based selection
+    Cpu  = 1,  // force the CPU soft-skinner (deterministic reference)
+    Gpu  = 2,  // force the GPU compute skin pass
+};
+
 class IMeshRenderer {
 public:
     virtual ~IMeshRenderer() = default;
 
     // -- Lifecycle ---------------------------------------------------------
     virtual bool isInitialized() const = 0;
+
+    // -- Skinning mode (SMA S5 GPU compute skinning) -----------------------
+    virtual void setSkinMode(SkinMode mode) = 0;
+    virtual SkinMode skinMode() const = 0;
 
     // -- Mesh upload / release --------------------------------------------
     virtual MeshHandle createMesh(const SMAMesh& mesh) = 0;

@@ -46,6 +46,18 @@ extern const size_t   kEmbeddedDXBC_fs_transition_size;
 extern const uint8_t  kEmbeddedDXBC_fs_vfx[];
 extern const size_t   kEmbeddedDXBC_fs_vfx_size;
 
+// -- SMA S5 GPU skinning shaders --------------------------------------------
+// D3D11: DXBC compute (skin_cs.hlsl) + draw VS (skin_vs.hlsl); GL: raw
+// GLSL 430 source text. See EmbeddedShaders_S5.cpp (auto-generated).
+extern const uint8_t  kEmbeddedCS_SkinDXBC[];
+extern const size_t   kEmbeddedCS_SkinDXBC_size;
+extern const uint8_t  kEmbeddedVS_SkinDXBC[];
+extern const size_t   kEmbeddedVS_SkinDXBC_size;
+extern const uint8_t  kEmbeddedCS_SkinGL[];
+extern const size_t   kEmbeddedCS_SkinGL_size;
+extern const uint8_t  kEmbeddedVS_SkinGL[];
+extern const size_t   kEmbeddedVS_SkinGL_size;
+
 // -- Stretch / Affine blit shaders (DXBC, for D3D11/D3D12 backends) ----------
 extern const uint8_t  kEmbeddedDXBC_stretch_blt_vs[];
 extern const size_t   kEmbeddedDXBC_stretch_blt_vs_size;

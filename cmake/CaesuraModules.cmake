@@ -211,6 +211,7 @@ caesura_add_module(Render
     src/render/EmbeddedShaders.cpp
     src/render/EmbeddedShaders_GL.cpp
     src/render/EmbeddedShaders_Metal.cpp
+    src/render/EmbeddedShaders_S5.cpp
     src/render/TextRenderer.cpp
     src/render/ParticleSystem.cpp
     src/render/GpuMonitor.cpp

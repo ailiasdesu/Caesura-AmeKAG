@@ -111,9 +111,13 @@ static bgfx::ShaderHandle buildBgfxShader(
 // engine-wide fallback for 2-D quad rendering and RTT blits.
 
 void BgfxShaderManager::initEmbeddedShaders() {
-    static bool s_initialized = false;
-    if (s_initialized) return;
-    s_initialized = true;
+    // PER-INSTANCE guard: multiple managers (the render device plus e.g.
+    // SmaMeshRenderer's own) must each build their own program/uniform
+    // handles. A function-static guard here silently skipped every later
+    // manager, leaving its handles invalid (SMA CPU draw was a no-op /
+    // crash on real GPUs until S5).
+    if (m_embeddedInit) return;
+    m_embeddedInit = true;
 
     const bgfx::RendererType::Enum renderer = bgfx::getCaps()->rendererType;
 

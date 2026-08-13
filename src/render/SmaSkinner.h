@@ -34,6 +34,39 @@ struct SmaSkinnedVertex {
     float u = 0.f, v = 0.f;
 };
 
+// ---------------------------------------------------------------------------
+//  S5: GPU bone packing. A world BonePose becomes one vec4
+//  (m0, m1, ox, oy) with m0 = cos(rot)*scale, m1 = sin(rot)*scale, so the
+//  compute shader applies exactly the CPU transform:
+//    x' = m0*x - m1*y + ox
+//    y' = m1*x + m0*y + oy
+//  (identical to applyBonePose; unit-tested for bit-level agreement).
+// ---------------------------------------------------------------------------
+inline void packBonePose(const BonePose& pose, float out[4]) {
+    const float c = std::cos(pose.rot);
+    const float s = std::sin(pose.rot);
+    out[0] = c * pose.scale;
+    out[1] = s * pose.scale;
+    out[2] = pose.ox;
+    out[3] = pose.oy;
+}
+
+// Pack a pose array into the interleaved bone buffer layout (4 floats per
+// bone; missing/out-of-range bones become the identity transform).
+inline void packBonePoses(const std::vector<BonePose>& poses,
+                          size_t boneCapacity,
+                          std::vector<float>& out) {
+    out.assign(boneCapacity * 4, 0.f);
+    const size_t n = poses.size() < boneCapacity ? poses.size() : boneCapacity;
+    for (size_t i = 0; i < n; ++i) {
+        packBonePose(poses[i], &out[i * 4]);
+    }
+    // Identity rows for the rest: out[i] = {1, 0, 0, 0} -> x' = x.
+    for (size_t i = n; i < boneCapacity; ++i) {
+        out[i * 4 + 0] = 1.f;
+    }
+}
+
 // Skin a mesh against world poses: per-vertex weighted blend (max 2 bones,
 // weights normalized by their sum). `out` is resized to the vertex count.
 // Vertices with no valid bone (or a zero weight sum) stay in place.

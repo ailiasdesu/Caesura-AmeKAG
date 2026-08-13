@@ -86,6 +86,9 @@ public:
     RenderProgramHandle getFallbackProgram() const override;
     RenderUniformHandle getDefaultSampler() const override;
 
+    // Raw engine fallback program (passthrough VS + texture FS) for
+    // tests that need a known-good program handle.
+    bgfx::ProgramHandle fallbackProgram()      const { return m_shaders->getFallbackProgram(); }
     bgfx::ProgramHandle getBlendProgram()      const { return m_shaders->getBlendProgram(); }
     bgfx::ProgramHandle getTransitionProgram() const { return m_shaders->getTransitionProgram(); }
     bgfx::ProgramHandle getVFXProgram()        const { return m_shaders->getVFXProgram(); }
