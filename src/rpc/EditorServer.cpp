@@ -597,6 +597,38 @@ void EditorServer::serverLoop(int port) {
         res.set_content(dumpJson({
             {"status", "ok"},
             {"scene", state->scene},
+            {"token_index", state->tokenIndex},
+            {"nvl_mode", state->nvlMode},
+            {"language", state->language},
+            {"backlog_count", state->backlogCount},
+            {"layer_count", state->layerCount},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
+    // GET /api/state -- canonical engine state for the IDE preview panel
+    // (same payload as /api/debug/getState; round 18).
+    // ---------------------------------------------------------------------
+    svr.Get("/api/state", [this](const httplib::Request&, httplib::Response& res) {
+        RpcReply reply = dispatchRequest(RpcRequest{RpcGetStateRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* state = std::get_if<RpcStateResult>(&reply.payload);
+        if (!state) {
+            setDispatchError(res, invalidDispatcherReply(
+                "State reply did not contain engine state"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"scene", state->scene},
+            {"token_index", state->tokenIndex},
+            {"nvl_mode", state->nvlMode},
+            {"language", state->language},
+            {"backlog_count", state->backlogCount},
+            {"layer_count", state->layerCount},
         }), "application/json");
     });
 

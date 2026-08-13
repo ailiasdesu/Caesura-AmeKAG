@@ -127,8 +127,16 @@ struct RpcKagDebugResult {
     std::string value;
 };
 
+// Engine runtime state for the IDE preview panel (round 18): current
+// scene + token position, NVL mode, UI language, backlog size and layer
+// count. Empty/zero when no game is running.
 struct RpcStateResult {
     std::string scene;
+    int tokenIndex = 0;
+    bool nvlMode = false;
+    std::string language;
+    int backlogCount = 0;
+    int layerCount = 0;
 };
 
 struct RpcFrameResult {

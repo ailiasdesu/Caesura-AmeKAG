@@ -666,7 +666,12 @@ std::string RpcServer::handleGetState(int id) {
 
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"state\":{\"scene\":\""
-        << jsonEscape(state->scene) << "\"}}";
+        << jsonEscape(state->scene) << "\",\"token_index\":"
+        << state->tokenIndex << ",\"nvl_mode\":"
+        << (state->nvlMode ? "true" : "false") << ",\"language\":\""
+        << jsonEscape(state->language) << "\",\"backlog_count\":"
+        << state->backlogCount << ",\"layer_count\":"
+        << state->layerCount << "}}";
     return out.str();
 }
 

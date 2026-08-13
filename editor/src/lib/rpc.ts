@@ -49,6 +49,18 @@ export interface FrameReply {
   error?: string
 }
 
+// Engine runtime state for the preview panel (GET /api/state, round 18).
+export interface StateReply {
+  status: string
+  scene?: string
+  token_index?: number
+  nvl_mode?: boolean
+  language?: string
+  backlog_count?: number
+  layer_count?: number
+  error?: string
+}
+
 export interface BuildReply {
   status: string
   output?: string
@@ -119,6 +131,11 @@ export class EngineClient {
 
   ping(): Promise<PingReply> {
     return this.request<PingReply>('/ping')
+  }
+
+  /** Engine runtime state (scene/token/language/backlog/layers). */
+  state(): Promise<StateReply> {
+    return this.request<StateReply>('/state')
   }
 
   status(): Promise<StatusReply> {

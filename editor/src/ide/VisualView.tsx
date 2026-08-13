@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { EngineClient, FrameReply, Live2DModel } from '../lib/rpc'
+import type { EngineClient, FrameReply, Live2DModel, StateReply } from '../lib/rpc'
 import { useEditor } from '../store'
 
 interface Props {
@@ -13,7 +13,20 @@ export function VisualView({ client }: Props) {
   const [modelPath, setModelPath] = useState('')
   const [modelMsg, setModelMsg] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [state, setState] = useState<StateReply | null>(null)
+  const [stateError, setStateError] = useState('')
   const insertIntoActive = useEditor((s) => s.insertIntoActive)
+
+  const refreshState = async () => {
+    setStateError('')
+    try {
+      const s = await client.state()
+      if (s.status === 'ok') setState(s)
+      else setStateError(s.error ?? 'state unavailable')
+    } catch (e) {
+      setStateError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const refreshFrame = async () => {
     setError('')
@@ -39,7 +52,11 @@ export function VisualView({ client }: Props) {
   useEffect(() => {
     void refreshModels()
     void refreshFrame()
-    const t = setInterval(() => void refreshFrame(), 3000)
+    void refreshState()
+    const t = setInterval(() => {
+      void refreshFrame()
+      void refreshState()
+    }, 3000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client])
@@ -103,6 +120,26 @@ export function VisualView({ client }: Props) {
         </div>
       ) : (
         <div className="frame-empty">{error || 'No frame yet'}</div>
+      )}
+
+      <div className="panel-subtitle">
+        ENGINE STATE
+        <span className="spacer" />
+        <button onClick={() => void refreshState()}>Refresh</button>
+      </div>
+      {stateError ? (
+        <div className="panel-msg">{stateError}</div>
+      ) : state ? (
+        <div className="state-grid">
+          <div className="state-row"><span>scene</span><b>{state.scene || '(none)'}</b></div>
+          <div className="state-row"><span>token</span><b>{state.token_index ?? 0}</b></div>
+          <div className="state-row"><span>language</span><b>{state.language || '-'}</b></div>
+          <div className="state-row"><span>nvl</span><b>{state.nvl_mode ? 'on' : 'off'}</b></div>
+          <div className="state-row"><span>backlog</span><b>{state.backlog_count ?? 0}</b></div>
+          <div className="state-row"><span>layers</span><b>{state.layer_count ?? 0}</b></div>
+        </div>
+      ) : (
+        <div className="frame-empty">No engine state yet</div>
       )}
 
       <div className="panel-subtitle">LIVE2D</div>

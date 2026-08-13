@@ -385,6 +385,21 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 
 /* ---- visual view ---- */
 
+.state-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.state-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.state-row span {
+  opacity: 0.65;
+}
 .frame-img { width: 100%; border: 1px solid var(--border); border-radius: 4px; }
 .frame-empty {
   height: 140px;

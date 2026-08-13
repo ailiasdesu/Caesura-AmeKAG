@@ -12,6 +12,7 @@ extern "C" {
 #include "entry/Engine.h"
 #include "debug/DebugProtocol.h"
 #include "rpc/EditorServer.h"
+#include <nlohmann_json.hpp>
 #include "rpc/RpcServer.h"
 #include "rpc/api/IRpcDispatcher.h"
 #include <atomic>
@@ -197,13 +198,44 @@ private:
                 lua_State* L = m_engine.lua().state();
                 if (!L) return rpcError(Caesura::RpcReplyStatus::Unavailable,
                                         "lua_unavailable", "Lua VM is unavailable");
+                // Snapshot the runner ctx through Lua (kag_runner.get_ctx
+                // is the authoritative game state the debugger also uses).
                 const int stackTop = lua_gettop(L);
-                lua_getglobal(L, "_KAG_SceneName");
-                std::string scene;
-                if (lua_isstring(L, -1)) scene = lua_tostring(L, -1);
+                const char* code =
+                    "local ctx = require('kag_runner').get_ctx(); "
+                    "if not ctx then return '{}' end; "
+                    "local ok, layers = pcall(function() "
+                    "  return require('layers').count() end); "
+                    "local i18n = require('i18n'); "
+                    "local bl = type(ctx.backlog) == 'table' and #ctx.backlog or 0; "
+                    "return string.format('{\"scene\":%q,\"token_index\":%d,"
+                    "\"nvl_mode\":%s,\"language\":%q,\"backlog_count\":%d,"
+                    "\"layer_count\":%d}', "
+                    "tostring(ctx.current_scene or ctx.currentScene or ''), "
+                    "tonumber(ctx.token_index) or 0, "
+                    "ctx.nvl_mode == true and 'true' or 'false', "
+                    "tostring(i18n and i18n.current or ''), bl, "
+                    "ok and (tonumber(layers) or 0) or 0)";
+                Caesura::RpcStateResult state;
+                if (luaL_loadstring(L, code) == LUA_OK
+                    && lua_pcall(L, 0, 1, 0) == LUA_OK
+                    && lua_isstring(L, -1)) {
+                    // The snippet returns a JSON object literal.
+                    try {
+                        auto j = nlohmann::json::parse(lua_tostring(L, -1));
+                        state.scene = j.value("scene", std::string());
+                        state.tokenIndex = j.value("token_index", 0);
+                        state.nvlMode = j.value("nvl_mode", false);
+                        state.language = j.value("language", std::string());
+                        state.backlogCount = j.value("backlog_count", 0);
+                        state.layerCount = j.value("layer_count", 0);
+                    } catch (const std::exception&) {
+                        state.scene = lua_tostring(L, -1);
+                    }
+                }
                 lua_settop(L, stackTop);
                 Caesura::RpcReply reply = rpcOk();
-                reply.payload = Caesura::RpcStateResult{std::move(scene)};
+                reply.payload = std::move(state);
                 return reply;
             } else if constexpr (
                 std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {

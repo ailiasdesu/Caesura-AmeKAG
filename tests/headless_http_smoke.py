@@ -101,6 +101,16 @@ def main():
     st, resp = request("/api/debug/getState")
     check("getState", st == 200 and resp.get("status") == "ok", "%s %s" % (st, resp))
 
+    # Canonical /api/state (IDE preview panel): typed fields present.
+    st, resp = request("/api/state")
+    check("state-endpoint", st == 200 and resp.get("status") == "ok"
+          and isinstance(resp.get("scene"), str)
+          and isinstance(resp.get("token_index"), int)
+          and isinstance(resp.get("language"), str)
+          and isinstance(resp.get("backlog_count"), int)
+          and isinstance(resp.get("layer_count"), int),
+          "%s %s" % (st, resp))
+
     # Rejected: line must be a positive int32. 4294967297 (2^32+1) previously
     # wrapped to a positive int (line 1) via unchecked get<int>(), silently
     # setting a wrong breakpoint.
