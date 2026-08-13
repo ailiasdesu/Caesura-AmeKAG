@@ -209,6 +209,170 @@ check("scene: unknown asset inert, no crash",
       (res3.sma_actors == nil or res3.sma_actors.a == nil)
       and #res3.backlog == 1)
 
+
+-- Restore the recording binding mock (section 5 cleared it for the
+-- no-GPU determinism runs).
+_G.sma = old
+
+-- ---------------------------------------------------------------------------
+-- 6. Round 18: playback controls — duration / loop / rate / pause / seek /
+--    play_anim / on_done_anim
+-- ---------------------------------------------------------------------------
+check("controls: duration from max keyframe", near(sma.duration(asset, "idle"), 1.0))
+check("controls: unknown anim duration 0", sma.duration(asset, "nope") == 0)
+
+-- loop wrap: the clip is 1s; t=1.5 must sample as t=0.5 (midpoint).
+local lp = sma.sample(asset, "idle", 1.5, true)
+check("controls: loop wraps t over duration", lp[2] and near(lp[2].rot, 0.7854))
+local nl = sma.sample(asset, "idle", 5.0, false)
+check("controls: non-loop clamps at last frame", nl[2] and near(nl[2].rot, 1.5708))
+
+local pctx = {}
+local act = sma.spawn(pctx, "p", asset, "idle", { loop = false, rate = 2 })
+check("controls: spawn loop/rate opts", act.loop == false and act.rate == 2)
+sma.update(pctx, 0.5)
+check("controls: rate doubles time", near(act.t, 1.0))
+sma.pause(pctx, "p")
+sma.update(pctx, 10)
+check("controls: pause freezes time", near(act.t, 1.0))
+sma.resume(pctx, "p")
+sma.update(pctx, 0.5)
+check("controls: resume continues", near(act.t, 2.0))
+sma.seek(pctx, "p", 0.25)
+check("controls: seek jumps", near(act.t, 0.25))
+sma.set_rate(pctx, "p", 0.5)
+sma.update(pctx, 1.0)
+check("controls: set_rate slows", near(act.t, 0.75))
+
+sma.play_anim(pctx, "p", "idle", { loop = false })
+check("controls: play_anim resets t", near(act.t, 0) and act.anim == "idle")
+
+-- on_done_anim: a non-loop clip finishing switches to the fallback.
+local dctx = {}
+local doneAct = sma.spawn(dctx, "d", asset, "idle", {
+    loop = false, on_done_anim = "idle",
+})
+sma.seek(dctx, "d", 1.0)  -- at the last frame
+sma.update(dctx, 1.0)     -- past the end -> fallback fires (loop=true)
+check("controls: on_done_anim fallback fires", doneAct.anim == "idle")
+check("controls: fallback loop mode", doneAct.loop == true)
+
+-- ---------------------------------------------------------------------------
+-- 7. Round 18: 2-bone IK
+-- ---------------------------------------------------------------------------
+-- Straight chain at (0,0)-(10,0), l1=10, l2=10, target (10, 10):
+-- theta1 should be 45deg + ... and the chain must reach the target.
+local t1, t2 = sma.ik2bones(0, 0, 10, 0, 10, 10, 10, 10)
+check("ik: solvable chain returns angles", t1 ~= nil and t2 ~= nil)
+-- Reachability: target beyond l1+l2 is unreachable.
+check("ik: too-far target -> nil",
+      sma.ik2bones(0, 0, 10, 0, 50, 50, 10, 10) == nil)
+check("ik: too-close target -> nil",
+      sma.ik2bones(0, 0, 10, 0, 2, 0, 10, 5) == nil)
+check("ik: degenerate length -> nil", sma.ik2bones(0, 0, 1, 0, 5, 0, 0, 0) == nil)
+-- Verify the solved angles actually reach the target: root at (0,0),
+-- mid at l1*(cos t1, sin t1), end = mid + l2*(cos t2, sin t2) == target.
+local ex = 10 * math.cos(t1) + 10 * math.cos(t2)
+local ey = 10 * math.sin(t1) + 10 * math.sin(t2)
+check("ik: solved angles reach the target", near(ex, 10) and near(ey, 10))
+
+-- set_ik integration: the actor's world poses get overridden.
+local ikctx = {}
+local ikAct = sma.spawn(ikctx, "ik", asset, "idle", {})
+sma.set_ik(ikctx, "ik", { 0, 1 }, 20, 0, nil, 10)
+sma.update(ikctx, 0.1)
+check("ik: constraint stored", ikAct.ik ~= nil and ikAct.ik.l2 == 10)
+sma.clear_ik(ikctx, "ik")
+check("ik: clear removes constraint", ikAct.ik == nil)
+
+-- ---------------------------------------------------------------------------
+-- 8. Round 18: crossfade blend
+-- ---------------------------------------------------------------------------
+local bctx = {}
+-- Add a second clip so crossfading between DIFFERENT animations is real.
+asset.animations.walk = {
+    duration = 1.0,
+    tracks = { { bone = 1, frames = { { t = 0, rot = 0 }, { t = 1, rot = 0.5 } } } },
+}
+local bAct = sma.spawn(bctx, "b", asset, "idle", {})
+sma.play_anim(bctx, "b", "walk", { blend_time = 1.0 })
+check("blend: crossfade armed", bAct.blend ~= nil
+      and bAct.blend.to_anim == "walk" and bAct.blend.elapsed == 0)
+sma.update(bctx, 0.5)
+check("blend: mid-crossfade still active", bAct.blend ~= nil)
+sma.update(bctx, 0.6)
+check("blend: completes and clears", bAct.blend == nil)
+sma.play_anim(bctx, "b", "walk", {})
+check("blend: no blend_time -> direct switch", bAct.blend == nil)
+
+-- ---------------------------------------------------------------------------
+-- 9. Round 18: parts / variant switching
+-- ---------------------------------------------------------------------------
+local partsAsset = sma.load([==[
+{
+  "texture": "chara/hero.png",
+  "bones": [ {"id":0,"parent":-1,"pivot":[0.0,0.0]} ],
+  "parts": [
+    { "id": "eye", "tex": 7, "current": "open",
+      "variants": {
+        "open":   { "positions":[[0,0],[1,0],[1,1]], "uvs":[[0,0],[1,0],[1,1]], "weights":[{"bone":0,"w":1}], "indices":[0,1,2] },
+        "closed": { "positions":[[0,0],[1,0],[1,1]], "uvs":[[0.5,0],[1,0],[1,1]], "weights":[{"bone":0,"w":1}], "indices":[0,1,2] }
+      } }
+  ],
+  "animations": { "idle": { "duration":1.0, "tracks":[] } }
+}]==])
+local sctx = {}
+local sAct = sma.spawn(sctx, "s", partsAsset, "idle", {})
+local partHandle = _G.sma.created
+check("parts: multi-part spawn creates per-part meshes",
+      sAct.parts ~= nil and #sAct.parts == 1 and sAct.parts[1].handle == partHandle)
+check("parts: part tex from asset", sAct.parts[1].texId == 7)
+local singleHandle = _G.sma.created
+local singleActor = sma.spawn(sctx, "s2", asset, "idle", {})
+check("parts: single-mesh path unchanged",
+      singleActor.handle == singleHandle + 1 and singleActor.parts == nil)
+local createdBefore = _G.sma.created
+local ok = sma.set_variant(sctx, "s", "eye", "closed")
+check("parts: set_variant switches variant", ok and sAct.parts[1].current == "closed")
+check("parts: variant rebuilds the mesh",
+      _G.sma.created == createdBefore + 1 and _G.sma.destroyed >= 1)
+check("parts: unknown variant rejected",
+      sma.set_variant(sctx, "s", "eye", "nope") == false)
+sma.render(sctx)
+check("parts: render draws each part", true)
+
+-- ---------------------------------------------------------------------------
+-- 10. Round 18: KAG commands — sma_anim / sma_ik / sma_variant + contracts
+-- ---------------------------------------------------------------------------
+local cctx = { sma_actors = {} }
+sma.commands.sma_play(cctx, { name = "c", asset = "hero", anim = "idle" })
+sma.commands.sma_anim(cctx, { name = "c", anim = "idle", rate = 3, loop = false })
+check("commands: sma_anim switches + applies opts",
+      cctx.sma_actors.c.anim == "idle" and cctx.sma_actors.c.rate == 3
+      and cctx.sma_actors.c.loop == false)
+sma.commands.sma_ik(cctx, { name = "c", bone0 = 0, bone1 = 1, tx = 10, ty = 10, l2 = 10 })
+check("commands: sma_ik applies constraint",
+      cctx.sma_actors.c.ik ~= nil and near(cctx.sma_actors.c.ik.tx, 10))
+sma.commands.sma_variant(cctx, { name = "c", part = "eye", variant = "open" })
+check("commands: sma_variant on single-mesh actor is inert", true)
+
+-- Contracts registered by kag/commands/system.lua (loaded above).
+local schema = require("kag.schema")
+local contracts = schema.dumpContracts() or {}
+local smaPlay = contracts.sma_play or {}
+local smaAnim = contracts.sma_anim or {}
+local smaIk = contracts.sma_ik or {}
+local smaVariant = contracts.sma_variant or {}
+check("contracts: sma_play has loop/rate/on_done",
+      smaPlay.loop ~= nil and smaPlay.rate ~= nil
+      and smaPlay.on_done_anim ~= nil)
+check("contracts: sma_anim has blend_time",
+      smaAnim.blend_time ~= nil)
+check("contracts: sma_ik has bone0/bone1/tx/ty/l1/l2",
+      smaIk.bone0 ~= nil and smaIk.l1 ~= nil)
+check("contracts: sma_variant has part/variant",
+      smaVariant.part ~= nil and smaVariant.variant ~= nil)
+
 if failed > 0 then
     print(string.format("SMA TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)

@@ -268,7 +268,7 @@ _schema.define("gallery", {
 })
 _schema.define("sma_play", {
     _meta = { category = "system", blocking = false,
-              desc = "SMA skeletal-mesh actor spawn (Battle 4d S3)" },
+              desc = "SMA skeletal-mesh actor spawn (Battle 4d S3; loop/rate/on_done round 18)" },
     name = { type = "string" },   -- actor id
     asset = { type = "string" },  -- registered SMA asset (sma.register)
     anim = { type = "string" },   -- animation name (default "idle")
@@ -276,6 +276,37 @@ _schema.define("sma_play", {
     scale = { type = "number" }, opacity = { type = "number" },
     tex = { type = "number" },    -- engine render-texture id
     view = { type = "number" },   -- target bgfx view id
+    loop = { type = "boolean", default = true },  -- loop the clip (design doc §4)
+    rate = { type = "number", default = 1 },      -- playback speed multiplier
+    on_done_anim = { type = "string" },  -- non-loop completion fallback
+})
+_schema.define("sma_anim", {
+    _meta = { category = "system", blocking = false,
+              desc = "SMA runtime animation switch (round 18; optional blend_time crossfade)" },
+    name = { type = "string" },
+    anim = { type = "string" },
+    loop = { type = "boolean", default = true },
+    rate = { type = "number" },
+    on_done_anim = { type = "string" },
+    blend_time = { type = "number", min = 0, max = 60 },  -- crossfade seconds
+})
+_schema.define("sma_ik", {
+    _meta = { category = "system", blocking = false,
+              desc = "SMA 2-bone IK constraint (round 18): chain reaches (tx, ty)" },
+    name = { type = "string" },
+    bone0 = { type = "number" },  -- root bone id
+    bone1 = { type = "number" },  -- mid bone id
+    tx = { type = "number" }, ty = { type = "number" },  -- world target
+    l1 = { type = "number" },     -- optional root->mid length (default: current)
+    l2 = { type = "number" },     -- mid->end length
+})
+_schema.define("sma_variant", {
+    _meta = { category = "system", blocking = false,
+              desc = "SMA part variant switch (round 18; E-mote style)" },
+    name = { type = "string" },
+    part = { type = "string" },     -- part id from the asset's parts list
+    variant = { type = "string" },  -- variant name
+    tex = { type = "number" },      -- optional per-part texture id override
 })
 _schema.define("sma_stop", {
     _meta = { category = "system", blocking = false,
