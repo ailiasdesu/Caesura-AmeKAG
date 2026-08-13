@@ -11,10 +11,10 @@
 
 | 提交 | 内容 |
 |---|---|
-| `feat(render)` | **`{i}` 斜体剪切**：`IRenderDevice::renderText` 增加 `bool italic = false`（第 10 参，接口 + BgfxRenderDevice/NullRenderDevice/TextRenderer 全链）；`GlyphQuad` 格式变更（TextRenderer.h:113）——增加 `shear` 字段（顶边水平偏移 px，默认 0，默认成员初始化），`submitGlyphQuads` 顶点构建顶边两角 `x + shear`、底边不动（倾斜不改变 advance 度量）；`renderText` 中 `shear = italic ? max(1.0f, 0.18f * m_fontGlyphH * scale) : 0`，bold 二次 quad 拷贝继承 shear（`{i}`+`{b}` 可叠加）；缓存路径判定 `scale!=1 \|\| bold \|\| italic` 走直接路径 |
+| `feat(render)` | **`{i}` 斜体剪切**：`IRenderDevice::renderText` 增加 `bool italic = false`（第 10 参，接口 + BgfxRenderDevice/NullRenderDevice/TextRenderer 全链）；`GlyphQuad` 格式变更（TextRenderer.h:125）——增加 `shear` 字段（顶边水平偏移 px，默认 0，默认成员初始化），`submitGlyphQuads` 顶点构建顶边两角 `x + shear`、底边不动（倾斜不改变 advance 度量）；`renderText` 中 `shear = italic ? max(1.0f, 0.18f * m_fontGlyphH * scale) : 0`，bold 二次 quad 拷贝继承 shear（`{i}`+`{b}` 可叠加）；缓存路径判定 `scale!=1 \|\| bold \|\| italic` 走直接路径；`glyphQuadToNDC` 纯函数 + 19 断言几何单测（test_render_pipeline） |
 | `feat(kag)` | **`{i}` Lua 管线**：`text_layout.lua parse_markup` 的 `{i}` 从 `noop` 改为 italic 标志（`italic_stack`/`current_italic`，span/字符/段全部携带）；`text_scene.lua add_text` 增加 italic 与 **instant** 两个尾部可选参数（`typewriter = not instant`），`add_wrapped_spans` 透传 `seg.italic`/`seg.instant`；段合并 `same_style` 含 italic 与 instant（保证 NVL 前缀独立成段） |
 | `feat(kag)` | **NVL 说话人行首内联前缀**：`text.lua` NVL 分支——有说话人且有消息时构造 `「Name」：` 前缀 span（颜色取 `nameplate_style.text_color`，`instant=true`）插入 spans 头部，无 markup 消息转单 span 统一走 `add_wrapped_spans`；空消息 `[ch]` 保留原独立标签。前缀随行 wrap、游标由 `add_wrapped_spans` 返回值推进——**零新状态字段**，存档/回滚/NVL 游标机制不动 |
-| `fix(kag)` | **潜伏颜色 bug**：`st and st.text_color and st.text_color:match(...)` 的 and 链在 Lua 中**截断多返回值**（二元运算只保留第一个），导致 NVL 说话人颜色 g/b 恒为 0（渲染成红色）。已改为 if 守卫 + 直接 `match` 调用（前缀分支 + 空消息标签分支两处） |
+| `fix(kag)` | **潜伏颜色 bug**：`st and st.text_color and st.text_color:match(...)` 的 and 链在 Lua 中**截断多返回值**（二元运算结果只保留第一个值；引擎自带 Lua 5.4 实测 `local a,b,c = true and f()` → `1 nil nil`，而直接调用返回全部），导致 NVL 说话人颜色 g/b 恒为 0（渲染成红色）。已改为 if 守卫 + 直接 `match` 调用（前缀分支 + 空消息标签分支两处）。**实证**：`external/lua/lua.exe` 最小复现 `and-chain match: 255 nil nil` vs `direct match: 255 255 255`——勿按 Lua 手册直觉"简化"回 and 链 |
 | `test` | 测试扩展：`test_text_markup.lua` 26→31（{i} italic 标志/`{b}`+`{i}` 嵌套/未闭合/instant 段独立/instant draw 非打字机）；`test_nvl.lua` 25 项（前缀 draw 结构/颜色/instant/backlog 纯文本/空消息回退）；`test_kag_execution.cpp` render_text 参数计数断言 9→10（含 italic 默认 false） |
 | `docs` | 教程 §13 `{i}` 已渲染表述 + §14 NVL 前缀样式、§15 过时"无操作"表述清理；能力矩阵 S2s/S2t 行更新（总 60 项不变）；api-stats 重生成（数字无变化）；交接 010 |
 
