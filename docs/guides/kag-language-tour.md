@@ -347,7 +347,12 @@ return {
 ```kag
 [ch text="Welcome to Caesura AmeKAG Engine Demo."]  ; ja 语言下显示译文
 [ch text="{greeting}"]                               ; {key} 令牌展开
+[button text="Go to the library"]                    ; 选择按钮标签同样本地化
 ```
+
+**覆盖范围**：`[ch]`/`[text]` 对话、`[button]`/`[sel]` 选择按钮标签
+（注册时本地化，`[endbutton]` 绘制与点击判定用译文）；标题/设置等
+菜单文本经 `i18n.t` 字符串表（语言切换即时生效）。
 
 **作者工作流**（`scripts/ks_i18n.lua`）：
 
