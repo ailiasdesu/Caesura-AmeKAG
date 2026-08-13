@@ -385,3 +385,31 @@ lua scripts/ks_i18n.lua --missing --dir demo --lang ja  ; 未翻译清单（CI �
 - 重绘行立即全显（typewriter 封存）；未翻译行回落原文；backlog 条目
   随存档持久化 `src`（旧档无 `src` 的条目保持原样）；说话人名牌/
   `[ruby]` 不参与（管线本就不译）
+
+## 18. AI 辅助（本地 LLM；Neo-Genesis 差异化）
+
+引擎通过 C++ 绑定（`AI` 表）访问 OpenAI-compatible / Ollama HTTP 服务，
+全部走 `config.ai` 配置（scripts/config.lua）：
+
+```lua
+config.ai = {
+    endpoint = "http://127.0.0.1:11434",  -- Ollama 默认；"" 禁用
+    model = "",   -- "" = 自动：Ollama 端点询问服务取首个可用模型
+    api_key = "", -- OpenAI-compatible 可选 Bearer
+    timeout_ms = 60000,  -- HTTP 读超时（冷加载预留）
+}
+```
+
+**能力面**：
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 游戏内 AI 对话 | `[ai_dialog prompt="..." fallback="…"]` | 异步查询（渲染循环不阻塞），超时/不可达优雅回退 fallback 文本 |
+| 场景创作 | IDE AiPanel / `kag/aiwriter.lua` | 生成对话（`generate_dialogue`）、续写场景（`continue_scene`），输出过 KAG 标签消毒 |
+| 开发辅助 | IDE AiPanel Dev Assist / `kag/aidev.lua` | 诊断解释、修复建议、场景结构审查（本地规则离线可用，LLM 在线增强） |
+
+**模型自动发现**（Ollama 端点且 model 为空时）：绑定向服务发
+`GET /api/tags` 取第一个可用模型（进程内缓存）——不再假设一个
+必然没拉取的默认模型。**真实验证**：引擎 --headless 经 RPC eval 对
+真实 Ollama（gemma3:4b）同步/异步查询均返回真实回复；条件式 C++
+用例与 ctest `CaesuraHeadlessAiSmoke`（无 Ollama 时跳过）作为回归。

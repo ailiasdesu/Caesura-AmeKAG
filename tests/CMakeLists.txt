@@ -201,6 +201,25 @@ if(Python3_EXECUTABLE)
         TIMEOUT 90
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
     )
+    # Real-Ollama AI smoke: runs the REAL engine binary against a REAL local
+    # Ollama server when one is reachable (sync + async AI.query); exits 77
+    # (ctest SKIP) on machines without Ollama so CI stays green.
+    add_test(
+        NAME CaesuraHeadlessAiSmoke
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/headless_ai_smoke.py
+                $<TARGET_FILE:CaesuraAmeKAG>
+    )
+    set_tests_properties(CaesuraHeadlessAiSmoke PROPERTIES
+        LABELS "entry;headless;cli;rpc;ai"
+        RUN_SERIAL TRUE
+        RESOURCE_LOCK "global-singletons"
+        FIXTURES_REQUIRED caesura-test-assets
+        PASS_REGULAR_EXPRESSION "ALL HEADLESS AI SMOKE TESTS PASSED"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 300
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
+    )
 endif()
 
 # Copy scripts to test output directory so sandbox.lua et al are found
