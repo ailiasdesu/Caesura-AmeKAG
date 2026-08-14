@@ -1,4 +1,4 @@
-﻿#include "BgfxMiniGameBackend.h"
+#include "BgfxMiniGameBackend.h"
 #include "../di/BackendRegistry.h"
 #include "EmbeddedMiniGameShaders.h"
 #include <nlohmann_json.hpp>
@@ -434,9 +434,19 @@ bool BgfxMiniGameBackend::update(float dt) {
 
 void BgfxMiniGameBackend::render() { if(!m_gpuReady) return;
     if(!m_active)return;
+    // P1-4: the view needs a rect and a clear or bgfx may skip the submit
+    // (a view with no rect never rasterizes). Match the backbuffer so the
+    // 3D scene fills the window on any resolution.
+    const bgfx::Stats* stats = bgfx::getStats();
+    const uint16_t vw = stats ? static_cast<uint16_t>(stats->width) : 1280;
+    const uint16_t vh = stats ? static_cast<uint16_t>(stats->height) : 720;
+    bgfx::setViewRect(MINIGAME_VIEW, 0, 0, vw, vh);
+    bgfx::setViewClear(MINIGAME_VIEW, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x001a1a2e, 1.0f, 0);
     float view[16],proj[16],viewProj[16];
     bx::mtxLookAt(view,bx::Vec3{m_camera.eyeX,m_camera.eyeY,m_camera.eyeZ},bx::Vec3{m_camera.atX,m_camera.atY,m_camera.atZ});
-    float aspect=1280.0f/720.0f;
+    const float aspect = (stats && stats->height > 0)
+        ? static_cast<float>(stats->width) / static_cast<float>(stats->height)
+        : 16.0f / 9.0f;
     bx::mtxProj(proj,m_camera.fov,aspect,m_camera.nearPlane,m_camera.farPlane,bgfx::getCaps()->homogeneousDepth);
     bx::mtxMul(viewProj,view,proj);
     bgfx::setViewTransform(MINIGAME_VIEW,view,proj);
