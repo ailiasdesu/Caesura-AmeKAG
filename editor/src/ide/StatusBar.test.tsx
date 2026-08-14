@@ -46,6 +46,15 @@ describe('StatusBar (component)', () => {
     expect(screen.getByText('token: 42')).toBeTruthy()
   })
 
+  it('shows the current execution command (em-dash when idle)', () => {
+    render(<StatusBar />)
+    expect(screen.getByText('cmd: —')).toBeTruthy()
+    cleanup()
+    useEditor.setState({ engineCmd: '[ch]' })
+    render(<StatusBar />)
+    expect(screen.getByText('cmd: [ch]')).toBeTruthy()
+  })
+
   it('shows paused state', () => {
     useEditor.setState({ enginePaused: true })
     render(<StatusBar />)

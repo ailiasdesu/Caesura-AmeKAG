@@ -49,6 +49,17 @@ describe('DebugView (component)', () => {
     })
   })
 
+  it('mirrors current_cmd into the store', async () => {
+    const client = makeClient({
+      debugState: vi.fn(async () => ({ status: 'ok', scene: 'ep2', token_index: 3, paused: false, current_cmd: '[ch]' })),
+    })
+    render(<DebugView client={client as unknown as EngineClient} />)
+    await screen.findByText('ep2')
+    await waitFor(() => {
+      expect(useEditor.getState().engineCmd).toBe('[ch]')
+    })
+  })
+
   it('shows paused badge and mirrors paused state', async () => {
     const client = makeClient({
       debugState: vi.fn(async () => ({ status: 'ok', scene: 'ep2', token_index: 3, paused: true })),

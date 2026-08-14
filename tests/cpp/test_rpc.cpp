@@ -75,7 +75,9 @@ RpcReply successReply(const RpcRequest& request) {
         return {RpcReplyStatus::Ok, {}, {}, RpcEvaluateResult{"42"}};
     }
     if (std::holds_alternative<RpcGetStateRequest>(request.payload)) {
-        return {RpcReplyStatus::Ok, {}, {}, RpcStateResult{"chapter-1"}};
+        RpcStateResult state{"chapter-1"};
+        state.currentCmd = "[ch]";
+        return {RpcReplyStatus::Ok, {}, {}, state};
     }
     if (std::holds_alternative<RpcCaptureFrameRequest>(request.payload)) {
         return {RpcReplyStatus::Ok, {}, {}, RpcFrameResult{"ZmFrZS1wbmc="}};
@@ -419,8 +421,11 @@ TEST_CASE("RpcServer submits runtime DTOs to dispatcher") {
     CHECK(rpc.processRequestLine(
         R"({"id":6,"method":"stop"})")
         .find("\"result\":\"ok\"") != std::string::npos);
+    CHECK(rpc.processRequestLine(
+        R"({"id":7,"method":"getState"})")
+        .find("\"current_cmd\":\"[ch]\"") != std::string::npos);
 
-    REQUIRE(dispatcher->requestCount() == 6);
+    REQUIRE(dispatcher->requestCount() == 7);
     const auto run = dispatcher->requestAt(0);
     REQUIRE(std::holds_alternative<RpcRunScriptRequest>(run.payload));
     CHECK(std::get<RpcRunScriptRequest>(run.payload).script == "return 9");
@@ -433,6 +438,8 @@ TEST_CASE("RpcServer submits runtime DTOs to dispatcher") {
         dispatcher->requestAt(4).payload));
     CHECK(std::holds_alternative<RpcStopRequest>(
         dispatcher->requestAt(5).payload));
+    CHECK(std::holds_alternative<RpcGetStateRequest>(
+        dispatcher->requestAt(6).payload));
 }
 
 TEST_CASE("RpcServer maps debugger JSON methods to self-contained DTOs") {
