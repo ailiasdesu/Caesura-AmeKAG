@@ -9,6 +9,8 @@ import type {
   StateReply,
 } from '../lib/rpc'
 import { useEditor } from '../store'
+import { SmaSkeletonCanvas } from './SmaSkeletonCanvas'
+import type { SmaCanvasBone } from './SmaSkeletonCanvas'
 
 interface Props {
   client: EngineClient
@@ -17,6 +19,7 @@ interface Props {
 interface SmaBone {
   id: number
   parent: number
+  pivot?: [number, number]
 }
 
 interface SmaAnimDetail {
@@ -250,6 +253,54 @@ export function VisualView({ client }: Props) {
     }
   }
 
+  // -- SMA skeleton canvas (round 27) --
+  // Parse the draft JSON and build {id,parent,pivot} bones for the canvas.
+  const draftBones = (): SmaCanvasBone[] | null => {
+    try {
+      const parsed = JSON.parse(draft) as {
+        bones?: { id?: number; parent?: number; pivot?: [number, number] }[]
+      }
+      const raw = Array.isArray(parsed.bones) ? parsed.bones : []
+      const bones: SmaCanvasBone[] = raw
+        .filter((b) => typeof b.id === 'number')
+        .map((b) => ({
+          id: b.id as number,
+          parent: typeof b.parent === 'number' ? (b.parent as number) : -1,
+          pivot:
+            Array.isArray(b.pivot) &&
+            typeof b.pivot[0] === 'number' &&
+            typeof b.pivot[1] === 'number'
+              ? ([Number(b.pivot[0]), Number(b.pivot[1])] as [number, number])
+              : ([0.5, 0.5] as [number, number]),
+        }))
+      return bones
+    } catch {
+      return null
+    }
+  }
+
+  // Write updated pivots back into the draft JSON text.
+  const applyBonePivots = (bones: SmaCanvasBone[]) => {
+    setDraftError('')
+    try {
+      const parsed = JSON.parse(draft) as Record<string, unknown>
+      const raw = Array.isArray((parsed as { bones?: unknown }).bones)
+        ? ((parsed as { bones: unknown[] }).bones as unknown[])
+        : []
+      const pivotMap = new Map<number, [number, number]>()
+      for (const b of bones) pivotMap.set(b.id, b.pivot)
+      for (const b of raw) {
+        const rec = b as { id?: unknown; pivot?: unknown }
+        if (typeof rec.id === 'number' && pivotMap.has(rec.id)) {
+          rec.pivot = pivotMap.get(rec.id)!
+        }
+      }
+      setDraft(JSON.stringify(parsed, null, 1))
+    } catch {
+      // JSON became invalid mid-edit; leave the textarea untouched.
+    }
+  }
+
   const onFrameClick = async (e: React.MouseEvent<HTMLImageElement>) => {
     setPickMsg('')
     const rect = e.currentTarget.getBoundingClientRect()
@@ -430,6 +481,14 @@ export function VisualView({ client }: Props) {
         <button onClick={() => void loadForEditing()} disabled={editBusy || smaBusy}>
           {editBusy ? 'Loading…' : 'Load for editing'}
         </button>
+      </div>
+      <div className="sma-canvas-block">
+        <div className="sma-canvas-title">Skeleton (click/drag to edit pivots)</div>
+        {draftBones() ? (
+          <SmaSkeletonCanvas bones={draftBones()!} onBonesChange={applyBonePivots} />
+        ) : (
+          <div className="sma-canvas-empty">(JSON parsing failed, skeleton cannot be edited)</div>
+        )}
       </div>
       <textarea
         className="sma-editor"
