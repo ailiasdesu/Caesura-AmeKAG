@@ -64,3 +64,4 @@
 | 16 | 编辑器测试基建（G4 起航）：vitest + SceneTree parseSceneElements 7 例（标签/类型分类/注释跳过/截断/行号/空源）+ CI npm ci 步骤 | vitest 7/7, tsc 0, ctest 绿, 耦合 PASS | cfd6de2f |
 | 17 | 编辑器安全纯函数测试：luaString 长括号转义（注入守卫：终止符形状内容/等号升级/10 连等） + luaValue JSON→Lua（标量/nil/转义/嵌套表）（G4 中段） | vitest 20/20, tsc 0, ctest 绿, 耦合 PASS | 339e2cf2 |
 | 18 | EngineClient RPC 客户端测试（可注入 fetch mock）：URL 拼接/token 头/Content-Type/查询参数/JSON 解析/RpcError/404 详情/setBase（G4 中段） | vitest 28/28, tsc 0, ctest 绿, 耦合 PASS | a44b530f |
+| 19 | 编辑器命令高亮漂移审计：发现 sma_anim/sma_ik/sma_variant 缺失（tag.invalid）；补全 3 命令 + check_test_coverage.py 增编辑器命令漂移守卫（负向验证通过）（G4 中段） | vitest 28/28, tsc 0, 覆盖检查 PASS(负向 FAIL 验证), ctest 绿, 耦合 PASS | a8db10c4 |
