@@ -31,8 +31,8 @@ minigame 模块承载引擎内嵌的 3D 小游戏子系统，生命周期为
 
 ## P1 重要问题
 
-### P1-1　render() 未配置 View（setViewRect/setViewClear），3D 视图可能不渲染
-- **位置**：`BgfxMiniGameBackend.cpp:435-446`（`render()`）
+### ~~P1-1　render() 未配置 View~~ ✅ round 21 已修复：render() 现调用 setViewRect/setViewClear（尺寸取自 bgfx::getStats 的实际帧缓冲，回退 1280x720）。
+### ~~P1-2　渲染宽高比硬编码~~ ✅ round 21 已修复：aspect 从 stats 动态计算（非 16:9 窗口不再畸变），无 stats 时回退 16:9。
 - **问题**：render() 只调用了 `bgfx::setViewTransform(MINIGAME_VIEW,...)` + 提交，**从未调用 `bgfx::setViewRect(MINIGAME_VIEW,0,0,w,h)` 与 `bgfx::setViewClear`**。bgfx 中 view 必须在提交前设定 view rect（否则 view 的 output 尺寸未定义/可能为 0），且不清屏共用 `MINIGAME_VIEW` 可能与 KAG 主 pass 发生深度/颜色残留叠加。这是 mini-game 实际能否出图的关键正确性问题。
 - **修复建议**：在 render() 内（或 enter 时）为 `MINIGAME_VIEW` 设置 `setViewRect`（宽高取自 `m_renderDevice` 的实际帧缓冲尺寸，而非硬编码）与 `setViewClear`（若需要独立清屏）；并确认 render 设备的 view 容量 > 10。
 - **工作量**：S
@@ -43,25 +43,25 @@ minigame 模块承载引擎内嵌的 3D 小游戏子系统，生命周期为
 - **修复建议**：从 `BackendRegistry::getRenderDevice()`（或 render 接口）获取当前输出尺寸计算 aspect；无设备时回退到默认 16:9。
 - **工作量**：S
 
-### P1-3　线程契约自相矛盾：update() 声明 JobSystem 安全却又调用 Lua
+### ~~P1-3　线程契约自相矛盾~~ ✅ round 35 已修复：采用方案 (a) 收紧契约——接口注释明确 update() 仅主线程（驱动物理/碰撞并可能调用 Lua 回调），显式标注 "Never dispatch update() to JobSystem workers"。
 - **位置**：`api/IMiniGameBackend.h:20-22`（注释声明 `update() may be dispatched to JobSystem workers`）与 `BgfxMiniGameBackend.cpp:429-433 / 203-210`（`update()`→`runCollisionDetection()` 内 `lua_pcall` 调用 Lua 全局 `on_collision`）
 - **问题**：接口契约声称 update() 可被分发到工作线程（纯 CPU），但实现中 update() 会执行 Lua 回调 `on_collision`。Lua 状态非线程安全，一旦未来真的把 update() 交给 JobSystem 就会数据竞争/崩溃。当前 Engine.cpp:739 在主线程顺序调用，是**潜在**而非现役 bug，但契约与实现矛盾必须消除。
 - **修复建议**：二选一——(a) 收紧契约：声明 update() 仅主线程调用，删除「JobSystem 安全」注释；(b) 若确实要并行物理，则把碰撞产生的配对事件**出队**到主线程再调 Lua（提供 `drainCollisionEvents` 或让 update 返回冲突列表由 Engine 主线程回调）。推荐 (a) 先行（现状即主线程）。
 - **工作量**：S（选 a）/ M（选 b）
 
-### P1-4　热路径每帧多次分配（update/碰撞检测）
+### ~~P1-4　热路径每帧多次分配~~ ✅ round 35 已修复：runCollisionDetection 改用 7 个成员 vector（m_colIds/m_colX/Y/Z/m_colSx/Sy/Sz），initGeometryCache 中 reserve(64)，每帧 clear 复用，行为逐位等价。
 - **位置**：`BgfxMiniGameBackend.cpp:205-208`（`runCollisionDetection` 每帧 `vector<uint32_t>` + 6 个 float vector 重新分配）及 `:430`（update 每帧遍历 + 清空 3 个 accel）
 - **问题**：`runCollisionDetection` 每帧重建 1 个 id vector + 6 个坐标 vector + sort，对象多时（几十上百）为热路径带来可观的分配与 cache 抖动。`findCollisions` 内部又 `vector<Item>` 二次分配。
 - **修复建议**：在成员中复用预分配的 vector（`m_colIds/px/py/...` reserve 后 clear 复用）；或直接让碰撞遍历 unordered_map 内联成数组避免二次拷贝。改为对象数组时注意与 `m_objects`（unordered_map）的迭代一致性。
 - **工作量**：S
 
-### P1-5　processEvent 恒返回 false，小游戏实际收不到输入，与「D9.4 焦点切换」意图不符
+### ~~P1-5　processEvent 恒返回 false~~ ✅ round 35 已修复：实现 SDL 鼠标事件转发（null/active 防护、MOUSE_BUTTON_DOWN 消费并 DEBUG_INFO），并补上缺失的接线——Engine::init 在 mini-game 阶段向 InputRouter 注册 gameCallback 转发 processEvent（此前 registerGameCallback 无任何调用者，事件永远到不了小游戏）。
 - **位置**：`BgfxMiniGameBackend.cpp:461`（`bool processEvent(const void* e){(void)e;return false;}`）
 - **问题**：enter()（414-416）把输入焦点切到 GAME、leave() 切回 KAG，但 `processEvent` 完全空实现、恒返回 false（不消费任何事件），也没把 SDL 事件转发给游戏逻辑。接口文档（IMiniGameBackend.h:57-60）明确 processEvent「forward SDL events to the mini-game when active」，现状使输入路由形同虚设。
 - **修复建议**：实现 processEvent（按需解析 SDL 事件类型，转发给场景/回调，命中则返回 true）；或在留下空实现前明确标注「暂未接入输入」避免误导。与 P1-3 的 focus 切换逻辑配套验证。
 - **工作量**：M
 
-### P1-6　bgfx handle 初始化用 `= {}`（idx 0）与 `BGFX_INVALID_HANDLE`（kInvalidHandle）不一致
+### ~~P1-6　bgfx handle 初始化用 `= {}`~~ ✅ round 35 已修复：m_geoVB/m_geoIB 数组改 `= {BGFX_INVALID_HANDLE}`；扫描确认其余 handle 成员（program/uniform）早已正确，运行时无 idx==0 依赖。
 - **位置**：`BgfxMiniGameBackend.h:59-60`（`bgfx::VertexBufferHandle m_geoVB[...] = {};` 等）
 - **问题**：bgfx 句柄是 {idx}；`BGFX_INVALID_HANDLE` 的 idx 为 `kInvalidHandle`（0xffff），而空花括号 `{}` 给 idx=0，而 idx 0 是**合法句柄的起始值**。`bgfx::isValid` 靠比对 kInvalidHandle 判断，因此初始化后未创建的句柄会被误判为「有效」。当前靠 `shutdown(){ if(!m_gpuReady) return; }`（:165）与 `ensureGpuResources` 的 gpuReady 门闩避免了误 destroy，但**惯用法危险**：任何绕过 m_gpuReady 的路径都可能 destroy 一个 idx=0 的假资源。
 - **修复建议**：所有句柄成员统一初始化为 `BGFX_INVALID_HANDLE`（显式 `{BGFX_INVALID_HANDLE}`），与 bgfx 惯例一致。
