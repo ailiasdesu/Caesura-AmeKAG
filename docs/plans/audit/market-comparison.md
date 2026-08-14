@@ -3,7 +3,7 @@
 > **用途**：为「Caesura (AmeKAG) vs 主流引擎」对比报告提供结构化素材。
 > **数据基准**：结合仓库内 2026-08-06 在线核实快照（docs/design/engine-market-analysis-2026-08-06.md，数据经 GitHub API/官网/itch.io 实时复核）+ 领域公开常识。
 > **重要说明**：本次调研时 web_search 因账户余额不足不可用（"Insufficient Balance"），无法实时在线复核；凡无法二次核实处一律标注「待核实」。最终报告发布前建议补一轮在线复核。
-> **复核进展（round 27）**：web_search 已修复（改走 opencode-go 提供方）。已复核：**Ren'Py 最新版 8.5.0**（renpy.org/release/8.5.0 官方确认，2025 发布）。其余「待核实」项待继续复核。
+> **复核进展（round 28）**：web_search 已修复（改走 opencode-go 提供方）。已复核：**Ren'Py 最新版 8.5.0**（renpy.org/release/8.5.0 官方确认，2025 发布，标题 "In Good Health"；Lemmasoft 公告帖 renpy 8.5 released）；**TyranoScript/TyranoStudio 免费可商用**（tyranoscript.com、Steam app 3634660）；**Naninovel 确认 Asset Store 约 $150**（naninovel.com/releases/1.21）；**VNM 商业付费**（Steam app 495480）；**Live2D 商用授权规则**（help.live2d.com/sdk/sdk_001，SDK 发行许可证机制）；**Godot+DM 为 MIT**（非 MPL-2.0，MPL-2.0 系 WebGAL）。其余「待核实」项见文末清单。
 > **Caesura 侧证据来源**（本地已验证）：docs/api/command-contracts.md（**84 个** KAG Neo-Genesis 契约命令，自动生成）；docs/design/skeletal-mesh-animation.md（SMA 骨骼网格动画，**GPU 蒙皮 bgfx compute 已交付 round 18**）；Ollama AI `[ai_dialog]` 集成。
 
 ## 0. 被调研引擎清单
@@ -122,13 +122,13 @@
 |---|---|
 | 技术栈 | HTML5 + JavaScript（TyranoScript 语义）+ TyranoBuilder（拖拽编辑器）；浏览器/Electron |
 | 平台 | Web / 移动（iOS/Android）/ Windows（套壳）；桌面原生性能弱 |
-| 开源/许可 | TyranoScript 部分开源；TyranoBuilder 免费（有商用版/署名条款）；许可细则待核实 |
+| 开源/许可 | TyranoScript 免费使用（官方 tyranoscript.com "Free to use"，兼容智能手机；可商用）；TyranoStudio（现厂商主导工具，Steam app 3634660）亦标注免费、可商用；许可细则见 [tyranoscript.com](https://tyranoscript.com/)、[Steam 页](https://store.steampowered.com/app/3634660/) |
 | 脚本/叙事 | 标签式 + JS；拖拽节点（Builder）；变量/分支/存档/回滚内置 |
 | 渲染能力 | 浏览器能力上限：2D + Live2D 内置（HTML5 Live2D）+ 简单转场；无深度 GPU（WebGL 受浏览器限制） |
 | 性能/启动 | 中；浏览器环境，大场景/长对话可能卡顿 |
 | 资产/打包 | Web 资源打包（.zip 可拆）；加密弱 |
 | 生态工具链 | Tyrano 可视化拖拽编辑器（零门槛）；JS 社区；日系用户多；维护较慢（2026-03 前仍有提交） |
-| 授权模式 | 免费（署名/商用细则待核实） |
+| 授权模式 | 免费、可商用（TyranoScript 官方 "Free to use"；TyranoStudio "perfect for commercial use"，见 [alternativeto](https://alternativeto.net/software/tyranostudio/about/)） |
 | 与 Caesura 差距 | **Caesura 强**：桌面原生 C++ 性能、GPU 多后端、CARC 加密归档、token 回滚、编辑器 RPC/调试器、自研动画体系；**Caesura 弱**：拖拽可视化编辑、Web 多端发布、HTML5 生态 |
 
 > **要点**：Tyrano 的护城河是「拖拽 + 零代码 + Web 发布」——面向非程序员创作者。Caesura 的 Web 编辑器路线正对标的可视化方向尚未做到拖拽级（RPC 路由全、缺前端），这是追赶点。
@@ -168,7 +168,7 @@
 |---|---|
 | 技术栈 | Unity（C#）+ NaniScript（Naninovel 自定义脚本语言）+ 可视化编辑器集成 |
 | 平台 | Unity 全平台（含主机 Steam/Switch 视发布） |
-| 开源/许可 | 商业闭源付费（Asset Store 约 $150 级，价待核实）；闭源 |
+| 开源/许可 | 商业闭源付费（Asset Store 原价约 **$150**、一次授权终身、可商用，见 [Asset Store 页](https://assetstore.unity.com/packages/tools/game-toolkits/naninovel-visual-novel-engine-135453) 与 [naninovel.com/releases/1.21](https://naninovel.com/releases/1.21)）；闭源 |
 | 脚本/叙事 | NaniScript 声明式 + 可视化（Timeline/字段）；变量/分支/存档开箱全套（含回滚/自动存档/云存档集成） |
 | 渲染能力 | 继承 Unity 全渲染（URP/HDRP、3D、粒子、后处理、Live2D 支持（Unity Live2D SDK））；回滚/转场/打字机全套 |
 | 性能/启动 | Unity 固有；高质量但包体/内存大 |
@@ -220,7 +220,7 @@
 | 性能/启动 | 中等；Web 分发快但大场景受浏览器限制；Electron 包体大 |
 | 资产/打包 | Web 资源打包（可混淆）；加密弱（Web 天然可解） |
 | 生态工具链 | WebGAL Terre 图形化编辑器（华语可视化代表）；3.9k+ stars 中文社区；文档活跃 |
-| 授权模式 | MPL-2.0 开源（修改需以源码分发，商用许可细节待核实） |
+| 授权模式 | MPL-2.0 开源（弱 copyleft：可免费商用、无版税；义务是修改/新增了 MPL 覆盖的源文件时需以 MPL-2.0 开源其源码；静态链接边界明确） |
 | 与 Caesura 差距 | **Caesura 强**：原生 C++ 性能（GPU 多后端、帧率稳）、CARC+Ed25519 强加密（Web 无解）、token 回滚、自研动画体系、三平台 CI、桌面分发质量；**Caesura 弱**：图形化拖拽编辑器（WebGAL Terre 领先）、Web 免安装分发、华语社区活跃度 |
 
 > **要点**：WebGAL 证明「华语市场对新一代 VN 引擎有真实需求」，其图形化 Terre 是可视化标杆；但 Web 技术栈上限（性能/加密/桌面质量）恰是 Caesura 原生路线的对比优势。**可视化编辑器前端是 Caesura 追赶优先级最高项之一**（RPC 路由已全、缺前端）。
@@ -267,7 +267,7 @@
 
 > **要点**：Live2D 是行业标准动画层。Caesura 直接集成 Cubism SDK（原生级）+ 自研 SMA（E-mote 风格 part variant），在动画层具备对标一线能力；商业授权是行业通例，Caesura 提供 PNG 回退保证无 SDK 也能跑。
 
-来源：Live2D Cubism 官方（商用授权规则待核实）；本地 docs/guides/live2d-setup.md。
+来源：Live2D Cubism 官方（商用授权机制见 [help.live2d.com/sdk/sdk_001](https://help.live2d.com/en/sdk/sdk_001/)：SDK 开发期免费，公开出版（Publication）需按营收/作品数量判断是否签 SDK 发行许可证协议）；本地 docs/guides/live2d-setup.md。
 
 ---
 
@@ -281,7 +281,7 @@
 | 吉里吉里Z | TJS2+KAG3 | GPU DX/GL | Win(Android 未完) | 有 | **E-mote(商业)** | 加密 | 无(第三方) | 大(遗产) | BSD/商业 | **低维护** |
 | NScripter | 行指令 | 简单 2D | Win | 有 | 无 | 明文/arc | 无 | 中(遗产) | 专有免费 | **停更** |
 | ONScripter | 兼容行 | 老特效 | **全平台(移动好)** | 有 | 无 | 明文 | 无 | 中(遗产) | GPL | 半休眠 |
-| Tyrano | HTML5/JS+拖拽 | Web(WebGL)+Live2D | Web/移动/Win | 有 | Live2D(Web) | 弱(Web) | **TyranoBuilder 拖拽** | 中 | 免费(细则待核实) | 慢 |
+| Tyrano | HTML5/JS+拖拽 | Web(WebGL)+Live2D | Web/移动/Win | 有 | Live2D(Web) | 弱(Web) | **TyranoBuilder 拖拽** | 中 | 免费(可商用) | 慢 |
 | VNM | 拖拽+数据库 | Unity 全 | Unity 全 | 有 | 需 Unity 组件 | Unity | **可视化** | 中 | 商业付费 | 中 |
 | Unity+Naninovel | NaniScript | Unity 全(URP 等) | **Unity 全(含主机)** | 有 | Live2D 支持 | Unity | Unity 编辑器 | 中(商业) | **付费闭源(~$150)** | 活跃 |
 | Godot+DM | .dialogue | Godot 全 | Godot 全 | 弱 | 社区适配 | Godot | Godot 编辑器 | 中 | **MIT** | 活跃 |
@@ -340,15 +340,23 @@
 
 ## 附：数据可信度与待核实清单
 
-- **本次 web_search 不可用**（Insufficient Balance），未能实时在线复核；数据主体来自仓库 2026-08-06 在线核实快照（采信），标注「待核实」处为需补查项。
-- 待核实清单：
-  1. Ren'Py 当前最新版本号与 Web 稳定版状态；
-  2. 吉里吉里Z 最新 release 与 E-mote 授权现状；
-  3. TyranoBuilder/TyranoScript 确切商业授权条款与最新版本；
-  4. VNM 当前售价与 Unity 版本依赖；
-  5. Naninovel 确切断版/价格/功能边界；
-  6. WebGAL / Monogatari 最新版本与可视化工具状态；
-  7. Live2D Cubism 商用授权最新价格/条款；
+- **复核状态（round 28）**：web_search 已修复可用（改走 opencode-go 提供方），本轮对优先清单逐项在线复核；数据主体仍以仓库 2026-08-06 在线核实快照（采信）+ 本轮 web_search 二次确认为准。
+- 本轮已确认项（原「待核实」→ 已确认，见正文改写）：
+  - **TyranoScript / TyranoStudio**：免费可商用（官方 [tyranoscript.com](https://tyranoscript.com/) "Free to use"；Steam app [3634660](https://store.steampowered.com/app/3634660/) 亦免费可商用）。
+  - **Naninovel**：Asset Store 一次授权约 **$150**、可商用（[Asset Store](https://assetstore.unity.com/packages/tools/game-toolkits/naninovel-visual-novel-engine-135453)、[release 1.21](https://naninovel.com/releases/1.21)）。
+  - **Visual Novel Maker**：商业付费（[Steam app 495480](https://store.steampowered.com/app/495480/)）；具体以区域定价/折扣为准。
+  - **Live2D Cubism SDK 商用授权**：开发期免费，公开出版按营收/作品数量判断是否需 [SDK 发行许可证协议](https://help.live2d.com/en/sdk/sdk_001/)（Publication License Agreement）。
+  - **Godot + DialogueManager**：均为 **MIT 许可**（正文正确，非 MPL-2.0；本素材中 **MPL-2.0 系 WebGAL**）。
+  - **Ren'Py 8.5.0**：[官方 release 页](https://www.renpy.org/release/8.5.0)，2025 发布，标题 "In Good Health"（此前 round 27 已确认）。
+  - **WebGAL 商用许可**：MPL-2.0 弱 copyleft，可免费商用、无版税，义务为 MPL 覆盖源文件的源码开放。
+- 仍待核实/需补查项：
+  1. ~~Ren'Py 当前最新版本号~~（已确认 8.5.0，round 27）+ Web 稳定版状态（本轮未单独核实）；
+  2. 吉里吉里Z 最新 release 版本号（本轮确认其 GitHub 仓库 [krkrz](https://github.com/kirikiroid3/krkrz)、快照页 [krkren.github.io](https://krkren.github.io/shapshot.html) 与社区分叉 krkrsdl2 存在且低维护，但未取得具体最新版本号）与 E-mote 授权现状（未核实）；
+  3. ~~TyranoBuilder/TyranoScript 确切商业授权条款~~（已确认免费可商用，本轮）+ 最新版本号（已从 tyranoscript.com/Steam 佐证现主导工具为 TyranoStudio，未锁定具体 build 号）；
+  4. ~~VNM 商业付费性质~~（已确认，Steam app 495480）+ 具体零售价/折扣与 Unity 版本依赖（本轮未取得精确美元价，需补查）；
+  5. ~~Naninovel 价格~~（已确认约 $150、一次授权、可商用）+ 确切断版号（本轮仅见 1.21 release note）与功能边界（未变更）；
+  6. WebGAL / Monogatari 最新版本与可视化工具状态（本轮未重新核实，仍按 2026-08-06 快照采信）；
+  7. ~~Live2D Cubism 商用授权机制~~（已确认 SDK 发行许可证机制，help.live2d.com/sdk/sdk_001）+ 具体价格档位/营收阈值（本轮未取得精确数字，需补查）；
   8. Caesura 侧 2026-08-06 之后的版本仍应二次核对（84 契约命令、发布就绪度最新值）。
 
 > 最终报告发布前：可用 web_search 逐项复核上述「待核实」清单，并将本素材与最新一份 docs/plans/YYYY-MM-DD-0NN-delivery-handoff.md 交叉核对 Caesura 侧数据。

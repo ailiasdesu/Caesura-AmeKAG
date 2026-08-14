@@ -14,11 +14,12 @@
 | Lua binding functions (luaL_Reg entries) | 172 |
 | KAG command handler files | 9 |
 | KAG contract commands (command-contracts.md) | 84 |
-| RPC HTTP endpoints (EditorServer) | 24 |
-| RPC stdin JSON-RPC methods | 28 |
+| RPC HTTP endpoints (EditorServer) | 25 |
+| RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
 | C++ test cases | 628 |
 | C++ assertions | 6117 |
+| Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
 
@@ -90,6 +91,7 @@
 | Get | /api/ping |
 | Get | /api/sma/validate |
 | Get | /api/state |
+| Get | /api/stats |
 | Get | /api/status |
 | Get | /index.html |
 | Post | /api/build |
@@ -130,6 +132,7 @@
 - `setBreakpoint`
 - `smaSave`
 - `smaValidate`
+- `stats`
 - `stepInto`
 - `stepOut`
 - `stepOver`
