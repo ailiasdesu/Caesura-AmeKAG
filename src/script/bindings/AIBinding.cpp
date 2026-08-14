@@ -24,14 +24,21 @@ namespace Caesura {
 namespace {
 
 // Per-request state shared between the worker and the main-thread callback.
+// Ordering: the JobSystem runs the completion lambda on the submitting
+// (owner) thread after the worker finishes, so reading result/error there
+// is safe without an atomic done flag (P1-4: removed the dead field).
 struct AiRequest {
     std::string result;
     std::string error;
-    bool done = false;
 };
 
 std::atomic<uint64_t> g_nextRequestId{1};
-std::atomic<bool> g_cancelFlag{false};
+// P1-2 (round 36): epoch-based cancellation. lua_AI_cancel records the
+// request-id watermark at cancel time; a worker only marks its request
+// "cancelled" when its own id <= epoch. Requests submitted AFTER the cancel
+// (id > epoch) are unaffected - the old boolean latch never reset and would
+// have cancelled every subsequent request forever.
+std::atomic<uint64_t> g_cancelEpoch{0};
 
 // ---- config read (config.ai.*) -------------------------------------------
 
@@ -295,12 +302,11 @@ static int lua_AI_query_async(lua_State* L) {
     std::string promptCopy = prompt;
     AiConfig cfgCopy = cfg;
     jobs->submit(
-        [request, promptCopy, cfgCopy]() {
+        [request, promptCopy, cfgCopy, id]() {
             doQuery(promptCopy, cfgCopy, request->result, request->error);
-            if (g_cancelFlag.load()) {
+            if (g_cancelEpoch.load() >= id) {
                 request->error = "cancelled";
             }
-            request->done = true;
         },
         JobPriority::Normal,
         [L, id, request]() {
@@ -349,7 +355,9 @@ static int lua_AI_query_async(lua_State* L) {
 }
 
 static int lua_AI_cancel(lua_State* L) {
-    g_cancelFlag.store(true);
+    // Cancel everything submitted so far (id <= watermark); future requests
+    // get ids above the watermark and run normally (P1-2 fix).
+    g_cancelEpoch.store(g_nextRequestId.load());
     // Drop all stored callbacks so they never fire after cancel.
     lua_getglobal(L, "_AI_CALLBACKS");
     if (lua_istable(L, -1)) {

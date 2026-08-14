@@ -103,7 +103,10 @@ void registerKAGBinding(lua_State* L) {
     invalidateKAGBindingCaches();
     luaL_newlib(L, kag_functions);
     lua_setglobal(L, "KAG");
-    printf("[Lua] KAG module registered (35 APIs, via BackendRegistry).\n");
+    // P2-7: derive the API count from the table so the log cannot drift
+    // from the implementation (was hardcoded "35").
+    const size_t apiCount = sizeof(kag_functions) / sizeof(kag_functions[0]) - 1;
+    printf("[Lua] KAG module registered (%zu APIs, via BackendRegistry).\n", apiCount);
 }
 
 // -- Helpers ---------------------------------------------------------------

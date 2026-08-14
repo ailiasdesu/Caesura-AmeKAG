@@ -17,6 +17,9 @@ public:
     virtual void resumeKAGCoroutine() = 0;
     virtual void lockdownScriptEnv() = 0;
     virtual void registerModules() = 0;
+    // Returns the VM state for the composition root / RPC layer. The state
+    // belongs to the engine owner thread; callers must not touch it from
+    // worker threads (P1-5 note: kept public for main.cpp RPC handlers).
     virtual lua_State* state() = 0;
     virtual void setInstructionBudget(int budget) = 0;
     virtual int  getInstructionBudget() const = 0;

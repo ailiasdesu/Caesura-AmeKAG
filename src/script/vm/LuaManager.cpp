@@ -140,7 +140,7 @@ void LuaManager::registerModules() {
     registerSteamBinding(m_L);   // P2: unified registration point
 
     printf("[Lua] Engine (backend selection) module registered.\n");
-    printf("[Lua] KAG module registered (32 APIs, via BackendRegistry).\n");
+    // KAGBinding::registerKAGBinding logs its own API count (auto-derived).
     printf("[Lua] Render module registered (via BackendRegistry).\n");
     printf("[Lua] DevCore module registered (via BackendRegistry).\n");
     printf("[Lua] Debug module registered (8 APIs).\n");
