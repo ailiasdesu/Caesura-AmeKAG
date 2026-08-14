@@ -133,8 +133,8 @@ private:
     bgfx::UniformHandle m_u_lightCol[3] = {BGFX_INVALID_HANDLE};
     bgfx::UniformHandle m_u_lightCount = BGFX_INVALID_HANDLE;
 
-    bgfx::VertexBufferHandle m_geoVB[int(MiniGeoType::Count)] = {};
-    bgfx::IndexBufferHandle  m_geoIB[int(MiniGeoType::Count)] = {};
+    bgfx::VertexBufferHandle m_geoVB[int(MiniGeoType::Count)] = {BGFX_INVALID_HANDLE};
+    bgfx::IndexBufferHandle  m_geoIB[int(MiniGeoType::Count)] = {BGFX_INVALID_HANDLE};
 
     static constexpr uint16_t MINIGAME_VIEW = 10;
     static constexpr int MAX_POINT_LIGHTS = 3;
@@ -154,6 +154,13 @@ private:
     bool m_collisionEnabled = true;
     float m_gravity = -9.8f;
     lua_State* m_L = nullptr;
+
+    // Reused per-frame buffers for collision detection (avoid hot-path
+    // allocations in runCollisionDetection()). Cleared and refilled each
+    // update(); capacity is reserved to the typical object count.
+    std::vector<uint32_t> m_colIds;
+    std::vector<float> m_colX, m_colY, m_colZ;
+    std::vector<float> m_colSx, m_colSy, m_colSz;
 };
 
 } // namespace Caesura

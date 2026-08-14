@@ -8,8 +8,9 @@
 // Lifecycle:  KAG scene →→ mini_game:enter →→ active loop →→ mini_game:leave →→ KAG
 //
 // Thread safety:
-//   - update() may be dispatched to JobSystem workers (pure CPU: physics,
-//     skeleton animation, particle simulation, scene culling).
+//   - update() runs on the engine main thread (drives physics/collision and
+//     may invoke Lua callbacks such as on_collision, which require the main
+//     thread). Never dispatch update() to JobSystem workers.
 //   - render() is called on main thread only (bgfx is not thread-safe).
 //   - All other methods are main-thread-only.
 //
@@ -62,8 +63,9 @@ public:
     // -- Game loop hooks ---------------------------------------------------
     // Called every frame when isActive() == true.
     //
-    // update(dt): pure CPU work (physics step, animation advance, AI ticks).
-    //   Safe to run on JobSystem worker threads.
+    // update(dt): runs on the engine main thread (drives physics/collision
+    //   and may invoke Lua callbacks such as on_collision, which require the
+    //   main thread). Never dispatch update() to JobSystem workers.
     //   Returns false if the mini-game wants to trigger a transition back
     //   to KAG (e.g., game-over condition met).
     virtual bool update(float deltaTime) = 0;
@@ -74,6 +76,12 @@ public:
 
     // -- Input routing -----------------------------------------------------
     // Forward SDL events to the mini-game when active.
+    //   - sdlEvent points to an SDL_Event* (Engine pumps SDL events and routes
+    //     them here while input focus == GAME, set by enter()).
+    //   - Safe with a null pointer and while inactive: both are ignored and
+    //     return false.
+    //   - When active, mouse-button-down events are consumed (logged and
+    //     return true) so KAG ignores them; all other events return false.
     // Returns true if the mini-game consumed the event (KAG should ignore it).
     virtual bool processEvent(const void* sdlEvent) = 0;
 

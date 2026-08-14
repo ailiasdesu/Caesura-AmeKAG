@@ -485,6 +485,14 @@ bool Engine::initOptionalPhase() {
     if (m_miniGameInitialized) {
         BackendRegistry::instance().setMiniGameBackend(m_miniGameBackend.get());
         registerMiniGameLuaRegistryService(m_lua->state(), m_miniGameBackend.get());
+        // P1-5 (round 35): wire the mini-game into the GAME-focus input path.
+        // InputRouter dispatches events to registered game callbacks while
+        // focus == GAME (set by BgfxMiniGameBackend::enter/leave); without
+        // this registration the backend's processEvent is never called.
+        IMiniGameBackend* mg = m_miniGameBackend.get();
+        m_inputRouter->registerGameCallback([mg](const SDL_Event& ev) {
+            mg->processEvent(&ev);
+        });
     }
 
     // Animation backend

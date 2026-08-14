@@ -9,6 +9,7 @@
 #include <bx/readerwriter.h>
 #include <cstdio>
 #include <cstring>
+#include <SDL3/SDL.h>
 
 extern "C" {
 #include <lua.h>
@@ -56,6 +57,17 @@ BgfxMiniGameBackend::~BgfxMiniGameBackend() { shutdown(); }
 // ==========================================================================
 
 void BgfxMiniGameBackend::initGeometryCache() {
+    // Pre-size the per-frame collision buffers so runCollisionDetection()
+    // never reallocates on the hot path.
+    const size_t kReserve = 64;
+    if (m_colIds.capacity() < kReserve) m_colIds.reserve(kReserve);
+    if (m_colX.capacity()    < kReserve) m_colX.reserve(kReserve);
+    if (m_colY.capacity()    < kReserve) m_colY.reserve(kReserve);
+    if (m_colZ.capacity()    < kReserve) m_colZ.reserve(kReserve);
+    if (m_colSx.capacity()   < kReserve) m_colSx.reserve(kReserve);
+    if (m_colSy.capacity()   < kReserve) m_colSy.reserve(kReserve);
+    if (m_colSz.capacity()   < kReserve) m_colSz.reserve(kReserve);
+
     m_geoVB[int(MiniGeoType::Cube)]   = createVB(createCubeGeometry());
     m_geoIB[int(MiniGeoType::Cube)]   = createIB(createCubeGeometry());
     m_geoVB[int(MiniGeoType::Sphere)] = createVB(createSphereGeometry(16));
@@ -203,10 +215,11 @@ void BgfxMiniGameBackend::setLightUniforms() { if(!m_gpuReady) return;
 
 void BgfxMiniGameBackend::runCollisionDetection() {
     if(!m_collisionEnabled||m_objects.size()<2)return;
-    std::vector<uint32_t> ids; std::vector<float> px,py,pz,sx,sy,sz;
-    for(auto&[id,obj]:m_objects){if(!obj.enableCollision)continue;ids.push_back(id);px.push_back(obj.posX);py.push_back(obj.posY);pz.push_back(obj.posZ);sx.push_back(obj.scaleX);sy.push_back(obj.scaleY);sz.push_back(obj.scaleZ);}
-    if(ids.size()<2)return;
-    auto pairs=findCollisions(ids.data(),px.data(),py.data(),pz.data(),sx.data(),sy.data(),sz.data(),ids.size());
+    m_colIds.clear(); m_colX.clear(); m_colY.clear(); m_colZ.clear();
+    m_colSx.clear(); m_colSy.clear(); m_colSz.clear();
+    for(auto&[id,obj]:m_objects){if(!obj.enableCollision)continue;m_colIds.push_back(id);m_colX.push_back(obj.posX);m_colY.push_back(obj.posY);m_colZ.push_back(obj.posZ);m_colSx.push_back(obj.scaleX);m_colSy.push_back(obj.scaleY);m_colSz.push_back(obj.scaleZ);}
+    if(m_colIds.size()<2)return;
+    auto pairs=findCollisions(m_colIds.data(),m_colX.data(),m_colY.data(),m_colZ.data(),m_colSx.data(),m_colSy.data(),m_colSz.data(),m_colIds.size());
     if(m_L&&!pairs.empty()){lua_getglobal(m_L,"on_collision");if(lua_isfunction(m_L,-1)){for(auto&p:pairs){lua_pushvalue(m_L,-1);lua_pushinteger(m_L,p.first);lua_pushinteger(m_L,p.second);if(lua_pcall(m_L,2,0,0)!=LUA_OK){printf("[MiniGame] on_collision error: %s\n",lua_tostring(m_L,-1));lua_pop(m_L,1);}}}lua_pop(m_L,1);}
 }
 
@@ -484,7 +497,27 @@ void BgfxMiniGameBackend::submitObject(const MiniObject& obj) {
     bgfx::submit(MINIGAME_VIEW,m_program);
 }
 
-bool BgfxMiniGameBackend::processEvent(const void* e){(void)e;return false;}
+bool BgfxMiniGameBackend::processEvent(const void* e) {
+    // Forward SDL events to the mini-game when it is active (enter() called and
+    // leave() not yet). The pointer is always an SDL_Event*: Engine pumps SDL
+    // events and hands them to InputRouter::processEvent(const SDL_Event&),
+    // which routes them here while focus == GAME (set in enter()). SDL3/SDL.h
+    // is included explicitly below for robustness.
+    if (!e) return false;             // never dereference a null event
+    if (!m_active) return false;      // only consume while the mini-game runs
+
+    const SDL_Event* ev = static_cast<const SDL_Event*>(e);
+    if (ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        // Minimal, testable dispatch path: log the interaction and consume it so
+        // KAG ignores this click (D9.4 focus-switch intent). No game logic yet —
+        // this closes the "mini-game never receives input" P1-5 gap.
+        DEBUG_INFO(SubSys::MiniGame, ErrCode::Ok,
+                   "[MiniGame] processEvent: mouse button %d consumed (pos %d,%d)",
+                   static_cast<int>(ev->button.button), ev->button.x, ev->button.y);
+        return true;  // consumed -- KAG should not see this event
+    }
+    return false;  // not consumed
+}
 
 // ==========================================================================
 // Lua dispatch
