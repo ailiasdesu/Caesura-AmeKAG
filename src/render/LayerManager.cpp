@@ -133,10 +133,15 @@ void LayerManager::markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y
 }
 
 bool LayerManager::shouldUseScissor(uint16_t screenW, uint16_t screenH) const {
-    if (m_mergedDirty.empty()) return false;
-    uint32_t frameArea = static_cast<uint32_t>(screenW) * static_cast<uint32_t>(screenH);
+    return shouldUseScissorFor(m_mergedDirty, screenW, screenH);
+}
+
+bool LayerManager::shouldUseScissorFor(const DirtyRect& merged,
+                                       uint16_t screenW, uint16_t screenH) {
+    if (merged.empty()) return false;
+    const uint32_t frameArea = static_cast<uint32_t>(screenW) * static_cast<uint32_t>(screenH);
     // Fallback: if dirty area > 75% of frame, draw full frame instead
-    return m_mergedDirty.area() <= ((frameArea * 3u) / 4u);
+    return merged.area() <= ((frameArea * 3u) / 4u);
 }
 
 void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {

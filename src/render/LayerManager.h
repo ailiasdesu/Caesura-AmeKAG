@@ -21,11 +21,20 @@ struct DirtyRect {
     void merge(const DirtyRect& o) {
         if (o.empty()) return;
         if (empty()) { *this = o; return; }
-        uint16_t nx = std::min(x, o.x);
-        uint16_t ny = std::min(y, o.y);
-        uint16_t nx2 = std::max<uint16_t>(x + w, o.x + o.w);
-        uint16_t ny2 = std::max<uint16_t>(y + h, o.y + o.h);
-        x = nx; y = ny; w = nx2 - nx; h = ny2 - ny;
+        // Compute in 32-bit: x+w etc. can exceed 65535 for pathological
+        // inputs; casting early to uint16_t would wrap and produce a wrong
+        // (possibly inverted) merged rect. We clamp the merged extent to the
+        // representable range instead -- a valid (if larger) bounding box,
+        // which is all the scissor optimization needs (G8).
+        const uint32_t kMax = 65535u;
+        const uint32_t nx = std::min<uint32_t>(x, o.x);
+        const uint32_t ny = std::min<uint32_t>(y, o.y);
+        const uint32_t nx2 = std::min(kMax,
+            std::max<uint32_t>(uint32_t(x) + w, uint32_t(o.x) + o.w));
+        const uint32_t ny2 = std::min(kMax,
+            std::max<uint32_t>(uint32_t(y) + h, uint32_t(o.y) + o.h));
+        x = (uint16_t)nx; y = (uint16_t)ny;
+        w = (uint16_t)(nx2 - nx); h = (uint16_t)(ny2 - ny);
     }
 };
 
@@ -76,6 +85,11 @@ public:
                                    uint16_t w, uint16_t h) override;
     void updateDirtyRegions(uint16_t screenW, uint16_t screenH) override;
     void clearDirtyRects() override;
+
+    // Pure scissor decision (GPU-free): true when the merged dirty area is
+    // <= 75% of the frame -- otherwise redrawing the whole frame is cheaper.
+    static bool shouldUseScissorFor(const DirtyRect& merged,
+                                    uint16_t screenW, uint16_t screenH);
 
     void render(uint16_t viewId, int screenW, int screenH,
                 uint32_t programId) override;
