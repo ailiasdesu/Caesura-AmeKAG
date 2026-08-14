@@ -101,6 +101,22 @@ describe('SceneTree (component)', () => {
       line: 2,
       nonce: expect.any(Number) as unknown as number,
     })
+    // G4 inspector: click also selects the element for the InspectorView
+    expect(state.inspected).toEqual({ path: 'assets/script/main.ks', line: 2 })
+  })
+
+  it('marks the inspected element with the inspected class', () => {
+    useEditor.setState({
+      docs: [doc('assets/script/main.ks', KS_SOURCE)],
+      activePath: 'assets/script/main.ks',
+      inspected: { path: 'assets/script/main.ks', line: 3 },
+    })
+    render(<SceneTree />)
+    const buttons = screen.getAllByRole('button')
+    expect(buttons[2].className).toContain('inspected') // [ch] at line 3
+    expect(buttons[0].className).not.toContain('inspected')
+    // aria-pressed marks the selected element for a11y
+    expect(buttons[2].getAttribute('aria-pressed')).toBe('true')
   })
 
   it('requests a reveal of line 1 on mount (initial focus)', () => {

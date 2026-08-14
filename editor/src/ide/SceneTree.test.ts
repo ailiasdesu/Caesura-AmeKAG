@@ -17,13 +17,13 @@ describe('parseSceneElements', () => {
 
     const els = parseSceneElements(src)
     expect(els).toEqual([
-      { line: 1, type: 'label', text: '*start', detail: '' },
-      { line: 3, type: 'bg', text: '[bg]', detail: 'room.png' },
-      { line: 4, type: 'ch', text: '[ch]', detail: 'Hero' },
-      { line: 5, type: 'audio', text: '[playbgm]', detail: 'bgm.ogg' },
-      { line: 7, type: 'fg', text: '[fg]', detail: 'hero' },
-      { line: 8, type: 'bg', text: '[image]', detail: 'cg1.png' },
-      { line: 9, type: 'label', text: '*end_label', detail: '' },
+      { line: 1, type: 'label', text: '*start', detail: '', params: {} },
+      { line: 3, type: 'bg', text: '[bg]', detail: 'room.png', params: { storage: 'room.png' } },
+      { line: 4, type: 'ch', text: '[ch]', detail: 'Hero', params: { name: 'Hero', text: 'Hello' } },
+      { line: 5, type: 'audio', text: '[playbgm]', detail: 'bgm.ogg', params: { file: 'bgm.ogg', loop: '1' } },
+      { line: 7, type: 'fg', text: '[fg]', detail: 'hero', params: { chara_show: 'true', name: 'hero' } },
+      { line: 8, type: 'bg', text: '[image]', detail: 'cg1.png', params: { file: 'cg1.png' } },
+      { line: 9, type: 'label', text: '*end_label', detail: '', params: {} },
     ])
   })
 
