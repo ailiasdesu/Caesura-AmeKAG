@@ -124,7 +124,8 @@ def main():
     st, resp = request("/api/sma/validate?path=demo/assets/sma/hero.json")
     check("sma-validate-hero", st == 200 and resp.get("status") == "ok"
           and resp.get("ok") is True and resp.get("errors") == []
-          and isinstance(resp.get("meta"), str) and "bones" in resp.get("meta", ""),
+          and isinstance(resp.get("meta"), str) and "bones" in resp.get("meta", "")
+          and "boneTree" in resp.get("meta", "") and "animDetails" in resp.get("meta", ""),
           "%s %s" % (st, resp))
     st, resp = request("/api/sma/validate?path=demo/assets/sma/_broken_example.json")
     check("sma-validate-broken", st == 200 and resp.get("status") == "ok"

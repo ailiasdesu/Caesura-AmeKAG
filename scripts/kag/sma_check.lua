@@ -352,6 +352,42 @@ function sma_check.validate_file(path)
     local res = sma_check.validate(asset)
     if type(asset) == "table" then
         meta.bones = type(asset.bones) == "table" and #asset.bones or 0
+        -- Bone tree for the IDE skeleton viewer (round 24): keep the count
+        -- in meta.bones for backward compatibility and add the structure.
+        meta.boneTree = {}
+        if type(asset.bones) == "table" then
+            for _, b in ipairs(asset.bones) do
+                if type(b) == "table" and type(b.id) == "number" then
+                    meta.boneTree[#meta.boneTree + 1] = {
+                        id = b.id,
+                        parent = b.parent ~= nil and b.parent or -1,
+                        pivot = type(b.pivot) == "table" and b.pivot or nil,
+                    }
+                end
+            end
+        end
+        -- Animation details (name/duration/track bones) for the IDE panel.
+        meta.animDetails = {}
+        if type(asset.animations) == "table" then
+            for name, anim in pairs(asset.animations) do
+                if type(anim) == "table" then
+                    local trackBones = {}
+                    if type(anim.tracks) == "table" then
+                        for _, tr in ipairs(anim.tracks) do
+                            if type(tr) == "table" and type(tr.bone) == "number" then
+                                trackBones[#trackBones + 1] = tr.bone
+                            end
+                        end
+                    end
+                    meta.animDetails[#meta.animDetails + 1] = {
+                        name = tostring(name),
+                        duration = type(anim.duration) == "number" and anim.duration or nil,
+                        tracks = trackBones,
+                    }
+                end
+            end
+            table.sort(meta.animDetails, function(a, b) return a.name < b.name end)
+        end
         -- Multi-part assets: report the first variant's mesh budget.
         local mesh = type(asset.mesh) == "table" and asset.mesh or nil
         if not mesh and type(asset.parts) == "table" then

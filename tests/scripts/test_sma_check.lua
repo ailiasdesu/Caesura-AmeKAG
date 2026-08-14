@@ -212,6 +212,11 @@ local fr = sma_check.validate_file(tmp)
 check("file: good asset ok", fr.ok == true)
 check("file: meta summary", fr.meta.bones == 1 and fr.meta.verts == 3
       and fr.meta.tris == 1 and fr.meta.parts == 0 and #fr.meta.anims == 1)
+check("file: boneTree built", type(fr.meta.boneTree) == "table"
+      and fr.meta.boneTree[1].id == 0 and fr.meta.boneTree[1].parent == -1)
+check("file: animDetails built", type(fr.meta.animDetails) == "table"
+      and fr.meta.animDetails[1].name == "idle"
+      and fr.meta.animDetails[1].tracks[1] == 0)
 os.remove(tmp)
 local mf = sma_check.validate_file("definitely_missing.json")
 check("file: missing file reports error", mf.ok == false and mf.errors[1]:find("cannot open", 1, true) ~= nil)
