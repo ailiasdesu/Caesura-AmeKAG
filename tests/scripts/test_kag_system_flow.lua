@@ -97,4 +97,4 @@ t = tokenizer.parse("[erasemacro name=\"greet\"]")
 ok("erasemacro parsed", t[1].cmd == "erasemacro")
 
 print(string.format("\n%d passed, %d failed", passed, failed))
-if failed > 0 then os.exit(1) else os.exit(0) end
+if failed > 0 then error("kag_system_flow: " .. failed .. " checks failed") end

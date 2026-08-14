@@ -422,4 +422,4 @@ if failed > 0 then
 end
 print("")
 
-os.exit(failed > 0 and 1 or 0)
+if failed > 0 then error("integration: " .. failed .. " checks failed") end

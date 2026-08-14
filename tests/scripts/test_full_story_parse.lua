@@ -53,6 +53,8 @@ test("All expected KAG tag types present", function()
         if tok.type == "command" then
             local cmd = tok.cmd
             cmdCount[cmd] = (cmdCount[cmd] or 0) + 1
+        elseif tok.type == "label" then
+            labelCount = labelCount + 1
         elseif tok.type == "text" and tok.content and tok.content:match("^%*") then
             labelCount = labelCount + 1
         end
@@ -186,6 +188,6 @@ print(string.format("  FAIL:  %d", failed))
 print(string.format("  TOTAL: %d", passed + failed))
 print(string.rep("=", 60))
 
-os.exit(failed > 0 and 1 or 0)
+if failed > 0 then error("full_story_parse: " .. failed .. " checks failed") end
 
 

@@ -292,5 +292,5 @@ end
 -- ══════════════════════════════════════════════════════════════════════════�?
 print(string.format("\nMacro tests: %d passed, %d failed", passed, failed))
 if failed > 0 then
-    os.exit(1)
+    error("macro: " .. failed .. " checks failed")
 end

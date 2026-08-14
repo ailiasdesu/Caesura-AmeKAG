@@ -1,4 +1,5 @@
-﻿local t = require("tokenizer")
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
+local t = require("tokenizer")
 local passed, failed = 0, 0
 local function check(name, ok)
     if ok then passed = passed + 1; print("  [OK] " .. name)
