@@ -1,10 +1,11 @@
-﻿extern "C" {
+extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "KAGBinding.h"
 #include "../../audio/api/IAudioBackend.h"
 #include "../../render/api/IRenderDevice.h"
+#include "../../di/BackendRegistry.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -13,6 +14,7 @@
 namespace Caesura {
 
 // -- Forward declarations --------------------------------------------------
+static void invalidateKAGBindingCaches();
 
 static int lua_KAG_play_bgm(lua_State* L);
 static int lua_KAG_play_voice(lua_State* L);
@@ -98,24 +100,43 @@ static const luaL_Reg kag_functions[] = {
 };
 
 void registerKAGBinding(lua_State* L) {
+    invalidateKAGBindingCaches();
     luaL_newlib(L, kag_functions);
     lua_setglobal(L, "KAG");
     printf("[Lua] KAG module registered (35 APIs, via BackendRegistry).\n");
 }
 
 // -- Helpers ---------------------------------------------------------------
+// P1-8: hot-path backend lookups are cached (same pattern as RenderBinding).
+// Backend instances are stable for the engine's lifetime (device recovery
+// mutates, never replaces); registerKAGBinding clears the cache so a fresh
+// lua_State in tests re-resolves against its own registry.
+
+static IAudioBackend* g_cachedAudio = nullptr;
+static IRenderDevice* g_cachedRender = nullptr;
+
+static void invalidateKAGBindingCaches() {
+    g_cachedAudio = nullptr;
+    g_cachedRender = nullptr;
+}
 
 static IAudioBackend* getAudio(lua_State* L) {
+    if (g_cachedAudio) return g_cachedAudio;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.AudioBackend");
     auto* be = (IAudioBackend*)lua_touserdata(L, -1);
     lua_pop(L, 1);
+    if (!be) be = BackendRegistry::instance().getAudioBackend();
+    g_cachedAudio = be;
     return be;  // set by Engine::initScriptingPhase; null in test env OK
 }
 
 static IRenderDevice* getRender(lua_State* L) {
+    if (g_cachedRender) return g_cachedRender;
     lua_getfield(L, LUA_REGISTRYINDEX, "Caesura.RenderDevice");
     auto* dev = (IRenderDevice*)lua_touserdata(L, -1);
     lua_pop(L, 1);
+    if (!dev) dev = BackendRegistry::instance().getRenderDevice();
+    g_cachedRender = dev;
     return dev;  // set by Engine::initScriptingPhase; null in test env OK
 }
 
