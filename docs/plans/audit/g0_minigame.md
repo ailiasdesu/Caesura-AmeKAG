@@ -72,7 +72,7 @@ minigame 模块承载引擎内嵌的 3D 小游戏子系统，生命周期为
 ### P2-1　函数过长 / 单一巨型分发
 - **位置**：`BgfxMiniGameBackend.cpp`（`luaCall` 一串 if-chain，17 个分支）与 `sceneFromJson` 近 90 行
 - **问题**：luaCall 靠 strcmp 链派发 17 个命令，与 `script/bindings/MiniGameBinding.cpp` 里另外 20 个 `luaL_Reg` 绑定重复维护命令名清单，易脱节；sceneFromJson 层级深（>4 层嵌套）。
-- ~~**修复建议**~~ ✅ round 29 已修复 luaCall 部分（15 分支链 → 类内 `constexpr LuaMethod kLuaMethods[]` 分发表）；✅ round 30 已修复 sceneFromJson（拆分为文件局部 `parseCamera/parseLights/parseObjectItem` helper，`nextId` 引用传递保持序号语义，行为逐字段等价）。剩余开放项：绑定侧命令名与后端命令集中定义共享。
+- ~~**修复建议**~~ ✅ round 29 已修复 luaCall 部分（15 分支链 → 类内 `constexpr LuaMethod kLuaMethods[]` 分发表）；✅ round 30 已修复 sceneFromJson（拆分为文件局部 `parseCamera/parseLights/parseObjectItem` helper，`nextId` 引用传递保持序号语义，行为逐字段等价）。✅ round 31 已闭环命令名共享：新建 `minigame/api/MiniGameCommands.h`（X-macro `CAESURA_MINIGAME_COMMANDS`）作为 15 个命令名的唯一来源——`BgfxMiniGameBackend::kLuaMethods` 表带编译期 static_assert 守卫（数量+逐名比较，漂移即构建失败），`MiniGameBinding.cpp` 的 dispatch stub 与 luaL_Reg 表均自 X-macro 生成。
 - **位置**：`BgfxMiniGameBackend.cpp:57-66`（`initGeometryCache`）
 - **问题**：每个几何类型把 createXxxGeometry() **连续生成两次**（一次喂 createVB、一次喂 createIB），如 `createVB(createCubeGeometry())` + `createIB(createCubeGeometry())`。CPU 顶点数据被算两遍，且几何 generator 内的 `printf` 会刷两倍日志。
 - **修复建议**：先生成一个 `GeometryData` 临时量，再分别 `createVB(geo)/createIB(geo)`。

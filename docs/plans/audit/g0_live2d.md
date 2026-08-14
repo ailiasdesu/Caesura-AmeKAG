@@ -70,13 +70,13 @@ live2d 模块提供动画后端，对外仅暴露 `api/IAnimationBackend.h`。�
 ## P2 建议
 
 - ~~**P2-1｜CMake 命名不一致**~~ ✅ round 29 已修复：编译宏统一为 `CAESURA_LIVE2D`（CMakeLists.txt:399-400 与 src/ 全部 18 处 `#ifdef` 同步改名，grep 零残留）。
-- **P2-2｜陈旧/乱码注释**：`Live2DBackend.cpp:305-308` 注释声称 "model.setting was set to nullptr by cubismLog"——`model.setting` 实际在 :310 才被赋值，cubismLog 与 setting 无关，注释误导；:296、:426、:457 出现 "`→?`Cubism 5 API"/"`→?`bgfx" 乱码。建议清理。（S）
-- **P2-3｜playMotion 子串扫描逻辑缺陷**：`Live2DBackend.cpp:468-471` 对 `motionCache` 键做子串匹配，循环内 `mit = model.motionCache.find(key)` 冗余（`key` 本身就是 map 键，find 恒命中当前键），且 `data` 解构未用。即使修好 P1-1 也应重写。（S）
-- **P2-4｜`ILive2DRenderPath::createRenderer()` 是死接口方法**：三个实现（D3D11/Metal/OpenGLShared/Readback）全部 `return nullptr`（renderer 实际由 `CubismUserModel::CreateRenderer` 创建），从未被调用。建议从接口移除。（S）
-- **P2-5｜live2d-setup.md 文档与代码漂移**：`:120,137` 仍称 Metal 为 "stub（init() 恒失败）"，但 `MetalNativeRenderPath.cpp` 已是完整实现（离屏 + 同步读回）；`:135` 称 OpenGLShared 路径"从未编译"，但 CMake 现已在 Apple/Linux 加入该源。建议更新文档状态表并标注 Metal 待 macOS 实机验证。（S）
-- **P2-6｜测试缺口**：`test_live2d.cpp` 对 `NullAnimationBackend` 与 `PathConfinement` 覆盖很好（纹理生命周期、failure 不分配句柄、shutdown 幂等、路径穿越防护均有单测），但**没有任何 Cubism 路径测试**——受限于 SDK 可选、CI 无 SDK/GPU，可接受；值得注意的是：若不将 Cubism 路径纳入带 SDK 的验证，P1-1 的 motionCache 缺陷会被长期掩盖（文档记录的 2026-08-01 D3D11 手工验证只跑通 load+render，未验证 playMotion）。（M）
-- **P2-7｜loadModel 失败哨兵不一致**：`Live2DBackend::loadModel` 失败返回 `-1`（Live2DBackend.cpp:543,553），`NullAnimationBackend::loadModel` 失败返回 `0`（:49,54,64）。两者都满足接口注释"non-positive"，但若调用方按 `==0` 判断失败会把 -1 当成功。建议统一哨兵或文档化。
-- **P2-8｜日志不统一**：`NullAnimationBackend.cpp` 用 `printf`/`fprintf`（:28,53,62,73），绕过引擎 DEBUG 宏/日志系统；`Live2DBackend` 用 `SDL_Log*`。建议统一走引擎日志层。（S）
+- ~~**P2-2｜陈旧/乱码注释**~~ ✅ round 30 已修复：6 处 `→?` 乱码 + 1 处错误注释（cubismLog 与 model.setting 无关）全部清理/重写为准确描述。（S）
+- ~~**P2-3｜playMotion 子串扫描逻辑缺陷**~~ ✅ round 31 已修复：循环改用显式迭代器 mit = it（移除冗余 find）、未用绑定 data 移除；其余路径不变。（S）
+- ~~**P2-4｜ILive2DRenderPath::createRenderer() 是死接口方法**~~ ✅ round 30 已修复：接口纯虚 + 4 实现头/源全部移除，CsmRendering 别名保留。（S）
+- ~~**P2-5｜live2d-setup.md 文档与代码漂移**~~ ✅ round 30 已修复：5 处 Metal stub 声明改为已实现·待 macOS 实机验证，OpenGLShared “从未编译”改为“随 Apple/Linux 分支编译但未实机运行验证”。（S）
+- **P2-6｜测试缺口**：`test_live2d.cpp` 对 `NullAnimationBackend` 与 `PathConfinement` 覆盖很好（纹理生命周期、failure 不分配句柄、shutdown 幂等、路径穿越防护均有单测），但**没有任何 Cubism 路径测试**——受限于 SDK 可选、CI 无 SDK/GPU，可接受；若不将 Cubism 路径纳入带 SDK 的验证，SDK 侧缺陷会被长期掩盖。（M）
+- ~~**P2-8｜日志不统一**~~ ✅ round 31 已修复：IDebugManager.h 新增 SubSys::Live2D/MiniGame；NullAnimationBackend 4 处 printf/fprintf、Live2DBackend 16 处 SDL_Log、4 渲染路径 15 处 SDL_Log 全部改为 DEBUG_*，消息文本逐字节保留。（S）
+- ~~**P2-7｜loadModel 失败哨兵不一致**~~ ✅ round 30 审查结论：接口注释明确 non-positive，main.cpp:464 已用 modelId <= 0 正确判断，现网无实际风险，保持现状。
 
 ## 耦合分析
 
