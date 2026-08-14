@@ -111,6 +111,26 @@ def main():
           and isinstance(resp.get("layer_count"), int),
           "%s %s" % (st, resp))
 
+    # /api/sma/validate (round 19): valid asset ok, broken asset lists
+    # field-located violations, unsafe paths rejected.
+    st, resp = request("/api/sma/validate?path=demo/assets/sma/hero.json")
+    check("sma-validate-hero", st == 200 and resp.get("status") == "ok"
+          and resp.get("ok") is True and resp.get("errors") == []
+          and isinstance(resp.get("meta"), str) and "bones" in resp.get("meta", ""),
+          "%s %s" % (st, resp))
+    st, resp = request("/api/sma/validate?path=demo/assets/sma/_broken_example.json")
+    check("sma-validate-broken", st == 200 and resp.get("status") == "ok"
+          and resp.get("ok") is False
+          and len(resp.get("errors", [])) >= 4
+          and any("undefined bone" in e for e in resp.get("errors", [])),
+          "%s %s" % (st, resp))
+    st, resp = request("/api/sma/validate?path=../../outside.json")
+    check("sma-validate-unsafe-path", st == 400, "%s %s" % (st, resp))
+    st, resp = request("/api/sma/validate?path=demo/assets/sma/missing.json")
+    check("sma-validate-missing-file", st == 200 and resp.get("ok") is False
+          and resp.get("errors") and "cannot open" in resp.get("errors", [])[0],
+          "%s %s" % (st, resp))
+
     # Rejected: line must be a positive int32. 4294967297 (2^32+1) previously
     # wrapped to a positive int (line 1) via unchecked get<int>(), silently
     # setting a wrong breakpoint.

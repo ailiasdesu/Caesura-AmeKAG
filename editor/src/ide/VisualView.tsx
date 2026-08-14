@@ -1,9 +1,46 @@
 import { useEffect, useState } from 'react'
-import type { EngineClient, FrameReply, Live2DModel, StateReply } from '../lib/rpc'
+import type {
+  EngineClient,
+  FrameReply,
+  Live2DModel,
+  SmaValidateReply,
+  StateReply,
+} from '../lib/rpc'
 import { useEditor } from '../store'
 
 interface Props {
   client: EngineClient
+}
+
+interface SmaMeta {
+  bones: number
+  anims: string[]
+  parts: number
+  verts: number
+  tris: number
+}
+
+function SmaMetaView({ metaText }: { metaText: string }) {
+  let meta: SmaMeta = { bones: 0, anims: [], parts: 0, verts: 0, tris: 0 }
+  try {
+    meta = JSON.parse(metaText) as SmaMeta
+  } catch {
+    /* keep defaults */
+  }
+  return (
+    <>
+      <div className="state-row"><span>bones</span><b>{meta.bones}</b></div>
+      <div className="state-row">
+        <span>anims</span>
+        <b>{meta.anims.length > 0 ? meta.anims.join(', ') : '-'}</b>
+      </div>
+      <div className="state-row"><span>parts</span><b>{meta.parts}</b></div>
+      <div className="state-row">
+        <span>verts/tris</span>
+        <b>{meta.verts}/{meta.tris}</b>
+      </div>
+    </>
+  )
 }
 
 export function VisualView({ client }: Props) {
@@ -15,6 +52,10 @@ export function VisualView({ client }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const [state, setState] = useState<StateReply | null>(null)
   const [stateError, setStateError] = useState('')
+  const [smaPath, setSmaPath] = useState('demo/assets/sma/hero.json')
+  const [smaResult, setSmaResult] = useState<SmaValidateReply | null>(null)
+  const [smaError, setSmaError] = useState('')
+  const [smaBusy, setSmaBusy] = useState(false)
   const insertIntoActive = useEditor((s) => s.insertIntoActive)
 
   const refreshState = async () => {
@@ -36,6 +77,20 @@ export function VisualView({ client }: Props) {
       else setError(f.error ?? 'frame capture unavailable')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const refreshSma = async () => {
+    setSmaError('')
+    setSmaResult(null)
+    setSmaBusy(true)
+    try {
+      const s = await client.smaValidate(smaPath.trim())
+      setSmaResult(s)
+    } catch (err) {
+      setSmaError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSmaBusy(false)
     }
   }
 
@@ -140,6 +195,42 @@ export function VisualView({ client }: Props) {
         </div>
       ) : (
         <div className="frame-empty">No engine state yet</div>
+      )}
+
+      <div className="panel-subtitle">
+        SMA ASSET
+        <span className="spacer" />
+        <button onClick={() => void refreshSma()} disabled={smaBusy}>
+          {smaBusy ? 'Validating…' : 'Validate'}
+        </button>
+      </div>
+      <div className="bp-row">
+        <input
+          className="model-select"
+          value={smaPath}
+          onChange={(e) => setSmaPath(e.target.value)}
+          placeholder="demo/assets/sma/hero.json"
+        />
+      </div>
+      {smaError ? (
+        <div className="panel-msg">{smaError}</div>
+      ) : smaResult ? (
+        <div className={smaResult.ok ? 'sma-result sma-ok' : 'sma-result sma-bad'}>
+          <div className="state-row">
+            <span>status</span>
+            <b>{smaResult.ok ? '✓ valid' : '✗ invalid'}</b>
+          </div>
+          {smaResult.ok && <SmaMetaView metaText={smaResult.meta} />}
+          {!smaResult.ok && smaResult.errors.length > 0 && (
+            <ul className="sma-errors">
+              {smaResult.errors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <div className="frame-empty">Enter a path and validate</div>
       )}
 
       <div className="panel-subtitle">LIVE2D</div>

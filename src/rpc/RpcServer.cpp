@@ -482,6 +482,7 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
         safeStoi(extractField(jsonLine, "w")),
         safeStoi(extractField(jsonLine, "h")));
     if (method == "getState") return handleGetState(id);
+    if (method == "smaValidate") return handleSmaValidate(id, extractField(jsonLine, "path"));
     if (method == "reload")   return handleReload(id);
     if (method == "setBreakpoint") return handleDebugAction(id,
         RpcRequest{RpcSetBreakpointRequest{
@@ -672,6 +673,27 @@ std::string RpcServer::handleGetState(int id) {
         << jsonEscape(state->language) << "\",\"backlog_count\":"
         << state->backlogCount << ",\"layer_count\":"
         << state->layerCount << "}}";
+    return out.str();
+}
+
+std::string RpcServer::handleSmaValidate(int id, const std::string& path) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcSmaValidateRequest{path}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+
+    const auto* res = std::get_if<RpcSmaValidateResult>(&reply.payload);
+    if (!res) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "SMA validate reply missing result", {}});
+    }
+
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"ok\":" << (res->ok ? "true" : "false")
+        << ",\"errors\":[";
+    for (size_t i = 0; i < res->errors.size(); ++i) {
+        if (i) out << ",";
+        out << "\"" << jsonEscape(res->errors[i]) << "\"";
+    }
+    out << "],\"meta\":" << res->meta << "}";
     return out.str();
 }
 

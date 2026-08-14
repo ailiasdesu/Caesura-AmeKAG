@@ -61,6 +61,24 @@ export interface StateReply {
   error?: string
 }
 
+// SMA asset validation (GET /api/sma/validate, round 19).
+export interface SmaValidateReply {
+  status: string
+  ok: boolean
+  errors: string[]
+  /** JSON object text: {bones, anims, parts, verts, tris} (parse client-side). */
+  meta: string
+  error?: string
+}
+
+export interface SmaMeta {
+  bones: number
+  anims: string[]
+  parts: number
+  verts: number
+  tris: number
+}
+
 export interface BuildReply {
   status: string
   output?: string
@@ -136,6 +154,13 @@ export class EngineClient {
   /** Engine runtime state (scene/token/language/backlog/layers). */
   state(): Promise<StateReply> {
     return this.request<StateReply>('/state')
+  }
+
+  /** Validate an SMA asset through the engine's shared checker. */
+  smaValidate(path: string): Promise<SmaValidateReply> {
+    return this.request<SmaValidateReply>(
+      `/sma/validate?path=${encodeURIComponent(path)}`,
+    )
   }
 
   status(): Promise<StatusReply> {

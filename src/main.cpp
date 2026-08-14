@@ -45,6 +45,17 @@ Caesura::RpcReply rpcError(Caesura::RpcReplyStatus status,
     return {status, code, message, {}};
 }
 
+// Asset paths for RPC validation are restricted to the repo's asset
+// directories: relative, no "..", no absolute paths, no embedded quotes.
+bool isSafeAssetPath(const std::string& path) {
+    if (path.empty() || path.size() > 256) return false;
+    if (path.find('"') != std::string::npos) return false;
+    if (path.find("..") != std::string::npos) return false;
+    if (path.front() == '/' || path.front() == '\\') return false;
+    if (path.size() > 1 && path[1] == ':') return false;
+    return path.rfind("assets/", 0) == 0 || path.rfind("demo/assets/", 0) == 0;
+}
+
 Caesura::RpcReply rpcOk() {
     return {Caesura::RpcReplyStatus::Ok, {}, {}, {}};
 }
@@ -236,6 +247,56 @@ private:
                 lua_settop(L, stackTop);
                 Caesura::RpcReply reply = rpcOk();
                 reply.payload = std::move(state);
+                return reply;
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcSmaValidateRequest>) {
+                if (!isSafeAssetPath(operation.path)) {
+                    return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                    "unsafe_path",
+                                    "Path must be relative under assets/ or demo/assets/");
+                }
+                lua_State* L = m_engine.lua().state();
+                if (!L) return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                                        "lua_unavailable", "Lua VM is unavailable");
+                const int stackTop = lua_gettop(L);
+                // Run the shared checker (kag.sma_check) inside the engine
+                // Lua state: same module the runtime loader uses, so the
+                // panel and the game agree on what is valid.
+                std::string path = operation.path;
+                for (char& ch : path) {
+                    if (ch == '\\') ch = '/';
+                }
+                const std::string code =
+                    "local ok, checker = pcall(require, 'kag.sma_check')\n"
+                    "if not ok or not checker then return '{\"ok\":false,\"errors\":[\"sma_check unavailable\"],\"meta\":{}}' end\n"
+                    "local function jl(list) local parts = {} for _, e in ipairs(list) do parts[#parts + 1] = string.format('%q', tostring(e)) end return '[' .. table.concat(parts, ',') .. ']' end\n"
+                    "local function jm(meta) local anims = {} for _, a in ipairs(meta.anims or {}) do anims[#anims + 1] = string.format('%q', tostring(a)) end "
+                    "return string.format('{\"bones\":%d,\"anims\":[%s],\"parts\":%d,\"verts\":%d,\"tris\":%d}', "
+                    "meta.bones or 0, table.concat(anims, ','), meta.parts or 0, meta.verts or 0, meta.tris or 0) end\n"
+                    "local res = checker.validate_file(\"" + path + "\")\n"
+                    "return string.format('{\"ok\":%s,\"errors\":%s,\"meta\":%s}', "
+                    "res.ok and 'true' or 'false', jl(res.errors or {}), jm(res.meta or {}))";
+                Caesura::RpcSmaValidateResult result;
+                if (luaL_loadstring(L, code.c_str()) == LUA_OK
+                    && lua_pcall(L, 0, 1, 0) == LUA_OK
+                    && lua_isstring(L, -1)) {
+                    try {
+                        auto j = nlohmann::json::parse(lua_tostring(L, -1));
+                        result.ok = j.value("ok", false);
+                        for (const auto& e : j.value("errors", std::vector<std::string>{})) {
+                            result.errors.push_back(e);
+                        }
+                        result.meta = j.value("meta", nlohmann::json::object()).dump();
+                    } catch (const std::exception&) {
+                        result.ok = false;
+                        result.errors.push_back("lua_result_parse_failed");
+                    }
+                } else {
+                    result.ok = false;
+                    result.errors.push_back("lua_exec_failed");
+                }
+                lua_settop(L, stackTop);
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = std::move(result);
                 return reply;
             } else if constexpr (
                 std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {

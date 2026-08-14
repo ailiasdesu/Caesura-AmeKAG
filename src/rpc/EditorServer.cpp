@@ -633,6 +633,37 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // GET /api/sma/validate?path=... -- SMA asset validation through the
+    // engine's shared checker (kag.sma_check). Returns ok + violations +
+    // a structure summary for the IDE SMA asset panel (round 19).
+    // ---------------------------------------------------------------------
+    svr.Get("/api/sma/validate", [this](const httplib::Request& req, httplib::Response& res) {
+        const std::string path = req.get_param_value("path");
+        if (path.empty()) {
+            res.set_content("{\"error\":\"Missing path parameter\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{RpcSmaValidateRequest{path}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* v = std::get_if<RpcSmaValidateResult>(&reply.payload);
+        if (!v) {
+            setDispatchError(res, invalidDispatcherReply(
+                "SMA validate reply missing result"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"ok", v->ok},
+            {"errors", v->errors},
+            {"meta", v->meta},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
     // GET /api/debug/getFrame -- capture the current frame as base64 PNG
     // ---------------------------------------------------------------------
     svr.Get("/api/debug/getFrame", [this](const httplib::Request& req, httplib::Response& res) {

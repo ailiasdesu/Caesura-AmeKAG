@@ -57,6 +57,7 @@ private:
     std::string handleAssets(int id, const std::string& type);
     std::string handleEval(int id, const std::string& code);
     std::string handleGetState(int id);
+    std::string handleSmaValidate(int id, const std::string& path);
     std::string handleGetFrame(int id, int w, int h);
     std::string handleReload(int id);
     std::string handleDebugAction(int id, RpcRequest request);

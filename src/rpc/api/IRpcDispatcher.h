@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace Caesura {
 
@@ -20,6 +21,15 @@ struct RpcEvaluateRequest {
 };
 
 struct RpcGetStateRequest {};
+
+// SMA asset validation for the IDE asset panel (round 19): validates a
+// relative asset path through kag.sma_check — the single source of truth
+// shared with the runtime loader — and returns the violation list plus a
+// structure summary. The engine restricts paths to assets/ and
+// demo/assets/ (no .., no absolute paths).
+struct RpcSmaValidateRequest {
+    std::string path;
+};
 
 struct RpcCaptureFrameRequest {
     int width = 1280;
@@ -89,6 +99,7 @@ using RpcRequestPayload = std::variant<
     RpcStopRequest,
     RpcEvaluateRequest,
     RpcGetStateRequest,
+    RpcSmaValidateRequest,
     RpcCaptureFrameRequest,
     RpcReloadScriptsRequest,
     RpcLoadAnimationRequest,
@@ -139,6 +150,14 @@ struct RpcStateResult {
     int layerCount = 0;
 };
 
+// SMA asset validation result: ok flag, per-field violation strings, and
+// a JSON structure summary (bones/anims/parts/verts/tris) for the panel.
+struct RpcSmaValidateResult {
+    bool ok = false;
+    std::vector<std::string> errors;
+    std::string meta;   // JSON object text
+};
+
 struct RpcFrameResult {
     std::string base64;
 };
@@ -172,6 +191,7 @@ using RpcReplyPayload = std::variant<
     RpcStatusResult,
     RpcEvaluateResult,
     RpcStateResult,
+    RpcSmaValidateResult,
     RpcFrameResult,
     RpcAnimationResult,
     RpcInspectionResult,
