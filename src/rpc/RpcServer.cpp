@@ -334,6 +334,69 @@ static int parseId(const std::string& json) {
 // Minimal JSON escape-sequence decoder (\n \t \r \" \\ \/ \uXXXX as UTF-8).
 static std::string jsonUnescape(const std::string& s);
 
+// Decode a JSON \uXXXX escape whose backslash sits at s[at] (s[at+1] == 'u').
+// Emits UTF-8 for BMP code points and astral-plane (surrogate pair, e.g.
+// \uD83D\uDE00) code points as 4-byte UTF-8. On malformed input (bad hex or a
+// dangling high surrogate) the escape is emitted literally. Returns the total
+// number of source characters the escape spans (12 for a pair, 6 otherwise).
+static size_t appendUnicodeEscape(const std::string& s, size_t at, std::string& out) {
+    auto readHex4 = [&](size_t off) -> int {
+        int code = 0;
+        for (int k = 0; k < 4; ++k) {
+            const char h = s[off + k];
+            code <<= 4;
+            if (h >= '0' && h <= '9') code |= h - '0';
+            else if (h >= 'a' && h <= 'f') code |= h - 'a' + 10;
+            else if (h >= 'A' && h <= 'F') code |= h - 'A' + 10;
+            else return -1;
+        }
+        return code;
+    };
+    auto emitCodePoint = [&](unsigned cp) {
+        if (cp <= 0x7F) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp <= 0x7FF) {
+            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    };
+    auto emitLiteral = [&]() {
+        out.push_back('\\');
+        out.push_back('u');
+        // Keep any hex digits that are present as literal text.
+        const size_t avail = s.size() - (at + 2);
+        const size_t take = avail < 4 ? avail : 4;
+        out.append(s, at + 2, take);
+    };
+    if (at + 6 > s.size()) { emitLiteral(); return s.size() - at; }  // "\u" with too few hex digits
+    const int hi = readHex4(at + 2);
+    if (hi < 0) { emitLiteral(); return 6; }
+    if (hi >= 0xD800 && hi <= 0xDBFF) {
+        // High surrogate: require a following \uDC00-\uDFFF low surrogate.
+        if (at + 12 <= s.size() && s[at + 6] == '\\' && s[at + 7] == 'u') {
+            const int lo = readHex4(at + 8);
+            if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                emitCodePoint(0x10000 + ((static_cast<unsigned>(hi) - 0xD800) << 10) +
+                              (static_cast<unsigned>(lo) - 0xDC00));
+                return 12;
+            }
+        }
+        emitLiteral();  // dangling high surrogate -> literal \uXXXX
+        return 6;
+    }
+    emitCodePoint(static_cast<unsigned>(hi));
+    return 6;
+}
+
 // Read a quoted JSON string starting at json[pos] == '"'; returns the
 // unescaped content and advances pos past the closing quote. Honoring \"
 // escapes means embedded quotes/newlines (multi-line Lua eval code) survive.
@@ -345,14 +408,14 @@ static std::string readJsonString(const std::string& json, size_t& pos) {
         const char c = json[pos];
         if (c == '\\' && pos + 1 < json.size()) {
             const char n = json[pos + 1];
-            if (n == 'n') { out.push_back('\n'); }
-            else if (n == 't') { out.push_back('\t'); }
-            else if (n == 'r') { out.push_back('\r'); }
-            else if (n == '"') { out.push_back('"'); }
-            else if (n == '\\') { out.push_back('\\'); }
-            else if (n == '/') { out.push_back('/'); }
-            else { out.push_back(c); out.push_back(n); }
-            pos += 2;
+            if (n == 'n') { out.push_back('\n'); pos += 2; }
+            else if (n == 't') { out.push_back('\t'); pos += 2; }
+            else if (n == 'r') { out.push_back('\r'); pos += 2; }
+            else if (n == '"') { out.push_back('"'); pos += 2; }
+            else if (n == '\\') { out.push_back('\\'); pos += 2; }
+            else if (n == '/') { out.push_back('/'); pos += 2; }
+            else if (n == 'u') { pos += appendUnicodeEscape(json, pos, out); }
+            else { out.push_back(c); out.push_back(n); pos += 2; }
             continue;
         }
         if (c == '"') { ++pos; break; }
@@ -396,32 +459,10 @@ static std::string jsonUnescape(const std::string& s) {
             else if (n == '"') { out.push_back('"'); ++i; }
             else if (n == '\\') { out.push_back('\\'); ++i; }
             else if (n == '/') { out.push_back('/'); ++i; }
-            else if (n == 'u' && i + 5 < s.size()) {
-                // \uXXXX (basic multilingual plane only).
-                unsigned code = 0;
-                bool ok = true;
-                for (int k = 1; k <= 4; ++k) {
-                    const char h = s[i + 1 + k];
-                    code <<= 4;
-                    if (h >= '0' && h <= '9') code |= static_cast<unsigned>(h - '0');
-                    else if (h >= 'a' && h <= 'f') code |= static_cast<unsigned>(h - 'a' + 10);
-                    else if (h >= 'A' && h <= 'F') code |= static_cast<unsigned>(h - 'A' + 10);
-                    else { ok = false; break; }
-                }
-                if (ok && code <= 0x7F) {
-                    out.push_back(static_cast<char>(code));
-                } else if (ok && code <= 0x7FF) {
-                    out.push_back(static_cast<char>(0xC0 | (code >> 6)));
-                    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
-                } else if (ok) {
-                    out.push_back(static_cast<char>(0xE0 | (code >> 12)));
-                    out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
-                    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
-                } else {
-                    out.push_back('\\');
-                    out.push_back('u');
-                }
-                i += 5;
+            else if (n == 'u') {
+                // Shared decoder: BMP + astral-plane surrogate pairs as UTF-8.
+                // The loop's trailing ++i covers the final byte of the span.
+                i += appendUnicodeEscape(s, i, out) - 1;
             } else {
                 out.push_back('\\');
             }

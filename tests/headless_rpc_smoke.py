@@ -127,6 +127,12 @@ try:
     r = request({"id": 8, "method": "eval", "code": "return 7 + 7"})
     check("eval-after-failing-run", r.get("status") == "ok" and r.get("result") == "14")
 
+    # Round 29: JSON \u escapes must decode BMP and astral-plane (surrogate
+    # pair) code points into correct UTF-8 on the live readJsonString path.
+    r = request({"id": 8, "method": "eval", "code": "return 'é中😀'"})
+    check("eval-unicode-escapes",
+          r.get("status") == "ok" and r.get("result") == "é中😀")
+
     # ---- KAG scene-level debugger (Neo-Genesis) ---------------------------
     r = request({"id": 9, "method": "kagSetBreakpoint",
                  "params": {"scene": "assets/script/main.ks", "cmd": "ch"}})
