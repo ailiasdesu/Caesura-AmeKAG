@@ -82,4 +82,12 @@ document.getElementById('advance').addEventListener('click', () => {
   void advance()
 })
 
+// render loop: sync core state to DOM every frame (CSS transitions
+// interpolate sprite moves/fades between renders).
+const frame = () => {
+  renderer.render()
+  requestAnimationFrame(frame)
+}
+requestAnimationFrame(frame)
+
 void runScene('galgame_demo.ks')

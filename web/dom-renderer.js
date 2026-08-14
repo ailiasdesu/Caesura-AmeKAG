@@ -50,11 +50,15 @@ export class DomRenderer {
         this.root.appendChild(el)
         this._els.set(n.name, el)
       }
+      // CSS transitions animate engine-driven moves/fades (sprite_move /
+      // sprite_fade yield per frame; the DOM sees the endpoint).
+      el.style.transition = 'left 300ms linear, top 300ms linear, opacity 300ms linear'
       el.style.left = n.x + 'px'
       el.style.top = n.y + 'px'
       el.style.width = n.w + 'px'
       el.style.height = n.h + 'px'
-      el.style.opacity = String(n.opacity)
+      // engine opacity is 0..255; DOM wants 0..1
+      el.style.opacity = String((Number(n.opacity) || 255) / 255)
       el.style.zIndex = String(n.z)
       const url = n.texture ? this.textureUrls.get(n.texture) : null
       if (el.tagName === 'IMG') {

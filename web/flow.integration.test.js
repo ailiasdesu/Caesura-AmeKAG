@@ -54,6 +54,10 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(spans[0].style.top).toBeTruthy()
     expect(spans[0].style.color).toMatch(/rgb\(/)
     expect(spans[0].style.fontSize).toMatch(/px/)
+    // layer transitions: CSS animates engine-driven moves/fades
+    const bgEl = stage.querySelector('img[data-layer="bg"]')
+    expect(bgEl.style.transition).toContain('left 300ms')
+    expect(bgEl.style.opacity).toBe('1') // 255 -> 1.0 normalized
 
     out = await player.runScene(ks, 'galgame_demo.ks', { maxFrames: 200000, autoClick: true })
     expect(out.startsWith('DONE:')).toBe(true)
@@ -71,6 +75,16 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     // after the final [p] the message layer is cleared (engine semantics)
     const msg2 = stage.querySelector('.caesura-message')
     expect(msg2).toBeNull()
+
+    // sprite_move animated _char_Sakura toward 120,200 (a later [ch sprite=]
+    // re-centers the layer at 440 — engine semantics; assert the move ran
+    // and the CSS transition is armed).
+    const sakura = stage.querySelector('img[data-layer="_char_Sakura"]')
+    expect(sakura).toBeTruthy()
+    const sakMoves = player.core.events.filter((e) => e.kind === 'layer.move' && e.detail.name === '_char_Sakura')
+    expect(sakMoves.length).toBeGreaterThan(20) // full sprite_move animation
+    expect(sakMoves[sakMoves.length - 1].detail.x).toBe(120)
+    expect(sakura.style.transition).toContain('left 300ms')
   }, 120000)
 
   it('loads a pre-baked .ksc stream (zero-parse start)', async () => {

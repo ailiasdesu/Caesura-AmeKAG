@@ -25,7 +25,7 @@ export class AdapterCore {
         x: opts.x ?? 0, y: opts.y ?? 0,
         w: opts.w ?? 1280, h: opts.h ?? 720,
         visible: opts.visible ?? true,
-        opacity: opts.opacity ?? 1,
+        opacity: opts.opacity ?? 255, // engine semantics: 0..255
         z: opts.z ?? 0,
         texture: null,
         layerType: opts.layer_type ?? 0,
@@ -42,16 +42,26 @@ export class AdapterCore {
     if (this.layers.delete(name)) this._log('layer.remove', { name })
   }
 
-  setLayerImage(node, texId) {
-    if (!node) return
-    node.texture = texId ?? null
-    this._log('layer.image', { name: node.name, tex: texId })
+  /** Resolve the canonical node: Lua-side proxies may wrap the same layer
+   *  under a different JS reference, so mutators always write the node
+   *  stored in the Map (keyed by name). */
+  _canon(node) {
+    if (!node) return null
+    const hit = this.layers.get(node.name)
+    return hit ?? node
   }
 
-  setLayerVisible(node, v) { if (node) { node.visible = !!v; this._log('layer.visible', { name: node.name, v: !!v }) } }
-  setLayerOpacity(node, v) { if (node) { node.opacity = Number(v) ?? 1; this._log('layer.opacity', { name: node.name, v: node.opacity }) } }
-  setLayerZ(node, z) { if (node) { node.z = Number(z) ?? 0; this._log('layer.z', { name: node.name, z: node.z }) } }
-  moveLayer(node, x, y) { if (node) { node.x = Number(x) ?? node.x; node.y = Number(y) ?? node.y; this._log('layer.move', { name: node.name, x: node.x, y: node.y }) } }
+  setLayerImage(node, texId) {
+    const n = this._canon(node)
+    if (!n) return
+    n.texture = texId ?? null
+    this._log('layer.image', { name: n.name, tex: texId })
+  }
+
+  setLayerVisible(node, v) { const n = this._canon(node); if (n) { n.visible = !!v; this._log('layer.visible', { name: n.name, v: !!v }) } }
+  setLayerOpacity(node, v) { const n = this._canon(node); if (n) { n.opacity = Number(v) ?? 255; n._lastMutateAt = this._frame ?? 0; this._log('layer.opacity', { name: n.name, v: n.opacity }) } }
+  setLayerZ(node, z) { const n = this._canon(node); if (n) { n.z = Number(z) ?? 0; n._lastMutateAt = this._frame ?? 0; this._log('layer.z', { name: n.name, z: n.z }) } }
+  moveLayer(node, x, y) { const n = this._canon(node); if (n) { n.x = Number(x) ?? n.x; n.y = Number(y) ?? n.y; n._lastMutateAt = this._frame ?? 0; this._log('layer.move', { name: n.name, x: n.x, y: n.y }) } }
 
   // -- textures ---------------------------------------------------------
   loadTexture(path) {
