@@ -49,6 +49,19 @@ public:
     int aliveCount() const override { return m_aliveCount; }
     bool isInitialized() const override { return m_initialized; }
 
+public:
+    // -- Pure particle visual math (headless-testable) ---------------------
+    // Pixel-space quad + life-faded color/alpha for one particle. Extracted
+    // from render() so the decay curve and quad math can be pinned without a
+    // GPU (G8). lifeFade = life/maxLife in [0,1]; a zero/negative maxLife
+    // degenerates to 1.0 (full size/alpha) instead of NaN.
+    struct ParticleQuad {
+        float x0, y0, x1, y1;   // pixel-space corners (half-extent box)
+        uint8_t r, g, b, a;     // color with life-faded alpha
+    };
+    static float lifeFade(const Particle& p);
+    static ParticleQuad buildParticleVisual(const Particle& p);
+
 private:
     std::vector<Particle> m_particles;
     // Free-slot stack: O(1) slot acquisition instead of a linear scan.

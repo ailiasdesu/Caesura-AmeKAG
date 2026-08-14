@@ -78,3 +78,93 @@ TEST_CASE("ParticleSystem::aliveCount within MAX_PARTICLES") {
     Caesura::ParticleSystem ps;
     int cnt = ps.aliveCount(); CHECK(cnt <= 1024);
 }
+// -----------------------------------------------------------------------------
+// Pure particle visual math (G8): lifeFade() decay curve + quad builder.
+// No GPU, no init required -- pure functions on a Particle value.
+// -----------------------------------------------------------------------------
+
+TEST_CASE("Particle visual: fresh particle is full size and alpha") {
+    Caesura::Particle p;
+    p.x = 100.0f; p.y = 200.0f;
+    p.size = 10.0f;
+    p.life = 1.0f; p.maxLife = 1.0f;
+    p.r = 1.0f; p.g = 0.5f; p.b = 0.0f; p.a = 1.0f;
+
+    CHECK(Caesura::ParticleSystem::lifeFade(p) == doctest::Approx(1.0f));
+    auto q = Caesura::ParticleSystem::buildParticleVisual(p);
+    CHECK(q.x0 == doctest::Approx(95.0f));   // 100 - 10*1*0.5
+    CHECK(q.y0 == doctest::Approx(195.0f));
+    CHECK(q.x1 == doctest::Approx(105.0f));
+    CHECK(q.y1 == doctest::Approx(205.0f));
+    CHECK(q.r == 255);
+    CHECK(q.g == 127);   // 0.5*255 = 127.5 -> 127
+    CHECK(q.b == 0);
+    CHECK(q.a == 255);
+}
+
+TEST_CASE("Particle visual: half-life shrinks quad and fades alpha") {
+    Caesura::Particle p;
+    p.x = 0.0f; p.y = 0.0f;
+    p.size = 20.0f;
+    p.life = 0.5f; p.maxLife = 1.0f;
+    p.r = 1.0f; p.g = 1.0f; p.b = 1.0f; p.a = 1.0f;
+
+    CHECK(Caesura::ParticleSystem::lifeFade(p) == doctest::Approx(0.5f));
+    auto q = Caesura::ParticleSystem::buildParticleVisual(p);
+    CHECK(q.x0 == doctest::Approx(-5.0f));   // 0 - 20*0.5*0.5
+    CHECK(q.x1 == doctest::Approx(5.0f));
+    CHECK(q.a == 127);   // 1.0*0.5*255 = 127.5 -> 127
+}
+
+TEST_CASE("Particle visual: near-death particle collapses") {
+    Caesura::Particle p;
+    p.x = 0.0f; p.y = 0.0f;
+    p.size = 100.0f;
+    p.life = 0.01f; p.maxLife = 1.0f;
+    p.r = 1.0f; p.g = 1.0f; p.b = 1.0f; p.a = 1.0f;
+
+    auto q = Caesura::ParticleSystem::buildParticleVisual(p);
+    CHECK(q.x0 == doctest::Approx(-0.5f));
+    CHECK(q.x1 == doctest::Approx(0.5f));
+    CHECK(q.a == 2);   // 0.01*255 = 2.55 -> 2
+}
+
+TEST_CASE("Particle visual: zero maxLife does not produce NaN") {
+    // Regression: life/maxLife with maxLife=0 is NaN; the guard must
+    // degenerate to fade=1.0 so vertices stay finite.
+    Caesura::Particle p;
+    p.x = 50.0f; p.y = 60.0f;
+    p.size = 8.0f;
+    p.life = 0.0f; p.maxLife = 0.0f;
+    p.r = 1.0f; p.g = 0.0f; p.b = 0.0f; p.a = 1.0f;
+
+    CHECK(Caesura::ParticleSystem::lifeFade(p) == doctest::Approx(1.0f));
+    auto q = Caesura::ParticleSystem::buildParticleVisual(p);
+    CHECK(q.x0 == q.x0);   // not NaN
+    CHECK(q.y1 == q.y1);
+    CHECK(q.a == 255);
+    CHECK(q.x0 == doctest::Approx(46.0f));
+    CHECK(q.x1 == doctest::Approx(54.0f));
+}
+
+TEST_CASE("Particle visual: negative life clamps to zero fade") {
+    Caesura::Particle p;
+    p.x = 0.0f; p.y = 0.0f;
+    p.size = 10.0f;
+    p.life = -0.5f; p.maxLife = 1.0f;
+    p.r = p.g = p.b = p.a = 1.0f;
+
+    CHECK(Caesura::ParticleSystem::lifeFade(p) == doctest::Approx(0.0f));
+    auto q = Caesura::ParticleSystem::buildParticleVisual(p);
+    CHECK(q.a == 0);
+    CHECK(q.x0 == doctest::Approx(0.0f));   // size 10 * fade 0 = 0
+}
+
+TEST_CASE("Particle visual: overshoot life clamps to full") {
+    Caesura::Particle p;
+    p.size = 10.0f;
+    p.life = 2.0f; p.maxLife = 1.0f;
+    p.r = p.g = p.b = p.a = 1.0f;
+
+    CHECK(Caesura::ParticleSystem::lifeFade(p) == doctest::Approx(1.0f));
+}

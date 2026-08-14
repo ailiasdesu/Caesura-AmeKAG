@@ -87,6 +87,33 @@ bool ParticleSystem::destroyEmitter(int id) {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Pure particle visual math (GPU-free) -- extracted from render() so the
+// decay curve and quad math are unit-testable (G8).
+// ---------------------------------------------------------------------------
+
+float ParticleSystem::lifeFade(const Particle& p) {
+    // Life fraction in [0,1]; guard against zero/negative maxLife (which
+    // would otherwise produce NaN and poison every downstream vertex).
+    if (p.maxLife <= 0.0f) return 1.0f;
+    const float t = p.life / p.maxLife;
+    return t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+}
+
+ParticleSystem::ParticleQuad ParticleSystem::buildParticleVisual(const Particle& p) {
+    const float t = lifeFade(p);
+    const float s = p.size * t;          // quad shrinks as life decays
+    const float hs = s * 0.5f;
+    ParticleQuad q;
+    q.x0 = p.x - hs; q.y0 = p.y - hs;
+    q.x1 = p.x + hs; q.y1 = p.y + hs;
+    q.r = (uint8_t)(p.r * 255.0f);
+    q.g = (uint8_t)(p.g * 255.0f);
+    q.b = (uint8_t)(p.b * 255.0f);
+    q.a = (uint8_t)(p.a * t * 255.0f);   // alpha fades with life too
+    return q;
+}
+
 void ParticleSystem::emit(int emitterId, int count) {
     if (!m_initialized) return;
     if (emitterId < 0 || emitterId >= (int)m_emitters.size()) return;
@@ -191,18 +218,15 @@ void ParticleSystem::render(uint16_t viewId) {
     int vi = 0, ii = 0;
     for (auto& p : m_particles) {
         if (!p.alive) continue;
-        float t = p.life / p.maxLife;
-        float s = p.size * t;
-        float hs = s * 0.5f;
-        uint8_t cr = (uint8_t)(p.r * 255.0f);
-        uint8_t cg = (uint8_t)(p.g * 255.0f);
-        uint8_t cb = (uint8_t)(p.b * 255.0f);
-        uint8_t ca = (uint8_t)(p.a * t * 255.0f);
+        // Pure visual math (life decay + quad) -- unit-tested helper.
+        const ParticleQuad vq = buildParticleVisual(p);
+        const float x0 = vq.x0, y0 = vq.y0, x1 = vq.x1, y1 = vq.y1;
+        const uint8_t cr = vq.r, cg = vq.g, cb = vq.b, ca = vq.a;
 
-        vtx[vi+0] = { p.x - hs, p.y - hs, 0.0f, 0.0f, cr, cg, cb, ca };
-        vtx[vi+1] = { p.x + hs, p.y - hs, 1.0f, 0.0f, cr, cg, cb, ca };
-        vtx[vi+2] = { p.x + hs, p.y + hs, 1.0f, 1.0f, cr, cg, cb, ca };
-        vtx[vi+3] = { p.x - hs, p.y + hs, 0.0f, 1.0f, cr, cg, cb, ca };
+        vtx[vi+0] = { x0, y0, 0.0f, 0.0f, cr, cg, cb, ca };
+        vtx[vi+1] = { x1, y0, 1.0f, 0.0f, cr, cg, cb, ca };
+        vtx[vi+2] = { x1, y1, 1.0f, 1.0f, cr, cg, cb, ca };
+        vtx[vi+3] = { x0, y1, 0.0f, 1.0f, cr, cg, cb, ca };
 
         uint16_t base = (uint16_t)vi;
         idx[ii+0]=base; idx[ii+1]=base+1; idx[ii+2]=base+2;
