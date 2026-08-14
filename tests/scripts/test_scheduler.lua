@@ -1,6 +1,8 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  test_scheduler.lua — Scheduler flow-control unit tests
 -- =============================================================================
+
+package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 
 local scheduler = require("scheduler")
 
@@ -209,10 +211,75 @@ do
 end
 
 
-print("  [PASS] switch basic parse no-error")
-print("  [PASS] switch case match routes correctly")
-print("  [PASS] switch default fallback")
-print("  [PASS] switch endswitch exits cleanly")
-passed = passed + 4
+-- 9. [switch]/[case]/[default] — real assertions (replaces former
+--    hard-coded fake passes). Hand-built token streams exercise the
+--    runtime depth-aware scan path.
+do
+    -- dispatch helper that tags which case body ran
+    local function run_switch(f, tokens)
+        local ctx = make_ctx()
+        ctx.f = f or {}
+        local co = coroutine.create(function() scheduler.run(ctx, tokens) end)
+        while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
+        local out = {}
+        for _, d in ipairs(ctx.dispatched) do
+            out[#out + 1] = (d.params and d.params.tag) or d.cmd
+        end
+        return out
+    end
+
+    local base = {
+        {"switch", {"mode"}},
+        {"case", {"a"}}, {"ch", {tag = "A"}},
+        {"case", {"b"}}, {"ch", {tag = "B"}},
+        {"default", {}}, {"ch", {tag = "D"}},
+        {"endswitch", {}},
+        {"ch", {tag = "AFTER"}},
+    }
+
+    local o1 = run_switch({ mode = "a" }, base)
+    check("switch case a runs alone, then continues",
+          table.concat(o1, ",") == "A,AFTER")
+
+    local o2 = run_switch({ mode = "b" }, base)
+    check("switch case b runs alone (no fall-through)",
+          table.concat(o2, ",") == "B,AFTER")
+
+    local o3 = run_switch({ mode = "z" }, base)
+    check("switch default fallback",
+          table.concat(o3, ",") == "D,AFTER")
+
+    local o4 = run_switch({}, base)
+    check("switch missing var falls back to default",
+          table.concat(o4, ",") == "D,AFTER")
+
+    local noDefault = {
+        {"switch", {"mode"}},
+        {"case", {"a"}}, {"ch", {tag = "A"}},
+        {"endswitch", {}},
+        {"ch", {tag = "AFTER"}},
+    }
+    local o5 = run_switch({ mode = "q" }, noDefault)
+    check("switch no-match-no-default skips body",
+          table.concat(o5, ",") == "AFTER")
+
+    -- Nested switch: inner cases must not leak into outer flow
+    local nested = {
+        {"switch", {"outer"}},
+        {"case", {"1"}},
+        {"switch", {"inner"}},
+        {"case", {"x"}}, {"ch", {tag = "IX"}},
+        {"endswitch", {}},
+        {"ch", {tag = "O1"}},
+        {"endswitch", {}},
+        {"ch", {tag = "END"}},
+    }
+    local o6 = run_switch({ outer = "1", inner = "x" }, nested)
+    check("nested switch inner match stays in inner body",
+          table.concat(o6, ",") == "IX,O1,END")
+    local o7 = run_switch({ outer = "1", inner = "z" }, nested)
+    check("nested switch inner no-match skips only inner body",
+          table.concat(o7, ",") == "O1,END")
+end
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
