@@ -89,6 +89,84 @@ local octx = d.run_scene('*start\n[ch text="a"]\n[end]\n', {
 check("kag_override replaces handler", spy.called == 1
       and octx.backlog[1] == "OVERRIDE")
 
+-- ---------------------------------------------------------------------------
+-- 7. nested if/elseif/else: only the matching branch executes (deterministic)
+-- ---------------------------------------------------------------------------
+local nested = '*start\n[set f.score 75]\n'
+    .. '[if exp="f.score >= 90"]\n[ch text="A"]\n'
+    .. '[elseif exp="f.score >= 80"]\n[ch text="B"]\n'
+    .. '[elseif exp="f.score >= 70"]\n[ch text="C"]\n'
+    .. '[else]\n[ch text="F"]\n[endif]\n[end]\n'
+local nctx = d.run_scene(nested)
+check("nested elseif picks C", nctx._error == nil
+      and nctx.backlog[#nctx.backlog] == "C")
+
+local nestedLow = d.run_scene('*start\n[set f.score 45]\n'
+    .. '[if exp="f.score >= 90"]\n[ch text="A"]\n'
+    .. '[elseif exp="f.score >= 70"]\n[ch text="C"]\n'
+    .. '[else]\n[ch text="F"]\n[endif]\n[end]\n')
+check("else branch when no elseif matches", nestedLow.backlog[1] == "F")
+
+-- ---------------------------------------------------------------------------
+-- 8. [jump] label flow control (deterministic redirection)
+-- ---------------------------------------------------------------------------
+local jumpSrc = '*start\n[ch text="a"]\n[jump target="*skip"]\n'
+    .. '[ch text="never"]\n*skip\n[ch text="b"]\n[end]\n'
+local jctx = d.run_scene(jumpSrc)
+check("jump skips intervening commands", jctx._error == nil
+      and #jctx.backlog == 2 and jctx.backlog[1] == "a"
+      and jctx.backlog[2] == "b")
+
+-- ---------------------------------------------------------------------------
+-- 9. [call]/[return] subroutine stack (deterministic)
+-- ---------------------------------------------------------------------------
+local callSrc = '*start\n[call target="*sub"]\n[ch text="after"]\n[end]\n'
+    .. '*sub\n[ch text="in-sub"]\n[return]\n'
+local cctx = d.run_scene(callSrc)
+check("call executes subroutine then returns", cctx._error == nil
+      and #cctx.backlog == 2 and cctx.backlog[1] == "in-sub"
+      and cctx.backlog[2] == "after")
+
+-- ---------------------------------------------------------------------------
+-- 10. expression boundaries: division, modulo, string compare, chained bool
+-- ---------------------------------------------------------------------------
+local exprSrc = '*start\n[set f.a 10]\n[set f.b 3]\n'
+    .. '[if exp="f.a / f.b > 3"]\n[ch text="div-ok"]\n[endif]\n'
+    .. '[if exp="f.a % f.b == 1"]\n[ch text="mod-ok"]\n[endif]\n'
+    .. '[if exp="\'hello\' == \'hello\'"]\n[ch text="str-ok"]\n[endif]\n'
+    .. '[if exp="f.a > 5 and f.b < 10"]\n[ch text="chain-ok"]\n[endif]\n[end]\n'
+local xctx = d.run_scene(exprSrc)
+check("division expression evaluates", xctx._error == nil
+      and xctx.backlog[1] == "div-ok")
+check("modulo expression evaluates", xctx.backlog[2] == "mod-ok")
+check("string equality evaluates", xctx.backlog[3] == "str-ok")
+check("chained boolean evaluates", xctx.backlog[4] == "chain-ok")
+
+-- ---------------------------------------------------------------------------
+-- 11. deep snapshot equality: nested tables and arrays compare structurally
+-- ---------------------------------------------------------------------------
+local deepSrc = '*start\n[set f.name Hero]\n'
+    .. '[set f.hp 100]\n[set f.items 3]\n'
+    .. '[ch text="hi"]\n[end]\n'
+local deepA = d.run_scene(deepSrc)
+local deepB = d.run_scene(deepSrc)
+check("deep snapshot matches across runs",
+      d.assert_state(d.state_snapshot(deepA), d.state_snapshot(deepB)))
+local snap = d.state_snapshot(deepA)
+check("flat fields captured", snap.f.name == "Hero"
+      and snap.f.hp == 100 and snap.f.items == 3)
+check("assert_state catches field diff",
+      not d.assert_state(snap, { f = { name = "Villain" } }))
+check("assert_state catches missing field",
+      not d.assert_state(snap, { f = { name = "Hero", hp = 100 } }))
+
+-- ---------------------------------------------------------------------------
+-- 12. state isolation: two scenes do not leak variables into each other
+-- ---------------------------------------------------------------------------
+local leakA = d.run_scene('*start\n[set f.shared 42]\n[end]\n')
+local leakB = d.run_scene('*start\n[ch text="fresh"]\n[end]\n')
+check("scene B does not see scene A variables", leakB.f.shared == nil)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("DETERMINISM TESTS: %d passed, %d FAILED", passed, failed))
