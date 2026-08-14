@@ -72,8 +72,14 @@ private:
     std::vector<RTTEntry> m_pool2D;
     std::vector<RTTEntry> m_pool3D;
 
-    // Legacy handle tracking (for backward compat createCanvas/destroyCanvas)
-    std::unordered_map<uint32_t, size_t> m_handleToPoolIndex;
+    // Handle -> (pool, index) tracking. Pool identity is required so
+    // deferred-destroy index fixups only touch entries in the SAME pool
+    // (the 2D/3D pools have independent index spaces).
+    struct PoolSlot {
+        RTType type;   // which pool the slot lives in
+        size_t index;  // index within that pool
+    };
+    std::unordered_map<uint32_t, PoolSlot> m_handleToPoolIndex;
     std::unordered_set<uint32_t> m_legacyHandles;
 
     // Deferred destruction queue -- handles destroyed at end-of-frame
