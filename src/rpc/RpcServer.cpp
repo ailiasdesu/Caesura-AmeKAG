@@ -483,6 +483,8 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
         safeStoi(extractField(jsonLine, "h")));
     if (method == "getState") return handleGetState(id);
     if (method == "smaValidate") return handleSmaValidate(id, extractField(jsonLine, "path"));
+    if (method == "pick") return handlePick(id,
+        safeStoi(extractField(jsonLine, "x")), safeStoi(extractField(jsonLine, "y")));
     if (method == "reload")   return handleReload(id);
     if (method == "setBreakpoint") return handleDebugAction(id,
         RpcRequest{RpcSetBreakpointRequest{
@@ -673,6 +675,19 @@ std::string RpcServer::handleGetState(int id) {
         << jsonEscape(state->language) << "\",\"backlog_count\":"
         << state->backlogCount << ",\"layer_count\":"
         << state->layerCount << "}}";
+    return out.str();
+}
+
+std::string RpcServer::handlePick(int id, int x, int y) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcPickRequest{x, y}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+    const auto* res = std::get_if<RpcPickResult>(&reply.payload);
+    if (!res) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Pick reply missing result", {}});
+    }
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"hits\":" << res->hits << "}";
     return out.str();
 }
 

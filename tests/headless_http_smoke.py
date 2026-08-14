@@ -111,6 +111,14 @@ def main():
           and isinstance(resp.get("layer_count"), int),
           "%s %s" % (st, resp))
 
+    # /api/pick (round 23): hit-test returns JSON hits array text.
+    st, resp = request("/api/pick?x=640&y=360")
+    check("pick-endpoint", st == 200 and resp.get("status") == "ok"
+          and isinstance(resp.get("hits"), str) and "[" in resp.get("hits", ""),
+          "%s %s" % (st, resp))
+    st, resp = request("/api/pick?x=-1&y=0")
+    check("pick-invalid-coords", st == 400, "%s %s" % (st, resp))
+
     # /api/sma/validate (round 19): valid asset ok, broken asset lists
     # field-located violations, unsafe paths rejected.
     st, resp = request("/api/sma/validate?path=demo/assets/sma/hero.json")

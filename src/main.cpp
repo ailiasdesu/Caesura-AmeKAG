@@ -298,6 +298,37 @@ private:
                 Caesura::RpcReply reply = rpcOk();
                 reply.payload = std::move(result);
                 return reply;
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcPickRequest>) {
+                // IDE preview-frame pick: hit-test the Lua layer tree via
+                // the shared layers module (same code the game uses).
+                lua_State* L = m_engine.lua().state();
+                if (!L) return rpcError(Caesura::RpcReplyStatus::Unavailable,
+                                        "lua_unavailable", "Lua VM is unavailable");
+                const int stackTop = lua_gettop(L);
+                const std::string code =
+                    "local ok, layers = pcall(require, 'layers')\n"
+                    "if not ok or not layers or not layers.pick then return '[]' end\n"
+                    "local hits = layers.pick(" + std::to_string(operation.x)
+                    + ", " + std::to_string(operation.y) + ")\n"
+                    "local parts = {}\n"
+                    "for _, h in ipairs(hits) do\n"
+                    "  parts[#parts + 1] = string.format('{\"id\":%q,\"name\":%q,\"z\":%d,\"depth\":%d,\"opacity\":%d,\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}', "
+                    "tostring(h.id), tostring(h.name), h.z or 0, h.depth or 0, h.opacity or 255, "
+                    "math.floor(h.x or 0), math.floor(h.y or 0), math.floor(h.w or 0), math.floor(h.h or 0))\n"
+                    "end\n"
+                    "return '[' .. table.concat(parts, ',') .. ']'";
+                Caesura::RpcPickResult pick;
+                if (luaL_loadstring(L, code.c_str()) == LUA_OK
+                    && lua_pcall(L, 0, 1, 0) == LUA_OK
+                    && lua_isstring(L, -1)) {
+                    pick.hits = lua_tostring(L, -1);
+                } else {
+                    pick.hits = "[]";
+                }
+                lua_settop(L, stackTop);
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = std::move(pick);
+                return reply;
             } else if constexpr (
                 std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {
                 std::string frame = m_engine.captureFrameForRpc(

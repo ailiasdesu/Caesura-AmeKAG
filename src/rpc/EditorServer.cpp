@@ -664,6 +664,36 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // GET /api/pick?x=&y= -- IDE preview-frame hit test (round 23): returns
+    // the Lua layer-tree nodes containing the window pixel, bottom-to-top.
+    // ---------------------------------------------------------------------
+    svr.Get("/api/pick", [this](const httplib::Request& req, httplib::Response& res) {
+        int x = 0, y = 0;
+        if (req.has_param("x")) x = std::atoi(req.get_param_value("x").c_str());
+        if (req.has_param("y")) y = std::atoi(req.get_param_value("y").c_str());
+        if (x < 0 || y < 0 || x > 8192 || y > 8192) {
+            res.set_content("{\"error\":\"Invalid pick coordinates\"}", "application/json");
+            res.status = 400;
+            return;
+        }
+        RpcReply reply = dispatchRequest(RpcRequest{RpcPickRequest{x, y}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* p = std::get_if<RpcPickResult>(&reply.payload);
+        if (!p) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Pick reply missing result"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"hits", p->hits},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
     // GET /api/debug/getFrame -- capture the current frame as base64 PNG
     // ---------------------------------------------------------------------
     svr.Get("/api/debug/getFrame", [this](const httplib::Request& req, httplib::Response& res) {

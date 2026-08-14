@@ -31,6 +31,13 @@ struct RpcSmaValidateRequest {
     std::string path;
 };
 
+// IDE preview-frame pick (round 23): hit-test the Lua layer tree at a
+// window pixel (1280x720 engine space). Returns JSON hits (bottom-to-top).
+struct RpcPickRequest {
+    int x = 0;
+    int y = 0;
+};
+
 struct RpcCaptureFrameRequest {
     int width = 1280;
     int height = 720;
@@ -100,6 +107,7 @@ using RpcRequestPayload = std::variant<
     RpcEvaluateRequest,
     RpcGetStateRequest,
     RpcSmaValidateRequest,
+    RpcPickRequest,
     RpcCaptureFrameRequest,
     RpcReloadScriptsRequest,
     RpcLoadAnimationRequest,
@@ -158,6 +166,10 @@ struct RpcSmaValidateResult {
     std::string meta;   // JSON object text
 };
 
+struct RpcPickResult {
+    std::string hits;   // JSON array text: [{id,name,z,depth,opacity,x,y,w,h}]
+};
+
 struct RpcFrameResult {
     std::string base64;
 };
@@ -192,6 +204,7 @@ using RpcReplyPayload = std::variant<
     RpcEvaluateResult,
     RpcStateResult,
     RpcSmaValidateResult,
+    RpcPickResult,
     RpcFrameResult,
     RpcAnimationResult,
     RpcInspectionResult,
