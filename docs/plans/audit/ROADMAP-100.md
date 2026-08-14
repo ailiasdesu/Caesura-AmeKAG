@@ -53,3 +53,4 @@
 | 5 | 无障碍颜色滤镜数学纯化（Machado-2009 预设表 + effect-4 VFX 打包）+ 7 例测试（G8 中段） | C++ 694/694, Lua 120/120, ctest 绿, 耦合 PASS | 89aaf4f1 |
 | 6 | DirtyRect merge uint16 回绕修复（32 位计算+钳制）+ shouldUseScissorFor 纯决策 + 11 例测试（G8 中后段） | C++ 705/705, Lua 120/120, ctest 绿, 耦合 PASS | 853e0e31 |
 | 7 | 粒子生命周期衰减纯化（lifeFade + buildParticleVisual + maxLife=0 NaN 守卫）+ 6 例测试（G8 收尾） | C++ 711/711, Lua 120/120, ctest 绿, 耦合 PASS | 22203ce8 |
+| 8 | 确定性测试套件扩展：嵌套 elseif、jump/call 流程、表达式边界（除/模/串/链）、深快照、状态隔离（G9 前哨） | Lua 120/120（+28 determinism 断言）, C++ 711/711, 耦合 PASS | be61f8be |
