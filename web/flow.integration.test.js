@@ -47,6 +47,13 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bgImg.getAttribute('src')).toContain('classroom.png')
     const msg = stage.querySelector('.caesura-message')
     expect(msg?.textContent).toContain('Welcome to Caesura')
+    // structured draws render as positioned spans (x/y/color/scale)
+    const spans = msg?.querySelectorAll('span')
+    expect(spans && spans.length).toBeGreaterThan(0)
+    expect(spans[0].style.left).toBeTruthy()
+    expect(spans[0].style.top).toBeTruthy()
+    expect(spans[0].style.color).toMatch(/rgb\(/)
+    expect(spans[0].style.fontSize).toMatch(/px/)
 
     out = await player.runScene(ks, 'galgame_demo.ks', { maxFrames: 200000, autoClick: true })
     expect(out.startsWith('DONE:')).toBe(true)

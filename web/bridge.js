@@ -183,23 +183,34 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
         end
-        -- Collect the current visible text from the Lua TextScene draws
-        -- (the DOM overlay shows what the engine would render this frame).
-        local parts = {}
+        -- Collect the current visible text draws from the Lua TextScene
+        -- as a lightweight JSON array (fields: text/x/y/r/g/b/a/scale/bold/italic).
         local st = ctx.text_state
+        local draws = {}
         if st and type(st.draws) == 'table' then
           for _, d in ipairs(st.draws) do
             if type(d) == 'table' and d.text and #d.text > 0 then
-              parts[#parts + 1] = d.text
+              draws[#draws + 1] = {
+                t = tostring(d.text),
+                x = tonumber(d.x) or 0,
+                y = tonumber(d.y) or 0,
+                r = tonumber(d.r) or 255,
+                g = tonumber(d.g) or 255,
+                b = tonumber(d.b) or 255,
+                a = tonumber(d.a) or 255,
+                s = tonumber(d.scale) or 1,
+                bd = d.bold == true and 1 or 0,
+                it = d.italic == true and 1 or 0,
+              }
             end
           end
         end
-        __SCENE_TEXT = table.concat(parts, string.char(10))
+        __SCENE_DRAWS_TABLE = draws
         return result
       `)
-      // sync the collected Lua text into the core overlay buffer
-      const sceneText = lua.global.get('__SCENE_TEXT')
-      if (typeof sceneText === 'string') core.setText(sceneText)
+      // sync the structured draws into the core overlay (JSON parse)
+      const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
+      core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
       return out
     },
     /** Run a scene from a pre-baked story bundle (ks_bake --web): zero
@@ -247,20 +258,31 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
         end
-        local parts = {}
         local st = ctx.text_state
+        local draws = {}
         if st and type(st.draws) == 'table' then
           for _, d in ipairs(st.draws) do
             if type(d) == 'table' and d.text and #d.text > 0 then
-              parts[#parts + 1] = d.text
+              draws[#draws + 1] = {
+                t = tostring(d.text),
+                x = tonumber(d.x) or 0,
+                y = tonumber(d.y) or 0,
+                r = tonumber(d.r) or 255,
+                g = tonumber(d.g) or 255,
+                b = tonumber(d.b) or 255,
+                a = tonumber(d.a) or 255,
+                s = tonumber(d.scale) or 1,
+                bd = d.bold == true and 1 or 0,
+                it = d.italic == true and 1 or 0,
+              }
             end
           end
         end
-        __SCENE_TEXT = table.concat(parts, string.char(10))
+        __SCENE_DRAWS_TABLE = draws
         return result
       `)
-      const sceneText = lua.global.get('__SCENE_TEXT')
-      if (typeof sceneText === 'string') core.setText(sceneText)
+      const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
+      core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
       return out
     },
     /** Raise the click signal for the next runScene. */

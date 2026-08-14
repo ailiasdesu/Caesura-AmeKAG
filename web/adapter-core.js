@@ -9,6 +9,7 @@ export class AdapterCore {
     this.layers = new Map()
     this.textures = new Map() // id -> {path, loaded, width, height}
     this.textBuffer = ''
+    this.draws = []
     this.audioBus = { bgm: null, se: [], voice: null }
     this.events = [] // call log for tests/telemetry
     this._seq = 0
@@ -68,9 +69,11 @@ export class AdapterCore {
   destroyTexture(id) { this.textures.delete(id); this._log('texture.destroy', { id }) }
 
   // -- text -------------------------------------------------------------
-  clearText() { this.textBuffer = ''; this._log('text.clear') }
+  clearText() { this.textBuffer = ''; this.draws = []; this._log('text.clear') }
   appendText(s) { if (s) { this.textBuffer += s; this._log('text.append', { len: s.length }) } }
   setText(s) { this.textBuffer = String(s ?? ''); this._log('text.set', { len: this.textBuffer.length }) }
+  /** Structured text draws from the Lua TextScene (x/y/rgb/scale/bold). */
+  setDraws(draws) { this.draws = Array.isArray(draws) ? draws : []; this._log('text.draws', { n: this.draws.length }) }
 
   // -- audio ------------------------------------------------------------
   audioPlay(kind, path, volume = 1) {

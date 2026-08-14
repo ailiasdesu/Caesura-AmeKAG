@@ -72,24 +72,53 @@ export class DomRenderer {
         this._els.delete(name)
       }
     }
-    // message overlay
-    const hasText = this.core.textBuffer.length > 0
+    // message overlay — structured draws (x/y/rgb/scale) when available,
+    // else the flat textBuffer (legacy fallback).
+    const draws = this.core.draws ?? []
+    const hasText = draws.length > 0 || this.core.textBuffer.length > 0
     if (hasText && !this._textEl) {
       this._textEl = document.createElement('div')
       this._textEl.className = 'caesura-message'
       this._textEl.style.position = 'absolute'
       this._textEl.style.left = '0'
-      this._textEl.style.right = '0'
-      this._textEl.style.bottom = '0'
-      this._textEl.style.padding = '16px 24px'
-      this._textEl.style.background = 'rgba(0,0,0,0.55)'
-      this._textEl.style.color = '#fff'
-      this._textEl.style.fontFamily = 'system-ui, sans-serif'
-      this._textEl.style.fontSize = '20px'
-      this._textEl.style.whiteSpace = 'pre-wrap'
+      this._textEl.style.top = '0'
+      this._textEl.style.width = '100%'
+      this._textEl.style.height = '100%'
+      this._textEl.style.pointerEvents = 'none'
       this.root.appendChild(this._textEl)
     }
-    if (this._textEl) this._textEl.textContent = this.core.textBuffer
+    if (this._textEl) {
+      this._textEl.textContent = ''
+      if (draws.length > 0) {
+        for (const d of draws) {
+          const span = document.createElement('span')
+          span.textContent = d.t
+          span.style.position = 'absolute'
+          span.style.left = d.x + 'px'
+          span.style.top = d.y + 'px'
+          span.style.color = 'rgb(' + d.r + ',' + d.g + ',' + d.b + ')'
+          span.style.fontSize = Math.round(20 * (d.s || 1)) + 'px'
+          if (d.bd) span.style.fontWeight = '700'
+          if (d.it) span.style.fontStyle = 'italic'
+          this._textEl.appendChild(span)
+        }
+      } else {
+        // flat fallback: bottom text box
+        const box = document.createElement('div')
+        box.textContent = this.core.textBuffer
+        box.style.position = 'absolute'
+        box.style.left = '0'
+        box.style.right = '0'
+        box.style.bottom = '0'
+        box.style.padding = '16px 24px'
+        box.style.background = 'rgba(0,0,0,0.55)'
+        box.style.color = '#fff'
+        box.style.fontFamily = 'system-ui, sans-serif'
+        box.style.fontSize = '20px'
+        box.style.whiteSpace = 'pre-wrap'
+        this._textEl.appendChild(box)
+      }
+    }
     if (!hasText && this._textEl) { this._textEl.remove(); this._textEl = null }
   }
 
