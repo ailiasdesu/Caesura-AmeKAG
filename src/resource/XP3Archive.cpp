@@ -374,9 +374,13 @@ bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile
 
     // Write compressed index
     fwrite(zlibIndex.data(), 1, zlibIndex.size(), out);
-
-    // Seek back to write actual index offset
-    fseek(out, static_cast<long>(magicLen), SEEK_SET);
+    // Seek back to write actual index offset (P2-3: use 64-bit seek so
+    // large archives never truncate the offset field position).
+#ifdef _WIN32
+    _fseeki64(out, static_cast<long long>(magicLen), SEEK_SET);
+#else
+    fseeko(out, static_cast<off_t>(magicLen), SEEK_SET);
+#endif
     fwrite(&indexOffset, 8, 1, out);
     fclose(out);
 
