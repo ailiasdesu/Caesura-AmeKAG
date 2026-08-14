@@ -1,4 +1,4 @@
-# placeholder# G5 调研：Web 导出路径 B —— 轻量 Web 播放器（不编译 C++ 引擎）
+# G5 调研：Web 导出路径 B —— 轻量 Web 播放器（不编译 C++ 引擎）
 
 > 调研员：G5 子 agent
 > 日期：2026-08-14
@@ -189,3 +189,36 @@
 ### 6.3 不可行/延后清单（明示边界）
 - 3D 小游戏（minigame 模块）、Live2D/SMA 骨骼动画、粒子系统高级特效、视频播放高级控制 —— **不进 MVP**，用静态或 WebGL 替代。
 - 存档加密、Steam 云存档、成就 —— Web 用 IndexedDB 明文替代，不做强加密。
+
+---
+
+## 7. 建议：是否值得做 + MVP 范围
+
+### 7.1 值得做（结论）
+
+- **技术可行性极高**：执行栈 90% 纯 Lua 可复用 + 资产 100% 浏览器原生 + 有 Ren'Py 行业先例背书。
+- **业务价值明确**：零成本解锁「浏览器试玩 / 一键分享 / 静态托管分发」，验证网页体验后再考虑完整 Emscripten 全引擎（更重方案）也不迟。
+- **与当前架构不冲突**：不编译 C++、不改现有模块边界，仅新增「编辑器导出子命令 + 一个独立 web-player 目录」，不触碰模块/接口/BackendRegistry 纪律。
+
+### 7.2 MVP 范围建议
+1. **运行时**：wasmoon（Lua 5.4）承载 tokenizer+scheduler+compiler+schema+kag/commands/{text,layer,audio,transition,resource}。
+2. **核心可视子集**（约 32 命令）：文本/DOM、bg/fg 图层、position/layopt/move、font/ruby/nameplate、playbgm/playse/fade、wait/waitforclick/button、jump/call/if/random/eval、shake/quake/flash。
+3. **预编译**：ks_bake 改出 --web story.json（token 流 + label index + 资源清单）。
+4. **存储**：IndexedDB 存档；WebAudio 3-bus 对 SoLoud。
+5. **资产**：裸 assets/ 目录，跳过 CARC。
+
+### 7.3 建议周期（含打磨）
+- **实验验证（约 3-5 人日）**：先把 demo_story.ks 在 wasmoon 里跑通 tokenizer+scheduler 步进（M1），这是整个方案的「风险先验」，通过后正式立项。
+- **正式 MVP（约 2-4 人周）**：M1-M4，交付「编辑器一键导出 -> 浏览器可玩 demo_story」。
+- 完整版（含 WebGL 特效/移动端/存储加固）再加约 1-2 人周。
+
+### 7.4 相关参考链接
+- wasmoon：https://github.com/ceifa/wasmoon 、 wasmoon-async-fix：https://www.npmjs.com/package/wasmoon-async-fix
+- Fengari：https://github.com/fengari-lua/fengari 、 lua.vm.js：https://github.com/daurnimator/lua.vm.js
+- Ren'Py Web：https://doc.renpy.cn/zh-CN/web.html 、 https://github.com/renpy/renpyweb
+- Lua 移植横向对比（含性能）：https://www.philhassey.com/blog/2013/12/05/lua-on-javascript-comparison-lua-vm-js-lua-js-lua-js-phil-lua5-1-js-native/
+- wasm 部署坑参考（Vercel community）：https://community.vercel.com/t/instantiate-wasm-failed-only-in-vercel-production/497
+
+---
+
+*本报告为 G5 调研节点产出，仅新增本文件，未改动任何引擎源码。*
