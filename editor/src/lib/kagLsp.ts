@@ -46,7 +46,7 @@ export interface KagLspOptions {
 
 const LSP_LINE_LIMIT = 2000 // don't push huge files through eval
 
-function lspCall(client: EngineClient, method: string, ...args: unknown[]): Promise<string> {
+export function lspCall(client: EngineClient, method: string, ...args: unknown[]): Promise<string> {
   const argStr = args
     .map((a) => (typeof a === 'string' ? luaString(a) : luaValue(a)))
     .join(', ')
