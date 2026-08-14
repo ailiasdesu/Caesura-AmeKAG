@@ -35,6 +35,11 @@ check("root removal refused", layers_src:find("refusing to remove the root", 1, 
 
 -- 4) lazy RTT allocation
 check("lazy acquire in render", layers_src:find("Lazy RTT", 1, true) ~= nil)
+-- 8) pick hit-test (round 23 /api/pick)
+check("Layers.pick exists", layers_src:find("function Layers.pick", 1, true) ~= nil)
+check("pick filters invisible", layers_src:find("node.visible == false then return", 1, true) ~= nil)
+check("pick checks bounds", layers_src:find("px <= x + w and py <= y + h", 1, true) ~= nil)
+check("pick sorts by z", layers_src:find("table.sort(hits", 1, true) ~= nil)
 check("invisible layers cost nothing", layers_src:find("node.dirty and node.view_id and not node.rt", 1, true) ~= nil)
 
 if failed and failed > 0 then os.exit(1) end

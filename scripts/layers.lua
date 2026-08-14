@@ -226,6 +226,37 @@ function Layers.forEach(fn)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
+--  Layers.pick(px, py) → hits[]
+--    IDE preview-frame hit test (round 23 /api/pick). DFS over the node
+--    tree; returns every visible node whose bounds contain (px, py),
+--    ordered bottom-to-top by z. Approximation: scale/rotation/clip are
+--    ignored (preview-picking tolerance); x/y/w/h are engine-space pixels.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function Layers.pick(px, py)
+    local hits = {}
+    local function walk(node, depth)
+        if not node then return end
+        if node.visible == false then return end
+        if node.opacity ~= nil and node.opacity <= 0 then return end
+        local x, y = node.x or 0, node.y or 0
+        local w, h = node.w or 0, node.h or 0
+        if w > 0 and h > 0 and px >= x and px <= x + w and py >= y and py <= y + h then
+            hits[#hits + 1] = {
+                id = node.id, name = node.name, z = node.z or 0, depth = depth,
+                opacity = node.opacity or 255, x = x, y = y, w = w, h = h,
+            }
+        end
+        for _, child in ipairs(node.children or {}) do
+            walk(child, depth + 1)
+        end
+    end
+    walk(Layers.get_root(), 0)
+    table.sort(hits, function(a, b) return (a.z or 0) < (b.z or 0) end)
+    return hits
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Layers.add_layer(parent, config) → LayerNode
 --    Creates a new layer node under parent (defaults to root), allocates
 --    an RTT, assigns a bgfx View ID, inserts in z-order, marks dirty.
