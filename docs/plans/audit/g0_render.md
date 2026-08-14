@@ -37,7 +37,7 @@ render 模块是 bgfx 渲染核心：BgfxRenderDevice（组合根）+ BgfxDevice
 - 建议：将 `DEBUG_WARN/INFO/DBG/ERR` 宏的声明（或一个 `debug/api/IDebugManager.h` 可满足的薄封装头）作为 debug 对外 api 提供，render 改 include api 头。属清理项，不阻塞。
 - 工作量：S
 
-**P1-2 TextureManager shutdown() 未清 `m_solidCache`/`m_pathToId`，重初始化后旧 id 悬空**
+~~**P1-2 TextureManager shutdown() 未清 `m_solidCache`/`m_pathToId`，重初始化后旧 id 悬空**~~ ✅ round 32 已修复：shutdown() 补 `m_solidCache.clear(); m_pathToId.clear();`，并新增 reinit 回归测试。
 - 位置：`TextureManager.cpp:91-121`（shutdown 未清这两个缓存）
 - 问题：`shutdown()` 只清 `m_cache/m_textureSizes/m_textureDimensions/m_restoreSources/m_textureLRU/quota`，不清 `m_solidCache` 与 `m_pathToId`；而 `initialize()` 把 `m_nextId` 重置为 1。若同实例 shutdown 后再 initialize，旧的 solid/path 缓存 id 指向新会话新分配的纹理 id，导致错误复用/误命中。
 - 建议：shutdown() 里补 `m_solidCache.clear(); m_pathToId.clear();`（或 initialize 里清）。
@@ -81,11 +81,11 @@ render 模块是 bgfx 渲染核心：BgfxRenderDevice（组合根）+ BgfxDevice
 
 ## P2 建议
 
-1. **巨型注释噪声**：`BgfxRenderDevice.cpp:155-206` 等多处整段 `// T T T T ...` 占位注释、大量空行/空段落（130-160, 344-404），应清理。
-2. **重复死静态变量**：`BgfxRenderDevice.cpp:76` `s_preferredBackend` 与 `BgfxDeviceCore.cpp:11` 重复定义（render 侧未用，恒为 Direct3D11，且与 core 侧非同步）——删 render 侧。
-3. **注释编码损坏**：`BgfxRenderDevice.cpp:413,420-421`、`TextRenderer.cpp:28,33,48,417,966` 等注释出现 `??`（本应为 em-dash，因旧编辑器字符集污染），建议统一替换为 `—`（参考 test_source_encoding 修复路径）。
-4. **ShaderCache.cpp:24** ```printf("...\\n")``` 字符串里 `\\n` 双反斜杠使日志无换行。
-5. **GpuMonitor.h:3-4** 重复 `#include <deque>`；ParticleSystem.h `SIM_BATCH_SIZE` 常量未用；TextureManager.h:44,54 把 `m_solidCache`/`m_pathToId` 暴露为 public（实现细节外露）。
+1. ~~**巨型注释噪声**~~ ✅ round 21 已清理（见修复轮 A）。
+2. ~~**重复死静态变量**~~ ✅ 已修复（render 侧 s_preferredBackend 已删，仅 BgfxDeviceCore.cpp 保留）。
+3. ~~**注释编码损坏**~~ ✅ 已修复（?? → — 全局替换）。
+4. ~~**ShaderCache.cpp:24 双反斜杠**~~ ✅ 已修复。
+5. ~~**GpuMonitor 重复 include / SIM_BATCH_SIZE 未用 / TextureManager public 外露**~~ ✅ round 32 已修复：GpuMonitor.h 去重 deque；ParticleSystem.h 删 SIM_BATCH_SIZE；m_solidCache/m_pathToId 移入 private（无外部访问）。
 6. **ParticleSystem.cpp:99-101** `emit()` 内循环里每粒子现构 `std::uniform_real_distribution`，可提升为成员或函数级复用（微优化）。
 7. **RTTManager 双池索引映射**：`m_handleToPoolIndex` 存 `pool.size()-1`，但 release 用同一索引同时查 `m_pool2D/m_pool3D`，两池共享一个索引空间可能误匹配——当前靠 handle.id 二次校验兜底，仍建议为每个 handle 记录所在池。
 8. **CompositeShaderCache 全局单例**（`ShaderCache.cpp:11-14`）不归 BackendRegistry 管，且带 `bgfx::ProgramHandle`；目前主要被 BgfxShaderManager 初始化，跨模块直用需警惕绕过注册表（当前未见跨模块使用，留记录）。且其 `getProgram` 实际永远 fallback（`compileVariant` 只回 Normal），实质是 LUT 而非编译器，注释与实现职责可澄清。
