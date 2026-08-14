@@ -1,0 +1,120 @@
+{
+ "_comment": "DELIBERATELY BROKEN example — used by sma_check demo/test/editor panel. Each _intent field explains the injected defect.",
+ "texture": 123,
+ "bones": [
+  {
+   "id": 0,
+   "parent": -1,
+   "pivot": [
+    0.5,
+    0.9
+   ]
+  },
+  {
+   "id": 1,
+   "parent": 9,
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "_intent": "dangling parent: bone 9 does not exist"
+  }
+ ],
+ "mesh": {
+  "positions": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    0,
+    1
+   ]
+  ],
+  "uvs": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "indices": [
+   0,
+   1,
+   99,
+   0,
+   2,
+   3
+  ],
+  "_intent": "uvs length mismatch + index 99 out of range",
+  "weights": [
+   {
+    "bone": 0,
+    "w": 0.7
+   },
+   {
+    "bone": 1,
+    "w": 0.5
+   },
+   {
+    "bone": 0,
+    "w": 1
+   },
+   {
+    "bone": 1,
+    "w": 0
+   },
+   {
+    "bone": 0,
+    "w": 1
+   },
+   {
+    "bone": 1,
+    "w": 0
+   },
+   {
+    "bone": 0,
+    "w": 1
+   },
+   {
+    "bone": 1,
+    "w": 0
+   }
+  ]
+ },
+ "animations": {
+  "idle": {
+   "duration": 0,
+   "tracks": [
+    {
+     "bone": 0,
+     "frames": [
+      {
+       "t": 1,
+       "rot": 0.1
+      },
+      {
+       "t": 0.5,
+       "rot": 0.2
+      },
+      {
+       "t": 0.3
+      }
+     ]
+    }
+   ],
+   "_intent": "duration 0 + descending frame timestamps"
+  }
+ }
+}
