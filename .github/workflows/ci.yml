@@ -70,6 +70,15 @@ jobs:
             Write-Host "lua.exe not found - skipping static contract check"
           }
 
+      - name: Test coverage check (no orphan tests)
+        shell: pwsh
+        run: |
+          # Regression guard (round 14): every test_*.lua / test_*.cpp must be
+          # registered in its runner / CMakeLists — an unregistered test is a
+          # silent green. Fails the job listing any orphan.
+          python tests/scripts/check_test_coverage.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Test
         shell: pwsh
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --repeat until-pass:2
