@@ -901,4 +901,8 @@ encode_lua_literal = function(t)
     return "{" .. table.concat(parts, ",") .. "}"
 end
 
+-- Web player bundle encoding (round 35): reuse the cache literal writer
+-- so ks_bake --web can emit story bundles without a JSON dependency.
+compiler.encode_lua_literal = encode_lua_literal
+
 return compiler

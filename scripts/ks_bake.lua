@@ -52,6 +52,50 @@ local function bakeScene(path, outRoot)
     return true, outPath
 end
 
+--- Web export (round 35): bake every scene into a story.json bundle for
+--  the web player: { version, scenes: { path = serialized }, assets: [...] }.
+--  Assets are discovered from [bg]/[fg]/[playbgm]/[playse]/[playvoice]
+--  storage/file params (best-effort; the player falls back to the .ksc
+--  stream when an asset is missing).
+local function bakeWeb(scenes, outDir)
+    local bundle = { version = 1, scenes = {}, assets = {} }
+    local seen = {}
+    local assetCount = 0
+    local function addAsset(p)
+        if type(p) ~= "string" or #p == 0 or seen[p] then return end
+        seen[p] = true
+        assetCount = assetCount + 1
+        bundle.assets[assetCount] = p
+    end
+    for _, path in ipairs(scenes) do
+        local f = io.open(path, "r")
+        if not f then return nil, "cannot open: " .. path end
+        local src = f:read("*a")
+        f:close()
+        local ok, tokens = pcall(tokenizer.parse, src)
+        if not ok or not tokens then return nil, "tokenize failed: " .. path end
+        compiler.compile(tokens)
+        local serialized = compiler.serialize(tokens)
+        if not serialized then return nil, "serialize failed: " .. path end
+        -- scene key: player uses the basename (demo/galgame_demo.ks)
+        local key = path:match("([^/\\]+)$") or path
+        bundle.scenes[key] = serialized
+        -- asset discovery: scan token params for storage/file values
+        for _, tok in ipairs(tokens) do
+            local p2 = tok[2]
+            if type(p2) == "table" then
+                for _, k in ipairs({ "storage", "file" }) do
+                    local v = p2[k]
+                    if type(v) == "string" and v:find("%.%a%a%a?$") then
+                        addAsset(v)
+                    end
+                end
+            end
+        end
+    end
+    return bundle, assetCount
+end
+
 --- check whether an existing .ksc matches the source (fresh).
 local function isFresh(path, outRoot)
     local outPath = kscPathFor(path, outRoot)
@@ -68,7 +112,7 @@ local is_script = arg and arg[0]
     and arg[0]:match("([^/\\]+)$") == "ks_bake.lua"
 
 if is_script then
-    local inputs, dirs, outRoot, checkOnly = {}, {}, OUT_ROOT, false
+    local inputs, dirs, outRoot, checkOnly, webOut = {}, {}, OUT_ROOT, false, nil
     local i = 1
     while i <= #arg do
         local a = arg[i]
@@ -78,13 +122,18 @@ if is_script then
         elseif a == "--out" then
             i = i + 1
             outRoot = arg[i]
+        elseif a == "--web" then
+            i = i + 1
+            webOut = arg[i]
         elseif a == "--check" then
             checkOnly = true
         elseif a == "-h" or a == "--help" then
             print("Usage: lua scripts/ks_bake.lua <scene.ks> [more.ks ...]")
             print("       lua scripts/ks_bake.lua --dir <dir> [--dir <dir2>] [--out cache/ksc] [--check]")
+            print("       lua scripts/ks_bake.lua --dir demo --web cache/story  (web player bundle)")
             print("  bakes scenes into pre-compiled .ksc (mobile zero-parse launch)")
             print("  --out: cache root (default cache/ksc, same as flow.load_scene)")
+            print("  --web <dir>: emit cache/story.lua bundle (scenes + assets) for the web player")
             print("  --check: verify existing .ksc freshness without rewriting")
             os.exit(0)
         else
@@ -105,6 +154,14 @@ if is_script then
         if pf then
             for raw_line in pf:lines() do
                 local line = raw_line:gsub("\\", "/")
+                -- dir /b on absolute inputs yields full paths; strip the CWD
+                -- prefix so io.open works even when the repo path is non-ASCII
+                -- (Lua 5.4 io.open is byte-oriented on Windows).
+                local cwd = io.popen("cd"):read("*a") or ""
+                cwd = cwd:gsub("^%s*(.-)%s*$", "%1"):gsub("\\", "/")
+                if cwd ~= "" and line:sub(1, #cwd) == cwd then
+                    line = line:sub(#cwd + 2)
+                end
                 add(line)
             end
             pf:close()
@@ -114,6 +171,30 @@ if is_script then
     if #collected == 0 then
         print("error: no .ks scenes given")
         os.exit(1)
+    end
+
+    -- Web bundle mode (round 35): one Lua-literal file the web player loads
+    -- with zero parse/compile (scenes serialized via compiler.serialize).
+    if webOut then
+        local bundle, assetCount = bakeWeb(collected)
+        if not bundle then
+            print("[error] " .. tostring(assetCount))
+            os.exit(1)
+        end
+        local encoded = compiler.encode_lua_literal(bundle)
+        local outPath = webOut .. "/story.lua"
+        local dirCmd = "mkdir \"" .. webOut .. "\" 2>nul"
+        pcall(os.execute, dirCmd)
+        local w = io.open(outPath, "w")
+        if not w then
+            print("[error] cannot write " .. outPath)
+            os.exit(1)
+        end
+        w:write("return " .. encoded .. "\n")
+        w:close()
+        print(string.format("[web] %s: %d scenes, %d assets", outPath,
+            #collected, assetCount or 0))
+        os.exit(0)
     end
 
     local errors = 0
