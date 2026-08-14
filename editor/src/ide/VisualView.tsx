@@ -4,6 +4,7 @@ import type {
   FrameReply,
   Live2DModel,
   PickHit,
+  SmaSaveReply,
   SmaValidateReply,
   StateReply,
 } from '../lib/rpc'
@@ -114,6 +115,12 @@ export function VisualView({ client }: Props) {
   const [smaResult, setSmaResult] = useState<SmaValidateReply | null>(null)
   const [smaError, setSmaError] = useState('')
   const [smaBusy, setSmaBusy] = useState(false)
+  // -- SMA editor (round 26) --
+  const [draft, setDraft] = useState('')
+  const [draftError, setDraftError] = useState('')
+  const [editMsg, setEditMsg] = useState('')
+  const [saveResult, setSaveResult] = useState<SmaSaveReply | null>(null)
+  const [editBusy, setEditBusy] = useState(false)
   const [pickHits, setPickHits] = useState<PickHit[]>([])
   const [pickMsg, setPickMsg] = useState('')
   const insertIntoActive = useEditor((s) => s.insertIntoActive)
@@ -151,6 +158,95 @@ export function VisualView({ client }: Props) {
       setSmaError(err instanceof Error ? err.message : String(err))
     } finally {
       setSmaBusy(false)
+    }
+  }
+
+  // -- SMA editor (round 26) -----------------------------------------
+  // Minimal hero sample used when the engine read channel is unavailable.
+  const HERO_SAMPLE = JSON.stringify(
+    {
+      name: 'hero',
+      bones: [
+        { id: 0, parent: -1, name: 'root' },
+        { id: 1, parent: 0, name: 'torso' },
+        { id: 2, parent: 1, name: 'head' },
+      ],
+      anims: ['idle', 'walk'],
+      parts: 2,
+      verts: 120,
+      tris: 180,
+      boneTree: [
+        { id: 0, parent: -1 },
+        { id: 1, parent: 0 },
+        { id: 2, parent: 1 },
+      ],
+      animDetails: [
+        { name: 'idle', duration: 2.0, tracks: [0, 1] },
+        { name: 'walk', duration: 1.2, tracks: [0, 1, 2] },
+      ],
+    },
+    null,
+    2,
+  )
+
+  const loadForEditing = async () => {
+    setEditBusy(true)
+    setEditMsg('')
+    setSaveResult(null)
+    setDraftError('')
+    const path = smaPath.trim() || 'demo/assets/sma/hero.json'
+    try {
+      // Prefer reading the asset through the engine's Lua channel (/api/eval
+      // returns a value; /api/run alone has no return). Falls back below.
+      const script =
+        `local f=io.open('${path}','r') if not f then return 'ERR:open' end local t=f:read('*a') f:close() return t`
+      const raw = await client.evalRaw(script)
+      // The engine JSON-escapes the Lua return; unescape once.
+      let content = raw
+      try {
+        content = JSON.parse(raw) as string
+      } catch {
+        /* already plain text */
+      }
+      const trimmed = content.trim()
+      if (trimmed === '' || trimmed.startsWith('ERR:open')) {
+        throw new Error(trimmed === '' ? 'file empty' : trimmed)
+      }
+      // Ensure it is a valid JSON document before populating the editor.
+      JSON.parse(content)
+      setDraft(content)
+      setEditMsg(`Loaded ${path} from the engine`)
+    } catch (e) {
+      // Engine read unavailable -> edit a prefilled sample instead.
+      setDraft(HERO_SAMPLE)
+      setEditMsg(
+        `Engine read unavailable (${e instanceof Error ? e.message : String(e)}); editing a sample draft.`,
+      )
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  const saveDraft = async () => {
+    setSaveResult(null)
+    setDraftError('')
+    setEditMsg('')
+    const path = smaPath.trim() || 'demo/assets/sma/hero.json'
+    // Local JSON syntax check before hitting the engine.
+    try {
+      JSON.parse(draft)
+    } catch (e) {
+      setDraftError(e instanceof Error ? `Invalid JSON: ${e.message}` : 'Invalid JSON')
+      return
+    }
+    setEditBusy(true)
+    try {
+      const r = await client.smaSave(path, draft)
+      setSaveResult(r)
+    } catch (e) {
+      setEditMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setEditBusy(false)
     }
   }
 
@@ -326,6 +422,51 @@ export function VisualView({ client }: Props) {
         </div>
       ) : (
         <div className="frame-empty">Enter a path and validate</div>
+      )}
+
+      <div className="panel-subtitle">
+        SMA EDITOR
+        <span className="spacer" />
+        <button onClick={() => void loadForEditing()} disabled={editBusy || smaBusy}>
+          {editBusy ? 'Loading…' : 'Load for editing'}
+        </button>
+      </div>
+      <textarea
+        className="sma-editor"
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          setDraftError('')
+        }}
+        placeholder={'{\n  // Edit hero.json here (JSON)\n}'}
+        spellCheck={false}
+      />
+      {draftError && <div className="panel-msg sma-bad-msg">{draftError}</div>}
+      {editMsg && <div className="panel-msg">{editMsg}</div>}
+      <div className="bp-row">
+        <button
+          className="sma-save"
+          onClick={() => void saveDraft()}
+          disabled={editBusy || smaBusy || draft.trim() === ''}
+        >
+          {editBusy ? 'Saving…' : 'Save'}
+        </button>
+        <span className="editor-hint">validates JSON locally, then writes via /api/sma/save</span>
+      </div>
+      {saveResult && (
+        <div className={saveResult.ok ? 'sma-result sma-ok' : 'sma-result sma-bad'}>
+          <div className="state-row">
+            <span>save</span>
+            <b>{saveResult.ok ? '✓ saved' : '✗ failed'}</b>
+          </div>
+          {!saveResult.ok && saveResult.errors.length > 0 && (
+            <ul className="sma-errors">
+              {saveResult.errors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <div className="panel-subtitle">LIVE2D</div>

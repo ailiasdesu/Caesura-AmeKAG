@@ -97,6 +97,13 @@ export interface SmaMeta {
   verts: number
   tris: number
 }
+export interface SmaSaveReply {
+  status: string
+  ok: boolean
+  errors: string[]
+  error?: string
+}
+
 
 export interface BuildReply {
   status: string
@@ -187,6 +194,14 @@ export class EngineClient {
     return this.request<SmaValidateReply>(
       `/sma/validate?path=${encodeURIComponent(path)}`,
     )
+  }
+
+  /** Save an SMA asset through the engine shared checker (round 26). */
+  smaSave(path: string, content: string): Promise<SmaSaveReply> {
+    return this.request<SmaSaveReply>('/sma/save', {
+      method: 'POST',
+      body: JSON.stringify({ path, content }),
+    })
   }
 
   status(): Promise<StatusReply> {
