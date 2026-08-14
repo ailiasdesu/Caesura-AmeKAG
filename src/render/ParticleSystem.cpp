@@ -91,17 +91,19 @@ void ParticleSystem::emit(int emitterId, int count) {
     if (!m_initialized) return;
     if (emitterId < 0 || emitterId >= (int)m_emitters.size()) return;
     auto& em = m_emitters[emitterId];
-    if (!em.active) return;
+    // Reuse one distribution object across the whole burst (P2-6: the
+    // per-particle construction was pure overhead - the distribution is
+    // stateless w.r.t. its parameters and re-entrant on the engine thread).
+    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
     for (int n = 0; n < count; n++) {
         if (m_freeSlots.empty()) break;  // pool full
         const int slot = m_freeSlots.back();
         m_freeSlots.pop_back();
 
-        float angle = em.angleMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.angleMax - em.angleMin);
-        float speed = em.speedMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.speedMax - em.speedMin);
-        float life  = em.lifeMin + (float)std::uniform_real_distribution<float>(0.0f, 1.0f)(rng()) * (em.lifeMax - em.lifeMin);
-
+        float angle = em.angleMin + (float)unit(rng()) * (em.angleMax - em.angleMin);
+        float speed = em.speedMin + (float)unit(rng()) * (em.speedMax - em.speedMin);
+        float life  = em.lifeMin + (float)unit(rng()) * (em.lifeMax - em.lifeMin);
         auto& p = m_particles[slot];
         p.x = em.x; p.y = em.y;
         p.vx = cosf(angle) * speed;

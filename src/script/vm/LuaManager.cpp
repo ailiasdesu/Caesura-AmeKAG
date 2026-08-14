@@ -23,6 +23,7 @@
 #include "../state/GameState.h"
 #include "../../di/BackendRegistry.h"
 #include "../../di/api/ThreadAssert.h"
+#include "../../debug/api/DebugLog.h"
 #include <cstdio>
 #include <limits>
 
@@ -64,7 +65,8 @@ bool LuaManager::init() {
 
     m_L = luaL_newstate();
     if (!m_L) {
-        fprintf(stderr, "[Lua] Failed to create Lua state.\n");
+        DEBUG_ERR(SubSys::Scripting, ErrCode::Script_LuaVMCreateFailed,
+                  "[Lua] Failed to create Lua state.");
         return false;
     }
 
@@ -91,8 +93,9 @@ void LuaManager::lockdownScriptEnv() {
     // Load sandbox rules from Lua module (human-readable, AI-inspectable)
     // All dangerous globals, module restrictions, and I/O stubs defined there.
     if (luaL_dofile(m_L, "scripts/sandbox.lua") != LUA_OK) {
-        fprintf(stderr, "[Lua] Failed to load sandbox.lua: %s\n",
-                lua_tostring(m_L, -1));
+        DEBUG_ERR(SubSys::Scripting, ErrCode::Script_LoadFailed,
+                  "[Lua] Failed to load sandbox.lua: %s",
+                  lua_tostring(m_L, -1));
         lua_pop(m_L, 1);
     } else {
         // sandbox.lua returns the Sandbox module table; pop it to keep the stack clean
@@ -142,14 +145,13 @@ void LuaManager::registerModules() {
     printf("[Lua] DevCore module registered (via BackendRegistry).\n");
     printf("[Lua] Debug module registered (8 APIs).\n");
 }
-
-
 bool LuaManager::loadScript(const char* path) {
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_L || !path) return false;
     printf("[Lua] Loading script: %s\n", path);
     if (luaL_dofile(m_L, path) != LUA_OK) {
-        fprintf(stderr, "[Lua] Error loading %s: %s\n", path, lua_tostring(m_L, -1));
+        DEBUG_ERR(SubSys::Scripting, ErrCode::Script_LoadFailed,
+                  "[Lua] Error loading %s: %s", path, lua_tostring(m_L, -1));
         lua_pop(m_L, 1);
         return false;
     }

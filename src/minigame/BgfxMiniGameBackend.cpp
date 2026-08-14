@@ -1,5 +1,6 @@
 #include "BgfxMiniGameBackend.h"
 #include "../di/BackendRegistry.h"
+#include "../debug/api/DebugLog.h"
 #include "EmbeddedMiniGameShaders.h"
 #include <nlohmann_json.hpp>
 #include <fstream>
@@ -20,14 +21,14 @@ namespace Caesura {
 static bgfx::ShaderHandle buildMiniGameShader(const uint8_t* bytecode, uint32_t codeSize,
                                               bool fragment, uint8_t numAttrs, const uint16_t* attrIds) {
     if (codeSize > 65536) {
-        fprintf(stderr, "[MiniGame] Shader rejected: %u bytes exceeds 64 KB limit.\n", codeSize);
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] Shader rejected: %u bytes exceeds 64 KB limit.", codeSize);
         return BGFX_INVALID_HANDLE;
     }
     const uint16_t uniformCount = 0;
     const uint32_t totalSize = 4 + 4 + 4 + 2 + 4 + codeSize + 1 + 1 + 2 * numAttrs + 2;
     const bgfx::Memory* mem = bgfx::alloc(totalSize);
     if (!mem) {
-        fprintf(stderr, "[MiniGame] bgfx::alloc failed for %u bytes\n", totalSize);
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] bgfx::alloc failed for %u bytes", totalSize);
         return BGFX_INVALID_HANDLE;
     }
     bx::StaticMemoryBlockWriter writer(mem->data, mem->size);
@@ -82,8 +83,8 @@ bool BgfxMiniGameBackend::ensureGpuResources() {
     // authoritative for GPU availability (engine inits it before wiring the
     // mini-game backend; tests may pass an uninitialized/null device).
     if (!m_renderDevice || !m_renderDevice->isInitialized()) {
-        fprintf(stderr, "[MiniGame] ensureGpuResources: render device not "
-                        "initialized; refusing GPU resource creation\n");
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] ensureGpuResources: render device not "
+                        "initialized; refusing GPU resource creation");
         return false;
     }
 
@@ -119,7 +120,7 @@ bool BgfxMiniGameBackend::ensureGpuResources() {
     }
 
     if (!shaderOk) {
-        fprintf(stderr, "[MiniGame] Shader build failed for renderer %s\n",
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] Shader build failed for renderer %s",
                bgfx::getRendererName(rt));
         if (bgfx::isValid(vs)) bgfx::destroy(vs);
         if (bgfx::isValid(fs)) bgfx::destroy(fs);
@@ -323,7 +324,7 @@ bool BgfxMiniGameBackend::sceneFromJson(const std::string& jsonText, MiniScene& 
         }
         return true;
     } catch (const std::exception& error) {
-        fprintf(stderr, "[MiniGame] sceneFromJson failed: %s\n", error.what());
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] sceneFromJson failed: %s", error.what());
         return false;
     }
 }
@@ -331,14 +332,14 @@ bool BgfxMiniGameBackend::sceneFromJson(const std::string& jsonText, MiniScene& 
 uint32_t BgfxMiniGameBackend::loadScene(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) {
-        fprintf(stderr, "[MiniGame] loadScene: cannot open %s\n", path.c_str());
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] loadScene: cannot open %s", path.c_str());
         return 0;
     }
     std::string jsonText((std::istreambuf_iterator<char>(file)),
                          std::istreambuf_iterator<char>());
     MiniScene scene;
     if (!sceneFromJson(jsonText, scene)) {
-        fprintf(stderr, "[MiniGame] loadScene: invalid scene file %s\n", path.c_str());
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] loadScene: invalid scene file %s", path.c_str());
         return 0;
     }
     scene.id = m_nextSceneId++;
@@ -388,7 +389,7 @@ void BgfxMiniGameBackend::enter(uint32_t h){
     }
     auto it = m_scenes.find(h);
     if (it == m_scenes.end()) {
-        fprintf(stderr, "[MiniGame] enter: unknown scene %u\n", h);
+        DEBUG_ERR(SubSys::MiniGame, ErrCode::Ok, "[MiniGame] enter: unknown scene %u", h);
         return;
     }
     if(!ensureGpuResources())return;

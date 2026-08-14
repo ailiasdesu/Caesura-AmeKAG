@@ -10,6 +10,7 @@ extern "C" {
 #include "../../render/api/IVideoPlayer.h"
 #include "../../resource/api/IAsyncLoader.h"
 #include "../../resource/api/IResourceGenerationTracker.h"
+#include "../../debug/api/DebugLog.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -296,7 +297,7 @@ static int lua_Render_submit_blend(lua_State* L) {
     RenderTextureHandle blendTex = resolveTexture(L,blendTexId, dev);
 
     if (!baseTex.isValid() || !blendTex.isValid()) {
-        fprintf(stderr, "[Render] submit_blend: invalid texture(s)\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] submit_blend: invalid texture(s)");
         lua_pushboolean(L, 0); return 1;
     }
 
@@ -321,7 +322,7 @@ static int lua_Render_submit_transition(lua_State* L) {
     RenderTextureHandle toTex   = resolveTexture(L,toTexId, dev);
 
     if (!fromTex.isValid() || !toTex.isValid()) {
-        fprintf(stderr, "[Render] submit_transition: invalid texture(s)\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] submit_transition: invalid texture(s)");
         lua_pushboolean(L, 0); return 1;
     }
 
@@ -373,7 +374,7 @@ static int lua_Render_submit_vfx(lua_State* L) {
     if (!dev) { lua_pushboolean(L, 0); return 1; }
     RenderTextureHandle srcTex = resolveTexture(L,srcTexId, dev);
     if (!srcTex.isValid()) {
-        fprintf(stderr, "[Render] submit_vfx: invalid texture\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] submit_vfx: invalid texture");
         lua_pushboolean(L, 0); return 1;
     }
 
@@ -757,7 +758,7 @@ static int lua_Render_text_set_font(lua_State* L) {
         return 1;
     }
 
-    fprintf(stderr, "[Render] text_set_font: failed to load TTF: %s\n", face);
+    DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] text_set_font: failed to load TTF: %s", face);
     dev->setFont(0);  // fall back to built-in font
     lua_pushboolean(L, 0);
     return 1;

@@ -5,6 +5,7 @@
 #include "EditorServer.h"
 #include "ConstantTime.h"
 #include "../../external/cpp-httplib/httplib.h"
+#include "../debug/api/DebugLog.h"
 
 #include <nlohmann_json.hpp>
 
@@ -1106,7 +1107,8 @@ void EditorServer::serverLoop(int port) {
     // ---------------------------------------------------------------------
     printf("[EditorServer] Listening on port %d...\n", port);
     if (!svr.listen_after_bind()) {
-        fprintf(stderr, "[EditorServer] Failed to listen on port %d\n", port);
+        DEBUG_ERR(SubSys::Platform, ErrCode::Ok,
+                  "[EditorServer] Failed to listen on port %d", port);
     }
     m_running = false;
 }

@@ -12,6 +12,7 @@ extern "C" {
 #include <nlohmann_json.hpp>
 #include "../../job/api/IJobSystem.h"
 #include "../../di/BackendRegistry.h"
+#include "../../debug/api/DebugLog.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -333,8 +334,9 @@ static int lua_AI_query_async(lua_State* L) {
                     }
                     if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
                         const char* err = lua_tostring(L, -1);
-                        fprintf(stderr, "[AI] callback error: %s\n",
-                                err ? err : "(unknown)");
+                        DEBUG_ERR(SubSys::Scripting, ErrCode::Script_ExecutionError,
+                                  "[AI] callback error: %s",
+                                  err ? err : "(unknown)");
                         lua_pop(L, 1);
                     }
                 } else {

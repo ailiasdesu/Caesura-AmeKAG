@@ -1,6 +1,7 @@
 #include "SoLoudAudioEngine.h"
 #include "di/api/ThreadAssert.h"
 #include "di/BackendRegistry.h"
+#include "../debug/api/DebugLog.h"
 #include <soloud_wav.h>
 #include <soloud_wavstream.h>
 #include <cstdio>
@@ -35,14 +36,14 @@ std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::stri
     if (isStreamFormat(file)) {
         auto stream = std::make_shared<SoLoud::WavStream>();
         if (stream->load(file.c_str()) != SoLoud::SO_NO_ERROR) {
-            fprintf(stderr, "[Audio] Failed to load stream: %s\n", file.c_str());
+            DEBUG_ERR(SubSys::Audio, ErrCode::Audio_FileLoadFailed, "[Audio] Failed to load stream: %s", file.c_str());
             return nullptr;
         }
         src = stream;
     } else {
         auto wav = std::make_shared<SoLoud::Wav>();
         if (wav->load(file.c_str()) != SoLoud::SO_NO_ERROR) {
-            fprintf(stderr, "[Audio] Failed to load: %s\n", file.c_str());
+            DEBUG_ERR(SubSys::Audio, ErrCode::Audio_FileLoadFailed, "[Audio] Failed to load: %s", file.c_str());
             return nullptr;
         }
         src = wav;
@@ -69,7 +70,7 @@ std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::stri
                 continue;
             }
             m_waveCache.erase(it);
-            fprintf(stderr, "[Audio] Wave cache LRU evicted: %s\n", lruFile.c_str());
+            DEBUG_ERR(SubSys::Audio, ErrCode::Ok, "[Audio] Wave cache LRU evicted: %s", lruFile.c_str());
             break;
         }
     }
@@ -97,7 +98,7 @@ bool SoLoudAudioEngine::init(){
         2
     );
     if (res != SoLoud::SO_NO_ERROR) {
-        fprintf(stderr, "[Audio] SoLoud init failed: %d\n", res);
+        DEBUG_ERR(SubSys::Audio, ErrCode::Audio_SoLoudInitFailed, "[Audio] SoLoud init failed: %d", res);
         return false;
     }
 
@@ -107,7 +108,7 @@ bool SoLoudAudioEngine::init(){
     m_bgmBus.setVolume(1.0f);
     m_bgmBusHandle = m_soloud.play(m_bgmBus);
     if (!m_soloud.isValidVoiceHandle(m_bgmBusHandle)) {
-        fprintf(stderr, "[Audio] BGM bus play() returned invalid handle 0\n");
+        DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] BGM bus play() returned invalid handle 0");
         m_soloud.deinit();
         return false;
     }
@@ -115,7 +116,7 @@ bool SoLoudAudioEngine::init(){
     m_voiceBus.setVolume(1.0f);
     m_voiceBusHandle = m_soloud.play(m_voiceBus);
     if (!m_soloud.isValidVoiceHandle(m_voiceBusHandle)) {
-        fprintf(stderr, "[Audio] VOICE bus play() returned invalid handle 0\n");
+        DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] VOICE bus play() returned invalid handle 0");
         m_soloud.deinit();
         return false;
     }
@@ -123,7 +124,7 @@ bool SoLoudAudioEngine::init(){
     m_seBus.setVolume(1.0f);
     m_seBusHandle = m_soloud.play(m_seBus);
     if (!m_soloud.isValidVoiceHandle(m_seBusHandle)) {
-        fprintf(stderr, "[Audio] SE bus play() returned invalid handle 0\n");
+        DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] SE bus play() returned invalid handle 0");
         m_soloud.deinit();
         return false;
     }
