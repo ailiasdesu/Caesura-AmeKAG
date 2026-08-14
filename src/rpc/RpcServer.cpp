@@ -485,6 +485,8 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
     if (method == "smaValidate") return handleSmaValidate(id, extractField(jsonLine, "path"));
     if (method == "pick") return handlePick(id,
         safeStoi(extractField(jsonLine, "x")), safeStoi(extractField(jsonLine, "y")));
+    if (method == "smaSave") return handleSmaSave(id,
+        extractField(jsonLine, "path"), extractField(jsonLine, "content"));
     if (method == "reload")   return handleReload(id);
     if (method == "setBreakpoint") return handleDebugAction(id,
         RpcRequest{RpcSetBreakpointRequest{
@@ -675,6 +677,26 @@ std::string RpcServer::handleGetState(int id) {
         << jsonEscape(state->language) << "\",\"backlog_count\":"
         << state->backlogCount << ",\"layer_count\":"
         << state->layerCount << "}}";
+    return out.str();
+}
+
+std::string RpcServer::handleSmaSave(int id, const std::string& path,
+                                        const std::string& content) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcSmaSaveRequest{path, content}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+    const auto* res = std::get_if<RpcSmaSaveResult>(&reply.payload);
+    if (!res) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "SMA save reply missing result", {}});
+    }
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"ok\":" << (res->ok ? "true" : "false")
+        << ",\"errors\":[";
+    for (size_t i = 0; i < res->errors.size(); ++i) {
+        if (i) out << ",";
+        out << "\"" << jsonEscape(res->errors[i]) << "\"";
+    }
+    out << "]}";
     return out.str();
 }
 

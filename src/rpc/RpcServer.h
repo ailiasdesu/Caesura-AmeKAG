@@ -59,6 +59,7 @@ private:
     std::string handleGetState(int id);
     std::string handleSmaValidate(int id, const std::string& path);
     std::string handlePick(int id, int x, int y);
+    std::string handleSmaSave(int id, const std::string& path, const std::string& content);
     std::string handleGetFrame(int id, int w, int h);
     std::string handleReload(int id);
     std::string handleDebugAction(int id, RpcRequest request);

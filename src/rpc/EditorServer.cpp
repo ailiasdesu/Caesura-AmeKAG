@@ -694,6 +694,43 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // POST /api/sma/save -- validate + write back an SMA asset (round 26).
+    // Body: {"path": "...", "content": "..."}; path restricted to assets/.
+    // ---------------------------------------------------------------------
+    svr.Post("/api/sma/save", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            const std::string path = body.value("path", std::string());
+            const std::string content = body.value("content", std::string());
+            if (path.empty() || content.empty()) {
+                res.set_content("{\"error\":\"Missing path or content\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            RpcReply reply = dispatchRequest(
+                RpcRequest{RpcSmaSaveRequest{path, content}});
+            if (reply.status != RpcReplyStatus::Ok) {
+                setDispatchError(res, reply);
+                return;
+            }
+            const auto* v = std::get_if<RpcSmaSaveResult>(&reply.payload);
+            if (!v) {
+                setDispatchError(res, invalidDispatcherReply(
+                    "SMA save reply missing result"));
+                return;
+            }
+            res.set_content(dumpJson({
+                {"status", "ok"},
+                {"ok", v->ok},
+                {"errors", v->errors},
+            }), "application/json");
+        } catch (const std::exception&) {
+            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
+            res.status = 400;
+        }
+    });
+
+    // ---------------------------------------------------------------------
     // GET /api/debug/getFrame -- capture the current frame as base64 PNG
     // ---------------------------------------------------------------------
     svr.Get("/api/debug/getFrame", [this](const httplib::Request& req, httplib::Response& res) {

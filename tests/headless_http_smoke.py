@@ -140,6 +140,36 @@ def main():
           and resp.get("errors") and "cannot open" in resp.get("errors", [])[0],
           "%s %s" % (st, resp))
 
+    # /api/sma/save (round 26): POST {path, content} — shared validator
+    # (sma_check.validate_text) gates the write. Good content round-trips
+    # unchanged (ok:true, no errors); broken JSON is rejected with errors;
+    # unsafe paths (non-assets prefix / "..") return 400.
+    hero_path = os.path.join(cwd, "demo", "assets", "sma", "hero.json")
+    hero_text = ""
+    try:
+        with open(hero_path, "r", encoding="utf-8") as hf:
+            hero_text = hf.read()
+    except Exception as e:
+        hero_text = ""
+    check("sma-save-source-readable", bool(hero_text.strip()), "reading %s: %r" % (hero_path, hero_text[:60]))
+
+    st, resp = request("/api/sma/save",
+                       data=json.dumps({"path": "demo/assets/sma/hero.json",
+                                        "content": hero_text}).encode())
+    check("sma-save-ok", st == 200 and resp.get("status") == "ok"
+          and resp.get("ok") is True and resp.get("errors") == [], "%s %s" % (st, resp))
+
+    st, resp = request("/api/sma/save",
+                       data=json.dumps({"path": "demo/assets/sma/hero.json",
+                                        "content": '{"bones":[]}'}).encode())
+    check("sma-save-invalid-json-rejected", st == 200 and resp.get("status") == "ok"
+          and resp.get("ok") is False and resp.get("errors"), "%s %s" % (st, resp))
+
+    st, resp = request("/api/sma/save",
+                       data=json.dumps({"path": "../../evil.json",
+                                        "content": '{"bones":[]}'}).encode())
+    check("sma-save-unsafe-path", st == 400, "%s %s" % (st, resp))
+
     # Rejected: line must be a positive int32. 4294967297 (2^32+1) previously
     # wrapped to a positive int (line 1) via unchecked get<int>(), silently
     # setting a wrong breakpoint.

@@ -38,6 +38,13 @@ struct RpcPickRequest {
     int y = 0;
 };
 
+// Editor save-back for SMA assets (round 26): validates the JSON text with
+// the shared checker, then writes it to the (safe) assets/ path.
+struct RpcSmaSaveRequest {
+    std::string path;
+    std::string content;
+};
+
 struct RpcCaptureFrameRequest {
     int width = 1280;
     int height = 720;
@@ -108,6 +115,7 @@ using RpcRequestPayload = std::variant<
     RpcGetStateRequest,
     RpcSmaValidateRequest,
     RpcPickRequest,
+    RpcSmaSaveRequest,
     RpcCaptureFrameRequest,
     RpcReloadScriptsRequest,
     RpcLoadAnimationRequest,
@@ -170,6 +178,11 @@ struct RpcPickResult {
     std::string hits;   // JSON array text: [{id,name,z,depth,opacity,x,y,w,h}]
 };
 
+struct RpcSmaSaveResult {
+    bool ok = false;
+    std::vector<std::string> errors;
+};
+
 struct RpcFrameResult {
     std::string base64;
 };
@@ -205,6 +218,7 @@ using RpcReplyPayload = std::variant<
     RpcStateResult,
     RpcSmaValidateResult,
     RpcPickResult,
+    RpcSmaSaveResult,
     RpcFrameResult,
     RpcAnimationResult,
     RpcInspectionResult,

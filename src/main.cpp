@@ -23,6 +23,7 @@ extern "C" {
 #include <deque>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -330,6 +331,82 @@ private:
                 lua_settop(L, stackTop);
                 Caesura::RpcReply reply = rpcOk();
                 reply.payload = std::move(pick);
+                return reply;
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcSmaSaveRequest>) {
+                // Editor save-back: validate the JSON text with the shared
+                // checker first; only write to the disk on success. Path is
+                // restricted by isSafeAssetPath (assets/ or demo/assets/).
+                if (!isSafeAssetPath(operation.path)) {
+                    return rpcError(Caesura::RpcReplyStatus::InvalidRequest,
+                                    "unsafe_path",
+                                    "Path must be relative under assets/ or demo/assets/");
+                }
+                lua_State* L = m_engine.lua().state();
+                Caesura::RpcSmaSaveResult saveRes;
+                if (!L) {
+                    saveRes.ok = false;
+                    saveRes.errors.push_back("lua_unavailable");
+                } else {
+                    const int stackTop = lua_gettop(L);
+                    // Build a Lua literal for the content (escape backslash
+                    // and quotes for the embedded string literal).
+                    std::string lit = operation.content;
+                    std::string esc;
+                    esc.reserve(lit.size() + 16);
+                    for (char ch : lit) {
+                        if (ch == '\\') esc += "\\\\";
+                        else if (ch == '"') esc += "\\\"";
+                        else if (ch == '\n') esc += "\\n";
+                        else if (ch == '\r') esc += "\\r";
+                        else if (ch == '\t') esc += "\\t";
+                        else esc += ch;
+                    }
+                    const std::string code =
+                        "local ok, checker = pcall(require, 'kag.sma_check')\n"
+                        "if not ok or not checker then return '{\"ok\":false,\"errors\":[\"sma_check unavailable\"]}' end\n"
+                        "local res = checker.validate_text(\"" + esc + "\")\n"
+                        "local parts = {} for _, e in ipairs(res.errors or {}) do parts[#parts + 1] = string.format('%q', tostring(e)) end\n"
+                        "return string.format('{\"ok\":%s,\"errors\":[%s]}', res.ok and 'true' or 'false', table.concat(parts, ','))";
+                    if (luaL_loadstring(L, code.c_str()) == LUA_OK
+                        && lua_pcall(L, 0, 1, 0) == LUA_OK
+                        && lua_isstring(L, -1)) {
+                        try {
+                            auto j = nlohmann::json::parse(lua_tostring(L, -1));
+                            saveRes.ok = j.value("ok", false);
+                            for (const auto& e2 : j.value("errors", std::vector<std::string>{})) {
+                                saveRes.errors.push_back(e2);
+                            }
+                        } catch (...) {
+                            saveRes.ok = false;
+                            saveRes.errors.push_back("lua_result_parse_failed");
+                        }
+                    } else {
+                        saveRes.ok = false;
+                        saveRes.errors.push_back("lua_exec_failed");
+                    }
+                    lua_settop(L, stackTop);
+                }
+                if (saveRes.ok) {
+                    std::string writePath = operation.path;
+                    for (char& ch : writePath) {
+                        if (ch == '/') ch = '\\';
+                    }
+                    std::ofstream out(writePath, std::ios::binary);
+                    if (!out) {
+                        saveRes.ok = false;
+                        saveRes.errors.push_back("cannot open file for writing");
+                    } else {
+                        out.write(operation.content.data(),
+                                  static_cast<std::streamsize>(operation.content.size()));
+                        out.close();
+                        if (!out) {
+                            saveRes.ok = false;
+                            saveRes.errors.push_back("write failed");
+                        }
+                    }
+                }
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = std::move(saveRes);
                 return reply;
             } else if constexpr (
                 std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {

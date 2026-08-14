@@ -331,6 +331,24 @@ function sma_check.validate(asset)
 end
 
 -- ---------------------------------------------------------------------------
+-- validate_text(jsonText) -> {ok, errors} — decode + validate a JSON string
+-- (used by the editor save path before writing an asset back to disk).
+-- ---------------------------------------------------------------------------
+function sma_check.validate_text(text)
+    if type(text) ~= "string" then
+        return { ok = false, errors = { "root: expected a JSON string" } }
+    end
+    if not json then
+        return { ok = false, errors = { "file: no JSON decoder available" } }
+    end
+    local ok, asset = pcall(json.decode, text)
+    if not ok then
+        return { ok = false, errors = { "root: malformed JSON (" .. tostring(asset) .. ")" } }
+    end
+    return sma_check.validate(asset)
+end
+
+-- ---------------------------------------------------------------------------
 -- validate_file(path) -> {ok, errors, meta} — read + decode + validate,
 -- plus a structure summary for tooling/editor panels.
 -- ---------------------------------------------------------------------------

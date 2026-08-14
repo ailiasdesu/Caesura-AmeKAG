@@ -239,5 +239,19 @@ check("sma.validate: ok on valid", vr.ok == true)
 local vr2 = sma.validate(badJson)
 check("sma.validate: error located", vr2.ok == false and vr2.errors[1]:find("indices", 1, true) ~= nil)
 
+-- validate_text (round 26): decode + validate a JSON string — the gate the
+-- editor save path runs before writing an asset back to disk.
+local vt_good = sma_check.validate_text(goodJson)
+check("validate_text: good ok", vt_good.ok == true and #vt_good.errors == 0)
+local vt_bad = sma_check.validate_text(badJson)
+check("validate_text: bad located", vt_bad.ok == false
+      and (vt_bad.errors[1]:find("indices", 1, true)
+           or vt_bad.errors[1]:find("positions", 1, true)) ~= nil)
+local vt_mal = sma_check.validate_text("{bad json")
+check("validate_text: malformed rejected", vt_mal.ok == false
+      and vt_mal.errors[1]:find("malformed JSON", 1, true) ~= nil)
+local vt_non = sma_check.validate_text(42)
+check("validate_text: non-string rejected", vt_non.ok == false)
+
 print(("SUMMARY sma_check: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then os.exit(1) end
