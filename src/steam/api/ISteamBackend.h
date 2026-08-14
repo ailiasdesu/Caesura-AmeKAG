@@ -1,4 +1,4 @@
-﻿// ISteamBackend — pure virtual interface for Steam SDK integration
+// ISteamBackend — pure virtual interface for Steam SDK integration
 // Pattern: mirrors Live2D (IAnimationBackend), optional module with #ifdef guard
 // Steam SDK is NOT committed — users download Steamworks separately
 #pragma once
@@ -7,12 +7,6 @@
 #include <cstdint>
 
 namespace Caesura {
-
-struct SteamAchievement {
-    std::string id;
-    bool unlocked = false;
-    float unlockTime = 0.0f;
-};
 
 class ISteamBackend {
 public:

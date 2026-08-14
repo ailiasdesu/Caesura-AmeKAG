@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <limits>
 
-// miniz single-header ?? need to define MINIZ_HEADER_FILE_ONLY first
+// miniz single-header — need to define MINIZ_HEADER_FILE_ONLY first
 // then include the .c in one TU later (in CMake)
 #include <miniz.h>
 
@@ -294,7 +294,7 @@ static bool ResolveOutputPath(const fs::path& outputRoot, const std::wstring& na
 }
 
 // ============================================================================
-//  pack ?? directory ?? XP3
+//  pack — directory — XP3
 // ============================================================================
 
 bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile,
@@ -377,13 +377,13 @@ bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile
     fwrite(&indexOffset, 8, 1, out);
     fclose(out);
 
-    printf("[XP3] Packed %d files ?? %s (%.2f MB)\n",
+    printf("[XP3] Packed %d files — %s (%.2f MB)\n",
            total, outputFile.c_str(), (double)indexOffset / (1024.0 * 1024.0));
     return true;
 }
 
 // ============================================================================
-//  unpack ?? XP3 ?? directory
+//  unpack — XP3 — directory
 // ============================================================================
 
 bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir,
@@ -479,12 +479,12 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
         if (progressCb) progressCb(i + 1, total);
     }
 
-    printf("[XP3] Unpacked %d files ?? %s\n", total, outputDir.c_str());
+    printf("[XP3] Unpacked %d files — %s\n", total, outputDir.c_str());
     return true;
 }
 
 // ============================================================================
-//  list ?? read file list without extraction
+//  list — read file list without extraction
 // ============================================================================
 
 std::vector<XP3Archive::FileEntry> XP3Archive::list(const std::string& xp3File) {

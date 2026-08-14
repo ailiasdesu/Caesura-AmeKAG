@@ -491,7 +491,8 @@ bool Live2DBackend::playMotion(int handle, const std::string& name) {
 
     auto mit = model.motionCache.find(name);
     if (mit == model.motionCache.end()) {
-        for (auto& [key, data] : model.motionCache) {
+        // Fallback: substring match over cached keys (e.g. "wave" -> "wave/0").
+        for (const auto& [key, data] : model.motionCache) {
             if (key.find(name) != std::string::npos) { mit = model.motionCache.find(key); break; }
         }
     }

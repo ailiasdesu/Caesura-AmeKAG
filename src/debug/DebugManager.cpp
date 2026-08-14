@@ -149,7 +149,7 @@ const char* ErrCodeName(ErrCode c) {
 }
 
 // ============================================================================
-//  DebugManager ?? singleton
+//  DebugManager — singleton
 // ============================================================================
 
 DebugManager& DebugManager::instance() {
@@ -452,7 +452,7 @@ void DebugManager::beginProfile(const char* label) {
 void DebugManager::endProfile(const char* label) {
     if (m_activeSamples.empty()) return;
     auto& s = m_activeSamples.back();
-    // W9: label match assertion ?? catch mismatched begin/end pairs
+    // W9: label match assertion — catch mismatched begin/end pairs
     if (strcmp(s.label, label) != 0) {
         fprintf(stderr, "[Profile] MISMATCH: endProfile(\"%s\") != beginProfile(\"%s\")\n",
                 label, s.label);

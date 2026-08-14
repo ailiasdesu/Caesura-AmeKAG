@@ -73,7 +73,7 @@ void BgfxRenderDevice::flushBatch() { m_draw->flushBatch(); }
 // DX12 / Metal / WebGPU backend stubs. bgfx handles the actual backend
 // internally; these helpers expose the selection API.
 
-static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3D11;
+// (P2) backend preference is owned by BgfxDeviceCore; the copy here was dead.
 
 // setPreferredBackend extracted to BgfxDeviceCore
 
@@ -407,7 +407,7 @@ void BgfxRenderDevice::submitBlend(uint16_t v, RenderTextureHandle base, RenderT
 
 
 // ===========================================================================
-//  GPU Effect: Transition ?? crossfade / rule / wipe between two textures
+//  GPU Effect: Transition — crossfade / rule / wipe between two textures
 // ===========================================================================
 
 // Spec [10.2.25]: @Beta 闂?Pre-bake rule images into a LUT texture atlas for batch
@@ -417,7 +417,7 @@ void BgfxRenderDevice::submitTransition(uint16_t v, RenderTextureHandle from, Re
 
 
 // ===========================================================================
-//  GPU Effect: VFX ?? fade / blur / quake post-processing
+//  GPU Effect: VFX — fade / blur / quake post-processing
 // ===========================================================================
 
 void BgfxRenderDevice::submitVFX(uint16_t v, RenderTextureHandle src, int e, float fa, float fr, float fg, float fb, float br, float qx, float qy) { m_draw->submitVFX(v,toBgfx(src),e,fa,fr,fg,fb,br,qx,qy); }

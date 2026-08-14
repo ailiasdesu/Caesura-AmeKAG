@@ -21,7 +21,7 @@ void CompositeShaderCache::init() {
     if (m_initialized) return;
 
     m_initialized = true;
-    printf("[ShaderCache] Initialized (max %zu). Programs registered by IRenderDevice.\\n",
+    printf("[ShaderCache] Initialized (max %zu). Programs registered by IRenderDevice.\n",
            MAX_ENTRIES);
 }
 

@@ -129,7 +129,9 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     // still resident -- complete immediately without touching the job
     // system (no IO, no decode, no worker round trip). Scene re-entry is
     // the common case in VNs (back to title, gallery thumbnails).
-    const std::string cacheKey = path + "|" + type;
+    // P2: length-prefixed key avoids "|" collisions between (path,type) pairs.
+    const std::string cacheKey =
+        std::to_string(path.size()) + ":" + path + type;
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         auto it = m_rgbaCache.find(cacheKey);
@@ -173,7 +175,8 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
             // Successful decode -> keep in the bounded cache (main thread).
             if (result->success && !result->rgba.empty()) {
                 std::lock_guard<std::mutex> lock(m_cacheMutex);
-                const std::string key = result->path + "|" + result->type;
+                const std::string key =
+                    std::to_string(result->path.size()) + ":" + result->path + result->type;
                 if (m_rgbaCache.find(key) == m_rgbaCache.end()) {
                     const size_t bytes = result->rgba.size()
                                        + result->data.size();

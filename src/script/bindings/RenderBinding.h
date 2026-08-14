@@ -1,4 +1,4 @@
-﻿ #pragma once
+ #pragma once
 
 struct lua_State;
 
@@ -9,6 +9,6 @@ namespace Caesura {
 void registerRenderBinding(lua_State* L);
 
 // Release all cached GPU textures. Call before bgfx::shutdown().
-void RenderBinding_Shutdown();
+// (P2) RenderBinding_Shutdown removed: declaration was dangling (no def/call).
 
 } // namespace Caesura

@@ -463,7 +463,7 @@ bool Engine::initOptionalPhase() {
     // call returns a safe default instead of a nil-function error.
     m_steamInitialized = m_steamBackend && m_steamBackend->init();
     BackendRegistry::instance().setSteamBackend(m_steamBackend.get());
-    registerSteamBinding(m_lua->state());
+    // (P2) registerSteamBinding moved to LuaManager::registerModules
 
     // Crypto engine registration (moved OUT of Steam if-block - bug fix)
     BackendRegistry::instance().setCryptoEngine(m_cryptoEngine.get());

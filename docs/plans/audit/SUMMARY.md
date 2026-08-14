@@ -23,7 +23,7 @@
 |---|---|---|
 | 20 ✅ | 架构修复轮 A | P0-1/P0-2 + P1-1/P1-2/P1-3 完成（CI 绿） |
 | 21 ✅ | 架构修复轮 B | P1-4/P1-5/P1-6/P1-8 完成；P1-7 评估为**接受现状**（setRenderDevice 用前置声明 `class IRenderDevice*`，无 include 依赖，接口合规；耦合扫描 PASS） |
-| 22 ⏳ | P2 批量 + 全量回归 | 全部 P2 + 复核 |
+| 22 ✅ | P2 批量 + 全量回归 | 8 项代码修复 + 18 处注释编码；luaCall/UnifiedBinding（测试在用）/MobileAdapter TODO 记录保留 |
 | 23-39 | 17 轮持续迭代 | 特性/深化轮（/api/pick、SMA 骨骼编辑器、IDE、性能、市场功能）按路线图/用户指示 |
 | 40 | 最终报告轮 | 详细报告（含主流 galgame 引擎对比分析） |
 

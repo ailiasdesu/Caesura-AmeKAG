@@ -23,6 +23,14 @@ bool checkedAdd(uint64_t left, uint64_t right, uint64_t& result) {
     result = left + right;
     return true;
 }
+
+// P2: one helper for every binary stream read: fail-closed on short reads
+// (a truncated file must never leave partially-initialized fields behind).
+bool checkedRead(std::istream& s, void* dst, std::streamsize size) {
+    if (size < 0) return false;
+    s.read(static_cast<char*>(dst), size);
+    return static_cast<bool>(s);
+}
 }
 
 // ==========================================================================
