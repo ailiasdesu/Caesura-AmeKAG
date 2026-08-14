@@ -15,6 +15,7 @@
 #include <bgfx/bgfx.h>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -546,4 +547,139 @@ TEST_CASE("Render: D3D11 SMA GPU skinning matches CPU skinning") {
     // shut down (destroying handles after bgfx::shutdown is UB).
     device.shutdown();
 }
+
+// ---------------------------------------------------------------------------
+// Round 19: S5 host-side cost benchmark. The GPU compute path must reduce
+// per-frame host work versus CPU soft skinning: for a large mesh (8k
+// vertices / 64 bones) the GPU path (pose pack + dispatch submit) must
+// cost LESS host time than the CPU path (per-vertex blend + upload).
+// This is the S5 value proposition (the GPU does the math; the host only
+// packs 64 vec4s). Host-side timing is deterministic across WARP and real
+// GPUs, so the assertion holds everywhere the compute path is available.
+// ---------------------------------------------------------------------------
+constexpr wchar_t kSmaPerfChildEnv[] = L"CAESURA_SMA_PERF_CHILD";
+constexpr wchar_t kSmaPerfTestCase[] =
+    L"Render: D3D11 SMA GPU skin host-cost benchmark";
+
+TEST_CASE("Render: D3D11 SMA GPU skin host-cost benchmark") {
+    if (!isGpuChildProcess(kSmaPerfChildEnv)) {
+        CHECK(runGpuChildProcess(kSmaPerfChildEnv, kSmaPerfTestCase) == ERROR_SUCCESS);
+        return;
+    }
+
+    constexpr uint16_t kWidth = 128;
+    constexpr uint16_t kHeight = 72;
+    constexpr uint16_t kDrawView = 20;
+    constexpr int kCols = 128;   // 8192 vertices
+    constexpr int kRows = 64;
+    constexpr int kVertCount = kCols * kRows;
+    constexpr int kFrames = 120;  // 20 warmup + 100 measured
+    constexpr int kWarmup = 20;
+
+    HiddenSdlWindow window(kWidth, kHeight);
+    REQUIRE(window);
+    REQUIRE(window.nativeHandle() != nullptr);
+
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), kWidth, kHeight));
+
+    {
+        SmaMeshRenderer renderer;
+        renderer.init();
+        REQUIRE(renderer.isInitialized());
+        REQUIRE(renderer.gpuSkinAvailable());
+
+        // Deterministic pseudo-random large mesh: 8k verts, 64 bones,
+        // dual-bone weights, ~16k triangles.
+        SMAMesh mesh;
+        mesh.vertices.reserve(kVertCount);
+        for (int r = 0; r < kRows; ++r) {
+            for (int c = 0; c < kCols; ++c) {
+                SMAMeshVertex v;
+                v.x = static_cast<float>(c);
+                v.y = static_cast<float>(r);
+                v.u = kCols > 1 ? static_cast<float>(c) / (kCols - 1) : 0.f;
+                v.v = kRows > 1 ? static_cast<float>(r) / (kRows - 1) : 0.f;
+                v.bone0 = static_cast<uint16_t>((c + r * 3) % 64);
+                v.w0 = 0.6f;
+                v.bone1 = static_cast<uint16_t>((c * 7 + r) % 64);
+                v.w1 = 0.4f;
+                mesh.vertices.push_back(v);
+            }
+        }
+        mesh.indices.reserve((kCols - 1) * (kRows - 1) * 6);
+        for (int r = 0; r < kRows - 1; ++r) {
+            for (int c = 0; c < kCols - 1; ++c) {
+                const int i = r * kCols + c;
+                mesh.indices.push_back(static_cast<uint16_t>(i));
+                mesh.indices.push_back(static_cast<uint16_t>(i + 1));
+                mesh.indices.push_back(static_cast<uint16_t>(i + kCols));
+                mesh.indices.push_back(static_cast<uint16_t>(i + 1));
+                mesh.indices.push_back(static_cast<uint16_t>(i + kCols + 1));
+                mesh.indices.push_back(static_cast<uint16_t>(i + kCols));
+            }
+        }
+        REQUIRE(mesh.indices.size() % 3 == 0);
+
+        const MeshHandle h = renderer.createMesh(mesh);
+        REQUIRE(h);
+
+        std::vector<BonePose> poses(64);
+        for (size_t i = 0; i < poses.size(); ++i) {
+            poses[i].rot = static_cast<float>((i * 7) % 360) * 0.01f;
+            poses[i].scale = 0.9f + static_cast<float>((i * 13) % 20) * 0.01f;
+            poses[i].ox = static_cast<float>((i * 3) % 50);
+            poses[i].oy = static_cast<float>((i * 11) % 40);
+        }
+
+        // White 1x1 texture (a mesh draw always binds one).
+        const uint8_t whitePx[4] = { 255, 255, 255, 255 };
+        bgfx::TextureHandle whiteTex = bgfx::createTexture2D(
+            1, 1, false, 1, bgfx::TextureFormat::RGBA8,
+            BGFX_SAMPLER_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP,
+            bgfx::copy(whitePx, sizeof(whitePx)));
+        REQUIRE(bgfx::isValid(whiteTex));
+
+        bgfx::setViewRect(kDrawView, 0, 0, kWidth, kHeight);
+        bgfx::setViewClear(kDrawView, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
+        bgfx::frame();  // flush setup
+
+        auto measure = [&](SkinMode mode) {
+            renderer.setSkinMode(mode);
+            using Clock = std::chrono::steady_clock;
+            double totalMs = 0.0;
+            for (int i = 0; i < kFrames; ++i) {
+                const auto t0 = Clock::now();
+                renderer.updateMesh(h, poses);
+                renderer.drawMesh(kDrawView, h, whiteTex.idx, 20.f, 5.f, 1.0f, 1.f);
+                const auto t1 = Clock::now();
+                bgfx::frame();  // submit (outside the timed region)
+                if (i >= kWarmup) {
+                    totalMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
+                }
+            }
+            return totalMs / static_cast<double>(kFrames - kWarmup);
+        };
+
+        const double cpuMs = measure(SkinMode::Cpu);
+        const double gpuMs = measure(SkinMode::Gpu);
+
+        MESSAGE("SMA perf (8k verts, 64 bones): CPU " << cpuMs
+                << " ms/frame host, GPU " << gpuMs << " ms/frame host");
+        // Value proposition: the compute path must cost LESS host time
+        // (pose pack + dispatch submit) than soft skinning + upload.
+        CHECK_MESSAGE(gpuMs < cpuMs,
+                      "GPU host path (" << gpuMs << "ms) not cheaper than CPU ("
+                      << cpuMs << "ms)");
+
+        bgfx::setViewFrameBuffer(kDrawView, BGFX_INVALID_HANDLE);
+        bgfx::frame();
+        renderer.destroyMesh(h);
+        bgfx::destroy(whiteTex);
+        bgfx::frame();
+    }
+    device.shutdown();
+}
+
 #endif
