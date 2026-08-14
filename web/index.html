@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Caesura Web Player — G5 MVP</title>
+  <style>
+    html, body { margin: 0; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
+    #stage { position: relative; width: 1280px; height: 720px; margin: 12px auto; background: #000; overflow: hidden; }
+    .caesura-layer { position: absolute; }
+    .caesura-layer img { width: 100%; height: 100%; object-fit: contain; }
+    .caesura-message { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 24px;
+      background: rgba(0,0,0,0.6); color: #fff; font-size: 20px; white-space: pre-wrap; min-height: 72px; }
+    .controls { text-align: center; padding: 8px; }
+    .controls button { margin: 0 6px; padding: 6px 14px; cursor: pointer; }
+    #log { max-width: 1280px; margin: 8px auto; padding: 8px; font-family: monospace; font-size: 12px;
+      white-space: pre-wrap; height: 140px; overflow-y: auto; background: #1a1a1a; color: #8c8; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <select id="scene">
+      <option value="galgame_demo.ks">galgame_demo.ks</option>
+      <option value="full_pipeline_demo.ks">full_pipeline_demo.ks</option>
+      <option value="sma_demo.ks">sma_demo.ks</option>
+    </select>
+    <button id="run">▶ Run Scene</button>
+    <button id="advance">Click to Advance</button>
+    <span id="status"></span>
+  </div>
+  <div id="stage"></div>
+  <div id="log"></div>
+  <script type="module" src="./main.mjs"></script>
+</body>
+</html>
