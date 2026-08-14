@@ -90,7 +90,7 @@ render 模块是 bgfx 渲染核心：BgfxRenderDevice（组合根）+ BgfxDevice
 7. ~~**RTTManager 双池索引映射**~~ ✅ round 34 评估：release 已有 handle.id 二次校验 + 全池兜底搜索 + erase 清理（RTTManager.cpp:112/118/128-132/159），误匹配被拒绝，风险已缓解；记录保留。
 8. **CompositeShaderCache 全局单例**（`ShaderCache.cpp:11-14`）不归 BackendRegistry 管，且带 `bgfx::ProgramHandle`；目前主要被 BgfxShaderManager 初始化，跨模块直用需警惕绕过注册表（当前未见跨模块使用，留记录）。且其 `getProgram` 实际永远 fallback（`compileVariant` 只回 Normal），实质是 LUT 而非编译器，注释与实现职责可澄清。
 9. ~~**STB_IMAGE_WRITE 实现错位**~~ ✅ 已修复（stb_impl.cpp 独立 TU；RTTManager.cpp:2 注释确认）。
-10. **测试**：已有 `test_render_device/mesh_renderer/render_pipeline/render_integration/layer_manager/particle_system/texture_manager/sma_skinner` 覆盖较好；缺口——`GpuMonitor`（降质/恢复状态机无单元测试）、`RTTManager` 池复用/释放路径、`TextRenderer::rebuildCache` 的 CJK/缓存键命中（`matches()`）行为、`BgfxQuadBatch::flushBatch` 纹理合并组逻辑大多只能靠 GPU 集成测试。
+10. ~~**测试**~~ 部分完成（round 39）：新增 `test_gpu_monitor.cpp`（7 用例：初始 HIGH、headless 不崩溃、3 帧降级 MEDIUM→LOW、10 帧恢复、滚动平均、reset、resolutionScale/vfx 随档位）——GpuMonitor 状态机现 GPU-free 可测；为可测性给 `update()` 加了 `bgfx::getStats()` 空指针防护（headless 回退 CPU dt）。仍开放：RTTManager 池复用、TextRenderer rebuildCache、BgfxQuadBatch 合并组（依赖 GPU 或需重构注入）。
 
 ## 耦合分析
 

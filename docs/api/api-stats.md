@@ -10,15 +10,15 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 31 |
-| Pure-virtual interface methods | 277 |
+| Pure-virtual interface methods | 278 |
 | Lua binding functions (luaL_Reg entries) | 157 |
 | KAG command handler files | 9 |
 | KAG contract commands (command-contracts.md) | 84 |
 | RPC HTTP endpoints (EditorServer) | 25 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
-| C++ test cases | 631 |
-| C++ assertions | 6128 |
+| C++ test cases | 638 |
+| C++ assertions | 6160 |
 | Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
@@ -39,7 +39,7 @@
 | minigame | IMiniGameBackend.h | 11 |
 | platform | IMobileAdapter.h | 10 |
 | platform | IPlatformBackend.h | 5 |
-| render | IGpuMonitor.h | 3 |
+| render | IGpuMonitor.h | 4 |
 | render | ILayerManager.h | 16 |
 | render | IMeshRenderer.h | 5 |
 | render | IParticleSystem.h | 7 |
