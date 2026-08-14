@@ -10,6 +10,8 @@ export class AdapterCore {
     this.textures = new Map() // id -> {path, loaded, width, height}
     this.textBuffer = ''
     this.draws = []
+    this.backlog = []
+    this._lastBacklog = ''
     this.audioBus = { bgm: null, se: [], voice: null }
     this.events = [] // call log for tests/telemetry
     this._seq = 0
@@ -83,7 +85,18 @@ export class AdapterCore {
   appendText(s) { if (s) { this.textBuffer += s; this._log('text.append', { len: s.length }) } }
   setText(s) { this.textBuffer = String(s ?? ''); this._log('text.set', { len: this.textBuffer.length }) }
   /** Structured text draws from the Lua TextScene (x/y/rgb/scale/bold). */
-  setDraws(draws) { this.draws = Array.isArray(draws) ? draws : []; this._log('text.draws', { n: this.draws.length }) }
+  setDraws(draws) {
+    this.draws = Array.isArray(draws) ? draws : []
+    // backlog: snapshot non-empty pages so the UI can scroll back (VN
+    // convention: every [p]/[er] commits the current page to history).
+    const text = this.draws.map((d) => d.t).join('')
+    if (text.trim().length > 0 && text !== this._lastBacklog) {
+      this.backlog.push({ draws: this.draws.map((d) => ({ ...d })), text })
+      this._lastBacklog = text
+      this._log('backlog.add', { n: this.backlog.length })
+    }
+    this._log('text.draws', { n: this.draws.length })
+  }
 
   // -- audio ------------------------------------------------------------
   audioPlay(kind, path, volume = 1) {

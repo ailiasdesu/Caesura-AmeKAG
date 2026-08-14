@@ -15,6 +15,13 @@
     .controls button { margin: 0 6px; padding: 6px 14px; cursor: pointer; }
     #log { max-width: 1280px; margin: 8px auto; padding: 8px; font-family: monospace; font-size: 12px;
       white-space: pre-wrap; height: 140px; overflow-y: auto; background: #1a1a1a; color: #8c8; border-radius: 6px; }
+    .backlog-wrap { max-width: 1280px; margin: 8px auto; }
+    .backlog-title { font-size: 12px; color: #888; margin-bottom: 4px; }
+    #backlog { max-height: 160px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .backlog-entry { padding: 4px 6px; font-size: 14px; color: #ccc; cursor: pointer; border-radius: 4px; }
+    .backlog-entry:hover { background: #2a2a2a; }
+    .backlog-entry .bl-line { color: #666; font-size: 11px; margin-right: 8px; }
+    .backlog-entry.active { background: #223344; color: #fff; }
   </style>
 </head>
 <body>
@@ -26,9 +33,14 @@
     </select>
     <button id="run">▶ Run Scene</button>
     <button id="advance">Click to Advance</button>
+    <button id="auto">⏩ Auto</button>
     <span id="status"></span>
   </div>
   <div id="stage"></div>
+  <div class="backlog-wrap">
+    <div class="backlog-title">Backlog (<span id="backlog-count">0</span>)</div>
+    <div id="backlog"></div>
+  </div>
   <div id="log"></div>
   <script type="module" src="./main.mjs"></script>
 </body>

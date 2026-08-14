@@ -81,11 +81,46 @@ document.getElementById('run').addEventListener('click', () => {
 document.getElementById('advance').addEventListener('click', () => {
   void advance()
 })
+document.getElementById('auto').addEventListener('click', () => {
+  autoMode = !autoMode
+  document.getElementById('auto').textContent = autoMode ? '⏸ Auto' : '⏩ Auto'
+  if (autoMode) scheduleAuto()
+  else if (autoTimer) clearTimeout(autoTimer)
+})
+
+// --- backlog (VN history) ---
+const backlogEl = document.getElementById('backlog')
+const backlogCount = document.getElementById('backlog-count')
+let lastBacklogLen = -1
+const syncBacklog = () => {
+  const bl = player.core.backlog
+  if (bl.length === lastBacklogLen) return
+  lastBacklogLen = bl.length
+  backlogCount.textContent = String(bl.length)
+  backlogEl.textContent = ''
+  bl.forEach((entry, i) => {
+    const row = document.createElement('div')
+    row.className = 'backlog-entry'
+    row.innerHTML = '<span class="bl-line">' + (i + 1) + '</span>' + entry.text.replace(/</g, '&lt;')
+    row.title = 'backlog ' + (i + 1)
+    backlogEl.appendChild(row)
+  })
+  backlogEl.scrollTop = backlogEl.scrollHeight
+}
+
+// --- auto-advance ---
+let autoMode = false
+let autoTimer = null
+const scheduleAuto = () => {
+  if (!autoMode) return
+  autoTimer = setTimeout(() => { void advance(); scheduleAuto() }, 1200)
+}
 
 // render loop: sync core state to DOM every frame (CSS transitions
 // interpolate sprite moves/fades between renders).
 const frame = () => {
   renderer.render()
+  syncBacklog()
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
