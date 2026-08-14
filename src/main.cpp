@@ -223,14 +223,22 @@ private:
                     "  return require('layers').count() end); "
                     "local i18n = require('i18n'); "
                     "local bl = type(ctx.backlog) == 'table' and #ctx.backlog or 0; "
+                    "local tok = ctx.tokens and ctx.tokens[ctx.token_index]; "
+                    "local cur = ''; "
+                    "if type(tok) == 'table' then "
+                    "  if tok.type == 'command' then cur = '[' .. tostring(tok.cmd or '') .. ']' "
+                    "  elseif tok.type == 'label' then cur = '*' .. tostring(tok.name or '') "
+                    "  elseif tok.type == 'text' then cur = 'text' "
+                    "  else cur = tostring(tok.type or '') end "
+                    "end; "
                     "return string.format('{\"scene\":%q,\"token_index\":%d,"
                     "\"nvl_mode\":%s,\"language\":%q,\"backlog_count\":%d,"
-                    "\"layer_count\":%d}', "
+                    "\"layer_count\":%d,\"current_cmd\":%q}', "
                     "tostring(ctx.current_scene or ctx.currentScene or ''), "
                     "tonumber(ctx.token_index) or 0, "
                     "ctx.nvl_mode == true and 'true' or 'false', "
                     "tostring(i18n and i18n.current or ''), bl, "
-                    "ok and (tonumber(layers) or 0) or 0)";
+                    "ok and (tonumber(layers) or 0) or 0, cur)";
                 Caesura::RpcStateResult state;
                 if (luaL_loadstring(L, code) == LUA_OK
                     && lua_pcall(L, 0, 1, 0) == LUA_OK
@@ -244,6 +252,7 @@ private:
                         state.language = j.value("language", std::string());
                         state.backlogCount = j.value("backlog_count", 0);
                         state.layerCount = j.value("layer_count", 0);
+                        state.currentCmd = j.value("current_cmd", std::string());
                     } catch (const std::exception&) {
                         state.scene = lua_tostring(L, -1);
                     }

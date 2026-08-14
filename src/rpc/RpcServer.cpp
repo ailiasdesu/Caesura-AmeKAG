@@ -718,7 +718,8 @@ std::string RpcServer::handleGetState(int id) {
         << (state->nvlMode ? "true" : "false") << ",\"language\":\""
         << jsonEscape(state->language) << "\",\"backlog_count\":"
         << state->backlogCount << ",\"layer_count\":"
-        << state->layerCount << "}}";
+        << state->layerCount << ",\"current_cmd\":\""
+        << jsonEscape(state->currentCmd) << "\"}}";
     return out.str();
 }
 

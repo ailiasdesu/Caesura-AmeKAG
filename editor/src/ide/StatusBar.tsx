@@ -5,6 +5,7 @@ export function StatusBar() {
   const scene = useEditor((s) => s.engineScene)
   const token = useEditor((s) => s.engineToken)
   const paused = useEditor((s) => s.enginePaused)
+  const currentCmd = useEditor((s) => s.engineCmd)
 
   return (
     <footer className="status-bar">
@@ -13,6 +14,7 @@ export function StatusBar() {
       </span>
       <span className="status-item">scene: {scene || '—'}</span>
       <span className="status-item">token: {token}</span>
+      <span className="status-item">cmd: {currentCmd || '—'}</span>
       <span className={`status-item ${paused ? 'paused' : ''}`}>
         {paused ? '⏸ paused' : '▶ running'}
       </span>

@@ -446,6 +446,7 @@ export function VisualView({ client }: Props) {
         <div className="state-grid">
           <div className="state-row"><span>scene</span><b>{state.scene || '(none)'}</b></div>
           <div className="state-row"><span>token</span><b>{state.token_index ?? 0}</b></div>
+          <div className="state-row"><span>exec</span><b>{state.current_cmd || '—'}</b></div>
           <div className="state-row"><span>language</span><b>{state.language || '-'}</b></div>
           <div className="state-row"><span>nvl</span><b>{state.nvl_mode ? 'on' : 'off'}</b></div>
           <div className="state-row"><span>backlog</span><b>{state.backlog_count ?? 0}</b></div>

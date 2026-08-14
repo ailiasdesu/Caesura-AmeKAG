@@ -603,6 +603,7 @@ void EditorServer::serverLoop(int port) {
             {"language", state->language},
             {"backlog_count", state->backlogCount},
             {"layer_count", state->layerCount},
+            {"current_cmd", state->currentCmd},
         }), "application/json");
     });
 
@@ -630,6 +631,7 @@ void EditorServer::serverLoop(int port) {
             {"language", state->language},
             {"backlog_count", state->backlogCount},
             {"layer_count", state->layerCount},
+            {"current_cmd", state->currentCmd},
         }), "application/json");
     });
 

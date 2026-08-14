@@ -24,6 +24,7 @@ export function DebugView({ client }: Props) {
         engineScene: s.scene ?? '',
         engineToken: typeof s.token_index === 'number' ? s.token_index : 0,
         enginePaused: s.paused === true,
+        engineCmd: s.current_cmd ?? '',
       })
     } catch {
       setEngine({ engineConnected: false })

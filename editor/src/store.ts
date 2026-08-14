@@ -22,6 +22,8 @@ interface EditorState {
   engineScene: string
   engineToken: number
   enginePaused: boolean
+  /** Current execution element from the engine, e.g. "[ch]" (round 28). */
+  engineCmd: string
   /** Battle 4b: reveal request — the editor scrolls to this line after
    *  a scene-tree click (set by SceneTree, consumed by EditorArea). */
   revealRequest: { path: string; line: number; nonce: number } | null
@@ -33,7 +35,7 @@ interface EditorState {
   closeDoc: (path: string) => void
   setActive: (path: string) => void
   setSideView: (v: SideView) => void
-  setEngine: (s: Partial<Pick<EditorState, 'engineConnected' | 'engineScene' | 'engineToken' | 'enginePaused'>>) => void
+  setEngine: (s: Partial<Pick<EditorState, 'engineConnected' | 'engineScene' | 'engineToken' | 'enginePaused' | 'engineCmd'>>) => void
   /** Insert generated tag text into the active document at the cursor
    *  (or append); marks the doc dirty. */
   insertIntoActive: (text: string) => void
@@ -51,6 +53,7 @@ export const useEditor = create<EditorState>((set) => ({
   engineScene: '',
   engineToken: 0,
   enginePaused: false,
+  engineCmd: '',
   revealRequest: null,
   inspected: null,
   openDoc: (doc) =>

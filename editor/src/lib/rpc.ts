@@ -33,6 +33,8 @@ export interface DebugStateReply {
   scene?: string
   paused?: boolean
   token_index?: number
+  /** Current execution element, e.g. "[ch]", "*start", "text" (round 28). */
+  current_cmd?: string
   [key: string]: unknown
 }
 
@@ -58,6 +60,8 @@ export interface StateReply {
   language?: string
   backlog_count?: number
   layer_count?: number
+  /** Current execution element, e.g. "[ch]", "*start", "text" (round 28). */
+  current_cmd?: string
   error?: string
 }
 

@@ -161,6 +161,8 @@ struct RpcKagDebugResult {
 // Engine runtime state for the IDE preview panel (round 18): current
 // scene + token position, NVL mode, UI language, backlog size and layer
 // count. Empty/zero when no game is running.
+// currentCmd (round 28): human-readable current execution element, e.g.
+// "[ch]", "*start" or "text" — empty when no game is running.
 struct RpcStateResult {
     std::string scene;
     int tokenIndex = 0;
@@ -168,6 +170,7 @@ struct RpcStateResult {
     std::string language;
     int backlogCount = 0;
     int layerCount = 0;
+    std::string currentCmd;
 };
 
 // SMA asset validation result: ok flag, per-field violation strings, and
