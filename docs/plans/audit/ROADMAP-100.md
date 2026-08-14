@@ -47,3 +47,4 @@
 | 轮次 | 任务 | 结果 | 提交 |
 |---|---|---|---|
 | 1 | TextRenderer 纯布局提取 + 11 例无 GPU 测试（G2 前半） | C++ 659/659, Lua 120/120, ctest 绿, 耦合 PASS | 4c12c9c5, 6c30d545 |
+| 2 | TextRenderer 脏区间纯函数化（countUtf8Glyphs/computeDirtyRange）+ 10 例无 GPU 测试（G2 完成） | C++ 669/669, Lua 120/120, ctest 绿, 耦合 PASS | b36d82c8 |
