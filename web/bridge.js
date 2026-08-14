@@ -2,19 +2,28 @@
 // Loads the pure-Lua KAG stack + the REAL kag command table, wires the
 // AdapterCore as the binding surface, and runs .ks scenes.
 import { Lua } from 'wasmoon'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { AdapterCore, LAYER_TYPE } from './adapter-core.js'
 
+// Local glue.wasm for non-browser hosts (vitest/jsdom); browsers use the
+// bundled default (CDN) unless wasmFile is passed explicitly.
+const here = dirname(fileURLToPath(import.meta.url))
+
 // modules whose Lua source lives in scripts/ (NOT bindings)
+// layers/audio/etc are C++-binding modules stubbed in JS below (the real
+// scripts/layers.lua pulls rtt/view_id/RTT pools — too heavy for the web
+// adapter; the stub honors its Type enum and node contract).
 const BINDING_MODULES = new Set([
   'backend', 'layers', 'audio', 'rtt', 'blend', 'transition', 'transform',
-  'vfx', 'flow', 'replay', 'mods', 'pool', 'config', 'system', 'i18n',
+  'vfx', 'flow', 'replay', 'pool', 'config', 'system',
   'settings', 'gallery', 'music_room', 'title_menu', 'saveload_menu',
   'chapter_select', 'dev_hud', 'history_ui', 'toast', 'ks_i18n',
   'fileutil', 'sandbox',
 ])
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch }) {
-  const factory = await Lua.load()
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile }) {
+  const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()
 
@@ -41,9 +50,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch }) {
     end
   `)
 
-  // ---- JS binding adapter (backend.* / layers.*) ----
+  // ---- JS binding adapter (backend.* + layers.*) ----
+  // Type enum mirrors scripts/layers.lua (LAYER_BASE=1 ... LAYER_MESSAGE=6).
   const jsLayers = {
-    Type: { LAYER_NORMAL: 0, LAYER_MESSAGE: 1, LAYER_BG: 2, LAYER_FG: 3 },
+    Type: { LAYER_BASE: 1, LAYER_LAYER0: 2, LAYER_LAYER1: 3, LAYER_FORE: 4, LAYER_UI: 5, LAYER_MESSAGE: 6, LAYER_EFFECT: 7 },
     get: (id) => core.getLayer(id) ?? null,
     find: (id) => core.getLayer(id) ?? null,
     ensure: (id, opts) => core.ensureLayer(id, opts),
@@ -52,8 +62,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch }) {
       const name = (opts && opts.name) || ('layer' + (core._seq + 1))
       return core.ensureLayer(name, opts)
     },
-    bg: (name) => core.ensureLayer(name ?? 'bg', { layerType: 2, z: 0 }),
-    fg: (name) => core.ensureLayer(name ?? 'fg', { layerType: 3, z: 1 }),
+    bg: (name) => core.ensureLayer(name ?? 'bg', { layer_type: 1, z: 0 }),
+    fg: (name) => core.ensureLayer(name ?? 'fg', { layer_type: 4, z: 1 }),
     set_layer_image: (node, tex) => core.setLayerImage(node, tex),
     set_layer_visible: (node, v) => core.setLayerVisible(node, v),
     set_layer_opacity: (node, v) => core.setLayerOpacity(node, v),
@@ -74,7 +84,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch }) {
     load_texture_async: (f) => core.loadTexture(f),
     create_solid_texture: () => 0, destroy_texture: (id) => core.destroyTexture(id),
     font_render_text: () => 1, font_clear: () => {}, line_height: () => 22,
-    render_text: (t) => { core.setText(t ?? ''); return 1 }, clear_text: () => core.clearText(),
+    // Lua contract: render_text(text, x, y, r, g, b, a) — the text is the
+    // first arg; x/y/r/g/b/a are render coordinates we ignore in the DOM
+    // overlay (TextScene/add_wrapped_spans drive the real layout).
+    render_text: (...args) => { const t = args[0]; if (typeof t === 'string') core.appendText(t); return 1 }, clear_text: () => core.clearText(),
     text_render_ruby: () => {}, text_set_font: () => {}, text_reset_state: () => {},
     create_lut_texture: () => 0, render_frame: () => {}, set_screen_offset: () => {},
     particles_create_emitter: () => 0, particles_emit: () => {}, particles_destroy_emitter: () => {}, clear_particles: () => {},
@@ -157,12 +170,40 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch }) {
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
         end
+        -- Collect the current visible text from the Lua TextScene draws
+        -- (the DOM overlay shows what the engine would render this frame).
+        local parts = {}
+        local st = ctx.text_state
+        if st and type(st.draws) == 'table' then
+          for _, d in ipairs(st.draws) do
+            if type(d) == 'table' and d.text and #d.text > 0 then
+              parts[#parts + 1] = d.text
+            end
+          end
+        end
+        __SCENE_TEXT = table.concat(parts, string.char(10))
         return result
       `)
+      // sync the collected Lua text into the core overlay buffer
+      const sceneText = lua.global.get('__SCENE_TEXT')
+      if (typeof sceneText === 'string') core.setText(sceneText)
       return out
     },
     /** Raise the click signal for the next runScene. */
     async click() { lua.global.set('__CLICK', true) },
+    /** Snapshot the real Lua layer tree (Layers.snapshot) for rendering. */
+    async snapshotLayers() {
+      const out = await lua.doString(`
+        local layers = require('layers')
+        local snaps = layers.snapshot()
+        local out = {}
+        for i, s in ipairs(snaps) do
+          out[i] = { name = s.name, tag = s.tag, x = s.x, y = s.y, w = s.w, h = s.h, visible = s.visible, opacity = s.opacity, z = s.z, texture = s.texture }
+        end
+        return out
+      `)
+      return out
+    },
     /** Pre-resolve texture ids to URLs (browser: asset URLs). */
     async linkTextures(assetUrl) {
       for (const [id, t] of core.textures) {

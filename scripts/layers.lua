@@ -858,4 +858,23 @@ function Layers.mark_dirty_with_transparency(layer, rect)
     end
 end
 
+--- Snapshot the layer tree for the Web player renderer (round 34).
+--  Pure read: returns { name, tag, x, y, w, h, visible, opacity, z,
+--  texture } for every registered layer (no binding calls).
+function Layers.snapshot()
+    local out = {}
+    for _, node in pairs(layerMap) do
+        out[#out + 1] = {
+            name = node.name, tag = node.tag,
+            x = node.x or 0, y = node.y or 0,
+            w = node.w or 1280, h = node.h or 720,
+            visible = node.visible ~= false,
+            opacity = node.opacity or 1,
+            z = node.z or 0,
+            texture = node.texture,
+        }
+    end
+    return out
+end
+
 return Layers

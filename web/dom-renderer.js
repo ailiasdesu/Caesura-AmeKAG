@@ -3,9 +3,9 @@
 // with a texture becomes a positioned <img>; the message layer shows
 // text. jsdom-testable (no real browser APIs beyond DOM).
 
-const LAYER_TAGS = new Map([
-  [0, 'div'], [1, 'div'], [2, 'img'], [3, 'img'],
-])
+// Layer tag -> element kind: image-bearing layers render as <img>;
+// message/ui layers as overlay <div>.
+const IMAGE_LAYER_TAGS = new Set(['bg', 'fg', 'layer0', 'layer1', 'fore', '_char_', 'image'])
 
 export class DomRenderer {
   constructor(core, rootEl, opts = {}) {
@@ -16,6 +16,9 @@ export class DomRenderer {
     this.textureUrls = new Map() // id -> src string
     this._els = new Map() // layer name -> element
     this._textEl = null
+    /** Optional external layer source (Lua Layers.snapshot()); when set it
+     *  takes precedence over core.renderList(). */
+    this.getLayers = opts.getLayers ?? null
     this._subscribe()
   }
 
@@ -30,14 +33,17 @@ export class DomRenderer {
   setTextureUrl(id, url) { this.textureUrls.set(id, url) }
 
   /** Full re-render: sync DOM to core state. Cheap for demo sizes. */
-  render() {
+  async render() {
     const alive = new Set()
-    const list = this.core.renderList()
+    const list = this.getLayers ? await this.getLayers() : this.core.renderList()
     // text layer rendered separately (overlay) if it has content
     for (const n of list) {
       let el = this._els.get(n.name)
-      if (!el) {
-        el = document.createElement(LAYER_TAGS.get(n.layerType) ?? 'div')
+      const isImage = IMAGE_LAYER_TAGS.has(n.name) || (n.tag && IMAGE_LAYER_TAGS.has(n.tag)) ||
+        n.name.startsWith('_char_') || (n.tag && n.tag.startsWith('_char_'))
+      if (!el || (isImage && el.tagName !== 'IMG') || (!isImage && el.tagName === 'IMG')) {
+        if (el) el.remove()
+        el = document.createElement(isImage ? 'img' : 'div')
         el.className = 'caesura-layer'
         el.dataset.layer = n.name
         el.style.position = 'absolute'
