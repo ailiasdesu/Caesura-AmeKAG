@@ -42,5 +42,10 @@ check("pick checks bounds", layers_src:find("px >= x and px <= x + w and py >= y
 check("pick sorts by z", layers_src:find("table.sort(hits", 1, true) ~= nil)
 check("invisible layers cost nothing", layers_src:find("node.dirty and node.view_id and not node.rt", 1, true) ~= nil)
 
+-- 9) Web player snapshot export (round 34)
+check("Layers.snapshot exists", layers_src:find("function Layers.snapshot", 1, true) ~= nil)
+check("snapshot reads texture id", layers_src:find("texture = node.texture", 1, true) ~= nil)
+check("snapshot is a pure read", layers_src:find("for _, node in pairs(layerMap) do", 1, true) ~= nil)
+
 if failed and failed > 0 then os.exit(1) end
 print("LAYER TESTS DONE")
