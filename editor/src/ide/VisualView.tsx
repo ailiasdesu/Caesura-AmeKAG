@@ -3,6 +3,7 @@ import type {
   EngineClient,
   FrameReply,
   Live2DModel,
+  PickHit,
   SmaValidateReply,
   StateReply,
 } from '../lib/rpc'
@@ -56,6 +57,8 @@ export function VisualView({ client }: Props) {
   const [smaResult, setSmaResult] = useState<SmaValidateReply | null>(null)
   const [smaError, setSmaError] = useState('')
   const [smaBusy, setSmaBusy] = useState(false)
+  const [pickHits, setPickHits] = useState<PickHit[]>([])
+  const [pickMsg, setPickMsg] = useState('')
   const insertIntoActive = useEditor((s) => s.insertIntoActive)
 
   const refreshState = async () => {
@@ -91,6 +94,28 @@ export function VisualView({ client }: Props) {
       setSmaError(err instanceof Error ? err.message : String(err))
     } finally {
       setSmaBusy(false)
+    }
+  }
+
+  const onFrameClick = async (e: React.MouseEvent<HTMLImageElement>) => {
+    setPickMsg('')
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    // Engine frame space is 1280x720; the preview is scaled down.
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1280)
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 720)
+    try {
+      const r = await client.pick(x, y)
+      let hits: PickHit[] = []
+      try {
+        hits = JSON.parse(r.hits) as PickHit[]
+      } catch {
+        hits = []
+      }
+      setPickHits(hits)
+      setPickMsg(hits.length === 0 ? '(no layer at this pixel)' : '')
+    } catch (err) {
+      setPickMsg(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -168,7 +193,20 @@ export function VisualView({ client }: Props) {
             className="frame-img"
             src={`data:image/png;base64,${frame.png}`}
             alt="Engine frame"
+            onClick={(ev) => void onFrameClick(ev)}
+            style={{ cursor: 'crosshair' }}
           />
+          {pickMsg && <div className="panel-msg">{pickMsg}</div>}
+          {pickHits.length > 0 && (
+            <div className="state-grid">
+              {pickHits.map((h, i) => (
+                <div className="state-row" key={i}>
+                  <span>{h.name || h.id} (z={h.z})</span>
+                  <b>x{h.x},y{h.y} {h.w}×{h.h}</b>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="drop-hint">
             Drop images/audio here → inserts [bg]/[playbgm] into the active script
           </div>

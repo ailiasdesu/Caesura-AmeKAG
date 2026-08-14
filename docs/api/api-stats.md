@@ -14,12 +14,11 @@
 | Lua binding functions (luaL_Reg entries) | 172 |
 | KAG command handler files | 9 |
 | KAG contract commands (command-contracts.md) | 84 |
-| RPC HTTP endpoints (EditorServer) | 22 |
-| RPC stdin JSON-RPC methods | 26 |
+| RPC HTTP endpoints (EditorServer) | 23 |
+| RPC stdin JSON-RPC methods | 27 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
 | C++ test cases | 625 |
 | C++ assertions | 6107 |
-| Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
 
@@ -87,6 +86,7 @@
 | Get | /api/debug/inspect |
 | Get | /api/live2d/models |
 | Get | /api/logs |
+| Get | /api/pick |
 | Get | /api/ping |
 | Get | /api/sma/validate |
 | Get | /api/state |
@@ -121,6 +121,7 @@
 - `kagReloadScene`
 - `kagSetBreakpoint`
 - `logs`
+- `pick`
 - `ping`
 - `reload`
 - `removeBreakpoint`

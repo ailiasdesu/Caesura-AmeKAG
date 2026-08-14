@@ -61,6 +61,25 @@ export interface StateReply {
   error?: string
 }
 
+// Preview-frame hit test (GET /api/pick, round 23).
+export interface PickReply {
+  status: string
+  hits: string // JSON array text: [{id,name,z,depth,opacity,x,y,w,h}]
+  error?: string
+}
+
+export interface PickHit {
+  id: string
+  name: string
+  z: number
+  depth: number
+  opacity: number
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 // SMA asset validation (GET /api/sma/validate, round 19).
 export interface SmaValidateReply {
   status: string
@@ -154,6 +173,13 @@ export class EngineClient {
   /** Engine runtime state (scene/token/language/backlog/layers). */
   state(): Promise<StateReply> {
     return this.request<StateReply>('/state')
+  }
+
+  /** Hit-test the preview frame at a window pixel (1280x720 space). */
+  pick(x: number, y: number): Promise<PickReply> {
+    return this.request<PickReply>(
+      `/pick?x=${x}&y=${y}`,
+    )
   }
 
   /** Validate an SMA asset through the engine's shared checker. */
