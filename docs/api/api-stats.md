@@ -14,8 +14,8 @@
 | Lua binding functions (luaL_Reg entries) | 172 |
 | KAG command handler files | 9 |
 | KAG contract commands (command-contracts.md) | 84 |
-| RPC HTTP endpoints (EditorServer) | 23 |
-| RPC stdin JSON-RPC methods | 27 |
+| RPC HTTP endpoints (EditorServer) | 24 |
+| RPC stdin JSON-RPC methods | 28 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
 | C++ test cases | 628 |
 | C++ assertions | 6117 |
@@ -101,6 +101,7 @@
 | Post | /api/live2d/load |
 | Post | /api/reload |
 | Post | /api/run |
+| Post | /api/sma/save |
 | Post | /api/stop |
 
 ### 4.2 stdin JSON-RPC methods
@@ -127,6 +128,7 @@
 - `removeBreakpoint`
 - `run`
 - `setBreakpoint`
+- `smaSave`
 - `smaValidate`
 - `stepInto`
 - `stepOut`

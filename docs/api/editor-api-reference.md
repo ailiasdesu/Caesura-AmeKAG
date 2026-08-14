@@ -108,6 +108,44 @@
 不存在的文件 → `ok:false` + "cannot open file"。
 stdio 传输的 `smaValidate` 方法同构（请求字段 `path`）。
 
+
+### 1.2c SMA 资产编辑保存（round 26）
+
+**`POST /api/sma/save`**（编辑器 SMA 资产面板 Save 按钮）
+
+保存 SMA 资产——引擎先用共享校验器 `kag.sma_check.validate_text`
+校验 JSON（与 §1.2b 的 `/api/sma/validate` 同一份代码、同一口径），
+校验通过后才写回磁盘。**校验失败不会写盘**。
+
+请求体（`Content-Type: application/json`）：
+
+| 请求字段 | 类型 | 必填 | 说明 |
+|---------|------|------|------|
+| `path` | string | 是 | 目标相对路径，仅允许 `assets/` 与 `demo/assets/` 前缀（禁 `..`、禁绝对路径） |
+| `content` | string | 是 | SMA 资产的 JSON 文本（原样写入） |
+
+```
+→ POST /api/sma/save
+→ {"path":"demo/assets/sma/hero.json","content":"{...}"}
+← {"status":"ok","ok":true,"errors":[]}
+```
+
+| 响应字段 | 类型 | 说明 |
+|---------|------|------|
+| `status` | string | `"ok"` |
+| `ok` | bool | 是否校验通过并已写盘 |
+| `errors` | string[] | 违规列表（带字段路径，与 §1.2b 格式一致；成功时为空） |
+
+错误示例：
+
+- 坏 JSON（`content` 非法）→ `ok:false` + `errors`（含具体违规，与校验端点一致，**不写盘**）
+- 不安全路径（如 `path=../../outside.json`）→ HTTP 400
+- 目标目录不存在 / 写入失败 → `ok:false` + 错误信息
+
+stdio 传输的 `smaSave` 方法同构（请求字段 `path` / `content`）。
+与 §1.2b 呼应：编辑器 Save 按钮的保存路径复用同一共享校验器，保证
+“保存前校验”与“手动校验”口径完全一致，杜绝前端自校验与引擎后端不一致。
+
 ---
 
 ### 1.3 资源列表
