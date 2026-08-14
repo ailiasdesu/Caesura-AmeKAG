@@ -2,6 +2,7 @@
 #include "BgfxDraw.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <cstdint>
@@ -57,7 +58,11 @@ void BgfxDraw::submitBlend(uint16_t viewId, bgfx::TextureHandle baseTex,
                                     float baseAlpha, float blendAlpha, float globalAlpha) {
     if (!bgfx::isValid(m_state->shaders->getBlendProgram())) {
         static bool once = false;
-        if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitBlend: blend program not loaded.\n"); once = true; }
+        if (!once) {
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[BgfxRenderDevice] submitBlend: blend program not loaded.");
+            once = true;
+        }
         return;
     }
 
@@ -76,7 +81,11 @@ void BgfxDraw::submitTransition(uint16_t viewId, bgfx::TextureHandle fromTex,
                                          int method, float progress) {
     if (!bgfx::isValid(m_state->shaders->getTransitionProgram())) {
         static bool once = false;
-        if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitTransition: transition program not loaded.\n"); once = true; }
+        if (!once) {
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[BgfxRenderDevice] submitTransition: transition program not loaded.");
+            once = true;
+        }
         return;
     }
 
@@ -97,7 +106,11 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
                                   float blurRadius, float quakeX, float quakeY) {
     if (!bgfx::isValid(m_state->shaders->getVFXProgram())) {
         static bool once = false;
-        if (!once) { fprintf(stderr, "[BgfxRenderDevice] submitVFX: VFX program not loaded.\n"); once = true; }
+        if (!once) {
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[BgfxRenderDevice] submitVFX: VFX program not loaded.");
+            once = true;
+        }
         return;
     }
 

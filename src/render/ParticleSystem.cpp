@@ -1,6 +1,7 @@
-﻿#include "ParticleSystem.h"
+#include "ParticleSystem.h"
 #include "../di/BackendRegistry.h"
 #include "../render/api/IRenderDevice.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bx/math.h>
 #include <cmath>
 #include <cstdio>
@@ -41,7 +42,8 @@ bool ParticleSystem::init() {
     m_texSampler = toBgfx(renderDev->getDefaultSampler());
     m_program = toBgfx(renderDev->getFallbackProgram());
     if (!bgfx::isValid(m_texSampler) || !bgfx::isValid(m_program)) {
-        fprintf(stderr, "[ParticleSystem] Render device missing sampler or program\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ParticleSystem] Render device missing sampler or program");
         return false;
     }
     uint8_t white[16] = { 255,255,255,255, 255,255,255,255, 255,255,255,255, 255,255,255,255 };
@@ -169,7 +171,8 @@ void ParticleSystem::render(uint16_t viewId) {
     bgfx::TransientVertexBuffer tvb;
     bgfx::allocTransientVertexBuffer(&tvb, (uint32_t)maxVerts, m_layout);
     if (tvb.size < (uint32_t)maxVerts) {
-        fprintf(stderr, "[ParticleSystem] render: transient VB alloc failed (need %d, got %d)\n", maxVerts, (int)tvb.size);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ParticleSystem] render: transient VB alloc failed (need %d, got %d)", maxVerts, (int)tvb.size);
         return;
     }
     auto* vtx = (PtVertex*)tvb.data;
@@ -177,7 +180,8 @@ void ParticleSystem::render(uint16_t viewId) {
     bgfx::TransientIndexBuffer tib;
     bgfx::allocTransientIndexBuffer(&tib, (uint32_t)(m_aliveCount * 6));
     if (tib.size < (uint32_t)(m_aliveCount * 6)) {
-        fprintf(stderr, "[ParticleSystem] render: transient IB alloc failed\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ParticleSystem] render: transient IB alloc failed");
         return;
     }
     auto* idx = (uint16_t*)tib.data;

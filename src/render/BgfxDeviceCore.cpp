@@ -1,5 +1,6 @@
 #include "BgfxDeviceCore.h"
 #include "BgfxDebugCallback.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include "../di/api/ThreadAssert.h"
 #include <bx/math.h>
 #include <bx/bx.h>
@@ -26,7 +27,8 @@ bool BgfxDeviceCore::setPreferredBackend(const char* name) {
     } else if (strcmp(name, "opengl") == 0 || strcmp(name, "OpenGL") == 0) {
         s_preferredBackend = bgfx::RendererType::OpenGL;
     } else {
-        fprintf(stderr, "[BgfxRenderDevice] Unknown backend: %s\n", name);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] Unknown backend: %s", name);
         return false;
     }
     printf("[BgfxRenderDevice] Preferred backend set to: %s\n", name);
@@ -70,13 +72,14 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     if (!bgfx::init(initParams)) {
         // Fallback: let bgfx auto-select best renderer
         const char* preferredName = bgfx::getRendererName(s_preferredBackend);
-        fprintf(stderr, "[BgfxRenderDevice] %s init failed; trying auto-select...\n",
-                preferredName);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] %s init failed; trying auto-select...", preferredName);
         initParams.type = bgfx::RendererType::Count;
         printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=auto-select\n",
                nativeWindowHandle, width, height);
     if (!bgfx::init(initParams)) {
-            fprintf(stderr, "[BgfxRenderDevice] Fatal: bgfx::init failed.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[BgfxRenderDevice] Fatal: bgfx::init failed.");
             return false;
         }
     }
@@ -90,9 +93,9 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
 
     // Enable debug text for engine HUD overlay
     bgfx::setDebug(BGFX_DEBUG_TEXT);
-    // -- Set up default views --
     setupDefaultViews();
-    fprintf(stderr, "[BgfxRenderDevice] Default views OK.\n");
+    DEBUG_INFO(SubSys::Render, ErrCode::Ok,
+               "[BgfxRenderDevice] Default views OK.");
 
     // -- Embedded shader fallback (initEmbeddedShaders is called by
     // BgfxRenderDevice::init after this point) --
@@ -116,9 +119,9 @@ void BgfxDeviceCore::resize(int width, int height) {
     if (width == m_width && height == m_height) return;
     m_width  = width;
     m_height = height;
-    bgfx::reset(uint32_t(width), uint32_t(height), BGFX_RESET_VSYNC);
     setupDefaultViews();
-    fprintf(stderr, "[BgfxRenderDevice] Resized to %dx%d\n", width, height);
+    DEBUG_INFO(SubSys::Render, ErrCode::Ok,
+               "[BgfxRenderDevice] Resized to %dx%d", width, height);
 }
 
 void BgfxDeviceCore::shutdown() {
@@ -256,15 +259,15 @@ ViewportHandle BgfxDeviceCore::createRenderTarget(int width, int height) {
         BGFX_TEXTURE_RT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 
     if (!bgfx::isValid(tex)) {
-        fprintf(stderr, "[BgfxRenderDevice] createRenderTarget: "
-                "texture allocation failed\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] createRenderTarget: ""texture allocation failed");
         return ViewportHandle{0};
     }
 
     bgfx::FrameBufferHandle fb = bgfx::createFrameBuffer(1, &tex, true);
     if (!bgfx::isValid(fb)) {
-        fprintf(stderr, "[BgfxRenderDevice] createRenderTarget: "
-                "framebuffer allocation failed\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] createRenderTarget: ""framebuffer allocation failed");
         bgfx::destroy(tex);
         return ViewportHandle{0};
     }

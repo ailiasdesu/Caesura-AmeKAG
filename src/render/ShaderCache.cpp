@@ -1,4 +1,5 @@
 #include "ShaderCache.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <cstdio>
 #include <algorithm>
 
@@ -45,8 +46,9 @@ void CompositeShaderCache::shutdown() {
 
 void CompositeShaderCache::registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program) {
     if (!bgfx::isValid(program)) {
-        fprintf(stderr, "[ShaderCache] registerProgram: invalid program for blend=%d palette=%d\n",
-                key.blendMode, (int)key.usePalette);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ShaderCache] registerProgram: invalid program for blend=%d palette=%d",
+                  key.blendMode, (int)key.usePalette);
         return;
     }
 
@@ -114,16 +116,18 @@ bgfx::ProgramHandle CompositeShaderCache::getProgram(const CompositeShaderKey& k
             fb->second.lruIt = m_lruList.begin();
             return fb->second.program;
         }
-        fprintf(stderr, "[ShaderCache] palette requested but no fallback for blend=%d\n",
-                key.blendMode);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ShaderCache] palette requested but no fallback for blend=%d",
+                  key.blendMode);
         return BGFX_INVALID_HANDLE;
     }
 
     // Compile new variant (should not reach here if registered by BgfxRenderDevice)
     bgfx::ProgramHandle prog = compileVariant(key);
     if (!bgfx::isValid(prog)) {
-        fprintf(stderr, "[ShaderCache] Failed to compile variant: blend=%d palette=%d\n",
-                key.blendMode, (int)key.usePalette);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[ShaderCache] Failed to compile variant: blend=%d palette=%d",
+                  key.blendMode, (int)key.usePalette);
         return BGFX_INVALID_HANDLE;
     }
 
@@ -187,9 +191,10 @@ bgfx::ProgramHandle CompositeShaderCache::compileVariant(const CompositeShaderKe
     // All Programs registered by IRenderDevice::initEmbeddedShaders()
     // and registered via registerProgram(). If we reach here, the program
     // was not registered -- fall back to Normal blend mode.
-    fprintf(stderr, "[ShaderCache] compileVariant: unregistered variant blend=%d palette=%d. "
-            "Falling back to Normal.\n",
-            key.blendMode, (int)key.usePalette);
+    DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+              "[ShaderCache] compileVariant: unregistered variant blend=%d palette=%d. "
+              "Falling back to Normal.",
+              key.blendMode, (int)key.usePalette);
 
     // Try Normal fallback
     CompositeShaderKey fallbackKey;

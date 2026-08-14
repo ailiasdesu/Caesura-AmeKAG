@@ -1,6 +1,7 @@
 #include "RTTManager.h"
 #include <stb/stb_image_write.h>   // declarations only; impl lives in stb_impl.cpp
 #include "di/BackendRegistry.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
 #include <vector>
 #include <cstdio>
@@ -73,8 +74,9 @@ ViewportHandle RTTManager::acquireCanvas(int w, int h, RTType type, bool clear) 
     // No free match -- create a new RTT
     ViewportHandle hdl = m_device.createRenderTarget(w, h);
     if (hdl.id == 0) {
-        fprintf(stderr, "[RTTManager] Failed to create %s RTT (%dx%d)\n",
-                (type == RTType::RT_3D ? "3D" : "2D"), w, h);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[RTTManager] Failed to create %s RTT (%dx%d)",
+                  (type == RTType::RT_3D ? "3D" : "2D"), w, h);
         return hdl;
     }
 
@@ -122,7 +124,8 @@ void RTTManager::releaseCanvas(ViewportHandle handle) {
     }
 
     // Not in pool -- fallback: just mark as available in whichever pool matches
-    fprintf(stderr, "[RTTManager] releaseCanvas: handle %u not found in pool index, searching...\n", handle.id);
+    DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+              "[RTTManager] releaseCanvas: handle %u not found in pool index, searching...", handle.id);
     for (auto& entry : m_pool2D) {
         if (entry.handle.id == handle.id) { entry.inUse = false; return; }
     }

@@ -1,4 +1,5 @@
-﻿#include "TextRenderer.h"
+#include "TextRenderer.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include "api/IRenderDevice.h"
 #include "di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
@@ -291,15 +292,17 @@ TextRenderer::TTFState::~TTFState() {
 bool TextRenderer::init(IRenderDevice* device) {
     if (m_initialized) return true;
     if (!device) {
-        fprintf(stderr, "[TextRenderer] Null device pointer.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Null device pointer.");
         return false;
     }
 
     // Borrow shared resources from IRenderDevice
     m_fallbackProgram = toBgfx(device->getFallbackProgram());
     if (!bgfx::isValid(m_fallbackProgram)) {
-        fprintf(stderr, "[TextRenderer] Fallback program not ready. "
-                "Ensure device::init() runs first.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Fallback program not ready. "
+                  "Ensure device::init() runs first.");
         return false;
     }
 
@@ -312,18 +315,21 @@ bool TextRenderer::init(IRenderDevice* device) {
 
     m_texSampler = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
     if (!bgfx::isValid(m_texSampler)) {
-        fprintf(stderr, "[TextRenderer] Uniform creation failed.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Uniform creation failed.");
         return false;
     }
 
     m_u_color = bgfx::createUniform("u_color", bgfx::UniformType::Vec4);
     if (!bgfx::isValid(m_u_color)) {
-        fprintf(stderr, "[TextRenderer] Color uniform creation failed.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Color uniform creation failed.");
         return false;
     }
 
     if (!loadFontAtlas(FontId::Small)) {
-        fprintf(stderr, "[TextRenderer] Font atlas creation failed.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] Font atlas creation failed.");
         return false;
     }
 
@@ -464,8 +470,9 @@ bool TextRenderer::loadFontAtlas(FontId id) {
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
 
     if (!bgfx::isValid(m_fontTexture)) {
-        fprintf(stderr, "[TextRenderer] Texture creation failed (%dx%d)\n",
-                atlasW, atlasH);
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] Texture creation failed (%dx%d)",
+                  atlasW, atlasH);
         return false;
     }
 
@@ -820,7 +827,8 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
 
 bool TextRenderer::loadTTF(const char* path, float fontSize) {
     if (!path || path[0] == '\0' || fontSize <= 0.0f) {
-        fprintf(stderr, "[TextRenderer] Invalid TTF load request\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Invalid TTF load request");
         return false;
     }
 
@@ -831,28 +839,32 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
     // shutdown() and onDeviceLost()); bgfx::getCaps() itself is not safe
     // to call before bgfx::init.
     if (!m_initialized) {
-        fprintf(stderr, "[TextRenderer] loadTTF: renderer not initialized; "
-                        "refusing GPU atlas upload\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] loadTTF: renderer not initialized; "
+                  "refusing GPU atlas upload");
         return false;
     }
 
     auto nextTtf = std::make_unique<TTFState>();
     FT_Error ftErr = FT_Init_FreeType(&nextTtf->ftLib);
     if (ftErr) {
-        fprintf(stderr, "[TextRenderer] FT_Init_FreeType failed (err=%d)\n", (int)ftErr);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] FT_Init_FreeType failed (err=%d)", (int)ftErr);
         return false;
     }
 
     ftErr = FT_New_Face(nextTtf->ftLib, path, 0, &nextTtf->ftFace);
     if (ftErr) {
-        fprintf(stderr, "[TextRenderer] FT_New_Face failed: %s (err=%d)\n", path, (int)ftErr);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] FT_New_Face failed: %s (err=%d)", path, (int)ftErr);
         return false;
     }
 
     ftErr = FT_Set_Pixel_Sizes(nextTtf->ftFace, 0, (FT_UInt)fontSize);
     if (ftErr) {
-        fprintf(stderr, "[TextRenderer] FT_Set_Pixel_Sizes failed: %s (err=%d)\n",
-                path, (int)ftErr);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] FT_Set_Pixel_Sizes failed: %s (err=%d)",
+                  path, (int)ftErr);
         return false;
     }
 
@@ -880,11 +892,11 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
         if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
 
     if (failed > 0) {
-        fprintf(stderr,
-                "[TextRenderer] Warning: %zu of %zu glyphs failed to "
-                "rasterize (missing glyph or atlas full); they will fall "
-                "back to the bitmap font.\n",
-                failed, m_ttf->glyphs.size() + failed);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextRenderer] Warning: %zu of %zu glyphs failed to "
+                  "rasterize (missing glyph or atlas full); they will fall "
+                  "back to the bitmap font.",
+                  failed, m_ttf->glyphs.size() + failed);
     }
 
     // Upload atlas as bgfx texture
@@ -1021,7 +1033,8 @@ GlyphMetrics TextRenderer::getTTFGlyph(uint32_t codepoint) {
 bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath) {
     FILE* f = fopen(atlasPath.c_str(), "rb");
     if (!f) {
-        fprintf(stderr, "[TextRenderer] CJK atlas not found: %s (skipping)\n", atlasPath.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK atlas not found: %s (skipping)", atlasPath.c_str());
         return false;
     }
     fseek(f, 0, SEEK_END);
@@ -1030,7 +1043,8 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
     std::vector<uint8_t> data(size);
     if (fread(data.data(), 1, size, f) != (size_t)size) {
         fclose(f);
-        fprintf(stderr, "[TextRenderer] CJK atlas read incomplete: %s\n", atlasPath.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK atlas read incomplete: %s", atlasPath.c_str());
         return false;
     }
     fclose(f);
@@ -1038,9 +1052,9 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
     const uint16_t cjkW = 4096, cjkH = 4096;
     const uint32_t expected = static_cast<uint32_t>(cjkW) * cjkH * 4;  // 64MB
     if (static_cast<size_t>(size) != expected) {
-        fprintf(stderr,
-            "[TextRenderer] CJK atlas size mismatch: %ld bytes, expected %u (skipping)\n",
-            size, expected);
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK atlas size mismatch: %ld bytes, expected %u (skipping)",
+                  size, expected);
         return false;
     }
     m_cjkAtlas = bgfx::createTexture2D(cjkW, cjkH, false, 1,
@@ -1048,20 +1062,23 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
         BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP,
         bgfx::copy(data.data(), expected));
     if (!bgfx::isValid(m_cjkAtlas)) {
-        fprintf(stderr, "[TextRenderer] CJK atlas texture creation failed\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK atlas texture creation failed");
         return false;
     }
 
     FILE* mf = fopen(metaPath.c_str(), "rb");
     if (!mf) {
-        fprintf(stderr, "[TextRenderer] CJK metadata not found: %s\n", metaPath.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK metadata not found: %s", metaPath.c_str());
         bgfx::destroy(m_cjkAtlas); m_cjkAtlas = BGFX_INVALID_HANDLE;
         return false;
     }
     uint32_t count = 0;
     if (fread(&count, sizeof(count), 1, mf) != 1) {
         fclose(mf);
-        fprintf(stderr, "[TextRenderer] CJK metadata read failed\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_FontAtlasFailed,
+                  "[TextRenderer] CJK metadata read failed");
         bgfx::destroy(m_cjkAtlas); m_cjkAtlas = BGFX_INVALID_HANDLE;
         return false;
     }
@@ -1141,7 +1158,8 @@ bool TextRenderer::ensureCacheBuffers() {
         m_msgCache.vb = bgfx::createDynamicVertexBuffer(
             maxVerts, m_posTexLayout, BGFX_BUFFER_ALLOW_RESIZE);
         if (!bgfx::isValid(m_msgCache.vb)) {
-            fprintf(stderr, "[TextRenderer] Failed to create dynamic vertex buffer.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[TextRenderer] Failed to create dynamic vertex buffer.");
             return false;
         }
     }
@@ -1149,7 +1167,8 @@ bool TextRenderer::ensureCacheBuffers() {
         m_msgCache.ib = bgfx::createDynamicIndexBuffer(
             maxInds, BGFX_BUFFER_ALLOW_RESIZE | BGFX_BUFFER_INDEX32);
         if (!bgfx::isValid(m_msgCache.ib)) {
-            fprintf(stderr, "[TextRenderer] Failed to create dynamic index buffer.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[TextRenderer] Failed to create dynamic index buffer.");
             return false;
         }
     }

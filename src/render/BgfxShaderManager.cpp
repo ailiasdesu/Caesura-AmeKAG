@@ -1,6 +1,7 @@
 #include "BgfxShaderManager.h"
 #include "EmbeddedShaders.h"
 #include "ShaderCache.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bx/bx.h>
 #include <bx/readerwriter.h>
 #include <bx/error.h>
@@ -44,7 +45,8 @@ static bgfx::ShaderHandle buildBgfxShader(
     const ShaderUniformMetadata* uniform = nullptr) {
     // [10.2.3] Shader safety: reject bytecode > 64 KB (SPIR-V/DXBC limit)
     if (codeSize > 65536) {
-        fprintf(stderr, "[BgfxShaderManager] Shader rejected: %u bytes exceeds 64 KB limit.\n", codeSize);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxShaderManager] Shader rejected: %u bytes exceeds 64 KB limit.", codeSize);
         return BGFX_INVALID_HANDLE;
     }
 
@@ -61,7 +63,8 @@ static bgfx::ShaderHandle buildBgfxShader(
 
     const bgfx::Memory* mem = bgfx::alloc(totalSize);
     if (!mem) {
-        fprintf(stderr, "[BgfxShaderManager] bgfx::alloc failed for %u bytes\n", totalSize);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxShaderManager] bgfx::alloc failed for %u bytes", totalSize);
         return BGFX_INVALID_HANDLE;
     }
     bx::StaticMemoryBlockWriter writer(mem->data, mem->size);
@@ -242,7 +245,8 @@ void BgfxShaderManager::initEmbeddedShaders() {
 
     // Verify fallback program is valid before registering
     if (!bgfx::isValid(m_fallbackProgram)) {
-        fprintf(stderr, "[BgfxShaderManager] FALLBACK PROGRAM INVALID, all rendering disabled!\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxShaderManager] FALLBACK PROGRAM INVALID, all rendering disabled!");
     }
 
     // -- Create uniform handles for effect cbuffers -------------------

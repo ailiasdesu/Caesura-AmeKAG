@@ -1,4 +1,5 @@
 #include "BgfxDebugCallback.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <stb/stb_image_write.h>   // declarations only; impl lives in stb_impl.cpp
 #include <vector>
 
@@ -20,13 +21,14 @@ void BgfxDebugCallback::screenShot(const char* _name, uint32_t _width,
                                    const void* _data, uint32_t _size,
                                    bool _flipY) {
     if (!_data || _width == 0 || _height == 0) {
-        fprintf(stderr, "[bgfx] screenshot skipped (no data)\n");
+        DEBUG_ERR(Caesura::SubSys::Render, Caesura::ErrCode::Ok,
+                  "[bgfx] screenshot skipped (no data)");
         return;
     }
     if (_format != bgfx::TextureFormat::RGBA8
         && _format != bgfx::TextureFormat::BGRA8) {
-        fprintf(stderr, "[bgfx] screenshot format %d unsupported, skipping\n",
-                (int)_format);
+        DEBUG_ERR(Caesura::SubSys::Render, Caesura::ErrCode::Ok,
+                  "[bgfx] screenshot format %d unsupported, skipping", (int)_format);
         return;
     }
     BX_UNUSED(_depth, _size);
@@ -50,6 +52,7 @@ void BgfxDebugCallback::screenShot(const char* _name, uint32_t _width,
                                   src, (int)_width * 4);
     stbi_flip_vertically_on_write(0);
     if (!ok) {
-        fprintf(stderr, "[bgfx] screenshot write failed: %s\n", _name);
+        DEBUG_ERR(Caesura::SubSys::Render, Caesura::ErrCode::Ok,
+                  "[bgfx] screenshot write failed: %s", _name);
     }
 }

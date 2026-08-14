@@ -2,6 +2,7 @@
 #include "BgfxShaderManager.h"
 #include "EmbeddedShaders.h"
 #include "SmaSkinner.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
 #include <bx/bx.h>
 #include <bx/error.h>
@@ -37,8 +38,8 @@ bgfx::ShaderHandle buildShaderBinary(const uint8_t* code, uint32_t codeSize,
                                      uint8_t numAttrs,
                                      const uint16_t* attrIds) {
     if (!code || codeSize == 0 || codeSize > 65536) {
-        fprintf(stderr, "[SmaMeshRenderer] Shader rejected: %u bytes\n",
-                codeSize);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[SmaMeshRenderer] Shader rejected: %u bytes", codeSize);
         return BGFX_INVALID_HANDLE;
     }
     uint32_t uniformBytes = 0;
@@ -160,9 +161,9 @@ void SmaMeshRenderer::init() {
         // draw reuses the engine's proven passthrough program — no extra
         // vertex shader or uniforms needed.
         if (!bgfx::isValid(m_skinProgram)) {
-            fprintf(stderr,
-                    "[SmaMeshRenderer] S5 GPU skinning unavailable "
-                    "(compute program build failed); using CPU skinner.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[SmaMeshRenderer] S5 GPU skinning unavailable "
+                      "(compute program build failed); using CPU skinner.");
         }
     }
 
@@ -187,9 +188,9 @@ bool SmaMeshRenderer::useGpuSkin(const MeshEntry& entry) const {
         && bgfx::isValid(m_boneBuffer);
     if (m_skinMode == SkinMode::Gpu && !capable) {
         if (!m_skinWarningShown) {
-            fprintf(stderr,
-                    "[SmaMeshRenderer] GPU skinning requested but "
-                    "unavailable; falling back to CPU.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[SmaMeshRenderer] GPU skinning requested but "
+                      "unavailable; falling back to CPU.");
             m_skinWarningShown = true;
         }
         return false;

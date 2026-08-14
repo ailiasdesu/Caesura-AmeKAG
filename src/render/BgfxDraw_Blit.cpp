@@ -2,6 +2,7 @@
 #include "BgfxDraw.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 #include <cstdio>
@@ -87,7 +88,8 @@ void BgfxDraw::stretchBlt(uint16_t targetView, uint32_t dstTexId,
     (void)dstTexId;
 
     if (!bgfx::isValid(srcTex)) {
-        fprintf(stderr, "[BgfxRenderDevice] stretchBlt: invalid src tex\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] stretchBlt: invalid src tex");
         return;
     }
 
@@ -147,7 +149,8 @@ void BgfxDraw::affineBlt(uint16_t targetView, uint32_t dstTexId,
     (void)dstTexId;
 
     if (!bgfx::isValid(srcTex)) {
-        fprintf(stderr, "[BgfxRenderDevice] affineBlt: invalid src tex\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxRenderDevice] affineBlt: invalid src tex");
         return;
     }
 

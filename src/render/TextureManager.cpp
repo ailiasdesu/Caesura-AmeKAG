@@ -1,4 +1,5 @@
 #include "TextureManager.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bimg/decode.h>
 #include <bx/file.h>
 #include <bx/allocator.h>
@@ -103,13 +104,15 @@ void TextureManager::shutdown() {
     }
     m_quotaReservations.clear();
     m_cache.clear();
-    m_textureSizes.clear();
     m_textureDimensions.clear();
     m_restoreSources.clear();
     m_textureLRU.clear();
+    // P1-2 (audit g0_render): clear the dedup/path caches too — stale ids from
+    // a previous session must not be re-returned after re-initialization.
+    m_solidCache.clear();
+    m_pathToId.clear();
     m_totalBytes = 0;
     m_gpuAvailable = true;
-
     if (bgfx::isValid(m_placeholderTex)) {
         bgfx::destroy(m_placeholderTex);
         m_placeholderTex = BGFX_INVALID_HANDLE;
@@ -170,7 +173,8 @@ bgfx::TextureHandle TextureManager::buildCheckerboardTexture() {
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
 
     if (!bgfx::isValid(m_placeholderTex)) {
-        fprintf(stderr, "[TextureManager] Failed to create placeholder texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Failed to create placeholder texture.");
     } else {
         printf("[TextureManager] Placeholder texture created (16x16 %s).\n", m_devMode ? "checkerboard" : "transparent");
     }
@@ -205,15 +209,17 @@ bgfx::TextureHandle TextureManager::loadFromFile(
         if (sz <= 0) continue;
         if (static_cast<uint64_t>(sz) >
             static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())) {
-            fprintf(stderr, "[TextureManager] Texture file is too large: %s\n",
-                    path.c_str());
+            DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                      "[TextureManager] Texture file is too large: %s",
+                      path.c_str());
             return BGFX_INVALID_HANDLE;
         }
         file.seekg(0, std::ios::beg);
         std::vector<uint8_t> buf(static_cast<size_t>(sz));
         if (!file.read(reinterpret_cast<char*>(buf.data()), sz)) {
-            fprintf(stderr, "[TextureManager] Failed to read: %s\n",
-                    path.c_str());
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[TextureManager] Failed to read: %s",
+                      path.c_str());
             return BGFX_INVALID_HANDLE;
         }
         bgfx::TextureHandle texture = loadFromMemory(
@@ -223,7 +229,8 @@ bgfx::TextureHandle TextureManager::loadFromFile(
         }
         return texture;
     }
-    fprintf(stderr, "[TextureManager] File not found: %s\n", path.c_str());
+    DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+              "[TextureManager] File not found: %s", path.c_str());
     return BGFX_INVALID_HANDLE;
 }
 
@@ -234,8 +241,9 @@ bool TextureManager::validateTextureDimensions(
         width > std::numeric_limits<uint16_t>::max() ||
         height > std::numeric_limits<uint16_t>::max() ||
         rgbaBytes > std::numeric_limits<uint32_t>::max()) {
-        fprintf(stderr, "[TextureManager] Unsupported texture dimensions: %ux%u.\n",
-                width, height);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Unsupported texture dimensions: %ux%u.",
+                  width, height);
         return false;
     }
 
@@ -245,9 +253,9 @@ bool TextureManager::validateTextureDimensions(
             caps ? caps->limits.maxTextureSize : 0;
         if (maxTextureSize != 0 &&
             (width > maxTextureSize || height > maxTextureSize)) {
-            fprintf(stderr,
-                    "[TextureManager] Texture %ux%u exceeds GPU limit %u.\n",
-                    width, height, maxTextureSize);
+            DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                      "[TextureManager] Texture %ux%u exceeds GPU limit %u.",
+                      width, height, maxTextureSize);
             return false;
         }
     }
@@ -269,14 +277,16 @@ bgfx::TextureHandle TextureManager::loadFromMemory(
 
     if (!img) {
         if (size > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
-            fprintf(stderr, "[TextureManager] Encoded texture exceeds decoder limit.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                      "[TextureManager] Encoded texture exceeds decoder limit.");
             return BGFX_INVALID_HANDLE;
         }
         int iw = 0, ih = 0, channels = 0;
         unsigned char* stbData = stbi_load_from_memory(
             data, static_cast<int>(size), &iw, &ih, &channels, 4);
         if (!stbData) {
-            fprintf(stderr, "[TextureManager] Decode failed.\n");
+            DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                      "[TextureManager] Decode failed.");
             return BGFX_INVALID_HANDLE;
         }
         uint64_t rgbaBytes = 0;
@@ -305,7 +315,8 @@ bgfx::TextureHandle TextureManager::loadFromMemory(
         !validateTextureDimensions(img->m_width, img->m_height, rgbaBytes) ||
         img->m_size < rgbaBytes) {
         bimg::imageFree(img);
-        fprintf(stderr, "[TextureManager] Unsupported texture layout.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Unsupported texture layout.");
         return BGFX_INVALID_HANDLE;
     }
 
@@ -395,9 +406,10 @@ bool TextureManager::checkBudget(uint32_t id, uint16_t w, uint16_t h) {
         if (previousBytes != 0) {
             trackTexture(id, previousBytes);
         }
-        fprintf(stderr, "[TextureManager] Texture requires %llu bytes, budget is %llu bytes.\n",
-                static_cast<unsigned long long>(bytes),
-                static_cast<unsigned long long>(budget));
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Texture requires %llu bytes, budget is %llu bytes.",
+                  static_cast<unsigned long long>(bytes),
+                  static_cast<unsigned long long>(budget));
         return false;
     }
 
@@ -407,9 +419,10 @@ bool TextureManager::checkBudget(uint32_t id, uint16_t w, uint16_t h) {
             m_totalBytes > std::numeric_limits<uint64_t>::max() - bytes
                 ? std::numeric_limits<uint64_t>::max()
                 : m_totalBytes + bytes;
-        fprintf(stderr, "[TextureManager] Budget exceeded (%llu/%llu MB), evicting texture %u\n",
-                static_cast<unsigned long long>(requestedTotal / (1024 * 1024)),
-                static_cast<unsigned long long>(budget / (1024 * 1024)), victimId);
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Budget exceeded (%llu/%llu MB), evicting texture %u",
+                  static_cast<unsigned long long>(requestedTotal / (1024 * 1024)),
+                  static_cast<unsigned long long>(budget / (1024 * 1024)), victimId);
         destroyTexture(victimId);
     }
 
@@ -417,8 +430,9 @@ bool TextureManager::checkBudget(uint32_t id, uint16_t w, uint16_t h) {
         if (previousBytes != 0) {
             trackTexture(id, previousBytes);
         }
-        fprintf(stderr, "[TextureManager] Cannot fit texture within %llu MB budget\n",
-                static_cast<unsigned long long>(budget / (1024 * 1024)));
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Cannot fit texture within %llu MB budget",
+                  static_cast<unsigned long long>(budget / (1024 * 1024)));
         return false;
     }
 
@@ -434,17 +448,20 @@ bool TextureManager::checkBudget(uint32_t id, uint16_t w, uint16_t h) {
 
 uint32_t TextureManager::loadTexture(const std::string& path) {
     if (!m_initialized) {
-        fprintf(stderr, "[TextureManager] Not initialized.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Not initialized.");
         return 0;
     }
     // Reject path traversal
     if (path.find("..") != std::string::npos) {
-        fprintf(stderr, "[TextureManager] Path traversal blocked: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Path traversal blocked: %s", path.c_str());
         return 0;
     }
 
     if (path.empty()) {
-        fprintf(stderr, "[TextureManager] Empty path.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Empty path.");
         return 0;
 
     }
@@ -458,11 +475,13 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
 
     QuotaReservation quotaReservation;
     if (!quotaReservation) {
-        fprintf(stderr, "[TextureManager] Texture quota exceeded: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Texture quota exceeded: %s", path.c_str());
         return 0;
     }
     if (!m_gpuAvailable) {
-        fprintf(stderr, "[TextureManager] GPU unavailable; cannot load texture: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] GPU unavailable; cannot load texture: %s", path.c_str());
         return 0;
     }
 
@@ -473,12 +492,14 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     try {
         tex = loadFromFile(path, width, height, encodedBytes);
     } catch (const std::bad_alloc&) {
-        fprintf(stderr, "[TextureManager] Out of memory while loading: %s\n",
-                path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Out of memory while loading: %s",
+                  path.c_str());
         return 0;
     }
     if (!bgfx::isValid(tex)) {
-        fprintf(stderr, "[TextureManager] Failed to load: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Failed to load: %s", path.c_str());
         return 0;
     }
 
@@ -490,7 +511,8 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     const uint32_t id = registerTexture(
         tex, width, height, std::move(restoreSource), quotaReservation);
     if (id == 0) {
-        fprintf(stderr, "[TextureManager] Failed to register: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Failed to register: %s", path.c_str());
         return 0;
     }
     printf("[TextureManager] Loaded: %s -> id=%u\n", path.c_str(), id);
@@ -502,17 +524,20 @@ uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, ui
                                              const std::string& cacheKey) {
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized || !rgba || w == 0 || h == 0) {
-        fprintf(stderr, "[TextureManager] Invalid RGBA input.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Invalid RGBA input.");
         return 0;
     }
 
     QuotaReservation quotaReservation;
     if (!quotaReservation) {
-        fprintf(stderr, "[TextureManager] Texture quota exceeded (RGBA).\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Texture quota exceeded (RGBA).");
         return 0;
     }
     if (!m_gpuAvailable) {
-        fprintf(stderr, "[TextureManager] GPU unavailable; cannot create RGBA texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] GPU unavailable; cannot create RGBA texture.");
         return 0;
     }
 
@@ -529,21 +554,24 @@ uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, ui
         restoreSource.bytes.assign(
             rgba, rgba + static_cast<size_t>(rgbaBytes));
     } catch (const std::bad_alloc&) {
-        fprintf(stderr, "[TextureManager] Out of memory copying RGBA texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Out of memory copying RGBA texture.");
         return 0;
     }
 
     bgfx::TextureHandle tex =
         createFromRGBA(restoreSource.bytes.data(), w, h);
     if (!bgfx::isValid(tex)) {
-        fprintf(stderr, "[TextureManager] GPU texture creation failed (RGBA).\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] GPU texture creation failed (RGBA).");
         return 0;
     }
 
     const uint32_t id = registerTexture(
         tex, w, h, std::move(restoreSource), quotaReservation);
     if (id == 0) {
-        fprintf(stderr, "[TextureManager] Failed to register RGBA texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Failed to register RGBA texture.");
         return 0;
     }
     if (!cacheKey.empty()) {
@@ -557,21 +585,25 @@ uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, ui
 uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t size,
                                                const std::string& cacheKey) {
     if (!m_initialized) {
-        fprintf(stderr, "[TextureManager] Not initialized.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Not initialized.");
         return 0;
     }
     if (!data || size == 0) {
-        fprintf(stderr, "[TextureManager] Invalid texture data.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Invalid texture data.");
         return 0;
     }
 
     QuotaReservation quotaReservation;
     if (!quotaReservation) {
-        fprintf(stderr, "[TextureManager] Texture quota exceeded (memory).\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Texture quota exceeded (memory).");
         return 0;
     }
     if (!m_gpuAvailable) {
-        fprintf(stderr, "[TextureManager] GPU unavailable; cannot load texture from memory.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] GPU unavailable; cannot load texture from memory.");
         return 0;
     }
 
@@ -580,7 +612,8 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
     try {
         restoreSource.bytes.assign(data, data + static_cast<size_t>(size));
     } catch (const std::bad_alloc&) {
-        fprintf(stderr, "[TextureManager] Out of memory copying encoded texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Out of memory copying encoded texture.");
         return 0;
     }
 
@@ -590,7 +623,8 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
         restoreSource.bytes.data(),
         static_cast<uint32_t>(restoreSource.bytes.size()), width, height);
     if (!bgfx::isValid(tex)) {
-        fprintf(stderr, "[TextureManager] Failed to load from memory.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
+                  "[TextureManager] Failed to load from memory.");
         return 0;
     }
 
@@ -599,7 +633,8 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
     const uint32_t id = registerTexture(
         tex, width, height, std::move(restoreSource), quotaReservation);
     if (id == 0) {
-        fprintf(stderr, "[TextureManager] Failed to register memory texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Failed to register memory texture.");
         return 0;
     }
     if (!cacheKey.empty()) {
@@ -619,7 +654,8 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
 uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
                                              uint8_t b, uint8_t a) {
     if (!m_initialized) {
-        fprintf(stderr, "[TextureManager] Not initialized.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Not initialized.");
         return 0;
     }
     // Solid-color dedup: UIs re-request the same RGBA every open (settings,
@@ -633,11 +669,13 @@ uint32_t TextureManager::createSolidTexture(uint8_t r, uint8_t g,
     }
     QuotaReservation quotaReservation;
     if (!quotaReservation) {
-        fprintf(stderr, "[TextureManager] Texture quota exceeded (solid).\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] Texture quota exceeded (solid).");
         return 0;
     }
     if (!m_gpuAvailable) {
-        fprintf(stderr, "[TextureManager] GPU unavailable; cannot create solid texture.\n");
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[TextureManager] GPU unavailable; cannot create solid texture.");
         return 0;
     }
     RestoreSource restoreSource;
