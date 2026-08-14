@@ -83,3 +83,4 @@
 | 35 | G5 导出链：ks_bake --web story bundle——bakeWeb（compiler.serialize 场景序列化 + storage/file 资产发现）、encode_lua_literal 导出、非 ASCII 路径 CWD 剥离、CLI --web 产出 cache/story/story.lua（4 场景 6 资产）；web 播放器零解析加载验证（.ksc + story bundle 均 load 直取） | web vitest 15/15, Lua 120+29+17, compiler 39, 耦合 PASS | e2764bd7, dc91cafa |
 | 36 | G5 浏览器部署形态：vite 配置（publicDir 仓库根）静态服务 /scripts /demo /assets /cache/story 全部 200；main.mjs 优先 story bundle（runFromBundle 零解析）运行 + 点击推进；资源布局测试 3 例（web 18/18） | web vitest 18/18, vite 全资源 200, 引擎无变更 | b3500e69 |
 | 37 | G5 音频真实化：AudioEngine（WebAudio 3 总线 bgm/se/voice、解码缓存、play/stop/isPlaying/音量），bridge 音频委托真实引擎 + core 状态降级；5 引擎测试（总线/生命周期/缓存/降级）；web 23/23 | web vitest 23/23, 引擎无变更 | 2cba6e3d |
+| 38 | G5 文本排版对齐：bridge 收集 TextScene draws 为 Lua 表（x/y/rgb/scale/bold/italic）经 wasmoon 表桥接直达 JS，core.setDraws + DOM 渲染器逐条绝对定位 span；textBuffer 平面回退保留；flow 断言 span left/top/color/fontSize | web vitest 23/23, 引擎无变更 | 42628adb |
