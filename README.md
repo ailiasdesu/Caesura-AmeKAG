@@ -175,7 +175,7 @@ Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 
 ## KAG Script Compatibility
 
-72 KAG Neo-Genesis commands with declarative contracts across 9 categories (generated from `docs/api/command-contracts.md`): audio, layer, text, system, flow control, transition, VFX, video, resource/save.
+84 KAG Neo-Genesis commands with declarative contracts across 9 categories (generated from `docs/api/command-contracts.md`): audio, layer, text, system, flow control, transition, VFX, video, resource/save.
 
 ```kag
 *start
@@ -270,7 +270,7 @@ Caesura(AmeKAG)/
 | [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md) | Script authors | KAG Neo-Genesis language whitepaper: next-generation design, advanced features, KAG3 evolution |
 | [editor-api-reference.md](docs/api/editor-api-reference.md) | Editor developers | RPC endpoints, Lua bindings, KAG commands, C++ interfaces |
 | [cpp-interfaces.md](docs/api/cpp-interfaces.md) | Engine developers | All 28 I* pure-virtual interfaces (30 headers) |
-| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 78 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
+| [command-contracts.md](docs/api/command-contracts.md) | Script authors | Auto-generated 84 KAG Neo-Genesis command contracts (types, clamping, interpolation) |
 | [kag-commands.md](docs/api/kag-commands.md) | Script authors | Deprecated KAG3-compat reference (see command-contracts.md) |
 | [lua-modules.md](docs/api/lua-modules.md) | Script authors | Lua binding module APIs (Render, VFX, KAG, Debug...) |
 | [getting-started.md](docs/guides/getting-started.md) | New users | Build, project setup, first scene |

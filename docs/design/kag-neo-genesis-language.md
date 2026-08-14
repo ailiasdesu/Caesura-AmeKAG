@@ -7,7 +7,7 @@
 > 持续保留。
 >
 > 配套文档：`docs/design/nextgen-kag-standard.md`（标准演化）、
-> `docs/api/command-contracts.md`（78 命令权威契约）。
+> `docs/api/command-contracts.md`（84 命令权威契约）。
 
 ---
 
