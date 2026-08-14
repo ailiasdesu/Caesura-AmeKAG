@@ -59,3 +59,4 @@
 | 11 | 替换 4 个假通过 switch 测试为 7 项真实断言：case 精确路由/无回落、default 回退、缺变量回退、无匹配跳过、嵌套 switch 隔离（G9 中段） | Lua 120/120（scheduler 25/25）, C++ 711/711, ctest 绿, 耦合 PASS | 79514217 |
 | 12 | 孤儿测试审计：发现 8 个 test_*.lua 从未进 runner（假绿）；确认全部 PASS 后建独立 run_orphan_tests.lua（与沙箱套件顺序互斥不可合并）+ 修复 os.exit/BOM/label 计数（G9 中段） | Lua 120/120 + 孤儿 8/8, C++ 711/711, ctest 绿, 耦合 PASS | 4d5bff82 |
 | 13 | 孤儿测试接入收尾：精确诊断重排失败根因（全局 mock 与沙箱顺序冲突），改用隔离运行器方案；更新 CLAUDE.md 门禁说明（G9 中段） | 同 round 12 门禁 | 4d5bff82 |
+| 14 | 防回归机制：check_test_coverage.py（Lua 128+C++ 65 全注册校验）+ CI Test coverage check 步骤——未注册测试=失败（G9 收尾/质量基建） | Lua 120/120+孤儿 8/8, C++ 711/711, ctest 绿, 耦合 PASS | f67399a6 |
