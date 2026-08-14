@@ -1,4 +1,4 @@
-﻿// SteamBackend implementation — requires Steamworks SDK
+// SteamBackend implementation — requires Steamworks SDK
 // Compiled only when CAESURA_HAS_STEAM is defined (via CMake option)
 #include "SteamBackend.h"
 #include <cstring>
@@ -119,7 +119,9 @@ bool SteamBackend::resetAllAchievements() {
 bool SteamBackend::setStatInt(const char* name, int32_t value) {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized || !name) return false;
-    return SteamUserStats()->SetStat(name, value);
+    if (!SteamUserStats()->SetStat(name, value)) return false;
+    m_statsDirty = true;  // P1-3: persist stats on the next runCallbacks flush
+    return true;
 #else
     (void)name; (void)value;
     return false;
@@ -141,7 +143,9 @@ int32_t SteamBackend::getStatInt(const char* name) const {
 bool SteamBackend::setStatFloat(const char* name, float value) {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized || !name) return false;
-    return SteamUserStats()->SetStat(name, value);
+    if (!SteamUserStats()->SetStat(name, value)) return false;
+    m_statsDirty = true;  // P1-3: persist stats on the next runCallbacks flush
+    return true;
 #else
     (void)name; (void)value;
     return false;
