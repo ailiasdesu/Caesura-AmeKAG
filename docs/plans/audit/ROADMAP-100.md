@@ -51,3 +51,4 @@
 | 3 | BgfxQuadBatch 批次数学纯函数化（quadToNdc/computeMergeGroups/buildGroupIndices）+ 11 例无 GPU 测试（G1 完成） | C++ 680/680, Lua 120/120, ctest 绿, 耦合 PASS | 96a2cd6c |
 | 4 | 共享像素→NDC 纯数学 NdcMath.h，blitTexture/stretchBlt/affineBlt/quadToNdc 统一委托 + 7 例测试（G8 前半） | C++ 687/687, Lua 120/120, ctest 绿, 耦合 PASS | 7c8b2849 |
 | 5 | 无障碍颜色滤镜数学纯化（Machado-2009 预设表 + effect-4 VFX 打包）+ 7 例测试（G8 中段） | C++ 694/694, Lua 120/120, ctest 绿, 耦合 PASS | 89aaf4f1 |
+| 6 | DirtyRect merge uint16 回绕修复（32 位计算+钳制）+ shouldUseScissorFor 纯决策 + 11 例测试（G8 中后段） | C++ 705/705, Lua 120/120, ctest 绿, 耦合 PASS | 853e0e31 |
