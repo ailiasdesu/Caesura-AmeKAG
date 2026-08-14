@@ -79,6 +79,19 @@ jobs:
           python tests/scripts/check_test_coverage.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Editor unit tests (vitest)
+        shell: pwsh
+        run: |
+          # Editor front-end pure-logic tests (round 16): parseSceneElements
+          # and future editor pure functions. node_modules is NOT checked in
+          # (gitignored); npm ci installs from the lockfile deterministically.
+          Push-Location editor
+          npm ci --no-audit --no-fund
+          npm test
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { exit $code }
+
       - name: Test
         shell: pwsh
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --repeat until-pass:2
