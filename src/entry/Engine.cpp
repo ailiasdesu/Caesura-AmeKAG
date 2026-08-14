@@ -1345,6 +1345,21 @@ bool Engine::appLifecycleWatch(void* userdata, SDL_Event* event) {
     handleAppLifecycle(engine->m_mobileAdapter.get(),
                        engine->m_lua ? engine->m_lua->state() : nullptr,
                        event->type);
+    // Mobile backgrounding must silence audio without unloading assets
+    // (MobileAdapter TODO: SoLoud pause wiring, round 29). Composition-root
+    // concern: the audio backend lives here, not in the platform adapter.
+    if (engine->m_audioBackend) {
+        switch (event->type) {
+            case SDL_EVENT_WILL_ENTER_BACKGROUND:
+                engine->m_audioBackend->suspend();
+                break;
+            case SDL_EVENT_DID_ENTER_FOREGROUND:
+                engine->m_audioBackend->resume();
+                break;
+            default:
+                break;
+        }
+    }
     return true; // allow other watchers / the queue to see the event
 }
 

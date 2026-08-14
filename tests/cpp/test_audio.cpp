@@ -650,3 +650,21 @@ TEST_CASE("Audio: voice pool API safe before init") {
     CHECK(eng.isVoicePlaying() == false);
     eng.shutdown();   // idempotent
 }
+
+TEST_CASE("Audio: suspend/resume lifecycle contract (round 29)") {
+    SoLoudAudioEngine eng;
+    // Before init: suspend/resume must be safe no-ops.
+    eng.suspend();
+    eng.resume();
+    REQUIRE(eng.init());
+    // After init: suspend/resume must not crash and must be repeatable.
+    eng.suspend();
+    eng.suspend();
+    eng.resume();
+    eng.resume();
+    eng.update(0.0f);
+    eng.shutdown();
+    // After shutdown: still safe.
+    eng.suspend();
+    eng.resume();
+}

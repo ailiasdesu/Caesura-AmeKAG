@@ -25,6 +25,8 @@ struct LifecycleProbe {
     bool voicePlaying = false;
     unsigned int voiceCompletions = 0;
     int audioUpdateCalls = 0;
+    int audioSuspendCalls = 0;
+    int audioResumeCalls = 0;
     int isVoicePlayingCalls = 0;
     int animationRenderCalls = 0;
     float lastAnimationDt = -1.0f;
@@ -214,6 +216,8 @@ public:
         if (m_probe.onShutdown) m_probe.onShutdown();
     }
     void update(float) override { ++m_probe.audioUpdateCalls; }
+    void suspend() override { ++m_probe.audioSuspendCalls; }
+    void resume() override { ++m_probe.audioResumeCalls; }
     unsigned int playBGM(const std::string&, float) override { return 0; }
     void stopBGM(float) override {}
     unsigned int playVoice(const std::string&) override { return 0; }

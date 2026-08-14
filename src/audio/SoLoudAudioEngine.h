@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../audio/api/IAudioBackend.h"
 #include <soloud.h>
 #include <soloud_bus.h>
@@ -32,6 +32,8 @@ public:
     bool init() override;
     void shutdown() override;
     void update(float deltaTime) override;
+    void suspend() override;
+    void resume() override;
 
     unsigned int playBGM(const std::string& file, float fadeTime = 1.0f) override;
     void stopBGM(float fadeTime = 1.0f) override;

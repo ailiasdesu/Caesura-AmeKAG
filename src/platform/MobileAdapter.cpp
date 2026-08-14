@@ -1,4 +1,4 @@
-﻿// MobileAdapter implementation -- mobile platform adapter.
+// MobileAdapter implementation -- mobile platform adapter.
 // Spec [10.2.64]: touch input mapping, lifecycle events, DPI scaling.
 // Core mapping is implemented; native mobile SDK integration is not wired.
 #include "MobileAdapter.h"
@@ -45,8 +45,9 @@ void MobileAdapter::onOrientationChanged(lua_State* L, const char* orientation) 
 void MobileAdapter::onPause(lua_State* L) {
     m_paused = true;
 
-    // TODO: Pause SoLoud audio engine here when mobile audio backend is wired.
-    // For now, call Lua callback if available.
+    // Audio suspend on backgrounding is wired at the composition root
+    // (Engine::appLifecycleWatch -> IAudioBackend::suspend, round 29);
+    // this adapter stays platform-pure and only notifies Lua.
     if (L) {
         lua_getglobal(L, "_G");
         lua_getfield(L, -1, "onPause");
@@ -69,7 +70,8 @@ void MobileAdapter::onPause(lua_State* L) {
 void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
     m_paused = false;
 
-    // TODO: Resume SoLoud audio engine here when mobile audio backend is wired.
+    // Audio resume on foregrounding is wired at the composition root
+    // (Engine::appLifecycleWatch -> IAudioBackend::resume, round 29).
     if (L) {
         lua_getglobal(L, "_G");
         lua_getfield(L, -1, "onResume");

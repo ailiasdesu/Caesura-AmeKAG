@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../audio/api/IAudioBackend.h"
 
 namespace Caesura {
@@ -18,6 +18,8 @@ public:
     bool init() override;
     void shutdown() override;
     void update(float deltaTime) override;
+    void suspend() override;
+    void resume() override;
 
     // -- BGM bus -----------------------------------------------------------
     unsigned int playBGM(const std::string& file, float fadeTime = 1.0f) override;

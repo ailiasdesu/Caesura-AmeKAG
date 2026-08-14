@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <string>
 
 namespace Caesura {
@@ -18,6 +18,13 @@ public:
     virtual bool init() = 0;
     virtual void shutdown() = 0;
     virtual void update(float deltaTime) = 0;
+
+    // -- App-lifecycle audio suspend/resume (mobile backgrounding) ----------
+    // Suspends all playback (mixer paused) without releasing loaded assets;
+    // resume() continues from the suspended position. Used by the engine's
+    // SDL app-lifecycle watcher (WILL_ENTER_BACKGROUND/DID_ENTER_FOREGROUND).
+    virtual void suspend() = 0;
+    virtual void resume() = 0;
 
     // -- BGM bus: background music with cross-fade support -----------------
     virtual unsigned int playBGM(const std::string& file, float fadeTime = 1.0f) = 0;

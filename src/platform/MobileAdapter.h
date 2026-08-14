@@ -1,4 +1,4 @@
-﻿// MobileAdapter -- Mobile platform adapter.
+// MobileAdapter -- Mobile platform adapter.
 // Spec [10.2.64]: Touch input mapping, lifecycle events, DPI scaling.
 // Core mapping is implemented and unit-tested (see class doc); native mobile
 // platform integration is not wired into the Engine yet.
@@ -25,8 +25,10 @@ struct TouchPoint {
 /// Mobile platform adapter -- lifecycle + touch → input mapping.
 /// Core mapping (touch → SDL mouse/wheel events, DPI scale, pause/resume
 /// Lua callbacks) is implemented and unit-tested. Native mobile platform
-/// integration (real OS lifecycle hooks, SoLoud pause wiring) is NOT wired
-/// into the Engine yet -- the platform layer must call these methods.
+/// integration (real OS lifecycle hooks) is NOT wired into the Engine yet --
+/// the platform layer must call these methods. Audio suspend/resume on
+/// backgrounding is handled at the composition root
+/// (Engine::appLifecycleWatch -> IAudioBackend, round 29).
 class MobileAdapter : public IMobileAdapter {
 public:
     MobileAdapter() = default;

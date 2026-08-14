@@ -1,4 +1,4 @@
-﻿#include "SoLoudAudioEngine.h"
+#include "SoLoudAudioEngine.h"
 #include "di/api/ThreadAssert.h"
 #include "di/BackendRegistry.h"
 #include <soloud_wav.h>
@@ -162,6 +162,18 @@ void SoLoudAudioEngine::shutdown(){
     printf("[Audio] SoLoud shut down.\n");
 
     m_rawWaveCache.clear();
+}
+
+void SoLoudAudioEngine::suspend(){
+    CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_initialized) return;
+    m_soloud.setPauseAll(true);
+}
+
+void SoLoudAudioEngine::resume(){
+    CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_initialized) return;
+    m_soloud.setPauseAll(false);
 }
 
 void SoLoudAudioEngine::update(float /*deltaTime*/){

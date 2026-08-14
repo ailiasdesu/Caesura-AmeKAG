@@ -1,4 +1,4 @@
-﻿#include "NullAudioBackend.h"
+#include "NullAudioBackend.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -12,6 +12,8 @@ NullAudioBackend::NullAudioBackend() {
 bool NullAudioBackend::init() { return true; }
 void NullAudioBackend::shutdown() {}
 void NullAudioBackend::update(float /*deltaTime*/) {}
+void NullAudioBackend::suspend() {}
+void NullAudioBackend::resume() {}
 
 // -- BGM bus -----------------------------------------------------------
 
