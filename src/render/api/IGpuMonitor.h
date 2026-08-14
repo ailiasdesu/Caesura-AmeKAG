@@ -27,6 +27,11 @@ public:
     virtual float resolutionScale() const = 0;
     virtual bool vfxEnabled() const = 0;
     virtual void reset() = 0;
+
+    // Set by the composition root once the render device (bgfx) is
+    // initialized; until then update() must not touch bgfx stats
+    // (round 39: makes GpuMonitor safe and testable pre-init).
+    virtual void setGpuAvailable(bool available) = 0;
 };
 
 } // namespace Caesura

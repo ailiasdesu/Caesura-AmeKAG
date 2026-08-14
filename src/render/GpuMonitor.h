@@ -45,6 +45,11 @@ public:
     // Reset counters (e.g. after scene change)
     void reset() override;
 
+    // Set after bgfx::init() succeeds (composition root). Until then update()
+    // cannot call bgfx::getStats() - it would crash on the uninitialized
+    // context - and falls back to CPU dt (P2-10 / round 39).
+    void setGpuAvailable(bool available) override { m_gpuAvailable = available; }
+
 private:
     static constexpr double kBudgetMs      = 16.67;  // 60fps target
     static constexpr double kBudgetMsLoose = 20.0;   // Recovery threshold
@@ -54,6 +59,7 @@ private:
 
     GpuQuality m_quality = GpuQuality::HIGH;
     FrameMetrics m_metrics;
+    bool m_gpuAvailable = false;
 
     std::deque<double> m_frameTimeWindow;  // Last N GPU frame times (ms)
     double m_windowSum = 0.0;

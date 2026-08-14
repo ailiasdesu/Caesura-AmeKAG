@@ -294,6 +294,8 @@ bool Engine::initPlatformPhase() {
     }
     m_renderInitialized = true;
     BackendRegistry::instance().setRenderDevice(m_renderDevice.get());
+    // GPU monitor may now query the render stats safely (round 39).
+    if (m_gpuMonitor) m_gpuMonitor->setGpuAvailable(true);
 
     // Render info (GPU caps)
     if (gpuMode) {

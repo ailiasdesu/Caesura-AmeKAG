@@ -17,6 +17,7 @@ public:
     float resolutionScale() const override { return 1.0f; }
     bool vfxEnabled() const override { return true; }
     void reset() override { m_metrics = FrameMetrics{}; }
+    void setGpuAvailable(bool /*available*/) override {}
 
 private:
     FrameMetrics m_metrics;

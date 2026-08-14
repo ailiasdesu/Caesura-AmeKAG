@@ -23,15 +23,24 @@ GpuQuality GpuMonitor::update(double dt) {
     m_metrics.frameCount++;
     m_metrics.cpuTimeMs = dt * 1000.0;
 
-    // Read GPU stats from bgfx
-    const bgfx::Stats* stats = bgfx::getStats();
+    // Read GPU stats from bgfx only after init (getStats() dereferences the
+    // context; before bgfx::init() that is a crash). setGpuAvailable(true) is
+    // called by the composition root once init succeeds. Until then (and in
+    // headless/test builds) fall back to CPU dt - which also makes the state
+    // machine unit-testable without a GPU (P2-10 / round 39).
+    const bgfx::Stats* stats = m_gpuAvailable ? bgfx::getStats() : nullptr;
+    double frameGpuUs;
+    if (stats) {
+        frameGpuUs = static_cast<double>(stats->gpuTimeEnd);
+    } else {
+        frameGpuUs = -1.0;  // triggers the fallback below
+    }
     
     // gpuTimeEnd is in microseconds, convert to milliseconds
     // gpuTimeEnd is in microseconds, convert to milliseconds.
     // bgfx may return INT64_MAX (0x7fffffffffffffff) when GPU timer is
     // unavailable (e.g. no timestamp query support, or first frames).
     // Clamp to a reasonable range: 0..1000ms.
-    double frameGpuUs = static_cast<double>(stats->gpuTimeEnd);
     constexpr double kMaxGpuUs = 1'000'000.0;  // 1 second (1000ms)
     if (frameGpuUs < 0.0 || frameGpuUs > kMaxGpuUs) {
         frameGpuUs = dt * 1'000'000.0;  // fall back to CPU dt in microseconds
@@ -106,9 +115,8 @@ GpuQuality GpuMonitor::update(double dt) {
                   "GPU[%s] frame=%.1fms cpu=%.1fms avg=%.1fms draw=%u wait=%u",
                   gpuQualityName(m_quality), gpuTimeMs, m_metrics.cpuTimeMs,
                   m_metrics.rollingAvgMs,
-                  stats->numDraw, stats->numCompute);
+                  stats ? stats->numDraw : 0u, stats ? stats->numCompute : 0u);
     }
-
     return m_quality;
 }
 
