@@ -101,6 +101,72 @@ end
 check("translate idempotent", expr.translate(expr.translate("a && b"))
     == "a and b")
 
+-- ---- translate: parentheses scope operators --------------------------------
+check("parens preserved around translated ops",
+    expr.translate("(a && b) == 1") == "(a and b) == 1")
+check("parens group mixed chain",
+    expr.translate("a && (b || c) && d") == "a and (b or c) and d")
+
+-- ---- translate: table keys and string literals stay untouched --------------
+check("operators inside table-key quotes kept",
+    expr.translate('f["a&&b"] == 1') == 'f["a&&b"] == 1')
+check("single-quote key with || kept",
+    expr.translate("f['x||y'] != 2") == "f['x||y'] ~= 2")
+check("escaped quote + && inside string",
+    expr.translate([[s == "a \" && b"]]) == [[s == "a \" && b"]])
+
+-- ---- translate: numeric and unary edges ------------------------------------
+check("negative literal preserved",
+    expr.translate("-5 < f.hp") == "-5 < f.hp")
+check("float and scientific literals",
+    expr.translate("f.hp >= 3.14 && f.mp <= 1e3")
+        == "f.hp >= 3.14 and f.mp <= 1e3")
+check("double negation !!, translated",
+    expr.translate("!a && !!b") == "not a and not not b")
+check("chained != compiles (Lua semantics)",
+    expr.translate("a != b != c") == "a ~= b ~= c")
+check("range idiom preserved",
+    expr.translate("1 < f.hp && f.hp < 100")
+        == "1 < f.hp and f.hp < 100")
+
+-- ---- translate: ternary with parenthesized branches ------------------------
+check("ternary paren branches",
+    expr.translate("a ? (b && c) : (d || e)")
+        == "((a) and ((b and c)) or ((d or e)))")
+
+-- ---- evaluate: nil and short-circuit edges --------------------------------
+do
+    local ctx = { f = { hp = 30, mp = 5 }, tf = { flag = true },
+                  sf = {}, mp = {}, lf = {} }
+    local ok1, v1 = expr.evaluate(ctx, "f.missing == nil")
+    check("missing field compares to nil", ok1 and v1 == true)
+
+    -- Short-circuit must prevent the runtime error on the right side.
+    local ok2, v2 = expr.evaluate(ctx, "false && tf.nil_table.field == 1")
+    check("&& short-circuits nil deref", ok2 and v2 == false)
+    local ok3, v3 = expr.evaluate(ctx, "true || tf.nil_table.field == 1")
+    check("|| short-circuits nil deref", ok3 and v3 == true)
+
+    -- Strict typing: string vs number does NOT coerce (Lua semantics).
+    local ok4, v4 = expr.evaluate(ctx, "'30' == f.hp")
+    check("string != number (strict Lua compare)", ok4 and v4 == false)
+end
+
+-- ---- evaluate: arithmetic and comparison edges -----------------------------
+do
+    local ctx = { f = { hp = 30, mp = 5 }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local ok1, v1 = expr.evaluate(ctx, "f.hp % 7 == 2")
+    check("modulo evaluates", ok1 and v1 == true)
+    local ok2, v2 = expr.evaluate(ctx, "f.hp / 4 > 7")
+    check("division evaluates", ok2 and v2 == true)
+    local ok3, v3 = expr.evaluate(ctx, "f.hp >= 3.14")
+    check("float comparison evaluates", ok3 and v3 == true)
+    local ok4, v4 = expr.evaluate(ctx, "f.hp != 0 && f.hp != 31")
+    check("range exclusion evaluates", ok4 and v4 == true)
+    local ok5, v5 = expr.evaluate(ctx, "f.hp > 20 and f.hp < 40")
+    check("Lua-native and works too", ok5 and v5 == true)
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end
