@@ -11,7 +11,6 @@ class OpenGLSharedRenderPath : public ILive2DRenderPath {
 public:
     bool init(int width, int height) override;
     void shutdown() override;
-    CsmRendering::CubismRenderer* createRenderer() override;
     void beginFrame(CsmRendering::CubismRenderer* renderer) override;
     void endFrame(CsmRendering::CubismRenderer* renderer, bgfx::TextureHandle bgfxTex) override;
     void resize(int width, int height) override;

@@ -22,9 +22,6 @@ public:
     // Tear down GPU resources
     virtual void shutdown() = 0;
 
-    // Create a CubismRenderer for the given model
-    virtual CsmRendering::CubismRenderer* createRenderer() = 0;
-
     // Begin a Cubism frame (set render target, clear)
     virtual void beginFrame(CsmRendering::CubismRenderer* renderer) = 0;
 

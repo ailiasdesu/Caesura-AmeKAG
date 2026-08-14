@@ -84,13 +84,6 @@ bool OpenGLSharedRenderPath::createTargetTexture(int width, int height) {
 }
 
 // ============================================================
-// Renderer creation — delegated to CubismUserModel
-// ============================================================
-CubismRenderer* OpenGLSharedRenderPath::createRenderer() {
-    return nullptr;
-}
-
-// ============================================================
 // Per-frame: Cubism → glBlitFramebuffer → shared texture → bgfx
 // ============================================================
 void OpenGLSharedRenderPath::beginFrame(CubismRenderer* renderer) {

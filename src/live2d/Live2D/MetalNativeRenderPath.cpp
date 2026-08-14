@@ -58,13 +58,6 @@ void MetalNativeRenderPath::shutdown() {
     m_device = nil;
 }
 
-CsmRendering::CubismRenderer* MetalNativeRenderPath::createRenderer() {
-    CubismRenderer* renderer = CubismRenderer_Metal::Create();
-    if (!renderer) return nullptr;
-    renderer->Initialize(nullptr);
-    return renderer;
-}
-
 // Per-model offscreen target (Cubism renders here; endFrame reads it back).
 bool MetalNativeRenderPath::ensureTarget(CsmRendering::CubismRenderer* renderer) {
     auto it = m_targets.find(renderer);

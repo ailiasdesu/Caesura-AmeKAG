@@ -164,13 +164,6 @@ ID3D11ShaderResourceView* D3D11NativeRenderPath::createModelTexture(
 }
 
 // ============================================================
-// Renderer (delegated to CubismUserModel)
-// ============================================================
-CubismRenderer* D3D11NativeRenderPath::createRenderer() {
-    return nullptr; // renderer created by CubismUserModel::CreateRenderer()
-}
-
-// ============================================================
 // Per-frame: Cubism D3D11 → GPU copy → bgfx
 // ============================================================
 void D3D11NativeRenderPath::beginFrame(CubismRenderer* renderer) {

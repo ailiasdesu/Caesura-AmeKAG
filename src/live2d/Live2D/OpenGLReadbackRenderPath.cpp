@@ -68,10 +68,6 @@ void OpenGLReadbackRenderPath::shutdown() {
     m_pixelBuffer.clear();
 }
 
-CubismRenderer* OpenGLReadbackRenderPath::createRenderer() {
-    return nullptr;  // renderer is created by CubismUserModel, not by us
-}
-
 void OpenGLReadbackRenderPath::beginFrame(CubismRenderer* renderer) {
     if (!m_fbo || !m_colorTex) return;
 

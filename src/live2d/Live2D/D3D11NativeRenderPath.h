@@ -19,7 +19,6 @@ class D3D11NativeRenderPath : public ILive2DRenderPath {
 public:
     bool init(int width, int height) override;
     void shutdown() override;
-    CsmRendering::CubismRenderer* createRenderer() override;
 
     ID3D11ShaderResourceView* createModelTexture(int width, int height,
                                                  const unsigned char* pixels);

@@ -293,7 +293,7 @@ void Live2DBackend::setRenderDevice(IRenderDevice* device) {
 }
 
 // ============================================================
-// Model loading →?Cubism 5 API
+// Model loading (Cubism 5 API)
 // ============================================================
 bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     std::string dir = dirName(model.dir);
@@ -302,9 +302,9 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     model.settingJson = readFile(model.dir);
     if (model.settingJson.empty()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read: %s", model.dir.c_str());
-        // Note: model.setting was set to nullptr by cubismLog, but model.settingJson
-        // was already consumed. We should NOT try to clean up model.setting here
-        // (the null destructor guard handles it). Just bail.
+        // The .model3.json read failed: bail out before allocating model.setting.
+        // model.setting is still null here, so the null guard in ~Live2DModel()
+        // handles cleanup on the way out.
         return false;
     }
     model.setting = new CubismModelSettingJson(
@@ -449,7 +449,7 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
 }
 
 // ============================================================
-// Per-frame: Cubism render →?render path →?bgfx
+// Per-frame: Cubism render via the pluggable render path to bgfx
 // ============================================================
 void Live2DBackend::render(float dt) {
     if (!m_renderPath) return;
@@ -465,7 +465,7 @@ void Live2DBackend::render(float dt) {
         // Recompute model vertices/deformations before drawing (csmUpdateModel).
         cubismModel->Update();
 
-        // Cubism render →?bgfx (via pluggable render path)
+        // Cubism render to bgfx (via pluggable render path)
         m_renderPath->beginFrame(static_cast<CubismRenderer*>(model->renderer));
         m_renderPath->endFrame(static_cast<CubismRenderer*>(model->renderer), model->bgfxTex);
 
@@ -481,7 +481,7 @@ void Live2DBackend::render(float dt) {
 }
 
 // ============================================================
-// Motion playback →?Cubism 5 API
+// Motion playback (Cubism 5 API)
 // ============================================================
 bool Live2DBackend::playMotion(int handle, const std::string& name) {
     auto it = m_models.find(handle);
@@ -538,7 +538,7 @@ void Live2DBackend::setExpression(int handle, const std::string& name) {
 }
 
 // ============================================================
-// Parameter →?Cubism 5 API
+// Parameter control (Cubism 5 API)
 // ============================================================
 void Live2DBackend::setParameter(int handle, const std::string& param, float value) {
     auto it = m_models.find(handle);
