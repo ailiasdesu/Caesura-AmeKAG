@@ -61,3 +61,4 @@
 | 13 | 孤儿测试接入收尾：精确诊断重排失败根因（全局 mock 与沙箱顺序冲突），改用隔离运行器方案；更新 CLAUDE.md 门禁说明（G9 中段） | 同 round 12 门禁 | 4d5bff82 |
 | 14 | 防回归机制：check_test_coverage.py（Lua 128+C++ 65 全注册校验）+ CI Test coverage check 步骤——未注册测试=失败（G9 收尾/质量基建） | Lua 120/120+孤儿 8/8, C++ 711/711, ctest 绿, 耦合 PASS | f67399a6 |
 | 15 | 文档同步审计：KAG 契约命令数全仓漂移（72/78/81/84 并存），核实权威值 84（schema_doc 自动生成）并同步 README/AGENTS/CLAUDE/kag-neo-genesis-language；规避 PowerShell UTF-16 重定向坑（G9 收尾） | 文档一致性 | f5caf28d |
+| 16 | 编辑器测试基建（G4 起航）：vitest + SceneTree parseSceneElements 7 例（标签/类型分类/注释跳过/截断/行号/空源）+ CI npm ci 步骤 | vitest 7/7, tsc 0, ctest 绿, 耦合 PASS | cfd6de2f |
