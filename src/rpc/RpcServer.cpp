@@ -487,6 +487,7 @@ std::string RpcServer::processRequestLine(const std::string& jsonLine) {
         safeStoi(extractField(jsonLine, "x")), safeStoi(extractField(jsonLine, "y")));
     if (method == "smaSave") return handleSmaSave(id,
         extractField(jsonLine, "path"), extractField(jsonLine, "content"));
+    if (method == "stats") return handleStats(id);
     if (method == "reload")   return handleReload(id);
     if (method == "setBreakpoint") return handleDebugAction(id,
         RpcRequest{RpcSetBreakpointRequest{
@@ -677,6 +678,25 @@ std::string RpcServer::handleGetState(int id) {
         << jsonEscape(state->language) << "\",\"backlog_count\":"
         << state->backlogCount << ",\"layer_count\":"
         << state->layerCount << "}}";
+    return out.str();
+}
+
+std::string RpcServer::handleStats(int id) {
+    RpcReply reply = dispatchRequest(RpcRequest{RpcStatsRequest{}});
+    if (reply.status != RpcReplyStatus::Ok) return replyError(id, reply);
+    const auto* s = std::get_if<RpcStatsResult>(&reply.payload);
+    if (!s) {
+        return replyError(id, RpcReply{RpcReplyStatus::Failed,
+            "invalid_dispatcher_reply", "Stats reply missing result", {}});
+    }
+    std::ostringstream out;
+    out << "{\"id\":" << id << ",\"stats\":{\"texture_budget_mb\":"
+        << s->textureBudgetMB << ",\"texture_tier\":" << s->textureTier
+        << ",\"texture_tier_name\":\"" << jsonEscape(s->textureTierName) << "\""
+        << ",\"mesh_count\":" << s->meshCount
+        << ",\"job_workers\":" << s->jobWorkers
+        << ",\"job_pending\":" << s->jobPending
+        << ",\"lua_kb\":" << s->luaKb << "}}";
     return out.str();
 }
 

@@ -694,6 +694,33 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // GET /api/stats -- engine runtime stats for the IDE panel (round 28).
+    // ---------------------------------------------------------------------
+    svr.Get("/api/stats", [this](const httplib::Request&, httplib::Response& res) {
+        RpcReply reply = dispatchRequest(RpcRequest{RpcStatsRequest{}});
+        if (reply.status != RpcReplyStatus::Ok) {
+            setDispatchError(res, reply);
+            return;
+        }
+        const auto* s = std::get_if<RpcStatsResult>(&reply.payload);
+        if (!s) {
+            setDispatchError(res, invalidDispatcherReply(
+                "Stats reply missing result"));
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"texture_budget_mb", s->textureBudgetMB},
+            {"texture_tier", s->textureTier},
+            {"texture_tier_name", s->textureTierName},
+            {"mesh_count", s->meshCount},
+            {"job_workers", s->jobWorkers},
+            {"job_pending", s->jobPending},
+            {"lua_kb", s->luaKb},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
     // POST /api/sma/save -- validate + write back an SMA asset (round 26).
     // Body: {"path": "...", "content": "..."}; path restricted to assets/.
     // ---------------------------------------------------------------------

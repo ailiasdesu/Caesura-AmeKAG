@@ -93,6 +93,8 @@ public:
     InputRouter&  input()         { requireInitialized(); return *m_inputRouter; }
     IGpuMonitor&  gpuMonitor()    { requireInitialized(); return *m_gpuMonitor; }
     VideoPlayer&  videoPlayer()   { requireInitialized(); return *m_videoPlayer; }
+    ITextureBudget& textureBudget() { requireInitialized(); return *m_textureBudget; }
+    IJobSystem&   jobSystem()     { requireInitialized(); return *m_jobSystem; }
 
     const EngineConfig& config() const { return m_config; }
 

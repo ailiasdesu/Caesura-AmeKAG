@@ -45,6 +45,9 @@ struct RpcSmaSaveRequest {
     std::string content;
 };
 
+// Engine runtime stats for the IDE panel (round 28).
+struct RpcStatsRequest {};
+
 struct RpcCaptureFrameRequest {
     int width = 1280;
     int height = 720;
@@ -116,6 +119,7 @@ using RpcRequestPayload = std::variant<
     RpcSmaValidateRequest,
     RpcPickRequest,
     RpcSmaSaveRequest,
+    RpcStatsRequest,
     RpcCaptureFrameRequest,
     RpcReloadScriptsRequest,
     RpcLoadAnimationRequest,
@@ -183,6 +187,16 @@ struct RpcSmaSaveResult {
     std::vector<std::string> errors;
 };
 
+struct RpcStatsResult {
+    int textureBudgetMB = 0;
+    int textureTier = 0;
+    std::string textureTierName;
+    size_t meshCount = 0;
+    int jobWorkers = 0;
+    int jobPending = 0;
+    int luaKb = 0;
+};
+
 struct RpcFrameResult {
     std::string base64;
 };
@@ -219,6 +233,7 @@ using RpcReplyPayload = std::variant<
     RpcSmaValidateResult,
     RpcPickResult,
     RpcSmaSaveResult,
+    RpcStatsResult,
     RpcFrameResult,
     RpcAnimationResult,
     RpcInspectionResult,

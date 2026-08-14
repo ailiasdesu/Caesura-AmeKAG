@@ -4,6 +4,9 @@ extern "C" {
 #include <lualib.h>
 }
 #include "render/BgfxRenderDevice.h"
+#include "di/api/ITextureBudget.h"
+#include "job/api/IJobSystem.h"
+#include "render/api/IMeshRenderer.h"
 #include "audio/SoLoudAudioEngine.h"
 #include "platform/SDL3PlatformBackend.h"
 #include "minigame/BgfxMiniGameBackend.h"
@@ -407,6 +410,21 @@ private:
                 }
                 Caesura::RpcReply reply = rpcOk();
                 reply.payload = std::move(saveRes);
+                return reply;
+            } else if constexpr (std::is_same_v<Operation, Caesura::RpcStatsRequest>) {
+                Caesura::RpcStatsResult stats;
+                stats.textureBudgetMB =
+                    static_cast<int>(m_engine.textureBudget().getBudgetMB());
+                stats.textureTier = m_engine.textureBudget().getTier();
+                stats.textureTierName = m_engine.textureBudget().getTierName();
+                stats.meshCount = m_engine.meshRenderer().meshCount();
+                stats.jobWorkers = m_engine.jobSystem().workerCount();
+                stats.jobPending = m_engine.jobSystem().pendingJobs();
+                if (lua_State* L = m_engine.lua().state()) {
+                    stats.luaKb = static_cast<int>(lua_gc(L, LUA_GCCOUNT, 0));
+                }
+                Caesura::RpcReply reply = rpcOk();
+                reply.payload = std::move(stats);
                 return reply;
             } else if constexpr (
                 std::is_same_v<Operation, Caesura::RpcCaptureFrameRequest>) {
