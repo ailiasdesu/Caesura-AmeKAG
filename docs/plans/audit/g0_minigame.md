@@ -70,11 +70,9 @@ minigame 模块承载引擎内嵌的 3D 小游戏子系统，生命周期为
 ## P2 建议
 
 ### P2-1　函数过长 / 单一巨型分发
-- **位置**：`BgfxMiniGameBackend.cpp:467-484`（`luaCall` 一串 if-chain，17 个分支）与 `:224-314`（`sceneFromJson` 近 90 行）
+- **位置**：`BgfxMiniGameBackend.cpp`（`luaCall` 一串 if-chain，17 个分支）与 `sceneFromJson` 近 90 行
 - **问题**：luaCall 靠 strcmp 链派发 17 个命令，与 `script/bindings/MiniGameBinding.cpp` 里另外 20 个 `luaL_Reg` 绑定重复维护命令名清单，易脱节；sceneFromJson 层级深（>4 层嵌套）。
-- **修复建议**：luaCall 用静态 `unordered_map<string, handler>` 或 switch（对常量字符串）；sceneFromJson 拆出 `parseCamera/parseLight/parseObject` 辅助。绑定侧命令名应与后端命令集中定义共享。
-- **工作量**：M
-
+- ~~**修复建议**~~ ✅ round 29 已修复 luaCall 部分：15 分支 if/strcmp 链 → 类内 `static constexpr LuaMethod kLuaMethods[]` 分发表（handler 为 static 成员，可触达私有状态），未知命令回退保留；行为与旧链逐分支一致。sceneFromJson 拆分与绑定侧命令集中共享仍为开放项。
 ### P2-2　几何缓存重复生成 CPU 数据
 - **位置**：`BgfxMiniGameBackend.cpp:57-66`（`initGeometryCache`）
 - **问题**：每个几何类型把 createXxxGeometry() **连续生成两次**（一次喂 createVB、一次喂 createIB），如 `createVB(createCubeGeometry())` + `createIB(createCubeGeometry())`。CPU 顶点数据被算两遍，且几何 generator 内的 `printf` 会刷两倍日志。

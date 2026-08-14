@@ -10,15 +10,15 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 31 |
-| Pure-virtual interface methods | 275 |
+| Pure-virtual interface methods | 277 |
 | Lua binding functions (luaL_Reg entries) | 172 |
 | KAG command handler files | 9 |
 | KAG contract commands (command-contracts.md) | 84 |
 | RPC HTTP endpoints (EditorServer) | 25 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
-| C++ test cases | 628 |
-| C++ assertions | 6117 |
+| C++ test cases | 629 |
+| C++ assertions | 6118 |
 | Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
@@ -28,7 +28,7 @@
 | archive | IArchiveReader.h | 3 |
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
-| audio | IAudioBackend.h | 26 |
+| audio | IAudioBackend.h | 28 |
 | debug | IDebugManager.h | 15 |
 | di | IDeviceLostListener.h | 2 |
 | di | ISandboxQuota.h | 5 |

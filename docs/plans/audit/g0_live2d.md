@@ -69,7 +69,7 @@ live2d 模块提供动画后端，对外仅暴露 `api/IAnimationBackend.h`。�
 
 ## P2 建议
 
-- **P2-1｜CMake 命名不一致**：选项 `CAESURA_LIVE2D`（CMakeLists.txt:257）与编译宏 `CAESURA_HAS_LIVE2D`（:399-400）两套命名。虽然 `docs/guides/live2d-setup.md:108-111` 已记录对应关系、属有意为之，但代码里 grep 不到 `CAESURA_LIVE2D`（全用 `CAESURA_HAS_LIVE2D`），易混淆。建议同名或统一注释。（S）
+- ~~**P2-1｜CMake 命名不一致**~~ ✅ round 29 已修复：编译宏统一为 `CAESURA_LIVE2D`（CMakeLists.txt:399-400 与 src/ 全部 18 处 `#ifdef` 同步改名，grep 零残留）。
 - **P2-2｜陈旧/乱码注释**：`Live2DBackend.cpp:305-308` 注释声称 "model.setting was set to nullptr by cubismLog"——`model.setting` 实际在 :310 才被赋值，cubismLog 与 setting 无关，注释误导；:296、:426、:457 出现 "`→?`Cubism 5 API"/"`→?`bgfx" 乱码。建议清理。（S）
 - **P2-3｜playMotion 子串扫描逻辑缺陷**：`Live2DBackend.cpp:468-471` 对 `motionCache` 键做子串匹配，循环内 `mit = model.motionCache.find(key)` 冗余（`key` 本身就是 map 键，find 恒命中当前键），且 `data` 解构未用。即使修好 P1-1 也应重写。（S）
 - **P2-4｜`ILive2DRenderPath::createRenderer()` 是死接口方法**：三个实现（D3D11/Metal/OpenGLShared/Readback）全部 `return nullptr`（renderer 实际由 `CubismUserModel::CreateRenderer` 创建），从未被调用。建议从接口移除。（S）

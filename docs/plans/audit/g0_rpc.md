@@ -9,9 +9,7 @@
 ## P1 重要问题
 无。
 
-## P2 建议
-1. `RpcServer.cpp:334/386` 自研 JSON escape 解码器（\uXXXX 仅 BMP）——19 轮 headless_rpc_smoke 覆盖；若需代理对字符（astral plane）支持可换标准库（P2 不迫切，注意"仅 BMP"注释明确）。
-2. `EditorServer.cpp:273-286` Bearer token 门禁为可选（未配置时开放本地端口）——本地开发工具定位合理；文档已注明（editor-api-reference）。
+1. ~~`RpcServer.cpp:334/386` 自研 JSON escape 解码器（\uXXXX 仅 BMP）~~ ✅ round 29 已修复：共享 `appendUnicodeEscape` 支持代理对（`\uD83D\uDE00` → 4 字节 UTF-8），`readJsonString` 实况路径与 `jsonUnescape`（现存死代码）均接入；dangling surrogate/坏 hex 回退字面量。冒烟断言 `eval-unicode-escapes`（é中😀 往返）覆盖。
 
 ## 耦合分析
 rpc 依赖 archive(1)——预算 4 内；main.cpp 的 if-constexpr 链是共享耦合点（19 轮踩坑记录，改动需谨慎）。
