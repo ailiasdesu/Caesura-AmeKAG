@@ -13,12 +13,52 @@ interface Props {
   client: EngineClient
 }
 
+interface SmaBone {
+  id: number
+  parent: number
+}
+
+interface SmaAnimDetail {
+  name: string
+  duration: number
+  tracks: number[]
+}
+
 interface SmaMeta {
   bones: number
   anims: string[]
   parts: number
   verts: number
   tris: number
+  boneTree?: SmaBone[]
+  animDetails?: SmaAnimDetail[]
+}
+
+function SkeletonTree({ bones }: { bones: SmaBone[] }) {
+  // Build children maps; root = parent -1 (or an id missing from parents).
+  const childrenOf = new Map<number, SmaBone[]>()
+  const roots: SmaBone[] = []
+  const known = new Set(bones.map((b) => b.id))
+  for (const b of bones) {
+    if (b.parent === -1 || !known.has(b.parent)) {
+      roots.push(b)
+    } else {
+      const list = childrenOf.get(b.parent) ?? []
+      list.push(b)
+      childrenOf.set(b.parent, list)
+    }
+  }
+  const renderBone = (b: SmaBone, depth: number): JSX.Element[] => {
+    const kids = childrenOf.get(b.id) ?? []
+    return [
+      <div className="state-row" key={b.id} style={{ paddingLeft: depth * 10 }}>
+        <span>◇ bone {b.id}</span>
+        <b>{kids.length > 0 ? `${kids.length} child` : 'leaf'}</b>
+      </div>,
+      ...kids.flatMap((k) => renderBone(k, depth + 1)),
+    ]
+  }
+  return <>{roots.flatMap((r) => renderBone(r, 0))}</>
 }
 
 function SmaMetaView({ metaText }: { metaText: string }) {
@@ -40,6 +80,23 @@ function SmaMetaView({ metaText }: { metaText: string }) {
         <span>verts/tris</span>
         <b>{meta.verts}/{meta.tris}</b>
       </div>
+      {meta.boneTree && meta.boneTree.length > 0 && (
+        <div className="sma-tree">
+          <div className="sma-tree-title">Skeleton</div>
+          <SkeletonTree bones={meta.boneTree} />
+        </div>
+      )}
+      {meta.animDetails && meta.animDetails.length > 0 && (
+        <div className="sma-tree">
+          <div className="sma-tree-title">Animations</div>
+          {meta.animDetails.map((d) => (
+            <div className="state-row" key={d.name}>
+              <span>{d.name} ({d.duration}s)</span>
+              <b>tracks: {d.tracks.join(', ') || '-'}</b>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }
