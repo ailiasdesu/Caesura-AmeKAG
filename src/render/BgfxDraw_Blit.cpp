@@ -1,5 +1,6 @@
 // BgfxDraw_Blit.cpp - Texture blit operations (blitTexture, stretchBlt, affineBlt)
 #include "BgfxDraw.h"
+#include "NdcMath.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"
 #include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
@@ -41,18 +42,17 @@ void BgfxDraw::blitTexture(uint16_t targetView, bgfx::TextureHandle tex,
     float sw = (float)m_state->device->getWidth();
     float sh = (float)m_state->device->getHeight();
     if (sw <= 0.0f || sh <= 0.0f) return;  // guard zero-size backbuffer
-    float nx  = (x / sw) * 2.0f - 1.0f;
-    float ny  = 1.0f - (y / sh) * 2.0f;
-    float nx2 = ((x + w) / sw) * 2.0f - 1.0f;
-    float ny2 = 1.0f - ((y + h) / sh) * 2.0f;
+
+    // Shared pure pixel->NDC conversion (see NdcMath.h).
+    const NdcRect n = pixelToNdc(x, y, w, h, sw, sh);
 
     struct PosTexVertex { float x, y; float u, v; };
 
     PosTexVertex quad[4] = {
-        { nx,  ny,  0.0f, 0.0f },
-        { nx2, ny,  1.0f, 0.0f },
-        { nx2, ny2, 1.0f, 1.0f },
-        { nx,  ny2, 0.0f, 1.0f },
+        { n.x0, n.y0, 0.0f, 0.0f },
+        { n.x1, n.y0, 1.0f, 0.0f },
+        { n.x1, n.y1, 1.0f, 1.0f },
+        { n.x0, n.y1, 0.0f, 1.0f },
     };
 
     bgfx::TransientVertexBuffer tvb;
@@ -93,13 +93,12 @@ void BgfxDraw::stretchBlt(uint16_t targetView, uint32_t dstTexId,
         return;
     }
 
-    float hw = (float)m_state->device->getWidth()  * 0.5f;
-    float hh = (float)m_state->device->getHeight() * 0.5f;
-    if (hw <= 0.0f || hh <= 0.0f) return;
-    float l = (dx / hw) - 1.0f;
-    float r = ((dx + dw) / hw) - 1.0f;
-    float t = 1.0f - (dy / hh);
-    float b = 1.0f - ((dy + dh) / hh);
+    const float swB = (float)m_state->device->getWidth();
+    const float shB = (float)m_state->device->getHeight();
+    if (swB <= 0.0f || shB <= 0.0f) return;
+
+    // Shared pure pixel->NDC conversion (see NdcMath.h).
+    const NdcRect n = pixelToNdc(dx, dy, dw, dh, swB, shB);
 
     struct FsVertex { float x, y, u, v; };
     bgfx::TransientVertexBuffer tvb;
@@ -113,10 +112,10 @@ void BgfxDraw::stretchBlt(uint16_t targetView, uint32_t dstTexId,
     bgfx::allocTransientVertexBuffer(&tvb, 4, layout);
     auto* v = (FsVertex*)tvb.data;
 
-    v[0] = { l, t, sx,      sy };
-    v[1] = { r, t, sx + sw, sy };
-    v[2] = { r, b, sx + sw, sy + sh };
-    v[3] = { l, b, sx,      sy + sh };
+    v[0] = { n.x0, n.y0, sx,      sy };
+    v[1] = { n.x1, n.y0, sx + sw, sy };
+    v[2] = { n.x1, n.y1, sx + sw, sy + sh };
+    v[3] = { n.x0, n.y1, sx,      sy + sh };
 
     uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
     bgfx::TransientIndexBuffer tib;
@@ -154,13 +153,12 @@ void BgfxDraw::affineBlt(uint16_t targetView, uint32_t dstTexId,
         return;
     }
 
-    float hw = (float)m_state->device->getWidth()  * 0.5f;
-    float hh = (float)m_state->device->getHeight() * 0.5f;
-    if (hw <= 0.0f || hh <= 0.0f) return;
-    float l = (dx / hw) - 1.0f;
-    float r = ((dx + dw) / hw) - 1.0f;
-    float t = 1.0f - (dy / hh);
-    float b = 1.0f - ((dy + dh) / hh);
+    const float swB = (float)m_state->device->getWidth();
+    const float shB = (float)m_state->device->getHeight();
+    if (swB <= 0.0f || shB <= 0.0f) return;
+
+    // Shared pure pixel->NDC conversion (see NdcMath.h).
+    const NdcRect n = pixelToNdc(dx, dy, dw, dh, swB, shB);
 
     struct FsVertex { float x, y, u, v; };
     bgfx::TransientVertexBuffer tvb;
@@ -174,10 +172,10 @@ void BgfxDraw::affineBlt(uint16_t targetView, uint32_t dstTexId,
     bgfx::allocTransientVertexBuffer(&tvb, 4, layout);
     auto* v = (FsVertex*)tvb.data;
 
-    v[0] = { l, t, sx,      sy };
-    v[1] = { r, t, sx + sw, sy };
-    v[2] = { r, b, sx + sw, sy + sh };
-    v[3] = { l, b, sx,      sy + sh };
+    v[0] = { n.x0, n.y0, sx,      sy };
+    v[1] = { n.x1, n.y0, sx + sw, sy };
+    v[2] = { n.x1, n.y1, sx + sw, sy + sh };
+    v[3] = { n.x0, n.y1, sx,      sy + sh };
 
     uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
     bgfx::TransientIndexBuffer tib;

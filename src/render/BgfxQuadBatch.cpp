@@ -1,4 +1,5 @@
 #include "BgfxQuadBatch.h"
+#include "NdcMath.h"
 #include "BgfxDraw.h"
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"  // getWidth/getHeight for pixel->NDC conversion
@@ -14,12 +15,12 @@ namespace Caesura {
 
 BgfxQuadBatch::NdcRect BgfxQuadBatch::quadToNdc(float x, float y, float w, float h,
                                                 float screenW, float screenH) {
-    NdcRect r;
-    r.nx0 = (x / screenW) * 2.0f - 1.0f;
-    r.ny0 = 1.0f - (y / screenH) * 2.0f;
-    r.nx1 = ((x + w) / screenW) * 2.0f - 1.0f;
-    r.ny1 = 1.0f - ((y + h) / screenH) * 2.0f;
-    return r;
+    // Delegate to the shared pure conversion so every CPU-side blit path
+    // agrees on one implementation (see NdcMath.h).
+    const Caesura::NdcRect n = pixelToNdc(x, y, w, h, screenW, screenH);
+    NdcRect out;
+    out.nx0 = n.x0; out.ny0 = n.y0; out.nx1 = n.x1; out.ny1 = n.y1;
+    return out;
 }
 
 void BgfxQuadBatch::computeMergeGroups(const std::vector<BatchQuad>& quads,
