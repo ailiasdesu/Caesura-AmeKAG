@@ -374,7 +374,8 @@ bool Engine::initScriptingPhase() {
 
     // Phase G8-U1: install lua_Alloc hook for memory monitoring
     lua_setallocf(m_lua->state(), s_luaAllocFn, m_lua->state());
-    BackendRegistry::instance().setLuaState(m_lua->state());
+    // (Round 21 P1-5) BackendRegistry no longer stores a lua_State; the
+    // Lua surface lives in script/bindings (EngineBinding + registries).
     BackendRegistry::instance().setLuaManager(m_lua.get());
     m_sandboxQuota->setLuaState(m_lua->state());
     m_sandboxQuotaBound = true;
@@ -1455,7 +1456,6 @@ void Engine::shutdown() {
     registry.setAudioBackend(nullptr);
     registry.setPlatformBackend(nullptr);
     registry.setLuaManager(nullptr);
-    registry.setLuaState(nullptr);
 
     if (m_debugInitialized) DebugManager::instance().shutdown();
 }

@@ -5,6 +5,7 @@
 }
 #include "../vm/LuaManager.h"
 #include "../bindings/KAGBinding.h"
+#include "../bindings/EngineBinding.h"
 #include "../bindings/RenderBinding.h"
 #include "../bindings/DevCoreBinding.h"
 #include "../bindings/DebugBinding.h"
@@ -119,7 +120,7 @@ void LuaManager::registerModules() {
 
     // -- Security: sandboxing moved to lockdownScriptEnv() (called after scripts load) --
 
-    BackendRegistry::registerEngineBindings(m_L);
+    Caesura::engine_binding::registerEngineBindings(m_L);
     registerKAGBinding(m_L);
     registerRenderBinding(m_L);
     registerDevCoreBinding(m_L);

@@ -1,6 +1,7 @@
 // test_backend_registry.cpp - BackendRegistry / DI module tests
 #include "doctest.h"
 #include "di/BackendRegistry.h"
+#include "script/bindings/EngineBinding.h"
 #include "render/BgfxRenderDevice.h"
 #include "render/NullRenderDevice.h"
 #include "platform/NullPlatformBackend.h"
@@ -109,19 +110,11 @@ TEST_CASE("BackendRegistry::createBackend factory rejects unknown names") {
     CHECK(reg.createRenderDevice("nonexistent") == nullptr);
 }
 
-TEST_CASE("BackendRegistry::getRenderDeviceFromLua returns fallback") {
-    lua_State* L = luaL_newstate();
-    REQUIRE(L != nullptr);
-    IRenderDevice* dev = BackendRegistry::getRenderDeviceFromLua(L);
-    (void)dev;  // may be null or not -- just verify no crash
-    lua_close(L);
-}
-
-TEST_CASE("BackendRegistry::registerEngineBindings works") {
+TEST_CASE("EngineBinding::registerEngineBindings works (P1-5 move)") {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
     REQUIRE(L != nullptr);
-    BackendRegistry::registerEngineBindings(L);
+    Caesura::engine_binding::registerEngineBindings(L);
     lua_getglobal(L, "Engine");
     CHECK(lua_istable(L, -1));
     lua_pop(L, 1);

@@ -65,7 +65,6 @@ void checkEngineRegistryCleared() {
     CHECK(registry.getAnimationBackend() == nullptr);
     CHECK(registry.getSteamBackend() == nullptr);
     CHECK(registry.getLuaManager() == nullptr);
-    CHECK(registry.getLuaState() == nullptr);
 }
 
 } // namespace

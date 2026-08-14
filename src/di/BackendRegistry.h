@@ -5,8 +5,6 @@
 #include <vector>
 #include <string>
 
-struct lua_State;
-
 namespace Caesura {
 
 // Forward declarations only — no I*.h includes needed for consumers
@@ -73,9 +71,6 @@ public:
     void setMobileAdapter(IMobileAdapter* adapter);
     void setMeshRenderer(IMeshRenderer* renderer);
 
-    void setLuaState(lua_State* L) { m_luaState = L; }
-    lua_State* getLuaState() { return m_luaState; }
-
     // -- SandboxQuota wrappers (delegate to the registered interface) --
     bool tryAlloc(const char* kind);
     void release(const char* kind);
@@ -117,20 +112,10 @@ public:
     void notifyDeviceLost();
     void notifyDeviceRestored();
 
-    // -- Lua --
-    static void registerEngineBindings(lua_State* L);
-    static IRenderDevice*    getRenderDeviceFromLua(lua_State* L);
-    static IAudioBackend*    getAudioBackendFromLua(lua_State* L);
-    static IPlatformBackend* getPlatformBackendFromLua(lua_State* L);
-    static IInputRouter*     getInputRouterFromLua(lua_State* L);
-    static IMiniGameBackend* getMiniGameBackendFromLua(lua_State* L);
-    static IVideoPlayer*     getVideoPlayerFromLua(lua_State* L);
-
 private:
     BackendRegistry() = default;
     std::unordered_map<std::type_index, void*> m_services;
     std::vector<IDeviceLostListener*> m_deviceLostListeners;
-    lua_State*         m_luaState    = nullptr;
 };
 
 } // namespace Caesura

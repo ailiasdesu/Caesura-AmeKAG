@@ -250,6 +250,7 @@ caesura_add_module(Script
     src/script/bindings/SteamBinding.cpp
     src/script/bindings/SaveBinding.cpp
     src/script/bindings/AIBinding.cpp
+    src/script/bindings/EngineBinding.cpp
 )
 
 caesura_add_module(Steam
