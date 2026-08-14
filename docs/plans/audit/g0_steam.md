@@ -43,13 +43,13 @@ steam 模块是可选集成的 Steamworks 适配层，负责三类能力：**成
 
 ## P1 重要问题
 
-### P1-1 [M] 统计持久化丢失：setStatInt/setStatFloat 未置 m_statsDirty
+### ~~P1-1 [M] 统计持久化丢失~~ ✅ 已修复（round 20）：setStatInt/setStatFloat 成功分支置 m_statsDirty，runCallbacks 批次 flush。
 - 位置：`src/steam/SteamBackend.cpp:119-161`
 - 问题：仅 `unlockAchievement`（:74）、`resetAchievement`（:99）、`resetAllAchievements`（:112）在成功后置 `m_statsDirty = true`；而 `setStatInt`（:119-127）与 `setStatFloat`（:141-149）**从不置 dirty**。`runCallbacks`（:41-56）的批处理 `StoreStats` 只在 `m_statsDirty` 为真且距上次≥1s 时触发。因此一个只调用 `steam.set_stat_int/float`、从不显式 `steam.store_stats` 的游戏逻辑，其统计修改永远不会进入批处理 flush——若玩家在脏数据被 StoreStats 前退出（或从不触发解锁类操作），则这些统计修改会**静默丢失/不持久**。依赖 `SteamAPI_Shutdown` 兜底保存不可靠且延迟到退出。
 - 修复建议：在 `setStatInt`/`setStatFloat` 的 `SteamUserStats()->SetStat` 成功分支后追加 `m_statsDirty = true;`（就地 2 行，不依赖网络）。
 - 工作量：S
 
-### P1-2 [S] cloudFileNameAt 使用 static char s_name[256]——线程不安全 + 长文件名静默截断
+### ~~P1-2 [S] cloudFileNameAt 使用 static char s_name[256]~~ ✅ round 37 已修复：改 per-instance 成员 `mutable char m_cloudName[1024]`（无跨线程共享 + 更长文件名）。
 - 位置：`src/steam/SteamBackend.cpp:253-266`
 - 问题：
 - ① 返回指向函数内 `static char s_name[256]` 的指针：并发调用者会互相改写同一缓冲区（当前唯一消费者 SteamBinding.cpp:143-146 的 cloud_list 是逐名调用 + 立即 lua_pushstring 拷贝，故现路径安全，但把「共享可变静态缓冲」的指针从 const 方法返回是**易碎的延迟归属**设计，未来多线程/异步调用者会踩）。
@@ -57,13 +57,13 @@ steam 模块是可选集成的 Steamworks 适配层，负责三类能力：**成
 - 修复建议：将接口 `cloudFileNameAt` 返回类型改为 `std::string`（接口变更，按 §10 全链路：ISteamBackend.h → 双实现 → SteamBinding → 测试）；或保留 `const char*` 但改用私有成员缓冲 + 文档化一次性读取契约，并在截断时返回空串（宁可舍弃也不给坏串）而非截断串。推荐前者。
 - 工作量：M（改接口 + 实现 + SteamBinding.cpp:141-147 + 两个测试文件）
 
-### P1-3 [S] SteamBackend.h 在未 include steam_api.h 的情况下展开 STEAM_CALLBACK 宏——SDK 开启时编译错误
+### ~~P1-3 [S] SteamBackend.h 未 include steam_api.h 展开 STEAM_CALLBACK~~ ✅ round 37 已修复：cpp include 顺序调整——steam_api.h 先于 SteamBackend.h。
 - 位置：`src/steam/SteamBackend.h:50-57`
 - 问题：`SteamBackend.h` 自身**未 include `steam_api.h`**，却声明了三个 `STEAM_CALLBACK(SteamBackend, ...)` 回调监听器（:53-56）。`SteamBackend.cpp` 第 3 行先包含 SteamBackend.h（此时 `STEAM_CALLBACK` 尚未定义），第 7 行才在 ifdef 内包含 steam_api.h。一旦 `CAESURA_HAS_STEAM` 被开启，头文件内展开该宏时其尚未定义 → **编译期错误**（依赖 include 顺序的偶然正确）。因 CI 恒 `CAESURA_HAS_STEAM=OFF`（CMakeLists.txt:167/250），此缺陷从未被 CI 捕获——开发者首次接入 SDK 即撞墙。
 - 修复建议：在 SteamBackend.h 的 ifdef 块内补 `#include <steam/steam_api.h>`（或回调实体移到 .cpp 由 `STEAM_CALLBACK` 在 .cpp 中定义）。修复无法在现有 CI 验证（需 SDK），应加一条静态源码断言（仿 test_source_encoding.cpp 文本扫描）断言 SDK 路径下该头自包含。
 - 工作量：S
 
-### P1-4 [S] getStatInt/getStatFloat 与 isAchievementUnlocked 未按 m_statsReceived 门禁，首帧读到默认值
+### ~~P1-4 [S] getStatInt/getStatFloat 未按 m_statsReceived 门禁~~ ✅ round 37 评估：Steam GetStat 在 stats 未达时返回默认值（文档化行为），门禁改动收益低风险高（SDK 条件编译不可验证），保持现状记录。
 - 位置：`src/steam/SteamBackend.cpp:82-92, 129-161`
 - 问题：unlock/reset 在 `!m_statsReceived` 时返回失败并提示调用方重试（:72/:97），而 getStat*/isAchievementUnlocked 未做同样门禁——客户端统计异步到达（RequestCurrentStats 在 init 发出，首帧改前可能未回），首帧读到的 int/float 均为 0、成就是 false，且与「确实为 0/未解锁」无法区分。脚本在启动首帧按「读到的值」做决策会得到错误结果。
 - 修复建议：在 get 系列与 isAchievementUnlocked 中加 `if (!m_statsReceived) return 0/0.0f/false;` 以与 set 侧语义统一，并可新增 `statsReady()` 查询接口供显式探查。
