@@ -221,89 +221,104 @@ bool BgfxMiniGameBackend::checkCollision(uint32_t a,uint32_t b){
 // Scene
 // ==========================================================================
 
+namespace {
+
+using json = nlohmann::json;
+
+void parseCamera(const json& cam, MiniScene& out) {
+    if (cam.contains("eye") && cam["eye"].is_array() && cam["eye"].size() >= 3) {
+        out.eyeX = cam["eye"][0].get<float>();
+        out.eyeY = cam["eye"][1].get<float>();
+        out.eyeZ = cam["eye"][2].get<float>();
+    }
+    if (cam.contains("at") && cam["at"].is_array() && cam["at"].size() >= 3) {
+        out.atX = cam["at"][0].get<float>();
+        out.atY = cam["at"][1].get<float>();
+        out.atZ = cam["at"][2].get<float>();
+    }
+}
+
+void parseLights(const json& lights, MiniScene& out) {
+    if (lights.contains("ambient") && lights["ambient"].is_array() &&
+        lights["ambient"].size() >= 3) {
+        out.lights.ambient[0] = lights["ambient"][0].get<float>();
+        out.lights.ambient[1] = lights["ambient"][1].get<float>();
+        out.lights.ambient[2] = lights["ambient"][2].get<float>();
+    }
+    if (lights.contains("directional") && lights["directional"].is_object()) {
+        const auto& dir = lights["directional"];
+        out.lights.hasDirectional = true;
+        if (dir.contains("dir") && dir["dir"].is_array() && dir["dir"].size() >= 3) {
+            out.lights.dir[0] = dir["dir"][0].get<float>();
+            out.lights.dir[1] = dir["dir"][1].get<float>();
+            out.lights.dir[2] = dir["dir"][2].get<float>();
+        }
+        if (dir.contains("color") && dir["color"].is_array() && dir["color"].size() >= 3) {
+            out.lights.dirColor[0] = dir["color"][0].get<float>();
+            out.lights.dirColor[1] = dir["color"][1].get<float>();
+            out.lights.dirColor[2] = dir["color"][2].get<float>();
+        }
+        if (dir.contains("intensity")) out.lights.dirIntensity = dir["intensity"].get<float>();
+    }
+}
+
+void parseObjectItem(const json& item, uint32_t& nextId, MiniScene& out) {
+    if (!item.is_object()) return;
+    MiniObject obj;
+    obj.id = nextId++;
+    const std::string type = item.contains("type") && item["type"].is_string()
+        ? item["type"].get<std::string>() : "cube";
+    if (type == "sphere")      obj.geoType = MiniGeoType::Sphere;
+    else if (type == "plane")  obj.geoType = MiniGeoType::Plane;
+    else if (type == "quad")   obj.geoType = MiniGeoType::Quad;
+    else                       obj.geoType = MiniGeoType::Cube;
+    const auto readVec = [&item](const char* key, float& x, float& y, float& z) {
+        if (!item.contains(key) || !item[key].is_array() || item[key].size() < 3) return;
+        x = item[key][0].get<float>();
+        y = item[key][1].get<float>();
+        z = item[key][2].get<float>();
+    };
+    readVec("pos", obj.posX, obj.posY, obj.posZ);
+    readVec("rot", obj.rotX, obj.rotY, obj.rotZ);
+    if (item.contains("scale") && item["scale"].is_array() && item["scale"].size() >= 3) {
+        obj.scaleX = item["scale"][0].get<float>();
+        obj.scaleY = item["scale"][1].get<float>();
+        obj.scaleZ = item["scale"][2].get<float>();
+    } else if (item.contains("scale") && item["scale"].is_number()) {
+        const float s = item["scale"].get<float>();
+        obj.scaleX = obj.scaleY = obj.scaleZ = s;
+    }
+    if (item.contains("color") && item["color"].is_array() && item["color"].size() >= 3) {
+        obj.r = item["color"][0].get<float>();
+        obj.g = item["color"][1].get<float>();
+        obj.b = item["color"][2].get<float>();
+    }
+    if (item.contains("gravity") && item["gravity"].is_boolean()) {
+        obj.useGravity = item["gravity"].get<bool>();
+    }
+    if (item.contains("material") && item["material"].is_number()) {
+        obj.materialId = item["material"].get<uint32_t>();
+    }
+    out.objects.push_back(obj);
+}
+
+} // namespace
+
 bool BgfxMiniGameBackend::sceneFromJson(const std::string& jsonText, MiniScene& out) {
-    using json = nlohmann::json;
     try {
         const json doc = json::parse(jsonText);
         if (doc.contains("name") && doc["name"].is_string()) {
             out.name = doc["name"].get<std::string>();
         }
         if (doc.contains("camera") && doc["camera"].is_object()) {
-            const auto& cam = doc["camera"];
-            if (cam.contains("eye") && cam["eye"].is_array() && cam["eye"].size() >= 3) {
-                out.eyeX = cam["eye"][0].get<float>();
-                out.eyeY = cam["eye"][1].get<float>();
-                out.eyeZ = cam["eye"][2].get<float>();
-            }
-            if (cam.contains("at") && cam["at"].is_array() && cam["at"].size() >= 3) {
-                out.atX = cam["at"][0].get<float>();
-                out.atY = cam["at"][1].get<float>();
-                out.atZ = cam["at"][2].get<float>();
-            }
+            parseCamera(doc["camera"], out);
         }
         if (doc.contains("lights") && doc["lights"].is_object()) {
-            const auto& lights = doc["lights"];
-            if (lights.contains("ambient") && lights["ambient"].is_array() &&
-                lights["ambient"].size() >= 3) {
-                out.lights.ambient[0] = lights["ambient"][0].get<float>();
-                out.lights.ambient[1] = lights["ambient"][1].get<float>();
-                out.lights.ambient[2] = lights["ambient"][2].get<float>();
-            }
-            if (lights.contains("directional") && lights["directional"].is_object()) {
-                const auto& dir = lights["directional"];
-                out.lights.hasDirectional = true;
-                if (dir.contains("dir") && dir["dir"].is_array() && dir["dir"].size() >= 3) {
-                    out.lights.dir[0] = dir["dir"][0].get<float>();
-                    out.lights.dir[1] = dir["dir"][1].get<float>();
-                    out.lights.dir[2] = dir["dir"][2].get<float>();
-                }
-                if (dir.contains("color") && dir["color"].is_array() && dir["color"].size() >= 3) {
-                    out.lights.dirColor[0] = dir["color"][0].get<float>();
-                    out.lights.dirColor[1] = dir["color"][1].get<float>();
-                    out.lights.dirColor[2] = dir["color"][2].get<float>();
-                }
-                if (dir.contains("intensity")) out.lights.dirIntensity = dir["intensity"].get<float>();
-            }
+            parseLights(doc["lights"], out);
         }
         if (doc.contains("objects") && doc["objects"].is_array()) {
             for (const auto& item : doc["objects"]) {
-                if (!item.is_object()) continue;
-                MiniObject obj;
-                obj.id = m_nextObjId++;
-                const std::string type = item.contains("type") && item["type"].is_string()
-                    ? item["type"].get<std::string>() : "cube";
-                if (type == "sphere")      obj.geoType = MiniGeoType::Sphere;
-                else if (type == "plane")  obj.geoType = MiniGeoType::Plane;
-                else if (type == "quad")   obj.geoType = MiniGeoType::Quad;
-                else                       obj.geoType = MiniGeoType::Cube;
-                const auto readVec = [&item](const char* key, float& x, float& y, float& z) {
-                    if (!item.contains(key) || !item[key].is_array() || item[key].size() < 3) return;
-                    x = item[key][0].get<float>();
-                    y = item[key][1].get<float>();
-                    z = item[key][2].get<float>();
-                };
-                readVec("pos", obj.posX, obj.posY, obj.posZ);
-                readVec("rot", obj.rotX, obj.rotY, obj.rotZ);
-                if (item.contains("scale") && item["scale"].is_array() && item["scale"].size() >= 3) {
-                    obj.scaleX = item["scale"][0].get<float>();
-                    obj.scaleY = item["scale"][1].get<float>();
-                    obj.scaleZ = item["scale"][2].get<float>();
-                } else if (item.contains("scale") && item["scale"].is_number()) {
-                    const float s = item["scale"].get<float>();
-                    obj.scaleX = obj.scaleY = obj.scaleZ = s;
-                }
-                if (item.contains("color") && item["color"].is_array() && item["color"].size() >= 3) {
-                    obj.r = item["color"][0].get<float>();
-                    obj.g = item["color"][1].get<float>();
-                    obj.b = item["color"][2].get<float>();
-                }
-                if (item.contains("gravity") && item["gravity"].is_boolean()) {
-                    obj.useGravity = item["gravity"].get<bool>();
-                }
-                if (item.contains("material") && item["material"].is_number()) {
-                    obj.materialId = item["material"].get<uint32_t>();
-                }
-                out.objects.push_back(obj);
+                parseObjectItem(item, m_nextObjId, out);
             }
         }
         return true;
