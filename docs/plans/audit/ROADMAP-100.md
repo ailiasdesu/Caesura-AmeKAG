@@ -63,3 +63,4 @@
 | 15 | 文档同步审计：KAG 契约命令数全仓漂移（72/78/81/84 并存），核实权威值 84（schema_doc 自动生成）并同步 README/AGENTS/CLAUDE/kag-neo-genesis-language；规避 PowerShell UTF-16 重定向坑（G9 收尾） | 文档一致性 | f5caf28d |
 | 16 | 编辑器测试基建（G4 起航）：vitest + SceneTree parseSceneElements 7 例（标签/类型分类/注释跳过/截断/行号/空源）+ CI npm ci 步骤 | vitest 7/7, tsc 0, ctest 绿, 耦合 PASS | cfd6de2f |
 | 17 | 编辑器安全纯函数测试：luaString 长括号转义（注入守卫：终止符形状内容/等号升级/10 连等） + luaValue JSON→Lua（标量/nil/转义/嵌套表）（G4 中段） | vitest 20/20, tsc 0, ctest 绿, 耦合 PASS | 339e2cf2 |
+| 18 | EngineClient RPC 客户端测试（可注入 fetch mock）：URL 拼接/token 头/Content-Type/查询参数/JSON 解析/RpcError/404 详情/setBase（G4 中段） | vitest 28/28, tsc 0, ctest 绿, 耦合 PASS | a44b530f |
