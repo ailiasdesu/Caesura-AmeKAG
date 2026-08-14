@@ -6,6 +6,7 @@
 #include "SteamBinding.h"
 #include "../../di/BackendRegistry.h"
 #include "../../steam/api/ISteamBackend.h"
+#include "../../debug/api/DebugLog.h"
 #include <cstdio>
 #include <climits>
 #include <vector>
@@ -97,7 +98,9 @@ STEAM_BODY(cloud_write, lua_pushboolean(L, 0);, {
 STEAM_BODY(cloud_read, lua_pushstring(L, "");, {
     const char* file = luaL_checkstring(L, 1);
     const int32_t size = steam->cloudFileSize(file);
-    if (size <= 0 || size > 16 * 1024 * 1024) {
+    // P2-4 (round 37): align with CloudSaveProvider kMaxChunkedSize (64MB);
+    // the old 16MB cap rejected legitimate cloud saves the provider allows.
+    if (size <= 0 || size > 64 * 1024 * 1024) {
         lua_pushnil(L);
         return 1;
     }
@@ -176,7 +179,7 @@ static const luaL_Reg steam_functions[] = {
 void registerSteamBinding(lua_State* L) {
     luaL_newlib(L, steam_functions);
     lua_setglobal(L, "steam");
-    printf("[Lua] Steam module registered (19 APIs).\n");
+    DEBUG_INFO(SubSys::Scripting, ErrCode::Ok, "[Lua] Steam module registered (19 APIs).");
 }
 
 } // namespace Caesura

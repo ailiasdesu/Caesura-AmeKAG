@@ -2,7 +2,8 @@
 // Requires Steamworks SDK 1.60+. Compiled only when CAESURA_HAS_STEAM is defined.
 #pragma once
 #include "api/ISteamBackend.h"
-#include <cstdint>  // fixed-width types (GCC strict)
+#include <chrono>      // steady_clock (wall-clock throttle)
+#include <cstdint>   // fixed-width types (GCC strict)
 
 namespace Caesura {
 
@@ -45,7 +46,9 @@ private:
     bool m_statsReceived  = false;
     bool m_overlayActive  = false;
     bool m_statsDirty     = false;
-    double m_lastStoreStats = 0.0;  // throttle seconds (clock())
+    std::chrono::steady_clock::time_point m_lastStoreStats;  // throttle (wall clock);
+    // default-constructed = epoch -> first flush always passes
+    mutable char m_cloudName[1024] = {};  // cloudFileNameAt scratch buffer (per-instance)
 
 #ifdef CAESURA_HAS_STEAM
     // Steam callback listeners (dispatched by SteamAPI_RunCallbacks on the

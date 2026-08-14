@@ -1,11 +1,15 @@
 // SteamBackend implementation — requires Steamworks SDK
 // Compiled only when CAESURA_HAS_STEAM is defined (via CMake option)
-#include "SteamBackend.h"
+#include <chrono>      // steady_clock (wall-clock throttle)
 #include <cstring>
 
+// Include the Steamworks SDK BEFORE SteamBackend.h: the header STEAM_CALLBACK
+// macro must expand with steam_api.h already visible (P1-3).
 #ifdef CAESURA_HAS_STEAM
 #include <steam/steam_api.h>
 #endif
+
+#include "SteamBackend.h"
 
 namespace Caesura {
 
@@ -45,8 +49,8 @@ void SteamBackend::runCallbacks() {
     // round trip happens at most once per second here (never on the Lua
     // binding call path).
     if (m_statsDirty) {
-        const double now = (double)clock() / CLOCKS_PER_SEC;
-        if (now - m_lastStoreStats >= 1.0) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - m_lastStoreStats >= std::chrono::seconds(1)) {
             m_lastStoreStats = now;
             m_statsDirty = false;
             SteamUserStats()->StoreStats();
@@ -167,7 +171,10 @@ float SteamBackend::getStatFloat(const char* name) const {
 bool SteamBackend::storeStats() {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized) return false;
-    return SteamUserStats()->StoreStats();
+    // Do not call StoreStats() directly here (scripts could spam it): mark dirty
+    // and let runCallbacks flush on the next tick (throttled to 1/sec).
+    m_statsDirty = true;
+    return true;  // accepted; actual flush happens on the next runCallbacks
 #else
     return false;
 #endif
@@ -257,12 +264,11 @@ int32_t SteamBackend::cloudFileCount() const {
 const char* SteamBackend::cloudFileNameAt(int32_t index) const {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized || index < 0) return "";
-    static char s_name[256];
     int32_t size = 0;
     const char* name = SteamRemoteStorage()->GetFileNameAndSize(index, &size);
     if (!name) return "";
-    snprintf(s_name, sizeof(s_name), "%s", name);
-    return s_name;
+    snprintf(m_cloudName, sizeof(m_cloudName), "%s", name);
+    return m_cloudName;
 #else
     (void)index;
     return "";
