@@ -49,3 +49,4 @@
 | 1 | TextRenderer 纯布局提取 + 11 例无 GPU 测试（G2 前半） | C++ 659/659, Lua 120/120, ctest 绿, 耦合 PASS | 4c12c9c5, 6c30d545 |
 | 2 | TextRenderer 脏区间纯函数化（countUtf8Glyphs/computeDirtyRange）+ 10 例无 GPU 测试（G2 完成） | C++ 669/669, Lua 120/120, ctest 绿, 耦合 PASS | b36d82c8 |
 | 3 | BgfxQuadBatch 批次数学纯函数化（quadToNdc/computeMergeGroups/buildGroupIndices）+ 11 例无 GPU 测试（G1 完成） | C++ 680/680, Lua 120/120, ctest 绿, 耦合 PASS | 96a2cd6c |
+| 4 | 共享像素→NDC 纯数学 NdcMath.h，blitTexture/stretchBlt/affineBlt/quadToNdc 统一委托 + 7 例测试（G8 前半） | C++ 687/687, Lua 120/120, ctest 绿, 耦合 PASS | 7c8b2849 |
