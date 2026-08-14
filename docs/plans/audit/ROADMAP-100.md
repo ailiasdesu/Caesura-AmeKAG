@@ -54,3 +54,4 @@
 | 6 | DirtyRect merge uint16 回绕修复（32 位计算+钳制）+ shouldUseScissorFor 纯决策 + 11 例测试（G8 中后段） | C++ 705/705, Lua 120/120, ctest 绿, 耦合 PASS | 853e0e31 |
 | 7 | 粒子生命周期衰减纯化（lifeFade + buildParticleVisual + maxLife=0 NaN 守卫）+ 6 例测试（G8 收尾） | C++ 711/711, Lua 120/120, ctest 绿, 耦合 PASS | 22203ce8 |
 | 8 | 确定性测试套件扩展：嵌套 elseif、jump/call 流程、表达式边界（除/模/串/链）、深快照、状态隔离（G9 前哨） | Lua 120/120（+28 determinism 断言）, C++ 711/711, 耦合 PASS | be61f8be |
+| 9 | 表达式语言边界测试：括号作用域、表键引号、短路防 nil 解引用、严格类型、数字字面量/双重否定/链式比较（G9 中段） | Lua 120/120（+17 expr 断言）, C++ 711/711, ctest 绿, 耦合 PASS | 81872bae |
