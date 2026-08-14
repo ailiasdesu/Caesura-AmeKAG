@@ -5,6 +5,7 @@ import { Lua } from 'wasmoon'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { AdapterCore, LAYER_TYPE } from './adapter-core.js'
+import { AudioEngine } from './audio-engine.js'
 
 // Local glue.wasm for non-browser hosts (vitest/jsdom); browsers use the
 // bundled default (CDN) unless wasmFile is passed explicitly.
@@ -22,10 +23,11 @@ const BINDING_MODULES = new Set([
   'fileutil', 'sandbox',
 ])
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile }) {
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p }) {
   const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()
+  const audio = new AudioEngine()
 
   // ---- collect scripts/*.lua via HTTP ----
   const entries = await (await fetchImpl(scriptsBase + 'index.json')).json()
@@ -73,9 +75,19 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile })
     fade_to: () => {}, mark_dirty: () => {}, get_layer: (id) => core.getLayer(id) ?? null,
   }
   const jsBackend = {
-    close: () => {}, audio_play: (kind, file, opts) => { core.audioPlay(String(kind), String(file), opts && opts.volume); const e = core.audioBus[String(kind)]; if (e) e._startFrame = core._frame ?? 0; return 1 },
-    audio_stop: (kind) => core.audioStop(String(kind)), audio_xfade: () => {}, audio_is_playing: (kind) => { core.tick(); return core.audioIsPlaying(String(kind)) },
-    audio_set_bus_volume: () => {}, audio_fade_volume: () => {},
+    // audio_play routes through the real WebAudio engine when available;
+    // the core state machine always records the call (telemetry + fallback).
+    audio_play: (kind, file, opts) => {
+      const k = String(kind), f = String(file)
+      core.audioPlay(k, f, opts && opts.volume)
+      void audio.play(k, f, { volume: opts && opts.volume, assetUrl: audioAssetUrl })
+      return 1
+    },
+    audio_stop: (kind) => { const k = String(kind); core.audioStop(k); audio.stop(k) },
+    audio_xfade: () => {},
+    audio_is_playing: (kind) => { core.tick(); return core.audioIsPlaying(String(kind)) },
+    audio_set_bus_volume: (kind, v) => { core.audioSetBusVolume(String(kind), v); audio.setBusVolume(String(kind), v) },
+    audio_fade_volume: () => {},
     load_texture: (f) => {
       // resolve via mods.resolve-like identity; fetch metadata in browser
       const id = core.loadTexture(f)
@@ -123,6 +135,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile })
   return {
     lua,
     core,
+    audio,
     /** Run a .ks source; resolves with final ctx.token_index. */
     /** Current scene coroutine state (persisted across advances). */
     _co: null,

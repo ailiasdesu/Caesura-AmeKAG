@@ -78,6 +78,7 @@ export class AdapterCore {
     this._log('audio.play', { kind, path, volume })
   }
   audioStop(kind) { if (this.audioBus[kind]) this.audioBus[kind].playing = false; this._log('audio.stop', { kind }) }
+  audioSetBusVolume(kind, v) { this._log('audio.volume', { kind, v: Number(v) ?? 1 }) }
   /** Host callback: a clip actually ended (AudioContext onended). */
   audioEnded(kind) { if (this.audioBus[kind]) this.audioBus[kind].playing = false; this._log('audio.ended', { kind }) }
   audioIsPlaying(kind) {
