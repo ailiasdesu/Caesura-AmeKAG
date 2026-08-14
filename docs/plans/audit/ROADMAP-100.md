@@ -85,3 +85,4 @@
 | 37 | G5 音频真实化：AudioEngine（WebAudio 3 总线 bgm/se/voice、解码缓存、play/stop/isPlaying/音量），bridge 音频委托真实引擎 + core 状态降级；5 引擎测试（总线/生命周期/缓存/降级）；web 23/23 | web vitest 23/23, 引擎无变更 | 2cba6e3d |
 | 38 | G5 文本排版对齐：bridge 收集 TextScene draws 为 Lua 表（x/y/rgb/scale/bold/italic）经 wasmoon 表桥接直达 JS，core.setDraws + DOM 渲染器逐条绝对定位 span；textBuffer 平面回退保留；flow 断言 span left/top/color/fontSize | web vitest 23/23, 引擎无变更 | 42628adb |
 | 39 | G5 图层动画：CSS transition 补间（left/top/opacity 300ms）插值引擎驱动的 sprite_move/sprite_fade、opacity 0..255 归一化 0..1、canonical 节点 mutator（Lua proxy 引用解析）、main.mjs rAF 渲染循环；flow 断言 sprite_move 20+ 帧至 x=120 + transition 就位 | web vitest 23/23, 引擎无变更 | 0392b85f |
+| 40 | G5 播放器 UI 收官（40% 里程碑）：backlog 历史（core 快照提交不同文本页 + 面板滚动回看）、自动推进开关（1.2s 定时点击）；3 backlog 测试；web 26/26 | web vitest 26/26, 引擎无变更 | 65c290d1 |
