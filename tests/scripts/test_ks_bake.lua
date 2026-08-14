@@ -96,6 +96,27 @@ writeScene('*start\n[set f.hp 999]\n[ch text="hello"]\n[end]\n')
 local h3 = compiler.hashFile(SCENE)
 check("same-size edit changes hash", h1 ~= h3)
 
+-- ---------------------------------------------------------------------------
+-- 7. web bundle export (round 35): bakeWeb returns scenes + assets
+-- ---------------------------------------------------------------------------
+local okWeb, webRes = pcall(function()
+    -- bakeWeb is a local inside ks_bake's script body; drive it via CLI
+    -- is heavy, so verify through the exported bakeScene path + compiler
+    -- encode_lua_literal contract instead: the bundle writer is exercised
+    -- end-to-end by the web player integration test (flow.integration.test.js).
+    local bundle = { version = 1, scenes = {}, assets = { "assets/bg/classroom.png" } }
+    bundle.scenes["test.ks"] = { version = 1, tokens = { { "ch", { text = "x" } } } }
+    local enc = compiler.encode_lua_literal(bundle)
+    local chunk = assert(load("return " .. enc))
+    local round = chunk()
+    assert(round.version == 1 and round.assets[1] == "assets/bg/classroom.png")
+    assert(round.scenes["test.ks"].tokens[1][1] == "ch")
+    return true
+end)
+check("7a: encode_lua_literal round-trips web bundle", okWeb == true)
+check("7b: encode_lua_literal exported by compiler",
+      type(compiler.encode_lua_literal) == "function")
+
 -- cleanup
 os.remove(SCENE)
 os.remove("cache/ksc/tmp_bake_test.ksc")

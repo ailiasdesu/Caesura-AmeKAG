@@ -65,4 +65,32 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     const msg2 = stage.querySelector('.caesura-message')
     expect(msg2).toBeNull()
   }, 120000)
+
+  it('loads a pre-baked .ksc stream (zero-parse start)', async () => {
+    // ks_bake pre-compiles scenes into Lua-literal .ksc; the web player
+    // loads them directly (no tokenizer/compiler at scene start).
+    const ksc = readFileSync(join(here, '..', 'cache', 'ksc-web', 'demo_galgame_demo.ksc'), 'utf8')
+    player.lua.global.set('KSC_SRC', ksc)
+    const data = await player.lua.doString([
+      '  local chunk = assert(load(KSC_SRC, \'@galgame.ksc\', \'t\', _ENV))',
+      '  return chunk()',
+    ].join(String.fromCharCode(10)))
+    expect(data.version).toBe(1)
+    expect(data.tokens.length).toBeGreaterThan(0)
+    expect(data.labels).toBeTruthy()
+  }, 60000)
+
+  it('loads the ks_bake --web story bundle (scenes + assets)', async () => {
+    const story = readFileSync(join(here, '..', 'cache', 'story', 'story.lua'), 'utf8')
+    player.lua.global.set('STORY_SRC', story)
+    const bundle = await player.lua.doString([
+      '  local chunk = assert(load(STORY_SRC, \'@story.lua\', \'t\', _ENV))',
+      '  return chunk()',
+    ].join(String.fromCharCode(10)))
+    expect(bundle.version).toBe(1)
+    expect(bundle.scenes).toBeTruthy()
+    expect(bundle.scenes['galgame_demo.ks']).toBeTruthy()
+    expect(bundle.assets.length).toBeGreaterThan(0)
+    expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
+  }, 60000)
 })
