@@ -3,6 +3,7 @@
 > **用途**：为「Caesura (AmeKAG) vs 主流引擎」对比报告提供结构化素材。
 > **数据基准**：结合仓库内 2026-08-06 在线核实快照（docs/design/engine-market-analysis-2026-08-06.md，数据经 GitHub API/官网/itch.io 实时复核）+ 领域公开常识。
 > **重要说明**：本次调研时 web_search 因账户余额不足不可用（"Insufficient Balance"），无法实时在线复核；凡无法二次核实处一律标注「待核实」。最终报告发布前建议补一轮在线复核。
+> **复核进展（round 27）**：web_search 已修复（改走 opencode-go 提供方）。已复核：**Ren'Py 最新版 8.5.0**（renpy.org/release/8.5.0 官方确认，2025 发布）。其余「待核实」项待继续复核。
 > **Caesura 侧证据来源**（本地已验证）：docs/api/command-contracts.md（**84 个** KAG Neo-Genesis 契约命令，自动生成）；docs/design/skeletal-mesh-animation.md（SMA 骨骼网格动画，**GPU 蒙皮 bgfx compute 已交付 round 18**）；Ollama AI `[ai_dialog]` 集成。
 
 ## 0. 被调研引擎清单
