@@ -5,6 +5,7 @@ import { ActivityBar } from './ide/ActivityBar'
 import { StatusBar } from './ide/StatusBar'
 import { ExplorerView } from './ide/ExplorerView'
 import { SceneTree } from './ide/SceneTree'
+import { InspectorView } from './ide/InspectorView'
 import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
 import { AiPanel } from './ide/AiPanel'
@@ -61,6 +62,7 @@ export function App() {
             <>
               <ExplorerView client={clientRef.current} />
               <SceneTree />
+              <InspectorView />
             </>
           )}
           {sideView === 'debug' && <DebugView client={clientRef.current} />}

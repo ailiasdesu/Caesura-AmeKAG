@@ -25,6 +25,9 @@ interface EditorState {
   /** Battle 4b: reveal request — the editor scrolls to this line after
    *  a scene-tree click (set by SceneTree, consumed by EditorArea). */
   revealRequest: { path: string; line: number; nonce: number } | null
+  /** G4 inspector: the scene element currently inspected (path + line),
+   *  set by SceneTree clicks, consumed by InspectorView. */
+  inspected: { path: string; line: number } | null
   openDoc: (doc: OpenDoc) => void
   updateDoc: (path: string, content: string) => void
   closeDoc: (path: string) => void
@@ -36,6 +39,8 @@ interface EditorState {
   insertIntoActive: (text: string) => void
   /** Request the editor to reveal a line in a doc (scene-tree jump). */
   requestReveal: (path: string, line: number) => void
+  /** G4 inspector: select a scene element for the inspector panel. */
+  setInspected: (path: string, line: number) => void
 }
 
 export const useEditor = create<EditorState>((set) => ({
@@ -47,6 +52,7 @@ export const useEditor = create<EditorState>((set) => ({
   engineToken: 0,
   enginePaused: false,
   revealRequest: null,
+  inspected: null,
   openDoc: (doc) =>
     set((s) => {
       const existing = s.docs.find((d) => d.path === doc.path)
@@ -89,4 +95,5 @@ export const useEditor = create<EditorState>((set) => ({
       activePath: path,
       revealRequest: { path, line, nonce: (s.revealRequest?.nonce ?? 0) + 1 },
     })),
+  setInspected: (path, line) => set({ inspected: { path, line } }),
 }))

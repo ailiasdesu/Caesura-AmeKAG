@@ -552,3 +552,26 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 .ai-lines-input { width: 60px; }
 .ai-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .ai-msg { white-space: pre-wrap; }
+/* G4 inspector */
+.inspector-body {
+  padding: 4px 8px 8px;
+}
+.inspector-body .state-row b {
+  word-break: break-all;
+  max-width: 180px;
+  text-align: right;
+}
+.inspector-source {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg-elev, rgba(255, 255, 255, 0.05));
+  border-radius: 4px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.scene-el.inspected {
+  outline: 1px solid var(--accent, #4a9eff);
+  background: rgba(74, 158, 255, 0.12);
+}

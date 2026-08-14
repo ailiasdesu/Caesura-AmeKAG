@@ -2,11 +2,28 @@ import { useEffect, useMemo } from 'react'
 import { useEditor } from '../store'
 import { revealEditorLine } from './EditorArea'
 
-interface SceneElement {
+export interface SceneElement {
   line: number
   type: 'label' | 'bg' | 'fg' | 'ch' | 'audio' | 'other'
   text: string
   detail: string
+  /** Tag parameter table (key="value" / key=number pairs), G4 inspector. */
+  params: Record<string, string>
+}
+
+/** Extract `key="value"` / `key=number` / bare-flag parameter pairs from a
+ *  tag body (G4 inspector). Quoted values win over bare tokens; a quoted
+ *  value may contain '='. Tolerant of malformed bodies (returns {}). */
+export function parseTagParams(body: string): Record<string, string> {
+  const params: Record<string, string> = {}
+  const re = /([\w_]+)\s*=\s*"((?:[^"\\]|\\.)*)"?|([\w_]+)\s*=\s*([\w.+-]+)|([\w_]+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body)) !== null) {
+    if (m[1] !== undefined && m[2] !== undefined) params[m[1]] = m[2]
+    else if (m[3] !== undefined && m[4] !== undefined) params[m[3]] = m[4]
+    else if (m[5] !== undefined) params[m[5]] = 'true'
+  }
+  return params
 }
 
 /** Parse a .ks document into a scene element tree (Battle 4b).
@@ -23,7 +40,7 @@ export function parseSceneElements(source: string): SceneElement[] {
     // *label
     const label = trimmed.match(/^\*([\w_]+)/)
     if (label) {
-      out.push({ line: i + 1, type: 'label', text: `*${label[1]}`, detail: '' })
+      out.push({ line: i + 1, type: 'label', text: `*${label[1]}`, detail: '', params: {} })
       continue
     }
 
@@ -39,7 +56,7 @@ export function parseSceneElements(source: string): SceneElement[] {
       else if (cmd === 'fg' || cmd === 'chara_show') type = 'fg'
       else if (cmd === 'ch' || cmd === 'text') type = 'ch'
       else if (cmd === 'playbgm' || cmd === 'playse' || cmd === 'play') type = 'audio'
-      out.push({ line: i + 1, type, text: `[${cmd}]`, detail })
+      out.push({ line: i + 1, type, text: `[${cmd}]`, detail, params: parseTagParams(rest) })
     }
   }
   return out
@@ -58,6 +75,8 @@ export function SceneTree() {
   const docs = useEditor((s) => s.docs)
   const activePath = useEditor((s) => s.activePath)
   const requestReveal = useEditor((s) => s.requestReveal)
+  const inspected = useEditor((s) => s.inspected)
+  const setInspected = useEditor((s) => s.setInspected)
 
   const active = docs.find((d) => d.path === activePath) ?? null
   const elements = useMemo(
@@ -95,12 +114,14 @@ export function SceneTree() {
         {elements.map((e, idx) => (
           <button
             key={idx}
-            className={`scene-el scene-${e.type}`}
+            className={`scene-el scene-${e.type}${inspected?.path === active.path && inspected.line === e.line ? ' inspected' : ''}`}
             title={`line ${e.line} — ${e.detail}`}
             onClick={() => {
               requestReveal(active.path, e.line)
               revealEditorLine(active.path, e.line)
+              setInspected(active.path, e.line)
             }}
+            aria-pressed={inspected?.path === active.path && inspected.line === e.line}
           >
             <span className="scene-icon">{ICONS[e.type]}</span>
             <span className="scene-text">{e.text}</span>
