@@ -7,6 +7,7 @@ import type {
   SmaSaveReply,
   SmaValidateReply,
   StateReply,
+  StatsReply,
 } from '../lib/rpc'
 import { useEditor } from '../store'
 import { SmaSkeletonCanvas } from './SmaSkeletonCanvas'
@@ -114,6 +115,8 @@ export function VisualView({ client }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const [state, setState] = useState<StateReply | null>(null)
   const [stateError, setStateError] = useState('')
+  const [stats, setStats] = useState<StatsReply | null>(null)
+  const [statsError, setStatsError] = useState('')
   const [smaPath, setSmaPath] = useState('demo/assets/sma/hero.json')
   const [smaResult, setSmaResult] = useState<SmaValidateReply | null>(null)
   const [smaError, setSmaError] = useState('')
@@ -136,6 +139,17 @@ export function VisualView({ client }: Props) {
       else setStateError(s.error ?? 'state unavailable')
     } catch (e) {
       setStateError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const refreshStats = async () => {
+    setStatsError('')
+    try {
+      const s = await client.stats()
+      if (s.status === 'ok') setStats(s)
+      else setStatsError(s.error ?? 'stats unavailable')
+    } catch (e) {
+      setStatsError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -337,9 +351,11 @@ export function VisualView({ client }: Props) {
     void refreshModels()
     void refreshFrame()
     void refreshState()
+    void refreshStats()
     const t = setInterval(() => {
       void refreshFrame()
       void refreshState()
+      void refreshStats()
     }, 3000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -437,6 +453,31 @@ export function VisualView({ client }: Props) {
         </div>
       ) : (
         <div className="frame-empty">No engine state yet</div>
+      )}
+
+      <div className="panel-subtitle">
+        ENGINE STATS
+        <span className="spacer" />
+        <button onClick={() => void refreshStats()}>Refresh</button>
+      </div>
+      {statsError ? (
+        <div className="panel-msg">{statsError}</div>
+      ) : stats ? (
+        <div className="state-grid">
+          <div className="state-row">
+            <span>texture budget</span>
+            <b>{stats.texture_budget_mb != null ? stats.texture_budget_mb + ' MB' : '-'}{stats.texture_tier_name ? ' · ' + stats.texture_tier_name : ''}</b>
+          </div>
+          <div className="state-row"><span>mesh count</span><b>{stats.mesh_count ?? 0}</b></div>
+          <div className="state-row"><span>job workers</span><b>{stats.job_workers ?? 0}</b></div>
+          <div className="state-row"><span>job pending</span><b>{stats.job_pending ?? 0}</b></div>
+          <div className="state-row">
+            <span>Lua heap</span>
+            <b>{stats.lua_kb != null ? stats.lua_kb + ' KB' : '-'}</b>
+          </div>
+        </div>
+      ) : (
+        <div className="frame-empty">No engine stats yet</div>
       )}
 
       <div className="panel-subtitle">

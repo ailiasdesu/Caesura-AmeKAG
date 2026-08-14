@@ -61,6 +61,19 @@ export interface StateReply {
   error?: string
 }
 
+// Engine stats (GET /api/stats). Render/asset/job/Lua introspection.
+export interface StatsReply {
+  status: string
+  texture_budget_mb?: number
+  texture_tier?: number
+  texture_tier_name?: string
+  mesh_count?: number
+  job_workers?: number
+  job_pending?: number
+  lua_kb?: number
+  error?: string
+}
+
 // Preview-frame hit test (GET /api/pick, round 23).
 export interface PickReply {
   status: string
@@ -180,6 +193,11 @@ export class EngineClient {
   /** Engine runtime state (scene/token/language/backlog/layers). */
   state(): Promise<StateReply> {
     return this.request<StateReply>('/state')
+  }
+
+  /** Engine stats (texture budget/tier, meshes, job workers/pending, Lua heap). */
+  stats(): Promise<StatsReply> {
+    return this.request<StatsReply>('/stats')
   }
 
   /** Hit-test the preview frame at a window pixel (1280x720 space). */
