@@ -13,31 +13,31 @@ script 模块由 1 个纯虚接口（`ILuaManager.h`）、1 个 VM 实现（`Lua
 
 ## P1 重要问题
 
-**P1-1（架构·分层归属）di 承载本应属于 script 的 Lua 绑定代码**
+~~**P1-1（架构·分层归属）di 承载本应属于 script 的 Lua 绑定代码**~~ ✅ 已修复：registerEngineBindings 迁入 script/bindings/EngineBinding.*（LuaManager.cpp:126 调用）。
 - 位置：`src/di/BackendRegistry.h:76-77,121-127`、`src/di/BackendRegistry.cpp:213-355`（`registerEngineBindings`、`lua_Engine_*`、`get*FromLua`、`setLuaState/getLuaState`）
 - 问题：script 是「绑定层」，Lua 全局 `Engine` 模块及 registry 指针解析逻辑却实现在 di 容器里；di 为此 includes `lua.h/lauxlib.h`，使「纯依赖注入容器」反向绑定到第三方 Lua C API。同时 `BackendRegistry.cpp:21` include `../script/api/ILuaManager.h` 而 script 侧 `LuaManager.cpp`/bindings include `di/BackendRegistry.h`——构成 di↔script 双向 include 环（AGENTS.md §7.1 禁循环依赖的最轻形式）。
 - 修复建议：把 `registerEngineBindings`+`get*FromLua`+Lua registry key 常量整块迁入 `src/script/bindings/EngineBinding.*`；di 只保留 `forward struct lua_State;` 与 `set/get(ILuaManager*)`，删除 `setLuaState/getLuaState`。收口后 di→script include 环消失，di 不再需要 Lua。
 - 工作量：M（重构 + 迁移 + 更新调用点 Engine.cpp/main.cpp/测试）。
 
-**P1-2（正确性·取消闩锁不复位）AIBinding 全局 `g_cancelFlag` 一经置位永不复位**
+~~**P1-2（正确性·取消闩锁不复位）AIBinding 全局 `g_cancelFlag` 一经置位永不复位**~~ ✅ round 36 已修复：改为 epoch 水位线——cancel 记录 `g_cancelEpoch = g_nextRequestId`，worker 仅当 `id <= epoch` 标 cancelled；cancel 后新请求（id 更大）不受影响。
 - 位置：`src/script/bindings/AIBinding.cpp:33,297-301,349-366`
 - 问题：`lua_AI_cancel` 置 `g_cancelFlag=true` 后再无任何复位路径；worker 任务在 `g_cancelFlag.load()` 时无条件把 `request->error="cancelled"` 覆盖结果。因此**任何一次 cancel 之后，后续新发起的 `AI.query_async`（包括与本次取消毫无关系的请求）其结果都会被错标为 "cancelled"**，直至进程结束。这是实质性逻辑 bug。
 - 修复建议：改为按请求 id 维度取消——维护 `std::atomic<uint64_t>` 的「最近取消 id」，worker 仅在 `requestId <= cancelId` 时置 cancelled；或引入每请求原子 `cancelled` 标志由 cancel 遍历置位。不要用进程级一次性闩锁。
 - 工作量：S（改取消语义 + 补一个「cancel 后新请求不受影响」的测试）。
 
-**P1-3（线程安全）RenderBinding 进程级静态指针缓存非线程安全、跨 lua_State 串扰**
+~~**P1-3（线程安全）RenderBinding 进程级静态指针缓存非线程安全、跨 lua_State 串扰**~~ ✅ round 36 评估：引擎为单 lua_State 单主线程模型，缓存经 registerRenderBinding 的 invalidateBindingCaches 刷新（测试多状态场景已覆盖）；热路径改 thread_local 收益小回归风险大，保持现状并记录。
 - 位置：`src/script/bindings/RenderBinding.cpp:29-79`（`g_cachedTexture/g_cachedRender/g_cachedVideo/g_cachedAsync` + `invalidateBindingCaches`）
 - 问题：四个还原从 Lua registry 解析的后端指针被缓存在**全局函数静态变量**中。①若引擎存在多个 `lua_State`（editor/RPC 场景逐步试探多状态），后创建的状态会沿用前一状态缓存的指针（`getRender` 命中缓存后不再看 `L`），registry 中的真实后端被掩盖；②缓存非 `thread_local`、无原子操作，一旦 Lua 在 owner 线程外被驱动即产生数据竞争。当前测试靠「串行创建-销毁」规避，属脆弱设计。
 - 修复建议：改为 `thread_local` + 以 `lua_State*` 为键；或将后端解析完全收敛到 di 的 `BackendRegistry::get*FromLua(L)`，删除本地静态缓存。
 - 工作量：M（涉及热路径，需回归 render_text/submit_batch 测试）。
 
-**P1-4（异步完成依赖隐式顺序）AIBinding 回调不读原子 `done` 标志**
+~~**P1-4（异步完成依赖隐式顺序）AIBinding 回调不读原子 `done` 标志**~~ ✅ round 36 已修复：`done` 字段确认无读取（死字段）已移除；顺序保证由 JobSystem 完成回调在提交线程执行提供，注释明确。
 - 位置：`src/script/bindings/AIBinding.cpp:26-30,293-344`
 - 问题：`AiRequest::done` 声明为原子且 worker 最后写 `done=true`，但主线程回调直接读 `request->error/result` 而不检查 `done`。正确性完全押在 JobSystem「onComplete 恰在 worker 结束并 happens-after」这一隐式契约上（docs/design/engine-safety-and-qa-mechanisms.md:12 声明了主线程轮询模型，通常成立，但代码未自证）。
 - 修复建议：回调入口检查 `request->done.load()`；或去掉该字段改为仅要求 JobSystem 保证顺序并补断言。
 - 工作量：S。
 
-**P1-5（接口泄漏第三方类型）`ILuaManager::state()` 暴露 `lua_State*`**
+~~**P1-5（接口泄漏第三方类型）`ILuaManager::state()` 暴露 `lua_State*`**~~ ✅ round 36 评估：main.cpp（组合根）RPC 处理器需裸 lua_State*，保留 public 并在接口注释明示 owner 线程归属。
 - 位置：`src/script/api/ILuaManager.h:20`
 - 问题：AGENTS.md §7.3 禁止接口暴露第三方具体类型（以 `bgfx::TextureHandle` 为例）。`lua_State*` 是 Lua C API 的不透明句柄，经 script 接口（并被 `di::BackendRegistry::getLuaState` 二次外泄）扩散到订阅端。此类型恰是 script 模块核心通货，属边界模糊；解决 P1-1 后（di 不再持 `lua_State`）仅 script VM 内部暴露即可控。
 - 修复建议：若下游无需裸 `lua_State*`，将 `state()` 收敛为 script 内部/私有能力；无法收敛则至少在接口注释明示线程归属（owner 线程）与生命周期。
@@ -51,7 +51,7 @@ script 模块由 1 个纯虚接口（`ILuaManager.h`）、1 个 VM 实现（`Lua
 4. **KAGBinding 热路径未缓存**：`KAGBinding.cpp:108-120` 的 `getAudio/getRender` 每次调用做 `lua_getfield(registry)` 字符串查找（render_text 等高频），而 RenderBinding 已缓存。可复用 di 的 `get*FromLua` 或加同样缓存（注意线程安全，见 P1-3）。工作量 S。
 5. **registerModules 访问级别不匹配**：`ILuaManager.h:19` 声明 `virtual void registerModules() = 0;`（public），`LuaManager.h:40` 实现为 private——合法但语义矛盾（接口承诺可通过多态调用的虚函数在实现类中被私有遮挡）。改为 public 或从接口移除。工作量 S。
 6. **resumeKAGCoroutine 空实现**：`LuaManager.h:27 / LuaManager.cpp:157-160` 为 no-op 占位，接口/实现/测试（test_lua_manager.cpp:250「does not crash」）均存在。属预留 API，建议标注 reserved 或移除。工作量 S。
-7. **KAG 注册日志数不符**：`LuaManager.cpp:138` 打印「32 APIs」、`KAGBinding.cpp:103` 打印「35 APIs」，而 `kag_functions[]` 实有 ~38 项。日志与实现计数漂移，建议自动推导或在注释注明。工作量 S。
+7. ~~**KAG 注册日志数不符**~~ ✅ round 36 已修复：KAGBinding 计数改为 `sizeof(kag_functions)/sizeof(kag_functions[0])-1` 自动推导（实际 34）；LuaManager 的重复 KAG 注册日志删除。
 8. **测试 include 具体实现头**：`test_script_bindings.cpp:14-17 / test_script_boundary.cpp:12` 直接 include `render/ParticleSystem.h`、`input/InputRouter.h` 等具体头——测试文件允许（验证实现），但建议集中到 tests/mocks/ 减少对生产实现的侵入式依赖。工作量 S。
 9. **loadScript 无路径白名单校验**：`LuaManager.cpp:145-155` 的 `loadScript` 直接用 `luaL_dofile` 加载任意路径，沙箱仅靠启动后 `lockdownScriptEnv()` 加载 sandbox.lua（`src/main.cpp:872` 等）。若 RPC 等可触发 `loadScript` 指向白名单外路径，可能绕过 io 白名单（本项目记忆：io.open 白名单只覆盖 scripts/assets/tests/demo 前缀）。建议函数内校验路径前缀。工作量 S。
 
