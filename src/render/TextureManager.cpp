@@ -14,8 +14,7 @@
 #include "../di/api/ISandboxQuota.h"
 #include "../di/api/ITextureBudget.h"
 #include "../di/api/ThreadAssert.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../external/stb/stb_image.h"
+#include <stb/stb_image.h>   // declarations only; impl lives in stb_impl.cpp
 
 namespace Caesura {
 

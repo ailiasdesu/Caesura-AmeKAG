@@ -1,6 +1,5 @@
-﻿#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../external/stb/stb_image_write.h"
 #include "RTTManager.h"
+#include <stb/stb_image_write.h>   // declarations only; impl lives in stb_impl.cpp
 #include "di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
 #include <vector>

@@ -1,5 +1,5 @@
 #include "BgfxDebugCallback.h"
-#include "../../external/stb/stb_image_write.h"
+#include <stb/stb_image_write.h>   // declarations only; impl lives in stb_impl.cpp
 #include <vector>
 
 BgfxDebugCallback g_bgfxDebugCallback;

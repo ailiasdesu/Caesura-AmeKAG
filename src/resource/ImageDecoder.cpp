@@ -1,9 +1,9 @@
-﻿#include "ImageDecoder.h"
+#include "ImageDecoder.h"
 #include <bimg/decode.h>
 #include <bx/allocator.h>
 #include <cstdio>
 
-#include "../../external/stb/stb_image.h"
+#include <stb/stb_image.h>   // declarations only; impl lives in render/stb_impl.cpp
 
 namespace Caesura {
 

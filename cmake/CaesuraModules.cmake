@@ -219,6 +219,7 @@ caesura_add_module(Render
     src/render/TextureManager.cpp
     src/render/LayerManager.cpp
     src/render/ShaderCache.cpp
+    src/render/stb_impl.cpp
 )
 
 caesura_add_module(Resource
