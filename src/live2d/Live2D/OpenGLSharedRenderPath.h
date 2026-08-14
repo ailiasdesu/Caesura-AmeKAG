@@ -1,5 +1,5 @@
-﻿#pragma once
-#ifdef CAESURA_HAS_LIVE2D
+#pragma once
+#ifdef CAESURA_LIVE2D
 
 #include "ILive2DRenderPath.h"
 

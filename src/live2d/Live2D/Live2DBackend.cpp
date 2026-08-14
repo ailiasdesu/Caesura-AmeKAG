@@ -1,4 +1,4 @@
-#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_LIVE2D
 
 #include "Live2DBackend.h"
 

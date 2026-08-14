@@ -1,5 +1,5 @@
-﻿#pragma once
-#if defined(CAESURA_HAS_LIVE2D) && defined(_WIN32)
+#pragma once
+#if defined(CAESURA_LIVE2D) && defined(_WIN32)
 
 #include "ILive2DRenderPath.h"
 

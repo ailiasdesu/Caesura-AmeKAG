@@ -396,8 +396,8 @@ if(CAESURA_LIVE2D)
             "${CUBISM_CORE_DIR}/include"
             "${CUBISM_FRAMEWORK_DIR}/src"
         )
-        target_compile_definitions(CaesuraLive2D PRIVATE CAESURA_HAS_LIVE2D)
-        target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_LIVE2D)
+        target_compile_definitions(CaesuraLive2D PRIVATE CAESURA_LIVE2D)
+        target_compile_definitions(CaesuraEntry PRIVATE CAESURA_LIVE2D)
         message(STATUS "Live2D: ${CUBISM_FRAMEWORK_RENDERER} renderer for ${CMAKE_SYSTEM_NAME}/${CAESURA_CUBISM_ARCH}")
 
         # Cubism renderers load FrameworkShaders/* at runtime (relative to

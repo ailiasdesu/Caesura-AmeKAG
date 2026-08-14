@@ -1,5 +1,5 @@
 #pragma once
-#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_LIVE2D
 
 #include "../api/IAnimationBackend.h"
 #include <string>

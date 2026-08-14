@@ -16,7 +16,7 @@ namespace Caesura {
 // verified (fail closed).
 //
 // This helper intentionally has no dependency on the Cubism SDK so it can be
-// unit-tested in every build configuration (CAESURA_HAS_LIVE2D on or off).
+// unit-tested in every build configuration (CAESURA_LIVE2D on or off).
 std::string confineToModelRoot(const std::string& path);
 
 } // namespace Caesura

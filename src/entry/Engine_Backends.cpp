@@ -17,7 +17,7 @@
 #include "../storage/SaveManager.h"
 #include "../archive/CryptoEngine.h"
 
-#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_LIVE2D
 #include "../live2d/Live2D/Live2DBackend.h"
 #endif
 
@@ -101,7 +101,7 @@ std::unique_ptr<carc::ICryptoEngine> createCryptoEngine() {
 }
 
 std::unique_ptr<IAnimationBackend> createDefaultAnimationBackend() {
-#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_LIVE2D
     return std::make_unique<Live2DBackend>();
 #else
     return std::make_unique<NullAnimationBackend>();
@@ -114,7 +114,7 @@ std::unique_ptr<IAnimationBackend> createFallbackAnimationBackend() {
 
 void attachRenderDeviceToAnimationBackend(IAnimationBackend* animationBackend,
                                           IRenderDevice* renderDevice) {
-#ifdef CAESURA_HAS_LIVE2D
+#ifdef CAESURA_LIVE2D
     if (auto* live2d = dynamic_cast<Live2DBackend*>(animationBackend)) {
         live2d->setRenderDevice(renderDevice);
     }

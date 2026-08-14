@@ -1,9 +1,9 @@
-﻿// MetalNativeRenderPath.cpp — complete macOS Metal render path for Live2D
+// MetalNativeRenderPath.cpp — complete macOS Metal render path for Live2D
 // (C1/R1 closure). Renders each model to a Cubism offscreen target, reads
 // the MTLTexture back synchronously, and uploads it into the bgfx texture
 // the engine composites (same contract as OpenGLReadbackRenderPath).
-// Compiles only with CAESURA_HAS_LIVE2D + __APPLE__ (Objective-C++).
-#if defined(CAESURA_HAS_LIVE2D) && defined(__APPLE__)
+// Compiles only with CAESURA_LIVE2D + __APPLE__ (Objective-C++).
+#if defined(CAESURA_LIVE2D) && defined(__APPLE__)
 
 #include "MetalNativeRenderPath.h"
 #include <SDL3/SDL.h>
@@ -138,4 +138,4 @@ void MetalNativeRenderPath::resize(int width, int height) {
 
 } // namespace Caesura
 
-#endif // CAESURA_HAS_LIVE2D && __APPLE__
+#endif // CAESURA_LIVE2D && __APPLE__
