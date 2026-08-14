@@ -474,23 +474,59 @@ bool BgfxMiniGameBackend::processEvent(const void* e){(void)e;return false;}
 // Lua dispatch
 // ==========================================================================
 
+
+
 int BgfxMiniGameBackend::luaCall(lua_State* L,const char* method){
-    if(strcmp(method,"spawn_cube")==0){lua_pushinteger(L,spawnCube((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(uint32_t)luaL_optinteger(L,9,0)));return 1;}
-    if(strcmp(method,"spawn_sphere")==0){lua_pushinteger(L,spawnSphere((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(uint32_t)luaL_optinteger(L,9,0)));return 1;}
-    if(strcmp(method,"spawn_plane")==0){lua_pushinteger(L,spawnPlane((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,10),(float)luaL_optnumber(L,6,10),(float)luaL_optnumber(L,7,.5),(float)luaL_optnumber(L,8,.5),(float)luaL_optnumber(L,9,.5),(uint32_t)luaL_optinteger(L,10,0)));return 1;}
-    if(strcmp(method,"remove_object")==0){removeObject((uint32_t)luaL_checkinteger(L,2));lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"set_camera")==0){setCamera((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_checknumber(L,5),(float)luaL_checknumber(L,6),(float)luaL_checknumber(L,7));lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"create_material")==0){lua_pushinteger(L,createMaterial((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,.5),(float)luaL_optnumber(L,6,0),(float)luaL_optnumber(L,7,.5),luaL_optstring(L,8,"")));return 1;}
-    if(strcmp(method,"set_material")==0){lua_pushboolean(L,setObjectMaterial((uint32_t)luaL_checkinteger(L,2),(uint32_t)luaL_checkinteger(L,3))?1:0);return 1;}
-    if(strcmp(method,"set_ambient")==0){setAmbient((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4));lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"set_directional")==0){setDirectional((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1));lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"add_point_light")==0){lua_pushinteger(L,addPointLight((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(float)luaL_optnumber(L,9,10),luaL_optstring(L,10,"")));return 1;}
-    if(strcmp(method,"remove_light")==0){lua_pushboolean(L,removeLight((uint32_t)luaL_checkinteger(L,2))?1:0);return 1;}
-    if(strcmp(method,"check_collision")==0){lua_pushboolean(L,checkCollision((uint32_t)luaL_checkinteger(L,2),(uint32_t)luaL_checkinteger(L,3))?1:0);return 1;}
-    if(strcmp(method,"set_collision")==0){m_collisionEnabled=lua_toboolean(L,2)!=0;lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"set_velocity")==0){setVelocity((uint32_t)luaL_checkinteger(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_checknumber(L,5));lua_pushboolean(L,1);return 1;}
-    if(strcmp(method,"set_gravity")==0){setGravity((uint32_t)luaL_checkinteger(L,2),lua_toboolean(L,3)!=0);lua_pushboolean(L,1);return 1;}
+    for(const LuaMethod& entry : kLuaMethods){
+        if(strcmp(method,entry.name)==0)return entry.fn(*this,L);
+    }
     printf("[MiniGame] Unknown: %s\n",method);lua_pushboolean(L,0);return 1;
+}
+
+int BgfxMiniGameBackend::luaSpawnCube(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushinteger(L,self.spawnCube((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(uint32_t)luaL_optinteger(L,9,0)));return 1;
+}
+int BgfxMiniGameBackend::luaSpawnSphere(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushinteger(L,self.spawnSphere((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(uint32_t)luaL_optinteger(L,9,0)));return 1;
+}
+int BgfxMiniGameBackend::luaSpawnPlane(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushinteger(L,self.spawnPlane((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,10),(float)luaL_optnumber(L,6,10),(float)luaL_optnumber(L,7,.5),(float)luaL_optnumber(L,8,.5),(float)luaL_optnumber(L,9,.5),(uint32_t)luaL_optinteger(L,10,0)));return 1;
+}
+int BgfxMiniGameBackend::luaRemoveObject(BgfxMiniGameBackend& self,lua_State* L){
+    self.removeObject((uint32_t)luaL_checkinteger(L,2));lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaSetCamera(BgfxMiniGameBackend& self,lua_State* L){
+    self.setCamera((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_checknumber(L,5),(float)luaL_checknumber(L,6),(float)luaL_checknumber(L,7));lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaCreateMaterial(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushinteger(L,self.createMaterial((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,.5),(float)luaL_optnumber(L,6,0),(float)luaL_optnumber(L,7,.5),luaL_optstring(L,8,"")));return 1;
+}
+int BgfxMiniGameBackend::luaSetMaterial(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushboolean(L,self.setObjectMaterial((uint32_t)luaL_checkinteger(L,2),(uint32_t)luaL_checkinteger(L,3))?1:0);return 1;
+}
+int BgfxMiniGameBackend::luaSetAmbient(BgfxMiniGameBackend& self,lua_State* L){
+    self.setAmbient((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4));lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaSetDirectional(BgfxMiniGameBackend& self,lua_State* L){
+    self.setDirectional((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1));lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaAddPointLight(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushinteger(L,self.addPointLight((float)luaL_checknumber(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_optnumber(L,5,1),(float)luaL_optnumber(L,6,1),(float)luaL_optnumber(L,7,1),(float)luaL_optnumber(L,8,1),(float)luaL_optnumber(L,9,10),luaL_optstring(L,10,"")));return 1;
+}
+int BgfxMiniGameBackend::luaRemoveLight(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushboolean(L,self.removeLight((uint32_t)luaL_checkinteger(L,2))?1:0);return 1;
+}
+int BgfxMiniGameBackend::luaCheckCollision(BgfxMiniGameBackend& self,lua_State* L){
+    lua_pushboolean(L,self.checkCollision((uint32_t)luaL_checkinteger(L,2),(uint32_t)luaL_checkinteger(L,3))?1:0);return 1;
+}
+int BgfxMiniGameBackend::luaSetCollision(BgfxMiniGameBackend& self,lua_State* L){
+    self.m_collisionEnabled=lua_toboolean(L,2)!=0;lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaSetVelocity(BgfxMiniGameBackend& self,lua_State* L){
+    self.setVelocity((uint32_t)luaL_checkinteger(L,2),(float)luaL_checknumber(L,3),(float)luaL_checknumber(L,4),(float)luaL_checknumber(L,5));lua_pushboolean(L,1);return 1;
+}
+int BgfxMiniGameBackend::luaSetGravity(BgfxMiniGameBackend& self,lua_State* L){
+    self.setGravity((uint32_t)luaL_checkinteger(L,2),lua_toboolean(L,3)!=0);lua_pushboolean(L,1);return 1;
 }
 
 // ==========================================================================

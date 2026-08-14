@@ -89,6 +89,46 @@ private:
     void submitObject(const MiniObject& obj);
     void runCollisionDetection();
 
+    // P2 cleanup: static Lua dispatch table. luaCall looks up the method
+    // name in a constexpr table of {name, handler} pairs; each handler is a
+    // static member so it can reach private state through the instance ref.
+    static int luaSpawnCube(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSpawnSphere(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSpawnPlane(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaRemoveObject(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetCamera(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaCreateMaterial(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetMaterial(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetAmbient(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetDirectional(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaAddPointLight(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaRemoveLight(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaCheckCollision(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetCollision(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetVelocity(BgfxMiniGameBackend& self, lua_State* L);
+    static int luaSetGravity(BgfxMiniGameBackend& self, lua_State* L);
+    struct LuaMethod {
+        const char* name;
+        int (*fn)(BgfxMiniGameBackend&, lua_State*);
+    };
+    static constexpr LuaMethod kLuaMethods[] = {
+        {"spawn_cube",        &luaSpawnCube},
+        {"spawn_sphere",      &luaSpawnSphere},
+        {"spawn_plane",       &luaSpawnPlane},
+        {"remove_object",     &luaRemoveObject},
+        {"set_camera",        &luaSetCamera},
+        {"create_material",   &luaCreateMaterial},
+        {"set_material",      &luaSetMaterial},
+        {"set_ambient",       &luaSetAmbient},
+        {"set_directional",   &luaSetDirectional},
+        {"add_point_light",   &luaAddPointLight},
+        {"remove_light",      &luaRemoveLight},
+        {"check_collision",   &luaCheckCollision},
+        {"set_collision",     &luaSetCollision},
+        {"set_velocity",      &luaSetVelocity},
+        {"set_gravity",       &luaSetGravity},
+    };
+
     IRenderDevice* m_renderDevice = nullptr;
     bool m_active = false;
     bool m_gpuReady = false;
