@@ -77,9 +77,7 @@ resource 模块承担三类职责：
 - **位置**：`tests/cpp/test_image_decoder.cpp:34-36` 注释 “ImageDecoder tests disabled — stb_image SEH on MSVC/x64”。解码路径（含维度炸弹防护 `kMaxDim/kMaxPixels`）在 CI 上无直接覆盖（test_async.cpp 仅间接用 1x1 PNG 触发一次）。
 - **建议**：在禁用 SEH 或换线程的隔离环境中补正常尺寸 + 伪造超大头部解码用例，覆盖 `dimensionsValid` 守卫。工作量：M。
 
-### P2-5 XP3Archive pack / AssetManager 使用 `printf`/stderr 而非统一日志
-- **位置**：`XP3Archive.cpp`、`AssetManager.cpp:19`、`AsyncLoader.cpp` 大量 `printf/fprintf(stderr)`。与 `debug` 模块 `IDebugManager` 不统一；当前不依赖 debug 以保持耦合 ≤4，是合理取舍。可维持现状或评估引入 debug 接口（会给 resource 增加 1 个跨模块依赖，仍 ≤4）。
-- **建议**：维持现状可接受；P1-1 修复时保留 pendingCount 相关日志便于追踪。工作量：可选。
+### ~~P2-5~~ ✅ round 33 已修复：`AsyncLoader.cpp` 10 处与 `XP3Archive.cpp` 8 处 `fprintf(stderr)` 全部改为 `DEBUG_ERR(SubSys::Resource/Archive, ...)`（引入 debug 接口，resource 耦合 2→3 仍 ≤4）。`AssetManager.cpp:19` 的 printf 为状态日志，保留。
 
 ### P2-6 缓存命中的 `poll()` 路径无测试覆盖
 - **位置**：缓存命中把 `CompletedLoad` push 进 `m_completed`，`poll()` 会 `new CompletedLoad` 推 SDL 事件。现有测试（test_async.cpp 212-239）只走 `drainCompleted()`，未覆盖“缓存命中 + poll()”，而该路径正是 P1-1 计数 bug 的触发场景之一。
