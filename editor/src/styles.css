@@ -575,3 +575,12 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
   outline: 1px solid var(--accent, #4a9eff);
   background: rgba(74, 158, 255, 0.12);
 }
+/* G4 timeline */
+.timeline-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
+.timeline-chip { font-size: 10px; padding: 2px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: inherit; cursor: pointer; }
+.timeline-chip.active { background: var(--accent, #4a9eff); border-color: var(--accent, #4a9eff); color: #fff; }
+.timeline-body { padding: 0 4px 8px; }
+.timeline-section { margin: 6px 0; }
+.timeline-section-title { display: flex; align-items: center; font-size: 11px; font-weight: 600; padding: 3px 6px; cursor: pointer; border-radius: 4px; }
+.timeline-section-title:hover { background: rgba(255,255,255,0.07); }
+.timeline-section-title .scene-counts { font-weight: 400; font-size: 10px; }
