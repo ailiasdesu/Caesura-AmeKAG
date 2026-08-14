@@ -189,6 +189,67 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile })
       if (typeof sceneText === 'string') core.setText(sceneText)
       return out
     },
+    /** Run a scene from a pre-baked story bundle (ks_bake --web): zero
+     *  parse/compile at start — the serialized stream loads directly. */
+    async runFromBundle(bundle, sceneKey, opts = {}) {
+      const scene = bundle && bundle.scenes && bundle.scenes[sceneKey]
+      if (!scene) return 'ERR:scene-not-in-bundle:' + String(sceneKey)
+      lua.global.set('BAKED_SCENE', scene)
+      lua.global.set('__CLICK', false)
+      lua.global.set('__AUTOCLICK', !!opts.autoClick)
+      const maxFrames = opts.maxFrames ?? 200000
+      const out = await lua.doString(`
+        local compiler = require('kag.compiler')
+        local scheduler = require('scheduler')
+        local tokens = compiler.deserialize(BAKED_SCENE)
+        local ctx = {
+          f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+          variables = {}, current_scene = '${sceneKey}',
+          token_index = 1, tokens = tokens,
+          text_state = {}, layer_state = {}, audio_state = {},
+          macro_args = {}, call_stack = {}, flag_stack = {},
+        }
+        local co = coroutine.create(function()
+          local ok, err = pcall(function() scheduler.run(ctx, tokens, 1) end)
+          if not ok then error(err) end
+        end)
+        local frames = 0
+        local clicks = 0
+        local result = ''
+        while true do
+          local status = coroutine.status(co)
+          if status == 'dead' then result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break end
+          frames = frames + 1
+          if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
+          if ctx.waiting_input then
+            if not __CLICK then
+              if __AUTOCLICK and clicks < 100 then __CLICK = true else
+                result = 'WAIT:' .. tostring(ctx.token_index) break
+              end
+            end
+            ctx.waiting_input = false
+            __CLICK = false
+            clicks = clicks + 1
+          end
+          local r = { coroutine.resume(co, 16) }
+          if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
+        end
+        local parts = {}
+        local st = ctx.text_state
+        if st and type(st.draws) == 'table' then
+          for _, d in ipairs(st.draws) do
+            if type(d) == 'table' and d.text and #d.text > 0 then
+              parts[#parts + 1] = d.text
+            end
+          end
+        end
+        __SCENE_TEXT = table.concat(parts, string.char(10))
+        return result
+      `)
+      const sceneText = lua.global.get('__SCENE_TEXT')
+      if (typeof sceneText === 'string') core.setText(sceneText)
+      return out
+    },
     /** Raise the click signal for the next runScene. */
     async click() { lua.global.set('__CLICK', true) },
     /** Snapshot the real Lua layer tree (Layers.snapshot) for rendering. */
