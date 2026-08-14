@@ -128,9 +128,45 @@ end
 
 sma._json = json
 
---- sma.load(jsonText) → parsed asset table (texture/atlas/bones/mesh/animations)
-function sma.load(jsonText)
-    return json.decode(jsonText)
+--- sma.load(jsonText, opts) → parsed asset table
+--  opts.validate=true runs the static schema checker (kag.sma_check) and
+--  raises on violations -- creators can gate asset loading in CI/tests.
+function sma.load(jsonText, opts)
+    local asset = json.decode(jsonText)
+    if opts and opts.validate then
+        local ok, checker = pcall(require, "kag.sma_check")
+        if ok and checker then
+            local res = checker.validate(asset)
+            if not res.ok then
+                error("sma.load: asset validation failed:\n  "
+                      .. table.concat(res.errors, "\n  "), 2)
+            end
+        end
+    end
+    return asset
+end
+
+--- sma.validate(jsonTextOrTable) → {ok, errors} — asset schema check
+--  Wraps kag.sma_check (loaded lazily; without it the check reports
+--  _unavailable instead of failing).
+function sma.validate(jsonTextOrTable)
+    local ok, checker = pcall(require, "kag.sma_check")
+    if not ok or not checker then
+        return { ok = true, errors = {}, _unavailable = true }
+    end
+    local t = jsonTextOrTable
+    if type(t) == "string" then t = json.decode(t) end
+    return checker.validate(t)
+end
+
+--- sma.validate_file(path) → {ok, errors, meta} — validate an asset file
+--  (read + decode + check + structure summary for tooling/editor panels).
+function sma.validate_file(path)
+    local ok, checker = pcall(require, "kag.sma_check")
+    if not ok or not checker then
+        return { ok = false, errors = { "sma_check unavailable" }, meta = {} }
+    end
+    return checker.validate_file(path)
 end
 
 -- ---------------------------------------------------------------------------
@@ -319,13 +355,22 @@ end
 
 -- Build the engine mesh for one part variant (shared by spawn and
 -- set_variant). variant = {positions, uvs, weights, indices}.
+-- Weight layout (design doc §2.2): per-vertex entries -- either one entry
+-- per vertex (single bone) or two interleaved entries ([2i-1] bone A,
+-- [2i] bone B). The legacy single-entry layout keeps working unchanged.
+local function part_vertex_weights(weights, i, vertCount)
+    if #weights >= vertCount * 2 then
+        return weights[(i - 1) * 2 + 1] or {}, weights[(i - 1) * 2 + 2] or {}
+    end
+    return weights[i] or {}, {}
+end
+
 local function create_part_mesh(variant)
     local verts, indices = variant.positions or {}, variant.indices or {}
     local weights = variant.weights or {}
     local luaVerts = {}
     for i, p in ipairs(verts) do
-        local w = weights[i] or { bone = 0, w = 1 }
-        local w2 = weights[i + 1] or {}
+        local w, w2 = part_vertex_weights(weights, i, #verts)
         luaVerts[#luaVerts + 1] = {
             p[1] or 0, p[2] or 0,
             (variant.uvs and variant.uvs[i] and variant.uvs[i][1]) or 0,

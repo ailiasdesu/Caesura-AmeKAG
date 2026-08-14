@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) — kag/init.lua
 --  KAG module entry point. Loads all core Lua libraries.
 --  Spec: Modules are loaded in dependency order; tokenizer + scheduler
@@ -15,6 +15,7 @@ local lsp        = require("kag.lsp")     -- language service (Battle 2; preload
 local aiwriter   = require("kag.aiwriter") -- AI scene writing (Battle 4c; preload)
 local aidev      = require("kag.aidev")   -- AI dev assistant (Battle 4e; preload for sandbox)
 local sma        = require("kag.sma")     -- skeletal mesh animation (Battle 4d S3; preload for sandbox)
+local sma_check  = require("kag.sma_check") -- SMA asset validator (Battle 4d; preload for sandbox/RPC)
 local mods       = require("mods")        -- mod loader (preload for sandbox)
 local replay     = require("replay")      -- input recording/playback (preload for sandbox)
 local layers     = require("layers")      -- layer tree (preload for sandbox; color filter submit)

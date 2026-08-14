@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) — Sandbox Rules v2 (Track 3)
 --  ===========================================================================
 --  Loaded once at engine startup via LuaManager::lockdownScriptEnv().
@@ -104,7 +104,7 @@ if _G.io then
         if type(fn) ~= "string" then return nil, "io.open path must be string" end
         if fn:find("..", 1, true) then return nil, "io.open traversal rejected" end
         if fn:find("^scripts/") == 1 or fn:find("^assets/") == 1
-           or fn:find("^tests/") == 1 then
+           or fn:find("^tests/") == 1 or fn:find("^demo/") == 1 then
             local f, err = real_open(fn, "r")
             if f then return f, nil end
             return nil, err or "io.open open failed"

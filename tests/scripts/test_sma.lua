@@ -17,9 +17,11 @@ _G.sma = {
     updates = 0,
     draws = 0,
     last_handle = 0,
+    last_verts = nil,
     create_mesh = function(verts, indices)
         _G.sma.created = _G.sma.created + 1
         _G.sma.last_handle = _G.sma.created
+        _G.sma.last_verts = verts
         return _G.sma.created
     end,
     destroy_mesh = function() _G.sma.destroyed = _G.sma.destroyed + 1 end,
@@ -141,6 +143,41 @@ sma.update(ctx2, 1.0)
 sma.render(ctx2)
 check("update/render without binding: no crash", true)
 _G.sma = old
+
+-- ---------------------------------------------------------------------------
+-- 4b. Round 19: dual-bone weight layout (design doc §2.2 interleaved
+-- [2i-1]/[2i] entries) reaches the binding without index misalignment.
+-- ---------------------------------------------------------------------------
+local near2 = function(a, b) return math.abs(a - b) < 1e-6 end
+local tbAsset = {
+    bones = { { id = 0, parent = -1, pivot = { 0.5, 0.5 } },
+              { id = 1, parent = 0, pivot = { 0.5, 0.5 } } },
+    mesh = {
+        positions = { { 0, 0 }, { 1, 0 }, { 0, 1 } },
+        uvs = { { 0, 0 }, { 1, 0 }, { 0, 1 } },
+        indices = { 0, 1, 2 },
+        weights = {
+            { bone = 0, w = 0.6 }, { bone = 1, w = 0.4 },  -- v0: two bones
+            { bone = 0, w = 0.7 }, { bone = 1, w = 0.3 },  -- v1: two bones
+            { bone = 0, w = 1.0 }, { bone = 1, w = 0.0 },  -- v2: single bone
+        },
+    },
+    animations = {},
+}
+local tbCtx = {}
+sma.spawn(tbCtx, "tb", tbAsset, "idle", {})
+local lv = _G.sma.last_verts
+check("weights: 3 vertices uploaded", lv ~= nil and #lv == 3)
+check("weights: v0 bone pair aligned (0,0.6)/(1,0.4)",
+      lv and lv[1][5] == 0 and near2(lv[1][6], 0.6)
+      and lv[1][7] == 1 and near2(lv[1][8], 0.4))
+check("weights: v1 bone pair aligned (0,0.7)/(1,0.3)",
+      lv and lv[2][5] == 0 and near2(lv[2][6], 0.7)
+      and lv[2][7] == 1 and near2(lv[2][8], 0.3))
+check("weights: v2 single bone (w1 = 0)",
+      lv and lv[3][5] == 0 and near2(lv[3][6], 1.0)
+      and lv[3][7] == 1 and near2(lv[3][8], 0.0))
+sma.despawn(tbCtx, "tb")
 
 -- ---------------------------------------------------------------------------
 -- 5. Scene-level determinism test (SMA S4): [sma_play]/[sma_stop] run
