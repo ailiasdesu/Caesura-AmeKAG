@@ -91,6 +91,45 @@ public:
     static NDCQuad glyphQuadToNDC(float x, float y, float w, float h,
                                   float shear, float screenW, float screenH);
 
+    // -- Pure glyph layout (headless-testable) ----------------------------
+    // The batch-cache layout math (UTF-8 decode, glyph lookup, quad + UV
+    // building, pen advance, NDC conversion) is extracted as pure statics so
+    // unit tests can pin it without a GPU. The glyph source is injected via
+    // a callback; the production path wraps getTTFGlyph(), tests provide a
+    // table. `hasCjk` selects the CJK UV space, `useTtf`/`ttfAscent` drive
+    // the baseline offset (mirrors rebuildCache()).
+    struct LaidGlyph {
+        float gx = 0, gy = 0, w = 0, h = 0;
+        float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+        bool fromCjk = false;
+    };
+    struct GlyphLookupResult {
+        GlyphMetrics gm;   // w/h <= 0 means "no glyph" (empty slot)
+        bool fromCjk;      // glyph sourced from the CJK atlas space
+    };
+    using GlyphLookupFn = GlyphLookupResult (*)(uint32_t codepoint, void* userData);
+    struct GlyphLayoutResult {
+        std::vector<LaidGlyph> glyphs;
+        float penAdvance = 0.0f;   // final pen X after all advances
+        bool allCjk = false;       // every emitted glyph came from CJK
+    };
+    // Pure: decode UTF-8 `text`, look up each codepoint, emit quads + UVs.
+    // No bgfx/device state is touched. maxGlyphs truncates the output list.
+    static GlyphLayoutResult layoutGlyphs(const std::string& text,
+                                          float penX, float penY,
+                                          GlyphLookupFn lookup, void* userData,
+                                          bool hasCjk, float invW, float invH,
+                                          float cjkInvW, float cjkInvH,
+                                          bool useTtf, float ttfAscent,
+                                          size_t maxGlyphs);
+    // Pure: turn laid-out glyphs into a triangle-list vertex stream
+    // (6 verts x {x,y,u,v} per glyph) + indices. screenW/H <= 0 falls back
+    // to raw pixel coordinates (matches rebuildCache()).
+    static void buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
+                                  float screenW, float screenH,
+                                  std::vector<float>& verts,
+                                  std::vector<uint32_t>& indices);
+
     void newline();
     void clearText(uint16_t viewId);
     void setCursor(float x, float y) { m_cursor.x = x; m_cursor.y = y; }
@@ -151,6 +190,9 @@ private:
 
     // -- Glyph lookup (Track 2) --
     GlyphMetrics getTTFGlyph(uint32_t codepoint);
+    // GPU-free glyph source used by rebuildCache: resolves via getTTFGlyph()
+    // and computes the CJK-sourcing flag. userData = the TextRenderer*.
+    static GlyphLookupResult glyphLookupForCache(uint32_t codepoint, void* userData);
 
     // -- Batch cache internals (Track 2) --
     struct GlyphDraw { float gx, gy, w, h, u0, v0, u1, v1; };

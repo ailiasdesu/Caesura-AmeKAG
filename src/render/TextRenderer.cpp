@@ -1175,6 +1175,121 @@ bool TextRenderer::ensureCacheBuffers() {
     return true;
 }
 
+// ===========================================================================
+// Pure glyph layout (GPU-free) -- extracted so unit tests can pin the
+// batch-cache geometry math without a GPU (P2-10). The production path
+// injects glyphLookupForCache(); tests inject a fixed table.
+// ===========================================================================
+
+TextRenderer::GlyphLookupResult TextRenderer::glyphLookupForCache(uint32_t codepoint, void* userData) {
+    auto* self = static_cast<TextRenderer*>(userData);
+    GlyphLookupResult out;
+    out.gm = self->getTTFGlyph(codepoint);
+    const bool hasCjk = bgfx::isValid(self->m_cjkAtlas);
+    bool fromCjk = false;
+    if (hasCjk && !self->m_ttf) {
+        fromCjk = true;
+    } else if (hasCjk && self->m_ttf) {
+        // glyph sourced from CJK when the TTF atlas lacks it
+        fromCjk = (self->m_ttf->glyphs.find(codepoint) == self->m_ttf->glyphs.end());
+    }
+    out.fromCjk = fromCjk;
+    return out;
+}
+
+TextRenderer::GlyphLayoutResult TextRenderer::layoutGlyphs(
+    const std::string& text, float penX, float penY,
+    GlyphLookupFn lookup, void* userData,
+    bool hasCjk, float invW, float invH,
+    float cjkInvW, float cjkInvH,
+    bool useTtf, float ttfAscent, size_t maxGlyphs) {
+
+    GlyphLayoutResult result;
+    const uint8_t* tdata = reinterpret_cast<const uint8_t*>(text.data());
+    const int tlen = (int)text.size();
+    bool anyNonCjk = false;
+    bool anyGlyph = false;
+
+    for (int i = 0; i < tlen; ) {
+        int clen = utf8_char_len(tdata[i]);
+        if (i + clen > tlen) clen = tlen - i;
+        const uint32_t cp = utf8_codepoint(&tdata[i], clen);
+        i += clen;
+
+        const GlyphLookupResult lr = lookup(cp, userData);
+        const GlyphMetrics& gm = lr.gm;
+        const bool fromCjk = lr.fromCjk;
+        if (gm.w > 0 && gm.h > 0) {
+            anyGlyph = true;
+            if (!fromCjk) anyNonCjk = true;
+        } else if (!fromCjk) {
+            // Empty slot still participates in the allCJK decision, mirroring
+            // the production glyphFromCjk bookkeeping.
+            anyNonCjk = true;
+        }
+
+        LaidGlyph d;
+        if (gm.w > 0 && gm.h > 0) {
+            const float iw = fromCjk ? cjkInvW : invW;
+            const float ih = fromCjk ? cjkInvH : invH;
+            d.gx = penX + (float)gm.offsetX;
+            d.gy = penY - (float)gm.offsetY
+                   + (useTtf && !fromCjk ? ttfAscent : 8.0f);
+            d.w = (float)gm.w;
+            d.h = (float)gm.h;
+            d.u0 = gm.x * iw;  d.v0 = gm.y * ih;
+            d.u1 = (gm.x + gm.w) * iw;  d.v1 = (gm.y + gm.h) * ih;
+            d.fromCjk = fromCjk;
+        }
+        // no-glyph case keeps the default zeroed LaidGlyph (empty slot)
+
+        if (result.glyphs.size() < maxGlyphs) {
+            result.glyphs.push_back(d);
+        }
+        penX += gm.advance;
+    }
+
+    result.penAdvance = penX;
+    result.allCjk = hasCjk && anyGlyph && !anyNonCjk;
+    return result;
+}
+
+void TextRenderer::buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
+                                     float screenW, float screenH,
+                                     std::vector<float>& verts,
+                                     std::vector<uint32_t>& indices) {
+    verts.clear();
+    indices.clear();
+    verts.reserve(glyphs.size() * 6 * 4);
+    indices.reserve(glyphs.size() * 6);
+    const bool ndcOk = screenW > 0.0f && screenH > 0.0f;
+
+    for (size_t gi = 0; gi < glyphs.size(); ++gi) {
+        const LaidGlyph& d = glyphs[gi];
+        const uint32_t vbase = static_cast<uint32_t>(gi * 6);
+        float nx0, ny0, nx1, ny1;
+        if (ndcOk) {
+            nx0 = (d.gx / screenW) * 2.0f - 1.0f;
+            ny0 = 1.0f - (d.gy / screenH) * 2.0f;
+            nx1 = ((d.gx + d.w) / screenW) * 2.0f - 1.0f;
+            ny1 = 1.0f - ((d.gy + d.h) / screenH) * 2.0f;
+        } else {
+            nx0 = d.gx; ny0 = d.gy; nx1 = d.gx + d.w; ny1 = d.gy + d.h;
+        }
+        const float v[24] = {
+            nx0, ny0, d.u0, d.v0,
+            nx1, ny0, d.u1, d.v0,
+            nx1, ny1, d.u1, d.v1,
+            nx0, ny0, d.u0, d.v0,
+            nx1, ny1, d.u1, d.v1,
+            nx0, ny1, d.u0, d.v1
+        };
+        verts.insert(verts.end(), v, v + 24);
+        indices.push_back(vbase);     indices.push_back(vbase + 1); indices.push_back(vbase + 2);
+        indices.push_back(vbase);     indices.push_back(vbase + 2); indices.push_back(vbase + 3);
+    }
+}
+
 float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
                                   float x, float y, TextColor color,
                                   bgfx::ProgramHandle program) {
@@ -1187,100 +1302,32 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
 
     const float invW = 1.0f / float(texW);
     const float invH = 1.0f / float(texH);
-    float penX = x;
-    const float penY = y;
+    const bool hasCjk = bgfx::isValid(m_cjkAtlas);
+    const float cjkInvW = 1.0f / float(m_atlasW);
+    const float cjkInvH = 1.0f / float(m_atlasH);
 
-    const uint8_t* tdata = reinterpret_cast<const uint8_t*>(text.data());
-    int tlen = (int)text.size();
+    // Pure layout phase (GPU-free; extracted for unit testing).
+    GlyphLayoutResult laid = layoutGlyphs(text, x, y,
+                                          &TextRenderer::glyphLookupForCache, this,
+                                          hasCjk, invW, invH, cjkInvW, cjkInvH,
+                                          m_ttf != nullptr,
+                                          m_ttf ? (float)m_ttf->ascent : 8.0f,
+                                          m_msgCache.maxGlyphs);
 
-    struct PosTexVertex { float x, y, u, v; };
-    
-    // CJK atlas UV dimensions (when separate atlas is loaded)
-    float cjkInvW = 1.0f / float(m_atlasW);
-    float cjkInvH = 1.0f / float(m_atlasH);
-    bool hasCjk = bgfx::isValid(m_cjkAtlas);
-    
-    std::vector<GlyphDraw> draws;
-    std::vector<bool> glyphFromCjk;  // per-glyph: true if sourced from CJK atlas
-    draws.reserve(m_msgCache.maxGlyphs);
-    glyphFromCjk.reserve(m_msgCache.maxGlyphs);
-
-    for (int i = 0; i < tlen; ) {
-        int clen = utf8_char_len(tdata[i]);
-        if (i + clen > tlen) clen = tlen - i;
-        uint32_t cp = utf8_codepoint(&tdata[i], clen);
-        i += clen;
-
-        GlyphMetrics gm = getTTFGlyph(cp);
-        bool fromCjk = false;
-        if (hasCjk && !m_ttf) {
-            fromCjk = true;
-        } else if (hasCjk && m_ttf) {
-            // glyph from CJK if not found in TTF atlas
-            fromCjk = (m_ttf->glyphs.find(cp) == m_ttf->glyphs.end());
-        }
-        
-        if (gm.w > 0 && gm.h > 0) {
-            GlyphDraw d;
-            float iw = fromCjk ? cjkInvW : invW;
-            float ih = fromCjk ? cjkInvH : invH;
-            d.gx = penX + (fromCjk ? (float)gm.offsetX : gm.offsetX);
-            d.gy = penY - (fromCjk ? (float)gm.offsetY : gm.offsetY) 
-                   + (m_ttf && !fromCjk ? m_ttf->ascent : 8.0f);
-            d.w = (float)gm.w;
-            d.h = (float)gm.h;
-            d.u0 = gm.x * iw;  d.v0 = gm.y * ih;
-            d.u1 = (gm.x + gm.w) * iw;  d.v1 = (gm.y + gm.h) * ih;
-            draws.push_back(d);
-        } else {
-            draws.push_back({0,0,0,0,0,0,0,0});
-        }
-        glyphFromCjk.push_back(fromCjk);
-        penX += gm.advance;
-    }
-
-    m_msgCache.glyphCount = static_cast<uint32_t>(draws.size());
-    if (m_msgCache.glyphCount > m_msgCache.maxGlyphs)
-        m_msgCache.glyphCount = m_msgCache.maxGlyphs;
-
-    std::vector<PosTexVertex> verts;
+    // Pure vertex phase.
+    std::vector<float> verts;
     std::vector<uint32_t> indices;
-    verts.reserve(m_msgCache.glyphCount * 6);
-    indices.reserve(m_msgCache.glyphCount * 6);
+    buildQuadVertices(laid.glyphs, (float)m_screenWidth, (float)m_screenHeight,
+                      verts, indices);
 
-    // Pixel -> NDC (the fallback VS is passthrough) and use the glyph's real
-    // width/height -- the previous code drew every glyph as a 1px quad (its
-    // UV swizzle was the only way it looked anything like text) and at pixel
-    // coordinates that were culled entirely.
-    const float sw = (float)m_screenWidth;
-    const float sh = (float)m_screenHeight;
-    const bool ndcOk = sw > 0.0f && sh > 0.0f;
-
-    for (uint32_t gi = 0; gi < m_msgCache.glyphCount; ++gi) {
-        const GlyphDraw& d = draws[gi];
-        uint32_t vbase = gi * 6;
-        float nx0, ny0, nx1, ny1;
-        if (ndcOk) {
-            nx0 = (d.gx / sw) * 2.0f - 1.0f;
-            ny0 = 1.0f - (d.gy / sh) * 2.0f;
-            nx1 = ((d.gx + d.w) / sw) * 2.0f - 1.0f;
-            ny1 = 1.0f - ((d.gy + d.h) / sh) * 2.0f;
-        } else {
-            nx0 = d.gx; ny0 = d.gy; nx1 = d.gx + d.w; ny1 = d.gy + d.h;
-        }
-        verts.push_back({ nx0, ny0, d.u0, d.v0 });
-        verts.push_back({ nx1, ny0, d.u1, d.v0 });
-        verts.push_back({ nx1, ny1, d.u1, d.v1 });
-        verts.push_back({ nx0, ny0, d.u0, d.v0 });
-        verts.push_back({ nx1, ny1, d.u1, d.v1 });
-        verts.push_back({ nx0, ny1, d.u0, d.v1 });
-
-        indices.push_back(vbase);     indices.push_back(vbase + 1); indices.push_back(vbase + 2);
-        indices.push_back(vbase);     indices.push_back(vbase + 2); indices.push_back(vbase + 3);
-    }
+    m_msgCache.glyphCount = static_cast<uint32_t>(laid.glyphs.size());
+    m_msgCache.cacheIsCjk = laid.allCjk;
 
     uint32_t nv = m_msgCache.glyphCount * 6, ni = m_msgCache.glyphCount * 6;
-    const bgfx::Memory* vm = bgfx::copy(verts.data(), (uint32_t)(verts.size() * sizeof(PosTexVertex)));
+    struct PosTexVertex { float x, y, u, v; };
+    static_assert(sizeof(PosTexVertex) == 4 * sizeof(float),
+                  "PosTexVertex layout must match the float vertex stream");
+    const bgfx::Memory* vm = bgfx::copy(verts.data(), (uint32_t)(verts.size() * sizeof(float)));
     const bgfx::Memory* im = bgfx::copy(indices.data(), (uint32_t)(indices.size() * sizeof(uint32_t)));
     bgfx::update(m_msgCache.vb, 0, vm);
     bgfx::update(m_msgCache.ib, 0, im);
@@ -1288,9 +1335,7 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
     float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
     bgfx::setUniform(m_u_color, fc);
     // TD-13: Use CJK atlas texture when CJK-only text is detected
-    bool allCjk = hasCjk && !glyphFromCjk.empty();
-    for (bool c : glyphFromCjk) { if (!c) { allCjk = false; break; } }
-    m_msgCache.cacheIsCjk = allCjk;
+    const bool allCjk = laid.allCjk;
     bgfx::TextureHandle useTex = (allCjk && bgfx::isValid(m_cjkAtlas)) ? m_cjkAtlas : tex;
     bgfx::setTexture(0, m_texSampler, useTex);
     bgfx::setVertexBuffer(0, m_msgCache.vb, 0, nv);
@@ -1300,7 +1345,7 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
 
     m_msgCache.cacheIsCjk = allCjk && bgfx::isValid(m_cjkAtlas);
     m_msgCache.clearDirty();
-    return penX;
+    return laid.penAdvance;
 }
 
 float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
