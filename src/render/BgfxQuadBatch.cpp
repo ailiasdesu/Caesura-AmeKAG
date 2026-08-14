@@ -3,8 +3,58 @@
 #include "BgfxShaderManager.h"
 #include "BgfxDeviceCore.h"  // getWidth/getHeight for pixel->NDC conversion
 #include <bgfx/bgfx.h>
+#include <cstring>
 
 namespace Caesura {
+
+// ===========================================================================
+// Pure batch math (GPU-free) -- extracted so unit tests can pin the NDC
+// conversion, merge grouping and index generation without a GPU (P2-10).
+// ===========================================================================
+
+BgfxQuadBatch::NdcRect BgfxQuadBatch::quadToNdc(float x, float y, float w, float h,
+                                                float screenW, float screenH) {
+    NdcRect r;
+    r.nx0 = (x / screenW) * 2.0f - 1.0f;
+    r.ny0 = 1.0f - (y / screenH) * 2.0f;
+    r.nx1 = ((x + w) / screenW) * 2.0f - 1.0f;
+    r.ny1 = 1.0f - ((y + h) / screenH) * 2.0f;
+    return r;
+}
+
+void BgfxQuadBatch::computeMergeGroups(const std::vector<BatchQuad>& quads,
+                                       std::vector<MergeGroup>& groups) {
+    groups.clear();
+    const uint32_t quadCount = (uint32_t)quads.size();
+    uint32_t qi = 0;
+    while (qi < quadCount) {
+        const auto& q = quads[qi];
+        uint32_t mergeEnd = qi + 1;
+        while (mergeEnd < quadCount &&
+               quads[mergeEnd].tex.idx == q.tex.idx &&
+               quads[mergeEnd].viewId == q.viewId &&
+               quads[mergeEnd].opacity == q.opacity) {
+            mergeEnd++;
+        }
+        groups.push_back(MergeGroup{qi, mergeEnd - qi});
+        qi = mergeEnd;
+    }
+}
+
+void BgfxQuadBatch::buildGroupIndices(uint32_t quadCount,
+                                      std::vector<uint16_t>& indices) {
+    indices.clear();
+    indices.reserve(quadCount * 6);
+    for (uint32_t m = 0; m < quadCount; m++) {
+        const uint32_t localBase = m * 4;
+        indices.push_back((uint16_t)(localBase + 0));
+        indices.push_back((uint16_t)(localBase + 1));
+        indices.push_back((uint16_t)(localBase + 2));
+        indices.push_back((uint16_t)(localBase + 0));
+        indices.push_back((uint16_t)(localBase + 2));
+        indices.push_back((uint16_t)(localBase + 3));
+    }
+}
 
 void BgfxQuadBatch::beginBatch() {
     m_state->batching = true;
@@ -63,16 +113,12 @@ void BgfxQuadBatch::flushBatch() {
         auto& q = m_state->batchQuads[qi];
         uint32_t baseVert = qi * 4;
 
-        const float nx0 = (q.x / sw) * 2.0f - 1.0f;
-        const float ny0 = 1.0f - (q.y / sh) * 2.0f;
-        const float nx1 = ((q.x + q.w) / sw) * 2.0f - 1.0f;
-        const float ny1 = 1.0f - ((q.y + q.h) / sh) * 2.0f;
-
-        // Build quad vertices (NDC)
-        v[baseVert + 0] = { nx0, ny0, 0.0f, 0.0f };
-        v[baseVert + 1] = { nx1, ny0, 1.0f, 0.0f };
-        v[baseVert + 2] = { nx1, ny1, 1.0f, 1.0f };
-        v[baseVert + 3] = { nx0, ny1, 0.0f, 1.0f };
+        // Build quad vertices (NDC) via the pure helper.
+        const NdcRect n = quadToNdc(q.x, q.y, q.w, q.h, sw, sh);
+        v[baseVert + 0] = { n.nx0, n.ny0, 0.0f, 0.0f };
+        v[baseVert + 1] = { n.nx1, n.ny0, 1.0f, 0.0f };
+        v[baseVert + 2] = { n.nx1, n.ny1, 1.0f, 1.0f };
+        v[baseVert + 3] = { n.nx0, n.ny1, 0.0f, 1.0f };
     }
 
     uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
@@ -88,23 +134,20 @@ void BgfxQuadBatch::flushBatch() {
     uint32_t idxOffset = 0;
     uint32_t vertOffset = 0;
 
-    for (uint32_t qi = 0; qi < quadCount; qi++) {
-        auto& q = m_state->batchQuads[qi];
+    // Pure merge grouping: contiguous quads sharing (tex, viewId, opacity)
+    // collapse into one submit.
+    std::vector<MergeGroup> groups;
+    computeMergeGroups(m_state->batchQuads, groups);
 
-        // Check if next quad shares same texture —merge if so. Opacity is
-        // part of the batch uniform (blendParams), so quads with different
-        // opacity must NOT merge -- the merged submit would apply only the
-        // first quad's alpha to all of them.
-        uint32_t mergeEnd = qi + 1;
-        while (mergeEnd < quadCount &&
-               m_state->batchQuads[mergeEnd].tex.idx == q.tex.idx &&
-               m_state->batchQuads[mergeEnd].viewId == q.viewId &&
-               m_state->batchQuads[mergeEnd].opacity == q.opacity) {
-            mergeEnd++;
-        }
+    for (const auto& g : groups) {
+        const auto& q = m_state->batchQuads[g.startQuad];
+        const uint32_t mergeIdxCount = g.quadCount * 6;
 
-        uint32_t mergeCount = mergeEnd - qi;
-        uint32_t mergeIdxCount = mergeCount * 6;
+        // Pure local indices (rebase-from-0 within this merge group).
+        std::vector<uint16_t> groupIndices;
+        buildGroupIndices(g.quadCount, groupIndices);
+        memcpy((uint16_t*)tib.data + idxOffset, groupIndices.data(),
+               groupIndices.size() * sizeof(uint16_t));
 
         bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), q.tex);
         // Set opacity as a uniform. blendParams is declared Vec4 x2 (8 floats);
@@ -114,26 +157,13 @@ void BgfxQuadBatch::flushBatch() {
                         0.0f, 0.0f, 0.0f, 0.0f };
         bgfx::setUniform(m_state->shaders->getBlendParams(), bp, 2);
 
-        // Rebase indices relative to merge group start: bgfx interprets
-        // index values as offsets from setVertexBuffer startVertex.
-        for (uint32_t m = 0; m < mergeCount; m++) {
-            uint32_t localBase = m * 4;
-            indices[idxOffset + m*6 + 0] = localBase + 0;
-            indices[idxOffset + m*6 + 1] = localBase + 1;
-            indices[idxOffset + m*6 + 2] = localBase + 2;
-            indices[idxOffset + m*6 + 3] = localBase + 0;
-            indices[idxOffset + m*6 + 4] = localBase + 2;
-            indices[idxOffset + m*6 + 5] = localBase + 3;
-        }
-
         // Submit the vertex/index subset for this texture group
-        bgfx::setVertexBuffer(0, &tvb, vertOffset, mergeCount * 4);
+        bgfx::setVertexBuffer(0, &tvb, vertOffset, g.quadCount * 4);
         bgfx::setIndexBuffer(&tib, idxOffset, mergeIdxCount);
         bgfx::submit(q.viewId, m_state->shaders->getFallbackProgram());
 
         idxOffset += mergeIdxCount;
-        vertOffset += mergeCount * 4;
-        qi = mergeEnd - 1;
+        vertOffset += g.quadCount * 4;
     }
 
     m_state->batchQuads.clear();
