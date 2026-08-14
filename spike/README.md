@@ -11,6 +11,7 @@ npm install wasmoon@2.0.0-next.0   # 1.16 在 Node 24 有 environ_get 断言 bug
 node spike1_tokenizer.mjs          # tokenizer + lpeg（纯 Lua）tokenize 三个 demo
 node spike2_compiler.mjs           # kag.compiler 编译前端（schema/expr/operation）
 node spike3_scheduler.mjs          # 完整调度器：tokenize→compile→scheduler.run
+node spike4_kag_real.mjs           # 真实 kag 命令表 + JS 绑定适配层（MVP 核心原型）
 ```
 
 ## 结果
@@ -20,6 +21,7 @@ node spike3_scheduler.mjs          # 完整调度器：tokenize→compile→sche
 | 1 | tokenizer + lpeg 原样运行 | PASS（3 个 demo .ks 全部 tokenize） |
 | 2 | 编译前端（schema/expr/compiler/operation） | PASS（55 tokens / 3 labels） |
 | 3 | 完整调度器执行 demo 场景 | PASS（55 tokens 推进到 53，命令 handler 全链路调用） |
+| 4 | **真实 kag 命令表 + JS 绑定适配层** | PASS（9 命令模块加载，demo 全 55 tokens 零错误执行，good_end 结局解锁，20 次绑定调用真实对接：load_texture/audio_play/set_layer_image） |
 
 ## 关键发现
 
@@ -65,7 +67,7 @@ end
 （32 函数）/ layers.*（20 函数）+ mods.resolve / i18n.localize 等。Web 播放器的
 JS 适配层只需实现这些函数的口（多数为 no-op 或 DOM/WebAudio 映射）。
 
-## 下一步（MVP 路径 B）
+### 5. JS 适配层契约（spike4 实测）
 
 1. JS 适配层：backend.* / layers.* 核心子集（bg/fg/ch/text/playbgm/playse/wait）
 2. kag/init.lua 组合根替换：spike3 用 stub kag 表，MVP 需要真实命令表加载
