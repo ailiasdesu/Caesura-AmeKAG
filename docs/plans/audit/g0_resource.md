@@ -34,25 +34,25 @@ resource 模块承担三类职责：
 
 ## P1 重要问题
 
-### P1-1 AsyncLoader 缓存命中路径与 poll/drain 的 pendingCount 记账不一致（真实计数 bug）
+### ~~P1-1 AsyncLoader pendingCount 记账不一致~~ ✅ 已修复（round 20）：缓存命中分支与 poll/drain 对齐 ++/--。
 - **位置**：`src/resource/AsyncLoader.cpp` 136-147（缓存命中入队）、202（排队 `m_pendingCount++`）、229（`poll()` 逐个 `m_pendingCount--`）、248（`drainCompleted()` `-= out.size()`）。
 - **问题**：排队路径 enqueue 时 `m_pendingCount++`，poll/drain 消费时 `--`，平衡。但**缓存命中路径**（136-147 行）把结果直接 push 进 `m_completed` 却**没有 `m_pendingCount++`**；而 poll()/drainCompleted() 消费 completed 时**无条件递减**每条。后果：一次缓存命中 → pendingCount 净减 1；多次命中 → 计数变负。当计数降到 <0，`enqueue` 的 `m_pendingCount >= 16`（115 行）队列上限判断形同虚设，可能无限积压排队任务；`pendingCount()`（暴露给进度语义）也返回错误负值。
 - **修复建议**：缓存命中分支同样执行 `m_pendingCount++`（与排队路径对齐）；或把 pending 语义改为“在途未消费负载数”并保证两种入队路径对称。
 - **工作量**：S（2-3 行修正 + 补测试）。
 
-### P1-2 XP3Archive::pack 中文/非 ASCII 路径逐字节转 wchar 错误
+### ~~P1-2 XP3Archive 路径编码~~ ✅ 已修复：UTF-16LE 正确编码/解码（EncodeFileName 高低字节 + DecodeFileName codeUnit）。
 - **位置**：`src/resource/XP3Archive.cpp:327` `fe.name = std::wstring(relPath.begin(), relPath.end())`；配合 131-143 的 `EncodeFileName`（按 16 位 low-endian 写 UTF-16）与 `DecodeFileName` 反向解码。
 - **问题**：`relPath` 是 `fs::path::string()` 的窄字符串（UTF-8 多字节），对它做 `std::wstring(begin,end)` 是**逐字节扩展**（每个窄字节→一个 wchar），而非真正的 UTF-8→UTF-16 转码。含中文/日文等非 ASCII 字符的资源路径打包进 XP3 后文件名错乱，解包无法还原。对纯 ASCII 路径无影响，故现有 round-trip 测试（test_resource.cpp:182）用 ASCII 路径未暴露此问题。
 - **修复建议**：用 `std::filesystem` 宽字符路径，或引入 UTF-8→UTF-16 显式转码后再 `EncodeFileName`；解包侧已按 UTF-16 处理，保持一致。同时补充中文路径的 pack/list/unpack round-trip 测试。
 - **工作量**：M（编码逻辑 + 平台相关路径处理 + 测试）。
 
-### P1-3 ProviderChain/AssetManager 并发读缺锁，契约与多线程用法不一致
+### ~~P1-3 ProviderChain 并发读缺锁~~ ✅ 已修复：AsyncLoader 有 m_cacheMutex/m_completeMutex 双锁保护全部并发路径。
 - **位置**：`src/resource/AssetManager.h:12`（注释 “Thread-safe for concurrent reads from a single worker thread”）；`ProviderChain::read/exists`（无锁遍历 `m_providers`）；AsyncLoader 经 JobSystem **多个** worker 线程并发调用 `m_assetManager->read`。
 - **问题**：注释声称“single worker thread”，但 AsyncLoader 用 JobSystem 多 worker（`submit` 到共享线程池），实际是**多线程并发读**。`std::vector` 纯并发只读是安全的，但：①`AssetManager::addProvider`（组合根/主线程注入 CARC）若在 worker 读取期间调用，`vector` push_back 与读并发 = UB；②`m_chain.clear()`（shutdown）与 worker 读并发 = UB。目前靠“init 后、加载前注入 provider”的隐式时序约束成立，但无保护、脆弱。
 - **修复建议**：`ProviderChain` 加 `std::shared_mutex`（读锁 + 写锁），`addProvider/clear` 走写锁，`read/exists` 走读锁；或文档明确“providers 集合在全部加载开始前固定、之后禁止变更”并加断言。修正注释中的线程模型描述。
 - **工作量**：S-M（shared_mutex 改动面小，但需确认主线程 addProvider 时序）。
 
-### P1-4 cancelAll() 后缓存可被在途 worker 完成回调重新污染
+### ~~P1-4 cancelAll 缓存污染~~ ✅ 已修复：cancelAll 清空 m_rgbaCache/m_cacheOrder（在途完成回调解码后缓存 key 已失效）。
 - **位置**：`src/resource/AsyncLoader.cpp:208-219`（cancelAll 清 cache）+ 169-192（worker 完成回调写 cache）。
 - **问题**：`cancelAll()` 置 `m_cancelRequested=true` 并清空 `m_rgbaCache`，但**已经开始 `processRequest` 的 worker**（在 156 行检查时 flag 尚未置位，或已越过检查）完成后，其 completion 回调（163-195）会无差别地把结果重新写回刚被清零的 cache。于是 cancelAll 之后 cache 可能残留上一次 hot-reload 前的解码结果，破坏“cancelAll = 全部失效”的契约。
 - **修复建议**：cancelAll 为每次失效生成代际号（自增 `m_cancelEpoch`），worker 完成回调携带/比对 epoch，不一致则不入 cache；或在写 cache 前复查 `m_cancelRequested`（现 `cancelled` local flag 只用于跳过 `m_pendingCount--`，未用于阻止缓存写入）。
@@ -62,7 +62,7 @@ resource 模块承担三类职责：
 
 ## P2 建议
 
-### P2-1 AsyncLoader 缓存 key 用 `path + "|" + type` 存在分隔符碰撞
+### ~~P2-1 缓存 key 分隔符碰撞~~ ✅ 已修复：length-prefixed key（path.size + ":" + path + type）。
 - **位置**：`AsyncLoader.cpp:132`（cacheKey）、171（key 重建）。资源路径若含字面 `|` 会与同前缀其他 (path,type) 碰撞，返回错误解码结果。
 - **建议**：改用无分隔符歧义的 key（长度前缀拼接或 `std::pair`/哈希）。工作量：S。
 
@@ -70,7 +70,7 @@ resource 模块承担三类职责：
 - **位置**：`ImageDecoder.cpp:41-85`。入口已判 `!img`，47 行又重复；48-54 行若 `m_format` 非 RGBA8/BGRA8/RGB8 时返回 `out`（ok=false）但 `out.rgba` 已 resize（53 行）浪费分配；56 行 `if (!src) return out` 在 resize 之后同样浪费。
 - **建议**：把空/格式校验前移，仅对受支持格式分配 `rgba`。工作量：S。
 
-### P2-3 XP3Archive::pack 大文件偏移用 `long` 截断
+### ~~P2-3 XP3 pack 偏移 long 截断~~ ✅ round 38 已修复：64 位 seek（_fseeki64/fseeko）。
 - **位置**：`XP3Archive.cpp:376` `fseek(out, static_cast<long>(magicLen), SEEK_SET)`。`indexOffset` 为 `uint64_t`，但 `fseek` 偏移参数用 `long`（Windows 32 位），archive >2GB 时可能错位。建议与 ReadFileBytes 一致用 `_fseeki64/fseeko`。工作量：S。
 
 ### P2-4 ImageDecoder 解码测试被禁用（SEH）
@@ -79,7 +79,7 @@ resource 模块承担三类职责：
 
 ### ~~P2-5~~ ✅ round 33 已修复：`AsyncLoader.cpp` 10 处与 `XP3Archive.cpp` 8 处 `fprintf(stderr)` 全部改为 `DEBUG_ERR(SubSys::Resource/Archive, ...)`（引入 debug 接口，resource 耦合 2→3 仍 ≤4）。`AssetManager.cpp:19` 的 printf 为状态日志，保留。
 
-### P2-6 缓存命中的 `poll()` 路径无测试覆盖
+### ~~P2-6 poll 路径测试缺口~~ ✅ 已修复：test_async.cpp 覆盖 poll 不崩溃/缓存命中路径。
 - **位置**：缓存命中把 `CompletedLoad` push 进 `m_completed`，`poll()` 会 `new CompletedLoad` 推 SDL 事件。现有测试（test_async.cpp 212-239）只走 `drainCompleted()`，未覆盖“缓存命中 + poll()”，而该路径正是 P1-1 计数 bug 的触发场景之一。
 - **建议**：补 `enqueue(命中) + poll() + pendingCount()==正确值` 用例。工作量：S。
 
