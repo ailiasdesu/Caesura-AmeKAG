@@ -24,7 +24,6 @@
 | 20 ✅ | 架构修复轮 A | P0-1/P0-2 + P1-1/P1-2/P1-3 完成（CI 绿） |
 | 21 ✅ | 架构修复轮 B | P1-4/P1-5/P1-6/P1-8 完成；P1-7 评估为**接受现状**（setRenderDevice 用前置声明 `class IRenderDevice*`，无 include 依赖，接口合规；耦合扫描 PASS） |
 | 22 ✅ | P2 批量 + 全量回归 | 8 项代码修复 + 18 处注释编码；luaCall/UnifiedBinding（测试在用）/MobileAdapter TODO 记录保留 |
-| 23-39 | 17 轮持续迭代 | 特性/深化轮（/api/pick、SMA 骨骼编辑器、IDE、性能、市场功能）按路线图/用户指示 |
-| 40 | 最终报告轮 | 详细报告（含主流 galgame 引擎对比分析） |
-
+| 23-39 ✅ | 17 轮持续迭代 | 特性/深化轮：/api/pick、SMA 编辑器+骨架画布+校验保存、引擎 stats 端点+IDE 面板、音频生命周期、minigame 分发表+输入接线、命令单源 X-macro、日志一致性（8 业务模块）、AI epoch 取消、steam/resource/render 修复、GpuMonitor 可测性+7 单测 |
+| 40 ✅ | 最终报告轮 | **final-report-40.md**（含 11 引擎市场对比 + 能力盘点 + 后续建议）；37 本地提交统一推送 |
 > 每轮保持：全量重建零错误 → C++ 全测 → Lua 全测 → ctest → 耦合 PASS → api-stats → 分语义提交 → push → CI 三平台绿。
