@@ -1,4 +1,4 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "resource/ImageDecoder.h"
 #include "resource/AssetManager.h"
 #include <cstdint>
@@ -8,7 +8,7 @@ using namespace Caesura;
 
 namespace {
 
-class LifetimeTrackingProvider final : public caesura::IAssetProvider {
+class LifetimeTrackingProvider final : public Caesura::IAssetProvider {
 public:
     explicit LifetimeTrackingProvider(int& destructionCount)
         : m_destructionCount(destructionCount) {}

@@ -4,7 +4,7 @@
 #include <cstdint>  // fixed-width types (GCC strict)
 #include <string>
 
-namespace caesura {
+namespace Caesura {
 
 class DirAssetProvider : public IAssetProvider {
 public:
@@ -22,4 +22,4 @@ private:
     std::string fullPath(const std::string& path) const;
 };
 
-} // namespace caesura
+} // namespace Caesura

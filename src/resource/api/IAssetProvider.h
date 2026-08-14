@@ -1,10 +1,10 @@
-﻿// IAssetProvider -- abstract interface for asset sources
+// IAssetProvider -- abstract interface for asset sources
 #pragma once
 #include <string>
 #include <vector>
 #include <cstdint>
 
-namespace caesura {
+namespace Caesura {
 
 class IAssetProvider {
 public:
@@ -27,4 +27,4 @@ public:
     virtual bool verify() = 0;
 };
 
-} // namespace caesura
+} // namespace Caesura

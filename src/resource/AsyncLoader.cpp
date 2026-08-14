@@ -141,7 +141,12 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
                 std::lock_guard<std::mutex> lock2(m_completeMutex);
                 m_completed.push_back(std::move(hit));
             }
-            printf("[AsyncLoader] Cache hit: %s (%s)\n", path.c_str(), type.c_str());
+            // P1-2: cache hits enqueue into m_completed too, so account them
+            // the same way as the job path -- poll()/drainCompleted() decrement
+            // per consumed entry and would otherwise drift negative.
+            m_pendingCount++;
+            printf("[AsyncLoader] Cache hit: %s (%s) [pending=%d]\n",
+                   path.c_str(), type.c_str(), m_pendingCount.load());
             return id;
         }
     }

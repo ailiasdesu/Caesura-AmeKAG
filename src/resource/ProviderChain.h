@@ -6,7 +6,7 @@
 #include <memory>
 #include <algorithm>
 
-namespace caesura {
+namespace Caesura {
 
 class ProviderChain {
 public:
@@ -33,5 +33,5 @@ private:
     void sortByPriority();
 };
 
-} // namespace caesura
+} // namespace Caesura
 

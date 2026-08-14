@@ -4,7 +4,7 @@
 
 namespace fs = std::filesystem;
 
-namespace caesura {
+namespace Caesura {
 
 std::string DirAssetProvider::fullPath(const std::string& path) const
 {
@@ -60,4 +60,4 @@ bool DirAssetProvider::exists(const std::string& path)
     return fs::is_regular_file(fs::path(fp), ec) && !ec;
 }
 
-} // namespace caesura
+} // namespace Caesura

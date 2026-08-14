@@ -12,14 +12,14 @@ AssetManager::~AssetManager() {
 void AssetManager::init() {
     if (m_initialized) return;
 
-    m_chain.addProvider(std::make_unique<caesura::DirAssetProvider>(""));
-    m_chain.addProvider(std::make_unique<caesura::DirAssetProvider>("assets"));
+    m_chain.addProvider(std::make_unique<Caesura::DirAssetProvider>(""));
+    m_chain.addProvider(std::make_unique<Caesura::DirAssetProvider>("assets"));
 
     m_initialized = true;
     printf("[AssetManager] Initialized (dir providers).\n");
 }
 
-void AssetManager::addProvider(std::unique_ptr<caesura::IAssetProvider> provider) {
+void AssetManager::addProvider(std::unique_ptr<Caesura::IAssetProvider> provider) {
     m_chain.addProvider(std::move(provider));
 }
 

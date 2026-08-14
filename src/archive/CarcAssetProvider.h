@@ -7,7 +7,7 @@
 
 namespace Caesura::carc {
 
-class CarcAssetProvider : public ::caesura::IAssetProvider {
+class CarcAssetProvider : public ::Caesura::IAssetProvider {
 public:
     explicit CarcAssetProvider(std::unique_ptr<CARCReader> reader);
 

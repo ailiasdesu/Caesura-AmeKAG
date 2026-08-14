@@ -1,6 +1,6 @@
-﻿#include "ProviderChain.h"
+#include "ProviderChain.h"
 
-namespace caesura {
+namespace Caesura {
 
 void ProviderChain::addProvider(std::unique_ptr<IAssetProvider> provider)
 {
@@ -41,4 +41,4 @@ bool ProviderChain::exists(const std::string& path)
     return false;
 }
 
-} // namespace caesura
+} // namespace Caesura

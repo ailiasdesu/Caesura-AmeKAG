@@ -1,4 +1,4 @@
-﻿#include "doctest.h"
+#include "doctest.h"
 #include "resource/ResourceHandle.h"
 #include "resource/DirAssetProvider.h"
 #include "resource/ProviderChain.h"
@@ -9,7 +9,7 @@
 #include <filesystem>
 
 using namespace Caesura;    // ResourceHandle, GenerationTracker, HandleType::TEXTURE
-using namespace caesura;    // DirAssetProvider, ProviderChain
+using namespace Caesura;    // DirAssetProvider, ProviderChain
 
 TEST_CASE("ResourceHandle::default") {
     ResourceHandle h;

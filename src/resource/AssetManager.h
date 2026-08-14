@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "ProviderChain.h"
 #include <memory>
@@ -22,13 +22,13 @@ public:
     void shutdown();
 
     // Inject a pre-built asset provider (e.g. CARC from Engine)
-    void addProvider(std::unique_ptr<caesura::IAssetProvider> provider);
+    void addProvider(std::unique_ptr<Caesura::IAssetProvider> provider);
 
     std::vector<uint8_t> read(const std::string& path);
     bool exists(const std::string& path);
 
 private:
-    caesura::ProviderChain m_chain;
+    Caesura::ProviderChain m_chain;
     bool m_initialized = false;
 };
 
