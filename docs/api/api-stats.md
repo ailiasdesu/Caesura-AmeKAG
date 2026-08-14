@@ -13,13 +13,13 @@
 | Pure-virtual interface methods | 275 |
 | Lua binding functions (luaL_Reg entries) | 168 |
 | KAG command handler files | 9 |
-| KAG contract commands (command-contracts.md) | 81 |
-| RPC HTTP endpoints (EditorServer) | 21 |
-| RPC stdin JSON-RPC methods | 25 |
-| Lua runtime scripts (scripts/, excl. demo/check) | 73 |
-| C++ test cases | 625 |
-| C++ assertions | 6119 |
-| Lua tests passed | 118 |
+| KAG contract commands (command-contracts.md) | 84 |
+| RPC HTTP endpoints (EditorServer) | 22 |
+| RPC stdin JSON-RPC methods | 26 |
+| Lua runtime scripts (scripts/, excl. demo/check) | 74 |
+| C++ test cases | 626 |
+| C++ assertions | 6117 |
+| Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
 
@@ -87,6 +87,7 @@
 | Get | /api/live2d/models |
 | Get | /api/logs |
 | Get | /api/ping |
+| Get | /api/sma/validate |
 | Get | /api/state |
 | Get | /api/status |
 | Get | /index.html |
@@ -124,6 +125,7 @@
 - `removeBreakpoint`
 - `run`
 - `setBreakpoint`
+- `smaValidate`
 - `stepInto`
 - `stepOut`
 - `stepOver`

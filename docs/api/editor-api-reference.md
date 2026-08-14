@@ -83,6 +83,33 @@
 
 ---
 
+### 1.2b SMA 资产校验（round 19）
+
+**`GET /api/sma/validate?path=...`**（IDE SMA 资产面板）
+
+校验 SMA 资产 JSON——引擎内跑共享校验器 `kag.sma_check`（与运行时
+加载器同一份代码，保证口径一致）。路径受限：仅允许 `assets/` 与
+`demo/assets/` 前缀的相对路径（禁 `..`、禁绝对路径）。
+
+```
+→ GET /api/sma/validate?path=demo/assets/sma/hero.json
+← {"status":"ok","ok":true,"errors":[],
+   "meta":"{\"bones\":8,\"anims\":[\"idle:2\",\"wave:2\"],\"parts\":5,\"verts\":8,\"tris\":4}"}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `status` | string | `"ok"` |
+| `ok` | bool | 资产是否通过校验 |
+| `errors` | string[] | 违规列表（带字段路径，如 `mesh.indices[3]: vertex index 99 out of range`） |
+| `meta` | string | JSON 文本：结构摘要 `{bones, anims, parts, verts, tris}`（前端解析） |
+
+错误示例：`path=../../outside.json` → HTTP 400（不安全路径）；
+不存在的文件 → `ok:false` + "cannot open file"。
+stdio 传输的 `smaValidate` 方法同构（请求字段 `path`）。
+
+---
+
 ### 1.3 资源列表
 
 **`GET /api/assets?type={image|audio|script}`**

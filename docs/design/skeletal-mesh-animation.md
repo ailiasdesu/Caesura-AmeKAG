@@ -73,7 +73,9 @@ src/render/...MeshRender       ← 网格渲染原语（C++，IRenderDevice 扩�
 
 设计要点：
 - **线性骨骼链**（parent 树），每骨骼一个 2D 枢轴点 + 旋转/缩放/平移
-- 顶点权重：每顶点最多 2 根骨骼（`{bone, w}` 列表，w 归一化）
+- 顶点权重：每顶点最多 2 根骨骼，**交错布局**（[2i-1] 骨 A / [2i] 骨 B，
+  w 归一化，和必须 = 1——引擎不做运行时归一化）；单骨布局（每顶点 1
+  条目）兼容。见 §11 校验器与 demo/assets/sma/template.json。
 - 动画 = 时间轴关键帧（rot/scale/offset），线性插值（LERP）
 - 纹理来自现有纹理管线（`ITextureManager`，预算/LRU 复用）
 
@@ -208,6 +210,11 @@ pos+uv+bone0/bone1+w0/w1，32B/顶点；D3D11 禁止 DYNAMIC 用法带 SRV 绑�
 - 回退：无 BGFX_CAPS_COMPUTE / Metal / SPIR-V → CPU 软变形（SkinMode::Auto）。
 - **验证**：D3D11 GPU 子测试（隐藏窗 + framebuffer 读回）——同一网格同一
   姿势 GPU/CPU 两帧逐像素比对（容差 ±1 + 边缘预算）通过（14 断言）。
+- **性能基准**（round 19，D3D11 主机侧计时，8k 顶点 / 64 骨 / ~16k 三角，
+  120 帧取后 100 帧均值）：**CPU 1.268 ms/帧 vs GPU 0.080 ms/帧（主机侧，
+  ≈15.8×）**——GPU 路径（打包 64 个 vec4 + dispatch 提交）比软变形 + 上传
+  便宜一个数量级；断言 gpu < cpu 在 CI Windows WARP 同样成立（只测主机
+  侧成本，不测 GPU 执行）。
 
 ## 9b. 播放控制与高级动画（round 18）
 
@@ -220,11 +227,46 @@ pos+uv+bone0/bone1+w0/w1，32B/顶点；D3D11 禁止 DYNAMIC 用法带 SRV 绑�
 - **部件/表情变体**（E-mote 风格）：资产 `parts` 多网格（每部件独立
   变体几何），`set_variant` 销毁重建该部件网格；单 mesh 路径完全兼容。
 
+## 9c. 创作工具链（round 19）
+
+**校验器** `scripts/kag/sma_check.lua`（库 + CLI 双模式，仿 ks_check）：
+- CLI：`lua scripts/kag/sma_check.lua <asset.json> [more...]`，退出码 0/1
+  （CI 门禁）；库：`validate(asset)` / `validate_file(path)`（含结构摘要
+  meta：bones/anims/parts/verts/tris）
+- 规则与运行时消费契约严格一致：骨骼 id 唯一 / parent 引用存在 / 无环 /
+  pivot；网格 positions/uvs/indices（%3 且不越界）/weights（1 或 2 交错
+  条目、bone 引用、w∈[0,1]、和=1）；动画 duration/track 骨引用/frames t
+  升序；parts 变体递归校验；texture/atlas 元数据
+- 集成：`sma.load(jsonText, {validate=true})` 加载门禁、`sma.validate`、
+  `sma.validate_file`（RPC 复用）
+- 修复（round 19）：`create_part_mesh` 双骨权重读取改为 [2i-1]/[2i]
+  交错布局（旧实现把相邻条目错位当第二骨；18 轮测试未覆盖 weights 路径）
+
+**资产模板与示例**（demo/assets/sma/）：
+- `template.json`：带 `_comment` 字段的完整模板（骨骼/网格/双骨权重/动画/部件）
+- `hero.json`：可运行示例角色——8 骨（root→body→head + 双臂 2 骨链 +
+  眼睛）、5 部件（body/head/armL/armR/eyes，eyes 含 default/happy 变体）、
+  idle（呼吸）与 wave（挥手交叉淡化）动画、肘部双骨混合
+- `_broken_example.json`：故意损坏的演示资产（每个错误带 `_intent`），
+  服务校验器演示/测试/IDE 面板
+- 纹理策略：仓库无二进制素材——demo 运行时经 `backend.create_solid_texture`
+  注入纯色纹理，资产 texture 字段留空
+
+**SMA demo 场景**（demo/sma_demo.ks + sma_entry.lua + sma_demo_driver.lua）：
+- 独立入口（不动主 demo）：spawn hero（idle loop）→ crossfade 切 wave →
+  eyes 变体 → 2 骨 IK 右臂指向目标 → 停止
+- `sma_demo_driver.lua` 与测试共享（headless 冒烟驱动真实 demo 逻辑）
+
+**IDE 面板**：`GET /api/sma/validate?path=...`（引擎经 Lua 跑共享校验器，
+路径限 assets/ 与 demo/assets/、禁 `..`）；VisualView "SMA ASSET" 面板——
+输入路径 → ✓/✗ + 错误列表 + 结构摘要（骨骼/动画/部件/顶点三角）。
+
 ## 10. 风险
 
 | 风险 | 对策 |
 |---|---|
-| 软变形 CPU 成本随角色数线性增长 | 顶点预算 + 同屏上限；GPU 蒙皮为后备 |
+| 软变形 CPU 成本随角色数线性增长 | 顶点预算 + 同屏上限；GPU 蒙皮为后备（§9 性能基准：8k 顶点主机侧成本显著低于 CPU 路径） |
 | 数据格式与 Live2D 生态不兼容 | 定位为"轻量替代"，非 Live2D 导入器 |
 | 网格渲染与图层系统集成复杂度 | 复用 sprite 图层路径（z 序/透明度） |
-| 无美术工具产出 SMA JSON | 提供手写 JSON 模板 + 后续编辑器可视化（Battle 4b 场景树扩展） |
+| 手写 SMA JSON 易出错 | **已闭环**：sma_check 校验器（CLI/库/RPC）+ 资产模板 + IDE 校验面板（round 19） |
+| 资产权重布局与运行时不一致 | **已闭环**：校验器与 create_part_mesh 消费契约同源（[2i-1]/[2i] 交错，round 19 修复错位） |
