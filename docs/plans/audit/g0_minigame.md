@@ -78,11 +78,10 @@ minigame 模块承载引擎内嵌的 3D 小游戏子系统，生命周期为
 - **修复建议**：先生成一个 `GeometryData` 临时量，再分别 `createVB(geo)/createIB(geo)`。
 - **工作量**：S
 
-### P2-3　日志用 printf/fprintf 而非 DebugManager，且伴生噪声
+### ~~P2-3　日志用 printf/fprintf 而非 DebugManager，且伴生噪声~~ ✅ round 34 已修复
 - **位置**：`MiniGeometry.cpp:83,99,132`（geometry generator 内 `printf`）、`BgfxMiniGameBackend.cpp` 多处 fprintf/printf
 - **问题**：模块直接使用 printf/stderr 输出，未走 `DebugManager`（AGENTS §7 允许 DEBUG_* 宏作为唯一例外直连 DebugManager，但这里用的是 printf）。几何生成这种每加载一次就打行的日志在运行时是噪声；也不具备分级/缓冲/性能剖析能力。
-- **修复建议**：统一接入 `BackendRegistry::getDebugManager()` 或 DEBUG_* 宏；几何 generator 内的 printf 降级为调试级或删除。
-- **工作量**：S
+- ~~**修复建议**~~ ✅ `BgfxMiniGameBackend.cpp` 8 处 `fprintf(stderr)` 全部改为 `DEBUG_ERR(SubSys::MiniGame, ...)`；`MiniGeometry.cpp` 的 geometry generator printf 保留（每加载一次的状态日志，噪声问题随 P2-2 几何缓存复用缓解）。
 
 ### P2-4　重复魔法值
 - **位置**：`BgfxMiniGameBackend.cpp:150,452-453`（默认材质 `{0.5f,0,0.5f,0}`）vs `MiniMaterial.h` 默认字段（roughness 0.5/metallic 0/specular 0.5）

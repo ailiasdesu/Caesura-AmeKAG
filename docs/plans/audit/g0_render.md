@@ -86,10 +86,10 @@ render 模块是 bgfx 渲染核心：BgfxRenderDevice（组合根）+ BgfxDevice
 3. ~~**注释编码损坏**~~ ✅ 已修复（?? → — 全局替换）。
 4. ~~**ShaderCache.cpp:24 双反斜杠**~~ ✅ 已修复。
 5. ~~**GpuMonitor 重复 include / SIM_BATCH_SIZE 未用 / TextureManager public 外露**~~ ✅ round 32 已修复：GpuMonitor.h 去重 deque；ParticleSystem.h 删 SIM_BATCH_SIZE；m_solidCache/m_pathToId 移入 private（无外部访问）。
-6. **ParticleSystem.cpp:99-101** `emit()` 内循环里每粒子现构 `std::uniform_real_distribution`，可提升为成员或函数级复用（微优化）。
-7. **RTTManager 双池索引映射**：`m_handleToPoolIndex` 存 `pool.size()-1`，但 release 用同一索引同时查 `m_pool2D/m_pool3D`，两池共享一个索引空间可能误匹配——当前靠 handle.id 二次校验兜底，仍建议为每个 handle 记录所在池。
+6. ~~**ParticleSystem.cpp:99-101** `emit()` 内循环里每粒子现构 `std::uniform_real_distribution`~~ ✅ round 34 已修复：burst 级复用单个 `unit(0,1)` 分布器。
+7. ~~**RTTManager 双池索引映射**~~ ✅ round 34 评估：release 已有 handle.id 二次校验 + 全池兜底搜索 + erase 清理（RTTManager.cpp:112/118/128-132/159），误匹配被拒绝，风险已缓解；记录保留。
 8. **CompositeShaderCache 全局单例**（`ShaderCache.cpp:11-14`）不归 BackendRegistry 管，且带 `bgfx::ProgramHandle`；目前主要被 BgfxShaderManager 初始化，跨模块直用需警惕绕过注册表（当前未见跨模块使用，留记录）。且其 `getProgram` 实际永远 fallback（`compileVariant` 只回 Normal），实质是 LUT 而非编译器，注释与实现职责可澄清。
-9. **STB_IMAGE_WRITE 实现错位**：`RTTManager.cpp:1` 定义 `STB_IMAGE_WRITE_IMPLEMENTATION` 但该 TU 内未使用 stbi_write 函数；真正消费它的 `BgfxDebugCallback.cpp` 靠它提供实现——两 TU 隐式耦合，建议把实现单独成 TU 或统一到一处。
+9. ~~**STB_IMAGE_WRITE 实现错位**~~ ✅ 已修复（stb_impl.cpp 独立 TU；RTTManager.cpp:2 注释确认）。
 10. **测试**：已有 `test_render_device/mesh_renderer/render_pipeline/render_integration/layer_manager/particle_system/texture_manager/sma_skinner` 覆盖较好；缺口——`GpuMonitor`（降质/恢复状态机无单元测试）、`RTTManager` 池复用/释放路径、`TextRenderer::rebuildCache` 的 CJK/缓存键命中（`matches()`）行为、`BgfxQuadBatch::flushBatch` 纹理合并组逻辑大多只能靠 GPU 集成测试。
 
 ## 耦合分析
