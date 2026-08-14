@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  test_tokenizer.lua — Tokenizer unit tests
 -- =============================================================================
 
@@ -114,5 +114,82 @@ check("quoted empty kept", t_q[1].params[1][1] == "k"
 -- (the Results line above prints before these regression checks;
 -- the exit-code guard after them is authoritative -- review nit)
       and t_q[1].params[1][2] == "")
+
+-- ---- Neo-Genesis block text (triple-quote) --------------------------------
+do
+    local toks = tokenizer.parse('"""line1\nline2\n"""')
+    check("blocktext is a text token", toks[1].type == "text")
+    check("blocktext content preserved",
+          toks[1].content == "line1\nline2")
+end
+
+do
+    local toks = tokenizer.parse('[ch text="a"]\n"""multi\nline\ntext"""\n[ch text="b"]')
+    check("blocktext between commands", #toks == 3
+          and toks[1].cmd == "ch" and toks[2].type == "text"
+          and toks[3].cmd == "ch")
+    check("blocktext multi-line content",
+          toks[2].content == "multi\nline\ntext")
+end
+
+-- ---- comments ---------------------------------------------------------------
+do
+    local toks = tokenizer.parse('; header comment\n[ch text="x"]')
+    check("leading comment skipped", #toks == 1 and toks[1].cmd == "ch")
+    local toks2 = tokenizer.parse('[ch text="a"] ; inline note\n[ch text="b"]')
+    check("inline comment skipped", #toks2 == 2
+          and toks2[1].cmd == "ch" and toks2[2].cmd == "ch")
+end
+
+-- ---- iscript raw region -----------------------------------------------------
+do
+    local toks = tokenizer.parse('[iscript]\nlocal x = 1\n-- [not a tag]\n[/endscript]')
+    check("iscript single token", #toks == 1 and toks[1].type == "iscript")
+    check("iscript body is raw (tags not tokenized)",
+          toks[1].body:find("[not a tag]", 1, true) ~= nil)
+end
+
+-- ---- labels and mixed streams ----------------------------------------------
+do
+    local toks = tokenizer.parse('*start\nHello world\n[ch text="hi"]')
+    check("label token carries name", toks[1].type == "label"
+          and toks[1].name == "start")
+    check("mixed stream token order", #toks == 3
+          and toks[2].type == "text" and toks[3].cmd == "ch")
+end
+
+-- ---- robustness -------------------------------------------------------------
+do
+    local ok = pcall(tokenizer.parse, "[]")
+    check("empty command raises (visible error)", not ok)
+    local ok2 = pcall(tokenizer.parse, "[")
+    check("unclosed command raises", not ok2)
+end
+
+do
+    local toks = tokenizer.parse('[ch text="a [b] c"]')
+    check("brackets inside quoted value", #toks == 1 and toks[1].cmd == "ch")
+    local toks2 = tokenizer.parse('[se file="a=b.wav"]')
+    check("equals inside quoted value", #toks2 == 1 and toks2[1].cmd == "se")
+end
+
+do
+    local toks = tokenizer.parse('\239\187\191[bg]')
+    check("BOM prefix tolerated", #toks == 1 and toks[1].cmd == "bg")
+    local toks2 = tokenizer.parse('[bg]\r\n[fg]')
+    check("CRLF line endings", #toks2 == 2
+          and toks2[1].cmd == "bg" and toks2[2].cmd == "fg")
+    local toks3 = tokenizer.parse('こんにちは世界')
+    check("unicode text content preserved", toks3[1].type == "text"
+          and toks3[1].content == "こんにちは世界")
+end
+
+-- ---- unclosed regions degrade gracefully (no crash) -------------------------
+do
+    local ok, toks = pcall(tokenizer.parse, '[iscript]\nlocal x = 1')
+    check("unclosed iscript does not crash", ok)
+    local ok2, toks2 = pcall(tokenizer.parse, '"""abc')
+    check("unclosed blocktext does not crash", ok2)
+end
 
 if failed > 0 then os.exit(1) end
