@@ -130,6 +130,23 @@ public:
                                   std::vector<float>& verts,
                                   std::vector<uint32_t>& indices);
 
+    // -- Pure dirty-range math (headless-testable) -------------------------
+    // Count UTF-8 codepoints in a byte range (lenient: a truncated trailing
+    // sequence counts as one glyph). Used by the batch-cache dirty tracking.
+    static uint32_t countUtf8Glyphs(const uint8_t* data, size_t len);
+
+    struct DirtyRangeResult {
+        bool changed = false;   // false == texts identical, no rebuild needed
+        uint32_t start = 0;     // first changed glyph (codepoint-aligned)
+        uint32_t end = 0;       // one past the last changed glyph, <= maxGlyphs
+    };
+    // Pure: codepoint-aligned dirty range when the cached text changes from
+    // oldText to newText. Mirrors updateDirtyRange() exactly, minus the
+    // MessageLayerCache member writes.
+    static DirtyRangeResult computeDirtyRange(const std::string& oldText,
+                                              const std::string& newText,
+                                              uint32_t maxGlyphs);
+
     void newline();
     void clearText(uint16_t viewId);
     void setCursor(float x, float y) { m_cursor.x = x; m_cursor.y = y; }

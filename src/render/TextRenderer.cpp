@@ -1110,43 +1110,61 @@ void TextRenderer::invalidateCache() {
     m_msgCache.markAllDirty();
 }
 
-void TextRenderer::updateDirtyRange(const std::string& newText) {
-    const std::string& oldText = m_msgCache.cachedText;
-    size_t oldLen = oldText.size();
-    size_t newLen = newText.size();
+// ---------------------------------------------------------------------------
+// Pure dirty-range math (GPU-free) -- extracted so unit tests can pin the
+// batch-cache update logic without a GPU.
+// ---------------------------------------------------------------------------
 
-    uint32_t diffStart = 0;
+uint32_t TextRenderer::countUtf8Glyphs(const uint8_t* data, size_t len) {
+    uint32_t count = 0;
+    for (size_t pos = 0; pos < len; ) {
+        int clen = utf8_char_len(data[pos]);
+        if (pos + (size_t)clen > len) clen = (int)(len - pos);
+        pos += (size_t)clen;
+        ++count;
+    }
+    return count;
+}
+
+TextRenderer::DirtyRangeResult TextRenderer::computeDirtyRange(
+    const std::string& oldText, const std::string& newText, uint32_t maxGlyphs) {
+    DirtyRangeResult out;
     const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldText.data());
     const uint8_t* newData = reinterpret_cast<const uint8_t*>(newText.data());
+    const size_t oldLen = oldText.size();
+    const size_t newLen = newText.size();
 
+    // Walk forward while codepoints match exactly (byte-wise compare of
+    // whole sequences -- never splits a multi-byte char).
+    uint32_t diffStart = 0;
     size_t oldPos = 0, newPos = 0;
     while (oldPos < oldLen && newPos < newLen) {
         int oclen = utf8_char_len(oldData[oldPos]);
         int nclen = utf8_char_len(newData[newPos]);
-        if (oclen != nclen || memcmp(oldData + oldPos, newData + newPos, oclen) != 0)
+        if (oclen != nclen || memcmp(oldData + oldPos, newData + newPos, (size_t)oclen) != 0)
             break;
-        oldPos += oclen; newPos += nclen; diffStart++;
+        oldPos += (size_t)oclen; newPos += (size_t)nclen; ++diffStart;
     }
 
-    auto countGlyphs = [](const uint8_t* data, size_t len) -> uint32_t {
-        uint32_t count = 0;
-        for (size_t pos = 0; pos < len; ) {
-            int clen = utf8_char_len(data[pos]);
-            if (pos + clen > len) clen = (int)(len - pos);
-            pos += clen; count++;
-        }
-        return count;
-    };
+    const uint32_t oldRemain = countUtf8Glyphs(oldData + oldPos, oldLen - oldPos);
+    const uint32_t newRemain = countUtf8Glyphs(newData + newPos, newLen - newPos);
+    if (oldRemain == 0 && newRemain == 0) return out;  // identical text
 
-    uint32_t oldRemain = countGlyphs(oldData + oldPos, oldLen - oldPos);
-    uint32_t newRemain = countGlyphs(newData + newPos, newLen - newPos);
+    out.changed = true;
+    out.start = diffStart;
+    out.end = diffStart + (oldRemain > newRemain ? oldRemain : newRemain);
+    if (out.end > maxGlyphs) out.end = maxGlyphs;
+    return out;
+}
 
-    if (oldRemain == 0 && newRemain == 0) { m_msgCache.clearDirty(); return; }
-
-    m_msgCache.dirtyStart = diffStart;
-    m_msgCache.dirtyEnd   = diffStart + (oldRemain > newRemain ? oldRemain : newRemain);
-    if (m_msgCache.dirtyEnd > m_msgCache.maxGlyphs)
-        m_msgCache.dirtyEnd = m_msgCache.maxGlyphs;
+void TextRenderer::updateDirtyRange(const std::string& newText) {
+    // Delegate the codepoint diff to the pure helper; keep the member writes
+    // here so the cache state stays in one place.
+    const DirtyRangeResult r =
+        computeDirtyRange(m_msgCache.cachedText, newText, m_msgCache.maxGlyphs);
+    if (!r.changed) { m_msgCache.clearDirty(); return; }
+    m_msgCache.dirtyStart = r.start;
+    m_msgCache.dirtyEnd   = r.end;
     m_msgCache.cachedText = newText;
 }
 
