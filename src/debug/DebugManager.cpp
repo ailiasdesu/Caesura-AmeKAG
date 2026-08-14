@@ -97,6 +97,9 @@ const char* SubSysName(SubSys s) {
         case SubSys::Dbg:       return "DEBUG";
         case SubSys::Live2D:    return "LIVE2D";
         case SubSys::MiniGame:  return "MINIGAME";
+        case SubSys::Storage:   return "STORAGE";
+        case SubSys::Resource:  return "RESOURCE";
+        case SubSys::Archive:   return "ARCHIVE";
     }
     return "UNKNOWN";
 }

@@ -1,4 +1,5 @@
-﻿#include "resource/XP3Archive.h"
+#include "resource/XP3Archive.h"
+#include "../debug/api/DebugLog.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -301,7 +302,8 @@ bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile
                       std::function<void(int,int)> progressCb) {
     FILE* out = fopen(outputFile.c_str(), "wb");
     if (!out) {
-        fprintf(stderr, "[XP3] Cannot open output: %s\n", outputFile.c_str());
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] Cannot open output: %s", outputFile.c_str());
         return false;
     }
 
@@ -364,7 +366,8 @@ bool XP3Archive::pack(const std::string& inputDir, const std::string& outputFile
     auto rawIndex = BuildIndex(files);
     auto zlibIndex = ZlibCompress(rawIndex.data(), rawIndex.size());
     if (zlibIndex.empty()) {
-        fprintf(stderr, "[XP3] Index compression failed.\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Ok,
+            "[XP3] Index compression failed.");
         fclose(out);
         return false;
     }
@@ -390,20 +393,23 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
                         std::function<void(int,int)> progressCb) {
     auto raw = ReadFileBytes(xp3File);
     if (raw.size() < 13) {
-        fprintf(stderr, "[XP3] File too small: %s\n", xp3File.c_str());
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] File too small: %s", xp3File.c_str());
         return false;
     }
 
     // Verify magic
     const char magic[] = "XP3\r\n";
     if (memcmp(raw.data(), magic, 5) != 0) {
-        fprintf(stderr, "[XP3] Not an XP3 archive: %s\n", xp3File.c_str());
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] Not an XP3 archive: %s", xp3File.c_str());
         return false;
     }
 
     uint64_t indexOff = ReadU64(raw.data() + 5);
     if (indexOff < 13 || indexOff >= raw.size()) {
-        fprintf(stderr, "[XP3] Invalid index offset.\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] Invalid index offset.");
         return false;
     }
     const size_t indexOffset = static_cast<size_t>(indexOff);
@@ -413,8 +419,9 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
 
     // M1: prevent decompression bomb (cap at 256 MB)
     if (indexRawSize > kMaxIndexSize) {
-        fprintf(stderr, "[XP3] Index too large (%.1f MB > 256 MB limit).\n",
-                (double)indexRawSize / (1024.0 * 1024.0));
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] Index too large (%.1f MB > 256 MB limit).",
+            (double)indexRawSize / (1024.0 * 1024.0));
         return false;
     }
 
@@ -426,7 +433,8 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
 
     std::vector<FileEntry> files;
     if (!ParseIndex(idxData, idxSize, files) || !ValidateEntries(files, indexOff)) {
-        fprintf(stderr, "[XP3] Invalid index contents.\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed,
+            "[XP3] Invalid index contents.");
         return false;
     }
     int total = (int)files.size();
@@ -437,7 +445,8 @@ bool XP3Archive::unpack(const std::string& xp3File, const std::string& outputDir
     for (const auto& file : files) {
         fs::path outputPath;
         if (!ResolveOutputPath(outputRoot, file.name, outputPath)) {
-            fprintf(stderr, "[XP3] Rejected unsafe output path.\n");
+            DEBUG_ERR(SubSys::Archive, ErrCode::Ok,
+                "[XP3] Rejected unsafe output path.");
             return false;
         }
         outputPaths.push_back(std::move(outputPath));

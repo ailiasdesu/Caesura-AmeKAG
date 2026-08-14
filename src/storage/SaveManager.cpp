@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) -- SaveManager.cpp
 //  JSON save/load with schema versioning and migration chain.
 //  Uses nlohmann/json v3.11.3 for robust structured serialization.
@@ -14,6 +14,7 @@
 #include "LocalFileSaveProvider.h"
 #include "../di/BackendRegistry.h"
 #include "../archive/api/ICryptoEngine.h"
+#include "../debug/api/DebugLog.h"
 #include <bgfx/bgfx.h>
 #include <vector>
 
@@ -141,7 +142,7 @@ std::string SaveManager::readFile(const std::string& path) {
     // Decrypt if key is set and data starts with "CAES" magic
     if (m_keySet && content.size() >= 4 && std::memcmp(content.data(), "CAES", 4) == 0) {
         if (content.size() < 32) {
-            fprintf(stderr, "[SaveManager] Encrypted save too short\n");
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Encrypted save too short");
             return "";
         }
         const auto* nonce = reinterpret_cast<const uint8_t*>(content.data() + 4);
@@ -151,12 +152,12 @@ std::string SaveManager::readFile(const std::string& path) {
 
         auto* crypto = BackendRegistry::instance().getCryptoEngine();
         if (!crypto) {
-            fprintf(stderr, "[SaveManager] CryptoEngine not initialized\n");
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
             return "";
         }
         auto plain = crypto->decrypt(ct, ctLen, m_encryptKey, 32, nonce, 12, tag, 16);
         if (plain.empty()) {
-            fprintf(stderr, "[SaveManager] Decryption failed (wrong key or corrupted data)\n");
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Decryption failed (wrong key or corrupted data)");
             return "";
         }
         return std::string(reinterpret_cast<char*>(plain.data()), plain.size());
@@ -174,7 +175,7 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
         uint8_t tag[16];
         auto* crypto = BackendRegistry::instance().getCryptoEngine();
         if (!crypto) {
-            fprintf(stderr, "[SaveManager] CryptoEngine not initialized\n");
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
             return false;
         }
         crypto->generateNonce(nonce, 12);
@@ -182,7 +183,7 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
         auto cipher = crypto->encrypt(            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
             m_encryptKey, 32, nonce, 12, tag, 16);
         if (cipher.empty()) {
-            fprintf(stderr, "[SaveManager] Encryption failed\n");
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Encryption failed");
             return false;
         }
 
@@ -201,13 +202,13 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
     const std::string tmpPath = path + ".tmp";
     std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
     if (!out) {
-        fprintf(stderr, "[SaveManager] Failed to open file for writing: %s\n", tmpPath.c_str());
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Failed to open file for writing: %s", tmpPath.c_str());
         return false;
     }
     out.write(dataToWrite.c_str(), static_cast<std::streamsize>(dataToWrite.size()));
     out.flush();
     if (!out.good()) {
-        fprintf(stderr, "[SaveManager] Write failed for %s\n", tmpPath.c_str());
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Write failed for %s", tmpPath.c_str());
         std::filesystem::remove(tmpPath);  // no stale partial temp file
         return false;
     }
@@ -215,7 +216,7 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
     std::error_code ec;
     std::filesystem::rename(tmpPath, path, ec);
     if (ec) {
-        fprintf(stderr, "[SaveManager] Rename failed: %s\n", ec.message().c_str());
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Rename failed: %s", ec.message().c_str());
         std::filesystem::remove(tmpPath);
         return false;
     }
@@ -233,7 +234,7 @@ bool SaveManager::save(int slot, const json& gameData,
     // Slot bound: negative or absurd slots fabricate paths outside the save
     // dir; the UI only uses 0..99. Guard at the boundary.
     if (slot < 0 || slot > 99) {
-        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
         return false;
     }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
@@ -242,7 +243,7 @@ bool SaveManager::save(int slot, const json& gameData,
     // KAG.save_game() / KAG.load_game() bindings which route here.
 
     if (m_saveDir.empty()) {
-        fprintf(stderr, "[SaveManager] Not initialized; call init() first.\n");
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Not initialized; call init() first.");
         return false;
     }
 
@@ -274,7 +275,7 @@ bool SaveManager::save(int slot, const json& gameData,
 
 json SaveManager::load(int slot, SaveMeta* outMeta) {
     if (slot < 0 || slot > 99) {
-        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
         return {};
     }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
@@ -289,7 +290,7 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
     try {
         envelope = json::parse(contents);
     } catch (const json::exception& e) {
-        fprintf(stderr, "[SaveManager] JSON parse error: %s\n", e.what());
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed, "[SaveManager] JSON parse error: %s", e.what());
         return json();
     }
 
@@ -297,7 +298,7 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
     // value() reads below throw type_error.306 across the Lua C boundary --
     // treat it as corrupt and fail gracefully instead of crashing.
     if (!envelope.is_object()) {
-        fprintf(stderr, "[SaveManager] Save envelope is not a JSON object; treating as corrupt\n");
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed, "[SaveManager] Save envelope is not a JSON object; treating as corrupt");
         return json();
     }
 
@@ -386,7 +387,7 @@ bool SaveManager::slotExists(int slot) {
 
 bool SaveManager::deleteSlot(int slot) {
     if (slot < 0 || slot > 99) {
-        fprintf(stderr, "[SaveManager] Slot %d out of range [0..99]\n", slot);
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
         return false;
     }
     std::string path = slotPath(slot);
@@ -395,7 +396,7 @@ bool SaveManager::deleteSlot(int slot) {
         printf("[SaveManager] Deleted slot %d\n", slot);
         return true;
     }
-    fprintf(stderr, "[SaveManager] Failed to delete slot %d\n", slot);
+    DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Failed to delete slot %d", slot);
     return false;
 }
 
@@ -405,7 +406,7 @@ bool SaveManager::deleteSlot(int slot) {
 
 void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn fn) {
     if (toVersion <= fromVersion) {
-        fprintf(stderr, "[SaveManager] Rejected migration v%d -> v%d (must increase)\n", fromVersion, toVersion);
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Rejected migration v%d -> v%d (must increase)", fromVersion, toVersion);
         return;
     }
     m_migrations[fromVersion] = {toVersion, fn};
@@ -417,7 +418,7 @@ void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn 
 
 json SaveManager::migrate(const json& data, int fromVersion) {
     if (!data.is_object()) {
-        fprintf(stderr, "[SaveManager] Migration input is not an object; skipping\n");
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Migration input is not an object; skipping");
         return data;
     }
     json current = data;
@@ -435,7 +436,7 @@ json SaveManager::migrate(const json& data, int fromVersion) {
         steps++;
     }
     if (steps >= 64) {
-        fprintf(stderr, "[SaveManager] Migration chain exceeded 64 steps (cycle?) at v%d\n", ver);
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Migration chain exceeded 64 steps (cycle?) at v%d", ver);
     }
     return current;
 }
@@ -484,7 +485,7 @@ bool SaveManager::s_gfxReady = false;
 std::string SaveManager::captureThumbnailPNG(int width, int height) {
     (void)width; (void)height;
     if (!s_gfxReady) {
-        fprintf(stderr, "[SaveManager] Thumbnail skipped: gfx not ready\n");
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Thumbnail skipped: gfx not ready");
         return "";
     }
     char path[256];

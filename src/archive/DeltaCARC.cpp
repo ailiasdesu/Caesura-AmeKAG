@@ -1,4 +1,4 @@
-﻿// DeltaCARC — differential CARC update: generate / apply / verify
+// DeltaCARC — differential CARC update: generate / apply / verify
 //
 // Format (v2): entries carry the CARC path-hash (hex) and, for
 // Add/Replace, the plaintext file data. CARC indexes are path-hash
@@ -9,6 +9,7 @@
 #include "CARCReader.h"
 #include "CARCWriter.h"
 #include "CryptoEngine.h"
+#include "../debug/api/DebugLog.h"
 #include <fstream>
 #include <cstring>
 #include <cstdio>
@@ -91,8 +92,8 @@ bool DeltaCARC::generate(const std::string& oldPath,
                           const std::string& deltaPath) {
     // Open both CARCs
     CARCReader oldReader, newReader;
-    if (!oldReader.open(oldPath)) { fprintf(stderr, "[DeltaCARC] Cannot open old: %s\n", oldPath.c_str()); return false; }
-    if (!newReader.open(newPath)) { fprintf(stderr, "[DeltaCARC] Cannot open new: %s\n", newPath.c_str()); return false; }
+    if (!oldReader.open(oldPath)) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Cannot open old: %s", oldPath.c_str()); return false; }
+    if (!newReader.open(newPath)) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Cannot open new: %s", newPath.c_str()); return false; }
 
     // Compute source/target SHAs
     uint8_t oldSHA[PATH_HASH_SIZE], newSHA[PATH_HASH_SIZE];
@@ -136,12 +137,12 @@ bool DeltaCARC::generate(const std::string& oldPath,
         }
         uint8_t hash[PATH_HASH_SIZE];
         if (!hexDecode(hashHex, hash)) {
-            fprintf(stderr, "[DeltaCARC] Bad hash in new index\n");
+            DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Bad hash in new index");
             return false;
         }
         auto data = newReader.readFileByHash(hash);
         if (data.empty() && info.originalSize != 0) {
-            fprintf(stderr, "[DeltaCARC] Cannot read new file: %s\n", hashHex.c_str());
+            DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Cannot read new file: %s", hashHex.c_str());
             return false;
         }
         DeltaFlag flag = (oldIt == oldIdx.end()) ? DeltaFlag::Add : DeltaFlag::Replace;
@@ -172,7 +173,7 @@ bool DeltaCARC::generate(const std::string& oldPath,
     std::vector<uint8_t> encrypted;
     if (!deltaBody.empty()) {
         encrypted = CryptoEngine::encrypt(deltaBody.data(), deltaBody.size(), key, nonce, tag);
-        if (encrypted.empty()) { fprintf(stderr, "[DeltaCARC] Encryption failed\n"); return false; }
+        if (encrypted.empty()) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_CryptoFailed, "[DeltaCARC] Encryption failed"); return false; }
     }
 
     // Write delta file: [header][key][nonce][tag][encrypted_body]
@@ -205,14 +206,14 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     if (!df) return false;
     size_t dfSize = df.tellg(); df.seekg(0);
     if (dfSize < sizeof(DeltaHeader) + AES_KEY_SIZE + AES_NONCE_SIZE + AES_TAG_SIZE) {
-        fprintf(stderr, "[DeltaCARC] Delta file too small\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Delta file too small");
         return false;
     }
 
     DeltaHeader hdr;
     df.read(reinterpret_cast<char*>(&hdr), sizeof(DeltaHeader));
-    if (hdr.magic != DELTA_MAGIC) { fprintf(stderr, "[DeltaCARC] Bad magic\n"); return false; }
-    if (hdr.version != DELTA_VERSION) { fprintf(stderr, "[DeltaCARC] Unsupported version %u\n", hdr.version); return false; }
+    if (hdr.magic != DELTA_MAGIC) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Bad magic"); return false; }
+    if (hdr.version != DELTA_VERSION) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Unsupported version %u", hdr.version); return false; }
 
     uint8_t key[AES_KEY_SIZE], nonce[AES_NONCE_SIZE], tag[AES_TAG_SIZE];
     df.read(reinterpret_cast<char*>(key), AES_KEY_SIZE);
@@ -234,13 +235,13 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     std::vector<uint8_t> deltaBody;
     if (encSize > 0) {
         deltaBody = CryptoEngine::decrypt(encrypted.data(), encSize, key, nonce, tag);
-        if (deltaBody.empty()) { fprintf(stderr, "[DeltaCARC] Decrypt failed\n"); return false; }
+        if (deltaBody.empty()) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_CryptoFailed, "[DeltaCARC] Decrypt failed"); return false; }
     } else if (hdr.entryCount > 0) {
-        fprintf(stderr, "[DeltaCARC] Corrupt delta: empty body with %u entries\n", hdr.entryCount);
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: empty body with %u entries", hdr.entryCount);
         return false;
     }
     if (memcmp(actualSHA, hdr.sourceSHA, PATH_HASH_SIZE) != 0) {
-        fprintf(stderr, "[DeltaCARC] Source SHA mismatch — delta not for this file\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Source SHA mismatch — delta not for this file");
         return false;
     }
 
@@ -253,7 +254,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
         const uint8_t* end = p + deltaBody.size();
         while (p < end) {
             if (static_cast<size_t>(end - p) < 5) {
-                fprintf(stderr, "[DeltaCARC] Corrupt delta: truncated entry header\n");
+                DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: truncated entry header");
                 return false;
             }
             DeltaFlag flag = (DeltaFlag)*p++;
@@ -261,7 +262,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             if (!readU32(p, end, hashLen)) return false;
             p += 4;
             if (hashLen > static_cast<size_t>(end - p)) {
-                fprintf(stderr, "[DeltaCARC] Corrupt delta: hashLen %u exceeds buffer\n", hashLen);
+                DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: hashLen %u exceeds buffer", hashLen);
                 return false;
             }
             std::string hashHex(reinterpret_cast<const char*>(p), hashLen);
@@ -273,7 +274,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
                 continue;
             }
             if (flag != DeltaFlag::Add && flag != DeltaFlag::Replace) {
-                fprintf(stderr, "[DeltaCARC] Corrupt delta: unknown flag %u\n", (unsigned)flag);
+                DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: unknown flag %u", (unsigned)flag);
                 return false;
             }
             uint64_t dataLen = 0;
@@ -282,7 +283,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             // Compare lengths as uint64 before any pointer arithmetic:
             // p + dataLen would wrap for dataLen >= 2^63 (UB / DoS).
             if (dataLen > static_cast<uint64_t>(end - p)) {
-                fprintf(stderr, "[DeltaCARC] Corrupt delta: data size %llu exceeds buffer\n",
+                DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: data size %llu exceeds buffer",
                         (unsigned long long)dataLen);
                 return false;
             }
@@ -292,7 +293,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
         }
     }
     if (parsed != hdr.entryCount) {
-        fprintf(stderr, "[DeltaCARC] Corrupt delta: entry count mismatch (header %u, body %u)\n",
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Corrupt delta: entry count mismatch (header %u, body %u)",
                 hdr.entryCount, parsed);
         return false;
     }
@@ -332,7 +333,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
             if (!hexDecode(hashHex, hash)) return false;
             auto data = src.readFileByHash(hash);
             if (data.empty() && info.originalSize != 0) {
-                fprintf(stderr, "[DeltaCARC] Cannot read source file: %s\n", hashHex.c_str());
+                DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Cannot read source file: %s", hashHex.c_str());
                 return false;
             }
             if (!writer.addFileByHash(hash, data.data(), data.size())) return false;
@@ -343,7 +344,7 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     }
 
     if (!writer.finalize()) {
-        fprintf(stderr, "[DeltaCARC] Failed to finalize output CARC\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_WriteFailed, "[DeltaCARC] Failed to finalize output CARC");
         return false;
     }
 
@@ -354,18 +355,18 @@ bool DeltaCARC::apply(const std::string& sourcePath,
     // (source index − removed) + updated/added hashes.
     CARCReader check;
     if (!check.open(outputPath)) {
-        fprintf(stderr, "[DeltaCARC] Output CARC failed verification\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Output CARC failed verification");
         return false;
     }
     if (check.numFiles() != expectedIndex.size()) {
-        fprintf(stderr, "[DeltaCARC] Output index mismatch: %zu files, expected %zu\n",
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Output index mismatch: %zu files, expected %zu",
                 check.numFiles(), expectedIndex.size());
         return false;
     }
     for (const auto& [hashHex, info] : check.index()) {
         (void)info;
         if (expectedIndex.count(hashHex) == 0) {
-            fprintf(stderr, "[DeltaCARC] Output index mismatch: unexpected %s\n", hashHex.c_str());
+            DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Output index mismatch: unexpected %s", hashHex.c_str());
             return false;
         }
     }
@@ -384,14 +385,14 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
     if (!df) return false;
     size_t dfSize = df.tellg(); df.seekg(0);
     if (dfSize < sizeof(DeltaHeader) + AES_KEY_SIZE + AES_NONCE_SIZE + AES_TAG_SIZE) {
-        fprintf(stderr, "[DeltaCARC] Delta file too small\n");
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Delta file too small");
         return false;
     }
 
     DeltaHeader hdr;
     df.read(reinterpret_cast<char*>(&hdr), sizeof(DeltaHeader));
-    if (hdr.magic != DELTA_MAGIC) { fprintf(stderr, "[DeltaCARC] Bad magic\n"); return false; }
-    if (hdr.version != DELTA_VERSION) { fprintf(stderr, "[DeltaCARC] Unsupported version\n"); return false; }
+    if (hdr.magic != DELTA_MAGIC) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Bad magic"); return false; }
+    if (hdr.version != DELTA_VERSION) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Unsupported version"); return false; }
 
     uint8_t key[AES_KEY_SIZE], nonce[AES_NONCE_SIZE], tag[AES_TAG_SIZE];
     df.read(reinterpret_cast<char*>(key), AES_KEY_SIZE);
@@ -409,7 +410,7 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
     std::vector<uint8_t> deltaBody;
     if (encSize > 0) {
         deltaBody = CryptoEngine::decrypt(encrypted.data(), encSize, key, nonce, tag);
-        if (deltaBody.empty()) { fprintf(stderr, "[DeltaCARC] Decrypt failed\n"); return false; }
+        if (deltaBody.empty()) { DEBUG_ERR(SubSys::Archive, ErrCode::Archive_CryptoFailed, "[DeltaCARC] Decrypt failed"); return false; }
     }
 
     // Walk every entry with bounds checks — malformed bodies fail here.
@@ -440,7 +441,7 @@ bool DeltaCARC::verify(const std::string& deltaPath) {
         }
     }
     if (parsed != hdr.entryCount) {
-        fprintf(stderr, "[DeltaCARC] Entry count mismatch: header %u, body %u\n",
+        DEBUG_ERR(SubSys::Archive, ErrCode::Archive_ReadFailed, "[DeltaCARC] Entry count mismatch: header %u, body %u",
                 hdr.entryCount, parsed);
         return false;
     }

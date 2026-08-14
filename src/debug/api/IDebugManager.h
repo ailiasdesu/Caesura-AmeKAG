@@ -15,7 +15,7 @@ enum class DbgLevel : uint8_t {
 };
 enum class SubSys : uint8_t {
     Render = 0, Audio = 1, Scripting = 2, Input = 3, Platform = 4, Engine = 5, Dbg = 6,
-    Live2D = 7, MiniGame = 8,
+    Live2D = 7, MiniGame = 8, Storage = 9, Resource = 10, Archive = 11,
 };
 enum class ErrCode : uint32_t {
     Ok = 0,
@@ -29,6 +29,9 @@ enum class ErrCode : uint32_t {
     Inp_FocusSwitchError = 5001,
     Engine_PlatformInitFailed = 6001, Engine_RenderInitFailed = 6002, Engine_AudioInitFailed = 6003,
     Engine_LuaInitFailed = 6004, Engine_UpdateError = 6005, Engine_RenderError = 6006,
+    Storage_SaveWriteFailed = 7001, Storage_SaveReadFailed = 7002, Storage_CryptoFailed = 7003,
+    Resource_LoadFailed = 8001, Resource_DecodeFailed = 8002,
+    Archive_ReadFailed = 10001, Archive_WriteFailed = 10002, Archive_CryptoFailed = 10003,
     Internal_LogFileOpenFailed = 9001, Internal_MutexLockFailed = 9002,
 };
 

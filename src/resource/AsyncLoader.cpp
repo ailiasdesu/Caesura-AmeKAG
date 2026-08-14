@@ -1,6 +1,7 @@
 #include "AsyncLoader.h"
 #include "AssetManager.h"
 #include "ImageDecoder.h"
+#include "../debug/api/DebugLog.h"
 #include "../di/BackendRegistry.h"
 #include "../job/api/IJobSystem.h"
 #include <SDL3/SDL.h>
@@ -58,14 +59,16 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
     // kill the process. Surface it as a failed load instead.
     try {
     if (!m_assetManager) {
-        fprintf(stderr, "[AsyncLoader] AssetManager unavailable: %s\n", req.path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Resource_LoadFailed,
+            "[AsyncLoader] AssetManager unavailable: %s", req.path.c_str());
         result.success = false;
         return result;
     }
 
     std::vector<uint8_t> raw = m_assetManager->read(req.path);
     if (raw.empty()) {
-        fprintf(stderr, "[AsyncLoader] Asset not found: %s\n", req.path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Resource_LoadFailed,
+            "[AsyncLoader] Asset not found: %s", req.path.c_str());
         result.success = false;
         return result;
     }
@@ -80,7 +83,8 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
             printf("[AsyncLoader] Decoded #%d: %s (%ux%u)\n",
                    req.id, req.path.c_str(), result.width, result.height);
         } else {
-            fprintf(stderr, "[AsyncLoader] Decode failed: %s\n", req.path.c_str());
+            DEBUG_ERR(SubSys::Resource, ErrCode::Resource_DecodeFailed,
+                "[AsyncLoader] Decode failed: %s", req.path.c_str());
             result.success = false;
         }
     } else {
@@ -90,12 +94,14 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
                req.id, req.path.c_str(), result.data.size());
     }
     } catch (const std::exception& e) {
-        fprintf(stderr, "[AsyncLoader] Exception loading %s: %s\n",
-                req.path.c_str(), e.what());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Resource_LoadFailed,
+            "[AsyncLoader] Exception loading %s: %s",
+            req.path.c_str(), e.what());
         result.success = false;
     } catch (...) {
-        fprintf(stderr, "[AsyncLoader] Unknown exception loading %s: %s\n",
-                req.path.c_str(), "?");
+        DEBUG_ERR(SubSys::Resource, ErrCode::Resource_LoadFailed,
+            "[AsyncLoader] Unknown exception loading %s: %s",
+            req.path.c_str(), "?");
         result.success = false;
     }
     return result;
@@ -104,22 +110,26 @@ AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& r
 int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     if (!m_running) return -1;
     if (!m_assetManager) {
-        fprintf(stderr, "[AsyncLoader] AssetManager unavailable; rejecting: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
+            "[AsyncLoader] AssetManager unavailable; rejecting: %s", path.c_str());
         return -1;
     }
     if (!isPathSafe(path)) {
-        fprintf(stderr, "[AsyncLoader] Path rejected: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
+            "[AsyncLoader] Path rejected: %s", path.c_str());
         return -1;
     }
 
     if (m_pendingCount >= 16) {
-        fprintf(stderr, "[AsyncLoader] Queue full (16 pending), rejecting: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
+            "[AsyncLoader] Queue full (16 pending), rejecting: %s", path.c_str());
         return -1;
     }
 
     auto* jobSystem = BackendRegistry::instance().getJobSystem();
     if (!jobSystem || !jobSystem->isRunning()) {
-        fprintf(stderr, "[AsyncLoader] JobSystem unavailable; rejecting: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
+            "[AsyncLoader] JobSystem unavailable; rejecting: %s", path.c_str());
         return -1;
     }
 
@@ -203,7 +213,8 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
         });
 
     if (jobId == 0) {
-        fprintf(stderr, "[AsyncLoader] Job submission failed: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
+            "[AsyncLoader] Job submission failed: %s", path.c_str());
         return -1;
     }
 
