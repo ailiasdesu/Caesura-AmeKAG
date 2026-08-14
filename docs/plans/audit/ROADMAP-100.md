@@ -68,3 +68,4 @@
 | 20 | lspCall Lua 桥代码生成测试（导出函数 + mock evalRaw）：方法调用/luaString 转义/终止符升级/多参 join/无参（G4 中段，20% 里程碑） | vitest 34/34, tsc 0, ctest 绿, 耦合 PASS | f36b5415 |
 | 21 | jsdom 组件测试基建（G4 中段）：安装 jsdom/@testing-library + SceneTree 组件测试（空态/元素渲染/计数标题/点击跳转 reveal/挂载聚焦/无元素提示）——vi.mock 阻断 Monaco | vitest 40/40, tsc 0, ctest 绿, 耦合 PASS | 4176d232 |
 | 22 | jsdom 组件测试推广（G4 中段）：StatusBar 7 例（offline/connected/scene/token/paused/品牌/组合态）+ ExplorerView 9 例（分组渲染/空态提示/大小写不敏感过滤/错误显示/脚本双击打开含 inspect 失败降级/图片占位打开/OPEN EDITORS 生命周期） | vitest 56/56, tsc 0, ctest 绿, 耦合 PASS | c06d8786 |
+| 23 | jsdom 组件测试推广 II（G4 中段）：OutputPanel 4 例（空态/分级行/500 条上限/引擎不可达静默重试）+ DebugView 11 例（轮询镜像 store/暂停徽章/离线降级/Run 成功失败与禁用态/Stop/断点设置与非数字回退/清空/Continue） | vitest 71/71, tsc 0, ctest 绿, 耦合 PASS | af6a1995 |
