@@ -37,6 +37,7 @@ public:
     float resolutionScale() const override { return 1.0f; }
     bool vfxEnabled() const override { return true; }
     void reset() override {}
+    void setGpuAvailable(bool) override {}
 
 private:
     int* m_destructorCalls = nullptr;
