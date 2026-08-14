@@ -331,8 +331,8 @@ local function collect_macro_defs(tokens)
             end
             local args = {}
             if type(params.args) == "string" then
-                for a in params.args:gmatch("[^,]+") do
-                    a = a:match("^%s*(.-)%s*$")
+                for raw_a in params.args:gmatch("[^,]+") do
+                    local a = raw_a:match("^%s*(.-)%s*$")
                     if #a > 0 then args[#args + 1] = a end
                 end
             end

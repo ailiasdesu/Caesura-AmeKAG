@@ -171,8 +171,8 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
             -- already a list (programmatic callers may pass arrays)
         elseif type(v) == "string" then
             local out = {}
-            for item in v:gmatch("[^,]+") do
-                item = item:match("^%s*(.-)%s*$")  -- trim
+            for raw_item in v:gmatch("[^,]+") do
+                local item = raw_item:match("^%s*(.-)%s*$")  -- trim
                 if #item > 0 then
                     if spec.item_type == "number" then
                         local n = tonumber(item)

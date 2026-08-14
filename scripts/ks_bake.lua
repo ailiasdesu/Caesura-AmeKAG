@@ -103,8 +103,8 @@ if is_script then
         local cmd = "dir /s /b \"" .. d .. "\\*.ks\" 2>nul"
         local pf = io.popen(cmd)
         if pf then
-            for line in pf:lines() do
-                line = line:gsub("\\", "/")
+            for raw_line in pf:lines() do
+                local line = raw_line:gsub("\\", "/")
                 add(line)
             end
             pf:close()

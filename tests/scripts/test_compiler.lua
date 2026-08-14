@@ -236,6 +236,63 @@ local ok9b, v9b = exprLang.evaluateTranslated(ctx9, toksB[1][2].cond, toksB[1][2
 check("9c: translated cond respects variable change",
       ok9b == true and v9b == false)
 
+
+-- ---------------------------------------------------------------------------
+-- 10. Lua 5.4 const-loop-variable regression (round 31 wasmoon spike):
+--     for x in ... do x = ... end is a compile ERROR in 5.4. These paths
+--     were never exercised before; the spike surfaced them.
+-- ---------------------------------------------------------------------------
+local schema = require("kag.schema")
+
+-- 10a. Schema.coerce with a list-typed param (comma-separated string)
+local saved10 = package.loaded["kag"]
+schema.define("__spike_list_test", {
+    colors = { type = "list", item_type = "string" },
+    nums = { type = "list", item_type = "number" },
+    flags = { type = "list", item_type = "boolean" },
+})
+local okL, coL = pcall(schema.coerce, "__spike_list_test",
+    { colors = "red, green, blue", nums = "1,2, 3", flags = "true,no,1" })
+check("10a: list params coerce comma-separated strings",
+      okL and coL.colors[1] == "red" and coL.colors[2] == "green"
+      and coL.colors[3] == "blue"
+      and coL.nums[2] == 2 and coL.nums[3] == 3
+      and coL.flags[1] == true and coL.flags[2] == false and coL.flags[3] == true)
+check("10b: list keeps trimmed elements only", okL and #coL.colors == 3)
+package.loaded["kag"] = saved10
+
+-- 10c. scheduler runtime macro-args path (branch-defined macro forces the
+--      runtime splice path, which re-reads params.args and trims it)
+local scheduler10 = require("scheduler")
+local kag10 = {}
+local disp10 = {}
+setmetatable(kag10, { __index = function(_, k)
+    return function(c2, p2) disp10[#disp10 + 1] = { k, p2 } end
+end})
+package.loaded["kag"] = kag10
+local toks10 = tokenizer.parse(
+    "*start\n"
+    .. "[if exp=\"f.x > 1\"]\n"
+    .. "[macro shout args=\"who,msg\"]\n"
+    .. "[ch text=\"%who% %msg%\"]\n"
+    .. "[endmacro]\n"
+    .. "[endif]\n"
+    .. "[shout who=\"Hero\" msg=\"hi\"]\n")
+compiler.compile(toks10)
+local ctx10 = { f = { x = 2 }, tf = {}, sf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    label_index = toks10._compiled.labels }
+local co10 = coroutine.create(function() scheduler10.run(ctx10, toks10, 1) end)
+while coroutine.status(co10) ~= "dead" do coroutine.resume(co10) end
+check("10c: runtime macro args path survives (no const-var crash)",
+      #disp10 >= 1)
+package.loaded["kag"] = nil
+
+-- 10d. ks_bake line-normalization path is guarded by pcall — just ensure
+--      the module still loads (the loop was fixed).
+local okBake = pcall(require, "ks_bake")
+check("10d: ks_bake loads after loop-var fix", okBake == true)
+
 if failed > 0 then
     print(string.format("COMPILER TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)

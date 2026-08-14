@@ -936,8 +936,8 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.macro_args = ctx.macro_args or {}
                 local args = {}
                 if type(params.args) == "string" then
-                    for a in params.args:gmatch("[^,]+") do
-                        a = a:match("^%s*(.-)%s*$")  -- trim
+                    for raw_a in params.args:gmatch("[^,]+") do
+                        local a = raw_a:match("^%s*(.-)%s*$")  -- trim
                         if #a > 0 then args[#args + 1] = a end
                     end
                 end

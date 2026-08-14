@@ -1,0 +1,8 @@
+{
+  "name": "caesura-web-spike",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "wasmoon": "^2.0.0-next.0"
+  }
+}
