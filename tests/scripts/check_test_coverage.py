@@ -55,6 +55,22 @@ def main():
         if f not in listed:
             problems.append(f"C++ test not in CMakeLists file list: tests/cpp/{f}")
 
+    # --- Editor command-highlight drift ------------------------------------
+    # The editor's Monaco KAG_COMMANDS table must cover every schema contract
+    # command; a missing command renders it as tag.invalid (round 19).
+    editor_lang = os.path.join(ROOT, "editor", "src", "ide", "kagLanguage.ts")
+    doc = os.path.join(ROOT, "docs", "api", "command-contracts.md")
+    if os.path.exists(editor_lang) and os.path.exists(doc):
+        lang_src = read(editor_lang)
+        m = re.search(r"KAG_COMMANDS" + chr(92) + "s*=" + chr(92) + "s*" + chr(92) + "[(.*?)" + chr(92) + "]", lang_src, re.S)
+        editor_cmds = set(re.findall(chr(39) + "([a-z0-9_]+)" + chr(39), m.group(1))) if m else set()
+        doc_src = read(doc)
+        doc_cmds = set(re.findall("^### " + chr(96) + chr(92) + "[([a-z0-9_]+)" + chr(92) + "]", doc_src, re.M))
+        for c in sorted(doc_cmds):
+            if c not in editor_cmds:
+                problems.append(f"Editor highlight missing schema command: {c}")
+        # TEMP-DEBUG
+
     if problems:
         print(f"TEST COVERAGE: {len(problems)} problem(s) found:")
         for p in problems:

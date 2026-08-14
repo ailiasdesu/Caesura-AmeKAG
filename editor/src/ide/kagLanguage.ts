@@ -29,7 +29,7 @@ const KAG_COMMANDS = [
   'rollback', 'toast', 'replay', 'save', 'load', 'listsaves', 'saveplace',
   'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
   'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'set', 'inc', 'random',
-  'assert', 'sma_play', 'sma_stop',
+  'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
   'clear', 'ct', 'endtag', 'endform', 'g', 'br', 'hr', 'cancel', 'close',
 ]
 
