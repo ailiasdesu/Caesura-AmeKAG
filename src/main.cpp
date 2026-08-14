@@ -271,7 +271,7 @@ private:
                     "if not ok or not checker then return '{\"ok\":false,\"errors\":[\"sma_check unavailable\"],\"meta\":{}}' end\n"
                     "local function jl(list) local parts = {} for _, e in ipairs(list) do parts[#parts + 1] = string.format('%q', tostring(e)) end return '[' .. table.concat(parts, ',') .. ']' end\n"
                     "local function jm(meta) local anims = {} for _, a in ipairs(meta.anims or {}) do anims[#anims + 1] = string.format('%q', tostring(a)) end "
-                    "local bt = {} for _, b in ipairs(meta.boneTree or {}) do bt[#bt + 1] = string.format('{\"id\":%d,\"parent\":%d}', b.id, b.parent or -1) end "
+                    "local bt = {} for _, b in ipairs(meta.boneTree or {}) do bt[#bt + 1] = string.format('{\"id\":%d,\"parent\":%d,\"pivot\":[%s,%s]}', b.id, b.parent or -1, tostring(b.pivot and b.pivot[1] or 0), tostring(b.pivot and b.pivot[2] or 0)) end "
                     "local ad = {} for _, d in ipairs(meta.animDetails or {}) do ad[#ad + 1] = string.format('{\"name\":%q,\"duration\":%s,\"tracks\":%s}', tostring(d.name), d.duration or 0, jl(d.tracks or {})) end "
                     "return string.format('{\"bones\":%d,\"anims\":[%s],\"parts\":%d,\"verts\":%d,\"tris\":%d,\"boneTree\":[%s],\"animDetails\":[%s]}', "
                     "meta.bones or 0, table.concat(anims, ','), meta.parts or 0, meta.verts or 0, meta.tris or 0, table.concat(bt, ','), table.concat(ad, ',')) end\n"
