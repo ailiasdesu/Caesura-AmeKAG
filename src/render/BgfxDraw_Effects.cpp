@@ -1,6 +1,7 @@
 // BgfxDraw_Effects.cpp - Post-processing effects (blend, transition, VFX, fillViewport)
 #include "BgfxDraw.h"
 #include "BgfxShaderManager.h"
+#include "ColorFilterMath.h"
 #include "BgfxDeviceCore.h"
 #include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
@@ -131,18 +132,15 @@ void BgfxDraw::submitVFX(uint16_t viewId, bgfx::TextureHandle srcTex,
         { 0.0f, 0.0f, 0.0f }
     };
     // Effect 4 (colorblind/contrast filter): C++ fills the matrix rows
-    // from the active preset (setColorFilter); m0 = color.rgb, m1 =
-    // (blurQuake.x, blurQuake.z, blurQuake.w), m2 = padding.xyz.
+    // from the active preset (setColorFilter) via the shared pure packer.
     VFXParams filtered = params;
     if (effect == 4) {
         const float* m = m_state->device->getColorFilterMatrix();
         if (m) {
-            filtered.color[0] = m[0]; filtered.color[1] = m[1];
-            filtered.color[2] = m[2]; filtered.color[3] = fadeAlpha;
-            filtered.blurQuake[0] = m[3]; filtered.blurQuake[1] = 0.0f;
-            filtered.blurQuake[2] = m[4]; filtered.blurQuake[3] = m[5];
-            filtered.padding[0] = m[6]; filtered.padding[1] = m[7];
-            filtered.padding[2] = m[8];
+            const VfxColorFilterPack p = packVfxColorFilter(m, fadeAlpha);
+            for (int i = 0; i < 4; ++i) filtered.color[i] = p.color[i];
+            for (int i = 0; i < 4; ++i) filtered.blurQuake[i] = p.blurQuake[i];
+            for (int i = 0; i < 3; ++i) filtered.padding[i] = p.padding[i];
         }
     }
     bgfx::setUniform(m_state->shaders->getVFXParams(), &filtered, 3);

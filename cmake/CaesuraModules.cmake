@@ -205,6 +205,7 @@ caesura_add_module(Render
     src/render/BgfxDraw_Blit.cpp
     src/render/BgfxDraw_Effects.cpp
     src/render/BgfxQuadBatch.cpp
+    src/render/ColorFilterMath.cpp
     src/render/BgfxShaderManager.cpp
     src/render/BgfxDebugCallback.cpp
     src/render/RTTManager.cpp
