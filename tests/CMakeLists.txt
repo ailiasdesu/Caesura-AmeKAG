@@ -23,6 +23,8 @@ set(TEST_SOURCES
     cpp/test_audio.cpp
     cpp/test_audio_integration.cpp
     cpp/test_gpu_monitor.cpp
+    cpp/test_rtt_pool.cpp
+    cpp/test_text_cache.cpp
     cpp/test_lua_manager.cpp
     cpp/test_script_bindings.cpp
     cpp/test_script_boundary.cpp
@@ -149,7 +151,7 @@ add_caesura_doctest(CaesuraScriptTests
 add_caesura_doctest(CaesuraRenderResourceTests
     LABELS render resource
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
+    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
 )
 add_caesura_doctest(CaesuraAudioTests
     LABELS audio
