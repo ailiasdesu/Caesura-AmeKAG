@@ -17,6 +17,7 @@
 #include <bgfx/bgfx.h>
 #include <SDL3/SDL.h>
 #include <cstring>
+#include "debug/api/DebugLog.h"
 
 namespace Caesura {
 
@@ -31,7 +32,7 @@ bool OpenGLReadbackRenderPath::init(int width, int height) {
     if (!m_glInitialized) {
         GLenum glewErr = glewInit();
         if (glewErr != GLEW_OK) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+            DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
                 "[Live2D/GL] GLEW init warning: %s", glewGetErrorString(glewErr));
         }
     }
@@ -50,14 +51,14 @@ bool OpenGLReadbackRenderPath::init(int width, int height) {
 
     GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (fbStatus != GL_FRAMEBUFFER_COMPLETE) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/GL] FBO incomplete: 0x%04X", fbStatus);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         return false;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    SDL_Log("[Live2D/GL] Render path ready (%dx%d) with dedicated FBO", width, height);
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D/GL] Render path ready (%dx%d) with dedicated FBO", width, height);
     return true;
 }
 

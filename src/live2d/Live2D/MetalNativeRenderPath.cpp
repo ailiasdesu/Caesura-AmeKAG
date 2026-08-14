@@ -7,6 +7,7 @@
 
 #include "MetalNativeRenderPath.h"
 #include <SDL3/SDL.h>
+#include "debug/api/DebugLog.h"
 
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
@@ -31,7 +32,7 @@ static id<MTLDevice> getBgfxMetalDevice() {
 bool MetalNativeRenderPath::init(int width, int height) {
     m_device = getBgfxMetalDevice();
     if (!m_device) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/Metal] bgfx MTLDevice not available, falling back");
         return false;
     }
@@ -43,12 +44,12 @@ bool MetalNativeRenderPath::init(int width, int height) {
 
     m_commandQueue = [m_device newCommandQueue];
     if (!m_commandQueue) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/Metal] newCommandQueue failed, falling back");
         return false;
     }
 
-    SDL_Log("[Live2D/Metal] Render path ready — shared device (bgfx Metal)");
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D/Metal] Render path ready — shared device (bgfx Metal)");
     return true;
 }
 

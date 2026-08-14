@@ -95,6 +95,8 @@ const char* SubSysName(SubSys s) {
         case SubSys::Platform:  return "PLAT";
         case SubSys::Engine:    return "ENGINE";
         case SubSys::Dbg:       return "DEBUG";
+        case SubSys::Live2D:    return "LIVE2D";
+        case SubSys::MiniGame:  return "MINIGAME";
     }
     return "UNKNOWN";
 }

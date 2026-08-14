@@ -15,6 +15,7 @@ enum class DbgLevel : uint8_t {
 };
 enum class SubSys : uint8_t {
     Render = 0, Audio = 1, Scripting = 2, Input = 3, Platform = 4, Engine = 5, Dbg = 6,
+    Live2D = 7, MiniGame = 8,
 };
 enum class ErrCode : uint32_t {
     Ok = 0,

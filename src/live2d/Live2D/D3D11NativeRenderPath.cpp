@@ -1,6 +1,7 @@
 #if defined(CAESURA_LIVE2D) && defined(_WIN32)
 
 #include "D3D11NativeRenderPath.h"
+#include "debug/api/DebugLog.h"
 
 // bgfx internals
 #include <bgfx/bgfx.h>
@@ -43,7 +44,7 @@ static ID3D11DeviceContext* getBgfxD3D11Context() {
 bool D3D11NativeRenderPath::init(int width, int height) {
     m_device = getBgfxD3D11Device();
     if (!m_device) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/D3D11] bgfx D3D11 device not available, falling back");
         return false;
     }
@@ -54,7 +55,7 @@ bool D3D11NativeRenderPath::init(int width, int height) {
     // Required before any CubismRenderer_D3D11::CreateRenderer() (model load).
     CubismRenderer_D3D11::SetConstantSettings(1, m_device);
 
-    SDL_Log("[Live2D/D3D11] Render path ready — shared device (bgfx D3D11)");
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D/D3D11] Render path ready — shared device (bgfx D3D11)");
     return true;
 }
 
@@ -93,14 +94,14 @@ bool D3D11NativeRenderPath::createModelTarget(CsmRendering::CubismRenderer* rend
     ModelTarget target;
     HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &target.tex);
     if (FAILED(hr)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D/D3D11] CreateTexture2D failed: 0x%08X", hr);
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D/D3D11] CreateTexture2D failed: 0x%08X", hr);
         return false;
     }
     hr = m_device->CreateRenderTargetView(target.tex, nullptr, &target.rtv);
     if (FAILED(hr)) {
         // Partial-failure rollback (P2-2): free everything so the next frame retries.
         target.tex->Release();
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D/D3D11] CreateRenderTargetView failed: 0x%08X", hr);
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D/D3D11] CreateRenderTargetView failed: 0x%08X", hr);
         return false;
     }
 
@@ -146,7 +147,7 @@ ID3D11ShaderResourceView* D3D11NativeRenderPath::createModelTexture(
     ID3D11Texture2D* tex = nullptr;
     HRESULT hr = m_device->CreateTexture2D(&desc, &initData, &tex);
     if (FAILED(hr)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/D3D11] CreateTexture2D (model) failed: 0x%08X", hr);
         return nullptr;
     }
@@ -154,7 +155,7 @@ ID3D11ShaderResourceView* D3D11NativeRenderPath::createModelTexture(
     hr = m_device->CreateShaderResourceView(tex, nullptr, &srv);
     tex->Release();
     if (FAILED(hr)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/D3D11] CreateShaderResourceView (model) failed: 0x%08X", hr);
         return nullptr;
     }

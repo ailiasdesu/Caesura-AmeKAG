@@ -21,6 +21,7 @@
 
 #include <SDL3/SDL.h>
 #include <cstring>
+#include "debug/api/DebugLog.h"
 
 namespace Caesura {
 
@@ -33,7 +34,7 @@ using namespace Csm::Rendering;
 bool OpenGLSharedRenderPath::init(int width, int height) {
     const GLenum glewErr = glewInit();
     if (glewErr != GLEW_OK) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/GL] GLEW init warning: %s", glewGetErrorString(glewErr));
     }
     m_width = width;
@@ -73,13 +74,13 @@ bool OpenGLSharedRenderPath::createTargetTexture(int width, int height) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D/GL] FBO incomplete: 0x%04X", status);
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D/GL] FBO incomplete: 0x%04X", status);
         return false;
     }
 
     m_width = width;
     m_height = height;
-    SDL_Log("[Live2D/GL] Shared GL texture + FBO ready (%dx%d)", width, height);
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D/GL] Shared GL texture + FBO ready (%dx%d)", width, height);
     return true;
 }
 

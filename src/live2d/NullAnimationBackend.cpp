@@ -1,5 +1,6 @@
 // NullAnimationBackend.cpp - static-image fallback for SDK-less environments.
 #include "NullAnimationBackend.h"
+#include "../debug/api/DebugLog.h"
 #include "../di/BackendRegistry.h"
 #include "../render/api/ITextureManager.h"
 #include "../render/api/IRenderDevice.h"
@@ -25,7 +26,7 @@ bool NullAnimationBackend::init() {
     m_textureManager = registry.getTextureManager();
     m_renderDevice = registry.getRenderDevice();
     m_initialized = true;
-    printf("[NullAnimation] PNG fallback initialized.\n");
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[NullAnimation] PNG fallback initialized.");
     return true;
 }
 
@@ -50,7 +51,7 @@ int NullAnimationBackend::loadModel(const std::string& path, const std::string& 
 
     const uint32_t texId = m_textureManager->loadTexture(path);
     if (texId == 0) {
-        printf("[NullAnimation] Failed to load image: %s\n", path.c_str());
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[NullAnimation] Failed to load image: %s", path.c_str());
         return 0;
     }
 
@@ -59,8 +60,8 @@ int NullAnimationBackend::loadModel(const std::string& path, const std::string& 
     m_textureManager->getTextureSizeById(texId, width, height);
     if (width == 0 || height == 0) {
         m_textureManager->destroyTexture(texId);
-        fprintf(stderr, "[NullAnimation] Image has no usable dimensions: %s\n",
-                path.c_str());
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
+                "[NullAnimation] Image has no usable dimensions: %s", path.c_str());
         return 0;
     }
 
@@ -70,7 +71,8 @@ int NullAnimationBackend::loadModel(const std::string& path, const std::string& 
     sprite.width = width;
     sprite.height = height;
     m_sprites[handle] = sprite;
-    printf("[NullAnimation] Loaded static sprite #%d: %s (tex=%u)\n", handle, path.c_str(), texId);
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok,
+            "[NullAnimation] Loaded static sprite #%d: %s (tex=%u)", handle, path.c_str(), texId);
     return handle;
 }
 

@@ -29,6 +29,7 @@
 #include "ILive2DRenderPath.h"
 #include "../PathConfinement.h"
 #include "../../render/api/IRenderDevice.h"
+#include "debug/api/DebugLog.h"
 #ifdef _WIN32
 #include "D3D11NativeRenderPath.h"
 #else
@@ -102,7 +103,7 @@ namespace {
     };
 
     static void cubismLog(const csmChar* message) {
-        SDL_Log("[Live2D] %s", message);
+        DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] %s", message);
     }
 
     // CubismFramework file loader (used for FrameworkShaders/*.fx).
@@ -186,7 +187,7 @@ bool Live2DBackend::init() {
     const auto rendererType = bgfx::getRendererType();
 #ifdef _WIN32
     if (rendererType != bgfx::RendererType::Direct3D11) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D] Windows build requires the bgfx D3D11 renderer");
         return false;
     }
@@ -194,7 +195,7 @@ bool Live2DBackend::init() {
     if (rendererType != bgfx::RendererType::OpenGL &&
         rendererType != bgfx::RendererType::OpenGLES &&
         rendererType != bgfx::RendererType::Metal) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D] Unsupported macOS bgfx renderer: %s",
             bgfx::getRendererName(rendererType));
         return false;
@@ -202,7 +203,7 @@ bool Live2DBackend::init() {
 #else
     if (rendererType != bgfx::RendererType::OpenGL &&
         rendererType != bgfx::RendererType::OpenGLES) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D] Linux build requires the bgfx OpenGL renderer");
         return false;
     }
@@ -216,7 +217,7 @@ bool Live2DBackend::init() {
     option.ReleaseBytesFunction = cubismReleaseBytes;
 
     if (!CubismFramework::StartUp(&allocator, &option)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] StartUp failed");
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D] StartUp failed");
         return false;
     }
     CubismFramework::Initialize();
@@ -261,7 +262,7 @@ bool Live2DBackend::init() {
     }
 #endif
 
-    SDL_Log("[Live2D] CubismFramework 5 initialized (render path: %s)", m_renderPath->name());
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] CubismFramework 5 initialized (render path: %s)", m_renderPath->name());
     return true;
 }
 
@@ -301,7 +302,7 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
     // 1. Load .model3.json
     model.settingJson = readFile(model.dir);
     if (model.settingJson.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Cannot read: %s", model.dir.c_str());
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D] Cannot read: %s", model.dir.c_str());
         // The .model3.json read failed: bail out before allocating model.setting.
         // model.setting is still null here, so the null guard in ~Live2DModel()
         // handles cleanup on the way out.
@@ -340,14 +341,14 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
             if (!stbi_info_from_memory(
                     reinterpret_cast<const stbi_uc*>(texData.data()),
                     static_cast<int>(texData.size()), &iw, &ih, &ic)) {
-                SDL_Log("[Live2D] Texture %d: invalid image header: %s", i, texPath.c_str());
+                DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Texture %d: invalid image header: %s", i, texPath.c_str());
                 continue;
             }
             constexpr int kMaxTextureDim = 16384;
             constexpr uint64_t kMaxTextureBytes = 256ull * 1024ull * 1024ull;
             if (iw <= 0 || ih <= 0 || iw > kMaxTextureDim || ih > kMaxTextureDim ||
                 static_cast<uint64_t>(iw) * static_cast<uint64_t>(ih) * 4u > kMaxTextureBytes) {
-                SDL_Log("[Live2D] Texture %d: dimensions out of range: %dx%d", i, iw, ih);
+                DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Texture %d: dimensions out of range: %dx%d", i, iw, ih);
                 continue;
             }
             // Create Cubism texture from loaded PNG data
@@ -372,9 +373,9 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
                 model.textures[i] = createBgfxTexture(w, h, pixels);
 #endif
                 stbi_image_free(pixels);
-                SDL_Log("[Live2D] Texture %d loaded: %dx%d", i, w, h);
+                DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Texture %d loaded: %dx%d", i, w, h);
             } else {
-                SDL_Log("[Live2D] Texture %d failed to decode: %s", i, texPath.c_str());
+                DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Texture %d failed to decode: %s", i, texPath.c_str());
             }
         }
     }
@@ -417,7 +418,7 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
         }
     }
 
-    SDL_Log("[Live2D] Model loaded: %s", model.name.c_str());
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Model loaded: %s", model.name.c_str());
     return true;
 }
 
@@ -432,7 +433,7 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
 #endif
 
     if (!model.renderer) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Failed to create OpenGL renderer");
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok, "[Live2D] Failed to create OpenGL renderer");
         return false;
     }
 
@@ -444,7 +445,7 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
     );
     model.bgfxTexValid = bgfx::isValid(model.bgfxTex);
 
-    SDL_Log("[Live2D] Renderer created (%dx%d)", model.renderWidth, model.renderHeight);
+    DEBUG_INFO(SubSys::Live2D, ErrCode::Ok, "[Live2D] Renderer created (%dx%d)", model.renderWidth, model.renderHeight);
     return true;
 }
 
@@ -492,12 +493,12 @@ bool Live2DBackend::playMotion(int handle, const std::string& name) {
     auto mit = model.motionCache.find(name);
     if (mit == model.motionCache.end()) {
         // Fallback: substring match over cached keys (e.g. "wave" -> "wave/0").
-        for (const auto& [key, data] : model.motionCache) {
-            if (key.find(name) != std::string::npos) { mit = model.motionCache.find(key); break; }
+        for (auto it = model.motionCache.begin(); it != model.motionCache.end(); ++it) {
+            if (it->first.find(name) != std::string::npos) { mit = it; break; }
         }
     }
     if (mit == model.motionCache.end()) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[Live2D] Motion not found: %s", name.c_str());
+        DEBUG_WARN(SubSys::Live2D, ErrCode::Ok, "[Live2D] Motion not found: %s", name.c_str());
         return false;
     }
 
@@ -565,7 +566,7 @@ void Live2DBackend::setParameter(int handle, const std::string& param, float val
 int Live2DBackend::loadModel(const std::string& path, const std::string& name) {
     const std::string confined = confineToModelRoot(path);
     if (confined.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
             "[Live2D] Model path outside model root: %s", path.c_str());
         return -1;
     }
