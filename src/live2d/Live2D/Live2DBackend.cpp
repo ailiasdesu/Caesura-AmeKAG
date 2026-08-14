@@ -391,6 +391,32 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
         }
     }
 
+    // 7b. Cache motions (P1-1: motionCache was never populated, so
+    // playMotion() could never find any clip).
+    const csmInt32 motionCount = model.setting->GetMotionCount();
+    if (motionCount > 0) {
+        for (csmInt32 i = 0; i < motionCount; ++i) {
+            const char* groupName = model.setting->GetMotionGroupName(i);
+            if (!groupName) continue;
+            const std::string group(groupName);
+            const csmInt32 groupMotionCount = model.setting->GetMotionCount(groupName);
+            for (csmInt32 j = 0; j < groupMotionCount; ++j) {
+                const char* fileName = model.setting->GetMotionFileName(groupName, j);
+                if (!fileName) continue;
+                std::string motionPath = joinPath(dir, fileName);
+                auto motionData = readFile(motionPath);
+                if (motionData.empty()) continue;
+                // Key the clip by its file stem and by "group/index" so
+                // playMotion(name) and playMotion("group/index") both hit.
+                const std::string stem = std::filesystem::path(fileName).stem().string();
+                if (model.motionCache.find(stem) == model.motionCache.end()) {
+                    model.motionCache[stem] = motionData;
+                }
+                model.motionCache[group + "/" + std::to_string(j)] = motionData;
+            }
+        }
+    }
+
     SDL_Log("[Live2D] Model loaded: %s", model.name.c_str());
     return true;
 }
