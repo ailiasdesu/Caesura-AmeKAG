@@ -119,6 +119,19 @@ def main():
     st, resp = request("/api/pick?x=-1&y=0")
     check("pick-invalid-coords", st == 400, "%s %s" % (st, resp))
 
+    # /api/stats: engine runtime statistics. Status ok and every numeric
+    # budget/counter field must come back as an int (typed assertions).
+    st, resp = request("/api/stats")
+    check("stats-endpoint", st == 200 and resp.get("status") == "ok"
+          and isinstance(resp.get("texture_budget_mb"), int)
+          and isinstance(resp.get("texture_tier"), int)
+          and isinstance(resp.get("texture_tier_name"), str)
+          and isinstance(resp.get("mesh_count"), int)
+          and isinstance(resp.get("job_workers"), int)
+          and isinstance(resp.get("job_pending"), int)
+          and isinstance(resp.get("lua_kb"), int),
+          "%s %s" % (st, resp))
+
     # /api/sma/validate (round 19): valid asset ok, broken asset lists
     # field-located violations, unsafe paths rejected.
     st, resp = request("/api/sma/validate?path=demo/assets/sma/hero.json")
