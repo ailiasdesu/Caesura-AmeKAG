@@ -117,3 +117,46 @@ describe('TimelineView (component)', () => {
     expect(screen.getByText('No matching elements')).toBeTruthy()
   })
 })
+
+describe('TimelineView engine exec status (G4)', () => {
+  it('shows the live exec bar when the engine is connected and running', () => {
+    useEditor.setState({
+      docs: [doc(KS)],
+      activePath: 'assets/script/main.ks',
+      engineConnected: true,
+      engineCmd: '[ch]',
+      engineToken: 7,
+    })
+    render(<TimelineView />)
+    const bar = document.querySelector('.timeline-exec')
+    expect(bar).toBeTruthy()
+    expect(bar?.textContent).toContain('[ch]')
+    expect(bar?.textContent).toContain('token 7')
+    expect(bar?.textContent).toContain('▶')
+  })
+
+  it('hides the exec bar when the engine is disconnected', () => {
+    useEditor.setState({
+      docs: [doc(KS)],
+      activePath: 'assets/script/main.ks',
+      engineConnected: false,
+      engineCmd: '[ch]',
+      engineToken: 7,
+    })
+    render(<TimelineView />)
+    expect(screen.queryByText('▶')).toBeNull()
+    expect(screen.queryByText('token 7')).toBeNull()
+  })
+
+  it('hides the exec bar when no command is executing yet', () => {
+    useEditor.setState({
+      docs: [doc(KS)],
+      activePath: 'assets/script/main.ks',
+      engineConnected: true,
+      engineCmd: '',
+      engineToken: 0,
+    })
+    render(<TimelineView />)
+    expect(screen.queryByText('▶')).toBeNull()
+  })
+})

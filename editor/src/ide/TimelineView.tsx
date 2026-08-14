@@ -56,6 +56,9 @@ export function TimelineView() {
   const activePath = useEditor((s) => s.activePath)
   const requestReveal = useEditor((s) => s.requestReveal)
   const setInspected = useEditor((s) => s.setInspected)
+  const engineCmd = useEditor((s) => s.engineCmd)
+  const engineToken = useEditor((s) => s.engineToken)
+  const engineConnected = useEditor((s) => s.engineConnected)
   const [filter, setFilter] = useState<SceneFilter>('all')
 
   const active = docs.find((d) => d.path === activePath) ?? null
@@ -93,6 +96,14 @@ export function TimelineView() {
         <span className="spacer" />
         <span className="scene-counts">{visible.length} sec</span>
       </div>
+      {engineConnected && engineCmd && (
+        <div className="timeline-exec" title="Engine execution position">
+          <span className="exec-live">▶</span>
+          <span className="exec-cmd">{engineCmd}</span>
+          <span className="spacer" />
+          <span className="scene-counts">token {engineToken}</span>
+        </div>
+      )}
       <div className="timeline-filters">
         {FILTERS.map((f) => (
           <button
