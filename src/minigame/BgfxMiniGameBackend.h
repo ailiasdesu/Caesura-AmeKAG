@@ -1,6 +1,8 @@
 #pragma once
 #include "api/IMiniGameBackend.h"
+#include "api/MiniGameCommands.h"
 #include <cstdint>  // fixed-width types (GCC strict)
+#include <cstddef>  // std::size_t
 #include "../input/api/IInputRouter.h"
 #include "MiniMaterial.h"
 #include "MiniGeometry.h"
@@ -89,45 +91,27 @@ private:
     void submitObject(const MiniObject& obj);
     void runCollisionDetection();
 
-    // P2 cleanup: static Lua dispatch table. luaCall looks up the method
-    // name in a constexpr table of {name, handler} pairs; each handler is a
-    // static member so it can reach private state through the instance ref.
-    static int luaSpawnCube(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSpawnSphere(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSpawnPlane(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaRemoveObject(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetCamera(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaCreateMaterial(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetMaterial(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetAmbient(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetDirectional(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaAddPointLight(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaRemoveLight(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaCheckCollision(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetCollision(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetVelocity(BgfxMiniGameBackend& self, lua_State* L);
-    static int luaSetGravity(BgfxMiniGameBackend& self, lua_State* L);
+    // P2 cleanup: static Lua dispatch table. Both the handler declarations
+    // and the constexpr {name, handler} table are generated from the
+    // CAESURA_MINIGAME_COMMANDS X-macro (api/MiniGameCommands.h), the single
+    // source of truth for the 15 command names — the table cannot drift from
+    // the Lua binding, and vice versa. Handlers are static members so they
+    // can reach private state through the instance ref.
+#define CAESURA_MG_DECL(snake, camel) \
+    static int camel(BgfxMiniGameBackend& self, lua_State* L);
+    CAESURA_MINIGAME_COMMANDS(CAESURA_MG_DECL)
+#undef CAESURA_MG_DECL
     struct LuaMethod {
         const char* name;
         int (*fn)(BgfxMiniGameBackend&, lua_State*);
     };
+#define CAESURA_MG_ENTRY(snake, camel) {#snake, &camel},
     static constexpr LuaMethod kLuaMethods[] = {
-        {"spawn_cube",        &luaSpawnCube},
-        {"spawn_sphere",      &luaSpawnSphere},
-        {"spawn_plane",       &luaSpawnPlane},
-        {"remove_object",     &luaRemoveObject},
-        {"set_camera",        &luaSetCamera},
-        {"create_material",   &luaCreateMaterial},
-        {"set_material",      &luaSetMaterial},
-        {"set_ambient",       &luaSetAmbient},
-        {"set_directional",   &luaSetDirectional},
-        {"add_point_light",   &luaAddPointLight},
-        {"remove_light",      &luaRemoveLight},
-        {"check_collision",   &luaCheckCollision},
-        {"set_collision",     &luaSetCollision},
-        {"set_velocity",      &luaSetVelocity},
-        {"set_gravity",       &luaSetGravity},
+        CAESURA_MINIGAME_COMMANDS(CAESURA_MG_ENTRY)
     };
+#undef CAESURA_MG_ENTRY
+    static constexpr std::size_t kLuaMethodCount =
+        sizeof(kLuaMethods) / sizeof(kLuaMethods[0]);
 
     IRenderDevice* m_renderDevice = nullptr;
     bool m_active = false;

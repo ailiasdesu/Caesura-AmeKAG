@@ -9,6 +9,7 @@ extern "C" {
 }
 #include "MiniGameBinding.h"
 #include "../../minigame/api/IMiniGameBackend.h"
+#include "../../minigame/api/MiniGameCommands.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -46,21 +47,13 @@ static int lua_MiniGame_dispatch(lua_State* L, const char* method) {
         return lua_MiniGame_dispatch(L, method);                             \
     }
 
-MINIGAME_DISPATCH(spawn_cube, "spawn_cube")
-MINIGAME_DISPATCH(spawn_sphere, "spawn_sphere")
-MINIGAME_DISPATCH(spawn_plane, "spawn_plane")
-MINIGAME_DISPATCH(remove_object, "remove_object")
-MINIGAME_DISPATCH(set_camera, "set_camera")
-MINIGAME_DISPATCH(create_material, "create_material")
-MINIGAME_DISPATCH(set_material, "set_material")
-MINIGAME_DISPATCH(set_ambient, "set_ambient")
-MINIGAME_DISPATCH(set_directional, "set_directional")
-MINIGAME_DISPATCH(add_point_light, "add_point_light")
-MINIGAME_DISPATCH(remove_light, "remove_light")
-MINIGAME_DISPATCH(check_collision, "check_collision")
-MINIGAME_DISPATCH(set_collision, "set_collision")
-MINIGAME_DISPATCH(set_velocity, "set_velocity")
-MINIGAME_DISPATCH(set_gravity, "set_gravity")
+// Command dispatch stubs are generated from the single source of truth
+// (CAESURA_MINIGAME_COMMANDS in MiniGameCommands.h), so the Lua-visible names
+// cannot drift from the backend table. Each expansion makes:
+//     static int lua_MiniGame_spawn_cube(lua_State* L) { ... }
+#define CAESURA_MG_STUB(snake, camel) MINIGAME_DISPATCH(snake, #snake)
+CAESURA_MINIGAME_COMMANDS(CAESURA_MG_STUB)
+#undef CAESURA_MG_STUB
 
 // ===========================================================================
 // Lifecycle methods (not part of luaCall)
@@ -106,29 +99,20 @@ static int lua_MiniGame_is_active(lua_State* L) {
 
 // ===========================================================================
 
+// Command rows are generated from the single source of truth
+// (CAESURA_MINIGAME_COMMANDS in MiniGameCommands.h); the dispatch-stub names
+// are exactly lua_MiniGame_##snake (snake_case), so registration stays aligned.
+#define CAESURA_MG_REG(snake, camel) { #snake, lua_MiniGame_##snake },
 static const luaL_Reg mini_game_functions[] = {
-    { "spawn_cube",      lua_MiniGame_spawn_cube      },
-    { "spawn_sphere",    lua_MiniGame_spawn_sphere    },
-    { "spawn_plane",     lua_MiniGame_spawn_plane     },
-    { "remove_object",   lua_MiniGame_remove_object   },
-    { "set_camera",      lua_MiniGame_set_camera      },
-    { "create_material", lua_MiniGame_create_material },
-    { "set_material",    lua_MiniGame_set_material    },
-    { "set_ambient",     lua_MiniGame_set_ambient     },
-    { "set_directional", lua_MiniGame_set_directional },
-    { "add_point_light", lua_MiniGame_add_point_light },
-    { "remove_light",    lua_MiniGame_remove_light    },
-    { "check_collision", lua_MiniGame_check_collision },
-    { "set_collision",   lua_MiniGame_set_collision   },
-    { "set_velocity",    lua_MiniGame_set_velocity    },
-    { "set_gravity",     lua_MiniGame_set_gravity     },
-    { "load_scene",      lua_MiniGame_load_scene      },
-    { "unload_scene",    lua_MiniGame_unload_scene    },
-    { "enter",           lua_MiniGame_enter           },
-    { "leave",           lua_MiniGame_leave           },
-    { "is_active",       lua_MiniGame_is_active       },
+    CAESURA_MINIGAME_COMMANDS(CAESURA_MG_REG)
+    { "load_scene",      lua_MiniGame_load_scene   },
+    { "unload_scene",    lua_MiniGame_unload_scene },
+    { "enter",           lua_MiniGame_enter        },
+    { "leave",           lua_MiniGame_leave        },
+    { "is_active",       lua_MiniGame_is_active    },
     { nullptr, nullptr }
 };
+#undef CAESURA_MG_REG
 
 void registerMiniGameBinding(lua_State* L) {
     luaL_newlib(L, mini_game_functions);
