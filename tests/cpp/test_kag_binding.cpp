@@ -6,7 +6,6 @@
 #include "script/bindings/VFXBinding.h"
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
-#include "script/bindings/UnifiedBinding.h"
 #include <thread>
 
 extern "C" {
@@ -28,7 +27,6 @@ static LuaManager* initLuaWithBindings() {
     registerVFXBinding(L);
     registerDebugBinding(L);
     registerDevCoreBinding(L);
-    registerUnifiedBackendBinding(L);
     return lm;
 }
 
@@ -126,14 +124,4 @@ TEST_CASE("DevCore global table exists") {
     lua_pop(L, 1);
     delete lm;
 }
-
-TEST_CASE("registerUnifiedBackendBinding no-crash") {
-    auto* lm = initLuaWithBindings();
-    REQUIRE(lm != nullptr);
-    lua_State* L = lm->state();
-    registerUnifiedBackendBinding(L);
-    delete lm;
-}
-
-
 

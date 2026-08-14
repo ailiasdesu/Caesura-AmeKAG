@@ -5,7 +5,6 @@
 #include "script/bindings/RenderBinding.h"
 #include "script/bindings/DevCoreBinding.h"
 #include "script/bindings/DebugBinding.h"
-#include "script/bindings/UnifiedBinding.h"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -27,7 +26,6 @@ static LuaManager* initDemoLua() {
     registerRenderBinding(L);
     registerDevCoreBinding(L);
     registerDebugBinding(L);
-    registerUnifiedBackendBinding(L);
     return lm;
 }
 

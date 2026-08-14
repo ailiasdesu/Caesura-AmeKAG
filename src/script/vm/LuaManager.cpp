@@ -9,11 +9,8 @@
 #include "../bindings/RenderBinding.h"
 #include "../bindings/DevCoreBinding.h"
 #include "../bindings/DebugBinding.h"
-// [R8-FIX] UnifiedBinding is deprecated as of spec [0.3].
-// The _CAESURA_BACKEND proxy is no longer registered by default.
-// Lua scripts use backend.lua which falls back to direct KAG/Render/DevCore calls.
-// UnifiedBinding.h/.cpp are retained for reference only - they are NOT compiled into the engine.
-// #include "UnifiedBinding.h"  // deprecated, BackendFactory handles _CAESURA_BACKEND
+// [R8-FIX] UnifiedBinding removed (round 40+1): the _CAESURA_BACKEND proxy is
+// superseded by backend.lua (BackendFactory) with direct KAG/Render/DevCore calls.
 #include "../bindings/VFXBinding.h"
 #include "../bindings/MiniGameBinding.h"
 #include "../bindings/SmaBinding.h"

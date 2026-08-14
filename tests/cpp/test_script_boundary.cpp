@@ -6,7 +6,6 @@
 #include "script/bindings/VFXBinding.h"
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
-#include "script/bindings/UnifiedBinding.h"
 #include "script/state/GameState.h"
 #include "di/BackendRegistry.h"
 #include "render/ParticleSystem.h"
@@ -31,7 +30,6 @@ static LuaManager* initKAGLua() {
     registerVFXBinding(L);
     registerDebugBinding(L);
     registerDevCoreBinding(L);
-    registerUnifiedBackendBinding(L);
     return lm;
 }
 

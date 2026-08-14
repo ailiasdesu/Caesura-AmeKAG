@@ -8,7 +8,6 @@
 #include "script/bindings/MiniGameBinding.h"
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
-#include "script/bindings/UnifiedBinding.h"
 #include "script/bindings/SteamBinding.h"
 #include "di/BackendRegistry.h"
 #include "input/InputRouter.h"
@@ -69,7 +68,6 @@ static LuaManager* initBindingLua() {
     registerMiniGameBinding(L);
     registerDebugBinding(L);
     registerDevCoreBinding(L);
-    registerUnifiedBackendBinding(L);
     return lm;
 }
 
@@ -280,52 +278,6 @@ TEST_CASE("Bindings: KAG global table must have expected APIs") {
     CHECK(lua_isfunction(L, -1));
     lua_pop(L, 1);
     lua_pop(L, 1);
-    delete lm;
-}
-
-TEST_CASE("Bindings: unified render delegates exact arguments and results") {
-    auto* lm = initBindingLua();
-    REQUIRE(lm != nullptr);
-    lua_State* L = lm->state();
-
-    const int result = luaL_dostring(L,
-        "local text_args\n"
-        "KAG.render_text = function(...)\n"
-        "  text_args = table.pack(...)\n"
-        "  return true, 'text-forwarded'\n"
-        "end\n"
-        "KAG.clear_text = function(...)\n"
-        "  return select('#', ...), 'clear-forwarded'\n"
-        "end\n"
-        "KAG.render_ruby = function(...)\n"
-        "  return select('#', ...), 'ruby-forwarded'\n"
-        "end\n"
-        "KAG.line_height = function(...) assert(select('#', ...) == 0); return 31 end\n"
-        "KAG.is_voice_playing = function(...)\n"
-        "  return select('#', ...), 'voice-forwarded'\n"
-        "end\n"
-        "local ok, marker = _CAESURA_BACKEND.render(\n"
-        "  'render_text', 'dialogue', 12.5, 34.25, 10, 20, 30, 40)\n"
-        "assert(ok == true and marker == 'text-forwarded')\n"
-        "assert(text_args.n == 7)\n"
-        "assert(text_args[1] == 'dialogue')\n"
-        "assert(text_args[2] == 12.5 and text_args[3] == 34.25)\n"
-        "assert(text_args[4] == 10 and text_args[5] == 20)\n"
-        "assert(text_args[6] == 30 and text_args[7] == 40)\n"
-        "local argc, clear_marker = _CAESURA_BACKEND.render('clear_text')\n"
-        "assert(argc == 0 and clear_marker == 'clear-forwarded')\n"
-        "local ruby_argc, ruby_marker = _CAESURA_BACKEND.render(\n"
-        "  'render_ruby', 'base', 'ruby', 1, 2, 3, 4, 5, 6)\n"
-        "assert(ruby_argc == 8 and ruby_marker == 'ruby-forwarded')\n"
-        "assert(_CAESURA_BACKEND.render('line_height') == 31)\n"
-        "local voice_argc, voice_marker = _CAESURA_BACKEND.audio('is_playing')\n"
-        "assert(voice_argc == 0 and voice_marker == 'voice-forwarded')");
-    if (result != LUA_OK) {
-        MESSAGE("Lua error: "
-                << (lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown"));
-    }
-    CHECK(result == LUA_OK);
-
     delete lm;
 }
 

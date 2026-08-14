@@ -6,7 +6,6 @@
 #include "script/bindings/VFXBinding.h"
 #include "script/bindings/DebugBinding.h"
 #include "script/bindings/DevCoreBinding.h"
-#include "script/bindings/UnifiedBinding.h"
 
 extern "C" {
 #include <lua.h>
@@ -26,7 +25,6 @@ static LuaManager* initKAGLua() {
     registerVFXBinding(L);
     registerDebugBinding(L);
     registerDevCoreBinding(L);
-    registerUnifiedBackendBinding(L);
     return lm;
 }
 
