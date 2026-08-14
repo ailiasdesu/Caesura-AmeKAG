@@ -1,7 +1,6 @@
 #pragma once
 #include "api/IGpuMonitor.h"
 #include <deque>
-#include <deque>
 
 namespace Caesura {
 

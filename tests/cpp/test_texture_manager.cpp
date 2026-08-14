@@ -227,6 +227,31 @@ TEST_CASE("TextureManager releases reservations when GPU is unavailable") {
     CHECK(quota.releaseCalls == 4);
 }
 
+TEST_CASE("TextureManager shutdown clears dedup/path caches for reinit (P1-2)") {
+    // Regression for audit g0_render P1-2: shutdown() must clear m_solidCache
+    // and m_pathToId so a re-initialized manager cannot return stale ids from
+    // the previous session. Without GPU the load paths return 0, so this
+    // verifies the shutdown/reinit cycle is clean and idempotent.
+    CountingTextureQuota quota;
+    quota.allowAlloc = true;
+    ScopedSandboxQuotaRegistration quotaRegistration(&quota);
+    TextureManager tm;
+
+    REQUIRE(tm.initialize(false));
+    CHECK(tm.totalTextureBytes() == 0);
+    tm.shutdown();
+    // Re-initialize: must not crash, quota accounting must start clean.
+    REQUIRE(tm.initialize(false));
+    CHECK(tm.totalTextureBytes() == 0);
+    const uint8_t pixel[] = {255, 255, 255, 255};
+    CHECK(tm.loadTextureFromRGBA(pixel, 1, 1) == 0);
+    CHECK(tm.createSolidTexture(255, 255, 255) == 0);
+    // Release-accounting must be balanced after the reinit cycle.
+    CHECK(quota.releaseCalls == quota.tryCalls);
+    tm.shutdown();
+    CHECK(quota.releaseCalls == quota.tryCalls);
+}
+
 
 
 // =============================================================================

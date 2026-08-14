@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "api/IParticleSystem.h"
 #include <bgfx/bgfx.h>
 #include <vector>
@@ -32,7 +32,6 @@ struct Emitter : ParticleEmitterConfig {
 class ParticleSystem : public IParticleSystem {
 public:
     static constexpr int MAX_PARTICLES = 1024;
-    static constexpr int SIM_BATCH_SIZE = 256;
 
     ParticleSystem() = default;
     ~ParticleSystem() override;

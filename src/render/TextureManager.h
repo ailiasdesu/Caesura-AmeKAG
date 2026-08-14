@@ -40,18 +40,11 @@ public:
     uint32_t loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, uint16_t h,
                                  const std::string& cacheKey = "") override;
 
-    // RGBA(32-bit) -> registered texture id for solid-color dedup.
-    std::unordered_map<uint32_t, uint32_t> m_solidCache;
-
     uint32_t createSolidTexture(uint8_t r, uint8_t g, uint8_t b,
                                 uint8_t a = 255) override;
     uint32_t getPlaceholderTexture() override;
 
     void destroyTexture(uint32_t id) override;
-    // Path -> last texture id cache: repeated loads of the same file (the
-    // common VN pattern of reusing backgrounds/sprites) reuse the existing
-    // GPU texture instead of re-decoding + re-uploading.
-    std::unordered_map<std::string, uint32_t> m_pathToId;
     uint32_t getTextureHandle(uint32_t id) const override;
     void getTextureSizeById(uint32_t id, uint16_t& width,
                             uint16_t& height) const override;
@@ -100,6 +93,12 @@ private:
                              RestoreSource&& restoreSource,
                              QuotaReservation& quotaReservation);
 
+    // RGBA(32-bit) -> registered texture id for solid-color dedup.
+    std::unordered_map<uint32_t, uint32_t> m_solidCache;
+    // Path -> last texture id cache: repeated loads of the same file (the
+    // common VN pattern of reusing backgrounds/sprites) reuse the existing
+    // GPU texture instead of re-decoding + re-uploading.
+    std::unordered_map<std::string, uint32_t> m_pathToId;
     std::unordered_map<uint32_t, bgfx::TextureHandle> m_cache;
     bgfx::TextureHandle m_placeholderTex = BGFX_INVALID_HANDLE;
     bool m_devMode = true;
