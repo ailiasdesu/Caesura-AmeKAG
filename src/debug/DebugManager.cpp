@@ -480,6 +480,21 @@ void DebugManager::endFrameProfile() {
         std::chrono::duration<double, std::milli>(now - m_frameStart).count();
 }
 
+// -- debug::log free function (api/DebugLog.h sink) -------------------------
+
+namespace debug {
+
+void log(DbgLevel level, SubSys sub, ErrCode ec, const char* fmt, ...) {
+    char buf[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    DebugManager::instance().log(level, sub, ec, "%s", buf);
+}
+
+} // namespace debug
+
 } // namespace Caesura
 
 

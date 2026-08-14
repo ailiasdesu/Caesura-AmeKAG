@@ -7,7 +7,7 @@
 #define PL_MPEG_IMPLEMENTATION
 #include "../../external/pl_mpeg/pl_mpeg.h"
 #include "VideoPlayer.h"
-#include "../debug/DebugManager.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include "../di/BackendRegistry.h"
 #include "../audio/api/IAudioBackend.h"
 

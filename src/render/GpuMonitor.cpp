@@ -1,5 +1,5 @@
-﻿#include "GpuMonitor.h"
-#include "../debug/DebugManager.h"
+#include "GpuMonitor.h"
+#include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <bgfx/bgfx.h>
 #include <cmath>
 #include <cstdio>
