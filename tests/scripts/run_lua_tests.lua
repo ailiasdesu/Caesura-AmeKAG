@@ -68,6 +68,7 @@ local tests = {
     "test_label_index",
     "test_expr_cache",
     "test_expr_lang",
+    "test_expr_lang2",
     "test_variables",
     "test_control_flow",
     "test_flow_edge",

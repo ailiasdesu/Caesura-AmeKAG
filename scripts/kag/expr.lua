@@ -363,7 +363,32 @@ local function translate_parens(src)
                     j = j + 1
                 end
                 if depth == 0 then
-                    out[#out + 1] = "(" .. translate(src:sub(i + 1, j - 1)) .. ")"
+                    -- [round 84] A parenthesized function call carries a
+                    -- comma-separated argument list: translating the whole
+                    -- inner text as ONE expression lets a ternary swallow the
+                    -- commas (f.calc(f.flag ? 1 : 2, 3) -> (2, 3) folded
+                    -- into the else branch). Split top-level commas and
+                    -- translate each argument independently, then rejoin.
+                    local inner = src:sub(i + 1, j - 1)
+                    local segs = {}
+                    local cur = 1
+                    local comma = find_top(inner, ",", 1)
+                    if comma then
+                        while comma do
+                            segs[#segs + 1] = inner:sub(cur, comma - 1)
+                            cur = comma + 1
+                            comma = find_top(inner, ",", cur)
+                        end
+                        segs[#segs + 1] = inner:sub(cur)
+                        for k = 1, #segs do segs[k] = translate(segs[k]) end
+                        -- trim each segment: a trailing space before the
+                        -- comma (f.calc(a, b ? 1 : 2, 3)) would otherwise
+                        -- survive into the rejoined argument list
+                        for k = 1, #segs do segs[k] = segs[k]:gsub("^%s+", ""):gsub("%s+$", "") end
+                        out[#out + 1] = "(" .. table.concat(segs, ", ") .. ")"
+                    else
+                        out[#out + 1] = "(" .. translate(inner) .. ")"
+                    end
                     i = j + 1
                 else
                     out[#out + 1] = c
