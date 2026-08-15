@@ -6,6 +6,7 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <unordered_map>
 
 namespace Caesura {
@@ -44,9 +45,27 @@ public:
     bool isRunning()   const override { return m_running; }
 
 private:
+    // A load currently in flight for one (path,type) key. Every enqueue that
+    // targets a key with a live InFlightEntry shares this single load instead
+    // of submitting its own job, so the source is read exactly once even when
+    // the same asset is requested concurrently (round 90 gap: dedup only via
+    // the completion cache could not collapse two truly-parallel requests).
+    struct InFlightEntry {
+        std::vector<int>  waiterIds;                     // every enqueue id sharing this load
+        std::shared_ptr<CompletedLoad>   result;         // filled by the worker thread
+        std::shared_ptr<std::atomic<bool>> cancelled;    // set when the job was pre-empted
+    };
+
+    static std::string makeKey(const std::string& path, const std::string& type);
+
     CompletedLoad processRequest(const AsyncLoadRequest& req);
     void postCompleteEvent(int requestId, const std::string& path,
                            const std::vector<uint8_t>& data, bool success);
+    // Runs on the main thread (or synchronously under NullJobSystem) when a
+    // shared in-flight load finishes: releases the entry and delivers one
+    // CompletedLoad (+ pendingCount accounting) to every registered waiter.
+    void finishInFlight(const std::shared_ptr<InFlightEntry>& entry,
+                        bool cancelled);
 
     AssetManager* m_assetManager = nullptr;
     std::atomic<bool> m_running{false};
@@ -56,6 +75,14 @@ private:
 
     std::mutex m_completeMutex;
     std::vector<CompletedLoad> m_completed;
+
+    // Per-(path,type) in-flight dedup table. Guarded by m_inflightMutex; the
+    // engine touches it from the main thread, tests may use several. cancelAll
+    // clears the map (a later enqueue starts a fresh load); a running job still
+    // holds its own shared_ptr<InFlightEntry>, so its waiters are discharged
+    // correctly even after the map entry is dropped.
+    std::mutex m_inflightMutex;
+    std::unordered_map<std::string, std::shared_ptr<InFlightEntry>> m_inflight;
 
     // Decoded-resource cache (modern resource pipeline): successful loads
     // are kept (bounded by total bytes) so re-entering the same scene does

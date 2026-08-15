@@ -8,6 +8,7 @@
 #include "di/BackendRegistry.h"
 #include "di/api/ThreadAssert.h"
 #include "mocks/NullJobSystem.h"
+#include "job/JobSystem.h"   // real multi-threaded JobSystem (concurrency dedup)
 #include "TestPaths.h"
 #include <cstdio>
 #include <fstream>
@@ -15,6 +16,11 @@
 #include <map>
 #include <stdexcept>
 #include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <chrono>
+#include <memory>
 
 using namespace Caesura;    // ResourceHandle, GenerationTracker, HandleType::TEXTURE
 using namespace Caesura;    // DirAssetProvider, ProviderChain
@@ -599,13 +605,51 @@ TEST_CASE("ProviderChain exists() short-circuits at highest hit") {
     CHECK(midRaw->existsCalls() == 0);
 }
 
-TEST_CASE("ProviderChain throwing provider is NOT isolated -- propagates") {
-    // Per AGENTS.md the chain itself does no exception isolation: a member
-    // provider that throws propagates out of read()/exists(). This test pins
-    // the CURRENT contract so a future hardening change is a visible diff.
+TEST_CASE("ProviderChain throwing provider is isolated and read falls back") {
+    // A member that throws is treated as "not servable": the exception is
+    // swallowed (matching AsyncLoader/NullJobSystem isolation) and the chain
+    // falls through to the next provider. The throwing provider reports
+    // exists()==true but its read() throws -- that fault must not escape.
     ProviderChain chain;
     chain.addProvider(std::make_unique<ThrowingProvider>(10, "bad"));
-    CHECK_THROWS_AS(chain.read("x.bin"), std::runtime_error);
+    auto low = std::make_unique<MemProvider>(5, "good");
+    low->put("x.bin", {'a'});
+    chain.addProvider(std::move(low));
+
+    CHECK(chain.exists("x.bin"));   // resolved by the low provider
+    const auto data = chain.read("x.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 'a');
+    CHECK_NOTHROW(chain.read("x.bin"));
+}
+
+TEST_CASE("ProviderChain high-priority throwing provider still falls back") {
+    // Even when the HIGHEST-priority provider faults, the chain must not
+    // propagate and must still serve from the lower-priority provider.
+    ProviderChain chain;
+    chain.addProvider(std::make_unique<ThrowingProvider>(10, "bad"));
+    auto low = std::make_unique<MemProvider>(1, "good");
+    low->put("asset.bin", {'L'});
+    chain.addProvider(std::move(low));
+
+    CHECK(chain.exists("asset.bin"));
+    const auto data = chain.read("asset.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 'L');
+}
+
+TEST_CASE("ProviderChain all providers throwing fails gracefully") {
+    // When every provider faults, read()/exists() swallow and return the
+    // "no result" contract (empty / false) -- never propagate. throwOnExists
+    // makes exists() fault too, so both paths are exercised.
+    ProviderChain chain;
+    chain.addProvider(std::make_unique<ThrowingProvider>(10, "bad1", /*throwOnExists*/ true));
+    chain.addProvider(std::make_unique<ThrowingProvider>(1, "bad2", /*throwOnExists*/ true));
+
+    CHECK_FALSE(chain.exists("x.bin"));
+    CHECK(chain.read("x.bin").empty());
+    CHECK_NOTHROW(chain.read("x.bin"));
+    CHECK_NOTHROW(chain.exists("x.bin"));
 }
 
 TEST_CASE("ProviderChain exceptions in lower-priority provider stay masked when high serves") {
@@ -836,5 +880,178 @@ TEST_CASE("AsyncLoader rejects parent-traversal paths") {
     CHECK(fx.loader.enqueue("./" + flat, "text") > 0);
     // (Note: the provider reads with the literal key "./res_dot_ok.txt", which
     //  the filesystem normalizes to the same file on POSIX-style stat())
+
     std::remove(flat.c_str());
+}
+
+// =============================================================================
+// Round 90 gap: TRUE concurrency dedup. The completion cache cannot collapse
+// two requests that overlap in flight -- only a per-(path,type) in-flight table
+// can. This test therefore drives a REAL (multi-threaded) JobSystem with a
+// provider that holds the first read open, so the second enqueue is guaranteed
+// to arrive while the first load is still running. It asserts the source is
+// read exactly once.
+// =============================================================================
+
+namespace {
+
+// Provider that counts source reads and can hold one specific read open until
+// a barrier is released. Lets a test pin a load "in flight" while a second
+// concurrent enqueue fires.
+class BlockingCountProvider : public IAssetProvider {
+public:
+    BlockingCountProvider(std::string path, std::vector<uint8_t> payload)
+        : m_pathToBlock(std::move(path)), m_payload(std::move(payload)) {}
+
+    int readCount() const { return m_readCount.load(); }
+
+    // Main-thread + workers: block until read() has been entered >= target
+    // times. The counter is monotonic (never reset), so callers can wait for a
+    // later read (e.g. a retry after release) by passing an absolute count.
+    void waitForReads(int target, std::chrono::milliseconds timeout) {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_cvStart.wait_for(lock, timeout, [this, target] {
+            return m_readCount.load() >= target;
+        });
+    }
+    void release() {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_released = true;
+        }
+        m_cv.notify_all();
+    }
+
+    bool exists(const std::string& path) override { return path == m_pathToBlock; }
+    std::vector<uint8_t> read(const std::string& path) override {
+        m_readCount.fetch_add(1);
+        m_cvStart.notify_all();
+        if (path == m_pathToBlock) {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_cv.wait(lock, [this] { return m_released; });
+        }
+        return m_payload;
+    }
+    std::string getSource() const override { return "BlockingCountProvider"; }
+    int priority() const override { return 100; }
+    bool verify() override { return true; }
+
+private:
+    std::string m_pathToBlock;
+    std::vector<uint8_t> m_payload;
+    std::atomic<int> m_readCount{0};
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::condition_variable m_cvStart;
+    bool m_released = false;
+};
+
+// Real-JobSystem AsyncLoader fixture: true off-thread workers. Completion
+// callbacks are discharged on the main thread via pollMainThreadJobs() (the
+// test has no SDL event loop, so drainCompleted() is the delivery channel).
+class RealAsyncFixtures {
+public:
+    RealAsyncFixtures()
+        : loader(&assets) {
+        detail::g_mainThreadId = std::this_thread::get_id();
+        jobs.init();
+        BackendRegistry::instance().setJobSystem(&jobs);
+        assets.init();
+        loader.init();
+    }
+    ~RealAsyncFixtures() {
+        loader.shutdown();
+        assets.shutdown();
+        BackendRegistry::instance().setJobSystem(nullptr);
+        jobs.shutdown();
+    }
+
+    JobSystem jobs;
+    AssetManager assets;
+    AsyncLoader loader;
+};
+
+} // namespace
+
+TEST_CASE("AsyncLoader in-flight dedup: concurrent same-path enqueues read source once") {
+    const std::string path = "dedup_concurrent.dat";
+    std::vector<uint8_t> payload = { 'c', 'o', 'n', 'c', 'u', 'r' };
+    {
+        RealAsyncFixtures fx;
+        // Counting+blocking provider sits at priority 100, above the default
+        // DirAssetProviders, so the loader's read goes through THIS provider.
+        auto prov = std::make_unique<BlockingCountProvider>(path, payload);
+        BlockingCountProvider* raw = prov.get();
+        fx.assets.addProvider(std::move(prov));
+
+        // First enqueue: a worker picks it up and blocks inside read().
+        int id1 = fx.loader.enqueue(path, "text");
+        REQUIRE(id1 > 0);
+        raw->waitForReads(1, std::chrono::seconds(5));
+        REQUIRE(raw->readCount() == 1);   // first job is genuinely reading the source
+
+        // Second enqueue while the first is in flight: must share that load
+        // (per-(path,type) in-flight dedup), never submit a second job.
+        int id2 = fx.loader.enqueue(path, "text");
+        REQUIRE(id2 > 0);
+        CHECK(id2 != id1);
+        // Source is still held open -> a duplicate job would have read it a
+        // second time; dedup means it was NOT read again.
+        CHECK(raw->readCount() == 1);
+        CHECK(fx.loader.pendingCount() == 2);  // two not-yet-drained enqueues
+
+        // Release the barrier: the single load reads once and completes for both.
+        raw->release();
+        fx.jobs.waitIdle();
+        fx.jobs.pollMainThreadJobs();
+
+        auto done = fx.loader.drainCompleted();
+        REQUIRE(done.size() == 2);
+        CHECK(done[0].success);
+        CHECK(done[1].success);
+        CHECK(raw->readCount() == 1);   // THE assertion: source read exactly once
+        CHECK(fx.loader.pendingCount() == 0);
+    }
+}
+
+// In-flight dedup must not leak: once a shared load completes, a fresh enqueue
+// of the same key (with the asset now served by the source, not a cache) starts
+// a real new load -- the in-flight entry was released on completion.
+TEST_CASE("AsyncLoader in-flight dedup: released after completion; retry loads again") {
+    const std::string path = "dedup_release.dat";
+    std::vector<uint8_t> payload = { 'r', 'e', 'l', 'e', 'a', 's', 'e' };
+    {
+        RealAsyncFixtures fx;
+        auto prov = std::make_unique<BlockingCountProvider>(path, payload);
+        BlockingCountProvider* raw = prov.get();
+        fx.assets.addProvider(std::move(prov));
+
+        int id1 = fx.loader.enqueue(path, "text");
+        REQUIRE(id1 > 0);
+        raw->waitForReads(1, std::chrono::seconds(5));
+        int id2 = fx.loader.enqueue(path, "text");
+        REQUIRE(id2 > 0);
+        CHECK(raw->readCount() == 1);
+
+        raw->release();
+        fx.jobs.waitIdle();
+        fx.jobs.pollMainThreadJobs();
+        auto first = fx.loader.drainCompleted();
+        REQUIRE(first.size() == 2);
+        CHECK(fx.loader.pendingCount() == 0);
+
+        // In-flight entry was released -> a new enqueue starts a fresh load
+        // and reads the source again (no stale dedup).
+        int id3 = fx.loader.enqueue(path, "text");
+        REQUIRE(id3 > 0);
+        raw->waitForReads(2, std::chrono::seconds(5));
+        CHECK(raw->readCount() == 2);
+        raw->release();
+        fx.jobs.waitIdle();
+        fx.jobs.pollMainThreadJobs();
+        auto second = fx.loader.drainCompleted();
+        REQUIRE(second.size() == 1);
+        CHECK(second[0].success);
+        CHECK(fx.loader.pendingCount() == 0);
+    }
 }
