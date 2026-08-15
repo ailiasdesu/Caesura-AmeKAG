@@ -94,7 +94,7 @@ assets/live2d/
 
 ```kag
 ; 加载 Live2D 模型
-@fg storage="carc://live2d/character_name/character_name.model3.json"
+@fg storage="live2d/character_name/character_name.model3.json"
 
 ; 播放动作
 @motion name="idle"
