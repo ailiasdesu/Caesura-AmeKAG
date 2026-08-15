@@ -27,6 +27,7 @@ local tests = {
     "test_bench_dispatch",
     "test_math_cmds",
     "test_character_cmds",
+    "test_textspeed",
 }
 
 local passed, failed = 0, 0

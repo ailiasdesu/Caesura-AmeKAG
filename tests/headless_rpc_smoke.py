@@ -233,6 +233,13 @@ try:
     _b = r.get("result") or ""
     check("lsp-diag-unknown-command",
         r.get("status") == "ok" and len(_b) > 2)
+
+    # round 71: interpolation diagnostics — a bad ${expr} inside a text
+    # param is flagged (Schema.checkInterp shared compile path).
+    r = lsp_json("diagnostics", '[ch text="a ${bad &&}"]')
+    _b = r.get("result") or ""
+    check("lsp-diag-bad-interpolation",
+        r.get("status") == "ok" and "interpolation" in _b)
 finally:
     try:
         proc.stdin.close()
