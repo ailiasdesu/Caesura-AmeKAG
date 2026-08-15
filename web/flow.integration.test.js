@@ -1063,4 +1063,230 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     const out2 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_vars.ks' })
     expect(out2.startsWith('DONE:')).toBe(true)
   }, 120000)
+  // -- round 78 i18n x round 81 advance combination -------------------------
+  // Each [i18n] hot-switch (round 76/78) records ctx.settingsValues.language
+  // and relocalizes the visible page/backlog/choices. Round-81 advance
+  // resumes the SAME persistent ctx (__CTXREF) one [p] page at a time, so a
+  // language switch that ran before a park survives the advance and steers
+  // the freshly rendered page. These tests pin the two semantics together:
+  // a page rendered after an advance must carry the language that was active
+  // at the time its [i18n] line ran. No bridge changes were needed.
+
+  it('[i18n] switch governs the page rendered by the NEXT advance (round 78 x 81)', async () => {
+    const NL = String.fromCharCode(10)
+    const pageT = () => (player.core.draws || []).map((d) => d.t || '').join('')
+    player.core.draws = []
+    const ks = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="P1-{settings}"]', '[p]',
+      '[i18n language="en"]',
+      '[ch name="N" text="P2-{settings}"]', '[p]',
+      '[i18n language="zh"]',
+      '[ch name="N" text="P3-{settings}"]', '[p]',
+      '[end]',
+    ].join(NL)
+    // Fresh park at the first [p]: page 1 renders in the initial zh dict.
+    let out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('P1-设置')
+    expect(pageT()).not.toContain('P1-Settings')
+
+    // Advance 1 runs [i18n language="en"] then page 2 -> en dict.
+    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('P2-Settings')
+    expect(pageT()).not.toContain('P2-设置')
+
+    // Advance 2 switches back to zh -> page 3 renders in zh again.
+    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('P3-设置')
+    expect(pageT()).not.toContain('P3-Settings')
+
+    // Advance 3 -> past the last [p], DONE.
+    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+  }, 120000)
+
+  it('language state survives advance and a fresh scene (i18n persistence, round 78 x 81)', async () => {
+    const readCtx = async (name) => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX[' + JSON.stringify(name) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    const pageT = () => (player.core.draws || []).map((d) => d.t || '').join('')
+    const backlogT = () => (player.core.backlog || []).map((b) => b.text || '').join(' | ')
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const ks = [
+      '[i18n language="en"]',
+      '[ch name="N" text="E1-{settings}"]', '[p]',
+      '[ch name="N" text="E2-{settings}"]', '[p]',   // no switch -> must stay en
+      '[end]',
+    ].join(NL)
+    // Fresh: en selected and page 1 renders with it.
+    let out = await player.runScene(ks, 'i18n_persist.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('E1-Settings')
+
+    // Advance 1: NO i18n command between the pages; the en selection set
+    // before the park must have survived the advance (round-81 keeps ctx).
+    out = await player.runScene(ks, 'i18n_persist.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_persist.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('E2-Settings')
+    let sv = await readCtx('settingsValues')
+    expect(sv && sv.language).toBe('en')
+
+    // Advance 2 -> DONE; a later fresh scene (no [i18n]) still inherits en
+    // because i18n.current outlives the scene (module-level state).
+    out = await player.runScene(ks, 'i18n_persist.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_persist.ks' })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const fresh = ['[ch name="N" text="F-{settings}"]', '[p]', '[end]'].join(NL)
+    out = await player.runScene(fresh, 'i18n_persist_fresh.ks', { maxFrames: 50000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // the fresh scene renders through the STILL-en dict: i18n.current outlives
+    // both the advance chain and the scene boundary. (settingsValues is only
+    // written by an [i18n] command, so the language check reads i18n.current.)
+    expect(backlogT()).toContain('F-Settings')
+    await player.lua.doString('_G.__R = (require("i18n")).current')
+    expect(player.lua.global.get('__R')).toBe('en')
+  }, 120000)
+
+  it('[i18n] language persists through save/load (round 78 x storage semantics)', async () => {
+    const readCtx = async (name) => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX[' + JSON.stringify(name) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    const pageT = () => (player.core.draws || []).map((d) => d.t || '').join('')
+    const backlogT = () => (player.core.backlog || []).map((b) => b.text || '').join(' | ')
+    const slot = 77
+
+    // Pin en, render one page, then save the current position. Save.save
+    // persists state.language = settingsValues.language, so a reload must
+    // hot-switch back to en (see save.lua restore).
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const enKs = [
+      '[i18n language="en"]',
+      '[ch name="N" text="SAVE-{settings}"]', '[p]',
+      '[end]',
+    ].join(NL)
+    let out = await player.runScene(enKs, 'i18n_save.ks', { maxFrames: 50000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // [p] commits the page, so the localized text sits in the backlog.
+    expect(backlogT()).toContain('SAVE-Settings')
+    expect(await player.saveCurrent(slot)).toBe(true)
+
+    // Flip the running language to zh (separate scene) so a restore is visible.
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const zhKs = ['[i18n language="zh"]', '[ch name="N" text="NOW-{settings}"]', '[p]', '[end]'].join(NL)
+    out = await player.runScene(zhKs, 'i18n_to_zh.ks', { maxFrames: 50000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(backlogT()).toContain('NOW-设置')
+
+    // Loading the save restores en (language + i18n.current hot-switch).
+    player.core.draws = []
+    player.core.backlog.length = 0
+    out = await player.loadSlot(slot, { maxFrames: 50000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const sv = await readCtx('settingsValues')
+    expect(sv && sv.language).toBe('en')
+
+    // A follow-up [ch] in a fresh scene after the load renders with en again.
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const afterKs = ['[ch name="N" text="AFTER-{settings}"]', '[p]', '[end]'].join(NL)
+    out = await player.runScene(afterKs, 'i18n_after_load.ks', { maxFrames: 50000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(backlogT()).toContain('AFTER-Settings')
+
+    player.deleteSlot(slot)
+  }, 120000)
+
+  it('backlog entries re-localize across advances (round 78 backlog + round 81 advance)', async () => {
+    const readBacklog = async () => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.backlog or nil')
+      return player.lua.global.get('__R') || []
+    }
+    const NL = String.fromCharCode(10)
+    player.core.backlog.length = 0
+    const ks = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="b1={settings}"]', '[p]',
+      '[i18n language="en"]',
+      '[ch name="N" text="b2={settings}"]', '[p]',
+      '[end]',
+    ].join(NL)
+    // Fresh park: page 1 (b1) is committed when we advance out of it.
+    let out = await player.runScene(ks, 'i18n_bk_adv.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+
+    // Advance 1: [i18n language="en"] commits b1 to backlog AND relocalizes
+    // it (设置 -> Settings); page 2 renders b2 in en.
+    out = await player.runScene(ks, 'i18n_bk_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_bk_adv.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+
+    // Advance 2 -> DONE; inspect the full backlog.
+    out = await player.runScene(ks, 'i18n_bk_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_bk_adv.ks' })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const bl = await readBacklog()
+    const texts = bl.map((b) => b.text)
+    // b1 committed under zh then relocalized to en on the switch.
+    expect(bl.some((b) => b.text.includes('b1=Settings')), JSON.stringify(texts)).toBe(true)
+    expect(bl.some((b) => b.text.includes('b1=设置')), JSON.stringify(texts)).toBe(false)
+    // b2 committed under en directly.
+    expect(bl.some((b) => b.text.includes('b2=Settings')), JSON.stringify(texts)).toBe(true)
+    // entries keep their pre-localize src for the next relocalize.
+    expect(bl.some((b) => b.src === 'b1={settings}' && b.text.includes('b1=Settings'))).toBe(true)
+  }, 120000)
+
+  it('i18n plural tables (round 80) hold their variant selection across advances', async () => {
+    const setupPlural = async () => {
+      await player.lua.doString([
+        "local I = require('i18n')",
+        "I.set_language('en')",
+        "I.strings.items = { one = '{n} item', other = '{n} items' }",
+      ].join(String.fromCharCode(10)))
+    }
+    const tNum = async (n) => {
+      await player.lua.doString('_G.__R = (require("i18n")).translate("items", { n = ' + Number(n) + ' })')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    await setupPlural()
+
+    // Baseline: en plural picks one/other by count.
+    expect(await tNum(1)).toBe('1 item')
+    expect(await tNum(3)).toBe('3 items')
+
+    // A real advancing scene runs against the live plural-active dict.
+    player.core.draws = []
+    const ks = ['[ch name="N" text="A1"]', '[p]', '[ch name="N" text="A2"]', '[p]', '[end]'].join(NL)
+    let out = await player.runScene(ks, 'plural_adv.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(await tNum(1)).toBe('1 item')
+    expect(await tNum(5)).toBe('5 items')
+
+    // After each advance the plural table (and en category) survive, so
+    // variant selection still tracks the count.
+    out = await player.runScene(ks, 'plural_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'plural_adv.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(await tNum(1)).toBe('1 item')
+    expect(await tNum(2)).toBe('2 items')
+
+    out = await player.runScene(ks, 'plural_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'plural_adv.ks' })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(await tNum(0)).toBe('0 items')
+    // zh/ja (and unknown) plural_category is always "other" regardless of n.
+    await player.lua.doString('(require("i18n")).set_language("zh")')
+    await player.lua.doString('(require("i18n")).strings.items = { other = "共 {n} 个", one = "一个" }')
+    expect(await tNum(1)).toBe('共 1 个')
+    await player.lua.doString('(require("i18n")).set_language("en")')
+  }, 120000)
+
 })
