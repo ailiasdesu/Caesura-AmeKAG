@@ -21,6 +21,7 @@ local tests = {
     "test_kag_e2e",
     "test_kag_system_flow",
     "test_macro",
+    "test_macro_deep",
     "test_p2_features",
     "test_contracts_runtime",
     "test_saveflow",
