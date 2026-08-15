@@ -290,4 +290,57 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(player.core.backlog.length).toBeGreaterThan(5)
     expect(player.core.backlog[0].text).toContain('Welcome to the Caesura')
   }, 120000)
+
+  it('exercises round 53-63 expression edges in the web player', async () => {
+    player.core.backlog.length = 0
+    // Ternary-in-index, ?? null-coalesce, long-bracket interpolation,
+    // [switch exp=], [eval] TJS operators and expression-bound [for] —
+    // the desktop fixes must behave identically under wasmoon.
+    const ks = [
+      '[set f.flag = true]',
+      '[set f.hp = 30]',
+      '[eval exp="f.arr = {10, 20}"]',
+      '[eval exp="f.ok = f.hp > 10 && f.flag"]',
+      '[ch name="N" text="idx=\x24{f.arr[f.flag ? 1 : 2]}"]',
+      '[p]',
+      '[set f.flag = false]',
+      '[ch name="N" text="idx2=\x24{f.arr[f.flag ? 1 : 2]}"]',
+      '[p]',
+      '[ch name="N" text="nc=\x24{f.missing ?? 42}"]',
+      '[p]',
+      '[ch name="N" text="lb=\x24{ [[x}}]] .. \'A\' }"]',
+      '[p]',
+      '[ch name="N" text="ok=\x24{f.ok}"]',
+      '[p]',
+      '[set f.tier = 2]',
+      '[switch exp="f.tier"]',
+      '[case 1]',
+      '[ch name="N" text="tier-one"]',
+      '[case 2]',
+      '[ch name="N" text="tier-two"]',
+      '[endswitch]',
+      '[ch name="N" text="sw=done"]',
+      '[p]',
+      '[set f.n = 2]',
+      '[for var="i" start="1" end="f.n"]',
+      '[ch name="N" text="loop\x24{f.i}"]',
+      '[endfor]',
+      '[ch name="N" text="expr-edge-done"]',
+      '[p]',
+      '[end]',
+    ].join('\n')
+    const out = await player.runScene(ks, 'expr_edge.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((x) => x.text).join(' | ')
+    expect(texts).toContain('idx=10')          // ternary-in-index then-branch
+    expect(texts).toContain('idx2=20')         // ternary-in-index else-branch
+    expect(texts).toContain('nc=42')           // ?? fallback on missing var
+    expect(texts).toContain('lb=x}}A')         // long-bracket braces survive
+    expect(texts).toContain('ok=true')         // [eval] && translation
+    expect(texts).toContain('tier-two')        // [switch exp=] numeric match
+    expect(texts).toContain('sw=done')         // flow continues after switch
+    expect(texts).toContain('loop1')           // [for] expression end bound
+    expect(texts).toContain('loop2')
+    expect(texts).toContain('expr-edge-done')
+  }, 120000)
 })
