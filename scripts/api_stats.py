@@ -116,8 +116,10 @@ def run_tests():
         # (round 70: the census dropped the Lua row when lua.exe was absent).
         lua = None
         for cand in (os.path.join(ROOT, "external", "lua", "lua.exe"),
-                     os.path.join(ROOT, "build", "lua", "lua.exe"),
                      os.path.join(ROOT, "build", "lua", "Debug", "lua.exe"),
+                     os.path.join(ROOT, "build", "lua", "lua.exe"),
+                     os.path.join(ROOT, "build", "tools", "lua", "Debug", "lua.exe"),
+                     os.path.join(ROOT, "build", "tools", "lua", "lua.exe"),
                      os.path.join(ROOT, "build", "Debug", "lua.exe")):
             if os.path.isfile(cand):
                 lua = cand
@@ -129,8 +131,8 @@ def run_tests():
                     if "lua.exe" in files:
                         lua = os.path.join(r2, "lua.exe")
                         break
-                    if lua is not None:
-                        break
+                if lua is not None:
+                    pass  # found via the walk (outer loop already ended)
         if lua is not None:
             out = subprocess.run([lua, os.path.join(ROOT, "tests", "scripts", "run_lua_tests.lua")],
                                  capture_output=True, text=True, timeout=300,

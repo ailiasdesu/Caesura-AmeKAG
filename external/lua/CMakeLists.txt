@@ -1,4 +1,4 @@
-﻿# Lua 5.4.7 — static library
+# Lua 5.4.7 — static library
 cmake_minimum_required(VERSION 3.25)
 project(lua_lib C)
 
@@ -19,6 +19,11 @@ set(LUA_SOURCES
 )
 
 add_library(lua STATIC ${LUA_SOURCES})
+# LNK1149 guard (round 70): MSVC compares link inputs/outputs by BASE
+# name, so an interpreter named lua.exe cannot sit next to the static
+# lib lua.lib — rename the archive output to lua_lib.lib (consumers
+# link the TARGET name, which is unchanged).
+set_target_properties(lua PROPERTIES OUTPUT_NAME lua_lib)
 target_include_directories(lua PUBLIC ${LUA_DIR})
 
 if(MSVC)
@@ -27,3 +32,19 @@ if(MSVC)
 else()
     target_compile_options(lua PRIVATE -w)
 endif()
+
+# Round 70: standalone interpreter for the script test suites. The engine
+# links the static lib; the test tooling (run_lua_tests.lua, ks_check.lua,
+# api_stats census) needs a runnable lua — previously only a gitignored
+# prebuilt binary existed, so Windows CI SILENTLY SKIPPED the Lua suites
+# and the docs-freshness guard failed there. Building lua.c gives every
+# platform a real interpreter (build/lua/<config>/lua[.exe]).
+add_executable(lua_cli ${LUA_DIR}/lua.c)
+target_link_libraries(lua_cli PRIVATE lua)
+if(MSVC)
+    target_compile_options(lua_cli PRIVATE /W0)
+    target_compile_definitions(lua_cli PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_compile_options(lua_cli PRIVATE -w)
+endif()
+set_target_properties(lua_cli PROPERTIES OUTPUT_NAME lua)
