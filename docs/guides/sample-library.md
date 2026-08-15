@@ -26,6 +26,7 @@
 | 06 | demo/tutorial/tutorial_06_effects.ks | 特效与转场：闪白/震动/溶解转场/结局解锁 | flash, vib, trans, ending, scroll, wait |
 | 07 | demo/tutorial/tutorial_07_saveload.ks | 存档与读档：槽位/保存/读取/结果分支（Web 无存档后端时优雅降级） | save, load, tf.save_result, tf.load_result |
 | 08 | demo/tutorial/tutorial_08_system_ui.ks | 系统 UI：CG 画廊/音乐室/历史回看/章节选择/内容解锁 | unlock, gallery, music, history, chapter |
+| 09 | demo/tutorial/tutorial_09_interpolation.ks | 文本插值与表达式：$tbl.key / %tbl.key% / ${expr}（TJS 运算符 ?: && !=） | set, ch, interpolate |
 
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
