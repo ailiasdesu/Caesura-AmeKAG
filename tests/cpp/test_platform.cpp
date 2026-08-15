@@ -3,6 +3,7 @@
 #include "platform/SDL3PlatformBackend.h"
 #include "platform/api/IPlatformBackend.h"
 #include "platform/MobileAdapter.h"
+#include "platform/NullPlatformBackend.h"
 #include <cstring>
 
 using namespace Caesura;
@@ -77,3 +78,60 @@ TEST_CASE("Platform: SDL3PlatformBackend shutdown before init is safe") {
     CHECK_NOTHROW(backend.shutdown());
     CHECK_NOTHROW(backend.shutdown());  // idempotent
 }
+// =============================================================================
+// G11: platform layer boundary tests (no-GPU / no-window safe)
+// =============================================================================
+
+TEST_CASE("Platform: getTicksMs is a monotonic advancing time source") {
+    // (c) Timing -- the runner computes frame delta as getTicksMs() deltas and
+    // clamps it to [0, 0.25]s. The platform contract requires an ever-advancing,
+    // never-decreasing tick source so the delta (now - last) can't go negative.
+    SDL3PlatformBackend backend;
+    const int samples = 12;
+    uint64_t first = backend.getTicksMs();
+    uint64_t prev = first;
+    for (int i = 0; i < samples; ++i) {
+        SDL_Delay(5);
+        uint64_t cur = backend.getTicksMs();
+        CHECK(cur >= prev);          // monotonic non-decreasing
+        CHECK(cur < UINT64_MAX);     // not an overflow sentinel
+        prev = cur;
+    }
+    // The tick source actually advances: sleeping over the samples must move
+    // the last reading strictly past the first (positive frame delta).
+    CHECK(prev > first);
+}
+
+TEST_CASE("Platform: NullPlatformBackend resize maps to window dimensions") {
+    // (d) resizeWindow -> getWindowWidth/Height mapping (no-GPU backend that
+    // models the IPlatformBackend contract without creating a real window).
+    NullPlatformBackend backend;
+    CHECK(backend.getWindowWidth() == 0);
+    CHECK(backend.getWindowHeight() == 0);
+
+    CHECK(backend.init("test", 1920, 1080));
+    CHECK(backend.getWindowWidth() == 1920);
+    CHECK(backend.getWindowHeight() == 1080);
+
+    backend.resizeWindow(800, 600);
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+
+    backend.shutdown();
+}
+
+TEST_CASE("Platform: NullPlatformBackend interface upcast identity") {
+    // The concrete backend must satisfy the documented IPlatformBackend calls
+    // safely with no window and no GPU.
+    NullPlatformBackend backend;
+    IPlatformBackend* iface = &backend;
+    CHECK(iface->getBackendName() != nullptr);
+    CHECK(std::strcmp(iface->getBackendName(), "NullPlatform") == 0);
+    CHECK(iface->pollEvent() == false);
+    CHECK(iface->getNativeWindowHandle() == nullptr);
+    IPlatformBackend::MouseState ms = iface->getMouseState();
+    CHECK(ms.x == 0);
+    CHECK(ms.y == 0);
+    CHECK_FALSE(ms.leftDown);
+}
+
