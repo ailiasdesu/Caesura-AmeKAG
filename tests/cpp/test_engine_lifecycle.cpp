@@ -176,3 +176,191 @@ TEST_CASE("Engine: explicit backend overrides wire through to registry") {
     }  // ~Engine frees the injected backends it now owns (no double-free)
     CHECK(BackendRegistry::instance().getRenderDevice() == nullptr);
 }
+
+// ============================================================================
+// EngineConfig / Engine launch-parameter boundary tests (round 81+5 follow-up).
+// Coverage: restart round-trip, registry-cleared integrity, headless-vs-explicit
+// backend precedence, partial/all-Null backend injection, invalid-dimension
+// acceptance, and end-of-init field passthrough.
+// ============================================================================
+
+// (4a) init -> shutdown -> init again is REFUSED: init() is once-per-instance
+// (m_initAttempted guards re-entry). A restart therefore requires a fresh
+// Engine. After the refused re-init the registry must still be empty and
+// service access must still throw.
+TEST_CASE("Engine: init->shutdown->re-init refused (once per instance)") {
+    Engine engine(makeConfig());
+    REQUIRE(engine.init());
+    engine.shutdown();
+
+    auto& reg = BackendRegistry::instance();
+    CHECK(reg.getRenderDevice() == nullptr);
+    CHECK(reg.getAudioBackend() == nullptr);
+
+    // Re-init on the same instance is refused after shutdown; service access
+    // is still guarded (m_initialized is false).
+    bool threw = false;
+    try {
+        (void)engine.renderDevice();
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
+    CHECK(threw);               // access still guarded
+    CHECK_FALSE(engine.init()); // restart round-trip not supported in-place
+
+    // Registry untouched (still cleared) and shutdown remains idempotent.
+    CHECK(reg.getRenderDevice() == nullptr);
+    CHECK_NOTHROW(engine.shutdown());
+}
+
+// (4b) Dedicated full-registry integrity check: after shutdown every backend
+// slot the engine owns is unregistered, not just the headline render/audio
+// pair that round 81 verified inline. Locks the full set.
+TEST_CASE("Engine: shutdown clears the entire owned registry") {
+    {
+        Engine engine(makeConfig());
+        REQUIRE(engine.init());
+        BackendRegistry& reg = BackendRegistry::instance();
+        CHECK(reg.getRenderDevice() != nullptr);
+        CHECK(reg.getAudioBackend() != nullptr);
+        CHECK(reg.getPlatformBackend() != nullptr);
+        CHECK(reg.getMiniGameBackend() != nullptr);
+        CHECK(reg.getAnimationBackend() != nullptr);
+        CHECK(reg.getJobSystem() != nullptr);
+        CHECK(reg.getCryptoEngine() != nullptr);
+        engine.shutdown();
+    }
+    BackendRegistry& reg = BackendRegistry::instance();
+    CHECK(reg.getRenderDevice() == nullptr);
+    CHECK(reg.getAudioBackend() == nullptr);
+    CHECK(reg.getPlatformBackend() == nullptr);
+    CHECK(reg.getMiniGameBackend() == nullptr);
+    CHECK(reg.getAnimationBackend() == nullptr);
+    CHECK(reg.getJobSystem() == nullptr);
+    CHECK(reg.getCryptoEngine() == nullptr);
+}
+
+// (2a) headless=true selects Null (no-GPU) adapters in the registry. The
+// registry pointers are non-null but the concrete types report the Null
+// backend name -- locked via the interface (no GPU resources in CI).
+TEST_CASE("Engine: headless mode registers Null (no-GPU) backends") {
+    Engine engine(makeConfig());  // headless=true
+    REQUIRE(engine.init());
+    BackendRegistry& reg = BackendRegistry::instance();
+    REQUIRE(reg.getRenderDevice() != nullptr);
+    REQUIRE(reg.getAudioBackend() != nullptr);
+    REQUIRE(reg.getPlatformBackend() != nullptr);
+    CHECK(std::string(reg.getRenderDevice()->getBackendName()) == "NullRender");
+    CHECK(std::string(reg.getAudioBackend()->getBackendName())   == "NullAudio");
+    CHECK(std::string(reg.getPlatformBackend()->getBackendName())== "NullPlatform");
+    engine.shutdown();
+}
+
+// (2b) headless + explicit backend conflict: the explicitly injected backend
+// WINS. In init(), the headless Null defaults are created only when the slot
+// is still empty, so an injected render device is never replaced.
+TEST_CASE("Engine: explicit backend wins over headless null default") {
+    auto* injectedRender = new NullRenderDevice();
+    EngineConfig cfg;
+    cfg.headless = true;              // conflicting signal on purpose
+    cfg.render   = injectedRender;    // explicit backend intent
+    {
+        Engine engine(std::move(cfg));
+        REQUIRE(engine.init());
+        CHECK(BackendRegistry::instance().getRenderDevice() == injectedRender);
+        engine.shutdown();
+    }
+    CHECK(BackendRegistry::instance().getRenderDevice() == nullptr);
+}
+
+// (3a) Partial backend injection: supply only a render device (and platform)
+// and leave the rest null. In headless mode the audio slot is auto-filled with
+// a Null default, while the injected pointers pass straight through.
+TEST_CASE("Engine: partial backend injection fills missing with null defaults") {
+    auto* injectedRender   = new NullRenderDevice();
+    auto* injectedPlatform = new NullPlatformBackend();
+    EngineConfig cfg;
+    cfg.headless = true;
+    cfg.render   = injectedRender;
+    cfg.platform = injectedPlatform;  // audio + minigame intentionally omitted
+    {
+        Engine engine(std::move(cfg));
+        REQUIRE(engine.init());
+        BackendRegistry& reg = BackendRegistry::instance();
+        CHECK(reg.getRenderDevice() == injectedRender);
+        CHECK(reg.getPlatformBackend() == injectedPlatform);
+        // Missing slot auto-filled by headless Null default (not dangling).
+        REQUIRE(reg.getAudioBackend() != nullptr);
+        CHECK(std::string(reg.getAudioBackend()->getBackendName()) == "NullAudio");
+        // miniGame is default-filled by initOptionalPhase.
+        REQUIRE(reg.getMiniGameBackend() != nullptr);
+        engine.shutdown();
+    }
+    CHECK(BackendRegistry::instance().getRenderDevice() == nullptr);
+}
+
+// (3b) All-Null injection: every core slot explicitly supplied as a Null
+// backend registers by pointer equality (no double-ownership, no leak).
+TEST_CASE("Engine: all-Null injection wires through to registry") {
+    auto* injectedRender   = new NullRenderDevice();
+    auto* injectedAudio    = new NullAudioBackend();
+    auto* injectedPlatform = new NullPlatformBackend();
+    auto* injectedMiniGame = new NullMiniGameBackend();
+    EngineConfig cfg;
+    cfg.headless = true;
+    cfg.render   = injectedRender;
+    cfg.audio    = injectedAudio;
+    cfg.platform = injectedPlatform;
+    cfg.miniGame = injectedMiniGame;
+    {
+        Engine engine(std::move(cfg));
+        REQUIRE(engine.init());
+        BackendRegistry& reg = BackendRegistry::instance();
+        CHECK(reg.getRenderDevice()  == injectedRender);
+        CHECK(reg.getAudioBackend()  == injectedAudio);
+        CHECK(reg.getPlatformBackend()== injectedPlatform);
+        CHECK(reg.getMiniGameBackend()== injectedMiniGame);
+        engine.shutdown();
+    }
+    CHECK(BackendRegistry::instance().getRenderDevice() == nullptr);
+}
+
+// (1a) Launch parameters pass through to config() after a full init -- the
+// engine never rewrites the caller's width/height/title/frameLimit.
+TEST_CASE("Engine: field values pass through to config() after init") {
+    EngineConfig cfg;
+    cfg.title       = "Boundary Test Title";
+    cfg.width       = 960;
+    cfg.height      = 540;
+    cfg.headless    = true;
+    cfg.editorMode  = false;
+    cfg.frameLimit  = 5;
+    Engine engine(std::move(cfg));
+    REQUIRE(engine.init());
+    const EngineConfig& c = engine.config();
+    CHECK(std::string(c.title) == "Boundary Test Title");
+    CHECK(c.width == 960);
+    CHECK(c.height == 540);
+    CHECK(c.headless);
+    CHECK_FALSE(c.editorMode);
+    CHECK(c.frameLimit == 5);
+    engine.shutdown();
+}
+
+// (1b) Negative window dimensions on the config are ACCEPTED (not clamped or
+// rejected): in headless mode the NullPlatformBackend stores and reports the
+// raw value verbatim. This locks the current no-clamp behavior; a future clamp
+// would need to update this test. (Record-only note: the engine does NOT
+// validate dimensions today -- main.cpp is the actual guard for real windows.)
+TEST_CASE("Engine: negative dimensions accepted with no clamp (headless)") {
+    EngineConfig cfg;
+    cfg.headless = true;
+    cfg.width  = -1;
+    cfg.height = -2;
+    Engine engine(std::move(cfg));
+    REQUIRE(engine.init());  // must not throw / crash on negative dims
+    CHECK(engine.platform().getWindowWidth()  == -1);
+    CHECK(engine.platform().getWindowHeight() == -2);
+    engine.shutdown();
+}
+
