@@ -487,6 +487,197 @@ local daJ = lsp.json("diagnostics", '[csp name="a" left=320]\n')
 check("alias: hint serialized via json", daJ:find("KAG3 别名", 1, true) ~= nil
       and daJ:find('"severity":2', 1, true) ~= nil)
 
+
+-- ---------------------------------------------------------------------------
+-- 15. label rename deep-boundary tests (round 80): target forms, special
+--     newNames, multi-reference precision, byte-exact edits in multibyte
+--     scenes, and lenient edge inputs (no crashes).
+-- ---------------------------------------------------------------------------
+-- Multibyte helpers (你=\228\189\160 好=\229\165\189, 6 bytes) — written as
+-- byte escapes so the test file stays encoding-agnostic (git bash/GUI).
+local NL = "\n"
+local fn_ni = "\228\189\160"
+local fn_hao = "\229\165\189"
+
+-- Byte-accurate edit applier (mirror of section 13's, local here so it can be
+-- reused across sub-blocks). Editors are assumed to operate on byte offsets.
+local function apply_edits_bytes(text, edits)
+    local ls = { 1 }
+    for i = 1, #text do if text:byte(i) == 10 then ls[#ls + 1] = i + 1 end end
+    table.sort(edits, function(a, b)
+        if a.line == b.line then return a.col < b.col end
+        return a.line < b.line end)
+    for j = #edits, 1, -1 do
+        local e = edits[j]
+        local bs = (ls[e.line] or 1) + e.col - 1
+        text = text:sub(1, bs - 1) .. e.newText .. text:sub(bs + e.length)
+    end
+    return text
+end
+
+-- 15a. Target-form reference set: quoted target="*old", bare target=*old,
+--      positional [jump *old], and a NO-STAR [jump target=old] which is NOT
+--      a label reference and must be left untouched.
+do
+    local tform = "*old" .. NL
+        .. '[jump target="*old"]' .. NL
+        .. "[jump target=*old]" .. NL
+        .. "[jump *old]" .. NL
+        .. "[jump target=old]" .. NL
+    local te = lsp.rename(tform, 1, 2, "new")
+    check("forms: def + 3 refs (quoted/bare/positional), no-star untouched",
+          te ~= nil and #te == 4)
+    local order = {}
+    for _, e in ipairs(te) do order[#order + 1] = { e.line, e.col, e.length, e.kind } end
+    check("forms: def at (1,2) len 3", order[1] and order[1][1] == 1
+          and order[1][2] == 2 and order[1][3] == 3 and order[1][4] == "definition")
+    check("forms: quoted ref col 16", order[2] and order[2][1] == 2
+          and order[2][2] == 16 and order[2][4] == "reference")
+    check("forms: bare param ref col 15", order[3] and order[3][1] == 3
+          and order[3][2] == 15 and order[3][4] == "reference")
+    check("forms: positional [jump *old] ref col 8", order[4] and order[4][1] == 4
+          and order[4][2] == 8 and order[4][4] == "reference")
+    local ta = apply_edits_bytes(tform, te)
+    check("forms: rewritten to *new everywhere except no-star line",
+          ta:find('[jump target="*new"]', 1, true) ~= nil
+          and ta:find("[jump target=*new]", 1, true) ~= nil
+          and ta:find("[jump *new]", 1, true) ~= nil)
+    check("forms: no-star [jump target=old] left as-is",
+          ta:find("[jump target=old]", 1, true) ~= nil
+          and ta:find("[jump target=*old]", 1, true) == nil)
+    check("forms: old name fully gone", ta:find("*old", 1, true) == nil)
+end
+
+-- 15b. Special newNames: invalid charset rejected (nil), valid digit/
+--      underscore accepted, same-name is a no-op, very long name accepted.
+do
+    local base = "*goal" .. NL .. "[jump target=*goal]" .. NL
+    check("names: space rejected", lsp.rename(base, 1, 1, "bad name") == nil)
+    check("names: quote rejected", lsp.rename(base, 1, 1, 'bad"quote') == nil)
+    check("names: punctuation hyphen rejected", lsp.rename(base, 1, 1, "a-b") == nil)
+    check("names: leading digit rejected", lsp.rename(base, 1, 1, "9start") == nil)
+    check("names: lone asterisk rejected", lsp.rename(base, 1, 1, "*") == nil)
+    check("names: lone underscore accepted (valid ident)", lsp.rename(base, 1, 1, "_") ~= nil
+          and #lsp.rename(base, 1, 1, "_") == 2)
+    check("names: leading underscore accepted", lsp.rename(base, 1, 1, "_ok") ~= nil
+          and #lsp.rename(base, 1, 1, "_ok") == 2)
+    check("names: digits inside accepted", lsp.rename(base, 1, 1, "a1b2") ~= nil
+          and #lsp.rename(base, 1, 1, "a1b2") == 2)
+    check("names: same name is no-op", #lsp.rename(base, 1, 1, "goal") == 0)
+    local longName = string.rep("x", 200)
+    local le = lsp.rename(base, 1, 1, longName)
+    check("names: 200-char valid name accepted", le ~= nil and #le == 2
+          and le[1].newText == longName and le[1].length == 4)
+    -- same-name edits carry no newText change that would corrupt (still {})
+    check("names: no-op returns empty not nil", lsp.rename(base, 1, 1, "goal") ~= nil)
+end
+
+-- 15c. Single-file semantics + multi-reference aggregation: rename is scoped
+--      to the ONE text argument (no cross-file resolution); every reference
+--      to the label in the file is rewritten, and references to a DIFFERENT
+--      label in the same file are left alone.
+do
+    local multi = "*start" .. NL
+        .. "*other" .. NL
+        .. "[jump target=*start]" .. NL
+        .. "[call *start]" .. NL
+        .. "[link target=*start]go[/link]" .. NL   -- keep terminal last
+        .. "[jump target=*other]" .. NL            -- this line is after [/link], dropped
+    -- NOTE: link truncates the rest; put the *other ref BEFORE the terminal link.
+    local multi2 = "*start" .. NL
+        .. "*other" .. NL
+        .. "[jump target=*start]" .. NL
+        .. "[call *start]" .. NL
+        .. "[jump target=*other]" .. NL
+        .. "[link target=*start]go[/link]" .. NL
+    local me = lsp.rename(multi2, 1, 2, "finish")
+    check("multi: renames only *start references", me ~= nil)
+    local count = 0
+    local refKinds = { definition = 0, reference = 0 }
+    for _, e in ipairs(me) do
+        count = count + 1
+        refKinds[e.kind] = refKinds[e.kind] + 1
+    end
+    -- *start: 1 def + 3 refs; *other: untouched (its ref stays *other)
+    check("multi: 1 def + 3 refs for *start", refKinds.definition == 1
+          and refKinds.reference == 3 and count == 4)
+    local ma = apply_edits_bytes(multi2, me)
+    check("multi: *other reference preserved", ma:find("[jump target=*other]", 1, true) ~= nil)
+    check("multi: all *start refs rewritten",
+          ma:find("[jump target=*finish]", 1, true) ~= nil
+          and ma:find("[call *finish]", 1, true) ~= nil
+          and ma:find("[link target=*finish]", 1, true) ~= nil)
+    check("multi: *start fully gone", ma:find("*start", 1, true) == nil)
+end
+
+-- 15d. Edit-set precision in a MULTIBYTE scene: the label definition sits on
+--      a line whose prefix is non-ASCII (byte columns, not char). Renaming
+--      from a jump reference must still produce byte-exact columns that, when
+--      applied, reconstruct the intended text.
+do
+    local ni = fn_ni
+    local hao = fn_hao
+    local scene = ni .. hao .. " *goal" .. NL   -- '你'好 + space before *goal
+        .. "[jump target=*goal]" .. NL
+    -- definition is on line 1, col 9 (byte of 'g' after the 6 multibyte
+    -- bytes + space + '*'); reference on line 2, col 15.
+    local pe = lsp.rename(scene, 1, 9, "finish")
+    check("mb: def + ref edits found", pe ~= nil and #pe == 2)
+    check("mb: def col 9 len 6 (byte after 6-byte prefix)", pe[1] and pe[1].line == 1
+          and pe[1].col == 9 and pe[1].length == 4)
+    check("mb: ref col 15 on line 2", pe[2] and pe[2].line == 2
+          and pe[2].col == 15 and pe[2].length == 4)
+    local pa = apply_edits_bytes(scene, pe)
+    check("mb: apply reconstructs *finish", pa:find("*finish", 1, true) ~= nil
+          and pa:find("*goal", 1, true) == nil)
+    check("mb: multibyte prefix bytes intact", pa:find(ni .. hao, 1, true) ~= nil)
+    check("mb: jump ref rewritten", pa:find("[jump target=*finish]", 1, true) ~= nil)
+    -- consistency with lsp.definition: both resolve to the SAME line.
+    local pd = lsp.definition(scene, 1, 9)
+    check("mb: definition resolves to line 1", pd ~= nil and pd.name == "goal"
+          and pd.line == 1)
+end
+
+-- 15e. Lenient edge inputs: out-of-range line/col, empty/absent text and
+--      name never crash; they return a valid result, {} or nil as declared.
+do
+    check("edge: empty text returns {}", #lsp.rename("", 1, 1, "x") == 0)
+    check("edge: nil line returns {}", #lsp.rename("*a" .. NL, nil, 1, "x") == 0)
+    check("edge: nil text returns {}", #lsp.rename(nil, 1, 1, "x") == 0)
+    check("edge: nil newName rejected", lsp.rename("*a" .. NL, 1, 1, nil) == nil)
+    check("edge: boolean newName rejected", lsp.rename("*a" .. NL, 1, 1, true) == nil)
+    check("edge: line 0 still resolves def (lenient)",
+          #lsp.rename("*a" .. NL .. "[jump *a]" .. NL, 0, 1, "b") == 2)
+    check("edge: oversized line still resolves def (lenient)",
+          #lsp.rename("*a" .. NL .. "[jump *a]" .. NL, 99, 1, "b") == 2)
+    check("edge: col 0 resolves def (lenient)",
+          #lsp.rename("*a" .. NL .. "[jump *a]" .. NL, 1, 0, "b") == 2)
+    check("edge: huge col no token -> {} not crash",
+          #lsp.rename("*a" .. NL, 1, 99999, "b") == 0)
+    -- negative line/col are clamped (no crash).
+    check("edge: negative line resolves def (lenient)",
+          #lsp.rename("*a" .. NL .. "[jump *a]" .. NL, -3, 1, "b") == 2)
+end
+
+-- 15f. Consistency with lsp.definition: renaming from the definition line and
+--      from a jump reference both resolve the SAME label to the SAME line, and
+--      the rename edit set's definition entry targets that same line.
+do
+    local cons = "*mark" .. NL .. "[jump target=*mark]" .. NL
+    local cd1 = lsp.definition(cons, 1, 2)
+    local cd2 = lsp.definition(cons, 2, 15)
+    check("consistency: def from def-line and jump-ref both -> mark line 1",
+          cd1 ~= nil and cd2 ~= nil and cd1.name == "mark" and cd2.name == "mark"
+          and cd1.line == 1 and cd2.line == 1)
+    local ce1 = lsp.rename(cons, 1, 2, "renamed")
+    local ce2 = lsp.rename(cons, 2, 15, "renamed")
+    check("consistency: rename from def-line and jump-ref produce same set",
+          ce1 ~= nil and ce2 ~= nil and #ce1 == 2 and #ce2 == 2
+          and ce1[1].line == ce2[1].line and ce1[1].col == ce2[1].col
+          and ce1[1].line == 1)
+end
+
+
 -- Exit gate.
 if failed > 0 then
 
