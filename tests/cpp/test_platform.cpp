@@ -135,3 +135,94 @@ TEST_CASE("Platform: NullPlatformBackend interface upcast identity") {
     CHECK_FALSE(ms.leftDown);
 }
 
+
+// =============================================================================
+// round 79: platform lifecycle, resize-sequence, timing, window edges
+// =============================================================================
+
+TEST_CASE("Platform: NullPlatformBackend resize sequence tracks dimensions") {
+    // Window management edge: a sequence of resize calls must never leave the
+    // backend with a stale dimension -- every resize updates width and height.
+    NullPlatformBackend backend;
+    backend.init("t", 100, 100);
+    const int pairs[][2] = {
+        { 800, 600 }, { 1920, 1080 }, { 320, 240 }, { 1280, 720 }
+    };
+    for (const auto& p : pairs) {
+        backend.resizeWindow(p[0], p[1]);
+        CHECK(backend.getWindowWidth() == p[0]);
+        CHECK(backend.getWindowHeight() == p[1]);
+    }
+    backend.shutdown();
+}
+
+TEST_CASE("Platform: NullPlatformBackend init is idempotent over repeated calls") {
+    // Lifecycle edge: calling init twice must not break the dimensions set by
+    // the first call; the most recent init wins and is reflected immediately.
+    NullPlatformBackend backend;
+    CHECK(backend.init("a", 640, 480));
+    CHECK(backend.getWindowWidth() == 640);
+    CHECK(backend.getWindowHeight() == 480);
+
+    CHECK(backend.init("b", 1024, 768));
+    CHECK(backend.getWindowWidth() == 1024);
+    CHECK(backend.getWindowHeight() == 768);
+    backend.shutdown();
+}
+
+TEST_CASE("Platform: NullPlatformBackend resize before init mutates dimensions") {
+    // Window-management edge documented from the actual null implementation:
+    // resizeWindow() is NOT gated on init -- it unconditionally writes the new
+    // dimensions even before init, so a pre-init resize leaves the backend with
+    // width/height set (unlike SDL3PlatformBackend::resizeWindow which no-ops
+    // until a real window exists). It must at least never crash.
+    NullPlatformBackend backend;
+    CHECK(backend.getWindowWidth() == 0);
+    CHECK(backend.getWindowHeight() == 0);
+    CHECK_NOTHROW(backend.resizeWindow(800, 600));
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+}
+
+TEST_CASE("Platform: NullPlatformBackend fullscreen toggle does not change size") {
+    // Window management: setFullscreen is a safe no-op on the null backend that
+    // never silently alters the window dimensions.
+    NullPlatformBackend backend;
+    backend.init("t", 800, 600);
+    CHECK_NOTHROW(backend.setFullscreen(true));
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+    CHECK_NOTHROW(backend.setFullscreen(false));
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+    backend.shutdown();
+}
+
+TEST_CASE("Platform: NullPlatformBackend timing is a constant sentinel") {
+    // Timing contract: the null backend advertises a deterministic, non-growing
+    // tick source (0) rather than pretending to be a monotonic clock -- engine
+    // code that special-cases a zero baseline must not misbehave.
+    NullPlatformBackend backend;
+    CHECK(backend.getTicksMs() == 0);
+    CHECK(backend.getTicksMs() == 0);
+    backend.init("t", 100, 100);
+    CHECK(backend.getTicksMs() == 0);   // invariant across lifecycle states
+    backend.shutdown();
+    CHECK(backend.getTicksMs() == 0);
+}
+
+TEST_CASE("Platform: SDL3 getTicksMs back-to-back reads are non-decreasing") {
+    // Timing edge: two immediate, back-to-back reads must never go backwards,
+    // and a longer (cross-second-scale) sleep must advance the clock -- the
+    // frame-delta clamp [0, 0.25]s depends on this.
+    SDL3PlatformBackend backend;
+    const uint64_t t0 = backend.getTicksMs();
+    const uint64_t t1 = backend.getTicksMs();
+    CHECK(t1 >= t0);
+
+    SDL_Delay(30);
+    const uint64_t t2 = backend.getTicksMs();
+    CHECK(t2 >= t1);
+    CHECK(t2 > t0);                    // the delay advanced the clock
+    CHECK(t2 < UINT64_MAX);
+}
