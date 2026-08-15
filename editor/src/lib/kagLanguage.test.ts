@@ -69,6 +69,14 @@ describe('KAG_COMMANDS (rounds 71-74 registration)', () => {
     expect(KAG_COMMANDS).toContain('endbutton')
   })
 
+  it('registers the round-76 [i18n] command keyword', () => {
+    // scripts/kag/commands/system.lua declares the [i18n] contract (round 76,
+    // category system, single required language= param). The Monaco keyword
+    // set must carry i18n so [i18n language="zh"] tokens as a valid tag
+    // rather than tag.invalid.
+    expect(KAG_COMMANDS).toContain('i18n')
+  })
+
   it('highlights the KAG3 [goto] alias (kag3_import maps goto->jump)', () => {
     // scripts/kag3_import.lua declares ["goto"]="jump"; the Monaco keyword
     // set must carry goto so [goto *label] tokens as a valid tag rather
