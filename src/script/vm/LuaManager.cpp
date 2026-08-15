@@ -23,13 +23,22 @@
 #include "../../debug/api/DebugLog.h"
 #include <cstdio>
 #include <limits>
+#include <thread>
+#include <chrono>
 
 namespace Caesura {
 
 namespace {
 char kLuaManagerRegistryKey;
 constexpr int kInstructionHookInterval = 10000;
-}
+
+// [galgame-flake-H1] On Windows a transient filesystem open failure (AV scan,
+// I/O backpressure, saves/logs flush) can make luaL_dofile return LUA_ERRFILE.
+// A 30+-file require chain in scripts/kag/init.lua then aborts the whole load.
+// Retry the file once after a short nap; real script errors (syntax/runtime)
+// return non-LUA_ERRFILE codes and are never retried.
+constexpr int kLoadRetryDelayMs = 4;
+} // namespace
 
 // ===========================================================================
 //  Track 3: Instruction-count hook for CPU budget enforcement
@@ -146,13 +155,30 @@ bool LuaManager::loadScript(const char* path) {
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_L || !path) return false;
     printf("[Lua] Loading script: %s\n", path);
-    if (luaL_dofile(m_L, path) != LUA_OK) {
-        DEBUG_ERR(SubSys::Scripting, ErrCode::Script_LoadFailed,
-                  "[Lua] Error loading %s: %s", path, lua_tostring(m_L, -1));
-        lua_pop(m_L, 1);
-        return false;
+
+    const int status = luaL_dofile(m_L, path);
+    if (status == LUA_OK) return true;
+
+    // [galgame-flake-H1] LUA_ERRFILE means the file could not be opened (transient
+    // on Windows), not a script-level error. Give it one short retry to absorb AV /
+    // I/O backpressure. Non-ERRFILE codes are genuine syntax/runtime errors and are
+    // never retried — retrying them would only double the failure.
+    if (status == LUA_ERRFILE) {
+        const char* firstErr = lua_tostring(m_L, -1);
+        DEBUG_WARN(SubSys::Scripting, ErrCode::Script_LoadFailed,
+                   "[Lua] Open failed for %s (LUA_ERRFILE) retrying: %s",
+                   path, firstErr ? firstErr : "(no message)");
+        lua_pop(m_L, 1); // clear the stale error message before retrying
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(kLoadRetryDelayMs));
+
+        if (luaL_dofile(m_L, path) == LUA_OK) return true;
     }
-    return true;
+
+    DEBUG_ERR(SubSys::Scripting, ErrCode::Script_LoadFailed,
+              "[Lua] Error loading %s: %s", path, lua_tostring(m_L, -1));
+    lua_pop(m_L, 1);
+    return false;
 }
 
 void LuaManager::resumeKAGCoroutine() {

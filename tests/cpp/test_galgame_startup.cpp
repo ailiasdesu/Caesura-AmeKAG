@@ -5,6 +5,7 @@
 
 #include <string>
 #include <utility>
+#include <cstdio>
 
 extern "C" {
 #include <lua.h>
@@ -14,6 +15,44 @@ extern "C" {
 using namespace Caesura;
 
 namespace {
+// [galgame-flake-H1] The init.lua require chain behaves like a single atomic
+// loadScript from the caller's perspective: a failure anywhere (most likely a
+// transient LUA_ERRFILE on Windows) just returns false with the VM error
+// already popped. This wrapper turns that into a diagnosable assertion: on
+// failure it captures which modules already made it into package.loaded (the
+// failing require is the one right after the last present module) plus a
+// filesystem existence probe, so a future flake can be pinned to a module.
+bool loadOrCapture(LuaManager& lua, lua_State* L, const char* path) {
+    if (lua.loadScript(path)) return true;
+
+    CAPTURE(path);
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "loaded");
+    int count = 0;
+    std::string loadedNames;
+    if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2) != 0) {
+            ++count;
+            if (loadedNames.size() < 512) {
+                if (!loadedNames.empty()) loadedNames += ",";
+                const char* name = lua_tostring(L, -2);
+                loadedNames += name ? name : "?";
+            }
+            lua_pop(L, 1);
+        }
+        if (loadedNames.size() >= 512) loadedNames += ",...";
+    }
+    lua_pop(L, 2); // package.loaded + package
+    CAPTURE(count);
+    if (!loadedNames.empty()) CAPTURE(loadedNames);
+
+    std::FILE* f = std::fopen(path, "rb");
+    const bool exists = (f != nullptr);
+    if (f) std::fclose(f);
+    CAPTURE(exists);
+    return false;
+}
 
 void configurePackagePath(lua_State* L, const std::string& scriptDir) {
     lua_getglobal(L, "package");
@@ -69,13 +108,13 @@ TEST_CASE("Galgame startup smoke: headless loads config, KAG init, and configure
 
     configurePackagePath(L, "scripts/");
 
-    REQUIRE(engine.lua().loadScript("scripts/config.lua"));
-    REQUIRE(engine.lua().loadScript("scripts/kag/init.lua"));
+    REQUIRE(loadOrCapture(engine.lua(), L, "scripts/config.lua"));
+    REQUIRE(loadOrCapture(engine.lua(), L, "scripts/kag/init.lua"));
 
     const std::string entryScript = readEntryScript(L);
     CAPTURE(entryScript);
     REQUIRE(entryScript == "../demo/entry.lua");
-    REQUIRE(engine.lua().loadScript(("scripts/" + entryScript).c_str()));
+    REQUIRE(loadOrCapture(engine.lua(), L, ("scripts/" + entryScript).c_str()));
 
     const char* apiProbe =
         "assert(type(Engine) == 'table', 'Engine table missing')\n"

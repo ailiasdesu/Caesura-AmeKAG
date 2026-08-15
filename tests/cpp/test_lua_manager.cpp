@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include <cstring>
+#include <cstdio>
 
 using namespace Caesura;
 
@@ -77,7 +78,56 @@ TEST_CASE("LuaManager::lockdownScriptEnv removes dangerous globals") {
 TEST_CASE("LuaManager::loadScript fails on nonexistent file") {
     LuaManager lm;
     lm.init();
+    // [galgame-flake-H1] A truly missing file is a persistent LUA_ERRFILE: the
+    // one-shot retry cannot rescue it and loadScript must still return false.
     CHECK_FALSE(lm.loadScript("nonexistent_script.lua"));
+}
+
+// [galgame-flake-H1] Retry boundary: the success path must load a real script
+// without any retry interfering (an extra retry would double-execute the file's
+// side effects). A valid file with a side effect is executed exactly once.
+TEST_CASE("LuaManager::loadScript loads valid file exactly once on success path") {
+    LuaManager lm;
+    REQUIRE(lm.init());
+    lua_State* L = lm.state();
+    REQUIRE(L != nullptr);
+
+    const char* tmpFile = "loadscript_success_tmp.lua";
+    const char* body = "loaded_count = (loaded_count or 0) + 1\n";
+    std::FILE* f = std::fopen(tmpFile, "wb");
+    REQUIRE(f != nullptr);
+    std::fwrite(body, 1, std::strlen(body), f);
+    std::fclose(f);
+
+    CHECK(lm.loadScript(tmpFile));   // first load executes once
+    CHECK(lm.loadScript(tmpFile));   // second load executes again (it is not cached)
+
+    lua_getglobal(L, "loaded_count");
+    CHECK(lua_tointeger(L, -1) == 2);
+    lua_pop(L, 1);
+    std::remove(tmpFile);
+}
+
+// [galgame-flake-H1] Only LUA_ERRFILE is retried. A real syntax error returns a
+// non-ERRFILE code and must fail immediately (and stay failed after the retry
+// path is skipped) — the fix must not turn a genuine script bug into flakiness.
+TEST_CASE("LuaManager::loadScript does not retry genuine syntax errors") {
+    LuaManager lm;
+    REQUIRE(lm.init());
+    lua_State* L = lm.state();
+    REQUIRE(L != nullptr);
+
+    const char* tmpFile = "loadscript_syntax_tmp.lua";
+    const char* body = "this is not valid lua !!!\n";
+    std::FILE* f = std::fopen(tmpFile, "wb");
+    REQUIRE(f != nullptr);
+    std::fwrite(body, 1, std::strlen(body), f);
+    std::fclose(f);
+
+    // A syntax error is not a file-open failure; loadScript must return false
+    // and leave the VM in a state where no partial result was produced.
+    CHECK_FALSE(lm.loadScript(tmpFile));
+    std::remove(tmpFile);
 }
 
 TEST_CASE("LuaManager::double init is safe") {
