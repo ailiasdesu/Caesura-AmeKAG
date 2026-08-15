@@ -280,18 +280,37 @@ function M.processScene(path, opts)
             -- Param-value rewrites: text-ish params get &var conversion,
             -- expression params get static TJS translation. Operates on
             -- the raw token slice, keyed by the (possibly aliased) param name.
-            out = out:gsub("([%w_]+)%s*=%s*\"([^\"]*)\"", function(pname, pval)
+            -- Helper shared by the quoted and bare (unquoted) param-value
+            -- rewrite passes: rename the param via PARAM_ALIASES, and for
+            -- text/expression params translate the VALUE. `q` is the quote
+            -- character (a quote or "") and is preserved so rebuild parity
+            -- holds (a bare value stays bare).
+            local function rewrite_param(pname, pval, q)
                 local eparam = (aliases and aliases[pname]) or pname
                 if TEXT_PARAMS[eparam] then
                     local conv = M.convertAmpVars(pval)
                     if conv ~= pval then report.converted_embeds = report.converted_embeds + 1 end
-                    return eparam .. '="' .. conv .. '"'
+                    return eparam .. "=" .. q .. conv .. (q or "")
                 elseif EXPR_PARAMS[eparam] then
                     local conv = M.translateExpr(pval)
                     if conv ~= pval then report.converted_exprs = report.converted_exprs + 1 end
-                    return eparam .. '="' .. conv .. '"'
+                    return eparam .. "=" .. q .. conv .. (q or "")
                 end
-                return eparam .. '="' .. pval .. '"'
+                return eparam .. "=" .. q .. pval .. (q or "")
+            end
+            -- Quoted values: name="value" (the common KAG3 form).
+            out = out:gsub("([%w_]+)%s*=%s*\"([^\"]*)\"", function(pname, pval)
+                return rewrite_param(pname, pval, '"')
+            end)
+            -- Bare (unquoted) values: name=var.path / name=5 / name=hero. KAG3
+            -- allows unquoted simple values, and round-72's param aliases
+            -- ([add var=...] -> name=...) must rename the KEY even when the
+            -- value is bare, or the converted scene silently no-ops at runtime
+            -- (the engine math contract reads `name`). The bare charset
+            -- explicitly excludes quotes/spaces/operators so the quoted pass
+            -- above and expression params stay untouched.
+            out = out:gsub("([%w_]+)%s*=%s*([%w_%.%-+]+)", function(pname, pval)
+                return rewrite_param(pname, pval, "")
             end)
             for _, note in ipairs(notes) do
                 if note:find("^UNSUPPORTED") then

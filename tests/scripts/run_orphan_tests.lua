@@ -28,6 +28,7 @@ local tests = {
     "test_math_cmds",
     "test_character_cmds",
     "test_textspeed",
+    "test_kag3_import_e2e",
 }
 
 local passed, failed = 0, 0
