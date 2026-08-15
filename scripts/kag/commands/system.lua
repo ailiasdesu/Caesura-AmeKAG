@@ -369,6 +369,18 @@ function SystemCommands.ending(ctx, params)
     print(string.format("[ending] unlocked %s (%s)", id, name))
 end
 
+-- Round 51 contracts: [unlock]/[rollback] (audit: handlers lacked
+-- schema contracts — no type checks or editor validation).
+_schema.define("unlock", {
+    _meta = { category = "system", blocking = false, desc = "unlock a gallery CG or music-room track" },
+    type = { type = "string", default = "cg" },
+    id = { type = "string" },
+    name = { type = "string" },
+})
+_schema.define("rollback", {
+    _meta = { category = "system", blocking = true, desc = "pop the newest token-level snapshot and re-run from there" },
+})
+
 function SystemCommands.rollback(ctx, params)
     if not ctx then return false end
     local ok, reason = require("kag_runner").rollback()

@@ -110,6 +110,23 @@ function Bezier.apply(preset_name, t)
 end
 
 
+-- Round 51 contracts: [blur]/[fade] (audit: handlers lacked schemas).
+local _schema2 = require("kag.schema")
+_schema2.define("blur", {
+    _meta = { category = "transition", blocking = true, desc = "gaussian blur the whole frame" },
+    amount = { type = "number", default = 0, min = 0, max = 100 },
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    duration = { type = "number", default = 300, min = 0, max = 30000 },
+})
+_schema2.define("fade", {
+    _meta = { category = "transition", blocking = true, desc = "fade a layer between from/to opacity" },
+    layer = { type = "string", default = "fg" },
+    from = { type = "number", default = 0, min = 0, max = 255 },
+    to = { type = "number", default = 255, min = 0, max = 255 },
+    time = { type = "number", default = 500, min = 0, max = 30000 },
+    duration = { type = "number", default = 500, min = 0, max = 30000 },
+})
+
 local TransCommands = {}
 
 local function find_layer(layerName)

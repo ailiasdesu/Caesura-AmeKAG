@@ -368,4 +368,35 @@ function AudioCommands.setvoicevolume(ctx, params)
     backend.audio_set_bus_volume("voice", vol)
 end
 
+-- =============================================================================
+--  Round 51: contracts for voice/wait commands (audit: handlers existed
+--  without schema contracts — no type checks, no editor validation).
+-- =============================================================================
+schema.define("playvoice", {
+    _meta = { category = "audio", blocking = true, desc = "play a voiced line (blocks until finished)" },
+    storage = { type = "file" },
+    file = { type = "file" },
+    path = { type = "file" },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+schema.define("voice", {
+    _meta = { category = "audio", blocking = false, desc = "KAG3-compatible voice command" },
+    storage = { type = "file" },
+    file = { type = "file" },
+    path = { type = "file" },
+    volume = { type = "number", default = 1.0, min = 0, max = 1.5 },
+})
+schema.define("stopvoice", {
+    _meta = { category = "audio", blocking = false, desc = "stop the current voice playback" },
+})
+schema.define("waitbgm", {
+    _meta = { category = "audio", blocking = true, desc = "block until the BGM bus finishes" },
+})
+schema.define("waitsound", {
+    _meta = { category = "audio", blocking = true, desc = "block until the SE bus finishes" },
+})
+schema.define("waitclick", {
+    _meta = { category = "audio", blocking = true, desc = "block until a click (voice-oriented wait)" },
+})
+
 return AudioCommands

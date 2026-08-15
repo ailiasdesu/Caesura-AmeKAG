@@ -7,6 +7,17 @@
 local backend = require("backend")
 local layers  = require("layers")
 
+-- Round 51 contract: [layfade] (audit: handler lacked a schema).
+local _schema3 = require("kag.schema")
+_schema3.define("layfade", {
+    _meta = { category = "layer", blocking = true, desc = "fade one layer to an opacity" },
+    layer = { type = "string", default = "bg" },
+    name = { type = "string" },
+    to = { type = "number", default = 255, min = 0, max = 255 },
+    time = { type = "number", default = 300, min = 0, max = 30000 },
+    duration = { type = "number", default = 300, min = 0, max = 30000 },
+})
+
 local LayerCommands = {}
 
 -- Internal: resolve file path (storage > path > file > positional)

@@ -442,6 +442,12 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- [saveload mode=save|load] — slot-selection UI (scheduler-driven)
+-- Round 51 contract: [saveload] (audit: handler lacked a schema).
+require("kag.schema").define("saveload", {
+    _meta = { category = "save", blocking = true, desc = "open the save/load menu (mode: save|load)" },
+    mode = { type = "string" },
+})
+
 function SaveCommands.saveload(ctx, params)
     local SaveLoad = require("saveload_menu")
     -- string guard on the bare mode (audit: a pair table from named

@@ -8,6 +8,12 @@
 local Operation   = require("kag.operation")
 local backend     = require("backend")
 
+-- Round 51 contract: [stopvideo] (audit: handler lacked a schema).
+local _schema4 = require("kag.schema")
+_schema4.define("stopvideo", {
+    _meta = { category = "video", blocking = false, desc = "stop the current video playback" },
+})
+
 local VideoCommands = {}
 
 local function resolve_file(params)

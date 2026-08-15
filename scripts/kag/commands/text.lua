@@ -1138,6 +1138,30 @@ Future enhancement: extract to a standalone ChoiceController Lua class if comple
 --]]
 -- =============================================================================
 
+-- Round 51 contracts: choice/button + skip commands (audit: handlers
+-- lacked schema contracts).
+schema.define("button", {
+    _meta = { category = "text", blocking = false, desc = "register a choice button label ([endbutton] draws it)" },
+    text = { type = "string", default = "", interpolate = true },
+    caption = { type = "string" },
+    target = { type = "string" },
+    cond = { type = "string" },
+})
+schema.define("endbutton", {
+    _meta = { category = "text", blocking = true, desc = "draw the registered choice buttons and wait for a pick" },
+    target = { type = "string" },
+})
+schema.define("endselect", {
+    _meta = { category = "text", blocking = true, desc = "KAG3 alias of [endbutton]" },
+})
+schema.define("select", {
+    _meta = { category = "text", blocking = false, desc = "begin a choice block ([sel] alias)" },
+})
+schema.define("skip", {
+    _meta = { category = "text", blocking = false, desc = "toggle skip mode (mode=seen skips read text only)" },
+    mode = { type = "string" },
+})
+
 function TextCommands.button(ctx, params)
     ctx._choiceButtons = ctx._choiceButtons or {}
     local text = params.text or params.caption or ""
