@@ -34,11 +34,23 @@ print("=== Caesura Orphan Test Suite (isolated) ===\n")
 -- contained (exit 0 = pass, non-zero = fail).
 local lua_bin = arg and arg[-1] or "lua"
 local function run_isolated(name)
-    -- Windows popen: cmd.exe fails when the executable is quoted
-    -- ("external\lua\lua.exe ..." -> 'external' not recognized), but
-    -- unquoted works as long as the path has no spaces. The test file
-    -- path is quoted (it may contain spaces).
+    -- Windows popen (cmd.exe /c) quoting rules:
+    --  * unquoted relative exe works ("external\lua\lua.exe ...")
+    --  * a command STARTING with a quote loses its outer quotes under
+    --    cmd /c, so `"D:\path with space\lua.exe" ...` breaks into
+    --    `D:\path` + garbage ('D:\...\Caesura' not recognized);
+    --  * prefixing with `call` keeps the first char non-quote, so a
+    --    quoted absolute exe (what git-bash argv[-1] resolves to) runs
+    --    correctly. The test file path is always quoted.
     local bin = lua_bin:gsub('/', '\\')
+    -- cmd splits UNQUOTED command tokens at spaces AND at parens
+    -- (probe: 'D:\...\Caesura(AmeKAG)\lua.exe' -> 'D:\...\Caesura'
+    -- not recognized), and an absolute exe is what git-bash argv[-1]
+    -- resolves to. Wrap only when needed so the round-52 relative-exe
+    -- path (no spaces/parens) keeps working unquoted.
+    if bin:find("[ %(%)]") then
+        bin = 'call "' .. bin .. '"'
+    end
     local f = (test_dir .. name .. '.lua'):gsub('/', '\\')
     local cmd = bin .. ' "' .. f .. '"'
     local pf = io.popen(cmd)
