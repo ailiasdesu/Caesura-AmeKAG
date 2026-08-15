@@ -86,7 +86,31 @@ top-level `=` and runs the full pipeline on the RHS (round 68):
 [eval exp="f.arr = {10, 20, 30}"]          -- table constructor
 ```
 
-A bare expression (no assignment) stores its result in `tf.eval_result`.
+### Bare value expressions and `tf.eval_result`
+
+A **bare value expression** — no `=` assignment, no statement — is
+auto-wrapped in a `return` through the full translation pipeline, so
+its result lands in `tf.eval_result` (round 71; before that a bare
+value failed to compile):
+
+```
+[eval exp="f.hp * 2"]                       -- -> tf.eval_result = f.hp * 2
+[eval exp="f.a ? 1 : 2"]                    -- bare ternary (round 71)
+[eval exp="f.a && f.b ? 1 : 0"]             -- TJS operators + ternary combine
+```
+
+TJS ternary and the `&&`/`||`/`!`/`!=` operators are all supported in
+a bare value expression — the `return` wrap runs the same TJS→Lua
+translator as `[if]`, so `f.a ? 1 : 2`, `f.hp * 2`, and a call inside
+a value expression (`f.double(21) * 1`) all store their value.
+
+**Assignment and call statements** keep statement semantics. An
+assignment (`f.score = f.base + 50`) writes the variable and, because
+the chunk returns nothing, leaves `tf.eval_result` untouched. A bare
+call used as a statement (`[eval exp="f.double(5)"]`) likewise runs for
+its side effect only — Lua discards the chained call's return, so
+`tf.eval_result` is not set. Only when a call sits inside a value
+expression does its return value reach `tf.eval_result`.
 
 ## Errors are visible
 

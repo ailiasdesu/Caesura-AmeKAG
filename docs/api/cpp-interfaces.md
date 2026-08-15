@@ -664,7 +664,7 @@ Web 编辑器 HTTP 服务器。
 | GET | `/api/ping` | 健康检查 → `{"status":"ok"}` |
 | GET | `/api/status` | 引擎状态（Lua 可用性、端口） |
 | GET | `/api/assets` | 列出项目资源（支持 `?type=image/audio/script` 过滤） |
-| POST | `/api/run` | 当前返回 `unsupported_yieldable_execution` |
+| POST | `/api/run` | 通过 managed coroutine（startManagedRun+pumpManagedRuns）执行剧本/代码 |
 | POST | `/api/stop` | 停止执行 |
 | GET | `/api/logs` | 近期日志 |
 | GET | `/api/live2d/models` | 列出可用 Live2D 模型 |

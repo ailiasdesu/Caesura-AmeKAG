@@ -7,14 +7,14 @@
 
 | 示例 | 文件 | 覆盖命令 | 验证 |
 |---|---|---|---|
-| Command Showcase | demo/showcase.ks | **25 个命令**：bg/fg/ch/cl/font/pt/wait/playbgm/playse/playvoice/p/position/flash/trans/vib/sprite_move/sprite_fade/set/if/else/endif/jump/scroll/stopbgm/ending/end | 引擎 tokenize/compile（56 tokens/6 labels）+ Web 播放器 DONE:53 + backlog 9 页 + ending 解锁 |
+| Command Showcase | demo/showcase.ks | **25 个命令**：bg/fg/ch/cl/font/pt/wait/playbgm/playse/p/position/flash/trans/vib/sprite_move/sprite_fade/eval/if/else/endif/jump/scroll/stopbgm/ending/end | 引擎 tokenize/compile（56 tokens/6 labels）+ Web 播放器 DONE:53 + backlog 9 页 + ending 解锁 |
 | Galgame Demo | demo/galgame_demo.ks | 核心 VN 流程（bg/ch/playbgm/voice/sprite/ending） | Web flow 集成测试（park/点击/DONE/hana bg/立绘） |
 | Full Pipeline | demo/full_pipeline_demo.ks | 全管线流程 | ks_bake bundle |
 | SMA Demo | demo/sma_demo.ks | SMA 骨骼动画命令 | ks_bake bundle |
 
 ## 教程路径（Tutorial Path，从零开始）
 
-按顺序运行 6 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
+按顺序运行 13 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
 
 | 步骤 | 示例 | 学习内容 | 命令 |
 |---|---|---|---|
@@ -30,10 +30,12 @@
 | 10 | demo/tutorial/tutorial_10_loops.ks | 循环控制流：正序/倒序 [for]、[while] 条件循环 + [eval] 递减（每场景 65536 迭代守卫） | for, endfor, while, endwhile, eval, set, ch, p |
 | 11 | demo/tutorial/tutorial_11_switch.ks | 多路分支：裸变量选择器（KAG3 兼容）与 exp= 表达式选择器（数值/布尔/TJS 运算符），case tostring 匹配无 fallthrough，缺失变量走 default | switch, case, default, endswitch, set, ch, p |
 | 12 | demo/tutorial/tutorial_12_expr_combo.ks | 表达式组合实战：三元在索引内、?? 空合并 + switch exp、循环 + 插值、eval 三元赋值（RHS 全管道） | eval, switch, case, endswitch, for, endfor, set, ch, p |
+| 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度（textspeed/cps）、算术链（add/sub/mul/div/mod/dec）、角色（csp/csd/csl）、notify/palette/vibrate/preload | textspeed, cps, add, sub, mul, div, mod, dec, csp, csd, csl, notify, palette, vibrate, preload |
+| 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度切换、变量算术链、角色立绘 / 移动 / 清除、吐司通知、LUT 色调、消息层震动、资源预加载 | textspeed, cps, add, sub, mul, div, mod, dec, csp, csl, csd, notify, palette, vibrate, preload, set, eval, ch, p |
 
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
-注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→06 顺序学习。
+注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→13 顺序学习。
 
 ## 如何运行示例
 
@@ -72,9 +74,9 @@ bundle 由 `lua scripts/ks_bake.lua --dir demo --web cache/story` 生成（需�
 |---|---|
 | 文本 | font / pt / ch / p / scroll |
 | 图层 | bg / fg / cl / position / sprite_move / sprite_fade |
-| 音频 | playbgm / playse / playvoice / stopbgm |
+| 音频 | playbgm / playse / stopbgm |
 | 特效 | flash / trans / vib |
-| 流程 | wait / if / else / endif / jump / set / ending / end |
+| 流程 | wait / eval / if / else / endif / jump / ending / end |
 
 ---
 *示例库 round 41-42 建设（G6 起点）*

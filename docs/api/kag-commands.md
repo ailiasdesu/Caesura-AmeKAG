@@ -177,7 +177,7 @@
 | `se` | `file` | `playse` | Play SE |
 | `clear` | — | `cl` | Clear text layer |
 
-## Total: see the auto-generated [command-contracts.md](command-contracts.md) (72 contract commands)
+## Total: see the auto-generated [command-contracts.md](command-contracts.md) (102 contract commands)
 
 | Category | Count | Commands |
 |----------|-------|----------|
