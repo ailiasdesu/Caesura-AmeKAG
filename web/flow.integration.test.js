@@ -115,7 +115,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
 
-  it('runs every tutorial in the teaching path (01-06) to completion', async () => {
+  it('runs every tutorial in the teaching path (01-08) to completion', async () => {
     const tutorials = [
       ['tutorial_01_hello.ks', /你好，世界/],
       ['tutorial_02_text.ks', /文本命令学完了/],
@@ -123,6 +123,10 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
       ['tutorial_04_audio.ks', /音频教程完成/],
       ['tutorial_05_branching.ks', /分支教学完成/],
       ['tutorial_06_effects.ks', /六个教程全部完成/],
+      // round 45: save/load degrades gracefully (no SaveManager in web)
+      ['tutorial_07_saveload.ks', /存档教程完成/],
+      // round 45: system-UI overlays are no-op stubs in the web player
+      ['tutorial_08_system_ui.ks', /八课教程全部学完/],
     ]
     for (const [file, lineRe] of tutorials) {
       const ks = readFileSync(join(here, '..', 'demo', 'tutorial', file), 'utf8')

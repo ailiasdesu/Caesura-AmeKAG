@@ -68,6 +68,17 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     set_layer_blend: () => {}, set_position: (n, x, y) => core._log('layer.position', { name: String(n), x, y }), set_options: () => {},
     fade_to: () => {}, mark_dirty: () => {}, get_layer: (id) => core.getLayer(id) ?? null,
   }
+
+  // ---- KAG binding surface (C++ bindings in the real engine) ----
+  // Save/load go through KAG.save_game / KAG.load_game in the desktop
+  // engine; the web player has no SaveManager, so expose honest stubs
+  // that return nil (engine-side handlers degrade to "error" results
+  // instead of crashing on a nil call).
+  const jsKAG = {
+    save_game: () => null,
+    load_game: () => null,
+    capture_thumbnail: () => null,
+  }
   const jsBackend = {
     // audio_play routes through the real WebAudio engine when available;
     // the core state machine always records the call (telemetry + fallback).
@@ -107,14 +118,26 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     flow: { scene_cache: () => {}, load_scene: () => {} },
     replay: { save: () => {}, event_count: () => 0, load: () => {}, set_mode: () => {} },
     pool: {}, config: { ai: () => {} }, system: { lua: () => {} },
-    settings: {}, gallery: {}, music_room: {}, title_menu: {}, saveload_menu: {},
-    chapter_select: {}, dev_hud: {}, history_ui: {}, toast: {}, ks_i18n: {}, fileutil: {}, sandbox: {},
+    settings: {},
+    // System-UI modules: the desktop engine opens overlay screens; the web
+    // player has no overlay runtime, so every entry point is a safe no-op
+    // (engine handlers call show(ctx)/_hideAll(ctx) — nil would crash).
+    gallery: { show: () => {}, _hideAll: () => {} },
+    music_room: { show: () => {}, _hideAll: () => {} },
+    history_ui: { show: () => {}, _hideAll: () => {} },
+    title_menu: { show: () => {}, _hideAll: () => {} },
+    saveload_menu: { show: () => {}, _hideAll: () => {} },
+    chapter_select: { show: () => {}, _hideAll: () => {} },
+    dev_hud: { show: () => {}, _hideAll: () => {} },
+    toast: { show: () => {}, _hideAll: () => {} },
+    ks_i18n: {}, fileutil: {}, sandbox: {},
     mods: { resolve: (p) => p, register: () => {}, list: () => ({}) },
     i18n: { localize: (s) => s, current: '', t: (s) => s },
   }
   for (const [k, v] of Object.entries(jsStubs)) lua.global.set(k, v)
   lua.global.set('backend', jsBackend)
   lua.global.set('layers', jsLayers)
+  lua.global.set('KAG', jsKAG)
   await lua.doString(`
     backend = _G['backend']
     layers = _G['layers']
