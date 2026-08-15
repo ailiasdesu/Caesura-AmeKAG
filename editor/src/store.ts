@@ -1,6 +1,7 @@
 // Editor store — lightweight IDE state (VS Code-style workbench model).
 // Tabs of open documents, active tab, sidebar view, status line.
 import { create } from 'zustand'
+import { loadSettings, saveSettings, type EditorSettings } from './lib/settings'
 
 export interface OpenDoc {
   /** Asset path as reported by /api/assets, e.g. assets/script/main.ks */
@@ -12,12 +13,14 @@ export interface OpenDoc {
   dirty: boolean
 }
 
-export type SideView = 'explorer' | 'debug' | 'visual' | 'ai'
+export type SideView = 'explorer' | 'debug' | 'visual' | 'ai' | 'settings'
 
 interface EditorState {
   docs: OpenDoc[]
   activePath: string | null
   sideView: SideView
+  /** IDE preference settings (theme/font/line numbers/engine params). */
+  settings: EditorSettings
   engineConnected: boolean
   engineScene: string
   engineToken: number
@@ -39,6 +42,8 @@ interface EditorState {
   closeDoc: (path: string) => void
   setActive: (path: string) => void
   setSideView: (v: SideView) => void
+  /** Persist + apply a partial settings update (theme/font/line numbers/...). */
+  setSettings: (patch: Partial<EditorSettings>) => void
   setEngine: (s: Partial<Pick<EditorState, 'engineConnected' | 'engineScene' | 'engineToken' | 'enginePaused' | 'engineCmd'>>) => void
   /** Insert generated tag text into the active document at the cursor
    *  (or append); marks the doc dirty. */
@@ -55,6 +60,8 @@ export const useEditor = create<EditorState>((set) => ({
   docs: [],
   activePath: null,
   sideView: 'explorer',
+  // Hydrate persisted preferences; missing/corrupt storage → defaults.
+  settings: loadSettings(),
   engineConnected: false,
   engineScene: '',
   engineToken: 0,
@@ -88,6 +95,12 @@ export const useEditor = create<EditorState>((set) => ({
     }),
   setActive: (path) => set({ activePath: path }),
   setSideView: (v) => set({ sideView: v }),
+  setSettings: (patch) =>
+    set((s) => {
+      const next = { ...s.settings, ...patch }
+      saveSettings(next)
+      return { settings: next }
+    }),
   setEngine: (p) => set(p),
   insertIntoActive: (text) =>
     set((s) => {

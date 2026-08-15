@@ -32,6 +32,9 @@ export function EditorArea() {
   const closeDoc = useEditor((s) => s.closeDoc)
   const revealRequest = useEditor((s) => s.revealRequest)
   const lastReveal = useRef(0)
+  // Layer "settings": Monaco font size + line-number gutter toggle.
+  const fontSize = useEditor((s) => s.settings.fontSize)
+  const showLineNumbers = useEditor((s) => s.settings.showLineNumbers)
 
   const active = docs.find((d) => d.path === activePath) ?? null
 
@@ -68,7 +71,7 @@ export function EditorArea() {
           <div
             key={d.path}
             role="tab"
-            className={`editor-tab ${d.path === activePath ? 'active' : ''}`}
+            className={"editor-tab " + (d.path === activePath ? 'active' : '')}
             onClick={() => setActive(d.path)}
             title={d.path}
           >
@@ -104,7 +107,8 @@ export function EditorArea() {
               if (typeof v === 'string') updateDoc(active.path, v)
             }}
             options={{
-              fontSize: 13,
+              fontSize,
+              lineNumbers: showLineNumbers ? 'on' : 'off',
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               wordWrap: 'on',

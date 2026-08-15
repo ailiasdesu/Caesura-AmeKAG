@@ -11,6 +11,7 @@ import { TimelineView } from './ide/TimelineView'
 import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
 import { AiPanel } from './ide/AiPanel'
+import { SettingsPanel } from './ide/SettingsPanel'
 import { EditorArea } from './ide/EditorArea'
 import { OutputPanel } from './ide/OutputPanel'
 import { ConnectionPanel } from './components/ConnectionPanel'
@@ -27,6 +28,9 @@ export function App() {
   const [connError, setConnError] = useState('')
   const sideView = useEditor((s) => s.sideView)
   const setEngine = useEditor((s) => s.setEngine)
+  // Layer "settings" entry: the workbench theme is applied via data-theme on
+  // the root app node so the CSS palette can react to the persisted choice.
+  const theme = useEditor((s) => s.settings.theme)
 
   useEffect(() => {
     void (async () => {
@@ -45,7 +49,7 @@ export function App() {
   }, [setEngine])
 
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <header className="app-header">
         <h1 className="app-title">Caesura Editor</h1>
         <ConnectionPanel
@@ -72,6 +76,7 @@ export function App() {
           {sideView === 'debug' && <DebugView client={clientRef.current} />}
           {sideView === 'visual' && <VisualView client={clientRef.current} />}
           {sideView === 'ai' && <AiPanel client={clientRef.current} />}
+          {sideView === 'settings' && <SettingsPanel />}
         </aside>
 
         <main className="editor-col">

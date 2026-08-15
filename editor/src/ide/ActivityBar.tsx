@@ -5,6 +5,7 @@ const VIEWS: { id: SideView; label: string; icon: string }[] = [
   { id: 'debug', label: 'Run and Debug', icon: '🐞' },
   { id: 'visual', label: 'Visual Preview', icon: '🎬' },
   { id: 'ai', label: 'AI Writer', icon: '✨' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' },
 ]
 
 export function ActivityBar() {
@@ -16,7 +17,7 @@ export function ActivityBar() {
       {VIEWS.map((v) => (
         <button
           key={v.id}
-          className={`activity-item ${sideView === v.id ? 'active' : ''}`}
+          className={"activity-item " + (sideView === v.id ? 'active' : '')}
           onClick={() => setSideView(v.id)}
           title={v.label}
         >

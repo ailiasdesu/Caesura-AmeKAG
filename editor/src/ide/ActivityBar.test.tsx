@@ -19,18 +19,20 @@ beforeEach(() => {
 })
 
 describe('ActivityBar (component)', () => {
-  it('renders all four view buttons with icons and labels', () => {
+  it('renders all five view buttons with icons and labels', () => {
     render(<ActivityBar />)
     const buttons = screen.getAllByRole('button')
-    expect(buttons).toHaveLength(4)
+    expect(buttons).toHaveLength(5)
     expect(buttons[0].textContent).toBe('📁')
     expect(buttons[1].textContent).toBe('🐞')
     expect(buttons[2].textContent).toBe('🎬')
     expect(buttons[3].textContent).toBe('✨')
+    expect(buttons[4].textContent).toBe('⚙️')
     expect(buttons[0].getAttribute('title')).toBe('Explorer (assets)')
     expect(buttons[1].getAttribute('title')).toBe('Run and Debug')
     expect(buttons[2].getAttribute('title')).toBe('Visual Preview')
     expect(buttons[3].getAttribute('title')).toBe('AI Writer')
+    expect(buttons[4].getAttribute('title')).toBe('Settings')
   })
 
   it('marks the active view with the active class', () => {
@@ -41,6 +43,7 @@ describe('ActivityBar (component)', () => {
     expect(buttons[0].className).not.toContain('active')
     expect(buttons[1].className).not.toContain('active')
     expect(buttons[3].className).not.toContain('active')
+    expect(buttons[4].className).not.toContain('active')
   })
 
   it('switches the active view on click', () => {
@@ -49,6 +52,12 @@ describe('ActivityBar (component)', () => {
     expect(useEditor.getState().sideView).toBe('ai')
     fireEvent.click(screen.getAllByRole('button')[1])
     expect(useEditor.getState().sideView).toBe('debug')
+  })
+
+  it('activates the settings view from its button', () => {
+    render(<ActivityBar />)
+    fireEvent.click(screen.getAllByRole('button')[4])
+    expect(useEditor.getState().sideView).toBe('settings')
   })
 
   it('updates the active class after a click', () => {

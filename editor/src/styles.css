@@ -793,3 +793,93 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
   font-family: ui-monospace, Consolas, monospace;
   font-weight: 600;
 }
+
+/* ---- Settings panel (layer "settings") ---- */
+
+.settings-panel { gap: 10px; }
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.settings-label { flex: 1; color: var(--fg); }
+.settings-check input { accent-color: var(--accent); }
+
+.settings-select,
+.settings-input {
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font: inherit;
+}
+.settings-input { width: 64px; }
+
+.settings-row.settings-readonly code {
+  font-family: 'Cascadia Code', ui-monospace, monospace;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+.settings-hint {
+  font-size: 10px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.settings-primary,
+.settings-secondary {
+  border-radius: 3px;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.settings-primary {
+  background: var(--accent);
+  color: #111;
+  border: none;
+}
+.settings-secondary {
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+/* ---- Light theme (layer "settings" - data-theme on the app root) ----
+   The workbench uses the built-in dark palette by default; selecting "Light"
+   in the Settings panel sets data-theme="light" on .app, overriding the core
+   --bg / --fg tokens so the whole shell switches palette. */
+
+[data-theme="light"] {
+  --bg: #f5f6f8;
+  --bg-panel: #ffffff;
+  --bg-input: #eef0f3;
+  --bg-hover: #e2e5ea;
+  --fg: #1f2430;
+  --fg-dim: #6b7280;
+  --accent: #1a5fb4;
+  --accent-strong: #0d4fa3;
+  --border: #d3d7de;
+  --ok: #2e7d32;
+  --warn: #b5651d;
+  --err: #c62828;
+  --paused: #b5651d;
+}
