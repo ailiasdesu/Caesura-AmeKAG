@@ -30,12 +30,14 @@ export function registerKagLanguage() {
         [/^\*[a-zA-Z_][\w]*/, 'type.identifier'],
         // block text """ ... """
         [/"""/, { token: 'string', next: '@blocktext' }],
-        // tags: [command ...]
+        // tags: [command ...] — the command word is captured in group 1 so the
+        // @keywords case matches the bare name (Monarch's plain '@keywords'
+        // compares the whole '[cmd' text, which never equals a bare keyword).
         [
-          /\[[a-zA-Z_][\w]*/,
+          /\[([a-zA-Z_][\w]*)/,
           {
             cases: {
-              '@keywords': 'tag',
+              '$1@keywords': 'tag',
               '@default': 'tag.invalid',
             },
           },
