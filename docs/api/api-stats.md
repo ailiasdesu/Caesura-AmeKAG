@@ -11,14 +11,14 @@
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 31 |
 | Pure-virtual interface methods | 278 |
-| Lua binding functions (luaL_Reg entries) | 157 |
+| Lua binding functions (luaL_Reg entries) | 149 |
 | KAG command handler files | 9 |
-| KAG contract commands (command-contracts.md) | 84 |
+| KAG contract commands (command-contracts.md) | 102 |
 | RPC HTTP endpoints (EditorServer) | 25 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
-| C++ test cases | 638 |
-| C++ assertions | 6160 |
+| C++ test cases | 711 |
+| C++ assertions | 6656 |
 | Lua tests passed | 120 |
 
 ## 2. C++ interfaces by module
@@ -71,7 +71,6 @@
 | SaveBinding.cpp | 12 | KAG |
 | SmaBinding.cpp | 8 | sma |
 | SteamBinding.cpp | 18 | steam |
-| UnifiedBinding.cpp | 8 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, _CAESURA_BACKEND |
 | VFXBinding.cpp | 10 | VFX |
 
 ## 4. RPC surface
