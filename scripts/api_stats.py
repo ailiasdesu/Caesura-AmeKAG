@@ -3,7 +3,13 @@
 
 Scans the source tree (interfaces, Lua bindings, KAG commands, RPC
 endpoints) and emits a Markdown statistics document. Every number is
-derived from the code (or from live test runs), never hand-maintained.
+derived from the code, never hand-maintained.
+
+Round 70: the census used to also report live test-run counts (C++
+cases/assertions, Lua tests passed). Those are environment-dependent
+(FFmpeg presence, GPU/audio availability, runner load) and made the
+CI docs-freshness guard flaky; test health is enforced by the
+dedicated gates (ctest, Lua suites, check_test_coverage) instead.
 
 Usage: python scripts/api_stats.py [--json]
 """
@@ -94,64 +100,12 @@ def count_lua_scripts():
     return count
 
 
-def run_tests():
-    """Live test census (best effort; returns None when not runnable)."""
-    result = {"cpp_cases": None, "cpp_asserts": None, "lua_passed": None}
-    try:
-        exe = os.path.join(ROOT, "build", "tests", "Debug", "CaesuraTests.exe")
-        if os.path.isfile(exe):
-            out = subprocess.run([exe, "-r", "compact"], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                 timeout=300, cwd=os.path.dirname(exe)).stdout
-            matches = re.findall(r"test cases:\s*(\d+)\s*\|\s*(\d+)\s+passed.*?assertions:\s*(\d+)\s*\|\s*(\d+)\s+passed",
-                                 out, re.DOTALL)
-            if matches:
-                # Last block is the grand total; earlier blocks are
-                # per-suite summaries (compact reporter).
-                result["cpp_cases"], result["cpp_asserts"] = int(matches[-1][1]), int(matches[-1][3])
-    except Exception:
-        pass
-    try:
-        # external/lua is gitignored — CMake builds the interpreter into
-        # build/ on CI, so probe the same locations the workflow steps use
-        # (round 70: the census dropped the Lua row when lua.exe was absent).
-        lua = None
-        for cand in (os.path.join(ROOT, "external", "lua", "lua.exe"),
-                     os.path.join(ROOT, "build", "lua", "Debug", "lua.exe"),
-                     os.path.join(ROOT, "build", "lua", "lua.exe"),
-                     os.path.join(ROOT, "build", "tools", "lua", "Debug", "lua.exe"),
-                     os.path.join(ROOT, "build", "tools", "lua", "lua.exe"),
-                     os.path.join(ROOT, "build", "Debug", "lua.exe")):
-            if os.path.isfile(cand):
-                lua = cand
-                break
-        if lua is None:
-            bdir = os.path.join(ROOT, "build")
-            if os.path.isdir(bdir):
-                for r2, _, files in os.walk(bdir):
-                    if "lua.exe" in files:
-                        lua = os.path.join(r2, "lua.exe")
-                        break
-                if lua is not None:
-                    pass  # found via the walk (outer loop already ended)
-        if lua is not None:
-            out = subprocess.run([lua, os.path.join(ROOT, "tests", "scripts", "run_lua_tests.lua")],
-                                 capture_output=True, text=True, timeout=300,
-                                 cwd=ROOT).stdout
-            matches = re.findall(r"Results:\s*(\d+)\s+passed,\s*\d+\s+failed,\s*\d+\s+total", out)
-            if matches:
-                result["lua_passed"] = int(matches[-1])
-    except Exception:
-        pass
-    return result
-
-
 def main():
     interfaces, total_iface_methods = scan_interfaces()
     bindings = scan_lua_bindings()
     kag = scan_kag_commands()
     rpc = scan_rpc()
     lua_scripts = count_lua_scripts()
-    tests = run_tests()
 
     stats = {
         "modules": sorted(interfaces.keys()),
@@ -164,8 +118,7 @@ def main():
         "rpc_http_endpoints": len(rpc["http_endpoints"]),
         "rpc_stdin_methods": len(rpc["stdin_methods"]),
         "lua_scripts": lua_scripts,
-        "tests": tests,
-    }
+            }
 
     if "--json" in sys.argv:
         print(json.dumps(stats, indent=2, ensure_ascii=False))
@@ -192,12 +145,6 @@ def main():
     A(f"| RPC HTTP endpoints (EditorServer) | {stats['rpc_http_endpoints']} |")
     A(f"| RPC stdin JSON-RPC methods | {stats['rpc_stdin_methods']} |")
     A(f"| Lua runtime scripts (scripts/, excl. demo/check) | {stats['lua_scripts']} |")
-    if tests["cpp_cases"] is not None:
-        A(f"| C++ test cases | {tests['cpp_cases']} |")
-    if tests["cpp_asserts"] is not None:
-        A(f"| C++ assertions | {tests['cpp_asserts']} |")
-    if tests["lua_passed"] is not None:
-        A(f"| Lua tests passed | {tests['lua_passed']} |")
     A("")
     A("## 2. C++ interfaces by module")
     A("")
