@@ -1,12 +1,15 @@
 #include "doctest.h"
 #include "job/JobSystem.h"
 #include "entry/Engine.h"
+#include "mocks/NullJobSystem.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
+#include <vector>
 
 using namespace Caesura;
 
@@ -141,4 +144,168 @@ TEST_CASE("JobSystem shutdown never detaches workers from owned state") {
     const std::string contents((std::istreambuf_iterator<char>(source)),
                                std::istreambuf_iterator<char>());
     CHECK(contents.find(".detach()") == std::string::npos);
+}
+
+// =============================================================================
+// JOB BOUNDARY TESTS (NullJobSystem deterministic path + real JobSystem sizing)
+// Verified against IJobSystem + NullJobSystem semantics as actually implemented.
+// Defects found (not fixed in src/): see report.
+// =============================================================================
+
+// (a) Task completion -- a task enqueued to NullJobSystem runs to completion and
+// its result + onComplete are available immediately after submit returns.
+TEST_CASE("Boundary[Null] task completion: result + onComplete available immediately") {
+    NullJobSystem njs;
+    njs.init();
+    REQUIRE(njs.isRunning());
+
+    int result = 0;
+    bool completeRan = false;
+    bool onCompleteRan = false;
+    uint64_t id = njs.submit(
+        [&]() { result = 42; completeRan = true; },
+        JobPriority::Normal,
+        [&]() { onCompleteRan = true; });
+
+    // Synchronous contract: everything already done when submit returns.
+    CHECK(completeRan);
+    CHECK(onCompleteRan);
+    CHECK(result == 42);
+    CHECK(id > 0);
+    CHECK(njs.pendingJobs() == 0);
+}
+
+// (b) Ordering -- FIFO under NullJobSystem: tasks run in submission order.
+TEST_CASE("Boundary[Null] ordering: enqueued tasks run in FIFO submission order") {
+    NullJobSystem njs;
+    njs.init();
+    std::vector<int> order;
+    for (int i = 1; i <= 5; ++i) {
+        njs.submit([&order, i]() { order.push_back(i); });
+    }
+    // Synchronous submission implies FIFO order is observed trivially.
+    CHECK(order == std::vector<int>({1, 2, 3, 4, 5}));
+}
+
+// (b2) Ordering across priorities under NullJobSystem: priority is ignored by the
+// mock (documented), so all enqueued jobs still run in submission order.
+TEST_CASE("Boundary[Null] ordering: priority values do not reorder synchronous mock") {
+    NullJobSystem njs;
+    njs.init();
+    std::vector<int> order;
+    njs.submit([&]() { order.push_back(1); }, JobPriority::High);
+    njs.submit([&]() { order.push_back(2); }, JobPriority::Low);
+    njs.submit([&]() { order.push_back(3); }, JobPriority::Normal);
+    CHECK(order == std::vector<int>({1, 2, 3}));
+}
+
+// (c) Cancellation -- the IJobSystem API exposes NO cancellation mechanism. The only
+// rejection path NullJobSystem (and the interface) provides is submit-after-shutdown,
+// which never runs the task and returns a 0 (invalid) id. This is the closest
+// observable to "a cancelled task never runs". Missing cancellation API is reported.
+TEST_CASE("Boundary[Null] rejected task: submit after shutdown never runs and returns 0") {
+    NullJobSystem njs;
+    njs.init();
+    njs.shutdown();  // system is down; the analog of a cancelled/rejected submission
+    bool ran = false;
+    uint64_t id = njs.submit([&]() { ran = true; });
+    CHECK(id == 0);
+    CHECK(ran == false);   // task never ran
+    CHECK(njs.isRunning() == false);
+    CHECK(njs.pendingJobs() == 0);
+}
+
+// (d) Exception isolation -- NullJobSystem provides NO isolation: a work lambda that
+// throws propagates out of submit() to the caller. Verified, not assumed.
+TEST_CASE("Boundary[Null] exception isolation: throwing work propagates out of submit") {
+    NullJobSystem njs;
+    njs.init();
+    CHECK_THROWS_AS(njs.submit([]() { throw std::runtime_error("boom"); }),
+                    std::runtime_error);
+}
+
+// (d2) After a throwing job, the system is still usable: subsequent jobs still run.
+TEST_CASE("Boundary[Null] exception isolation: subsequent tasks still run after a throw") {
+    NullJobSystem njs;
+    njs.init();
+    bool firstRan = false;
+    bool laterRan = false;
+    CHECK_THROWS_AS(njs.submit([&]() { firstRan = true; throw std::runtime_error("x"); }),
+                    std::runtime_error);
+    CHECK(firstRan);
+    uint64_t later = njs.submit([&]() { laterRan = true; });
+    CHECK(later > 0);
+    CHECK(laterRan);   // system not corrupted by the earlier throw
+}
+
+// (d3) Exception isolation for onComplete: also unguarded in the mock, propagates out.
+TEST_CASE("Boundary[Null] exception isolation: throwing onComplete propagates out of submit") {
+    NullJobSystem njs;
+    njs.init();
+    CHECK_THROWS_AS(
+        njs.submit([]() {}, JobPriority::Normal,
+                   []() { throw std::runtime_error("cb"); }),
+        std::runtime_error);
+}
+
+// (e) Nested / fan-out -- NullJobSystem is synchronous, so a work lambda that submits
+// sub-tasks completes those sub-tasks (work + onComplete) before it returns, and the
+// outer onComplete observes the fan-out already finished.
+TEST_CASE("Boundary[Null] nested: sub-tasks complete before the outer task returns") {
+    NullJobSystem njs;
+    njs.init();
+    int level2Done = 0;
+    NullJobSystem* sys = &njs;
+    bool outerWorkDone = false;
+
+    njs.submit([&]() {
+        // Fan out two sub-tasks from within the outer work.
+        sys->submit([&]() { level2Done++; },
+                    JobPriority::Normal,
+                    [&]() { level2Done += 10; });
+        sys->submit([&]() { level2Done++; });
+        // Synchronous mock => sub-tasks already finished here.
+        CHECK(level2Done == 12);
+        outerWorkDone = true;
+    });
+
+    CHECK(outerWorkDone);
+    CHECK(level2Done == 12);  // sub-task work (2) + sub-task onComplete (+10)
+
+    // (e2) fan-out: outer onComplete fires only after all nested tasks finished.
+    bool outerComplete = false;
+    njs.submit(
+        [&]() { sys->submit([&]() { /* inner */ }); },
+        JobPriority::Normal,
+        [&]() { outerComplete = true; });
+    CHECK(outerComplete);
+}
+
+// (f) Worker-pool sizing -- the real JobSystem is constructible without a GPU window,
+// so this is testable: workerCount must match computeWorkerCount() from hardware.
+TEST_CASE("Boundary[JobSystem] worker-pool sizing matches available hardware") {
+    JobSystem js;
+    js.init();
+    const unsigned hw = std::thread::hardware_concurrency();
+    int expected = (hw == 0) ? 4 : ((hw < 4) ? 1 : static_cast<int>(hw) - 1);
+    CHECK(js.isRunning());
+    CHECK(js.workerCount() >= 1);
+    CHECK(js.workerCount() == expected);
+    js.shutdown();
+    CHECK(js.workerCount() == 0);  // torn down cleanly
+}
+
+// (f2) Completion on the real JobSystem: waitIdle drains all submitted work.
+TEST_CASE("Boundary[JobSystem] task completion via waitIdle") {
+    JobSystem js;
+    js.init();
+    constexpr int kJobs = 16;
+    std::atomic<int> counter{0};
+    for (int i = 0; i < kJobs; ++i) {
+        js.submit([&]() { counter.fetch_add(1); });
+    }
+    js.waitIdle();
+    CHECK(counter.load() == kJobs);
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
 }
