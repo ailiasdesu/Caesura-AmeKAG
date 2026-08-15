@@ -150,6 +150,46 @@ do
     check("regression: plain expr unaffected", p9.text == "plain Ame")
 end
 
+-- ${expr} balanced-brace / nesting regression class (round 66 follow-up):
+-- the historical limitation was a scanner pattern that ended the ${...}
+-- span at the FIRST } and did NOT handle NESTED braces or braces inside
+-- quoted strings. Round 54 added depth tracking + quote awareness, round
+-- 62 added Lua long brackets. These lock nested-brace behavior so a
+-- table constructor / indexed constructor / string-holding brace inside
+-- a span never truncates it. (Old truncation: expr ${ {a=1} } would end
+-- at the inner } and leak the raw remainder into the text.)
+do
+    local ctx = { f = { a = 10, name = "Ame" }, sf = {}, tf = {}, mp = {}, lf = {} }
+
+    -- nested table constructor interpolation
+    local c1 = Schema.coerce("_interp_test", { text = "P ${{a=1}.a} E" }, ctx)
+    check("nested table constructor .field", c1.text == "P 1 E")
+    local c2 = Schema.coerce("_interp_test", { text = "P ${{1,2,3}[2]} E" }, ctx)
+    check("generic constructor index [2]", c2.text == "P 2 E")
+
+    -- nested braces with a string containing } inside ${...}
+    local c3 = Schema.coerce("_interp_test", { text = 'P ${ "}" .. f.a } E' }, ctx)
+    check("nested string holding } stays in span", c3.text == "P }10 E")
+
+    -- deep nesting (3 levels)
+    local c4 = Schema.coerce("_interp_test", { text = "P ${{{a=1},{b=2}}[1].a} E" }, ctx)
+    check("3-level nested constructor", c4.text == "P 1 E")
+    local c5 = Schema.coerce("_interp_test", { text = "P ${{[1]={[2]={[3]=7}}}[1][2][3]} E" }, ctx)
+    check("3-level nested indexed constructor", c5.text == "P 7 E")
+
+    -- long-bracket + nested brace combined: a [[...]] string (holds }} )
+    -- lives INSIDE a table constructor -- only long-bracket awareness
+    -- plus depth tracking can close this span correctly.
+    local c6 = Schema.coerce("_interp_test", { text = "P ${{ a=[[}}]], b=1 }.b} E" }, ctx)
+    check("long-bracket inside nested constructor", c6.text == "P 1 E")
+
+    -- OLD truncation regression: ${ { a="}", b=2 }.b } has a } inside a
+    -- quoted member value; the old [^{}]+ pattern ended at the first }
+    -- and leaked the raw tail -- now it balances and evaluates correctly.
+    local c7 = Schema.coerce("_interp_test", { text = 'P ${ { a="}", b=2 }.b } E' }, ctx)
+    check("old-truncation case evaluates correctly", c7.text == "P 2 E")
+end
+
 -- volume setter contracts (clamp regression class)
 do
     pcall(require, "kag.commands.audio")
