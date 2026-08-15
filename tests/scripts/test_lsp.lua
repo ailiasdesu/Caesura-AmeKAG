@@ -240,6 +240,78 @@ check("multiple unknown params each flagged", #du7 == 2
 local du8 = lsp.diagnostics('[ch text="a"]\n[ch text="b"]\n')
 check("valid params across lines clean", #du8 == 0)
 
+
+-- ---------------------------------------------------------------------------
+-- 11. definition/references across nav command forms (round 74 / stage D):
+--     named quoted target="*label" for [jump]/[call]/[link], cursor placed
+--     INSIDE the quoted value (not just on the command), plus aggregation
+--     of multiple nav sites to one label.
+-- ---------------------------------------------------------------------------
+-- Quoted named forms: each line targets *scene with the cursor inside the
+-- quoted value (col 17 = the 'e' inside "*scene"). [link]...[/link] kept
+-- terminal (tokenizer truncates content after a mid-stream [/link]; the
+-- link command token itself always parses).
+local navQuoted = "*scene\n"
+    .. "[jump target=\"*scene\"]\n"
+    .. "[call target=\"*scene\"]\n"
+    .. "[jump target=\"*scene\"]\n"
+    .. "[link target=\"*scene\"]go[/link]\n"
+local dqm = lsp.definition(navQuoted, 2, 17)
+check("def: jump target=\"quoted\" value cursor -> scene", dqm ~= nil
+      and dqm.name == "scene" and dqm.line == 1)
+local dqc = lsp.definition(navQuoted, 3, 17)
+check("def: call target=\"quoted\" value cursor -> scene", dqc ~= nil
+      and dqc.name == "scene" and dqc.line == 1)
+local dql = lsp.definition(navQuoted, 5, 17)
+check("def: link target=\"quoted\" value cursor -> scene", dql ~= nil
+      and dql.name == "scene" and dql.line == 1)
+-- Cursor strictly inside the value of a SECOND jump on the same label.
+local dq2 = lsp.definition(navQuoted, 4, 19)
+check("def: 2nd jump quoted value cursor -> scene", dq2 ~= nil
+      and dq2.name == "scene" and dq2.line == 1)
+-- Aggregation: 4 nav sites + 1 definition for *scene.
+local rq = lsp.references(navQuoted, "scene")
+check("refs: quoted named 4 sites + def", #rq == 5)
+local qk = { definition = 0, reference = 0 }
+for _, x in ipairs(rq) do qk[x.kind] = (qk[x.kind] or 0) + 1 end
+check("refs: 1 def + 4 references (jump/call/link)", qk.definition == 1
+      and qk.reference == 4)
+-- Positions: definition line 1, refs span lines 2..5.
+local qlines = {}
+for _, x in ipairs(rq) do qlines[#qlines + 1] = x.line end
+table.sort(qlines)
+check("refs: aggregated at every nav line", qlines[1] == 1
+      and qlines[#qlines] == 5 and #qlines == 5)
+-- Definition granularity is the whole command token, not param-value
+-- precise: a cursor anywhere inside a nav command (including on the
+-- param NAME, col 9 in "target=...") still resolves to its target. The
+-- editor passes the true cursor column; token-span resolution is the
+-- existing, intended behaviour (see original d1).
+local dqX = lsp.definition(navQuoted, 2, 9)
+check("def: cursor on param name still resolves via token span", dqX ~= nil
+      and dqX.name == "scene" and dqX.line == 1)
+-- Bare forms (no quotes) also aggregate for call/link (terminal link).
+local navBare = "*end\n[jump *end]\n[call *end]\n[link *end]go[/link]\n"
+local rb = lsp.references(navBare, "end")
+check("refs: bare call+link aggregate", #rb == 4)
+local dbj = lsp.definition(navBare, 2, 8)
+check("def: bare jump value cursor -> end", dbj ~= nil and dbj.name == "end"
+      and dbj.line == 1)
+local dbc = lsp.definition(navBare, 3, 8)
+check("def: bare call value cursor -> end", dbc ~= nil and dbc.name == "end"
+      and dbc.line == 1)
+local dbl = lsp.definition(navBare, 4, 8)
+check("def: bare link value cursor -> end", dbl ~= nil and dbl.name == "end"
+      and dbl.line == 1)
+-- json bridge for quoted named + aggregation shapes.
+local jqn = lsp.json("definition", navQuoted, 3, 17)
+check("json: quoted call definition shape", jqn:find('"name":"scene"', 1, true) ~= nil
+      and jqn:find('"line":1', 1, true) ~= nil)
+local jqa = lsp.json("references", navQuoted, "scene")
+check("json: aggregation serializes definition+references",
+      jqa:find('"kind":"definition"', 1, true) ~= nil
+      and jqa:find('"kind":"reference"', 1, true) ~= nil)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))
