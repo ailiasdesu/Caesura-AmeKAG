@@ -46,5 +46,10 @@ if(MSVC)
     target_compile_definitions(lua_cli PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(lua_cli PRIVATE -w)
+    if(NOT APPLE)
+        # lvm.c uses pow()/floor(); macOS libSystem provides them, Linux
+        # needs an explicit libm link or the linker reports undefined refs.
+        target_link_libraries(lua_cli PRIVATE m)
+    endif()
 endif()
 set_target_properties(lua_cli PROPERTIES OUTPUT_NAME lua)
