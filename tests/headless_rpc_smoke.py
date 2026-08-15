@@ -240,6 +240,136 @@ try:
     _b = r.get("result") or ""
     check("lsp-diag-bad-interpolation",
         r.get("status") == "ok" and "interpolation" in _b)
+
+    # ---- Round 71-74: math / choice / text-speed / resource contracts ----
+    # (a) Math command result executed through the real schema-coerce +
+    # dispatch path (identical to the scheduler's non-flow-control dispatch:
+    # params = Schema.coerce(cmd, params, ctx); handler(ctx, params) -- then
+    # read back via eval. The eval sandbox traps new global writes, so the
+    # sampled ctx is anchored once with rawset (permitted) and reused by the
+    # follow-up eval.
+    r = request({"id": 100, "method": "eval", "code":
+        "local kag=require('kag'); local s=require('kag.schema'); "
+        "local ctx={f={},sf={},tf={},mp={},lf={}}; rawset(_G,'_smokeMathCtx',ctx); "
+        "local p=s.coerce('add',{name='f.x',value=5},ctx); kag.add(ctx,p); "
+        "return tostring(ctx.f.x)"})
+    check("math-add-executes",
+        r.get("status") == "ok" and r.get("result") == "5")
+
+    r = request({"id": 101, "method": "eval", "code":
+        "return tostring(_G._smokeMathCtx.f.x)"})
+    check("math-add-read-via-eval",
+        r.get("status") == "ok" and r.get("result") == "5")
+
+    # The rest of the math family shares the same coerce + dispatch path.
+    r = request({"id": 102, "method": "eval", "code":
+        "local kag=require('kag'); local s=require('kag.schema'); "
+        "local ctx={f={},sf={},tf={},mp={},lf={}}; "
+        "local function run(cmd, params) "
+        "  local p=s.coerce(cmd, params or {}, ctx); kag[cmd](ctx,p) end "
+        "ctx.f.n=10; "
+        "run('mul',{name='f.n',value=3}); "
+        "run('div',{name='f.n',value=2}); "
+        "run('dec',{name='f.n',amount=3}); "
+        "run('mod',{name='f.n',value=5}); "
+        "run('sub',{name='f.n',value=1}); "
+        "return tostring(ctx.f.n)"})
+    check("math-family-mul-div-dec-mod-sub",
+        r.get("status") == "ok" and r.get("result") == "1.0")
+
+    # div/mod by zero print a visible error and no-op (no zero-division crash).
+    r = request({"id": 103, "method": "eval", "code":
+        "local kag=require('kag'); local s=require('kag.schema'); "
+        "local ctx={f={},sf={},tf={},mp={},lf={}}; ctx.f.n=7; "
+        "local p=s.coerce('div',{name='f.n',value=0},ctx); kag.div(ctx,p); "
+        "return tostring(ctx.f.n)"})
+    check("math-div-zero-noop",
+        r.get("status") == "ok" and r.get("result") == "7")
+
+    # (b) [sel]/[button] x= capture registration. KAG3 x="tf.choice" declares
+    # the variable [endbutton] writes the chosen target into on selection;
+    # the reachable non-blocking surface holds the x= slot on the choice.
+    r = request({"id": 104, "method": "eval", "code":
+        "local kag=require('kag'); "
+        "local ctx={f={},sf={},tf={},mp={},lf={},_choiceButtons={}}; "
+        "kag.button(ctx,{text='Go',target='*route_a',x='tf.choice'}); "
+        "local b=ctx._choiceButtons and ctx._choiceButtons[1]; "
+        "if not b then return 'no-choice' end; "
+        "return tostring(#ctx._choiceButtons)..':'..tostring(b.target)..':'..tostring(b.x)"})
+    check("sel-button-x-capture-registered",
+        r.get("status") == "ok" and r.get("result") == "1:*route_a:tf.choice")
+
+    # (c) Save slot list / load roundtrip through the KAG C++ bindings
+    # (SaveManager) exposed via eval. A high probe slot is cleaned up after.
+    r = request({"id": 105, "method": "eval", "code":
+        "return type(KAG.list_saves)"})
+    check("save-list-binding",
+        r.get("status") == "ok" and r.get("result") == "function")
+
+    r = request({"id": 106, "method": "eval", "code":
+        "local ok = KAG.save_game(13, {f={probe=77}}, "
+        "  'assets/script/main.ks', 4, ''); return ok and 'true' or 'false'"})
+    check("save-slot-write",
+        r.get("status") == "ok" and r.get("result") == "true")
+
+    r = request({"id": 107, "method": "eval", "code":
+        "local s=KAG.list_saves(); local hit=nil; "
+        "for _,e in ipairs(s) do if e.slot==13 then hit=e end end; "
+        "if not hit then return 'absent' end; "
+        "return tostring(hit.slot)..':'..tostring(hit.scene)..':'..tostring(hit.token_index)"})
+    check("save-slot-list-reflects",
+        r.get("status") == "ok" and r.get("result") == "13:assets/script/main.ks:4")
+
+    r = request({"id": 108, "method": "eval", "code":
+        "local data, meta = KAG.load_game(13); "
+        "if not data then return 'nil' end; "
+        "return tostring(data.f and data.f.probe)"})
+    check("load-slot-roundtrip",
+        r.get("status") == "ok" and r.get("result") == "77")
+
+    r = request({"id": 109, "method": "eval", "code":
+        "return tostring(KAG.delete_save(13))"})
+    check("save-slot-cleanup",
+        r.get("status") == "ok" and r.get("result") == "true")
+
+    # (d) Unknown-command diagnostic carries a concrete severity + message
+    # (extending the round-57 length-only assertion).
+    r = lsp_json("diagnostics", "[zzz oops=1]")
+    _b = r.get("result") or ""
+    check("lsp-diag-unknown-command-severity",
+        r.get("status") == "ok" and '"severity":2' in _b
+        and "unknown KAG command" in _b)
+
+    # (e) The contract registry reflects the round 71-74 commands. The
+    # schema registry is the authoritative contract count (assert a >=
+    # baseline instead of an exact count so future migrations stay green);
+    # the new commands are also checked individually for contract + handler.
+    r = request({"id": 110, "method": "eval", "code":
+        "return tostring(require('kag.schema').registrySize())"})
+    _contract_n = 0
+    try:
+        _contract_n = int(r.get("result") or 0)
+    except ValueError:
+        _contract_n = 0
+    check("contract-count-grows",
+        r.get("status") == "ok" and _contract_n >= 84)
+
+    r = request({"id": 111, "method": "eval", "code":
+        "local s=require('kag.schema'); local kag=require('kag'); "
+        "local need={'add','csp','textspeed','palette','preload','button'}; "
+        "local ok=true; for _,c in ipairs(need) do "
+        "  if not (s.isMigrated(c) and type(kag[c])=='function') then ok=false end end; "
+        "return ok and 'true' or 'false'"})
+    check("round71-74-contracts-present",
+        r.get("status") == "ok" and r.get("result") == "true")
+
+    # stats RPC stays healthy with the new contract surface loaded.
+    r = request({"id": 112, "method": "stats"})
+    _st = r.get("stats") or {}
+    check("stats-reflects-engine",
+        isinstance(_st.get("texture_budget_mb"), int)
+        and isinstance(_st.get("job_workers"), int))
+
 finally:
     try:
         proc.stdin.close()
