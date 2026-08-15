@@ -30,6 +30,10 @@ interface EditorState {
   /** G4 inspector: the scene element currently inspected (path + line),
    *  set by SceneTree clicks, consumed by InspectorView. */
   inspected: { path: string; line: number } | null
+  /** Battle 4c+: the text currently selected in the active editor widget
+   *  (path + selection). Set by the text widget; the AiPanel "Ask" section
+   *  injects it into LLM queries when the user opts in (default off). */
+  editorSelection: { path: string; text: string } | null
   openDoc: (doc: OpenDoc) => void
   updateDoc: (path: string, content: string) => void
   closeDoc: (path: string) => void
@@ -43,6 +47,8 @@ interface EditorState {
   requestReveal: (path: string, line: number) => void
   /** G4 inspector: select a scene element for the inspector panel. */
   setInspected: (path: string, line: number) => void
+  /** Battle 4c+: update the active editor selection (or null when none). */
+  setSelection: (sel: { path: string; text: string } | null) => void
 }
 
 export const useEditor = create<EditorState>((set) => ({
@@ -56,6 +62,7 @@ export const useEditor = create<EditorState>((set) => ({
   engineCmd: '',
   revealRequest: null,
   inspected: null,
+  editorSelection: null,
   openDoc: (doc) =>
     set((s) => {
       const existing = s.docs.find((d) => d.path === doc.path)
@@ -99,4 +106,5 @@ export const useEditor = create<EditorState>((set) => ({
       revealRequest: { path, line, nonce: (s.revealRequest?.nonce ?? 0) + 1 },
     })),
   setInspected: (path, line) => set({ inspected: { path, line } }),
+  setSelection: (sel) => set({ editorSelection: sel }),
 }))
