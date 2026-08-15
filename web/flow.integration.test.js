@@ -115,7 +115,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
 
-  it('runs every tutorial in the teaching path (01-11) to completion', async () => {
+  it('runs every tutorial in the teaching path (01-12) to completion', async () => {
     const tutorials = [
       ['tutorial_01_hello.ks', /你好，世界/],
       ['tutorial_02_text.ks', /文本命令学完了/],
@@ -133,6 +133,8 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
       ['tutorial_10_loops.ks', /循环教程完成/],
       // round 58: multi-way branch (bare variable + exp= expression selector)
       ['tutorial_11_switch.ks', /switch 教程完成/],
+      // round 68: expression combo (ternary-in-index / ?? / switch exp / loops)
+      ['tutorial_12_expr_combo.ks', /表达式组合教程完成/],
     ]
     for (const [file, lineRe] of tutorials) {
       const ks = readFileSync(join(here, '..', 'demo', 'tutorial', file), 'utf8')
