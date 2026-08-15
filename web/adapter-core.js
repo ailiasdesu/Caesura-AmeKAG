@@ -20,6 +20,10 @@ export class AdapterCore {
   }
 
   // -- layers -----------------------------------------------------------
+  // Mirrors the engine's Layers.ensure(ctx, name, z): creating an
+  // existing layer is a no-op except for an explicit z/tag update (the
+  // engine overwrites z on a found node). tag defaults to the layer name
+  // (so Layers.find(name) tag-matching and the DOM tag heuristics work).
   ensureLayer(name, opts = {}) {
     let n = this.layers.get(name)
     if (!n) {
@@ -32,10 +36,14 @@ export class AdapterCore {
         opacity: opts.opacity ?? 255, // engine semantics: 0..255
         z: opts.z ?? 0,
         texture: null,
+        tag: opts.tag ?? null,
         layerType: opts.layer_type ?? 0,
       }
       this.layers.set(name, n)
       this._log('layer.create', { name, z: n.z })
+    } else {
+      if (opts.z !== undefined) n.z = opts.z
+      if (opts.tag !== undefined) n.tag = opts.tag
     }
     return n
   }

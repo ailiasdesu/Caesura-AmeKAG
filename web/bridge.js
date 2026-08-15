@@ -111,7 +111,19 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     Type: { LAYER_BASE: 1, LAYER_LAYER0: 2, LAYER_LAYER1: 3, LAYER_FORE: 4, LAYER_UI: 5, LAYER_MESSAGE: 6, LAYER_EFFECT: 7 },
     get: (id) => core.getLayer(id) ?? null,
     find: (id) => core.getLayer(id) ?? null,
-    ensure: (id, opts) => core.ensureLayer(id, opts),
+    // Engine contract: Layers.ensure(ctx, name, z) - command handlers call
+    // layers.ensure(ctx, "_textbox", 2). The real layers.lua ignores ctx
+    // and creates/fetches the layer named `name` at z-order `z`. The web
+    // stub must mirror that (and set tag=name like Layers.add_layer does,
+    // so Layers.find(name) tag-matching + DomRenderer tag heuristics work).
+    // (Round 74: previously (id, opts) - the Lua handlers passed (ctx,
+    // _textbox, 2) which silently created a layer named after the ctx
+    // table, so [textbox]/[nameplate]/[nvl] never found their layers.)
+    ensure: (ctx, name, z) =>
+      core.ensureLayer(String(name == null ? '' : name), {
+        z: typeof z === 'number' ? z : (typeof z === 'string' ? Number(z) : undefined),
+        tag: String(name == null ? '' : name),
+      }),
     get_root: () => 0,
     add_layer: (parent, opts) => {
       const name = (opts && opts.name) || ('layer' + (core._seq + 1))
@@ -303,6 +315,11 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
+      // Choice-selection override (round 74): pick which [endbutton] option
+      // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
+      lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
+      lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
+      lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
       const out = await lua.doString(`
         local tokenizer = require('tokenizer')
         local scheduler = require('scheduler')
@@ -363,6 +380,37 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 break
               end
             end
+            -- Choice result routing: [endbutton] set _pendingJump to a
+            -- "*label" target when the player picked an option. Mirror the
+            -- desktop runner's dead-coroutine branch (kag_runner.update
+            -- -> stage_label_jump): resolve the label and re-spawn at it so
+            -- [sel x="tf.result"] choices route to the chosen branch.
+            if ctx._pendingJump then
+              local target = ctx._pendingJump
+              ctx._pendingJump = nil
+              local path = (type(target) == 'table' and target.scene) or target
+              if type(path) == 'string' and path:sub(1, 1) == '*' then
+                local label = path:sub(2)
+                local lidx = (ctx.label_index and ctx.label_index[label]) or nil
+                if not lidx and type(ctx.tokens) == 'table' then
+                  for ti, tok in ipairs(ctx.tokens) do
+                    if tok and tok[1] == 'label' and tok[2] and tok[2].name == label then
+                      lidx = ti
+                      break
+                    end
+                  end
+                end
+                if lidx then
+                  ctx.token_index = lidx
+                  ctx.stop_flag = false
+                  co = coroutine.create(function()
+                    local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+                    if not okc then error(errc) end
+                  end)
+                  break
+                end
+              end
+            end
             result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           frames = frames + 1
@@ -371,6 +419,28 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             if not __CLICK then
               if __AUTOCLICK and clicks < 100 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
+              end
+            end
+            -- Choice mode ([endbutton]/[endselect]): the engine's input layer
+            -- dispatches a click (mouse at _GAME_MOUSE_X/_GAME_MOUSE_Y) to
+            -- _KAG_onClick, which hit-tests the button regions and records
+            -- _selectedChoice. The web runner's batched click must feed the
+            -- SAME dispatch so [sel x="tf.result"] captures the chosen option
+            -- (round 74 parity). __CHOICE_INDEX (1-based) picks which visible
+            -- option to auto-select; defaults to the first.
+            if ctx._choiceMode then
+              local cbs = ctx._choiceButtonsActive or ctx._choiceButtons
+              local ci = tonumber(__CHOICE_INDEX) or 1
+              local cx = tonumber(__CHOICE_X or 100) or 100
+              local cy
+              if type(cbs) == 'table' and cbs[ci] then
+                local c = cbs[ci]
+                cy = (tonumber(c.y) or 450) + (tonumber(c.h) or 24) / 2
+              end
+              _G._GAME_MOUSE_X = cx
+              _G._GAME_MOUSE_Y = cy or 460
+              if type(_G._KAG_onClick) == 'function' then
+                _G._KAG_onClick()
               end
             end
             ctx.waiting_input = false
@@ -455,6 +525,11 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
+      // Choice-selection override (round 74): pick which [endbutton] option
+      // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
+      lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
+      lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
+      lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
       const maxFrames = opts.maxFrames ?? 200000
       const out = await lua.doString(`
         local compiler = require('kag.compiler')
@@ -524,6 +599,37 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 break
               end
             end
+            -- Choice result routing: [endbutton] set _pendingJump to a
+            -- "*label" target when the player picked an option. Mirror the
+            -- desktop runner's dead-coroutine branch (kag_runner.update
+            -- -> stage_label_jump): resolve the label and re-spawn at it so
+            -- [sel x="tf.result"] choices route to the chosen branch.
+            if ctx._pendingJump then
+              local target = ctx._pendingJump
+              ctx._pendingJump = nil
+              local path = (type(target) == 'table' and target.scene) or target
+              if type(path) == 'string' and path:sub(1, 1) == '*' then
+                local label = path:sub(2)
+                local lidx = (ctx.label_index and ctx.label_index[label]) or nil
+                if not lidx and type(ctx.tokens) == 'table' then
+                  for ti, tok in ipairs(ctx.tokens) do
+                    if tok and tok[1] == 'label' and tok[2] and tok[2].name == label then
+                      lidx = ti
+                      break
+                    end
+                  end
+                end
+                if lidx then
+                  ctx.token_index = lidx
+                  ctx.stop_flag = false
+                  co = coroutine.create(function()
+                    local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+                    if not okc then error(errc) end
+                  end)
+                  break
+                end
+              end
+            end
             result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           frames = frames + 1
@@ -532,6 +638,28 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             if not __CLICK then
               if __AUTOCLICK and clicks < 100 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
+              end
+            end
+            -- Choice mode ([endbutton]/[endselect]): the engine's input layer
+            -- dispatches a click (mouse at _GAME_MOUSE_X/_GAME_MOUSE_Y) to
+            -- _KAG_onClick, which hit-tests the button regions and records
+            -- _selectedChoice. The web runner's batched click must feed the
+            -- SAME dispatch so [sel x="tf.result"] captures the chosen option
+            -- (round 74 parity). __CHOICE_INDEX (1-based) picks which visible
+            -- option to auto-select; defaults to the first.
+            if ctx._choiceMode then
+              local cbs = ctx._choiceButtonsActive or ctx._choiceButtons
+              local ci = tonumber(__CHOICE_INDEX) or 1
+              local cx = tonumber(__CHOICE_X or 100) or 100
+              local cy
+              if type(cbs) == 'table' and cbs[ci] then
+                local c = cbs[ci]
+                cy = (tonumber(c.y) or 450) + (tonumber(c.h) or 24) / 2
+              end
+              _G._GAME_MOUSE_X = cx
+              _G._GAME_MOUSE_Y = cy or 460
+              if type(_G._KAG_onClick) == 'function' then
+                _G._KAG_onClick()
               end
             end
             ctx.waiting_input = false

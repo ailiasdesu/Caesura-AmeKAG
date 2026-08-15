@@ -347,4 +347,139 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(texts).toContain('loop2')
     expect(texts).toContain('expr-edge-done')
   }, 120000)
+  it('[for] loop exposes its counter in f and accumulates via [add] (round 74/75)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[set f.sum = 0]',
+      '[for var="i" start="1" end="3"]',
+      '[add name="f.sum" value=1]',
+      '[endfor]',
+      '[ch name="N" text="sum=\x24{f.sum} after=\x24{f.i}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'loop_edge.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    // body executed once per bound range step: [add] accumulated 1+1+1=3
+    expect(texts).toContain('sum=3')
+    // the loop counter is exposed in the f table and left past the bound
+    expect(texts).toContain('after=4')
+  }, 120000)
+
+  it('[sel x="tf.result"]/[endbutton] writes the chosen target label (round 74/75)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    // auto-click selects option 1; the choice routes to its *label.
+    const ks = [
+      '[sel x="tf.result" target="*route_a" text="Route A"]',
+      '[sel x="tf.result" target="*route_b" text="Route B"]',
+      '[endbutton]',
+      '[end]',
+      '*route_a',
+      '[ch name="N" text="chose-a=\x24{tf.result}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'choice_a.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('chose-a=*route_a')
+
+    // choiceIndex=2 picks the second option -> routes to *route_b
+    player.core.backlog.length = 0
+    const ks2 = [
+      '[sel x="tf.result" target="*route_a" text="Route A"]',
+      '[sel x="tf.result" target="*route_b" text="Route B"]',
+      '[endbutton]',
+      '[end]',
+      '*route_b',
+      '[ch name="N" text="chose-b=\x24{tf.result}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out2 = await player.runScene(ks2, 'choice_b.ks', {
+      maxFrames: 200000, autoClick: true, choiceIndex: 2,
+    })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('chose-b=*route_b')
+  }, 120000)
+
+  it('[ruby] follows the text cursor when no x/y is given (round 74)', async () => {
+    player.core.draws = []
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[ch name="N" text="GO"]',
+      '[ruby text="漢字" ruby="かんじ"]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'ruby_follow.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // the bare [ruby] (no x/y) lands on the current text cursor, NOT the
+    // absolute (0,0) that schema.coerce's x=0/y=0 defaults used to pin — the
+    // round-74 fix. core.draws carries the base text at its computed x/y.
+    const rubyDraw = player.core.draws.find((d) => d.t === '漢字')
+    expect(rubyDraw).toBeTruthy()
+    expect(rubyDraw.x).toBeGreaterThan(0)
+    expect(rubyDraw.y).toBeGreaterThan(0)
+    // specifically it matches the message window cursor (after the GO line),
+    // i.e. it followed the cursor rather than pinning to the origin.
+    expect(rubyDraw.y).toBeGreaterThan(100)
+  }, 120000)
+
+  it('[nvl on]/[nvl off] toggles _textbox/_nameplate layer visibility (round 74)', async () => {
+    player.core.layers.clear()
+    const NL = String.fromCharCode(10)
+    // [textbox] creates _textbox; [ch name=...] renders the _nameplate.
+    const ks = [
+      '[textbox x=0 y=520 w=1280 h=200 color="0,0,0" opacity=200]',
+      '[nameplate y=480 w=220 h=36 color="0,0,0"]',
+      '[ch name="N" text="pre"]',
+      '[p]',
+      '[nvl on]',
+      '[set f.mark = 1]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'nvl_hide.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // [nvl on] hides the fixed message window + nameplate (Ren'Py NVL parity)
+    expect(player.core.getLayer('_textbox').visible).toBe(false)
+    expect(player.core.getLayer('_nameplate').visible).toBe(false)
+
+    // fresh run: [nvl off] restores the pre-NVL visibility
+    player.core.layers.clear()
+    const ks2 = [
+      '[textbox x=0 y=520 w=1280 h=200 color="0,0,0" opacity=200]',
+      '[nameplate y=480 w=220 h=36 color="0,0,0"]',
+      '[ch name="N" text="pre"]',
+      '[p]',
+      '[nvl on]',
+      '[nvl off]',
+      '[set f.mark2 = 1]',
+      '[end]',
+    ].join(NL)
+    const out2 = await player.runScene(ks2, 'nvl_restore.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    expect(player.core.getLayer('_textbox').visible).toBe(true)
+    expect(player.core.getLayer('_nameplate').visible).toBe(true)
+  }, 120000)
+
+  it('\x24{f.missing ?? fallback} null-coalescing interpolation (round 74/75)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[set f.name = "fallback"]',
+      '[ch name="N" text="nc=\x24{f.missing ?? f.name}"]',
+      '[p]',
+      '[set f.have = "present"]',
+      '[ch name="N" text="hc=\x24{f.have ?? f.name}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'interp_nc.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    expect(texts).toContain('nc=fallback')  // missing key -> fallback var value
+    expect(texts).toContain('hc=present')   // present key wins over fallback
+  }, 120000)
 })
