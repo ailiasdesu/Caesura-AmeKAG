@@ -15,6 +15,9 @@ import { useEditor } from '../store'
 import { SceneOutline } from './SceneOutline'
 import { revealEditorLine } from './EditorArea'
 import { buildLabelJumpSnippet, parseJumpResult } from '../lib/engineJump'
+import { parseSceneOutline, buildOutlineSections } from '../lib/sceneOutline'
+import { tokenToOutlineLine, sceneMatchesDoc } from '../lib/enginePosition'
+import { useEnginePosition } from './useEnginePosition'
 import type { EngineClient } from '../lib/rpc'
 
 /** Is the given doc path a .ks script? */
@@ -34,8 +37,14 @@ export function SceneOutlinePanel({ client }: SceneOutlinePanelProps) {
   const docs = useEditor((s) => s.docs)
   const activePath = useEditor((s) => s.activePath)
   const engineConnected = useEditor((s) => s.engineConnected)
+  const engineScene = useEditor((s) => s.engineScene)
+  const engineToken = useEditor((s) => s.engineToken)
   const requestReveal = useEditor((s) => s.requestReveal)
   const setInspected = useEditor((s) => s.setInspected)
+
+  // Poll the live engine position while connected (store gets engineScene /
+  // engineToken). Guarded: no polling when disconnected / no client.
+  useEnginePosition({ client, enabled: engineConnected })
 
   // Recompute only when the active .ks doc's identity or content changes.
   const active = useMemo(() => {
@@ -43,6 +52,16 @@ export function SceneOutlinePanel({ client }: SceneOutlinePanelProps) {
     if (!doc || !isKsPath(doc.path)) return null
     return doc
   }, [docs, activePath])
+
+  // Live cross-reference: when the engine's running scene matches the active
+  // doc, resolve its token_index to the matching outline source line.
+  const currentLine = useMemo(() => {
+    if (!active || !engineConnected) return null
+    if (!sceneMatchesDoc(engineScene, active.path)) return null
+    if (typeof engineToken !== 'number' || engineToken < 1) return null
+    const sections = buildOutlineSections(parseSceneOutline(active.content))
+    return tokenToOutlineLine(sections, engineToken)
+  }, [active, engineConnected, engineScene, engineToken])
 
   const handleSelectLabel = (
     _label: string,
@@ -79,6 +98,8 @@ export function SceneOutlinePanel({ client }: SceneOutlinePanelProps) {
       source={active.content}
       onSelectLabel={handleSelectLabel}
       onJumpToLabel={handleJumpToLabel}
+      currentLine={engineConnected ? currentLine : null}
+      currentScene={engineConnected && sceneMatchesDoc(engineScene, active.path) ? engineScene : null}
     />
   )
 }

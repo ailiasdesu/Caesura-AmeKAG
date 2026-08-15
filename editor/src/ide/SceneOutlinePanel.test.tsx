@@ -14,6 +14,13 @@ vi.mock('./EditorArea', () => ({
   revealEditorLine: vi.fn(),
 }))
 
+// The live position poller is a separate concern (it drives evalRaw on an
+// interval while connected). Stub it out so exact-call-count assertions in
+// the jump tests stay deterministic.
+vi.mock('./useEnginePosition', () => ({
+  useEnginePosition: () => {},
+}))
+
 const revealMock = vi.mocked(revealEditorLine)
 
 // A minimal structural stand-in for EngineClient — only the eval path the

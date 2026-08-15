@@ -21,10 +21,22 @@ export interface SceneOutlineProps {
    *  engine scene to the label; optional — absent keeps the row read-only
    *  apart from the primary select handler. */
   onJumpToLabel?: (label: string, line: number) => void
+  /** Live engine position: the source line the running scene is currently at
+   *  (derived from token_index). When set, the matching section heading or
+   *  item row is highlighted (outline-current). Disconnected / no scene → 0
+   *  or null → no highlight. */
+  currentLine?: number | null
+  /** Live engine scene name (path) currently running; shown in the header
+   *  next to the section count when the engine is connected. */
+  currentScene?: string | null
 }
 
 /** Render one outline row: a command row or a text content line. */
-function OutlineRow({ item }: { item: OutlineItem }) {
+function OutlineRow({ item, active }: { item: OutlineItem; active: boolean }) {
+  const rowClass =
+    'outline-row ' +
+    (item.kind === 'command' ? 'outline-command' : 'outline-text') +
+    (active ? ' outline-current' : '')
   if (item.kind === 'command') {
     const keyParams = Object.entries(item.params)
       .slice(0, 3)
@@ -32,10 +44,7 @@ function OutlineRow({ item }: { item: OutlineItem }) {
       .join(' ')
     const cmdText = '[' + item.cmd + ']'
     return (
-      <div
-        className="outline-row outline-command"
-        title={'line ' + item.line + ' — ' + cmdText}
-      >
+      <div className={rowClass} title={'line ' + item.line + ' — ' + cmdText}>
         <span className="outline-line">{item.line}</span>
         <span className="outline-cmd">{cmdText}</span>
         {keyParams && <span className="outline-cmd-params">{keyParams}</span>}
@@ -44,14 +53,20 @@ function OutlineRow({ item }: { item: OutlineItem }) {
   }
   if (item.kind !== 'text') return null
   return (
-    <div className="outline-row outline-text" title={'line ' + item.line}>
+    <div className={rowClass} title={'line ' + item.line}>
       <span className="outline-line">{item.line}</span>
       <span className="outline-content">{item.content}</span>
     </div>
   )
 }
 
-export function SceneOutline({ source, onSelectLabel, onJumpToLabel }: SceneOutlineProps) {
+export function SceneOutline({
+  source,
+  onSelectLabel,
+  onJumpToLabel,
+  currentLine,
+  currentScene,
+}: SceneOutlineProps) {
   const sections = useMemo(
     () => buildOutlineSections(parseSceneOutline(source)),
     [source],
@@ -65,21 +80,35 @@ export function SceneOutline({ source, onSelectLabel, onJumpToLabel }: SceneOutl
     if (onJumpToLabel) onJumpToLabel(label, line)
   }
 
+  // The row currently at the live engine position (a single source line maps
+  // to at most one outline row — a section heading OR an item row).
+  const current = typeof currentLine === 'number' ? currentLine : null
+
   return (
     <div className="sidebar-pane outline-pane">
       <div className="panel-title">
         Scene Outline
         <span className="spacer" />
+        {currentScene ? (
+          <span className="outline-scene" title="Running scene">
+            ▶ {currentScene}
+          </span>
+        ) : null}
         <span className="scene-counts">{sections.length} section{sections.length === 1 ? '' : 's'}</span>
       </div>
       {sections.length === 0 ? (
         <div className="explorer-empty">No scene outline (empty script)</div>
       ) : (
         <div className="scene-tree outline-body">
-          {sections.map((s) => (
-            <div className="timeline-section" key={'sec-' + s.line}>
+          {sections.map((s) => {
+            const headingActive = current === s.line
+            const headingClass =
+              'timeline-section-title outline-label-row' +
+              (headingActive ? ' outline-current' : '')
+            return (
+              <div className="timeline-section" key={'sec-' + s.line}>
               <div
-                className="timeline-section-title outline-label-row"
+                className={headingClass}
                 title={s.label ? 'label *' + s.label : 'prologue'}
                 onClick={() => s.label !== null && handleLabel(s.label, s.line)}
                 role={s.label !== null ? 'button' : undefined}
@@ -123,10 +152,15 @@ export function SceneOutline({ source, onSelectLabel, onJumpToLabel }: SceneOutl
                 </span>
               </div>
               {s.items.map((item) => (
-                <OutlineRow key={s.line + '-' + item.line + '-' + item.kind} item={item} />
+                <OutlineRow
+                  key={s.line + '-' + item.line + '-' + item.kind}
+                  item={item}
+                  active={current === item.line}
+                />
               ))}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

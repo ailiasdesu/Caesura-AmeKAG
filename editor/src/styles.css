@@ -632,3 +632,28 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--fg, #ddd);
 }
 
+
+/* G4 scene outline — live engine position cross-reference (final increment) */
+.outline-current {
+  outline: 1px solid var(--accent, #4a9eff);
+  background: rgba(74, 158, 255, 0.12);
+  border-radius: 3px;
+}
+.outline-current .outline-line,
+.outline-current .outline-cmd,
+.outline-current .outline-content {
+  color: #fff;
+}
+.outline-current .outline-label {
+  color: #ffd866;
+}
+.outline-scene {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--accent, #4a9eff);
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+}
