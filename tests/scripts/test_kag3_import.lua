@@ -137,9 +137,78 @@ end
 local rep3, err3 = M.processScene(os.tmpname() .. "-nonexistent.ks")
 check("missing file returns error", rep3 == nil and err3 ~= nil)
 
+
+-- ---------------------------------------------------------------------------
+-- 7. round-71 KAG3-compat commands: known (not UNSUPPORTED) + param aliases
+-- ---------------------------------------------------------------------------
+local R71_KNOWN = {
+    "csp", "csd", "csl",
+    "add", "sub", "mul", "div", "mod", "dec",
+    "vibrate", "textspeed", "cps",
+    "preload",
+}
+for _, cmd in ipairs(R71_KNOWN) do
+    local nc, notes = M.convertCommand(cmd, {})
+    local unsup = false
+    for _, n in ipairs(notes) do
+        if n:find("UNSUPPORTED", 1, true) then unsup = true end
+    end
+    check("round-71 known: " .. cmd, nc == cmd and not unsup)
+end
+
+-- KAG3 -> engine parameter aliases flow through processScene:
+--   [add var=...] -> [add name=...]  (math contract is name= + value/amount=)
+--   [csp]/[csl] left/top=... -> x/y=...  (engine pixel-coordinate positions)
+--   [palette] passes through as KNOWN but is surfaced as a non-blocking
+--   conflict note (KAG3 index palette vs engine LUT grading).
+local r71scene = [[
+*start
+[csp name="hero" layer="0" left="320" top="240"]
+[csl name="hero" layer="0" left="340" top="260"]
+[add var="f.hp" value="5"]
+[dec var="f.hp"]
+[vibrate time="300"]
+[textspeed 50]
+[cps 60]
+[notify msg="saved"]
+[palette effect="night"]
+[preload path="bg/01.png"]
+]]
+local tmp3 = os.tmpname() .. ".ks"
+local f3 = io.open(tmp3, "w")
+f3:write(r71scene)
+f3:close()
+local rep71 = M.processScene(tmp3)
+check("round-71 scene parses", rep71 ~= nil)
+if rep71 then
+    local out = rep71.output
+    check("round-71 scene: no unsupported", #rep71.unsupported == 0)
+    check("csp left->x", out:find('left="320"', 1, true) == nil
+          and out:find('x="320"', 1, true) ~= nil)
+    check("csp top->y", out:find('top="240"', 1, true) == nil
+          and out:find('y="240"', 1, true) ~= nil)
+    check("csl left/top->x/y", out:find('top="260"', 1, true) == nil
+          and out:find('y="260"', 1, true) ~= nil)
+    check("add var->name", out:find('var="f.hp"', 1, true) == nil
+          and out:find('name="f.hp" value="5"', 1, true) ~= nil)
+    check("dec var->name", out:find('[dec name="f.hp"]', 1, true) ~= nil)
+    check("vibrate kept", out:find('[vibrate time="300"]', 1, true) ~= nil)
+    check("textspeed positional kept", out:find('[textspeed 50]', 1, true) ~= nil)
+    check("cps positional kept", out:find('[cps 60]', 1, true) ~= nil)
+    check("notify kept", out:find('[notify msg="saved"]', 1, true) ~= nil)
+    check("palette passthrough", out:find('[palette effect="night"]', 1, true) ~= nil)
+    check("preload kept", out:find('[preload path="bg/01.png"]', 1, true) ~= nil)
+    local palConflict = false
+    for _, cf in ipairs(rep71.conflicts or {}) do
+        if cf.cmd == "palette" then palConflict = true end
+    end
+    check("palette conflict noted (advisory)", palConflict)
+    check("conflict not strict-blocking", not M.hasBlocking(rep71))
+end
 -- cleanup
 os.remove(tmp)
 os.remove(tmp2)
+os.remove(tmp3)
 
 -- Exit gate (runner convention).
 if failed > 0 then

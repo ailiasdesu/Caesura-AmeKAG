@@ -35,6 +35,13 @@ pcall(require, "kag.commands.layer")
 pcall(require, "kag.commands.vfx")
 pcall(require, "kag.commands.video")
 pcall(require, "kag.commands.save")
+-- Round-71 KAG3-compat modules. Pre-registered explicitly so their schema
+-- contracts load into the known set even if the heavy require("kag") fails
+-- (headless lint contexts); otherwise [csp]/[csd]/[csl]/[add]/[sub]/[mul]/
+-- [div]/[mod]/[dec]/[preload] would fall through to UNSUPPORTED.
+pcall(require, "kag.commands.math")
+pcall(require, "kag.commands.character")
+pcall(require, "kag.commands.resource")
 local kag_ok = pcall(require, "kag")
 
 -- ---------------------------------------------------------------------------
@@ -111,6 +118,31 @@ local EXPR_PARAMS = {
     exp = true, expr = true, cond = true,
 }
 
+-- Parameter-name aliases: KAG3 tag param -> Neo-Genesis engine param, keyed
+-- by the KAG3 command name. Applied in processScene's param rewrite so e.g.
+-- KAG3 [add var="f.hp" value="5"] becomes [add name="f.hp" value="5"]
+-- (the engine math contract is name= + value/amount=). Also covers the KAG3
+-- character-position convention left/top -> engine x/y for [csp]/[csl].
+local PARAM_ALIASES = {
+    add   = { var = "name" },
+    sub   = { var = "name" },
+    mul   = { var = "name" },
+    div   = { var = "name" },
+    mod   = { var = "name" },
+    dec   = { var = "name" },
+    csp   = { left = "x", top = "y" },
+    csl   = { left = "x", top = "y" },
+}
+
+-- Commands whose NAME matches an engine command but whose KAG3 semantics
+-- differ from the engine's meaning. Reported as a non-blocking conflict
+-- note (advisory): the tag passes through as KNOWN (the engine owns the
+-- name) so import never hard-fails, but the author is told the meaning
+-- changed so a silent semantic mismatch cannot creep in.
+local CONFLICT_NOTES = {
+    palette = "KAG3 [palette] selects the message-window palette by index; the engine [palette effect=...] is LUT color grading. Pick index= colors -> [color]/[textbox] styling, or rewrite as an explicit [palette effect=...] LUT apply.",
+}
+
 local M = {}
 
 local AMP_NS = { f = true, tf = true, sf = true, mp = true, lf = true }
@@ -151,6 +183,12 @@ function M.convertCommand(cmd, params)
         return new_cmd, notes
     end
     if known[cmd] then
+        -- Known command. A name that also carries a KAG3 semantic conflict
+        -- is surfaced as a non-blocking advisory note (see CONFLICT_NOTES).
+        local conflict = CONFLICT_NOTES[cmd]
+        if conflict then
+            notes[#notes + 1] = "NOTE [" .. cmd .. "]: " .. conflict
+        end
         return cmd, notes
     end
     local sug = SUGGESTIONS[cmd]
@@ -189,7 +227,7 @@ function M.processScene(path, opts)
     local report = {
         path = path, tokens = #tokens, texts = 0, labels = 0, iscripts = 0,
         converted_embeds = 0, converted_exprs = 0, renames = 0,
-        unsupported = {}, iscript_blocks = {},
+        unsupported = {}, conflicts = {}, iscript_blocks = {},
     }
 
     -- Line index for source-accurate line numbers (same as ks_check).
@@ -236,24 +274,32 @@ function M.processScene(path, opts)
                 out = out:gsub("^%[%s*[%w_]+", "[" .. new_cmd, 1)
                 report.renames = report.renames + 1
             end
+            -- Param-name aliases (KAG3 name -> engine name), e.g.
+            -- [add var=...] -> [add name=...] and [csp left/top=...] -> x/y.
+            local aliases = PARAM_ALIASES[tok.cmd]
             -- Param-value rewrites: text-ish params get &var conversion,
             -- expression params get static TJS translation. Operates on
-            -- the raw token slice, keyed by param name.
+            -- the raw token slice, keyed by the (possibly aliased) param name.
             out = out:gsub("([%w_]+)%s*=%s*\"([^\"]*)\"", function(pname, pval)
-                if TEXT_PARAMS[pname] then
+                local eparam = (aliases and aliases[pname]) or pname
+                if TEXT_PARAMS[eparam] then
                     local conv = M.convertAmpVars(pval)
                     if conv ~= pval then report.converted_embeds = report.converted_embeds + 1 end
-                    return pname .. '="' .. conv .. '"'
-                elseif EXPR_PARAMS[pname] then
+                    return eparam .. '="' .. conv .. '"'
+                elseif EXPR_PARAMS[eparam] then
                     local conv = M.translateExpr(pval)
                     if conv ~= pval then report.converted_exprs = report.converted_exprs + 1 end
-                    return pname .. '="' .. conv .. '"'
+                    return eparam .. '="' .. conv .. '"'
                 end
-                return pname .. '="' .. pval .. '"'
+                return eparam .. '="' .. pval .. '"'
             end)
             for _, note in ipairs(notes) do
                 if note:find("^UNSUPPORTED") then
                     report.unsupported[#report.unsupported + 1] = {
+                        line = line, cmd = tok.cmd, note = note,
+                    }
+                elseif note:find("^NOTE") then
+                    report.conflicts[#report.conflicts + 1] = {
                         line = line, cmd = tok.cmd, note = note,
                     }
                 end
@@ -289,6 +335,13 @@ function M.printReport(report, out)
         out:write(string.format("unsupported: %d\n", #report.unsupported))
         for _, u in ipairs(report.unsupported) do
             out:write(string.format("  line %d: %s\n", u.line, u.note))
+        end
+    end
+    if report.conflicts and #report.conflicts > 0 then
+        out:write(string.format("conflicts (advisory, pass-through KNOWN): %d\n",
+            #report.conflicts))
+        for _, c in ipairs(report.conflicts) do
+            out:write(string.format("  line %d: %s\n", c.line, c.note))
         end
     end
     if #report.iscript_blocks > 0 then
