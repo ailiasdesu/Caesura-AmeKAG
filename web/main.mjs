@@ -4,6 +4,7 @@
 import { createPlayer } from './bridge.js'
 import { DomRenderer } from './dom-renderer.js'
 import { buildSceneOptions } from './scene-options.js'
+import { createPlayerSettings, VOLUME_BUSSES } from './player-settings.js'
 
 const stage = document.getElementById('stage')
 const logEl = document.getElementById('log')
@@ -25,6 +26,69 @@ log('engine loaded; kag table ready')
 
 const renderer = new DomRenderer(player.core, stage)
 let storyBundle = null
+
+// ---- player settings (round 86) -------------------------------------
+// Centralized, persistent settings (language / auto / text speed / skip /
+// per-bus volume). Reading here so the player boots with saved preferences
+// and any UI write propagates to the engine (i18n + audio buses) live.
+const settings = createPlayerSettings()
+settings.load()
+// Push the persisted volume / language into the engine at boot.
+applyVolumes(settings.get('volumes'))
+void applyLanguage(settings.get('language'))
+// Keep the engine live behind any later settings change.
+settings.subscribe(({ field, settings: s }) => {
+  if (field === 'volumes') applyVolumes(s.volumes)
+  if (field === 'language') void applyLanguage(s.language)
+})
+
+/** Forward volumes to both the core state machine and the WebAudio engine. */
+function applyVolumes(vols) {
+  for (const b of VOLUME_BUSSES) {
+    const v = Number.isFinite(vols?.[b]) ? vols[b] : 1
+    try { player.core.audioSetBusVolume(b, v) } catch { /* noop */ }
+    try { player.audio.setBusVolume(b, v) } catch { /* noop */ }
+  }
+}
+
+/** Forward the active language to the pure-Lua i18n module. */
+async function applyLanguage(lang) {
+  try { await player.setLanguage(lang) } catch { /* noop */ }
+}
+
+/** Sync once from the persisted settings into the settings UI and bind the
+ *  controls so any change writes straight back to the settings controller
+ *  (which notifies -> engine wiring). Auto toggle also mirrors the #auto
+ *  play/advance button (round 86). */
+function bindSettingsControls() {
+  const langEl = document.getElementById('settings-lang')
+  const autoEl = document.getElementById('settings-auto')
+  const speedEl = document.getElementById('settings-speed')
+  const bgmEl = document.getElementById('settings-bgm')
+  const seEl = document.getElementById('settings-se')
+  const voiceEl = document.getElementById('settings-voice')
+  // seed control values
+  langEl.value = settings.get('language') in { en: 1, zh: 1, 'zh-TW': 1, ja: 1 } ? settings.get('language') : 'en'
+  autoEl.checked = settings.get('autoClick')
+  speedEl.value = String(settings.get('textSpeed'))
+  bgmEl.value = String(settings.get('volumes').bgm)
+  seEl.value = String(settings.get('volumes').se)
+  voiceEl.value = String(settings.get('volumes').voice)
+  // writes
+  langEl.addEventListener('change', () => settings.set('language', langEl.value))
+  autoEl.addEventListener('change', () => {
+    settings.set('autoClick', autoEl.checked)
+    const cur = settings.get('autoClick')
+    autoMode = cur
+    document.getElementById('auto').textContent = cur ? '⏸ Auto' : '⏩ Auto'
+    if (cur) scheduleAuto()
+    else if (autoTimer) clearTimeout(autoTimer)
+  })
+  speedEl.addEventListener('input', () => settings.set('textSpeed', Number(speedEl.value)))
+  bgmEl.addEventListener('input', () => settings.setVolume('bgm', Number(bgmEl.value)))
+  seEl.addEventListener('input', () => settings.setVolume('se', Number(seEl.value)))
+  voiceEl.addEventListener('input', () => settings.setVolume('voice', Number(voiceEl.value)))
+}
 
 const syncTextures = () => {
   for (const [id, t] of player.core.textures) {
@@ -116,10 +180,10 @@ async function runScene(name) {
   statusEl.textContent = 'running…'
   let out
   if (storyBundle && storyBundle.scenes[name]) {
-    out = await player.runFromBundle(storyBundle, name, { autoClick: false })
+    out = await player.runFromBundle(storyBundle, name, { autoClick: settings.get('autoClick') })
   } else {
     const ks = await (await fetch(DEMO_BASE + name)).text()
-    out = await player.runScene(ks, name, { autoClick: false })
+    out = await player.runScene(ks, name, { autoClick: settings.get('autoClick') })
   }
   syncTextures()
   await renderer.render()
@@ -146,6 +210,7 @@ async function advance() {
 
 await loadStoryBundle()
 renderSlots()
+bindSettingsControls()
 
 document.getElementById('run').addEventListener('click', () => {
   void runScene(document.getElementById('scene').value)
@@ -154,7 +219,10 @@ document.getElementById('advance').addEventListener('click', () => {
   void advance()
 })
 document.getElementById('auto').addEventListener('click', () => {
-  autoMode = !autoMode
+  // persist the toggle through player settings (round 86); autoMode + UI
+  // labels stay as the single source of truth derived from settings.
+  settings.set('autoClick', !settings.get('autoClick'))
+  autoMode = settings.get('autoClick')
   document.getElementById('auto').textContent = autoMode ? '⏸ Auto' : '⏩ Auto'
   if (autoMode) scheduleAuto()
   else if (autoTimer) clearTimeout(autoTimer)
@@ -239,8 +307,9 @@ document.getElementById('save-now').addEventListener('click', async () => {
 document.getElementById('refresh-slots').addEventListener('click', () => renderSlots())
 
 // --- auto-advance ---
-let autoMode = false
+let autoMode = settings.get('autoClick') // derived from persisted settings (round 86)
 let autoTimer = null
+document.getElementById('auto').textContent = autoMode ? '⏸ Auto' : '⏩ Auto'
 const scheduleAuto = () => {
   if (!autoMode) return
   autoTimer = setTimeout(() => { void advance(); scheduleAuto() }, 1200)

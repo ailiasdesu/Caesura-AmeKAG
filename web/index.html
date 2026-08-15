@@ -46,6 +46,23 @@
     <button id="auto">⏩ Auto</button>
     <span id="status"></span>
   </div>
+  <div class="controls settings-bar">
+    <label>Lang
+      <select id="settings-lang">
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="ja">日本語</option>
+      </select>
+    </label>
+    <label>Auto
+      <input id="settings-auto" type="checkbox" />
+    </label>
+    <label>Speed <input id="settings-speed" type="range" min="1" max="80" value="20" /></label>
+    <label>BGM <input id="settings-bgm" type="range" min="0" max="1" step="0.05" value="1" /></label>
+    <label>SE <input id="settings-se" type="range" min="0" max="1" step="0.05" value="1" /></label>
+    <label>Voice <input id="settings-voice" type="range" min="0" max="1" step="0.05" value="1" /></label>
+  </div>
   <div id="stage"></div>
   <div class="status-line">Audio: <span id="audio-status">—</span></div>
   <div class="endings-wrap">

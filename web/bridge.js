@@ -334,6 +334,22 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     lua,
     core,
     audio,
+    /** Set the active UI/story language via the real pure-Lua i18n module
+     *  (loaded at boot). Falls back silently when i18n is unavailable.
+     *  @param {string} lang BCP-47-ish code, e.g. 'en', 'zh', 'ja-JP'. */
+    async setLanguage(lang) {
+      const s = String(lang ?? '').replace(/[^A-Za-z0-9-]/g, '')
+      if (!s) return false
+      try {
+        const ok = await lua.doString([
+          "local i18n = require('i18n')",
+          "if type(i18n) ~= 'table' then return false end",
+          "if i18n.set_language then i18n.set_language('" + s + "') end",
+          'return true',
+        ].join(String.fromCharCode(10)))
+        return ok !== false
+      } catch { return false }
+    },
     /** Run a .ks source; resolves with final ctx.token_index. */
     /** Current scene coroutine state (persisted across advances). */
     _co: null,
