@@ -1,7 +1,7 @@
 # Caesura (AmeKAG) — Editor Developer API Reference
 
 > **面向 web-editor 前端开发者的完整接口文档**
-> 最后更新: 2026-07-26
+> 最后更新: 2026-08-15
 
 ---
 
@@ -177,18 +177,19 @@ stdio 传输的 `smaSave` 方法同构（请求字段 `path` / `content`）。
 
 **`POST /api/run`**
 
-该路由已保留，但当前不会执行脚本。为避免不可 yield 的 Lua 主状态绕过调试器，
-在 managed coroutine 执行入口完成前统一返回 `unsupported_yieldable_execution`。
+提交脚本到 owner-thread dispatcher，由 managed coroutine 执行
+（`startManagedRun` + 每帧 `pumpManagedRuns`），可正常执行含 `coroutine.yield()`
+的脚本。请求体为原始脚本文本。
 
 ```
-→ "playbgm('theme.ogg')\nbg('scene01.png')\nch('Hero', 'Hello world!')\np()"
-← {"status":"invalid_request","code":"unsupported_yieldable_execution",...}
+→ playbgm('theme.ogg')\nbg('scene01.png')\nch('Hero', 'Hello world!')\np()
+← {"status":"ok"}
 ```
 
 错误响应 (4xx/5xx)：
 ```
-← {"error":"Empty script"}
-← {"status":"invalid_request","code":"unsupported_yieldable_execution",...}
+← {"error":"Empty script"}    // 空请求体 → HTTP 400
+← {"status":"invalid_request", ...}   // dispatcher 拒绝/失败
 ```
 
 ---
@@ -327,13 +328,14 @@ Engine、Lua 或动画后端。
 | `load_texture` | `(path: string) → id: int` | 从文件加载纹理，返回纹理 ID（0=失败） |
 | `destroy_texture` | `(id: int)` | 释放纹理 |
 | `create_solid_texture` | `(r, g, b, a: int) → id: int` | 创建 1×1 纯色纹理 |
-| `render_text` | `(text, x, y, scale, r, g, b, a)` | 渲染文字到消息图层 |
-| `render_ruby` | `(text, ruby, x, y)` | 渲染带注音的文字 |
-| `clear_text` | `()` | 清除消息图层文字 |
-| `set_font` | `(face, size, color)` | 设置字体 |
-| `line_height` | `() → number` | 获取当前行高 |
+| `text_set_font` | `(face, size, color?)` | 设置字体；`"default"` 重置为内置位图字体 |
+| `text_reset_state` | `()` | 重置文字渲染器内部行/字符状态 |
 | `get_resolution` | `() → width, height` | 获取 backbuffer 分辨率 |
 | `set_view_name` | `(viewId, name)` | 设置 bgfx 视图调试名称 |
+| `set_screen_offset` | `(dx, dy)` | 平移 VIEW_MAIN（camera/quake）；小数被四舍五入 |
+| `create_viewport` | `(w, h) → handle` | 创建 RTT 视口（非法尺寸返回 0） |
+| `destroy_viewport` | `(handle)` | 销毁 RTT 视口 |
+| `draw_viewport` | `(handle, x, y, w?, h?)` | 把 RTT 视口画到 VIEW_MAIN |
 | `submit_batch` | `(table)` | 批量提交绘制四边形（见下方） |
 | `submit_blend` | `(baseTexId, blendTexId, mode, baseAlpha, blendAlpha, globalAlpha)` | 提交混合特效 |
 | `submit_transition` | `(fromTexId, toTexId, ruleTexId, method, progress)` | 提交转场特效 |
@@ -341,9 +343,12 @@ Engine、Lua 或动画后端。
 | `stretch_blt` | `(dstTexId, dx, dy, dw, dh, srcTexId, sx, sy, sw, sh, filter)` | 缩放 Blit |
 | `affine_blt` | `(dstTexId, dx, dy, dw, dh, srcTexId, sx, sy, sw, sh, m0..m5)` | 仿射变换 Blit |
 | `fill_viewport` | `(vpId, r, g, b, a)` | 纯色填充 RTT |
+| `set_color_filter` | `(preset)` | 无障碍颜色滤镜：none/deuteranopia/protanopia/tritanopia/grayscale/high_contrast |
 | `resize` | `(width, height)` | 通知引擎窗口大小变化 |
-| `is_valid_handle` | `(type: int, id: int) → bool` | 验证资源句柄（type: 0=Texture,1=Sound,...） |
+| `is_valid_handle` | `(type: int, id: int) → bool` | 验证资源句柄（type: 0=Texture,1=Shader,2=RTT,...） |
+| `load_texture_async` | `(path, callback?) → int` | 异步加载纹理（`<0` 出错）；可选 `(ok, path, texId)` 回调 |
 | `cancel_async_loads` | `()` | 取消所有异步加载 |
+| `invalidate_handles` | `(type)` | 按类型使缓存资源代际句柄失效 |
 | **视频** | | |
 | `video_play` | `(path) → handle` | 播放视频 |
 | `video_stop` | `(handle)` | 停止视频 |
@@ -407,21 +412,39 @@ Render.submit_batch({
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `play_bgm` | `(file, volume?, loop?) → bool` | 播放 BGM |
-| `stop_bgm` | `(fadeTime?)` | 停止 BGM |
+| `stop_bgm` | `(fadeTime?) → bool` | 停止 BGM（可淡出） |
 | `play_se` | `(file, volume?) → bool` | 播放音效 |
-| `stop_se` | `()` | 停止所有音效 |
+| `play_se_3d` | `(file, x, y, z?) → bool` | 播放定位音效 |
+| `stop_se` | `() → bool` | 停止所有音效 |
+| `is_se_playing` | `() → bool` | SE 总线是否活跃 |
 | `play_voice` | `(file, volume?) → bool` | 播放语音 |
-| `stop_voice` | `()` | 停止语音 |
+| `stop_voice` | `() → bool` | 停止语音 |
+| `replay_voice` | `()` | 重播当前语音 |
 | `set_global_volume` | `(vol: 0.0–1.0)` | 设置主音量 |
 | `get_global_volume` | `() → number` | 获取主音量 |
 | `set_bus_volume` | `(bus, vol)` | 设置总线音量（"bgm"/"voice"/"se"） |
 | `get_bus_volume` | `(bus) → number` | 获取总线音量 |
-| `render_text` | `(text, x, y, scale, r, g, b, a)` | 渲染文字 |
-| `clear_text` | `()` | 清除文字 |
-| `line_height` | `() → number` | 行高 |
+| `set_bgm_volume` | `(vol)` | 设置 BGM 总线音量 |
+| `set_se_volume` | `(vol)` | 设置 SE 总线音量 |
+| `set_voice_volume` | `(vol)` | 设置 Voice 总线音量 |
+| `audio_fade_volume` | `(bus, target, seconds)` | 平滑音量过渡 |
+| `audio_get_length` | `(bus) → number` | 当前音轨长度（秒） |
+| `audio_get_position` | `(bus) → number` | 当前播放位置（秒） |
 | `is_bgm_playing` | `() → bool` | BGM 是否播放中 |
 | `is_voice_playing` | `() → bool` | 语音是否播放中 |
 | `get_active_voices` | `() → int` | 活跃语音数 |
+| `flush_wave_cache` | `()` | 清空解码波形缓存 |
+| `render_text` | `(text, x, y, scale, r, g, b, a)` | 渲染文字 |
+| `render_ruby` | `(text, ruby, x, y)` | 渲染注音 |
+| `clear_text` | `()` | 清除文字 |
+| `clear_text_layer` | `()` | 清除文字层（同 clear_text） |
+| `clear_screen` | `()` | 清除画面图层 |
+| `line_height` | `() → number` | 行高 |
+| `quake` | `(duration_ms, amplitude?)` | 屏幕震动 |
+| `show_text` | `(text)` | 显示文本行 |
+| `show_image` | `(path, ...)` | 将图片显示到图层 |
+| `wait_click` | `()` | 等待点击 |
+| `set_listener` | `(...)` | 设置音频监听器 |
 | `log` | `(message)` | 日志 |
 
 ### 2.4 Debug 模块
@@ -433,18 +456,21 @@ Render.submit_batch({
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `log` | `(level, message)` | 写入引擎日志 |
-| `assert` | `(condition, message)` | 调试断言 |
-| `traceback` | `() → string` | Lua 堆栈回溯 |
-| `get_fps` | `() → number` | 当前帧率 |
-| `get_memory` | `() → number` | Lua 内存使用 (KB) |
-| `profile_start` | `(name)` | 开始性能采样 |
-| `profile_end` | `(name)` | 结束性能采样 |
+| `get_last_error` | `() → string` | 最近一次引擎错误 |
+| `get_error_count` | `() → int` | 累计错误数 |
+| `get_subsystem_stats` | `(subsystem)` | 子系统错误/状态计数 |
+| `dump_report` | `()` | 输出结构化错误/状态报告 |
+| `get_render_info` | `()` | 渲染后端诊断 |
+| `get_audio_info` | `()` | 音频后端诊断 |
+| `get_input_info` | `()` | 输入后端诊断 |
+| `get_log_path` | `() → string` | 引擎日志文件路径 |
+| `get_stats` | `()` | 聚合运行时统计 |
 
-这里的 `Debug` Lua 表只提供日志、断言与性能分析绑定。`DebugProtocol` 由 `Engine`
+这里的 `Debug` Lua 表提供日志、错误与诊断绑定。`DebugProtocol` 由 `Engine`
 按 Lua VM 生命周期持有，支持可 yield KAG 协程的非阻塞断点、继续、step
 into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同一 resume 仲裁入口，
 暂停期间的 frame update、点击批处理及其他 Lua 回调不会越过断点。完整调试命令当前
-通过 stdio RPC 暴露；HTTP 调试路由已开放（8 条 `/api/debug/*`）。
+通过 stdio RPC 暴露；HTTP 调试路由已开放（7 条 `/api/debug/*`）。
 
 ### 2.5 DevCore 模块
 
@@ -454,23 +480,34 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `get_version` | `() → string` | 引擎版本 |
-| `get_backend_name` | `(subsystem) → string` | 后端名称（"render"/"audio"/"platform"） |
-| `set_dev_mode` | `(bool)` | 开发模式开关 |
-| `reload_scripts` | `()` | 热重载脚本 |
+| `set_input_focus` | `(bool)` | 输入焦点切到 KAG / 游戏 |
+| `get_input_focus` | `() → bool` | 输入焦点是否在游戏 |
+| `log` | `(message)` | 写一条引擎日志 |
+| `quit` | `()` | 请求退出引擎 |
+| `set_resolution` | `(w, h)` | 设置渲染分辨率 |
+| `get_resolution` | `() → w, h` | 获取当前分辨率 |
+| `set_fullscreen` | `(bool)` | 切换全屏 |
+| `get_window_size` | `() → w, h` | 获取 OS 窗口尺寸 |
 
-### 2.6 Save 模块
+### 2.6 Save 模块（注册在 KAG 模块上）
 
 ```lua
--- 全局变量: Save
+-- 存档/读档绑定注册到 KAG 模块（KAG.save_game, KAG.load_game, ...），
+-- 没有独立的 Save 全局变量。
+-- Backend: BackendRegistry::instance().getSaveManager()
 ```
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `save` | `(slot: int, data: table)` | 保存到槽位 |
-| `load` | `(slot: int) → table` | 从槽位加载 |
+| `save_game` | `(slot: int, data: table)` | 保存到槽位 |
+| `load_game` | `(slot: int) → table` | 从槽位加载 |
 | `list_saves` | `() → table` | 列出所有存档 |
 | `delete_save` | `(slot: int)` | 删除存档 |
+| `save_exists` | `(slot: int) → bool` | 槽位是否有存档 |
+| `get_save_dir` | `() → string` | 存档写入目录 |
+| `set_encryption_key` | `(key)` | 设置/派生存档加密密钥 |
+| `clear_encryption_key` | `()` | 清除存档加密密钥 |
+| `capture_thumbnail` | `()` | 捕获当前帧作为存档缩略图 |
 | `configure_cloud` | `(endpoint: string) → bool` | 配置 HTTP 云存档端（`""` 恢复本地）；离线降级不抛错 |
 | `cloud_push` | `(slot: int) → bool` | 把槽位文件推送到云端 |
 | `cloud_pull` | `(slot: int) → bool` | 从云端拉取槽位文件到本地 |
@@ -478,15 +515,21 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 ### 2.7 Steam 模块（无条件注册，无 SDK 时安全降级）
 
 ```lua
--- 全局变量: Steam（始终可用；无 Steam SDK 时由 Null 后端返回安全默认值）
+-- 全局变量: steam（始终可用；无 Steam SDK 时由 Null 后端返回安全默认值）
 ```
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `is_available` | `() → bool` | Steam 是否可用 |
-| `get_user_name` | `() → string` | Steam 昵称 |
 | `unlock_achievement` | `(id)` | 解锁成就 |
-| `set_rich_presence` | `(key, value)` | 设置 Rich Presence |
+| `is_achievement_unlocked` | `(id) → bool` | 成就是否已解锁 |
+| `reset_achievement` | `(id)` | 重置单个成就 |
+| `reset_all_achievements` | `()` | 重置全部成就 |
+| `set_stat_int` | `(name, value)` | 设置整数统计 |
+| `get_stat_int` | `(name) → int` | 获取整数统计 |
+| `set_stat_float` | `(name, value)` | 设置浮点统计 |
+| `get_stat_float` | `(name) → float` | 获取浮点统计 |
+| `store_stats` | `()` | 提交统计变更到 Steam |
+| `is_overlay_active` | `() → bool` | Steam 覆盖层是否激活 |
 | `cloud_write` | `(name, data) → bool` | 写入云存档文件 |
 | `cloud_read` | `(name) → string/nil` | 读取云存档文件（不存在返回 nil） |
 | `cloud_file_size` | `(name) → int` | 云文件字节数 |
@@ -499,7 +542,7 @@ into/over/out 和变量检查。KAG scheduler 的所有普通推进均经过同�
 ---
 
 > **Note:** the authoritative command reference is the auto-generated
-> [command-contracts.md](command-contracts.md) (72 contract commands). The
+> [command-contracts.md](command-contracts.md) (102 contract commands). The
 > hand-maintained list below is legacy context.
 
 ## 3. KAG Command Reference
@@ -609,7 +652,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 引擎内部架构文档，供需要修改引擎核心的合作开发者参考。
 
-→ [cpp-interfaces.md](cpp-interfaces.md) — 30 个 `I*` 纯虚接口，16 模块，BackendRegistry 完整 getter 列表。
+→ [cpp-interfaces.md](cpp-interfaces.md) — 31 个 `I*` 纯虚接口，15 模块，BackendRegistry 完整 getter 列表。
 
 ---
 
@@ -628,7 +671,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
    → GET /api/assets?type=script 列出所有脚本
 
 4. 编写 KAG 场景
-   → 当前 POST /api/run 返回 unsupported；需等待 managed coroutine 执行入口
+   → POST /api/run 通过 managed coroutine 执行脚本，支持 coroutine.yield()
 
 5. 调试
    → GET /api/logs 查看执行日志

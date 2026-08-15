@@ -1,4 +1,4 @@
-﻿# Lua Module API — Complete Reference
+# Lua Module API — Complete Reference
 
 > C++ binding modules exposed to Lua scripts. All modules are global variables after `Engine::init()`.
 
@@ -23,11 +23,12 @@
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `render_text` | `(text, x, y, scale, r, g, b, a)` | Render text to message layer |
-| `render_ruby` | `(text, ruby, x, y)` | Render text with furigana annotation |
-| `clear_text` | `()` | Clear all text from message layer |
-| `set_font` | `(face, size, color)` | Set font face, size, colour |
-| `line_height` | `() → number` | Get current line height in pixels |
+| `text_set_font` | `(face, size, color?)` | Set font face/size; `"default"` resets to the built-in bitmap font |
+| `text_reset_state` | `()` | Reset the text renderer's internal line/char state |
+
+> The text entry-points `render_text`, `render_ruby`, `clear_text`, `set_font`,
+> and `line_height` live on the **KAG** module (see [KAG section](#kag-c-audio-bindings)),
+> not on Render.
 
 ### View & Resolution
 
@@ -35,6 +36,10 @@
 |----------|-----------|-------------|
 | `get_resolution` | `() → w, h` | Get backbuffer width and height |
 | `set_view_name` | `(viewId, name)` | Set bgfx view debug marker |
+| `set_screen_offset` | `(dx, dy)` | Pan VIEW_MAIN (camera/quakes); fractional values are rounded |
+| `create_viewport` | `(w, h) → handle` | Create an RTT viewport (0 on invalid dimensions) |
+| `destroy_viewport` | `(handle)` | Destroy an RTT viewport |
+| `draw_viewport` | `(handle, x, y, w?, h?)` | Blit an RTT viewport onto VIEW_MAIN |
 | `resize` | `(w, h)` | Notify engine of window resize |
 
 ### Batch Submission
@@ -55,8 +60,8 @@ Each quad entry:
 | `rt` | int | 0 | Alternative: RTT ViewportHandle ID |
 | `x` | float | 0 | Left position |
 | `y` | float | 0 | Top position |
-| `w` | float | backbuffer width | Quad width |
-| `h` | float | backbuffer height | Quad height |
+| `w` | float | 128 | Quad width |
+| `h` | float | 128 | Quad height |
 | `opacity` | int (0–255) | 255 | Opacity |
 | `view` | int | 1 (VIEW_MAIN) | Target bgfx view |
 
@@ -70,6 +75,7 @@ Each quad entry:
 | `stretch_blt` | `(dstTexId, dx,dy,dw,dh, srcTexId, sx,sy,sw,sh, filter)` | Stretch blit (0=Nearest,1=Linear,2=Aniso) |
 | `affine_blt` | `(dstTexId, dx,dy,dw,dh, srcTexId, sx,sy,sw,sh, m0..m5)` | Affine 2×3 matrix blit |
 | `fill_viewport` | `(vpId, r, g, b, a)` | Fill RTT with solid colour |
+| `set_color_filter` | `(preset)` | Accessibility colour filter: none/deuteranopia/protanopia/tritanopia/grayscale/high_contrast |
 
 ### Video Playback
 
@@ -90,7 +96,9 @@ Each quad entry:
 | Function | Signature | Returns | Description |
 |----------|-----------|---------|-------------|
 | `is_valid_handle` | `(type, id)` | `bool` | Validate resource handle. type: 0=Texture,1=Shader,2=RTT,3=Audio,4=Video,5=Font,6=Model,7=Steam |
+| `load_texture_async` | `(path, callback?)` | `int` | Enqueue an async texture load (`<0` on error); optional `(ok, path, texId)` callback |
 | `cancel_async_loads` | `()` | `bool` | Cancel all pending async loads |
+| `invalidate_handles` | `(type)` | `bool` | Invalidate cached resource generation handles by type |
 
 ---
 
@@ -207,13 +215,16 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `log` | `(level, message)` | Write to engine log (level: "trace"/"debug"/"info"/"warn"/"error"/"fatal") |
-| `assert` | `(condition, message)` | Debug assertion check |
-| `traceback` | `() → string` | Get Lua stack traceback |
-| `get_fps` | `() → number` | Current frames per second |
-| `get_memory` | `() → number` | Lua memory usage in KB |
-| `profile_start` | `(name)` | Begin named profiling section |
-| `profile_end` | `(name)` | End named profiling section |
+| `log` | `(level, message)` | Write to engine log (log_level + message) |
+| `get_last_error` | `() → string` | Most recent engine error |
+| `get_error_count` | `() → int` | Total error count |
+| `get_subsystem_stats` | `(subsystem)` | Subsystem error/stat counters |
+| `dump_report` | `()` | Dump a structured error/state report |
+| `get_render_info` | `()` | Render backend diagnostics |
+| `get_audio_info` | `()` | Audio backend diagnostics |
+| `get_input_info` | `()` | Input backend diagnostics |
+| `get_log_path` | `() → string` | Path of the engine log file |
+| `get_stats` | `()` | Aggregate runtime stats |
 
 ---
 
@@ -225,10 +236,14 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `get_version` | `() → string` | Engine version string |
-| `get_backend_name` | `(subsystem) → string` | Active backend: "render"/"audio"/"platform" |
-| `set_dev_mode` | `(bool)` | Toggle development mode (checkerboard placeholder textures) |
-| `reload_scripts` | `()` | Trigger Lua hot reload |
+| `set_input_focus` | `(bool)` | Route input to KAG vs. game focus |
+| `get_input_focus` | `() → bool` | Whether input focus is on the game |
+| `log` | `(message)` | Write a message to the engine log |
+| `quit` | `()` | Request the engine to quit |
+| `set_resolution` | `(w, h)` | Set the rendering resolution |
+| `get_resolution` | `() → w, h` | Get the current resolution |
+| `set_fullscreen` | `(bool)` | Toggle fullscreen |
+| `get_window_size` | `() → w, h` | Get the OS window size |
 
 ---
 
@@ -254,7 +269,7 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `clear_text_layer` | `()` | — | Clear the text layer (delegates to clear_text) |
 | `flush_wave_cache` | `()` | `bool` | Flush the decoded-wave cache |
 | `quake` | `(duration_ms, amplitude?)` | `bool` | Screen shake (KAG3 classic) |
-| `render_ruby` | `(text, ruby, x, y)` | `bool` | Furigana annotation (also on Render) |
+| `render_ruby` | `(text, ruby, x, y)` | `bool` | Furigana annotation for the current text line |
 | `play_voice` | `(file, volume?)` | `bool` | Play voice line |
 | `stop_voice` | `()` | `bool` | Stop current voice |
 | `set_global_volume` | `(vol)` | — | Master volume 0.0–1.0 |
@@ -263,27 +278,42 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `get_bus_volume` | `(bus) → number` | — | Get bus volume |
 | `render_text` | `(text, x, y, scale, r, g, b, a)` | — | Render text |
 | `clear_text` | `()` | — | Clear text layer |
+| `set_font` | `(face, size, color?)` | — | Set font face/size; `"default"` resets to the built-in bitmap font |
 | `line_height` | `() → number` | — | Current line height |
 | `is_bgm_playing` | `() → bool` | — | Is BGM playing |
 | `is_voice_playing` | `() → bool` | — | Is voice playing |
 | `get_active_voices` | `() → int` | — | Active voice count |
+| `replay_voice` | `()` | `bool` | Replay the current voice line |
+| `set_bgm_volume` | `(vol)` | — | Set BGM bus volume |
+| `set_se_volume` | `(vol)` | — | Set SE bus volume |
+| `set_voice_volume` | `(vol)` | — | Set Voice bus volume |
+| `show_text` | `(text)` | — | Show text line |
+| `show_image` | `(path, ...)` | — | Show an image onto a layer |
+| `wait_click` | `()` | — | Wait for a click |
+| `set_listener` | `(...)` | — | Set an audio listener |
 | `log` | `(message)` | — | Write to engine log |
 
 ---
 
-## Save
+## Save (registered on the KAG module)
 
 ```lua
--- Global: Save
+-- No separate `Save` global; the save/load bindings are registered onto
+-- the KAG module (KAG.save_game, KAG.load_game, ...).
 -- Backend: BackendRegistry::instance().getSaveManager()
 ```
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `save` | `(slot, data)` | Save game state to slot (int, Lua table) |
-| `load` | `(slot) → table` | Load game state from slot |
+| `save_game` | `(slot, data)` | Save game state to slot (int, Lua table) |
+| `load_game` | `(slot) → table` | Load game state from slot |
 | `list_saves` | `() → table` | List all save slots with metadata |
 | `delete_save` | `(slot)` | Delete save slot |
+| `save_exists` | `(slot) → bool` | Whether a slot has a save |
+| `get_save_dir` | `() → string` | Directory where saves are written |
+| `set_encryption_key` | `(key)` | Set/derive the save encryption key |
+| `clear_encryption_key` | `()` | Clear the save encryption key |
+| `capture_thumbnail` | `()` | Capture the current frame as the save thumbnail |
 | `configure_cloud` | `(endpoint) → bool` | Configure HTTP cloud-save endpoint ("" = local only); offline-safe |
 | `cloud_push` | `(slot) → bool` | Push slot file to the cloud |
 | `cloud_pull` | `(slot) → bool` | Pull slot file from the cloud |
@@ -300,10 +330,16 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `is_available` | `() → bool` | Steam API available |
-| `get_user_name` | `() → string` | Steam display name |
 | `unlock_achievement` | `(id)` | Unlock achievement by ID |
-| `set_rich_presence` | `(key, value)` | Set Rich Presence key-value pair |
+| `is_achievement_unlocked` | `(id) → bool` | Whether an achievement is unlocked |
+| `reset_achievement` | `(id)` | Reset a single achievement |
+| `reset_all_achievements` | `()` | Reset all achievements |
+| `set_stat_int` | `(name, value)` | Set an integer statistic |
+| `get_stat_int` | `(name) → int` | Get an integer statistic |
+| `set_stat_float` | `(name, value)` | Set a float statistic |
+| `get_stat_float` | `(name) → float` | Get a float statistic |
+| `store_stats` | `()` | Commit statistic changes to Steam |
+| `is_overlay_active` | `() → bool` | Whether the Steam overlay is active |
 | `cloud_write` | `(name, data) → bool` | Write a cloud-save file (Remote Storage) |
 | `cloud_read` | `(name) → string/nil` | Read a cloud file; nil when missing |
 | `cloud_file_size` | `(name) → int` | Cloud file size in bytes |
