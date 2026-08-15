@@ -413,3 +413,81 @@ TEST_CASE("confineToModelRoot resolves symlinks and keeps containment") {
     }
     fs::remove_all(tmp);
 }
+
+// ---------------------------------------------------------------------------
+// G3: Conditional-compilation guard stubs for the Live2D Cubism SDK path.
+//
+// The Cubism SDK is proprietary and absent from CI, so the SDK backend
+// (Live2DBackend + render paths) is never compiled by default. These static
+// source assertions keep that boundary honest: they fail before a release if
+// (a) the no-SDK PNG fallback (already covered above) stops being the build's
+// default animation backend, or (b) an SDK-only include leaks into a no-SDK
+// build, or (c) the composition root regresses its "no SDK -> NullAnimation"
+// fallback wiring.
+// ---------------------------------------------------------------------------
+
+#include <sstream>
+
+namespace {
+
+std::string readSourceRelative(const std::string& relative) {
+    auto path = std::filesystem::current_path();
+    while (!path.empty()) {
+        if (std::filesystem::exists(path / "src") &&
+            std::filesystem::exists(path / "tests" / "cpp")) {
+            break;
+        }
+        const auto parent = path.parent_path();
+        if (parent == path) {
+            path.clear();
+            break;
+        }
+        path = parent;
+    }
+    REQUIRE_FALSE(path.empty());
+    const auto full = path / relative;
+    std::ifstream file(full, std::ios::binary);
+    std::ostringstream out;
+    out << file.rdbuf();
+    return out.str();
+}
+
+} // namespace
+
+TEST_CASE("Live2D SDK backend is guard-wrapped and never leaks SDK headers") {
+    const std::string header = readSourceRelative("src/live2d/Live2D/Live2DBackend.h");
+    const std::string impl = readSourceRelative("src/live2d/Live2D/Live2DBackend.cpp");
+
+    // The SDK backend must be entirely inside a CAESURA_LIVE2D guard (the
+    // header and .cpp both carry it before any SDK content).
+    CHECK(header.find("#ifdef CAESURA_LIVE2D") != std::string::npos);
+    CHECK(header.find("#include \"../api/IAnimationBackend.h\"") != std::string::npos);
+    CHECK(impl.find("#ifdef CAESURA_LIVE2D") != std::string::npos);
+    // The SDK include (Cubism framework/core) lives only inside the guard.
+    CHECK(impl.find("#include <CubismFramework.hpp>") != std::string::npos);
+    CHECK(impl.find("CubismFramework::StartUp") != std::string::npos);
+    CHECK(impl.find("CubismFramework::Initialize()") != std::string::npos);
+}
+
+TEST_CASE("Live2D null PNG fallback is the always-compiled default") {
+    // NullAnimationBackend + PathConfinement must be unconditionally listed in
+    // the Live2D module (no build-time exclusion), so the no-SDK path is always
+    // present and testable.
+    const std::string modules = readSourceRelative("cmake/CaesuraModules.cmake");
+    const std::string root = readSourceRelative("CMakeLists.txt");
+
+    // The static module lists the fallback unconditionally ...
+    CHECK(modules.find("src/live2d/NullAnimationBackend.cpp") != std::string::npos);
+    CHECK(modules.find("src/live2d/PathConfinement.cpp") != std::string::npos);
+    // ... while the SDK backend source is only added behind CAESURA_LIVE2D.
+    CHECK(root.find("src/live2d/Live2D/Live2DBackend.cpp") != std::string::npos);
+    CHECK(root.find("option(CAESURA_LIVE2D ") != std::string::npos);
+}
+
+TEST_CASE("Live2D no-SDK composition root wires NullAnimation fallback") {
+    // Composition root (entry) must select NullAnimationBackend when the SDK
+    // is not available, never constructing the SDK backend unconditionally.
+    const std::string engine = readSourceRelative("src/entry/Engine_Backends.cpp");
+    CHECK(engine.find("std::make_unique<NullAnimationBackend>()") != std::string::npos);
+    CHECK(engine.find("std::make_unique<Live2DBackend>()") != std::string::npos);
+}
