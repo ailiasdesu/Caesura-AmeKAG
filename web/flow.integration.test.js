@@ -482,4 +482,174 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(texts).toContain('nc=fallback')  // missing key -> fallback var value
     expect(texts).toContain('hc=present')   // present key wins over fallback
   }, 120000)
+  it('[while exp] loop iterates on web, bounded (round 76)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    // Data-driven [while]: counter + accumulator accumulate per iteration
+    // and the loop terminates (bounded guard), mirroring the desktop run.
+    const ks = [
+      '[set f.counter = 0]',
+      '[set f.sum = 0]',
+      '[while exp="f.counter < 4"]',
+      '[add name="f.counter" value=1]',
+      '[add name="f.sum" value=1]',
+      '[endwhile]',
+      '[ch name="N" text="cnt=\x24{f.counter} sum=\x24{f.sum}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'while_edge.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    // body ran exactly 4 times (counter 0->4, sum 0->4), then the exp
+    // turned false and the loop exited (no frame-limit error -> bounded).
+    expect(texts).toContain('cnt=4')
+    expect(texts).toContain('sum=4')
+  }, 120000)
+
+  it('[textspeed]/[cps] set ctx.text_speed (reveal pace) + ctx.cps (round 76)', async () => {
+    const readCtx = async (name) => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX[' + JSON.stringify(name) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    // [textspeed cps=100] -> 100 chars/sec == 10 ms/char reveal pace
+    await player.runScene('[textspeed cps=100]\n[end]', 'cps100.ks', { maxFrames: 200000, autoClick: true })
+    expect(await readCtx('cps')).toBe(100)
+    expect(await readCtx('text_speed')).toBe(10) // floor(1000/100)
+    // [cps 25] (KAG3 bare alias) -> 25 chars/sec == 40 ms/char
+    await player.runScene('[cps 25]\n[end]', 'cps25.ks', { maxFrames: 200000, autoClick: true })
+    expect(await readCtx('cps')).toBe(25)
+    expect(await readCtx('text_speed')).toBe(40) // floor(1000/25)
+  }, 120000)
+
+  it('[button cond="f.x..."] hides the false option on web (round 76)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[set f.x = 1]',
+      // cond false (1 > 1): "NeedX" must be filtered out at [endbutton]
+      '[button text="NeedX" target="*high" cond="f.x > 1"]',
+      // cond true (1 >= 1): only this option remains visible
+      '[button text="Low" target="*low" cond="f.x >= 1"]',
+      '[endbutton]',
+      '[end]',
+      '*low',
+      '[ch name="N" text="picked-low"]',
+      '[p]',
+      '[end]',
+      '*high',
+      '[ch name="N" text="picked-high"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'cond_choice.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    // auto-click picked the first VISIBLE option (Low) — the false cond
+    // option was dropped, so the *high route never ran.
+    expect(texts).toContain('picked-low')
+    expect(texts).not.toContain('picked-high')
+
+    // control: with f.x=5 both conds pass, so the first visible option is
+    // "NeedX" (cond f.x > 1 true) -> routes to *high.
+    player.core.backlog.length = 0
+    const ks2 = [
+      '[set f.x = 5]',
+      '[button text="NeedX" target="*high" cond="f.x > 1"]',
+      '[button text="Low" target="*low" cond="f.x >= 1"]',
+      '[endbutton]',
+      '[end]',
+      '*low',
+      '[ch name="N" text="picked-low"]',
+      '[p]',
+      '[end]',
+      '*high',
+      '[ch name="N" text="picked-high"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out2 = await player.runScene(ks2, 'cond_choice2.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('picked-high')
+  }, 120000)
+
+  it('save inside a [for] body then [load] -> loop CONTINUES to completion (round 76)', async () => {
+    for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
+    const NL = String.fromCharCode(10)
+    // Save is taken mid-loop (2nd iteration). Round-75 desktop parity: the
+    // web bridge saves through the REAL SaveCommands.save, whose
+    // capture_state serializes ctx._forStack/_ifStack into loop_stacks; a
+    // [load] restore writes ctx._resumeLoopStacks and the re-spawned
+    // scheduler.run consumes it, so the for/if chain picks up where it
+    // paused instead of silently ending.
+    const sceneA = [
+      '[set f.total = 0]',
+      '[for var="i" start="1" end="3"]',
+      '[add name="f.total" value=1]',
+      '[if exp="f.i == 2"]',
+      '[save slot=1]',
+      '[endif]',
+      '[endfor]',
+      '[ch name="N" text="completed total=\x24{f.total} i=\x24{f.i}"]',
+      '[p]',
+      '[ch name="N" text="AFTER-LOOP-DONE"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    await player.runScene(sceneA, 'loop_save.ks', { maxFrames: 200000, autoClick: true })
+    const loader = [
+      '[ch name="N" text="LOADER-START"]',
+      '[p]',
+      '[load slot=1]',
+      '[end]',
+    ].join(NL)
+    player.core.backlog.length = 0
+    const out = await player.runScene(loader, 'loader.ks', {
+      maxFrames: 200000, autoClick: true,
+      sceneSources: { 'loop_save.ks': sceneA },
+    })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((x) => x.text).join(' | ')
+    expect(texts).toContain('LOADER-START')
+    // The loop body ran all 3 iterations (i=1 before save counts; save on
+    // i=2, then iterations 2-finalize + 3 run after load), so total=3 and
+    // the counter exited at i=4.
+    expect(texts).toContain('completed total=3')
+    expect(texts).toContain('i=4')
+    expect(texts).toContain('AFTER-LOOP-DONE')
+  }, 120000)
+
+  it('[select]/[sel]/[endselect] KAG3 alias path works on web (round 76)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    // [select] opens the block (no-op), [sel x=] registers an option,
+    // [endselect] renders + blocks (alias of [endbutton]). auto-click
+    // selects option 1 -> routes to *route_p and records tf.result.
+    const ks = [
+      '[select]',
+      '[sel x="tf.result" target="*route_p" text="PickP"]',
+      '[sel x="tf.result" target="*route_q" text="PickQ"]',
+      '[endselect]',
+      '[end]',
+      '*route_p',
+      '[ch name="N" text="picked-p=\x24{tf.result}"]',
+      '[p]',
+      '[end]',
+      '*route_q',
+      '[ch name="N" text="picked-q"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'select_p.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('picked-p=*route_p')
+
+    // choiceIndex=2 picks the second option -> routes to *route_q
+    player.core.backlog.length = 0
+    const out2 = await player.runScene(ks, 'select_q.ks', {
+      maxFrames: 200000, autoClick: true, choiceIndex: 2,
+    })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('picked-q')
+  }, 120000)
 })
