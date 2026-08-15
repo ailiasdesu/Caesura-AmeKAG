@@ -52,6 +52,34 @@ local FLOW_CMDS = {
     "select", "sel", "endselect", "end", "stop",
 }
 
+-- KAG3 parameter-name aliases (mirror of kag3_import.lua PARAM_ALIASES):
+-- KAG3 tag param -> Neo-Genesis engine param, keyed by command. Pure
+-- advisory — these rows never change validation itself, only let the
+-- editor hint the canonical name when an author writes the KAG3 spelling.
+--   add/sub/mul/div/mod/dec  var=  ->  name=
+--   csp/csl                   left= ->  x=,  top= ->  y=
+local KAG3_PARAM_ALIASES = {
+    add = { var = "name" },
+    sub = { var = "name" },
+    mul = { var = "name" },
+    div = { var = "name" },
+    mod = { var = "name" },
+    dec = { var = "name" },
+    csp = { left = "x", top = "y" },
+    csl = { left = "x", top = "y" },
+}
+
+-- Find the canonical param a KAG3 alias maps to, or nil when the command/
+-- param pair has no alias. Only the *unknown* param lookup path consults
+-- this, so a legitimately-declared param is never touched.
+local function kag3_alias_target(cmd, pname)
+    local map = KAG3_PARAM_ALIASES[cmd]
+    if not map then return nil end
+    local target = map[pname]
+    if not target then return nil end
+    return target
+end
+
 --- Build the command index once (contracts + flow commands + kag table).
 local commands = nil
 local function ensure_index()
@@ -396,8 +424,19 @@ function lsp.diagnostics(text)
                 if #unknown > 0 then
                     table.sort(unknown)
                     for _, pname in ipairs(unknown) do
+                        -- KAG3 alias hint (pure advisory): when this command+
+                        -- param has a KAG3-compat spelling that the importer
+                        -- rewrites to the canonical engine param, tell the
+                        -- author which spelling to use instead of leaving a
+                        -- bare unknown-param warning. Does not change the
+                        -- warning itself or the contract check.
+                        local hint = ""
+                        local target = kag3_alias_target(cmd, pname)
+                        if target then
+                            hint = "（KAG3 别名：建议用 " .. target .. "= 代替 " .. pname .. "=）"
+                        end
                         addIssue(lineOf(tok.offset), 1,
-                            "unknown param '" .. pname .. "' for [" .. cmd .. "]", 2)
+                            "unknown param '" .. pname .. "' for [" .. cmd .. "]" .. hint, 2)
                     end
                 end
             else

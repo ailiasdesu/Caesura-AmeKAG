@@ -428,6 +428,65 @@ check("json rename no-op -> renamed:true empty edits", jrMissing ~= nil
       and jrMissing:find('"renamed":true', 1, true) ~= nil
       and jrMissing:find('"edits":[]', 1, true) ~= nil)
 
+-- ---------------------------------------------------------------------------
+-- 14. KAG3 param-alias hints (round 82): unknown-param diagnostics on a
+--     command+param that has a KAG3-compat spelling (mirror of
+--     kag3_import.lua PARAM_ALIASES) append an advisory hint naming the
+--     canonical engine param. Pure message text — severity stays 2 and the
+--     diagnostic shape ({line,col,message,severity}) is unchanged.
+-- ---------------------------------------------------------------------------
+-- [csp] contract declares x/y; KAG3 spells left/top -> hint suggests x/y.
+local da1 = lsp.diagnostics('[csp name="a" left=320]\n')
+check("alias: csp left= flags unknown with hint", #da1 == 1
+      and da1[1].message:find("unknown param 'left'", 1, true) ~= nil
+      and da1[1].message:find("KAG3 别名", 1, true) ~= nil
+      and da1[1].message:find("x= 代替 left=", 1, true) ~= nil
+      and da1[1].severity == 2)
+local da2 = lsp.diagnostics('[csl name="a" top=300]\n')
+check("alias: csl top= hints y=", #da2 == 1
+      and da2[1].message:find("unknown param 'top'", 1, true) ~= nil
+      and da2[1].message:find("y= 代替 top=", 1, true) ~= nil)
+-- [add] contract declares name; KAG3 spells var -> hint suggests name=.
+-- [add] also flags missing required 'name' (name= is the canonical
+-- param), so the hint must be located within the issue list, not asserted
+-- as the sole diagnostic.
+local da3 = lsp.diagnostics('[add var="f.hp" value=5]\n')
+local da3hint = false
+for _, it in ipairs(da3) do
+    if it.message:find("unknown param 'var'", 1, true) ~= nil
+       and it.message:find("name= 代替 var=", 1, true) ~= nil then
+        da3hint = true
+    end
+end
+check("alias: add var= hints name=", da3hint)
+local da4 = lsp.diagnostics('[dec var="f.hp"]\n')
+local da4hint = false
+for _, it in ipairs(da4) do
+    if it.message:find("name= 代替 var=", 1, true) ~= nil then
+        da4hint = true
+    end
+end
+check("alias: dec var= hints name=", da4hint)
+-- canonical params are clean (no false hint, no new diagnostics).
+local da5 = lsp.diagnostics('[csp name="a" x=320 y=240]\n')
+check("alias: csp canonical x/y clean", #da5 == 0)
+local da6 = lsp.diagnostics('[add name="f.hp" value=5]\n')
+check("alias: add canonical name clean", #da6 == 0)
+-- a NON-aliased unknown param gets no hint suffix (still a warning).
+local da7 = lsp.diagnostics('[csp name="a" bogus=1]\n')
+check("alias: unmatched unknown param no hint", #da7 == 1
+      and da7[1].message:find("unknown param 'bogus'", 1, true) ~= nil
+      and da7[1].message:find("KAG3 别名", 1, true) == nil)
+-- alias applies only on that command: [ch left=] is not a csp alias.
+local da8 = lsp.diagnostics('[ch text="a" left=1]\n')
+check("alias: alias scoped to owning command", #da8 == 1
+      and da8[1].message:find("unknown param 'left'", 1, true) ~= nil
+      and da8[1].message:find("KAG3 别名", 1, true) == nil)
+-- JSON bridge: alias hint flows through the diagnostics method unchanged.
+local daJ = lsp.json("diagnostics", '[csp name="a" left=320]\n')
+check("alias: hint serialized via json", daJ:find("KAG3 别名", 1, true) ~= nil
+      and daJ:find('"severity":2', 1, true) ~= nil)
+
 -- Exit gate.
 if failed > 0 then
 
