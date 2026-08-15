@@ -59,10 +59,14 @@ Caesura (AmeKAG) 引擎的资源管线负责加载、解码和管理游戏所需
 
 ## 视频
 
-| 格式 | 支持 | 分辨率限制 | 备注 |
-|------|------|-----------|------|
-| MPEG1 | ✅ | 1920×1080 | 基本视频播放支持 |
-| 其他格式 | ❌ | — | 可通过 FFmpeg 预处理转换为 MPEG1 |
+视频解码默认启用 FFmpeg（CMake 选项 `CAESURA_ENABLE_FFMPEG`，默认 `ON`）。**当编译时找到 FFmpeg（`external/ffmpeg` / vcpkg / pkg-config）时，引擎通过 FFmpeg 支持其可探测的全部容器与编码格式**（MP4/H.264、HEVC、VP9、WebM、MKV、MPEG-1/2 等），并启用硬件解码与 SIMD 加速、含音频轨。`pl_mpeg` 仅作零依赖回退：只在未编译 FFmpeg、或 FFmpeg 打开失败时，回退到 **MPEG-1 专用**解码。
+
+| 解码器 | 支持范围 | 备注 |
+|--------|---------|------|
+| FFmpeg（首选，`CAESURA_ENABLE_FFMPEG=ON` 且找到 FFmpeg） | FFmpeg 支持的全格式（MP4/H.264、HEVC、VP9、WebM、MKV、MPEG-1/2 等） | 硬件解码 + SIMD；含音频轨（重采样为浮点立体声 PCM） |
+| pl_mpeg（回退） | 仅 MPEG-1 | FFmpeg 未启用或打开失败时回退；帧经 `bgfx` 上传为纹理 |
+
+> 若需固定 MPEG-1 兼容性（如目标平台不随附 FFmpeg），可 `-DCAESURA_ENABLE_FFMPEG=OFF` 强制走 pl_mpeg 回退，并预先用 FFmpeg 将素材转码为 MPEG-1。
 
 ## 推荐目录结构
 
@@ -89,23 +93,29 @@ assets/
 │   └── voice/       # 语音
 │       ├── hero_001.wav
 │       └── heroine_001.wav
-└── video/           # 视频
-    ├── opening.mpg
-    └── ending.mpg
+└── video/           # 视频（FFmpeg 支持任意容器，如 .mp4/.mkv/.webm）
+    ├── opening.mp4   # H.264
+    └── ending.mkv
 ```
 
-## 异步加载
+## 资源预加载
 
-引擎通过 `AsyncLoader` 支持资源的异步加载：
+异步预加载通过 KAG 标签 `[preload]` 声明（见 `scripts/kag/commands/resource.lua`），底层由 C++ 侧 `AsyncLoader` + `JobSystem` 在工作线程执行 IO/解码，完成后回调通知主线程；Lua 侧管理缓存与占位纹理回退。
 
-```lua
--- 预加载图片到缓存
-KAG.preload("images/bg/school.png", "texture")
+```ks
+; 预加载图片到纹理缓存（异步，先返回占位纹理）
+[preload type="texture" path="images/bg/school.png" wait="false"]
 
--- 查询加载状态
-if KAG.is_loaded("images/bg/school.png") then
-    -- 资源已就绪
-end
+; 同步等待全部加载完成后再继续
+[preload type="texture" path="images/bg/a.png,images/bg/b.png" wait="true"]
+
+; 预加载音频 / 场景
+[preload type="audio" path="audio/bgm_01.mp3"]
+[preload type="scene" path="act2.ks"]
 ```
 
-异步加载通过 `JobSystem` 在工作线程上执行 IO 和解码，完成后通过回调通知主线程。
+- `type` — `texture` / `audio` / `scene`
+- `path`（或 `storage`）— 逗号分隔的资源路径（相对游戏根目录）
+- `wait` — `"true"` 同步阻塞协程直至加载完成；`"false"` 后台加载，提前使用时显示占位纹理（开发紫色 / 发布灰色）
+
+加载状态由 `kag.commands.resource` 的 `is_loaded` / `is_pending` / `flush_cache` 函数管理（供其他 KAG 命令内部调用，并非 `KAG.*` 直接绑定）。

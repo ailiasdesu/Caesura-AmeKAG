@@ -12,27 +12,46 @@ CARC (Caesura ARChive) 是 Caesura (AmeKAG) 引擎的加密压缩归档格式。
 
 ### 基本用法
 
-```bash
-# 打包（无加密）
-tools/carc_pack ./mygame ./release/game.carc
+工具位于构建输出目录 `bin/Debug/carc_pack.exe`（Release 为 `bin/Release/carc_pack.exe`），支持 `pack`（默认）、`list`、`extract` 三种操作：
 
-# 打包 + 生成密钥对
-tools/carc_pack ./mygame ./release/game.carc ./mygame/game.key.pub ./mygame/game.key
+```bash
+CARC_PACK=bin/Debug/carc_pack.exe
+
+# 打包（无加密）
+$CARC_PACK ./mygame ./release/game.carc
+
+# 打包 + 生成密钥对（保存公钥/私钥文件）
+$CARC_PACK ./mygame ./release/game.carc ./mygame/game.key.pub ./mygame/game.key
 
 # 使用已有密钥打包
-tools/carc_pack ./mygame ./release/game.carc
+$CARC_PACK ./mygame ./release/game.carc
 # (密钥文件 game.key 和 game.key.pub 需放在工作目录)
+
+# 列出归档内文件（每行一个路径哈希，供脚本/导入器消费）
+$CARC_PACK list ./release/game.carc [public.key]
+
+# 提取单个文件到原始相对路径（需 --path 指定已知路径）
+$CARC_PACK extract ./release/game.carc ./out --path audio/bgm_01.mp3 [public.key]
+
+# 全量提取（归档只存路径哈希，全量提取按哈希名落盘）
+$CARC_PACK extract ./release/game.carc ./outfull [public.key]
 ```
 
 ### 参数说明
 
 ```
-carc_pack <input_dir> <output.carc> [public.key] [private.key]
+carc_pack.exe <input_dir> <output.carc> [public.key] [private.key]
+carc_pack.exe list <archive.carc> [public.key]
+carc_pack.exe extract <archive.carc> <out_dir> [--path <rel>] [public.key]
 
-  input_dir    — 要打包的目录
-  output.carc  — 输出的 CARC 归档文件
-  public.key   — (可选) 保存 Ed25519 公钥的文件路径
-  private.key  — (可选) 保存 Ed25519 私钥的文件路径
+  pack        — 默认操作。打包目录
+  input_dir   — 要打包的目录
+  output.carc — 输出的 CARC 归档文件
+  public.key  — (可选) Ed25519 公钥路径（list/extract 用于验签）
+  private.key — (可选) 保存 Ed25519 私钥的文件路径
+  list        — 打印归档内文件的路径哈希（每行一个，machine-readable）
+  extract     — 提取归档内容到 out_dir
+  --path      — (extract) 仅提取指定相对路径到一个文件（保留原始文件名）
 ```
 
 ### 密钥管理
@@ -72,36 +91,42 @@ carc_pack <input_dir> <output.carc> [public.key] [private.key]
 
 ## 在 KAG 脚本中使用
 
-打包后的资源通过 `carc://` 协议引用：
+Caesura 引擎**没有 `carc://` 协议**。资源请求统一走纯路径：打包时的相对路径即脚本中的资源路径，引擎按优先级依次在各资源提供者（磁盘目录、`data.carc`/`game.carc`/`patch.carc`）中查找同名路径。
 
 ```kag
 ; 背景图片
-@bg "carc://scenes/bg_classroom.png"
+@bg "scenes/bg_classroom.png"
 
 ; 背景音乐
-@bgm "carc://audio/bgm_01.mp3"
+@bgm "audio/bgm_01.mp3"
 
 ; 角色立绘
-@fg "carc://characters/hero_smile.png"
+@fg "characters/hero_smile.png"
 
 ; 音效
-@se "carc://audio/se_click.wav"
+@se "audio/se_click.wav"
 ```
 
 ## 运行时加载
 
-引擎通过 `CarcAssetProvider` 处理 `carc://` 协议的资源请求：
+引擎在组合根的 `registerDefaultAssetProviders`（`src/entry/Engine_Assets.cpp`）中，按 `data.carc`、`game.carc`、`patch.carc` 的顺序自动探测并注册存在的归档作为 `CarcAssetProvider`（纯路径语义，见上节）：
 
 ```cpp
-// 组合根内部（Engine 启动时自动处理，无需游戏代码手动注册）
-auto reader = std::make_unique<carc::CARCReader>();
-if (reader->open("game.carc")) {
-    assetManager.addProvider(
-        std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
+// src/entry/Engine_Assets.cpp（组合根，Engine 启动时自动处理，无需游戏代码手动注册）
+void registerDefaultAssetProviders(AssetManager& assetManager) {
+    const char* carcFiles[] = {"data.carc", "game.carc", "patch.carc"};
+    for (const char* fname : carcFiles) {
+        auto reader = std::make_unique<carc::CARCReader>();
+        if (reader->open(fname)) {
+            assetManager.addProvider(
+                std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
+            printf("[Engine] Registered CARC: %s\n", fname);
+        }
+    }
 }
 ```
 
-`assetManager` 由 `Engine` 独占持有并注入组合根辅助函数，不通过全局单例访问。
+`assetManager` 由 `Engine` 独占持有并注入组合根辅助函数，不通过全局单例访问。`ProviderChain` 按优先级依次在磁盘目录与已注册的 CARC 提供者中查找同名路径。
 
 ## 安全注意事项
 
@@ -119,4 +144,4 @@ A: 检查是否包含了不应打包的文件（如 `.git/`, `.DS_Store`）。�
 A: 公钥不匹配或归档文件被修改。确认使用的公钥与打包时的私钥配对。
 
 **Q: 能否增量更新 CARC？**
-A: 当前不支持增量更新。使用 `DeltaCARC`（开发中）可在后续版本中支持差异更新。
+A: 当前不支持增量更新。引擎侧 `DeltaCARC`（`src/archive/DeltaCARC.*`）差异更新实现已完成（文件级 diff，AES-256-GCM 加密整条 delta，按源/目标 SHA 绑定验证），但**尚未接入组合根或 `carc_pack` 命令行工具**——需额外集成方可在实际流程中使用。
