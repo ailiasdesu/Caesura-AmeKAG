@@ -2,14 +2,8 @@
 // Loads the pure-Lua KAG stack + the REAL kag command table, wires the
 // AdapterCore as the binding surface, and runs .ks scenes.
 import { Lua } from 'wasmoon'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { AdapterCore, LAYER_TYPE } from './adapter-core.js'
 import { AudioEngine } from './audio-engine.js'
-
-// Local glue.wasm for non-browser hosts (vitest/jsdom); browsers use the
-// bundled default (CDN) unless wasmFile is passed explicitly.
-const here = dirname(fileURLToPath(import.meta.url))
 
 // modules whose Lua source lives in scripts/ (NOT bindings)
 // layers/audio/etc are C++-binding modules stubbed in JS below (the real
