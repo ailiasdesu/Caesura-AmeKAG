@@ -3,7 +3,16 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (102)
+## Commands (117)
+
+### `[add]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible add: var += value_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | yes |
+| `value` | number | - | - | yes |
 
 ### `[ai_dialog]`
 
@@ -135,6 +144,57 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible cl command
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[cps]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3 [textspeed] alias: chars per second ([cps 50])_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `cps` | number | 50 | 1..120 | - |
+
+### `[csd]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible csd command: hide/remove a character on a layer_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `layer` | string | 0 | - | - |
+| `name` | string | - | - | yes |
+
+### `[csl]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible csl command: move a character layer (no visibility change)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `layer` | string | 0 | - | - |
+| `name` | string | - | - | yes |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
+### `[csp]`
+
+_Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible csp command: show a character image on a layer (default assets/char/<name>.png at 0,0)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | file | - | - | - |
+| `layer` | string | 0 | - | - |
+| `name` | string | - | - | yes |
+| `path` | string | - | - | - |
+| `storage` | file | - | - | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
+### `[dec]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible dec (inc twin): var -= amount (default 1)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amount` | number | 1 | - | - |
+| `name` | string | - | - | yes |
+
 ### `[delay]`
 
 _Category: system · Blocking: yes (waits for completion) · KAG3-compatible delay command_
@@ -144,6 +204,15 @@ _Category: system · Blocking: yes (waits for completion) · KAG3-compatible del
 | `duration` | number | - | 0..60000 | - |
 | `ms` | number | - | 0..60000 | - |
 | `time` | number | 1000 | 0..60000 | - |
+
+### `[div]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible div: var /= value_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | yes |
+| `value` | number | - | - | yes |
 
 ### `[emb]`
 
@@ -369,6 +438,15 @@ _Category: save · Blocking: yes (waits for completion) · KAG3-compatible load 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[mod]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible mod: var %= value (zero operand -> visible error, no-op)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | yes |
+| `value` | number | - | - | yes |
+
 ### `[move]`
 
 _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible move command_
@@ -396,6 +474,15 @@ _Category: layer · Blocking: yes (waits for completion) · KAG3-compatible move
 | `x` | number | - | - | - |
 | `y` | number | - | - | - |
 
+### `[mul]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible mul: var *= value_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | yes |
+| `value` | number | - | - | yes |
+
 ### `[music]`
 
 _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible music command_
@@ -417,6 +504,16 @@ _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible nameplate c
 | `x` | number | 32 | - | - |
 | `y` | number | 480 | - | - |
 
+### `[notify]`
+
+_Category: system · Blocking: no (fire-and-forget) · show a brief corner toast notification (author feedback)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `kind` | string | - | - | - |
+| `msg` | string | - | - | yes |
+| `time` | number | 2500 | 0..30000 | - |
+
 ### `[nvl]`
 
 _Category: text · Blocking: no (fire-and-forget) · NVL mode: full-screen accumulated text (Ren'Py parity); [nvl clear] page break, [nvl off] exit; [nvl prefix="「%s」："] customizes the speaker prefix format (%s = name)_
@@ -432,6 +529,17 @@ _Category: text · Blocking: yes (waits for completion) · click-to-advance_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[palette]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · KAG3-compatible palette/LUT color-grading command_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `effect` | enum | apply | - | - |
+| `id` | string |  | - | - |
+| `intensity` | number | 1.0 | 0.0..1.0 | - |
+| `path` | string |  | - | - |
 
 ### `[particles]`
 
@@ -537,6 +645,17 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible position c
 | `scale` | number | 1.0 | 0.01..16 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[preload]`
+
+_Category: resource · Blocking: no (fire-and-forget) · Preload assets (texture/audio/scene) ahead of use; async unless wait=true_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `path` | string |  | - | - |
+| `storage` | string |  | - | - |
+| `type` | string | texture | 1,2,3 | - |
+| `wait` | string | true | 1,2 | - |
 
 ### `[pt]`
 
@@ -844,6 +963,15 @@ _Category: audio · Blocking: no (fire-and-forget) · stop the current voice pla
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[sub]`
+
+_Category: system · Blocking: no (fire-and-forget) · KAG3-compatible sub: var -= value_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `name` | string | - | - | yes |
+| `value` | number | - | - | yes |
+
 ### `[text]`
 
 _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible text command_
@@ -867,6 +995,14 @@ _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible textbox com
 | `w` | number | 1280 | 64..4096 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 520 | - | - |
+
+### `[textspeed]`
+
+_Category: text · Blocking: no (fire-and-forget) · KAG3 typewriter speed: chars per second (overrides [pt] ms/char)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `cps` | number | 50 | 1..120 | - |
 
 ### `[trans]`
 
@@ -892,6 +1028,16 @@ _Category: system · Blocking: no (fire-and-forget) · unlock a gallery CG or mu
 ### `[vib]`
 
 _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible vib command_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amplitude` | number | - | 0..50 | - |
+| `intensity` | number | 3 | 0..50 | - |
+| `time` | number | 300 | 0..30000 | - |
+
+### `[vibrate]`
+
+_Category: vfx · Blocking: yes (waits for completion) · KAG3-compatible alias for [vib] (message-layer vibration)_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
