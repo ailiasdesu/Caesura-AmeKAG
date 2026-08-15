@@ -42,6 +42,119 @@ local interp_cache = {}
 local INTERP_CACHE_MAX = 128
 local interp_env = { f = {}, sf = {}, tf = {}, mp = {}, lf = {} }
 
+-- Evaluate one ${expr} interpolation span (cache notes above). Returns
+-- the formatted value, or the raw "${expr}" span when the expression
+-- fails to compile or throws (bad input leaks verbatim, as before).
+-- Find the index of the brace matching the '{' at position open.
+-- Quote-aware: braces inside '...' / "..." do not count. nil when
+-- unterminated. Shared by the ${...} scanner and the constructor
+-- parenthesizer (round 54).
+local function match_brace(s, open)
+    local depth, quote = 1, nil
+    local j, n = open + 1, #s
+    while j <= n do
+        local d = s:sub(j, j)
+        if quote then
+            if d == "\\" then
+                j = j + 1  -- escaped char inside a literal
+            elseif d == quote then
+                quote = nil
+            end
+        elseif d == "'" or d == '"' then
+            quote = d
+        elseif d == "{" then
+            depth = depth + 1
+        elseif d == "}" then
+            depth = depth - 1
+            if depth == 0 then return j end
+        end
+        j = j + 1
+    end
+    return nil
+end
+
+local function eval_interp_expr(expr, ctx)
+    local f2 = interp_cache[expr]
+    if not f2 then
+        interp_env.f = ctx and ctx.f or {}
+        interp_env.sf = ctx and ctx.sf or {}
+        interp_env.tf = ctx and ctx.tf or {}
+        interp_env.mp = ctx and ctx.mp or {}
+        interp_env.lf = ctx and ctx.lf or {}
+        -- TJS -> Lua translation (&& || ! != ?:) so ${expr} accepts the
+        -- same expression language as [if]/[eval] (round 50 audit).
+        local exprLua = expr
+        pcall(function()
+            local ex = require("kag.expr")
+            if ex and ex.translate then exprLua = ex.translate(expr) end
+        end)
+        -- Lua forbids indexing a table constructor directly
+        -- ({1,2}[1] is a syntax error: constructors are not prefixexp),
+        -- so parenthesize a leading constructor:
+        -- ${ {a=1,b=2}.b } -> ( {a=1,b=2} ).b (round 54).
+        local first = exprLua:match("^%s*(.)")
+        if first == "{" then
+            local open_pos = #exprLua:match("^%s*") + 1
+            local close2 = match_brace(exprLua, open_pos)
+            if close2 then
+                exprLua = exprLua:sub(1, open_pos - 1)
+                    .. "(" .. exprLua:sub(open_pos, close2) .. ")"
+                    .. exprLua:sub(close2 + 1)
+            end
+        end
+        f2 = load("return (" .. exprLua .. ")", "=ks_interp", "t", interp_env)
+        if not f2 then return "${" .. expr .. "}" end  -- syntax error
+        interp_cache[expr] = f2
+        local n = 0
+        for _ in pairs(interp_cache) do n = n + 1 end
+        if n > INTERP_CACHE_MAX then
+            local keys = {}
+            for k in pairs(interp_cache) do keys[#keys + 1] = k end
+            for j = 1, math.floor(#keys / 2) do
+                interp_cache[keys[j]] = nil
+            end
+        end
+    else
+        -- update the shared env to the current ctx tables
+        interp_env.f = ctx and ctx.f or {}
+        interp_env.sf = ctx and ctx.sf or {}
+        interp_env.tf = ctx and ctx.tf or {}
+        interp_env.mp = ctx and ctx.mp or {}
+        interp_env.lf = ctx and ctx.lf or {}
+    end
+    local ok2, val2 = pcall(f2)
+    if ok2 then return tostring(val2) end
+    return "${" .. expr .. "}"
+end
+
+-- Expand every ${...} span in v with balanced-brace scanning (round 54):
+-- the old "%${([^{}]+)}" pattern truncated expressions containing
+-- literal braces (${ {a=1,b=2}.a } leaked the raw span into the text).
+-- Depth counts nested braces; quoted string literals are skipped so
+-- ${ "}" .. f.x } still balances. Unterminated "${" spans are left
+-- verbatim, matching the syntax-error fallback.
+local function expand_interp_exprs(v, ctx)
+    local out = {}
+    local i, n = 1, #v
+    while i <= n do
+        local k = v:find("${", i, true)
+        if not k then
+            out[#out + 1] = v:sub(i)
+            break
+        end
+        if k > i then out[#out + 1] = v:sub(i, k - 1) end
+        local close2 = match_brace(v, k + 1)
+        if not close2 then
+            -- unterminated "${" — leave the rest verbatim
+            out[#out + 1] = v:sub(k)
+            break
+        end
+        out[#out + 1] = eval_interp_expr(v:sub(k + 2, close2 - 1), ctx)
+        i = close2 + 1
+    end
+    return table.concat(out)
+end
+
 --- Schema.define(cmd, specs) — register the contract for one command.
 --  `specs._meta = { category=..., blocking=..., desc=... }` is optional and
 --  stored separately (never treated as a parameter contract).
@@ -111,53 +224,12 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
             and (v:find("$", 1, true) or v:find("%", 1, true)) then
             -- ${expr}: full expression evaluated in a sandbox env with the
             -- ctx variable tables (f/sf/tf/mp/lf) -- beyond KAG3's eval-glue.
-            -- Chunk cache: Lua 5.4 binds _ENV at load time, so the chunk is
-            -- loaded ONCE against a shared env table whose f/sf/tf/mp/lf
-            -- fields are updated to the current ctx tables before every
-            -- evaluation (the scheduler is single-threaded/serial, so no
-            -- concurrent evaluation can observe a torn env).
-            v = v:gsub("%${([^{}]+)}", function(expr)
-                local f2 = interp_cache[expr]
-                if not f2 then
-                    interp_env.f = ctx and ctx.f or {}
-                    interp_env.sf = ctx and ctx.sf or {}
-                    interp_env.tf = ctx and ctx.tf or {}
-                    interp_env.mp = ctx and ctx.mp or {}
-                    interp_env.lf = ctx and ctx.lf or {}
-                    -- TJS -> Lua translation (&& || ! != ?:) so
-                    -- ${expr} accepts the same expression language as
-                    -- [if]/[eval] (round 50 audit: a ternary was left
-                    -- verbatim — Lua load() rejects TJS operators).
-                    local exprLua = expr
-                    pcall(function()
-                        local ex = require("kag.expr")
-                        if ex and ex.translate then exprLua = ex.translate(expr) end
-                    end)
-                    f2 = load("return (" .. exprLua .. ")", "=ks_interp", "t",
-                              interp_env)
-                    if not f2 then return "${" .. expr .. "}" end  -- syntax error
-                    interp_cache[expr] = f2
-                    local n = 0
-                    for _ in pairs(interp_cache) do n = n + 1 end
-                    if n > INTERP_CACHE_MAX then
-                        local keys = {}
-                        for k in pairs(interp_cache) do keys[#keys + 1] = k end
-                        for j = 1, math.floor(#keys / 2) do
-                            interp_cache[keys[j]] = nil
-                        end
-                    end
-                else
-                    -- update the shared env to the current ctx tables
-                    interp_env.f = ctx and ctx.f or {}
-                    interp_env.sf = ctx and ctx.sf or {}
-                    interp_env.tf = ctx and ctx.tf or {}
-                    interp_env.mp = ctx and ctx.mp or {}
-                    interp_env.lf = ctx and ctx.lf or {}
-                end
-                local ok2, val2 = pcall(f2)
-                if ok2 then return tostring(val2) end
-                return "${" .. expr .. "}"
-            end)
+            -- Balanced-brace scanning (round 54): the old pattern
+            -- "%${([^{}]+)}" truncated expressions containing literal
+            -- braces (${ {a=1,b=2}.a } leaked the raw span into the
+            -- text). expand_interp_exprs tracks brace depth and skips
+            -- quoted string literals, so ${ "}" .. f.x } balances too.
+            v = expand_interp_exprs(v, ctx)
             -- $tbl.key / %tbl.key% variable lookup (f/sf/tf/mp/lf). The
             -- %...% form is KAG3-compatible; bare %ident% stays untouched
             -- (macro placeholders are expanded earlier by the scheduler).

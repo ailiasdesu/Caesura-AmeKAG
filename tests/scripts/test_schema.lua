@@ -114,6 +114,27 @@ do
     check("var + expr mixed", p4.text == "mixed Ame 42")
 end
 
+-- ${expr} balanced-brace scanning (round 54: old [^{}]+ pattern
+-- truncated table-constructor expressions and leaked the raw span)
+do
+    local ctx = { f = { hp = 42, name = "Ame" } }
+    local p2 = Schema.coerce("_interp_test",
+        { text = "v ${ {a=1,b=2}.b } ok ${ {1,2,3}[2] }" }, ctx)
+    check("nested table constructor interpolates", p2.text == "v 2 ok 2")
+    local p3 = Schema.coerce("_interp_test",
+        { text = "q ${ \"}\" .. f.name }" }, ctx)
+    check("quoted brace does not close span", p3.text == "q }Ame")
+    local p4 = Schema.coerce("_interp_test",
+        { text = "unterm ${oops stays" }, ctx)
+    check("unterminated span stays verbatim", p4.text == "unterm ${oops stays")
+    local p5 = Schema.coerce("_interp_test",
+        { text = "nested ${ {a=1}.a + f.hp }" }, ctx)
+    check("constructor + var arithmetic", p5.text == "nested 43")
+    local p6 = Schema.coerce("_interp_test",
+        { text = "empty ${} ok" }, ctx)
+    check("empty span stays verbatim", p6.text == "empty ${} ok")
+end
+
 -- volume setter contracts (clamp regression class)
 do
     pcall(require, "kag.commands.audio")

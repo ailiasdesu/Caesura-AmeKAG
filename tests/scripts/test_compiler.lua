@@ -378,6 +378,10 @@ local toks12e = tokenizer.parse('[ch name="N" text="OK=${f.flag && f.hp > 10}"]'
 compiler.compile(toks12e)
 local p12e = schema.coerce("ch", toks12e[1][2] or toks12e[1].params, ctx12)
 check("12e: ${ && translated", p12e.text == "OK=true")
+local toks12f = tokenizer.parse('[ch name="N" text="T=${ {a=1,b=2}.b}"]')
+compiler.compile(toks12f)
+local p12f = schema.coerce("ch", toks12f[1][2] or toks12f[1].params, ctx12)
+check("12f: ${ nested table constructor (balanced braces)", p12f.text == "T=2")
 
 
 
