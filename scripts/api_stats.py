@@ -36,7 +36,10 @@ def scan_interfaces():
                 continue
             path = os.path.join(api_dir, fn)
             text = open(path, encoding="utf-8", errors="replace").read()
-            methods = len(re.findall(r"\)\s*=\s*0\s*;", text))
+            # Pure-virtual methods end in ") = 0;" or ") const = 0;".
+            # The optional const qualifier (member-const methods) was previously
+            # missed, systematically undercounting interfaces with const getters.
+            methods = len(re.findall(r"\)\s*(?:const\s*)?=\s*0\s*;", text))
             ifaces.append({"file": fn, "methods": methods})
         if ifaces:
             modules[mod] = ifaces

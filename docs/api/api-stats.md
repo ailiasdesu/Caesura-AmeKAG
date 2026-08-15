@@ -10,7 +10,7 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 31 |
-| Pure-virtual interface methods | 278 |
+| Pure-virtual interface methods | 379 |
 | Lua binding functions (luaL_Reg entries) | 149 |
 | KAG command handler files | 11 |
 | KAG contract commands (command-contracts.md) | 118 |
@@ -22,37 +22,37 @@
 
 | Module | Interface file | Pure-virtual methods |
 |--------|----------------|----------------------|
-| archive | IArchiveReader.h | 3 |
+| archive | IArchiveReader.h | 6 |
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
-| audio | IAudioBackend.h | 28 |
-| debug | IDebugManager.h | 15 |
+| audio | IAudioBackend.h | 31 |
+| debug | IDebugManager.h | 26 |
 | di | IDeviceLostListener.h | 2 |
 | di | ISandboxQuota.h | 5 |
-| di | ITextureBudget.h | 2 |
-| input | IInputRouter.h | 8 |
-| job | IJobSystem.h | 5 |
-| live2d | IAnimationBackend.h | 11 |
-| minigame | IMiniGameBackend.h | 11 |
-| platform | IMobileAdapter.h | 10 |
-| platform | IPlatformBackend.h | 5 |
-| render | IGpuMonitor.h | 4 |
+| di | ITextureBudget.h | 7 |
+| input | IInputRouter.h | 13 |
+| job | IJobSystem.h | 8 |
+| live2d | IAnimationBackend.h | 13 |
+| minigame | IMiniGameBackend.h | 13 |
+| platform | IMobileAdapter.h | 15 |
+| platform | IPlatformBackend.h | 11 |
+| render | IGpuMonitor.h | 8 |
 | render | ILayerManager.h | 16 |
-| render | IMeshRenderer.h | 5 |
-| render | IParticleSystem.h | 7 |
-| render | IRenderDevice.h | 38 |
-| render | ITextureManager.h | 13 |
-| render | IVideoPlayer.h | 10 |
-| resource | IAssetProvider.h | 3 |
-| resource | IAsyncLoader.h | 6 |
-| resource | IResourceGenerationTracker.h | 1 |
-| rpc | IEditorServer.h | 7 |
+| render | IMeshRenderer.h | 8 |
+| render | IParticleSystem.h | 9 |
+| render | IRenderDevice.h | 46 |
+| render | ITextureManager.h | 17 |
+| render | IVideoPlayer.h | 18 |
+| resource | IAssetProvider.h | 5 |
+| resource | IAsyncLoader.h | 8 |
+| resource | IResourceGenerationTracker.h | 4 |
+| rpc | IEditorServer.h | 9 |
 | rpc | IRpcDispatcher.h | 1 |
-| rpc | IRpcServer.h | 4 |
-| script | ILuaManager.h | 10 |
-| steam | ISteamBackend.h | 12 |
-| storage | ISaveManager.h | 15 |
-| storage | ISaveProvider.h | 6 |
+| rpc | IRpcServer.h | 5 |
+| script | ILuaManager.h | 12 |
+| steam | ISteamBackend.h | 23 |
+| storage | ISaveManager.h | 18 |
+| storage | ISaveProvider.h | 7 |
 
 ## 3. Lua bindings by source file
 
