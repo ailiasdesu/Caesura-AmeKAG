@@ -400,7 +400,6 @@ test("All key script files exist", function()
     local files = {
         "scripts/tokenizer.lua",
         "scripts/lpeg.lua",
-        "scripts/kag/parser.lua",
         "scripts/kag/commands/save.lua",
     }
     for _, path in ipairs(files) do

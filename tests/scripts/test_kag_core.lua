@@ -34,20 +34,9 @@ ok("inline text with command", hasWait)
 t = tokenizer.parse("") ; ok("empty -> 0 tokens", #t == 0)
 
 -- ==============================
--- 2. Parser
+-- 2. (removed) Legacy kag.parser adapter (G12). tokenizer (section 1) is the
+--     sole parsing layer. Section numbers kept for traceability.
 -- ==============================
-print("[parser]")
-local parser = require("kag.parser")
-local parsed = parser.parse("*start\n[bg file=\"bg.png\"]\n[text text=\"hi\"]\n[p]\n[end]\n")
-ok("parser multi-command", type(parsed) == "table" and #parsed > 0)
-parsed = parser.parse("")
-ok("parser empty script", type(parsed) == "table")
-
--- Verify specific command types (parser uses type="tag", field="command")
-parsed = parser.parse("[bg file=\"bg.png\"][text text=\"hi\"][p]")
-local cmds = {}; for _, v in ipairs(parsed) do if v.type == "tag" then table.insert(cmds, v.command) end end
-ok("parser parses bg", cmds[1] == "bg"); ok("parser parses text", cmds[2] == "text"); ok("parser parses p", cmds[3] == "p")
-
 -- ==============================
 -- 3. Scheduler
 -- ==============================
@@ -89,13 +78,8 @@ check("flow.find_label finds chapter2", flow.find_label(sample, "chapter2"), 4)
 check("flow.find_label missing", flow.find_label(sample, "nonexistent"), nil)
 
 -- ==============================
--- 5. Conductor
+-- 5. (removed) Legacy kag.conductor module (G12). Load-check dropped.
 -- ==============================
-print("[conductor]")
-local ok3, conductor = pcall(require, "kag.conductor")
-ok("conductor loads", ok3)
-if ok3 then ok("conductor has execute", type(conductor.execute) == "function") end
-
 -- ==============================
 -- 6. All command modules load
 -- ==============================

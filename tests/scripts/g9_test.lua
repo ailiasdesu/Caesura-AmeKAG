@@ -56,7 +56,7 @@ local function phase_fullstory()
     CHECK(ok, "full_story.ks parsed (" .. (tokens and #tokens or 0) .. " tokens)")
     if tokens then
         -- Walk via scheduler
-        local scheduler = require("kag.conductor")
+        local scheduler = require("scheduler")  -- G12: legacy kag.conductor removed; use the real scheduler
         local ok2 = pcall(function()
             for _, t in ipairs(tokens) do
                 if scheduler.dispatch then

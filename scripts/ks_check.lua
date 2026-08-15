@@ -329,10 +329,19 @@ local BLOCK_CLOSE_TOK = { endif = true, endwhile = true, endfor = true, endswitc
 -- (c) BUILT-IN *flow* command names: the scheduler dispatches these BEFORE
 -- macro lookup (they never reach the kag/macro dispatch), so a [macro] named
 -- any of them is dead -- it can never be invoked as a macro (round-76 lint).
+-- [goto] added round-77: goto is flow, so [macro goto] is a dead macro too.
 local FLOW_MACRO_SLOT = {
     ["if"] = true, ["while"] = true, ["for"] = true, ["jump"] = true,
-    ["call"] = true, ["link"] = true, ["label"] = true,
+    ["call"] = true, ["link"] = true, ["label"] = true, ["goto"] = true,
 }
+-- (g) condition commands that MUST carry a non-empty exp= to run their body.
+local COND_EXP = { ["if"] = true, ["while"] = true, ["until"] = true }
+-- (j) commands whose target may reference a *label in the current scene.
+--     Includes [sel]/[select] (choice navigation jumps to a target label).
+local NAV_LABEL_REF = {}
+for _, c in ipairs({ "jump", "call", "link", "goto", "sel", "select" }) do
+    NAV_LABEL_REF[c] = true
+end
 
 local function macroNameOf(tok)
     if tok.type ~= "command" or tok.cmd ~= "macro" then return nil end
@@ -378,6 +387,97 @@ structuralWarnings = function(path, tokens, lineOf, sceneRegistry)
                     "[label *" .. name .. "] defined more than once in this "
                         .. "scene (first definition at line " .. labels[name]
                         .. " wins)")
+            end
+        end
+    end
+
+    -- (j) [label] defined but never targeted by any navigation in THIS scene
+    --     ([jump]/[call]/[link]/[goto]/[sel]/[select]). Labels are how the
+    --     scheduler re-enters a scene, so a label can also be a cross-scene
+    --     entry point, an entry fallback, or a fall-through section anchor --
+    --     all legitimate uses an in-scene-absence would wrongly flag. To stay
+    --     conservative and false-positive-free we only warn when:
+    --       * the scene-directory registry scan succeeded (registry_ready,
+    --         mirroring the round-77 cross-scene gate), so we are in a known
+    --         project layout;
+    --       * the label is not the scene's FIRST *label (default entry);
+    --       * no in-scene nav targets it;
+    --       * the immediately-preceding top-level structural token is a
+    --         [jump]/[goto]/[return] -- i.e. a label perched right after a
+    --         one-way transfer is genuinely orphaned (fall-through anchors,
+    --         sub-entries and labels parked after [end]/[stop]/content are
+    --         all exempt -- [end]/[stop] labels are deliberate dead-end
+    --         scaffolding, also surfaced by the unreachable-after-jump check).
+    if registry_ready then
+        local first_label = nil
+        for _, tok in ipairs(tokens) do
+            if tok.type == "label" and type(tok.name) == "string" then
+                first_label = tok.name
+                break
+            end
+        end
+        local labeled = {}   -- name -> first token index
+        for i, tok in ipairs(tokens) do
+            if tok.type == "label" and type(tok.name) == "string"
+                and labeled[tok.name] == nil then
+                labeled[tok.name] = i
+            end
+        end
+        -- in-scene navigation target set (label references)
+        local reached = {}
+        for _, tok in ipairs(tokens) do
+            if tok.type == "command" and type(tok.cmd) == "string"
+                and NAV_LABEL_REF[tok.cmd] then
+                local tgt = nil
+                for _, pair in ipairs(tok.params or {}) do
+                    if type(pair) == "table" and (pair[1] == "target"
+                        or pair[1] == "label" or pair[1] == "storage"
+                        or pair[1] == "x") then
+                        tgt = pair[2]
+                    end
+                end
+                if tgt == nil and tok.params and tok.params[1] then
+                    tgt = tok.params[1][2]
+                end
+                if type(tgt) == "string" and tgt:sub(1, 1) == "*" then
+                    local nm = tgt:gsub("^*", "")
+                    if nm ~= "" then reached[nm] = true end
+                end
+            end
+        end
+        -- for each label, find the preceding top-level structural command
+        local function preceding_outer(start_idx)
+            local depth = 0
+            local outer = nil
+            for j = start_idx - 1, 1, -1 do
+                local t = tokens[j]
+                if t and t.type == "label" then
+                    if outer == nil then outer = "label" end
+                    break
+                end
+                if t and t.type == "command" and type(t.cmd) == "string" then
+                    local c = t.cmd
+                    if BLOCK_CLOSE_TOK[c] then
+                        depth = depth + 1
+                    elseif BLOCK_OPEN[c] then
+                        if depth > 0 then depth = depth - 1
+                        elseif outer == nil then outer = c end
+                    else
+                        if outer == nil then outer = c end
+                    end
+                end
+            end
+            return outer
+        end
+        for name, idx in pairs(labeled) do
+            if name ~= first_label and not reached[name] then
+                local outer = preceding_outer(idx)
+                if outer == "jump" or outer == "goto" or outer == "return" then
+                    warn_scene(path, labels[name] or lineOf(tokens[idx].offset or 1),
+                        "[label *" .. name .. "] defined but never referenced "
+                            .. "by any [jump]/[call]/[link]/[goto]/[sel] in this "
+                            .. "scene, and unreachable by fall-through")
+                end
             end
         end
     end
@@ -429,6 +529,44 @@ structuralWarnings = function(path, tokens, lineOf, sceneRegistry)
         if flow_depth <= 0 and BLOCK_CLOSE_TOK[cmd] then
             warn_scene(path, lineOf(tok.offset or 1),
                 "[" .. cmd .. "] without matching opener (unbalanced flow nesting)")
+        end
+
+        -- (g) [if]/[while]/[until] with a MISSING or empty exp= -- the
+        --     expression compiles to a constant that never enables the branch
+        --     (a missing exp is false, an empty one is falsey), so the body
+        --     never runs -- almost always a bug. Conservative: only fires on
+        --     those three condition commands (for/switch use other params).
+        if COND_EXP[cmd] then
+            local eexp = paramVal(tok, "exp")
+            if eexp == nil or (type(eexp) == "string"
+                and eexp:gsub("%s", "") == "") then
+                warn_scene(path, lineOf(tok.offset or 1),
+                    "[" .. cmd .. "] missing or empty exp= (condition always "
+                        .. "false -- body never runs)")
+            end
+        end
+
+        -- (h) duplicate named parameters in ONE tag ([ch text="a" text="b"]):
+        --     the LAST value wins at runtime, so the earlier one is silently
+        --     dropped -- a copy/paste smell. Skips positional/numeric slots.
+        if tok.params then
+            local seen_param = {}
+            local warned_param = {}
+            for _, p in ipairs(tok.params) do
+                if type(p) == "table" and type(p[1]) == "string"
+                    and not p[1]:match("^%d+$") then
+                    if seen_param[p[1]] then
+                        if not warned_param[p[1]] then
+                            warned_param[p[1]] = true
+                            warn_scene(path, lineOf(tok.offset or 1),
+                                "[" .. cmd .. "] duplicate parameter '"
+                                    .. p[1] .. "' (last value wins at runtime)")
+                        end
+                    else
+                        seen_param[p[1]] = true
+                    end
+                end
+            end
         end
 
         -- unreachable: first command/text token after a top-level [jump]
