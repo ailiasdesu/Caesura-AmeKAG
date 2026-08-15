@@ -79,6 +79,22 @@ jobs:
           python tests/scripts/check_test_coverage.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Lua script suites (main + orphan)
+        shell: pwsh
+        run: |
+          # Round 60: the full Lua suite never ran in CI (only local).
+          # The vendored lua is copied into build/ by the CMake step.
+          $lua = Get-ChildItem -Recurse build/lua -Filter "lua.exe" | Select-Object -First 1
+          if (-not $lua) { $lua = Get-ChildItem -Recurse build -Filter "lua.exe" | Select-Object -First 1 }
+          if ($lua) {
+            & $lua.FullName tests/scripts/run_lua_tests.lua
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $lua.FullName tests/scripts/run_orphan_tests.lua
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Host "lua.exe not found - skipping Lua suites"
+          }
+
       - name: Editor unit tests (vitest)
         shell: pwsh
         run: |
@@ -116,7 +132,7 @@ jobs:
           submodules: recursive
 
       - name: Install Dependencies
-        run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config
+        run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config lua
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
@@ -125,6 +141,11 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build --config Debug --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tail -40
+
+      - name: Lua script suites (main + orphan)
+        run: |
+          lua tests/scripts/run_lua_tests.lua
+          lua tests/scripts/run_orphan_tests.lua
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --repeat until-pass:2
@@ -143,7 +164,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
+          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
 
       - name: Build SDL3 from source
         run: |
@@ -165,6 +186,11 @@ jobs:
           set -o pipefail
           cmake --build build --config Debug --parallel $(nproc) 2>&1 | tail -40
 
+      - name: Lua script suites (main + orphan)
+        run: |
+          lua5.4 tests/scripts/run_lua_tests.lua
+          lua5.4 tests/scripts/run_orphan_tests.lua
+
       - name: Test
         run: |
           ctest --test-dir build --output-on-failure --repeat until-pass:2 2>&1 | tee ctest.log
@@ -180,6 +206,9 @@ jobs:
 
       - name: Coupling Count
         run: python3 scripts/count_coupling.py --ci
+
+      - name: Test Coverage Check
+        run: python3 tests/scripts/check_test_coverage.py
 
   # ============================================================
   # Release Package (Windows only)
