@@ -219,4 +219,263 @@ do
     check("2000-command scene within budget", dt < 10.0, string.format("%.3fs", dt))
 end
 
+
+-- =============================================================================
+-- Unicode & Multibyte Boundary Tests (deeper than round 10's BOM/unicode pass:
+-- CJK/emoji/combining, full-width space, CJK quotes in params, invalid UTF-8,
+-- UTF-16 BOM pass-through, mixed line endings, byte-accurate offsets, and a
+-- 10K-char CJK perf budget -- this round's new angle).
+-- =============================================================================
+
+-- ---- A. multibyte text runs ------------------------------------------------
+do
+    local toks = tokenizer.parse("こんにちは世界")
+    check("cjk text run single token", #toks == 1 and toks[1].type == "text"
+        and toks[1].content == "こんにちは世界",
+        #toks .. " tokens / " .. tostring(toks[1] and toks[1].content))
+end
+
+do
+    local toks = tokenizer.parse("👋🎉混在テキスト😀")
+    check("emoji + cjk text run preserved",
+        #toks == 1 and toks[1].type == "text"
+        and toks[1].content == "👋🎉混在テキスト😀",
+        tostring(toks[1] and toks[1].content))
+end
+
+do
+    -- U+0301 (combining acute) following a base letter must stay with it.
+    local toks = tokenizer.parse("e\204\129x")   -- e + combining acute + x
+    check("combining char kept in text", #toks == 1
+        and toks[1].content:find("e\204\129x", 1, true) ~= nil,
+        string.format("%q", tostring(toks[1] and toks[1].content)))
+end
+
+do
+    -- ident is ASCII-only: a CJK command name is NOT in the grammar.
+    local ok = pcall(tokenizer.parse, "[日本語 text=\"x\"]")
+    check("cjk command name rejected", not ok)
+end
+
+do
+    -- label ident is ASCII-only too.
+    local ok = pcall(tokenizer.parse, "*ラベル")
+    check("cjk label rejected", not ok)
+end
+
+-- ---- B. full-width / special whitespace ------------------------------------
+do
+    -- U+3000 (full-width space) is NOT in the ASCII space set that terminates
+    -- a text run / bare value, so it stays inside the token.
+    local toks = tokenizer.parse("a　b")          -- full-width space between
+    check("fullwidth space is text not separator", #toks == 1
+        and toks[1].type == "text" and toks[1].content == "a　b",
+        string.format("%q", tostring(toks[1] and toks[1].content)))
+end
+
+do
+    -- Full-width space inside a quoted parameter value is preserved as-is.
+    local toks = tokenizer.parse("[ch text=a　b]")
+    check("fullwidth space in param value",
+        #toks == 1 and toks[1].params[1][1] == "text"
+        and toks[1].params[1][2] == "a　b",
+        string.format("%q", tostring(toks[1] and toks[1].params and toks[1].params[1] and toks[1].params[1][2])))
+end
+
+do
+    -- Full-width space is not a param separator (ASCII space/tab/CR/LF only).
+    local toks = tokenizer.parse("[ch text=a　b]")
+    check("fullwidth space not a param separator",
+        #toks == 1 and #toks[1].params == 1
+        and toks[1].params[1][2] == "a　b",
+        #(toks[1] and toks[1].params or {}) .. " params")
+end
+
+do
+    -- Tab inside a quoted value is preserved; tab between params separates.
+    local tq = tokenizer.parse('[c text="a\tb"]')
+    check("tab preserved inside quoted value",
+        tq[1].params[1][2] == "a\tb",
+        string.format("%q", tostring(tq[1].params[1][2])))
+    local ts = tokenizer.parse("[c a=1\tb=2]")
+    check("tab is a param separator", #ts[1].params == 2
+        and ts[1].params[1][1] == "a" and ts[1].params[2][1] == "b",
+        #ts[1].params .. " params")
+end
+
+do
+    -- Leading whitespace/tab is consumed by skip; trailing whitespace stays
+    -- in the text content (text body stops only at [ * or newline).
+    local toks = tokenizer.parse("   hi   ")
+    check("leading space trimmed, trailing kept",
+        #toks == 1 and toks[1].content == "hi   ",
+        string.format("%q", tostring(toks[1] and toks[1].content)))
+    local t2 = tokenizer.parse("\t[ch]")
+    check("leading tab before command", #t2 == 1 and t2[1].cmd == "ch")
+end
+
+do
+    -- CJK in bare positional values (full-width digits are not tonumber-able,
+    -- but the tokenizer must preserve them verbatim for the handler).
+    local d = tokenizer.parse("[delay ５００]")
+    check("fullwidth digits in bare value",
+        #d == 1 and d[1].params[1][2] == "５００",
+        string.format("%q", tostring(d[1].params[1][2])))
+    local c = tokenizer.parse("[ch 内容]")
+    check("cjk bare value", #c == 1 and c[1].params[1][2] == "内容",
+        string.format("%q", tostring(c[1].params[1][2])))
+end
+
+-- ---- C. quotes & multibyte -------------------------------------------------
+do
+    local toks = tokenizer.parse('[ch text="「引号」他强调"]')
+    check("cjk quotes inside quoted value",
+        #toks == 1 and toks[1].params[1][2] == "「引号」他强调",
+        string.format("%q", tostring(toks[1].params[1][2])))
+end
+
+do
+    local dq = tokenizer.parse('[ch text="😀🎉"]')
+    check("emoji in double-quoted value", dq[1].params[1][2] == "😀🎉")
+    local sq = tokenizer.parse("[ch text='😀']")
+    check("emoji in single-quoted value", sq[1].params[1][2] == "😀")
+end
+
+do
+    -- Unclosed quote with the bracket closed: value keeps the raw quote char,
+    -- never crashes.
+    local ok, toks = pcall(tokenizer.parse, '[ch text="開]')
+    check("unclosed quote + cjk does not crash", ok)
+    if ok then
+        check("unclosed quote value keeps quote char",
+            toks[1].params[1][2] == '"開',
+            string.format("%q", tostring(toks[1].params[1][2])))
+    end
+end
+
+do
+    -- Full-width brackets are plain text, not command delimiters.
+    local toks = tokenizer.parse("『ここ』")
+    check("fullwidth brackets are text",
+        #toks == 1 and toks[1].type == "text"
+        and toks[1].content == "『ここ』",
+        tostring(toks[1] and toks[1].content))
+end
+
+-- ---- D. BOM / encoding / line endings --------------------------------------
+do
+    -- BOM + multibyte: BOM is stripped, the CJK text that follows survives.
+    local toks = tokenizer.parse('\239\187\191こんにちは[ch]')
+    check("BOM then cjk text", #toks == 2
+        and toks[1].type == "text" and toks[1].content == "こんにちは"
+        and toks[2].cmd == "ch",
+        #toks .. " tokens")
+end
+
+do
+    -- UTF-16LE BOM (FF FE): no UTF-16 detection -- it is passed through as
+    -- raw bytes (not skipped, not a crash). Locks the pass-through contract.
+    local ok, toks = pcall(tokenizer.parse, "\255\254h")
+    check("utf16le bom passes through (no crash)", ok)
+    if ok then
+        -- First token is text containing the raw FF FE bytes + 'h'.
+        check("utf16le bom bytes preserved raw",
+            #toks == 1 and toks[1].type == "text"
+            and toks[1].content == "\255\254h",
+            string.format("%q", tostring(toks[1] and toks[1].content)))
+    end
+end
+
+do
+    -- Invalid UTF-8 sequences (overlong/lone-continuation bytes) are
+    -- tolerated and passed through byte-for-byte, never dropped/crash.
+    local ok, toks = pcall(tokenizer.parse, "ab\255\254\128cd")
+    check("invalid utf8 bytes tolerated", ok)
+    if ok then
+        check("invalid utf8 bytes preserved raw",
+            #toks == 1 and toks[1].type == "text"
+            and toks[1].content == "ab\255\254\128cd",
+            string.format("%q", tostring(toks[1] and toks[1].content)))
+    end
+end
+
+do
+    -- Mixed CRLF / LF / CR line endings all work.
+    local toks = tokenizer.parse("[a]\r\n[b]\n[c]\r[d]")
+    check("mixed CRLF/LF/CR", #toks == 4
+        and toks[1].cmd == "a" and toks[2].cmd == "b"
+        and toks[3].cmd == "c" and toks[4].cmd == "d",
+        #toks .. " tokens")
+end
+
+do
+    -- CJK text and a command on the same line tokenize separately.
+    local toks = tokenizer.parse("こんにちは[ch]")
+    check("cjk text + cmd same line", #toks == 2
+        and toks[1].type == "text" and toks[1].content == "こんにちは"
+        and toks[2].cmd == "ch",
+        #toks .. " tokens")
+end
+
+-- ---- E. comments / blocktext / iscript multibyte ---------------------------
+do
+    local toks = tokenizer.parse('; コメント 😊 空色\n[ch text="hi"]')
+    check("comment with cjk + emoji skipped", #toks == 1
+        and toks[1].cmd == "ch", #toks .. " tokens")
+end
+
+do
+    -- A ; inside blocktext is literal text, not a comment.
+    local toks = tokenizer.parse('\"\"\"line1\n; not a comment\nline2\"\"\"')
+    check("comment marker inside blocktext is literal",
+        #toks == 1 and toks[1].type == "text"
+        and toks[1].content:find("line1\n; not a comment\nline2", 1, true) ~= nil,
+        string.format("%q", tostring(toks[1] and toks[1].content)))
+end
+
+do
+    -- iscript body keeps multibyte + Lua comments raw (not tokenized).
+    local toks = tokenizer.parse('[iscript]\nlocal s = "日本語"; -- 😀 コメント\n[/endscript]')
+    check("iscript preserves multibyte body", #toks == 1
+        and toks[1].type == "iscript"
+        and toks[1].body:find("日本語", 1, true) ~= nil
+        and toks[1].body:find("😀", 1, true) ~= nil,
+        tostring(toks[1] and toks[1].body))
+end
+
+-- ---- F. byte-accurate offsets across multibyte -----------------------------
+do
+    -- こんにちは = 5 CJK chars x 3 bytes = bytes 1..15; [ch] starts at 16.
+    local o = tokenizer.parse_with_offsets("こんにちは[ch]")
+    check("offsets cjk text", #o == 2 and o[1].type == "text"
+        and o[1].offset == 1 and o[1].end_offset == 15,
+        tostring(o[1] and o[1].offset .. "," .. o[1].end_offset))
+    check("offsets cmd after cjk", o[2].cmd == "ch"
+        and o[2].offset == 16 and o[2].end_offset == 19,
+        tostring(o[2] and o[2].offset .. "," .. o[2].end_offset))
+end
+
+do
+    -- Byte offsets are correct when a quoted parameter holds CJK.
+    local o = tokenizer.parse_with_offsets('[x a="日本語"] 中')
+    check("offsets with cjk in quoted value",
+        #o == 2 and o[1].cmd == "x" and o[1].offset == 1
+        and o[2].type == "text" and o[2].offset == 19 and o[2].end_offset == 21,
+        (#o) .. " tokens; t1=" .. (o[1] and o[1].offset) .. " t2=" .. (o[2] and o[2].offset .. "," .. o[2].end_offset))
+end
+
+-- ---- G. 10K-CJK performance budget -----------------------------------------
+do
+    -- A single 10,000-character CJK text run must parse to one text token
+    -- within a generous budget (CJK is 3 bytes/char => 30KB of source).
+    local long = string.rep("人", 10000)
+    local t0 = os.clock()
+    local toks = tokenizer.parse(long)
+    local dt = os.clock() - t0
+    -- 人 is 3 bytes/char, so 10000 chars = 30000 bytes; Lua # is byte length.
+    check("10K cjk single text token", #toks == 1
+        and #toks[1].content == 30000, tostring(#toks) .. " tok(s), " .. #(toks[1] and toks[1].content or "") .. " bytes")
+    check("10K cjk within budget", dt < 5.0, string.format("%.3fs", dt))
+end
+
 if failed > 0 then os.exit(1) end
