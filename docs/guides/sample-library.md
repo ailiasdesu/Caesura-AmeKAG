@@ -12,6 +12,22 @@
 | Full Pipeline | demo/full_pipeline_demo.ks | 全管线流程 | ks_bake bundle |
 | SMA Demo | demo/sma_demo.ks | SMA 骨骼动画命令 | ks_bake bundle |
 
+## 教程路径（Tutorial Path，从零开始）
+
+按顺序运行 6 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
+
+| 步骤 | 示例 | 学习内容 | 命令 |
+|---|---|---|---|
+| 01 | demo/tutorial/tutorial_01_hello.ks | 最小剧本结构：注释/命令格式/[ch]/[p]/[end] | font, pt, ch, p, end |
+| 02 | demo/tutorial/tutorial_02_text.ks | 文本与排版：字体/字号/打字速度/说话人/语音/滚动字幕 | font, pt, ch, voice_wait, wait, scroll |
+| 03 | demo/tutorial/tutorial_03_layers.ks | 图层系统：背景/前景/角色立绘/位置/立绘动画/清层 | bg, trans, fg, position, ch sprite, sprite_move, sprite_fade, cl |
+| 04 | demo/tutorial/tutorial_04_audio.ks | 三总线音频：BGM/SE/Voice/音量/淡入淡出/交叉淡化 | playbgm, setbgmvolume, playse, voice_wait, fadebgm, xfadebgm, stopse, stopbgm |
+| 05 | demo/tutorial/tutorial_05_branching.ks | 变量与流程：赋值/条件分支/标签跳转 | set, if, else, endif, jump |
+| 06 | demo/tutorial/tutorial_06_effects.ks | 特效与转场：闪白/震动/溶解转场/结局解锁 | flash, vib, trans, ending, scroll, wait |
+
+每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
+注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→06 顺序学习。
+
 ## 如何运行示例
 
 ### 引擎（桌面）
