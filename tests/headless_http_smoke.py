@@ -230,6 +230,114 @@ def main():
                        timeout=40)
     check("live2d-load-route", st in (200, 500) and "raw" not in resp, "%s %s" % (st, resp))
 
+    # ---- Round 71-79 command surface (over HTTP /api/eval) --------------
+    # The HTTP editor exposes the same Lua eval dispatch as the stdio RPC
+    # (POST /api/eval: raw Lua body -> {status, result}), so the round-75
+    # schema.coerce + handler + rawset-anchored-ctx patterns run unchanged
+    # over HTTP. There is no dedicated save / math / textspeed HTTP name --
+    # the generic eval route is the reachable surface for these commands.
+    # (Save slot I/O goes through the KAG C++ bindings over the same eval
+    # bridge; /api/stats stays the first-class health route.)
+
+    # (a) Math command chain via schema.coerce + handler, then read f.x back
+    # via a follow-up eval. The eval sandbox traps new global writes, so the
+    # sampled ctx is anchored once with rawset (permitted) and reused by the
+    # follow-up eval -- identical to the stdio smoke.
+    st, resp = request("/api/eval", data=b"local kag=require('kag'); local s=require('kag.schema'); "
+        b"local ctx={f={},sf={},tf={},mp={},lf={}}; rawset(_G,'_smokeHttpMathCtx',ctx); "
+        b"local p=s.coerce('add',{name='f.x',value=5},ctx); kag.add(ctx,p); "
+        b"return tostring(ctx.f.x)")
+    check("http-math-add-executes",
+        st == 200 and resp.get("result") == "5", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local kag=require('kag'); local s=require('kag.schema'); "
+        b"local ctx=_G._smokeHttpMathCtx; "
+        b"local function run(c,p) local q=s.coerce(c,p or {},ctx); kag[c](ctx,q) end "
+        b"ctx.f.n=10; run('mul',{name='f.n',value=3}); run('div',{name='f.n',value=2}); "
+        b"run('dec',{name='f.n',amount=3}); run('mod',{name='f.n',value=5}); run('sub',{name='f.n',value=1}); "
+        b"return tostring(ctx.f.n)")
+    check("http-math-family-mul-div-dec-mod-sub",
+        st == 200 and resp.get("result") == "1.0", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"return tostring(_G._smokeHttpMathCtx.f.x)")
+    check("http-math-read-via-eval",
+        st == 200 and resp.get("result") == "5", "%s %s" % (st, resp))
+
+    # (b) The contract registry reflects the round 71-79 commands over HTTP.
+    # registrySize() is authoritative (assert >= 118 -- the exact current
+    # count is 118 -- so future migrations stay green); the newest commands
+    # are also checked individually for contract + handler.
+    st, resp = request("/api/eval", data=b"return tostring(require('kag.schema').registrySize())")
+    _http_contracts = 0
+    try:
+        _http_contracts = int(resp.get("result") or 0)
+    except (TypeError, ValueError):
+        _http_contracts = 0
+    check("http-contract-count",
+        st == 200 and _http_contracts >= 118, "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local s=require('kag.schema'); local kag=require('kag'); "
+        b"local need={'add','mul','mod','textspeed','palette','notify','i18n'}; "
+        b"local ok=true; for _,c in ipairs(need) do "
+        b"  if not (s.isMigrated(c) and type(kag[c])=='function') then ok=false end end; "
+        b"return ok and 'true' or 'false'")
+    check("http-round79-contracts-present",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
+
+    # (c) /api/stats stays healthy with the round-71-79 surface loaded
+    # (the earlier stats-endpoint check already typed the numeric fields;
+    # this re-probes the route after the new command surface ran).
+    st, resp = request("/api/stats")
+    check("http-stats-healthy", st == 200 and resp.get("status") == "ok"
+          and isinstance((resp or {}).get("lua_kb"), int),
+          "%s %s" % (st, resp))
+
+    # (d) Save slot write/list/load/delete roundtrip over HTTP via the KAG
+    # C++ bindings (SaveManager) reachable through /api/eval. The high probe
+    # slot is cleaned up after.
+    st, resp = request("/api/eval", data=b"return type(KAG.list_saves)")
+    check("http-save-list-binding",
+        st == 200 and resp.get("result") == "function", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local ok = KAG.save_game(23, {f={probe=99}}, "
+        b"  'assets/script/main.ks', 4, ''); return ok and 'true' or 'false'")
+    check("http-save-slot-write",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local s=KAG.list_saves(); local hit=nil; "
+        b"for _,e in ipairs(s) do if e.slot==23 then hit=e end end; "
+        b"if not hit then return 'absent' end; "
+        b"return tostring(hit.slot)..':'..tostring(hit.scene)..':'..tostring(hit.token_index)")
+    check("http-save-slot-list-reflects",
+        st == 200 and resp.get("result") == "23:assets/script/main.ks:4",
+        "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local data, meta = KAG.load_game(23); "
+        b"if not data then return 'nil' end; return tostring(data.f and data.f.probe)")
+    check("http-load-slot-roundtrip",
+        st == 200 and resp.get("result") == "99", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"return tostring(KAG.delete_save(23))")
+    check("http-save-slot-cleanup",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
+
+    # (e) New-command dispatch probes: [notify] degrades headless-safe (no
+    # raise), and [i18n] with a missing required param is a schema error
+    # surfaced through the shared schema.coerce path.
+    st, resp = request("/api/eval", data=b"local kag=require('kag'); local s=require('kag.schema'); "
+        b"local ctx={f={},sf={},tf={},mp={},lf={}}; "
+        b"local ok=pcall(function() local p=s.coerce('notify',{msg='hi'},ctx); kag.notify(ctx,p) end); "
+        b"return ok and 'true' or 'false'")
+    check("http-notify-degrade-safe",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"local s=require('kag.schema'); "
+        b"local ok,err=pcall(function() s.coerce('i18n',{}) end); "
+        b"if ok then return 'no-error' end; "
+        b"return (err and string.find(tostring(err),'language') and 'true') or 'false'")
+    check("http-i18n-missing-param",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
+
     # CORS: only localhost/127.0.0.1 origins are allowed.
     st, resp = request("/api/status", headers={"Origin": "http://evil.example.com"})
     check("cors-evil-origin-rejected", st == 403, "%s %s" % (st, resp))
