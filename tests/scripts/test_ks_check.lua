@@ -129,6 +129,26 @@ if swfn then
         return n
     end
 
+    -- registry-aware variant: passes a synthetic scene-name registry so the
+    -- cross-scene (*.ks) resolution check (round 76) can be driven without
+    -- real scene dirs. `reg` is a { ["scene.ks"] = true, ... } table.
+    local function warn_count_reg(src, substr, reg)
+        local warns = {}
+        local saved_print = print
+        print = function(s) warns[#warns + 1] = tostring(s) end
+        local ok = pcall(function()
+            local toks = tokenizer.parse_with_offsets(src)
+            swfn("__test__", toks, makeLineOf(src), reg)
+        end)
+        print = saved_print
+        if not ok then return -1 end
+        local n = 0
+        for _, w in ipairs(warns) do
+            if w:find(substr, 1, true) then n = n + 1 end
+        end
+        return n
+    end
+
     local NL = "\n"
     -- (a) duplicate [label] definition
     check("warn dup label triggers",
@@ -178,6 +198,42 @@ if swfn then
             .. '[while exp="f.x"]' .. NL .. "[endwhile]" .. NL
             .. '[for var="i" start="1" end="3"]' .. NL .. "[endfor]",
             "without matching opener") == 0)
+
+    -- (a) cross-scene [call]/[jump]/[link] *.ks resolution against the
+    --     scene-directory registry (round 76). Synthetic registry has
+    --     scene1.ks present; anything else is a missing scene.
+    local REG = { ["scene1.ks"] = true }
+    check("warn cross-scene call missing triggers",
+        warn_count_reg('[call target="missing.ks"]' .. NL .. "[end]", "cross-scene target scene", REG) == 1)
+    check("warn cross-scene jump missing triggers",
+        warn_count_reg('[jump target="nope.ks"]' .. NL .. '*end' .. NL .. "[end]", "cross-scene target scene", REG) == 1)
+    check("warn cross-scene link missing triggers",
+        warn_count_reg('[link target="gone.ks" text="x"]' .. NL .. "[end]", "cross-scene target scene", REG) == 1)
+    check("warn cross-scene present clean",
+        warn_count_reg('[call target="scene1.ks"]' .. NL .. "[end]", "cross-scene target scene", REG) == 0)
+    check("warn cross-scene ignores intra-scene label",
+        warn_count_reg('[jump target="*end"]' .. NL .. '*end' .. NL .. "[end]", "cross-scene target scene", REG) == 0)
+
+    -- (b) [jump]/[call]/[link] with an empty / whitespace-only target
+    check("warn empty-target jump triggers",
+        warn_count('[jump target=""]' .. NL .. '*end', "empty target") == 1)
+    check("warn empty-target call whitespace triggers",
+        warn_count('[call target="   "]' .. NL .. "[end]", "empty target") == 1)
+    check("warn empty-target clean",
+        warn_count('[jump target="*end"]' .. NL .. '*end' .. NL .. "[end]", "empty target") == 0)
+
+    -- (c) [macro] defined under a BUILT-IN flow-command name is dead (the
+    --     scheduler dispatches flow before macro lookup).
+    check("warn flow-macro if triggers",
+        warn_count('[macro if args="a"]' .. NL .. "[endmacro]", "flow command") == 1)
+    check("warn flow-macro call triggers",
+        warn_count('[macro call]' .. NL .. "[endmacro]", "flow command") == 1)
+    check("warn flow-macro link triggers",
+        warn_count('[macro link args="a"]' .. NL .. "[endmacro]", "flow command") == 1)
+    check("warn flow-macro label triggers",
+        warn_count('[macro label]' .. NL .. "[endmacro]", "flow command") == 1)
+    check("warn flow-macro clean",
+        warn_count('[macro scene_intro args="a"]' .. NL .. "[endmacro]", "flow command") == 0)
 end
 if failed > 0 then os.exit(1) end
 print("KS CHECK TESTS DONE")

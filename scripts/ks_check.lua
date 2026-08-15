@@ -59,6 +59,65 @@ local function warn_scene(scene, line, msg)
     print(string.format("[WARN] %s:%d: %s", scene, line, msg))
 end
 
+-- Cross-scene [call]/[jump]/[link] resolution: the scheduler loads a
+-- non-* target as assets/script/<target>.ks, so any scene a scene can reach
+-- lives as a *.ks sibling in the same directory. Build a scene-basename
+-- registry by listing that directory (lfs > popen dir/ls), and resolve
+-- targets against it. Listing is environment-dependent, so this degrades to
+-- an empty list on failure -- callers gate on "saw the current scene" to
+-- stay false-positive-free (see scene_discovery).
+local function list_ks_files(dir)
+    local files = {}
+    local lfsok, lfs = pcall(require, "lfs")
+    if lfsok and lfs and lfs.dir then
+        local ok, iter = pcall(lfs.dir, dir)
+        if ok and iter then
+            for fname in iter do
+                if fname:find("%.ks$") then files[#files + 1] = fname end
+            end
+            if #files > 0 then return files end
+        end
+    end
+    local isWin = package.config:sub(1, 1) == "\\"
+    local cmd = isWin and ('dir /b "' .. dir .. '" 2>nul')
+        or ('ls "' .. dir .. '" 2>/dev/null')
+    local ok, result = pcall(function()
+        local f = io.popen(cmd)
+        if not f then return nil end
+        local out = f:read("*a")
+        f:close()
+        return out
+    end)
+    if ok and result then
+        for fname in result:gmatch("[^\r\n]+") do
+            local trimmed = fname:match("^%s*(.-)%s*$")
+            if trimmed and trimmed:find("%.ks$") then
+                files[#files + 1] = trimmed
+            end
+        end
+        return files
+    end
+    return files
+end
+
+-- Returns (registry, ready). ready is true only when the scan provably
+-- listed the current scene itself (proving the directory was read); if it
+-- cannot see the current scene (unreadable dir / no listing tool), ready is
+-- false so the cross-scene check stays silent -- conservative, never a false
+-- positive when resolution is genuinely unknowable.
+local function scene_discovery(path)
+    local base = path and path:match("([^/\\]+)$")
+    if base == nil then return {}, false end
+    local dir = (path:match("^(.*)[/\\][^/\\]*$") or "."):gsub("\\", "/")
+    local files = list_ks_files(dir)
+    local reg = {}
+    local saw_self = false
+    for _, f in ipairs(files) do
+        reg[f] = true
+        if f == base then saw_self = true end
+    end
+    return reg, saw_self
+end
 local function strip_tail(text, consumed)
     local tail = text:sub(consumed + 1)
     while true do
@@ -267,6 +326,13 @@ end
 local BLOCK_OPEN  = { ["if"] = true, ["while"] = true, ["for"] = true, switch = true }
 local BLOCK_CLOSE = { endif = "if", endwhile = "while", endfor = "for", endswitch = "switch" }
 local BLOCK_CLOSE_TOK = { endif = true, endwhile = true, endfor = true, endswitch = true }
+-- (c) BUILT-IN *flow* command names: the scheduler dispatches these BEFORE
+-- macro lookup (they never reach the kag/macro dispatch), so a [macro] named
+-- any of them is dead -- it can never be invoked as a macro (round-76 lint).
+local FLOW_MACRO_SLOT = {
+    ["if"] = true, ["while"] = true, ["for"] = true, ["jump"] = true,
+    ["call"] = true, ["link"] = true, ["label"] = true,
+}
 
 local function macroNameOf(tok)
     if tok.type ~= "command" or tok.cmd ~= "macro" then return nil end
@@ -283,7 +349,19 @@ local function macroNameOf(tok)
     return mname
 end
 
-structuralWarnings = function(path, tokens, lineOf)
+structuralWarnings = function(path, tokens, lineOf, sceneRegistry)
+    -- (a) cross-scene [call]/[jump]/[link] resolution registry. An optional
+    --     caller-supplied registry overrides directory discovery (tests pass a
+    --     synthetic one so the check is driveable without real scene dirs);
+    --     otherwise scan the current scene's directory. ready=false => the scan
+    --     could not prove it read the directory -> skip cross-scene checks.
+    local registry, registry_ready = nil, false
+    if type(sceneRegistry) == "table" then
+        registry = sceneRegistry
+        registry_ready = true
+    else
+        registry, registry_ready = scene_discovery(path)
+    end
     -- (a) collect every *label defined in THIS scene; a name seen more than
     --     once is a duplicate definition (runtime: first definition wins).
     local labels = {}        -- name -> first-definition line
@@ -380,6 +458,26 @@ structuralWarnings = function(path, tokens, lineOf)
                         "[" .. cmd .. "] target '*" .. name
                             .. "' not defined in this scene (label missing?)")
                 end
+            elseif type(target) == "string" then
+                -- (b) empty / whitespace-only navigation target: the scheduler
+                --     has no destination to resolve (it would try to load a
+                --     blank scene and fail). Warn unconditionally.
+                if target:gsub("%s", "") == "" then
+                    warn_scene(path, lineOf(tok.offset or 1),
+                        "[" .. cmd .. "] empty target (missing destination scene/label)")
+                else
+                    -- (a) cross-scene *.ks reference: resolve the basename against
+                    --     the scene directory registry. Only fires in a "known
+                    --     good" scene dir and only for .ks targets -- a staged /
+                    --     expression-free non-.ks target is left alone.
+                    local tbase = target:match("([^/\\\\]+)$")
+                    if tbase and tbase:find("%.ks$") and registry_ready
+                        and not registry[tbase] then
+                        warn_scene(path, lineOf(tok.offset or 1),
+                            "[" .. cmd .. "] cross-scene target scene '" .. tbase
+                                .. "' not found in scene directory")
+                    end
+                end
             end
             -- (e) an unconditional top-level [jump] makes same-level code below
             --     it unreachable until the next *label. [call] is deliberately
@@ -435,19 +533,31 @@ structuralWarnings = function(path, tokens, lineOf)
             if #switch_stack > 0 then table.remove(switch_stack) end
         end
 
-        -- (c) a [macro] whose name a runtime macro would override: a migrated
-        --     contract command or a registered kag handler reached through the
-        --     regular dispatch (round-74 asymmetric semantics). Excludes
-        --     flow-special names (those can't be macro-dispatched).
+        -- (c) a [macro] whose name is a BUILT-IN *flow* command name
+        --     (if/while/for/jump/call/link/label): the scheduler dispatches these
+        --     BEFORE macro lookup -- the flow branch always wins, so the macro is
+        --     dead (it can never be invoked as a macro). Round-76 lint.
         if cmd == "macro" then
             local mname = macroNameOf(tok)
-            if mname and mname ~= "" and not FLOW_SPECIAL[mname] then
-                local shadow = schema.isMigrated(mname)
-                    or (kag_cmd_table and kag_cmd_table[mname] ~= nil)
-                if shadow then
+            if mname and mname ~= "" then
+                if FLOW_MACRO_SLOT[mname] then
                     warn_scene(path, lineOf(tok.offset or 1),
-                        "[macro " .. mname .. "] shadows built-in command '"
-                            .. mname .. "' (runtime macro overrides it)")
+                        "[macro " .. mname .. "] shadows BUILT-IN flow command '"
+                            .. mname
+                            .. "' (dead macro: scheduler dispatches flow before macro lookup)")
+                -- (d) a [macro] whose name a runtime macro would override: a migrated
+                --     contract command or a registered kag handler reached through
+                --     the regular dispatch (round-74 asymmetric semantics). Excludes
+                --     flow-special names (those can't be macro-dispatched, and are
+                --     already reported above as dead flow-shadow macros).
+                elseif not FLOW_SPECIAL[mname] then
+                    local shadow = schema.isMigrated(mname)
+                        or (kag_cmd_table and kag_cmd_table[mname] ~= nil)
+                    if shadow then
+                        warn_scene(path, lineOf(tok.offset or 1),
+                            "[macro " .. mname .. "] shadows built-in command '"
+                                .. mname .. "' (runtime macro overrides it)")
+                    end
                 end
             end
         end
