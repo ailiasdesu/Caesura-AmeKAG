@@ -90,6 +90,7 @@ tmp/
 /*_tmp.lua
 /tmp_probe*.lua
 /ks_scan_tmp.lua
+/ks_*_proto.lua
 tests/scripts/tmp_probe*.lua
 web/scratch.*.test.js
 cache/
