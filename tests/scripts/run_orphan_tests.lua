@@ -24,6 +24,7 @@ local tests = {
     "test_macro_deep",
     "test_p2_features",
     "test_contracts_runtime",
+    "test_contracts_runtime2",
     "test_saveflow",
     "test_bench_dispatch",
     "test_math_cmds",

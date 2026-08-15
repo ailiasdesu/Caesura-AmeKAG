@@ -62,8 +62,21 @@ def main():
     doc = os.path.join(ROOT, "docs", "api", "command-contracts.md")
     if os.path.exists(editor_lang) and os.path.exists(doc):
         lang_src = read(editor_lang)
-        m = re.search(r"KAG_COMMANDS" + chr(92) + "s*=" + chr(92) + "s*" + chr(92) + "[(.*?)" + chr(92) + "]", lang_src, re.S)
-        editor_cmds = set(re.findall(chr(39) + "([a-z0-9_]+)" + chr(39), m.group(1))) if m else set()
+        # Round 82: KAG_COMMANDS is now re-exported from lib/commandLint.ts
+        # (KNOWN_COMMANDS is the single source of truth). Parse the literal
+        # array in commandLint.ts; fall back to the old KAG_COMMANDS literal
+        # for robustness.
+        lint_path = os.path.join(ROOT, "editor", "src", "lib", "commandLint.ts")
+        editor_cmds = set()
+        for probe_path, probe_name in ((lint_path, "KNOWN_COMMANDS"),
+                                       (editor_lang, "KAG_COMMANDS")):
+            if not os.path.exists(probe_path):
+                continue
+            probe_src = read(probe_path)
+            m = re.search(re.escape(probe_name) + r"[^=]*=\s*\[(.*?)\]", probe_src, re.S)
+            if m:
+                editor_cmds = set(re.findall(chr(39) + "([a-z0-9_]+)" + chr(39), m.group(1)))
+                break
         doc_src = read(doc)
         doc_cmds = set(re.findall("^### " + chr(96) + chr(92) + "[([a-z0-9_]+)" + chr(92) + "]", doc_src, re.M))
         for c in sorted(doc_cmds):
