@@ -1,6 +1,8 @@
 #pragma once
 #include "../../src/job/api/IJobSystem.h"
+#include <cstdio>
 #include <cstdint>
+#include <exception>
 
 namespace Caesura {
 
@@ -29,8 +31,37 @@ public:
         (void)priority;
         if (!m_running) return 0;
         uint64_t id = m_jobId++;
-        if (work) work();
-        if (onComplete) onComplete();
+        // Exception isolation mirrors the real JobSystem: a throwing task or
+        // completion callback is caught, reported, and swallowed so it can
+        // neither escape the submit() caller nor corrupt the queue. The
+        // completion callback still runs, and later submissions are unaffected.
+        if (work) {
+            try {
+                work();
+            } catch (const std::exception& e) {
+                fprintf(stderr,
+                        "[NullJobSystem] submit work() threw -- isolated and swallowed: %s\n",
+                        e.what());
+            } catch (...) {
+                fprintf(stderr,
+                        "[NullJobSystem] submit work() threw unknown exception -- "
+                        "isolated and swallowed\n");
+            }
+        }
+        if (onComplete) {
+            try {
+                onComplete();
+            } catch (const std::exception& e) {
+                fprintf(stderr,
+                        "[NullJobSystem] submit onComplete() threw -- isolated and "
+                        "swallowed: %s\n",
+                        e.what());
+            } catch (...) {
+                fprintf(stderr,
+                        "[NullJobSystem] submit onComplete() threw unknown exception -- "
+                        "isolated and swallowed\n");
+            }
+        }
         return id;
     }
 

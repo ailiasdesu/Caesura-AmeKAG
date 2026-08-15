@@ -1,7 +1,8 @@
-﻿#include "JobSystem.h"
+#include "JobSystem.h"
 #include "../di/api/ThreadAssert.h"
 #include <cstdio>
 #include <chrono>
+#include <exception>
 
 namespace Caesura {
 
@@ -124,7 +125,18 @@ void JobSystem::pollMainThreadJobs() {
     }
 
     for (auto& fn : batch) {
-        if (fn) fn();
+        if (!fn) continue;
+        try {
+            fn();
+        } catch (const std::exception& e) {
+            fprintf(stderr,
+                    "[JobSystem] Main-thread callback threw -- isolated and swallowed: %s\n",
+                    e.what());
+        } catch (...) {
+            fprintf(stderr,
+                    "[JobSystem] Main-thread callback threw unknown exception -- "
+                    "isolated and swallowed\n");
+        }
     }
 }
 
@@ -183,7 +195,19 @@ void JobSystem::workerLoop(int workerIndex) {
         }
 
         if (job.work) {
-            job.work();
+            try {
+                job.work();
+            } catch (const std::exception& e) {
+                fprintf(stderr,
+                        "[JobSystem] Worker %d: task work() threw -- isolated and "
+                        "swallowed: %s\n",
+                        workerIndex, e.what());
+            } catch (...) {
+                fprintf(stderr,
+                        "[JobSystem] Worker %d: task work() threw unknown exception "
+                        "-- isolated and swallowed\n",
+                        workerIndex);
+            }
         }
 
         if (job.onComplete) {
