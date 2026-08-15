@@ -442,5 +442,280 @@ do
     check("goto missing target no-crash", okG)
 end
 
+
+-- ---------------------------------------------------------------------------
+-- 20. Control-flow edge depth (G9): nested-loop targeting, [until] worst
+--     case, [for] numeric/step/fractional edges, [while] mid-body flip,
+--     and [goto] into a loop body. Each assertion locks OBSERVED behavior
+--     (the scheduler implementation is authoritative).
+-- ---------------------------------------------------------------------------
+local function collect_tags(ctx)
+    local o = {}
+    for _, d in ipairs(ctx.dispatched) do
+        if d.params and d.params.tag then o[#o + 1] = d.params.tag end
+    end
+    return table.concat(o, ",")
+end
+
+-- Helpers: run with a frame cap so a mis-locked loop-guard assertion fails
+-- the "no runaway" check instead of hanging the suite forever.
+local function run_in_coro_capped(ctx, tokens, maxf)
+    local co = coroutine.create(function() scheduler.run(ctx, tokens) end)
+    local n = 0
+    local M = maxf or 2000
+    while coroutine.status(co) ~= "dead" and n < M do
+        n = n + 1
+        coroutine.resume(co, 16)
+    end
+    return n
+end
+
+-- 20a. Nested [switch] at depth 3 inside a case body: the inner switch gets
+--      its own stack entry, so its endswitch pops the INNER entry while the
+--      outer taken-case flag stays live; later outer cases stay skipped.
+do
+    local depth3 = {
+        {"switch", {"l1"}}, {"case", {"1"}},
+            {"switch", {"l2"}}, {"case", {"2"}},
+                {"switch", {"l3"}}, {"case", {"x"}}, {"ch", {tag = "XXX"}},
+                {"endswitch", {}},
+                {"ch", {tag = "L2BODY"}},
+            {"endswitch", {}},
+            {"ch", {tag = "L1BODY"}},
+        {"endswitch", {}},
+        {"ch", {tag = "AFTER"}},
+    }
+    local c1 = make_ctx(); c1.variables = { l1 = "1", l2 = "2", l3 = "x" }
+    run_in_coro_capped(c1, depth3, 200)
+    check("G9 depth-3 switch path runs all matched bodies",
+        collect_tags(c1) == "XXX,L2BODY,L1BODY,AFTER")
+
+    local c2 = make_ctx(); c2.variables = { l1 = "1", l2 = "2", l3 = "z" }
+    run_in_coro_capped(c2, depth3, 200)
+    check("G9 depth-3 inner no-match skips only innermost body",
+        collect_tags(c2) == "L2BODY,L1BODY,AFTER")
+end
+
+-- 20b. [break]/[continue] target the INNERMOST loop.
+-- 20b-i. [break] in a [while] nested inside a [for]: the inner while's
+--        break leaves only that while; the outer [for] continues its range.
+do
+    local ctx = make_ctx()
+    run_in_coro_capped(ctx, {
+        {"for", {var = "i", start = "1", ["end"] = "2"}},
+            {"while", {exp = "1 == 1"}},
+                {"break", {}},
+                {"ch", {tag = "NEVER"}},
+            {"endwhile", {}},
+            {"ch", {tag = "FBODY"}},
+        {"endfor", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 break in while-inside-for targets inner while",
+        collect_tags(ctx) == "FBODY,FBODY,AFTER", collect_tags(ctx))
+    check("G9 break leaves outer for counter at end", ctx.f.i == 3)
+end
+
+-- 20b-ii. [continue] in a [for] nested inside a [while]: the continue
+--         skips the for body's tail, the for still completes its range, and
+--         the outer while runs its next body token (here: flips go to false).
+do
+    local ctx = make_ctx(); ctx.f.go = 1
+    run_in_coro_capped(ctx, {
+        {"while", {exp = "f.go"}},
+            {"for", {var = "j", start = "1", ["end"] = "3"}},
+                {"continue", {}},
+                {"ch", {tag = "NEVER"}},
+            {"endfor", {}},
+            {"iscript", {body = "ctx.f.go = false"}},
+        {"endwhile", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 continue in for-inside-while skips tail, for completes",
+        collect_tags(ctx) == "AFTER", collect_tags(ctx))
+    check("G9 continue inner for counter completes (ends past end="..tostring(ctx.f.j)..")", ctx.f.j == 4)
+    check("G9 continue outer while then exits", ctx.f.go == false)
+end
+
+-- 20b-iii. [break] inside a [switch] nested in a [while]: the break has NO
+--          loop entry on the switch (switch is not a loop) so it targets the
+--          surrounding [while] and exits it at the matching case.
+do
+    local ctx = make_ctx(); ctx.f.n = 0
+    run_in_coro_capped(ctx, {
+        {"while", {exp = "f.n < 5"}},
+            {"switch", {exp = "f.n"}},
+                {"case", {"2"}}, {"break", {}},
+            {"endswitch", {}},
+            {"iscript", {body = "ctx.f.n = ctx.f.n + 1"}},
+        {"endwhile", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 break in switch-inside-while exits the while",
+        collect_tags(ctx) == "AFTER", collect_tags(ctx))
+    check("G9 break in switch-inside-while stopped at matching case",
+        ctx.f.n == 2)
+end
+
+-- 20b-iv. [break] inside a [switch] nested in a [for]: breaks the [for].
+do
+    local ctx = make_ctx()
+    run_in_coro_capped(ctx, {
+        {"for", {var = "i", start = "1", ["end"] = "4"}},
+            {"switch", {exp = "f.i"}},
+                {"case", {"3"}}, {"break", {}},
+            {"endswitch", {}},
+            {"ch", {tag = "FB"}},
+        {"endfor", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 break in switch-inside-for exits the for",
+        collect_tags(ctx) == "FB,FB,AFTER", collect_tags(ctx))
+    check("G9 break in switch-inside-for stops before end", ctx.f.i == 3)
+end
+
+-- 20c. [until]: a huge timeout with an immediately-true condition must
+--      exit without waiting (no per-frame polling).
+do
+    local ctx = make_ctx()
+    ctx.f.ok = 1
+    local n = run_until(ctx,
+        { {"until", { exp = "f.ok == 1", timeout = 6000000 }},
+          {"ch", { text = "done" }} }, 10)
+    check("G9 until huge timeout + true exits without waiting",
+        n == 3 and #ctx.dispatched == 1)
+end
+
+-- 20d. [for] with fractional start/step/end: the float step accumulates in
+--      the counter and the loop count is exact (inclusive of end), not
+--      clipped by integer truncation.
+do
+    -- start 0, end 1, step 0.5 -> bodies at 0, 0.5, 1.0 (3 iterations)
+    local c = make_ctx()
+    run_in_coro_capped(c, {
+        {"for", {var = "i", start = "0", ["end"] = "1", step = "0.5"}},
+            {"ch", {tag = "B"}},
+        {"endfor", {}},
+        {"ch", {tag = "A"}},
+    }, 200)
+    check("G9 for float 0.5 step runs exact 3 bodies",
+        collect_tags(c) == "B,B,B,A", collect_tags(c))
+    check("G9 for float 0.5 step counter numeric past end",
+        type(c.f.i) == "number" and c.f.i > 1)
+
+    -- start 0, end 0.3, step 0.1 -> bodies at 0, 0.1, 0.2 (3 iterations)
+    local c2 = make_ctx()
+    run_in_coro_capped(c2, {
+        {"for", {var = "i", start = "0", ["end"] = "0.3", step = "0.1"}},
+            {"ch", {tag = "B"}},
+        {"endfor", {}},
+        {"ch", {tag = "A"}},
+    }, 200)
+    check("G9 for float 0.1 step runs exact 3 bodies",
+        collect_tags(c2) == "B,B,B,A", collect_tags(c2))
+end
+
+-- 20e. [for] step=0: OBSERVED semantics -- the scheduler clamps a zero step
+--      to 1 (scheduler.lua: "if sp == 0 then sp = 1 end"), so the loop is
+--      NOT rejected with an error and does NOT hang; it iterates with step 1.
+--      This documents the actual contract (authoring assumption "rejected"
+--      does not hold).
+do
+    local ctx = make_ctx()
+    local n = run_in_coro_capped(ctx, {
+        {"for", {var = "i", start = "1", ["end"] = "3", step = "0"}},
+            {"ch", {tag = "B"}},
+        {"endfor", {}},
+        {"ch", {tag = "A"}},
+    }, 200)
+    check("G9 for step=0 clamps to 1, no hang", n < 200, "frames " .. n)
+    check("G9 for step=0 iterates start..end once",
+        collect_tags(ctx) == "B,B,B,A", collect_tags(ctx))
+    check("G9 for step=0 counter clamped step=1 ends 4", ctx.f.i == 4)
+end
+
+-- 20f. [for] with start > end and a NEGATIVE step iterates correctly
+--      (start 3, end 0, step -1 -> bodies at 3,2,1,0; inclusive of end).
+do
+    local ctx = make_ctx()
+    run_in_coro_capped(ctx, {
+        {"for", {var = "i", start = "3", ["end"] = "0", step = "-1"}},
+            {"ch", {tag = "B"}},
+        {"endfor", {}},
+        {"ch", {tag = "A"}},
+    }, 200)
+    check("G9 for start>end negative step runs 4 bodies",
+        collect_tags(ctx) == "B,B,B,B,A", collect_tags(ctx))
+    check("G9 for start>end negative step counter past end", ctx.f.i == -1)
+end
+
+-- 20g. [while] whose condition flips FALSE mid-body: the running body
+--      completes, then the re-evaluated head exits cleanly.
+do
+    -- boolean-false flip via iscript on the first body line
+    local ctx = make_ctx(); ctx.f.keep = true
+    run_in_coro_capped(ctx, {
+        {"while", {exp = "keep"}},
+            {"iscript", {body = "ctx.f.keep = false"}},
+            {"ch", {tag = "BODY"}},
+        {"endwhile", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 while flips false mid-body: body completes, then exits",
+        collect_tags(ctx) == "BODY,AFTER", collect_tags(ctx))
+    check("G9 while flip leaves flag false", ctx.f.keep == false)
+
+    -- comparison flip via iscript decrement (3 decrements)
+    local c2 = make_ctx(); c2.f.n = 3
+    run_in_coro_capped(c2, {
+        {"while", {exp = "f.n > 0"}},
+            {"iscript", {body = "ctx.f.n = ctx.f.n - 1"}},
+            {"ch", {tag = "BODY"}},
+        {"endwhile", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 while comparison flip runs body exactly 3 times",
+        collect_tags(c2) == "BODY,BODY,BODY,AFTER", collect_tags(c2))
+end
+
+-- 20h. [goto] into a loop body (same-scene label): the goto bypasses the
+--      loop HEAD, so the matching end-token has no stack entry and becomes
+--      a no-op. OBSERVED semantics: the loop body executes once, the
+--      counter is never initialized, and execution continues past the end
+--      token -- it must never CRASH or hang (documented as undefined
+--      authoring, locked here as a no-crash assertion).
+do
+    local c1 = make_ctx(); c1.f.n = 0
+    local n1 = run_in_coro_capped(c1, {
+        {"goto", {target = "*L1"}},
+        {"while", {exp = "f.n < 1"}},
+            {"label", {name = "L1"}},
+            {"ch", {tag = "BODY"}},
+            {"iscript", {body = "ctx.f.n = ctx.f.n + 1"}},
+        {"endwhile", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 goto into while body: no crash/hang",
+        n1 < 200, "frames " .. n1)
+    check("G9 goto into while body runs body once then continues",
+        collect_tags(c1) == "BODY,AFTER", collect_tags(c1))
+
+    local c2 = make_ctx()
+    local n2 = run_in_coro_capped(c2, {
+        {"goto", {target = "*FL"}},
+        {"for", {var = "i", start = "1", ["end"] = "2"}},
+            {"label", {name = "FL"}},
+            {"ch", {tag = "FBODY"}},
+        {"endfor", {}},
+        {"ch", {tag = "AFTER"}},
+    }, 200)
+    check("G9 goto into for body: no crash/hang",
+        n2 < 200, "frames " .. n2)
+    check("G9 goto into for body runs body once then continues",
+        collect_tags(c2) == "FBODY,AFTER", collect_tags(c2))
+    check("G9 goto into for body never initialized counter",
+        c2.f.i == nil)
+end
+
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
