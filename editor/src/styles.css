@@ -575,6 +575,51 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
   outline: 1px solid var(--accent, #4a9eff);
   background: rgba(74, 158, 255, 0.12);
 }
+/* G4 inspector — round 82: engine status strip + command lint + label jumps */
+.inspector-engine {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  margin: 0 4px 4px;
+  border: 1px solid rgba(74, 158, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(74, 158, 255, 0.08);
+  font-size: 11px;
+}
+.inspector-engine-label { color: var(--fg-dim, #888); text-transform: uppercase; font-size: 10px; }
+.inspector-engine-value {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  color: var(--accent, #4a9eff);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-warn {
+  margin: 2px 0 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--paused, #d9a93a);
+  background: rgba(217, 169, 58, 0.12);
+  border: 1px solid rgba(217, 169, 58, 0.3);
+}
+.inspector-hint {
+  margin: 2px 0 4px;
+  font-size: 10px;
+  color: var(--fg-dim, #888);
+}
+.inspector-param-unlisted { color: var(--paused, #d9a93a); }
+.inspector-param-flag { color: var(--fg-dim, #888); }
+.inspector-jumps {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
 /* G4 timeline */
 .timeline-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
 .timeline-chip { font-size: 10px; padding: 2px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: inherit; cursor: pointer; }

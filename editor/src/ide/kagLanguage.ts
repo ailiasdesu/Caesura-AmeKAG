@@ -1,40 +1,16 @@
 // KAG Neo-Genesis language definition for Monaco.
 // Registered once at startup; gives .ks files tag/param/comment/label
 // syntax highlighting in the editor area (IDE P2-7).
+//
+// The recognized command-name set lives in lib/commandLint.ts (a single source
+// of truth shared with the Inspector's param lint). It is re-exported here as
+// KAG_COMMANDS so existing consumers (kagLanguage.test.ts, Monaco) keep the
+// same name without pulling the lint module's rules into the Monaco graph.
 import * as monaco from 'monaco-editor'
+import { KNOWN_COMMANDS } from '../lib/commandLint'
 
-export const KAG_COMMANDS = [
-  // flow
-  'if', 'elseif', 'elsif', 'else', 'endif', 'while', 'endwhile', 'for',
-  'endfor', 'break', 'continue', 'switch', 'case', 'default', 'endswitch',
-  'jump', 'goto', 'call', 'return', 'link', 'label', 'macro', 'endmacro',
-  'erasemacro', 'end', 'stop', 'eval', 'emb', 'iscript', 'endscript',
-  'until',
-  // text
-  'ch', 'text', 'l', 'r', 'er', 'p', 'ruby', 'font', 'pt', 'button',
-  'endbutton', 'sel', 'select', 'endselect', 'nameplate', 'textbox',
-  'sprite_fade', 'sprite_move', 'sprite_scale', 'sprite_swap', 'history',
-  'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto', 'nvl',
-  // layer
-  'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout', 'layfade',
-  'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash', 'blur', 'fade',
-  'vib', 'camera', 'particles',
-  // audio
-  'playbgm', 'playbgmstop', 'playse', 'playvoice', 'stopvoice', 'stopbgm', 'stopse',
-  'fadebgm', 'fadevol', 'xfadebgm', 'play', 'bgm', 'se', 'voice',
-  'voice_off', 'playstop', 'setbgmvolume', 'setsevolume', 'setvoicevolume',
-  'waitsound', 'waitbgm',
-  // system / resource / save
-  'wait', 'delay', 's', 'chapter', 'ending', 'gallery', 'music', 'unlock',
-  'rollback', 'toast', 'replay', 'save', 'load', 'saveload', 'listsaves', 'saveplace',
-  'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
-  'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'i18n', 'set', 'inc', 'random',
-  'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
-  // round 71: KAG3-compat arithmetic + character + effects + notification
-  'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
-  'textspeed', 'cps', 'palette', 'vibrate', 'notify',
-  'clear', 'ct', 'endtag', 'endform', 'g', 'br', 'hr', 'cancel', 'close',
-]
+export { KNOWN_COMMANDS as KAG_COMMANDS }
+
 
 export function registerKagLanguage() {
   const id = 'kag'
@@ -45,7 +21,7 @@ export function registerKagLanguage() {
   monaco.languages.setMonarchTokensProvider(id, {
     defaultToken: '',
     tokenPostfix: '.kag',
-    keywords: KAG_COMMANDS,
+    keywords: KNOWN_COMMANDS,
     tokenizer: {
       root: [
         // comments: ; ... line
