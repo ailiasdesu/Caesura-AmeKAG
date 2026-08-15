@@ -3,6 +3,7 @@
 #include "archive/CARCReader.h"
 #include "archive/CARCWriter.h"
 #include "archive/CryptoEngine.h"
+#include "archive/DeltaCARC.h"
 #include "archive/api/IArchiveReader.h"
 #include "archive/api/IArchiveWriter.h"
 #include "archive/api/ICryptoEngine.h"
@@ -447,3 +448,417 @@ TEST_CASE("CARC G10: directory-style paths require exact spelling (no normalizat
     CHECK(reader.readFile("dir\\sub\\leaf.txt").empty());
     CHECK(reader.readFile("DIR/sub/leaf.txt").empty());      // case-sensitive
 }
+// =============================================================================
+// G11: Additional CARC / DeltaCARC / crypto / streaming boundary tests
+//      (deep + special-character paths, empty files, duplicate keys, large
+//       streaming, truncation/corruption handling, key-length crypto bounds,
+//       DeltaCARC apply-on-tamper)
+// =============================================================================
+
+namespace {
+
+// Build a CARC from {relativePath, text content} pairs.
+std::filesystem::path buildTextCarc(
+    const std::filesystem::path& dir,
+    const std::vector<std::pair<std::string, std::string>>& files,
+    const std::string& name = "g11.carc")
+{
+    namespace fs = std::filesystem;
+    const fs::path arc = dir / name;
+    {
+        Caesura::carc::CARCWriter writer;
+        REQUIRE(writer.create(arc.string()));
+        for (const auto& [rel, content] : files) {
+            REQUIRE(writer.addFile(rel,
+                reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+        }
+        REQUIRE(writer.finalize());
+    }
+    REQUIRE(fs::exists(arc));
+    REQUIRE(fs::file_size(arc) > 0);
+    return arc;
+}
+
+std::string readText(carc::CARCReader& r, const std::string& path) {
+    auto data = r.readFile(path);
+    return std::string(data.begin(), data.end());
+}
+
+} // namespace
+
+// --- CARC format: special characters / deep nesting / empty files -----------
+
+TEST_CASE("CARC G11: special-character and deeply-nested path keys round-trip") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_special");
+    // CARC keys are byte-exact (SHA-256 of the path bytes), so arbitrary bytes
+    // -- including UTF-8 sequences, spaces and quotes -- must round-trip.
+    const std::string unicodeName = "\xc3\xa9\xe4\xb8\xad safe space .txt";   // "é中文 ..."
+    const fs::path arc = buildTestArchive(temp.path(), {
+        {"a/b/c/d/e/f/leaf.txt", std::vector<uint8_t>({'d','e','e','p'})},
+        {"quoted\"with'quote.txt", std::vector<uint8_t>({'q'})},
+        {unicodeName, std::vector<uint8_t>({'u','n'})},
+    });
+
+    Caesura::carc::CARCReader reader;
+    REQUIRE(reader.open(arc.string()));
+    CHECK(reader.numFiles() == 3);
+
+    CHECK(reader.hasFile("a/b/c/d/e/f/leaf.txt"));
+    CHECK(reader.hasFile("quoted\"with'quote.txt"));
+    CHECK(reader.hasFile(unicodeName));
+
+    auto leaf = reader.readFile("a/b/c/d/e/f/leaf.txt");
+    REQUIRE_FALSE(leaf.empty());
+    CHECK(std::memcmp(leaf.data(), "deep", 4) == 0);
+
+    auto quoted = reader.readFile("quoted\"with'quote.txt");
+    REQUIRE_FALSE(quoted.empty());
+    CHECK(std::memcmp(quoted.data(), "q", 1) == 0);
+
+    auto unicode = reader.readFile(unicodeName);
+    REQUIRE_FALSE(unicode.empty());
+    CHECK(std::memcmp(unicode.data(), "un", 2) == 0);
+}
+
+TEST_CASE("CARC G11: empty-content file entries round-trip and stay addressable") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_emptyfile");
+    const fs::path arc = buildTestArchive(temp.path(), {
+        {"zero.txt", std::vector<uint8_t>()},
+        {"also/empty.txt", std::vector<uint8_t>()},
+        {"sized.txt", std::vector<uint8_t>({'x'})},
+    });
+
+    Caesura::carc::CARCReader reader;
+    REQUIRE(reader.open(arc.string()));
+    CHECK(reader.numFiles() == 3);
+
+    // Empty files remain in the index (addressable by hash) ...
+    CHECK(reader.hasFile("zero.txt"));
+    CHECK(reader.hasFile("also/empty.txt"));
+
+    // ... and reading them yields an empty (but successful) payload.
+    CHECK(reader.readFile("zero.txt").empty());
+    CHECK(reader.readFile("also/empty.txt").empty());
+
+    // Both empty entries carry originalSize == 0 in the index.
+    int zeroSizeCount = 0;
+    for (const auto& [hash, info] : reader.index()) {
+        (void)hash;
+        if (info.originalSize == 0) zeroSizeCount++;
+    }
+    CHECK(zeroSizeCount == 2);
+}
+
+TEST_CASE("CARC G11: duplicate path keys -- last add controls read, numFiles counts both") {
+    namespace fs = std::filesystem;
+    // LOCKED-DOCUMENTATION: CARCWriter currently does NOT deduplicate entries
+    // that share a path hash. The reader's index maps hash->entry (last one
+    // wins), while numFiles() reflects the raw file-list, i.e. counts both.
+    // This test nails down the *current* behavior so a future dedup decision
+    // is a deliberate, reviewable change.
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_dup");
+    const fs::path arc = temp.path() / "dup.carc";
+    {
+        Caesura::carc::CARCWriter writer;
+        REQUIRE(writer.create(arc.string()));
+        REQUIRE(writer.addFile("same.txt", reinterpret_cast<const uint8_t*>("first"), 5));
+        REQUIRE(writer.addFile("same.txt", reinterpret_cast<const uint8_t*>("second"), 6));
+        REQUIRE(writer.finalize());
+    }
+
+    Caesura::carc::CARCReader reader;
+    REQUIRE(reader.open(arc.string()));
+    CHECK(reader.hasFile("same.txt"));
+    // numFiles() reports both raw entries for the same path hash.
+    CHECK(reader.numFiles() == 2);
+    // readFile() resolves through the hash-keyed index -> last add wins.
+    auto got = reader.readFile("same.txt");
+    REQUIRE_FALSE(got.empty());
+    CHECK(got.size() == 6);
+    CHECK(std::memcmp(got.data(), "second", 6) == 0);
+}
+
+// --- Streaming I/O: > 2 MiB round-trip / trunkated-file graceful failure -----
+
+TEST_CASE("CARC G11: >2MiB incompressible payload streams back byte-exact") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_big");
+    const fs::path arc = temp.path() / "big.carc";
+    constexpr size_t kBig = 5u * 1024u * 1024u;  // strictly greater than 2 MiB
+    std::vector<uint8_t> big(kBig);
+    std::srand(1234);
+    for (size_t i = 0; i < big.size(); ++i) big[i] = static_cast<uint8_t>(std::rand() & 0xFF);
+
+    {
+        Caesura::carc::CARCWriter writer;
+        REQUIRE(writer.create(arc.string()));
+        REQUIRE(writer.addFile("big.bin", big.data(), big.size()));
+        REQUIRE(writer.finalize());
+    }
+
+    Caesura::carc::CARCReader reader;
+    REQUIRE(reader.open(arc.string()));
+    REQUIRE(reader.hasFile("big.bin"));
+
+    auto got = reader.readFile("big.bin");
+    REQUIRE(got.size() == kBig);
+
+    // Segment-wise equality over the whole payload.
+    const size_t seg = 262144u;  // 256 KiB
+    bool match = true;
+    for (size_t off = 0; off < kBig; off += seg) {
+        const size_t n = std::min(seg, kBig - off);
+        if (std::memcmp(got.data() + off, big.data() + off, n) != 0) { match = false; break; }
+    }
+    CHECK(match);
+}
+
+TEST_CASE("CARC G11: truncated archive fails open gracefully (never crashes)") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_trunc");
+    const fs::path arc = buildTestArchive(temp.path(), {
+        {"a.txt", std::vector<uint8_t>({'a','b','c','d'})},
+        {"b.txt", std::vector<uint8_t>({'1','2','3'})},
+    });
+    const std::uintmax_t fullSize = fs::file_size(arc);
+    REQUIRE(fullSize > sizeof(Caesura::carc::CARCHeader));
+
+    // Probe: header-only, mid-file, and trailer-missing truncation points.
+    const std::uintmax_t trailers = Caesura::carc::SIGNATURE_SIZE + Caesura::carc::PUBLICKEY_SIZE;
+    const std::uintmax_t cuts[3] = {
+        sizeof(Caesura::carc::CARCHeader),
+        fullSize / 2,
+        fullSize - trailers,
+    };
+    int idx = 0;
+    for (const std::uintmax_t cut : cuts) {
+        const fs::path t = temp.path() / ("trunc_" + std::to_string(idx++) + ".carc");
+        {
+            std::ifstream in(arc, std::ios::binary);
+            std::ofstream out(t, std::ios::binary);
+            std::vector<char> buf(static_cast<size_t>(cut));
+            in.read(buf.data(), static_cast<std::streamsize>(cut));
+            out.write(buf.data(), in.gcount());
+        }
+        Caesura::carc::CARCReader reader;
+        auto opened = reader.open(t.string());
+        // The reader must give a clear failure (no crash, no partial state).
+        CAPTURE(cut);
+        if (cut >= sizeof(Caesura::carc::CARCHeader)) {
+            // Header reads fine but later structural checks fail.
+            CHECK_FALSE(opened);
+            CHECK_FALSE(reader.isOpen());
+        } else {
+            // Even a sub-header read must fail closed.
+            CHECK_FALSE(opened);
+        }
+    }
+}
+
+// --- Read/write interaction: corrupted header / wrong magic / immediate read --
+
+TEST_CASE("CARC G11: wrong magic and corrupted length fields reject open") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_corrupt");
+    const fs::path baseArc = buildTestArchive(temp.path(),
+        {{"a.txt", std::vector<uint8_t>({'x'})}});
+
+    // Wrong magic: byte 0 flips 0x43('C') -> 0x42('B').
+    {
+        const fs::path bad = temp.path() / "badmagic.carc";
+        fs::copy_file(baseArc, bad, fs::copy_options::overwrite_existing);
+        flipByte(bad, 0);
+        Caesura::carc::CARCReader reader;
+        CHECK_FALSE(reader.open(bad.string()));
+        CHECK_FALSE(reader.isOpen());
+    }
+
+    // Corrupt the 8-byte contentSize in the header (offset 16) to a huge value.
+    {
+        const fs::path bad = temp.path() / "badlen.carc";
+        fs::copy_file(baseArc, bad, fs::copy_options::overwrite_existing);
+        {
+            std::fstream f(bad, std::ios::binary | std::ios::in | std::ios::out);
+            const std::uint64_t huge = 0xFFFFFFFFFFFFFFFFull;
+            f.seekp(16);
+            f.write(reinterpret_cast<const char*>(&huge), 8);
+        }
+        Caesura::carc::CARCReader reader;
+        CHECK_FALSE(reader.open(bad.string()));
+        CHECK_FALSE(reader.isOpen());
+    }
+
+    // Corrupt the numFiles field (offset 40) so the index walk must abort.
+    {
+        const fs::path bad = temp.path() / "badcount.carc";
+        fs::copy_file(baseArc, bad, fs::copy_options::overwrite_existing);
+        {
+            std::fstream f(bad, std::ios::binary | std::ios::in | std::ios::out);
+            const std::uint32_t hugeCount = 0xFFFFFFF0u;
+            f.seekp(40);
+            f.write(reinterpret_cast<const char*>(&hugeCount), 4);
+        }
+        Caesura::carc::CARCReader reader;
+        CHECK_FALSE(reader.open(bad.string()));
+        CHECK_FALSE(reader.isOpen());
+    }
+}
+
+TEST_CASE("CARC G11: write then immediately read back in the same session") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_immediate");
+    const fs::path arc = temp.path() / "immediate.carc";
+    const std::string text = "write-then-read boundary payload";
+    {
+        Caesura::carc::CARCWriter writer;
+        REQUIRE(writer.create(arc.string()));
+        REQUIRE(writer.addFile("note.txt",
+            reinterpret_cast<const uint8_t*>(text.data()), text.size()));
+        REQUIRE(writer.addFile("other/note.txt",
+            reinterpret_cast<const uint8_t*>("other content"), 13));
+        REQUIRE(writer.finalize());
+    }
+
+    // Open and read immediately after the writer finalizes (same test scope).
+    Caesura::carc::CARCReader reader;
+    REQUIRE(reader.open(arc.string()));
+    REQUIRE(reader.hasFile("note.txt"));
+    auto got = reader.readFile("note.txt");
+    REQUIRE_FALSE(got.empty());
+    CHECK(got.size() == text.size());
+    CHECK(std::memcmp(got.data(), text.data(), text.size()) == 0);
+    CHECK(readText(reader, "other/note.txt") == "other content");
+}
+
+// --- Encryption boundaries: key length / empty plaintext / multi-round -------
+
+TEST_CASE("Crypto G11: non-256-bit key lengths are rejected (empty output)") {
+    Caesura::carc::CryptoEngine crypto;
+    const uint8_t msg[8] = {'a','b','c','d','e','f','g','h'};
+    uint8_t nonce[12] = {}, tag[16] = {};
+
+    uint8_t shortKey[16] = {};   // 128-bit: below the AES-256 minimum.
+    auto enc16 = crypto.encrypt(msg, sizeof(msg), shortKey, sizeof(shortKey),
+                                nonce, sizeof(nonce), tag, sizeof(tag));
+    CHECK(enc16.empty());
+
+    uint8_t tinyKey[8] = {};
+    auto enc8 = crypto.encrypt(msg, sizeof(msg), tinyKey, sizeof(tinyKey),
+                               nonce, sizeof(nonce), tag, sizeof(tag));
+    CHECK(enc8.empty());
+
+    // An oversized key (48 bytes) is tolerated: only the first 32 are used.
+    uint8_t longKey[48] = {};
+    for (int i = 0; i < 48; ++i) longKey[i] = static_cast<uint8_t>(i);
+    auto enc48 = crypto.encrypt(msg, sizeof(msg), longKey, sizeof(longKey),
+                                nonce, sizeof(nonce), tag, sizeof(tag));
+    REQUIRE_FALSE(enc48.empty());
+    // Decrypting with a 32-byte prefix of the same key must succeed.
+    auto dec = crypto.decrypt(enc48.data(), enc48.size(), longKey, 32,
+                              nonce, sizeof(nonce), tag, sizeof(tag));
+    REQUIRE_FALSE(dec.empty());
+    CHECK(std::memcmp(dec.data(), msg, sizeof(msg)) == 0);
+}
+
+TEST_CASE("Crypto G11: empty plaintext rejected; wrong-key decrypt fails") {
+    Caesura::carc::CryptoEngine crypto;
+    uint8_t nonce[12] = {}, tag[16] = {};
+    uint8_t key[32] = {0x11,0x22,0x33,0x44};
+
+    // Empty plaintext (len 0) must not produce ciphertext on encrypt.
+    auto emptyEnc = crypto.encrypt(key, 0, key, sizeof(key),
+                                   nonce, sizeof(nonce), tag, sizeof(tag));
+    CHECK(emptyEnc.empty());
+
+    const char* msg = "sensitive data";
+    uint8_t realKey[32] = {};
+    std::memset(realKey, 0xAB, 32);
+    uint8_t realNonce[12], realTag[16];
+    crypto.generateNonce(realNonce, sizeof(realNonce));
+    auto ct = crypto.encrypt(reinterpret_cast<const uint8_t*>(msg), std::strlen(msg),
+                             realKey, sizeof(realKey),
+                             realNonce, sizeof(realNonce), realTag, sizeof(realTag));
+    REQUIRE_FALSE(ct.empty());
+
+    // Decrypt with a different key (same nonce/tag) -> GCM auth fails -> empty.
+    uint8_t wrongKey[32] = {};
+    std::memset(wrongKey, 0xCD, 32);
+    auto bad = crypto.decrypt(ct.data(), ct.size(), wrongKey, sizeof(wrongKey),
+                              realNonce, sizeof(realNonce), realTag, sizeof(realTag));
+    CHECK(bad.empty());
+}
+
+TEST_CASE("Crypto G11: three-round round-trip with isolated keys is exact") {
+    Caesura::carc::CryptoEngine crypto;
+    const char* msgs[3] = { "round one payload", "round two payload ....", "round three" };
+    uint8_t keys[3][32];
+    for (int r = 0; r < 3; ++r)
+        for (int j = 0; j < 32; ++j)
+            keys[r][j] = static_cast<uint8_t>((r + j) * 7 + 1);
+
+    for (int r = 0; r < 3; ++r) {
+        uint8_t nonce[12], tag[16];
+        crypto.generateNonce(nonce, sizeof(nonce));
+        auto ct = crypto.encrypt(reinterpret_cast<const uint8_t*>(msgs[r]), std::strlen(msgs[r]),
+                                 keys[r], sizeof(keys[r]),
+                                 nonce, sizeof(nonce), tag, sizeof(tag));
+        REQUIRE_FALSE(ct.empty());
+        auto pt = crypto.decrypt(ct.data(), ct.size(), keys[r], sizeof(keys[r]),
+                                 nonce, sizeof(nonce), tag, sizeof(tag));
+        REQUIRE_FALSE(pt.empty());
+        CHECK(pt.size() == std::strlen(msgs[r]));
+        CHECK(std::memcmp(pt.data(), msgs[r], pt.size()) == 0);
+    }
+}
+
+// --- DeltaCARC: apply rejects tampered / truncated / missing ---
+
+TEST_CASE("DeltaCARC G11: apply rejects body-tampered and truncated deltas") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_g11_deltatamper");
+    using TextFiles = std::vector<std::pair<std::string, std::string>>;
+    const fs::path oldPath = buildTextCarc(temp.path(), TextFiles{{"a.txt", "one"}}, "old.carc");
+    const fs::path newPath = buildTextCarc(temp.path(), TextFiles{{"a.txt", "two"}}, "new.carc");
+    const fs::path delta = temp.path() / "delta.bin";
+    const fs::path out = temp.path() / "out.carc";
+
+    REQUIRE(carc::DeltaCARC::generate(oldPath.string(), newPath.string(), delta.string()));
+    REQUIRE(carc::DeltaCARC::verify(delta.string()));
+    REQUIRE(fs::file_size(delta) > 140);
+
+    // Body-tampered copy: flip a byte inside the encrypted body (offset >= 140).
+    {
+        const fs::path bad = temp.path() / "tampered.bin";
+        fs::copy_file(delta, bad, fs::copy_options::overwrite_existing);
+        flipByte(bad, 148);
+        CHECK_FALSE(carc::DeltaCARC::verify(bad.string()));
+        CHECK_FALSE(carc::DeltaCARC::apply(oldPath.string(), bad.string(), out.string()));
+    }
+
+    // Truncated copy (header + key material only): decrypt fails / count mismatch.
+    {
+        const fs::path bad = temp.path() / "truncated.bin";
+        {
+            std::ifstream in(delta, std::ios::binary);
+            std::ofstream outFile(bad, std::ios::binary);
+            std::vector<char> buf(140);
+            in.read(buf.data(), 140);
+            outFile.write(buf.data(), in.gcount());
+        }
+        CHECK_FALSE(carc::DeltaCARC::verify(bad.string()));
+        CHECK_FALSE(carc::DeltaCARC::apply(oldPath.string(), bad.string(), out.string()));
+    }
+
+    // Missing source: apply must fail cleanly.
+    CHECK_FALSE(carc::DeltaCARC::apply((temp.path() / "missing.carc").string(),
+                                       delta.string(), out.string()));
+
+    // A clean apply still succeeds afterwards (delta file itself is untouched).
+    REQUIRE(carc::DeltaCARC::apply(oldPath.string(), delta.string(), out.string()));
+    carc::CARCReader applied;
+    REQUIRE(applied.open(out.string()));
+    CHECK(readText(applied, "a.txt") == "two");
+}
+
