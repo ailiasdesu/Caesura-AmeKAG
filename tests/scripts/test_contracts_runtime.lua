@@ -20,6 +20,7 @@ pcall(require, 'kag.commands.layer')
 pcall(require, 'kag.commands.vfx')
 pcall(require, 'kag.commands.video')
 pcall(require, 'kag.commands.save')
+pcall(require, 'kag.commands.math')
 
 local passed, failed = 0, 0
 local function check(name, cond, detail)
@@ -249,6 +250,165 @@ do
     check('layfade headless-safe; scheduler advances past it', ctx4
         and ctx4.unlockedCG and ctx4.unlockedCG.after_layfade == true, err4)
 end
+-- 14. math command chain drives real variables through the scheduler
+--     ([add] then [mul] reading f.x) and [div] by zero is caught and
+--     reported ("[KAG] division by zero ...") without crashing the scene
+--     -- the no-op lets the scheduler continue to a following command.
+do
+    local ctx, err = run_scene('[add name="f.x" value=5][mul name="f.x" value=3]')
+    check('add then mul chain builds f.x=15', ctx and ctx.f.x == 15, err)
+
+    local ctx2, err2 = run_scene(
+        '[add name="f.x" value=10][div name="f.x" value=0][unlock type="cg" id="after_div0"]')
+    check('div-by-zero is caught, no crash, f.x unchanged', ctx2
+        and ctx2.f.x == 10, err2)
+    check('div-by-zero no-op; scheduler advances past it', ctx2
+        and ctx2.unlockedCG and ctx2.unlockedCG.after_div0 == true, err2)
+
+    local ctx3, err3 = run_scene('[dec name="f.n" amount=2]')
+    check('dec default/amount writes f.n', ctx3 and ctx3.f.n == -2, err3)
+end
+
+-- 15. [textspeed] / [cps] write the exact handler fields: ctx.text_speed
+--     (ms/char, floor(1000/cps)) is the kag_runner read point, and
+--     ctx.cps holds the observable chars-per-second value.
+do
+    local c100, e100 = run_scene('[textspeed cps=100]')
+    check('[textspeed cps=100] sets ctx.text_speed=10', c100 and c100.text_speed == 10, e100)
+    check('[textspeed cps=100] sets ctx.cps=100', c100 and c100.cps == 100, e100)
+
+    local cdef, edef = run_scene('[textspeed]')
+    check('[textspeed] default cps=50 -> text_speed=20', cdef and cdef.text_speed == 20, edef)
+    check('[textspeed] default records ctx.cps=50', cdef and cdef.cps == 50, edef)
+
+    local ccps, ecps = run_scene('[cps 25]')
+    check('[cps 25] sets ctx.text_speed=40', ccps and ccps.text_speed == 40, ecps)
+    check('[cps 25] sets ctx.cps=25', ccps and ccps.cps == 25, ecps)
+end
+
+-- 16. [notify msg=...] degrades gracefully headless: the toast module may
+--     be absent, but the handler pcall-wraps require+show and returns
+--     true, so the scene completes (round-52 guard).
+do
+    local ctx, err = run_scene('[notify msg="saved"]')
+    check('[notify] headless-safe (toast degrade)', ctx ~= nil, err)
+    local ctx2, err2 = run_scene('[notify msg="x" time=2500]')
+    check('[notify] with time= headless-safe', ctx2 ~= nil, err2)
+end
+
+-- 17. [preload] contract enum: the valid form (type=texture/audio/scene)
+--     with wait=true/path accepted coerces to a table and completes; an
+--     unknown type is rejected by schema.coerce with a "must be one of"
+--     error (the scene stops, reported not crashed).
+do
+    local ctx, err = run_scene('[preload type="texture" wait="true" path=""]')
+    check('[preload type=texture wait=true] accepted', ctx ~= nil, err)
+    local cimg, eimg = run_scene('[preload type="scene" wait="false"]')
+    check('[preload type=scene wait=false] accepted', cimg ~= nil, eimg)
+
+    local bad, badErr = run_scene('[preload type="video"]')
+    check('[preload] unknown type rejected (schema error)',
+        bad == nil and type(badErr) == 'string'
+        and badErr:find('must be one of') ~= nil, badErr)
+end
+
+-- 18. [sel x="tf.result"] / [endbutton] full pipeline: register choices,
+--     block on waiting_input, simulate a pick through the active block,
+--     assert the chosen target lands in tf.result and becomes the jump.
+--     (Round-74 mechanism mirrored from test_select.lua.)
+do
+    local function run_select_click(src, pick)
+        local tokens = tokenizer.parse(src)
+        compiler.compile(tokens)
+        local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+            _whileIterByScene = { ['t.ks'] = 0 }, macros = nil, macro_args = nil,
+            current_scene = 't.ks', token_index = 1, tokens = tokens,
+            text_state = {}, layer_state = {}, audio_state = {},
+            call_stack = {}, flag_stack = {}, backlog = {},
+            _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {} }
+        local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+        local n = 0
+        while coroutine.status(co) ~= 'dead' and not ctx.waiting_input and n < 50 do
+            coroutine.resume(co, 16); n = n + 1
+        end
+        if ctx.waiting_input and ctx._choiceButtonsActive then
+            -- choose the N-th rendered option
+            ctx.waiting_input = false
+            ctx._selectedChoice = ctx._choiceButtonsActive[pick]
+            ctx._choiceMode = false
+            ctx._choiceButtonsActive = nil
+            while coroutine.status(co) ~= 'dead' and n < 800 do
+                coroutine.resume(co, 16); n = n + 1
+            end
+        end
+        if coroutine.status(co) ~= 'dead' then return nil, 'blocked' end
+        return ctx
+    end
+
+    local ctxR, errR = run_select_click(
+        '[sel x="tf.result" text="Route A" target="*a"][sel x="tf.result" text="Route B" target="*b"][endselect]', 2)
+    check('sel-registered choices staged active', ctxR and ctxR._choiceButtonsActive == nil
+        and ctxR._selectedChoice == nil, errR)
+    check('sel x=tf.result holds chosen target', ctxR and ctxR.tf.result == '*b', errR)
+    check('sel pick sets pending jump', ctxR and ctxR._pendingJump == '*b', errR)
+
+    local ctxS, errS = run_select_click(
+        '[sel x="picked" text="Only" target="*o"][endbutton]', 1)
+    check('sel bare x= target -> f scope', ctxS and ctxS.f.picked == '*o', errS)
+end
+
+-- 19. nested macro definition e2e: an OUTER macro whose body contains an
+--     INNER [macro]...[endmacro] definition; running the outer defines the
+--     inner (which is thus invocable afterwards). Round 75 makes the body
+--     collection depth-aware so the outer does not stop at the inner's
+--     [endmacro]. (The inner definition makes the outer dynamic -- the
+--     compiler does not inline it, so this exercises the runtime splice.)
+do
+    local src = '[macro outer][macro inner][unlock type="cg" id="from_inner"][endmacro][endmacro][outer][inner]'
+    local ctx, err = run_scene(src)
+    check('nested macro: outer defines inner, inner invocable afterwards',
+        ctx and ctx.unlockedCG and ctx.unlockedCG.from_inner == true, err)
+end
+
+-- 20. macro depth guard: >1000 sequential calls complete (the runtime
+--     stack pops per completed body, so a flat scene never trips), while a
+--     self-recursive macro is caught with an expansion-depth error.
+do
+    -- The scheduler yields once per processed token, so a >1000-call flat
+    -- scene needs a larger resume budget than run_scene's 800-iteration
+    -- guard -- use a dedicated high-cap loop for the depth exercise.
+    local function run_many(src)
+        local tokens = tokenizer.parse(src)
+        compiler.compile(tokens)
+        local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+            current_scene = 't.ks', token_index = 1, tokens = tokens,
+            text_state = {}, layer_state = {}, audio_state = {},
+            macro_args = {}, call_stack = {}, flag_stack = {},
+            backlog = {}, _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {} }
+        local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+        local n = 0
+        while coroutine.status(co) ~= 'dead' and n < 5000 do
+            local ok, err = coroutine.resume(co, 16)
+            if not ok then return nil, err end
+            if ctx.waiting_input then ctx.waiting_input = false end
+            n = n + 1
+        end
+        if coroutine.status(co) ~= 'dead' then return nil, 'blocked after ' .. n .. ' iters' end
+        return ctx
+    end
+
+    local seq = '[macro bump][unlock type="cg" id="x"][endmacro]'
+        .. string.rep('[bump]', 1002)
+    local ctx, err = run_many(seq)
+    check('1002 sequential macro calls complete (no false depth error)',
+        ctx ~= nil and ctx.unlockedCG and ctx.unlockedCG.x == true, err)
+
+    local rec, recErr = run_scene('[macro rec][rec][endmacro][rec]')
+    check('self-recursive macro trips expansion-depth guard',
+        rec == nil and type(recErr) == 'string'
+        and recErr:find('depth') ~= nil, recErr or 'no error raised')
+end
+
 
 print(string.format('\nCONTRACT RUNTIME TESTS: %d passed, %d failed', passed, failed))
 if failed > 0 then os.exit(1) end
