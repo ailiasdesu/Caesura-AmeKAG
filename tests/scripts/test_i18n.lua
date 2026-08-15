@@ -331,6 +331,87 @@ i18n.current, i18n.strings = saved2.current, saved2.strings
 i18n.lines, i18n.fallback = saved2.lines, saved2.fallback
 
 -- ---------------------------------------------------------------------------
+-- 3c. Runtime language API: fallback chain (missing lang -> default -> raw
+--     key), translate() placeholder interpolation, set_language dictionary
+--     swap (mid-scene) and reload() from-directory hot-reload behavior.
+-- ---------------------------------------------------------------------------
+local saved3 = { current = i18n.current, strings = i18n.strings,
+                 lines = i18n.lines, fallback = i18n.fallback,
+                 default_language = i18n.default_language }
+i18n.current = "fr"                 -- a language with no lang file
+i18n.default_language = "en"
+i18n.strings = { greeting = "Bonjour", hello_key = "Salut {who}!" }
+i18n.lines = {}
+i18n.fallback = { greeting = "Hello", only_default = "DefaultValue" }
+
+-- (a) fallback chain: current -> default language -> raw key
+check("rt: current dictionary wins", i18n.t("greeting") == "Bonjour")
+check("rt: default-language fallback used",
+      i18n.t("only_default") == "DefaultValue")
+check("rt: raw key returned when missing everywhere",
+      i18n.t("absent_key") == "absent_key")
+check("rt: current_language reflects selection",
+      i18n.current_language() == "fr")
+check("rt: per-line source misses -> original",
+      i18n.localize("untouched line", "x.ks") == "untouched line")
+
+-- (b) translate() {placeholder} interpolation
+check("rt: translate interpolates {param}",
+      i18n.translate("Hello, {name}!", { name = "Caesura" })
+      == "Hello, Caesura!")
+check("rt: translate many params + keeps markup",
+      i18n.translate("{b}{name}{/b}: {n}x", { name = "A", n = 3 })
+      == "{b}A{/b}: 3x")
+check("rt: translate leaves unknown placeholders intact",
+      i18n.translate("hi {who} {nope}", { who = "x" }) == "hi x {nope}")
+check("rt: translate with no params returns template unchanged",
+      i18n.translate("hi {who}") == "hi {who}")
+check("rt: translate bare dict key uses its value as template",
+      i18n.translate("hello_key", { who = "monde" }) == "Salut monde!")
+check("rt: translate localizes {key} before interpolating params",
+      i18n.translate("{greeting} {name}", { name = "Caesura" })
+      == "Bonjour Caesura")
+
+-- (c) set_language dictionary swap (mid-scene)
+-- Switch from a *different* current code so set_language actually reloads.
+i18n.current = "xx"                 -- dummy current, no lang file
+i18n.set_language("fr")             -- no fr file -> built-in dictionary
+check("rt: set_language seeds current", i18n.current == "fr")
+check("rt: set_language selects a built-in dictionary",
+      type(i18n.strings) == "table"
+      and i18n.t("title_screen") == "标题画面")   -- builtin zh dict
+i18n.strings = { greeting = "Bonjour" }   -- simulate the swapped dict
+check("rt: t() reflects swapped dictionary immediately",
+      i18n.t("greeting") == "Bonjour")
+check("rt: localize picks up swapped dictionary tokens",
+      i18n.localize("say {greeting}", "x.ks") == "say Bonjour")
+
+-- same-code set_language is a no-op fast path keeping the active dict
+i18n.current = "fr"; i18n.strings = { x = 1 }
+i18n.set_language("fr")
+check("rt: set_language same-code no-op keeps dictionary",
+      i18n.strings.x == 1)
+check("rt: set_language returns active strings table",
+      type(i18n.set_language("fr")) == "table")
+
+-- (d) reload() hot-reloads a language file, preserving current/default
+i18n.default_language = "en"
+local rld = i18n.reload("ja")       -- re-reads assets/lang/ja.lua
+check("rt: reload returns a strings table", type(rld) == "table")
+check("rt: reload switches current to reloaded code", i18n.current == "ja")
+check("rt: reload preserves default_language",
+      i18n.default_language == "en")
+check("rt: t() resolves after reload",
+      i18n.t("fullscreen") ~= nil and #i18n.t("fullscreen") > 0)
+
+-- restore state so later sections (and the suite cleanup) see no drift
+i18n.current, i18n.strings = saved3.current, saved3.strings
+i18n.lines, i18n.fallback = saved3.lines, saved3.fallback
+i18n.default_language = saved3.default_language
+
+
+
+-- ---------------------------------------------------------------------------
 -- 4. ks_i18n template generator
 -- ---------------------------------------------------------------------------
 local ks = require("ks_i18n")

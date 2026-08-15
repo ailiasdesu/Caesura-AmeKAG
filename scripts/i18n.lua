@@ -19,6 +19,10 @@ local i18n = {}
 
 -- Current language code
 i18n.current = "zh"
+-- Default fallback language code (configurable). t()/translate() fall
+-- back to this dictionary before returning the raw key. Defaults to "en"
+-- (matches the documented "fall back to English" behavior).
+i18n.default_language = "en"
 -- Loaded string table (flat key->value)
 i18n.strings = {}
 -- Fallback string table (always English)
@@ -88,10 +92,13 @@ function i18n.load(langCode)
         i18n._loadBuiltin(langCode)
     end
 
-    -- Load English fallback if not already loaded and current is not English
-    if langCode ~= "en" and next(i18n.fallback) == nil then
+    -- Load the default-language dictionary (configurable, default "en") as
+    -- the fallback chain's second rung: specified language -> default
+    -- language -> raw key. Only loaded once, unless default_language changed.
+    local dflt = i18n.default_language or "en"
+    if langCode ~= dflt and next(i18n.fallback) == nil then
         local ok2, fb = pcall(function()
-            local f = io.open("assets/lang/en.lua", "r")
+            local f = io.open("assets/lang/" .. dflt .. ".lua", "r")
             if not f then return nil end
             local txt = f:read("*a")
             f:close()
@@ -255,6 +262,114 @@ function i18n._loadBuiltin(langCode)
         },
     }
     i18n.strings = builtins[langCode] or builtins.zh
+end
+
+-- ===========================================================================
+-- i18n.current_language() -> string
+--  Returns the currently selected language code (i18n.current).
+--  Pairs with set_language(): the runtime API for switching dictionaries
+--  mid-scene (the KAG text pipeline re-localizes via relocalize_page).
+-- ===========================================================================
+function i18n.current_language()
+    return i18n.current
+end
+
+-- ===========================================================================
+-- i18n.set_language(code, opts) -> strings table
+--  Per-language dictionary selection with a fallback chain:
+--      current language  ->  default_language  ->  raw key.
+--  Selects the dictionary for <code> (loading assets/lang/<code>.lua via
+--  i18n.load, or falling back to built-ins when the file is absent), sets
+--  i18n.current, and returns the active strings table.
+--  opts.default may override the fallback default language for this call
+--  (and updates i18n.default_language). Pass opts.reload=true to force a
+--  re-read even when <code> equals the current language.
+-- ===========================================================================
+function i18n.set_language(code, opts)
+    opts = opts or {}
+    code = code or i18n.current
+    if opts.default and type(opts.default) == "string" and #opts.default > 0 then
+        i18n.default_language = opts.default
+    end
+    if not opts.reload and code == i18n.current and next(i18n.strings) ~= nil then
+        -- Already on this dictionary; just ensure the fallback is loaded.
+        i18n._ensureFallback()
+        return i18n.strings
+    end
+    return i18n.load(code)
+end
+
+-- ---------------------------------------------------------------------------
+-- i18n._ensureFallback() — (re)load the default-language dictionary if the
+--  cached fallback is missing (e.g. set_language with a changed default).
+-- ---------------------------------------------------------------------------
+function i18n._ensureFallback()
+    local dflt = i18n.default_language or "en"
+    if next(i18n.fallback) ~= nil or i18n.current == dflt then return end
+    local ok2, fb = pcall(function()
+        local fp = io.open("assets/lang/" .. dflt .. ".lua", "r")
+        if not fp then return nil end
+        local txt = fp:read("*a")
+        fp:close()
+        local body = txt
+        while body:match("^%s*%-%-") do
+            body = body:gsub("^%s*%-%-[^\n]*\n?", "", 1)
+        end
+        return (body:match("^%s*return") and load(body, "i18n", "t", {})
+            or load("return " .. body, "i18n", "t", {}))()
+    end)
+    if ok2 and type(fb) == "table" then
+        i18n.fallback = fb
+    end
+end
+
+-- ===========================================================================
+-- i18n.translate(text, params) -> string with {placeholder}s interpolated
+--  Runtime template interpolation, distinct from i18n.expand (dictionary
+--  lookup): translate() first resolves the template through normalize the
+--  normal localize path (per-line translation > {key} expand), then fills
+--  {name} placeholders from the params table. Unknown placeholders and
+--  inline-markup tags are left intact. With no params, behaves like localize.
+--    i18n.translate("Hello, {name}!", { name = "Caesura" }) -> "Hello, Caesura!"
+-- ===========================================================================
+function i18n.translate(text, params)
+    if not text or #text == 0 then return text or "" end
+    -- Resolve the template: a bare whole-key text that names a string-table
+    -- entry uses that value (so placeholder templating can be authored as a
+    -- {key} value); otherwise fall through the normal localize path.
+    local template = text
+    local dict = i18n.strings[text]
+    if dict == nil then dict = i18n.fallback[text] end
+    if dict ~= nil then
+        template = tostring(dict)
+    else
+        template = i18n.localize(text)
+    end
+    if not params or next(params) == nil then return template end
+    return (template:gsub("{([%w_]+)}", function(name)
+        if MARKUP_NAMES[name] then return "{" .. name .. "}" end
+        if params[name] ~= nil and name ~= "" then
+            return tostring(params[name])
+        end
+        local val = i18n.t(name)
+        if val == name then return "{" .. name .. "}" end
+        return val
+    end))
+end
+
+-- ===========================================================================
+-- i18n.reload(langCode) -> strings table
+--  Hot-reload a language dictionary from disk (re-read assets/lang/<code>.lua
+--  even if it is already the current language). Editors / dev workflows can
+--  re-run this after editing a lang file without restarting the engine. It
+--  preserves i18n.current, i18n.default_language and the cached fallback.
+-- ===========================================================================
+function i18n.reload(langCode)
+    langCode = langCode or i18n.current
+    local saved_default = i18n.default_language
+    local result = i18n.load(langCode)
+    i18n.default_language = saved_default
+    return result
 end
 
 -- Auto-load default language on module load
