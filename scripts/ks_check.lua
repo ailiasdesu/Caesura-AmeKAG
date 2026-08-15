@@ -196,7 +196,18 @@ local function checkScene(path)
                         -- work here exactly as they do at runtime after
                         -- compiler/scheduler normalization.
                         local k = tonumber(pair[1]) or pair[1]
-                        params[k] = pair[2]
+                        if type(k) == "string" and k:find("%.") then
+                            -- Dotted key pair { "f.name", "Aoi" } from the
+                            -- tokenizer's ident(.ident)* = value branch:
+                            -- same positional expansion as compiler
+                            -- normalize_params ([set f.x = v] -> var/value).
+                            local n = 0
+                            for i2 = 1, 20 do if params[i2] then n = i2 end end
+                            params[n + 1] = k
+                            params[n + 2] = pair[2]
+                        else
+                            params[k] = pair[2]
+                        end
                     end
                 end
                 local line = lineOf(tok.offset or 1)

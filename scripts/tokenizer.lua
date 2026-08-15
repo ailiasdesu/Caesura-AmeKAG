@@ -28,7 +28,10 @@ local uval    = C((1 - S(" \t\r\n]"))^1)
 -- Bare positional value (KAG3 syntax: [delay 500], [se 1], [gallery 2]):
 -- params[1] gets the raw string; handlers tonumber it. Comes AFTER the
 -- ident=value branch so "x=5" never parses as a bare value.
-local param   = Ct(C(ident) * space * "=" * space * (qval + uval))
+-- Dotted key path: f.name / f.hp / sf.chapter (KAG3 [set f.x = v]).
+-- One capture spanning the whole dotted key, so the pair is {1, "f.name"}.
+local dkey    = C(ident * (P(".") * ident)^0)
+local param   = Ct(dkey * space * "=" * space * (qval + uval))
               + Ct(Cc("1") * C(uval))
 
 -- Command body: ["cmd", name, {{key,val},...}]

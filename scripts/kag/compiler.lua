@@ -100,8 +100,23 @@ local function normalize_params(cmd, raw)
         if type(p) == "table" and type(p[1]) == "string" then
             has_pairs = true
             local key = tonumber(p[1]) or p[1]
-            out[key] = p[2]
-            if type(key) == "number" then bare[key] = p[2] end
+            local is_dotted = type(key) == "string" and key:find("%.")
+            if not is_dotted then
+                out[key] = p[2]
+                if type(key) == "number" then bare[key] = p[2] end
+            else
+                -- Dotted key pair { "f.name", "Aoi" } (tokenizer's
+                -- ident(.ident)* = value branch, KAG3 [set f.x = v]):
+                -- the dotted key is a VARIABLE path, not a named param --
+                -- expand it into positional slots so the set contract maps
+                -- var = "f.name", value = "Aoi" via positional_index.
+                -- (round 50 audit: [set f.name = "Aoi"] stored the quoted
+                -- literal because the bare "=" fallback kept quotes; this
+                -- path also strips them via qval.)
+                local idx = #bare + 1
+                bare[idx] = key
+                bare[idx + 1] = p[2]
+            end
         end
     end
     if not has_pairs then return raw end  -- named table: keep identity

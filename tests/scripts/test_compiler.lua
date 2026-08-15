@@ -343,6 +343,42 @@ local ctx11e = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
 local co11e = coroutine.create(function() scheduler.run(ctx11e, toks11e, 1) end)
 while coroutine.status(co11e) ~= "dead" do coroutine.resume(co11e) end
 check("11e: eval expression assignment runs", type(ctx11e.f.luck) == "number")
+-- ---------------------------------------------------------------------------
+-- 12a-12e. Dotted-key assignment + interpolation (round 50).
+--  [set f.name = "Aoi"] must store the UNQUOTED string via the tokenizer's
+--  dotted-key branch; ${expr} must translate TJS operators
+--  (?: && !=) before load() — previously a ternary stayed verbatim.
+-- ---------------------------------------------------------------------------
+local function run_set(src)
+    local toks = tokenizer.parse(src)
+    compiler.compile(toks)
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+        variables = {}, current_scene = "t.ks", token_index = 1,
+        tokens = toks }
+    local co = coroutine.create(function() scheduler.run(ctx, toks, 1) end)
+    while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
+    return ctx
+end
+
+local c12 = run_set('[set f.name = "Aoi"]')
+check("12a: dotted [set f.x = \"v\"] strips quotes", c12.f.name == "Aoi")
+local c12b = run_set("[set f.hp = 30]")
+check("12b: dotted numeric assignment", c12b.f.hp == 30)
+local c12c = run_set('[set f.msg = "hello world"]')
+check("12c: dotted string with space", c12c.f.msg == "hello world")
+
+-- ${ TJS operators (schema interpolation path)
+local ctx12 = { f = { hp = 30, flag = true, name = "Aoi" }, sf = {}, tf = {},
+    mp = {}, lf = {} }
+local toks12 = tokenizer.parse('[ch name="N" text="Rank ${f.hp > 20 ? \'high\' : \'low\'}"]')
+compiler.compile(toks12)
+local p12 = schema.coerce("ch", toks12[1][2] or toks12[1].params, ctx12)
+check("12d: ${ ternary translated (TJS ?:)", p12.text == "Rank high")
+local toks12e = tokenizer.parse('[ch name="N" text="OK=${f.flag && f.hp > 10}"]')
+compiler.compile(toks12e)
+local p12e = schema.coerce("ch", toks12e[1][2] or toks12e[1].params, ctx12)
+check("12e: ${ && translated", p12e.text == "OK=true")
+
 
 
 if failed > 0 then

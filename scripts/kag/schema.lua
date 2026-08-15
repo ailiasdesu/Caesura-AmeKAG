@@ -124,7 +124,16 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
                     interp_env.tf = ctx and ctx.tf or {}
                     interp_env.mp = ctx and ctx.mp or {}
                     interp_env.lf = ctx and ctx.lf or {}
-                    f2 = load("return (" .. expr .. ")", "=ks_interp", "t",
+                    -- TJS -> Lua translation (&& || ! != ?:) so
+                    -- ${expr} accepts the same expression language as
+                    -- [if]/[eval] (round 50 audit: a ternary was left
+                    -- verbatim — Lua load() rejects TJS operators).
+                    local exprLua = expr
+                    pcall(function()
+                        local ex = require("kag.expr")
+                        if ex and ex.translate then exprLua = ex.translate(expr) end
+                    end)
+                    f2 = load("return (" .. exprLua .. ")", "=ks_interp", "t",
                               interp_env)
                     if not f2 then return "${" .. expr .. "}" end  -- syntax error
                     interp_cache[expr] = f2
