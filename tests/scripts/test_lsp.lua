@@ -344,6 +344,90 @@ do
     check("alias: [ch ] does not gain x", not hasSelOnly)
 end
 
+-- ---------------------------------------------------------------------------
+-- 13. label rename (round 76): rename a *label across the scene -- update
+--     the definition AND every nav reference ([jump]/[call]/[link]/[goto]/
+--     [sel]/[select] via a named target="*name" or bare *name). Edits are
+--     {kind, line, col, length, newText} with col/length on the NAME byte
+--     (after the leading '*') so an editor replaces it in place. nil is
+--     returned for a rejected (invalid) newName; {} when no defined label
+--     resolves under the cursor.
+-- ---------------------------------------------------------------------------
+-- [link]...[/link] must stay LAST: the tokenizer truncates parsing
+-- mid-stream after a [/link], so its tail [goto]/[sel] lines would be lost.
+local renTxt = "*start\n"
+    .. "[jump target=\"*start\"]\n"
+    .. "[call *start]\n"
+    .. "[goto target=*start]\n"
+    .. "[sel target=\"*start\"]\n"
+    .. "[link *start]go[/link]\n"
+local ren = lsp.rename(renTxt, 1, 1, "scene")  -- cursor on the *start def
+check("rename: def + 5 nav sites", ren ~= nil and #ren == 6)
+local rnDef, rnRef = 0, 0
+local defEdit = nil
+for _, ed in ipairs(ren) do
+    if ed.kind == "definition" then rnDef = rnDef + 1; defEdit = ed end
+    if ed.kind == "reference" then rnRef = rnRef + 1 end
+    check("rename: edit has newText+length", type(ed.newText) == "string"
+          and type(ed.length) == "number")
+end
+check("rename: 1 definition + 5 references", rnDef == 1 and rnRef == 5)
+check("rename: def edit at line 1 col 2 (after *)", defEdit ~= nil
+      and defEdit.line == 1 and defEdit.col == 2
+      and defEdit.newText == "scene" and defEdit.length == 5)
+-- Applying the edits must rewrite every site in place.
+local function apply_edits(text, edits)
+    local ls = { 1 }
+    for i = 1, #text do if text:byte(i) == 10 then ls[#ls + 1] = i + 1 end end
+    table.sort(edits, function(a, b)
+        if a.line == b.line then return a.col < b.col end
+        return a.line < b.line end)
+    for j = #edits, 1, -1 do
+        local e = edits[j]
+        local bs = (ls[e.line] or 1) + e.col - 1
+        text = text:sub(1, bs - 1) .. e.newText .. text:sub(bs + e.length)
+    end
+    return text
+end
+local renamed = apply_edits(renTxt, ren)
+local sceneCount = select(2, renamed:gsub("%*scene", ""))
+check("rename: applied rewrites every site to *scene", sceneCount == 6
+      and renamed:find("*start", 1, true) == nil)
+check("rename: quoted jump rewritten", renamed:find('[jump target="*scene"]', 1, true) ~= nil)
+check("rename: bare call rewritten", renamed:find("[call *scene]", 1, true) ~= nil)
+check("rename: goto rewritten", renamed:find("[goto target=*scene]", 1, true) ~= nil)
+check("rename: sel rewritten", renamed:find('[sel target="*scene"]', 1, true) ~= nil)
+check("rename: bare link rewritten", renamed:find("[link *scene]go", 1, true) ~= nil)
+-- Leading '*' on newName is stripped and accepted.
+local renStar = lsp.rename(renTxt, 1, 1, "*scene")
+check("rename: leading * stripped+accepted", renStar ~= nil and #renStar == 6)
+
+-- Invalid newName is rejected (nil): spaces, empty, non-string.
+check("rename: rejects spaced newName", lsp.rename(renTxt, 1, 1, "bad name") == nil)
+check("rename: rejects empty newName", lsp.rename(renTxt, 1, 1, "") == nil)
+check("rename: rejects non-string newName", lsp.rename(renTxt, 1, 1, 42) == nil)
+
+-- Unknown / absent label -> no edits ({}, not rejected).
+check("rename: missing label no edits",
+      #lsp.rename("[jump target=*missing]\n", 1, 18, "x") == 0)
+check("rename: cursor off any token no edits",
+      #lsp.rename("[ch text=\"hi\"]\n", 1, 5, "x") == 0)
+
+-- JSON shape roundtrip via lsp.json.
+local jr = lsp.json("rename", renTxt, 1, 1, "scene")
+check("json rename renamed:true + edits", jr:find('"renamed":true', 1, true) ~= nil
+      and jr:find('"edits":', 1, true) ~= nil
+      and jr:find('"kind":"definition"', 1, true) ~= nil
+      and jr:find('"newText":"scene"', 1, true) ~= nil
+      and jr:find('"length":5', 1, true) ~= nil)
+local jrBad = lsp.json("rename", renTxt, 1, 1, "bad name")
+check("json rename rejected -> renamed:false", jrBad ~= nil
+      and jrBad:find('"renamed":false', 1, true) ~= nil)
+local jrMissing = lsp.json("rename", "[jump target=*missing]\n", 1, 18, "x")
+check("json rename no-op -> renamed:true empty edits", jrMissing ~= nil
+      and jrMissing:find('"renamed":true', 1, true) ~= nil
+      and jrMissing:find('"edits":[]', 1, true) ~= nil)
+
 -- Exit gate.
 if failed > 0 then
 

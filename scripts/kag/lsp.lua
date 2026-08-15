@@ -416,9 +416,23 @@ end
 --- Navigation commands whose target param points at a *label.
 local NAV_CMDS = { jump = true, call = true, link = true }
 
+-- Rename navigation set: the base NAV_CMDS plus the scheduler/label alias
+-- forms that carry a nav target in real scenes -- [goto] (flow-control
+-- branch) and the [sel]/[select] button-style commands, whose target may be
+-- a named target param (quoted or bare) or a bare *name positional arg.
+-- Used by lsp.rename only; definition/references keep the original scope.
+local RENAME_NAV_CMDS = {
+    jump = true, call = true, link = true,
+    ["goto"] = true, sel = true, select = true,
+}
+
 --- Extract the *label target of a navigation command token (nil otherwise).
-local function token_target(tok)
-    if tok.type ~= "command" or not NAV_CMDS[tok.cmd] then return nil end
+--  navSet (optional) narrows which commands count as nav; defaults to the
+--  base NAV_CMDS so existing callers are unchanged.
+local function token_target(tok, navSet)
+    if tok.type ~= "command" then return nil end
+    navSet = navSet or NAV_CMDS
+    if not navSet[tok.cmd] then return nil end
     for _, pair in ipairs(tok.params or {}) do
         if type(pair) == "table" then
             local v = pair[2]
@@ -472,6 +486,18 @@ local function collect_labels(tokens, idx)
         end
     end
     return labels
+end
+
+--- Locate the source byte offset of the NAME (after the leading '*') for
+--  a *name occurrence inside a token's source span. The tokenizer only
+--  records the command/label token span, not the param-value byte
+--  position, so the exact nav-target offset is recovered by a literal scan
+--  of the token's slice. Returns nil when not found.
+local function locate_label_byte(text, tok, name)
+    local slice = text:sub(tok.offset, tok.end_offset)
+    local starRel = slice:find("*" .. name, 1, true)
+    if not starRel then return nil end
+    return tok.offset + starRel
 end
 
 --- lsp.definition(text, line, char) → {name, line, col} for the *label
@@ -539,6 +565,62 @@ function lsp.references(text, labelName)
     return refs
 end
 
+--- lsp.rename(text, line, char, newName) → list of edits, each
+--  {kind, line, col, length, newText}, covering the *label definition plus
+--  every nav reference ([jump]/[call]/[link]/[goto]/[sel]/[select], via a
+--  named target="*name" or bare *name). length is the byte length of the
+--  old name and newText the replacement; col/line are the position of the
+--  name AFTER its leading '*', so an editor applies the edit in place.
+--  Returns nil when newName is invalid (rejected), and {} when no label
+--  resolves under the cursor (unknown label / not defined in this scene).
+function lsp.rename(text, line, char, newName)
+    -- Validate the new label name: strip a leading '*' if the IDE sent it,
+    -- then require the same charset the tokenizer uses for idents (start
+    -- letter/underscore, then letters/digits/underscore, no spaces).
+    if type(newName) ~= "string" then return nil end
+    newName = newName:gsub("^%*", "")
+    if newName == "" or not newName:match("^[A-Za-z_][A-Za-z0-9_]*$") then
+        return nil
+    end
+
+    local tokens = parse_scene(text)
+    if not tokens or not line then return {} end
+    local idx = build_index(text)
+
+    -- Resolve the label under the cursor via the same lookup as
+    -- lsp.definition. When the target is not defined in THIS scene
+    -- (def.line == nil) there is nothing to rename → no edits.
+    local def = lsp.definition(text, line, char)
+    if not def or not def.name or not def.line then return {} end
+    local oldName = def.name
+    if oldName == newName then return {} end
+
+    local edits = {}
+    local function pushEdit(kind, bytePos)
+        edits[#edits + 1] = {
+            kind = kind,
+            line = idx.lineOf(bytePos),
+            col = idx.colOf(bytePos),
+            length = #oldName,
+            newText = newName,
+        }
+    end
+
+    for _, tok in ipairs(tokens) do
+        if tok.type == "label" and tok.name == oldName then
+            local b = locate_label_byte(text, tok, oldName)
+            if b then pushEdit("definition", b) end
+        elseif tok.type == "command" then
+            local target = token_target(tok, RENAME_NAV_CMDS)
+            if target == oldName then
+                local b = locate_label_byte(text, tok, oldName)
+                if b then pushEdit("reference", b) end
+            end
+        end
+    end
+    return edits
+end
+
 --- JSON string escape (shared by the json encoder).
 local function json_str(s)
     s = tostring(s)
@@ -560,6 +642,16 @@ function lsp.json(method, ...)
         result = lsp.definition(...)
     elseif method == "references" then
         result = lsp.references(...)
+    elseif method == "rename" then
+        -- lsp.rename returns a list of edits (nil = rejected for a bad
+        -- newName, {} = no-op on an unknown/absent label). Wrap it in the
+        -- {renamed, edits} response shape the IDE expects.
+        local edits = lsp.rename(...)
+        if edits == nil then
+            result = { renamed = false }
+        else
+            result = { renamed = true, edits = edits }
+        end
     end
     if result == nil then result = {} end
     -- minimal JSON encoder for the result shapes (arrays of flat maps)
@@ -579,6 +671,27 @@ function lsp.json(method, ...)
             end
         end
         parts[#parts + 1] = "{" .. table.concat(fields, ",") .. "}"
+    elseif method == "rename" and type(result) == "table" and result.renamed ~= nil then
+        -- rename: {renamed:true, edits:[{line,col,length,newText}]} or
+        -- {renamed:false} when the rename was rejected (bad newName).
+        if result.renamed and type(result.edits) == "table" then
+            local editParts = {}
+            for _, e in ipairs(result.edits) do
+                local fields = {}
+                for k, v in pairs(e) do
+                    if type(v) == "string" then
+                        fields[#fields + 1] = json_str(k) .. ":" .. json_str(v)
+                    elseif type(v) == "number" then
+                        fields[#fields + 1] = json_str(k) .. ":" .. tostring(v)
+                    end
+                end
+                editParts[#editParts + 1] = "{" .. table.concat(fields, ",") .. "}"
+            end
+            parts[#parts + 1] = '{"renamed":true,"edits":['
+                .. table.concat(editParts, ",") .. "]}"
+        else
+            parts[#parts + 1] = '{"renamed":false,"edits":[]}'
+        end
     else
         for _, item in ipairs(result) do
             local fields = {}
