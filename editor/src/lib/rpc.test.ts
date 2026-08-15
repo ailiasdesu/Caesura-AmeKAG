@@ -1,5 +1,18 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EngineClient, RpcError } from './rpc'
+import type { OutlineSection } from '../ide/sceneOutlineTypes'
+import {
+  buildPositionProbeSnippet,
+  parsePositionProbe,
+  sceneMatchesDoc,
+  tokenToOutlineLine,
+} from './enginePosition'
+import { buildLabelJumpSnippet, parseJumpResult, escapeLuaString } from './engineJump'
+import {
+  buildLayerSnapshotSnippet,
+  parseLayerSnapshot,
+  layerSlot,
+} from './layerSnapshot'
 
 /** Build a mock fetch returning a canned Response-like object. */
 type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -97,5 +110,403 @@ describe('EngineClient', () => {
     client.setBase('/engine')
     await client.ping()
     expect(fetchMock.mock.calls[0][0]).toBe('/engine/ping')
+  })
+
+  // ---------------------------------------------------------------------
+  // Task 1 — request construction across every route
+  // ---------------------------------------------------------------------
+
+  it('evalRaw posts raw Lua code as text/plain to /eval and returns the raw result', async () => {
+    const fetchMock = mockFetch(200, { result: 'some-raw-result' })
+    const client = new EngineClient('/api', fetchMock)
+    const result = await client.evalRaw('return 1 + 2')
+    expect(result).toBe('some-raw-result')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/eval')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe('return 1 + 2') // raw Lua, NOT JSON-wrapped
+    const headers = init.headers as Record<string, string>
+    expect(headers['Content-Type']).toBe('text/plain')
+    expect(headers.Accept).toBe('application/json')
+    expect(headers.Authorization).toBeUndefined()
+  })
+
+  it('evalRaw includes the bearer token when set', async () => {
+    const fetchMock = mockFetch(200, { result: 'x' })
+    const client = new EngineClient('/api', fetchMock)
+    client.setToken('tk')
+    await client.evalRaw('return 1')
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tk')
+  })
+
+  it('evalRaw throws RpcError on non-2xx', async () => {
+    // text() returns a non-JSON string here because we force the body to a string
+    const fetchMock = vi.fn<FetchFn>(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error('not json')
+      },
+      text: async () => 'engine exploded',
+    }) as unknown as Response)
+    const client = new EngineClient('/api', fetchMock)
+    await expect(client.evalRaw('boom')).rejects.toMatchObject({
+      name: 'RpcError',
+      status: 500,
+    })
+  })
+
+  it('evalRaw throws RpcError carrying the engine error payload when body.error is set', async () => {
+    const fetchMock = mockFetch(200, { error: 'syntax error near X' })
+    const client = new EngineClient('/api', fetchMock)
+    await expect(client.evalRaw('not lua')).rejects.toMatchObject({
+      name: 'RpcError',
+      message: 'syntax error near X',
+      body: { error: 'syntax error near X' },
+    })
+  })
+
+  it('evalRaw returns empty string when result is absent', async () => {
+    const fetchMock = mockFetch(200, {})
+    const client = new EngineClient('/api', fetchMock)
+    expect(await client.evalRaw('return nil')).toBe('')
+  })
+
+  it('run() POSTs a JSON {script} to /run', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.run('print("hi")')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/run')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ script: 'print("hi")' })
+  })
+
+  it('smaValidate URL-encodes the path query param', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok', ok: true, errors: [], meta: '{}' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.smaValidate('demo/my model/model.psd')
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/sma/validate?path=' + encodeURIComponent('demo/my model/model.psd'),
+    )
+  })
+
+  it('build() POSTs JSON {outputPath, keyPath}', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.build('out', 'key')
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      outputPath: 'out',
+      keyPath: 'key',
+    })
+  })
+
+  it('build() with no args posts null outputPath/keyPath', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.build()
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({
+      outputPath: undefined,
+      keyPath: undefined,
+    })
+  })
+
+  it('stop() / reload() POST with no body', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.stop()
+    await client.reload()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/stop')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/reload')
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
+    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBeUndefined()
+  })
+
+  it('setBreakpoint / removeBreakpoint / clearBreakpoints hit debug routes', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.setBreakpoint('main.ks', 12)
+    await client.removeBreakpoint('main.ks', 12)
+    await client.clearBreakpoints()
+    const [u1, i1] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [u2, i2] = fetchMock.mock.calls[1] as [string, RequestInit]
+    const [u3] = fetchMock.mock.calls[2] as [string, RequestInit]
+    expect(u1).toBe('/api/debug/setBreakpoint')
+    expect(JSON.parse(i1.body as string)).toEqual({ source: 'main.ks', line: 12 })
+    expect(i1.method).toBe('POST')
+    expect(u2).toBe('/api/debug/removeBreakpoint')
+    expect(JSON.parse(i2.body as string)).toEqual({ source: 'main.ks', line: 12 })
+    expect(u3).toBe('/api/debug/clearBreakpoints')
+  })
+
+  it('debugContinue POSTs to /debug/continue', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.debugContinue()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/debug/continue')
+    expect(init.method).toBe('POST')
+  })
+
+  it('inspect() encodes name, frame and global flag', async () => {
+    const fetchMock = mockFetch(200, { value: 1 })
+    const client = new EngineClient('/api', fetchMock)
+    await client.inspect('a b', 3, true)
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/debug/inspect?name=' + encodeURIComponent('a b') + '&frame=3&global=1',
+    )
+  })
+
+  it('inspect() omits =1 global postfix when global is false', async () => {
+    const fetchMock = mockFetch(200, { value: 1 })
+    const client = new EngineClient('/api', fetchMock)
+    await client.inspect('x', 0, false)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/debug/inspect?name=x&frame=0')
+  })
+
+  it('frame() defaults to 640x360 and encodes query', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.frame()
+    await client.frame(1280, 720)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/debug/getFrame?w=640&h=360')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/debug/getFrame?w=1280&h=720')
+  })
+
+  it('assets() hits /assets and appends ?type= filter', async () => {
+    const fetchMock = mockFetch(200, [])
+    const client = new EngineClient('/api', fetchMock)
+    await client.assets()
+    await client.assets('audio')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/assets')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/assets?type=audio')
+  })
+
+  it('logs() / live2dModels() / debugState() hit their GET routes', async () => {
+    const fetchMock = mockFetch(200, [])
+    const client = new EngineClient('/api', fetchMock)
+    await client.logs()
+    await client.live2dModels()
+    await client.debugState()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/logs')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/live2d/models')
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/debug/getState')
+  })
+
+  it('live2dLoad POSTs JSON {path}', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok', modelId: 7 })
+    const client = new EngineClient('/api', fetchMock)
+    const reply = await client.live2dLoad('models/a.model3.json')
+    expect(reply.modelId).toBe(7)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/live2d/load')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      path: 'models/a.model3.json',
+    })
+  })
+
+  // ---------------------------------------------------------------------
+  // Task 2 — response parsing & error handling
+  // ---------------------------------------------------------------------
+
+  it('state() returns the full engine runtime state payload', async () => {
+    const payload = {
+      status: 'running',
+      scene: 'assets/script/main.ks',
+      token_index: 42,
+      nvl_mode: false,
+      language: 'zh',
+      backlog_count: 3,
+      layer_count: 5,
+      current_cmd: 'text',
+    }
+    const client = new EngineClient('/api', mockFetch(200, payload))
+    expect(await client.state()).toEqual(payload)
+  })
+
+  it('stats() returns the full stats payload', async () => {
+    const payload = {
+      status: 'ok',
+      texture_budget_mb: 512,
+      texture_tier: 3,
+      texture_tier_name: 'high',
+      mesh_count: 10,
+      job_workers: 4,
+      job_pending: 2,
+      lua_kb: 1024,
+    }
+    const client = new EngineClient('/api', mockFetch(200, payload))
+    expect(await client.stats()).toEqual(payload)
+  })
+
+  it('pick() passes the raw JSON-array-text hits through unmodified', async () => {
+    const rawHits = '[{"id":"1","name":"bg","z":0,"depth":1,"opacity":1,"x":0,"y":0,"w":100,"h":100}]'
+    const client = new EngineClient('/api', mockFetch(200, { status: 'ok', hits: rawHits }))
+    const reply = await client.pick(1, 2)
+    expect(reply.status).toBe('ok')
+    // The client does not parse the JSON array text — that is left to consumers.
+    expect(reply.hits).toBe(rawHits)
+  })
+
+  it('frame() passes the base64 png through', async () => {
+    const client = new EngineClient('/api', mockFetch(200, {
+      status: 'ok', width: 640, height: 360, png: 'aGVsbG8=',
+    }))
+    const reply = await client.frame()
+    expect(reply.png).toBe('aGVsbG8=')
+    expect(reply.width).toBe(640)
+  })
+
+  it('debugState() passes paused/token_index/current_cmd through', async () => {
+    const client = new EngineClient('/api', mockFetch(200, {
+      status: 'paused', scene: 'main.ks', paused: true, token_index: 9, current_cmd: '[ch]',
+    }))
+    const reply = await client.debugState()
+    expect(reply.paused).toBe(true)
+    expect(reply.token_index).toBe(9)
+    expect(reply.current_cmd).toBe('[ch]')
+  })
+
+  it('parses an HTTP error whose body is non-JSON by falling back to text', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => {
+        throw new SyntaxError('bad json')
+      },
+      text: async () => 'plain text 503',
+    }) as unknown as Response)
+    const client = new EngineClient('/api', fetchMock)
+    const err = await client.ping().catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect(err.status).toBe(503)
+    // body is the fallback text when JSON parsing failed
+    expect(err.body).toBe('plain text 503')
+    expect((err as Error).message).toContain('/ping')
+  })
+
+  it('RpcError message mentions the HTTP status even when body is absent', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => null,
+      text: async () => '',
+    }) as Response)
+    const client = new EngineClient('/api', fetchMock)
+    const err = await client.smaSave('x', 'y').catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect((err as Error).message).toContain('400')
+    expect((err as Error).message).toContain('/sma/save')
+  })
+
+  it('propagates network errors (fetch rejection) as-is', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const client = new EngineClient('/api', fetchMock)
+    await expect(client.ping()).rejects.toThrow('Failed to fetch')
+  })
+
+  it('treats a 204-style empty JSON body gracefully (parses as-is)', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => ({
+      ok: true,
+      status: 204,
+      json: async () => ({}),
+      text: async () => '',
+    }) as Response)
+    const client = new EngineClient('/api', fetchMock)
+    expect(await client.ping()).toEqual({})
+  })
+
+  // ---------------------------------------------------------------------
+  // Task 5 — evalRaw → pure-function parsing chains
+  // ---------------------------------------------------------------------
+
+  it('integration: evalRaw -> parsePositionProbe resolves a running scene', async () => {
+    const fetchMock = mockFetch(200, { result: '{"scene":"assets/script/main.ks","token":7}' })
+    const client = new EngineClient('/api', fetchMock)
+    const raw = await client.evalRaw(buildPositionProbeSnippet())
+    const pos = parsePositionProbe(raw)
+    expect(pos).toEqual({ scene: 'assets/script/main.ks', token: 7 })
+  })
+
+  it('integration: evalRaw -> parseJumpResult classifies ok/missing/no-ctx', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => ({ ok: true, status: 200, json: async () => ({ result: 'ok' }), text: async () => '' }) as Response)
+    const client = new EngineClient('/api', fetchMock)
+    const ok = parseJumpResult(await client.evalRaw(buildLabelJumpSnippet('*start')))
+    expect(ok).toBe('ok')
+
+    const fetchMissing = vi.fn<FetchFn>(async () => ({ ok: true, status: 200, json: async () => ({ result: 'missing' }), text: async () => '' }) as Response)
+    expect(parseJumpResult(await new EngineClient('/api', fetchMissing).evalRaw(buildLabelJumpSnippet('*nope')))).toBe('missing')
+  })
+
+  it('integration: evalRaw -> parseLayerSnapshot resolves a structured tree', async () => {
+    const layerJson = JSON.stringify([
+      { id: '1', name: 'msg', z: 10, visible: true, handle: 5, opacity: 1 },
+      { id: '2', name: 'bg', z: 1, visible: true, handle: 3, opacity: 0.5 },
+    ])
+    const fetchMock = mockFetch(200, { result: layerJson })
+    const client = new EngineClient('/api', fetchMock)
+    const snaps = parseLayerSnapshot(await client.evalRaw(buildLayerSnapshotSnippet()))
+    // parseLayerSnapshot sorts bg slots before msg
+    expect(snaps.map((s) => s.name)).toEqual(['bg', 'msg'])
+    expect(snaps[0].slot).toBe('bg')
+    expect(snaps[1].slot).toBe('msg')
+  })
+
+  it('integration: evalRaw no-ctx pushes null through parsePositionProbe', async () => {
+    const fetchMock = mockFetch(200, { result: 'no-ctx' })
+    const client = new EngineClient('/api', fetchMock)
+    expect(parsePositionProbe(await client.evalRaw(buildPositionProbeSnippet()))).toBeNull()
+  })
+
+  it('helpers compose: sceneMatchesDoc and tokenToOutlineLine are consistent with probes', () => {
+    // The snippet + parser round-trip must agree with the outline mapping helper.
+    expect(sceneMatchesDoc('assets/script/main.ks', 'assets/script/main.ks')).toBe(true)
+    expect(sceneMatchesDoc('assets/script/main.ks', 'main.ks')).toBe(true)
+    expect(sceneMatchesDoc('a.ks', 'b.ks')).toBe(false)
+
+    const sections: OutlineSection[] = [
+      {
+        label: 'start',
+        line: 3,
+        items: [{ kind: 'label', line: 3, name: 'start' }],
+      },
+      {
+        label: null,
+        line: 1,
+        items: [{ kind: 'text', line: 1, content: 'prologue' }],
+      },
+    ]
+    // rows are flattened heading-then-items in document order: [3,3,1,1].
+    expect(tokenToOutlineLine(sections, 1)).toBe(3)
+    expect(tokenToOutlineLine(sections, 2)).toBe(3)
+    expect(tokenToOutlineLine(sections, 3)).toBe(1)
+    expect(tokenToOutlineLine(sections, 5)).toBeNull()
+  })
+})
+
+describe('EngineClient evalRaw contract (pure fragments)', () => {
+  it('buildLabelJumpSnippet escapes label quotes/backslashes and parseJumpResult round-trips', () => {
+    const safe = escapeLuaString('a"b\\c')
+    expect(safe).toBe('a\\\"b\\\\c')
+    expect(parseJumpResult('ok')).toBe('ok')
+    expect(parseJumpResult('missing')).toBe('missing')
+    expect(parseJumpResult('no-ctx')).toBe('no-ctx')
+    expect(parseJumpResult('weird')).toBe('weird')
+  })
+
+  it('layerSlot groups bg/fg/msg names', () => {
+    expect(layerSlot('bg')).toBe('bg')
+    expect(layerSlot('fgLayer')).toBe('fg')
+    expect(layerSlot('msgLayer')).toBe('msg')
+    expect(layerSlot('_gallery')).toBe('other')
+    expect(layerSlot('foreground')).toBe('other')
+    expect(layerSlot('')).toBe('other')
   })
 })
