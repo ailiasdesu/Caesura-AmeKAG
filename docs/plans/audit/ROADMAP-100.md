@@ -125,3 +125,5 @@
 | 65 | Web 播放器表达式 parity：flow 测试新增 expr-edge 用例（44/44）——三元索引 then/else（${f.arr[f.flag ? 1 : 2]}）、?? 空合并回退、长括号插值（[[x}}]]）、[eval] && 运算符、[switch exp=] 数值匹配、[for] 表达式边界——round 53-63 桌面修复在 wasmoon 下行为完全一致 | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 65 提交) |
 
 | 66 | 性能基线（热路径规模化确定性测试）：test_schema 500-span 插值（首尾跨度正确 + 计数 500 + <5s）；test_expr_lang 2000x 缓存求值（<5s）+ 200 项数值链（=20130）+ 运算符链；test_tokenizer 2000 命令场景（=2002 token，<10s）——为插值扫描器/表达式缓存/tokenizer 文本流设回归护栏 | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 66 提交) |
+
+| 67 | 文档一致性核对 + CI 保鲜守卫：api-stats.md 普查过期（契约 84→102、C++ 用例 638→711/断言 6160→6656、绑定函数 157→149、UnifiedBinding 移除）——重生成提交；command-contracts.md 验证新鲜（102 命令）；ci.yml Windows job 新增「Generated docs freshness」步骤（重生成 + git diff --exit-code 失败即红） | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 67 提交) |
