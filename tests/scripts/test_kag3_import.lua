@@ -210,6 +210,97 @@ os.remove(tmp)
 os.remove(tmp2)
 os.remove(tmp3)
 
+-- ---------------------------------------------------------------------------
+-- 8. round-73 deep-import coverage: [macro]..[endmacro] arg refs, [emb],
+--    star-form [jump], [goto] -> [jump], [wait]/[delay], combined [if]
+--    TJS operators, and [iscript] verbatim passthrough.
+-- ---------------------------------------------------------------------------
+check("goto renamed to jump", (function()
+    local nc, _ = M.convertCommand("goto", {})
+    return nc == "jump"
+end)())
+check("wait is known", (function()
+    local nc, notes = M.convertCommand("wait", {})
+    for _, n in ipairs(notes) do
+        if n:find("UNSUPPORTED", 1, true) then return false end
+    end
+    return nc == "wait"
+end)())
+check("delay is known (KAG3 wait alias)", (function()
+    local nc, notes = M.convertCommand("delay", {})
+    for _, n in ipairs(notes) do
+        if n:find("UNSUPPORTED", 1, true) then return false end
+    end
+    return nc == "delay"
+end)())
+check("macro/endmacro known (not unsupported)", (function()
+    local okM, okE = false, false
+    local _, nM = M.convertCommand("macro", {})
+    local _, nE = M.convertCommand("endmacro", {})
+    okM = true
+    for _, n in ipairs(nM) do if n:find("UNSUPPORTED", 1, true) then okM = false end end
+    okE = true
+    for _, n in ipairs(nE) do if n:find("UNSUPPORTED", 1, true) then okE = false end end
+    return okM and okE
+end)())
+-- convertMacroArgs unit cases (needs require of M).
+check("macro arg &1 -> %1%", M.convertMacroArgs("&1") == "%1%")
+check("macro arg &2 -> %2%", M.convertMacroArgs("&2") == "%2%")
+check("macro named arg &who -> %who%", M.convertMacroArgs("&who") == "%who%")
+check("macro arg ns var shielded (&f.x)", M.convertMacroArgs("&f.x raw") == "&f.x raw")
+check("macro arg non-AMP ns shielded (&kag.status)",
+      M.convertMacroArgs("&kag.status") == "&kag.status")
+check("macro arg && protected", M.convertMacroArgs("a && &1") == "a && %1%")
+
+-- A single scene exercising every deep-import construct at once.
+local r73 = [[
+*start
+[macro greeting args="who"]
+Hello &who, HP &f.hp, p1 &1
+[endmacro]
+[iscript]
+var legacy_tjs = 1;  // kept verbatim
+[/endscript]
+[emb exp="f.hp + 1"]
+[if exp="f.a && f.b || !f.c"]
+[ch text="cond"]
+[endif]
+[wait time="100"]
+[delay time="200"]
+[jump *finale]
+*mid
+[jump target=*finale]
+*finale
+[ch text="done"]
+[stop]
+]]
+local tmp73 = os.tmpname() .. ".ks"
+local f73 = io.open(tmp73, "w")
+f73:write(r73)
+f73:close()
+local rep73 = M.processScene(tmp73)
+check("round-73 scene parses", rep73 ~= nil)
+if rep73 then
+    local out = rep73.output
+    check("macro body &who -> %who%", out:find("Hello %who%,", 1, true) ~= nil)
+    check("macro body &f.hp -> %f.hp%", out:find("HP %f.hp%,", 1, true) ~= nil)
+    check("macro body &1 -> %1%", out:find(", p1 %1%", 1, true) ~= nil)
+    check("macro head args= preserved", out:find('[macro greeting args="who"]', 1, true) ~= nil)
+    check("macro tail endmacro preserved", out:find("[endmacro]", 1, true) ~= nil)
+    check("iscript kept verbatim", out:find("var legacy_tjs = 1;", 1, true) ~= nil
+          and out:find("[/endscript]", 1, true) ~= nil)
+    check("emb exp translated", out:find('[emb exp="f.hp + 1"]', 1, true) ~= nil)
+    check("if TJS &&/||/! -> and/or/not",
+          out:find("f.a and f.b or not f.c", 1, true) ~= nil)
+    check("wait kept", out:find('[wait time="100"]', 1, true) ~= nil)
+    check("delay kept (no unsupported)", out:find('[delay time="200"]', 1, true) ~= nil)
+    check("bare star jump preserved", out:find("[jump *finale]", 1, true) ~= nil)
+    check("named star jump preserved", out:find("[jump target=*finale]", 1, true) ~= nil)
+    check("goto not in output", out:find("[goto", 1, true) == nil
+          and out:find("goto", 1, true) == nil)
+end
+os.remove(tmp73)
+
 -- Exit gate (runner convention).
 if failed > 0 then
     print(string.format("KAG3 IMPORT TESTS: %d passed, %d FAILED", passed, failed))

@@ -72,6 +72,7 @@ end
 -- ---------------------------------------------------------------------------
 local RENAMES = {
     waitse   = "waitsound",   -- KAG3: wait for SE to finish; engine: waitsound
+    ["goto"] = "jump",        -- KAG3: [goto *label] is a strict alias of [jump]
 }
 
 -- ---------------------------------------------------------------------------
@@ -164,6 +165,29 @@ function M.convertAmpVars(s)
     return s
 end
 
+--- M.convertMacroArgs(s) -> string. KAG3 macro-body argument references:
+--  positional &N and bare &name become the Neo-Genesis %N%/ %name%
+--  placeholders the scheduler's macro expansion fills from the invocation's
+--  params (bare positional -> params[1], args="..."-declared -> %arg%).
+--  Namespace-qualified system vars (&f.x, &kag.status) are shielded so they
+--  are never mistaken for a macro arg (convertAmpVars already handled the
+--  f/tf/sf/mp/lf cases). Logical && is protected.
+function M.convertMacroArgs(s)
+    if type(s) ~= "string" or not s:find("&", 1, true) then return s end
+    s = s:gsub("&&", "\1")       -- protect logical and
+    local shielded = {}
+    s = s:gsub("&%a+%.%w+", function(m)  -- shield &ns.key namespaced refs
+        shielded[#shielded + 1] = m
+        return "\2"
+    end)
+    s = s:gsub("&([%w_]+)", function(name)
+        return "%" .. name .. "%"
+    end)
+    s = s:gsub("\2", function() return table.remove(shielded, 1) end)
+    s = s:gsub("\1", "&&")
+    return s
+end
+
 --- M.translateExpr(src) -> string. Static TJS->Lua translation for
 --  expression params (reuses the runtime translator as a pure function).
 function M.translateExpr(src)
@@ -246,6 +270,7 @@ function M.processScene(path, opts)
 
     local pieces = {}      -- rebuilt output chunks
     local pos = 1          -- scan position in stripped raw text
+    local inMacro = false  -- inside [macro]..[endmacro]: &N/&name -> %N%/%name%
 
     for _, tok in ipairs(tokens) do
         local st, en = tok.offset, tok.end_offset
@@ -258,6 +283,13 @@ function M.processScene(path, opts)
         if tok.type == "text" then
             report.texts = report.texts + 1
             local conv = M.convertAmpVars(raw_tok)
+            if inMacro then  -- KAG3 macro-arg references (&N, &name)
+                local mconv = M.convertMacroArgs(conv)
+                if mconv ~= conv then
+                    report.converted_embeds = report.converted_embeds + 1
+                    conv = mconv
+                end
+            end
             if conv ~= raw_tok then report.converted_embeds = report.converted_embeds + 1 end
             pieces[#pieces + 1] = conv
         elseif tok.type == "label" then
@@ -323,6 +355,10 @@ function M.processScene(path, opts)
                     }
                 end
             end
+            -- Toggle macro-body tracking so text tokens between [macro] and
+            -- [endmacro] get the KAG3 positional/arg reference conversion.
+            if new_cmd == "macro" then inMacro = true
+            elseif new_cmd == "endmacro" then inMacro = false end
             pieces[#pieces + 1] = out
         else
             pieces[#pieces + 1] = raw_tok
