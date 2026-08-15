@@ -184,7 +184,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-12-009-delivery-handoff.md` | **最新状态**交接文档（009，NVL 模式） |
+| `plans/2026-08-14-019-delivery-handoff.md` | **最新状态**交接文档（019，round 89 状态；轮次记录权威在 plans/audit/ROADMAP-100.md） |
 | `plans/2026-08-12-008-delivery-handoff.md` | 交接文档（008，内联标记视觉化） |
 | `plans/2026-08-12-007-delivery-handoff.md` | 交接文档（007，SMA 游戏循环接驳） |
 | `plans/2026-08-12-006-delivery-handoff.md` | 交接文档（006，停滞修复 + 表达力扩展） |

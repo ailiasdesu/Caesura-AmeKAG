@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 30 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
+Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 31 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
 
 ## Plugin Requirements
 
