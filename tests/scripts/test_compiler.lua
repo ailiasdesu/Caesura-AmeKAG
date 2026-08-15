@@ -390,6 +390,24 @@ local ctx11j = { f = { flag = false }, sf = {}, tf = {}, mp = {}, lf = {},
 local co11j = coroutine.create(function() scheduler.run(ctx11j, toks11j, 1) end)
 while coroutine.status(co11j) ~= "dead" do coroutine.resume(co11j) end
 check("11j: eval ternary assignment else-branch", ctx11j.f.pick2 == 2)
+
+-- 11k-11l. eval ternary conds with >= / != (round 70 review C1)
+local toks11k = tokenizer.parse('[eval exp="f.pick = f.lv >= 5 ? 1 : 0"]')
+compiler.compile(toks11k)
+local ctx11k = { f = { lv = 5 }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11k }
+local co11k = coroutine.create(function() scheduler.run(ctx11k, toks11k, 1) end)
+while coroutine.status(co11k) ~= "dead" do coroutine.resume(co11k) end
+check("11k: eval >= ternary cond translates", ctx11k.f.pick == 1)
+local toks11l = tokenizer.parse('[eval exp="f.pick2 = f.hp != 0 ? 7 : 9"]')
+compiler.compile(toks11l)
+local ctx11l = { f = { hp = 3 }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11l }
+local co11l = coroutine.create(function() scheduler.run(ctx11l, toks11l, 1) end)
+while coroutine.status(co11l) ~= "dead" do coroutine.resume(co11l) end
+check("11l: eval != ternary cond translates", ctx11l.f.pick2 == 7)
 -- ---------------------------------------------------------------------------
 -- 12a-12e. Dotted-key assignment + interpolation (round 50).
 --  [set f.name = "Aoi"] must store the UNQUOTED string via the tokenizer's

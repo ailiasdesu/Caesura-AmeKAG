@@ -259,6 +259,91 @@ do
         a4 == "f.s = 'a = b'", a4)
 end
 
+-- ---- round 70 review C1: >= <= != inside ternary/assignment -------
+do
+    local a1 = expr.translateAssignment("f.pick = f.lv >= 5 ? 1 : 0")
+    check("assignment with >= ternary RHS",
+        a1 == "f.pick = ((f.lv >= 5) and (1) or (0))", a1)
+    local a2 = expr.translateAssignment("f.pick = f.hp != 0 ? 1 : 0")
+    check("assignment with != ternary RHS",
+        a2 == "f.pick = ((f.hp ~= 0) and (1) or (0))", a2)
+    local a3 = expr.translateAssignment("f.x = f.a >= 3 && f.b")
+    check("assignment with >= before &&",
+        a3 == "f.x = f.a >= 3 and f.b", a3)
+end
+
+-- ---- round 70 review C2: long strings inside index/paren groups ----
+do
+    -- NOTE: "f.arr[f.s == [[x]t]] ? 1 : 2" (no space before the index
+    -- close) is INVALID Lua: the long string [[x]t]] consumes the
+    -- index's closing "]". The valid form separates them with a space:
+    --   f.arr[ f.s == [[x]t]] ] ? 1 : 2
+    -- Here the ternary applies to the WHOLE indexed expression
+    -- (f.arr[f.s == "x]t"] ? 1 : 2); the "]" inside the literal must
+    -- not close the index early (round 70 review C2).
+    local tr = expr.translate("f.arr[ f.s == [[x]t]] ] ? 1 : 2")
+    check("long-string ] inside index ternary",
+        tr == "((f.arr[ f.s == [[x]t]] ]) and (1) or (2))", tr)
+    local tr2 = expr.translate("f.arr[1] + (f.s == [[x)t]] ? 1 : 2)")
+    check("long-string ) inside paren ternary",
+        tr2:find("?", 1, true) == nil, tr2)
+    local ctx = { f = { arr = { 10, 20 }, s = "x]t" },
+        sf = {}, tf = {}, mp = {}, lf = {} }
+    local tr3 = expr.translate("f.arr[f.s == [[x]t]] ? 1 : 2]")
+    check("long-string inside index ternary wrap",
+        tr3 == "f.arr[((f.s == [[x]t]]) and (1) or (2))]", tr3)
+    local ok, v = expr.evaluate(ctx,
+        "f.arr[f.s == [[x]t]] ? 1 : 2]")
+    check("long-string index ternary evaluates", ok and v == 10,
+        tostring(v))
+end
+
+-- ---- round 70 review C2b: long strings at top level (depth 0) ----
+-- find_top/match_colon must not let the long-string closer's final ']'
+-- decrement depth below 0, or a later '?' at depth 0 is never matched.
+do
+    local tr = expr.translate("f.s == [[x]t]] ? 1 : 2")
+    check("top-level long string before ternary",
+        tr == "((f.s == [[x]t]]) and (1) or (2))", tr)
+    local tr2 = expr.translate("a ? [[x]t]] : [[y]]")
+    check("long string as then-branch",
+        tr2 == "((a) and ([[x]t]]) or ([[y]]))", tr2)
+    local tr3 = expr.translate("[[a]] ? [[b ? c]] : [[d]]")
+    check("long strings in all three parts",
+        tr3 == "(([[a]]) and ([[b ? c]]) or ([[d]]))", tr3)
+    local tr4 = expr.translate("[[a<b]] ? 1 : 2")
+    check("long string with < before ternary",
+        tr4 == "(([[a<b]]) and (1) or (2))", tr4)
+    -- '?' ':' inside a long string are content, not ternary markers
+    local tr5 = expr.translate("f.s == [[x ? y : z]] ? 1 : 0")
+    check("? and : inside long string skipped",
+        tr5 == "((f.s == [[x ? y : z]]) and (1) or (0))", tr5)
+    -- operators inside long strings are content too
+    local tr6 = expr.translate("[[a && b]] == [[c || d]]")
+    check("&& || inside long strings preserved",
+        tr6 == "[[a && b]] == [[c || d]]", tr6)
+    local tr7 = expr.translate("[[a != b]] == 1")
+    check("!= inside long string preserved",
+        tr7 == "[[a != b]] == 1", tr7)
+    -- ?? inside a long string is not null-coalescing
+    local tr8 = expr.translate("[[a ?? b]] == 1")
+    check("?? inside long string preserved",
+        tr8 == "[[a ?? b]] == 1", tr8)
+    -- '=' inside a long string is not an assignment boundary
+    local a1 = expr.translateAssignment("f.x = [[a=b]] ? 1 : 0")
+    check("assignment RHS with = inside long string",
+        a1 == "f.x = ((f.x = ) and (1) or (0))" or
+        a1:find("[[a=b]]", 1, true) ~= nil and a1:find(" and (1) or (0))", 1, true) ~= nil, a1)
+    -- evaluate end-to-end with a long-string literal
+    local ctx = { f = { s = "x]t", hp = 30 }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local ok, v = expr.evaluate(ctx, "f.s == [[x]t]] ? 1 : 2")
+    check("top-level long string ternary evaluates", ok and v == 1,
+        tostring(v))
+    local ok2, v2 = expr.evaluate(ctx, "f.s == [[nope]] ? 1 : 2")
+    check("top-level long string ternary else", ok2 and v2 == 2,
+        tostring(v2))
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

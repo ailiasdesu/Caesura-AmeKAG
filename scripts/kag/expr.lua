@@ -40,6 +40,19 @@ local DUMP_CACHE_MAX = 128
 -- Character-level scanner helpers (string-literal aware)
 -- ---------------------------------------------------------------------------
 
+-- Skip a Lua long bracket [=*[ ... ]=*] starting at j (src:sub(j,j) == '[').
+-- Returns the index AFTER the closer, or nil when not a long string or
+-- unterminated. Round 70 review C2: bracket/paren scanners must not let
+-- a ']' inside a long string close the group early.
+local function skip_long_string(src, j)
+    local eqs = src:match("^=*", j + 1) or ""
+    if src:sub(j + 1 + #eqs, j + 1 + #eqs) ~= "[" then return nil end
+    local closer = "]" .. eqs .. "]"
+    local k = src:find(closer, j + 2 + #eqs, true)
+    if not k then return nil end
+    return k + #closer
+end
+
 -- Find the first occurrence of ch at paren-depth 0, outside string literals.
 -- Returns byte index or nil.
 local function find_top(src, ch, from)
@@ -62,7 +75,15 @@ local function find_top(src, ch, from)
             if c == '"' or c == "'" then
                 quote = c
                 i = i + 1
-            elseif c == "(" or c == "[" then
+            elseif c == "[" then
+                local ls = skip_long_string(src, i)
+                if ls then
+                    i = ls  -- next iteration starts right after the literal
+                else
+                    depth = depth + 1
+                    i = i + 1
+                end
+            elseif c == "(" then
                 depth = depth + 1
                 i = i + 1
             elseif c == ")" or c == "]" then
@@ -101,7 +122,15 @@ local function match_colon(src, q_pos)
             if c == '"' or c == "'" then
                 quote = c
                 i = i + 1
-            elseif c == "(" or c == "[" then
+            elseif c == "[" then
+                local ls = skip_long_string(src, i)
+                if ls then
+                    i = ls  -- next iteration starts right after the literal
+                else
+                    depth = depth + 1
+                    i = i + 1
+                end
+            elseif c == "(" then
                 depth = depth + 1
                 i = i + 1
             elseif c == ")" or c == "]" then
@@ -169,6 +198,15 @@ local function translate_operators(src)
                 quote = c
                 out[#out + 1] = c
                 i = i + 1
+            elseif c == "[" then
+                local ls = skip_long_string(src, i)
+                if ls then
+                    out[#out + 1] = src:sub(i, ls - 1)  -- verbatim literal
+                    i = ls
+                else
+                    out[#out + 1] = c
+                    i = i + 1
+                end
             elseif c == "&" and src:sub(i + 1, i + 1) == "&" then
                 i = i + 2
                 emit_op(" and ")
@@ -234,7 +272,13 @@ local function translate_brackets(src)
                 out[#out + 1] = c
                 i = i + 1
             elseif c == "[" then
-                -- find the matching ] (bracket depth, quote-aware)
+                local ls = skip_long_string(src, i)
+                if ls then
+                    out[#out + 1] = src:sub(i, ls - 1)  -- verbatim literal
+                    i = ls
+                else
+                -- find the matching ] (bracket depth, quote-aware; a
+                -- long string inside does not count)
                 local j, depth, q2 = i + 1, 1, nil
                 while j <= n do
                     local d = src:sub(j, j)
@@ -244,7 +288,12 @@ local function translate_brackets(src)
                     elseif d == '"' or d == "'" then
                         q2 = d
                     elseif d == "[" then
-                        depth = depth + 1
+                        local ls2 = skip_long_string(src, j)
+                        if ls2 then
+                            j = ls2 - 1  -- loop advance lands after it
+                        else
+                            depth = depth + 1
+                        end
                     elseif d == "]" then
                         depth = depth - 1
                         if depth == 0 then break end
@@ -258,6 +307,7 @@ local function translate_brackets(src)
                     out[#out + 1] = c
                     i = i + 1
                 end
+                end  -- if ls (long-string literal emitted verbatim)
             else
                 out[#out + 1] = c
                 i = i + 1
@@ -304,6 +354,11 @@ local function translate_parens(src)
                     elseif d == ")" then
                         depth = depth - 1
                         if depth == 0 then break end
+                    elseif d == "[" then
+                        local ls2 = skip_long_string(src, j)
+                        if ls2 then
+                            j = ls2 - 1  -- a ')' inside a long string
+                        end               -- must not close the group
                     end
                     j = j + 1
                 end
@@ -384,6 +439,11 @@ function expr.translateAssignment(source)
             end
         elseif c == '"' or c == "'" then
             quote = c
+        elseif c == "[" then
+            local ls = skip_long_string(source, i)
+            if ls then
+                i = ls - 1  -- skip [[...]] literals: '=' inside is content
+            end
         elseif c == "(" then
             depth = depth + 1
         elseif c == ")" then
@@ -392,9 +452,16 @@ function expr.translateAssignment(source)
             if source:sub(i + 1, i + 1) == "=" then
                 i = i + 1  -- skip == comparisons entirely
             elseif depth == 0 then
-                -- first top-level single '=': translate the RHS fully
-                return source:sub(1, i - 1):gsub("%s+$", "")
-                    .. " = " .. translate(source:sub(i + 1):gsub("^%s+", ""))
+                local prev = source:sub(i - 1, i - 1)
+                if prev == ">" or prev == "<" or prev == "!"
+                        or prev == "~" then
+                    -- part of >= <= != ~= — not an assignment (round 70
+                    -- review C1: f.x = f.lv >= 5 ? 1 : 0 broke here)
+                else
+                    -- first top-level single '=': translate the RHS fully
+                    return source:sub(1, i - 1):gsub("%s+$", "")
+                        .. " = " .. translate(source:sub(i + 1):gsub("^%s+", ""))
+                end
             end
         end
         i = i + 1
