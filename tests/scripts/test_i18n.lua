@@ -583,29 +583,52 @@ local LUA = nil
 -- binary the --missing gate cannot run -- POSIX popen("") yields an
 -- EMPTY report that fails the assertions, so never fall through to "".
 local cands = {}
-if type(_G.arg) == "table" and type(_G.arg[-1]) == "string" then
-    cands[#cands + 1] = _G.arg[-1]
+-- (1) the interpreter this suite is RUNNING under. SAVE_ARG was captured
+-- BEFORE the CLI e2e sections clobbered _G.arg, so it still carries the
+-- runner's own argv: on CI that is exactly the Lua the job invoked
+-- (brew "lua" on macOS, "lua5.4" on Linux, the built lua_cli path on
+-- Windows). A bare name resolves via PATH in the popen shell.
+if type(SAVE_ARG) == "table" and type(SAVE_ARG[-1]) == "string"
+    and #SAVE_ARG[-1] > 0 then
+    cands[#cands + 1] = SAVE_ARG[-1]
 end
+-- (2) vendored source-tree lua (Windows local builds keep lua.exe there)
 for _, c in ipairs({ "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe",
-                     "external" .. SEP2 .. "lua" .. SEP2 .. "lua",
-                     "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
-                         .. SEP2 .. "lua.exe",
-                     "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
-                         .. SEP2 .. "lua" }) do
+                     "external" .. SEP2 .. "lua" .. SEP2 .. "lua" }) do
     cands[#cands + 1] = c
 end
-cands[#cands + 1] = IS_WIN2 and "lua.exe" or "lua"
-for _, c in ipairs(cands) do
-    if c:find(SEP2, 1, true) or c:find("/", 1, true) then
-        -- path-like candidate: must exist on disk
-        if io.open(c, "r") then LUA = c break end
-    else
-        -- bare name: resolvable via PATH (popen shells out) -- accept
-        LUA = c
-        break
-    end
+-- (3) the lua_cli interpreter built by CMake (round 70): multi-config
+-- generators put it under Debug/ (Windows), Makefile generators directly
+-- under build/lua/ (macOS/Linux CI).
+for _, c in ipairs({ "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
+                         .. SEP2 .. "lua.exe",
+                     "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
+                         .. SEP2 .. "lua",
+                     "build" .. SEP2 .. "lua" .. SEP2 .. "lua",
+                     "build" .. SEP2 .. "lua" .. SEP2 .. "lua.exe" }) do
+    cands[#cands + 1] = c
 end
-local fff = io.popen(LUA and (LUA .. ' scripts/ks_i18n.lua --dir "'
+-- (4) bare names via PATH (order matters: Linux CI installs lua5.4 only)
+cands[#cands + 1] = "lua5.4"
+cands[#cands + 1] = IS_WIN2 and "lua.exe" or "lua"
+-- Resolve: path-like candidates must exist on disk; a bare name is
+-- accepted only when no earlier candidate resolved (popen shells out,
+-- so PATH lookup happens at spawn time).
+for _, c in ipairs(cands) do
+    local pathLike = c:find(SEP2, 1, true) or c:find("/", 1, true)
+        or c:find(".", 1, true)
+    if not pathLike or io.open(c, "r") then LUA = c break end
+end
+-- The interpreter may be an absolute path containing spaces or
+-- parentheses (local checkouts under "Caesura(AmeKAG)"); Windows cmd
+-- splits on those, so wrap the binary in call "..." exactly like the
+-- orphan runner does. POSIX shells quote paths natively -- wrapper is
+-- Windows-only.
+local cmdline = LUA
+if IS_WIN2 and LUA and (LUA:find("[ %(%)]") or LUA:find(SEP2, 1, true)) then
+    cmdline = 'call "' .. LUA .. '"'
+end
+local fff = io.popen(cmdline and (cmdline .. ' scripts/ks_i18n.lua --dir "'
     .. cli_dir .. '" --out "' .. cli_lang .. '" --missing') or "")
 if fff then
     local report = fff:read("*a")
