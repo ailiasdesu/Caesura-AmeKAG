@@ -86,3 +86,5 @@
 | 38 | G5 文本排版对齐：bridge 收集 TextScene draws 为 Lua 表（x/y/rgb/scale/bold/italic）经 wasmoon 表桥接直达 JS，core.setDraws + DOM 渲染器逐条绝对定位 span；textBuffer 平面回退保留；flow 断言 span left/top/color/fontSize | web vitest 23/23, 引擎无变更 | 42628adb |
 | 39 | G5 图层动画：CSS transition 补间（left/top/opacity 300ms）插值引擎驱动的 sprite_move/sprite_fade、opacity 0..255 归一化 0..1、canonical 节点 mutator（Lua proxy 引用解析）、main.mjs rAF 渲染循环；flow 断言 sprite_move 20+ 帧至 x=120 + transition 就位 | web vitest 23/23, 引擎无变更 | 0392b85f |
 | 40 | G5 播放器 UI 收官（40% 里程碑）：backlog 历史（core 快照提交不同文本页 + 面板滚动回看）、自动推进开关（1.2s 定时点击）；3 backlog 测试；web 26/26 | web vitest 26/26, 引擎无变更 | 65c290d1 |
+| 41 | G6 示例库起点：showcase.ks（25 命令全覆盖：文本/图层/音频/特效/流程 + random/if/jump 分支 + ending 解锁；56 tokens/6 labels）；backlog 历史机制设计（[p] 页快照） | 引擎 compile 通过, web showcase 全流程 PASS | c8ede0d6, 628d7b64 |
+| 42 | G6 示例库收尾：backlog 完整实现（Lua 累积 __SCENE_BACKLOG + core.pushBacklog 快照去重不影响视图）+ showcase flow 测试（DONE + 9 页历史 + ending）+ 示例库文档 docs/guides/sample-library.md | web vitest 27/27, bundle 5 场景 | 628d7b64, c8ede0d6 |
