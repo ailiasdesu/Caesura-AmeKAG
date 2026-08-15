@@ -430,6 +430,103 @@ os.remove(genPath)
 os.remove(tmpdir .. "/x.ks")
 
 -- ---------------------------------------------------------------------------
+-- 6. CLI-level E2E (round 74): drive the REAL scripts/ks_i18n.lua entry
+--    (arg parsing + file write + --update merge + --missing exit code)
+--    against a real demo scene snippet in a repo-local tmp dir.
+--    Success paths run in-process (dofile re-executes the module; safe
+--    because the CLI only os.exit()s on --missing / cannot-write, which
+--    we never trigger in-process). The --missing exit gate needs a real
+--    subprocess because os.exit() would kill the whole suite.
+-- ---------------------------------------------------------------------------
+local SAVE_ARG = _G.arg
+local cli_dir = "tmp/test_i18n/cli"       -- forward slashes (C6 whitelist)
+local cli_lang = "tmp/test_i18n/cli/cli_e2e.lua"
+pcall(os.execute, 'rm -rf "tmp/test_i18n/cli"')
+pcall(os.execute, 'mkdir -p "tmp/test_i18n/cli"')
+
+-- Real demo snippet (galgame_demo.ks dialogue + a bare text token).
+local fcli = io.open(cli_dir .. "/galgame_demo.ks", "w")
+fcli:write('[ch name="Narrator" text="Welcome to Caesura AmeKAG Engine Demo."]\n[p]\n'
+         .. '[ch name="Narrator" text="Afternoon sunlight filters through the window."]\n'
+         .. '[p]\nplain line\n[p]\n')
+fcli:close()
+
+-- Fresh generate: run scripts/ks_i18n.lua as a script with --dir/--out.
+_G.arg = { [0] = "scripts/ks_i18n.lua", "--dir", cli_dir,
+           "--lang", "cli_e2e", "--out", cli_lang }
+local cli_ok = pcall(dofile, "scripts/ks_i18n.lua")
+check("cli: script entry runs without error", cli_ok)
+local cli_body = ""
+local fcl = io.open(cli_lang, "r")
+if fcl then cli_body = fcl:read("*a"); fcl:close() end
+check("cli: fresh template written", #cli_body > 0)
+local cli_keys = 0
+for _ in cli_body:gmatch('%[%"[^%]]+%] = "') do cli_keys = cli_keys + 1 end
+check("cli: 3 messages extracted from demo snippet", cli_keys == 3)
+check("cli: bare text token extracted",
+      cli_body:find('galgame_demo.ks:' .. i18n.fnv1a("plain line"),
+                    1, true) ~= nil)
+
+-- --update merge: pre-populate a translation + top-level settings key,
+-- rerun the CLI with --update, and assert both survive regeneration.
+local updKey = "galgame_demo.ks:" .. i18n.fnv1a(
+    "Welcome to Caesura AmeKAG Engine Demo.")
+local upd = io.open(cli_lang, "w")
+upd:write(string.format('%s\n%s\n  greeting = "こんにちは！",\n  lines = {\n'
+    .. '    ["%s"] = "ようこそ",\n  },\n}\n',
+    "-- Auto-generated header", "return {", updKey))
+upd:close()
+_G.arg = { [0] = "scripts/ks_i18n.lua", "--dir", cli_dir,
+           "--lang", "cli_e2e", "--out", cli_lang, "--update" }
+pcall(dofile, "scripts/ks_i18n.lua")
+local upd_body = ""
+local fup = io.open(cli_lang, "r")
+if fup then upd_body = fup:read("*a"); fup:close() end
+check("cli --update: existing translation kept",
+      upd_body:find('"ようこそ"', 1, true) ~= nil)
+check("cli --update: top-level settings key preserved",
+      upd_body:find('greeting = "こんにちは！"', 1, true) ~= nil)
+
+-- --missing (subprocess): must report the untranslated remainder and
+-- exit 1 (the os.exit() gate would kill the whole suite in-process, so
+-- this one runs as a real subprocess). Locate the LUA interpreter like
+-- test_carc_import finds its binary (vendored exe first, then bare).
+local SEP2 = package.config:sub(1, 1)
+local IS_WIN2 = SEP2 == "\\"
+local LUA = nil
+for _, c in ipairs(IS_WIN2 and
+    { "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe",
+      "external" .. SEP2 .. "lua" .. SEP2 .. "lua" }
+    or { "external" .. SEP2 .. "lua" .. SEP2 .. "lua",
+         "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe" }) do
+    if io.open(c, "r") then LUA = c break end
+end
+local fff = io.popen(LUA and (LUA .. ' scripts/ks_i18n.lua --dir "'
+    .. cli_dir .. '" --out "' .. cli_lang .. '" --missing') or "")
+if fff then
+    local report = fff:read("*a")
+    fff:close()
+    -- After --update merged "ようこそ" for the Welcome key, exactly the
+    -- other two lines (Afternoon sunlight + plain line) stay untranslated.
+    check("cli --missing: reports remaining untranslated",
+          report:find("2/3 keys untranslated", 1, true) ~= nil
+          and report:find("Afternoon sunlight", 1, true) ~= nil
+          and report:find("plain line", 1, true) ~= nil)
+else
+    print("SKIP cli --missing: no LUA interpreter located")
+end
+-- The gate leaves the empty placeholders in place until a translator
+-- fills them (CI-facing contract).
+local fmiss = io.open(cli_lang, "r")
+local miss_body = fmiss and fmiss:read("*a") or ""
+if fmiss then fmiss:close() end
+check("cli --missing: empty (untranslated) placeholders remain",
+      miss_body:find('= ""', 1, true) ~= nil)
+
+_G.arg = SAVE_ARG
+pcall(os.execute, 'rm -rf "tmp/test_i18n/cli"')
+
+-- ---------------------------------------------------------------------------
 -- cleanup: restore i18n state and the backend global
 -- ---------------------------------------------------------------------------
 i18n.current = saved_current
