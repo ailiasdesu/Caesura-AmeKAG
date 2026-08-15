@@ -976,6 +976,19 @@ function TextCommands.nvl(ctx, params)
         -- Drop the accumulated page so the normal window resumes clean.
         backend.clear_text()
         TextScene.clear(ctx)
+        -- REVIEW-FIX (phase D): NVL and the fixed message window are
+        -- mutually exclusive (Ren'Py NVL parity). [nvl off] restores the
+        -- pre-NVL visibility of the _textbox / _nameplate layers that
+        -- [nvl] hid on entry (saved in ctx.nvl_hidden_vis).
+        local saved = ctx.nvl_hidden_vis
+        ctx.nvl_hidden_vis = nil
+        for _, ln in ipairs({ "_textbox", "_nameplate" }) do
+            local node = layers.get(ln)
+            if node then
+                node.visible = (saved and saved[ln] ~= nil)
+                    and saved[ln] or node.visible
+            end
+        end
         return
     end
 
@@ -986,6 +999,20 @@ function TextCommands.nvl(ctx, params)
     end
     backend.clear_text()
     TextScene.clear(ctx)
+    -- REVIEW-FIX (phase D): hide the fixed message-window / nameplate
+    -- layers while in full-screen NVL mode (the textbox would otherwise
+    -- box the accumulated block). Save their prior visibility so [nvl
+    -- off] can restore it. Layers that never existed stay untouched.
+    if not ctx.nvl_hidden_vis then
+        ctx.nvl_hidden_vis = {}
+        for _, ln in ipairs({ "_textbox", "_nameplate" }) do
+            local node = layers.get(ln)
+            if node then
+                ctx.nvl_hidden_vis[ln] = node.visible == true
+                if node.visible then node.visible = false end
+            end
+        end
+    end
     nvl_reset_cursor(ctx)
     update_text_state(ctx, "nvl")
 end
@@ -1004,9 +1031,16 @@ function TextCommands.ruby(ctx, params)
 
     local lineHeight = resolve_line_height(ctx)
     local startX = params.start_x or 32
+    -- REVIEW-FIX (phase D): schema.coerce fills x=0/y=0 defaults, and Lua
+    -- treats 0 as truthy, so a bare [ruby ...] (no explicit position) used
+    -- to pin the draw at absolute (0,0) instead of following the current
+    -- text cursor. Only a strictly positive x/y overrides cursor-follow;
+    -- nil lets add_ruby fall back to state.cursor_x / cursor_y.
+    local rx = (params.x and params.x > 0) and params.x or nil
+    local ry = (params.y and params.y > 0) and params.y or nil
     TextScene.add_ruby(ctx, text, ruby_text, {
-        x = params.x,
-        y = params.y,
+        x = rx,
+        y = ry,
         start_x = startX,
         max_width = resolve_max_width(ctx, params, startX),
         line_height = lineHeight,
@@ -1211,6 +1245,9 @@ schema.define("button", {
     caption = { type = "string" },
     target = { type = "string" },
     cond = { type = "string" },
+    -- KAG3 [sel x=...]: variable to store this option chosen target
+    -- into (e.g. x="tf.result"). Bare key -> f scope ([set] parity).
+    x = { type = "string" },
 })
 schema.define("endbutton", {
     _meta = { category = "text", blocking = true, desc = "draw the registered choice buttons and wait for a pick" },
@@ -1248,11 +1285,16 @@ function TextCommands.button(ctx, params)
     -- Neo-Genesis: [button cond="f.x > 1"] — conditional choice (Ren'Py
     -- menu `if` parity). Evaluated when [endbutton] renders the block;
     -- false choices are hidden. TJS syntax, runtime-translated.
+    -- KAG3 [sel x="tf.result"]: the chosen option target label is
+    -- stored into x when [endbutton] completes (engine choice result).
+    -- [sel] without x falls back to the jump-only behavior (the rich
+    -- result also lives in ctx._selectedChoice for handlers/UI).
     table.insert(ctx._choiceButtons, {
         text = text, target = target or "", cond = params.cond,
         -- Pre-localize label source for the hot-switch redraw.
         src = src_text,
         scene = ctx.current_scene or ctx.currentScene or "",
+        x = params.x,
     })
 end
 
@@ -1337,8 +1379,27 @@ function TextCommands.endbutton(ctx, params)
     _G._KAG_onClick = oldClick
     TextScene.remove_group(ctx, "choices")
     
-    if selected and selected.target then
-        ctx._pendingJump = selected.target
+    if selected then
+        -- KAG3 [sel x="tf.result"]: write the chosen option target label
+        -- into the declared variable (tf./sf./f./mp./lf. scope or bare
+        -- key -> f, matching [set]). Guards mirror resolve_var in [set]:
+        -- unknown/non-table scope degrades silently.
+        if type(selected.x) == "string" and selected.x ~= "" then
+            local scopeName, key = selected.x:match("^([%a_]+)%.([%w_]+)$")
+            local targetTbl
+            if scopeName and ctx[scopeName] then
+                targetTbl, key = ctx[scopeName], key
+            else
+                scopeName, key = "f", selected.x
+                targetTbl = ctx[scopeName]
+            end
+            if type(targetTbl) == "table" and key and key ~= "" then
+                targetTbl[key] = selected.target or ""
+            end
+        end
+        if selected.target then
+            ctx._pendingJump = selected.target
+        end
     end
 end
 

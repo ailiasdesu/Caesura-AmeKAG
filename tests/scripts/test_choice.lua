@@ -216,4 +216,43 @@ do
           and ctxK._choiceButtons == nil)
 end
 
+-- ---------------------------------------------------------------------------
+-- round 74: [button] without [endbutton] — staged options linger but never
+-- block or enter choice mode (headless tolerance); a later [endbutton]
+-- can still render them.
+-- ---------------------------------------------------------------------------
+do
+    local ctxL = { f = {}, sf = {}, tf = {}, mp = {}, _choiceButtons = nil,
+        current_scene = "t.ks", variables = {} }
+    pcall(KAG2.button, ctxL, { text = "Orphaned", target = "*o" })
+    check("bare [button] stages, no endbutton", type(ctxL._choiceButtons) == "table"
+          and #ctxL._choiceButtons == 1)
+    check("[button] no-endbutton no block", ctxL._choiceMode == nil
+          and ctxL.waiting_input == nil
+          and ctxL._choiceButtonsActive == nil)
+    pcall(function() TextCommands.endbutton(ctxL, {}) end)
+    check("staged [button] renders on later [endbutton]",
+          ctxL._choiceButtonsActive ~= nil and #ctxL._choiceButtonsActive == 1)
+end
+
+-- round 74: cond-hidden choices renumber 1-based in the visible block
+do
+    local ctxM = {
+        f = { has = true }, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "f.has" },   -- shown
+            { text = "B", target = "*b", cond = "f.nope" },  -- hidden
+            { text = "C", target = "*c" },                   -- shown
+        },
+    }
+    pcall(function() TextCommands.endbutton(ctxM, {}) end)
+    check("cond-hidden renumber starts at 1", ctxM._choiceButtonsActive ~= nil
+          and #ctxM._choiceButtonsActive == 2
+          and ctxM._choiceButtonsActive[1].index == 1
+          and ctxM._choiceButtonsActive[2].index == 2
+          and ctxM._choiceButtonsActive[2].target == "*c")
+end
+
 print("CHOICE TESTS DONE")

@@ -211,6 +211,39 @@ local okRestore = snapshot.restore(ctxS, snap)
 check("snapshot restores nvl_mode", okRestore == true and ctxS.nvl_mode == true)
 
 -- ---------------------------------------------------------------------------
+-- 8. [nvl] / [textbox] mutual exclusion (phase D): full-screen NVL text has
+--    no fixed message window, so entering NVL must hide the _textbox /_
+--    _nameplate layers and [nvl off] must restore their prior visibility.
+-- ---------------------------------------------------------------------------
+local ctxT = fresh_ctx()
+local tbp = Schema.coerce("textbox", {}, ctxT)
+TextCommands.textbox(ctxT, tbp)
+local tbNode = layers.get("_textbox")
+check("textbox layer visible before nvl", tbNode ~= nil and tbNode.visible == true)
+
+TextCommands.nvl(ctxT, {})
+tbNode = layers.get("_textbox")
+check("nvl hides the textbox layer", tbNode ~= nil and tbNode.visible == false)
+
+-- [nvl clear] re-enters and keeps it hidden
+TextCommands.text(ctxT, { text = "line" })
+TextCommands.nvl(ctxT, { mode = "clear" })
+tbNode = layers.get("_textbox")
+check("nvl clear keeps textbox hidden", tbNode ~= nil and tbNode.visible == false)
+
+TextCommands.nvl(ctxT, { mode = "off" })
+tbNode = layers.get("_textbox")
+check("nvl off restores the textbox", tbNode ~= nil and tbNode.visible == true)
+
+-- textbox configured invisible beforehand stays hidden after nvl off
+local ctxT2 = fresh_ctx()
+TextCommands.textbox(ctxT2, Schema.coerce("textbox", { visible = false }, ctxT2))
+TextCommands.nvl(ctxT2, {})
+TextCommands.nvl(ctxT2, { mode = "off" })
+check("nvl off keeps a pre-hidden textbox hidden",
+      layers.get("_textbox") ~= nil and layers.get("_textbox").visible == false)
+
+-- ---------------------------------------------------------------------------
 -- cleanup: restore the backend global the way we found it
 -- ---------------------------------------------------------------------------
 rawset(_G, "_CAESURA_BACKEND", saved_backend)

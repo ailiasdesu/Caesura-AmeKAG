@@ -27,6 +27,7 @@ package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 local TextLayout = require("kag.text_layout")
 local TextScene = require("kag.text_scene")
 local TextCommands = require("kag.commands.text")
+local Schema = require("kag.schema")
 local layers = require("layers")
 
 -- ---------------------------------------------------------------------------
@@ -232,6 +233,184 @@ check("ch: green span drawn", greenDraw ~= nil and greenDraw.g == 255
 check("ch: backlog plain", ctxC.backlog[1] ~= nil
       and ctxC.backlog[1].text == "Hi green!")
 check("ch: reveal plain length", ctxC.reveal ~= nil and ctxC.reveal.total == 9)
+
+-- ---------------------------------------------------------------------------
+-- 5. [ruby] command — furigana parsing + positioning (phase D)
+-- ---------------------------------------------------------------------------
+-- measure_ruby: width is max(base, ruby*scale); offsets center each run
+-- within that bounding box.
+local mr = TextLayout.measure_ruby("漢字", "かんじ", { ruby_scale = 0.5, font_size = 24 })
+-- base 2 full-width @24 = 48; ruby 3 full-width @24*0.5 = 36 -> width = 48
+check("ruby: measure width = max(base, ruby)", mr.width == 48
+      and mr.base_width == 48 and mr.ruby_width == 36)
+check("ruby: base centered when ruby wider", (function()
+    -- ruby wider: 4 chars (base 1 char => base=24, ruby=4*12=48)
+    local m = TextLayout.measure_ruby("字", "かんじみ", { ruby_scale = 0.5, font_size = 24 })
+    return m.width == 48 and m.base_offset == 12 and m.ruby_offset == 0
+end)())
+
+-- [ruby] cursor-follow (REVIEW-FIX regression): schema.coerce fills x=0/y=0,
+-- but a bare [ruby ...] must follow the current text cursor, not pin to (0,0).
+local ctxR = {
+    backlog = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 200, cursor_y = 300, draws = {},
+                   font_size = 24 },
+    textCursorX = 200, textCursorY = 300,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+local rubyParams = Schema.coerce("ruby", { text = "漢字", ruby = "かんじ" }, ctxR)
+TextCommands.ruby(ctxR, rubyParams)
+local rd = ctxR.text_state.draws[#ctxR.text_state.draws]
+check("ruby: bare command follows cursor", rd ~= nil and rd.x == 200
+      and rd.y == 300)
+check("ruby: draw carries ruby text + kind",
+      rd ~= nil and rd.kind == "ruby" and rd.ruby == "かんじ"
+      and rd.layout_width ~= nil)
+
+-- explicit x/y override the cursor (positive only)
+local ctxRX = {
+    backlog = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 200, cursor_y = 300, draws = {}, font_size = 24 },
+    textCursorX = 200, textCursorY = 300,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+TextCommands.ruby(ctxRX, Schema.coerce("ruby",
+    { text = "字", ruby = "よみ", x = 500, y = 120 }, ctxRX))
+local rdX = ctxRX.text_state.draws[#ctxRX.text_state.draws]
+check("ruby: explicit position overrides cursor", rdX ~= nil
+      and rdX.x == 500.0 and rdX.y == 120)
+
+-- empty text is a no-op (no draw appended)
+local ctxRE = {
+    backlog = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 200, cursor_y = 300, draws = {}, font_size = 24 },
+    textCursorX = 200, textCursorY = 300,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+local n0 = #ctxRE.text_state.draws
+TextCommands.ruby(ctxRE, Schema.coerce("ruby", { text = "", ruby = "x" }, ctxRE))
+check("ruby: empty text no-op", #ctxRE.text_state.draws == n0)
+
+-- ruby wraps to the next line when it would overflow the width
+local ctxRW = {
+    backlog = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 1000, cursor_y = 300, draws = {}, font_size = 24 },
+    textCursorX = 1000, textCursorY = 300,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+-- start_x=32, max_width=1216 -> x(1000)+width(48) > 32+32? no. Force overflow:
+-- cursor pushed near the right edge so x+width exceeds start_x+max_width.
+TextCommands.ruby(ctxRW, Schema.coerce("ruby",
+    { text = "漢字", ruby = "かんじ", start_x = 1000, x = 1200, y = 300 }, ctxRW))
+local rdW = ctxRW.text_state.draws[#ctxRW.text_state.draws]
+check("ruby: overflow wraps to next line", rdW ~= nil and rdW.y == 324)
+
+-- ---------------------------------------------------------------------------
+-- 6. nameplate + [ch] name: overlay / replacement (phase D)
+-- ---------------------------------------------------------------------------
+-- Without a nameplate, [ch name=X] shows a "[X]" label draw.
+local ctxN0 = {
+    backlog = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {}, font_size = 24 },
+    textCursorX = 32, textCursorY = 580,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+-- reset current_speaker so the label path is taken
+TextCommands.ch(ctxN0, { name = "Ama", text = "hi" })
+local nd0
+for _, d in ipairs(ctxN0.text_state.draws) do
+    if d.text == "[Ama]" then nd0 = d end
+end
+check("nameplate: absent -> [Name] label draw", nd0 ~= nil)
+
+-- [nameplate] configures ctx.nameplate_style (coerced defaults); the
+-- current speaker's plate layer is (re)built with the style dimensions.
+local ctxNP = {
+    backlog = {},
+    f = {}, sf = {}, tf = {}, mp = {}, variables = {}, characters = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {}, font_size = 24 },
+    textCursorX = 32, textCursorY = 580,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+TextCommands.ch(ctxNP, { name = "Rin", text = "yo" })
+ctxNP.current_speaker = "Rin"
+TextCommands.nameplate(ctxNP, Schema.coerce("nameplate",
+    { x = 300, y = 470, w = 260, h = 40 }, ctxNP))
+check("nameplate: style persisted in ctx", ctxNP.nameplate_style ~= nil
+      and ctxNP.nameplate_style.x == 300 and ctxNP.nameplate_style.y == 470
+      and ctxNP.nameplate_style.w == 260 and ctxNP.nameplate_style.h == 40)
+local plate = layers.get("_nameplate")
+check("nameplate: plate layer sized", plate ~= nil and plate.x == 300
+      and plate.y == 470 and plate.w == 260 and plate.h == 40)
+
+-- [ch name=Y] after [ch name=X] with a nameplate replaces the speaker
+-- (overlay/replacement), updating ctx.current_speaker.
+local ctxNR = {
+    backlog = {},
+    f = {}, sf = {}, tf = {}, mp = {}, variables = {}, characters = {},
+    nameplate_style = Schema.coerce("nameplate", {}, {}),
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {}, font_size = 24 },
+    textCursorX = 32, textCursorY = 580,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+TextCommands.ch(ctxNR, { name = "Kai", text = "z" })
+check("nameplate: ch sets current speaker", ctxNR.current_speaker == "Kai")
+check("nameplate: plate re-rendered for new speaker",
+      layers.get("_nameplate") ~= nil and layers.get("_nameplate").visible)
+
+-- ---------------------------------------------------------------------------
+-- 7. [font] mid-stream base size — "多段文字不同字体" (phase D): [font size=N]
+--    sets the base font size that subsequent [ch]/[text] measurement uses,
+--    so a fixed-width long line wraps into MORE lines at a larger size.
+-- ---------------------------------------------------------------------------
+TextCommands.font(ctxC, Schema.coerce("font", { size = 48 }, ctxC))
+check("font: size persisted in ctx.text_state", ctxC.text_state.font_size == 48)
+local longS = string.rep("a", 100)
+local ctxFD = {
+    backlog = {},
+    f = {}, sf = {}, tf = {}, mp = {}, variables = {}, characters = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {}, font_size = nil },
+    textCursorX = 32, textCursorY = 580,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+TextCommands.ch(ctxFD, { text = longS })
+local defaultLines = #ctxFD.text_state.draws
+local ctxFF = {
+    backlog = {},
+    f = {}, sf = {}, tf = {}, mp = {}, variables = {}, characters = {},
+    text_state = { line = 1, char_offset = 0, opacity = 255,
+                   cursor_x = 32, cursor_y = 580, draws = {}, font_size = nil },
+    textCursorX = 32, textCursorY = 580,
+    current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+}
+TextCommands.font(ctxFF, Schema.coerce("font", { size = 48 }, ctxFF))
+TextCommands.ch(ctxFF, { text = longS })
+check("font: larger size wraps a long line into more lines",
+      #ctxFF.text_state.draws > defaultLines)
+check("font: per-line typewriter continues (draws still typewriter)",
+      ctxFF.text_state.draws[1].typewriter == true)
+
+-- ---------------------------------------------------------------------------
+-- 8. long-text wrapping width — line width fits max_width, segments tile x
+--    (a wrapped line never exceeds the box; consecutive draws advance x)
+-- ---------------------------------------------------------------------------
+for _, pref in ipairs({ 32 }) do
+    local lines = TextLayout.wrap(string.rep("ab", 40), { max_width = 120, font_size = 24 })
+    check("wrap: long text never exceeds max_width", (function()
+        for _, ln in ipairs(lines) do
+            if ln.width > 120 then return false end
+        end
+        return #lines > 1
+    end)())
+end
 
 local failed = 0
 for _, ok in ipairs(results) do
