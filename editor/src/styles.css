@@ -589,3 +589,33 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 .timeline-exec .exec-live { color: #4a9eff; animation: exec-pulse 1.6s ease-in-out infinite; }
 .timeline-exec .exec-cmd { font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
 @keyframes exec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* G4 scene outline panel (first increment) */
+.outline-pane { overflow: hidden; }
+.outline-body { padding: 0 4px 8px; }
+.outline-label-row { cursor: pointer; }
+.outline-label {
+  font-family: 'Cascadia Code', monospace;
+  font-weight: 700;
+  color: var(--paused, #d9a93a);
+}
+.outline-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  padding: 1px 6px 1px 14px;
+  border-radius: 3px;
+}
+.outline-row:hover { background: rgba(255,255,255,0.05); }
+.outline-line { flex: 0 0 22px; color: var(--fg-dim, #888); font-size: 10px; text-align: right; }
+.outline-cmd { flex: 0 0 auto; font-family: 'Cascadia Code', monospace; color: var(--accent, #4a9eff); }
+.outline-cmd-params { color: var(--fg-dim, #888); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-text { color: inherit; }
+.outline-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg, #ddd);
+}
+
