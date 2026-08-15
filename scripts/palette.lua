@@ -28,6 +28,11 @@ end
 -- @param path    file path to the 256x16 or 4096x64 LUT image (.png)
 -- @return true on success, nil+error on failure
 function palette.load(lut_id, path)
+    -- Round 82: load() was the one LUT op without the lut_available() guard —
+    -- set_night_mode() (and toggle_mode()) reached it headless and crashed on
+    -- the nil backend global. Guard like apply/clear/unload: visible no-op
+    -- instead of a mid-scene crash.
+    if not lut_available() then lut_noop("load") return false end
     if not lut_id or #lut_id == 0 then
         return nil, "palette.load: lut_id required"
     end
