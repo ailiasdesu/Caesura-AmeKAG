@@ -425,6 +425,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
           end
         end
+        __LAST_CTX = ctx
         return result
       `)
       // sync the structured draws into the core overlay (JSON parse)
@@ -583,6 +584,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
           end
         end
+        __LAST_CTX = ctx
         return result
       `)
       const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
@@ -603,6 +605,72 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     },
     /** Raise the click signal for the next runScene. */
     async click() { lua.global.set('__CLICK', true) },
+
+    // -- save-slot management (round 49) ----------------------------------
+    // Storage is the same backend [save]/[load] use (localStorage default).
+    /** List saved slots with metadata: [{ slot, scene, token, savedAt }]. */
+    listSlots() {
+      const out = []
+      // storage keys are opaque; scan a sane range like the engine's
+      // SaveManager (slots 0..99 are manual slots).
+      for (let s = 0; s < 100; s++) {
+        const raw = storage.get(saveKey(s))
+        if (raw == null) continue
+        try {
+          const payload = JSON.parse(raw)
+          out.push({
+            slot: s,
+            scene: String(payload.scene ?? ''),
+            token: Number(payload.token) || 1,
+            savedAt: Number(payload.savedAt) || 0,
+          })
+        } catch { /* corrupt entry: skip */ }
+      }
+      return out
+    },
+
+    /** Delete a saved slot. Returns true when it existed. */
+    deleteSlot(slot) {
+      const key = saveKey(slot)
+      const existed = storage.get(key) != null
+      storage.del(key)
+      core._log('save.delete', { slot: Number(slot), existed })
+      return existed
+    },
+
+    /** Save the CURRENT scene position (last run's ctx) into a slot.
+     *  Drives the engine's own SaveCommands.save so f/sf/unlocks/backlog
+     *  all persist exactly as [save slot=N] would in a running scene. */
+    async saveCurrent(slot) {
+      const ctx = lua.global.get('__LAST_CTX')
+      if (!ctx) return false
+      const ok = await lua.doString([
+        "local Save = require('kag.commands.save')",
+        "local c = _G.__LAST_CTX",
+        "if type(c) ~= 'table' then return false end",
+        'local r = Save.save(c, { slot = ' + Number(slot) + ' })',
+        "return r == nil or r == true",
+      ].join(String.fromCharCode(10)))
+      return !!ok
+    },
+
+    /** Load a slot into a fresh scene run; the run loop resumes the saved
+     *  scene from its saved token (round 47-48). sceneSources maps scene
+     *  names to .ks source for scenes not in a bundle. */
+    async loadSlot(slot, opts = {}) {
+      const src = [
+        '[ch name="System" text="Loading slot ' + Number(slot) + '..."]',
+        '[p]',
+        '[load slot=' + Number(slot) + ']',
+        '[end]',
+      ].join(String.fromCharCode(10))
+      const out = await this.runScene(src, 'loadslot.ks', {
+        maxFrames: opts.maxFrames ?? 200000,
+        autoClick: opts.autoClick ?? true,
+        sceneSources: opts.sceneSources ?? {},
+      })
+      return out
+    },
     /** Snapshot the real Lua layer tree (Layers.snapshot) for rendering. */
     async snapshotLayers() {
       const out = await lua.doString(`

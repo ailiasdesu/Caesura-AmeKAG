@@ -27,6 +27,15 @@
     #endings { max-height: 96px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
     .ending-entry { padding: 4px 6px; font-size: 13px; color: #fc9; border-radius: 4px; }
     .ending-entry::before { content: "★ "; color: #fa3; }
+    .saves-wrap { max-width: 1280px; margin: 8px auto; }
+    .saves-actions { margin: 4px 0; display: flex; gap: 6px; align-items: center; }
+    .saves-actions input { width: 64px; padding: 4px 6px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; }
+    #saves { max-height: 160px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .save-entry { display: flex; gap: 8px; align-items: center; padding: 4px 6px; font-size: 13px; border-radius: 4px; }
+    .save-entry:hover { background: #2a2a2a; }
+    .save-entry .slot-num { color: #6cf; font-weight: bold; min-width: 2ch; }
+    .save-entry .slot-meta { color: #999; flex: 1; }
+    .save-entry button { padding: 2px 8px; font-size: 12px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -42,6 +51,15 @@
   <div class="endings-wrap">
     <div class="backlog-title">Endings (<span id="endings-count">0</span>)</div>
     <div id="endings"></div>
+  </div>
+  <div class="saves-wrap">
+    <div class="backlog-title">Save Slots (<span id="saves-count">0</span>)</div>
+    <div class="saves-actions">
+      <input id="save-slot" type="number" min="0" max="99" value="1" />
+      <button id="save-now">💾 Save Current</button>
+      <button id="refresh-slots">⟳ Refresh</button>
+    </div>
+    <div id="saves"></div>
   </div>
   <div class="backlog-wrap">
     <div class="backlog-title">Backlog (<span id="backlog-count">0</span>)</div>

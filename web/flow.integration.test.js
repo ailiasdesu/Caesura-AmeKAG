@@ -215,6 +215,64 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(texts).toContain('A4')
   }, 120000)
 
+  it('manages save slots: list/save-current/delete (round 49)', async () => {
+    for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
+    const NL = String.fromCharCode(10)
+    const sceneA = [
+      '[ch name="N" text="S1"]',
+      '[p]',
+      '[ch name="N" text="S2"]',
+      '[p]',
+      '[save slot=1]',
+      '[ch name="N" text="S3"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    await player.runScene(sceneA, 'scene_a.ks', { maxFrames: 200000, autoClick: true })
+
+    // listSlots reflects the [save] made inside the scene
+    let slots = player.listSlots()
+    expect(slots.some((s) => s.slot === 1 && s.scene.includes('scene_a.ks'))).toBe(true)
+
+    // saveCurrent captures the LAST run's position into another slot
+    const ok = await player.saveCurrent(9)
+    expect(ok).toBe(true)
+    slots = player.listSlots()
+    const s9 = slots.find((s) => s.slot === 9)
+    expect(s9).toBeTruthy()
+    expect(s9.token).toBeGreaterThan(1)
+
+    // deleteSlot removes and is idempotent
+    expect(player.deleteSlot(1)).toBe(true)
+    expect(player.deleteSlot(1)).toBe(false)
+    expect(player.listSlots().some((s) => s.slot === 1)).toBe(false)
+  }, 120000)
+
+  it('loads a slot through the UI path and resumes (round 49)', async () => {
+    for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
+    const NL = String.fromCharCode(10)
+    const sceneA = [
+      '[ch name="N" text="U1"]',
+      '[p]',
+      '[set f.tag = 7]',
+      '[save slot=2]',
+      '[ch name="N" text="U2 after save"]',
+      '[p]',
+      '[ch name="N" text="U3"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    await player.runScene(sceneA, 'scene_a.ks', { maxFrames: 200000, autoClick: true })
+
+    player.core.backlog.length = 0
+    const out = await player.loadSlot(2, { sceneSources: { 'scene_a.ks': sceneA } })
+    expect(out.startsWith('DONE:')).toBe(true)
+    const texts = player.core.backlog.map((x) => x.text).join(' | ')
+    expect(texts).toContain('Loading slot 2')
+    expect(texts).toContain('U2 after save')
+    expect(texts).toContain('U3')
+  }, 120000)
+
   it('runs the showcase sample (25 commands, branching, backlog)', async () => {
     player.core.backlog.length = 0 // isolate from earlier scenes
     const ks = readFileSync(join(here, '..', 'demo', 'showcase.ks'), 'utf8')

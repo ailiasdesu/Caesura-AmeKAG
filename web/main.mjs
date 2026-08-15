@@ -11,6 +11,8 @@ const statusEl = document.getElementById('status')
 const endingsEl = document.getElementById('endings')
 const endingsCount = document.getElementById('endings-count')
 const audioStatusEl = document.getElementById('audio-status')
+const savesEl = document.getElementById('saves')
+const savesCount = document.getElementById('saves-count')
 const log = (s) => { logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight }
 
 const SCRIPTS_BASE = '/scripts/'
@@ -148,6 +150,7 @@ async function advance() {
 }
 
 await loadStoryBundle()
+renderSlots()
 
 document.getElementById('run').addEventListener('click', () => {
   void runScene(document.getElementById('scene').value)
@@ -181,6 +184,64 @@ const syncBacklog = () => {
   })
   backlogEl.scrollTop = backlogEl.scrollHeight
 }
+
+// --- save slots (round 49) ---
+const fmtTime = (ts) => (ts ? new Date(ts).toLocaleTimeString() : '—')
+
+async function renderSlots() {
+  const slots = player.listSlots()
+  savesCount.textContent = String(slots.length)
+  savesEl.textContent = ''
+  if (slots.length === 0) {
+    const row = document.createElement('div')
+    row.className = 'save-entry'
+    row.innerHTML = '<span class="slot-meta">(no saves yet — run a scene, then Save Current)</span>'
+    savesEl.appendChild(row)
+    return
+  }
+  for (const s of slots) {
+    const row = document.createElement('div')
+    row.className = 'save-entry'
+    const meta = document.createElement('span')
+    meta.className = 'slot-meta'
+    meta.textContent = 'scene ' + s.scene + ' · token ' + s.token + ' · ' + fmtTime(s.savedAt)
+    const loadBtn = document.createElement('button')
+    loadBtn.textContent = 'Load'
+    loadBtn.addEventListener('click', async () => {
+      log('loading slot ' + s.slot + '…')
+      const out = await player.loadSlot(s.slot, { sceneSources: {} })
+      syncTextures()
+      await renderer.render()
+      statusEl.textContent = 'load: ' + out
+      log('load result: ' + out)
+      renderSlots()
+    })
+    const delBtn = document.createElement('button')
+    delBtn.textContent = 'Delete'
+    delBtn.addEventListener('click', () => {
+      player.deleteSlot(s.slot)
+      log('deleted slot ' + s.slot)
+      renderSlots()
+    })
+    const num = document.createElement('span')
+    num.className = 'slot-num'
+    num.textContent = String(s.slot).padStart(2, '0')
+    row.appendChild(num)
+    row.appendChild(meta)
+    row.appendChild(loadBtn)
+    row.appendChild(delBtn)
+    savesEl.appendChild(row)
+  }
+}
+
+document.getElementById('save-now').addEventListener('click', async () => {
+  const slot = Number(document.getElementById('save-slot').value)
+  if (!Number.isInteger(slot) || slot < 0 || slot > 99) { log('slot must be 0..99'); return }
+  const ok = await player.saveCurrent(slot)
+  log(ok ? 'saved current position to slot ' + slot : 'save failed (no scene run yet)')
+  renderSlots()
+})
+document.getElementById('refresh-slots').addEventListener('click', () => renderSlots())
 
 // --- auto-advance ---
 let autoMode = false
