@@ -79,6 +79,25 @@ jobs:
           python tests/scripts/check_test_coverage.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Generated docs freshness
+        shell: pwsh
+        run: |
+          # Round 67: api-stats.md / command-contracts.md must match the
+          # current source census — regen and fail on any diff.
+          python scripts/api_stats.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $lua = Get-ChildItem -Recurse build/lua -Filter "lua.exe" | Select-Object -First 1
+          if (-not $lua) { $lua = Get-ChildItem -Recurse build -Filter "lua.exe" | Select-Object -First 1 }
+          if ($lua) {
+            & $lua.FullName scripts/schema_doc.lua > docs/api/command-contracts.md
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          git diff --exit-code docs/api/api-stats.md docs/api/command-contracts.md
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Generated docs are stale - run the generators locally and commit"
+            exit 1
+          }
+
       - name: Lua script suites (main + orphan)
         shell: pwsh
         run: |
