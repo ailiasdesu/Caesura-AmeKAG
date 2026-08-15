@@ -3,10 +3,14 @@
 // zero-parse scene starts; falls back to raw .ks sources.
 import { createPlayer } from './bridge.js'
 import { DomRenderer } from './dom-renderer.js'
+import { buildSceneOptions } from './scene-options.js'
 
 const stage = document.getElementById('stage')
 const logEl = document.getElementById('log')
 const statusEl = document.getElementById('status')
+const endingsEl = document.getElementById('endings')
+const endingsCount = document.getElementById('endings-count')
+const audioStatusEl = document.getElementById('audio-status')
 const log = (s) => { logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight }
 
 const SCRIPTS_BASE = '/scripts/'
@@ -35,9 +39,74 @@ async function loadStoryBundle() {
     const bundle = await player.lua.doString(code)
     storyBundle = bundle
     log('story bundle: ' + Object.keys(bundle.scenes).length + ' scenes, ' + bundle.assets.length + ' assets')
+    populateScenePicker(bundle.scenes)
+    populateFallbackScenes()
   } catch (e) {
     log('story bundle unavailable: ' + String(e).slice(0, 80))
   }
+}
+
+
+function populateScenePicker(scenes) {
+  const sel = document.getElementById('scene')
+  sel.textContent = ''
+  for (const group of buildSceneOptions(scenes)) {
+    const og = document.createElement('optgroup')
+    og.label = group.label
+    for (const opt of group.options) {
+      const o = document.createElement('option')
+      o.value = opt.value
+      o.textContent = opt.label
+      og.appendChild(o)
+    }
+    sel.appendChild(og)
+  }
+}
+
+// When the bundle is unavailable, offer raw .ks files from /demo (flat list).
+const FALLBACK_SCENES = [
+  'galgame_demo.ks', 'full_pipeline_demo.ks', 'sma_demo.ks', 'showcase.ks',
+  'tutorial/tutorial_01_hello.ks', 'tutorial/tutorial_02_text.ks',
+  'tutorial/tutorial_03_layers.ks', 'tutorial/tutorial_04_audio.ks',
+  'tutorial/tutorial_05_branching.ks', 'tutorial/tutorial_06_effects.ks',
+]
+
+function populateFallbackScenes() {
+  if (document.getElementById('scene').options.length > 0) return
+  const sel = document.getElementById('scene')
+  sel.textContent = ''
+  for (const name of FALLBACK_SCENES) {
+    const o = document.createElement('option')
+    o.value = name
+    o.textContent = name
+    sel.appendChild(o)
+  }
+}
+
+let lastEndingsLen = -1
+const syncEndings = () => {
+  const list = player.core.endings || []
+  if (list.length === lastEndingsLen) return
+  lastEndingsLen = list.length
+  endingsCount.textContent = String(list.length)
+  endingsEl.textContent = ''
+  for (const e of list) {
+    const row = document.createElement('div')
+    row.className = 'ending-entry'
+    row.textContent = (e.id || '?') + ' — ' + (e.name || '')
+    endingsEl.appendChild(row)
+  }
+}
+
+const syncAudioStatus = () => {
+  const bus = player.core.audioBus
+  const parts = []
+  if (bus.bgm && bus.bgm.playing) parts.push('BGM: ' + bus.bgm.path.split('/').pop())
+  const sePlaying = (bus.se || []).filter((x) => x && x.playing)
+  if (sePlaying.length > 0) parts.push('SE: ' + sePlaying.length)
+  if (bus.voice && bus.voice.playing) parts.push('VOICE: ' + bus.voice.path.split('/').pop())
+  const txt = parts.length > 0 ? parts.join(' · ') : '—'
+  if (audioStatusEl.textContent !== txt) audioStatusEl.textContent = txt
 }
 
 async function runScene(name) {
@@ -126,6 +195,8 @@ const scheduleAuto = () => {
 const frame = () => {
   renderer.render()
   syncBacklog()
+  syncEndings()
+  syncAudioStatus()
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)

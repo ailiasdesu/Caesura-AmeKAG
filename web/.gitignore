@@ -1,1 +1,4 @@
 node_modules/
+dist/
+tmp_dist_server.cjs
+_probe*.mjs

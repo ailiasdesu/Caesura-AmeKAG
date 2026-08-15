@@ -22,21 +22,27 @@
     .backlog-entry:hover { background: #2a2a2a; }
     .backlog-entry .bl-line { color: #666; font-size: 11px; margin-right: 8px; }
     .backlog-entry.active { background: #223344; color: #fff; }
+    .status-line { max-width: 1280px; margin: 6px auto; padding: 0 8px; font-size: 13px; color: #9cf; }
+    .endings-wrap { max-width: 1280px; margin: 8px auto; }
+    #endings { max-height: 96px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .ending-entry { padding: 4px 6px; font-size: 13px; color: #fc9; border-radius: 4px; }
+    .ending-entry::before { content: "★ "; color: #fa3; }
   </style>
 </head>
 <body>
   <div class="controls">
-    <select id="scene">
-      <option value="galgame_demo.ks">galgame_demo.ks</option>
-      <option value="full_pipeline_demo.ks">full_pipeline_demo.ks</option>
-      <option value="sma_demo.ks">sma_demo.ks</option>
-    </select>
+    <select id="scene"></select>
     <button id="run">▶ Run Scene</button>
     <button id="advance">Click to Advance</button>
     <button id="auto">⏩ Auto</button>
     <span id="status"></span>
   </div>
   <div id="stage"></div>
+  <div class="status-line">Audio: <span id="audio-status">—</span></div>
+  <div class="endings-wrap">
+    <div class="backlog-title">Endings (<span id="endings-count">0</span>)</div>
+    <div id="endings"></div>
+  </div>
   <div class="backlog-wrap">
     <div class="backlog-title">Backlog (<span id="backlog-count">0</span>)</div>
     <div id="backlog"></div>
