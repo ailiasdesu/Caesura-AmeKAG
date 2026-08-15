@@ -14,10 +14,12 @@ local ResourceCommands = {}
 require("kag.schema").define("preload", {
     _meta = { category = "resource", blocking = false,
               desc = "Preload assets (texture/audio/scene) ahead of use; async unless wait=true" },
-    type = { type = "string", default = "texture", choices = { "texture", "audio", "scene" } },
+    type = { type = "enum", default = "texture",
+             values = { texture = true, audio = true, scene = true } },
     path = { type = "string", default = "", desc = "comma-separated asset paths" },
     storage = { type = "string", default = "", desc = "alias for path" },
-    wait = { type = "string", default = "true", choices = { "true", "false" } },
+    wait = { type = "enum", default = "true",
+             values = { ["true"] = true, ["false"] = true } },
 })
 
 -- ═══════════════════════════════════════════════════════════════════════════
