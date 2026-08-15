@@ -575,12 +575,35 @@ check("cli --update: top-level settings key preserved",
 local SEP2 = package.config:sub(1, 1)
 local IS_WIN2 = SEP2 == "\\"
 local LUA = nil
-for _, c in ipairs(IS_WIN2 and
-    { "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe",
-      "external" .. SEP2 .. "lua" .. SEP2 .. "lua" }
-    or { "external" .. SEP2 .. "lua" .. SEP2 .. "lua",
-         "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe" }) do
-    if io.open(c, "r") then LUA = c break end
+-- Interpreter candidates for the subprocess, in order: (1) the running
+-- interpreter itself (arg[-1] -- the CI-invoked binary, e.g. brew lua on
+-- macOS, lua5.4 on Linux); (2) the vendored source-tree lua (Windows
+-- local builds keep lua.exe there); (3) the lua_cli built by CMake
+-- (round 70); (4) bare "lua" via PATH (macOS/Linux CI). Without a real
+-- binary the --missing gate cannot run -- POSIX popen("") yields an
+-- EMPTY report that fails the assertions, so never fall through to "".
+local cands = {}
+if type(_G.arg) == "table" and type(_G.arg[-1]) == "string" then
+    cands[#cands + 1] = _G.arg[-1]
+end
+for _, c in ipairs({ "external" .. SEP2 .. "lua" .. SEP2 .. "lua.exe",
+                     "external" .. SEP2 .. "lua" .. SEP2 .. "lua",
+                     "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
+                         .. SEP2 .. "lua.exe",
+                     "build" .. SEP2 .. "lua" .. SEP2 .. "Debug"
+                         .. SEP2 .. "lua" }) do
+    cands[#cands + 1] = c
+end
+cands[#cands + 1] = IS_WIN2 and "lua.exe" or "lua"
+for _, c in ipairs(cands) do
+    if c:find(SEP2, 1, true) or c:find("/", 1, true) then
+        -- path-like candidate: must exist on disk
+        if io.open(c, "r") then LUA = c break end
+    else
+        -- bare name: resolvable via PATH (popen shells out) -- accept
+        LUA = c
+        break
+    end
 end
 local fff = io.popen(LUA and (LUA .. ' scripts/ks_i18n.lua --dir "'
     .. cli_dir .. '" --out "' .. cli_lang .. '" --missing') or "")

@@ -28,7 +28,7 @@ export const KAG_COMMANDS = [
   'wait', 'delay', 's', 'chapter', 'ending', 'gallery', 'music', 'unlock',
   'rollback', 'toast', 'replay', 'save', 'load', 'saveload', 'listsaves', 'saveplace',
   'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
-  'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'set', 'inc', 'random',
+  'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'i18n', 'set', 'inc', 'random',
   'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
   // round 71: KAG3-compat arithmetic + character + effects + notification
   'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
