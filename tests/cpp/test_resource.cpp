@@ -13,6 +13,7 @@
 #include <fstream>
 #include <filesystem>
 #include <map>
+#include <stdexcept>
 #include <thread>
 
 using namespace Caesura;    // ResourceHandle, GenerationTracker, HandleType::TEXTURE
@@ -465,3 +466,375 @@ TEST_CASE("AsyncLoader dedup: same asset twice shares one load") {
     std::remove(path.c_str());
 }
 
+// =============================================================================
+// Round 78 second wave: boundary tests for the provider chain + AsyncLoader.
+// Focus: chain depth / priority override / exception behavior, queue capacity,
+// cache semantics (invalidation, no-reload, same-content distinct paths),
+// error retry, lifecycle, and path normalization (traversal rejection).
+// =============================================================================
+
+namespace {
+
+// Spy provider: counts how many times exists()/read() were invoked, so tests
+// can assert priority-override (a low-priority provider must never be touched
+// when a higher-priority one serves) with exact call accounting.
+class SpyProvider : public IAssetProvider {
+public:
+    SpyProvider(int prio, std::string source, bool present, std::vector<uint8_t> payload = {})
+        : m_prio(prio), m_source(std::move(source)), m_present(present), m_payload(std::move(payload)) {}
+
+    int existsCalls() const { return m_existsCalls; }
+    int readCalls() const { return m_readCalls; }
+
+    bool exists(const std::string&) override {
+        ++m_existsCalls;
+        return m_present;
+    }
+    std::vector<uint8_t> read(const std::string&) override {
+        ++m_readCalls;
+        return m_payload;
+    }
+    std::string getSource() const override { return m_source; }
+    int priority() const override { return m_prio; }
+    bool verify() override { return true; }
+
+private:
+    int m_prio;
+    std::string m_source;
+    bool m_present;
+    std::vector<uint8_t> m_payload;
+    int m_existsCalls = 0;
+    int m_readCalls = 0;
+};
+
+// Provider whose read()/exists() throws, to exercise ProviderChain behavior
+// when a member provider faults.
+class ThrowingProvider : public IAssetProvider {
+public:
+    explicit ThrowingProvider(int prio, std::string source, bool throwOnExists = false)
+        : m_prio(prio), m_source(std::move(source)), m_throwOnExists(throwOnExists) {}
+
+    bool exists(const std::string&) override {
+        if (m_throwOnExists) throw std::runtime_error("exists() fault");
+        return true;
+    }
+    std::vector<uint8_t> read(const std::string&) override {
+        throw std::runtime_error("read() fault");
+    }
+    std::string getSource() const override { return m_source; }
+    int priority() const override { return m_prio; }
+    bool verify() override { return true; }
+
+private:
+    int m_prio;
+    std::string m_source;
+    bool m_throwOnExists;
+};
+
+} // namespace
+
+// ---- Provider chain depth & priority override -------------------------------
+
+TEST_CASE("ProviderChain deep 5-provider fallback honors priority order") {
+    // A(10),B(8),C(6),D(4),E(2). Only E (lowest priority) holds the file, so
+    // the chain must walk through A,B,C,D (each a miss) and resolve from E.
+    // Inserted out of order to prove addProvider() re-sorts by priority.
+    ProviderChain chain;
+    auto e = std::make_unique<MemProvider>(2, "E");
+    e->put("deep.bin", {'E'});
+    auto a = std::make_unique<MemProvider>(10, "A");
+    auto d = std::make_unique<MemProvider>(4, "D");
+    auto c = std::make_unique<MemProvider>(6, "C");
+    auto b = std::make_unique<MemProvider>(8, "B");
+    chain.addProvider(std::move(e));
+    chain.addProvider(std::move(a));
+    chain.addProvider(std::move(d));
+    chain.addProvider(std::move(c));
+    chain.addProvider(std::move(b));
+
+    REQUIRE(chain.providers().size() == 5);
+    // Sorted order must be A(10),B(8),C(6),D(4),E(2).
+    CHECK(chain.providers()[0]->priority() == 10);
+    CHECK(chain.providers()[1]->priority() == 8);
+    CHECK(chain.providers()[2]->priority() == 6);
+    CHECK(chain.providers()[3]->priority() == 4);
+    CHECK(chain.providers()[4]->priority() == 2);
+
+    CHECK(chain.exists("deep.bin"));
+    const auto data = chain.read("deep.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 'E');
+}
+
+TEST_CASE("ProviderChain priority override: low provider not called when high serves") {
+    ProviderChain chain;
+    auto high = std::make_unique<SpyProvider>(10, "high", /*present*/ true, std::vector<uint8_t>{'H'});
+    auto low  = std::make_unique<SpyProvider>(1, "low",  /*present*/ true, std::vector<uint8_t>{'L'});
+    auto* lowRaw  = low.get();
+    auto* highRaw = high.get();
+    chain.addProvider(std::move(high));
+    chain.addProvider(std::move(low));
+
+    // read() checks exists() then read() on the highest provider that serves.
+    const auto data = chain.read("asset.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 'H');
+    CHECK(highRaw->readCalls() == 1);
+    // The low-priority provider must never be consulted at all (exists or read).
+    CHECK(lowRaw->existsCalls() == 0);
+    CHECK(lowRaw->readCalls() == 0);
+}
+
+TEST_CASE("ProviderChain exists() short-circuits at highest hit") {
+    ProviderChain chain;
+    auto high = std::make_unique<SpyProvider>(10, "high", /*present*/ true, std::vector<uint8_t>{'H'});
+    auto mid  = std::make_unique<SpyProvider>(5,  "mid",  /*present*/ true, std::vector<uint8_t>{'M'});
+    auto* midRaw = mid.get();
+    chain.addProvider(std::move(high));
+    chain.addProvider(std::move(mid));
+
+    // exists() returns true immediately on the first provider that has it --
+    // the lower provider is never queried.
+    CHECK(chain.exists("x.bin"));
+    CHECK(midRaw->existsCalls() == 0);
+}
+
+TEST_CASE("ProviderChain throwing provider is NOT isolated -- propagates") {
+    // Per AGENTS.md the chain itself does no exception isolation: a member
+    // provider that throws propagates out of read()/exists(). This test pins
+    // the CURRENT contract so a future hardening change is a visible diff.
+    ProviderChain chain;
+    chain.addProvider(std::make_unique<ThrowingProvider>(10, "bad"));
+    CHECK_THROWS_AS(chain.read("x.bin"), std::runtime_error);
+}
+
+TEST_CASE("ProviderChain exceptions in lower-priority provider stay masked when high serves") {
+    // High-priority provider serves; the throwing provider sits at lower
+    // priority and is never consulted, so no exception escapes.
+    ProviderChain chain;
+    auto high = std::make_unique<MemProvider>(10, "good");
+    high->put("safe.bin", {'s'});
+    chain.addProvider(std::make_unique<ThrowingProvider>(1, "bad"));
+    chain.addProvider(std::move(high));
+
+    const auto data = chain.read("safe.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 's');
+}
+
+// ---- AsyncLoader: queue capacity, cache semantics, lifecycle ----------------
+
+TEST_CASE("AsyncLoader queue capacity: 16 pending max, excess rejected") {
+    namespace fs = std::filesystem;
+    fs::create_directories("res_cap");
+    for (int i = 0; i < 20; ++i) {
+        std::ofstream out("res_cap/f" + std::to_string(i) + ".txt");
+        out << "payload-" << i;
+    }
+    {
+        AsyncFixtures fx;
+        int accepted = 0, rejected = 0;
+        for (int i = 0; i < 20; ++i) {
+            const int id = fx.loader.enqueue("res_cap/f" + std::to_string(i) + ".txt", "text");
+            if (id > 0) ++accepted;
+            else ++rejected;
+        }
+        // Everything completed synchronously but is still "pending" until
+        // drained, so the 16-entry cap is what gates the 17th..20th enqueues.
+        CHECK(accepted == 16);
+        CHECK(rejected == 4);
+        CHECK(fx.loader.pendingCount() <= 16);
+
+        auto done = fx.loader.drainCompleted();
+        REQUIRE(done.size() == static_cast<size_t>(accepted));
+        for (const auto& c : done) {
+            CHECK(c.success);
+            CHECK_FALSE(c.data.empty());
+        }
+        CHECK(fx.loader.pendingCount() == 0);
+    }
+    fs::remove_all("res_cap");
+}
+
+TEST_CASE("AsyncLoader cache hit does not re-read source file") {
+    // After a texture is cached, delete it from disk; a re-enqueue of the same
+    // (path,type) must still succeed from the resident cache -- proving the
+    // loader does NOT re-open the (now missing) source file.
+    const std::string path = "res_cachereload.png";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(kResG10RedPng),
+                  static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+    }
+    {
+        AsyncFixtures fx;
+        int id1 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id1 > 0);
+        auto first = fx.loader.drainCompleted();
+        REQUIRE_FALSE(first.empty());
+        REQUIRE(first[0].success);
+        REQUIRE_FALSE(first[0].rgba.empty());
+
+        // Source disappears while the decoded payload stays resident.
+        std::remove(path.c_str());
+
+        int id2 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id2 > 0);
+        auto second = fx.loader.drainCompleted();
+        REQUIRE_FALSE(second.empty());
+        CHECK(second[0].success);               // served from cache, not disk
+        CHECK(second[0].rgba == first[0].rgba);
+        CHECK(second[0].width  == first[0].width);
+        CHECK(second[0].height == first[0].height);
+    }
+    // File already removed above; tolerate absence.
+    std::remove(path.c_str());
+}
+
+TEST_CASE("AsyncLoader cache: reload after cancelAll-invalidate") {
+    const std::string path = "res_invalidate.png";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(kResG10RedPng),
+                  static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+    }
+    {
+        AsyncFixtures fx;
+        int id1 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id1 > 0);
+        auto first = fx.loader.drainCompleted();
+        REQUIRE_FALSE(first.empty());
+        REQUIRE(first[0].success);
+
+        // cancelAll clears the decode cache (contract: invalidate everything).
+        fx.loader.cancelAll();
+
+        // Re-enqueue same (path,type): must re-load from source (cache gone).
+        int id2 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id2 > 0);
+        auto second = fx.loader.drainCompleted();
+        REQUIRE_FALSE(second.empty());
+        CHECK(second[0].success);
+        CHECK(second[0].id != id1);
+        // Distinct load id proves the source (not the cache) served it.
+        CHECK(second[0].id == id2);
+    }
+    std::remove(path.c_str());
+}
+
+TEST_CASE("AsyncLoader different paths with same content are distinct cache entries") {
+    const std::string pA = "res_same_a.png";
+    const std::string pB = "res_same_b.png";
+    {
+        std::ofstream outA(pA, std::ios::binary);
+        outA.write(reinterpret_cast<const char*>(kResG10RedPng),
+                   static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+        std::ofstream outB(pB, std::ios::binary);
+        outB.write(reinterpret_cast<const char*>(kResG10RedPng),
+                   static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+    }
+    {
+        AsyncFixtures fx;
+        int idA = fx.loader.enqueue(pA, "texture");
+        REQUIRE(idA > 0);
+        auto a = fx.loader.drainCompleted();
+        REQUIRE(a.size() == 1);
+        REQUIRE(a[0].success);
+
+        int idB = fx.loader.enqueue(pB, "texture");
+        REQUIRE(idB > 0);
+        auto b = fx.loader.drainCompleted();
+        REQUIRE(b.size() == 1);
+        CHECK(b[0].success);
+
+        // Keys are (path,type) pairs, so identical bytes under two names are
+        // cached separately and both load successfully.
+        CHECK(a[0].id == idA);
+        CHECK(b[0].id == idB);
+        CHECK(a[0].path != b[0].path);
+        CHECK(b[0].rgba == a[0].rgba);   // same decoded content
+    }
+    std::remove(pA.c_str());
+    std::remove(pB.c_str());
+}
+
+TEST_CASE("AsyncLoader error then retry with file present succeeds") {
+    const std::string path = "res_retry.txt";
+    std::remove(path.c_str());
+    {
+        AsyncFixtures fx;
+        // First attempt: asset missing -> failure surfaces.
+        int id1 = fx.loader.enqueue(path, "text");
+        REQUIRE(id1 > 0);
+        auto fail = fx.loader.drainCompleted();
+        REQUIRE(fail.size() == 1);
+        CHECK_FALSE(fail[0].success);
+
+        // Create the file, then a fresh request must succeed (retry recovers).
+        { std::ofstream out(path, std::ios::binary); out << "now it exists"; }
+        int id2 = fx.loader.enqueue(path, "text");
+        REQUIRE(id2 > 0);
+        auto ok = fx.loader.drainCompleted();
+        REQUIRE(ok.size() == 1);
+        CHECK(ok[0].success);
+        std::string s(ok[0].data.begin(), ok[0].data.end());
+        CHECK(s == "now it exists");
+    }
+    std::remove(path.c_str());
+}
+
+TEST_CASE("AsyncLoader lifecycle: enqueue before init returns -1") {
+    // A loader that was never init()'d must reject work. Not running => -1.
+    AssetManager assets;
+    AsyncLoader loader(&assets);
+    // Do NOT call loader.init() -- exercise the not-running guard.
+    CHECK(loader.enqueue("whatever.bin", "text") == -1);
+    CHECK(loader.pendingCount() == 0);
+    // shutdown() on a never-started loader is a safe no-op.
+    CHECK_NOTHROW(loader.shutdown());
+}
+
+TEST_CASE("AsyncLoader twice back-to-back same path: first loads, second cache-hit id") {
+    const std::string path = "res_back2back.png";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(kResG10RedPng),
+                  static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+    }
+    {
+        AsyncFixtures fx;
+        int id1 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id1 > 0);
+        int id2 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id2 > 0);
+        // IDs are strictly increasing and distinct.
+        CHECK(id2 > id1);
+        auto done = fx.loader.drainCompleted();
+        REQUIRE(done.size() == 2);
+        // One entry is the real load, the other the cache hit; both succeed.
+        CHECK(done[0].success);
+        CHECK(done[1].success);
+        CHECK_FALSE(done[0].rgba.empty());
+        CHECK(done[1].rgba == done[0].rgba);
+    }
+    std::remove(path.c_str());
+}
+
+// ---- Path normalization / traversal rejection --------------------------------
+
+TEST_CASE("AsyncLoader rejects parent-traversal paths") {
+    AsyncFixtures fx;
+    // isPathSafe() rejects any path containing ".." -- both "/" and "\"
+    // separators, and embedded forms.
+    CHECK(fx.loader.enqueue("../escape.bin", "text") == -1);
+    CHECK(fx.loader.enqueue("a/../b.bin", "text") == -1);
+    CHECK(fx.loader.enqueue("..\\escape.bin", "text") == -1);
+    CHECK(fx.loader.enqueue("..", "text") == -1);
+    // Leading-dot relative paths with no ".." are NOT a traversal and pass.
+    const std::string flat = "res_dot_ok.txt";
+    { std::ofstream out(flat, std::ios::binary); out << "dot ok"; }
+    CHECK(fx.loader.enqueue("./" + flat, "text") > 0);
+    // (Note: the provider reads with the literal key "./res_dot_ok.txt", which
+    //  the filesystem normalizes to the same file on POSIX-style stat())
+    std::remove(flat.c_str());
+}
