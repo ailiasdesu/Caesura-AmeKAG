@@ -115,6 +115,43 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
 
+  it('runFromBundle executes a baked scene via the Lua-literal bridge (round 89 fix)', async () => {
+    // Regression: runFromBundle used to hand JS objects to wasmoon via
+    // global.set, which arrives as a *userdata* proxy; compiler.deserialize
+    // strictly requires a Lua table, so every bundled scene instantly
+    // 'DONE:1:0' without executing. The bridge now encodes the scenes map
+    // as a Lua literal and rebuilds real tables on the Lua side.
+    const ks = [
+      '*start',
+      "[ch name='Hero' text='bundle hello']",
+      '[p]',
+      "[ch name='Hero' text='bundle end']",
+      '[end]',
+    ].join('\n')
+    player.lua.global.set('KS_FOR_BAKE', ks)
+    const bundle = await player.lua.doString([
+      "local tokenizer = require('tokenizer')",
+      "local compiler = require('kag.compiler')",
+      'local tokens = tokenizer.parse(KS_FOR_BAKE)',
+      'compiler.compile(tokens)',
+      'local stream = compiler.serialize(tokens)',
+      'return { version = 1, scenes = { baked_one_ks = stream }, assets = {} }',
+    ].join(String.fromCharCode(10)))
+    expect(bundle.scenes.baked_one_ks).toBeTruthy()
+    player.core.events.length = 0
+    player.core.backlog.length = 0
+    const out = await player.runFromBundle(bundle, 'baked_one_ks', { maxFrames: 5000, autoClick: true })
+    expect(out.startsWith('DONE:'), 'bundle scene should complete: ' + out).toBe(true)
+    expect(out, 'bundle scene should execute past token 1').not.toBe('DONE:1:0')
+    // text lands in the backlog pages (bundle path commits [p] pages the
+    // same way the source path does)
+    const texts = player.core.backlog.flatMap((pg) =>
+      Array.isArray(pg.draws) ? pg.draws.map((d) => d.t || '') : [])
+    expect(texts.some((x) => x.includes('bundle hello'))).toBe(true)
+    expect(texts.some((x) => x.includes('bundle end'))).toBe(true)
+  }, 60000)
+
+
   // round 79: parameterized regression sweep — the REAL demo teaching files
   // (01-13) + showcase.ks run through the wasmoon player to completion with
   // ZERO unexpected error events; cheap per-file end states are asserted so a

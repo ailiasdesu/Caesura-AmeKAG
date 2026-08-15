@@ -52,8 +52,13 @@ function luaLiteralValue(v) {
   if (Array.isArray(v)) return '{' + v.map(luaLiteralValue).join(',') + '}'
   if (typeof v === 'object') {
     const parts = []
+    // Bracket quoted keys whenever they are NOT a valid plain Lua identifier:
+    // reserved words (end/for/do/while/return/... — e.g. a [for end="3"]
+    // param) or otherwise non-alnum keys must be '["end"]=..' not 'end=..'.
+    const RESERVED = new Set(['and','break','do','else','elseif','end','false','for','function','goto','if','in','local','nil','not','or','repeat','return','then','true','until','while'])
     for (const k of Object.keys(v)) {
-      const key = /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) ? k : '[' + luaLiteralValue(k) + ']'
+      const bare = /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && !RESERVED.has(k)
+      const key = bare ? k : '[' + luaLiteralValue(k) + ']'
       parts.push(key + '=' + luaLiteralValue(v[k]))
     }
     return '{' + parts.join(',') + '}'
@@ -623,8 +628,15 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     async runFromBundle(bundle, sceneKey, opts = {}) {
       const scene = bundle && bundle.scenes && bundle.scenes[sceneKey]
       if (!scene) return 'ERR:scene-not-in-bundle:' + String(sceneKey)
-      lua.global.set('BAKED_SCENE', scene)
-      lua.global.set('__BUNDLE_SCENES', bundle.scenes ?? {})
+      // wasmoon exposes host-side JS objects as *userdata* proxies when set
+      // via global.set, and compiler.deserialize strictly requires a Lua
+      // table (type(data) == 'table'). Passing .scenes directly made every
+      // bundled scene fail to deserialize -> instant DONE:1:0. Encode the
+      // scenes map as a Lua literal so the runner rebuilds REAL Lua tables
+      // for the baked scene and for [load]/[jump]/[call] cross-scene lookup.
+      lua.global.set('BAKED_SCENE', null)
+      lua.global.set('__BUNDLE_SCENES_LIT', luaLiteralValue(bundle.scenes ?? {}))
+      lua.global.set('__RUN_SCENE_KEY', sceneKey)
       lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
@@ -642,7 +654,17 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         local compiler = require('kag.compiler')
         local scheduler = require('scheduler')
         local tokenizer = require('tokenizer')
+        -- Rebuild a REAL Lua scenes table from the literal (host JS objects
+        -- arrive as userdata proxies which compiler.deserialize rejects).
+        local __BUNDLE_SCENES = (type(__BUNDLE_SCENES_LIT) == 'string'
+          and assert(load('return ' .. __BUNDLE_SCENES_LIT))() or {})
+        local BAKED_SCENE = __BUNDLE_SCENES[__RUN_SCENE_KEY]
+        if BAKED_SCENE == nil then
+          BAKED_SCENE = __BUNDLE_SCENES[__RUN_SCENE_KEY:gsub('^demo/','')]
+        end
         local tokens = compiler.deserialize(BAKED_SCENE)
+        if tokens == nil then error('bundle-deserialize-failed:' .. tostring(__RUN_SCENE_KEY)) end
+        local __initial_tokens = tokens
         -- Advance semantics (round 81 resumed): resume the parked cursor.
         local advance = __ADVANCE == true
         local advanceMatch = advance and __ADVANCE_SCENE ~= nil
@@ -660,6 +682,38 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             token_index = 1, tokens = tokens,
             text_state = {}, layer_state = {}, audio_state = {},
             macro_args = {}, call_stack = {}, flag_stack = {},
+            -- Cross-scene [jump]/[call]/[link] hook: scheduler passes an
+            -- 'assets/script/<target>.ks' path; resolve it against the
+            -- bundled scenes (table or literal-stream) and the source map.
+            load_tokens = function(path)
+              local base = tostring(path or '')
+              base = base:gsub('^assets/script/', '')
+              local key = base
+              if key:sub(1, 5) == 'demo/' then key = key:sub(6) end
+              local okL = false
+              local result = nil
+              local ser = __BUNDLE_SCENES and (__BUNDLE_SCENES[key] or __BUNDLE_SCENES[base])
+              if type(ser) == 'table' then
+                local okT, nt2 = pcall(compiler.deserialize, ser)
+                if okT and type(nt2) == 'table' then result = nt2; okL = true end
+              elseif type(ser) == 'string' and #ser > 0 then
+                local okD, came = pcall(compiler.deserialize, ser)
+                if okD and came then result = came; okL = true end
+              end
+              if not okL then
+                local src = __SCENE_SOURCES and (__SCENE_SOURCES[key] or __SCENE_SOURCES[base])
+                if type(src) == 'string' and #src > 0 then
+                  local okP, nt = pcall(tokenizer.parse, src)
+                  if okP and type(nt) == 'table' then result = nt; okL = true end
+                end
+              end
+              if okL and result ~= nil then
+                -- Signal the outer dead-coroutine loop to re-spawn at the
+                -- swapped scene (desktop kag_runner _scene_changed analog).
+                ctx._scene_changed = true
+              end
+              return result
+            end,
           }
           co = coroutine.create(function()
             local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
@@ -675,10 +729,15 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             key = key:sub(6)
           end
           local ser = __BUNDLE_SCENES and __BUNDLE_SCENES[key]
-          if type(ser) ~= 'string' or #ser == 0 then
+          if ser == nil then
             ser = __BUNDLE_SCENES and __BUNDLE_SCENES[name]
           end
-          if type(ser) == 'string' and #ser > 0 then
+          -- Bundle scene values are real deserializable tables (version=1);
+          -- older/web-cache streams may be encoded as Lua-literal strings.
+          if type(ser) == 'table' then
+            local okT, nt2 = pcall(compiler.deserialize, ser)
+            if okT and type(nt2) == 'table' then return nt2 end
+          elseif type(ser) == 'string' and #ser > 0 then
             return compiler.deserialize(ser)
           end
           local src = __SCENE_SOURCES and __SCENE_SOURCES[key]
@@ -770,7 +829,27 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 end
               end
             end
-            result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
+                                    -- Cross-scene [jump]/[goto]: scheduler swaps ctx.tokens and
+            -- RETURNS (dead coroutine); the runner must re-spawn at the
+            -- new scene's saved token (desktop _scene_changed analog). The
+            -- one-shot ctx._scene_changed flag (set by ctx.load_tokens) is
+            -- consumed here so a later legitimate [end] of the jumped-to
+            -- scene does NOT loop. [call] keeps one coroutine alive, so it
+            -- never sets the flag.
+            if ctx.stop_flag ~= true and ctx._scene_changed == true and type(ctx.load_tokens) == 'function' then
+              ctx._scene_changed = false
+              local ntk = ctx.tokens
+              ctx.label_index = nil
+              ctx.stop_flag = false
+              co2 = coroutine.create(function()
+                local okc, errc = pcall(function() scheduler.run(ctx, ntk, ctx.token_index) end)
+                if not okc then error(errc) end
+              end)
+              _G.__CO = co2
+              _G.__CTXREF = ctx
+              break
+            end
+result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           frames = frames + 1
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
