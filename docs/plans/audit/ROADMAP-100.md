@@ -127,3 +127,5 @@
 | 66 | 性能基线（热路径规模化确定性测试）：test_schema 500-span 插值（首尾跨度正确 + 计数 500 + <5s）；test_expr_lang 2000x 缓存求值（<5s）+ 200 项数值链（=20130）+ 运算符链；test_tokenizer 2000 命令场景（=2002 token，<10s）——为插值扫描器/表达式缓存/tokenizer 文本流设回归护栏 | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 66 提交) |
 
 | 67 | 文档一致性核对 + CI 保鲜守卫：api-stats.md 普查过期（契约 84→102、C++ 用例 638→711/断言 6160→6656、绑定函数 157→149、UnifiedBinding 移除）——重生成提交；command-contracts.md 验证新鲜（102 命令）；ci.yml Windows job 新增「Generated docs freshness」步骤（重生成 + git diff --exit-code 失败即红） | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 67 提交) |
+
+| 68 | 表达式深化：①**三元在括号内翻译**（find_top 只匹配 paren 深度 0——(f.flag ? a : b) 从未被翻译；新增 translate_parens 与 brackets 同构的内外翻转压平）②**eval 三元赋值**（translateAssignment：首个顶层 '=' 拆 LHS，RHS 全管道翻译——x = cond ? a : b 合法；修 for 循环内改 i 无效的 Lua 陷阱改 while、== 双等号跳过、LHS/RHS trim；ks_check 与 lsp diagnostics 同步兜底）③tutorial_12_expr_combo（三元索引/?? + switch exp/循环插值/eval 综合）flow 01-12、bundle 17 场景 | web 44/44, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 68 提交) |
