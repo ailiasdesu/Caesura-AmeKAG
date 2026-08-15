@@ -445,6 +445,14 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
       lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
       lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
+      // Player-settings wiring (round 87+ UX): opts.textSpeed is the KAG3
+      // chars-per-second pace (the player-settings slider is 1..80 cps);
+      // opts.skip toggles skip mode. Both are pushed into the scene ctx so
+      // the reveal machinery (kag_runner reads ctx.text_speed as ms/char)
+      // and the [p]/[ch] wait loop anchor on them. Applied on a fresh start
+      // AND on an advance so mid-run setting toggles take effect immediately.
+      lua.global.set('__TEXT_SPEED', Number.isFinite(opts.textSpeed) ? opts.textSpeed : null)
+      lua.global.set('__SKIP_MODE', opts.skip === true)
       const out = await lua.doString(`
         local tokenizer = require('tokenizer')
         local scheduler = require('scheduler')
@@ -481,6 +489,24 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end)
           _G.__CTXREF = ctx
           _G.__CO = co
+        end
+        -- Push player-settings text speed (cps) + skip mode into the ctx on
+        -- both a fresh start and an advance (round 87 UX). textSpeed is cps:
+        -- ctx.text_speed is the ms/char read point (floor(1000/cps)), exactly
+        -- as [textspeed] computes it; inline [pt]/[textspeed] commands still
+        -- override it mid-run. A zero/negative/huge cps (validation edge) is
+        -- ignored so the engine default never explodes into a 0/negative
+        -- divisor.
+        do
+          local __cps = tonumber(__TEXT_SPEED)
+          if __cps ~= nil and __cps > 0 then
+            ctx.cps = __cps
+            ctx.text_speed = math.floor(1000 / __cps)
+            if ctx.text_speed < 1 then ctx.text_speed = 1 end
+          end
+          -- Explicitly drive the default skip mode both ways so a mid-run
+          -- toggle OFF (opts.skip false) clears a previously parked skip.
+          ctx.skip_mode = __SKIP_MODE == true
         end
         local __load_scene_tokens = function(name)
           -- Engine scene paths are allowlisted to demo/...; web scene keys
@@ -587,7 +613,15 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           frames = frames + 1
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) .. ':' .. tostring((ctx.tokens and ctx.tokens[ctx.token_index] and (ctx.tokens[ctx.token_index].cmd or ctx.tokens[ctx.token_index].type)) or '?') break end
           if ctx.waiting_input then
-            if not __CLICK then
+            -- Skip mode (round 87 UX): reveal the page instantly and advance
+            -- through the wait without a click — mirrors kag_runner.update
+            -- (skip_mode reveals + on_click immediately).
+            if ctx.skip_mode then
+              if ctx.reveal then
+                local __st = require('kag.text_scene').get_state(ctx)
+                __st.reveal_chars = ctx.reveal.total
+              end
+            elseif not __CLICK then
               if __AUTOCLICK and clicks < 100 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
               end
@@ -717,6 +751,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
       lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
       lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
+      // Player-settings wiring (round 87+ UX): same text-speed (cps) + skip
+      // contract as runScene, applied on fresh start AND advance.
+      lua.global.set('__TEXT_SPEED', Number.isFinite(opts.textSpeed) ? opts.textSpeed : null)
+      lua.global.set('__SKIP_MODE', opts.skip === true)
       const maxFrames = opts.maxFrames ?? 200000
       const out = await lua.doString(`
         local compiler = require('kag.compiler')
@@ -789,6 +827,22 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end)
           _G.__CTXREF = ctx
           _G.__CO = co
+        end
+        -- Push player-settings text speed (cps) + skip mode into the ctx on
+        -- both a fresh start and an advance (round 87 UX), same contract as
+        -- runScene. textSpeed is cps -> ctx.text_speed ms/char = floor(1000/cps);
+        -- a non-positive cps is ignored so the engine default never divides by
+        -- zero/negative. Inline [pt]/[textspeed] commands override mid-run.
+        do
+          local __cps = tonumber(__TEXT_SPEED)
+          if __cps ~= nil and __cps > 0 then
+            ctx.cps = __cps
+            ctx.text_speed = math.floor(1000 / __cps)
+            if ctx.text_speed < 1 then ctx.text_speed = 1 end
+          end
+          -- Both-ways default: skip reflects opts.skip, so a mid-run toggle
+          -- OFF also clears a previously parked skip on the next advance.
+          ctx.skip_mode = __SKIP_MODE == true
         end
         -- [load] resume: bundled scenes are serialized; parse them on demand.
         local __load_scene_tokens = function(name)
@@ -922,7 +976,15 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           frames = frames + 1
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
           if ctx.waiting_input then
-            if not __CLICK then
+            -- Skip mode (round 87 UX): reveal the page instantly and advance
+            -- through the wait without a click — mirrors kag_runner.update
+            -- (skip_mode reveals + on_click immediately).
+            if ctx.skip_mode then
+              if ctx.reveal then
+                local __st = require('kag.text_scene').get_state(ctx)
+                __st.reveal_chars = ctx.reveal.total
+              end
+            elseif not __CLICK then
               if __AUTOCLICK and clicks < 100 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
               end

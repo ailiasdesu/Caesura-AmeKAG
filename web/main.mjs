@@ -43,11 +43,63 @@ settings.load()
 // Push the persisted volume / language into the engine at boot.
 applyVolumes(settings.get('volumes'))
 void applyLanguage(settings.get('language'))
-// Keep the engine live behind any later settings change.
+
+/**
+ * Mirror the current settings controller state back into the settings UI
+ * controls wherever they actually mirror a persisted field. Safe against
+ * echo loops: assigning el.value / el.checked programmatically does NOT
+ * fire change/input events, so this never re-triggers a settings set.
+ * Called after load, on any settings notification (so an external write
+ * such as a reset or a programmatic set updates the sliders/checkbox), and
+ * after reset. Text-speed/volume sliders show the sanitized in-range value.
+ */
+function syncSettingsControls() {
+  const langEl = document.getElementById('settings-lang')
+  const autoEl = document.getElementById('settings-auto')
+  const speedEl = document.getElementById('settings-speed')
+  const bgmEl = document.getElementById('settings-bgm')
+  const seEl = document.getElementById('settings-se')
+  const voiceEl = document.getElementById('settings-voice')
+  if (!langEl) return // settings UI absent (headless) — nothing to mirror
+  langEl.value = settings.get('language') in { en: 1, zh: 1, 'zh-TW': 1, ja: 1 } ? settings.get('language') : 'en'
+  autoEl.checked = settings.get('autoClick')
+  speedEl.value = String(settings.get('textSpeed'))
+  bgmEl.value = String(settings.get('volumes').bgm)
+  seEl.value = String(settings.get('volumes').se)
+  voiceEl.value = String(settings.get('volumes').voice)
+}
+
+// Keep the engine (volume buses + i18n) live behind any later settings
+// change, and keep the settings UI mirrors in sync (bidirectional, no cycle:
+// control writes -> settings.set -> notify -> mirror back without an event).
 settings.subscribe(({ field, settings: s }) => {
-  if (field === 'volumes') applyVolumes(s.volumes)
-  if (field === 'language') void applyLanguage(s.language)
+  if (field === '*') {
+    // Reset carried defaults: re-apply every engine-facing setting now.
+    applyVolumes(s.volumes)
+    void applyLanguage(s.language)
+  } else {
+    if (field === 'volumes') applyVolumes(s.volumes)
+    if (field === 'language') void applyLanguage(s.language)
+  }
+  syncSettingsControls()
 })
+
+/**
+ * Reset all settings to their defaults and apply them to the engine +
+ * UI immediately (round 87 reset): language resets to default (en), volume
+ * buses return to 1.0, auto/skip off, text speed back to DEFAULT_TEXT_SPEED.
+ * settings.reset() notifies subscribers ('*'), which re-applies volumes +
+ * language and mirrors the controls.
+ */
+function resetPlayerSettings() {
+  settings.reset()
+  const s = settings.getAll()
+  autoMode = s.autoClick
+  document.getElementById('auto').textContent = autoMode ? '⏸ Auto' : '⏩ Auto'
+  if (autoMode) scheduleAuto()
+  else if (autoTimer) clearTimeout(autoTimer)
+  syncSettingsControls()
+}
 
 /** Forward volumes to both the core state machine and the WebAudio engine. */
 function applyVolumes(vols) {
@@ -74,14 +126,12 @@ function bindSettingsControls() {
   const bgmEl = document.getElementById('settings-bgm')
   const seEl = document.getElementById('settings-se')
   const voiceEl = document.getElementById('settings-voice')
-  // seed control values
-  langEl.value = settings.get('language') in { en: 1, zh: 1, 'zh-TW': 1, ja: 1 } ? settings.get('language') : 'en'
-  autoEl.checked = settings.get('autoClick')
-  speedEl.value = String(settings.get('textSpeed'))
-  bgmEl.value = String(settings.get('volumes').bgm)
-  seEl.value = String(settings.get('volumes').se)
-  voiceEl.value = String(settings.get('volumes').voice)
-  // writes
+  // seed control values from the settings controller (kept in sync with the
+  // subscriber notify path — see syncSettingsControls).
+  syncSettingsControls()
+  // writes: control operation -> settings controller (which notifies -> engine
+  // wiring + control mirror). No echo loop: programmatic .value assignment
+  // never fires change/input events.
   langEl.addEventListener('change', () => settings.set('language', langEl.value))
   autoEl.addEventListener('change', () => {
     settings.set('autoClick', autoEl.checked)
@@ -95,6 +145,8 @@ function bindSettingsControls() {
   bgmEl.addEventListener('input', () => settings.setVolume('bgm', Number(bgmEl.value)))
   seEl.addEventListener('input', () => settings.setVolume('se', Number(seEl.value)))
   voiceEl.addEventListener('input', () => settings.setVolume('voice', Number(voiceEl.value)))
+  const resetBtn = document.getElementById('settings-reset')
+  if (resetBtn) resetBtn.addEventListener('click', () => resetPlayerSettings())
 }
 
 const syncTextures = () => {
@@ -189,12 +241,17 @@ const syncAudioStatus = () => {
 async function runScene(name) {
   log('running ' + name)
   statusEl.textContent = 'running…'
+  const runOpts = {
+    autoClick: settings.get('autoClick'),
+    textSpeed: settings.get('textSpeed'),
+    skip: settings.get('skipMode'),
+  }
   let out
   if (storyBundle && storyBundle.scenes[name]) {
-    out = await player.runFromBundle(storyBundle, name, { autoClick: settings.get('autoClick') })
+    out = await player.runFromBundle(storyBundle, name, runOpts)
   } else {
     const ks = await (await fetch(DEMO_BASE + name)).text()
-    out = await player.runScene(ks, name, { autoClick: settings.get('autoClick') })
+    out = await player.runScene(ks, name, runOpts)
   }
   syncTextures()
   await renderer.render()
@@ -206,12 +263,19 @@ async function advance() {
   const sel = document.getElementById('scene').value
   // VN semantics: advance resumes the previously parked scene cursor one page
   // (desktop on_click parity) instead of re-running the whole scene from token 1.
+  // textSpeed/skip ride along so a mid-run setting toggle takes effect on the
+  // next advanced page (the bridge re-applies them to the live/wrapped ctx).
+  const advOpts = {
+    autoClick: false, maxFrames: 5000, advance: true, advanceScene: sel,
+    textSpeed: settings.get('textSpeed'),
+    skip: settings.get('skipMode'),
+  }
   let out
   if (storyBundle && storyBundle.scenes[sel]) {
-    out = await player.runFromBundle(storyBundle, sel, { autoClick: false, maxFrames: 5000, advance: true, advanceScene: sel })
+    out = await player.runFromBundle(storyBundle, sel, advOpts)
   } else {
     const ks = await (await fetch(DEMO_BASE + sel)).text()
-    out = await player.runScene(ks, sel, { autoClick: false, maxFrames: 5000, advance: true, advanceScene: sel })
+    out = await player.runScene(ks, sel, advOpts)
   }
   syncTextures()
   await renderer.render()
