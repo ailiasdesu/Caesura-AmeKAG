@@ -179,6 +179,18 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             ctx.waiting_input = false
             __CLICK = false
             clicks = clicks + 1
+            local pg = ctx.text_state and ctx.text_state.draws
+            local pdraws = {}
+            if type(pg) == 'table' then
+              for _, d in ipairs(pg) do
+                if type(d) == 'table' and d.text and #d.text > 0 then
+                  pdraws[#pdraws + 1] = { t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0 }
+                end
+              end
+            end
+            __SCENE_PAGE = pdraws
+            __SCENE_BACKLOG = __SCENE_BACKLOG or {}
+            __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
           end
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
@@ -211,6 +223,16 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       // sync the structured draws into the core overlay (JSON parse)
       const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
       core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
+      // commit all [p]-parked pages accumulated during the run (VN history)
+      const pages = lua.global.get('__SCENE_BACKLOG')
+      if (pages && Array.isArray(pages)) {
+        for (const pg of pages) {
+          if (Array.isArray(pg) && pg.length > 0) {
+            core.pushBacklog(JSON.parse(JSON.stringify(pg)))
+          }
+        }
+      }
+      lua.global.set('__SCENE_BACKLOG', null)
       return out
     },
     /** Run a scene from a pre-baked story bundle (ks_bake --web): zero
@@ -254,6 +276,18 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             ctx.waiting_input = false
             __CLICK = false
             clicks = clicks + 1
+            local pg = ctx.text_state and ctx.text_state.draws
+            local pdraws = {}
+            if type(pg) == 'table' then
+              for _, d in ipairs(pg) do
+                if type(d) == 'table' and d.text and #d.text > 0 then
+                  pdraws[#pdraws + 1] = { t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0 }
+                end
+              end
+            end
+            __SCENE_PAGE = pdraws
+            __SCENE_BACKLOG = __SCENE_BACKLOG or {}
+            __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
           end
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
@@ -283,6 +317,16 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       `)
       const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
       core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
+      // commit all [p]-parked pages accumulated during the run (VN history)
+      const pages = lua.global.get('__SCENE_BACKLOG')
+      if (pages && Array.isArray(pages)) {
+        for (const pg of pages) {
+          if (Array.isArray(pg) && pg.length > 0) {
+            core.pushBacklog(JSON.parse(JSON.stringify(pg)))
+          }
+        }
+      }
+      lua.global.set('__SCENE_BACKLOG', null)
       return out
     },
     /** Raise the click signal for the next runScene. */

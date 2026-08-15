@@ -87,15 +87,19 @@ export class AdapterCore {
   /** Structured text draws from the Lua TextScene (x/y/rgb/scale/bold). */
   setDraws(draws) {
     this.draws = Array.isArray(draws) ? draws : []
-    // backlog: snapshot non-empty pages so the UI can scroll back (VN
-    // convention: every [p]/[er] commits the current page to history).
-    const text = this.draws.map((d) => d.t).join('')
-    if (text.trim().length > 0 && text !== this._lastBacklog) {
-      this.backlog.push({ draws: this.draws.map((d) => ({ ...d })), text })
-      this._lastBacklog = text
-      this._log('backlog.add', { n: this.backlog.length })
-    }
     this._log('text.draws', { n: this.draws.length })
+  }
+
+  /** Commit a historical page WITHOUT changing the current view (VN
+   *  backlog: clicking pushes the visible page into history; the display
+   *  stays until the next [p] clears it). */
+  pushBacklog(draws) {
+    const list = Array.isArray(draws) ? draws : []
+    const text = list.map((d) => d.t).join('')
+    if (text.trim().length === 0 || text === this._lastBacklog) return
+    this.backlog.push({ draws: list.map((d) => ({ ...d })), text })
+    this._lastBacklog = text
+    this._log('backlog.add', { n: this.backlog.length })
   }
 
   // -- audio ------------------------------------------------------------

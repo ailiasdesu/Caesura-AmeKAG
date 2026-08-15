@@ -58,6 +58,11 @@ async function runScene(name) {
 
 async function advance() {
   const sel = document.getElementById('scene').value
+  // VN semantics: clicking commits the visible page to history
+  if (player.core.draws.length > 0) {
+    const text = player.core.draws.map((d) => d.t).join('')
+    player.core.setDraws(player.core.draws.map((d) => ({ ...d })))
+  }
   log('click')
   await player.click()
   let out

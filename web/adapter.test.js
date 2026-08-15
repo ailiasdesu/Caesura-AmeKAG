@@ -146,9 +146,9 @@ describe('AdapterCore audio simulation', () => {
 describe('AdapterCore backlog (VN history)', () => {
   it('commits distinct text pages to history', () => {
     const core = new AdapterCore()
-    core.setDraws([{ t: 'Hello', x: 10, y: 20 }])
-    core.setDraws([{ t: 'Hello', x: 10, y: 20 }]) // unchanged -> no new entry
-    core.setDraws([{ t: 'Next line', x: 10, y: 40 }])
+    core.pushBacklog([{ t: 'Hello', x: 10, y: 20 }])
+    core.pushBacklog([{ t: 'Hello', x: 10, y: 20 }]) // unchanged -> no new entry
+    core.pushBacklog([{ t: 'Next line', x: 10, y: 40 }])
     expect(core.backlog.length).toBe(2)
     expect(core.backlog[0].text).toBe('Hello')
     expect(core.backlog[1].text).toBe('Next line')
@@ -157,16 +157,16 @@ describe('AdapterCore backlog (VN history)', () => {
 
   it('ignores empty pages', () => {
     const core = new AdapterCore()
-    core.setDraws([])
-    core.setDraws([{ t: '   ', x: 0, y: 0 }])
+    core.pushBacklog([])
+    core.pushBacklog([{ t: '   ', x: 0, y: 0 }])
     expect(core.backlog.length).toBe(0)
   })
 
   it('backlog entries are snapshots (later draws do not mutate them)', () => {
     const core = new AdapterCore()
-    core.setDraws([{ t: 'A', x: 1, y: 2 }])
+    core.pushBacklog([{ t: 'A', x: 1, y: 2 }])
     const first = core.backlog[0].draws[0]
-    core.setDraws([{ t: 'B', x: 3, y: 4 }])
+    core.pushBacklog([{ t: 'B', x: 3, y: 4 }])
     expect(first.x).toBe(1)
     expect(core.backlog[0].text).toBe('A')
   })

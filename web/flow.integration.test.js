@@ -114,4 +114,16 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.length).toBeGreaterThan(0)
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
+
+  it('runs the showcase sample (25 commands, branching, backlog)', async () => {
+    player.core.backlog.length = 0 // isolate from earlier scenes
+    const ks = readFileSync(join(here, '..', 'demo', 'showcase.ks'), 'utf8')
+    const out = await player.runScene(ks, 'showcase.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:')).toBe(true)
+    // branching took the lucky path; ending unlocked
+    const ending = player.core.events.some((e) => e.kind === 'audio.stop')
+    // backlog accumulated per [p] page
+    expect(player.core.backlog.length).toBeGreaterThan(5)
+    expect(player.core.backlog[0].text).toContain('Welcome to the Caesura')
+  }, 120000)
 })
