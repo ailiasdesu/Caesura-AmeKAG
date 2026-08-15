@@ -642,6 +642,14 @@ function scheduler.run(ctx, tokens, start_index)
             local timeout = tonumber(params.timeout) or 60000
             if timeout < 0 then timeout = 0 end
             if type(uexp) == "string" and uexp ~= "" then
+                -- Per-scene frame guard (round 59): [until] yields every
+                -- frame so it cannot hang the main thread, but a huge
+                -- timeout with a never-true exp would poll for a very
+                -- long time. Bound the total frames waited per scene the
+                -- same way [while]/[for] bound iterations
+                -- (WHILE_MAX_ITERS).
+                local wscene = ctx.current_scene or "?"
+                ctx._untilFramesByScene = ctx._untilFramesByScene or {}
                 local op <close> = operation.start(ctx)
                 local ct = op.token
                 local elapsed = 0
@@ -666,6 +674,13 @@ function scheduler.run(ctx, tokens, start_index)
                     if v then break end
                     local dt = tonumber(coroutine.yield() or frameTime)
                         or frameTime
+                    ctx._untilFramesByScene[wscene] =
+                        (ctx._untilFramesByScene[wscene] or 0) + 1
+                    if ctx._untilFramesByScene[wscene] > WHILE_MAX_ITERS then
+                        error("[until] exceeded " .. WHILE_MAX_ITERS
+                            .. " total frames in scene '" .. wscene
+                            .. "' (bounded wait guard)", 0)
+                    end
                     elapsed = elapsed + dt
                 end
                 if not ct.cancelled then op:complete() end
