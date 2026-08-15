@@ -169,6 +169,70 @@ try:
     r = request({"id": 18, "method": "kagReloadScene"})
     check("kag-reload-scene-no-scene-graceful",
         r.get("status") == "ok")
+
+    # ---- Round 57: LSP endpoints against the contract registry -----------
+    # The editor's lspCall() bridges to kag.lsp.json() via /api/eval;
+    # validate completion / hover / diagnostics for the round-51 contract
+    # commands (schema-driven, same registry ks_check uses).
+    _lsp_id = [19]
+
+    def lsp_json(method, *args):
+        code = "local lsp = require('kag.lsp'); return lsp.json('%s'%s)" % (
+            method, "".join(", " + json.dumps(a) for a in args))
+        _lsp_id[0] += 1
+        return request({"id": _lsp_id[0], "method": "eval", "code": code})
+
+    r = lsp_json("hover", "blur", "duration")
+    _b = r.get("result") or ""
+    check("lsp-hover-blur-contract",
+        r.get("status") == "ok" and '"title"' in _b
+        and "type=number" in _b and "duration" in _b)
+
+    r = lsp_json("hover", "fade", "duration")
+    _b = r.get("result") or ""
+    check("lsp-hover-fade-contract",
+        r.get("status") == "ok" and "type=number" in _b)
+
+    r = lsp_json("hover", "unlock", "type")
+    _b = r.get("result") or ""
+    check("lsp-hover-unlock-param",
+        r.get("status") == "ok" and "type=" in _b)
+
+    r = lsp_json("hover", "saveload", "mode")
+    _b = r.get("result") or ""
+    check("lsp-hover-saveload-mode",
+        r.get("status") == "ok" and "mode" in _b and "type=" in _b)
+
+    r = lsp_json("hover", "select")
+    _b = r.get("result") or ""
+    check("lsp-hover-select-params", r.get("status") == "ok" and "params:" in _b)
+
+    r = lsp_json("completion", "[sav")
+    _b = r.get("result") or ""
+    check("lsp-completion-saveload", r.get("status") == "ok" and "saveload" in _b)
+
+    r = lsp_json("completion", "[bl")
+    _b = r.get("result") or ""
+    check("lsp-completion-blur", r.get("status") == "ok" and "blur" in _b)
+
+    r = lsp_json("completion", "[ch ")
+    _b = r.get("result") or ""
+    check("lsp-completion-ch-params", r.get("status") == "ok" and "text" in _b)
+
+    r = lsp_json("diagnostics", '[ch name="A" text="x"]\n[if exp="f.hp >"]')
+    _b = r.get("result") or ""
+    check("lsp-diag-bad-expr-compile",
+        r.get("status") == "ok" and "does not compile" in _b)
+
+    r = lsp_json("diagnostics", "[playbgm vol=1]")
+    _b = r.get("result") or ""
+    check("lsp-diag-missing-anyof",
+        r.get("status") == "ok" and "requires one of" in _b)
+
+    r = lsp_json("diagnostics", "[blurrr oops=1]")
+    _b = r.get("result") or ""
+    check("lsp-diag-unknown-command",
+        r.get("status") == "ok" and len(_b) > 2)
 finally:
     try:
         proc.stdin.close()
