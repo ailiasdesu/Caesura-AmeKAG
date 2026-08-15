@@ -82,3 +82,97 @@ test_tokenizer/test_label_bench/test_frame_bench），随 CI 门禁每轮全跑�
 - 守卫全部在门禁中：Lua 套件全绿（含 test_benchmark/test_schema/
   test_expr_lang/test_tokenizer/test_label_bench/test_frame_bench），
   C++/ctest/耦合 PASS（同 round 81 门禁记录）。
+---
+
+# round 82-87：性能基线二次刷新（round 82 之后的热路径回归对比）
+
+## 触发背景
+
+round 82 刷新基线（round 66-81 零回归）后，round 82-87 期间在热路径上
+新增/改动了以下代码，需确认未引入可感知开销：
+
+| 轮次 | 热路径改动 | 关注点 |
+|---|---|---|
+| round 84 | expr translate_parens 括号内顶层逗号分段（多参调用逐段 translate + trim 再 join） | 逐段翻译新增 O(段数) 额外开销 |
+| round 83/84 | scheduler _backJumps 反向跳边记忆守卫 + 循环栈（_for/_while/_forStackMarks）跳转时重置 | 跳边守卫每次 jump/goto 查表开销；循环栈重置 |
+| round 80/84 | i18n 复数（CLDR 表格 + {n} 插值） | 文本插值路径 |
+| round 82/87 | web advance / player-settings（JS 侧） | 不影响 Lua 侧热路径 |
+| round 87 | wait/skip/textspeed 深度 | 命令分发路径 |
+
+## round 82-87 当前基线（本次采样，本机 os.clock）
+
+> 与 round 82 方法一致：预算守卫测实机制（CI 更松），另用探针 os.clock
+> 计时取精确 dx / 中位数。
+
+### frame_bench 守卫（round 68-72，round 82-87 期间保持通过）
+
+| 热路径 | round 82 记录 | 本次（中位数 3 次） | 对比 |
+|---|---|---|---|
+| render 5000x 均值 | 274.6us/帧（45% 占用） | PASS（<500us 预算） | 渲染路径零改动 |
+| 混合表达式 translate 1000x | 0.054s | 0.054s | 0%（精确复现） |
+| [add] 链 dispatch 1000x | 0.007s | 0.004s | -43%（更快） |
+
+- 混合表达式 translate 守卫（含 2-3 个括号组、??、三元）精确复现 round 82
+  的 0.054s——翻译管道在 round 82-87 期间零净退化。
+- [add] 链 dispatch 中位数 0.004s，优于 round 82 的 0.007s——调度器在
+  round 83/84 新增 _backJumps/循环栈重置后，分发吞吐不降反升（守卫只在
+  jump/goto 边触发，非每 token 路径）。
+
+### test_benchmark 吞吐（round 82 vs 本次）
+
+| 指标 | round 82 记录 | 本次（独立 / 套件内） | 结论 |
+|---|---|---|---|
+| tokenizer 1000tok | 361-533ms / 90-133ms-per-1000tok | 245ms / 61ms-per-1000tok（独立）；301ms / 75ms-per-1000tok（套件内） | 低端或更优，无退化 |
+| scheduler 4001 resumes | 26-48ms | 25ms（套件内）/ 29ms（独立） | 范围下沿，无退化 |
+
+### 规模化确定性守卫（round 66，round 82-87 期间全 PASS）
+
+| 守卫 | 预算 | 结果 |
+|---|---|---|
+| test_schema 500-span 插值 | <5s | PASS |
+| test_expr_lang 2000x 缓存求值 | <5s | PASS |
+| test_expr_lang 200 项数值链 | -- | PASS（=20130） |
+| test_tokenizer 2000 命令场景 | <10s | PASS |
+
+## round 84 translate_parens 逗号分段专项验证
+
+功能：多参调用括号（f.calc(f.flag ? 1 : 2, 3)）顶层逗号分段独立翻译 +
+trim 再 join。正确性已由 test_expr_lang2 三条 LIMIT 断言锁定（round 84
+翻转），套件内 124/124 全绿。
+
+开销（本机 os.clock，中位数 5 次，30k 迭代）：
+
+| 形态 | 单次耗时 | 说明 |
+|---|---|---|
+| 平表达式（无括号） | 0.0138ms | 基线 |
+| 1 参括号（round 68 路径） | 0.0303ms | 无逗号不触发分段 |
+| 2 参括号（round 84 分段） | 0.0346ms | +0.0043ms（+14% vs 1 参） |
+| 6 参括号（round 84 分段，含三元） | 0.0801ms | 每参数约 +0.002-0.008ms |
+| 6 参无三元（纯分段） | 0.0429ms | 纯 O(段数) 开销 |
+
+结论：round 84 逗号分段引入 O(段数) 的逐段 translate+trim 开销，每参数约
+数个微秒量级。即便 6 参调用单次也仅 0.080ms——相对 2s 预算余量 >99.9%，
+对真实表达式求值（缓存命中后约 0.06ms 级别）无可感知影响。
+
+## 结论：round 82-87 无性能回归
+
+- 全部预算守卫 PASS（render/expr/add/tokenizer/schema/expr_lang），套件内 124/124 全绿。
+- 无任何热路径预算余量 <20%：最紧的仍是 render 每帧守卫（约 45% 占用），其余 >97% 余量。
+- round 84 translate_parens 逗号分段：理论 O(段数) 额外开销实测为每参数数微秒，表达式级无可感知影响，且 frame_bench 混合守卫精确复现 0.054s。
+- round 83/84 scheduler _backJumps/循环栈重置：跳边守卫非每 token 路径，[add] 链 dispatch 实测 0.004s 优于 round 82 的 0.007s，无开销。
+- tokenizer 与 scheduler 吞吐均不高于 round 82 读数（tokenizer 甚至低端更优），i18n/wait/skip 改动未触及调度热路径。
+
+## 建议（非必须，无预算逼近）
+
+- 与 round 82 结论一致：各热路径预算余量充足，暂无必须实现的优化点。
+- round 84 逗号分段已是 O(段数) 最优形态（每段独立翻译，无法再并联）；若未来
+  出现极多参（>32）的高频调用，可考虑缓存参数级翻译结果（表达式缓存已覆盖
+  整表达式，参数级命中率有限），但不构成当前回归，留作观测。
+
+## 验证
+
+- 本文档更新为纯测量 + 文档，无代码变更。
+- 全量 Lua 套件 run_lua_tests.lua 124/124 通过（含 frame_bench/schema/
+  expr_lang/expr_lang2/tokenizer/label_bench/benchmark 守卫）；
+  test_scheduler / test_flow_edge / test_flow_edge_call 全绿（调度器守卫路径）。
+
