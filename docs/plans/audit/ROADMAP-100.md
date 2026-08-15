@@ -88,3 +88,4 @@
 | 40 | G5 播放器 UI 收官（40% 里程碑）：backlog 历史（core 快照提交不同文本页 + 面板滚动回看）、自动推进开关（1.2s 定时点击）；3 backlog 测试；web 26/26 | web vitest 26/26, 引擎无变更 | 65c290d1 |
 | 41 | G6 示例库起点：showcase.ks（25 命令全覆盖：文本/图层/音频/特效/流程 + random/if/jump 分支 + ending 解锁；56 tokens/6 labels）；backlog 历史机制设计（[p] 页快照） | 引擎 compile 通过, web showcase 全流程 PASS | c8ede0d6, 628d7b64 |
 | 42 | G6 示例库收尾：backlog 完整实现（Lua 累积 __SCENE_BACKLOG + core.pushBacklog 快照去重不影响视图）+ showcase flow 测试（DONE + 9 页历史 + ending）+ 示例库文档 docs/guides/sample-library.md | web vitest 27/27, bundle 5 场景 | 628d7b64, c8ede0d6 |
+| 43 | G6 教学示例库：demo/tutorial/ 6 个递进式教程（01 hello → 02 文本 → 03 图层 → 04 音频 → 05 分支 → 06 特效），全部过 ks_check 契约零警告 + ks_bake 编译 + Web 播放器 DONE 运行验证；Web 播放器新增 ending 解锁记录（bridge 导出 ctx.seen_endings → core.recordEndings 去重事件）；flow 测试固化教程全路径 + adapter 测试 2 例；sample-library.md 教程路径表；story bundle 11 场景 | web vitest 30/30, Lua 120/120+29, C++ 711/711, ctest 10/11（AI smoke 跳过）, 耦合 PASS | (round 43 提交) |
