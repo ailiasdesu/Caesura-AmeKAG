@@ -27,4 +27,7 @@
   greeting = "Hello!",
   farewell = "Goodbye!",
   thank_you = "Thank you!",
+
+  -- CLDR plural variant table (round 80): no n param resolves to "other"
+  items = { one = "{n} item", other = "{n} items" },
 }

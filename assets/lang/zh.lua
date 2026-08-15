@@ -34,4 +34,7 @@
   greeting = "你好！",
   farewell = "再见！",
   thank_you = "谢谢！",
+
+  -- CLDR 复数变体表（round 80）：无 n 参数时落到 other 形态
+  items = { one = "{n} 个条目", other = "{n} 个条目" },
 }

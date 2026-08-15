@@ -29,6 +29,7 @@ return {
   greeting = "こんにちは！",
   volume_bgm = "BGM音量",
   load_game = "ロード",
+  items = { one = "{n} 個", other = "{n} 個" },
   lines = {
     -- full_pipeline_demo.ks
     ["full_pipeline_demo.ks:724a1028"] = "", -- original: Welcome to the Caesura full-pipeline demo.

@@ -175,6 +175,12 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     ['tutorial_12_expr_combo.ks', 'tutorial', /表达式组合教程完成/, [], {}],
     // round 71/77: [palette day/night/toggle] must fire REAL palette.set events
     ['tutorial_13_commands.ks', 'tutorial', /KAG3 兼容命令教程完成/, [], { palette: 3 }],
+    // round 87/88 flow&timing: [wait]/[delay] with stop_flag alignment,
+    // [goto]/[jump] mixing + loop-stack reset, [i18n] plural dictionary values
+    ['tutorial_14_flow_timing.ks', 'tutorial', /计时与流程教程完成/, [], {}],
+    // round 84 advanced expression: nested ternary, multi-param comma-segment
+    // function calls, ?? null-coalesce, [eval] ternary assignment
+    ['tutorial_15_expr_deep.ks', 'tutorial', /高级表达式教程完成/, [], {}],
     ['showcase.ks', '', null, 'Thanks for watching the showcase.', {}],
     // auto-click resolves both [sel] blocks to option 1 -> good ending
     ['story.ks', 'example_game', null, 'thank you for finding my story.', {}],

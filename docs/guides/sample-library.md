@@ -14,7 +14,7 @@
 
 ## 教程路径（Tutorial Path，从零开始）
 
-按顺序运行 13 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
+按顺序运行 15 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
 
 | 步骤 | 示例 | 学习内容 | 命令 |
 |---|---|---|---|
@@ -31,10 +31,12 @@
 | 11 | demo/tutorial/tutorial_11_switch.ks | 多路分支：裸变量选择器（KAG3 兼容）与 exp= 表达式选择器（数值/布尔/TJS 运算符），case tostring 匹配无 fallthrough，缺失变量走 default | switch, case, default, endswitch, set, ch, p |
 | 12 | demo/tutorial/tutorial_12_expr_combo.ks | 表达式组合实战：三元在索引内、?? 空合并 + switch exp、循环 + 插值、eval 三元赋值（RHS 全管道） | eval, switch, case, endswitch, for, endfor, set, ch, p |
 | 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度切换、变量算术链、角色立绘 / 移动 / 清除、吐司通知、LUT 色调、消息层震动、资源预加载 | textspeed, cps, add, sub, mul, div, mod, dec, csp, csl, csd, notify, palette, vibrate, preload, set, eval, ch, p |
+| 14 | demo/tutorial/tutorial_14_flow_timing.ks | 计时与流程控制：帧让步等待与场景中止对齐、goto/jump 混合跳转 + 循环栈重置、反向往回边守卫、i18n 运行时热切换语言 + 复数字典值 | wait, delay, set, for, endfor, add, if, endif, jump, goto, i18n, ch, p, end |
+| 15 | demo/tutorial/tutorial_15_expr_deep.ks | 高级表达式：嵌套三元、多参函数调用 + 逗号分段、?? 空合并、eval 三元赋值、作用域前缀、数值边界 | set, eval, ch, p, end |
 
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
-注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→13 顺序学习。
+注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→15 顺序学习。
 
 ## 如何运行示例
 
