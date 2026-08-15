@@ -24,6 +24,9 @@
 | 04 | demo/tutorial/tutorial_04_audio.ks | 三总线音频：BGM/SE/Voice/音量/淡入淡出/交叉淡化 | playbgm, setbgmvolume, playse, voice_wait, fadebgm, xfadebgm, stopse, stopbgm |
 | 05 | demo/tutorial/tutorial_05_branching.ks | 变量与流程：赋值/条件分支/标签跳转 | set, if, else, endif, jump |
 | 06 | demo/tutorial/tutorial_06_effects.ks | 特效与转场：闪白/震动/溶解转场/结局解锁 | flash, vib, trans, ending, scroll, wait |
+| 07 | demo/tutorial/tutorial_07_saveload.ks | 存档与读档：槽位/保存/读取/结果分支（Web 无存档后端时优雅降级） | save, load, tf.save_result, tf.load_result |
+| 08 | demo/tutorial/tutorial_08_system_ui.ks | 系统 UI：CG 画廊/音乐室/历史回看/章节选择/内容解锁 | unlock, gallery, music, history, chapter |
+
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
 注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→06 顺序学习。
