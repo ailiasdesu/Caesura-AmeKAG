@@ -131,5 +131,90 @@ do
         failed = failed + 1 end
 end
 
+
+
+-- ---------------------------------------------------------------------------
+-- Round 74 additions: [break]/[continue] boundary depth.
+-- ---------------------------------------------------------------------------
+
+-- continue inside a for nested in a while must target the FOR (innermost),
+-- not the while: i==1 continues the for (so 1 body per for run), but the
+-- while's n decrement runs every round.
+do
+    local scheduler = require("scheduler")
+    local tokens = {
+        { "while", { exp = "n > 0" } },
+        { "eval", { exp = "f.n = f.n - 1" } },
+        { "for", { var = "i", start = "0", ["end"] = "2", step = "1" } },
+        { "if", { exp = "i == 1" } },
+        { "continue" },
+        { "endif" },
+        { "z", { tag = "IN" } },
+        { "endfor" },
+        { "z", { tag = "OUT" } },
+        { "endwhile" },
+    }
+    local d = {}
+    local kag_orig = package.loaded["kag"]
+    package.loaded["kag"] = setmetatable({}, { __index = function(_, k)
+        return function(c2, p2) d[#d + 1] = { k, p2 } end
+    end})
+    local vars = { n = 2 }
+    local ctx = { f = vars, tf = {}, sf = {}, mp = {}, variables = {},
+        _whileIterByScene = { ["t.ks"] = 0 },
+        macros = nil, macro_args = nil, current_scene = "t.ks", token_index = 1 }
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    local ok = true
+    while coroutine.status(co) ~= "dead" do ok = coroutine.resume(co) end
+    package.loaded["kag"] = kag_orig
+    local inC = 0
+    local outC = 0
+    for _, x in ipairs(d) do
+        if x[1] == "z" then
+            if x[2].tag == "IN" then inC = inC + 1 else outC = outC + 1 end
+        end
+    end
+    -- n=2,1: for runs i=0 (body), i=1 (continue), i=2 (body) -> 2 IN per
+    -- while round => 4 IN total, 2 OUT.
+    local okall = ok and inC == 4 and outC == 2
+    if okall then print("PASS continue-in-nested targets innermost for")
+        passed = passed + 1
+    else print("FAIL continue-in-nested targets innermost for (IN=" .. inC
+        .. " OUT=" .. outC .. ")") failed = failed + 1 end
+end
+
+-- break AND continue in the same for: i=0 body, i=1 continue, i=2 break.
+local t5 = {
+    { "for", { var = "i", start = "0", ["end"] = "5", step = "1" } },
+    { "if", { exp = "i == 2" } }, { "break" }, { "endif" },
+    { "if", { exp = "i == 1" } }, { "continue" }, { "endif" },
+    { "z", { tag = "B" } },
+    { "endfor" },
+    { "z", { tag = "AFTER" } },
+}
+local d5, ok5, _, ctx5 = run(t5, {})
+local b5 = 0
+local after5 = false
+for _, x in ipairs(d5) do
+    if x[1] == "z" then
+        if x[2].tag == "B" then b5 = b5 + 1 elseif x[2].tag == "AFTER" then after5 = true end
+    end
+end
+check("break+continue same loop runs once", ok5 and b5 == 1, tostring(b5))
+check("break+continue stops at i==2", ctx5.f.i == 2, tostring(ctx5.f.i))
+check("break+continue after runs", after5)
+
+-- break inside an EMPTY-body first iteration still exits cleanly.
+local t6 = {
+    { "for", { var = "k", start = "0", ["end"] = "9", step = "1" } },
+    { "if", { exp = "k == 0" } }, { "break" }, { "endif" },
+    { "endfor" },
+    { "z", { tag = "AFTER" } },
+}
+local d6, ok6, _, ctx6 = run(t6, {})
+local after6 = false
+for _, x in ipairs(d6) do if x[1] == "z" and x[2].tag == "AFTER" then after6 = true end end
+check("break in empty first iteration", ok6 and after6)
+check("break at k==0 counter", ctx6.f.k == 0, tostring(ctx6.f.k))
 if failed > 0 then os.exit(1) end
 print("LOOP CONTROL TESTS DONE")

@@ -123,5 +123,99 @@ do
         failed = failed + 1 end
 end
 
+-- ---------------------------------------------------------------------------
+-- Round 74 additions: range/boundary depth for numeric [for].
+-- ---------------------------------------------------------------------------
+
+-- Variable bounds: start=f.s / end=f.e read from the game frame each entry.
+local t6 = {
+    { "for", { var = "i", start = "f.s", ["end"] = "f.e", step = "1" } },
+    { "eval", { exp = "f.sum = f.sum + f.i" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+    { "z", { v = "after" } },
+}
+local d6, ok6, _, ctx6 = runFor(t6, { s = 2, e = 5, sum = 0 })
+local b6 = 0
+for _, x in ipairs(d6) do if x[1] == "z" and x[2].v == "x" then b6 = b6 + 1 end end
+check("for variable bounds run 4 times", ok6 and b6 == 4)
+check("for variable bounds sum", ctx6.f.sum == 14, tostring(ctx6.f.sum))  -- 2+3+4+5
+check("for variable bounds counter past end", ctx6.f.i == 6)
+
+-- Variable descending bounds with a negative step EXPRESSION (f.pace).
+local t7 = {
+    { "for", { var = "i", start = "f.hi", ["end"] = "f.lo", step = "f.pace" } },
+    { "eval", { exp = "f.sum = f.sum + f.i" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+}
+local d7, ok7, _, ctx7 = runFor(t7, { hi = 8, lo = 2, pace = -2, sum = 0 })
+local b7 = 0
+for _, x in ipairs(d7) do if x[1] == "z" and x[2].v == "x" then b7 = b7 + 1 end end
+check("for descending expr-step runs 4", ok7 and b7 == 4)
+check("for descending expr-step sum 8+6+4+2", ctx7.f.sum == 20, tostring(ctx7.f.sum))
+check("for descending expr-step bounds", ctx7.f.i == 0, tostring(ctx7.f.i))
+
+-- Large range: 0..9999 (10000 iterations) must run WITHOUT the 65536
+-- per-scene guard misfiring. Accumulate the sum via [eval].
+local t8 = {
+    { "for", { var = "i", start = "0", ["end"] = "9999", step = "1" } },
+    { "eval", { exp = "f.sum = f.sum + f.i" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+}
+local d8, ok8, _, ctx8 = runFor(t8, { sum = 0 })
+local b8 = 0
+for _, x in ipairs(d8) do if x[1] == "z" and x[2].v == "x" then b8 = b8 + 1 end end
+check("for 10000 iterations count", ok8 and b8 == 10000, tostring(b8))
+check("for 10000 iterations sum 49995000", ctx8.f.sum == 49995000, tostring(ctx8.f.sum))
+check("for 10000 iterations counter", ctx8.f.i == 10000, tostring(ctx8.f.i))
+
+-- Guard boundary: exactly 65536 iterations is permitted (the guard trips
+-- only ABOVE WHILE_MAX_ITERS) -- the loop must complete, not error.
+local t9 = {
+    { "for", { var = "i", start = "0", ["end"] = "65535", step = "1" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+}
+local d9, ok9, err9, ctx9 = runFor(t9, {})
+local b9 = 0
+for _, x in ipairs(d9) do if x[1] == "z" and x[2].v == "x" then b9 = b9 + 1 end end
+check("for at-65536 boundary completes", ok9 and b9 == 65536, tostring(b9) .. " ok=" .. tostring(ok9))
+check("for at-65536 boundary counter", ctx9.f.i == 65536, tostring(ctx9.f.i))
+
+-- Mutable END bound (documented anti-pattern): end=f.e is re-evaluated at
+-- every loop head, so shrinking it in the body shortens the span. Guard the
+-- run against a hang and report the observed length.
+local t10 = {
+    { "for", { var = "i", start = "0", ["end"] = "f.e", step = "1" } },
+    { "eval", { exp = "f.e = f.e - 1" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+}
+local d10, ok10, err10, ctx10 = runFor(t10, { e = 5 })
+local b10 = 0
+for _, x in ipairs(d10) do if x[1] == "z" and x[2].v == "x" then b10 = b10 + 1 end end
+check("for mutable end completes (no hang)", ok10)
+check("for mutable end observed span", b10 == 4, tostring(b10))
+
+-- Interpolation is NOT an expression-language construct: a bound of ${f.s} fails
+-- to compile and the body is skipped loudly (graceful, no crash).
+local t11 = {
+    { "for", { var = "i", start = "${f.s}", ["end"] = "3", step = "1" } },
+    { "z", { v = "x" } },
+    { "endfor" },
+    { "z", { v = "after" } },
+}
+local d11, ok11, _, _ = runFor(t11, { s = 1 })
+local b11 = 0
+local after11 = false
+for _, x in ipairs(d11) do
+    if x[1] == "z" then
+        if x[2].v == "x" then b11 = b11 + 1 elseif x[2].v == "after" then after11 = true end
+    end
+end
+check("for interpolation bound skips body (no crash)", ok11 and b11 == 0)
+check("for interpolation bound continues after", after11)
 if failed > 0 then os.exit(1) end
 print("FOR TESTS DONE")
