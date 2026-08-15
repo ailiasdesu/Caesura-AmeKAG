@@ -652,4 +652,168 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(out2.startsWith('DONE:'), out2).toBe(true)
     expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('picked-q')
   }, 120000)
+
+  it('[goto] is a KAG3 alias of [jump] on web: skips intermediate text (round 76/77 parity)', async () => {
+    player.core.backlog.length = 0
+    const NL = String.fromCharCode(10)
+    // Mirrors tests/scripts/test_scheduler.lua section 19: [goto *label] (and
+    // target="*label") is the KAG3 intra-scene label alias of [jump], and
+    // must skip the intermediate [ch] and land on the label. The scheduler
+    // union handler runs the (real) Lua flow branch under wasmoon, so web
+    // must match desktop.
+    const ks = [
+      '[ch name="N" text="A"]',
+      '[goto *L1]',
+      '[ch name="N" text="SKIPPED"]',
+      '*L1',
+      '[ch name="N" text="B"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'goto_label.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    // A and B survive; the SKIPPED line between [goto] and the label never ran.
+    expect(texts).toContain('A')
+    expect(texts).toContain('B')
+    expect(texts).not.toContain('SKIPPED')
+
+    // named target="*L2" form (KAG3 alias path) also skips to the label
+    player.core.backlog.length = 0
+    const ks2 = [
+      '[ch name="N" text="start"]',
+      '[goto target="*L2"]',
+      '[ch name="N" text="SKIP2"]',
+      '*L2',
+      '[ch name="N" text="end"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out2 = await player.runScene(ks2, 'goto_target.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    const t2 = player.core.backlog.map((b) => b.text).join(' | ')
+    expect(t2).toContain('start')
+    expect(t2).toContain('end')
+    expect(t2).not.toContain('SKIP2')
+  }, 120000)
+
+  it('[i18n language="en"] hot-switch runs and records settingsValues.language (round 76/77 parity)', async () => {
+    const readCtx = async (name) => {
+      // same pattern as the [textspeed]/[cps] round-76 test: read a field
+      // off __LAST_CTX (the exporter runs after every runScene).
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX[' + JSON.stringify(name) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[ch name="N" text="before"]',
+      '[p]',
+      '[i18n language="en"]',
+      '[ch name="N" text="after"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'i18n_en.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // no error events surfaced through the runner
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs.length).toBe(0)
+    // the [i18n] handler records the selected language on the scene ctx
+    const sv = await readCtx('settingsValues')
+    expect(sv).toBeTruthy()
+    expect(sv.language).toBe('en')
+    // the scene ran to completion after the switch (relocalize_page is a no-op stub)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('after')
+  }, 120000)
+
+  it('[i18n language] missing/empty param degrades gracefully on web (no crash)', async () => {
+    const NL = String.fromCharCode(10)
+    // The i18n command contract marks language= required=true, so
+    // schema.coerce rejects a missing/empty param BEFORE the handler runs
+    // (same as desktop: a controlled dispatch error, not a crash). The
+    // graceful guarantee on web is that the player surfaces the error and
+    // survives: the runtime is not torn down and a later valid scene runs.
+    const bad = await player.runScene('[i18n]', 'i18n_missing.ks', { maxFrames: 200000, autoClick: true })
+    expect(bad.startsWith('ERR:'), 'missing language should fail cleanly').toBe(true)
+    expect(bad).toContain('missing required param')
+    expect(bad).toContain('language')
+
+    const badEmpty = await player.runScene('[i18n language=""]', 'i18n_empty.ks', { maxFrames: 200000, autoClick: true })
+    expect(badEmpty.startsWith('ERR:')).toBe(true)
+
+    // Post-error robustness: a valid [i18n language="en"] still runs and
+    // records the language (the rejected dispatch did not corrupt the VM).
+    const good = ['[ch name="N" text="ok"]', '[p]', '[i18n language="ja"]', '[ch name="N" text="after"]', '[p]', '[end]'].join(NL)
+    const out = await player.runScene(good, 'i18n_recover.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.settingsValues or nil')
+    expect(player.lua.global.get('__R')).toBeTruthy()
+    expect(player.lua.global.get('__R').language).toBe('ja')
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('after')
+  }, 120000)
+
+  it('[palette] day/night/toggle run through a REAL web LUT, no degrade (round 77)', async () => {
+    player.core.layers.clear()
+    player.core.palette = { handle: null, intensity: 0, size: 0 }
+    player.core.events.length = 0
+    const NL = String.fromCharCode(10)
+    // Minimal palette scene mirroring tutorial_13: day (clear) -> night
+    // (load assets/lut/night.png + apply) -> toggle (back to day) -> day.
+    // palette.lua drives the backend.* LUT surface; on web these are now
+    // REAL bindings (load_image/is_valid/set_palette/destroy_texture) so
+    // lut_available() is true and the scene runs WITHOUT the degrade.
+    const ks = [
+      '[palette effect=day]',
+      '[palette effect=night]',
+      '[palette effect=toggle]',
+      '[palette effect=day]',
+      '[ch name="N" text="palette-done"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'palette_lut.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // No [palette] error: the old web gap crashed at palette.lua:39 (nil
+    // load_image) and logged a KAG command 'palette' failed ERROR. A wired
+    // LUT means zero error events.
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs).toEqual([])
+    // The engine's palette module tracked a real day<->night cycle:
+    //   day -> set_palette(nil,0,0) neutral
+    //   night -> load_image(path) => texture registered, set_palette(handle,1,16)
+    //   toggle -> set_day_mode -> clear -> neutral
+    //   day -> neutral again
+    const sets = player.core.events.filter((e) => e.kind === 'palette.set')
+    expect(sets.length).toBeGreaterThanOrEqual(4)
+    // The night LUT was registered through the core texture pipeline.
+    const nightTex = [...player.core.textures.values()].some((t) => t.path.includes('night.png'))
+    expect(nightTex).toBe(true)
+    // After the final [palette effect=day] the active LUT is cleared.
+    expect(player.core.palette.handle).toBeNull()
+  }, 120000)
+
+  it('[palette] web LUT tints the DOM render output (night) and clears on day (round 77)', async () => {
+    player.core.layers.clear()
+    player.core.palette = { handle: null, intensity: 0, size: 0 }
+    const NL = String.fromCharCode(10)
+    // A background texture must be present so the render list is non-empty.
+    const bgTex = player.core.loadTexture('bg_placeholder.png')
+    player.core.layers.clear()
+    const bg = player.core.ensureLayer('bg', { z: 0 })
+    player.core.setLayerImage(bg, bgTex)
+    renderer.setTextureUrl(bgTex, '/assets/bg_placeholder.png')
+    // Neutral: no filter (day).
+    player.core.setPalette(null, 0, 0)
+    await renderer.render()
+    expect(stage.style.filter).toBe('')
+    // Night: the active palette tints the whole render output.
+    player.core.setPalette(bgTex, 1.0, 16)
+    await renderer.render()
+    expect(stage.style.filter).toContain('brightness')
+    expect(stage.style.filter).toContain('hue-rotate')
+    // Back to day / neutral: filter clears.
+    player.core.setPalette(null, 0, 0)
+    await renderer.render()
+    expect(stage.style.filter).toBe('')
+  }, 60000)
 })

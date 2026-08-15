@@ -216,6 +216,18 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     },
     load_texture_async: (f) => core.loadTexture(f),
     create_solid_texture: () => 0, destroy_texture: (id) => core.destroyTexture(id),
+    // -- palette / LUT bridge (round 77) -------------------------------
+    // scripts/palette.lua drives LUT color grading through these four
+    // backend.* entries (load_image / is_valid / set_palette /
+    // destroy_texture). Earlier load_image+set_palette were missing, so
+    // [palette effect=night] crashed at palette.lua:39 (field load_image)
+    // once lut_available() returned true. The web LUT is real: the LUT
+    // image registers through the same core texture pipeline as atlases
+    // /sprites, and set_palette drives core.palette which the DOM
+    // renderer turns into a color-grading filter on the render output.
+    load_image: (f) => core.loadTexture(String(f ?? '')),
+    is_valid: (h) => core.textures.has(Number(h)),
+    set_palette: (h, intensity, size) => core.setPalette(h, intensity, size),
     font_render_text: () => 1, font_clear: () => {}, line_height: () => 22,
     // Lua contract: render_text(text, x, y, r, g, b, a) — the text is the
     // first arg; x/y/r/g/b/a are render coordinates we ignore in the DOM
@@ -248,7 +260,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     toast: { show: () => {}, _hideAll: () => {} },
     ks_i18n: {}, fileutil: {}, sandbox: {},
     mods: { resolve: (p) => p, register: () => {}, list: () => ({}) },
-    i18n: { localize: (s) => s, current: '', t: (s) => s },
+    // i18n is intentionally NOT stubbed: scripts/i18n.lua is the real
+    // pure-Lua module and is loaded through wasmoon (round 77 web parity),
+    // so the [i18n language=] handler sees a genuine Lua table with
+    // set_language and records ctx.settingsValues.language.
   }
   for (const [k, v] of Object.entries(jsStubs)) lua.global.set(k, v)
   lua.global.set('backend', jsBackend)
@@ -257,9 +272,25 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
   await lua.doString(`
     backend = _G['backend']
     layers = _G['layers']
-    for _, name in ipairs({'backend','layers','audio','rtt','blend','transition','transform','vfx','flow','replay','pool','config','system','settings','gallery','music_room','title_menu','saveload_menu','chapter_select','dev_hud','history_ui','toast','ks_i18n','fileutil','sandbox','mods','i18n'}) do
+    -- Round 77: wasmoon marshals a JS binding object as userdata, but
+    -- scripts/palette.lua gates every LUT op on a type(backend) == table
+    -- (lut_available). Copy the JS backend fields into a real Lua table so
+    -- [palette] sees a wired backend instead of degrading to a no-op.
+    do
+      local jsb = _G.backend
+      local t = {}
+      for k, v in pairs(jsb) do t[k] = v end
+      _G.backend = t
+    end
+    for _, name in ipairs({'backend','layers','audio','rtt','blend','transition','transform','vfx','flow','replay','pool','config','system','settings','gallery','music_room','title_menu','saveload_menu','chapter_select','dev_hud','history_ui','toast','ks_i18n','fileutil','sandbox','mods'}) do
       package.loaded[name] = _G[name]
     end
+    -- Web parity (round 77): load the REAL pure-Lua i18n module (scripts/
+    -- i18n.lua has set_language; a JS-object stub would report a non-table
+    -- type and the [i18n language=] handler would degrade before recording
+    -- ctx.settingsValues.language). Headless-safe: i18n.load pcall's the
+    -- io.open of assets/lang/*.lua and falls back to built-in dictionaries.
+    pcall(function() _G.i18n = require('i18n') end)
   `)
 
   // ---- load the real kag command table ----

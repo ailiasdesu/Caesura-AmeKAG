@@ -17,6 +17,10 @@ export class AdapterCore {
     this.audioBus = { bgm: null, se: [], voice: null }
     this.events = [] // call log for tests/telemetry
     this._seq = 0
+    /** Active color-grading LUT state (round 77 web palette bridge).
+     *  Mirrors the desktop s_lutTex/u_paletteParams binding: handle is the
+     *  registered LUT texture id (nil = no LUT), intensity 0..1, size 16/64. */
+    this.palette = { handle: null, intensity: 0, size: 0 }
   }
 
   // -- layers -----------------------------------------------------------
@@ -89,6 +93,21 @@ export class AdapterCore {
     if (t) { t.loaded = true; t.width = width ?? 0; t.height = height ?? 0; this._log('texture.ready', { id, w: t.width, h: t.height }) }
   }
   destroyTexture(id) { this.textures.delete(id); this._log('texture.destroy', { id }) }
+
+  // -- palette / LUT (round 77 web bridge) -----------------------------
+  /** Apply the active color-grading LUT. handle is a texture id registered
+   *  via load_image/loadTexture (null clears -> neutral). intensity 0..1,
+   *  size 16 (16^3) or 64 (64^3). The DOM renderer consumes core.palette to
+   *  tint the render output (a real web-side analog of the desktop LUT). */
+  setPalette(handle, intensity, size) {
+    const h = handle == null ? null : Number(handle)
+    this.palette = {
+      handle: h && this.textures.has(h) ? h : null,
+      intensity: Number(intensity) || 0,
+      size: Number(size) || 0,
+    }
+    this._log('palette.set', { handle: this.palette.handle, intensity: this.palette.intensity, size: this.palette.size })
+  }
 
   // -- text -------------------------------------------------------------
   clearText() { this.textBuffer = ''; this.draws = []; this._log('text.clear') }

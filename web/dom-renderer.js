@@ -7,6 +7,22 @@
 // message/ui layers as overlay <div>.
 const IMAGE_LAYER_TAGS = new Set(['bg', 'fg', 'layer0', 'layer1', 'fore', '_char_', 'image'])
 
+// Web-side LUT color-grading: map the active palette (core.palette) to a
+// CSS filter on the render container. This is the DOM render path analog of
+// the desktop backend.set_palette binding (s_lutTex applied to future
+// submits). handle==null (day/neutral) -> none; otherwise a blue-dark
+// "night" grade whose strength follows intensity 0..1.
+function paletteFilter(palette) {
+  if (!palette || palette.handle == null || !(Number(palette.intensity) > 0)) return ''
+  const t = Math.min(1, Math.max(0, Number(palette.intensity) || 0))
+  // night = cool, dim blue cast (brightness down, blue/sepia grade up
+  // with t). Linear in intensity so day<->night toggle visibly shifts.
+  const b = Math.round(16 * t)
+  const h = Math.round(198 * t)
+  const sat = 1 + 0.25 * t
+  return 'brightness(' + (1 - 0.18 * t).toFixed(3) + ') sepia(' + b + '%) hue-rotate(' + h + 'deg) saturate(' + sat.toFixed(3) + ')'
+}
+
 export class DomRenderer {
   constructor(core, rootEl, opts = {}) {
     this.core = core
@@ -35,6 +51,12 @@ export class DomRenderer {
   /** Full re-render: sync DOM to core state. Cheap for demo sizes. */
   async render() {
     const alive = new Set()
+    // Web-side color grading: the active LUT (backend.set_palette ->
+    // core.palette) tints the whole render output via a CSS filter, the
+    // DOM analog of the desktop s_lutTex/u_paletteParams binding. day/
+    // neutral (handle null) applies nothing; night applies a blue-dark
+    // grade scaled by intensity.
+    this.root.style.filter = paletteFilter(this.core.palette)
     const list = this.getLayers ? await this.getLayers() : this.core.renderList()
     // text layer rendered separately (overlay) if it has content
     for (const n of list) {
