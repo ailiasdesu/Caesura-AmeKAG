@@ -615,8 +615,9 @@ cands[#cands + 1] = IS_WIN2 and "lua.exe" or "lua"
 -- accepted only when no earlier candidate resolved (popen shells out,
 -- so PATH lookup happens at spawn time).
 for _, c in ipairs(cands) do
+    -- path-like = contains a separator ONLY (a bare name like "lua5.4"
+    -- carries a dot but resolves via PATH -- never treat it as a file).
     local pathLike = c:find(SEP2, 1, true) or c:find("/", 1, true)
-        or c:find(".", 1, true)
     if not pathLike or io.open(c, "r") then LUA = c break end
 end
 -- The interpreter may be an absolute path containing spaces or
