@@ -42,8 +42,16 @@ export class AudioEngine {
       return await this._ctx.decodeAudioData(buf)
     })()
     this._buffers.set(path, p)
-    try { await p } catch { this._buffers.delete(path) }
-    return p
+    try {
+      const buf = await p
+      return buf
+    } catch {
+      // load/decode failure: drop the failed entry so a later play(path)
+      // can retry, and signal "unavailable" to the caller instead of
+      // surfacing the rejection (graceful degradation).
+      this._buffers.delete(path)
+      return null
+    }
   }
   async play(kind, path, opts = {}) {
     const ctx = this.ensureContext()
@@ -56,7 +64,17 @@ export class AudioEngine {
     source.loop = !!opts.loop
     const bus = this._busGains.get(kind) ?? ctx.destination
     source.connect(bus)
-    if (opts.volume != null) bus.gain.value = Number(opts.volume) || 1
+    if (opts.volume != null) {
+      const v = Number(opts.volume)
+      if (Number.isFinite(v)) bus.gain.value = v
+    }
+    // When WebAudio signals the clip has naturally ended, drop it from the
+    // active map so isPlaying reflects the end without waiting on the clock
+    // (and so a later play(same kind) is not fought by a stale entry).
+    source.onended = () => {
+      const cur = this._sources.get(kind)
+      if (cur && cur.source === source) this._sources.delete(kind)
+    }
     source.start()
     this._sources.set(kind, { source, gain: bus, started: ctx.currentTime, duration: buffer.duration })
     return true
@@ -80,8 +98,32 @@ export class AudioEngine {
 
   setBusVolume(kind, v) {
     const g = this._busGains.get(kind)
-    if (g) g.gain.value = Number(v) ?? 1
+    if (!g) return
+    const n = Number(v)
+    g.gain.value = Number.isFinite(n) ? n : 1
   }
 
   stopAll() { for (const k of [...this._sources.keys()]) this.stop(k) }
+
+  // ---- lifecycle (round 83 tests) ----
+  /** Suspend the underlying AudioContext. */
+  suspend() {
+    if (this._ctx && typeof this._ctx.suspend === 'function') return this._ctx.suspend()
+    return undefined
+  }
+  /** Resume the underlying AudioContext. */
+  resume() {
+    if (this._ctx && typeof this._ctx.resume === 'function') return this._ctx.resume()
+    return undefined
+  }
+  /** Tear down: stop sources, close the context, clear state. Later calls
+   *  degrade safely (play returns false, stop no-ops). */
+  destroy() {
+    this.stopAll()
+    try { if (this._ctx && typeof this._ctx.close === 'function') this._ctx.close() } catch { }
+    this._ctx = null
+    this.ready = false
+    this._busGains.clear()
+    this._buffers.clear()
+  }
 }
