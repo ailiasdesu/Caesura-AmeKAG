@@ -1,6 +1,6 @@
 # Engine Capability Matrix (Mermaid)
 
-> 2026-08-06 readiness audit (updated after GPU verification iteration): this matrix tracks 61 code-level capability surfaces.
+> 2026-08-15 readiness audit (refreshed to round 90 / 90% milestone): this matrix tracks 79 code-level capability surfaces (existing rows refreshed for round 88-90; new round-90 rows: contract runtime coverage, tutorial sample library).
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -97,18 +97,18 @@ graph LR
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
 
-### Scripting (17 capabilities)
+### Scripting (38 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
-| S2 | KAG Neo-Genesis parser (117 contract commands, 9 categories) | Lua tokenizer | ✓ |
+| S2 | KAG Neo-Genesis parser (118 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
 | S2d | KAG3 expression compatibility (TJS `&& \|\| ! != ?:` translated string-aware; visible scene:line errors instead of silent else) | `kag/expr.lua` | ✓ |
 | S2e | KAG3 variable system (`%f.x%` interpolation, `lf` call-frame stack, `mp` message params, dual-style expression env) | schema + scheduler | ✓ |
 | S2f | KAG3 control-flow completeness (`[elsif]` alias, `[call *label]` intra-scene, `[end]`→ending, unknown-tag warnings) | tokenizer + scheduler | ✓ |
 | S2g | Modern utility commands (`[set]` typed, `[inc]`, `[random]`, `[assert]`) | system commands | ✓ |
-| S2h | Command metadata (category/blocking/desc on all 117 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
+| S2h | Command metadata (category/blocking/desc on all 118 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
 | S2c | Parser performance (4000 tokens 362ms -> 259ms, 64.75ms/1000tok after dropping 9 redundant prefix patterns) | lpeg.lua | ✓ |
 | S2i | KAG scene-level debugger (breakpoints on scene+cmd/line, single-step, scope inspection; RPC kagSetBreakpoint/kagDebugContinue/kagDebugStep/kagInspectScopes) | `kag_debug.lua` + scheduler + RPC | ✓ |
@@ -124,6 +124,7 @@ graph LR
 | S2s | Inline text markup (`{color=#rrggbb}` per-span colors, `{size=N}` glyph scaling affecting wrap, `{b}` synthetic bold, `{i}` italic top-edge shear, `{s}` strikethrough middle bar — all stackable; unknown `{tags}` literal) | `kag/text_layout.lua` (parse_markup/wrap_spans) + `kag/text_scene.lua` (add_wrapped_spans) + `IRenderDevice::renderText(scale, bold, italic, strike)` | ✓ (34 Lua assertions; typewriter reveal + backlog use stripped plain text; strike bar geometry headless-tested) |
 | S2t | NVL mode (`[nvl]` full-screen accumulated text block, Ren'Py parity; `[nvl clear]`/`[p]` page break, `[nvl off]` exit; speaker as 「Name」： inline prefix styled by `nameplate_style.text_color` — format customizable via `[nvl prefix="%s："]` schema param (persists per session, `%`-safe); wraps with the line, instant draw — zero new state fields; cursor reused from text_state so save/rollback persists the page) | `kag/commands/text.lua` (`nvl` handler + ch/text/p/er accumulation) + `kag/text_scene.lua` (`commit` seals prior reveal draws, `instant` draws skip typewriter) + save/snapshot `nvl_mode` | ✓ (29 Lua assertions; typewriter only animates the appended line) |
 | S2u | Localization pipeline (`{key}` token expansion with markup-name whitelist + per-line translation `lines["<scene>:<fnv1a(msg)>"]`, content-addressed keys; applied by [ch]/[text] before markup parsing **and by [button]/[sel] choice labels at registration**; empty placeholder falls back to original; settings Language hot-switch **+ full-page redraw** (already-displayed page / NVL page / backlog / active choice labels / closed captions re-localize with the new language via `page_src` replay — exceeds Ren'Py, which keeps displayed lines in the original language; layout y-cascade for re-wrapped translations; typewriter sealed) + save persistence (`state.language` + backlog `src`); `scripts/ks_i18n.lua` template generator with --update merge and --missing CI gate, extracts dialogue + choice labels) | `scripts/i18n.lua` (fnv1a/localize/expand/load) + `kag/commands/text.lua` (ch/text/button localize + relocalize_page/relocalize_backlog) + `kag/text_scene.lua` (page_src lifecycle) + `assets/lang/{zh,en,ja}.lua` | ✓ (67 Lua assertions; generated ja.lua template with 25 demo keys incl. choice labels) |
+| S2v | Contract runtime coverage (**118/118 contracts execute at runtime**; round-90 grep audit: 106 had runtime refs, 12 previously-dead handlers — cancel/setvoicevolume/setsevolume/playbgmstop/playstop/waitforclick/moveto/camera/sprite_fade/move/scale/swap — now exercised; coverage matrix saturated) | scheduler + `test_contract_runtime_gaps.lua` (orphan 18→19) | ✓ (25 Lua assertions: headless no-crash + skip/fallthrough presence + key semantics) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S3a | Save/load loop continuity (for/while/if/switch stacks lifted into ctx and serialized via `loop_stacks` in capture_state; [load] resumes an in-progress loop to completion) | Lua scheduler + save snapshot | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
@@ -148,7 +149,7 @@ graph LR
 | A3 | 3D spatial audio (listener position, 3D SE placement) | `IAudioBackend` | ✓ |
 | A4 | Per-SE-handle volume and stop control | `IAudioBackend` | ✓ |
 
-### Content Systems (9 capabilities)
+### Content Systems (10 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
@@ -161,12 +162,13 @@ graph LR
 | C7 | Cloud save provider abstraction (local / remote pluggable) | `ISaveProvider` | ✓ abstraction + local path + **HTTP cloud provider (push/pull/delete against a REST endpoint, offline degrade) + Lua save.configure_cloud/cloud_push/cloud_pull; mock-server round trip tested** |
 | C8 | Steamworks integration (achievements, stats, cloud saves) | `ISteamBackend` | Conditional (needs Steam SDK/account): full Lua surface (19 APIs incl. cloud list/write/read/delete/quota), overlay/stats/store fixes, Null-backend tested; real SDK round trip needs a Steam dev account |
 | C9 | Asset provider chain (Dir → CARC, priority-ordered, integrity check) | `IAssetProvider` | ✓ |
+| C10 | Tutorial sample library (**15 递进式教程** tutorial_01–15, each runnable to [end] with line-by-line commentary; covers hello/text/layers/audio/branching/effects/saveload/system-ui/interpolation/loops/switch/expr-combo/commands/flow-timing/expr-deep; engine compile + Web-player double verification) | `demo/tutorial/*.ks` + `assets/lang/{zh,en,ja}.lua` | ✓ (round 90 added 14/15; ks_check zero WARN; sample-library path table 15 rows) |
 
-### Development Tools (7 capabilities)
+### Development Tools (10 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) + **editor store depth** (round 88: store actions + reveal-queue consumption, editor 333→368) + **rpc client depth** (round 89: evalRaw POST / response parsing / error propagation / URL encoding, editor 368→402) + **panel integration E2E** (round 90: `panels.integration.test.tsx` mounts real App+store — doc→outline→reveal→Inspector chain, setEngine broadcasts across StatusBar/Outline/Timeline/VisualView, ActivityBar mount/unmount; editor 402→408) |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
@@ -182,7 +184,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite 2026-08-15: C++ 786/786, Lua 121/121 + 17 orphan, web 79/79, editor 270/270, ctest 10 + AI-skip; coupling/coverage PASS) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (round 90 baseline: C++ 849/849, Lua 126/126 + 19 orphan, web 183/183, editor 408/408, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP 87.9MB measured end-to-end) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
@@ -191,7 +193,7 @@ graph LR
 
 ---
 
-**Total: 61 tracked capabilities across 6 domains.** See the readiness snapshot above for
+**Total: 79 tracked capabilities across 6 domains (incl. round-90 additions S2v contract coverage + C10 tutorial library; P2/D1 baselines refreshed).** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
 
 ### 2026-08-12 additions (generation-gap round 9)
@@ -214,6 +216,19 @@ the distinction between architecture completion, core usability and release read
 - kag3_import macro-arg (`&N`/`%N%` conversion) + `goto`→`jump` alias.
 - S2 — command set census refreshed to 117 contracts (add/sub/mul/div/mod/dec,
   csp/csd/csl, textspeed/cps, palette/vibrate, notify, preload, goto alias).
+  (118 after round-86 `_meta` completion: 11 KAG3-compat commands gained
+  {category,blocking,desc} metadata.)
+
+### 2026-08-15 additions (round 88-90 / 90% milestone)
+
+- S2v — contract runtime coverage 100%: 118/118 commands execute at runtime;
+  12 previously dead handlers exercised by `test_contract_runtime_gaps.lua`.
+- C10 — tutorial sample library grown to 15 tutorials (round 90 added
+  tutorial_14_flow_timing + tutorial_15_expr_deep), path table +2 rows.
+- P2 — round 90 test baseline (C++ 849/849, Lua 126+19, web 183, editor 408)
+  plus Release build + CPack ZIP verified end-to-end.
+- D1 — editor depth: store actions (round 88) + rpc client (round 89) +
+  full-App panel-integration E2E (round 90), editor 270→408.
 
 ### 2026-08-12 additions (generation-gap round 6)
 
