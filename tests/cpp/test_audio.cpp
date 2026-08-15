@@ -671,3 +671,205 @@ TEST_CASE("Audio: suspend/resume lifecycle contract (round 29)") {
     eng.suspend();
     eng.resume();
 }
+
+// =============================================================================
+// G10 audio module boundary tests
+// =============================================================================
+
+TEST_CASE("SoLoudAudioEngine BGM and SE buses are independent") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int bgm = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    REQUIRE(bgm != 0);
+    eng.soloud().setLooping(bgm, true);
+    REQUIRE(eng.isBGMPlaying());
+
+    // Playing an SE must not disturb the BGM bus.
+    const unsigned int se = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(se != 0);
+    CHECK(eng.isSEPlaying());
+    CHECK(eng.isBGMPlaying());          // BGM still playing after SE starts
+
+    // Stopping the SE must not stop the BGM.
+    eng.stopSE();
+    CHECK_FALSE(eng.isSEPlaying());
+    CHECK(eng.isBGMPlaying());
+
+    // Reverse: play SE, then BGM; stopping the BGM leaves the SE untouched.
+    const unsigned int se2 = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(se2 != 0);
+    const unsigned int bgm2 = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    REQUIRE(bgm2 != 0);
+    eng.soloud().setLooping(bgm2, true);
+    CHECK(eng.isSEPlaying());
+    eng.stopBGM(0.0f);
+    CHECK_FALSE(eng.isBGMPlaying());
+    CHECK(eng.isSEPlaying());           // SE survived the BGM stop
+
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine voice keeps overlapping characters (pool, no single-slot kill)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // The engine uses a round-robin 4-slot voice pool: a new voice does NOT
+    // hard-stop the previous one (single-slot semantics were removed). Both
+    // handles coexist in the pool and stay valid independently.
+    const unsigned int v1 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v1 != 0);
+    eng.soloud().setLooping(v1, true);
+    CHECK(eng.isVoicePlaying());
+
+    const unsigned int v2 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v2 != 0);
+    eng.soloud().setLooping(v2, true);
+    CHECK(eng.isVoicePlaying());
+    CHECK(eng.soloud().isValidVoiceHandle(v1));  // first voice still alive
+    CHECK(eng.soloud().isValidVoiceHandle(v2));
+
+    // stopVoice() clears the whole pool; only NATURAL ends count as completions.
+    eng.stopVoice();
+    CHECK_FALSE(eng.isVoicePlaying());
+    CHECK(eng.consumeVoiceCompletions() == 0);
+}
+
+TEST_CASE("SoLoudAudioEngine bus volume applies to the bus (documented approximation)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // The engine exposes the configured bus volume as the authoritative truth;
+    // a per-handle getSEVolume() does NOT include the bus multiplier, so the
+    // effective (bus x handle) volume is not directly readable through
+    // IAudioBackend. We assert the documented contract: the bus volume is
+    // applied and readable via getBusVolume(), and samples still play.
+    const float original = eng.getBusVolume("se");
+    eng.setBusVolume("se", 0.35f);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.35f));
+
+    const unsigned int h = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(h != 0);
+    CHECK(eng.isSEPlaying());
+
+    // fadeVolume() keeps the persisted bus-volume state consistent.
+    eng.fadeVolume("se", 0.7f, 0.1f);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.7f));
+
+    eng.stopSEHandle(h);
+    eng.setBusVolume("se", original);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(original));
+}
+
+TEST_CASE("SoLoudAudioEngine empty/invalid handles are graceful no-ops") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    eng.setSEVolume(0, 0.5f);
+    CHECK(eng.getSEVolume(0) == 0.0f);
+    eng.setSEVolume(99999u, 0.5f);   // unknown handle: no-op, must not crash
+    eng.stopSEHandle(0);
+    eng.stopSEHandle(1u << 30);      // not a tracked handle
+
+    // Playing an empty file yields handle 0 and leaves SE idle.
+    CHECK(eng.playSE("") == 0);
+    CHECK_FALSE(eng.isSEPlaying());
+
+    // stopVoice with nothing playing is a safe no-op.
+    eng.stopVoice();
+    CHECK_FALSE(eng.isVoicePlaying());
+    CHECK(eng.consumeVoiceCompletions() == 0);
+}
+
+TEST_CASE("SoLoudAudioEngine stopping all three buses clears every bus") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int bgm = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    REQUIRE(bgm != 0);
+    eng.soloud().setLooping(bgm, true);
+    const unsigned int voice = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(voice != 0);
+    eng.soloud().setLooping(voice, true);
+    REQUIRE(eng.playSE("tests/audio/silence.wav") != 0);
+
+    CHECK(eng.isBGMPlaying());
+    CHECK(eng.isVoicePlaying());
+    CHECK(eng.isSEPlaying());
+
+    // IAudioBackend has no single stopAll(); stopping each bus is the public
+    // contract for clearing all playback.
+    eng.stopBGM(0.0f);
+    eng.stopVoice();
+    eng.stopSE();
+
+    CHECK_FALSE(eng.isBGMPlaying());
+    CHECK_FALSE(eng.isVoicePlaying());
+    CHECK_FALSE(eng.isSEPlaying());
+    CHECK(eng.consumeVoiceCompletions() == 0);  // explicit stop != natural end
+}
+
+TEST_CASE("SoLoudAudioEngine suspend pauses without dropping handles (app pause)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int bgm = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    REQUIRE(bgm != 0);
+    eng.soloud().setLooping(bgm, true);
+    const unsigned int se = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(se != 0);
+
+    // suspend() pauses the whole mixer; tracked handles stay alive so a
+    // subsequent resume() continues them.
+    eng.suspend();
+    CHECK(eng.isBGMPlaying());
+    CHECK(eng.isSEPlaying());
+    CHECK(eng.soloud().isValidVoiceHandle(bgm));
+    CHECK(eng.soloud().isValidVoiceHandle(se));
+
+    eng.resume();
+    eng.update(0.0f);
+    CHECK(eng.isBGMPlaying());
+    CHECK(eng.isSEPlaying());
+
+    eng.stopBGM(0.0f);
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine 3D position routing left/center/right yields valid handles") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // IAudioBackend exposes no direct pan (left/center/right) control; the
+    // spatial routing it does expose is 3D positioning via playSE3D().
+    const unsigned int left   = eng.playSE3D("tests/audio/silence.wav", -10.0f, 0.0f, 0.0f);
+    const unsigned int center = eng.playSE3D("tests/audio/silence.wav",   0.0f, 0.0f, 0.0f);
+    const unsigned int right  = eng.playSE3D("tests/audio/silence.wav",  10.0f, 0.0f, 0.0f);
+    CHECK(left != 0);
+    CHECK(center != 0);
+    CHECK(right != 0);
+    CHECK(eng.isSEPlaying());
+
+    // Listener at origin facing +x; the 3D mix update must run without crashing.
+    eng.update3dListener(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+    eng.update(0.0f);
+
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine has no mute toggle; bus volume 0 persists as mute approximation") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // IAudioBackend exposes no mute()/unmute(); the closest documented
+    // mechanism is setting a global/bus volume to 0, which persists.
+    eng.setGlobalVolume(0.0f);
+    CHECK(eng.getGlobalVolume() == doctest::Approx(0.0f));
+    eng.setGlobalVolume(1.0f);
+    CHECK(eng.getGlobalVolume() == doctest::Approx(1.0f));
+
+    eng.setBusVolume("voice", 0.0f);
+    CHECK(eng.getBusVolume("voice") == doctest::Approx(0.0f));
+    eng.setBusVolume("voice", 1.0f);
+    CHECK(eng.getBusVolume("voice") == doctest::Approx(1.0f));
+}
