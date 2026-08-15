@@ -64,7 +64,7 @@ export function App() {
             <>
               <ExplorerView client={clientRef.current} />
               <SceneTree />
-              <SceneOutlinePanel />
+              <SceneOutlinePanel client={clientRef.current} />
               <InspectorView />
               <TimelineView />
             </>

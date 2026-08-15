@@ -14,15 +14,26 @@ import { useMemo } from 'react'
 import { useEditor } from '../store'
 import { SceneOutline } from './SceneOutline'
 import { revealEditorLine } from './EditorArea'
+import { buildLabelJumpSnippet, parseJumpResult } from '../lib/engineJump'
+import type { EngineClient } from '../lib/rpc'
 
 /** Is the given doc path a .ks script? */
 function isKsPath(path: string): boolean {
   return path.toLowerCase().endsWith('.ks')
 }
 
-export function SceneOutlinePanel() {
+interface SceneOutlinePanelProps {
+  /** Optional engine RPC client. When provided AND the engine is connected,
+   *  the outline's per-label jump drives the running KAG scene to that
+   *  label via /api/eval; otherwise the jump action degrades to the
+   *  in-editor reveal (same as the primary label click). */
+  client?: EngineClient
+}
+
+export function SceneOutlinePanel({ client }: SceneOutlinePanelProps) {
   const docs = useEditor((s) => s.docs)
   const activePath = useEditor((s) => s.activePath)
+  const engineConnected = useEditor((s) => s.engineConnected)
   const requestReveal = useEditor((s) => s.requestReveal)
   const setInspected = useEditor((s) => s.setInspected)
 
@@ -43,6 +54,17 @@ export function SceneOutlinePanel() {
     setInspected(active.path, line)
   }
 
+  // Non-blocking engine jump: issue the eval snippet against the live KAG
+  // ctx (_G._CAESURA_CTX). Always reveal the line in-editor first, so the
+  // affordance behaves identically whether or not the engine is reachable;
+  // the engine call is fire-and-forget and swallows transport/label errors.
+  const handleJumpToLabel = (label: string, line: number) => {
+    if (!active) return
+    handleSelectLabel(label, line)
+    if (!engineConnected || !client) return
+    void evalRawGuarded(client, label)
+  }
+
   if (!active) {
     return (
       <div className="sidebar-pane">
@@ -52,5 +74,24 @@ export function SceneOutlinePanel() {
     )
   }
 
-  return <SceneOutline source={active.content} onSelectLabel={handleSelectLabel} />
+  return (
+    <SceneOutline
+      source={active.content}
+      onSelectLabel={handleSelectLabel}
+      onJumpToLabel={handleJumpToLabel}
+    />
+  )
+}
+
+/** Issue the engine label-jump eval and swallow all failures (no crash). */
+async function evalRawGuarded(
+  client: EngineClient,
+  label: string,
+): Promise<void> {
+  try {
+    const result = await client.evalRaw(buildLabelJumpSnippet(label))
+    parseJumpResult(result)
+  } catch {
+    // Transport / engine rejection must never surface into the click.
+  }
 }

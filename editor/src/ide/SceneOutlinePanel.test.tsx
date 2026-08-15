@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { SceneOutlinePanel } from './SceneOutlinePanel'
 import { revealEditorLine } from './EditorArea'
+import { buildLabelJumpSnippet } from '../lib/engineJump'
 import { useEditor, type OpenDoc } from '../store'
+import type { EngineClient } from '../lib/rpc'
 
 // SceneOutlinePanel imports revealEditorLine from EditorArea, which pulls in
 // monaco-editor — not available in jsdom. Mock the module so the wired panel
@@ -13,6 +15,12 @@ vi.mock('./EditorArea', () => ({
 }))
 
 const revealMock = vi.mocked(revealEditorLine)
+
+// A minimal structural stand-in for EngineClient — only the eval path the
+// panel uses is exercised. Cast through unknown to satisfy the full rpc type.
+function fakeClient(evalRaw: ReturnType<typeof vi.fn>): EngineClient {
+  return { evalRaw } as unknown as EngineClient
+}
 
 function doc(path: string, content: string): OpenDoc {
   return { path, name: path.split('/').pop() ?? path, language: 'kag', content, dirty: false }
@@ -109,5 +117,85 @@ describe('SceneOutlinePanel (store wiring)', () => {
     render(<SceneOutlinePanel />)
     // SceneOutline's own empty hint
     expect(screen.getByText('No scene outline (empty script)')).toBeTruthy()
+  })
+})
+
+describe('SceneOutlinePanel (live engine jump)', () => {
+  function openKs() {
+    useEditor.setState({
+      docs: [doc('assets/script/main.ks', KS_SOURCE)],
+      activePath: 'assets/script/main.ks',
+    })
+  }
+
+  it('jump button issues the label-jump eval when the engine is connected', () => {
+    const evalRaw = vi.fn().mockResolvedValue('ok')
+    openKs()
+    useEditor.setState({ engineConnected: true })
+    render(<SceneOutlinePanel client={fakeClient(evalRaw)} />)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+
+    // reveal still happens (fallback intent preserved on the connected path)
+    expect(revealMock).toHaveBeenCalledWith('assets/script/main.ks', 5)
+    // the engine eval carries the exact jump snippet for that label
+    expect(evalRaw).toHaveBeenCalledTimes(1)
+    expect(evalRaw).toHaveBeenCalledWith(buildLabelJumpSnippet('next'))
+    // inspected is unified too
+    expect(useEditor.getState().inspected).toEqual({
+      path: 'assets/script/main.ks',
+      line: 5,
+    })
+  })
+
+  it('does not call the engine when disconnected (falls back to in-editor reveal)', () => {
+    const evalRaw = vi.fn()
+    openKs()
+    // disconnected: no engineConnected, and no client passed
+    render(<SceneOutlinePanel />)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+    expect(evalRaw).not.toHaveBeenCalled()
+    // in-editor reveal is the graceful fallback
+    expect(revealMock).toHaveBeenCalledWith('assets/script/main.ks', 5)
+    expect(useEditor.getState().revealRequest).toEqual({
+      path: 'assets/script/main.ks',
+      line: 5,
+      nonce: expect.any(Number) as unknown as number,
+    })
+  })
+
+  it('does not call the engine when connected but no client prop is given', () => {
+    const evalRaw = vi.fn()
+    openKs()
+    useEditor.setState({ engineConnected: true })
+    render(<SceneOutlinePanel />)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+    expect(evalRaw).not.toHaveBeenCalled()
+    expect(revealMock).toHaveBeenCalledWith('assets/script/main.ks', 5)
+  })
+
+  it('a rejected engine jump degrades gracefully (no crash)', async () => {
+    const evalRaw = vi.fn().mockRejectedValue(new Error('transport down'))
+    openKs()
+    useEditor.setState({ engineConnected: true })
+    render(<SceneOutlinePanel client={fakeClient(evalRaw)} />)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+    // fire-and-forget rejection must not surface
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revealMock).toHaveBeenCalledWith('assets/script/main.ks', 5)
+  })
+
+  it('a resolved non-ok eval result does not crash the click', async () => {
+    const evalRaw = vi.fn().mockResolvedValue('no-ctx')
+    openKs()
+    useEditor.setState({ engineConnected: true })
+    render(<SceneOutlinePanel client={fakeClient(evalRaw)} />)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *start')[0])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(revealMock).toHaveBeenCalledWith('assets/script/main.ks', 1)
   })
 })

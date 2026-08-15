@@ -16,6 +16,10 @@ function commandTexts(root: HTMLElement): string[] {
   return Array.from(root.querySelectorAll('.outline-cmd')).map((el) => el.textContent ?? '')
 }
 
+function containerJumpButtons(): number {
+  return document.querySelectorAll('.outline-jump').length
+}
+
 beforeEach(() => cleanup())
 
 describe('SceneOutline (component)', () => {
@@ -73,5 +77,60 @@ describe('SceneOutline (component)', () => {
     render(<SceneOutline source={KS_SOURCE} />)
     const title = screen.getByText('Scene Outline').parentElement
     expect(title?.textContent).toContain('2 sections')
+  })
+
+  it('does not render a jump button when onJumpToLabel is not provided', () => {
+    render(<SceneOutline source={KS_SOURCE} />)
+    expect(containerJumpButtons()).toBe(0)
+  })
+
+  it('renders a per-label ▶ jump button when onJumpToLabel is provided', () => {
+    const onJumpToLabel = vi.fn()
+    render(<SceneOutline source={KS_SOURCE} onJumpToLabel={onJumpToLabel} />)
+    expect(containerJumpButtons()).toBe(2)
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+    expect(onJumpToLabel).toHaveBeenCalledWith('next', 5)
+    expect(onJumpToLabel).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires onJumpToLabel on a label heading secondary click (right-click)', () => {
+    const onJumpToLabel = vi.fn()
+    const onSelectLabel = vi.fn()
+    render(
+      <SceneOutline
+        source={KS_SOURCE}
+        onSelectLabel={onSelectLabel}
+        onJumpToLabel={onJumpToLabel}
+      />,
+    )
+
+    fireEvent.contextMenu(screen.getByText(/^\*start$/))
+    expect(onJumpToLabel).toHaveBeenCalledWith('start', 1)
+    // secondary click must not also select (no onSelectLabel call)
+    expect(onSelectLabel).not.toHaveBeenCalled()
+  })
+
+  it('jump button click does not bubble into the row select handler', () => {
+    const onJumpToLabel = vi.fn()
+    const onSelectLabel = vi.fn()
+    render(
+      <SceneOutline
+        source={KS_SOURCE}
+        onSelectLabel={onSelectLabel}
+        onJumpToLabel={onJumpToLabel}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByTitle('Jump running scene to *next')[0])
+    expect(onJumpToLabel).toHaveBeenCalledTimes(1)
+    expect(onSelectLabel).not.toHaveBeenCalled()
+  })
+
+  it('jump affordances are no-ops when onJumpToLabel is absent', () => {
+    render(<SceneOutline source={KS_SOURCE} onSelectLabel={() => {}} />)
+    expect(() => {
+      fireEvent.contextMenu(screen.getByText(/^\*start$/))
+    }).not.toThrow()
   })
 })

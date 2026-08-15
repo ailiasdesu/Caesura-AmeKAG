@@ -16,6 +16,11 @@ export interface SceneOutlineProps {
   /** Invoked when a *label heading is clicked with the label name (no '*').
    *  Basic navigation affordance; no-op stub is fine for this increment. */
   onSelectLabel?: (label: string, line: number) => void
+  /** Invoked when the label's per-section live-jump affordance is used
+   *  (secondary click on the heading or the ▶ button). Drives the running
+   *  engine scene to the label; optional — absent keeps the row read-only
+   *  apart from the primary select handler. */
+  onJumpToLabel?: (label: string, line: number) => void
 }
 
 /** Render one outline row: a command row or a text content line. */
@@ -46,7 +51,7 @@ function OutlineRow({ item }: { item: OutlineItem }) {
   )
 }
 
-export function SceneOutline({ source, onSelectLabel }: SceneOutlineProps) {
+export function SceneOutline({ source, onSelectLabel, onJumpToLabel }: SceneOutlineProps) {
   const sections = useMemo(
     () => buildOutlineSections(parseSceneOutline(source)),
     [source],
@@ -54,6 +59,10 @@ export function SceneOutline({ source, onSelectLabel }: SceneOutlineProps) {
 
   const handleLabel = (label: string, line: number) => {
     if (onSelectLabel) onSelectLabel(label, line)
+  }
+
+  const handleJump = (label: string, line: number) => {
+    if (onJumpToLabel) onJumpToLabel(label, line)
   }
 
   return (
@@ -75,6 +84,14 @@ export function SceneOutline({ source, onSelectLabel }: SceneOutlineProps) {
                 onClick={() => s.label !== null && handleLabel(s.label, s.line)}
                 role={s.label !== null ? 'button' : undefined}
                 tabIndex={s.label !== null ? 0 : undefined}
+                onContextMenu={
+                  s.label !== null
+                    ? (e) => {
+                        e.preventDefault()
+                        handleJump(s.label as string, s.line)
+                      }
+                    : undefined
+                }
                 onKeyDown={
                   s.label !== null
                     ? (e) => {
@@ -88,6 +105,19 @@ export function SceneOutline({ source, onSelectLabel }: SceneOutlineProps) {
               >
                 <span className="outline-label">{s.label !== null ? '*' + s.label : '(prologue)'}</span>
                 <span className="spacer" />
+                {s.label !== null && onJumpToLabel && (
+                  <button
+                    type="button"
+                    className="outline-jump"
+                    title={'Jump running scene to *' + s.label}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleJump(s.label as string, s.line)
+                    }}
+                  >
+                    ▶
+                  </button>
+                )}
                 <span className="scene-counts">
                   {'L' + s.line + ' · ' + s.items.length}
                 </span>
