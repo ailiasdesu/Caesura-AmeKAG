@@ -438,8 +438,25 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine — SD
 set(CPACK_GENERATOR "ZIP")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
-# Include SDL3 DLL in package
-if(TARGET SDL3::SDL3)
+# Deterministic, human-readable artifact name (version + platform): e.g.
+# CaesuraAmeKAG-1.0.0-win64.zip. Keeps the CI artifact copy-paste stable.
+set(CPACK_PACKAGE_FILE_NAME
+    "CaesuraAmeKAG-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_SYSTEM_NAME "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+
+# Emit a SHA256 sidecar next to the ZIP (e.g. ..-win64.zip.sha256).
+set(CPACK_PACKAGE_CHECKSUM "SHA256")
+
+# Resolve-and-embed the license file for package metadata/diagnostics.
+if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+endif()
+
+# Bundle the SDL3 runtime DLL on Windows only (the release artifact and CI
+# release job are Windows-targeted). On Linux/macOS TARGET_FILE resolves to a
+# platform native shared lib (libSDL3.so / .dylib); gate this to WIN32 to keep
+# the ZIP content uniform, mirroring the FFmpeg DLL gate below.
+if(WIN32 AND TARGET SDL3::SDL3)
     install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
 endif()
 if(CAESURA_FFMPEG_FOUND AND WIN32)
