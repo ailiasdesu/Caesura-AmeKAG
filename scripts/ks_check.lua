@@ -44,10 +44,19 @@ for _, c in ipairs({
 end
 
 local issues = 0
+-- Structural warnings are informational: they print with a [WARN]
+-- marker but do NOT increment `issues`, so valid scenes keep exit code 0
+-- (warnings are a lint layer, not a CI gate -- see structuralWarnings).
+local warnings = 0
 
 local function report(scene, line, msg)
     issues = issues + 1
     print(string.format("%s:%d: %s", scene, line, msg))
+end
+
+local function warn_scene(scene, line, msg)
+    warnings = warnings + 1
+    print(string.format("[WARN] %s:%d: %s", scene, line, msg))
 end
 
 local function strip_tail(text, consumed)
@@ -224,6 +233,147 @@ local function checkScene(path)
                     report(path, line, tostring(err2))
                 end
             end
+        end
+    end
+end
+
+-- ── Structural warnings (informational lint, NOT a CI gate) ──────────
+local NAV_CMDS = { jump = true, call = true, link = true }
+local function structuralWarnings(path, tokens, lineOf)
+    -- (a) collect every *label defined in THIS scene
+    local labels = {}
+    for _, tok in ipairs(tokens) do
+        if tok.type == "label" and type(tok.name) == "string" then
+            labels[tok.name] = true
+        end
+    end
+
+    -- (b) collect [macro] definitions (name -> 0 = never invoked)
+    local macro_calls = {}
+    for _, tok in ipairs(tokens) do
+        if tok.type == "command" and tok.cmd == "macro" then
+            local mname = nil
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and pair[1] == "name" then
+                    mname = pair[2]
+                end
+            end
+            if mname == nil and tok.params and tok.params[1] then
+                mname = tok.params[1][2]  -- bare [macro shout]
+            end
+            if type(mname) == "string" and mname ~= "" then
+                macro_calls[mname] = 0
+            end
+        end
+    end
+
+    -- switch nesting: each frame holds already-seen tostring(case-value) set
+    local switch_stack = {}
+
+    for _, tok in ipairs(tokens) do
+        if tok.type ~= "command" or type(tok.cmd) ~= "string" then
+            goto nexttok
+        end
+        local cmd = tok.cmd
+
+        -- (a) navigation target label existence (same-scene only)
+        if NAV_CMDS[cmd] then
+            local target = nil
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and (pair[1] == "target"
+                    or pair[1] == "label" or pair[1] == "storage") then
+                    target = pair[2]
+                end
+            end
+            if target == nil and tok.params and tok.params[1] then
+                target = tok.params[1][2]  -- bare [jump *lab]
+            end
+            if type(target) == "string" and target:sub(1, 1) == "*" then
+                local name = target:gsub("^*", "")
+                if name ~= "" and not labels[name] then
+                    warn_scene(path, lineOf(tok.offset or 1),
+                        "[" .. cmd .. "] target '*" .. name
+                            .. "' not defined in this scene (label missing?)")
+                end
+            end
+
+        -- (c) case values within the current [switch] block
+        elseif cmd == "case" and #switch_stack > 0 then
+            local val = nil
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and (pair[1] == "value"
+                    or pair[1] == "exp" or pair[1] == "1") then
+                    val = pair[2]
+                end
+            end
+            if val == nil and tok.params and tok.params[1] then
+                val = tok.params[1][2]
+            end
+            if val ~= nil then
+                local key = tostring(val)
+                local frame = switch_stack[#switch_stack]
+                if frame[key] then
+                    warn_scene(path, lineOf(tok.offset or 1),
+                        "[case] duplicate value '" .. val
+                            .. "' in [switch] block")
+                else
+                    frame[key] = true
+                end
+            end
+
+        -- (c) switch block open/close
+        elseif cmd == "switch" then
+            switch_stack[#switch_stack + 1] = {}
+        elseif cmd == "endswitch" then
+            if #switch_stack > 0 then table.remove(switch_stack) end
+        end
+
+        -- (b) macro invocation count (a defined macro used as [name])
+        if macro_calls[cmd] ~= nil then
+            macro_calls[cmd] = macro_calls[cmd] + 1
+        end
+        -- erasemacro removes the macro before future calls: exempt
+        if cmd == "erasemacro" then
+            local e = nil
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and pair[1] == "name" then
+                    e = pair[2]
+                end
+            end
+            if e == nil and tok.params and tok.params[1] then
+                e = tok.params[1][2]
+            end
+            if type(e) == "string" and macro_calls[e] ~= nil then
+                macro_calls[e] = -1
+            end
+        end
+
+        ::nexttok::
+    end
+
+    -- (b) report macros that were defined but never invoked
+    for name, count in pairs(macro_calls) do
+        if count == 0 then
+            local dline = 0
+            for _, tok in ipairs(tokens) do
+                if tok.type == "command" and tok.cmd == "macro" then
+                    local mname = nil
+                    for _, pair in ipairs(tok.params or {}) do
+                        if type(pair) == "table" and pair[1] == "name" then
+                            mname = pair[2]
+                        end
+                    end
+                    if mname == nil and tok.params and tok.params[1] then
+                        mname = tok.params[1][2]
+                    end
+                    if mname == name then
+                        dline = lineOf(tok.offset or 1)
+                        break
+                    end
+                end
+            end
+            warn_scene(path, dline,
+                "[macro " .. name .. "] defined but never invoked in this scene")
         end
     end
 end
