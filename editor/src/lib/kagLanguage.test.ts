@@ -69,6 +69,23 @@ describe('KAG_COMMANDS (rounds 71-74 registration)', () => {
     expect(KAG_COMMANDS).toContain('endbutton')
   })
 
+  it('highlights the KAG3 [goto] alias (kag3_import maps goto->jump)', () => {
+    // scripts/kag3_import.lua declares ["goto"]="jump"; the Monaco keyword
+    // set must carry goto so [goto *label] tokens as a valid tag rather
+    // than tag.invalid. jump is already registered.
+    expect(KAG_COMMANDS).toContain('goto')
+    expect(KAG_COMMANDS).toContain('jump')
+  })
+
+  it('highlights every round-71 math keyword', () => {
+    // math commands (KAG3-compat arithmetic + inc twin) all tokenize as
+    // valid tags so Monaco highlights [add]/[sub]/... rather than
+    // marking them tag.invalid.
+    for (const cmd of ['add', 'sub', 'mul', 'div', 'mod', 'dec', 'inc']) {
+      expect(KAG_COMMANDS, 'missing math command: ' + cmd).toContain(cmd)
+    }
+  })
+
   it('holds no duplicate command names', () => {
     const seen = new Set<string>()
     for (const cmd of KAG_COMMANDS) {

@@ -7,7 +7,7 @@ export const KAG_COMMANDS = [
   // flow
   'if', 'elseif', 'elsif', 'else', 'endif', 'while', 'endwhile', 'for',
   'endfor', 'break', 'continue', 'switch', 'case', 'default', 'endswitch',
-  'jump', 'call', 'return', 'link', 'label', 'macro', 'endmacro',
+  'jump', 'goto', 'call', 'return', 'link', 'label', 'macro', 'endmacro',
   'erasemacro', 'end', 'stop', 'eval', 'emb', 'iscript', 'endscript',
   'until',
   // text
