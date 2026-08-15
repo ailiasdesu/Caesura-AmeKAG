@@ -8,13 +8,13 @@
 ```mermaid
 graph TB
     subgraph "Composition Root & Host"
-        main["main.cpp<br/>owns Engine + RpcServer<br/>EditorServer not wired"]
+        main["main.cpp<br/>owns Engine + RpcServer + EditorServer<br/>(--editor: HTTP · --headless/--editor-stdio: stdio)"]
         engine["entry / CaesuraEntry<br/>composition root · lifecycle<br/>4-phase init"]
-        rpc["rpc / CaesuraRpc<br/>stdio JSON-RPC active<br/>HTTP implementation unwired"]
+        rpc["rpc / CaesuraRpc<br/>stdio JSON-RPC (--headless/--editor-stdio)<br/>HTTP editor (--editor, port 9876)"]
     end
 
     subgraph "Dependency Injection"
-        registry["di / BackendRegistry<br/>20 non-owning services<br/>budget · quota · device-loss listeners"]
+        registry["di / BackendRegistry<br/>22 non-owning services<br/>budget · quota · device-loss listeners"]
     end
 
     subgraph "Runtime Core"
@@ -96,19 +96,19 @@ graph TB
 - **main.cpp / entry/** — The only production locations that create concrete backend objects.
 - Four-phase init: `initPlatformPhase()` → `initScriptingPhase()` → `initAssetPhase()` → `initOptionalPhase()`.
 - Registers Engine-owned backends into `BackendRegistry` for runtime access.
-- Host code owns inbound transport adapters outside Engine and injects only callbacks or commands. The current `main.cpp` creates `RpcServer`; `EditorServer` is compiled but not instantiated.
+- Host code owns inbound transport adapters outside Engine and injects only callbacks or commands. `main.cpp` creates `RpcServer` for `--headless`/`--editor-stdio`; `--editor` instantiates `EditorServer` to run the HTTP editor on port 9876 (serving `web-editor/dist`).
 
 ### Dependency Injection (di/)
 
-- **BackendRegistry** — Singleton storing 20 non-owning engine-service pointers. Runtime backend access goes through `::instance().get*()`; host transports and device-loss listeners are excluded from that count.
+- **BackendRegistry** — Singleton storing 22 non-owning engine-service pointers. Runtime backend access goes through `::instance().get*()`; host transports and device-loss listeners are excluded from that count.
 - **TextureBudget** — Auto-detects 6 memory tiers (128MB–4GB) and exposes the selected budget to texture management.
 - **SandboxQuotaService** — Engine-owned Lua sandbox resource counting (textures, emitters, handles).
 - **IDeviceLostListener** — Main-thread callback contract. Listeners release GPU handles before renderer shutdown and rebuild them after restoration.
 
 ### Runtime Core
 
-- **render** (6 interfaces) — bgfx-based GPU rendering. IRenderDevice for draw calls, ILayerManager for BG/FG/MSG compositing, ITextureManager for texture lifecycle, IParticleSystem for 2D particles, IGpuMonitor for adaptive quality, and IVideoPlayer for playback.
-- **script** (1 interface) — Lua 5.4 VM with instruction-budget sandbox. KAG tokenizer and coroutine scheduler, plus 7 binding modules (Render, VFX, KAG, Debug, DevCore, Save, Steam).
+- **render** (7 interfaces) — bgfx-based GPU rendering. IRenderDevice for draw calls, ILayerManager for BG/FG/MSG compositing, ITextureManager for texture lifecycle, IParticleSystem for 2D particles, IGpuMonitor for adaptive quality, IVideoPlayer for playback, and IMeshRenderer for skeletal/mesh scenes (SMA).
+- **script** (1 interface) — Lua 5.4 VM with instruction-budget sandbox. KAG tokenizer and coroutine scheduler. Bindings span 11 modules (KAG, Render, VFX, Debug, DevCore, MiniGame, Sma, Steam, Save, AI, Engine) that register the `KAG`/`Render`/`VFX`/`Debug`/`DevCore`/`mini_game`/`sma`/`steam`/`AI`/`Engine` Lua APIs.
 - **audio** (1 interface) — SoLoud 3-bus audio. BGM (cross-fade), Voice (interrupt), SE (2D/3D spatial), per-bus volume, and playback position queries.
 - **resource** (3 interfaces) — Asset-provider chain, Engine-owned asset manager, asynchronous loading, worker-thread image decoding, and resource-generation tracking.
 
@@ -125,7 +125,7 @@ graph TB
 - **input** (1 interface) — SDL event router with KAG/Game focus switching.
 - **job** (1 interface) — Multi-threaded task system with priority and main-thread `onComplete` callbacks. NullJobSystem is the synchronous test implementation.
 - **steam** (1 interface) — Steamworks achievements, stats, and cloud saves; the real SDK backend is conditionally compiled.
-- **rpc** (2 interfaces) — Host-owned inbound transport adapters. Stdio JSON-RPC is wired for `--headless`/`--editor`; HTTP remains unwired until commands can be dispatched to the main thread.
+- **rpc** (3 interfaces: IRpcServer, IEditorServer, IRpcDispatcher) — Host-owned inbound transport adapters. Stdio JSON-RPC runs for `--headless`/`--editor-stdio`; `--editor` starts the HTTP editor on port 9876. Both dispatch through the shared `IRpcDispatcher` (owner-thread queue pumped each frame).
 - **debug** (1 interface) — Structured logging, frame profiling, subsystem stats, and GPU submit tracking.
 
 ## Game Frame Data Flow

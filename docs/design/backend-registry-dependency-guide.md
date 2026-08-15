@@ -1,18 +1,18 @@
 # BackendRegistry 依赖说明文档
 
-> 更新日期: 2026-07-18 | 公共接口: 28 | Registry 服务槽位: 20 | 模块: 16
+> 更新日期: 2026-08-15 | 公共接口: 31 | Registry 服务槽位: 22 | 模块: 16
 
 ## 核心原则
 
 BackendRegistry 是引擎运行时后端的**单一服务定位器**。子系统通过它获得其他模块的接口指针（`I*`），而非直接 include 具体实现头文件。
 
-RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主持有并通过回调注入能力，不占 Registry 槽位，也不进入 `Caesura::Engine` 聚合目标。当前 `main.cpp` 只实例化 `RpcServer`，`EditorServer` 尚未接入。
+RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主持有并通过回调注入能力，不占 Registry 槽位，也不进入 `Caesura::Engine` 聚合目标。`main.cpp` 在 `--headless`/`--editor-stdio` 实例化 `RpcServer`，在 `--editor` 实例化 `EditorServer`（HTTP 编辑器，端口 9876）；两者不占 Registry 槽位。
 
 **这不是"隐藏依赖"——这是显式解耦。** 每个模块的依赖关系通过 BackendRegistry 的 `get*()` 调用清晰可见，且强制走接口。
 
 ## 为什么不是"接口爆炸"
 
-28 个公共接口对应 16 个模块，其中 20 个长生命周期引擎服务进入 Registry。这与"接口爆炸"（通常指每个类都有接口）有本质区别：
+31 个公共接口（`src/*/api/I*.h`，api-stats 权威计数）对应 16 个模块，其中 22 个长生命周期引擎服务进入 Registry。这与"接口爆炸"（通常指每个类都有接口）有本质区别：
 
 1. **接口对应子系统，不随代码膨胀。** 模块新增功能在接口内部扩展方法，不创建新接口。
 2. **消费者只调用自己需要的。** `script` 模块调用 `getRenderDevice()`，不关心 `getCryptoEngine()`。
@@ -24,8 +24,8 @@ RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主
 
 | 模块 | 依赖的接口 | 用途 |
 |------|-----------|------|
-| **entry/Engine** | 20 个 Registry 服务 | 组合根，创建、注册并按逆序注销后端 |
-| **script** | Render/Audio/Input/MiniGame/Storage/Resource/Debug/Steam 接口及 `ISandboxQuota` | Lua/KAG 绑定调用；Steam Binding 每次从 Registry 解析后端 |
+| **entry/Engine** | 22 个 Registry 服务 | 组合根，创建、注册并按逆序注销后端（含 `IMobileAdapter`、`IMeshRenderer` 两个相对较新槽位） |
+| **script** | Render/Audio/Input/MiniGame/Storage/Resource/Debug/Steam/Job/Platform 接口及 `ISandboxQuota` | Lua/KAG 绑定调用；Steam Binding 每次从 Registry 解析后端（coupling 实测 script 跨 11 模块，见 `python scripts/count_coupling.py`） |
 | **render** | `IRenderDevice`, `ITextureBudget`, `ISandboxQuota` | 粒子渲染、纹理预算与配额 |
 | **render** | `IDebugManager` (宏) | 零开销日志 |
 | **audio** | `ISandboxQuota` | 资源配额检查 |

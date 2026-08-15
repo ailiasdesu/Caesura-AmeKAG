@@ -85,7 +85,7 @@ graph TD
 | `JobSystem` / `AssetManager` / `AsyncLoader` | `Engine` 按依赖逆序析构要求持有三个实例 | AsyncLoader 接收非拥有 AssetManager 指针；组合根显式排空回调后依次关闭 Async、Asset、Job |
 | `SaveManager` | `Engine` 以 `unique_ptr<ISaveManager>` 持有并初始化 | SaveBinding 只经 Registry 访问，关闭时清空注册 |
 | `CryptoEngine` | `Engine` 以 `unique_ptr<ICryptoEngine>` 持有 | Archive/Storage 经 Registry 使用加密接口 |
-| `SteamBackend` | `Engine` 以 `unique_ptr<ISteamBackend>` 持有；默认使用 Null adapter | 初始化成功后注册为第 20 个服务；Steam Binding 每次从 Registry 解析，关闭时清空 |
+| `SteamBackend` | `Engine` 以 `unique_ptr<ISteamBackend>` 持有；默认使用 Null adapter | 初始化成功后注册为 Registry 服务（当前共 22 个非拥有服务）；Steam Binding 每次从 Registry 解析，关闭时清空 |
 | `LayerManager` | `Engine` 以 `unique_ptr<ILayerManager>` 持有；根据真实/Null renderer 选择 GPU 生命周期 | renderer 初始化后注册；shutdown 后立即注销 |
 | `SandboxQuotaService` | `Engine` 以 `unique_ptr<ISandboxQuota>` 持有 | Lua 初始化后绑定 VM；音频/纹理释放配额后再解绑并注销 |
 
@@ -165,4 +165,6 @@ python scripts/count_coupling.py --ci
 
 Debug 构建会生成 `caesura_<module>.lib`、`CaesuraAmeKAG.exe`、`CaesuraTests.exe` 和 `carc_pack.exe`。模块库是内部架构边界，目前不作为稳定二进制 SDK 安装或发布。
 
-本次迁移后的已验证结果为 `480/480` 个 doctest 测试用例、`2066/2066` 个断言通过。
+当前全量门禁（round-88 审计基线）：C++ doctest `816/816` 用例（`6117` 断言）、
+Lua 主套件 `124/124` + 孤儿套件 `18/18`、web `175/175`、editor `368/368`、
+`ctest 10/10`（+AI smoke 跳过）、耦合 `PASS`。

@@ -59,7 +59,14 @@ Schema.define("playbgm", {
 > 循环体末尾 pop，同位置重复拼接不 pop）>100 才报错——顺序调用 1000+、大循环 2000 次迭代
 > 不再被误判为递归。
 
-## 四、已迁移命令（20）
+## 四、命令契约迁移（当前 118 契约）
+
+命令契约化已从早期批次（`pt`/`wait`/`scroll`/`trans`/`playbgm`/`ch`/`text` 等 20 个）演进为**全量迁移**：
+当前 `kag/schema.lua` 注册 **118 个命令契约**（`Schema.registrySize()` 权威计数，见 `docs/api/command-contracts.md`）。
+契约类型支持 `number`/`boolean`/`string`/`list`/`enum`/`file`，约束含 `default`/`min`/`max`/`choices`/`required`/`_require_any`，
+并带 `_meta` 元数据（`category`/`blocking`/`desc`）供编辑器与文档工具消费。
+
+早期批次（仅作演进记录）：
 
 | 批次 | 命令 |
 |---|---|
@@ -77,9 +84,9 @@ Schema.define("playbgm", {
 - **可文档化**：契约即 API 文档（类型/范围/默认值自动可生成）
 - **可扩展**：新命令先声明契约再写实现；工具链（编辑器/校验器）可直接读契约
 
-## 六、演进状态（2026-08-05 更新——路线图 1-4 已完成）
+## 六、演进状态（2026-08-15 更新——KAG Neo-Genesis 标准已全量落地）
 
-- ✅ 剩余命令迁移：全部命令族契约化（27 命令）
+- ✅ 剩余命令迁移：全部命令族契约化（当前 118 契约，见 §四）
 - ✅ 契约→API 文档自动生成（schema_doc.lua → docs/api/command-contracts.md）
 - ✅ 脚本静态校验器（ks_check.lua + LPeg Cp 字节偏移 + CI 三平台门禁）
 - ✅ 表达式插值（`$f.var` + `${expr}` 完整表达式）
@@ -87,6 +94,12 @@ Schema.define("playbgm", {
 - ✅ 嵌套宏定义（`[macro outer][macro inner]...[endmacro][endmacro]` 不再截断流；含嵌套定义的
   重定义宏由编译器保守标记为运行时处理）
 - ✅ 宏递归防护改为深度阈值（拼接深度 >100 报错，替换旧的累计调用计数——顺序/大循环不再误报）
+- ✅ **复数 i18n（round 86）**：`i18n.plural_category(count)` 按语言返回 CLDR 风格复数类别——
+  `en` 区分 `one`/`other`，`zh`/`ja`（及未知语言）恒为 `other`；`i18n._plural_form(entry, count)`
+  支持字典值为复数变体表（`{one=..., other=...}`），缺失类别回退 `other`→`one`，`{n}` 占位符经
+  `i18n.t()`/`i18n.expand()` 解析；运行期语言切换、`{n}` 与普通占位符混用、负/非整数/字符串计数回落 `other` 均有测试锁定
+- ✅ **goto → jump 别名**：`goto` 在运行时（scheduler）、编译期（compiler）与静态校验（ks_check）中统一映射到 `jump`，
+  KAG3 脚本迁移经 `kag3_import` 自动转换，`[sel]/[select]` 跳转同样经 `jump` 语义
 - ✅ 存读档循环连续性：`[for]`/`[while]`/`[if]`/`[switch]` 栈进入执行上下文并存档序列化，
   循环体内 `[save]`→`[load]` 恢复并续跑（旧档兼容）
 - ✅ kag3_import 宏参转换（`&N`/`&name` → `%N%`/`%name%`）+ `goto`→`jump` 别名
