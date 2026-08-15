@@ -47,7 +47,7 @@ local KIND = {
 local FLOW_CMDS = {
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
     "until", "break", "continue", "jump", "call", "return", "link", "label",
-    "macro", "endmacro", "erasemacro", "switch", "case", "endcase",
+    "macro", "endmacro", "erasemacro", "goto", "switch", "case", "endcase",
     "default", "endswitch", "eval", "emb", "iscript", "endscript",
     "select", "sel", "endselect", "end", "stop",
 }

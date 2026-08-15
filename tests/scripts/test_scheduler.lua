@@ -402,5 +402,45 @@ do
     check("nested same-name for final counter", ctx.f.i == 4,
         tostring(ctx.f.i))
 end
+
+-- 19. [goto] is a KAG3 alias of [jump] (round 76): intra-scene label jump
+do
+    -- same semantics as the [jump] test (section 4): goto skips the
+    -- intermediate command and lands on the label
+    local ctx = make_ctx()
+    ctx.dispatched = {}
+    local toks = {
+        {"goto", {storage = "L1"}}, {"bg", {file = "skip.jpg"}},
+        {"label", {name = "L1"}}, {"bg", {file = "jumped.jpg"}},
+    }
+    run_in_coro(ctx, toks)
+    local found = false
+    for _, d in ipairs(ctx.dispatched) do
+        if d.params and d.params.file == "jumped.jpg" then found = true end
+    end
+    check("goto aliases jump (intra-scene)", found)
+
+    -- bare [goto *L1] form also lands
+    local ctx2 = make_ctx()
+    ctx2.dispatched = {}
+    local toks2 = {
+        {"ch", {text = "A"}}, {"goto", {target = "*L1"}},
+        {"ch", {text = "SKIPPED"}},
+        {"label", {name = "L1"}}, {"ch", {text = "B"}},
+    }
+    run_in_coro(ctx2, toks2)
+    local texts = {}
+    for _, d in ipairs(ctx2.dispatched) do
+        if d.cmd == "ch" then texts[#texts + 1] = d.params and d.params.text end
+    end
+    check("goto bare *label skips to label",
+        table.concat(texts, ",") == "A,B",
+        table.concat(texts, ","))
+
+    -- missing target warns but does not crash (jump parity)
+    local okG = pcall(run_in_coro, make_ctx(), {{"goto", {}}})
+    check("goto missing target no-crash", okG)
+end
+
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

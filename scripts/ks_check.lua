@@ -36,7 +36,7 @@ local kag_cmd_table = package.loaded["kag"]
 local KNOWN_NONHANDLER = {}
 for _, c in ipairs({
     "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
-    "until", "break", "continue", "jump", "call", "return", "macro", "endmacro",
+    "until", "break", "continue", "jump", "goto", "call", "return", "macro", "endmacro",
     "switch", "endswitch", "case", "endcase", "default", "label", "eval",
     "emb", "iscript", "wait", "delay", "ch", "text", "link", "end", "stop",
 }) do
@@ -68,6 +68,11 @@ local function strip_tail(text, consumed)
     end
     return tail
 end
+-- Forward declaration: checkScene calls structuralWarnings, defined below
+-- (informational lint). Lua resolves the binding at compile time, so the
+-- local must be declared before its first use.
+local structuralWarnings
+
 local function checkScene(path)
     local f = io.open(path, "r")
     if not f then
@@ -235,46 +240,126 @@ local function checkScene(path)
             end
         end
     end
+    -- Structural warnings (informational lint): run after contract checks.
+    -- They print with a [WARN] marker and never increment `issues`, so valid
+    -- scenes keep exit code 0 regardless of how many lint hints surface.
+    structuralWarnings(path, tokens, lineOf)
 end
 
 -- ── Structural warnings (informational lint, NOT a CI gate) ──────────
 local NAV_CMDS = { jump = true, call = true, link = true }
-local function structuralWarnings(path, tokens, lineOf)
-    -- (a) collect every *label defined in THIS scene
-    local labels = {}
+-- Flow commands the scheduler dispatches BEFORE the macro registry (round-74
+-- asymmetric semantics: runtime macros override only NON-special commands,
+-- i.e. any name that reaches the scheduler's regular kag dispatch). A macro
+-- that shadows one of these special names can never be invoked as a macro,
+-- and a macro that shadows a migrated/handler command silently overrides it
+-- at runtime -- both are smells worth a [WARN].
+local FLOW_SPECIAL = {}
+for _, c in ipairs({
+    "if", "elseif", "else", "endif", "while", "endwhile", "for", "endfor",
+    "until", "break", "continue", "jump", "goto", "call", "return", "switch",
+    "endswitch", "case", "endcase", "default", "label", "macro", "endmacro",
+    "erasemacro", "eval", "iscript", "emb",
+}) do
+    FLOW_SPECIAL[c] = true
+end
+-- Blocks whose opener/closer must balance (conservative nesting parity).
+local BLOCK_OPEN  = { ["if"] = true, ["while"] = true, ["for"] = true, switch = true }
+local BLOCK_CLOSE = { endif = "if", endwhile = "while", endfor = "for", endswitch = "switch" }
+local BLOCK_CLOSE_TOK = { endif = true, endwhile = true, endfor = true, endswitch = true }
+
+local function macroNameOf(tok)
+    if tok.type ~= "command" or tok.cmd ~= "macro" then return nil end
+    local mname = nil
+    for _, pair in ipairs(tok.params or {}) do
+        if type(pair) == "table" and pair[1] == "name" then
+            mname = pair[2]
+        end
+    end
+    if mname == nil and tok.params and tok.params[1] then
+        mname = tok.params[1][2]  -- bare [macro shout]
+    end
+    if type(mname) ~= "string" then return nil end
+    return mname
+end
+
+structuralWarnings = function(path, tokens, lineOf)
+    -- (a) collect every *label defined in THIS scene; a name seen more than
+    --     once is a duplicate definition (runtime: first definition wins).
+    local labels = {}        -- name -> first-definition line
+    local seen_dup = {}
     for _, tok in ipairs(tokens) do
         if tok.type == "label" and type(tok.name) == "string" then
-            labels[tok.name] = true
+            local name = tok.name
+            local ln = lineOf(tok.offset or 1)
+            if labels[name] == nil then
+                labels[name] = ln
+            elseif not seen_dup[name] then
+                seen_dup[name] = true
+                warn_scene(path, ln,
+                    "[label *" .. name .. "] defined more than once in this "
+                        .. "scene (first definition at line " .. labels[name]
+                        .. " wins)")
+            end
         end
     end
 
     -- (b) collect [macro] definitions (name -> 0 = never invoked)
     local macro_calls = {}
     for _, tok in ipairs(tokens) do
-        if tok.type == "command" and tok.cmd == "macro" then
-            local mname = nil
-            for _, pair in ipairs(tok.params or {}) do
-                if type(pair) == "table" and pair[1] == "name" then
-                    mname = pair[2]
-                end
-            end
-            if mname == nil and tok.params and tok.params[1] then
-                mname = tok.params[1][2]  -- bare [macro shout]
-            end
-            if type(mname) == "string" and mname ~= "" then
-                macro_calls[mname] = 0
-            end
+        local mname = macroNameOf(tok)
+        if type(mname) == "string" and mname ~= "" then
+            macro_calls[mname] = 0
         end
     end
 
     -- switch nesting: each frame holds already-seen tostring(case-value) set
     local switch_stack = {}
 
+    -- nesting parity for unreachable/closer checks
+    local flow_depth = 0
+    local unreachable = nil       -- line of the top-level [jump] after which code is dead
+    local unreachable_report = false
+
+    local function paramVal(tok, key)
+        for _, pair in ipairs(tok.params or {}) do
+            if type(pair) == "table" and pair[1] == key then
+                return pair[2]
+            end
+        end
+        return nil
+    end
+
     for _, tok in ipairs(tokens) do
+        -- Labels terminate an unreachable region at the top level.
+        if tok.type == "label" and type(tok.name) == "string" then
+            if unreachable and flow_depth == 0 then
+                unreachable = nil
+                unreachable_report = false
+            end
+            goto nexttok
+        end
         if tok.type ~= "command" or type(tok.cmd) ~= "string" then
             goto nexttok
         end
         local cmd = tok.cmd
+
+        -- (f) [endfor]/[endwhile]/[endif]/[endswitch] without a matching
+        --     opener (orphaned closer). Conservative shared-depth count: an
+        --     opener anywhere balances a closer, so only genuinely orphaned
+        --     closers fire (no false positives on valid scenes).
+        if flow_depth <= 0 and BLOCK_CLOSE_TOK[cmd] then
+            warn_scene(path, lineOf(tok.offset or 1),
+                "[" .. cmd .. "] without matching opener (unbalanced flow nesting)")
+        end
+
+        -- unreachable: first command/text token after a top-level [jump]
+        if unreachable and flow_depth == 0 and not unreachable_report then
+            warn_scene(path, lineOf(tok.offset or 1),
+                "token(s) unreachable after [jump] (line " .. unreachable
+                    .. ") until the next *label")
+            unreachable_report = true
+        end
 
         -- (a) navigation target label existence (same-scene only)
         if NAV_CMDS[cmd] then
@@ -295,6 +380,28 @@ local function structuralWarnings(path, tokens, lineOf)
                         "[" .. cmd .. "] target '*" .. name
                             .. "' not defined in this scene (label missing?)")
                 end
+            end
+            -- (e) an unconditional top-level [jump] makes same-level code below
+            --     it unreachable until the next *label. [call] is deliberately
+            --     NOT treated as terminating: it returns to the caller, so
+            --     code after it is reachable again (no false positives).
+            if cmd == "jump" and flow_depth == 0 and not unreachable then
+                unreachable = lineOf(tok.offset or 1)
+                unreachable_report = false
+            end
+
+        -- (for) loop that can never run: start>end with positive step, or
+        -- start<end with negative step. Only fires on compile-time numeric
+        -- literals (expressions are skipped to stay conservative).
+        elseif cmd == "for" then
+            local s = tonumber(paramVal(tok, "start"))
+            local ev = tonumber(paramVal(tok, "end"))
+            local step = tonumber(paramVal(tok, "step")) or 1
+            if s ~= nil and ev ~= nil and step ~= 0
+                and ((step > 0 and s > ev) or (step < 0 and s < ev)) then
+                warn_scene(path, lineOf(tok.offset or 1),
+                    "[for] loop body never runs (start=" .. s
+                        .. " end=" .. ev .. " step=" .. step .. ")")
             end
 
         -- (c) case values within the current [switch] block
@@ -328,24 +435,43 @@ local function structuralWarnings(path, tokens, lineOf)
             if #switch_stack > 0 then table.remove(switch_stack) end
         end
 
+        -- (c) a [macro] whose name a runtime macro would override: a migrated
+        --     contract command or a registered kag handler reached through the
+        --     regular dispatch (round-74 asymmetric semantics). Excludes
+        --     flow-special names (those can't be macro-dispatched).
+        if cmd == "macro" then
+            local mname = macroNameOf(tok)
+            if mname and mname ~= "" and not FLOW_SPECIAL[mname] then
+                local shadow = schema.isMigrated(mname)
+                    or (kag_cmd_table and kag_cmd_table[mname] ~= nil)
+                if shadow then
+                    warn_scene(path, lineOf(tok.offset or 1),
+                        "[macro " .. mname .. "] shadows built-in command '"
+                            .. mname .. "' (runtime macro overrides it)")
+                end
+            end
+        end
+
         -- (b) macro invocation count (a defined macro used as [name])
         if macro_calls[cmd] ~= nil then
             macro_calls[cmd] = macro_calls[cmd] + 1
         end
         -- erasemacro removes the macro before future calls: exempt
         if cmd == "erasemacro" then
-            local e = nil
-            for _, pair in ipairs(tok.params or {}) do
-                if type(pair) == "table" and pair[1] == "name" then
-                    e = pair[2]
-                end
-            end
+            local e = paramVal(tok, "name")
             if e == nil and tok.params and tok.params[1] then
                 e = tok.params[1][2]
             end
             if type(e) == "string" and macro_calls[e] ~= nil then
                 macro_calls[e] = -1
             end
+        end
+
+        -- maintain flow nesting parity for unreachable/closer checks
+        if BLOCK_OPEN[cmd] then
+            flow_depth = flow_depth + 1
+        elseif BLOCK_CLOSE_TOK[cmd] then
+            flow_depth = math.max(0, flow_depth - 1)
         end
 
         ::nexttok::
@@ -356,20 +482,9 @@ local function structuralWarnings(path, tokens, lineOf)
         if count == 0 then
             local dline = 0
             for _, tok in ipairs(tokens) do
-                if tok.type == "command" and tok.cmd == "macro" then
-                    local mname = nil
-                    for _, pair in ipairs(tok.params or {}) do
-                        if type(pair) == "table" and pair[1] == "name" then
-                            mname = pair[2]
-                        end
-                    end
-                    if mname == nil and tok.params and tok.params[1] then
-                        mname = tok.params[1][2]
-                    end
-                    if mname == name then
-                        dline = lineOf(tok.offset or 1)
-                        break
-                    end
+                if macroNameOf(tok) == name then
+                    dline = lineOf(tok.offset or 1)
+                    break
                 end
             end
             warn_scene(path, dline,
@@ -449,4 +564,5 @@ if is_script then
     os.exit(0)
 end
 
-return { strip_tail = strip_tail, checkScene = checkScene }
+return { strip_tail = strip_tail, checkScene = checkScene,
+    structuralWarnings = structuralWarnings }

@@ -85,5 +85,99 @@ if package.searchers and #package.searchers > 0 and ks then
     os.remove(fixture)
 end
 
+-- ------------------------------------------------------------------
+-- Structural warnings (round 73+): the informational [WARN] layer.
+-- Drive structuralWarnings directly on token streams so we can assert
+-- trigger + no-false-positive without parsing stdout. warn_scene uses
+-- the GLOBAL print, so we swap print to capture [WARN] lines verbatim.
+-- Guarded: when the suite sandbox has emptied package.searchers and
+-- ks_check cannot be required, these checks pass trivially.
+-- ------------------------------------------------------------------
+local swfn = ks and ks.structuralWarnings
+
+if swfn then
+    -- lineOf: binary search over line-start offsets (mirrors ks_check).
+    local function makeLineOf(src)
+        local ls = { 1 }
+        for i = 1, #src do if src:byte(i) == 10 then ls[#ls + 1] = i + 1 end end
+        return function(offset)
+            local lo, hi = 1, #ls
+            while lo < hi do
+                local mid = math.floor((lo + hi + 1) / 2)
+                if ls[mid] <= offset then lo = mid else hi = mid - 1 end
+            end
+            return lo
+        end
+    end
+
+    -- warning collector: returns count of captured [WARN] lines that
+    -- contain the given substring (plain find, no Lua patterns).
+    local function warn_count(src, substr)
+        local warns = {}
+        local saved_print = print
+        print = function(s) warns[#warns + 1] = tostring(s) end
+        local ok = pcall(function()
+            local toks = tokenizer.parse_with_offsets(src)
+            swfn("__test__", toks, makeLineOf(src))
+        end)
+        print = saved_print
+        if not ok then return -1 end
+        local n = 0
+        for _, w in ipairs(warns) do
+            if w:find(substr, 1, true) then n = n + 1 end
+        end
+        return n
+    end
+
+    local NL = "\n"
+    -- (a) duplicate [label] definition
+    check("warn dup label triggers",
+        warn_count('*a' .. NL .. '[ch text="x"]' .. NL .. '*a', "defined more than once") == 1)
+    check("warn dup label clean",
+        warn_count('*a' .. NL .. '*b' .. NL .. '[ch text="x"]', "defined more than once") == 0)
+
+    -- (b) [for] loop body never runs (numeric-literal ranges only)
+    check("warn for-never-runs positive triggers",
+        warn_count('[for var="i" start="5" end="1"]' .. NL .. "[endfor]", "loop body never runs") == 1)
+    check("warn for-never-runs negative triggers",
+        warn_count('[for var="j" start="1" end="5" step="-1"]' .. NL .. "[endfor]", "loop body never runs") == 1)
+    check("warn for-never-runs clean ascending",
+        warn_count('[for var="i" start="1" end="3"]' .. NL .. "[endfor]", "loop body never runs") == 0)
+    check("warn for-never-runs clean descending",
+        warn_count('[for var="j" start="3" end="1" step="-1"]' .. NL .. "[endfor]", "loop body never runs") == 0)
+    check("warn for-never-runs skips expressions",
+        warn_count('[for var="k" start="f.x" end="f.y"]' .. NL .. "[endfor]", "loop body never runs") == 0)
+
+    -- (c) [macro] shadows a built-in (non-special) command
+    check("warn macro-shadows triggers",
+        warn_count('[macro ch]' .. NL .. "[endmacro]", "shadows built-in") == 1)
+    check("warn macro-shadows clean",
+        warn_count('[macro scene_intro args="a"]' .. NL .. "[endmacro]", "shadows built-in") == 0)
+
+    -- (e) unreachable tokens after a top-level unconditional [jump]
+    check("warn unreachable triggers",
+        warn_count('[jump target=*end]' .. NL .. '[ch text="dead"]' .. NL .. '*end', "unreachable after [jump]") == 1)
+    check("warn unreachable clean terminal jump",
+        warn_count('[ch text="x"]' .. NL .. '[jump target=*end]' .. NL .. '*end', "unreachable after [jump]") == 0)
+    check("warn unreachable ignores [call]",
+        warn_count('[call target=*sub]' .. NL .. '[ch text="after"]' .. NL .. '*sub', "unreachable after [jump]") == 0)
+    check("warn unreachable ignores conditional jump",
+        warn_count('[if exp="f.x"]' .. NL .. '[jump target=*end]' .. NL .. "[endif]" .. NL .. '[ch text="after"]' .. NL .. '*end', "unreachable after [jump]") == 0)
+
+    -- (f) [endfor]/[endwhile]/[endif]/[endswitch] without a matching opener
+    check("warn orphaned endfor triggers",
+        warn_count("[endfor]", "without matching opener") == 1)
+    check("warn orphaned endwhile triggers",
+        warn_count("[endwhile]", "without matching opener") == 1)
+    check("warn orphaned endif triggers",
+        warn_count("[endif]", "without matching opener") == 1)
+    check("warn orphaned endswitch triggers",
+        warn_count("[endswitch]", "without matching opener") == 1)
+    check("warn orphaned closer clean balanced",
+        warn_count('[if exp="true"]' .. NL .. "[endif]" .. NL
+            .. '[while exp="f.x"]' .. NL .. "[endwhile]" .. NL
+            .. '[for var="i" start="1" end="3"]' .. NL .. "[endfor]",
+            "without matching opener") == 0)
+end
 if failed > 0 then os.exit(1) end
 print("KS CHECK TESTS DONE")

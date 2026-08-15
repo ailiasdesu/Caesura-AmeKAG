@@ -23,7 +23,7 @@ local compiler = require("kag.compiler")
 local flow_commands = {
     ["if"] = true, ["else"] = true, ["endif"] = true,
     ["switch"] = true, ["case"] = true, ["endswitch"] = true,
-    ["jump"] = true, ["call"] = true, ["return"] = true,
+    ["jump"] = true, ["goto"] = true, ["call"] = true, ["return"] = true,
     ["link"] = true, ["end"] = true,
     ["label"] = true,
     ["macro"] = true, ["endmacro"] = true, ["erasemacro"] = true,
@@ -227,8 +227,8 @@ function scheduler.run(ctx, tokens, start_index)
             ctx._next_index = nil
         end
 
-        -- Flow control: [jump]
-        if cmd == "jump" then
+        -- Flow control: [jump]/[goto] (goto = KAG3 alias of jump)
+        if cmd == "jump" or cmd == "goto" then
             -- bare [jump next.ks] -> params[1] (KAG3 syntax); STRING-only:
             -- with named params (even a typo), params[1] is the raw pair
             -- table and target:sub would throw (review should-fix)
