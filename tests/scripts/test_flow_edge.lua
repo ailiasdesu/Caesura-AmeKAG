@@ -286,11 +286,17 @@ do
     check("C1 macro-body goto to external label lands", collect_tags(ctx) == "LAND", collect_tags(ctx))
 end
 
--- C2. macro body goto targeting a label AFTER the macro CALL SITE. Observed:
---     calling the macro twice with this goto causes a RUNAWAY re-expansion —
---     the run does not terminate within the frame cap, no macro depth-guard
---     error fires, and the MSTART,AFTERFIRST pattern repeats forever. This is
---     a genuine infinite-loop window. [DEFECT, reported] (Task 4)
+-- C2. macro body goto targeting a label AFTER the macro CALL SITE. This was
+--     a RUNAWAY re-expansion: the second expansion's goto jumped back into
+--     the just-spliced body region forever, never terminated, and no macro
+--     depth-guard fired (_macroStack stays flat because each jump to the
+--     out-of-body label pops its own splice entry). Round 84 cuts the cycle:
+--     a BACKWARD goto (target label at-or-before the current position) is
+--     allowed once, but re-taking the SAME backward edge (same origin token
+--     -> same target label) is rejected with a WARN + fall-through, so the
+--     run terminates within the frame cap instead of hanging. Covers both
+--     the compile-time-inlined (static-safe) and runtime-splice morphologies.
+--     [round 84 fix] (Task 4)
 do
     local ctx = make_ctx()
     local n, st = run_capped(ctx, {
@@ -305,10 +311,19 @@ do
         { "m1", {} },
         { "ch", { tag = "AFTERSECOND" } },
     }, 300)
-    check("C2 macro-body goto -> runaway re-expansion [DEFECT]",
-        n >= 300, "ran " .. n .. " frames (did not terminate; no depth-guard error)")
-    check("C2 runaway loop repeats MSTART,AFTERFIRST [DEFECT]",
-        collect_tags(ctx):match("MSTART,AFTERFIRST") ~= nil, collect_tags(ctx):sub(-80))
+    check("C2 macro-body backwards goto terminates (no re-expansion loop)",
+        n < 300 and st == "dead", "frames " .. n .. " (status " .. tostring(st) .. ")")
+    -- Lock the OBSERVED terminating sequence. Both [m1] call sites are
+    -- static-safe and compile-time INLINED, so the stream carries two macro
+    -- bodies. First expansion reaches the backwards goto once (lands), the
+    -- re-entry body re-takes the same backward edge and is CUT (round 84
+    -- guard), then falls through MSTART,MSKIP,AFTERSECOND. The run ends on
+    -- AFTERSECOND -- the AFTERFIRST/MSTART cycle before MSKIP is bounded.
+    check("C2 run falls through body to AFTERSECOND (cycle cut)",
+        collect_tags(ctx) == "MSTART,AFTERFIRST,MSTART,AFTERFIRST,MSTART,MSKIP,AFTERSECOND",
+        collect_tags(ctx))
+    check("C2 no macro depth-guard error fired (stack flat)",
+        (#(ctx._macroStack or {}) == 0), "macroStack=" .. tostring(#(ctx._macroStack or {})))
 end
 
 -- ---------------------------------------------------------------------------

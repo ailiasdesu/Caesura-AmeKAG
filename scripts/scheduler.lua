@@ -178,6 +178,12 @@ function scheduler.run(ctx, tokens, start_index)
     ctx._forStack = for_stack
     local WHILE_MAX_ITERS = 65536
 
+    -- [round 84 C2] Per-run backward-jump cycle memory (macro re-expansion
+    -- guard -- keyed by "origin>target" for BACKWARD intra-scene jumps). A
+    -- fresh scene pass starts clean; [jump]/[call] across scenes re-enter
+    -- via scheduler.run and get their own table.
+    ctx._backJumps = {}
+
     local kag = require("kag")
     local operation = require("kag.operation")
     local kagDebug = require("kag_debug")
@@ -269,19 +275,51 @@ function scheduler.run(ctx, tokens, start_index)
                     idx = find_label(tokens, label, ctx.label_index)
                 end
                 if idx then
-                    i = idx
-                    -- [round 83 A4/A5] An intra-scene jump is an arbitrary
-                    -- control-flow transfer: any loop/summary stacks still
-                    -- live at the jump site describe a loop body we are now
-                    -- leaving. Reset them so (a) no stale entries leak into
-                    -- later loops and (b) a LATER same-name [for] re-initializes
-                    -- its counter from its declared start instead of reusing
-                    -- the stale marker (observed: 11 iterations instead of 2).
-                    ctx._forStack = {}
-                    ctx._whileStack = {}
-                    ctx._ifStack = {}
-                    ctx._switchStack = {}
-                    ctx._forStackMarks = {}
+                    -- [round 84 C2] macro re-expansion loop guard.
+                    -- A static-safe macro (defined at top level, no erase /
+                    -- redefinition) is INLINED at compile time, so the macro
+                    -- body's [goto] runs with an EMPTY runtime _macroStack and
+                    -- the round-75 depth guard never fires -- the C2 script
+                    -- bounced forever re-expanding the same body. The hazard
+                    -- is specifically a BACKWARD jump (target label at-or-
+                    -- before the current position) whose re-traversal re-enters
+                    -- the inlined body and re-takes the SAME backward-edge,
+                    -- so the goto and its siblings loop. A dynamic macro that
+                    -- splices at runtime hits the identical edge through its
+                    -- own body tokens, so this guard covers both morphologies.
+                    -- Forward jumps (idx > i) and the FIRST take of a backward
+                    -- edge still land normally; only REPEATING the same
+                    -- backward edge (same origin token -> same target label)
+                    -- is cut, with a WARN instead of a hang. (Round 83 A4/A5
+                    -- stack resets below apply only on a TAKEN jump.)
+                    ctx._backJumps = ctx._backJumps or {}
+                    if idx <= i then
+                        local key = i .. ">" .. idx
+                        if ctx._backJumps[key] then
+                            print("[WARN] [jump] backward goto into macro body -- "
+                                .. "macro re-expansion loop prevented (target *"
+                                .. label .. ", from token " .. i .. ")")
+                        else
+                            ctx._backJumps[key] = true
+                            i = idx
+                        end
+                    else
+                        i = idx
+                    end
+                    if i == idx then
+                        -- [round 83 A4/A5] An intra-scene jump is an arbitrary
+                        -- control-flow transfer: any loop/summary stacks still
+                        -- live at the jump site describe a loop body we are now
+                        -- leaving. Reset them so (a) no stale entries leak into
+                        -- later loops and (b) a LATER same-name [for] re-initializes
+                        -- its counter from its declared start instead of reusing
+                        -- the stale marker (observed: 11 iterations instead of 2).
+                        ctx._forStack = {}
+                        ctx._whileStack = {}
+                        ctx._ifStack = {}
+                        ctx._switchStack = {}
+                        ctx._forStackMarks = {}
+                    end
                 else
                     print("[WARN] [jump] label not found: " .. label)
                 end
