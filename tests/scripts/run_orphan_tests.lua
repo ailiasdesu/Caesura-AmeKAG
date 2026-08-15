@@ -33,6 +33,15 @@ print("=== Caesura Orphan Test Suite (isolated) ===\n")
 -- later test. Run each test in its own lua subprocess so os.exit is
 -- contained (exit 0 = pass, non-zero = fail).
 local lua_bin = arg and arg[-1] or "lua"
+
+-- Native path separators: Windows cmd wants backslashes, POSIX sh wants
+-- forward slashes (round 60: the orphan suite now runs on Linux/macOS CI
+-- where tests\scripts\x.lua is a literal filename, not a path).
+local SEP = package.config:sub(1, 1)
+local function to_native(p)
+    return SEP == "/" and p:gsub("\\", "/") or p:gsub("/", "\\")
+end
+
 local function run_isolated(name)
     -- Windows popen (cmd.exe /c) quoting rules:
     --  * unquoted relative exe works ("external\lua\lua.exe ...")
@@ -42,7 +51,7 @@ local function run_isolated(name)
     --  * prefixing with `call` keeps the first char non-quote, so a
     --    quoted absolute exe (what git-bash argv[-1] resolves to) runs
     --    correctly. The test file path is always quoted.
-    local bin = lua_bin:gsub('/', '\\')
+    local bin = to_native(lua_bin)
     -- cmd splits UNQUOTED command tokens at spaces AND at parens
     -- (probe: 'D:\...\Caesura(AmeKAG)\lua.exe' -> 'D:\...\Caesura'
     -- not recognized), and an absolute exe is what git-bash argv[-1]
@@ -51,7 +60,7 @@ local function run_isolated(name)
     if bin:find("[ %(%)]") then
         bin = 'call "' .. bin .. '"'
     end
-    local f = (test_dir .. name .. '.lua'):gsub('/', '\\')
+    local f = to_native(test_dir .. name .. '.lua')
     local cmd = bin .. ' "' .. f .. '"'
     local pf = io.popen(cmd)
     if not pf then return false, "cannot spawn" end
