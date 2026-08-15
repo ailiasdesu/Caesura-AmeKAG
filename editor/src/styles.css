@@ -372,6 +372,22 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 .bp-row input { flex: 1; padding: 4px 6px; min-width: 0; }
 .bp-row input.bp-line { flex: 0 0 50px; }
 .bp-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.bp-list { list-style: none; margin: 4px 0; padding: 0; max-height: 120px; overflow: auto; }
+.bp-item { display: flex; align-items: center; gap: 6px; padding: 2px 4px; font-family: 'Cascadia Code', monospace; font-size: 11px; }
+.bp-item-src { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); }
+.bp-item-line { color: var(--accent); }
+.bp-item-rm { flex: 0 0 auto; padding: 0 6px; line-height: 1.4; font-size: 11px; color: var(--err); }
+
+.inspect-result { margin: 6px 0 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; }
+.inspect-result-head { display: flex; justify-content: space-between; gap: 8px; }
+.inspect-name { font-family: 'Cascadia Code', monospace; font-size: 11px; }
+.inspect-type { font-size: 10px; color: var(--fg-dim); text-transform: uppercase; }
+.inspect-value { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font-family: 'Cascadia Code', monospace; font-size: 11px; color: var(--accent); max-height: 120px; overflow: auto; }
+
+.frame-capture { margin: 6px 0 10px; }
+.frame-img { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; display: block; }
+.frame-meta { margin-top: 4px; font-size: 11px; color: var(--fg-dim); }
+
 
 .debug-script {
   width: 100%;
