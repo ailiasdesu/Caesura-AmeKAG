@@ -49,7 +49,7 @@
 [scroll text="Caesura KAG 教程系列 — 完结" speed=80]
 [wait time=600]
 [stopbgm time=400]
-[ch name="Narrator" text="六个教程全部完成！你已经掌握了 Caesura 剧本语言的基础。"]
+[ch name="Narrator" text="教程 06 完成——特效与转场。你已经掌握了 Caesura 剧本语言的这部分基础。"]
 [p]
 
 ; ---- 6. 正式收尾 ------------------------------------------------------------

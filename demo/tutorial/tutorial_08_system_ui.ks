@@ -56,6 +56,6 @@
 [chapter id="end" label="*end"]
 
 ; ---- 6. 收尾 ---------------------------------------------------------------
-[ch name="Narrator" text="系统 UI 教程完成！八课教程全部学完——你已经掌握了 Caesura 的完整基础。"]
+[ch name="Narrator" text="教程 08 完成——系统界面。你已经掌握了 Caesura 剧本语言的这部分基础。"]
 [p]
 [end]
