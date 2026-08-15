@@ -117,3 +117,5 @@
 | 61 | G9 表达式翻译补洞：①**三元在 [ ] 索引内不翻译**（find_top/match_colon 把 [ ] 当嵌套深度，f.arr[flag ? 1 : 2] 的原样 ? 使 Lua load 失败、[if] 静默走 else）——新增 translate_brackets 从内向外预翻译括号内容，外层三元配对不受影响；test_expr_lang +6（then/else/算术组合/外层三元包索引三元/字符串值/translate 无 ?）②**[eval] 缺 TJS 运算符翻译**（EXPR_TOKENS 无 eval，[eval exp="x = a && b"] 是非法 Lua）——运行时 translateOperators（仅运算符不翻译三元：赋值语句里 (a and b or c) wrap 会破坏 x = 前缀）+ expr.translateOperators 导出；test_compiler 11f-11h（&& / || / ! 赋值）53 全过 | web 43/43, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 61 提交) |
 
 | 62 | G9 插值长括号支持：match_brace 识别 Lua 长括号 ${[=[...]=]}（任意层级 [[、[=[、[==[）——长字符串里的 } 不再提前闭合 ${...} 跨度（此前 ${ [[}}]] .. f.x } 截断泄漏）；构造器括号化共用同一函数自动受益；test_schema +3（[[}}]] 值/level-1 [=[}]=]/纯表达式回归） | web 43/43, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 62 提交) |
+
+| 63 | G9 同名嵌套 [for] 死循环修复：_forStackMarks 从布尔改为**栈计数**（entry 0→1 初始化计数、嵌套 +1、endfor 完成/break 递减、rewind 重入经 _forRewound 标记不重复递增）——此前内层 endfor 把外层 mark 清空，外层重入时计数被重新初始化永不终止；同名共享计数器语义下外层只跑 1 次（IN,IN,OUT）而非死循环；test_scheduler 10（终止/序列/最终计数 4）37 全过 | web 43/43, Lua 120/120, 孤儿 9/9, C++ 711/711, ctest 10+AI 跳过, 耦合/覆盖 PASS | (round 63 提交) |
