@@ -84,4 +84,12 @@ tests/scripts/config/
 FrameworkShaders/
 editor/tsconfig.tsbuildinfo
 tmp/
+# Agent probe scratch files (convergence cleanup: agents may leave
+# one-off scan/probe scripts; never commit them)
+/*_probe.lua
+/*_tmp.lua
+/tmp_probe*.lua
+/ks_scan_tmp.lua
+tests/scripts/tmp_probe*.lua
+web/scratch.*.test.js
 cache/
