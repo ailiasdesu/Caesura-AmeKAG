@@ -10,11 +10,17 @@ end
 local mods = require("mods")
 
 -- Fixture: create a fake mod tree (and clean up afterwards).
+local SEP = package.config:sub(1, 1)
+local function mkdirs(path)
+    if SEP == "\\" then
+        os.execute('mkdir "' .. path:gsub("/", "\\") .. '" 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '"')
+    end
+end
 local function write(path, content)
     local dir = path:match("^(.*)/[^/]+$")
-    if dir then
-        os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul')
-    end
+    if dir then mkdirs(dir) end
     local f = assert(io.open(path, "w"))
     f:write(content)
     f:close()
@@ -95,8 +101,13 @@ do
 end
 
 -- ---- cleanup ---------------------------------------------------------------
-os.execute('rmdir /s /q mods\\testmod_a 2>nul')
-os.execute('rmdir /s /q mods\\testmod_b 2>nul')
+if SEP == "\\" then
+    os.execute('rmdir /s /q mods\\testmod_a 2>nul')
+    os.execute('rmdir /s /q mods\\testmod_b 2>nul')
+else
+    os.execute('rm -rf mods/testmod_a')
+    os.execute('rm -rf mods/testmod_b')
+end
 mods.disable("testmod_a")
 mods.disable("testmod_b")
 

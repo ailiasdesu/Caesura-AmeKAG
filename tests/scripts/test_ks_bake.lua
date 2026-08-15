@@ -28,6 +28,20 @@ local bake = dofile("scripts/ks_bake.lua")
 local SCENE = "tmp/bake_test.ks"
 local OUT = "cache/ksc"
 
+-- CI checkouts start without tmp/ and cache/ (round 60: the suite now
+-- runs on Linux/macOS where the Windows mkdir 2>nul trick is invalid).
+local function ensure_dir(path)
+    local sep = package.config:sub(1, 1)
+    if sep == "\\" then
+        os.execute('mkdir "' .. path:gsub("/", "\\") .. '" 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '"')
+    end
+end
+ensure_dir("tmp")
+ensure_dir("cache")
+ensure_dir("cache/ksc")
+
 local function writeScene(text)
     local f = io.open(SCENE, "w")
     f:write(text)

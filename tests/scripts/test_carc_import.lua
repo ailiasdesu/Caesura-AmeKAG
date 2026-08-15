@@ -13,7 +13,24 @@ local import = require("kag3_import")
 local tokenizer = require("tokenizer")
 
 local SEP = package.config:sub(1, 1)  -- "\" on Windows, "/" elsewhere
-local EXE = "bin" .. SEP .. "Debug" .. SEP .. "carc_pack.exe"
+local IS_WIN = SEP == "\\"
+-- Multi-config (MSVC) puts the tool at bin/Debug/carc_pack.exe; single-
+-- config (Linux/macOS) at bin/carc_pack. Pick whichever exists so the
+-- suite runs on every CI platform (round 60).
+local EXE = nil
+for _, c in ipairs(IS_WIN and {
+    "bin" .. SEP .. "Debug" .. SEP .. "carc_pack.exe",
+    "bin" .. SEP .. "carc_pack.exe",
+} or {
+    "bin" .. SEP .. "Debug" .. SEP .. "carc_pack",
+    "bin" .. SEP .. "carc_pack",
+}) do
+    if io.open(c, "r") then EXE = c break end
+end
+if not EXE then
+    print("SKIP: carc_pack binary not found (checked bin/Debug and bin)")
+    os.exit(0)
+end
 local TMP_IN = "tmp" .. SEP .. "carc_test_in"
 local TMP_CARC = "tmp" .. SEP .. "carc_test.carc"
 local TMP_OUT = "tmp" .. SEP .. "carc_test_out"
@@ -22,22 +39,35 @@ local function shell(cmd)
     return pcall(os.execute, cmd)
 end
 
+-- Portable directory reset (round 60: the Lua suites now run on Linux and
+-- macOS CI where rmdir/mkdir 2>nul are not valid).
+local function reset_dir(path)
+    if IS_WIN then
+        shell('rmdir /s /q "' .. path .. '" 2>nul')
+        shell('mkdir "' .. path .. '" 2>nul')
+    else
+        shell('rm -rf "' .. path .. '"')
+        shell('mkdir -p "' .. path .. '"')
+    end
+end
+local REDIR = IS_WIN and ">nul 2>nul" or ">/dev/null 2>&1"
+
 -- ---------------------------------------------------------------------------
 -- 1. pack a KAG3-style scene into a CARC archive
 -- ---------------------------------------------------------------------------
-shell('rmdir /s /q "' .. TMP_IN .. '" 2>nul')
-shell('mkdir "' .. TMP_IN .. '" 2>nul')
+reset_dir(TMP_IN)
 local f = io.open(TMP_IN .. SEP .. "legacy.ks", "w")
 f:write('[ch text="HP: &f.hp && MP: &mp.mp"]\n[waitse]\n[chara_show name="hero"]\n*start\n[end]\n')
 f:close()
-shell(EXE .. ' "' .. TMP_IN .. '" "' .. TMP_CARC .. '" >nul 2>nul')
+shell(EXE .. ' "' .. TMP_IN .. '" "' .. TMP_CARC .. '" ' .. REDIR)
 local carcExists = io.open(TMP_CARC, "r") ~= nil
 check("carc_pack creates archive", carcExists)
 
 -- ---------------------------------------------------------------------------
 -- 2. list subcommand returns hash entries
 -- ---------------------------------------------------------------------------
-shell(EXE .. ' list "' .. TMP_CARC .. '" > "tmp' .. SEP .. 'carc_list.txt" 2>nul')
+shell(EXE .. ' list "' .. TMP_CARC .. '" > "tmp' .. SEP .. 'carc_list.txt" '
+    .. (IS_WIN and "2>nul" or "2>/dev/null"))
 local lf = io.open("tmp" .. SEP .. "carc_list.txt", "r")
 local listContent = lf and lf:read("*a") or ""
 if lf then lf:close() end
@@ -46,9 +76,9 @@ check("list prints entries", listContent:find("%x%x%x%x", 1) ~= nil)
 -- ---------------------------------------------------------------------------
 -- 3. extract --path restores the scene
 -- ---------------------------------------------------------------------------
-shell('rmdir /s /q "' .. TMP_OUT .. '" 2>nul')
+reset_dir(TMP_OUT)
 shell(EXE .. ' extract "' .. TMP_CARC .. '" "' .. TMP_OUT
-    .. '" --path "legacy.ks" >nul 2>nul')
+    .. '" --path "legacy.ks" ' .. REDIR)
 local ef = io.open(TMP_OUT .. SEP .. "legacy.ks", "r")
 local extracted = ef and ef:read("*a") or ""
 if ef then ef:close() end
@@ -75,11 +105,14 @@ end
 -- ---------------------------------------------------------------------------
 -- 5. full extract (hash-named) does not crash
 -- ---------------------------------------------------------------------------
-shell('rmdir /s /q "tmp' .. SEP .. 'carc_test_full" 2>nul')
+reset_dir("tmp" .. SEP .. "carc_test_full")
 shell(EXE .. ' extract "' .. TMP_CARC .. '" "tmp' .. SEP
-    .. 'carc_test_full" >nul 2>nul')
+    .. 'carc_test_full" ' .. REDIR)
 local fullCount = 0
-local pf = io.popen('dir /b "tmp' .. SEP .. 'carc_test_full" 2>nul')
+local listCmd = IS_WIN
+    and ('dir /b "tmp' .. SEP .. 'carc_test_full" 2>nul')
+    or ('ls -1 "tmp' .. SEP .. 'carc_test_full" 2>/dev/null')
+local pf = io.popen(listCmd)
 if pf then
     for _ in pf:lines() do fullCount = fullCount + 1 end
     pf:close()
@@ -87,9 +120,15 @@ end
 check("full extract yields files", fullCount >= 1)
 
 -- cleanup
-shell('rmdir /s /q "' .. TMP_IN .. '" 2>nul')
-shell('rmdir /s /q "' .. TMP_OUT .. '" 2>nul')
-shell('rmdir /s /q "tmp' .. SEP .. 'carc_test_full" 2>nul')
+if IS_WIN then
+    shell('rmdir /s /q "' .. TMP_IN .. '" 2>nul')
+    shell('rmdir /s /q "' .. TMP_OUT .. '" 2>nul')
+    shell('rmdir /s /q "tmp' .. SEP .. 'carc_test_full" 2>nul')
+else
+    shell('rm -rf "' .. TMP_IN .. '"')
+    shell('rm -rf "' .. TMP_OUT .. '"')
+    shell('rm -rf "tmp' .. SEP .. 'carc_test_full"')
+end
 os.remove(TMP_CARC)
 os.remove("tmp" .. SEP .. "carc_list.txt")
 
