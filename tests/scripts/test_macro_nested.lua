@@ -54,8 +54,11 @@ while coroutine.status(coR) ~= "dead" do
         break
     end
 end
+-- Round 75: the expansion guard is depth-based now; the message says
+-- "expansion depth exceeded" (the old per-context counter message was
+-- "expansion budget exceeded").
 check("recursive macro budgeted", not okR
-      and tostring(errR):find("expansion budget") ~= nil)
+      and tostring(errR):find("expansion depth") ~= nil)
 
 print("NESTED MACRO TESTS DONE")
 if failed > 0 then os.exit(1) end

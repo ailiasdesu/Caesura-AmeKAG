@@ -80,7 +80,7 @@ do
     local ctx, ok, err = run_tokens(toks, 2500)
     local msg = tostring(err or "")
     check("self-recursive macro errors (not dead-loop)", not ok
-          and msg:find("expansion budget") ~= nil, msg)
+          and msg:find("expansion depth") ~= nil, msg)
 end
 
 -- 2. Mutual recursion ([macro a][b][endmacro][macro b][a][endmacro][a]).
@@ -95,7 +95,7 @@ do
     local ctx, ok, err = run_tokens(toks, 2500)
     local msg = tostring(err or "")
     check("mutual recursion budgeted", not ok
-          and msg:find("expansion budget") ~= nil, msg)
+          and msg:find("expansion depth") ~= nil, msg)
 end
 
 -- 3. Parameter passthrough (runtime path): args= named fill %who%.
@@ -237,12 +237,43 @@ do
     end
     print("  [report] nested-def: ok=" .. tostring(ok) .. " err=" .. tostring(err)
           .. " dispatched=" .. #dispatched .. " innerRan=" .. tostring(innerLater));
-    check("nested macro definition does not crash the process", true)
+    -- Round 75 fix: depth-aware body collection -- the nested
+    -- [macro inner]..[endmacro] pair belongs to the OUTER body, so the
+    -- [outer] invocation re-executes the inner DEFINITION and registers
+    -- inner for later use (its body does NOT run at definition time).
+    check("nested macro definition completes", ok, err)
+    local innerBody = ctx.macros and ctx.macros.inner
+    check("nested macro definition registers inner via outer body",
+          type(innerBody) == "table" and #innerBody == 1
+          and innerBody[1][1] == "ch",
+          "inner=" .. tostring(innerBody and #innerBody))
+    -- A separate [inner] call then dispatches the inner body.
+    ctx.macros = ctx.macros
+    local toks3 = { { "inner" } }
+    local ctx3 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        tokens = toks3, token_index = 1, current_scene = "t.ks", label_index = {} }
+    ctx3.macros = ctx.macros
+    local co4 = coroutine.create(function() scheduler.run(ctx3, toks3, 1) end)
+    local steps4 = 0
+    local ok4 = true
+    while coroutine.status(co4) ~= "dead" and steps4 < 100 do
+        local r4, e4 = coroutine.resume(co4)
+        steps4 = steps4 + 1
+        if not r4 then ok4 = false break end
+    end
+    local innerRan2 = false
+    for _, d in ipairs(dispatched) do
+        if d[1] == "ch" and d[2] and d[2].text == "INNER" then innerRan2 = true end
+    end
+    check("nested-defined inner invocable afterwards (INNER runs)",
+          ok4 and innerRan2, "innerRan=" .. tostring(innerRan2))
 end
 
--- 11. Budget counter is per-context and never reset: many legitimate
--- (non-recursive) dynamic macro calls accumulate and eventually trip the
--- 1000-cap with a misleading "self-recursive macro" report.
+-- 11. Round 75: expansion guard is DEPTH-based, not a per-ctx counter.
+-- 1002 sequential (non-recursive) dynamic macro calls each complete their
+-- body before the next splice -- the depth stack stays flat, so the run
+-- must complete with all 1002 bodies dispatched (the old per-context
+-- counter tripped at 1000 with a misleading recursion report).
 do
     local parts = {
         { "macro", { name = "mm" } }, { "ch", { text = "x" } }, { "endmacro" },
@@ -250,10 +281,11 @@ do
     }
     for i = 1, 1002 do parts[#parts + 1] = { "mm" } end
     clear_dispatched()
-    local ctx, ok, err = run_tokens(parts, 2500)
-    local msg = tostring(err or "")
-    check("1001+ legit calls on one ctx trip expansion budget (documented limit)",
-          not ok and msg:find("expansion budget") ~= nil, msg)
+    local ctx, ok, err = run_tokens(parts, 4000)
+    check("1002 sequential legit macro calls complete (depth guard)",
+          ok, err)
+    check("1002 sequential legit macro calls all dispatched",
+          #dispatched == 1002, "dispatched=" .. #dispatched)
 end
 
 package.loaded["kag"] = kag_orig

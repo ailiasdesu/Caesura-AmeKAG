@@ -304,6 +304,23 @@ do
     check('for-save excludes _forRewound', st6 and st6._forRewound == nil)
     check('for-save excludes _whileIterByScene', st6 and st6._whileIterByScene == nil)
 
+    -- Round 75: the LIVE for_stack IS serialized (loop_stacks.for_) so a
+    -- [load] resume can continue the enclosing loop. The entry mirrors
+    -- scheduler's stack record (var=i, step=1, not ended, pos > 0).
+    check('for-save serializes the live loop stack',
+        st6 and type(st6.loop_stacks) == 'table'
+        and type(st6.loop_stacks.for_) == 'table'
+        and #st6.loop_stacks.for_ == 1,
+        'loop_stacks=' .. tostring(st6 and st6.loop_stacks
+            and #st6.loop_stacks.for_))
+    local lse = st6 and st6.loop_stacks and st6.loop_stacks.for_
+        and st6.loop_stacks.for_[1]
+    check('for-save loop entry carries var/step/ended/pos',
+        lse and lse.var == 'i' and lse.step == 1 and lse.ended == false
+        and type(lse.pos) == 'number' and lse.pos > 0,
+        tostring(lse and lse.var) .. '/' .. tostring(lse and lse.step)
+        .. '/' .. tostring(lse and lse.ended))
+
     -- BOUNDARY (documented defect): resume the saved scene at the saved
     -- token with a FRESH scheduler, mirroring load's resume_from_save
     -- (reload scene + re-spawn scheduler.run at token_index). The loop
@@ -333,13 +350,113 @@ do
     check('for-load resume completes the in-flight iteration body',
         ctxR and ctxR.f and ctxR.f.iter_done == 2,
         'iter_done=' .. tostring(ctxR and ctxR.f and ctxR.f.iter_done))
-    -- If the iteration machinery were preserved, the loop keeps rewinding
-    -- to iter_done==4. It does not (scheduler-local for_stack lost after
-    -- the fresh scheduler.run) — the loop exits early at iter_done==2.
-    check('for-load [endfor] does NOT rewind into remaining iterations '
-        .. '(known boundary: loop exits early)',
+    -- Boundary WITHOUT the round-75 restore marker: a resume that does not
+    -- feed the saved loop stack back into the run still exits early
+    -- (backward-compatible; captures the pre-fix behavior).
+    check('for-load without loop-stack marker exits early (legacy)',
         ctxR and ctxR.f and ctxR.f.iter_done < 4,
         'iter_done=' .. tostring(ctxR and ctxR.f and ctxR.f.iter_done))
+
+    -- Round 75 FIX: feed the marker exactly like save.lua resume_from_save
+    -- now does (ctx._resumeLoopStacks = slot's loop_stacks) before the
+    -- re-spawned scheduler.run. The [endfor] after the resume point must
+    -- rewind into the remaining iterations: iter_done reaches 4.
+    local ctxR2 = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = 'demo/story.ks', tokens = toksR,
+        text_state = {}, layer_state = {}, audio_state = {},
+        macro_args = {}, call_stack = {}, flag_stack = {},
+        backlog = {}, _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {},
+        labelMap = {} }
+    for k, v in pairs(st6 and st6.f or {}) do ctxR2.f[k] = v end
+    ctxR2.token_index = st6 and st6.token_index or 1
+    if st6 and st6.loop_stacks then
+        ctxR2._resumeLoopStacks = st6.loop_stacks
+    end
+    local coR2 = coroutine.create(function()
+        scheduler.run(ctxR2, toksR, ctxR2.token_index) end)
+    local nr2 = 0
+    while coroutine.status(coR2) ~= 'dead' and nr2 < 800 do
+        local okR2, errR2 = coroutine.resume(coR2, 16)
+        if not okR2 then return nil, errR2 end
+        if ctxR2.waiting_input then ctxR2.waiting_input = false end
+        nr2 = nr2 + 1
+    end
+    check('for-load with loop-stack marker resumes clean',
+        ctxR2 and ctxR2.f ~= nil)
+    check('for-load with loop-stack marker continues to iter_done==4',
+        ctxR2 and ctxR2.f and ctxR2.f.iter_done == 4,
+        'iter_done=' .. tostring(ctxR2 and ctxR2.f and ctxR2.f.iter_done))
+    check('for-load marker consumed after resume',
+        ctxR2 and ctxR2._resumeLoopStacks == nil)
+end
+
+-- ----------------------------------------------------------------
+-- Round 75: [save] inside a [while] loop -- while_stack round-trips
+-- through the slot exactly like the for stack, so the resumed run
+-- rewinds the loop to completion (hp==5) instead of falling out.
+-- ----------------------------------------------------------------
+do
+    local wsrc = table.concat({
+        '[while exp="f.hp < 5"]',
+        '[inc f.hp]',
+        '[inc f.iter_done]',
+        '[if exp="f.hp == 2"][save slot=8][endif]',
+        '[endwhile]',
+    }, '\n')
+    local wtoks = tokenizer.parse(wsrc)
+    compiler.compile(wtoks)
+    -- first pass: run to completion, snapshot at hp==2 lands in slot 8
+    local wctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = 'demo/story.ks', tokens = wtoks,
+        text_state = {}, layer_state = {}, audio_state = {},
+        macro_args = {}, call_stack = {}, flag_stack = {},
+        backlog = {}, _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {},
+        labelMap = {} }
+    wctx.f.hp = 0
+    wctx.f.iter_done = 0
+    local wco = coroutine.create(function()
+        scheduler.run(wctx, wtoks, 1) end)
+    local wn = 0
+    while coroutine.status(wco) ~= 'dead' and wn < 800 do
+        local wok, werr = coroutine.resume(wco, 16)
+        if not wok then return nil, werr end
+        if wctx.waiting_input then wctx.waiting_input = false end
+        wn = wn + 1
+    end
+    check('while-save full run completes', wctx and wctx.f.hp == 5,
+        'hp=' .. tostring(wctx and wctx.f.hp))
+    local wst = savedSlots[8] and savedSlots[8].state
+    check('while-save serializes loop_stacks.while_',
+        wst and type(wst.loop_stacks) == 'table'
+        and type(wst.loop_stacks.while_) == 'table'
+        and #wst.loop_stacks.while_ == 1,
+        'while_=' .. tostring(wst and wst.loop_stacks
+            and wst.loop_stacks.while_ and #wst.loop_stacks.while_))
+    -- resume with the marker: loop rewinds to completion
+    local wr = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = 'demo/story.ks', tokens = wtoks,
+        text_state = {}, layer_state = {}, audio_state = {},
+        macro_args = {}, call_stack = {}, flag_stack = {},
+        backlog = {}, _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {},
+        labelMap = {} }
+    for k, v in pairs(wst and wst.f or {}) do wr.f[k] = v end
+    wr.token_index = wst and wst.token_index or 1
+    if wst and wst.loop_stacks then wr._resumeLoopStacks = wst.loop_stacks end
+    local wco2 = coroutine.create(function()
+        scheduler.run(wr, wtoks, wr.token_index) end)
+    local wn2 = 0
+    while coroutine.status(wco2) ~= 'dead' and wn2 < 800 do
+        local wok2, werr2 = coroutine.resume(wco2, 16)
+        if not wok2 then return nil, werr2 end
+        if wr.waiting_input then wr.waiting_input = false end
+        wn2 = wn2 + 1
+    end
+    check('while-load resume completes the loop (hp==5)',
+        wr and wr.f.hp == 5, 'hp=' .. tostring(wr and wr.f.hp))
+    check('while-load resume ran the remaining iterations',
+        wr and wr.f.iter_done == 5,
+        'iter_done=' .. tostring(wr and wr.f.iter_done))
+    check('while-load marker consumed', wr and wr._resumeLoopStacks == nil)
 end
 print(string.format('\nSAVEFLOW TESTS: %d passed, %d failed', passed, failed))
 if failed > 0 then os.exit(1) end
