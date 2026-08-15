@@ -873,3 +873,89 @@ TEST_CASE("SoLoudAudioEngine has no mute toggle; bus volume 0 persists as mute a
     eng.setBusVolume("voice", 1.0f);
     CHECK(eng.getBusVolume("voice") == doctest::Approx(1.0f));
 }
+
+// -----------------------------------------------------------------------------
+// G10 follow-up: bus volume pre-init consistency (round-77 audit)
+// setBusVolume must store its value before init() and apply it at init(),
+// matching setGlobalVolume's documented init-time application pattern.
+// -----------------------------------------------------------------------------
+
+TEST_CASE("SoLoudAudioEngine setBusVolume before init is applied at init") {
+    SoLoudAudioEngine eng;
+    // Configure a bus BEFORE the backend is initialized. Historically this was
+    // silently dropped (setBusVolume early-returned when !m_initialized); it
+    // must now be stored and applied when init() starts the buses.
+    eng.setBusVolume("bgm", 0.42f);
+    CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.42f));  // stored pending
+
+    if (!eng.init()) {
+        MESSAGE("Audio device unavailable, skipping");
+        eng.shutdown();
+        return;
+    }
+
+    // The SoLoud BGM bus must actually carry the pre-init value (not 1.0f).
+    // AudioSource::mVolume is the default volume init() applied via setVolume.
+    CHECK(eng.bgmBus().mVolume == doctest::Approx(0.42f));
+    // And the persisted getter agrees.
+    CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.42f));
+
+    eng.shutdown();
+}
+
+TEST_CASE("SoLoudAudioEngine setGlobalVolume before init still applies at init (regression)") {
+    SoLoudAudioEngine eng;
+    // setGlobalVolume is the established init-time-application pattern: it
+    // stores pre-init and applies the stored value inside init(). This
+    // regression guard ensures it keeps working unchanged.
+    eng.setGlobalVolume(0.25f);
+    CHECK(!eng.isBGMPlaying());  // still pre-init
+    if (!eng.init()) {
+        MESSAGE("Audio device unavailable, skipping");
+        eng.shutdown();
+        return;
+    }
+    CHECK(eng.getGlobalVolume() == doctest::Approx(0.25f));
+
+    // Verify SoLoud's global volume was actually applied at init.
+    CHECK(eng.soloud().getGlobalVolume() == doctest::Approx(0.25f));
+    eng.shutdown();
+}
+
+TEST_CASE("SoLoudAudioEngine setBusVolume after init applies immediately (regression)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // Live-path semantics unchanged: an after-init call must push the volume
+    // straight through to the SoLoud bus and update the persisted getter.
+    const float original = eng.getBusVolume("voice");
+    eng.setBusVolume("voice", 0.63f);
+    CHECK(eng.getBusVolume("voice") == doctest::Approx(0.63f));
+    CHECK(eng.voiceBus().mVolume == doctest::Approx(0.63f));
+
+    eng.setBusVolume("voice", original);
+    CHECK(eng.getBusVolume("voice") == doctest::Approx(original));
+    eng.shutdown();
+}
+
+TEST_CASE("SoLoudAudioEngine setBusVolume(0) mutes that bus") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // A zero bus volume is the documented mute approximation: it persists and
+    // drives the SoLoud bus to silence.
+    eng.setBusVolume("se", 0.0f);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.0f));
+    CHECK(eng.seBus().mVolume == doctest::Approx(0.0f));
+
+    // Sanity: the SE bus still plays samples (muted bus does not block play).
+    const unsigned int h = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(h != 0);
+    CHECK(eng.isSEPlaying());
+    eng.stopSEHandle(h);
+
+    eng.setBusVolume("se", 1.0f);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(1.0f));
+    eng.shutdown();
+}
+

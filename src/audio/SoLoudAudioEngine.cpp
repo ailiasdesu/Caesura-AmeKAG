@@ -104,8 +104,10 @@ bool SoLoudAudioEngine::init(){
 
     m_soloud.setGlobalVolume(m_globalVolume);
 
-    // Create and play audio buses -- all must succeed or init fails
-    m_bgmBus.setVolume(1.0f);
+    // Create and play audio buses -- all must succeed or init fails.
+    // Apply any bus volume configured before init() (stored pending values),
+    // matching the init-time application pattern of setGlobalVolume.
+    m_bgmBus.setVolume(m_bgmVolume);
     m_bgmBusHandle = m_soloud.play(m_bgmBus);
     if (!m_soloud.isValidVoiceHandle(m_bgmBusHandle)) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] BGM bus play() returned invalid handle 0");
@@ -113,7 +115,7 @@ bool SoLoudAudioEngine::init(){
         return false;
     }
 
-    m_voiceBus.setVolume(1.0f);
+    m_voiceBus.setVolume(m_voiceVolume);
     m_voiceBusHandle = m_soloud.play(m_voiceBus);
     if (!m_soloud.isValidVoiceHandle(m_voiceBusHandle)) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] VOICE bus play() returned invalid handle 0");
@@ -121,7 +123,7 @@ bool SoLoudAudioEngine::init(){
         return false;
     }
 
-    m_seBus.setVolume(1.0f);
+    m_seBus.setVolume(m_seVolume);
     m_seBusHandle = m_soloud.play(m_seBus);
     if (!m_soloud.isValidVoiceHandle(m_seBusHandle)) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] SE bus play() returned invalid handle 0");
@@ -295,17 +297,20 @@ float SoLoudAudioEngine::getGlobalVolume() const {
 
 void SoLoudAudioEngine::setBusVolume(const char* bus, float volume){
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return;
+    // Store the pending value unconditionally, so a call before init() is
+    // applied when init() starts the buses (same init-time application
+    // pattern as setGlobalVolume). If already initialized, push it through
+    // to the live SoLoud bus immediately.
     std::string b(bus);
     if (b == "bgm") {
         m_bgmVolume = volume;
-        m_bgmBus.setVolume(volume);
+        if (m_initialized) m_bgmBus.setVolume(volume);
     } else if (b == "voice") {
         m_voiceVolume = volume;
-        m_voiceBus.setVolume(volume);
+        if (m_initialized) m_voiceBus.setVolume(volume);
     } else if (b == "se") {
         m_seVolume = volume;
-        m_seBus.setVolume(volume);
+        if (m_initialized) m_seBus.setVolume(volume);
     }
     printf("[Audio] Bus %s volume = %.2f\n", bus, volume);
 }
