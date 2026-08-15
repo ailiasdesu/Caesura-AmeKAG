@@ -200,6 +200,46 @@ local hs3 = lsp.hover("ch")
 check("hover ch no cheat-sheet", hs3 ~= nil
       and hs3.text:find("expression language", 1, true) == nil)
 
+-- ---------------------------------------------------------------------------
+-- 10. unknown-param diagnostics (round-73): misspelled/undeclared named
+--     params on a known command are flagged as warnings.
+-- ---------------------------------------------------------------------------
+local du1 = lsp.diagnostics('[ch texte="x"]\n')
+check("unknown param flagged for [ch texte]", #du1 == 1
+      and du1[1].message:find("unknown param 'texte'", 1, true) ~= nil
+      and du1[1].message:find(" for [ch]", 1, true) ~= nil
+      and du1[1].severity == 2
+      and du1[1].line == 1)
+local du2 = lsp.diagnostics('[ch text="x"]\n')
+check("known param text clean", #du2 == 0)
+local du3 = lsp.diagnostics('[if exp="f.x"]\n')
+check("flow command [if] no false positive", #du3 == 0)
+-- Positional args (numeric slots) must NOT be flagged as unknown
+-- params. (The pre-existing required-param check still reports missing
+-- required params here because it does not map positional slots to named
+-- params -- that is out of scope for this round; only assert no
+-- "unknown param" warning.)
+local du4 = lsp.diagnostics('[set f.hp 30]\n')
+local du4unknown = false
+for _, it in ipairs(du4) do
+    if it.message:find("unknown param", 1, true) then du4unknown = true break end
+end
+check("positional params [set f.hp 30] no unknown-param", not du4unknown)
+local du5 = lsp.diagnostics('[notify "saved"]\n')
+local du5unknown = false
+for _, it in ipairs(du5) do
+    if it.message:find("unknown param", 1, true) then du5unknown = true break end
+end
+check("positional param [notify] no unknown-param", not du5unknown)
+local du6 = lsp.diagnostics('[playbgm file="x.ogg"]\n')
+check("storage/file alias no false positive", #du6 == 0)
+local du7 = lsp.diagnostics('[ch text="a" typos=1 tele="b"]\n')
+check("multiple unknown params each flagged", #du7 == 2
+      and du7[1].message:find("tele", 1, true) ~= nil
+      and du7[2].message:find("typos", 1, true) ~= nil)
+local du8 = lsp.diagnostics('[ch text="a"]\n[ch text="b"]\n')
+check("valid params across lines clean", #du8 == 0)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))

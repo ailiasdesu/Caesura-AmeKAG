@@ -359,6 +359,39 @@ function lsp.diagnostics(text)
                             .. table.concat(specs._require_any, ",") .. "}", 1)
                     end
                 end
+                -- unknown-param check (round-73, additive): every NAMED
+                -- param must be declared in the command's contract, else a
+                -- typo fails in the editor instead of being silently
+                -- dropped/ignored at run time. Excluded (never flagged):
+                --   - positional slots   (numeric keys, e.g. [set f.hp 30];
+                --     the contract's positional_index handles those)
+                --   - variable paths     (dotted keys, e.g. f.name spread
+                --     into positional slots by the compiler)
+                --   - underscore keys    (_require_any/_meta contract
+                --     metadata are not params)
+                --   - flow commands      (no contract entry -> specs nil,
+                --     so they route to the unknown-command branch above)
+                -- Warning (severity 2), line = command's own line, col 1,
+                -- matching the exp/interp checks. Sorted for determinism.
+                local unknown = {}
+                for _, pair in ipairs(tok.params or {}) do
+                    if type(pair) == "table" and type(pair[1]) == "string" then
+                        local pname = pair[1]
+                        if not pname:match("^%d+$")
+                            and not pname:find(".", 1, true)
+                            and pname:sub(1, 1) ~= "_"
+                            and specs[pname] == nil then
+                            unknown[#unknown + 1] = pname
+                        end
+                    end
+                end
+                if #unknown > 0 then
+                    table.sort(unknown)
+                    for _, pname in ipairs(unknown) do
+                        addIssue(lineOf(tok.offset), 1,
+                            "unknown param '" .. pname .. "' for [" .. cmd .. "]", 2)
+                    end
+                end
             else
                 -- unknown command (not flow, not alias): warn like ks_check
                 local known = ensure_index()[cmd]
