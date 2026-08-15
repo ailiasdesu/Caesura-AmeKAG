@@ -204,4 +204,19 @@ do
         #toks .. " tokens")
 end
 
+-- Round 66 perf baseline: a large scene (2000 commands + label + end)
+-- parses within a generous budget and yields the exact token count.
+do
+    local parts = {}
+    for i = 1, 2000 do
+        parts[#parts + 1] = "[ch name=\"N\" text=\"line " .. i .. "\"]"
+    end
+    local big = table.concat(parts, "\n") .. "\n*end\n[end]\n"
+    local t0 = os.clock()
+    local toks = tokenizer.parse(big)
+    local dt = os.clock() - t0
+    check("2000-command scene parses", #toks == 2002, #toks .. " tokens")
+    check("2000-command scene within budget", dt < 10.0, string.format("%.3fs", dt))
+end
+
 if failed > 0 then os.exit(1) end

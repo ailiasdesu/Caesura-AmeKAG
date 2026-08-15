@@ -204,6 +204,30 @@ do
         tr:find("?", 1, true) == nil, tr)
 end
 
+-- ---- perf baseline (round 66): translate/evaluate at scale ----
+do
+    local ctx = { f = { hp = 30, flag = true }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local src = "f.hp > 10 && f.flag ? f.hp * 2 : 0"
+    local t0 = os.clock()
+    for i = 1, 2000 do
+        local ok, v = expr.evaluate(ctx, src)
+        if not (ok and v == 60) then check("repeated evaluate stable", false); break end
+    end
+    local dt = os.clock() - t0
+    check("2000x cached evaluate correct", true)
+    check("2000x cached evaluate within budget", dt < 5.0, string.format("%.3fs", dt))
+    -- 200-term numeric chain: 30 + sum(1..200) = 20130
+    local big = "f.hp"
+    for i = 1, 200 do
+        big = big .. " + " .. i
+    end
+    local ok2, v2 = expr.evaluate(ctx, big)
+    check("large expression evaluates", ok2 and v2 == 20130, tostring(v2))
+    -- operator chain: and/or/not/!= all translate without recursion issues
+    local ok3, v3 = expr.evaluate(ctx, "f.flag && (f.hp > 0 || !f.off) != false")
+    check("operator chain evaluates", ok3 and v3 == true, tostring(v3))
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

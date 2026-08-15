@@ -430,5 +430,22 @@ check("scroll size clamped to 8", p.size == 8)
 p = Schema.coerce("scroll", {}, {})
 check("scroll defaults", p.speed == 60 and p.size == 28 and p.text == "")
 
+-- ---- perf baseline (round 66): interpolation scanner at scale ----
+do
+    local ctx = { f = { hp = 42, name = "Ame" }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local parts = {}
+    for i = 1, 500 do
+        parts[#parts + 1] = "v" .. i .. "=\x24{f.hp + " .. i .. "}"
+    end
+    local big = table.concat(parts, "|")
+    local t0 = os.clock()
+    local p = Schema.coerce("_interp_test", { text = big }, ctx)
+    local dt = os.clock() - t0
+    check("500-span interpolation expands", p.text:find("v1=43", 1, true) ~= nil
+        and p.text:find("v500=542", 1, true) ~= nil)
+    check("500-span interpolation keeps every span", select(2, p.text:gsub("v%d+=", "")) == 500)
+    check("500-span interpolation within budget", dt < 5.0, string.format("%.3fs", dt))
+end
+
 if failed and failed > 0 then os.exit(1) end
 print("SCHEMA TESTS DONE")
