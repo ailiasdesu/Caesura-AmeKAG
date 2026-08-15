@@ -265,6 +265,82 @@ do
     _G.KAG.save_game = realSave
 end
 
+-- ----------------------------------------------------------------
+-- Round 74 (stage D): [save] inside a [for] loop — token position +
+-- iteration-state boundary.
+-- ----------------------------------------------------------------
+do
+    -- A counter loop whose body increments f.hp then saves at hp==2.
+    -- capture_state stores ctx.f (so the loop counter vname 'i' AND hp
+    -- travel into the slot), but the loop's live iteration machinery
+    -- (scheduler.run's for_stack/while_stack locals + the ctx rewind
+    -- marks) is NOT serialized.
+    local src = table.concat({
+        '[for i=0 end=3]',
+        '[inc f.hp]',
+        '[if exp="f.hp == 2"][save slot=6][endif]',
+        '[inc f.iter_done]',
+        '[endfor]',
+    }, '\n')
+    -- first pass: run the loop to completion
+    local ctx1 = run_scene(src, function(c) c.f.hp = 0; c.f.iter_done = 0 end)
+    check('for-save full run headless', ctx1 ~= nil)
+    check('for-save full loop runs 4 iterations',
+        ctx1 and ctx1.f and ctx1.f.iter_done == 4,
+        'iter_done=' .. tostring(ctx1 and ctx1.f and ctx1.f.iter_done))
+
+    -- the save taken at hp==2 captures the counter in f (i=1 here) and the
+    -- token position INSIDE the loop body
+    local st6 = savedSlots[6] and savedSlots[6].state
+    check('for-save captures loop counter in f',
+        st6 and st6.f and st6.f.i == 1,
+        'i=' .. tostring(st6 and st6.f and st6.f.i))
+    check('for-save captures hp snapshot', st6 and st6.f and st6.f.hp == 2)
+    check('for-save token sits inside the loop body',
+        st6 and st6.token_index and st6.token_index > 0)
+
+    -- iteration scratch state NEVER enters the slot (scheduler-internal)
+    check('for-save excludes _forStackMarks', st6 and st6._forStackMarks == nil)
+    check('for-save excludes _forRewound', st6 and st6._forRewound == nil)
+    check('for-save excludes _whileIterByScene', st6 and st6._whileIterByScene == nil)
+
+    -- BOUNDARY (documented defect): resume the saved scene at the saved
+    -- token with a FRESH scheduler, mirroring load's resume_from_save
+    -- (reload scene + re-spawn scheduler.run at token_index). The loop
+    -- counter i and hp are restored from the slot, but for_stack is a
+    -- scheduler.run LOCAL and is gone — the [endfor] after the resume point
+    -- is a no-op, so the loop falls out of scope instead of continuing.
+    local toksR = tokenizer.parse(src)
+    compiler.compile(toksR)
+    local ctxR = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = 'demo/story.ks', tokens = toksR,
+        text_state = {}, layer_state = {}, audio_state = {},
+        macro_args = {}, call_stack = {}, flag_stack = {},
+        backlog = {}, _choiceButtons = {}, unlockedCG = {}, unlockedMusic = {},
+        labelMap = {} }
+    for k, v in pairs(st6 and st6.f or {}) do ctxR.f[k] = v end
+    ctxR.token_index = st6 and st6.token_index or 1
+    local coR = coroutine.create(function()
+        scheduler.run(ctxR, toksR, ctxR.token_index) end)
+    local nr = 0
+    while coroutine.status(coR) ~= 'dead' and nr < 800 do
+        local okR, errR = coroutine.resume(coR, 16)
+        if not okR then return nil, errR end
+        if ctxR.waiting_input then ctxR.waiting_input = false end
+        nr = nr + 1
+    end
+    check('for-load resume runs headless', ctxR ~= nil)
+    check('for-load resume completes the in-flight iteration body',
+        ctxR and ctxR.f and ctxR.f.iter_done == 2,
+        'iter_done=' .. tostring(ctxR and ctxR.f and ctxR.f.iter_done))
+    -- If the iteration machinery were preserved, the loop keeps rewinding
+    -- to iter_done==4. It does not (scheduler-local for_stack lost after
+    -- the fresh scheduler.run) — the loop exits early at iter_done==2.
+    check('for-load [endfor] does NOT rewind into remaining iterations '
+        .. '(known boundary: loop exits early)',
+        ctxR and ctxR.f and ctxR.f.iter_done < 4,
+        'iter_done=' .. tostring(ctxR and ctxR.f and ctxR.f.iter_done))
+end
 print(string.format('\nSAVEFLOW TESTS: %d passed, %d failed', passed, failed))
 if failed > 0 then os.exit(1) end
 print('SAVEFLOW TESTS DONE')

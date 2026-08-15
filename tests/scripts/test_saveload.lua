@@ -115,5 +115,96 @@ pcall(Save.saveload, ctxSL, { { "mod", "x" } })
 check("saveload pair safe", sl_show[1] == nil or sl_show[1] == "save")
 package.loaded["saveload_menu"] = sl_b
 
+-- ----------------------------------------------------------------
+-- Round 74 (stage D): save/load boundary deepening
+-- ----------------------------------------------------------------
+
+-- capture_state table-completeness matrix: which ctx tables travel into a
+-- save slot. f (global flags) and sf (system flags) are captured; the
+-- extension scopes tf / mp / lf are NOT serialized (tf = temp/UI flags,
+-- lf = local-frame flags, both documented as non-persistent). Only string
+-- keys survive (a crafted non-string key in f cannot leak through JSON).
+do
+    local st = Save.capture_state({
+        f = { hp = 40, chip = true, [123] = "leak" },
+        sf = { sys_bgm = true }, tf = { save_ui_open = true },
+        mp = { name = "Aoi" }, lf = { frame = "sub" },
+        current_scene = "s.ks", token_index = 3,
+    })
+    check("capture includes f (global flags)", st.f and st.f.hp == 40 and st.f.chip == true)
+    check("capture includes sf (system flags)", st.sf and st.sf.sys_bgm == true)
+    check("capture drops non-string f key", st.f[123] == nil)
+    check("capture excludes tf (temp flags)", st.tf == nil)
+    check("capture excludes mp (message params)", st.mp == nil)
+    check("capture excludes lf (local-frame flags)", st.lf == nil)
+    -- iteration/marker scratch state is scheduler-internal: it must never
+    -- ride into the serialized slot (a [for] counter lives in ctx.f, but
+    -- for_stack / while_stack are scheduler.run locals -- see saveflow).
+    check("capture excludes for iteration markers",
+          st._forStackMarks == nil and st._forRewound == nil)
+    check("capture excludes while iteration counters", st._whileIterByScene == nil)
+end
+
+-- [load] onto a slot whose backing record was deleted out-of-band (the
+-- C++ binding returns nil or false): the error path must set
+-- tf.load_result=error, NOT resurrect stale f, and never raise.
+local function load_fake(returnValue)
+    local saved = _G.KAG
+    _G.KAG = { load_game = function() return returnValue end,
+               save_game = function() return true end }
+    local ctx = { f = { hp = 1 }, sf = {}, tf = {}, mp = {}, variables = {},
+        current_scene = "s.ks", token_index = 1 }
+    local ok = pcall(Save.load, ctx, { slot = 1 })
+    _G.KAG = saved
+    return ok, ctx
+end
+do
+    local ok, ctx = load_fake(nil)
+    check("load binding=nil headless-safe", ok)
+    check("load binding=nil -> tf.load_result=error",
+          ctx.tf and ctx.tf.load_result == "error")
+    check("load binding=nil does not resurrect f", ctx.f.hp == 1)
+end
+do
+    local ok, ctx = load_fake(false)
+    check("load binding=false headless-safe", ok)
+    check("load binding=false -> tf.load_result=error",
+          ctx.tf and ctx.tf.load_result == "error")
+    check("load binding=false does not resurrect f", ctx.f.hp == 1)
+end
+
+-- [listsaves] when the binding reports an empty inventory: sf.save_list
+-- must be an empty table (never nil), and the handler's tf mirror holds
+-- the same empty list.
+do
+    local saved = _G.KAG
+    _G.KAG = { list_saves = function() return {} end,
+               load_game = function() return nil end,
+               save_game = function() return true end }
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, variables = {},
+        current_scene = "s.ks", token_index = 1 }
+    pcall(Save.listsaves, ctx, {})
+    _G.KAG = saved
+    check("listsaves empty inventory -> empty table",
+          type(ctx.sf.save_list) == "table" and #ctx.sf.save_list == 0)
+    check("listsaves empty inventory mirrors to tf",
+          type(ctx.tf.save_list) == "table" and #ctx.tf.save_list == 0)
+end
+
+-- Slot upper bound (handler-direct clamp): the numeric bare key bypasses
+-- schema coerce, so SaveCommands.save must clamp 100..999 -> 99 itself.
+do
+    local calls = {}
+    local saved = _G.KAG
+    _G.KAG = { save_game = function(slot) calls[#calls + 1] = slot
+                                        return true end,
+               load_game = function() return nil end }
+    local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},
+        current_scene = "s.ks", token_index = 1 }
+    pcall(Save.save, ctx, { slot = 123 })   -- direct numeric, no coerce
+    _G.KAG = saved
+    check("save direct numeric slot clamps to 99", calls[1] == 99)
+end
+
 if failed > 0 then os.exit(1) end
 print("SAVELOAD TESTS DONE")

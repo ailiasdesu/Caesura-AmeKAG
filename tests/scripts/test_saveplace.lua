@@ -45,5 +45,74 @@ check("KAG saveplace routes", System._placeData ~= nil
       and System._placeData.index == 77)
 check("KAG loadplace routes", ctx2._pendingJump ~= nil)
 
+-- ----------------------------------------------------------------
+-- Round 74 (stage D): saveplace/loadplace boundary deepening
+-- ----------------------------------------------------------------
+
+-- [saveplace] inside a [call] frame: the bookmark captures the INNER
+-- frame's scene + token position, but deliberately does NOT capture the
+-- call stack. So a loadplace resume from a call-frame bookmark loses the
+-- caller chain (no valid [return] target) -- a documented boundary: the
+-- bookmark is an independent in-memory scene point, not a frame-consistent
+-- continuation.
+do
+    local had = System._placeData
+    local ctxCall = { f = { inner = 1 }, tf = {}, sf = {}, mp = {}, lf = {},
+        variables = {}, current_scene = "scripts/demo_sub.ks", token_index = 9,
+        call_stack = { { tokens = { "main" }, index = 3 } } }
+    System.saveplace(ctxCall)
+    local pd = System._placeData
+    check("saveplace-in-call captures inner scene",
+        pd and pd.scene == "scripts/demo_sub.ks", tostring(pd and pd.scene))
+    check("saveplace-in-call captures inner token", pd and pd.index == 9)
+    check("saveplace does NOT capture call_stack",
+        pd and pd.call_stack == nil)
+    check("saveplace does NOT capture labelMap",
+        pd and pd.labelMap == nil)
+    if had == nil then System._placeData = nil end
+end
+
+-- [loadplace] token-position precision: the resume target preserves the
+-- EXACT saved token index (no off-by-one), routed through _pendingJump.
+do
+    System._placeData = nil
+    System.saveplace({ f = {}, tf = {}, sf = {}, mp = {}, lf = {},
+        variables = {}, current_scene = "scripts/demo_precise.ks",
+        token_index = 11 })
+    local lp = { f = {}, tf = {}, sf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = "other.ks", token_index = 1, stop_flag = false }
+    local ok = System.loadplace(lp)
+    check("loadplace exact token precision", ok
+        and lp._pendingJump and lp._pendingJump.index == 11,
+        'index=' .. tostring(lp._pendingJump and lp._pendingJump.index))
+    check("loadplace precise scene", lp._pendingJump
+        and lp._pendingJump.scene == "scripts/demo_precise.ks")
+    check("loadplace precise sets stop_flag", lp.stop_flag == true)
+end
+
+-- Bookmark tf is a DEEP copy: mutating the source ctx.tf after saveplace
+-- must not retroactively alter the stored bookmark.
+do
+    System._placeData = nil
+    local srcTf = { state_x = 1 }
+    local bs = { f = {}, tf = srcTf, sf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = "scripts/demo_copy.ks", token_index = 4 }
+    System.saveplace(bs)
+    -- mutate the LIVE tf after the bookmark was taken
+    srcTf.state_x = 999
+    srcTf.extra = true
+    check("saveplace tf is a deep copy (no aliasing)",
+        System._placeData and System._placeData.tf
+        and System._placeData.tf.state_x == 1
+        and System._placeData.tf.extra == nil,
+        'stored=' .. tostring(System._placeData and System._placeData.tf and System._placeData.tf.state_x))
+    -- and a loadplace restores the SNAPSHOT, not the mutated live table
+    local lp2 = { f = {}, tf = {}, sf = {}, mp = {}, lf = {}, variables = {},
+        current_scene = "other.ks", token_index = 1 }
+    System.loadplace(lp2)
+    check("loadplace restores snapshot tf (unmutated)",
+        lp2.tf and lp2.tf.state_x == 1 and lp2.tf.extra == nil)
+end
+
 if failed > 0 then os.exit(1) end
 print("SAVEPLACE TESTS DONE")
