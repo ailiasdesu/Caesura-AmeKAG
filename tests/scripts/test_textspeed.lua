@@ -139,5 +139,149 @@ do
     check("click returns revealed flag", ok == true)
 end
 
+-- ---------------------------------------------------------------------------
+-- Part 3 (round 77): [skip]/[auto] mode, text_speed edges, voice_wait headless
+-- ---------------------------------------------------------------------------
+
+-- skip mode driven by the REAL [skip] command (not raw ctx flag): [ch] does
+-- not reveal per-char; skip completes the line instantly and advances past it
+-- (waiting_input cleared) within one update.
+do
+    local kr, ctx, ts = launch(
+        '[textspeed cps=1]\n[skip]\n[ch name="SK" text="SKIPME"]\n')
+    kr.update(0.001)
+    check("skip cmd sets skip_mode", ctx.skip_mode == true)
+    -- skip wins over the slow cps=1 (1000 ms/char) reveal: a small number of
+    -- updates reveals AND advances the 6-char line without ever waiting the
+    -- full 6s.  (Observed: the reveal is created on the second update and the
+    -- skip path pins it to total and advances on the third.)
+    local advanced = false
+    for _ = 1, 4 do
+        if not ctx.waiting_input then advanced = true; break end
+        kr.update(0.016)
+    end
+    check("skip advances despite cps=1", advanced == true, "waiting stuck")
+end
+
+-- skip + [p]: in skip mode the runner auto-advances the page break WITHOUT a
+-- user click (it fires on_click each update).  The token_index must move past
+-- the [p] toward the next line (updates are consumed one click per update).
+-- (existing test already showed skip completes reveal; here we lock that it
+-- also flows past a click-wait page break.)
+do
+    local kr, ctx, ts = launch(
+        '[skip]\n[ch text="LINE1"]\n[p]\n[ch text="LINE2"]\n')
+    kr.update(0.001)
+    kr.update(0.016)              -- first skip-update completes LINE1, hits [p]
+    local idxAfterFirst = ctx.token_index
+    kr.update(0.016)              -- an idle update with skip: advances past [p]
+    check("skip advances past [p] across updates",
+        ctx.token_index and ctx.token_index > idxAfterFirst,
+        "from " .. tostring(idxAfterFirst) .. " to " .. tostring(ctx.token_index))
+end
+
+-- skip toggled OFF mid-reveal: the typewriter resumes accumulating (the speed
+-- floor now drives reveal again).  Reveal is no longer pinned to total.
+do
+    local kr, ctx, ts = launch(
+        '[textspeed cps=60]\n[ch text="ABCDEFGHIJ"]\n')
+    kr.update(0.001)              -- create reveal, 0 chars
+    ctx.skip_mode = true
+    kr.update(0.016)              -- skip pins reveal to total
+    check("skip pins reveal to total", reveal_chars(ts, ctx) == "10")
+    ctx.skip_mode = false
+    ctx.reveal.elapsed = 0
+    kr.update(0.016)              -- 16ms / 16 (cps=60 -> speed 16) = 1 char
+    check("skip-off resumes per-char accumulation",
+        reveal_chars(ts, ctx) == "1", "reveal " .. reveal_chars(ts, ctx))
+end
+
+-- text_speed cps extremes via the REAL [textspeed] command: cps=1 (slowest,
+-- 1000 ms/char) reveals very slowly; cps=120 is clamped to the 8 ms/char floor.
+do
+    local kr, ctx, ts = launch(
+        '[textspeed cps=1]\n[ch text="AB"]\n')
+    kr.update(0.001)
+    check("cps=1 -> 1000 ms/char", ctx.text_speed == 1000 and ctx.cps == 1)
+    kr.update(0.5)                -- 500ms / 1000 = 0 chars
+    check("cps=1 slow: 0 chars at 500ms", reveal_chars(ts, ctx) == "0")
+    kr.update(0.5)                -- cumulative 1000ms -> 1 char
+    check("cps=1 slow: 1 char at 1000ms", reveal_chars(ts, ctx) == "1")
+
+    local k2, c2, t2 = launch(
+        '[textspeed cps=120]\n[ch text="ABCDEFGHIJ"]\n')
+    k2.update(0.001)
+    check("cps=120 -> 8 ms/char floor", c2.text_speed == 8)
+end
+
+-- mid-reveal speed change to FASTER completes the line quickly: reveal uses
+-- floor(accumulated_elapsed / speed), so once a faster speed is set the
+-- already-accumulated elapsed immediately reveals text (observed clamp to
+-- total).  Locking that a faster mid-line speed never decreases the count.
+do
+    local kr, ctx, ts = launch(
+        '[textspeed cps=10]\n[ch text="ABCDEFGHIJKLMNOP"]\n')
+    kr.update(0.001)
+    kr.update(0.1)                -- 100ms / 100 = 1 char
+    local before = tonumber(reveal_chars(ts, ctx))
+    ctx.text_speed = 10           -- mid-line: switch to a faster floor
+    kr.update(0.02)               -- fl(120ms/10)=12, clamped to total 16
+    local after = tonumber(reveal_chars(ts, ctx))
+    check("faster mid-line speed reveals more, never fewer",
+        after ~= nil and before ~= nil and after >= before,
+        "before " .. tostring(before) .. " after " .. tostring(after))
+end
+
+-- textspeed vs skip priority: skip WINS over a slow cps (skip bypasses the
+-- reveal accumulation entirely and pins to total).
+do
+    local kr, ctx, ts = launch(
+        '[textspeed cps=1]\n[skip]\n[ch text="SLOWSKIP"]\n')
+    kr.update(0.001)
+    check("skip beats slow textspeed (speed read)", ctx.text_speed == 1000)
+    -- skip bypasses the reveal accumulation (reveal pinned to total) so the
+    -- 8-char line advances within a few updates instead of waiting 8s.
+    local advanced = false
+    for _ = 1, 4 do
+        if not ctx.waiting_input then advanced = true; break end
+        kr.update(0.016)
+    end
+    check("skip beats slow textspeed (advances)", advanced,
+        "waiting stuck")
+end
+
+-- auto mode: continuous page-turn — with auto_mode on and auto_delay small,
+-- successive updates advance the page break AND the line without any click,
+-- flowing toward the later lines.  (token_index moves strictly forward.)
+do
+    local kr, ctx = launch(
+        '[auto mode=on]\n[ch text="ONE"]\n[p]\n[ch text="TWO"]\n[p]\n')
+    check("auto mode=on sets auto_mode", ctx.auto_mode == true)
+    ctx.auto_delay = 50           -- fast auto cadence (headless voice = none)
+    kr.update(0.001)
+    local firstIdx = ctx.token_index
+    for _ = 1, 30 do kr.update(0.016) end
+    check("auto advances past [p] without clicks",
+        ctx.token_index and ctx.token_index > firstIdx,
+        "from " .. tostring(firstIdx) .. " to " .. tostring(ctx.token_index))
+end
+
+-- bare [auto] toggles auto_mode ON from the default-off state (KAG3 bare form).
+do
+    local kr, ctx = launch('[auto]\n')
+    check("bare [auto] toggles auto_mode on", ctx.auto_mode == true)
+end
+
+-- headless degrade: [voice_wait] with NO audio backend (audio_is_playing
+-- returns false) passes through immediately — the wait loop never enters.
+do
+    local kr, ctx, ts = launch(
+        '[voice_wait]\n[ch text="VOICEDONE"]\n')
+    kr.update(0.001)
+    check("voice_wait headless passes immediately",
+        ctx.token_index == 2, "token_index " .. tostring(ctx.token_index))
+end
+
+
 if failed > 0 then os.exit(1) end
 print("TEXTSPEED TESTS DONE")

@@ -30,6 +30,7 @@ local tests = {
     "test_math_cmds",
     "test_character_cmds",
     "test_textspeed",
+    "test_wait_delay",
     "test_kag3_import_e2e",
 }
 
