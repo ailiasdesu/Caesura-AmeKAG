@@ -149,6 +149,37 @@ function M.find_missing(dir, langData)
 end
 
 -- ---------------------------------------------------------------------------
+--  serialize_field(k, v) -> generated Lua line (or nil for unsupported).
+--  Serializes one top-level dictionary entry the lang file can carry:
+--  string / number / boolean, plus TABLE values that are plural-form
+--  entries (e.g. items = { one = "{n} item", other = "{n} items" }) or any
+--  nested string table. Plural entries are emitted as an inline table with
+--  sorted keys so --update roundtrips them without losing the variants.
+-- ---------------------------------------------------------------------------
+local function serialize_field(k, v)
+    if type(v) == "string" then
+        return string.format("  %s = %q,", k, v)
+    elseif type(v) == "number" or type(v) == "boolean" then
+        return string.format("  %s = %s,", k, tostring(v))
+    elseif type(v) == "table" then
+        local keys = {}
+        for sk in pairs(v) do keys[#keys + 1] = sk end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        local inner = {}
+        for _, sk in ipairs(keys) do
+            local sv = v[sk]
+            if type(sv) == "string" then
+                inner[#inner + 1] = string.format("%s = %q", sk, sv)
+            elseif type(sv) == "number" or type(sv) == "boolean" then
+                inner[#inner + 1] = string.format("%s = %s", sk, tostring(sv))
+            end
+        end
+        return string.format("  %s = { %s },", k, table.concat(inner, ", "))
+    end
+    return nil
+end
+
+-- ---------------------------------------------------------------------------
 --  Build the template body for a scene dir (optionally merging an existing
 --  lang table). Returns the .lua file content as a string.
 -- ---------------------------------------------------------------------------
@@ -160,15 +191,12 @@ function M.build_template(dir, existing)
     out_lines[#out_lines + 1] = "-- Scene: " .. dir .. " | keys: " .. total_keys
     out_lines[#out_lines + 1] = "return {"
     -- Merge mode: preserve the existing top-level fields (settings keys,
-    -- etc.) so --update never destroys hand-authored strings.
+    -- plural entries, etc.) so --update never destroys hand-authored data.
     if existing then
         for k, v in pairs(existing) do
             if k ~= "lines" then
-                if type(v) == "string" then
-                    out_lines[#out_lines + 1] = string.format("  %s = %q,", k, v)
-                elseif type(v) == "number" or type(v) == "boolean" then
-                    out_lines[#out_lines + 1] = string.format("  %s = %s,", k, tostring(v))
-                end
+                local s = serialize_field(k, v)
+                if s then out_lines[#out_lines + 1] = s end
             end
         end
     end

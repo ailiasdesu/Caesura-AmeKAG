@@ -113,17 +113,53 @@ function i18n.load(langCode)
 end
 
 -- ===========================================================================
+-- i18n.plural_category(count) -> string
+--  Per-language plural category for a count (CLDR-style categories).
+--    en: 1 -> "one", otherwise -> "other".
+--    zh / ja (and any unknown language): always -> "other" (no singular/
+--  plural distinction; a single unmarked form is the convention). This
+--  keeps the runtime safe when a zh/ja dictionary carries only "other".
+-- ===========================================================================
+function i18n.plural_category(count)
+    count = tonumber(count) or 0
+    local lang = i18n.current or "zh"
+    if lang == "en" then
+        return count == 1 and "one" or "other"
+    end
+    return "other"
+end
+
+-- ===========================================================================
+-- i18n._plural_form(entry, count) -> string
+--  Resolve a dictionary VALUE that may be either a plain string or a
+--  plural-variant table ({ one = "...", other = "..." }):
+--    - plain string -> returned unchanged.
+--    - plural table  -> the variant for this count's category selected by
+--      i18n.plural_category(count); falls back to entry.other then
+--      entry.one when the exact category is absent (a missing-plural
+--      fallback to the bare/most-generic form). With count=nil the generic
+--      "other" form is used (safe for t()/expand() with no {n} in scope).
+-- ===========================================================================
+function i18n._plural_form(entry, count)
+    if type(entry) ~= "table" then return entry end
+    local v = entry[i18n.plural_category(count)] or entry.other or entry.one
+    return v == nil and "" or tostring(v)
+end
+
+-- ===========================================================================
 -- i18n.t(key) -> translated string
 -- Looks up key in current strings, falls back to English, then returns key itself.
+-- A plural-variant table value is resolved to its generic ("other") form so
+-- plain lookup never leaks a raw table handle.
 -- ===========================================================================
 function i18n.t(key)
     if not key or #key == 0 then return key end
     -- Direct lookup
     local val = i18n.strings[key]
-    if val ~= nil then return tostring(val) end
+    if val ~= nil then return tostring(i18n._plural_form(val)) end
     -- Fallback to English
     val = i18n.fallback[key]
-    if val ~= nil then return tostring(val) end
+    if val ~= nil then return tostring(i18n._plural_form(val)) end
     -- Return key as-is
     return key
 end
@@ -326,11 +362,17 @@ end
 -- ===========================================================================
 -- i18n.translate(text, params) -> string with {placeholder}s interpolated
 --  Runtime template interpolation, distinct from i18n.expand (dictionary
---  lookup): translate() first resolves the template through normalize the
---  normal localize path (per-line translation > {key} expand), then fills
---  {name} placeholders from the params table. Unknown placeholders and
---  inline-markup tags are left intact. With no params, behaves like localize.
---    i18n.translate("Hello, {name}!", { name = "Caesura" }) -> "Hello, Caesura!"
+--  lookup). Resolves the template (bare whole-key = dictionary value,
+--  otherwise the localize path), then fills {name} placeholders from the
+--  params table. Unknown placeholders and markup tags stay intact.
+--  Plural + numeric format (G9): a string-table VALUE may be a plural
+--  variant table, e.g. items = { one = "{n} item", other = "{n} items" }.
+--  With params.n present the variant for i18n.plural_category(params.n) is
+--  picked and its {n} interpolated to the literal number; without params.n
+--  the generic ("other") form is resolved, {n} still interpolable.
+--    translate("items", { n = 1 }) -> "1 item"   (en one)
+--    translate("items", { n = 3 }) -> "3 items"  (en other)
+--    translate("items", { n = 5 }) -> "5" ...    (zh/ja single form)
 -- ===========================================================================
 function i18n.translate(text, params)
     if not text or #text == 0 then return text or "" end
@@ -341,7 +383,16 @@ function i18n.translate(text, params)
     local dict = i18n.strings[text]
     if dict == nil then dict = i18n.fallback[text] end
     if dict ~= nil then
-        template = tostring(dict)
+        if type(dict) == "table" then
+            local count = nil
+            if params and params.n ~= nil then
+                local nc = tonumber(params.n)
+                if nc ~= nil then count = nc end
+            end
+            template = tostring(i18n._plural_form(dict, count))
+        else
+            template = tostring(dict)
+        end
     else
         template = i18n.localize(text)
     end

@@ -655,6 +655,107 @@ _G.arg = SAVE_ARG
 pcall(os.execute, 'rm -rf "tmp/test_i18n/cli"')
 
 -- ---------------------------------------------------------------------------
+-- 7. Plural resolution + {n} numeric format (G9)
+--  A string-table VALUE may be a plural variant table:
+--      items = { one = "{n} item", other = "{n} items" }
+--  translate() resolves the variant by i18n.plural_category(params.n)
+--  (en: 1 -> "one", else "other"; zh/ja: always "other"/single form),
+--  then interpolates {n} to the literal number.
+-- ---------------------------------------------------------------------------
+local saved_pl = { current = i18n.current, strings = i18n.strings,
+                   lines = i18n.lines, fallback = i18n.fallback }
+
+-- (a) en singular/plural by count
+i18n.current = "en"
+i18n.strings = { items = { one = "{n} item", other = "{n} items" } }
+i18n.lines = {}
+i18n.fallback = {}
+check("plural: en count 1 -> one", 
+      i18n.translate("items", { n = 1 }) == "1 item")
+check("plural: en count 2 -> other",
+      i18n.translate("items", { n = 2 }) == "2 items")
+check("plural: en count 0 -> other",
+      i18n.translate("items", { n = 0 }) == "0 items")
+check("plural: en count as string resolves",
+      i18n.translate("items", { n = "42" }) == "42 items")
+
+-- (b) {n} numeric format + plural combined (placeholder inside the variant)
+i18n.strings.items = { one = "You have {n} apple", other = "You have {n} apples" }
+check("plural: placeholder inside one form",
+      i18n.translate("items", { n = 1 }) == "You have 1 apple")
+check("plural: placeholder inside other form",
+      i18n.translate("items", { n = 5 }) == "You have 5 apples")
+
+-- (c) missing-plural fallback: a plural table lacking the matched category
+-- falls back to entry.other (generic); a table with only "one" decodes there.
+i18n.strings.items = { one = "solo {n}" }          -- no "other"
+check("plural: missing other falls back to one",
+      i18n.translate("items", { n = 9 }) == "solo 9")
+i18n.strings.items = { other = "only {n}" }        -- no "one"
+check("plural: missing one falls back to other",
+      i18n.translate("items", { n = 1 }) == "only 1")
+
+-- (d) plural table without a count param -> generic form (no table leak),
+-- and plain string entries are untouched by the plural path.
+i18n.strings.items = { one = "{n} item", other = "{n} items" }
+check("plural: no n param -> generic other resolved, no table leak",
+      type(i18n.t("items")) == "string" and not i18n.t("items"):find("table:", 1, true))
+check("plural: translate without n uses other form",
+      i18n.translate("items", {}) == "{n} items")
+i18n.strings.plain = "{n} widgets"
+check("plural: plain string entry passes through",
+      i18n.translate("plain", { n = 3 }) == "3 widgets")
+
+-- (e) zh / ja: always the single ("other") form regardless of count.
+-- zh has NO singular/plural distinction, so an en-authored {one=..,other=..}
+-- entry still resolves to the single unmarked form for EVERY count (zh
+-- plural_category is always "other", so the "other"/bare form wins).
+i18n.current = "zh"
+i18n.strings.items = { other = "共 {n} 个", one = "一个" }
+check("plural: zh single form for 1",
+      i18n.translate("items", { n = 1 }) == "共 1 个")
+check("plural: zh single form for 5",
+      i18n.translate("items", { n = 5 }) == "共 5 个")
+check("plural: zh ignores en one/other split even on odd counts",
+      i18n.translate("items", { n = 11 }) == "共 11 个")
+i18n.current = "ja"
+i18n.strings.items = { other = "{n}個" }
+check("plural: ja single form count 1",
+      i18n.translate("items", { n = 1 }) == "1個")
+check("plural: ja single form count 10",
+      i18n.translate("items", { n = 10 }) == "10個")
+check("plural: ja category stays other",
+      i18n.plural_category(1) == "other")
+
+-- (f) plural_category per language
+i18n.current = "en"
+check("plural: en category one at 1",
+      i18n.plural_category(1) == "one")
+check("plural: en category other at 0/2/100",
+      i18n.plural_category(0) == "other"
+      and i18n.plural_category(2) == "other"
+      and i18n.plural_category(100) == "other")
+i18n.current = "zh"
+check("plural: zh category always other",
+      i18n.plural_category(1) == "other"
+      and i18n.plural_category(2) == "other")
+
+-- (g) plural variant survives ks_i18n --update roundtrip (serialize_field)
+local plExisting = {
+    lines = { ["x.ks:" .. i18n.fnv1a("Hello world")] = "Hallo Welt" },
+    items = { one = "{n} item", other = "{n} items" },
+    greeting = "hi",
+}
+local plBody = ks.build_template(tmpdir, plExisting)
+check("ks_i18n plural: variants serialized on --update",
+      plBody:find('items = { one = "{n} item", other = "{n} items" }', 1, true) ~= nil)
+check("ks_i18n plural: string field still preserved",
+      plBody:find('greeting = "hi"', 1, true) ~= nil)
+
+i18n.current, i18n.strings = saved_pl.current, saved_pl.strings
+i18n.lines, i18n.fallback = saved_pl.lines, saved_pl.fallback
+
+-- ---------------------------------------------------------------------------
 -- cleanup: restore i18n state and the backend global
 -- ---------------------------------------------------------------------------
 i18n.current = saved_current
