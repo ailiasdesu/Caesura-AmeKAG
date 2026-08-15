@@ -28,6 +28,7 @@
 | 08 | demo/tutorial/tutorial_08_system_ui.ks | 系统 UI：CG 画廊/音乐室/历史回看/章节选择/内容解锁 | unlock, gallery, music, history, chapter |
 | 09 | demo/tutorial/tutorial_09_interpolation.ks | 文本插值与表达式：$tbl.key / %tbl.key% / ${expr}（TJS 运算符 ?: && !=） | set, ch, interpolate |
 | 10 | demo/tutorial/tutorial_10_loops.ks | 循环控制流：正序/倒序 [for]、[while] 条件循环 + [eval] 递减（每场景 65536 迭代守卫） | for, endfor, while, endwhile, eval, set, ch, p |
+| 11 | demo/tutorial/tutorial_11_switch.ks | 多路分支：裸变量选择器（KAG3 兼容）与 exp= 表达式选择器（数值/布尔/TJS 运算符），case tostring 匹配无 fallthrough，缺失变量走 default | switch, case, default, endswitch, set, ch, p |
 
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
