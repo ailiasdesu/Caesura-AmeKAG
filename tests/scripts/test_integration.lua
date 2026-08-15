@@ -265,12 +265,20 @@ test("CARC FileEntry struct size is 116 bytes", function()
 end)
 
 test("CARC pack tool binary exists", function()
+    -- Round 60: multi-config MSVC puts the tool at bin/Debug (or Release);
+    -- single-config Linux/macOS builds put it at bin/ (no .exe).
+    local sep = package.config:sub(1, 1)
+    local exe = sep == "\\" and ".exe" or ""
     local found = false
-    for _, path in ipairs({"bin/Debug/carc_pack.exe", "bin/Release/carc_pack.exe"}) do
+    for _, path in ipairs({
+        "bin" .. sep .. "Debug" .. sep .. "carc_pack" .. exe,
+        "bin" .. sep .. "Release" .. sep .. "carc_pack" .. exe,
+        "bin" .. sep .. "carc_pack" .. exe,
+    }) do
         local f = io.open(path, "rb")
         if f then f:close(); found = true; print("  Found: " .. path); break end
     end
-    assert(found, "carc_pack.exe not found — needs build")
+    assert(found, "carc_pack binary not found (bin/Debug, bin/Release or bin)")
 end)
 
 -- CARC verification (file pre-created by CI/developer)
