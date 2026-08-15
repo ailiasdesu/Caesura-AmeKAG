@@ -70,6 +70,7 @@ local tests = {
     "test_expr_lang",
     "test_variables",
     "test_control_flow",
+    "test_flow_edge",
     "test_modern_commands",
     "test_kag_debug",
     "test_multiline",

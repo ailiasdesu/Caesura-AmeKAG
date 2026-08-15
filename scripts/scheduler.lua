@@ -270,6 +270,18 @@ function scheduler.run(ctx, tokens, start_index)
                 end
                 if idx then
                     i = idx
+                    -- [round 83 A4/A5] An intra-scene jump is an arbitrary
+                    -- control-flow transfer: any loop/summary stacks still
+                    -- live at the jump site describe a loop body we are now
+                    -- leaving. Reset them so (a) no stale entries leak into
+                    -- later loops and (b) a LATER same-name [for] re-initializes
+                    -- its counter from its declared start instead of reusing
+                    -- the stale marker (observed: 11 iterations instead of 2).
+                    ctx._forStack = {}
+                    ctx._whileStack = {}
+                    ctx._ifStack = {}
+                    ctx._switchStack = {}
+                    ctx._forStackMarks = {}
                 else
                     print("[WARN] [jump] label not found: " .. label)
                 end
