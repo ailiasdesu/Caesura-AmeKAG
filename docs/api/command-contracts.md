@@ -90,6 +90,7 @@ _Category: text · Blocking: no (fire-and-forget) · register a choice button la
 | `cond` | string | - | - | - |
 | `target` | string | - | - | - |
 | `text` | string |  | - | - |
+| `x` | string | - | - | - |
 
 ### `[camera]`
 
