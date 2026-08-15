@@ -3,10 +3,17 @@
 #include "resource/DirAssetProvider.h"
 #include "resource/ProviderChain.h"
 #include "resource/XP3Archive.h"
+#include "resource/AssetManager.h"
+#include "resource/AsyncLoader.h"
+#include "di/BackendRegistry.h"
+#include "di/api/ThreadAssert.h"
+#include "mocks/NullJobSystem.h"
 #include "TestPaths.h"
 #include <cstdio>
 #include <fstream>
 #include <filesystem>
+#include <map>
+#include <thread>
 
 using namespace Caesura;    // ResourceHandle, GenerationTracker, HandleType::TEXTURE
 using namespace Caesura;    // DirAssetProvider, ProviderChain
@@ -203,3 +210,258 @@ TEST_CASE("XP3Archive pack list and unpack round-trip") {
                                std::istreambuf_iterator<char>());
     CHECK(contents == "Caesura XP3 round-trip payload");
 }
+
+// =============================================================================
+// G10: resource module boundary tests (provider chain + async loader)
+// =============================================================================
+
+namespace {
+
+// In-memory IAssetProvider for testing the ProviderChain boundary without
+// touching the filesystem. exists()/read() serve a small map; a
+// provider can be forced to report exists()==true while read() stays empty to
+// exercise the chain's "empty read falls through" contract.
+class MemProvider : public IAssetProvider {
+public:
+    MemProvider(int prio, std::string source)
+        : m_prio(prio), m_source(std::move(source)) {}
+
+    void put(std::string path, std::vector<uint8_t> data) {
+        m_files[std::move(path)] = std::move(data);
+    }
+    void clear() { m_files.clear(); }
+    void forceExists(bool v) { m_forceExists = v; }
+    std::string source() const { return m_source; }
+
+    bool exists(const std::string& path) override {
+        return m_forceExists || m_files.find(path) != m_files.end();
+    }
+    std::vector<uint8_t> read(const std::string& path) override {
+        auto it = m_files.find(path);
+        if (it == m_files.end()) return {};
+        return it->second;
+    }
+    std::string getSource() const override { return m_source; }
+    int priority() const override { return m_prio; }
+    bool verify() override { return true; }
+
+private:
+    int m_prio;
+    std::string m_source;
+    bool m_forceExists = false;
+    std::map<std::string, std::vector<uint8_t>> m_files;
+};
+
+// Synchronous (NullJobSystem) AsyncLoader fixture. All loads complete
+// deterministically on the calling thread, so payload/failure assertions are
+// exact. Registers the job system in BackendRegistry and always restores it.
+class AsyncFixtures {
+public:
+    AsyncFixtures()
+        : loader(&assets) {
+        detail::g_mainThreadId = std::this_thread::get_id();
+        jobs.init();
+        BackendRegistry::instance().setJobSystem(&jobs);
+        assets.init();
+        loader.init();
+    }
+    ~AsyncFixtures() {
+        loader.shutdown();
+        assets.shutdown();
+        BackendRegistry::instance().setJobSystem(nullptr);
+        jobs.shutdown();
+    }
+
+    NullJobSystem jobs;
+    AssetManager assets;
+    AsyncLoader loader;
+};
+
+} // namespace
+
+TEST_CASE("ProviderChain::fallback first missing second serves") {
+    auto high = std::make_unique<MemProvider>(10, "high");
+    auto low  = std::make_unique<MemProvider>(5, "low");
+    low->put("asset.dat", {'h', 'i'});
+    // high has nothing for asset.dat yet the chain must still resolve it
+    // from low via fallback.
+    ProviderChain chain;
+    chain.addProvider(std::move(high));
+    chain.addProvider(std::move(low));
+
+    CHECK(chain.exists("asset.dat"));
+    const auto data = chain.read("asset.dat");
+    REQUIRE(data.size() == 2);
+    CHECK(data[0] == 'h');
+    CHECK(data[1] == 'i');
+}
+
+TEST_CASE("ProviderChain::fallback empty read falls through") {
+    // First provider wrongly claims exists() but read() returns empty; the
+    // chain must treat that as "not servable" and fall through to the next.
+    auto high = std::make_unique<MemProvider>(10, "high");
+    high->forceExists(true);          // exists()==true, read() empty
+    auto low = std::make_unique<MemProvider>(5, "low");
+    low->put("x.bin", {'a'});
+
+    ProviderChain chain;
+    chain.addProvider(std::move(high));
+    chain.addProvider(std::move(low));
+
+    const auto data = chain.read("x.bin");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == 'a');
+}
+
+TEST_CASE("ProviderChain::priority resolves highest first") {
+    auto top = std::make_unique<MemProvider>(10, "top");
+    top->put("k", {'1'});
+    auto mid = std::make_unique<MemProvider>(5, "mid");
+    mid->put("k", {'2'});
+    auto low = std::make_unique<MemProvider>(1, "low");
+    low->put("k", {'3'});
+
+    ProviderChain chain;
+    // Insert out of priority order: sortByPriority() must fix ordering.
+    chain.addProvider(std::move(low));
+    chain.addProvider(std::move(mid));
+    chain.addProvider(std::move(top));
+
+    const auto data = chain.read("k");
+    REQUIRE(data.size() == 1);
+    CHECK(data[0] == '1');   // highest priority wins
+
+    // When the top provider is dropped, the same chain resolves from mid.
+    // (Rebuild with only mid+low to avoid stale pointers.)
+    ProviderChain chain2;
+    auto mid2 = std::make_unique<MemProvider>(5, "mid");
+    mid2->put("k", {'2'});
+    auto low2 = std::make_unique<MemProvider>(1, "low");
+    low2->put("k", {'3'});
+    chain2.addProvider(std::move(mid2));
+    chain2.addProvider(std::move(low2));
+    REQUIRE(chain2.read("k").size() == 1);
+    CHECK(chain2.read("k")[0] == '2');
+}
+
+TEST_CASE("ProviderChain no provider serves -> empty, no crash") {
+    ProviderChain chain;
+    auto p = std::make_unique<MemProvider>(5, "only");
+    p->put("present.bin", {'z'});
+    chain.addProvider(std::move(p));
+
+    CHECK(chain.read("missing.bin").empty());
+    CHECK_FALSE(chain.exists("missing.bin"));
+    CHECK_NOTHROW(chain.read("present.bin"));
+}
+
+// ---- Async loader: completion, error path, cancellation, dedup -------------
+
+TEST_CASE("AsyncLoader completion delivers loaded payload") {
+    const std::string path = "res_g10_payload.bin";
+    { std::ofstream out(path, std::ios::binary); out << "hello async bytes"; }
+    {
+        AsyncFixtures fx;
+        int id = fx.loader.enqueue(path, "text");
+        REQUIRE(id > 0);
+        auto done = fx.loader.drainCompleted();
+        REQUIRE_FALSE(done.empty());
+        CHECK(done[0].id == id);
+        CHECK(done[0].success);
+        CHECK_FALSE(done[0].data.empty());
+        std::string s(done[0].data.begin(), done[0].data.end());
+        CHECK(s == "hello async bytes");
+        CHECK(fx.loader.pendingCount() == 0);
+    }
+    std::remove(path.c_str());
+}
+
+TEST_CASE("AsyncLoader missing asset reports failure") {
+    const std::string path = "res_g10_does_not_exist_9f3.bin";
+    { // ensure the missing path really is absent
+        std::remove(path.c_str());
+    }
+    {
+        AsyncFixtures fx;
+        int id = fx.loader.enqueue(path, "text");
+        REQUIRE(id > 0);
+        auto done = fx.loader.drainCompleted();
+        REQUIRE_FALSE(done.empty());
+        CHECK(done[0].id == id);
+        CHECK_FALSE(done[0].success);  // error path surfaces, no crash
+        CHECK(done[0].data.empty());
+        CHECK(fx.loader.pendingCount() == 0);
+    }
+}
+
+TEST_CASE("AsyncLoader cancelAll is safe/idempotent and resets") {
+    {
+        const std::string path = "res_g10_cancel.bin";
+        { std::ofstream out(path, std::ios::binary); out << "cancel me"; }
+        {
+            AsyncFixtures fx;
+            int id = fx.loader.enqueue(path, "text");
+            REQUIRE(id > 0);
+            fx.loader.cancelAll();
+            fx.loader.cancelAll();               // idempotent
+            // drain is safe after cancel; no crash, counters stay sane.
+            auto done = fx.loader.drainCompleted();
+            (void)done;
+            CHECK(fx.loader.pendingCount() == 0);
+
+            // New enqueue after cancel delivers normally (flag is reset).
+            int id2 = fx.loader.enqueue(path, "text");
+            REQUIRE(id2 > 0);
+            auto done2 = fx.loader.drainCompleted();
+            REQUIRE_FALSE(done2.empty());
+            CHECK(done2[0].success);
+        }
+        std::remove(path.c_str());
+    }
+}
+
+// Minimal validated 1x1 red PNG (same bytes used by test_async).
+static const uint8_t kResG10RedPng[] = {
+    0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,
+    0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+    0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+    0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+    0xDE,0x00,0x00,0x00,0x0D,0x49,0x44,0x41,
+    0x54,0x78,0x9C,0x63,0xF8,0xCF,0xC0,0xF0,
+    0x1F,0x00,0x05,0x00,0x01,0xFF,0x89,0x99,
+    0x3D,0x1D,0x00,0x00,0x00,0x00,0x49,0x45,
+    0x4E,0x44,0xAE,0x42,0x60,0x82
+};
+
+TEST_CASE("AsyncLoader dedup: same asset twice shares one load") {
+    const std::string path = "res_g10_dedup.png";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(kResG10RedPng),
+                  static_cast<std::streamsize>(sizeof(kResG10RedPng)));
+    }
+    {
+        AsyncFixtures fx;
+        // First request decodes and caches the texture.
+        int id1 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id1 > 0);
+        auto first = fx.loader.drainCompleted();
+        REQUIRE_FALSE(first.empty());
+        REQUIRE(first[0].success);
+        REQUIRE_FALSE(first[0].rgba.empty());
+
+        // Identical (path,type) again: served from the decode cache, a fresh
+        // id but a shared identical payload (one load, not two).
+        int id2 = fx.loader.enqueue(path, "texture");
+        REQUIRE(id2 > 0);
+        auto second = fx.loader.drainCompleted();
+        REQUIRE_FALSE(second.empty());
+        CHECK(second[0].id == id2);
+        CHECK(second[0].success);
+        CHECK(second[0].rgba == first[0].rgba);
+        CHECK(second[0].width  == first[0].width);
+        CHECK(second[0].height == first[0].height);
+    }
+    std::remove(path.c_str());
+}
+
