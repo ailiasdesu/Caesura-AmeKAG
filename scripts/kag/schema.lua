@@ -87,6 +87,31 @@ local function match_brace(s, open)
     return nil
 end
 
+-- Prepare a ${expr} body for Lua compilation: TJS->Lua translation
+-- (&& || ! != ?:) then parenthesize a leading table constructor. Returns
+-- the `return (...)` source string, or nil when the body is empty.
+-- Shared by eval_interp_expr (runtime) and Schema.checkInterp (editor
+-- validation) so both compile through ONE code path.
+local function prepare_interp_source(expr)
+    if type(expr) ~= "string" or expr == "" then return nil end
+    local exprLua = expr
+    pcall(function()
+        local ex = require("kag.expr")
+        if ex and ex.translate then exprLua = ex.translate(expr) end
+    end)
+    local first = exprLua:match("^%s*(.)")
+    if first == "{" then
+        local open_pos = #exprLua:match("^%s*") + 1
+        local close2 = match_brace(exprLua, open_pos)
+        if close2 then
+            exprLua = exprLua:sub(1, open_pos - 1)
+                .. "(" .. exprLua:sub(open_pos, close2) .. ")"
+                .. exprLua:sub(close2 + 1)
+        end
+    end
+    return "return (" .. exprLua .. ")"
+end
+
 local function eval_interp_expr(expr, ctx)
     local f2 = interp_cache[expr]
     if not f2 then
@@ -95,28 +120,12 @@ local function eval_interp_expr(expr, ctx)
         interp_env.tf = ctx and ctx.tf or {}
         interp_env.mp = ctx and ctx.mp or {}
         interp_env.lf = ctx and ctx.lf or {}
-        -- TJS -> Lua translation (&& || ! != ?:) so ${expr} accepts the
-        -- same expression language as [if]/[eval] (round 50 audit).
-        local exprLua = expr
-        pcall(function()
-            local ex = require("kag.expr")
-            if ex and ex.translate then exprLua = ex.translate(expr) end
-        end)
-        -- Lua forbids indexing a table constructor directly
-        -- ({1,2}[1] is a syntax error: constructors are not prefixexp),
-        -- so parenthesize a leading constructor:
-        -- ${ {a=1,b=2}.b } -> ( {a=1,b=2} ).b (round 54).
-        local first = exprLua:match("^%s*(.)")
-        if first == "{" then
-            local open_pos = #exprLua:match("^%s*") + 1
-            local close2 = match_brace(exprLua, open_pos)
-            if close2 then
-                exprLua = exprLua:sub(1, open_pos - 1)
-                    .. "(" .. exprLua:sub(open_pos, close2) .. ")"
-                    .. exprLua:sub(close2 + 1)
-            end
-        end
-        f2 = load("return (" .. exprLua .. ")", "=ks_interp", "t", interp_env)
+        -- Compile via the shared preparation path (single source of truth
+        -- for ${expr} -> Lua). A nil source means an empty body: render
+        -- verbatim, as before.
+        local src = prepare_interp_source(expr)
+        if not src then return "${" .. expr .. "}" end
+        f2 = load(src, "=ks_interp", "t", interp_env)
         if not f2 then return "${" .. expr .. "}" end  -- syntax error
         interp_cache[expr] = f2
         local n = 0
@@ -468,6 +477,49 @@ function Schema.registrySize()
     local n = 0
     for _ in pairs(registry) do n = n + 1 end
     return n
+end
+
+
+--- Schema.checkInterp(text) → list of { offset, error, severity }
+--  Validate every ${expr} span in a (interpolatable) string VALUE using
+--  the SAME compile path as runtime interpolation (prepare_interp_source +
+--  load). Pure: no ctx, no I/O, no env mutation. Used by the editor LSP
+--  diagnostics so a bad interpolation is flagged in the IDE instead of
+--  silently falling back to the verbatim ${...} at run time.
+--  Returns one entry per failed span (empty list = all spans compile):
+--    offset    1-based byte offset of the "${" within `text`
+--    error     human message
+--    severity  1 = error (compile failure), 2 = warning (unterminated)
+--  ${} with an empty body and the $tbl.key / %var% lookup shorthand are
+--  NOT flagged (they are syntax/interpolation, not expression-compile).
+function Schema.checkInterp(text)
+    if type(text) ~= "string" then return {} end
+    if not text:find("${", 1, true) then return {} end
+    local issues = {}
+    local i, n = 1, #text
+    while i <= n do
+        local k = text:find("${", i, true)
+        if not k then break end
+        local close2 = match_brace(text, k + 1)
+        if not close2 then
+            issues[#issues + 1] =
+                { offset = k, error = "unterminated ${", severity = 2 }
+            break
+        end
+        local body = text:sub(k + 2, close2 - 1)
+        if body:find("%S") then
+            local src = prepare_interp_source(body)
+            if not src or not load(src, "=ks_interp_check", "t", interp_env) then
+                issues[#issues + 1] = {
+                    offset = k,
+                    error = "interpolation does not compile: " .. body,
+                    severity = 1,
+                }
+            end
+        end
+        i = close2 + 1
+    end
+    return issues
 end
 
 return Schema

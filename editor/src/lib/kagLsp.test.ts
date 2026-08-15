@@ -55,3 +55,18 @@ describe('lspCall (Lua bridge code generation)', () => {
     expect(calls[0]).toContain("lsp.json('m', [=[a]=], [=[b]=], [=[c]=])")
   })
 })
+
+describe('lspCall passes expression-context cursor column to completion', () => {
+  it('sends the cursor column so the server can surface variable-table prefixes', async () => {
+    const { client, calls } = mockClient()
+    await lspCall(client, 'completion', '[if exp="f', 11)
+    expect(calls[0]).toContain("lsp.json('completion'")
+    expect(calls[0]).toContain('[==[[if exp="f]==], 11')
+  })
+
+  it('keeps the column numeric (via luaValue) not string-quoted', async () => {
+    const { client, calls } = mockClient()
+    await lspCall(client, 'completion', '[ch text="hp ${', 16)
+    expect(calls[0]).toMatch(/, 16\)/)
+  })
+})

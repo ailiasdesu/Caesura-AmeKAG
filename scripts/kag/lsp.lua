@@ -31,6 +31,9 @@ pcall(require, "kag.commands.layer")
 pcall(require, "kag.commands.vfx")
 pcall(require, "kag.commands.video")
 pcall(require, "kag.commands.save")
+pcall(require, "kag.commands.resource")
+pcall(require, "kag.commands.character")
+pcall(require, "kag.commands.math")
 
 -- Completion item kinds (Monaco LanguageIdentifier kinds; numeric values
 -- match monaco.languages.CompletionItemKind).
@@ -68,10 +71,14 @@ local function ensure_index()
     return commands
 end
 
---- lsp.completion(lineText, pos) → array of completion items.
+--- lsp.completion(lineText, cursorCol) → array of completion items.
 --  In-tag completion: after `[` suggests command names; inside a tag with
---  a command present suggests that command's params.
-function lsp.completion(lineText)
+--  a command present suggests that command's params. `cursorCol` (1-based,
+--  byte) is optional; when present it lets the provider also suggest
+--  expression-language variable table prefixes (f./sf./tf./mp./lf.) inside
+--  an exp= value or a ${...} interpolation span. Default (nil) keeps the
+--  original command/param-only behaviour.
+function lsp.completion(lineText, cursorCol)
     local items = {}
     -- command-name context: "[ch " -> params; "[c" -> commands
     local openBracket = lineText:find("[", 1, true)
@@ -102,10 +109,15 @@ function lsp.completion(lineText)
     end
     -- param context: "[ch " -> params of ch
     local specs = schemaModule.dumpContracts()[cmdName]
-    if not specs then return items end
+    -- Expression flow commands ([if]/[while]) have no contract entry but
+    -- still take an exp= value; fall through to the variable-table prefix
+    -- suggestions below instead of returning empty.
+    local EXPR_CMDS = { ["if"] = true, ["while"] = true, eval = true, emb = true }
+    if not specs and not EXPR_CMDS[cmdName] then return items end
     -- prefix after the command name (leading space consumed)
     local prefix = (afterName or ""):match("^%s*([%w_]*)")
-    for pname, spec in pairs(specs) do
+    if specs then
+        for pname, spec in pairs(specs) do
         if pname ~= "_meta" and (prefix == "" or pname:find(prefix, 1, true) == 1) then
             local detail = (spec.type or "string")
                 .. (spec.required and " (required)" or "")
@@ -118,6 +130,32 @@ function lsp.completion(lineText)
             }
         end
     end
+    end
+    -- Inside an expression-language context (exp= value or ${...} span) also
+    -- suggest the variable table prefixes (f./sf./tf./mp./lf.), filtered by
+    -- the current word prefix. Cursor column optional; without it the scan
+    -- falls back to the whole line so a CLI caller sees the same hints.
+    local upToCursor = lineText
+    if type(cursorCol) == "number" then
+        upToCursor = lineText:sub(1, math.max(0, cursorCol - 1))
+    end
+    local inExpr = upToCursor:find("${", 1, true) ~= nil
+        or upToCursor:match("%f[%w]exp%s*=") ~= nil
+    if inExpr then
+        -- filter by the word being typed AT the cursor (not the param-name
+        -- prefix): e.g. [if exp="f -> "f", [ch text="hp ${t -> "t".
+        local wordPrefix = upToCursor:match("([%w_]*)$") or ""
+        for _, tbl in ipairs({ "f", "sf", "tf", "mp", "lf" }) do
+            if wordPrefix == "" or tbl:find(wordPrefix, 1, true) == 1 then
+                items[#items + 1] = {
+                    label = tbl .. ".",
+                    kind = KIND.Field,
+                    detail = "variable table (expression language)",
+                    insertText = tbl .. ".",
+                }
+            end
+        end
+    end
     return items
 end
 
@@ -128,7 +166,14 @@ function lsp.hover(cmd, param)
     local contracts = schemaModule.dumpContracts()
     local specs = contracts[cmd]
     local meta = schemaModule.meta(cmd)
-    if not specs and not meta then return nil end
+    -- Expression commands ([if]/[while]/[eval]/[emb]) and the exp param
+    -- surface the expression-language cheat-sheet (below), even when the
+    -- command is a scheduler flow command without a contract entry.
+    local EXPR_CMDS = { ["if"] = true, ["while"] = true, eval = true, emb = true }
+    local isExpr = param == "exp" or EXPR_CMDS[cmd]
+    if not specs and not meta then
+        if not (isExpr and ensure_index()[cmd]) then return nil end
+    end
     local title = "[" .. cmd .. "]"
     local lines = {}
     if meta and meta.desc and meta.desc ~= "" then
@@ -155,6 +200,18 @@ function lsp.hover(cmd, param)
     if meta and meta.category then
         lines[#lines + 1] = "category: " .. tostring(meta.category)
             .. (meta.blocking and " (blocking)" or "")
+    end
+    -- Expression-language cheat-sheet: show for the exp param or any
+    -- expression command ([if]/[while]/[eval]/[emb]). Static reference so
+    -- authors see the operator mapping + variable tables + interpolation
+    -- forms without leaving the editor.
+    if isExpr then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "expression language:"
+        lines[#lines + 1] = "  operators  && || ! != ? :  ->  and or not ~= (t ? a : b)"
+        lines[#lines + 1] = "  variables  f. sf. tf. mp. lf.  (scene/char/macro tables)"
+        lines[#lines + 1] = "  interp     $tbl.key | %var% | ${expr}"
+        lines[#lines + 1] = "  docs       kag-expression-language.md"
     end
     return { title = title, text = table.concat(lines, "\n") }
 end
@@ -246,6 +303,33 @@ function lsp.diagnostics(text)
                     if not fn then
                         addIssue(lineOf(tok.offset), 1,
                             "expression in [" .. cmd .. "] does not compile: " .. exp, 1)
+                    end
+                end
+            end
+            -- ${expr} interpolation pre-check (editor): any interpolatable
+            -- text param (spec.interpolate, e.g. [ch text=...]) may embed
+            -- ${...} spans evaluated through the SAME schema compile path as
+            -- runtime (Schema.checkInterp). Flag each failed span so a
+            -- bad interpolation fails in the editor instead of silently
+            -- rendering the verbatim ${...} at run time. Reported at the
+            -- command's offset/col 1, matching the exp= check above.
+            if specs then
+                for _, pair in ipairs(tok.params or {}) do
+                    if type(pair) == "table" and type(pair[1]) == "string" then
+                        local pname = pair[1]
+                        local pval = pair[2]
+                        local pspec = specs[pname]
+                        if type(pspec) == "table" and pspec.interpolate
+                            and type(pval) == "string"
+                            and pval:find("${", 1, true) then
+                            local problems = schemaModule.checkInterp(pval)
+                            if problems then
+                                for _, pr in ipairs(problems) do
+                                    addIssue(lineOf(tok.offset), 1,
+                                        "[" .. cmd .. "] " .. pname .. " " .. pr.error, pr.severity or 1)
+                                end
+                            end
+                        end
                     end
                 end
             end

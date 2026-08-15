@@ -147,6 +147,59 @@ local jm = lsp.json("definition", "[jump target=*missing]\n", 1, 18)
 check("json missing label omits line", jm:find('"name":"missing"', 1, true) ~= nil
       and jm:find('"line"', 1, true) == nil)
 
+
+-- ---------------------------------------------------------------------------
+-- 7. ${expr} interpolation diagnostics (Battle 2e): interpolatable text
+--    params are run through Schema.checkInterp (the SAME compile path as
+--    runtime) so a bad interpolation fails in the editor.
+-- ---------------------------------------------------------------------------
+local di1 = lsp.diagnostics('[ch text="hp ${bad &&}"]\n')
+check("interp compile error flagged", #di1 == 1
+      and di1[1].message:find("interpolation", 1, true) ~= nil
+      and di1[1].severity == 1)
+local di2 = lsp.diagnostics('[ch text="hp ${f.hp}"]\n')
+check("interp valid clean", #di2 == 0)
+local di3 = lsp.diagnostics('[ch text="${ {a=1}.a }"]\n')
+check("interp nested constructor clean", #di3 == 0)
+local di4 = lsp.diagnostics('[ch text="hp ${oops"]\n')
+check("interp unterminated warning", #di4 == 1
+      and di4[1].message:find("unterminated", 1, true) ~= nil
+      and di4[1].severity == 2)
+local di5 = lsp.diagnostics('[ch text="${ [[a]] } ok"]\n')
+check("interp long bracket clean", #di5 == 0)
+local di6 = lsp.diagnostics('[ch text="${f.x} ok ${bad +} end"]\n')
+check("interp multi-span flags bad one", #di6 == 1
+      and di6[1].message:find("bad +", 1, true) ~= nil)
+
+-- ---------------------------------------------------------------------------
+-- 8. expression context completion: variable table prefixes
+-- ---------------------------------------------------------------------------
+local vp1 = lsp.completion('[if exp="f', 11)
+local hasDot = false
+for _, it in ipairs(vp1) do if it.label == "f." then hasDot = true break end end
+check("completion exp value offers f.", hasDot)
+local vp2 = lsp.completion('[ch text="hp ${', 16)
+local hasTf = false
+for _, it in ipairs(vp2) do if it.label == "tf." then hasTf = true break end end
+check("completion ${ offers tf.", hasTf)
+local vp3 = lsp.completion('[ch ', 4)
+local hasF = false
+for _, it in ipairs(vp3) do if it.label == "f." then hasF = true break end end
+check("completion non-expr omits variable prefixes", not hasF)
+
+-- ---------------------------------------------------------------------------
+-- 9. hover: expression-language cheat-sheet
+-- ---------------------------------------------------------------------------
+local hs1 = lsp.hover("if", "exp")
+check("hover if.exp has cheat-sheet", hs1 ~= nil
+      and hs1.text:find("expression language", 1, true) ~= nil)
+local hs2 = lsp.hover("eval")
+check("hover eval has cheat-sheet", hs2 ~= nil
+      and hs2.text:find("expression language", 1, true) ~= nil)
+local hs3 = lsp.hover("ch")
+check("hover ch no cheat-sheet", hs3 ~= nil
+      and hs3.text:find("expression language", 1, true) == nil)
+
 -- Exit gate.
 if failed > 0 then
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))

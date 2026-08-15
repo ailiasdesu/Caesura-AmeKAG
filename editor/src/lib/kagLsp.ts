@@ -92,7 +92,10 @@ export class KagLsp {
             return { suggestions: [] }
           }
           try {
-            const json = await lspCall(this.client, 'completion', lineText)
+            // Pass the cursor column so the server can detect expression
+            // context (inside exp= / ${...}) and offer variable-table prefix
+            // completions (f./sf./tf./mp./lf.).
+            const json = await lspCall(this.client, 'completion', lineText, position.column)
             const items = JSON.parse(json) as CompletionItem[]
             const word = model.getWordUntilPosition(position)
             const range = new m.Range(
