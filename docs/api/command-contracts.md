@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (84)
+## Commands (102)
 
 ### `[ai_dialog]`
 
@@ -54,12 +54,33 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible bg command
 | `storage` | string | - | - | - |
 | `volume` | number | - | 0..1.5 | - |
 
+### `[blur]`
+
+_Category: transition · Blocking: yes (waits for completion) · gaussian blur the whole frame_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amount` | number | 0 | 0..100 | - |
+| `duration` | number | 300 | 0..30000 | - |
+| `time` | number | 300 | 0..30000 | - |
+
 ### `[br]`
 
 _Category: text · Blocking: no (fire-and-forget) · KAG3 line-break alias_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[button]`
+
+_Category: text · Blocking: no (fire-and-forget) · register a choice button label ([endbutton] draws it)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `caption` | string | - | - | - |
+| `cond` | string | - | - | - |
+| `target` | string | - | - | - |
+| `text` | string |  | - | - |
 
 ### `[camera]`
 
@@ -133,6 +154,14 @@ _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible emb comma
 | `code` | string | - | - | - |
 | `exp` | string | - | - | - |
 
+### `[endbutton]`
+
+_Category: text · Blocking: yes (waits for completion) · draw the registered choice buttons and wait for a pick_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `target` | string | - | - | - |
+
 ### `[ending]`
 
 _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible ending command_
@@ -141,6 +170,13 @@ _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible ending co
 |---|---|---|---|---|
 | `id` | string | - | - | - |
 | `name` | string | - | - | - |
+
+### `[endselect]`
+
+_Category: text · Blocking: yes (waits for completion) · KAG3 alias of [endbutton]_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[er]`
 
@@ -157,6 +193,18 @@ _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible eval comm
 |---|---|---|---|---|
 | `code` | string | - | - | - |
 | `exp` | string | - | - | - |
+
+### `[fade]`
+
+_Category: transition · Blocking: yes (waits for completion) · fade a layer between from/to opacity_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `duration` | number | 500 | 0..30000 | - |
+| `from` | number | 0 | 0..255 | - |
+| `layer` | string | fg | - | - |
+| `time` | number | 500 | 0..30000 | - |
+| `to` | number | 255 | 0..255 | - |
 
 ### `[fadebgm]`
 
@@ -273,6 +321,18 @@ _Category: text · Blocking: no (fire-and-forget) · line break_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[layfade]`
+
+_Category: layer · Blocking: yes (waits for completion) · fade one layer to an opacity_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `duration` | number | 300 | 0..30000 | - |
+| `layer` | string | bg | - | - |
+| `name` | string | - | - | - |
+| `time` | number | 300 | 0..30000 | - |
+| `to` | number | 255 | 0..255 | - |
 
 ### `[layopt]`
 
@@ -454,6 +514,17 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playse com
 |---|---|---|---|---|
 | `fadeout` | number | 0 | 0..30000 | - |
 
+### `[playvoice]`
+
+_Category: audio · Blocking: yes (waits for completion) · play a voiced line (blocks until finished)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | file | - | - | - |
+| `path` | file | - | - | - |
+| `storage` | file | - | - | - |
+| `volume` | number | 1.0 | 0..1.5 | - |
+
 ### `[position]`
 
 _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible position command_
@@ -519,6 +590,13 @@ _Category: text · Blocking: no (fire-and-forget) · reset text state_
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
+### `[rollback]`
+
+_Category: system · Blocking: yes (waits for completion) · pop the newest token-level snapshot and re-run from there_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[ruby]`
 
 _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible ruby command_
@@ -547,6 +625,14 @@ _Category: save · Blocking: yes (waits for completion) · KAG3-compatible save 
 |---|---|---|---|---|
 | `slot` | number | - | -2..99 | - |
 
+### `[saveload]`
+
+_Category: save · Blocking: yes (waits for completion) · open the save/load menu (mode: save|load)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `mode` | string | - | - | - |
+
 ### `[saveplace]`
 
 | Param | Type | Default | Range / Choices | Required |
@@ -562,6 +648,13 @@ _Category: transition · Blocking: no (fire-and-forget) · KAG3-compatible scrol
 | `size` | number | 28 | 8..128 | - |
 | `speed` | number | 60 | 1..1000 | - |
 | `text` | string |  | - | - |
+
+### `[select]`
+
+_Category: text · Blocking: no (fire-and-forget) · begin a choice block ([sel] alias)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[set]`
 
@@ -605,6 +698,14 @@ _Category: vfx · Blocking: yes (waits for completion) · KAG3-compatible shake 
 | `amplitude` | number | 6 | 0..100 | - |
 | `frequency` | number | 20 | 1..120 | - |
 | `time` | number | 500 | 0..10000 | - |
+
+### `[skip]`
+
+_Category: text · Blocking: no (fire-and-forget) · toggle skip mode (mode=seen skips read text only)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `mode` | string | - | - | - |
 
 ### `[sma_anim]`
 
@@ -729,6 +830,20 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopse com
 | `fadeout` | number | 0 | 0..30000 | - |
 | `time` | number | 0 | 0..30000 | - |
 
+### `[stopvideo]`
+
+_Category: video · Blocking: no (fire-and-forget) · stop the current video playback_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
+### `[stopvoice]`
+
+_Category: audio · Blocking: no (fire-and-forget) · stop the current voice playback_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[text]`
 
 _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible text command_
@@ -764,6 +879,16 @@ _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible
 | `time` | number | 500 | 0..30000 | - |
 | `type` | string | crossfade | - | - |
 
+### `[unlock]`
+
+_Category: system · Blocking: no (fire-and-forget) · unlock a gallery CG or music-room track_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `id` | string | - | - | - |
+| `name` | string | - | - | - |
+| `type` | string | cg | - | - |
+
 ### `[vib]`
 
 _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible vib command_
@@ -790,6 +915,17 @@ _Category: video · Blocking: yes (waits for completion) · KAG3-compatible vide
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
 
+### `[voice]`
+
+_Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible voice command_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `file` | file | - | - | - |
+| `path` | file | - | - | - |
+| `storage` | file | - | - | - |
+| `volume` | number | 1.0 | 0..1.5 | - |
+
 ### `[voice_off]`
 
 _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible voice_off command_
@@ -813,7 +949,28 @@ _Category: system · Blocking: yes (waits for completion) · KAG3-compatible wai
 | `ms` | number | - | 0..60000 | - |
 | `time` | number | 1000 | 0..60000 | - |
 
+### `[waitbgm]`
+
+_Category: audio · Blocking: yes (waits for completion) · block until the BGM bus finishes_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
+### `[waitclick]`
+
+_Category: audio · Blocking: yes (waits for completion) · block until a click (voice-oriented wait)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
 ### `[waitforclick]`
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+
+### `[waitsound]`
+
+_Category: audio · Blocking: yes (waits for completion) · block until the SE bus finishes_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
