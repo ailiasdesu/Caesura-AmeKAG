@@ -5,6 +5,7 @@ import { ActivityBar } from './ide/ActivityBar'
 import { StatusBar } from './ide/StatusBar'
 import { ExplorerView } from './ide/ExplorerView'
 import { SceneTree } from './ide/SceneTree'
+import { SceneOutlinePanel } from './ide/SceneOutlinePanel'
 import { InspectorView } from './ide/InspectorView'
 import { TimelineView } from './ide/TimelineView'
 import { DebugView } from './ide/DebugView'
@@ -63,6 +64,7 @@ export function App() {
             <>
               <ExplorerView client={clientRef.current} />
               <SceneTree />
+              <SceneOutlinePanel />
               <InspectorView />
               <TimelineView />
             </>
