@@ -678,6 +678,94 @@ do
 end
 
 
+-- ---------------------------------------------------------------------------
+-- 16. round 92: rename ORIGIN resolution must use the SAME nav set as the
+--     edit-set scope (RENAME_NAV_CMDS = NAV_CMDS + goto/sel/select). Before
+--     the fix, a rename triggered on a [goto]/[sel]/[select] reference
+--     silently returned {} (empty edits) because lsp.rename resolved the
+--     origin via lsp.definition's NAV_CMDS, which excludes those commands.
+--     definition() keeps NAV_CMDS (navigation semantics unchanged); only
+--     rename's origin path broadens.
+-- ---------------------------------------------------------------------------
+do
+    -- Trigger rename with the cursor ON each extended nav reference
+    -- ([goto]/[sel]/[select]) -- not on the label definition -- and assert
+    -- a FULL edit set is produced (definition + every nav site), not {}.
+    local gs = "*start" .. NL
+        .. "[jump target=*start]" .. NL
+        .. "[goto target=*start]" .. NL
+    -- [goto ...] is line 2; cursor col 16 on the 't' of target=*start.
+    local g = lsp.rename(gs, 2, 16, "dest")
+    check("r92: rename from [goto] ref produces edits", g ~= nil and #g == 3)
+    local gDef, gRef = 0, 0
+    for _, ed in ipairs(g or {}) do
+        if ed.kind == "definition" then gDef = gDef + 1
+        elseif ed.kind == "reference" then gRef = gRef + 1 end
+    end
+    check("r92: goto origin -> 1 def + 2 refs", gDef == 1 and gRef == 2)
+    local ga = apply_edits_bytes(gs, g)
+    check("r92: goto-origin rename rewrites every site",
+          ga:find("[goto target=*dest]", 1, true) ~= nil
+          and ga:find("[jump target=*dest]", 1, true) ~= nil
+          and ga:find("*start", 1, true) == nil)
+
+    -- [sel target="*start"] line 2; cursor inside the quoted value (col 17).
+    local ss = "*start" .. NL
+        .. '[sel target="*start"]' .. NL
+    local s = lsp.rename(ss, 2, 17, "dest")
+    check("r92: rename from [sel] ref produces edits", s ~= nil and #s == 2)
+    local sDef, sRef = 0, 0
+    for _, ed in ipairs(s or {}) do
+        if ed.kind == "definition" then sDef = sDef + 1
+        elseif ed.kind == "reference" then sRef = sRef + 1 end
+    end
+    check("r92: sel origin -> 1 def + 1 ref", sDef == 1 and sRef == 1)
+    local sa = apply_edits_bytes(ss, s)
+    check("r92: sel-origin rename rewrites both sites",
+          sa:find('[sel target="*dest"]', 1, true) ~= nil
+          and sa:find("*dest", 1, true) ~= nil
+          and sa:find("*start", 1, true) == nil)
+
+    -- [select target=*start] line 2; cursor on the bare * value (col 17).
+    local sc = "*start" .. NL
+        .. "[select target=*start]" .. NL
+    local sl = lsp.rename(sc, 2, 17, "dest")
+    check("r92: rename from [select] ref produces edits", sl ~= nil and #sl == 2)
+    local slDef, slRef = 0, 0
+    for _, ed in ipairs(sl or {}) do
+        if ed.kind == "definition" then slDef = slDef + 1
+        elseif ed.kind == "reference" then slRef = slRef + 1 end
+    end
+    check("r92: select origin -> 1 def + 1 ref", slDef == 1 and slRef == 1)
+    local sca = apply_edits_bytes(sc, sl)
+    check("r92: select-origin rename rewrites both sites",
+          sca:find("[select target=*dest]", 1, true) ~= nil
+          and sca:find("*dest", 1, true) ~= nil
+          and sca:find("*start", 1, true) == nil)
+
+    -- A rename triggered from a goto/sel/select reference must be
+    -- CONSISTENT with one triggered from the definition line: same lines,
+    -- same set.
+    local egs = lsp.rename(gs, 1, 2, "dest")
+    check("r92: goto-origin and def-origin produce same set",
+          g ~= nil and egs ~= nil and #g == #egs
+          and g[1].line == egs[1].line and g[1].col == egs[1].col)
+
+    -- definition() keeps NAV_CMDS: on a [goto]/[sel]/[select] reference
+    -- (not in NAV_CMDS) it returns nil, while the rename origin still
+    -- resolves (navigation vs. rename scope stay distinct).
+    -- [goto ...] sits on line 3 (line 1 is *start, line 2 is the jump).
+    local dGoto = lsp.definition(gs, 3, 16)
+    check("r92: definition on [goto] ref stays nil (NAV_CMDS preserved)",
+          dGoto == nil)
+    local dSel = lsp.definition(ss, 2, 17)
+    check("r92: definition on [sel] ref stays nil (NAV_CMDS preserved)",
+          dSel == nil)
+    local dSelc = lsp.definition(sc, 2, 17)
+    check("r92: definition on [select] ref stays nil (NAV_CMDS preserved)",
+          dSelc == nil)
+end
+
 -- Exit gate.
 if failed > 0 then
 

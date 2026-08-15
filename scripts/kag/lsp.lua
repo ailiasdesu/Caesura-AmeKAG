@@ -539,12 +539,14 @@ local function locate_label_byte(text, tok, name)
     return tok.offset + starRel
 end
 
---- lsp.definition(text, line, char) → {name, line, col} for the *label
---  under the cursor: on a [jump]/[call]/[link] target resolves to the
---  label definition line; on a *label itself returns its own location.
+--- lsp.definition(text, line, char, navSet?) → {name, line, col} for the
+--  *label under the cursor: on a [jump]/[call]/[link] target resolves to
+--  the label definition line; on a *label itself returns its own location.
 --  Returns {name, line = nil} when the target label is not in THIS scene
 --  (labels are scene-scoped; cross-scene jumps land in another file).
-function lsp.definition(text, line, char)
+--  navSet (optional) narrows which commands count as nav; defaults to
+--  NAV_CMDS so the navigation semantics of callers are unchanged.
+function lsp.definition(text, line, char, navSet)
     local tokens = parse_scene(text)
     if not tokens or not line then return nil end
     local idx = build_index(text)
@@ -567,7 +569,7 @@ function lsp.definition(text, line, char)
             col = idx.colOf(hit.offset),
         }
     end
-    local target = token_target(hit)
+    local target = token_target(hit, navSet)
     if not target then return nil end
     local labels = collect_labels(tokens, idx)
     local def = labels[target]
@@ -626,10 +628,14 @@ function lsp.rename(text, line, char, newName)
     if not tokens or not line then return {} end
     local idx = build_index(text)
 
-    -- Resolve the label under the cursor via the same lookup as
-    -- lsp.definition. When the target is not defined in THIS scene
-    -- (def.line == nil) there is nothing to rename → no edits.
-    local def = lsp.definition(text, line, char)
+    -- Resolve the label under the cursor. Unlike lsp.definition (which
+    -- keeps the navigation semantics of NAV_CMDS), rename must accept the
+    -- SAME nav set that defines its edit-set scope — RENAME_NAV_CMDS — so
+    -- a rename triggered on a [goto]/[sel]/[select] reference (which are
+    -- not in NAV_CMDS) resolves its origin label and produces edits instead
+    -- of silently returning {}. When the target is not defined in THIS
+    -- scene (def.line == nil) there is nothing to rename → no edits.
+    local def = lsp.definition(text, line, char, RENAME_NAV_CMDS)
     if not def or not def.name or not def.line then return {} end
     local oldName = def.name
     if oldName == newName then return {} end
