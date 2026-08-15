@@ -267,7 +267,64 @@ local function translate_brackets(src)
     return table.concat(out)
 end
 
+-- Same flattening for (...) parenthesised groups (round 68): a ternary
+-- inside parens — f.arr[1] + (f.flag ? f.arr[2] : f.arr[3]) — was never
+-- translated because find_top only matches '?' at paren-depth 0.
+local function translate_parens(src)
+    local out = {}
+    local i, n = 1, #src
+    local quote = nil
+    while i <= n do
+        local c = src:sub(i, i)
+        if quote then
+            out[#out + 1] = c
+            if c == "\\" then
+                out[#out + 1] = src:sub(i + 1, i + 1)
+                i = i + 2
+            else
+                if c == quote then quote = nil end
+                i = i + 1
+            end
+        else
+            if c == '"' or c == "'" then
+                quote = c
+                out[#out + 1] = c
+                i = i + 1
+            elseif c == "(" then
+                local j, depth, q2 = i + 1, 1, nil
+                while j <= n do
+                    local d = src:sub(j, j)
+                    if q2 then
+                        if d == "\\" then j = j + 1
+                        elseif d == q2 then q2 = nil end
+                    elseif d == '"' or d == "'" then
+                        q2 = d
+                    elseif d == "(" then
+                        depth = depth + 1
+                    elseif d == ")" then
+                        depth = depth - 1
+                        if depth == 0 then break end
+                    end
+                    j = j + 1
+                end
+                if depth == 0 then
+                    out[#out + 1] = "(" .. translate(src:sub(i + 1, j - 1)) .. ")"
+                    i = j + 1
+                else
+                    out[#out + 1] = c
+                    i = i + 1
+                end
+            else
+                out[#out + 1] = c
+                i = i + 1
+            end
+        end
+    end
+    return table.concat(out)
+end
+
 local function translate_ternary(src)
+    src = translate_parens(src)
     src = translate_brackets(src)
     local q = find_top(src, "?", 1)
     if not q then
@@ -303,6 +360,45 @@ end
 --  statements make the (a and b or c) ternary wrap invalid (round 61).
 function expr.translateOperators(source)
     if type(source) ~= "string" then return tostring(source) end
+    return translate_operators(source)
+end
+
+--- expr.translateAssignment(source) — translate an [eval] statement.
+--  Splits at the FIRST top-level '=' and runs the FULL pipeline (ternary
+--  included) on the RHS — x = cond ? a : b becomes
+--  x = ((cond) and (a) or (b)), which is valid as an assignment RHS
+--  (round 68: eval assignments previously never got ternary support).
+--  With no assignment, falls back to operators-only translation.
+function expr.translateAssignment(source)
+    if type(source) ~= "string" then return tostring(source) end
+    local depth, quote = 0, nil
+    local i = 1
+    local n = #source
+    while i <= n do
+        local c = source:sub(i, i)
+        if quote then
+            if c == "\\" then
+                -- skip escaped char
+            elseif c == quote then
+                quote = nil
+            end
+        elseif c == '"' or c == "'" then
+            quote = c
+        elseif c == "(" then
+            depth = depth + 1
+        elseif c == ")" then
+            depth = math.max(0, depth - 1)
+        elseif c == "=" then
+            if source:sub(i + 1, i + 1) == "=" then
+                i = i + 1  -- skip == comparisons entirely
+            elseif depth == 0 then
+                -- first top-level single '=': translate the RHS fully
+                return source:sub(1, i - 1):gsub("%s+$", "")
+                    .. " = " .. translate(source:sub(i + 1):gsub("^%s+", ""))
+            end
+        end
+        i = i + 1
+    end
     return translate_operators(source)
 end
 

@@ -233,6 +233,12 @@ function lsp.diagnostics(text)
                         if not fn then
                             fn = load(exp, "=ks_expr_check", "t", {})
                         end
+                        if not fn and cmd == "eval" then
+                            -- round 68: ternary assignments translate via
+                            -- translateAssignment (full pipeline on the RHS)
+                            fn = load(exprLang.translateAssignment(exp),
+                                "=ks_expr_check", "t", {})
+                        end
                     else
                         fn = load("return " .. exprLang.translate(exp),
                             "=ks_expr_check", "t", {})

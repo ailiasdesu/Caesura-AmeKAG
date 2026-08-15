@@ -228,6 +228,37 @@ do
     check("operator chain evaluates", ok3 and v3 == true, tostring(v3))
 end
 
+-- ---- ternary inside parentheses (round 68) -----------------------------
+do
+    local ctx = { f = { arr = { 10, 20, 30 }, flag = true }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local ok1, v1 = expr.evaluate(ctx, "f.arr[1] + (f.flag ? f.arr[2] : f.arr[3])")
+    check("ternary in parens evaluates", ok1 and v1 == 30, tostring(v1))
+    ctx.f.flag = false
+    local ok2, v2 = expr.evaluate(ctx, "f.arr[1] + (f.flag ? f.arr[2] : f.arr[3])")
+    check("ternary in parens else-branch", ok2 and v2 == 40, tostring(v2))
+    local tr = expr.translate("1 + (f.flag ? 2 : 3)")
+    check("paren ternary leaves no '?'", tr:find("?", 1, true) == nil, tr)
+    local tr2 = expr.translate("(a || b) ? (c && d) : e")
+    check("existing paren grouping unchanged",
+        tr2 == "(((a or b)) and ((c and d)) or (e))", tr2)
+end
+
+-- ---- translateAssignment (round 68): ternary RHS in eval statements ----
+do
+    local a1 = expr.translateAssignment("f.x = f.y ? 1 : 2")
+    check("assignment ternary RHS translates",
+        a1 == "f.x = ((f.y) and (1) or (2))", a1)
+    local a2 = expr.translateAssignment("f.ok = f.hp > 10 && f.flag")
+    check("assignment operators translate",
+        a2 == "f.ok = f.hp > 10 and f.flag", a2)
+    local a3 = expr.translateAssignment("f.x == 1")
+    check("comparison (no assignment) untouched",
+        a3 == "f.x == 1", a3)
+    local a4 = expr.translateAssignment("f.s = 'a = b'")
+    check("equals inside string not split",
+        a4 == "f.s = 'a = b'", a4)
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

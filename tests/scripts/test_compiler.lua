@@ -372,6 +372,24 @@ local ctx11h = { f = { flag = false }, sf = {}, tf = {}, mp = {}, lf = {},
 local co11h = coroutine.create(function() scheduler.run(ctx11h, toks11h, 1) end)
 while coroutine.status(co11h) ~= "dead" do coroutine.resume(co11h) end
 check("11h: eval ! assignment translates", ctx11h.f.neg == true)
+
+-- 11i. eval ternary assignment (round 68: RHS full pipeline)
+local toks11i = tokenizer.parse('[eval exp="f.pick = f.flag ? 1 : 2"]')
+compiler.compile(toks11i)
+local ctx11i = { f = { flag = true }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11i }
+local co11i = coroutine.create(function() scheduler.run(ctx11i, toks11i, 1) end)
+while coroutine.status(co11i) ~= "dead" do coroutine.resume(co11i) end
+check("11i: eval ternary assignment then-branch", ctx11i.f.pick == 1)
+local toks11j = tokenizer.parse('[eval exp="f.pick2 = f.flag ? 1 : 2"]')
+compiler.compile(toks11j)
+local ctx11j = { f = { flag = false }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11j }
+local co11j = coroutine.create(function() scheduler.run(ctx11j, toks11j, 1) end)
+while coroutine.status(co11j) ~= "dead" do coroutine.resume(co11j) end
+check("11j: eval ternary assignment else-branch", ctx11j.f.pick2 == 2)
 -- ---------------------------------------------------------------------------
 -- 12a-12e. Dotted-key assignment + interpolation (round 50).
 --  [set f.name = "Aoi"] must store the UNQUOTED string via the tokenizer's

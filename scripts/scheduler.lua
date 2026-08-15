@@ -928,13 +928,12 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [eval] — unified scope (ctx + f + sf + tf)
         elseif cmd == "eval" then
             local code = params.exp or params.code or ""
-            -- Round 61: TJS operator parity with [if]/[switch] — translate
-            -- && || ! != before load (a raw '&&' previously failed as
-            -- invalid Lua). Operators only: ternaries stay unsupported in
-            -- assignment statements (their (a and b or c) wrap would
-            -- break "x = ..." prefixes).
-            if #code > 0 and code:find("[&|!]") then
-                code = exprLang.translateOperators(code)
+            -- Round 61/68: TJS operator parity with [if]/[switch] —
+            -- translate && || ! != before load; translateAssignment splits
+            -- at the first top-level '=' and runs the FULL pipeline on the
+            -- RHS, so ternary assignments (x = cond ? a : b) work too.
+            if #code > 0 and code:find("[&|!?]") then
+                code = exprLang.translateAssignment(code)
             end
             if #code == 0 then
                 -- KAG3 requires [eval exp="..."]; a bare [eval lf.x = 1]
