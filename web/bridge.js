@@ -217,7 +217,16 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             end
           end
         end
-        __SCENE_DRAWS_TABLE = draws
+                __SCENE_DRAWS_TABLE = draws
+        -- Export endings unlocked by [ending] (engine: ctx.seen_endings).
+        __SCENE_ENDINGS = {}
+        if type(ctx.seen_endings) == 'table' then
+          local n = 0
+          for eid, einfo in pairs(ctx.seen_endings) do
+            n = n + 1
+            __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
+          end
+        end
         return result
       `)
       // sync the structured draws into the core overlay (JSON parse)
@@ -232,6 +241,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           }
         }
       }
+            const endings = lua.global.get('__SCENE_ENDINGS')
+      if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
       lua.global.set('__SCENE_BACKLOG', null)
       return out
     },
@@ -312,7 +323,16 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             end
           end
         end
-        __SCENE_DRAWS_TABLE = draws
+                __SCENE_DRAWS_TABLE = draws
+        -- Export endings unlocked by [ending] (engine: ctx.seen_endings).
+        __SCENE_ENDINGS = {}
+        if type(ctx.seen_endings) == 'table' then
+          local n = 0
+          for eid, einfo in pairs(ctx.seen_endings) do
+            n = n + 1
+            __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
+          end
+        end
         return result
       `)
       const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
@@ -326,6 +346,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           }
         }
       }
+            const endings = lua.global.get('__SCENE_ENDINGS')
+      if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
       lua.global.set('__SCENE_BACKLOG', null)
       return out
     },

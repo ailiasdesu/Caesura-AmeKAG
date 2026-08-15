@@ -115,6 +115,33 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
 
+  it('runs every tutorial in the teaching path (01-06) to completion', async () => {
+    const tutorials = [
+      ['tutorial_01_hello.ks', /你好，世界/],
+      ['tutorial_02_text.ks', /文本命令学完了/],
+      ['tutorial_03_layers.ks', /图层教程完成/],
+      ['tutorial_04_audio.ks', /音频教程完成/],
+      ['tutorial_05_branching.ks', /分支教学完成/],
+      ['tutorial_06_effects.ks', /六个教程全部完成/],
+    ]
+    for (const [file, lineRe] of tutorials) {
+      const ks = readFileSync(join(here, '..', 'demo', 'tutorial', file), 'utf8')
+      const out = await player.runScene(ks, file, { maxFrames: 200000, autoClick: true })
+      expect(out.startsWith('DONE:'), file + ' should complete: ' + out).toBe(true)
+      // teaching lines flow through the TextScene draws (bridge collects
+      // them per-run); a [ch] line must have hit the page at some point.
+      const texts = player.core.events
+        .filter((e) => e.kind === 'text.draws')
+        .flatMap((e) => (Array.isArray(e.detail?.draws) ? e.detail.draws : []))
+        .map((d) => d.t || '')
+        .concat(player.core.backlog.flatMap((p) => p.draws.map((d) => d.t || '')))
+      expect(texts.some((x) => lineRe.test(x)), file + ' should contain teaching line').toBe(true)
+    }
+    // tutorial 06 unlocks its ending
+    const ending = player.core.events.some((e) => e.kind === 'ending.unlock')
+    expect(ending).toBe(true)
+  }, 120000)
+
   it('runs the showcase sample (25 commands, branching, backlog)', async () => {
     player.core.backlog.length = 0 // isolate from earlier scenes
     const ks = readFileSync(join(here, '..', 'demo', 'showcase.ks'), 'utf8')

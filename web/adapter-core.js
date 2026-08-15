@@ -12,6 +12,8 @@ export class AdapterCore {
     this.draws = []
     this.backlog = []
     this._lastBacklog = ''
+    this.endings = []
+    this._endingKeys = new Set()
     this.audioBus = { bgm: null, se: [], voice: null }
     this.events = [] // call log for tests/telemetry
     this._seq = 0
@@ -100,6 +102,19 @@ export class AdapterCore {
     this.backlog.push({ draws: list.map((d) => ({ ...d })), text })
     this._lastBacklog = text
     this._log('backlog.add', { n: this.backlog.length })
+  }
+
+  /** Record endings unlocked by [ending] during a run (engine writes
+   *  ctx.seen_endings; bridge exports them per-run). Dedup by id. */
+  recordEndings(list) {
+    const arr = Array.isArray(list) ? list : []
+    for (const e of arr) {
+      if (!e || typeof e.id !== 'string' || this._endingKeys.has(e.id)) continue
+      this._endingKeys.add(e.id)
+      this.endings.push({ id: e.id, name: String(e.name ?? '') })
+      this._log('ending.unlock', { id: e.id, name: String(e.name ?? '') })
+    }
+    return this.endings.length
   }
 
   // -- audio ------------------------------------------------------------

@@ -170,4 +170,29 @@ describe('AdapterCore backlog (VN history)', () => {
     expect(first.x).toBe(1)
     expect(core.backlog[0].text).toBe('A')
   })
+
+  describe('endings (round 43)', () => {
+    it('records unlocked endings with dedup by id', () => {
+      const core = new AdapterCore()
+      expect(core.endings).toEqual([])
+      core.recordEndings([{ id: 'a', name: 'End A' }, { id: 'b' }])
+      expect(core.endings).toEqual([
+        { id: 'a', name: 'End A' },
+        { id: 'b', name: '' },
+      ])
+      // same id again: dedup (no duplicate event)
+      const before = core.events.filter((e) => e.kind === 'ending.unlock').length
+      core.recordEndings([{ id: 'a', name: 'End A' }])
+      expect(core.endings.length).toBe(2)
+      expect(core.events.filter((e) => e.kind === 'ending.unlock').length).toBe(before)
+    })
+
+    it('ignores non-array / empty input', () => {
+      const core = new AdapterCore()
+      core.recordEndings(null)
+      core.recordEndings({})
+      core.recordEndings([])
+      expect(core.endings).toEqual([])
+    })
+  })
 })
