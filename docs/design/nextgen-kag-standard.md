@@ -52,6 +52,13 @@ Schema.define("playbgm", {
 测试锁定：`test_lua_manager.cpp`（指令预算 round-trip/无限循环中断/实例隔离）、
 `test_while.lua`（guard 触发）、`test_for.lua`（step=0 退化 + guard）。
 
+> **round-75**：`for`/`while`/`if`/`switch` 四个栈自运行期局部作用域提升进执行上下文
+> （`ctx._forStack/_whileStack/_ifStack/_switchStack`），`capture_state` 序列化循环栈，
+> `[load]` 恢复后，循环体内的 `[save]`→`[load]` 会**续跑循环体至完成**（而非重启/中止）；
+> 旧存档（无标记）保持向后兼容。宏递归防护改为**基于深度**：宏拼接深度栈（push endIdx，
+> 循环体末尾 pop，同位置重复拼接不 pop）>100 才报错——顺序调用 1000+、大循环 2000 次迭代
+> 不再被误判为递归。
+
 ## 四、已迁移命令（20）
 
 | 批次 | 命令 |
@@ -77,6 +84,12 @@ Schema.define("playbgm", {
 - ✅ 脚本静态校验器（ks_check.lua + LPeg Cp 字节偏移 + CI 三平台门禁）
 - ✅ 表达式插值（`$f.var` + `${expr}` 完整表达式）
 - ✅ 命令返回值（`[eval]` 存 `tf.eval_result` → `${tf.eval_result}` 展开——表达式上下文闭环）
+- ✅ 嵌套宏定义（`[macro outer][macro inner]...[endmacro][endmacro]` 不再截断流；含嵌套定义的
+  重定义宏由编译器保守标记为运行时处理）
+- ✅ 宏递归防护改为深度阈值（拼接深度 >100 报错，替换旧的累计调用计数——顺序/大循环不再误报）
+- ✅ 存读档循环连续性：`[for]`/`[while]`/`[if]`/`[switch]` 栈进入执行上下文并存档序列化，
+  循环体内 `[save]`→`[load]` 恢复并续跑（旧档兼容）
+- ✅ kag3_import 宏参转换（`&N`/`&name` → `%N%`/`%name%`）+ `goto`→`jump` 别名
 
 ## 七、命令重构（新一代精简）
 

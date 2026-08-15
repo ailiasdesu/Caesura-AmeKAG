@@ -30,7 +30,6 @@
 | 10 | demo/tutorial/tutorial_10_loops.ks | 循环控制流：正序/倒序 [for]、[while] 条件循环 + [eval] 递减（每场景 65536 迭代守卫） | for, endfor, while, endwhile, eval, set, ch, p |
 | 11 | demo/tutorial/tutorial_11_switch.ks | 多路分支：裸变量选择器（KAG3 兼容）与 exp= 表达式选择器（数值/布尔/TJS 运算符），case tostring 匹配无 fallthrough，缺失变量走 default | switch, case, default, endswitch, set, ch, p |
 | 12 | demo/tutorial/tutorial_12_expr_combo.ks | 表达式组合实战：三元在索引内、?? 空合并 + switch exp、循环 + 插值、eval 三元赋值（RHS 全管道） | eval, switch, case, endswitch, for, endfor, set, ch, p |
-| 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度（textspeed/cps）、算术链（add/sub/mul/div/mod/dec）、角色（csp/csd/csl）、notify/palette/vibrate/preload | textspeed, cps, add, sub, mul, div, mod, dec, csp, csd, csl, notify, palette, vibrate, preload |
 | 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度切换、变量算术链、角色立绘 / 移动 / 清除、吐司通知、LUT 色调、消息层震动、资源预加载 | textspeed, cps, add, sub, mul, div, mod, dec, csp, csl, csd, notify, palette, vibrate, preload, set, eval, ch, p |
 
 

@@ -1,7 +1,9 @@
-﻿# Caesura (AmeKAG) — C++ API Interface Reference
+# Caesura (AmeKAG) — C++ API Interface Reference
 
-> **30 个纯虚接口，16 个模块；21 个运行时引擎服务通过 `BackendRegistry` 访问**
-> 最后更新: 2026-07-18
+> **31 个纯虚接口，16 个模块；21 个运行时引擎服务通过 `BackendRegistry` 访问**
+> 最后更新: 2026-08-15
+>
+> **更新记录**: 2026-08-15 — round-75 docs sync: interface census 30 -> 31
 
 ---
 
@@ -17,7 +19,7 @@
 8. [live2d — 动画后端](#8-live2d--动画后端)
 9. [minigame — 3D 小游戏](#9-minigame--3d-小游戏)
 10. [platform — 平台抽象](#10-platform--平台抽象)
-11. [render — 渲染 (6 个接口)](#11-render--6-个接口)
+11. [render — 渲染 (7 个接口)](#11-render--7-个接口)
 12. [resource — 资源管理](#12-resource--资源管理)
 13. [rpc — HTTP/JSON-RPC 服务器](#13-rpc--httpjson-rpc-服务器)
 14. [script — Lua 虚拟机](#14-script--lua-虚拟机)
@@ -416,11 +418,30 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | `resizeWindow(w, h)` | 调整窗口大小 |
 | `getBackendName` | 后端名称 |
 
+### IMobileAdapter
+
+移动平台生命周期与触控适配，将触摸/手势事件映射为 SDL 输入并回调 Lua。
+
+**实现**: `platform/MobileAdapter`
+
+| 方法 | 说明 |
+|------|------|
+| `onPause(L)` | 应用退到后台：标记暂停，有 Lua 状态时回调 `_G.onPause()` |
+| `onResume(L, savedData)` | 回到前台：恢复并回调 `_G.onResume(savedData)` |
+| `onFingerDown/x(x,y,fingerId)` | 触摸按下 → 鼠标输入映射 |
+| `onFingerMotion(x,y,fingerId)` | 触摸移动 → 鼠标输入映射 |
+| `onFingerUp(x,y,fingerId)` | 触摸抬起 → 鼠标输入映射 |
+| `onPinch(cx,cy,scale)` / `resetPinch` / `getLastPinchScale` | 捏合手势 |
+| `onLongPress(x,y)` | 长按手势 |
+| `getDisplayScale` / `setDisplayScale` | 显示缩放 |
+| `onOrientationChanged(L, orientation)` | 朝向变化回调 `_G.onOrientationChanged(\"portrait\"/... )` |
+| `isPaused` / `activeTouchCount` / `isFingerDown(id)` | 状态查询 |
+
 ---
 
-## 11. render — 6 个接口
+## 11. render — 7 个接口
 
-渲染是接口最多的模块，覆盖设备管理、纹理、图层、粒子、GPU 监控、视频播放。
+渲染是接口最多的模块，覆盖设备管理、纹理、图层、粒子、GPU 监控、视频播放与骨骼网格动画。
 
 ### 11.1 IRenderDevice
 
@@ -586,6 +607,20 @@ struct VideoHandle { uint32_t id = 0; explicit operator bool() const; };
 | `shutdown` | 停止所有视频 |
 | `activeCount` | 活跃视频数 |
 
+### 11.7 IMeshRenderer
+
+2D 骨骼网格动画渲染器（SMA，Battle 4d S1），CPU 软蒙皮 / GPU compute 蒙皮。POD 网格类型（`MeshHandle`、`SMAMeshVertex`、`SMAMesh`、`BonePose`）定义在接口头文件中。
+
+| 方法 | 说明 |
+|------|------|
+| `isInitialized` | 渲染器是否就绪 |
+| `setSkinMode(mode)` / `skinMode` | 蒙皮模式：`Auto`/`Cpu`/`Gpu`（SMA S5，GPU compute 能力自动回退） |
+| `createMesh(mesh)` | 上传网格，返回不透明 `MeshHandle` |
+| `destroyMesh(handle)` | 释放网格 |
+| `updateMesh(handle, poses)` | 每帧按骨骼 pose 重新蒙皮并更新 GPU 缓冲 |
+| `drawMesh(targetView, handle, dstTexId, x, y, scale, opacity)` | 将蒙皮网格绘制到目标视图 |
+| `meshCount` | 当前网格数 |
+
 ---
 
 ## 12. resource — 资源管理
@@ -682,6 +717,20 @@ JSON-RPC 服务器接口。
 | `isRunning` | 是否运行中 |
 | `setDispatcher(dispatcher)` | 注入线程安全的 RPC DTO dispatcher |
 | `pushLog(level, message)` | 推送日志 |
+
+### 13.3 IRpcDispatcher
+
+Owner-thread RPC 命令边界。传输适配器（`RpcServer`/`EditorServer`）从后台线程提交
+自包含 DTO，dispatch 在引擎主线程执行，从而保证 Lua VM、Engine、动画后端仅由
+owner thread 访问且不持有 `lua_State*`。它不是 BackendRegistry 服务（见第 2 节访问规则与附录 A）。
+
+`RpcRequest` / `RpcReply` 及其 `RpcRequestPayload` / `RpcReplyPayload` variant（status、run_script、
+eval、get_state、sma_validate、pick、sma_save、stats、capture_frame、reload_scripts、
+load_animation、breakpoints、debug_resume、inspect、kag_debug 等）均定义在 `IRpcDispatcher.h`。
+
+| 方法 | 说明 |
+|------|------|
+| `dispatch(request)` | 在主线程服务一条 RPC 请求，返回 `RpcReply`（含状态码、消息与 payload） |
 
 ---
 

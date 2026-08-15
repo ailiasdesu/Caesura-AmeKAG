@@ -348,3 +348,19 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `cloud_quota_total` | `() → int` | Total cloud quota bytes |
 | `cloud_quota_used` | `() → int` | Used cloud bytes |
 | `cloud_list` | `() → table` | Cloud file name list (up to 256) |
+---
+
+## i18n (Lua runtime localization module)
+
+> Pure-Lua runtime module (`scripts/i18n.lua`), not a C++ binding. Exposed
+> as the global `i18n` table like `scheduler`. Handles multi-language
+> string tables (`assets/lang/<code>.lua`) and runtime template
+> interpolation. Fallback chain: current language → default language → raw key.
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `current_language` | `() → string` | Return the currently selected language code (`i18n.current`). Pairs with `set_language()`. |
+| `set_language` | `(code, opts) → strings` | Select a per-language dictionary with fallback chain current → default → raw key. Loads `assets/lang/<code>.lua`, sets `i18n.current`, returns the active strings table. `opts.default` overrides the fallback default (updates `i18n.default_language`); `opts.reload=true` forces a re-read even when `code` equals the current language. |
+| `translate` | `(text, params) → string` | Runtime template interpolation: resolve the template through the normal localization path, then fill `{name}` placeholders from `params`. Unknown placeholders and inline-markup tags are left intact. With no `params` behaves like `localize()`. Example: `i18n.translate("Hello, {name}!", { name = "Caesura" })` → `"Hello, Caesura!"`. |
+| `reload` | `(langCode) → strings` | Hot-reload a language dictionary from disk (re-reads `assets/lang/<code>.lua` even if already current); preserves `i18n.current`, `i18n.default_language` and the cached fallback. |
+| `default_language` | `(field) → string` | Fallback dictionary language (default `"en"`); configurable. |

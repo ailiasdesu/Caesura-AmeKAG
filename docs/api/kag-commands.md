@@ -164,8 +164,9 @@
 | `voice` | `file` (or bare `[voice 2]`) | voice bus | Plays voice and blocks until done; `[voice_wait]` adds click-to-skip |
 | `play` | `file` (or bare `[play 3]`) | bgm bus | Plays BGM (defaults to looping); bare arg is the file |
 | `jump`/`call`/`link` | `target` (or bare `[jump next.ks]`) | flow | Cross-scene requires `assets/script/` paths (allowlisted, no `..`); bare `*label` works |
+| `goto` | `target` (`*label`) | flow | KAG3 compat: `[goto *label]` is a strict alias of `[jump]` (converted by kag3_import, accepted at runtime) |
 | `unlock` | `id` (or bare `[unlock cg1]`) | system | Unlock entry; bare id recorded |
-| `macro` | `name` (or bare `[macro m ...]`) | system | Definition name is positional; `%1%` placeholders fill bare call args |
+| `macro` | `name` (or bare `[macro m ...]`) | system | Definition name is positional; `%1%` placeholders fill bare call args. kag3_import converts KAG3 `&N`/`&name` macro-body references to Neo-Genesis `%N%`/`%name%` placeholders. |
 | `clear` | — | `cl` | Clear text layer |
 | `ld` | `layer` | layers | Delete/hide a layer |
 | `shake` | — | vfx | Screen shake |
@@ -177,7 +178,7 @@
 | `se` | `file` | `playse` | Play SE |
 | `clear` | — | `cl` | Clear text layer |
 
-## Total: see the auto-generated [command-contracts.md](command-contracts.md) (102 contract commands)
+## Total: see the auto-generated [command-contracts.md](command-contracts.md) (117 contract commands)
 
 | Category | Count | Commands |
 |----------|-------|----------|

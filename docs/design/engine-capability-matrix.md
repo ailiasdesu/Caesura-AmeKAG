@@ -1,6 +1,6 @@
 # Engine Capability Matrix (Mermaid)
 
-> 2026-08-06 readiness audit (updated after GPU verification iteration): this matrix tracks 54 code-level capability surfaces.
+> 2026-08-06 readiness audit (updated after GPU verification iteration): this matrix tracks 61 code-level capability surfaces.
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -31,7 +31,7 @@ graph LR
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG Neo-Genesis Parser<br/>tokenizer · 81 commands"]
+        s2["KAG Neo-Genesis Parser<br/>tokenizer · 117 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
@@ -102,13 +102,13 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
-| S2 | KAG Neo-Genesis parser (81 contract commands, 9 categories) | Lua tokenizer | ✓ |
+| S2 | KAG Neo-Genesis parser (117 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
 | S2d | KAG3 expression compatibility (TJS `&& \|\| ! != ?:` translated string-aware; visible scene:line errors instead of silent else) | `kag/expr.lua` | ✓ |
 | S2e | KAG3 variable system (`%f.x%` interpolation, `lf` call-frame stack, `mp` message params, dual-style expression env) | schema + scheduler | ✓ |
 | S2f | KAG3 control-flow completeness (`[elsif]` alias, `[call *label]` intra-scene, `[end]`→ending, unknown-tag warnings) | tokenizer + scheduler | ✓ |
 | S2g | Modern utility commands (`[set]` typed, `[inc]`, `[random]`, `[assert]`) | system commands | ✓ |
-| S2h | Command metadata (category/blocking/desc on all 61 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
+| S2h | Command metadata (category/blocking/desc on all 117 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
 | S2c | Parser performance (4000 tokens 362ms -> 259ms, 64.75ms/1000tok after dropping 9 redundant prefix patterns) | lpeg.lua | ✓ |
 | S2i | KAG scene-level debugger (breakpoints on scene+cmd/line, single-step, scope inspection; RPC kagSetBreakpoint/kagDebugContinue/kagDebugStep/kagInspectScopes) | `kag_debug.lua` + scheduler + RPC | ✓ |
@@ -125,12 +125,14 @@ graph LR
 | S2t | NVL mode (`[nvl]` full-screen accumulated text block, Ren'Py parity; `[nvl clear]`/`[p]` page break, `[nvl off]` exit; speaker as 「Name」： inline prefix styled by `nameplate_style.text_color` — format customizable via `[nvl prefix="%s："]` schema param (persists per session, `%`-safe); wraps with the line, instant draw — zero new state fields; cursor reused from text_state so save/rollback persists the page) | `kag/commands/text.lua` (`nvl` handler + ch/text/p/er accumulation) + `kag/text_scene.lua` (`commit` seals prior reveal draws, `instant` draws skip typewriter) + save/snapshot `nvl_mode` | ✓ (29 Lua assertions; typewriter only animates the appended line) |
 | S2u | Localization pipeline (`{key}` token expansion with markup-name whitelist + per-line translation `lines["<scene>:<fnv1a(msg)>"]`, content-addressed keys; applied by [ch]/[text] before markup parsing **and by [button]/[sel] choice labels at registration**; empty placeholder falls back to original; settings Language hot-switch **+ full-page redraw** (already-displayed page / NVL page / backlog / active choice labels / closed captions re-localize with the new language via `page_src` replay — exceeds Ren'Py, which keeps displayed lines in the original language; layout y-cascade for re-wrapped translations; typewriter sealed) + save persistence (`state.language` + backlog `src`); `scripts/ks_i18n.lua` template generator with --update merge and --missing CI gate, extracts dialogue + choice labels) | `scripts/i18n.lua` (fnv1a/localize/expand/load) + `kag/commands/text.lua` (ch/text/button localize + relocalize_page/relocalize_backlog) + `kag/text_scene.lua` (page_src lifecycle) + `assets/lang/{zh,en,ja}.lua` | ✓ (67 Lua assertions; generated ja.lua template with 25 demo keys incl. choice labels) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
+| S3a | Save/load loop continuity (for/while/if/switch stacks lifted into ctx and serialized via `loop_stacks` in capture_state; [load] resumes an in-progress loop to completion) | Lua scheduler + save snapshot | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
 | S8a | Truncation detection (offset stream stops before end-of-input + trailing comment handling) | ks_check | ✓ |
-| S9 | Parameterized macros (args + %arg% substitution, nested expansion, deep-copied splice) | Lua scheduler | ✓ |
+| S9 | Parameterized macros (args + %arg% substitution, nested expansion, deep-copied splice) | Lua scheduler | ✓ / nested macro **DEFINITIONS** ([macro outer][macro inner]...[endmacro][endmacro]) + depth-based recursion guard (>100 splice depth errors; 1000+ sequential calls & 2000-iteration loops pass) |
 | S10 | Label index (O(1) jump, scene-scoped, restored/invalidated on swap) | Lua scheduler | ✓ |
 | S11 | [if] expr cache keyed by env identity (no stale variables across scenes) | Lua scheduler | ✓ |
+| S12 | i18n runtime API (set_language/current_language/translate/reload/default_language; mid-scene language switch, fallback chain, hot-reload) | `scripts/i18n.lua` + text pipeline relocalize_page | ✓ |
 | S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) |
 | S5 | Hot reload (watch scripts/, live-reload without restart) | Engine-owned `HotReload` instance | ✓ |
 | S6 | Error recovery (pcall guards, ErrorUI, graceful degradation) | scheduler + bindings | ✓ |
@@ -198,6 +200,20 @@ the distinction between architecture completion, core usability and release read
   text (Ren'Py NVL parity) with page-break cursor reuse and save/rollback
   persistence of the page.
 - S2 — command set census refreshed to 81 contracts (nvl + sma_play/sma_stop).
+
+### 2026-08-15 additions (round 71-75)
+
+- S3a — save/load loop continuity: for/while/if/switch stacks
+  lifted into the engine ctx and serialized via `loop_stacks` in
+  capture_state; [load] resumes an in-progress loop to completion.
+- S9 — nested macro definitions ([macro outer][macro inner]...[endmacro][endmacro])
+  plus a depth-based recursion guard (>100 splice depth errors;
+  1000+ sequential calls and 2000-iteration loops pass).
+- S12 — i18n runtime API (set_language/current_language/translate/reload/default_language; fallback chain; hot-reload).
+- [sel]/[button] `x=` result-capture.
+- kag3_import macro-arg (`&N`/`%N%` conversion) + `goto`→`jump` alias.
+- S2 — command set census refreshed to 117 contracts (add/sub/mul/div/mod/dec,
+  csp/csd/csl, textspeed/cps, palette/vibrate, notify, preload, goto alias).
 
 ### 2026-08-12 additions (generation-gap round 6)
 
