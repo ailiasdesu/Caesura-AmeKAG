@@ -118,21 +118,17 @@
 [p]
 
 ; ---- 15. [palette] 色调滤镜 ------------------------------------------------
-; [palette effect=...] 走 scripts/palette.lua（LUT 色调分级），
+; [palette effect=...] 走 scripts/palette.lua（LUT 色调分级）。
 ;   effect=day     中性 / 清除滤镜
 ;   effect=night   蓝色调（加载 assets/lut/night.png，缺失则回退清除）
 ;   effect=toggle  day <-> night 切换
 ;
-; 注意：scripts/palette.lua 通过 backend.load_image / backend.is_valid /
-; backend.set_palette 驱动 C++ 后端。当前 backend 尚未注册 set_palette 等
-; 绑定，因此以下命令在无该绑定的运行时（headless / Web 播放器）会抛错并
-; 中断剧本 —— 为满足"运行到 [end] 零错误"，这里以注释给出建议写法，待
-; backend.set_palette 链路就绪后取消注释即可演示实际色调切换：
-;
-;   [palette effect=day]
-;   [palette effect=night]
-;   [palette effect=toggle]
-[ch name="Narrator" text="[palette] 命令已注册，但依赖 backend.set_palette 绑定（见注释说明）。"]
+; round 72 起 palette.lua 内置守卫：backend.set_palette / destroy_texture
+; 未注册时打印可见提示并无操作（不再崩溃）；绑定就绪后自动生效。
+[palette effect=day]
+[palette effect=night]
+[palette effect=toggle]
+[ch name="Narrator" text="[palette] 色调滤镜：后端未注册 LUT 绑定时安全降级（见上方提示）。"]
 [p]
 
 ; ---- 16. [vibrate] 消息层震动 ----------------------------------------------
