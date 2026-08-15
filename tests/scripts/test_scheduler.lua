@@ -367,5 +367,40 @@ do
     check("nested switch inner no-match skips only inner body",
           table.concat(o7, ",") == "O1,END")
 end
+
+-- 10. Same-name nested [for] (round 63): the inner loop's endfor must not
+--     clear the OUTER loop's counter mark — previously the outer loop
+--     re-initialized its counter on re-entry and never terminated.
+do
+    local toks = {
+        { "for", { var = "i", start = "1", ["end"] = "2" } },
+        { "for", { var = "i", start = "1", ["end"] = "2" } },
+        { "ch", { tag = "IN" } },
+        { "endfor", {} },
+        { "ch", { tag = "OUT" } },
+        { "endfor", {} },
+    }
+    local ctx = make_ctx()
+    local co = coroutine.create(function() scheduler.run(ctx, toks) end)
+    local n = 0
+    while coroutine.status(co) ~= "dead" and n < 1000 do
+        n = n + 1
+        coroutine.resume(co)
+    end
+    local tags = {}
+    for _, d in ipairs(ctx.dispatched) do
+        tags[#tags + 1] = d.params and d.params.tag or d.cmd
+    end
+    check("nested same-name for terminates",
+        n < 1000 and coroutine.status(co) == "dead")
+    -- Both loops share the f.i counter (same-name is an anti-pattern): the
+    -- inner loop consumes the shared counter, so the outer runs once and
+    -- ends at 3+1=4 instead of hanging forever (the pre-round-63 bug).
+    check("nested same-name for shared counter",
+        table.concat(tags, ",") == "IN,IN,OUT",
+        table.concat(tags, ","))
+    check("nested same-name for final counter", ctx.f.i == 4,
+        tostring(ctx.f.i))
+end
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

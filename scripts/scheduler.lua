@@ -570,14 +570,29 @@ function scheduler.run(ctx, tokens, start_index)
                 -- loop restarts from start forever. Same-named nested
                 -- loops are a script anti-pattern (documented).
                 ctx._forStackMarks = ctx._forStackMarks or {}
-                if not ctx._forStackMarks[vname] then
-                    ctx.f[vname] = sv
+                ctx._forRewound = ctx._forRewound or {}
+                -- Stack-counted marks (round 63): a same-name NESTED [for]
+                -- must not clear the OUTER loop's mark when it ends —
+                -- previously the inner endfor set the name to nil, so the
+                -- outer loop re-initialized its counter on re-entry and
+                -- never terminated. The counter initializes only when no
+                -- live loop owns the name; a rewind re-entry (flagged by
+                -- endfor) neither re-initializes nor adds a level.
+                local m0 = ctx._forStackMarks[vname] or 0
+                if ctx._forRewound[vname] then
+                    ctx._forRewound[vname] = nil
+                else
+                    if m0 == 0 then
+                        ctx.f[vname] = sv
+                        ctx._forStackMarks[vname] = 1
+                    else
+                        ctx._forStackMarks[vname] = m0 + 1
+                    end
                 end
                 for_stack[#for_stack + 1] = {
                     var = vname, endv = ev, step = sp, pos = i,
                     ended = not ((sp > 0 and sv <= ev) or (sp < 0 and sv >= ev)),
                 }
-                ctx._forStackMarks[vname] = true
                 if for_stack[#for_stack].ended then
                     -- start already past the end: skip the body
                     local f = compiled_flow[i]
@@ -610,9 +625,15 @@ function scheduler.run(ctx, tokens, start_index)
                     for_stack[#for_stack] = nil  -- loop over: pop
                     -- An empty/skipped loop set the mark too: clear it or
                     -- a later same-name [for] reuses the stale counter
-                    -- (review should-fix).
+                    -- (round 63: count-based so a nested same-name loop
+                    -- only decrements its own level).
                     if ctx._forStackMarks then
-                        ctx._forStackMarks[w.var] = nil
+                        local mc = (ctx._forStackMarks[w.var] or 1) - 1
+                        if mc <= 0 then
+                            ctx._forStackMarks[w.var] = nil
+                        else
+                            ctx._forStackMarks[w.var] = mc
+                        end
                     end
                 else
                     local cur = tonumber(ctx.f and ctx.f[w.var]) or 0
@@ -623,10 +644,17 @@ function scheduler.run(ctx, tokens, start_index)
                     if over then
                         for_stack[#for_stack] = nil  -- done: pop
                         if ctx._forStackMarks then
-                            ctx._forStackMarks[w.var] = nil
+                            local mc = (ctx._forStackMarks[w.var] or 1) - 1
+                            if mc <= 0 then
+                                ctx._forStackMarks[w.var] = nil
+                            else
+                                ctx._forStackMarks[w.var] = mc
+                            end
                         end
                     else
                         for_stack[#for_stack] = nil  -- pop; next [for] re-pushes
+                        ctx._forRewound = ctx._forRewound or {}
+                        ctx._forRewound[w.var] = true  -- re-entry keeps the mark
                         i = w.pos - 1  -- loop head
                     end
                 end
@@ -713,7 +741,15 @@ function scheduler.run(ctx, tokens, start_index)
                     while_stack[#while_stack] = nil
                 else
                     if ctx._forStackMarks then
-                        ctx._forStackMarks[fl.var] = nil
+                        local mc = (ctx._forStackMarks[fl.var] or 1) - 1
+                        if mc <= 0 then
+                            ctx._forStackMarks[fl.var] = nil
+                        else
+                            ctx._forStackMarks[fl.var] = mc
+                        end
+                        if ctx._forRewound then
+                            ctx._forRewound[fl.var] = nil
+                        end
                     end
                     for_stack[#for_stack] = nil
                 end
