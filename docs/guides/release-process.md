@@ -55,6 +55,12 @@ Run from `build/tests/Debug` — **CWD matters** for resource paths.
 cd build/tests/Debug && ./CaesuraTests.exe
 # expect: 0 failed, 0 skipped
 ```
+For the Release gate, the `Release` binaries are built alongside the app (`build/tests/Release/CaesuraTests.exe`);
+use that instead when validating a shipping config:
+```bash
+cd build/tests/Release && ./CaesuraTests.exe
+# expect: 0 failed, 0 skipped
+```
 Or via CTest:
 ```bash
 ctest -C Debug --test-dir build --output-on-failure
@@ -127,8 +133,13 @@ cmake --build build --config Release --parallel
 cd build && cpack -C Release -G ZIP
 ```
 
-The ZIP is produced in `build/` with a name like
-`CaesuraAmeKAG-1.0.0-win64.zip` (see `CPACK_PACKAGE_FILE_NAME`).
+The ZIP is produced in `build/` — the actual name is
+`CaesuraAmeKAG-1.0.0-Windows-AMD64.zip` (from `CPACK_PACKAGE_FILE_NAME` =
+`CaesuraAmeKAG-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}`,
+i.e. `-Windows-AMD64`, not `-win64`).
+CPack also emits a companion `CaesuraAmeKAG-1.0.0-Windows-AMD64.zip.sha256` checksum.
+The archive root is the versioned folder `CaesuraAmeKAG-1.0.0-Windows-AMD64/`
+(not the repo root), so smoke-test paths include that top folder.
 
 ---
 
@@ -156,6 +167,15 @@ ls -la && ./CaesuraAmeKAG.exe --frames 60   # --frames = deterministic GPU smoke
 
 > The engine resolves `assets/` etc. relative to its **working directory**,
 > so always launch the exe from the extracted folder, not from elsewhere.
+>
+> **Expected notes during the smoke run:**
+> - A clean boot logs Lua/Render/DevCore/Debug/VFX/MiniGame/AI registration lines and
+>   ends with `--frames N` exiting 0. Missing-resource errors would abort instead.
+> - Two benign `[WARN] HotReload scan failed: ... "assets/script/"` lines appear because
+>   `assets/script/` is a dev-only dir not shipped in the ZIP — not a missing-resource failure.
+>
+> The ZIP also bundles vendored dependency trees (`include/`, `lib/`, `cmake/` for
+> freetype/soloud/zstd) and a `scripts/__pycache__/` — expected CPack artifacts, not errors.
 
 ---
 
@@ -171,11 +191,20 @@ git push origin v1.0.1
 
 # Create the release and attach the ZIP:
 gh release create v1.0.1 \
-  build/CaesuraAmeKAG-1.0.1.zip \
+  build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip \
   --title "Caesura (AmeKAG) v1.0.1" \
   --notes-file CHANGELOG.md \
   --draft
 ```
+
+Use the **real asset name** `build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip` (see §4).
+
+> **`gh release create` has no `--dry-run` flag.** To test the publish flow without
+> publishing, create the release with `--draft`: it uploads the asset and lets you
+> review the page, but doesn't publish. Verify your exact command with
+> `gh release create --help` first. (The asset-name and command above were validated
+> against a real CPack run and `gh` 2.93.0; no `v1.0.1` tag existed, so nothing was
+> published during verification.)
 
 `--draft` lets you review the release page before publishing; drop it when
 ready. `--notes-file CHANGELOG.md` uses your curated changelog as the body.
@@ -183,9 +212,12 @@ ready. `--notes-file CHANGELOG.md` uses your curated changelog as the body.
 ### 6.2 Release from CI artifacts (tag-triggered)
 - Push a tag like `v1.0.1` and the CI `release` job (which runs on tags)
   builds and CPack-zips Windows automatically.
-- Download `CaesuraAmeKAG-windows-x64.zip` from the workflow run, then:
+- Download the `caesura-amekag-windows-x64` artifact from the workflow run -- it
+  is an **upload folder** named `caesura-amekag-windows-x64` (containing the CPack
+  ZIP `CaesuraAmeKAG-<ver>-Windows-AMD64.zip`, the exe, and SDL3.dll),
+  not a file with that name. Then:
 ```bash
-gh release create v1.0.1 ./releases/CaesuraAmeKAG-windows-x64.zip \
+gh release create v1.0.1 ./releases/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip \
   --title "Caesura (AmeKAG) v1.0.1" --notes-file CHANGELOG.md
 ```
 
@@ -220,6 +252,7 @@ See also: `docs/guides/getting-started.md` (build/runtime), `AGENTS.md` §12
 # gates + docs
 cmake --build build --config Release --parallel
 cd build/tests/Debug && ./CaesuraTests.exe && cd ../../..
+# (a Release-gate may also run the Release tests: cd build/tests/Release && ./CaesuraTests.exe)
 external/lua/lua.exe tests/scripts/run_lua_tests.lua
 python scripts/count_coupling.py --ci
 
@@ -231,5 +264,5 @@ cd build && cpack -C Release -G ZIP && cd ..
 # publish
 git tag -a v1.0.1 -m "Caesura (AmeKAG) v1.0.1"
 git push origin v1.0.1
-gh release create v1.0.1 build/CaesuraAmeKAG-1.0.1.zip --title "Caesura (AmeKAG) v1.0.1" --notes-file CHANGELOG.md --draft
+gh release create v1.0.1 build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --title "Caesura (AmeKAG) v1.0.1" --notes-file CHANGELOG.md --draft
 ```
