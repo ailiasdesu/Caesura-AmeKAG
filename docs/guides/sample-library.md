@@ -7,7 +7,7 @@
 
 | 示例 | 文件 | 覆盖命令 | 验证 |
 |---|---|---|---|
-| Command Showcase | demo/showcase.ks | **25 个命令**：bg/fg/ch/cl/font/pt/wait/playbgm/playse/p/position/flash/trans/vib/sprite_move/sprite_fade/eval/if/else/endif/jump/scroll/stopbgm/ending/end | 引擎 tokenize/compile（56 tokens/6 labels）+ Web 播放器 DONE:53 + backlog 9 页 + ending 解锁 |
+| Command Showcase | demo/showcase.ks | **26 个命令**：bg/fg/ch/cl/font/pt/wait/playbgm/playse/p/position/flash/trans/vib/sprite_move/sprite_fade/eval/if/else/endif/jump/set/scroll/stopbgm/ending/end | 引擎 tokenize/compile（56 tokens/6 labels）+ Web 播放器 DONE:53 + backlog 9 页 + ending 解锁 |
 | Galgame Demo | demo/galgame_demo.ks | 核心 VN 流程（bg/ch/playbgm/voice/sprite/ending） | Web flow 集成测试（park/点击/DONE/hana bg/立绘） |
 | Full Pipeline | demo/full_pipeline_demo.ks | 全管线流程 | ks_bake bundle |
 | SMA Demo | demo/sma_demo.ks | SMA 骨骼动画命令 | ks_bake bundle |
@@ -26,7 +26,7 @@
 | 06 | demo/tutorial/tutorial_06_effects.ks | 特效与转场：闪白/震动/溶解转场/结局解锁 | flash, vib, trans, ending, scroll, wait |
 | 07 | demo/tutorial/tutorial_07_saveload.ks | 存档与读档：槽位/保存/读取/结果分支（Web 无存档后端时优雅降级） | save, load, tf.save_result, tf.load_result |
 | 08 | demo/tutorial/tutorial_08_system_ui.ks | 系统 UI：CG 画廊/音乐室/历史回看/章节选择/内容解锁 | unlock, gallery, music, history, chapter |
-| 09 | demo/tutorial/tutorial_09_interpolation.ks | 文本插值与表达式：$tbl.key / %tbl.key% / ${expr}（TJS 运算符 ?: && !=） | set, ch, interpolate |
+| 09 | demo/tutorial/tutorial_09_interpolation.ks | 文本插值与表达式：$tbl.key / %tbl.key% / ${expr}（TJS 运算符 ?: && !=） | set, ch, text, p |
 | 10 | demo/tutorial/tutorial_10_loops.ks | 循环控制流：正序/倒序 [for]、[while] 条件循环 + [eval] 递减（每场景 65536 迭代守卫） | for, endfor, while, endwhile, eval, set, ch, p |
 | 11 | demo/tutorial/tutorial_11_switch.ks | 多路分支：裸变量选择器（KAG3 兼容）与 exp= 表达式选择器（数值/布尔/TJS 运算符），case tostring 匹配无 fallthrough，缺失变量走 default | switch, case, default, endswitch, set, ch, p |
 | 12 | demo/tutorial/tutorial_12_expr_combo.ks | 表达式组合实战：三元在索引内、?? 空合并 + switch exp、循环 + 插值、eval 三元赋值（RHS 全管道） | eval, switch, case, endswitch, for, endfor, set, ch, p |

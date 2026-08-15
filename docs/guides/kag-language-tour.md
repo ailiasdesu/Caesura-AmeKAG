@@ -3,7 +3,7 @@
 > 面向新作者的完整语法指南。KAG Neo-Genesis 是脱胎于 KAG3 的全新一代
 > 现代化标签语法——保留 `[标签 参数=值]` 形态，但以声明式契约、Lua
 > 语义、可调试性和现代工具链重建。配套：`getting-started.md`（快速
-> 上手）、`command-contracts.md`（78 命令权威契约）。
+> 上手）、`command-contracts.md`（118 命令权威契约）。
 
 ---
 
@@ -93,6 +93,7 @@
 
 ; 跳转与子程序
 [jump target=*ending]
+[goto target=*ending]           ; [goto] 是 [jump] 的严格别名（KAG3 兼容）
 [call target=*subroutine]      ; 同场景调用，[return] 返回
 [return]
 
@@ -157,6 +158,29 @@
 [scene_intro bg="bg/room.png" title="第一章"]
 ```
 
+**调用与嵌套**（round 75 深度感知）：
+
+- **嵌套调用**：宏体内可调用其他宏（静态安全时递归内联，参数深拷贝）：
+  ```kag
+  [macro wrap args="line"]
+  [ch text="%line%"]
+  [endmacro]
+  [macro twice args="line"]
+  [wrap line="%line%"]
+  [wrap line="%line%"]
+  [endmacro]
+  [twice line="你好"]           ; 展开为两次 [ch]
+  ```
+- **嵌套定义**：体分析深度感知——`[macro inner]...[endmacro]` 对归入**外层**体
+  （round 75 修复，旧版在第一个 `[endmacro]` 就截断产生残缺体）。含嵌套定义的
+  外宏被保守标记为**动态**（运行时可能重定义名字），不做编译期内联。
+- **静态安全内联**：定义在流程深度 0、调用前出现、未被 `[erasemacro]` 擦除、
+  未重定义的宏，在**编译期**内联（行为与运行时 splice 完全一致）；定义在
+  `[if]`/`[while]`/`[for]`/`[select]` 分支内、或任一处 `[erasemacro name]`、
+  或重定义过的宏 → **动态**，运行时展开。自递归宏
+  （`[macro m][m][endmacro]`）无法内联，编译/运行预算（1000 次展开）快速失败。
+- **`[erasemacro name]`**：擦除宏定义。
+
 ## 9. Lua 混合脚本（Neo-Genesis 核心差异化）
 
 ```kag
@@ -196,7 +220,7 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 ## 12. 调试与工具
 
 - **静态校验**：`lua scripts/ks_check.lua scene.ks`（契约检查，CI 门禁）
-- **语言服务**：IDE 内补全/悬停/诊断（78 契约驱动）；`Ctrl+点击` 在
+- **语言服务**：IDE 内补全/悬停/诊断（118 契约驱动）；`Ctrl+点击` 在
   `[jump]/[call]/[link]` 目标与 `*label` 定义间跳转（goto-definition），
   右键"查找所有引用"高亮全部导航点（references）
 - **确定性执行**：`require("kag.determinism").run_scene(...)` 无 GPU 跑场景
@@ -383,6 +407,22 @@ lua scripts/ks_i18n.lua --missing --dir demo --lang ja  ; 未翻译清单（CI �
 - 内置 zh/en/ja 界面词条；语言文件同时支持手写 `{...}` 字面量与工具
   生成的 `return {...}`（含注释头）两种形态
 
+**复数形态（G9）**：字符串表的值可以是**复数变体表** `{ one=..., other=... }`，
+经 `i18n.translate(key, { n=count })` 按 `i18n.plural_category(count)` 选择变体并
+填入 `{n}` 占位符（en：1→`one`，其余→`other`；zh/ja 恒为 `other` 单一形式）：
+
+```lua
+-- assets/lang/en.lua
+return { items = { one = "{n} item", other = "{n} items" } }
+```
+
+```lua
+-- [iscript]/[emb] 内（scripts/i18n.lua）
+i18n.translate("items", { n = 3 })   -- en: "3 items"；zh/ja: "3"
+```
+
+无 `params.n` 时回退 `other`（通用）形式，`{n}` 仍可插值。
+
 **运行时热切换整页重绘**（**超 Ren'Py**：Ren'Py 已显示行保持原语言，
 本引擎切换后整页跟随新语言）：
 
@@ -422,3 +462,81 @@ config.ai = {
 必然没拉取的默认模型。**真实验证**：引擎 --headless 经 RPC eval 对
 真实 Ollama（gemma3:4b）同步/异步查询均返回真实回复；条件式 C++
 用例与 ctest `CaesuraHeadlessAiSmoke`（无 Ollama 时跳过）作为回归。
+
+## 19. round 71-82 新命令速查
+
+> 本教程上文已覆盖多数命令的基本用法；这里集中给出 round 71-82 新增/变更
+> 命令的速查（详细契约见 `docs/api/command-contracts.md`）。
+
+### 19.1 变量算术链（KAG3 兼容）
+
+`[add]`/`[sub]`/`[mul]`/`[div]`/`[mod]` 都对数值变量做就地算术（`v = v op value`），
+`[dec]` 自减（默认 `-1`）。见 `demo/tutorial/tutorial_13_commands.ks`：
+
+```kag
+[add name="f.n" value=5]     ; f.n = f.n + 5
+[sub name="f.n" value=3]     ; f.n = f.n - 3
+[mul name="f.n" value=2]     ; f.n = f.n * 2
+[div name="f.n" value=4]     ; f.n = f.n / 4
+[mod name="f.n" value=3]     ; f.n = f.n % 3
+[dec name="f.n"]             ; f.n = f.n - 1（amount 默认 1）
+```
+
+### 19.2 角色立绘命令（KAG3 兼容）
+
+- `[csp name=... layer=... x=... y=... storage=...]`：显示角色立绘（默认
+  `assets/char/<name>.png`；`storage=` 可覆盖路径，`layer` 默认 `0`）
+- `[csl ...]`：移动已显示的角色层到新坐标（不改可见性）
+- `[csd ...]`：清除角色层
+
+后端缺图/纹理缺失时各 handler 带守护，加载失败仅诊断并跳过，不中断剧本。
+
+### 19.3 打字速度（字符/秒）
+
+```kag
+[textspeed cps=40]            ; KAG3 兼容：按字符/秒设置（floor(1000/cps) ms/字）
+[cps 60]                      ; [textspeed] 别名，可接收裸参数
+[pt speed=60]                 ; 恢复为每字符毫秒控制
+```
+
+### 19.4 色调节制与震动
+
+- `[palette effect=day|night|toggle]`：LUT 色调滤镜（`scripts/palette.lua`；
+  round 72 起后端未注册 `set_palette` 时安全降级不再崩溃）
+- `[vibrate time=300]`：消息层震动，`[vib]` 别名（阻塞）
+
+### 19.5 通知与预加载
+
+```kag
+[notify msg="一条通知" time=1000]            ; 作者上屏角落吐司（时间毫秒）
+[preload path="assets/bg/hana.png"]         ; 预缓存纹理/音频/场景（type=texture/audio/scene）
+```
+
+### 19.6 本地化热切换命令
+
+`[i18n language="ja"]`：场景中途热切换界面语言（等价设置菜单 Language 切换，
+触发整页重译重绘）。复数形态见 §17。
+
+## 20. 表达式运算符全表
+
+`[if]`/`[while]`/`[switch exp=]`/`[eval]`/`[assert]`/`${}`/`%tbl.key%` 表达式走统一
+TJS→Lua 翻译层（`scripts/kag/expr.lua`，字符串字面量内不翻译）：
+
+| 运算符 | 含义 | TJS 写法 | Lua 等价 |
+|---|---|---|---|
+| 逻辑与 | `&&` | `f.hp > 0 && f.flag` | `A and B` |
+| 逻辑或 | `\|\|` | `sf.x == 1 \|\| f.y` | `A or B` |
+| 逻辑非 | `!` | `!tf.locked` | `not A` |
+| 不相等 | `!=` | `f.name != 'Aoi'` | `A ~= B` |
+| 三元 | `?:` | `f.hp > 20 ? 'high' : 'low'` | `(A and (B) or (C))` |
+| 空合并 | `??` | `f.missing ?? 42` | `A or B` |
+
+详解见 `docs/api/kag-expression-language.md`。要点：
+
+- 三元对数字/字符串精确；对布尔走 `and/or` 语义（`false` 的 then 分支会穿过，
+  需要时用括号比较或 `??`）。
+- 三元可出现在 `[...]` 索引与 `(...)` 组内（先内层展开）：
+  `f.arr[f.flag ? 1 : 2]`；赋值 RHS 也走全管道：`f.pick = f.flag ? 1 : 2`。
+- `[switch exp=...]` 表达式选择器按 `tostring` 等值匹配 `[case v]`（数值/布尔均可）。
+- `[eval]` 裸值表达式（无 `=` 赋值）自动包 `return`，结果存 `tf.eval_result`。
+
