@@ -6,6 +6,7 @@
 // test_storage.cpp - storage module unit tests (S2.4)
 #include "doctest.h"
 #include "storage/api/ISaveManager.h"
+#include "storage/api/ISaveProvider.h"
 #include "storage/SaveManager.h"
 #include "archive/CryptoEngine.h"
 #include "di/BackendRegistry.h"
@@ -811,5 +812,336 @@ TEST_CASE("Storage: tampered encrypted save (ciphertext & nonce) rejected withou
     json recovered = sm.load(3);
     CHECK(recovered["secret"] == "integrity_protected_payload");
     CHECK(recovered["v"] == 7);
+}
+
+// =============================================================================
+// Round-79+ boundary expansion:
+//  * large-payload roundtrip (~1 MiB) plain & encrypted, plus the undocumented
+//    save/load size-ceiling asymmetry (save accepts >10 MiB, load then rejects)
+//  * UTF-8 / CJK / emoji text roundtrip
+//  * unknown future schema_version passes through unmigrated; chained migration
+//    runs step-by-step when loading at an intermediate schema version
+//  * rapid sequential multi-slot save + immediate same-process load (disk
+//    persistence -- SaveManager keeps no in-memory cache)
+//  * pluggable in-memory ISaveProvider: full save/load/list/delete flow and
+//    provider-error propagation back through the SaveManager facade
+// =============================================================================
+
+// Build a deterministic repeated-string of the requested byte length.
+static std::string makeRepeatedPayload(size_t bytes, char seedLoop) {
+    std::string s;
+    s.reserve(bytes);
+    size_t i = 0;
+    while (i < bytes) {
+        s.push_back(static_cast<char>('A' + ((i + seedLoop) % 26)));
+        ++i;
+    }
+    return s;
+}
+
+TEST_CASE("Storage: large payload ~1 MiB roundtrips exactly (plain and encrypted)") {
+    TestPaths::ScopedTempDir dir("storage_big_roundtrip");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    const std::string big = makeRepeatedPayload(1024 * 1024, 0);  // 1 MiB
+    json gd = {{"title", "big"}, {"blob", big}, {"n", 123456}};
+
+    // Plain path.
+    REQUIRE(sm.save(2, gd, "bigplain", 1));
+    json loaded = sm.load(2);
+    CHECK(loaded["title"] == "big");
+    CHECK(loaded["blob"].is_string());
+    CHECK(loaded["blob"].get<std::string>() == big);
+    CHECK(loaded["n"] == 123456);
+
+    // Encrypted path preserves the same large payload exactly.
+    ScopedCryptoRegistration cryptoRegistration;
+    uint8_t key[32] = {};
+    for (int i = 0; i < 32; ++i) key[i] = static_cast<uint8_t>(i + 1);
+    sm.setEncryptionKey(key);
+    REQUIRE(sm.save(3, gd, "bigenc", 2));
+    json encLoaded = sm.load(3);
+    CHECK(encLoaded["blob"].get<std::string>() == big);
+    CHECK(encLoaded["n"] == 123456);
+    // At-rest: the on-disk encrypted file must exceed the plaintext size and
+    // start with the CAES magic (opaque, not a raw large-JSON dump).
+    std::string rawEnc = readRawFileBytes(dir.string() + "save_3.json");
+    CHECK(std::memcmp(rawEnc.data(), "CAES", 4) == 0);
+    CHECK(rawEnc.size() >= big.size());
+}
+
+TEST_CASE("Storage: oversized save (>10 MiB ceiling) is written but not loadable -- asymmetry") {
+    TestPaths::ScopedTempDir dir("storage_oversize");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    // readFile() enforces a 10 MiB MAX_SAVE_SIZE ceiling and returns empty for
+    // any file larger than it. writeFile() has NO such guard, so save() at
+    // ~11 MiB returns true while load()/slotExists()/listSaves() then report
+    // the slot as absent/empty. Documented current behavior (latent asymmetry
+    // flagged for the storage owner); assert it so a future fix is caught.
+    const std::string huge = makeRepeatedPayload(11 * 1024 * 1024, 3);  // 11 MiB
+    json gd = {{"huge", huge}};
+
+    bool saved = sm.save(4, gd, "huge", 0);
+    CHECK(saved == true);                    // writeFile accepts the oversized blob
+
+    // The file physically exists on disk and exceeds the read ceiling.
+    std::filesystem::path fp(dir.string() + "save_4.json");
+    CHECK(std::filesystem::exists(fp));
+    CHECK(std::filesystem::file_size(fp) > 10 * 1024 * 1024);
+
+    // ...but the manager cannot read it back: load null, slot not "exists",
+    // and the oversized slot is not listed.
+    CHECK(sm.load(4).is_null());
+    CHECK_FALSE(sm.slotExists(4));
+    CHECK(sm.listSaves().empty());
+
+    // A normal-size save alongside stays fully functional.
+    REQUIRE(sm.save(5, {{"ok", 1}}, "fine", 0));
+    CHECK(sm.load(5)["ok"] == 1);
+}
+
+TEST_CASE("Storage: UTF-8 CJK / emoji / combining-mark text roundtrips exactly") {
+    TestPaths::ScopedTempDir dir("storage_utf8");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    const std::string utf8 = "こんにちは世界 🌸✨ héllo wörld ✅ café résumé "
+                             "漢字仮名交じり文 且 合 有 好\n e\u0301\u0302 \t emoji: 🎮⛩️🏮 愛❤️";
+    const std::string nulInString = "abc\0def";  // embedded NUL must survive too
+    json gd;
+    gd["text"] = utf8;
+    gd["with_nul"] = nulInString;
+    gd["emojis"] = json::array({"✨", "🎌", "🌸", "❤️"});
+    gd["mixed"] = "🎥 映画を見る 'quoted' \u00e9";
+
+    REQUIRE(sm.save(6, gd, "utf8scene", 4));
+
+    json loaded = sm.load(6);
+    CHECK(loaded["text"].get<std::string>() == utf8);
+    CHECK(loaded["with_nul"].get<std::string>() == nulInString);
+    REQUIRE(loaded["emojis"].is_array());
+    CHECK(loaded["emojis"].size() == 4);
+    CHECK(loaded["emojis"][0] == "✨");
+    CHECK(loaded["emojis"][3] == "❤️");
+    CHECK(loaded["mixed"] == "🎥 映画を見る 'quoted' \u00e9");
+
+    // In file metadata, the UTF-8 scene name is preserved verbatim (bytes).
+    SaveMeta meta;
+    CHECK(sm.load(6, &meta)["text"].get<std::string>() == utf8);
+}
+
+TEST_CASE("Storage: unknown future schema version loads unmigrated (pass-through)") {
+    TestPaths::ScopedTempDir dir("storage_future_ver");
+    SaveManager sm;
+    sm.init(dir.string());  // built-in chain tops out at v5
+
+    CHECK(sm.currentSchemaVersion() == 5);
+
+    // Hand-write a save from a "future" engine (schema_version > current).
+    json env;
+    env["schema_version"] = 99;
+    env["timestamp"] = 0;
+    env["scene"] = "from_future";
+    env["token_index"] = 7;
+    env["thumbnail"] = "";
+    env["engine_version"] = "9.99.99";
+    env["data"] = {{"futuristic_field", true}, {"preserve", "intact"}};
+    {
+        std::ofstream f(dir.string() + "save_2.json", std::ios::binary | std::ios::trunc);
+        f << env.dump();
+    }
+
+    // load() only migrates when schemaVer < current, so a DEEPER-numered save
+    // passes through byte-for-byte with its original contents.
+    SaveMeta meta;
+    json loaded = sm.load(2, &meta);
+    CHECK(loaded.is_object());
+    CHECK(loaded["futuristic_field"] == true);
+    CHECK(loaded["preserve"] == "intact");
+    // No migration applied, so outMeta keeps the original (future) version.
+    CHECK(meta.schemaVersion == 99);
+    // The future save surfaces in listSaves preserving its version.
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == 1);
+    CHECK(saves[0].slot == 2);
+    CHECK(saves[0].schemaVersion == 99);
+}
+
+TEST_CASE("Storage: chained migration runs stepwise when loading an intermediate v2 save") {
+    TestPaths::ScopedTempDir dir("storage_chain_intermediate");
+    SaveManager sm;
+    sm.init(dir.string());  // v1->v2->v3->v4->v5 chain installed
+    REQUIRE(sm.currentSchemaVersion() == 5);
+
+    // Simulate a save produced at schema v2 (already has playtime, missing
+    // the v3/v4/v5 fields the chain must append).
+    json env;
+    env["schema_version"] = 2;
+    env["timestamp"] = 0;
+    env["scene"] = "midchain";
+    env["token_index"] = 5;
+    env["thumbnail"] = "";
+    env["engine_version"] = "0.95.0";
+    env["data"] = {{"playtime", 1234}, {"preserved", "yes"}};
+    {
+        std::ofstream f(dir.string() + "save_1.json", std::ios::binary | std::ios::trunc);
+        f << env.dump();
+    }
+
+    // v2 -> v3 (minigame) -> v4 (live2d) -> v5 (editor); existing field intact.
+    json loaded = sm.load(1);
+    CHECK(loaded["playtime"] == 1234);       // v2 field survives the chain
+    CHECK(loaded["preserved"] == "yes");      // untouched by migrations
+    CHECK(loaded["minigame"].is_object());    // added at v3
+    CHECK(loaded["live2d"].is_object());      // added at v4
+    CHECK(loaded["editor"].is_object());      // added at v5
+}
+
+TEST_CASE("Storage: rapid sequential multi-slot save + immediate load (disk-backed)") {
+    TestPaths::ScopedTempDir dir("storage_sequential");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    // Fill many slots back-to-back; SaveManager keeps NO in-memory cache, so
+    // an immediate load re-reads the file from the provider on every call.
+    const int N = 10;
+    for (int s = 0; s < N; ++s) {
+        json gd = {{"slot", s}, {"value", s * 10}};
+        REQUIRE(sm.save(s, gd, "scene_" + std::to_string(s), s));
+    }
+    // Every slot loads immediately in the same process with matching metadata.
+    for (int s = 0; s < N; ++s) {
+        SaveMeta meta;
+        json loaded = sm.load(s, &meta);
+        CHECK(loaded["slot"] == s);
+        CHECK(loaded["value"] == s * 10);
+        CHECK(meta.slot == s);
+        CHECK(meta.sceneName == "scene_" + std::to_string(s));
+        CHECK(sm.slotExists(s));
+    }
+    // All N listed, in ascending slot order, no duplicates / no gaps.
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == static_cast<size_t>(N));
+    for (int s = 0; s < N; ++s) {
+        CHECK(saves[static_cast<size_t>(s)].slot == s);
+    }
+}
+
+// In-memory ISaveProvider for provider-injection testing: stores raw bytes in
+// a std::map keyed by path, never touching the filesystem.
+class InMemorySaveProvider final : public ISaveProvider {
+public:
+    std::map<std::string, std::string> files;
+    // Error injection: when active, the flagged operation fails and reports.
+    bool failWrite = false;
+    bool failReadReturnEmpty = false;
+    bool failDelete = false;
+
+    std::string readFile(const std::string& path) override {
+        if (failReadReturnEmpty) return "";
+        const auto it = files.find(path);
+        return it == files.end() ? std::string() : it->second;
+    }
+    bool writeFile(const std::string& path, const std::string& content) override {
+        if (failWrite) return false;
+        files[path] = content;
+        return true;
+    }
+    bool deleteFile(const std::string& path) override {
+        if (failDelete) return false;
+        return files.erase(path) > 0;
+    }
+    std::vector<std::string> listFiles(const std::string& pattern) override {
+        std::vector<std::string> out;
+        for (const auto& [name, _] : files) {
+            if (pattern.empty() || name.find(pattern) != std::string::npos) out.push_back(name);
+        }
+        return out;
+    }
+    bool pushToCloud(const std::string&) override { return false; }
+    bool pullFromCloud(const std::string&) override { return false; }
+    bool supportsCloudSync() const override { return false; }
+};
+
+TEST_CASE("Storage: custom in-memory ISaveProvider drives the full save/load flow") {
+    TestPaths::ScopedTempDir dir("storage_provider_inmem");
+    SaveManager sm;
+    sm.init(dir.string());  // m_saveDir must be non-empty for listSaves()
+
+    auto mem = std::make_unique<InMemorySaveProvider>();
+    InMemorySaveProvider* memPtr = mem.get();
+    sm.setSaveProvider(std::move(mem));
+    CHECK(sm.getSaveProvider() == memPtr);
+
+    // save() routes the whole slot path through the provider's writeFile.
+    json gd = {{"p", true}, {"n", 7}, {"nested", {{"x", {{"y", 1}}}}}};
+    REQUIRE(sm.save(3, gd, "memscene", 6));
+
+    // Raw bytes land in the in-memory map under the canonical slot path...
+    const std::string path = dir.string() + "save_3.json";
+    CHECK(memPtr->files.count(path) == 1);
+
+    // ...and the SaveManager facade reads them back identically.
+    SaveMeta meta;
+    json loaded = sm.load(3, &meta);
+    CHECK(loaded == gd);
+    CHECK(meta.slot == 3);
+    CHECK(meta.sceneName == "memscene");
+    CHECK(meta.tokenIndex == 6);
+    CHECK(sm.slotExists(3));
+
+    // listSaves() enumerates the in-memory provider (not the filesystem).
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == 1);
+    CHECK(saves[0].slot == 3);
+
+    // deleteSlot() routes through the provider and removes the byte entry.
+    REQUIRE(sm.deleteSlot(3));
+    CHECK_FALSE(sm.slotExists(3));
+    CHECK(sm.load(3).is_null());
+    CHECK(memPtr->files.empty());
+}
+
+TEST_CASE("Storage: provider write/read/delete errors propagate gracefully") {
+    TestPaths::ScopedTempDir dir("storage_provider_err");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto mem = std::make_unique<InMemorySaveProvider>();
+    InMemorySaveProvider* memPtr = mem.get();
+    sm.setSaveProvider(std::move(mem));
+
+    // Normal write first (so we can later exercise the read/delete paths).
+    REQUIRE(sm.save(2, {{"ok", 1}}, "base", 0));
+
+    // 1) Provider write failure -> save() returns false and stores nothing.
+    memPtr->files.clear();
+    memPtr->failWrite = true;
+    CHECK_FALSE(sm.save(2, {{"ok", 2}}, "wfail", 0));
+    CHECK(memPtr->files.empty());
+    CHECK(sm.load(2).is_null());
+    memPtr->failWrite = false;
+
+    // Re-establish a baseline entry.
+    REQUIRE(sm.save(2, {{"ok", 1}}, "base", 0));
+
+    // 2) Provider read failure (empty) -> load null, slot not exists, not listed.
+    memPtr->failReadReturnEmpty = true;
+    CHECK(sm.load(2).is_null());
+    CHECK_FALSE(sm.slotExists(2));
+    CHECK(sm.listSaves().empty());
+    memPtr->failReadReturnEmpty = false;
+    CHECK(sm.load(2)["ok"] == 1);   // recovers when the provider does
+
+    // 3) Provider delete failure -> deleteSlot() returns false, slot remains.
+    memPtr->failDelete = true;
+    CHECK_FALSE(sm.deleteSlot(2));
+    CHECK(sm.load(2)["ok"] == 1);   // still present
+    memPtr->failDelete = false;
+    REQUIRE(sm.deleteSlot(2));      // succeeds once the provider is healthy
+    CHECK_FALSE(sm.slotExists(2));
 }
 
