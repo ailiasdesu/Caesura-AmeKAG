@@ -722,7 +722,10 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     const sv = await readCtx('settingsValues')
     expect(sv).toBeTruthy()
     expect(sv.language).toBe('en')
-    // the scene ran to completion after the switch (relocalize_page is a no-op stub)
+    // the scene ran to completion after the switch (relocalize_page is a REAL
+    // full-page redraw on web — the [i18n] handler drives it synchronously and
+    // the bridge re-exports text_state.draws, so already-displayed lines here
+    // carry the NEW language; see the round-78 relocalize tests below)
     expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('after')
   }, 120000)
 
@@ -750,6 +753,145 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(player.lua.global.get('__R')).toBeTruthy()
     expect(player.lua.global.get('__R').language).toBe('ja')
     expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('after')
+  }, 120000)
+
+  // ---- round 78: settings-language hot-switch parity on web ----------------
+  // Desktop's settings menu re-localizes the ALREADY-DISPLAYED page via
+  // TextCommands.relocalize_page (replays text_state.page_src through
+  // _drawMessage with the new dictionary). The web player loads the real
+  // i18n.lua, so [i18n language=] -> SystemCommands.i18n drives the SAME
+  // relocalize_page synchronously; the bridge re-exports text_state.draws
+  // after every runScene, so the re-localized page, choice labels and
+  // backlog are all observable from the harness. Zero web-side changes were
+  // needed (the whole path is Lua-side + the existing draws exporter).
+
+  it('[i18n] re-localizes the ALREADY-DISPLAYED page draws (round 78 relocalize)', async () => {
+    const readCtx = async (name) => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX[' + JSON.stringify(name) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    // Control in zh only: the same {settings} line renders as 设置.
+    player.core.draws = []
+    const zhKs = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="v={settings}"]',
+      '[end]',
+    ].join(NL)
+    await player.runScene(zhKs, 'rl_zh.ks', { maxFrames: 200000, autoClick: true })
+    const zhT = player.core.draws.map((d) => d.t).join(' | ')
+    expect(zhT).toContain('v=设置')
+
+    // Hot-switch in the SAME scene: the [ch] renders in zh (设置), then
+    // [i18n language="en"] re-localizes the already-displayed page to
+    // Settings. Because relocalize_page REPLAYS the page source (it does not
+    // append), the zh draw is replaced — v=设置 must be gone. (A non-NVL
+    // [ch] clears the message window, so no display command follows the
+    // switch here — that would refresh the page and drop the relocalized line.)
+    player.core.draws = []
+    const ks = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="v={settings}"]',      // zh draw: "v=设置"
+      '[i18n language="en"]',                   // relocalize_page -> "v=Settings"
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'rl_switch.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.draws.map((d) => d.t).join(' | ')
+    // page draws were re-localized in place to the NEW (en) dictionary
+    expect(texts).toContain('v=Settings')
+    // and the old-language page draw was REPLAYED, not merely appended
+    expect(texts).not.toContain('v=设置')
+    // the switch recorded the active language on the scene ctx
+    const sv = await readCtx('settingsValues')
+    expect(sv && sv.language).toBe('en')
+
+    // Persistence: a follow-up [ch] in the post-switch dictionary renders the
+    // en value (the switch took effect for future lines, not just the redraw).
+    player.core.draws = []
+    const persist = [
+      '[i18n language="en"]',
+      '[ch name="N" text="post={language}"]',  // en draw: "post=Language"
+      '[end]',
+    ].join(NL)
+    await player.runScene(persist, 'rl_persist.ks', { maxFrames: 200000, autoClick: true })
+    expect(player.core.draws.map((d) => d.t).join(' | ')).toContain('post=Language')
+  }, 120000)
+
+  it('[button] choice labels registered pre-switch re-localize after [i18n] (round 78 relocalize)', async () => {
+    const NL = String.fromCharCode(10)
+    // A choice is STAGED in language A ([button text="{settings}"] -> 设置),
+    // then [i18n language="en"] runs BEFORE [endbutton], so relocalize_page's
+    // _relocalizeChoices rebuilds the label; [endbutton] then renders "1. Settings".
+    // Park at the block (autoClick:false) so the rendered label is visible in
+    // the exported draws (auto-selection would remove the choice group).
+    player.core.draws = []
+    const ks = [
+      '[i18n language="zh"]',
+      '[button text="{settings}" target="*a"]',
+      '[i18n language="en"]',
+      '[endbutton]',
+      '[end]',
+      '*a',
+      '[ch name="N" text="arrived={language}"]',
+      '[end]',
+    ].join(NL)
+    const out = await player.runScene(ks, 'rl_choice.ks', { maxFrames: 200000, autoClick: false })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    const labels = player.core.draws.map((d) => d.t)
+    // the rendered choice label shows the NEW language (en: "Settings")
+    expect(labels.some((t) => t === '1. Settings'), JSON.stringify(labels)).toBe(true)
+    // the old zh label was replaced, not left alongside
+    expect(labels.some((t) => t === '1. 设置')).toBe(false)
+
+    // A fresh run (auto-click picks option 1) routes through the relocalized
+    // block and the post-switch dictionary persists for follow-up [ch].
+    player.core.draws = []
+    const out2 = await player.runScene(ks, 'rl_route.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    const t2 = player.core.draws.map((d) => d.t).join(' | ')
+    expect(t2).toContain('arrived=Language')
+  }, 120000)
+
+  it('[i18n] re-localizes ctx.backlog entries (round 78 relocalize, web runner exposes ctx)', async () => {
+    const readBacklog = async () => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.backlog or nil')
+      return player.lua.global.get('__R') || []
+    }
+    const NL = String.fromCharCode(10)
+    // Control: pinned to zh, the backlog entry keeps its zh-localized text.
+    const zhKs = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="b={settings}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    player.core.backlog.length = 0
+    await player.runScene(zhKs, 'rl_bk_zh.ks', { maxFrames: 200000, autoClick: true })
+    const zhBl = await readBacklog()
+    expect(zhBl.length).toBeGreaterThanOrEqual(1)
+    expect(zhBl[0].text).toContain('b=设置')
+    expect(zhBl[0].src).toBe('b={settings}')
+
+    // Hot-switch scene: [ch] renders in zh, [p] commits the page, then
+    // [i18n language="en"] -> relocalize_backlog re-localizes the stored
+    // entry from its retained src (pre-localize source) to the new dict.
+    const ks = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="b={settings}"]',
+      '[p]',
+      '[i18n language="en"]',
+      '[end]',
+    ].join(NL)
+    player.core.backlog.length = 0
+    const out = await player.runScene(ks, 'rl_bk_switch.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const bl = await readBacklog()
+    expect(bl.length).toBeGreaterThanOrEqual(1)
+    // entry was re-localized from 设置 -> Settings, keeping its src for the
+    // next relocalize (the desktop backlog redraw contract).
+    expect(bl[0].text).toContain('b=Settings')
+    expect(bl[0].src).toBe('b={settings}')
   }, 120000)
 
   it('[palette] day/night/toggle run through a REAL web LUT, no degrade (round 77)', async () => {
