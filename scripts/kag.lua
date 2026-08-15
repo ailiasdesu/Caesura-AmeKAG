@@ -236,26 +236,39 @@ function KAG.erasemacro(ctx, params) end
 
 -- Neo-Genesis contracts: KAG3-compat commands typed + validated.
 local _schema = require("kag.schema")
-_schema.define("saveplace", {})
-_schema.define("loadplace", {})
-_schema.define("listsaves", {})
+_schema.define("saveplace", {
+    _meta = { category = "save", blocking = false, desc = "KAG3-compatible saveplace command" },
+})
+_schema.define("loadplace", {
+    _meta = { category = "save", blocking = false, desc = "KAG3-compatible loadplace command" },
+})
+_schema.define("listsaves", {
+    _meta = { category = "save", blocking = false, desc = "KAG3-compatible listsaves command" },
+})
 _schema.define("br", {})
 _schema.define("hr", {})
 _schema.define("cancel", {
+    _meta = { category = "system", blocking = false, desc = "cancel current voice/transition (KAG3 compat)" },
     layer = { type = "string", default = "" },
     all = { type = "boolean", default = false },
 })
-_schema.define("close", {})
+_schema.define("close", {
+    _meta = { category = "system", blocking = false, desc = "close active scene, return to menu (KAG3 compat)" },
+})
 _schema.define("ld", {
+    _meta = { category = "layer", blocking = false, desc = "delete a layer (KAG3 compat)" },
     layer = { type = "string" },
     name = { type = "string" },
 })
 -- (no shake define here: vfx.lua owns the [shake] contract -- a
 -- duplicate would silently override its frequency clamp)
 _schema.define("playstop", {
+    _meta = { category = "audio", blocking = false, desc = "stop BGM playback (KAG3 compat)" },
     fadeout = { type = "number", default = 0, min = 0, max = 30000 },
 })
-_schema.define("waitforclick", {})
+_schema.define("waitforclick", {
+    _meta = { category = "text", blocking = true, desc = "block until the player clicks" },
+})
 
 -- [r] -- line break (KAG3); same as [l]
 KAG.r = KAG.l or KAG.br
@@ -264,7 +277,9 @@ KAG.r = KAG.l or KAG.br
 -- No timeout param: the waiting_input token isn't frame-resumed in this
 -- runner, so a deadline check can never fire. Promise nothing we can't
 -- keep (see the review chain).
-require("kag.schema").define("voice_wait", {})
+require("kag.schema").define("voice_wait", {
+    _meta = { category = "text", blocking = true, desc = "wait for a voice line with click-to-skip" },
+})
 KAG.voice_wait = function(ctx, params)
     return require("kag.commands.audio").voice_wait(ctx, params)
 end
@@ -428,6 +443,7 @@ end
 -- Neo-Genesis contract: unified audio entry gets typed params (bus choices
 -- replace the manual string compare; volume clamped like the audio cmds).
 require("kag.schema").define("play", {
+    _meta = { category = "audio", blocking = false, desc = "play audio on bus=bgm|se|voice (Neo-Genesis unified)" },
     bus     = { type = "string", choices = { ["bgm"] = true, ["se"] = true, ["voice"] = true } },
     file    = { type = "string" },
     storage = { type = "string" },  -- KAG3 alias
@@ -452,6 +468,7 @@ end
 -- The "bgm" command name itself is contract-migrated so the scheduler
 -- coerces [bgm volume=9] BEFORE dispatch (security: no amplification).
 require("kag.schema").define("bgm", {
+    _meta = { category = "audio", blocking = false, desc = "play BGM (KAG3 alternate for [play bus=bgm])" },
     file   = { type = "string" },
     storage = { type = "string" },
     volume = { type = "number", min = 0, max = 1.5 },  -- no default: positional

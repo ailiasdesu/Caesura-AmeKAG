@@ -57,6 +57,8 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible bg command
 
 ### `[bgm]`
 
+_Category: audio · Blocking: no (fire-and-forget) · play BGM (KAG3 alternate for [play bus=bgm])_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `file` | string | - | - | - |
@@ -105,6 +107,8 @@ _Category: transition · Blocking: no (fire-and-forget) · KAG3-compatible camer
 
 ### `[cancel]`
 
+_Category: system · Blocking: no (fire-and-forget) · cancel current voice/transition (KAG3 compat)_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `all` | boolean | false | - | - |
@@ -141,6 +145,8 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible cl command
 | `layer` | string | all | - | - |
 
 ### `[close]`
+
+_Category: system · Blocking: no (fire-and-forget) · close active scene, return to menu (KAG3 compat)_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -424,12 +430,16 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible layopt com
 
 ### `[ld]`
 
+_Category: layer · Blocking: no (fire-and-forget) · delete a layer (KAG3 compat)_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `layer` | string | - | - | - |
 | `name` | string | - | - | - |
 
 ### `[listsaves]`
+
+_Category: save · Blocking: no (fire-and-forget) · KAG3-compatible listsaves command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -443,6 +453,8 @@ _Category: save · Blocking: yes (waits for completion) · KAG3-compatible load 
 | `slot` | number | - | -2..99 | - |
 
 ### `[loadplace]`
+
+_Category: save · Blocking: no (fire-and-forget) · KAG3-compatible loadplace command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -582,6 +594,8 @@ _Category: vfx · Blocking: no (fire-and-forget) · KAG3-compatible particles co
 
 ### `[play]`
 
+_Category: audio · Blocking: no (fire-and-forget) · play audio on bus=bgm|se|voice (Neo-Genesis unified)_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `bus` | string | - | bgm,se,voice | - |
@@ -626,6 +640,8 @@ _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible playse com
 | `volume` | number | 1.0 | 0..1.5 | - |
 
 ### `[playstop]`
+
+_Category: audio · Blocking: no (fire-and-forget) · stop BGM playback (KAG3 compat)_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -762,6 +778,8 @@ _Category: save · Blocking: yes (waits for completion) · open the save/load me
 | `mode` | string | - | - | - |
 
 ### `[saveplace]`
+
+_Category: save · Blocking: no (fire-and-forget) · KAG3-compatible saveplace command_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
@@ -1091,6 +1109,8 @@ _Category: text · Blocking: no (fire-and-forget) · KAG3-compatible voice_off c
 
 ### `[voice_wait]`
 
+_Category: text · Blocking: yes (waits for completion) · wait for a voice line with click-to-skip_
+
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 
@@ -1119,6 +1139,8 @@ _Category: audio · Blocking: yes (waits for completion) · block until a click 
 |---|---|---|---|---|
 
 ### `[waitforclick]`
+
+_Category: text · Blocking: yes (waits for completion) · block until the player clicks_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
