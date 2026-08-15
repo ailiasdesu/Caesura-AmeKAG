@@ -4,6 +4,9 @@
 #include "audio/SoLoudAudioEngine.h"
 #include "di/BackendRegistry.h"
 #include "di/api/ISandboxQuota.h"
+#include "job/JobSystem.h"
+#include <atomic>
+#include <thread>
 
 using namespace Caesura;
 
@@ -956,6 +959,306 @@ TEST_CASE("SoLoudAudioEngine setBusVolume(0) mutes that bus") {
 
     eng.setBusVolume("se", 1.0f);
     CHECK(eng.getBusVolume("se") == doctest::Approx(1.0f));
+    eng.shutdown();
+}
+
+// =============================================================================
+// Round-2 audio boundary tests (round 77/78 follow-up)
+// Covers: SE concurrency (no built-in rotation), voice pool rotation cap,
+// stop-then-replay of the same handle, same-file dedup semantics, fade
+// interruption, the global x bus x handle volume chain, global-volume after
+// playback, and bus-volume persistence across suspend/resume.
+// Semantics below are locked against SoLoudAudioEngine.cpp as implemented.
+// =============================================================================
+
+TEST_CASE("SoLoudAudioEngine multiple SE on one bus coexist (no built-in rotation)") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // SE has NO fixed pool: playSE() appends every live handle to m_activeSE,
+    // so concurrent SE instances on the same bus overlap instead of evicting.
+    // Playing the SAME file three times must yield three distinct live voices
+    // (the wave-cache dedups the SOURCE, not the voices).
+    const unsigned int s1 = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(s1 != 0);
+    const unsigned int s2 = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(s2 != 0);
+    const unsigned int s3 = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(s3 != 0);
+
+    // All three handles are independently live on the same bus.
+    CHECK(eng.soloud().isValidVoiceHandle(s1));
+    CHECK(eng.soloud().isValidVoiceHandle(s2));
+    CHECK(eng.soloud().isValidVoiceHandle(s3));
+    CHECK(eng.isSEPlaying());
+
+    // Stopping ONE handle leaves the other two playing.
+    eng.stopSEHandle(s2);
+    CHECK_FALSE(eng.soloud().isValidVoiceHandle(s2));
+    CHECK(eng.isSEPlaying());
+    CHECK(eng.soloud().isValidVoiceHandle(s1));
+    CHECK(eng.soloud().isValidVoiceHandle(s3));
+
+    eng.stopSE();
+    CHECK_FALSE(eng.isSEPlaying());
+}
+
+TEST_CASE("SoLoudAudioEngine voice pool rotation caps at pool+one retiring slot") {
+    // The VN voice pool is a round-robin 4-slot array; each slot displaced by a
+    // new voice is retired (fade 0.05s) into m_retiringVoice. So 4 pool slots +
+    // up to 1 in-flight retiring voice == 5 concurrent allocations in the
+    // steady rotation; a 6th must be rejected by the handle quota.
+    AudioQuota quota(5);
+    ScopedAudioQuota scopedQuota(quota);
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int v0 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v0 != 0);
+    eng.soloud().setLooping(v0, true);
+    const unsigned int v1 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v1 != 0);
+    eng.soloud().setLooping(v1, true);
+    const unsigned int v2 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v2 != 0);
+    eng.soloud().setLooping(v2, true);
+    const unsigned int v3 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v3 != 0);
+    eng.soloud().setLooping(v3, true);
+    // Pool full (4 slots). The 5th play displaces the oldest slot into the
+    // retiring list, so allocations rise to 5 (4 pool + 1 retiring).
+    const unsigned int v4 = eng.playVoice("tests/audio/silence.wav");
+    REQUIRE(v4 != 0);
+    eng.soloud().setLooping(v4, true);
+    CHECK(quota.activeCount == 5);
+    CHECK(quota.tryCalls == 5);
+
+    // 6th play: quota exhausted -> rejected, nothing new plays.
+    CHECK(eng.playVoice("tests/audio/silence.wav") == 0);
+    CHECK(quota.activeCount == 5);
+
+    // The displaced first handle is no longer in the live pool but the rest stay.
+    eng.soloud().setLooping(v4, true);
+    CHECK(eng.isVoicePlaying());
+
+    eng.stopVoice();
+    eng.update(0.0f);
+    eng.shutdown();
+    CHECK(quota.activeCount == 0);
+    CHECK(quota.releaseUnderflows == 0);
+}
+
+TEST_CASE("SoLoudAudioEngine stop then immediately replay same handle is clean") {
+    AudioQuota quota(8);
+    ScopedAudioQuota scopedQuota(quota);
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int first = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(first != 0);
+    REQUIRE(quota.activeCount == 1);
+
+    // stopSEHandle frees the slot and its quota immediately.
+    eng.stopSEHandle(first);
+    CHECK_FALSE(eng.soloud().isValidVoiceHandle(first));
+    CHECK(quota.activeCount == 0);
+
+    // Replaying the same FILE (same handle value pool) right after must give a
+    // fresh, live handle and re-take the quota exactly once.
+    const unsigned int again = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(again != 0);
+    CHECK(eng.soloud().isValidVoiceHandle(again));
+    CHECK(quota.activeCount == 1);
+    // Old handle remains dead.
+    CHECK_FALSE(eng.soloud().isValidVoiceHandle(first));
+
+    eng.stopSE();
+    CHECK(quota.activeCount == 0);
+    CHECK(quota.releaseUnderflows == 0);
+}
+
+TEST_CASE("SoLoudAudioEngine same-file SE plays overlay rather than dedupe") {
+    // The wave cache dedupes the underlying source (one load, one shared_ptr),
+    // but each playSE() creates a NEW SoLoud voice. Contract locked: repeating
+    // the same file plays concurrently (no single-instance dedup/overwrite).
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int a = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(a != 0);
+    const unsigned int b = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(b != 0);
+
+    CHECK(eng.soloud().isValidVoiceHandle(a));
+    CHECK(eng.soloud().isValidVoiceHandle(b));
+    CHECK_NE(a, b);  // distinct live voices for the same file
+
+    eng.stopSE();
+}
+
+TEST_CASE("SoLoudAudioEngine fade interruption: later fade replaces the target") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // fadeVolume() records the target in the persisted bus state and starts a
+    // SoLoud fade. A second fadeVolume() before the first completes must
+    // override the target (the persisted state always matches the latest call)
+    // without crashing or leaving the bus in a stale pending state.
+    eng.setBusVolume("se", 0.9f);
+    eng.fadeVolume("se", 0.3f, 5.0f);   // long fade, interrupted immediately
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.3f));
+
+    eng.fadeVolume("se", 0.7f, 0.0f);   // override; 0s jump
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.7f));
+
+    // Interrupt a fade with a direct setBusVolume: set wins immediately.
+    eng.fadeVolume("se", 0.1f, 3.0f);
+    eng.setBusVolume("se", 0.55f);
+    CHECK(eng.getBusVolume("se") == doctest::Approx(0.55f));
+    CHECK(eng.seBus().mVolume == doctest::Approx(0.55f));
+
+    // A fade on one bus leaves the other bus volumes untouched.
+    eng.setBusVolume("bgm", 0.9f);
+    eng.fadeVolume("voice", 0.4f, 2.0f);
+    CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.9f));
+    CHECK(eng.getBusVolume("voice") == doctest::Approx(0.4f));
+
+    eng.shutdown();
+}
+
+TEST_CASE("SoLoudAudioEngine global x bus x handle volume chain applies per level") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    // The engine applies volume at three independent levels (global -> bus ->
+    // handle); IAudioBackend does not expose the composed product, so we read
+    // the SoLoud-level state of each stage and lock that the chain holds.
+    eng.setGlobalVolume(0.8f);
+    eng.setBusVolume("bgm", 0.5f);
+    const unsigned int h = eng.playBGM("tests/audio/silence.wav", 0.0f);  // 0s fade => handle at 1.0
+    REQUIRE(h != 0);
+    if (eng.soloud().isValidVoiceHandle(h))
+        CHECK(eng.soloud().getVolume(h) == doctest::Approx(1.0f));
+
+    CHECK(eng.soloud().getGlobalVolume() == doctest::Approx(0.8f));
+    CHECK(eng.bgmBus().mVolume == doctest::Approx(0.5f));
+    // Composed chain value (readable stages): 0.8 * 0.5 * 1.0.
+    CHECK(eng.soloud().getGlobalVolume() * eng.bgmBus().mVolume
+          == doctest::Approx(0.4f));
+
+    eng.shutdown();
+}
+
+TEST_CASE("SoLoudAudioEngine setGlobalVolume takes effect after playback") {
+    AudioQuota quota(8);
+    ScopedAudioQuota scopedQuota(quota);
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int se = eng.playSE("tests/audio/silence.wav");
+    REQUIRE(se != 0);
+    REQUIRE(quota.activeCount == 1);
+    const int voicesAfterPlay = eng.activeVoiceCount();
+
+    // Lowering the global volume AFTER a voice is live must apply live (SoLoud
+    // global volume scales every active voice) and must not kill the handle.
+    eng.setGlobalVolume(0.25f);
+    CHECK(eng.soloud().getGlobalVolume() == doctest::Approx(0.25f));
+    CHECK(eng.soloud().isValidVoiceHandle(se));
+    CHECK(eng.isSEPlaying());
+    CHECK(eng.activeVoiceCount() == voicesAfterPlay);
+
+    // Further lowering to mute keeps the voice alive (mute approximation).
+    eng.setGlobalVolume(0.0f);
+    CHECK(eng.soloud().getGlobalVolume() == doctest::Approx(0.0f));
+    CHECK(eng.soloud().isValidVoiceHandle(se));
+    CHECK(eng.isSEPlaying());
+
+    eng.stopSE();
+    eng.setGlobalVolume(1.0f);
+    eng.shutdown();
+    CHECK(quota.activeCount == 0);
+}
+
+TEST_CASE("SoLoudAudioEngine setBusVolume during suspend persists across resume") {
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    const unsigned int bgm = eng.playBGM("tests/audio/silence.wav", 0.0f);
+    REQUIRE(bgm != 0);
+    eng.soloud().setLooping(bgm, true);
+    const float before = eng.getBusVolume("bgm");
+
+    // suspend() pauses the mixer but does NOT tear down volume state; a
+    // setBusVolume() made while suspended must persist and survive resume().
+    eng.suspend();
+    CHECK(eng.soloud().isValidVoiceHandle(bgm));  // handle kept across suspend
+
+    eng.setBusVolume("bgm", 0.22f);
+    CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.22f));
+    CHECK(eng.bgmBus().mVolume == doctest::Approx(0.22f));
+
+    eng.resume();
+    eng.update(0.0f);
+    CHECK(eng.getBusVolume("bgm") == doctest::Approx(0.22f));   // value survived resume
+    CHECK(eng.bgmBus().mVolume == doctest::Approx(0.22f));
+    CHECK(eng.soloud().isValidVoiceHandle(bgm));
+    CHECK(eng.isBGMPlaying());
+
+    eng.setBusVolume("bgm", before);
+    eng.stopBGM(0.0f);
+    eng.shutdown();
+}
+
+// =============================================================================
+// Mixed audio + job (round-2)
+// IAudioBackend methods are guarded by CAESURA_ASSERT_MAIN_THREAD(): they may
+// only be called from the main thread. The JobSystem onComplete callback runs
+// on the main thread (via pollMainThreadJobs), so it is a valid, safe place to
+// drive audio. Driving audio directly from a job WORKER is out of contract
+// (main-thread assertion) and is documented, not exercised here.
+// =============================================================================
+
+TEST_CASE("Mixed: audio playable from a job onComplete (main thread)") {
+    AudioQuota quota(8);
+    ScopedAudioQuota scopedQuota(quota);
+    SoLoudAudioEngine eng;
+    if (!eng.init()) { MESSAGE("Audio device unavailable, skipping"); return; }
+
+    JobSystem js;
+    js.init();
+    REQUIRE(js.isRunning());
+
+    std::atomic<bool> workerDone{false};
+    std::atomic<bool> sePlayed{false};
+    std::atomic<bool> seDone{false};
+
+    // The job's onComplete runs on the main thread while draining the callback
+    // queue, so playing an SE here is contract-safe and must allocate a handle.
+    js.submit(
+        [&]() { workerDone.store(true); },
+        JobPriority::Normal,
+        [&]() {
+            const unsigned int h = eng.playSE("tests/audio/silence.wav");
+            if (h != 0) {
+                sePlayed.store(true);
+                eng.stopSEHandle(h);  // release cleanly on the main thread
+                seDone.store(true);
+            }
+        });
+
+    for (int i = 0; i < 200 && !sePlayed.load(); ++i) {
+        js.waitIdle();
+        js.pollMainThreadJobs();  // drain the onComplete (main thread)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    CHECK(workerDone.load());
+    CHECK(sePlayed.load());     // an SE was actually started from onComplete
+    CHECK(seDone.load());
+    CHECK(quota.activeCount == 0);  // handle released within the callback
+
+    js.shutdown();
     eng.shutdown();
 }
 

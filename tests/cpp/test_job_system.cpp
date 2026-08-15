@@ -397,3 +397,188 @@ TEST_CASE("Boundary[JobSystem] exception isolation: throwing onComplete is isola
     CHECK(js.pendingJobs() == 0);
     js.shutdown();
 }
+
+// =============================================================================
+// Round-2 job boundary tests (round 81 follow-up)
+// Covers: submit-before-init rejection, double shutdown, submit-after-shutdown,
+// empty waitIdle, large concurrent fan-out completion, and non-std::exception
+// isolation for both work() and onComplete() on the real JobSystem + Null mock.
+// Semantics locked against src/job/JobSystem.cpp and mocks/NullJobSystem.h.
+// =============================================================================
+
+TEST_CASE("Boundary[JobSystem] submit before init is rejected (id 0), task never runs") {
+    JobSystem js;  // NOT initialized
+    bool ran = false;
+    uint64_t id = js.submit([&]() { ran = true; });
+    CHECK(id == 0);
+    CHECK(ran == false);
+    CHECK(js.isRunning() == false);
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();  // shutdown of an uninitialized system is a safe no-op
+}
+
+TEST_CASE("Boundary[Null] submit before init is rejected (id 0), task never runs") {
+    NullJobSystem njs;  // NOT initialized
+    bool ran = false;
+    uint64_t id = njs.submit([&]() { ran = true; });
+    CHECK(id == 0);
+    CHECK(ran == false);
+    CHECK(njs.isRunning() == false);
+}
+
+TEST_CASE("Boundary[JobSystem] double shutdown is idempotent and safe") {
+    JobSystem js;
+    js.init();
+    REQUIRE(js.isRunning());
+    CHECK(js.workerCount() >= 1);
+
+    js.shutdown();
+    CHECK(js.isRunning() == false);
+    CHECK(js.workerCount() == 0);
+
+    js.shutdown();  // second call must be a no-op, not crash
+    CHECK(js.isRunning() == false);
+    CHECK(js.workerCount() == 0);
+}
+
+TEST_CASE("Boundary[JobSystem] submit after shutdown is rejected (id 0)") {
+    JobSystem js;
+    js.init();
+    js.shutdown();
+    CHECK(js.isRunning() == false);
+
+    bool ran = false;
+    uint64_t id = js.submit([&]() { ran = true; });
+    CHECK(id == 0);
+    CHECK(ran == false);   // never scheduled, never ran
+    CHECK(js.pendingJobs() == 0);
+}
+
+TEST_CASE("Boundary[JobSystem] waitIdle on an empty queue returns promptly") {
+    JobSystem js;
+    js.init();
+    // Nothing submitted: waitIdle must not block, wedge, or misreport.
+    js.waitIdle();
+    CHECK(js.pendingJobs() == 0);
+    CHECK(js.isRunning());
+
+    // Also safe immediately after shutdown (workers already joined).
+    js.shutdown();
+    js.waitIdle();  // no-op after shutdown
+    CHECK(js.pendingJobs() == 0);
+}
+
+TEST_CASE("Boundary[JobSystem] large concurrent fan-out completes exactly once per job") {
+    JobSystem js;
+    js.init();
+    constexpr int kJobs = 64;
+    std::atomic<int> workCount{0};
+    std::atomic<int> completeCount{0};
+
+    // Half the batch carries an onComplete; every job increments workCount.
+    for (int i = 0; i < kJobs; ++i) {
+        if (i % 2 == 0) {
+            js.submit([&]() { workCount.fetch_add(1); },
+                      JobPriority::Normal,
+                      [&]() { completeCount.fetch_add(1); });
+        } else {
+            js.submit([&]() { workCount.fetch_add(1); });
+        }
+    }
+
+    js.waitIdle();
+    // Drain any trailing onComplete queued at the tail of the batch.
+    for (int i = 0; i < 200 && completeCount.load() < kJobs / 2; ++i) {
+        js.pollMainThreadJobs();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    CHECK(workCount.load() == kJobs);
+    CHECK(completeCount.load() == kJobs / 2);
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+TEST_CASE("Boundary[JobSystem] non-std::exception in work is isolated, queue keeps draining") {
+    JobSystem js;
+    js.init();
+
+    // A work() that throws an int (not a std::exception) must be caught by the
+    // catch(...) branch and swallowed so the worker survives and the queue drains.
+    std::atomic<bool> afterRan{false};
+    js.submit([]() { throw 42; });  // int throw
+    js.submit([]() { struct C {}; throw C{}; });  // custom type throw
+    js.submit([&]() { afterRan.store(true); });
+
+    REQUIRE_NOTHROW(js.waitIdle());  // must not propagate the int/custom throw
+    CHECK(afterRan.load());
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+TEST_CASE("Boundary[Null] non-std::exception in work is isolated, submit returns normally") {
+    NullJobSystem njs;
+    njs.init();
+    bool laterRan = false;
+    uint64_t id = njs.submit([]() { throw 42; });  // int throw
+    CHECK(id > 0);  // isolation -> submit still succeeded
+    CHECK(njs.submit([&]() { laterRan = true; }) > 0);
+    CHECK(laterRan);  // system still usable
+}
+
+TEST_CASE("Boundary[JobSystem] non-std::exception in onComplete is isolated during poll") {
+    JobSystem js;
+    js.init();
+    std::atomic<bool> workerDone{false};
+    std::atomic<bool> laterMainDone{false};
+
+    // First callback throws an int; a later callback must still be delivered.
+    js.submit(
+        [&]() { workerDone.store(true); },
+        JobPriority::Normal,
+        []() { throw 7; });  // int throw in onComplete
+    js.submit(
+        []() { /* plain work */ },
+        JobPriority::Normal,
+        [&]() { laterMainDone.store(true); });
+
+    for (int i = 0; i < 200 && !laterMainDone.load(); ++i) {
+        js.waitIdle();
+        js.pollMainThreadJobs();  // isolates the int-throwing callback
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    CHECK(workerDone.load());
+    CHECK(laterMainDone.load());  // later callback still ran after the int throw
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+TEST_CASE("Boundary[JobSystem] worker count never exceeds available hardware") {
+    JobSystem js;
+    js.init();
+    const unsigned hw = std::thread::hardware_concurrency();
+    // computeWorkerCount: hw==0 -> 4; hw<4 -> 1; else hw-1. In every branch the
+    // worker count is positive and does NOT exceed the reported hardware
+    // concurrency (the hw==0 -> 4 case still satisfies count <= max(hw,4)).
+    CHECK(js.workerCount() >= 1);
+    CHECK(static_cast<unsigned>(js.workerCount()) <= (hw == 0 ? 4u : hw));
+    js.shutdown();
+    CHECK(js.workerCount() == 0);
+}
+
+TEST_CASE("Boundary[Null] shutdown and re-init resets the job counter") {
+    // NullJobSystem::shutdown() resets m_jobId to 1, so a fresh init cycle
+    // issues ids from 1 again -- a clean, deterministic restart contract.
+    NullJobSystem njs;
+    njs.init();
+    CHECK(njs.submit([]() {}) == 1);
+    CHECK(njs.submit([]() {}) == 2);
+    njs.shutdown();
+    CHECK(njs.isRunning() == false);
+
+    njs.init();
+    CHECK(njs.submit([]() {}) == 1);  // counter reset after restart
+    CHECK(njs.submit([]() {}) == 2);
+    njs.shutdown();
+}
