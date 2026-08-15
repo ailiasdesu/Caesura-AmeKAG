@@ -114,6 +114,16 @@ jobs:
             Write-Host "lua.exe not found - skipping Lua suites"
           }
 
+      - name: Web scripts index freshness
+        shell: pwsh
+        run: |
+          # Round 79 guard: deleting scripts/*.lua without regenerating
+          # web/scripts-index.json breaks the web suite (ENOENT). Regenerate to
+          # a temp file and diff against the committed artifact -- fails red
+          # when stale/missing. Lightweight: node only, no wasmoon install.
+          node web/gen-index.mjs --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Editor unit tests (vitest)
         shell: pwsh
         run: |
@@ -166,6 +176,14 @@ jobs:
           lua tests/scripts/run_lua_tests.lua
           lua tests/scripts/run_orphan_tests.lua
 
+      - name: Web scripts index freshness
+        run: |
+          # Round 79 guard: deleting scripts/*.lua without regenerating
+          # web/scripts-index.json breaks the web suite (ENOENT). Regenerate to
+          # a temp file and diff against the committed artifact -- fails red
+          # when stale/missing. Lightweight: node only, no wasmoon install.
+          node web/gen-index.mjs --check
+
       - name: Test
         run: ctest --test-dir build --output-on-failure --repeat until-pass:2
 
@@ -209,6 +227,14 @@ jobs:
         run: |
           lua5.4 tests/scripts/run_lua_tests.lua
           lua5.4 tests/scripts/run_orphan_tests.lua
+
+      - name: Web scripts index freshness
+        run: |
+          # Round 79 guard: deleting scripts/*.lua without regenerating
+          # web/scripts-index.json breaks the web suite (ENOENT). Regenerate to
+          # a temp file and diff against the committed artifact -- fails red
+          # when stale/missing. Lightweight: node only, no wasmoon install.
+          node web/gen-index.mjs --check
 
       - name: Test
         run: |
