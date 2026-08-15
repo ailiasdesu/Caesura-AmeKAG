@@ -181,6 +181,14 @@ local function translate_operators(src)
             elseif c == "!" then
                 i = i + 1
                 emit_op(" not ")
+            elseif c == "?" and src:sub(i + 1, i + 1) == "?" then
+                -- TJS null-coalescing: a ?? b keeps a when it is not
+                -- nil/false, else b. Lua 'or' is exactly this value
+                -- fallback (0 and "" are truthy, so numbers and empty
+                -- strings survive; only nil/false fall through).
+                -- (round 53: the doc mentioned ?? but it never translated)
+                i = i + 2
+                emit_op(" or ")
             else
                 out[#out + 1] = c
                 i = i + 1

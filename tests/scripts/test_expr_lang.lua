@@ -167,6 +167,21 @@ do
     check("Lua-native and works too", ok5 and v5 == true)
 end
 
+-- ---- null-coalescing ?? (round 53: doc mentioned it, never translated) ---
+do
+    local ctx = { f = { hp = 0, name = "Aoi" }, sf = {}, tf = {}, mp = {}, lf = {} }
+    local ok1, v1 = expr.evaluate(ctx, "f.missing ?? 42")
+    check("?? falls back on missing var", ok1 and v1 == 42)
+    local ok2, v2 = expr.evaluate(ctx, "f.hp ?? 99")
+    check("?? keeps 0 (truthy in Lua)", ok2 and v2 == 0)
+    local ok3, v3 = expr.evaluate(ctx, "f.name ?? 'anon'")
+    check("?? keeps present value", ok3 and v3 == "Aoi")
+    local ok4, v4 = expr.evaluate(ctx, "(f.a ?? 1) + (f.b ?? 2)")
+    check("?? nests in arithmetic", ok4 and v4 == 3)
+    local tr = expr.translate("'x ?? y'")
+    check("?? inside string literal untouched", tr == "'x ?? y'")
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

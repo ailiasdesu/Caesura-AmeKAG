@@ -17,6 +17,7 @@ and `"..."` are never touched):
 | `!a`                | `not a`         | `[if exp="!tf.locked"]`     |
 | `a != b`            | `a ~= b`        | `[if exp="f.name != 'Aoi'"]`|
 | `cond ? a : b`      | `(cond and (a) or (b))` | `[set var="f.x" value="${f.hp > 20 ? 'high' : 'low'}"]` |
+| `a ?? b`            | `a or b`        | `[if exp="f.missing ?? 42"]` — null-coalesce: 0 / "" survive (Lua truthy) |
 
 Nested ternaries and parenthesised sub-expressions are supported. The
 ternary form is exact for numbers and strings; for booleans it follows
