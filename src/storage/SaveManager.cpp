@@ -169,6 +169,18 @@ std::string SaveManager::readFile(const std::string& path) {
 bool SaveManager::writeFile(const std::string& path, const std::string& content) {
     if (m_saveProvider) return m_saveProvider->writeFile(path, content);
 
+    // Symmetric to readFile()'s MAX_SAVE_SIZE guard: reject oversized payloads
+    // up front so they never reach disk as a file that load()/slotExists()/
+    // listSaves() would silently skip. Also refuses the write when even a
+    // smaller payload would balloon past the ceiling (e.g. +32 B encryption
+    // header), keeping the on-disk size always loadable.
+    if (content.size() > MAX_SAVE_SIZE) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[SaveManager] Rejecting write to %s: payload %zu bytes exceeds MAX_SAVE_SIZE (%zu)",
+                  path.c_str(), content.size(), MAX_SAVE_SIZE);
+        return false;
+    }
+
     std::string dataToWrite;
     if (m_keySet) {
         uint8_t nonce[12];
@@ -194,6 +206,16 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
         dataToWrite.append(reinterpret_cast<char*>(cipher.data()), cipher.size());
     } else {
         dataToWrite = content;
+    }
+
+    // Mirror readFile()'s file-size check on the exact bytes that would hit
+    // disk (encrypted output grows by the 4+12+16 header): any payload the
+    // manager would refuse to read back must not be written in the first place.
+    if (dataToWrite.size() > MAX_SAVE_SIZE) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[SaveManager] Rejecting write to %s: on-disk size %zu bytes exceeds MAX_SAVE_SIZE (%zu)",
+                  path.c_str(), dataToWrite.size(), MAX_SAVE_SIZE);
+        return false;
     }
 
     // Atomic write: write to a temp file next to the target, flush, then

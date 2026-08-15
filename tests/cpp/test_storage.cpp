@@ -871,29 +871,27 @@ TEST_CASE("Storage: large payload ~1 MiB roundtrips exactly (plain and encrypted
     CHECK(rawEnc.size() >= big.size());
 }
 
-TEST_CASE("Storage: oversized save (>10 MiB ceiling) is written but not loadable -- asymmetry") {
+TEST_CASE("Storage: oversized save (>10 MiB ceiling) is refused, nothing written -- symmetric") {
     TestPaths::ScopedTempDir dir("storage_oversize");
     SaveManager sm;
     sm.init(dir.string());
 
     // readFile() enforces a 10 MiB MAX_SAVE_SIZE ceiling and returns empty for
-    // any file larger than it. writeFile() has NO such guard, so save() at
-    // ~11 MiB returns true while load()/slotExists()/listSaves() then report
-    // the slot as absent/empty. Documented current behavior (latent asymmetry
-    // flagged for the storage owner); assert it so a future fix is caught.
+    // any file larger than it. writeFile() carries the SAME guard now, so
+    // save() at ~11 MiB is rejected up front, no payload reaches disk, and
+    // load()/slotExists()/listSaves() naturally report the slot as absent.
+    // Symmetric: a save the manager would refuse to read must never be written.
     const std::string huge = makeRepeatedPayload(11 * 1024 * 1024, 3);  // 11 MiB
     json gd = {{"huge", huge}};
 
     bool saved = sm.save(4, gd, "huge", 0);
-    CHECK(saved == true);                    // writeFile accepts the oversized blob
+    CHECK(saved == false);                   // writeFile rejects the oversized blob
 
-    // The file physically exists on disk and exceeds the read ceiling.
+    // Nothing was written: no file on disk at all.
     std::filesystem::path fp(dir.string() + "save_4.json");
-    CHECK(std::filesystem::exists(fp));
-    CHECK(std::filesystem::file_size(fp) > 10 * 1024 * 1024);
+    CHECK_FALSE(std::filesystem::exists(fp));
 
-    // ...but the manager cannot read it back: load null, slot not "exists",
-    // and the oversized slot is not listed.
+    // And the slot is naturally absent from the manager's perspective.
     CHECK(sm.load(4).is_null());
     CHECK_FALSE(sm.slotExists(4));
     CHECK(sm.listSaves().empty());
