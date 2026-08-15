@@ -19,6 +19,8 @@ local VFXCommands = {}
 --  [vfx type="flash" time=200 r=255 g=255 b=255]
 --  [vfx type="fade" time=500 r=0 g=0 b=0]
 --  [vfx type="blur" time=500 strength=4]
+--  [palette effect="apply|clear|day|night|toggle|unload" ...]  -- LUT color grading
+--  [vibrate time=300 intensity=3 ...]  -- KAG3 alias for [vib]
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Neo-Genesis contracts: typed + clamped via kag/schema.
@@ -204,6 +206,84 @@ function VFXCommands.particles(ctx, params)
         -- the backend name is clear_particles (not particles_clear)
         backend.clear_particles()
         if ctx._particleEmitters then ctx._particleEmitters = {} end
+    end
+end
+
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  [palette effect="apply|clear|day|night|toggle|unload" ...]
+--  Standalone LUT color-grading command routing to scripts/palette.lua.
+--  The palette module drives the C++ backend through the GLOBAL backend
+--  (backend.load_image / backend.is_valid / backend.set_palette /
+--  backend.destroy_texture) -- it is not require()-bound.
+--    effect="apply" id="<lut>" path="assets/lut/<name>.png" intensity=0..1
+--        -> loads (when path given) then applies the LUT; without a path
+--           re-applies a previously loaded id
+--    effect="clear"     -> disable the active palette
+--    effect="day"       -> neutral grading (clears any active LUT)
+--    effect="night"     -> blue-dark grading (loads assets/lut/night.png)
+--    effect="toggle"    -> day <-> night
+--    effect="unload" id="<lut>" -> unload a cached LUT from memory
+-- ═══════════════════════════════════════════════════════════════════════
+schema.define("palette", {
+    _meta = { category = "vfx", blocking = false, desc = "KAG3-compatible palette/LUT color-grading command" },
+    effect = { type = "enum", values = {
+        ["apply"] = true, ["clear"] = true, ["day"] = true,
+        ["night"] = true, ["toggle"] = true, ["unload"] = true,
+    }, default = "apply" },
+    id        = { type = "string", default = "" },
+    path      = { type = "string", default = "" },
+    intensity = { type = "number", default = 1.0, min = 0.0, max = 1.0 },
+})
+
+function VFXCommands.palette(ctx, params)
+    local effect = params.effect or "apply"
+    local paletteModule = require("palette")
+    local id = params.id or ""
+    if effect == "apply" then
+        -- Load-then-apply: a path means (id, path) is a fresh LUT.
+        if params.path and #params.path > 0 then
+            local ok, err = paletteModule.load(id, params.path)
+            if not ok then
+                print("[palette] " .. tostring(err))
+                return
+            end
+        end
+        -- Apply whatever is loaded under id (no-op if the id is empty).
+        if id and #id > 0 then
+            paletteModule.apply(id, params.intensity)
+        end
+    elseif effect == "clear" then
+        paletteModule.clear()
+    elseif effect == "day" then
+        paletteModule.set_day_mode()
+    elseif effect == "night" then
+        paletteModule.set_night_mode()
+    elseif effect == "toggle" then
+        paletteModule.toggle_mode()
+    elseif effect == "unload" then
+        if id and #id > 0 then
+            paletteModule.unload(id)
+        end
+    end
+end
+
+-- [vibrate] -- KAG3-compatible alias for [vib] (message-layer vibration).
+-- [vib] is owned by transition.lua; this alias carries the SAME schema
+-- contract and forwards verbatim so KAG3 scripts written with either tag
+-- name behave identically. Lazy require keeps kag.lua's module load order
+-- independent of the transition table.
+schema.define("vibrate", {
+    _meta = { category = "vfx", blocking = true, desc = "KAG3-compatible alias for [vib] (message-layer vibration)" },
+    time      = { type = "number", default = 300, min = 0, max = 30000 },
+    intensity = { type = "number", default = 3, min = 0, max = 50 },
+    amplitude = { type = "number", min = 0, max = 50 },
+})
+
+function VFXCommands.vibrate(ctx, params)
+    local trans = require("kag.commands.transition")
+    if trans.vib then
+        trans.vib(ctx, params)
     end
 end
 

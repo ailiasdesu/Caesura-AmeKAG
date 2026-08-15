@@ -622,6 +622,55 @@ _schema.define("ai_dialog", {
     max_wait_ms = { type = "number", default = 15000, min = 100, max = 120000 },
 })
 
+-- --------------------------------------------------------------------------
+--  [notify msg="存档完成" time=2500] — author-facing toast notification.
+--  Routes to the toast module (scripts/toast.lua) whose public API is
+--  Toast.show(msg, ttlSeconds). time is expressed in MILLISECONDS in the
+--  KAG contract (toast expects seconds, so the handler divides by 1000).
+--  Toast.show itself only mutates module state (no backends/layers touched),
+--  so it is headless-safe; a require/show failure degrades to a printed
+--  notice and never blocks or breaks the scene (blocking = false).
+--  kind is editor-validated metadata for future theming; the current toast
+--  API has no kind/position support, so it is accepted but not applied.
+_schema.define("notify", {
+    _meta = { category = "system", blocking = false,
+              desc = "show a brief corner toast notification (author feedback)" },
+    msg  = { type = "string", required = true, positional_index = 1 },
+    time = { type = "number", default = 2500, min = 0, max = 30000 },  -- ms
+    kind = { type = "string", enum = { "info", "warn", "error" } },     -- reserved
+})
+
+function SystemCommands.notify(ctx, params)
+    local msg = params.msg
+    if type(msg) ~= "string" and type(params[1]) == "string" then
+        msg = params[1]
+    end
+    if type(msg) ~= "string" or msg == "" then
+        print("[notify] missing msg= (ignored)")
+        return true
+    end
+
+    -- Clamp ttl to the schema's 0..30000ms range (bare positional args
+    -- bypass schema defaults, mirroring the [wait] guard).
+    local ttlMs = tonumber(params.time) or 2500
+    if ttlMs < 0 then ttlMs = 0 end
+    if ttlMs > 30000 then ttlMs = 30000 end
+
+    -- Headless/tests may not have toast (or its backend/layers deps).
+    -- pcall both the require and the show call so a missing or degraded
+    -- toast module never raises into the scheduler.
+    local ok, toast = pcall(require, "toast")
+    if ok and type(toast) == "table" and type(toast.show) == "function" then
+        local okShow, err = pcall(toast.show, msg, ttlMs / 1000)
+        if not okShow then
+            print("[notify] toast.show degraded: " .. tostring(err))
+        end
+    else
+        print("[notify] toast unavailable; headless degrade: " .. tostring(msg))
+    end
+    return true
+end
+
 function SystemCommands.ai_dialog(ctx, params)
     local backend = require("backend")
     local prompt = params.prompt

@@ -25,6 +25,8 @@ local tests = {
     "test_contracts_runtime",
     "test_saveflow",
     "test_bench_dispatch",
+    "test_math_cmds",
+    "test_character_cmds",
 }
 
 local passed, failed = 0, 0

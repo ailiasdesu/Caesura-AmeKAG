@@ -71,6 +71,29 @@ end
 --   NOTE: "end" is a Lua keyword, so bracket syntax is required.
 KAG["end"] = system_cmds.ending
 
+-- ===========================================================================
+--  Math commands -- [add]/[sub]/[mul]/[div]/[mod]/[dec] (KAG3 compat)
+--  Loaded from kag/commands/math.lua (round 71). Registered by pairs so the
+--  table keys become dispatchable commands.
+-- ===========================================================================
+do
+    local math_cmds = require("kag.commands.math")
+    for name, handler in pairs(math_cmds) do
+        KAG[name] = handler
+    end
+end
+
+-- ===========================================================================
+--  Character commands -- [csp]/[csd]/[csl] (KAG3 compat)
+--  Loaded from kag/commands/character.lua (round 71).
+-- ===========================================================================
+do
+    local character_cmds = require("kag.commands.character")
+    for name, handler in pairs(character_cmds) do
+        KAG[name] = handler
+    end
+end
+
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 --  Saveplace / Loadplace �� in-memory scene bookmarks
 --  Spec [10.2.38]: independent of save system, no disk writes.

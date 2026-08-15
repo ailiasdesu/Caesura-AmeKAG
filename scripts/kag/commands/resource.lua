@@ -9,6 +9,17 @@ local layers  = require("layers")
 
 local ResourceCommands = {}
 
+-- Neo-Genesis contract (round 71 audit: [preload] was registered but had
+-- no schema entry, so the LSP/contracts census could not see it).
+require("kag.schema").define("preload", {
+    _meta = { category = "resource", blocking = false,
+              desc = "Preload assets (texture/audio/scene) ahead of use; async unless wait=true" },
+    type = { type = "string", default = "texture", choices = { "texture", "audio", "scene" } },
+    path = { type = "string", default = "", desc = "comma-separated asset paths" },
+    storage = { type = "string", default = "", desc = "alias for path" },
+    wait = { type = "string", default = "true", choices = { "true", "false" } },
+})
+
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Preload state — tracks which assets are loading/loaded
 -- ═══════════════════════════════════════════════════════════════════════════

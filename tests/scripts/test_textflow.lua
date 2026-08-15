@@ -67,5 +67,53 @@ check("text wraps message", wraps[1] and wraps[1][1] == "hello world")
 check("text wraps at y 580", wraps[1] and wraps[1][2].y == 580)
 TextScene2.add_wrapped = real_add_wrapped
 
+-- [textspeed cps=N] / [cps N] -- KAG3-type typewriter speed (round)
+-- Real read point: kag_runner.lua advances ctx.reveal by ctx.text_speed
+-- (ms/char) each frame, so the handler must set ctx.text_speed.
+local S = require("kag.schema")
+
+-- named [textspeed cps=60] -> floor(1000/60) == 16 ms/char
+local ctxT2 = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.textspeed, ctxT2, S.coerce("textspeed", { cps = 60 }, ctxT2))
+check("textspeed cps=60 sets ctx.cps", ctxT2.cps == 60)
+check("textspeed cps=60 -> 16 ms/char read point", ctxT2.text_speed == math.floor(1000 / 60))
+
+-- [textspeed] no param -> schema default (50 cps == 20 ms/char)
+local ctxD = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.textspeed, ctxD, S.coerce("textspeed", {}, ctxD))
+check("textspeed default restores 50 cps", ctxD.cps == 50)
+check("textspeed default -> 20 ms/char", ctxD.text_speed == 20)
+
+-- bare positional [cps 50] (alias) == [textspeed cps=50]
+local ctxP = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.cps, ctxP, S.coerce("cps", { [1] = "50" }, ctxP))
+check("cps 50 positional = 50 cps", ctxP.cps == 50)
+check("cps 50 positional -> 20 ms/char", ctxP.text_speed == 20)
+
+-- named [cps cps=25] alias sets the same cps
+local ctxA = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.cps, ctxA, S.coerce("cps", { cps = 25 }, ctxA))
+check("cps alias cps=25 sets ctx.cps", ctxA.cps == 25)
+
+-- named out-of-range clamps via the contract (cps=0 -> min 1)
+local ctxZ = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.textspeed, ctxZ, S.coerce("textspeed", { cps = 0 }, ctxZ))
+check("textspeed cps=0 clamps to 1", ctxZ.cps == 1)
+check("textspeed cps=0 -> 1000 ms/char", ctxZ.text_speed == 1000)
+
+-- bare positional out-of-range clamps in the handler ([cps -5] -> 1)
+local ctxN = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+pcall(KAG.cps, ctxN, S.coerce("cps", { [1] = "-5" }, ctxN))
+check("cps -5 positional clamps to 1", ctxN.cps == 1)
+
+-- named non-numeric errors inside schema.coerce (visible, not silent)
+local okBad = pcall(S.coerce, "textspeed", { cps = "abc" }, {})
+check("textspeed cps=abc errors (visible)", okBad == false)
+
+-- bare positional non-numeric falls back to default, no crash
+local ctxQ = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
+local okQ = pcall(KAG.cps, ctxQ, S.coerce("cps", { [1] = "abc" }, ctxQ))
+check("cps abc positional falls back to default", okQ and ctxQ.cps == 50)
+
 if failed > 0 then os.exit(1) end
 print("TEXTFLOW TESTS DONE")

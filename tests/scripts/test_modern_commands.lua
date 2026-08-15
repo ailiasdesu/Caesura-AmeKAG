@@ -202,6 +202,109 @@ do
         warnCount == 1, "warned " .. warnCount .. "x")
 end
 
+-- ---- [notify] routes to a mocked toast module with correct args --------
+do
+    local calls = {}
+    local toast_orig = package.loaded["toast"]
+    package.loaded["toast"] = {
+        show = function(msg, ttl) calls[#calls + 1] = { msg, ttl } end,
+    }
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+                  current_scene = "notify.ks", token_index = 1 }
+
+    -- explicit time in ms -> toast ttl in SECONDS (100ms -> 0.1s)
+    local rc = system.notify(ctx, { msg = "存档完成", time = 100 })
+    check("[notify] routes to toast with ms->s ttl", rc == true
+        and calls[1] and calls[1][1] == "存档完成" and calls[1][2] == 0.1,
+        table.concat(({ tostring(calls[1] and calls[1][1]), tostring(calls[1] and calls[1][2]) }), ","))
+
+    -- omitted time -> schema default 2500ms -> 2.5s
+    system.notify(ctx, { msg = "no time" })
+    check("[notify] default time 2500ms -> 2.5s", calls[2]
+        and calls[2][2] == 2.5, tostring(calls[2] and calls[2][2]))
+
+    -- tonal kind is accepted (reserved metadata; toast has no kind support)
+    system.notify(ctx, { msg = "warn look", time = 500, kind = "warn" })
+    check("[notify] kind accepted without effect", rc == true
+        and calls[3] and calls[3][2] == 0.5, tostring(calls[3] and calls[3][2]))
+
+    -- clamping: out-of-range time is clamped, not past to toast
+    system.notify(ctx, { msg = "big", time = 999999 })
+    check("[notify] time clamped to 30000ms -> 30s", calls[4]
+        and calls[4][2] == 30.0, tostring(calls[4] and calls[4][2]))
+
+    package.loaded["toast"] = toast_orig
+end
+
+-- ---- [notify] degrades gracefully when toast is unavailable --------------
+do
+    local orig = package.loaded["toast"]
+    package.loaded["toast"] = {}  -- stub without `show`: models headless/no-UI (require() would reload real toast.lua if cleared to nil)
+    local printed = {}
+    local realPrint = print
+    print = function(...) printed[#printed + 1] = table.concat({...}, " ") end
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+                  current_scene = "notify.ks", token_index = 2 }
+    local ok, rc = pcall(system.notify, ctx, { msg = "saved" })
+    -- must NOT raise into the caller and must not block
+    check("[notify] headless toast-unavailable degrades (returns true)",
+        ok and rc == true, tostring(rc))
+    local sawDegrade = false
+    for _, p in ipairs(printed) do
+        if p:find("toast unavailable", 1, true) then sawDegrade = true end
+    end
+    check("[notify] degradation notice printed", sawDegrade, table.concat(printed, "|"))
+    print = realPrint
+    package.loaded["toast"] = orig
+end
+
+-- ---- [notify] degrades when toast.show itself raises ----------------------
+do
+    local toast_orig = package.loaded["toast"]
+    package.loaded["toast"] = {
+        show = function() error("GPU down") end,
+    }
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+                  current_scene = "notify.ks", token_index = 3 }
+    local ok, rc = pcall(system.notify, ctx, { msg = "boom", time = 100 })
+    check("[notify] toast.show raise is swallowed (returns true)",
+        ok and rc == true, tostring(rc))
+    package.loaded["toast"] = toast_orig
+end
+
+-- ---- [notify] contract: missing msg raises at coerce; defaults apply ------
+do
+    local schema = require("kag.schema")
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+                  current_scene = "notify.ks", token_index = 4 }
+    -- missing required msg -> coerce raises
+    local ok, err = pcall(schema.coerce, "notify", { time = 100 }, ctx)
+    check("[notify] coerce rejects missing msg", ok == false
+        and err:find("msg", 1, true) ~= nil, tostring(err))
+    -- present msg -> defaults injected (time 2500, kind absent)
+    local out = schema.coerce("notify", { msg = "hi" }, ctx)
+    check("[notify] coerce applies time default 2500", out.msg == "hi"
+        and out.time == 2500, tostring(out.time))
+end
+
+-- ---- [notify] reachable end-to-end through the scheduler ------------------
+do
+    local calls = {}
+    local toast_orig = package.loaded["toast"]
+    package.loaded["toast"] = {
+        show = function(msg, ttl) calls[#calls + 1] = { msg, ttl } end,
+    }
+    local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+                  current_scene = "n.ks", token_index = 1, stop_flag = false }
+    local tokens = tokenizer.parse("[notify msg=\"saved via scheduler\" time=100]")
+    local co = coroutine.create(function() scheduler.run(ctx, tokens, 1) end)
+    while coroutine.status(co) ~= "dead" do coroutine.resume(co) end
+    package.loaded["toast"] = toast_orig
+    check("[notify] scheduler dispatches to handler + toast",
+        calls[1] and calls[1][1] == "saved via scheduler" and calls[1][2] == 0.1,
+        table.concat(({ tostring(calls[1] and calls[1][1]), tostring(calls[1] and calls[1][2]) }), ","))
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

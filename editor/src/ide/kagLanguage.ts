@@ -30,6 +30,9 @@ const KAG_COMMANDS = [
   'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
   'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'set', 'inc', 'random',
   'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
+  // round 71: KAG3-compat arithmetic + character + effects + notification
+  'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
+  'textspeed', 'cps', 'palette', 'vibrate', 'notify',
   'clear', 'ct', 'endtag', 'endform', 'g', 'br', 'hr', 'cancel', 'close',
 ]
 

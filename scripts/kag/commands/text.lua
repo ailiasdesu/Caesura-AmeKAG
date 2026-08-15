@@ -1112,6 +1112,71 @@ function TextCommands.pt(ctx, params)
     ctx.text_speed = params.speed
 end
 
+-- =============================================================================
+--  [textspeed cps=50] / [cps 50] ?? KAG3-compatible typewriter speed
+--  (chars per second). Overrides the per-character delay that [pt speed=...]
+--  sets via ctx.text_speed (ms/char). kag_runner.lua reads ctx.text_speed
+--  every frame to advance the typewriter reveal, so this command takes effect
+--  for the next [ch]/[text] reveal.
+--
+--  Unit conversion (KAG3 semantics): cps -> ms-per-char = floor(1000 / cps).
+--  KAG3's default message speed is 50 cps (== 20 ms/char); the task-specified
+--  valid range is 1..120 cps. floor(1000/120) == 8, the same 8 ms/char floor
+--  [pt] enforces, so the two commands stay consistent at the fast end.
+--
+--  [cps] and [textspeed] are separate contracts (like [delay]/[wait], each
+--  independently coerced+clamped by kag/schema); both accept the bare
+--  positional form [cps 50] via positional_index = 1.
+-- =============================================================================
+local DEFAULT_TEXT_CPS = 50   -- KAG3 default (50 chars/sec == 20 ms/char)
+local function apply_text_cps(ctx, params, cmd)
+    local raw = params.cps
+    if raw == nil or raw == "" then
+        -- Bare positional ([cps 50]): schema.coerce leaves params.cps nil
+        -- when positional_index fills the slot, so fall back to params[1].
+        raw = params[1]
+    end
+    local provided = raw ~= nil and raw ~= ""
+    local cps = provided and tonumber(raw) or DEFAULT_TEXT_CPS
+    if provided and cps == nil then
+        -- A named non-numeric cps errors inside schema.coerce (visible);
+        -- a bare positional skips that coercion, so surface it here and fall
+        -- back to the default instead of silently zero-ing the speed.
+        print(string.format("[kag] [%s]: cps not a number (%s), using default %d",
+            cmd, tostring(raw), DEFAULT_TEXT_CPS))
+        cps = DEFAULT_TEXT_CPS
+    end
+    if cps < 1 or cps > 120 then
+        local cl = math.max(1, math.min(120, math.floor(cps)))
+        print(string.format("[kag] [%s]: cps clamped %s -> %s",
+            cmd, tostring(cps), tostring(cl)))
+        cps = cl
+    end
+    ctx.text_speed = math.floor(1000 / cps)  -- real read point (kag_runner)
+    ctx.cps = cps                             -- observable KAG3 cps state
+end
+
+schema.define("textspeed", {
+    _meta = { category = "text", blocking = false,
+              desc = "KAG3 typewriter speed: chars per second (overrides [pt] ms/char)" },
+    cps = { type = "number", default = DEFAULT_TEXT_CPS, min = 1, max = 120,
+            positional_index = 1 },
+})
+
+schema.define("cps", {
+    _meta = { category = "text", blocking = false,
+              desc = "KAG3 [textspeed] alias: chars per second ([cps 50])" },
+    cps = { type = "number", default = DEFAULT_TEXT_CPS, min = 1, max = 120,
+            positional_index = 1 },
+})
+
+function TextCommands.textspeed(ctx, params)
+    apply_text_cps(ctx, params, "textspeed")
+end
+
+function TextCommands.cps(ctx, params)
+    apply_text_cps(ctx, params, "cps")
+end
 
 
 -- =============================================================================

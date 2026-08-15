@@ -19,6 +19,7 @@ local sma_check  = require("kag.sma_check") -- SMA asset validator (Battle 4d; p
 local mods       = require("mods")        -- mod loader (preload for sandbox)
 local replay     = require("replay")      -- input recording/playback (preload for sandbox)
 local layers     = require("layers")      -- layer tree (preload for sandbox; color filter submit)
+local palette    = require("palette")     -- color LUT palette (preload for sandbox; [palette] cmd)
 local flow       = require("flow")
 
 -- Graphics
