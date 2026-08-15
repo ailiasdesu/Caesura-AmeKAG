@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { VisualView } from './VisualView'
 import type { EngineClient } from '../lib/rpc'
@@ -197,5 +197,142 @@ describe('VisualView (component)', () => {
     await screen.findByText('bg (z=0)')
     expect(screen.getByText('x10,y20 100×50')).toBeTruthy()
     expect(client.pick).toHaveBeenCalledWith(640, 360)
+  })
+})
+
+describe('VisualView (round 90 enhancements)', () => {
+  // ResizeObserver is not present in jsdom; provide a stub whose callback we
+  // can drive manually so the frame viewport has a measurable size for pan.
+  let resizeCb: ((entries: { contentRect: { width: number; height: number } }[]) => void) | null = null
+  class ResizeObserverStub {
+    constructor(cb: (entries: { contentRect: { width: number; height: number } }[]) => void) { resizeCb = cb }
+    observe() {}
+    unobserve() {}
+    disconnect() { resizeCb = null }
+  }
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', { value: ResizeObserverStub, writable: true })
+  })
+  beforeEach(() => {
+    resizeCb = null
+    useEditor.setState({ activePath: null, inspected: null })
+  })
+
+  const setViewport = (w: number, h: number) => {
+    if (resizeCb) resizeCb([{ contentRect: { width: w, height: h } }])
+  }
+
+  /** A client whose evalRaw emulates a live layer tree over /api/eval. */
+  const layerClient = (layersJson: string) =>
+    makeClient({ evalRaw: vi.fn(async () => layersJson) })
+
+  const LAYER_JSON = JSON.stringify([
+    { id: '2', name: 'bg', z: 0, visible: true, handle: 3, opacity: 1 },
+    { id: '1', name: 'fg', z: 5, visible: false, handle: 4, opacity: 0.8 },
+    { id: '3', name: 'msg', z: 10, visible: true, handle: 0, opacity: 1 },
+  ])
+
+  it('renders layer snapshot rows with texture handles, visibility and opacity', async () => {
+    render(<VisualView client={layerClient(LAYER_JSON) as unknown as EngineClient} />)
+    await screen.findByText('bg')
+    const rows = document.querySelectorAll('.layer-row')
+    expect(rows.length).toBe(3)
+    const fg = [...rows].find((n) => n.textContent!.includes('fg')) as HTMLElement
+    expect(fg.className).toContain('hidden')
+    expect(fg.textContent).toContain('hidden')
+    expect(fg.textContent).toContain('#4')
+    expect(fg.textContent).toContain('80%')
+    const bg = [...rows].find((n) => n.textContent!.includes('bg')) as HTMLElement
+    expect(bg.textContent).toContain('visible')
+    expect(bg.textContent).toContain('#3')
+    const msg = [...rows].find((n) => n.textContent!.includes('msg')) as HTMLElement
+    expect(msg.textContent).toContain('∅')
+  })
+
+  it('shows the empty placeholder when no render layers exist', async () => {
+    render(<VisualView client={layerClient('[]') as unknown as EngineClient} />)
+    await screen.findByText('(no render layers yet)')
+    expect(document.querySelectorAll('.layer-row').length).toBe(0)
+  })
+
+  it('re-renders the layer snapshot when Refresh is clicked with new data', async () => {
+    const evalMock = vi.fn(async () => '[]')
+    render(<VisualView client={makeClient({ evalRaw: evalMock }) as unknown as EngineClient} />)
+    await screen.findByText('(no render layers yet)')
+    evalMock.mockResolvedValue(JSON.stringify([{ id: '1', name: 'bg', z: 0, visible: true, handle: 7, opacity: 1 }]))
+    const subtitle = screen.getByText('LAYER SNAPSHOT').closest('.panel-subtitle')!
+    fireEvent.click(subtitle.querySelector('button')!)
+    await screen.findByText('bg')
+    expect(document.querySelectorAll('.layer-row').length).toBe(1)
+  })
+
+  it('selecting a layer highlights it and links to the Inspector', async () => {
+    useEditor.setState({ activePath: 'assets/script/main.ks' })
+    render(<VisualView client={layerClient(LAYER_JSON) as unknown as EngineClient} />)
+    await screen.findAllByText('bg')
+    const layerRows = Array.from(document.querySelectorAll('.layer-row')) as HTMLElement[]
+    expect(layerRows.length).toBe(3)
+    const bgRow = layerRows.find((n) => n.textContent!.includes('bg'))!
+    fireEvent.click(bgRow)
+    expect(bgRow.className).toContain('selected')
+    expect(useEditor.getState().inspected).toEqual({ path: 'assets/script/main.ks', line: 1 })
+  })
+
+  it('zooms via the toolbar buttons and resets back to fit', async () => {
+    render(<VisualView client={makeClient() as unknown as EngineClient} />)
+    await screen.findByAltText('Engine frame')
+    fireEvent.click(screen.getByTitle('Zoom in'))
+    expect(screen.getByText('125%')).toBeTruthy()
+    fireEvent.click(screen.getByTitle('Reset zoom/pan'))
+    expect(screen.getByText('100%')).toBeTruthy()
+  })
+
+  it('clamps wheel zoom within the allowed band', async () => {
+    render(<VisualView client={makeClient() as unknown as EngineClient} />)
+    const vp = (await screen.findByAltText('Engine frame')).closest('.visual-viewport') as HTMLElement
+    for (let i = 0; i < 20; i++) fireEvent.wheel(vp, { deltaY: -100 })
+    expect(screen.getByText('400%')).toBeTruthy()
+    for (let i = 0; i < 30; i++) fireEvent.wheel(vp, { deltaY: 100 })
+    expect(screen.getByText('100%')).toBeTruthy()
+  })
+
+  it('applies the transform scale/translate from zoom and pan', async () => {
+    render(<VisualView client={makeClient() as unknown as EngineClient} />)
+    const stage = (await screen.findByAltText('Engine frame')).closest('.visual-stage') as HTMLElement
+    expect(stage.style.transform).toContain('scale(1)')
+    fireEvent.click(screen.getByTitle('Zoom in'))
+    fireEvent.click(screen.getByTitle('Zoom in'))
+    expect(stage.style.transform).toContain('scale(1.5)')
+  })
+
+  it('pan is clamped so the frame never leaves the viewport on resize', async () => {
+    render(<VisualView client={makeClient() as unknown as EngineClient} />)
+    await screen.findByAltText('Engine frame')
+    setViewport(300, 200)
+    const vp = (await screen.findByAltText('Engine frame')).closest('.visual-viewport') as HTMLElement
+    for (let i = 0; i < 4; i++) fireEvent.wheel(vp, { deltaY: -100 })
+    const stage = vp.querySelector('.visual-stage') as HTMLElement
+    expect(stage.style.transform).toContain('scale(2)')
+    setViewport(300, 200)
+    fireEvent.pointerDown(vp, { clientX: 100, clientY: 100, pointerId: 1 })
+    fireEvent.pointerMove(vp, { clientX: 500, clientY: 500, pointerId: 1 })
+    fireEvent.pointerUp(vp, { pointerId: 1 })
+    expect(stage.style.transform).toContain('translate(150px, 100px)')
+  })
+
+  it('marks the preview live when the engine is connected', async () => {
+    useEditor.setState({ engineConnected: true })
+    render(<VisualView client={makeClient() as unknown as EngineClient} />)
+    await screen.findByAltText('Engine frame')
+    expect(screen.getByText('live')).toBeTruthy()
+  })
+
+  it('degrades to a static snapshot hint when disconnected with no frame', async () => {
+    useEditor.setState({ engineConnected: false })
+    const client = makeClient({
+      frame: vi.fn(async () => ({ status: 'error', error: 'GPU busy' })),
+    })
+    render(<VisualView client={client as unknown as EngineClient} />)
+    await screen.findByText(/Engine disconnected.*static snapshot unavailable/)
   })
 })
