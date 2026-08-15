@@ -115,47 +115,70 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(bundle.assets.some((a) => a.includes('classroom.png'))).toBe(true)
   }, 60000)
 
-  it('runs every tutorial in the teaching path (01-13) to completion', async () => {
-    const tutorials = [
-      ['tutorial_01_hello.ks', /你好，世界/],
-      ['tutorial_02_text.ks', /文本命令学完了/],
-      ['tutorial_03_layers.ks', /图层教程完成/],
-      ['tutorial_04_audio.ks', /音频教程完成/],
-      ['tutorial_05_branching.ks', /分支教学完成/],
-      ['tutorial_06_effects.ks', /教程 06 完成/],
-      // round 45: save/load degrades gracefully (no SaveManager in web)
-      ['tutorial_07_saveload.ks', /存档教程完成/],
-      // round 45: system-UI overlays are no-op stubs in the web player
-      ['tutorial_08_system_ui.ks', /教程 08 完成/],
-      // round 50: interpolation teaching ($tbl.key / %tbl.key% / ${expr})
-      ['tutorial_09_interpolation.ks', /插值教程完成/],
-      // round 56: bounded loops ([for] ascending/descending, [while]+[eval])
-      ['tutorial_10_loops.ks', /循环教程完成/],
-      // round 58: multi-way branch (bare variable + exp= expression selector)
-      ['tutorial_11_switch.ks', /switch 教程完成/],
-      // round 68: expression combo (ternary-in-index / ?? / switch exp / loops)
-      ['tutorial_12_expr_combo.ks', /表达式组合教程完成/],
-      // round 71: KAG3-compatible commands (textspeed/cps, math chain, csp, notify, vibrate, preload)
-      ['tutorial_13_commands.ks', /KAG3 兼容命令教程完成/],
-    ]
-    for (const [file, lineRe] of tutorials) {
-      const ks = readFileSync(join(here, '..', 'demo', 'tutorial', file), 'utf8')
-      const out = await player.runScene(ks, file, { maxFrames: 200000, autoClick: true })
-      expect(out.startsWith('DONE:'), file + ' should complete: ' + out).toBe(true)
-      // teaching lines flow through the TextScene draws (bridge collects
-      // them per-run); a [ch] line must have hit the page at some point.
+  // round 79: parameterized regression sweep — the REAL demo teaching files
+  // (01-13) + showcase.ks run through the wasmoon player to completion with
+  // ZERO unexpected error events; cheap per-file end states are asserted so a
+  // regression in any tutorial surfaces the exact file. example_game's story
+  // is included too (auto-click drives its [sel] choices down route 1 -> good end).
+  const tutorialSweep = [
+    ['tutorial_01_hello.ks', 'tutorial', /你好，世界/, [], {}],
+    ['tutorial_02_text.ks', 'tutorial', /文本命令学完了/, [], {}],
+    ['tutorial_03_layers.ks', 'tutorial', /图层教程完成/, [], {}],
+    ['tutorial_04_audio.ks', 'tutorial', /音频教程完成/, [], {}],
+    // branching converges at *ending regardless of the random coin; exactly
+    // one of 路线 A / 路线 B may render (f.luck = math.random(2)).
+    ['tutorial_05_branching.ks', 'tutorial', /分支教学完成/, [], { pathA: /路线 A/, pathB: /路线 B/ }],
+    ['tutorial_06_effects.ks', 'tutorial', /教程 06 完成/, [], {}],
+    // round 45: save/load + system-UI stubs degrade gracefully (no error)
+    ['tutorial_07_saveload.ks', 'tutorial', /存档教程完成/, [], {}],
+    ['tutorial_08_system_ui.ks', 'tutorial', /教程 08 完成/, [], {}],
+    ['tutorial_09_interpolation.ks', 'tutorial', /插值教程完成/, [], {}],
+    ['tutorial_10_loops.ks', 'tutorial', /循环教程完成/, [], {}],
+    ['tutorial_11_switch.ks', 'tutorial', /switch 教程完成/, [], {}],
+    ['tutorial_12_expr_combo.ks', 'tutorial', /表达式组合教程完成/, [], {}],
+    // round 71/77: [palette day/night/toggle] must fire REAL palette.set events
+    ['tutorial_13_commands.ks', 'tutorial', /KAG3 兼容命令教程完成/, [], { palette: 3 }],
+    ['showcase.ks', '', null, 'Thanks for watching the showcase.', {}],
+    // auto-click resolves both [sel] blocks to option 1 -> good ending
+    ['story.ks', 'example_game', null, 'thank you for finding my story.', {}],
+  ]
+  it.each(tutorialSweep)('%s completes with zero unexpected error events', async (file, dir, teaching, terminal, flags) => {
+    const sub = dir ? dir + '/' : ''
+    const ks = readFileSync(join(here, '..', 'demo', sub, file), 'utf8')
+    player.core.events.length = 0
+    player.core.backlog.length = 0
+    const out = await player.runScene(ks, file, { maxFrames: 300000, autoClick: true })
+    // scene must reach [end] (never a frame-limit abort or parked [p])
+    expect(out.startsWith('DONE:'), file + ' should complete: ' + out).toBe(true)
+    // zero unexpected error events surfaced through the runner
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs, file + ' should have no error events').toEqual([])
+    // teaching lines (tutorials) flow through the text.update / backlog draws
+    if (teaching) {
       const texts = player.core.events
         .filter((e) => e.kind === 'text.draws')
         .flatMap((e) => (Array.isArray(e.detail?.draws) ? e.detail.draws : []))
         .map((d) => d.t || '')
         .concat(player.core.backlog.flatMap((p) => p.draws.map((d) => d.t || '')))
-      expect(texts.some((x) => lineRe.test(x)), file + ' should contain teaching line').toBe(true)
+      expect(texts.some((x) => teaching.test(x)), file + ' should contain teaching line').toBe(true)
     }
-    // tutorial 06 unlocks its ending
-    const ending = player.core.events.some((e) => e.kind === 'ending.unlock')
-    expect(ending).toBe(true)
+    const backlog = player.core.backlog.map((b) => b.text || b.src || '').join(' | ')
+    const draws = player.core.events.filter((e) => e.kind === 'text.draws').flatMap((e) => (Array.isArray(e.detail?.draws) ? e.detail.draws : [])).map((d) => d.t || '')
+    const all = (backlog + ' | ' + draws.join(' | '))
+    // per-file end states
+    if (flags.pathA && flags.pathB) {
+      // tutorial_05 branching: exactly one of the two coin paths renders
+      expect(flags.pathA.test(all) ? 1 : (flags.pathB.test(all) ? 1 : 0), file + ' should reach A or B').toBe(1)
+      expect(flags.pathA.test(all) === flags.pathB.test(all), file + ' picks exactly one branch').toBe(false)
+    }
+    if (typeof flags.palette === 'number') {
+      const pal = player.core.events.filter((e) => e.kind === 'palette.set').length
+      expect(pal === flags.palette, file + ' should fire ' + flags.palette + ' palette.set events, got ' + pal).toBe(true)
+    }
+    if (terminal) {
+      expect(all.includes(terminal), file + ' should show terminal line: ' + terminal).toBe(true)
+    }
   }, 120000)
-
   it('persists saves across scenes (round 46 web save bridge)', async () => {
     // isolate: fresh keys so earlier tests cannot leak state
     for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
