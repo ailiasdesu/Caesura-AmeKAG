@@ -93,4 +93,5 @@ tmp/
 /ks_*_proto.lua
 tests/scripts/tmp_probe*.lua
 web/scratch.*.test.js
+editor/.scratch_*
 cache/

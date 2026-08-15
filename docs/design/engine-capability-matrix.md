@@ -154,7 +154,7 @@ graph LR
 |---|-----------|-----------|--------|
 | C1 | Live2D animation (Cubism 5 SDK / PNG static fallback) | `IAnimationBackend` | Partial: PNG fallback + D3D11 (Windows) verified; **Metal render path fully implemented (was stub); GL shader deployment fixed (active-renderer FrameworkShaders copy)** -- GL/Metal runtime validation needs Linux/macOS hardware. SDK is bundled in thirdparty/. See `docs/guides/live2d-setup.md` |
 | C2 | 3D mini-game framework (enter→update→render→leave loop) | `IMiniGameBackend` | ✓ lifecycle + JSON scenes + 20-API Lua binding (`mini_game` global, sandbox-whitelisted); real-GPU D3D11 child-process test (enter→update→render→leave) + programmatic `enter(0)` mode; demo_minigame.lua runs end-to-end on D3D11 and OpenGL 4.3 |
-| C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ |
+| C3 | Encrypted save/load (JSON, AES-256-GCM) | `ISaveManager` | ✓ round-trip suite (round 79): ciphertext unreadable without key, graceful no-key failure, wrong-key GCM rejection, magic-gated plaintext pass-through, forged-magic rejection, tampered ciphertext+nonce rejection, slot-boundary mirroring |
 | C4 | Schema migration (v1→v5 auto-upgrade, pluggable migrations) | `ISaveManager` | ✓ |
 | C5 | CARC archive packaging (compress, encrypt, sign) | `IArchiveWriter` | ✓ |
 | C6 | Ed25519 digital signature (tamper detection for .carc files) | `ICryptoEngine` | ✓ |
@@ -166,7 +166,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py`) and HTTP smoke (`headless_http_smoke.py`, 14 assertions) end-to-end tested via ctest |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 14 assertions) end-to-end tested via ctest; **round-79 web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps zero 62→76) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
@@ -182,10 +182,10 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite: 617 cases / 3002 asserts, Lua 116 files, 2026-08-12) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (current local suite 2026-08-15: C++ 769 cases, Lua 121 + 16 orphan, web 76/76, editor 210/210; ctest 10 + AI-skip) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
-| P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ |
+| P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
 | P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | ✓ core mapping + lifecycle + **SDL finger events bridged (normalized -> pixel) + orientation change events (Lua _G.onOrientationChanged); 87 unit tests**; native mobile SDK integration still needs a device |
 
