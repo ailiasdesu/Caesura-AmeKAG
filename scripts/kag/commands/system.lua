@@ -65,7 +65,12 @@ function SystemCommands.wait(ctx, params)
     local elapsed = 0
     local frameTime = 16  -- ~60fps default dt
 
-    while elapsed < ms and not ct.cancelled do
+    -- Honor the scheduler's flow controls exactly like [until] (round
+    -- 87): a scene abort (ctx.stop_flag) or a Lua-initiated jump
+    -- (ctx._next_index) must end the wait immediately instead of keeping
+    -- the coroutine parked until ms elapses or the operation is cancelled.
+    while elapsed < ms and not ct.cancelled
+          and not ctx.stop_flag and not ctx._next_index do
         -- Yield each frame; scheduler feeds actual dt
         local dt = coroutine.yield() or frameTime
         if ct.cancelled then break end

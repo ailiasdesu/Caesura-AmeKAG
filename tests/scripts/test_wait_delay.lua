@@ -194,14 +194,12 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- 9. OBSERVED behavior (documented, no fix): unlike [until], a [wait] that
---    is NOT operation-cancelled keeps its coroutine parked in the yield loop
---    even when ctx.stop_flag or ctx._next_index is set from outside — it
---    only exits once its own ms elapses or its token is cancelled.  The
---    scheduler's stop_flag/_next_index checks run between tokens, NOT inside
---    the wait handler's inner frame loop.  We lock this so a future change
---    (adding stop_flag/_next_index to the wait loop, matching [until]) is
---    a deliberate, reviewed behavior change.
+-- 9. BehaVior aligned with [until] (round 87): a running [wait] obeys the
+--    scheduler's flow controls.  Setting ctx.stop_flag (a scene abort) from
+--    outside the wait handler's inner frame loop now ends the wait early —
+--    the coroutine exits (dead), the operation is completed and cleaned up,
+--    and a huge ms does not keep it parked.  (_next_index takes the same
+--    path: the loop condition mirrors [until] exactly.)
 -- ---------------------------------------------------------------------------
 do
     local ctx = mk()
@@ -215,12 +213,13 @@ do
         if frames == 3 then ctx.stop_flag = true end
         coroutine.resume(co, 16)
     end
-    -- 2000ms / 16 = 125 frames: with 40-frame cap and stop_flag ignored
-    -- mid-wait, the coroutine is STILL suspended (not dead, not advanced).
-    check("(observed) stop_flag does not unpark a running wait",
-        coroutine.status(co) == "suspended", "status " .. coroutine.status(co))
-    check("(observed) wait keeps an active operation until ms elapses",
-        #ctx.active_operations == 1)
+    -- 2000ms / 16 = 125 frames: stop_flag must unpark far earlier than the
+    -- 40-frame cap.  The coroutine ends (dead, not suspended), proving the
+    -- wait loop broke on stop_flag instead of parking until ms elapsed.
+    check("stop_flag interrupts a running wait (early, dead)",
+        coroutine.status(co) == "dead", "status " .. coroutine.status(co))
+    check("stop_flag interrupt cleans active_operations",
+        #ctx.active_operations == 0)
 end
 
 -- ---------------------------------------------------------------------------
