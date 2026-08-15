@@ -109,6 +109,14 @@ function lsp.completion(lineText, cursorCol)
     end
     -- param context: "[ch " -> params of ch
     local specs = schemaModule.dumpContracts()[cmdName]
+    -- KAG3 alias commands share a handler but register no contract of
+    -- their own: [sel] IS TextCommands.button (params text/target/cond/
+    -- caption/x, round-74 x= result capture) -- complete its params from
+    -- the aliased command's contract so the editor offers them.
+    local ALIAS_PARAM_CMDS = { sel = "button" }
+    if not specs and ALIAS_PARAM_CMDS[cmdName] then
+        specs = schemaModule.dumpContracts()[ALIAS_PARAM_CMDS[cmdName]]
+    end
     -- Expression flow commands ([if]/[while]) have no contract entry but
     -- still take an exp= value; fall through to the variable-table prefix
     -- suggestions below instead of returning empty.

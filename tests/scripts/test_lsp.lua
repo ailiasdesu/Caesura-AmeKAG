@@ -312,8 +312,43 @@ check("json: aggregation serializes definition+references",
       jqa:find('"kind":"definition"', 1, true) ~= nil
       and jqa:find('"kind":"reference"', 1, true) ~= nil)
 
+-- ---------------------------------------------------------------------------
+-- 12. KAG3 alias param completion (round 75): [sel] shares the [button]
+--     handler (TextCommands.sel = button) but registers no contract of its
+--     own; the LSP must complete its params from the aliased command.
+-- ---------------------------------------------------------------------------
+do
+    local cSel = lsp.completion('[sel ', nil)
+    local params = {}
+    for _, it in ipairs(cSel) do
+        if it.kind == 5 then params[it.label] = true end
+    end
+    check("alias: [sel ] completes text", params.text == true)
+    check("alias: [sel ] completes target", params.target == true)
+    check("alias: [sel ] completes cond", params.cond == true)
+    check("alias: [sel ] completes caption", params.caption == true)
+    check("alias: [sel ] completes x (round-74 result capture)", params.x == true)
+    -- prefix filtering still applies on the alias params
+    local cSelX = lsp.completion('[sel x', nil)
+    local hasX = false
+    for _, it in ipairs(cSelX) do
+        if it.label == 'x' then hasX = true end
+    end
+    check("alias: [sel x filters to x", hasX)
+    -- non-alias commands are unaffected
+    local cCh = lsp.completion('[ch ', nil)
+    local hasSelOnly = false
+    for _, it in ipairs(cCh) do
+        if it.label == 'x' then hasSelOnly = true end
+    end
+    check("alias: [ch ] does not gain x", not hasSelOnly)
+end
+
 -- Exit gate.
 if failed > 0 then
+
+
+
     print(string.format("LSP TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)
 end
