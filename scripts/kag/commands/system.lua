@@ -671,6 +671,41 @@ function SystemCommands.notify(ctx, params)
     return true
 end
 
+-- [i18n language="zh"] — hot-switch the UI language mid-scene (round 76).
+-- Uses the round-75 runtime API (i18n.set_language with the fallback chain
+-- current -> default_language -> raw key) and re-localizes the visible
+-- page, backlog, active choices and closed captions — the same path the
+-- settings menu uses after its language cycle. Headless-safe: a missing
+-- dictionary degrades to the printed notice, never raises.
+_schema.define("i18n", {
+    _meta = { category = "system", blocking = false,
+              desc = "hot-switch the UI language mid-scene (language=xx)" },
+    language = { type = "string", required = true },
+})
+
+function SystemCommands.i18n(ctx, params)
+    local lang = params.language or params.lang
+    if type(lang) ~= "string" or lang == "" then
+        print("[i18n] missing language= (e.g. [i18n language=\"zh\"])")
+        return true
+    end
+    local ok, i18n = pcall(require, "i18n")
+    if not (ok and type(i18n) == "table" and type(i18n.set_language) == "function") then
+        print("[i18n] runtime unavailable; degraded: " .. tostring(lang))
+        return true
+    end
+    i18n.set_language(lang)
+    ctx.settingsValues = ctx.settingsValues or {}
+    ctx.settingsValues.language = lang
+    -- Full-page redraw: page/backlog/choices/cc re-localize (the exact
+    -- relocalize_page the settings menu uses after its language cycle).
+    pcall(function()
+        local kt = require("kag.commands.text")
+        if kt and kt.relocalize_page then kt.relocalize_page(ctx) end
+    end)
+    return true
+end
+
 function SystemCommands.ai_dialog(ctx, params)
     local backend = require("backend")
     local prompt = params.prompt

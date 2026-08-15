@@ -49,6 +49,7 @@ local tests = {
     "test_choice",
     "test_text_markup",
     "test_i18n",
+    "test_i18n_cmd",
     "test_sma",
     "test_sma_check",
     "test_sma_demo",

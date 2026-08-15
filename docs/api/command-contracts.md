@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (117)
+## Commands (118)
 
 ### `[add]`
 
@@ -361,6 +361,14 @@ _Category: text · Blocking: no (fire-and-forget) · horizontal rule_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[i18n]`
+
+_Category: system · Blocking: no (fire-and-forget) · hot-switch the UI language mid-scene (language=xx)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `language` | string | - | - | yes |
 
 ### `[image]`
 
