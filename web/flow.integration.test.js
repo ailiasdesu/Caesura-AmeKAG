@@ -1286,7 +1286,188 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     await player.lua.doString('(require("i18n")).set_language("zh")')
     await player.lua.doString('(require("i18n")).strings.items = { other = "共 {n} 个", one = "一个" }')
     expect(await tNum(1)).toBe('共 1 个')
-    await player.lua.doString('(require("i18n")).set_language("en")')
+  }, 120000)
+
+  // ---- round 82: [eval]/[random]/[ending]/backlog/[rollback]/vfx parity ---
+  // Desktop behavior the web bridge had not yet pinned. The web player loads
+  // the REAL scheduler.lua + kag command tables, so each of these must behave
+  // identically under wasmoon (all verified against desktop semantics below).
+
+  it('[eval exp=] bare expression stores tf.eval_result; assignment is a no-result statement (round 82 parity)', async () => {
+    const readTF = async () => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.tf and _G.__LAST_CTX.tf.eval_result or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    // Bare arithmetic expression -> result 7 into tf.eval_result (the
+    // scheduler wraps "return <expr>" through the full TJS pipeline).
+    let out = await player.runScene(['[eval exp="1+2*3"]', '[end]'].join(NL), 'eval_arith.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(await readTF()).toBe(7)
+
+    // Bare ternary (TJS ? :) -> 1, proving the translateAssignment path.
+    out = await player.runScene(['[set f.a = true]', '[eval exp="f.a ? 1 : 2"]', '[end]'].join(NL), 'eval_tern.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(await readTF()).toBe(1)
+
+    // Assignment compiles as a STATEMENT (result nil) -> f.hp set, and the
+    // SAME scene's tf.eval_result stays at its earlier bare-expr value
+    // (rawset fires only on result ~= nil). Both eval tags share one ctx,
+    // because ctx.tf is per-scene (a fresh run re-creates it).
+    out = await player.runScene(
+      ['[eval exp="f.x = 1"]', '[eval exp="f.x * 2"]', '[eval exp="f.y = 99"]', '[end]'].join(NL),
+      'eval_assign.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.f and _G.__LAST_CTX.f.y or nil')
+    expect(player.lua.global.get('__R')).toBe(99)
+    // f.x * 2 stored 2 into eval_result; the f.y assignment (statement) did
+    // not overwrite it.
+    expect(await readTF()).toBe(2)
+  }, 120000)
+
+  it('[eval exp=] a runtime error degrades gracefully; the scene survives (round 82 parity)', async () => {
+    const NL = String.fromCharCode(10)
+    player.core.events.length = 0
+    // [eval exp="error(42)"] raises inside the pcall'd eval; the scheduler
+    // prints a diagnostic and CONTINUES (no scene abort — desktop behavior).
+    const out = await player.runScene(
+      ['[eval exp="error(42)"]', '[ch name="N" text="survived-eval-err"]', '[p]', '[end]'].join(NL),
+      'eval_err.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    expect(texts).toContain('survived-eval-err')
+    // No error events surface through the runner (contained + printed).
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs).toEqual([])
+  }, 120000)
+
+  it('[random var= min= max=] writes an integer in [min,max]; swaps inverted ranges (round 82 parity)', async () => {
+    const readF = async (k) => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.f and _G.__LAST_CTX.f[' + JSON.stringify(k) + '] or nil')
+      return player.lua.global.get('__R')
+    }
+    const NL = String.fromCharCode(10)
+    player.core.events.length = 0
+    // Bounded range: every draw is an integer in [1,6], and over 30 draws
+    // more than one value appears (math.random is uniform, not constant).
+    const draws = []
+    for (let i = 0; i < 30; i++) {
+      await player.runScene(['[random var="f.d" min=1 max=6]', '[end]'].join(NL), 'rand.ks', { maxFrames: 200000, autoClick: true })
+      const v = await readF('d')
+      expect(typeof v).toBe('number')
+      expect(Number.isInteger(v)).toBe(true)
+      expect(v).toBeGreaterThanOrEqual(1)
+      expect(v).toBeLessThanOrEqual(6)
+      draws.push(v)
+    }
+    expect(new Set(draws).size).toBeGreaterThan(1)
+    // Inverted range min>max swaps (system.lua: min,max = max,min) -> still
+    // a valid integer inside the swapped bounds, no error.
+    const inv = await player.runScene(['[random var="f.r" min=9 max=2]', '[end]'].join(NL), 'rand_inv.ks', { maxFrames: 200000, autoClick: true })
+    expect(inv.startsWith('DONE:'), inv).toBe(true)
+    const iv = await readF('r')
+    expect(Number.isInteger(iv)).toBe(true)
+    expect(iv).toBeGreaterThanOrEqual(2)
+    expect(iv).toBeLessThanOrEqual(9)
+    // Defaults: min=0 max=100 when omitted.
+    await player.runScene(['[random var="f.def"]', '[end]'].join(NL), 'rand_def.ks', { maxFrames: 200000, autoClick: true })
+    const dv = await readF('def')
+    expect(Number.isInteger(dv)).toBe(true)
+    expect(dv).toBeGreaterThanOrEqual(0)
+    expect(dv).toBeLessThanOrEqual(100)
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs).toEqual([])
+  }, 120000)
+
+  it('[ending id=] records unlocked endings with dedup by id (round 82 parity)', async () => {
+    // Isolate: reset the shared dedup registry so earlier scenes cannot leak.
+    player.core.endings = []
+    player.core._endingKeys = new Set()
+    const NL = String.fromCharCode(10)
+    // Two distinct ids + a repeat id. The engine keys seen_endings by id, so
+    // a repeat OVERWRITES, not appends; recordEndings then dedups by id too.
+    const out = await player.runScene(
+      ['[ending id="good" name="Good End"]', '[ending id="bad"]', '[ending id="good"]', '[end]'].join(NL),
+      'ending_multi.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const ids = player.core.endings.map((e) => e.id)
+    expect(ids).toContain('good')
+    expect(ids).toContain('bad')
+    // missing name falls back to "Ending <id>"
+    expect(player.core.endings.find((e) => e.id === 'bad').name).toBe('Ending bad')
+    // dedup: exactly two unique entries after the repeat [ending]
+    expect(player.core.endings.length).toBe(2)
+
+    // Across scenes: a fresh scene with the SAME id must not re-add it, and
+    // ending.unlock fires only on a NEW id (not on the repeat).
+    const before = player.core.endings.length
+    await player.runScene(['[ending id="good"]', '[end]'].join(NL), 'ending_again.ks', { maxFrames: 200000, autoClick: true })
+    expect(player.core.endings.length).toBe(before)
+    const goodUnlocks = player.core.events.filter((e) => e.kind === 'ending.unlock' && e.detail.id === 'good').length
+    expect(goodUnlocks).toBe(1)
+  }, 120000)
+
+  it('backlog preserves [p]-page order across a deep scrollback (round 82 parity)', async () => {
+    player.core.backlog = []
+    const NL = String.fromCharCode(10)
+    const ks = []
+    for (let i = 1; i <= 8; i++) ks.push('[ch name="N" text="LINE' + i + '"]', '[p]')
+    ks.push('[end]')
+    const out = await player.runScene(ks.join(NL), 'backlog_deep.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    // each [p] commits one page; arrival order is preserved (FIFO backlog)
+    expect(player.core.backlog.length).toBe(8)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toBe(
+      '[N]LINE1 | [N]LINE2 | [N]LINE3 | [N]LINE4 | [N]LINE5 | [N]LINE6 | [N]LINE7 | [N]LINE8')
+    // pages carry the nameplate prefix [N] like the desktop history rows
+    expect(player.core.backlog[0].text).toContain('[N]LINE1')
+    expect(player.core.backlog[7].text).toContain('[N]LINE8')
+  }, 120000)
+
+  it('[rollback] degrades gracefully on web: no undo stack -> no-op, no crash (round 82 parity)', async () => {
+    const NL = String.fromCharCode(10)
+    // Desktop [rollback] pops the kag_runner undo stack and re-runs from the
+    // saved token. The web bridge drives its own scene cursor (__CTXREF) and
+    // never wires kag_runner.rollback's module ctx, so rollback() returns
+    // "nothing-to-rollback" / "no-context"; the handler prints and returns
+    // false. Parity to lock: the scene survives, runs to DONE, no error event.
+    player.core.events.length = 0
+    player.core.backlog = []
+    const out = await player.runScene(
+      ['[ch name="N" text="A"]', '[p]', '[rollback]', '[ch name="N" text="B"]', '[p]', '[end]'].join(NL),
+      'rollback_deg.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs).toEqual([])
+    // both lines still render; rollback did not abort or re-loop
+    const texts = player.core.backlog.map((b) => b.text).join(' | ')
+    expect(texts).toContain('A')
+    expect(texts).toContain('B')
+  }, 120000)
+
+  it('[vibrate]/[flash] blocking VFX complete/degrade headless without crashing (round 82 parity)', async () => {
+    const NL = String.fromCharCode(10)
+    player.core.events.length = 0
+    // [flash] (VFX.flash) and [vibrate] (KAG3 alias -> message-layer vib) are
+    // BLOCKING: they yield frames until their duration elapses. Headless they
+    // animate a pure-Lua flash layer / no-op message layer; the contract to
+    // lock is that the scene completes with no error event.
+    let out = await player.runScene(
+      ['[flash r=255 g=0 b=0 time=100]', '[ch name="N" text="flash-done"]', '[p]', '[end]'].join(NL),
+      'fx_flash.ks', { maxFrames: 200000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('flash-done')
+
+    player.core.events.length = 0
+    player.core.backlog = []
+    const out2 = await player.runScene(
+      ['[vibrate time=100 intensity=3]', '[ch name="N" text="vib-done"]', '[p]', '[end]'].join(NL),
+      'fx_vibrate.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:'), out2).toBe(true)
+    expect(player.core.backlog.map((b) => b.text).join(' | ')).toContain('vib-done')
+
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs).toEqual([])
   }, 120000)
 
 })
