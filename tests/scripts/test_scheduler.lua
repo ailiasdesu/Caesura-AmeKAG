@@ -210,6 +210,92 @@ do
     check("until broken exp aborts wait", n == 3 and #ctx.dispatched == 1)
 end
 
+-- 8i-8o. [until] edge cases (round 59): timeout boundaries, default,
+-- operation cancel, waiting_input non-interference, truthiness, guard.
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 0 }}, {"ch", { text = "done" }} }, 10)
+    check("until timeout=0 falls through immediately", n <= 4
+          and #ctx.dispatched == 1)
+    check("until timeout=0 no active ops leak", #(ctx.active_operations or {}) == 0)
+end
+
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.x == 1", timeout = -5 }}, {"ch", { text = "done" }} }, 10)
+    check("until negative timeout clamped to 0", n <= 4 and #ctx.dispatched == 1)
+end
+
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1" }}, {"ch", { text = "done" }} },
+        6)
+    check("until default timeout does not expire early", n == 6
+          and #ctx.dispatched == 0)
+end
+
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1" }}, {"ch", { text = "done" }} },
+        6, function(frame)
+            if frame == 2 then ctx.stop_flag = true end
+        end)
+    check("until stop_flag aborts scene", n <= 5 and ctx.stop_flag == true
+          and #(ctx.active_operations or {}) == 0)
+end
+
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 60000 }}, {"ch", { text = "done" }} },
+        6, function(frame)
+            if frame == 2 then
+                local t = ctx.active_operations and ctx.active_operations[1]
+                if t then t:mark_cancelled() end
+            end
+        end)
+    check("until operation cancel ends wait", n <= 4
+          and #ctx.dispatched == 1
+          and #(ctx.active_operations or {}) == 0)
+end
+
+do
+    local ctx = make_ctx()
+    ctx.waiting_input = true  -- pre-existing input wait (e.g. a [p])
+    local n = run_until(ctx,
+        { {"until", { exp = "f.go == 1", timeout = 5000 }}, {"ch", { text = "done" }} },
+        20, function(frame)
+            if frame == 3 then ctx.f.go = 1 end
+        end)
+    check("until does not touch waiting_input", n <= 8
+          and ctx.waiting_input == true and #ctx.dispatched == 1)
+end
+
+do
+    local ctx = make_ctx()
+    ctx.f.cnt = 0
+    local n = run_until(ctx,
+        { {"until", { exp = "f.cnt", timeout = 5000 }}, {"ch", { text = "done" }} },
+        20, function(frame)
+            if frame == 3 then ctx.f.cnt = 1 end
+        end)
+    check("until non-boolean truthiness waits", n <= 8
+          and ctx.f.cnt == 1 and #ctx.dispatched == 1)
+end
+
+do
+    local ctx = make_ctx()
+    local n = run_until(ctx,
+        { {"until", { exp = "f.never == 1", timeout = 16 }}, {"ch", { text = "done" }} },
+        10)
+    check("until 1-frame timeout continues", n <= 5 and #ctx.dispatched == 1
+          and #(ctx.active_operations or {}) == 0)
+end
+
 
 -- 9. [switch]/[case]/[default] — real assertions (replaces former
 --    hard-coded fake passes). Hand-built token streams exercise the

@@ -122,4 +122,98 @@ check("cond TJS && short-circuit", ctxE._choiceButtonsActive ~= nil
       and #ctxE._choiceButtonsActive == 1
       and ctxE._choiceButtonsActive[1].target == "*f")
 
+-- ---- round 59: [button cond] edge cases --------------------------------
+-- C1. numeric inequality + unconditional survive (raw-TJS path)
+do
+    local ctxF = {
+        f = { hp = 5 }, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "f.hp > 10" },
+            { text = "B", target = "*b", cond = "f.hp != 0" },
+            { text = "C", target = "*c" },
+        },
+    }
+    pcall(function() TextCommands.endbutton(ctxF, {}) end)
+    check("cond numeric inequality filters", ctxF._choiceButtonsActive ~= nil
+          and #ctxF._choiceButtonsActive == 2
+          and ctxF._choiceButtonsActive[1].target == "*b"
+          and ctxF._choiceButtonsActive[2].target == "*c")
+end
+
+-- C2. missing var cond is falsy -> hidden -> all-hidden dissolves
+do
+    local ctxG = {
+        f = {}, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "f.nope" },
+        },
+    }
+    pcall(function() TextCommands.endbutton(ctxG, {}) end)
+    check("cond missing var hidden, block dissolves", ctxG._choiceMode == nil
+          and ctxG._choiceButtons == nil)
+end
+
+-- C3. empty-string cond treated as unconditional
+do
+    local ctxH = {
+        f = {}, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "" },
+            { text = "B", target = "*b" },
+        },
+    }
+    pcall(function() TextCommands.endbutton(ctxH, {}) end)
+    check("cond empty string kept as unconditional",
+          ctxH._choiceButtonsActive ~= nil and #ctxH._choiceButtonsActive == 2)
+end
+
+-- C4. combined TJS cond (== && !=) through the raw-TJS path
+do
+    local ctxI = {
+        f = { a = 1, b = 2 }, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "f.a == 1 && f.b != 3" },
+            { text = "B", target = "*b", cond = "f.a == 2 && f.b != 3" },
+            { text = "C", target = "*c" },
+        },
+    }
+    pcall(function() TextCommands.endbutton(ctxI, {}) end)
+    check("cond combined TJS keeps only true", ctxI._choiceButtonsActive ~= nil
+          and #ctxI._choiceButtonsActive == 2
+          and ctxI._choiceButtonsActive[1].target == "*a")
+end
+
+-- C5. endselect parity with endbutton
+do
+    local ctxJ = {
+        f = { ok = false }, sf = {}, tf = {}, mp = {},
+        text_state = { line = 1, char_offset = 0, opacity = 255, cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580, backlog = {}, layers = {},
+        _choiceButtons = {
+            { text = "A", target = "*a", cond = "f.ok" },
+            { text = "B", target = "*b" },
+        },
+    }
+    pcall(function() TextCommands.endselect(ctxJ, {}) end)
+    check("endselect filters like endbutton", ctxJ._choiceButtonsActive ~= nil
+          and #ctxJ._choiceButtonsActive == 1
+          and ctxJ._choiceButtonsActive[1].target == "*b")
+end
+
+-- C6. endbutton with no staged choices is a no-op
+do
+    local ctxK = { f = {}, sf = {}, tf = {}, mp = {}, _choiceButtons = {} }
+    pcall(function() TextCommands.endbutton(ctxK, {}) end)
+    check("endbutton no choices no-op", ctxK._choiceMode == nil
+          and ctxK._choiceButtons == nil)
+end
+
 print("CHOICE TESTS DONE")
