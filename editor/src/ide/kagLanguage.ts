@@ -3,7 +3,7 @@
 // syntax highlighting in the editor area (IDE P2-7).
 import * as monaco from 'monaco-editor'
 
-const KAG_COMMANDS = [
+export const KAG_COMMANDS = [
   // flow
   'if', 'elseif', 'elsif', 'else', 'endif', 'while', 'endwhile', 'for',
   'endfor', 'break', 'continue', 'switch', 'case', 'default', 'endswitch',
