@@ -137,7 +137,27 @@ function scheduler.run(ctx, tokens, start_index)
     -- if/elseif chain state: each entry tracks whether a branch was TAKEN
     -- so later elseif/else in the SAME chain are skipped (nested chains
     -- are independent via the stack).
-    local if_stack = {}
+    -- Session-local control-flow stacks hoisted to ctx (round 75): the
+    -- [save] snapshot serializes them (capture_state) and a [load]
+    -- resume restores them into ctx._resumeLoopStacks. They are run
+    -- locals otherwise, and a [load] re-spawns scheduler.run -- the
+    -- restored run would start with empty stacks, so the first [endfor]/
+    -- [endwhile] became a no-op and any enclosing loop silently ended
+    -- (round-74 defect report). [endif]/[endswitch] would likewise lose
+    -- their chain/branch state. kag_runner.start resets all four for a
+    -- fresh session; every other run entry either restores the marker
+    -- (post-load) or inherits the live tables (cross-scene [jump]/[call]
+    -- swap tokens mid-run -- the stacks must survive those).
+    local resume_st = ctx._resumeLoopStacks
+    if resume_st then
+        ctx._resumeLoopStacks = nil
+        if type(resume_st.if_) == "table" then ctx._ifStack = resume_st.if_ end
+        if type(resume_st.switch) == "table" then ctx._switchStack = resume_st.switch end
+        if type(resume_st.while_) == "table" then ctx._whileStack = resume_st.while_ end
+        if type(resume_st.for_) == "table" then ctx._forStack = resume_st.for_ end
+    end
+    local if_stack = ctx._ifStack or {}
+    ctx._ifStack = if_stack
     -- KAG3 variable frames: ctx.lf is the local (call-frame) variable
     -- table -- [call] pushes a fresh frame, [return] pops it. ctx.mp is
     -- the message-parameter table (KAG3 [call ... mp="x"]); ensure both
@@ -146,13 +166,16 @@ function scheduler.run(ctx, tokens, start_index)
     if ctx.mp == nil then ctx.mp = {} end
     -- switch/case state: taken case bodies must not fall through into
     -- later cases (KAG3 semantics -- a matched case runs alone).
-    local switch_stack = {}
+    local switch_stack = ctx._switchStack or {}
+    ctx._switchStack = switch_stack
     -- while state. Bounded -- a runaway loop in a script (a variable
     -- that never changes) must not hang the runner. KAG3 had no bound;
     -- Neo-Genesis caps iterations and errors loudly.
-    local while_stack = {}
+    local while_stack = ctx._whileStack or {}
+    ctx._whileStack = while_stack
     -- for-loop state (numeric counter loops, same bounded regime).
-    local for_stack = {}
+    local for_stack = ctx._forStack or {}
+    ctx._forStack = for_stack
     local WHILE_MAX_ITERS = 65536
 
     local kag = require("kag")
@@ -1017,9 +1040,21 @@ function scheduler.run(ctx, tokens, start_index)
             -- Collect macro body until [endmacro]
             local body = {}
             i = i + 1
+            -- Depth-aware body collection (round 75): a nested
+            -- [macro inner]...[endmacro] pair belongs to the OUTER body;
+            -- the body ends at the [endmacro] matching the opening
+            -- [macro] (depth back to 0). The naive scan stopped at the
+            -- first [endmacro], corrupting the stream (round-74 report).
+            local bdepth = 1
             while i <= #tokens do
-                if tokens[i][1] == "endmacro" then break end
-                table.insert(body, {tokens[i][1], tokens[i][2]})
+                local bt = tokens[i]
+                if bt[1] == "macro" then
+                    bdepth = bdepth + 1
+                elseif bt[1] == "endmacro" then
+                    bdepth = bdepth - 1
+                    if bdepth == 0 then break end
+                end
+                table.insert(body, {bt[1], bt[2]})
                 i = i + 1
             end
             if name then
@@ -1057,13 +1092,29 @@ function scheduler.run(ctx, tokens, start_index)
             -- Check if it's a macro invocation
             local macro_body = ctx.macros and ctx.macros[cmd]
             if macro_body then
-                -- Expansion budget (audit): a self-recursive macro
-                -- ([macro m][m][endmacro]) would splice its body forever,
-                -- growing the token array until the C++ instruction budget
-                -- aborts -- an explicit per-scene cap fails fast instead.
-                ctx._macroExpansions = (ctx._macroExpansions or 0) + 1
-                if ctx._macroExpansions > 1000 then
-                    error("[macro] expansion budget exceeded (possible "
+                -- Expansion depth guard (round 75): the old per-ctx
+                -- counter grew without bound, so a legit scene with >1000
+                -- macro calls (e.g. a [for] loop calling a macro once per
+                -- iteration) errored with a misleading recursion message.
+                -- Track NESTING depth instead: each splice pushes the
+                -- index of its last body token; the loop pops it once
+                -- execution moves past that index (bottom of the loop).
+                -- A self-recursive macro grows the stack without bound;
+                -- a completed body always pops (loop rewinds re-splice
+                -- with an empty stack, so iterations stay flat).
+                ctx._macroStack = ctx._macroStack or {}
+                -- endIdx = index of the LAST spliced body token; the loop
+                -- pops the entry once i moves past it (bottom of loop).
+                -- A completed body therefore never accumulates entries --
+                -- a rewind re-splices with an empty (or fully popped)
+                -- stack. Self-recursion re-splices at the SAME position
+                -- while the previous entry is still live (i has not yet
+                -- passed endIdx) -- the stack grows one per level and
+                -- trips the depth cap. No dedupe: deduping by endIdx
+                -- would swallow exactly the recursion signal.
+                ctx._macroStack[#ctx._macroStack + 1] = i - 1 + #macro_body
+                if #ctx._macroStack > 100 then
+                    error("[macro] expansion depth exceeded (possible "
                           .. "self-recursive macro at " .. cmd .. ")")
                 end
                 -- Parameter substitution: build a per-invocation copy with
@@ -1226,6 +1277,13 @@ function scheduler.run(ctx, tokens, start_index)
 
         ctx.token_index = i
         i = i + 1
+        -- Macro expansion depth: pop splices whose body execution has
+        -- moved past the last body token (nested splices pop inner-first
+        -- because their end index is smaller).
+        while ctx._macroStack and #ctx._macroStack > 0
+            and i > ctx._macroStack[#ctx._macroStack] do
+            ctx._macroStack[#ctx._macroStack] = nil
+        end
         -- Implicit return: a [call] whose subroutine falls off the END of
         -- the token stream (no [return] tag before the last token) must not
         -- leave a stale call frame -- pop it and resume at the saved return

@@ -375,16 +375,39 @@ local function collect_macro_defs(tokens)
                     if #a > 0 then args[#args + 1] = a end
                 end
             end
-            -- body: tokens up to [endmacro] (converted to array form)
+            -- body: tokens up to the [endmacro] matching this [macro]
+            -- (converted to array form). Depth-aware (round 75): a nested
+            -- [macro inner]...[endmacro] pair belongs to the OUTER body;
+            -- the naive scan stopped at the first [endmacro] and
+            -- corrupted the stream. Any nested definition inside the
+            -- body also makes the outer macro DYNAMIC (the runtime
+            -- executes [macro] tokens and may redefine names at call
+            -- time), so it is conservatively excluded from inlining.
             local body = {}
             local j = i + 1
-            while j <= #tokens and macro_cmd(tokens[j]) ~= "endmacro" do
+            local bdepth = 1
+            while j <= #tokens do
+                local bcmd = macro_cmd(tokens[j])
+                if bcmd == "macro" then
+                    bdepth = bdepth + 1
+                elseif bcmd == "endmacro" then
+                    bdepth = bdepth - 1
+                    if bdepth == 0 then break end
+                end
                 local bt = to_array_tok(tokens[j])
                 if bt then body[#body + 1] = bt end
                 j = j + 1
             end
             if name then
-                if defs[name] then
+                local hasNested = false
+                for _, bt in ipairs(body) do
+                    if macro_cmd(bt) == "macro" then hasNested = true break end
+                end
+                if hasNested then
+                    -- nested definition inside the body: runtime may
+                    -- redefine macros when the body executes -- dynamic
+                    redef[name] = true
+                elseif defs[name] then
                     -- redefinition: never inline this name (runtime
                     -- semantics = last definition wins)
                     redef[name] = true

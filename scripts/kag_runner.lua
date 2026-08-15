@@ -361,6 +361,17 @@ function kag_runner.start(scene_path)
     ctx.current_scene = scene_path
     ctx.currentScene = scene_path  -- also set camelCase for text/save commands
 
+    -- Fresh session: reset session-local control-flow stacks and the
+    -- macro expansion depth tracker (round 75 -- they live on ctx now so
+    -- [save]/[load] can snapshot/restore them; a new game must not
+    -- inherit the previous game's [for]/[while]/[if]/[switch] entries).
+    ctx._forStack = {}
+    ctx._whileStack = {}
+    ctx._ifStack = {}
+    ctx._switchStack = {}
+    ctx._macroStack = nil
+    ctx._resumeLoopStacks = nil
+
     -- Start coroutine
     kag_co = coroutine.create(function()
         scheduler.run(ctx, ctx.tokens, 1)

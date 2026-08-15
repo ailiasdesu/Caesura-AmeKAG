@@ -132,6 +132,26 @@ local function capture_state(ctx)
         end
     end
 
+    -- Live loop/branch stacks (round 75): scheduler.run hoisted them to
+    -- ctx so a save taken INSIDE a [for]/[while] body (or an [if]/[case]
+    -- chain) can restore them on [load] -- otherwise the re-spawned run
+    -- starts with empty stacks and the enclosing loop silently ends
+    -- (round-74 defect). Entries are plain JSON-able values (var/endv/
+    -- step/pos/ended for for; pos/ended for while; booleans for if and
+    -- switch). Deep-copy defensively; missing/non-table = no restore.
+    local function copyStack(t)
+        if type(t) ~= "table" or #t == 0 then return nil end
+        local out = {}
+        for i2, e in ipairs(t) do out[i2] = e end
+        return out
+    end
+    state.loop_stacks = {
+        for_ = copyStack(ctx._forStack),
+        while_ = copyStack(ctx._whileStack),
+        if_ = copyStack(ctx._ifStack),
+        switch = copyStack(ctx._switchStack),
+    }
+
     -- Schema version (engine-defined)
     state.schema_version = 2  -- bumped: added unlock state
 
@@ -395,6 +415,19 @@ function SaveCommands.load(ctx, params)
         (type(state.seen_scenes) == "table") and state.seen_scenes or {}
     ctx.seen_endings =
         (type(state.seen_endings) == "table") and state.seen_endings or {}
+
+    -- Restore live loop/branch stacks (round 75): the re-spawned
+    -- scheduler.run consumes this marker at entry. Type-guarded -- a
+    -- crafted save may carry anything here; entries are only replayed
+    -- if they look like the arrays capture_state wrote.
+    local ls = state.loop_stacks
+    if type(ls) == "table" then
+        local marker = {}
+        for k2, arr in pairs(ls) do
+            if type(arr) == "table" then marker[k2] = arr end
+        end
+        if next(marker) then ctx._resumeLoopStacks = marker end
+    end
 
     -- Set token position for resume
     ctx.token_index = math.max(1, tonumber(state.token_index) or 1)
