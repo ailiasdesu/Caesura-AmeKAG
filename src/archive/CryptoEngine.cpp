@@ -119,7 +119,12 @@ std::vector<uint8_t> CryptoEngine::encrypt(
     uint8_t* nonce, size_t nonceLen,
     uint8_t* tag, size_t tagLen)
 {
-    if (!plaintext || plaintextLen == 0 || !key || keyLen < 32) return {};
+    // AES-256 is exactly AES_KEY_SIZE bytes. Both the BCrypt (Windows) and
+    // OpenSSL (macOS/Linux) backends use AES-256 and would silently use only the
+    // first AES_KEY_SIZE bytes for an oversized key. A wrong key length is a
+    // configuration bug and must surface early: reject anything that is not
+    // exactly AES_KEY_SIZE, symmetric with the keyLen < AES_KEY_SIZE guard.
+    if (!plaintext || plaintextLen == 0 || !key || keyLen != AES_KEY_SIZE) return {};
 
 #ifdef _WIN32
     try {
@@ -172,7 +177,9 @@ std::vector<uint8_t> CryptoEngine::decrypt(
     const uint8_t* nonce, size_t nonceLen,
     const uint8_t* tag, size_t tagLen)
 {
-    if (!ciphertext || ciphertextLen == 0 || !key || keyLen < 32) return {};
+    // See encrypt(): AES-256 key length is exactly AES_KEY_SIZE; reject any
+    // other length (both shorter and longer) rather than silently truncating.
+    if (!ciphertext || ciphertextLen == 0 || !key || keyLen != AES_KEY_SIZE) return {};
 
 #ifdef _WIN32
     try {
@@ -282,6 +289,15 @@ void CryptoEngine::generateKey(uint8_t* key, size_t keyLen)
 
 void CryptoEngine::generateNonce(uint8_t* nonce, size_t nonceLen)
 {
+    // Nonce uniqueness contract: nonces are drawn from a CSPRNG
+    // (BCryptGenRandom / RAND_bytes). For AES_GCM_NONCE_SIZE (96 bits) uniform
+    // random nonces, accidental collision probability is negligible (< 2^-48 at
+    // billions of messages), so we do NOT maintain a reuse-detection registry:
+    // tracking every generated nonce would cost unbounded memory for essentially
+    // no practical benefit. Callers generating nonces in a deterministic or
+    // externally-controlled context (e.g. the index nonce derived from CARC
+    // version, or a nonce synthesized from a counter) remain responsible for
+    // guaranteeing uniqueness of nonces used under the same key.
 #ifdef _WIN32
     if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, (ULONG)nonceLen, BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
         throw std::runtime_error("BCryptGenRandom failed for nonce");

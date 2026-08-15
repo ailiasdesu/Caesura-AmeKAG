@@ -1,4 +1,4 @@
-﻿// CARCWriter implementation
+// CARCWriter implementation
 #include "CARCWriter.h"
 #include <zstd.h>
 #include "CryptoEngine.h"
@@ -37,12 +37,29 @@ bool CARCWriter::addFile(const std::string& relativePath,
 {
     if (!m_output.is_open()) return false;
 
+    uint8_t pathHash[PATH_HASH_SIZE];
+    CryptoEngine::sha256(reinterpret_cast<const uint8_t*>(relativePath.data()),
+                         relativePath.size(), pathHash);
+
+    // Deduplicate by path hash: adding an already-present relative path
+    // updates the existing pending entry (last write wins), matching the
+    // reader's hash-keyed index semantics. This keeps the index sized to the
+    // number of unique paths rather than the number of addFile() calls.
+    for (auto& pf : m_pendingFiles) {
+        if (std::memcmp(pf.pathHash, pathHash, PATH_HASH_SIZE) == 0) {
+            pf.relativePath = relativePath;
+            pf.originalSize = size;
+            if (size > 0) pf.data.assign(data, data + size);
+            else pf.data.clear();
+            return true;
+        }
+    }
+
     PendingFile pf;
     pf.relativePath = relativePath;
     pf.originalSize = size;
     if (size > 0) pf.data.assign(data, data + size);
-    CryptoEngine::sha256(reinterpret_cast<const uint8_t*>(relativePath.data()),
-                         relativePath.size(), pf.pathHash);
+    memcpy(pf.pathHash, pathHash, PATH_HASH_SIZE);
     m_pendingFiles.push_back(std::move(pf));
     return true;
 }
@@ -51,6 +68,18 @@ bool CARCWriter::addFileByHash(const uint8_t pathHash[PATH_HASH_SIZE],
                                const uint8_t* data, size_t size)
 {
     if (!m_output.is_open()) return false;
+
+    // Deduplicate by path hash (same idempotent "update existing" semantics
+    // as addFile): a path hash already pending gets its content replaced.
+    for (auto& pf : m_pendingFiles) {
+        if (std::memcmp(pf.pathHash, pathHash, PATH_HASH_SIZE) == 0) {
+            pf.relativePath.clear();
+            pf.originalSize = size;
+            if (size > 0) pf.data.assign(data, data + size);
+            else pf.data.clear();
+            return true;
+        }
+    }
 
     PendingFile pf;
     pf.relativePath.clear();

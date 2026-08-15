@@ -551,13 +551,13 @@ TEST_CASE("CARC G11: empty-content file entries round-trip and stay addressable"
     CHECK(zeroSizeCount == 2);
 }
 
-TEST_CASE("CARC G11: duplicate path keys -- last add controls read, numFiles counts both") {
+TEST_CASE("CARC G11: duplicate path keys are deduplicated (update existing entry)") {
     namespace fs = std::filesystem;
-    // LOCKED-DOCUMENTATION: CARCWriter currently does NOT deduplicate entries
-    // that share a path hash. The reader's index maps hash->entry (last one
-    // wins), while numFiles() reflects the raw file-list, i.e. counts both.
-    // This test nails down the *current* behavior so a future dedup decision
-    // is a deliberate, reviewable change.
+    // CARCWriter::addFile is idempotent by relative path: re-adding an existing
+    // path updates the pending entry (last write wins) instead of appending a
+    // duplicate. The index therefore holds exactly one entry per unique path,
+    // so numFiles() equals the unique-path count and readFile() returns the
+    // last-added content -- consistent with the reader's hash-keyed map.
     Caesura::TestPaths::ScopedTempDir temp("archive_g11_dup");
     const fs::path arc = temp.path() / "dup.carc";
     {
@@ -565,19 +565,23 @@ TEST_CASE("CARC G11: duplicate path keys -- last add controls read, numFiles cou
         REQUIRE(writer.create(arc.string()));
         REQUIRE(writer.addFile("same.txt", reinterpret_cast<const uint8_t*>("first"), 5));
         REQUIRE(writer.addFile("same.txt", reinterpret_cast<const uint8_t*>("second"), 6));
+        REQUIRE(writer.addFile("other.txt", reinterpret_cast<const uint8_t*>("x"), 1));
         REQUIRE(writer.finalize());
     }
 
     Caesura::carc::CARCReader reader;
     REQUIRE(reader.open(arc.string()));
     CHECK(reader.hasFile("same.txt"));
-    // numFiles() reports both raw entries for the same path hash.
+    // One index entry per unique path -> numFiles() counts unique paths, not
+    // raw addFile() calls.
     CHECK(reader.numFiles() == 2);
-    // readFile() resolves through the hash-keyed index -> last add wins.
+    // readFile() returns the last-added (overwriting) content.
     auto got = reader.readFile("same.txt");
     REQUIRE_FALSE(got.empty());
     CHECK(got.size() == 6);
     CHECK(std::memcmp(got.data(), "second", 6) == 0);
+    // The distinct path was not collapsed by the dedup.
+    CHECK(reader.hasFile("other.txt"));
 }
 
 // --- Streaming I/O: > 2 MiB round-trip / trunkated-file graceful failure -----
@@ -749,17 +753,18 @@ TEST_CASE("Crypto G11: non-256-bit key lengths are rejected (empty output)") {
                                nonce, sizeof(nonce), tag, sizeof(tag));
     CHECK(enc8.empty());
 
-    // An oversized key (48 bytes) is tolerated: only the first 32 are used.
+    // An oversized key (48 bytes) is rejected: AES-256 key length is exactly
+    // AES_KEY_SIZE. A wrong key length is a configuration bug and must fail
+    // fast (both encrypt and decrypt), symmetric with the too-short guard.
     uint8_t longKey[48] = {};
     for (int i = 0; i < 48; ++i) longKey[i] = static_cast<uint8_t>(i);
     auto enc48 = crypto.encrypt(msg, sizeof(msg), longKey, sizeof(longKey),
                                 nonce, sizeof(nonce), tag, sizeof(tag));
-    REQUIRE_FALSE(enc48.empty());
-    // Decrypting with a 32-byte prefix of the same key must succeed.
-    auto dec = crypto.decrypt(enc48.data(), enc48.size(), longKey, 32,
-                              nonce, sizeof(nonce), tag, sizeof(tag));
-    REQUIRE_FALSE(dec.empty());
-    CHECK(std::memcmp(dec.data(), msg, sizeof(msg)) == 0);
+    CHECK(enc48.empty());
+    // Decrypt of the (never produced) oversized-key ciphertext also rejects.
+    auto dec48 = crypto.decrypt(msg, sizeof(msg), longKey, sizeof(longKey),
+                                nonce, sizeof(nonce), tag, sizeof(tag));
+    CHECK(dec48.empty());
 }
 
 TEST_CASE("Crypto G11: empty plaintext rejected; wrong-key decrypt fails") {

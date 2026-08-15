@@ -27,12 +27,16 @@ public:
                 const std::string& privateKeyPath = "",
                 const std::string& publicKeyPath = "");
 
-    // Add a file to the archive. Data is copied.
+    // Add a file to the archive. Data is copied. Idempotent by relative path:
+    // adding the same path again updates the existing pending entry (last write
+    // wins) instead of appending a duplicate -- the index holds one entry per
+    // unique relative path, matching numFiles() and the reader's hash-keyed map.
     bool addFile(const std::string& relativePath,
                  const uint8_t* data, size_t size);
 
     // Add a file by its precomputed path hash (used by DeltaCARC apply,
-    // where plaintext paths are not recoverable from CARC indexes).
+    // where plaintext paths are not recoverable from CARC indexes). Also
+    // idempotent by path hash, with the same "update existing" semantics.
     bool addFileByHash(const uint8_t pathHash[PATH_HASH_SIZE],
                        const uint8_t* data, size_t size);
 
