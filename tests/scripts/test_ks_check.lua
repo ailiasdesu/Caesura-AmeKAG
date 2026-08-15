@@ -234,6 +234,51 @@ if swfn then
         warn_count('[macro label]' .. NL .. "[endmacro]", "flow command") == 1)
     check("warn flow-macro clean",
         warn_count('[macro scene_intro args="a"]' .. NL .. "[endmacro]", "flow command") == 0)
+
+    -- (g) [if]/[while]/[until] with a MISSING or empty exp= (round 77).
+    check("warn missing-exp if triggers",
+        warn_count('[if]' .. NL .. '[ch text="x"]' .. NL .. "[endif]", "missing or empty exp") == 1)
+    check("warn empty-exp while triggers",
+        warn_count('[while exp="   "]' .. NL .. 'b' .. NL .. "[endwhile]", "missing or empty exp") == 1)
+    check("warn missing-exp clean",
+        warn_count('[if exp="f.a==1"]' .. NL .. '[ch text="x"]' .. NL .. "[endif]", "missing or empty exp") == 0)
+    check("warn for-not-flagged missing exp",
+        warn_count('[for var="i" start="1" end="3"]' .. NL .. "[endfor]", "missing or empty exp") == 0)
+
+    -- (h) duplicate named parameters in a single tag (round 77).
+    check("warn dup-param triggers",
+        warn_count('[ch text="a" text="b"]', "duplicate parameter") == 1)
+    check("warn dup-param 3x warns once",
+        warn_count('[ch text="a" text="b" text="c"]', "duplicate parameter") == 1)
+    check("warn dup-param clean",
+        warn_count('[ch text="a" align="l"]', "duplicate parameter") == 0)
+
+    -- (j) [label] defined but never referenced (round 77). Cross-scene refs
+    --     make this conservative: only fires when the scene registry is known
+    --     (warn_count_reg), the label is not the scene entry, is not targeted
+    --     by any in-scene nav, and is unreachable by fall-through (a label
+    --     perched right after a [jump]/[goto]/[return]).
+    check("warn unreferenced label triggers",
+        warn_count_reg('*start' .. NL .. '[jump target=*done]' .. NL .. '*dead' .. NL
+            .. '[end]' .. NL .. '*done', "never referenced", { ["x.ks"] = true }) == 1)
+    check("warn unreferenced label clean entry + referenced",
+        warn_count_reg('*start' .. NL .. '[ch text="x"]' .. NL .. '[jump target=*done]' .. NL
+            .. '[end]' .. NL .. '*done', "never referenced", { ["x.ks"] = true }) == 0)
+    check("warn unreferenced label clean fall-through anchor",
+        warn_count_reg('*start' .. NL .. '[ch text="x"]' .. NL .. '*middle' .. NL
+            .. '[ch text="y"]' .. NL .. '[end]', "never referenced", { ["x.ks"] = true }) == 0)
+    check("warn unreferenced label clean sel-targeted",
+        warn_count_reg('*start' .. NL .. '[sel target=*choice text="Pick"]' .. NL
+            .. '*choice' .. NL .. '[end]', "never referenced", { ["x.ks"] = true }) == 0)
+    check("warn unreferenced label silent without registry",
+        warn_count('*start' .. NL .. '[jump target=*done]' .. NL .. '*dead' .. NL
+            .. '[end]' .. NL .. '*done', "never referenced") == 0)
+
+    -- (d) [macro goto] is dead: goto is flow, it can never be macro-dispatched
+    --     (covered by the round-77 built-in-flow-macro shadow warning now that
+    --     goto is in the flow slot).
+    check("warn flow-macro goto triggers",
+        warn_count('[macro goto args="a"]' .. NL .. "[endmacro]", "flow command") == 1)
 end
 if failed > 0 then os.exit(1) end
 print("KS CHECK TESTS DONE")
