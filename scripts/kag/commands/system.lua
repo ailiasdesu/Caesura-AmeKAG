@@ -684,7 +684,7 @@ _schema.define("i18n", {
 })
 
 function SystemCommands.i18n(ctx, params)
-    local lang = params.language or params.lang
+    local lang = params.language
     if type(lang) ~= "string" or lang == "" then
         print("[i18n] missing language= (e.g. [i18n language=\"zh\"])")
         return true
