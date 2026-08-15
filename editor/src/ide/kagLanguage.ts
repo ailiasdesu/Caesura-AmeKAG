@@ -16,17 +16,17 @@ const KAG_COMMANDS = [
   'sprite_fade', 'sprite_move', 'sprite_scale', 'sprite_swap', 'history',
   'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto', 'nvl',
   // layer
-  'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout',
-  'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash',
+  'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout', 'layfade',
+  'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash', 'blur', 'fade',
   'vib', 'camera', 'particles',
   // audio
-  'playbgm', 'playbgmstop', 'playse', 'playvoice', 'stopbgm', 'stopse',
+  'playbgm', 'playbgmstop', 'playse', 'playvoice', 'stopvoice', 'stopbgm', 'stopse',
   'fadebgm', 'fadevol', 'xfadebgm', 'play', 'bgm', 'se', 'voice',
   'voice_off', 'playstop', 'setbgmvolume', 'setsevolume', 'setvoicevolume',
   'waitsound', 'waitbgm',
   // system / resource / save
   'wait', 'delay', 's', 'chapter', 'ending', 'gallery', 'music', 'unlock',
-  'rollback', 'toast', 'replay', 'save', 'load', 'listsaves', 'saveplace',
+  'rollback', 'toast', 'replay', 'save', 'load', 'saveload', 'listsaves', 'saveplace',
   'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
   'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'set', 'inc', 'random',
   'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
