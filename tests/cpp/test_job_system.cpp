@@ -215,37 +215,64 @@ TEST_CASE("Boundary[Null] rejected task: submit after shutdown never runs and re
     CHECK(njs.pendingJobs() == 0);
 }
 
-// (d) Exception isolation -- NullJobSystem provides NO isolation: a work lambda that
-// throws propagates out of submit() to the caller. Verified, not assumed.
-TEST_CASE("Boundary[Null] exception isolation: throwing work propagates out of submit") {
+// (d) Exception isolation -- the null system now mirrors the real JobSystem: a
+// throwing work() lambda is caught, reported, and swallowed so it can neither
+// escape the submit() caller nor corrupt the queue; the onComplete callback
+// still runs and submit returns a valid id.
+TEST_CASE("Boundary[Null] exception isolation: throwing work is isolated, submit returns normally") {
     NullJobSystem njs;
     njs.init();
-    CHECK_THROWS_AS(njs.submit([]() { throw std::runtime_error("boom"); }),
-                    std::runtime_error);
+    bool onCompleteRan = false;
+    uint64_t id = 0;
+    REQUIRE_NOTHROW([&]() {
+        id = njs.submit(
+            []() { throw std::runtime_error("boom"); },
+            JobPriority::Normal,
+            [&]() { onCompleteRan = true; });
+    }());
+    CHECK(id > 0);
+    CHECK(onCompleteRan);  // isolation does not drop the completion callback
+    CHECK(njs.pendingJobs() == 0);
 }
 
-// (d2) After a throwing job, the system is still usable: subsequent jobs still run.
+// (d2) After an isolated throwing job, the system stays usable: the throw does not
+// propagate, the completion callback still runs, and subsequent jobs still run.
 TEST_CASE("Boundary[Null] exception isolation: subsequent tasks still run after a throw") {
     NullJobSystem njs;
     njs.init();
     bool firstRan = false;
+    bool firstComplete = false;
     bool laterRan = false;
-    CHECK_THROWS_AS(njs.submit([&]() { firstRan = true; throw std::runtime_error("x"); }),
-                    std::runtime_error);
+    REQUIRE_NOTHROW(njs.submit(
+        [&]() { firstRan = true; throw std::runtime_error("x"); },
+        JobPriority::Normal,
+        [&]() { firstComplete = true; }));
     CHECK(firstRan);
+    CHECK(firstComplete);   // onComplete not skipped by the isolated throw
     uint64_t later = njs.submit([&]() { laterRan = true; });
     CHECK(later > 0);
     CHECK(laterRan);   // system not corrupted by the earlier throw
 }
 
-// (d3) Exception isolation for onComplete: also unguarded in the mock, propagates out.
-TEST_CASE("Boundary[Null] exception isolation: throwing onComplete propagates out of submit") {
+// (d3) Exception isolation for onComplete: also isolated -- a throwing completion
+// callback no longer escapes submit(); later jobs still run.
+TEST_CASE("Boundary[Null] exception isolation: throwing onComplete is isolated, submit returns normally") {
     NullJobSystem njs;
     njs.init();
-    CHECK_THROWS_AS(
-        njs.submit([]() {}, JobPriority::Normal,
-                   []() { throw std::runtime_error("cb"); }),
-        std::runtime_error);
+    bool workRan = false;
+    uint64_t id = 0;
+    REQUIRE_NOTHROW([&]() {
+        id = njs.submit(
+            [&]() { workRan = true; },
+            JobPriority::Normal,
+            []() { throw std::runtime_error("cb"); });
+    }());
+    CHECK(workRan);
+    CHECK(id > 0);
+    // A later job still runs after the isolated callback throw.
+    bool laterRan = false;
+    CHECK(njs.submit([&]() { laterRan = true; }) > 0);
+    CHECK(laterRan);
 }
 
 // (e) Nested / fan-out -- NullJobSystem is synchronous, so a work lambda that submits
@@ -306,6 +333,67 @@ TEST_CASE("Boundary[JobSystem] task completion via waitIdle") {
     }
     js.waitIdle();
     CHECK(counter.load() == kJobs);
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+// (g) Exception isolation on the REAL JobSystem: a throwing work() -- which prior
+// to isolation would escape the worker thread and terminate the process -- is
+// caught, reported, and swallowed. The queue keeps draining and waitIdle does not
+// wedge, so one bad task cannot kill a worker or the whole pool.
+TEST_CASE("Boundary[JobSystem] exception isolation: throwing work is isolated, queue keeps draining") {
+    JobSystem js;
+    js.init();
+    std::atomic<bool> afterThrowingRan{false};
+    std::atomic<bool> laterCompleteRan{false};
+
+    js.submit([]() { throw std::runtime_error("worker boom"); });
+    js.submit(
+        [&afterThrowingRan]() { afterThrowingRan.store(true); },
+        JobPriority::Normal,
+        [&laterCompleteRan]() { laterCompleteRan.store(true); });
+
+    // Must return (not wedge) and both the later task + its callback run.
+    js.waitIdle();
+    for (int i = 0; i < 200 && !laterCompleteRan.load(); ++i) {
+        js.pollMainThreadJobs();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    CHECK(afterThrowingRan.load());
+    CHECK(laterCompleteRan.load());
+    CHECK(js.pendingJobs() == 0);
+    js.shutdown();
+}
+
+// (h) Exception isolation for onComplete on the REAL JobSystem: a throwing
+// main-thread callback does not escape pollMainThreadJobs nor stop the rest of
+// the drained batch.
+TEST_CASE("Boundary[JobSystem] exception isolation: throwing onComplete is isolated during poll") {
+    JobSystem js;
+    js.init();
+    std::atomic<bool> workerDone{false};
+    std::atomic<bool> laterMainDone{false};
+
+    // First job's work succeeds but its onComplete throws.
+    js.submit(
+        [&workerDone]() { workerDone.store(true); },
+        JobPriority::Normal,
+        []() { throw std::runtime_error("cb boom"); });
+    // A second job whose onComplete succeeds must still be delivered + run.
+    js.submit(
+        []() { /* plain work */ },
+        JobPriority::Normal,
+        [&laterMainDone]() { laterMainDone.store(true); });
+
+    for (int i = 0; i < 200 && !laterMainDone.load(); ++i) {
+        js.waitIdle();
+        js.pollMainThreadJobs();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    CHECK(workerDone.load());
+    CHECK(laterMainDone.load());  // the batch kept draining past the throwing callback
     CHECK(js.pendingJobs() == 0);
     js.shutdown();
 }
