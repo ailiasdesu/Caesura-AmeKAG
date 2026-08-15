@@ -310,8 +310,33 @@ Engine、Lua 或动画后端。
 | `size` | 文件大小（字节） |
 | `files` | 打包的文件数量 |
 
----
+### 1.10 执行 Lua 片段（/api/eval 桥 — LSP 语言服务 + 引擎跳转，round 80）
 
+**POST /api/eval** — 提交一段原始 Lua（返回它的求值结果）。
+HTTP worker 与 `/api/run` 走同一 owner-thread Lua 派发（Lua 脚本错误 → HTTP 500，错误信息透传）。
+这是编辑器 LSP 语言服务（`kag.lsp.json`）与**大纲驱动实机跳转**（engineJump）的通路。
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| body | string | 原始 Lua 脚本文本（`return` 的表达式结果即为响应 `result`） |
+
+| 响应字段 | 类型 | 说明 |
+|---------|------|------|
+| status | string | `"ok"` |
+| result | string | Lua 片段返回值的字符串化结果 |
+
+示例：
+
+```
+→ POST /api/eval
+→ return 6 * 7
+← {"status":"ok","result":"42"}
+```
+
+> **LSP 语言服务**：编辑器 `lspCall()` 把请求桥接为 `return kag.lsp.json(...)` 经本端点求值，
+> 返回 JSON 文本字符串供渲染器解析。支持的方法见下方 [附录 C：LSP 语言服务方法](#附录-c-lsp-语言服务方法经-apieval-桥接)。
+
+---
 ## 2. Lua Binding Modules
 
 编辑器通过注入 Lua 脚本来驱动引擎。以下是所有可用的 Lua 绑定模块。
@@ -713,3 +738,66 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 ```
 
 Lua 侧 API：`require("kag_debug")`（`set_breakpoint`/`step`/`continue_run`/`inspect`/`serialize_json`）。运行中通过编辑器 `eval` 也可直接调用 `kag_runner.debug_resume()` / `kag_runner.debug_step()`。
+
+---
+
+## 附录 C：LSP 语言服务方法（经 /api/eval 桥接，round 80）
+
+语言服务（`scripts/kag/lsp.lua`，纯 Lua，由声明式命令契约驱动）通过
+**POST /api/eval** 暴露给编辑器：编辑器 `lspCall()` 把每次请求包装成一条
+`return kag.lsp.json(...)` 的 Lua 片段，引擎求值后返回 JSON 文本字符串，
+渲染器解析一次。所有方法都是纯函数（无 ctx / 无 I/O）。
+
+### C.1 方法总览
+
+| 方法（lsp.json 第一个参数） | Lua 签名 | 返回形状 |
+|---------------------------|----------|---------|
+| `completion` | `lsp.completion(line_text)` | `[{label, kind, detail, insertText}]` |
+| `hover` | `lsp.hover(cmd, param?)` | `[{title, text}]`（契约 + 描述） |
+| `diagnostics` | `lsp.diagnostics(text)` | `[{line, col, message, severity}]` |
+| `definition` | `lsp.definition(text, line, char)` | `[{name, line, col}]`（跨场景目标 name-only） |
+| `references` | `lsp.references(text, labelName)` | `[{kind, line, col}]`（definition/reference） |
+| `rename` (round 80) | `lsp.rename(text, line, char, newName)` | `{renamed, edits}`（见下） |
+
+### C.2 rename —— 标签重命名（round 80 新增）
+
+光标位于一个 `*label` 上（或在 `[jump]/[call]/[link]/[goto]/[sel]/[select]`
+的 `target="*name"` / 裸 `*name` 引用上）时，返回 `{renamed:true, edits:[…]}`，
+覆盖该标签的定义点 + 全部导航引用；每个编辑项：
+
+| 编辑字段 | 类型 | 说明 |
+|---------|------|------|
+| `kind` | string | `"definition"`（定义点）或 `"reference"`（导航引用） |
+| `line` | int | 名称字节位置所在行（1-based） |
+| `col` | int | 首字符 **紧跟 `*` 之后**的字节偏移（editor 原地套用） |
+| `length` | int | 旧名称的字节长度 |
+| `newText` | string | 新名称 |
+
+响应三种形态：
+
+| 形态 | 条件 |
+|------|------|
+| `{"renamed":true,"edits":[ … ]}` | 正常：定义 + N 个引用编辑 |
+| `{"renamed":false,"edits":[]}` | 新名称非法被拒（`lsp.rename` 返回 `nil`） |
+| `{"renamed":true,"edits":[]}` | 光标处无已知标签 / 跨场景目标无编辑（空编辑） |
+
+请求示例（`/api/eval` 桥，等待返回 JSON 字符串）：
+
+```
+→ POST /api/eval
+→ return kag.lsp.json("rename", renTxt, 1, 1, "scene")
+← {"status":"ok","result":"[{\"renamed\":true,\"edits\":[...]}]"}
+```
+
+新名校验：可选前置 `*` 会被剥离；合法名需匹配 `[A-Za-z_][A-Za-z0-9_]*`
+（与 tokenizer 标识符同字符集），否则被拒（`renamed:false`）。同名校忽略
+（返回空编辑集）。
+
+### C.3 大纲驱动实机跳转（engineJump，round 80）
+
+编辑器面板的 **▶ 执行到标签 / 右键跳转** 通过同一 `/api/eval` 桥实现：
+先经 `flow.find_label` 校验标签存在，再调用 `kag.jump` 并设置
+调度器接管锚点（`_next_index`），让运行中的调度器在下一 token 处接管
+执行——**零引擎改动**。路由片段受沙箱白名单约束（`_G._CAESURA_CTX`
+锚点）。SceneOutlinePanel（`editor/`）提供该跳转的 UI 入口。
+

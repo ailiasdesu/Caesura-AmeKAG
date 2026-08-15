@@ -356,11 +356,17 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 > as the global `i18n` table like `scheduler`. Handles multi-language
 > string tables (`assets/lang/<code>.lua`) and runtime template
 > interpolation. Fallback chain: current language → default language → raw key.
+> Plural support (round 80): a dictionary value may be a CLDR-style plural
+> variant table (`{ one = "...", other = "..." }`); `translate(text, { n = … })`
+> selects the variant for the count's `plural_category` and interpolates `{n}`
+> with the literal number (see `plural_category` / `_plural_form` below).
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `current_language` | `() → string` | Return the currently selected language code (`i18n.current`). Pairs with `set_language()`. |
 | `set_language` | `(code, opts) → strings` | Select a per-language dictionary with fallback chain current → default → raw key. Loads `assets/lang/<code>.lua`, sets `i18n.current`, returns the active strings table. `opts.default` overrides the fallback default (updates `i18n.default_language`); `opts.reload=true` forces a re-read even when `code` equals the current language. |
-| `translate` | `(text, params) → string` | Runtime template interpolation: resolve the template through the normal localization path, then fill `{name}` placeholders from `params`. Unknown placeholders and inline-markup tags are left intact. With no `params` behaves like `localize()`. Example: `i18n.translate("Hello, {name}!", { name = "Caesura" })` → `"Hello, Caesura!"`. |
+| `translate` | `(text, params) → string` | Runtime template interpolation: resolve the template through the normal localization path, then fill `{name}` placeholders from `params`. Unknown placeholders and inline-markup tags are left intact. With no `params` behaves like `localize()`. Plural + numeric format (round 80): a string-table value may be a plural variant table (`items = { one = "{n} item", other = "{n} items" }`); with `params.n` the variant for that count's `plural_category` is picked and its `{n}` is interpolated to the literal number, without `params.n` the generic (`other`) form is resolved. Example: `i18n.translate("Hello, {name}!", { name = "Caesura" })` → `"Hello, Caesura!"`; `i18n.translate("items", { n = 1 })` → `"1 item"` (en one). |
+| `plural_category` | `(count) → string` | Return the CLDR plural category for a count in the current language: `en` → `"one"` when count == 1 else `"other"`; `zh`/`ja` (and any unknown language) always → `"other"` (no singular/plural distinction). |
+| `_plural_form` | `(entry, count?) → string` | Resolve a dictionary value that is a plain string (returned unchanged) or a plural variant table: picks the variant for `count`'s category, falling back to `other` then `one`; with `count` nil uses the generic `other` form (safe for `t()`/`expand()` with no `{n}`). |
 | `reload` | `(langCode) → strings` | Hot-reload a language dictionary from disk (re-reads `assets/lang/<code>.lua` even if already current); preserves `i18n.current`, `i18n.default_language` and the cached fallback. |
 | `default_language` | `(field) → string` | Fallback dictionary language (default `"en"`); configurable. |
