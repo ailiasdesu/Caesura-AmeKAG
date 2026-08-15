@@ -23,6 +23,8 @@ local tests = {
     "test_macro",
     "test_p2_features",
     "test_contracts_runtime",
+    "test_saveflow",
+    "test_bench_dispatch",
 }
 
 local passed, failed = 0, 0
