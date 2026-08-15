@@ -654,8 +654,8 @@ _Category: resource · Blocking: no (fire-and-forget) · Preload assets (texture
 |---|---|---|---|---|
 | `path` | string |  | - | - |
 | `storage` | string |  | - | - |
-| `type` | string | texture | 1,2,3 | - |
-| `wait` | string | true | 1,2 | - |
+| `type` | enum | texture | - | - |
+| `wait` | enum | true | - | - |
 
 ### `[pt]`
 
