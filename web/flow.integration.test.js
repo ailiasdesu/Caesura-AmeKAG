@@ -981,4 +981,86 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     await renderer.render()
     expect(stage.style.filter).toBe('')
   }, 60000)
+
+  // -- round 81 resume: advance/skip/auto parity -------------------------
+  // Desktop parity: each runScene(opts.advance) resumes the previously
+  // parked scene cursor and advances exactly ONE [p] page (kag_runner
+  // on_click semantics), instead of re-running the scene from token 1.
+  const pageText = () => (player.core.draws || []).map((d) => d.t || '').join('')
+
+  it('advance resumes the parked scene one page at a time (round 81)', async () => {
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[ch name="A" text="PAGE-ONE"]', '[p]',
+      '[ch name="A" text="PAGE-TWO"]', '[p]',
+      '[ch name="A" text="PAGE-THREE"]', '[p]',
+      '[end]',
+    ].join(NL)
+    // Fresh start parks at the first [p].
+    let out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('PAGE-ONE')
+
+    // Advance 1 -> ONE page forward, parked at the next [p] (PAGE-TWO shown).
+    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    expect(out.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('PAGE-TWO')
+    expect(pageText()).not.toContain('PAGE-ONE')
+
+    // Advance 2 -> PAGE-THREE.
+    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    expect(out.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('PAGE-THREE')
+
+    // Advance 3 -> past the final [p], DONE.
+    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    expect(out.startsWith('DONE:')).toBe(true)
+    // Backlog accumulated the departing pages (PAGE-ONE + PAGE-TWO + PAGE-THREE).
+    const bl = (player.core.backlog || []).map((b) => b.text).join(' | ')
+    expect(bl).toContain('PAGE-ONE')
+    expect(bl).toContain('PAGE-TWO')
+    expect(bl).toContain('PAGE-THREE')
+  }, 120000)
+
+  it('advance with a mismatched scene name restarts from token 1 (round 81)', async () => {
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[ch name="A" text="PAGE-ONE"]', '[p]',
+      '[ch name="A" text="PAGE-TWO"]', '[p]',
+      '[end]',
+    ].join(NL)
+    let out = await player.runScene(ks, 'adv_mismatch.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('PAGE-ONE')
+
+    // advanceScene does NOT match the current scene -> fresh run from token 1,
+    // so we are parked at PAGE-ONE again (not advanced to PAGE-TWO).
+    out = await player.runScene(ks, 'adv_mismatch.ks', { maxFrames: 50000, advance: true, advanceScene: 'some_other.ks' })
+    expect(out.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('PAGE-ONE')
+    expect(pageText()).not.toContain('PAGE-TWO')
+  }, 120000)
+
+  it('advance preserves [set] variables across pages (round 81)', async () => {
+    const NL = String.fromCharCode(10)
+    const ks = [
+      '[set f.v = 10]',
+      '[ch name="A" text="V1=${f.v}"]', '[p]',
+      '[set f.v = 20]',
+      '[ch name="A" text="V2=${f.v}"]', '[p]',
+      '[end]',
+    ].join(NL)
+    const out0 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000 })
+    expect(out0.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('V1=10')
+
+    // Advancing must NOT wipe the ctx: [set f.v = 20] ran on the resumed
+    // coroutine so V2 interpolates the variable that survived the advance.
+    const out1 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_vars.ks' })
+    expect(out1.startsWith('WAIT:')).toBe(true)
+    expect(pageText()).toContain('V2=20')
+
+    const out2 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_vars.ks' })
+    expect(out2.startsWith('DONE:')).toBe(true)
+  }, 120000)
 })

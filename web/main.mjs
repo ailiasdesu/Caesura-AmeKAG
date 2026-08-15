@@ -129,19 +129,14 @@ async function runScene(name) {
 
 async function advance() {
   const sel = document.getElementById('scene').value
-  // VN semantics: clicking commits the visible page to history
-  if (player.core.draws.length > 0) {
-    const text = player.core.draws.map((d) => d.t).join('')
-    player.core.setDraws(player.core.draws.map((d) => ({ ...d })))
-  }
-  log('click')
-  await player.click()
+  // VN semantics: advance resumes the previously parked scene cursor one page
+  // (desktop on_click parity) instead of re-running the whole scene from token 1.
   let out
   if (storyBundle && storyBundle.scenes[sel]) {
-    out = await player.runFromBundle(storyBundle, sel, { autoClick: false, maxFrames: 5000 })
+    out = await player.runFromBundle(storyBundle, sel, { autoClick: false, maxFrames: 5000, advance: true, advanceScene: sel })
   } else {
     const ks = await (await fetch(DEMO_BASE + sel)).text()
-    out = await player.runScene(ks, sel, { autoClick: false, maxFrames: 5000 })
+    out = await player.runScene(ks, sel, { autoClick: false, maxFrames: 5000, advance: true, advanceScene: sel })
   }
   syncTextures()
   await renderer.render()

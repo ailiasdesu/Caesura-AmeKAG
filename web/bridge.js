@@ -346,6 +346,11 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
+      // Advance semantics (round 81 resumed): opts.advance resumes the
+      // previously parked scene cursor (persistent ctx + live coroutine,
+      // keyed by the source-scene name) instead of replaying from token 1.
+      lua.global.set('__ADVANCE', opts.advance === true)
+      lua.global.set('__ADVANCE_SCENE', opts.advanceScene ?? null)
       // Choice-selection override (round 74): pick which [endbutton] option
       // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
       lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
@@ -354,7 +359,40 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       const out = await lua.doString(`
         local tokenizer = require('tokenizer')
         local scheduler = require('scheduler')
-        local tokens = tokenizer.parse(KS_SRC)
+        -- Advance semantics (round 81 resumed): when opts.advance matches the
+        -- persisted scene name, resume the previously PARKED cursor (the live
+        -- coroutine + ctx stored in __CO / __CTXREF) instead of re-parsing and
+        -- replaying from token 1. This mirrors kag_runner.on_click: one click
+        -- advances a single [p] page, parking at the next WAIT (or DONE).
+        -- Because all runs share the same wasmoon Lua state, the Lua tables and
+        -- coroutine survive across runScene/doString calls by reference.
+        local advance = __ADVANCE == true
+        local advanceMatch = advance and __ADVANCE_SCENE ~= nil
+          and tostring(__ADVANCE_SCENE) == '${sceneName}'
+        local ctx, co
+        if advanceMatch and type(_G.__CTXREF) == 'table' and _G.__CO ~= nil then
+          ctx = _G.__CTXREF
+          co = _G.__CO
+          -- Clear the park flag and consume the current page: the click that
+          -- triggered this advance drives the parked [p]/[ch] on past itself.
+          ctx.waiting_input = false
+          __CLICK = true
+        else
+          local tokens = tokenizer.parse(KS_SRC)
+          ctx = {
+            f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+            variables = {}, current_scene = '${sceneName}',
+            token_index = 1, tokens = tokens,
+            text_state = {}, layer_state = {}, audio_state = {},
+            macro_args = {}, call_stack = {}, flag_stack = {},
+          }
+          co = coroutine.create(function()
+            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+            if not ok then error(err) end
+          end)
+          _G.__CTXREF = ctx
+          _G.__CO = co
+        end
         local __load_scene_tokens = function(name)
           -- Engine scene paths are allowlisted to demo/...; web scene keys
           -- are bare basenames, so try the key as-is and stripped variants.
@@ -371,26 +409,35 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           if not okP or type(nt) ~= 'table' then return nil end
           return nt
         end
-        local ctx = {
-          f = {}, sf = {}, tf = {}, mp = {}, lf = {},
-          variables = {}, current_scene = '${sceneName}',
-          token_index = 1, tokens = tokens,
-          text_state = {}, layer_state = {}, audio_state = {},
-          macro_args = {}, call_stack = {}, flag_stack = {},
-        }
+        -- In advance mode only the preserved coroutine is resumed: the outer
+        -- re-wrap below (label/load jumps) must not orphan the live cursor.
         local result = ''
         while result == '' do
         -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
         -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
         -- and the outer loop must continue THAT scene (round 47 fix).
-        local co = coroutine.create(function()
-          local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-          if not ok then error(err) end
-        end)
+        local co2 = co
+        local function wrap_co()
+          local w = coroutine.create(function()
+            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+            if not ok then error(err) end
+          end)
+          _G.__CO = w
+          _G.__CTXREF = ctx
+          return w
+        end
+        if advanceMatch then
+          -- Persistent coroutine from the previous park: only the non-dead
+          -- suspended cursor is reused; if it somehow died, rebuild it from
+          -- the persisted ctx position.
+          if coroutine.status(co2) == 'dead' then co2 = wrap_co() end
+        else
+          co2 = wrap_co()
+        end
         local frames = 0
         local clicks = 0
         while true do
-          local status = coroutine.status(co)
+          local status = coroutine.status(co2)
           if status == 'dead' then
             -- [load] resume: engine semantics — reload the saved scene and
             -- continue from the saved token (SaveCommands.load sets these).
@@ -404,10 +451,12 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 ctx.stop_flag = false
                 ctx._pendingLoadScene = nil
                 ctx._pendingLoadToken = nil
-                co = coroutine.create(function()
+                co2 = coroutine.create(function()
                   local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
                   if not okc then error(errc) end
                 end)
+                _G.__CO = co2
+                _G.__CTXREF = ctx
                 break
               end
             end
@@ -434,10 +483,12 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 if lidx then
                   ctx.token_index = lidx
                   ctx.stop_flag = false
-                  co = coroutine.create(function()
+                  co2 = coroutine.create(function()
                     local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
                     if not okc then error(errc) end
                   end)
+                  _G.__CO = co2
+                  _G.__CTXREF = ctx
                   break
                 end
               end
@@ -490,7 +541,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             __SCENE_BACKLOG = __SCENE_BACKLOG or {}
             __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
           end
-          local r = { coroutine.resume(co, 16) }
+          local r = { coroutine.resume(co2, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
         end
         end
@@ -544,6 +595,11 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             const endings = lua.global.get('__SCENE_ENDINGS')
       if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
       lua.global.set('__SCENE_BACKLOG', null)
+      // Wire the persisted scene-cursor handles (round 81): these let callers
+      // inspect/advance the parked scene without re-parsing. The authoritative
+      // state lives in Lua globals (__CTXREF / __CO); the JS fields mirror it.
+      this._ctx = lua.global.get('__CTXREF')
+      this._co = await lua.doString("local c = _G.__CO if c == nil then return 'nil' end return coroutine.status(c)")
       return out
     },
     /** Run a scene from a pre-baked story bundle (ks_bake --web): zero
@@ -556,6 +612,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
+      // Advance semantics (round 81 resumed): resume the parked scene cursor
+      // (see runScene — same __CO/__CTXREF persistence across doString).
+      lua.global.set('__ADVANCE', opts.advance === true)
+      lua.global.set('__ADVANCE_SCENE', opts.advanceScene ?? null)
       // Choice-selection override (round 74): pick which [endbutton] option
       // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
       lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
@@ -567,6 +627,31 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         local scheduler = require('scheduler')
         local tokenizer = require('tokenizer')
         local tokens = compiler.deserialize(BAKED_SCENE)
+        -- Advance semantics (round 81 resumed): resume the parked cursor.
+        local advance = __ADVANCE == true
+        local advanceMatch = advance and __ADVANCE_SCENE ~= nil
+          and tostring(__ADVANCE_SCENE) == '${sceneKey}'
+        local ctx, co
+        if advanceMatch and type(_G.__CTXREF) == 'table' and _G.__CO ~= nil then
+          ctx = _G.__CTXREF
+          co = _G.__CO
+          ctx.waiting_input = false
+          __CLICK = true
+        else
+          ctx = {
+            f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+            variables = {}, current_scene = '${sceneKey}',
+            token_index = 1, tokens = tokens,
+            text_state = {}, layer_state = {}, audio_state = {},
+            macro_args = {}, call_stack = {}, flag_stack = {},
+          }
+          co = coroutine.create(function()
+            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+            if not ok then error(err) end
+          end)
+          _G.__CTXREF = ctx
+          _G.__CO = co
+        end
         -- [load] resume: bundled scenes are serialized; parse them on demand.
         local __load_scene_tokens = function(name)
           local key = name
@@ -590,26 +675,30 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end
           return nil
         end
-        local ctx = {
-          f = {}, sf = {}, tf = {}, mp = {}, lf = {},
-          variables = {}, current_scene = '${sceneKey}',
-          token_index = 1, tokens = tokens,
-          text_state = {}, layer_state = {}, audio_state = {},
-          macro_args = {}, call_stack = {}, flag_stack = {},
-        }
         local result = ''
         while result == '' do
         -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
         -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
         -- and the outer loop must continue THAT scene (round 47 fix).
-        local co = coroutine.create(function()
-          local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-          if not ok then error(err) end
-        end)
+        local co2 = co
+        local function wrap_co()
+          local w = coroutine.create(function()
+            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
+            if not ok then error(err) end
+          end)
+          _G.__CO = w
+          _G.__CTXREF = ctx
+          return w
+        end
+        if advanceMatch then
+          if coroutine.status(co2) == 'dead' then co2 = wrap_co() end
+        else
+          co2 = wrap_co()
+        end
         local frames = 0
         local clicks = 0
         while true do
-          local status = coroutine.status(co)
+          local status = coroutine.status(co2)
           if status == 'dead' then
             -- [load] resume: reload the saved (bundled) scene and continue
             -- from the saved token — engine resume_from_save semantics.
@@ -623,10 +712,12 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 ctx.stop_flag = false
                 ctx._pendingLoadScene = nil
                 ctx._pendingLoadToken = nil
-                co = coroutine.create(function()
+                co2 = coroutine.create(function()
                   local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
                   if not okc then error(errc) end
                 end)
+                _G.__CO = co2
+                _G.__CTXREF = ctx
                 break
               end
             end
@@ -653,10 +744,12 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 if lidx then
                   ctx.token_index = lidx
                   ctx.stop_flag = false
-                  co = coroutine.create(function()
+                  co2 = coroutine.create(function()
                     local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
                     if not okc then error(errc) end
                   end)
+                  _G.__CO = co2
+                  _G.__CTXREF = ctx
                   break
                 end
               end
@@ -709,7 +802,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             __SCENE_BACKLOG = __SCENE_BACKLOG or {}
             __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
           end
-          local r = { coroutine.resume(co, 16) }
+          local r = { coroutine.resume(co2, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
         end
         end
@@ -760,6 +853,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             const endings = lua.global.get('__SCENE_ENDINGS')
       if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
       lua.global.set('__SCENE_BACKLOG', null)
+      this._ctx = lua.global.get('__CTXREF')
+      this._co = await lua.doString("local c = _G.__CO if c == nil then return 'nil' end return coroutine.status(c)")
       return out
     },
     /** Raise the click signal for the next runScene. */
