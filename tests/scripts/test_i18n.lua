@@ -756,6 +756,151 @@ i18n.current, i18n.strings = saved_pl.current, saved_pl.strings
 i18n.lines, i18n.fallback = saved_pl.lines, saved_pl.fallback
 
 -- ---------------------------------------------------------------------------
+-- 8. [i18n language=] command (round 76) + deeper plural / interp /
+--    serialization-roundtrip boundaries (round 80 +)
+-- ---------------------------------------------------------------------------
+local s8 = { current = i18n.current, strings = i18n.strings,
+             lines = i18n.lines, fallback = i18n.fallback,
+             default_language = i18n.default_language }
+local SystemCommands = require("kag.commands.system")
+local Schema = require("kag.schema")
+
+-- (a) [i18n language=X] hot-switches the runtime dictionary and records the
+-- selection into ctx.settingsValues (the settings-menu contract).
+i18n.current = "xx"; i18n.strings = {}; i18n.fallback = {}; i18n.lines = {}
+local ctxI = fresh_ctx()
+local okI = pcall(SystemCommands.i18n, ctxI, { language = "en" })
+check("i18n cmd: runs without error", okI)
+check("i18n cmd: records settingsValues.language",
+      ctxI.settingsValues ~= nil and ctxI.settingsValues.language == "en")
+check("i18n cmd: switches i18n.current", i18n.current == "en")
+check("i18n cmd: activated dictionary is the file-loaded en table",
+      type(i18n.strings) == "table" and i18n.t("title_screen") == "Title Screen")
+
+-- (b) missing / empty language= must degrade headlessly (never raise).
+local ctxNo = fresh_ctx()
+local okNo, retNo = pcall(SystemCommands.i18n, ctxNo, {})
+check("i18n cmd: no language= degrades (returns true)", okNo and retNo == true)
+local ctxE = fresh_ctx()
+local okE, retE = pcall(SystemCommands.i18n, ctxE, { language = "" })
+check("i18n cmd: empty language= degrades", okE and retE == true)
+
+-- (c) the schema contract rejects a missing required language before the
+-- handler runs (the scheduler coerce gate), and accepts a valid one.
+local okC = pcall(Schema.coerce, "i18n", {}, fresh_ctx())
+check("i18n schema: missing required language raises (coerce rejects)", not okC)
+local okC2, coerced = pcall(Schema.coerce, "i18n", { language = "zh" }, fresh_ctx())
+check("i18n schema: valid language coerces through",
+      okC2 and type(coerced) == "table" and coerced.language == "zh")
+
+-- (d) repeated [i18n] with the same language is idempotent: set_language's
+-- same-code fast path keeps the active dictionary (no file re-read / drift).
+i18n.current = "xx"; i18n.strings = { x = 1 }
+local ctxD = fresh_ctx()
+SystemCommands.i18n(ctxD, { language = "zh" })
+local dictAfterFirst = i18n.strings
+SystemCommands.i18n(ctxD, { language = "zh" })
+check("i18n cmd: repeated same language idempotent (same dict table)",
+      i18n.current == "zh" and rawequal(i18n.strings, dictAfterFirst))
+
+-- (e) the command wires set_language + relocalize_page: a visible line is
+-- re-localized against the NEW (file-loaded) dictionary after [i18n].
+local cmdVec = "scene.ks:" .. i18n.fnv1a("hi")
+i18n.current = "xx"; i18n.strings = {}; i18n.fallback = {}; i18n.lines = { [cmdVec] = "bonjour" }
+local ctxR2 = fresh_ctx()
+TextCommands.ch(ctxR2, { name = "A", text = "hi" })
+local drewBonjour = false
+for _, d in ipairs(ctxR2.text_state.draws) do
+    if d.text == "bonjour" then drewBonjour = true end
+end
+check("i18n cmd: page drawn in pre-switch dictionary", drewBonjour)
+local okR2 = pcall(SystemCommands.i18n, ctxR2, { language = "zh" })
+check("i18n cmd: switch redraws without error", okR2 and i18n.current == "zh")
+-- zh file carries no "hi" line, so the redraw falls through to raw "hi".
+local drewHi = false
+for _, d in ipairs(ctxR2.text_state.draws) do
+    if d.text == "hi" then drewHi = true end
+end
+check("i18n cmd: line re-localized against new dictionary", drewHi)
+
+-- (f) plural_category / {n} numeric-form edge counts (round 80).
+i18n.current = "en"
+i18n.strings.items = { one = "{n} item", other = "{n} items" }
+check("plural: en negative count -> other (-1)",
+      i18n.plural_category(-1) == "other"
+      and i18n.translate("items", { n = -1 }) == "-1 items")
+check("plural: en non-integer count -> other (1.5)",
+      i18n.plural_category(1.5) == "other"
+      and i18n.translate("items", { n = "1.5" }) == "1.5 items")
+check("plural: en category nil / unparseable -> other",
+      i18n.plural_category(nil) == "other"
+      and i18n.plural_category("abc") == "other")
+check("plural: zh zero count still single form",
+      (function()
+          i18n.current = "zh"
+          i18n.strings.items = { other = "{n} 个" }
+          return i18n.plural_category(0) == "other"
+                 and i18n.translate("items", { n = 0 }) == "0 个"
+      end)())
+
+-- (g) interpolation boundaries: {n} mixed with ordinary / {key} placeholders.
+i18n.current = "en"
+i18n.strings.items = { other = "{n} {kind} items" }
+check("interp: plural {n} + ordinary placeholder",
+      i18n.translate("items", { n = 3, kind = "red" }) == "3 red items")
+i18n.strings.items = { one = "{n} {thing}", other = "{n} {thing}s" }
+i18n.strings.thing = "apple"
+check("interp: plural variant resolves {key} token inside form",
+      i18n.translate("items", { n = 1 }) == "1 apple"
+      and i18n.translate("items", { n = 5 }) == "5 apples")
+
+-- (h) serialize_field roundtrip survives quotes / backslash / newline
+-- translations (--update regenerates + reloads losslessly).
+if io.open(tmpdir .. "/x.ks", "r") then os.remove(tmpdir .. "/x.ks") end
+local tricky = {
+    greeting = 'say "hello"',
+    winpath = "C:\\dir\\file",
+    multi = "line one\nline two",
+    items = { one = "{n} item", other = "{n} items" },
+    lines = { ["x.ks:" .. i18n.fnv1a("Hello world")] = "Hallo" },
+}
+local tBody = ks.build_template(tmpdir, tricky)
+local tPath = tmpdir .. "/tricky.lua"
+local fw = io.open(tPath, "w"); fw:write(tBody); fw:close()
+local back = ks.load_lang(tPath)
+check("serialize r/t: double-quote translation roundtrips",
+      back ~= nil and back.greeting == 'say "hello"')
+check("serialize r/t: backslash path roundtrips", back.winpath == "C:\\dir\\file")
+check("serialize r/t: newline translation roundtrips", back.multi == "line one\nline two")
+check("serialize r/t: plural variants roundtrip intact",
+      type(back.items) == "table" and back.items.one == "{n} item"
+      and back.items.other == "{n} items")
+os.remove(tPath)
+
+-- (i) fallback-chain combo: translate() with no params is exactly localize()
+-- (current dict wins, default lang second, raw key last).
+i18n.current = "fr"; i18n.strings = { greeting = "Bonjour" }
+i18n.fallback = { greeting = "Hello", hello_key = "Bonjour le monde" }
+i18n.lines = {}
+check("combo: translate() no-params == localize()",
+      i18n.translate("say {greeting}") == i18n.localize("say {greeting}"))
+check("combo: current missing a key -> default lang value",
+      i18n.translate("hello_key", {}) == "Bonjour le monde")
+check("combo: raw key returned when missing everywhere",
+      i18n.translate("absent_key", {}) == "absent_key")
+-- default-language key with a plural table resolves (en category picks one)
+i18n.current = "en"
+i18n.default_language = "en"
+i18n.strings = {}
+i18n.fallback = { count = { one = "one {n}", other = "{n} total" } }
+check("combo: default-lang plural table resolves via translate",
+      i18n.translate("count", { n = 1 }) == "one 1")
+
+i18n.current, i18n.strings = s8.current, s8.strings
+i18n.lines, i18n.fallback = s8.lines, s8.fallback
+i18n.default_language = s8.default_language
+
+-- ---------------------------------------------------------------------------
 -- cleanup: restore i18n state and the backend global
 -- ---------------------------------------------------------------------------
 i18n.current = saved_current
