@@ -77,6 +77,7 @@
 | `language` | string | 当前 UI 语言（i18n.current） |
 | `backlog_count` | int | backlog 条目数 |
 | `layer_count` | int | 图层树节点数 |
+| `current_cmd` | string | 当前脚本正在执行的命令（场景未运行时为空串） |
 
 > 旧路径 `GET /api/debug/getState` 保留（返回相同字段）；stdio 传输的
 > `getState` 方法同样返回完整状态。
@@ -335,6 +336,49 @@ HTTP worker 与 `/api/run` 走同一 owner-thread Lua 派发（Lua 脚本错误 
 
 > **LSP 语言服务**：编辑器 `lspCall()` 把请求桥接为 `return kag.lsp.json(...)` 经本端点求值，
 > 返回 JSON 文本字符串供渲染器解析。支持的方法见下方 [附录 C：LSP 语言服务方法](#附录-c-lsp-语言服务方法经-apieval-桥接)。
+
+### 1.11 调试端点（HTTP /api/debug/*）
+
+Lua 调试器既可通过 stdio RPC 调用（见 §1.12），也可经以下 HTTP 路由访问，
+共 7 条（`GET /api/debug/getState` 同时是 §1.2 `/api/state` 的保留旧路径），
+均由 HTTP worker 提交 DTO、由 owner thread dispatcher 执行：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/debug/getState` | 引擎状态（与 `/api/state` 同字段） |
+| `GET` | `/api/debug/getFrame?w=&h=` | 截取当前帧为 base64 PNG（默认 1280×720，上限 8192） |
+| `POST` | `/api/debug/setBreakpoint` | 设置源码行断点（请求体 `source` + `line`） |
+| `POST` | `/api/debug/removeBreakpoint` | 移除断点（请求体 `source` + `line`） |
+| `POST` | `/api/debug/clearBreakpoints` | 清除全部断点 |
+| `POST` | `/api/debug/continue` | 恢复暂停的调试运行（可选 `pauseId`） |
+| `GET` | `/api/debug/inspect?name=&frame=&global=` | 检查 Lua 局部或全局变量 |
+
+`setBreakpoint` / `removeBreakpoint` 请求体（`application/json`）：
+
+```
+→ {"source":"assets/scripts/main.ks","line":120}
+← {"status":"ok"}
+```
+
+`inspect` 缺省检查局部变量，传 `global=1` 时检查全局变量。
+
+---
+
+### 1.12 stdio JSON-RPC 方法总览
+
+`--editor-stdio` / `--headless` 通过 stdin/stdout 换行分隔 JSON-RPC（每行一个
+完整 JSON 对象）。方法名与 §1 的 HTTP 端点同名、共用同一个 dispatcher DTO，
+共 29 个方法：
+
+**传输 / 生命周期**：`ping` `run` `stop` `reload` `logs` `assets` `eval`
+
+**资源与状态**：`getState` `getFrame` `stats` `pick` `smaValidate` `smaSave`
+
+**Lua 调试器**：`setBreakpoint` `removeBreakpoint` `clearBreakpoints` `continue`
+`stepInto` `stepOver` `stepOut` `inspectLocal` `inspectGlobal` `getDebugState`
+
+**KAG 场景调试**：`kagSetBreakpoint` `kagClearBreakpoints` `kagDebugContinue`
+`kagDebugStep` `kagReloadScene` `kagInspectScopes`（详见附录 B：KAG 场景调试）
 
 ---
 ## 2. Lua Binding Modules

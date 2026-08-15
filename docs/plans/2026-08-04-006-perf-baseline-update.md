@@ -176,3 +176,101 @@ trim 再 join。正确性已由 test_expr_lang2 三条 LIMIT 断言锁定（roun
   expr_lang/expr_lang2/tokenizer/label_bench/benchmark 守卫）；
   test_scheduler / test_flow_edge / test_flow_edge_call 全绿（调度器守卫路径）。
 
+---
+
+# round 88-91：性能基线三次刷新（round 88 之后的热路径回归对比）
+
+## 触发背景
+
+round 88 刷新基线（round 82-87 零回归）后，round 88-91 期间在热路径上新增/
+改动了以下代码，需确认未引入可感知开销：
+
+| 轮次 | 热路径改动 | 关注点 |
+|---|---|---|
+| round 89 | tokenizer 接受 comment-only / 空白输入为零 token 列表（grammar 由 explicit_cmds * skip * -1 改为 (skip * explicit_cmds)^0 * skip * -1） | 零宽 ^0 重复包裹对正常大文本解析是否引入回溯/逐 token 开销 |
+| round 91 | AsyncLoader in-flight 去重表（m_inflight unordered_map，唯一加载多 2 次互斥锁 + 完成后移除）；ProviderChain read/exists try/catch 隔离 | 顺序加载路径互斥锁/分配开销；try/catch 每 provider 循环开销 |
+| round 91 | web i18n mountFile / setLanguage 重定位红raw（JS 侧） | 不影响 Lua 侧热路径 |
+| round 88-91 | scheduler 无改动 | — |
+
+## round 88-91 当前基线（本次采样，本机 os.clock）
+
+> 方法与历轮一致：预算守卫测实机（CI 更松），另用探针计时；A/B 用 git show 6db2a30b:scripts/tokenizer.lua 提取 round 88 版做同输入对比。
+
+### frame_bench 守卫（round 68-72，round 88-91 期间保持通过）
+
+| 热路径 | round 88 记录 | 本次（套件内） | 对比 |
+|---|---|---|---|
+| render 5000x 均值 | PASS（<500us 预算） | PASS | 渲染路径零改动 |
+| 混合表达式 translate 1000x | 0.054s（精确复现） | PASS（<2s 预算） | 无回归 |
+| [add] 链 dispatch 1000x | 0.004s | PASS（<2s 预算） | 无回归 |
+
+### test_benchmark 吞吐（round 88 vs 本次，4 次采样取中位数）
+
+| 指标 | round 88 记录 | 本次（4 次采样） | 结论 |
+|---|---|---|---|
+| tokenizer 1000tok | 245ms/61ms-per-1000tok（独立）；301ms/75ms（套件内） | 270/363/272/277ms → 中位 ~273ms（68ms-per-1000tok） | 落在 round 88 区间 [245,301]，无退化 |
+| scheduler 4001 resumes | 25-29ms | 41/39/27/25ms → 中位 ~33ms（波动 25-41） | 落入文档既有噪声区间 [25,48]，scheduler 本轮零改动 |
+
+> 注：scheduler 首两次读数 41/39ms 偏高，后两次 27/25ms 回到 round 82-87 的 25-29ms 区间——与本机 os.clock 受 CPU 降频/时钟噪声影响一致（benchmark 实际断言解析<3s 总<3s 稳健）。scheduler 在 round 88-91 无任何改动，判定为环境噪声而非回归。
+
+### 规模化确定性守卫（round 66，round 88-91 期间全 PASS）
+
+| 守卫 | 预算 | 结果 |
+|---|---|---|
+| test_schema 500-span 插值 | <5s | PASS |
+| test_expr_lang 2000x 缓存求值 | <5s | PASS |
+| test_expr_lang2 逗号分段 LIMIT | -- | PASS |
+| test_tokenizer 2000 命令场景 | <10s | PASS |
+| test_schema_types / test_label_index / test_label_jump | -- | PASS |
+
+## 重点验证一：round 89 tokenizer grammar 改动对正常解析无开销
+
+round 89 把 grammar 从「必须 ≥1 token」改为「零或多个 token」（(skip * (explicit_cmds + ...))^0 * skip * -1）。隐患：^0 重复包裹是否让非空大文本解析变慢（多一层重复匹配、前置 skip 逐 token 摊派）。
+
+A/B 实测（round 88 版 vs 当前版，同输入，中位数 6-8 次）：
+
+| 输入形态 | round 88 | 当前 | Δ |
+|---|---|---|---|
+| 2000 命令场景（round 66 守卫相同输入） | 259.5ms | 255.0ms | **-1.7%（更快）** |
+| 混合 800 行（命令+叙述交替） | 52.0ms | 51.5ms | **-1.0%（更快）** |
+| 3000 行叙述流（约 340KB 纯文本） | 50.0ms | 50.5ms | **+1.0%（噪声内）** |
+| 单段长正文（约 46KB 连续文本） | 1.0ms | 1.0ms | **+0.0%（一致）** |
+| comment-only / 空白输入 | 抛错（旧行为） | ~0.0ms | 新功能，round 89 修复 |
+
+- 小样本（120 行纯文本）曾出现 +50% 读数，放大到 3000 行后收敛为 +1.0%——纯 os.clock() 1ms 量程对微秒级绝对时间的量化噪声，非真实回归。
+- 大文本（>300KB）解析差异 ≤1%，命令/混合场景甚至更快；token 计数一致（3000 vs 3000）。**round 89 grammar 改动对正常解析无任何可感知开销。**
+
+## 重点验证二：round 91 AsyncLoader in-flight 表 + ProviderChain try/catch
+
+### AsyncLoader in-flight 表（C++ 侧，代码走查分析）
+
+round 91 在 AsyncLoader::enqueue() 新增 m_inflight unordered_map + m_inflightMutex，对「顺序唯一加载路径」的开销：
+
+- **缓存命中路径（VN 场景重入的主路径）零开销**：enqueue 在 cache 命中处直接 return（cache 检查在 in-flight 之前），完全不触碰 in-flight 表——早退早于 in-flight 检查。
+- 仅「首次缓存未命中的唯一加载」多承担：2 次互斥锁获取（in-flight find + register）+ 完成时 1 次移除，外加 3 个 make_shared 堆分配和一个 unordered_map insert/erase。相对真实磁盘读 + 图片解码（毫秒级）这些微秒级操作可忽略，且只在首次加载发生、绝不落在缓存重入路径上。
+- makeKey 字符串拼接与 round 91 前等价（从 cache 块内上移到函数开头），无新增字符串构造。
+
+### ProviderChain try/catch 隔离（C++ 侧）
+
+round 91 为每个 provider 的 exists()/read() 包 try/catch。Windows/MSVC 零成本异常处理下，进 try 块不生成任何执行指令——正常（无异常）路径的循环开销为 0，只在 provider 抛异常时损失记录日志的成本（慢路径）。隔离语义由 round 91 的 test_resource.cpp 新增用例锁定（throw 隔离、高优 throw 回退、全 throw 优雅失败）。
+
+**round 91 两项改动均不构成对顺序加载/缓存重入热路径的可测开销。**
+
+## 结论：round 88-91 无性能回归
+
+- **全部预算守卫 PASS**，套件内 11 个 perf 守卫全部 [OK]，Lua 套件 **126/126**（round 88 为 124/124；round 89 新增 2 条 tokenizer 测试）。
+- tokenizer 吞吐中位 ~273ms/68ms-per-1000tok，落在 round 88 区间内；scheduler 波动噪声与既往一致且本轮零改动。
+- **round 89 tokenizer grammar 改动专项 A/B 证明对正常解析无开销**（大文本 ≤1%，命令/混合场景更快），并新增 comment-only 空输入功能（~0ms）。
+- **round 91 AsyncLoader in-flight 表**：缓存命中路径零开销（cache 早退在 in-flight 检查之前），仅首次唯一加载多微秒级锁/分配，相对磁盘+解码可忽略。
+- **round 91 ProviderChain try/catch**：零成本异常处理下正常路径零开销。
+- 本轮无任何热路径预算余量 <20%（最紧仍是 render 每帧守卫，~45% 占用）。
+
+## 建议（非必须，无预算逼近）
+
+- 与 round 82/88 结论一致：各热路径预算余量充足，暂无必须实现的优化点。
+- 可观测项不变：test_benchmark 的 scheduler 读数本机波动大（25-41ms），若希望吞吐读数更稳定，可改固定 resume 数单调计时取中位数，但不构成回归。
+
+## 验证
+
+- 本文档更新为纯测量 + 文档，无引擎源代码变更（tokenizer.lua 等工作树文件未被改动，仅临时 A/B 拷贝于测量后删除）。
+- 全量 Lua 套件 run_lua_tests.lua **126/126** 通过（round 88 为 124/124），含 round 66 规模化守卫 + round 89 新增鲁棒性测试 + round 88-91 期间 test_schema_types/test_expr_lang2/test_label_index/test_label_jump 全绿。

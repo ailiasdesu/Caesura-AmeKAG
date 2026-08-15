@@ -1,6 +1,6 @@
 # Caesura (AmeKAG) — C++ API Interface Reference
 
-> **31 个纯虚接口，16 个模块；21 个运行时引擎服务通过 `BackendRegistry` 访问**
+> **31 个纯虚接口，16 个模块；22 个运行时引擎服务通过 `BackendRegistry` 访问**
 > 最后更新: 2026-08-15
 >
 > **更新记录**: 2026-08-15 — round-75 docs sync: interface census 30 -> 31
@@ -35,7 +35,7 @@
 ```cpp
 auto* renderer = BackendRegistry::instance().getRenderDevice();
 auto* audio    = BackendRegistry::instance().getAudioBackend();
-auto* lua      = BackendRegistry::instance().getLuaState();
+auto* lua      = BackendRegistry::instance().getLuaManager()->state();
 ```
 
 - BackendRegistry 存储非拥有指针（`I*`），Engine 持有对应后端的 `unique_ptr` 所有权。
@@ -163,11 +163,14 @@ public:
 | `init` | — | `bool` | 初始化音频引擎 |
 | `shutdown` | — | — | 关闭并释放所有资源 |
 | `update` | `deltaTime` | — | 每帧更新音频系统 |
+| `suspend` | — | — | 暂停全部播放（混音器暂停，保留已加载资源） |
+| `resume` | — | — | 从暂停位置继续播放 |
 | `playBGM` | `file`, `fadeTime=1.0f` | `uint` | 播放背景音乐（支持淡入） |
 | `stopBGM` | `fadeTime=1.0f` | — | 停止 BGM（支持淡出） |
 | `playVoice` | `file` | `uint` | 播放语音（绝对中断前一条） |
 | `stopVoice` | — | — | 停止语音 |
 | `playSE` | `file` | `uint` | 播放 2D 音效 |
+| `playRawPCM` | `samples`, `numFrames`, `sampleRate`, `channels` | `uint` | 播放交错的 float PCM（视频音频等），返回句柄 |
 | `playSE3D` | `file`, `x, y, z` | `uint` | 播放 3D 空间音效 |
 | `stopSE` | — | — | 停止所有音效 |
 | `setSEVolume` | `handle`, `volume` | — | 设置单个音效句柄的音量 |
@@ -183,6 +186,7 @@ public:
 | `isBGMPlaying` | — | `bool` | BGM 是否播放中 |
 | `isSEPlaying` | — | `bool` | 是否有音效播放中 |
 | `activeVoiceCount` | — | `int` | 当前活跃语音数 |
+| `consumeVoiceCompletions` | — | `uint` | 返回并清零自上次调用以来自然结束的语音行数 |
 | `getPosition` | `bus` | `float` | 总线当前播放位置（秒） |
 | `getLength` | `bus` | `float` | 总线当前曲目总长度（秒） |
 | `fadeVolume` | `bus`, `targetVolume`, `fadeTime` | — | 平滑过渡到目标音量 |
@@ -224,10 +228,12 @@ public:
 | `recordTransientAlloc(count, bytes)` | 记录瞬态分配 |
 | `recordLuaGc(ms)` | 记录 Lua GC 耗时 |
 | `getFrameProfile` | 返回 `FrameProfile`（含 totalMs, gpuSubmitMs, luaGcMs） |
+| `beginFrameProfile` | 开始当前帧的性能采样 |
 | `endFrameProfile` | 结束当前帧的性能采样 |
 | `getRenderInfo` / `setRenderInfo` | 渲染子系统信息 |
 | `getAudioInfo` / `setAudioInfo` | 音频子系统信息 |
 | `getInputInfo` / `setInputInfo` | 输入子系统信息 |
+| `logFilePath` | 当前日志文件路径（`const std::string&`） |
 
 ---
 
@@ -239,6 +245,7 @@ Lua 沙箱资源配额管理，防止脚本资源泄漏。
 
 | 方法 | 说明 |
 |------|------|
+| `setLuaState(L)` | 注入 `lua_State*`（配额服务依赖） |
 | `tryAlloc(kind)` | 尝试分配资源（如 "textures", "particles_emitters"） |
 | `release(kind)` | 释放资源计数 |
 | `count(kind)` | 当前使用计数 |
@@ -261,7 +268,7 @@ Lua 沙箱资源配额管理，防止脚本资源泄漏。
 ### 4.3 IDeviceLostListener
 
 GPU 设备丢失恢复的监听契约。持有 GPU 资源的模块通过
-`BackendRegistry::registerDeviceLostListener()` 注册；它不是 20 个服务槽位之一。
+`BackendRegistry::registerDeviceLostListener()` 注册；它不是 22 个服务槽位之一。
 
 | 方法 | 调用时机 | 说明 |
 |------|----------|------|
@@ -311,6 +318,8 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 | `notifyResize(w, h)` | 通知所有 resize 回调 |
 | `hasKAGClick` | KAG 是否有点击待处理 |
 | `isClickPending` | 同 `hasKAGClick` |
+| `getKAGCallbackCount` | 已注册的 KAG 回调数 |
+| `getGameCallbackCount` | 已注册的 GAME 回调数 |
 | `consumeKAGClick` | 消耗 KAG 点击事件 |
 
 ---
@@ -386,7 +395,7 @@ using GameInputCallback = std::function<void(const SDL_Event&)>;
 | `enter(handle)` | 进入小游戏模式（隐藏 KAG 层，激活 3D 相机） |
 | `leave` | 退出小游戏模式（恢复 KAG 渲染） |
 | `isActive` | 是否处于小游戏模式 |
-| `update(dt)` | CPU 更新（物理、动画），可在线程池执行 |
+| `update(dt)` | CPU 更新（物理、碰撞，可回调 Lua）——仅主线程，不得派发给 JobSystem |
 | `render` | GPU 提交，仅主线程 |
 | `processEvent(sdlEvent)` | 输入事件路由，返回 true=已消费 |
 | `luaCall(L, method)` | Lua 桥接调用 |
@@ -460,6 +469,8 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | 分类 | 方法 | 说明 |
 |------|------|------|
 | **生命周期** | `init(hwnd, w, h)` | 初始化渲染设备 |
+| | `isInitialized` | 渲染设备是否已初始化 |
+| | `getBackbufferWidth` / `getBackbufferHeight` | backbuffer 分辨率查询 |
 | | `beginShutdown` | 通知后端进入关闭阶段 |
 | | `shutdown` | 先 `flushAllRTT` 再关闭具体渲染后端 |
 | | `flushAllRTT` | 释放所有 RTT framebuffer（GPU 上下文仍存） |
@@ -470,6 +481,7 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | | `advanceFrame` | 推进后端帧并处理延迟完成工作 |
 | **视图** | `setViewRect(viewId, x, y, w, h)` | 设置视图矩形 |
 | | `setViewClear(viewId, flags, rgba, depth, stencil)` | 设置视图清除 |
+| | `setScreenOffset(dx, dy)` | 设置屏幕偏移（视图变换） |
 | | `touch(viewId)` | 标记视图为活跃 |
 | **离屏渲染** | `createRenderTarget(w, h)` | 创建 RTT，返回 `ViewportHandle` |
 | | `destroyRenderTarget(handle)` | 销毁 RTT |
@@ -484,16 +496,21 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | **文字渲染** | `renderText(viewId, text, x, y, r, g, b, a)` | 渲染文字 |
 | | `renderRuby(viewId, text, ruby, x, y, r, g, b, a)` | 渲染注音文字 |
 | | `setFont(fontId)` | 设置字体 |
+| | `loadTTF(path, fontSize)` | 从文件加载 TrueType 字体（返回 `bool`） |
 | | `textLineHeight` | 行高 |
 | **特效** | `submitBlend(viewId, baseTex, blendTex, mode, baseAlpha, blendAlpha, globalAlpha)` | 混合特效 |
 | | `submitTransition(viewId, fromTex, toTex, ruleTex, method, progress)` | 转场特效 |
 | | `submitVFX(viewId, srcTex, effect, ...)` | 视觉特效 |
+| | `setColorFilter(preset)` | 设置无障碍色彩滤镜（None/Deuteranopia/Protanopia/Tritanopia/Grayscale/HighContrast），返回 `bool` |
 | **调试** | `setDebugName(viewId, name)` | 设置视图调试名称 |
 | | `drawDebugOverlay(title)` | 绘制调试覆盖层 |
 | | `requestScreenshot(path)` | 请求帧截图 |
 | **设备恢复** | `recoverDevice(hwnd, w, h)` | 重建丢失的渲染设备 |
 | | `flagDeviceLost` / `consumeDeviceLost` | 在线程/帧边界间传递设备丢失状态 |
 | **着色器** | `getDefaultSampler` / `getFallbackProgram` | 返回不透明采样器/程序句柄 |
+| **后端标识** | `getBackendName` | 后端名称 |
+| | `getRuntimeInfo` | 返回 `RenderRuntimeInfo`（backendName, 分辨率, viewCount, shaderReady） |
+| | `setPreferredBackend(name)` | 设置首选渲染后端（返回 `bool`） |
 
 ### 11.2 ILayerManager
 
@@ -555,6 +572,7 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | `update(dt, screenW, screenH)` | 更新粒子物理 |
 | `render(viewId)` | 渲染所有活跃粒子 |
 | `aliveCount` | 活跃粒子总数 |
+| `isInitialized` | 粒子系统是否已初始化 |
 
 **参数校验**（VFXBinding 层）：`rate`, `lifeMin/Max`, `speedMin/Max`, `sizeMin/Max` 不能为负；`lifeMin > lifeMax` 时自动 clamp。
 
@@ -582,6 +600,7 @@ struct FrameMetrics {
 | `resolutionScale` | 当前分辨率缩放因子 |
 | `vfxEnabled` | VFX 是否启用（低性能时自动关闭） |
 | `reset` | 重置统计数据 |
+| `setGpuAvailable(available)` | 组合根在渲染设备初始化后调用；此前 `update` 不得触碰 bgfx stats |
 
 ### 11.6 IVideoPlayer
 
@@ -595,7 +614,10 @@ struct VideoHandle { uint32_t id = 0; explicit operator bool() const; };
 |------|------|
 | `open(path)` | 打开视频文件，返回 `VideoHandle` |
 | `close(handle)` | 关闭视频 |
+| `setLoop(handle, loop)` | 设置循环播放 |
+| `setVolume(handle, volume)` | 设置视频音频音量 [0..1] |
 | `update(handle, dt)` | 解码下一帧到后端纹理 |
+| `updateAll(dt)` | 引擎帧循环推进所有播放中的视频 |
 | `getTexture(handle)` | 返回当前帧的不透明后端纹理 ID |
 | `isPlaying(handle)` | 是否播放中 |
 | `hasEnded(handle)` | 是否播放完毕 |
@@ -655,6 +677,7 @@ struct CompletedLoad {
 | `enqueue(path, type)` | 入队加载请求，返回 load ID |
 | `cancelAll` | 取消所有待处理加载 |
 | `poll` | 轮询完成结果（需每帧调用） |
+| `drainCompleted` | 非 SDL 交付：返回并清空全部已完成加载（调用方负责纹理上传 + Lua 回调） |
 | `pendingCount` | 待处理加载数 |
 | `isRunning` | 加载器是否运行中 |
 
@@ -687,6 +710,7 @@ Web 编辑器 HTTP 服务器。
 | `port` | 当前端口号 |
 | `pushLog(level, message)` | 推送日志到编辑器前端 |
 | `setDispatcher(dispatcher)` | 注入线程安全的 RPC DTO dispatcher |
+| `setAuthToken(token)` | 设置 HTTP 编辑器 Bearer token（非空时强制鉴权，缺失/不匹配返回 401） |
 | `setWebRoot(path)` | 设置 Web 前端静态文件根目录 |
 | `setArchiveWriterFactory(factory)` | 注入 `IArchiveWriter` 工厂；具体 CARC writer 由组合根创建 |
 
@@ -785,6 +809,9 @@ load_animation、breakpoints、debug_resume、inspect、kag_debug 等）均定�
 | | `cloudFileExists(fileName)` | 云文件是否存在 |
 | | `cloudDelete(fileName)` | 删除云文件 |
 | | `cloudQuotaTotal` / `cloudQuotaUsed` | 云存储配额 |
+| | `cloudFileCount` | 云文件总数（启用 `Lua cloud_list`） |
+| | `cloudFileNameAt(index)` | 按索引返回云文件名 |
+| | `name` | 后端名称 |
 
 ---
 
@@ -807,6 +834,11 @@ JSON 存档管理，支持加密和 schema 迁移。
 | `isEncryptionEnabled` | 是否启用加密 |
 | `setSaveProvider(provider)` | 注入自定义存储后端 |
 | `getSaveProvider` | 获取当前存储后端 |
+| `configureCloudSync(endpoint)` | 配置 HTTP 云端存档端点（""=仅本地） |
+| `pushSlotToCloud(slot)` | 推送指定槽位到云端 |
+| `pullSlotFromCloud(slot)` | 从云端拉取指定槽位 |
+| `captureThumbnailPNG(w=320, h=180)` | 捕获存档缩略图 PNG |
+| `setGfxReady(ready)` | 设置 GPU 就绪标志（SIGSEGV 守卫：渲染器未初始化前禁截缩略图） |
 | `currentSchemaVersion` | 当前存档格式版本号 |
 | `registerMigration(fromVer, toVer, fn)` | 注册 schema 迁移函数 |
 
@@ -833,30 +865,27 @@ JSON 存档管理，支持加密和 schema 迁移。
 ```cpp
 class BackendRegistry {
     IRenderDevice*       getRenderDevice();
-    IPlatformBackend*    getPlatformBackend();
     IAudioBackend*       getAudioBackend();
-    ILuaManager*         getLuaManager();
-    lua_State*           getLuaState();
+    IPlatformBackend*    getPlatformBackend();
     IInputRouter*        getInputRouter();
+    IVideoPlayer*        getVideoPlayer();
     ITextureManager*     getTextureManager();
     ILayerManager*       getLayerManager();
     IParticleSystem*     getParticleSystem();
-    IVideoPlayer*        getVideoPlayer();
     IDebugManager*       getDebugManager();
-    IJobSystem*          getJobSystem();
     IAsyncLoader*        getAsyncLoader();
-    IAnimationBackend*   getAnimationBackend();
     IMiniGameBackend*    getMiniGameBackend();
-    ISaveManager*        getSaveManager();
-    ITextureBudget*      getTextureBudget();
-    IResourceGenerationTracker* getResourceGenerationTracker();
-    ISandboxQuota*       getSandboxQuota();
+    IAnimationBackend*   getAnimationBackend();
     ICryptoEngine*       getCryptoEngine();
+    ILuaManager*         getLuaManager();
+    IJobSystem*          getJobSystem();
+    ISandboxQuota*       getSandboxQuota();
+    ITextureBudget*      getTextureBudget();
+    ISaveManager*        getSaveManager();
+    IResourceGenerationTracker* getResourceGenerationTracker();
     ISteamBackend*       getSteamBackend();
-
-    // Lua helpers
-    static IRenderDevice*   getRenderDeviceFromLua(lua_State* L);
-    static IVideoPlayer*    getVideoPlayerFromLua(lua_State* L);
+    IMobileAdapter*      getMobileAdapter();
+    IMeshRenderer*       getMeshRenderer();
 };
 ```
 

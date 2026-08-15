@@ -350,6 +350,60 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `cloud_list` | `() → table` | Cloud file name list (up to 256) |
 ---
 
+## AI (LLM query binding)
+
+```lua
+-- Global: AI
+-- Backend: BackendRegistry::instance().getJobSystem() (async replies on owner thread)
+-- Config: config.ai.{ endpoint, model, api_key, system, timeout_ms }
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `available` | `() → bool` | True when an AI endpoint is configured (`config.ai.endpoint` non-empty) |
+| `query` | `(prompt, opts?) → string` | Blocking LLM request. `opts` (optional table) may override `endpoint`/`model`/`system`/`timeout_ms`. Synchronous variant. |
+| `query_async` | `(prompt, opts?, callback) → bool` | Async LLM request; fires `callback(text, err)` on the main thread. Callback goes at arg 3, or arg 2 when `opts` is omitted. |
+| `cancel` | `()` | Cancel all pending AI requests (epoch watermark); dropped callbacks never fire |
+
+---
+
+## sma (Skeletal Mesh Animation)
+
+```lua
+-- Global: sma
+-- Backend: BackendRegistry::instance().getMeshRenderer()
+-- Thin mesh upload/draw surface; skeleton/hierarchy/animation logic lives in scripts/kag/sma.lua
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `create_mesh` | `(verts, indices) → handle` | Upload a mesh. `verts` = array of `{x, y, u, v, bone0, w0, bone1?, w1?}`; `indices` = array of numbers (count multiple of 3). Returns 0 on failure. |
+| `destroy_mesh` | `(handle)` | Release a mesh |
+| `update_mesh` | `(handle, poses)` | Re-skin by bone poses: `poses` = array of `{rot, scale, ox, oy}` |
+| `draw_mesh` | `(handle, view?, texId?, x?, y?, scale?, opacity?)` | Draw a skinned mesh to a view |
+| `count` | `() → int` | Number of live meshes |
+| `initialized` | `() → bool` | Renderer is ready |
+| `set_skin_mode` | `(mode)` | Skinning: `"auto"` (default) / `"cpu"` / `"gpu"` |
+| `get_skin_mode` | `() → string` | Current skinning mode (`auto`/`cpu`/`gpu`) |
+
+---
+
+## Engine (Backend selection)
+
+```lua
+-- Global: Engine
+-- Runtime backend creation/selection (composition-root surface for scripts/tests)
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `select_render_backend` | `(name, subBackend?) → bool` | Create and select a render backend; optional preferred sub-backend. `nil + err` on unknown backend. |
+| `select_audio_backend` | `(name) → bool` | Create and select an audio backend. `nil + err` on unknown backend. |
+| `select_platform_backend` | `(name) → bool` | Create and select a platform backend. `nil + err` on unknown backend. |
+| `get_backend_info` | `() → table` | Current backend names: `{ render = ..., audio = ..., platform = ... }` |
+
+---
+
 ## i18n (Lua runtime localization module)
 
 > Pure-Lua runtime module (`scripts/i18n.lua`), not a C++ binding. Exposed
@@ -368,5 +422,14 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 | `translate` | `(text, params) → string` | Runtime template interpolation: resolve the template through the normal localization path, then fill `{name}` placeholders from `params`. Unknown placeholders and inline-markup tags are left intact. With no `params` behaves like `localize()`. Plural + numeric format (round 80): a string-table value may be a plural variant table (`items = { one = "{n} item", other = "{n} items" }`); with `params.n` the variant for that count's `plural_category` is picked and its `{n}` is interpolated to the literal number, without `params.n` the generic (`other`) form is resolved. Example: `i18n.translate("Hello, {name}!", { name = "Caesura" })` → `"Hello, Caesura!"`; `i18n.translate("items", { n = 1 })` → `"1 item"` (en one). |
 | `plural_category` | `(count) → string` | Return the CLDR plural category for a count in the current language: `en` → `"one"` when count == 1 else `"other"`; `zh`/`ja` (and any unknown language) always → `"other"` (no singular/plural distinction). |
 | `_plural_form` | `(entry, count?) → string` | Resolve a dictionary value that is a plain string (returned unchanged) or a plural variant table: picks the variant for `count`'s category, falling back to `other` then `one`; with `count` nil uses the generic `other` form (safe for `t()`/`expand()` with no `{n}`). |
+| `t` | `(key) → string` | Plain lookup of `key` in the current strings table, falling back to the default language then returning the raw key. A plural-variant value resolves to its generic (`other`) form so a plain lookup never leaks a raw table. |
+| `expand` | `(text) → string` | Replace `{key}` tokens in `text` with translations (`i18n.t`). Unknown keys keep their braced form; inline markup tag names (`{b}/{i}/{s}/{color}/{size}`) are whitelisted and never treated as keys. |
+| `localize` | `(text, scene?) → string` | Localize dialogue text: per-line translation first (`lines["<scene>:<fnv1a(text)>"]`, Ren'Py-style content-addressed key), else `{key}` token expansion (`expand`), else the original text. Applied by the KAG text pipeline before markup parsing. |
+| `available` | `() → table` | List available language codes by scanning `assets/lang/` for `.lua` files. |
+| `load` | `(langCode) → strings` | Load a language dictionary from `assets/lang/<code>.lua` into `i18n.strings`; falls back to a built-in table when the file is missing. Sets `i18n.current`. |
 | `reload` | `(langCode) → strings` | Hot-reload a language dictionary from disk (re-reads `assets/lang/<code>.lua` even if already current); preserves `i18n.current`, `i18n.default_language` and the cached fallback. |
-| `default_language` | `(field) → string` | Fallback dictionary language (default `"en"`); configurable. |
+| `default_language` | field (`string`) | Fallback dictionary language (default `"en"`); configurable via `set_language`'s `opts.default`. |
+| `fnv1a` | `(text) → number` | FNV-1a 32-bit hash, used to build content-addressed per-line translation keys. |
+| `current` | field (`string`) | Currently selected language code (set by `load`/`set_language`). |
+| `strings` | field (`table`) | Active language strings table (current dictionary). |
+| `fallback` | field (`table`) | Default-language dictionary used as the second fallback rung. |
