@@ -111,8 +111,27 @@ def run_tests():
     except Exception:
         pass
     try:
-        lua = os.path.join(ROOT, "external", "lua", "lua.exe")
-        if os.path.isfile(lua):
+        # external/lua is gitignored — CMake builds the interpreter into
+        # build/ on CI, so probe the same locations the workflow steps use
+        # (round 70: the census dropped the Lua row when lua.exe was absent).
+        lua = None
+        for cand in (os.path.join(ROOT, "external", "lua", "lua.exe"),
+                     os.path.join(ROOT, "build", "lua", "lua.exe"),
+                     os.path.join(ROOT, "build", "lua", "Debug", "lua.exe"),
+                     os.path.join(ROOT, "build", "Debug", "lua.exe")):
+            if os.path.isfile(cand):
+                lua = cand
+                break
+        if lua is None:
+            bdir = os.path.join(ROOT, "build")
+            if os.path.isdir(bdir):
+                for r2, _, files in os.walk(bdir):
+                    if "lua.exe" in files:
+                        lua = os.path.join(r2, "lua.exe")
+                        break
+                    if lua is not None:
+                        break
+        if lua is not None:
             out = subprocess.run([lua, os.path.join(ROOT, "tests", "scripts", "run_lua_tests.lua")],
                                  capture_output=True, text=True, timeout=300,
                                  cwd=ROOT).stdout
