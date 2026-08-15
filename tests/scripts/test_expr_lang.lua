@@ -182,6 +182,28 @@ do
     check("?? inside string literal untouched", tr == "'x ?? y'")
 end
 
+-- ---- ternary inside [...] index brackets (round 61) ----------------------
+do
+    local ctx = { f = { arr = { 10, 20 }, flag = true, b = true, t = 0 },
+        sf = {}, tf = {}, mp = {}, lf = {} }
+    local ok1, v1 = expr.evaluate(ctx, "f.arr[ f.flag ? 1 : 2 ]")
+    check("ternary in index picks then", ok1 and v1 == 10)
+    ctx.f.flag = false
+    local ok2, v2 = expr.evaluate(ctx, "f.arr[ f.flag ? 1 : 2 ]")
+    check("ternary in index picks else", ok2 and v2 == 20)
+    local ok3, v3 = expr.evaluate(ctx, "f.arr[ f.flag ? 1 : 2 ] + 5")
+    check("ternary in index composes with arithmetic", ok3 and v3 == 25)
+    ctx.f.flag = true
+    local ok4, v4 = expr.evaluate(ctx, "f.arr[ f.b ? 1 : 2 ] ? 10 : 20")
+    check("outer ternary around indexed ternary", ok4 and v4 == 10)
+    ctx.f.flag = false
+    local ok5, v5 = expr.evaluate(ctx, "f.arr[ f.flag ? 1 : 2 ]")
+    check("ternary in index keeps indexing", ok5 and v5 == 20)
+    local tr = expr.translate("f.arr[ f.flag ? 1 : 2 ]")
+    check("translate leaves no '?' for index ternary",
+        tr:find("?", 1, true) == nil, tr)
+end
+
 local failed = 0
 for _, ok in ipairs(results) do if not ok then failed = failed + 1 end end
 if failed > 0 then os.exit(1) end

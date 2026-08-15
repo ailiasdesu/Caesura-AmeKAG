@@ -208,7 +208,67 @@ local function trim(s)
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+-- Translate ternary expressions INSIDE [...] index brackets before the
+-- outer ternary pass (round 61): find_top/match_colon treat [ ] as depth,
+-- so `f.arr[flag ? 1 : 2]` was never translated and the raw '?' broke
+-- Lua load(). Flatten bracket contents innermost-out; the outer pass then
+-- sees already-valid Lua inside the brackets.
+local function translate_brackets(src)
+    local out = {}
+    local i, n = 1, #src
+    local quote = nil
+    while i <= n do
+        local c = src:sub(i, i)
+        if quote then
+            out[#out + 1] = c
+            if c == "\\" then
+                out[#out + 1] = src:sub(i + 1, i + 1)
+                i = i + 2
+            else
+                if c == quote then quote = nil end
+                i = i + 1
+            end
+        else
+            if c == '"' or c == "'" then
+                quote = c
+                out[#out + 1] = c
+                i = i + 1
+            elseif c == "[" then
+                -- find the matching ] (bracket depth, quote-aware)
+                local j, depth, q2 = i + 1, 1, nil
+                while j <= n do
+                    local d = src:sub(j, j)
+                    if q2 then
+                        if d == "\\" then j = j + 1
+                        elseif d == q2 then q2 = nil end
+                    elseif d == '"' or d == "'" then
+                        q2 = d
+                    elseif d == "[" then
+                        depth = depth + 1
+                    elseif d == "]" then
+                        depth = depth - 1
+                        if depth == 0 then break end
+                    end
+                    j = j + 1
+                end
+                if depth == 0 then
+                    out[#out + 1] = "[" .. translate(src:sub(i + 1, j - 1)) .. "]"
+                    i = j + 1
+                else
+                    out[#out + 1] = c
+                    i = i + 1
+                end
+            else
+                out[#out + 1] = c
+                i = i + 1
+            end
+        end
+    end
+    return table.concat(out)
+end
+
 local function translate_ternary(src)
+    src = translate_brackets(src)
     local q = find_top(src, "?", 1)
     if not q then
         return translate_operators(src)
@@ -236,6 +296,14 @@ translate = translate_ternary
 function expr.translate(source)
     if type(source) ~= "string" then return tostring(source) end
     return translate(source)
+end
+
+--- expr.translateOperators(source) — TJS operator translation ONLY
+--  (&& || ! != ??), no ternary wrap. Used by [eval] where assignment
+--  statements make the (a and b or c) ternary wrap invalid (round 61).
+function expr.translateOperators(source)
+    if type(source) ~= "string" then return tostring(source) end
+    return translate_operators(source)
 end
 
 --- expr.evaluate(ctx, source) -> ok, value

@@ -343,6 +343,35 @@ local ctx11e = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
 local co11e = coroutine.create(function() scheduler.run(ctx11e, toks11e, 1) end)
 while coroutine.status(co11e) ~= "dead" do coroutine.resume(co11e) end
 check("11e: eval expression assignment runs", type(ctx11e.f.luck) == "number")
+
+-- 11f. [eval] TJS operator translation (round 61: && || ! != previously
+--      failed as invalid Lua — eval is a statement, so operators only)
+local toks11f = tokenizer.parse('[eval exp="f.ok = f.hp > 10 && f.flag"]')
+compiler.compile(toks11f)
+local ctx11f = { f = { hp = 30, flag = true }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11f }
+local co11f = coroutine.create(function() scheduler.run(ctx11f, toks11f, 1) end)
+while coroutine.status(co11f) ~= "dead" do coroutine.resume(co11f) end
+check("11f: eval && assignment translates", ctx11f.f.ok == true)
+
+local toks11g = tokenizer.parse('[eval exp="f.alt = f.missing || 7"]')
+compiler.compile(toks11g)
+local ctx11g = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11g }
+local co11g = coroutine.create(function() scheduler.run(ctx11g, toks11g, 1) end)
+while coroutine.status(co11g) ~= "dead" do coroutine.resume(co11g) end
+check("11g: eval || assignment translates", ctx11g.f.alt == 7)
+
+local toks11h = tokenizer.parse('[eval exp="f.neg = !f.flag"]')
+compiler.compile(toks11h)
+local ctx11h = { f = { flag = false }, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11h }
+local co11h = coroutine.create(function() scheduler.run(ctx11h, toks11h, 1) end)
+while coroutine.status(co11h) ~= "dead" do coroutine.resume(co11h) end
+check("11h: eval ! assignment translates", ctx11h.f.neg == true)
 -- ---------------------------------------------------------------------------
 -- 12a-12e. Dotted-key assignment + interpolation (round 50).
 --  [set f.name = "Aoi"] must store the UNQUOTED string via the tokenizer's
