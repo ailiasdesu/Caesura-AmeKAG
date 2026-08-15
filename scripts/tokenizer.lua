@@ -73,9 +73,14 @@ local block_text = Ct(Cc("blocktext") * P('"""')
     * C((P(1) - P('"""'))^0) * P('"""'))
 local explicit_cmds = iscript_pat + cmd_pat
 
+-- Robustness: the token sequence is optional (zero or more), so a
+-- comment-only or whitespace-only .ks source parses to an empty token
+-- table ({}), exactly like the empty string -- never a "parse failed"
+-- error. The grammar still rejects genuinely malformed input (unclosed
+-- "[" / "[]"): when no token matches, the trailing skip * -1 fails on the
+-- dangling bytes.
 local grammar = Ct(
-    bom * skip *
-    (explicit_cmds + label_pat + block_text + text_body) *
+    bom *
     (skip * (explicit_cmds + label_pat + block_text + text_body))^0 *
     skip * -1
 )

@@ -141,6 +141,27 @@ do
           and toks2[1].cmd == "ch" and toks2[2].cmd == "ch")
 end
 
+-- ---- comment-only / whitespace-only robustness (round 88 edge) --------------
+-- A .ks file containing ONLY comments and/or whitespace/newlines must parse
+-- to an empty token table ({}), exactly like the empty string -- never a
+-- "Tokenizer: parse failed" error.
+do
+    local function isEmpty(input)
+        local ok, res = pcall(tokenizer.parse, input)
+        return ok and type(res) == "table" and #res == 0, res
+    end
+    local ok; ok, _ = isEmpty("; only a comment")
+    check("comment-only returns empty {}", ok)
+    ok, _ = isEmpty("; line1\n; line2\n")
+    check("multi-comment-only returns empty {}", ok)
+    ok, _ = isEmpty("   \n\t ")
+    check("whitespace-only returns empty {}", ok)
+    ok, _ = isEmpty("\n\n\n")
+    check("blank-lines-only returns empty {}", ok)
+    ok, _ = isEmpty("  ; comment\n  \n; more\n\t")
+    check("comment+whitespace mix returns empty {}", ok)
+end
+
 -- ---- iscript raw region -----------------------------------------------------
 do
     local toks = tokenizer.parse('[iscript]\nlocal x = 1\n-- [not a tag]\n[/endscript]')
