@@ -368,12 +368,14 @@ end)
 print("\n=== Test Suite 5: Engine Bootstrap ===\n")
 
 test("Main.cpp exists and references expected modules", function()
-    local f = io.open("src/Main.cpp", "r")
-    assert_not_nil(f, "src/Main.cpp not found")
+    -- Canonical lowercase: Windows is case-insensitive, Linux/macOS are not
+    -- (round 60: the suite now runs on all CI platforms).
+    local f = io.open("src/main.cpp", "r")
+    assert_not_nil(f, "src/main.cpp not found")
     local content = f:read("*a")
     f:close()
-    assert(content:find("Engine"), "Main.cpp missing Engine")
-    assert(content:find("LuaManager"), "Main.cpp missing LuaManager")
+    assert(content:find("Engine"), "main.cpp missing Engine")
+    assert(content:find("LuaManager"), "main.cpp missing LuaManager")
 end)
 
 test("All key source files exist", function()
