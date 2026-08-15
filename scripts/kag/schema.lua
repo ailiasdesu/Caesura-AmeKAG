@@ -62,6 +62,20 @@ local function match_brace(s, open)
             end
         elseif d == "'" or d == '"' then
             quote = d
+        elseif d == "[" then
+            -- Lua long bracket [=[ ... ]=] (round 62): braces inside a
+            -- long string must not close the ${...} span. Skip to the
+            -- matching closer of any level ([[, [=[, [==[ ...).
+            local eqs = s:match("^=*", j + 1) or ""
+            if s:sub(j + 1 + #eqs, j + 1 + #eqs) == "[" then
+                local closer = "]" .. eqs .. "]"
+                local k = s:find(closer, j + 2 + #eqs, true)
+                if k then
+                    j = k + #closer - 1  -- loop advance lands after it
+                else
+                    j = n + 1  -- unterminated long string: stop scanning
+                end
+            end
         elseif d == "{" then
             depth = depth + 1
         elseif d == "}" then

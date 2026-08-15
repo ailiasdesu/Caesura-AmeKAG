@@ -135,6 +135,21 @@ do
     check("empty span stays verbatim", p6.text == "empty ${} ok")
 end
 
+-- ${expr} Lua long brackets (round 62): braces inside [[...]] /
+-- [=[...]=] must not close the span early
+do
+    local ctx = { f = { name = "Ame" } }
+    local p7 = Schema.coerce("_interp_test",
+        { text = "l ${ [[}}]] .. f.name }" }, ctx)
+    check("long-bracket braces do not close span", p7.text == "l }}Ame", p7.text)
+    local p8 = Schema.coerce("_interp_test",
+        { text = "l ${ [=[}]=] .. f.name }" }, ctx)
+    check("level-1 long bracket braces skipped", p8.text == "l }Ame", p8.text)
+    local p9 = Schema.coerce("_interp_test",
+        { text = "plain ${ f.name }" }, ctx)
+    check("regression: plain expr unaffected", p9.text == "plain Ame")
+end
+
 -- volume setter contracts (clamp regression class)
 do
     pcall(require, "kag.commands.audio")
