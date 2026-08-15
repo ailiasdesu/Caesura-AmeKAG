@@ -292,6 +292,58 @@ package.loaded["kag"] = nil
 --      the module still loads (the loop was fixed).
 local okBake = pcall(require, "ks_bake")
 check("10d: ks_bake loads after loop-var fix", okBake == true)
+-- ---------------------------------------------------------------------------
+-- 11a-11e. [set f.x = 5] assignment-sugar "=" separator (round 46).
+--  [set f.coins = 100] tokenizes as bare {1,"f.coins"},{2,"="},{3,"100"};
+--  normalize_params must drop the standalone "=" and shift positions so
+--  positional_index mapping yields var="f.coins", value="100" (was: the
+--  literal "=" was stored and branches never varied).
+-- ---------------------------------------------------------------------------
+local sys11 = require("kag.commands.system")
+local toks11 = tokenizer.parse("[set f.coins = 100]")
+compiler.compile(toks11)
+local p11 = toks11[1][2]
+check("11a: '=' separator stripped, value shifts down",
+      p11.var == "f.coins" and p11.value == "100")
+local ctx11 = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11 }
+local co11 = coroutine.create(function() scheduler.run(ctx11, toks11, 1) end)
+while coroutine.status(co11) ~= "dead" do coroutine.resume(co11) end
+check("11b: [set f.x = N] stores the number", ctx11.f.coins == 100)
+
+-- 11c. a non-bare "=" value is NOT a separator: the bare positional
+--      grammar (uval) keeps quotes as literals, so '[set f.s "="]'
+--      stores the 3-char string '"="' — the "=" strip must not touch it.
+local toks11c = tokenizer.parse('[set f.s "="]')
+compiler.compile(toks11c)
+local ctx11c = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11c }
+local co11c = coroutine.create(function() scheduler.run(ctx11c, toks11c, 1) end)
+while coroutine.status(co11c) ~= "dead" do coroutine.resume(co11c) end
+check("11c: quoted '=' value survives (uval literal)", ctx11c.f.s == '"="')
+
+-- 11d. no-equals form still works ([set f.x 42])
+local toks11d = tokenizer.parse("[set f.x 42]")
+compiler.compile(toks11d)
+local ctx11d = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11d }
+local co11d = coroutine.create(function() scheduler.run(ctx11d, toks11d, 1) end)
+while coroutine.status(co11d) ~= "dead" do coroutine.resume(co11d) end
+check("11d: bare positional form still works", ctx11d.f.x == 42)
+
+-- 11e. expression assignment belongs to [eval exp="..."], not [set]
+local toks11e = tokenizer.parse('[eval exp="f.luck = math.random(2)"]')
+compiler.compile(toks11e)
+local ctx11e = { f = {}, sf = {}, tf = {}, mp = {}, lf = {},
+    variables = {}, current_scene = "t.ks", token_index = 1,
+    tokens = toks11e }
+local co11e = coroutine.create(function() scheduler.run(ctx11e, toks11e, 1) end)
+while coroutine.status(co11e) ~= "dead" do coroutine.resume(co11e) end
+check("11e: eval expression assignment runs", type(ctx11e.f.luck) == "number")
+
 
 if failed > 0 then
     print(string.format("COMPILER TESTS: %d passed, %d FAILED", passed, failed))

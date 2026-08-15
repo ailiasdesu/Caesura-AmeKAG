@@ -46,7 +46,8 @@
 [p]
 
 ; --- 6. branching: random + if + jump ---
-[set f.luck = math.random(2)]
+; round 46 fix: [set] does not evaluate expressions; use [eval] for that
+[eval exp="f.luck = math.random(2)"]
 [if exp="f.luck == 1"]
 [ch name="Narrator" text="The coin says HEADS — good luck path."]
 [jump target=*ending_good]

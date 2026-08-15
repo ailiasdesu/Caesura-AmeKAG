@@ -105,6 +105,29 @@ local function normalize_params(cmd, raw)
         end
     end
     if not has_pairs then return raw end  -- named table: keep identity
+    -- KAG3 assignment sugar: [set f.x = 5] tokenizes as bare
+    -- {1,"f.x"},{2,"="},{3,"5"}. The standalone "=" separator is NOT a
+    -- value (a literal "=" value must be quoted, [set f.s "="], which
+    -- parses as qval and never lands here). Drop it and shift the
+    -- following positional args down so positional_index mapping sees
+    -- var="f.x", value="5" (audit: showcase's [set f.luck = math.random(2)]
+    -- had stored the literal "=" and its branch never varied).
+    if has_pairs then
+        local shifted = {}
+        local n = 0
+        for i = 1, math.max(1, #bare) do
+            local v = bare[i]
+            if v == "=" and bare[i + 1] ~= nil then
+                -- separator: skip it; the next positional shifts down
+            else
+                n = n + 1
+                shifted[n] = v
+            end
+        end
+        if n > 0 and (n ~= #bare or shifted[1] ~= bare[1]) then
+            bare = shifted
+        end
+    end
     -- Compile-time positional -> named mapping via the contract's
     -- positional_index declarations (e.g. [set f.hp 30] -> var="f.hp").
     local specs = schemaModule.specs(cmd)
