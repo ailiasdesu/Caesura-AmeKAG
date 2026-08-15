@@ -449,12 +449,21 @@ require("kag.schema").define("saveload", {
 })
 
 function SaveCommands.saveload(ctx, params)
-    local SaveLoad = require("saveload_menu")
+    -- Round 52 audit: headless/editor environments have no UI overlay —
+    -- saveload_menu may not be loadable at all, so pcall the require.
+    local okL, SaveLoad = pcall(require, "saveload_menu")
+    if not okL then SaveLoad = nil end
     -- string guard on the bare mode (audit: a pair table from named
     -- params must not reach the menu as the mode)
     local mode = params.mode
     if type(mode) ~= "string" then
         mode = (type(params[1]) == "string") and params[1] or nil
+    end
+    -- Round 52 audit: headless/editor environments have no UI overlay —
+    -- require("saveload_menu") may be absent or lack .show.
+    if type(SaveLoad) ~= "table" or type(SaveLoad.show) ~= "function" then
+        print("[SaveCmd] saveload: menu unavailable (headless) — skipping")
+        return
     end
     local chosen = SaveLoad.show(ctx, mode or "save")
     if chosen then
@@ -468,7 +477,19 @@ function SaveCommands.saveload(ctx, params)
 end
 
 function SaveCommands.listsaves(ctx, params)
-    local saves = kag_binding("list_saves")()
+    -- Round 52 audit: headless/web environments may lack the list_saves
+    -- binding (no C++ SaveManager) — degrade to an empty list instead of
+    -- crashing on a nil call.
+    local fn = kag_binding("list_saves")
+    if type(fn) ~= "function" then
+        print("[SaveCmd] listsaves: binding unavailable (headless) — empty list")
+        ctx.sf = ctx.sf or {}
+        ctx.sf.save_list = {}
+        ctx.tf = ctx.tf or {}
+        ctx.tf.save_list = {}
+        return
+    end
+    local saves = fn()
     ctx.sf = ctx.sf or {}
     ctx.sf.save_list = saves
     -- Also set as tf for immediate access

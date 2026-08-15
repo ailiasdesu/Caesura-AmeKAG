@@ -197,9 +197,15 @@ function VFX.blur(ctx, params)
         end
     end
 
-    -- Allocate temp RTTs for two-pass blur
-    local tmpA = rtt and rtt.alloc(ctx._width or 1280, ctx._height or 720) or 0
-    local tmpB = rtt and rtt.alloc(ctx._width or 1280, ctx._height or 720) or 0
+    -- Allocate temp RTTs for two-pass blur. Guard the alloc entry point:
+    -- headless/editor environments may expose a stub rtt without alloc
+    -- (round 52 audit: blur crashed with "attempt to call a nil value").
+    if type(rtt) ~= "table" or type(rtt.alloc) ~= "function" then
+        print("[VFX] blur: RTT alloc unavailable (headless) — skipping")
+        return
+    end
+    local tmpA = rtt.alloc(ctx._width or 1280, ctx._height or 720)
+    local tmpB = rtt.alloc(ctx._width or 1280, ctx._height or 720)
 
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)

@@ -22,13 +22,39 @@ local tests = {
     "test_kag_system_flow",
     "test_macro",
     "test_p2_features",
+    "test_contracts_runtime",
 }
 
 local passed, failed = 0, 0
 print("=== Caesura Orphan Test Suite (isolated) ===\n")
+
+-- Round 52 fix: tests that call os.exit (test_kag_core exits 0 on
+-- success) would terminate THIS process mid-loop, silently skipping every
+-- later test. Run each test in its own lua subprocess so os.exit is
+-- contained (exit 0 = pass, non-zero = fail).
+local lua_bin = arg and arg[-1] or "lua"
+local function run_isolated(name)
+    -- Windows popen: cmd.exe fails when the executable is quoted
+    -- ("external\lua\lua.exe ..." -> 'external' not recognized), but
+    -- unquoted works as long as the path has no spaces. The test file
+    -- path is quoted (it may contain spaces).
+    local bin = lua_bin:gsub('/', '\\')
+    local f = (test_dir .. name .. '.lua'):gsub('/', '\\')
+    local cmd = bin .. ' "' .. f .. '"'
+    local pf = io.popen(cmd)
+    if not pf then return false, "cannot spawn" end
+    local out = pf:read("*a")
+    local ok = pf:close()
+    if out and #out > 0 then
+        print(out:sub(1, math.min(#out, 4000)))
+    end
+    -- io.popen close: true when exit code 0 (Windows/Lua convention)
+    return ok, ok and "" or "subprocess exited non-zero"
+end
+
 for _, name in ipairs(tests) do
     print(string.format("Running %s.lua...", name))
-    local ok, err = pcall(dofile, test_dir .. name .. ".lua")
+    local ok, err = run_isolated(name)
     if ok then
         passed = passed + 1
         print(string.format("  [OK] %s\n", name))
