@@ -29,7 +29,7 @@ for _, c in ipairs(IS_WIN and {
 end
 if not EXE then
     print("SKIP: carc_pack binary not found (checked bin/Debug and bin)")
-    os.exit(0)
+    return  -- round 71: os.exit(0) here silently KILLED the whole main suite
 end
 local TMP_IN = "tmp" .. SEP .. "carc_test_in"
 local TMP_CARC = "tmp" .. SEP .. "carc_test.carc"

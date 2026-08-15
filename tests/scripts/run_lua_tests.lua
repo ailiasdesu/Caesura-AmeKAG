@@ -19,6 +19,8 @@ local _real_dofile  = dofile
 -- the whole command module chain before the tests that mock the C
 -- bindings, changing suite behavior (see git history).
 local okp, errp = pcall(require, "replay")
+local okpal, errpal = pcall(require, "palette")
+if not okpal then print("[run_lua_tests] preload palette failed: " .. tostring(errpal)) end
 if not okp then print("[run_lua_tests] preload replay failed: " .. tostring(errp)) end
 
 -- NOTE: test_kag_commands must run BEFORE test_scheduler because

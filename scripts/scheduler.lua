@@ -975,6 +975,24 @@ function scheduler.run(ctx, tokens, start_index)
                 error     = error,
             }
             local fn, compileErr = load(code, "=eval", "t", env)
+            if not fn then
+                -- Round 71 (doc contract): a BARE VALUE expression
+                -- ([eval] f.hp * 2, [eval] f.a ? 1 : 2) is not a valid Lua
+                -- statement; wrap it in "return" through the FULL pipeline
+                -- (ternary included) so the doc contract holds:
+                -- "a bare expression stores its result in tf.eval_result".
+                -- Assignments/calls compile as statements and never reach
+                -- this path; when the wrap also fails, the original
+                -- compile error is reported.
+                local wrapped, werr = load(
+                    "return " .. exprLang.translate(code),
+                    "=eval", "t", env)
+                if wrapped then
+                    fn = wrapped
+                else
+                    compileErr = compileErr or werr
+                end
+            end
             if fn then
                 local ok, result = pcall(fn)
                 if ok and result ~= nil then

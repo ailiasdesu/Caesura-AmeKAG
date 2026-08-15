@@ -334,8 +334,18 @@ i18n.lines, i18n.fallback = saved2.lines, saved2.fallback
 -- 4. ks_i18n template generator
 -- ---------------------------------------------------------------------------
 local ks = require("ks_i18n")
-local tmpfile = os.tmpname():gsub("\\", "/")
-local tmpdir = tmpfile:match("^(.*)[/\\]")
+-- Round 71: use a REPO-LOCAL tmp dir (tmp/test_i18n) instead of the OS temp
+-- dir. The OS temp path is enumerated via popen(dir/ls) and can be
+-- environment-sensitive on CI runners; a repo-local dir is guaranteed
+-- writable and enumerable (same reasoning as test_carc_import reset_dir).
+-- NOTE: scan_dir (fileutil) REJECTS backslash paths (C6 whitelist allows
+-- only %w/_%.:-), so tmpdir must be FORWARD slashes on every platform.
+local tmpdir = "tmp/test_i18n"
+local function reset_tmp()
+    pcall(os.execute, 'rm -rf "tmp/test_i18n"')
+    pcall(os.execute, 'mkdir -p "tmp/test_i18n"')
+end
+reset_tmp()
 local fixture = "demo/x.ks"
 local f = io.open(tmpdir .. "/x.ks", "w")
 f:write('[ch name="A" text="Hello world"]\n[p]\nplain line\n[text text="Second"]\n'

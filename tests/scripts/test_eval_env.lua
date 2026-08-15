@@ -48,11 +48,27 @@ check("eval io unreachable", v3.i == "nil")
 check("eval load unreachable", v3.l == "nil")
 check("eval dofile unreachable", v3.dof == "nil")
 
--- statement semantics: [eval] executes statements (f writes visible);
--- expression results are the strict-sandbox path's behavior, the inline
--- path compiles statements only.
+-- statement semantics: [eval] executes statements (f writes visible)
 local ok4, v4 = runEval([[f.answer = 40 + 2]], {})
 check("eval statement executes", ok4 and v4.answer == 42)
+
+-- round 71: bare VALUE expressions compile via a "return " wrap (doc
+-- contract: a bare [eval] stores its result in tf.eval_result).
+local ok5, v5, c5 = runEval([[f.hp * 2]], { hp = 21 })
+check("eval bare value expression stores result",
+    ok5 and c5.tf.eval_result == 42, tostring(c5 and c5.tf.eval_result))
+
+local ok6, v6, c6 = runEval([[f.a ? 10 : 20]], { a = true })
+check("eval bare ternary stores result",
+    ok6 and c6.tf.eval_result == 10, tostring(c6 and c6.tf.eval_result))
+
+local ok7, v7, c7 = runEval([[f.a && f.b ? 1 : 0]], { a = true, b = false })
+check("eval bare TJS ternary stores result",
+    ok7 and c7.tf.eval_result == 0, tostring(c7 and c7.tf.eval_result))
+
+-- invalid expressions still surface the compile error, no crash, no result
+local ok8, v8, c8 = runEval([[f.x +]], {})
+check("eval invalid expression safe", ok8 and c8.tf.eval_result == nil)
 
 if failed > 0 then os.exit(1) end
 print("EVAL ENV TESTS DONE")
