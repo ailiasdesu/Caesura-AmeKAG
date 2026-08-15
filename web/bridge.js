@@ -74,11 +74,46 @@ const BINDING_MODULES = new Set([
   'fileutil', 'sandbox',
 ])
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p, storageBackend }) {
+/* Derive the assets/lang URL from the scripts URL: both live at the same
+ * site root, so a scripts base like '/scripts/' or 'http://local/scripts/'
+ * maps to '/assets/lang/' / 'http://local/assets/lang/'. Callers may pin
+ * langBase explicitly (tests) to override this default. */
+const langBaseFromScripts = (sb) => (typeof sb === 'string' && sb.length > 0
+  ? String(sb).replace(/scripts\/?$/, '') + 'assets/lang/'
+  : undefined)
+
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
   const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()
   const audio = new AudioEngine()
+
+  // ---- lang dictionaries (round 91 i18n web parity) ------------------
+  // The REAL scripts/i18n.lua loads assets/lang/<code>.lua through
+  // io.open. Under wasmoon/browser that filesystem cannot reach served
+  // assets, so i18n.load has always degraded to the built-in dictionary
+  // stubs on web — losing the genuine dictionaries (plural `items` keys,
+  // per-lang lines, fallback dict). We fetch each dictionary from
+  // langBase (e.g. assets/lang/) and mount it into wasmoon's virtual FS,
+  // so the unchanged i18n.load/set_language code resolves the REAL files:
+  // unit strings, plural variant tables, full zh->en->raw fallback chain,
+  // and graceful degradation to built-ins when a file is absent (a missing
+  // lang file must still return the built-in table, not throw).
+  if (langBase) {
+    const base = String(langBase).replace(/[\/\s]*$/, '/')
+    for (const code of langs) {
+      if (!/^[A-Za-z0-9-]{1,16}$/.test(String(code))) continue
+      try {
+        const resp = await fetchImpl(base + code + '.lua')
+        const text = await resp.text()
+        if (text && text.trim().length > 0) {
+          factory.mountFile('assets/lang/' + code + '.lua', text)
+        }
+      } catch {
+        // File absent/unreadable: i18n.load falls back to built-ins.
+      }
+    }
+  }
 
   // ---- save storage backend (round 46) ----
   // Desktop engine persists saves through C++ SaveManager; the web player
@@ -346,13 +381,46 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       const s = String(lang ?? '').replace(/[^A-Za-z0-9-]/g, '')
       if (!s) return false
       try {
-        const ok = await lua.doString([
+        const cur = await lua.doString([
           "local i18n = require('i18n')",
           "if type(i18n) ~= 'table' then return false end",
           "if i18n.set_language then i18n.set_language('" + s + "') end",
-          'return true',
+          // Desktop parity (round 91): the settings menu drives the SAME
+          // relocalize path as [i18n language=] — the already-displayed
+          // page, backlog, active choices and cc re-localize with the new
+          // dictionary. Use the live scene ctx when one is parked.
+          "local okR, errR = pcall(function()",
+          "  local kt = require('kag.commands.text')",
+          "  local ctx = _G.__CTXREF",
+          "  if type(kt) == 'table' and kt.relocalize_page and type(ctx) == 'table' then",
+          "    kt.relocalize_page(ctx)",
+          "  end",
+          "end)",
+          "if not okR then print('[setLanguage] relocalize degraded: ' .. tostring(errR)) end",
+          // Rebuild the exported draws from the (possibly re-localized) live
+          // ctx so the DOM renderer shows the new language immediately — the
+          // same exporter runScene uses at the end of every run.
+          "local st = _G.__CTXREF and _G.__CTXREF.text_state",
+          "__SCENE_DRAWS_TABLE = {}",
+          "if type(st) == 'table' and type(st.draws) == 'table' then",
+          "  local n = 0",
+          "  for _, d in ipairs(st.draws) do",
+          "    if type(d) == 'table' and d.text and #d.text > 0 then",
+          "      n = n + 1",
+          "      __SCENE_DRAWS_TABLE[n] = {",
+          "        t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0,",
+          "        r = tonumber(d.r) or 255, g = tonumber(d.g) or 255, b = tonumber(d.b) or 255,",
+          "        a = tonumber(d.a) or 255, s = tonumber(d.scale) or 1,",
+          "        bd = d.bold == true and 1 or 0, it = d.italic == true and 1 or 0,",
+          "      }",
+          "    end",
+          "  end",
+          "end",
+          "return i18n.current",
         ].join(String.fromCharCode(10)))
-        return ok !== false
+        const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
+        core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
+        return cur
       } catch { return false }
     },
     /** Run a .ks source; resolves with final ctx.token_index. */

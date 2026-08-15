@@ -2,19 +2,37 @@
 // Full browser-flow integration: real wasmoon engine + DOM renderer +
 // the complete galgame demo scene, driven click-by-click.
 import { describe, it, expect, beforeAll } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPlayer } from './bridge.js'
 import { DomRenderer } from './dom-renderer.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const scriptsDir = join(here, '..', 'scripts')
+const rootDir = join(here, '..')
+const scriptsDir = join(rootDir, 'scripts')
+const assetsDir = join(rootDir, 'assets')
 const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
+// Round 91: also serve the REAL assets/lang/<code>.lua dictionaries so the
+// bridge can mount them (i18n web parity). Any other non-script path 404s
+// (the bridge treats a missing lang file as "use built-in", so a sensible
+// test for the fallback chain must explicitly 404 an unserved code).
 const fileFetch = async (url) => {
   const u = new URL(url)
+  if (u.pathname.startsWith('/assets/lang/')) {
+    const rel = u.pathname.replace('/assets/lang/', '').replaceAll('/', '\\')
+    const p = join(assetsDir, 'lang', rel)
+    // Only serve files that actually exist on disk; a missing lang code must
+    // reject so the bridge's try/catch treats it as absent.
+    return {
+      ok: existsSync(p),
+      status: existsSync(p) ? 200 : 404,
+      text: async () => (existsSync(p) ? readFileSync(p, 'utf8') : ''),
+      json: async () => index,
+    }
+  }
   const p = u.pathname.replace('/scripts/', scriptsDir + '/').replaceAll('/', '\\')
-  return { text: async () => readFileSync(p, 'utf8'), json: async () => index }
+  return { ...({ text: async () => readFileSync(p, 'utf8'), json: async () => index }), status: 200, ok: true }
 }
 
 let player = null
@@ -25,6 +43,7 @@ beforeAll(async () => {
   player = await createPlayer({
     scriptsBase: 'http://local/scripts/',
     fetchImpl: fileFetch,
+    langBase: 'http://local/assets/lang/',
     wasmFile: join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm'),
   })
   stage = document.createElement('div')
@@ -1513,4 +1532,194 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(errs).toEqual([])
   }, 120000)
 
+
+  // ---- round 91: i18n web full-chain parity -------------------------------
+  // The bridge now mounts the REAL assets/lang/{en,zh,ja}.lua dictionaries
+  // into wasmoon's virtual FS, so i18n.load/set_language resolve genuine
+  // files (plural items tables, per-lang fallback). These tests pin all
+  // five parity axes from the round-91 spec: (1) real file loading reachable
+  // by fetch path, (2) plural output matches desktop translate() per
+  // language, (3) settings-set language actually switches the player and
+  // redraws displayed text + persists across a settings "restart", (4)
+  // tutorial_14's real {items} plural demo renders, (5) hot-switch re-localizes
+  // backlog plural entries and governs new-page language after an advance,
+  // (6) missing dictionary key -> fallback chain, plural value -> normal.
+
+  // -- task 1 / 2: REAL lang files load; plural matches desktop per language
+  it('round 91: real assets/lang dictionaries load (plural items table present)', async () => {
+    // en is the dictionary the i18n.lua module booted from (mounted zh by
+    // default; switch to en to inspect the genuine en table).
+    await player.lua.doString('(require("i18n")).set_language("en")')
+    const en = await player.lua.doString([
+      "local I = require('i18n')",
+      'return { current = I.current, settings = tostring(I.strings.settings or ""),',
+      '         items = type(I.strings.items) ~= "table" and "notable" or',
+      '         ("one=" .. tostring(I.strings.items.one) .. ";other=" .. tostring(I.strings.items.other)),',
+      '         greeting = tostring(I.strings.greeting or "") }',
+    ].join(String.fromCharCode(10)))
+    expect(en.current).toBe('en')
+    // genuine en dictionary string (not the built-in stub text)
+    expect(en.settings).toBe('Settings')
+    expect(en.greeting).toBe('Hello!')
+    // the CLDR plural variant table shipped in assets/lang/en.lua is present
+    expect(en.items).toContain('one={n} item')
+    expect(en.items).toContain('other={n} items')
+    // zh dictionary also resolves real values through the mounted file
+    await player.lua.doString('(require("i18n")).set_language("zh")')
+    const zh = await player.lua.doString("local I=require('i18n') return tostring(I.strings.settings or '')")
+    expect(zh).toBe('设置')
+  }, 120000)
+
+  it('round 91: plural translate() output matches desktop for en (one/other) vs zh/ja (other)', async () => {
+    const tNum = async (lang, key, n) => {
+      await player.lua.doString('(require("i18n")).set_language(' + JSON.stringify(lang) + ')')
+      await player.lua.doString('_G.__R = (require("i18n")).translate(' + JSON.stringify(key) + ', { n = ' + Number(n) + ' })')
+      return player.lua.global.get('__R')
+    }
+    // en: n=1 -> one variant, n=3 -> other variant (real dict value)
+    expect(await tNum('en', 'items', 1)).toBe('1 item')
+    expect(await tNum('en', 'items', 3)).toBe('3 items')
+    expect(await tNum('en', 'items', 0)).toBe('0 items')
+    // zh/ja: always the single (other) form regardless of count
+    expect(await tNum('zh', 'items', 1)).toBe('1 个条目')
+    expect(await tNum('zh', 'items', 5)).toBe('5 个条目')
+    expect(await tNum('ja', 'items', 1)).toBe('1 個')
+    expect(await tNum('ja', 'items', 3)).toBe('3 個')
+    // unknown language code also collapses to other (safe): current 'xx' has
+    // no items key, so it falls back to the en fallback's OTHER form ({n} items)
+    // with count 1 -> "1 items" (NOT the en one-form "1 item"). This pins the
+    // zh/ja/unknown rule: everything except en uses the single "other" variant.
+    expect(await tNum('xx', 'items', 1)).toBe('1 items')
+  }, 120000)
+
+  // -- task 1 / 6: missing lang file + missing key fallback chains
+  it('round 91: a missing lang file degrades to built-in; missing key falls back en->raw', async () => {
+    // 'zz' has no assets/lang/zz.lua on disk -> fileFetch 404s -> i18n uses
+    // the built-in dictionary (zh), never throws.
+    await player.lua.doString('(require("i18n")).set_language("zz")')
+    const cur = await player.lua.doString("return (require('i18n')).current")
+    expect(cur).toBe('zz')
+    const builtinZh = await player.lua.doString("return tostring((require('i18n')).strings.title_screen or '')")
+    expect(builtinZh).toBe('标题画面') // built-in zh table, not the file
+
+    // Missing key: with en current, a key absent from both dict + fallback
+    // returns the raw key unchanged.
+    await player.lua.doString('(require("i18n")).set_language("en")')
+    await player.lua.doString("_G.__R = (require('i18n')).t('totally_missing_key')")
+    expect(player.lua.global.get('__R')).toBe('totally_missing_key')
+    // A key present as a PLAIN string passes through normally (not a raw key).
+    await player.lua.doString("_G.__R = (require('i18n')).t('greeting')")
+    expect(player.lua.global.get('__R')).toBe('Hello!')
+    // A key whose VALUE is a plural table resolves to the generic form via t()
+    // (never leaks a raw table handle).
+    await player.lua.doString("_G.__R = (require('i18n')).t('items')")
+    expect(player.lua.global.get('__R')).toBe('{n} items')
+  }, 120000)
+
+  // -- task 3: settings.set('language') switches the player + redraws + persists
+  it('round 91: player-settings language set switches i18n and re-localizes the displayed page', async () => {
+    const { createPlayerSettings, makeMemoryStorage } = await import('./player-settings.js')
+    const storage = makeMemoryStorage()
+    const settings = createPlayerSettings({ storage })
+    // wire the settings -> player language forwarder (mirrors main.mjs)
+    settings.subscribe(({ field, settings: s }) => {
+      if (field === 'language') void player.setLanguage(s.language)
+    })
+
+    // Render a page in zh, park at [p] so the ctx (and its page_src) stay live.
+    const NL = String.fromCharCode(10)
+    player.core.draws = []
+    const zhKs = [
+      '[i18n language="zh"]',
+      '[ch name="N" text="t={settings}"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    let out = await player.runScene(zhKs, 'rl_settings_zh.ks', { maxFrames: 200000, autoClick: false })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(player.core.draws.map((d) => d.t).join(' | ')).toContain('t=设置')
+
+    // settings.set('language','en') -> applyLanguage -> player.setLanguage
+    // must switch i18n.current AND relocalize the already-displayed page.
+    settings.set('language', 'en')
+    const cur = await player.lua.doString("return (require('i18n')).current")
+    expect(cur).toBe('en')
+    expect(player.core.draws.map((d) => d.t).join(' | ')).toContain('t=Settings')
+    expect(player.core.draws.map((d) => d.t).join(' | ')).not.toContain('t=设置')
+
+    // Persistence: a fresh settings controller from the SAME storage reloads ja.
+    settings.set('language', 'ja')
+    const settings2 = createPlayerSettings({ storage })
+    expect(settings2.load().language).toBe('ja')
+  }, 120000)
+
+  // -- task 4: tutorial_14 real plural demo text content
+  it('round 91: tutorial_14 renders the localized {items} plural demo text', async () => {
+    const ks = readFileSync(join(here, '..', 'demo', 'tutorial', 'tutorial_14_flow_timing.ks'), 'utf8')
+    player.core.events.length = 0
+    player.core.backlog.length = 0
+    const out = await player.runScene(ks, 'tutorial_14_flow_timing.ks', { maxFrames: 300000, autoClick: true })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs, 'tutorial_14 should have no error events').toEqual([])
+    const texts = player.core.backlog
+      .map((b) => b.text || '')
+      .join(' | ')
+      .concat(' | ' + player.core.events.filter((e) => e.kind === 'text.draws')
+        .flatMap((e) => (Array.isArray(e.detail?.draws) ? e.detail.draws : []))
+        .map((d) => d.t || '').join(' | '))
+    // The [i18n language="en"] + [ch ... plural={items}] line renders the
+    // genuine en plural "other" form (real assets/lang/en.lua value).
+    expect(texts).toContain('plural={n} items')
+    // The zh line renders the genuine zh other form.
+    expect(texts).toContain('plural={n} 个条目')
+    // The tutorial always completes (计时与流程教程完成. appears).
+    expect(texts).toContain('计时与流程教程完成')
+  }, 120000)
+
+  // -- task 5: hot-switch re-localizes a backlog PLURAL entry; advance new page
+  it('round 91: switching language re-localizes a backlog plural entry and steers the next page', async () => {
+    const readBacklog = async () => {
+      await player.lua.doString('_G.__R = _G.__LAST_CTX and _G.__LAST_CTX.backlog or nil')
+      return player.lua.global.get('__R') || []
+    }
+    const NL = String.fromCharCode(10)
+    const pageT = () => (player.core.draws || []).map((d) => d.t || '').join('')
+    player.core.draws = []
+    player.core.backlog.length = 0
+    const ks = [
+      '[i18n language="en"]',
+      '[ch name="N" text="P1-{items}"]', '[p]',
+      '[i18n language="zh"]',
+      '[ch name="N" text="P2-{items}"]', '[p]',
+      '[end]',
+    ].join(NL)
+    let out = await player.runScene(ks, 'i18n_plur_adv.ks', { maxFrames: 50000 })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('P1-{n} items')
+
+    out = await player.runScene(ks, 'i18n_plur_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_plur_adv.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    expect(pageT()).toContain('P2-{n} 个条目')
+
+    out = await player.runScene(ks, 'i18n_plur_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_plur_adv.ks' })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    const bl = await readBacklog()
+    const blTexts = bl.map((b) => b.text || '')
+    const blSrc = bl.map((b) => b.src || '')
+    expect(bl.some((b) => b.text.includes('P1-{n} 个条目')), JSON.stringify(blTexts)).toBe(true)
+    expect(bl.some((b) => b.text.includes('P1-{n} items')), JSON.stringify(blTexts)).toBe(false)
+    expect(bl.some((b) => b.src === 'P1-{items}' && b.text.includes('P1-{n} 个条目')), JSON.stringify(blSrc)).toBe(true)
+  }, 120000)
+
+  // -- task 6 explicitly: missing key across per-language dicts
+  it('round 91: a missing key in one language falls back to en, then raw; a plural VALUE stays normal', async () => {
+    await player.lua.doString('(require("i18n")).set_language("ja")')
+    await player.lua.doString("_G.__R = (require('i18n')).t('greeting')")
+    expect(player.lua.global.get('__R')).toBe('こんにちは！')
+    await player.lua.doString("_G.__R = (require('i18n')).t('items')")
+    expect(player.lua.global.get('__R')).toBe('{n} 個')
+    await player.lua.doString("_G.__R = (require('i18n')).t('no_such_key_anywhere')")
+    expect(player.lua.global.get('__R')).toBe('no_such_key_anywhere')
+  }, 120000)
 })
