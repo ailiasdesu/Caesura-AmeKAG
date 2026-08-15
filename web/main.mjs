@@ -21,7 +21,14 @@ const DEMO_BASE = '/demo/'
 const STORY_BASE = '/cache/story/story.lua'
 const ASSET_BASE = '/assets/'
 
-const player = await createPlayer({ scriptsBase: SCRIPTS_BASE })
+// wasmFile stays undefined in production (wasmoon fetches its CDN
+// default); a test host may pin a local copy via self.__CAESURA_WASM_FILE__
+// so fake-DOM runs can load the engine offline without changing browser
+// behavior (behavior unchanged when the global is unset).
+const wasmFile = (typeof self !== 'undefined' && self.__CAESURA_WASM_FILE__)
+  ? self.__CAESURA_WASM_FILE__
+  : undefined
+const player = await createPlayer({ scriptsBase: SCRIPTS_BASE, ...(wasmFile ? { wasmFile } : {}) })
 log('engine loaded; kag table ready')
 
 const renderer = new DomRenderer(player.core, stage)
@@ -168,7 +175,11 @@ const syncAudioStatus = () => {
   const bus = player.core.audioBus
   const parts = []
   if (bus.bgm && bus.bgm.playing) parts.push('BGM: ' + bus.bgm.path.split('/').pop())
-  const sePlaying = (bus.se || []).filter((x) => x && x.playing)
+  // audioPlay(kind, ...) stores the played entry directly on audioBus[kind],
+  // so after any [se ...] the SE bus is the *last* entry (an object), not the
+  // initial empty array — normalize both shapes so this never throws.
+  const seList = Array.isArray(bus.se) ? bus.se : (bus.se ? [bus.se] : [])
+  const sePlaying = seList.filter((x) => x && x.playing)
   if (sePlaying.length > 0) parts.push('SE: ' + sePlaying.length)
   if (bus.voice && bus.voice.playing) parts.push('VOICE: ' + bus.voice.path.split('/').pop())
   const txt = parts.length > 0 ? parts.join(' · ') : '—'
