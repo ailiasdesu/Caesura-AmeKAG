@@ -139,9 +139,22 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     // tf.save_result = "ok"), falsy on failure ("error").
     save_game: (slot, state, sceneName, tokenIdx, thumbnail) => {
       try {
+        // Normalize the scene path inside the captured state into the
+        // engine's allowlisted form (SaveCommands.load validates
+        // state.scene_path with _safeScenePath — bare web basenames
+        // would be rejected and [load] would never set _pendingLoadScene).
+        const st = state && typeof state === 'object' ? { ...state } : {}
+        let scene = String(sceneName ?? '')
+        if (scene.length > 0 && !scene.includes('/') && !scene.startsWith('demo/')) {
+          scene = 'demo/' + scene
+        }
+        if (typeof st.scene_path === 'string' && st.scene_path.length > 0
+            && !st.scene_path.includes('/')) {
+          st.scene_path = 'demo/' + st.scene_path
+        }
         const payload = JSON.stringify({
-          state: state ?? {},
-          scene: String(sceneName ?? ''),
+          state: st,
+          scene,
           token: Number(tokenIdx) || 1,
           thumbnail: String(thumbnail ?? ''),
           savedAt: Date.now(),
@@ -287,12 +300,29 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     async runScene(ksSrc, sceneName = 'scene.ks', opts = {}) {
       const maxFrames = opts.maxFrames ?? 200000
       lua.global.set('KS_SRC', ksSrc)
+      lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
       const out = await lua.doString(`
         local tokenizer = require('tokenizer')
         local scheduler = require('scheduler')
         local tokens = tokenizer.parse(KS_SRC)
+        local __load_scene_tokens = function(name)
+          -- Engine scene paths are allowlisted to demo/...; web scene keys
+          -- are bare basenames, so try the key as-is and stripped variants.
+          local key = name
+          if type(key) == 'string' and key:sub(1, 5) == 'demo/' then
+            key = key:sub(6)
+          end
+          local src = __SCENE_SOURCES and __SCENE_SOURCES[key]
+          if type(src) ~= 'string' or #src == 0 then
+            src = __SCENE_SOURCES and __SCENE_SOURCES[name]
+          end
+          if type(src) ~= 'string' or #src == 0 then return nil end
+          local okP, nt = pcall(tokenizer.parse, src)
+          if not okP or type(nt) ~= 'table' then return nil end
+          return nt
+        end
         local ctx = {
           f = {}, sf = {}, tf = {}, mp = {}, lf = {},
           variables = {}, current_scene = '${sceneName}',
@@ -300,16 +330,41 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           text_state = {}, layer_state = {}, audio_state = {},
           macro_args = {}, call_stack = {}, flag_stack = {},
         }
+        local result = ''
+        while result == '' do
+        -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
+        -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
+        -- and the outer loop must continue THAT scene (round 47 fix).
         local co = coroutine.create(function()
-          local ok, err = pcall(function() scheduler.run(ctx, tokens, 1) end)
+          local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
           if not ok then error(err) end
         end)
         local frames = 0
         local clicks = 0
-        local result = ''
         while true do
           local status = coroutine.status(co)
-          if status == 'dead' then result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break end
+          if status == 'dead' then
+            -- [load] resume: engine semantics — reload the saved scene and
+            -- continue from the saved token (SaveCommands.load sets these).
+            if ctx._pendingLoadScene and type(__load_scene_tokens) == 'function' then
+              local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
+              if ok2 and type(ntoks) == 'table' then
+                ctx.tokens = ntoks
+                ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                ctx.current_scene = ctx._pendingLoadScene
+                ctx.currentScene = ctx._pendingLoadScene
+                ctx.stop_flag = false
+                ctx._pendingLoadScene = nil
+                ctx._pendingLoadToken = nil
+                co = coroutine.create(function()
+                  local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
+                  if not okc then error(errc) end
+                end)
+                break
+              end
+            end
+            result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
+          end
           frames = frames + 1
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) .. ':' .. tostring((ctx.tokens and ctx.tokens[ctx.token_index] and (ctx.tokens[ctx.token_index].cmd or ctx.tokens[ctx.token_index].type)) or '?') break end
           if ctx.waiting_input then
@@ -336,6 +391,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
+        end
         end
         -- Collect the current visible text draws from the Lua TextScene
         -- as a lightweight JSON array (fields: text/x/y/r/g/b/a/scale/bold/italic).
@@ -394,13 +450,39 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       const scene = bundle && bundle.scenes && bundle.scenes[sceneKey]
       if (!scene) return 'ERR:scene-not-in-bundle:' + String(sceneKey)
       lua.global.set('BAKED_SCENE', scene)
+      lua.global.set('__BUNDLE_SCENES', bundle.scenes ?? {})
+      lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
       lua.global.set('__CLICK', false)
       lua.global.set('__AUTOCLICK', !!opts.autoClick)
       const maxFrames = opts.maxFrames ?? 200000
       const out = await lua.doString(`
         local compiler = require('kag.compiler')
         local scheduler = require('scheduler')
+        local tokenizer = require('tokenizer')
         local tokens = compiler.deserialize(BAKED_SCENE)
+        -- [load] resume: bundled scenes are serialized; parse them on demand.
+        local __load_scene_tokens = function(name)
+          local key = name
+          if type(key) == 'string' and key:sub(1, 5) == 'demo/' then
+            key = key:sub(6)
+          end
+          local ser = __BUNDLE_SCENES and __BUNDLE_SCENES[key]
+          if type(ser) ~= 'string' or #ser == 0 then
+            ser = __BUNDLE_SCENES and __BUNDLE_SCENES[name]
+          end
+          if type(ser) == 'string' and #ser > 0 then
+            return compiler.deserialize(ser)
+          end
+          local src = __SCENE_SOURCES and __SCENE_SOURCES[key]
+          if type(src) ~= 'string' or #src == 0 then
+            src = __SCENE_SOURCES and __SCENE_SOURCES[name]
+          end
+          if type(src) == 'string' and #src > 0 then
+            local okP, nt = pcall(tokenizer.parse, src)
+            return okP and type(nt) == 'table' and nt or nil
+          end
+          return nil
+        end
         local ctx = {
           f = {}, sf = {}, tf = {}, mp = {}, lf = {},
           variables = {}, current_scene = '${sceneKey}',
@@ -408,16 +490,41 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           text_state = {}, layer_state = {}, audio_state = {},
           macro_args = {}, call_stack = {}, flag_stack = {},
         }
+        local result = ''
+        while result == '' do
+        -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
+        -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
+        -- and the outer loop must continue THAT scene (round 47 fix).
         local co = coroutine.create(function()
-          local ok, err = pcall(function() scheduler.run(ctx, tokens, 1) end)
+          local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
           if not ok then error(err) end
         end)
         local frames = 0
         local clicks = 0
-        local result = ''
         while true do
           local status = coroutine.status(co)
-          if status == 'dead' then result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break end
+          if status == 'dead' then
+            -- [load] resume: reload the saved (bundled) scene and continue
+            -- from the saved token — engine resume_from_save semantics.
+            if ctx._pendingLoadScene and type(__load_scene_tokens) == 'function' then
+              local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
+              if ok2 and type(ntoks) == 'table' then
+                ctx.tokens = ntoks
+                ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                ctx.current_scene = ctx._pendingLoadScene
+                ctx.currentScene = ctx._pendingLoadScene
+                ctx.stop_flag = false
+                ctx._pendingLoadScene = nil
+                ctx._pendingLoadToken = nil
+                co = coroutine.create(function()
+                  local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
+                  if not okc then error(errc) end
+                end)
+                break
+              end
+            end
+            result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
+          end
           frames = frames + 1
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
           if ctx.waiting_input then
@@ -444,6 +551,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end
           local r = { coroutine.resume(co, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
+        end
         end
         local st = ctx.text_state
         local draws = {}

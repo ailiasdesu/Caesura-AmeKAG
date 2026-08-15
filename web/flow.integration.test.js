@@ -177,6 +177,44 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(errs.length).toBe(0)
   }, 120000)
 
+  it('resumes from the saved point after [load] (round 47)', async () => {
+    for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
+    const NL = String.fromCharCode(10)
+    // Scene A saves mid-way; the loader scene then [load]s it and the
+    // player must continue from the saved token (engine resume semantics).
+    const sceneA = [
+      '[ch name="N" text="A1"]',
+      '[p]',
+      '[ch name="N" text="A2"]',
+      '[p]',
+      '[set f.marker = 42]',
+      '[save slot=1]',
+      '[ch name="N" text="A3 after save"]',
+      '[p]',
+      '[ch name="N" text="A4"]',
+      '[p]',
+      '[end]',
+    ].join(NL)
+    await player.runScene(sceneA, 'scene_a.ks', { maxFrames: 200000, autoClick: true })
+    const loader = [
+      '[ch name="N" text="LOADER-START"]',
+      '[p]',
+      '[load slot=1]',
+      '[end]',
+    ].join(NL)
+    player.core.backlog.length = 0
+    const out = await player.runScene(loader, 'loader.ks', {
+      maxFrames: 200000, autoClick: true,
+      sceneSources: { 'scene_a.ks': sceneA },
+    })
+    expect(out.startsWith('DONE:')).toBe(true)
+    // resumed lines appear after the loader page
+    const texts = player.core.backlog.map((x) => x.text).join(' | ')
+    expect(texts).toContain('LOADER-START')
+    expect(texts).toContain('A3 after save')
+    expect(texts).toContain('A4')
+  }, 120000)
+
   it('runs the showcase sample (25 commands, branching, backlog)', async () => {
     player.core.backlog.length = 0 // isolate from earlier scenes
     const ks = readFileSync(join(here, '..', 'demo', 'showcase.ks'), 'utf8')
