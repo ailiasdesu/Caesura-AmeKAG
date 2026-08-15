@@ -9,6 +9,58 @@ import { AudioEngine } from './audio-engine.js'
 // layers/audio/etc are C++-binding modules stubbed in JS below (the real
 // scripts/layers.lua pulls rtt/view_id/RTT pools — too heavy for the web
 // adapter; the stub honors its Type enum and node contract).
+function makeDefaultStorage() {
+  if (typeof localStorage !== 'undefined' && localStorage) {
+    return {
+      get: (k) => { try { return localStorage.getItem(k) } catch { return null } },
+      set: (k, v) => { try { localStorage.setItem(k, v); return true } catch { return false } },
+      del: (k) => { try { localStorage.removeItem(k) } catch { /* noop */ } },
+    }
+  }
+  // Node/jsdom fallback: process-lifetime memory store.
+  const mem = new Map()
+  return {
+    get: (k) => (mem.has(k) ? mem.get(k) : null),
+    set: (k, v) => { mem.set(k, v); return true },
+    del: (k) => { mem.delete(k) },
+  }
+}
+
+
+// JSON-safe value -> Lua literal source (bracketed keys + escaped strings).
+// Round 46: the web save bridge parses stored state back into real Lua
+// tables with load('return ' .. literal) — wasmoon's userdata proxies are
+// rejected by the engine's load handler (type(state) ~= 'table').
+function luaLiteralValue(v) {
+  if (v === null || v === undefined) return 'nil'
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'nil'
+  if (typeof v === 'boolean') return v ? 'true' : 'false'
+  if (typeof v === 'string') {
+    let out = '"'
+    for (const ch of v) {
+      const code = ch.codePointAt(0)
+      if (ch === '\\') out += '\\\\'
+      else if (ch === '"') out += '\\"'
+      else if (ch === '\n') out += '\\n'
+      else if (ch === '\r') out += '\\r'
+      else if (ch === '\t') out += '\\t'
+      else if (code < 32) out += '\\' + code
+      else out += ch
+    }
+    return out + '"'
+  }
+  if (Array.isArray(v)) return '{' + v.map(luaLiteralValue).join(',') + '}'
+  if (typeof v === 'object') {
+    const parts = []
+    for (const k of Object.keys(v)) {
+      const key = /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) ? k : '[' + luaLiteralValue(k) + ']'
+      parts.push(key + '=' + luaLiteralValue(v[k]))
+    }
+    return '{' + parts.join(',') + '}'
+  }
+  return 'nil'
+}
+
 const BINDING_MODULES = new Set([
   'backend', 'layers', 'audio', 'rtt', 'blend', 'transition', 'transform',
   'vfx', 'flow', 'replay', 'pool', 'config', 'system',
@@ -17,11 +69,18 @@ const BINDING_MODULES = new Set([
   'fileutil', 'sandbox',
 ])
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p }) {
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p, storageBackend }) {
   const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()
   const audio = new AudioEngine()
+
+  // ---- save storage backend (round 46) ----
+  // Desktop engine persists saves through C++ SaveManager; the web player
+  // bridges [save]/[load] to a KV store. Default: browser localStorage;
+  // tests inject an in-memory backend (jsdom lacks a shared origin).
+  const storage = storageBackend ?? makeDefaultStorage()
+  const saveKey = (slot) => 'caesura.save.' + String(slot)
 
   // ---- collect scripts/*.lua via HTTP ----
   const entries = await (await fetchImpl(scriptsBase + 'index.json')).json()
@@ -75,8 +134,40 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
   // that return nil (engine-side handlers degrade to "error" results
   // instead of crashing on a nil call).
   const jsKAG = {
-    save_game: () => null,
-    load_game: () => null,
+    // Serialize the engine state table (Lua -> JS object, JSON-safe) into
+    // the storage backend. Returns truthy on success (engine sets
+    // tf.save_result = "ok"), falsy on failure ("error").
+    save_game: (slot, state, sceneName, tokenIdx, thumbnail) => {
+      try {
+        const payload = JSON.stringify({
+          state: state ?? {},
+          scene: String(sceneName ?? ''),
+          token: Number(tokenIdx) || 1,
+          thumbnail: String(thumbnail ?? ''),
+          savedAt: Date.now(),
+        })
+        const ok = storage.set(saveKey(slot), payload)
+        core._log('save.write', { slot: Number(slot), ok: !!ok })
+        return ok
+      } catch (e) {
+        core._log('save.error', { slot: Number(slot), error: String(e) })
+        return null
+      }
+    },
+    // Raw read used by the Lua-side load_game wrapper. Returns the
+    // stored state as a Lua literal string (the wrapper parses it with
+    // load('return ' .. s) into a real table).
+    _load_raw: (slot) => {
+      const raw = storage.get(saveKey(slot))
+      core._log('save.read', { slot: Number(slot), found: raw != null })
+      if (raw == null) return null
+      try {
+        const payload = JSON.parse(raw)
+        return luaLiteralValue(payload.state ?? {})
+      } catch {
+        return null
+      }
+    },
     capture_thumbnail: () => null,
   }
   const jsBackend = {
@@ -148,6 +239,40 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
 
   // ---- load the real kag command table ----
   await lua.doString(`local kag = require('kag')`)
+
+  // ---- web save/load bridge (round 46) ----
+  // [save] already works through jsKAG.save_game. [load] needs a real
+  // Lua table back, but wasmoon returns JS objects as userdata proxies
+  // (type(v) ~= 'table'), which the engine's load handler rejects. So
+  // wrap load_game in Lua: read the raw JSON via the JS stub, then
+  // parse it with load() (JSON is valid Lua literal syntax) into a real
+  // table. This mirrors ks_bake's encode_lua_literal round-trip.
+  await lua.doString([
+    // Wrap KAG in a pure-Lua table: kag_binding reads _G.KAG[name], and a
+    // function stored on the JS proxy would have its return values marshaled
+    // back through the bridge as userdata (type ~= 'table' breaks load).
+    // A Lua-side table holding the JS functions + our load_game wrapper
+    // keeps the load_game return value a genuine Lua table.
+    'local _kag_js = _G.KAG',
+    'local _kag_json_to_table = function(s)',
+    "  local f, err = load('return ' .. s, '@save.json', 't', _ENV)",
+    '  if not f then return nil, err end',
+    '  local ok, t = pcall(f)',
+    "  if not ok or type(t) ~= 'table' then return nil, 'corrupt save' end",
+    '  return t',
+    'end',
+    'local _kag = {}',
+    'for k, v in pairs(_kag_js) do _kag[k] = v end',
+    '_kag.load_game = function(slot)',
+    '  local raw = _kag._load_raw(slot)',
+    "  if raw == nil then return nil, 'no save in slot' end",
+    "  if type(raw) ~= 'string' then return nil, 'bad payload' end",
+    '  local t, err = _kag_json_to_table(raw)',
+    "  if not t then return nil, err or 'corrupt' end",
+    "  return t, 'ok'",
+    'end',
+    '_G.KAG = _kag',
+  ].join(String.fromCharCode(10)))
 
   return {
     lua,

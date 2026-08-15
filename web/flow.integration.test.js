@@ -146,6 +146,37 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(ending).toBe(true)
   }, 120000)
 
+  it('persists saves across scenes (round 46 web save bridge)', async () => {
+    // isolate: fresh keys so earlier tests cannot leak state
+    for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
+    const NL = String.fromCharCode(10)
+    const saveKs = [
+      '[set f.coins = 100]',
+      '[set f.name = "樱"]',
+      '[save slot=1]',
+      '[end]',
+    ].join(NL)
+    const out1 = await player.runScene(saveKs, 'savegame.ks', { maxFrames: 200000, autoClick: true })
+    expect(out1.startsWith('DONE:')).toBe(true)
+    expect(player.core.events.some((e) => e.kind === 'save.write')).toBe(true)
+
+    // fresh run loads slot 1 and restores variables (load sets stop_flag,
+    // so the scene halts after restoring — engine semantics)
+    const loadKs = [
+      '[ch name="N" text="before"]',
+      '[p]',
+      '[load slot=1]',
+      '[end]',
+    ].join(NL)
+    player.core.events.length = 0
+    const out2 = await player.runScene(loadKs, 'loadgame.ks', { maxFrames: 200000, autoClick: true })
+    expect(out2.startsWith('DONE:')).toBe(true)
+    expect(player.core.events.some((e) => e.kind === 'save.read')).toBe(true)
+    // [load] succeeded: engine logged Loaded slot 1 (no error events)
+    const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
+    expect(errs.length).toBe(0)
+  }, 120000)
+
   it('runs the showcase sample (25 commands, branching, backlog)', async () => {
     player.core.backlog.length = 0 // isolate from earlier scenes
     const ks = readFileSync(join(here, '..', 'demo', 'showcase.ks'), 'utf8')
