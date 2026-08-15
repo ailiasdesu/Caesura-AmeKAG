@@ -83,7 +83,7 @@
 | `if` | `exp` (Lua expr) | string | Conditional branch. Skip to `else`/`endif` if false. Supports nested depth. |
 | `else` | — | — | Alternative branch. |
 | `endif` | — | — | End conditional block. |
-| `switch` | `expr` (Lua expr) | string | Multi-way branch. Matches `case` values within block. (Alpha: flat only.) |
+| `switch` | `exp` (TJS expr) | string | Multi-way branch; matches `case` values (tostring equality). `exp=` evaluates a TJS expression (round 55); bare positional stays a KAG3 variable name. (Alpha: flat only.) |
 | `case` | `value` | string | Case branch within switch. |
 | `default` | — | — | Default case branch. |
 | `endswitch` | — | — | End switch block. |

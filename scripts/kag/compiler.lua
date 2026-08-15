@@ -61,7 +61,8 @@ local EXPR_TOKENS = {
     ["until"] = "exp",  -- declarative conditional wait (Neo-Genesis)
     ["button"] = "cond",  -- conditional choices: AOT at compile time
     ["for"] = nil,  -- handled specially below (three numeric exprs)
-    ["switch"] = nil,  -- switch expr is a variable name, not TJS (KAG3 form)
+    ["switch"] = "exp",  -- optional [switch exp="..."] selector (round 55);
+                        -- the KAG3 positional form stays a bare variable name
 }
 
 --- Normalize one token to array format {cmd, params} (params = {} when
@@ -566,7 +567,7 @@ function compiler.compile(tokens)
                 -- [button cond]): params already normalized in pass 1
                 compile_expr_param(cmd, p)
                 if cmd == "if" or cmd == "elseif" or cmd == "while"
-                    or cmd == "for" or cmd == "until" then
+                    or cmd == "for" or cmd == "until" or cmd == "switch" then
                     -- keep the translated source for the scheduler (it
                     -- loads with the ctx env at runtime, cached there)
                     if cmd == "for" then

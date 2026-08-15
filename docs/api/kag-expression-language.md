@@ -1,7 +1,9 @@
 # KAG Expression Language (Neo-Genesis)
 
-> Reference for the expression syntax accepted by `[if]`, `[while]`, `[eval]`,
-> `[assert]`, `${expr}` interpolation and `%tbl.key%` / `$tbl.key` variables.
+> Reference for the expression syntax accepted by `[if]`, `[while]`, `[switch exp=]`,
+> `[eval]`, `[assert]`, `${expr}` interpolation and `%tbl.key%` / `$tbl.key` variables.
+> `[switch exp="f.tier"]` selects a case by evaluating an expression (round 55); the
+> KAG3 positional form `[switch mode]` remains a bare variable name.
 > Implementation: `scripts/kag/expr.lua` (TJS→Lua translation layer).
 
 ## Compatibility with legacy KAG3 / TJS

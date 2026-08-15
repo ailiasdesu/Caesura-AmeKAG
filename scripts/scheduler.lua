@@ -721,17 +721,36 @@ function scheduler.run(ctx, tokens, start_index)
         -- Flow control: [switch]/[case]/[default]/[endswitch] (spec [1.4])
         elseif cmd == "switch" then
             -- switch/case dispatch (Alpha: flat only, single-level)
-            local switchExpr = params[1] or ""
-            local switchVal = nil
-            -- Script variables live in ctx.f (the eval env, shared with
-            -- [if]/[while]); ctx.variables is the legacy binding-layer
-            -- table. f wins, variables is the fallback.
-            if ctx.f and ctx.f[switchExpr] ~= nil then
-                switchVal = tostring(ctx.f[switchExpr])
-            elseif ctx.variables and ctx.variables[switchExpr] ~= nil then
-                switchVal = tostring(ctx.variables[switchExpr])
+            -- Selector (round 55): named exp= is a TJS expression compiled
+            -- at load (same machinery as [if]); otherwise the KAG3
+            -- positional form is a bare variable name. Comparison stays
+            -- tostring equality for both forms ([case 100] matches
+            -- exp="f.gold" yielding "100").
+            local src = compiled_exprs[i]
+            local switchVal
+            if src then
+                local ok, result = eval_expr_translated(ctx, src, params.exp,
+                    compiled_exprDumps and compiled_exprDumps[i])
+                if ok and result ~= nil then
+                    switchVal = tostring(result)
+                else
+                    -- expression failed or evaluated to nil: use the raw
+                    -- text so the no-case/default path decides (never a
+                    -- nil key)
+                    switchVal = tostring(params.exp or "")
+                end
             else
-                switchVal = switchExpr
+                -- Script variables live in ctx.f (the eval env, shared
+                -- with [if]/[while]); ctx.variables is the legacy
+                -- binding-layer table. f wins, variables is the fallback.
+                local switchExpr = params[1] or ""
+                if ctx.f and ctx.f[switchExpr] ~= nil then
+                    switchVal = tostring(ctx.f[switchExpr])
+                elseif ctx.variables and ctx.variables[switchExpr] ~= nil then
+                    switchVal = tostring(ctx.variables[switchExpr])
+                else
+                    switchVal = switchExpr
+                end
             end
 
             -- Find matching case. Compiled streams carry the depth-aware
