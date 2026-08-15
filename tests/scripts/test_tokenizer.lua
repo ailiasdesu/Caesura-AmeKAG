@@ -192,4 +192,16 @@ do
     check("unclosed blocktext does not crash", ok2)
 end
 
+-- Round 64: exclusion sets must not leak %n (ALL-controls) — a text run
+-- stops only at the actual whitespace set, so a control byte like \x01
+-- stays inside the text token instead of truncating it.
+do
+    local src = "hello\x01world"
+    local toks = tokenizer.parse(src)
+    check("text run keeps control byte", #toks == 1
+        and toks[1].type == "text"
+        and toks[1].content:find("hello\x01world", 1, true) ~= nil,
+        #toks .. " tokens")
+end
+
 if failed > 0 then os.exit(1) end

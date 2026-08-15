@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) — lpeg.lua (pure-Lua PEG engine)
 --  Covers the subset needed by tokenizer.lua: P, S, R, V, C, Ct, Cc, match
 --  Pattern API: pat = lpeg.P"literal" / lpeg.S"set" / lpeg.R("a","z")
@@ -76,9 +76,19 @@ function Pattern:__pow(n)
     -- find the next excluded char in one C-level call instead of
     -- per-char pattern invocations (audit: ~100x on text runs).
     if pat._excludeSet and (n == 0 or n == 1) then
-        -- escape pattern specials: sets containing ] or [
-        -- (e.g. the tokenizer whitespace set) would break the class
-        local set = pat._excludeSet:gsub("(%W)", "%%%1")
+        -- Escape pattern specials: sets containing ] or [ (e.g. the
+        -- tokenizer whitespace set) would break the class. Raw
+        -- whitespace/control chars stay RAW — '%' + 'n' inside a Lua
+        -- pattern class is the ALL-CONTROL class (a superset), not a
+        -- literal newline (round 64: S(" \t\r\n") excluded EVERY
+        -- control byte from text runs instead of just tab/CR/LF).
+        local function esc_class_char(c)
+            if c:find("^[%^%$%(%)%%%.%[%]%*%+%-%?]$") then
+                return "%" .. c
+            end
+            return c
+        end
+        local set = pat._excludeSet:gsub(".", esc_class_char)
         local min_one = (n == 1)
         return lpeg.P(function(s, pos)
             local stop = s:find("[" .. set .. "]", pos)
