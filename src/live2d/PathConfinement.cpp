@@ -7,6 +7,11 @@ namespace Caesura {
 
 std::string confineToModelRoot(const std::string& path) {
     namespace fs = std::filesystem;
+    // [round 97] Fail closed on empty input: fs::absolute("") resolves to
+    // the CWD on macOS (libc++) but to an empty path on Windows, so without
+    // this guard an empty path is accepted as 'inside the root' on macOS
+    // (round 96 test caught the divergence).
+    if (path.empty()) return {};
     std::error_code ec;
     const fs::path root = fs::current_path(ec);
     if (ec) return {};
