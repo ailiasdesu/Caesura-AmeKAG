@@ -708,3 +708,327 @@ TEST_CASE("constantTimeEquals matches only byte-identical strings") {
     CHECK_FALSE(constantTimeEquals("", "Bearer s3cret"));
     CHECK_FALSE(constantTimeEquals("Bearer s3cret", ""));
 }
+
+// =============================================================================
+// Round 80+ unit-level boundary tests: DTO parsing, serialization shape,
+// HTTP routing/auth, lifecycle, and error propagation.
+// =============================================================================
+
+// --- 1. DTO parsing: unknown method / malformed JSON / missing fields -----
+
+TEST_CASE("RpcServer replies with structured error for unknown method") {
+    RpcServer rpc;
+    const std::string response = rpc.processRequestLine(
+        R"({"id":99,"method":"definitelyNotAMethod"})");
+    CHECK(response.find("\"id\":99") != std::string::npos);
+    CHECK(response.find("Unknown method") != std::string::npos);
+    CHECK(response.find("definitelyNotAMethod") != std::string::npos);
+    CHECK(response.find("\"status\"") == std::string::npos);
+    CHECK(response.find("\"jsonrpc\"") == std::string::npos);
+}
+
+TEST_CASE("RpcServer handles missing id by defaulting to zero") {
+    RpcServer rpc;
+    const std::string response = rpc.processRequestLine(
+        R"({"method":"ping"})");
+    CHECK(response.find("\"id\":0") != std::string::npos);
+    CHECK(response.find("\"result\":\"ok\"") != std::string::npos);
+}
+
+TEST_CASE("RpcServer handles missing method as unknown empty method") {
+    RpcServer rpc;
+    const std::string response = rpc.processRequestLine(R"({"id":7})");
+    CHECK(response.find("\"id\":7") != std::string::npos);
+    CHECK(response.find("Unknown method") != std::string::npos);
+}
+
+TEST_CASE("RpcServer treats malformed non-JSON input as unknown method") {
+    RpcServer rpc;
+    const std::string response = rpc.processRequestLine("not-a-json-object");
+    CHECK(response.find("Unknown method") != std::string::npos);
+    CHECK(response.find("\"id\":0") != std::string::npos);
+}
+
+TEST_CASE("RpcServer tolerates truncated JSON once the method is parsed") {
+    RpcServer rpc;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    rpc.setDispatcher(dispatcher);
+    // Missing closing brace, but the hand-rolled extractor still finds method.
+    const std::string response = rpc.processRequestLine(
+        R"({"method":"getState")");
+    CHECK(response.find("\"id\":0") != std::string::npos);
+    CHECK(response.find("\"scene\"") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 1);
+}
+
+// --- 2. Response serialization shape --------------------------------------
+
+TEST_CASE("RpcServer success reply echoes id and omits the jsonrpc field") {
+    RpcServer rpc;
+    const std::string response = rpc.processRequestLine(
+        R"({"id":1234,"method":"ping"})");
+    CHECK(response.find("\"id\":1234") != std::string::npos);
+    CHECK(response.find("\"result\":\"ok\"") != std::string::npos);
+    CHECK(response.find("\"jsonrpc\"") == std::string::npos);
+}
+
+TEST_CASE("RpcServer dispatcher-unavailable reply is a structured error") {
+    RpcServer rpc;  // no dispatcher installed
+    const std::string response = rpc.processRequestLine(
+        R"({"id":5,"method":"getState"})");
+    CHECK(response.find("\"id\":5") != std::string::npos);
+    CHECK(response.find("\"status\":\"unavailable\"") != std::string::npos);
+    CHECK(response.find("\"code\":\"dispatcher_unavailable\"") != std::string::npos);
+    CHECK(response.find("\"error\"") != std::string::npos);
+    CHECK(response.find("\"message\"") != std::string::npos);
+}
+
+TEST_CASE("RpcServer rejects empty run before reaching the dispatcher") {
+    RpcServer rpc;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    rpc.setDispatcher(dispatcher);
+    const std::string response = rpc.processRequestLine(
+        R"({"id":3,"method":"run"})");  // script omitted -> empty
+    CHECK(response.find("\"id\":3") != std::string::npos);
+    CHECK(response.find("\"error\":\"Empty script\"") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 0);
+}
+
+// --- 3. HTTP endpoint routing ---------------------------------------------
+
+TEST_CASE("EditorServer returns 404 for unknown route") {
+    EditorServer es;
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Get("/api/nonexistent-route");
+    if (response) CHECK(response->status == 404);
+    es.stop();
+}
+
+TEST_CASE("EditorServer returns 404 for GET on a POST-only route") {
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Get("/api/stop");  // /api/stop is POST-only
+    if (response) CHECK(response->status == 404);
+    CHECK(dispatcher->requestCount() == 0);
+    es.stop();
+}
+
+TEST_CASE("EditorServer returns 404 for POST on a GET-only route") {
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Post("/api/status", "", "application/json");
+    if (response) CHECK(response->status == 404);
+    CHECK(dispatcher->requestCount() == 0);
+    es.stop();
+}
+
+TEST_CASE("EditorServer enforces a configured bearer token (401)") {
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    es.setAuthToken("s3cret-token");
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+
+    auto noAuth = client.Get("/api/ping");
+    REQUIRE(noAuth);
+    CHECK(noAuth->status == 401);
+    CHECK(noAuth->body.find("Unauthorized") != std::string::npos);
+
+    httplib::Headers wrong;
+    wrong.emplace("Authorization", "Bearer wrong-token");
+    auto badAuth = client.Get("/api/ping", wrong);
+    REQUIRE(badAuth);
+    CHECK(badAuth->status == 401);
+
+    httplib::Headers good;
+    good.emplace("Authorization", "Bearer s3cret-token");
+    auto okAuth = client.Get("/api/ping", good);
+    REQUIRE(okAuth);
+    CHECK(okAuth->status == 200);
+
+    auto okStatus = client.Get("/api/status", good);
+    REQUIRE(okStatus);
+    CHECK(okStatus->status == 200);
+    CHECK(dispatcher->requestCount() >= 1);
+
+    es.stop();
+}
+
+TEST_CASE("EditorServer rejects non-local CORS origins with 403") {
+    EditorServer es;
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+
+    httplib::Headers evil;
+    evil.emplace("Origin", "http://localhost.evil.com");
+    auto response = client.Get("/api/ping", evil);
+    REQUIRE(response);
+    CHECK(response->status == 403);
+    CHECK(response->body.find("Origin not allowed") != std::string::npos);
+
+    // The bare-prefix guard must also reject an attacker-controlled host.
+    httplib::Headers evil2;
+    evil2.emplace("Origin", "http://localhostevil.com");
+    auto response2 = client.Get("/api/ping", evil2);
+    REQUIRE(response2);
+    CHECK(response2->status == 403);
+    es.stop();
+}
+
+TEST_CASE("EditorServer allows localhost CORS origin") {
+    EditorServer es;
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+
+    httplib::Headers local;
+    local.emplace("Origin", "http://localhost:5173");
+    auto response = client.Get("/api/ping", local);
+    REQUIRE(response);
+    CHECK(response->status == 200);
+    es.stop();
+}
+
+// --- 4. Lifecycle ----------------------------------------------------------
+
+TEST_CASE("RpcServer dispatches via processRequestLine before run") {
+    RpcServer rpc;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    rpc.setDispatcher(dispatcher);
+
+    const std::string ping = rpc.processRequestLine(
+        R"({"id":10,"method":"ping"})");
+    CHECK(ping.find("\"id\":10") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 0);  // ping is handled internally
+
+    const std::string state = rpc.processRequestLine(
+        R"({"id":11,"method":"getState"})");
+    CHECK(state.find("\"id\":11") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 1);
+}
+
+TEST_CASE("RpcServer keeps processing request lines after stop") {
+    auto source = std::make_shared<ControlledLineSource>();
+    source->finish();
+    RpcServer rpc(lineSourceFor(source));
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    rpc.setDispatcher(dispatcher);
+    rpc.run();  // transport hits EOF; not running afterwards
+    CHECK_FALSE(rpc.isRunning());
+
+    const std::string response = rpc.processRequestLine(
+        R"({"id":12,"method":"getState"})");
+    CHECK(response.find("\"scene\"") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 1);
+}
+
+TEST_CASE("EditorServer start while running is idempotent") {
+    EditorServer es;
+    REQUIRE(es.start(0));
+    const int firstPort = es.port();
+    CHECK(es.isRunning());
+    CHECK(es.start(0));          // second start while running -> no-op success
+    CHECK(es.isRunning());
+    CHECK(es.port() == firstPort);
+    es.stop();
+    CHECK_FALSE(es.isRunning());
+}
+
+TEST_CASE("EditorServer can start again after stop") {
+    EditorServer es;
+    REQUIRE(es.start(0));
+    es.stop();
+    CHECK_FALSE(es.isRunning());
+
+    REQUIRE(es.start(0));
+    CHECK(es.isRunning());
+    CHECK(es.port() > 0);
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Get("/api/ping");
+    REQUIRE(response);
+    CHECK(response->status == 200);
+    es.stop();
+}
+
+// --- 5. Error propagation --------------------------------------------------
+
+TEST_CASE("RpcServer converts a throwing dispatcher into a structured error") {
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(
+        [](const RpcRequest&) -> RpcReply {
+            throw std::runtime_error("boom from dispatcher");
+        });
+    RpcServer rpc;
+    rpc.setDispatcher(dispatcher);
+    const std::string response = rpc.processRequestLine(
+        R"({"id":21,"method":"getState"})");
+    CHECK(response.find("\"id\":21") != std::string::npos);
+    CHECK(response.find("\"status\":\"error\"") != std::string::npos);
+    CHECK(response.find("\"code\":\"dispatcher_exception\"") != std::string::npos);
+    CHECK(response.find("boom from dispatcher") != std::string::npos);
+}
+
+TEST_CASE("RpcServer converts a non-std exception into a generic error") {
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(
+        [](const RpcRequest&) -> RpcReply {
+            throw 42;  // not derived from std::exception
+        });
+    RpcServer rpc;
+    rpc.setDispatcher(dispatcher);
+    const std::string response = rpc.processRequestLine(
+        R"({"id":22,"method":"getState"})");
+    CHECK(response.find("\"status\":\"error\"") != std::string::npos);
+    CHECK(response.find("\"code\":\"dispatcher_exception\"") != std::string::npos);
+    CHECK(response.find("unknown exception") != std::string::npos);
+}
+
+TEST_CASE("EditorServer rejects an empty run body with 400") {
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Post("/api/run", "", "text/plain");
+    REQUIRE(response);
+    CHECK(response->status == 400);
+    CHECK(response->body.find("Empty script") != std::string::npos);
+    CHECK(dispatcher->requestCount() == 0);
+    es.stop();
+}
+
+TEST_CASE("EditorServer propagates a throwing dispatcher as HTTP 500") {
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(
+        [](const RpcRequest&) -> RpcReply {
+            throw std::runtime_error("http boom");
+        });
+    EditorServer es;
+    es.setDispatcher(dispatcher);
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+    auto response = client.Post("/api/run", "return 1", "text/plain");
+    REQUIRE(response);
+    CHECK(response->status == 500);
+    CHECK(response->body.find("\"code\":\"dispatcher_exception\"") != std::string::npos);
+    es.stop();
+}
+
+TEST_CASE("EditorServer does not dispatch oversized request bodies") {
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+
+    // Far beyond the default httplib payload cap (8 MiB): the body is
+    // rejected before the handler runs, so the dispatcher is never called.
+    const std::string huge(16 * 1024 * 1024, 'x');
+    auto response = client.Post("/api/live2d/load", huge, "application/json");
+    CHECK(dispatcher->requestCount() == 0);
+    es.stop();
+}
