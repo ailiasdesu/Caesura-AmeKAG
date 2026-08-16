@@ -282,7 +282,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
   const jsStubs = {
     audio: { lua: () => {} }, rtt: { create: () => 0, destroy: () => {}, bind: () => {} },
     blend: { lua: () => {} }, transition: { lua: () => {}, start: () => {}, is_active: () => false },
-    transform: { lua: () => {} }, vfx: { lua: () => {}, flash: () => {} },
+    transform: { lua: () => {} }, vfx: { lua: () => {}, flash: () => {}, shake: () => {}, quake: () => {} },
     flow: { scene_cache: () => {}, load_scene: () => {} },
     replay: { save: () => {}, event_count: () => 0, load: () => {}, set_mode: () => {} },
     pool: {}, config: { ai: () => {} }, system: { lua: () => {} },
@@ -636,7 +636,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 __st.reveal_chars = ctx.reveal.total
               end
             elseif not __CLICK then
-              if __AUTOCLICK and clicks < 100 then __CLICK = true else
+              if __AUTOCLICK and clicks < 10000 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
               end
             end
@@ -680,6 +680,16 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           end
           local r = { coroutine.resume(co2, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
+          -- R106 parity: advance fire-and-forget [tween]s each frame by the
+          -- same dt the scheduler consumed. Mirrors desktop kag_runner.update
+          -- -> TweenCommands.update(ctx, dt_ms). No-ops until R106-A registers
+          -- scripts/kag/commands/tween.lua in kag.lua + regenerates
+          -- scripts-index.json; the module then stays advanced on BOTH paths
+          -- (runScene + runFromBundle) with zero further bridge change.
+          local __twm = package.loaded['kag.commands.tween']
+          if type(__twm) == 'table' and type(__twm.update) == 'function' then
+            pcall(__twm.update, ctx, 16)
+          end
         end
         end
         -- Collect the current visible text draws from the Lua TextScene
@@ -1016,7 +1026,7 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
                 __st.reveal_chars = ctx.reveal.total
               end
             elseif not __CLICK then
-              if __AUTOCLICK and clicks < 100 then __CLICK = true else
+              if __AUTOCLICK and clicks < 10000 then __CLICK = true else
                 result = 'WAIT:' .. tostring(ctx.token_index) break
               end
             end
@@ -1060,6 +1070,16 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           local r = { coroutine.resume(co2, 16) }
           if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
+          -- R106 parity: advance fire-and-forget [tween]s each frame by the
+          -- same dt the scheduler consumed. Mirrors desktop kag_runner.update
+          -- -> TweenCommands.update(ctx, dt_ms). No-ops until R106-A registers
+          -- scripts/kag/commands/tween.lua in kag.lua + regenerates
+          -- scripts-index.json; the module then stays advanced on BOTH paths
+          -- (runScene + runFromBundle) with zero further bridge change.
+          local __twm = package.loaded['kag.commands.tween']
+          if type(__twm) == 'table' and type(__twm.update) == 'function' then
+            pcall(__twm.update, ctx, 16)
+          end
         end
         end
         local st = ctx.text_state

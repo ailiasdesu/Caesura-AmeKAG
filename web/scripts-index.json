@@ -28,6 +28,7 @@
  "kag.commands.system": true,
  "kag.commands.text": true,
  "kag.commands.transition": true,
+ "kag.commands.tween": true,
  "kag.commands.vfx": true,
  "kag.commands.video": true,
  "kag.compiler": true,

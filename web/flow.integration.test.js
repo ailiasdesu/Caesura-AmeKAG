@@ -202,7 +202,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     ['tutorial_15_expr_deep.ks', 'tutorial', /高级表达式教程完成/, [], {}],
     ['showcase.ks', '', null, 'Thanks for watching the showcase.', {}],
     // auto-click resolves both [sel] blocks to option 1 -> good ending
-    ['story.ks', 'example_game', null, 'thank you for finding my story.', {}],
+    ['story.ks', 'example_game', null, 'Thank you for playing. / 感谢游玩。', {}],
   ]
   it.each(tutorialSweep)('%s completes with zero unexpected error events', async (file, dir, teaching, terminal, flags) => {
     const sub = dir ? dir + '/' : ''
