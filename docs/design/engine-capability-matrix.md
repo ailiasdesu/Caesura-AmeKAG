@@ -1,6 +1,6 @@
 # Engine Capability Matrix (Mermaid)
 
-> 2026-08-15 readiness audit (refreshed to round 90 / 90% milestone): this matrix tracks 79 code-level capability surfaces (existing rows refreshed for round 88-90; new round-90 rows: contract runtime coverage, tutorial sample library).
+> 2026-08-16 readiness audit (refreshed to round 98): this matrix tracks 79 code-level capability surfaces (existing rows refreshed through round 98; round 97-98 script robustness: expr nesting budget + schema coerce semantics corrections).
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -127,14 +127,14 @@ graph LR
 | S2v | Contract runtime coverage (**118/118 contracts execute at runtime**; round-90 grep audit: 106 had runtime refs, 12 previously-dead handlers — cancel/setvoicevolume/setsevolume/playbgmstop/playstop/waitforclick/moveto/camera/sprite_fade/move/scale/swap — now exercised; coverage matrix saturated) | scheduler + `test_contract_runtime_gaps.lua` (orphan 18→19) | ✓ (25 Lua assertions: headless no-crash + skip/fallthrough presence + key semantics) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S3a | Save/load loop continuity (for/while/if/switch stacks lifted into ctx and serialized via `loop_stacks` in capture_state; [load] resumes an in-progress loop to completion) | Lua scheduler + save snapshot | ✓ |
-| S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ |
+| S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ + **round 97/98 schema coerce semantics corrected** (positional args typed coercion, `choices` array normalization, default-value normalization, empty-file defect) — `test_schema_coerce` depth suite (+85 round-97 assertions: type/default/enum/positional/idempotence) |
 | S8 | Static .ks validator + contract audit gate (ks_check --audit-defaults, CI) | `scripts/ks_check.lua` | ✓ |
 | S8a | Truncation detection (offset stream stops before end-of-input + trailing comment handling) | ks_check | ✓ |
 | S9 | Parameterized macros (args + %arg% substitution, nested expansion, deep-copied splice) | Lua scheduler | ✓ / nested macro **DEFINITIONS** ([macro outer][macro inner]...[endmacro][endmacro]) + depth-based recursion guard (>100 splice depth errors; 1000+ sequential calls & 2000-iteration loops pass) |
 | S10 | Label index (O(1) jump, scene-scoped, restored/invalidated on swap) | Lua scheduler | ✓ |
 | S11 | [if] expr cache keyed by env identity (no stale variables across scenes) | Lua scheduler | ✓ |
 | S12 | i18n runtime API (set_language/current_language/translate/reload/default_language; mid-scene language switch, fallback chain, hot-reload) | `scripts/i18n.lua` + text pipeline relocalize_page | ✓ |
-| S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) |
+| S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) + **round 97 expr nesting budget**: deeply-nested expression evaluation cut from O(n³) to bounded <=0.001s (`fix(script): expr nesting budget (O(n3) deep-nest cut)`) |
 | S5 | Hot reload (watch scripts/, live-reload without restart) | Engine-owned `HotReload` instance | ✓ |
 | S6 | Error recovery (pcall guards, ErrorUI, graceful degradation) | scheduler + bindings | ✓ |
 | S6a | Modal UI input loops (settings/music_room/gallery/chapter select -- per-frame yield + GAME key routing: UP/DOWN/LEFT/RIGHT/ENTER/ESC/F/mouse) | ui modules + Engine input | ✓ |
@@ -168,7 +168,7 @@ graph LR
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) + **editor store depth** (round 88: store actions + reveal-queue consumption, editor 333→368) + **rpc client depth** (round 89: evalRaw POST / response parsing / error propagation / URL encoding, editor 368→402) + **panel integration E2E** (round 90: `panels.integration.test.tsx` mounts real App+store — doc→outline→reveal→Inspector chain, setEngine broadcasts across StatusBar/Outline/Timeline/VisualView, ActivityBar mount/unmount; editor 402→408) |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) + **editor store depth** (round 88: store actions + reveal-queue consumption, editor 333→368) + **rpc client depth** (round 89: evalRaw POST / response parsing / error propagation / URL encoding, editor 368→402) + **panel integration E2E** (round 90: `panels.integration.test.tsx` mounts real App+store — doc→outline→reveal→Inspector chain, setEngine broadcasts across StatusBar/Outline/Timeline/VisualView, ActivityBar mount/unmount; editor 402→408) + **round 91-98 editor depth** (round 95 SceneOutline virtualization [windowed rows, reveal-into-view]; round 96 inspector lint/disconnect/jump-status/dual-link + jump idempotency; round 97 activitybar/statusbar a11y + scene truncation + state depth; editor 408→506) |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
@@ -184,7 +184,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (round 90 baseline: C++ 849/849, Lua 126/126 + 19 orphan, web 183/183, editor 408/408, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP 87.9MB measured end-to-end) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (round 98 baseline: C++ 963/963, Lua 128/128 + 20 orphan, web 282/282, editor 506/506, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP end-to-end measured) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
@@ -193,8 +193,25 @@ graph LR
 
 ---
 
-**Total: 79 tracked capabilities across 6 domains (incl. round-90 additions S2v contract coverage + C10 tutorial library; P2/D1 baselines refreshed).** See the readiness snapshot above for
+**Total: 79 tracked capabilities across 6 domains (round-98 refresh preserves the 79 count; P2 baseline refreshed to round-98 numbers, S4 expr-budget + S7 schema-coerce completions added, D1 editor depth extended 408→506).** See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+### 2026-08-16 additions (round 91-98)
+
+- S4 — round 97 expr nesting budget: deeply-nested expression evaluation
+  hardened from worst-case O(n³) to a bounded cut (<=0.001s), preventing
+  pathological deep-nest expression stalls; part of the round 92-96 zero
+  regression perf pass (round 97).
+- S7 — round 97/98 schema `coerce` semantics corrected and deepened:
+  positional-argument typed coercion, `choices` array normalization,
+  default-value normalization, and an empty-file defect fixed; round-97
+  `test_schema_coerce` depth suite (+85 assertions covering
+  type/default/enum/positional/idempotence).
+- P2 — round 98 test baseline: C++ 963/963, Lua 128/128 + 20 orphan,
+  web 282/282, editor 506/506, ctest 10 + AI-skip.
+- D1 — editor depth continues 408→506 (round 95 SceneOutline
+  virtualization, round 96 inspector lint/disconnect/jump-status/dual-link,
+  round 97 activitybar/statusbar a11y + scene truncation + state depth).
 
 ### 2026-08-12 additions (generation-gap round 9)
 
