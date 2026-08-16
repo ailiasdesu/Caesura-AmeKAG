@@ -6,6 +6,7 @@ target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 set(TEST_SOURCES
     cpp/test_main.cpp
     cpp/test_core.cpp
+    cpp/test_debug_manager_edge.cpp
     cpp/test_carc.cpp
     cpp/test_carc_debug.cpp
     cpp/test_system.cpp
