@@ -396,29 +396,29 @@ std::string DebugManager::dumpFullReport() {
         m_errorCounts.begin(), m_errorCounts.end(), 0u) << "," << "\n";
     oss << "  \"subsystems\": {" << "\n";
 
-    const SubSys subs[] = { SubSys::Render, SubSys::Audio, SubSys::Scripting,
-        SubSys::Input, SubSys::Platform, SubSys::Engine, SubSys::Dbg };
-    for (size_t i = 0; i < 7; i++) {
-        const size_t si = static_cast<size_t>(subs[i]);
+    // Report every SubSys enumerator (0..kSubSysCount-1), including the high
+    // subsystems (Live2D .. Archive) that a hardcoded 7-slot pass would omit.
+    for (size_t i = 0; i < kSubSysCount; i++) {
+        const SubSys sub = static_cast<SubSys>(i);
         SubsystemStats st;
-        st.totalCalls = si < m_totalCounts.size() ? m_totalCounts[si] : 0;
-        st.errorCount = si < m_errorCounts.size() ? m_errorCounts[si] : 0;
-        st.warnCount  = si < m_warnCounts.size() ? m_warnCounts[si] : 0;
+        st.totalCalls = m_totalCounts[i];
+        st.errorCount = m_errorCounts[i];
+        st.warnCount  = m_warnCounts[i];
         st.lastErrorMessage.clear();
         for (auto it = m_ringBuffer.rbegin(); it != m_ringBuffer.rend(); ++it) {
-            if (it->subsystem == subs[i] && it->level >= DbgLevel::Err) {
+            if (it->subsystem == sub && it->level >= DbgLevel::Err) {
                 st.lastErrorCode    = static_cast<uint32_t>(it->errorCode);
                 st.lastErrorMessage = it->message;
                 break;
             }
         }
-        oss << "    \"" << SubSysName(subs[i]) << "\": {"
+        oss << "    \"" << SubSysName(sub) << "\": {"
             << "\"calls\":" << st.totalCalls
             << ",\"errors\":" << st.errorCount
             << ",\"warns\":" << st.warnCount
             << ",\"lastErrorMessage\":" << escapeJson(st.lastErrorMessage) << ",\"lastErrorCode\":" << st.lastErrorCode
             << "}";
-        if (i < 6) oss << ",";
+        if (i + 1 < kSubSysCount) oss << ",";
         oss << "\n";
     }
     oss << "  }," << "\n";
@@ -477,6 +477,7 @@ void DebugManager::beginFrameProfile() {
     m_frameProfile.gpuSubmitCount = 0;
     m_frameProfile.transientAllocCount = 0;
     m_frameProfile.transientAllocBytes = 0;
+    m_frameProfile.luaGcMs = 0.0;  // reset per frame so recordLuaGc does not leak across frames
 }
 
 void DebugManager::endFrameProfile() {

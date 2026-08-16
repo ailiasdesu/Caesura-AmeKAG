@@ -17,6 +17,11 @@ enum class SubSys : uint8_t {
     Render = 0, Audio = 1, Scripting = 2, Input = 3, Platform = 4, Engine = 5, Dbg = 6,
     Live2D = 7, MiniGame = 8, Storage = 9, Resource = 10, Archive = 11,
 };
+
+// Single source of truth for the number of SubSys enumerators (0..kSubSysCount-1).
+// Derived from the enum maximum so DebugManager's per-subsystem counter arrays
+// stay in lockstep with the enum instead of a hardcoded bucket count.
+constexpr size_t kSubSysCount = static_cast<size_t>(SubSys::Archive) + 1;
 enum class ErrCode : uint32_t {
     Ok = 0,
     Platform_SDL_InitFailed = 1001, Platform_WindowCreateFailed = 1002, Platform_NativeHandleNull = 1003,

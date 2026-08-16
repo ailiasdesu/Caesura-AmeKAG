@@ -138,7 +138,9 @@ private:
 
     static constexpr size_t kRingSize = 1024;
     std::deque<LogEntry> m_ringBuffer;
-    std::array<uint32_t, 7> m_errorCounts = {}, m_warnCounts = {}, m_totalCounts = {};
+    // One bucket per SubSys enumerator (0..kSubSysCount-1); derived from the
+    // enum so high subsystems (Live2D .. Archive) are counted, not dropped.
+    std::array<uint32_t, kSubSysCount> m_errorCounts = {}, m_warnCounts = {}, m_totalCounts = {};
     LogEntry m_lastErrorEntry;
     bool m_hasLastError = false;
     IDebugManager::RenderInfo m_renderInfo;

@@ -11,13 +11,12 @@
 // purely in-memory (file I/O is skipped when the log file is not open), which
 // keeps the fast-path tests isolated and fast.
 //
-// Two known implementation quirks are pinned below (not "fixed" here, we only
-// add tests under tests/cpp/):
-//   * kSubSysCounterBuckets == 7, but SubSys has 12 enumerators (0..11). The
-//     high subsystems (Live2D=7 .. Archive=11) fall off the counter arrays and
-//     their total/error/warn counts are silently dropped.
-//   * beginFrameProfile() resets gpu submit / transient alloc counters but NOT
-//     recordLuaGc() accumulation, so luaGcMs leaks across frame boundaries.
+// Regression coverage (was pinned as known quirks, now fixed):
+//   * kSubSysCount == 12 (derived from SubSys::Archive + 1). Every enumerator
+//     (0..11) has a counters bucket, so Live2D/MiniGame/Storage/Resource/Archive
+//     total/error/warn counts are tallied (previously silently dropped).
+//   * beginFrameProfile() resets gpu submit / transient alloc counters AND
+//     recordLuaGc() accumulation, so luaGcMs no longer leaks across frames.
 #include "doctest.h"
 #include "debug/DebugManager.h"
 #include "debug/api/IDebugManager.h"
@@ -177,23 +176,37 @@ TEST_CASE("DebugManager lastError() is the newest error across all subsystems") 
     CHECK(std::string(last.message).find("newest err") != std::string::npos);
 }
 
-// Known quirk (implementation bug, pinned for documentation):
-// m_totalCounts/m_errorCounts/m_warnCounts are std::array<uint32_t, 7> but
-// SubSys::Live2D..Archive have indices 7..11 and are silently NOT tallied.
-TEST_CASE("DebugManager high-index subsystems are not tallied (known quirk)") {
+// Regression: high-index subsystems (indices 7..11: Live2D/MiniGame/Storage/
+// Resource/Archive) previously fell off the 7-slot counter arrays and their
+// total/error/warn counts were silently dropped. kSubSysCount == 12 now gives
+// every enumerator a bucket, so the counts must move.
+TEST_CASE("DebugManager high-index subsystems are tallied") {
     auto& dm = DebugManager::instance();
-    const auto baseErrors = dm.errorCount();
+    const uint32_t baseErrors  = dm.errorCount();
     const uint32_t baseArchive = dm.subsystemErrorCount(SubSys::Archive);
+    const uint32_t baseStorage = dm.subsystemErrorCount(SubSys::Storage);
 
     dm.log(DbgLevel::Err, SubSys::Archive, ErrCode::Archive_ReadFailed, "archive boom");
+    dm.log(DbgLevel::Err, SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "storage boom");
 
-    // sub-7 counters DO move if the bucket exists; Archive (index 11) has no
-    // bucket, so its error count is unchanged and total errorCount is too.
-    CHECK(dm.subsystemErrorCount(SubSys::Archive) == baseArchive);
-    CHECK(dm.errorCount() == baseErrors);
+    // Archive (index 11) and Storage (index 9) each gained an error bucket, and
+    // the aggregate errorCount moved by exactly the two high-index errors.
+    CHECK(dm.subsystemErrorCount(SubSys::Archive) == baseArchive + 1);
+    CHECK(dm.subsystemErrorCount(SubSys::Storage) == baseStorage + 1);
+    CHECK(dm.errorCount() == baseErrors + 2);
 
-    // But the entry is still recorded in the ring buffer (log path always runs).
-    // The loss is only in the aggregate counters, not in the entries themselves.
+    // getSubsystemStats reflects the tallied counters for a high subsystem.
+    const auto st = dm.getSubsystemStats(SubSys::Archive);
+    CHECK(st.errorCount == baseArchive + 1);
+    CHECK(st.totalCalls >= baseArchive + 1);
+    CHECK(st.lastErrorCode == static_cast<uint32_t>(ErrCode::Archive_ReadFailed));
+
+    // dumpFullReport includes every SubSys key (all 12), not just the first 7.
+    const std::string report = dm.dumpFullReport();
+    for (int i = 0; i < 12; ++i) {
+        const SubSys sub = static_cast<SubSys>(i);
+        CHECK(report.find(SubSysName(sub)) != std::string::npos);
+    }
 }
 
 // ============================================================================
@@ -202,6 +215,9 @@ TEST_CASE("DebugManager high-index subsystems are not tallied (known quirk)") {
 
 TEST_CASE("DebugManager frame profile records and reads back counters") {
     auto& dm = DebugManager::instance();
+    // Reset to a clean frame so the absolute assertions below are not polluted
+    // by whatever the process-wide singleton accumulated in earlier test files.
+    dm.beginFrameProfile();
     dm.recordGpuSubmit(3);
     dm.recordGpuSubmit(4);
     dm.recordTransientAlloc(10, 4096);
@@ -215,12 +231,11 @@ TEST_CASE("DebugManager frame profile records and reads back counters") {
     CHECK(fp.luaGcMs == 1.5);
 }
 
-TEST_CASE("DebugManager beginFrameProfile resets gpu/transient but NOT luaGc (known quirk)") {
+TEST_CASE("DebugManager beginFrameProfile resets luaGcMs along with gpu/transient") {
     auto& dm = DebugManager::instance();
-    // luaGcMs is cumulative and never reset, so snapshot the pre-existing
-    // value before adding our delta — the point is beginFrameProfile leaves it
-    // untouched (does NOT zero it), unlike the gpu/transient counters.
-    double gcBefore = dm.getFrameProfile().luaGcMs;
+    // luaGcMs previously leaked across frames because beginFrameProfile did
+    // not have a reset for it; now it must be zeroed exactly like the other
+    // per-frame counters (regression flip).
     dm.recordGpuSubmit(99);
     dm.recordTransientAlloc(7, 1234);
     dm.recordLuaGc(5.0);
@@ -228,22 +243,22 @@ TEST_CASE("DebugManager beginFrameProfile resets gpu/transient but NOT luaGc (kn
     dm.beginFrameProfile();
 
     const auto& fp = dm.getFrameProfile();
-    CHECK(fp.gpuSubmitCount == 0u);          // reset
-    CHECK(fp.transientAllocCount == 0u);     // reset
-    CHECK(fp.transientAllocBytes == 0u);     // reset
-    // Quirk: luaGcMs is NOT reset by beginFrameProfile; our +5.0 is retained
-    // on top of whatever accumulated before. Pins the bug.
-    CHECK(fp.luaGcMs >= gcBefore + 4.99);    // <-- documents the bug
+    CHECK(fp.gpuSubmitCount == 0u);      // reset
+    CHECK(fp.transientAllocCount == 0u); // reset
+    CHECK(fp.transientAllocBytes == 0u); // reset
+    CHECK(fp.luaGcMs == 0.0);            // reset (was previously leaked)
 
     // endFrameProfile stamps totalMs without disturbing the resets.
-    const char* label = "frame-a";
+    dm.recordLuaGc(2.5);
+    CHECK(dm.getFrameProfile().luaGcMs == 2.5);
+
     dm.beginFrameProfile();
     dm.recordGpuSubmit(1);
     dm.endFrameProfile();
     const auto& fp2 = dm.getFrameProfile();
     CHECK(fp2.gpuSubmitCount == 1u);
+    CHECK(fp2.luaGcMs == 0.0);           // still zeroed after a fresh frame begin
     CHECK(fp2.totalMs >= 0.0);
-    (void)label;
 }
 
 TEST_CASE("DebugManager begin/endProfile round-trips a sample with depth") {
