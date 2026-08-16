@@ -48,6 +48,7 @@ set(TEST_SOURCES
     cpp/test_render_device.cpp
     cpp/test_render_pipeline.cpp
     cpp/test_render_integration.cpp
+    cpp/test_render_postfx.cpp
     cpp/test_rpc.cpp
     cpp/test_cloud_save.cpp
     cpp/test_mini_collision.cpp

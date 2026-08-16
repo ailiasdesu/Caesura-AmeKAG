@@ -24,6 +24,7 @@ local tests = {
     "test_macro_deep",
     "test_p2_features",
     "test_contracts_runtime",
+    "test_vfx_postfx",
     "test_contracts_runtime2",
     "test_contract_runtime_gaps",
     "test_saveflow",

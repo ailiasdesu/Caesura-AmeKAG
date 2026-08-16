@@ -162,6 +162,14 @@ public:
                    float, float, float, float) override {}
     void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     bool setColorFilter(ColorFilterPreset) override { return true; }
+    // -- Round-102 post-processing chain (interface conformance: recording mock
+    // runs headless, so post-effects are unsupported / inert).
+    bool isPostFxSupported(PostFxKind) const override { return false; }
+    PostFxHandle createPostFx(PostFxKind, const PostFxParams&) override { return 0; }
+    void setPostFxParams(PostFxHandle, const PostFxParams&) override {}
+    void destroyPostFx(PostFxHandle) override {}
+    void clearPostFx() override {}
+    bool isPostFxActive() const override { return false; }
     RenderUniformHandle getDefaultSampler() const override { return {}; }
     RenderProgramHandle getFallbackProgram() const override { return {}; }
     const char* getBackendName() const override { return "RecordingRender"; }

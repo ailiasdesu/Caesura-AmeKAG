@@ -103,6 +103,14 @@ public:
     void fillViewport(ViewportHandle, uint8_t, uint8_t, uint8_t, uint8_t) override {}
     bool setColorFilter(ColorFilterPreset) override { return true; }
 
+    // -- post-processing chain (round 102) -- gracefully no-op like Null
+    bool isPostFxSupported(PostFxKind) const override { return false; }
+    PostFxHandle createPostFx(PostFxKind, const PostFxParams&) override { return 0; }
+    void setPostFxParams(PostFxHandle, const PostFxParams&) override {}
+    void destroyPostFx(PostFxHandle) override {}
+    void clearPostFx() override {}
+    bool isPostFxActive() const override { return false; }
+
     // -- shaders / sampler --
     RenderUniformHandle getDefaultSampler() const override { return {}; }
     RenderProgramHandle getFallbackProgram() const override { return {}; }
