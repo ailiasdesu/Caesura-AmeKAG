@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'vitest'
+// @vitest-environment jsdom
+import { describe, it, expect, vi } from 'vitest'
+// SceneTree imports revealEditorLine from EditorArea, which pulls in
+// monaco-editor — not available in jsdom (collection crash guard, round 94).
+vi.mock('./EditorArea', () => ({
+  revealEditorLine: vi.fn(),
+}))
 import { parseSceneElements } from './SceneTree'
 
 describe('parseSceneElements', () => {

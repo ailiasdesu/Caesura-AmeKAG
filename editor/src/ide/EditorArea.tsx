@@ -57,9 +57,11 @@ export function EditorArea() {
       lsp.dispose()
       if (active) unregisterEditor(active.path, editor)
     })
-    // Ctrl+S marks the doc clean (saving via engine happens through the
-    // debug/eval path in a later iteration; the store keeps dirty state).
-    editor.addCommand(/* monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS */ 2049, () => {
+    // Ctrl+S = CtrlCmd(2048) | KeyS(49) = 2097. This was previously a
+    // hardcoded 2049 (= CtrlCmd | Backspace), which — despite the comment
+    // claiming otherwise — is not the S key. Placeholder: the command body is
+    // wired once the engine gains a write route (the store keeps dirty state).
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       // placeholder: Ctrl+S is wired once the engine gains a write route
     })
   }

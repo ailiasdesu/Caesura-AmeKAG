@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+// SceneTree pulls in EditorArea -> monaco-editor, not available in jsdom
+// (collection crash guard, round 94).
+vi.mock('./EditorArea', () => ({
+  revealEditorLine: vi.fn(),
+}))
 import { parseTagParams } from './SceneTree'
 import { InspectorView } from './InspectorView'
 import { useEditor } from '../store'
