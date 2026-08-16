@@ -1,4 +1,16 @@
-import { useEffect, useMemo } from 'react'
+// Scene tree panel — scene element outline of the active .ks document.
+//
+// Groups parsed elements by type into collapsible sections (round 90+ depth):
+//  - each type group is a <section role="group"> with a toggle <button>
+//    carrying aria-expanded / aria-controls, so the panel stays keyboard
+//    navigable and screen-reader friendly;
+//  - clicking an element row navigates: push a reveal request into the store
+//    (consumed by EditorArea), directly reveal the line in the mounted Monaco
+//    editor, and select the element for the G4 inspector (double write);
+//  - selection stays reactive to the store, so an external inspected change
+//    (e.g. from the inspector or outline panel) re-highlights the row.
+
+import { useEffect, useMemo, useState } from 'react'
 import { useEditor } from '../store'
 import { revealEditorLine } from './EditorArea'
 
@@ -9,6 +21,19 @@ export interface SceneElement {
   detail: string
   /** Tag parameter table (key="value" / key=number pairs), G4 inspector. */
   params: Record<string, string>
+}
+
+/** Stable display order for type groups (labels first, then visuals, dialog,
+ *  audio, and anything unrecognised). */
+export const TYPE_ORDER: SceneElement['type'][] = ['label', 'bg', 'fg', 'ch', 'audio', 'other']
+
+const TYPE_LABELS: Record<SceneElement['type'], string> = {
+  label: 'Labels',
+  bg: 'Backgrounds',
+  fg: 'Sprites',
+  ch: 'Dialogue',
+  audio: 'Audio',
+  other: 'Other',
 }
 
 /** Extract `key="value"` / `key=number` / bare-flag parameter pairs from a
@@ -71,6 +96,9 @@ const ICONS: Record<SceneElement['type'], string> = {
   other: '▸',
 }
 
+/** Which of the per-type groups are currently expanded (default all open). */
+type Expansion = Record<SceneElement['type'], boolean>
+
 export function SceneTree() {
   const docs = useEditor((s) => s.docs)
   const activePath = useEditor((s) => s.activePath)
@@ -83,6 +111,12 @@ export function SceneTree() {
     () => (active ? parseSceneElements(active.content) : []),
     [active],
   )
+
+  const [expanded, setExpanded] = useState<Expansion>(() =>
+    Object.fromEntries(TYPE_ORDER.map((t) => [t, true])) as Expansion,
+  )
+  const toggleGroup = (type: SceneElement['type']) =>
+    setExpanded((prev) => ({ ...prev, [type]: !prev[type] }))
 
   useEffect(() => {
     if (active) requestReveal(active.path, 1)
@@ -101,6 +135,13 @@ export function SceneTree() {
   const counts = { label: 0, bg: 0, fg: 0, ch: 0, audio: 0, other: 0 }
   for (const e of elements) counts[e.type]++
 
+  const grouped = TYPE_ORDER.filter((t) => counts[t] > 0).map((t) => ({
+    type: t,
+    label: TYPE_LABELS[t],
+    icon: ICONS[t],
+    items: elements.filter((e) => e.type === t),
+  }))
+
   return (
     <div className="sidebar-pane">
       <div className="panel-title">
@@ -111,23 +152,47 @@ export function SceneTree() {
         </span>
       </div>
       <div className="scene-tree">
-        {elements.map((e, idx) => (
-          <button
-            key={idx}
-            className={`scene-el scene-${e.type}${inspected?.path === active.path && inspected.line === e.line ? ' inspected' : ''}`}
-            title={`line ${e.line} — ${e.detail}`}
-            onClick={() => {
-              requestReveal(active.path, e.line)
-              revealEditorLine(active.path, e.line)
-              setInspected(active.path, e.line)
-            }}
-            aria-pressed={inspected?.path === active.path && inspected.line === e.line}
+        {grouped.map((g) => (
+          <section
+            key={g.type}
+            className={`scene-group scene-group-${g.type}`}
+            aria-label={g.label}
           >
-            <span className="scene-icon">{ICONS[e.type]}</span>
-            <span className="scene-text">{e.text}</span>
-            {e.detail && <span className="scene-detail">{e.detail}</span>}
-            <span className="scene-line">{e.line}</span>
-          </button>
+            <button
+              type="button"
+              className="scene-group-header"
+              aria-expanded={expanded[g.type]}
+              aria-controls={`scene-group-${g.type}`}
+              onClick={() => toggleGroup(g.type)}
+            >
+              {expanded[g.type] ? '▾' : '▸'}
+              <span className="scene-icon">{g.icon}</span>
+              <span className="scene-text">{g.label}</span>
+              <span className="scene-count">{g.items.length}</span>
+            </button>
+            {expanded[g.type] && (
+              <div id={`scene-group-${g.type}`}>
+                {g.items.map((e) => (
+                  <button
+                    key={e.line}
+                    aria-pressed={inspected?.path === active.path && inspected.line === e.line}
+                    className={`scene-el scene-${e.type}${inspected?.path === active.path && inspected.line === e.line ? ' inspected' : ''}`}
+                    title={`line ${e.line} — ${e.detail}`}
+                    onClick={() => {
+                      requestReveal(active.path, e.line)
+                      revealEditorLine(active.path, e.line)
+                      setInspected(active.path, e.line)
+                    }}
+                  >
+                    <span className="scene-icon">{ICONS[e.type]}</span>
+                    <span className="scene-text">{e.text}</span>
+                    {e.detail && <span className="scene-detail">{e.detail}</span>}
+                    <span className="scene-line">{e.line}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         ))}
         {elements.length === 0 && (
           <div className="explorer-empty">No scene elements found</div>
