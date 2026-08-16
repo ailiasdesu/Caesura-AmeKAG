@@ -560,7 +560,21 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
               local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
               if ok2 and type(ntoks) == 'table' then
                 ctx.tokens = ntoks
-                ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                -- [load] resume cursor. Round 94: a self-referential load —
+                -- [save] then [load] back-to-back in the SAME scene — saves a
+                -- token at/before the CURRENT [load] token, so re-spawning at
+                -- it re-executes the [save]/[load] block and loops forever.
+                -- When the reloaded scene is the current one AND the saved
+                -- resume point is at/before the consumed [load] token, advance
+                -- past the [load] so execution continues forward and completes.
+                -- Cross-scene loads (a real [load] into a different scene) are
+                -- unchanged: the scene differs, so _pendingLoadToken is used.
+                if ctx.current_scene == ctx._pendingLoadScene
+                  and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
+                  ctx.token_index = ctx.token_index + 1
+                else
+                  ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                end
                 ctx.current_scene = ctx._pendingLoadScene
                 ctx.currentScene = ctx._pendingLoadScene
                 ctx.stop_flag = false
@@ -903,7 +917,24 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
               local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
               if ok2 and type(ntoks) == 'table' then
                 ctx.tokens = ntoks
-                ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                -- [load] resume cursor (round 94). A self-referential load —
+                -- [save] then [load] back-to-back in the SAME scene — saves a
+                -- token at/before the CURRENT [load] token; re-spawning there
+                -- re-runs the [save]/[load] block and loops forever. The
+                -- source path masked this in the sweep by never resolving the
+                -- saved scene to tokens; the bundle path resolves it, so the
+                -- deadlock surfaced here. When the reloaded scene IS the
+                -- current one AND the saved resume point is at/before the
+                -- consumed [load] token, advance past the [load] so execution
+                -- continues forward and the scene completes. Cross-scene loads
+                -- (a genuine [load] into a different scene) are unchanged: the
+                -- scene differs, so _pendingLoadToken is used as-is.
+                if ctx.current_scene == ctx._pendingLoadScene
+                  and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
+                  ctx.token_index = ctx.token_index + 1
+                else
+                  ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+                end
                 ctx.current_scene = ctx._pendingLoadScene
                 ctx.currentScene = ctx._pendingLoadScene
                 ctx.stop_flag = false

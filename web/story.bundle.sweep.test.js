@@ -59,12 +59,11 @@ const fileFetch = async (url) => {
 // but the bundle is not regenerated — exactly the consistency gap this suite
 // guards. Update this list in lockstep with demo/ when scene files change.
 const EXPECTED_KEYS = [
-    // NOTE (round 94): full_pipeline_demo.ks HANGS when driven via
-  // runFromBundle (bundle path) — [save]/[load] or [wait] interplay in the
-  // bundled stream deadlocks the runner (source path in flow.integration
-  // still passes). Excluded from the sweep until the bundle-path bug is
-  // fixed; tracked in ROADMAP round 94.
-  // 'full_pipeline_demo.ks',  'galgame_demo.ks',
+  // Round 94: full_pipeline_demo / galgame_demo were excluded while the
+  // bundle-path [save]/[load] self-referential deadlock was open; round 95
+  // fixed the load-resume cursor in bridge.js, so they are back in the sweep.
+  'full_pipeline_demo.ks',
+  'galgame_demo.ks',
   'showcase.ks',
   'sma_demo.ks',
   'story.ks',
@@ -74,11 +73,10 @@ const EXPECTED_KEYS = [
   'tutorial_04_audio.ks',
   'tutorial_05_branching.ks',
   'tutorial_06_effects.ks',
-    // NOTE (round 94): tutorial_07_saveload.ks ALSO hangs via runFromBundle —
-  // same [save]/[load] in bundled-stream root cause as full_pipeline_demo.ks.
-  // Excluded from sweep until the bundle save/load resume bug is fixed
-  // (tracked ROADMAP round 94; source path in flow.integration still passes).
-  // 'tutorial_07_saveload.ks',  'tutorial_08_system_ui.ks',
+  // Round 94: tutorial_07_saveload was excluded for the same bundle [load]
+  // resume deadlock; restored in round 95 with the bridge fix.
+  'tutorial_07_saveload.ks',
+  'tutorial_08_system_ui.ks',
   'tutorial_09_interpolation.ks',
   'tutorial_10_loops.ks',
   'tutorial_11_switch.ks',
