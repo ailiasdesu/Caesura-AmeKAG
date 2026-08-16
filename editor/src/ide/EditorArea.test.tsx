@@ -86,12 +86,24 @@ const h = vi.hoisted(() => {
     revealCalls: number[] = []
     positionCalls: { lineNumber: number; column: number }[] = []
     focusCalls = 0
+    cursorListeners: ((e: { position: { lineNumber: number; column: number } }) => void)[] = []
+    cursorCalls: { lineNumber: number; column: number }[] = []
     constructor() { allEditors.push(this) }
     onDidDispose(cb: () => void) {
       this.disposers.push(cb)
       return disposer(() => {
         this.disposers = this.disposers.filter((c) => c !== cb)
       })
+    }
+    onDidChangeCursorPosition(
+      cb: (e: { position: { lineNumber: number; column: number } }) => void,
+    ) {
+      this.cursorListeners.push(cb)
+      return {
+        dispose: () => {
+          this.cursorListeners = this.cursorListeners.filter((c) => c !== cb)
+        },
+      }
     }
     dispose() {
       this.disposed = true
@@ -345,6 +357,26 @@ describe('EditorArea · Monaco mock contract', () => {
     expect(ed!.revealCalls).toEqual([9])
     expect(ed!.positionCalls).toEqual([{ lineNumber: 9, column: 1 }])
     expect(ed!.focusCalls).toBe(1)
+  })
+
+  it('wire cursor moves into the store editorCursor (Scene Builder)', () => {
+    render(<EditorArea />)
+    const ed = h.lastEditor
+    expect(ed!.cursorListeners).toHaveLength(1)
+    // Simulate a cursor move inside the mounted Monaco editor.
+    ed!.cursorListeners[0]({ position: { lineNumber: 4, column: 7 } })
+    expect(useEditor.getState().editorCursor).toEqual({
+      path: 'assets/script/main.ks',
+      line: 4,
+      column: 7,
+    })
+    // A later move overwrites the previous cursor.
+    ed!.cursorListeners[0]({ position: { lineNumber: 2, column: 1 } })
+    expect(useEditor.getState().editorCursor).toEqual({
+      path: 'assets/script/main.ks',
+      line: 2,
+      column: 1,
+    })
   })
 
   it('registers the Ctrl+S command on the mounted editor', () => {

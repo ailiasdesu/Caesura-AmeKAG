@@ -30,6 +30,7 @@ export function EditorArea() {
   const setActive = useEditor((s) => s.setActive)
   const updateDoc = useEditor((s) => s.updateDoc)
   const closeDoc = useEditor((s) => s.closeDoc)
+  const setCursor = useEditor((s) => s.setCursor)
   const revealRequest = useEditor((s) => s.revealRequest)
   const lastReveal = useRef(0)
   // Layer "settings": Monaco font size + line-number gutter toggle.
@@ -53,9 +54,22 @@ export function EditorArea() {
     lsp.register()
     // Battle 4b: register the editor for scene-tree jumps
     if (active) registerEditor(active.path, editor)
+    // Scene Builder: report the live cursor (0-based line → 1-based) so
+    // generated lines land at the user's insertion point.
+    const activeRef = { current: active }
+    editor.onDidChangeCursorPosition((e) => {
+      const a = activeRef.current
+      if (!a) return
+      setCursor({
+        path: a.path,
+        line: e.position.lineNumber,
+        column: e.position.column,
+      })
+    })
     editor.onDidDispose(() => {
       lsp.dispose()
       if (active) unregisterEditor(active.path, editor)
+      setCursor(null)
     })
     // Ctrl+S = CtrlCmd(2048) | KeyS(49) = 2097. This was previously a
     // hardcoded 2049 (= CtrlCmd | Backspace), which — despite the comment

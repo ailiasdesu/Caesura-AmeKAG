@@ -37,6 +37,10 @@ interface EditorState {
    *  (path + selection). Set by the text widget; the AiPanel "Ask" section
    *  injects it into LLM queries when the user opts in (default off). */
   editorSelection: { path: string; text: string } | null
+  /** Scene Builder: the live cursor position of the active Monaco editor
+   *  (path + 1-based line/column). Set by EditorArea on cursor move; consumed
+   *  by SceneBuilder so generated lines land at the user's insertion point. */
+  editorCursor: { path: string; line: number; column: number } | null
   openDoc: (doc: OpenDoc) => void
   updateDoc: (path: string, content: string) => void
   closeDoc: (path: string) => void
@@ -54,6 +58,12 @@ interface EditorState {
   setInspected: (path: string, line: number) => void
   /** Battle 4c+: update the active editor selection (or null when none). */
   setSelection: (sel: { path: string; text: string } | null) => void
+  /** Scene Builder: record the active editor's live cursor position (or null). */
+  setCursor: (cursor: { path: string; line: number; column: number } | null) => void
+  /** Scene Builder: insert generated statement text at the active doc's live
+   *  cursor line (falling back to append when no cursor is tracked/active);
+   *  marks the doc dirty. */
+  insertAtCursor: (text: string) => void
 }
 
 export const useEditor = create<EditorState>((set) => ({
@@ -70,6 +80,7 @@ export const useEditor = create<EditorState>((set) => ({
   revealRequest: null,
   inspected: null,
   editorSelection: null,
+  editorCursor: null,
   openDoc: (doc) =>
     set((s) => {
       const existing = s.docs.find((d) => d.path === doc.path)
@@ -120,4 +131,43 @@ export const useEditor = create<EditorState>((set) => ({
     })),
   setInspected: (path, line) => set({ inspected: { path, line } }),
   setSelection: (sel) => set({ editorSelection: sel }),
+  setCursor: (cursor) => set({ editorCursor: cursor }),
+  insertAtCursor: (text) =>
+    set((s) => {
+      if (!s.activePath) return {}
+      const doc = s.docs.find((d) => d.path === s.activePath)
+      if (!doc) return {}
+      const lineIndex = resolveInsertLine(
+        doc.content,
+        s.editorCursor,
+        s.activePath,
+      )
+      const lines = doc.content.split('\n')
+      lines.splice(lineIndex, 0, text)
+      return {
+        docs: s.docs.map((d) =>
+          d.path === s.activePath
+            ? { ...d, content: lines.join('\n'), dirty: true }
+            : d,
+        ),
+      }
+    }),
 }))
+
+/**
+ * Resolve the 0-based line index at which a generated statement should be
+ * inserted into a document. When a live cursor exists for the target doc the
+ * new line is placed just above the cursor line (clamped to the document);
+ * otherwise the text is appended at the end. Pure — unit-testable.
+ */
+export function resolveInsertLine(
+  content: string,
+  cursor: { path: string; line: number; column: number } | null,
+  activePath: string | null,
+): number {
+  const lineCount = content === '' ? 1 : content.split('\n').length
+  if (cursor && cursor.path === activePath && cursor.line >= 1) {
+    return Math.min(cursor.line - 1, lineCount)
+  }
+  return lineCount
+}

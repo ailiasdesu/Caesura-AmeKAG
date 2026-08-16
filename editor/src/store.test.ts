@@ -2,7 +2,7 @@
 // These tests drive the zustand store directly (no DOM) to assert the exact
 // state transitions each action produces, including edge/empty states.
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useEditor, type OpenDoc, type SideView } from './store'
+import { useEditor, resolveInsertLine, type OpenDoc, type SideView } from './store'
 
 const doc = (path: string, partial: Partial<OpenDoc> = {}): OpenDoc => ({
   path,
@@ -26,6 +26,7 @@ beforeEach(() => {
     revealRequest: null,
     inspected: null,
   })
+  useEditor.setState({ editorCursor: null })
 })
 
 describe('useEditor.openDoc', () => {
@@ -283,5 +284,101 @@ describe('useEditor.setInspected', () => {
     const s = useEditor.getState()
     expect(s.inspected).toEqual({ path: 'a.ks', line: 2 })
     expect(s.revealRequest).toBeNull()
+  })
+})
+
+
+describe('useEditor.setCursor', () => {
+  it('records the live editor cursor (or null when cleared)', () => {
+    const { setCursor } = useEditor.getState()
+    setCursor({ path: 'a.ks', line: 3, column: 5 })
+    expect(useEditor.getState().editorCursor).toEqual({ path: 'a.ks', line: 3, column: 5 })
+    setCursor({ path: 'b.ks', line: 1, column: 1 })
+    expect(useEditor.getState().editorCursor).toEqual({ path: 'b.ks', line: 1, column: 1 })
+    setCursor(null)
+    expect(useEditor.getState().editorCursor).toBeNull()
+  })
+})
+
+describe('useEditor.insertAtCursor', () => {
+  it('inserts the statement just above the tracked cursor line', () => {
+    const { openDoc, setCursor, insertAtCursor } = useEditor.getState()
+    openDoc(doc('a.ks', { content: ['*start', '[bg storage="room.png"]', 'Hello'].join('\n') }))
+    setCursor({ path: 'a.ks', line: 3, column: 1 })
+    insertAtCursor('[ch name="Hero" text="Hi"]')
+    const d = useEditor.getState().docs.find((x) => x.path === 'a.ks')
+    expect(d?.content).toBe(
+      ['*start', '[bg storage="room.png"]', '[ch name="Hero" text="Hi"]', 'Hello'].join('\n'),
+    )
+    expect(d?.dirty).toBe(true)
+  })
+
+  it('appends to the end when no cursor is tracked for the active doc', () => {
+    const { openDoc, setCursor, insertAtCursor } = useEditor.getState()
+    openDoc(doc('a.ks', { content: 'one' }))
+    setCursor({ path: 'other.ks', line: 1, column: 1 }) // cursor is on a different doc
+    insertAtCursor('[p]')
+    const d = useEditor.getState().docs.find((x) => x.path === 'a.ks')
+    // insertAtCursor always places a statement on its own line (append here).
+    expect(d?.content).toBe('one\n[p]')
+  })
+
+  it('appends when editorCursor is null', () => {
+    const { openDoc, insertAtCursor } = useEditor.getState()
+    openDoc(doc('a.ks', { content: 'tail' }))
+    insertAtCursor('[p]')
+    expect(useEditor.getState().docs[0].content).toBe('tail\n[p]')
+  })
+
+  it('clamps the insert line to the document when the cursor is past the end', () => {
+    const { openDoc, setCursor, insertAtCursor } = useEditor.getState()
+    openDoc(doc('a.ks', { content: ['x', 'y'].join('\n') }))
+    setCursor({ path: 'a.ks', line: 99, column: 1 })
+    insertAtCursor('[p]')
+    expect(useEditor.getState().docs[0].content).toBe(['x', 'y', '[p]'].join('\n'))
+  })
+
+  it('is a no-op when no document is active', () => {
+    useEditor.getState().setCursor({ path: 'a.ks', line: 1, column: 1 })
+    useEditor.getState().insertAtCursor('[p]')
+    expect(useEditor.getState().docs).toHaveLength(0)
+  })
+
+  it('leaves other documents untouched', () => {
+    const { openDoc, setCursor, insertAtCursor } = useEditor.getState()
+    openDoc(doc('a.ks', { content: 'A' }))
+    openDoc(doc('b.ks', { content: 'B' }))
+    useEditor.getState().setActive('a.ks')
+    setCursor({ path: 'a.ks', line: 1, column: 1 })
+    insertAtCursor('[p]')
+    const b = useEditor.getState().docs.find((x) => x.path === 'b.ks')
+    expect(b?.content).toBe('B')
+    expect(b?.dirty).toBe(false)
+  })
+})
+
+describe('resolveInsertLine (pure)', () => {
+  const cur = (line: number) => ({ path: 'a.ks', line, column: 1 })
+
+  it('maps a cursor line to a 0-based insert index (just above)', () => {
+    expect(resolveInsertLine("x\ny\nz", cur(2), 'a.ks')).toBe(1)
+  })
+
+  it('has no effect on content or the number of lines (pure)', () => {
+    const content = "a\nb"
+    resolveInsertLine(content, cur(1), 'a.ks')
+    expect(content).toBe("a\nb")
+  })
+
+  it('returns the line count when the cursor path mismatches the active doc', () => {
+    expect(resolveInsertLine('a\nb', cur(1), 'other.ks')).toBe(2)
+  })
+
+  it('returns the line count when no cursor is given', () => {
+    expect(resolveInsertLine('a\nb', null, 'a.ks')).toBe(2)
+  })
+
+  it('returns 0 for an empty doc so the statement lands on line 1', () => {
+    expect(resolveInsertLine('', cur(1), 'a.ks')).toBe(0)
   })
 })

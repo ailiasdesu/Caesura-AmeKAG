@@ -7,6 +7,7 @@ import { ExplorerView } from './ide/ExplorerView'
 import { SceneTree } from './ide/SceneTree'
 import { SceneOutlinePanel } from './ide/SceneOutlinePanel'
 import { InspectorView } from './ide/InspectorView'
+import { SceneBuilder } from './ide/SceneBuilder'
 import { TimelineView } from './ide/TimelineView'
 import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
@@ -70,6 +71,7 @@ export function App() {
               <SceneTree />
               <SceneOutlinePanel client={clientRef.current} />
               <InspectorView client={clientRef.current} />
+              <SceneBuilder />
               <TimelineView />
             </>
           )}

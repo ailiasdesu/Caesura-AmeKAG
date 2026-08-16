@@ -34,6 +34,7 @@ const fakeEditorH = vi.hoisted(() => ({
   setPosition: vi.fn(),
   focus: vi.fn(),
   onDidDispose: vi.fn(() => () => {}),
+  onDidChangeCursorPosition: vi.fn(() => ({ dispose: vi.fn() })),
   addCommand: vi.fn(),
 }))
 
