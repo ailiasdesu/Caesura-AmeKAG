@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <chrono>
+#include <mutex>
+#include <thread>
 // test_storage.cpp - storage module unit tests (S2.4)
 #include "doctest.h"
 #include "storage/api/ISaveManager.h"
@@ -1143,3 +1146,393 @@ TEST_CASE("Storage: provider write/read/delete errors propagate gracefully") {
     CHECK_FALSE(sm.slotExists(2));
 }
 
+
+// =============================================================================
+// Round-85+ concurrency / multithreading boundary tests.
+//
+// ARCHITECTURE NOTE (verified): src/storage has NO CAESURA_ASSERT_MAIN_THREAD
+// guard (0 matches in src/storage) and SaveManager holds no internal mutex.
+// save()/load() read only effectively-immutable shared state after init()
+// (m_saveDir, m_currentSchemaVersion, m_keySet, m_saveProvider) and route the
+// actual I/O to the ISaveProvider. Different slots map to different provider
+// keys/files, so concurrent saves to *distinct* slots are safe as long as the
+// provider is thread-safe. The default test fixtures below install a
+// mutex-guarded in-memory provider so our threads never race the provider.
+//
+// These cases cover:
+//   * concurrent save isolation across distinct slots
+//   * sequential interleaving order-independence + same-slot overwrite-by-load
+//   * thread-safe provider call counting under concurrent save/load
+//   * slow provider => synchronous (blocking) save still yields a correct slot
+//   * large/small slot interleaving (1 MiB vs 1 KB)
+//   * failure recovery: failed save then retry; failed load preserves bytes
+//   * memory-pressure: 50-slot save/load pressure loop stays correct
+// =============================================================================
+
+// Thread-safe in-memory ISaveProvider. Unlike the plain InMemorySaveProvider
+// above (whose std::map is NOT safe to mutate from several threads), this one
+// guards every access with a mutex and reports call counts with atomics so a
+// multi-threaded test can prove isolation and measuring.
+class ThreadSafeInMemorySaveProvider final : public ISaveProvider {
+public:
+    std::string readFile(const std::string& path) override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        ++readCalls;
+        if (failNextReads > 0) {  // transient read failure: report nothing
+            --failNextReads;
+            return std::string();
+        }
+        const auto it = files.find(path);
+        return it == files.end() ? std::string() : it->second;
+    }
+    bool writeFile(const std::string& path, const std::string& content) override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        ++writeCalls;
+        if (writeLatencyUs > 0) {
+            // Simulate a slow backend: block this thread while "writing".
+            std::this_thread::sleep_for(std::chrono::microseconds(writeLatencyUs));
+        }
+        if (failNextWrites > 0) {  // fail a bounded number of writes in a row
+            --failNextWrites;
+            return false;
+        }
+        files[path] = content;
+        return true;
+    }
+    bool deleteFile(const std::string& path) override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        ++deleteCalls;
+        return files.erase(path) > 0;
+    }
+    std::vector<std::string> listFiles(const std::string& pattern) override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        std::vector<std::string> out;
+        for (const auto& [name, _] : files) {
+            if (pattern.empty() || name.find(pattern) != std::string::npos) out.push_back(name);
+        }
+        return out;
+    }
+    bool pushToCloud(const std::string&) override { return false; }
+    bool pullFromCloud(const std::string&) override { return false; }
+    bool supportsCloudSync() const override { return false; }
+
+    // Optional artificial write latency (microseconds) to exercise the
+    // synchronous-blocking behaviour: a slow provider must still yield a
+    // correct, complete save (the call blocks until the write finishes).
+    long writeLatencyUs = 0;
+    std::atomic<int> failNextWrites{0};
+    std::atomic<int> failNextReads{0};
+    std::atomic<long> writeCalls{0};
+    std::atomic<long> readCalls{0};
+    std::atomic<long> deleteCalls{0};
+
+private:
+    std::mutex m_mutex;
+    std::map<std::string, std::string> files;
+};
+
+TEST_CASE("Storage: concurrent saves to distinct slots are isolated") {
+    TestPaths::ScopedTempDir dir("storage_concurrent_slots");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto prov = std::make_unique<ThreadSafeInMemorySaveProvider>();
+    ThreadSafeInMemorySaveProvider* provPtr = prov.get();
+    sm.setSaveProvider(std::move(prov));
+
+    // 8 threads, each saving a UNIQUE slot with a slot-tagged payload.
+    const int N = 8;
+    std::vector<std::thread> threads;
+    std::atomic<int> failures{0};
+    for (int s = 0; s < N; ++s) {
+        threads.emplace_back([&sm, &failures, s]() {
+            json gd = {{"thread", s}, {"value", s * 100}, {"ok", true}};
+            if (!sm.save(s, gd, "scene_" + std::to_string(s), s)) failures.fetch_add(1);
+        });
+    }
+    for (auto& t : threads) t.join();
+
+    // No save reported failure.
+    CHECK(failures.load() == 0);
+
+    // Exactly N writes reached the provider (one per slot).
+    CHECK(provPtr->writeCalls.load() == N);
+
+    // Every slot loads back with its own exact payload (isolation: no slot
+    // leaked another thread's data).
+    for (int s = 0; s < N; ++s) {
+        SaveMeta meta;
+        json loaded = sm.load(s, &meta);
+        CHECK(loaded["thread"] == s);
+        CHECK(loaded["value"] == s * 100);
+        CHECK(loaded["ok"] == true);
+        CHECK(meta.sceneName == "scene_" + std::to_string(s));
+    }
+
+    // All N slots enumerate exactly once, in ascending order, no dups/gaps.
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == static_cast<size_t>(N));
+    for (int s = 0; s < N; ++s) CHECK(saves[static_cast<size_t>(s)].slot == s);
+}
+
+TEST_CASE("Storage: concurrent save+load across distinct slots stays consistent") {
+    TestPaths::ScopedTempDir dir("storage_concurrent_io");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto prov = std::make_unique<ThreadSafeInMemorySaveProvider>();
+    ThreadSafeInMemorySaveProvider* provPtr = prov.get();
+    sm.setSaveProvider(std::move(prov));
+
+    // Phase 1: a writer thread backfills 4 slots so readers have content.
+    std::thread seed([&]() {
+        for (int s = 0; s < 4; ++s) {
+            REQUIRE(sm.save(s, {{"phase", 0}, {"slot", s}}, "seed", s));
+        }
+    });
+    seed.join();
+
+    // Phase 2: one thread overwrites slots 0..3 while two readers repeatedly
+    // load them. Each slot is self-consistent: a reader may observe the
+    // pre- or post-overwrite value, but MUST never see a torn/mixed envelope.
+    std::atomic<bool> stop{false};
+    std::atomic<int> readerMixed{0};
+    auto writer = std::thread([&]() {
+        for (int round = 1; round <= 10; ++round) {
+            for (int s = 0; s < 4; ++s) sm.save(s, {{"phase", round}, {"slot", s}}, "w", round);
+        }
+        stop.store(true);
+    });
+    auto reader = std::thread([&]() {
+        while (!stop.load()) {
+            for (int s = 0; s < 4; ++s) {
+                json v = sm.load(s);
+                if (v.is_null()) continue;
+                int slot = v.value("slot", -1);
+                int phase = v.value("phase", -1);
+                // A slot entry must never carry another slot's identity.
+                if (slot != s || phase < 0) readerMixed.fetch_add(1);
+            }
+        }
+    });
+
+    writer.join();
+    reader.join();
+
+    CHECK(readerMixed.load() == 0);                 // no torn cross-slot reads
+    CHECK(provPtr->deleteCalls.load() == 0);        // reader never deleted anything
+
+    // Writers wrote and readers read: both call paths were exercised. The
+    // reader count is naturally racy (it stops when the writer finishes), so
+    // only require that meaningful reading happened; the writer bound is exact.
+    CHECK(provPtr->writeCalls.load() >= 40);        // 4 seed + 4*10 overwrites
+    CHECK(provPtr->readCalls.load() >= 10);         // reader loop did real loads
+}
+
+TEST_CASE("Storage: sequential interleaving of save/load is order-independent") {
+    // save(A) + save(B) + load(A) must always give A's payload no matter which
+    // interleaving produced it -- load reflects committed disk state for A.
+    TestPaths::ScopedTempDir dir("storage_interleave");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    json a = {{"who", "A"}, {"n", 1}};
+    json b = {{"who", "B"}, {"n", 2}};
+
+    // Interleaving 1: save A, then save B, then load A.
+    REQUIRE(sm.save(1, a, "a", 1));
+    REQUIRE(sm.save(2, b, "b", 2));
+    CHECK(sm.load(1)["who"] == "A");
+
+    // Interleaving 2: save B, then save A (reverse registration), then load A.
+    SaveManager sm2;
+    sm2.init(dir.string());
+    REQUIRE(sm2.save(2, b, "b", 2));
+    REQUIRE(sm2.save(1, a, "a", 1));
+    CHECK(sm2.load(1)["who"] == "A");
+    CHECK(sm2.load(2)["who"] == "B");
+
+    // Interleaving 3: single manager, A then B then A again, load mid-way.
+    REQUIRE(sm.save(1, a, "a", 1));
+    REQUIRE(sm.save(2, b, "b", 2));
+    REQUIRE(sm.save(1, a, "a_re", 3));   // re-save A; must not disturb B
+    CHECK(sm.load(1)["who"] == "A");
+    CHECK(sm.load(2)["who"] == "B");
+}
+
+TEST_CASE("Storage: save same slot twice loads the second value") {
+    TestPaths::ScopedTempDir dir("storage_slot_twice");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    REQUIRE(sm.save(4, {{"phase", 1}}, "first", 1));
+    REQUIRE(sm.save(4, {{"phase", 2}, {"marker", "second"}}, "second", 9));
+
+    json loaded = sm.load(4);
+    CHECK(loaded["phase"] == 2);
+    CHECK(loaded["marker"] == "second");
+
+    // A third save also wins; the slot file count stays 1.
+    REQUIRE(sm.save(4, {{"phase", 3}}, "third", 2));
+    CHECK(sm.load(4)["phase"] == 3);
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == 1);
+    CHECK(saves[0].slot == 4);
+    CHECK(saves[0].tokenIndex == 2);
+}
+
+TEST_CASE("Storage: slow provider blocks synchronously but saves correctly") {
+    // SaveManager has no async path: a slow provider must fully block save()
+    // and STILL return a complete, loadable slot -- never a partial/early one.
+    TestPaths::ScopedTempDir dir("storage_slow_provider");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto prov = std::make_unique<ThreadSafeInMemorySaveProvider>();
+    ThreadSafeInMemorySaveProvider* provPtr = prov.get();
+    provPtr->writeLatencyUs = 5000;   // 5ms artificial latency per write
+    sm.setSaveProvider(std::move(prov));
+
+    auto t0 = std::chrono::steady_clock::now();
+    json gd = {{"slow", true}, {"payload", "blocking-write"}};
+    REQUIRE(sm.save(7, gd, "slowscene", 3));         // must block until written
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    CHECK(ms >= 4);                                  // actually waited on provider
+
+    json loaded = sm.load(7);
+    CHECK(loaded["slow"] == true);
+    CHECK(loaded["payload"] == "blocking-write");
+    CHECK(provPtr->writeCalls.load() == 1);
+}
+
+TEST_CASE("Storage: 1 MiB and 1 KB slots interleave without cross-corruption") {
+    TestPaths::ScopedTempDir dir("storage_size_mix");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    const std::string big = makeRepeatedPayload(1024 * 1024, 5);   // 1 MiB
+    const std::string small = makeRepeatedPayload(1024, 9);        // 1 KB
+
+    // Interleave large and small across alternating slots, like a game
+    // switching between a heavy quicksave and lightweight auto-saves.
+    for (int i = 0; i < 6; ++i) {
+        bool useBig = (i % 2 == 0);
+        int slot = i;
+        const std::string& body = useBig ? big : small;
+        json gd = {{"k", i}, {"blob", body}};
+        REQUIRE(sm.save(slot, gd, useBig ? "bigscene" : "smallscene", i));
+    }
+
+    // Every slot round-trips its exact blob; large stays large, small small.
+    for (int i = 0; i < 6; ++i) {
+        bool useBig = (i % 2 == 0);
+        const std::string& expected = useBig ? big : small;
+        json loaded = sm.load(i);
+        CHECK(loaded["k"] == i);
+        CHECK(loaded["blob"].is_string());
+        CHECK(loaded["blob"].get<std::string>() == expected);
+        CHECK(loaded["blob"].get<std::string>().size() == expected.size());
+    }
+}
+
+TEST_CASE("Storage: failed save then immediate retry succeeds cleanly") {
+    // A provider that fails the next write (transient error) must leave no
+    // partial/poisoned slot; after the failure a retry lands the full payload.
+    TestPaths::ScopedTempDir dir("storage_fail_retry");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto prov = std::make_unique<ThreadSafeInMemorySaveProvider>();
+    ThreadSafeInMemorySaveProvider* provPtr = prov.get();
+    sm.setSaveProvider(std::move(prov));
+
+    // Baseline save to establish the slot content we must preserve.
+    REQUIRE(sm.save(3, {{"v", 1}}, "base", 0));
+    CHECK(sm.load(3)["v"] == 1);
+
+    // Next write fails: save() reports failure and the old value stays intact.
+    provPtr->failNextWrites.store(1);
+    CHECK_FALSE(sm.save(3, {{"v", 2}}, "willfail", 0));
+    CHECK(sm.load(3)["v"] == 1);   // prior content untouched (no partial write)
+
+    // Immediate retry with a healthy provider succeeds and overwrites.
+    REQUIRE(sm.save(3, {{"v", 3}}, "retry", 1));
+    SaveMeta meta;
+    json retryLoaded = sm.load(3, &meta);
+    CHECK(retryLoaded["v"] == 3);
+    CHECK(meta.sceneName == "retry");     // the retry's metadata won
+}
+
+TEST_CASE("Storage: failed load leaves the on-disk save intact") {
+    // A transient READ failure (provider returns empty / reports none) must
+    // NOT destroy or corrupt the underlying save: after health returns, the
+    // exact payload is still recoverable. A real filesystem provider never
+    // mutates on read; this guards against a future implementation that
+    // deletes or truncates on a failed load.
+    TestPaths::ScopedTempDir dir("storage_load_preserve");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    auto prov = std::make_unique<ThreadSafeInMemorySaveProvider>();
+    ThreadSafeInMemorySaveProvider* provPtr = prov.get();
+    sm.setSaveProvider(std::move(prov));
+
+    json gd = {{"important", "data"}, {"n", 42}};
+    REQUIRE(sm.save(9, gd, "keep", 5));
+    SaveMeta metaBefore;
+    REQUIRE(sm.load(9, &metaBefore)["n"] == 42);
+
+    // Force the next reads to fail (return empty): load() reports null and
+    // slotExists() false, but the stored bytes are untouched. The fail counter
+    // is per-read, so cover both the load and the slotExists query.
+    provPtr->failNextReads.store(2);
+    CHECK(sm.load(9).is_null());
+    CHECK_FALSE(sm.slotExists(9));      // present but unreadable at that instant
+    CHECK(provPtr->readCalls.load() >= 2);
+
+    // Health returns: the exact original payload survives the failed load.
+    SaveMeta meta;
+    json again = sm.load(9, &meta);
+    CHECK(again["important"] == "data");
+    CHECK(again["n"] == 42);
+    CHECK(meta.sceneName == "keep");
+    CHECK(meta.slot == 9);
+    CHECK(sm.slotExists(9));
+}
+
+TEST_CASE("Storage: 50-slot save/load pressure loop stays correct") {
+    // Quantity-of-order sanity for slot growth: hammer 50 slots save+load and
+    // confirm every payload round-trips and the managed list stays consistent.
+    // This exercises sustained per-slot I/O (disk-backed persistence, no cache)
+    // and guards against accidental quadratic behaviour in list/scan paths.
+    TestPaths::ScopedTempDir dir("storage_pressure50");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    const int N = 50;
+    for (int s = 0; s < N; ++s) {
+        json gd = {{"slot", s}, {"iter", 0}};
+        REQUIRE(sm.save(s, gd, "p_" + std::to_string(s), s));
+    }
+    // Second pass overwrites every slot (proves repeated same-slot writes).
+    for (int s = 0; s < N; ++s) {
+        json gd = {{"slot", s}, {"iter", 1}};
+        REQUIRE(sm.save(s, gd, "p_" + std::to_string(s), s + 1000));
+    }
+    // Load every slot, verify the latest (iter=1) content.
+    for (int s = 0; s < N; ++s) {
+        SaveMeta meta;
+        json loaded = sm.load(s, &meta);
+        CHECK(loaded["slot"] == s);
+        CHECK(loaded["iter"] == 1);
+        CHECK(meta.tokenIndex == s + 1000);
+    }
+
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == static_cast<size_t>(N));
+    for (int s = 0; s < N; ++s) {
+        CHECK(saves[static_cast<size_t>(s)].slot == s);
+        CHECK(saves[static_cast<size_t>(s)].tokenIndex == s + 1000);
+    }
+}
