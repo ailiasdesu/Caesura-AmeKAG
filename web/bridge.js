@@ -569,7 +569,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- past the [load] so execution continues forward and completes.
                 -- Cross-scene loads (a real [load] into a different scene) are
                 -- unchanged: the scene differs, so _pendingLoadToken is used.
-                if ctx.current_scene == ctx._pendingLoadScene
+                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene)
                   and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
                   ctx.token_index = ctx.token_index + 1
                 else
@@ -929,7 +929,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- continues forward and the scene completes. Cross-scene loads
                 -- (a genuine [load] into a different scene) are unchanged: the
                 -- scene differs, so _pendingLoadToken is used as-is.
-                if ctx.current_scene == ctx._pendingLoadScene
+                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene)
                   and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
                   ctx.token_index = ctx.token_index + 1
                 else

@@ -251,7 +251,11 @@ end
 -- so `f.arr[flag ? 1 : 2]` was never translated and the raw '?' broke
 -- Lua load(). Flatten bracket contents innermost-out; the outer pass then
 -- sees already-valid Lua inside the brackets.
-local function translate_brackets(src)
+-- Forward declaration: translate_ternary is defined later and assigned
+-- here so the bracket/paren passes can call back into the full pipeline.
+local translate
+
+local function translate_brackets(src, depth)
     local out = {}
     local i, n = 1, #src
     local quote = nil
@@ -301,7 +305,7 @@ local function translate_brackets(src)
                     j = j + 1
                 end
                 if depth == 0 then
-                    out[#out + 1] = "[" .. translate(src:sub(i + 1, j - 1)) .. "]"
+                    out[#out + 1] = "[" .. translate(src:sub(i + 1, j - 1), depth) .. "]"
                     i = j + 1
                 else
                     out[#out + 1] = c
@@ -320,7 +324,7 @@ end
 -- Same flattening for (...) parenthesised groups (round 68): a ternary
 -- inside parens — f.arr[1] + (f.flag ? f.arr[2] : f.arr[3]) — was never
 -- translated because find_top only matches '?' at paren-depth 0.
-local function translate_parens(src)
+local function translate_parens(src, depth)
     local out = {}
     local i, n = 1, #src
     local quote = nil
@@ -351,6 +355,13 @@ local function translate_parens(src)
                         q2 = d
                     elseif d == "(" then
                         depth = depth + 1
+                        if depth > 48 then
+                            -- [round 97] nesting budget: leave this whole
+                            -- group untranslated (runtime parser reports it)
+                            out[#out + 1] = src:sub(i, j - 1)
+                            i = j
+                            break
+                        end
                     elseif d == ")" then
                         depth = depth - 1
                         if depth == 0 then break end
@@ -380,14 +391,14 @@ local function translate_parens(src)
                             comma = find_top(inner, ",", cur)
                         end
                         segs[#segs + 1] = inner:sub(cur)
-                        for k = 1, #segs do segs[k] = translate(segs[k]) end
+                        for k = 1, #segs do segs[k] = translate(segs[k], depth) end
                         -- trim each segment: a trailing space before the
                         -- comma (f.calc(a, b ? 1 : 2, 3)) would otherwise
                         -- survive into the rejoined argument list
                         for k = 1, #segs do segs[k] = segs[k]:gsub("^%s+", ""):gsub("%s+$", "") end
                         out[#out + 1] = "(" .. table.concat(segs, ", ") .. ")"
                     else
-                        out[#out + 1] = "(" .. translate(inner) .. ")"
+                        out[#out + 1] = "(" .. translate(inner, depth) .. ")"
                     end
                     i = j + 1
                 else
@@ -403,9 +414,15 @@ local function translate_parens(src)
     return table.concat(out)
 end
 
-local function translate_ternary(src)
-    src = translate_parens(src)
-    src = translate_brackets(src)
+local function translate_ternary(src, depth)
+    -- [round 97] Complexity budget: deep nested ternaries make the
+    -- recursive scan O(n^3) (each level re-scans its whole substring),
+    -- and ~100 nested levels already take seconds. Beyond the budget the
+    -- expression is left untranslated (the runtime Lua parser reports the
+    -- syntax), so a hostile/accidental deep nest can never hang the
+    -- translator. Normal scripts stay well below 30 levels.
+    src = translate_parens(src, depth)
+    src = translate_brackets(src, depth)
     local q = find_top(src, "?", 1)
     if not q then
         return translate_operators(src)
@@ -419,11 +436,16 @@ local function translate_ternary(src)
     local cond = trim(src:sub(1, q - 1))
     local then_part = trim(src:sub(q + 1, colon - 1))
     local else_part = trim(src:sub(colon + 1))
-    return "((" .. translate(cond) .. ") and (" .. translate(then_part)
-        .. ") or (" .. translate(else_part) .. "))"
+    return "((" .. translate(cond, depth) .. ") and (" .. translate(then_part, depth)
+        .. ") or (" .. translate(else_part, depth) .. "))"
 end
 
-translate = translate_ternary
+translate = function(input, depth)
+    if type(input) ~= "string" then return tostring(input) end
+    return translate_ternary(input, depth)
+end
+
+-- translate now defined above with the depth budget
 
 -- ---------------------------------------------------------------------------
 -- Public API

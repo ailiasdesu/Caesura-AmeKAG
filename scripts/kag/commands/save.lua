@@ -439,6 +439,15 @@ function SaveCommands.load(ctx, params)
     -- an arbitrary readable local file.
     local sp = state.scene_path or ""
     if SaveCommands._safeScenePath(sp) then
+        -- [round 97] Record the scene the [load] was issued FROM, before
+        -- current_scene is overwritten below: the bridge needs it to tell a
+        -- self-referential load ([save]+[load] in the same scene — resume
+        -- point at/before the [load] re-runs the block forever) from a real
+        -- cross-scene load (resume point must be honored exactly). round 95
+        -- compared current_scene == _pendingLoadScene AFTER this overwrite,
+        -- which is true for EVERY load, so every load got cursor+1 and a
+        -- page was skipped (slots.boundary regression).
+        ctx._pendingLoadOriginScene = ctx.current_scene or ctx.currentScene
         ctx.currentScene = sp
         ctx.current_scene = sp
         -- Set stop_flag so the current script execution stops
