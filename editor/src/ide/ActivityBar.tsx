@@ -17,9 +17,11 @@ export function ActivityBar() {
       {VIEWS.map((v) => (
         <button
           key={v.id}
-          className={"activity-item " + (sideView === v.id ? 'active' : '')}
+          className={'activity-item ' + (sideView === v.id ? 'active' : '')}
           onClick={() => setSideView(v.id)}
           title={v.label}
+          aria-label={v.label}
+          aria-current={sideView === v.id ? 'true' : undefined}
         >
           <span className="activity-icon">{v.icon}</span>
         </button>
