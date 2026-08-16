@@ -10,10 +10,10 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 31 |
-| Pure-virtual interface methods | 379 |
-| Lua binding functions (luaL_Reg entries) | 149 |
+| Pure-virtual interface methods | 385 |
+| Lua binding functions (luaL_Reg entries) | 154 |
 | KAG command handler files | 11 |
-| KAG contract commands (command-contracts.md) | 118 |
+| KAG contract commands (command-contracts.md) | 119 |
 | RPC HTTP endpoints (EditorServer) | 25 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 71 |
@@ -40,7 +40,7 @@
 | render | ILayerManager.h | 16 |
 | render | IMeshRenderer.h | 8 |
 | render | IParticleSystem.h | 9 |
-| render | IRenderDevice.h | 46 |
+| render | IRenderDevice.h | 52 |
 | render | ITextureManager.h | 17 |
 | render | IVideoPlayer.h | 18 |
 | resource | IAssetProvider.h | 5 |
@@ -64,7 +64,7 @@
 | EngineBinding.cpp | 4 | Engine |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |
-| RenderBinding.cpp | 33 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
+| RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
 | SaveBinding.cpp | 12 | KAG |
 | SmaBinding.cpp | 8 | sma |
 | SteamBinding.cpp | 18 | steam |

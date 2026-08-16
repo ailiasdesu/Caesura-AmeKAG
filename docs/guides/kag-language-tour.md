@@ -214,6 +214,9 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 [quake time=500 amplitude=8]         ; 震屏
 [flash color="#ffffff" time=200]
 [vfx type="grayscale" time=500]      ; 色盲/高对比滤镜
+[vfx postfx="bloom" strength=0.5 amount=0.8]  ; PostFx chain (bloom/vignette/lut/softblur/none)
+[vfx postfx="vignette" strength=0.6 radius=0.5 rgb=255,128,64]
+[vfx postfx="none"]    ; 关闭全部后处理
 [shake]
 ```
 

@@ -76,6 +76,11 @@ Each quad entry:
 | `affine_blt` | `(dstTexId, dx,dy,dw,dh, srcTexId, sx,sy,sw,sh, m0..m5)` | Affine 2×3 matrix blit |
 | `fill_viewport` | `(vpId, r, g, b, a)` | Fill RTT with solid colour |
 | `set_color_filter` | `(preset)` | Accessibility colour filter: none/deuteranopia/protanopia/tritanopia/grayscale/high_contrast |
+| `set_postfx` | `(kind, params)` | Enable/update a PostFx effect. kind: bloom/vignette/lut/softblur; params: {strength, radius, amount, rgb="r,g,b", lutMix} → handle (0 = unsupported/no-op) |
+| `destroy_postfx` | `(kind)` | Disable one PostFx effect |
+| `clear_postfx` | `()` | Disable the whole PostFx chain (postfx=none) |
+| `is_postfx_supported` | `(kind)` | `bool` — headless/Null devices return false |
+| `is_postfx_active` | `()` | `bool` — is any PostFx effect active |
 
 ### Video Playback
 

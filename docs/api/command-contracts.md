@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (118)
+## Commands (119)
 
 ### `[add]`
 
@@ -1051,6 +1051,63 @@ _Category: system · Blocking: no (fire-and-forget) · unlock a gallery CG or mu
 | `id` | string | - | - | - |
 | `name` | string | - | - | - |
 | `type` | string | cg | - | - |
+
+### `[vfx]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · GPU visual effects: particles, quake/shake/flash/fade/blur, and PostFx chain (postfx=)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `action` | string | - | - | - |
+| `amount` | number | - | 0..1 | - |
+| `amplitude` | number | - | 0..100 | - |
+| `amplitudex` | number | - | 0..200 | - |
+| `amplitudey` | number | - | 0..200 | - |
+| `angleMax` | number | - | - | - |
+| `angleMin` | number | - | - | - |
+| `angle_max` | number | - | - | - |
+| `b` | number | - | 0..255 | - |
+| `blue` | number | - | 0..255 | - |
+| `blurlevel` | number | - | 0..64 | - |
+| `color` | string | - | - | - |
+| `count` | number | - | 0..100000 | - |
+| `decay` | boolean | - | - | - |
+| `direction` | string | - | - | - |
+| `effect` | string | - | - | - |
+| `emitter` | number | - | - | - |
+| `frequency` | number | - | 1..120 | - |
+| `g` | number | - | 0..255 | - |
+| `gravityX` | number | - | - | - |
+| `gravityY` | number | - | - | - |
+| `gravity_x` | number | - | - | - |
+| `gravity_y` | number | - | - | - |
+| `green` | number | - | 0..255 | - |
+| `intensity` | number | - | 0..50 | - |
+| `layer` | string | - | - | - |
+| `lifeMax` | number | - | 0..60 | - |
+| `lifeMin` | number | - | 0..60 | - |
+| `life_max` | number | - | 0..60 | - |
+| `lutMix` | number | - | 0..1 | - |
+| `opacity` | number | - | 0..1 | - |
+| `postfx` | enum | - | - | - |
+| `power` | number | - | 0..200 | - |
+| `r` | number | - | 0..255 | - |
+| `radius` | number | - | 0..64 | - |
+| `rate` | number | - | 0..1000 | - |
+| `red` | number | - | 0..255 | - |
+| `rgb` | string | - | - | - |
+| `sizeMax` | number | - | 0..512 | - |
+| `sizeMin` | number | - | 0..512 | - |
+| `size_max` | number | - | 0..512 | - |
+| `speed` | number | - | 0..10000 | - |
+| `speedMax` | number | - | 0..10000 | - |
+| `speedMin` | number | - | 0..10000 | - |
+| `speed_max` | number | - | 0..10000 | - |
+| `strength` | number | - | 0..255 | - |
+| `time` | number | - | 0..30000 | - |
+| `type` | string | - | - | - |
+| `x` | number | - | - | - |
+| `y` | number | - | - | - |
 
 ### `[vib]`
 
