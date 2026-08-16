@@ -215,6 +215,96 @@ do
     end
 end
 
+
+-- ===========================================================================
+-- 6. round-84 deep-boundary RUNTIME: alias matrix, RENAMES (goto->jump),
+--    macro-arg text expansion, alias+explicit coexist (last-wins), emb branch.
+-- ===========================================================================
+-- 6a. PARAM_ALIASES math matrix: every var->name command produces the
+--     expected variable value at runtime (converted [add name=...] etc).
+do
+    local sc = "*start\n"
+        .. "[add var=\"f.a\" value=\"5\"]\n"
+        .. "[sub var=\"f.b\" value=\"3\"]\n"
+        .. "[mul var=\"f.c\" value=\"4\"]\n"
+        .. "[div var=\"f.d\" value=\"2\"]\n"
+        .. "[mod var=\"f.e\" value=\"3\"]\n"
+        .. "[dec var=\"f.f\"]\n"
+        .. "[dec var=\"f.g\" amount=3]\n"
+        .. "[stop]\n"
+    local rr = run_scene(sc, { a=0, b=10, c=2, d=10, e=10, f=5, g=10 })
+    if rr.rep and rr.ctx then
+        local c = rr.ctx
+        check("e2e: alias matrix converts var->name (no var= left)",
+            rr.rep.output:find("var=", 1, true) == nil, rr.rep.output)
+        check("e2e: [add] f.a==5", c.f.a == 5, tostring(c.f.a))
+        check("e2e: [sub] f.b==7", c.f.b == 7, tostring(c.f.b))
+        check("e2e: [mul] f.c==8", c.f.c == 8, tostring(c.f.c))
+        check("e2e: [div] f.d==5", c.f.d == 5, tostring(c.f.d))
+        check("e2e: [mod] f.e==1", c.f.e == 1, tostring(c.f.e))
+        check("e2e: [dec] f.f==4 (default amount 1)", c.f.f == 4, tostring(c.f.f))
+        check("e2e: [dec] f.g==7 (amount=3)", c.f.g == 7, tostring(c.f.g))
+    end
+end
+
+-- 6b. RENAMES runtime: [goto]->[jump] forward jump actually hops. [waitse]
+--     conversion is asserted (the mock backend has no audio_* handler, so
+--     runtime waitsound audio is not exercised here).
+do
+    local rr = run_scene("*start\n[goto target=*skip]\n[ch name=\"H\" text=\"WRONG\"]\n*skip\n[ch name=\"H\" text=\"right\"]\n[waitse end=1]\n[stop]\n", {})
+    if rr.rep then
+        check("e2e: goto->jump converted", rr.rep.output:find("[goto", 1, true) == nil
+            and rr.rep.output:find("[jump target=*skip]", 1, true) ~= nil, rr.rep.output)
+    end
+    local texts = backlog_texts(rr.ctx)
+    local list = table.concat(texts, " | ")
+    check("e2e: [jump] forward hop skipped WRONG",
+        (function() for _, t in ipairs(texts) do if t == "WRONG" then return false end end return true end)(), list)
+    check("e2e: [jump] landed on *skip -> right",
+        (function() for _, t in ipairs(texts) do if t == "right" then return true end end return false end)(), list)
+    check("e2e: waitsound conversion (rename)", rr.rep.output:find("waitse", 1, true) == nil
+        and rr.rep.output:find("[waitsound end=1]", 1, true) ~= nil, rr.rep.output)
+end
+
+-- 6c. Macro-arg text-position expansion runs: [greet who=hero 10 20] fills
+--     both the named %who% and the numeric %1%/%2% placeholders.
+do
+    local rr = run_scene("*start\n[macro greet args=\"who\"]\nHello &who p1=&1 p2=&2\n[endmacro]\n[greet who=hero 10 20]\n[stop]\n", {})
+    local texts = backlog_texts(rr.ctx)
+    local list = table.concat(texts, " | ")
+    check("e2e: macro text-arg conversion (%who%/%1%/%2%)",
+        rr.rep.output:find("Hello %who% p1=%1% p2=%2%", 1, true) ~= nil, rr.rep.output)
+    check("e2e: macro runtime fills named + numeric args",
+        (function() for _, t in ipairs(texts) do if t == "Hello hero p1=10 p2=20" then return true end end return false end)(), list)
+end
+
+-- 6d. Alias + explicit engine param coexist: the importer does not dedup, so
+--     [add var=... name=...] -> two name= keys whose runtime winner is the
+--     LAST one (positional), NOT reliably the explicit engine name. Lock the
+--     current behavior here (forward order: name= after var= -> f.e wins).
+do
+    local rr = run_scene("*start\n[add var=\"f.v\" name=\"f.e\" value=\"5\"]\n[stop]\n", { v=200, e=100 })
+    if rr.rep and rr.ctx then
+        check("e2e: coexist keeps two name= (no dedup)",
+            rr.rep.output:find("add name=\"f.v\" name=\"f.e\"", 1, true) ~= nil, rr.rep.output)
+        check("e2e: coexist runtime is LAST-name-wins (f.e incremented)",
+            rr.ctx.f.e == 105 and rr.ctx.f.v == 200,
+            "f.v="..tostring(rr.ctx.f.v).." f.e="..tostring(rr.ctx.f.e))
+    end
+end
+
+-- 6e. [if] expression (TJS->Lua) drives a runtime branch; [emb] expression
+--     param is converted (params preserved) though the mock backend cannot
+--     evaluate it, so only the branch + conversion are asserted.
+do
+    local rr = run_scene("*start\n[if exp=\"f.hp + 1 == 43\"]\n[ch name=\"H\" text=\"emb ok\"]\n[endif]\n[emb exp=\"f.hp + 2\"]\n[stop]\n", { hp=42 })
+    local texts = backlog_texts(rr.ctx)
+    local list = table.concat(texts, " | ")
+    check("e2e: TJS expr in [if] runs TRUE branch",
+        (function() for _, t in ipairs(texts) do if t == "emb ok" then return true end end return false end)(), list)
+    check("e2e: emb exp converted (params preserved)",
+        rr.rep.output:find("[emb exp=\"f.hp + 2\"]", 1, true) ~= nil, rr.rep.output)
+end
 -- ---------------------------------------------------------------------------
 if failed > 0 then
     print(string.format("KAG3 IMPORT E2E: %d passed, %d FAILED", passed, failed))

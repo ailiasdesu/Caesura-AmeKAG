@@ -301,6 +301,175 @@ if rep73 then
 end
 os.remove(tmp73)
 
+-- ---------------------------------------------------------------------------
+-- 9. round-84 deep-boundary: alias matrix, RENAME matrix, macro-arg forms,
+--    CONFLICT_NOTES depth, KAG3-specific commands, iscript/emb preservation.
+-- ---------------------------------------------------------------------------
+local function procInline(src)
+    local t = os.tmpname() .. ".ks"
+    local h = io.open(t, "w"); h:write(src); h:close()
+    local rp = M.processScene(t)
+    os.remove(t)
+    return rp
+end
+
+-- 9a. PARAM_ALIASES full matrix: every math command var->name (quoted).
+for _, c in ipairs({ "add", "sub", "mul", "div", "mod", "dec" }) do
+    local sc = "*start\n[" .. c .. " var=\"f." .. c .. "\" value=\"5\"]\n[stop]\n"
+    local rp = procInline(sc)
+    check("r84 var->name matrix (quoted): " .. c,
+        rp and rp.output:find("var=", 1, true) == nil
+        and rp.output:find('name="f.' .. c .. '" value="5"', 1, true) ~= nil,
+        rp and rp.output or "nil")
+end
+check("r84 csp left/top -> x/y (quoted)", (function()
+    local rp = procInline("*start\n[csp name=\"h\" layer=\"0\" left=\"320\" top=\"240\"]\n[stop]\n")
+    return rp and rp.output:find("left=", 1, true) == nil
+        and rp.output:find("top=", 1, true) == nil
+        and rp.output:find('x="320" y="240"', 1, true) ~= nil, rp and rp.output or "nil"
+end)())
+check("r84 csl left/top -> x/y (bare/unquoted)", (function()
+    local rp = procInline("*start\n[csl name=h layer=0 left=300 top=200]\n[stop]\n")
+    return rp and rp.output:find("left=", 1, true) == nil
+        and rp.output:find("top=", 1, true) == nil
+        and rp.output:find("x=300 y=200", 1, true) ~= nil, rp and rp.output or "nil"
+end)())
+-- Alias + explicit engine param coexist: the importer currently does NOT
+-- dedup -- var->name is applied greedily, producing two name= keys whose
+-- runtime winner is the LAST one (positional), not reliably the explicit
+-- engine param. Lock the converted OUTPUT shape here; runtime + finding in
+-- the e2e file and the report.
+check("r84 alias+explicit coexist: var->name dup (quoted)", (function()
+    local rp = procInline("*start\n[add var=\"f.a\" name=\"f.b\" value=\"5\"]\n[stop]\n")
+    return rp and rp.output:find('add name="f.a" name="f.b"', 1, true) ~= nil,
+        rp and rp.output or "nil"
+end)())
+check("r84 alias+explicit coexist: csp left+x -> x dup (quoted)", (function()
+    local rp = procInline("*start\n[csp name=\"h\" layer=\"0\" left=\"1\" x=\"2\" top=\"3\" y=\"4\"]\n[stop]\n")
+    return rp and rp.output:find('x="1" x="2" y="3" y="4"', 1, true) ~= nil,
+        rp and rp.output or "nil"
+end)())
+
+-- 9b. RENAME matrix: goto->jump, waitse->waitsound; target params preserved.
+check("r84 rename matrix: goto->jump, waitse->waitsound, params kept", (function()
+    local rp = procInline("*start\n[goto target=*end]\n[waitse end=1]\n*end\n[stop]\n")
+    if not rp then return false, "nil" end
+    local ok = rp.output:find("[goto", 1, true) == nil
+        and rp.output:find("[jump target=*end]", 1, true) ~= nil
+        and rp.output:find("waitse", 1, true) == nil
+        and rp.output:find("[waitsound end=1]", 1, true) ~= nil
+        and rp.output:find("[stop]", 1, true) ~= nil
+    return ok, rp.output
+end)())
+check("r84 waitse rename counted + params preserved", (function()
+    local rp = procInline("*start\n[waitse stop=1]\n[stop]\n")
+    return rp and rp.renames >= 1
+        and rp.output:find("[waitsound stop=1]", 1, true) ~= nil,
+        rp and rp.output or "nil"
+end)())
+
+-- 9c. Macro-arg forms in TEXT position (bare dialogue lines inside a macro
+--     body): &1/&2 numeric, &name named, &f.x namespaced, && escape protected.
+--     (Attribute/param-position macro args are NOT converted by the current
+--     importer -- see the documented-gap check below + the round report.)
+check("r84 macro body arg forms (text position)", (function()
+    local rp = procInline("*start\n[macro greet args=\"who\"]\nHello &who (p1=&1 p2=&2) hp &f.hp, a && b\n[endmacro]\n[stop]\n")
+    if not rp then return false, "nil" end
+    local out = rp.output
+    return out:find("Hello %who% (p1=%1% p2=%2%) hp %f.hp%, a && b", 1, true) ~= nil
+        and out:find("[endmacro]", 1, true) ~= nil, out
+end)())
+-- Documented gap (round-84 finding): a KAG3 macro named arg in a COMMAND
+-- PARAM inside a macro body (e.g. [ch text="hi &who"]) is left as raw &who.
+-- The param-value rewrite only calls convertAmpVars (dot-namespace embeds);
+-- convertMacroArgs is applied only to bare dialogue TEXT lines. Recorded so
+-- a future fix can convert attr-position macro args too; the current
+-- importer output is locked here so the gap is visible, not silently broken.
+check("r84 [GAP] macro arg in command param NOT converted (attr position)", (function()
+    local rp = procInline("*start\n[macro greet args=\"who\"]\n[ch name=\"H\" text=\"hi &who\"]\n[endmacro]\n[stop]\n")
+    if not rp then return false, "nil" end
+    local out = rp.output
+    return out:find('text="hi &who"', 1, true) ~= nil
+        and out:find('text="hi %who%"', 1, true) == nil, out
+end)())
+check("r84 macro body &f.x/&tf.flag namespaced (separate embed conv)", (function()
+    local rp = procInline("*start\n[macro m]\n&f.hp &tf.flag\n[endmacro]\n[stop]\n")
+    return rp and rp.output:find("%f.hp% %tf.flag%", 1, true) ~= nil,
+        rp and rp.output or "nil"
+end)())
+check("r84 convertMacroArgs mixed forms shielded", (function()
+    local got = M.convertMacroArgs("&1 &who &f.x a && b &kag.st")
+    return got == "%1% %who% &f.x a && b &kag.st", tostring(got)
+end)())
+
+-- 9d. CONFLICT_NOTES: [palette] passes through KNOWN with an advisory NOTE,
+--     never blocks in --strict, and stays usable (re-tokenizable + params in
+--     the output).
+check("r84 palette NOTE + known + usable + non-blocking", (function()
+    local rp = procInline("*start\n[palette effect=\"night\"]\n[stop]\n")
+    if not rp then return false, "nil" end
+    local hasNote = false
+    for _, cc in ipairs(rp.conflicts or {}) do
+        if cc.cmd == "palette" and cc.note:find("NOTE", 1, true) then hasNote = true end
+    end
+    local retok = type(tokenizer.parse(rp.output)) == "table"
+    return hasNote and #rp.unsupported == 0 and not M.hasBlocking(rp)
+        and retok and rp.output:find('[palette effect="night"]', 1, true) ~= nil,
+        rp.output .. " | retok=" .. tostring(retok)
+end)())
+
+-- 9e. KAG3-specific command families: unsupported commands surface a
+--     suggestion ([chara_show]/[chara_hide]/[monocro]/...); the end-to-end
+--     family [endtag]/[endform]/[g] are REAL KAG3-compat no-op handlers in
+--     kag.lua, so they must never be RENAMED. (Round-84 finding: whether the
+--     importer classifies them as KNOWN vs UNSUPPORTED is ambient-cache
+--     dependent -- package.loaded["kag"] completeness at kag3_import load
+--     time; here we lock only the stable "no rename" contract.) [endimage]/
+--     [color] are unsupported (no suggestion in table).
+for _, c in ipairs({ "chara_show", "chara_hide", "monocro", "motion", "btndef", "user" }) do
+    local nc, notes = M.convertCommand(c, {})
+    local unsup, sug = false, nil
+    for _, n in ipairs(notes) do
+        if n:find("UNSUPPORTED", 1, true) then unsup = true end
+        if n:find(": ", 1, true) then sug = n:match(": (.+)$") end
+    end
+    check("r84 unsupported + suggestion: " .. c,
+        nc == c and unsup and type(sug) == "string" and #sug > 0, tostring(sug))
+end
+for _, c in ipairs({ "endtag", "endform", "g" }) do
+    local nc = M.convertCommand(c, {})
+    check("r84 end-family (no rename): " .. c, nc == c)
+end
+check("r84 end-family: convertCommand returns a pair (never nil)", (function()
+    local ok = true
+    for _, c in ipairs({ "endtag", "endform", "g" }) do
+        local nc = M.convertCommand(c, {})
+        if type(nc) ~= "string" or nc == "" then ok = false end
+    end
+    return ok
+end)())
+check("r84 endimage/color unsupported", (function()
+    local a, b = false, false
+    local _, na = M.convertCommand("endimage", {})
+    local _, nb = M.convertCommand("color", {})
+    for _, n in ipairs(na) do if n:find("UNSUPPORTED", 1, true) then a = true end end
+    for _, n in ipairs(nb) do if n:find("UNSUPPORTED", 1, true) then b = true end end
+    return a and b
+end)())
+
+-- 9f. iscript/emb preservation + [goto] inside a macro body -> [jump].
+check("r84 iscript verbatim + emb expr + goto-in-macro -> jump", (function()
+    local rp = procInline("*start\n[macro m]\n[goto target=*in]\n*in\n&f.hp\n[endmacro]\n[iscript]\nvar legacy_tjs = 1;\n[/endscript]\n[emb exp=\"f.hp + 1\"]\n[m]\n[stop]\n")
+    if not rp then return false, "nil" end
+    local out = rp.output
+    return out:find("var legacy_tjs = 1;", 1, true) ~= nil
+        and out:find("[/endscript]", 1, true) ~= nil
+        and out:find('[emb exp="f.hp + 1"]', 1, true) ~= nil
+        and out:find("[goto", 1, true) == nil
+        and out:find("[jump target=*in]", 1, true) ~= nil
+        and out:find("%f.hp%", 1, true) ~= nil, out
+end)())
+
 -- Exit gate (runner convention).
 if failed > 0 then
     print(string.format("KAG3 IMPORT TESTS: %d passed, %d FAILED", passed, failed))
