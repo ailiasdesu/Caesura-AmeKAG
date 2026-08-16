@@ -228,6 +228,72 @@ do
     check("operator chain evaluates", ok3 and v3 == true, tostring(v3))
 end
 
+-- ---- scale guards (round 90): translate() itself at scale ----------------
+-- round 66 guarded 2000x CACHED evaluate; these guard the TRANSLATE path
+-- that every [if]/[while]/[eval]/interpolation runs once on real scene
+-- text. Budgets are CI-safe multiples of measured cost (~1.3s total).
+do
+    -- (A) long text with many interpolation-style ternaries (build 300
+    --     interpolation segments joined by &&): exercises find_top and
+    --     match_colon over many top-level ternaries + string scanning.
+    local partsA = {}
+    for i = 1, 300 do
+        partsA[#partsA + 1] = string.format("f.x%d > 0 ? f.a%d : f.b%d", i, i, i)
+    end
+    local bigA = table.concat(partsA, " && ")
+    local tA0 = os.clock()
+    local outA = expr.translate(bigA)
+    local dtA = os.clock() - tA0
+    check("300 interp translate no leftover '?'", outA:find("?", 1, true) == nil)
+    check("300 interp translate under 2s", dtA < 2.0, string.format("%.3fs", dtA))
+
+    -- (B) huge single expression: 500 chained ternary (right-assoc flat
+    --     chain) -- the O(n^2) ternary-recursion worst case a naive author
+    --     writes by hand. Output must be 100% ternary-free.
+    local partsB = {}
+    for i = 1, 500 do partsB[#partsB + 1] = string.format("f.c%d ? %d", i, i) end
+    partsB[#partsB + 1] = "0"
+    local bigB = table.concat(partsB, " : ")
+    local tB0 = os.clock()
+    local outB = expr.translate(bigB)
+    local dtB = os.clock() - tB0
+    check("500-ternary chain no leftover '?'", outB:find("?", 1, true) == nil)
+    check("500-ternary chain under 2s", dtB < 2.0, string.format("%.3fs", dtB))
+
+    -- (C) multi-arg call, 80 args each with a ternary: round 84 comma
+    --     segment path. Verify segment count preserved (80 args, 79
+    --     commas, no ternary leaks) and cheap.
+    local argsC = {}
+    for i = 1, 80 do argsC[#argsC + 1] = string.format("f.a%d ? 1 : 0", i) end
+    local bigC = "f.calc(" .. table.concat(argsC, ", ") .. ")"
+    local tC0 = os.clock()
+    local outC = expr.translate(bigC)
+    local dtC = os.clock() - tC0
+    check("80-arg translate no leftover '?'", outC:find("?", 1, true) == nil)
+    local commas = select(2, outC:gsub(",", ""))
+    check("80-arg translate keeps 79 commas", commas == 79, commas)
+    check("80-arg translate under 0.1s", dtC < 0.1, string.format("%.4fs", dtC))
+
+    -- (D) scan-heavy text: many long-bracket strings with '?' ':' ',' '&'
+    --     inside (must be SKIPPED by find_top/match_colon) plus real
+    --     ternaries at top level -- exercises the string-skip paths.
+    local segsD = {}
+    for i = 1, 200 do
+        segsD[#segsD + 1] = string.format(
+            "f.s%d == [[a ? b : c, x && y ]] && f.ok%d ? f.y%d : f.n%d", i, i, i, i)
+    end
+    local bigD = table.concat(segsD, " || ")
+    local tD0 = os.clock()
+    local outD = expr.translate(bigD)
+    local dtD = os.clock() - tD0
+    check("200 longstring scan under 2s", dtD < 2.0, string.format("%.3fs", dtD))
+    -- long strings are preserved verbatim; only the REAL top-level
+    -- ternaries are wrapped, so no '?' may survive OUTSIDE a [[...]].
+    local strippedD = outD:gsub("%[%[.-%]%]", "")
+    check("200 longstring scan: real ternaries resolved",
+        strippedD:find("?", 1, true) == nil, strippedD)
+end
+
 -- ---- ternary inside parentheses (round 68) -----------------------------
 do
     local ctx = { f = { arr = { 10, 20, 30 }, flag = true }, sf = {}, tf = {}, mp = {}, lf = {} }
