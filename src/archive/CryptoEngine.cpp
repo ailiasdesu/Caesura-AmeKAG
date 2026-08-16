@@ -16,12 +16,68 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <deque>
+#include <mutex>
+#include <array>
+#include <algorithm>
 
 extern "C" {
 #include "../../external/ed25519/ed25519.h"
 }
 
 namespace Caesura::carc {
+
+// ==========================================================================
+// Optional nonce-reuse detection registry (process-scoped, bounded)
+// ==========================================================================
+// Reusing an AES-GCM (key, nonce) pair for two different plaintexts lets an
+// attacker XOR the two ciphertexts to recover the keystream difference and,
+// with a known plaintext, strip GCM's tamper-detectable structure. The registry
+// below detects accidental reuse at encrypt time and REJECTS it (empty output).
+//
+// Scoping: keyed on the (key, nonce) pair, NOT the nonce alone. The same nonce
+// used under a different key is harmless and must not be flagged.
+//
+// Lifetime & threads: the registry is process-scoped (static) because
+// CryptoEngine instances are ephemeral (the static wrappers construct a fresh
+// instance per call) -- a per-instance registry would reset on every call and
+// detect nothing. A static mutex makes it safe across the archive-writing
+// threads. Memory is bounded to kNonceReuseHistory entries (~45 KB).
+namespace {
+constexpr size_t kNonceReuseHistory = 1024u;
+using NonceKey   = std::array<uint8_t, AES_KEY_SIZE>;
+using NonceValue = std::array<uint8_t, AES_NONCE_SIZE>;
+
+std::mutex& nonceRegistryMutex() {
+    static std::mutex m;
+    return m;
+}
+std::deque<std::pair<NonceKey, NonceValue>>& nonceRegistry() {
+    static std::deque<std::pair<NonceKey, NonceValue>> reg;
+    return reg;
+}
+bool& nonceDetectionFlag() {
+    static bool enabled = true;
+    return enabled;
+}
+
+// Returns true if the (key, nonce) pair was already recorded (nonce reuse).
+// When false (not previously seen), records the pair (bounded) and returns.
+bool nonceReuseCheckAndRecord(const uint8_t* key, const uint8_t* nonce) {
+    std::lock_guard<std::mutex> guard(nonceRegistryMutex());
+    NonceKey k{};
+    NonceValue n{};
+    std::memcpy(k.data(), key, AES_KEY_SIZE);
+    std::memcpy(n.data(), nonce, AES_NONCE_SIZE);
+    auto& reg = nonceRegistry();
+    for (const auto& [rk, rn] : reg) {
+        if (rk == k && rn == n) return true;
+    }
+    if (reg.size() >= kNonceReuseHistory) reg.pop_front();
+    reg.emplace_back(k, n);
+    return false;
+}
+} // namespace
 
 // ==========================================================================
 // Helpers
@@ -125,6 +181,16 @@ std::vector<uint8_t> CryptoEngine::encrypt(
     // configuration bug and must surface early: reject anything that is not
     // exactly AES_KEY_SIZE, symmetric with the keyLen < AES_KEY_SIZE guard.
     if (!plaintext || plaintextLen == 0 || !key || keyLen != AES_KEY_SIZE) return {};
+
+    // Nonce-reuse detection (optional, on by default): an (AES key, nonce) pair
+    // used before for encryption under the same key is rejected here, before any
+    // ciphertext is produced. This is a fail-closed guard -- silently accepting a
+    // reuse would compromise GCM-unique-keystream guarantees. Scoped per
+    // (key, nonce): the same nonce under a different key is not reuse and passes.
+    if (nonceDetectionFlag() && (nonce == nullptr || nonceReuseCheckAndRecord(key, nonce))) {
+        return {};
+    }
+
 
 #ifdef _WIN32
     try {
@@ -292,12 +358,14 @@ void CryptoEngine::generateNonce(uint8_t* nonce, size_t nonceLen)
     // Nonce uniqueness contract: nonces are drawn from a CSPRNG
     // (BCryptGenRandom / RAND_bytes). For AES_GCM_NONCE_SIZE (96 bits) uniform
     // random nonces, accidental collision probability is negligible (< 2^-48 at
-    // billions of messages), so we do NOT maintain a reuse-detection registry:
-    // tracking every generated nonce would cost unbounded memory for essentially
-    // no practical benefit. Callers generating nonces in a deterministic or
-    // externally-controlled context (e.g. the index nonce derived from CARC
-    // version, or a nonce synthesized from a counter) remain responsible for
-    // guaranteeing uniqueness of nonces used under the same key.
+    // billions of messages), so generateNonce() itself does not consult a
+    // registry. A bounded, per-(key,nonce) reuse-detection registry IS kept on
+    // encrypt() as a cheap fail-closed backstop (see nonceReuseCheckAndRecord;
+    // on by default, bounded to 1024 entries). Callers generating nonces in a
+    // deterministic or externally-controlled context (e.g. the index nonce
+    // derived from CARC version, or a nonce synthesized from a counter) remain
+    // responsible for guaranteeing uniqueness of nonces used under the same key
+    // -- the registry detects accidental reuse but is not a uniqueness oracle.
 #ifdef _WIN32
     if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, (ULONG)nonceLen, BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
         throw std::runtime_error("BCryptGenRandom failed for nonce");
@@ -358,6 +426,18 @@ bool CryptoEngine::writePrivateKey(const std::string& path, const uint8_t* key, 
     if (!f) return false;
     f.write(reinterpret_cast<const char*>(key), (std::streamsize)keyLen);
     return f.good();
+}
+// ==========================================================================
+// Nonce-reuse detection registry control
+// ==========================================================================
+void CryptoEngine::setNonceReuseDetection(bool enabled) {
+    std::lock_guard<std::mutex> guard(nonceRegistryMutex());
+    nonceDetectionFlag() = enabled;
+    if (!enabled) nonceRegistry().clear();
+}
+
+bool CryptoEngine::nonceReuseDetectionEnabled() {
+    return nonceDetectionFlag();
 }
 
 // ==========================================================================

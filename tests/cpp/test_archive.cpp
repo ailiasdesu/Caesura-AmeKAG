@@ -818,6 +818,106 @@ TEST_CASE("Crypto G11: three-round round-trip with isolated keys is exact") {
     }
 }
 
+
+// --- Nonce-reuse detection registry (round 88 / round 104 adjudication) ---
+
+TEST_CASE("Crypto: nonce reuse under the same key is rejected, fresh nonce passes") {
+    // The registry is process-scoped and on by default. Ensure it is active.
+    Caesura::carc::CryptoEngine::setNonceReuseDetection(true);
+
+    Caesura::carc::CryptoEngine crypto;
+    uint8_t key[32] = {0};
+    for (int i = 0; i < 32; ++i) key[i] = static_cast<uint8_t>(0xA0 + i % 16);
+
+    const char* msg = "nonce-reuse detection payload";
+    const uint8_t* m = reinterpret_cast<const uint8_t*>(msg);
+    const size_t mLen = std::strlen(msg);
+
+    // First use of (key, nonceA) encrypts normally.
+    uint8_t nonceA[12] = {0,1,2,3,4,5,6,7,8,9,10,11};
+    uint8_t tagA[16];
+    auto first = crypto.encrypt(m, mLen, key, sizeof(key), nonceA, sizeof(nonceA), tagA, sizeof(tagA));
+    REQUIRE_FALSE(first.empty());
+    REQUIRE_FALSE(crypto.decrypt(first.data(), first.size(), key, sizeof(key),
+                                 nonceA, sizeof(nonceA), tagA, sizeof(tagA)).empty());
+
+    // Reusing the exact same (key, nonceA) must be REJECTED (empty output).
+    uint8_t tagReuse[16];
+    auto reused = crypto.encrypt(m, mLen, key, sizeof(key), nonceA, sizeof(nonceA), tagReuse, sizeof(tagReuse));
+    CHECK(reused.empty());
+
+    // A fresh nonce under the same key is not reuse and succeeds.
+    uint8_t nonceB[12] = {20,21,22,23,24,25,26,27,28,29,30,31};
+    uint8_t tagB[16];
+    auto fresh = crypto.encrypt(m, mLen, key, sizeof(key), nonceB, sizeof(nonceB), tagB, sizeof(tagB));
+    REQUIRE_FALSE(fresh.empty());
+
+    // The same nonce (nonceA) under a DIFFERENT key is not reuse and succeeds.
+    uint8_t key2[32] = {0};
+    for (int i = 0; i < 32; ++i) key2[i] = static_cast<uint8_t>(0xE0 + i % 16);
+    uint8_t tagDiff[16];
+    auto diffKey = crypto.encrypt(m, mLen, key2, sizeof(key2), nonceA, sizeof(nonceA), tagDiff, sizeof(tagDiff));
+    REQUIRE_FALSE(diffKey.empty());
+}
+
+TEST_CASE("Crypto: nonce-reuse detection can be disabled (opt-out)") {
+    // Save the default so this test never leaks state to the rest of the suite.
+    const bool wasEnabled = Caesura::carc::CryptoEngine::nonceReuseDetectionEnabled();
+    Caesura::carc::CryptoEngine::setNonceReuseDetection(false);
+
+    Caesura::carc::CryptoEngine crypto;
+    uint8_t key[32] = {0};
+    for (int i = 0; i < 32; ++i) key[i] = static_cast<uint8_t>(0xB0 + i % 16);
+    uint8_t nonce[12] = {40,41,42,43,44,45,46,47,48,49,50,51};
+    const char* msg = "opt-out reuse should be permitted";
+    const uint8_t* m = reinterpret_cast<const uint8_t*>(msg);
+    const size_t mLen = std::strlen(msg);
+
+    uint8_t t1[16], t2[16];
+    auto first = crypto.encrypt(m, mLen, key, sizeof(key), nonce, sizeof(nonce), t1, sizeof(t1));
+    REQUIRE_FALSE(first.empty());
+    // With detection disabled, the same (key, nonce) is allowed again.
+    auto second = crypto.encrypt(m, mLen, key, sizeof(key), nonce, sizeof(nonce), t2, sizeof(t2));
+    REQUIRE_FALSE(second.empty());
+
+    // Restore the prior state for subsequent tests.
+    Caesura::carc::CryptoEngine::setNonceReuseDetection(wasEnabled);
+    CHECK(Caesura::carc::CryptoEngine::nonceReuseDetectionEnabled() == wasEnabled);
+}
+
+// --- Nonce-reuse detection: CARC normal write path is unaffected -----------
+TEST_CASE("CARC: multi-archive write still succeeds with nonce-reuse detection on") {
+    // Two consecutive archives in the same process must both finalize cleanly
+    // with the (default-on) nonce-reuse registry active -- the per-file nonces
+    // are CSPRNG and the per-archive index key is keyed from each archive's own
+    // freshly generated public key, so no (key, nonce) pair repeats across
+    // archives. This guards against a regression that would break the writer.
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_nonce_multi");
+    const bool wasEnabled = Caesura::carc::CryptoEngine::nonceReuseDetectionEnabled();
+    Caesura::carc::CryptoEngine::setNonceReuseDetection(true);
+
+    for (int i = 0; i < 2; ++i) {
+        const fs::path arc = temp.path() / ("a" + std::to_string(i) + ".carc");
+        {
+            Caesura::carc::CARCWriter writer;
+            REQUIRE(writer.create(arc.string()));
+            REQUIRE(writer.addFile("f.txt", reinterpret_cast<const uint8_t*>("hi"), 2));
+            REQUIRE(writer.addFile("g.txt", reinterpret_cast<const uint8_t*>("there"), 5));
+            REQUIRE(writer.finalize());
+        }
+        Caesura::carc::CARCReader reader;
+        REQUIRE(reader.open(arc.string()));
+        CHECK(reader.numFiles() == 2);
+        auto got = reader.readFile("f.txt");
+        REQUIRE_FALSE(got.empty());
+        CHECK(std::memcmp(got.data(), "hi", 2) == 0);
+    }
+
+    Caesura::carc::CryptoEngine::setNonceReuseDetection(wasEnabled);
+}
+
+
 // --- DeltaCARC: apply rejects tampered / truncated / missing ---
 
 TEST_CASE("DeltaCARC G11: apply rejects body-tampered and truncated deltas") {
@@ -866,4 +966,3 @@ TEST_CASE("DeltaCARC G11: apply rejects body-tampered and truncated deltas") {
     REQUIRE(applied.open(out.string()));
     CHECK(readText(applied, "a.txt") == "two");
 }
-

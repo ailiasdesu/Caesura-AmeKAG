@@ -47,6 +47,18 @@ public:
     bool writePublicKey(const std::string& path, const uint8_t* key, size_t keyLen) override;
     bool writePrivateKey(const std::string& path, const uint8_t* key, size_t keyLen) override;
 
+    // --- Optional nonce-reuse detection registry ---
+    // A bounded, process-scoped registry of (AES key, nonce) pairs already used
+    // for encryption. On encrypt(), a (key, nonce) pair seen before is a GCM
+    // nonce-reuse (a security defect that leaks keystream) and is REJECTED
+    // (returns an empty ciphertext). Scoped by key+nonce, not nonce alone, so
+    // the same nonce under a different key is allowed (that is not reuse).
+    // Bounded to kNonceReuseHistory entries (~45 KB) so memory stays low.
+    // Enabled by default; opt out only for callers with their own uniqueness
+    // guarantee under a fixed key (e.g. a counter-based nonce) via the toggle.
+    static void setNonceReuseDetection(bool enabled);
+    static bool nonceReuseDetectionEnabled();
+
     // --- Static wrappers (backward compat for internal archive code) ---
     static std::vector<uint8_t> encrypt(
         const uint8_t* plaintext, size_t plaintextLen,
