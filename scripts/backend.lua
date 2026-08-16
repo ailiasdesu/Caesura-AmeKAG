@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) -- backend.lua
 --  Spec [0.4]: Unified C++ backend proxy.
 --  Resolution order: 1. _CAESURA_BACKEND  2. direct KAG/Render/DevCore
@@ -226,6 +226,41 @@ function Backend.set_color_filter(preset)
     else return false end
 end
 
+
+-- Post-expression chain (round 102): full-screen PostFx effects.
+-- kind: "bloom" | "vignette" | "lut" | "softblur"; params table carries
+--   strength / radius / amount / rgb / lutMix (defaults filled in C++).
+-- Returns the effect handle (0 when unsupported / headless no-op).
+function Backend.set_postfx(kind, params)
+    local be = get_backend()
+    params = params or {}
+    if be then return be.render("set_postfx", kind, params)
+    else return 0 end
+end
+
+function Backend.destroy_postfx(kind)
+    local be = get_backend()
+    if be then return be.render("destroy_postfx", kind)
+    else return false end
+end
+
+function Backend.clear_postfx()
+    local be = get_backend()
+    if be then return be.render("clear_postfx")
+    else return false end
+end
+
+function Backend.is_postfx_supported(kind)
+    local be = get_backend()
+    if be then return be.render("is_postfx_supported", kind)
+    else return false end
+end
+
+function Backend.is_postfx_active()
+    local be = get_backend()
+    if be then return be.render("is_postfx_active")
+    else return false end
+end
 function Backend.submit_stretch_blt(dst_rt, dst_rect, src_rt, src_rect, filter_id)
     local be = get_backend()
     if be then return be.render("submit_stretch_blt", dst_rt, dst_rect, src_rt, src_rect, filter_id)

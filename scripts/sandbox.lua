@@ -278,6 +278,11 @@ local RENDER_WHITELIST = {
     submit_stretch_blt  = true,
     submit_affine_blt   = true,
     set_color_filter    = true,  -- accessibility filter presets
+    set_postfx          = true,  -- PostFx chain (bloom/vignette/lut/softblur)
+    destroy_postfx      = true,
+    clear_postfx        = true,
+    is_postfx_supported = true,
+    is_postfx_active    = true,
     -- Text rendering state (font face/size/color)
     text_set_font       = true,
     text_reset_state    = true,

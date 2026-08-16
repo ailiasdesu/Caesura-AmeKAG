@@ -69,7 +69,103 @@ schema.define("particles", {
     alpha = { type = "number", default = 1, min = 0, max = 255 },
 })
 
+
+-- [vfx] wrapper contract (round 102). NOTE: this schema is VALIDATION-ONLY
+-- (no defaults on shared fields) so migrating [vfx] never changes legacy
+-- effect behavior: the handlers resolve <name> or <alias> or <literal>
+-- fallbacks from nil params, and filling in a default for one shared name
+-- (e.g. strength used by both blur and the postfx chain, amplitude vs
+-- intensity) would silently alter existing scripts. postfx is an enum
+-- (choices validated by ks_check/LSP) and the numeric clamps apply.
+schema.define("vfx", {
+    _meta = { category = "vfx", blocking = false,
+        desc = "GPU visual effects: particles, quake/shake/flash/fade/blur, and PostFx chain (postfx=)" },
+    type       = { type = "string" },
+    effect     = { type = "string" }, -- legacy alias of type
+    action     = { type = "string" },
+    direction  = { type = "string" },
+    layer      = { type = "string" },
+    color      = { type = "string" },
+    rgb        = { type = "string" },  -- "r,g,b" (0..255 each)
+    -- PostFx chain (round 102): kind choices + numeric clamps.
+    postfx   = { type = "enum", values = {
+        ["bloom"] = true, ["vignette"] = true, ["lut"] = true,
+        ["softblur"] = true, ["none"] = true,
+    } },
+    strength = { type = "number", min = 0, max = 255 }, -- postfx 0..1 / blur px
+    radius   = { type = "number", min = 0, max = 64 },
+    amount   = { type = "number", min = 0, max = 1 },
+    lutMix   = { type = "number", min = 0, max = 1 },
+    -- Legacy effect params (typed + clamped; no defaults -- see above)
+    time       = { type = "number", min = 0, max = 30000 },
+    intensity  = { type = "number", min = 0, max = 50 },
+    frequency  = { type = "number", min = 1, max = 120 },
+    amplitude  = { type = "number", min = 0, max = 100 },
+    amplitudex = { type = "number", min = 0, max = 200 },
+    amplitudey = { type = "number", min = 0, max = 200 },
+    power      = { type = "number", min = 0, max = 200 },
+    decay      = { type = "boolean" },
+    opacity    = { type = "number", min = 0, max = 1 },
+    r = { type = "number", min = 0, max = 255 },
+    g = { type = "number", min = 0, max = 255 },
+    b = { type = "number", min = 0, max = 255 },
+    red  = { type = "number", min = 0, max = 255 },
+    green= { type = "number", min = 0, max = 255 },
+    blue = { type = "number", min = 0, max = 255 },
+    blurlevel = { type = "number", min = 0, max = 64 },
+    x = { type = "number" },
+    y = { type = "number" },
+    rate    = { type = "number", min = 0, max = 1000 },
+    speed   = { type = "number", min = 0, max = 10000 },
+    emitter = { type = "number" },
+    count   = { type = "number", min = 0, max = 100000 },
+    lifeMin  = { type = "number", min = 0, max = 60 },
+    life_max = { type = "number", min = 0, max = 60 },
+    lifeMax  = { type = "number", min = 0, max = 60 },
+    speedMin = { type = "number", min = 0, max = 10000 },
+    speed_max= { type = "number", min = 0, max = 10000 },
+    speedMax = { type = "number", min = 0, max = 10000 },
+    sizeMin  = { type = "number", min = 0, max = 512 },
+    size_max = { type = "number", min = 0, max = 512 },
+    sizeMax  = { type = "number", min = 0, max = 512 },
+    angleMin = { type = "number" },
+    angle_max= { type = "number" },
+    angleMax = { type = "number" },
+    gravityX = { type = "number" },
+    gravityY = { type = "number" },
+    gravity_x = { type = "number" },
+    gravity_y = { type = "number" },
+});
+
+-- Route [vfx postfx=...] to the C++ PostFx chain. Headless / Null devices
+-- report is_postfx_supported=false -> no-op (graceful degradation, matching
+-- the legacy submitVFX path). postfx="none" clears the whole chain.
+function VFXCommands._postfx(ctx, params)
+    local kind = params.postfx or ""
+    if kind == "none" or kind == "" then
+        backend.clear_postfx()
+        return
+    end
+    if not backend.is_postfx_supported(kind) then
+        print("[vfx] postfx '" .. kind .. "' unsupported on this device -- no-op")
+        return
+    end
+    local pf = {
+        strength = params.strength or 1.0,
+        radius   = params.radius or 0,
+        amount   = params.amount or 0,
+        lutMix   = params.lutMix or 0,
+        rgb      = params.rgb or "",
+    }
+    backend.set_postfx(kind, pf)
+end
+
 function VFXCommands.vfx(ctx, params)
+    -- PostFx chain takes precedence when postfx= is present.
+    if params.postfx and params.postfx ~= "" then
+        VFXCommands._postfx(ctx, params)
+        return
+    end
     local vtype = params.type or params.effect or "particle"
 
     -- ── Particle effects ────────────────────────────────────────────────
