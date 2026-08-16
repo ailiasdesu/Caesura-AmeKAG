@@ -133,7 +133,7 @@
 - **ctest**：headless_http_smoke / headless_rpc_smoke / LSP 冒烟等（AI smoke 跳过）。
 - **Web/Editor 分文件**：web/ vitest + flow + sweep；editor/ tsc + vitest；产物 editor/dist、web/dist 不入库。
 - **覆盖守卫**：check_test_coverage.py（Lua 128+C++ 65 注册校验、编辑器命令漂移、no-register-fail）。
-- **CI 三平台**：.github/workflows/ci.yml —— Windows D+R / macOS / Linux（SDL3 从源构建）; round 60 补 Lua 套件步骤，round 67 fresh docs 守卫，round 93 gen-index --check 三平台守卫，round 100 统一 push + 一次三平台 CI（**TODO** 主代理确认 round 100 CI 结果）。
+- **CI 三平台**：.github/workflows/ci.yml —— Windows D+R / macOS / Linux（SDL3 从源构建）; round 60 补 Lua 套件步骤，round 67 fresh docs 守卫，round 93 gen-index --check 三平台守卫，round 100 统一 push 后三平台 CI 全绿（run 31944039999 success）。
 - **保鲜守卫**：Generated docs freshness（重生成 + git diff --exit-code）、gen-index --check。
 
 ---
