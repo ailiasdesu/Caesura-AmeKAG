@@ -33,6 +33,7 @@ local tests = {
     "test_textspeed",
     "test_wait_delay",
     "test_kag3_import_e2e",
+    "test_settings_config_deep",
 }
 
 local passed, failed = 0, 0
