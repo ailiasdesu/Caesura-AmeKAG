@@ -59,6 +59,12 @@ reset_dir(TMP_IN)
 local f = io.open(TMP_IN .. SEP .. "legacy.ks", "w")
 f:write('[ch text="HP: &f.hp && MP: &mp.mp"]\n[waitse]\n[chara_show name="hero"]\n*start\n[end]\n')
 f:close()
+-- Nested relative path (doc: extract --path restores the original relative
+-- path into a subdirectory). Pack catches both files in one archive.
+if IS_WIN then shell('mkdir "' .. TMP_IN .. SEP .. 'sub' .. '" 2>nul') else shell('mkdir -p "' .. TMP_IN .. '/sub"') end
+local nf = io.open(TMP_IN .. SEP .. "sub" .. SEP .. "nested.ks", "w")
+nf:write('[ch text="nested"]\n[end]\n')
+nf:close()
 shell(EXE .. ' "' .. TMP_IN .. '" "' .. TMP_CARC .. '" ' .. REDIR)
 local carcExists = io.open(TMP_CARC, "r") ~= nil
 check("carc_pack creates archive", carcExists)
@@ -72,6 +78,15 @@ local lf = io.open("tmp" .. SEP .. "carc_list.txt", "r")
 local listContent = lf and lf:read("*a") or ""
 if lf then lf:close() end
 check("list prints entries", listContent:find("%x%x%x%x", 1) ~= nil)
+-- The tool prints the 32-byte path hash as 64 hex chars, one per line
+-- (doc: "list 打印归档内文件的路径哈希（每行一个，machine-readable）").
+local hashOk = true
+for line in (listContent .. "\n"):gmatch("([^\r\n]*)\n") do
+    if line ~= "" and not (#line == 64 and line:match("^%x+$")) then
+        hashOk = false
+    end
+end
+check("list lines are 64-hex path hashes", hashOk)
 
 -- ---------------------------------------------------------------------------
 -- 3. extract --path restores the scene
@@ -119,15 +134,52 @@ if pf then
 end
 check("full extract yields files", fullCount >= 1)
 
+-- ---------------------------------------------------------------------------
+-- 6. extract --path restores a nested relative path into a subdirectory
+--    (doc: "提取单个文件到原始相对路径（需 --path 指定已知路径）")
+-- ---------------------------------------------------------------------------
+reset_dir("tmp" .. SEP .. "carc_test_nested")
+shell(EXE .. ' extract "' .. TMP_CARC .. '" "tmp' .. SEP
+    .. 'carc_test_nested" --path "sub/nested.ks" ' .. REDIR)
+local nef = io.open("tmp" .. SEP .. "carc_test_nested" .. SEP .. "sub" .. SEP .. "nested.ks", "r")
+local nestedContent = nef and nef:read("*a") or ""
+if nef then nef:close() end
+check("extract --path restores nested relative path",
+      nestedContent:find("nested", 1, true) ~= nil)
+
+-- ---------------------------------------------------------------------------
+-- 7. extract --path with an unknown relative path is rejected (no file written)
+-- ---------------------------------------------------------------------------
+local before = ""
+local pf2 = io.popen((IS_WIN and 'dir /b "tmp' .. SEP .. 'carc_test_nested" 2>nul'
+    or 'ls -1 "tmp' .. SEP .. 'carc_test_nested" 2>/dev/null'))
+if pf2 then
+    before = pf2:read("*a") or ""
+    pf2:close()
+end
+shell(EXE .. ' extract "' .. TMP_CARC .. '" "tmp' .. SEP
+    .. 'carc_test_nested" --path "does_not_exist.ks" ' .. REDIR)
+local after = ""
+local pf3 = io.popen((IS_WIN and 'dir /b "tmp' .. SEP .. 'carc_test_nested" 2>nul'
+    or 'ls -1 "tmp' .. SEP .. 'carc_test_nested" 2>/dev/null'))
+if pf3 then
+    after = pf3:read("*a") or ""
+    pf3:close()
+end
+check("extract --path unknown path writes nothing", before == after)
+os.remove("tmp" .. SEP .. "carc_test_nested" .. SEP .. "sub" .. SEP .. "nested.ks")
+
 -- cleanup
 if IS_WIN then
     shell('rmdir /s /q "' .. TMP_IN .. '" 2>nul')
     shell('rmdir /s /q "' .. TMP_OUT .. '" 2>nul')
     shell('rmdir /s /q "tmp' .. SEP .. 'carc_test_full" 2>nul')
+    shell('rmdir /s /q "tmp' .. SEP .. 'carc_test_nested" 2>nul')
 else
     shell('rm -rf "' .. TMP_IN .. '"')
     shell('rm -rf "' .. TMP_OUT .. '"')
     shell('rm -rf "tmp' .. SEP .. 'carc_test_full"')
+    shell('rm -rf "tmp' .. SEP .. 'carc_test_nested"')
 end
 os.remove(TMP_CARC)
 os.remove("tmp" .. SEP .. "carc_list.txt")

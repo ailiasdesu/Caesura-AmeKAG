@@ -49,6 +49,11 @@
   （round-75 起改为**基于拼接深度**——嵌套拼接栈 >100 才报错，替换旧的累计调用计数上限，
   顺序调用 1000+/大循环不再被误判为自递归）。
 - **存档安全**：AES-256-GCM 加密 + 槽位路径包含校验 + schema 迁移。
+  - 加密布局：文件前缀魔数 `CAES`（4B）+ nonce（12B）+ GCM tag（16B）+ ciphertext
+    （`src/storage/SaveManager.cpp`）；设置加密密钥 `set_encryption_key` 后读写自动
+    加密/解密，密钥未设或数据不以 `CAES` 开头则按明文往返（跨版本兼容）。
+  - schema 迁移链：`v1→v2`(playtime)→`v3`(minigame)→`v4`(live2d)→`v5`(editor)，
+    读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`）。
 - **测试基线（round-88 审计口径）**：C++ doctest `816/816` 用例
   （`6117` 断言）/ Lua 主套件 `124/124` + 孤儿 `18/18` / web `175/175` /
   editor `368/368` / ctest `10/10`（+AI smoke 跳过）/ 耦合检查

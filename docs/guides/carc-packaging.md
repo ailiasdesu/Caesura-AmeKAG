@@ -4,9 +4,10 @@
 
 CARC (Caesura ARChive) 是 Caesura (AmeKAG) 引擎的加密压缩归档格式。它用于将游戏资源打包为单个文件，支持：
 
-- **AES-256-GCM 加密**: 可选的文件级加密，保护游戏资源
-- **zstd 压缩**: 高效的字典式压缩，平衡速度与压缩率
-- **Ed25519 签名**: 可选的数字签名，防止资源篡改
+- **AES-256-GCM 加密**: 每个文件独立生成 32 字节 AES 密钥 + 12 字节 nonce
+  加密，**始终启用**（归档整体即加密+压缩形态，无明文模式）
+- **zstd 压缩**: 逐文件 zstd 压缩，平衡速度与压缩率（始终启用）
+- **Ed25519 签名**: 头+内容+索引整体签名，公钥内嵌归档尾部（始终启用）
 
 ## 命令行工具
 
@@ -17,15 +18,14 @@ CARC (Caesura ARChive) 是 Caesura (AmeKAG) 引擎的加密压缩归档格式。
 ```bash
 CARC_PACK=bin/Debug/carc_pack.exe
 
-# 打包（无加密）
+# 打包（每次生成全新密钥对；密钥随归档尾部 + 可选落盘）
 $CARC_PACK ./mygame ./release/game.carc
 
-# 打包 + 生成密钥对（保存公钥/私钥文件）
+# 打包并额外把生成的公钥/私钥写到指定文件
 $CARC_PACK ./mygame ./release/game.carc ./mygame/game.key.pub ./mygame/game.key
+# (若省略密钥路径，公钥仅内嵌归档尾部、私钥不留盘)
 
-# 使用已有密钥打包
-$CARC_PACK ./mygame ./release/game.carc
-# (密钥文件 game.key 和 game.key.pub 需放在工作目录)
+# 注意：不支持复用已有密钥——每次 pack 都会生成新密钥对。
 
 # 列出归档内文件（每行一个路径哈希，供脚本/导入器消费）
 $CARC_PACK list ./release/game.carc [public.key]
@@ -64,29 +64,33 @@ carc_pack.exe extract <archive.carc> <out_dir> [--path <rel>] [public.key]
 
 ```
 ┌─────────────────────────────────────────┐
-│  Header (128 bytes)                     │
-│  ├─ Magic: "CARC" (4 bytes)             │
-│  ├─ Version: uint32                     │
-│  ├─ Compression: enum (zstd=1)          │
-│  ├─ Flags: uint32 (encrypted, signed)   │
-│  └─ Reserved                           │
+│  Header (64 bytes)                      │
+│  ├─ Magic "CARC" (4) / Version u32 (1)  │
+│  ├─ contentOffset u64 (= 64)            │
+│  ├─ contentSize u64 / indexOffset u64   │
+│  ├─ indexSize u64 / numFiles u32        │
+│  └─ reserved[20]                        │
 ├─────────────────────────────────────────┤
-│  Index (加密，如启用)                    │
+│  Content block（逐文件 zstd 压缩 →        │
+│  AES-256-GCM 加密，按条目串行拼接）       │
+├─────────────────────────────────────────┤
+│  Index（始终 AES-256-GCM 加密）           │
 │  ├─ File count: uint32                  │
-│  └─ For each file:                      │
-│      ├─ Path hash: uint64               │
-│      ├─ Offset: uint64                  │
-│      ├─ Size: uint64                    │
-│      └─ Original size: uint64           │
+│  ├─ FileEntry × N（每条 116 bytes）      │
+│  │    pathHash[32]  offset u64          │
+│  │    compressedSize u64  originalSize  │
+│  │    aesKey[32]  nonce[12]  tag[16]    │
+│  └─ append 16-byte AES-GCM tag          │
+│  索引密钥 = SHA-256(归档公钥 32B)；       │
+│  nonce = CARC 版本号（4B 零填充）         │
 ├─────────────────────────────────────────┤
-│  Body (加密+压缩，如启用)                │
-│  └─ zstd 压缩的数据块                    │
-├─────────────────────────────────────────┤
-│  Footer (128 bytes)                     │
+│  Trailer (96 bytes)                     │
 │  ├─ Ed25519 Signature (64 bytes)        │
-│  ├─ Public Key (32 bytes)               │
-│  └─ Reserved                           │
+│  └─ Public Key (32 bytes)               │
 └─────────────────────────────────────────┘
+> 归档**始终**加密+压缩+签名（无明文/未签名模式）。每个文件由自己的
+> aesKey/nonce/tag 加密；`list` 仅输出 `pathHash` 的 64 位十六进制
+> （原始相对路径不落盘，`extract --path <rel>` 才能还原真实文件名）。
 ```
 
 ## 在 KAG 脚本中使用
@@ -134,6 +138,7 @@ void registerDefaultAssetProviders(AssetManager& assetManager) {
 2. **公钥嵌入引擎** — 运行时验证签名使用
 3. **AES-256-GCM 提供认证加密** — 同时保护机密性和完整性
 4. **Ed25519 签名在加密之上** — 防止恶意资源替换
+5. **nonce 复用检测（默认开启）** — CryptoEngine 按 (AES key, nonce) 键界维护一个**有界**（1024 条，约 45 KB）进程级复用注册表。encrypt() 以同一 (key, nonce) 加密两次会在第二次**拒绝产出密文**（返回空），fail-closed 地避免 GCM 重放 keystream 泄露。注册表按 (key, nonce) **成对**键界，因此同一 nonce 在不同 key 下使用（安全语义）不会被误判。generateNonce() 使用 CSPRNG（96-bit 碰撞概率 < 2^-48），正常打包路径不会触注册表；仅当调用方在固定 key 下以确定性/计数器方式生成 nonce 时，可调用 CryptoEngine::setNonceReuseDetection(false) 关闭检测（默认开启）。
 
 ## 常见问题
 
@@ -144,4 +149,4 @@ A: 检查是否包含了不应打包的文件（如 `.git/`, `.DS_Store`）。�
 A: 公钥不匹配或归档文件被修改。确认使用的公钥与打包时的私钥配对。
 
 **Q: 能否增量更新 CARC？**
-A: 当前不支持增量更新。引擎侧 `DeltaCARC`（`src/archive/DeltaCARC.*`）差异更新实现已完成（文件级 diff，AES-256-GCM 加密整条 delta，按源/目标 SHA 绑定验证），但**尚未接入组合根或 `carc_pack` 命令行工具**——需额外集成方可在实际流程中使用。
+A: 当前不支持增量更新。引擎侧 `DeltaCARC`（`src/archive/DeltaCARC.*`）差异更新实现已完成（文件级 diff，AES-256-GCM 加密整条 delta，按源/目标 SHA 绑定验证）——**截至 round-99 复核，仍仅作为库存在于 archive 模块（`src/entry/Engine_Assets.cpp` 组合根只注册 `CarcAssetProvider`，`carc_pack` 也未暴露 DeltaCARC 子命令）**，需额外集成方可在实际流程中使用。

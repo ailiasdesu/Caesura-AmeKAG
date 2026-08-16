@@ -97,9 +97,9 @@
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| **CARCWriter addFile 不去重** | 待评估（round 88 记录） | 按 pathHash 全字节比较、重复键更新既有条目（幂等语义与 reader 后写覆盖对齐，numFiles=唯一路径数）；非缺陷但需文档明确 |
-| **48B 密钥容忍** | 设计决策（round 88 记录） | CryptoEngine keyLen 严格拒绝 ≠32；16B 拒 / 48B 拒对称 |
-| **nonce 复用无检测** | 设计取舍（round 88 记录） | nonce 文档化"调用方负责唯一性"；CSPRNG 96-bit 碰撞 <2⁻⁴⁸，加注册表无收益 |
+| **CARCWriter addFile 不去重** | 已落地（round 88） | 幂等 update：重复键更新既有条目（last-write-wins），numFiles=唯一路径数；`CARCWriter::addFile`/`addFileByHash` + reader 后写覆盖对齐；测试 `CARC G11: duplicate path keys` 覆盖 |
+| **48B 密钥容忍** | 已落地（round 88） | CryptoEngine `encrypt`/`decrypt` 严格拒绝 `keyLen != 32`（16B/48B 对称全拒）；测试 `Crypto G11: non-256-bit key lengths` 覆盖 |
+| **nonce 复用无检测** | 已落地（round 104，本任务） | CryptoEngine 增加**默认开启**的有界 (key, nonce) 复用注册表（1024 条 ~45KB，进程级 + mutex），encrypt 复用即拒绝（返回空，fail-closed）；decrypt 不检测（读取合法）；`setNonceReuseDetection(bool)` 可选关闭；测试 +3、文档同步 |
 | **settings 语言默认差异** | 记录（设计取舍） | web settings 语言默认与桌面行为差异（round 98 parity 测试锁定双端 mapping 同一代码，但默认值语义可能不同）；settings.reset 不写 localStorage（round 95 设计取舍） |
 | **宏系统两缺陷** | 待修 | _macroExpansions 只增不重置致 1000 误报；宏体内嵌宏定义收集残缺（round 99 裁决全局宏共享语义，但两缺陷本体未改） |
 | **kag3_import 宏体参 &who 不转 %who%** | 记录 | convertMacroArgs 仅应用裸文本行，宏体命令参数 &who 不转 %who%（round 96 记录） |
