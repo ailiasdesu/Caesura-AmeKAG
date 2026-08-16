@@ -24,6 +24,7 @@ pcall(require, "kag.commands.layer")
 pcall(require, "kag.commands.vfx")
 pcall(require, "kag.commands.video")
 pcall(require, "kag.commands.save")
+pcall(require, "kag.commands.tween")
 pcall(require, "kag")
 
 -- The kag command table (handlers) -- used for the unknown-command audit.
