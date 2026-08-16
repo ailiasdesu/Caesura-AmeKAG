@@ -625,6 +625,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
             result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           frames = frames + 1
+          -- Perf-trace hook (round 109): when the caller sets PERF_TRACE=true
+          -- the benchmark can read the exact frame count afterwards. Gated so
+          -- the normal path costs one nil-test per frame (no global write).
+          if __PERF_TRACE == true then _G.__FRAME_COUNT = frames end
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) .. ':' .. tostring((ctx.tokens and ctx.tokens[ctx.token_index] and (ctx.tokens[ctx.token_index].cmd or ctx.tokens[ctx.token_index].type)) or '?') break end
           if ctx.waiting_input then
             -- Skip mode (round 87 UX): reveal the page instantly and advance
@@ -1015,6 +1019,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
 result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
           end
           frames = frames + 1
+          if __PERF_TRACE == true then _G.__FRAME_COUNT = frames end
           if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
           if ctx.waiting_input then
             -- Skip mode (round 87 UX): reveal the page instantly and advance

@@ -609,3 +609,71 @@ frame_bench/benchmark 等），但**缺「大型游戏资产」维度的压力�
 - **套件规模**：新增 1 个 Lua 测试文件，不影响 C++/web/editor 套件；全量 Lua 套件仍全绿
   （131/131）。
 - 本文档更新为纯测量 + 新增测试文件，无引擎生产源代码变更。
+---
+# round 109：Web 播放器性能基线（wasmoon 大场景基准）
+
+## 触发背景
+
+前沿基线（round 66-101）覆盖引擎侧 Lua/C++ 热路径（tokenizer/scheduler/expr/render/
+资源压测），但 **web 播放器（wasmoon）本身没有独立的帧/内存基线**。round 101 前后示例游戏
+《单程回信》（demo/example_game/story.ks，446 行三结局）已双端验证；story.bundle.sweep.test.js
+（round 90/94/95 建立）负责一致性守卫。本轮为 web 播放器建立**首个性能基线**：大场景下
+帧吞吐（scheduler tick/ms）、token 吞吐（tokens/ms）、Lua 堆增长（collectgarbage 前后差），
+并如实记录 wasmoon 单线程/内存窗口限制。
+
+> 度量口径：headless jsdom + wasmoon；bridge.js 把整场一次性跑为**同步 lua.doString**，
+> 其外的 wall-clock 即真实调度时间。bridge.js round-109 钩子在 __PERF_TRACE 下把帧计数
+> 写入 _G.__FRAME_COUNT（默认关闭、正常路径仅一次 nil 判断，零写入）。内存采用 round 101
+> 手法：collectgarbage("collect")×3 后 collectgarbage("count")（KB）前后差——反映 wasmoon
+> Emscripten 线性内存里 Lua 自管堆（表+字符串）。
+
+## 新增守卫与实测基线（web/perf-baseline.test.js，6 断言；本机采样）
+
+| 指标 | 场景 | 实测 | 预算 | 余量 |
+|---|---|---|---|---|
+| 帧吞吐 story.ks 主路径 | 446 行三结局示例游戏（autoClick 走首分支→zero_hour 结局） | **2.75 frames/ms**（2607 帧 / 949ms） | >1.3 frames/ms | ~2.1x |
+| token 吞吐 story.ks | 同上（DONE:331:26 → 331 token） | **0.35 tok/ms** | >0.15 tok/ms | ~2.3x |
+| 内存增长 story.ks | 同上（save/load + ending + gallery 解锁） | **383.2 KB** | <1024 KB | ~2.7x |
+| 帧吞吐 合成 1000 行 | 内存合成 [ch][p] 大场景（3000 token） | **5.87 frames/ms**（4001 帧 / 682ms） | >2.5 frames/ms | ~2.3x |
+| 内存增长 合成 1000 行 | 同上 | **621.6 KB** | <2048 KB | ~3.3x |
+| 规模化线性 | 2000 行（6000 token）vs 1000 行 | 1383ms vs 682ms（**2.03x**） | wall2000 < 2.5x wall1000 | 线性不爆炸 |
+
+> 对比：**tutorial_13_commands.ks**（7642 字节，bundle 内最大 tutorial，70 token/113 帧/27.5ms，
+> 帧吞吐 **4.11 frames/ms**）——示例游戏 story.ks 帧吞吐（2.75）明显低于纯叙述/命令 tutorial（4.11），
+> 因其含分支 [sel]、[save]/[load]、transition、delay，单 token 单位工作量更大；合成叙述流
+> 最高（5.87）。三者同一起点、同一 player 顺序测量，相对关系稳定。
+
+## 计数断言（确定性）
+
+- story.ks 主路径 DONE:331:26（331 token / 26 click），零 error 事件，__FRAME_COUNT>100（钩子确实触发）。
+- 合成 1000 行 token == 3000（1000 对 [ch]+[p]，各约 3 token），全部 DONE。
+- 合成 2000 行 token == 6000；wall 与 1000 行保持 ~2x（2.03x），无超线性退化。
+
+## wasmoon 限制记录（定性观察）
+
+1. **整场同步执行、单线程**：bridge.js 把整场跑成一个 lua.doString，浏览器主线程被整场阻塞
+   （无 rAF 让步）——极长场景会让页面 tab 卡死一小段时间，web 播放器不做增量分帧。
+2. **协作式协程（coroutine）是唯一并发**：场景推进用 Lua coroutine（_G.__CO/_G.__CTXREF 持活），
+   无 worker/多线程；[load]/label/choice 跳转通过 dead-coroutine 重包实现。
+3. **内存窗口 = Lua 自管堆**：collectgarbage("count") 只反映 Lua 堆内表/字符串的 KB；wasmoon 的
+   Emscripten 线性内存扩容、JS 侧用户数据代理不在其内——**无法精确测 wasmoon 进程总内存**，
+   仅能测 Lua 堆相对增长（与 round 101 同类口径）。
+4. **帧非 vsync 帧**：这里的「帧」是 scheduler tick（每 tick coroutine.resume），不是浏览器 rAF
+   渲染帧；桌面版帧率语义不直接可比，本基线锚定 **帧吞吐（tick/ms）与 token 吞吐（tokens/ms）**。
+5. **每场景重建 ctx/协程**：tokenizer.parse 每场景重扫；大场景 token 数线性进 scheduler
+   （round 89 grammar 起空输入零 token，无回归）。
+
+## 结论：web 播放器首个性能基线建立，预算余量充足
+
+- **守卫全绿**：web/perf-baseline.test.js 6/6 PASS。预算一律按实测**反推留 ~2x 余量**（最紧为
+  story.ks 内存增长 2.7x 余量；规模化线性 2.5x 门内不误伤）。
+- **无逼近**：无任何预算余量 <20%；story.ks 主路径帧吞吐 2.75 frames/ms 是分支型真实游戏的
+  有代表性下限，合成 1000 行大场景 5.87 frames/ms 是该框架大线性场景上限形态。
+- **bridge.js 改动**：新增 __PERF_TRACE/_G.__FRAME_COUNT 可选帧计数钩子（runScene 与
+  runFromBundle 两处帧环各 3 行），默认关闭零开销，不影响既有 web tests（下述验证）。
+
+## 验证
+
+- cd web && npx vitest run perf-baseline.test.js：6/6 全绿（本机约 5.6s）。
+- 既有 web 套件全量无回归（bridge.js 钩子默认关闭）。
+- 本文档追加 round 109 段，纯测量 + 新增测试文件 + 3 行可选钩子，无引擎生产源代码变更。
