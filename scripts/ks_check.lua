@@ -339,7 +339,7 @@ local COND_EXP = { ["if"] = true, ["while"] = true, ["until"] = true }
 -- (j) commands whose target may reference a *label in the current scene.
 --     Includes [sel]/[select] (choice navigation jumps to a target label).
 local NAV_LABEL_REF = {}
-for _, c in ipairs({ "jump", "call", "link", "goto", "sel", "select" }) do
+for _, c in ipairs({ "jump", "call", "link", "goto", "sel", "select", "button" }) do
     NAV_LABEL_REF[c] = true
 end
 
