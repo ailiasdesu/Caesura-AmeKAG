@@ -93,8 +93,8 @@ do
     local ctx = {}
     local params = schema.coerce("csp", { "hero" }, ctx)
     Char.csp(ctx, params)
-    check("csp positional name filled",
-        params.name == nil and params[1] == "hero")
+    check("csp positional name filled (round 97: coerced into out.name)",
+        params.name == "hero" and params[1] == "hero")
     check("csp positional path uses assets/char/hero.png",
         loaded_files[#loaded_files] == "assets/char/hero.png")
 end

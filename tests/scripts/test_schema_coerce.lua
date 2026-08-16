@@ -98,8 +98,8 @@ check("string plain passthrough",
 Schema.define("_cb_file", { f = { type = "file" } })
 check("file valid relative ok",
       (function() local p = Schema.coerce("_cb_file", { f = "assets/bg/x.png" }, {}); return p.f == "assets/bg/x.png" end)())
-check("file empty dropped as absent [FINDING: dead empty-check]",
-      (Schema.coerce("_cb_file", { f = "" }, {})).f == nil)
+check("file empty rejected (round 97: empty-path check live)",
+      not pcall(Schema.coerce, "_cb_file", { f = "" }, {}))
 check("file traversal '..' rejected",
       not pcall(Schema.coerce, "_cb_file", { f = "../evil.png" }, {}))
 check("file 'a../..x' rejected (contains ..)",
@@ -142,8 +142,11 @@ check("required present ok",
       (pcall(Schema.coerce, "_cb_req", { req = "3" }, {})))
 -- default type: emitted as-specified (not re-coerced) [FINDING]
 Schema.define("_cb_deftype", { n = { type = "number", default = "oops" } })
-local pdt = Schema.coerce("_cb_deftype", {}, {})
-check("default wrong type emitted verbatim [FINDING]", pdt.n == "oops")
+check("default wrong type rejected (round 97: coerced through coerceValue)",
+      not pcall(Schema.coerce, "_cb_deftype", {}, {}))
+Schema.define("_cb_defok", { n = { type = "number", default = "42" } })
+check("default string '42' normalized to number 42",
+      (Schema.coerce("_cb_defok", {}, {})).n == 42)
 -- empty string counts as absent: default applied, required throws
 local pe = Schema.coerce("_cb_def", { s = "" }, {})
 check("empty string -> default applied", pe.s == "dflt")
@@ -171,8 +174,10 @@ check("string choices MAP valid", (Schema.coerce("_cb_cmap", { m = "a" }, {})).m
 check("string choices MAP invalid rejected",
       not pcall(Schema.coerce, "_cb_cmap", { m = "z" }, {}))
 Schema.define("_cb_carr", { m = { type = "string", choices = { "a", "b" } } })
-check("string choices ARRAY rejects all [FINDING]",
-      not pcall(Schema.coerce, "_cb_carr", { m = "a" }, {}))
+check("string choices ARRAY accepts value (round 97: contains semantics)",
+      (Schema.coerce("_cb_carr", { m = "a" }, {})).m == "a")
+check("string choices ARRAY rejects non-member",
+      not pcall(Schema.coerce, "_cb_carr", { m = "z" }, {}))
 -- clamp boundaries
 check("clamp ==min unclamped", (Schema.coerce("_cb_num", { min0 = "0" }, {})).min0 == 0)
 check("clamp ==max unclamped", (Schema.coerce("_cb_num", { min0 = "10" }, {})).min0 == 10)
@@ -194,9 +199,9 @@ Schema.define("_cb_pos", {
 })
 local pp = Schema.coerce("_cb_pos", { [1] = "Alice" }, {})
 check("positional fills required (no error)", pp[1] == "Alice")
-check("positional name not written to out.name", pp.name == nil)
+check("positional name written to out.name (round 97)", pp.name == "Alice")
 local pp2 = Schema.coerce("_cb_pos", { [1] = "A", [3] = "slot3" }, {})
-check("positional skips default for opt", pp2.opt == nil and pp2[3] == "slot3")
+check("positional overrides default for opt (round 97)", pp2.opt == "slot3" and pp2[3] == "slot3")
 -- positional vs named conflict: named wins for out.name, positional still copied
 local pp3 = Schema.coerce("_cb_pos", { name = "Named", [1] = "Alice" }, {})
 check("named beats positional for out.name", pp3.name == "Named")
@@ -205,14 +210,16 @@ check("positional slot still present", pp3[1] == "Alice")
 check("positional out-of-range + required throws",
       not pcall(Schema.coerce, "_cb_pos", { [9] = "x" }, {}))
 local pp4 = Schema.coerce("_cb_pos", { [1] = "A", [2] = "30", [3] = "c", [4] = "extra" }, {})
-check("optional positional slots absent in out", pp4.opt == nil and pp4.vol == nil)
--- positional numbers are NOT type-coerced (stay raw string at out[N]) [FINDING]
-check("positional numeric value stays uncoerced string [FINDING]",
-      tostring(Schema.coerce("_cb_pos", { [1] = "A", [2] = "30" }, {})[2]) == "30")
--- production: [add f.x 5] positional value not schema-coerced (value.type=number advisory)
+check("positional slots coerced into named keys (round 97)",
+      pp4.vol == 30 and pp4.opt == "c")
+check("extra undeclared positional passes through", pp4[4] == "extra")
+-- positional numbers ARE now type-coerced (round 97)
+check("positional numeric value coerced to number 30",
+      Schema.coerce("_cb_pos", { [1] = "A", [2] = "30" }, {})[2] == 30)
+-- production: [add f.x 5] positional value now schema-coerced to number
 local pm = Schema.coerce("add", { [1] = "f.x", [2] = "5" }, {})
-check("math/add positional number stays string [FINDING]",
-      type(pm[2]) == "string" and pm[2] == "5")
+check("math/add positional number coerced to number (round 97)",
+      type(pm[2]) == "number" and pm[2] == 5)
 
 -- ---------------------------------------------------------------------------
 -- 5. SPECIAL VALUES — empty vs nil vs "0", quoted equals, escapes, dotted keys

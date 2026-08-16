@@ -356,9 +356,33 @@ local function coerceValue(name, spec, raw, whereFn, ctx)
             end
         end
     end
-    if spec.type ~= "list" and spec.choices and not spec.choices[v] then
-        error(string.format("%s: param '%s' must be one of {%s}, got %q",
-            whereFn(), name, table.concat(spec.choices, ","), tostring(raw)), 0)
+    if spec.type ~= "list" and spec.choices then
+        local okC = false
+        local allowedC = spec.choices
+        if type(allowedC) == "table" then
+            if allowedC[v] then
+                okC = true
+            else
+                for _, av in ipairs(allowedC) do
+                    if tostring(av) == tostring(v) then okC = true break end
+                end
+            end
+        end
+        if not okC then
+            local listC = {}
+            if type(allowedC) == "table" then
+                for k in pairs(allowedC) do
+                    if type(k) == "number" then
+                        listC[#listC + 1] = tostring(allowedC[k])
+                    else
+                        listC[#listC + 1] = tostring(k)
+                    end
+                end
+            end
+            table.sort(listC)
+            error(string.format("%s: param '%s' must be one of {%s}, got %q",
+                whereFn(), name, table.concat(listC, ","), tostring(raw)), 0)
+        end
     end
     return v
 end
@@ -397,20 +421,37 @@ function Schema.coerce(cmd, params, ctx)
     -- Coerce declared params.
     for name, spec in pairs(specs) do
         local raw = params[name]
-        if raw == nil or raw == "" then
-            -- `positional_index = N`: the param may also arrive as the Nth
-            -- bare positional arg (KAG3 style, e.g. [set f.hp 30]); the
-            -- required check is skipped while that positional slot is filled.
-            local pos_filled = spec.positional_index
-                and params[spec.positional_index] ~= nil
-                and params[spec.positional_index] ~= ""
+        -- `positional_index = N`: the param may also arrive as the Nth
+        -- bare positional arg (KAG3 style, e.g. [set f.hp 30]).
+        local pos = spec.positional_index
+        local pos_raw = pos and params[pos]
+        local pos_filled = pos_raw ~= nil and pos_raw ~= ""
+        -- Empty string means "absent" for most types (KAG3 empty token =
+        -- no value). Exception (round 97 dead-code fix): a `file`-typed
+        -- EMPTY value is an invalid *provided* path, not an omission -- so
+        -- it flows into coerceValue, where the empty-path rejection fires.
+        local absent = raw == nil or (raw == "" and spec.type ~= "file")
+        if absent then
             if spec.required and not pos_filled then
                 error(W() .. ": missing required param '" .. name .. "'", 0)
             end
-            -- When the positional slot is filled (pos_filled), do NOT
-            -- write spec.default -- the handler falls back to params[N]
-            -- itself, and a default would shadow the positional value.
-            if spec.default ~= nil and not pos_filled then out[name] = spec.default end
+            if pos_filled then
+                -- Positional value fills the slot: coerce it (type convert
+                -- + clamp) into BOTH the named key and the positional slot,
+                -- so handlers read numbers/booleans regardless of arg form
+                -- (round 97: positional bypassed type coercion before). A
+                -- default is intentionally NOT applied when the slot is
+                -- filled -- the provided value always wins.
+                local coerced = coerceValue(name, spec, pos_raw, W, ctx)
+                out[name] = coerced
+                out[pos] = coerced
+            elseif spec.default ~= nil then
+                -- Defaults are normalized through coerceValue: a typed
+                -- default that violates the contract (number param with
+                -- default="oops") is rejected instead of emitted verbatim
+                -- (round 97).
+                out[name] = coerceValue(name, spec, spec.default, W, ctx)
+            end
         else
             out[name] = coerceValue(name, spec, raw, W, ctx)
         end
@@ -424,7 +465,10 @@ function Schema.coerce(cmd, params, ctx)
                 print(string.format("[schema] %s: unknown param '%s' ignored",
                     cmd, tostring(name)))
             end
-            out[name] = v  -- pass through for compat
+            -- A positional slot already written by a positional_index
+            -- coercion above stays (round 97); otherwise the raw value
+            -- (e.g. an undeclared extra positional arg) passes through.
+            if out[name] == nil then out[name] = v end
         end
     end
     return out

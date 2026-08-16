@@ -110,10 +110,12 @@ check("cps -5 positional clamps to 1", ctxN.cps == 1)
 local okBad = pcall(S.coerce, "textspeed", { cps = "abc" }, {})
 check("textspeed cps=abc errors (visible)", okBad == false)
 
--- bare positional non-numeric falls back to default, no crash
+-- bare positional non-numeric now rejects inside schema.coerce (round 97:
+-- positional values are type-coerced just like named -- consistent with the
+-- named [textspeed cps=abc] case above, no silent fallback)
 local ctxQ = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
-local okQ = pcall(KAG.cps, ctxQ, S.coerce("cps", { [1] = "abc" }, ctxQ))
-check("cps abc positional falls back to default", okQ and ctxQ.cps == 50)
+local okQ = pcall(S.coerce, "cps", { [1] = "abc" }, ctxQ)
+check("cps abc positional errors (round 97: coerced, consistent with named)", okQ == false)
 
 if failed > 0 then os.exit(1) end
 print("TEXTFLOW TESTS DONE")
