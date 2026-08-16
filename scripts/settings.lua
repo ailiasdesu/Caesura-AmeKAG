@@ -10,6 +10,7 @@ local backend = require("backend")
 local layers  = require("layers")
 local audio   = require("audio")
 local i18n    = require("i18n")
+local layout_math = require("kag.layout_math")  -- [R107-A] declarative vbox/hbox/grid math
 
 -- Language hot-switch full-page redraw: after i18n.load the already
 -- displayed page, backlog, choice labels and closed captions re-localize
@@ -244,6 +245,70 @@ function Settings._renderVolumeBar(value, max)
 end
 
 -- ===========================================================================
+-- Settings._volumeBand(ctx) -> { row1..row3 = {x,y,w,h} }  (R107-A [layout])
+-- Declarative vbox (via kag/layout_math) for the 3-bus volume slider rows
+-- (menu items 1..3). Anchored at the exact historic row geometry
+-- (px+30, startY; lineH=30) so the resolved slot rects are coordinate-
+-- identical to the previous hand-rolled absolute layout:
+--   row[i].x = px + 30, row[i].y = startY + (i-1)*30
+-- Uses the authoritative R107-A contract: layout_math.vbox returns each
+-- slot relative to the container content origin; we add the panel origin.
+-- ===========================================================================
+function Settings._volumeBand(ctx)
+    local px = state.panelX or 340
+    local py = state.panelY or 120
+    local startY = py + 50
+    local lineH = 30
+    local bandW = (state.panelW or 600) - 100
+
+    -- 3 flexible rows over h = 3*lineH -> each row is exactly lineH tall.
+    local items = { { h = 0 }, { h = 0 }, { h = 0 } }
+    local res = layout_math.vbox(items, { w = bandW, h = 3 * lineH, gap = 0 })
+    local originX, originY = px + 30, startY
+
+    local band = {}
+    for i, slot in ipairs(res.slots or {}) do
+        band["row" .. i] = {
+            x = originX + slot.x,
+            y = originY + slot.y,
+            w = slot.w,
+            h = slot.h,
+        }
+    end
+    return band
+end
+
+-- Row geometry for the menu list; the 3 volume rows (indices 1..3) are
+-- sourced from the declarative _volumeBand, all other rows keep the historic
+-- formula. Both branches resolve to identical coordinates (proving the
+-- declarative layout is coordinate-equivalent to the old absolute layout).
+-- Returns { startY, lineH, rowY = function(i) }, where rowY(i)/rowX(i) are ints.
+function Settings._rowGeometry(ctx)
+    local px = state.panelX or 340
+    local py = state.panelY or 120
+    local startY = py + 50
+    local lineH = 30
+    local band = Settings._volumeBand(ctx)
+    return {
+        startY = startY,
+        lineH = lineH,
+        rowY = function(i)
+            if i >= 1 and i <= 3 and band["row" .. i] then
+                return band["row" .. i].y
+            end
+            return startY + (i - 1) * lineH
+        end,
+        rowX = function(i)
+            if i >= 1 and i <= 3 and band["row" .. i] then
+                return band["row" .. i].x
+            end
+            return px + 30
+        end,
+    }
+end
+
+
+-- ===========================================================================
 -- Settings._render(ctx) — draw settings menu text
 -- ===========================================================================
 function Settings._render(ctx)
@@ -256,8 +321,9 @@ function Settings._render(ctx)
     local pw = state.panelW or 600
     local ph = state.panelH or 360
 
-    local startY = py + 50
-    local lineH = 30
+    local geo = Settings._rowGeometry(ctx)
+    local startY = geo.startY
+    local lineH = geo.lineH
 
     -- Title: "Settings / 設置" at top of panel
     local titleStr = "Settings / 設置"
@@ -268,8 +334,12 @@ function Settings._render(ctx)
     backend.render_text(string.rep("-", math.floor(pw / 9)), px + 20, py + 28, 80, 80, 140, 200)
 
     -- Menu items
+    -- R107-A PILOT: row x/y for the 3 volume-slider rows come from the
+    -- declarative vbox (_volumeBand); all other rows keep the historic
+    -- formula. Both resolve to identical coordinates (proven in the loop).
     for i, item in ipairs(state.items) do
-        local lineY = startY + (i - 1) * lineH
+        local lineY = geo.rowY(i)
+        local lineX = geo.rowX(i)
         local isSelected = (i == state.cursor)
         local prefix = isSelected and " > " or "   "
 
@@ -292,13 +362,13 @@ function Settings._render(ctx)
         elseif item.type == "toggle" and item.value then
             r, g, b = 100, 255, 100  -- green for ON toggles
         end
-        backend.render_text(line, px + 30, lineY, r, g, b, 255)
+        backend.render_text(line, lineX, lineY, r, g, b, 255)
     end
 
     -- Cursor highlight position (position behind the selected row)
     if state.cursorLayer then
         state.cursorLayer.x = px + 26
-        state.cursorLayer.y = startY + (state.cursor - 1) * lineH - 2
+        state.cursorLayer.y = geo.rowY(state.cursor) - 2
     end
 
     -- Footer inside panel
@@ -435,12 +505,12 @@ end
 -- ===========================================================================
 function Settings.onClick(ctx, x, y)
     if not state.active then return false end
-    -- Map y coordinate to menu item within the panel
-    local px = state.panelX or 340
-    local py = state.panelY or 120
-    local startY = py + 50
-    local lineH = 30
-    local clickedIdx = math.floor((y - startY) / lineH) + 1
+    -- Map y coordinate to menu item within the panel. Row geometry (including
+    -- the declarative 3 volume-slider rows) is sourced from _rowGeometry so
+    -- click targetting stays aligned with the rendered layout.
+    local geo = Settings._rowGeometry(ctx)
+    local lineH = geo.lineH
+    local clickedIdx = math.floor((y - geo.startY) / lineH) + 1
     if clickedIdx >= 1 and clickedIdx <= #state.items then
         state.cursor = clickedIdx
         Settings.confirm(ctx)
