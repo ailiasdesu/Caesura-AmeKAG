@@ -337,37 +337,53 @@ void EditorServer::serverLoop(int port) {
     // GET /api/assets -- list project assets
     // ---------------------------------------------------------------------
     svr.Get("/api/assets", [](const httplib::Request& req, httplib::Response& res) {
-        std::string type = req.get_param_value("type");  // "image", "audio", "script", "" = all
+        std::string type = req.get_param_value("type");
 
         // Build JSON array
         Json arr = Json::array();
 
-        auto addFiles = [&](const std::string& dir, const std::string& kind) {
-            if (!type.empty() && type != kind) return;
-            std::string path = "assets/" + dir;
-            if (!fs::exists(path)) return;
-            try {
-                for (const auto& entry : fs::directory_iterator(path)) {
-                    if (entry.is_regular_file()) {
-                        std::string name = entry.path().filename().string();
-                        std::string relPath = "assets/" + dir + "/" + name;
-                        Json obj;
-                        obj["path"] = relPath;
-                        obj["name"] = name;
-                        obj["type"] = kind;
-                        arr.push_back(obj);
-                    }
-                }
-            } catch (...) {}
+        // Each scanned disk directory maps to a coarse type (image/audio/script)
+        // shared with the editor's coarse filter, and a per-directory kind
+        // (bg|fg|bgm|se|voice|...) that Scene Builder uses to pick assets for
+        // a specific slot. The ?type= filter accepts EITHER the coarse type
+        // ("image", "audio", "script" — backward compatible) OR the per-dir
+        // kind ("bg", "fg", "bgm", "se", ...); omitted means every directory.
+        const std::vector<std::pair<std::string, std::string>> dirs = {
+            {"bg", "image"},     // background images
+            {"fg", "image"},     // foreground / character sprites
+            {"char", "image"},   // legacy character portraits
+            {"ui", "image"},     // UI elements
+            {"bgm", "audio"},    // background music
+            {"voice", "audio"},  // voice lines
+            {"se", "audio"},     // sound effects
+            {"scripts", "script"},
         };
 
-        addFiles("bg", "image");
-        addFiles("char", "image");
-        addFiles("ui", "image");
-        addFiles("bgm", "audio");
-        addFiles("voice", "audio");
-        addFiles("se", "audio");
-        addFiles("scripts", "script");
+        auto includeDir = [&](const std::string& dir, const std::string& coarse) {
+            if (type.empty()) return true;
+            if (type == coarse) return true;  // coarse category filter
+            if (type == dir) return true;     // per-directory slot filter
+            return false;
+        };
+
+        for (const auto& [dir, coarse] : dirs) {
+            if (!includeDir(dir, coarse)) continue;
+            std::string path = "assets/" + dir;
+            if (!fs::exists(path)) continue;
+            try {
+                for (const auto& entry : fs::directory_iterator(path)) {
+                    if (!entry.is_regular_file()) continue;
+                    std::string name = entry.path().filename().string();
+                    std::string relPath = "assets/" + dir + "/" + name;
+                    Json obj;
+                    obj["path"] = relPath;
+                    obj["name"] = name;
+                    obj["type"] = coarse;
+                    obj["kind"] = dir;
+                    arr.push_back(obj);
+                }
+            } catch (...) {}
+        }
 
         res.set_content(dumpJson(arr), "application/json");
     });

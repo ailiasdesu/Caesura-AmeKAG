@@ -151,26 +151,33 @@ stdio 传输的 `smaSave` 方法同构（请求字段 `path` / `content`）。
 
 ### 1.3 资源列表
 
-**`GET /api/assets?type={image|audio|script}`**
+**`GET /api/assets?type={image|audio|script|bg|fg|bgm|se|voice|...}`**
 
-`type` 参数可选，省略则返回全部。
+`type` 参数可选，省略则返回全部。过滤值既可以是粗粒度类别（`image`/`audio`/`script`），
+也可以是 Scene Builder 需要的按目录槽位（`bg`/`fg`/`bgm`/`se`/`voice`/`char`/`ui`/`scripts`）。
+每项同时携带 `type`（粗类别）与 `kind`（目录槽位），供场景搭建面板按槽位取资源。
 
 ```
 → (no body)
 ← [
-    {"path":"assets/bg/scene01.png","name":"scene01.png","type":"image"},
-    {"path":"assets/bgm/theme.ogg","name":"theme.ogg","type":"audio"},
-    {"path":"assets/scripts/chapter1.ks","name":"chapter1.ks","type":"script"}
+    {"path":"assets/bg/scene01.png","name":"scene01.png","type":"image","kind":"bg"},
+    {"path":"assets/fg/girl_uniform.png","name":"girl_uniform.png","type":"image","kind":"fg"},
+    {"path":"assets/bgm/theme.ogg","name":"theme.ogg","type":"audio","kind":"bgm"},
+    {"path":"assets/voice/line01.ogg","name":"line01.ogg","type":"audio","kind":"voice"},
+    {"path":"assets/scripts/chapter1.ks","name":"chapter1.ks","type":"script","kind":"scripts"}
   ]
 ```
 
-扫描的目录映射：
+扫描的目录映射（`type` 过滤匹配粗类别或目录槽位）：
 
-| type | 扫描目录 |
-|------|---------|
-| `image` | `assets/bg/`, `assets/char/`, `assets/ui/` |
-| `audio` | `assets/bgm/`, `assets/voice/`, `assets/se/` |
-| `script` | `assets/scripts/` |
+| type | 扫描目录 | kind |
+|------|---------|------|
+| `image` | `assets/bg/`, `assets/fg/`, `assets/char/`, `assets/ui/` | `bg`/`fg`/`char`/`ui` |
+| `audio` | `assets/bgm/`, `assets/voice/`, `assets/se/` | `bgm`/`voice`/`se` |
+| `script` | `assets/scripts/` | `scripts` |
+
+示例：`/api/assets?type=fg` 只返回 `assets/fg/` 下的前景精灵；`/api/assets?type=bgm` 只返回 BGM。
+前端 `EngineClient.assets(type)` 已同步支持该契约（`AssetEntry.kind` 为新增字段）。
 
 ---
 

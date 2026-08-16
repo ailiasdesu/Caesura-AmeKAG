@@ -209,6 +209,51 @@ private:
     bool m_createdRoot = false;
 };
 
+// Creates disposable files under assets/<subdir>/ in the test CWD (which the
+// /api/assets handler scans relative to the process CWD) and cleans them up
+// on destruction. Mirrors ScopedModelFiles.
+class ScopedAssetFiles {
+public:
+    bool add(const std::string& subdir, const std::string& name) {
+        std::error_code error;
+        const auto dir = std::filesystem::path("assets") / subdir;
+        if (!std::filesystem::exists(dir, error)) {
+            if (!std::filesystem::create_directories(dir, error) || error) {
+                return false;
+            }
+            m_createdDirs.push_back(dir);
+        }
+
+        const auto path = dir / name;
+        if (std::filesystem::exists(path, error) || error) return false;
+        std::ofstream output(path, std::ios::binary);
+        output.put('x');
+        output.close();
+        if (!output) {
+            std::filesystem::remove(path, error);
+            return false;
+        }
+        m_files.push_back(path);
+        return true;
+    }
+
+    ~ScopedAssetFiles() {
+        std::error_code error;
+        for (const auto& path : m_files) {
+            std::filesystem::remove(path, error);
+            error.clear();
+        }
+        for (auto it = m_createdDirs.rbegin(); it != m_createdDirs.rend(); ++it) {
+            std::filesystem::remove(*it, error);
+            error.clear();
+        }
+    }
+
+private:
+    std::vector<std::filesystem::path> m_files;
+    std::vector<std::filesystem::path> m_createdDirs;
+};
+
 } // namespace
 
 static_assert(std::is_abstract_v<IRpcDispatcher>);
@@ -678,6 +723,89 @@ TEST_CASE("EditorServer lists static animation images case-insensitively as vali
         "caesura_rpc_static_bitmap.BmP"));
     CHECK_FALSE(containsModel("models/caesura_rpc_static_ignore.TxT",
         "caesura_rpc_static_ignore.TxT"));
+}
+
+TEST_CASE("EditorServer /api/assets lists scanned dirs with kind + type filters") {
+    ScopedAssetFiles files;
+    REQUIRE(files.add("bg", "caesura_rpc_asset_bg.png"));
+    REQUIRE(files.add("fg", "caesura_rpc_asset_fg.png"));
+    REQUIRE(files.add("bgm", "caesura_rpc_asset_bgm.ogg"));
+
+    EditorServer es;
+    REQUIRE(es.start(0));
+    httplib::Client client("127.0.0.1", es.port());
+
+    auto all = client.Get("/api/assets");
+    REQUIRE(all);
+    CHECK(all->status == 200);
+    const auto allArr = nlohmann::json::parse(all->body);
+    REQUIRE(allArr.is_array());
+
+    const auto findEntry = [&allArr](const std::string& name) {
+        for (const auto& e : allArr) {
+            if (e.value("name", std::string()) == name) return e;
+        }
+        return nlohmann::json::object();
+    };
+    {
+        const auto bg = findEntry("caesura_rpc_asset_bg.png");
+        CHECK(bg.value("type", std::string()) == "image");
+        CHECK(bg.value("kind", std::string()) == "bg");
+        CHECK(bg.value("path", std::string()) == "assets/bg/caesura_rpc_asset_bg.png");
+    }
+    {
+        const auto fg = findEntry("caesura_rpc_asset_fg.png");
+        CHECK(fg.value("type", std::string()) == "image");
+        CHECK(fg.value("kind", std::string()) == "fg");
+    }
+    {
+        const auto bgm = findEntry("caesura_rpc_asset_bgm.ogg");
+        CHECK(bgm.value("type", std::string()) == "audio");
+        CHECK(bgm.value("kind", std::string()) == "bgm");
+    }
+
+    auto fgOnly = client.Get("/api/assets?type=fg");
+    REQUIRE(fgOnly);
+    const auto fgArr = nlohmann::json::parse(fgOnly->body);
+    REQUIRE(fgArr.is_array());
+    bool fgHit = false, bgHit = false, bgmHit = false;
+    for (const auto& e : fgArr) {
+        const std::string kind = e.value("kind", std::string());
+        fgHit |= (kind == "fg");
+        bgHit |= (kind == "bg");
+        bgmHit |= (kind == "bgm");
+    }
+    CHECK(fgHit);
+    CHECK_FALSE(bgHit);
+    CHECK_FALSE(bgmHit);
+
+    auto bgmOnly = client.Get("/api/assets?type=bgm");
+    REQUIRE(bgmOnly);
+    const auto bgmArr = nlohmann::json::parse(bgmOnly->body);
+    bgmHit = false; fgHit = false;
+    for (const auto& e : bgmArr) {
+        const std::string kind = e.value("kind", std::string());
+        bgmHit |= (kind == "bgm");
+        fgHit |= (kind == "fg");
+    }
+    CHECK(bgmHit);
+    CHECK_FALSE(fgHit);
+
+    auto imageOnly = client.Get("/api/assets?type=image");
+    REQUIRE(imageOnly);
+    const auto imageArr = nlohmann::json::parse(imageOnly->body);
+    bool anyAudio = false; fgHit = false; bgHit = false;
+    for (const auto& e : imageArr) {
+        const std::string kind = e.value("kind", std::string());
+        fgHit |= (kind == "fg");
+        bgHit |= (kind == "bg");
+        if (e.value("type", std::string()) == "audio") anyAudio = true;
+    }
+    CHECK(fgHit);
+    CHECK(bgHit);
+    CHECK_FALSE(anyAudio);
+
+    es.stop();
 }
 
 TEST_CASE("EditorServer reports dispatcher unavailable over HTTP") {

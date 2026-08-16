@@ -19,7 +19,10 @@ export interface StatusReply {
 export interface AssetEntry {
   path: string
   name: string
+  /** Coarse category: "image" | "audio" | "script". */
   type: string
+  /** Per-directory slot: "bg" | "fg" | "char" | "ui" | "bgm" | "voice" | "se" | "scripts". */
+  kind?: string
 }
 
 export interface LogEntry {
@@ -269,7 +272,26 @@ export class EngineClient {
 
   // -- introspection ------------------------------------------------------
 
-  assets(type?: 'image' | 'audio' | 'script'): Promise<AssetEntry[]> {
+  /**
+   * List project assets. The optional filter accepts either the coarse
+   * category ("image" | "audio" | "script") or a per-directory slot
+   * ("bg" | "fg" | "bgm" | "se" | "voice" | ...) so Scene Builder can pull
+   * exactly the assets for a slot it is painting.
+   */
+  assets(
+    type?:
+      | 'image'
+      | 'audio'
+      | 'script'
+      | 'bg'
+      | 'fg'
+      | 'char'
+      | 'ui'
+      | 'bgm'
+      | 'voice'
+      | 'se'
+      | 'scripts',
+  ): Promise<AssetEntry[]> {
     const q = type ? `?type=${type}` : ''
     return this.request<AssetEntry[]>(`/assets${q}`)
   }
