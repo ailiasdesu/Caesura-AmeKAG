@@ -94,3 +94,121 @@ export function buildOutlineSections(items: OutlineItem[]): OutlineSection[] {
   }
   return sections
 }
+
+// ---------------------------------------------------------------------------
+// Long-scene virtualization (performance increment): the outline flattens labels
+// and items into one linear row list so the SceneOutline component can render
+// only the rows near the scroll window. The window computation is a pure
+// function so it is directly unit-testable without a DOM / scroll layout.
+// ---------------------------------------------------------------------------
+
+/** Fixed pixel height of a single outline row (command / text / label heading).
+ *  Rows are fixed-height so the visible slice is derivable from scrollTop. */
+export const OUTLINE_ROW_HEIGHT = 20
+
+/** Scroll-window over-scan: extra rows rendered above/below the viewport so
+ *  fast scrolls / partial rows never flash against an empty backdrop. */
+export const OUTLINE_OVERSCAN = 4
+
+/** Fallback viewport height (px) used when the DOM cannot report a real
+ *  clientHeight (jsdom tests, SSR). Matches the .scene-tree max-height. */
+export const DEFAULT_OUTLINE_VIEWPORT = 320
+
+/** A flat outline row: either a section heading (label / prologue) or a single
+ *  command / text item. Every row has a stable key for the virtual list. */
+export type OutlineFlatRow =
+  | { rowKind: 'section'; key: string; section: OutlineSection }
+  | { rowKind: 'item'; key: string; item: OutlineItem }
+
+/** Flatten labelled sections into one linear list of renderable rows. Item
+ *  order is preserved; each label heading precedes its own items. */
+export function flattenOutlineRows(sections: OutlineSection[]): OutlineFlatRow[] {
+  const rows: OutlineFlatRow[] = []
+  for (const section of sections) {
+    rows.push({ rowKind: 'section', key: 'sec:' + section.line, section })
+    for (const item of section.items) {
+      rows.push({ rowKind: 'item', key: item.line + ':' + item.kind, item })
+    }
+  }
+  return rows
+}
+
+/** Source line a flat row maps to (section headings and items both carry one). */
+export function flatRowLine(row: OutlineFlatRow): number {
+  return row.rowKind === 'section' ? row.section.line : row.item.line
+}
+
+/** The slice of a flat row list that is (or should be) rendered for the given
+ *  scroll position. Pure and DOM-free: given a fixed row height and viewport
+ *  height, the visible rows are a contiguous index range.
+ *
+ *  Returns:
+ *  - startIndex / endIndex: inclusive range of rows to render
+ *  - paddingTop / paddingBottom: pixel spacing (outside the range) that keeps
+ *    the spacer-driven scroll height correct.
+ */
+export interface OutlineWindow {
+  startIndex: number
+  endIndex: number
+  paddingTop: number
+  paddingBottom: number
+}
+
+export interface OutlineWindowInput {
+  scrollTop: number
+  viewportHeight: number
+  rowHeight: number
+  totalRows: number
+  /** Extra rows above/below the strict viewport. Defaults to OUTLINE_OVERSCAN. */
+  overscan?: number
+}
+
+export function getVisibleWindow(input: OutlineWindowInput): OutlineWindow {
+  const { scrollTop, viewportHeight, rowHeight, totalRows } = input
+  const overscan = input.overscan ?? OUTLINE_OVERSCAN
+  const last = Math.max(totalRows - 1, 0)
+
+  if (totalRows <= 0 || viewportHeight <= 0 || rowHeight <= 0) {
+    return { startIndex: 0, endIndex: last, paddingTop: 0, paddingBottom: 0 }
+  }
+
+  let startIndex = Math.floor(Math.max(0, scrollTop) / rowHeight) - overscan
+  let endIndex =
+    Math.floor((Math.max(0, scrollTop) + viewportHeight) / rowHeight) + overscan
+
+  startIndex = Math.min(Math.max(0, startIndex), last)
+  endIndex = Math.min(Math.max(0, endIndex), last)
+  if (endIndex < startIndex) endIndex = startIndex
+
+  const paddingTop = startIndex * rowHeight
+  const paddingBottom = Math.max(0, (last - endIndex) * rowHeight)
+  return { startIndex, endIndex, paddingTop, paddingBottom }
+}
+
+export interface RevealRowInput {
+  /** Absolute index of the row to reveal. */
+  rowIndex: number
+  rowHeight: number
+  viewportHeight: number
+  currentScrollTop: number
+  totalRows: number
+}
+
+/** The scrollTop that brings rowIndex fully into view, leaving the current
+ *  scroll position untouched when the row is already visible. Clamped to the
+ *  valid scroll range for the given row count and viewport. Pure. */
+export function scrollTopToRevealRow(input: RevealRowInput): number {
+  const { rowIndex, rowHeight, viewportHeight, currentScrollTop, totalRows } = input
+  if (rowHeight <= 0 || viewportHeight <= 0) return Math.max(0, currentScrollTop)
+  const maxScrollTop = Math.max(0, totalRows * rowHeight - viewportHeight)
+  const top = rowIndex * rowHeight
+  const bottom = top + rowHeight
+  const next =
+    top < currentScrollTop
+      ? top
+      : bottom > currentScrollTop + viewportHeight
+        ? bottom - viewportHeight
+        : currentScrollTop
+  return Math.min(Math.max(0, next), maxScrollTop)
+}
+

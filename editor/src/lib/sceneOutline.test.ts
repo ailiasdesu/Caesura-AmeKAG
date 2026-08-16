@@ -3,6 +3,9 @@ import {
   parseSceneOutline,
   buildOutlineSections,
   parseTagParams,
+  getVisibleWindow,
+  scrollTopToRevealRow,
+  flattenOutlineRows,
 } from './sceneOutline'
 
 describe('parseSceneOutline', () => {
@@ -128,3 +131,163 @@ describe('parseTagParams', () => {
     expect(parseTagParams('')).toEqual({})
   })
 })
+describe('getVisibleWindow', () => {
+  const ROW = 20
+
+  it('renders all rows when the list is shorter than the viewport', () => {
+    const w = getVisibleWindow({
+      scrollTop: 0,
+      viewportHeight: 320,
+      rowHeight: ROW,
+      totalRows: 8,
+    })
+    expect(w.startIndex).toBe(0)
+    expect(w.endIndex).toBe(7)
+    expect(w.paddingTop).toBe(0)
+    expect(w.paddingBottom).toBe(0)
+  })
+
+  it('windows a long list to the scroll position plus overscan', () => {
+    // 2000 rows @ 20px = 40,000px; a 200px viewport shows ~10 rows.
+    const w = getVisibleWindow({
+      scrollTop: 0,
+      viewportHeight: 200,
+      rowHeight: ROW,
+      totalRows: 2000,
+      overscan: 2,
+    })
+    // first row is 0; last visible = floor(200/20)+overscan = 10+2 = 12
+    expect(w.startIndex).toBe(0)
+    expect(w.endIndex).toBe(12)
+    expect(w.paddingTop).toBe(0)
+    expect(w.paddingBottom).toBe((2000 - 1 - 12) * ROW)
+  })
+
+  it('shifts the window as scrollTop advances', () => {
+    const w = getVisibleWindow({
+      scrollTop: 1000,
+      viewportHeight: 200,
+      rowHeight: ROW,
+      totalRows: 2000,
+      overscan: 2,
+    })
+    // floor(1000/20)=50; start = 50-2 = 48; end = floor(1200/20)+2 = 62
+    expect(w.startIndex).toBe(48)
+    expect(w.endIndex).toBe(62)
+    expect(w.paddingTop).toBe(48 * ROW)
+    expect(w.paddingBottom).toBe((2000 - 1 - 62) * ROW)
+  })
+
+  it('clamps near the end so no range exceeds the last row', () => {
+    const w = getVisibleWindow({
+      scrollTop: 2000 * ROW,
+      viewportHeight: 200,
+      rowHeight: ROW,
+      totalRows: 2000,
+      overscan: 4,
+    })
+    expect(w.endIndex).toBe(1999)
+    // start never exceeds last
+    expect(w.startIndex).toBeLessThanOrEqual(1999)
+    expect(w.paddingBottom).toBe(0)
+  })
+
+  it('handles degenerate inputs without throwing', () => {
+    expect(
+      getVisibleWindow({ scrollTop: 0, viewportHeight: 0, rowHeight: ROW, totalRows: 100 }),
+    ).toEqual({ startIndex: 0, endIndex: 99, paddingTop: 0, paddingBottom: 0 })
+    expect(
+      getVisibleWindow({ scrollTop: 5, viewportHeight: 100, rowHeight: 0, totalRows: 5 }),
+    ).toEqual({ startIndex: 0, endIndex: 4, paddingTop: 0, paddingBottom: 0 })
+    expect(
+      getVisibleWindow({ scrollTop: 0, viewportHeight: 100, rowHeight: ROW, totalRows: 0 }),
+    ).toEqual({ startIndex: 0, endIndex: 0, paddingTop: 0, paddingBottom: 0 })
+  })
+})
+
+describe('scrollTopToRevealRow', () => {
+  const ROW = 20
+
+  it('keeps the scroll position when the row is already visible', () => {
+    expect(
+      scrollTopToRevealRow({
+        rowIndex: 5,
+        rowHeight: ROW,
+        viewportHeight: 200,
+        currentScrollTop: 100,
+        totalRows: 100,
+      }),
+    ).toBe(100)
+  })
+
+  it('scrolls up so a row above the viewport becomes visible', () => {
+    // row 2 top = 40, below current view (100..300) -> scroll to top of row 2
+    expect(
+      scrollTopToRevealRow({
+        rowIndex: 2,
+        rowHeight: ROW,
+        viewportHeight: 200,
+        currentScrollTop: 100,
+        totalRows: 100,
+      }),
+    ).toBe(40)
+  })
+
+  it('scrolls down so a row below the viewport becomes visible', () => {
+    // row 20 top=400, bottom=420; view is 100..300 -> scroll to bottom-edge
+    expect(
+      scrollTopToRevealRow({
+        rowIndex: 20,
+        rowHeight: ROW,
+        viewportHeight: 200,
+        currentScrollTop: 100,
+        totalRows: 100,
+      }),
+    ).toBe(400 + ROW - 200) // 220
+  })
+
+  it('clamps to the valid scroll range', () => {
+    // last row below a tiny viewport -> clamp to maxScrollTop
+    expect(
+      scrollTopToRevealRow({
+        rowIndex: 99,
+        rowHeight: ROW,
+        viewportHeight: 200,
+        currentScrollTop: 0,
+        totalRows: 100,
+      }),
+    ).toBe(100 * ROW - 200) // 1800
+  })
+})
+
+describe('flattenOutlineRows', () => {
+  it('renders each label heading followed by its items, in order', () => {
+    const sections = buildOutlineSections(
+      parseSceneOutline('a\n*start\none\ntwo\n*end\nthree'),
+    )
+    const rows = flattenOutlineRows(sections)
+    const label = (r: (typeof rows)[number]) => {
+      if (r.rowKind === 'section') {
+        return r.section.label === null ? '(prologue)' : '*' + r.section.label
+      }
+      const item = r.item
+      if (item.kind === 'text') return item.content
+      if (item.kind === 'command') return '[' + item.cmd + ']'
+      return '*' + item.name
+    }
+    expect(rows.map(label)).toEqual([
+      '(prologue)',
+      'a',
+      '*start',
+      'one',
+      'two',
+      '*end',
+      'three',
+    ])
+    // every row carries a stable, non-empty key
+    for (const row of rows) expect(row.key.length).toBeGreaterThan(0)
+    // keys are unique across the whole list
+    expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length)
+  })
+})
+

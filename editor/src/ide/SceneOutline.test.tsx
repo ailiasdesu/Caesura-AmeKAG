@@ -134,3 +134,85 @@ describe('SceneOutline (component)', () => {
     }).not.toThrow()
   })
 })
+describe('SceneOutline (virtualized long scenes)', () => {
+  const ROW = 20
+
+  // Build a long .ks source: one label per 5 lines so total rows = sections + items.
+  function longSource(lines: number): string {
+    const out: string[] = []
+    for (let i = 1; i <= lines; i++) {
+      // every 5th line is a label; the rest are text/content lines
+      if (i % 5 === 0) out.push('*mark' + i)
+      else out.push('line ' + i)
+    }
+    return out.join('\n')
+  }
+
+  /** Scroll the outline's own (virtualized) container and then re-query. */
+  function scrollOutlineTo(container: HTMLElement, scrollTop: number) {
+    const scroller = container.querySelector('.outline-body') as HTMLElement
+    fireEvent.scroll(scroller, { target: { scrollTop } })
+  }
+
+  it('renders only a window of rows for a long scene (fewer than total)', () => {
+    // 1000 source lines -> ~800 non-label items + 200 label rows = 1000 rows.
+    const { container } = render(
+      <SceneOutline source={longSource(1000)} rowHeight={ROW} viewportHeight={200} />,
+    )
+    // visible window ≈ 200/20 + 2*overscan(8) = ~18 rows, far less than 1000.
+    const renderedRows = container.querySelectorAll('.outline-row').length
+    const renderedLabels = container.querySelectorAll('.outline-label-row').length
+    const total = renderedRows + renderedLabels
+    expect(total).toBeGreaterThan(0)
+    expect(total).toBeLessThan(1000)
+    // the first label/row (line 5 -> label *mark5) is visible at scroll 0
+    expect(screen.getByText('*mark5')).toBeTruthy()
+  })
+
+  it('changes the rendered window when the scroll position moves', () => {
+    const { container } = render(
+      <SceneOutline source={longSource(1000)} rowHeight={ROW} viewportHeight={200} />,
+    )
+    // At scroll 0 a later label (*mark500) must NOT be mounted yet.
+    expect(screen.queryByText('*mark500')).toBeNull()
+
+    // scroll down far enough that *mark500 lands in the window
+    scrollOutlineTo(container, 500 * ROW - 60)
+    // the earlier label is now virtualized away
+    expect(screen.queryByText('*mark5')).toBeNull()
+    // and the label near the new scroll position is mounted
+    expect(screen.getByText('*mark500')).toBeTruthy()
+  })
+
+  it('shows outline-current highlight on the matching row when it is visible', () => {
+    const { container } = render(
+      <SceneOutline
+        source={longSource(1000)}
+        currentLine={6}
+        rowHeight={ROW}
+        viewportHeight={200}
+      />,
+    )
+    const highlight = container.querySelectorAll('.outline-current')
+    expect(highlight.length).toBe(1)
+    // row for source line 6 (a text line after the *mark5 label)
+    expect(highlight[0].textContent).toContain('6')
+  })
+
+  it('auto-scrolls so a highlight row outside the initial window becomes visible', () => {
+    const { container } = render(
+      <SceneOutline
+        source={longSource(1000)}
+        currentLine={505}
+        rowHeight={ROW}
+        viewportHeight={200}
+      />,
+    )
+    // The reveal scrolled the window down; the first label should no longer be present.
+    expect(screen.queryByText('*mark5')).toBeNull()
+    // the highlight row (currentLine=505 -> a text row) is now rendered
+    const highlight = Array.from(container.querySelectorAll('.outline-current'))
+    expect(highlight.length).toBe(1)
+    expect(highlight[0].textContent).toContain('505')
+  })
+})
