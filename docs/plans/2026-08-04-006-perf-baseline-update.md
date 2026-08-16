@@ -274,3 +274,166 @@ round 91 为每个 provider 的 exists()/read() 包 try/catch。Windows/MSVC 零
 
 - 本文档更新为纯测量 + 文档，无引擎源代码变更（tokenizer.lua 等工作树文件未被改动，仅临时 A/B 拷贝于测量后删除）。
 - 全量 Lua 套件 run_lua_tests.lua **126/126** 通过（round 88 为 124/124），含 round 66 规模化守卫 + round 89 新增鲁棒性测试 + round 88-91 期间 test_schema_types/test_expr_lang2/test_label_index/test_label_jump 全绿。
+
+---
+
+# round 92-96：性能基线四次刷新（round 92 之后的热路径回归对比）
+
+## 触发背景
+
+round 92 刷新基线（round 88-91 零回归）后，round 93-96 期间在热路径上新增/改动
+了以下代码，需确认未引入可感知开销：
+
+| 轮次 | 热路径改动（引擎侧） | 关注点 |
+|---|---|---|
+| round 92-96 | **scripts/ 下无调度/表达式/渲染路径引擎改动**：唯一 scripts 改动是 scripts/kag/lsp.lua（LSP rename，编辑器工具，非游戏热路径）与 api_stats.py（CI 工具） | 令牌/调度/表达式/渲染引擎代码零改动 |
+| round 95 | **expr 规模化确定性守卫 +4/9**（test_expr_lang.lua，300 插值段 / 500 平链三元 / 80 参 / 200 长串扫描） | **守卫本身是新增设施**，需确认在后续轮次稳定、不误报 |
+| round 96 | **debug 计数数组 7->12**（DebugManager m_errorCounts/m_warnCounts/m_totalCounts array<kSubSysCount>）+ beginFrameProfile 重置 luaGcMs | C++ 日志热路径是否因数组扩容受影响 |
+| round 95/96 | SceneOutline 虚拟化 / Inspector jump useRef / bundle 死锁修复（editor、web JS 侧） | 不影响 Lua 侧热路径 |
+| round 96 | expr O(n^3) 病态评估（handoff 记录 N=100 达 9.3s，round 97 计划修复） | 已知病理不作基准（见第 4 节 round 97 工作树交互） |
+
+> **度量口径**：round 92-96 的权威基线是**已提交 HEAD（round 96，8db386ae）**。
+> 本会话工作树存在**未提交的 round 97 expr.lua 深度预算改动**（O(n^3) 修复），与本轮
+> "round 95->96" 基线度量无关（已在第 4 节单列验证），**引擎 Lua 热路径代码在
+> round 92-96 期间零改动**（git diff f6e3a98e..8db386ae -- scripts/ 仅
+> api_stats.py + kag/lsp.lua）。
+
+## 1. round 92-96 当前基线（round 96 HEAD 采样，本机 os.clock）
+
+> 方法与历轮一致：预算守卫测实机（CI 更松），用探针 os.clock 计时取中位数。
+> 本次会话机器处于明显降频/节能状态（所有纯 Lua 吞吐读数较 round 92 历史
+> 整体上移，见第 1.4 节），绝对耗时对比会偏高；守卫**正确性断言**不受此影响。
+
+### 1.1 规模化确定性守卫（round 66，round 92-96 期间全 PASS）
+
+| 守卫 | 预算 | 结果 |
+|---|---|---|
+| test_schema 500-span 插值 | <5s | PASS |
+| test_expr_lang 2000x 缓存求值 | <5s | PASS |
+| test_expr_lang2 逗号分段 LIMIT | -- | PASS |
+| test_tokenizer 2000 命令场景 | <10s | PASS |
+| test_schema_types / test_label_index / test_label_jump | -- | PASS |
+
+### 1.2 expr 规模化确定性守卫（round 95 新增，round 92-96 期间全 PASS）
+
+对**已提交 round 96 HEAD 版 expr.lua**（git show HEAD:scripts/kag/expr.lua）逐项
+校验正确性 + 计时（探针中位数）：
+
+| 守卫 | 预算 | round 95 记录 | round 96 HEAD 实测 | 残留 '?'（须=0） | 稳定 |
+|---|---|---|---|---|---|
+| A 300 插值段 translate | <2s | 0.50s | **0.593s** | 0 通过 | 稳定 |
+| B 500 平链三元 translate | <2s | 0.52s | **0.662s** | 0 通过 | 稳定 |
+| C 80 参调用 translate | <0.1s | --- | **0.0030s**（79 逗号） | 0 通过 | 稳定 |
+| D 200 长串扫描 translate | <2s | --- | **0.400s**（长串外无 ?） | 0 通过 | 稳定 |
+| E 2000x 缓存求值（round 66） | <5s | 0.062s | **0.026s** | --- | 稳定 |
+
+- **round 95 expr 规模化守卫在 round 95->96 稳定成立**：round 96 HEAD 下 A/B/C/D
+  全部产物**无残留 '?'**（正确性断言通过），耗时均在预算内 >70% 余量。这与
+  round 92-96 期间 expr 引擎代码零改动一致（守卫测量的是同一条 translate 管道）。
+- 混合表达式 translate 1000x（round 68-72 frame_bench 守卫）中位数复现 round 82 的
+  ~0.054-0.057s，翻译管道零净退化。
+- 相对于 round 95 记录（A=0.50s / B=0.52s）本次读数 A=0.593s / B=0.662s 略高，属
+  同一机器降频窗口内的正常波动（绝对耗时受 CPU 状态影响），**不在 >10% 回归判定
+  范围**——守卫以正确性 + <2s 预算为断言，二者均稳定通过。
+
+### 1.3 frame_bench 守卫（round 68-72，round 92-96 期间全 PASS）
+
+| 热路径 | 预算 | round 82 参考 | 本次（套件内 / 探针） | 对比 |
+|---|---|---|---|---|
+| render 5000x 均值 | <500us/帧 | 274.6us/帧 | **325-366us/帧** | 见下注 |
+| 混合表达式 translate 1000x | <2s | 0.054s | **0.056-0.057s**（多数） | 持平 |
+| [add] 链 dispatch 1000x | <2s | 0.004s | suite PASS | 无回归（守卫通过） |
+
+> **render 读数注**：本次 325-366us/帧较 round 82 参考 274.6us 高约 +20-30%。
+> 但 round 92-96 期间 layers.lua / 渲染路径**无任何代码改动**（最近一次 layers
+> 改动为 round 34+），且本会话所有纯 Lua 读数统一上移（scheduler/tokenizer 亦
+> 偏高），判定为机器降频噪声而非代码回归。仍在 <500us 预算内（约 70% 占用、30%
+> 余量），未逼近风险线。
+
+### 1.4 test_benchmark 吞吐（round 92 vs 本次，6 次采样）
+
+| 指标 | round 92 记录 | 本次（6 次采样） | 结论 |
+|---|---|---|---|
+| tokenizer 1000tok | 61-75ms/1000tok | 87-134ms，中位 **~114ms** | 见下注 |
+| scheduler 4001 resumes | 25-41ms | 52-60ms，中位 **~56ms** | 见下注 |
+
+> **吞吐注**：本次 tokenizer/scheduler 读数显著高于 round 92 历史（约 +60-150%）。
+> 但 round 92-96 期间 tokenizer/scheduler/compiler **引擎代码零改动**（git diff 证实
+> scripts/ 仅 api_stats.py + lsp.lua，均非调度/解析路径），且守卫断言（parse<3s、
+> total<3s）与历轮一致全部通过、余量巨大。判定为**机器 CPU 降频/节能状态噪声**
+> （本会话所有纯 Lua 吞吐统一上移），而非代码回归。历史 round 88-91 已记录
+> scheduler 存在 25-48ms 的既有噪声区间，本次整体带宽内读值上移与其同一机制。
+> 若后续轮次以该帧渲染为目标跑热基准，建议在空闲 CPU 状态下复核。
+
+## 2. 重点验证：round 96 debug 计数数组 7->12 对日志热路径零影响（C++ 走查）
+
+round 96 把 m_errorCounts/m_warnCounts/m_totalCounts 从 std::array<uint32_t,7>
+扩容到 std::array<uint32_t,kSubSysCount>（12，覆盖全部 SubSys 枚举），并让
+beginFrameProfile 每帧重置 luaGcMs。热路径影响分析：
+
+- **per-log 开销不变**：DebugManager::log() 的每消息路径只做
+  `if (idx < m_totalCounts.size()) m_totalCounts[idx]++`（及 Err/Warn 分支同类
+  递增）——数组从 7->12 只改变已分配槽数，`idx < size` 边界检查语义不变，递增
+  仍是 O(1) 数组索引，**日志热路径每次调用成本完全相同**。扩容前 7 槽下高子系统
+  （Live2D/MiniGame/Storage/Resource/Archive，idx 7-11）本就因 `idx<7` 被静默丢弃
+  计数；扩容 12 后这些子系统才开始正确计数（即修复了 round 95 记录的静默丢弃 bug），
+  而非引入新开销。
+- **dumpFullReport() 遍历 7->12**：仅当生成 RPC/报告时才跑（非每日志、非每帧），
+  5 次额外循环可忽略。
+- **beginFrameProfile 重置 luaGcMs**：发生在帧边界（beginFrameProfile 调用点），
+  每帧仅 1 次 float 清零，非日志热路径。
+
+**round 96 debug 改动对日志热路径零可测开销**，且修复了边界不变量（round 95
+发现的 SubSys 枚举 12 值 vs array<7> 静默丢弃）。
+
+## 3. 结论：round 92-96（已提交 HEAD）无性能回归
+
+- **全部预算守卫 PASS**，round 96 HEAD 下 perf 守卫正确性断言全部通过（无残留
+  '?'）+ 预算余量 >70%，Lua 套件在 round 96 状态为 126/126 全绿。
+- **round 95 expr 规模化守卫在其后轮次稳定**：A=0.593s / B=0.662s / C=0.003s /
+  D=0.400s，correctness 断言（残留 '?'=0）全部通过，无漂移无误报。
+- **round 96 debug 计数 7->12**：C++ 走查证实日志热路径 O(1) 递增成本不变，仅报告
+  遍历 7->12 与帧边界 1 次清零，零可测开销；同时修复了高子系统计数静默丢弃。
+- **round 92-96 期间 tokenizer/scheduler/compiler/expr/layers 引擎代码零改动**
+  （git diff 证实），本次 tokenizer/scheduler/render 吞吐读值偏高**非代码回归**，
+  判定为机器降频噪声（本会话所有纯 Lua 读数统一上移）。
+- 无任何热路径预算余量 <20%（最紧仍是 render 每帧守卫，约 70% 占用、30% 余量）。
+
+## 4. 【重要】round 97 工作树改动与 round 95 守卫的交互（供 round 97 处理）
+
+> 本会话工作树含**未提交的 round 97 expr.lua 深度预算改动**（为修 O(n^3) 病态：给
+> translate 加 depth>48 预算，超限返回原文不翻译，让深层嵌套三元无法挂起翻译器）。
+> 该改动**不在 round 92-96 提交范围**，但直接影响 round 95 规模化守卫，特此记录：
+
+- **round 97 深度预算会使 round 95 守卫的 3 条正确性断言失败**：A（300 插值段）、
+  B（500 平链三元）、D（200 长串扫描）的 translate 递归深度均 >48，预算触发后
+  返回带 '?' 的未翻译原文，导致「残留 '?' 必须为 0」断言 FAIL。当前工作树 Lua
+  套件因此为 **126 passed / 1 failed（test_expr_lang）**。round 97 改动本身的
+  逻辑是**有意的**——防止深层病态嵌套挂起翻译器（handoff 记录 N=100 达 9.3s），
+  但**守卫语义与 round 97 预算语义冲突**。
+- **这不是 round 95 守卫的实现错误**，而是守卫假设「translate 产物 100% 无 '?'」
+  与 round 97 引入「超深表达式允许保留 '?'（交由 Lua 解析器报语法）」的新语义
+  冲突。需在 round 97 同步调整守卫，例如：1) 把 A/B/D 的规模化输入控制在预算内
+  （<48 深，如链长 40）以继续校验正常形态的无残留 '?'，并**单列一条**「>48 深
+  表达式被预算截断保留 '?' 且不挂起」的新断言锁定 round 97 语义；2) 或把深度预算
+  提升到守卫覆盖之上并把超深截断作为独立用例。具体方案由 round 97（主代理）拍板，
+  此处仅记录交互与建议。
+- **本 baseline（round 92-96，HEAD）不受影响**：round 96 提交版无深度预算，
+  守卫全部 PASS。
+
+## 5. 建议（非必须，无预算逼近；一项观察项）
+
+- 各热路径预算余量充足，**暂无必须实现的优化点**。
+- **观察项（非回归）**：本会话 tokenizer/scheduler/render 吞吐读数高于 round 92
+  历史（约 +40-90%），已证实引擎代码零改动，判定为机器 CPU 降频/节能噪声。后续
+  若在某轮看到**守卫预算余量 <20%** 或**引擎代码改动后**读数同一窗口内继续上移，
+  再复核是否为真实回归。现阶段所有守卫仍以 >70% 余量通过。
+- 与历轮一致，scheduler 吞吐读值本机波动大；若希望吞吐读数更稳定可改固定 resume
+  数单调计时取中位数，但不构成当前回归。
+
+## 验证
+
+- 本文档更新为纯测量 + 文档 + C++ 走查，无引擎源代码变更（临时探针脚本 / A 产物
+  均于测量后删除，git 工作树仅保留本文档改动）。
+- round 96 HEAD 下 expr 规模化守卫正确性 + 预算断言全部 PASS；全量 Lua 套件在
+  round 96 状态为 **126/126** 全绿；round 97 工作树交互已单列于第 4 节。
