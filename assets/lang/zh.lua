@@ -37,4 +37,18 @@
 
   -- CLDR 复数变体表（round 80）：无 n 参数时落到 other 形态
   items = { one = "{n} 个条目", other = "{n} 个条目" },
+  -- One-Way Reply scene keys (round 105)
+  investigate_sigh = "尘封了十七年的名字，在纸上微微发亮。",  final_choice = "你只有几秒钟。雨里，最后一封信该去哪里？",
+  end_zero_a = "纸落入铁箱，没有声响。然后邮箱醒来，像十七年前一样呼吸。",
+  end_zero_b = "第二天清晨，课堂点名册上多了一个名字——姐姐回来了，从未离开。",
+  end_zero_c = "澪，谢谢你把迟到的道歉，送回了十七年前。",
+  end_zero_d = "时间归零。可在雨停的那一刻，两个人都学会了告别。",
+  end_companion_a = "信被轻轻放进书包。答案没有回到过去，却落在了今天。",
+  end_companion_b = "我们一起读完最后一页日记，把旧邮箱用锁封了起来。",
+  end_companion_c = "从今往后，写给她的话，只说给彼此听。",
+  end_companion_d = "邮箱沉默了。窗外，雨已停，天光正亮。",
+  end_promise_a = "纸张撕成两半，落进废纸篓。邮箱从此再没有响过一次。",
+  end_promise_b = "十七年前的谜，仍旧是谜。可澪的眼里，终于少了一道悬着的影。",
+  end_promise_c = "我们，就做普通朋友吧。",
+  end_promise_d = "守约——有些信，不说破，才是完整的抵达。",
 }

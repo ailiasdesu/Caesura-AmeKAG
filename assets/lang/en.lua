@@ -30,4 +30,18 @@
 
   -- CLDR plural variant table (round 80): no n param resolves to "other"
   items = { one = "{n} item", other = "{n} items" },
+  -- One-Way Reply scene keys (round 105)
+  investigate_sigh = "Seventeen years of dust, and one name still glows faintly on the page.",  final_choice = "You have a few seconds. In the rain, where should the last letter go?",
+  end_zero_a = "The paper drops into the tin box without a sound. Then the mailbox wakes, breathing as it did seventeen years ago.",
+  end_zero_b = "Next morning the register holds one more name — her sister came home, and never really left.",
+  end_zero_c = "Mio, thank you for carrying the late apology back to seventeen years ago.",
+  end_zero_d = "Time has come to zero. But by the time the rain stops, both of them have learned how to say goodbye.",
+  end_companion_a = "The letter slips quietly into the bag. The answer does not travel back; it settles in today instead.",
+  end_companion_b = "Together we finish the last page of her diary and seal the old mailbox shut.",
+  end_companion_c = "From now on, the words meant for her are spoken only to each other.",
+  end_companion_d = "The mailbox falls still. Outside, the rain has stopped and the light is bright.",
+  end_promise_a = "The paper tears in two and lands in the bin. The mailbox never rings again.",
+  end_promise_b = "The mystery of seventeen years stays a mystery. But the shadow behind Mio's eyes is finally gone.",
+  end_promise_c = "Let's just be ordinary friends.",
+  end_promise_d = "A promise — some letters, left unsent, are what arrive most fully.",
 }
