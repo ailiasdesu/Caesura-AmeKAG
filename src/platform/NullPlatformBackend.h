@@ -24,6 +24,7 @@ public:
 private:
     int m_width = 0;
     int m_height = 0;
+    bool m_initialized = false;
 };
 
 } // namespace Caesura

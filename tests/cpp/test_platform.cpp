@@ -170,16 +170,40 @@ TEST_CASE("Platform: NullPlatformBackend init is idempotent over repeated calls"
     backend.shutdown();
 }
 
-TEST_CASE("Platform: NullPlatformBackend resize before init mutates dimensions") {
-    // Window-management edge documented from the actual null implementation:
-    // resizeWindow() is NOT gated on init -- it unconditionally writes the new
-    // dimensions even before init, so a pre-init resize leaves the backend with
-    // width/height set (unlike SDL3PlatformBackend::resizeWindow which no-ops
-    // until a real window exists). It must at least never crash.
+TEST_CASE("Platform: NullPlatformBackend resize before init is a no-op") {
+    // Window-management edge, flipped by round 93: resizeWindow() is now gated
+    // on m_initialized, matching SDL3PlatformBackend::resizeWindow which no-ops
+    // until a real window exists. A pre-init resize must NOT alter dimensions.
     NullPlatformBackend backend;
     CHECK(backend.getWindowWidth() == 0);
     CHECK(backend.getWindowHeight() == 0);
     CHECK_NOTHROW(backend.resizeWindow(800, 600));
+    CHECK(backend.getWindowWidth() == 0);
+    CHECK(backend.getWindowHeight() == 0);
+}
+
+TEST_CASE("Platform: NullPlatformBackend resize after init updates dimensions") {
+    // Window-management edge: once initialized, resizeWindow must take effect
+    // and map through to getWindowWidth/Height.
+    NullPlatformBackend backend;
+    CHECK(backend.init("t", 1920, 1080));
+    backend.resizeWindow(800, 600);
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+    backend.shutdown();
+}
+
+TEST_CASE("Platform: NullPlatformBackend resize after shutdown is a no-op") {
+    // Window-management edge: after shutdown the backend is no longer
+    // initialized, so a resize must be a no-op (dimensions stay frozen).
+    NullPlatformBackend backend;
+    CHECK(backend.init("t", 1920, 1080));
+    backend.resizeWindow(800, 600);
+    CHECK(backend.getWindowWidth() == 800);
+    CHECK(backend.getWindowHeight() == 600);
+
+    backend.shutdown();
+    backend.resizeWindow(320, 240);
     CHECK(backend.getWindowWidth() == 800);
     CHECK(backend.getWindowHeight() == 600);
 }
