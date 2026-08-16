@@ -33,6 +33,13 @@ for name, handler in pairs(layer_cmds) do
     KAG[name] = handler
 end
 
+-- [tween] declarative tween commands (round 106): merged after layer so
+-- attr reads/writes resolve through the same layer/speaker path.
+local tween_cmds = require("kag.commands.tween")
+for name, handler in pairs(tween_cmds) do
+    KAG[name] = handler
+end
+
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 --  Text commands �� [ch], [text], [l], [r], [er], [p]
 --  Loaded from kag/commands/text.lua, delegates to backend font rendering.

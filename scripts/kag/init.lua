@@ -41,6 +41,10 @@ local backend    = require("backend")
 -- Save/Load (Phase 6)
 local save_cmds  = require("kag.commands.save")
 
+-- Declarative tween commands (round 106): preloaded so sandbox require
+-- resolves before any [tween] token runs (kag_runner hooks call it).
+local tween_cmds = require("kag.commands.tween")
+
 -- P1 extensions
 local gallery    = require("gallery")
 local music_room = require("music_room")

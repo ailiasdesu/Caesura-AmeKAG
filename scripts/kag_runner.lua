@@ -429,6 +429,18 @@ function kag_runner.update(dt)
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
     local delta_ms = math.max(0, (tonumber(dt) or 0) * 1000)
 
+    -- [tween] fire-and-forget (wait=false) tweens: advance every frame.
+    -- Blocking [tween] (wait=true) advances itself inside its own
+    -- operation loop; this hook only services the non-blocking queue
+    -- (skipped entirely once empty). The module loads through kag.lua;
+    -- the pcall guards a missing registration in dev tooling.
+    if ctx and type(ctx.tweens) == "table" and #ctx.tweens > 0 then
+        pcall(function()
+            local tw = require("kag.commands.tween")
+            if tw and tw.update then tw.update(ctx, delta_ms) end
+        end)
+    end
+
     -- Typewriter reveal: advance the visible character count by the
     -- configured text speed (ms per char). Skip/auto modes reveal instantly.
     if ctx and ctx.reveal and not ctx.skip_mode then
