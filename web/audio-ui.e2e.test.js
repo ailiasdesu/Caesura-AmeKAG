@@ -1,0 +1,274 @@
+// @vitest-environment jsdom
+// Audio UI integration test for the Caesura web player (main.mjs).
+// Drives the REAL main.mjs against a real jsdom DOM + a real wasmoon engine,
+// mocking only the network (fetch) and pinning the local wasm so the fake
+// browser can boot offline. Covers the audio settings UI wiring that the
+// unit suites cover only in isolation:
+//   * 1. BGM/SE/Voice slider drags -> settings.volumes update -> mirrored
+//          slider position stays in sync, three busses independent.
+//   * 2. Volume 0 mutes a bus (settings + engine forward); restoring 1 clears.
+//   * 3. syncAudioStatus: shows the playing BGM path, and the placeholder
+//          when nothing is playing (after the scene reaches [stopbgm]/[stopse]).
+//   * 4. Reset walks sliders back to their 1.0 defaults (settings restored).
+//   * 5. Scene commands: [playbgm] drives the status display, and a
+//          [setbgmvolume] engine mutation does NOT write back into the
+//          settings/UI (round 93 one-way lock) -- asserted at the DOM layer.
+//
+// One page load per file (a single browser session), ordered cases so later
+// ones build on the parked scene, exactly like a user would.
+import { describe, it, expect, beforeAll } from 'vitest'
+import { readFileSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const root = join(here, '..')
+const wasmFile = join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm')
+const AUDIO_TUTORIAL = 'tutorial/tutorial_04_audio.ks'
+const EM = String.fromCharCode(0x2014) // — (no-audio placeholder)
+
+// Map web/player fetch URLs to real files so the player boots without a
+// server (copied 1:1 from e2e.main.test.js to stay in the same harness).
+function resolvePathFromUrl(urlStr) {
+  let pathname
+  try { pathname = new URL(urlStr, 'http://local').pathname } catch { pathname = urlStr }
+  if (pathname === '/scripts/index.json') return join(here, 'scripts-index.json')
+  for (const dir of ['scripts', 'demo', 'cache', 'assets']) {
+    const prefix = '/' + dir + '/'
+    if (pathname.startsWith(prefix)) return join(root, dir, pathname.slice(prefix.length))
+  }
+  return null
+}
+
+function makeFetch() {
+  return async (input) => {
+    const url = typeof input === 'string' ? input : String(input?.url ?? '')
+    const p = resolvePathFromUrl(url)
+    if (p && existsSync(p)) {
+      const text = () => readFileSync(p, "utf8")
+      return {
+        ok: true, status: 200, text,
+        json: async () => JSON.parse(text()),
+        arrayBuffer: async () => readFileSync(p).buffer,
+      }
+    }
+    return { ok: false, status: 404, text: async () => '', json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) }
+  }
+}
+
+// DOM fixture mirrors web/index.html body (minus the module <script>).
+function setupDom() {
+  document.head.innerHTML = '<title>caesura-audio-e2e</title>'
+  document.body.innerHTML = [
+    '<div class="controls">',
+    '  <select id="scene"></select>',
+    '  <button id="run">▶ Run Scene</button>',
+    '  <button id="advance">Click to Advance</button>',
+    '  <button id="auto">⏩ Auto</button>',
+    '  <span id="status"></span>',
+    '</div>',
+    '<div class="controls settings-bar">',
+    '  <label>Lang <select id="settings-lang"><option value="en">English</option><option value="zh">中文</option><option value="zh-TW">繁體中文</option><option value="ja">日本語</option></select></label>',
+    '  <label>Auto <input id="settings-auto" type="checkbox" /></label>',
+    '  <label>Speed <input id="settings-speed" type="range" min="1" max="80" value="20" /></label>',
+    '  <label>BGM <input id="settings-bgm" type="range" min="0" max="1" step="0.05" value="1" /></label>',
+    '  <label>SE <input id="settings-se" type="range" min="0" max="1" step="0.05" value="1" /></label>',
+    '  <label>Voice <input id="settings-voice" type="range" min="0" max="1" step="0.05" value="1" /></label>',
+    '  <button id="settings-reset" type="button">↺ Reset</button>',
+    '</div>',
+    '<div id="stage"></div>',
+    '<div class="status-line">Audio: <span id="audio-status">—</span></div>',
+    '<div class="endings-wrap"><div class="backlog-title">Endings (<span id="endings-count">0</span>)</div><div id="endings"></div></div>',
+    '<div class="saves-wrap">',
+    '  <div class="backlog-title">Save Slots (<span id="saves-count">0</span>)</div>',
+    '  <div class="saves-actions"><input id="save-slot" type="number" min="0" max="99" value="1" /><button id="save-now">💾 Save Current</button><button id="refresh-slots">⟳ Refresh</button></div>',
+    '  <div id="saves"></div>',
+    '</div>',
+    '<div class="backlog-wrap"><div class="backlog-title">Backlog (<span id="backlog-count">0</span>)</div><div id="backlog"></div></div>',
+    '<div id="log"></div>',
+  ].join(String.fromCharCode(10))
+}
+
+async function waitFor(predicate, label, timeout = 15000) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    const v = predicate()
+    if (v) return v
+    await new Promise((r) => setTimeout(r, 40))
+  }
+  throw new Error('waitFor timed out: ' + label)
+}
+
+const $ = (id) => document.getElementById(id)
+const statusText = () => ($('status') ? $('status').textContent : '')
+const audioStatus = () => ($('audio-status') ? $('audio-status').textContent : '')
+
+async function waitStatus(fragment, label, timeout = 60000) {
+  return waitFor(() => statusText().includes(fragment), label, timeout)
+}
+
+// Read what main.mjs persisted into localStorage (the settings source of truth
+// the UI mirrors). Returns parsed settings or null.
+function readPersistedSettings() {
+  const raw = localStorage.getItem('caesura.player-settings')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch { return null }
+}
+
+// Set a slider to `value` and dispatch input (the real handler listens for
+// 'input'), mirroring how main.mjs coerces the slider's string value.
+function setSlider(id, value) {
+  const el = $(id)
+  el.value = String(value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+  return el
+}
+
+function sliderValue(id) { return Number($(id).value) }
+
+// Resolve a scene to the actual <option> value the picker offers. The book
+// bundle keys scenes by bare name (e.g. 'tutorial_04_audio.ks'); when the
+// bundle is unavailable the fallback list uses 'tutorial/<name>'. Pick
+// whichever form exists so the select actually selects it.
+function pickSceneValue(name) {
+  const sel = $('scene')
+  const bare = name.split('/').pop()
+  for (const opt of sel.options) {
+    if (opt.value === name || opt.value === bare) return opt.value
+  }
+  // Neither form is an option (defensive): keep a stable value by appending one.
+  return 'tutorial_04_audio.ks'
+}
+
+// Pick a scene and Run it, waiting for it to park on a [p] (WAIT:).
+async function runScene(name) {
+  const sel = $('scene')
+  sel.value = pickSceneValue(name)
+  sel.dispatchEvent(new Event('change', { bubbles: true }))
+  $('run').click()
+  return waitStatus('parked: ', 'run parks: ' + name)
+}
+
+// Click Advance and wait for the status cursor to move to a new advance page.
+async function advanceOnce() {
+  const before = statusText()
+  $('advance').click()
+  return waitFor(() => {
+    const s = statusText()
+    return s.startsWith('advance:') && s !== before
+  }, 'advance advances page', 60000)
+}
+
+beforeAll(async () => {
+  globalThis.__CAESURA_WASM_FILE__ = wasmFile
+  setupDom()
+  globalThis.fetch = makeFetch()
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16)
+  }
+  await import('./main.mjs')
+  // The module auto-runs galgame_demo.ks; wait for it to park on a [p].
+  await waitFor(() => /^parked: /i.test(statusText()), 'initial scene parks', 150000)
+  // Anchor sliders at defaults so the per-bus tests start from a known point.
+  setSlider('settings-bgm', 1)
+  setSlider('settings-se', 1)
+  setSlider('settings-voice', 1)
+}, 180000)
+
+describe('audio UI · volume sliders (integration with settings + engine wiring)', () => {
+  it('drags each slider independently: settings.volumes persists + mirror stays in sync', () => {
+    setSlider('settings-bgm', 0.4)
+    setSlider('settings-se', 0.6)
+    setSlider('settings-voice', 0.8)
+
+    const vols = readPersistedSettings().volumes
+    expect(vols.bgm).toBe(0.4)
+    expect(vols.se).toBe(0.6)
+    expect(vols.voice).toBe(0.8)
+
+    // The settings mirror (syncSettingsControls) keeps DOM sliders in sync
+    // with the persisted, sanitized value.
+    expect(sliderValue('settings-bgm')).toBe(0.4)
+    expect(sliderValue('settings-se')).toBe(0.6)
+    expect(sliderValue('settings-voice')).toBe(0.8)
+
+    // Independent again: only bgm changes.
+    setSlider('settings-bgm', 0.25)
+    const vols2 = readPersistedSettings().volumes
+    expect(vols2.bgm).toBe(0.25)
+    expect(vols2.se).toBe(0.6)
+    expect(vols2.voice).toBe(0.8)
+    expect(sliderValue('settings-bgm')).toBe(0.25)
+  })
+
+  it('muting a bus (volume 0) persists + is restored; other buses unaffected', () => {
+    setSlider('settings-se', 0)
+    let vols = readPersistedSettings().volumes
+    expect(vols.se).toBe(0)
+    expect(sliderValue('settings-se')).toBe(0)
+    expect(vols.bgm).toBe(0.25)
+    expect(vols.voice).toBe(0.8)
+
+    setSlider('settings-se', 1)
+    vols = readPersistedSettings().volumes
+    expect(vols.se).toBe(1)
+    expect(sliderValue('settings-se')).toBe(1)
+  })
+})
+
+describe('audio UI · reset restores the default 1.0 slider positions', () => {
+  it('Reset after manual drags returns all busses to 1.0', () => {
+    setSlider('settings-bgm', 0.3)
+    setSlider('settings-se', 0.3)
+    setSlider('settings-voice', 0.3)
+    expect(sliderValue('settings-bgm')).toBe(0.3)
+
+    $('settings-reset').click()
+
+    // The reset notifies subscribers -> syncSettingsControls mirrors the
+    // defaults back into the DOM sliders (the observable UI contract).
+    expect(sliderValue('settings-bgm')).toBe(1)
+    expect(sliderValue('settings-se')).toBe(1)
+    expect(sliderValue('settings-voice')).toBe(1)
+  })
+})
+
+describe('audio UI · scene audio status display + one-way lock', () => {
+  it('runs the audio tutorial: [playbgm] shows the playing path, [setbgmvolume] does NOT write back to the slider', async () => {
+    await runScene(AUDIO_TUTORIAL)
+    await waitFor(() => audioStatus().includes('BGM'), 'audio status shows BGM', 15000)
+    expect(audioStatus()).toContain('BGM: daily.wav')
+
+    // Anchor the settings/UI at 0.7 (a user pick). [setbgmvolume] happens on
+    // the NEXT page and is engine-side only (round 93 one-way lock): it must
+    // NOT echo back into the slider or settings.volumes.
+    setSlider('settings-bgm', 0.7)
+    expect(sliderValue('settings-bgm')).toBe(0.7)
+
+    // Advance one page: the tutorial's page-2 token is [setbgmvolume volume=0.3].
+    await advanceOnce()
+    expect(statusText()).toMatch(/^advance: (WAIT:|DONE:)/)
+
+    expect(sliderValue('settings-bgm')).toBe(0.7)
+    expect(readPersistedSettings().volumes.bgm).toBe(0.7)
+  }, 120000)
+
+  it('[stopbgm]/[stopse] drop those buses from the status display', async () => {
+    // Advance until the scene clears every bus. The tutorial's final audio
+    // pages run [playse]/voice then [stopse] + [stopbgm]; after that all
+    // buses report not-playing and syncAudioStatus falls back to the "—"
+    // placeholder. Advance repeatedly (bounded) so the count is robust to
+    // exactly where the previous test left the parked cursor.
+    for (let i = 0; i < 10; i++) {
+      if (audioStatus() === EM) break
+      const s0 = statusText()
+      $('advance').click()
+      await waitFor(() => {
+        const s = statusText()
+        return s.startsWith('advance:') && s !== s0
+      }, 'advance to clear audio ' + i, 60000)
+    }
+    await waitFor(() => audioStatus() === EM, 'status reaches the no-audio placeholder', 15000)
+    expect(audioStatus()).toBe(EM)
+  }, 120000)
+})
