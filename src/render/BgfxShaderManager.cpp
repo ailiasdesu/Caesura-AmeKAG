@@ -25,6 +25,11 @@ BgfxShaderManager::~BgfxShaderManager() {
     if (bgfx::isValid(m_u_vfxParams))        bgfx::destroy(m_u_vfxParams);
     if (bgfx::isValid(m_u_stretchParams))    bgfx::destroy(m_u_stretchParams);
     if (bgfx::isValid(m_u_affineParams))     bgfx::destroy(m_u_affineParams);
+    if (bgfx::isValid(m_postfxVignette))     bgfx::destroy(m_postfxVignette);
+    if (bgfx::isValid(m_postfxLut))          bgfx::destroy(m_postfxLut);
+    if (bgfx::isValid(m_postfxBlur))         bgfx::destroy(m_postfxBlur);
+    if (bgfx::isValid(m_postfxBloom))        bgfx::destroy(m_postfxBloom);
+    if (bgfx::isValid(m_u_postfxParams))     bgfx::destroy(m_u_postfxParams);
 }
 
 struct ShaderUniformMetadata {
@@ -144,6 +149,11 @@ void BgfxShaderManager::initEmbeddedShaders() {
 
     Bytecode vsSprite, fsTexture, vsFullscreen, fsBlend, fsTransition, fsVfx;
     Bytecode stretchVs, stretchFs, affineVs, affineFs;
+    // Round-102 post-processing full-screen PS (vignette / LUT grade /
+    // soft blur / bloom). Compiled for D3D11/D3D12; other backends fall
+    // back to fsTexture (identity copy) so the chain stays functional
+    // (graceful degradation, no visual effect on those backends).
+    Bytecode fsPostfxVignette, fsPostfxLut, fsPostfxBlur, fsPostfxBloom;
 
     if (isVulkan) {
         vsSprite   = { reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite),
@@ -169,6 +179,10 @@ void BgfxShaderManager::initEmbeddedShaders() {
         stretchFs  = { kEmbeddedDXBC_stretch_blt_fs, kEmbeddedDXBC_stretch_blt_fs_size };
         affineVs   = { kEmbeddedDXBC_affine_blt_vs, kEmbeddedDXBC_affine_blt_vs_size };
         affineFs   = { kEmbeddedDXBC_affine_blt_fs, kEmbeddedDXBC_affine_blt_fs_size };
+        fsPostfxVignette = { kEmbeddedDXBC_fs_postfx_vignette, kEmbeddedDXBC_fs_postfx_vignette_size };
+        fsPostfxLut      = { kEmbeddedDXBC_fs_postfx_lut,      kEmbeddedDXBC_fs_postfx_lut_size };
+        fsPostfxBlur     = { kEmbeddedDXBC_fs_postfx_blur,     kEmbeddedDXBC_fs_postfx_blur_size };
+        fsPostfxBloom    = { kEmbeddedDXBC_fs_postfx_bloom,    kEmbeddedDXBC_fs_postfx_bloom_size };
     } else if (isGL) {
         vsSprite   = { kEmbeddedGL_vs_sprite, kEmbeddedGL_vs_sprite_size };
         fsTexture  = { kEmbeddedGL_fs_texture, kEmbeddedGL_fs_texture_size };
@@ -197,6 +211,14 @@ void BgfxShaderManager::initEmbeddedShaders() {
     // dedicated blit bytecode (Vulkan today): no src-rect UV mapping.
     if (stretchVs.size == 0) { stretchVs = vsSprite; stretchFs = fsTexture; }
     if (affineVs.size == 0)  { affineVs  = vsSprite; affineFs  = fsTexture; }
+
+    // Post-processing chain: only D3D ships dedicated PS bytecode today.
+    // On GL/Metal/Vulkan the full-screen PS falls back to the plain texture
+    // copy (identity) so the chain still runs (stages composite as copies).
+    if (fsPostfxVignette.size == 0) fsPostfxVignette = fsTexture;
+    if (fsPostfxLut.size == 0)      fsPostfxLut      = fsTexture;
+    if (fsPostfxBlur.size == 0)     fsPostfxBlur     = fsTexture;
+    if (fsPostfxBloom.size == 0)    fsPostfxBloom    = fsTexture;
 
     if (!vsSprite.data || vsSprite.size == 0 ||
         !fsTexture.data || fsTexture.size == 0) {
@@ -242,6 +264,18 @@ void BgfxShaderManager::initEmbeddedShaders() {
     m_vfxProgram = buildProgram(vsFullscreen, fsVfx, "VFX", &vfxParams);
     m_stretchProgram = buildProgram(stretchVs, stretchFs, "StretchBlt", nullptr);
     m_affineProgram = buildProgram(affineVs, affineFs, "AffineBlt", nullptr);
+
+    // Round-102 post-processing chain: shared 4x vec4 params uniform.
+    const ShaderUniformMetadata postfxParams = {
+        "PostFxParams",
+        uint8_t(bgfx::UniformType::Vec4) | kUniformFragmentBit,
+        4, 0, 4, 64
+    };
+    m_postfxVignette = buildProgram(vsFullscreen, fsPostfxVignette, "PostFxVignette", &postfxParams);
+    m_postfxLut      = buildProgram(vsFullscreen, fsPostfxLut,      "PostFxLutGrade",  &postfxParams);
+    m_postfxBlur     = buildProgram(vsFullscreen, fsPostfxBlur,     "PostFxSoftBlur",  &postfxParams);
+    m_postfxBloom    = buildProgram(vsFullscreen, fsPostfxBloom,    "PostFxBloom",     &postfxParams);
+    m_u_postfxParams = bgfx::createUniform("PostFxParams", bgfx::UniformType::Vec4, 4);
 
     // Verify fallback program is valid before registering
     if (!bgfx::isValid(m_fallbackProgram)) {

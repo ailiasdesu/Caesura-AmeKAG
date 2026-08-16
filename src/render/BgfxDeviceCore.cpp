@@ -102,8 +102,8 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
 
     // -- Explicit view order (RTT -> MAIN -> DEBUG -> TRANSITION) --
         // Enforce: VIEW_RTT (0) -> VIEW_MAIN (1) -> VIEW_DEBUG (2)
-    bgfx::ViewId viewOrder[] = { VIEW_RTT, VIEW_MAIN, VIEW_DEBUG, VIEW_TRANSITION };
-    bgfx::setViewOrder(0, 4, viewOrder);
+    bgfx::ViewId viewOrder[] = { VIEW_RTT, VIEW_MAIN, VIEW_POSTFX, VIEW_DEBUG, VIEW_TRANSITION };
+    bgfx::setViewOrder(0, 5, viewOrder);
 
     printf("[BgfxRenderDevice] Initialized %dx%d with 3 views (order: RTT -> MAIN -> DEBUG)\n",
            width, height);

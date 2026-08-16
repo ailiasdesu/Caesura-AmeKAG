@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # ============================================================================
 # Caesura (AmeKAG) - Shader Compilation Script (Unix / macOS)
 # ============================================================================
@@ -99,6 +99,10 @@ compile_for_platform() {
         "fs_blend"
         "fs_transition"
         "fs_vfx"
+        "fs_postfx_vignette"
+        "fs_postfx_lut"
+        "fs_postfx_blur"
+        "fs_postfx_bloom"
         "stretch_blt_fs"
         "affine_blt_fs"
     )

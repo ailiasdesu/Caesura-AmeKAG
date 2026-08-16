@@ -72,6 +72,12 @@ class NullRenderDevice final : public IRenderDevice {public:
     void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g,
                       uint8_t b, uint8_t a) override;
     bool setColorFilter(ColorFilterPreset preset) override { return false; }
+    bool isPostFxSupported(PostFxKind kind) const override { return false; }
+    PostFxHandle createPostFx(PostFxKind kind, const PostFxParams& params) override { return 0; }
+    void setPostFxParams(PostFxHandle handle, const PostFxParams& params) override {}
+    void destroyPostFx(PostFxHandle handle) override {}
+    void clearPostFx() override {}
+    bool isPostFxActive() const override { return false; }
     void flushBatch() override;
     float textLineHeight() const override;
     RenderUniformHandle getDefaultSampler() const override;

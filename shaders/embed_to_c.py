@@ -16,6 +16,7 @@ OUT = os.path.join(BASE, "src", "render")
 
 FILES = ["vs_sprite", "vs_fullscreen", "stretch_blt_vs", "affine_blt_vs",
          "fs_texture", "fs_blend", "fs_transition", "fs_vfx",
+         "fs_postfx_vignette", "fs_postfx_lut", "fs_postfx_blur", "fs_postfx_bloom",
          "stretch_blt_fs", "affine_blt_fs"]
 
 

@@ -86,7 +86,7 @@ for %%S in (vs_sprite vs_fullscreen stretch_blt_vs affine_blt_vs minigame_vs) do
 )
 
 REM Fragment shaders
-for %%S in (fs_texture fs_blend fs_transition fs_vfx stretch_blt_fs affine_blt_fs minigame_fs) do (
+for %%S in (fs_texture fs_blend fs_transition fs_vfx fs_postfx_vignette fs_postfx_lut fs_postfx_blur fs_postfx_bloom stretch_blt_fs affine_blt_fs minigame_fs) do (
     set "SRC=%GLSL_DIR%\%%S.sc"
     set "OUT=%OUT_SUBDIR%\%%S!EXT!"
     if exist "!SRC!" (

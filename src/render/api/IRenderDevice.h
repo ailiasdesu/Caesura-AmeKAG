@@ -173,6 +173,35 @@ public:
     };
     virtual bool setColorFilter(ColorFilterPreset preset) = 0;
 
+    // -- Post-processing chain (round 102: Neo-Genesis postfx) ----------
+    // Full-screen effect chain applied to the scene before backbuffer
+    // composite. While at least one PostFx is active, the scene renders to
+    // an internal scene RTT and the chain runs sceneRTT -> stage... ->
+    // backbuffer each frame. When the chain is empty the scene draws
+    // directly to the backbuffer (zero overhead, current behavior).
+    // Null/software renderers return 0 / false (graceful degradation --
+    // the Lua layer treats unsupported as no-op, matching submitVFX).
+    enum class PostFxKind : uint8_t {
+        Vignette = 0,      // radial darkening; params: strength, radius, rgb tint
+        LutColorGrade = 1, // 3x1 color matrix grade; params: strength, rgb, lutMix
+        SoftBlur = 2,      // gaussian soften; params: radius(px), amount
+        Bloom = 3,         // bright-pass + downsampled additive glow; params: strength, amount(threshold)
+    };
+    struct PostFxParams {
+        float strength = 1.0f; // master intensity 0..1
+        float radius  = 0.0f;  // vignette inner radius / blur radius px / bloom spread
+        float amount  = 0.0f;  // bloom threshold / blur mix
+        float r = 1.0f, g = 1.0f, b = 1.0f; // tint color (vignette/LUT)
+        float lutMix = 0.0f;   // LUT grade mix 0..1 (1 = full grade)
+    };
+    using PostFxHandle = uint32_t; // 0 = invalid/unsupported
+    virtual bool isPostFxSupported(PostFxKind kind) const = 0;
+    virtual PostFxHandle createPostFx(PostFxKind kind, const PostFxParams& params) = 0;
+    virtual void setPostFxParams(PostFxHandle handle, const PostFxParams& params) = 0;
+    virtual void destroyPostFx(PostFxHandle handle) = 0; // 0/unknown safe no-op
+    virtual void clearPostFx() = 0;
+    virtual bool isPostFxActive() const = 0;
+
     // -- Shader / Sampler access (for ParticleSystem and other GPU systems) --
     virtual RenderUniformHandle getDefaultSampler() const = 0;
     virtual RenderProgramHandle getFallbackProgram() const = 0;

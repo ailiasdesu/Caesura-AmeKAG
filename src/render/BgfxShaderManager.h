@@ -41,6 +41,18 @@ public:
     bgfx::UniformHandle getVFXParams()          const { return m_u_vfxParams; }
     bgfx::UniformHandle getStretchParams()      const { return m_u_stretchParams; }
     bgfx::UniformHandle getAffineParams()       const { return m_u_affineParams; }
+    // -- Round-102 post-processing chain ---------------------------------------
+    // Per-kind full-screen PS programs driven by a shared PostFxParams uniform.
+    bgfx::ProgramHandle getPostFxProgram(int kind) const {
+        switch (kind) {
+            case 0: return m_postfxVignette;   // Vignette
+            case 1: return m_postfxLut;        // LutColorGrade
+            case 2: return m_postfxBlur;       // SoftBlur
+            case 3: return m_postfxBloom;      // Bloom
+            default: return BGFX_INVALID_HANDLE;
+        }
+    }
+    bgfx::UniformHandle getPostFxParams() const { return m_u_postfxParams; }
 
 private:
     bgfx::ProgramHandle m_fallbackProgram    = BGFX_INVALID_HANDLE;
@@ -57,6 +69,12 @@ private:
     bgfx::UniformHandle m_u_vfxParams        = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_stretchParams    = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_affineParams     = BGFX_INVALID_HANDLE;
+    // Round-102 post-process programs + shared params uniform
+    bgfx::ProgramHandle m_postfxVignette   = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_postfxLut        = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_postfxBlur       = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_postfxBloom      = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_u_postfxParams   = BGFX_INVALID_HANDLE;
     bool m_embeddedInit = false;  // per-instance initEmbeddedShaders guard
 };
 

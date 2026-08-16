@@ -19,6 +19,10 @@ public:
     static constexpr uint16_t VIEW_MAIN       = 1;
     static constexpr uint16_t VIEW_DEBUG      = 2;
     static constexpr uint16_t VIEW_TRANSITION = 3;
+    // Round-102 post-processing chain composite view (order: RTT -> MAIN
+    // -> POSTFX -> DEBUG -> TRANSITION). Scene renders to the internal
+    // scene RTT under VIEW_MAIN; POSTFX composites sceneRtt -> backbuffer.
+    static constexpr uint16_t VIEW_POSTFX    = 40;
 
     static bool setPreferredBackend(const char* name);
     const char* getBackendName() const;

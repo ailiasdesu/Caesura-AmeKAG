@@ -108,6 +108,14 @@ public:
     void fillViewport(ViewportHandle handle, uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
     bool setColorFilter(ColorFilterPreset preset) override;
 
+    // -- Post-processing chain (round 102)
+    bool isPostFxSupported(PostFxKind kind) const override;
+    PostFxHandle createPostFx(PostFxKind kind, const PostFxParams& params) override;
+    void setPostFxParams(PostFxHandle handle, const PostFxParams& params) override;
+    void destroyPostFx(PostFxHandle handle) override;
+    void clearPostFx() override;
+    bool isPostFxActive() const override { return !m_postFxStages.empty(); }
+
     // -- Batch protocol (spec [0.3])
     void beginBatch() override;
     void flushBatch() override;
@@ -120,6 +128,33 @@ private:
     int m_width  = 1280;
     int m_height = 720;
     bool m_bgfxInitialized = false;
+
+    // -- Post-processing chain state (round 102) --------------------------
+    struct PostFxStage {
+        PostFxKind kind = PostFxKind::Vignette;
+        PostFxParams params;
+        bool enabled = true;
+    };
+    std::vector<PostFxStage> m_postFxStages;        // ordered chain (stable handles = index+1)
+
+    // Scratch render targets. Each entry tracks its size so the chain can
+    // ping-pong between passes and rebuild on resize. The scene target is
+    // the framebuffer VIEW_MAIN is redirected to while the chain is active.
+    struct PostFxRt {
+        bgfx::FrameBufferHandle fb = BGFX_INVALID_HANDLE;
+        int w = 0, h = 0;
+    };
+    std::vector<PostFxRt> m_postFxRtPool;           // scratch RTTs (ping-pong / downsample chain)
+    bgfx::FrameBufferHandle m_sceneRtt             = BGFX_INVALID_HANDLE; // scene target (backbuffer size)
+    int m_sceneRttW = 0, m_sceneRttH = 0;          // cached scene target size
+    bool m_chainRetargeted = false;                // VIEW_MAIN -> m_sceneRtt this frame
+
+    // Chain helpers (GPU alive only; callers guard on m_bgfxInitialized).
+    void runPostFxChain();                          // sceneRtt -> stages -> backbuffer
+    void destroyPostFxResources();                  // release pool + sceneRtt (GPU alive)
+    PostFxRt getScratchRt(int slot, int w, int h);  // size-matched scratch RTT, grows pool
+    void submitFullscreenQuad(uint16_t viewId, bgfx::ProgramHandle prog,
+                              bgfx::TextureHandle tex, bgfx::UniformHandle sampler);
 
     std::unique_ptr<BgfxShaderManager> m_shaders;
     std::unique_ptr<BgfxDeviceCore>   m_deviceCore;
