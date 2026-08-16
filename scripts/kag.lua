@@ -40,6 +40,13 @@ for name, handler in pairs(tween_cmds) do
     KAG[name] = handler
 end
 
+-- [layout] declarative layout containers (round 107): pure coordinate
+-- calculators writing existing layer x/y; no new render path.
+local layout_cmds = require("kag.commands.layout")
+for name, handler in pairs(layout_cmds) do
+    KAG[name] = handler
+end
+
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 --  Text commands �� [ch], [text], [l], [r], [er], [p]
 --  Loaded from kag/commands/text.lua, delegates to backend font rendering.

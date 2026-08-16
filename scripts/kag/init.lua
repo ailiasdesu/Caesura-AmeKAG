@@ -44,6 +44,10 @@ local save_cmds  = require("kag.commands.save")
 -- Declarative tween commands (round 106): preloaded so sandbox require
 -- resolves before any [tween] token runs (kag_runner hooks call it).
 local tween_cmds = require("kag.commands.tween")
+-- Declarative layout containers (round 107): settings.lua consumes
+-- kag.layout_math directly; preload both for sandbox require.
+local layout_cmds = require("kag.commands.layout")
+local layout_math = require("kag.layout_math")
 
 -- P1 extensions
 local gallery    = require("gallery")
