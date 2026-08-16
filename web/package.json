@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "dev:web": "vite"
+    "dev:web": "vite",
+    "build": "vite build"
   },
   "devDependencies": {
     "jsdom": "^30.0.1",

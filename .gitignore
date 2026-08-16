@@ -1,6 +1,7 @@
 # --- Build artifacts ---
 /build/
 /build-*/
+/dist/
 bin/
 cmake-build*/
 out/
