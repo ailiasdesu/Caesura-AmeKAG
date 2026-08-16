@@ -41,10 +41,10 @@ for _, t in ipairs(toks) do
                 elseif pair[1] == "name" then name = pair[2] end
             end
         end
-        if name == "scene_intro" then macro_found = true end
+        if name == "scene_open" then macro_found = true end
     end
 end
-check("scene_intro macro defined", macro_found)
+check("scene_open macro defined", macro_found)
 
 -- 3. choices present and targets resolve (record format)
 local sel_targets = {}
@@ -114,9 +114,10 @@ end
 
 compiler.compile(toks)
 local labels = toks._compiled.labels
-check("all labels indexed", labels.route_library and labels.route_rooftop
-      and labels.route_gate and labels.investigate and labels.leave_library
-      and labels.ending_good and labels.ending_normal and labels.ending_bad
+check("all labels indexed", labels.probe and labels.poke and labels.drop
+      and labels.post_choice and labels.truth_lead and labels.companion_lead
+      and labels.post_investigate and labels.ending_zero
+      and labels.ending_companion and labels.ending_promise
       and labels.credits ~= nil)
 
 local unresolved = {}
@@ -149,15 +150,18 @@ pcall(require, "kag.commands.layer")
 pcall(require, "kag.commands.vfx")
 pcall(require, "kag.commands.video")
 pcall(require, "kag.commands.save")
-local FLOW = { ["if"] = true, ["else"] = true, ["endif"] = true,
+pcall(require, "kag.commands.character")
+pcall(require, "kag.commands.math")
+pcall(require, "kag.commands.resource")
+local FLOW = { ["if"] = true, ["elseif"] = true, ["else"] = true, ["endif"] = true,
     ["while"] = true, ["endwhile"] = true, ["for"] = true, ["endfor"] = true,
-    ["break"] = true, ["continue"] = true, ["jump"] = true, ["call"] = true,
+    ["until"] = true, ["break"] = true, ["continue"] = true, ["jump"] = true, ["call"] = true,
     ["return"] = true, ["label"] = true, ["macro"] = true, ["endmacro"] = true,
     ["erasemacro"] = true, ["eval"] = true, ["emb"] = true, ["iscript"] = true,
     ["select"] = true, ["sel"] = true, ["endselect"] = true, ["link"] = true,
     ["end"] = true, ["stop"] = true, ["switch"] = true, ["endswitch"] = true,
     ["case"] = true, ["endcase"] = true, ["default"] = true,
-    ["scene_intro"] = true }
+    ["scene_open"] = true }
 local unknown = {}
 for _, t in ipairs(toks) do
     local cmd = t[1] or (t.type == "command" and t.cmd)
