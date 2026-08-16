@@ -14,7 +14,7 @@
 
 ## 教程路径（Tutorial Path，从零开始）
 
-按顺序运行 15 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
+按顺序运行 16 个递进式教学示例，即可掌握 KAG Neo-Genesis 剧本语言的全部基础：
 
 | 步骤 | 示例 | 学习内容 | 命令 |
 |---|---|---|---|
@@ -33,10 +33,16 @@
 | 13 | demo/tutorial/tutorial_13_commands.ks | KAG3 兼容命令实战：打字速度切换、变量算术链、角色立绘 / 移动 / 清除、吐司通知、LUT 色调、消息层震动、资源预加载 | textspeed, cps, add, sub, mul, div, mod, dec, csp, csl, csd, notify, palette, vibrate, preload, set, eval, ch, p |
 | 14 | demo/tutorial/tutorial_14_flow_timing.ks | 计时与流程控制：帧让步等待与场景中止对齐、goto/jump 混合跳转 + 循环栈重置、反向往回边守卫、i18n 运行时热切换语言 + 复数字典值 | wait, delay, set, for, endfor, add, if, endif, jump, goto, i18n, ch, p, end |
 | 15 | demo/tutorial/tutorial_15_expr_deep.ks | 高级表达式：嵌套三元、多参函数调用 + 逗号分段、?? 空合并、eval 三元赋值、作用域前缀、数值边界 | set, eval, ch, p, end |
+| 16 | demo/tutorial/tutorial_16_tween.ks | 声明式补间 [tween]：基础属性插值（attr=x/y/alpha/scale）、5 种缓动同屏对比、from 缺省、非阻塞 wait=false + [wait] 组合、${expr} 表达式 from/to、delay（⚠️ [tween] 模块已实现但未登记进 kag/init.lua，集成后验证） | bg, ch, p, csp, csl, tween, wait, set, end |
 
 
 每个教程都是独立可运行剧本（编译 + Web 播放器双重验证，运行到 [end] 零错误），
-注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→15 顺序学习。
+注释里逐行讲解命令含义。教程之间相互衔接，建议按 01→16 顺序学习。
+> ⚠️ 教程 16 依赖 R106-A [tween] 命令（sprite 属性补间）。tween.lua 与
+> tests/scripts/test_tween.lua 已实现、kag_runner 每帧钩子已接线，但模块尚未
+> 登记进 kag/init.lua 预加载清单，因此 [tween] 标签在 ks_check 仍被判为未知
+> 命令（退出码 1）。登记完成后需重新跑 ks_check / ks_bake / Web sweep
+> 验证并去掉本标注。
 
 ## 如何运行示例
 

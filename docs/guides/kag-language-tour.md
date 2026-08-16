@@ -520,6 +520,36 @@ config.ai = {
 `[i18n language="ja"]`：场景中途热切换界面语言（等价设置菜单 Language 切换，
 触发整页重译重绘）。复数形态见 §17。
 
+### 19.7 [tween] 声明式补间（round 106 / R106-A）
+
+[tween] 是 sprite 属性补间命令：把某个图层上的数值属性（x / y / alpha /
+scale）在 N 毫秒内从起点平滑插值到终点。较 [move]（仅 x/y）更通用，内置
+5 种缓动 + ${expr} 起点/终点 + 延迟 + 阻塞/非阻塞，取代手写序列。契约：
+
+```kag
+[tween target="t0" attr=x to=900 dur=800]        ; 基础：from 缺省=当前值
+[tween target="e1" attr=x from=80 to=1100 dur=1500 ease=ease_in_out]
+[tween target="n1" attr=x from=0 to=1200 dur=1000 wait=false]  ; 非阻塞
+[tween target="n1" attr=alpha from=255 to=0 dur=600]
+[tween target="n1" attr=scale from=1.0 to=1.6 dur=800 ease=back_out]
+[tween target="t0" attr=x from=${f.base_x} to=${f.base_x + f.step * 2} dur=700]
+[tween target="t0" attr=x from=1200 to=80 dur=700 delay=400]  ; 延迟启动
+```
+
+- `target`（必填）：目标图层名或说话人（说话人回落 `_char_<name>` 图层；缺失时打印诊断并安全返回）
+- `attr`（必填）：x / y / alpha（0..255 不透明度）/ scale（1.0=原大）
+- `from`／`to`：起点（缺省=当前值）／终点（必填）；均支持 `${expr}` 插值
+- `ease`：linear / ease_in / ease_out / ease_in_out / back_out（默认 linear）
+- `dur`（必填）：毫秒（契约钳制 100..30000）；`delay`：延迟启动毫秒（默认 0）
+- `wait`：true=阻塞协程（默认）；false=非阻塞，配 `[wait ms=...]` 卡点
+
+教程见 `demo/tutorial/tutorial_16_tween.ks`。实现位于
+`scripts/kag/commands/tween.lua`（含 `tests/scripts/test_tween.lua`），
+`kag_runner` 每帧钩子（`TweenCommands.update`）已接线。⚠️ 该模块尚未登记进
+`kag/init.lua` 预加载清单，故 [tween] 在 ks_check 仍判为未知命令、运行时不可用；
+登记完成后再回填 `docs/api/command-contracts.md` 并把 tutorial_16 加入
+`web/flow.integration.test.js` 教程扫描清单，跑验证后去掉本标注。
+
 ## 20. 表达式运算符全表
 
 `[if]`/`[while]`/`[switch exp=]`/`[eval]`/`[assert]`/`${}`/`%tbl.key%` 表达式走统一
