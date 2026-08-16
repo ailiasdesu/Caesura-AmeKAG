@@ -14,15 +14,22 @@
 //     surfaced as a warning.
 //  3. Bidirectional label navigation — for a selected *label, jump the live
 //     engine to that label (buildLabelJumpSnippet → /api/eval), and follow the
-//     engine's current position back into the editor (token→source line).
+//     engine's current position back into the editor (token→source line). The
+//     jump outcome ('ok' / 'missing' / 'no-ctx' / 'error') is surfaced as a
+//     status line under the buttons, and a re-entry guard makes double-clicks
+//     idempotent (no duplicate engine evals).
 //
 // The optional EngineClient is only used for the live-jump and follow-engine
 // actions; with no client (or a disconnected engine) those degrade to a
 // disabled state and the panel still renders fully.
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useEditor } from '../store'
 import { parseSceneElements } from './SceneTree'
-import { buildLabelJumpSnippet, parseJumpResult } from '../lib/engineJump'
+import {
+  buildLabelJumpSnippet,
+  parseJumpResult,
+  type LabelJumpStatus,
+} from '../lib/engineJump'
 import { parseSceneOutline, buildOutlineSections } from '../lib/sceneOutline'
 import { sceneMatchesDoc, tokenToOutlineLine } from '../lib/enginePosition'
 import { lintCommand, type CommandLint } from '../lib/commandLint'
@@ -62,15 +69,36 @@ function paramHint(lint: CommandLint | null, key: string, value: string): string
 }
 
 /**
- * Issue a label-jump eval against the live engine and swallow all failures
- * (transport / engine rejection must never surface into a click).
+ * Issue a label-jump eval against the live engine and classify the outcome so
+ * the panel can surface feedback. Never throws: transport failures collapse
+ * to 'error' so the affordance still renders instead of crashing the click.
  */
-async function jumpEngineToLabel(client: EngineClient, label: string): Promise<void> {
+async function jumpEngineToLabel(
+  client: EngineClient,
+  label: string,
+): Promise<LabelJumpStatus> {
   try {
     const result = await client.evalRaw(buildLabelJumpSnippet(label))
-    parseJumpResult(result)
+    return parseJumpResult(result)
   } catch {
-    // ignored — the affordance must never throw into a click handler
+    // engine rejection / transport failure — reported as an error state
+    return 'error'
+  }
+}
+
+/** Human-readable copy for the jump outcome line shown under the buttons. */
+function jumpStatusText(status: LabelJumpStatus, label: string): string {
+  switch (status) {
+    case 'ok':
+      return 'Jumped to *' + label
+    case 'missing':
+      return 'Label *' + label + ' not found in the running scene'
+    case 'no-ctx':
+      return 'No scene running in the engine'
+    case 'error':
+      return 'Engine jump failed — is the engine reachable?'
+    default:
+      return 'Engine replied: ' + status
   }
 }
 
@@ -109,9 +137,22 @@ export function InspectorView({ client }: InspectorViewProps) {
   const isLabel = element?.type === 'label'
   const label = isLabel && element ? labelName(element.text) : ''
 
+  // Live-jump feedback + re-entry guard. jumpStatus reports the engine's
+  // reply ('ok' / 'missing' / 'no-ctx' / 'error') under the buttons. The pending
+  // latch is a ref so it takes effect synchronously — a same-tick double-click
+  // hits the guard before React re-renders, so no duplicate engine evals fire.
+  const [jumpStatus, setJumpStatus] = useState<LabelJumpStatus | null>(null)
+  const jumpPendingRef = useRef(false)
+
   const handleJumpEngineToLabel = () => {
     if (!isLabel || !label || !engineConnected || !client) return
-    void jumpEngineToLabel(client, label)
+    if (jumpPendingRef.current) return
+    jumpPendingRef.current = true
+    setJumpStatus(null)
+    void jumpEngineToLabel(client, label).then((status) => {
+      jumpPendingRef.current = false
+      setJumpStatus(status)
+    })
   }
 
   const handleFollowEngine = () => {
@@ -233,6 +274,16 @@ export function InspectorView({ client }: InspectorViewProps) {
             >
               Follow engine position
             </button>
+          </div>
+        )}
+
+        {isLabel && jumpStatus !== null && (
+          <div
+            className={
+              'inspector-jump-status' + (jumpStatus === 'ok' ? ' ok' : ' warn')
+            }
+          >
+            {jumpStatusText(jumpStatus, label)}
           </div>
         )}
 
