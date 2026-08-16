@@ -130,13 +130,4 @@ extern const size_t   kEmbeddedDXBC_fs_postfx_blur_size;
 extern const uint8_t  kEmbeddedDXBC_fs_postfx_bloom[];
 extern const size_t   kEmbeddedDXBC_fs_postfx_bloom_size;
 
-// -- Round-102 post-processing chain full-screen PS (DXBC, D3D11/D3D12) --------
-extern const uint8_t  kEmbeddedDXBC_fs_postfx_vignette[];
-extern const size_t   kEmbeddedDXBC_fs_postfx_vignette_size;
-extern const uint8_t  kEmbeddedDXBC_fs_postfx_lut[];
-extern const size_t   kEmbeddedDXBC_fs_postfx_lut_size;
-extern const uint8_t  kEmbeddedDXBC_fs_postfx_blur[];
-extern const size_t   kEmbeddedDXBC_fs_postfx_blur_size;
-extern const uint8_t  kEmbeddedDXBC_fs_postfx_bloom[];
-extern const size_t   kEmbeddedDXBC_fs_postfx_bloom_size;
 } // namespace Caesura
