@@ -371,6 +371,13 @@ function kag_runner.start(scene_path)
     ctx._switchStack = {}
     ctx._macroStack = nil
     ctx._resumeLoopStacks = nil
+    -- [round 98] Cross-scene switch budget: session-scoped so it bounds an
+    -- A<->B [jump]/[call]/[link] ping-pong driven by the frame loop AND an
+    -- unbounded cross-scene [call] nesting (grows ctx.call_stack) across
+    -- re-spawns. Reset ONLY here on a fresh session -- NOT per scheduler.run
+    -- (a per-run reset would clear it on every scene swap and defeat the
+    -- guard). scheduler.budget_scene_switch increments it per allowed switch.
+    ctx._sceneSwitches = 0
 
     -- Start coroutine
     kag_co = coroutine.create(function()

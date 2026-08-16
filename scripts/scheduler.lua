@@ -51,6 +51,27 @@ local function is_safe_scene_path(path)
     return path:find("%.ks$") ~= nil
 end
 
+-- [round 98] Cross-scene switch budget (dead-loop / overflow guard). A script
+-- that ping-pongs scenes (A<->B via [jump]/[call]/[link]) or nests cross-scene
+-- [call] chains would otherwise run forever under the external frame loop's
+-- re-spawn (each cross-scene [jump]/[link] dies the coroutine and update()
+-- re-spawns it) or grow ctx.call_stack without bound within one run ([call]
+-- swaps tokens inline and never returns). Session-scoped counter: reset ONLY
+-- on a fresh kag_runner.start (a per-run reset would clear it on every scene
+-- swap and defeat the guard). Each allowed cross-scene switch increments it;
+-- returning false means the budget is exhausted and the caller must WARN +
+-- fall through (do not switch) -- the same cut-and-WARN shape as the round-84
+-- _backJumps backward-jump guard. Purposely generous so no authored game trips
+-- it, tight enough to stop pathological churn quickly.
+local SCENE_SWITCH_MAX = 4096
+local function budget_scene_switch(ctx)
+    if type(ctx) ~= "table" then return false end
+    local n = tonumber(ctx._sceneSwitches) or 0
+    n = n + 1
+    ctx._sceneSwitches = n
+    return n <= SCENE_SWITCH_MAX
+end
+
 local function build_label_index(tokens)
     local idx = {}
     for i, tok in ipairs(tokens) do
@@ -248,6 +269,14 @@ function scheduler.run(ctx, tokens, start_index)
                 local path = "assets/script/" .. target
                 if not is_safe_scene_path(path) then
                     print("[WARN] [jump] blocked scene path: " .. path)
+                elseif not budget_scene_switch(ctx) then
+                    -- [round 98] cross-scene switch budget: an A<->B [jump]
+                    -- ping-pong would otherwise spin forever under the external
+                    -- frame loop (each jump ends the run, but the runner
+                    -- re-spawns it). WARN + fall through -- do NOT switch.
+                    print("[WARN] [jump] cross-scene switch budget exceeded at "
+                        .. tostring(ctx.current_scene or "?")
+                        .. " (possible A<->B ping-pong); switch cut")
                 else
                     local new_tokens = ctx.load_tokens and ctx.load_tokens(path)
                     if new_tokens then
@@ -259,6 +288,23 @@ function scheduler.run(ctx, tokens, start_index)
                         ctx.layers = {}
                         ctx.backlog = {}
                         ctx.label_index = nil  -- raw tokens: entry lazy-builds
+                        -- [round 98 C] A cross-scene jump is an arbitrary
+                        -- control-flow transfer exactly like an intra-scene
+                        -- jump: any loop/summary stacks still live at the
+                        -- jump site describe a loop body we are now leaving
+                        -- for an unrelated scene. Reset them symmetrically
+                        -- with the intra-scene branch (round 83 A4/A5) so
+                        -- (a) no stale entries leak into later loops and
+                        -- (b) a LATER same-name [for] in the new scene
+                        -- re-initializes its counter from its declared
+                        -- start instead of reusing the stale marker from
+                        -- the jumped-away scene (observed: 11 iterations
+                        -- instead of 2 across a scene boundary).
+                        ctx._forStack = {}
+                        ctx._whileStack = {}
+                        ctx._ifStack = {}
+                        ctx._switchStack = {}
+                        ctx._forStackMarks = {}
                         operation.cancel_all(ctx)
                         return
                     else
@@ -363,7 +409,7 @@ function scheduler.run(ctx, tokens, start_index)
             else
                 new_tokens = ctx.load_tokens and ctx.load_tokens(path)
             end
-            if new_tokens then
+            if new_tokens and budget_scene_switch(ctx) then
                 ctx.call_stack = ctx.call_stack or {}
                 table.insert(ctx.call_stack, {
                     tokens = tokens, index = i + 1,
@@ -379,6 +425,14 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 refresh_compiled()
                 i = 0
+            elseif new_tokens then
+                -- [round 98] cross-scene switch budget: an A<->B [call] chain
+                -- would grow ctx.call_stack without bound (cross-scene calls
+                -- swap tokens inline and never return) and spin. WARN + fall
+                -- through -- do NOT push a frame or switch.
+                print("[WARN] [call] cross-scene switch budget exceeded ("
+                    .. tostring(ctx.current_scene or "?") .. " -> " .. path
+                    .. "); call cut")
             end
             end
 
@@ -416,6 +470,13 @@ function scheduler.run(ctx, tokens, start_index)
             local new_tokens = nil
             if not is_safe_scene_path(path) then
                 print("[WARN] [link] blocked scene path: " .. path)
+            elseif not budget_scene_switch(ctx) then
+                -- [round 98] cross-scene switch budget: WARN + fall through
+                -- and, unlike the normal path, do NOT wipe layers/backlog/
+                -- call_stack -- there is no scene to link into.
+                print("[WARN] [link] cross-scene switch budget exceeded ("
+                    .. tostring(ctx.current_scene or "?") .. " -> " .. path
+                    .. "); link cut")
             else
                 -- security info: clear ONLY after the allowlist accepts
                 -- (a blocked traversal link must not wipe scene state)

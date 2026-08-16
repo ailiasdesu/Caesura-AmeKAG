@@ -557,12 +557,12 @@ end
 -- ---------------------------------------------------------------------------
 
 -- F1. A's [for] body cross-scene jumps to B; B's [for] reuses the SAME var
---     name. Observed DEFECT: the cross-scene [jump] (unlike the intra-scene
---     one, round-83 A4/A5) does NOT reset _forStackMarks, so A's live loop
---     mark leaks into B — B's same-name [for] does NOT re-initialize its
---     counter from its declared start and runs far more iterations than its
---     [start..end] declares. [DEFECT — cross-scene loop/token isolation;
---     reported]
+--     name. Round-98 C fix: the cross-scene [jump] now resets the loop stacks
+--     symmetrically with the intra-scene one (round-83 A4/A5), so A's live
+--     loop mark does NOT leak into B — B's same-name [for] re-initializes
+--     its counter from its declared start and runs EXACTLY [start..end]
+--     bodies (BH x2), settling f.i at end+1 (12). Previously the stale mark
+--     leaked and B ran 11 bodies from A's stale counter. [FIXED round 98]
 do
     local b_tokens = {
         { "for", { var = "i", start = "10", ["end"] = "11" } },
@@ -580,16 +580,28 @@ do
     local ctx = make_ctx(); ctx.current_scene = "assets/script/a.ks"
     ctx.load_tokens = function() return b_tokens end
     run_capped(ctx, a_tokens, nil, 150)   -- A: ABODY then jump -> returns
+    -- Cross-scene jump reset the loop stacks: nothing live at the boundary.
+    check("F1 cross-scene jump cleared _forStack (no A body loop leak)",
+        #(ctx._forStack or {}) == 0, "for=" .. tostring(#(ctx._forStack or {})))
+    check("F1 cross-scene jump cleared _whileStack",
+        #(ctx._whileStack or {}) == 0, "while=" .. tostring(#(ctx._whileStack or {})))
+    check("F1 cross-scene jump cleared _ifStack and _switchStack",
+        #(ctx._ifStack or {}) == 0 and #(ctx._switchStack or {}) == 0,
+        "if=" .. tostring(#(ctx._ifStack or {})) .. " switch=" .. tostring(#(ctx._switchStack or {})))
+    check("F1 cross-scene jump cleared _forStackMarks (A's stale i-marker gone)",
+        next(ctx._forStackMarks or {}) == nil, label_str(ctx._forStackMarks))
     local n2, st2 = run_after_jump(ctx, 600)
     local bh = 0
     for _ in collect_tags(ctx):gmatch("BH") do bh = bh + 1 end
     check("F1 B's run terminates (no hang)", n2 < 600 and st2 == "dead",
         "frames " .. n2)
-    check("F1 [DEFECT] A's same-name loop mark leaks into B's [for]",
-        bh == 11, "expected 11 leaked-iterations, got " .. bh
+    check("F1 [FIXED] B's same-name [for] re-initializes: exactly 2 bodies (was 11)",
+        bh == 2, "expected 2 iterations, got " .. bh
             .. " -> " .. collect_tags(ctx))
-    check("F1 B's for counter polluted by A's stale value (ends 12, not 2)",
+    check("F1 B's counter settles at end+1 (12) from its OWN start=10",
         ctx.f.i == 12, "f.i=" .. tostring(ctx.f.i))
+    check("F1 A's stale loop var did not leak (A's endfor never ran AEND)",
+        collect_tags(ctx):match("AEND") == nil, collect_tags(ctx))
 end
 
 -- F2. CONTROL: the same B loop on a FRESH scene (no prior A loop) runs exactly
