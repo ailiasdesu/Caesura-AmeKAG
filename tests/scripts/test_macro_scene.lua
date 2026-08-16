@@ -278,6 +278,73 @@ do
             and not has_sub(collect(ctx), "B_AFTER"), collect(ctx))
 end
 
+-- ---------------------------------------------------------------------------
+-- D. NESTED macro-definition collection (round 74 report / round 75 fix)
+--
+-- A [macro outer] whose body CONTAINS a nested [macro inner]...[endmacro]
+-- must be collected depth-aware: the inner [endmacro] only decrements the
+-- nesting depth and does NOT terminate the OUTER body; the outer body ends
+-- only at the [endmacro] matching its opening [macro] (depth back to 0).
+-- The naive scan stopped at the FIRST [endmacro], truncating outer to a
+-- dangling half-defined body and leaking an [endmacro] into the stream that
+-- corrupted every token after it. This suite locks the depth-aware behavior:
+--   D1 outer is collected COMPLETE (inner def + inner endmacro + trailing
+--      outer content all present -- proves no first-endmacro truncation)
+--   D2 both macros usable at runtime (nested inner registered lazily when
+--      outer splices its body; both bodies execute)
+--   D3 the token AFTER outer's [endmacro] still runs (no dangling endmacro
+--      corrupts the following token stream)
+-- ---------------------------------------------------------------------------
+do
+    local tokens = {
+        { "macro", { name = "outer" } },      -- opening
+        { "macro", { name = "inner" } },      -- nested def (depth 1->2)
+        { "ch", { text = "INNER_BODY" } },    -- inner body
+        { "endmacro", {} },                   -- inner close (2->1, no break)
+        { "ch", { text = "OUTER_BODY" } },    -- outer body AFTER inner close
+        { "endmacro", {} },                   -- outer close (1->0, break)
+        { "outer", {} },                      -- invoke outer -> registers inner
+        { "inner", {} },                      -- invoke nested inner
+        { "mark", { tag = "DONE" } },         -- MUST run (no dangling endmacro)
+    }
+    local ctx = make_ctx()
+    local n, st = run_capped(ctx, tokens, nil, 500)
+    check("D1 run terminates (nested macro def collection progresses)",
+        n < 500 and st == "dead", "frames " .. n .. " st=" .. tostring(st))
+
+    -- Collection completeness: outer's body must hold 4 tokens -- the inner
+    -- macro def, its body, ITS endmacro, and the trailing outer content.
+    -- The naive first-endmacro scan would have stopped at index 2.
+    local ob = ctx.macros and ctx.macros.outer
+    check("D1 outer body collected COMPLETE (4 tokens, not truncated at first endmacro)",
+        ob ~= nil and #ob == 4,
+        "outer len=" .. tostring(ob and #ob))
+    check("D1 [nested] outer body CONTAINS the inner macro def (idx1 = [macro inner])",
+        ob and ob[1] and ob[1][1] == "macro"
+            and ob[1][2] and ob[1][2].name == "inner",
+        "outer[1]=" .. tostring(ob and ob[1] and ob[1][1]))
+    check("D1 [nested] inner [endmacro] captured INSIDE outer body (idx3)",
+        ob and ob[3] and ob[3][1] == "endmacro",
+        "outer[3]=" .. tostring(ob and ob[3] and ob[3][1]))
+    check("D1 [nested] trailing outer content AFTER inner endmacro preserved (idx4)",
+        ob and ob[4] and ob[4][1] == "ch" and ob[4][2]
+            and ob[4][2].text == "OUTER_BODY",
+        "outer[4]=" .. tostring(ob and ob[4] and ob[4][1]
+            and ob[4][2] and ob[4][2].text))
+
+    -- Runtime usability: invoking outer splices its body (registering inner
+    -- lazily), then invoking inner splices ITS body. Both bodies execute.
+    check("D2 [nested] outer macro body executes at runtime (T:OUTER_BODY)",
+        has_sub(collect(ctx), "T:OUTER_BODY"), collect(ctx))
+    check("D2 [nested] inner macro body executes at runtime (T:INNER_BODY)",
+        ctx.macros and ctx.macros.inner ~= nil
+            and has_sub(collect(ctx), "T:INNER_BODY"), collect(ctx))
+
+    -- No dangling endmacro: the token after outer's [endmacro] must run.
+    check("D3 [no-dangling] token after outer [endmacro] executes (M:DONE)",
+        has_sub(collect(ctx), "M:DONE"), collect(ctx))
+end
+
 package.loaded["kag"] = kag_orig
 
 print(string.format("\nMacro-scene results: %d passed, %d failed", passed, failed))
