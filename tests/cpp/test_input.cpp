@@ -534,3 +534,494 @@ TEST_CASE("InputRouter::processEvent with no registered callbacks is safe") {
     router.processEvent(kd);
     CHECK(router.isClickPending());
 }
+
+
+// =============================================================================
+// round 93b: scancode/key passthrough, key-repeat, modifiers+Meta/Win,
+//            multi-device (keyboard/mouse/gamepad), text-input IME, lifecycle
+// =============================================================================
+// The InputRouter is a pure routing layer: it does NOT transform SDL events.
+// A KEY_DOWN carries {scancode, key, mod, raw, repeat} verbatim to the active
+// focus callback. These tests lock down that passthrough contract ("unknown
+// scancode" handling == pass through unchanged) and the focus-based filtering
+// rules for every input device family the engine can receive.
+
+// ---- 1. scancode/key passthrough (letters/digits/functions/arrows/unknown) ---
+TEST_CASE("InputRouter::key scancode+keycode pass through verbatim") {
+    // A representative sweep across SDL physical scancodes and virtual key
+    // codes (letters, digits, function keys, arrows). The router must deliver
+    // the exact scancode/key pair it received -- it owns no mapping table.
+    InputRouter router;
+    struct Pair { SDL_Scancode sc; SDL_Keycode kc; };
+    const Pair pairs[] = {
+        { SDL_SCANCODE_A,         SDLK_A          },
+        { SDL_SCANCODE_0,         SDLK_0          },
+        { SDL_SCANCODE_F1,        SDLK_F1         },
+        { SDL_SCANCODE_UP,        SDLK_UP         },
+        { SDL_SCANCODE_DOWN,      SDLK_DOWN       },
+        { SDL_SCANCODE_LEFT,      SDLK_LEFT       },
+        { SDL_SCANCODE_RIGHT,     SDLK_RIGHT      },
+        { SDL_SCANCODE_RETURN,    SDLK_RETURN     },
+    };
+    for (const Pair& pr : pairs) {
+        SDL_Scancode gotSc = SDL_SCANCODE_UNKNOWN;
+        SDL_Keycode  gotKc = SDLK_UNKNOWN;
+        router.registerKAGCallback([&](const SDL_Event& e) {
+            gotSc = e.key.scancode;
+            gotKc = e.key.key;
+        });
+        router.consumeKAGClick();          // reset pending flag between iterations
+        SDL_Event evt = {};
+        evt.type = SDL_EVENT_KEY_DOWN;
+        evt.key.scancode = pr.sc;
+        evt.key.key = pr.kc;
+        evt.key.repeat = false;
+        router.processEvent(evt);
+        CHECK(gotSc == pr.sc);
+        CHECK(gotKc == pr.kc);
+        CHECK(router.isClickPending());
+    }
+}
+
+TEST_CASE("InputRouter::unknown scancode/keycode are passed through, not dropped") {
+    // "Unknown" SDL codes (SDL_SCANCODE_UNKNOWN / SDLK_UNKNOWN, and an
+    // out-of-range private scancode) must reach the handler unchanged. The
+    // router has no whitelist -- this locks the current passthrough semantics.
+    InputRouter router;
+    SDL_Scancode gotSc = SDL_SCANCODE_UNKNOWN;
+    SDL_Keycode  gotKc = SDLK_UNKNOWN;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        gotSc = e.key.scancode; gotKc = e.key.key;
+    });
+
+    const SDL_Scancode weirdSc = static_cast<SDL_Scancode>(999);
+    const SDL_Keycode  weirdKc = static_cast<SDL_Keycode>(0x40000000u | 0x2F1u);
+    SDL_Event evt = {};
+    evt.type = SDL_EVENT_KEY_DOWN;
+    evt.key.scancode = SDL_SCANCODE_UNKNOWN;
+    evt.key.key = SDLK_UNKNOWN;
+    router.processEvent(evt);
+    CHECK(evt.key.scancode == gotSc);
+    CHECK(evt.key.key == gotKc);
+
+    router.consumeKAGClick();
+    evt.key.scancode = weirdSc;
+    evt.key.key = weirdKc;
+    router.processEvent(evt);
+    CHECK(gotSc == weirdSc);
+    CHECK(gotKc == weirdKc);
+}
+
+TEST_CASE("InputRouter::raw platform scancode field survives routing") {
+    // The platform-dependent "raw" scancode (Uint16) is part of the event too;
+    // it must arrive unmodified so higher layers can inspect it.
+    InputRouter router;
+    Uint16 gotRaw = 0;
+    router.registerKAGCallback([&](const SDL_Event& e) { gotRaw = e.key.raw; });
+    SDL_Event evt = {};
+    evt.type = SDL_EVENT_KEY_DOWN;
+    evt.key.scancode = SDL_SCANCODE_SPACE;
+    evt.key.key = SDLK_SPACE;
+    evt.key.raw = 0x0039u;
+    router.processEvent(evt);
+    CHECK(gotRaw == 0x0039u);
+}
+
+// ---- 2. key repeat ---------------------------------------------------------
+TEST_CASE("InputRouter::key repeat flag is exposed to consumers") {
+    // SDL marks OS-level auto-repeat with e.key.repeat. In GAME focus the
+    // router is transparent to both KEY_DOWN and KEY_UP (nothing is filtered),
+    // so a consumer can see repeat==true on a repeat down and repeat==false on
+    // the release. (In KAG focus KEY_UP never reaches callbacks -- that filter
+    // is covered by a separate case below.)
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    struct Seen { Uint32 key = 0; bool repeat = false; };
+    std::vector<Seen> seen;
+    router.registerGameCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP)
+            seen.push_back({ e.key.key, e.key.repeat });
+    });
+
+    SDL_Event down = {};
+    down.type = SDL_EVENT_KEY_DOWN;
+    down.key.key = SDLK_SPACE;
+    down.key.repeat = true;      // OS auto-repeat
+    down.key.down = true;
+    router.processEvent(down);
+
+    SDL_Event up = {};
+    up.type = SDL_EVENT_KEY_UP;
+    up.key.key = SDLK_SPACE;
+    up.key.repeat = false;       // release never repeats
+    up.key.down = false;
+    router.processEvent(up);
+
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0].key == SDLK_SPACE);
+    CHECK(seen[0].repeat == true);
+    CHECK(seen[1].key == SDLK_SPACE);
+    CHECK(seen[1].repeat == false);
+}
+
+TEST_CASE("InputRouter::repeat and first-down are distinct events") {
+    // The router must NOT collapse a repeated down into the original down:
+    // the handler sees one callback per KEY_DOWN, in submission order, and the
+    // repeat flag lets it distinguish hold-over-repeat from the initial press.
+    InputRouter router;
+    std::vector<bool> repeatSeq;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN) repeatSeq.push_back(e.key.repeat);
+    });
+
+    for (int i = 0; i < 3; ++i) {
+        SDL_Event evt = {};
+        evt.type = SDL_EVENT_KEY_DOWN;
+        evt.key.key = SDLK_A;
+        evt.key.repeat = (i > 0); // first is a real press, rest are repeats
+        evt.key.down = true;
+        router.processEvent(evt);
+    }
+    REQUIRE(repeatSeq.size() == 3);
+    CHECK(repeatSeq[0] == false);
+    CHECK(repeatSeq[1] == true);
+    CHECK(repeatSeq[2] == true);
+    // Every KEY_DOWN -- repeat included -- advances the KAG story loop flag.
+    CHECK(router.isClickPending());
+}
+
+TEST_CASE("InputRouter::key-up never re-arms the KAG advance flag") {
+    // A release (KEY_UP) is not an advancing event: it must not set the
+    // pending flag in KAG focus, and a repeat-flagged KEY_DOWN still does.
+    InputRouter router;
+    router.registerKAGCallback([&](const SDL_Event&) {});
+    router.consumeKAGClick();
+    CHECK_FALSE(router.isClickPending());
+
+    SDL_Event up = {};
+    up.type = SDL_EVENT_KEY_UP;
+    up.key.key = SDLK_SPACE;
+    up.key.repeat = false;
+    router.processEvent(up);
+    CHECK_FALSE(router.isClickPending());   // release filtered -- no advance
+
+    SDL_Event down = {};
+    down.type = SDL_EVENT_KEY_DOWN;
+    down.key.key = SDLK_SPACE;
+    down.key.repeat = true;
+    router.processEvent(down);
+    CHECK(router.isClickPending());         // press (even a repeat) advances
+}
+
+// ---- 3. modifiers, incl. Meta/Win bare modifier ----------------------------
+TEST_CASE("InputRouter::combined Ctrl+Alt+Shift+Meta modifier mask passes through") {
+    // All four modifier families together must arrive with every bit intact.
+    InputRouter router;
+    SDL_Keymod captured = SDL_KMOD_NONE;
+    router.registerKAGCallback([&](const SDL_Event& e) { captured = e.key.mod; });
+
+    const SDL_Keymod combo = static_cast<SDL_Keymod>(
+        SDL_KMOD_LCTRL | SDL_KMOD_LALT | SDL_KMOD_LSHIFT | SDL_KMOD_LGUI);
+    SDL_Event evt = {};
+    evt.type = SDL_EVENT_KEY_DOWN;
+    evt.key.key = SDLK_X;
+    evt.key.mod = combo;
+    router.processEvent(evt);
+    CHECK(captured == combo);
+}
+
+TEST_CASE("InputRouter::Meta/Win key routes as a bare modifier KEY_DOWN") {
+    // A bare Win/Meta key (no main key) is still a KEY_DOWN: it reaches the
+    // KAG advance chain like Ctrl does, carrying the GUI/CMD modifier on the
+    // event. Round 93 covered Ctrl; this locks down the same for Meta/Win.
+    InputRouter router;
+    struct Capture { SDL_Keymod mod = SDL_KMOD_NONE; SDL_Keycode key = SDLK_UNKNOWN; };
+    std::vector<Capture> calls;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        calls.push_back({ e.key.mod, e.key.key });
+    });
+
+    SDL_Event metaDown = {};
+    metaDown.type = SDL_EVENT_KEY_DOWN;
+    metaDown.key.key = SDLK_LMETA;
+    metaDown.key.mod = SDL_KMOD_LGUI;
+    router.processEvent(metaDown);
+
+    REQUIRE(calls.size() == 1);
+    CHECK(calls[0].key == SDLK_LMETA);
+    CHECK(calls[0].mod == SDL_KMOD_LGUI);
+    CHECK(router.isClickPending());
+}
+
+TEST_CASE("InputRouter::modifier state preserved across down+up for Meta key") {
+    // A Meta+<key> chord produces two events (KEY_DOWN, KEY_UP) that both
+    // expose the same GUI modifier; the router must not mutate the mask.
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    struct Capture { SDL_Keymod mod = SDL_KMOD_NONE; Uint32 type = 0; };
+    std::vector<Capture> seen;
+    router.registerGameCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP)
+            seen.push_back({ e.key.mod, e.type });
+    });
+
+    const SDL_Keymod guiShift = static_cast<SDL_Keymod>(SDL_KMOD_LGUI | SDL_KMOD_LSHIFT);
+    SDL_Event down = {};
+    down.type = SDL_EVENT_KEY_DOWN;
+    down.key.key = SDLK_TAB;
+    down.key.mod = guiShift;
+    router.processEvent(down);
+
+    SDL_Event up = {};
+    up.type = SDL_EVENT_KEY_UP;
+    up.key.key = SDLK_TAB;
+    up.key.mod = guiShift;
+    router.processEvent(up);
+
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0].mod == guiShift);
+    CHECK(seen[1].mod == guiShift);
+    CHECK_FALSE(router.isClickPending());  // GAME mode, no KAG advance flag
+}
+
+// ---- 4. multi-device coexistence (keyboard / mouse / gamepad) --------------
+TEST_CASE("InputRouter::keyboard and mouse events coexist in focus routing") {
+    // Keyboard and mouse are independent device families: in GAME focus both
+    // reach the game consumer with no cross-talk and no KAG leak.
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    std::vector<Uint32> game;
+    router.registerGameCallback([&](const SDL_Event& e) { game.push_back(e.type); });
+
+    SDL_Event key = {}; key.type = SDL_EVENT_KEY_DOWN; key.key.key = SDLK_SPACE;
+    SDL_Event mdown = {}; mdown.type = SDL_EVENT_MOUSE_BUTTON_DOWN; mdown.button.button = 1;
+    SDL_Event mup = {}; mup.type = SDL_EVENT_MOUSE_BUTTON_UP; mup.button.button = 1;
+    router.processEvent(key);
+    router.processEvent(mdown);
+    router.processEvent(mup);
+
+    REQUIRE(game.size() == 3);
+    CHECK(game[0] == SDL_EVENT_KEY_DOWN);
+    CHECK(game[1] == SDL_EVENT_MOUSE_BUTTON_DOWN);
+    CHECK(game[2] == SDL_EVENT_MOUSE_BUTTON_UP);
+    CHECK_FALSE(router.isClickPending());
+}
+
+TEST_CASE("InputRouter::gamepad button/axis events route to GAME focus") {
+    // Gamepad events are a distinct device family. In GAME focus they must be
+    // delivered to the game consumer; in KAG focus they are not advancing
+    // events (never arm the KAG advance flag) and never leak to game.
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    std::vector<Uint32> game;
+    router.registerGameCallback([&](const SDL_Event& e) { game.push_back(e.type); });
+
+    SDL_Event bdown = {};
+    bdown.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    bdown.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    bdown.gbutton.down = true;
+    router.processEvent(bdown);
+
+    SDL_Event bup = {};
+    bup.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    bup.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    bup.gbutton.down = false;
+    router.processEvent(bup);
+
+    SDL_Event axis = {};
+    axis.type = SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    axis.gaxis.axis = SDL_GAMEPAD_AXIS_LEFTX;
+    axis.gaxis.value = 32767;
+    router.processEvent(axis);
+
+    REQUIRE(game.size() == 3);
+    CHECK(game[0] == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+    CHECK(game[1] == SDL_EVENT_GAMEPAD_BUTTON_UP);
+    CHECK(game[2] == SDL_EVENT_GAMEPAD_AXIS_MOTION);
+    CHECK_FALSE(router.isClickPending());   // gamepad never re-arms KAG flag
+}
+
+TEST_CASE("InputRouter::gamepad events are non-advancing in KAG focus") {
+    // Under KAG focus, gamepad input is NOT a story-advance event: it is
+    // filtered out (no callback, no pending flag), unlike a key press.
+    InputRouter router;
+    int kagCalls = 0;
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagCalls; });
+
+    SDL_Event gp = {};
+    gp.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    gp.gbutton.button = SDL_GAMEPAD_BUTTON_EAST;
+    gp.gbutton.down = true;
+    router.processEvent(gp);
+
+    CHECK(kagCalls == 0);
+    CHECK_FALSE(router.isClickPending());
+
+    // A real key press still advances (the KAG chain is not blocked by the
+    // preceding non-advancing gamepad event).
+    SDL_Event key = {};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.key = SDLK_SPACE;
+    router.processEvent(key);
+    CHECK(kagCalls == 1);
+    CHECK(router.isClickPending());
+}
+
+// ---- 5. text input / IME ---------------------------------------------------
+TEST_CASE("InputRouter::text input reaches GAME focus with UTF-8 preserved") {
+    // SDL_EVENT_TEXT_INPUT carries a UTF-8 string (e.text.text). In GAME focus
+    // the router must deliver the exact bytes -- including multi-byte CJK.
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    std::string got;
+    router.registerGameCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_TEXT_INPUT) got = e.text.text ? e.text.text : "";
+    });
+
+    // UTF-8 for "あ" (U+3042: E3 81 82), full-width four-byte U+1F31F, and ASCII.
+    SDL_Event txt = {};
+    txt.type = SDL_EVENT_TEXT_INPUT;
+    txt.text.text = "ã";
+    router.processEvent(txt);
+    CHECK(got == "ã");
+
+    txt.text.text = "abc";
+    router.processEvent(txt);
+    CHECK(got == "abc");
+
+    txt.text.text = "ð";       // U+1F31F 🌟 (4-byte UTF-8)
+    router.processEvent(txt);
+    CHECK(got == "ð");
+    CHECK_FALSE(router.isClickPending());
+}
+
+TEST_CASE("InputRouter::text input is non-advancing in KAG focus") {
+    // In KAG focus, SDL_EVENT_TEXT_INPUT is not an advancing event: it is
+    // filtered out entirely (never reaches KAG callbacks, never arms the flag).
+    // IME composition produces text-input events without KEY_DOWN; the engine's
+    // story-advance chain must not treat them as a click.
+    InputRouter router;
+    int kagCalls = 0;
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagCalls; });
+
+    SDL_Event txt = {};
+    txt.type = SDL_EVENT_TEXT_INPUT;
+    txt.text.text = "ã";
+    router.processEvent(txt);
+
+    CHECK(kagCalls == 0);
+    CHECK_FALSE(router.isClickPending());
+}
+
+TEST_CASE("InputRouter::keyboard events are not suppressed during text input") {
+    // The router does not implement IME-composition suppression: a KEY_DOWN
+    // that accompanies a text-input burst still reaches the active consumer
+    // (each event type is filtered independently by focus rules).
+    InputRouter router;
+    int kagKeys = 0;
+    int kagText = 0;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN) ++kagKeys;
+        if (e.type == SDL_EVENT_TEXT_INPUT) ++kagText;
+    });
+
+    SDL_Event txt = {};
+    txt.type = SDL_EVENT_TEXT_INPUT;
+    txt.text.text = "ã";
+    router.processEvent(txt);                 // text: filtered in KAG
+
+    SDL_Event enter = {};
+    enter.type = SDL_EVENT_KEY_DOWN;
+    enter.key.key = SDLK_RETURN;
+    enter.key.repeat = false;
+    router.processEvent(enter);               // key: advances in KAG
+
+    CHECK(kagText == 0);
+    CHECK(kagKeys == 1);
+    CHECK(router.isClickPending());
+}
+
+// ---- 6. lifecycle: repeat init, drain, event-loop flush --------------------
+TEST_CASE("InputRouter::repeat processEvent calls are safe and idempotent") {
+    // Re-invoking the router (e.g. a fresh frame's event queue) with the same
+    // router instance must not throw or corrupt routing state; callback counts
+    // and focus are stable across repeated drains.
+    InputRouter router;
+    int kagCalls = 0;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN) ++kagCalls;
+    });
+
+    SDL_Event key = {};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.key = SDLK_SPACE;
+
+    for (int frame = 0; frame < 5; ++frame) {
+        CHECK_NOTHROW(router.processEvent(key));
+        router.consumeKAGClick();
+    }
+    CHECK(kagCalls == 5);
+    CHECK(router.getKAGCallbackCount() == 1);
+    CHECK(router.getFocus() == InputFocus::KAG);
+    CHECK_FALSE(router.isClickPending());   // drained each iteration
+}
+
+TEST_CASE("InputRouter::event-loop drain leaves a consistent routing state") {
+    // A full event batch (key down, up, motion, text, gamepad, wheel) processed
+    // in sequence must leave the router in the same deterministic state each
+    // cycle: KAG pending flag reflects only the last advancing event, and the
+    // focus is unchanged across the drain.
+    InputRouter router;
+    router.registerKAGCallback([&](const SDL_Event&) {});
+
+    const auto flushCycle = [&]() {
+        SDL_Event key = {}; key.type = SDL_EVENT_KEY_DOWN; key.key.key = SDLK_SPACE;
+        SDL_Event up = {};   up.type = SDL_EVENT_KEY_UP;   up.key.key = SDLK_SPACE;
+        SDL_Event mov = {};  mov.type = SDL_EVENT_MOUSE_MOTION;
+        SDL_Event txt = {};  txt.type = SDL_EVENT_TEXT_INPUT; txt.text.text = "x";
+        SDL_Event gp = {};   gp.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        SDL_Event wh = {};   wh.type = SDL_EVENT_MOUSE_WHEEL;
+        router.processEvent(key);
+        router.processEvent(up);
+        router.processEvent(mov);
+        router.processEvent(txt);
+        router.processEvent(gp);
+        router.processEvent(wh);
+    };
+
+    flushCycle();
+    CHECK(router.isClickPending());          // key down was advancing
+    CHECK(router.getFocus() == InputFocus::KAG);   // focus unchanged
+
+    router.consumeKAGClick();
+    CHECK_FALSE(router.isClickPending());
+
+    flushCycle();
+    CHECK(router.isClickPending());
+    CHECK(router.getFocus() == InputFocus::KAG);
+}
+
+TEST_CASE("InputRouter::many rapid events preserve order and pending edge") {
+    // Queue behaviour on the KAG advancing window: interleaving down/up with
+    // non-advancing events must not lose or reorder the flag transitions.
+    InputRouter router;
+    int kagCalls = 0;
+    router.registerKAGCallback([&](const SDL_Event& e) {
+        if (e.type == SDL_EVENT_KEY_DOWN) ++kagCalls;
+    });
+
+    SDL_Event down = {}; down.type = SDL_EVENT_KEY_DOWN; down.key.key = SDLK_A;
+    SDL_Event up = {};   up.type = SDL_EVENT_KEY_UP;     up.key.key = SDLK_A;
+
+    router.processEvent(down);
+    CHECK(router.isClickPending());
+    router.processEvent(up);          // up filtered -- flag stays
+    CHECK(router.isClickPending());
+    router.consumeKAGClick();
+    router.processEvent(up);          // still no re-arm from release
+    CHECK_FALSE(router.isClickPending());
+    router.processEvent(down);        // next press re-arms
+    CHECK(router.isClickPending());
+    CHECK(kagCalls == 2);
+}
+
