@@ -57,8 +57,28 @@ python -m http.server 8080
 3. 上传 zip，填写页面信息。itch.io 会把它当作网页游戏托管。
 
 ### GitHub Pages
-1. 把 `dist/<game>/` 内容推送到任意仓库的 gh-pages 分支，或 CI 上传为 Pages 站点。
-2. 访问 `https://<user>.github.io/<repo>/`。
+项目内置了**一键自动部署** workflow（`.github/workflows/deploy-web.yml`，手动触发），
+见下文「GitHub Pages 自动部署」；也可以手动推 gh-pages 分支（略）。
+
+#### GitHub Pages 自动部署（workflow_dispatch）
+仓库已提供自动化发布 workflow，把 Web 播放器静态站直接部署到 GitHub Pages：
+
+1. **启用 Pages**：仓库 *Settings → Pages*，Source 选 **GitHub Actions**
+   （不是分支部署；写入权限由 workflow 的 `permissions: pages: write` 声明，无需另开）。
+2. **触发发布**：仓库 *Actions → "Deploy Web Player (GitHub Pages)" → Run workflow*。
+   - `game` 输入可选，缺省 `demo/galgame_demo.ks`；填一个 demo 目录（如
+     `demo/example_game`）或单个 `.ks`（如 `demo/sma_demo.ks`）。
+   - 产物通过 `package_game.sh` 组装，**只含该 game 的 story bundle**
+     （`cache/story/story.lua` + `demo/<game>/`），不会夹带整个 demo 集。
+3. **访问站点**：部署完成后在 job 的 *Environment: github-pages* 里拿
+   `page_url`，或访问 `https://<user>.github.io/<repo>/`。
+
+工作流流水线：`checkout → npm ci + vite build → package_game.sh（游戏专属覆盖）
+→ upload-pages-artifact → deploy-pages`，跑在 `ubuntu-latest`（vite 跨平台一致，无需 GPU），
+与 `ci.yml` 三平台引擎构建完全解耦（新文件独立，不影响既有 job）。
+
+> 提示：多次发布由 `concurrency: group: github-pages` 串行排队；`deploy-pages` 的
+> 原子部署保证只有整体上传成功站点才切换。
 
 ### Netlify / Vercel / S3
 直接拖拽/上传 `dist/<game>/` 目录即可（纯静态，无需 SPA 回退规则）。

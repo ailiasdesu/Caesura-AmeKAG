@@ -1,0 +1,92 @@
+# Caesura (AmeKAG) - deploy-web.yml
+name: Deploy Web Player (GitHub Pages)
+
+# Manually deploy the web player static site (vite build + package_game.sh)
+# to GitHub Pages. Pick a game in the Actions -> Run workflow dialog.
+# Fully decoupled from ci.yml: no engine build, no GPU, ubuntu-latest.
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: >-
+          Demo directory (e.g. demo/example_game) or a single .ks file
+          (e.g. demo/galgame_demo.ks) to package into the static site.
+          Only this game story bundle is shipped.
+        required: false
+        default: demo/galgame_demo.ks
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build Web Player and Deploy Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      - name: Build web player (vite build)
+        working-directory: web
+        run: npm run build
+
+      - name: Install Lua (POSIX interpreter)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+          if command -v lua5.4 >/dev/null; then sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua; fi
+
+      - name: Regenerate web scripts index (freshness guard)
+        run: node web/gen-index.mjs
+
+      # --no-web-build reuses web/dist from the npm build above; the script
+      # keeps its game-specific override so only the chosen game bundle ships.
+      - name: Package game static site
+        run: bash scripts/package_game.sh --no-web-build "${{ inputs.game }}"
+
+      - name: Resolve packaged output directory
+        id: resolve
+        run: |
+          OUT="$(find dist -mindepth 1 -maxdepth 1 -type d | sort | head -n 1)"
+          if [ -z "$OUT" ] || [ ! -f "$OUT/index.html" ]; then
+            echo "::error::No packaged static site under dist/ (expected dist/<game>/index.html)"
+            exit 1
+          fi
+          echo "Resolved package directory: $OUT"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.resolve.outputs.out }}
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
