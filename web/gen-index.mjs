@@ -78,7 +78,11 @@ export function main(argv = process.argv.slice(2)) {
     try {
       writeFileSync(tmp, text)
       const expected = existsSync(output) ? readFileSync(output, 'utf8') : null
-      if (expected !== text) {
+      // Normalize CRLF (git autocrlf on Windows checkouts) before comparing:
+      // the artifact is generated with LF and must be byte-stable across
+      // platforms (round 93 CI: Windows flagged stale on otherwise-equal data).
+      const normExpected = expected === null ? null : expected.replace(/\r\n/g, '\n')
+      if (normExpected !== text) {
         const detail = expected === null
           ? 'artifact missing: ' + output
           : 'artifact stale (' + Object.keys(mods).length + ' modules scanned)'

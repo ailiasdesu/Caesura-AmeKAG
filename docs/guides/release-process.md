@@ -77,12 +77,28 @@ external/lua/lua.exe tests/scripts/run_orphan_tests.lua
 python scripts/count_coupling.py --ci
 ```
 
-### 2.5 Doc freshness (generated artifacts)
+### 2.5 Static contract check (.ks scenes)
+Every demo scene must pass the declarative KAG command contracts before
+testing (the same gate CI enforces before its test steps):
+```bash
+external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
+# expect: OK — all scenes pass contract checks
+# also sweep the per-capability tutorial series (15 scenes, round 90 added 14/15):
+external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
+```
+
+### 2.6 Doc / index freshness (generated artifacts)
 CI regenerates generated docs and fails on drift. Refresh locally:
 ```bash
 python scripts/api_stats.py               # regenerates docs/api/api-stats.md
 python scripts/gen_changelog.py          # regenerates CHANGELOG.md (see §3)
+node web/gen-index.mjs                    # regenerates web/scripts-index.json
+node web/gen-index.mjs --check           # freshness guard (fails red if stale/missing)
 ```
+`--check` diffs a temp-generated index against the committed
+`web/scripts-index.json` without overwriting it; CI runs this guard on all
+three platforms (Windows/macOS/Linux), so any `scripts/*.lua` change must be
+regenerated (`node web/gen-index.mjs`) and committed.
 If `git status` shows diffs in generated files, include them in the release commit.
 
 ---
@@ -255,6 +271,8 @@ cd build/tests/Debug && ./CaesuraTests.exe && cd ../../..
 # (a Release-gate may also run the Release tests: cd build/tests/Release && ./CaesuraTests.exe)
 external/lua/lua.exe tests/scripts/run_lua_tests.lua
 python scripts/count_coupling.py --ci
+external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
+node web/gen-index.mjs --check
 
 # changelog + package
 python scripts/gen_changelog.py --from-tag v1.0.0-alpha --tag v1.0.1

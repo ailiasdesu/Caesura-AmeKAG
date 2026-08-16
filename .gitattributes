@@ -12,6 +12,7 @@
 *.cmake text eol=lf
 *.txt text eol=lf
 *.md text eol=lf
+*.json text eol=lf
 *.bat text eol=crlf
 *.sh text eol=lf
 

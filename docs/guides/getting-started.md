@@ -146,6 +146,9 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 - Read the [Lua Module API](../api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
 - Study `scripts/demo_tutorial.ks` for a capability-by-capability tour scene
+- Study the per-capability tutorial series `demo/tutorial/` (15 个分能力剧本，`tutorial_01_hello.ks` …
+  `tutorial_15_expr_deep.ks`：文本/图层/音频/分支/效果/存取档/系统UI/插值/循环/switch/表达式组合/命令/流程时序/表达式深入)
+  — 每个可 `external/lua/lua.exe scripts/ks_check.lua demo/tutorial/tutorial_XX_*.ks` 通过静态契约校验
 - Run the full example game `demo/example_game/` ("The Last Letter" —
   multi-chapter flow, choices, three endings, macros, Lua hybrid):
 
@@ -179,6 +182,29 @@ ffmpeg -framerate 60 -i export_out/frame_%05d.png -c:v libx264 -pix_fmt yuv420p 
 引擎截图回调（`BgfxDebugCallback::screenShot`）把 bgfx readback 写为
 PNG（RGBA/BGRA 自动处理），修复了此前 RPC `getFrame` 恒失败的缺陷。
 
+## Web Player（浏览器里的 KAG 播放器）
+
+`web/` 是一个纯前端的 KAG web 播放器（wasmoon Lua VM + vite）。它读取
+`scripts/`/`demo/`/`assets/` 资源并直接在浏览器里跑 `.ks` 剧本，无需构建 C++ 引擎：
+
+```bash
+# 首次：安装依赖（node 已装则一次性 `npm ci`）
+cd web && npm ci
+
+# 开发模式：启动 vite 开发服务器（默认 http://127.0.0.1:5174）
+npm run dev:web
+
+# 生产构建：输出到 web/dist/（含运行时目录 scripts/demo/assets/cache）
+npx vite build
+
+# 单元/集成测试（vitest）
+npm test
+```
+
+> CI 三平台（Windows/macOS/Linux）都会跑 `node web/gen-index.mjs --check`
+> 守卫：`web/scripts-index.json` 必须与 `scripts/` 下实际模块一致（stale/missing 即红）。
+> 本地改了 `scripts/*.lua` 须重跑 `node web/gen-index.mjs` 并提交新索引。
+
 ## 快速验证清单（Smoke Checklist）
 
 从克隆源码到 Demo 可跑，新开发者按序自检（每步应无错误）：
@@ -197,6 +223,8 @@ PNG（RGBA/BGRA 自动处理），修复了此前 RPC `getFrame` 恒失败的缺
 - [ ] Lua 主套件：`external/lua/lua.exe tests/scripts/run_lua_tests.lua` → 全绿
 - [ ] Lua 孤儿套件：`external/lua/lua.exe tests/scripts/run_orphan_tests.lua` → 全绿
 - [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`
+- [ ] Web 脚本索引守卫：`node web/gen-index.mjs --check` → `CHECK OK`（stale/missing 会红；
+      改过 `scripts/*.lua` 先 `node web/gen-index.mjs` 再提交新 `web/scripts-index.json`）
 
 ### 3. Demo 运行
 
@@ -204,6 +232,7 @@ PNG（RGBA/BGRA 自动处理），修复了此前 RPC `getFrame` 恒失败的缺
       → 打印 `[ExampleGame] Loading: demo/example_game/story.ks` 且无 FATAL
 - [ ] 打开 KAG 语言向导剧本：`lua scripts/kag_demo_entry.lua` / `scripts/demo_story.ks`
 - [ ] 脚本契约校验：`lua scripts/ks_check.lua demo/example_game/story.ks` → 0 violations
+- [ ] Web 播放器：`cd web && npm run dev:web` → 打开 http://127.0.0.1:5174 能跑剧本/看到画面
 
 ### 4. KAG3 导入器烟测（可选）
 
