@@ -113,3 +113,120 @@ TEST_CASE("MiniGame: loadScene parses JSON scene descriptors") {
     backend.shutdown();
     std::filesystem::remove(path);
 }
+
+// ---------------------------------------------------------------------------
+// Boundary lifecycle: repeated / premature / post-leave transitions (F2+F3)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("MiniGame: repeated enter is idempotent and single leave fully exits") {
+    NullMiniGameBackend backend;
+    backend.init();
+    const uint32_t s1 = backend.loadScene("a.glb");
+    const uint32_t s2 = backend.loadScene("b.glb");
+    REQUIRE(s1 != 0);
+    REQUIRE(s2 != 0);
+
+    backend.enter(s1);
+    CHECK(backend.isActive());
+    // Re-entering while already active is idempotent: it must not stack a
+    // second active "depth" (a single leave() must fully deactivate).
+    backend.enter(s2);
+    CHECK(backend.isActive());
+    backend.leave();
+    CHECK_FALSE(backend.isActive());
+    CHECK_FALSE(backend.isActive());  // no residual depth
+    backend.shutdown();
+}
+
+TEST_CASE("MiniGame: update/render before enter are safe no-ops") {
+    NullMiniGameBackend backend;
+    backend.init();
+    CHECK_FALSE(backend.isActive());
+    // Pumping the loop on an inactive backend must not crash and must not
+    // implicitly activate it.
+    CHECK(backend.update(0.016f) == true);
+    backend.render();
+    CHECK_FALSE(backend.isActive());
+    backend.shutdown();
+}
+
+TEST_CASE("MiniGame: leave-then-update stays inactive") {
+    NullMiniGameBackend backend;
+    backend.init();
+    const uint32_t s = backend.loadScene("c.glb");
+    REQUIRE(s != 0);
+    backend.enter(s);
+    CHECK(backend.isActive());
+    backend.leave();
+    CHECK_FALSE(backend.isActive());
+    // update() after leave must not re-activate the backend.
+    CHECK(backend.update(0.016f) == true);
+    backend.render();
+    CHECK_FALSE(backend.isActive());
+    backend.shutdown();
+}
+
+TEST_CASE("MiniGame: enter/leave cycle is repeatable") {
+    NullMiniGameBackend backend;
+    backend.init();
+    const uint32_t s = backend.loadScene("d.glb");
+    REQUIRE(s != 0);
+    backend.enter(s);
+    backend.leave();
+    backend.enter(s);
+    CHECK(backend.isActive());
+    backend.leave();
+    CHECK_FALSE(backend.isActive());
+    backend.shutdown();
+}
+
+TEST_CASE("MiniGame: multi-scene switching across the active loop") {
+    NullMiniGameBackend backend;
+    backend.init();
+    const uint32_t hub = backend.loadScene("hub.glb");
+    const uint32_t boss = backend.loadScene("boss.glb");
+    REQUIRE(hub != 0);
+    REQUIRE(boss != 0);
+    REQUIRE(hub != boss);
+
+    // Scene A loop
+    backend.enter(hub);
+    CHECK(backend.isActive());
+    CHECK(backend.update(0.016f) == true);
+    backend.render();
+    backend.leave();
+    CHECK_FALSE(backend.isActive());
+
+    // Switch to scene B and drive another full frame.
+    backend.enter(boss);
+    CHECK(backend.isActive());
+    CHECK(backend.update(0.016f) == true);
+    backend.render();
+    backend.leave();
+    CHECK_FALSE(backend.isActive());
+
+    backend.unloadScene(hub);
+    backend.unloadScene(boss);
+    backend.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Boundary state: enter argument (scene handle) passthrough via loadScene
+// ---------------------------------------------------------------------------
+
+TEST_CASE("MiniGame: loadScene returns distinct opaque handles for distinct scenes") {
+    NullMiniGameBackend backend;
+    backend.init();
+    const uint32_t h1 = backend.loadScene("scene_one.glb");
+    const uint32_t h2 = backend.loadScene("scene_two.glb");
+    CHECK(h1 != 0);
+    CHECK(h2 != 0);
+    CHECK(h1 != h2);
+    // Handles are opaque and must round-trip through enter()/leave() without
+    // confusion about which scene is active.
+    backend.enter(h2);
+    CHECK(backend.isActive());
+    backend.unloadScene(h1);
+    backend.unloadScene(h2);
+    backend.shutdown();
+}

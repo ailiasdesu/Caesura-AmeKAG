@@ -491,3 +491,165 @@ TEST_CASE("Live2D no-SDK composition root wires NullAnimation fallback") {
     CHECK(engine.find("std::make_unique<NullAnimationBackend>()") != std::string::npos);
     CHECK(engine.find("std::make_unique<Live2DBackend>()") != std::string::npos);
 }
+
+
+// ---------------------------------------------------------------------------
+// Boundary lifecycle for the Null PNG fallback (G3 SDK-less path)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NullAnimationBackend render is safe with no loaded model") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    // No model loaded: render must be a no-op and must not crash or emit blits.
+    fixture.animation.render(0.016f);
+    CHECK(fixture.renderer.blits.empty());
+    fixture.animation.shutdown();
+}
+
+TEST_CASE("NullAnimationBackend load-then-unload frees the texture immediately") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    const int h = fixture.animation.loadModel("sprite.png", "sprite");
+    REQUIRE(h == 1);
+    CHECK(fixture.animation.isLoaded(h));
+    fixture.animation.unloadModel(h);
+    CHECK_FALSE(fixture.animation.isLoaded(h));
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11});
+
+    // Reloading the same path yields a fresh handle AND a fresh texture id.
+    const int h2 = fixture.animation.loadModel("sprite.png", "sprite");
+    REQUIRE(h2 == 2);
+    CHECK(fixture.animation.isLoaded(h2));
+    CHECK(fixture.textures.liveIds == std::unordered_set<uint32_t>{12});
+
+    fixture.animation.unloadModel(h2);
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11, 12});
+    fixture.animation.shutdown();
+    // shutdown after manual unloads frees nothing extra.
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11, 12});
+}
+
+TEST_CASE("NullAnimationBackend reload of the same animation yields independent sprites") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    const int first = fixture.animation.loadModel("face.png", "face");
+    const int second = fixture.animation.loadModel("face.png", "face");
+    REQUIRE(first == 1);
+    REQUIRE(second == 2);
+    CHECK(first != second);
+    CHECK(fixture.animation.isLoaded(first));
+    CHECK(fixture.animation.isLoaded(second));
+    CHECK(fixture.textures.loadedPaths ==
+          std::vector<std::string>{"face.png", "face.png"});
+    CHECK(fixture.textures.liveIds == std::unordered_set<uint32_t>{11, 12});
+
+    // Unloading the first leaves the second intact.
+    fixture.animation.unloadModel(first);
+    CHECK_FALSE(fixture.animation.isLoaded(first));
+    CHECK(fixture.animation.isLoaded(second));
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11});
+    fixture.animation.shutdown();
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11, 12});
+}
+
+// ---------------------------------------------------------------------------
+// Boundary degrade: animation controls & params on the Null PNG fallback
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NullAnimationBackend degrades gracefully for motion/expression/params") {
+    NullAnimationFixture fixture;
+    REQUIRE(fixture.animation.init());
+    const int h = fixture.animation.loadModel("hero.png", "hero");
+    REQUIRE(h == 1);
+
+    // Motion degrades to "not supported" (false); expression & parameter are
+    // accepted as no-ops (must not crash, must not corrupt sprite state).
+    CHECK_FALSE(fixture.animation.playMotion(h, "idle"));
+    fixture.animation.setExpression(h, "angry");
+    fixture.animation.setParameter(h, "ParamAngleX", -32.0f);
+    fixture.animation.setParameter(h, "ParamAngleY", 40.0f);
+
+    // Unknown handles are no-ops too.
+    CHECK_FALSE(fixture.animation.playMotion(999, "idle"));
+    fixture.animation.setExpression(999, "x");
+    fixture.animation.setParameter(999, "p", 1.0f);
+
+    // The sprite still renders with its default state after all the above.
+    fixture.animation.showModel(h, 5.0f, 5.0f, 1.0f);
+    fixture.animation.setOpacity(h, 12.0f);  // clamped to 1.0
+    fixture.animation.render(0.016f);
+    REQUIRE(fixture.renderer.blits.size() == 1);
+    CHECK(fixture.renderer.blits.front().opacity == 255);
+    fixture.animation.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Boundary: PathConfinement depth (empty, dot-prefix, backslash, Unicode)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("confineToModelRoot handles empty path without crashing (fail closed)") {
+    // An empty path cannot be verified as inside the model root, so the guard
+    // must fail closed (return empty) rather than resolving it to the root.
+    // Correct secure behavior: an empty string is rejected, never crashes.
+    const std::string empty = Caesura::confineToModelRoot("");
+    CHECK(empty.empty());
+}
+
+TEST_CASE("confineToModelRoot accepts dot-prefix and backslash relative paths under root") {
+    namespace fs = std::filesystem;
+    // A real file under the CWD makes canonicalization deterministic.
+    const fs::path folder = fs::current_path() / "pc_depth_tmp";
+    std::error_code ec;
+    fs::create_directories(folder, ec);
+    const fs::path file = folder / "sprite.png";
+    if (!ec) {
+        std::ofstream(file) << "x";
+    }
+
+    const std::string relName = file.filename().string();
+    const std::string dotRel = "./pc_depth_tmp/" + relName;   // "./" prefix
+    const std::string confinedDot = Caesura::confineToModelRoot(dotRel);
+    CHECK_FALSE(confinedDot.empty());
+    CHECK(confinedDot.find("pc_depth_tmp") != std::string::npos);
+
+#ifdef _WIN32
+    // Backslash separators must be normalized to forward slashes so the
+    // containment prefix comparison still passes.
+    const std::string backRel = "pc_depth_tmp\\" + relName;
+    const std::string confinedBack = Caesura::confineToModelRoot(backRel);
+    CHECK_FALSE(confinedBack.empty());
+    CHECK(confinedBack.find("pc_depth_tmp") != std::string::npos);
+    // Windows dot-dot escape with backslashes is still rejected.
+    CHECK(Caesura::confineToModelRoot("..\\escape.png").empty());
+    CHECK(Caesura::confineToModelRoot("..\\..\\escape.png").empty());
+#endif
+
+    fs::remove_all(folder, ec);
+}
+
+TEST_CASE("confineToModelRoot keeps Unicode relative paths under the root") {
+    namespace fs = std::filesystem;
+    const std::string token = "模型" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const fs::path folder = fs::current_path() / token;
+    std::error_code ec;
+    fs::create_directories(folder, ec);
+    if (!ec) {
+        const std::string confined = Caesura::confineToModelRoot(token + "/model.model3.json");
+        CHECK_FALSE(confined.empty());
+        CHECK(confined.find(token) != std::string::npos);
+    }
+    fs::remove_all(folder, ec);
+}
+
+// ---------------------------------------------------------------------------
+// Boundary: BackendRegistry integration for animation backend
+// ---------------------------------------------------------------------------
+
+TEST_CASE("BackendRegistry getAnimationBackend round-trip") {
+    auto& reg = BackendRegistry::instance();
+    NullAnimationBackend backend;
+    reg.setAnimationBackend(&backend);
+    CHECK(reg.getAnimationBackend() == &backend);
+    reg.setAnimationBackend(nullptr);
+    CHECK(reg.getAnimationBackend() == nullptr);
+}
