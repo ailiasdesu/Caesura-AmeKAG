@@ -75,6 +75,8 @@ local tests = {
     "test_flow_edge",
     "test_flow_edge_call",
     "test_flow_edge_scene",
+    "test_macro_scene",
+    "test_scene_switch_budget",
     "test_modern_commands",
     "test_kag_debug",
     "test_multiline",
