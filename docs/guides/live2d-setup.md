@@ -162,7 +162,7 @@ assets/live2d/
 - **运行时修复**：`CubismRenderer_D3D11::SetConstantSettings(1, device)`（模型加载前必须）、`beginFrame` 绑定共享纹理 RTV + `StartFrame/DrawModel/EndFrame` + 恢复 bgfx 渲染目标、`endFrame` 直接 `bgfx::overrideInternal`（去掉 `CopyResource`）、`cubismModel->Update()` 顶点更新、模型纹理 D3D11 SRV + `BindTexture`、renderer double-free 修复、`CubismFramework::Option` 生命周期修复。
 - **shader**：`FrameworkShaders/*.fx` 由 CMake 构建时复制到输出目录；`LoadFileFunction/ReleaseBytesFunction` 回调接入。
 - **验证方式**：`--editor` 模式 HTTP `POST /api/live2d/load` 加载 `Samples/Resources/Haru/Haru.model3.json`（ASCII 路径副本），多帧渲染无崩溃、无设备丢失、无 shader 编译错误、无 `ContextNum` 警告。
-- **套件**：Live2D 构建与无 Live2D 构建均 557/557 通过，ctest 9/9，耦合度 PASS。
+- **套件**：Live2D 构建与无 Live2D 构建均 963/963 通过，ctest 10+AI 跳过，耦合度 PASS。
 - **遗留**：OpenGLShared/OpenGLReadback 路径未实机运行验证（无对应平台环境）；Metal 已实现但待 macOS 实机验证；画面像素正确性未做视觉确认。
 
 

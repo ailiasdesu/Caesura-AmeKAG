@@ -152,9 +152,9 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 ### api/ — API 参考文档
 | 文件 | 内容 |
 |------|------|
-| `api/command-contracts.md` | 84 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
+| `api/command-contracts.md` | 118 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
 | `api/lua-modules.md` | Lua 模块 API 参考 |
-| `api/cpp-interfaces.md` | 全部 C++ 接口定义（30 个） |
+| `api/cpp-interfaces.md` | 全部 C++ 接口定义（31 个） |
 | `api/editor-api-reference.md` | 编辑器 RPC 端点参考 |
 | `api/api-stats.md` | 实时 API 普查（自动生成） |
 | `api/kag-commands.md` | 已弃用的 KAG3 兼容参考（被 command-contracts.md 取代） |
@@ -164,7 +164,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | 文件 | 内容 |
 |------|------|
 | `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
-| `design/engine-capability-matrix.md` | 54 项能力的完成状态矩阵 |
+| `design/engine-capability-matrix.md` | 79 项能力的完成状态矩阵 |
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
@@ -184,7 +184,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-16-020-delivery-handoff.md` | **最新状态**交接文档（020，round 96 起点 / round 95 完成；轮次记录权威在 plans/audit/ROADMAP-100.md） |
+| `plans/2026-08-16-021-delivery-handoff.md` | **最新状态**交接文档（021，round 100 起点 / round 99 完成；轮次记录权威在 plans/audit/ROADMAP-100.md） |
 | `plans/2026-08-14-019-delivery-handoff.md` | 交接文档（019，round 89 状态） |
 | `plans/2026-08-12-008-delivery-handoff.md` | 交接文档（008，内联标记视觉化） |
 | `plans/2026-08-12-007-delivery-handoff.md` | 交接文档（007，SMA 游戏循环接驳） |

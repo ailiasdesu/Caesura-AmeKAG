@@ -85,7 +85,7 @@ external/lua/lua.exe tests/scripts/run_orphan_tests.lua
 python scripts/count_coupling.py --ci
 ```
 
-Test sources are explicitly listed in `tests/CMakeLists.txt` (currently 55 `test_*.cpp` files, including `test_main.cpp`). `CaesuraTests` links the same internal static module libraries as the application through `Caesura::Engine`, plus `Caesura::Rpc`; it does not recompile a second copy of the production sources. The runner reports the authoritative test-case total, and every discovered case must pass. `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
+Test sources are explicitly listed in `tests/CMakeLists.txt` (currently 66 `test_*.cpp` files, including `test_main.cpp`). `CaesuraTests` links the same internal static module libraries as the application through `Caesura::Engine`, plus `Caesura::Rpc`; it does not recompile a second copy of the production sources. The runner reports the authoritative test-case total, and every discovered case must pass. `NullJobSystem` in `tests/mocks/` provides synchronous testing. The test binary is at `build/tests/Debug/CaesuraTests.exe`.
 
 ## Lint & Format
 
@@ -166,12 +166,12 @@ Tests link the same internal static module libraries as the application. Each `t
 ## Key Documentation
 
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first; 完整文档分类见 AGENTS.md §12)
-- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (84 commands; supersedes kag-commands.md)
+- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (118 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
-- `docs/api/cpp-interfaces.md` — all 30 C++ interface definitions
+- `docs/api/cpp-interfaces.md` — all 31 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
-- `docs/design/engine-capability-matrix.md` — 54 tracked capabilities and readiness limits
+- `docs/design/engine-capability-matrix.md` — 79 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
 
