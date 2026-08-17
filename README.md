@@ -384,6 +384,22 @@ Caesura(AmeKAG)/
 
 ---
 
+## 社区与支持（Community & Support）
+
+想提问、晒作品、参与引擎开发还是分享创作心得？社区主阵地是 **GitHub Discussions**
+（对话）与 **Issues**（Bug / 功能追踪）。完整入口、话题分类与学习路径见
+**[docs/guides/community.md](docs/guides/community.md)**。
+
+- **💬 提问 / 求助** — Discussions「提问」（先看 [getting-started](docs/guides/getting-started.md) 与已有讨论）
+- **🎨 作品展示** — Discussions「作品展示」：用引擎做的游戏 / 场景 / 立绘
+- **🔧 引擎开发** — Discussions「引擎开发」：接口 / 渲染 / 脚本 / 构建
+- **✍️ 内容创作** — Discussions「内容创作」：剧本写作 / 美术音频 / 经验
+- **🐛 Bug / 功能请求** — Issues（见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 Issue 模板）
+- **🚀 发布作品** — `bash scripts/package_game.sh` 一键打包为静态站 → itch.io / GitHub Releases / GitHub Pages（见 [packaging-ux.md](docs/guides/packaging-ux.md)）
+
+> **想参与贡献？** 从 [CONTRIBUTING.md](CONTRIBUTING.md) 开始：Fork → 分支 → 语义提交 → PR
+> （合并门禁：全量构建零错误 + C++ / Lua / Web / Editor 四套件测试全绿 + 耦合门禁）。
+
 ## License
 
 Caesura (AmeKAG) — Copyright (c) 2025-2026 AiliasDesu. MIT License.

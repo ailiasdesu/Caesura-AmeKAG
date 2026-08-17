@@ -146,10 +146,10 @@ and reference them from `scripts/demo.lua` or your own game entry point.
 - Read the [Lua Module API](../api/lua-modules.md) for scripting APIs
 - Study `scripts/demo_story.ks` for a complete example
 - Study `scripts/demo_tutorial.ks` for a capability-by-capability tour scene
-- Study the per-capability tutorial series `demo/tutorial/` (15 个分能力剧本，`tutorial_01_hello.ks` …
+- Study the per-capability tutorial series `demo/tutorial/` (16 个分能力剧本，`tutorial_01_hello.ks` …
   `tutorial_15_expr_deep.ks`：文本/图层/音频/分支/效果/存取档/系统UI/插值/循环/switch/表达式组合/命令/流程时序/表达式深入)
   — 每个可 `external/lua/lua.exe scripts/ks_check.lua demo/tutorial/tutorial_XX_*.ks` 通过静态契约校验
-- Run the full example game `demo/example_game/` ("The Last Letter" —
+- Run the full example game `demo/example_game/` ("The One-Way Reply" / 《单程回信》 —
   multi-chapter flow, choices, three endings, macros, Lua hybrid):
 
 ```bash
