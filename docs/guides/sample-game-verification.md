@@ -1,6 +1,6 @@
 # Sample Game Verification（示例游戏双端验证）
 
-> 目标：为样例游戏 `demo/example_game/story.ks.new` 提供端到端验证——`跑通 DONE + 零错误`，不写死剧情内容断言。
+> 目标：为样例游戏 `demo/example_game/story.ks` 提供端到端验证——`跑通 DONE + 零错误`，不写死剧情内容断言。
 
 ## 验证脚本
 
@@ -19,7 +19,7 @@ bash scripts/verify_sample_game.sh
 
 脚本依次执行：
 
-1. **静态契约校验** `lua scripts/ks_check.lua demo/example_game/story.ks.new`
+1. **静态契约校验** `lua scripts/ks_check.lua demo/example_game/story.ks`
    - 目标：零警告（lint 警告不算 CI 门禁，仅提示）。
 2. **headless 全流程** `sample_game_headless.lua`
    - mock 掉 C++ 绑定（`KAG.*`/`Render.*`/`DevCore.*`/`engine.*`），`kag_runner` 逐 token 推进，自动点击 `[p]` 等待与 `[select]` 首选项。
@@ -33,7 +33,7 @@ bash scripts/verify_sample_game.sh
 
 ```bash
 # 只跑静态校验
-external/lua/lua.exe scripts/ks_check.lua demo/example_game/story.ks.new
+external/lua/lua.exe scripts/ks_check.lua demo/example_game/story.ks
 
 # 只跑 headless 全流程
 external/lua/lua.exe tests/scripts/sample_game_headless.lua
@@ -60,11 +60,11 @@ SAMPLE_ENDING=ending_promise external/lua/lua.exe tests/scripts/sample_game_head
 
 ## Web 端手动冒烟指引
 
-Web 播放器跑的是 `ks_bake --dir demo --web cache/story` 生成的打包场景（对 `demo/**/*.ks`），**不含** `story.ks.new`（扩展名非 `.ks`）。要手动验证草稿的 Web 端表现：
+Web 播放器跑的是 `ks_bake --dir demo --web cache/story` 生成的打包场景（对 `demo/**/*.ks`），**不含** `story.ks`（扩展名非 `.ks`）。要手动验证草稿的 Web 端表现：
 
 1. 生成 bundle：`external/lua/lua.exe scripts/ks_bake.lua --dir demo --web cache/story`
    - 仅覆盖发货用的 `demo/example_game/story.ks`。
-2. 若需在浏览器里跑 `story.ks.new`：将其临时并入 bundle 场景集（或单独 bake），再跑 `web/story.bundle.sweep.test.js`，确认 `runFromBundle` 驱动该场景到 `DONE` 且零 error 事件。
+2. 若需在浏览器里跑 `story.ks`：将其临时并入 bundle 场景集（或单独 bake），再跑 `web/story.bundle.sweep.test.js`，确认 `runFromBundle` 驱动该场景到 `DONE` 且零 error 事件。
 3. 不跑完整 vitest 时，可直接在 `web/main.mjs` 打开自动播放（autoClick）从场景首帧看到 `[end]` 结束即可。
 
-> 说明：当前不把 `story.ks.new` 写进测试注册文件/`EXPECTED_KEYS`（保持双端验证设施不动），待最终 `story.ks.new` 定稿改名 `story.ks` 后再纳入正式 bundle 与 sweep。
+> 说明：当前不把 `story.ks` 写进测试注册文件/`EXPECTED_KEYS`（保持双端验证设施不动），待最终 `story.ks` 定稿改名 `story.ks` 后再纳入正式 bundle 与 sweep。

@@ -2,13 +2,13 @@
 # =============================================================================
 #  Caesura (AmeKAG) — verify_sample_game.sh
 #
-#  End-to-end verification for the sample game (demo/example_game/story.ks.new).
+#  End-to-end verification for the sample game (demo/example_game/story.ks).
 #  Drives the draft through the engine verification facilities and reports
 #  PASS/FAIL. Content-agnostic: asserts "runs to [end] with zero errors", not
 #  specific story wording.
 #
 #  Steps
-#   1. ks_check  — static contract check of story.ks.new (goal: zero warnings)
+#   1. ks_check  — static contract check of story.ks (goal: zero warnings)
 #   2. headless  — kag_runner drives the whole script to [end] (DONE)
 #   3. endings   — reachability probe for the three ending labels
 #                   (ending_zero / ending_companion / ending_promise)
@@ -29,7 +29,7 @@ if [ -z "$LUA" ] || ! [ -e "$LUA" ]; then
     echo "[verify] FATAL: no Lua interpreter found (expected external/lua/lua.exe)"; exit 1
 fi
 
-STORY="${SAMPLE_STORY:-demo/example_game/story.ks.new}"
+STORY="${SAMPLE_STORY:-demo/example_game/story.ks}"
 ENDINGS="ending_zero ending_companion ending_promise"
 DRIVER="tests/scripts/sample_game_headless.lua"
 FRAME_BUDGET="${SAMPLE_FRAMES:-200000}"
@@ -96,7 +96,7 @@ done
 echo ""
 note "Step 4: Web smoke (manual — not executed here)"
 note "  The web player runs the shipped demo/example_game/story.ks bundle, not"
-note "  story.ks.new. To verify the draft in-browser you must first fold it into"
+note "  story.ks. To verify the draft in-browser you must first fold it into"
 note "  the web bundle, then drive cache/story/story.lua via web/story.bundle.sweep.test.js."
 note "  See docs/guides/sample-game-verification.md for the manual walkthrough."
 
