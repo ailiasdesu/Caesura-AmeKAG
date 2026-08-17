@@ -426,6 +426,13 @@ i18n.translate("items", { n = 3 })   -- en: "3 items"；zh/ja: "3"
 
 无 `params.n` 时回退 `other`（通用）形式，`{n}` 仍可插值。
 
+> **⚠️ 复数键不可用裸 `{key}` 走 `[ch]`/`[text]`/`[button]` 管线（round 110 回归防范）**：
+> 这些命令的本地化路径是 `i18n.localize` → `expand` → `t()`，**没有 `{n}` 数量输入**，
+> 因此复数表键会解析成通用 `other` 形式并把 `{n}` 原样残留（如
+> `[ch text="共 {items}"]` → `共 {n} items`）。正确做法：在 `[iscript]`/`[emb]` 里
+> 先算好数量，用 `i18n.translate(key, { n = <count> })` 得到译文再注入文本；引擎对裸
+> `{key}` 命中复数表键会打印 `[i18n] WARN` 引导改用 `translate()`。
+
 **运行时热切换整页重绘**（**超 Ren'Py**：Ren'Py 已显示行保持原语言，
 本引擎切换后整页跟随新语言）：
 

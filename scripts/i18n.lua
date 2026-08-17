@@ -174,6 +174,21 @@ function i18n.expand(text)
     if not text or #text == 0 then return text or "" end
     return (text:gsub("{([%w_]+)}", function(key)
         if MARKUP_NAMES[key] then return "{" .. key .. "}" end
+        -- [plural-guard] A string-table key whose value is a PLURAL VARIANT
+        -- TABLE ({ one=.., other=.. }) can only pick the right form via
+        -- i18n.translate(key, { n = <count> }); a bare {key} token resolves
+        -- to the generic ("other") form and LEAVES any {n} placeholder
+        -- un-interpolated (round 110 regression: "[ch text=...{items}...]"
+        -- rendered a literal "{n} items"). Surface a one-shot diagnostic so
+        -- authors route such keys through translate() instead of guessing.
+        local rv = i18n.strings[key]
+        if rv == nil then rv = i18n.fallback[key] end
+        if type(rv) == "table" then
+            print(string.format("[i18n] WARN: key %q is a plural-variant table; "
+                .. "bare {key} expansion resolves the generic form and leaves "
+                .. "{n} un-interpolated. Use i18n.translate(%q, { n = <count> }) "
+                .. "inside [iscript]/[emb] instead.", key, key))
+        end
         local val = i18n.t(key)
         -- Unknown key: keep the braced form so missing translations stay
         -- visible (and literal {word} text is never destructively mangled).

@@ -756,6 +756,99 @@ i18n.current, i18n.strings = saved_pl.current, saved_pl.strings
 i18n.lines, i18n.fallback = saved_pl.lines, saved_pl.fallback
 
 -- ---------------------------------------------------------------------------
+-- 7b. Plural usage THROUGH the KAG text pipeline (round 110 regression
+--  guard). The [ch]/[text]/[button] pipeline localizes via i18n.localize
+--  -> i18n.expand -> i18n.t, which NEVER receives a {n} count. A plural
+--  VARIANT TABLE value ({ one=.., other=.. }) therefore resolves to its
+--  generic ("other") form and LEAVES a literal {n} placeholder in the
+--  rendered line. This is locked as the current (correct) semantics: plural
+--  keys MUST be routed through i18n.translate(key, { n = <count> }) inside
+--  [iscript]/[emb] (resolve the count first, then inject the translated
+--  string). A bare {key} plural lookup is a content-authoring error and is
+--  now also flagged by a one-shot [i18n] WARN from expand().
+-- ---------------------------------------------------------------------------
+local saved_pl2 = { current = i18n.current, strings = i18n.strings,
+                    lines = i18n.lines, fallback = i18n.fallback }
+i18n.current = "en"
+i18n.strings = { items = { one = "{n} item", other = "{n} items" } }
+i18n.lines = {}
+i18n.fallback = {}
+
+-- (a) bare {items} under expand/localize resolves "other" and KEEPS {n}.
+check("plural-pipe: expand leaves {n} residual (no count in scope)",
+      i18n.expand("count {items}") == "count {n} items")
+check("plural-pipe: localize leaves {n} residual too",
+      i18n.localize("count {items}", "x.ks") == "count {n} items")
+
+-- (b) the engine now warns when a plural variant table is reached via bare
+--     {key} (guides authors to translate()): the warning must mention the
+--     key and point at i18n.translate. Capture printed output.
+local warns = {}
+local orig_print = print
+_G.print = function(...)
+    local parts = {}
+    for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
+    local line = table.concat(parts, " ")
+    if line:find("[i18n] WARN", 1, true) then warns[#warns + 1] = line end
+    orig_print(...)
+end
+i18n.expand("count {items}")
+_G.print = orig_print
+check("plural-pipe: expand warns on plural-table {key}",
+      #warns >= 1 and warns[1]:find("items", 1, true) ~= nil
+      and warns[1]:find("translate", 1, true) ~= nil)
+
+-- (c) [ch text="count {items}"] renders the residual {n} (locked), never a
+--     raw table handle. Markup parsing keeps {n} as literal text (it is
+--     not a markup tag), so the draw + backlog both carry "count {n} items".
+local ctxPl = fresh_ctx()
+TextCommands.ch(ctxPl, { name = "A", text = "count {items}" })
+local plDrawn = false
+for _, d in ipairs(ctxPl.text_state.draws) do
+    if d.text == "count {n} items" then plDrawn = true end
+end
+check("plural-pipe: [ch] renders residual {n} (no plural count in pipeline)",
+      plDrawn)
+check("plural-pipe: [ch] never leaks a raw table handle",
+      not (function()
+          for _, d in ipairs(ctxPl.text_state.draws) do
+              if d.text:find("table:", 1, true) then return true end
+          end
+          return false
+      end)())
+-- backlog records the localized plain (with residual {n}), not a table.
+check("plural-pipe: backlog plain has residual {n}",
+      ctxPl.backlog[1] ~= nil and ctxPl.backlog[1].text == "count {n} items")
+
+-- (d) [text text=...] same residual behavior.
+local ctxPlT = fresh_ctx()
+TextCommands.text(ctxPlT, { text = "you have {items}" })
+local plT = false
+for _, d in ipairs(ctxPlT.text_state.draws) do
+    if d.text == "you have {n} items" then plT = true end
+end
+check("plural-pipe: [text] renders residual {n}",
+      plT and ctxPlT.backlog[1] ~= nil
+      and ctxPlT.backlog[1].text == "you have {n} items")
+
+-- (e) [button text="..{items}.."] label: localized at registration, which
+--     expands the pair to the generic form with residual {n}.
+local ctxPlB = fresh_ctx()
+TextCommands.button(ctxPlB, { text = "take {items}", target = "*t" })
+check("plural-pipe: [button] label resolves to residual {n}",
+      ctxPlB._choiceButtons ~= nil
+      and ctxPlB._choiceButtons[1].text == "take {n} items")
+
+-- (f) the CORRECT plural authoring path still interpolates: resolve the
+--     count in [iscript] and translate() with { n = <count> }.
+check("plural-pipe: correct usage via translate({n=count})",
+      i18n.translate("items", { n = 3 }) == "3 items"
+      and i18n.translate("items", { n = 1 }) == "1 item")
+
+i18n.current, i18n.strings = saved_pl2.current, saved_pl2.strings
+i18n.lines, i18n.fallback = saved_pl2.lines, saved_pl2.fallback
+
+-- ---------------------------------------------------------------------------
 -- 8. [i18n language=] command (round 76) + deeper plural / interp /
 --    serialization-roundtrip boundaries (round 80 +)
 -- ---------------------------------------------------------------------------
