@@ -45,6 +45,8 @@ export const KNOWN_COMMANDS: string[] = [
   'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
   'textspeed', 'cps', 'palette', 'vibrate', 'notify',
   'clear', 'ct', 'endtag', 'endform', 'g', 'br', 'hr', 'cancel', 'close',
+  // round 106/107: declarative tween + layout containers
+  'tween', 'layout', 'layout_slot', 'layout_place',
 ]
 
 /** A Set view of KNOWN_COMMANDS for O(1) membership checks. */
