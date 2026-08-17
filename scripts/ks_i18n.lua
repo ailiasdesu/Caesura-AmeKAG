@@ -149,6 +149,124 @@ function M.find_missing(dir, langData)
 end
 
 -- ---------------------------------------------------------------------------
+--  Markup / interpolation names that must never be treated as {key} string
+--  table references (mirror i18n.MARKUP_NAMES + the runtime ${expr} expr).
+-- ---------------------------------------------------------------------------
+local KEY_REF_MARKUP = { b = true, i = true, s = true, color = true, size = true }
+
+-- ---------------------------------------------------------------------------
+--  extract_key_refs(ks_text) -> { {key=string, text=string}, ... }
+--  Collect every {key} string-table reference appearing inside dialogue
+--  literals of one .ks file (bare text tokens + [ch]/[text]/[button]/[sel]
+--  text params). Markup tag names ({b}/{i}/{s}/{color}/{size}) and the
+--  runtime ${expr} interpolation are NOT string-table keys and are skipped,
+--  matching i18n.expand. This is the "extract {key} references" half of the
+--  toolchain: scenes reference named dictionary keys, and the backfill gate
+--  reports a referenced key with no string-table entry.
+-- ---------------------------------------------------------------------------
+function M.extract_key_refs(ks_text)
+    local refs = {}
+    local tokens = tokenizer.parse(ks_text)
+    local function scan(value)
+        if type(value) ~= "string" or #value == 0 then return end
+        -- Discard ${...} runtime interpolation regions so their inner
+        -- contents never register as {key} references.
+        local safe = value:gsub("$%b{}", " ")
+        for token in safe:gmatch("{([%w_]+)}") do
+            if not KEY_REF_MARKUP[token] then
+                refs[#refs + 1] = { key = token, text = value }
+            end
+        end
+    end
+    for _, tok in ipairs(tokens) do
+        if tok.type == "text" then
+            scan(tok.content)
+        elseif tok.type == "command" then
+            local p = {}
+            for _, pair in ipairs(tok.params or {}) do
+                if type(pair) == "table" and pair[1] then
+                    p[pair[1]] = pair[2]
+                end
+            end
+            local cmd = tok.cmd
+            if cmd == "ch" or cmd == "text" then
+                scan(p.text or p.message)
+            elseif cmd == "button" or cmd == "sel" then
+                scan(p.text or p.caption)
+            end
+        end
+    end
+    return refs
+end
+
+-- ---------------------------------------------------------------------------
+--  collect_key_refs(dir) -> { {key, first, count, files={...}}, ... } (sorted)
+--  Dedup the {key} string-table references of every .ks under dir, keeping
+--  the first occurrence's dialogue text as translator context and counting
+--  how many distinct scenes reference each key (a reuse / translation-memory
+--  signal: a key referenced by many scenes is worth translating once well).
+-- ---------------------------------------------------------------------------
+function M.collect_key_refs(dir)
+    local files = fileutil.scan_dir(dir, "%.ks$")
+    table.sort(files)
+    local agg = {}      -- key -> { key=.., first=.., count=.., files=set }
+    for _, fname in ipairs(files) do
+        local f = io.open(dir .. "/" .. fname, "r")
+        if f then
+            local txt = f:read("*a")
+            f:close()
+            local refs = M.extract_key_refs(txt)
+            local perFile = {}
+            for _, ref in ipairs(refs) do
+                perFile[ref.key] = true
+                local a = agg[ref.key]
+                if not a then
+                    a = { key = ref.key, first = ref.text, count = 0, files = {} }
+                    agg[ref.key] = a
+                end
+                a.count = a.count + 1
+            end
+            for k in pairs(perFile) do
+                agg[k].files[fname] = true
+            end
+        end
+    end
+    local list = {}
+    for _, a in pairs(agg) do list[#list + 1] = a end
+    table.sort(list, function(x, y) return x.key < y.key end)
+    return list
+end
+
+-- ---------------------------------------------------------------------------
+--  find_key_missing(dir, langData) -> { entries, total, missing }
+--  Backfill check for the {key} direction: every string-table key a scene
+--  references must exist as a top-level entry in langData (the strings
+--  dictionary). langData may be a full lang table (its top-level keys are
+--  the string table; the special `lines`/_version/_meta fields are excluded)
+--  or a bare { ["key"] = value } strings table. Markup names are never
+--  missing. Returns the missing entries with reuse counts + first context.
+-- ---------------------------------------------------------------------------
+function M.find_key_missing(dir, langData)
+    local refs = M.collect_key_refs(dir)
+    local lang = langData or {}
+    -- The string table = every top-level key except structural fields.
+    local STRUCT = { lines = true, _version = true, _meta = true }
+    local have = {}
+    for k in pairs(lang) do
+        if not STRUCT[k] then have[k] = true end
+    end
+    local missing = {}
+    for _, r in ipairs(refs) do
+        if not KEY_REF_MARKUP[r.key] and not have[r.key] then
+            missing[#missing + 1] = r
+        end
+    end
+    -- Sort missing by key for a deterministic report.
+    table.sort(missing, function(x, y) return x.key < y.key end)
+    return { entries = missing, total = #refs, missing = #missing }
+end
+
+-- ---------------------------------------------------------------------------
 --  serialize_field(k, v) -> generated Lua line (or nil for unsupported).
 --  Serializes one top-level dictionary entry the lang file can carry:
 --  string / number / boolean, plus TABLE values that are plural-form
@@ -245,6 +363,7 @@ if is_cli then
         elseif a == "--out" then args.out = arg[i + 1]
         elseif a == "--update" then args.update = true
         elseif a == "--missing" then args.missing = true
+        elseif a == "--keys" then args.keys = true
         end
     end
     local dir = args.dir or "demo"
@@ -255,6 +374,8 @@ if is_cli then
         -- Untranslated report: list keys whose translation is absent or
         -- an empty placeholder, grouped by scene. Exit 1 when any key is
         -- still missing (CI gate for translation completeness).
+        -- 1) Per-line-translation backlog: keys whose lang-file `lines`
+        -- translation is absent or an empty placeholder.
         local langData = M.load_lang(out)
         local report = M.find_missing(dir, langData)
         local prev_scene = nil
@@ -267,10 +388,49 @@ if is_cli then
             local orig_esc = e.original:gsub("%-%-", "—")
             print(string.format('  ["%s"] = "", -- %s', e.key, orig_esc))
         end
+        -- 2) {key} string-table refs: every named dict key a scene uses
+        -- must resolve to a top-level entry. Report gaps + exit 1 too.
+        local keyMiss = M.find_key_missing(dir, langData)
+        for _, m in ipairs(keyMiss.entries) do
+            local filez = {}
+            for fn in pairs(m.files) do filez[#filez + 1] = fn end
+            table.sort(filez)
+            print(string.format("  {%s} (%d ref, in %s)", m.key, m.count,
+                table.concat(filez, ",")))
+        end
         print(string.format(
             "ks_i18n --missing: %d/%d keys untranslated in %s (%s)",
             report.missing, report.total, out, lang))
-        os.exit(report.missing > 0 and 1 or 0)
+        print(string.format(
+            "ks_i18n --missing: %d/%d {key} string-table refs unresolved in %s (%s)",
+            keyMiss.missing, keyMiss.total, out, lang))
+        os.exit((report.missing + keyMiss.missing) > 0 and 1 or 0)
+    end
+
+    if args.keys then
+        -- {key} reference inventory: every string-table key a scene uses,
+        -- with the first dialogue context + reuse count (translation
+        -- memory: a key referenced from many places is translated once
+        -- and reused everywhere). Resolved keys carry no "missing" marker;
+        -- unresolved ones are flagged so the backfill gate is visible.
+        local langData = M.load_lang(out)
+        local refs = M.collect_key_refs(dir)
+        local keyMiss = M.find_key_missing(dir, langData)
+        local missingKeys = {}
+        for _, m in ipairs(keyMiss.entries) do missingKeys[m.key] = true end
+        for _, r in ipairs(refs) do
+            local filez = {}
+            for fn in pairs(r.files) do filez[#filez + 1] = fn end
+            table.sort(filez)
+            local flag = missingKeys[r.key] and "<<MISSING>>" or ""
+            local first_esc = r.first:gsub("%-%-", "—")
+            print(string.format("  %s(%d ref, in %s) %s -- e.g. %s",
+                r.key, r.count, table.concat(filez, ","), flag, first_esc))
+        end
+        print(string.format(
+            "ks_i18n --keys: %d unique {key} refs (%d unresolved) in %s (%s)",
+            #refs, keyMiss.missing, dir, lang))
+        os.exit(keyMiss.missing > 0 and 1 or 0)
     end
 
     local existing = nil

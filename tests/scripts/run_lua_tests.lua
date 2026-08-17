@@ -50,6 +50,7 @@ local tests = {
     "test_text_markup",
     "test_i18n",
     "test_i18n_cmd",
+    "test_ks_i18n_flow",
     "test_sma",
     "test_sma_check",
     "test_sma_demo",
