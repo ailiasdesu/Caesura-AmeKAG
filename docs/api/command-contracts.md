@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (119)
+## Commands (123)
 
 ### `[add]`
 
@@ -427,6 +427,50 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible layopt com
 | `layer` | string |  | - | - |
 | `opacity` | number | 1.0 | 0..1.0 | - |
 | `visible` | boolean | true | - | - |
+
+### `[layout]`
+
+_Category: layer · Blocking: no (fire-and-forget) · declare an hbox/vbox/grid container that computes child x/y (calculator, not a render layer)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `align` | string | start | - | - |
+| `cols` | number | - | 1..128 | - |
+| `gap` | number | 0 | 0..8192 | - |
+| `h` | number | - | 0..8192 | - |
+| `kind` | enum | - | - | yes |
+| `layer` | string | - | - | - |
+| `name` | string | - | - | yes |
+| `padding` | number | 0 | 0..8192 | - |
+| `paddingX` | number | - | 0..8192 | - |
+| `paddingY` | number | - | 0..8192 | - |
+| `w` | number | - | 0..8192 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
+### `[layout_place]`
+
+_Category: layer · Blocking: no (fire-and-forget) · place an element layer at an absolute offset inside a [layout] container frame_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `h` | number | - | 0..8192 | - |
+| `layer` | string | - | - | yes |
+| `parent` | string | - | - | yes |
+| `w` | number | - | 0..8192 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
+### `[layout_slot]`
+
+_Category: layer · Blocking: no (fire-and-forget) · register an element layer into a slot of a declared [layout] container_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `index` | number | - | 1..1024 | - |
+| `layer` | string | - | - | yes |
+| `parent` | string | - | - | yes |
+| `size` | string | - | - | - |
 
 ### `[ld]`
 
@@ -1041,6 +1085,21 @@ _Category: transition · Blocking: yes (waits for completion) · KAG3-compatible
 | `method` | string | crossfade | - | - |
 | `time` | number | 500 | 0..30000 | - |
 | `type` | string | crossfade | - | - |
+
+### `[tween]`
+
+_Category: layer · Blocking: yes (waits for completion) · declaratively tween a layer/sprite attribute from A to B in N ms_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `attr` | enum | - | - | yes |
+| `delay` | number | 0 | 0..30000 | - |
+| `dur` | number | - | 100..30000 | yes |
+| `ease` | enum | linear | - | - |
+| `from` | string | - | - | - |
+| `target` | string | - | - | yes |
+| `to` | string | - | - | yes |
+| `wait` | boolean | true | - | - |
 
 ### `[unlock]`
 

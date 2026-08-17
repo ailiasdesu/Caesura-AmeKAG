@@ -12,11 +12,11 @@
 | API interface headers (src/*/api/I*.h) | 31 |
 | Pure-virtual interface methods | 385 |
 | Lua binding functions (luaL_Reg entries) | 154 |
-| KAG command handler files | 11 |
-| KAG contract commands (command-contracts.md) | 119 |
+| KAG command handler files | 13 |
+| KAG contract commands (command-contracts.md) | 123 |
 | RPC HTTP endpoints (EditorServer) | 25 |
 | RPC stdin JSON-RPC methods | 29 |
-| Lua runtime scripts (scripts/, excl. demo/check) | 71 |
+| Lua runtime scripts (scripts/, excl. demo/check) | 74 |
 
 ## 2. C++ interfaces by module
 
@@ -141,11 +141,13 @@
 | audio.lua |
 | character.lua |
 | layer.lua |
+| layout.lua |
 | math.lua |
 | resource.lua |
 | save.lua |
 | system.lua |
 | text.lua |
 | transition.lua |
+| tween.lua |
 | vfx.lua |
 | video.lua |
