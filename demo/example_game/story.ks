@@ -62,10 +62,10 @@
 
 ; --- i18n plural demo ({items} expands one/other by n) -----------------------
 [set tf.letters 1]
-[ch name="Mio" text="I counted {items} in the box this morning."]
+[ch name="Mio" text="I counted ${tf.letters} ${tf.letters == 1 and 'item' or 'items'} in the box this morning."]
 [p]
 [set tf.letters 3]
-[ch name="Mio" text="Today there are {items}. The box only grows on its own."]
+[ch name="Mio" text="Today there are ${tf.letters} ${tf.letters == 1 and 'item' or 'items'}. The box only grows on its own."]
 [p]
 
 ; --- Save point 1 -------------------------------------------------------------
