@@ -245,3 +245,64 @@ gh release create v1.0.0 build/CaesuraAmeKAG-1.0.0-Windows-AMD64.zip \
 - `docs/guides/sample-game-verification.md` — 示例游戏双端验证（含 `.new` 过期提法，待更新）
 - `.github/workflows/deploy-web.yml` — Web 播放器 GitHub Pages 自动部署
 - ROADMAP-100 round 90 — 首次 Release 流程实测记录（Release 构建/C++849/Lua 126+19/CPack 87.9MB/ZIP 359 文件冒烟）
+---
+
+## 8. v1.0.0 发布清单（2026-08-17 就绪检查，待用户确认执行）
+
+> 状态速览：**产物生成链路全部通过**（§0 已有 8 组实测），gh 已认证（§4A），tag 仅为
+> `v1.0.0-alpha`（尚无 `v1.0.0` 正式 tag），GitHub Releases 为空。以下命令序列**不实际执行**，
+> 待用户确认后由发布者运行。changelog 草稿见 `CHANGELOG-v100.md`（原始逐提交版，1818 commits），
+> 润色版已置入 `CHANGELOG.md` 顶部 `## v1.0.0` 段。
+
+### 8.1 发布前置核对（本轮已确认）
+
+| 项 | 状态 |
+|---|---|
+| CMake 版本 | ✅ `project(CaesuraAmeKAG VERSION 1.0.0)` |
+| 现有 tag | `v1.0.0-alpha`、`backup-before-migration`（无 v1.0.0） |
+| 现有 GitHub Releases | 无（列表为空） |
+| gh 认证 | ✅ `ailiasdesu`（scope: gist/read:org/repo），`origin` 推送可用 |
+| 提交范围 | 1818 commits（v1.0.0-alpha..HEAD，round 81→112） |
+| 工作树 | 干净（本会话仅新增/修改文档草稿） |
+
+### 8.2 发布命令序列（桌面 ZIP + Web 站附件）
+
+~~~bash
+cd /d/文件存放处/code/Caesura(AmeKAG)
+
+# 1) [如未跑过] 生成并核对 changelog（原始 + 润色版）
+PYTHONIOENCODING=utf-8 python scripts/gen_changelog.py --from-tag v1.0.0-alpha --tag v1.0.0 --dry-run
+#    原始草稿 → CHANGELOG-v100.md；润色发布文案 → CHANGELOG.md 顶部 ## v1.0.0 段
+
+# 2) Release 门禁 + 打包（§2/§2.7）
+cmake --build build --config Release --parallel
+cd build/tests/Release && ./CaesuraTests.exe && cd ../../..   # 976/976, 0 failed
+external/lua/lua.exe tests/scripts/run_lua_tests.lua          # 131 + orphan 24
+python scripts/count_coupling.py --ci
+cd build && cpack -C Release -G ZIP && cd ..                  # XX.zip + .sha256
+
+# 3) Web 站附件（可选，第二个 release 资产）
+bash scripts/package_game.sh demo/example_game                # → dist/example_game (≈34.4 MiB)
+#    发布前压成单 zip（顶层即 index.html）：(cd dist/example_game && zip -r ../../example_game-web.zip .)
+
+# 4) 打 tag + 推送（仅发布者执行，勿在本会话做）
+git tag -a v1.0.0 -m "Caesura (AmeKAG) v1.0.0"
+git push origin v1.0.0
+
+# 5) 创建 release（--draft 复核后再发布；asset 用真实名）
+gh release create v1.0.0 \
+  build/CaesuraAmeKAG-1.0.0-Windows-AMD64.zip \
+  --title "Caesura (AmeKAG) v1.0.0" --notes-file CHANGELOG.md --draft
+#    复核无误后去掉 --draft 发布。
+
+# 6) [可选] 附 Web 站 zip（§3.2 / §8.2-3 产物）
+#    gh release upload v1.0.0 example_game-web.zip
+
+# 7) [可选] Web GitHub Pages 自动部署
+#    仓库 Actions → "Deploy Web Player (GitHub Pages)" → Run workflow（game=demo/example_game）
+#    Pages 源需先在 Settings → Pages 选 GitHub Actions。
+~~~
+
+> **坑提醒**（本轮实测）：`gen_changelog.py --dry-run` 在 Windows 默认 GBK stdout 下会因
+> `↔`（U+2194）抛 `UnicodeEncodeError`，须 `PYTHONIOENCODING=utf-8` 前缀；非 dry-run 写文件路径
+> 用 `write_text(encoding="utf-8")` 无此问题。`gh release create` 无 `--dry-run`，用 `--draft` 复核。

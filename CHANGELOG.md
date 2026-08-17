@@ -5,7 +5,55 @@
 > hand-polished into grouped, readable entries. Regenerate for the raw
 > one-commit-per-line view; edit this file for the curated view.
 
-Project version: **1.0.0-alpha** — see `CMakeLists.txt` / tag `v1.0.0-alpha`.
+Project version: **1.0.0** — see `CMakeLists.txt` / tag `v1.0.0` (from v1.0.0-alpha).
+
+---
+
+## v1.0.0 — Initial productized release (2026-08-17)
+
+> The first stable line release, cut from `master` at round 112. Spans 30 rounds of
+> hardening (81→112) on top of the `v1.0.0-alpha` baseline — the full stage-G
+> productization campaign: real-GPU verification, a post-processing stack, a
+> declarative layout/tween system, the bundled sample game, and one-click
+> packaging/distribution. **1818 commits** since `v1.0.0-alpha` (raw per-commit
+> listing: `CHANGELOG-v100.md`).
+
+### Highlights
+
+- **Example game 「The One-Way Reply / 《单程回信》」** (round 101/105/110/112) — a complete
+  ~17.5 min, 3-ending (归零/同行/守约) bilingual zh/en visual novel under
+  `demo/example_game/`, exercising the full KAG Neo-Genesis feature surface
+  (branching, trust-differential state, dual save slots, i18n hot-switch, tween,
+  SMA mini-game, ending gallery). End-to-end gate: `verify_sample_game.sh` 5/5 PASS.
+- **Declarative UI primitives** — `[tween]` tween system (round 106) and the
+  `[layout]` hbox/vbox/grid container family (round 107), both with desktop/Web
+  parity and settings-migration pilot.
+- **Post-processing stack v1** (round 102) — bloom, vignette, LUT color grade and
+  soft-blur GPU passes (fxc-compiled DXBC inlined; GL/Metal/Vulkan identity-fallback),
+  wired into the `[vfx]` command family and 6 new render interfaces.
+- **Editor upgrades** — Scene Builder zero-code panel (round 108), Timeline/Debug/
+  Inspector/VisualView depth, LSP rename & KAG3-param-alias diagnostics, settings
+  panel, AiPanel; editor suite grew to >530 tests.
+- **KAG3 ecosystem tooling** (round 111) — `.xp3` archive parser and TLG5/6 image
+  decoders, plus a `kag3-migration.md` 6-step migration pipeline.
+- **Packaging & distribution** (round 108/109/110) — `package_game.sh` one-click
+  Web builds, `deploy-web.yml` GitHub Pages workflow, Web performance baselines, and
+  the verified CPack Release ZIP (`CaesuraAmeKAG-1.0.0-Windows-AMD64.zip`, 87.9 MB /
+  386 files).
+- **Cross-platform hardening** (round 103) — Metal readiness, Android (NDK/arm64)
+  build chain research, cross-platform verification matrix; CARC nonce-reuse
+  detection and save-security audit (round 104).
+
+### Platform quality at this release
+
+- C++ doctest **976/976**, assertions 8858/8858 (Release-verified), 66 test files.
+- Lua main suite **131/131** + **24 orphan** + Web **297** (20 files) + Editor **530**.
+- Coupling budget PASS; 119 KAG contracts, 100% runtime coverage; 31 interfaces;
+  three-platform CI green (Windows D+R / macOS / Linux / Package).
+
+```
+python scripts/gen_changelog.py --from-tag v1.0.0-alpha --tag v1.0.0   # raw regenerate
+```
 
 ---
 
