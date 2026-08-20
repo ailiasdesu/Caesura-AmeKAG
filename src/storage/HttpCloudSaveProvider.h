@@ -16,7 +16,10 @@ namespace Caesura {
 
 class HttpCloudSaveProvider final : public ISaveProvider {
 public:
-    HttpCloudSaveProvider(std::string endpoint, int timeoutMs = 8000);
+    // endpoint may be http:// or https://; bearerToken (optional) is sent as
+    // an Authorization header on every cloud request (ST-2).
+    HttpCloudSaveProvider(std::string endpoint, int timeoutMs = 8000,
+                          std::string bearerToken = std::string());
     ~HttpCloudSaveProvider() override = default;
 
     std::string readFile(const std::string& path) override;
@@ -38,6 +41,7 @@ private:
 
     std::string m_endpoint;
     int         m_timeoutMs;
+    std::string m_bearerToken;  // optional Authorization: Bearer <token>
     std::unique_ptr<ISaveProvider> m_local;  // LocalFileSaveProvider
 };
 
