@@ -322,6 +322,47 @@ TEST_CASE("Storage: corrupted save file fails gracefully (no crash on load)") {
     CHECK(saves[0].slot == 3);
 }
 
+TEST_CASE("Storage: corrupt envelope with wrong-typed fields degrades gracefully (ST-1)") {
+    // Regression guard for the ST-1 review finding: envelope.value("scene","")
+    // threw nlohmann type_error.302 when a key existed with a wrong type
+    // (e.g. "scene": 42), escaping through the Lua C boundary as a crash.
+    TestPaths::ScopedTempDir dir("storage_typemismatch");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    // Every metadata field wrong-typed: must load as corrupt (null), never throw.
+    {
+        std::ofstream f(dir.string() + "save_0.json", std::ios::binary | std::ios::trunc);
+        f << R"({"scene": 42, "timestamp": "nope", "token_index": "x", "schema_version": [1], "thumbnail": 3, "engine_version": 5})";
+    }
+    // Mixed: valid data sub-object but a malformed scene field alongside.
+    {
+        std::ofstream f(dir.string() + "save_1.json", std::ios::binary | std::ios::trunc);
+        f << R"({"scene": {"nested": "obj"}, "timestamp": 12345, "token_index": 2, "schema_version": 1, "data": {"v": 7}})";
+    }
+    // listSaves() must tolerate both without throwing. Wrong-typed metadata
+    // fields degrade to their defaults (schema 1 etc.) rather than crashing;
+    // the slots may still be listed with defaulted metadata.
+    const auto list = sm.listSaves();
+    REQUIRE(list.size() == 2);   // both slots present with defaulted fields
+    CHECK(list[0].sceneName == "");        // "scene": 42 -> default ""
+    CHECK(list[0].tokenIndex == 0);        // "token_index": "x" -> 0
+    CHECK(list[0].schemaVersion == 1);     // "schema_version": [1] -> 1
+
+    // A fully valid save around them still round-trips.
+    json good = {{"v", 77}, {"deep", {{"k", "z"}}}};
+    REQUIRE(sm.save(2, good, "good", 3));
+    CHECK(sm.load(2)["v"] == 77);
+    auto saves = sm.listSaves();
+    REQUIRE(saves.size() == 3);   // slots 0/1 (defaulted) + slot 2 (valid)
+    CHECK(saves[2].slot == 2);
+
+    // The manager remains usable after bad-field slots were skipped.
+    REQUIRE(sm.deleteSlot(2));
+    const auto after = sm.listSaves();
+    REQUIRE(after.size() == 2);   // the two defaulted slots are still listed
+}
+
 TEST_CASE("Storage: slot boundary semantics (0 and 99 valid, out-of-range rejected)") {
     TestPaths::ScopedTempDir dir("storage_bounds");
     SaveManager sm;
