@@ -2,6 +2,7 @@
 #include "doctest.h"
 #include "render/LayerManager.h"
 #include "render/GpuMonitor.h"
+#include <string>
 
 using namespace Caesura;
 
@@ -178,4 +179,149 @@ TEST_CASE("Scissor decision: zero-size frame never scissor-crashes") {
     DirtyRect r{0, 0, 100, 100};
     // Degenerate frame: frameArea 0 -> 75% = 0 -> dirty 10000 > 0 -> false.
     CHECK_FALSE(LayerManager::shouldUseScissorFor(r, 0, 0));
+}
+// =============================================================================
+// v2 (round 116): dynamic layer configuration - count, names, ordering
+// =============================================================================
+TEST_CASE("LayerManager: default layout has 3 layers bg/fg/msg") {
+    LayerManager lm;
+    lm.init();
+    CHECK(lm.getLayerCount() == 3);
+    CHECK(std::string(lm.getLayerName(0)) == "bg");
+    CHECK(std::string(lm.getLayerName(1)) == "fg");
+    CHECK(std::string(lm.getLayerName(2)) == "msg");
+    CHECK(lm.findLayer("bg") == 0);
+    CHECK(lm.findLayer("fg") == 1);
+    CHECK(lm.findLayer("msg") == 2);
+    CHECK(lm.findLayer("nope") == -1);
+    CHECK(lm.getLayerName(99) == nullptr);
+}
+
+TEST_CASE("LayerManager: configureLayers sets custom count and names") {
+    LayerManager lm;
+    lm.init();
+    ILayerManager::LayerConfig cfg[] = {
+        {"backdrop", 0.0f}, {"sprite_a", 10.0f}, {"sprite_b", 20.0f},
+        {"overlay", 30.0f}, {"hud", 100.0f},
+    };
+    CHECK(lm.configureLayers(cfg, 5));
+    CHECK(lm.getLayerCount() == 5);
+    CHECK(std::string(lm.getLayerName(0)) == "backdrop");
+    CHECK(std::string(lm.getLayerName(4)) == "hud");
+    CHECK(lm.findLayer("sprite_a") == 1);
+    CHECK(lm.findLayer("hud") == 4);
+    // Legacy enum indices now map onto the custom layout's first slot
+    lm.setTexture(ILayerManager::LayerType::BG, 42);  // -> backdrop
+    CHECK(lm.get(0).tex.idx == 42);
+}
+
+TEST_CASE("LayerManager: configureLayers rejects invalid configs") {
+    LayerManager lm;
+    lm.init();
+    ILayerManager::LayerConfig ok[] = {{"a", 0.0f}, {"b", 1.0f}};
+    CHECK(lm.configureLayers(ok, 2));
+
+    // null config / zero count
+    CHECK_FALSE(lm.configureLayers(nullptr, 2));
+    CHECK_FALSE(lm.configureLayers(ok, 0));
+
+    // null name / empty name
+    ILayerManager::LayerConfig badName[] = {{nullptr, 0.0f}};
+    CHECK_FALSE(lm.configureLayers(badName, 1));
+    ILayerManager::LayerConfig emptyName[] = {{"", 0.0f}};
+    CHECK_FALSE(lm.configureLayers(emptyName, 1));
+
+    // duplicate name
+    ILayerManager::LayerConfig dup[] = {{"x", 0.0f}, {"x", 1.0f}};
+    CHECK_FALSE(lm.configureLayers(dup, 2));
+
+    // failed config must not corrupt the previous setup
+    CHECK(lm.getLayerCount() == 2);
+    CHECK(std::string(lm.getLayerName(0)) == "a");
+}
+
+TEST_CASE("LayerManager: reorderLayer changes render order") {
+    LayerManager lm;
+    lm.init();
+    ILayerManager::LayerConfig cfg[] = {
+        {"bg", 0.0f}, {"fg", 1.0f}, {"msg", 2.0f},
+    };
+    CHECK(lm.configureLayers(cfg, 3));
+    CHECK(lm.findLayer("bg") == 0);
+    CHECK(lm.findLayer("fg") == 1);
+    CHECK(lm.findLayer("msg") == 2);
+
+    // Move bg to the top: bg fg msg -> fg msg bg
+    CHECK(lm.reorderLayer(0, 2));
+    CHECK(lm.findLayer("fg") == 0);
+    CHECK(lm.findLayer("msg") == 1);
+    CHECK(lm.findLayer("bg") == 2);
+
+    // Move bg back to bottom: fg msg bg -> bg fg msg
+    CHECK(lm.reorderLayer(2, 0));
+    CHECK(lm.findLayer("bg") == 0);
+    CHECK(lm.findLayer("fg") == 1);
+    CHECK(lm.findLayer("msg") == 2);
+
+    // Out-of-range reorder is a no-op
+    CHECK_FALSE(lm.reorderLayer(0, 7));
+    CHECK_FALSE(lm.reorderLayer(7, 0));
+    CHECK(lm.getLayerCount() == 3);
+}
+
+TEST_CASE("LayerManager: out-of-range index setters are safe") {
+    LayerManager lm;
+    lm.init();
+    lm.setTexture(99, 1);
+    lm.setVisible(99, true);
+    lm.setOpacity(99, 0.5f);
+    lm.setPosition(99, 1, 2);
+    lm.setScale(99, 1, 1);
+    lm.setBlendMode(99, 1);
+    lm.clear(99);
+    lm.markDirty(99, 0, 0, 10, 10);
+    lm.markDirtyWithTransparency(99, 0, 0, 10, 10);
+    // no crash
+    CHECK(true);
+}
+
+TEST_CASE("LayerManager: markDirtyWithTransparency respects custom render order") {
+    LayerManager lm;
+    lm.init();
+    // Layout: bg, sprite, fg -- sprite is between bg and fg
+    ILayerManager::LayerConfig cfg[] = {
+        {"bg", 0.0f}, {"sprite", 5.0f}, {"fg", 10.0f},
+    };
+    CHECK(lm.configureLayers(cfg, 3));
+    lm.setVisible(0, true);
+    lm.setVisible(1, true);
+    lm.setVisible(2, true);
+    lm.get(0).dirty = false;
+    lm.get(1).dirty = false;
+    lm.get(2).dirty = false;
+    lm.clearDirtyRects();
+
+    // Transparency on sprite (index 1) marks bg (index 0) but not fg (index 2)
+    lm.markDirtyWithTransparency(1, 10, 10, 50, 50);
+    lm.updateDirtyRegions(1280, 720);
+    // Merged = union of sprite + bg rects = 10,10,50,50
+    CHECK(lm.get(0).dirty);  // bg got marked
+    CHECK(lm.get(1).dirty);  // sprite itself
+    CHECK_FALSE(lm.get(2).dirty);  // fg above sprite: not affected
+
+    // Now move fg below sprite: bg fg sprite -> bg sprite fg
+    CHECK(lm.reorderLayer(2, 1));  // fg moves between bg and sprite
+    // order now: bg fg sprite (findLayer fg==1, sprite==2)
+    CHECK(lm.findLayer("fg") == 1);
+    CHECK(lm.findLayer("sprite") == 2);
+    lm.get(0).dirty = false;
+    lm.get(1).dirty = false;
+    lm.get(2).dirty = false;
+    lm.clearDirtyRects();
+
+    // Transparency on sprite (now index 2) marks bg (0) and fg (1)
+    lm.markDirtyWithTransparency(lm.findLayer("sprite"), 20, 20, 10, 10);
+    CHECK(lm.get(0).dirty);
+    CHECK(lm.get(1).dirty);
+    CHECK(lm.get(2).dirty);
 }

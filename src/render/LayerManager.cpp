@@ -2,8 +2,27 @@
 #include "di/BackendRegistry.h"
 #include <cstdio>
 #include <algorithm>
+#include <cstring>
 
 namespace Caesura {
+
+// ---------------------------------------------------------------------------
+// Default layout: legacy BG/FG/MSG three-slot setup.
+// ---------------------------------------------------------------------------
+
+void LayerManager::resetToDefaultLayout() {
+    m_layers.clear();
+    m_layers.resize(ILayerManager::COUNT);
+    const char* names[ILayerManager::COUNT] = { "bg", "fg", "msg" };
+    for (uint32_t i = 0; i < ILayerManager::COUNT; ++i) {
+        m_layers[i].name = names[i];
+        m_layers[i].z    = static_cast<float>(i);
+    }
+    m_dirtyRects.clear();
+    m_dirtyRects.resize(ILayerManager::COUNT);
+    m_mergedDirty = DirtyRect{};
+    m_useScissor = false;
+}
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -11,16 +30,15 @@ namespace Caesura {
 
 void LayerManager::init() {
     if (m_initialized) return;
-    for (int i = 0; i < COUNT; ++i) {
-        m_layers[i] = Layer{};
-        m_dirtyRects[i] = DirtyRect{};
-    }
+    resetToDefaultLayout();  // idempotent: constructor already seeded defaults
+    
     if (m_gpuEnabled) {
         m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
         BackendRegistry::instance().registerDeviceLostListener(this);
     }
     m_initialized = true;
-    printf("[LayerManager] Initialized.\n");
+    printf("[LayerManager] Initialized (%u layers).\n",
+           static_cast<unsigned>(m_layers.size()));
 }
 
 void LayerManager::shutdown() {
@@ -34,54 +52,122 @@ void LayerManager::shutdown() {
         BackendRegistry::instance().unregisterDeviceLostListener(this);
     }
     m_initialized = false;
+    m_layers.clear();
+    m_dirtyRects.clear();
     printf("[LayerManager] Shutdown complete.\n");
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic layer configuration (v2)
+// ---------------------------------------------------------------------------
+
+bool LayerManager::configureLayers(const LayerConfig* configs, uint32_t count) {
+    if (configs == nullptr || count == 0) return false;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (configs[i].name == nullptr || configs[i].name[0] == '\0') return false;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+        for (uint32_t j = i + 1; j < count; ++j) {
+            if (std::strcmp(configs[i].name, configs[j].name) == 0) return false;
+        }
+    }
+    // All good: rebuild the layer set in array order (render order).
+    m_layers.clear();
+    m_layers.resize(count);
+    m_dirtyRects.clear();
+    m_dirtyRects.resize(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        m_layers[i].name = configs[i].name ? configs[i].name : "";
+        m_layers[i].z    = configs[i].z;
+    }
+    m_mergedDirty = DirtyRect{};
+    m_useScissor = false;
+    return true;
+}
+
+uint32_t LayerManager::getLayerCount() const {
+    return static_cast<uint32_t>(m_layers.size());
+}
+
+const char* LayerManager::getLayerName(uint32_t index) const {
+    if (!validIndex(index)) return nullptr;
+    return m_layers[index].name.c_str();
+}
+
+int32_t LayerManager::findLayer(const char* name) const {
+    if (name == nullptr) return -1;
+    for (size_t i = 0; i < m_layers.size(); ++i) {
+        if (m_layers[i].name == name) return static_cast<int32_t>(i);
+    }
+    return -1;
+}
+
+bool LayerManager::reorderLayer(uint32_t fromIndex, uint32_t toIndex) {
+    if (!validIndex(fromIndex) || !validIndex(toIndex)) return false;
+    if (fromIndex == toIndex) return true;
+    Layer moved = std::move(m_layers[fromIndex]);
+    m_layers.erase(m_layers.begin() + fromIndex);
+    m_layers.insert(m_layers.begin() + toIndex, std::move(moved));
+    // Dirty rects follow their layer: move the dirty rect too.
+    DirtyRect dr = m_dirtyRects[fromIndex];
+    m_dirtyRects.erase(m_dirtyRects.begin() + fromIndex);
+    m_dirtyRects.insert(m_dirtyRects.begin() + toIndex, dr);
+    // The moved layer plus its neighbors changed on screen.
+    markAllDirty();
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // Per-layer access
 // ---------------------------------------------------------------------------
 
-Layer& LayerManager::get(LayerType t) {
-    return m_layers[static_cast<uint8_t>(t)];
+Layer& LayerManager::get(uint32_t index) {
+    return m_layers[index];
 }
 
-const Layer& LayerManager::get(LayerType t) const {
-    return m_layers[static_cast<uint8_t>(t)];
+const Layer& LayerManager::get(uint32_t index) const {
+    return m_layers[index];
 }
 
 // ---------------------------------------------------------------------------
 // Convenience setters
 // ---------------------------------------------------------------------------
 
-void LayerManager::setTexture(LayerType t, uint32_t texId) {
+void LayerManager::setTexture(uint32_t t, uint32_t texId) {
+    if (!validIndex(t)) return;
     Layer& l = get(t);
     l.tex   = { uint16_t(texId) };
     l.dirty = true;
 }
 
-void LayerManager::setVisible(LayerType t, bool visible) {
+void LayerManager::setVisible(uint32_t t, bool visible) {
+    if (!validIndex(t)) return;
     Layer& l = get(t);
     l.visible = visible;
     l.dirty   = true;
 }
 
-void LayerManager::setOpacity(LayerType t, float opacity) {
+void LayerManager::setOpacity(uint32_t t, float opacity) {
+    if (!validIndex(t)) return;
     get(t).opacity = opacity;
 }
 
-void LayerManager::setPosition(LayerType t, float x, float y) {
+void LayerManager::setPosition(uint32_t t, float x, float y) {
+    if (!validIndex(t)) return;
     Layer& l = get(t);
     l.x = x;
     l.y = y;
 }
 
-void LayerManager::setScale(LayerType t, float sx, float sy) {
+void LayerManager::setScale(uint32_t t, float sx, float sy) {
+    if (!validIndex(t)) return;
     Layer& l = get(t);
     l.sx = sx;
     l.sy = sy;
 }
 
-void LayerManager::setBlendMode(LayerType t, int blend) {
+void LayerManager::setBlendMode(uint32_t t, int blend) {
+    if (!validIndex(t)) return;
     get(t).blend = blend;
 }
 
@@ -89,7 +175,8 @@ void LayerManager::setBlendMode(LayerType t, int blend) {
 // Utilities
 // ---------------------------------------------------------------------------
 
-void LayerManager::clear(LayerType t) {
+void LayerManager::clear(uint32_t t) {
+    if (!validIndex(t)) return;
     Layer& l = get(t);
     l.tex     = BGFX_INVALID_HANDLE;
     l.visible = false;
@@ -97,12 +184,12 @@ void LayerManager::clear(LayerType t) {
 }
 
 void LayerManager::clearAll() {
-    for (int i = 0; i < COUNT; ++i)
-        clear(static_cast<LayerType>(i));
+    for (size_t i = 0; i < m_layers.size(); ++i)
+        clear(static_cast<uint32_t>(i));
 }
 
 void LayerManager::markAllDirty() {
-    for (int i = 0; i < COUNT; ++i)
+    for (size_t i = 0; i < m_layers.size(); ++i)
         m_layers[i].dirty = true;
 }
 
@@ -110,25 +197,31 @@ void LayerManager::markAllDirty() {
 // Dirty rect tracking
 // ---------------------------------------------------------------------------
 
-void LayerManager::markDirty(LayerType t, uint16_t x, uint16_t y,
+void LayerManager::markDirty(uint32_t t, uint16_t x, uint16_t y,
                               uint16_t w, uint16_t h) {
+    if (!validIndex(t)) return;
     DirtyRect r{x, y, w, h};
     if (r.empty()) return;
-    m_dirtyRects[static_cast<uint8_t>(t)].merge(r);
+    m_dirtyRects[t].merge(r);
+    m_layers[t].dirty = true;  // a dirty region implies the layer changed
 }
 
-void LayerManager::markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y,
+void LayerManager::markDirtyWithTransparency(uint32_t t, uint16_t x, uint16_t y,
                                               uint16_t w, uint16_t h) {
-    int idx = static_cast<int>(t);
-    if (idx >= (int)COUNT) return;
+    if (!validIndex(t)) return;
 
     // Mark the layer itself
     markDirty(t, x, y, w, h);
 
-    // Recursively mark layers BELOW (lower Z-order = smaller index)
-    // because transparency reveals what's underneath
-    for (int i = idx - 1; i >= 0; --i) {
-        markDirty(static_cast<LayerType>(i), x, y, w, h);
+    // Recursively mark layers BELOW in render order (earlier array position =
+    // lower z = rendered first) because transparency reveals what is
+    // underneath. Render order may have been reordered at runtime (v2), so we
+    // walk every layer that currently renders before this one.
+    const uint32_t pos = t;  // array position == render position
+    for (uint32_t i = 0; i < pos; ++i) {
+        if (!validIndex(i)) break;
+        if (!m_layers[i].visible) continue;
+        markDirty(i, x, y, w, h);
     }
 }
 
@@ -147,7 +240,7 @@ bool LayerManager::shouldUseScissorFor(const DirtyRect& merged,
 void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
     // Merge all per-layer dirty rects
     m_mergedDirty = DirtyRect{};
-    for (int i = 0; i < COUNT; ++i) {
+    for (size_t i = 0; i < m_dirtyRects.size(); ++i) {
         if (!m_dirtyRects[i].empty()) {
             m_mergedDirty.merge(m_dirtyRects[i]);
         }
@@ -168,7 +261,7 @@ void LayerManager::updateDirtyRegions(uint16_t screenW, uint16_t screenH) {
 }
 
 void LayerManager::clearDirtyRects() {
-    for (int i = 0; i < COUNT; ++i) {
+    for (size_t i = 0; i < m_dirtyRects.size(); ++i) {
         m_dirtyRects[i] = DirtyRect{};
     }
     m_mergedDirty = DirtyRect{};
@@ -176,7 +269,7 @@ void LayerManager::clearDirtyRects() {
 }
 
 // ---------------------------------------------------------------------------
-// Z-order submit -- BG →→ FG →→ MSG
+// Z-order submit -- array order = render order (v2; default bg -> fg -> msg)
 // ---------------------------------------------------------------------------
 
 void LayerManager::render(uint16_t viewId, int screenW, int screenH,
@@ -204,7 +297,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         s_layoutInit = true;
     }
 
-    for (int i = 0; i < COUNT; ++i) {
+    for (size_t i = 0; i < m_layers.size(); ++i) {
         Layer& l = m_layers[i];
 
         if (!l.visible) continue;
@@ -216,7 +309,7 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
         float rw = (float)screenW * l.sx;
         float rh = (float)screenH * l.sy;
 
-        // Convert to NDC: screen coordinates →→ [-1, 1]
+        // Convert to NDC: screen coordinates -> [-1, 1]
         float nx0 = (lx / (screenW * 0.5f)) - 1.0f;
         float ny0 = 1.0f - (ly / (screenH * 0.5f));  // flip Y
         float nx1 = ((lx + rw) / (screenW * 0.5f)) - 1.0f;
@@ -263,8 +356,8 @@ void LayerManager::render(uint16_t viewId, int screenW, int screenH,
 
 void LayerManager::onDeviceLost() {
     if (!m_gpuEnabled) return;
-    // Layer textures become invalid — clear all layer texture references
-    for (int i = 0; i < COUNT; i++) {
+    // Layer textures become invalid -- clear all layer texture references
+    for (size_t i = 0; i < m_layers.size(); ++i) {
         m_layers[i].tex = BGFX_INVALID_HANDLE;
         m_layers[i].dirty = true;
     }
@@ -273,7 +366,7 @@ void LayerManager::onDeviceLost() {
         bgfx::destroy(m_texUniform);
         m_texUniform = BGFX_INVALID_HANDLE;
     }
-    printf("[LayerManager] Device lost — layer textures released\n");
+    printf("[LayerManager] Device lost -- layer textures released\n");
 }
 
 void LayerManager::onDeviceRestored() {
@@ -281,7 +374,7 @@ void LayerManager::onDeviceRestored() {
     // Recreate the uniform
     m_texUniform = bgfx::createUniform("s_tex", bgfx::UniformType::Sampler, 1);
     // Layers will get new textures when Lua re-calls setTexture()
-    printf("[LayerManager] Device restored — uniform recreated\n");
+    printf("[LayerManager] Device restored -- uniform recreated\n");
 }
 
 } // namespace Caesura

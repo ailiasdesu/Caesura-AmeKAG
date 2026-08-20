@@ -4,6 +4,7 @@
 #include "../di/api/IDeviceLostListener.h"
 #include <bgfx/bgfx.h>
 #include <cstdint>
+#include <string>
 #include <vector>
 #include <algorithm>
 
@@ -39,6 +40,8 @@ struct DirtyRect {
 };
 
 struct Layer {
+    std::string name;                    // unique layer name (v2)
+    float z      = 0.0f;                 // logical depth hint
     bgfx::TextureHandle tex     = BGFX_INVALID_HANDLE;
     float x    = 0.0f;
     float y    = 0.0f;
@@ -56,7 +59,7 @@ struct Layer {
 
 class LayerManager : public ILayerManager, public IDeviceLostListener {
 public:
-    explicit LayerManager(bool gpuEnabled = false) : m_gpuEnabled(gpuEnabled) {}
+    explicit LayerManager(bool gpuEnabled = false) : m_gpuEnabled(gpuEnabled) { resetToDefaultLayout(); }
 
     LayerManager(const LayerManager&) = delete;
     LayerManager& operator=(const LayerManager&) = delete;
@@ -64,24 +67,31 @@ public:
     void init() override;
     void shutdown() override;
 
-    // Accessors (not in interface →→ returns internal Layer& for direct manipulation)
-    Layer& get(LayerType t);
-    const Layer& get(LayerType t) const;
+    // Accessors (not in interface -> returns internal Layer& for direct manipulation)
+    Layer& get(uint32_t index);
+    const Layer& get(uint32_t index) const;
 
-    void setTexture(LayerType t, uint32_t texId) override;
-    void setVisible(LayerType t, bool visible) override;
-    void setOpacity(LayerType t, float opacity) override;
-    void setPosition(LayerType t, float x, float y) override;
-    void setScale(LayerType t, float sx, float sy) override;
-    void setBlendMode(LayerType t, int blend) override;
+    // -- Dynamic layer configuration (v2) --
+    bool configureLayers(const LayerConfig* configs, uint32_t count) override;
+    uint32_t getLayerCount() const override;
+    const char* getLayerName(uint32_t index) const override;
+    int32_t findLayer(const char* name) const override;
+    bool reorderLayer(uint32_t fromIndex, uint32_t toIndex) override;
 
-    void clear(LayerType t) override;
+    void setTexture(uint32_t t, uint32_t texId) override;
+    void setVisible(uint32_t t, bool visible) override;
+    void setOpacity(uint32_t t, float opacity) override;
+    void setPosition(uint32_t t, float x, float y) override;
+    void setScale(uint32_t t, float sx, float sy) override;
+    void setBlendMode(uint32_t t, int blend) override;
+
+    void clear(uint32_t t) override;
     void clearAll() override;
     void markAllDirty() override;
 
-    void markDirty(LayerType t, uint16_t x, uint16_t y,
+    void markDirty(uint32_t t, uint16_t x, uint16_t y,
                    uint16_t w, uint16_t h) override;
-    void markDirtyWithTransparency(LayerType t, uint16_t x, uint16_t y,
+    void markDirtyWithTransparency(uint32_t t, uint16_t x, uint16_t y,
                                    uint16_t w, uint16_t h) override;
     void updateDirtyRegions(uint16_t screenW, uint16_t screenH) override;
     void clearDirtyRects() override;
@@ -101,13 +111,16 @@ public:
 private:
     bool shouldUseScissor(uint16_t screenW, uint16_t screenH) const;
 
-    Layer m_layers[COUNT];
+    void resetToDefaultLayout();
+    bool validIndex(uint32_t index) const { return index < m_layers.size(); }
+
+    std::vector<Layer> m_layers;         // array order = render order (v2)
     bool  m_initialized = false;
     bool  m_gpuEnabled = false;
 
     bgfx::UniformHandle m_texUniform = BGFX_INVALID_HANDLE;
 
-    DirtyRect m_dirtyRects[COUNT];
+    std::vector<DirtyRect> m_dirtyRects;
     DirtyRect m_mergedDirty;
     bool m_useScissor = false;
 };

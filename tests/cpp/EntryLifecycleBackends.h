@@ -51,18 +51,23 @@ public:
 
     void init() override { ++m_probe.initCalls; }
     void shutdown() override { ++m_probe.shutdownCalls; }
-    void setTexture(LayerType, uint32_t) override {}
-    void setVisible(LayerType, bool) override {}
-    void setOpacity(LayerType, float) override {}
-    void setPosition(LayerType, float, float) override {}
-    void setScale(LayerType, float, float) override {}
-    void setBlendMode(LayerType, int) override {}
-    void clear(LayerType) override {}
+    bool configureLayers(const LayerConfig*, uint32_t) override { return true; }
+    uint32_t getLayerCount() const override { return 3; }
+    const char* getLayerName(uint32_t) const override { return "mock"; }
+    int32_t findLayer(const char*) const override { return -1; }
+    bool reorderLayer(uint32_t, uint32_t) override { return true; }
+    void setTexture(uint32_t, uint32_t) override {}
+    void setVisible(uint32_t, bool) override {}
+    void setOpacity(uint32_t, float) override {}
+    void setPosition(uint32_t, float, float) override {}
+    void setScale(uint32_t, float, float) override {}
+    void setBlendMode(uint32_t, int) override {}
+    void clear(uint32_t) override {}
     void clearAll() override {}
     void markAllDirty() override {}
-    void markDirty(LayerType, uint16_t, uint16_t, uint16_t, uint16_t) override {}
+    void markDirty(uint32_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
     void markDirtyWithTransparency(
-        LayerType, uint16_t, uint16_t, uint16_t, uint16_t) override {}
+        uint32_t, uint16_t, uint16_t, uint16_t, uint16_t) override {}
     void updateDirtyRegions(uint16_t, uint16_t) override {}
     void clearDirtyRects() override {}
     void render(uint16_t, int, int, uint32_t) override {}
