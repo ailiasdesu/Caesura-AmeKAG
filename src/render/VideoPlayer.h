@@ -92,6 +92,7 @@ private:
         bool   playing = true;
         bool   ended   = false;
         bool   hasFrame = false;
+        bool   closing  = false;  // RD-1: logically closed, erase deferred
         // Audio (pl_mpeg path): decoded float PCM queued by the audio
         // callback and drained into the audio backend during update().
         bool   audioEnabled = false;
@@ -132,12 +133,17 @@ private:
 #endif
     };
 
-    VideoState* find(VideoHandle handle);
+    std::shared_ptr<VideoState> find(VideoHandle handle);
     void destroyTexture(VideoState& vs);
     // Drain queued decoded PCM into the audio backend (main thread).
     void drainAudio(VideoState& vs);
+    // Flush any videos closed while a decoder worker could still be running
+    // (RD-1): close() marks the state and defers the destructive erase to the
+    // next updateAll() boundary, where no worker can still be touching it.
+    void flushPendingClose();
 
-    std::unordered_map<uint32_t, VideoState> m_videos;
+    std::unordered_map<uint32_t, std::shared_ptr<VideoState>> m_videos;
+    std::vector<uint32_t> m_pendingClose;  // ids closed, erase deferred (RD-1)
     uint32_t m_nextId = 1;
     IJobSystem* m_jobSystem = nullptr;
     std::mutex m_audioMutex;  // guards audioQueue across worker/main threads

@@ -48,7 +48,7 @@ void VideoPlayer::onDeviceLost() {
     // re-uploads the next decoded frame (no stale-handle submits).
     std::lock_guard<std::mutex> lock(m_audioMutex);
     for (auto& [id, vs] : m_videos) {
-        vs.texture = BGFX_INVALID_HANDLE;
+        vs->texture = BGFX_INVALID_HANDLE;
     }
 }
 
@@ -265,11 +265,12 @@ VideoHandle VideoPlayer::open(const char* path) {
         }
 
         VideoHandle handle{ m_nextId++ };
-        m_videos[handle.id] = vs;
+        m_videos[handle.id] = std::make_shared<VideoState>(std::move(vs));
 
         DEBUG_INFO(SubSys::Render, ErrCode::Ok,
                    "VideoPlayer: opened (FFmpeg) '%s' %dx%d %.1fs (id=%u)",
-                   path, vs.width, vs.height, vs.duration, handle.id);
+                   path, m_videos[handle.id]->width, m_videos[handle.id]->height,
+                   m_videos[handle.id]->duration, handle.id);
         return handle;
     }
 
@@ -321,11 +322,12 @@ VideoHandle VideoPlayer::open(const char* path) {
     }
 
     VideoHandle handle{ m_nextId++ };
-    m_videos[handle.id] = vs;
+    m_videos[handle.id] = std::make_shared<VideoState>(std::move(vs));
 
     DEBUG_INFO(SubSys::Render, ErrCode::Ok,
                "VideoPlayer: opened '%s' %dx%d %.1fs (id=%u)",
-               path, vs.width, vs.height, vs.duration, handle.id);
+               path, m_videos[handle.id]->width, m_videos[handle.id]->height,
+               m_videos[handle.id]->duration, handle.id);
     return handle;
 }
 
@@ -414,12 +416,12 @@ void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
     if (!samples) return;
     std::lock_guard<std::mutex> lock(m_audioMutex);
     for (auto& kv : m_videos) {
-        if (kv.second.plm == plmRaw) {
+        if (kv.second->plm == plmRaw) {
             // Interleaved float PCM: samples->count * 2 (stereo interleave).
             // Cap the queue: if the consumer (drainAudio) is failing or the
             // audio backend is absent, drop audio instead of growing forever.
-            if (kv.second.audioQueue.size() < 8 * 1024 * 1024 / sizeof(float)) {
-                kv.second.audioQueue.insert(kv.second.audioQueue.end(),
+            if (kv.second->audioQueue.size() < 8 * 1024 * 1024 / sizeof(float)) {
+                kv.second->audioQueue.insert(kv.second->audioQueue.end(),
                     samples->interleaved,
                     samples->interleaved + samples->count * 2);
             }
@@ -428,7 +430,7 @@ void VideoPlayer::onAudioDecoded(void* plmRaw, void* samplesRaw) {
     }
 }
 void VideoPlayer::setLoop(VideoHandle handle, bool loop) {
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (!vs) return;
     if (vs->useFFmpeg) {
         // FFmpeg path: rewind is done inside update() (av_seek_frame to 0 on EOF).
@@ -439,7 +441,7 @@ void VideoPlayer::setLoop(VideoHandle handle, bool loop) {
 }
 
 void VideoPlayer::setVolume(VideoHandle handle, float volume) {
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (!vs) return;
     if (!std::isfinite(volume)) return;  // NaN/Inf: reject (never clamp to a valid value)
     vs->volume = (volume < 0.0f) ? 0.0f : (volume > 1.0f ? 1.0f : volume);
@@ -450,51 +452,35 @@ void VideoPlayer::setVolume(VideoHandle handle, float volume) {
 }
 
 void VideoPlayer::close(VideoHandle handle) {
+    auto shared = find(handle);
+    if (!shared) return;
+    VideoState& vs = *shared;
+
     auto* audio = BackendRegistry::instance().getAudioBackend();
-    if (audio && m_videos.count(handle.id)) {
-        auto& vs = m_videos[handle.id];
+    if (audio) {
         for (const auto h : vs.audioHandles) audio->stopSEHandle(h);
         vs.audioHandles.clear();
         vs.audioHandle = 0;
         vs.audioStarted = false;
         { std::lock_guard<std::mutex> lk(m_audioMutex); vs.audioQueue.clear(); }
     }
-    VideoState* vs = find(handle);
-    if (!vs) return;
+    vs.playing = false;
+    vs.ended   = true;
+    vs.closing = true;
 
-    destroyTexture(*vs);
-    if (vs->useFFmpeg) {
-#ifdef CAESURA_VIDEO_FFMPEG
-        auto* sws = static_cast<SwsContext*>(vs->swsCtx);
-        auto* f   = static_cast<AVFrame*>(vs->avFrame);
-        auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
-        auto* cc  = static_cast<AVCodecContext*>(vs->avCodec);
-        auto* fmt = static_cast<AVFormatContext*>(vs->avFormat);
-
-        if (sws)  sws_freeContext(sws);
-        if (f)    av_frame_free(&f);
-        if (fRGB) av_frame_free(&fRGB);
-        if (cc)   avcodec_free_context(&cc);
-        if (fmt)  avformat_close_input(&fmt);
-
-        vs->swsCtx = nullptr;
-        vs->avFrame = nullptr;
-        vs->avFrameRGB = nullptr;
-        vs->avCodec = nullptr;
-        vs->avFormat = nullptr;
-#endif
-    } else {
-        if (vs->plm) {
-            plm_destroy(static_cast<plm_t*>(vs->plm));
-            vs->plm = nullptr;
-        }
+    // Defer the destructive erase to updateAll() (RD-1): a decoder worker
+    // submitted in the same frame may still hold the VideoState pointer,
+    // and destroying it here would use-after-free. Logical teardown above
+    // is complete and immediate; resource release is one frame late at most.
+    if (std::find(m_pendingClose.begin(), m_pendingClose.end(), handle.id)
+            == m_pendingClose.end()) {
+        m_pendingClose.push_back(handle.id);
     }
-    m_videos.erase(handle.id);
 }
 
 bool VideoPlayer::update(VideoHandle handle, double dt) {
     (void)dt;
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (!vs || !vs->playing || vs->ended) return false;
 
     if (vs->useFFmpeg) {
@@ -750,55 +736,57 @@ void VideoPlayer::updateAll(double dt) {
     ids.reserve(m_videos.size());
     for (const auto& kv : m_videos) ids.push_back(kv.first);
     for (const auto id : ids) {
-        auto* vs = find(VideoHandle{id});
+        auto vs = find(VideoHandle{id});
         if (vs && vs->playing && !vs->ended) update(VideoHandle{id}, dt);
     }
+    // Destroy videos closed this frame (RD-1: workers are idle here).
+    flushPendingClose();
 }
 
 uint32_t VideoPlayer::getTexture(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    if (it == m_videos.end() || !it->second.hasFrame)
+    if (it == m_videos.end() || !it->second->hasFrame)
         return 0;
-    return it->second.texture.idx;
+    return it->second->texture.idx;
 }
 
 bool VideoPlayer::isPlaying(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    return it != m_videos.end() && it->second.playing && !it->second.ended;
+    return it != m_videos.end() && it->second->playing && !it->second->ended;
 }
 
 bool VideoPlayer::hasEnded(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    return it == m_videos.end() || it->second.ended;
+    return it == m_videos.end() || it->second->ended;
 }
 
 int VideoPlayer::width(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    return it != m_videos.end() ? it->second.width : 0;
+    return it != m_videos.end() ? it->second->width : 0;
 }
 
 int VideoPlayer::height(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    return it != m_videos.end() ? it->second.height : 0;
+    return it != m_videos.end() ? it->second->height : 0;
 }
 
 double VideoPlayer::duration(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
-    return it != m_videos.end() ? it->second.duration : 0.0;
+    return it != m_videos.end() ? it->second->duration : 0.0;
 }
 
 double VideoPlayer::currentTime(VideoHandle handle) const {
     auto it = m_videos.find(handle.id);
     if (it == m_videos.end()) return 0.0;
 
-    if (it->second.useFFmpeg) {
+    if (it->second->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
-        auto* cc = static_cast<AVCodecContext*>(it->second.avCodec);
-        auto* f  = static_cast<AVFrame*>(it->second.avFrame);
+        auto* cc = static_cast<AVCodecContext*>(it->second->avCodec);
+        auto* f  = static_cast<AVFrame*>(it->second->avFrame);
         if (cc && f && f->pts != AV_NOPTS_VALUE) {
-            AVRational tb = it->second.avFormat
-                ? static_cast<AVFormatContext*>(it->second.avFormat)
-                      ->streams[it->second.videoStreamIndex]->time_base
+            AVRational tb = it->second->avFormat
+                ? static_cast<AVFormatContext*>(it->second->avFormat)
+                      ->streams[it->second->videoStreamIndex]->time_base
                 : AVRational{1, 1};
             return (double)f->pts * av_q2d(tb);
         }
@@ -807,22 +795,22 @@ double VideoPlayer::currentTime(VideoHandle handle) const {
         return 0.0;
 #endif
     }
-    if (!it->second.plm) return 0.0;
-    return plm_get_time(static_cast<plm_t*>(it->second.plm));
+    if (!it->second->plm) return 0.0;
+    return plm_get_time(static_cast<plm_t*>(it->second->plm));
 }
 
 void VideoPlayer::pause(VideoHandle handle) {
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (vs) vs->playing = false;
 }
 
 void VideoPlayer::resume(VideoHandle handle) {
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (vs && !vs->ended) vs->playing = true;
 }
 
 void VideoPlayer::seek(VideoHandle handle, double time) {
-    VideoState* vs = find(handle);
+    auto vs = find(handle);
     if (!vs) return;
 
     // Stop and flush audio so post-seek PCM does not mix with pre-seek audio.
@@ -868,42 +856,87 @@ void VideoPlayer::seek(VideoHandle handle, double time) {
     vs->hasFrame = false;
 }
 
-void VideoPlayer::shutdown() {
-    for (auto& [id, vs] : m_videos) {
-        destroyTexture(vs);
-        if (vs.useFFmpeg) {
+void VideoPlayer::flushPendingClose() {
+    // Called from updateAll()/shutdown() on the main thread, when no
+    // decoder worker can still be touching a state (RD-1): every close()
+    // deferred while a worker might be mid-frame is now destroyed.
+    // Drop duplicates defensively: close() dedups, but a caller could
+    // still push the same id twice across frames.
+    std::vector<uint32_t> toClose;  // unique ids
+    for (const auto id : m_pendingClose) {
+        if (std::find(toClose.begin(), toClose.end(), id) == toClose.end())
+            toClose.push_back(id);
+    }
+    m_pendingClose.clear();
+    for (const auto id : toClose) {
+        auto it = m_videos.find(id);
+        if (it == m_videos.end()) continue;
+        destroyTexture(*it->second);
+        if (it->second->useFFmpeg) {
 #ifdef CAESURA_VIDEO_FFMPEG
-            auto* sws = static_cast<SwsContext*>(vs.swsCtx);
-            auto* f   = static_cast<AVFrame*>(vs.avFrame);
-            auto* fRGB = static_cast<AVFrame*>(vs.avFrameRGB);
-            auto* cc  = static_cast<AVCodecContext*>(vs.avCodec);
-            auto* fmt = static_cast<AVFormatContext*>(vs.avFormat);
-
+            auto* sws = static_cast<SwsContext*>(it->second->swsCtx);
+            auto* f   = static_cast<AVFrame*>(it->second->avFrame);
+            auto* fRGB = static_cast<AVFrame*>(it->second->avFrameRGB);
+            auto* cc  = static_cast<AVCodecContext*>(it->second->avCodec);
+            auto* fmt = static_cast<AVFormatContext*>(it->second->avFormat);
             if (sws)  sws_freeContext(sws);
             if (f)    av_frame_free(&f);
             if (fRGB) av_frame_free(&fRGB);
             if (cc)   avcodec_free_context(&cc);
             if (fmt)  avformat_close_input(&fmt);
-
-            vs.swsCtx = nullptr;
-            vs.avFrame = nullptr;
-            vs.avFrameRGB = nullptr;
-            vs.avCodec = nullptr;
-            vs.avFormat = nullptr;
+            it->second->swsCtx = nullptr;
+            it->second->avFrame = nullptr;
+            it->second->avFrameRGB = nullptr;
+            it->second->avCodec = nullptr;
+            it->second->avFormat = nullptr;
 #endif
         } else {
-            if (vs.plm) {
-                plm_destroy(static_cast<plm_t*>(vs.plm));
-                vs.plm = nullptr;
+            if (it->second->plm) {
+                plm_destroy(static_cast<plm_t*>(it->second->plm));
+                it->second->plm = nullptr;
+            }
+        }
+        m_videos.erase(it);
+    }
+}
+
+void VideoPlayer::shutdown() {
+    // Flush any close()s deferred while a worker was mid-frame (RD-1);
+    // no worker can be running during shutdown, so this is safe to do first.
+    flushPendingClose();
+    for (auto& [id, vs] : m_videos) {
+        destroyTexture(*vs);
+        if (vs->useFFmpeg) {
+#ifdef CAESURA_VIDEO_FFMPEG
+            auto* sws = static_cast<SwsContext*>(vs->swsCtx);
+            auto* f   = static_cast<AVFrame*>(vs->avFrame);
+            auto* fRGB = static_cast<AVFrame*>(vs->avFrameRGB);
+            auto* cc  = static_cast<AVCodecContext*>(vs->avCodec);
+            auto* fmt = static_cast<AVFormatContext*>(vs->avFormat);
+            if (sws)  sws_freeContext(sws);
+            if (f)    av_frame_free(&f);
+            if (fRGB) av_frame_free(&fRGB);
+            if (cc)   avcodec_free_context(&cc);
+            if (fmt)  avformat_close_input(&fmt);
+            vs->swsCtx = nullptr;
+            vs->avFrame = nullptr;
+            vs->avFrameRGB = nullptr;
+            vs->avCodec = nullptr;
+            vs->avFormat = nullptr;
+#endif
+        } else {
+            if (vs->plm) {
+                plm_destroy(static_cast<plm_t*>(vs->plm));
+                vs->plm = nullptr;
             }
         }
     }
     m_videos.clear();
 }
 
-VideoPlayer::VideoState* VideoPlayer::find(VideoHandle handle) {
+std::shared_ptr<VideoPlayer::VideoState> VideoPlayer::find(VideoHandle handle) {
     auto it = m_videos.find(handle.id);
-    return it != m_videos.end() ? &it->second : nullptr;
+    return it != m_videos.end() ? it->second : nullptr;
 }
 
 void VideoPlayer::destroyTexture(VideoState& vs) {
