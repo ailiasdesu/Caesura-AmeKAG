@@ -677,3 +677,109 @@ frame_bench/benchmark 等），但**缺「大型游戏资产」维度的压力�
 - cd web && npx vitest run perf-baseline.test.js：6/6 全绿（本机约 5.6s）。
 - 既有 web 套件全量无回归（bridge.js 钩子默认关闭）。
 - 本文档追加 round 109 段，纯测量 + 新增测试文件 + 3 行可选钩子，无引擎生产源代码变更。
+---
+
+# round 101-114：阶段 G 汇总（大型资源压测 + Web 性能基线 零回归确认）
+
+## 触发背景（阶段 G 窗口）
+
+round 101 开启阶段 G（git 记录：`test(kag): add scale stress suite with perf budgets` →
+`docs(roadmap): start stage G and record round 101`），round 114 收尾。阶段 G 在既有元素级守卫
+（round 66-98）之上新增两个性能维度：
+
+| 轮次 | 新增设施 | 覆盖维度 |
+|---|---|---|
+| round 101 | tests/scripts/test_scale_stress.lua（20 断言，登记主套件） | 大型游戏资产：4096 图集 / 8 万句柄 / 9600-token 大场景 / 500 页 backlog / 340-410KB 长插值 |
+| round 109 | web/perf-baseline.test.js（6 断言）+ bridge.js __PERF_TRACE 可选帧计数钩子 | web 播放器（wasmoon）：大场景帧吞吐 / token 吞吐 / Lua 堆增长 / 规模化线性 |
+
+**热路径代码零改动确认**（git log 交叉核对 round 101 快照）：round 101-114 期间
+scripts/kag/expr.lua、scripts/tokenizer.lua、scripts/scheduler.lua、scripts/layers.lua **无任何新提交**
+（最近改动分别为 round 97 深度预算、round 89 grammar、round 96 循环栈/switch 预算、round 34 渲染流；
+scheduler `96472f9e` 经 merge-base 确认为 round 101 之前已提交）。阶段 G 唯一引擎侧代码改动是
+bridge.js 3 行默认关闭的帧计数钩子（round 109，__PERF_TRACE 下仅一次 nil 判断、正常路径零写入），
+不触碰调度/表达式/渲染内核。
+
+## 全部预算守卫清单与实测（本轮样本，本机 os.clock / vitest；3 次采样取中位）
+
+### 桌面 Lua 5 项（test_scale_stress.lua，round 101，20 断言全绿）
+
+| 预算 | 场景 | 预算 | 本次实测（3 次采样） | 余量 |
+|---|---|---|---|---|
+| A | 4096×4096 图集 → 4096 瓦片 texel 记账 + 全量预扫描 | <1s | 2.0 / 3.0 / 3.0 ms（中位 3.0 ms） | >99.7% |
+| B | 8 万次 alloc/free 句柄池（并发上限 128，id 回收复用） | <2s | 66 / 68 / 66 ms（中位 66 ms） | ~96.7% |
+| C·parse | 9600-token 大场景 tokenizer.parse（~388 KB 源码） | <10s | 863 / 870 / 853 ms（中位 863 ms） | ~91.4% |
+| C·run | 9600-token scheduler.run（9601 frames 全量走完） | <10s | 73 / 51 / 49 ms（中位 51 ms） | >99.5% |
+| D | 500 页 backlog 堆增长（collectgarbage 前后差） | <4096 KB | **934.7 KB**（精确复现 round 101 记录） | 77.2% |
+| E | 3000 行叙述流 translate（累计 408,972 字节） | <10s | 1.062 / 1.103 / 1.110 s（中位 ~1.103 s） | ~89.0% |
+
+> 计数断言全部通过：A 瓦片==4096、texel 账==16,777,216；B 并发 live=120（≥100 且 ≤128）、
+> 复用 79872 次、nextId=129（< 上限+64）；C token==9600、frames==tokens+1、[ch] 派发==4800；
+> D 页数==500；E 无残留 && 符号。该文件自身每次独立运行 <1.5s；Lua 主套件含其在内 **132/132**
+> 全绿（round 101 登记时为 131 文件；132 系 round 102-114 间新增的另有测试文件，非守卫回归）。
+
+### 表达式 4 项（test_expr_lang.lua，round 95 规模化守卫；探针中位数 3 次）
+
+| 预算 | 场景 | 预算 | 本次实测 | 对比 round 97-98 记录 |
+|---|---|---|---|---|
+| A | 300 插值段 translate | <2s | **0.337 s** | 0.593 s |
+| B | 500 平链三元 translate（O(n²) worst-case） | <2s | **0.411 s** | 0.662 s |
+| C | 80 参调用 translate（79 逗号） | <0.1s | **0.002 s** | 0.003 s |
+| D | 200 长串扫描 translate | <2s | **0.265 s** | 0.400 s |
+
+> 另含 round 66 的 E 守卫（2000x 缓存求值 <5s）：本次 0.063 s，与 round 66-81 记录 0.062 s 一致、
+> 余量 >98%；round 97-98 的快读数 0.026 s 属轻负载窗口，落在同一机器噪声区间。全部正确性断言
+> （产物残留 '?'==0、79 逗号保持）通过；A/B/D 的括号嵌套深度仍 <48，未触发 round 97 深度预算
+> 截断语义。整套件 98 断言 0 FAIL。
+
+### frame_bench 3 项（round 68-72；探针中位数 3 次）
+
+| 预算 | 场景 | 预算 | 本次实测 | 对比历史 |
+|---|---|---|---|---|
+| render | render 5000x 均值 | <500us/帧 | 276.8 / 273.6 / 311.0 us（中位 ~277 us） | round 82 参考 274.6 us，持平 |
+| expr | 混合表达式 translate 1000x | <2s | 57-58 ms | round 97-98 记录 0.056-0.057 s，一致 |
+| add | [add] 链 dispatch 1000x（f.x=1000） | <2s | 10 / 6 / 9 ms（中位 9 ms） | 历史区间 0.004-0.010 s 内 |
+
+> 套件 6/6 PASS（render<500us、mixed expr<2s、add<2s、五个 layers 存在、ternary '?' 解析计数）。
+
+### Web 6 断言（web/perf-baseline.test.js，round 109；vitest 6/6 PASS，~6.2s）
+
+| 断言 | 预算 | 本次实测 | 对比 round 109 记录 | 余量 |
+|---|---|---|---|---|
+| story.ks 帧吞吐 | >1.3 frames/ms | **3.854**（2607 帧 / 676 ms） | 2.75 | ~3.0x |
+| story.ks token 吞吐 | >0.15 tok/ms | **0.489**（331 token） | 0.35 | ~3.3x |
+| story.ks 堆增长 | <1024 KB | **384.0 KB** | 383.2 KB（精确复现） | ~2.7x |
+| 合成 1000 行帧吞吐 | >2.5 frames/ms | **7.427**（4001 帧 / 539 ms） | 5.87 | ~3.0x |
+| 合成 1000 行堆增长 | <2048 KB | PASS | 621.6 KB | >3x |
+| 规模化线性 2000 vs 1000 行 | wall2000 < 2.5x wall1000 | **1.991x**（1033 / 519 ms，6000 token） | 2.03x | 门内 |
+
+> 本轮机器负载较 round 109 轻，全部 web 读数优于或精确复现 round 109 记录（帧吞吐 2.75→3.85、
+> 5.87→7.43，规模化比 2.03→1.99）。计数断言 DONE:331:26、token==3000/6000、error 事件==0 全部通过。
+
+## 结论：round 101-114（阶段 G）无性能回归
+
+- **全部预算守卫 PASS**：桌面 Lua test_scale_stress 20/20、表达式套件 98/98、frame_bench 6/6、
+  Web perf-baseline 6/6；Lua 主套件 **132/132** 全绿，零 FAIL 零误差。
+- **新增维度预算充足**：round 101 五组预算余量 77.2%-99.7%，round 109 六条断言余量 ≥2.7x，
+  无一条逼近预算线（<20% 余量风险线）。
+- **最紧预算余量项**：全基线最紧仍是 **frame_bench render 每帧守卫**（~277 us / <500 us ≈ 55%
+  占用、~45% 余量，与 round 82-109 历轮结论一致，非本轮新增）；round 101-114 新增维度中最紧为
+  **scale_stress D 500 页 backlog 内存增长**（934.7 KB / <4096 KB，77.2% 余量）与 **web story.ks
+  堆增长**（384.0 KB / <1024 KB，~2.7x 余量），均远离风险线。
+- **热路径零改动 + 读数零退化**：阶段 G 窗口 expr/tokenizer/scheduler/layers 无新提交；所有实测
+  读数落在历史记录区间或更优（D 内存 934.7 KB、web story-mem 384.0 KB 与 round 101/109 记录逐字节
+  级复现），无任何预算余量较历史收紧。
+- 观察项与历轮一致：test_benchmark 的 scheduler 吞吐本机存在既有机型噪声区间（25-60ms，本次窗口
+  不在其采样范围），不做回归判定依据。
+
+## 验证
+
+- 实测命令与结果（全部 exit 0）：
+  - `external/lua/lua.exe tests/scripts/test_scale_stress.lua`（3 次）：**20 passed / 0 failed**，每次 <1.5s。
+  - `external/lua/lua.exe tests/scripts/test_expr_lang.lua`：**98 PASS / 0 FAIL**（含 4 项规模化守卫 + 2000x 缓存求值），exit 0。
+  - `external/lua/lua.exe tests/scripts/test_frame_bench.lua`：**6/6 PASS**（render<500us、expr<2s、add<2s），exit 0。
+  - `external/lua/lua.exe tests/scripts/run_lua_tests.lua`：**132 passed / 0 failed / 132 total**，exit 0。
+  - `cd web && npx vitest run perf-baseline.test.js`：**6/6 PASS**（~6.2s），exit 0。
+  - 读数探针（临时脚本 / web 临时 vitest 文件，测量后删除）：expr 规模化 4 项、frame_bench render/expr/add、
+    web 6 读数，各 3 次采样取中位；临时文件均已删除，git 工作树仅保留本文档改动。
+- 本文档追加阶段 G 汇总段，纯测量 + 文档，无引擎/测试源代码变更（不 git 提交）。
+
