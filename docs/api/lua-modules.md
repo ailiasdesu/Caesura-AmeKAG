@@ -11,6 +11,10 @@
 -- Backend: BackendRegistry::instance().getRenderDevice()
 ```
 
+> 阶段 G（round 102）新增 **PostFx 后处理家族 5 API**（set_postfx / destroy_postfx /
+> clear_postfx / is_postfx_supported / is_postfx_active，见下方「Blend / Transition / VFX」表）；
+> api-stats 记账 Render 共 **38 个绑定 API**（自动生成，勿手改）。
+
 ### Texture Management
 
 | Function | Signature | Returns | Description |
@@ -253,6 +257,13 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 ---
 
 ## KAG (C++ Audio Bindings)
+
+> ⚠️ 阶段 G 的 `[tween]` / `[layout]` / `[vfx postfx=` 是**纯 Lua 命令handler**
+> （scripts/kag/commands/tween.lua / layout.lua / vfx.lua + scripts/kag/layout_math.lua），
+> 不新增 C++ 绑定——它们经 KAG 调度器执行并写 `layers.move_layer` / `ctx.tweens`。
+> 其契约（参数/钳制/枚举）见 `docs/api/command-contracts.md`（123 命令，自动生成）；
+> 本文件只记录 C++ 侧绑定（`Render.set_postfx` 家族属于此列）。
+
 
 ```lua
 -- Global: KAG

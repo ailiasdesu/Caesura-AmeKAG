@@ -18,6 +18,59 @@ job in `.github/workflows/ci.yml` (CPack ZIP, Windows only).
 
 ---
 
+## 0.5 发布流程总览（文本流程图）
+
+```
+[master 分支] 所有改动先合入 master（门禁全绿）
+      │
+      ▼
+┌─ 1. 构建 ─────────────────────────────────────────────┐
+│  cmake -B build -S . -G "Visual Studio 17 2022" -A x64 │  （vcpkg 需 -DCMAKE_TOOLCHAIN_FILE=...）
+│  cmake --build build --config Release --parallel       │
+└──────────────────────┬───────────────────────────────┘
+                       ▼
+┌─ 2. 全量门禁（跳过=禁止发版）─────────────────────────┐
+│  2.1 Release 构建零错误                                 │
+│  2.2 C++ 套件 976/976（build/tests/Release 或 Debug）    │  ← CWD 必须是 build/tests/<cfg>
+│  2.3 Lua 主套件 132 + 孤儿 24（仓库根）                  │
+│  2.4 耦合预算 python scripts/count_coupling.py --ci     │
+│  2.5 ks_check 静态契约（demo + 16 教程，0 violations）   │
+│  2.6 生成物新鲜度（api_stats / gen_changelog / gen-index）│
+└──────────────────────┬───────────────────────────────┘
+                       ▼
+┌─ 3. 生成 CHANGELOG ────────────────────────────────────┐
+│  python scripts/gen_changelog.py --from-tag <prev> --tag <ver> │
+│  → 手工润色（合并逐提交条目 / 删 plan: / 按影响排序）      │
+└──────────────────────┬───────────────────────────────┘
+                       ▼
+┌─ 4. CPack 打包 ────────────────────────────────────────┐
+│  cd build && cpack -C Release -G ZIP                    │
+│  → build/CaesuraAmeKAG-<ver>-Windows-AMD64.zip + .sha256 │
+└──────────────────────┬───────────────────────────────┘
+                       ▼
+┌─ 5. 验证 ZIP ──────────────────────────────────────────┐
+│  unzip -l 核对内容 + 解压后从归档根 --frames 60 冒烟      │
+└──────────────────────┬───────────────────────────────┘
+                       ▼
+┌─ 6. 发布 GitHub Release ───────────────────────────────┐
+│  git tag -a v<ver>  →  git push origin v<ver>            │
+│  gh release create v<ver> <zip> --notes-file CHANGELOG.md --draft │
+│  （复核后去掉 --draft；或走 CI release job 拉产物）        │
+└────────────────────────────────────────────────────────┘
+
+**产物清单（一次 v1.0.x 发布）**：
+
+| 产物 | 路径 | 说明 |
+|------|------|------|
+| 桌面 ZIP | `build/CaesuraAmeKAG-1.0.x-Windows-AMD64.zip` | 引擎 + demo + 资产 + SDL3/FFmpeg DLL（约 88 MB / 386 文件） |
+| 校验和 | `build/CaesuraAmeKAG-1.0.x-Windows-AMD64.zip.sha256` | CPack 自动生成 |
+| CHANGELOG | `CHANGELOG.md`（仓库根） | 手工润色后的发布说明 |
+| Web 站（可选） | `dist/<game>/`（package_game.sh 产物） | 静态 HTML5 播放器站（itch/GitHub Pages/Netlify） |
+| GitHub Release | 网页条目（含上述 ZIP 附件） | `gh release create` 创建 |
+```
+
+---
+
 ## 1. Build
 
 Configure once (or when options change), then build with the desired
@@ -83,7 +136,7 @@ testing (the same gate CI enforces before its test steps):
 ```bash
 external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
 # expect: OK — all scenes pass contract checks
-# also sweep the per-capability tutorial series (15 scenes, round 90 added 14/15):
+# also sweep the per-capability tutorial series (16 scenes, tutorial_01..16):
 external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
 ```
 

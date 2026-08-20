@@ -119,7 +119,7 @@ for f in demo/tutorial/tutorial_*.ks; do external/lua/lua.exe scripts/ks_check.l
 
 快速导航：
 - [KAG Neo-Genesis 语言白皮书](../../docs/design/kag-neo-genesis-language.md)
-- [命令契约（119 个）](../../docs/api/command-contracts.md)（自动生成，权威）
+- [命令契约（123 个）](../../docs/api/command-contracts.md)（自动生成，权威）
 - [KAG 语言速查](../../docs/guides/kag-language-tour.md)
 - [资源管线 / 目录规范](../../docs/guides/asset-pipeline.md)
 

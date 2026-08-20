@@ -1,6 +1,6 @@
 # 示例游戏发布就绪度检查与发布指南（Sample Game Release）
 
-> 目标作品：`demo/example_game/story.ks` —「The Last Letter / 《单程回信》」示例游戏（2 场景：
+> 目标作品：`demo/example_game/story.ks` —《单程回信》（The One-Way Reply）示例游戏（2 场景：
 > `story.ks` + `story_lastletter.ks`，三结局，中英双语，含完整 KAG Neo-Genesis 特性演示）。
 >
 > 本文档评估两条发布路径（GitHub Releases / itch.io），给出**逐个可跑**的发布前置检查清单，
@@ -19,7 +19,7 @@
 | Release C++ 测试 | ✅ 976/976 用例、8858/8858 断言、0 failed |
 | Lua 主套件 + 孤儿套件 | ✅ EXIT=0（round 90 记录 126+19） |
 | ks_check（示例游戏） | ✅ OK，零警告 |
-| verify_sample_game.sh | ⚠️ 见 §2.4 —— 默认路径指向已不存在的 `story.ks.new`，需带 `SAMPLE_STORY` |
+| verify_sample_game.sh | ✅ 默认路径已是 `demo/example_game/story.ks`（round 110 已修复 `.new` 缺陷），裸跑 5/5 PASS |
 | package_game.sh（Web 站） | ✅ `dist/example_game` = 35,229 KB（~34.4 MiB），2 场景 bundle |
 | CPack Release ZIP | ✅ `build/CaesuraAmeKAG-1.0.0-Windows-AMD64.zip` = 87.9 MB，386 文件 + .sha256 |
 | 桌面 ZIP 冒烟（--frames 120） | ✅ 干净启动/干净退出，exit 0 |
@@ -27,9 +27,9 @@
 | gh（GitHub CLI） | ✅ 已认证 `ailiasdesu`（keyring） |
 | butler（itch.io CLI） | ❌ **未安装**（itch.io 路径的首要缺口） |
 
-**发布就绪判定**：桌面 / Web 两条路径的**产物生成链路全部通过**；卡点不是构建，而是
-① `verify_sample_game.sh` 默认路径缺陷（发布前应修，或按 §2.4 带参数跑）② itch.io 必须
-`butler` 安装 + 用户账号登录。GitHub 路径零账号动作（已认证）。
+**发布就绪判定**：桌面 / Web 两条路径的**产物生成链路全部通过**；卡点不是构建，也不是
+验证脚本（其默认路径缺陷已在 round 110 修复），而是 itch.io 必须 `butler` 安装 +
+用户账号登录。GitHub 路径零账号动作（已认证）。
 
 ---
 
@@ -95,13 +95,9 @@ external/lua/lua.exe scripts/ks_check.lua demo/example_game/story.ks demo/exampl
 # 端到端验证 —— ✅ 实测 PASS 5/5（需显式指定 SAMPLE_STORY，见下方警告）
 SAMPLE_STORY=demo/example_game/story.ks bash scripts/verify_sample_game.sh
 ```
-> ⚠️ **已知缺陷（发布前应修）**：`scripts/verify_sample_game.sh` 里默认
-> `STORY="${SAMPLE_STORY:-demo/example_game/story.ks.new}"` —— 指向已不存在的
-> `story.ks.new`（round 102 定稿已改名 `story.ks`）。裸跑 `bash scripts/verify_sample_game.sh`
-> 会 **5/5 全 FAIL**（cannot open file），产生**假红**。发布前把默认值改为
-> `demo/example_game/story.ks`（并同步 `docs/guides/sample-game-verification.md` 的 `.new` 提法）；
-> 在此之前**必须带 `SAMPLE_STORY=...` 运行**。实测带参数后：主路径 RESULT DONE
-> （token=331, clicks=8080）+ 三结局（ending_zero/companion/promise）各自 RESULT DONE。
+> 默认路径为 `demo/example_game/story.ks`（round 110 已修复，裸跑不再假红）。
+> 实测：主路径 RESULT DONE（token≈331, clicks≈8080）+ 三结局
+> （ending_zero/companion/promise）各自 RESULT DONE；断言 5/5 PASS。
 
 ### 2.5 耦合预算与生成物新鲜度
 ```bash
@@ -227,12 +223,12 @@ gh release create v1.0.0 build/CaesuraAmeKAG-1.0.0-Windows-AMD64.zip \
 
 ## 6. 发布前待办（阻碍项汇总）
 
-1. **[必修] `scripts/verify_sample_game.sh` 默认 `story.ks.new` → `story.ks`**（§2.4）。
-   同时清理 `docs/guides/sample-game-verification.md` 与脚本内残留的 `.new` 提法。
+1. ~~[必修] `verify_sample_game.sh` 默认 `story.ks.new` → `story.ks`~~ —— **已完成**（round 110，本文 §0/§2.4 已同步）。
+   当前唯一实质待办是 itch.io 侧（项 2）。
 2. **[可选] 装 butler + 用户 itch.io 登录**（B 路径前提，§4B）。
 3. **[可选] README.md 有未提交改动**（本会话外产生），发布提交时一并确认归属。
-4. **[可选] 示例游戏命名一致性**：`demo/example_game/README.md` 标题为 "The Last Letter"，
-   `story.ks` 头注为 "The One-Way Reply"/《单程回信》——发布页文案前统一对外名称。
+4. **[已完成] 示例游戏命名一致性**：`demo/example_game/README.md` 已统一为《单程回信》
+   （The One-Way Reply）；发布页文案采用同一对外名称。
 5. **[建议] 发布前跑一次 `python scripts/gen_changelog.py --from-tag v1.0.0-alpha --tag v1.0.0`
    --dry-run` 预审 changelog**（round 90 已实测 --dry-run 合理）。
 
@@ -242,7 +238,7 @@ gh release create v1.0.0 build/CaesuraAmeKAG-1.0.0-Windows-AMD64.zip \
 
 - `docs/guides/release-process.md` — 桌面 Release + CPack + gh release 全流程（round 90 已实测修正）
 - `docs/guides/packaging-ux.md` — 一键打包与 itch/GitHub Pages/Netlify 分发
-- `docs/guides/sample-game-verification.md` — 示例游戏双端验证（含 `.new` 过期提法，待更新）
+- `docs/guides/sample-game-verification.md` — 示例游戏双端验证（round 102/110 已与 `story.ks` 定稿同步）
 - `.github/workflows/deploy-web.yml` — Web 播放器 GitHub Pages 自动部署
 - ROADMAP-100 round 90 — 首次 Release 流程实测记录（Release 构建/C++849/Lua 126+19/CPack 87.9MB/ZIP 359 文件冒烟）
 ---

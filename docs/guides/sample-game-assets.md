@@ -87,7 +87,7 @@
 
 ### 3.3 {settings}/{items} 插值键用法（已验证）
 
-- `{settings}`：UI 菜单键（=“设置”），`story.ks.new` 与 `tutorial_14_flow_timing.ks` 均用 `[ch text="...{settings}"]` 演示 `{key}` 展开。
+- `{settings}`：UI 菜单键（=“设置”），`story.ks` 与 `tutorial_14_flow_timing.ks` 均用 `[ch text="...{settings}"]` 演示 `{key}` 展开。
 - `{items}`：复数变体表，`i18n.translate("items", {n=N})` 取 one/other；无 n 参数时落 `other`。
 - 建议示例游戏沿用 `{settings}`/`{items}`（已注册，语义稳定），不必新造。
 

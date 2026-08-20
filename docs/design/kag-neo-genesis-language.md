@@ -7,7 +7,7 @@
 > 持续保留。
 >
 > 配套文档：`docs/design/nextgen-kag-standard.md`（标准演化）、
-> `docs/api/command-contracts.md`（84 命令权威契约）。
+> `docs/api/command-contracts.md`（**123 命令权威契约**，自动生成）。
 
 ---
 
@@ -31,10 +31,10 @@ E-mote 等）长期停留在 GPL/专有双许可的旧工具链上。KAG Neo-Gen
 
 ## 2. 先进性：语言层
 
-### 2.1 声明式命令契约（78 命令）
+### 2.1 声明式命令契约（123 命令）
 
-每个命令由 schema 声明（`scripts/kag/commands/*.lua` + 自动生成的
-`docs/api/command-contracts.md`）：
+每个命令由 schema 声明（`scripts/kag/commands/*.lua`，共 13 个命令 handler 文件，
+自动生成 `docs/api/command-contracts.md`）：
 
 ```lua
 -- scripts/kag/commands/text.lua（节选）
@@ -71,6 +71,56 @@ KAG3 的 TJS 风格表达式（`&&`/`||`/`!`/`? :`、`%tbl.key%` 表访问、
 | `[call *label]/[return]` | 同场景调用 + `lf` 变量帧栈 | KAG3 语义保留 |
 | `[macro m args=...]` | 参数化宏 | KAG3 仅文本替换 |
 | `[select]/[sel]/[endselect]` | 选择分支 | KAG3 语法兼容 |
+
+
+### 2.4 声明式 UI：补间 / 布局 / 后处理（阶段 G，round 102-107）
+
+阶段 G 为语言层新增三族**声明式能力**，全部走 schema 契约（类型/钳制/枚举/插值），
+无需手写逐帧代码：
+
+#### 2.4.1 声明式补间 `[tween]`（round 106，对标 Ren'Py ATL 最小子集）
+
+```kag
+[tween target="t0" attr=x to=900 dur=800]                    ; from 缺省 = 当前值
+[tween target="e1" attr=x from=80 to=1100 dur=1500 ease=ease_in_out]
+[tween target="n1" attr=alpha from=255 to=0 dur=600 wait=false]  ; 非阻塞 fire-and-forget
+[tween target="t0" attr=x from=${f.base_x} to=${f.base_x + f.step * 2} dur=700]  ; 表达式插值
+```
+
+- **契约**：`target`（speaker 或图层名，_char_ 约定隐式解析）、
+  `attr ∈ {x, y, alpha, scale}`、`from`（可省）、`to`（必填）、
+  `dur` 100–30000、`delay` 0–30000、`ease ∈ {linear, ease_in, ease_out, ease_in_out, back_out}`、
+  `wait`（阻塞=与 [wait] 同构，非阻塞=每帧钩子推进）。
+- **语义**：单时间线管理器 `ctx.tweens`（delay 相/t 累计/终点精确落 to）；
+  终点精确、端点定义 e(0)=0 / e(1)=1（back_out 有过冲）。
+
+#### 2.4.2 声明式布局 `[layout]`（round 107）
+
+```kag
+[layout name="band" kind=vbox gap=10 padding=6 align=start x=290 y=200 w=360 h=180]
+[layout_slot parent="band" layer="row1" index=1 size="90x30"]
+[layout_place parent="band" layer="badge" x=20 y=40]   ; 绝对偏移放置
+```
+
+- **契约**：`[layout]`（name 必填 + kind 枚举 hbox/vbox/grid + gap/padding/align/cols/w/h/x/y）、
+  `[layout_slot]`（parent/layer/index/size "WxH"）、`[layout_place]`（parent/layer/x/y/w/h）。
+- **设计决策**：容器是**计算器不是渲染层**——recompute 后 `layers.move_layer` 写现有层
+  坐标，渲染管线零改动，与 `[position]`/`[tween]` 天然组合；坐标与手写公式逐像素等价
+  （settings 迁移试点证明）。
+
+#### 2.4.3 后处理链 `[vfx ... postfx=]`（round 102）
+
+```kag
+[vfx type=vfx postfx=bloom strength=0.6 radius=2]     ; 开启/更新 bloom
+[vfx type=vfx postfx=none]                            ; 关闭整条后处理链
+[vfx type=vfx postfx=vignette amount=0.5]
+```
+
+- **契约**：`postfx` 枚举 {bloom, vignette, lut, softblur, none} + strength/radius/amount/lutMix
+  clamp + rgb "r,g,b"；validation-only 无 default 保 legacy 语义。
+- **引擎侧**：VIEW_MAIN→m_sceneRtt 重定向 + 逐 stage 全屏 pass（scratch RTT 乒乓）+
+  VIEW_POSTFX=40；绑定 `Render.set_postfx` 家族（5 API）。
+
 
 ## 3. 先进性：运行层
 
@@ -149,7 +199,9 @@ KAG3 的 TJS 风格表达式（`&&`/`||`/`!`/`? :`、`%tbl.key%` 表访问、
 
 ---
 
-> 数字口径：命令契约 78（`docs/api/command-contracts.md` 实测计数）；
-> 测试基准 99 Lua 用例 / 605 C++ 用例全绿（`run_lua_tests.lua` +
-> `CaesuraTests.exe`）；性能数字为本机实测，绝对值随机器波动，
-> 相对提升（-28.5%）以 `perf(tokenizer)` 提交的基准为准。
+> 数字口径：命令契约 **123**（`docs/api/command-contracts.md` 自动生成计数，幂等）；
+> 测试基准（阶段 G 终态 / round 113）：Lua 主套件 **132** + 孤儿 **24** 全绿、
+> C++ doctest **976/976**（8858 断言）、web **297/297**、editor **530/530**
+> （`run_lua_tests.lua` + `run_orphan_tests.lua` + `CaesuraTests.exe`）；
+> 性能数字为本机实测，绝对值随机器波动，相对提升（-28.5%）以 `perf(tokenizer)`
+> 提交的基准为准。

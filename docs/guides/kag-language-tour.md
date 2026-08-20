@@ -3,7 +3,7 @@
 > 面向新作者的完整语法指南。KAG Neo-Genesis 是脱胎于 KAG3 的全新一代
 > 现代化标签语法——保留 `[标签 参数=值]` 形态，但以声明式契约、Lua
 > 语义、可调试性和现代工具链重建。配套：`getting-started.md`（快速
-> 上手）、`command-contracts.md`（118 命令权威契约）。
+> 上手）、`command-contracts.md`（123 命令权威契约）。
 
 ---
 
@@ -223,7 +223,7 @@ Lua 侧反向驱动：`kag.jump('next.ks')` / `kag.call('*sub')` / `kag.save_gam
 ## 12. 调试与工具
 
 - **静态校验**：`lua scripts/ks_check.lua scene.ks`（契约检查，CI 门禁）
-- **语言服务**：IDE 内补全/悬停/诊断（118 契约驱动）；`Ctrl+点击` 在
+- **语言服务**：IDE 内补全/悬停/诊断（123 契约驱动）；`Ctrl+点击` 在
   `[jump]/[call]/[link]` 目标与 `*label` 定义间跳转（goto-definition），
   右键"查找所有引用"高亮全部导航点（references）
 - **确定性执行**：`require("kag.determinism").run_scene(...)` 无 GPU 跑场景
@@ -359,7 +359,7 @@ sma.register("hero", sma.load(io.open("assets/sma/hero.json"):read("*a")))
 ```
 
 运行：`lua scripts/kag_runner.lua` 或通过 IDE 的 Run 按钮驱动。
-参考完整游戏：`demo/example_game/`（The Last Letter，选择分支 → 三结局）。
+参考完整游戏：`demo/example_game/`（《单程回信》The One-Way Reply，选择分支 → 三结局）。
 
 ## 17. 本地化（i18n；Ren'Py translate 对齐）
 
@@ -552,10 +552,9 @@ scale）在 N 毫秒内从起点平滑插值到终点。较 [move]（仅 x/y）�
 
 教程见 `demo/tutorial/tutorial_16_tween.ks`。实现位于
 `scripts/kag/commands/tween.lua`（含 `tests/scripts/test_tween.lua`），
-`kag_runner` 每帧钩子（`TweenCommands.update`）已接线。⚠️ 该模块尚未登记进
-`kag/init.lua` 预加载清单，故 [tween] 在 ks_check 仍判为未知命令、运行时不可用；
-登记完成后再回填 `docs/api/command-contracts.md` 并把 tutorial_16 加入
-`web/flow.integration.test.js` 教程扫描清单，跑验证后去掉本标注。
+`kag_runner` 每帧钩子（`TweenCommands.update`）已接线，**并已登记进
+`kag/init.lua` 预加载清单（round 106）**——[tween] 已入 command-contracts
+（123 契约），ks_check 可正常识别，tutorial_16 与示例游戏均可直接使用。
 
 ## 20. 表达式运算符全表
 
@@ -580,3 +579,269 @@ TJS→Lua 翻译层（`scripts/kag/expr.lua`，字符串字面量内不翻译）
 - `[switch exp=...]` 表达式选择器按 `tostring` 等值匹配 `[case v]`（数值/布尔均可）。
 - `[eval]` 裸值表达式（无 `=` 赋值）自动包 `return`，结果存 `tf.eval_result`。
 
+
+---
+
+## 21. 命令分类速查（123 契约，8 类）
+
+> 全部命令的**权威契约**（参数/默认值/取值范围/必填）见
+> `docs/api/command-contracts.md`（自动生成，共 123 个 schema 契约）。
+> 下表按 8 个类别速查每个命令的**一句话用途**，便于按场景找命令。
+>
+> ⚠️ **两类命令**：123 个 schema 契约命令（table 中大部分）与**流程命令**
+> （`[if]`/`[else]`/`[endif]`/`[while]`/`[for]`/`[switch]`/`[jump]`/`[goto]`/`[call]`/
+> `[return]`/`[link]`/`[select]` 等，由 scheduler 原生分发 + kag3_import 的
+> FLOW_COMMANDS 表收录，不在 schema.dumpContracts() 里）。引擎运行时两者
+> 同等可用；静态校验 ks_check 对两类都识别。
+
+### 21.1 text — 文本与消息（31）
+
+| 命令 | 用途 |
+|------|------|
+| `[ch]` / `[text]` / `[nvl]` | 对话（说话人+文本）/ 旁白 / NVL 全屏累积文本 |
+| `[p]` / `[l]` / `[er]` / `[r]` / `[s]` | 分页等待 / 行内换行 / 清除消息层 / 重置 / 跳过行 |
+| `[font]` / `[pt]` / `[cps]` / `[textspeed]` | 字体 / 打字速度（ms/字 · 字每秒） |
+| `[br]` / `[hr]` | 换行 / 水平分隔线 |
+| `[ruby]` | 注音假名 |
+| `[button]` / `[endbutton]` / `[select]` / `[sel]` / `[endselect]` | 按钮 / 选择分支 |
+| `[skip]` / `[auto]` | 跳过 / 自动播放 |
+| `[nameplate]` | 说话人名牌 |
+| `[textbox]` / `[reset]` | 文本框样式 / 重置文本状态 |
+| `[voice_wait]` / `[waitforclick]` | 等语音播完 / 等点击 |
+| `[voice_off]` | 关闭角色语音 |
+| `[sprite_fade]` / `[sprite_move]` / `[sprite_scale]` / `[sprite_swap]` | 精灵家族（说话人绑定动画/换装） |
+
+### 21.2 layer — 图层与画面（17）
+
+| 命令 | 用途 |
+|------|------|
+| `[bg]` / `[fg]` / `[image]` | 背景 / 前景 / 任意图片图层 |
+| `[position]` / `[moveto]` / `[ld]` | 定位 / 移动图层 / 图层载入 |
+| `[layopt]` / `[layfade]` / `[fadeout]` | 图层选项（透明度等）/ 图层淡化 / 全屏淡出 |
+| `[cl]` | 清除图层 |
+| `[csp]` / `[csl]` / `[csd]` | 角色立绘显示 / 移动 / 清除（KAG3 兼容） |
+| `[tween]` | **声明式补间**（round 106）：x/y/alpha/scale 平滑插值 + 5 缓动（见 §19.7） |
+| `[layout]` / `[layout_slot]` / `[layout_place]` | **声明式布局**（round 107）：hbox/vbox/grid 容器计算并写图层位置 |
+
+### 21.3 audio — 音频（20）
+
+| 命令 | 用途 |
+|------|------|
+| `[playbgm]` / `[stopbgm]` / `[fadebgm]` / `[xfadebgm]` / `[playbgmstop]` | BGM 播放/停止/淡出/交叉淡化 |
+| `[playse]` / `[stopse]` / `[playstop]` | SE 播放/停止 |
+| `[playvoice]` / `[stopvoice]` / `[voice]` | 语音播放/停止/阻塞播放 |
+| `[play]` 等别名 | KAG3 兼容别名（routes to bus） |
+| `[setbgmvolume]` / `[setsevolume]` / `[setvoicevolume]` / `[fadevol]` | 总线音量设置/淡变 |
+| `[waitbgm]` / `[waitsound]` / `[waitclick]` | 等待音频/点击 |
+
+### 21.4 system — 系统与流程（32）
+
+| 命令 | 用途 |
+|------|------|
+| `[set]` / `[add]` / `[sub]` / `[mul]` / `[div]` / `[mod]` / `[inc]` / `[dec]` / `[random]` | 变量赋值 / 算术链 / 递增递减 / 随机 |
+| `[eval]` / `[emb]` / `[assert]` | Lua 行内表达式 / 输出值 / 断言 |
+| `[if]` / `[else]` / `[endif]` / `[while]` / `[endwhile]` / `[for]` / `[endfor]` / `[switch]` / `[case]` / `[default]` / `[endswitch]` | 条件 / 循环 / 多路分支（§5/§10） |
+| `[jump]` / `[goto]` / `[call]` / `[return]` / `[link]` | 跳转 / 严格别名 / 子程序调用 / 返回 / 外部场景链接 |
+| `[wait]` / `[delay]` | 阻塞等待 / 帧让步 |
+| `[notify]` | 作者吐司通知（上屏角落） |
+| `[ai_dialog]` | 游戏内 AI 对话（§18） |
+| `[ending]` / `[unlock]` / `[chapter]` / `[gallery]` / `[music]` / `[history]` | 结局 / 解锁 / 章节 / 画廊 / 音乐室 / 历史 |
+| `[replay]` | 回放录制/播放（联动视频导出） |
+| `[i18n]` | 运行时热切换语言（§17） |
+| `[sma_play]` / `[sma_anim]` / `[sma_ik]` / `[sma_variant]` / `[sma_stop]` | SMA 骨骼动画控制（§15） |
+| `[rollback]` / `[cancel]` / `[close]` | 回滚 / 取消 / 关闭 |
+
+### 21.5 save — 存档（6）
+
+| 命令 | 用途 |
+|------|------|
+| `[save]` / `[load]` | 存/读档（槽位） |
+| `[saveload]` / `[saveplace]` / `[loadplace]` / `[listsaves]` | 存档菜单 / 原地存读 / 槽位列表 |
+
+### 21.6 transition — 转场与滚动（8）
+
+| 命令 | 用途 |
+|------|------|
+| `[trans]` / `[fade]` / `[blur]` | 转场（溶解/淡入淡出/模糊） |
+| `[scroll]` / `[camera]` / `[move]` | 画面滚动 / 摄像机 / 图层移动 |
+| `[quake]` / `[vib]` | 震屏 / 消息层震动 |
+
+### 21.7 vfx — 特效与滤镜（6）
+
+| 命令 | 用途 |
+|------|------|
+| `[flash]` | 闪白 |
+| `[shake]` / `[vibrate]` | 抖动（`[vib]` 别名） |
+| `[particles]` | 粒子特效 |
+| `[vfx]` | 滤镜（grayscale 等）与 **PostFx chain**（bloom/vignette/lut/softblur，round 102） |
+| `[palette]` | LUT 色调滤镜（day/night/toggle） |
+
+### 21.8 resource / video — 资源与视频（1+2）
+
+| 命令 | 用途 |
+|------|------|
+| `[preload]` | 异步预缓存纹理/音频/场景（见 asset-pipeline.md §6.2） |
+| `[video]` / `[stopvideo]` | 播放视频 / 停止视频 |
+
+---
+
+## 22. 常用模式：五段模板
+
+> 从零写一部视觉小说的五个高频片段，各自独立可跑、可组合。
+
+### 模式 A：对话推进（基础三件套）
+
+```kag
+*start
+[bg storage="bg/classroom.png"]
+[playbgm storage="bgm/theme.ogg" volume=0.7]
+
+[ch name="Hero" text="这是第一句台词。"]
+[p]                       ; 点击继续
+[ch name="Hero" text="第二句，带打字机速度。"]
+[pt speed=30]
+[ch name="Hero" text="慢速一句。"]
+[p]
+
+[stopbgm time=500]
+[end]
+```
+
+要点：`[bg]` 先铺背景 → `[ch]` 说话 → `[p]` 分页等待；
+音频在场景头播放、尾停止；写长句避免一屏放不下。
+
+### 模式 B：选择分支 + 好感度
+
+```kag
+; 每当 +10 好感度，结局分支不同
+[set f.affection 0]
+
+[select]
+[sel text="陪她去图书馆" target=*lib]
+[sel text="说今天有事" target=*busy]
+[endselect]
+
+*lib
+[inc f.affection 10]
+[ch name="Hero" text="一个下午就这样过去了。"]
+[jump target=*check]
+
+*busy
+[ch name="Hero" text="她看起来有点失落。"]
+[jump target=*check]
+
+*check
+[if exp="f.affection >= 10"]
+[ch text="好感度 ${f.affection}：你们的关系更近了。"]
+[else]
+[ch text="好感度 ${f.affection}：似乎还有距离。"]
+[endif]
+[end]
+```
+
+要点：`[select]`...`[endselect]` 阻塞等待选择；每分支末尾 `[jump]` 到共同合并点；
+`f.*` 变量会随存档持久化。
+
+### 模式 C：存档 / 读档 / 回滚
+
+```kag
+*chapter2
+[ch name="Hero" text="第二章，先存档。"]
+[save 1]                       ; 存到槽位 1
+[listsaves]                    ; 列出全部槽位
+[rollback]                     ; token 级回滚（运行时）
+[history]                      ; 打开 backlog
+[ch name="Hero" text="读档后从这里继续。"]
+[load 2]
+[end]
+```
+
+要点：`[save N]` 裸参数 = 槽位；`[rollback]` 是 Neo-Genesis 差异化能力
+（按 token 回退，非 KAG3 的整页回滚）。
+
+### 模式 D：特效与转场组合（氛围）
+
+```kag
+; 雷雨夜：背景 + 震屏 + 闪白 + 后处理
+[bg storage="bg/hana.png"]
+[palette effect="night"]       ; LUT 夜色滤镜（缺文件安全降级）
+[flash color="#ffffff" time=200]
+[quake time=500 amplitude=8]   ; 震屏
+[vfx postfx="vignette" strength=0.6]   ; PostFx 暗角（round 102）
+[ch name="Hero" text="雨夜，雷声滚过天际。"]
+[vfx postfx="none"]            ; 关闭后处理
+[trans type="fade" time=800]   ; 淡出转场
+[end]
+```
+
+要点：LUT/后处理**缺资源/缺后端时安全降级**（不崩溃）；`[vfx postfx="none"]`
+关掉全部后处理；转场 `[trans]` 是阻塞的。
+
+### 模式 E：i18n 双语注入 + 热切换
+
+```kag
+; 行级翻译由 assets/lang/<code>.lua 提供（ks_i18n.lua 生成）
+[ch text="Welcome to the Academy."]   ; 按当前语言的 lines 表翻译
+[ch text="{greeting}, Hero!"]          ; {key} 字符串表展开
+[i18n language="ja"]                   ; 场景中途热切换（整页重译重绘）
+[ch text="Welcome to the Academy."]    ; 立即以日文显示
+[ch text="共 {items} 个条目"]          ; ⚠️ 复数键不能裸 {key}（见 §17）
+[end]
+```
+
+要点：行级翻译用内容寻址键（原文 FNV-1a），`{key}` 用字符串表；复数键必须在
+`[iscript]`/`[emb]` 里 `i18n.translate(key, { n=count })` 计算结果再注入
+（round 110 回归防范，见 §17 警告块）。
+
+---
+
+## 23. 表达式语言完整语法（TJS→Lua 管道）
+
+> 以下覆盖 `[if]`/`[while]`/`[switch exp=]`/`[eval]`/`[assert]`/`${}`/`%tbl.key%`
+> 统一表达式层的**全部语法要素**；详解见 `docs/api/kag-expression-language.md`。
+> 实现：`scripts/kag/expr.lua`（字符串字面量内不翻译，安全）。
+
+### 23.1 运算符
+
+| 类别 | 运算符 | TJS 写法 | Lua 等价 |
+|------|--------|---------|---------|
+| 算术 | 加减乘除模 | `+ - * / %` | 同左（除法 Lua 5.4 浮点） |
+| 关系 | 相等/不等 | `==` / `!=` | `==` / `~=` |
+| 关系 | 大小 | `< > <= >=` | 同左 |
+| 逻辑 | 与 | `&&` | `and` |
+| 逻辑 | 或 | `||` | `or` |
+| 逻辑 | 非 | `!` | `not` |
+| 条件 | 三元 | `cond ? a : b` | `(cond and a or b)`（布尔语义注意） |
+| 合并 | 空合并 | `a ?? b` | `a or b` |
+| 成员 | 点/索引 | `f.hp` / `arr[i]` / `tbl["k"]` | 同左（f/tf/sf/mp/lf 命名空间） |
+| 连接 | 字符串 | `+`（TJS）→ `..`（Lua） | `..` |
+
+### 23.2 变量表与可见性
+
+| 表 | 用途 | 可见范围 | 持久化 |
+|----|------|---------|--------|
+| `f.` | 游戏进度 | 全局 | ✅ 存档保存 |
+| `sf.` | 系统变量 | 全局 | ✅ 存档保存 |
+| `tf.` | 临时变量 | 全局（会话） | ❌ 存档不保存 |
+| `mp.` | 消息参数 | 当前 `[call]` 帧 | ❌ 调用帧 |
+| `lf.` | 局部变量 | 当前 `[call]` 帧栈 | ❌ 调用帧 |
+
+### 23.3 插值形式
+
+| 形式 | 示例 | 时机 |
+|------|------|------|
+| `${expr}` | `${f.gold * 2}` | 运行期求值（Lua 表达式，可任意嵌套括号/函数调用） |
+| `%tbl.key%` | `%f.flag%` | KAG3 兼容插值（两段式 tbl.key） |
+| `${tbl.key}`（无 var 前缀） | `${settings.title}` | 查全局表值（含 i18n 键） |
+
+### 23.4 关键规则
+
+- **三元对数字/字符串精确**；对布尔走 and/or 语义（`false` 的 then 分支会穿过，
+  需要时用括号比较或 `??`）。
+- 三元可出现在 `[...]` 索引与 `(...)` 组内（先内层展开）：
+  `f.arr[f.flag ? 1 : 2]`；赋值 RHS 也走全管道：`f.pick = f.flag ? 1 : 2`。
+- `[switch exp=...]` 表达式选择器按 `tostring` 等值匹配 `[case v]`（数值/布尔均可）。
+- `[eval]` 裸值表达式（无 `=` 赋值）自动包 `return`，结果存 `tf.eval_result`。
+- 字符串字面量（单引号/双引号）内的 `&&`/`||`/`!` 不翻译——安全。
+- **复杂嵌套预算**：括号嵌套 >48 层整组不翻译（运行时解析器报错）——防 O(n³)
+  挂起（round 97 修复）；单表达式复杂度有预算，超限 WARN。

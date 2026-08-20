@@ -234,8 +234,8 @@ mirage.xp3
 
 | 工具/文档 | 位置 | 状态 |
 |---|---|---|
-| xp3 解包器 | R111-A 原型 | 开发中（迁移期工具，非运行时） |
-| tlg 解码器 | R111-B 原型 | 开发中（迁移期工具，非运行时） |
+| xp3 解包器 | `tools/xp3_tool.py`（R111-A） | **可用**（round 111 完成，27 断言全绿；v2 加密索引路线图见 xp3-compat.md） |
+| tlg 解码器 | `tools/tlg2png.py`（R111-B） | **可用**（round 111 完成，38 断言全绿；详见 tlg-compat.md） |
 | .ks 转换器 | `scripts/kag3_import.lua` | 可用；`--asset-prefix` 为待裁决扩展 |
 | 静态校验 | `scripts/ks_check.lua` | 可用（CI 门禁） |
 | 资源格式 | `docs/guides/asset-pipeline.md` | 权威 |

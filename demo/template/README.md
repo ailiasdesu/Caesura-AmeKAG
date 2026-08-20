@@ -1,6 +1,6 @@
-# Caesura (AmeKAG) — New Project Template
+# Caesura (AmeKAG) — New Project Template 项目模板
 
-给你的下一部视觉小说一个**零摩擦起点**。这个模板是一个最小可运行骨架：
+给你的下一部视觉小说一个**零摩擦起点**。这个模板是最小可运行骨架：
 
 - **两个场景**（开场 + 分支结局）与**一次玩家选择**（`[select]` / `[sel]`）
 - 资产目录占位（`assets/bg|fg|bgm|se|voice` + README）
@@ -34,8 +34,8 @@ lua scripts/ks_check.lua demo/template/story.ks   # 静态契约校验（目标�
 ```
 
 改剧本就编辑 `story.ks`：加场景加标签，分支用 `[select]…[endselect]`（本模板已有示例）。
-完整的 KAG 命令参考见 `docs/api/command-contracts.md`（118 个契约命令）与
-`docs/guides/kag-language-tour.md`。
+完整的 KAG 命令参考见 `docs/api/command-contracts.md`（**123 个契约命令**，自动生成、权威）与
+`docs/guides/kag-language-tour.md`（语言速览 + 五段常用模板）。
 
 ### 3. 跑起来验证
 
@@ -44,7 +44,7 @@ lua scripts/ks_check.lua demo/template/story.ks   # 静态契约校验（目标�
 bash scripts/verify_template.sh
 
 # 只跑 headless 冒烟（跑到 [end] 即成功）
-SAMPLE_STORY="demo/template/story.ks" \\
+SAMPLE_STORY="demo/template/story.ks" \
   external/lua/lua.exe tests/scripts/sample_game_headless.lua
 ```
 
@@ -89,6 +89,14 @@ demo/template/
     └── voice/    #   语音（角色语音占位说明）
 ```
 
+---
+
+## 校验基线（与 ROADMAP-200 一致）
+
+模板验证依赖的引擎测试基线：C++ 用例 **976**（8858 断言）· Lua 主套件 **132** +
+孤儿套件 **24** · 命令契约 **123** · 教程 **16**（tutorial_01_hello → tutorial_16_tween）。
+模板自身的校验：`verify_template.sh` 要求 ks_check 零警告 + headless DONE（4/4 PASS）。
+
 ## 相关文档
 
 | 文档 | 内容 |
@@ -96,6 +104,6 @@ demo/template/
 | `docs/guides/template-quickstart.md` | 模板使用完整指南（含 GitHub template repo 启用） |
 | `docs/guides/getting-started.md` | 引擎从零构建与运行 |
 | `docs/guides/asset-pipeline.md` | 资产格式与目录规范、缺失降级 |
-| `docs/guides/kag-language-tour.md` | KAG Neo-Genesis 语言速览 |
+| `docs/guides/kag-language-tour.md` | KAG Neo-Genesis 语言速览 + 命令分类 + 五段模板 |
 | `docs/guides/sample-game-verification.md` | 示例游戏双端验证方法 |
 | `demo/example_game/` | 完整示例（三结局、i18n、SMA、画廊） |

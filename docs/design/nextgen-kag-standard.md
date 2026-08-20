@@ -59,10 +59,10 @@ Schema.define("playbgm", {
 > 循环体末尾 pop，同位置重复拼接不 pop）>100 才报错——顺序调用 1000+、大循环 2000 次迭代
 > 不再被误判为递归。
 
-## 四、命令契约迁移（当前 118 契约）
+## 四、命令契约迁移（当前 123 契约）
 
 命令契约化已从早期批次（`pt`/`wait`/`scroll`/`trans`/`playbgm`/`ch`/`text` 等 20 个）演进为**全量迁移**：
-当前 `kag/schema.lua` 注册 **118 个命令契约**（`Schema.registrySize()` 权威计数，见 `docs/api/command-contracts.md`）。
+当前 `kag/schema.lua` 注册 **123 个命令契约**（`Schema.registrySize()` 权威计数，见 `docs/api/command-contracts.md`；自动生成幂等）。
 契约类型支持 `number`/`boolean`/`string`/`list`/`enum`/`file`，约束含 `default`/`min`/`max`/`choices`/`required`/`_require_any`，
 并带 `_meta` 元数据（`category`/`blocking`/`desc`）供编辑器与文档工具消费。
 
@@ -86,7 +86,7 @@ Schema.define("playbgm", {
 
 ## 六、演进状态（2026-08-15 更新——KAG Neo-Genesis 标准已全量落地）
 
-- ✅ 剩余命令迁移：全部命令族契约化（当前 118 契约，见 §四）
+- ✅ 剩余命令迁移：全部命令族契约化（当前 123 契约，见 §四；阶段 G 新增 tween/layout 家族）
 - ✅ 契约→API 文档自动生成（schema_doc.lua → docs/api/command-contracts.md）
 - ✅ 脚本静态校验器（ks_check.lua + LPeg Cp 字节偏移 + CI 三平台门禁）
 - ✅ 表达式插值（`$f.var` + `${expr}` 完整表达式）
@@ -103,6 +103,13 @@ Schema.define("playbgm", {
 - ✅ 存读档循环连续性：`[for]`/`[while]`/`[if]`/`[switch]` 栈进入执行上下文并存档序列化，
   循环体内 `[save]`→`[load]` 恢复并续跑（旧档兼容）
 - ✅ kag3_import 宏参转换（`&N`/`&name` → `%N%`/`%name%`）+ `goto`→`jump` 别名
+- ✅ **声明式补间 `[tween]`（round 106）**：契约含 target/attr/from/to/dur/delay/ease(5 缓动)/wait；
+  from 可省=当前值、占位插值、阻塞/非阻塞双模式；ctx.tweens 管理器 + kag_runner 每帧钩子
+- ✅ **声明式布局 `[layout]`（round 107）**：hbox/vbox/grid 三容器 + [layout_slot]/[layout_place]
+  子命令（三个独立契约）；容器=计算器写现有层坐标，渲染零改动
+- ✅ **后处理 vfx postfx 枚举（round 102）**：`[vfx ... postfx=bloom|vignette|lut|softblur|none]`
+  validation-only（无 default 保 legacy）；契约 118→119
+- ✅ **契约普查 118→123**：tween + layout 家族（round 106/107）后全量重生成 command-contracts
 
 ## 七、命令重构（新一代精简）
 

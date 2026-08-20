@@ -1,214 +1,415 @@
 # Caesura (AmeKAG) — Cross-Platform Visual Novel Engine
 
-> **16 modules · 31 interfaces · 119 KAG Neo-Genesis command contracts · 0 circular dependencies**
+> **16 modules · 31 pure-virtual interfaces · 123 KAG Neo-Genesis command contracts · 0 circular dependencies**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
-> Live API census: `python scripts/api_stats.py` → `docs/api/api-stats.md`
+> Live API census: `python scripts/api_stats.py` → [docs/api/api-stats.md](docs/api/api-stats.md)
 
 <p align="center">
   <b>Platforms</b>&nbsp;🪟 Windows&nbsp;&nbsp;🍎 macOS&nbsp;&nbsp;🐧 Linux&nbsp;&nbsp;🌐 Web&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Status</b>&nbsp;✅ Tests passing&nbsp;&nbsp;·&nbsp;&nbsp;
-  <b>Contracts</b>&nbsp;119 KAG commands&nbsp;&nbsp;·&nbsp;&nbsp;
+  <b>Contracts</b>&nbsp;123 KAG commands&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Interfaces</b>&nbsp;31 pure-virtual
   <br>
-  <sub><i>文本徽章（不依赖外部 CI 服务，计数取自阶段 G 最近审计）— 测试状态见
-  <a href="docs/plans/audit/ROADMAP-200.md">ROADMAP-200</a></i></sub>
+  <sub><i>文本徽章（不依赖外部 CI 服务，计数取自 [docs/api/api-stats.md](docs/api/api-stats.md) 实时普查与阶段 G 最近审计）—
+  测试状态见 [ROADMAP-200](docs/plans/audit/ROADMAP-200.md) 门禁列</i></sub>
 </p>
 
-Caesura is an open-source galgame/visual novel engine with Live2D, 3D mini-games, and AI-assisted workflows as first-class citizens. **Native KAG Neo-Genesis scripting** — the next-generation, modernized iteration of the KAG script language (evolved from KAG3, KAG3-compatible).
+Caesura is an open-source galgame / visual novel engine with **Live2D, 3D mini-games, SMA skeletal
+animation, i18n, cloud saves and AI-assisted authoring** as first-class citizens. Its scripting
+language is **KAG Neo-Genesis** — the next-generation, modernized iteration of the KAG script
+language (evolved from KAG3, KAG3-compatible; legacy KAG3 projects can be imported and migrated).
+
+引擎自带 **16 步教程路径**（`demo/tutorial/tutorial_01_hello.ks` → `tutorial_16_tween.ks`）与一个
+**完整示例游戏《单程回信》（The One-Way Reply）**（`demo/example_game/`，三结局，约 15–18 分钟）。
 
 ---
 
-## Features
 
-- **KAG Neo-Genesis scripting** — the next-generation KAG language: 119 contract commands with declarative schemas, expression evaluator, variables, control flow, `[expr]`/`[iscript]` Lua hybrid embedding, label/choice jumps, scenes, chapter routing. See the [KAG Neo-Genesis language whitepaper](docs/design/kag-neo-genesis-language.md).
-- **Lua-first runtime** — direct `backend.*`/`layers.*` API or KAG scheduler; sandboxed strict mode with per-module whitelists
-- **Multi-backend GPU** — D3D11 + OpenGL 4.3 verified on real GPUs; Metal render path complete (embedded GLSL/DXBC/Metal shaders)
-- **Live2D Cubism 5** — D3D11 verified with zero shader warnings; OpenGL/Metal render paths implemented (SDK bundled in `thirdparty/`)
-- **Scene-level debugger** — breakpoints, step/continue, pause-driven state inspection over RPC (editor workflow)
-- **Hot scene reload** — edit `.ks` files and re-apply to the running scene without restart
-- **Mod loader** — drop-in mods with merged config, script hooks and asset overrides
-- **Recording / playback** — input capture drives auto-demo; replay → deterministic PNG frame export (`--export-replay`)
-- **Accessibility** — closed captions, TTS hook, colorblind/contrast filter presets (deuteranopia/protanopia/tritanopia/grayscale/high-contrast)
-- **Cloud saves** — pluggable providers: local, Steam Remote Storage (full Lua surface), HTTP REST endpoint with offline degrade
-- **Steamworks** — achievements, stats, rich presence, cloud list/write/read/delete/quota; unconditionally registered with safe Null defaults
-- **Mobile-ready** — SDL finger-event bridge, orientation change events, touch→mouse injection (P7)
-- **AI-assisted authoring** — local LLM integration (`[ai_dialog]`), DevCore RPC `eval`/`run`
-- **Editor host** — HTTP editor on :9876 + stdin/stdout JSON-RPC; web-editor frontend served when built
+## 引擎能力总览（Capability Overview）
 
-## Quick Start
+引擎能力按 6 个能力域组织，共 **79 项跟踪能力**（权威矩阵：
+[docs/design/engine-capability-matrix.md](docs/design/engine-capability-matrix.md)，87 项能力行含
+子项展开，79 项为顶层能力计数）。以下按域逐一说明。
 
-### Build
+### 🎨 渲染（Rendering · 10 项）
+
+bgfx 多后端 GPU 渲染（**D3D11 / OpenGL 4.3 已真机验证**，Metal 引擎侧完整、需 macOS 硬件运行时验证）；
+三层合成（BG/FG/MSG）带脏矩形优化；异步纹理加载 + 预算 + LRU 淘汰；2D GPU 粒子；视频播放
+（pl_mpeg MPEG-1 + 可选 FFmpeg）；自适应 GPU 质量监控与自动降级；FreeType 文本渲染（CJK + Ruby 注音，
+NotoSansCJKsc 整字体 786 字形实测）；转场特效（blend / wipe / 自定义 shader）；渲染到纹理 + 视口 blit；
+批量绘制协议；错误界面（ErrorUI）直接 bgfx 渲染、零 GUI 框架依赖，崩溃时也能显示错误。
+
+### 📜 脚本（Scripting · 38 项）
+
+Lua 5.4 VM（协程调度器 + 沙箱 + 指令预算防死循环）；**KAG Neo-Genesis 解析器**（123 个声明式契约命令、
+KAG3 兼容裸参数 / TJS 表达式 / 旧变量系统 / 控制流）；`[until exp timeout]` 声明式条件等待、
+`[button cond]` 条件选择（Ren'Py menu 对齐）、`[nvl]` NVL 模式、内联文本标记（`{color}`/`{size}`/`{b}`/`{i}`/`{s}`）、
+i18n 本地化管线（`{key}` token + 逐行翻译 + 中英日热切换 + 整页重绘，超 Ren'Py）、参数化宏（含嵌套宏定义）、
+标签索引 O(1) 跳转、场景级调试器（断点/单步/作用域检查）、mod 加载器、输入录制/回放（自动演示 + 帧导出 PNG → 视频）、
+无障碍（字幕、TTS 钩子、色盲/高对比滤镜）、LLM 对话（`[ai_dialog]`，OpenAI 兼容 / Ollama 实测）、
+LSP 导航（label 定义/引用）、AOT 编译与嵌套预算硬化。**123/123 契约命令全部有运行时执行覆盖**，指令预算防死循环。
+
+### 🔊 音频（Audio · 4 项）
+
+SoLoud 三总线（**BGM 交叉淡化 / Voice 打断 / SE**）；淡入淡出、音量、位置查询；3D 空间音频
+（听者位置 + 3D SE 放置）；逐 SE 句柄音量与停止控制。音频模块另含 4 槽语音池（重叠行淡出不截断）与 BGM ducking。
+
+### 📦 内容（Content · 10 项）
+
+**Live2D Cubism 5**（PNG 静态回退 + D3D11 真机验证，OpenGL/Metal 渲染路径已实现）；
+**3D 小游戏框架**（enter→update→render→leave 生命周期 + 20 API Lua 绑定）；
+加密存档（JSON + AES-256-GCM，防篡改审计见 [save-security-audit.md](docs/design/save-security-audit.md)）；
+存档 schema 迁移（v1→v5 自动升级）；**CARC 归档**（压缩 + AES-256-GCM 加密 + Ed25519 签名）；
+云存档 provider 抽象（本地 / HTTP REST 云端，离线降级）；Steamworks（成就/统计/云存档，条件编译 + Null 默认）；
+资产 provider 链（Dir → CARC 优先级 + 完整性检查）；**.xp3/.tlg 读取器原型**（round 111，KAG3 存量资产撬动，见
+[xp3-compat.md](docs/guides/xp3-compat.md) / [tlg-compat.md](docs/guides/tlg-compat.md)）；
+教程示例库（tutorial 01–16 + showcase + 完整示例游戏）。
+
+### 🛠️ 开发工具（Development · 10 项）
+
+编辑器 RPC（**HTTP :9876 + stdin/stdout JSON-RPC 双传输**，25 HTTP 端点 / 29 stdio 方法，
+owner-thread DTO 分发，传输层不持有 `lua_State*`）；结构日志（环形缓冲 + 子系统统计）；帧剖析
+（GPU 提交数 / 瞬时分配 / Lua GC）；NullJobSystem 同步测试替身；headless 无 GPU 模式；
+DevMode 棋盘格占位纹理；Lua 调试器（断点/步进/检查 + 陈旧暂停拒绝）；AI 开发助手
+（`kag/aidev.lua`，本地规则诊断 + LLM 解释/修复/生成 + IDE /api/eval 接入）；LSP 导航（Monaco provider）；
+**SMA 骨骼网格动画**（CPU 软蒙皮 + GPU compute 蒙皮（D3D11 像素级一致验证）+ 2-bone IK + E-mote 部件切换 +
+`[sma_play]`/`[sma_anim]`/`[sma_ik]` 等契约 + `sma.*` Lua 绑定）。
+
+### 🌍 平台（Platform · 7 项）
+
+跨平台（Windows MSVC / Linux GCC / macOS Clang，CI 三平台构建 + 测试）；GitHub Actions 流水线
+（Release + CPack ZIP 端到端）；多线程任务系统（优先级队列 + 主线程回调）；输入路由（KAG ↔ Game 焦点切换）；
+纹理预算自动探测（6 档 128MB–4GB）；Lua 沙箱资源配额（纹理/发射器/句柄）；**MobileAdapter**
+（SDL 手指事件桥接、方向变化事件、触摸→鼠标注入，87 单元测试；Android NDK 构建链见 [android-build.md](docs/guides/android-build.md)）。
+
+### 能力矩阵摘要（79 项，按域分类计数）
+
+| 能力域 | 计数 | 代表性能力（详见矩阵） |
+|--------|:----:|------------------------|
+| 渲染 Rendering | 10 | 多后端 GPU / 图层合成 / 粒子 / 视频 / 文本 / 转场 / RTT |
+| 脚本 Scripting | 38 | KAG 解析器 / 流程控制 / 调试器 / i18n / 宏 / 热重载 / LSP / AI |
+| 音频 Audio | 4 | 三总线 / 3D 空间 / 逐句柄控制 |
+| 内容 Content | 10 | Live2D / 3D 小游戏 / 存档加密 / CARC / 云存档 / Steam / 资产链 |
+| 开发工具 Development | 10 | 编辑器 RPC / 调试器 / AI 助手 / SMA 骨骼动画 |
+| 平台 Platform | 7 | 跨平台 / CI / 线程池 / 预算 / 配额 / Mobile |
+| **合计** | **79** | 完整状态逐项见 [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) |
+
+就绪度快照（2026-08-16 round 98 刷新，保守口径）：架构模块化 98% · 核心视觉小说可用性 74% ·
+跨平台产品发布 34%（Metal/非 Windows 真机验证与可选 SDK 尚未在发布条件验证）。
+
+---
+
+## 架构详解（Architecture）
+
+### 组合根模式（Composition Root + DI）
+
+引擎遵循严格依赖注入：**`src/main.cpp` + `src/entry/` 是唯一创建具体后端对象的组合根**，其余模块
+一律通过 `BackendRegistry` 获取接口指针：`main.cpp → 创建具体后端 → EngineConfig → Engine::init() → 注册 I* 指针进 BackendRegistry → 其余模块 getXxx()`。
+
+
+### 子系统拓扑
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Editor / automation client                  │
+└───────────────┬──────────────────────────────────────────┘
+                │ HTTP or stdin/stdout RPC DTO
+┌───────────────▼──────────────────────────────────────────┐
+│              Host transport (main.cpp)                   │
+│      RpcServer / EditorServer · no direct Lua access     │
+└───────────────┬──────────────────────────────────────────┘
+                │ owner-thread dispatcher pump
+┌───────────────▼──────────────────────────────────────────┐
+│              Engine (C++20 src/entry/)                   │
+│  render(bgfx) · audio(SoLoud) · script(Lua5.4)           │
+│  live2d(3D PBR) · minigame · storage · archive(CARC)     │
+│  platform(SDL3) · input · job · steam · debug · di        │
+└──────────────────────────────────────────────────────────┘
+```
+
+**16 个内部模块（15 个子系统库 + entry 组合根）**，运行时后端访问全部集中在 `BackendRegistry` 并通过
+**31 个纯虚接口（385 个纯虚方法）** 暴露。CMake 目标图无循环依赖；实现级依赖见
+[engine-architecture-topology.md](docs/design/engine-architecture-topology.md)。
+
+### 数据流（Lua → Scheduler → Backend）
+
+`.ks 剧本 → tokenizer → scheduler.lua（协程调度）→ kag/commands/*.lua（命令处理器 + 契约校验）→
+backend.* / layers.* / VFX.* Lua 绑定 → C++ 接口（IRenderDevice / IAudioBackend / ISaveManager …）→ BackendRegistry`。
+
+两种脚本执行模式（可混合）：**直接 API**（Lua 直接调 `backend.*` / `layers.*`，类似 Ren'Py）；
+**KAG .ks 调度**（`scheduler.lua` tokenize 后分发给命令处理器）；**KAG+Lua 混合**
+（`[eval]` / `[emb]` / `[iscript]` 内嵌 Lua，`kag.jump`/`kag.call`/`kag.save_game` 实现 Lua→KAG 回调，
+引擎侧绑定在 `src/script/bindings/`，经 `ILuaManager` 暴露给 Lua）。
+
+### 模块地图（16 模块）
+
+| # | 模块 | 角色 | 接口数 |
+|---|------|------|:-----:|
+| 1 | `render` | bgfx GPU 渲染：图层/粒子/文本/视频/GPU 恢复 | 7 |
+| 2 | `script` | Lua VM、KAG 绑定、GameState、tokenizer、scheduler | 1 |
+| 3 | `resource` | 异步资产加载、provider 链、图像解码 | 3 |
+| 4 | `live2d` | 动画后端（Cubism SDK 或 PNG 回退） | 1 |
+| 5 | `archive` | CARC 归档：AES-256-GCM + Ed25519 签名 | 3 |
+| 6 | `minigame` | 3D 小游戏场景（enter/update/render/leave） | 1 |
+| 7 | `storage` | 加密存档、schema 迁移、云同步 | 2 |
+| 8 | `audio` | SoLoud 三总线音频（BGM/Voice/SE）+ 3D 空间 | 1 |
+| 9 | `entry` | 组合根：Engine + EngineConfig + 4 阶段 init | — |
+| 10 | `di` | BackendRegistry + 纹理预算 + 沙箱配额 | 3 |
+| 11 | `debug` | 结构日志、帧剖析、子系统统计 | 1 |
+| 12 | `platform` | SDL3/Null 窗口、事件、计时、原生句柄 | 2 |
+| 13 | `rpc` | HTTP/stdio 传输 + owner-thread 命令 DTO 接口 | 3 |
+| 14 | `input` | SDL 事件路由（KAG ↔ Game 焦点切换） | 1 |
+| 15 | `job` | 多线程任务系统 + NullJobSystem mock | 1 |
+| 16 | `steam` | Steamworks 成就/统计/云存档（条件编译） | 1 |
+| | **合计** | | **31** |
+
+### 31 个纯虚接口（runtime 后端服务）
+
+| 接口 | 模块 | 实现 |
+|-------|------|------|
+| `IRenderDevice` | render | BgfxRenderDevice（D3D11/OpenGL/Metal） |
+| `ITextureManager` | render | TextureManager（bimg + stb） |
+| `ILayerManager` | render | LayerManager（BG/FG/MSG 合成） |
+| `IParticleSystem` | render | ParticleSystem（2D GPU 粒子） |
+| `IGpuMonitor` | render | GpuMonitor / NullGpuMonitor |
+| `IVideoPlayer` | render | VideoPlayer（pl_mpeg / FFmpeg） |
+| `IMeshRenderer` | render | MeshRenderer（2D 骨骼网格 / SMA 角色） |
+| `ILuaManager` | script | LuaManager（Lua 5.4，指令预算） |
+| `IAssetProvider` | resource | DirProvider / CARCProvider 链 |
+| `IAsyncLoader` | resource | AsyncLoader（工作线程解码） |
+| `IResourceGenerationTracker` | resource | GenerationTracker（热重载句柄代） |
+| `IAnimationBackend` | live2d | Live2DBackend / NullAnimationBackend |
+| `IArchiveReader` | archive | CARCReader |
+| `IArchiveWriter` | archive | CARCWriter |
+| `ICryptoEngine` | archive | CryptoEngine（AES-256-GCM + Ed25519） |
+| `IMiniGameBackend` | minigame | BgfxMiniGameBackend（预留） |
+| `ISaveManager` | storage | SaveManager（JSON、加密、schema v5） |
+| `ISaveProvider` | storage | LocalFileSaveProvider / Cloud |
+| `IAudioBackend` | audio | SoLoudAudioEngine |
+| `ITextureBudget` | di | TextureBudget（自动探测 6 档） |
+| `ISandboxQuota` | di | SandboxQuotaService（Lua 资源限额） |
+| `IDeviceLostListener` | di | GPU 资源丢失/恢复观察者 |
+| `IDebugManager` | debug | DebugManager（环形缓冲、剖析） |
+| `IPlatformBackend` | platform | SDL3PlatformBackend |
+| `IMobileAdapter` | platform | MobileAdapter（手指事件/方向/触摸→鼠标） |
+| `IEditorServer` | rpc | EditorServer（httplib，25 端点） |
+| `IRpcServer` | rpc | RpcServer（JSON-RPC） |
+| `IRpcDispatcher` | rpc | 组合根 owner-thread 分发器 |
+| `IInputRouter` | input | InputRouter（KAG/Game 焦点） |
+| `IJobSystem` | job | JobSystem / NullJobSystem |
+| `ISteamBackend` | steam | SteamBackend（条件编译） |
+
+### BackendRegistry —— 唯一访问点
+
+所有后端访问必须通过 `BackendRegistry`（`src/di/`），禁止绕过：
+
+```cpp
+// ✅ 正确
+auto* renderer = BackendRegistry::instance().getRenderDevice();
+auto* lua = BackendRegistry::instance().getLuaState();
+
+// ❌ 错误（绕过注册表）
+auto& tm = TextureManager::instance();
+auto* L = LuaManager::instance().state();
+```
+
+- `BackendRegistry` 存非拥有指针（`I*`），Engine 持有 `unique_ptr` 所有权；
+- 子系统通过 `set*()` 注册、`get*()` 访问；新后端流程：创建 `I*` 接口 → 实现 → registry 加 set/get → `Engine::init()` 注册。
+
+### 模块边界铁律（AGENTS.md §1–4 摘要，完整见 [AGENTS.md](AGENTS.md)）
+
+1. **每个模块只能通过 `api/` 子目录对外暴露符号**（`src/<module>/api/I*.h`）；
+2. **禁止模块间 include 具体实现头文件**——只允许 `I*.h`（接口必须纯虚、无数据成员）；
+3. **唯一例外**：`src/entry/` + `src/main.cpp`（组合根）可 include 具体头创建对象；
+4. **`di/BackendRegistry.h` 只 include `I*.h`**，绝不 include 具体实现；
+5. 禁止循环依赖、禁止头文件级具体类型依赖、禁止非组合根 `new` 具体后端；
+6. 耦合预算：`entry`/`di`/`script` ≤14 跨模块依赖，其余模块 ≤4（`python scripts/count_coupling.py --ci` 校验）。
+
+---
+
+## 快速开始（Quick Start）
+
+### 0. 环境要求
+
+> **工具链**：Windows 用 VS2022 + CMake 3.25+ + vcpkg；Linux (Ubuntu 24.04) 用 GCC 13+（SDL3 源码构建、FreeType、zstd、OpenSSL）；macOS 用 Xcode 15+ + Homebrew（`brew install cmake sdl3 freetype zstd openssl@3 ffmpeg`）。
+
+> **运行要求**：引擎从**项目根目录**启动（资源路径相对 CWD 解析）；仓库自带 Lua 解释器 `external/lua/lua.exe`（vendored）。
+
+### 1. 克隆
 
 ```bash
-# Windows (MSVC)
+git clone <your-fork-url> && cd "Caesura(AmeKAG)"
+```
+
+### 2. 构建（三平台）
+
+```bash
+# Windows（MSVC，主开发平台）
 cmake -B build -DCAESURA_LIVE2D=OFF
 cmake --build build --config Debug --parallel
 
-# macOS / Linux
-cmake -B build -DCAESURA_LIVE2D=OFF
+# macOS / Linux（FFmpeg 常不可用，关闭它）
+cmake -B build -DCAESURA_LIVE2D=OFF -DCAESURA_ENABLE_FFMPEG=OFF
 cmake --build build -j$(nproc)
+
+# 可选：Live2D Cubism SDK（需手动下载）
+cmake -B build -DCAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative-5-r.5"
 ```
 
-### Run Tests
+**CMake 选项**：
+
+| 选项 | 默认 | 用途 |
+|------|------|------|
+| `CAESURA_LIVE2D` | `OFF` | Live2D Cubism SDK 动画（需手动 SDK） |
+| `CAESURA_ENABLE_FFMPEG` | `ON` | 硬解视频（找不到库时回退 pl_mpeg，不阻断构建） |
+| `CAESURA_DEBUG` | Debug 开 / Release 关 | 调试日志与断言 |
+
+启动引擎：
 
 ```bash
-cd build/tests/Debug
-./CaesuraTests.exe --no-skip
+./build/Debug/CaesuraAmeKAG.exe            # 正常启动（项目根）
+./build/Debug/CaesuraAmeKAG.exe --editor   # 编辑器模式（HTTP :9876 + 隐藏 GPU 窗口）
 ```
 
-### Launch Editor
+### 3. 跑测试（四套件 + CTest）
 
-`--editor` starts the HTTP editor host on `http://localhost:9876` with a hidden GPU window. Use `--editor-stdio` for newline-delimited JSON-RPC with GPU, or `--headless` for stdio RPC without GPU.
+| 套件 | 命令（仓库根或标注目录） | 通过标准 |
+|------|--------------------------|----------|
+| C++ doctest | `cd build/tests/Debug && ./CaesuraTests.exe` | 0 failed, 0 skipped（976 用例） |
+| C++ CTest | `ctest -C Debug --test-dir build --output-on-failure` | 全过 |
+| Lua 主套件 | `external/lua/lua.exe tests/scripts/run_lua_tests.lua` | 全过（132 套件，顺序敏感） |
+| Lua 孤儿套件 | `external/lua/lua.exe tests/scripts/run_orphan_tests.lua` | 全过（24 套件，单独跑） |
+| Web vitest | `cd web && npm test` | 全过（297 用例） |
+| Editor vitest | `cd editor && npm test` | 全过（530 用例） |
+| 耦合门禁 | `python scripts/count_coupling.py --ci` | PASS（entry/di/script ≤14，其余 ≤4） |
+| Web 索引守卫 | `node web/gen-index.mjs --check` | CHECK OK（改过 `scripts/*.lua` 先重跑 gen-index） |
 
-Set the environment variable `CAESURA_EDITOR_TOKEN` to require a bearer token on every HTTP editor request (sent as `Authorization: Bearer <token>`); when unset or empty, the editor stays open to local callers (loopback trust boundary). The token is visible to same-UID processes and inherited by child processes.
+doctest 过滤器：`-tc="*Name*"`（用例名）、`-ts="*Suite*"`（套件名）、`-tce`（排除）、`-s`（显示通过）、`-d`（耗时）。
 
-### Your First KAG Script
+### 4. 跑示例游戏《单程回信》
 
-```kag
-*start
-[bg storage="scene01.png"]
-[ch name="Hero" text="Welcome to Caesura."]
-[p]
-[end]
+```bash
+# 仓库根（git bash / POSIX）
+bash scripts/verify_sample_game.sh        # 端到端验证（ks_check + headless DONE + 三结局可达，5/5 PASS）
+lua demo/example_game/entry.lua          # 直接跑（无 lua 用 external/lua/lua.exe）
 ```
 
-Save as `.ks` and execute it through the runtime. Remote `run`/`eval` currently return `unsupported_yieldable_execution` until their managed-coroutine path is implemented.
+一键打包为静态 Web 站（itch.io / GitHub Pages / Netlify）：
 
----
+```bash
+bash scripts/package_game.sh demo/example_game   # 产物在 dist/<game>/，直接上传分发
+```
 
-## 示例游戏（Sample Games）
+### 5. 跑项目模板（新游戏脚手架）
 
-引擎自带一个完整的示例游戏 **《单程回信》（The One-Way Reply）**，位于
-[`demo/example_game/`](demo/example_game/)。
+round 113 新增 `demo/template/`：最小两场景 + 一次 `[select]` 的剧本骨架 + `entry.lua` 多路径回退 +
+`assets/` 占位 + 五步指南（[template-quickstart.md](docs/guides/template-quickstart.md)）。
+
+```bash
+bash scripts/verify_template.sh           # 4/4 PASS（ks_check 零警告 + headless DONE + 两分支可达）
+bash scripts/package_game.sh demo/template   # 打包模板为 Web 站
+```
+
+复制 `demo/template/` 到新目录改 `story.ks`，就是你的第一个游戏工程。
+
+### 6. Web 播放器（浏览器里跑 KAG）
+
+`web/` 是纯前端 KAG Web 播放器（wasmoon Lua VM + vite），无需构建 C++ 引擎即可在浏览器跑 `.ks`：
+
+```bash
+cd web && npm ci          # 首次装依赖
+npm run dev:web           # 开发模式 → http://127.0.0.1:5174
+npx vite build            # 生产构建 → web/dist/
+npm test                  # vitest 套件
+```
+
+> 播放器优先加载 ks_bake 预编译 bundle（零解析启动）；`lua scripts/ks_bake.lua --dir demo --web cache/story`
+> 可重新生成以包含新示例。CI 会跑 `node web/gen-index.mjs --check` 守卫脚本索引一致性。
+
+### 7. KAG3 工程导入（可选）
+
+```bash
+lua scripts/kag3_import.lua <scene.ks>            # KAG3 → KAG Neo-Genesis
+lua scripts/kag3_import.lua --strict <scene.ks>   # 严格模式（干净退出码 0）
+lua scripts/kag3_import.lua --carc game.carc --path assets/script/main.ks   # 从 CARC 提取导入
+```
+
+详见 [kag3-import.md](docs/guides/kag3-import.md) 与 [kag3-migration.md](docs/guides/kag3-migration.md)
+（六步迁移流水线：xp3 解包 → tlg→png → 音频直用 → 导入 → 资产路径重写 → 验证）。
+
+
+## 示例游戏《单程回信》（The One-Way Reply）
+
+引擎自带一个完整的示例游戏 **《单程回信》**（`demo/example_game/`，round 101 立项 → round 105 填充完成
+→ round 110 收尾/文档）。
 
 - **类型**：现代校园 · 温情悬疑 · 短篇多结局视觉小说（约 15–18 分钟）
 - **结局**：3 个——真结局「归零」 / 好结局「同行」 / 普通结局「守约」，均以 `[ending]` 解锁画廊
-- **演示能力**：多章节流程、玩家选择与信任差分、变量/插值/表达式、参数化宏、Lua 混合、
-  双存档点、中英 i18n 热切换、转场/粒子/后处理、SMA 骨骼动画小游戏融合、backlog/跳过/自动
-- **启动**：`lua demo/example_game/entry.lua`（或 `bash scripts/package_game.sh` 一键打包为静态 Web 站）
+- **角色**：主角 / 澪（Mio）/ 潮（Ushio），8 个流程节点
+- **演示能力**：多章节流程、玩家选择与信任差分（`[if f.trust>=2]`/`[add]`/`[sub]` 线索）、
+  变量/插值/表达式（`${tf.letters}` 内插、复数表达式）、参数化宏、Lua 混合、双存档点、
+  中英 i18n 热切换（16 键 × zh/en 32 格零缺失）、转场/粒子/后处理（雷雨 flash/quake/shake/vib + LUT 调色）、
+  SMA 骨骼动画小游戏融合（`[sma_play]`/`[sma_anim]`/`[sma_variant]`/`[sma_ik]`）、backlog/跳过/自动
+- **启动**：`lua demo/example_game/entry.lua`（或 `bash scripts/package_game.sh demo/example_game` 一键打包为静态 Web 站）
 
 | 文档 | 内容 |
 |------|------|
 | [DESIGN.md](demo/example_game/DESIGN.md) | 完整设计文档：世界观、角色、8 个流程节点、三结局分流、能力展示清单（验收依据） |
 | [README.md](demo/example_game/README.md) | 快速上手：演示能力表、结构、修改剧本、静态校验命令 |
+| [sample-game-assets.md](docs/guides/sample-game-assets.md) | 资产审计：9 项直接复用 + 6 项占位安全降级 + i18n 键预留（round 105） |
+| [sample-game-verification.md](docs/guides/sample-game-verification.md) | 端到端验证设施说明 |
+| [sample-game-release.md](docs/guides/sample-game-release.md) | GitHub Releases / itch.io 双路径发布清单 |
 
-**验证**：`bash scripts/verify_sample_game.sh`（ks_check 契约校验 + headless 端到端跑通
-DONE + 三结局可达，5/5 PASS，见 [sample-game-verification.md](docs/guides/sample-game-verification.md)）。
+**验证**（`bash scripts/verify_sample_game.sh`，5/5 PASS）：
 
----
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                 Editor / automation client               │
-└────────────────────────────┬─────────────────────────────┘
-                             │ HTTP or stdin/stdout RPC DTO
-┌────────────────────────────▼─────────────────────────────┐
-│                 Host transport (main.cpp)                │
-│       RpcServer / EditorServer · no direct Lua access    │
-└────────────────────────────┬─────────────────────────────┘
-                             │ owner-thread dispatcher pump
-┌────────────────────────────▼─────────────────────────────┐
-│                 Engine (C++20 src/entry/)                │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
-│  │ render  │ │  audio   │ │  script  │ │  resource   │   │
-│  │  bgfx   │ │  SoLoud  │ │  Lua 5.4 │ │  async load │   │
-│  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
-│  │ live2d  │ │ minigame │ │ storage  │ │  archive    │   │
-│  │ Cubism  │ │  3D PBR  │ │save/load │ │ CARC+crypto │   │
-│  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
-│  │platform │ │  input   │ │   job    │ │    steam    │   │
-│  │  SDL3   │ │  router  │ │  thread  │ │  Steamworks │   │
-│  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐   │
-│  │  debug  │ │    di    │ │          │ │             │   │
-│  │log+debug│ │ registry │ │          │ │             │   │
-│  └─────────┘ └──────────┘ └──────────┘ └─────────────┘   │
-└──────────────────────────────────────────────────────────┘
-```
-
-**16 modules with runtime backend access centralized through `BackendRegistry` and 31
-pure-virtual interfaces.** The current CMake target graph has no circular dependencies;
-remaining implementation-level dependencies are tracked in the architecture topology.
-
-The engine is built as 16 internal static module libraries (15 subsystem libraries plus
-the `entry` composition root) and 15 API-only `INTERFACE` targets. Applications and tests
-link the source-free `Caesura::Engine` aggregate target; host applications and tests link
-`Caesura::Rpc` explicitly. Production sources are compiled once while the shipped artifact
-remains a single executable.
-
-### Module Map
-
-| # | Module | .cpp/.h | API | Role |
-|---|--------|---------|-----|------|
-| 1 | `render` | 20/26 | 6 | bgfx GPU rendering, layers, particles, video, GPU monitor |
-| 2 | `script` | 10/11 | 1 | Lua VM, KAG bindings, GameState, tokenizer, scheduler |
-| 3 | `resource` | 6/10 | 3 | Async asset loading, asset provider chain, image decode |
-| 4 | `live2d` | 6/9 | 1 | Animation backend (Cubism SDK or PNG fallback) |
-| 5 | `archive` | 6/10 | 3 | CARC archive format, AES-256-GCM, Ed25519 signing |
-| 6 | `minigame` | 7/8 | 1 | 3D mini-game scenes (enter/update/render/leave loop) |
-| 7 | `storage` | 3/5 | 2 | Save/load with encryption, schema migration, cloud sync |
-| 8 | `audio` | 2/3 | 1 | SoLoud 3-bus audio (BGM/Voice/SE), 3D spatial |
-| 9 | `entry` | 8/3 | — | Composition root: Engine + EngineConfig + 4-phase init |
-| 10 | `di` | 4/7 | 3 | BackendRegistry + texture budget + sandbox quota |
-| 11 | `debug` | 3/4 | 1 | Structured logging, frame profiling, subsystem stats |
-| 12 | `platform` | 3/4 | 1 | SDL3/Null window, events, timing, native handles |
-| 13 | `rpc` | 2/5 | 3 | HTTP/stdio transports plus owner-thread command DTO interface |
-| 14 | `input` | 1/2 | 1 | SDL event routing (KAG ↔ Game focus switch) |
-| 15 | `job` | 1/2 | 1 | Multi-threaded task system + NullJobSystem mock |
-| 16 | `steam` | 1/3 | 1 | Steamworks achievements, stats, cloud saves (conditional) |
+1. **ks_check** 静态契约校验（story.ks 零警告）
+2. **headless 端到端**：kag_runner 驱动全剧本跑到 `[end]`（主路径 DONE，帧预算 200000）
+3. **三结局可达性**：`ending_zero` / `ending_companion` / `ending_promise` 探针全部可达
+4. 依赖 `tests/scripts/sample_game_headless.lua`（mock callable 绑定；`is_voice_playing`/`is_bgm_playing`
+   必须返回 false，否则音频等待命令会死挂）
+5. Web 冒烟为信息性人工步骤（不在此执行）
 
 ---
 
-## 31 Abstract Interfaces
+## 教程体系（Tutorial 01–16）
 
-Runtime engine services are accessed through `BackendRegistry::instance()`. Host transport
-adapters stay outside Engine/Registry and submit self-contained DTOs through `IRpcDispatcher`.
-`main.cpp` owns `RpcServer` or `EditorServer`; neither transport holds `lua_State*`.
-Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
+16 个递进式教学剧本（`demo/tutorial/`，round 90 建成 14 个 → round 106 补 15、round 107 补 16），每个独立可跑、
+带逐行注释、经**引擎编译 + Web 播放器双重验证**。完整覆盖矩阵见
+[sample-library.md](docs/guides/sample-library.md)（含每教程所用命令明细）。
 
-| Interface | Module | Implementation |
-|-----------|--------|---------------|
-| `IRenderDevice` | render | BgfxRenderDevice (D3D11/OpenGL/Metal) |
-| `ITextureManager` | render | TextureManager (bimg + stb) |
-| `ILayerManager` | render | LayerManager (BG/FG/MSG compositing) |
-| `IParticleSystem` | render | ParticleSystem (2D GPU particles) |
-| `IGpuMonitor` | render | GpuMonitor / NullGpuMonitor |
-| `IVideoPlayer` | render | VideoPlayer (pl_mpeg / FFmpeg) |
-| `IMeshRenderer` | render | MeshRenderer (2D skeletal-mesh / SMA characters) |
-| `ILuaManager` | script | LuaManager (Lua 5.4, instruction budget) |
-| `IAssetProvider` | resource | DirProvider / CARCProvider chain |
-| `IAsyncLoader` | resource | AsyncLoader (worker-thread decode) |
-| `IResourceGenerationTracker` | resource | GenerationTracker (hot-reload handle generations) |
-| `IAnimationBackend` | live2d | Live2DBackend / NullAnimationBackend |
-| `IArchiveReader` | archive | CARCReader |
-| `IArchiveWriter` | archive | CARCWriter |
-| `ICryptoEngine` | archive | CryptoEngine (AES-256-GCM + Ed25519) |
-| `IMiniGameBackend` | minigame | BgfxMiniGameBackend (reserved) |
-| `ISaveManager` | storage | SaveManager (JSON, encrypted, schema v5) |
-| `ISaveProvider` | storage | LocalFileSaveProvider / Cloud |
-| `IAudioBackend` | audio | SoLoudAudioEngine |
-| `ITextureBudget` | di | TextureBudget (auto-detect 6 tiers) |
-| `ISandboxQuota` | di | SandboxQuotaService (Lua resource limits) |
-| `IDeviceLostListener` | di | GPU resource loss/restoration observer contract |
-| `IDebugManager` | debug | DebugManager (ring buffer, profiling) |
-| `IPlatformBackend` | platform | SDL3PlatformBackend |
-| `IMobileAdapter` | platform | MobileAdapter (SDL finger events, orientation, touch→mouse) |
-| `IEditorServer` | rpc | EditorServer (httplib, 18 endpoints) |
-| `IRpcServer` | rpc | RpcServer (JSON-RPC) |
-| `IRpcDispatcher` | rpc | Composition-root owner-thread dispatcher |
-| `IInputRouter` | input | InputRouter (KAG/Game focus) |
-| `IJobSystem` | job | JobSystem / NullJobSystem |
-| `ISteamBackend` | steam | SteamBackend (conditional compile) |
+| 步骤 | 文件 | 学习内容 |
+|:----:|------|----------|
+| 01 | [tutorial_01_hello.ks](demo/tutorial/tutorial_01_hello.ks) | 最小剧本结构：注释/命令格式/[ch]/[p]/[end] |
+| 02 | [tutorial_02_text.ks](demo/tutorial/tutorial_02_text.ks) | 文本与排版：字体/字号/打字速度/说话人/语音/滚动 |
+| 03 | [tutorial_03_layers.ks](demo/tutorial/tutorial_03_layers.ks) | 图层系统：背景/前景/立绘/位置/动画/清层 |
+| 04 | [tutorial_04_audio.ks](demo/tutorial/tutorial_04_audio.ks) | 三总线音频：BGM/SE/Voice/音量/淡入淡出/交叉淡化 |
+| 05 | [tutorial_05_branching.ks](demo/tutorial/tutorial_05_branching.ks) | 变量与流程：赋值/条件分支/标签跳转 |
+| 06 | [tutorial_06_effects.ks](demo/tutorial/tutorial_06_effects.ks) | 特效与转场：闪白/震动/溶解/结局解锁 |
+| 07 | [tutorial_07_saveload.ks](demo/tutorial/tutorial_07_saveload.ks) | 存档/读档：槽位/保存/读取/结果分支（Web 优雅降级） |
+| 08 | [tutorial_08_system_ui.ks](demo/tutorial/tutorial_08_system_ui.ks) | 系统 UI：画廊/音乐室/历史/章节选择/解锁 |
+| 09 | [tutorial_09_interpolation.ks](demo/tutorial/tutorial_09_interpolation.ks) | 文本插值与表达式：$tbl.key / %tbl.key% / ${expr} |
+| 10 | [tutorial_10_loops.ks](demo/tutorial/tutorial_10_loops.ks) | 循环控制：for / while / eval 递减（65536 迭代守卫） |
+| 11 | [tutorial_11_switch.ks](demo/tutorial/tutorial_11_switch.ks) | 多路分支：switch/case/default（KAG3 兼容） |
+| 12 | [tutorial_12_expr_combo.ks](demo/tutorial/tutorial_12_expr_combo.ks) | 表达式组合实战：三元/空合并/循环+插值 |
+| 13 | [tutorial_13_commands.ks](demo/tutorial/tutorial_13_commands.ks) | KAG3 兼容命令实战：textspeed/算术链/立绘/通知/调色 |
+| 14 | [tutorial_14_flow_timing.ks](demo/tutorial/tutorial_14_flow_timing.ks) | 计时与流程：wait/delay/混合跳转/i18n 热切换 |
+| 15 | [tutorial_15_expr_deep.ks](demo/tutorial/tutorial_15_expr_deep.ks) | 高级表达式：嵌套三元/多参函数/作用域前缀 |
+| 16 | [tutorial_16_tween.ks](demo/tutorial/tutorial_16_tween.ks) | 声明式补间 [tween]：属性插值/5 缓动/非阻塞 |
+
+运行方式（仓库根）：
+
+```bash
+external/lua/lua.exe scripts/ks_check.lua demo/tutorial/tutorial_01_hello.ks   # 单个校验
+for f in demo/tutorial/tutorial_*.ks; do external/lua/lua.exe scripts/ks_check.lua $f; done  # 全部
+```
 
 ---
 
 ## KAG Script Compatibility
 
-119 KAG Neo-Genesis commands with declarative contracts across 9 categories (generated from `docs/api/command-contracts.md`): system, text, layer, audio, transition, vfx, save, resource, video.
+**123 个 KAG Neo-Genesis 命令**（declarative contracts，类别：system / text / layer / audio /
+transition / vfx / save / resource / video / layout / tween / sma / math）——权威契约见
+[command-contracts.md](docs/api/command-contracts.md)（自动生成，含类型/默认值/范围/必需/阻塞语义）。
 
 ```kag
 *start
@@ -220,149 +421,107 @@ Every interface is a pure-virtual class in `src/<module>/api/I*.h`.
 [link target="chapter2"]
 ```
 
-See: [Command Contracts](docs/api/command-contracts.md) (auto-generated, authoritative)
+- KAG3 兼容层：裸位置参数、TJS 表达式（`&& || ! != ?:` 字符串感知翻译）、`%f.x%` 旧变量系统、
+  `[elsif]`/`[call *label]`/`[end]`→ending、`[goto]`→`jump` 别名——见 [kag-expression-language.md](docs/api/kag-expression-language.md)
+  与 [kag-language-tour.md](docs/guides/kag-language-tour.md)
+- 语言白皮书（下一代设计：命令契约/schema/变量系统/宏/i18n）→ [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md)
+- 标准定义 → [nextgen-kag-standard.md](docs/design/nextgen-kag-standard.md)
+- 运行时契约覆盖：**123/123 命令全部可执行**（round 90 起 118/118 满覆盖；round 102 +postfx、round 106 +tween、round 107 +layout 3 命令 → 123）
 
 ---
 
-## Platform Support
+## 文档索引（5 类）
 
-| Platform | Renderer | Build | CI | Notes |
-|----------|----------|:-----:|:--:|-------|
-| Windows (MSVC) | D3D11 | ✓ | ✓ | Primary dev platform |
-| Linux (GCC) | OpenGL | ✓ | ✓ | Source-build SDL3 |
-| macOS (Clang) | Metal | ✓ | ✓ | Homebrew deps |
+> 文档按用途分 5 类，**共 125 个 markdown 文档**；分类规则见 [AGENTS.md §12](AGENTS.md#12-文档分类)。
+> 阶段 G 新增文档以 **🆕** 标记。
 
-CI workflow: `.github/workflows/ci.yml` — build + test on all 3 platforms.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Language | C++20 |
-| Build | CMake 3.25+ |
-| Rendering | bgfx (D3D11 / OpenGL / Metal) |
-| Windowing | SDL 3.4 |
-| Audio | SoLoud (BGM / Voice / SE buses) |
-| Scripting | Lua 5.4 + sandbox + instruction budget |
-| Text | FreeType + ASCII fallback atlas (CJK font asset not bundled) |
-| Crypto | BCrypt (Win) / OpenSSL (Unix) |
-| Networking | cpp-httplib (HTTP), nlohmann/json |
-| Video | pl_mpeg (MPEG-1) + FFmpeg (optional) |
-| Live2D | Cubism 5 SDK (optional, not bundled) |
-| Archive | CARC format (AES-256-GCM + Ed25519) |
-| Testing | doctest + CTest (use current fresh-build output) |
-| Editor | HTTP on `--editor`; stdio RPC on `--editor-stdio` / `--headless` |
-
----
-
-## Directory Structure
-
-```
-Caesura(AmeKAG)/
-├── src/                    C++ engine (84 .cpp)
-│   ├── archive/            CARC format + crypto
-│   ├── audio/              SoLoud backend
-│   ├── debug/              Logging + profiling
-│   ├── di/                 BackendRegistry + quotas
-│   ├── entry/              Engine composition root
-│   ├── input/              SDL event routing
-│   ├── job/                Thread pool
-│   ├── live2d/             Animation backends
-│   ├── minigame/           3D mini-game framework
-│   ├── platform/           SDL3 window/events
-│   ├── render/             bgfx GPU rendering
-│   ├── resource/           Asset loading pipeline
-│   ├── rpc/                HTTP/RPC servers
-│   ├── script/             Lua VM + KAG bindings
-│   ├── steam/              Steamworks (conditional)
-│   └── storage/            Save/load system
-├── scripts/                Lua runtime (kag/, tokenizer, scheduler)
-├── tests/                  C++ 976 用例 · Lua 131 套件 + 24 孤儿 · Web 297 · Editor 530（阶段 G round 108-109 基线）
-│   └── mocks/              NullJobSystem for synchronous testing
-├── demo/                   Sample library（tutorial 01–16 + showcase + example_game + sma_demo）
-├── docs/
-│   ├── api/                Interface docs (Lua, KAG, C++, RPC, API statistics)
-│   ├── design/             Architecture topology, safety, capability matrix
-│   ├── guides/             Getting started, asset pipeline, sample library, packaging UX
-│   └── plans/              Execution plans and summaries
-├── external/               3rd-party (bgfx, SDL3, SoLoud, Lua, FreeType...)
-├── assets/                 Game assets
-├── build/                  CMake build output
-└── AGENTS.md               Agent constitutional constraints
-```
-
----
-
-## Documentation Index
-
-> 文档按用途分 5 类，规则见 [AGENTS.md §12](AGENTS.md#12-文档分类)。阶段 G 新增文档以 **🆕** 标记。
-
-### api/ — API 参考（自动生成文档为权威）
+### api/ — API 参考（8 篇，自动生成文档为权威）
 
 | 文件 | 内容 |
 |------|------|
-| [command-contracts.md](docs/api/command-contracts.md) | 119 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
-| [lua-modules.md](docs/api/lua-modules.md) | Lua 模块 API 参考 |
-| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | 全部 31 个 C++ 纯虚接口定义 |
-| [editor-api-reference.md](docs/api/editor-api-reference.md) | 编辑器 RPC 端点参考 |
+| [command-contracts.md](docs/api/command-contracts.md) | **123 个 KAG Neo-Genesis 命令**的声明式契约参考（自动生成，权威） |
+| [lua-modules.md](docs/api/lua-modules.md) | Lua 模块 API 参考（154 个绑定函数） |
+| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | 全部 31 个 C++ 纯虚接口定义（385 方法） |
+| [editor-api-reference.md](docs/api/editor-api-reference.md) | 编辑器 RPC 端点参考（25 HTTP / 29 stdio） |
 | 🆕 [scene-builder-rpc-bridge.md](docs/api/scene-builder-rpc-bridge.md) | Scene Builder 面板 ↔ 引擎 RPC 桥接手册（round 108） |
-| [api-stats.md](docs/api/api-stats.md) | 实时 API 普查（自动生成） |
+| [api-stats.md](docs/api/api-stats.md) | 实时 API 普查（`python scripts/api_stats.py` 生成） |
 | [kag-commands.md](docs/api/kag-commands.md) | 已弃用的 KAG3 兼容参考（被 command-contracts.md 取代） |
 | [kag-expression-language.md](docs/api/kag-expression-language.md) | `[if]`/`[eval]`/`${}` 表达式语法参考 |
 
-### design/ — 架构与设计文档
+### design/ — 架构与设计文档（14 篇）
 
 | 文件 | 内容 |
 |------|------|
 | [engine-architecture-topology.md](docs/design/engine-architecture-topology.md) | 引擎架构拓扑说明（16 模块 + 数据流） |
-| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | 79 项能力的完成状态矩阵 |
+| [engine-capability-matrix.md](docs/design/engine-capability-matrix.md) | **79 项能力**的完成状态矩阵 |
 | [engine-safety-and-qa-mechanisms.md](docs/design/engine-safety-and-qa-mechanisms.md) | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | [engine-topology-mermaid.md](docs/design/engine-topology-mermaid.md) | Mermaid 架构拓扑图源码 |
 | [backend-registry-dependency-guide.md](docs/design/backend-registry-dependency-guide.md) | BackendRegistry 依赖矩阵与使用规范 |
 | [nextgen-kag-standard.md](docs/design/nextgen-kag-standard.md) | KAG Neo-Genesis 标准定义 |
-| [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md) | KAG Neo-Genesis 语言白皮书（下一代设计、KAG3 演变） |
-| [engine-performance-baseline.md](docs/design/engine-performance-baseline.md) | 性能基线（round 101–109 持续刷新：大型资源压测 / Web 帧率预算 / bundle vs source） |
-| 🆕 [save-security-audit.md](docs/design/save-security-audit.md) | 存档防篡改审计：AES-GCM 覆盖、nonce 复用、回滚防护（round 104） |
+| [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md) | KAG Neo-Genesis 语言白皮书 |
+| [engine-performance-baseline.md](docs/design/engine-performance-baseline.md) | 性能基线（round 101–109 刷新：大型资源压测/Web 帧率/bundle vs source） |
+| 🆕 [save-security-audit.md](docs/design/save-security-audit.md) | 存档防篡改审计：AES-GCM 覆盖/nonce 复用/回滚防护（round 104） |
 | [engine-market-comparison.md](docs/design/engine-market-comparison.md) | 2026-08-03 市场对比（历史快照） |
 | [engine-market-analysis-2026-08-06.md](docs/design/engine-market-analysis-2026-08-06.md) | 2026-08-06 市场分析（数据更新版） |
+| [engine-market-analysis-100-rounds.md](docs/design/engine-market-analysis-100-rounds.md) | 100 轮市场分析（阶段 G 依据） |
+| [engine-market-research-japanese-vn-engines-2026.md](docs/design/engine-market-research-japanese-vn-engines-2026.md) | 2026 日本 VN 引擎市场调研 |
+| [skeletal-mesh-animation.md](docs/design/skeletal-mesh-animation.md) | SMA 骨骼网格动画设计 |
 
-### guides/ — 用户与开发者指南
+### guides/ — 用户与开发者指南（22 篇）
 
 | 文件 | 内容 |
 |------|------|
-| [getting-started.md](docs/guides/getting-started.md) | 从克隆到 Demo 可跑的入门指南 |
-| [sample-library.md](docs/guides/sample-library.md) | **示例库总览**：已收录示例 + 教程路径 01–16 + 覆盖矩阵 |
+| [getting-started.md](docs/guides/getting-started.md) | 从克隆到 Demo 可跑的入门指南（含 Smoke 清单） |
+| [sample-library.md](docs/guides/sample-library.md) | 示例库总览 + 教程路径 01–16 + 覆盖矩阵 |
+| [community.md](docs/guides/community.md) | 社区入口与学习路径（Discussions 话题/发布入口） |
 | [asset-pipeline.md](docs/guides/asset-pipeline.md) | 支持的资源格式与目录规范 |
-| [carc-packaging.md](docs/guides/carc-packaging.md) | CARC 打包格式与工具使用 |
+| [carc-packaging.md](docs/guides/carc-packaging.md) | CARC 打包格式（Header 64B/FileEntry 116B/Trailer 96B）与工具 |
 | [live2d-setup.md](docs/guides/live2d-setup.md) | Cubism SDK 集成步骤 |
 | [kag3-import.md](docs/guides/kag3-import.md) | KAG3 工程导入 |
+| [kag3-migration.md](docs/guides/kag3-migration.md) | KAG3 完整迁移流水线（六步：xp3/tlg/资产重写） |
 | [kag-language-tour.md](docs/guides/kag-language-tour.md) | KAG Neo-Genesis 语言速查 |
+| [i18n.md](docs/guides/i18n.md) | i18n 本地化工作流（ks_i18n 提取/回填/门禁） |
 | 🆕 [metal-readiness.md](docs/guides/metal-readiness.md) | Metal 渲染路径就绪度审计（round 103） |
 | 🆕 [android-build.md](docs/guides/android-build.md) | Android（NDK/arm64-v8a）构建链（round 103） |
 | 🆕 [cross-platform-verification.md](docs/guides/cross-platform-verification.md) | 三平台 × 能力域验证矩阵（round 103） |
-| 🆕 [sample-game-assets.md](docs/guides/sample-game-assets.md) | 示例游戏《单程回信》资产审计与 i18n 键预留（round 105） |
+| 🆕 [mobile-pipeline.md](docs/guides/mobile-pipeline.md) | 移动端管线（MobileAdapter） |
+| 🆕 [sample-game-assets.md](docs/guides/sample-game-assets.md) | 示例游戏资产审计与 i18n 键预留（round 105） |
 | 🆕 [sample-game-verification.md](docs/guides/sample-game-verification.md) | 示例游戏端到端验证设施（round 105） |
+| 🆕 [sample-game-release.md](docs/guides/sample-game-release.md) | 示例游戏发布清单（GitHub Releases / itch.io） |
 | 🆕 [packaging-ux.md](docs/guides/packaging-ux.md) | 一键打包分发：itch.io / GitHub Pages / Netlify（round 108） |
+| 🆕 [template-quickstart.md](docs/guides/template-quickstart.md) | 项目模板五步指南（round 113） |
+| 🆕 [release-process.md](docs/guides/release-process.md) | 发版流程（版本/发布/分发） |
+| 🆕 [xp3-compat.md](docs/guides/xp3-compat.md) | .xp3 归档格式兼容说明（round 111） |
+| 🆕 [tlg-compat.md](docs/guides/tlg-compat.md) | .tlg5/6 图像格式兼容说明（round 111） |
 
-### plans/ — 执行记录与当前计划（按日期命名）
+### plans/ — 执行记录与当前计划（70 篇，按日期命名）
 
 | 文件 | 内容 |
 |------|------|
-| [2026-08-16-021-delivery-handoff.md](docs/plans/2026-08-16-021-delivery-handoff.md) | **阶段 F 收官交接**（round 100 / round 99 完成态基线） |
-| [ROADMAP-200.md](docs/plans/audit/ROADMAP-200.md) | **阶段 G 路线图**（round 101–，产品化：真机验证/后处理/SMA/示例游戏/打包分发） |
-| [2026-08-12-004-generation-gap-roadmap.md](docs/plans/2026-08-12-004-generation-gap-roadmap.md) | 代差路线图（五大战役，权威规划） |
+| [ROADMAP-200.md](docs/plans/audit/ROADMAP-200.md) | **阶段 G 路线图**（round 101–，产品化：真机验证/后处理/SMA/示例游戏/打包/模板/发布） |
 | [ROADMAP-100.md](docs/plans/audit/ROADMAP-100.md) | 100 轮冲刺轮次记录（round 1–100，权威） |
+| [2026-08-16-021-delivery-handoff.md](docs/plans/2026-08-16-021-delivery-handoff.md) | 阶段 F 收官交接（round 100 / round 99 完成态基线） |
+| [2026-08-12-004-generation-gap-roadmap.md](docs/plans/2026-08-12-004-generation-gap-roadmap.md) | 代差路线图（五大战役，权威规划） |
+| [2026-06-17-001-feat-engine-stability-hardening-plan.md](docs/plans/2026-06-17-001-feat-engine-stability-hardening-plan.md) | 引擎稳定性加固计划 |
+| [2026-06-18-galgame-core-readiness-audit.md](docs/plans/2026-06-18-galgame-core-readiness-audit.md) | Galgame 核心就绪度排查方案 |
+| [2026-07-02-architecture-hardening-summary.md](docs/plans/2026-07-02-architecture-hardening-summary.md) | 架构硬化执行总结 |
+| [2026-07-03-continued-hardening-summary.md](docs/plans/2026-07-03-continued-hardening-summary.md) | 后续架构硬化总结 |
+| [2026-07-16-001-modular-static-library-migration-summary.md](docs/plans/2026-07-16-001-modular-static-library-migration-summary.md) | 模块静态库架构迁移总结 |
 
-### solutions/ — 经验与模式（YAML frontmatter 可搜索）
+> 其余 ~60 篇为逐轮交接/计划（`YYYY-MM-DD-NNN-描述.md`），完整历史与每轮门禁记录见 `docs/plans/` 与 `docs/plans/audit/`。
+
+### solutions/ — 经验与模式（9 篇，YAML frontmatter 可搜索）
 
 | 文件 | 内容 |
 |------|------|
 | [architecture-patterns/engine-constructor-sigsegv-testing.md](docs/solutions/architecture-patterns/engine-constructor-sigsegv-testing.md) | Engine 构造崩溃的 NullGpuMonitor 解决模式 |
 | [architecture-patterns/header-only-to-instance-class.md](docs/solutions/architecture-patterns/header-only-to-instance-class.md) | 头文件内联类重构为实例类模式 |
+| [architecture-patterns/galgame-engine-readiness-audit.md](docs/solutions/architecture-patterns/galgame-engine-readiness-audit.md) | Galgame 引擎就绪度审计 |
+| [architecture-patterns/gpu-api-guard-before-bgfx-init.md](docs/solutions/architecture-patterns/gpu-api-guard-before-bgfx-init.md) | bgfx init 前 GPU API 守卫 |
 | [build-errors/clean-build-include-path.md](docs/solutions/build-errors/clean-build-include-path.md) | 全量构建 include 路径修复模式 |
+| [build-errors/bgfx-shader-binary-repack.md](docs/solutions/build-errors/bgfx-shader-binary-repack.md) | bgfx 着色器二进制重打包 |
 | [runtime-crashes/bgfx-predefined-uniform-name-conflict.md](docs/solutions/runtime-crashes/bgfx-predefined-uniform-name-conflict.md) | bgfx 预定义 uniform 命名冲突 |
+| [kag-language/kag-neogenesis-modernization.md](docs/solutions/kag-language/kag-neogenesis-modernization.md) | KAG Neo-Genesis 现代化历程 |
 | [deferred-gpu-tests.md](docs/solutions/deferred-gpu-tests.md) | 无 GPU 环境下无法覆盖的测试项清单 |
 
 ---
@@ -374,36 +533,103 @@ Caesura(AmeKAG)/
 | 路径 | 主题 | 验证状态 |
 |------|------|----------|
 | [demo/example_game/](demo/example_game/) | 《单程回信》完整示例游戏（15–18 分钟，三结局 + SMA + i18n） | ✅ headless E2E 5/5 PASS（DONE + 三结局可达），ks_check 零警告 |
-| [demo/tutorial/](demo/tutorial/) | 教程路径 **01–16**：从最小剧本到声明式补间 [tween]（递进式教学，每例独立可跑） | ✅ 引擎 tokenize/compile + Web 播放器双验证，ks_bake 通过 |
+| [demo/template/](demo/template/) | 新游戏项目模板（最小两场景 + [select] + entry 多路径） | ✅ verify_template 4/4 PASS，package_game 打包成功 |
+| [demo/tutorial/](demo/tutorial/) | 教程路径 **01–16**：从最小剧本到声明式补间 [tween] | ✅ 引擎 tokenize/compile + Web 播放器双验证，ks_bake 通过 |
 | [demo/showcase.ks](demo/showcase.ks) | Command Showcase：26 个命令全展示 | ✅ 引擎 tokenize/compile + Web 播放器（DONE:53 + ending 解锁） |
 | [demo/galgame_demo.ks](demo/galgame_demo.ks) | 核心 VN 流程演示（bg/ch/playbgm/voice/sprite/ending） | ✅ Web flow 集成测试（round 109 部署默认 game） |
 | [demo/full_pipeline_demo.ks](demo/full_pipeline_demo.ks) | 全管线流程（资产+脚本+播放） | ✅ ks_bake bundle |
 | [demo/sma_demo.ks](demo/sma_demo.ks) | SMA 骨骼动画命令演示 | ✅ ks_bake bundle |
 
-**示例游戏详情**：《单程回信》DESIGN/README 见上文「示例游戏」节；教程 01–16 的学习内容与所用命令表见 sample-library.md。
+---
+
+## Platform Support
+
+| 平台 | 渲染 | 构建 | CI | 备注 |
+|----------|----------|:----:|:---:|------|
+| Windows (MSVC) | D3D11 | ✓ | ✓ | 主开发平台；D3D11 + OpenGL 4.3 真机像素验证 |
+| Linux (GCC) | OpenGL | ✓ | ✓ | SDL3 源码构建 |
+| macOS (Clang) | Metal | ✓ | ✓ | Metal 引擎侧完整，运行时验证需 macOS 硬件 |
+| Web | Canvas (wasmoon) | — | ✓ | 纯前端播放器，`web/` + ks_bake bundle |
+
+CI 工作流：`.github/workflows/ci.yml`（Windows MSVC Debug+Release、macOS Clang、Linux GCC；Linux 跑耦合计数；Release 经 CPack 打包 ZIP）。
+
+## Tech Stack
+
+| 层 | 技术 |
+|-----|------|
+| 语言 | C++20 |
+| 构建 | CMake 3.25+ |
+| 渲染 | bgfx（D3D11 / OpenGL / Metal） |
+| 窗口 | SDL 3.4 |
+| 音频 | SoLoud（BGM / Voice / SE 总线） |
+| 脚本 | Lua 5.4 + 沙箱 + 指令预算（web: wasmoon） |
+| 文本 | FreeType + CJK（NotoSansCJKsc） |
+| 加密 | BCrypt/OpenSSL；AES-256-GCM + Ed25519 |
+| 网络 | cpp-httplib、nlohmann/json |
+| 视频 | pl_mpeg (MPEG-1) + FFmpeg（可选） |
+| Live2D | Cubism 5 SDK（可选，thirdparty/） |
+| 归档 | CARC（压缩 + 加密 + 签名） |
+| 测试 | doctest + CTest + Lua + vitest |
+| 编辑器 | HTTP :9876 / stdio JSON-RPC |
 
 ---
 
 ## 社区与支持（Community & Support）
 
-想提问、晒作品、参与引擎开发还是分享创作心得？社区主阵地是 **GitHub Discussions**
-（对话）与 **Issues**（Bug / 功能追踪）。完整入口、话题分类与学习路径见
-**[docs/guides/community.md](docs/guides/community.md)**。
+主阵地是 **GitHub Discussions**（对话）与 **Issues**（Bug / 功能追踪）。完整入口、话题分类与
+学习路径见 [docs/guides/community.md](docs/guides/community.md)。
 
 - **💬 提问 / 求助** — Discussions「提问」（先看 [getting-started](docs/guides/getting-started.md) 与已有讨论）
 - **🎨 作品展示** — Discussions「作品展示」：用引擎做的游戏 / 场景 / 立绘
 - **🔧 引擎开发** — Discussions「引擎开发」：接口 / 渲染 / 脚本 / 构建
 - **✍️ 内容创作** — Discussions「内容创作」：剧本写作 / 美术音频 / 经验
-- **🐛 Bug / 功能请求** — Issues（见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 Issue 模板）
-- **🚀 发布作品** — `bash scripts/package_game.sh` 一键打包为静态站 → itch.io / GitHub Releases / GitHub Pages（见 [packaging-ux.md](docs/guides/packaging-ux.md)）
+- **🚀 发布与打包** — Discussions「发布与打包」：package_game.sh / itch / GitHub Pages
+- **🐛 Bug / 功能请求** — Issues（[bug_report](.github/ISSUE_TEMPLATE/bug_report.md) / [feature_request](.github/ISSUE_TEMPLATE/feature_request.md) 模板）
+- **🚀 发布作品** — `bash scripts/package_game.sh` 一键打包为静态站 → itch.io / GitHub Releases / GitHub Pages
 
 > **想参与贡献？** 从 [CONTRIBUTING.md](CONTRIBUTING.md) 开始：Fork → 分支 → 语义提交 → PR
-> （合并门禁：全量构建零错误 + C++ / Lua / Web / Editor 四套件测试全绿 + 耦合门禁）。
+> （合并门禁：全量构建零错误 + C++ / Lua / Web / Editor 四套件测试全绿 + 耦合门禁 + 索引守卫）。
+> 贡献方式不仅限于代码——优质教程、示例游戏、美术/音频素材同样是贡献。
+
+---
+
+## 项目状态与路线图（Project Status & Roadmap）
+
+### 里程碑
+
+- **round 1–100（100 轮冲刺）**：引擎核心从零到功能完整（权威轮次记录：[ROADMAP-100.md](docs/plans/audit/ROADMAP-100.md)）
+- **round 101 起「阶段 G：产品化」**：真机验证 / 后处理特效栈 / SMA 骨骼动画 / 声明式布局与补间 / 示例游戏《单程回信》/ 一键打包分发 / 项目模板 / KAG3 存量资产（xp3/tlg）/ 社区文档 / v1.0.0 发布准备（[ROADMAP-200.md](docs/plans/audit/ROADMAP-200.md)）
+- **v1.0.0 发布准备（round 113）**：CMake 版本对齐 1.0.0、CHANGELOG v1.0.0 段、发布清单。
+
+### 当前基线（阶段 G round 108–113 门禁实测）
+
+| 指标 | 数值 |
+|------|------|
+| C++ 接口 | **31** 纯虚接口 / **385** 纯虚方法 |
+| KAG 命令契约 | **123**（多类别，自动生成权威） |
+| Lua 绑定函数 | **154**（11 个绑定文件） |
+| RPC 表面 | **25** HTTP 端点 + **29** stdio JSON-RPC 方法 |
+| Lua 运行时脚本 | **74**（scripts/，不含 demo/check） |
+| 能力矩阵 | **79** 项 / 6 域 |
+| 测试 · C++ | **976** 用例（8858 断言，doctest 全绿） |
+| 测试 · Lua | **132** 主套件 + **24** 孤儿套件（全绿） |
+| 测试 · Web | **297** 用例（vitest，20 文件） |
+| 测试 · Editor | **530** 用例（vitest 全绿） |
+| 耦合门禁 | PASS（entry/di/script ≤14，其余 ≤4） |
+| CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP） |
+| 示例库 | tutorial 01–16 + showcase + galgame/full_pipeline/sma + example_game + template |
+| 提交统计 | 1818 commits（round 113 基准：fix 628 / feat 327 / docs 301 / test 292） |
+
+> 以上数字为最近一次全量门禁实测（阶段 G round 108–113）；实时口径见
+> [api-stats.md](docs/api/api-stats.md)（API 表面）与 ROADMAP-200 各轮门禁列。若发现不一致，
+> 请运行 `python scripts/api_stats.py` 重新生成 API 普查。
+
+---
 
 ## License
 
-Caesura (AmeKAG) — Copyright (c) 2025-2026 AiliasDesu. MIT License.
+Caesura (AmeKAG) — Copyright (c) 2025-2026 AiliasDesu. [MIT License](LICENSE).
 
-Third-party libraries retain their original copyrights: bgfx (BSD-2), SDL3 (zlib), SoLoud (zlib), Lua 5.4 (MIT), FreeType (FTL), zstd (BSD), nlohmann/json (MIT), ed25519 (CC0), stb (MIT/PD), pl_mpeg (MIT), cpp-httplib (MIT), doctest (MIT).
+第三方库保留其原始版权：bgfx (BSD-2)、SDL3 (zlib)、SoLoud (zlib)、Lua 5.4 (MIT)、FreeType (FTL)、zstd (BSD)、nlohmann/json (MIT)、ed25519 (CC0)、stb (MIT/PD)、pl_mpeg (MIT)、cpp-httplib (MIT)、doctest (MIT)。
 
-Live2D Cubism SDK is proprietary software by Live2D Inc. — users download separately.
+**Live2D Cubism SDK 为 Live2D Inc. 的专有软件**——需单独下载，不随仓库分发。

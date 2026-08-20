@@ -54,10 +54,11 @@
     加密/解密，密钥未设或数据不以 `CAES` 开头则按明文往返（跨版本兼容）。
   - schema 迁移链：`v1→v2`(playtime)→`v3`(minigame)→`v4`(live2d)→`v5`(editor)，
     读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`）。
-- **测试基线（round-88 审计口径）**：C++ doctest `816/816` 用例
-  （`6117` 断言）/ Lua 主套件 `124/124` + 孤儿 `18/18` / web `175/175` /
-  editor `368/368` / ctest `10/10`（+AI smoke 跳过）/ 耦合检查
-  （`python scripts/count_coupling.py --ci`）与 api-stats 重生成全绿为合并门槛。
+- **测试基线（阶段 G 终态 / round 113 口径，round 114 终验复核）**：C++ doctest
+  `976/976` 用例（`8858` 断言）/ Lua 主套件 `132/132` + 孤儿 `24/24` /
+  web `297/297`（20 文件）/ editor `530/530` / KAG 契约 `123` /
+  ctest `10/10`（+AI smoke 跳过）/ 覆盖 `PASS` / 耦合检查
+  （`python scripts/count_coupling.py --ci`）与 api-stats 重生成幂等全绿为合并门槛。
 
 ## 5. 相关文档
 

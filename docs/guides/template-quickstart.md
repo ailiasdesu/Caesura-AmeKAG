@@ -52,7 +52,7 @@ cp -r demo/template my_game
 [end]
 ```
 
-命令全集见 `docs/api/command-contracts.md`（118 契约命令）；语言速览见
+命令全集见 `docs/api/command-contracts.md`（123 契约命令）；语言速览见
 `docs/guides/kag-language-tour.md`。
 
 ### 2.3 跑起来 & 校验

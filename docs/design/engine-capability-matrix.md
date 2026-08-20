@@ -1,6 +1,6 @@
 # Engine Capability Matrix (Mermaid)
 
-> 2026-08-16 readiness audit (refreshed to round 98): this matrix tracks 79 code-level capability surfaces (existing rows refreshed through round 98; round 97-98 script robustness: expr nesting budget + schema coerce semantics corrections).
+> 2026-08-16 readiness audit (阶段 G 终态 / refreshed to round 113): this matrix tracks **82 code-level capability surfaces** (existing rows refreshed through round 98; round 97-98 script robustness: expr nesting budget + schema coerce semantics corrections; **round 102-113 stage G: post-processing stack [R11], declarative tween [S13], declarative layout [S14], Scene Builder, i18n/迁移工具链以说明方式纳入（见文末「工具链边界」）**).
 > A present interface or conditional implementation is not counted as release validation.
 
 ## Readiness Snapshot
@@ -27,17 +27,20 @@ graph LR
         r8["Transition Effects<br/>blend · wipe · custom"]
         r9["Render-to-Texture<br/>offscreen · viewport blit"]
         r10["Batch Protocol<br/>deferred GPU submit"]
+        r11["Post-Processing Chain<br/>bloom · vignette · LUT · softblur"]
     end
 
     subgraph "Scripting"
         s1["Lua 5.4 VM<br/>coroutine · sandbox"]
-        s2["KAG Neo-Genesis Parser<br/>tokenizer · 117 commands"]
+        s2["KAG Neo-Genesis Parser<br/>tokenizer · 123 commands"]
         s3["Flow Control<br/>if/jump/call/switch/macro"]
         s4["Instruction Budget<br/>anti-infinite-loop"]
         s5["Hot Reload<br/>script watch · live edit"]
         s6["Error Recovery<br/>pcall guard · ErrorUI"]
         s7["Conditional Wait<br/>[until exp timeout]"]
         s8["Conditional Choices<br/>[button cond]"]
+        s13["Declarative Tween<br/>[tween] · 5 easings"]
+        s14["Declarative Layout<br/>[layout] hbox/vbox/grid"]
     end
 
     subgraph "Audio"
@@ -82,7 +85,7 @@ graph LR
 
 ## Capability Breakdown
 
-### Rendering (10 capabilities)
+### Rendering (11 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
@@ -96,19 +99,20 @@ graph LR
 | R8 | Transition effects (blend, wipe, custom shader) | `IRenderDevice` | ✓ blend/wipe/custom-shader paths; Transition program compiled on D3D11 + OpenGL 4.3, demo flash+crossfade rendered on both backends (2026-08-06) |
 | R9 | Render-to-texture with viewport blit | `IRenderDevice` | ✓ |
 | R10 | Batch draw-call protocol for multi-layer scenes | `IRenderDevice` | ✓ |
+| R11 | Post-processing chain (bloom / vignette / LUT color grade / soft blur; redirection of VIEW_MAIN to a scene RTT + per-stage full-screen passes over a ping-pong scratch-RTT pool; bloom multi-pass bright/downsample/blur/additive; fxc-compiled DXBC embedded, GL/Metal/Vulkan constant-copy degrade; command surface `[vfx ... postfx=bloom|vignette|lut|softblur|none]` + `Render.set_postfx` family) | `IRenderDevice` (PostFxKind/PostFxParams + createPostFx/setPostFxParams/destroyPostFx/clearPostFx/isPostFxActive/isPostFxSupported) | ✓ (round 102; Null/headless full degrade; D3D11 四段 program READY 冒烟验证于 round 114 发布终验; GL/Metal/Vulkan 恒等降级不空程序) |
 
-### Scripting (38 capabilities)
+### Scripting (40 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | S1 | Lua 5.4 VM with coroutine-based scheduler | `ILuaManager` | ✓ |
-| S2 | KAG Neo-Genesis parser (118 contract commands, 9 categories) | Lua tokenizer | ✓ |
+| S2 | KAG Neo-Genesis parser (123 contract commands, 9 categories) | Lua tokenizer | ✓ |
 | S2a | KAG3 bare positional args (13 families, 15 commands: delay/wait/se/voice/play/jump/call/link/unlock/macro/erasemacro/save/load/gallery/ending) | tokenizer + scheduler | ✓ |
 | S2d | KAG3 expression compatibility (TJS `&& \|\| ! != ?:` translated string-aware; visible scene:line errors instead of silent else) | `kag/expr.lua` | ✓ |
 | S2e | KAG3 variable system (`%f.x%` interpolation, `lf` call-frame stack, `mp` message params, dual-style expression env) | schema + scheduler | ✓ |
 | S2f | KAG3 control-flow completeness (`[elsif]` alias, `[call *label]` intra-scene, `[end]`→ending, unknown-tag warnings) | tokenizer + scheduler | ✓ |
 | S2g | Modern utility commands (`[set]` typed, `[inc]`, `[random]`, `[assert]`) | system commands | ✓ |
-| S2h | Command metadata (category/blocking/desc on all 118 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
+| S2h | Command metadata (category/blocking/desc on all 123 contracts; emitted by schema_doc + dumpContracts) | schema | ✓ |
 | S2b | Exact token offsets (byte-accurate '[' position + end_offset via dual Cp) | `parse_with_offsets` | ✓ |
 | S2c | Parser performance (4000 tokens 362ms -> 259ms, 64.75ms/1000tok after dropping 9 redundant prefix patterns) | lpeg.lua | ✓ |
 | S2i | KAG scene-level debugger (breakpoints on scene+cmd/line, single-step, scope inspection; RPC kagSetBreakpoint/kagDebugContinue/kagDebugStep/kagInspectScopes) | `kag_debug.lua` + scheduler + RPC | ✓ |
@@ -124,7 +128,7 @@ graph LR
 | S2s | Inline text markup (`{color=#rrggbb}` per-span colors, `{size=N}` glyph scaling affecting wrap, `{b}` synthetic bold, `{i}` italic top-edge shear, `{s}` strikethrough middle bar — all stackable; unknown `{tags}` literal) | `kag/text_layout.lua` (parse_markup/wrap_spans) + `kag/text_scene.lua` (add_wrapped_spans) + `IRenderDevice::renderText(scale, bold, italic, strike)` | ✓ (34 Lua assertions; typewriter reveal + backlog use stripped plain text; strike bar geometry headless-tested) |
 | S2t | NVL mode (`[nvl]` full-screen accumulated text block, Ren'Py parity; `[nvl clear]`/`[p]` page break, `[nvl off]` exit; speaker as 「Name」： inline prefix styled by `nameplate_style.text_color` — format customizable via `[nvl prefix="%s："]` schema param (persists per session, `%`-safe); wraps with the line, instant draw — zero new state fields; cursor reused from text_state so save/rollback persists the page) | `kag/commands/text.lua` (`nvl` handler + ch/text/p/er accumulation) + `kag/text_scene.lua` (`commit` seals prior reveal draws, `instant` draws skip typewriter) + save/snapshot `nvl_mode` | ✓ (29 Lua assertions; typewriter only animates the appended line) |
 | S2u | Localization pipeline (`{key}` token expansion with markup-name whitelist + per-line translation `lines["<scene>:<fnv1a(msg)>"]`, content-addressed keys; applied by [ch]/[text] before markup parsing **and by [button]/[sel] choice labels at registration**; empty placeholder falls back to original; settings Language hot-switch **+ full-page redraw** (already-displayed page / NVL page / backlog / active choice labels / closed captions re-localize with the new language via `page_src` replay — exceeds Ren'Py, which keeps displayed lines in the original language; layout y-cascade for re-wrapped translations; typewriter sealed) + save persistence (`state.language` + backlog `src`); `scripts/ks_i18n.lua` template generator with --update merge and --missing CI gate, extracts dialogue + choice labels) | `scripts/i18n.lua` (fnv1a/localize/expand/load) + `kag/commands/text.lua` (ch/text/button localize + relocalize_page/relocalize_backlog) + `kag/text_scene.lua` (page_src lifecycle) + `assets/lang/{zh,en,ja}.lua` | ✓ (67 Lua assertions; generated ja.lua template with 25 demo keys incl. choice labels) |
-| S2v | Contract runtime coverage (**118/118 contracts execute at runtime**; round-90 grep audit: 106 had runtime refs, 12 previously-dead handlers — cancel/setvoicevolume/setsevolume/playbgmstop/playstop/waitforclick/moveto/camera/sprite_fade/move/scale/swap — now exercised; coverage matrix saturated) | scheduler + `test_contract_runtime_gaps.lua` (orphan 18→19) | ✓ (25 Lua assertions: headless no-crash + skip/fallthrough presence + key semantics) |
+| S2v | Contract runtime coverage (**123/123 contracts execute at runtime**; round-90 grep audit saturated 118; stage-G commands 由专项套件覆盖 — test_tween.lua / test_layout_cmds.lua / test_vfx_postfx.lua) | scheduler + `test_contract_runtime_gaps.lua` + tween/layout/vfx-postfx suites | ✓ (25 + 28 + 54 + 18 Lua assertions) |
 | S3 | Flow control (if/else, jump/call/return, switch/case, macros) | Lua scheduler | ✓ |
 | S3a | Save/load loop continuity (for/while/if/switch stacks lifted into ctx and serialized via `loop_stacks` in capture_state; [load] resumes an in-progress loop to completion) | Lua scheduler + save snapshot | ✓ |
 | S7 | Declarative command contracts (typed params, clamping, $var/${expr} interpolation, required/choices) | `kag/schema.lua` | ✓ + **round 97/98 schema coerce semantics corrected** (positional args typed coercion, `choices` array normalization, default-value normalization, empty-file defect) — `test_schema_coerce` depth suite (+85 round-97 assertions: type/default/enum/positional/idempotence) |
@@ -134,6 +138,8 @@ graph LR
 | S10 | Label index (O(1) jump, scene-scoped, restored/invalidated on swap) | Lua scheduler | ✓ |
 | S11 | [if] expr cache keyed by env identity (no stale variables across scenes) | Lua scheduler | ✓ |
 | S12 | i18n runtime API (set_language/current_language/translate/reload/default_language; mid-scene language switch, fallback chain, hot-reload) | `scripts/i18n.lua` + text pipeline relocalize_page | ✓ |
+| S13 | Declarative tween (`[tween target= attr=x|y|alpha|scale from= to= dur=100-30000 delay=0-30000 ease=linear|ease_in|ease_out|ease_in_out|back_out wait=true|false]`; from 缺省=当前值; from/to 支持 `${expr}` 插值; ctx.tweens 管理器单时间线 delay 相/t 累计/终点精确落 to; 阻塞 wait=true 与 [wait] 同构, 非阻塞 fire-and-forget 经 kag_runner.update 每帧钩子; 与 [position]/[layout] 组合) | `kag/commands/tween.lua` + `kag_runner.update` (pcall+空表短路) + Web 双帧循环防御性驱动 | ✓ (round 106; test_tween 28 断言; tutorial_16_tween.ks; tween.parity 3 用例; 5 缓动端点矩阵) |
+| S14 | Declarative layout (`[layout name= kind=hbox|vbox|grid gap= padding= align= cols= w/h/x/y=]` + `[layout_slot parent= layer= index= size="WxH"]` + `[layout_place parent= layer= x= y=]`; 容器是"计算器"非渲染层 — recompute 后 layers.move_layer 写现有层坐标, 渲染管线零改动, 与 [position]/[tween] 组合; settings 迁移试点坐标等价证明逐像素一致) | `kag/layout_math.lua` (纯函数) + `kag/commands/layout.lua` + `test_settings_layout_pilot.lua` | ✓ (round 107; test_layout_cmds 54 断言; layout.parity 4 用例; hbox/vbox/grid/gap/padding/align/越界/空容器) |
 | S4 | Instruction budget sandbox (anti-infinite-loop, per-frame cap) | `ILuaManager` | ✓ (preserved through DebugProtocol attach/detach, breakpoint yield/resume and inherited coroutine hooks) + **round 97 expr nesting budget**: deeply-nested expression evaluation cut from O(n³) to bounded <=0.001s (`fix(script): expr nesting budget (O(n3) deep-nest cut)`) |
 | S5 | Hot reload (watch scripts/, live-reload without restart) | Engine-owned `HotReload` instance | ✓ |
 | S6 | Error recovery (pcall guards, ErrorUI, graceful degradation) | scheduler + bindings | ✓ |
@@ -162,13 +168,13 @@ graph LR
 | C7 | Cloud save provider abstraction (local / remote pluggable) | `ISaveProvider` | ✓ abstraction + local path + **HTTP cloud provider (push/pull/delete against a REST endpoint, offline degrade) + Lua save.configure_cloud/cloud_push/cloud_pull; mock-server round trip tested** |
 | C8 | Steamworks integration (achievements, stats, cloud saves) | `ISteamBackend` | Conditional (needs Steam SDK/account): full Lua surface (19 APIs incl. cloud list/write/read/delete/quota), overlay/stats/store fixes, Null-backend tested; real SDK round trip needs a Steam dev account |
 | C9 | Asset provider chain (Dir → CARC, priority-ordered, integrity check) | `IAssetProvider` | ✓ |
-| C10 | Tutorial sample library (**15 递进式教程** tutorial_01–15, each runnable to [end] with line-by-line commentary; covers hello/text/layers/audio/branching/effects/saveload/system-ui/interpolation/loops/switch/expr-combo/commands/flow-timing/expr-deep; engine compile + Web-player double verification) | `demo/tutorial/*.ks` + `assets/lang/{zh,en,ja}.lua` | ✓ (round 90 added 14/15; ks_check zero WARN; sample-library path table 15 rows) |
+| C10 | Tutorial sample library (**16 递进式教程** tutorial_01–16, each runnable to [end] with line-by-line commentary; covers hello/text/layers/audio/branching/effects/saveload/system-ui/interpolation/loops/switch/expr-combo/commands/flow-timing/expr-deep/**tween(16)**; engine compile + Web-player double verification) | `demo/tutorial/*.ks` + `assets/lang/{zh,en,ja}.lua` | ✓ (round 90 added 14/15; round 106 added tutorial_16_tween; ks_check zero WARN; sample-library path table 16 rows) |
 
 ### Development Tools (10 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
-| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) + **editor store depth** (round 88: store actions + reveal-queue consumption, editor 333→368) + **rpc client depth** (round 89: evalRaw POST / response parsing / error propagation / URL encoding, editor 368→402) + **panel integration E2E** (round 90: `panels.integration.test.tsx` mounts real App+store — doc→outline→reveal→Inspector chain, setEngine broadcasts across StatusBar/Outline/Timeline/VisualView, ActivityBar mount/unmount; editor 402→408) + **round 91-98 editor depth** (round 95 SceneOutline virtualization [windowed rows, reveal-into-view]; round 96 inspector lint/disconnect/jump-status/dual-link + jump idempotency; round 97 activitybar/statusbar a11y + scene truncation + state depth; editor 408→506) |
+| D1 | Editor RPC (HTTP plus stdio JSON-RPC) | `IEditorServer`, `IRpcServer`, `IRpcDispatcher` | Full: both transports use owner-thread DTO dispatch and are CLI-wired; managed-coroutine `run/eval` + breakpoint lifecycle (set/remove/clear/continue) + inspect + frame capture implemented on both transports; stdio smoke (`headless_rpc_smoke.py` 45/45) and HTTP smoke (`headless_http_smoke.py`, 46 assertions) end-to-end tested via ctest; **web full-tutorial regression sweep** (15 parametrized scenarios: tutorial 01–13 + showcase + example_game, all DONE; web gaps 62→79) + **G4-2 SceneOutline panel** (active-document outline rendering, label-click reveal navigation; editor 205→210) + **G4-3 outline-driven live jump** (label-click drives the running scene to a `*label` via `/api/eval` + `flow.find_label` + `kag.jump` `_next_index` — zero engine change; editor 210→234) + **G4-4 live engine position cross-reference** (`useEnginePosition` hook polls `/api/eval` for `_CAESURA_CTX`; outline row highlight + panel ▶ scene name; editor 234→245) + **InspectorView depth** (live engine status bar + `commandLint.ts` param lint with `KNOWN_COMMANDS` single source; label bidirectional jump + follow engine position; editor 245→270) + **editor store depth** (round 88: store actions + reveal-queue consumption, editor 333→368) + **rpc client depth** (round 89: evalRaw POST / response parsing / error propagation / URL encoding, editor 368→402) + **panel integration E2E** (round 90: `panels.integration.test.tsx` mounts real App+store — doc→outline→reveal→Inspector chain, setEngine broadcasts across StatusBar/Outline/Timeline/VisualView, ActivityBar mount/unmount; editor 402→408) + **round 91-98 editor depth** (round 95 SceneOutline virtualization [windowed rows, reveal-into-view]; round 96 inspector lint/disconnect/jump-status/dual-link + jump idempotency; round 97 activitybar/statusbar a11y + scene truncation + state depth; editor 408→506→**530**; round 108 Scene Builder 面板 +32 (SceneBuilder.tsx + lib/sceneBuilder.ts + store 扩展 + resolveInsertLine; 三类操作 [bg]/[csp]/[ch]+[p] 光标行插入 + Inspector 联动; /api/assets 扩展 fg 槽位 + kind 字段, 生成行校验复用 LSP; verify 全链实测) |
 | D2 | Structured logging (ring buffer, subsystem error counts, per-subsystem stats) | `IDebugManager` | ✓ |
 | D3 | Frame profiling (GPU submit count, transient allocs, Lua GC timing) | `IDebugManager` | ✓ |
 | D4 | NullJobSystem mock (synchronous task execution for deterministic testing) | `IJobSystem` | ✓ |
@@ -184,7 +190,7 @@ graph LR
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
-| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` | ✓ (round 98 baseline: C++ 963/963, Lua 128/128 + 20 orphan, web 282/282, editor 506/506, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP end-to-end measured) |
+| P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` + `.github/workflows/deploy-web.yml` | ✓ (阶段 G 终态 / round 113 baseline: C++ 976/976, Lua 132/132 + 24 orphan, web 297/297, editor 530/530, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP end-to-end measured; web GitHub Pages 手动部署链路 round 109 就绪) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
 | P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
@@ -193,8 +199,54 @@ graph LR
 
 ---
 
-**Total: 79 tracked capabilities across 6 domains (round-98 refresh preserves the 79 count; P2 baseline refreshed to round-98 numbers, S4 expr-budget + S7 schema-coerce completions added, D1 editor depth extended 408→506).** See the readiness snapshot above for
+> 📷 `engine-capacity-matrix.png` 是对应 mermaid 的静态渲染快照（round-98 世代）；
+> 若重新在支持 mermaid-cli 的环境执行 `mmdc` 可再生成，矩阵以本文表列为准。
+
+**Total: 82 tracked capabilities across 6 domains (阶段 G 终态 / round-113 refresh: +R11 post-processing chain, +S13 declarative tween, +S14 declarative layout; P2 baseline refreshed to round-113 numbers 976/132+24/297/530; S2 contract census 118→123; C10 tutorials 15→16; D1 editor depth extended 408→506→530).** 工具链（ks_i18n / xp3_tool / tlg2png / package_game / template）不单列矩阵行——见文末「工具链边界」说明。 See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
+
+
+### 2026-08-16 additions (阶段 G / round 101-113 final)
+
+- R11 — 后处理链（round 102）：`[vfx ... postfx=` + `Render.set_postfx` 家族；
+  VIEW_MAIN→m_sceneRtt 重定向 + 逐 stage 全屏 pass（scratch RTT 乒乓）+ VIEW_POSTFX=40；
+  bloom 多 pass（bright/½ 降采样/¼ blur×2/additive）；四个 fxc 真编译 DXBC 内嵌，
+  GL/Metal/Vulkan 恒等拷贝降级；schema 契约 118→119（vfx postfx 枚举）；api-stats 38 API
+  自动计入；test_render_postfx 9 用例 + test_vfx_postfx 18 断言；round 114 发布终验
+  D3D11 四段 shader 冒烟 READY。
+- S13 — 声明式补间 `[tween]`（round 106）：5 缓动（linear/ease_in/ease_out/ease_in_out/back_out）
+  端点精确、from 缺省=当前值、${expr} 插值、delay 分相、阻塞/非阻塞双模式；ctx.tweens
+  管理器 + kag_runner 每帧钩子；雪杀手 Web parity + tutorial_16；孤儿套件 21→22。
+- S14 — 声明式布局 `[layout]`（round 107）：hbox/vbox/grid 容器=计算器（纯函数
+  layout_math），recompute 写现有层坐标、渲染零改动；[layout]/[layout_slot]/[layout_place]
+  三独立契约；settings 迁移试点坐标等价证明；孤儿套件 22→24；契约 119→123。
+- S2 — 契约普查 118→123（tween + layout 家族）。
+- C10 — 教程库 15→16（tutorial_16_tween）。
+- D1 — editor 506→530：round 108 Scene Builder 面板（[bg]/[csp]/[ch]+[p] 三类操作、
+  光标行插入、Inspector 联动、/api/assets fg+kind 扩展，R108-C 契约违例修复后
+  [csp] 必填 name 生成正确）；editor-api-reference 与 scene-builder-rpc-bridge 同步。
+- P2 — 基线终态：C++ 976/976（8858 断言）、Lua 132/132 + 24 orphan、web 297/297
+  （20 文件）、editor 530/530、契约 123；round 113 template 套件 4/4；round 114 发布
+  终验 Release 构建零错误 + ZIP 87.97MB/403 文件 + 解压冒烟 D3D11 干净启动/退出。
+
+### 工具链边界说明（Matrix 不单列工具类能力的原因）
+
+能力矩阵只跟踪**引擎代码级能力面**（runtime 表面/接口/命令/绑定/编辑器内核）。
+阶段 G 新增的**内容工具链**属于仓库工具层（非引擎运行能力），不在矩阵单列，
+统一在 guides/ 记录：
+
+| 工具 | 位置 | 记录文档 |
+|---|---|---|
+| i18n 提取/回填（ks_i18n extract/collect/backfill + --keys/--missing 门禁） | `scripts/ks_i18n.lua` | `docs/guides/i18n.md`（工作流节） |
+| XP3 归档解析器 | `tools/xp3_tool.py`（27 unittest） | `docs/guides/xp3-compat.md` + `docs/guides/kag3-migration.md` |
+| TLG5/6 图片解码器 | `tools/tlg2png.py`（38 断言自洽测试） | `docs/guides/tlg-compat.md` |
+| 一键打包/分发 | `scripts/package_game.sh` + `deploy-web.yml` | `docs/guides/packaging-ux.md` |
+| 项目模板 | `demo/template/` + `scripts/verify_template.sh` | `docs/guides/template-quickstart.md` |
+| 示例游戏验证 | `scripts/verify_sample_game.sh` | `docs/guides/sample-game-verification.md` |
+
+这些工具的可执行性由对应测试/脚本断言守护（tools 65 断言、i18n 39 断言、template 4/4、
+verify 5/5），不进入 runtime 能力计数；如未来希望将某工具提升为引擎能力（如 xp3 作为
+资源提供者链的正式一环），再以独立 R/S/C 行纳入本矩阵。
 
 ### 2026-08-16 additions (round 91-98)
 

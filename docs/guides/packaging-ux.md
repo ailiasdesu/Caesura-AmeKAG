@@ -129,6 +129,44 @@ bash scripts/package_game.sh --no-web-build demo/tutorial
 （`scripts`/`demo`/`assets`/`cache/story`）一并复制进去；脚本随后用**游戏专属**的 story bundle
 覆盖 `cache/story/story.lua`，确保产物只含你的游戏（而不是整个 demo 集）。
 
+## 6.5 产物说明：dist/<game>/ 里有什么
+
+`package_game.sh` 的输出是一个**自包含静态站点**——不需要后端、不需要额外运行时，
+丢到任意静态托管即可玩。目录结构：
+
+```
+dist/example_game/
+├── index.html                  # 播放器壳（4.8 KB，加载 web-assets 并启动）
+├── web-assets/                 # vite 构建的播放器运行时（JS 包）
+├── cache/story/story.lua       # ★ 预编译剧本 bundle（播放器零解析零编译直接跑）
+├── demo/<game>/*.ks            # 场景源码（兜底/调试用，与 bundle 内容一致）
+├── assets/                     # 游戏资产（默认拷贝仓库共享池 / --assets 指定）
+├── scripts/                    # 引擎 Lua 运行时（scheduler/kag 命令处理器等）
+└── MANIFEST.txt                # 文件树 + 逐文件大小 + 总大小（判断裁减依据）
+```
+
+**关键点**：
+
+- **bundle 是"游戏专属"的**：脚本用游戏专属 story bundle 覆盖通用 bundle，
+  产物只含你的游戏（不是整个 demo 集）——体积与加载都更优。
+- **资产默认整包带走**：不传 `--assets` 时打包共享 assets/ 池（省心但大，
+  示例游戏 ~34 MiB，大头是 16 MB Noto 字体 + 12 MB daily.wav）。
+  `MANIFEST.txt` 末尾 `total KB` 让你判断是否值得 `--assets` 指向精简目录。
+- **场景入口**：播放器默认场景是 `galgame_demo.ks`（仓库主 demo）；你的场景
+  在页面下拉框里选。要自定义默认入口，见 `--entry` 选项（写入 MANIFEST 标注）。
+
+### 6.6 发布前检查清单（Web 站）
+
+| # | 检查 | 命令 / 方法 |
+|---|------|-------------|
+| 1 | ks_check 契约校验通过 | `external/lua/lua.exe scripts/ks_check.lua <your>.ks` → 0 violations |
+| 2 | 打包成功 | `bash scripts/package_game.sh <game>` → exit 0 + MANIFEST 生成 |
+| 3 | 本地 HTTP 冒烟 | `cd dist/<game> && python -m http.server 8080` → 页面能 Run 到 [end] |
+| 4 | 体积评估 | 看 MANIFEST.txt 末尾 total KB；>50 MiB 考虑 `--assets` 精简 |
+| 5 | 上传分发 | itch.io（zip）/ GitHub Pages（workflow）/ Netlify（拖拽） |
+
+---
+
 ## 7. 资产约定
 
 - 默认 `--assets assets` 把仓库共享资产池整包带走（安全省心，代价是体积较大）。

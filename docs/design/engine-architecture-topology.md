@@ -4,7 +4,9 @@
 
 Caesura 采用“内部模块静态库 + 最终单一可执行文件”的混合结构：
 
-- 15 个普通子系统与 `entry` 组合根分别形成静态库，共 16 个内部模块静态库。
+- 15 个普通子系统与 `entry` 组合根分别形成静态库，共 16 个内部模块静态库
+  （api-stats 的 "Module libraries" 计 15 是因为它以 `src/*/api/` 目录计数，
+  `entry` 无 `api/` 子目录、不产生接口，故不计入）。
 - 除 `entry` 外，每个模块都有对应的 API-only `INTERFACE` 目标，共 15 个 API 目标。
 - 每个子系统的生产源码只编译一次，便于约束依赖和复用测试。
 - 对外交付仍是 `CaesuraAmeKAG` 单一可执行文件，不引入 DLL ABI、部署或版本兼容负担。
@@ -67,6 +69,33 @@ graph TD
 
 `src/render/EmbeddedShaders_SPIRV.cpp` 是唯一不单独进入目标的 `.cpp`；它由 `EmbeddedShaders.cpp` 文本包含，重复编译会产生重复定义。
 
+## 16 模块职责详表（api 接口 / 关键实现 / 数据流进出）
+
+> 每个模块仅通过 `src/<module>/api/I*.h` 对外暴露符号；实现细节（具体类、第三方
+> 依赖）对其他模块不可见。31 个接口盘点、逐接口方法数见 `docs/api/api-stats.md`
+> （自动生成）；依赖矩阵见 `docs/design/backend-registry-dependency-guide.md`。
+
+| 模块 | API 接口（api/ 目录） | 关键实现 | 数据流进出 |
+|---|---|---|---|
+| **archive** | `IArchiveReader` `IArchiveWriter` `ICryptoEngine` | `CARCReader` `CARCWriter` `CRLManager` `CarcAssetProvider` `CryptoEngine`(AES-256-GCM + Ed25519) `DeltaCARC` | 入：资源路径/CARC 文件流、加密密钥、nonce 复用注册表；出：解密解压后的资产缓冲、加密/签名的归档写回；`CarcAssetProvider` 作为资源提供者链的一环供 `AssetManager` 消费 |
+| **audio** | `IAudioBackend` | `SoLoudAudioEngine`（3 总线 BGM/Voice/SE）`NullAudioBackend` | 入：`play_bgm/play_se/play_voice` 等 L/KAG 命令、fade/volume 控制；出：音频流输出、voice 完成事件（每帧 `consumeVoiceCompletions` 泵给 Lua `_onVoiceComplete`） |
+| **debug** | `IDebugManager` | `DebugManager`（结构化日志+环形缓冲+子系统统计）、`DebugProtocol`（调试器状态机）、`HotReload` | 入：`DEBUG_*/` 宏（零开销直调）、RPC 调试命令（断点/步进/暂停恢复）；出：日志、`getDebugState` DTO、热重载触发 |
+| **di** | `ITextureBudget` `ISandboxQuota` `IDeviceLostListener` | `BackendRegistry`（22 个非拥有服务槽位）、`TextureBudget`（6 档自适应）、`SandboxQuota` | 入：各后端注册/查询、纹理分配/释放、Lua 资源操作配额；出：预算拒绝、配额扣减、设备丢失通知（`notifyDeviceLost/notifyDeviceRestored`） |
+| **entry** | —（组合根，无独立 API 目标） | `Engine` + `EngineConfig`（move-only） + `ErrorUI` + `StartupScripts` + `StartupValidation`；拆分 `Engine_Backends/Engine_Assets/Engine_Gpu/Engine_LuaRegistry` | 入：具体后端指针、Lua 配置表；出：创建+注册全部后端、初始化分四阶段、逆序关停、错误 UI |
+| **input** | `IInputRouter` | `InputRouter`（SDL 事件→KAG/Game 焦点路由 + resize 回调） | 入：SDL 键盘/鼠标/手指事件；出：`_KAG_onClick`/按键全局、焦点切换、点击合并（每帧至多一次 coalesced click） |
+| **job** | `IJobSystem` | `JobSystem`（线程池+优先级+主线程回调）、`NullJobSystem`（测试同步） | 入：加载/解码任务（无共享状态）；出：`pollMainThreadJobs` 主线程消费回调、`onComplete` |
+| **live2d** | `IAnimationBackend` | `NullAnimationBackend`（PNG 降级）、可选 Cubism 实现、`PathConfinement`（路径穿越防护） | 入：model/motion/expression 命令；出：`render` 帧绘制、纹理句柄（`setLayerTexture`） |
+| **minigame** | `IMiniGameBackend` | `BgfxMiniGameBackend` + `NullMiniGameBackend` + `MiniCollision`(sweep-and-prune) + `MiniGeometry` | 入：`enter->update->render->leave` 生命周期 + JSON 场景 + Lua `mini_game` 绑定；出：3D 场景渲染、碰撞判定结果 |
+| **platform** | `IPlatformBackend` `IMobileAdapter` | `SDL3PlatformBackend` + `NullPlatformBackend` + `MobileAdapter`（触摸→鼠标/滚轮映射、方向事件） | 入：窗口创建、原生句柄、SDL 事件泵、时间基准；出：`getTicksMs`、窗口句柄（供 bgfx 初始化）、分辨率 |
+| **render** | `IRenderDevice` `ITextureManager` `ILayerManager` `IParticleSystem` `IVideoPlayer` `IGpuMonitor` `IMeshRenderer` | `BgfxRenderDevice`+分拆实现（Draw/Blit/Effects）`BgfxDeviceCore`(视图管线) `BgfxQuadBatch`(批次) `RTTManager` `TextRenderer`(FreeType/CJK/ruby) `TextureManager`(预算+LRU) `LayerManager`(BG/FG/MSG 三层+dirty) `ParticleSystem` `VideoPlayer`(pl_mpeg/FFmpeg) `GpuMonitor`(自适应降级) `SmaMeshRenderer`(GPU 蒙皮) + 内嵌 shader（DXBC/GLSL/Metal/SPIR-V） | 入：Lua 绘制命令（submit_batch/render_text/blit/postfx）、纹理加载、视频帧；出：bgfx 帧缓冲、RTT 视图、后处理链、截图 readback、GPU 指标 |
+| **resource** | `IAssetProvider` `IAsyncLoader` `IResourceGenerationTracker` | `AssetManager` + `ProviderChain`（Dir→CARC 提供者链，优先级+完整性）+ `DirAssetProvider` + `ImageDecoder`(stb) + `AsyncLoader` + `XP3Archive`(KAG3 XP3 读取) | 入：资源路径/URL、异步加载请求；出：解码缓冲（主线程 onComplete 上传 GPU）、代际失效句柄（`invalidate_handles`） |
+| **rpc** | `IEditorServer` `IRpcServer` `IRpcDispatcher` | `EditorServer`(HTTP 编辑器端口 9876，25 端点) + `RpcServer`(stdio JSON-RPC，29 方法) | 入：编辑器 HTTP/stdin 请求（eval/run/断点/资产清单/SMA 校验）；出：owner-thread DTO 分发（`unsupported_yieldable_execution` 拒绝直接 yield 主状态） |
+| **script** | `ILuaManager` | `LuaManager`(Lua 5.4 VM+指令预算沙箱) `GameState` + `bindings/*.cpp`(11 个绑定文件、154 个 luaL_Reg 条目：KAG/Render/Save/VFX/Sma/Steam/AI/Debug/DevCore/Engine/MiniGame) | 入：Lua 脚本、KAG .ks token（经 tokenizer→scheduler）、RPC eval；出：经 BackendRegistry 触达全部后端；`engine_update/engine_render` 每帧回调、`_CAESURA_CTX` 执行上下文 |
+| **steam** | `ISteamBackend` | `SteamBackend`（成就/统计/云存档/overlay，条件编译 `CAESURA_HAS_STEAM`；无 SDK 时 Null 安全默认） | 入：Lua `steam.*` 18 API 调用；出：Steamworks 成就解锁/统计写入/Remote Storage 云文件 |
+| **storage** | `ISaveManager` `ISaveProvider` | `SaveManager`(AES-256-GCM + `CAES` 魔数 + schema v1→v5 迁移) `CloudSaveProvider` `HttpCloudSaveProvider` | 入：Lua `KAG.save_game/load_game` 等 12 API、自动存档计时器；出：加密存档文件（槽位目录）、云 push/pull、缩略图 |
+
+
+
 ## 组合根与运行时注册
 
 `src/entry/Engine.cpp` 与其拆分实现文件负责具体后端的创建、生命周期编排和
@@ -121,6 +150,80 @@ Windows ASCII 大小写；symlink/junction 解析及显式 source root 注入仍
 `BackendRegistry::getSaveManager()` 获取 `ISaveManager`，不直接包含或访问具体
 `SaveManager` 实现。
 
+## 启动流程（main.cpp → entry → registry → Lua → kag_runner）
+
+### 3.1 阶段总览
+
+```text
+main.cpp
+  ├─ 解析 CLI（--headless / --editor / --editor-stdio / --backend / --frames /
+  │    --export-replay / --export-dir） + CAESURA_EDITOR_TOKEN 环境变量
+  ├─ 向上探测 assets/ 目录并 chdir（保证从任意 CWD 启动都能找到资源）
+  ├─ EngineConfig config（move-only 所有权转移包：backends/窗口/headless/editor）
+  │    └─ GPU 模式（!headless || editorMode）创建具体后端：
+  │         SDL3PlatformBackend / BgfxRenderDevice / SoLoudAudioEngine / BgfxMiniGameBackend
+  ├─ Engine engine(std::move(config)) → engine.init()（4 阶段，见下）
+  ├─ 分支：
+  │    ├─ --editor      → 加载 config.lua + kag/init.lua → lockdown → HTTP 编辑器/stdio RPC
+  │    ├─ --headless    → 同上最小加载 → stdio JSON-RPC
+  │    └─ 正常游戏       → config.lua → kag/init.lua → validateCarcOnStartup →
+  │                        resetInstructionBudget → 入口脚本（config.entry_script，
+  │                        默认 ../demo/entry.lua） → 推送 _CAESURA_CONFIG →
+  │                        lockdownScriptEnv → engine.run()
+  └─ engine.run() 主循环（见 3.3）→ engine.shutdown() 逆序关停
+```
+
+### 3.2 Engine::init() 四阶段
+
+`Engine.cpp` 的 init 是**幂等可回滚**的：任一阶段失败立即 `shutdown()` 清理已注册服务。
+
+| 阶段 | 职责 | 关键注册（BackendRegistry `set*`） |
+|---|---|---|
+| **initPlatformPhase** | 平台/窗口/渲染/音频/输入就绪 | `setPlatformBackend` `setMobileAdapter` `setRenderDevice`（含 `setPreferredBackend`） `setAudioBackend` `setInputRouter`；`DebugManager` 写入 render/audio/input 信息；`setTextureBudget` `setTextureManager` `setAsyncLoader` `setSaveManager` `setParticleSystem` `setLayerManager`；创建 `GpuMonitor` |
+| **initScriptingPhase** | Lua VM + 沙箱 + 调试协议 + 绑定 | `setLuaManager`、`setSandboxQuota`（绑定 VM）、`setVideoPlayer`、`registerEngineLuaRegistryServices`（引擎服务表）、`DebugProtocol`（借用 `HotReload`）、Lua 自动存档间隔绑定 |
+| **initAssetPhase** | 资源管线 | `setJobSystem` `setResourceGenerationTracker`、`VideoPlayer::setJobSystem`、`AssetManager::init` + `registerDefaultAssetProviders`（Dir→CARC 链） |
+| **initOptionalPhase** | 条件后端 + 扩展 | `setSteamBackend`（SDK 可用时） `setCryptoEngine` `setMiniGameBackend`（含输入回调注册）`setAnimationBackend`（Cubism/PNG 降级）`setMeshRenderer`（SMA：真实/Null 选择） |
+
+> 关停顺序与 init 严格相反（见 §4 生命周期表与当前文档正文）：先停 Layer/MiniGame/异步
+> 生产者 → `AsyncLoader→AssetManager→JobSystem` shutdown → Audio/Texture 释放资源并解绑
+> 配额 → 注销 `SandboxQuota`/`HotReload` → 关 Lua VM → 按逆序清空 Registry 非拥有指针。
+
+### 3.3 Engine::run() 每帧主循环
+
+```text
+while (m_running) {
+  ownerPump()                    // RPC dispatcher 每帧最前排空队列（managed coroutine）
+  pumpDebugger() → publishDebugPauseState()   // 调试协议（暂停/恢复/步进）
+  processEvents()                // SDL 事件泵 + 输入路由 + 点击合并（_KAG_onClick）
+  consumeDeviceLost() → 恢复    // GPU 设备丢失恢复（recoverFromDeviceLoss）
+  dt 计算（0.25s 截断）          // 平台 tick 或 headless 稳态时钟
+  hotReload->checkAndReload()    // Lua 未暂停时检查脚本热重载
+  jobSystem->pollMainThreadJobs() + asyncLoader->poll()   // 异步完成回调
+  Lua 内存预算（80%/95%/100% GC 阶梯 + 300 帧 GC step）
+  gpuMonitor->update()           // 自适应质量：写 _CAESURA_GPU_QUALITY/_VFX_ENABLED 等全局
+  自动存档计时器
+  _KAG_onClick（每帧至多一次 coalesced click）
+  engine_update(dt)              // Lua：kag_runner.update → scheduler 推进（pcall 容错）
+  audio->update + consumeVoiceCompletions → _onVoiceComplete
+  render(dt)                     // engine_render → Live2D render → drawDebugOverlay → minigame render
+  --export-replay 时 requestScreenshot（每帧 PNG）
+  renderDevice->commit_frame()（含 runPostFxChain）→ advanceFrame()
+  --frames N 到时退出
+}
+```
+
+### 3.4 从 Lua 到 kag_runner 的剧本执行
+
+`entry.lua`（或 `demo/template/entry.lua` 多路径回退）`require("kag_runner")` 后调用
+`kag_runner.start(场景路径)`：把 `.ks` 文件交给 tokenizer/LPeg 解析成 token 流，
+交给 `scheduler.lua` 逐 token 派发（`schema.coerce` 类型校验/钳制）到
+`scripts/kag/commands/*.lua` 的 handler；阻塞命令（`[wait]`/`[tween wait=true]`/
+`[until]` 等）以 `Operation` 协程让出，每帧由 `kag_runner.update(dt)` 恢复推进；
+`wait=false` 的 fire-and-forget（如非阻塞 tween）经 `ctx.tweens` 管理器逐帧推进（空表短路）。
+KAG↔Lua 双向调用：`[eval]/[emb]/[iscript]` 内嵌 Lua，`kag.jump/kag.call/kag.save_game`
+从 Lua 驱动剧本。真实场景执行上下文暴露为 `_CAESURA_CTX`（编辑器 `/api/eval` 读它做
+行号/位置联动）。
+
 ## 当前边界
 
 当前迁移已完成模块源码唯一归属，并将 Script 对 Render、Storage 等子系统的
@@ -153,6 +256,68 @@ MiniGame 着色器已归入 `src/minigame`，MiniGame 只链接 `RenderApi`；�
 | `CAESURA_HAS_LIVE2D` | `Caesura::Live2D`、`Caesura::Entry` | `PRIVATE` |
 | `CAESURA_DEBUG` | `Caesura::BuildOptions` | `INTERFACE` |
 
+## 渲染管线（bgfx views / 批次 / RTT / 后处理）
+
+### 4.1 视图（View）布局
+
+bgfx 帧内视图编号集中定义在 `BgfxDeviceCore.h`（`IRenderDevice.h` 暴露常量供
+渲染命令消费；`BgfxDeviceCore::commit_frame` 使用实际顺序）：
+
+| 视图常量 | 值 | 用途 |
+|---|---|---|
+| `VIEW_RTT` | 0 | 离屏渲染目标画布（`createRenderTarget` 的 RTT 场景） |
+| `VIEW_MAIN` | 1 | 主合成流水线（KAG UI/图层：BG/FG/MSG、文本、粒子） |
+| `VIEW_DEBUG` | 2 | 调试覆盖层（`drawDebugOverlay`） |
+| `VIEW_TRANSITION` | 3 | 转场合成 |
+| `VIEW_POSTFX` | 40 | **后处理链合成视图**（round 102 新增；RTT→MAIN→POSTFX→DEBUG→TRANSITION） |
+
+帧顺序（`BgfxDeviceCore.cpp` `viewOrder`）：`{ VIEW_RTT, VIEW_MAIN, VIEW_POSTFX, VIEW_DEBUG, VIEW_TRANSITION }`。
+每帧 `setViewRect/setViewClear/setViewTransform` 设置 1280×720 正交投影；`commit_frame`
+末尾统一 `bgfx::frame()` 提交。
+
+### 4.2 批次提交（Batch Protocol）
+
+- **Lua 侧**：`Render.submit_batch({...})` 提交四边形数组（tex/rt/x/y/w/h/opacity/view）；
+  `beginBatch/flushBatch` 显式成批；RTT 视图句柄经 `rt` 键混用。
+- **引擎侧**：`BgfxQuadBatch` 累积 draw call，`BgfxDraw_Batch.cpp` 统一提交；
+  `LayerManager` 以 BG/FG/MSG 三层维护 dirty-rect（`mark_dirty`），减少重绘。
+- **纹理**：`TextureManager` 经 `ITextureBudget` 申请预算（6 档自动探测），超出
+  LRU 淘汰；异步加载走 `load_texture_async` → `AsyncLoader` 工作线程解码 →
+  主线程 `onComplete` 上传 GPU。
+
+### 4.3 RTT（Render-to-Texture）
+
+`RTTManager` 管理离屏 `FrameBuffer`/纹理对：`createRenderTarget(w,h)` 返回
+`ViewportHandle`，Lua `create_viewport/destroy_viewport/draw_viewport` 创建/销毁/
+blit 到 `VIEW_MAIN`。`m_sceneRtt`（backbuffer 尺寸）在后处理链活动时承接主场景
+渲染（见 4.4）。`flushAllRTT` 在 GPU 生命周期边界统一释放；resize/shutdown/
+recoverDevice 均重建或释放。
+
+### 4.4 后处理链（round 102+，阶段 G 新 GPU 能力）
+
+- **接口**：`IRenderDevice` 新增 `PostFxKind`（`Vignette/LutColorGrade/SoftBlur/Bloom`）
+  + `PostFxParams` + 6 方法（`createPostFx/setPostFxParams/destroyPostFx/clearPostFx`
+  `isPostFxActive/isPostFxSupported`）；`PostFxHandle` 为稳定句柄（index+1，0=不支持）。
+- **执行**：链激活时 `commit_frame` 先重定向 `VIEW_MAIN` → `m_sceneRtt`，再调用
+  `runPostFxChain()`：从场景 RTT 纹理起，按 `m_postFxStages` 顺序逐 stage 全屏 pass，
+  经尺寸匹配的 scratch RTT 池乒乓（`getScratchRt` 按需扩容），最终合成回 backbuffer，
+  合成视图 `VIEW_POSTFX=40`。
+- **Bloom 内部分解**：bright-pass → ½ 降采样 → ¼ blur×2 → additive 合成（多 slot 乒乓）。
+- **着色器**：vignette/lut_grade/soft_blur/bloom 四个 fxc 真编译 DXBC 内嵌
+  （`EmbeddedShaders.cpp` + DXBC 二进制/GLSL/Metal/SPIR-V 多后端）；GL/Metal/Vulkan
+  无字节码时恒等拷贝降级（`fallbackProgram`），绝不空程序崩溃。
+- **Lua/KAG 面**：`[vfx type=... postfx=bloom|vignette|lut|softblur|none ...]` 命令
+  + `Render.set_postfx/destroy_postfx/clear_postfx/is_postfx_supported/is_postfx_active`
+  绑定（5 API，api-stats 38 中计入）；`postfx=none` 映射 `clear_postfx`。
+- **生命周期**：`m_postFxStages` 有序链（句柄稳定）、`destroyPostFxResources` 在
+  shutdown/resize/recoverDevice 释放 RTT 池与场景目标。
+
+### 4.5 视频（VideoPlayer）
+
+`VideoPlayer` 支持 pl_mpeg（MPEG-1，无条件编译）与 FFmpeg（`CAESURA_VIDEO_FFMPEG`，
+可选）；解码走 `IVideoDecoder` 抽象；`updateAll(dt)` 按真实帧时间驱动所有播放中视频，
+`video_get_texture` 以纹理句柄暴露当前帧；引擎主循环 `render(dt)` 前自动推进。
+
 ## 构建与验证
 
 ```powershell
@@ -165,6 +330,10 @@ python scripts/count_coupling.py --ci
 
 Debug 构建会生成 `caesura_<module>.lib`、`CaesuraAmeKAG.exe`、`CaesuraTests.exe` 和 `carc_pack.exe`。模块库是内部架构边界，目前不作为稳定二进制 SDK 安装或发布。
 
-当前全量门禁（round-88 审计基线）：C++ doctest `816/816` 用例（`6117` 断言）、
-Lua 主套件 `124/124` + 孤儿套件 `18/18`、web `175/175`、editor `368/368`、
-`ctest 10/10`（+AI smoke 跳过）、耦合 `PASS`。
+当前全量门禁（阶段 G 终态 / round 113 基线，round 114 终验复核）：C++ doctest
+`976/976` 用例（`8858` 断言）、Lua 主套件 `132/132` + 孤儿套件 `24/24`、
+web `297/297`（20 文件）、editor `530/530`、KAG 契约 `123`、
+`ctest 10/10`（+AI smoke 跳过）、耦合 `PASS`、覆盖 `PASS`。
+（对照组：round 110 Release 复验 C++ `976/976`；round 113 template 套件 `4/4` PASS；
+round 114 发布终验：Release 构建零错误、ZIP `87.97 MB / 403 文件`、解压冒烟 D3D11
+干净启动/退出、verify 5/5、ks_check 零警告。）

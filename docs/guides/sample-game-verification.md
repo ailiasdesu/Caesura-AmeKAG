@@ -67,4 +67,6 @@ Web 播放器跑的是 `ks_bake --dir demo --web cache/story` 生成的打包场
 2. 若需在浏览器里跑 `story.ks`：将其临时并入 bundle 场景集（或单独 bake），再跑 `web/story.bundle.sweep.test.js`，确认 `runFromBundle` 驱动该场景到 `DONE` 且零 error 事件。
 3. 不跑完整 vitest 时，可直接在 `web/main.mjs` 打开自动播放（autoClick）从场景首帧看到 `[end]` 结束即可。
 
-> 说明：当前不把 `story.ks` 写进测试注册文件/`EXPECTED_KEYS`（保持双端验证设施不动），待最终 `story.ks` 定稿改名 `story.ks` 后再纳入正式 bundle 与 sweep。
+> 说明：`story.ks` 已定稿（round 102 由 `story.ks.new` 改名），
+> verify_sample_game.sh 默认路径即 `demo/example_game/story.ks`（round 110
+> 已修复默认值），可直接裸跑 `bash scripts/verify_sample_game.sh`。

@@ -74,8 +74,8 @@ cd build/tests/Debug && ./CaesuraTests.exe
 # Run tests via CTest (specify the configuration for multi-config generators)
 ctest -C Debug --test-dir build --output-on-failure
 # Lua script suites (run from repo root; external/lua/lua.exe is vendored):
-#   - main suite: 120+ files, order-sensitive (sandbox locks globals mid-run)
-#   - orphan suite: 8 order-incompatible tests (create global mocks) run
+#   - main suite: 132 files, order-sensitive (sandbox locks globals mid-run)
+#   - orphan suite: 24 order-incompatible tests (create global mocks) run
 #     separately — they must never be merged into run_lua_tests.lua
 external/lua/lua.exe tests/scripts/run_lua_tests.lua
 external/lua/lua.exe tests/scripts/run_orphan_tests.lua
@@ -166,7 +166,7 @@ Tests link the same internal static module libraries as the application. Each `t
 ## Key Documentation
 
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first; 完整文档分类见 AGENTS.md §12)
-- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (118 commands; supersedes kag-commands.md)
+- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (123 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
 - `docs/api/cpp-interfaces.md` — all 31 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
