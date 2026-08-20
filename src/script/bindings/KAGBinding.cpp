@@ -6,6 +6,7 @@ extern "C" {
 #include "../../audio/api/IAudioBackend.h"
 #include "../../render/api/IRenderDevice.h"
 #include "../../di/BackendRegistry.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -299,10 +300,14 @@ static int lua_KAG_render_text(lua_State* L) {
     const char* text = luaL_checkstring(L, 1);
     float x    = (float)luaL_optnumber(L, 2, 32.0);
     float y    = (float)luaL_optnumber(L, 3, 48.0);
-    uint8_t r  = (uint8_t)luaL_optinteger(L, 4, 255);
-    uint8_t g  = (uint8_t)luaL_optinteger(L, 5, 255);
-    uint8_t b  = (uint8_t)luaL_optinteger(L, 6, 255);
-    uint8_t a  = (uint8_t)luaL_optinteger(L, 7, 255);
+    auto comp   = [L](int idx, lua_Integer dflt) -> uint8_t {
+        const lua_Integer v = luaL_optinteger(L, idx, dflt);
+        return static_cast<uint8_t>(std::min<lua_Integer>(255, std::max<lua_Integer>(0, v)));
+    };
+    uint8_t r  = comp(4, 255);   // clamp (S1-3)
+    uint8_t g  = comp(5, 255);
+    uint8_t b  = comp(6, 255);
+    uint8_t a  = comp(7, 255);
     float scale = (float)luaL_optnumber(L, 8, 1.0);   // {size=N} markup
     bool  bold  = lua_toboolean(L, 9) != 0;           // {b} markup
     bool  italic = lua_toboolean(L, 10) != 0;         // {i} markup
@@ -323,10 +328,14 @@ static int lua_KAG_render_ruby(lua_State* L) {
     const char* ruby = luaL_checkstring(L, 2);
     float x    = (float)luaL_optnumber(L, 3, 32.0);
     float y    = (float)luaL_optnumber(L, 4, 48.0);
-    uint8_t r  = (uint8_t)luaL_optinteger(L, 5, 255);
-    uint8_t g  = (uint8_t)luaL_optinteger(L, 6, 255);
-    uint8_t b  = (uint8_t)luaL_optinteger(L, 7, 255);
-    uint8_t a  = (uint8_t)luaL_optinteger(L, 8, 255);
+    auto comp   = [L](int idx, lua_Integer dflt) -> uint8_t {
+        const lua_Integer v = luaL_optinteger(L, idx, dflt);
+        return static_cast<uint8_t>(std::min<lua_Integer>(255, std::max<lua_Integer>(0, v)));
+    };
+    uint8_t r  = comp(5, 255);   // clamp (S1-3)
+    uint8_t g  = comp(6, 255);
+    uint8_t b  = comp(7, 255);
+    uint8_t a  = comp(8, 255);
 
     IRenderDevice* dev = getRender(L);
     if (!dev) { lua_pushboolean(L, 0); return 1; }

@@ -35,21 +35,54 @@ static bool readMesh(lua_State* L, int vertIdx, int idxIdx, SMAMesh& out) {
         lua_rawgeti(L, vertIdx, i); // vert table
         if (!lua_istable(L, -1)) { lua_pop(L, 1); return false; }
         SMAMeshVertex& v = out.vertices[(size_t)(i - 1)];
-        v.x = (float)luaL_optnumber(L, -1, 1);
-        v.y = (float)luaL_optnumber(L, -1, 2);
-        v.u = (float)luaL_optnumber(L, -1, 3);
-        v.v = (float)luaL_optnumber(L, -1, 4);
+        // Field-named access (review S1-1): luaL_optnumber on the table
+        // index always yields the default; the fields must be read by name.
+        v.x     = (float)luaL_optnumber(L, -1, 1);
+        lua_getfield(L, -1, "x");
+        if (lua_isnumber(L, -1)) v.x = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
+        v.y     = (float)luaL_optnumber(L, -1, 2);
+        lua_getfield(L, -1, "y");
+        if (lua_isnumber(L, -1)) v.y = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
+        v.u     = (float)luaL_optnumber(L, -1, 3);
+        lua_getfield(L, -1, "u");
+        if (lua_isnumber(L, -1)) v.u = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
+        v.v     = (float)luaL_optnumber(L, -1, 4);
+        lua_getfield(L, -1, "v");
+        if (lua_isnumber(L, -1)) v.v = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
         v.bone0 = (uint16_t)luaL_optinteger(L, -1, 5);
-        v.w0 = (float)luaL_optnumber(L, -1, 6);
+        lua_getfield(L, -1, "bone0");
+        if (lua_isnumber(L, -1)) v.bone0 = (uint16_t)lua_tointeger(L, -1);
+        lua_pop(L, 1);
+        v.w0    = (float)luaL_optnumber(L, -1, 6);
+        lua_getfield(L, -1, "w0");
+        if (lua_isnumber(L, -1)) v.w0 = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
         v.bone1 = (uint16_t)luaL_optinteger(L, -1, 7);
-        v.w1 = (float)luaL_optnumber(L, -1, 8);
+        lua_getfield(L, -1, "bone1");
+        if (lua_isnumber(L, -1)) v.bone1 = (uint16_t)lua_tointeger(L, -1);
+        lua_pop(L, 1);
+        v.w1    = (float)luaL_optnumber(L, -1, 8);
+        lua_getfield(L, -1, "w1");
+        if (lua_isnumber(L, -1)) v.w1 = (float)lua_tonumber(L, -1);
+        lua_pop(L, 1);
         lua_pop(L, 1);
     }
     out.indices.resize((size_t)in);
     for (int i = 1; i <= in; ++i) {
         lua_rawgeti(L, idxIdx, i);
-        out.indices[(size_t)(i - 1)] = (uint16_t)lua_tointeger(L, -1);
+        const lua_Integer raw = lua_tointeger(L, -1);
         lua_pop(L, 1);
+        if (raw < 0 || raw >= vn || raw > 65535) {
+            // Out-of-range index would either corrupt the mesh (surviving a
+            // uint16 truncation) or read past the vertex buffer (review S1-1).
+            out.indices.clear();
+            return false;
+        }
+        out.indices[(size_t)(i - 1)] = (uint16_t)raw;
     }
     return true;
 }
@@ -87,10 +120,22 @@ static int lua_sma_update_mesh(lua_State* L) {
         lua_rawgeti(L, 2, i); // pose table
         if (lua_istable(L, -1)) {
             BonePose& p = poses[(size_t)(i - 1)];
-            p.rot = (float)luaL_optnumber(L, -1, 1);
-            p.scale = (float)luaL_optnumber(L, -1, 2);
-            p.ox = (float)luaL_optnumber(L, -1, 3);
-            p.oy = (float)luaL_optnumber(L, -1, 4);
+            p.rot = (float)luaL_optnumber(L, -1, 0.0f);
+            lua_getfield(L, -1, "rot");
+            if (lua_isnumber(L, -1)) p.rot = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
+            p.scale = (float)luaL_optnumber(L, -1, 1.0f);
+            lua_getfield(L, -1, "scale");
+            if (lua_isnumber(L, -1)) p.scale = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
+            p.ox = (float)luaL_optnumber(L, -1, 0.0f);
+            lua_getfield(L, -1, "ox");
+            if (lua_isnumber(L, -1)) p.ox = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
+            p.oy = (float)luaL_optnumber(L, -1, 0.0f);
+            lua_getfield(L, -1, "oy");
+            if (lua_isnumber(L, -1)) p.oy = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
         }
         lua_pop(L, 1);
     }

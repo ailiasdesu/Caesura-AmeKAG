@@ -324,12 +324,30 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
         return json();
     }
 
-    uint64_t ts       = envelope.value("timestamp", uint64_t(0));
-    std::string scene = envelope.value("scene", "");
-    int tokenIdx      = envelope.value("token_index", 0);
-    std::string thumb = envelope.value("thumbnail", "");
-    int schemaVer     = envelope.value("schema_version", 1);
-    std::string engineVer = envelope.value("engine_version", "");
+    // Field reads must be type-safe: value() throws type_error 302 when a key
+    // exists with a wrong type (review ST-1) -- guard each read so a single
+    // tampered/corrupt save degrades gracefully instead of crashing.
+    auto safeStr = [&envelope](const char* key) -> std::string {
+        const auto it = envelope.find(key);
+        if (it == envelope.end() || !it->is_string()) return "";
+        return it->get<std::string>();
+    };
+    auto safeUint = [&envelope](const char* key, uint64_t fallback) -> uint64_t {
+        const auto it = envelope.find(key);
+        if (it == envelope.end() || !it->is_number_unsigned()) return fallback;
+        return it->get<uint64_t>();
+    };
+    auto safeInt = [&envelope](const char* key, int fallback) -> int {
+        const auto it = envelope.find(key);
+        if (it == envelope.end() || !it->is_number_integer()) return fallback;
+        return it->get<int>();
+    };
+    uint64_t ts       = safeUint("timestamp", 0);
+    std::string scene = safeStr("scene");
+    int tokenIdx      = safeInt("token_index", 0);
+    std::string thumb = safeStr("thumbnail");
+    int schemaVer     = safeInt("schema_version", 1);
+    std::string engineVer = safeStr("engine_version");
 
     if (outMeta) {
         outMeta->slot          = slot;
@@ -386,11 +404,16 @@ std::vector<SaveMeta> SaveManager::listSaves() {
 
         SaveMeta meta;
         meta.slot          = slot;
-        meta.timestamp     = envelope.value("timestamp", uint64_t(0));
-        meta.sceneName     = envelope.value("scene", "");
-        meta.thumbnail     = envelope.value("thumbnail", "");
-        meta.tokenIndex    = envelope.value("token_index", 0);
-        meta.schemaVersion = envelope.value("schema_version", 1);
+        const auto si = envelope.find("timestamp");
+        meta.timestamp     = (si != envelope.end() && si->is_number_unsigned()) ? si->get<uint64_t>() : 0;
+        const auto sn = envelope.find("scene");
+        meta.sceneName     = (sn != envelope.end() && sn->is_string()) ? sn->get<std::string>() : "";
+        const auto st = envelope.find("thumbnail");
+        meta.thumbnail     = (st != envelope.end() && st->is_string()) ? st->get<std::string>() : "";
+        const auto sk = envelope.find("token_index");
+        meta.tokenIndex    = (sk != envelope.end() && sk->is_number_integer()) ? sk->get<int>() : 0;
+        const auto sv = envelope.find("schema_version");
+        meta.schemaVersion = (sv != envelope.end() && sv->is_number_integer()) ? sv->get<int>() : 1;
 
         result.push_back(meta);
     }

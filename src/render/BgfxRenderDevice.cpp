@@ -478,8 +478,11 @@ void BgfxRenderDevice::setPostFxParams(PostFxHandle handle, const PostFxParams& 
 }
 
 void BgfxRenderDevice::destroyPostFx(PostFxHandle handle) {
+    // Stable-handle contract: disable the stage in place instead of erasing,
+    // so every other live handle keeps pointing at the same effect (RD-2).
+    // The chain skips disabled stages; clearPostFx() reclaims all slots.
     if (handle == 0 || handle > m_postFxStages.size()) return;
-    m_postFxStages.erase(m_postFxStages.begin() + static_cast<std::ptrdiff_t>(handle - 1));
+    m_postFxStages[handle - 1].enabled = false;
 }
 
 void BgfxRenderDevice::clearPostFx() {
@@ -608,10 +611,20 @@ void BgfxRenderDevice::runPostFxChain() {
     const size_t stageCount = m_postFxStages.size();
     const bool single = stageCount == 1;
 
+    // Determine the index of the last enabled stage up front: with a
+    // disabled tail (RD-2) the final composite must still target the
+    // backbuffer, which the naive i == size()-1 test would miss.
+    size_t lastEnabledIdx = 0;
+    bool hasEnabled = false;
+    for (size_t i = 0; i < stageCount; ++i) {
+        if (m_postFxStages[i].enabled) { lastEnabledIdx = i; hasEnabled = true; }
+    }
+    if (!hasEnabled) return;  // every stage disabled: nothing to composite
+
     for (size_t i = 0; i < stageCount; ++i) {
         const PostFxStage& st = m_postFxStages[i];
         if (!st.enabled) continue;
-        const bool last = (i == stageCount - 1);
+        const bool last = (i == lastEnabledIdx);
         PostFxKind kind = st.kind;
         bgfx::ProgramHandle prog = m_shaders->getPostFxProgram(static_cast<int>(kind));
         if (!bgfx::isValid(prog)) prog = m_shaders->getFallbackProgram();

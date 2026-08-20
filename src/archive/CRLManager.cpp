@@ -62,7 +62,13 @@ int64_t extractInt(const std::string& json, size_t& pos) {
         pos++;
     }
     if (num.empty()) return 0;
-    return std::stoll(num);
+    try {
+        return std::stoll(num);
+    } catch (const std::exception&) {
+        // Malformed numeric field (e.g. overflow) must never crash the
+        // verifier -- fall back to the field-missing value (review A-1).
+        return 0;
+    }
 }
 
 // Find value for key in JSON object

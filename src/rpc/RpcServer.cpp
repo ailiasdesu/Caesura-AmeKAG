@@ -70,11 +70,25 @@ public:
 #endif
     }
 
+    // Cap a single pending line so an unbounded/malformed stdin stream
+    // cannot grow memory without limit (review R-1). 16 MiB is far above
+    // any legitimate editor payload; a line larger than this is treated
+    // as a hostile input and dropped as EndOfInput.
+    static constexpr std::size_t kMaxLineBytes = 16u * 1024u * 1024u;
+
     RpcLineReadResult readLine(std::string& line) {
         line.clear();
         for (;;) {
             if (m_cancelled.load(std::memory_order_acquire)) {
                 return RpcLineReadResult::Cancelled;
+            }
+
+            if (m_buffer.size() > kMaxLineBytes) {
+                // Hostile input: no newline within the cap. Drop the buffer
+                // and signal end-of-input so the server shuts down cleanly.
+                m_buffer.clear();
+                m_endOfInput = true;
+                return RpcLineReadResult::EndOfInput;
             }
 
             const std::size_t newline = m_buffer.find('\n');

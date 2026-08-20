@@ -11,6 +11,7 @@ extern "C" {
 #include "../../resource/api/IAsyncLoader.h"
 #include "../../resource/api/IResourceGenerationTracker.h"
 #include "../../debug/api/DebugLog.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -246,6 +247,7 @@ static int lua_Render_submit_batch(lua_State* L) {
         float    w      = getTableFloat(L, "w", 128);
         float    h      = getTableFloat(L, "h", 128);
         int      opacity = getTableInt(L, "opacity", 255);
+        opacity = std::min(std::max(opacity, 0), 255);  // clamp (RD-5)
 
         RenderTextureHandle tex;
         uint32_t hit = 0;

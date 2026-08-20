@@ -45,6 +45,12 @@ std::vector<uint8_t> DirAssetProvider::read(const std::string& path)
     const std::streamsize size = file.tellg();
     if (size <= 0) return {};
 
+    // Cap a single asset read (review RD-3): a corrupt or misleading file
+    // must not trigger a multi-GB heap allocation. 512 MiB matches the
+    // documented per-asset ceiling used by the packaged formats.
+    constexpr std::streamsize kMaxAssetBytes = 512ull * 1024ull * 1024ull;
+    if (size > kMaxAssetBytes) return {};
+
     file.seekg(0, std::ios::beg);
     std::vector<uint8_t> data(static_cast<size_t>(size));
     file.read(reinterpret_cast<char*>(data.data()), size);

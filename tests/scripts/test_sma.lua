@@ -410,6 +410,23 @@ check("contracts: sma_ik has bone0/bone1/tx/ty/l1/l2",
 check("contracts: sma_variant has part/variant",
       smaVariant.part ~= nil and smaVariant.variant ~= nil)
 
+
+-- ---------------------------------------------------------------------------
+-- Review S1-1 guard (round 116): the C++ SmaBinding used to read mesh/pose
+-- fields with luaL_optnumber on the table index, which always yielded the
+-- defaults (breaks SMA skinning semantically). Fixed to per-field lua_getfield;
+-- this source guard pins that fix so a refactor cannot silently revert it.
+-- ---------------------------------------------------------------------------
+do
+    local f = assert(io.open("src/script/bindings/SmaBinding.cpp", "r"))
+    local src = f:read("*a")
+    f:close()
+    check("S1-1: readMesh reads x field", src:find('lua_getfield(L, -1, "x")', 1, true) ~= nil)
+    check("S1-1: readMesh reads bone0 field", src:find('lua_getfield(L, -1, "bone0")', 1, true) ~= nil)
+    check("S1-1: pose reads rot field", src:find('lua_getfield(L, -1, "rot")', 1, true) ~= nil)
+    check("S1-1: indices bounds-checked", src:find("raw >= vn", 1, true) ~= nil)
+end
+
 if failed > 0 then
     print(string.format("SMA TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)
