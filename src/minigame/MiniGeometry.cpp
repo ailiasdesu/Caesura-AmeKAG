@@ -1,4 +1,4 @@
-﻿#include "MiniGeometry.h"
+#include "MiniGeometry.h"
 #include <cmath>
 #include <cstdio>
 
@@ -73,6 +73,11 @@ GeometryData createCubeGeometry() {
 GeometryData createSphereGeometry(uint32_t segments) {
     GeometryData geo;
     if (segments < 3) segments = 3; // min 3 rings to produce valid geometry
+    // Cap segments so the largest vertex index stays within uint16_t range
+    // (RD-4): vertex count = 2 + (segments-1)*2*segments, and indices are
+    // stored as uint16_t. segments=181 already exceeds 65535, so clamp to a
+    // conservative 160 (>>> this keeps every index below 65536 with margin).
+    if (segments > 160) segments = 160;
     uint32_t latSteps = segments;
     uint32_t lonSteps = segments * 2;
 

@@ -3,6 +3,7 @@
 #include "minigame/api/IMiniGameBackend.h"
 #include "minigame/NullMiniGameBackend.h"
 #include "minigame/BgfxMiniGameBackend.h"
+#include "minigame/MiniGeometry.h"
 #include <filesystem>
 #include <fstream>
 #include "di/BackendRegistry.h"
@@ -230,3 +231,28 @@ TEST_CASE("MiniGame: loadScene returns distinct opaque handles for distinct scen
     backend.unloadScene(h2);
     backend.shutdown();
 }
+// =============================================================================
+// RD-4: sphere geometry index stays within uint16_t range (segments capped)
+// =============================================================================
+TEST_CASE("MiniGame: sphere geometry caps segments to keep indices in uint16 range") {
+    using namespace Caesura;
+    // Default low-detail sphere stays sane.
+    auto small = createSphereGeometry(8);
+    CHECK_FALSE(small.vertices.empty());
+    CHECK_FALSE(small.indices.empty());
+    for (auto idx : small.indices) {
+        CHECK(idx < small.vertices.size());
+        CHECK(static_cast<uint32_t>(idx) <= 65535u);
+    }
+
+    // A huge requested segment count is clamped, not truncated.
+    auto big = createSphereGeometry(100000);
+    CHECK(big.vertices.size() < 65536u);   // 50882 vertices at segments=160
+    for (auto idx : big.indices) {
+        CHECK(idx < big.vertices.size());
+    }
+    // Sanity: the printed/clamped segments produced valid triangles.
+    CHECK(big.indices.size() % 3 == 0);
+    CHECK(big.indices.size() / 3 > 100);
+}
+
