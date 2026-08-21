@@ -1,0 +1,34 @@
+{
+  "templates": [
+    {
+      "id": "blank",
+      "name": "Blank VN",
+      "description": "Minimal single-scene starter, no sample story text.",
+      "dir": "blank"
+    },
+    {
+      "id": "basic",
+      "name": "Basic VN",
+      "description": "Two-scene branching template with choice + save + credits.",
+      "dir": "basic"
+    },
+    {
+      "id": "live2d",
+      "name": "Live2D VN",
+      "description": "Live2D-oriented skeleton (Cubism hooks, model slot).",
+      "dir": "live2d"
+    },
+    {
+      "id": "kag3",
+      "name": "KAG3 Migration",
+      "description": "KAG3-style layout with %var% interpolation and legacy aliases.",
+      "dir": "kag3"
+    },
+    {
+      "id": "showcase",
+      "name": "Advanced / Showcase",
+      "description": "Feature-rich demo scene (tween/layout/i18n/postfx).",
+      "dir": "showcase"
+    }
+  ]
+}
