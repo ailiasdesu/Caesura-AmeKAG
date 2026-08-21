@@ -14,7 +14,7 @@
 | Lua binding functions (luaL_Reg entries) | 154 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 123 |
-| RPC HTTP endpoints (EditorServer) | 25 |
+| RPC HTTP endpoints (EditorServer) | 29 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 74 |
 
@@ -85,6 +85,8 @@
 | Get | /api/logs |
 | Get | /api/pick |
 | Get | /api/ping |
+| Get | /api/project/list |
+| Get | /api/project/templates |
 | Get | /api/sma/validate |
 | Get | /api/state |
 | Get | /api/stats |
@@ -97,6 +99,8 @@
 | Post | /api/debug/setBreakpoint |
 | Post | /api/eval |
 | Post | /api/live2d/load |
+| Post | /api/project/create |
+| Post | /api/project/duplicate |
 | Post | /api/reload |
 | Post | /api/run |
 | Post | /api/sma/save |
