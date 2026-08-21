@@ -7,7 +7,9 @@
 #include "RpcServer.h"
 
 #include <chrono>
+#include <climits>
 #include <condition_variable>
+#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <sstream>
@@ -329,6 +331,11 @@ void RpcServer::writeLine(const std::string& json) {
 // Request dispatcher
 // =========================================================================
 
+// [Review R-2] parseId previously accumulated into `int`, so a request id with
+// more than ~10 digits could overflow a signed 32-bit int (undefined behavior).
+// We now accumulate in int64 and clamp to INT_MAX on overflow, so arbitrarily
+// long numeric ids degrade safely to INT_MAX instead of invoking UB. The
+// return type stays `int` to match the existing callers (see RpcServer.cpp).
 static int parseId(const std::string& json) {
     // Quick and dirty: find "id":N
     size_t pos = json.find("\"id\":");
@@ -336,13 +343,18 @@ static int parseId(const std::string& json) {
     pos += 5;
     // Skip whitespace
     while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
-    // Read number
-    int val = 0;
+    // Read number (clamped to int range; never overflows signed types).
+    std::int64_t val = 0;
     while (pos < json.size() && json[pos] >= '0' && json[pos] <= '9') {
-        val = val * 10 + (json[pos] - '0');
+        const int digit = json[pos] - '0';
+        // If multiplying by 10 would exceed INT_MAX, saturate and stop.
+        if (val > (static_cast<std::int64_t>(INT_MAX) - digit) / 10) {
+            return INT_MAX;
+        }
+        val = val * 10 + digit;
         pos++;
     }
-    return val;
+    return static_cast<int>(val);
 }
 
 // Minimal JSON escape-sequence decoder (\n \t \r \" \\ \/ \uXXXX as UTF-8).

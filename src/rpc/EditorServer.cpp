@@ -271,11 +271,17 @@ void EditorServer::serverLoop(int port) {
             res.set_header("Access-Control-Allow-Origin", origin.c_str());
             res.set_header("Vary", "Origin");
         }
-        // Optional bearer-token gate. When configured, requests must present
-        // "Authorization: Bearer <token>"; this protects the local editor on
-        // multi-user machines. CORS preflight (OPTIONS) carries no
-        // Authorization header and must not be gated, or the browser web
-        // editor breaks; the actual request behind the preflight is checked.
+        // [Review R-3] API-token gate: the editor binds only to loopback
+        // (127.0.0.1), so no external host can reach it — the residual risk is
+        // another LOCAL process driving /api/run, /api/eval, etc. to execute
+        // arbitrary Lua. Mitigation is the bearer-token gate below: when
+        // m_authToken (CAESURA_EDITOR_TOKEN) is set, every /api/* request must
+        // present "Authorization: Bearer <token>" or get 401. When the token is
+        // empty the gate is open, preserving the existing editor workflow and
+        // tests ("default open + mandatory auth once configured" — backwards
+        // compatible hardening, not default-deny). CORS preflight (OPTIONS)
+        // carries no Authorization header and must not be gated, or the browser
+        // web editor breaks; the actual request behind the preflight is checked.
         if (req.method != "OPTIONS") {
             const std::string auth = req.get_header_value("Authorization");
             std::string token;
