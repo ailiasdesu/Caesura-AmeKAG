@@ -5,7 +5,62 @@
 > hand-polished into grouped, readable entries. Regenerate for the raw
 > one-commit-per-line view; edit this file for the curated view.
 
-Project version: **1.0.0** — see `CMakeLists.txt` / tag `v1.0.0` (from v1.0.0-alpha).
+Project version: **1.0.1** — see `CMakeLists.txt` / tag `v1.0.1` (from v1.0.0).
+
+---
+
+## v1.0.1 — Patch release: dynamic layers, audit fixes, bilingual README (2026-08-21)
+
+> Cut from `master` at round 117, two releases after v1.0.0. **10 commits** spanning
+> the round-116 day: a backward-compatible layer system upgrade, 25 code-review
+> findings disposition (14 fixed), and the bilingual no-emoji README. No new
+> game-facing breakage; the whole set re-gated green on three-platform CI.
+
+### Highlights
+
+- **Dynamic layer engine v2** (round 116) — the C++ hard-compositor is no longer
+  fixed to the legacy 3-slot BG/FG/MSG layout. Callers can now configure any
+  number of named layers with an explicit render order via
+  `configureLayers` / `getLayerCount` / `getLayerName` /
+  `findLayer` / `reorderLayer`; every index-based API keeps the legacy
+  `LayerType` values (BG/FG/MSG = 0/1/2) as the default layout, so existing
+  code compiles unchanged. The Lua `layers.lua` scene graph (production path)
+  already supported dynamic count/names/z-order; this closes the C++ counterpart.
+- **25 code-review findings disposition** (round 116/117) — external-input crashes
+  fixed (CRL stoll parse, save-envelope wrong-typed fields, unbounded stdin RPC
+  line buffer); functional regression fixed (SMA mesh/pose field reads); resource
+  and correctness hardening (PostFx stable handles, asset size caps, color clamp,
+  sphere index bounds) plus two medium items closed this round: **RD-1** VideoPlayer
+  decoder-worker use-after-free (shared_ptr lifecycle + frame-boundary close flush)
+  and **ST-2** cloud-save provider hardening (https support with fail-closed when
+  OpenSSL is not linked, optional bearer-token auth, 10 MiB pull cap).
+- **README bilingual rewrite** (round 116) — 636 to 745 lines, every section now
+  carries English + Chinese titles and body; all emoji removed (PASS/Yes/Words);
+  93 links intact. Capability matrix count corrected 79 to 82 (R11 postfx, S13 tween,
+  S14 layout were already tracked); interface census 385 to **390** methods
+  (ILayerManager 16 to 21).
+
+### Feat
+
+- **render** Dynamic layer count/name/order in ILayerManager v2 (`28b66a5b`)
+
+### Fix
+
+- **storage** ST-2 cloud provider https/auth/payload-cap hardening (`46bf7bf6`)
+- **render** RD-1 VideoPlayer shared_ptr lifecycle, defer close erase to frame boundary (`9aa945c5`)
+- **minigame** Clamp sphere segments to keep indices in uint16 range (RD-4) (`a71e383f`)
+- Address 25-item code review findings (high/medium severity) (`179f3dc8`)
+
+### Test
+
+- **storage** ST-1 wrong-typed save fields degrade gracefully (`d591d5ff`)
+
+### Docs
+
+- **roadmap** Record round 117 RD-1/ST-2 closure (`d1920cad`)
+- Record round 116 code review triage (25 findings disposition) (`e8381cf8`)
+- **readme** Bilingual zh/en rewrite without emoji, sync capability counts to 82 (`6066728d`)
+- Regenerate api-stats (390 methods) and record round 116 (`43475ba9`)
 
 ---
 

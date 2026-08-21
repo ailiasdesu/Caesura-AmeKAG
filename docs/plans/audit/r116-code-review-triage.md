@@ -2,7 +2,8 @@
 
 > 2026-08-20 · round 116 审查子代理对 `src/` 下约 65 个核心实现文件做了全文阅读与危险模式全量扫描，
 > 共 25 条发现（high 5 / medium 8 / low 12）。以下为每个条目的处置状态。
-> 权威基线：C++ 984/984（315547 断言）、Lua 132/132、孤儿 24/24、web 298/298、editor 530/530。
+> 权威基线：C++ 987/987（315556 断言）、Lua 132/132、孤儿 24/24、web 298/298、editor 530/530。
+> 更新（2026-08-21, v1.0.1 发布前）：RD-1 / ST-2 已在本处修订（round 117）修复，自「待处理」移入「已修复」。
 
 ## 已修复（11 条，本轮落地）
 
@@ -19,6 +20,8 @@
 | RD-4 | medium | minigame | createSphereGeometry 顶点索引 uint16 截断（segments>=181） | `a71e383f` segments 上限 160 + 测试（984/984） |
 | S1-2 | low | script | 若干绑定返回值与契约不一致（stop_voice 等返回 nil） | 已核实为兼容性设计，保留 |
 | S1-4 | low | script | DevCore.quit 栈不平衡 | 无实质危害，保留 |
+| RD-1 | medium | render | VideoPlayer update() 的 waitIdle 内 main 回调 close() 致 worker 悬垂（UAF） | `9aa945c5` m_videos 值改 shared_ptr、worker 捕获引用、close 物理 erase 延迟到帧末 flushPendingClose、shutdown 先 flush（round 117） |
+| ST-2 | medium | storage | HttpCloudSaveProvider 无 TLS、无鉴权、拉取无大小上限 | `46bf7bf6` https 支持（无 OpenSSL fail-closed）、可选 Bearer token、10MiB 拉取上限、makeClient 统一 TLS/超时/认证（round 117） |
 
 ## 已复核无需修改（2 条）
 
@@ -31,8 +34,6 @@
 
 | 编号 | 严重度 | 模块 | 问题 | 建议 |
 |---|---|---|---|---|
-| RD-1 | medium | render | VideoPlayer update()->waitIdle() 内 pollMainThreadJobs 执行 main 回调，回调 Lua 可 close() erase m_videos，worker 正在解码 → UAF | 需 GPU 验证的深度并发重构；建议 close() 延迟 erase 到 waitIdle 后统一清理 |
-| ST-2 | medium | storage | HttpCloudSaveProvider 无 TLS、无鉴权、拉取大小无上限（绕 10MiB 上限） | reate 云同步默认关闭；启用时建议 https + 限长 + 原子写 |
 | A-2 | medium | archive | CARC 证书链验证依赖"重新拼装"载荷签名，字段顺序敏感 | 建议签名覆盖范围改为转义感知的顶层键定位 |
 | A-3 | medium | archive | DeltaCARC 密钥明文随文件分发（伪加密） | 若公开分发需改公钥加密会话密钥 + 整体签名 |
 | A-4 | low | archive | CryptoEngine sign/verify 忽略长度参数 | 内部调用均传正确长度，可加断言 |
