@@ -302,8 +302,12 @@ bool CARCReader::decryptIndex(std::vector<uint8_t>& outIndexData)
     CryptoEngine::sha256(m_publicKey, PUBLICKEY_SIZE, h);
     memcpy(indexKey, h, AES_KEY_SIZE);
 
+    // Index nonce derivation MUST mirror CARCWriter (review A-5):
+    // [version(4)] + [first 8 bytes of sha256(public key)] -- see writer.
     uint8_t indexNonce[AES_NONCE_SIZE] = {};
     memcpy(indexNonce, &m_header.version, sizeof(m_header.version));
+    static_assert(PATH_HASH_SIZE >= AES_NONCE_SIZE - 4u, "hash too small");
+    memcpy(indexNonce + 4, h, AES_NONCE_SIZE - 4u);
 
     uint8_t indexTag[AES_TAG_SIZE];
     uint64_t encryptedDataSize = m_header.indexSize - AES_TAG_SIZE;

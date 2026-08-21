@@ -322,11 +322,20 @@ void CryptoEngine::sha256(const uint8_t* data, size_t len, uint8_t* hash, size_t
 // ==========================================================================
 // Instance: Ed25519 signing / verification (orlp -- cross-platform)
 // ==========================================================================
+// Ed25519 fixed sizes: private seed/secret 32B, public key 32B, signature 64B.
+// The orlp API takes arrays without explicit lengths; the *Len parameters let a
+// caller pass a wrong buffer size that would otherwise read/write out of bounds
+// (review A-4). Validate them fail-closed instead of ignoring.
 bool CryptoEngine::sign(const uint8_t* data, size_t len,
                         const uint8_t* privateKey, size_t privateKeyLen,
                         uint8_t* signature, size_t signatureLen)
 {
-    (void)privateKeyLen; (void)signatureLen;
+    // Ed25519 private key is 64 bytes (32-byte seed + 32-byte public key);
+    // the orlp API reads privateKey[32..63] as the public half. Interface
+    // callers pass the full 64-byte key (static wrapper does too).
+    if (privateKey == nullptr || signature == nullptr ||
+        data == nullptr || privateKeyLen != 64u || signatureLen != SIGNATURE_SIZE)
+        return false;
     ed25519_sign(signature, data, len, privateKey + 32, privateKey);
     return true;
 }
@@ -335,7 +344,9 @@ bool CryptoEngine::verify(const uint8_t* data, size_t len,
                           const uint8_t* publicKey, size_t publicKeyLen,
                           const uint8_t* signature, size_t signatureLen)
 {
-    (void)publicKeyLen; (void)signatureLen;
+    if (publicKey == nullptr || signature == nullptr ||
+        data == nullptr || publicKeyLen != 32u || signatureLen != SIGNATURE_SIZE)
+        return false;
     return ed25519_verify(signature, data, len, publicKey) != 0;
 }
 

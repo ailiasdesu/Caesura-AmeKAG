@@ -145,9 +145,18 @@ bool CARCWriter::finalize()
     CryptoEngine::sha256(m_publicKey, PUBLICKEY_SIZE, h);
     memcpy(indexKey, h, AES_KEY_SIZE);
 
+    // Index nonce (review A-5): [version(4)] + [first 8 bytes of sha256(public key)].
+    // Previously the nonce was version-on-zero-padding, so any two archives
+    // signed with the same public key that had an identical index plaintext
+    // would reuse the AES-GCM nonce+key pair (a confidentiality break on the
+    // encryption). Binding the public-key hash into the nonce makes it unique
+    // per signing key while staying deterministic per archive (reader derives
+    // the same value from the embedded public key). 12 bytes = AES_NONCE_SIZE.
     uint8_t indexNonce[AES_NONCE_SIZE] = {};
     uint32_t version = CARC_VERSION;
     memcpy(indexNonce, &version, sizeof(version));
+    static_assert(PATH_HASH_SIZE >= AES_NONCE_SIZE - 4u, "hash too small");
+    memcpy(indexNonce + 4, h, AES_NONCE_SIZE - 4u);
 
     uint8_t indexTag[AES_TAG_SIZE];
     std::vector<uint8_t> encryptedIndex = CryptoEngine::encrypt(
