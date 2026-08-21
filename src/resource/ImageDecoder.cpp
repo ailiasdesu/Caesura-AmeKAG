@@ -55,6 +55,16 @@ static DecodedImage fromBimg(bimg::ImageContainer* img) {
     const uint8_t* src = static_cast<const uint8_t*>(img->m_data);
     if (!src) return out;
 
+    // RE-2: fail-closed bounds check before reading pixel data. bimg's
+    // ImageContainer::m_size is the byte size of the raw image data; a forged
+    // KTX/DDS header could declare, say, RGBA8 dimensions whose w*h*4 span
+    // overruns the actual m_data buffer, causing an out-of-bounds read
+    // (assign()/the loops below would read past the end). Reject unless the
+    // container holds enough bytes for the format's uncompressed span.
+    const size_t pixelStride = (img->m_format == bimg::TextureFormat::RGB8) ? 3u : 4u;
+    const size_t requiredBytes = static_cast<size_t>(w) * static_cast<size_t>(h) * pixelStride;
+    if (img->m_size < requiredBytes) return {};  // not enough raw data for declared span (review RE-2)
+
     if (img->m_format == bimg::TextureFormat::RGBA8) {
         out.rgba.assign(src, src + out.rgba.size());
         out.ok = true;

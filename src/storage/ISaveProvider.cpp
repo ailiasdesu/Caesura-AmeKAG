@@ -1,4 +1,4 @@
-﻿// ===========================================================================
+// ===========================================================================
 //  Caesura (AmeKAG) — ISaveProvider.cpp
 //  Local filesystem save provider implementation.
 // ===========================================================================
@@ -24,10 +24,43 @@ std::string LocalFileSaveProvider::readFile(const std::string& path) {
 }
 
 bool LocalFileSaveProvider::writeFile(const std::string& path, const std::string& content) {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    // ST-3: size cap + atomic write. This provider is used directly by the
+    // cloud-pull path (pullFromCloud), so it must enforce the same 10 MiB
+    // limit that SaveManager::MAX_SAVE_SIZE enforces on its own layout.
+    // Writing unencrypted payloads larger than this would also be rejected on
+    // read-back by readFile() below.
+    static constexpr size_t kMaxWriteSize = 10 * 1024 * 1024;  // 10 MiB, matches SaveManager MAX_SAVE_SIZE (review ST-3)
+    if (content.size() > kMaxWriteSize) return false;
+
+    // Atomic write: write to a temp file next to the target, flush, then
+    // atomically rename into place. A crash mid-write leaves the previous
+    // save intact instead of truncating it.
+    const std::string tmpPath = path + ".tmp";
+    std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.write(content.c_str(), static_cast<std::streamsize>(content.size()));
-    return out.good();
+    out.flush();
+    if (!out.good()) {
+        out.close();
+        std::filesystem::remove(tmpPath);  // no stale partial temp file
+        return false;
+    }
+    out.close();
+
+    std::error_code ec;
+    std::filesystem::rename(tmpPath, path, ec);
+    if (ec) {
+        // On Windows, rename fails when the destination already exists; fall
+        // back to remove-then-rename so we never leave a stale temp behind.
+        std::error_code rmEc;
+        std::filesystem::remove(path, rmEc);
+        std::filesystem::rename(tmpPath, path, ec);
+        if (ec) {
+            std::filesystem::remove(tmpPath);
+            return false;
+        }
+    }
+    return true;
 }
 
 bool LocalFileSaveProvider::deleteFile(const std::string& path) {
