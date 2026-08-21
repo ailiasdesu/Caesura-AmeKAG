@@ -13,6 +13,7 @@ import { DebugView } from './ide/DebugView'
 import { VisualView } from './ide/VisualView'
 import { AiPanel } from './ide/AiPanel'
 import { SettingsPanel } from './ide/SettingsPanel'
+import { ProjectManagerView } from './ide/ProjectManagerView'
 import { EditorArea } from './ide/EditorArea'
 import { OutputPanel } from './ide/OutputPanel'
 import { ConnectionPanel } from './components/ConnectionPanel'
@@ -29,11 +30,13 @@ export function App() {
   const [connError, setConnError] = useState('')
   const sideView = useEditor((s) => s.sideView)
   const setEngine = useEditor((s) => s.setEngine)
+  const setEngineClient = useEditor((s) => s.setEngineClient)
   // Layer "settings" entry: the workbench theme is applied via data-theme on
   // the root app node so the CSS palette can react to the persisted choice.
   const theme = useEditor((s) => s.settings.theme)
 
   useEffect(() => {
+    setEngineClient(clientRef.current)
     void (async () => {
       setConn('connecting')
       try {
@@ -79,6 +82,7 @@ export function App() {
           {sideView === 'visual' && <VisualView client={clientRef.current} />}
           {sideView === 'ai' && <AiPanel client={clientRef.current} />}
           {sideView === 'settings' && <SettingsPanel />}
+          {sideView === 'project' && <ProjectManagerView client={clientRef.current} />}
         </aside>
 
         <main className="editor-col">

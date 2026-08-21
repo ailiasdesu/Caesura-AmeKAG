@@ -3,6 +3,7 @@
 // state transitions each action produces, including edge/empty states.
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useEditor, resolveInsertLine, type OpenDoc, type SideView } from './store'
+import type { EngineClient } from './lib/rpc'
 
 const doc = (path: string, partial: Partial<OpenDoc> = {}): OpenDoc => ({
   path,
@@ -380,5 +381,74 @@ describe('resolveInsertLine (pure)', () => {
 
   it('returns 0 for an empty doc so the statement lands on line 1', () => {
     expect(resolveInsertLine('', cur(1), 'a.ks')).toBe(0)
+  })
+})
+
+describe('useEditor project manager (Project Manager, Sprint 2)', () => {
+  beforeEach(() => {
+    useEditor.setState({
+      client: null,
+      projects: [],
+      templates: [],
+      recentProjects: [],
+    })
+  })
+
+  it('setEngineClient registers the RPC client', () => {
+    const mock = { ping: async () => ({ status: 'ok' }) }
+    useEditor.getState().setEngineClient(mock as unknown as EngineClient)
+    expect(useEditor.getState().client).toBe(mock)
+  })
+
+  it('loadProjects pulls the project list from the registered client', async () => {
+    const mock = {
+      projectList: async () => [
+        { path: 'projects/demo', name: 'demo', template: 'basic', modified: '1' },
+      ],
+    }
+    useEditor.setState({ client: mock as unknown as EngineClient })
+    await useEditor.getState().loadProjects()
+    expect(useEditor.getState().projects).toEqual([
+      { path: 'projects/demo', name: 'demo', template: 'basic', modified: '1' },
+    ])
+  })
+
+  it('loadTemplates pulls the template list from the registered client', async () => {
+    const mock = {
+      projectTemplates: async () => [
+        { id: 'basic', name: 'basic', description: '', dir: 'basic' },
+      ],
+    }
+    useEditor.setState({ client: mock as unknown as EngineClient })
+    await useEditor.getState().loadTemplates()
+    expect(useEditor.getState().templates).toEqual([
+      { id: 'basic', name: 'basic', description: '', dir: 'basic' },
+    ])
+  })
+
+  it('loadProjects is a no-op without a registered client', async () => {
+    useEditor.setState({ client: null, projects: [] })
+    await useEditor.getState().loadProjects()
+    expect(useEditor.getState().projects).toEqual([])
+  })
+
+  it('loadProjects leaves state untouched when the client rejects', async () => {
+    useEditor.setState({
+      client: { projectList: async () => { throw new Error('offline') } } as unknown as EngineClient,
+      projects: [{ path: 'projects/x', name: 'x', template: '' }],
+    })
+    await useEditor.getState().loadProjects()
+    expect(useEditor.getState().projects).toEqual([
+      { path: 'projects/x', name: 'x', template: '' },
+    ])
+  })
+
+  it('addRecentProject prepends and de-duplicates by path', () => {
+    const { addRecentProject } = useEditor.getState()
+    addRecentProject('projects/a', 'a')
+    addRecentProject('projects/b', 'b')
+    addRecentProject('projects/a', 'a') // re-open a → moves to front
+    const recent = useEditor.getState().recentProjects
+    expect(recent.map((x) => x.path)).toEqual(['projects/a', 'projects/b'])
   })
 })

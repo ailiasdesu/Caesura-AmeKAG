@@ -2,6 +2,13 @@
 // Tabs of open documents, active tab, sidebar view, status line.
 import { create } from 'zustand'
 import { loadSettings, saveSettings, type EditorSettings } from './lib/settings'
+import type { EngineClient, ProjectInfo, ProjectTemplate } from './lib/rpc'
+import {
+  loadRecentProjects,
+  saveRecentProjects,
+  pushRecentProject,
+  type RecentProject,
+} from './lib/recentProjects'
 
 export interface OpenDoc {
   /** Asset path as reported by /api/assets, e.g. assets/script/main.ks */
@@ -13,7 +20,7 @@ export interface OpenDoc {
   dirty: boolean
 }
 
-export type SideView = 'explorer' | 'debug' | 'visual' | 'ai' | 'settings'
+export type SideView = 'explorer' | 'debug' | 'visual' | 'ai' | 'settings' | 'project'
 
 interface EditorState {
   docs: OpenDoc[]
@@ -64,14 +71,38 @@ interface EditorState {
    *  cursor line (falling back to append when no cursor is tracked/active);
    *  marks the doc dirty. */
   insertAtCursor: (text: string) => void
+  /** Project Manager: the engine RPC client used by loadProjects/loadTemplates.
+   *  Registered once by App so the store's async project actions can reach
+   *  the engine (avoids threading the client through every panel). */
+  client: EngineClient | null
+  /** Project Manager: managed projects under ./projects/ (ProjectInfo[]). */
+  projects: ProjectInfo[]
+  /** Project Manager: discoverable templates (ProjectTemplate[]). */
+  templates: ProjectTemplate[]
+  /** Project Manager: recently opened projects (persisted to localStorage). */
+  recentProjects: RecentProject[]
+  /** Project Manager: register the engine client (called by App). */
+  setEngineClient: (c: EngineClient | null) => void
+  /** Project Manager: fetch + set the managed project list from the engine. */
+  loadProjects: () => Promise<void>
+  /** Project Manager: fetch + set the template list from the engine. */
+  loadTemplates: () => Promise<void>
+  /** Project Manager: record an opened project into the recent history
+   *  (de-duplicated by path, capped, persisted) and update state. */
+  addRecentProject: (path: string, name: string) => void
 }
 
-export const useEditor = create<EditorState>((set) => ({
+export const useEditor = create<EditorState>((set, get) => ({
   docs: [],
   activePath: null,
   sideView: 'explorer',
   // Hydrate persisted preferences; missing/corrupt storage → defaults.
   settings: loadSettings(),
+  client: null,
+  projects: [],
+  templates: [],
+  // Hydrate persisted recent-project history; missing/corrupt → [].
+  recentProjects: loadRecentProjects(),
   engineConnected: false,
   engineScene: '',
   engineToken: 0,
@@ -152,6 +183,33 @@ export const useEditor = create<EditorState>((set) => ({
         ),
       }
     }),
+  setEngineClient: (c) => set({ client: c }),
+  addRecentProject: (path, name) =>
+    set((s) => {
+      const recentProjects = pushRecentProject(s.recentProjects, path, name)
+      saveRecentProjects(recentProjects)
+      return { recentProjects }
+    }),
+  loadProjects: async () => {
+    const { client } = get()
+    if (!client) return
+    try {
+      const projects = await client.projectList()
+      await set({ projects })
+    } catch {
+      // Engine unreachable — leave the current list untouched.
+    }
+  },
+  loadTemplates: async () => {
+    const { client } = get()
+    if (!client) return
+    try {
+      const templates = await client.projectTemplates()
+      await set({ templates })
+    } catch {
+      // Engine unreachable — leave the current list untouched.
+    }
+  },
 }))
 
 /**

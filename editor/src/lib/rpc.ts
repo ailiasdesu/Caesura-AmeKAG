@@ -136,6 +136,32 @@ export interface Live2DModel {
   name: string
 }
 
+// A project template discoverable via GET /api/project/templates.
+export interface ProjectTemplate {
+  id: string
+  name: string
+  description: string
+  /** Directory name under tools/project_templates (== id in practice). */
+  dir: string
+}
+
+// A managed project under ./projects/ (GET /api/project/list).
+export interface ProjectInfo {
+  /** Directory path relative to the engine cwd, e.g. "projects/demo". */
+  path: string
+  name: string
+  template: string
+  /** File-system mtime as a raw integer string (opaque; for sorting). */
+  modified?: string
+}
+
+// Shared reply for POST /api/project/create and /api/project/duplicate.
+export interface ProjectOpReply {
+  ok: boolean
+  path?: string
+  error?: string
+}
+
 export interface ApiError {
   status: string
   code?: string
@@ -360,6 +386,35 @@ export class EngineClient {
     return this.request<{ status: string; modelId?: number }>('/live2d/load', {
       method: 'POST',
       body: JSON.stringify({ path }),
+    })
+  }
+
+  // -- Project Manager ----------------------------------------------------
+
+  /** List discoverable project templates (GET /api/project/templates). */
+  projectTemplates(): Promise<ProjectTemplate[]> {
+    return this.request<ProjectTemplate[]>('/project/templates')
+  }
+
+  /** List managed projects under ./projects/ (GET /api/project/list). */
+  projectList(): Promise<ProjectInfo[]> {
+    return this.request<ProjectInfo[]>('/project/list')
+  }
+
+  /** Create a new project from a template (POST /api/project/create). */
+  projectCreate(template: string, name: string): Promise<ProjectOpReply> {
+    return this.request<ProjectOpReply>('/project/create', {
+      method: 'POST',
+      body: JSON.stringify({ template, name }),
+    })
+  }
+
+  /** Duplicate an existing source project under a new name
+   *  (POST /api/project/duplicate). srcPath is the ProjectInfo.path. */
+  projectDuplicate(srcPath: string, name: string): Promise<ProjectOpReply> {
+    return this.request<ProjectOpReply>('/project/duplicate', {
+      method: 'POST',
+      body: JSON.stringify({ srcPath, name }),
     })
   }
 }

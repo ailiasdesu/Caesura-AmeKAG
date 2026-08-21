@@ -510,3 +510,84 @@ describe('EngineClient evalRaw contract (pure fragments)', () => {
     expect(layerSlot('')).toBe('other')
   })
 })
+
+describe('EngineClient project routes (Project Manager, Sprint 2)', () => {
+  it('projectTemplates() GETs /project/templates and parses the array', async () => {
+    const payload = [
+      { id: 'basic', name: 'basic', description: 'Minimal', dir: 'basic' },
+      { id: 'live2d', name: 'live2d', description: 'Live2D', dir: 'live2d' },
+    ]
+    const client = new EngineClient('/api', mockFetch(200, payload))
+    const templates = await client.projectTemplates()
+    expect(templates).toHaveLength(2)
+    expect(templates[0].id).toBe('basic')
+    expect(templates[0].dir).toBe('basic')
+    expect(client['request']).toBeDefined()
+  })
+
+  it('projectTemplates() hits the exact /api/project/templates path', async () => {
+    const fetchMock = mockFetch(200, [])
+    const client = new EngineClient('/api', fetchMock)
+    await client.projectTemplates()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/project/templates')
+  })
+
+  it('projectList() GETs /project/list and parses ProjectInfo[]', async () => {
+    const payload = [
+      { path: 'projects/demo', name: 'demo', template: 'basic', modified: '1234' },
+    ]
+    const client = new EngineClient('/api', mockFetch(200, payload))
+    const list = await client.projectList()
+    expect(list).toHaveLength(1)
+    expect(list[0].path).toBe('projects/demo')
+    expect(list[0].template).toBe('basic')
+  })
+
+  it('projectList() hits the exact /api/project/list path', async () => {
+    const fetchMock = mockFetch(200, [])
+    const client = new EngineClient('/api', fetchMock)
+    await client.projectList()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/project/list')
+  })
+
+  it('projectCreate() POSTs JSON {template,name} to /project/create', async () => {
+    const fetchMock = mockFetch(200, { ok: true, path: 'projects/demo' })
+    const client = new EngineClient('/api', fetchMock)
+    const reply = await client.projectCreate('basic', 'demo')
+    expect(reply.ok).toBe(true)
+    expect(reply.path).toBe('projects/demo')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/project/create')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ template: 'basic', name: 'demo' })
+  })
+
+  it('projectCreate() surfaces a {error} reply object when not ok', async () => {
+    const client = new EngineClient('/api', mockFetch(200, { ok: false, error: 'Project already exists' }))
+    const reply = await client.projectCreate('basic', 'demo')
+    expect(reply.ok).toBe(false)
+    expect(reply.error).toBe('Project already exists')
+  })
+
+  it('projectDuplicate() POSTs JSON {srcPath,name} to /project/duplicate', async () => {
+    const fetchMock = mockFetch(200, { ok: true, path: 'projects/demo_copy' })
+    const client = new EngineClient('/api', fetchMock)
+    const reply = await client.projectDuplicate('projects/demo', 'demo_copy')
+    expect(reply.ok).toBe(true)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/project/duplicate')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      srcPath: 'projects/demo',
+      name: 'demo_copy',
+    })
+  })
+
+  it('projectCreate() throws RpcError carrying the backend error on 400', async () => {
+    const client = new EngineClient('/api', mockFetch(400, { error: 'Invalid project name' }))
+    const err = await client.projectCreate('basic', 'bad name!').catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect(err.status).toBe(400)
+    expect(err.body).toEqual({ error: 'Invalid project name' })
+  })
+})
