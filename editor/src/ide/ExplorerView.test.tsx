@@ -168,3 +168,86 @@ describe('ExplorerView (component)', () => {
     })
   })
 })
+describe('ExplorerView type filters & asset affordances', () => {
+  it('renders type filter buttons with All active by default', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('main.ks')
+    const all = screen.getByRole('button', { name: 'All' })
+    expect(all.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Images' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Audio' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Scripts' })).toBeTruthy()
+  })
+
+  it('clicking Audio shows only audio assets and hides the others', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('main.ks')
+    fireEvent.click(screen.getByRole('button', { name: 'Audio' }))
+    expect(screen.getByText('bgm.ogg')).toBeTruthy()
+    expect(screen.queryByText('main.ks')).toBeNull()
+    expect(screen.queryByText('room.png')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Audio' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('clicking Images shows only image assets', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('main.ks')
+    fireEvent.click(screen.getByRole('button', { name: 'Images' }))
+    expect(screen.getByText('room.png')).toBeTruthy()
+    expect(screen.queryByText('main.ks')).toBeNull()
+    expect(screen.queryByText('bgm.ogg')).toBeNull()
+  })
+
+  it('clicking Scripts shows only script assets', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('main.ks')
+    fireEvent.click(screen.getByRole('button', { name: 'Scripts' }))
+    expect(screen.getByText('main.ks')).toBeTruthy()
+    expect(screen.getByText('start.ks')).toBeTruthy()
+    expect(screen.queryByText('room.png')).toBeNull()
+    expect(screen.queryByText('bgm.ogg')).toBeNull()
+  })
+
+  it('type filter stacks with the text filter', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('main.ks')
+    fireEvent.click(screen.getByRole('button', { name: 'Audio' }))
+    expect(screen.getByText('bgm.ogg')).toBeTruthy()
+    // Now the text filter also applies on top of type selection
+    fireEvent.change(screen.getByPlaceholderText('Filter assets…'), {
+      target: { value: 'room' },
+    })
+    expect(screen.queryByText('bgm.ogg')).toBeNull()
+    expect(screen.queryByText('room.png')).toBeNull()
+  })
+
+  it('renders a colored thumbnail placeholder on image assets with the kind label', async () => {
+    const client = makeClient({
+      assets: vi.fn(async () => [
+        { path: 'assets/image/bg_01.png', name: 'bg_01.png', type: 'image', kind: 'bg' },
+      ]),
+    })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('bg_01.png')
+    const thumb = document.querySelector('.explorer-thumb')
+    expect(thumb).toBeTruthy()
+    expect(thumb!.textContent).toBe('bg')
+    expect((thumb as HTMLElement).style.background).toBeTruthy()
+  })
+
+  it('shows the unavailability hint when the audio preview fails', async () => {
+    const client = makeClient({ assets: vi.fn(async () => ASSETS) })
+    render(<ExplorerView client={client as unknown as EngineClient} />)
+    await screen.findByText('bgm.ogg')
+    fireEvent.click(document.querySelector('.explorer-audio-btn')!)
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('不可用')
+    })
+  })
+})
