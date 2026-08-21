@@ -352,6 +352,65 @@ def main():
     st, resp = request("/api/status")
     check("no-token-open", st == 200, "%s %s" % (st, resp))
 
+    # ---- Project Manager endpoints (Sprint 2, task book §6.3) ----
+    # GET /api/project/templates -> 5 templates in manifest order.
+    st, resp = request("/api/project/templates")
+    names = [t["id"] for t in resp] if isinstance(resp, list) else []
+    check("project-templates-list",
+          st == 200 and len(names) == 5
+          and all(x in names for x in ("blank","basic","live2d","kag3","showcase")),
+          "%s %s" % (st, resp))
+
+    # POST /api/project/create with default template -> ok + path under projects/.
+    import time as _t
+    pname = "smoke_%d" % int(_t.time())
+    st, resp = request("/api/project/create",
+                       data=json.dumps({"template": "basic", "name": pname}).encode())
+    check("project-create-ok",
+          st == 200 and resp.get("ok") is True and str(resp.get("path","")).endswith(pname),
+          "%s %s" % (st, resp))
+
+    # Malformed name (spaces / slashes / path separators) -> 400.
+    st, resp = request("/api/project/create",
+                       data=json.dumps({"template": "basic", "name": "bad name"}).encode())
+    check("project-create-invalid-name", st == 400, "%s %s" % (st, resp))
+    st, resp = request("/api/project/create",
+                       data=json.dumps({"template": "basic", "name": "a/../b"}).encode())
+    check("project-create-path-traversal", st == 400, "%s %s" % (st, resp))
+
+    # Unknown template -> 400.
+    st, resp = request("/api/project/create",
+                       data=json.dumps({"template": "nope", "name": "x1"}).encode())
+    check("project-create-unknown-template", st == 400, "%s %s" % (st, resp))
+
+    # Duplicate the created project.
+    st, resp = request("/api/project/duplicate",
+                       data=json.dumps({"srcPath": pname, "name": pname + "_copy"}).encode())
+    check("project-duplicate-ok",
+          st == 200 and resp.get("ok") is True
+          and str(resp.get("path","")).endswith(pname + "_copy"),
+          "%s %s" % (st, resp))
+
+    # Duplicate of a nonexistent source -> 404.
+    st, resp = request("/api/project/duplicate",
+                       data=json.dumps({"srcPath": "does_not_exist", "name": "z9"}).encode())
+    check("project-duplicate-missing-src", st == 404, "%s %s" % (st, resp))
+
+    # GET /api/project/list reflects the created projects.
+    st, resp = request("/api/project/list")
+    listed = [p["name"] for p in resp] if isinstance(resp, list) else []
+    check("project-list-reflects-created",
+          st == 200 and pname in listed and (pname + "_copy") in listed,
+          "%s %s" % (st, resp))
+
+    # Cleanup: remove created project dirs so the repo stays clean.
+    for d in (pname, pname + "_copy"):
+        try:
+            import shutil
+            shutil.rmtree(os.path.join(cwd, "projects", d), ignore_errors=True)
+        except Exception:
+            pass
+
     time.sleep(1)
     check("engine-alive", proc.poll() is None)
 
