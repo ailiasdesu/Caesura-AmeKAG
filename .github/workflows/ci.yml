@@ -110,6 +110,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             & $lua.FullName tests/scripts/run_orphan_tests.lua
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # Golden Project (release-gate.md §7): ks_check + headless full run.
+            & $lua.FullName scripts/ks_check.lua tests/projects/golden_vn/story.ks
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $env:SAMPLE_STORY = "tests/projects/golden_vn/story.ks"
+            & $lua.FullName tests/scripts/sample_game_headless.lua
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
             Write-Host "lua.exe not found - skipping Lua suites"
           }
@@ -175,6 +181,9 @@ jobs:
         run: |
           lua tests/scripts/run_lua_tests.lua
           lua tests/scripts/run_orphan_tests.lua
+          # Golden Project (release-gate.md §7): ks_check + headless full run.
+          lua scripts/ks_check.lua tests/projects/golden_vn/story.ks
+          SAMPLE_STORY="tests/projects/golden_vn/story.ks" lua tests/scripts/sample_game_headless.lua
 
       - name: Web scripts index freshness
         run: |
@@ -227,6 +236,9 @@ jobs:
         run: |
           lua5.4 tests/scripts/run_lua_tests.lua
           lua5.4 tests/scripts/run_orphan_tests.lua
+          # Golden Project (release-gate.md §7): ks_check + headless full run.
+          lua5.4 scripts/ks_check.lua tests/projects/golden_vn/story.ks
+          SAMPLE_STORY="tests/projects/golden_vn/story.ks" lua5.4 tests/scripts/sample_game_headless.lua
 
       - name: Web scripts index freshness
         run: |
