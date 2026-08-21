@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { BreakpointSpec, DebugStateReply, EngineClient, FrameReply } from '../lib/rpc'
+import { buildRunSceneSnippet, scenePathForDoc } from '../lib/sceneRun'
 import { useEditor } from '../store'
 
 interface Props {
@@ -50,6 +51,10 @@ export function DebugView({ client }: Props) {
   const engineConnected = useEditor((s) => s.engineConnected)
   const enginePaused = useEditor((s) => s.enginePaused)
   const setEngine = useEditor((s) => s.setEngine)
+  const activePath = useEditor((s) => s.activePath)
+
+  // The runnable scene for the currently open document (.ks only).
+  const activeScene = scenePathForDoc(activePath)
 
   const refresh = useCallback(async () => {
     try {
@@ -73,6 +78,13 @@ export function DebugView({ client }: Props) {
     return () => clearInterval(t)
   }, [refresh])
 
+  // When the active doc is a .ks scene, point the breakpoint scene box at it
+  // so breakpoints default to the scene being edited/run.
+  useEffect(() => {
+    const scene = scenePathForDoc(activePath)
+    if (scene) setScene(scene)
+  }, [activePath])
+
   const run = async () => {
     setRunning(true)
     setMsg('')
@@ -83,6 +95,39 @@ export function DebugView({ client }: Props) {
       setMsg(e instanceof Error ? e.message : String(e))
     } finally {
       setRunning(false)
+    }
+  }
+
+  /** Run the currently open .ks scene: stop any running scene, then start
+   *  the new one via kag_runner through the /api/eval channel. */
+  const runCurrentScene = async () => {
+    const scene = scenePathForDoc(activePath)
+    if (!scene) {
+      setMsg('Open a .ks scene to run it')
+      return
+    }
+    setRunning(true)
+    setMsg('')
+    try {
+      const result = await client.evalRaw(buildRunSceneSnippet(scene))
+      setMsg('Scene: ' + scene + (result.trim() ? ' → ' + result.trim() : ''))
+      await refresh()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  /** Hot-reload the engine's current scene (client.reload) and refresh state. */
+  const reloadScene = async () => {
+    setMsg('')
+    try {
+      await client.reload()
+      setMsg('Scene reloaded')
+      await refresh()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -214,8 +259,26 @@ export function DebugView({ client }: Props) {
         spellCheck={false}
       />
       <div className="bp-actions">
-        <button className="primary" onClick={() => void run()} disabled={running || offline}>
-          {running ? 'Running…' : 'Run'}
+        <button
+          className="primary"
+          onClick={() => void runCurrentScene()}
+          disabled={running || offline || !activeScene}
+          title={activeScene ? 'Run ' + activeScene : 'Open a .ks scene to run it'}
+        >
+          {running ? 'Running…' : 'Run Current Scene'}
+        </button>
+        <button onClick={() => void reloadScene()} disabled={offline} title="Hot-reload the engine scene">
+          Reload Scene
+        </button>
+      </div>
+      {!activeScene && (
+        <div className="panel-msg">
+          Run Current Scene needs an open .ks scene (current doc: {activePath || 'none'})
+        </div>
+      )}
+      <div className="bp-actions">
+        <button onClick={() => void run()} disabled={running || offline}>
+          Run Raw
         </button>
         <button onClick={() => void stop()} disabled={offline}>
           Stop

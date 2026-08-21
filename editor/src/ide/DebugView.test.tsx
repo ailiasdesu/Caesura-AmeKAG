@@ -107,7 +107,7 @@ describe('DebugView (component)', () => {
     fireEvent.change(screen.getByPlaceholderText('-- Lua to run in the engine (optional)'), {
       target: { value: 'print(42)' },
     })
-    fireEvent.click(screen.getByText('Run'))
+    fireEvent.click(screen.getByText('Run Raw'))
     await screen.findByText('Script completed')
     expect(client.run).toHaveBeenCalledWith('print(42)')
   })
@@ -119,7 +119,7 @@ describe('DebugView (component)', () => {
       }),
     })
     await renderConnected(client)
-    fireEvent.click(screen.getByText('Run'))
+    fireEvent.click(screen.getByText('Run Raw'))
     await screen.findByText('Lua syntax error')
   })
 
@@ -132,12 +132,12 @@ describe('DebugView (component)', () => {
       run: vi.fn(() => gate),
     })
     await renderConnected(client)
-    fireEvent.click(screen.getByText('Run'))
+    fireEvent.click(screen.getByText('Run Raw'))
     const btn = await screen.findByText('Running…')
     expect((btn as HTMLButtonElement).disabled).toBe(true)
     release({ status: 'ok' })
     await screen.findByText('Script completed')
-    expect(screen.getByText('Run').closest('button')?.disabled).toBe(false)
+    expect(screen.getByText('Run Raw').closest('button')?.disabled).toBe(false)
   })
 
   it('requests stop', async () => {
@@ -230,7 +230,7 @@ describe('DebugView (component)', () => {
     })
     render(<DebugView client={client as unknown as EngineClient} />)
     await screen.findByText(/Engine disconnected/)
-    expect(screen.getByText('Run').closest('button')?.disabled).toBe(true)
+    expect(screen.getByText('Run Raw').closest('button')?.disabled).toBe(true)
     expect(screen.getByText('Stop').closest('button')?.disabled).toBe(true)
     expect(screen.getByText('Continue').closest('button')?.disabled).toBe(true)
     expect((screen.getByPlaceholderText('assets/script/main.ks') as HTMLInputElement).disabled).toBe(true)
