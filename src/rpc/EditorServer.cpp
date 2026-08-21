@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -1125,6 +1126,212 @@ void EditorServer::serverLoop(int port) {
         svr.Get("/index.html", serveIndex);
         printf("[EditorServer] Serving web editor from: %s\n", m_webRoot.c_str());
     }
+
+    // ---------------------------------------------------------------------
+    // Project Manager endpoints (Sprint 2, task book §6.3)
+    //  GET    /api/project/templates   -> [{id,name,description,dir}]
+    //  GET    /api/project/list        -> [{path,name,template,modified}]
+    //  POST   /api/project/create      -> {template,name,path}
+    //  POST   /api/project/duplicate   -> {srcPath,name}
+    //
+    // These are EDITOR-ORIENTED meta operations (they manage filesystem
+    // projects/templates, not the runtime protocol), so they are implemented
+    // here instead of the engine RPC DTO chain -- consistent with the
+    // task-book principle that Editor-internal RPC may evolve freely.
+    // ---------------------------------------------------------------------
+
+    // Templates root: tools/project_templates under the repo root. Paths are
+    // confined to <cwd>/tools/project_templates (no ".." / absolute escapes).
+    const auto templatesRoot = []() -> fs::path {
+        fs::path cwd = fs::current_path();
+        return cwd / "tools" / "project_templates";
+    };
+
+    const auto confineTemplatePath = [&](const std::string& p) -> fs::path {
+        std::string norm = p;
+        for (auto& ch : norm) if (ch == char(92)) ch = '/';
+        if (norm.find("..") != std::string::npos) return {};
+        if (!norm.empty() && norm[0] == '/') return {};
+        if (norm.find(':') != std::string::npos) return {};   // drive/scheme
+        return templatesRoot() / norm;
+    };
+
+    svr.Get("/api/project/templates", [&](const httplib::Request&, httplib::Response& res) {
+        nlohmann::json out = nlohmann::json::array();
+        // Read manifest.json when present; otherwise enumerate directories.
+        std::ifstream mf(templatesRoot() / "manifest.json");
+        if (mf) {
+            try {
+                auto m = nlohmann::json::parse(mf);
+                if (m.contains("templates") && m["templates"].is_array())
+                    out = m["templates"];
+            } catch (const std::exception&) { out = nlohmann::json::array(); }
+        }
+        if (out.empty()) {
+            // Fallback: enumerate directories under templates root.
+            std::error_code ec;
+            for (const auto& e : fs::directory_iterator(templatesRoot(), ec)) {
+                if (ec || !e.is_directory()) continue;
+                out.push_back({ {"id", e.path().filename().string()},
+                                {"name", e.path().filename().string()},
+                                {"description", ""},
+                                {"dir", e.path().filename().string()} });
+            }
+        }
+        res.set_content(out.dump(), "application/json");
+    });
+
+    svr.Get("/api/project/list", [&](const httplib::Request&, httplib::Response& res) {
+        // Discover projects under ./projects/ (created by this manager). Each
+        // is a directory with story.ks (or entry.lua) and assets/. Hard catch
+        // keeps a malformed entry from becoming a 500 (Sprint 2).
+        nlohmann::json out = nlohmann::json::array();
+        try {
+            fs::path projectsRoot = fs::current_path() / "projects";
+            std::error_code ec;
+            if (!fs::exists(projectsRoot, ec)) {
+                std::error_code createEc;
+                fs::create_directories(projectsRoot, createEc);
+                res.set_content(out.dump(), "application/json");
+                return;
+            }
+            for (const auto& e : fs::directory_iterator(projectsRoot, ec)) {
+                if (ec) break;
+                std::error_code de;
+                if (!e.is_directory(de) || de) continue;
+                const std::string name = e.path().filename().string();
+                const bool hasStory = fs::exists(e.path() / "story.ks", de)
+                                    || fs::exists(e.path() / "entry.lua", de);
+                if (!hasStory) continue;
+                std::string modified;
+                std::error_code le;
+                auto ft = fs::last_write_time(e.path(), le);
+                if (!le) {
+                    modified = std::to_string(
+                        static_cast<long long>(ft.time_since_epoch().count()));
+                }
+                out.push_back({ {"path", std::string("projects/") + name},
+                                {"name", name},
+                                {"template", ""},
+                                {"modified", modified} });
+            }
+        } catch (...) {
+            out = nlohmann::json::array();
+        }
+        std::string body;
+        try { body = out.dump(); } catch (...) { body = "[]"; }
+        res.set_content(body, "application/json");
+    });
+
+    svr.Post("/api/project/create", [&](const httplib::Request& req, httplib::Response& res) {
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            const std::string templateId = body.value("template", "basic");
+            const std::string name = body.value("name", std::string());
+            if (name.empty()) {
+                res.set_content("{\"error\":\"Missing project name\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            if (templateId != "blank" && templateId != "basic" &&
+                templateId != "live2d" && templateId != "kag3" &&
+                templateId != "showcase" && !templateId.empty()) {
+                res.set_content("{\"error\":\"Unknown template\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            // Sanitize project name: allow [A-Za-z0-9_-], reject separators.
+            for (char ch : name) {
+                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
+                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
+                    res.status = 400;
+                    return;
+                }
+            }
+            fs::path projectsRoot = fs::current_path() / "projects";
+            std::error_code ec;
+            fs::create_directories(projectsRoot, ec);
+
+            fs::path dest = projectsRoot / name;
+            if (fs::exists(dest, ec)) {
+                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
+                res.status = 409;
+                return;
+            }
+            // Copy template dir (default "basic") into the project.
+            const std::string dir = templateId.empty() ? "basic" : templateId;
+            fs::path src = confineTemplatePath(dir);
+            if (src.empty() || !fs::exists(src, ec)) {
+                res.set_content("{\"error\":\"Template not found\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            std::error_code copyEc;
+            fs::copy(src, dest, fs::copy_options::recursive
+                                        | fs::copy_options::overwrite_existing,
+                     copyEc);
+            if (copyEc) {
+                res.set_content("{\"error\":\"Failed to copy template\"}", "application/json");
+                res.status = 500;
+                return;
+            }
+            // Adjust entry.lua story path is unnecessary (it already probes
+            // several relative locations).
+            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
+                            "application/json");
+        } catch (const std::exception&) {
+            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/api/project/duplicate", [&](const httplib::Request& req, httplib::Response& res) {
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            const std::string srcName = body.value("srcPath", std::string());
+            const std::string newName = body.value("name", std::string());
+            if (srcName.empty() || newName.empty()) {
+                res.set_content("{\"error\":\"Missing srcPath/name\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            for (char ch : newName) {
+                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
+                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
+                    res.status = 400;
+                    return;
+                }
+            }
+            fs::path projectsRoot = fs::current_path() / "projects";
+            fs::path src = projectsRoot / srcName;
+            fs::path dest = projectsRoot / newName;
+            std::error_code ec;
+            if (!fs::exists(src, ec) || !fs::is_directory(src, ec)) {
+                res.set_content("{\"error\":\"Source project not found\"}", "application/json");
+                res.status = 404;
+                return;
+            }
+            if (fs::exists(dest, ec)) {
+                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
+                res.status = 409;
+                return;
+            }
+            std::error_code copyEc;
+            fs::copy(src, dest, fs::copy_options::recursive
+                                        | fs::copy_options::overwrite_existing,
+                     copyEc);
+            if (copyEc) {
+                res.set_content("{\"error\":\"Failed to duplicate\"}", "application/json");
+                res.status = 500;
+                return;
+            }
+            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
+                            "application/json");
+        } catch (const std::exception&) {
+            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
+            res.status = 400;
+        }
+    });
 
     // ---------------------------------------------------------------------
     // Start listening
