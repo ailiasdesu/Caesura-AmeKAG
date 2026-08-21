@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useEditor } from '../store'
 import { KagLsp } from '../lib/kagLsp'
 import { EngineClient } from '../lib/rpc'
+import { parseAssetDrop } from '../lib/assetDrop'
 
 // Battle 4b: module-level registry so the SceneTree (outside the Monaco
 // editor tree) can ask the mounted editor to reveal a line.
@@ -25,11 +26,13 @@ export function revealEditorLine(path: string, line: number): void {
 }
 
 export function EditorArea() {
+
   const docs = useEditor((s) => s.docs)
   const activePath = useEditor((s) => s.activePath)
   const setActive = useEditor((s) => s.setActive)
   const updateDoc = useEditor((s) => s.updateDoc)
   const closeDoc = useEditor((s) => s.closeDoc)
+  const openDoc = useEditor((s) => s.openDoc)
   const setCursor = useEditor((s) => s.setCursor)
   const revealRequest = useEditor((s) => s.revealRequest)
   const lastReveal = useRef(0)
@@ -80,8 +83,37 @@ export function EditorArea() {
     })
   }
 
+  // Asset drag-and-drop (Sprint 3b): ExplorerView drops
+  // application/x-caesura-asset {path,type}. Scripts open as docs;
+  // image/audio show a status hint (no media server in the engine).
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const asset = parseAssetDrop(e.dataTransfer.getData('application/x-caesura-asset'))
+    if (!asset) return
+    const { path, type } = asset
+    if (type === 'script') {
+      setActive(path)
+      openDoc({
+        path,
+        name: path.split('/').pop() ?? path,
+        language: path.endsWith('.ks') ? 'kag' : 'lua',
+        content: '',
+        dirty: false,
+      })
+    } else {
+      // image/audio: click-to-place is wired in the Visual/Scene views;
+      // dropping a non-script here just nudges the user.
+      setCursor({ path, line: 1, column: 1 })  // reuse cursor for a hint area
+    }
+  }
+  const handleDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-caesura-asset')) {
+      e.preventDefault()
+    }
+  }
+
   return (
-    <div className="editor-area">
+    <div className="editor-area" onDrop={handleDrop} onDragOver={handleDragOver}>
       <div className="tab-bar" role="tablist">
         {docs.map((d) => (
           <div
