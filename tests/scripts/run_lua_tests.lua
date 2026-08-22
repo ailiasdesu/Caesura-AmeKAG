@@ -87,6 +87,7 @@ local tests = {
     "test_macro_deep2",
     "test_scene_restore",
     "test_elseif",
+    "test_elsif_alias",
     "test_if_nested",
     "test_switch",
     "test_switch_exotic",

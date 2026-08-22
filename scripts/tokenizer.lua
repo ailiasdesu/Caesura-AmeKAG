@@ -188,7 +188,13 @@ function tokenizer.parse_with_offsets(ks_text)
             local tok = { offset = startpos, end_offset = endpos - 1 }
             local typ = t[1]
             if typ == "cmd" then
-                tok.type = "command"; tok.cmd = t[2]
+                -- Alias normalization MUST match tokenizer.parse (line ~130):
+                -- ks_check/LSP consume this path, so an un-normalized [elsif]
+                -- would be flagged "unknown" there while the runtime scheduler
+                -- executes it fine (P1 toolchain inconsistency, round 122).
+                -- String-only rewrite: offset/end_offset come from Cp()
+                -- captures and are unaffected.
+                tok.type = "command"; tok.cmd = tokenizer.normalize_cmd(t[2])
                 -- one_token's Ct nesting wraps EACH param capture in its
                 -- own sub-array: t[3..#t] = { {pair} } per bare/named
                 -- arg (audit: the old `tok.params = t[3]` read only the
