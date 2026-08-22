@@ -273,3 +273,16 @@ add_custom_command(TARGET CaesuraTests POST_BUILD
         COMMENT "Copying FFmpeg DLLs to test output directory..."
     )
 endif()
+
+# Copy the Steamworks runtime DLL to test output so CaesuraTests (which links
+# caesura_steam) can start at all; mirrors the root steam_api64.dll handling
+# and the SDL3-runtime-beside-tests rule above.
+if(CAESURA_HAS_STEAM AND WIN32)
+    get_filename_component(STEAM_SDK_BIN_DIR "${STEAM_LIBRARY}" DIRECTORY)
+    add_custom_command(TARGET CaesuraTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${STEAM_SDK_BIN_DIR}/steam_api64.dll"
+        "$<TARGET_FILE_DIR:CaesuraTests>/steam_api64.dll"
+        COMMENT "Copying Steamworks runtime to test output directory..."
+    )
+endif()
