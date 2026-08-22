@@ -91,8 +91,13 @@ namespace SoLoud
             Thread::wait(data->threadHandle);
             Thread::release(data->threadHandle);
         }
-        snd_pcm_drain(data->alsaDeviceHandle);
-        snd_pcm_close(data->alsaDeviceHandle);
+        // Guard: with a null default device (headless CI/WSL via
+        // /etc/asound.conf) open may yield a NULL handle and a transient
+        // volume-0 teardown then asserts in snd_pcm_drain(NULL).
+        if (data->alsaDeviceHandle) {
+            snd_pcm_drain(data->alsaDeviceHandle);
+            snd_pcm_close(data->alsaDeviceHandle);
+        }
         if (0 != data->sampleBuffer)
         {
             delete[] data->sampleBuffer;
