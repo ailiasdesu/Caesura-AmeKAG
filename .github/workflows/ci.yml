@@ -212,6 +212,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
 
+      - name: Configure ALSA null device (headless audio)
+        run: |
+          # SoLoud ALSA backend (enabled on Linux) needs a default PCM; CI
+          # runners have no sound card. A null device lets init succeed and
+          # keeps the audio path exercised instead of SIGABRT on snd_pcm.
+          printf "pcm.!default { type null }\nctl.!default { type null }\n" | sudo tee /etc/asound.conf
+
       - name: Build SDL3 from source
         run: |
           wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
