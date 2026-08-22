@@ -852,3 +852,49 @@ Lua 侧 API：`require("kag_debug")`（`set_breakpoint`/`step`/`continue_run`/`i
 执行——**零引擎改动**。路由片段受沙箱白名单约束（`_G._CAESURA_CTX`
 锚点）。SceneOutlinePanel（`editor/`）提供该跳转的 UI 入口。
 
+
+## F. Project Management (Sprint 2/5c)
+
+### GET /api/project/templates
+
+Returns available project templates.
+
+### GET /api/project/list
+
+Lists managed projects under `./projects/`.
+
+### POST /api/project/create
+
+Create a new project from a template. Body: `{"template":"basic","name":"my_vn"}`
+
+-> `{"ok":true,"path":"projects/my_vn"}`
+
+400 invalid name or unknown template; 409 already exists.
+
+### POST /api/project/duplicate
+
+Duplicate an existing project.
+
+### POST /api/project/import
+
+Register an existing directory as a managed project.
+
+### GET /api/project/meta?path=projects/name
+
+Reads project metadata (infers defaults when caesura.project.json absent).
+
+### POST /api/project/meta
+
+Saves project metadata.
+
+## G. Web Packaging (Sprint 5c)
+
+### POST /api/package/web
+
+One-click web packaging via `scripts/package_game.sh`.
+
+Body: `{"storyPath":"demo/example_game/story.ks","outName":"example_game"}`
+
+-> `{"ok":true,"outputDir":"dist/example_game","logTail":"..."}`
+
+400 = path outside whitelist or invalid outName.
