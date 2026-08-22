@@ -517,8 +517,16 @@ def main():
           "%s %s" % (st, str(resp)[:400]))
 
     # Real artifacts must exist on disk (static site + baked story bundle).
+    # The engine writes dist/ under its CWD; in-tree builds keep that under
+    # the repo too (build/Debug/dist). Accept either layout so out-of-tree
+    # (WSL/CI prefix builds) is not a false failure.
     _repo_root = os.path.dirname(os.path.dirname(cwd))  # build/Debug -> repo
-    _pkg_dir = os.path.join(_repo_root, "dist", "smoke_pkg")
+    _pkg_candidates = [
+        os.path.join(cwd, "dist", "smoke_pkg"),
+        os.path.join(_repo_root, "dist", "smoke_pkg"),
+    ]
+    _pkg_dir = next((p for p in _pkg_candidates if os.path.isdir(p)),
+                    _pkg_candidates[0])
     check("package-web-artifacts",
           os.path.isfile(os.path.join(_pkg_dir, "index.html"))
           and os.path.isfile(os.path.join(_pkg_dir, "MANIFEST.txt"))
