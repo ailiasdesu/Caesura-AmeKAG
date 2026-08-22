@@ -250,6 +250,17 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying demo to output directory..."
 )
 
+# Copy the prebuilt web player so the editor package/web endpoint and the
+# HTTP smoke can assemble a site from the output dir (same pattern as demo).
+if(EXISTS "${CMAKE_SOURCE_DIR}/web/dist/index.html")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/web/dist"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/web/dist"
+        COMMENT "Copying web player to output directory..."
+    )
+endif()
+
 # Copy PM-created projects to output (may be empty at first)
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/projects")
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
