@@ -81,7 +81,9 @@ target_include_directories(CaesuraTests PRIVATE
 )
 
 target_compile_definitions(CaesuraTests PRIVATE
-    CAESURA_SOURCE_DIR=u8\"${CMAKE_SOURCE_DIR}\"
+    # CAESURA_SOURCE_DIR provided by CaesuraBuildOptions (interface) since
+    # round 133 -- do NOT redefine: duplicate defs with different encodings
+    # broke Chinese repo paths on Windows (ACP conversion throws).
 )
 
 target_link_libraries(CaesuraTests PRIVATE

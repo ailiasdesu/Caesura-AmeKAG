@@ -11,6 +11,12 @@ add_library(Caesura::BuildOptions ALIAS CaesuraBuildOptions)
 # envelopes, diagnostics UI) reads the released binary's version.
 target_compile_definitions(CaesuraBuildOptions INTERFACE
     CAESURA_VERSION="${PROJECT_VERSION}"
+    # Repo root for out-of-tree builds (WSL/CI build dirs are NOT on the
+    # cwd chain): editor path confinement resolves templates/projects from
+    # the source tree instead of guessing upward from the build dir.
+    # u8 keeps char8_t semantics that std::filesystem::path accepts on MSVC
+    # (Chinese repo paths must survive the ACP conversion).
+    CAESURA_SOURCE_DIR=u8"${CMAKE_SOURCE_DIR}"
 )
 
 target_compile_features(CaesuraBuildOptions INTERFACE cxx_std_20)
