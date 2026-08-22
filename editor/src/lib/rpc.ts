@@ -125,9 +125,15 @@ export interface SmaSaveReply {
 }
 
 
+// Reply of POST /api/build (one-click CARC packaging, R1.3).
 export interface BuildReply {
   status: string
-  output?: string
+  /** Produced archive path (as confined under build/). */
+  path?: string
+  /** Archive size in bytes. */
+  size?: number
+  /** Number of packaged files. */
+  files?: number
   error?: string
 }
 
@@ -330,7 +336,11 @@ export class EngineClient {
     return this.request<Live2DModel[]>('/live2d/models')
   }
 
-  build(outputPath?: string, keyPath?: string): Promise<BuildReply> {
+  /** One-click CARC packaging (POST /api/build): packs scripts/ + assets/
+   *  into an encrypted archive. Both paths are optional — the engine defaults
+   *  to build/game.carc and build/game.key and confines them under build/
+   *  (rejecting "..", drive letters and absolute paths). */
+  buildCarc(outputPath?: string, keyPath?: string): Promise<BuildReply> {
     return this.request<BuildReply>('/build', {
       method: 'POST',
       body: JSON.stringify({ outputPath, keyPath }),

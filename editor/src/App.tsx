@@ -14,6 +14,7 @@ import { VisualView } from './ide/VisualView'
 import { AiPanel } from './ide/AiPanel'
 import { SettingsPanel } from './ide/SettingsPanel'
 import { ProjectManagerView } from './ide/ProjectManagerView'
+import { BuildManagerView } from './ide/BuildManagerView'
 import { EditorArea } from './ide/EditorArea'
 import { OutputPanel } from './ide/OutputPanel'
 import { ConnectionPanel } from './components/ConnectionPanel'
@@ -83,6 +84,7 @@ export function App() {
           {sideView === 'ai' && <AiPanel client={clientRef.current} />}
           {sideView === 'settings' && <SettingsPanel />}
           {sideView === 'project' && <ProjectManagerView client={clientRef.current} />}
+          {sideView === 'build' && <BuildManagerView client={clientRef.current} />}
         </aside>
 
         <main className="editor-col">

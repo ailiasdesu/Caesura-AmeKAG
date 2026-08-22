@@ -192,26 +192,52 @@ describe('EngineClient', () => {
     )
   })
 
-  it('build() POSTs JSON {outputPath, keyPath}', async () => {
-    const fetchMock = mockFetch(200, { status: 'ok' })
+  it('buildCarc() POSTs JSON {outputPath, keyPath} to /api/build', async () => {
+    const fetchMock = mockFetch(200, {
+      status: 'ok',
+      path: 'build/game.carc',
+      size: 2048,
+      files: 12,
+    })
     const client = new EngineClient('/api', fetchMock)
-    await client.build('out', 'key')
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const reply = await client.buildCarc('out', 'key')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/build')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({
       outputPath: 'out',
       keyPath: 'key',
     })
+    // Success reply carries the produced archive path/size/file count.
+    expect(reply.status).toBe('ok')
+    expect(reply.path).toBe('build/game.carc')
+    expect(reply.size).toBe(2048)
+    expect(reply.files).toBe(12)
   })
 
-  it('build() with no args posts null outputPath/keyPath', async () => {
+  it('buildCarc() with no args omits outputPath/keyPath (server defaults apply)', async () => {
     const fetchMock = mockFetch(200, { status: 'ok' })
     const client = new EngineClient('/api', fetchMock)
-    await client.build()
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    await client.buildCarc()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/build')
     expect(JSON.parse(init.body as string)).toEqual({
       outputPath: undefined,
       keyPath: undefined,
+    })
+  })
+
+  it('buildCarc() surfaces RpcError carrying the engine error on 400', async () => {
+    // The engine rejects paths escaping build/ with a plain {error} body.
+    const client = new EngineClient(
+      '/api',
+      mockFetch(400, { error: 'outputPath/keyPath must be relative paths under build/' }),
+    )
+    const err = await client.buildCarc('../evil.carc').catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect(err.status).toBe(400)
+    expect(err.body).toEqual({
+      error: 'outputPath/keyPath must be relative paths under build/',
     })
   })
 

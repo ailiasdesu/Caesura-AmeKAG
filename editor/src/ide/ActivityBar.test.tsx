@@ -18,7 +18,7 @@ beforeEach(() => {
   })
 })
 
-const ICONS = ['📁', '🗂', '🐞', '🎬', '✨', '⚙️']
+const ICONS = ['📁', '🗂', '🐞', '🎬', '✨', '⚙️', '🔨']
 const LABELS = [
   'Explorer (assets)',
   'Projects',
@@ -26,13 +26,14 @@ const LABELS = [
   'Visual Preview',
   'AI Writer',
   'Settings',
+  'Build',
 ]
 
 describe('ActivityBar (component)', () => {
-  it('renders all six view buttons with icons and labels', () => {
+  it('renders all seven view buttons with icons and labels', () => {
     render(<ActivityBar />)
     const buttons = screen.getAllByRole('button')
-    expect(buttons).toHaveLength(6)
+    expect(buttons).toHaveLength(7)
     buttons.forEach((b, i) => expect(b.textContent).toBe(ICONS[i]))
     expect(buttons[0].getAttribute('title')).toBe('Explorer (assets)')
     expect(buttons[1].getAttribute('title')).toBe('Projects')
@@ -63,6 +64,12 @@ describe('ActivityBar (component)', () => {
     expect(useEditor.getState().sideView).toBe('project')
   })
 
+  it('switches to the build view from its button (7th)', () => {
+    render(<ActivityBar />)
+    fireEvent.click(screen.getAllByRole('button')[6])
+    expect(useEditor.getState().sideView).toBe('build')
+  })
+
   it('activates the settings view from its button', () => {
     render(<ActivityBar />)
     fireEvent.click(screen.getAllByRole('button')[5])
@@ -81,7 +88,7 @@ describe('ActivityBar (accessibility & state machine)', () => {
   it('exposes every view button with a role and an accessible label', () => {
     render(<ActivityBar />)
     const buttons = screen.getAllByRole('button')
-    expect(buttons).toHaveLength(6)
+    expect(buttons).toHaveLength(7)
     for (const b of buttons) {
       expect(b.getAttribute('aria-label')).toBeTruthy()
       expect(b.textContent?.length).toBeGreaterThan(0)
