@@ -102,7 +102,7 @@ interface EditorState {
 export const useEditor = create<EditorState>((set, get) => ({
   docs: [],
   activePath: null,
-  sideView: 'explorer',
+  sideView: 'project',
   // Hydrate persisted preferences; missing/corrupt storage → defaults.
   settings: loadSettings(),
   client: null,
