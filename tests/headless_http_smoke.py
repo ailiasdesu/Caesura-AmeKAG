@@ -396,20 +396,60 @@ def main():
                        data=json.dumps({"srcPath": "does_not_exist", "name": "z9"}).encode())
     check("project-duplicate-missing-src", st == 404, "%s %s" % (st, resp))
 
+    # Import an existing on-disk directory (absolute path outside projects/).
+    import tempfile
+    src_tmp = tempfile.mkdtemp(prefix="caesura_import_")
+    with open(os.path.join(src_tmp, "story.ks"), "w", encoding="utf-8") as f:
+        f.write("; imported by headless_http_smoke\n[p]")
+    empty_tmp = tempfile.mkdtemp(prefix="caesura_empty_")
+    iname = "smoke_import_%d" % int(_t.time())
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": src_tmp, "name": iname}).encode())
+    check("project-import-ok",
+          st == 200 and resp.get("ok") is True
+          and str(resp.get("path","")).endswith(iname),
+          "%s %s" % (st, resp))
+
+    # Invalid destination name -> 400.
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": src_tmp, "name": "bad name"}).encode())
+    check("project-import-invalid-name", st == 400, "%s %s" % (st, resp))
+
+    # Nonexistent source directory -> 404.
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": os.path.join(src_tmp, "nope"),
+                                        "name": "z8"}).encode())
+    check("project-import-missing-src", st == 404, "%s %s" % (st, resp))
+
+    # Source without a story entry point (story.ks/entry.lua) -> 400.
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": empty_tmp, "name": "z7"}).encode())
+    check("project-import-no-story", st == 400, "%s %s" % (st, resp))
+
+    # Re-import under an already-taken name -> 409.
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": src_tmp, "name": iname}).encode())
+    check("project-import-duplicate-name", st == 409, "%s %s" % (st, resp))
+
     # GET /api/project/list reflects the created projects.
     st, resp = request("/api/project/list")
     listed = [p["name"] for p in resp] if isinstance(resp, list) else []
     check("project-list-reflects-created",
           st == 200 and pname in listed and (pname + "_copy") in listed,
           "%s %s" % (st, resp))
+    check("project-list-reflects-imported",
+          st == 200 and iname in listed,
+          "%s %s" % (st, resp))
 
     # Cleanup: remove created project dirs so the repo stays clean.
-    for d in (pname, pname + "_copy"):
+    for d in (pname, pname + "_copy", iname):
         try:
             import shutil
             shutil.rmtree(os.path.join(cwd, "projects", d), ignore_errors=True)
         except Exception:
             pass
+    shutil.rmtree(src_tmp, ignore_errors=True)
+    shutil.rmtree(empty_tmp, ignore_errors=True)
 
     time.sleep(1)
     check("engine-alive", proc.poll() is None)

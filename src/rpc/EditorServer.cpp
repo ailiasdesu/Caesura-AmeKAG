@@ -1168,6 +1168,8 @@ void EditorServer::serverLoop(int port) {
     //  GET    /api/project/list        -> [{path,name,template,modified}]
     //  POST   /api/project/create      -> {template,name,path}
     //  POST   /api/project/duplicate   -> {srcPath,name}
+    //  POST   /api/project/import      -> {srcPath,name} (srcPath is ANY
+    //           on-disk directory; name must be sanitized)
     //
     // These are EDITOR-ORIENTED meta operations (they manage filesystem
     // projects/templates, not the runtime protocol), so they are implemented
@@ -1357,6 +1359,71 @@ void EditorServer::serverLoop(int port) {
                      copyEc);
             if (copyEc) {
                 res.set_content("{\"error\":\"Failed to duplicate\"}", "application/json");
+                res.status = 500;
+                return;
+            }
+            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
+                            "application/json");
+        } catch (const std::exception&) {
+            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/api/project/import", [&](const httplib::Request& req, httplib::Response& res) {
+        // Import semantics differ from duplicate on purpose: srcPath may be
+        // ANY on-disk directory (absolute or relative -- that is the whole
+        // point of importing an existing game), while only the destination
+        // NAME goes through the sanitizer and lands under ./projects/.
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            const std::string srcStr = body.value("srcPath", std::string());
+            const std::string newName = body.value("name", std::string());
+            if (srcStr.empty() || newName.empty()) {
+                res.set_content("{\"error\":\"Missing srcPath/name\"}", "application/json");
+                res.status = 400;
+                return;
+            }
+            for (char ch : newName) {
+                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
+                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
+                    res.status = 400;
+                    return;
+                }
+            }
+            std::error_code ec;
+            const fs::path src(srcStr);
+            if (!fs::exists(src, ec) || !fs::is_directory(src, ec)) {
+                res.set_content("{\"error\":\"Source directory not found\"}", "application/json");
+                res.status = 404;
+                return;
+            }
+            // A Caesura project carries a story entry point (story.ks
+            // preferred, entry.lua fallback) -- mirrors /api/project/list
+            // discovery so imported projects are listable afterwards.
+            if (!fs::exists(src / "story.ks", ec)
+                && !fs::exists(src / "entry.lua", ec)) {
+                res.set_content(
+                    "{\"error\":\"Not a Caesura project (missing story.ks/entry.lua)\"}",
+                    "application/json");
+                res.status = 400;
+                return;
+            }
+            fs::path projectsRoot = fs::current_path() / "projects";
+            std::error_code mkEc;
+            fs::create_directories(projectsRoot, mkEc);
+            fs::path dest = projectsRoot / newName;
+            if (fs::exists(dest, ec)) {
+                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
+                res.status = 409;
+                return;
+            }
+            std::error_code copyEc;
+            fs::copy(src, dest, fs::copy_options::recursive
+                                        | fs::copy_options::overwrite_existing,
+                     copyEc);
+            if (copyEc) {
+                res.set_content("{\"error\":\"Failed to import project\"}", "application/json");
                 res.status = 500;
                 return;
             }
