@@ -1207,11 +1207,41 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
     msg += luaError ? luaError : "No error details available.";
     msg += "\n\nPlease choose an action below.";
 
+    // §15 Crash/Diagnostics: assemble the player-friendly crash context.
+    // Composition-root data only; every field degrades gracefully to empty.
+    DiagnosticInfo diag;
+    diag.engineVersion = CAESURA_VERSION;  // CMake project version (see CaesuraModules.cmake)
+    diag.platform = SDL_GetPlatform();
+    if (m_renderDevice) diag.gpuBackend = m_renderDevice->getBackendName();
+    diag.logDir = "logs";
+    {
+        // Currently running KAG scene from the runner ctx (same authoritative
+        // source the debugger uses). Any failure leaves it empty -- building
+        // diagnostics must never throw while handling a fatal error.
+        lua_State* L = m_lua ? m_lua->state() : nullptr;
+        if (L) {
+            const int stackTop = lua_gettop(L);
+            const char* snippet =
+                "local ok, ctx = pcall(function() "
+                "return require('kag_runner').get_ctx() end); "
+                "if ok and ctx then return tostring(ctx.current_scene or '') end; "
+                "return ''";
+            if (luaL_loadstring(L, snippet) == LUA_OK
+                && lua_pcall(L, 0, 1, 0) == LUA_OK
+                && lua_isstring(L, -1)) {
+                diag.scenePath = lua_tostring(L, -1);
+            }
+            lua_settop(L, stackTop);
+        }
+    }
+
     ErrorAction action = ErrorUI::show(
         "Engine Runtime Error",
         msg,
         "", 0,
-        m_renderDevice != nullptr
+        m_renderDevice != nullptr,
+        "",  // commandName: not known at this level
+        diag
     );
 
     switch (action) {
