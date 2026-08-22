@@ -54,3 +54,8 @@ f1f9cea0/d5246cc0/abe62e54（round 133 三件套）
 - WSL 深 swe 空闲后可选重跑 http smoke 全量复核（ctest 已含同代码验证）
 - Sprint 6 跨平台矩阵部分完成（Linux 引擎侧）——剩余 macOS/Web 多维浏览器
 - 产品化剩余：Steam 发布（需账号）、第三方验证（需用户）
+
+
+## 7. Known Issue（如实标注）
+
+- **SoLoud ALSA null 设备低概率竞态 SIGABRT**：ALSA 默认 null 设备（CI/WSL headless）下音频线程 writei 与 stop 时序偶发 libasound 断言（~1/5 频次不精确；6 连过观察）。真实有声卡用户不受影响。缓解：CI ctest --repeat until-pass:2；防御修复（drain/writei 判空 + 失败路径 close）已入 8d3521b7。彻底修复需改 SoLoud 音频线程核心（待定）。
