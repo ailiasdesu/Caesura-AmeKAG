@@ -100,3 +100,7 @@ cache/
 # Steamworks SDK (proprietary, manual download -- same pattern as Live2D)
 steamworks_sdk_*.zip
 external/steamworks/
+
+# PM-created projects (user content)
+projects/*
+!projects/.gitkeep
