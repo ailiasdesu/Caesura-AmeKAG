@@ -46,7 +46,13 @@ void secureErase(void* memory, size_t size) noexcept {
 } // namespace
 
 // Engine version string (Spec U6: archive version management)
-const char* SaveManager::ENGINE_VERSION = "1.0.0";
+// Engine version recorded in save envelopes — derived from the CMake
+// project version (CAESURA_VERSION compile definition) so it always matches
+// the released binary.
+#ifndef CAESURA_VERSION
+#define CAESURA_VERSION "unknown"
+#endif
+const char* SaveManager::ENGINE_VERSION = CAESURA_VERSION;
 
 SaveManager::SaveManager() = default;
 SaveManager::~SaveManager() {

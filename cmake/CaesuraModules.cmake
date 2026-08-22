@@ -7,6 +7,12 @@
 add_library(CaesuraBuildOptions INTERFACE)
 add_library(Caesura::BuildOptions ALIAS CaesuraBuildOptions)
 
+# Engine version propagated from the root project() so every module (save
+# envelopes, diagnostics UI) reads the released binary's version.
+target_compile_definitions(CaesuraBuildOptions INTERFACE
+    CAESURA_VERSION="${PROJECT_VERSION}"
+)
+
 target_compile_features(CaesuraBuildOptions INTERFACE cxx_std_20)
 target_include_directories(CaesuraBuildOptions INTERFACE
     ${CMAKE_SOURCE_DIR}/src
@@ -356,6 +362,11 @@ set_target_properties(CaesuraEntry PROPERTIES
     FOLDER "Caesura/Modules"
     OUTPUT_NAME "caesura_entry"
 )
+# §15 crash diagnostics: the entry error screen shows the same version as the
+# save envelopes. (Engine.cpp must not include ../storage/SaveManager.h --
+# guarded by test_source_encoding.cpp.) CAESURA_VERSION is defined once on
+# the CaesuraBuildOptions interface target (top of this file) and inherited
+# here -- single source of truth is the root project().
 
 # Convenience target for the application and tests. It has no compiled
 # sources; consumers receive the complete static engine graph.
