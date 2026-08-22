@@ -95,7 +95,7 @@ steam-release/                  # 本地工作目录（不入库；真实 AppID 
 
 ## 4. steamcmd 上传 ⏳（通用模板，按官方格式写，未执行过）
 
-`scripts/app_build_<APPID>.vdf`：
+模板文件已就绪：`scripts/steam/app_build_template.vdf`（复制后填入 AppID）与 `scripts/steam/depot_build_windows_template.vdf`。
 
 ```
 "appbuild"

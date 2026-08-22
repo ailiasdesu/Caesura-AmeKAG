@@ -1,0 +1,11 @@
+"appbuild"
+{
+    "appid"     "<APPID>"
+    "desc"      "Caesura AmeKAG v1.0.1"
+    "buildoutput" "steam_output"
+    "contentroot" ".."
+    "depots"
+    {
+        "<DEPOTID_WINDOWS>" "depot_build_windows.vdf"
+    }
+}
