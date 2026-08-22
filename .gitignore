@@ -96,3 +96,7 @@ tests/scripts/tmp_probe*.lua
 web/scratch.*.test.js
 editor/.scratch_*
 cache/
+
+# Steamworks SDK (proprietary, manual download -- same pattern as Live2D)
+steamworks_sdk_*.zip
+external/steamworks/

@@ -4,6 +4,15 @@
 #include "api/ISteamBackend.h"
 #include <chrono>      // steady_clock (wall-clock throttle)
 #include <cstdint>   // fixed-width types (GCC strict)
+#include <memory>    // unique_ptr (opaque SteamCallbacks bridge)
+
+#ifdef CAESURA_HAS_STEAM
+// Steamworks callback payload structs: SDK-owned global-scope C structs,
+// forward-declared so this header stays free of <steam/steam_api.h>.
+// (Engine_Backends.cpp includes this header without STEAM_INCLUDE_DIR.)
+struct UserStatsReceived_t;
+struct GameOverlayActivated_t;
+#endif
 
 namespace Caesura {
 
@@ -53,10 +62,19 @@ private:
 #ifdef CAESURA_HAS_STEAM
     // Steam callback listeners (dispatched by SteamAPI_RunCallbacks on the
     // owner thread): overlay activation state and user-stats availability.
-    STEAM_CALLBACK(SteamBackend, OnUserStatsReceived, UserStatsReceived_t,
-                   m_callbackUserStatsReceived);
-    STEAM_CALLBACK(SteamBackend, OnGameOverlayActivated, GameOverlayActivated_t,
-                   m_callbackOverlayActivated);
+    // Hidden behind an opaque bridge because the SDK's CCallbackManual members
+    // need complete SDK types, which would force an SDK include into this
+    // header; the bridge is defined in SteamBackend.cpp where
+    // <steam/steam_api.h> is visible. CCallbackManual default-constructs in
+    // the unregistered state: init() Register()s after SteamAPI_Init,
+    // shutdown() Unregister()s before SteamAPI_Shutdown (the CCallbackImpl
+    // destructor is the safety net for anything left registered).
+    struct SteamCallbacks;
+    std::unique_ptr<SteamCallbacks> m_callbacks;
+    bool m_callbacksRegistered = false;
+
+    void OnUserStatsReceived(::UserStatsReceived_t* pCallback);
+    void OnGameOverlayActivated(::GameOverlayActivated_t* pCallback);
 #endif
 };
 

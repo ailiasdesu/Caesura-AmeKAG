@@ -251,6 +251,18 @@ if(CAESURA_HAS_STEAM)
     target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_STEAM)
     target_include_directories(CaesuraSteam PRIVATE ${STEAM_INCLUDE_DIR})
     target_link_libraries(CaesuraSteam PRIVATE ${STEAM_LIBRARY})
+    # Copy the Steamworks runtime DLL next to the exe at configure time,
+    # mirroring the FFmpeg DLL handling above; without it SteamAPI_Init fails
+    # to load steam_api64.dll at runtime. The SDK ships it beside the import
+    # library in redistributable_bin/<arch>/, so derive it from STEAM_LIBRARY.
+    if(WIN32)
+        get_filename_component(STEAM_SDK_BIN_DIR "${STEAM_LIBRARY}" DIRECTORY)
+        foreach(CFG Debug Release RelWithDebInfo MinSizeRel)
+            if(EXISTS "${STEAM_SDK_BIN_DIR}/steam_api64.dll")
+                file(COPY "${STEAM_SDK_BIN_DIR}/steam_api64.dll" DESTINATION ${CMAKE_BINARY_DIR}/${CFG})
+            endif()
+        endforeach()
+    endif()
 endif()
 
 # -- Live2D Cubism animation (optional, proprietary SDK) ---------------------

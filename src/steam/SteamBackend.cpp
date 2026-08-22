@@ -2,9 +2,11 @@
 // Compiled only when CAESURA_HAS_STEAM is defined (via CMake option)
 #include <chrono>      // steady_clock (wall-clock throttle)
 #include <cstring>
+#include <memory>      // make_unique (SteamCallbacks bridge)
 
-// Include the Steamworks SDK BEFORE SteamBackend.h: the header STEAM_CALLBACK
-// macro must expand with steam_api.h already visible (P1-3).
+// The Steamworks SDK is intentionally included only here: SteamBackend.h
+// stays SDK-free (its callback members hide behind the SteamCallbacks bridge
+// defined below), so includers of that header need no STEAM_INCLUDE_DIR.
 #ifdef CAESURA_HAS_STEAM
 #include <steam/steam_api.h>
 #endif
@@ -12,6 +14,16 @@
 #include "SteamBackend.h"
 
 namespace Caesura {
+
+#ifdef CAESURA_HAS_STEAM
+// Opaque callback bridge (declared in SteamBackend.h). CCallbackManual
+// default-constructs unregistered, so construction never touches the
+// SteamAPI; registration is driven by init()/shutdown().
+struct SteamBackend::SteamCallbacks {
+    CCallbackManual<SteamBackend, UserStatsReceived_t> statsReceived;
+    CCallbackManual<SteamBackend, GameOverlayActivated_t> overlay;
+};
+#endif
 
 SteamBackend::SteamBackend() = default;
 SteamBackend::~SteamBackend() { shutdown(); }
@@ -25,7 +37,16 @@ bool SteamBackend::init() {
     // UserStatsReceived_t may silently no-op, so request them up front.
     m_statsRequested = true;
     m_statsReceived  = false;
-    SteamUserStats()->RequestCurrentStats();
+    // Manual callback registration: only valid once the SteamAPI is live.
+    // CCallback::Register unregisters first when already registered, so a
+    // re-init after shutdown stays correct; the flag gates shutdown().
+    if (!m_callbacks) m_callbacks = std::make_unique<SteamCallbacks>();
+    m_callbacks->statsReceived.Register(this, &SteamBackend::OnUserStatsReceived);
+    m_callbacks->overlay.Register(this, &SteamBackend::OnGameOverlayActivated);
+    m_callbacksRegistered = true;
+    // No explicit RequestCurrentStats(): modern Steamworks (1.60+) removed
+    // ISteamUserStats::RequestCurrentStats — user stats are fetched
+    // automatically after SteamAPI_Init and arrive via UserStatsReceived_t.
     return true;
 #else
     (void)m_initialized;
@@ -35,6 +56,17 @@ bool SteamBackend::init() {
 
 void SteamBackend::shutdown() {
 #ifdef CAESURA_HAS_STEAM
+    // Unregister BEFORE SteamAPI_Shutdown: no queued callback may fire into a
+    // torn-down client. (CCallbackImpl's destructor also auto-unregisters
+    // anything still flagged registered — this explicit path is the norm.)
+    if (m_callbacksRegistered) {
+        if (m_callbacks) {
+            m_callbacks->statsReceived.Unregister();
+            m_callbacks->overlay.Unregister();
+        }
+        m_callbacksRegistered = false;
+    }
+    m_callbacks.reset();
     if (m_initialized) {
         SteamAPI_Shutdown();
         m_initialized = false;
@@ -233,9 +265,12 @@ bool SteamBackend::cloudDelete(const char* fileName) {
 int32_t SteamBackend::cloudQuotaTotal() const {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized) return 0;
-    int32_t total = 0;
+    // SDK 1.65 GetQuota reports through uint64*; saturate to int32_max for
+    // the interface's int32_t contract.
+    uint64 total = 0;
     SteamRemoteStorage()->GetQuota(&total, nullptr);
-    return total;
+    return total > static_cast<uint64>(INT32_MAX) ? INT32_MAX
+                                                  : static_cast<int32_t>(total);
 #else
     return 0;
 #endif
@@ -244,9 +279,10 @@ int32_t SteamBackend::cloudQuotaTotal() const {
 int32_t SteamBackend::cloudQuotaUsed() const {
 #ifdef CAESURA_HAS_STEAM
     if (!m_initialized) return 0;
-    int32_t used = 0;
+    uint64 used = 0;
     SteamRemoteStorage()->GetQuota(nullptr, &used);
-    return used;
+    return used > static_cast<uint64>(INT32_MAX) ? INT32_MAX
+                                                 : static_cast<int32_t>(used);
 #else
     return 0;
 #endif

@@ -166,7 +166,11 @@ TEST_CASE("SteamBackend no-SDK build must never reference Steamworks symbols") {
     CHECK(src.find("SteamRemoteStorage()") != std::string::npos);
     CHECK(src.find("#ifdef CAESURA_HAS_STEAM") != std::string::npos);
     // Negative: no Steamworks type/macro appears outside a guard (the header
-    // only declares STEAM_CALLBACK members inside its own guard too).
+    // only declares CCallbackManual members inside its own guard too -- the
+    // STEAM_CALLBACK macro form was replaced in Sprint 4b/Steam-SDK bring-up
+    // because its protected default ctor is inaccessible to a non-derived
+    // holder class; CCallbackManual + explicit Register works for holders).
     const std::string header = readSteamSourceFile("src/steam/SteamBackend.h");
-    CHECK(header.find("STEAM_CALLBACK") != std::string::npos);
+    CHECK(header.find("CCallbackManual") != std::string::npos);
+    CHECK(header.find("#ifdef CAESURA_HAS_STEAM") != std::string::npos);
 }
