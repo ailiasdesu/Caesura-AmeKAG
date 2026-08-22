@@ -938,6 +938,41 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // POST /api/debug/stepInto|stepOver|stepOut -- single-step a paused
+    // debugger run (Sprint 4b). Same contract as /continue but with the
+    // matching RpcDebugResumeMode.
+    // ---------------------------------------------------------------------
+    const auto stepHandler = [this](RpcDebugResumeMode mode) {
+        return [this, mode](const httplib::Request& req, httplib::Response& res) {
+            RpcDebugResumeRequest request;
+            request.mode = mode;
+            Json body;
+            try {
+                body = Json::parse(req.body);
+            } catch (const Json::exception&) {
+                // Empty/absent body is allowed; defaults apply.
+            }
+            if (body.is_object() && body.contains("pauseId") &&
+                body["pauseId"].is_number_unsigned()) {
+                try {
+                    request.pauseId = body["pauseId"].get<std::uint64_t>();
+                } catch (const Json::exception&) {
+                    // Malformed pauseId: fall through with default 0.
+                }
+            }
+            RpcReply reply = dispatchRequest(RpcRequest{std::move(request)});
+            if (reply.status != RpcReplyStatus::Ok) {
+                setDispatchError(res, reply);
+                return;
+            }
+            res.set_content("{\"status\":\"ok\"}", "application/json");
+        };
+    };
+    svr.Post("/api/debug/stepInto", stepHandler(RpcDebugResumeMode::StepInto));
+    svr.Post("/api/debug/stepOver", stepHandler(RpcDebugResumeMode::StepOver));
+    svr.Post("/api/debug/stepOut", stepHandler(RpcDebugResumeMode::StepOut));
+
+    // ---------------------------------------------------------------------
     // GET /api/debug/inspect -- inspect a Lua local or global variable
     // ---------------------------------------------------------------------
     svr.Get("/api/debug/inspect", [this](const httplib::Request& req, httplib::Response& res) {
