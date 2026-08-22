@@ -441,6 +441,52 @@ def main():
           st == 200 and iname in listed,
           "%s %s" % (st, resp))
 
+    # ---- Project metadata (PM settings, task book §6.3) ----
+    # GET without caesura.project.json -> inferred defaults; POST writes
+    # the file; GET then reflects the saved values. Runs against pname
+    # created above; cleanup below removes the written file with the dir.
+    st, resp = request("/api/project/meta?path=projects/" + pname)
+    _m = resp.get("meta", {}) if isinstance(resp, dict) else {}
+    check("project-meta-default",
+          st == 200 and resp.get("ok") is True and resp.get("inferred") is True
+          and _m.get("name") == pname and _m.get("language") == "zh"
+          and _m.get("version") == "1.0" and isinstance(_m.get("created"), str),
+          "%s %s" % (st, resp))
+
+    st, resp = request("/api/project/meta",
+                       data=json.dumps({"path": "projects/" + pname,
+                                        "meta": {"language": "en",
+                                                 "description": "smoke meta"}}).encode())
+    _m = resp.get("meta", {}) if isinstance(resp, dict) else {}
+    check("project-meta-save",
+          st == 200 and resp.get("ok") is True
+          and _m.get("language") == "en" and _m.get("description") == "smoke meta"
+          and isinstance(_m.get("modified"), str) and bool(_m.get("modified")),
+          "%s %s" % (st, resp))
+
+    st, resp = request("/api/project/meta?path=projects/" + pname)
+    _m = resp.get("meta", {}) if isinstance(resp, dict) else {}
+    check("project-meta-get-reflects-save",
+          st == 200 and resp.get("inferred") is False
+          and _m.get("language") == "en" and _m.get("description") == "smoke meta"
+          and _m.get("created"),
+          "%s %s" % (st, resp))
+
+    # Validation gates: closed language set, path traversal, missing param.
+    st, resp = request("/api/project/meta",
+                       data=json.dumps({"path": "projects/" + pname,
+                                        "meta": {"language": "klingon"}}).encode())
+    check("project-meta-invalid-language", st == 400, "%s %s" % (st, resp))
+
+    st, resp = request("/api/project/meta?path=projects/../evil")
+    check("project-meta-path-traversal", st == 400, "%s %s" % (st, resp))
+
+    st, resp = request("/api/project/meta")
+    check("project-meta-missing-param", st == 400, "%s %s" % (st, resp))
+
+    st, resp = request("/api/project/meta?path=projects/no_such_project_zz")
+    check("project-meta-missing-project", st == 404, "%s %s" % (st, resp))
+
     # Cleanup: remove created project dirs so the repo stays clean.
     for d in (pname, pname + "_copy", iname):
         try:
@@ -450,6 +496,47 @@ def main():
             pass
     shutil.rmtree(src_tmp, ignore_errors=True)
     shutil.rmtree(empty_tmp, ignore_errors=True)
+
+    # ---- Web packaging endpoint (POST /api/package/web, Sprint 6) ----
+    # The engine wraps scripts/package_game.sh: whitelisted repo-relative
+    # story paths (assets/ demo/ tests/projects/ projects/) are packaged
+    # into dist/<outName>. The engine runs with cwd=build/Debug here, so a
+    # success also proves the endpoint locates the repository root itself.
+    import shutil as _shutil
+    st, resp = request("/api/package/web",
+                       data=json.dumps({"storyPath": "demo/example_game/story.ks",
+                                        "outName": "smoke_pkg"}).encode(),
+                       timeout=300)
+    check("package-web-ok", st == 200 and resp.get("ok") is True
+          and resp.get("outputDir") == "dist/smoke_pkg"
+          and isinstance(resp.get("logTail"), str)
+          and "PACKAGE COMPLETE" in resp.get("logTail", ""),
+          "%s %s" % (st, str(resp)[:400]))
+
+    # Real artifacts must exist on disk (static site + baked story bundle).
+    _repo_root = os.path.dirname(os.path.dirname(cwd))  # build/Debug -> repo
+    _pkg_dir = os.path.join(_repo_root, "dist", "smoke_pkg")
+    check("package-web-artifacts",
+          os.path.isfile(os.path.join(_pkg_dir, "index.html"))
+          and os.path.isfile(os.path.join(_pkg_dir, "MANIFEST.txt"))
+          and os.path.isfile(os.path.join(_pkg_dir, "cache", "story", "story.lua")),
+          _pkg_dir)
+    _shutil.rmtree(_pkg_dir, ignore_errors=True)
+
+    # Path traversal -> 400.
+    st, resp = request("/api/package/web",
+                       data=json.dumps({"storyPath": "../evil.ks"}).encode())
+    check("package-web-traversal-rejected", st == 400, "%s %s" % (st, resp))
+
+    # Absolute / drive path -> 400.
+    st, resp = request("/api/package/web",
+                       data=json.dumps({"storyPath": "C:/Windows/win.ini"}).encode())
+    check("package-web-absolute-rejected", st == 400, "%s %s" % (st, resp))
+
+    # Existing file OUTSIDE the whitelist -> 400.
+    st, resp = request("/api/package/web",
+                       data=json.dumps({"storyPath": "web/index.html"}).encode())
+    check("package-web-outside-whitelist", st == 400, "%s %s" % (st, resp))
 
     time.sleep(1)
     check("engine-alive", proc.poll() is None)

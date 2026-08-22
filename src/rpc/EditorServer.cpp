@@ -56,6 +56,55 @@ bool isAnimationAsset(const fs::path& path) {
         std::string::npos;
 }
 
+// --- Web packaging (POST /api/package/web) helpers -----------------------
+//
+// Whitelist prefixes a packageable story path may live under. Everything
+// else -- including absolute paths and ".." escapes -- is rejected so a
+// local HTTP caller cannot make the engine shell out against arbitrary
+// repository locations.
+bool isStoryPathAllowed(const std::string& path) {
+    static const char* const kPrefixes[] = {
+        "assets/", "demo/", "tests/projects/", "projects/"};
+    for (const char* prefix : kPrefixes) {
+        if (path.rfind(prefix, 0) == 0) return true;
+    }
+    return false;
+}
+
+// Reduce an output name to [A-Za-z0-9_-]. Returns false when nothing usable
+// remains (the caller answers 400 instead of guessing a name).
+bool sanitizeWebOutName(const std::string& raw, std::string& out) {
+    out.clear();
+    for (unsigned char ch : raw) {
+        if (std::isalnum(ch) || ch == '_' || ch == '-') {
+            out.push_back(static_cast<char>(ch));
+        }
+    }
+    return !out.empty();
+}
+
+// Keep only the last lines of packaging output for the reply payload.
+std::string logTailOf(const std::string& log) {
+    constexpr size_t kMaxLines = 30;
+    std::vector<std::string> lines;
+    std::istringstream stream(log);
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        lines.push_back(line);
+    }
+    if (lines.size() > kMaxLines) {
+        lines.erase(lines.begin(),
+                    lines.end() - static_cast<std::ptrdiff_t>(kMaxLines));
+    }
+    std::string joined;
+    for (const auto& entry : lines) {
+        joined += entry;
+        joined += '\n';
+    }
+    return joined;
+}
+
 bool readOptionalFloat(const Json& body,
                        const char* field,
                        float defaultValue,
@@ -122,6 +171,82 @@ void setDispatchError(httplib::Response& response, const RpcReply& reply) {
 
 RpcReply invalidDispatcherReply(const std::string& message) {
     return {RpcReplyStatus::Failed, "invalid_dispatcher_reply", message, {}};
+}
+
+// =========================================================================
+// Project metadata (task book §6.3 PM settings)
+// A managed project under ./projects/<name>/ may carry an optional
+// caesura.project.json:
+//   {name, template, version, language, description, created, modified}
+// Like the other Project Manager routes these are editor-oriented meta
+// operations handled here instead of the runtime RPC DTO chain.
+// =========================================================================
+
+// Current UTC time as an ISO-8601 timestamp.
+std::string nowIsoUtc() {
+    const std::time_t t = std::chrono::system_clock::to_time_t(
+        std::chrono::system_clock::now());
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &t);
+#else
+    gmtime_r(&t, &tm);
+#endif
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buf;
+}
+
+Json defaultProjectMeta(const std::string& name) {
+    const std::string now = nowIsoUtc();
+    return Json{
+        {"name", name},
+        {"template", ""},
+        {"version", "1.0"},
+        {"language", "zh"},
+        {"description", ""},
+        {"created", now},
+        {"modified", now},
+    };
+}
+
+// Overlay stored meta strings onto the defaults so a partially-written or
+// hand-edited document still yields a complete schema. Non-string values are
+// ignored (they cannot appear in a well-formed document).
+void overlayStringMeta(Json& base, const Json& stored) {
+    for (auto it = stored.begin(); it != stored.end(); ++it) {
+        if (it.value().is_string()) base[it.key()] = it.value();
+    }
+}
+
+// Resolve a managed-project reference ("projects/<name>"; a bare sanitized
+// <name> is tolerated for symmetry with /api/project/duplicate) into
+// <cwd>/projects/<name>. Returns an empty path when the input escapes the
+// managed root -- traversal, drive letters/schemes, absolute paths, nested
+// separators or characters outside [A-Za-z0-9_-] share the sanitizer policy
+// of create/duplicate/import.
+fs::path confineManagedProjectPath(const std::string& p) {
+    const std::string prefix = "projects/";
+    std::string norm = p;
+    for (char& ch : norm) {
+        if (ch == char(92)) ch = '/';  // normalize backslash separators
+    }
+    while (!norm.empty() && norm.back() == '/') norm.pop_back();
+    if (norm.empty()) return {};
+    if (norm.find("..") != std::string::npos) return {};
+    if (norm[0] == '/') return {};                       // absolute path
+    if (norm.find(':') != std::string::npos) return {};  // drive / scheme
+
+    std::string name = norm;
+    if (norm.rfind(prefix, 0) == 0) name = norm.substr(prefix.size());
+    if (name.empty() || name.find('/') != std::string::npos) return {};
+    for (char ch : name) {
+        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' ||
+              ch == '-')) {
+            return {};
+        }
+    }
+    return fs::current_path() / "projects" / name;
 }
 
 } // namespace
@@ -1136,6 +1261,214 @@ void EditorServer::serverLoop(int port) {
     });
 
     // ---------------------------------------------------------------------
+    // POST /api/package/web -- one-click web-site packaging (Build Manager)
+    //
+    // Wraps scripts/package_game.sh: validates {storyPath, outName}, runs
+    // the script synchronously and returns its log tail. storyPath must be
+    // a repo-relative path under assets/ demo/ tests/projects/ or projects/
+    // (no "..", no absolute/drive paths, conservative charset only);
+    // outName is sanitized to [A-Za-z0-9_-] and the output is confined to
+    // dist/<outName> -- the script itself cds to the repository root before
+    // resolving both. Synchronous blocking is accepted (the editor shows a
+    // running state); failures carry the script's log tail for diagnosis.
+    // ---------------------------------------------------------------------
+    svr.Post("/api/package/web", [](const httplib::Request& req,
+                                    httplib::Response& res) {
+        Json body;
+        try {
+            body = req.body.empty() ? Json::object() : Json::parse(req.body);
+        } catch (const Json::exception&) {
+            res.set_content("{\"error\":\"Request body must be valid JSON\"}",
+                            "application/json");
+            res.status = 400;
+            return;
+        }
+        if (!body.is_object()) {
+            res.set_content("{\"error\":\"Request body must be a JSON object\"}",
+                            "application/json");
+            res.status = 400;
+            return;
+        }
+
+        // Defaults mirror the editor Build Manager inputs.
+        std::string storyPath = "demo/example_game/story.ks";
+        std::string rawOutName;
+        if (body.contains("storyPath")) {
+            if (!body["storyPath"].is_string()) {
+                res.set_content("{\"error\":\"storyPath must be a string\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+            const std::string value = body["storyPath"].get<std::string>();
+            if (!value.empty()) storyPath = value;
+        }
+        if (body.contains("outName")) {
+            if (!body["outName"].is_string()) {
+                res.set_content("{\"error\":\"outName must be a string\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+            rawOutName = body["outName"].get<std::string>();
+        }
+
+        auto reject = [&res](const std::string& message) {
+            res.set_content(dumpJson({{"error", message}}),
+                            "application/json");
+            res.status = 400;
+        };
+
+        for (auto& ch : storyPath) {
+            if (ch == static_cast<char>(92)) ch = '/';  // normalize backslash
+        }
+        if (storyPath.find("..") != std::string::npos) {
+            reject("storyPath must not contain '..'");
+            return;
+        }
+        if (storyPath.find(':') != std::string::npos) {
+            reject("storyPath must be a relative repository path (no drive/scheme)");
+            return;
+        }
+        if (!storyPath.empty() && storyPath.front() == '/') {
+            reject("storyPath must be a relative repository path");
+            return;
+        }
+        for (unsigned char ch : storyPath) {
+            const bool safe = std::isalnum(ch) || ch == '/' || ch == '_' ||
+                              ch == '-' || ch == '.' || ch == ' ';
+            if (!safe) {
+                reject("storyPath contains unsupported characters");
+                return;
+            }
+        }
+        if (!isStoryPathAllowed(storyPath)) {
+            reject("storyPath must live under assets/, demo/, "
+                   "tests/projects/ or projects/");
+            return;
+        }
+
+        std::string outName = "example_game";
+        if (!rawOutName.empty() && !sanitizeWebOutName(rawOutName, outName)) {
+            reject("outName contains no usable characters ([A-Za-z0-9_-])");
+            return;
+        }
+        const std::string outDir = "dist/" + outName;
+
+        // Locate the packaging script relative to the engine CWD: the smoke
+        // test (and installed layouts) run from build/Debug, so walk up to
+        // the repository root. A repo-relative invocation keeps the spawned
+        // command pure ASCII even when the repository path itself is not.
+        fs::path scriptPath;
+        try {
+            fs::path probe = fs::current_path();
+            for (int depth = 0; depth < 8 && !probe.empty();
+                 ++depth, probe = probe.parent_path()) {
+                const fs::path candidate = probe / "scripts" / "package_game.sh";
+                if (fs::exists(candidate)) {
+                    scriptPath = candidate;
+                    break;
+                }
+            }
+        } catch (...) {
+            scriptPath.clear();
+        }
+        if (scriptPath.empty()) {
+            res.set_content(dumpJson({
+                {"ok", false},
+                {"error",
+                 "scripts/package_game.sh not found (engine must run inside "
+                 "the repository)"},
+            }), "application/json");
+            res.status = 503;
+            return;
+        }
+
+        // Existence is checked against the repository root (the script's
+        // own working directory after its internal cd), not the engine CWD.
+        std::string scriptArg;
+        try {
+            const fs::path repoRoot = scriptPath.parent_path().parent_path();
+            if (!fs::exists(repoRoot / fs::path(storyPath))) {
+                reject("storyPath not found: " + storyPath);
+                return;
+            }
+            scriptArg = fs::relative(scriptPath, fs::current_path())
+                            .generic_string();
+        } catch (...) {
+            scriptArg.clear();
+        }
+        if (scriptArg.empty()) {
+            res.set_content(dumpJson({
+                {"ok", false},
+                {"error",
+                 "failed to resolve scripts/package_game.sh relative to the "
+                 "engine working directory"},
+            }), "application/json");
+            res.status = 503;
+            return;
+        }
+        for (auto& ch : scriptArg) {
+            if (ch == static_cast<char>(92)) ch = '/';
+        }
+
+        // Run the script synchronously; merge stderr into stdout so the log
+        // tail explains failures. Retained log is capped while the pipe
+        // keeps draining (a stalled pipe would hang pclose forever). Note
+        // the script's argv parser breaks on the first positional, so
+        // --out must precede the story path.
+        const std::string command = "bash \"" + scriptArg + "\" --out \"" +
+                                    outDir + "\" \"" + storyPath +
+                                    "\" 2>&1";
+        std::string output;
+#if defined(_WIN32)
+        FILE* pipe = _popen(command.c_str(), "r");
+#else
+        FILE* pipe = ::popen(command.c_str(), "r");
+#endif
+        if (!pipe) {
+            res.set_content(dumpJson({
+                {"ok", false},
+                {"error", "failed to spawn bash (is git bash on PATH?)"},
+                {"outputDir", outDir},
+            }), "application/json");
+            res.status = 500;
+            return;
+        }
+        constexpr size_t kMaxLogBytes = 1u << 20;  // 1 MiB of retained log
+        char buffer[4096];
+        size_t chunk = 0;
+        while ((chunk = fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
+            if (output.size() < kMaxLogBytes) output.append(buffer, chunk);
+        }
+#if defined(_WIN32)
+        const int exitCode = _pclose(pipe);
+#else
+        const int exitCode = ::pclose(pipe);
+#endif
+        const std::string tail = logTailOf(output);
+
+        if (exitCode != 0) {
+            res.set_content(dumpJson({
+                {"status", "error"},
+                {"ok", false},
+                {"error", "package_game.sh failed with exit code " +
+                              std::to_string(exitCode)},
+                {"outputDir", outDir},
+                {"logTail", tail},
+            }), "application/json");
+            res.status = 500;
+            return;
+        }
+        res.set_content(dumpJson({
+            {"status", "ok"},
+            {"ok", true},
+            {"outputDir", outDir},
+            {"logTail", tail},
+        }), "application/json");
+    });
+
+    // ---------------------------------------------------------------------
     // Static file serving -- web editor frontend
     // Static file serving -- web editor frontend
     // ---------------------------------------------------------------------
@@ -1170,6 +1503,10 @@ void EditorServer::serverLoop(int port) {
     //  POST   /api/project/duplicate   -> {srcPath,name}
     //  POST   /api/project/import      -> {srcPath,name} (srcPath is ANY
     //           on-disk directory; name must be sanitized)
+    //  GET    /api/project/meta?path=  -> {ok,path,inferred,meta}
+    //           (missing caesura.project.json infers defaults)
+    //  POST   /api/project/meta        -> {path,meta{language,description,
+    // template}} writes caesura.project.json
     //
     // These are EDITOR-ORIENTED meta operations (they manage filesystem
     // projects/templates, not the runtime protocol), so they are implemented
@@ -1431,6 +1768,192 @@ void EditorServer::serverLoop(int port) {
                             "application/json");
         } catch (const std::exception&) {
             res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
+            res.status = 400;
+        }
+    });
+
+    svr.Get("/api/project/meta", [](const httplib::Request& req, httplib::Response& res) {
+        // Read one project's metadata. When caesura.project.json has never
+        // been written the reply carries engine-inferred defaults and
+        // inferred:true so the editor can still show an editable form.
+        const fs::path projectDir =
+            confineManagedProjectPath(req.get_param_value("path"));
+        if (projectDir.empty()) {
+            res.set_content("{\"error\":\"Invalid project path\"}",
+                            "application/json");
+            res.status = 400;
+            return;
+        }
+        std::error_code ec;
+        if (!fs::exists(projectDir, ec) || !fs::is_directory(projectDir, ec)) {
+            res.set_content("{\"error\":\"Project not found\"}",
+                            "application/json");
+            res.status = 404;
+            return;
+        }
+        const std::string name = pathToUtf8(projectDir.filename());
+        Json meta = defaultProjectMeta(name);
+        bool inferred = true;
+        std::ifstream mf(projectDir / "caesura.project.json");
+        if (mf) {
+            try {
+                Json stored = Json::parse(mf);
+                if (stored.is_object()) {
+                    overlayStringMeta(meta, stored);
+                    inferred = false;
+                }
+            } catch (const std::exception&) {
+                // Corrupt metadata falls back to inferred defaults rather
+                // than failing the whole settings panel.
+            }
+        }
+        res.set_content(dumpJson({
+            {"ok", true},
+            {"path", "projects/" + name},
+            {"inferred", inferred},
+            {"meta", meta},
+        }), "application/json");
+    });
+
+    svr.Post("/api/project/meta", [](const httplib::Request& req, httplib::Response& res) {
+        // Save the editable metadata surface (language/description/
+        // template) into caesura.project.json. Identity is owned by the
+        // directory: name never moves, version stays engine-stamped and
+        // created survives saves; modified is re-stamped on every write.
+        try {
+            auto body = Json::parse(req.body);
+            if (!body.is_object()) {
+                res.set_content(
+                    "{\"error\":\"Request body must be a JSON object\"}",
+                    "application/json");
+                res.status = 400;
+                return;
+            }
+            const fs::path projectDir =
+                confineManagedProjectPath(body.value("path", std::string()));
+            if (projectDir.empty()) {
+                res.set_content("{\"error\":\"Invalid project path\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+            const auto patchIt = body.find("meta");
+            if (patchIt == body.end() || !patchIt->is_object()) {
+                res.set_content("{\"error\":\"Missing meta object\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+
+            // Validate the editable surface BEFORE touching disk: language
+            // is the closed set shared with the editor's Settings dropdown,
+            // template is a plain string token and description is bounded
+            // free text (rejected, not truncated, so pastes fail loudly).
+            static const char* kLanguages[] = {"zh", "en", "ja"};
+            constexpr size_t kMaxDescription = 2000;
+            const auto langIt = patchIt->find("language");
+            if (langIt != patchIt->end() && langIt->is_string()) {
+                const std::string lang = langIt->get<std::string>();
+                bool allowed = false;
+                for (const char* candidate : kLanguages) {
+                    if (lang == candidate) { allowed = true; break; }
+                }
+                if (!allowed) {
+                    res.set_content(
+                        "{\"error\":\"language must be one of zh/en/ja\"}",
+                        "application/json");
+                    res.status = 400;
+                    return;
+                }
+            } else if (langIt != patchIt->end() && !langIt->is_null()) {
+                res.set_content("{\"error\":\"language must be a string\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+            const auto tplIt = patchIt->find("template");
+            if (tplIt != patchIt->end() && !tplIt->is_string() &&
+                !tplIt->is_null()) {
+                res.set_content("{\"error\":\"template must be a string\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+            const auto descIt = patchIt->find("description");
+            if (descIt != patchIt->end() && descIt->is_string() &&
+                descIt->get<std::string>().size() > kMaxDescription) {
+                res.set_content(
+                    "{\"error\":\"description must be at most 2000 characters\"}",
+                    "application/json");
+                res.status = 400;
+                return;
+            }
+            if (descIt != patchIt->end() && !descIt->is_string() &&
+                !descIt->is_null()) {
+                res.set_content("{\"error\":\"description must be a string\"}",
+                                "application/json");
+                res.status = 400;
+                return;
+            }
+
+            std::error_code ec;
+            if (!fs::exists(projectDir, ec) || !fs::is_directory(projectDir, ec)) {
+                res.set_content("{\"error\":\"Project not found\"}",
+                                "application/json");
+                res.status = 404;
+                return;
+            }
+
+            // Start from the stored document (preserving created/template/
+            // version across saves) or inferred defaults.
+            const std::string name = pathToUtf8(projectDir.filename());
+            Json meta = defaultProjectMeta(name);
+            std::ifstream mf(projectDir / "caesura.project.json");
+            if (mf) {
+                try {
+                    Json stored = Json::parse(mf);
+                    if (stored.is_object()) overlayStringMeta(meta, stored);
+                } catch (const std::exception&) {}
+            }
+            mf.close();
+
+            meta["name"] = name;
+            meta["version"] = "1.0";
+            if (!meta.contains("created") || !meta["created"].is_string() ||
+                meta["created"].get_ref<const std::string&>().empty()) {
+                meta["created"] = nowIsoUtc();
+            }
+            if (tplIt != patchIt->end() && tplIt->is_string()) {
+                meta["template"] = tplIt->get<std::string>();
+            }
+            if (langIt != patchIt->end() && langIt->is_string()) {
+                meta["language"] = langIt->get<std::string>();
+            }
+            if (descIt != patchIt->end() && descIt->is_string()) {
+                meta["description"] = descIt->get<std::string>();
+            }
+            meta["modified"] = nowIsoUtc();
+
+            std::ofstream out(projectDir / "caesura.project.json",
+                              std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) {
+                res.set_content(
+                    "{\"error\":\"Failed to write project metadata\"}",
+                    "application/json");
+                res.status = 500;
+                return;
+            }
+            out << meta.dump(2) << "\n";
+            out.close();
+
+            res.set_content(dumpJson({
+                {"ok", true},
+                {"path", "projects/" + name},
+                {"meta", meta},
+            }), "application/json");
+        } catch (const std::exception&) {
+            res.set_content("{\"error\":\"Invalid JSON body\"}",
+                            "application/json");
             res.status = 400;
         }
     });
