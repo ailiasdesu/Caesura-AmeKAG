@@ -247,8 +247,11 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 
 # -- Steam (optional)
 if(CAESURA_HAS_STEAM)
-    target_compile_definitions(CaesuraSteam PRIVATE CAESURA_HAS_STEAM)
-    target_compile_definitions(CaesuraEntry PRIVATE CAESURA_HAS_STEAM)
+    # PUBLIC on purpose: SteamBackend.h changes SteamBackend's class layout
+    # under this flag, so every consumer compiling that header (CaesuraEntry,
+    # CaesuraTests via Caesura::Engine) must inherit the same definition --
+    # same rationale as CAESURA_VIDEO_FFMPEG being PUBLIC on CaesuraRender.
+    target_compile_definitions(CaesuraSteam PUBLIC CAESURA_HAS_STEAM)
     target_include_directories(CaesuraSteam PRIVATE ${STEAM_INCLUDE_DIR})
     target_link_libraries(CaesuraSteam PRIVATE ${STEAM_LIBRARY})
     # Copy the Steamworks runtime DLL next to the exe at configure time,
