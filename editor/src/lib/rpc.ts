@@ -161,7 +161,7 @@ export interface ProjectInfo {
   modified?: string
 }
 
-// Shared reply for POST /api/project/create and /api/project/duplicate.
+// Shared reply for POST /api/project/create, /duplicate and /import.
 export interface ProjectOpReply {
   ok: boolean
   path?: string
@@ -431,6 +431,17 @@ export class EngineClient {
    *  (POST /api/project/duplicate). srcPath is the ProjectInfo.path. */
   projectDuplicate(srcPath: string, name: string): Promise<ProjectOpReply> {
     return this.request<ProjectOpReply>('/project/duplicate', {
+      method: 'POST',
+      body: JSON.stringify({ srcPath, name }),
+    })
+  }
+
+  /** Import an existing on-disk project directory into the manager
+   *  (POST /api/project/import). Unlike duplicate, srcPath may be ANY
+   *  directory containing story.ks or entry.lua; it is copied under
+   *  ./projects/<name>. */
+  projectImport(srcPath: string, name: string): Promise<ProjectOpReply> {
+    return this.request<ProjectOpReply>('/project/import', {
       method: 'POST',
       body: JSON.stringify({ srcPath, name }),
     })

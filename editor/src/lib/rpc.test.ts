@@ -623,6 +623,42 @@ describe('EngineClient project routes (Project Manager, Sprint 2)', () => {
     })
   })
 
+  it('projectImport() POSTs JSON {srcPath,name} to /project/import', async () => {
+    const fetchMock = mockFetch(200, { ok: true, path: 'projects/imported' })
+    const client = new EngineClient('/api', fetchMock)
+    const reply = await client.projectImport('/tmp/mygame', 'imported')
+    expect(reply.ok).toBe(true)
+    expect(reply.path).toBe('projects/imported')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/project/import')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      srcPath: '/tmp/mygame',
+      name: 'imported',
+    })
+  })
+
+  it('projectImport() throws RpcError carrying the backend error on 404', async () => {
+    const client = new EngineClient(
+      '/api',
+      mockFetch(404, { error: 'Source directory not found' }),
+    )
+    const err = await client.projectImport('/nope', 'x').catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect(err.status).toBe(404)
+    expect(err.body).toEqual({ error: 'Source directory not found' })
+  })
+
+  it('projectImport() surfaces a {error} reply object when not ok', async () => {
+    const client = new EngineClient(
+      '/api',
+      mockFetch(200, { ok: false, error: 'Not a Caesura project (missing story.ks/entry.lua)' }),
+    )
+    const reply = await client.projectImport('/tmp/plain', 'plain')
+    expect(reply.ok).toBe(false)
+    expect(reply.error).toContain('story.ks')
+  })
+
   it('projectCreate() throws RpcError carrying the backend error on 400', async () => {
     const client = new EngineClient('/api', mockFetch(400, { error: 'Invalid project name' }))
     const err = await client.projectCreate('basic', 'bad name!').catch((e) => e)

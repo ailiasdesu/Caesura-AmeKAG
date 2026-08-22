@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
-import { ProjectManagerView, storyPathFor } from './ProjectManagerView'
+import { ProjectManagerView, storyPathFor, isValidProjectName } from './ProjectManagerView'
 import { useEditor } from '../store'
 import type { EngineClient, ProjectTemplate } from '../lib/rpc'
 
@@ -14,6 +14,7 @@ function makeClient(over: Partial<EngineClient> = {}): EngineClient {
   return {
     projectCreate: vi.fn(async () => ({ ok: true, path: 'projects/demo' })),
     projectDuplicate: vi.fn(async () => ({ ok: true, path: 'projects/demo_copy' })),
+    projectImport: vi.fn(async () => ({ ok: true, path: 'projects/imported' })),
     projectList: vi.fn(async () => []),
     projectTemplates: vi.fn(async () => []),
     inspect: vi.fn(async () => ''),
@@ -43,6 +44,19 @@ describe('storyPathFor (pure)', () => {
   it('appends story.ks to the project directory', () => {
     expect(storyPathFor('projects/demo')).toBe('projects/demo/story.ks')
     expect(storyPathFor('projects/demo/')).toBe('projects/demo/story.ks')
+  })
+})
+
+describe('isValidProjectName (pure)', () => {
+  it('accepts letters, digits, _ and -', () => {
+    expect(isValidProjectName('demo')).toBe(true)
+    expect(isValidProjectName('my_game-2')).toBe(true)
+  })
+  it('rejects spaces, separators and empty strings', () => {
+    expect(isValidProjectName('bad name')).toBe(false)
+    expect(isValidProjectName('a/b')).toBe(false)
+    expect(isValidProjectName('../escape')).toBe(false)
+    expect(isValidProjectName('')).toBe(false)
   })
 })
 
@@ -89,5 +103,43 @@ describe('ProjectManagerView (component)', () => {
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent === 'Create Project')!)
     expect(screen.getByText(/may only contain/i)).toBeTruthy()
     expect(client.projectCreate).not.toHaveBeenCalled()
+  })
+
+  it('import flow calls projectImport with srcPath/name and confirms', async () => {
+    const client = makeClient({
+      projectImport: vi.fn(async () => ({ ok: true, path: 'projects\\imported' })),
+    })
+    render(<ProjectManagerView client={client} />)
+    fireEvent.change(screen.getByPlaceholderText('Source folder path'), {
+      target: { value: '/tmp/mygame' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Import as name'), {
+      target: { value: 'imported' },
+    })
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Import Project')!,
+    )
+    // handleImport awaits the RPC before showing feedback — flush microtasks.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(client.projectImport).toHaveBeenCalledWith('/tmp/mygame', 'imported')
+    expect(screen.getByText(/Imported imported/i)).toBeTruthy()
+    // Imported project lands in recent history with normalized separators.
+    expect(useEditor.getState().recentProjects[0].path).toBe('projects/imported')
+  })
+
+  it('import with an invalid name shows a validation error and does not call RPC', () => {
+    const client = makeClient()
+    render(<ProjectManagerView client={client} />)
+    fireEvent.change(screen.getByPlaceholderText('Source folder path'), {
+      target: { value: '/tmp/mygame' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Import as name'), {
+      target: { value: 'bad name!' },
+    })
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Import Project')!,
+    )
+    expect(screen.getByText(/may only contain/i)).toBeTruthy()
+    expect(client.projectImport).not.toHaveBeenCalled()
   })
 })
