@@ -1720,7 +1720,7 @@ void EditorServer::serverLoop(int port) {
                     return;
                 }
             }
-            fs::path projectsRoot = fs::current_path() / "projects";
+            fs::path projectsRoot = engineRoot() / "projects";
             fs::path src = projectsRoot / srcName;
             fs::path dest = projectsRoot / newName;
             std::error_code ec;
@@ -1790,7 +1790,7 @@ void EditorServer::serverLoop(int port) {
                 res.status = 400;
                 return;
             }
-            fs::path projectsRoot = fs::current_path() / "projects";
+            fs::path projectsRoot = engineRoot() / "projects";
             std::error_code mkEc;
             fs::create_directories(projectsRoot, mkEc);
             fs::path dest = projectsRoot / newName;
