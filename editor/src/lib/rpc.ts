@@ -373,6 +373,14 @@ export class EngineClient {
     })
   }
 
+  /** Single-step controls (Sprint 4b): same contract as /continue. */
+  debugStep(mode: 'into' | 'over' | 'out'): Promise<{ status: string }> {
+    const cap = mode === 'into' ? 'Into' : mode === 'over' ? 'Over' : 'Out'
+    return this.request<{ status: string }>(`/debug/step${cap}`, {
+      method: 'POST',
+    })
+  }
+
   inspect(name: string, frame = 0, global = false): Promise<unknown> {
     const g = global ? '&global=1' : ''
     return this.request<unknown>(

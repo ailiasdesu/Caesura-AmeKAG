@@ -14,6 +14,7 @@ type Client = Pick<
   | 'removeBreakpoint'
   | 'clearBreakpoints'
   | 'debugContinue'
+  | 'debugStep'
   | 'inspect'
   | 'frame'
 >
@@ -26,6 +27,7 @@ const makeClient = (overrides: Partial<Client> = {}): Client => ({
   removeBreakpoint: vi.fn(async () => ({ status: 'ok' })),
   clearBreakpoints: vi.fn(async () => ({ status: 'ok' })),
   debugContinue: vi.fn(async () => ({ status: 'ok' })),
+  debugStep: vi.fn(async () => ({ status: 'ok' })),
   inspect: vi.fn(async () => 42),
   frame: vi.fn(async () => ({ status: 'ok', width: 640, height: 360, png: 'aGVsbG8=' })),
   ...overrides,
@@ -250,6 +252,29 @@ describe('DebugView (component)', () => {
     await waitFor(() => expect(screen.getByText('Continue').closest('button')?.disabled).toBe(false))
     fireEvent.click(screen.getByText('Continue'))
     await waitFor(() => expect(client.debugContinue).toHaveBeenCalled())
+  })
+
+  it('steps into/over/out when paused (Sprint 4b)', async () => {
+    const client = makeClient({
+      debugState: vi.fn(async () => ({ status: 'ok', scene: 'ep2', token_index: 3, paused: true })),
+    })
+    render(<DebugView client={client as unknown as EngineClient} />)
+    await screen.findByText('paused')
+    await waitFor(() => expect(screen.getByText('Step Into').closest('button')?.disabled).toBe(false))
+    fireEvent.click(screen.getByText('Step Into'))
+    fireEvent.click(screen.getByText('Step Over'))
+    fireEvent.click(screen.getByText('Step Out'))
+    await waitFor(() => {
+      expect(client.debugStep).toHaveBeenCalledWith('into')
+      expect(client.debugStep).toHaveBeenCalledWith('over')
+      expect(client.debugStep).toHaveBeenCalledWith('out')
+    })
+    // Running (not paused): step buttons disabled.
+    ;(client.debugState as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: 'ok', scene: 'ep2', token_index: 5, paused: false,
+    })
+    fireEvent.click(screen.getByText('\u21bb'))
+    await waitFor(() => expect(screen.getByText('Step Into').closest('button')?.disabled).toBe(true))
   })
 
   it('disables Continue while running and re-enables it on pause', async () => {

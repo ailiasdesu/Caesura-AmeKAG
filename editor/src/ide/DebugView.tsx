@@ -188,6 +188,16 @@ export function DebugView({ client }: Props) {
     }
   }
 
+  // Sprint 4b: single-step a paused run (into/over/out).
+  const step = async (mode: 'into' | 'over' | 'out') => {
+    try {
+      await client.debugStep(mode)
+      await refresh()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const doInspect = async () => {
     const name = inspectName.trim()
     if (!name) {
@@ -285,6 +295,15 @@ export function DebugView({ client }: Props) {
         </button>
         <button onClick={() => void cont()} disabled={offline || !enginePaused} title="Resume when paused">
           Continue
+        </button>
+        <button onClick={() => void step('into')} disabled={offline || !enginePaused} title="Step into (Sprint 4b)">
+          Step Into
+        </button>
+        <button onClick={() => void step('over')} disabled={offline || !enginePaused} title="Step over">
+          Step Over
+        </button>
+        <button onClick={() => void step('out')} disabled={offline || !enginePaused} title="Step out">
+          Step Out
         </button>
       </div>
 

@@ -252,6 +252,20 @@ describe('EngineClient', () => {
     expect(init.method).toBe('POST')
   })
 
+  it('debugStep POSTs to /debug/step<Mode> (Sprint 4b)', async () => {
+    const fetchMock = mockFetch(200, { status: 'ok' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.debugStep('into')
+    await client.debugStep('over')
+    await client.debugStep('out')
+    const urls = fetchMock.mock.calls.map((c) => c[0])
+    expect(urls).toEqual([
+      '/api/debug/stepInto',
+      '/api/debug/stepOver',
+      '/api/debug/stepOut',
+    ])
+  })
+
   it('inspect() encodes name, frame and global flag', async () => {
     const fetchMock = mockFetch(200, { value: 1 })
     const client = new EngineClient('/api', fetchMock)
