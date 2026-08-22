@@ -245,6 +245,15 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying demo to output directory..."
 )
 
+# Copy PM-created projects to output (may be empty at first)
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/projects")
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/projects"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/projects"
+    COMMENT "Copying projects to output directory..."
+)
+
 # -- Steam (optional)
 if(CAESURA_HAS_STEAM)
     # PUBLIC on purpose: SteamBackend.h changes SteamBackend's class layout
@@ -443,6 +452,7 @@ install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
 install(DIRECTORY scripts/ DESTINATION scripts)
 install(DIRECTORY demo/ DESTINATION demo)
 install(DIRECTORY assets/ DESTINATION assets)
+install(DIRECTORY projects/ DESTINATION projects)
 install(DIRECTORY shaders/ DESTINATION shaders OPTIONAL)
 install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 
