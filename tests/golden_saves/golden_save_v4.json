@@ -1,0 +1,46 @@
+{
+  "schema_version": 4,
+  "timestamp": 1767259200,
+  "scene": "chapter3_rooftop",
+  "token_index": 789,
+  "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "engine_version": "0.11.0",
+  "data": {
+    "marker": "golden-v4",
+    "player": {
+      "name": "Ame",
+      "hp": 82,
+      "affinity": { "hana": 58 }
+    },
+    "flags": {
+      "met_hana": true,
+      "got_ticket": true,
+      "won_shooting_range": true,
+      "confessed": true
+    },
+    "current_label": "*finale_epilogue",
+    "seen_labels": [
+      "*prologue_station",
+      "*chapter1_classroom",
+      "*chapter2_festival",
+      "*chapter3_rooftop",
+      "*finale_epilogue"
+    ],
+    "playtime": 15430,
+    "minigame": {
+      "high_score": 18300,
+      "courses_unlocked": 3,
+      "tutorial_done": true
+    },
+    "live2d": {
+      "model_id": "hana_school_uniform",
+      "expression": "smile",
+      "motion": "greeting_01",
+      "visible": true
+    },
+    "settings": {
+      "text_speed": 4,
+      "bgm_volume": 0.7
+    }
+  }
+}

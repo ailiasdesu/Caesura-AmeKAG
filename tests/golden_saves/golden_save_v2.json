@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "timestamp": 1767086400,
+  "scene": "chapter1_classroom",
+  "token_index": 231,
+  "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "engine_version": "0.9.6",
+  "data": {
+    "marker": "golden-v2",
+    "player": {
+      "name": "Ame",
+      "hp": 87,
+      "affinity": { "hana": 45 }
+    },
+    "flags": {
+      "met_hana": true,
+      "got_ticket": true
+    },
+    "current_label": "*chapter2_festival",
+    "seen_labels": [
+      "*prologue_station",
+      "*chapter1_classroom",
+      "*chapter2_festival"
+    ],
+    "playtime": 3725,
+    "settings": {
+      "text_speed": 3,
+      "bgm_volume": 0.8
+    }
+  }
+}

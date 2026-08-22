@@ -44,6 +44,7 @@ set(TEST_SOURCES
     cpp/test_storage.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
+    cpp/test_golden_saves.cpp
     cpp/test_mobile_adapter.cpp
     cpp/test_render_device.cpp
     cpp/test_render_pipeline.cpp
@@ -147,7 +148,7 @@ add_caesura_doctest(CaesuraEntryTests
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem
     RESOURCE_LOCK save-files
-    ARGS --source-file=*test_storage.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp
+    ARGS --source-file=*test_storage.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
 )
 add_caesura_doctest(CaesuraScriptTests
     LABELS script lua

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "timestamp": 1767000000,
+  "scene": "prologue_station",
+  "token_index": 17,
+  "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "engine_version": "0.9.0",
+  "data": {
+    "marker": "golden-v1",
+    "player": {
+      "name": "Ame",
+      "hp": 87,
+      "affinity": { "hana": 42 }
+    },
+    "flags": {
+      "met_hana": true,
+      "got_ticket": false
+    },
+    "current_label": "*chapter2_confession",
+    "seen_labels": [
+      "*prologue_station",
+      "*chapter1_classroom"
+    ],
+    "settings": {
+      "text_speed": 3,
+      "bgm_volume": 0.8
+    }
+  }
+}

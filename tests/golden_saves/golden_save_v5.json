@@ -1,0 +1,56 @@
+{
+  "schema_version": 5,
+  "timestamp": 1767345600,
+  "scene": "finale_epilogue",
+  "token_index": 1024,
+  "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "engine_version": "1.0.0",
+  "data": {
+    "marker": "golden-v5",
+    "player": {
+      "name": "Ame",
+      "hp": 91,
+      "affinity": { "hana": 64 }
+    },
+    "flags": {
+      "met_hana": true,
+      "got_ticket": true,
+      "won_shooting_range": true,
+      "confessed": true,
+      "true_end_route": true
+    },
+    "current_label": "*credits",
+    "seen_labels": [
+      "*prologue_station",
+      "*chapter1_classroom",
+      "*chapter2_festival",
+      "*chapter3_rooftop",
+      "*finale_epilogue",
+      "*credits"
+    ],
+    "playtime": 21600,
+    "minigame": {
+      "high_score": 20100,
+      "courses_unlocked": 3,
+      "tutorial_done": true
+    },
+    "live2d": {
+      "model_id": "hana_school_uniform",
+      "expression": "tearful_smile",
+      "motion": "greeting_01",
+      "visible": true
+    },
+    "editor": {
+      "active_project": "golden_vn",
+      "open_scenes": [
+        "scene1.ks",
+        "finale.ks"
+      ],
+      "cursor_line": 1024
+    },
+    "settings": {
+      "text_speed": 5,
+      "bgm_volume": 0.7
+    }
+  }
+}

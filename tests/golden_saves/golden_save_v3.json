@@ -1,0 +1,38 @@
+{
+  "schema_version": 3,
+  "timestamp": 1767172800,
+  "scene": "chapter2_festival",
+  "token_index": 512,
+  "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "engine_version": "0.10.2",
+  "data": {
+    "marker": "golden-v3",
+    "player": {
+      "name": "Ame",
+      "hp": 85,
+      "affinity": { "hana": 51 }
+    },
+    "flags": {
+      "met_hana": true,
+      "got_ticket": true,
+      "won_shooting_range": true
+    },
+    "current_label": "*chapter3_rooftop",
+    "seen_labels": [
+      "*prologue_station",
+      "*chapter1_classroom",
+      "*chapter2_festival",
+      "*chapter3_rooftop"
+    ],
+    "playtime": 9875,
+    "minigame": {
+      "high_score": 12500,
+      "courses_unlocked": 2,
+      "tutorial_done": true
+    },
+    "settings": {
+      "text_speed": 4,
+      "bgm_volume": 0.8
+    }
+  }
+}
