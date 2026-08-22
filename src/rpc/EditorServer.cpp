@@ -219,10 +219,39 @@ void overlayStringMeta(Json& base, const Json& stored) {
     }
 }
 
+// Repo-root discovery that survives out-of-tree builds: when the editor runs
+// from a build directory (build/Debug, /root/build-linux, ...) the source
+// tree is NOT on the cwd chain. Walk upward until a directory containing
+// both tools/project_templates and src exists; fall back to plain cwd so the
+// in-tree dev layout keeps behaving exactly as before.
+fs::path engineRoot() {
+#ifdef CAESURA_SOURCE_DIR
+    // Out-of-tree build: the source tree is a sibling of the build dir, so
+    // upward walking from cwd can never reach it -- use the CMake-injected
+    // source root when valid.
+    const fs::path fromMacro(CAESURA_SOURCE_DIR);
+    if (fs::exists(fromMacro / "tools" / "project_templates") &&
+        fs::exists(fromMacro / "src")) {
+        return fromMacro;
+    }
+#endif
+    fs::path probe = fs::current_path();
+    while (!probe.empty()) {
+        if (fs::exists(probe / "tools" / "project_templates") &&
+            fs::exists(probe / "src")) {
+            return probe;
+        }
+        fs::path parent = probe.parent_path();
+        if (parent == probe) break;
+        probe = parent;
+    }
+    return fs::current_path();
+}
+
 // Resolve a managed-project reference ("projects/<name>"; a bare sanitized
 // <name> is tolerated for symmetry with /api/project/duplicate) into
-// <cwd>/projects/<name>. Returns an empty path when the input escapes the
-// managed root -- traversal, drive letters/schemes, absolute paths, nested
+// <engineRoot>/projects/<name>. Returns an empty path when the input escapes
+// the managed root -- traversal, drive letters/schemes, absolute paths, nested
 // separators or characters outside [A-Za-z0-9_-] share the sanitizer policy
 // of create/duplicate/import.
 fs::path confineManagedProjectPath(const std::string& p) {
@@ -246,7 +275,7 @@ fs::path confineManagedProjectPath(const std::string& p) {
             return {};
         }
     }
-    return fs::current_path() / "projects" / name;
+    return engineRoot() / "projects" / name;
 }
 
 } // namespace
@@ -1517,8 +1546,7 @@ void EditorServer::serverLoop(int port) {
     // Templates root: tools/project_templates under the repo root. Paths are
     // confined to <cwd>/tools/project_templates (no ".." / absolute escapes).
     const auto templatesRoot = []() -> fs::path {
-        fs::path cwd = fs::current_path();
-        return cwd / "tools" / "project_templates";
+        return engineRoot() / "tools" / "project_templates";
     };
 
     const auto confineTemplatePath = [&](const std::string& p) -> fs::path {
@@ -1561,7 +1589,7 @@ void EditorServer::serverLoop(int port) {
         // keeps a malformed entry from becoming a 500 (Sprint 2).
         nlohmann::json out = nlohmann::json::array();
         try {
-            fs::path projectsRoot = fs::current_path() / "projects";
+            fs::path projectsRoot = engineRoot() / "projects";
             std::error_code ec;
             if (!fs::exists(projectsRoot, ec)) {
                 std::error_code createEc;
@@ -1622,7 +1650,7 @@ void EditorServer::serverLoop(int port) {
                     return;
                 }
             }
-            fs::path projectsRoot = fs::current_path() / "projects";
+            fs::path projectsRoot = engineRoot() / "projects";
             std::error_code ec;
             fs::create_directories(projectsRoot, ec);
 
@@ -1650,7 +1678,23 @@ void EditorServer::serverLoop(int port) {
                 return;
             }
             // Adjust entry.lua story path is unnecessary (it already probes
-            // several relative locations).
+            // several relative locations). Templates ship a caesura.project.json
+            // (round 131) whose name/timestamp must follow the new project.
+            try {
+                fs::path metaFile = dest / "caesura.project.json";
+                if (fs::exists(metaFile, ec)) {
+                    std::ifstream metaIn(metaFile);
+                    std::ostringstream metaBuf;
+                    metaBuf << metaIn.rdbuf();
+                    auto meta = nlohmann::json::parse(metaBuf.str());
+                    meta["name"] = name;
+                    meta["template"] = templateId.empty() ? "basic" : templateId;
+                    meta["created"] = nowIsoUtc();
+                    meta["modified"] = meta["created"];
+                    std::ofstream out(metaFile, std::ios::trunc);
+                    out << meta.dump(2);
+                }
+            } catch (const std::exception&) { /* meta write is best-effort */ }
             res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
                             "application/json");
         } catch (const std::exception&) {
