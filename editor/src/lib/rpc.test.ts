@@ -241,6 +241,57 @@ describe('EngineClient', () => {
     })
   })
 
+  it('packageWeb() POSTs JSON {storyPath,outName} to /api/package/web', async () => {
+    const fetchMock = mockFetch(200, {
+      ok: true,
+      outputDir: 'dist/example_game',
+      logTail: '  PACKAGE COMPLETE -> dist/example_game',
+    })
+    const client = new EngineClient('/api', fetchMock)
+    const reply = await client.packageWeb('demo/example_game/story.ks', 'example_game')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/package/web')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      storyPath: 'demo/example_game/story.ks',
+      outName: 'example_game',
+    })
+    expect(reply.ok).toBe(true)
+    expect(reply.outputDir).toBe('dist/example_game')
+    expect(reply.logTail).toContain('PACKAGE COMPLETE')
+  })
+
+  it('packageWeb() with no args sends undefined fields (server defaults apply)', async () => {
+    const fetchMock = mockFetch(200, { ok: true, outputDir: 'dist/example_game' })
+    const client = new EngineClient('/api', fetchMock)
+    await client.packageWeb()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/package/web')
+    expect(JSON.parse(init.body as string)).toEqual({
+      storyPath: undefined,
+      outName: undefined,
+    })
+  })
+
+  it('packageWeb() surfaces RpcError carrying logTail when the script fails', async () => {
+    // The engine answers 500 with the packaging script's log tail so the
+    // IDE can show which step failed (ks_check / ks_bake / assemble).
+    const client = new EngineClient(
+      '/api',
+      mockFetch(500, {
+        ok: false,
+        error: 'package_game.sh failed with exit code 1',
+        outputDir: 'dist/example_game',
+        logTail: '[package] FAIL: ks_check contract gate',
+      }),
+    )
+    const err = await client.packageWeb('demo/x.ks').catch((e) => e)
+    expect(err).toBeInstanceOf(RpcError)
+    expect(err.status).toBe(500)
+    expect(err.body.error).toContain('exit code 1')
+    expect(err.body.logTail).toContain('ks_check')
+  })
+
   it('stop() / reload() POST with no body', async () => {
     const fetchMock = mockFetch(200, { status: 'ok' })
     const client = new EngineClient('/api', fetchMock)

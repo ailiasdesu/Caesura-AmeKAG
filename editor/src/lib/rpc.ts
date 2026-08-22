@@ -1,5 +1,5 @@
 // Caesura Editor — engine HTTP RPC client.
-// Mirrors the 18 routes of src/rpc/EditorServer.cpp (docs/api/editor-api-reference.md).
+// Mirrors the 21 routes of src/rpc/EditorServer.cpp (docs/api/editor-api-reference.md).
 // All calls go through /api/* (Vite dev proxy → localhost:9876, or same-origin
 // in production). Every request carries the optional bearer token from the
 // engine's CAESURA_EDITOR_TOKEN env var (set via the connection panel).
@@ -137,6 +137,16 @@ export interface BuildReply {
   error?: string
 }
 
+// Reply of POST /api/package/web (one-click web-site packaging, Sprint 6).
+export interface WebPackageReply {
+  ok: boolean
+  /** Confined output directory, e.g. "dist/example_game". */
+  outputDir?: string
+  /** Last lines of the packaging script output (for troubleshooting). */
+  logTail?: string
+  error?: string
+}
+
 export interface Live2DModel {
   path: string
   name: string
@@ -165,6 +175,32 @@ export interface ProjectInfo {
 export interface ProjectOpReply {
   ok: boolean
   path?: string
+  error?: string
+}
+
+// Project metadata persisted as projects/<name>/caesura.project.json
+// (GET/POST /api/project/meta, task book §6.3 PM settings). `name` mirrors
+// the directory name and is not editable; created/version/modified are
+// engine-owned stamps.
+export interface ProjectMeta {
+  name: string
+  template: string
+  version: string
+  /** UI language hint: 'zh' | 'en' | 'ja'. */
+  language: string
+  description: string
+  /** ISO-8601 UTC timestamps stamped by the engine. */
+  created: string
+  modified: string
+}
+
+// Reply of GET/POST /api/project/meta. inferred=true means no metadata
+// file existed yet — every field came from engine defaults.
+export interface ProjectMetaReply {
+  ok: boolean
+  path?: string
+  inferred?: boolean
+  meta?: ProjectMeta
   error?: string
 }
 
@@ -347,6 +383,18 @@ export class EngineClient {
     })
   }
 
+  /** One-click web-site packaging (POST /api/package/web): the engine
+   *  validates a whitelisted story path (assets/ demo/ tests/projects/
+   *  projects/), sanitizes outName to [A-Za-z0-9_-] and runs
+   *  scripts/package_game.sh into dist/<outName>. Both args optional —
+   *  the engine defaults to demo/example_game/story.ks + example_game. */
+  packageWeb(storyPath?: string, outName?: string): Promise<WebPackageReply> {
+    return this.request<WebPackageReply>('/package/web', {
+      method: 'POST',
+      body: JSON.stringify({ storyPath, outName }),
+    })
+  }
+
   // -- KAG scene debugger -------------------------------------------------
 
   debugState(): Promise<DebugStateReply> {
@@ -444,6 +492,26 @@ export class EngineClient {
     return this.request<ProjectOpReply>('/project/import', {
       method: 'POST',
       body: JSON.stringify({ srcPath, name }),
+    })
+  }
+
+  /** Read one project's metadata (GET /api/project/meta). Missing files
+   *  come back with inferred=true and engine-default values. */
+  projectMeta(path: string): Promise<ProjectMetaReply> {
+    return this.request<ProjectMetaReply>(
+      `/project/meta?path=${encodeURIComponent(path)}`,
+    )
+  }
+
+  /** Save editable project metadata (POST /api/project/meta): language,
+   *  description and template. name/created/version are engine-owned. */
+  projectSaveMeta(
+    path: string,
+    meta: Partial<Pick<ProjectMeta, 'template' | 'language' | 'description'>>,
+  ): Promise<ProjectMetaReply> {
+    return this.request<ProjectMetaReply>('/project/meta', {
+      method: 'POST',
+      body: JSON.stringify({ path, meta }),
     })
   }
 }

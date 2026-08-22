@@ -10,6 +10,17 @@ const TEMPLATES: ProjectTemplate[] = [
   { id: 'showcase', name: 'showcase', description: 'Showcase', dir: 'showcase' },
 ]
 
+/** Default metadata payload used by the projectMeta mock. */
+const DEMO_META = {
+  name: 'demo',
+  template: '',
+  version: '1.0',
+  language: 'zh',
+  description: '',
+  created: '2026-01-01T00:00:00Z',
+  modified: '2026-01-01T00:00:00Z',
+}
+
 function makeClient(over: Partial<EngineClient> = {}): EngineClient {
   return {
     projectCreate: vi.fn(async () => ({ ok: true, path: 'projects/demo' })),
@@ -17,6 +28,12 @@ function makeClient(over: Partial<EngineClient> = {}): EngineClient {
     projectImport: vi.fn(async () => ({ ok: true, path: 'projects/imported' })),
     projectList: vi.fn(async () => []),
     projectTemplates: vi.fn(async () => []),
+    projectMeta: vi.fn(async () => ({
+      ok: true,
+      inferred: true,
+      meta: { ...DEMO_META },
+    })),
+    projectSaveMeta: vi.fn(async () => ({ ok: true, meta: { ...DEMO_META } })),
     inspect: vi.fn(async () => ''),
     ...over,
   } as unknown as EngineClient
@@ -141,5 +158,84 @@ describe('ProjectManagerView (component)', () => {
     )
     expect(screen.getByText(/may only contain/i)).toBeTruthy()
     expect(client.projectImport).not.toHaveBeenCalled()
+  })
+
+  // -- Project Settings (§6.3): load / edit / save metadata -------------
+
+  it('settings: clicking Settings loads project meta into the form', async () => {
+    const client = makeClient({
+      projectMeta: vi.fn(async () => ({
+        ok: true,
+        inferred: false,
+        meta: {
+          ...DEMO_META,
+          language: 'ja',
+          description: 'hello world',
+        },
+      })),
+    })
+    useEditor.setState({
+      projects: [{ path: 'projects/demo', name: 'demo', template: 'basic' }],
+    })
+    render(<ProjectManagerView client={client} />)
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Settings')!,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    expect(client.projectMeta).toHaveBeenCalledWith('projects/demo')
+    const langSelect = screen.getByLabelText('Project language') as HTMLSelectElement
+    expect(langSelect.value).toBe('ja')
+    const desc = screen.getByLabelText('Project description') as HTMLTextAreaElement
+    expect(desc.value).toBe('hello world')
+    expect(screen.getByText('PROJECT SETTINGS')).toBeTruthy()
+  })
+
+  it('settings: Save posts language/description and confirms', async () => {
+    const client = makeClient()
+    useEditor.setState({
+      projects: [{ path: 'projects/demo', name: 'demo', template: 'basic' }],
+    })
+    render(<ProjectManagerView client={client} />)
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Settings')!,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    fireEvent.change(screen.getByLabelText('Project description'), {
+      target: { value: 'A tiny story' },
+    })
+    fireEvent.change(screen.getByLabelText('Project language'), {
+      target: { value: 'en' },
+    })
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Save Settings')!,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    expect(client.projectSaveMeta).toHaveBeenCalledWith('projects/demo', {
+      language: 'en',
+      description: 'A tiny story',
+    })
+    expect(screen.getByText(/Saved settings for demo/i)).toBeTruthy()
+  })
+
+  it('settings: failed save surfaces the backend error', async () => {
+    const client = makeClient({
+      projectSaveMeta: vi.fn(async () => ({
+        ok: false,
+        error: 'disk full',
+      })),
+    })
+    useEditor.setState({
+      projects: [{ path: 'projects/demo', name: 'demo', template: 'basic' }],
+    })
+    render(<ProjectManagerView client={client} />)
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Settings')!,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.textContent === 'Save Settings')!,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByText(/disk full/i)).toBeTruthy()
   })
 })

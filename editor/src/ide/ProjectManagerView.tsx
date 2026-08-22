@@ -18,6 +18,17 @@ export function isValidProjectName(name: string): boolean {
 }
 
 /**
+ * Project metadata languages (must match the backend's closed set in
+ * POST /api/project/meta). Labels are bilingual so non-English users can
+ * find their language at a glance.
+ */
+const LANGUAGES: { id: string; label: string }[] = [
+  { id: 'zh', label: '中文 (zh)' },
+  { id: 'en', label: 'English (en)' },
+  { id: 'ja', label: '日本語 (ja)' },
+]
+
+/**
  * Resolve the story document path for a project directory. Projects are
  * created from templates that carry a story.ks (preferred) or entry.lua.
  */
@@ -52,6 +63,15 @@ export function ProjectManagerView({ client }: Props) {
   const [importName, setImportName] = useState('')
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
+  // Project Settings (§6.3): the selected project plus its editable
+  // metadata draft. Loaded from GET /api/project/meta on selection.
+  const [settingsProject, setSettingsProject] = useState<{
+    path: string
+    name: string
+  } | null>(null)
+  const [metaLanguage, setMetaLanguage] = useState('zh')
+  const [metaDescription, setMetaDescription] = useState('')
+  const [metaLoading, setMetaLoading] = useState(false)
 
   const refresh = useCallback(() => {
     void loadProjects()
@@ -148,6 +168,47 @@ export function ProjectManagerView({ client }: Props) {
       setMsg(`Imported ${trimmed}`)
       setImportSrc('')
       setImportName('')
+      void loadProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  /** Select a project for the Settings pane and load its metadata. */
+  const openSettings = async (p: { path: string; name: string }) => {
+    setError('')
+    setMsg('')
+    setSettingsProject(p)
+    setMetaLoading(true)
+    try {
+      const reply = await client.projectMeta(p.path)
+      const m = reply.meta
+      if (m) {
+        setMetaLanguage(m.language || 'zh')
+        setMetaDescription(m.description || '')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMetaLoading(false)
+    }
+  }
+
+  /** Persist the Settings draft via POST /api/project/meta, then refresh. */
+  const handleSaveSettings = async () => {
+    if (!settingsProject) return
+    setError('')
+    setMsg('')
+    try {
+      const reply = await client.projectSaveMeta(settingsProject.path, {
+        language: metaLanguage,
+        description: metaDescription,
+      })
+      if (!reply.ok) {
+        setError(reply.error ?? 'Save failed')
+        return
+      }
+      setMsg(`Saved settings for ${settingsProject.name}`)
       void loadProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -255,9 +316,55 @@ export function ProjectManagerView({ client }: Props) {
             <span className="explorer-item-name">{p.name}</span>
             <button onClick={() => void openProject(p)}>Open</button>
             <button onClick={() => void handleDuplicate(p)}>Duplicate</button>
+            <button
+              onClick={() => void openSettings(p)}
+              title={`Edit metadata for ${p.name}`}
+            >
+              Settings
+            </button>
           </div>
         ))}
       </section>
+
+      {/* Project settings — visible once a project is selected */}
+      {settingsProject && (
+        <section className="explorer-section">
+          <div className="explorer-section-title">PROJECT SETTINGS</div>
+          <div className="explorer-item" title={settingsProject.path}>
+            <span className="explorer-file-icon">🗂</span>
+            <span className="explorer-item-name">{settingsProject.name}</span>
+          </div>
+          <select
+            className="explorer-filter"
+            value={metaLanguage}
+            onChange={(e) => setMetaLanguage(e.target.value)}
+            aria-label="Project language"
+            disabled={metaLoading}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <textarea
+            className="explorer-filter"
+            rows={3}
+            placeholder="Project description"
+            value={metaDescription}
+            onChange={(e) => setMetaDescription(e.target.value)}
+            aria-label="Project description"
+            disabled={metaLoading}
+          />
+          <button
+            className="primary"
+            onClick={() => void handleSaveSettings()}
+            disabled={metaLoading}
+          >
+            Save Settings
+          </button>
+        </section>
+      )}
 
       {/* Recent projects */}
       <section className="explorer-section">
