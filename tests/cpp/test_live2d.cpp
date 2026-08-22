@@ -439,6 +439,18 @@ TEST_CASE("confineToModelRoot resolves symlinks and keeps containment") {
 namespace {
 
 std::string readSourceRelative(const std::string& relative) {
+#ifdef CAESURA_SOURCE_DIR
+    // Out-of-tree builds: prefer the CMake-injected source root.
+    const std::filesystem::path fromMacro(CAESURA_SOURCE_DIR);
+    if (std::filesystem::exists(fromMacro / "src") &&
+        std::filesystem::exists(fromMacro / "tests" / "cpp")) {
+        const auto full = fromMacro / relative;
+        std::ifstream file(full, std::ios::binary);
+        std::ostringstream out;
+        out << file.rdbuf();
+        return out.str();
+    }
+#endif
     auto path = std::filesystem::current_path();
     while (!path.empty()) {
         if (std::filesystem::exists(path / "src") &&

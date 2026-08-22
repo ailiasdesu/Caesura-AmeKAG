@@ -447,8 +447,11 @@ def main():
     # created above; cleanup below removes the written file with the dir.
     st, resp = request("/api/project/meta?path=projects/" + pname)
     _m = resp.get("meta", {}) if isinstance(resp, dict) else {}
+    # Templates now ship caesura.project.json (round 131), so a fresh
+    # project may or may not be "inferred" -- both are valid; the contract
+    # is ok=True with resolved name/language/version.
     check("project-meta-default",
-          st == 200 and resp.get("ok") is True and resp.get("inferred") is True
+          st == 200 and resp.get("ok") is True
           and _m.get("name") == pname and _m.get("language") == "zh"
           and _m.get("version") == "1.0" and isinstance(_m.get("created"), str),
           "%s %s" % (st, resp))

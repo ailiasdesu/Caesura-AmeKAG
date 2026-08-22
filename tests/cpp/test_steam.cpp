@@ -79,6 +79,17 @@ TEST_CASE("NullSteamBackend::shutdown is idempotent") {
 #include <sstream>
 
 static std::string readSteamSourceFile(const std::string& relative) {
+#ifdef CAESURA_SOURCE_DIR
+    // Out-of-tree builds: prefer the CMake-injected source root.
+    const std::filesystem::path fromMacro(CAESURA_SOURCE_DIR);
+    if (std::filesystem::exists(fromMacro / "src") &&
+        std::filesystem::exists(fromMacro / "tests" / "cpp")) {
+        std::ifstream file(fromMacro / relative, std::ios::binary);
+        std::ostringstream out;
+        out << file.rdbuf();
+        return out.str();
+    }
+#endif
     auto path = std::filesystem::current_path();
     while (!path.empty()) {
         if (std::filesystem::exists(path / "src") &&

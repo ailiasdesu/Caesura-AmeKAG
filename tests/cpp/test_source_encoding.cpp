@@ -17,6 +17,15 @@ bool isSourceFile(const std::filesystem::path& path) {
 }
 
 std::filesystem::path findRepoRoot() {
+#ifdef CAESURA_SOURCE_DIR
+    // Out-of-tree builds (e.g. WSL or CI) have no source tree on the cwd
+    // chain; the CMake build injects the source root -- prefer it.
+    const std::filesystem::path fromMacro(CAESURA_SOURCE_DIR);
+    if (std::filesystem::exists(fromMacro / "src") &&
+        std::filesystem::exists(fromMacro / "tests" / "cpp")) {
+        return fromMacro;
+    }
+#endif
     auto path = std::filesystem::current_path();
     while (!path.empty()) {
         if (std::filesystem::exists(path / "src") &&
