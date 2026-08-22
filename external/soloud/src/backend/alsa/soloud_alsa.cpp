@@ -71,8 +71,10 @@ namespace SoLoud
                 data->sampleBuffer[i] = static_cast<short>(floor(data->buffer[i] 
                                                           * static_cast<float>(0x7fff)));
             }
-            if (snd_pcm_writei(data->alsaDeviceHandle, data->sampleBuffer, data->samples) == -EPIPE)
-                snd_pcm_prepare(data->alsaDeviceHandle);
+            if (data->alsaDeviceHandle) {
+                if (snd_pcm_writei(data->alsaDeviceHandle, data->sampleBuffer, data->samples) == -EPIPE)
+                    snd_pcm_prepare(data->alsaDeviceHandle);
+            }
                 
         }
         
@@ -144,12 +146,19 @@ namespace SoLoud
         rc = snd_pcm_hw_params_set_rate_near(handle, params, &val, &dir);
         if (rc < 0)
         {
+            // The handle was opened but never configured: leave it NULL so
+            // alsaCleanup's drain guard sees no PCM (libasound asserts on
+            // draining an unconfigured device).
+            snd_pcm_close(handle);
+            data->alsaDeviceHandle = 0;
             return UNKNOWN_ERROR;
         }
 
         rc = snd_pcm_hw_params(handle, params);
         if (rc < 0) 
         {
+            snd_pcm_close(handle);
+            data->alsaDeviceHandle = 0;
             return UNKNOWN_ERROR;
         }
 
@@ -164,6 +173,8 @@ namespace SoLoud
         data->threadHandle = Thread::createThread(alsaThread, data);
         if (0 == data->threadHandle)
         {
+            snd_pcm_close(handle);
+            data->alsaDeviceHandle = 0;
             return UNKNOWN_ERROR;
         }
         aSoloud->mBackendString = "ALSA";
