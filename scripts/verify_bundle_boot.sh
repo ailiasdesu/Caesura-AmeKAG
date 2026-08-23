@@ -27,6 +27,9 @@ if [[ ! -f "$ENGINE" ]]; then
     echo "  Pass it as argv[1], or set CAESURA_ENGINE."
     exit 2
 fi
+# Absolute path: the launch happens after cd into the bundle (relative
+# engine paths would silently point inside the bundle dir on CI).
+ENGINE="$(cd "$(dirname "$ENGINE")" && pwd)/$(basename "$ENGINE")"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
