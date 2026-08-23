@@ -125,11 +125,15 @@ set(SOLOUD_BACKEND_SDL2 OFF CACHE BOOL "" FORCE)
 if(WIN32)
     set(SOLOUD_BACKEND_WINMM ON CACHE BOOL "" FORCE)
     set(SOLOUD_BACKEND_WASAPI ON CACHE BOOL "" FORCE)
-elseif(UNIX AND NOT APPLE)
+elseif(UNIX AND NOT APPLE AND NOT ANDROID)
     # Linux: without a real backend SoLoud's AUTO picks nothing and init
     # fails with error 7 (silent break -- CI only caught it via audio tests
     # tolerating init failure, and headless WSL needed a null device).
     set(SOLOUD_BACKEND_ALSA ON CACHE BOOL "" FORCE)
+elseif(ANDROID)
+    # Track M: OpenSLES is the Android backend — NDK has no ALSA/WASAPI,
+    # and AUTO picks nothing (same silent-init-failure pattern as Linux).
+    set(SOLOUD_BACKEND_OPENSLES ON CACHE BOOL "" FORCE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # iOS: the CoreAudio backend is required — AUTO picks nothing and audio
     # init fails (same silent break pattern as Linux/ALSA). Scoped to iOS:

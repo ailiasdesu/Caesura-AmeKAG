@@ -122,6 +122,28 @@ elseif(APPLE)
         OpenSSL::SSL
         OpenSSL::Crypto
     )
+
+
+elseif(ANDROID)
+    # Track M: Android (NDK) is POSIX but desktop-only deps (X11) do not
+    # exist. Same OpenSSL slice contract as the iOS branch: the probe
+    # builds android-arm64 libssl.a/libcrypto.a under OPENSSL_ROOT_DIR and
+    # passes it explicitly — FindOpenSSL is unreliable cross-compiling
+    # (pkg-config paths win on host).
+    find_package(Threads REQUIRED)
+    set(ANDROID_OPENSSL_SSL "${OPENSSL_ROOT_DIR}/lib/libssl.a")
+    set(ANDROID_OPENSSL_CRYPTO "${OPENSSL_ROOT_DIR}/lib/libcrypto.a")
+    if(NOT EXISTS "${ANDROID_OPENSSL_SSL}" OR NOT EXISTS "${ANDROID_OPENSSL_CRYPTO}")
+        message(FATAL_ERROR "Android OpenSSL slice missing under OPENSSL_ROOT_DIR: ${OPENSSL_ROOT_DIR} (need lib/libssl.a + lib/libcrypto.a)")
+    endif()
+    target_include_directories(CaesuraSystemDependencies INTERFACE
+        "${OPENSSL_ROOT_DIR}/include")
+    target_link_libraries(CaesuraSystemDependencies INTERFACE
+        Threads::Threads
+        log android
+        "${ANDROID_OPENSSL_SSL}"
+        "${ANDROID_OPENSSL_CRYPTO}"
+    )
 elseif(UNIX)
     find_package(Threads REQUIRED)
     find_package(X11 REQUIRED)

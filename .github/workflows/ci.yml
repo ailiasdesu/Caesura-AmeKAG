@@ -475,6 +475,19 @@ jobs:
           cmake --install "$RUNNER_TEMP/sdl-build"
           echo "SDL3_DIR=$RUNNER_TEMP/sdl3-android/lib/cmake/SDL3" >> "$GITHUB_ENV"
 
+      - name: "Build OpenSSL Android slice (arm64-v8a, api 24)"
+        shell: bash
+        run: |
+          set -e
+          git clone --depth 1 --branch openssl-3.3.2 https://github.com/openssl/openssl.git "$RUNNER_TEMP/openssl-src"
+          cd "$RUNNER_TEMP/openssl-src"
+          export ANDROID_NDK_ROOT="$NDK_DIR"
+          export PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          ./Configure android-arm64 --prefix="$RUNNER_TEMP/openssl-android" -D__ANDROID_API__=24
+          make -j3
+          make install_sw
+          echo "OPENSSL_ROOT_DIR=$RUNNER_TEMP/openssl-android" >> "$GITHUB_ENV"
+
       - name: "Configure Android (red point moves to engine-side gaps)"
         shell: bash
         run: |
@@ -484,6 +497,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCAESURA_LIVE2D=OFF -DCAESURA_ENABLE_FFMPEG=OFF \
             -DSOLOUD_BACKEND_OPENSLES=ON \
+            -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR" \
             -DSDL3_DIR="$SDL3_DIR"
 
       - name: "Build module graph"
