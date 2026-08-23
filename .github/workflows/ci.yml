@@ -340,7 +340,27 @@ jobs:
         with:
           submodules: recursive
 
-      - name: "Configure iOS (expected first red: SDL3 iOS package missing)"
+      - name: "Build SDL3 source for iOS (move the red past the package gate)"
+        shell: bash
+        run: |
+          set -e
+          SDL_SRC="$RUNNER_TEMP/sdl-src"
+          SDL_INSTALL="$RUNNER_TEMP/sdl3-ios"
+          git clone --depth 1 --branch release-3.2.4 https://github.com/libsdl-org/SDL.git "$SDL_SRC"
+          cmake -S "$SDL_SRC" -B "$SDL_SRC/build-ios" \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_STATIC=ON -DSDL_SHARED=ON \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_DOCS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$SDL_INSTALL"
+          cmake --build "$SDL_SRC/build-ios" --config Release --parallel 3
+          cmake --install "$SDL_SRC/build-ios" --config Release
+          echo "SDL3_DIR=$SDL_INSTALL/lib/cmake/SDL3" >> "$GITHUB_ENV"
+
+      - name: "Configure iOS (red point moves to engine-side gaps)"
         shell: bash
         run: |
           cmake -S . -B build-ios -G Xcode \
@@ -348,7 +368,8 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCAESURA_LIVE2D=OFF \
-            -DCAESURA_ENABLE_FFMPEG=OFF
+            -DCAESURA_ENABLE_FFMPEG=OFF \
+            -DSDL3_DIR="$RUNNER_TEMP/sdl3-ios/lib/cmake/SDL3"
 
       - name: Build module graph
         shell: bash
