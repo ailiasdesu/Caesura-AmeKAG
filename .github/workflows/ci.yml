@@ -240,6 +240,11 @@ jobs:
           cmake --build build --config Debug --parallel $(nproc) > build.log 2>&1 || { echo '=== build errors ==='; grep -iE 'error:|fatal error|undefined' build.log | head -30; tail -40 build.log; exit 1; }
           tail -3 build.log
 
+      - name: Bundled layout boot smoke (xvfb; A3/R6 contract)
+        run: |
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG
+
       - name: Lua script suites (main + orphan)
         run: |
           lua5.4 tests/scripts/run_lua_tests.lua
