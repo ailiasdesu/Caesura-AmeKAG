@@ -184,7 +184,8 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-22-025-delivery-handoff.md` | **最新状态**交接文档（025，round 135 完成 / WSL Linux 全量测试 + 8 项跨平台修复；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
+| `plans/2026-08-23-026-delivery-handoff.md` | **最新状态**交接文档（026，Validation-Release 阶段总结；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
+| `plans/2026-08-22-025-delivery-handoff.md` | 交接文档（025；WSL Linux 全量测试 + 8 项跨平台修复） |
 | `plans/2026-08-22-024-delivery-handoff.md` | 交接文档（024，round 127 完成 / 产品化 Sprint 4-5c + Steam SDK） |
 | `plans/2026-08-21-023-delivery-handoff.md` | 交接文档（023，round 121 完成 / Sprint 1-3） |
 | `plans/2026-08-21-022-delivery-handoff.md` | 交接文档（022，round 117 完成 / v1.0.1） |
