@@ -194,7 +194,15 @@ endif()
 
 # The distributable remains one executable; production sources live in the
 # module libraries above and are compiled exactly once.
-add_executable(${PROJECT_NAME} src/main.cpp)
+if(ANDROID)
+    # Track M A2/R1: Android ships a JNI shared library that SDLActivity
+    # loads, not a desktop executable. MODULE yields libCaesuraAmeKAG.so;
+    # the final name the activity loads is set by gradle meta-data
+    # (android.app.lib_name) when the A2 host module lands.
+    add_library(${PROJECT_NAME} MODULE src/main.cpp)
+else()
+    add_executable(${PROJECT_NAME} src/main.cpp)
+endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE Caesura::Engine Caesura::Rpc)
 
 # -- FFmpeg (apply if found above) -----------------------------------------
@@ -478,6 +486,7 @@ message(STATUS "Caesura (AmeKAG) configured successfully.")
 # needs a BUNDLE destination (the iOS probe red point at the install step).
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION .
+    LIBRARY DESTINATION .
     BUNDLE DESTINATION .
 )
 install(DIRECTORY scripts/ DESTINATION scripts)
