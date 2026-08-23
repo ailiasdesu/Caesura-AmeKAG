@@ -85,13 +85,16 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # an iOS slice and passes OPENSSL_ROOT_DIR (same pattern as SDL3_DIR).
     # FindOpenSSL on the mac runner prefers Homebrew pkg-config paths and
     # ignores OPENSSL_ROOT_DIR, so resolve the explicit install directly.
+    # Direct absolute paths: find_package(FindOpenSSL) prefers Homebrew on
+    # the mac runner; find_library behaved inconsistently with -D cache vars
+    # here, so the probe contract is explicit file paths under the root.
+    set(IOS_OPENSSL_SSL "${OPENSSL_ROOT_DIR}/lib/libssl.a")
+    set(IOS_OPENSSL_CRYPTO "${OPENSSL_ROOT_DIR}/lib/libcrypto.a")
+    if(NOT EXISTS "${IOS_OPENSSL_SSL}" OR NOT EXISTS "${IOS_OPENSSL_CRYPTO}")
+        message(FATAL_ERROR "iOS OpenSSL slice missing under OPENSSL_ROOT_DIR: ${OPENSSL_ROOT_DIR} (need lib/libssl.a + lib/libcrypto.a)")
+    endif()
     target_include_directories(CaesuraSystemDependencies INTERFACE
         "${OPENSSL_ROOT_DIR}/include")
-    find_library(IOS_OPENSSL_LIB NAMES ssl PATHS "${OPENSSL_ROOT_DIR}/lib" NO_DEFAULT_PATH)
-    find_library(IOS_CRYPTO_LIB NAMES crypto PATHS "${OPENSSL_ROOT_DIR}/lib" NO_DEFAULT_PATH)
-    if(NOT IOS_OPENSSL_LIB OR NOT IOS_CRYPTO_LIB)
-        message(FATAL_ERROR "iOS OpenSSL slice not found under OPENSSL_ROOT_DIR: ${OPENSSL_ROOT_DIR}")
-    endif()
     target_link_libraries(CaesuraSystemDependencies INTERFACE
         ${METAL_LIBRARY}
         ${FOUNDATION_LIBRARY}
@@ -99,8 +102,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         ${UIKIT_LIBRARY}
         ${AUDIOTOOLBOX_LIBRARY}
         pthread
-        ${IOS_OPENSSL_LIB}
-        ${IOS_CRYPTO_LIB}
+        "${IOS_OPENSSL_SSL}"
+        "${IOS_OPENSSL_CRYPTO}"
     )
 elseif(APPLE)
     find_library(COCOA_LIBRARY Cocoa REQUIRED)
