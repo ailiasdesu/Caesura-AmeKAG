@@ -32,17 +32,15 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 BUNDLE="$WORK/bundle"
 
-echo "=== [bundle-boot] packaging first_vn ==="
-bash "$SCRIPT_DIR/package_game.sh" --no-web-build --out "$BUNDLE" "$REPO_ROOT/tests/projects/first_vn" >/dev/null 2>&1 \
-    || { echo "ERROR: package_game.sh failed"; exit 1; }
-
-# Mirror the Android staging: the web packaging ships only the baked .ks; the
-# native/mobile bundle needs the project entry + its media assets too.
-mkdir -p "$BUNDLE/demo/first_vn"
-cp "$REPO_ROOT/tests/projects/first_vn/entry.lua" "$BUNDLE/demo/first_vn/"
-cp -r "$REPO_ROOT/tests/projects/first_vn/assets" "$BUNDLE/demo/first_vn/"
-
-# Point the runtime at the project entry (same rewrite as the CI probe).
+echo "=== [bundle-boot] assembling the canonical resource root ==="
+# Same assembly as the android-compile probe (A3): <root>/{scripts,assets,
+# demo/first_vn} and config.entry_script pointing at the project entry.
+# package_game.sh is NOT used: its web pipeline needs web/dist which CI
+# runners only build in the web job, and the native bundle needs no ks_bake.
+mkdir -p "$BUNDLE/demo"
+cp -r "$REPO_ROOT/scripts" "$BUNDLE/scripts"
+cp -r "$REPO_ROOT/assets"  "$BUNDLE/assets"
+cp -r "$REPO_ROOT/tests/projects/first_vn" "$BUNDLE/demo/first_vn"
 sed -i 's|config.entry_script = .*|config.entry_script = "../demo/first_vn/entry.lua"|' "$BUNDLE/scripts/config.lua"
 
 echo "=== [bundle-boot] launching engine: $ENGINE"
