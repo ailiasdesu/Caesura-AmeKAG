@@ -1,0 +1,6 @@
+# Gradle / Android build artifacts (all relative to android/)
+app/build/
+build/
+.gradle/
+local.properties
+app/src/main/jniLibs/

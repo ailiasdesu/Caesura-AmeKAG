@@ -1,0 +1,26 @@
+// Top-level build file — mirrors the official SDL3 android-project template
+// (AGP 8.7.3 / Gradle 8.9+). The engine native library is produced by the
+// android-compile CI probe (NDK cross-compile) and dropped into
+// app/src/main/jniLibs/<abi>/ before assembleDebug; this repository does
+// NOT drive the NDK from Gradle (see README.md).
+
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

@@ -40,7 +40,11 @@ target_include_directories(CaesuraBuildOptions INTERFACE
     ${CMAKE_SOURCE_DIR}/external/ed25519
 )
 target_compile_definitions(CaesuraBuildOptions INTERFACE
-    SDL_MAIN_HANDLED
+    # Track M A2: Android's SDLActivity glue calls the app's `SDL_main`
+    # entry (getMainFunction()=SDL_main); defining SDL_MAIN_HANDLED there
+    # would keep a plain `main` and the JNI glue could never start the app.
+    # Desktop platforms keep SDL_MAIN_HANDLED (their wrappers are ours).
+    $<$<NOT:$<PLATFORM_ID:Android>>:SDL_MAIN_HANDLED>
     $<$<CONFIG:Debug>:BX_CONFIG_DEBUG=1>
     $<$<NOT:$<CONFIG:Debug>>:BX_CONFIG_DEBUG=0>
 )

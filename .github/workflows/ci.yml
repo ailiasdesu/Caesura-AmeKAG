@@ -504,3 +504,34 @@ jobs:
         shell: bash
         run: |
           cmake --build build-android --parallel 3
+          ls -la build-android/libCaesuraAmeKAG.so
+
+      - name: "Stage native libs for the APK (A2 host)"
+        shell: bash
+        run: |
+          set -e
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp build-android/libCaesuraAmeKAG.so android/app/src/main/jniLibs/arm64-v8a/
+          cp "$RUNNER_TEMP/sdl3-android/lib/libSDL3.so" android/app/src/main/jniLibs/arm64-v8a/
+          ls -la android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: "Gradle assembleDebug (Track M A2 host module)"
+        shell: bash
+        run: |
+          set -e
+          # Hosted ubuntu images ship the Android SDK; compileSdk 35 may be
+          # missing → install defensively (licenses are pre-accepted).
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" >/dev/null 2>&1 || true
+          GRADLE="gradle"
+          if gradle --version 2>/dev/null | grep -q "Gradle 8.9\|Gradle 8.10\|Gradle 8.1[1-9]"; then
+            echo "using runner gradle"
+          else
+            echo "runner gradle too old/missing - downloading 8.9"
+            curl -sL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+            unzip -q /tmp/gradle.zip -d /tmp
+            GRADLE="/tmp/gradle-8.9/bin/gradle"
+          fi
+          cd android
+          "$GRADLE" --no-daemon --console=plain assembleDebug
+          cd ..
+          ls -la android/app/build/outputs/apk/debug/ || true
