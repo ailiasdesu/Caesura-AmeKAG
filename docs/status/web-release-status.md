@@ -91,7 +91,7 @@ node scripts/web_browser_smoke.mjs --root dist/first_vn --scene story.ks
   - 资源泄漏迹象：texture 缓存跨轮固定 12（c1=12 c3=12 end=12，无增长）；DOM 层 1；JS heap 采样 Delta 为负（GC 回收，Chrome -0.8MB / Edge -0.2MB）
   - WebGL/WebGPU：不适用（DOM 渲染器无 GPU）；WASM（Lua VM）零错误
   - 页签长时间运行：W5 专项待测
-- [ ] **W5 Tab Suspend/Resume** —— 后台 rAF/setTimeout 节流、恢复、计时器跳变、存档不损坏（下一项）
+- [x] **W5 Tab Suspend/Resume** —— 真实浏览器多标签切换（Target.activateTarget，页面获真实 visibilitychange）隐藏 6.5s 后返回，用 smoke --suspend 于 dist/first_vn 实测（Chrome 13/13、Edge 13/13）：场景保持 parked 无计时器灾难跳变（WAIT:8 不变）、WebAudio 存活（state=running + bgm source 仍在）、返回后可信点击正常推进（输入/循环未丢失）、存档链路未受影响（同轮 reload 持久 PASS）。**关键结论**：web scheduler 对后台时间**不敏感**——[wait] 走合成 dt（coroutine.resume dt=16 帧推进，see scripts/kag/commands/system.lua）而非墙钟，故无需修复与回归测试；rAF/setTimeout 仅驱动 UI/自动推进，返回后自然恢复。
 - [ ] **W3 Web CJK/Font/Asset smoke 场景** —— 现有 first_vn/example_game 已含中文+日文+英文文本且渲染通过；建独立 smoke 场景 + font fallback/缓存项
 - [ ] **W4 Web Stress/Memory** —— web_stress_vn（100+ 图集/多音频/CJK 字体/连续切场景/反复加载）+ 实际测量记录
 - [ ] **W5 Tab Suspend/Resume** —— 后台恢复/计时器跳变/输入不丢失/存档不损坏
