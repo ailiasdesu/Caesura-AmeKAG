@@ -382,6 +382,106 @@ describe('AudioEngine · bridge contract', () => {
     await eng.play('se', 'sfx.wav', { assetUrl: 'http://cdn/' })
     expect(eng.isPlaying('se')).toBe(true)
   })
+
+  it('exposes unlock/state for the W1 lifecycle contract', () => {
+    const eng = new AudioEngine({})
+    expect(typeof eng.unlock).toBe('function')
+    expect(typeof eng.state).toBe('string')
+  })
+})
+
+// =============================================================
+// plan W1 — WebAudio autoplay lifecycle (user-gesture unlock)
+// =============================================================
+describe('AudioEngine · autoplay unlock (W1)', () => {
+  // fake ctx pinned to 'suspended' with resume() that flips it to running
+  function suspendedEngine() {
+    const { ctx, eng } = mkEngine()
+    ctx.state = 'suspended'
+    ctx.resume = vi.fn(async () => { ctx.state = 'running' })
+    return { ctx, eng }
+  }
+
+  it('reports ctx state through the state getter', async () => {
+    const { ctx, eng } = suspendedEngine()
+    expect(eng.state).toBe('suspended')
+    ctx.state = 'running'
+    expect(eng.state).toBe('running')
+    eng.destroy()
+    expect(eng.state).toBe('none')
+  })
+
+  it('unlock resumes a suspended context (initial suspended -> running)', async () => {
+    const { ctx, eng } = suspendedEngine()
+    expect(eng.state).toBe('suspended')
+    await expect(eng.unlock()).resolves.toBe(true)
+    expect(eng.state).toBe('running')
+    expect(ctx.resume).toHaveBeenCalledTimes(1)
+  })
+
+  it('repeated unlock is safe and does not resume a running context twice', async () => {
+    const { ctx, eng } = suspendedEngine()
+    await eng.unlock()
+    await eng.unlock()
+    await eng.unlock()
+    expect(ctx.resume).toHaveBeenCalledTimes(1)
+    expect(eng.state).toBe('running')
+  })
+
+  it('repeat resume calls (engine.resume) are safe', async () => {
+    const { ctx, eng } = suspendedEngine()
+    await expect(Promise.resolve(eng.resume())).resolves.toBeUndefined()
+    ctx.state = 'running'
+    await expect(Promise.resolve(eng.resume())).resolves.toBeUndefined()
+    expect(eng.state).toBe('running')
+  })
+
+  it('background recovery: a re-suspended context unlocks again on tab return', async () => {
+    const { ctx, eng } = suspendedEngine()
+    await eng.unlock()
+    // browser/OS suspend puts the context back to suspended
+    ctx.state = 'suspended'
+    ctx.resume.mockClear()
+    await expect(eng.unlock()).resolves.toBe(true)
+    expect(ctx.resume).toHaveBeenCalledTimes(1)
+    expect(eng.state).toBe('running')
+  })
+
+  it('unlock creates the context lazily on first gesture and resumes it', async () => {
+    const { ctx } = suspendedEngine()
+    let created = 0
+    const fakeCtor = function () { created++; return ctx }
+    const prev = globalThis.AudioContext
+    globalThis.AudioContext = fakeCtor
+    try {
+      const eng = new AudioEngine({})
+      expect(eng.state).toBe('none')
+      await expect(eng.unlock()).resolves.toBe(true)
+      expect(created).toBe(1)
+      expect(eng.state).toBe('running')
+    } finally {
+      if (prev === undefined) delete globalThis.AudioContext
+      else globalThis.AudioContext = prev
+    }
+  })
+
+  it('unlock degrades to false without an AudioContext (headless)', async () => {
+    const eng = new AudioEngine({})
+    await expect(eng.unlock()).resolves.toBe(false)
+    // and it never throws even after destroy
+    eng.destroy()
+    await expect(eng.unlock()).resolves.toBe(false)
+  })
+
+  it('unlock ignores a resume() rejection (transient gesture failure)', async () => {
+    const { ctx, eng } = suspendedEngine()
+    ctx.resume = vi.fn(async () => { throw new Error('not allowed yet') })
+    await expect(eng.unlock()).resolves.toBe(false)
+    expect(eng.state).toBe('suspended')
+    // a later attempt succeeds once the gesture is trusted
+    ctx.resume = vi.fn(async () => { ctx.state = 'running' })
+    await expect(eng.unlock()).resolves.toBe(true)
+  })
 })
 
 })

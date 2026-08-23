@@ -116,6 +116,33 @@ export class AudioEngine {
     if (this._ctx && typeof this._ctx.resume === 'function') return this._ctx.resume()
     return undefined
   }
+
+  /** Current AudioContext lifecycle state: 'running' | 'suspended' |
+   *  'closed' | 'none' (no context — jsdom/headless). The UI hook and the
+   *  real-browser smoke read this before/after a user gesture (plan W1). */
+  get state() {
+    return this._ctx ? (this._ctx.state ?? 'running') : 'none'
+  }
+
+  /**
+   * User-gesture unlock (autoplay policy): browsers keep a fresh
+   * AudioContext 'suspended' until a trusted gesture. Idempotent — resume()
+   * is only called while the context is suspended, so repeated gestures /
+   * repeated unlock calls are safe (W1: '多次 unlock 不重复破坏状态').
+   * Creates the context lazily on first gesture when play() has not run yet.
+   * Returns true when the context is (or became) 'running', false when no
+   * AudioContext exists (test/headless degradation).
+   */
+  async unlock() {
+    const ctx = this.ensureContext()
+    if (!ctx) return false
+    try {
+      if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+        await ctx.resume()
+      }
+    } catch { /* resume can transiently fail outside a gesture; next call retries */ }
+    return this.state !== 'suspended'
+  }
   /** Tear down: stop sources, close the context, clear state. Later calls
    *  degrade safely (play returns false, stop no-ops). */
   destroy() {

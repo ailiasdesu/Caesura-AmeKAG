@@ -31,6 +31,23 @@ const wasmFile = (typeof self !== 'undefined' && self.__CAESURA_WASM_FILE__)
 const player = await createPlayer({ scriptsBase: SCRIPTS_BASE, ...(wasmFile ? { wasmFile } : {}) })
 log('engine loaded; kag table ready')
 
+// ---- WebAudio lifecycle (plan W1) ------------------------------------
+// Autoplay policy: a fresh AudioContext stays 'suspended' until a trusted
+// user gesture. Capture pointerdown/keydown/touchstart (document-level,
+// covers the Run/Advance buttons + canvas taps) to unlock — idempotent,
+// so every later gesture is a safe no-op. Returning to the tab after a
+// browser/OS suspend resumes it again.
+const unlockAudio = () => { void player.audio.unlock() }
+for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+  document.addEventListener(type, unlockAudio, { capture: true, passive: true })
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') unlockAudio()
+})
+// Verification hook for the real-browser smoke (W1 asserts the context
+// state before/after a trusted click); also the live audio debug surface.
+window.__caesuraAudio = player.audio
+
 const renderer = new DomRenderer(player.core, stage)
 let storyBundle = null
 
