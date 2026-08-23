@@ -247,6 +247,7 @@ caesura_add_module(Resource
 caesura_add_module(Rpc
     src/rpc/RpcServer.cpp
     src/rpc/EditorServer.cpp
+    src/rpc/services/ProjectService.cpp
 )
 
 caesura_add_module(Script

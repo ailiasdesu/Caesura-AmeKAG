@@ -5,6 +5,7 @@
 #include "EditorServer.h"
 #include "ConstantTime.h"
 #include "ProjectContext.h"
+#include "services/ProjectService.h"
 #include "../../external/cpp-httplib/httplib.h"
 #include "../debug/api/DebugLog.h"
 
@@ -373,6 +374,9 @@ void EditorServer::serverLoop(int port) {
     // template/project/build/package resolution goes through ctx; business
     // handlers must not guess with fs::current_path().
     const ProjectContext ctx = ProjectContext::fromEnvironment();
+    // Core Service layer (task book §14): handlers below are thin transport
+    // wrappers; business logic lives in the services.
+    rpc::service::ProjectService projects(ctx);
 
     // ---------------------------------------------------------------------
     // CORS middleware - allow web editor from any origin
@@ -1532,448 +1536,71 @@ void EditorServer::serverLoop(int port) {
         return templatesRoot() / norm;
     };
 
-    svr.Get("/api/project/templates", [&](const httplib::Request&, httplib::Response& res) {
-        nlohmann::json out = nlohmann::json::array();
-        // Read manifest.json when present; otherwise enumerate directories.
-        std::ifstream mf(templatesRoot() / "manifest.json");
-        if (mf) {
-            try {
-                auto m = nlohmann::json::parse(mf);
-                if (m.contains("templates") && m["templates"].is_array())
-                    out = m["templates"];
-            } catch (const std::exception&) { out = nlohmann::json::array(); }
-        }
-        if (out.empty()) {
-            // Fallback: enumerate directories under templates root.
-            std::error_code ec;
-            for (const auto& e : fs::directory_iterator(templatesRoot(), ec)) {
-                if (ec || !e.is_directory()) continue;
-                out.push_back({ {"id", e.path().filename().string()},
-                                {"name", e.path().filename().string()},
-                                {"description", ""},
-                                {"dir", e.path().filename().string()} });
-            }
-        }
-        res.set_content(out.dump(), "application/json");
-    });
-
-    svr.Get("/api/project/list", [&](const httplib::Request&, httplib::Response& res) {
-        // Discover projects under ./projects/ (created by this manager). Each
-        // is a directory with story.ks (or entry.lua) and assets/. Hard catch
-        // keeps a malformed entry from becoming a 500 (Sprint 2).
-        nlohmann::json out = nlohmann::json::array();
-        try {
-            fs::path projectsRoot = engineRoot() / "projects";
-            std::error_code ec;
-            if (!fs::exists(projectsRoot, ec)) {
-                std::error_code createEc;
-                fs::create_directories(projectsRoot, createEc);
-                res.set_content(out.dump(), "application/json");
-                return;
-            }
-            for (const auto& e : fs::directory_iterator(projectsRoot, ec)) {
-                if (ec) break;
-                std::error_code de;
-                if (!e.is_directory(de) || de) continue;
-                const std::string name = e.path().filename().string();
-                const bool hasStory = fs::exists(e.path() / "story.ks", de)
-                                    || fs::exists(e.path() / "entry.lua", de);
-                if (!hasStory) continue;
-                std::string modified;
-                std::error_code le;
-                auto ft = fs::last_write_time(e.path(), le);
-                if (!le) {
-                    modified = std::to_string(
-                        static_cast<long long>(ft.time_since_epoch().count()));
-                }
-                out.push_back({ {"path", std::string("projects/") + name},
-                                {"name", name},
-                                {"template", ""},
-                                {"modified", modified} });
-            }
-        } catch (...) {
-            out = nlohmann::json::array();
-        }
-        std::string body;
-        try { body = out.dump(); } catch (...) { body = "[]"; }
-        res.set_content(body, "application/json");
-    });
-
-    svr.Post("/api/project/create", [&](const httplib::Request& req, httplib::Response& res) {
-        try {
-            auto body = nlohmann::json::parse(req.body);
-            const std::string templateId = body.value("template", "basic");
-            const std::string name = body.value("name", std::string());
-            if (name.empty()) {
-                res.set_content("{\"error\":\"Missing project name\"}", "application/json");
-                res.status = 400;
-                return;
-            }
-            if (templateId != "blank" && templateId != "basic" &&
-                templateId != "live2d" && templateId != "kag3" &&
-                templateId != "showcase" && !templateId.empty()) {
-                res.set_content("{\"error\":\"Unknown template\"}", "application/json");
-                res.status = 400;
-                return;
-            }
-            // Sanitize project name: allow [A-Za-z0-9_-], reject separators.
-            for (char ch : name) {
-                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
-                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
-                    res.status = 400;
-                    return;
-                }
-            }
-            fs::path projectsRoot = engineRoot() / "projects";
-            std::error_code ec;
-            fs::create_directories(projectsRoot, ec);
-
-            fs::path dest = projectsRoot / name;
-            if (fs::exists(dest, ec)) {
-                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
-                res.status = 409;
-                return;
-            }
-            // Copy template dir (default "basic") into the project.
-            const std::string dir = templateId.empty() ? "basic" : templateId;
-            fs::path src = confineTemplatePath(dir);
-            if (src.empty() || !fs::exists(src, ec)) {
-                res.set_content("{\"error\":\"Template not found\"}", "application/json");
-                res.status = 400;
-                return;
-            }
-            std::error_code copyEc;
-            fs::copy(src, dest, fs::copy_options::recursive
-                                        | fs::copy_options::overwrite_existing,
-                     copyEc);
-            if (copyEc) {
-                res.set_content("{\"error\":\"Failed to copy template\"}", "application/json");
-                res.status = 500;
-                return;
-            }
-            // Adjust entry.lua story path is unnecessary (it already probes
-            // several relative locations). Templates ship a caesura.project.json
-            // (round 131) whose name/timestamp must follow the new project.
-            try {
-                fs::path metaFile = dest / "caesura.project.json";
-                if (fs::exists(metaFile, ec)) {
-                    std::ifstream metaIn(metaFile);
-                    std::ostringstream metaBuf;
-                    metaBuf << metaIn.rdbuf();
-                    auto meta = nlohmann::json::parse(metaBuf.str());
-                    meta["name"] = name;
-                    meta["template"] = templateId.empty() ? "basic" : templateId;
-                    meta["created"] = nowIsoUtc();
-                    meta["modified"] = meta["created"];
-                    std::ofstream out(metaFile, std::ios::trunc);
-                    out << meta.dump(2);
-                }
-            } catch (const std::exception&) { /* meta write is best-effort */ }
-            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
-                            "application/json");
-        } catch (const std::exception&) {
-            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
-            res.status = 400;
-        }
-    });
-
-    svr.Post("/api/project/duplicate", [&](const httplib::Request& req, httplib::Response& res) {
-        try {
-            auto body = nlohmann::json::parse(req.body);
-            const std::string srcName = body.value("srcPath", std::string());
-            const std::string newName = body.value("name", std::string());
-            if (srcName.empty() || newName.empty()) {
-                res.set_content("{\"error\":\"Missing srcPath/name\"}", "application/json");
-                res.status = 400;
-                return;
-            }
-            for (char ch : newName) {
-                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
-                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
-                    res.status = 400;
-                    return;
-                }
-            }
-            fs::path projectsRoot = engineRoot() / "projects";
-            fs::path src = projectsRoot / srcName;
-            fs::path dest = projectsRoot / newName;
-            std::error_code ec;
-            if (!fs::exists(src, ec) || !fs::is_directory(src, ec)) {
-                res.set_content("{\"error\":\"Source project not found\"}", "application/json");
-                res.status = 404;
-                return;
-            }
-            if (fs::exists(dest, ec)) {
-                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
-                res.status = 409;
-                return;
-            }
-            std::error_code copyEc;
-            fs::copy(src, dest, fs::copy_options::recursive
-                                        | fs::copy_options::overwrite_existing,
-                     copyEc);
-            if (copyEc) {
-                res.set_content("{\"error\":\"Failed to duplicate\"}", "application/json");
-                res.status = 500;
-                return;
-            }
-            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
-                            "application/json");
-        } catch (const std::exception&) {
-            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
-            res.status = 400;
-        }
-    });
-
-    svr.Post("/api/project/import", [&](const httplib::Request& req, httplib::Response& res) {
-        // Import semantics differ from duplicate on purpose: srcPath may be
-        // ANY on-disk directory (absolute or relative -- that is the whole
-        // point of importing an existing game), while only the destination
-        // NAME goes through the sanitizer and lands under ./projects/.
-        try {
-            auto body = nlohmann::json::parse(req.body);
-            const std::string srcStr = body.value("srcPath", std::string());
-            const std::string newName = body.value("name", std::string());
-            if (srcStr.empty() || newName.empty()) {
-                res.set_content("{\"error\":\"Missing srcPath/name\"}", "application/json");
-                res.status = 400;
-                return;
-            }
-            for (char ch : newName) {
-                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-')) {
-                    res.set_content("{\"error\":\"Invalid project name\"}", "application/json");
-                    res.status = 400;
-                    return;
-                }
-            }
-            std::error_code ec;
-            const fs::path src(srcStr);
-            if (!fs::exists(src, ec) || !fs::is_directory(src, ec)) {
-                res.set_content("{\"error\":\"Source directory not found\"}", "application/json");
-                res.status = 404;
-                return;
-            }
-            // A Caesura project carries a story entry point (story.ks
-            // preferred, entry.lua fallback) -- mirrors /api/project/list
-            // discovery so imported projects are listable afterwards.
-            if (!fs::exists(src / "story.ks", ec)
-                && !fs::exists(src / "entry.lua", ec)) {
-                res.set_content(
-                    "{\"error\":\"Not a Caesura project (missing story.ks/entry.lua)\"}",
-                    "application/json");
-                res.status = 400;
-                return;
-            }
-            fs::path projectsRoot = engineRoot() / "projects";
-            std::error_code mkEc;
-            fs::create_directories(projectsRoot, mkEc);
-            fs::path dest = projectsRoot / newName;
-            if (fs::exists(dest, ec)) {
-                res.set_content("{\"error\":\"Project already exists\"}", "application/json");
-                res.status = 409;
-                return;
-            }
-            std::error_code copyEc;
-            fs::copy(src, dest, fs::copy_options::recursive
-                                        | fs::copy_options::overwrite_existing,
-                     copyEc);
-            if (copyEc) {
-                res.set_content("{\"error\":\"Failed to import project\"}", "application/json");
-                res.status = 500;
-                return;
-            }
-            res.set_content(dumpJson({{"ok", true}, {"path", dest.string()}}),
-                            "application/json");
-        } catch (const std::exception&) {
-            res.set_content("{\"error\":\"Invalid JSON body\"}", "application/json");
-            res.status = 400;
-        }
-    });
-
-    svr.Get("/api/project/meta", [](const httplib::Request& req, httplib::Response& res) {
-        // Read one project's metadata. When caesura.project.json has never
-        // been written the reply carries engine-inferred defaults and
-        // inferred:true so the editor can still show an editable form.
-        const fs::path projectDir =
-            confineManagedProjectPath(req.get_param_value("path"));
-        if (projectDir.empty()) {
-            res.set_content("{\"error\":\"Invalid project path\"}",
-                            "application/json");
-            res.status = 400;
-            return;
-        }
-        std::error_code ec;
-        if (!fs::exists(projectDir, ec) || !fs::is_directory(projectDir, ec)) {
-            res.set_content("{\"error\":\"Project not found\"}",
-                            "application/json");
-            res.status = 404;
-            return;
-        }
-        const std::string name = pathToUtf8(projectDir.filename());
-        Json meta = defaultProjectMeta(name);
-        bool inferred = true;
-        std::ifstream mf(projectDir / "caesura.project.json");
-        if (mf) {
-            try {
-                Json stored = Json::parse(mf);
-                if (stored.is_object()) {
-                    overlayStringMeta(meta, stored);
-                    inferred = false;
-                }
-            } catch (const std::exception&) {
-                // Corrupt metadata falls back to inferred defaults rather
-                // than failing the whole settings panel.
-            }
-        }
-        res.set_content(dumpJson({
-            {"ok", true},
-            {"path", "projects/" + name},
-            {"inferred", inferred},
-            {"meta", meta},
-        }), "application/json");
-    });
-
-    svr.Post("/api/project/meta", [](const httplib::Request& req, httplib::Response& res) {
-        // Save the editable metadata surface (language/description/
-        // template) into caesura.project.json. Identity is owned by the
-        // directory: name never moves, version stays engine-stamped and
-        // created survives saves; modified is re-stamped on every write.
-        try {
-            auto body = Json::parse(req.body);
-            if (!body.is_object()) {
-                res.set_content(
-                    "{\"error\":\"Request body must be a JSON object\"}",
-                    "application/json");
-                res.status = 400;
-                return;
-            }
-            const fs::path projectDir =
-                confineManagedProjectPath(body.value("path", std::string()));
-            if (projectDir.empty()) {
-                res.set_content("{\"error\":\"Invalid project path\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-            const auto patchIt = body.find("meta");
-            if (patchIt == body.end() || !patchIt->is_object()) {
-                res.set_content("{\"error\":\"Missing meta object\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-
-            // Validate the editable surface BEFORE touching disk: language
-            // is the closed set shared with the editor's Settings dropdown,
-            // template is a plain string token and description is bounded
-            // free text (rejected, not truncated, so pastes fail loudly).
-            static const char* kLanguages[] = {"zh", "en", "ja"};
-            constexpr size_t kMaxDescription = 2000;
-            const auto langIt = patchIt->find("language");
-            if (langIt != patchIt->end() && langIt->is_string()) {
-                const std::string lang = langIt->get<std::string>();
-                bool allowed = false;
-                for (const char* candidate : kLanguages) {
-                    if (lang == candidate) { allowed = true; break; }
-                }
-                if (!allowed) {
-                    res.set_content(
-                        "{\"error\":\"language must be one of zh/en/ja\"}",
+    svr.Get("/api/project/templates", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        const auto r = projects.listTemplates();
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
                         "application/json");
-                    res.status = 400;
-                    return;
-                }
-            } else if (langIt != patchIt->end() && !langIt->is_null()) {
-                res.set_content("{\"error\":\"language must be a string\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-            const auto tplIt = patchIt->find("template");
-            if (tplIt != patchIt->end() && !tplIt->is_string() &&
-                !tplIt->is_null()) {
-                res.set_content("{\"error\":\"template must be a string\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-            const auto descIt = patchIt->find("description");
-            if (descIt != patchIt->end() && descIt->is_string() &&
-                descIt->get<std::string>().size() > kMaxDescription) {
-                res.set_content(
-                    "{\"error\":\"description must be at most 2000 characters\"}",
-                    "application/json");
-                res.status = 400;
-                return;
-            }
-            if (descIt != patchIt->end() && !descIt->is_string() &&
-                !descIt->is_null()) {
-                res.set_content("{\"error\":\"description must be a string\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-
-            std::error_code ec;
-            if (!fs::exists(projectDir, ec) || !fs::is_directory(projectDir, ec)) {
-                res.set_content("{\"error\":\"Project not found\"}",
-                                "application/json");
-                res.status = 404;
-                return;
-            }
-
-            // Start from the stored document (preserving created/template/
-            // version across saves) or inferred defaults.
-            const std::string name = pathToUtf8(projectDir.filename());
-            Json meta = defaultProjectMeta(name);
-            std::ifstream mf(projectDir / "caesura.project.json");
-            if (mf) {
-                try {
-                    Json stored = Json::parse(mf);
-                    if (stored.is_object()) overlayStringMeta(meta, stored);
-                } catch (const std::exception&) {}
-            }
-            mf.close();
-
-            meta["name"] = name;
-            meta["version"] = "1.0";
-            if (!meta.contains("created") || !meta["created"].is_string() ||
-                meta["created"].get_ref<const std::string&>().empty()) {
-                meta["created"] = nowIsoUtc();
-            }
-            if (tplIt != patchIt->end() && tplIt->is_string()) {
-                meta["template"] = tplIt->get<std::string>();
-            }
-            if (langIt != patchIt->end() && langIt->is_string()) {
-                meta["language"] = langIt->get<std::string>();
-            }
-            if (descIt != patchIt->end() && descIt->is_string()) {
-                meta["description"] = descIt->get<std::string>();
-            }
-            meta["modified"] = nowIsoUtc();
-
-            std::ofstream out(projectDir / "caesura.project.json",
-                              std::ios::binary | std::ios::trunc);
-            if (!out.is_open()) {
-                res.set_content(
-                    "{\"error\":\"Failed to write project metadata\"}",
-                    "application/json");
-                res.status = 500;
-                return;
-            }
-            out << meta.dump(2) << "\n";
-            out.close();
-
-            res.set_content(dumpJson({
-                {"ok", true},
-                {"path", "projects/" + name},
-                {"meta", meta},
-            }), "application/json");
-        } catch (const std::exception&) {
-            res.set_content("{\"error\":\"Invalid JSON body\"}",
-                            "application/json");
-            res.status = 400;
-        }
+    });
+    svr.Get("/api/project/list", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        const auto r = projects.list();
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
+    });
+    svr.Post("/api/project/create", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        nlohmann::json body = nlohmann::json::object();
+        try { body = nlohmann::json::parse(req.body); } catch (...) { }
+        const auto r = projects.create(body.value("template", "basic"),
+                                       body.value("name", std::string()));
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
+    });
+    svr.Post("/api/project/duplicate", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        auto body = nlohmann::json::object();
+        try { body = nlohmann::json::parse(req.body); } catch (...) { }
+        const auto r = projects.duplicate(body.value("srcPath", std::string()), body.value("name", std::string()));
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
+    });
+    svr.Post("/api/project/import", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        auto body = nlohmann::json::object();
+        try { body = nlohmann::json::parse(req.body); } catch (...) { }
+        const auto r = projects.importProject(body.value("srcPath", std::string()), body.value("name", std::string()));
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
+    });
+    svr.Get("/api/project/meta", [&projects](const httplib::Request& req, httplib::Response& res) {
+        const auto r = projects.metaGet(req.get_param_value("path"));
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
+    });
+    svr.Post("/api/project/meta", [&projects](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        nlohmann::json meta = nlohmann::json::object();
+        try { meta = nlohmann::json::parse(req.body); } catch (...) { }
+        auto m = meta.is_object() ? meta : nlohmann::json::object();
+        const auto r = projects.metaSave(m.value("path", std::string()),
+                                          m.value("meta", nlohmann::json::object()));
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false,
+                                     nlohmann::json::error_handler_t::replace),
+                        "application/json");
     });
 
     // ---------------------------------------------------------------------
