@@ -148,6 +148,14 @@ cp "$WEB_DIST/index.html"        "$OUT/index.html"
 cp "$WEB_DIST"/web-assets/*      "$OUT/web-assets/"
 cp -r "$WEB_DIST"/scripts/.      "$OUT/scripts/"
 
+# The web player bridge.js fetches scriptsBase + index.json -- regenerate it
+# for the packaged script tree so a packaged game boots without manual
+# bundle edits (Validation-Release task book §9).
+if [ -f "$ROOT/web/gen-index.mjs" ] && command -v node >/dev/null 2>&1; then
+    node "$ROOT/web/gen-index.mjs" "$OUT/scripts" "$OUT/scripts/index.json" >/dev/null 2>&1 \
+        || echo "[package] WARN: scripts index.json generation failed"
+fi
+
 # prune dev-only artifacts from the packaged script tree
 find "$OUT/scripts" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
 find "$OUT/scripts" -type f -name "*.pyc" -delete 2>/dev/null || true
