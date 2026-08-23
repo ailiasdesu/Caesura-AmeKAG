@@ -130,6 +130,11 @@ elseif(UNIX AND NOT APPLE)
     # fails with error 7 (silent break -- CI only caught it via audio tests
     # tolerating init failure, and headless WSL needed a null device).
     set(SOLOUD_BACKEND_ALSA ON CACHE BOOL "" FORCE)
+elseif(APPLE)
+    # macOS/iOS: the CoreAudio backend is required — AUTO picks nothing and
+    # audio init fails (same silent break pattern as Linux/ALSA). iOS probe
+    # (Track I) surfaces this as the next gap once SDL3 is provided.
+    set(SOLOUD_BACKEND_COREAUDIO ON CACHE BOOL "" FORCE)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/bgfx/bx   ${CMAKE_BINARY_DIR}/bx)
