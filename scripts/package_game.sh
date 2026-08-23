@@ -40,10 +40,19 @@ readonly HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT"
 
-LUA="external/lua/lua.exe"
-[ -f "$LUA" ] || LUA="$(command -v lua || true)"
+# Lua interpreter: the vendored lua.exe is Windows-only — Linux/macOS CI
+# must use the platform interpreter (uname MINGW*/MSYS* = git-bash).
+case "$(uname -s 2>/dev/null || true)" in
+    MINGW*|MSYS*|CYGWIN*)
+        LUA="external/lua/lua.exe"
+        [ -f "$LUA" ] || LUA="" ;;
+    *) LUA="" ;;
+esac
+if [ -z "$LUA" ]; then
+    LUA="$(command -v lua5.4 || command -v lua || true)"
+fi
 if [ -z "$LUA" ] || [ ! -e "$LUA" ]; then
-    echo "[package] FATAL: no Lua interpreter (expected external/lua/lua.exe)."; exit 1
+    echo "[package] FATAL: no Lua interpreter (vendored lua.exe unavailable on this OS)."; exit 1
 fi
 
 # ------------------------------------------------------------------ options --
