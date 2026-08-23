@@ -1339,6 +1339,7 @@ TEST_CASE("Storage: concurrent save+load across distinct slots stays consistent"
     // pre- or post-overwrite value, but MUST never see a torn/mixed envelope.
     std::atomic<bool> stop{false};
     std::atomic<int> readerMixed{0};
+    std::atomic<int> readerReads{0};
     auto writer = std::thread([&]() {
         for (int round = 1; round <= 10; ++round) {
             for (int s = 0; s < 4; ++s) sm.save(s, {{"phase", round}, {"slot", s}}, "w", round);
@@ -1346,10 +1347,11 @@ TEST_CASE("Storage: concurrent save+load across distinct slots stays consistent"
         stop.store(true);
     });
     auto reader = std::thread([&]() {
-        while (!stop.load()) {
+        while (!stop.load() || readerReads.load() < 10) {
             for (int s = 0; s < 4; ++s) {
                 json v = sm.load(s);
                 if (v.is_null()) continue;
+                readerReads.fetch_add(1);
                 int slot = v.value("slot", -1);
                 int phase = v.value("phase", -1);
                 // A slot entry must never carry another slot's identity.
