@@ -401,4 +401,11 @@ const frame = () => {
 }
 requestAnimationFrame(frame)
 
-void runScene('galgame_demo.ks')
+// Default scene: URL ?scene=<name> wins, else the FIRST scene of the
+// loaded story bundle, else the demo fallback -- a packaged game must boot
+// without any manual bundle edits (Validation-Release task book §9).
+const initialScene =
+    new URLSearchParams(location.search).get('scene')
+    ?? (storyBundle ? Object.keys(storyBundle.scenes)[0] : null)
+    ?? 'galgame_demo.ks'
+void runScene(initialScene)
