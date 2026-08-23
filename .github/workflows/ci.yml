@@ -323,3 +323,40 @@ jobs:
         with:
           name: caesura-amekag-windows-x64
           path: release-artifacts/
+
+  # ============================================================
+  # iOS compile audit (Track I I1) - RED-GREEN probe, never blocks.
+  # No Mac hardware in the repo dev loop; this surfaces the iOS toolchain
+  # gaps so they can be closed incrementally. continue-on-error keeps the
+  # branch CI green while the job reports its state in the workflow log.
+  # ============================================================
+  ios-compile:
+    name: "iOS CMake probe (audit)"
+    runs-on: macos-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: "Configure iOS (expected first red: SDL3 iOS package missing)"
+        shell: bash
+        run: |
+          cmake -S . -B build-ios -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCAESURA_LIVE2D=OFF \
+            -DCAESURA_ENABLE_FFMPEG=OFF
+
+      - name: Build module graph
+        shell: bash
+        run: |
+          cmake --build build-ios --config Release --parallel 3
+
+      - name: Toolchain state summary
+        if: always()
+        shell: bash
+        run: |
+          echo "ios-compile probe finished (see above for the gap list)"
