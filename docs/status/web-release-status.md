@@ -92,6 +92,11 @@ node scripts/web_browser_smoke.mjs --root dist/first_vn --scene story.ks
   - WebGL/WebGPU：不适用（DOM 渲染器无 GPU）；WASM（Lua VM）零错误
   - 页签长时间运行：W5 专项待测
 - [x] **W5 Tab Suspend/Resume** —— 真实浏览器多标签切换（Target.activateTarget，页面获真实 visibilitychange）隐藏 6.5s 后返回，用 smoke --suspend 于 dist/first_vn 实测（Chrome 13/13、Edge 13/13）：场景保持 parked 无计时器灾难跳变（WAIT:8 不变）、WebAudio 存活（state=running + bgm source 仍在）、返回后可信点击正常推进（输入/循环未丢失）、存档链路未受影响（同轮 reload 持久 PASS）。**关键结论**：web scheduler 对后台时间**不敏感**——[wait] 走合成 dt（coroutine.resume dt=16 帧推进，see scripts/kag/commands/system.lua）而非墙钟，故无需修复与回归测试；rAF/setTimeout 仅驱动 UI/自动推进，返回后自然恢复。
+- [x] **W7 Web Packaging / Deployability** —— 完成：
+  - vite base './'：产物引用全部相对化（index.html `./web-assets/...`），运行时 base 由 document.baseURI（先剥 query/hash）推导——**打包产物可在任意子路径托管**（smoke `--subpath games` 对 dist/first_vn 与 dist/cjk_smoke 全部通过：boot/text/图片/音频/存档/fonts 检查 18/18）；
+  - **离线自包含**：vite closeBundle 把 wasmoon glue.wasm vendor 进 web-assets/，构建期 transformIndexHtml 内联 `__CAESURA_WASM_FILE__` 指向本地副本（dev 保持默认）——打包产物不再依赖 unpkg（smoke 断言 0 个 CDN 资源条目 + wasm 从 web-assets/glue.wasm 加载）；
+  - 命令收敛：`bash scripts/package_game.sh [--out D] <scene|dir>`（内部已含 vite build）+ `node scripts/web_browser_smoke.mjs --root dist/...`（新增 `--subpath`）；输出结构 = index.html + web-assets/(js+glue.wasm) + scripts/ + assets/ + cache/story/ + MANIFEST.txt（无需新增重复脚本，符合计划“复用现有”）；
+  - 已知限制：smoke 静态服务器 no-store（浏览器缓存命中验证宿主相关）；GitHub Pages 等静态宿主均可用（相对路径），S3/Netlify 同源部署同理。
 - [ ] **W3 Web CJK/Font/Asset smoke 场景** —— 现有 first_vn/example_game 已含中文+日文+英文文本且渲染通过；建独立 smoke 场景 + font fallback/缓存项
 - [ ] **W4 Web Stress/Memory** —— web_stress_vn（100+ 图集/多音频/CJK 字体/连续切场景/反复加载）+ 实际测量记录
 - [ ] **W5 Tab Suspend/Resume** —— 后台恢复/计时器跳变/输入不丢失/存档不损坏
