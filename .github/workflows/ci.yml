@@ -371,7 +371,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCAESURA_LIVE2D=OFF \
             -DCAESURA_ENABLE_FFMPEG=OFF \
-            -DSDL3_DIR="$RUNNER_TEMP/sdl3-ios/lib/cmake/SDL3"
+            -DSDL3_DIR="$RUNNER_TEMP/sdl3-ios/lib/cmake/SDL3" \
+            -DCMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER=com.caesura.amekag
 
       - name: Build module graph
         shell: bash
