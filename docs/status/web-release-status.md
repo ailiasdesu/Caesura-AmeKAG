@@ -84,7 +84,14 @@ node scripts/web_browser_smoke.mjs --root dist/first_vn --scene story.ks
 
 - [x] **W1 Web Audio 生命周期** —— 完成（unlock 幂等 + 初始 suspended→running + 后台恢复 + 销毁安全；Chrome+Edge packaged 实跑；318 测试绿）
 - [x] **W2 Web Storage/Save** —— 复用现有 localStorage KV 桥（caesura.save.<slot> 0..99）：新增槽位校验（save_game/_load_raw/saveCurrent/deleteSlot 整数 0..99，非法诚实拒绝）、storageStats()（槽数+字节）、saveCurrent 以 ctx.tf.save_result=='ok' 判成败（原判定把引擎 SaveCommands.save 隐式 nil 当成功，quota 失败误报）、UI 失败可见（#saves-storage 红字 + quato 提示）、web/save-persistence.test.js（真 localStorage + 双实例模拟 reload 持久 + overwrite/invalid/empty/corrupt/quota），真实浏览器跨 reload 持久已由 smoke 验证；IndexedDB 大载荷仍为已记录限制（缩略图恒 null，暂无需）
-- [x] **W3 Web CJK/Font/Asset** —— 打包字体真正启用：index.html @font-face 'CaesuraNoto'（assets/fonts/NotoSansCJKsc-Regular.otf, format opentype, font-display swap）+ 字体栈（Segoe UI/PingFang SC/Hiragino Sans/Noto Sans CJK SC/system-ui 回退）作用于 stage/消息层；demo/cjk_smoke.ks 专用场景（中/日/英/混合标点/未知 face 回退页）；smoke --cjk 对打包产物（dist/cjk_smoke）逐页断言：中/日/英/标点文本渲染、document.fonts.check('CaesuraNoto')=true、打包字体 URL 资源条目、中文页截图（多模态复核无豆腐块）。Chrome 16/16 + Edge 16/16，first_vn 回归 8/8。Cache 命中：smoke 静态服务器 no-store，未验证浏览器缓存命中（宿主相关，标注为已知限制）
+- [x] **W3 Web CJK/Font/Asset** —— 打包字体真正启用：index.html @font-face 'CaesuraNoto'（assets/fonts/NotoSansCJKsc-Regular.otf, format opentype, font-display swap）+ 字体栈（Segoe UI/PingFang SC/Hiragino Sans/Noto Sans CJK SC/system-ui 回退）作用于 stage/消息层；demo/cjk_smoke.ks 专用场景（中/日/英/混合标点/未知 face 页（如实说明：bridge [font] 在 Web 为 no-op（text_set_font 空存根），'回退'实际是浏览器级字体栈渲染，非引擎字体切换））；smoke --cjk 对打包产物（dist/cjk_smoke）逐页断言：中/日/英/标点文本渲染、document.fonts.check('CaesuraNoto')=true、打包字体 URL 资源条目、中文页截图（多模态复核无豆腐块）。Chrome 16/16 + Edge 16/16，first_vn 回归 8/8。Cache 命中：smoke 静态服务器 no-store，未验证浏览器缓存命中（宿主相关，标注为已知限制）
+- [x] **W4 Web Large Asset / Memory Stress** —— **web_stress_vn**（tests/projects/web_stress_vn + 共享池 assets/stress：120 张 256x256 PNG + 2×30s 大 WAV tone440/tone550，生成脚本 stdlib 确定性可复现；12 页循环场景 [jump *start] 无限循环）。smoke --stress 对打包产物驱 3 整轮（36 页+循环）实测（Chrome + Edge 各 16/16 PASS）：
+  - 首次启动耗时（导航→parked，真实测量）：Chrome 1966ms / Edge 2715ms（headless-new x64；非发布基准，仅过程测量）
+  - 场景切换稳定性：36 页顺序 01..12×3 严格复现，0 引擎错误、0 页面异常（含 WASM）
+  - 资源泄漏迹象：texture 缓存跨轮固定 12（c1=12 c3=12 end=12，无增长）；DOM 层 1；JS heap 采样 Delta 为负（GC 回收，Chrome -0.8MB / Edge -0.2MB）
+  - WebGL/WebGPU：不适用（DOM 渲染器无 GPU）；WASM（Lua VM）零错误
+  - 页签长时间运行：W5 专项待测
+- [ ] **W5 Tab Suspend/Resume** —— 后台 rAF/setTimeout 节流、恢复、计时器跳变、存档不损坏（下一项）
 - [ ] **W3 Web CJK/Font/Asset smoke 场景** —— 现有 first_vn/example_game 已含中文+日文+英文文本且渲染通过；建独立 smoke 场景 + font fallback/缓存项
 - [ ] **W4 Web Stress/Memory** —— web_stress_vn（100+ 图集/多音频/CJK 字体/连续切场景/反复加载）+ 实际测量记录
 - [ ] **W5 Tab Suspend/Resume** —— 后台恢复/计时器跳变/输入不丢失/存档不损坏
