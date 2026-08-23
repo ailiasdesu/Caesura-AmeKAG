@@ -383,3 +383,32 @@ jobs:
         shell: bash
         run: |
           echo "ios-compile probe finished (see above for the gap list)"
+
+  # ============================================================
+  # Android static audit (Track M) — zero-NDK checks the mobile pipeline
+  # can run everywhere; native cross-compile stays --smoke on a dev box
+  # with an NDK (documented in docs/guides/android-build.md §5).
+  # ============================================================
+  android-static:
+    name: "Android static contract (no NDK)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Script syntax + friendly diagnostics
+        shell: bash
+        run: |
+          bash -n scripts/build_android.sh
+          # no NDK on this runner — the script must fail PROPERLY, not crash
+          out=$(bash scripts/build_android.sh 2>&1 || true)
+          echo "$out" | grep -q "Android NDK not found" || { echo "expected NDK-missing diagnostic"; exit 1; }
+
+      - name: .ks contract gate for the Android demo content
+        shell: bash
+        run: |
+          lua=external/lua/lua.exe
+          if [ -x "$lua" ]; then :; else lua=$(command -v lua || true); fi
+          if [ -n "$lua" ]; then "$lua" scripts/ks_check.lua tests/projects/first_vn/story.ks; fi
