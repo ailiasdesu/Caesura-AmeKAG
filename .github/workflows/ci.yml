@@ -438,3 +438,55 @@ jobs:
           lua=external/lua/lua.exe
           if [ -x "$lua" ]; then :; else lua=$(command -v lua || true); fi
           if [ -n "$lua" ]; then "$lua" scripts/ks_check.lua tests/projects/first_vn/story.ks; fi
+
+  # ============================================================
+  # Android CMake probe (Track M A1) — GH ubuntu runners ship an
+  # NDK, so the red-green loop can run on CI like the iOS probe.
+  # continue-on-error keeps the branch green while the probe
+  # surfaces the R9/R1 gaps in the workflow log.
+  # ============================================================
+  android-compile:
+    name: "Android CMake probe (audit)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: "Build SDL3 Android slice (arm64-v8a)"
+        shell: bash
+        run: |
+          set -e
+          NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          if [ -z "$NDK" ]; then NDK=$(ls -d "${ANDROID_SDK_ROOT:-}/ndk/"* 2>/dev/null | head -1); fi
+          echo "NDK=$NDK"
+          test -n "$NDK" || { echo "no NDK on runner"; exit 1; }
+          echo "NDK_DIR=$NDK" >> "$GITHUB_ENV"
+          git clone --depth 1 --branch release-3.2.4 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/sdl-src"
+          cmake -S "$RUNNER_TEMP/sdl-src" -B "$RUNNER_TEMP/sdl-build" \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_STATIC=ON -DSDL_SHARED=ON \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_DOCS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/sdl3-android"
+          cmake --build "$RUNNER_TEMP/sdl-build" --parallel 3
+          cmake --install "$RUNNER_TEMP/sdl-build"
+          echo "SDL3_DIR=$RUNNER_TEMP/sdl3-android/lib/cmake/SDL3" >> "$GITHUB_ENV"
+
+      - name: "Configure Android (red point moves to engine-side gaps)"
+        shell: bash
+        run: |
+          cmake -S . -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCAESURA_LIVE2D=OFF -DCAESURA_ENABLE_FFMPEG=OFF \
+            -DSOLOUD_BACKEND_OPENSLES=ON \
+            -DSDL3_DIR="$SDL3_DIR"
+
+      - name: "Build module graph"
+        shell: bash
+        run: |
+          cmake --build build-android --parallel 3
