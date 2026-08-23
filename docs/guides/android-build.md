@@ -178,9 +178,15 @@ cmake --build build-android-arm64 --target CaesuraAudio --config Release --paral
 #  3) gradle -p android assembleDebug   → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**未完成（A2/A3 剩余）**：APK 内资产供给（引擎按 CWD 找 `assets/`，R6 需 SDL3
-AssetManager 或 CARC；iOS 同根因，建议 I3 合并一次做）；真机启动链路验证
-（JNI_OnLoad→SDL_main→SDL_Init 的完整 glue；本圈只验了编译与链接）。## 4. 关键模块在 Android 下的分析
+**未完成（A2/A3 剩余）**：APK 内资产供给的**运行时消费**（引擎按 CWD 找
+`assets/`；R6 根机制已落地（--resource-root/CAESURA_RESOURCE_ROOT，f5dbac5e），
+但 SDL3 AssetManager 或 CARC 的取数胶水 + 真机链路验证（JNI_OnLoad→SDL_main→SDL_Init）
+仍为 device-unverified；iOS 同根因，建议 I3/Track M 合并一次做）。
+
+**A3（内容打包）2026-08-24**：CI 探针已把 `tests/projects/first_vn` 内容成套装入
+APK assets（`assets/assets/<首VN内容>` 布局，对应引擎资源根 ROOT/assets 映射），
+并对 APK 做 zip 内容校验（story.ks/entry.lua/libCaesuraAmeKAG.so/libSDL3.so 均在包内）
+——**打包级已验证**；运行时读取隶属上述未完成项。## 4. 关键模块在 Android 下的分析
 
 ### 4.1 bgfx 渲染后端（GLES）
 

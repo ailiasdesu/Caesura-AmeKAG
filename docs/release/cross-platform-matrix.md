@@ -16,7 +16,7 @@
 | Orientation | N/A | N/A | N/A | ?(smoke 未测旋转) | ? | ? |
 | Safe Area | N/A | N/A | N/A | N/A(桌面浏览器) | ? | ? |
 | Stress | ● | ◐ | ? | ●(W4) | ? | ? |
-| Build/link (CI) | ● | ● | ● | ● | ✅ android-compile 探针全绿 (2026-08-24, NDK 27 arm64-v8a + SDL3 3.2.4 + OpenSSL 3.3.2 切片；模块库+`libCaesuraAmeKAG.so (R1 MODULE)`+测试全链接+A2 宿主 `gradle assembleDebug` 出 APK) | ✅ ios-compile 探针全绿 (2026-08-24) |
+| Build/link (CI) | ● | ● | ● | ● | ✅ android-compile 探针全绿 (2026-08-24, NDK 27 arm64-v8a + SDL3 3.2.4 + OpenSSL 3.3.2 切片；模块库+`libCaesuraAmeKAG.so (R1 MODULE)`+测试全链接+A2 宿主 `gradle assembleDebug` 出 APK + A3 首VN内容打包进 APK assets 并经 zip 校验) | ✅ ios-compile 探针全绿 (2026-08-24) |
 
 ## 证据锚（全部本会话实测/门禁）
 
