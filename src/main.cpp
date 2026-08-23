@@ -819,6 +819,27 @@ private:
     bool m_accepting = true;
 };
 
+// Explicit instantiations: on the Android NDK toolchain (libc++ `__ndk1` +
+// lld) the variant visitor inside execute() can leave these member-template
+// instantiations unreferenced-into the link (ld.lld: undefined symbol ...
+// executeDebug<...> for the 7 debug request types). Forcing emission keeps
+// the debug RPC dispatch linkable under the NDK without changing behaviour
+// on MSVC/macOS/Linux, where the implicit instantiations link fine.
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcSetBreakpointRequest>(
+    Caesura::RpcSetBreakpointRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcRemoveBreakpointRequest>(
+    Caesura::RpcRemoveBreakpointRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcClearBreakpointsRequest>(
+    Caesura::RpcClearBreakpointsRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcDebugResumeRequest>(
+    Caesura::RpcDebugResumeRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcInspectLocalRequest>(
+    Caesura::RpcInspectLocalRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcInspectGlobalRequest>(
+    Caesura::RpcInspectGlobalRequest const&);
+template Caesura::RpcReply EngineRpcDispatcher::executeDebug<Caesura::RpcGetDebugStateRequest>(
+    Caesura::RpcGetDebugStateRequest const&);
+
 void runStdioRpc(Caesura::Engine& engine) {
     auto dispatcher = std::make_shared<EngineRpcDispatcher>(engine);
     Caesura::RpcServer rpc;
