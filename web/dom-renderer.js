@@ -139,7 +139,9 @@ export class DomRenderer {
         box.style.padding = '16px 24px'
         box.style.background = 'rgba(0,0,0,0.55)'
         box.style.color = '#fff'
-        box.style.fontFamily = 'system-ui, sans-serif'
+        // inherit the player font stack (@font-face CaesuraNoto + fallbacks);
+        // a hard-coded system-ui here would override the W3 CJK font.
+        box.style.fontFamily = ''
         box.style.fontSize = '20px'
         box.style.whiteSpace = 'pre-wrap'
         this._textEl.appendChild(box)

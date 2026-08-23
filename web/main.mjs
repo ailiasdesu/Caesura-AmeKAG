@@ -48,6 +48,18 @@ document.addEventListener('visibilitychange', () => {
 // state before/after a trusted click); also the live audio debug surface.
 window.__caesuraAudio = player.audio
 
+// W4 verification hooks (smoke --stress): texture/dem leak probes + a
+// page-level error net (uncaught errors / rejected promises, incl. WASM
+// runtime failures) so the stress run can tell "stable" from "swallowed".
+window.__caesuraCore = player.core
+window.__caesuraErrors = []
+window.addEventListener('error', (e) => { window.__caesuraErrors.push(String(e.message || e.type)) })
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason || {}
+  const stack = String(r && r.stack || '')
+  window.__caesuraErrors.push('rejection: ' + String(r && r.message || r).slice(0, 160) + (stack ? ' @ ' + stack.split(String.fromCharCode(10)).slice(0, 3).join(' | ') : ''))
+})
+
 const renderer = new DomRenderer(player.core, stage)
 let storyBundle = null
 
