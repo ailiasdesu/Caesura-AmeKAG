@@ -216,7 +216,9 @@ class ScopedAssetFiles {
 public:
     bool add(const std::string& subdir, const std::string& name) {
         std::error_code error;
-        const auto dir = std::filesystem::path("assets") / subdir;
+        // Assets live at the repo root (AssetService uses the sourceRoot),
+        // not the CWD -- the fixture must match the same contract.
+        const auto dir = std::filesystem::path(CAESURA_SOURCE_DIR) / "assets" / subdir;
         if (!std::filesystem::exists(dir, error)) {
             if (!std::filesystem::create_directories(dir, error) || error) {
                 return false;
