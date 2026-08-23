@@ -888,23 +888,53 @@ int main(int argc, char* argv[]) {
     setbuf(stderr, NULL);
     fprintf(stderr, "[main] Starting Caesura (AmeKAG)...\n");
 
-    // Resources resolve relative to the CWD; if the user launched the
-    // engine from a build dir (or anywhere else), walk up until assets/
-    // is found and chdir there so the game finds its data regardless of
-    // the launch directory.
+    // Resource root resolution (Track I3 / Android R6):
+    //   1. --resource-root <dir>  (explicit; iOS launcher passes
+    //      SDL_GetBasePath(), the Android JNI wrapper its install dir)
+    //   2. CAESURA_RESOURCE_ROOT env var
+    //   3. legacy walk-up: relative to CWD, walk parents until assets/ is
+    //      found and chdir there (unchanged backward-compatible behavior).
     {
         namespace fs = std::filesystem;
-        fs::path probe = fs::current_path();
-        for (int i = 0; i < 6; ++i) {
-            if (fs::exists(probe / "assets") && fs::is_directory(probe / "assets")) {
-                std::error_code ec;
-                fs::current_path(probe, ec);
-                if (!ec) {
-                    fprintf(stderr, "[main] Working directory: %s\n", probe.string().c_str());
-                }
+        const char* envRoot = std::getenv("CAESURA_RESOURCE_ROOT");
+        std::string resourceRoot;
+        bool rootExplicit = false;
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string(argv[i]) == "--resource-root" && i + 1 < argc) {
+                resourceRoot = argv[i + 1];
+                rootExplicit = true;
                 break;
             }
-            probe = probe.parent_path();
+        }
+        if (resourceRoot.empty() && envRoot && *envRoot) {
+            resourceRoot = envRoot;
+            rootExplicit = true;
+        }
+
+        fs::path target;
+        if (rootExplicit) {
+            target = fs::path(resourceRoot);
+            if (!fs::is_directory(target) || !fs::is_directory(target / "assets")) {
+                fprintf(stderr, "[main] ERROR: --resource-root has no assets/ directory: %s\n",
+                        resourceRoot.c_str());
+                return 1;
+            }
+        } else {
+            fs::path probe = fs::current_path();
+            for (int i = 0; i < 6; ++i) {
+                if (fs::exists(probe / "assets") && fs::is_directory(probe / "assets")) {
+                    target = probe;
+                    break;
+                }
+                probe = probe.parent_path();
+            }
+            if (target.empty()) target = fs::current_path();
+        }
+
+        std::error_code ec;
+        fs::current_path(target, ec);
+        if (!ec) {
+            fprintf(stderr, "[main] Working directory: %s\n", target.string().c_str());
         }
     }
 
