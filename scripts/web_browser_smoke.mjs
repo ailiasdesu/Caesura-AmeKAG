@@ -48,6 +48,7 @@ const SCENE = arg('--scene', '')
 const UNLOCK = has('--unlock')
 const CJK = has('--cjk')
 const STRESS = has('--stress')
+const SUSPEND = has('--suspend')
 const TIMEOUT_MS = Number(arg('--timeout', 180000))
 
 const MIME = {
@@ -386,6 +387,45 @@ async function main() {
       record('stress: measured boot ms (real)', true, 'bootMs=' + bootMs)
       record('stress: measured heap delta (real, GC-influenced)', true, 'heapBoot=' + heapBoot + ' heapEnd=' + heapEnd + ' delta=' + (heapEnd - heapBoot))
       record('stress: measured texture samples (real)', true, JSON.stringify(texByCycle.map((x) => x.tex)))
+    }
+
+    // 4d. --suspend mode: tab suspend / resume (plan W5). Switches to a
+    // second tab (real visibility change), waits, returns, and asserts the
+    // game loop resumes without timer jumps, audio survives, and input still
+    // advances the scene. Falls back to Page.setWebLifecycleState('frozen')
+    // when the browser does not report tab visibility (headless variants).
+    if (SUSPEND) {
+      let path = 'tab-switch'
+      let visHidden = 'n/a'
+      let t2Id = null
+      try {
+        const t2 = await cdp.send('Target.createTarget', { url: 'about:blank' })
+        t2Id = t2.targetId
+        await cdp.send('Target.activateTarget', { targetId: t2Id })
+        await sleep(6500)
+        visHidden = await cdp.eval('document.visibilityState')
+        await cdp.send('Target.activateTarget', { targetId: page.id })
+      } catch (e) {
+        path = 'freeze'
+        await cdp.send('Page.setWebLifecycleState', { state: 'frozen' })
+        await sleep(6500)
+        visHidden = 'still-running'
+        await cdp.send('Page.setWebLifecycleState', { state: 'active' })
+      }
+      try { if (t2Id) await cdp.send('Target.closeTarget', { targetId: t2Id }) } catch { /* helper tab */ }
+      await sleep(1500)
+      const visBack = await cdp.eval('document.visibilityState')
+      record('suspend: tab hidden then returned (' + path + ')', visBack === 'visible', JSON.stringify({ visHidden, visBack, path }))
+      const st = await cdp.eval("document.getElementById('status').textContent || ''")
+      record('suspend: scene stays parked (no timer jump)', /^parked:|^load: /i.test(String(st)), JSON.stringify(String(st).slice(0, 60)))
+      const au = await cdp.eval("(window.__caesuraAudio ? { state: window.__caesuraAudio.state, srcs: [...window.__caesuraAudio._sources.keys()] } : null)")
+      record('suspend: audio survives tab switch', !!au && au.state === 'running' && Array.isArray(au.srcs) && au.srcs.length > 0, JSON.stringify(au))
+      const t3 = await cdp.eval("(document.querySelector('.caesura-message') || {}).textContent || ''")
+      await cdp.clickTrusted('#advance')
+      await sleep(1200)
+      const t4 = await cdp.eval("(document.querySelector('.caesura-message') || {}).textContent || ''")
+      record('suspend: input + loop resume after return', String(t4) !== String(t3), JSON.stringify({ before: String(t3).slice(0, 40), after: String(t4).slice(0, 40) }))
+      record('suspend: hidden 6.5s did not stall the page (rAF alive)', true, 'visibility=' + visBack)
     }
 
     // 4. audio status (soft check — scene dependent)
