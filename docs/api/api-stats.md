@@ -9,9 +9,9 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 31 |
-| Pure-virtual interface methods | 390 |
-| Lua binding functions (luaL_Reg entries) | 154 |
+| API interface headers (src/*/api/I*.h) | 33 |
+| Pure-virtual interface methods | 398 |
+| Lua binding functions (luaL_Reg entries) | 155 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 123 |
 | RPC HTTP endpoints (EditorServer) | 36 |
@@ -30,11 +30,13 @@
 | di | IDeviceLostListener.h | 2 |
 | di | ISandboxQuota.h | 5 |
 | di | ITextureBudget.h | 7 |
-| input | IInputRouter.h | 13 |
+| input | IInputRouter.h | 14 |
 | job | IJobSystem.h | 8 |
 | live2d | IAnimationBackend.h | 13 |
 | minigame | IMiniGameBackend.h | 13 |
-| platform | IMobileAdapter.h | 15 |
+| platform | IDisplayService.h | 1 |
+| platform | ILifecycleService.h | 4 |
+| platform | IMobileAdapter.h | 17 |
 | platform | IPlatformBackend.h | 11 |
 | render | IGpuMonitor.h | 8 |
 | render | ILayerManager.h | 21 |
@@ -60,7 +62,7 @@
 |--------------|-----------|--------------------|
 | AIBinding.cpp | 5 | _AI_CALLBACKS, _AI_CALLBACKS, AI |
 | DebugBinding.cpp | 10 | Debug |
-| DevCoreBinding.cpp | 8 | _CAESURA_QUIT, DevCore |
+| DevCoreBinding.cpp | 9 | _CAESURA_QUIT, DevCore |
 | EngineBinding.cpp | 4 | Engine |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |

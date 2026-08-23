@@ -1,9 +1,11 @@
 # Caesura (AmeKAG) — C++ API Interface Reference
 
-> **31 个纯虚接口，16 个模块；22 个运行时引擎服务通过 `BackendRegistry` 访问**
-> 最后更新: 2026-08-15
+> **33 个纯虚接口，16 个模块；24 个运行时引擎服务通过 `BackendRegistry` 访问**
+> 最后更新: 2026-08-23
 >
-> **更新记录**: 2026-08-15 — round-75 docs sync: interface census 30 -> 31
+> **更新记录**: 2026-08-23 — STEP11 (Track P2 Lifecycle Service): interface census 32 -> 33 (+`ILifecycleService`)，Registry 服务槽位 23 -> 24
+> 2026-08-23 — STEP10 (Track P1 Display Service): interface census 31 -> 32 (+`IDisplayService`)，Registry 服务槽位 22 -> 23
+> 2026-08-15 — round-75 docs sync: interface census 30 -> 31
 
 ---
 
@@ -268,7 +270,7 @@ Lua 沙箱资源配额管理，防止脚本资源泄漏。
 ### 4.3 IDeviceLostListener
 
 GPU 设备丢失恢复的监听契约。持有 GPU 资源的模块通过
-`BackendRegistry::registerDeviceLostListener()` 注册；它不是 22 个服务槽位之一。
+`BackendRegistry::registerDeviceLostListener()` 注册；它不是 23 个服务槽位之一。
 
 | 方法 | 调用时机 | 说明 |
 |------|----------|------|
@@ -437,6 +439,8 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 |------|------|
 | `onPause(L)` | 应用退到后台：标记暂停，有 Lua 状态时回调 `_G.onPause()` |
 | `onResume(L, savedData)` | 回到前台：恢复并回调 `_G.onResume(savedData)` |
+| `onLowMemory(L)` | OS 内存压力：回调 `_G.onLowMemory()`（STEP11 新增；无 Lua 时安全 no-op，回调异常被吞且栈平衡） |
+| `onTerminate(L)` | OS 即将终止：回调 `_G.onTerminate()`（STEP11 新增；仅通知，不改拆卸顺序） |
 | `onFingerDown/x(x,y,fingerId)` | 触摸按下 → 鼠标输入映射 |
 | `onFingerMotion(x,y,fingerId)` | 触摸移动 → 鼠标输入映射 |
 | `onFingerUp(x,y,fingerId)` | 触摸抬起 → 鼠标输入映射 |
@@ -445,6 +449,47 @@ Script 模块经 `IMiniGameBackend` 接口实现，不能在具体 Bgfx 后端�
 | `getDisplayScale` / `setDisplayScale` | 显示缩放 |
 | `onOrientationChanged(L, orientation)` | 朝向变化回调 `_G.onOrientationChanged(\"portrait\"/... )` |
 | `isPaused` / `activeTouchCount` / `isFingerDown(id)` | 状态查询 |
+
+### IDisplayService
+
+统一显示度量查询（Track P1 Display Service，STEP10）：跨桌面/Web/移动的"当前屏幕状态"单一入口，业务代码无需平台 ifdef。桌面与无头环境的 `safeArea` 恒为零值；移动端实现随 Track M/I 落地。
+
+**接口文件**: `src/platform/api/IDisplayService.h`（`Orientation` / `Insets` / `DisplayMetrics` 被接口方法按值传递，依 AGENTS.md §2 定义在接口头文件内）
+**实现**: `SDL3DisplayService`（桌面 SDL3 窗口/显示器实时查询，窗口经 `IPlatformBackend` 懒获取）、`NullDisplayService`（无头/测试，固定零值）
+**构造点**: 组合根工厂 `entry/createDisplayService()`（平台+GPU 可用选 SDL3，否则 Null）；经 `EngineConfig.displayService` 注入，Engine 持有 `unique_ptr` 所有权
+
+| 方法 | 说明 |
+|------|------|
+| `currentMetrics()` | 返回当前 `DisplayMetrics` 快照（一次 SDL 查询，可每帧调用）：`pixelWidth/pixelHeight` 物理像素、`logicalWidth/logicalHeight` 逻辑像素、`scaleFactor` 物理/逻辑比、`dpi = 96 × scaleFactor`（SDL3 提供的是 content scale，此为文档化映射）、`orientation`、`safeArea{left, top, right, bottom}`（逻辑像素安全区 inset） |
+
+**注册**: `Engine::init()` 中 `BackendRegistry::instance().setDisplayService(...)`（与平台后端同阶段）；消费方 `getDisplayService()`。
+**Lua 绑定**: `DevCore.get_display_metrics()`（`src/script/bindings/DevCoreBinding.cpp`）→ `{pixelWidth, pixelHeight, logicalWidth, logicalHeight, scaleFactor, dpi, orientation, safeArea{...}}`；未注册服务时返回 `nil`（`DevCore.get_resolution()` 行为不变）。
+
+### ILifecycleService
+
+统一应用生命周期事件模型（Track P2 Lifecycle Service，STEP11）：桌面（SDL3 app-lifecycle 事件）、Android（JNI onPause/onResume/onLowMemory）与 iOS（UIApplication 通知）共用一条事件流，消费方注册一次 `ILifecycleListener` 即接入全部平台，无需平台 ifdef。
+
+**接口文件**: `src/platform/api/ILifecycleService.h`（`LifecycleEvent` 枚举被接口方法按值传递，依 AGENTS.md §2 定义在接口头文件内）
+**实现**: `LifecycleService`（platform 模块 header-only 中枢）：互斥锁保护监听器表，重复注册忽略；派发前对监听器集合取快照，派发中自移除安全，注册顺序即派发顺序
+**事件源约定**: 事件必须在引擎主线程投递（或先汇入主线程），监听器可触碰 Lua；当前桌面源为 `Engine::appLifecycleWatch`（SDL3 事件 watch，主线程）
+
+`LifecycleEvent` 六事件：
+
+| 事件 | 说明 |
+|------|------|
+| `Pause` / `Resume` | 离开 / 回到焦点（预留给移动端 JNI 源；桌面 SDL3 源当前不产生） |
+| `Background` / `Foreground` | 完全退到后台（无可见表面）/ 回到前台（桌面源：`SDL_EVENT_WILL_ENTER_BACKGROUND` / `SDL_EVENT_DID_ENTER_FOREGROUND`） |
+| `LowMemory` | OS 内存压力——应释放缓存/纹理（桌面源：`SDL_EVENT_LOW_MEMORY`） |
+| `Terminate` | OS 即将终止进程（桌面源：`SDL_EVENT_TERMINATING`） |
+
+| 方法 | 说明 |
+|------|------|
+| `addListener(listener)` | 注册监听器（重复忽略），注册顺序即派发顺序 |
+| `removeListener(listener)` | 移除监听器；未注册/已移除均为安全 no-op |
+| `post(event)` | 向全部监听器投递事件（调用方线程同步派发） |
+
+**构造与注册**: 组合根 `Engine::initPlatformPhase()` 创建并持有 `unique_ptr<LifecycleService>`，先 `addListener(this)` 将自身注册为首监听器，再 `BackendRegistry::instance().setLifecycleService(...)`；消费方 `getLifecycleService()`。
+**Engine 内建映射**: `Background`/`Pause` → `IMobileAdapter::onPause` + 音频挂起；`Foreground`/`Resume` → `onResume` + 音频恢复；`LowMemory`/`Terminate` → `IMobileAdapter::onLowMemory`/`onTerminate`（回调 `_G.onLowMemory` / `_G.onTerminate`，无 Lua 安全）。`Engine::shutdown()` 先移除 SDL watch 再移除自身监听器（Lua 安全拆卸顺序）。
 
 ---
 
@@ -885,6 +930,8 @@ class BackendRegistry {
     IResourceGenerationTracker* getResourceGenerationTracker();
     ISteamBackend*       getSteamBackend();
     IMobileAdapter*      getMobileAdapter();
+    IDisplayService*     getDisplayService();
+    ILifecycleService*   getLifecycleService();
     IMeshRenderer*       getMeshRenderer();
 };
 ```

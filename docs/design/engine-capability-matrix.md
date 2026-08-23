@@ -185,7 +185,7 @@ graph LR
 | D9 | LSP navigation (goto-definition / find-all-references for `*label` ↔ `[jump]`/`[call]`/`[link]`; cross-scene targets return name-only) | `kag/lsp.lua` (definition/references) + Monaco providers | ✓ (12 Lua assertions; Ctrl+Click + context menu in IDE) |
 | D10 | Skeletal mesh animation (SMA S1–S5: CPU soft-skinning math + **GPU compute skinning** (bgfx compute; D3D11 DXBC + GL 430 GLSL, draw transform baked into bone-buffer slots, final NDC output — verified pixel-identical to the CPU path on a real D3D11 device) + bgfx renderer + Lua driver [JSON/hierarchy/LERP] + **round-18 playback controls** (loop/duration/rate/pause/resume/seek/play_anim crossfade/on_done_anim) + **2-bone IK** + **E-mote parts/variant switching** + `[sma_play]`/`[sma_anim]`/`[sma_ik]`/`[sma_variant]`/`[sma_stop]` contracts + `sma.*` binding incl. `set_skin_mode`) | `IMeshRenderer` + `SmaMeshRenderer` + `SmaSkinner` + `kag/sma.lua` + `SmaBinding` | ✓ (12 C++ + 70 Lua assertions; **D3D11 GPU child test: GPU skin == CPU skin pixel-for-pixel (14 assertions)**; headless uses Null backend; Metal/SPIR-V fall back to the CPU skinner) |
 
-### Platform Infrastructure (7 capabilities)
+### Platform Infrastructure (9 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
@@ -196,13 +196,15 @@ graph LR
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
 | P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | ✓ core mapping + lifecycle + **SDL finger events bridged (normalized -> pixel) + orientation change events (Lua _G.onOrientationChanged); 87 unit tests**; native mobile SDK integration still needs a device |
+| P8 | Display metrics service (unified pixel/logical size, scale factor, DPI, orientation, safe-area insets via one snapshot query) | `IDisplayService` (platform) | ✓ desktop (SDL3 window/display query, dpi = 96×contentScale mapping + Null headless fallback; safeArea always zero on desktop/headless); real safe-area insets / mobile implementation NOT done (Track M/I) |
+| P9 | Unified app-lifecycle events (single feed across desktop SDL3 / Android JNI / iOS notifications; consumers implement `ILifecycleListener` once, no platform ifdefs; 6-event enum: Pause/Resume/Background/Foreground/LowMemory/Terminate) | `ILifecycleService` (platform) | ✓ desktop (SDL3 event watch posts Background/Foreground/LowMemory/Terminate through the LifecycleService hub — registration-order dispatch, dedupe, self-removal-safe snapshot; Engine listener maps to onPause/onResume audio suspend/resume + `_G.onLowMemory`/`_G.onTerminate` via IMobileAdapter; +7 unit tests); mobile native event sources NOT implemented (Track M/I) |
 
 ---
 
 > 📷 `engine-capacity-matrix.png` 是对应 mermaid 的静态渲染快照（round-98 世代）；
 > 若重新在支持 mermaid-cli 的环境执行 `mmdc` 可再生成，矩阵以本文表列为准。
 
-**Total: 82 tracked capabilities across 6 domains (阶段 G 终态 / round-113 refresh: +R11 post-processing chain, +S13 declarative tween, +S14 declarative layout; P2 baseline refreshed to round-113 numbers 976/132+24/297/530; S2 contract census 118→123; C10 tutorials 15→16; D1 editor depth extended 408→506→530).** 工具链（ks_i18n / xp3_tool / tlg2png / package_game / template）不单列矩阵行——见文末「工具链边界」说明。 See the readiness snapshot above for
+**Total: 84 tracked capabilities across 6 domains (2026-08-23 STEP10/STEP11: +P8 display metrics, +P9 unified lifecycle events; 阶段 G 终态 / round-113 refresh: +R11 post-processing chain, +S13 declarative tween, +S14 declarative layout; P2 baseline refreshed to round-113 numbers 976/132+24/297/530; S2 contract census 118→123; C10 tutorials 15→16; D1 editor depth extended 408→506→530).** 工具链（ks_i18n / xp3_tool / tlg2png / package_game / template）不单列矩阵行——见文末「工具链边界」说明。 See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
 
 
@@ -228,6 +230,24 @@ the distinction between architecture completion, core usability and release read
 - P2 — 基线终态：C++ 976/976（8858 断言）、Lua 132/132 + 24 orphan、web 297/297
   （20 文件）、editor 530/530、契约 123；round 113 template 套件 4/4；round 114 发布
   终验 Release 构建零错误 + ZIP 87.97MB/403 文件 + 解压冒烟 D3D11 干净启动/退出。
+
+### 2026-08-23 additions (Track P STEP10–STEP11)
+
+- P8 — Display metrics 服务（commit f50c6af8）：`IDisplayService.currentMetrics()` 单次快照
+  返回 pixel/logical 尺寸、scaleFactor、DPI（=96×contentScale 文档化映射）、orientation、
+  safeArea（Orientation/Insets/DisplayMetrics 按值传递，类型定义在接口头文件，AGENTS.md §2）。
+  实现 `SDL3DisplayService`（桌面 SDL3 实时查询，窗口经 `IPlatformBackend` 懒取）+
+  `NullDisplayService`（无头/测试固定零值）；构造点组合根 `entry/createDisplayService()`
+  工厂，`BackendRegistry` 新增 set/getDisplayService 槽位（#23）；Lua 绑定
+  `DevCore.get_display_metrics()`。安全区/DPI 细节：桌面零 inset，移动端待 Track M/I。
+- P9 — 统一生命周期事件服务（commit 6f8414e1）：`LifecycleEvent` 六事件（Pause/Resume/
+  Background/Foreground/LowMemory/Terminate），消费方实现 `ILifecycleListener` 一次接入
+  全平台，无平台 ifdef。桌面源 `Engine::appLifecycleWatch`（SDL3 watch，主线程投递）post
+  Background/Foreground/LowMemory/Terminate，Pause/Resume 预留移动端 JNI 源；
+  `LifecycleService` 中枢按注册顺序派发、去重、快照派发（自移除安全）。Engine 自身作为
+  首监听器映射 onPause/onResume 音频挂起恢复 + `IMobileAdapter.onLowMemory/onTerminate`
+  （`_G.onLowMemory`/`_G.onTerminate`，无 Lua 安全）；`BackendRegistry` 新增
+  set/getLifecycleService 槽位（#24）。移动端原生事件源待 Track M/I。
 
 ### 工具链边界说明（Matrix 不单列工具类能力的原因）
 
