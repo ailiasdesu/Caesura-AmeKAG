@@ -1262,3 +1262,26 @@ TEST_CASE("Mixed: audio playable from a job onComplete (main thread)") {
     eng.shutdown();
 }
 
+
+TEST_CASE("SoLoudAudioEngine survives rapid init/play/stop/shutdown cycles") {
+    // Regression for the deinit() flag race: deinit asserted
+    // !mInsideAudioThreadMutex spuriously when the audio thread acquired
+    // the mix lock between deinit's transient lock-drain and the backend
+    // cleanup join (SIGABRT on headless ALSA-null). 40 cycles with a real
+    // play/stop pair keep the audio thread hot without being slow.
+    for (int iter = 0; iter < 40; ++iter) {
+        SoLoudAudioEngine eng;
+        if (!eng.init()) {
+            MESSAGE("Audio device unavailable, skipping");
+            return;
+        }
+        const unsigned int h = eng.playVoice("tests/audio/silence.wav");
+        if (h) {
+            eng.soloud().setLooping(h, true);
+            eng.soloud().stop(h);
+        }
+        eng.update(0.0f);
+        eng.shutdown();
+    }
+    CHECK(true);
+}
