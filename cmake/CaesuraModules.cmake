@@ -249,6 +249,7 @@ caesura_add_module(Rpc
     src/rpc/EditorServer.cpp
     src/rpc/services/ProjectService.cpp
     src/rpc/services/PackagingService.cpp
+    src/rpc/services/AssetService.cpp
 )
 
 caesura_add_module(Script
