@@ -59,3 +59,20 @@ f1f9cea0/d5246cc0/abe62e54（round 133 三件套）
 ## 7. Known Issue（如实标注）
 
 - **SoLoud ALSA null 设备低概率竞态 SIGABRT**：ALSA 默认 null 设备（CI/WSL headless）下音频线程 writei 与 stop 时序偶发 libasound 断言（~1/5 频次不精确；6 连过观察）。真实有声卡用户不受影响。缓解：CI ctest --repeat until-pass:2；防御修复（drain/writei 判空 + 失败路径 close）已入 8d3521b7。彻底修复需改 SoLoud 音频线程核心（待定）。
+
+
+## 8. Validation-Release 后续（round 136+ 追加）
+
+### P0-2 First-VN E2E（完成）
+tests/projects/first_vn/ + scripts/verify_first_vn.sh（13/13 PASS）——完整用户创作流程验收。
+
+### P0-3 ProjectContext（完成）
+src/rpc/ProjectContext.h 统一 resolver；EditorServer 零裸 current_path；in-tree/out-of-tree 双验证。
+
+### P0-5 Web 真实验证（完成+2 修复）
+- **autostart**：播放器硬编码 galgame_demo.ks → 自动启动首个 bundle 场景（43b57e88）
+- **index.json**：package_game.sh 缺 scripts/index.json → web 游戏黑屏；打包时生成（3f0cc03c）
+- 多模态验证（CDP 抓 stage DOM）：bg 图层 1280x720 + Aina 角色 400x520 + 双语对白渲染 + advance 推进到 DONE:75 → [end] 全流程可玩。
+
+### 剩余 P0（外部资源）
+macOS 真机（§8→pending）、Steam 真实发布（§10→pending）、第三方开发者验证（§11→需招募）。
