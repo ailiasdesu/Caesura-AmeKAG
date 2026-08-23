@@ -244,3 +244,19 @@ SDL3 的 `SDLActivity` 继承 + 引擎 .so 放 `jniLibs/<abi>/` + gradle 打包�
   `scripts/build_android.sh`；脚本在无 NDK 时给出明确报错与下载指引，不会误跑。
 - 一旦安装 NDK，先跑 `scripts/build_android.sh`（arm64-v8a），预期首次会卡在
   SDL3 缺失（见 R3）或链接目标缺 Android 分支（见 R9），这些是已知待源码改造点。
+
+---
+
+## 5. 状态审计（2026-08-23，Track M A0/A1）
+
+**现状（诚实标注）**：构建链文档 + 单一入口脚本已就绪；**本机无 Android NDK**（无 `ANDROID_*_HOME`、`%LOCALAPPDATA%/Android/Sdk/ndk` 不存在），
+因此本次只做了**脚本级验证**，未做真实交叉编译——按计划 §9 状态分层记为：
+
+| 分层 | 状态 |
+|---|---|
+| 脚本契约 | ✅ 单入口 `scripts/build_android.sh`（旧 `android_build.sh` 为僵尸重复脚本已删除）；`bash -n` 通过；缺 NDK/CMake/SDL3_DIR/assets 时均为清晰错误并退出 1 |
+| build-verified（arm64 交叉编译） | ⏳ 待 NDK + Android SDL3 CMake 包（机器上有 NDK 后一条命令验证：`bash scripts/build_android.sh --smoke`） |
+| install-verified / device-verified / release-verified | ⏳ 待 Track M A2-A4 |
+
+**A1 加固项**：CMake 存在性检查、assets 根目录检查、NDK 发现路径对未设环境变量的 `set -u` 兼容修复。
+**下一步**：A2（JNI/Activity 最小 app 模块 + SDL3 SDL_MAIN_HANDLED 入口）、A3（First VN 资产打包）、A4（真机文档模板，见 docs/platform/android-device-validation.md——未验证前保持 device-unverified）。

@@ -62,8 +62,8 @@ if [[ -z "$NDK" || ! -d "$NDK" ]]; then
     for candidate in \
         "$LOCALAPPDATA/Android/Sdk/ndk"/* \
         "$HOME/Android/Sdk/ndk"/* \
-        "$ANDROID_HOME/ndk"/* \
-        "$ANDROID_SDK_ROOT/ndk"/* \
+        "${ANDROID_HOME:-}/ndk"/* \
+        "${ANDROID_SDK_ROOT:-}/ndk"/* \
         "/opt/android-ndk" \
         "/usr/local/android-ndk"; do
         if [[ -d "$candidate/build/cmake" ]]; then
@@ -78,6 +78,18 @@ if [[ -z "$NDK" || ! -d "$NDK" ]]; then
     echo "  Set ANDROID_NDK_HOME (or ANDROID_NDK), or pass --ndk <path>."
     echo "  NDK download: https://developer.android.com/ndk/downloads"
     echo "  (suggest r26 or newer)"
+    exit 1
+fi
+
+# -- Clear diagnostics for the plan's mandatory prerequisites --------------
+if ! command -v cmake >/dev/null 2>&1; then
+    echo "ERROR: CMake not found in PATH (3.25+ required; NDK toolchain needs it)."
+    echo "  Install CMake (e.g. https://cmake.org/download/) or add it to PATH."
+    exit 1
+fi
+if [[ ! -d "$REPO_ROOT/assets" ]]; then
+    echo "ERROR: game assets root missing: $REPO_ROOT/assets"
+    echo "  The Android package ships demo assets under assets/; restore or create it."
     exit 1
 fi
 
