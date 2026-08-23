@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cstring>
 #include "audio/SoLoudAudioEngine.h"
+#include "audio/AudioFocusService.h"
+#include "audio/api/IAudioFocusService.h"
 #include "di/BackendRegistry.h"
 #include "di/api/ISandboxQuota.h"
 #include "job/JobSystem.h"
@@ -1285,3 +1287,78 @@ TEST_CASE("SoLoudAudioEngine survives rapid init/play/stop/shutdown cycles") {
     }
     CHECK(true);
 }
+
+// =============================================================================
+// Track P5 — Audio Focus Service (IAudioFocusService)
+// =============================================================================
+
+namespace {
+struct FocusProbe : IAudioFocusListener {
+    AudioFocusEvent events[8] = {};
+    int count = 0;
+    void onAudioFocusEvent(AudioFocusEvent event) override {
+        if (count < 8) events[count++] = event;
+    }
+};
+}
+
+TEST_CASE("AudioFocus: state machine transitions on post") {
+    AudioFocusService svc;
+    CHECK(svc.currentState() == AudioFocusState::Normal);
+    svc.post(AudioFocusEvent::InterruptionBegin);
+    CHECK(svc.currentState() == AudioFocusState::Interrupted);
+    svc.post(AudioFocusEvent::InterruptionEnd);
+    CHECK(svc.currentState() == AudioFocusState::Normal);
+    svc.post(AudioFocusEvent::FocusLost);
+    CHECK(svc.currentState() == AudioFocusState::Lost);
+    svc.post(AudioFocusEvent::FocusGained);
+    CHECK(svc.currentState() == AudioFocusState::Normal);
+}
+
+TEST_CASE("AudioFocus: interruption end without begin keeps state") {
+    AudioFocusService svc;
+    svc.post(AudioFocusEvent::InterruptionEnd);
+    CHECK(svc.currentState() == AudioFocusState::Normal);
+    svc.post(AudioFocusEvent::FocusGained);
+    CHECK(svc.currentState() == AudioFocusState::Normal);
+}
+
+TEST_CASE("AudioFocus: listeners receive events in order; duplicates ignored") {
+    AudioFocusService svc;
+    FocusProbe a, b;
+    svc.addListener(&a);
+    svc.addListener(&b);
+    svc.addListener(&a);
+    svc.post(AudioFocusEvent::InterruptionBegin);
+    svc.post(AudioFocusEvent::InterruptionEnd);
+    CHECK(a.count == 2);
+    CHECK(b.count == 2);
+    CHECK(a.events[0] == AudioFocusEvent::InterruptionBegin);
+    CHECK(b.events[1] == AudioFocusEvent::InterruptionEnd);
+}
+
+TEST_CASE("AudioFocus: remove stops delivery; null-safe hub") {
+    AudioFocusService svc;
+    FocusProbe a;
+    svc.addListener(&a);
+    svc.post(AudioFocusEvent::FocusLost);
+    CHECK(a.count == 1);
+    svc.removeListener(&a);
+    svc.post(AudioFocusEvent::FocusGained);
+    CHECK(a.count == 1);
+    svc.removeListener(nullptr);
+    CHECK_NOTHROW(svc.post(AudioFocusEvent::FocusLost));
+    CHECK(svc.currentState() == AudioFocusState::Lost);
+}
+
+TEST_CASE("AudioFocus: interface upcast") {
+    AudioFocusService svc;
+    IAudioFocusService* iface = &svc;
+    REQUIRE(iface != nullptr);
+    FocusProbe probe;
+    iface->addListener(&probe);
+    iface->post(AudioFocusEvent::InterruptionBegin);
+    CHECK(probe.count == 1);
+    CHECK(iface->currentState() == AudioFocusState::Interrupted);
+}
+

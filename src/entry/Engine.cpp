@@ -11,6 +11,7 @@ extern "C" {
 #include "../audio/api/IAudioBackend.h"
 #include "../platform/api/IDisplayService.h"
 #include "../platform/LifecycleService.h"
+#include "../audio/AudioFocusService.h"
 #include "../di/api/ITextureBudget.h"
 #include "../di/api/ISandboxQuota.h"
 #include "../render/api/IRenderDevice.h"
@@ -285,6 +286,14 @@ bool Engine::initPlatformPhase() {
     m_lifecycleService = std::make_unique<LifecycleService>();
     m_lifecycleService->addListener(this);
     BackendRegistry::instance().setLifecycleService(m_lifecycleService.get());
+
+    // Audio focus arbitration (Track P5): desktop has no OS arbitration, so
+    // the default hub only waits for native interruption callbacks (Android
+    // JNI / iOS audio session notifications post here). Engine reacts by
+    // pausing/resuming the audio backend; game layers may listen too.
+    m_audioFocusService = std::make_unique<AudioFocusService>();
+    m_audioFocusService->addListener(this);
+    BackendRegistry::instance().setAudioFocusService(m_audioFocusService.get());
 
     // Mobile adapter: touch/lifecycle mapping (registered for editor/RPC
     // and future mobile ports; wired to SDL background/foreground events).
@@ -1459,6 +1468,22 @@ void Engine::onLifecycleEvent(LifecycleEvent event) {
     }
 }
 
+void Engine::onAudioFocusEvent(AudioFocusEvent event) {
+    // Pause/resume the whole audio engine on focus loss / interruptions;
+    // SoLoud suspend is idempotent (safe with the lifecycle background
+    // suspend). An interruption end that never began is a resume no-op.
+    switch (event) {
+        case AudioFocusEvent::FocusLost:
+        case AudioFocusEvent::InterruptionBegin:
+            if (m_audioBackend) m_audioBackend->suspend();
+            break;
+        case AudioFocusEvent::FocusGained:
+        case AudioFocusEvent::InterruptionEnd:
+            if (m_audioBackend) m_audioBackend->resume();
+            break;
+    }
+}
+
 void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
@@ -1470,6 +1495,7 @@ void Engine::shutdown() {
     // Remove the engine listener first too: a native mobile lifecycle event
     // delivered after this point must not reach Lua state being torn down.
     if (m_lifecycleService) m_lifecycleService->removeListener(this);
+    if (m_audioFocusService) m_audioFocusService->removeListener(this);
 
     // A never-initialized Engine owns its injected objects but no global state.
     if (!m_initAttempted) return;

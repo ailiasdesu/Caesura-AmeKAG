@@ -30,6 +30,7 @@ class ISteamBackend;
 class IMobileAdapter;
 class IDisplayService;
 class ILifecycleService;
+class IAudioFocusService;
 class IMeshRenderer;
 namespace carc { class ICryptoEngine; }
 
@@ -73,6 +74,7 @@ public:
     void setMobileAdapter(IMobileAdapter* adapter);
     void setDisplayService(IDisplayService* service);
     void setLifecycleService(ILifecycleService* service);
+    void setAudioFocusService(IAudioFocusService* service);
     void setMeshRenderer(IMeshRenderer* renderer);
 
     // -- SandboxQuota wrappers (delegate to the registered interface) --
@@ -105,6 +107,7 @@ public:
     IMobileAdapter*   getMobileAdapter();
     IDisplayService*  getDisplayService();
     ILifecycleService* getLifecycleService();
+    IAudioFocusService* getAudioFocusService();
     IMeshRenderer*    getMeshRenderer();
 
     // -- Factories --
