@@ -16,7 +16,7 @@
 
 ## 2. 执行路径（审计建议序 I0→I3→I1→I2→I4）
 
-1. **I3 资源抽象**（可先行、CI 全绿可锁）：resourceRoot 注入替代 CWD 上探（与 Android R6 合并为一项，共享耦合点）。
+1. **I3 资源抽象**（✅ 已落地 2026-08-23，commit f5dbac5e）：`--resource-root <dir>` / `CAESURA_RESOURCE_ROOT` 注入（顺序：显式 > 环境变量 > 原 CWD 上探，行为向后兼容；显式根必须含 assets/，否则清晰报错退出 1）。iOS 启动器传 `SDL_GetBasePath()`（bundle），Android JNI 传安装目录——与 Android R6 同一机制；APK 压缩资产仍是 R6 扩展项（SDL3 资产回调 / CARC）。
 2. **I1 toolchain（CI 可红绿）**：在 GitHub Actions `macos-latest` 加 `cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS ...` 模块编译步骤（模块图=静态库，无需 bundle）——本机 Windows 无法验，用 CI 判定；预估首个红点=SoLoud COREAUDIO 缺失。
 3. **I2 First VN**：`tests/projects/first_vn` 内容与 Android 同一资产根（同构）。
 4. **I4 真机/模拟器**：唯一需 Mac 硬件项（**模拟器免签名**；App Store 才需账号）——Metal 冒烟 + 触摸/方向/安全区/audio interruption/save-load/CJK。
