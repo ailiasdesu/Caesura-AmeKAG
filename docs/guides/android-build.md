@@ -193,7 +193,13 @@ entry_script 指向 `../demo/first_vn/entry.lua`），并对 APK 做 zip 内容�
 APK `assets/game/**` 提取到内部存储（`filesDir/caesura_root`，版本标记文件
 防重复），再由 `getArguments()` 把 `{"--resource-root", <root>}` 传给
 SDLActivity→SDL_main 的 argv——引擎侧零改动（复用 f5dbac5e 的根解析）。
-_运行时链路（提取→SDL_Init→入口脚本→资源 IO）仍待真机验证。_## 4. 关键模块在 Android 下的分析
+_运行时链路（提取→SDL_Init→入口脚本→资源 IO）仍待真机验证。_
+
+**契约已验证（2026-08-24，桌面端到端）**：用真实引擎以
+`--resource-root <bundle>` 启动打包布局（scripts/assets/demo/first_vn）→
+`[FirstVN] Loading: demo/first_vn/story.ks` + Ready、0 错误（修了 entry.lua 的
+story.ks 布局发现：脚本自身路径推导 + 历史候选回退）。Android 侧唯一再未验证的
+只剩 APK 提取胶水与 SDL glue 启动链（设备项）。_## 4. 关键模块在 Android 下的分析
 
 ### 4.1 bgfx 渲染后端（GLES）
 
