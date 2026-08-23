@@ -381,6 +381,7 @@ jobs:
       - name: "Configure iOS (red point moves to engine-side gaps)"
         shell: bash
         run: |
+          export PKG_CONFIG_PATH="$RUNNER_TEMP/openssl-ios/lib/pkgconfig"
           cmake -S . -B build-ios -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
