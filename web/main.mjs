@@ -16,10 +16,14 @@ const savesEl = document.getElementById('saves')
 const savesCount = document.getElementById('saves-count')
 const log = (s) => { logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight }
 
-const SCRIPTS_BASE = '/scripts/'
-const DEMO_BASE = '/demo/'
-const STORY_BASE = '/cache/story/story.lua'
-const ASSET_BASE = '/assets/'
+// W7: a packaged player may be served from a subpath (GitHub Pages / itch.io
+// / Netlify). Resolve runtime bases RELATIVE to the page URL instead of
+// hard-coding '/...' so the same dist works at any mount point.
+const baseHref = String(document.baseURI || location.href).replace(/[^/]*$/, '')
+const SCRIPTS_BASE = baseHref + 'scripts/'
+const DEMO_BASE = baseHref + 'demo/'
+const STORY_BASE = baseHref + 'cache/story/story.lua'
+const ASSET_BASE = baseHref + 'assets/'
 
 // wasmFile stays undefined in production (wasmoon fetches its CDN
 // default); a test host may pin a local copy via self.__CAESURA_WASM_FILE__
@@ -185,7 +189,7 @@ const syncTextures = () => {
     // '/assets/assets/...' (404 in real browsers; jsdom never fetches <img>,
     // so only the packaged browser run catches it — W0 修正).
     const p = String(t.path || '')
-    renderer.setTextureUrl(id, p.startsWith('/') ? p : (p.startsWith('assets/') ? '/' + p : ASSET_BASE + p))
+    renderer.setTextureUrl(id, /^(https?:|\/)/.test(p) ? p : (p.startsWith('assets/') ? baseHref + p : ASSET_BASE + p))
   }
 }
 

@@ -87,11 +87,21 @@ const langBaseFromScripts = (sb) => (typeof sb === 'string' && sb.length > 0
 // the path already carries the 'assets/' prefix (W0 image/audio P0 fix:
 // the previous '/assets/' + p produced '/assets/assets/...' = 404 and
 // silently kept WebAudio silent while the core state machine reported it).
+// W7: resolve against the page base (subpath hosting); lazily computed so
+// node/jsdom test environments without a document keep functioning.
+const pageBase = () => {
+  try {
+    if (typeof document !== 'undefined' && document && document.baseURI) {
+      return String(document.baseURI).replace(/[^/]*$/, '')
+    }
+  } catch { /* noop */ }
+  return ''
+}
 const defaultAudioAssetUrl = (p) => {
   const s = String(p)
-  if (s.startsWith('/')) return s
-  if (s.startsWith('assets/')) return '/' + s
-  return '/assets/' + s
+  if (/^(https?:|\/)/.test(s)) return s
+  if (s.startsWith('assets/')) return pageBase() + s
+  return pageBase() + 'assets/' + s
 }
 
 export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = defaultAudioAssetUrl, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
