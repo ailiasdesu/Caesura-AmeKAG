@@ -87,6 +87,28 @@ export SDL3_DIR=/path/to/SDL3-android-install/lib/cmake/SDL3
 > 引擎顶层对 SDL3 target 有归一化（`SDL3::SDL3` ← `SDL3-shared`/`SDL3-static`/裸
 > `SDL3`），Android 共享库通常暴露为 `SDL3::SDL3-shared`，会自动解析。
 
+### 2.3 OpenSSL Android 切片（必备，archive 加密）
+
+> 引擎的 `archive` 模块无条件链接 `libssl.a`/`libcrypto.a`（AES-256-GCM + Ed25519）。
+> Android 下必须与 SDL3 一样先产出 **android-arm64 切片**，`SystemDependencies` 的
+> `elseif(ANDROID)` 分支按 iOS 的显式路径契约取用（`FindOpenSSL` 交叉编译不可靠）。
+
+```bash
+# 1. 克隆 OpenSSL 3.3.2（与 iOS 探针同版本）
+git clone --depth 1 --branch openssl-3.3.2 https://github.com/openssl/openssl.git
+cd openssl
+# 2. NDK clang 进 PATH + Android 目标配置（需 export ANDROID_NDK_ROOT）
+export ANDROID_NDK_ROOT=<ndk路径>
+export PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+./Configure android-arm64 --prefix=<安装目录> -D__ANDROID_API__=24
+make -j$(nproc) && make install_sw
+# 3. 传入引擎（与 SDL3_DIR 并列的必填变量）
+export OPENSSL_ROOT_DIR=<安装目录>
+```
+
+> 检查切片是否齐全：`<安装目录>/lib/libssl.a` + `lib/libcrypto.a` 都存在即可。
+> CI 的 `android-compile` 探针（`.github/workflows/ci.yml`）内置了同款构建步骤。
+
 ---
 
 ## 3. 构建命令
