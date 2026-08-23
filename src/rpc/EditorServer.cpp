@@ -4,6 +4,7 @@
 
 #include "EditorServer.h"
 #include "ConstantTime.h"
+#include "ProjectContext.h"
 #include "../../external/cpp-httplib/httplib.h"
 #include "../debug/api/DebugLog.h"
 
@@ -221,31 +222,10 @@ void overlayStringMeta(Json& base, const Json& stored) {
 
 // Repo-root discovery that survives out-of-tree builds: when the editor runs
 // from a build directory (build/Debug, /root/build-linux, ...) the source
-// tree is NOT on the cwd chain. Walk upward until a directory containing
-// both tools/project_templates and src exists; fall back to plain cwd so the
-// in-tree dev layout keeps behaving exactly as before.
+// tree is NOT on the cwd chain -- ProjectContext owns the macro-first + walk
+// discovery (task book §7). Back-compat helper for anonymous-namespace utils.
 fs::path engineRoot() {
-#ifdef CAESURA_SOURCE_DIR
-    // Out-of-tree build: the source tree is a sibling of the build dir, so
-    // upward walking from cwd can never reach it -- use the CMake-injected
-    // source root when valid.
-    const fs::path fromMacro(CAESURA_SOURCE_DIR);
-    if (fs::exists(fromMacro / "tools" / "project_templates") &&
-        fs::exists(fromMacro / "src")) {
-        return fromMacro;
-    }
-#endif
-    fs::path probe = fs::current_path();
-    while (!probe.empty()) {
-        if (fs::exists(probe / "tools" / "project_templates") &&
-            fs::exists(probe / "src")) {
-            return probe;
-        }
-        fs::path parent = probe.parent_path();
-        if (parent == probe) break;
-        probe = parent;
-    }
-    return fs::current_path();
+    return ProjectContext::fromEnvironment().sourceRoot();
 }
 
 // Resolve a managed-project reference ("projects/<name>"; a bare sanitized
@@ -388,6 +368,11 @@ void EditorServer::pushLog(const std::string& level, const std::string& message)
 
 void EditorServer::serverLoop(int port) {
     httplib::Server& svr = *m_server;
+
+    // Single source of truth for filesystem roots (task book §7). All
+    // template/project/build/package resolution goes through ctx; business
+    // handlers must not guess with fs::current_path().
+    const ProjectContext ctx = ProjectContext::fromEnvironment();
 
     // ---------------------------------------------------------------------
     // CORS middleware - allow web editor from any origin
@@ -1301,7 +1286,7 @@ void EditorServer::serverLoop(int port) {
     // resolving both. Synchronous blocking is accepted (the editor shows a
     // running state); failures carry the script's log tail for diagnosis.
     // ---------------------------------------------------------------------
-    svr.Post("/api/package/web", [](const httplib::Request& req,
+    svr.Post("/api/package/web", [&ctx](const httplib::Request& req,
                                     httplib::Response& res) {
         Json body;
         try {
@@ -1388,20 +1373,9 @@ void EditorServer::serverLoop(int port) {
         // test (and installed layouts) run from build/Debug, so walk up to
         // the repository root. A repo-relative invocation keeps the spawned
         // command pure ASCII even when the repository path itself is not.
-        fs::path scriptPath;
-        try {
-            fs::path probe = fs::current_path();
-            for (int depth = 0; depth < 8 && !probe.empty();
-                 ++depth, probe = probe.parent_path()) {
-                const fs::path candidate = probe / "scripts" / "package_game.sh";
-                if (fs::exists(candidate)) {
-                    scriptPath = candidate;
-                    break;
-                }
-            }
-        } catch (...) {
-            scriptPath.clear();
-        }
+        // Unified root resolution (task book §7): no ad-hoc upward walks.
+        fs::path scriptPath = ctx.sourceRoot() / "scripts" / "package_game.sh";
+        if (!fs::exists(scriptPath)) scriptPath.clear();
         if (scriptPath.empty()) {
             res.set_content(dumpJson({
                 {"ok", false},
@@ -1422,7 +1396,7 @@ void EditorServer::serverLoop(int port) {
                 reject("storyPath not found: " + storyPath);
                 return;
             }
-            scriptArg = fs::relative(scriptPath, fs::current_path())
+            scriptArg = fs::relative(scriptPath, ctx.buildRoot())
                             .generic_string();
         } catch (...) {
             scriptArg.clear();
