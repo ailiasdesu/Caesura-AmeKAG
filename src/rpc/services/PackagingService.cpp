@@ -4,6 +4,7 @@
 
 #include "archive/api/IArchiveWriter.h"
 
+#include <cstdint>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>

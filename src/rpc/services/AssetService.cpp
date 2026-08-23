@@ -1,5 +1,6 @@
 #include "AssetService.h"
 
+#include <cstdint>
 #include <filesystem>
 
 namespace fs = std::filesystem;

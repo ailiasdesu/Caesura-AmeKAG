@@ -3,6 +3,7 @@
 
 #include "ProjectService.h"
 
+#include <cstdint>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
