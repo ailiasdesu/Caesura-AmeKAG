@@ -9,6 +9,31 @@
 
 ---
 
+## ⭐ 30 分钟速通：从零到第一个可运行 VN（KPI-1 路径）
+
+> 这是新手最短路径（产品化 KPI-1：陌生开发者 ≤30 分钟完成首个 Tiny VN）。
+> 完整细节见后文 §1-§10；本速通覆盖「下载 → 创建 → 编辑 → 运行 → 打包」。
+
+### ⚡ 五个步骤
+
+1. **下载 Release**（Windows ZIP）→ 解压 → 双击 `CaesuraAmeKAG.exe --editor`；
+   首次打开默认就是 **Project Manager** 面板（模板列表）。
+2. **创建项目**：选择 **basic** 模板 → 输入项目名 → **Create**。
+   新项目含 `story.ks`（两场景双分支示例）+ `caesura.project.json` 元数据。
+3. **编辑**：打开 `story.ks`（Monaco 编辑器 + KAG 语法着色/LSP）；
+   改对白/加分支/换背景照 [ch]/[bg]/[sel] 语法写。
+4. **运行与调试**：Debug 面板 **▶ Run Current Scene** 直接跑；断点/Step Into/Over/Out 单步。
+5. **打包**：Build 面板 **Build CARC**（加密归档）+ **Package**（Web 站）；Web 包自动启动首个场景。
+
+### ✅ 完成判定（Tiny VN 必须包含）
+
+background ✓ · character ✓ · dialogue ✓ · choice ✓ · BGM ✓ · save/load ✓
+
+> 现成验收范例：`tests/projects/first_vn/`（包含上述全部要素，13 项验收门禁
+> `bash scripts/verify_first_vn.sh`）。新手可复制它的写法快速上手。
+
+---
+
 ## 0. 你需要什么
 
 Caesura (AmeKAG) 是 **C++20 + bgfx 渲染 + SDL3 窗口 + Lua 5.4 脚本** 的跨平台视觉小说引擎。
