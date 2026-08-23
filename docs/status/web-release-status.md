@@ -84,6 +84,7 @@ node scripts/web_browser_smoke.mjs --root dist/first_vn --scene story.ks
 
 - [x] **W1 Web Audio 生命周期** —— 完成（unlock 幂等 + 初始 suspended→running + 后台恢复 + 销毁安全；Chrome+Edge packaged 实跑；318 测试绿）
 - [x] **W2 Web Storage/Save** —— 复用现有 localStorage KV 桥（caesura.save.<slot> 0..99）：新增槽位校验（save_game/_load_raw/saveCurrent/deleteSlot 整数 0..99，非法诚实拒绝）、storageStats()（槽数+字节）、saveCurrent 以 ctx.tf.save_result=='ok' 判成败（原判定把引擎 SaveCommands.save 隐式 nil 当成功，quota 失败误报）、UI 失败可见（#saves-storage 红字 + quato 提示）、web/save-persistence.test.js（真 localStorage + 双实例模拟 reload 持久 + overwrite/invalid/empty/corrupt/quota），真实浏览器跨 reload 持久已由 smoke 验证；IndexedDB 大载荷仍为已记录限制（缩略图恒 null，暂无需）
+- [x] **W3 Web CJK/Font/Asset** —— 打包字体真正启用：index.html @font-face 'CaesuraNoto'（assets/fonts/NotoSansCJKsc-Regular.otf, format opentype, font-display swap）+ 字体栈（Segoe UI/PingFang SC/Hiragino Sans/Noto Sans CJK SC/system-ui 回退）作用于 stage/消息层；demo/cjk_smoke.ks 专用场景（中/日/英/混合标点/未知 face 回退页）；smoke --cjk 对打包产物（dist/cjk_smoke）逐页断言：中/日/英/标点文本渲染、document.fonts.check('CaesuraNoto')=true、打包字体 URL 资源条目、中文页截图（多模态复核无豆腐块）。Chrome 16/16 + Edge 16/16，first_vn 回归 8/8。Cache 命中：smoke 静态服务器 no-store，未验证浏览器缓存命中（宿主相关，标注为已知限制）
 - [ ] **W3 Web CJK/Font/Asset smoke 场景** —— 现有 first_vn/example_game 已含中文+日文+英文文本且渲染通过；建独立 smoke 场景 + font fallback/缓存项
 - [ ] **W4 Web Stress/Memory** —— web_stress_vn（100+ 图集/多音频/CJK 字体/连续切场景/反复加载）+ 实际测量记录
 - [ ] **W5 Tab Suspend/Resume** —— 后台恢复/计时器跳变/输入不丢失/存档不损坏
