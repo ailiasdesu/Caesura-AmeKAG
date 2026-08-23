@@ -194,11 +194,18 @@ namespace SoLoud
 		// Make sure no audio operation is currently pending
 		lockAudioMutex_internal();
 		unlockAudioMutex_internal();
-		SOLOUD_ASSERT(!mInsideAudioThreadMutex);
 		stopAll();
 		if (mBackendCleanupFunc)
 			mBackendCleanupFunc(this);
 		mBackendCleanupFunc = 0;
+		// The backend cleanup stops and JOINS the audio thread, so after it
+		// returns nobody can hold the in-audio-thread flag any more. Moving
+		// the assert here (instead of before stopAll/cleanup) fixes a real
+		// race: the audio thread could acquire the mix lock between the
+		// transient lock-drain above and the cleanup join, making deinit()
+		// assert !mInsideAudioThreadMutex spuriously (SIGABRT in headless
+		// ALSA-null runs). Checking after the join is exact, not best-effort.
+		SOLOUD_ASSERT(!mInsideAudioThreadMutex);
 		if (mAudioThreadMutex)
 			Thread::destroyMutex(mAudioThreadMutex);
 		mAudioThreadMutex = NULL;
