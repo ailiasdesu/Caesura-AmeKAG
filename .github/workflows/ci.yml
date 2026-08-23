@@ -362,6 +362,22 @@ jobs:
           cmake --install "$SDL_SRC/build-ios" --config Release
           echo "SDL3_DIR=$SDL_INSTALL/lib/cmake/SDL3" >> "$GITHUB_ENV"
 
+      - name: "Build OpenSSL source for iOS (archive crypto dep)"
+        shell: bash
+        run: |
+          set -e
+          OSSL_SRC="$RUNNER_TEMP/openssl-src"
+          OSSL_INSTALL="$RUNNER_TEMP/openssl-ios"
+          mkdir -p "$OSSL_SRC"
+          curl -sL https://github.com/openssl/openssl/releases/download/openssl-3.3.2/openssl-3.3.2.tar.gz -o "$RUNNER_TEMP/openssl.tgz"
+          tar -xzf "$RUNNER_TEMP/openssl.tgz" -C "$OSSL_SRC"
+          cd "$OSSL_SRC/openssl-3.3.2"
+          export CC=clang
+          perl Configure ios64-xcrun --prefix="$OSSL_INSTALL" no-shared no-tests no-apps no-docs
+          make -j3
+          make install_sw
+          echo "OPENSSL_ROOT_DIR=$OSSL_INSTALL" >> "$GITHUB_ENV"
+
       - name: "Configure iOS (red point moves to engine-side gaps)"
         shell: bash
         run: |
@@ -372,6 +388,7 @@ jobs:
             -DCAESURA_LIVE2D=OFF \
             -DCAESURA_ENABLE_FFMPEG=OFF \
             -DSDL3_DIR="$RUNNER_TEMP/sdl3-ios/lib/cmake/SDL3" \
+            -DOPENSSL_ROOT_DIR="$RUNNER_TEMP/openssl-ios" \
             -DCMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER=com.caesura.amekag
 
       - name: Build module graph

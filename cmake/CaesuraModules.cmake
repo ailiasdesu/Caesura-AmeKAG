@@ -81,6 +81,9 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
     find_library(UIKIT_LIBRARY UIKit REQUIRED)
     find_library(AUDIOTOOLBOX_LIBRARY AudioToolbox REQUIRED)
+    # Archive crypto needs OpenSSL on every platform - the iOS probe builds
+    # an iOS slice and passes OPENSSL_ROOT_DIR (same pattern as SDL3_DIR).
+    find_package(OpenSSL REQUIRED)
     target_link_libraries(CaesuraSystemDependencies INTERFACE
         ${METAL_LIBRARY}
         ${FOUNDATION_LIBRARY}
@@ -88,6 +91,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         ${UIKIT_LIBRARY}
         ${AUDIOTOOLBOX_LIBRARY}
         pthread
+        OpenSSL::SSL
+        OpenSSL::Crypto
     )
 elseif(APPLE)
     find_library(COCOA_LIBRARY Cocoa REQUIRED)
