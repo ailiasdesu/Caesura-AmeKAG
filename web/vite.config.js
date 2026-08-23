@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
-import { cpSync, mkdirSync } from 'node:fs'
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { buildIndex, serialize } from './gen-index.mjs'
 
 // The web player serves the whole repo root as static content so
 // /scripts/, /demo/, /assets/ and /cache/story/story.lua resolve
@@ -21,6 +22,39 @@ function copyRuntimeDirs() {
         mkdirSync(to, { recursive: true })
         cpSync(from, to, { recursive: true })
       }
+      // bridge.js hard-depends on scriptsBase + 'index.json'; generate it for
+      // the copied scripts tree so web/dist is self-contained (W0: the bare
+      // dist used to boot-fail on /scripts/index.json 404).
+      try {
+        writeFileSync(resolve(process.cwd(), 'dist', 'scripts', 'index.json'), serialize(buildIndex(resolve(REPO_ROOT, 'scripts'))))
+      } catch (e) {
+        console.error('[vite] WARN: dist scripts/index.json generation failed:', String(e))
+      }
+    },
+  }
+}
+
+// Dev server: the player boots from the served repo root, so /scripts/
+// index.json must exist there — it is generated on the fly from scripts/
+// (gitignored repo root has no committed copy; only web/scripts-index.json
+// is the committed CI artifact).
+function devScriptsIndex() {
+  return {
+    name: 'caesura-dev-scripts-index',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        try {
+          const pathname = new URL(req.url ?? '/', 'http://x').pathname
+          if (pathname === '/scripts/index.json') {
+            res.setHeader('content-type', 'application/json; charset=utf-8')
+            res.end(serialize(buildIndex(resolve(REPO_ROOT, 'scripts'))))
+            return
+          }
+        } catch (e) {
+          res.statusCode = 500; res.end('scripts index error: ' + String(e)); return
+        }
+        next()
+      })
     },
   }
 }
@@ -34,5 +68,5 @@ export default defineConfig({
     target: 'es2022',
     assetsDir: 'web-assets',
   },
-  plugins: [copyRuntimeDirs()],
+  plugins: [copyRuntimeDirs(), devScriptsIndex()],
 })

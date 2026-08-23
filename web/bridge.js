@@ -82,7 +82,19 @@ const langBaseFromScripts = (sb) => (typeof sb === 'string' && sb.length > 0
   ? String(sb).replace(/scripts\/?$/, '') + 'assets/lang/'
   : undefined)
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = (p) => '/assets/' + p, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
+// Engine audio paths are repo-relative ('assets/bgm/x.wav'); the web
+// player serves them under the site root, so normalize to '/<path>' when
+// the path already carries the 'assets/' prefix (W0 image/audio P0 fix:
+// the previous '/assets/' + p produced '/assets/assets/...' = 404 and
+// silently kept WebAudio silent while the core state machine reported it).
+const defaultAudioAssetUrl = (p) => {
+  const s = String(p)
+  if (s.startsWith('/')) return s
+  if (s.startsWith('assets/')) return '/' + s
+  return '/assets/' + s
+}
+
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = defaultAudioAssetUrl, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
   const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()

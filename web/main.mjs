@@ -151,7 +151,12 @@ function bindSettingsControls() {
 
 const syncTextures = () => {
   for (const [id, t] of player.core.textures) {
-    renderer.setTextureUrl(id, ASSET_BASE + t.path)
+    // Engine texture paths are repo-relative ('assets/bg/x.png'); serve them
+    // under the site root. The previous ASSET_BASE + t.path produced
+    // '/assets/assets/...' (404 in real browsers; jsdom never fetches <img>,
+    // so only the packaged browser run catches it — W0 修正).
+    const p = String(t.path || '')
+    renderer.setTextureUrl(id, p.startsWith('/') ? p : (p.startsWith('assets/') ? '/' + p : ASSET_BASE + p))
   }
 }
 
@@ -170,7 +175,6 @@ async function loadStoryBundle() {
     log('story bundle unavailable: ' + String(e).slice(0, 80))
   }
 }
-
 
 function populateScenePicker(scenes) {
   const sel = document.getElementById('scene')
