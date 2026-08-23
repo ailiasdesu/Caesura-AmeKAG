@@ -145,7 +145,7 @@ jobs:
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --repeat until-pass:2
+        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
           Pop-Location
 
       - name: Smoke Test
@@ -194,7 +194,7 @@ jobs:
           node web/gen-index.mjs --check
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --repeat until-pass:2
+        run: ctest --test-dir build --output-on-failure
 
   # ============================================================
   # Linux GCC
@@ -257,7 +257,7 @@ jobs:
 
       - name: Test
         run: |
-          ctest --test-dir build --output-on-failure --repeat until-pass:2 2>&1 | tee ctest.log
+          ctest --test-dir build --output-on-failure 2>&1 | tee ctest.log
           exit ${PIPESTATUS[0]}
 
       - name: Upload ctest log on failure
