@@ -18,11 +18,29 @@ local function file_exists(path)
     return false
 end
 
+-- story.ks discovery is layout-generic: prefer the sibling of THIS file
+-- (works from the repo root, build/tests/Debug, /tmp dist bundle
+-- <root>/demo/first_vn/, and the APK-extracted resource root), then
+-- fall back to the historical desktop candidates.
+local script_dir = nil
+do
+    local src = debug.getinfo(1, "S").source
+    if src and src:sub(1, 1) == "@" then src = src:sub(2) end
+    local dir = src and src:match("^(.*)[/\\]entry%.lua$") or nil
+    if dir then script_dir = dir end
+end
+
 local story_path = nil
+if script_dir then
+    for _, p in ipairs({ script_dir .. "/story.ks", script_dir .. "/../story.ks" }) do
+        if file_exists(p) then story_path = p; break end
+    end
+end
 for _, p in ipairs({
     "tests/projects/first_vn/story.ks",
     "first_vn/story.ks",
     "../tests/projects/first_vn/story.ks",
+    "demo/first_vn/story.ks",
 }) do
     if file_exists(p) then story_path = p; break end
 end
