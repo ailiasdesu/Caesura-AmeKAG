@@ -71,6 +71,24 @@ if(WIN32)
     target_link_libraries(CaesuraSystemDependencies INTERFACE
         bcrypt winmm ws2_32 psapi ole32 d3d11 dxgi d3dcompiler
     )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # iOS (Track I): Cocoa is macOS-only (no such framework on iOS) - link
+    # the iOS equivalents instead. Metal/QuartzCore cover bgfx Metal;
+    # Foundation/UIKit for the app layer; AudioToolbox for SoLoud CoreAudio;
+    # OpenSSL stays out until a real iOS build supplies it (archive crypto).
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
+    find_library(UIKIT_LIBRARY UIKit REQUIRED)
+    find_library(AUDIOTOOLBOX_LIBRARY AudioToolbox REQUIRED)
+    target_link_libraries(CaesuraSystemDependencies INTERFACE
+        ${METAL_LIBRARY}
+        ${FOUNDATION_LIBRARY}
+        ${QUARTZCORE_LIBRARY}
+        ${UIKIT_LIBRARY}
+        ${AUDIOTOOLBOX_LIBRARY}
+        pthread
+    )
 elseif(APPLE)
     find_library(COCOA_LIBRARY Cocoa REQUIRED)
     find_library(IOKIT_LIBRARY IOKit REQUIRED)
