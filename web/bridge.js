@@ -92,7 +92,7 @@ const langBaseFromScripts = (sb) => (typeof sb === 'string' && sb.length > 0
 const pageBase = () => {
   try {
     if (typeof document !== 'undefined' && document && document.baseURI) {
-      return String(document.baseURI).replace(/[^/]*$/, '')
+      return String(document.baseURI).split(/[?#]/)[0].replace(/[^/]*$/, '')
     }
   } catch { /* noop */ }
   return ''

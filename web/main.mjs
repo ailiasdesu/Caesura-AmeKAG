@@ -19,7 +19,7 @@ const log = (s) => { logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scro
 // W7: a packaged player may be served from a subpath (GitHub Pages / itch.io
 // / Netlify). Resolve runtime bases RELATIVE to the page URL instead of
 // hard-coding '/...' so the same dist works at any mount point.
-const baseHref = String(document.baseURI || location.href).replace(/[^/]*$/, '')
+const baseHref = String(document.baseURI || location.href).split(/[?#]/)[0].replace(/[^/]*$/, '')
 const SCRIPTS_BASE = baseHref + 'scripts/'
 const DEMO_BASE = baseHref + 'demo/'
 const STORY_BASE = baseHref + 'cache/story/story.lua'
