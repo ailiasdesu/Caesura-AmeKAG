@@ -95,6 +95,32 @@ void MobileAdapter::onResume(lua_State* L, const std::string& savedData) {
     }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════
+//  onLowMemory / onTerminate -- unified lifecycle (Track P2)
+// ══════════════════════════════════════════════════════════════════════════
+static void invokeGlobalCallback(lua_State* L, const char* name) {
+    if (!L) return;
+    lua_getglobal(L, "_G");
+    lua_getfield(L, -1, name);
+    if (lua_isfunction(L, -1)) {
+        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+            lua_pop(L, 1); // error object
+        }
+    } else {
+        lua_pop(L, 1); // non-function
+    }
+    lua_pop(L, 1); // _G
+}
+
+void MobileAdapter::onLowMemory(lua_State* L) {
+    invokeGlobalCallback(L, "onLowMemory");
+}
+
+void MobileAdapter::onTerminate(lua_State* L) {
+    invokeGlobalCallback(L, "onTerminate");
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 //  Touch → Mouse Mapping
 // ══════════════════════════════════════════════════════════════════════════

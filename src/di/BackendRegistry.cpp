@@ -23,6 +23,7 @@
 #include "../steam/api/ISteamBackend.h"
 #include "../platform/api/IMobileAdapter.h"
 #include "../platform/api/IDisplayService.h"
+#include "../platform/api/ILifecycleService.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -82,6 +83,7 @@ DEF_GETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_GETTER(ISteamBackend,    SteamBackend)
 DEF_GETTER(IMobileAdapter,   MobileAdapter)
 DEF_GETTER(IDisplayService,  DisplayService)
+DEF_GETTER(ILifecycleService, LifecycleService)
 DEF_GETTER(IMeshRenderer,    MeshRenderer)
 
 DEF_SETTER(IRenderDevice,    RenderDevice)
@@ -106,6 +108,7 @@ DEF_SETTER(IResourceGenerationTracker, ResourceGenerationTracker)
 DEF_SETTER(ISteamBackend,    SteamBackend)
 DEF_SETTER(IMobileAdapter,   MobileAdapter)
 DEF_SETTER(IDisplayService,  DisplayService)
+DEF_SETTER(ILifecycleService, LifecycleService)
 DEF_SETTER(IMeshRenderer,    MeshRenderer)
 
 #undef DEF_GETTER

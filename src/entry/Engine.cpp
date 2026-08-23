@@ -10,6 +10,7 @@ extern "C" {
 #include "ErrorUI.h"
 #include "../audio/api/IAudioBackend.h"
 #include "../platform/api/IDisplayService.h"
+#include "../platform/LifecycleService.h"
 #include "../di/api/ITextureBudget.h"
 #include "../di/api/ISandboxQuota.h"
 #include "../render/api/IRenderDevice.h"
@@ -271,6 +272,12 @@ bool Engine::initPlatformPhase() {
         m_displayService = createDisplayService(m_config);
     }
     BackendRegistry::instance().setDisplayService(m_displayService.get());
+
+    // Unified lifecycle hub (Track P2): desktop source is the SDL event
+    // watch registered just below; Android/iOS post from native hooks.
+    m_lifecycleService = std::make_unique<LifecycleService>();
+    m_lifecycleService->addListener(this);
+    BackendRegistry::instance().setLifecycleService(m_lifecycleService.get());
 
     // Mobile adapter: touch/lifecycle mapping (registered for editor/RPC
     // and future mobile ports; wired to SDL background/foreground events).
@@ -1392,25 +1399,57 @@ void Engine::handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 ev
 bool Engine::appLifecycleWatch(void* userdata, SDL_Event* event) {
     auto* engine = static_cast<Engine*>(userdata);
     if (!engine) return true;
-    handleAppLifecycle(engine->m_mobileAdapter.get(),
-                       engine->m_lua ? engine->m_lua->state() : nullptr,
-                       event->type);
-    // Mobile backgrounding must silence audio without unloading assets
-    // (MobileAdapter TODO: SoLoud pause wiring, round 29). Composition-root
-    // concern: the audio backend lives here, not in the platform adapter.
-    if (engine->m_audioBackend) {
-        switch (event->type) {
-            case SDL_EVENT_WILL_ENTER_BACKGROUND:
-                engine->m_audioBackend->suspend();
-                break;
-            case SDL_EVENT_DID_ENTER_FOREGROUND:
-                engine->m_audioBackend->resume();
-                break;
-            default:
-                break;
-        }
+    // Track P2: uniform lifecycle events go through LifecycleService.
+    // Orientation is engine-specific today (no LifecycleEvent slot), so it
+    // keeps its direct MobileAdapter path.
+    switch (event->type) {
+        case SDL_EVENT_WILL_ENTER_BACKGROUND:
+            if (engine->m_lifecycleService) engine->m_lifecycleService->post(LifecycleEvent::Background);
+            break;
+        case SDL_EVENT_DID_ENTER_FOREGROUND:
+            if (engine->m_lifecycleService) engine->m_lifecycleService->post(LifecycleEvent::Foreground);
+            break;
+        case SDL_EVENT_LOW_MEMORY:
+            if (engine->m_lifecycleService) engine->m_lifecycleService->post(LifecycleEvent::LowMemory);
+            break;
+        case SDL_EVENT_TERMINATING:
+            if (engine->m_lifecycleService) engine->m_lifecycleService->post(LifecycleEvent::Terminate);
+            break;
+        case SDL_EVENT_DISPLAY_ORIENTATION:
+            handleAppLifecycle(engine->m_mobileAdapter.get(),
+                               engine->m_lua ? engine->m_lua->state() : nullptr,
+                               event->type);
+            break;
+        default:
+            break;
     }
     return true; // allow other watchers / the queue to see the event
+}
+
+void Engine::onLifecycleEvent(LifecycleEvent event) {
+    auto* L = m_lua ? m_lua->state() : nullptr;
+    switch (event) {
+        case LifecycleEvent::Background:
+        case LifecycleEvent::Pause:
+            if (m_mobileAdapter) m_mobileAdapter->onPause(L);
+            // Mobile backgrounding must silence audio without unloading
+            // assets (composition-root concern, unchanged since round 29).
+            if (m_audioBackend) m_audioBackend->suspend();
+            break;
+        case LifecycleEvent::Foreground:
+        case LifecycleEvent::Resume:
+            if (m_mobileAdapter) m_mobileAdapter->onResume(L);
+            if (m_audioBackend) m_audioBackend->resume();
+            break;
+        case LifecycleEvent::LowMemory:
+            if (m_mobileAdapter) m_mobileAdapter->onLowMemory(L);
+            break;
+        case LifecycleEvent::Terminate:
+            // Notification only: teardown order is unchanged (the SDL watch
+            // is unregistered first in Engine::shutdown).
+            if (m_mobileAdapter) m_mobileAdapter->onTerminate(L);
+            break;
+    }
 }
 
 void Engine::shutdown() {
@@ -1421,6 +1460,9 @@ void Engine::shutdown() {
     // Unregister the SDL app-lifecycle watch first: a background event
     // delivered after this point must not reach Lua state being torn down.
     SDL_RemoveEventWatch(&Engine::appLifecycleWatch, this);
+    // Remove the engine listener first too: a native mobile lifecycle event
+    // delivered after this point must not reach Lua state being torn down.
+    if (m_lifecycleService) m_lifecycleService->removeListener(this);
 
     // A never-initialized Engine owns its injected objects but no global state.
     if (!m_initAttempted) return;

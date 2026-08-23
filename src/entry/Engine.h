@@ -3,6 +3,7 @@
 #include "entry/EngineConfig.h"
 #include <cstdint>  // fixed-width types (GCC strict)
 #include "platform/api/IPlatformBackend.h"
+#include "platform/api/ILifecycleService.h"
 #include "platform/MobileAdapter.h"
 #include "di/api/ThreadAssert.h"
 #include <SDL3/SDL.h>
@@ -53,7 +54,7 @@ namespace carc { class ICryptoEngine; }
 //      - NOT persisted - values are ephemeral per-scene
 //   Migration: All scripts should use the C++ GameState ctx (ctx1).
 //   Conductor is deprecated and no longer auto-loaded by kag/init.lua.
-class Engine {
+class Engine : public ILifecycleListener {
 public:
     using OwnerPump = std::function<void()>;
 
@@ -89,6 +90,9 @@ public:
     // Pure mapping from an SDL app event type to the mobile adapter callback
     // (onPause/onResume), extracted so it can be unit-tested without SDL.
     static void handleAppLifecycle(IMobileAdapter* adapter, lua_State* L, Uint32 eventType);
+    // Unified lifecycle (Track P2): receives LifecycleService events from
+    // Engine::appLifecycleWatch (desktop SDL source) / native mobile sources.
+    void onLifecycleEvent(LifecycleEvent event) override;
 
     LuaManager&   lua()           { requireInitialized(); return *m_lua; }
     InputRouter&  input()         { requireInitialized(); return *m_inputRouter; }
@@ -163,6 +167,7 @@ private:
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
     std::unique_ptr<IDisplayService>   m_displayService;
     std::unique_ptr<MobileAdapter>     m_mobileAdapter;
+    std::unique_ptr<ILifecycleService>  m_lifecycleService;
     std::unique_ptr<LuaManager>        m_lua;
 
     // App-lifecycle watcher: SDL app events (WILL_ENTER_BACKGROUND etc.) are

@@ -306,3 +306,51 @@ TEST_CASE("MobileAdapter onOrientationChanged invokes Lua callback") {
 
     lua_close(L);
 }
+
+
+TEST_CASE("MobileAdapter::unified lifecycle low-memory / terminate (Track P2)") {
+    MobileAdapter ma;
+    // Without a Lua state both events are safe no-ops (null-safe).
+    CHECK_NOTHROW(ma.onLowMemory(nullptr));
+    CHECK_NOTHROW(ma.onTerminate(nullptr));
+}
+
+TEST_CASE("MobileAdapter::unified lifecycle invokes _G callbacks with balanced stack") {
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    MobileAdapter ma;
+    int calls = 0;
+    lua_pushlightuserdata(L, &calls);
+    lua_pushcclosure(L, [](lua_State* LL) -> int {
+        int* c = static_cast<int*>(lua_touserdata(LL, lua_upvalueindex(1)));
+        (*c)++;
+        return 0;
+    }, 1);
+    lua_setglobal(L, "onLowMemory");
+    lua_pushlightuserdata(L, &calls);
+    lua_pushcclosure(L, [](lua_State* LL) -> int {
+        int* c = static_cast<int*>(lua_touserdata(LL, lua_upvalueindex(1)));
+        (*c)++;
+        return 0;
+    }, 1);
+    lua_setglobal(L, "onTerminate");
+    const int before = lua_gettop(L);
+    ma.onLowMemory(L);
+    CHECK(calls == 1);
+    ma.onTerminate(L);
+    CHECK(calls == 2);
+    CHECK(lua_gettop(L) == before); // stack balanced
+    lua_close(L);
+}
+
+TEST_CASE("MobileAdapter::unified lifecycle swallows callback errors safely") {
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    MobileAdapter ma;
+    lua_pushcfunction(L, [](lua_State* LL) -> int { return luaL_error(LL, "boom"); });
+    lua_setglobal(L, "onLowMemory");
+    const int before = lua_gettop(L);
+    CHECK_NOTHROW(ma.onLowMemory(L));
+    CHECK(lua_gettop(L) == before);
+    lua_close(L);
+}

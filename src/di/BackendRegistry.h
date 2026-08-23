@@ -29,6 +29,7 @@ class IResourceGenerationTracker;
 class ISteamBackend;
 class IMobileAdapter;
 class IDisplayService;
+class ILifecycleService;
 class IMeshRenderer;
 namespace carc { class ICryptoEngine; }
 
@@ -71,6 +72,7 @@ public:
     void setSteamBackend(ISteamBackend* backend);
     void setMobileAdapter(IMobileAdapter* adapter);
     void setDisplayService(IDisplayService* service);
+    void setLifecycleService(ILifecycleService* service);
     void setMeshRenderer(IMeshRenderer* renderer);
 
     // -- SandboxQuota wrappers (delegate to the registered interface) --
@@ -102,6 +104,7 @@ public:
     ISteamBackend*    getSteamBackend();
     IMobileAdapter*   getMobileAdapter();
     IDisplayService*  getDisplayService();
+    ILifecycleService* getLifecycleService();
     IMeshRenderer*    getMeshRenderer();
 
     // -- Factories --

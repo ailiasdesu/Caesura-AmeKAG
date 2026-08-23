@@ -21,6 +21,12 @@ public:
     // Lua _G.onResume(savedData) when a Lua state is supplied.
     virtual void onResume(lua_State* L, const std::string& savedData = "") = 0;
 
+    // Unified lifecycle (Track P2): OS memory pressure -> _G.onLowMemory();
+    // OS termination notice -> _G.onTerminate(). Both degrade to a safe
+    // no-op without Lua and swallow callback errors (balanced stack).
+    virtual void onLowMemory(lua_State* L) = 0;
+    virtual void onTerminate(lua_State* L) = 0;
+
     // -- Touch -> mouse mapping --------------------------------------------
     virtual void onFingerDown(float x, float y, int fingerId) = 0;
     virtual void onFingerMotion(float x, float y, int fingerId) = 0;

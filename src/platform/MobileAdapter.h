@@ -47,6 +47,12 @@ public:
     /// Display orientation change -> Lua _G.onOrientationChanged(name).
     void onOrientationChanged(lua_State* L, const char* orientation) override;
 
+    /// Track P2: OS memory pressure -> _G.onLowMemory() (safe no-op without L).
+    void onLowMemory(lua_State* L) override;
+
+    /// Track P2: termination notice -> _G.onTerminate() (safe no-op without L).
+    void onTerminate(lua_State* L) override;
+
     // ── Touch → Mouse Mapping ──────────────────────────────────────────
 
     /// Single finger down -- maps to left mouse button press at (x, y).

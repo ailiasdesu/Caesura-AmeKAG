@@ -5,6 +5,8 @@
 #include "platform/SDL3DisplayService.h"
 #include "platform/NullDisplayService.h"
 #include "platform/api/IDisplayService.h"
+#include "platform/LifecycleService.h"
+#include "platform/api/ILifecycleService.h"
 #include "platform/MobileAdapter.h"
 #include "platform/NullPlatformBackend.h"
 #include <cstring>
@@ -305,4 +307,66 @@ TEST_CASE("Display: IDisplayService interface upcast") {
     REQUIRE(iface != nullptr);
     const auto m = iface->currentMetrics();
     CHECK(m.logicalWidth == 64);
+}
+
+
+// =============================================================================
+// Track P2 — Lifecycle Service (ILifecycleService)
+// =============================================================================
+
+namespace {
+struct LifecycleProbe : ILifecycleListener {
+    int events[8] = {0};
+    int count = 0;
+    void onLifecycleEvent(LifecycleEvent event) override {
+        if (count < 8) events[count++] = static_cast<int>(event);
+    }
+};
+}
+
+TEST_CASE("Lifecycle: dispatch in registration order to all listeners") {
+    LifecycleService svc;
+    LifecycleProbe a, b;
+    svc.addListener(&a);
+    svc.addListener(&b);
+    svc.post(LifecycleEvent::Background);
+    svc.post(LifecycleEvent::Foreground);
+    svc.post(LifecycleEvent::LowMemory);
+    CHECK(a.count == 3);
+    CHECK(b.count == 3);
+    CHECK(a.events[0] == static_cast<int>(LifecycleEvent::Background));
+    CHECK(a.events[1] == static_cast<int>(LifecycleEvent::Foreground));
+    CHECK(b.events[2] == static_cast<int>(LifecycleEvent::LowMemory));
+}
+
+TEST_CASE("Lifecycle: duplicate add is ignored; remove stops delivery") {
+    LifecycleService svc;
+    LifecycleProbe a;
+    svc.addListener(&a);
+    svc.addListener(&a);  // duplicate — ignored
+    svc.post(LifecycleEvent::Pause);
+    CHECK(a.count == 1);
+    svc.removeListener(&a);
+    svc.post(LifecycleEvent::Resume);
+    CHECK(a.count == 1);
+    svc.removeListener(&a);  // double remove — safe no-op
+}
+
+TEST_CASE("Lifecycle: null listener and empty hub are safe") {
+    LifecycleService svc;
+    svc.addListener(nullptr);
+    CHECK_NOTHROW(svc.post(LifecycleEvent::Terminate));
+    svc.removeListener(nullptr);
+    CHECK_NOTHROW(svc.post(LifecycleEvent::Background));
+}
+
+TEST_CASE("Lifecycle: ILifecycleService interface upcast") {
+    LifecycleService svc;
+    ILifecycleService* iface = &svc;
+    REQUIRE(iface != nullptr);
+    LifecycleProbe a;
+    iface->addListener(&a);
+    iface->post(LifecycleEvent::Foreground);
+    CHECK(a.count == 1);
+    iface->removeListener(&a);
 }
