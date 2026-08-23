@@ -16,6 +16,8 @@
 #    - Android NDK r26+: set ANDROID_NDK_HOME / ANDROID_NDK, or --ndk <path>
 #    - CMake 3.25+
 #    - SDL3_DIR pointing at an Android SDL3 CMake package (or --sdl3 <path>)
+#    - OPENSSL_ROOT_DIR pointing at an android-arm64 OpenSSL install (or --openssl <path>)
+#      (archive crypto links libssl.a/libcrypto.a — same slice contract as iOS)
 #
 #  Usage:
 #    scripts/build_android.sh [--ndk <path>] [--sdl3 <path>]
@@ -39,12 +41,14 @@ SMOKE=0
 
 NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK:-}}"
 SDL3_DIR="${SDL3_DIR:-}"
+OPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR:-}"
 
 # -- CLI parsing ------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --ndk)      NDK="$2"; shift 2 ;;
         --sdl3)     SDL3_DIR="$2"; shift 2 ;;
+        --openssl)  OPENSSL_ROOT_DIR="$2"; shift 2 ;;
         --abi)      ABI="$2"; shift 2 ;;
         --platform) ANDROID_PLATFORM="$2"; shift 2 ;;
         --release)  BUILD_TYPE=Release; shift ;;
@@ -108,6 +112,13 @@ if [[ -z "$SDL3_DIR" || ! -f "$SDL3_DIR/SDL3Config.cmake" ]]; then
     exit 2
 fi
 
+if [[ -z "$OPENSSL_ROOT_DIR" || ! -f "$OPENSSL_ROOT_DIR/lib/libssl.a" || ! -f "$OPENSSL_ROOT_DIR/lib/libcrypto.a" ]]; then
+    echo "ERROR: OPENSSL_ROOT_DIR not set, or no android-arm64 slice (lib/libssl.a + lib/libcrypto.a)."
+    echo "  Build OpenSSL with: ./Configure android-arm64 --prefix=<dir>; make; make install_sw"
+    echo "  (see the ios-compile probe in .github/workflows/ci.yml for the same recipe)"
+    exit 2
+fi
+
 BUILD_DIR="$REPO_ROOT/build-android-$ABI"
 mkdir -p "$BUILD_DIR"
 
@@ -129,6 +140,7 @@ cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
     -DCAESURA_LIVE2D=OFF \
     -DCAESURA_ENABLE_FFMPEG=OFF \
     -DSDL3_DIR="$SDL3_DIR" \
+    -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR" \
     -DSOLOUD_BACKEND_OPENSLES=ON 2>&1 | tee "$BUILD_DIR/configure.log"
 
 # -- 2) Build ----------------------------------------------------------------
