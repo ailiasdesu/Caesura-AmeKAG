@@ -49,6 +49,10 @@ const UNLOCK = has('--unlock')
 const CJK = has('--cjk')
 const STRESS = has('--stress')
 const SUSPEND = has('--suspend')
+// Subpath mount point (e.g. --subpath games -> /games/). Leading/trailing
+// slashes stripped so git-bash MSYS path conversion cannot mangle the arg.
+const SUBPATH_ARG = String(arg('--subpath', '')).replace(/^\/+|\/+$/g, '')
+const SUBPATH_PREFIX = SUBPATH_ARG ? '/' + SUBPATH_ARG + '/' : ''
 const TIMEOUT_MS = Number(arg('--timeout', 180000))
 
 const MIME = {
@@ -99,6 +103,15 @@ const record = (name, ok, detail = '') => {
 function startServer(httpPortUsed, cdpPortUsed) {
   const server = createServer((req, res) => {
     let urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname)
+    // Subpath mount: serve the dist under SUBPATH_PREFIX (e.g. /games/) so a
+    // packaged player can be verified on a non-root mount point (W7).
+    if (SUBPATH_PREFIX) {
+      if (urlPath === SUBPATH_PREFIX || urlPath === SUBPATH_PREFIX.replace(/\/$/, '')) {
+        urlPath = '/index.html'
+      } else if (urlPath.startsWith(SUBPATH_PREFIX)) {
+        urlPath = '/' + urlPath.slice(SUBPATH_PREFIX.length) // re-add leading '/'
+      } else { res.writeHead(404); res.end('not under subpath'); return }
+    }
     // Virtual route: pin the wasmoon Lua VM wasm to a LOCAL copy so the
     // packaged player never depends on unpkg.com at runtime (see W0 doc).
     if (urlPath === '/') urlPath = '/index.html'
@@ -116,6 +129,7 @@ function startServer(httpPortUsed, cdpPortUsed) {
       res.writeHead(404); res.end('not found'); return
     }
     const type = MIME[extname(safe).toLowerCase()] ?? 'application/octet-stream'
+    if (Number(process.env.WEB_SMOKE_TRACE) === 1) console.error('[srv]', urlPath, '->', safe)
     res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' })
     res.end(readFileSync(safe))
   })
@@ -223,12 +237,15 @@ async function main() {
   // Auto-pick free ports unless the caller pinned them (a leftover browser
   // holding a fixed port used to make the new instance silently disappear).
   const httpPort = HTTP_PORT || await freePort()
-  const cdpPort = CDP_PORT || await freePort()
+  let cdpPort = CDP_PORT || await freePort()
+  while (cdpPort === httpPort) cdpPort = await freePort()
+  console.error('[harness] http=' + httpPort + ' cdp=' + cdpPort + ' root=' + ROOT + (SUBPATH_PREFIX ? ' subpath=' + SUBPATH_PREFIX : ''))
   const server = await startServer(httpPort, cdpPort)
   let chromeProc = null
   try {
     const query = SCENE ? '?scene=' + encodeURIComponent(SCENE) : ''
-    const url = 'http://127.0.0.1:' + httpPort + '/' + query
+    const pageRoot = 'http://127.0.0.1:' + httpPort + SUBPATH_PREFIX
+    const url = pageRoot.replace(/\/$/, '') + '/' + query
     const args = [
       '--headless=new',
       '--no-first-run',
@@ -262,19 +279,28 @@ async function main() {
     const cdp = await Cdp.connect(page.webSocketDebuggerUrl)
     await cdp.send('Runtime.enable')
     await cdp.send('Page.enable')
-    // Pin the Lua VM wasm to the local copy (served above) so the packaged
-    // player can boot offline; runs before every page script.
-    await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
-      source: 'self.__CAESURA_WASM_FILE__ = ' + JSON.stringify('http://127.0.0.1:' + httpPort + '/__wasm__/glue.wasm'),
-    })
-    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + httpPort + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '') })
+    await cdp.send('Page.navigate', { url: pageRoot.replace(/\/$/, '') + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '') })
 
     // 1. boot
     const bootAt = Date.now()
-    const parked = await cdp.waitEval(
-      "document.getElementById('status') && /^parked:|^load: /i.test(document.getElementById('status').textContent)",
-      'status parks', 150000)
+    let parked = null
+    try {
+      parked = await cdp.waitEval(
+        "document.getElementById('status') && /^parked:|^load: /i.test(document.getElementById('status').textContent)",
+        'status parks', 150000)
+    } catch (e) {
+      const dump = await cdp.eval("JSON.stringify({st: (document.getElementById('status')||{}).textContent || '', log: ((document.getElementById('log')||{}).textContent || '').slice(-300), ready: document.readyState, scripts: [...document.querySelectorAll('script')].map(function(s){return (s.src || 'inline').split('/').slice(-2).join('/')}), wasmPin: (typeof self.__CAESURA_WASM_FILE__ === 'string' ? String(self.__CAESURA_WASM_FILE__) : 'none')})").catch(() => '')
+      console.error('[boot-timeout]', String(dump))
+      throw e
+    }
     record('boot (engine load + auto run parks)', !!parked, JSON.stringify(parked))
+    // W7: packaged player must be self-contained — no CDN (unpkg) fetches,
+    // Lua VM wasm served from the local web-assets/glue.wasm copy.
+    const res = await cdp.eval("[...performance.getEntriesByType('resource')].map((r) => String(r.name))")
+    const cdnHits = Array.isArray(res) ? res.filter((n) => /unpkg|cdn|jsdelivr/.test(n)) : []
+    const wasmLocal = Array.isArray(res) ? res.filter((n) => /glue\.wasm/.test(n)) : []
+    record('packaged: no CDN/unpkg dependency', Array.isArray(cdnHits) && cdnHits.length === 0, JSON.stringify(cdnHits))
+    record('packaged: local webs wasm used', Array.isArray(wasmLocal) && wasmLocal.length > 0 && wasmLocal.every((n) => n.includes('web-assets/glue.wasm')), JSON.stringify(wasmLocal))
 
     // 2. text
     const msgText = await cdp.eval("(() => {\n" +
@@ -457,7 +483,7 @@ async function main() {
       "  return Number(document.getElementById('saves-count').textContent)\n" +
       "})()")
     record('save (Save Current lists a slot)', slotsBefore > 0, 'slots=' + slotsBefore)
-    const baseUrl = 'http://127.0.0.1:' + httpPort + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '')
+    const baseUrl = pageRoot.replace(/\/$/, '') + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '')
     await cdp.send('Page.navigate', { url: baseUrl })
     await cdp.waitEval(
       "document.getElementById('status') && /^parked:|^load: /i.test(document.getElementById('status').textContent)",
