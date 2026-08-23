@@ -402,9 +402,12 @@ jobs:
         shell: bash
         run: |
           bash -n scripts/build_android.sh
-          # no NDK on this runner — the script must fail PROPERLY, not crash
+          # GH ubuntu runners preinstall an Android NDK/SDK, so the script
+          # may reach past the NDK gate; BOTH diagnostics are legitimate:
+          # no NDK -> clean exit-1 message, NDK present -> SDL3_DIR error.
           out=$(bash scripts/build_android.sh 2>&1 || true)
-          echo "$out" | grep -q "Android NDK not found" || { echo "expected NDK-missing diagnostic"; exit 1; }
+          echo "$out" | grep -qE "Android NDK not found|SDL3_DIR not set or invalid" || {
+            echo "expected a proper diagnostic; got:"; echo "$out"; exit 1; }
 
       - name: .ks contract gate for the Android demo content
         shell: bash
