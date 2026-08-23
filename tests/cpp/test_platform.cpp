@@ -2,6 +2,9 @@
 #include "doctest.h"
 #include "platform/SDL3PlatformBackend.h"
 #include "platform/api/IPlatformBackend.h"
+#include "platform/SDL3DisplayService.h"
+#include "platform/NullDisplayService.h"
+#include "platform/api/IDisplayService.h"
 #include "platform/MobileAdapter.h"
 #include "platform/NullPlatformBackend.h"
 #include <cstring>
@@ -249,4 +252,57 @@ TEST_CASE("Platform: SDL3 getTicksMs back-to-back reads are non-decreasing") {
     CHECK(t2 >= t1);
     CHECK(t2 > t0);                    // the delay advanced the clock
     CHECK(t2 < UINT64_MAX);
+}
+
+// =============================================================================
+// Track P1 — Display Service (IDisplayService)
+// =============================================================================
+
+TEST_CASE("Display: NullDisplayService reports fixed metrics (default zeros)") {
+    NullDisplayService svc;
+    const auto m = svc.currentMetrics();
+    CHECK(m.pixelWidth == 0);
+    CHECK(m.pixelHeight == 0);
+    CHECK(m.logicalWidth == 0);
+    CHECK(m.logicalHeight == 0);
+    CHECK(m.scaleFactor == 1.0);
+    CHECK(m.dpi == 96.0);
+    CHECK(m.orientation == Orientation::Unknown);
+    CHECK(m.safeArea.left == 0.0);
+    CHECK(m.safeArea.bottom == 0.0);
+}
+
+TEST_CASE("Display: NullDisplayService honors injected logical size") {
+    NullDisplayService svc(1280, 720);
+    const auto m = svc.currentMetrics();
+    CHECK(m.logicalWidth == 1280);
+    CHECK(m.logicalHeight == 720);
+    CHECK(m.pixelWidth == 1280);
+    CHECK(m.pixelHeight == 720);
+}
+
+TEST_CASE("Display: SDL3DisplayService with no platform backend reports zeros") {
+    SDL3DisplayService svc(nullptr);
+    const auto m = svc.currentMetrics();
+    CHECK(m.pixelWidth == 0);
+    CHECK(m.logicalHeight == 0);
+    CHECK(m.orientation == Orientation::Unknown);
+}
+
+TEST_CASE("Display: SDL3DisplayService with an uninitialized platform is safe") {
+    // No window yet (backend constructed, init() not called) -> zero metrics.
+    SDL3PlatformBackend backend;
+    SDL3DisplayService svc(&backend);
+    const auto m = svc.currentMetrics();
+    CHECK(m.pixelWidth == 0);
+    CHECK(m.pixelHeight == 0);
+    CHECK(m.orientation == Orientation::Unknown);
+}
+
+TEST_CASE("Display: IDisplayService interface upcast") {
+    NullDisplayService svc(64, 32);
+    IDisplayService* iface = &svc;
+    REQUIRE(iface != nullptr);
+    const auto m = iface->currentMetrics();
+    CHECK(m.logicalWidth == 64);
 }

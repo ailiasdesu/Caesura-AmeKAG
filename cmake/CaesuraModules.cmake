@@ -204,6 +204,7 @@ caesura_add_module(MiniGame
 caesura_add_module(Platform
     src/platform/NullPlatformBackend.cpp
     src/platform/SDL3PlatformBackend.cpp
+    src/platform/SDL3DisplayService.cpp
     src/platform/MobileAdapter.cpp
 )
 

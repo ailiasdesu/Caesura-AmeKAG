@@ -1,10 +1,12 @@
-﻿ extern "C" {
+ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
 #include "DevCoreBinding.h"
 #include "../../input/api/IInputRouter.h"
 #include "../../platform/api/IPlatformBackend.h"
+#include "../../platform/api/IDisplayService.h"
+#include "../../di/BackendRegistry.h"
 #include "../../render/api/IRenderDevice.h"
 #include <cstdio>
 #include <cstring>
@@ -144,6 +146,52 @@ static int lua_DevCore_set_fullscreen(lua_State* L) {
 static int lua_DevCore_get_window_size(lua_State* L) {
     return lua_DevCore_get_resolution(L);
 }
+// -- DevCore.get_display_metrics() ----------------------------------------
+// Track P1: live display metrics from IDisplayService (registered by the
+// composition root). Returns a table or nil when no service is installed.
+static const char* orientationName(Caesura::Orientation o) {
+    using namespace Caesura;
+    switch (o) {
+        case Orientation::Portrait: return "portrait";
+        case Orientation::PortraitUpsideDown: return "portrait_upside_down";
+        case Orientation::LandscapeLeft: return "landscape_left";
+        case Orientation::LandscapeRight: return "landscape_right";
+        default: return "unknown";
+    }
+}
+
+static int lua_DevCore_get_display_metrics(lua_State* L) {
+    auto* svc = Caesura::BackendRegistry::instance().getDisplayService();
+    if (!svc) { lua_pushnil(L); return 1; }
+    const auto m = svc->currentMetrics();
+    lua_newtable(L);
+    lua_pushinteger(L, (lua_Integer)m.pixelWidth);
+    lua_setfield(L, -2, "pixelWidth");
+    lua_pushinteger(L, (lua_Integer)m.pixelHeight);
+    lua_setfield(L, -2, "pixelHeight");
+    lua_pushinteger(L, (lua_Integer)m.logicalWidth);
+    lua_setfield(L, -2, "logicalWidth");
+    lua_pushinteger(L, (lua_Integer)m.logicalHeight);
+    lua_setfield(L, -2, "logicalHeight");
+    lua_pushnumber(L, (lua_Number)m.scaleFactor);
+    lua_setfield(L, -2, "scaleFactor");
+    lua_pushnumber(L, (lua_Number)m.dpi);
+    lua_setfield(L, -2, "dpi");
+    lua_pushstring(L, orientationName(m.orientation));
+    lua_setfield(L, -2, "orientation");
+    lua_newtable(L);
+    lua_pushnumber(L, (lua_Number)m.safeArea.left);
+    lua_setfield(L, -2, "left");
+    lua_pushnumber(L, (lua_Number)m.safeArea.top);
+    lua_setfield(L, -2, "top");
+    lua_pushnumber(L, (lua_Number)m.safeArea.right);
+    lua_setfield(L, -2, "right");
+    lua_pushnumber(L, (lua_Number)m.safeArea.bottom);
+    lua_setfield(L, -2, "bottom");
+    lua_setfield(L, -2, "safeArea");
+    return 1;
+}
+
 // -- Module registration --------------------------------------------------
 
 static const luaL_Reg devcore_functions[] = {
@@ -155,6 +203,7 @@ static const luaL_Reg devcore_functions[] = {
     { "get_resolution",  lua_DevCore_get_resolution  },
     { "set_fullscreen",   lua_DevCore_set_fullscreen },
     { "get_window_size",  lua_DevCore_get_window_size },
+    { "get_display_metrics", lua_DevCore_get_display_metrics },
     { nullptr, nullptr }
 };
 

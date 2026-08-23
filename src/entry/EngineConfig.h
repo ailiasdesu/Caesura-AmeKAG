@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>  // uint32_t (GCC strict; MSVC used to get it transitively)
 #include <string>
@@ -13,6 +13,7 @@ class IPlatformBackend;
 class IMiniGameBackend;
 class IAnimationBackend;
 class ISteamBackend;
+class IDisplayService;
 class IVideoDecoder;
 class LuaManager;
 class InputRouter;
@@ -44,6 +45,7 @@ struct EngineConfig {
         , miniGame(std::exchange(other.miniGame, nullptr))
         , animation(std::exchange(other.animation, nullptr))
         , steam(std::exchange(other.steam, nullptr))
+        , displayService(std::exchange(other.displayService, nullptr))
         , title(other.title)
         , width(other.width)
         , height(other.height)
@@ -76,6 +78,10 @@ struct EngineConfig {
     IMiniGameBackend* miniGame        = nullptr;
     IAnimationBackend* animation      = nullptr;
     ISteamBackend*    steam           = nullptr;
+
+    // Display metrics service (Track P1). nullptr = Engine supplies a Null
+    // default; desktop builds inject SDL3DisplayService from main.cpp.
+    IDisplayService*  displayService  = nullptr;
 
     // Dimensions
     const char*       title           = "Caesura (AmeKAG)";

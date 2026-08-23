@@ -21,6 +21,7 @@ class HotReload;
 class DebugProtocol;
 class InputRouter;
 class IGpuMonitor;
+class IDisplayService;
 class VideoPlayer;
 class DebugManager;
 class IMiniGameBackend;
@@ -160,6 +161,7 @@ private:
     std::unique_ptr<IRenderDevice>     m_renderDevice;
     std::unique_ptr<IAudioBackend>     m_audioBackend;
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
+    std::unique_ptr<IDisplayService>   m_displayService;
     std::unique_ptr<MobileAdapter>     m_mobileAdapter;
     std::unique_ptr<LuaManager>        m_lua;
 

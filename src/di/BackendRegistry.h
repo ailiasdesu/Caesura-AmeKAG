@@ -28,6 +28,7 @@ class ISaveManager;
 class IResourceGenerationTracker;
 class ISteamBackend;
 class IMobileAdapter;
+class IDisplayService;
 class IMeshRenderer;
 namespace carc { class ICryptoEngine; }
 
@@ -69,6 +70,7 @@ public:
     void setResourceGenerationTracker(IResourceGenerationTracker* tracker);
     void setSteamBackend(ISteamBackend* backend);
     void setMobileAdapter(IMobileAdapter* adapter);
+    void setDisplayService(IDisplayService* service);
     void setMeshRenderer(IMeshRenderer* renderer);
 
     // -- SandboxQuota wrappers (delegate to the registered interface) --
@@ -99,6 +101,7 @@ public:
     IResourceGenerationTracker* getResourceGenerationTracker();
     ISteamBackend*    getSteamBackend();
     IMobileAdapter*   getMobileAdapter();
+    IDisplayService*  getDisplayService();
     IMeshRenderer*    getMeshRenderer();
 
     // -- Factories --

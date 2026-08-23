@@ -9,6 +9,7 @@ extern "C" {
 #include "../debug/DebugManager.h"
 #include "ErrorUI.h"
 #include "../audio/api/IAudioBackend.h"
+#include "../platform/api/IDisplayService.h"
 #include "../di/api/ITextureBudget.h"
 #include "../di/api/ISandboxQuota.h"
 #include "../render/api/IRenderDevice.h"
@@ -90,6 +91,7 @@ void removeDebugPauseProbe(lua_State* L) {
 
 // Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
+std::unique_ptr<IDisplayService> createDisplayService(const EngineConfig& config);
 std::unique_ptr<ISteamBackend> createDefaultSteamIntegration();
 std::unique_ptr<IAudioBackend> createHeadlessAudioBackend();
 std::unique_ptr<IRenderDevice> createHeadlessRenderDevice();
@@ -261,6 +263,14 @@ bool Engine::initPlatformPhase() {
     }
     m_platformInitialized = true;
     BackendRegistry::instance().setPlatformBackend(m_platformBackend.get());
+
+    // Display metrics service (Track P1): injected from main.cpp when a
+    // platform impl is available; Null default otherwise. Registered so
+    // script/engine bindings can query live metrics without platform ifdefs.
+    if (!m_displayService) {
+        m_displayService = createDisplayService(m_config);
+    }
+    BackendRegistry::instance().setDisplayService(m_displayService.get());
 
     // Mobile adapter: touch/lifecycle mapping (registered for editor/RPC
     // and future mobile ports; wired to SDL background/foreground events).
