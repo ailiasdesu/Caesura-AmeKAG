@@ -470,7 +470,12 @@ message(STATUS "Caesura (AmeKAG) configured successfully.")
 
 
 # -- CPack Release packaging ------------------------------------------------
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
+# APPLE (macOS/iOS) build the executable as a MACOSX_BUNDLE, so CPack
+# needs a BUNDLE destination (the iOS probe red point at the install step).
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION .
+    BUNDLE DESTINATION .
+)
 install(DIRECTORY scripts/ DESTINATION scripts)
 install(DIRECTORY demo/ DESTINATION demo)
 install(DIRECTORY assets/ DESTINATION assets)
