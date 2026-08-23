@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | Windows | ✅（CPack ZIP） | ✅ | ✅ | 发布路径已验证 |
 | Linux | ✅ | ✅ | ✅（WSL 实机 ctest 11/11） | 已验证 |
-| macOS | ✅（代码） | ✅（CI 编译） | ⏳ **pending** | **需 Mac 真机**（§8 诚实标注） |
+| macOS | ✅（代码） | ✅（CI 编译 - Clang 严格修复后 2m12s） | ⏳ **pending** | **需 Mac 真机**（§8 诚实标注） |
 | Web | ✅（package_game.sh） | ✅ | ✅（Chrome CDP 验证） | boot/text/image/input/自动启动全通过 |
 
 ## Real environment
