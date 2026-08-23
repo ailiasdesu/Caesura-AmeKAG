@@ -27,9 +27,10 @@
 // -----------------------------------------------------------------------------
 
 import { createServer } from 'node:http'
+import net from 'node:net'
 import { readFileSync, existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { join, extname, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 
 const ARGV = process.argv.slice(2)
 const arg = (name, dflt) => {
@@ -40,11 +41,13 @@ const has = (name) => ARGV.includes(name)
 
 const ROOT = resolve(arg('--root', join(process.cwd(), 'web', 'dist')))
 const BROWSER = arg('--browser', 'chrome')
-const HTTP_PORT = Number(arg('--port', 8765))
-const CDP_PORT = Number(arg('--cdp-port', 9333))
+// 0 = auto-pick a free port (default); pin by passing --port/--cdp-port.
+const HTTP_PORT = Number(arg('--port', 0))
+const CDP_PORT = Number(arg('--cdp-port', 0))
 const SCENE = arg('--scene', '')
 const UNLOCK = has('--unlock')
 const CJK = has('--cjk')
+const STRESS = has('--stress')
 const TIMEOUT_MS = Number(arg('--timeout', 180000))
 
 const MIME = {
@@ -80,6 +83,10 @@ const CHROME_PATHS = {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const freePort = () => new Promise((res) => {
+  const srv = net.createServer()
+  srv.listen(0, '127.0.0.1', () => { const p2 = srv.address().port; srv.close(() => res(p2)) })
+})
 const pass = new Set()
 const fail = new Set()
 const record = (name, ok, detail = '') => {
@@ -88,7 +95,7 @@ const record = (name, ok, detail = '') => {
 }
 
 // ------------------------------------------------------------ static server
-function startServer() {
+function startServer(httpPortUsed, cdpPortUsed) {
   const server = createServer((req, res) => {
     let urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname)
     // Virtual route: pin the wasmoon Lua VM wasm to a LOCAL copy so the
@@ -112,7 +119,7 @@ function startServer() {
     res.end(readFileSync(safe))
   })
   return new Promise((resolveReady) => {
-    server.listen(HTTP_PORT, '127.0.0.1', () => resolveReady(server))
+    server.listen(httpPortUsed, '127.0.0.1', () => resolveReady(server))
   })
 }
 
@@ -124,16 +131,16 @@ function findBrowser() {
   return null
 }
 
-async function waitForCdp(timeout = 20000) {
+async function waitForCdp(cdpPortX, timeout = 20000) {
   const deadline = Date.now() + timeout
   while (Date.now() < deadline) {
     try {
-      const r = await fetch('http://127.0.0.1:' + CDP_PORT + '/json/list')
+      const r = await fetch('http://127.0.0.1:' + cdpPortX + '/json/list')
       if (r.ok) return await r.json()
     } catch { /* not up yet */ }
     await sleep(250)
   }
-  throw new Error('CDP endpoint did not come up on port ' + CDP_PORT)
+  throw new Error('CDP endpoint did not come up on port ' + cdpPortX)
 }
 
 // ---------------------------------------------------------------- CDP client
@@ -212,18 +219,22 @@ async function main() {
     process.exit(1)
   }
 
-  const server = await startServer()
+  // Auto-pick free ports unless the caller pinned them (a leftover browser
+  // holding a fixed port used to make the new instance silently disappear).
+  const httpPort = HTTP_PORT || await freePort()
+  const cdpPort = CDP_PORT || await freePort()
+  const server = await startServer(httpPort, cdpPort)
   let chromeProc = null
   try {
     const query = SCENE ? '?scene=' + encodeURIComponent(SCENE) : ''
-    const url = 'http://127.0.0.1:' + HTTP_PORT + '/' + query
+    const url = 'http://127.0.0.1:' + httpPort + '/' + query
     const args = [
       '--headless=new',
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-features=Translate',
       '--disable-extensions',
-      '--remote-debugging-port=' + CDP_PORT,
+      '--remote-debugging-port=' + cdpPort,
       '--user-data-dir=' + join(process.cwd(), 'build', 'web-smoke', 'profile-' + BROWSER + '-' + Date.now()),
       '--window-size=1280,900',
     ]
@@ -235,15 +246,15 @@ async function main() {
     chromeProc = spawn(browser, args, { stdio: 'ignore' })
     chromeProc.on('error', (e) => { console.error('[web-smoke] chrome spawn error', e) })
 
-    let targets = await waitForCdp()
-    let page = targets.find((t) => t.type === 'page' && String(t.url).startsWith('http://127.0.0.1:' + HTTP_PORT))
+    let targets = await waitForCdp(cdpPort)
+    let page = targets.find((t) => t.type === 'page' && String(t.url).startsWith('http://127.0.0.1:' + httpPort))
       ?? targets.find((t) => t.type === 'page')
     // page target can appear a moment after the CDP endpoint; retry briefly
     const pageDeadline = Date.now() + 60000
     while (!page && Date.now() < pageDeadline) {
       await sleep(250)
-      try { targets = await (await fetch('http://127.0.0.1:' + CDP_PORT + '/json/list')).json() } catch { continue }
-      page = targets.find((t) => t.type === 'page' && String(t.url).startsWith('http://127.0.0.1:' + HTTP_PORT))
+      try { targets = await (await fetch('http://127.0.0.1:' + cdpPort + '/json/list')).json() } catch { continue }
+      page = targets.find((t) => t.type === 'page' && String(t.url).startsWith('http://127.0.0.1:' + httpPort))
         ?? targets.find((t) => t.type === 'page')
     }
     if (!page) throw new Error('no page target; targets=' + JSON.stringify(targets.map((t) => t.type + ':' + t.url)))
@@ -253,11 +264,12 @@ async function main() {
     // Pin the Lua VM wasm to the local copy (served above) so the packaged
     // player can boot offline; runs before every page script.
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
-      source: 'self.__CAESURA_WASM_FILE__ = ' + JSON.stringify('http://127.0.0.1:' + HTTP_PORT + '/__wasm__/glue.wasm'),
+      source: 'self.__CAESURA_WASM_FILE__ = ' + JSON.stringify('http://127.0.0.1:' + httpPort + '/__wasm__/glue.wasm'),
     })
-    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + HTTP_PORT + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '') })
+    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + httpPort + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '') })
 
     // 1. boot
+    const bootAt = Date.now()
     const parked = await cdp.waitEval(
       "document.getElementById('status') && /^parked:|^load: /i.test(document.getElementById('status').textContent)",
       'status parks', 150000)
@@ -271,6 +283,9 @@ async function main() {
     record('text (.caesura-message renders text)', typeof msgText === 'string' && String(msgText).trim().length > 0, JSON.stringify(String(msgText).slice(0, 60)))
 
     // 3. image layers
+    await cdp.waitEval("(document.querySelectorAll('.caesura-layer[src]').length > 0)", 'wait for image layers', 20000).catch(() => {})
+    // settle: let pending <img> loads resolve before judging decode state
+    await sleep(1200)
     const imgOk = await cdp.eval("(() => {\n" +
       "  const imgs = [...document.querySelectorAll('.caesura-layer[src]')]\n" +
       "  return { count: imgs.length, ready: imgs.filter(i => i.complete && i.naturalWidth > 0).length, total: imgs.filter(i => i.complete).length }\n" +
@@ -313,6 +328,66 @@ async function main() {
       record('cjk: font asset fetched via packaged URL', Array.isArray(fontRes) && fontRes.length > 0, JSON.stringify(fontRes))
     }
 
+    // 4c. --stress mode: web_stress_vn large-asset / memory stress (plan W4).
+    // Drives 3 full cycles of the 12-page loop and records real measurements
+    // (first-boot time, per-cycle texture counts, DOM layer counts, heap
+    // samples, page errors) — numeric values are recorded, not asserted.
+    if (STRESS) {
+      const bootMs = Date.now() - bootAt
+      const pageNo = async () => {
+        const t = await cdp.eval("(document.querySelector('.caesura-message') || {}).textContent || ''")
+        const m = /Stress (\d+)\/12/.exec(String(t))
+        return m ? Number(m[1]) : 0
+      }
+      const tex = async () => {
+        const v = await cdp.eval("(window.__caesuraCore && window.__caesuraCore.textures && window.__caesuraCore.textures.size) ?? -1")
+        return typeof v === 'number' ? v : -1
+      }
+      const heap = async () => {
+        const v = await cdp.eval("(window.performance && performance.memory && performance.memory.usedJSHeapSize) ?? -1")
+        return typeof v === 'number' ? v : -1
+      }
+      const heapBoot = await heap()
+      const texByCycle = []
+      const cycleHit = (n) => { for (let i = 0; i < texByCycle.length; i++) if (texByCycle[i].pp === n) return i; return -1 }
+      const seen = []
+      let advances = 0
+      const CYCLE_PAGES = 12
+      const CYCLE_X = 3
+      let lastCycle = texByCycle.length
+      while (advances < CYCLE_PAGES * CYCLE_X * 1.3 && seen.length < CYCLE_PAGES * CYCLE_X) {
+        const n = await pageNo()
+        if (n > 0) seen.push(n)
+        // a fresh cycle (page 1 after already having seen page 12) -> sample
+        if (n === 1 && seen.length > 1) {
+          texByCycle.push({ at: seen.length, tex: await tex(), layers: await cdp.eval("document.querySelectorAll('.caesura-layer[src]').length"), pp: texByCycle.length + 1 })
+        }
+        await cdp.clickTrusted('#advance')
+        await sleep(650)
+        advances++
+      }
+      const texEnd = await tex()
+      const layersEnd = await cdp.eval("document.querySelectorAll('.caesura-layer[src]').length")
+      const heapEnd = await heap()
+      const errs = await cdp.eval("(window.__caesuraErrors || []).slice(0, 20)")
+      const evErrors = await cdp.eval("(window.__caesuraCore && window.__caesuraCore.events ? window.__caesuraCore.events.filter((e) => String(e.kind).includes('error')).length : -1)")
+      const c1 = texByCycle[0] ? texByCycle[0].tex : -1
+      const c3 = texByCycle[2] ? texByCycle[2].tex : texEnd
+      record('stress: 3 cycles completed (36 pages + loop)', seen.length >= CYCLE_PAGES * CYCLE_X && seen.filter((n) => n === 1).length >= CYCLE_X, 'pages=' + seen.length + ' cycles=' + seen.filter((n) => n === 1).length)
+      const orderOk = (() => {
+        const expect = Array.from({ length: 12 }, (_, i) => i + 1)
+        for (let c = 0; c < 2; c++) for (let i = 0; i < 12; i++) if (seen[c * 12 + i] !== expect[i]) return false
+        return true
+      })()
+      record('stress: page order stable (01..12 repeats)', orderOk, 'sample=' + seen.slice(0, 24).join(','))
+      record('stress: texture cache bounded across cycles', c3 >= 0 && texEnd >= 0 && texEnd <= c1 + 6, 'c1=' + c1 + ' c3=' + c3 + ' end=' + texEnd)
+      record('stress: DOM layers bounded (< 8)', Number(layersEnd) < 8, 'layers=' + layersEnd)
+      record('stress: no page errors / wasm failures', Array.isArray(errs) && errs.length === 0 && Number(evErrors) === 0, 'errs=' + JSON.stringify(errs) + ' evErrors=' + evErrors)
+      record('stress: measured boot ms (real)', true, 'bootMs=' + bootMs)
+      record('stress: measured heap delta (real, GC-influenced)', true, 'heapBoot=' + heapBoot + ' heapEnd=' + heapEnd + ' delta=' + (heapEnd - heapBoot))
+      record('stress: measured texture samples (real)', true, JSON.stringify(texByCycle.map((x) => x.tex)))
+    }
+
     // 4. audio status (soft check — scene dependent)
     const audio = await cdp.eval("document.getElementById('audio-status').textContent")
     const audioSeen = /BGM|SE|VOICE/.test(String(audio))
@@ -320,7 +395,7 @@ async function main() {
     // WebAudio real playback: a live source on the bus proves the normalized
     // asset URL decoded + started (core state alone would mask 404s).
     let srcs = await cdp.eval("(window.__caesuraAudio && window.__caesuraAudio._sources ? [...window.__caesuraAudio._sources.keys()] : [])")
-    if (!Array.isArray(srcs) || srcs.length === 0) {
+    if (audioSeen && (!Array.isArray(srcs) || srcs.length === 0)) {
       // decode/start is async (large WAV); give it a window before failing
       const srcDeadline = Date.now() + 20000
       while (Date.now() < srcDeadline) {
@@ -342,7 +417,7 @@ async function main() {
       "  return Number(document.getElementById('saves-count').textContent)\n" +
       "})()")
     record('save (Save Current lists a slot)', slotsBefore > 0, 'slots=' + slotsBefore)
-    const baseUrl = 'http://127.0.0.1:' + HTTP_PORT + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '')
+    const baseUrl = 'http://127.0.0.1:' + httpPort + '/' + (SCENE ? '?scene=' + encodeURIComponent(SCENE) : '')
     await cdp.send('Page.navigate', { url: baseUrl })
     await cdp.waitEval(
       "document.getElementById('status') && /^parked:|^load: /i.test(document.getElementById('status').textContent)",
