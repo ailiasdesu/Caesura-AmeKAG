@@ -183,10 +183,17 @@ cmake --build build-android-arm64 --target CaesuraAudio --config Release --paral
 但 SDL3 AssetManager 或 CARC 的取数胶水 + 真机链路验证（JNI_OnLoad→SDL_main→SDL_Init）
 仍为 device-unverified；iOS 同根因，建议 I3/Track M 合并一次做）。
 
-**A3（内容打包）2026-08-24**：CI 探针已把 `tests/projects/first_vn` 内容成套装入
-APK assets（`assets/assets/<首VN内容>` 布局，对应引擎资源根 ROOT/assets 映射），
-并对 APK 做 zip 内容校验（story.ks/entry.lua/libCaesuraAmeKAG.so/libSDL3.so 均在包内）
-——**打包级已验证**；运行时读取隶属上述未完成项。## 4. 关键模块在 Android 下的分析
+**A3（内容打包）+ R6 读胶水 2026-08-24**：CI 探针把**规范资源根布局**成套装入
+APK（`assets/game/{scripts,assets,demo/first_vn}`，与 demo/ 同构；config.lua 的
+entry_script 指向 `../demo/first_vn/entry.lua`），并对 APK 做 zip 内容校验
+（story.ks/entry.lua/kag/init.lua/lang/libCaesuraAmeKAG.so/libSDL3.so 均在包内）
+——**打包级已验证**。
+
+**R6 读胶水（Java 侧，编译级已验证；真机未验）**：`MainActivity` 首启把
+APK `assets/game/**` 提取到内部存储（`filesDir/caesura_root`，版本标记文件
+防重复），再由 `getArguments()` 把 `{"--resource-root", <root>}` 传给
+SDLActivity→SDL_main 的 argv——引擎侧零改动（复用 f5dbac5e 的根解析）。
+_运行时链路（提取→SDL_Init→入口脚本→资源 IO）仍待真机验证。_## 4. 关键模块在 Android 下的分析
 
 ### 4.1 bgfx 渲染后端（GLES）
 

@@ -515,17 +515,24 @@ jobs:
           cp "$RUNNER_TEMP/sdl3-android/lib/libSDL3.so" android/app/src/main/jniLibs/arm64-v8a/
           ls -la android/app/src/main/jniLibs/arm64-v8a/
 
-      - name: "Stage first_vn content into APK assets (Track M A3)"
+      - name: "Stage game bundle (A3 + R6 read glue contract)"
         shell: bash
         run: |
           set -e
-          # A3 packaging: the engine resource root map is ROOT/assets/...;
-          # the APK asset tree mirrors that as assets/assets/<...> so a
-          # future SDL3-asset-manager glue (R6 extension) can consume it
-          # unchanged. Runtime consumption is NOT verified here (device).
-          mkdir -p android/app/src/main/assets/assets
-          cp -r tests/projects/first_vn/. android/app/src/main/assets/assets/
-          find android/app/src/main/assets -type f | sort | head -12
+          # Canonical engine resource root (same contract as demo/):
+          #   <root>/scripts  (runtime; config.lua entry_script -> game entry)
+          #   <root>/assets   (shared media pool)
+          #   <root>/demo/<project>/ (entry.lua + story.ks + assets/)
+          # MainActivity extracts APK assets/game/** into internal storage
+          # once, then forwards --resource-root <root> to SDL_main argv.
+          rm -rf android/app/src/main/assets/game
+          mkdir -p android/app/src/main/assets/game/demo
+          cp -r scripts  android/app/src/main/assets/game/scripts
+          cp -r assets   android/app/src/main/assets/game/assets
+          cp -r tests/projects/first_vn android/app/src/main/assets/game/demo/first_vn
+          sed -i 's|config.entry_script = .*|config.entry_script = "../demo/first_vn/entry.lua"  -- A3/R6: first_vn entry (engine resolves scripts/../demo/first_vn)|' \
+            android/app/src/main/assets/game/scripts/config.lua
+          grep -n "entry_script" android/app/src/main/assets/game/scripts/config.lua
 
       - name: "Gradle assembleDebug (Track M A2 host module)"
         shell: bash
@@ -547,5 +554,5 @@ jobs:
           "$GRADLE" --no-daemon --console=plain assembleDebug
           cd ..
           ls -la android/app/build/outputs/apk/debug/ || true
-          echo "--- APK content check (A3) ---"
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E "assets/assets/story.ks|assets/assets/entry.lua|libCaesuraAmeKAG.so|libSDL3.so"
+          echo "--- APK content check (A3 + R6 bundle) ---"
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E "assets/game/demo/first_vn/story.ks|assets/game/demo/first_vn/entry.lua|assets/game/scripts/kag/init.lua|assets/game/assets/lang/|libCaesuraAmeKAG.so|libSDL3.so"

@@ -43,3 +43,9 @@ bash scripts/build_android.sh --smoke
 
 - 未创建 gradle 工程、未伪造 .so/APK 产物；A2 宿主层代码（R1/R9/JNI）为**共享耦合点**，
   需在有 NDK 可编译验证的轮次实施，避免“只写不验”。
+
+**R6 读胶水（2026-08-24 落地，编译级）**：APK 内游戏包布局为 `assets/game/`
+（= 引擎资源根：scripts + assets + demo/<project>，与 demo/ 同构）；`MainActivity`
+首启把 game/** 提取到 `filesDir/caesura_root`（.bundle-version 标记防重复提取），
+`getArguments()` 返回 `{"--resource-root", root}`——SDLActivity 的 SDLMain 把它
+作为 argv 交给 SDL_main，引擎复用 f5dbac5e 的根解析，**引擎侧零改动**。
