@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "api/IInputRouter.h"
 #include <SDL3/SDL.h>
 #include <functional>
@@ -16,6 +16,7 @@ public:
     InputRouter() = default;
 
     void processEvent(const SDL_Event& event) override;
+    void submitPointer(const PointerEvent& event) override;
     void setFocus(InputFocus focus) override;
     InputFocus getFocus() const override { return m_focus; }
 
@@ -32,8 +33,12 @@ public:
     void consumeKAGClick() override { m_kagClickPending = false; }
 
 private:
+    void dispatchSdlEvent(const SDL_Event& event);
+
     InputFocus m_focus = InputFocus::KAG;
     bool m_kagClickPending = false;
+    float m_lastPinchScale = 0.0f;   // 0 = no active pinch (P3)
+    size_t m_activePointers = 0;     // multi-touch bookkeeping (P3)
 
     std::vector<GameInputCallback> m_gameCallbacks;
     std::vector<GameInputCallback> m_kagCallbacks;

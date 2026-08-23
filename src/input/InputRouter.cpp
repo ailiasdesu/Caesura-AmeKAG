@@ -1,4 +1,4 @@
-﻿#include "InputRouter.h"
+#include "InputRouter.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -34,6 +34,12 @@ const char* inputFocusToString(InputFocus focus) {
 // -------------------------------------------------------------------------------
 
 void InputRouter::processEvent(const SDL_Event& event) {
+    dispatchSdlEvent(event);
+}
+
+// Single dispatch point: processEvent and the unified pointer path (P3)
+// funnel through this so routing/phantom-click guarantees stay identical.
+void InputRouter::dispatchSdlEvent(const SDL_Event& event) {
     switch (m_focus) {
         case InputFocus::KAG: {
             // In KAG mode, mouse clicks and keyboard advance the story
@@ -57,6 +63,68 @@ void InputRouter::processEvent(const SDL_Event& event) {
                 if (m_focus != InputFocus::GAME) break;
                 cb(event);
             }
+            break;
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------
+//  InputRouter::submitPointer   unified pointer path (Track P3)
+// -------------------------------------------------------------------------------
+// Source-agnostic: builds the equivalent SDL_Event and feeds the SAME
+// dispatch (single source of truth for KAG/GAME routing + click-pending).
+// MobileAdapter's SDL touch->mouse injection remains the compat path.
+
+void InputRouter::submitPointer(const PointerEvent& event) {
+    m_activePointers = event.activePointers;
+
+    SDL_Event ev{};
+    switch (event.action) {
+        case PointerAction::Down: {
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.x = static_cast<float>(event.x);
+            ev.button.y = static_cast<float>(event.y);
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::Move: {
+            ev.type = SDL_EVENT_MOUSE_MOTION;
+            ev.motion.x = static_cast<float>(event.x);
+            ev.motion.y = static_cast<float>(event.y);
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::Up: {
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.x = static_cast<float>(event.x);
+            ev.button.y = static_cast<float>(event.y);
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::LongPress: {
+            // Right-button press+release pair (MobileAdapter long-press
+            // semantics: right-click action on a held contact).
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_RIGHT;
+            ev.button.x = static_cast<float>(event.x);
+            ev.button.y = static_cast<float>(event.y);
+            dispatchSdlEvent(ev);
+            ev.button.button = SDL_BUTTON_RIGHT;
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::Pinch: {
+            // Wheel delta derived from the cumulative scale (like the
+            // MobileAdapter wheel injection); first pinch event = baseline.
+            if (m_lastPinchScale <= 0.0f) m_lastPinchScale = event.scale;
+            const float delta = event.scale - m_lastPinchScale;
+            m_lastPinchScale = event.scale;
+            ev.type = SDL_EVENT_MOUSE_WHEEL;
+            ev.wheel.y = static_cast<float>(delta) * 10.0f;
+            dispatchSdlEvent(ev);
             break;
         }
     }
@@ -98,6 +166,7 @@ void InputRouter::setFocus(InputFocus focus) {
     // slate   the next user click sets the flag, rather than a stale
     // flag from before the GAME session causing an instant advance.
     m_kagClickPending = false;
+    m_lastPinchScale = 0.0f;
 
     printf("[InputRouter] Focus: %s   %s (input=%s, gameCb=%zu, kagCb=%zu)\n",
            inputFocusToString(oldFocus), inputFocusToString(focus),

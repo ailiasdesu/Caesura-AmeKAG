@@ -6,6 +6,18 @@
 
 using namespace Caesura;
 
+namespace {
+void PointEv(IInputRouter& r, PointerAction a, float x, float y, int32_t id = 0, float scale = 1.0f) {
+    PointerEvent pe;
+    pe.action = a; pe.x = x; pe.y = y; pe.pointerId = id; pe.scale = scale;
+    r.submitPointer(pe);
+}
+InputRouter& routerInstance() {
+    static InputRouter router;
+    return router;
+}
+} // namespace
+
 TEST_CASE("InputRouter::default focus is KAG") {
     InputRouter router;  // NOT a singleton — each test creates its own instance
     CHECK(router.getFocus() == InputFocus::KAG);
@@ -1025,3 +1037,76 @@ TEST_CASE("InputRouter::many rapid events preserve order and pending edge") {
     CHECK(kagCalls == 2);
 }
 
+
+
+// =============================================================================
+// Track P3 — Unified pointer path (IInputRouter::submitPointer)
+// =============================================================================
+
+TEST_CASE("Pointer: Down/Up in KAG mode arms click pending + fires KAG callbacks") {
+    InputRouter router;
+    int kagCalls = 0;
+    bool sawDown = false;
+    router.registerKAGCallback([&](const SDL_Event& ev) {
+        kagCalls++;
+        if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ev.button.button == SDL_BUTTON_LEFT) sawDown = true;
+    });
+    PointEv(router, PointerAction::Down, 100, 80, 0);
+    CHECK(router.isClickPending());
+    CHECK(kagCalls == 1);
+    CHECK(sawDown);
+    PointEv(router, PointerAction::Up, 100, 80, 0);
+    router.consumeKAGClick();
+    CHECK_FALSE(router.isClickPending());
+}
+
+TEST_CASE("Pointer: GAME mode never leaks to KAG callbacks") {
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+    int kagCalls = 0, gameCalls = 0;
+    router.registerKAGCallback([&](const SDL_Event&) { kagCalls++; });
+    router.registerGameCallback([&](const SDL_Event&) { gameCalls++; });
+    PointEv(router, PointerAction::Down, 10, 10, 0);
+    PointEv(router, PointerAction::Move, 20, 20, 0);
+    PointEv(router, PointerAction::Up, 20, 20, 0);
+    CHECK(kagCalls == 0);
+    CHECK(gameCalls == 3);
+    CHECK_FALSE(router.isClickPending());
+}
+
+TEST_CASE("Pointer: LongPress maps to right-button press+release pair") {
+    InputRouter router;
+    int rights = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ev.button.button == SDL_BUTTON_RIGHT) rights++;
+    });
+    router.setFocus(InputFocus::GAME);
+    PointEv(router, PointerAction::LongPress, 50, 60, 0);
+    CHECK(rights == 1);
+}
+
+TEST_CASE("Pointer: Pinch maps to wheel delta from cumulative scale") {
+    InputRouter router;
+    std::vector<float> wheels;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_MOUSE_WHEEL) wheels.push_back(ev.wheel.y);
+    });
+    router.setFocus(InputFocus::GAME);
+    PointEv(router, PointerAction::Pinch, 0, 0, 1.0f, 1.1f);   // baseline 1.0
+    PointEv(router, PointerAction::Pinch, 0, 0, 1.2f, 1.3f);   // +0.2
+    CHECK(wheels.size() == 2);
+    CHECK(wheels[1] == doctest::Approx(2.0f));  // 0.2 * 10
+    router.setFocus(InputFocus::KAG);            // pinch baseline resets
+    PointEv(router, PointerAction::Pinch, 0, 0, 1.0f, 1.5f);   // new baseline
+    CHECK(router.isClickPending() == false);     // pinch is not a KAG click
+}
+
+TEST_CASE("Pointer: interface exposes pointer abstraction") {
+    PointerEvent pe;
+    pe.action = PointerAction::Down;
+    pe.x = 5; pe.y = 7; pe.pointerId = 3; pe.activePointers = 2;
+    CHECK(pe.pointerId == 3);
+    CHECK(pe.activePointers == 2);
+    IInputRouter* r = &routerInstance();
+    r->submitPointer(pe);   // smoke: no crash
+}
