@@ -372,7 +372,9 @@ jobs:
           curl -sL https://github.com/openssl/openssl/releases/download/openssl-3.3.2/openssl-3.3.2.tar.gz -o "$RUNNER_TEMP/openssl.tgz"
           tar -xzf "$RUNNER_TEMP/openssl.tgz" -C "$OSSL_SRC"
           cd "$OSSL_SRC/openssl-3.3.2"
-          export CC=clang
+          export CC="$(xcrun -sdk iphoneos -f clang)"
+          export CROSS_TOP="$(xcrun --sdk iphoneos --show-sdk-platform-path)"
+          export CROSS_SDK="iphoneos"
           perl Configure ios64-xcrun --prefix="$OSSL_INSTALL" no-shared no-tests no-apps no-docs
           make -j3
           make install_sw
