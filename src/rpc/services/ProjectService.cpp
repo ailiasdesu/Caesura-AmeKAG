@@ -232,7 +232,7 @@ ServiceResult ProjectService::list() {
             Json entry = {{"path", ("projects/" + name)},
                           {"name", name},
                           {"template", ""},
-                          {"modified", te ? std::to_string(t.time_since_epoch().count()) : ""}};
+                          {"modified", te ? std::to_string(static_cast<long long>(t.time_since_epoch().count())) : ""}};
             fs::path metaFile = e.path() / "caesura.project.json";
             std::error_code me;
             if (fs::exists(metaFile, me)) {
