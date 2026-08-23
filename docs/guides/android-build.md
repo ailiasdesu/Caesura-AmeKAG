@@ -195,6 +195,10 @@ APK `assets/game/**` 提取到内部存储（`filesDir/caesura_root`，版本标
 SDLActivity→SDL_main 的 argv——引擎侧零改动（复用 f5dbac5e 的根解析）。
 _运行时链路（提取→SDL_Init→入口脚本→资源 IO）仍待真机验证。_
 
+**门禁固化**：`scripts/verify_bundle_boot.sh`（打包→装配→真实引擎 `--resource-root`
+启动→断言 [FirstVN] Ready）——本机 PASS；已作为 Linux CI（xvfb + mesa GL）步骤，
+打包布局启动进入跨平台回归门禁。_
+
 **契约已验证（2026-08-24，桌面端到端）**：用真实引擎以
 `--resource-root <bundle>` 启动打包布局（scripts/assets/demo/first_vn）→
 `[FirstVN] Loading: demo/first_vn/story.ks` + Ready、0 错误（修了 entry.lua 的
