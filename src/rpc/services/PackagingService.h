@@ -1,27 +1,17 @@
 #pragma once
 // PackagingService.h -- build/package domain core service (task book §14).
-// Carries the one-click CARC build (/api/build) and the web packaging flow
-// (/api/package/web) out of the HTTP handlers; handlers stay transport-thin.
 
-#include "../ProjectContext.h"
-
-#include <nlohmann_json.hpp>
+#include "ProjectService.h"
 
 #include <functional>
 #include <memory>
 #include <string>
 
 namespace Caesura {
-namespace carc { class IArchiveWriter; }
-namespace rpc {
-namespace service {
+namespace carc {
+class IArchiveWriter;
+}
 
-struct ServiceResult;  // defined in ProjectService.h; include it instead
-} } }
-
-#include "ProjectService.h"
-
-namespace Caesura {
 namespace rpc {
 namespace service {
 
