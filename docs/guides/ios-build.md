@@ -1,6 +1,6 @@
 # iOS Build 参考（Track I I0 审计结论 / I1 执行路径）
 
-> 状态：**audit-only / 未构建**（2026-08-23）。本机 Windows，无 Mac/Xcode/签名凭据。
+> 状态：**build-verified (CI probe)**（2026-08-24）。机器本机 Windows；iOS 编译由 GitHub Actions macos-latest 探针验证——SDL3 3.2.4 + OpenSSL 3.3.2 的 iOS arm64 切片由探针构建，引擎全模块图（含 bgfx-Metal/SoLoud-CoreAudio/Lua/归档加密）+ carc_pack/lua_cli/CaesuraTests/CaesuraAmeKAG bundle 链接全部通过（commit d5267312..cca6a205 系列，红点链 SDL3→签名→Cocoa→BUNDLE→bundle-id→engine 签名→Lua system()→OpenSSL→切片架构→sysroot 全部闭环）。真机/模拟器（I4）仍待 Mac 硬件。
 > 一切设备结论以 docs/platform/ios-device-validation.md 分层为准。
 
 ## 1. 事实清单（file:line）

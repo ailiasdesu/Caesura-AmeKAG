@@ -16,6 +16,7 @@
 | Orientation | N/A | N/A | N/A | ?(smoke 未测旋转) | ? | ? |
 | Safe Area | N/A | N/A | N/A | N/A(桌面浏览器) | ? | ? |
 | Stress | ● | ◐ | ? | ●(W4) | ? | ? |
+| Build/link (CI) | ● | ● | ● | ● | ⏳ 等 NDK --smoke | ✅ ios-compile 探针全绿 (2026-08-24) |
 
 ## 证据锚（全部本会话实测/门禁）
 
