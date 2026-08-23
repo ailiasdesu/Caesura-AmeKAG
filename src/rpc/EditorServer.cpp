@@ -6,6 +6,7 @@
 #include "ConstantTime.h"
 #include "ProjectContext.h"
 #include "services/ProjectService.h"
+#include "services/PackagingService.h"
 #include "../../external/cpp-httplib/httplib.h"
 #include "../debug/api/DebugLog.h"
 
@@ -377,6 +378,8 @@ void EditorServer::serverLoop(int port) {
     // Core Service layer (task book §14): handlers below are thin transport
     // wrappers; business logic lives in the services.
     rpc::service::ProjectService projects(ctx);
+    rpc::service::PackagingService packaging(
+        ctx, [this] { return m_archiveWriterFactory ? m_archiveWriterFactory() : nullptr; });
 
     // ---------------------------------------------------------------------
     // CORS middleware - allow web editor from any origin
@@ -1151,328 +1154,44 @@ void EditorServer::serverLoop(int port) {
     // ---------------------------------------------------------------------
     // POST /api/build -- one-click CARC packaging (R1.3)
     // ---------------------------------------------------------------------
-    svr.Post("/api/build", [this](const httplib::Request& req, httplib::Response& res) {
+    svr.Post("/api/build", [&packaging](const httplib::Request& req, httplib::Response& res) {
+        Json body = Json::object();
+        try { body = req.body.empty() ? Json::object() : Json::parse(req.body); } catch (const Json::exception&) {
+            res.set_content("{\"error\":\"Request body must be valid JSON\"}", "application/json"); res.status = 400; return;
+        }
+        if (!body.is_object()) { res.set_content("{\"error\":\"Request body must be a JSON object\"}", "application/json"); res.status = 400; return; }
         std::string outputPath = "build/game.carc";
         std::string keyPath = "build/game.key";
-
-        // Parse optional outputPath and keyPath from body. An empty body keeps
-        // the defaults (backward compatible); malformed JSON is a 400. The old
-        // hand-rolled scanner truncated values containing escaped quotes and
-        // mis-matched on literal "outputPath" inside a value.
-        Json body;
-        try {
-            body = req.body.empty() ? Json::object() : Json::parse(req.body);
-        } catch (const Json::exception&) {
-            res.set_content("{\"error\":\"Request body must be valid JSON\"}",
-                            "application/json");
-            res.status = 400;
-            return;
-        }
-        if (!body.is_object()) {
-            res.set_content("{\"error\":\"Request body must be a JSON object\"}",
-                            "application/json");
-            res.status = 400;
-            return;
-        }
-        if (body.contains("outputPath")) {
-            if (!body["outputPath"].is_string()) {
-                res.set_content("{\"error\":\"outputPath must be a string\"}", "application/json");
-                res.status = 400;
-                return;
-            }
+        if (body.contains("outputPath") && body["outputPath"].is_string()) {
             const std::string v = body["outputPath"].get<std::string>();
             if (!v.empty()) outputPath = v;
         }
-        if (body.contains("keyPath")) {
-            if (!body["keyPath"].is_string()) {
-                res.set_content("{\"error\":\"keyPath must be a string\"}", "application/json");
-                res.status = 400;
-                return;
-            }
+        if (body.contains("keyPath") && body["keyPath"].is_string()) {
             const std::string v = body["keyPath"].get<std::string>();
             if (!v.empty()) keyPath = v;
         }
-
-        // Security: confine output paths under build/ -- reject absolute paths
-        // and ".." escapes so a local caller cannot overwrite arbitrary files.
-        auto confineToBuild = [](std::string p) -> std::string {
-            if (p.empty()) return {};
-            for (auto& ch : p) {
-                if (ch == static_cast<char>(92)) ch = '/';  // normalize backslash
-            }
-            if (p.find("..") != std::string::npos) return {};
-            if (p.find(':') != std::string::npos) return {};  // drive / scheme
-            if (p[0] == '/') return {};                        // absolute
-            // Force everything under build/ regardless of what the caller sent.
-            if (p.rfind("build/", 0) != 0) {
-                p = "build/" + p;
-            }
-            return p;
-        };
-        outputPath = confineToBuild(outputPath);
-        keyPath = confineToBuild(keyPath);
-        if (outputPath.empty() || keyPath.empty()) {
-            res.set_content(
-                "{\"error\":\"outputPath/keyPath must be relative paths under build/\"}",
-                "application/json");
-            res.status = 400;
-            return;
-        }
-
-        // Collect files from scripts/ and assets/
-        std::vector<std::pair<std::string, std::string>> files; // relPath, diskPath
-        for (const char* dir : {"scripts", "assets"}) {
-            if (!fs::exists(dir)) continue;
-            try {
-                for (const auto& entry : fs::recursive_directory_iterator(dir)) {
-                    if (!entry.is_regular_file()) continue;
-                    std::string rel = entry.path().string();
-                    // Normalize to forward slashes
-                    for (auto& c : rel) if (c == '\\') c = '/';
-                    files.push_back({rel, entry.path().string()});
-                }
-            } catch (...) {}
-        }
-
-        if (files.empty()) {
-            res.set_content("{\"error\":\"No files to package\"}", "application/json");
-            res.status = 400;
-            return;
-        }
-
-        // Create output directory
-        fs::create_directories("build");
-
-        auto writer = m_archiveWriterFactory ? m_archiveWriterFactory() : nullptr;
-        if (!writer) {
-            res.set_content("{\"error\":\"Archive writer is not configured\"}", "application/json");
-            res.status = 503;
-            return;
-        }
-        if (!writer->create(outputPath, keyPath, keyPath + ".pub")) {
-            res.set_content("{\"error\":\"Failed to create CARC archive\"}", "application/json");
-            res.status = 500;
-            return;
-        }
-
-        for (const auto& [relPath, diskPath] : files) {
-            std::ifstream ifs(diskPath, std::ios::binary);
-            if (!ifs.is_open()) continue;
-            std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)),
-                                       std::istreambuf_iterator<char>());
-            writer->addFile(relPath, data.data(), data.size());
-        }
-
-        if (!writer->finalize()) {
-            res.set_content("{\"error\":\"Failed to finalize CARC archive\"}", "application/json");
-            res.status = 500;
-            return;
-        }
-
-        auto fileSize = fs::file_size(outputPath);
-        res.set_content(dumpJson({
-            {"status", "ok"},
-            {"path", outputPath},
-            {"size", static_cast<unsigned long long>(fileSize)},
-            {"files", files.size()},
-        }), "application/json");
+        const auto r = packaging.build(outputPath, keyPath);
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), "application/json");
     });
-
-    // ---------------------------------------------------------------------
-    // POST /api/package/web -- one-click web-site packaging (Build Manager)
-    //
-    // Wraps scripts/package_game.sh: validates {storyPath, outName}, runs
-    // the script synchronously and returns its log tail. storyPath must be
-    // a repo-relative path under assets/ demo/ tests/projects/ or projects/
-    // (no "..", no absolute/drive paths, conservative charset only);
-    // outName is sanitized to [A-Za-z0-9_-] and the output is confined to
-    // dist/<outName> -- the script itself cds to the repository root before
-    // resolving both. Synchronous blocking is accepted (the editor shows a
-    // running state); failures carry the script's log tail for diagnosis.
-    // ---------------------------------------------------------------------
-    svr.Post("/api/package/web", [&ctx](const httplib::Request& req,
-                                    httplib::Response& res) {
-        Json body;
-        try {
-            body = req.body.empty() ? Json::object() : Json::parse(req.body);
-        } catch (const Json::exception&) {
-            res.set_content("{\"error\":\"Request body must be valid JSON\"}",
-                            "application/json");
-            res.status = 400;
-            return;
+    svr.Post("/api/package/web", [&packaging](const httplib::Request& req, httplib::Response& res) {
+        Json body = Json::object();
+        try { body = req.body.empty() ? Json::object() : Json::parse(req.body); } catch (const Json::exception&) {
+            res.set_content("{\"error\":\"Request body must be valid JSON\"}", "application/json"); res.status = 400; return;
         }
-        if (!body.is_object()) {
-            res.set_content("{\"error\":\"Request body must be a JSON object\"}",
-                            "application/json");
-            res.status = 400;
-            return;
-        }
-
-        // Defaults mirror the editor Build Manager inputs.
+        if (!body.is_object()) { res.set_content("{\"error\":\"Request body must be a JSON object\"}", "application/json"); res.status = 400; return; }
         std::string storyPath = "demo/example_game/story.ks";
         std::string rawOutName;
-        if (body.contains("storyPath")) {
-            if (!body["storyPath"].is_string()) {
-                res.set_content("{\"error\":\"storyPath must be a string\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
-            const std::string value = body["storyPath"].get<std::string>();
-            if (!value.empty()) storyPath = value;
+        if (body.contains("storyPath") && body["storyPath"].is_string()) {
+            const std::string v = body["storyPath"].get<std::string>();
+            if (!v.empty()) storyPath = v;
         }
-        if (body.contains("outName")) {
-            if (!body["outName"].is_string()) {
-                res.set_content("{\"error\":\"outName must be a string\"}",
-                                "application/json");
-                res.status = 400;
-                return;
-            }
+        if (body.contains("outName") && body["outName"].is_string()) {
             rawOutName = body["outName"].get<std::string>();
         }
-
-        auto reject = [&res](const std::string& message) {
-            res.set_content(dumpJson({{"error", message}}),
-                            "application/json");
-            res.status = 400;
-        };
-
-        for (auto& ch : storyPath) {
-            if (ch == static_cast<char>(92)) ch = '/';  // normalize backslash
-        }
-        if (storyPath.find("..") != std::string::npos) {
-            reject("storyPath must not contain '..'");
-            return;
-        }
-        if (storyPath.find(':') != std::string::npos) {
-            reject("storyPath must be a relative repository path (no drive/scheme)");
-            return;
-        }
-        if (!storyPath.empty() && storyPath.front() == '/') {
-            reject("storyPath must be a relative repository path");
-            return;
-        }
-        for (unsigned char ch : storyPath) {
-            const bool safe = std::isalnum(ch) || ch == '/' || ch == '_' ||
-                              ch == '-' || ch == '.' || ch == ' ';
-            if (!safe) {
-                reject("storyPath contains unsupported characters");
-                return;
-            }
-        }
-        if (!isStoryPathAllowed(storyPath)) {
-            reject("storyPath must live under assets/, demo/, "
-                   "tests/projects/ or projects/");
-            return;
-        }
-
-        std::string outName = "example_game";
-        if (!rawOutName.empty() && !sanitizeWebOutName(rawOutName, outName)) {
-            reject("outName contains no usable characters ([A-Za-z0-9_-])");
-            return;
-        }
-        const std::string outDir = "dist/" + outName;
-
-        // Locate the packaging script relative to the engine CWD: the smoke
-        // test (and installed layouts) run from build/Debug, so walk up to
-        // the repository root. A repo-relative invocation keeps the spawned
-        // command pure ASCII even when the repository path itself is not.
-        // Unified root resolution (task book §7): no ad-hoc upward walks.
-        fs::path scriptPath = ctx.sourceRoot() / "scripts" / "package_game.sh";
-        if (!fs::exists(scriptPath)) scriptPath.clear();
-        if (scriptPath.empty()) {
-            res.set_content(dumpJson({
-                {"ok", false},
-                {"error",
-                 "scripts/package_game.sh not found (engine must run inside "
-                 "the repository)"},
-            }), "application/json");
-            res.status = 503;
-            return;
-        }
-
-        // Existence is checked against the repository root (the script's
-        // own working directory after its internal cd), not the engine CWD.
-        std::string scriptArg;
-        try {
-            const fs::path repoRoot = scriptPath.parent_path().parent_path();
-            if (!fs::exists(repoRoot / fs::path(storyPath))) {
-                reject("storyPath not found: " + storyPath);
-                return;
-            }
-            scriptArg = fs::relative(scriptPath, ctx.buildRoot())
-                            .generic_string();
-        } catch (...) {
-            scriptArg.clear();
-        }
-        if (scriptArg.empty()) {
-            res.set_content(dumpJson({
-                {"ok", false},
-                {"error",
-                 "failed to resolve scripts/package_game.sh relative to the "
-                 "engine working directory"},
-            }), "application/json");
-            res.status = 503;
-            return;
-        }
-        for (auto& ch : scriptArg) {
-            if (ch == static_cast<char>(92)) ch = '/';
-        }
-
-        // Run the script synchronously; merge stderr into stdout so the log
-        // tail explains failures. Retained log is capped while the pipe
-        // keeps draining (a stalled pipe would hang pclose forever). Note
-        // the script's argv parser breaks on the first positional, so
-        // --out must precede the story path.
-        const std::string command = "bash \"" + scriptArg + "\" --out \"" +
-                                    outDir + "\" \"" + storyPath +
-                                    "\" 2>&1";
-        std::string output;
-#if defined(_WIN32)
-        FILE* pipe = _popen(command.c_str(), "r");
-#else
-        FILE* pipe = ::popen(command.c_str(), "r");
-#endif
-        if (!pipe) {
-            res.set_content(dumpJson({
-                {"ok", false},
-                {"error", "failed to spawn bash (is git bash on PATH?)"},
-                {"outputDir", outDir},
-            }), "application/json");
-            res.status = 500;
-            return;
-        }
-        constexpr size_t kMaxLogBytes = 1u << 20;  // 1 MiB of retained log
-        char buffer[4096];
-        size_t chunk = 0;
-        while ((chunk = fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
-            if (output.size() < kMaxLogBytes) output.append(buffer, chunk);
-        }
-#if defined(_WIN32)
-        const int exitCode = _pclose(pipe);
-#else
-        const int exitCode = ::pclose(pipe);
-#endif
-        const std::string tail = logTailOf(output);
-
-        if (exitCode != 0) {
-            res.set_content(dumpJson({
-                {"status", "error"},
-                {"ok", false},
-                {"error", "package_game.sh failed with exit code " +
-                              std::to_string(exitCode)},
-                {"outputDir", outDir},
-                {"logTail", tail},
-            }), "application/json");
-            res.status = 500;
-            return;
-        }
-        res.set_content(dumpJson({
-            {"status", "ok"},
-            {"ok", true},
-            {"outputDir", outDir},
-            {"logTail", tail},
-        }), "application/json");
+        const auto r = packaging.packageWeb(storyPath, rawOutName);
+        res.status = r.status;
+        res.set_content(r.body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), "application/json");
     });
 
     // ---------------------------------------------------------------------
