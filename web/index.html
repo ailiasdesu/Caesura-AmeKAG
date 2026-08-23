@@ -5,8 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Caesura Web Player — G5 MVP</title>
   <style>
-    html, body { margin: 0; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
-    #stage { position: relative; width: 1280px; height: 720px; margin: 12px auto; background: #000; overflow: hidden; }
+    /* W3: ship the CJK font with the player. @font-face + a real family means
+       the packaged NotoSansCJKsc is used for stage text (font load verified by
+       document.fonts.check in the browser smoke); the stack falls back to
+       system CJK fonts (-apple-system / Segoe UI / PingFang / Noto Sans CJK)
+       when the asset is absent or another script is missing. */
+    @font-face {
+      font-family: 'CaesuraNoto';
+      src: url('assets/fonts/NotoSansCJKsc-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    html, body { margin: 0; background: #111; color: #ddd; font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
+    #stage { position: relative; width: 1280px; height: 720px; margin: 12px auto; background: #000; overflow: hidden;
+      font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
+    .caesura-message { font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
     .caesura-layer { position: absolute; }
     .caesura-layer img { width: 100%; height: 100%; object-fit: contain; }
     .caesura-message { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 24px;

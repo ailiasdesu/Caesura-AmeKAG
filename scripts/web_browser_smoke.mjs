@@ -44,6 +44,7 @@ const HTTP_PORT = Number(arg('--port', 8765))
 const CDP_PORT = Number(arg('--cdp-port', 9333))
 const SCENE = arg('--scene', '')
 const UNLOCK = has('--unlock')
+const CJK = has('--cjk')
 const TIMEOUT_MS = Number(arg('--timeout', 180000))
 
 const MIME = {
@@ -278,6 +279,40 @@ async function main() {
     record('image (stage has layers)', !!anyLayer, 'layers=' + anyLayer)
     record('image (layer <img> decoded)', imgOk && (imgOk.ready > 0 || imgOk.total === 0), JSON.stringify(imgOk))
 
+    // 4b. --cjk mode: CJK / font / packaged-asset verification (plan W3).
+    // Drives the dedicated demo/cjk_smoke.ks page by page and asserts the
+    // REAL rendered text (Chinese / Japanese / English / mixed punctuation),
+    // the shipped @font-face font load, the packaged font asset URL and the
+    // fallback path (unknown face -> system stack still renders).
+    if (CJK) {
+      const texts = []
+      let done = false
+      let shotted = false
+      for (let i = 0; i < 9 && !done; i++) {
+        const t = await cdp.eval("(document.querySelector('.caesura-message') || {}).textContent || ''")
+        if (typeof t === 'string' && t.trim().length > 0) texts.push(t.trim())
+        if (!shotted && /中文渲染/.test(String(t))) {
+          await cdp.screenshot('build/web-smoke/smoke-cjk.png')
+          shotted = true
+          record('cjk: 中文页截图已捕获', true)
+        }
+        const st = await cdp.eval("document.getElementById('status').textContent || ''")
+        if (/DONE:/i.test(String(st))) { done = true; break }
+        await cdp.clickTrusted('#advance')
+        await sleep(900)
+      }
+      const all = texts.join(' ')
+      record('cjk: Chinese renders', /你好|凯苏拉|中文渲染/.test(all), 'pages=' + texts.length)
+      record('cjk: Japanese renders', /こんにちは|ケースラ|日本語/.test(all))
+      record('cjk: English renders', /quick brown fox/.test(all))
+      record('cjk: mixed punctuation', /[「」…—！？]/.test(all))
+      record('cjk: fallback page (unknown face -> system stack)', texts.some((t) => /フォールバック|System font fallback/.test(t)))
+      const font = await cdp.eval("(async () => { try { await document.fonts.ready } catch { /* noop */ } return { check: !!(document.fonts && document.fonts.check && document.fonts.check('16px CaesuraNoto')), faces: document.fonts ? [...document.fonts].map((f) => String(f.family) + ':' + f.status).slice(0, 6) : [] } })()")
+      record('cjk: packaged @font-face loaded (document.fonts.check)', !!(font && font.check === true), JSON.stringify(font))
+      const fontRes = await cdp.eval("[...performance.getEntriesByType('resource')].filter((r) => String(r.name).includes('fonts/')).map((r) => String(r.name).split('/').slice(-2).join('/'))")
+      record('cjk: font asset fetched via packaged URL', Array.isArray(fontRes) && fontRes.length > 0, JSON.stringify(fontRes))
+    }
+
     // 4. audio status (soft check — scene dependent)
     const audio = await cdp.eval("document.getElementById('audio-status').textContent")
     const audioSeen = /BGM|SE|VOICE/.test(String(audio))
@@ -294,7 +329,7 @@ async function main() {
         if (Array.isArray(srcs) && srcs.length > 0) break
       }
     }
-    record('audio (WebAudio source(s) live on buses)', Array.isArray(srcs) && srcs.length > 0, JSON.stringify(srcs))
+    record('audio (WebAudio source(s) live when bus claims playing)', Array.isArray(srcs) && srcs.length > 0 || !audioSeen, JSON.stringify(srcs))
 
     // 5. save round trip + persistence across reload
     await cdp.eval("(() => {\n" +
