@@ -33,6 +33,15 @@ else()
     target_compile_options(lua PRIVATE -w)
 endif()
 
+# iOS (Track I): the luaconf LUA_USE_IOS guard stubs l_system() — iOS
+# provides no system() implementation (loslib.c:133-138).
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_compile_definitions(lua PRIVATE LUA_USE_IOS)
+    if(TARGET lua_cli)
+        target_compile_definitions(lua_cli PRIVATE LUA_USE_IOS)
+    endif()
+endif()
+
 # Round 70: standalone interpreter for the script test suites. The engine
 # links the static lib; the test tooling (run_lua_tests.lua, ks_check.lua,
 # api_stats census) needs a runnable lua — previously only a gitignored
