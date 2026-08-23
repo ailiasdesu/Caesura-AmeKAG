@@ -82,8 +82,8 @@ node scripts/web_browser_smoke.mjs --root dist/first_vn --scene story.ks
 
 ## 8. 本阶段剩余阻塞项（P0，按计划顺序）
 
-- [x] **W1 Web Audio 生命周期** —— 完成（unlock 幂等 + 初始 suspended→running + 后台恢复 + 销毁安全；Chrome+Edge packaged 实跑；311 测试绿）
-- [ ] **W2 Web Storage/Save** —— 复用现有 localStorage KV；补 quota 失败可观测性与「重建实例读旧存储」回归（浏览器级已验：跨 reload 持久；quota/大载荷未验）
+- [x] **W1 Web Audio 生命周期** —— 完成（unlock 幂等 + 初始 suspended→running + 后台恢复 + 销毁安全；Chrome+Edge packaged 实跑；318 测试绿）
+- [x] **W2 Web Storage/Save** —— 复用现有 localStorage KV 桥（caesura.save.<slot> 0..99）：新增槽位校验（save_game/_load_raw/saveCurrent/deleteSlot 整数 0..99，非法诚实拒绝）、storageStats()（槽数+字节）、saveCurrent 以 ctx.tf.save_result=='ok' 判成败（原判定把引擎 SaveCommands.save 隐式 nil 当成功，quota 失败误报）、UI 失败可见（#saves-storage 红字 + quato 提示）、web/save-persistence.test.js（真 localStorage + 双实例模拟 reload 持久 + overwrite/invalid/empty/corrupt/quota），真实浏览器跨 reload 持久已由 smoke 验证；IndexedDB 大载荷仍为已记录限制（缩略图恒 null，暂无需）
 - [ ] **W3 Web CJK/Font/Asset smoke 场景** —— 现有 first_vn/example_game 已含中文+日文+英文文本且渲染通过；建独立 smoke 场景 + font fallback/缓存项
 - [ ] **W4 Web Stress/Memory** —— web_stress_vn（100+ 图集/多音频/CJK 字体/连续切场景/反复加载）+ 实际测量记录
 - [ ] **W5 Tab Suspend/Resume** —— 后台恢复/计时器跳变/输入不丢失/存档不损坏
