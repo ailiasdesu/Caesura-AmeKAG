@@ -113,6 +113,10 @@ const $ = (id) => document.getElementById(id)
 const statusText = () => ($('status') ? $('status').textContent : '')
 
 beforeAll(async () => {
+  // Pin the auto-started scene to the audio tutorial: the W1 contract needs
+  // a scene that deterministically issues [playbgm]/[playse]/[playvoice] at
+  // boot (the bundle's scene ordering is not part of the contract).
+  try { window.history.replaceState(null, '', '?scene=tutorial/tutorial_04_audio.ks') } catch { /* jsdom fallback */ }
   globalThis.__CAESURA_WASM_FILE__ = wasmFile
   globalThis.AudioContext = function () { activeCtx = makeFakeAudioContext(); return activeCtx }
   setupDom()
@@ -125,8 +129,11 @@ beforeAll(async () => {
 }, 200000)
 
 describe('W1 WebAudio autoplay lifecycle (real main.mjs)', () => {
-  it('the auto-started scene left the context suspended (no gesture yet)', () => {
+  it('the auto-started scene left the context suspended (no gesture yet)', async () => {
     expect(window.__caesuraAudio).toBeTruthy()
+    // [playbgm] creates the context asynchronously after the scene starts;
+    // wait for it, then assert it is still 'suspended' (no gesture yet).
+    await waitFor(() => window.__caesuraAudio.state !== 'none', 'audio ctx created', 20000)
     expect(window.__caesuraAudio.state).toBe('suspended')
     expect(fakeAudio.resumeCalls).toBe(0)
   })

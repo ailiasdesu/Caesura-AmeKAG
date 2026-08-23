@@ -203,6 +203,13 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     // tf.save_result = "ok"), falsy on failure ("error").
     save_game: (slot, state, sceneName, tokenIdx, thumbnail) => {
       try {
+        // Slot contract: integer 0..99 (engine SaveManager manual range);
+        // anything else is an invalid slot -> honest error result.
+        const sv = Number(slot)
+        if (!Number.isInteger(sv) || sv < 0 || sv > 99) {
+          core._log('save.error', { slot: Number(slot), error: 'invalid slot' })
+          return null
+        }
         // Normalize the scene path inside the captured state into the
         // engine's allowlisted form (SaveCommands.load validates
         // state.scene_path with _safeScenePath — bare web basenames
@@ -235,6 +242,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     // stored state as a Lua literal string (the wrapper parses it with
     // load('return ' .. s) into a real table).
     _load_raw: (slot) => {
+      const sv = Number(slot)
+      if (!Number.isInteger(sv) || sv < 0 || sv > 99) return null
       const raw = storage.get(saveKey(slot))
       core._log('save.read', { slot: Number(slot), found: raw != null })
       if (raw == null) return null
@@ -1176,9 +1185,27 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
       return out
     },
 
+    /** Storage pressure summary for the UI: { slots, bytesUsed }.
+     *  Scans the manual slot range (0..99) like listSlots, summing the
+     *  stored payload bytes so the player can warn before quota limits
+     *  (W2: quota failure must be observable, not silent). */
+    storageStats() {
+      let slots = 0
+      let bytesUsed = 0
+      for (let sl = 0; sl < 100; sl++) {
+        const raw = storage.get(saveKey(sl))
+        if (raw == null) continue
+        slots++
+        bytesUsed += String(raw).length
+      }
+      return { slots, bytesUsed }
+    },
+
     /** Delete a saved slot. Returns true when it existed. */
     deleteSlot(slot) {
-      const key = saveKey(slot)
+      const sv = Number(slot)
+      if (!Number.isInteger(sv) || sv < 0 || sv > 99) return false
+      const key = saveKey(sv)
       const existed = storage.get(key) != null
       storage.del(key)
       core._log('save.delete', { slot: Number(slot), existed })
@@ -1189,16 +1216,26 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
      *  Drives the engine's own SaveCommands.save so f/sf/unlocks/backlog
      *  all persist exactly as [save slot=N] would in a running scene. */
     async saveCurrent(slot) {
+      const sv = Number(slot)
+      if (!Number.isInteger(sv) || sv < 0 || sv > 99) return false
       const ctx = lua.global.get('__LAST_CTX')
       if (!ctx) return false
-      const ok = await lua.doString([
-        "local Save = require('kag.commands.save')",
-        "local c = _G.__LAST_CTX",
-        "if type(c) ~= 'table' then return false end",
-        'local r = Save.save(c, { slot = ' + Number(slot) + ' })',
-        "return r == nil or r == true",
-      ].join(String.fromCharCode(10)))
-      return !!ok
+      try {
+        const ok = await lua.doString([
+          "local Save = require('kag.commands.save')",
+          "local c = _G.__LAST_CTX",
+          "if type(c) ~= 'table' then return false end",
+          'Save.save(c, { slot = ' + sv + ' })',
+          // Success/failure is reported via ctx.tf.save_result ('ok'/'error').
+          "return not not (c.tf and c.tf.save_result == 'ok')",
+        ].join(String.fromCharCode(10)))
+        return !!ok
+      } catch (e) {
+        // Lua-side failure must degrade to an honest false, never throw into
+        // the UI (W2: quota/error observability at the call surface).
+        core._log('save.error', { slot: sv, error: String(e) })
+        return false
+      }
     },
 
     /** Load a slot into a fresh scene run; the run loop resumes the saved

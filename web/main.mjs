@@ -350,6 +350,15 @@ const fmtTime = (ts) => (ts ? new Date(ts).toLocaleTimeString() : '—')
 async function renderSlots() {
   const slots = player.listSlots()
   savesCount.textContent = String(slots.length)
+  // W2: surface storage pressure (guarded span; absent in headless fixtures)
+  const statEl = document.getElementById('saves-storage')
+  if (statEl) {
+    try {
+      const st = player.storageStats()
+      const kb = (st.bytesUsed / 1024).toFixed(1)
+      statEl.textContent = st.slots > 0 ? String(st.slots + ' slot(s) · ' + kb + ' KB') : ''
+    } catch { /* stats unavailable: leave blank */ }
+  }
   savesEl.textContent = ''
   if (slots.length === 0) {
     const row = document.createElement('div')
@@ -397,7 +406,15 @@ document.getElementById('save-now').addEventListener('click', async () => {
   const slot = Number(document.getElementById('save-slot').value)
   if (!Number.isInteger(slot) || slot < 0 || slot > 99) { log('slot must be 0..99'); return }
   const ok = await player.saveCurrent(slot)
-  log(ok ? 'saved current position to slot ' + slot : 'save failed (no scene run yet)')
+  const statEl = document.getElementById('saves-storage')
+  if (ok && statEl) statEl.style.color = ''
+  if (!ok) {
+    // W2: quota / backend failure must be observable, not a silent no-op
+    log('save FAILED (storage full or backend error) — not written to slot ' + slot)
+    if (statEl) { statEl.textContent = '⚠ save failed — storage full?'; statEl.style.color = '#f66' }
+  } else {
+    log('saved current position to slot ' + slot)
+  }
   renderSlots()
 })
 document.getElementById('refresh-slots').addEventListener('click', () => renderSlots())
