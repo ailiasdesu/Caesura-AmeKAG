@@ -1,0 +1,52 @@
+; =============================================================================
+; W4 — web_stress_vn: large-asset / memory stress scene (Track W).
+; Cycles 12 pages over a 120-image pool with two large WAV bgm assets;
+; drives continuous texture/memory load+release in the web player. Loops
+; via [jump *start] until the driver stops advancing (smoke --stress runs
+; a fixed number of cycles). Measured numbers in docs/status/web-release-
+; status.md (W4).
+; =============================================================================
+[font face="CaesuraNoto" size=22]
+*start
+[bg storage="assets/stress/bg/bg001.png"]
+[playbgm storage="assets/stress/bgm/tone440.wav" volume=0.4]
+[ch name="Stress" text="Stress 01/12 — 中文圧力テスト ページ"]
+[p]
+[bg storage="assets/stress/bg/bg002.png"]
+[ch name="Stress" text="Stress 02/12 — English pressure page"]
+[p]
+[bg storage="assets/stress/bg/bg003.png"]
+[ch name="Stress" text="Stress 03/12 — 日本語圧力 ページ"]
+[p]
+[stopbgm]
+[playbgm storage="assets/stress/bgm/tone550.wav" volume=0.4]
+[bg storage="assets/stress/bg/bg004.png"]
+[ch name="Stress" text="Stress 04/12 — mixed 標点…「」— page"]
+[p]
+[bg storage="assets/stress/bg/bg005.png"]
+[ch name="Stress" text="Stress 05/12 — pressure page with sprite-less bg"]
+[p]
+[bg storage="assets/stress/bg/bg006.png"]
+[ch name="Stress" text="Stress 06/12 — Язык pressure page"]
+[p]
+[bg storage="assets/stress/bg/bg007.png"]
+[ch name="Stress" text="Stress 07/12 — 中文第八页も圧力"]
+[p]
+[bg storage="assets/stress/bg/bg008.png"]
+[ch name="Stress" text="Stress 08/12 — English page 8/12"]
+[p]
+[bg storage="assets/stress/bg/bg009.png"]
+[ch name="Stress" text="Stress 09/12 — 日本語.page"]
+[p]
+[bg storage="assets/stress/bg/bg010.png"]
+[ch name="Stress" text="Stress 10/12 — mixed rendering 圧力!?」"]
+[p]
+[bg storage="assets/stress/bg/bg011.png"]
+[ch name="Stress" text="Stress 11/12 — almost there, がんばれ"]
+[p]
+[stopbgm]
+[playbgm storage="assets/stress/bgm/tone440.wav" volume=0.4]
+[bg storage="assets/stress/bg/bg012.png"]
+[ch name="Stress" text="Stress 12/12 — 最終ページ，cycle complete!"]
+[p]
+[jump *start]
