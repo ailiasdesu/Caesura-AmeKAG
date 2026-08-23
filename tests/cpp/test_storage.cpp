@@ -11,6 +11,7 @@
 #include "storage/api/ISaveManager.h"
 #include "storage/api/ISaveProvider.h"
 #include "storage/SaveManager.h"
+#include "storage/LocalFileSaveProvider.h"
 #include "archive/CryptoEngine.h"
 #include "di/BackendRegistry.h"
 #include "TestPaths.h"
@@ -1576,4 +1577,31 @@ TEST_CASE("Storage: 50-slot save/load pressure loop stays correct") {
         CHECK(saves[static_cast<size_t>(s)].slot == s);
         CHECK(saves[static_cast<size_t>(s)].tokenIndex == s + 1000);
     }
+}
+
+TEST_CASE("Storage: LocalFileSaveProvider end-to-end through SaveManager (Track P4)") {
+    TestPaths::ScopedTempDir dir("storage_localfile_default");
+    SaveManager sm;
+    sm.init(dir.string());
+    sm.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+
+    // Save / load round trip on real files (atomic-ish tmp+rename path).
+    CHECK(sm.save(1, {{"hero", "sakura"}, {"level", 10}}, "demo/w2.ks", 7));
+    SaveMeta meta;
+    json data = sm.load(1, &meta);
+    CHECK(data["hero"] == "sakura");
+    CHECK(data["level"] == 10);
+    CHECK(meta.sceneName == "demo/w2.ks");
+
+    // Slot listing / existence / delete.
+    CHECK(sm.slotExists(1));
+    CHECK(sm.listSaves().size() == 1);
+    CHECK(sm.deleteSlot(1));
+    CHECK_FALSE(sm.slotExists(1));
+    CHECK(sm.listSaves().empty());
+
+    // Overwrite: same slot under a NEW payload stays a single entry.
+    CHECK(sm.save(1, {{"hero", "mio"}}, "demo/w2.ks", 8));
+    CHECK(sm.listSaves().size() == 1);
+    CHECK(sm.load(1)["hero"] == "mio");
 }

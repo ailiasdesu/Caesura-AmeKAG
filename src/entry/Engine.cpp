@@ -35,6 +35,7 @@ extern "C" {
 #include "../script/bindings/SteamBinding.h"
 #include "../script/bindings/VFXBinding.h"
 #include "../storage/api/ISaveManager.h"
+#include "../storage/LocalFileSaveProvider.h"
 #include "../archive/api/ICryptoEngine.h"
 #include <SDL3/SDL.h>
 #include <thread>
@@ -213,6 +214,12 @@ bool Engine::init() {
     if (!m_asyncLoader) m_asyncLoader = createAsyncLoader(m_assetManager.get());
     if (!m_jobSystem) m_jobSystem = createJobSystem();
     if (!m_saveManager) m_saveManager = createSaveManager();
+    // Track P4: install the desktop default provider from the composition
+    // root (SaveManager itself stays platform-agnostic — Android/iOS swap
+    // this line for their AppStorage provider later).
+    if (!m_saveManager->getSaveProvider()) {
+        m_saveManager->setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    }
     if (!m_cryptoEngine) m_cryptoEngine = createCryptoEngine();
 
     detail::g_mainThreadId = std::this_thread::get_id();
