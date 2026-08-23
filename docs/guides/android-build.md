@@ -165,15 +165,22 @@ cmake --build build-android-arm64 --target CaesuraAudio --config Release --paral
 > `--target` 指定模块/组合目标可在不产可执行、不产 APK 的前提下验证 Android 交叉
 > 编译可行性——这正是本机"仅编译不链接完整 APK"的冒烟目标。
 
-### 3.4 打包 APK（暂缺，待设备）
+### 3.4 打包 APK（CI 装配已验；安装/运行待设备）
 
-本仓库**不含 JNI/Activity 壳**（同 `mobile-pipeline.md`）。APK 组装需外部 app module：
-SDL3 的 `SDLActivity` 继承 + 引擎 .so 放 `jniLibs/<abi>/` + gradle 打包。此步骤无设备
-无法验证，标注为"待设备"。
+> 2026-08-24 更新：A2 宿主模块已随仓库落地（`android/` gradle 工程），
+> CI `android-compile` 探针已内建「原生装配 + `gradle assembleDebug`」并全绿
+> ——产出 **编译级 APK**（compile-verified）。**安装/启动/交互仍为 device-unverified**。
 
----
+```bash
+# 装配/构建（与探针同款）：
+#  1) 交叉编译原生库（NDK + SDL3_DIR + OPENSSL_ROOT_DIR）→ build-android-*/libCaesuraAmeKAG.so
+#  2) 拷入 app/src/main/jniLibs/arm64-v8a/（连同 SDL3 的 libSDL3.so）
+#  3) gradle -p android assembleDebug   → android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-## 4. 关键模块在 Android 下的分析
+**未完成（A2/A3 剩余）**：APK 内资产供给（引擎按 CWD 找 `assets/`，R6 需 SDL3
+AssetManager 或 CARC；iOS 同根因，建议 I3 合并一次做）；真机启动链路验证
+（JNI_OnLoad→SDL_main→SDL_Init 的完整 glue；本圈只验了编译与链接）。## 4. 关键模块在 Android 下的分析
 
 ### 4.1 bgfx 渲染后端（GLES）
 
