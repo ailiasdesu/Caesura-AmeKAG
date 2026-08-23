@@ -377,7 +377,8 @@ jobs:
       - name: Build module graph
         shell: bash
         run: |
-          cmake --build build-ios --config Release --parallel 3
+          cmake --build build-ios --config Release --parallel 3 \
+            -- CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Toolchain state summary
         if: always()
