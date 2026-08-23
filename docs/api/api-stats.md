@@ -9,8 +9,8 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 33 |
-| Pure-virtual interface methods | 398 |
+| API interface headers (src/*/api/I*.h) | 34 |
+| Pure-virtual interface methods | 403 |
 | Lua binding functions (luaL_Reg entries) | 155 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 123 |
@@ -26,6 +26,7 @@
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
 | audio | IAudioBackend.h | 31 |
+| audio | IAudioFocusService.h | 5 |
 | debug | IDebugManager.h | 26 |
 | di | IDeviceLostListener.h | 2 |
 | di | ISandboxQuota.h | 5 |

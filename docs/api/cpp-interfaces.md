@@ -1,9 +1,12 @@
 # Caesura (AmeKAG) — C++ API Interface Reference
 
-> **33 个纯虚接口，16 个模块；24 个运行时引擎服务通过 `BackendRegistry` 访问**
+> **34 个纯虚接口，16 个模块；25 个运行时引擎服务通过 `BackendRegistry` 访问**
 > 最后更新: 2026-08-23
 >
-> **更新记录**: 2026-08-23 — STEP11 (Track P2 Lifecycle Service): interface census 32 -> 33 (+`ILifecycleService`)，Registry 服务槽位 23 -> 24
+> **更新记录**: 2026-08-23 — STEP14 (Track P5 Audio Focus Service): interface census 33 -> 34 (+`IAudioFocusService`)，Registry 服务槽位 24 -> 25
+> 2026-08-23 — STEP13 (Track P4 组合根默认存档 provider): 无新增接口头（census 保持 33；`Engine::init` 缺省安装 `LocalFileSaveProvider`，修复未装 provider 时存档静默失效）
+> 2026-08-23 — STEP12 (Track P3 统一指针输入路径): `IInputRouter` 扩展 `submitPointer` + `PointerAction`/`PointerEvent` 类型（无新增接口头，census 保持 33）
+> 2026-08-23 — STEP11 (Track P2 Lifecycle Service): interface census 32 -> 33 (+`ILifecycleService`)，Registry 服务槽位 23 -> 24
 > 2026-08-23 — STEP10 (Track P1 Display Service): interface census 31 -> 32 (+`IDisplayService`)，Registry 服务槽位 22 -> 23
 > 2026-08-15 — round-75 docs sync: interface census 30 -> 31
 
@@ -157,6 +160,7 @@ public:
 
 **实现**: SoLoudAudioEngine
 **用途**: BGM / Voice / SE 三总线音频播放，支持 3D 空间音效。
+**注册**: `BackendRegistry::instance().setAudioBackend()`；音频焦点中枢另经 `setAudioFocusService()` 注册（见下）。
 
 ### IAudioBackend
 
@@ -193,6 +197,61 @@ public:
 | `getLength` | `bus` | `float` | 总线当前曲目总长度（秒） |
 | `fadeVolume` | `bus`, `targetVolume`, `fadeTime` | — | 平滑过渡到目标音量 |
 | `getBackendName` | — | `const char*` | 后端名称 |
+
+### IAudioFocusService
+
+**接口文件**: `src/audio/api/IAudioFocusService.h`（`AudioFocusEvent` / `AudioFocusState` 枚举与监听器接口被方法按值传递，依 AGENTS.md §2 定义在接口头文件内）
+
+OS 音频焦点/瞬态中断仲裁的平台无关最小馈送端（Track P5）。桌面/Web 没有 OS 仲裁——服务保持空闲等待；Android/iOS 的原生音频中断回调把事件 post 进来（焦点丢失/中断开始 → 避让或暂停；焦点恢复/中断结束 → 继续）。
+
+#### 事件与状态
+
+```cpp
+enum class AudioFocusEvent : uint8_t {
+    FocusGained = 0,        // 应用重新取得独占焦点（正常播放）
+    FocusLost = 1,          // OS 收回/移除音频焦点（持久）
+    InterruptionBegin = 2,  // 瞬态中断开始（来电、Siri、闹钟…）
+    InterruptionEnd = 3,    // 瞬态中断结束
+};
+
+enum class AudioFocusState : uint8_t { Normal, Lost, Interrupted };
+
+class IAudioFocusListener {
+public:
+    virtual void onAudioFocusEvent(AudioFocusEvent event) = 0;
+};
+```
+
+| 状态 | 进入条件 |
+|------|----------|
+| `Normal` | 初始状态；`FocusGained`；或处于 `Interrupted` 时收到 `InterruptionEnd` |
+| `Lost` | `FocusLost` |
+| `Interrupted` | `InterruptionBegin` |
+
+#### 服务方法
+
+| 方法 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `addListener` | `IAudioFocusListener*` | — | 注册监听器（重复注册被忽略） |
+| `removeListener` | `IAudioFocusListener*` | — | 注销监听器（null 安全） |
+| `post` | `AudioFocusEvent` | — | 投递事件：先状态机迁移，再在投递线程按注册顺序同步派发监听器快照副本（与 `LifecycleService` 同契约） |
+| `currentState` | — | `AudioFocusState` | 查询当前焦点状态 |
+
+#### AudioFocusService 状态机语义
+
+默认实现是 audio 模块的 header-only 中枢（`src/audio/AudioFocusService.h`），自身从不触碰音频设备——暂停什么由消费方决定：
+
+- `FocusLost → Lost`、`FocusGained → Normal`、`InterruptionBegin → Interrupted`
+- `InterruptionEnd` 仅当当前处于 `Interrupted` 时才回到 `Normal`（从未开始的中断结束是 no-op，防止误恢复）
+- 所有方法线程安全（mutex 保护）；`post` 在锁外派发快照，监听器可在回调中安全 `removeListener`
+
+#### Engine 接线（组合根）
+
+`Engine::initPlatformPhase()` 创建并持有 `unique_ptr<AudioFocusService>`，先 `addListener(this)` 再 `setAudioFocusService()` 注册到 BackendRegistry。Engine 同时实现 `IAudioFocusListener`：`FocusLost` / `InterruptionBegin` → `IAudioBackend::suspend()`，`FocusGained` / `InterruptionEnd` → `resume()`（SoLoud suspend 幂等，可与生命周期后台挂起叠加而不冲突）；游戏/图层也可自行 `addListener`（例如中断时暂停玩法逻辑）。`shutdown()` 先 `removeListener(this)` 再 teardown，防止销毁期事件打到将析构的后端。
+
+#### 移动端入口
+
+桌面/Web 无 OS 音频仲裁，该 hub 就是 Android JNI（Android 音频焦点）与 iOS audio-session 中断通知的文档化接入点：原生层收到系统中断回调后调用 `post(...)` 即可，Engine 的挂起/恢复响应自动生效。原生回调接线尚未完成，属 Track M/I 范围。
 
 ---
 
@@ -306,11 +365,30 @@ include 具体实现头文件并创建后端对象的位置）。
 ```cpp
 enum class InputFocus { KAG, GAME };
 using GameInputCallback = std::function<void(const SDL_Event&)>;
+
+// 统一指针输入（Track P3）：平台无关指针抽象，原生触摸源无需暴露 SDL_Event
+enum class PointerAction : uint8_t {
+    Down,       // 首次触点
+    Move,       // 触点移动
+    Up,         // 触点释放
+    LongPress,  // 按压超过典型阈值（约 500ms）
+    Pinch,      // 双指缩放增量（scale 为累积值）
+};
+
+struct PointerEvent {
+    PointerAction action = PointerAction::Move;
+    float x = 0.0f;             // 窗口逻辑像素
+    float y = 0.0f;
+    float scale = 1.0f;         // pinch 累积缩放（1 = 基线）
+    int32_t pointerId = 0;      // 多点触控手指 id
+    size_t activePointers = 1;  // 并发触点数
+};
 ```
 
 | 方法 | 说明 |
 |------|------|
 | `processEvent(event)` | 处理 SDL 事件，路由到当前焦点的回调 |
+| `submitPointer(event)` | 统一指针输入路径（Track P3）：与 `processEvent` 共享同一分发（KAG/GAME 互斥与防幻点击保证由构造共享）。`Down`/`Move`/`Up` → 鼠标左键等价语义；`LongPress` → 右键按下+抬起对（与 MobileAdapter 长按对等）；`Pinch` → 由累积 `scale` 换算滚轮增量（焦点切换时基线复位） |
 | `setFocus(focus)` | 切换输入焦点（KAG ↔ GAME） |
 | `getFocus` | 返回当前焦点 |
 | `registerGameCallback(cb)` | 注册 GAME 模式的输入回调 |
@@ -932,6 +1010,7 @@ class BackendRegistry {
     IMobileAdapter*      getMobileAdapter();
     IDisplayService*     getDisplayService();
     ILifecycleService*   getLifecycleService();
+    IAudioFocusService*  getAudioFocusService();
     IMeshRenderer*       getMeshRenderer();
 };
 ```

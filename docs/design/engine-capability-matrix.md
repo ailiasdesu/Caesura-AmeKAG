@@ -185,26 +185,27 @@ graph LR
 | D9 | LSP navigation (goto-definition / find-all-references for `*label` ↔ `[jump]`/`[call]`/`[link]`; cross-scene targets return name-only) | `kag/lsp.lua` (definition/references) + Monaco providers | ✓ (12 Lua assertions; Ctrl+Click + context menu in IDE) |
 | D10 | Skeletal mesh animation (SMA S1–S5: CPU soft-skinning math + **GPU compute skinning** (bgfx compute; D3D11 DXBC + GL 430 GLSL, draw transform baked into bone-buffer slots, final NDC output — verified pixel-identical to the CPU path on a real D3D11 device) + bgfx renderer + Lua driver [JSON/hierarchy/LERP] + **round-18 playback controls** (loop/duration/rate/pause/resume/seek/play_anim crossfade/on_done_anim) + **2-bone IK** + **E-mote parts/variant switching** + `[sma_play]`/`[sma_anim]`/`[sma_ik]`/`[sma_variant]`/`[sma_stop]` contracts + `sma.*` binding incl. `set_skin_mode`) | `IMeshRenderer` + `SmaMeshRenderer` + `SmaSkinner` + `kag/sma.lua` + `SmaBinding` | ✓ (12 C++ + 70 Lua assertions; **D3D11 GPU child test: GPU skin == CPU skin pixel-for-pixel (14 assertions)**; headless uses Null backend; Metal/SPIR-V fall back to the CPU skinner) |
 
-### Platform Infrastructure (9 capabilities)
+### Platform Infrastructure (10 capabilities)
 
 | # | Capability | Interface | Status |
 |---|-----------|-----------|--------|
 | P1 | Cross-platform (Windows MSVC, Linux GCC, macOS Clang) | `IPlatformBackend` | Partial: CI build coverage; real GPU behavior is not verified on all platforms |
 | P2 | CI pipeline (3-platform build + doctest suite, GitHub Actions) | `.github/workflows/ci.yml` + `.github/workflows/deploy-web.yml` | ✓ (阶段 G 终态 / round 113 baseline: C++ 976/976, Lua 132/132 + 24 orphan, web 297/297, editor 530/530, ctest 10 + AI-skip, coupling/coverage PASS; Release build + CPack ZIP end-to-end measured; web GitHub Pages 手动部署链路 round 109 就绪) |
 | P3 | Multi-threaded task system (priority queues, main-thread callbacks) | `IJobSystem` | ✓ |
-| P4 | Input routing (KAG ↔ Game focus switch, resize callbacks) | `IInputRouter` | ✓ |
+| P4 | Input routing (KAG ↔ Game focus switch, resize callbacks, unified pointer path) | `IInputRouter` | ✓ (STEP12: `submitPointer(PointerEvent)` feeds the same dispatch as `processEvent` — KAG/GAME mutual exclusion + phantom-click guarantees shared by construction; Down/Move/Up→left-click semantics, LongPress→right-button press/release pair, Pinch→wheel delta from cumulative scale with baseline reset on focus switch; legacy SDL touch→mouse injection kept as compatibility path; native touch sources pending Track M/I) |
 | P5 | Texture budget auto-detection (6 tiers, 128MB–4GB) | `ITextureBudget` | ✓ enforcement tests (round 79): tier-boundary exact mapping, tier5 override-only, quota-full reject + release recovery, quota-0 all-reject |
 | P6 | Lua sandbox resource quotas (textures, emitters, handles) | `ISandboxQuota` | ✓ |
 | P7 | MobileAdapter (lifecycle callbacks, touch → mouse/wheel event mapping, DPI scaling) | `IMobileAdapter` (platform) | ✓ core mapping + lifecycle + **SDL finger events bridged (normalized -> pixel) + orientation change events (Lua _G.onOrientationChanged); 87 unit tests**; native mobile SDK integration still needs a device |
 | P8 | Display metrics service (unified pixel/logical size, scale factor, DPI, orientation, safe-area insets via one snapshot query) | `IDisplayService` (platform) | ✓ desktop (SDL3 window/display query, dpi = 96×contentScale mapping + Null headless fallback; safeArea always zero on desktop/headless); real safe-area insets / mobile implementation NOT done (Track M/I) |
 | P9 | Unified app-lifecycle events (single feed across desktop SDL3 / Android JNI / iOS notifications; consumers implement `ILifecycleListener` once, no platform ifdefs; 6-event enum: Pause/Resume/Background/Foreground/LowMemory/Terminate) | `ILifecycleService` (platform) | ✓ desktop (SDL3 event watch posts Background/Foreground/LowMemory/Terminate through the LifecycleService hub — registration-order dispatch, dedupe, self-removal-safe snapshot; Engine listener maps to onPause/onResume audio suspend/resume + `_G.onLowMemory`/`_G.onTerminate` via IMobileAdapter; +7 unit tests); mobile native event sources NOT implemented (Track M/I) |
+| P10 | OS audio-focus / interruption arbitration (platform-agnostic event feed; consumers implement `IAudioFocusListener` once, no platform ifdefs; 4-event enum FocusGained/FocusLost/InterruptionBegin/InterruptionEnd driving a Normal/Lost/Interrupted state machine) | `IAudioFocusService` (audio) | ✓ desktop hub (`AudioFocusService` header-only: ordered listener dispatch on the posting thread, duplicate listeners ignored, spurious InterruptionEnd is a no-op; Engine listener drives `IAudioBackend` suspend/resume, idempotent with the lifecycle background suspend); desktop/Web have no OS arbitration — the hub is the documented entry point for Android JNI / iOS audio-session interruption callbacks, native wiring NOT implemented (Track M/I) |
 
 ---
 
 > 📷 `engine-capacity-matrix.png` 是对应 mermaid 的静态渲染快照（round-98 世代）；
 > 若重新在支持 mermaid-cli 的环境执行 `mmdc` 可再生成，矩阵以本文表列为准。
 
-**Total: 84 tracked capabilities across 6 domains (2026-08-23 STEP10/STEP11: +P8 display metrics, +P9 unified lifecycle events; 阶段 G 终态 / round-113 refresh: +R11 post-processing chain, +S13 declarative tween, +S14 declarative layout; P2 baseline refreshed to round-113 numbers 976/132+24/297/530; S2 contract census 118→123; C10 tutorials 15→16; D1 editor depth extended 408→506→530).** 工具链（ks_i18n / xp3_tool / tlg2png / package_game / template）不单列矩阵行——见文末「工具链边界」说明。 See the readiness snapshot above for
+**Total: 85 tracked capabilities across 6 domains (2026-08-23 STEP10–STEP14: +P8 display metrics, +P9 unified lifecycle events, STEP12 unified pointer path folded into P4, +P10 audio-focus arbitration; 阶段 G 终态 / round-113 refresh: +R11 post-processing chain, +S13 declarative tween, +S14 declarative layout; P2 baseline refreshed to round-113 numbers 976/132+24/297/530; S2 contract census 118→123; C10 tutorials 15→16; D1 editor depth extended 408→506→530).** 工具链（ks_i18n / xp3_tool / tlg2png / package_game / template）不单列矩阵行——见文末「工具链边界」说明。 See the readiness snapshot above for
 the distinction between architecture completion, core usability and release readiness.
 
 
@@ -231,7 +232,7 @@ the distinction between architecture completion, core usability and release read
   （20 文件）、editor 530/530、契约 123；round 113 template 套件 4/4；round 114 发布
   终验 Release 构建零错误 + ZIP 87.97MB/403 文件 + 解压冒烟 D3D11 干净启动/退出。
 
-### 2026-08-23 additions (Track P STEP10–STEP11)
+### 2026-08-23 additions (Track P STEP10–STEP14)
 
 - P8 — Display metrics 服务（commit f50c6af8）：`IDisplayService.currentMetrics()` 单次快照
   返回 pixel/logical 尺寸、scaleFactor、DPI（=96×contentScale 文档化映射）、orientation、
@@ -248,6 +249,22 @@ the distinction between architecture completion, core usability and release read
   首监听器映射 onPause/onResume 音频挂起恢复 + `IMobileAdapter.onLowMemory/onTerminate`
   （`_G.onLowMemory`/`_G.onTerminate`，无 Lua 安全）；`BackendRegistry` 新增
   set/getLifecycleService 槽位（#24）。移动端原生事件源待 Track M/I。
+- STEP12 — 统一指针输入路径（commit e1a5eceb）：`IInputRouter` 新增纯虚
+  `submitPointer(const PointerEvent&)` 与类型
+  `PointerAction{Down,Move,Up,LongPress,Pinch}` /
+  `PointerEvent{x,y,scale,pointerId,activePointers}`（类型定义在接口头文件，
+  AGENTS.md §2）。InputRouter 抽出共享分发函数——submitPointer 与 processEvent
+  共享 KAG/GAME 互斥与防幻点击保证；LongPress→右键按下+抬起对，Pinch→累积 scale
+  换算滚轮增量（焦点切换基线复位）；旧 SDL touch→mouse 注入保留为兼容路径；
+  +5 单测。
+- STEP13 — 组合根默认存档 provider（commit 78f5d1a5）：`SaveManager` 在
+  `m_saveProvider == null` 时 save/load/list/delete 全部守卫短路（运行时静默无存档）；
+  `Engine::init` 现缺省安装 `LocalFileSaveProvider`，宿主仍可经 EngineConfig 注入
+  自定义 provider 覆盖；+单测锁定。
+- P10 — OS 音频焦点仲裁（commit 84179efa）：见 Platform Infrastructure 表 P10 行；
+  `IAudioFocusService` 四方法（addListener/removeListener/post/currentState）+
+  `IAudioFocusListener` 监听器接口；`BackendRegistry` 新增 set/getAudioFocusService
+  槽位（#25）。移动端原生中断回调接线待 Track M/I。
 
 ### 工具链边界说明（Matrix 不单列工具类能力的原因）
 

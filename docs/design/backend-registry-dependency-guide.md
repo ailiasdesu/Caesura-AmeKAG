@@ -1,6 +1,6 @@
 # BackendRegistry 依赖说明文档
 
-> 更新日期: 2026-08-23 | 公共接口: 33 | Registry 服务槽位: 24 | 模块: 16
+> 更新日期: 2026-08-23 | 公共接口: 34 | Registry 服务槽位: 25 | 模块: 16
 
 ## 核心原则
 
@@ -12,7 +12,7 @@ RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主
 
 ## 为什么不是"接口爆炸"
 
-33 个公共接口（`src/*/api/I*.h`，api-stats 权威计数）对应 16 个模块，其中 24 个长生命周期引擎服务进入 Registry。这与"接口爆炸"（通常指每个类都有接口）有本质区别：
+34 个公共接口（`src/*/api/I*.h`，api-stats 权威计数）对应 16 个模块，其中 25 个长生命周期引擎服务进入 Registry。这与"接口爆炸"（通常指每个类都有接口）有本质区别：
 
 1. **接口对应子系统，不随代码膨胀。** 模块新增功能在接口内部扩展方法，不创建新接口。
 2. **消费者只调用自己需要的。** `script` 模块调用 `getRenderDevice()`，不关心 `getCryptoEngine()`。
@@ -24,7 +24,7 @@ RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主
 
 | 模块 | 依赖的接口 | 用途 |
 |------|-----------|------|
-| **entry/Engine** | 24 个 Registry 服务 | 组合根，创建、注册并按逆序注销后端（含 `IMobileAdapter`、`IMeshRenderer`、`IDisplayService`、`ILifecycleService` 等较新槽位） |
+| **entry/Engine** | 25 个 Registry 服务 | 组合根，创建、注册并按逆序注销后端（含 `IMobileAdapter`、`IMeshRenderer`、`IDisplayService`、`ILifecycleService`、`IAudioFocusService` 等较新槽位） |
 | **script** | Render/Audio/Input/MiniGame/Storage/Resource/Debug/Steam/Job/Platform/Display 接口及 `ISandboxQuota` | Lua/KAG 绑定调用；Steam Binding 每次从 Registry 解析后端；`DevCore.get_display_metrics()` 经 `getDisplayService()` 查询显示度量（coupling 实测 script 跨 11 模块，见 `python scripts/count_coupling.py`） |
 | **render** | `IRenderDevice`, `ITextureBudget`, `ISandboxQuota` | 粒子渲染、纹理预算与配额 |
 | **render** | `IDebugManager` (宏) | 零开销日志 |
@@ -36,8 +36,9 @@ RPC/Editor 是宿主入站传输适配器，不是引擎后端。它们由宿主
 | **storage** | `ICryptoEngine` | 存档加密 |
 | **platform**（服务提供方，STEP10 新增槽位 #23） | 提供 `IDisplayService`（`src/platform/api/IDisplayService.h`；实现 `SDL3DisplayService` / `NullDisplayService`） | 统一显示度量查询（pixel/logical 尺寸、scaleFactor、DPI、orientation、safeArea）。构造点：组合根 `entry/createDisplayService()` 工厂（SDL3 可用→SDL3 实现，否则 Null），`Engine::init()` 调用 `setDisplayService()` 注册；消费方：Lua `DevCore.get_display_metrics()` |
 | **platform**（服务提供方，STEP11 新增槽位 #24） | 提供 `ILifecycleService`（`src/platform/api/ILifecycleService.h`；实现 `LifecycleService`，platform 模块 header-only 中枢） | 统一应用生命周期事件流（`LifecycleEvent` 六事件：Pause/Resume/Background/Foreground/LowMemory/Terminate；消费方注册一次 `ILifecycleListener` 即全平台接入，无平台 ifdef）。构造点：组合根 `entry`——`Engine::initPlatformPhase()` 创建并持有 `unique_ptr`，先 `addListener(this)` 再 `setLifecycleService()` 注册；消费方：Engine 自身（映射 onPause/onResume 音频挂起恢复与 `IMobileAdapter.onLowMemory/onTerminate` → `_G.onLowMemory`/`_G.onTerminate`） |
+| **audio**（服务提供方，STEP14 新增槽位 #25） | 提供 `IAudioFocusService`（`src/audio/api/IAudioFocusService.h`；实现 `AudioFocusService`，audio 模块 header-only 中枢） | OS 音频焦点/中断仲裁事件流（事件 FocusGained/FocusLost/InterruptionBegin/InterruptionEnd → 状态机 Normal/Lost/Interrupted；消费方实现一次 `IAudioFocusListener` 即接入，无平台 ifdef）。构造点：组合根 `entry`——`Engine::initPlatformPhase()` 创建并持有 `unique_ptr`，先 `addListener(this)` 再 `setAudioFocusService()` 注册；消费方：Engine 自身（FocusLost/InterruptionBegin → `IAudioBackend::suspend()`，FocusGained/InterruptionEnd → resume，与生命周期后台挂起幂等共存）；游戏/图层可自行 addListener。桌面/Web 无 OS 仲裁——hub 即 Android JNI / iOS audio-session 回调的文档化入口，接线待 Track M/I |
 
-**其余模块（archive, debug, di, input, job, platform, steam）不通过 Registry 访问其他模块服务。**（platform 行为该表中的服务提供方，自身不访问其他模块服务）
+**其余模块（archive, debug, di, input, job, steam）不通过 Registry 访问其他模块服务。**（platform 与 audio 两行为该表中的服务提供方说明：platform 不访问其他模块服务；audio 自身仅消费 `ISandboxQuota` 配额检查）
 
 ## 新增模块检查清单
 
