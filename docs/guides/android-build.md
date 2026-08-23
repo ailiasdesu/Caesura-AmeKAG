@@ -257,15 +257,23 @@ SDL3 的 `SDLActivity` 继承 + 引擎 .so 放 `jniLibs/<abi>/` + gradle 打包�
 
 ---
 
-## 7. 本机验证结果
+## 7. 验证结果（2026-08-24 更新：CI build-verified）
 
-- **NDK 状态**：本机 `ANDROID_NDK_HOME` / `ANDROID_NDK` / `ANDROID_HOME` /
-  `ANDROID_SDK_ROOT` 均未设置；常见路径（`$LOCALAPPDATA/Android/Sdk/ndk` 等）
-  未发现任何 NDK 版本。
-- **结论**：**无 NDK → 跳过真实交叉编译验证**。交付文档 + 可执行脚本
-  `scripts/build_android.sh`；脚本在无 NDK 时给出明确报错与下载指引，不会误跑。
-- 一旦安装 NDK，先跑 `scripts/build_android.sh`（arm64-v8a），预期首次会卡在
-  SDL3 缺失（见 R3）或链接目标缺 Android 分支（见 R9），这些是已知待源码改造点。
+- **本机（Windows 开发机）**：无 NDK（`ANDROID_NDK_HOME` / `ANDROID_SDK_ROOT`
+  未设置，常见路径无 NDK）。脚本级契约已验证（缺件清晰报错、`bash -n` 通过）。
+- **CI（GitHub Actions `android-compile` 探针，2026-08-24 全绿）**：GH ubuntu
+  runner（NDK 27.3 + libc++/lld）内完整走通：SDL3 3.2.4 android-arm64 切片 →
+  OpenSSL 3.3.2 android-arm64 切片（`Configure android-arm64` + `make install_sw`，
+  见 ci.yml）→ 引擎 configure（`-DCMAKE_TOOLCHAIN_FILE=android.toolchain.cmake`
+  `-DANDROID_ABI=arm64-v8a` `-DANDROID_PLATFORM=android-24`）→ 全量 module graph
+  + `CaesuraAmeKAG` 可执行 + `CaesuraTests` 全链接成功（5m35s）。
+- **红绿循环贡献（源码侧）**：
+  1. `SystemDependencies` 新增 `elseif(ANDROID)` 分支（Threads/log/android +
+     `OPENSSL_ROOT_DIR` 显式切片路径），修复 NDK 下 UNIX 分支 `X11 not found`；
+  2. `main.cpp` 为 `executeDebug<...>` 7 个调试请求类型加显式实例化 —— NDK
+     libc++/lld 不发射这些成员模板实例导致链接失败（MSVC/macOS/Linux 均正常）。
+- **仍 ⏳**：真机（Anka? no——A2-A4 待 NDK 级验证/设备）：JNI/Activity、APK 打包、
+  渲染/音频/生命周期真机冒烟（见第 6 节清单与 docs/platform/android-device-validation.md）。
 
 ---
 
@@ -277,7 +285,7 @@ SDL3 的 `SDLActivity` 继承 + 引擎 .so 放 `jniLibs/<abi>/` + gradle 打包�
 | 分层 | 状态 |
 |---|---|
 | 脚本契约 | ✅ 单入口 `scripts/build_android.sh`（旧 `android_build.sh` 为僵尸重复脚本已删除）；`bash -n` 通过；缺 NDK/CMake/SDL3_DIR/assets 时均为清晰错误并退出 1 |
-| build-verified（arm64 交叉编译） | ⏳ 待 NDK + Android SDL3 CMake 包（机器上有 NDK 后一条命令验证：`bash scripts/build_android.sh --smoke`） |
+| build-verified（arm64 交叉编译） | ✅ CI `android-compile` 探针全绿（2026-08-24：NDK 27.3 + SDL3 3.2.4 + OpenSSL 3.3.2 切片，模块 graph + 可执行 + 测试全链接） |
 | install-verified / device-verified / release-verified | ⏳ 待 Track M A2-A4 |
 
 **A1 加固项**：CMake 存在性检查、assets 根目录检查、NDK 发现路径对未设环境变量的 `set -u` 兼容修复。
