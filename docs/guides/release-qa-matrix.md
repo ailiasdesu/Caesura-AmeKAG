@@ -36,7 +36,7 @@
 | Windows | ✅（CPack ZIP） | ✅ | ✅ | 发布路径已验证 |
 | Linux | ✅ | ✅ | ✅（WSL 实机 ctest 11/11） | 已验证 |
 | macOS | ✅（代码） | ✅（CI 编译 - Clang 严格修复后 2m12s） | ⏳ **pending** | **需 Mac 真机**（§8 诚实标注） |
-| Web | ✅（package_game.sh） | ✅ | ✅（Chrome CDP 验证） | boot/text/image/input/自动启动全通过 |
+| Web | ✅（package_game.sh） | ✅ | ✅（Chrome+Edge CDP 验证） | boot/text(含CJK)/image(input img 解码)/input/audio(WebAudio source+autoplay 解锁)/save(跨 reload 持久)/自动启动全通过（2026-08-23 scripts/web_browser_smoke.mjs） |
 
 ## Real environment
 
@@ -45,7 +45,7 @@
 | Windows hardware | ✅（本机 996/996 + smoke 72/72 + firstvn） |
 | Linux hardware/WSL | ✅（WSL ctest 11/11 + 全套件绿；Linux 真卡待硬） |
 | macOS hardware | ⏳ **pending**（无设备） |
-| Chrome / Edge | ✅（Chrome headless CDP 多模态验证） |
+| Chrome / Edge | ✅（Chrome + Edge headless CDP 多模态验证；Chrome 复现 autoplay suspended→running 解锁；Edge 默认放行） |
 | Steam test | ⏳ **pending**（无凭据——§10 诚实标注） |
 
 ## Distribution
@@ -57,4 +57,4 @@
 
 ## 本矩阵更新记录
 
-- 2026-08-23：First-VN E2E 13/13；Web CDP 验证 boot/text/image/input；§14 分层（Project/Packaging/Asset Service）；SoLoud deinit race 根修。
+- 2026-08-23：First-VN E2E 13/13；Web CDP 验证 boot/text/image/input；§14 分层（Project/Packaging/Asset Service）；SoLoud deinit race 根修。另：Web Track W0/W1 —— 资产双前缀 404 修复（/assets/assets/→/assets/，图片与音频真实加载）、dev/dist scripts-index 生成、W1 autoplay 解锁（Chrome suspended→running）+ web_browser_smoke.mjs 入库（Chrome/Edge 全部通过，详见 docs/status/web-release-status.md）。
