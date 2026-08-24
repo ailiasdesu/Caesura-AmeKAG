@@ -1132,6 +1132,16 @@ void Engine::processEvents() {
              event.type == SDL_EVENT_MOUSE_BUTTON_UP) && L) {
             float mx = 0, my = 0;
             SDL_GetMouseState(&mx, &my);
+
+            int winW = m_platformBackend ? m_platformBackend->getWindowWidth() : 0;
+            int winH = m_platformBackend ? m_platformBackend->getWindowHeight() : 0;
+            int logW = m_renderDevice ? m_renderDevice->getBackbufferWidth() : m_config.width;
+            int logH = m_renderDevice ? m_renderDevice->getBackbufferHeight() : m_config.height;
+            if (winW > 0 && winH > 0 && logW > 0 && logH > 0) {
+                mx = mx * ((float)logW / (float)winW);
+                my = my * ((float)logH / (float)winH);
+            }
+
             IPlatformBackend::MouseState mouse;
             mouse.x = mx; mouse.y = my;
             mouse.leftDown = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;

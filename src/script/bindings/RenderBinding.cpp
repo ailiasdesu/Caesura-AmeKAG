@@ -256,7 +256,9 @@ static int lua_Render_submit_batch(lua_State* L) {
                 if (texCacheId[c] == texId) { tex = texCache[c]; hit = 1; break; }
             }
             if (!hit) {
-                tex = resolveTexture(L, texId, dev);
+                auto* texture = getTexture(L);
+                uint32_t rawHandle = texture ? texture->getTextureHandle(texId) : 0;
+                tex = textureManagerHandle(rawHandle);
                 if (texCacheN < 256) {
                     texCache[texCacheN] = tex;
                     texCacheId[texCacheN] = texId;
@@ -264,11 +266,11 @@ static int lua_Render_submit_batch(lua_State* L) {
                 }
             }
         }
-        // Also try explicit "rt" key for forward-compat (uncached; rare)
+        // If no explicit texture or tex is invalid, check if an RTT viewport handle was supplied
         if (!tex.isValid()) {
             uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
-            if (rtId != 0) {
-                tex = resolveTexture(L, rtId, dev);
+            if (rtId != 0 && dev) {
+                tex = dev->getViewportTexture(ViewportHandle{ rtId });
             }
         }
         if (tex.isValid()) {

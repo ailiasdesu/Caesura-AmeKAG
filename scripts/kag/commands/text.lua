@@ -1362,9 +1362,10 @@ function TextCommands.endbutton(ctx, params)
         -- Hit-test against button regions
         local buttons = ctx._choiceButtonsActive
         if not buttons then return end
+        local vw, _ = require("viewport").wh()
         for _, choice in ipairs(buttons) do
-            if y >= choice.y and y <= choice.y + choice.h
-               and x >= 32 and x <= 600 then
+            if y >= (choice.y - 6) and y <= (choice.y + choice.h + 10)
+               and x >= 0 and x <= (vw or 1920) then
                 ctx._selectedChoice = choice
                 ctx._choiceMode = false
                 ctx._choiceButtonsActive = nil

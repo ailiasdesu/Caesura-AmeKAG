@@ -77,63 +77,15 @@ void BgfxQuadBatch::flushBatch() {
             .end();
     }
 
-    struct FsVertex { float x, y, u, v; };
-    uint32_t quadCount = (uint32_t)m_state->batchQuads.size();
-    uint32_t vertCount = quadCount * 4;
-    uint32_t idxCount  = quadCount * 6;
-
-    if (bgfx::getAvailTransientVertexBuffer(vertCount, m_state->posTexLayout) < vertCount) {
-        m_state->batching = false;
-        return;
-    }
-    if (bgfx::getAvailTransientIndexBuffer(idxCount) < idxCount) {
-        m_state->batching = false;
-        return;
-    }
-
-    bgfx::TransientVertexBuffer tvb;
-    bgfx::allocTransientVertexBuffer(&tvb, vertCount, m_state->posTexLayout);
-    auto* v = (FsVertex*)tvb.data;
-
-    bgfx::TransientIndexBuffer tib;
-    bgfx::allocTransientIndexBuffer(&tib, idxCount);
-    uint16_t* indices = (uint16_t*)tib.data;
-
-    // Split into per-texture draw calls within the batch
-    // (bgfx requires one texture set per submit)
-
-    // Pixel -> NDC conversion: the fallback vertex shader is passthrough
-    // (gl_Position = vec4(a_position, 0, 1)), so all other draw paths convert
-    // on the CPU side. Without it, pixel coords (0..1280, 0..720) lie outside
-    // clip space [-1,1] and the whole batch is culled -- invisible UI.
     const float sw = (float)m_state->device->getWidth();
     const float sh = (float)m_state->device->getHeight();
     if (sw <= 0.0f || sh <= 0.0f) { m_state->batching = false; return; }
 
-    for (uint32_t qi = 0; qi < quadCount; qi++) {
-        auto& q = m_state->batchQuads[qi];
-        uint32_t baseVert = qi * 4;
+    struct FsVertex { float x, y, u, v; };
 
-        // Build quad vertices (NDC) via the pure helper.
-        const NdcRect n = quadToNdc(q.x, q.y, q.w, q.h, sw, sh);
-        v[baseVert + 0] = { n.nx0, n.ny0, 0.0f, 0.0f };
-        v[baseVert + 1] = { n.nx1, n.ny0, 1.0f, 0.0f };
-        v[baseVert + 2] = { n.nx1, n.ny1, 1.0f, 1.0f };
-        v[baseVert + 3] = { n.nx0, n.ny1, 0.0f, 1.0f };
-    }
-
-    uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
-                   | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
-                                           BGFX_STATE_BLEND_INV_SRC_ALPHA);
-
-    bgfx::setVertexBuffer(0, &tvb);
-    bgfx::setIndexBuffer(&tib);
-    bgfx::setState(state);
-
-    // Submit per-texture: each quad may have different texture
-    // For single-texture scenes, we can merge into fewer submits
-    uint32_t idxOffset = 0;
-    uint32_t vertOffset = 0;
+    const uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A
+                         | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
+                                                 BGFX_STATE_BLEND_INV_SRC_ALPHA);
 
     // Pure merge grouping: contiguous quads sharing (tex, viewId, opacity)
     // collapse into one submit.
@@ -142,29 +94,51 @@ void BgfxQuadBatch::flushBatch() {
 
     for (const auto& g : groups) {
         const auto& q = m_state->batchQuads[g.startQuad];
-        const uint32_t mergeIdxCount = g.quadCount * 6;
+        const uint32_t groupVertCount = g.quadCount * 4;
+        const uint32_t groupIdxCount  = g.quadCount * 6;
 
-        // Pure local indices (rebase-from-0 within this merge group).
-        std::vector<uint16_t> groupIndices;
-        buildGroupIndices(g.quadCount, groupIndices);
-        memcpy((uint16_t*)tib.data + idxOffset, groupIndices.data(),
-               groupIndices.size() * sizeof(uint16_t));
+        if (bgfx::getAvailTransientVertexBuffer(groupVertCount, m_state->posTexLayout) < groupVertCount ||
+            bgfx::getAvailTransientIndexBuffer(groupIdxCount) < groupIdxCount) {
+            continue;
+        }
+
+        bgfx::TransientVertexBuffer gtvb;
+        bgfx::allocTransientVertexBuffer(&gtvb, groupVertCount, m_state->posTexLayout);
+        auto* gv = (FsVertex*)gtvb.data;
+
+        bgfx::TransientIndexBuffer gtib;
+        bgfx::allocTransientIndexBuffer(&gtib, groupIdxCount);
+        auto* gi = (uint16_t*)gtib.data;
+
+        for (uint32_t qi = 0; qi < g.quadCount; qi++) {
+            const auto& quad = m_state->batchQuads[g.startQuad + qi];
+            const NdcRect n = quadToNdc(quad.x, quad.y, quad.w, quad.h, sw, sh);
+            const uint32_t bVert = qi * 4;
+            gv[bVert + 0] = { n.nx0, n.ny0, 0.0f, 0.0f };
+            gv[bVert + 1] = { n.nx1, n.ny0, 1.0f, 0.0f };
+            gv[bVert + 2] = { n.nx1, n.ny1, 1.0f, 1.0f };
+            gv[bVert + 3] = { n.nx0, n.ny1, 0.0f, 1.0f };
+
+            const uint32_t bIdx = qi * 6;
+            gi[bIdx + 0] = (uint16_t)(bVert + 0);
+            gi[bIdx + 1] = (uint16_t)(bVert + 1);
+            gi[bIdx + 2] = (uint16_t)(bVert + 2);
+            gi[bIdx + 3] = (uint16_t)(bVert + 0);
+            gi[bIdx + 4] = (uint16_t)(bVert + 2);
+            gi[bIdx + 5] = (uint16_t)(bVert + 3);
+        }
 
         bgfx::setTexture(0, m_state->shaders->getDefaultSampler(), q.tex);
-        // Set opacity as a uniform. blendParams is declared Vec4 x2 (8 floats);
-        // passing a 1-float address with _num=1 made bgfx read 16 bytes from a
-        // 4-byte stack slot (out-of-bounds read, UB). Always pass 8 floats.
+        // Set opacity as a uniform. blendParams is declared Vec4 x2 (8 floats).
         float bp[8] = { q.opacity / 255.0f, 0.0f, 0.0f, 0.0f,
                         0.0f, 0.0f, 0.0f, 0.0f };
         bgfx::setUniform(m_state->shaders->getBlendParams(), bp, 2);
 
         // Submit the vertex/index subset for this texture group
-        bgfx::setVertexBuffer(0, &tvb, vertOffset, g.quadCount * 4);
-        bgfx::setIndexBuffer(&tib, idxOffset, mergeIdxCount);
+        bgfx::setVertexBuffer(0, &gtvb, 0, groupVertCount);
+        bgfx::setIndexBuffer(&gtib, 0, groupIdxCount);
+        bgfx::setState(state);
         bgfx::submit(q.viewId, m_state->shaders->getFallbackProgram());
-
-        idxOffset += mergeIdxCount;
-        vertOffset += g.quadCount * 4;
     }
 
     m_state->batchQuads.clear();
