@@ -1,0 +1,380 @@
+{
+  "schema_version": "1.0.0",
+  "head_commit": "62132e783dd238752659d4227ff26b0235258ea9",
+  "last_updated": "2026-08-25T02:00:00Z",
+  "platforms": {
+    "windows": {
+      "display_name": "Windows (x64)",
+      "tier": 1,
+      "summary_status": "verified",
+      "capabilities": {
+        "build": {
+          "status": "verified",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "README.md",
+            "test": "cmake --build build --config Debug --parallel",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        },
+        "runtime": {
+          "status": "verified",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/plans/2026-08-24-027-antigravity-handoff.md",
+            "test": "build/tests/Debug/CaesuraTests.exe && external/lua/lua.exe tests/scripts/run_lua_tests.lua",
+            "verified_at": "2026-08-25T01:57:33Z",
+            "notes": "1052 doctest cases (0 failed), 134 main Lua suites (0 failed), 24 orphan suites (0 failed)"
+          }
+        },
+        "first_vn": {
+          "status": "verified",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "scripts/verify_first_vn.sh",
+            "test": "bash scripts/verify_first_vn.sh",
+            "verified_at": "2026-08-25T01:57:33Z",
+            "notes": "13/13 user journey checks passed (template, creation, metadata, validation, headless run, choices A/B, save/load, package)"
+          }
+        },
+        "packaging": {
+          "status": "verified",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/plans/audit/ROADMAP-200.md",
+            "test": "cd build && cpack -C Release -G ZIP",
+            "verified_at": "2026-08-25T01:57:33Z",
+            "notes": "Standalone ZIP artifact (CaesuraAmeKAG-1.0.1-Windows-AMD64.zip)"
+          }
+        },
+        "release": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md",
+            "test": "RC-GO decision gate",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        }
+      }
+    },
+    "linux": {
+      "display_name": "Linux (x64 / Ubuntu 24.04 / WSL)",
+      "tier": 1,
+      "summary_status": "verified",
+      "capabilities": {
+        "build": {
+          "status": "verified",
+          "evidence": {
+            "commit": "806275cf",
+            "document": "docs/plans/2026-08-22-025-delivery-handoff.md",
+            "test": "cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)",
+            "verified_at": "2026-08-22T20:00:00Z"
+          }
+        },
+        "runtime": {
+          "status": "verified",
+          "evidence": {
+            "commit": "806275cf",
+            "document": "docs/plans/2026-08-22-025-delivery-handoff.md",
+            "test": "ctest --test-dir build --output-on-failure",
+            "verified_at": "2026-08-22T20:00:00Z",
+            "notes": "11/11 CTest test targets passed on WSL and GitHub Actions Linux CI"
+          }
+        },
+        "first_vn": {
+          "status": "verified",
+          "evidence": {
+            "commit": "806275cf",
+            "document": ".github/workflows/ci.yml",
+            "test": "xvfb-run -a -s '-screen 0 1280x720x24' bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG first_vn",
+            "verified_at": "2026-08-22T20:00:00Z"
+          }
+        },
+        "packaging": {
+          "status": "verified",
+          "evidence": {
+            "commit": "806275cf",
+            "document": "scripts/verify_bundle_boot.sh",
+            "test": "bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG demo",
+            "verified_at": "2026-08-22T20:00:00Z"
+          }
+        },
+        "release": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md",
+            "test": "RC-GO decision gate",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        }
+      }
+    },
+    "web": {
+      "display_name": "Web Player (WASM / DOM)",
+      "tier": 1,
+      "summary_status": "verified",
+      "capabilities": {
+        "build": {
+          "status": "verified",
+          "evidence": {
+            "commit": "6e90d7df",
+            "document": "docs/status/web-release-status.md",
+            "test": "cd web && npm run build",
+            "verified_at": "2026-08-24T12:00:00Z",
+            "notes": "Zero-dependency dist bundle (159KB, gzip 46KB) with vendored glue.wasm"
+          }
+        },
+        "runtime": {
+          "status": "verified",
+          "evidence": {
+            "commit": "6e90d7df",
+            "document": "docs/status/web-release-status.md",
+            "test": "cd web && npm test",
+            "verified_at": "2026-08-24T12:00:00Z",
+            "notes": "318 vitest tests across 21 test files (100% passed)"
+          }
+        },
+        "first_vn": {
+          "status": "verified",
+          "evidence": {
+            "commit": "6e90d7df",
+            "document": "scripts/verify_first_vn.sh",
+            "test": "bash scripts/package_game.sh tests/projects/first_vn",
+            "verified_at": "2026-08-24T12:00:00Z"
+          }
+        },
+        "browser": {
+          "status": "verified",
+          "evidence": {
+            "commit": "6e90d7df",
+            "document": "docs/status/web-release-status.md",
+            "test": "node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock",
+            "verified_at": "2026-08-24T12:00:00Z",
+            "notes": "Real-browser CDP assertions: boot (parked), CJK text, images, input, audio unlock (suspended->running), reload save persistence"
+          }
+        },
+        "release_candidate": {
+          "status": "verified",
+          "evidence": {
+            "commit": "6e90d7df",
+            "document": "docs/status/web-release-status.md",
+            "test": "Track W W8 release checklist (14/14 PASS)",
+            "verified_at": "2026-08-24T12:00:00Z"
+          }
+        }
+      }
+    },
+    "android": {
+      "display_name": "Android (ARM64)",
+      "tier": 1,
+      "summary_status": "verified",
+      "capabilities": {
+        "build": {
+          "status": "verified",
+          "evidence": {
+            "commit": "1f054039",
+            "document": ".github/workflows/ci.yml",
+            "test": "scripts/build_android.sh --release --abi arm64-v8a",
+            "verified_at": "2026-08-24T22:00:00Z",
+            "notes": "libCaesuraAmeKAG.so MODULE target + SDL3 3.2.4 & OpenSSL 3.3.2 slices"
+          }
+        },
+        "runtime": {
+          "status": "verified",
+          "evidence": {
+            "commit": "1f054039",
+            "document": "docs/plans/2026-08-24-028-android-full-closure.md",
+            "test": "bash scripts/android_device_smoke.sh",
+            "verified_at": "2026-08-24T22:00:00Z",
+            "notes": "FreeType 2048x2048 RGBA8 CJK font atlas (8074 glyphs), transient buffer fix, RTT viewport fix"
+          }
+        },
+        "first_vn": {
+          "status": "verified",
+          "evidence": {
+            "commit": "1f054039",
+            "document": "docs/platform/android-device-validation.md",
+            "test": "Full E2E walkthrough on device (story.ks -> choice 1 sunset -> ending pass)",
+            "verified_at": "2026-08-24T22:00:00Z"
+          }
+        },
+        "real_device": {
+          "status": "verified",
+          "evidence": {
+            "commit": "1f054039",
+            "document": "docs/platform/android-device-validation.md",
+            "test": "Physical Xiaomi 11 adb/su logcat + screencap suite",
+            "verified_at": "2026-08-24T22:00:00Z",
+            "notes": "Launch, touch tap, long press (GestureDetector), landscape orientation lock, sleep/wake power cycle, save slot 7 + autosave"
+          }
+        },
+        "signing": {
+          "status": "verified",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/android-release-signing.md",
+            "test": "apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk",
+            "verified_at": "2026-08-24T23:30:00Z",
+            "notes": "V1/V2/V3 signing verified true, zipalign 4-byte check passed, zero hardcoded credentials"
+          }
+        },
+        "aab": {
+          "status": "verified",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/android-release-signing.md",
+            "test": "cd android && gradle bundleRelease",
+            "verified_at": "2026-08-24T23:30:00Z",
+            "notes": "app-release.aab built with language/density/abi splits disabled for visual novel assets"
+          }
+        },
+        "release": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md",
+            "test": "Official keystore signing & store publishing gate",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        }
+      }
+    },
+    "macos": {
+      "display_name": "macOS (Apple Silicon / Intel)",
+      "tier": 2,
+      "summary_status": "probe",
+      "capabilities": {
+        "build": {
+          "status": "probe",
+          "evidence": {
+            "commit": "62132e78",
+            "document": ".github/workflows/ci.yml",
+            "test": "cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF && cmake --build build",
+            "verified_at": "2026-08-25T01:57:33Z",
+            "notes": "CI macos-latest compiles full module graph in ~2m12s"
+          }
+        },
+        "runtime": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/guides/release-qa-matrix.md",
+            "test": "ctest --test-dir build --output-on-failure",
+            "verified_at": "2026-08-25T01:57:33Z",
+            "notes": "Non-GUI test targets pass; full windowed Cocoa/Metal runtime pending physical device"
+          }
+        },
+        "first_vn": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/release/cross-platform-matrix.md",
+            "test": "Interactive / windowed first_vn execution pending hardware",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        },
+        "real_device": {
+          "status": "hardware-gated",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/platform/ios-device-validation.md",
+            "test": "Physical Mac interactive smoke testing",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        },
+        "release": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md",
+            "test": "Apple Developer ID signing and notarization",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        }
+      }
+    },
+    "ios": {
+      "display_name": "iOS (Track I / Metal)",
+      "tier": 2,
+      "summary_status": "probe",
+      "capabilities": {
+        "build": {
+          "status": "probe",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-build-and-validation.md",
+            "test": "cmake -S . -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 && cmake --build build-ios --config Release",
+            "verified_at": "2026-08-24T23:30:00Z",
+            "notes": "CI ios-compile probe compiles full module graph with iOS SDL3 & OpenSSL slices"
+          }
+        },
+        "metal": {
+          "status": "probe",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "scripts/verify_metal_shaders.py",
+            "test": "python3 scripts/verify_metal_shaders.py",
+            "verified_at": "2026-08-24T23:30:00Z",
+            "notes": "10 2D render shaders + 2 3D MSL minigame shaders + postfx & SMA compute fallbacks verified"
+          }
+        },
+        "runtime": {
+          "status": "pending",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-device-validation.md",
+            "test": "UIKit event loop & AudioSession interruption handling",
+            "verified_at": "2026-08-24T23:30:00Z"
+          }
+        },
+        "first_vn": {
+          "status": "pending",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-device-validation.md",
+            "test": "Interactive first_vn walkthrough on iOS device / simulator",
+            "verified_at": "2026-08-24T23:30:00Z"
+          }
+        },
+        "real_device": {
+          "status": "hardware-gated",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-device-validation.md",
+            "test": "Physical iPhone 15/16 or iOS Simulator interactive run",
+            "verified_at": "2026-08-24T23:30:00Z"
+          }
+        },
+        "signing": {
+          "status": "credential-gated",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-build-and-validation.md",
+            "test": "Apple Developer code signing",
+            "verified_at": "2026-08-24T23:30:00Z"
+          }
+        },
+        "testflight": {
+          "status": "credential-gated",
+          "evidence": {
+            "commit": "8aa51c36",
+            "document": "docs/platform/ios-device-validation.md",
+            "test": "App Store Connect / TestFlight distribution pipeline",
+            "verified_at": "2026-08-24T23:30:00Z"
+          }
+        },
+        "release": {
+          "status": "pending",
+          "evidence": {
+            "commit": "62132e78",
+            "document": "docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md",
+            "test": "App Store submission gate",
+            "verified_at": "2026-08-25T01:57:33Z"
+          }
+        }
+      }
+    }
+  }
+}

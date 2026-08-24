@@ -1,0 +1,91 @@
+{
+  "suite": "Module Coupling & Architecture Boundary Audit",
+  "runner": "python scripts/count_coupling.py",
+  "commit": "62132e783dd238752659d4227ff26b0235258ea9",
+  "modules_total": 16,
+  "compliant_modules": 16,
+  "violations": 0,
+  "status": "PASS",
+  "module_coupling_counts": {
+    "archive": {
+      "count": 2,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "audio": {
+      "count": 2,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "debug": {
+      "count": 0,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "di": {
+      "count": 13,
+      "limit": 14,
+      "status": "PASS"
+    },
+    "entry": {
+      "count": 14,
+      "limit": 14,
+      "status": "PASS"
+    },
+    "input": {
+      "count": 0,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "job": {
+      "count": 1,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "live2d": {
+      "count": 3,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "minigame": {
+      "count": 4,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "platform": {
+      "count": 0,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "render": {
+      "count": 4,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "resource": {
+      "count": 3,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "rpc": {
+      "count": 2,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "script": {
+      "count": 11,
+      "limit": 14,
+      "status": "PASS"
+    },
+    "steam": {
+      "count": 0,
+      "limit": 4,
+      "status": "PASS"
+    },
+    "storage": {
+      "count": 4,
+      "limit": 4,
+      "status": "PASS"
+    }
+  }
+}

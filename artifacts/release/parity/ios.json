@@ -1,0 +1,38 @@
+{
+  "$schema": "https://caesura.engine/schemas/first_vn_state_snapshot.v1.json",
+  "platform": "ios",
+  "story": "first_vn",
+  "status": "hardware-gated",
+  "evidence": {
+    "runner": "scripts/verify_metal_shaders.py",
+    "commit": "62132e78",
+    "verification_type": "toolchain_compile_probe",
+    "gate_reason": "Physical Apple hardware (iPhone/iPad) gated; Xcode toolchain and Metal MSL shaders verified."
+  },
+  "route_a": {
+    "choice": "sun",
+    "route": "sun",
+    "flag_is_sun": 1,
+    "final_label": "*ending",
+    "ending": "sunset",
+    "save_roundtrip": true,
+    "languages": [
+      "zh",
+      "en",
+      "ja"
+    ]
+  },
+  "route_b": {
+    "choice": "rain",
+    "route": "rain",
+    "flag_is_sun": 0,
+    "final_label": "*ending",
+    "ending": "rain_shelter",
+    "save_roundtrip": true,
+    "languages": [
+      "zh",
+      "en",
+      "ja"
+    ]
+  }
+}

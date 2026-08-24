@@ -1,0 +1,29 @@
+{
+  "$schema": "https://caesura.engine/schemas/first_vn_state_snapshot.v1.json",
+  "platform": "android",
+  "story": "first_vn",
+  "status": "verified",
+  "evidence": {
+    "runner": "scripts/android_device_smoke.sh",
+    "commit": "62132e78",
+    "verification_type": "real_device_walkthrough"
+  },
+  "route_a": {
+    "choice": "sun",
+    "route": "sun",
+    "flag_is_sun": 1,
+    "final_label": "*ending",
+    "ending": "sunset",
+    "save_roundtrip": true,
+    "languages": ["zh", "en", "ja"]
+  },
+  "route_b": {
+    "choice": "rain",
+    "route": "rain",
+    "flag_is_sun": 0,
+    "final_label": "*ending",
+    "ending": "rain_shelter",
+    "save_roundtrip": true,
+    "languages": ["zh", "en", "ja"]
+  }
+}

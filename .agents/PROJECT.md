@@ -1,89 +1,92 @@
-# Project: Caesura (AmeKAG) Platform & Runtime Sprint
+# Project: Caesura (AmeKAG) 1.x Release Candidate
 
 ## Architecture
 Caesura (AmeKAG) is a cross-platform Visual Novel engine with a strict 16-module modular architecture.
 Module boundaries are enforced via `src/<module>/api/I<ModuleName>.h`. Direct implementation inclusion between modules is forbidden.
 All backends are registered and accessed via `BackendRegistry`. `src/main.cpp` and `src/entry/` form the sole composition root.
 
-### Data Flow & Component Interaction
-- **Platform & Input**: `IPlatformBackend` encapsulates SDL3 window, IME text input, and event polling. `InputRouter` filters and routes events to KAG coroutines or game callbacks.
-- **Scripting & Engine**: `DevCoreBinding` bridges platform capabilities to Lua sandbox. KAG Neo-Genesis interpreter manages coroutines and dynamic UI scenes.
-- **Rendering & Animation**: `IRenderDevice` (bgfx) renders 2D scenes, Live2D Cubism models, and SMA 3D minigame meshes with cross-backend fallback (Direct3D 11, OpenGL, GLES, Metal).
-- **Packaging & CI**: Automated pipelines for Android Release Signing / AAB generation and iOS Xcode / Metal toolchain hardening.
+### Data Flow & Release Candidate Architecture
+- **Unified Status Source**: `docs/status/platform-matrix.yaml` acts as the single machine-readable source of truth across all 6 target platforms (Windows, Linux, Web, Android, macOS, iOS).
+- **Generator & CI Validation**: `scripts/generate_platform_status.py` generates `docs/status/platform-status.md`, validates YAML schema, and prevents status drift.
+- **Cross-Platform Behavioral Parity**: `tests/projects/first_vn/` is executed across all platforms. Standard `FirstVNStateSnapshot` JSONs in `artifacts/parity/` record deterministic game progression and choice outcomes, asserted by `scripts/compare_platform_parity.py`.
+- **Platform Verification & Hardware Gates**: Android latest HEAD (`62132e78`) verified in `docs/platform/android-latest-head-validation.md`. iOS toolchain/Metal verified and marked `hardware-gated` in `docs/platform/ios-device-validation.md`.
+- **Release Evidence Bundle**: `artifacts/release/` contains `manifest.json`, `platform-status.json`, parity reports, checksums, test logs, and the final `RC-GO` decision in `docs/status/release-candidate-report.md`.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | IPlatformBackend Text Input | Pure virtual methods `startTextInput()`, `stopTextInput()`, `setTextInputRect()`, `isTextInputActive()` | R1 | Survey 1 [DONE] |
-| 2 | SDL3PlatformBackend Text Input | Implementation using `SDL_StartTextInput`, `SDL_StopTextInput`, `SDL_SetTextInputArea`, `SDL_TextInputActive` | R1 | Survey 1 [DONE] |
-| 3 | NullPlatformBackend Text Input | Headless stubs for CI/testing without display | R1 | Survey 1 [DONE] |
-| 4 | Engine Event Routing for IME | Dispatch `SDL_EVENT_TEXT_INPUT` (`_KAG_onTextInput`) and `SDL_EVENT_TEXT_EDITING` (`_KAG_onTextEditing`) | R1 | Survey 1 [DONE] |
-| 5 | InputRouter IME Protection | Treat text input events as non-advancing under `InputFocus::KAG` | R1 | Survey 1 [DONE] |
-| 6 | DevCore Lua IME Bindings | Expose `start_text_input`, `stop_text_input`, `set_text_input_rect`, `is_text_input_active` to Lua | R1 | Survey 1 [DONE] |
-| 7 | Backend & Sandbox Whitelist | Bridge functions in `scripts/backend.lua` and allowlist in `scripts/sandbox.lua` | R1 | Survey 1 [DONE] |
-| 8 | KAG [input] Schema Contract | Define `[input]` in `scripts/kag/schema.lua` with typed constraints | R1 | Survey 1 [DONE] |
-| 9 | KAG [input] Interactive UI & Viewport Offset | Coroutine-yielding text box UI placed in upper viewport (`y <= 0.45 * height`) to avoid virtual keyboard occlusion | R1 | Survey 1 [DONE] |
-| 10 | IME C++ & Lua Unit Tests | C++ doctests in `test_platform.cpp`, `test_input.cpp` and headless Lua tests in `test_input_cmd.lua` | R1 | Survey 1 [DONE] |
-| 11 | Android Environment Signing Config | Dual env-var support (`CAESURA_ANDROID_*` & `CAESURA_*_PATH`) in `android/app/build.gradle` without hardcoded secrets | R2 | Survey 2 [DONE] |
-| 12 | Android AAB & V1/V2/V3 Signing | Explicit V1/V2/V3 signing and `bundle { language { enableSplit false } }` configuration | R2 | Survey 2 [DONE] |
-| 13 | Android Release Automation Scripts | PKCS12 keytool generator script (`generate_android_keystore.sh`) and release build script (`build_android_release.sh`) | R2 | Survey 2 [DONE] |
-| 14 | Android CI Ephemeral Key Validation | End-to-end assembleRelease, bundleRelease, zipalign, and apksigner verification in CI | R2 | Survey 2 [DONE] |
-| 15 | iOS CMake Toolchain Hardening | CMake iOS Xcode bundle definitions, framework linkages, and OpenSSL static slices | R3 | Survey 2 |
-| 16 | Metal Shader Census & Verification | Python verification script (`verify_metal_shaders.py`) and C++ contract test (`test_render_metal_contract.cpp`) | R3 | Survey 2 |
-| 17 | Metal Fallback Assertions | Document and assert Metal Post-FX identity fallback and SMA CPU skinning fallback | R3 | Survey 2 |
-| 18 | iOS CI Workflow Hardening | SDL3 & OpenSSL dependency caching and robust build steps in `ci.yml` | R3 | Survey 2 |
-| 19 | Live2D Multi-Backend Mobile Lifecycle | Validate Live2D Cubism memory bounds, native render paths, and Null fallback on mobile | R4 | Survey 3 |
-| 20 | 3D Minigame & SMA GLES/Mobile Validation | Validate 3D primitives, physics loop, and dual-mode skinning (GPU compute / CPU SIMD fallback) | R4 | Survey 3 |
-| 21 | Post-FX Stall-Free Degradation | Validate Vignette, LUT, SoftBlur, Bloom scratch RTT ping-pong without GPU pipeline stalls | R4 | Survey 3 |
-| 22 | Full Regression Test Baseline | 100% C++ doctests (1041+ passing), 100% Lua tests (134+ passing), zero coupling violations across 16 modules | R4 | Survey 3 |
+| 1 | Platform Matrix YAML Schema | `docs/status/platform-matrix.yaml` tracking 6 platforms with 7 strict enums and evidence anchors | M1 (Task 01) | Survey 1 [DONE] |
+| 2 | Platform Status Generator Script | `scripts/generate_platform_status.py` with markdown generation, JSON export, and `--check` CI freshness guard | M1 (Task 01) | Survey 1 [DONE] |
+| 3 | Generated Platform Status Markdown | `docs/status/platform-status.md` auto-generated from YAML with zero document drift | M1 (Task 01) | Survey 1 [DONE] |
+| 4 | First-VN Fixture & Test Verification | Validate `tests/projects/first_vn/` progression, branching, variables, save/load, i18n, and audio across platforms | M2 (Task 02) | Survey 2 [DONE] |
+| 5 | FirstVNStateSnapshot Parity JSONs | `artifacts/parity/<platform>.json` snapshots for Windows, Linux, Web, Android, and iOS (hardware-gated) | M2 (Task 02) | Survey 2 [DONE] |
+| 6 | Cross-Platform Parity Assertion Tool | `scripts/compare_platform_parity.py` asserting `desktop == web == android == ios` | M2 (Task 02) | Survey 2 [DONE] |
+| 7 | Android Latest HEAD Validation | Verify latest commit HEAD (`62132e78`) on Xiaomi 11 / test harness across boot, CJK RGBA8 atlas, touch, save, and IME | M3 (Task 03) | Survey 3 [DONE] |
+| 8 | Android Latest HEAD Report | `docs/platform/android-latest-head-validation.md` documenting SHA256 hashes, device info, logs, and test evidence | M3 (Task 03) | Survey 3 [DONE] |
+| 9 | iOS Toolchain & Metal Shader Audit | Audit Xcode build, 12 embedded Metal shaders, Post-FX identity fallback, and SMA CPU soft-skinning | M4 (Task 04) | Survey 3 [DONE] |
+| 10 | iOS Device Validation & Hardware Gate Report | `docs/platform/ios-device-validation.md` with prerequisite matrix, build procedures, and explicit `hardware-gated` boundary | M4 (Task 04) | Survey 3 [DONE] |
+| 11 | Release Evidence Bundle Assembly | `artifacts/release/` containing `manifest.json`, `platform-status.json`, `parity/`, `checksums/`, and `reports/` | M5 (Task 05) | Survey 3 [DONE] |
+| 12 | Zero-Regression Baseline Test Pass | 100% C++ doctests (1052 passed), 100% Lua suites (158 passed), 16/16 module coupling pass, 100% coverage pass | M5 (Task 05) | Survey 3 [DONE] |
+| 13 | Authoritative Release Candidate Report | `docs/status/release-candidate-report.md` declaring definitive `RC-GO` status with release blocker checklist | M5 (Task 05) | Survey 3 [DONE] |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| R1 | IME Virtual Keyboard & Text Input | Features 1-10: IPlatformBackend, SDL3, InputRouter, Lua bindings, KAG [input] UI with viewport offset, C++ & Lua tests | none | DONE |
-| R2 | Android Release Signing & AAB Pipeline | Features 11-14: build.gradle signing, PKCS12 keytool scripts, assembleRelease, bundleRelease, apksigner verify | none | DONE |
-| R3 | iOS & Metal Toolchain / CI Hardening | Features 15-18: CMake iOS Xcode bundle, Metal shader verification, CI caching | none | IN_PROGRESS |
-| R4 | Mobile Stress Validation & Baseline QA | Features 19-22: Live2D/3D minigame stress, Post-FX stall validation, full regression test suite pass | R1, R2, R3 | PLANNED |
+| M1 | Unified Platform Status Matrix & Generator | Features 1-3: `platform-matrix.yaml`, `generate_platform_status.py`, `platform-status.md` | none | DONE |
+| M2 | First-VN Cross-Platform Behavioral Parity | Features 4-6: `FirstVNStateSnapshot`, `artifacts/parity/`, `compare_platform_parity.py` | M1 | DONE |
+| M3 | Android Latest HEAD Real-Device Regression | Features 7-8: Android latest HEAD verification, `android-latest-head-validation.md` | M1 | DONE |
+| M4 | iOS Real-Device Track & Hardware Gate Audit | Features 9-10: iOS toolchain audit, Metal shader validation, `ios-device-validation.md` | M1 | DONE |
+| M5 | Release Candidate Gate & Evidence Bundle | Features 11-13: `artifacts/release/`, baseline test passes, `release-candidate-report.md` (`RC-GO`) | M1, M2, M3, M4 | DONE |
 
 ## Interface Contracts
-### `src/platform/api/IPlatformBackend.h`
-```cpp
-virtual void startTextInput() = 0;
-virtual void stopTextInput() = 0;
-virtual void setTextInputRect(int x, int y, int w, int h, int cursor = 0) = 0;
-virtual bool isTextInputActive() const = 0;
-```
+### Status Matrix Enum Contract
+Allowed status values in `docs/status/platform-matrix.yaml`:
+- `verified`: Tested and verified with concrete evidence (commit, document, test, timestamp).
+- `probe`: Basic build or compile probe verified in CI.
+- `pending`: Feature or platform under active development.
+- `hardware-gated`: Requires physical hardware (e.g., Apple Mac/iPhone) not currently connected.
+- `credential-gated`: Requires production credentials/signing keys.
+- `blocked`: Blocked by external dependency or known P0 bug.
+- `not-applicable`: Dimension does not apply to this platform.
 
-### `src/script/bindings/DevCoreBinding.cpp` ↔ Lua
-```lua
-DevCore.start_text_input() -> void
-DevCore.stop_text_input() -> void
-DevCore.set_text_input_rect(x, y, w, h, cursor) -> void
-DevCore.is_text_input_active() -> boolean
+### FirstVNStateSnapshot Schema Contract (`artifacts/parity/<platform>.json`)
+```json
+{
+  "platform": "windows|linux|web|android|ios",
+  "story": "first_vn",
+  "status": "verified|hardware-gated",
+  "route_a": {
+    "choice": "sun",
+    "route": "sun",
+    "flag_is_sun": 1,
+    "final_label": "*ending",
+    "ending": "sunset",
+    "save_roundtrip": true,
+    "languages": ["zh", "en", "ja"]
+  },
+  "route_b": {
+    "choice": "rain",
+    "route": "rain",
+    "flag_is_sun": 0,
+    "final_label": "*ending",
+    "ending": "rainy_day",
+    "save_roundtrip": true,
+    "languages": ["zh", "en", "ja"]
+  }
+}
 ```
-
-### KAG Neo-Genesis `[input]` Command
-```kag
-[input name="player_name" prompt="Enter your name:" default="Hero" maxlen=16 x=360 y=200 width=1200 height=120]
-```
-- Coerces to `f.player_name` by default.
-- Yields current coroutine until confirmed or canceled.
-- Positions UI at `y <= 0.45 * height` to prevent virtual keyboard occlusion.
 
 ## Code Layout
-- `src/platform/api/IPlatformBackend.h`: Platform backend interface
-- `src/platform/SDL3PlatformBackend.h`, `SDL3PlatformBackend.cpp`: SDL3 implementation
-- `src/platform/NullPlatformBackend.h`: Headless mock implementation
-- `src/entry/Engine.cpp`: Main loop & event dispatch to `_KAG_onTextInput` / `_KAG_onTextEditing`
-- `src/input/InputRouter.cpp`: Event filtering for KAG non-advancing inputs
-- `src/script/bindings/DevCoreBinding.cpp`: Lua DevCore bindings
-- `scripts/backend.lua`: Engine backend wrapper
-- `scripts/sandbox.lua`: Lua sandbox whitelist
-- `scripts/kag/schema.lua`: Schema definitions for `[input]`
-- `scripts/kag/commands/text.lua`: KAG text & interactive input implementation
-- `android/app/build.gradle`: Android release signing and bundle configuration
-- `scripts/generate_android_keystore.sh`, `scripts/build_android_release.sh`: Android scripts
-- `CMakeLists.txt`, `.github/workflows/ci.yml`: CMake & CI build hardening
-- `scripts/verify_metal_shaders.py`: Metal shader validation tool
-- `tests/cpp/`: C++ doctest suites (`test_platform.cpp`, `test_input.cpp`, `test_render_metal_contract.cpp`)
-- `tests/scripts/`: Lua test suites (`test_input_cmd.lua`, `run_lua_tests.lua`)
+- `docs/status/platform-matrix.yaml`: Master platform status YAML definition
+- `scripts/generate_platform_status.py`: Platform status markdown generator and schema validator
+- `docs/status/platform-status.md`: Auto-generated human-readable platform status document
+- `tests/projects/first_vn/`: Standard acceptance test visual novel project
+- `artifacts/parity/`: Cross-platform state parity snapshots
+- `scripts/compare_platform_parity.py`: Parity comparison and validation tool
+- `docs/platform/cross-platform-parity.md`: Cross-platform parity architecture and verification guide
+- `docs/platform/android-latest-head-validation.md`: Latest HEAD Android regression documentation
+- `scripts/verify_android_regression.py`: Automated Android latest HEAD regression verifier
+- `docs/platform/ios-device-validation.md`: iOS toolchain, Metal shaders, and hardware-gated audit documentation
+- `artifacts/release/`: Release candidate evidence bundle (`manifest.json`, `checksums/`, `reports/`)
+- `scripts/verify_release_candidate.py`: Master release candidate verification tool
+- `docs/status/release-candidate-report.md`: Master 1.x Release Candidate report with `RC-GO` decision

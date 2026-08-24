@@ -1,0 +1,30 @@
+{
+  "suite": "First-VN Cross-Platform Behavioral Parity",
+  "runner": "python scripts/compare_platform_parity.py",
+  "commit": "62132e783dd238752659d4227ff26b0235258ea9",
+  "required_platforms": [
+    "windows",
+    "linux",
+    "web",
+    "android"
+  ],
+  "gated_platforms": [
+    "ios"
+  ],
+  "verified_count": 4,
+  "gated_count": 1,
+  "failed_count": 0,
+  "status": "PASS",
+  "unit_tests": {
+    "runner": "python tests/scripts/test_platform_parity.py",
+    "tests_run": 10,
+    "tests_passed": 10,
+    "status": "OK"
+  },
+  "e2e_checks": {
+    "runner": "bash scripts/verify_first_vn.sh",
+    "checks_run": 13,
+    "checks_passed": 13,
+    "status": "PASS"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "suite": "Caesura Lua Test Suites",
+  "runner": "build/lua/Debug/lua.exe",
+  "commit": "62132e783dd238752659d4227ff26b0235258ea9",
+  "main_suites": 134,
+  "orphan_suites": 24,
+  "total_suites": 158,
+  "suites_passed": 158,
+  "suites_failed": 0,
+  "status": "PASS",
+  "coverage": {
+    "lua_tests_registered": 158,
+    "cpp_tests_registered": 71,
+    "coverage_check": "PASS"
+  }
+}

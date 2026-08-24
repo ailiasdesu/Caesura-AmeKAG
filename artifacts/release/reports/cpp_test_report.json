@@ -1,0 +1,31 @@
+{
+  "suite": "Caesura Core C++ Doctest Suite",
+  "runner": "build/tests/Debug/CaesuraTests.exe",
+  "commit": "62132e783dd238752659d4227ff26b0235258ea9",
+  "test_cases_total": 1052,
+  "test_cases_passed": 1052,
+  "test_cases_failed": 0,
+  "test_cases_skipped": 0,
+  "assertions_total": 385299,
+  "assertions_passed": 385299,
+  "assertions_failed": 0,
+  "status": "PASS",
+  "categories": {
+    "archive": "CARC v2 encryption, compression, pack/unpack roundtrip, memory file, integrity header",
+    "audio": "SoLoud backend, 3-bus audio mixer (BGM/SE/Voice), volume fade, xfade, pan, pitch, loop",
+    "debug": "Trace logger, sink dispatch, performance metrics, profiler markers, memory tracking",
+    "di": "BackendRegistry singleton, dynamic registration, typed accessors, quota alloc/free, sandbox limits",
+    "entry": "Engine lifecycle, EngineConfig bootstrap, window resize, viewport scaling, mobile adapter",
+    "input": "SDL3 event mapping, touch gesture detector (long press, pinch), IME text input bridge",
+    "job": "JobSystem worker pool, fiber dispatch, dependency graph, atomic counter synchronization",
+    "live2d": "Live2D Cubism model loader, motion player, expression controller, physics calculation",
+    "minigame": "3D minigame viewport, orbit camera, MSL/GLSL shader pipeline, mesh renderer",
+    "platform": "SDL3 window management, clipboard, DPI scaling, file dialog, IME virtual keyboard",
+    "render": "bgfx render device, quad batching, TTF atlas (RGBA8 2048x2048), transient buffers, postfx fallbacks",
+    "resource": "Async asset loader, package manager, cache eviction policy, background streaming",
+    "rpc": "HTTP RPC server, JSON-RPC 2.0 dispatch, editor bridge, debug inspection endpoints",
+    "script": "Lua 5.4 VM bindings, KAG command contracts (123 commands), expression evaluator, sandbox",
+    "steam": "Steamworks API mock & integration, achievements, stats, cloud storage, overlay hook",
+    "storage": "SaveManager schema v1->v5 migration, system slots (-1 quick, -2 auto), thumbnail encode"
+  }
+}
