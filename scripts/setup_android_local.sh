@@ -20,7 +20,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export JAVA_HOME="${JAVA_HOME:-/d/green/android-tools/jdk-17.0.20+8}"
 export ANDROID_HOME="${ANDROID_HOME:-/d/green}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-export PATH="$JAVA_HOME/bin:/d/green/android-tools/gradle-8.9/bin:$PATH"
+export PATH="$JAVA_HOME/bin:/d/green/android-tools/gradle-8.9/bin:/d/green/android-tools/strawberry-perl/perl/bin:$PATH"
 NDK="${NDK:-$ANDROID_HOME/ndk/27.3.13750724}"
 SRC_DIR=/d/green/android-build-src
 SDL3_DIR="${SDL3_DIR:-$SRC_DIR/sdl3-android/lib/cmake/SDL3}"
@@ -41,7 +41,9 @@ if [[ -f "$SDL3_DIR/SDL3Config.cmake" ]]; then
 else
     echo "[local-android] building SDL3 android slice (arm64-v8a)..."
     rm -rf "$SRC_DIR/SDL/build-android" "$SRC_DIR/sdl3-android"
-    cmake -S "$SRC_DIR/SDL" -B "$SRC_DIR/SDL/build-android" \
+    # VS 2022 generator would hijack the NDK toolchain with MSBuild's built-in
+    # Android targets (r23c); MinGW Makefiles keeps the NDK in control.
+    cmake -G "Ninja" -S "$SRC_DIR/SDL" -B "$SRC_DIR/SDL/build-android" \
         -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 \
         -DCMAKE_BUILD_TYPE=Release -DSDL_STATIC=ON -DSDL_SHARED=ON \

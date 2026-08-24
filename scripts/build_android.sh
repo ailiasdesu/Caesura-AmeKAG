@@ -132,7 +132,7 @@ echo "  target   : ${TARGET:-<all>}  smoke=${SMOKE}"
 echo "  out      : $BUILD_DIR"
 
 # -- 1) Configure ------------------------------------------------------------
-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
+cmake -G "${CMAKE_GENERATOR:-Ninja}" -S "$REPO_ROOT" -B "$BUILD_DIR" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
     -DANDROID_ABI="$ABI" \
     -DANDROID_PLATFORM="$ANDROID_PLATFORM" \
