@@ -342,6 +342,20 @@ bool Engine::initPlatformPhase() {
         return false;
     }
     m_renderInitialized = true;
+    // Present surface: the drawable size differs from the configured engine
+    // resolution on Android (OS-imposed window), so the renderer maps the
+    // logical scene (1920x1080) to the real surface (e.g. 2320x956) and the
+    // game fills the display instead of clipping/letterboxing.
+    {
+        SDL_Window* win = static_cast<SDL_Window*>(
+            m_platformBackend ? m_platformBackend->getNativeWindowHandle() : nullptr);
+        if (win) {
+            int pw = 0, ph = 0;
+            if (SDL_GetWindowSizeInPixels(win, &pw, &ph) && pw > 0 && ph > 0) {
+                m_renderDevice->setPresentSize(uint32_t(pw), uint32_t(ph));
+            }
+        }
+    }
     BackendRegistry::instance().setRenderDevice(m_renderDevice.get());
     // GPU monitor may now query the render stats safely (round 39).
     if (m_gpuMonitor) m_gpuMonitor->setGpuAvailable(true);

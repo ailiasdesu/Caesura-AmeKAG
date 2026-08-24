@@ -10,7 +10,7 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 34 |
-| Pure-virtual interface methods | 403 |
+| Pure-virtual interface methods | 404 |
 | Lua binding functions (luaL_Reg entries) | 155 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 123 |
@@ -43,7 +43,7 @@
 | render | ILayerManager.h | 21 |
 | render | IMeshRenderer.h | 8 |
 | render | IParticleSystem.h | 9 |
-| render | IRenderDevice.h | 52 |
+| render | IRenderDevice.h | 53 |
 | render | ITextureManager.h | 17 |
 | render | IVideoPlayer.h | 18 |
 | resource | IAssetProvider.h | 5 |

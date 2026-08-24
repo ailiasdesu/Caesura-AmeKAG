@@ -99,6 +99,7 @@ public:
         uint8_t opacity = 0;
     };
 
+    void setPresentSize(uint32_t, uint32_t) override {}
     bool init(void*, int width, int height) override {
         backbufferWidth = width;
         backbufferHeight = height;

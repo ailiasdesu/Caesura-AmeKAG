@@ -39,6 +39,8 @@ public:
     void beginFrame();
     void endFrame();
     void commit_frame();
+    // Present surface size (see IRenderDevice::setPresentSize).
+    void setPresentSize(uint16_t w, uint16_t h) { m_backbufferW = w; m_backbufferH = h; }
     void setViewRect(uint16_t v, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void setViewClear(uint16_t v, uint16_t f, uint32_t c, float d, uint8_t s);
     void touch(uint16_t v);
@@ -77,8 +79,16 @@ private:
     int m_screenOffsetX = 0;
     int m_screenOffsetY = 0;
     void setupDefaultViews();
+    void updateBackbufferSize();
     int m_width  = 1280;
     int m_height = 720;
+    // Actual present surface (bgfx backbuffer) pixels. On desktop it equals
+    // the logical size; on Android the OS surface (e.g. 2320x956) differs
+    // from the configured engine resolution (1920x1080), so the MAIN/DEBUG
+    // view rects use this size while every projection stays in LOGICAL
+    // coordinates -- the game content stretches to fill the display.
+    uint16_t m_backbufferW = 0;
+    uint16_t m_backbufferH = 0;
     bool m_bgfxInitialized = false;
     bool m_shutdownComplete = false;
     struct RTTEntry { bgfx::FrameBufferHandle fb = BGFX_INVALID_HANDLE; bgfx::TextureHandle tex = BGFX_INVALID_HANDLE; uint16_t viewId = VIEW_RTT; };

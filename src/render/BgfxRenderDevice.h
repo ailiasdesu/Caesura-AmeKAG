@@ -23,6 +23,7 @@ public:
     const char* getBackendName() const override { return m_deviceCore ? m_deviceCore->getBackendName() : "bgfx"; }
 
     bool init(void* nativeWindowHandle, int width, int height) override;
+    void setPresentSize(uint32_t width, uint32_t height) override;
     bool isInitialized() const override { return m_bgfxInitialized; }
     void beginShutdown() override;
     void resize(int width, int height) override;

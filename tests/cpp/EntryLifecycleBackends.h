@@ -134,6 +134,7 @@ public:
     explicit RenderDevice(LifecycleProbe& probe) : m_probe(probe) {}
     ~RenderDevice() override { ++m_probe.destructorCalls; }
 
+    void setPresentSize(uint32_t, uint32_t) override {}
     bool init(void* nativeWindowHandle, int width, int height) override {
         ++m_probe.initCalls;
         m_probe.observedNativeHandle = nativeWindowHandle;

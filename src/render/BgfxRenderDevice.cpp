@@ -115,6 +115,10 @@ void BgfxRenderDevice::beginShutdown() {
     if (m_bgfxInitialized) setBgfxShuttingDown(true);
 }
 
+void BgfxRenderDevice::setPresentSize(uint32_t width, uint32_t height) {
+    if (m_deviceCore) m_deviceCore->setPresentSize(uint16_t(width), uint16_t(height));
+}
+
 void BgfxRenderDevice::resize(int width, int height) {
     m_deviceCore->resize(width, height);
     // Scene RTT + chain scratch targets are size-matched to the backbuffer;

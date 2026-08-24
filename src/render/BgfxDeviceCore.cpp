@@ -179,6 +179,11 @@ printf("[BgfxRenderDevice] Shutdown complete.\n");
 void BgfxDeviceCore::beginFrame() {
     if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
+    // Refresh the present-surface size (stable after frame 1; on Android it
+    // is the OS window surface, NOT the configured engine resolution).
+    updateBackbufferSize();
+    const uint16_t bw = m_backbufferW > 0 ? m_backbufferW : static_cast<uint16_t>(m_width);
+    const uint16_t bh = m_backbufferH > 0 ? m_backbufferH : static_cast<uint16_t>(m_height);
     // Screen-offset pan: shift VIEW_MAIN's rect by the camera/quakes offset
     // (clamped so the view never leaves the backbuffer entirely).
     if (m_screenOffsetX != 0 || m_screenOffsetY != 0) {
@@ -191,35 +196,35 @@ void BgfxDeviceCore::beginFrame() {
         const int32_t vy = std::max<int32_t>(0, std::min<int32_t>(m_screenOffsetY, limY));
         bgfx::setViewRect(VIEW_MAIN, static_cast<uint16_t>(vx),
                           static_cast<uint16_t>(vy),
-                          static_cast<uint16_t>(m_width),
-                          static_cast<uint16_t>(m_height));
+                          bw, bh);
     } else {
-        bgfx::setViewRect(VIEW_MAIN, 0, 0, static_cast<uint16_t>(m_width),
-                          static_cast<uint16_t>(m_height));
+        bgfx::setViewRect(VIEW_MAIN, 0, 0, bw, bh);
     }
     // The debug-text overlay in VIEW_DEBUG + explicit submit calls
     // in blitTexture/blitViewport drive VIEW_MAIN and VIEW_RTT.
+}
+
+void BgfxDeviceCore::updateBackbufferSize() {
+    // An explicitly-provided present size (Android OS surface, from
+    // SDL_GetWindowSizeInPixels) is authoritative; bgfx reports its own
+    // configured resolution (1920x1080), not the real drawable.
+    if (m_backbufferW > 0 && m_backbufferH > 0) return;
+    const bgfx::Stats* st = bgfx::getStats();
+    if (st && st->width > 0 && st->height > 0) {
+        m_backbufferW = st->width;
+        m_backbufferH = st->height;
+    }
 }
 
 void BgfxDeviceCore::endFrame() {
     if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
     bgfx::frame();
-    static int s_probe = 0;
-    if (s_probe++ < 40) {
-        const bgfx::Stats* st = bgfx::getStats();
-        fprintf(stderr, "[BGFX-PROBE] endFrame draw=%u\n", (unsigned)st->numDraw);
-    }
 }
 
 void BgfxDeviceCore::commit_frame() {
     if (!m_bgfxInitialized) return;
     bgfx::frame();
-    static int s_probe2 = 0;
-    if (s_probe2++ < 40) {
-        const bgfx::Stats* st = bgfx::getStats();
-        fprintf(stderr, "[BGFX-PROBE] commit draw=%u\n", (unsigned)st->numDraw);
-    }
 }
 
 void BgfxDeviceCore::setupDefaultViews() {
@@ -228,8 +233,11 @@ void BgfxDeviceCore::setupDefaultViews() {
     bgfx::setViewClear(VIEW_RTT, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
                        0x00000000, 1.0f, 0);
 
+    const uint16_t bw = m_backbufferW > 0 ? m_backbufferW : static_cast<uint16_t>(m_width);
+    const uint16_t bh = m_backbufferH > 0 ? m_backbufferH : static_cast<uint16_t>(m_height);
+
     // -- View MAIN (primary compositing) --
-    bgfx::setViewRect(VIEW_MAIN, 0, 0, uint16_t(m_width), uint16_t(m_height));
+    bgfx::setViewRect(VIEW_MAIN, 0, 0, bw, bh);
     bgfx::setViewClear(VIEW_MAIN, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
                        0x303030FF, 1.0f, 0);
 
@@ -251,7 +259,7 @@ void BgfxDeviceCore::setupDefaultViews() {
     bgfx::setViewTransform(VIEW_RTT, nullptr, orthoRTT);
 
     // -- View DEBUG (engine HUD overlay) --
-    bgfx::setViewRect(VIEW_DEBUG, 0, 0, uint16_t(m_width), uint16_t(m_height));
+    bgfx::setViewRect(VIEW_DEBUG, 0, 0, bw, bh);
     bgfx::setViewClear(VIEW_DEBUG, BGFX_CLEAR_NONE, 0x00000000, 1.0f, 0);
 }
 

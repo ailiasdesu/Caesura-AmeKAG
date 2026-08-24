@@ -35,6 +35,7 @@ class CountingRenderDevice final : public IRenderDevice {
 public:
     // -- lifecycle --
     bool init(void*, int width, int height) override { return true; }
+    void setPresentSize(uint32_t, uint32_t) override {}
     bool isInitialized() const override { return true; }
     void beginShutdown() override {}
     void shutdown() override {}

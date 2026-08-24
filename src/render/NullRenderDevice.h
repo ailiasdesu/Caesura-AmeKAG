@@ -9,6 +9,7 @@ class NullRenderDevice final : public IRenderDevice {public:
     NullRenderDevice();
 
     bool init(void* nativeWindowHandle, int width, int height) override;
+    void setPresentSize(uint32_t, uint32_t) override {}
     bool isInitialized() const override { return false; }
     void beginShutdown() override;
     void shutdown() override;

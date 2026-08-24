@@ -38,6 +38,13 @@ public:
 
     // Lifecycle
     virtual bool init(void* nativeWindowHandle, int width, int height) = 0;
+
+    // Present surface size in pixels. On desktop it equals the window size;
+    // on Android the OS-imposed surface (e.g. 2320x956) can differ from the
+    // configured engine resolution (1920x1080). The renderer keeps LOGICAL
+    // coordinates for the scene while the presentation scales to this size,
+    // so the game content fills the display (no clipping/letterbox).
+    virtual void setPresentSize(uint32_t width, uint32_t height) = 0;
     virtual bool isInitialized() const = 0;
     virtual void beginShutdown() = 0;
 
