@@ -154,7 +154,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 |------|------|
 | `api/command-contracts.md` | 123 个 KAG Neo-Genesis 命令的声明式契约参考（自动生成，权威） |
 | `api/lua-modules.md` | Lua 模块 API 参考 |
-| `api/cpp-interfaces.md` | 全部 C++ 接口定义（31 个） |
+| `api/cpp-interfaces.md` | 全部 C++ 接口定义（34 个） |
 | `api/editor-api-reference.md` | 编辑器 RPC 端点参考 |
 | `api/api-stats.md` | 实时 API 普查（自动生成） |
 | `api/kag-commands.md` | 已弃用的 KAG3 兼容参考（被 command-contracts.md 取代） |
@@ -164,7 +164,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | 文件 | 内容 |
 |------|------|
 | `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
-| `design/engine-capability-matrix.md` | 79 项能力的完成状态矩阵 |
+| `design/engine-capability-matrix.md` | 82 项能力的完成状态矩阵 |
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
@@ -184,7 +184,9 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-23-026-delivery-handoff.md` | **最新状态**交接文档（026，Validation-Release 阶段总结；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
+| `plans/2026-08-24-028-android-full-closure.md` | **最新状态**交接文档（028，Android 全链路真机闭环、IME 输入桥接、Release 签名与 iOS/Metal 加固） |
+| `plans/2026-08-24-027-antigravity-handoff.md` | 交接文档（027，Antigravity 接手现状、铁律、环境速查） |
+| `plans/2026-08-23-026-delivery-handoff.md` | 交接文档（026，Validation-Release 阶段总结；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
 | `plans/2026-08-22-025-delivery-handoff.md` | 交接文档（025；WSL Linux 全量测试 + 8 项跨平台修复） |
 | `plans/2026-08-22-024-delivery-handoff.md` | 交接文档（024，round 127 完成 / 产品化 Sprint 4-5c + Steam SDK） |
 | `plans/2026-08-21-023-delivery-handoff.md` | 交接文档（023，round 121 完成 / Sprint 1-3） |

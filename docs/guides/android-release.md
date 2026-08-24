@@ -8,9 +8,9 @@
 
 | 产物 | 命令（android/ 下） | 签名 | CI 验证 |
 |---|---|---|---|
-| debug APK | `gradle assembleDebug` | debug key（AGP 自动） | ✅ 探针 7m+ 全绿 |
-| release APK | `gradle assembleRelease` | 无 env → **未签名**；置 env → 签名 | ✅ 未签名构建（探针） |
-| AAB | `gradle bundleRelease` | 同 release | ⏳ 未接入（Play 阶段加） |
+| debug APK | `gradle assembleDebug` | debug key（AGP 自动） | ✅ 探针全绿 |
+| release APK | `gradle assembleRelease` | 无 env → **未签名**；置 env → 签名 | ✅ 签名与未签名构建 |
+| AAB | `gradle bundleRelease` | 同 release | ✅ 自动化脚本已接入（`scripts/build_android_release.sh`） |
 
 ## 2. 签名（环境变量驱动，零仓库密钥）
 

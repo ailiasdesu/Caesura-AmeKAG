@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 31 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
+Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 34 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
 
 ## Plugin Requirements
 
@@ -74,7 +74,7 @@ cd build/tests/Debug && ./CaesuraTests.exe
 # Run tests via CTest (specify the configuration for multi-config generators)
 ctest -C Debug --test-dir build --output-on-failure
 # Lua script suites (run from repo root; external/lua/lua.exe is vendored):
-#   - main suite: 132 files, order-sensitive (sandbox locks globals mid-run)
+#   - main suite: 134 files, order-sensitive (sandbox locks globals mid-run)
 #   - orphan suite: 24 order-incompatible tests (create global mocks) run
 #     separately — they must never be merged into run_lua_tests.lua
 external/lua/lua.exe tests/scripts/run_lua_tests.lua
@@ -168,10 +168,10 @@ Tests link the same internal static module libraries as the application. Each `t
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first; 完整文档分类见 AGENTS.md §12)
 - `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (123 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
-- `docs/api/cpp-interfaces.md` — all 31 C++ interface definitions
+- `docs/api/cpp-interfaces.md` — all 34 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
 - `docs/design/engine-architecture-topology.md` — module dependency topology and data flow
-- `docs/design/engine-capability-matrix.md` — 79 tracked capabilities and readiness limits
+- `docs/design/engine-capability-matrix.md` — 82 tracked capabilities and readiness limits
 - `docs/guides/getting-started.md` — from clone to running demo
 - `docs/solutions/` — past problem solutions organized by category (YAML frontmatter, searchable)
 

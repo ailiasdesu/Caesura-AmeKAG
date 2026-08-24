@@ -1,15 +1,15 @@
 # Caesura (AmeKAG) — Cross-Platform Visual Novel Engine / 跨平台视觉小说引擎
 
-> **16 modules · 31 pure-virtual interfaces · 123 KAG Neo-Genesis command contracts · 0 circular dependencies**
-> **16 模块 · 31 纯虚接口 · 123 KAG Neo-Genesis 命令契约 · 0 循环依赖**
+> **16 modules · 34 pure-virtual interfaces · 123 KAG Neo-Genesis command contracts · 0 circular dependencies**
+> **16 模块 · 34 纯虚接口 · 123 KAG Neo-Genesis 命令契约 · 0 循环依赖**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 > Live API census: `python scripts/api_stats.py` → [docs/api/api-stats.md](docs/api/api-stats.md) / 实时 API 普查
 
 <p align="center">
-  <b>Platforms 平台</b>&nbsp; Windows&nbsp;&nbsp; macOS&nbsp;&nbsp; Linux&nbsp;&nbsp; Web&nbsp;&nbsp;·&nbsp;&nbsp;
+  <b>Platforms 平台</b>&nbsp; Windows&nbsp;&nbsp; Android&nbsp;&nbsp; macOS&nbsp;&nbsp; Linux&nbsp;&nbsp; iOS (Track I)&nbsp;&nbsp; Web&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Status 状态</b>&nbsp; Tests passing 测试全绿&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Contracts 契约</b>&nbsp;123 KAG commands 命令&nbsp;&nbsp;·&nbsp;&nbsp;
-  <b>Interfaces 接口</b>&nbsp;31 pure-virtual 纯虚
+  <b>Interfaces 接口</b>&nbsp;34 pure-virtual 纯虚
   <br>
   <sub><i>文本徽章（不依赖外部 CI 服务，计数取自 [docs/api/api-stats.md](docs/api/api-stats.md) 实时普查与阶段 G 最近审计）—
   测试状态见 [ROADMAP-200](docs/plans/audit/ROADMAP-200.md) 门禁列 / Text badges (no external CI dependency; counts come
@@ -708,24 +708,24 @@ entry points, topic categories and learning paths are in [docs/guides/community.
   ([ROADMAP-200.md](docs/plans/audit/ROADMAP-200.md))
 - **v1.0.0 release prep (round 113)**: CMake version aligned to 1.0.0, CHANGELOG v1.0.0 section, release checklist.
 
-### 当前基线（阶段 G round 108–113 门禁实测 / Current baseline — stage-G rounds 108–113 gate measurements)
+### 当前基线（阶段 G 门禁实测 / Current baseline — stage-G gate measurements)
 
 | 指标 | 数值 / Value |
 |------|------|
-| C++ 接口 | **31** 纯虚接口 / **390** 纯虚方法 |
+| C++ 接口 | **34** 纯虚接口 / **408** 纯虚方法 |
 | KAG 命令契约 | **123**（多类别，自动生成权威） |
-| Lua 绑定函数 | **154**（11 个绑定文件） |
-| RPC 表面 | **25** HTTP 端点 + **29** stdio JSON-RPC 方法 |
-| Lua 运行时脚本 | **74**（scripts/，不含 demo/check） |
-| 能力矩阵 | **79** 项 / 6 域 |
-| 测试 · C++ | **976** 用例（8858 断言，doctest 全绿） |
-| 测试 · Lua | **132** 主套件 + **24** 孤儿套件（全绿） |
+| Lua 绑定函数 | **159**（11 个绑定文件） |
+| RPC 表面 | **36** HTTP 端点 + **29** stdio JSON-RPC 方法 |
+| Lua 运行时脚本 | **75**（scripts/，不含 demo/check） |
+| 能力矩阵 | **82** 项 / 6 域 |
+| 测试 · C++ | **1,052** 用例（385,299 断言，doctest 全绿） |
+| 测试 · Lua | **134** 主套件 + **24** 孤儿套件（全绿） |
 | 测试 · Web | **297** 用例（vitest，20 文件） |
-| 测试 · Editor | **530** 用例（vitest 全绿） |
+| 测试 · Editor | **615** 用例（vitest 全绿） |
 | 耦合门禁 | PASS（entry/di/script ≤14，其余 ≤4） |
-| CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP） |
-| 示例库 | tutorial 01–16 + showcase + galgame/full_pipeline/sma + example_game + template |
-| 提交统计 | 1818 commits（round 113 基准：fix 628 / feat 327 / docs 301 / test 292） |
+| CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP + Android APK/AAB + iOS probe） |
+| 示例库 | tutorial 01–16 + showcase + galgame/full_pipeline/sma + example_game + template + first_vn |
+| 移动端真机验证 | 小米 11 (alioth / Snapdragon 888 / Adreno 660 / Android 14) 全链路 100% 闭环 |
 
 > 以上数字为最近一次全量门禁实测（阶段 G round 108–113）；实时口径见
 > [api-stats.md](docs/api/api-stats.md)（API 表面）与 ROADMAP-200 各轮门禁列。若发现不一致，
