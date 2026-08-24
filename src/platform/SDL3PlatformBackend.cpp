@@ -27,6 +27,12 @@ bool SDL3PlatformBackend::init(const char* title, int width, int height) {
     // Device-day: bgfx GLES uses the SDL-owned EGL context; the window must
     // be created OpenGL-capable or SDL_GL_CreateContext refuses it.
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    // Lock the app to landscape: without SDL_HINT_ORIENTATIONS SDL3 lets the
+    // Android display auto-rotation drive the window orientation, so the app
+    // visibly spins with the phone despite the manifest screenOrientation
+    // lock (the engine then re-orients its surface). The hint makes SDL
+    // restrict the activity to landscape and ignore sensor rotation.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft,LandscapeRight");
 #endif
 
     m_window = SDL_CreateWindowWithProperties(props);
