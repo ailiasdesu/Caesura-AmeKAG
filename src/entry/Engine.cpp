@@ -990,6 +990,11 @@ void Engine::processEvents() {
         // InputRouter callback list never fired because no event handler
         // existed here.
         if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+            static int s_resizeAll = 0;
+            if (s_resizeAll++ < 24) {
+                fprintf(stderr, "[RESIZE-ALL] %ux%u\n",
+                        (unsigned)event.window.data1, (unsigned)event.window.data2);
+            }
             if (m_inputRouter) {
                 m_inputRouter->notifyResize(event.window.data1,
                                             event.window.data2);
@@ -998,8 +1003,19 @@ void Engine::processEvents() {
             // 1080x2276) while the engine initializes desktop-sized
             // (1280x720); without this the scene renders into a 720-high
             // band and appears squeezed to the bottom of the screen.
-            if (m_renderDevice) {
+            // Only propagate when the size really changed (Android can
+            // resend identical resize events every frame; that storms RTT
+            // rebuilds and flickers).
+            if (m_renderDevice && (uint32_t(event.window.data1) != m_renderLastW
+                                || uint32_t(event.window.data2) != m_renderLastH)) {
+                static int s_resizeLog = 0;
+                if (s_resizeLog++ < 12) {
+                    fprintf(stderr, "[RESIZE] %ux%u\n",
+                            (unsigned)event.window.data1, (unsigned)event.window.data2);
+                }
                 m_renderDevice->resize(event.window.data1, event.window.data2);
+                m_renderLastW = uint32_t(event.window.data1);
+                m_renderLastH = uint32_t(event.window.data2);
             }
         }
         // -- GPU device reset from SDL (triggers recovery at next loop iteration) --

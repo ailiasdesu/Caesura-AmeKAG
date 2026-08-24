@@ -1,10 +1,21 @@
-﻿-- ═══════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════
 --  Caesura (AmeKAG) — rtt.lua
 --  Lua-side Render-To-Texture wrapper around C++ Render bindings.
 --  Manages viewport handles, blitting, and lifecycle.
 -- ═══════════════════════════════════════════════════════════════════════
 
 local backend = require("backend")
+-- All-platform default canvas size follows the engine backbuffer (1920x1080
+-- default, --resolution override). Falls back to 1920x1080 when the query
+-- fails (tests/headless).
+local function default_res()
+    local ok, w, h = pcall(backend.get_resolution)
+    if ok and w and h and type(w) == "number" and w > 0 and h > 0 then
+        return w, h
+    end
+    return 1920, 1080
+end
+
 
 local RTT = {}
 
@@ -13,7 +24,8 @@ local RTT = {}
 -- ═══════════════════════════════════════════════════════════════════════
 
 function RTT.create(width, height)
-    return backend.create_viewport(width or 1280, height or 720)
+    local dw, dh = default_res()
+    return backend.create_viewport(width or dw, height or dh)
 end
 
 -- ─── Pooled lifecycle (perf: layer add/remove/resize no longer allocates
@@ -21,7 +33,8 @@ end
 local pool = {}  -- "WxH" -> { handle, ... }
 
 function RTT.acquire(width, height)
-    width, height = width or 1280, height or 720
+    local dw, dh = default_res()
+    width, height = width or dw, height or dh
     local key = width .. "x" .. height
     local bucket = pool[key]
     if bucket and #bucket > 0 then
@@ -34,7 +47,8 @@ function RTT.release(handle, width, height)
     if not handle then return end
     -- Return to pool keyed by the caller-known size (bounded 8 per size).
     -- Callers pass w/h because the backend has no viewport-size getter.
-    local key = (width or 1280) .. "x" .. (height or 720)
+    local dw, dh = default_res()
+    local key = (width or dw) .. "x" .. (height or dh)
     local bucket = pool[key] or {}
     if #bucket < 8 then
         bucket[#bucket + 1] = handle

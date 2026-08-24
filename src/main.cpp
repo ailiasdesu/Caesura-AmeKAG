@@ -1019,6 +1019,10 @@ extern "C" int main(int argc, char* argv[]) {
     // --export-dir (default export_out). Bounded by --frames N.
     std::string exportReplayFile;
     std::string exportDir = "export_out";
+    // All-platform default render resolution is 1920x1080 (games are
+    // authored for that canvas; the device window adapts). --resolution
+    // overrides per launch.
+    int resW = 1920, resH = 1080;
     // Editor auth token comes from the environment, not argv: argv is
     // world-readable via /proc/<pid>/cmdline on Linux, so a CLI flag would
     // not protect against other local users. Set CAESURA_EDITOR_TOKEN to
@@ -1049,6 +1053,16 @@ extern "C" int main(int argc, char* argv[]) {
             exportReplayFile = argv[++i];
         } else if (arg == "--export-dir" && i + 1 < argc) {
             exportDir = argv[++i];
+        } else if (arg == "--resolution" && i + 1 < argc) {
+            // --resolution WxH (e.g. 1920x1080 / 1280x720): engine render
+            // canvas size, any window adapts. All-platform default is 1920x1080.
+            int w = 0, h = 0;
+            if (sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w >= 320 && h >= 240) {
+                resW = w; resH = h;
+            } else {
+                fprintf(stderr, "Invalid --resolution value: %s\n", argv[i]);
+                return 1;
+            }
         }
     }
 
@@ -1069,8 +1083,8 @@ extern "C" int main(int argc, char* argv[]) {
 
     Caesura::EngineConfig config;
     config.title      = "Caesura (AmeKAG)";
-    config.width      = 1280;
-    config.height     = 720;
+    config.width      = resW;
+    config.height     = resH;
     config.headless   = headless;
     config.editorMode = editorMode;
     config.enableDebugger = headless || editorMode;

@@ -152,6 +152,8 @@ private:
     bool         m_assetManagerInitialized = false;
     bool         m_asyncLoaderInitialized = false;
     bool         m_steamInitialized = false;
+    uint32_t     m_renderLastW = 0;
+    uint32_t     m_renderLastH = 0;
     bool         m_miniGameInitialized = false;
     bool         m_animationInitialized = false;
     unsigned int m_audioVoiceCompletionsPending = 0;

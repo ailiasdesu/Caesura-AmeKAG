@@ -618,8 +618,10 @@ function kag_runner.render()
        and #(ctx.cc_text.text or "") > 0 then
         local backend = require("backend")
         local vp = ctx.viewport or {}
-        local w = vp.width or 1280
-        local h = vp.height or 720
+        local ok2, rw, rh = pcall(require("backend").get_resolution)
+        if not (ok2 and rw and rh and rw > 0 and rh > 0) then rw, rh = 1920, 1080 end
+        local w = vp.width or rw
+        local h = vp.height or rh
         local text = ctx.cc_text.text
         local speaker = ctx.cc_text.speaker or ""
         if #speaker > 0 then
