@@ -6,6 +6,7 @@
 #include "platform/api/ILifecycleService.h"
 #include "audio/api/IAudioFocusService.h"
 #include "platform/MobileAdapter.h"
+#include "platform/GestureDetector.h"
 #include "di/api/ThreadAssert.h"
 #include <SDL3/SDL.h>
 #include <functional>
@@ -171,6 +172,9 @@ private:
     std::unique_ptr<IPlatformBackend>  m_platformBackend;
     std::unique_ptr<IDisplayService>   m_displayService;
     std::unique_ptr<MobileAdapter>     m_mobileAdapter;
+    // Raw finger stream -> long-press / pinch gesture events (P7 dispatch
+    // to IMobileAdapter::onLongPress/onPinch; was implemented but unwired).
+    std::unique_ptr<GestureDetector>   m_gestureDetector;
     std::unique_ptr<ILifecycleService>  m_lifecycleService;
     std::unique_ptr<IAudioFocusService>  m_audioFocusService;
     std::unique_ptr<LuaManager>        m_lua;

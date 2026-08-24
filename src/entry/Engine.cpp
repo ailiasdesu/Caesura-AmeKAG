@@ -315,6 +315,7 @@ bool Engine::initPlatformPhase() {
     // and future mobile ports; wired to SDL background/foreground events).
     m_mobileAdapter = std::make_unique<MobileAdapter>();
     BackendRegistry::instance().setMobileAdapter(m_mobileAdapter.get());
+    m_gestureDetector = std::make_unique<GestureDetector>();
     // SDL app-lifecycle events are delivered only via event watches
     // (they are never queued); register once here.
     SDL_AddEventWatch(&Engine::appLifecycleWatch, this);
@@ -677,6 +678,19 @@ void Engine::run(const OwnerPump& ownerPump) {
         }
 
         GpuQuality gpuQ = m_gpuMonitor->update(static_cast<double>(dt));
+
+        // Gesture polling: long-press fires on a held still finger; pinch
+        // pulses on two-finger distance changes. Dispatching at most one
+        // event per frame keeps the SDL event queue from being flooded.
+        if (m_mobileAdapter && m_gestureDetector) {
+            const GestureEvent ge = m_gestureDetector->tick(
+                static_cast<double>(SDL_GetTicks()));
+            if (ge.kind == GestureEvent::Kind::LongPress) {
+                m_mobileAdapter->onLongPress(ge.x, ge.y);
+            } else if (ge.kind == GestureEvent::Kind::Pinch) {
+                m_mobileAdapter->onPinch(ge.x, ge.y, ge.scale);
+            }
+        }
 
         // Auto-save timer (0 disables; Lua System.setAutoSaveInterval).
         if (m_autoSaveIntervalSec > 0.0 && dt > 0.0 && !isLuaExecutionPaused()) {
@@ -1047,21 +1061,42 @@ void Engine::processEvents() {
             const float winH = m_platformBackend
                 ? static_cast<float>(m_platformBackend->getWindowHeight()) : 720.0f;
             switch (event.type) {
-                case SDL_EVENT_FINGER_DOWN:
+                case SDL_EVENT_FINGER_DOWN: {
+                    const float fx = event.tfinger.x * winW;
+                    const float fy = event.tfinger.y * winH;
+                    if (m_gestureDetector) {
+                        m_gestureDetector->onFingerDown(
+                            static_cast<int>(event.tfinger.fingerID), fx, fy,
+                            static_cast<double>(SDL_GetTicks()));
+                    }
                     m_mobileAdapter->onFingerDown(
-                        event.tfinger.x * winW, event.tfinger.y * winH,
-                        static_cast<int>(event.tfinger.fingerID));
+                        fx, fy, static_cast<int>(event.tfinger.fingerID));
                     break;
-                case SDL_EVENT_FINGER_MOTION:
+                }
+                case SDL_EVENT_FINGER_MOTION: {
+                    const float fx = event.tfinger.x * winW;
+                    const float fy = event.tfinger.y * winH;
+                    if (m_gestureDetector) {
+                        m_gestureDetector->onFingerMove(
+                            static_cast<int>(event.tfinger.fingerID), fx, fy,
+                            static_cast<double>(SDL_GetTicks()));
+                    }
                     m_mobileAdapter->onFingerMotion(
-                        event.tfinger.x * winW, event.tfinger.y * winH,
-                        static_cast<int>(event.tfinger.fingerID));
+                        fx, fy, static_cast<int>(event.tfinger.fingerID));
                     break;
-                case SDL_EVENT_FINGER_UP:
+                }
+                case SDL_EVENT_FINGER_UP: {
+                    const float fx = event.tfinger.x * winW;
+                    const float fy = event.tfinger.y * winH;
+                    if (m_gestureDetector) {
+                        m_gestureDetector->onFingerUp(
+                            static_cast<int>(event.tfinger.fingerID),
+                            static_cast<double>(SDL_GetTicks()));
+                    }
                     m_mobileAdapter->onFingerUp(
-                        event.tfinger.x * winW, event.tfinger.y * winH,
-                        static_cast<int>(event.tfinger.fingerID));
+                        fx, fy, static_cast<int>(event.tfinger.fingerID));
                     break;
+                }
                 default:
                     break;
             }

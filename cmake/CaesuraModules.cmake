@@ -267,6 +267,7 @@ caesura_add_module(Platform
     src/platform/SDL3PlatformBackend.cpp
     src/platform/SDL3DisplayService.cpp
     src/platform/MobileAdapter.cpp
+    src/platform/GestureDetector.cpp
 )
 
 caesura_add_module(Render

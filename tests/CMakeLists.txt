@@ -17,6 +17,7 @@ set(TEST_SOURCES
     cpp/test_demo_smoke.cpp
     cpp/test_demo_e2e.cpp
     cpp/test_input.cpp
+    cpp/test_gesture_detector.cpp
     cpp/test_async.cpp
     cpp/test_null_jobsystem.cpp
     cpp/test_job_system.cpp

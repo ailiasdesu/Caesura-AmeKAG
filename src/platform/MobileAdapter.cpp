@@ -215,6 +215,8 @@ void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
     if (delta == 0.0f) return;
 
     // Map pinch scale delta to a vertical mouse-wheel (zoom) event.
+    printf("[Mobile] Pinch -> wheel (%.0f, %.0f scale=%.3f)\n",
+           centerX * m_displayScale, centerY * m_displayScale, scale);
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_WHEEL;
     ev.wheel.y = delta * kPinchToWheelScale;
@@ -228,6 +230,8 @@ void MobileAdapter::onLongPress(float x, float y) {
     // Long press → right mouse button click.
     // Note: press-duration tracking (>500ms) is done by the platform layer;
     // this adapter only maps the detected press to a right-click.
+    printf("[Mobile] Long press -> right click (%.0f, %.0f)\n",
+           x * m_displayScale, y * m_displayScale);
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.x = x * m_displayScale;
