@@ -370,3 +370,148 @@ TEST_CASE("Lifecycle: ILifecycleService interface upcast") {
     CHECK(a.count == 1);
     iface->removeListener(&a);
 }
+
+// =============================================================================
+// Track IME — Text Input / Virtual Keyboard
+// =============================================================================
+
+TEST_CASE("Platform: NullPlatformBackend text input lifecycle") {
+    NullPlatformBackend backend;
+    CHECK_FALSE(backend.isTextInputActive());
+    CHECK_FALSE(backend.startTextInput());
+    CHECK_FALSE(backend.setTextInputRect(10, 20, 100, 40, 0));
+
+    CHECK(backend.init("test", 1280, 720));
+    CHECK_FALSE(backend.isTextInputActive());
+
+    CHECK(backend.startTextInput());
+    CHECK(backend.isTextInputActive());
+
+    CHECK(backend.setTextInputRect(100, 200, 300, 50, 5));
+    CHECK(backend.isTextInputActive());
+
+    CHECK(backend.stopTextInput());
+    CHECK_FALSE(backend.isTextInputActive());
+
+    backend.shutdown();
+    CHECK_FALSE(backend.isTextInputActive());
+}
+
+TEST_CASE("Platform: SDL3PlatformBackend text input pre-init safety") {
+    SDL3PlatformBackend backend;
+    CHECK_FALSE(backend.isTextInputActive());
+    CHECK_FALSE(backend.startTextInput());
+    CHECK_FALSE(backend.stopTextInput());
+    CHECK_FALSE(backend.setTextInputRect(0, 0, 100, 100));
+}
+
+TEST_CASE("Platform: IPlatformBackend text input polymorphism") {
+    NullPlatformBackend backend;
+    IPlatformBackend* iface = &backend;
+    CHECK(iface->init("test", 1280, 720));
+    CHECK(iface->startTextInput());
+    CHECK(iface->isTextInputActive());
+    CHECK(iface->setTextInputRect(50, 50, 200, 40, 2));
+    CHECK(iface->stopTextInput());
+    CHECK_FALSE(iface->isTextInputActive());
+    iface->shutdown();
+}
+
+TEST_CASE("Platform Stress: rapid start/stop text input oscillation") {
+    NullPlatformBackend backend;
+    CHECK(backend.init("stress_test", 1280, 720));
+    
+    for (int i = 0; i < 10000; ++i) {
+        CHECK(backend.startTextInput());
+        CHECK(backend.isTextInputActive());
+        CHECK(backend.stopTextInput());
+        CHECK_FALSE(backend.isTextInputActive());
+    }
+    
+    // Consecutive start calls
+    for (int i = 0; i < 100; ++i) {
+        CHECK(backend.startTextInput());
+        CHECK(backend.isTextInputActive());
+    }
+    
+    // Consecutive stop calls
+    for (int i = 0; i < 100; ++i) {
+        CHECK(backend.stopTextInput());
+        CHECK_FALSE(backend.isTextInputActive());
+    }
+    
+    backend.shutdown();
+}
+
+TEST_CASE("Platform Stress: adversarial and extreme setTextInputRect coordinates") {
+    NullPlatformBackend backend;
+    CHECK(backend.init("rect_stress", 1920, 1080));
+    CHECK(backend.startTextInput());
+
+    const int testCoords[][5] = {
+        { -99999, -99999, -500, -100, -1 },
+        { 0, 0, 0, 0, 0 },
+        { 1000000, 2000000, 500000, 800000, 99999 },
+        { 2147483647, 2147483647, 2147483647, 2147483647, 2147483647 },
+        { -2147483647 - 1, -2147483647 - 1, -2147483647 - 1, -2147483647 - 1, -2147483647 - 1 },
+        { 100, 200, 300, 40, 10 }
+    };
+
+    for (const auto& c : testCoords) {
+        CHECK(backend.setTextInputRect(c[0], c[1], c[2], c[3], c[4]));
+        CHECK(backend.isTextInputActive());
+    }
+
+    backend.shutdown();
+}
+
+TEST_CASE("Platform Stress: NullPlatformBackend full lifecycle idempotency and resurrection") {
+    NullPlatformBackend backend;
+
+    // Pre-init calls must safely fail
+    CHECK_FALSE(backend.startTextInput());
+    CHECK_FALSE(backend.setTextInputRect(10, 10, 100, 20, 0));
+    CHECK_FALSE(backend.isTextInputActive());
+
+    // Init and activate
+    CHECK(backend.init("init1", 800, 600));
+    CHECK(backend.startTextInput());
+    CHECK(backend.isTextInputActive());
+
+    // Shutdown resets active state
+    backend.shutdown();
+    CHECK_FALSE(backend.isTextInputActive());
+    CHECK_FALSE(backend.startTextInput());
+    CHECK_FALSE(backend.setTextInputRect(10, 10, 100, 20, 0));
+
+    // Multiple shutdowns are safe
+    backend.shutdown();
+    backend.shutdown();
+    CHECK_FALSE(backend.isTextInputActive());
+
+    // Re-init resurrects backend
+    CHECK(backend.init("init2", 1024, 768));
+    CHECK_FALSE(backend.isTextInputActive()); // fresh init starts inactive
+    CHECK(backend.startTextInput());
+    CHECK(backend.isTextInputActive());
+    backend.shutdown();
+    CHECK_FALSE(backend.isTextInputActive());
+}
+
+TEST_CASE("Platform Stress: SDL3PlatformBackend pre-init and post-shutdown resilience") {
+    SDL3PlatformBackend backend;
+    
+    // Multiple calls before init
+    for (int i = 0; i < 50; ++i) {
+        CHECK_FALSE(backend.isTextInputActive());
+        CHECK_FALSE(backend.startTextInput());
+        CHECK_FALSE(backend.stopTextInput());
+        CHECK_FALSE(backend.setTextInputRect(i, i * 2, 100, 50, i));
+    }
+
+    // Calling shutdown before init is safe
+    backend.shutdown();
+    backend.shutdown();
+    CHECK_FALSE(backend.isTextInputActive());
+    CHECK_FALSE(backend.startTextInput());
+}

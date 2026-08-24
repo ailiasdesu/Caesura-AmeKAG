@@ -148,4 +148,25 @@ void* SDL3PlatformBackend::getNativeWindowHandle() const {
     return nwh;
 }
 
+bool SDL3PlatformBackend::startTextInput() {
+    if (!m_window) return false;
+    return SDL_StartTextInput(m_window);
+}
+
+bool SDL3PlatformBackend::stopTextInput() {
+    if (!m_window) return false;
+    return SDL_StopTextInput(m_window);
+}
+
+bool SDL3PlatformBackend::setTextInputRect(int x, int y, int w, int h, int cursor) {
+    if (!m_window) return false;
+    SDL_Rect rect{ x, y, w, h };
+    return SDL_SetTextInputArea(m_window, &rect, cursor);
+}
+
+bool SDL3PlatformBackend::isTextInputActive() const {
+    if (!m_window) return false;
+    return SDL_TextInputActive(m_window);
+}
+
 } // namespace Caesura

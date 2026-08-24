@@ -192,6 +192,47 @@ static int lua_DevCore_get_display_metrics(lua_State* L) {
     return 1;
 }
 
+// -- DevCore.start_text_input() -------------------------------------------
+
+static int lua_DevCore_start_text_input(lua_State* L) {
+    auto* platform = getPlatform(L);
+    if (!platform) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, platform->startTextInput() ? 1 : 0);
+    return 1;
+}
+
+// -- DevCore.stop_text_input() --------------------------------------------
+
+static int lua_DevCore_stop_text_input(lua_State* L) {
+    auto* platform = getPlatform(L);
+    if (!platform) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, platform->stopTextInput() ? 1 : 0);
+    return 1;
+}
+
+// -- DevCore.set_text_input_rect(x, y, w, h, [cursor]) --------------------
+
+static int lua_DevCore_set_text_input_rect(lua_State* L) {
+    int x = (int)luaL_checkinteger(L, 1);
+    int y = (int)luaL_checkinteger(L, 2);
+    int w = (int)luaL_checkinteger(L, 3);
+    int h = (int)luaL_checkinteger(L, 4);
+    int cursor = (int)luaL_optinteger(L, 5, 0);
+    auto* platform = getPlatform(L);
+    if (!platform) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, platform->setTextInputRect(x, y, w, h, cursor) ? 1 : 0);
+    return 1;
+}
+
+// -- DevCore.is_text_input_active() ---------------------------------------
+
+static int lua_DevCore_is_text_input_active(lua_State* L) {
+    auto* platform = getPlatform(L);
+    if (!platform) { lua_pushboolean(L, 0); return 1; }
+    lua_pushboolean(L, platform->isTextInputActive() ? 1 : 0);
+    return 1;
+}
+
 // -- Module registration --------------------------------------------------
 
 static const luaL_Reg devcore_functions[] = {
@@ -204,6 +245,10 @@ static const luaL_Reg devcore_functions[] = {
     { "set_fullscreen",   lua_DevCore_set_fullscreen },
     { "get_window_size",  lua_DevCore_get_window_size },
     { "get_display_metrics", lua_DevCore_get_display_metrics },
+    { "start_text_input",     lua_DevCore_start_text_input     },
+    { "stop_text_input",      lua_DevCore_stop_text_input      },
+    { "set_text_input_rect",  lua_DevCore_set_text_input_rect  },
+    { "is_text_input_active", lua_DevCore_is_text_input_active },
     { nullptr, nullptr }
 };
 

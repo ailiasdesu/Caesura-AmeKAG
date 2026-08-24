@@ -18,11 +18,27 @@ local saved = { current = i18n.current, strings = i18n.strings,
                 lines = i18n.lines, fallback = i18n.fallback,
                 default_language = i18n.default_language }
 
+local IS_WIN = package.config:sub(1, 1) == "\\"
+local function mkdirs(path)
+    if IS_WIN then
+        os.execute('mkdir "' .. path:gsub("/", "\\") .. '" 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '"')
+    end
+end
+local function rmdirs(path)
+    if IS_WIN then
+        os.execute('rmdir /s /q "' .. path:gsub("/", "\\") .. '" 2>nul')
+    else
+        os.execute('rm -rf "' .. path .. '"')
+    end
+end
+
 -- Repo-local tmp dir (forward slashes — fileutil scan_dir C6 whitelist).
 local tmpdir = "tmp/test_ks_i18n_flow"
 local function reset_tmp()
-    pcall(os.execute, 'rm -rf "tmp/test_ks_i18n_flow"')
-    pcall(os.execute, 'mkdir -p "tmp/test_ks_i18n_flow"')
+    rmdirs("tmp/test_ks_i18n_flow")
+    mkdirs("tmp/test_ks_i18n_flow")
 end
 reset_tmp()
 
@@ -108,7 +124,7 @@ check("flow backfill: lang-table top-level used, lines excluded",
 --    per-line content key and the {key} string-table token.
 -- ---------------------------------------------------------------------------
 local e2e_dir = tmpdir .. "/e2e"
-pcall(os.execute, 'mkdir -p "tmp/test_ks_i18n_flow/e2e"')
+mkdirs(e2e_dir)
 local fe = io.open(e2e_dir .. "/scene.ks", "w")
 fe:write("[ch name=\"Mio\" text=\"Hello {greeting}\"]\n[p]\nthe captain rowed away\n[p]\n")
 fe:close()
@@ -169,7 +185,7 @@ end)())
 -- backfill gate over a dir containing ONLY pl.ks: the plural-variant dict
 -- is complete (all {key} refs resolve), so zero missing.
 local plOnly = tmpdir .. "/plonly"
-pcall(os.execute, 'mkdir -p "tmp/test_ks_i18n_flow/plonly"')
+mkdirs(plOnly)
 local fpp = io.open(plOnly .. "/pl.ks", "w")
 fpp:write("[ch name=\"N\" text=\"box holds {items}\"]\n[p]\n")
 fpp:close()
@@ -193,9 +209,8 @@ check("flow plural: localize of {items} string emits generic form",
 --    the whole suite in-process; same contract as test_i18n.lua round 74).
 -- ---------------------------------------------------------------------------
 local SEP = package.config:sub(1, 1)
-local IS_WIN = SEP == "\\"
 local CLI_DIR = tmpdir .. "/cli"
-pcall(os.execute, 'mkdir -p "tmp/test_ks_i18n_flow/cli"')
+mkdirs(CLI_DIR)
 local fcli = io.open(CLI_DIR .. "/s.ks", "w")
 fcli:write("[ch name=\"N\" text=\"Greet {greeting}\"]\n[p]\nplain line\n[p]\n[ch text=\"{extra}\"]\n[p]\n")
 fcli:close()
@@ -273,7 +288,7 @@ _G.arg = SAVE_ARG
 i18n.current, i18n.strings = saved.current, saved.strings
 i18n.lines, i18n.fallback = saved.lines, saved.fallback
 i18n.default_language = saved.default_language
-pcall(os.execute, 'rm -rf "tmp/test_ks_i18n_flow"')
+rmdirs("tmp/test_ks_i18n_flow")
 
 local failed = 0
 for _, ok in ipairs(results) do

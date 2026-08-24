@@ -111,6 +111,10 @@ function BackendFactory.create(opts)
         elseif cmd == "get_resolution" then return DevCore.get_resolution()
         elseif cmd == "set_fullscreen" then return DevCore.set_fullscreen(...)
         elseif cmd == "log" then return DevCore.log(...)
+        elseif cmd == "start_text_input" then return DevCore.start_text_input()
+        elseif cmd == "stop_text_input" then return DevCore.stop_text_input()
+        elseif cmd == "set_text_input_rect" then return DevCore.set_text_input_rect(...)
+        elseif cmd == "is_text_input_active" then return DevCore.is_text_input_active()
         else error("[BackendFactory] Unknown platform: " .. tostring(cmd)) end
     end
 

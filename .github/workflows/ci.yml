@@ -346,7 +346,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: "Cache SDL3 iOS prebuilt slice"
+        id: cache-sdl3-ios
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sdl3-ios
+          key: sdl3-ios-release-3.2.4-${{ runner.os }}
+
       - name: "Build SDL3 source for iOS (move the red past the package gate)"
+        if: steps.cache-sdl3-ios.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -e
@@ -366,9 +374,21 @@ jobs:
           cmake --build "$SDL_SRC/build-ios" --config Release --parallel 3 \
             -- CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
           cmake --install "$SDL_SRC/build-ios" --config Release
-          echo "SDL3_DIR=$SDL_INSTALL/lib/cmake/SDL3" >> "$GITHUB_ENV"
+
+      - name: "Set SDL3 environment"
+        shell: bash
+        run: |
+          echo "SDL3_DIR=$RUNNER_TEMP/sdl3-ios/lib/cmake/SDL3" >> "$GITHUB_ENV"
+
+      - name: "Cache OpenSSL iOS prebuilt slice"
+        id: cache-openssl-ios
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/openssl-ios
+          key: openssl-ios-3.3.2-${{ runner.os }}
 
       - name: "Build OpenSSL source for iOS (archive crypto dep)"
+        if: steps.cache-openssl-ios.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -e
@@ -385,7 +405,16 @@ jobs:
           perl Configure ios64-xcrun --prefix="$OSSL_INSTALL" no-shared no-tests no-apps no-docs
           make -j3
           make install_sw
-          echo "OPENSSL_ROOT_DIR=$OSSL_INSTALL" >> "$GITHUB_ENV"
+
+      - name: "Set OpenSSL environment"
+        shell: bash
+        run: |
+          echo "OPENSSL_ROOT_DIR=$RUNNER_TEMP/openssl-ios" >> "$GITHUB_ENV"
+
+      - name: "Verify Metal Shaders & Fallback paths"
+        shell: bash
+        run: |
+          python3 scripts/verify_metal_shaders.py
 
       - name: "Configure iOS (red point moves to engine-side gaps)"
         shell: bash
@@ -540,7 +569,17 @@ jobs:
             android/app/src/main/assets/game/scripts/config.lua
           grep -n "entry_script" android/app/src/main/assets/game/scripts/config.lua
 
-      - name: "Gradle assembleDebug (Track M A2 host module)"
+      - name: "Generate ephemeral test keystore (Track A5)"
+        shell: bash
+        run: |
+          set -e
+          bash scripts/generate_android_keystore.sh --test --keystore "$RUNNER_TEMP/ci-release.keystore"
+          echo "CAESURA_ANDROID_KEYSTORE=$RUNNER_TEMP/ci-release.keystore" >> "$GITHUB_ENV"
+          echo "CAESURA_ANDROID_KEYSTORE_PASS=caesura_test_pass" >> "$GITHUB_ENV"
+          echo "CAESURA_ANDROID_KEY_ALIAS=caesura-test" >> "$GITHUB_ENV"
+          echo "CAESURA_ANDROID_KEY_PASS=caesura_test_pass" >> "$GITHUB_ENV"
+
+      - name: "Gradle assembleDebug, assembleRelease & bundleRelease (Track A5)"
         shell: bash
         run: |
           set -e
@@ -557,16 +596,37 @@ jobs:
             GRADLE="/tmp/gradle-8.9/bin/gradle"
           fi
           cd android
+          echo "=== Building assembleDebug ==="
           "$GRADLE" --no-daemon --console=plain assembleDebug
-          cd ..
-          ls -la android/app/build/outputs/apk/debug/ || true
-          echo "=== A5: unsigned release APK ==="
-          cd android
+          echo "=== Building assembleRelease (Signed with ephemeral key) ==="
           "$GRADLE" --no-daemon --console=plain assembleRelease
-          ls -la app/build/outputs/apk/release/ || true
+          echo "=== Building bundleRelease (AAB for Play Store) ==="
+          "$GRADLE" --no-daemon --console=plain bundleRelease
           cd ..
-          echo "--- APK content check (A3 + R6 bundle) ---"
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E "assets/game/demo/first_vn/story.ks|assets/game/demo/first_vn/entry.lua|assets/game/scripts/kag/init.lua|assets/game/assets/lang/|libCaesuraAmeKAG.so|libSDL3.so"
+
+      - name: "Verify Android release artifacts (zipalign & apksigner) (Track A5)"
+        shell: bash
+        run: |
+          set -e
+          echo "=== Locating Android Build Tools ==="
+          BT_DIR=$(ls -d "$ANDROID_SDK_ROOT/build-tools/"* 2>/dev/null | sort -V | tail -n 1)
+          echo "Build tools: $BT_DIR"
+          ZIPALIGN="$BT_DIR/zipalign"
+          APKSIGNER="$BT_DIR/apksigner"
+
+          echo "=== 1. APK Alignment Verification (zipalign -c) ==="
+          "$ZIPALIGN" -c -v 4 android/app/build/outputs/apk/release/app-release.apk
+
+          echo "=== 2. APK Signature Verification (apksigner verify) ==="
+          "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+
+          echo "=== 3. APK Content Check ==="
+          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E "assets/game/demo/first_vn/story.ks|assets/game/demo/first_vn/entry.lua|assets/game/scripts/kag/init.lua|assets/game/assets/lang/|libCaesuraAmeKAG.so|libSDL3.so"
+
+          echo "=== 4. AAB Content & Structure Check ==="
+          test -f android/app/build/outputs/bundle/release/app-release.aab
+          unzip -l android/app/build/outputs/bundle/release/app-release.aab | grep -E "base/lib/arm64-v8a/libCaesuraAmeKAG.so|base/lib/arm64-v8a/libSDL3.so|base/assets/game/scripts/kag/init.lua|base/manifest/AndroidManifest.xml"
+
       - name: "Upload android slices for local builds (device day)"
         uses: actions/upload-artifact@v4
         with:
@@ -576,11 +636,12 @@ jobs:
             $RUNNER_TEMP/openssl-android/
           if-no-files-found: warn
 
-      - name: "Upload APK artifacts (device day)"
+      - name: "Upload APK & AAB artifacts (device day)"
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: android-release-artifacts
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
+            android/app/build/outputs/apk/release/app-release*.apk
+            android/app/build/outputs/bundle/release/app-release*.aab
           if-no-files-found: warn

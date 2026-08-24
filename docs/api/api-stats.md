@@ -10,8 +10,8 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 34 |
-| Pure-virtual interface methods | 404 |
-| Lua binding functions (luaL_Reg entries) | 155 |
+| Pure-virtual interface methods | 408 |
+| Lua binding functions (luaL_Reg entries) | 159 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 123 |
 | RPC HTTP endpoints (EditorServer) | 36 |
@@ -38,7 +38,7 @@
 | platform | IDisplayService.h | 1 |
 | platform | ILifecycleService.h | 4 |
 | platform | IMobileAdapter.h | 17 |
-| platform | IPlatformBackend.h | 11 |
+| platform | IPlatformBackend.h | 15 |
 | render | IGpuMonitor.h | 8 |
 | render | ILayerManager.h | 21 |
 | render | IMeshRenderer.h | 8 |
@@ -63,7 +63,7 @@
 |--------------|-----------|--------------------|
 | AIBinding.cpp | 5 | _AI_CALLBACKS, _AI_CALLBACKS, AI |
 | DebugBinding.cpp | 10 | Debug |
-| DevCoreBinding.cpp | 9 | _CAESURA_QUIT, DevCore |
+| DevCoreBinding.cpp | 13 | _CAESURA_QUIT, DevCore |
 | EngineBinding.cpp | 4 | Engine |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |

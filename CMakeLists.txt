@@ -205,6 +205,18 @@ else()
 endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE Caesura::Engine Caesura::Rpc)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.caesura.amekag"
+        MACOSX_BUNDLE_BUNDLE_NAME "CaesuraAmeKAG"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.caesura.amekag"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+    )
+endif()
+
 # -- FFmpeg (apply if found above) -----------------------------------------
 if(CAESURA_FFMPEG_FOUND)
     # VideoPlayer.h changes layout under this flag, so consumers must inherit

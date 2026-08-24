@@ -73,6 +73,8 @@ set(TEST_SOURCES
     cpp/test_live2d.cpp
     cpp/test_archive.cpp
     cpp/test_delta_carc.cpp
+    cpp/test_render_metal_contract.cpp
+    cpp/test_mobile_stress_validation.cpp
 )
 
 add_executable(CaesuraTests ${TEST_SOURCES})

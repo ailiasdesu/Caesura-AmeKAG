@@ -21,10 +21,22 @@ public:
     void resizeWindow(int width, int height) override;
     const char* getBackendName() const override;
 
+    // -- Text Input / IME (Virtual Keyboard) --------------------------------
+    bool startTextInput() override;
+    bool stopTextInput() override;
+    bool setTextInputRect(int x, int y, int w, int h, int cursor = 0) override;
+    bool isTextInputActive() const override;
+
 private:
     int m_width = 0;
     int m_height = 0;
     bool m_initialized = false;
+    bool m_textInputActive = false;
+    int m_textInputX = 0;
+    int m_textInputY = 0;
+    int m_textInputW = 0;
+    int m_textInputH = 0;
+    int m_textInputCursor = 0;
 };
 
 } // namespace Caesura

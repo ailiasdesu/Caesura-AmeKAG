@@ -164,6 +164,9 @@ local _G_whitelist = {
     _KAG_onClick        = true,
     _KAG_onKey          = true,
     _KAG_onScroll       = true,
+    _KAG_onTextInput    = true,
+    _KAG_onTextEditing  = true,
+    _KAG_onKeyDown      = true,
     -- Engine runtime state globals (set by C++ main loop)
     _CAESURA_GPU_QUALITY  = true,
     _CAESURA_VFX_ENABLED  = true,
@@ -195,6 +198,7 @@ local _G_whitelist = {
     _GAME_KEY_ESC   = true,
     _GAME_KEY_H     = true,
     _GAME_KEY_V     = true,
+    _GAME_KEY_BACKSPACE = true,
     _KAG_MOUSE_WHEEL_Y = true,
     _CAESURA_AUDIO_EVENT = true,
     _CAESURA_VOICE_COMPLETE = true,
@@ -299,6 +303,10 @@ local DEVCORE_WHITELIST = {
     log                 = true,
     get_resolution      = true,
     get_window_size     = true,
+    start_text_input    = true,
+    stop_text_input     = true,
+    set_text_input_rect = true,
+    is_text_input_active = true,
 }
 
 -- Whitelist: Debug module -- read-only inspection only

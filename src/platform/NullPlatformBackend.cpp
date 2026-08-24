@@ -15,7 +15,10 @@ bool NullPlatformBackend::init(const char*, int width, int height) {
     return true;
 }
 
-void NullPlatformBackend::shutdown() { m_initialized = false; }
+void NullPlatformBackend::shutdown() {
+    m_initialized = false;
+    m_textInputActive = false;
+}
 bool NullPlatformBackend::pollEvent() { return false; }
 IPlatformBackend::MouseState NullPlatformBackend::getMouseState() const { return {}; }
 uint64_t NullPlatformBackend::getTicksMs() const { return 0; }
@@ -31,5 +34,30 @@ void NullPlatformBackend::resizeWindow(int width, int height) {
     m_height = height;
 }
 const char* NullPlatformBackend::getBackendName() const { return "NullPlatform"; }
+
+bool NullPlatformBackend::startTextInput() {
+    if (!m_initialized) return false;
+    m_textInputActive = true;
+    return true;
+}
+
+bool NullPlatformBackend::stopTextInput() {
+    m_textInputActive = false;
+    return true;
+}
+
+bool NullPlatformBackend::setTextInputRect(int x, int y, int w, int h, int cursor) {
+    if (!m_initialized) return false;
+    m_textInputX = x;
+    m_textInputY = y;
+    m_textInputW = w;
+    m_textInputH = h;
+    m_textInputCursor = cursor;
+    return true;
+}
+
+bool NullPlatformBackend::isTextInputActive() const {
+    return m_initialized && m_textInputActive;
+}
 
 } // namespace Caesura

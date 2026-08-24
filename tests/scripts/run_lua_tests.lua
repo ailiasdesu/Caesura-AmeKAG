@@ -161,6 +161,7 @@ local tests = {
     "test_gallery_loop",
     "test_settings",
     "test_frame_bench",
+    "test_input_cmd",
 }
 
 local passed, failed = 0, 0

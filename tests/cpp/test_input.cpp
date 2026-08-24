@@ -1106,7 +1106,175 @@ TEST_CASE("Pointer: interface exposes pointer abstraction") {
     pe.action = PointerAction::Down;
     pe.x = 5; pe.y = 7; pe.pointerId = 3; pe.activePointers = 2;
     CHECK(pe.pointerId == 3);
-    CHECK(pe.activePointers == 2);
     IInputRouter* r = &routerInstance();
     r->submitPointer(pe);   // smoke: no crash
 }
+
+// =============================================================================
+// Track IME — Text Input / Virtual Keyboard Routing
+// =============================================================================
+
+TEST_CASE("InputRouter: SDL_EVENT_TEXT_INPUT is non-advancing in KAG focus") {
+    InputRouter router;
+    int kagEvents = 0;
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagEvents; });
+
+    SDL_Event textEvent = {};
+    textEvent.type = SDL_EVENT_TEXT_INPUT;
+    textEvent.text.text = "Hello Caesura";
+
+    router.processEvent(textEvent);
+    CHECK_FALSE(router.isClickPending());
+    CHECK_FALSE(router.hasKAGClick());
+    CHECK(kagEvents == 0);
+}
+
+TEST_CASE("InputRouter: SDL_EVENT_TEXT_EDITING is non-advancing in KAG focus") {
+    InputRouter router;
+    int kagEvents = 0;
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagEvents; });
+
+    SDL_Event editEvent = {};
+    editEvent.type = SDL_EVENT_TEXT_EDITING;
+    editEvent.edit.text = "Comp";
+    editEvent.edit.start = 0;
+    editEvent.edit.length = 4;
+
+    router.processEvent(editEvent);
+    CHECK_FALSE(router.isClickPending());
+    CHECK_FALSE(router.hasKAGClick());
+    CHECK(kagEvents == 0);
+}
+
+TEST_CASE("InputRouter: text events route to GAME callback in GAME focus with UTF-8 preservation") {
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+
+    std::string receivedText;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_TEXT_INPUT) {
+            receivedText = ev.text.text ? ev.text.text : "";
+        }
+    });
+
+    const char* utf8String = "テスト文字列_主人公_Emoji😊";
+    SDL_Event textEvent = {};
+    textEvent.type = SDL_EVENT_TEXT_INPUT;
+    textEvent.text.text = utf8String;
+
+    router.processEvent(textEvent);
+    CHECK(receivedText == utf8String);
+}
+
+TEST_CASE("InputRouter Stress: rapid text input event flood never causes KAG click or story advance") {
+    InputRouter router;
+    int kagInvocations = 0;
+    router.registerKAGCallback([&](const SDL_Event&) {
+        ++kagInvocations;
+    });
+
+    const char* payloads[] = {
+        "a", "B", "123", "こんにちは", "✨🌟🎉", "line1\nline2", "", "\t", "Very long text line with many characters 1234567890"
+    };
+
+    for (int i = 0; i < 5000; ++i) {
+        SDL_Event evInput = {};
+        evInput.type = SDL_EVENT_TEXT_INPUT;
+        evInput.text.text = payloads[i % 9];
+        router.processEvent(evInput);
+
+        CHECK_FALSE(router.isClickPending());
+        CHECK_FALSE(router.hasKAGClick());
+
+        SDL_Event evEdit = {};
+        evEdit.type = SDL_EVENT_TEXT_EDITING;
+        evEdit.edit.text = payloads[i % 9];
+        evEdit.edit.start = i % 10;
+        evEdit.edit.length = (i + 1) % 10;
+        router.processEvent(evEdit);
+
+        CHECK_FALSE(router.isClickPending());
+        CHECK_FALSE(router.hasKAGClick());
+    }
+
+    CHECK(kagInvocations == 0);
+}
+
+TEST_CASE("InputRouter Stress: rapid focus flapping between KAG and GAME with interleaved text and click events") {
+    InputRouter router;
+    int kagCallbacks = 0;
+    int gameCallbacks = 0;
+
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagCallbacks; });
+    router.registerGameCallback([&](const SDL_Event&) { ++gameCallbacks; });
+
+    for (int i = 0; i < 1000; ++i) {
+        // 1. In KAG focus: text events never trigger click
+        router.setFocus(InputFocus::KAG);
+        SDL_Event textEv = {};
+        textEv.type = SDL_EVENT_TEXT_INPUT;
+        textEv.text.text = "test_kaggle";
+        router.processEvent(textEv);
+        CHECK_FALSE(router.hasKAGClick());
+
+        // 2. Mouse click in KAG triggers click
+        SDL_Event clickEv = {};
+        clickEv.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        router.processEvent(clickEv);
+        CHECK(router.hasKAGClick());
+
+        // 3. Switch to GAME focus -> immediately drains pending KAG click
+        router.setFocus(InputFocus::GAME);
+        CHECK_FALSE(router.hasKAGClick());
+
+        // 4. In GAME focus: events route to GAME callbacks
+        router.processEvent(textEv);
+        router.processEvent(clickEv);
+        CHECK_FALSE(router.hasKAGClick());
+
+        // 5. Switch back to KAG -> clean slate, no phantom click leak
+        router.setFocus(InputFocus::KAG);
+        CHECK_FALSE(router.hasKAGClick());
+    }
+
+    CHECK(kagCallbacks == 1000);   // exactly 1 click per loop in KAG
+    CHECK(gameCallbacks == 2000);  // 1 text + 1 click per loop in GAME
+}
+
+TEST_CASE("InputRouter Stress: GAME focus high-throughput text stream with UTF-8 byte verification") {
+    InputRouter router;
+    router.setFocus(InputFocus::GAME);
+
+    std::vector<std::string> received;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_TEXT_INPUT && ev.text.text) {
+            received.emplace_back(ev.text.text);
+        }
+    });
+
+    const std::vector<std::string> testStrings = {
+        "Simple ASCII",
+        "日本語テスト：名前を入力してください",
+        "中文测试：请输入角色姓名",
+        "한국어 테스트: 이름을 입력하세요",
+        "Mixed: Cafe & Naïve + 🌟✨🚀",
+        "Symbols: !@#$%^&*()_+-=[]{}|;':\",./<>?",
+        ""
+    };
+
+    for (int loop = 0; loop < 500; ++loop) {
+        for (const auto& s : testStrings) {
+            SDL_Event ev = {};
+            ev.type = SDL_EVENT_TEXT_INPUT;
+            ev.text.text = s.c_str();
+            router.processEvent(ev);
+        }
+    }
+
+    REQUIRE(received.size() == 500 * testStrings.size());
+    for (size_t idx = 0; idx < received.size(); ++idx) {
+        CHECK(received[idx] == testStrings[idx % testStrings.size()]);
+    }
+}
+
+

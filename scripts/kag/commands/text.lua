@@ -1557,4 +1557,262 @@ function TextCommands.relocalize_page(ctx)
     return true
 end
 
+-- =============================================================================
+-- [input] — Interactive Text Input with Virtual Keyboard & IME Support
+-- =============================================================================
+
+function TextCommands.input(ctx, params)
+    -- 1. Condition check: skip if condition evaluates to false
+    if params.cond and type(params.cond) == "string" and params.cond ~= "" then
+        local exprLang = require("kag.expr")
+        local ok, v
+        if params.cond:find("[&|!?]") then
+            ok, v = exprLang.evaluate(ctx, params.cond)
+        else
+            ok, v = exprLang.evaluateTranslated(ctx, params.cond, params.cond)
+        end
+        if not (ok and v) then
+            return
+        end
+    end
+
+    local var_name = params.name
+    if not var_name or var_name == "" then
+        return
+    end
+
+    local max_len = tonumber(params.maxlen or params.max_length) or 32
+    local buffer = tostring(params.default or "")
+    local comp_text = ""
+    local prompt_text = tostring(params.prompt or "")
+    local is_password = params.password == true
+    local btn_ok_label = params.btn_ok or "OK"
+    local btn_cancel_label = params.btn_cancel or ""
+
+    -- 2. Viewport & Dimensions with Adaptive Upper Placement
+    local vw, vh = 1280, 720
+    local ok_vp, vp = pcall(require, "viewport")
+    if ok_vp and vp and vp.wh then
+        vw, vh = vp.wh()
+    end
+    local box_w = tonumber(params.width) or 640
+    local box_h = tonumber(params.height) or 180
+    local box_x = tonumber(params.x) or 0
+    if box_x <= 0 then
+        box_x = math.floor((vw - box_w) / 2)
+    end
+    local box_y = tonumber(params.y) or 0
+    if box_y <= 0 then
+        box_y = math.floor(vh * 0.22)
+    end
+    -- Virtual keyboard occlusion prevention: upper viewport bound y + box_h <= 0.45 * vh
+    local max_allowed_y = math.floor(vh * 0.45 - box_h)
+    if max_allowed_y < 20 then max_allowed_y = 20 end
+    box_y = math.max(0, math.min(box_y, max_allowed_y))
+
+    -- 3. Notify platform backend
+    backend.set_text_input_rect(box_x, box_y, box_w, box_h, 0)
+    backend.start_text_input()
+
+    -- UTF-8 Helpers
+    local function utf8_length(s)
+        if not s or #s == 0 then return 0 end
+        if type(utf8) == "table" and utf8.len then
+            local l = utf8.len(s)
+            if l then return l end
+        end
+        local count = 0
+        for i = 1, #s do
+            local b = s:byte(i)
+            if b < 0x80 or b >= 0xC0 then count = count + 1 end
+        end
+        return count
+    end
+
+    local function utf8_pop(s)
+        if not s or #s == 0 then return "" end
+        if type(utf8) == "table" and utf8.offset then
+            local p = utf8.offset(s, -1)
+            if p then return s:sub(1, p - 1) end
+        end
+        local i = #s
+        while i > 1 and s:byte(i) >= 0x80 and s:byte(i) < 0xC0 do
+            i = i - 1
+        end
+        return s:sub(1, i - 1)
+    end
+
+    -- 4. UI Layout & Button Rectangles
+    local btn_ok_rect = {
+        x = box_x + box_w - 120,
+        y = box_y + box_h - 44,
+        w = 100,
+        h = 36,
+    }
+    local btn_cancel_rect = {
+        x = box_x + box_w - 240,
+        y = box_y + box_h - 44,
+        w = 100,
+        h = 36,
+    }
+
+    local function redraw_ui()
+        TextScene.remove_group(ctx, "text_input")
+        if #prompt_text > 0 then
+            TextScene.add_text(ctx, prompt_text, box_x + 16, box_y + 16,
+                { r = 220, g = 220, b = 220, a = 255 }, "text_input", 1, true, false, true)
+        end
+        local display_buf = is_password and string.rep("*", utf8_length(buffer)) or buffer
+        local full_line = display_buf
+        if #comp_text > 0 then
+            full_line = full_line .. "[" .. comp_text .. "]"
+        end
+        full_line = full_line .. "|"
+        TextScene.add_text(ctx, full_line, box_x + 20, box_y + 64,
+            { r = 255, g = 255, b = 255, a = 255 }, "text_input", 1, false, false, true)
+        TextScene.add_text(ctx, "[" .. btn_ok_label .. "]", btn_ok_rect.x, btn_ok_rect.y,
+            { r = 100, g = 255, b = 100, a = 255 }, "text_input", 1, true, false, true)
+        if #btn_cancel_label > 0 then
+            TextScene.add_text(ctx, "[" .. btn_cancel_label .. "]", btn_cancel_rect.x, btn_cancel_rect.y,
+                { r = 255, g = 100, b = 100, a = 255 }, "text_input", 1, true, false, true)
+        end
+    end
+
+    redraw_ui()
+
+    ctx._inputMode = true
+    ctx.waiting_input = true
+
+    local oldTextInput = _G._KAG_onTextInput
+    local oldTextEditing = _G._KAG_onTextEditing
+    local oldKeyDown = _G._KAG_onKeyDown
+    local oldClick = _G._KAG_onClick
+
+    local function cleanup_and_finish(save_result)
+        backend.stop_text_input()
+        TextScene.remove_group(ctx, "text_input")
+        _G._KAG_onTextInput = oldTextInput
+        _G._KAG_onTextEditing = oldTextEditing
+        _G._KAG_onKeyDown = oldKeyDown
+        _G._KAG_onClick = oldClick
+        ctx._inputMode = false
+        ctx.waiting_input = false
+
+        if save_result then
+            local scopeName, key = var_name:match("^([%a_]+)%.([%w_]+)$")
+            local targetTbl
+            if scopeName and ctx[scopeName] then
+                targetTbl, key = ctx[scopeName], key
+            else
+                scopeName, key = "f", var_name
+                targetTbl = ctx[scopeName]
+            end
+            if type(targetTbl) == "table" and key and key ~= "" then
+                targetTbl[key] = buffer
+            end
+        end
+    end
+
+    _G._KAG_onTextInput = function(text)
+        if not ctx._inputMode then
+            if oldTextInput then oldTextInput(text) end
+            return
+        end
+        if type(text) == "string" and #text > 0 then
+            local current_len = utf8_length(buffer)
+            local append_len = utf8_length(text)
+            if current_len + append_len <= max_len then
+                buffer = buffer .. text
+            else
+                local allowed = max_len - current_len
+                if allowed > 0 then
+                    if type(utf8) == "table" and utf8.codes and utf8.char then
+                        local added = 0
+                        for _, cp in utf8.codes(text) do
+                            if added < allowed then
+                                buffer = buffer .. utf8.char(cp)
+                                added = added + 1
+                            else
+                                break
+                            end
+                        end
+                    else
+                        local count = 0
+                        local byte_idx = #text
+                        for i = 1, #text do
+                            local b = text:byte(i)
+                            if b < 0x80 or b >= 0xC0 then
+                                count = count + 1
+                                if count > allowed then
+                                    byte_idx = i - 1
+                                    break
+                                end
+                            end
+                        end
+                        buffer = buffer .. text:sub(1, byte_idx)
+                    end
+                end
+            end
+            comp_text = ""
+            redraw_ui()
+        end
+    end
+
+    _G._KAG_onTextEditing = function(text, start, length)
+        if not ctx._inputMode then
+            if oldTextEditing then oldTextEditing(text, start, length) end
+            return
+        end
+        comp_text = tostring(text or "")
+        redraw_ui()
+    end
+
+    _G._KAG_onKeyDown = function(keyCode, keyName)
+        if not ctx._inputMode then
+            if oldKeyDown then oldKeyDown(keyCode, keyName) end
+            return
+        end
+        if keyName == "backspace" or keyCode == 8 or keyCode == 0x08 then
+            if #comp_text > 0 then
+                comp_text = ""
+            else
+                buffer = utf8_pop(buffer)
+            end
+            redraw_ui()
+        elseif keyName == "return" or keyCode == 13 or keyCode == 0x0D then
+            cleanup_and_finish(true)
+        elseif keyName == "escape" or keyCode == 27 or keyCode == 0x1B then
+            cleanup_and_finish(false)
+        end
+    end
+
+    _G._KAG_onClick = function()
+        if not ctx._inputMode then
+            if oldClick then oldClick() end
+            return
+        end
+        local mx = _G._GAME_MOUSE_X or 0
+        local my = _G._GAME_MOUSE_Y or 0
+        if mx >= btn_ok_rect.x and mx <= (btn_ok_rect.x + btn_ok_rect.w) and
+           my >= (btn_ok_rect.y - 6) and my <= (btn_ok_rect.y + btn_ok_rect.h + 6) then
+            cleanup_and_finish(true)
+            return
+        end
+        if #btn_cancel_label > 0 and
+           mx >= btn_cancel_rect.x and mx <= (btn_cancel_rect.x + btn_cancel_rect.w) and
+           my >= (btn_cancel_rect.y - 6) and my <= (btn_cancel_rect.y + btn_cancel_rect.h + 6) then
+            cleanup_and_finish(false)
+            return
+        end
+    end
+
+    coroutine.yield()
+
+    if ctx._inputMode then
+        cleanup_and_finish(true)
+    end
+end
+
+TextCommands.edit = TextCommands.input
+
 return TextCommands

@@ -53,6 +53,12 @@ public:
 
     // -- Backend identification --------------------------------------------
     virtual const char* getBackendName() const = 0;
+
+    // -- Text Input / IME (Virtual Keyboard) --------------------------------
+    virtual bool startTextInput() = 0;
+    virtual bool stopTextInput() = 0;
+    virtual bool setTextInputRect(int x, int y, int w, int h, int cursor = 0) = 0;
+    virtual bool isTextInputActive() const = 0;
 };
 
 } // namespace Caesura

@@ -36,6 +36,12 @@ public:
 
     const char* getBackendName() const override { return "SDL3"; }
 
+    // -- Text Input / IME (Virtual Keyboard) --------------------------------
+    bool startTextInput() override;
+    bool stopTextInput() override;
+    bool setTextInputRect(int x, int y, int w, int h, int cursor = 0) override;
+    bool isTextInputActive() const override;
+
     // -- SDL3-specific accessors (for C++ engine internals) -----------------
     SDL_Window* window()     const { return m_window; }
     SDL_Event&  lastEvent()        { return m_lastEvent; }

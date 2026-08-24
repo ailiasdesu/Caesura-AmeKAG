@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  test_sandbox.lua — Sandbox security verification
 -- =============================================================================
 
@@ -51,6 +51,20 @@ do
     -- Accessing blacklisted globals should fail at load() time
     local fn, err = load("return os.exit", "=test", "t", env)
     check("release: os.exit blocked", fn ~= nil, "load should fail: " .. (err or "nil"))
+end
+
+-- 5. Strict mode: input event handlers and key constants whitelisted in _G
+do
+    local ok1 = pcall(function() _G._KAG_onTextInput = function() end end)
+    check("whitelist: _KAG_onTextInput", ok1)
+    local ok2 = pcall(function() _G._KAG_onTextEditing = function() end end)
+    check("whitelist: _KAG_onTextEditing", ok2)
+    local ok3 = pcall(function() _G._KAG_onKeyDown = function() end end)
+    check("whitelist: _KAG_onKeyDown", ok3)
+    local ok4 = pcall(function() _G._GAME_KEY_BACKSPACE = true end)
+    check("whitelist: _GAME_KEY_BACKSPACE", ok4)
+    local ok_blocked = pcall(function() _G._UNAUTHORIZED_TEST_VAR_FORBIDDEN = 123 end)
+    check("strict: unauthorized global blocked", not ok_blocked)
 end
 
 print(string.format("\nResults: %d passed, %d failed", passed, failed))

@@ -2,6 +2,11 @@ plugins {
      id 'com.android.application'
 }
 
+def ksPath = System.getenv('CAESURA_ANDROID_KEYSTORE') ?: System.getenv('CAESURA_KEYSTORE_PATH')
+def ksPass = System.getenv('CAESURA_ANDROID_KEYSTORE_PASS') ?: System.getenv('CAESURA_KEYSTORE_PASSWORD') ?: ''
+def kAlias = System.getenv('CAESURA_ANDROID_KEY_ALIAS') ?: System.getenv('CAESURA_KEY_ALIAS') ?: ''
+def kPass  = System.getenv('CAESURA_ANDROID_KEY_PASS') ?: System.getenv('CAESURA_KEY_PASSWORD') ?: ''
+
 android {
     namespace "com.caesura.app"
     compileSdkVersion 35
@@ -11,25 +16,43 @@ android {
         targetSdkVersion 35
         versionCode 1
         versionName "1.0"
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
     signingConfigs {
         caesura {
-            storeFile file(System.getenv('CAESURA_ANDROID_KEYSTORE') ?: 'none')
-            storePassword System.getenv('CAESURA_ANDROID_KEYSTORE_PASS') ?: ''
-            keyAlias System.getenv('CAESURA_ANDROID_KEY_ALIAS') ?: ''
-            keyPassword System.getenv('CAESURA_ANDROID_KEY_PASS') ?: ''
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile file(ksPath)
+                storePassword ksPass
+                keyAlias kAlias
+                keyPassword kPass
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
         }
     }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // Signing is opt-in via environment variables (A5): the keystore
+            // Signing is opt-in via environment variables (Track A5): the keystore
             // and passwords NEVER live in the repository. Without them the
-            // release APK is unsigned (buildable/verifiable on CI).
-            if (System.getenv('CAESURA_ANDROID_KEYSTORE') != null) {
+            // release APK/AAB is unsigned (buildable/verifiable on CI).
+            if (ksPath != null && file(ksPath).exists()) {
                 signingConfig signingConfigs.caesura
             }
+        }
+    }
+    bundle {
+        language {
+            enableSplit = false
+        }
+        density {
+            enableSplit = false
+        }
+        abi {
+            enableSplit = false
         }
     }
     lint {

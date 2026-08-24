@@ -123,6 +123,11 @@ public:
     }
     const char* getBackendName() const override { return "TestPlatform"; }
 
+    bool startTextInput() override { return true; }
+    bool stopTextInput() override { return true; }
+    bool setTextInputRect(int, int, int, int, int = 0) override { return true; }
+    bool isTextInputActive() const override { return false; }
+
 private:
     LifecycleProbe& m_probe;
     int m_width = 0;
