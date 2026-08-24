@@ -9,6 +9,7 @@
 #    默认从 android/app/build/outputs/apk/debug/app-debug.apk 安装
 #
 #  覆盖 A4 项: launch / native-load / touch-advance / lifecycle(power toggle) /
+#  权限: 所有 input/settings 走 su 通道(绕过 MIUI 无 SIM 的 adb 安全调试限制) /
 #             orientation(rotation via su) / audio-init / CJK(截图后人工复核) /
 #             crash-freedom。存档/长按/多指等需要游戏内交互的项留人工。
 # =============================================================================
@@ -31,8 +32,11 @@ echo "=== [device-smoke] device check ==="
 echo "device: $("$ADB" shell getprop ro.product.model) / Android $("$ADB" shell getprop ro.build.version.release) / $("$ADB" shell getprop ro.product.cpu.abi)"
 
 if [[ -f "$APK" ]]; then
-    echo "=== [device-smoke] install ($APK) ==="
-    "$ADB" install -r "$APK" | tail -1
+    echo "=== [device-smoke] install via root pm ($APK) ==="
+    # MIUI gates plain adb install without the SIM-gated "USB debugging
+    # (security settings)"; root channel bypasses it.
+    MSYS_NO_PATHCONV=1 "$ADB" push "$APK" /sdcard/caesura-app.apk >/dev/null
+    "$ADB" shell "su -c pm install -r /sdcard/caesura-app.apk" | tail -1
 else
     echo "=== [device-smoke] APK 未找到, 用已安装包 ==="
     "$ADB" shell pm list packages | grep -q "$PKG" || { echo "AMS not installed and no APK"; exit 2; }
@@ -54,14 +58,14 @@ echo "=== [device-smoke] screenshot: launch state ==="
 "$ADB" exec-out screencap -p > "$OUT/01-launch.png" 2>/dev/null && ok "screenshot saved: $OUT/01-launch.png" || bad "screencap failed"
 
 echo "=== [device-smoke] touch advance (tap center) ==="
-"$ADB" shell input tap 540 1400 || true; sleep 2
+"$ADB" shell "su -c input tap 540 1400" || true; sleep 2
 "$ADB" exec-out screencap -p > "$OUT/02-after-tap.png" 2>/dev/null || true
 cmp -s "$OUT/01-launch.png" "$OUT/02-after-tap.png" && bad "screen unchanged after tap (may need 2 taps)" || ok "screen responded"
 
 echo "=== [device-smoke] sleep/wake (lifecycle) ==="
-"$ADB" shell input keyevent KEYCODE_POWER; sleep 3
-"$ADB" shell input keyevent KEYCODE_WAKEUP; sleep 2
-"$ADB" shell input keyevent 82 >/dev/null 2>&1 || true; sleep 2
+"$ADB" shell "su -c input keyevent KEYCODE_POWER"; sleep 3
+"$ADB" shell "su -c input keyevent KEYCODE_WAKEUP"; sleep 2
+"$ADB" shell "su -c input keyevent 82" >/dev/null 2>&1 || true; sleep 2
 NEWPID="$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d "\r\n")"
 [[ "$NEWPID" == "$PID" ]] && ok "process survives sleep/wake" || bad "process changed after sleep/wake (was $PID now $NEWPID)"
 
