@@ -559,5 +559,10 @@ jobs:
           "$GRADLE" --no-daemon --console=plain assembleDebug
           cd ..
           ls -la android/app/build/outputs/apk/debug/ || true
+          echo "=== A5: unsigned release APK ==="
+          cd android
+          "$GRADLE" --no-daemon --console=plain assembleRelease
+          ls -la app/build/outputs/apk/release/ || true
+          cd ..
           echo "--- APK content check (A3 + R6 bundle) ---"
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E "assets/game/demo/first_vn/story.ks|assets/game/demo/first_vn/entry.lua|assets/game/scripts/kag/init.lua|assets/game/assets/lang/|libCaesuraAmeKAG.so|libSDL3.so"

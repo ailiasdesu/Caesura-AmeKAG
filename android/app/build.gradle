@@ -12,10 +12,24 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    signingConfigs {
+        caesura {
+            storeFile file(System.getenv('CAESURA_ANDROID_KEYSTORE') ?: 'none')
+            storePassword System.getenv('CAESURA_ANDROID_KEYSTORE_PASS') ?: ''
+            keyAlias System.getenv('CAESURA_ANDROID_KEY_ALIAS') ?: ''
+            keyPassword System.getenv('CAESURA_ANDROID_KEY_PASS') ?: ''
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Signing is opt-in via environment variables (A5): the keystore
+            // and passwords NEVER live in the repository. Without them the
+            // release APK is unsigned (buildable/verifiable on CI).
+            if (System.getenv('CAESURA_ANDROID_KEYSTORE') != null) {
+                signingConfig signingConfigs.caesura
+            }
         }
     }
     lint {
