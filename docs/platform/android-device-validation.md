@@ -22,8 +22,8 @@
 |---|------|------|------|
 | 1 | launch（APK 安装、启动、场景可见） | ✅ device-verified | root pm 通道安装；[FirstVN] Loading + [FirstVN] Ready；场景满屏渲染（连续截图一致，无闪烁） |
 | 2 | touch tap 推进 | ✅ device-verified | su -c input tap（MIUI 拒绝 adb shell input，须 su 通道）；对话逐页推进（[Click] resumed N tokens 日志 + 截图 diffs） |
-| 3 | long press（右键语义） | ⚠️ 未接线 | MobileAdapter::onLongPress 已实现但无运行时派发者（Engine 未调用）——记录为已知缺口 |
-| 4 | pinch 缩放（滚轮语义） | ⚠️ 未接线 | MobileAdapter::onPinch 同前——无多指派发路径；未知设备应标 device-unverified |
+| 3 | long press（右键语义） | ✅ device-verified | GestureDetector（本轮）：单指按住 ≥500ms 触发；真机 su -c input swipe 600 500 600 500 900 → logcat [Mobile] Long press -> right click (431, 475) |
+| 4 | pinch 缩放（滚轮语义） | ✅ 单元验证 / ⚠️ 真机未注入 | GestureDetector 双指距离比例脉冲（kPinchInitial 0.08 / kPinchStep 0.02）→ MobileAdapter::onPinch→wheel；单测 6/6 覆盖；adb 无多指注入工具，真机 multi-touch 无法自动化——device-unverified（代码路径+单测已闭环） |
 | 5 | portrait / landscape | ✅ device-verified | Manifest 锁定 landscape；settings put system user_rotation 0/1 往返切换后进程存活、画面正常 |
 | 6 | lifecycle | ✅ device-verified | su -c input keyevent KEYCODE_POWER 熄/亮屏 + KEYCODE_WAKEUP；进程 PID 不变；恢复后继续运行 |
 | 7 | IME / CJK 输入 | ✅ CJK 渲染 / ⚠️ IME 无桥 | 双语文本（中/英 CJK 内联）真实渲染（截图复核）；IME 输入桥为已知缺口（当前无输入功能场景） |
@@ -38,7 +38,7 @@
 | script-contract | ✅ | scripts/build_android.sh 单入口（本地验证） |
 | build-verified | ✅ CI + 本地 | ios/android-compile 探针全绿；本机 NDK r27.3 + SDL3 3.2.4 + OpenSSL 3.3.2 切片 |
 | install-verified | ✅ | root pm 通道安装 app-debug.apk（hash 见上） |
-| device-verified | ✅ 核心项 / ⚠️ 3 项未验 | 本表 #1-#9；#3/#4（长按/捏合无派发）、#7 IME、#10 低内存未触发 |
+| device-verified | ✅ 核心项 / ⚠️ 2 项未验 | 本表 #1-#9；#3 长按 device-verified（本轮派发接线+真机日志）；#4 pinch 单元验证（无多指注入）、#7 IME、#10 低内存未触发 |
 | release-verified | ⏳ | A5 签名环境未配置（keystore 由用户持有） |
 
 ## Known Issues（真机发现，勿删除历史）
@@ -46,4 +46,4 @@
 1. **系统槽（quicksave -1 / autosave -2）此前被 SaveManager 0..99 守卫拒绝**：引擎 60s 自动存档每轮报 [STORAGE] [ERROR] Slot -2 out of range 且不写文件（桌面同样触发）。已修复：slotPath 映射 save_quick.json / save_auto.json，守卫 [-2..99]，listSaves 仍只枚举 0..99；真机验证 saves/save_auto.json 生成、错误清零。
 2. **选择分支 UI 文本真机未复现**（2026-08-24 FirstVN 行走）：[save] 之后屏幕文字消失（对话/选择按钮均不可见，日志无错误；桌面/headless/web 同款 story 全绿）。疑与 save→text_scene 状态有关，后续排查。记录为 device-open。
 3. tmpvar_5 shader 变体编译失败（GLES ESSL 转换非阻塞回退 Normal）——已知非阻塞项，所有 10 程序 READY。
-4. 多指/长按派发缺失：MobileAdapter::onPinch/onLongPress 实现存在但无运行时派发者（Engine finger 流仅 down/motion/up）。
+4. （已闭环 2026-08-24）多指/长按派发：新增 platform/GestureDetector（单指长按 ≥500ms + 双指捏合比例脉冲），Engine finger 流接入、每帧 tick 派发到 MobileAdapter::onLongPress/onPinch；长按真机验证，捏合单测覆盖。
