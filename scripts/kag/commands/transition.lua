@@ -217,8 +217,9 @@ function TransCommands.scroll(ctx, params)
     local speed = params.speed  -- schema-typed
     local size = params.size
     local color = params.color
-    local width = (ctx.viewport and ctx.viewport.width) or 1280
-    local height = (ctx.viewport and ctx.viewport.height) or 720
+    local vw, vh = require("viewport").logical(1920, 1080)  -- viewport-relative fallback (was 1280/720)
+    local width = (ctx.viewport and ctx.viewport.width) or vw
+    local height = (ctx.viewport and ctx.viewport.height) or vh
     if #text == 0 then return end
 
     -- Resolve the color to components: "r,g,b" string or named.

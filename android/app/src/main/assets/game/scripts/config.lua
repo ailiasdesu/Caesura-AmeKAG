@@ -29,8 +29,8 @@ config.platform_backend = "sdl3"
 -- Window Settings (persisted across sessions)
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 
-config.window_width   = 1280
-config.window_height  = 720
+config.window_width   = 1920
+config.window_height  = 1080
 config.vsync          = true
 config.texture_budget = "auto"  -- "auto" | 0|1|2|3|4|5: texture memory budget tier ([10.2.65])
 config.adaptive_quality = true  -- Spec [10.2.40]: auto-detect GPU tier, scale effects/shadow/resolution

@@ -22,7 +22,7 @@ check("lh zero guard", src:find("if line_height <= 0 then return 24 end", 1, tru
 -- max width: explicit > chars_per_line > viewport remainder
 check("mw explicit", src:find("params.max_width", 1, true) ~= nil)
 check("mw chars_per_line", src:find("chars_per_line * (tonumber(state.font_size) or 24)", 1, true) ~= nil)
-check("mw fallback", src:find("math.max(1, 1280 - x - 48)", 1, true) ~= nil)
+check("mw fallback", src:find("math.max(1, vw - x - 48)", 1, true) ~= nil)
 
 -- color: hex parse -> font_color -> white, bytes clamped
 check("color hex parse", src:find("parse_hex_color(params.color)", 1, true) ~= nil)

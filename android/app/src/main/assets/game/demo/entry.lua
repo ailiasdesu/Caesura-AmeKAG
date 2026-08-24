@@ -113,6 +113,7 @@ end
 
 function engine_render()
     layers.render()
+    kag_runner.render()
 end
 
 function _KAG_onClick()

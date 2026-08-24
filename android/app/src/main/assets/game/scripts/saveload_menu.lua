@@ -21,7 +21,8 @@ function SaveLoad.show(ctx, mode)
     mode = mode or "save"
     local bg = layers.ensure(ctx, "_saveload_bg", 192)
     bg.visible = true
-    bg.x, bg.y, bg.w, bg.h = 0, 0, 1280, 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    bg.x, bg.y, bg.w, bg.h = 0, 0, vw, vh
     bg.texture = solid(0, 0, 0, 210)
 
     local slots = require("kag.commands.save").listsaves(ctx, {})
@@ -47,7 +48,7 @@ function SaveLoad.show(ctx, mode)
             backend.render_text(prefix .. label, 40, y, r, g, b, 255)
             y = y + 52
         end
-        backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Cancel", 20, 690, 120, 120, 160, 255)
+        backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Cancel", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
 
         if _G._GAME_KEY_UP == true then

@@ -39,21 +39,22 @@ local function showEndings(ctx)
     end
     table.sort(names)
     local cursor = 1
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
     while true do
-        backend.render_text(i18n.t("endings_title") or "Endings", 1280 / 2 - 60, 180, 220, 180, 80, 255)
+        backend.render_text(i18n.t("endings_title") or "Endings", math.floor(vw / 2) - 60, 180, 220, 180, 80, 255)
         if #names == 0 then
-            backend.render_text("(none yet)", 1280 / 2 - 60, 300, 120, 120, 160, 255)
+            backend.render_text("(none yet)", math.floor(vw / 2) - 60, 300, 120, 120, 160, 255)
         else
             local y = 300
             for i, n in ipairs(names) do
                 local prefix = (i == cursor) and "> " or "  "
                 local r, g, b = 255, 255, 255
                 if i == cursor then r, g, b = 255, 220, 80 end
-                backend.render_text(prefix .. "[OK] " .. n, 1280 / 2 - 80, y, r, g, b, 255)
+                backend.render_text(prefix .. "[OK] " .. n, math.floor(vw / 2) - 80, y, r, g, b, 255)
                 y = y + 40
             end
         end
-        backend.render_text("[Up/Down] Select  [Enter] Replay  [Esc] Back", 20, 690, 120, 120, 160, 255)
+        backend.render_text("[Up/Down] Select  [Enter] Replay  [Esc] Back", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
@@ -84,26 +85,27 @@ function TitleMenu.show(ctx)
     local bg = layers.ensure(ctx, "_title_bg", 90)
     bg.visible = true
     bg.x, bg.y = 0, 0
-    bg.w, bg.h = 1280, 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    bg.w, bg.h = vw, vh
     bg.texture = solid(8, 8, 20, 255)
 
     local cursor = 1
     while true do
         -- Title
-        backend.render_text(i18n.t("title_screen"), 1280 / 2 - 120, 180, 220, 180, 80, 255)
+        backend.render_text(i18n.t("title_screen"), math.floor(vw / 2) - 120, 180, 220, 180, 80, 255)
 
         -- Menu items
         local y = 320
         for i, key in ipairs(MENU_ITEMS) do
             local label = i18n.t(key)
             if i == cursor then
-                backend.render_text("> " .. label, 1280 / 2 - 80, y, 255, 220, 80, 255)
+                backend.render_text("> " .. label, math.floor(vw / 2) - 80, y, 255, 220, 80, 255)
             else
-                backend.render_text("  " .. label, 1280 / 2 - 80, y, 180, 180, 200, 255)
+                backend.render_text("  " .. label, math.floor(vw / 2) - 80, y, 180, 180, 200, 255)
             end
             y = y + 44
         end
-        backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Exit", 20, 690, 120, 120, 160, 255)
+        backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Exit", 20, vh - 30, 120, 120, 160, 255)
 
         coroutine.yield()
 

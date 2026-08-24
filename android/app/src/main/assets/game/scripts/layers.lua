@@ -559,8 +559,13 @@ function Layers.render()
             renderNode(child, wx, wy)
         end
 
-        -- emit commands for dirty nodes with tex/rt and view_id
-        -- Root-level nodes may have tex but no rt; include them
+        -- emit commands for visible nodes with tex/rt and view_id.
+        -- Root-level nodes may have tex but no rt; include them.
+        -- NOTE: emitted EVERY frame (not only when dirty): the backbuffer
+        -- does not preserve content between presents, so a static layer
+        -- that submitted once would vanish from frame 2 onward (blank
+        -- scene / flicker). dirty stays in charge of lazy RTT allocation
+        -- and per-frame re-composition work only.
         local nodeTex = node.tex or node.texture or 0
         -- Lazy RTT: a layer with content but no pooled rt (e.g. added with
         -- size 0 then resized at runtime, or texture-only until now) gets
@@ -570,7 +575,7 @@ function Layers.render()
             and (node.w or 0) > 0 and (node.h or 0) > 0 then
             node.rt = rtt.acquire(node.w, node.h)
         end
-        if node.dirty and node.view_id and (node.rt or (nodeTex and nodeTex ~= 0)) then
+        if node.view_id and (node.rt or (nodeTex and nodeTex ~= 0)) then
             batch.commands[#batch.commands + 1] = {
                 view_id    = node.view_id,
                 tex        = nodeTex,

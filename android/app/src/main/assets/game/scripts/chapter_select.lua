@@ -50,7 +50,8 @@ function ChapterSelect.show(ctx)
 
     local bg = layers.ensure(ctx, "_chapter_bg", 190)
     bg.visible = true
-    bg.x, bg.y, bg.w, bg.h = 0, 0, 1280, 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    bg.x, bg.y, bg.w, bg.h = 0, 0, vw, vh
     bg.texture = solid(0, 0, 0, 210)
 
     local cursor, scroll, ITEMS = 1, 0, 12
@@ -68,7 +69,7 @@ function ChapterSelect.show(ctx)
             backend.render_text(prefix .. badge .. ch.name, 30, y, r, g, b, 255)
             y = y + 44
         end
-        backend.render_text("[Up/Down] Select  [Enter] Jump  [Esc] Cancel", 20, 690, 120, 120, 160, 255)
+        backend.render_text("[Up/Down] Select  [Enter] Jump  [Esc] Cancel", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
 
         if _G._GAME_KEY_UP == true then

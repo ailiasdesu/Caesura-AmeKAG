@@ -170,8 +170,9 @@ function MusicRoom.show(ctx)
     end
 
     local w, h = backend.get_resolution()
-    w = w or 1280
-    h = h or 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    w = w or vw
+    h = h or vh
 
     -- Dark overlay background layer (semi-transparent full-screen)
     local overlayTex = solid(0, 0, 0, 180)

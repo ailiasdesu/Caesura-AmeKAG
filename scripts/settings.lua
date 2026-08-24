@@ -129,8 +129,9 @@ function Settings.show(ctx)
     backend.set_input_focus("GAME")
 
     local w, h = backend.get_resolution()
-    w = w or 1280
-    h = h or 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    w = w or vw
+    h = h or vh
 
     -- Panel dimensions (centered, with border)
     local panelW = 680
@@ -314,8 +315,9 @@ end
 function Settings._render(ctx)
     if not state.active then return end
     local w, h = backend.get_resolution()
-    w = w or 1280
-    h = h or 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    w = w or vw
+    h = h or vh
     local px = state.panelX or 340
     local py = state.panelY or 120
     local pw = state.panelW or 600

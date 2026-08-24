@@ -195,8 +195,13 @@ check("redraw: typewriter sealed", (function()
     return true
 end)())
 check("redraw: page source entry not mutated",
-      ctxR.text_state.page_src[1].opts.msgY == 580
-      and ctxR.text_state.page_src[1].src == "hi")
+      (function()
+          -- msgY follows the logical viewport (was hardcoded 580 for the
+          -- 720-px layout; the engine default is now 1920x1080).
+          local _, vh = require("viewport").wh()
+          return ctxR.text_state.page_src[1].opts.msgY == math.max(0, vh - 140)
+                 and ctxR.text_state.page_src[1].src == "hi"
+      end)())
 
 -- {key} tokens re-expand with the NEW string table on redraw.
 local ctxK = fresh_ctx()

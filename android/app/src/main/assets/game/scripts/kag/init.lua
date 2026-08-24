@@ -24,6 +24,7 @@ local flow       = require("flow")
 
 -- Graphics
 local layers     = require("layers")
+local viewport   = require("viewport")  -- logical-resolution layout helpers (1920x1080 default)
 local rtt        = require("rtt")
 local blend      = require("blend")
 local transition = require("transition")
@@ -40,6 +41,12 @@ local backend    = require("backend")
 
 -- Save/Load (Phase 6)
 local save_cmds  = require("kag.commands.save")
+-- Runtime-required kag submodules must be preloaded for the sandboxed
+-- require wrapper (package.searchers disabled after lockdown): any module
+-- first required inside a frame/click callback (kag_runner.on_click ->
+-- kag.snapshot) would otherwise hard-error "not preloaded".
+local snapshot    = require("kag.snapshot")   -- rollback snapshots (on_click)
+local text_scene  = require("kag.text_scene") -- dialogue draw list (render)
 
 -- Declarative tween commands (round 106): preloaded so sandbox require
 -- resolves before any [tween] token runs (kag_runner hooks call it).

@@ -103,7 +103,8 @@ local function resolve_max_width(ctx, params, x)
         local state = TextScene.get_state(ctx)
         return chars_per_line * (tonumber(state.font_size) or 24)
     end
-    return math.max(1, 1280 - x - 48)
+    local vw = require("viewport").logical(1280, 720)
+    return math.max(1, vw - x - 48)
 end
 
 local function animate_text_opacity(ctx, params)
@@ -743,10 +744,14 @@ function TextCommands.ch(ctx, params)
     -- Set up message layer if needed
     local msgNode = layers.get("message")
     if not msgNode then
+        -- Bottom dialog box sized to the logical viewport: full width,
+        -- 200px tall at y = H - 200 (was 1280x200 at y=520, a 720-px layout
+        -- that floated mid-screen at 1920x1080).
+        local vw, vh = require("viewport").wh()
         msgNode = layers.add_layer(nil, {
             name = "message",
             layer_type = layers.Type.LAYER_MESSAGE,
-            x = 0, y = 520, w = 1280, h = 200, visible = true,
+            x = 0, y = math.max(0, vh - 200), w = vw, h = 200, visible = true,
         })
         layers.set_z(msgNode, 2)
     end
@@ -767,16 +772,17 @@ function TextCommands.ch(ctx, params)
     -- Calculate X positions based on "pos" (normal mode) or the fixed NVL
     -- column (full-screen page).
     local nameX, msgX
+    local vw, vh = require("viewport").wh()
     if nvl then
         msgX = NVL_X
     elseif pos == "left" then
         nameX = 48
         msgX  = 48
     elseif pos == "right" then
-        nameX = 1032
-        msgX  = 784    -- right-side text starts earlier for readability
+        nameX = vw - 248
+        msgX  = vw - 496    -- right-side text starts earlier for readability
     else  -- center (default)
-        nameX = 540   -- speaker name centered
+        nameX = math.floor(vw / 2) - 100   -- speaker name centered
         msgX  = 48     -- dialogue text left-aligned (standard galgame convention)
     end
 
@@ -785,9 +791,10 @@ function TextCommands.ch(ctx, params)
 
     -- Calculate y-position for message: normal mode draws below the fixed
     -- speaker line; NVL mode continues at the accumulated cursor (reset by
-    -- [nvl]/[nvl clear]/[p] to the top of the page).
-    local msgY = nvl and (ctx.textCursorY or NVL_Y0) or 580
-    local maxWidth = nvl and NVL_MAX_WIDTH
+    -- [nvl]/[nvl clear]/[p] to the top of the page). 580 was the 720-px
+    -- baseline; at H it becomes H - 140 so the box hugs the bottom.
+    local msgY = nvl and (ctx.textCursorY or NVL_Y0) or math.max(0, vh - 140)
+    local maxWidth = nvl and math.max(1, vw - 96)
         or resolve_max_width(ctx, params, msgX)
 
     -- Record the page source (pre-localize message + the exact layout

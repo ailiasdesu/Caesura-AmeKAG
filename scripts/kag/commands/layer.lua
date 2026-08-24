@@ -44,10 +44,14 @@ local function get_or_create_layer(layerName, layerType)
     local node = layers.find(layerName)
     if not node then
         local root = layers.get_root()
+        -- Full viewport size (logical resolution, default 1920x1080):
+        -- scene layers must fill the render buffer at any resolution.
+        -- Hardcoded 1280x720 left the scene as a top-left letterbox.
+        local vw, vh = require("viewport").wh()
         node = layers.add_layer(root, {
             name = layerName, tag = layerName,
             z = (layerType == layers.Type.LAYER_BASE and 0 or 1),
-            x = 0, y = 0, w = 1280, h = 720, visible = true,
+            x = 0, y = 0, w = vw, h = vh, visible = true,
         })
     end
     return node

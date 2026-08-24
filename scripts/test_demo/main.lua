@@ -7,7 +7,7 @@ local layers  = require("layers")
 local backend = require("backend")
 local System  = require("system")
 local w, h = backend.get_resolution()
-if not w then w, h = 1280, 720 end
+if not w then w, h = require("viewport").wh() end  -- viewport-relative (was 1280/720)
 
 -- Helpers
 local function solid(r,g,b,a)

@@ -20,6 +20,8 @@ local _real_dofile  = dofile
 -- bindings, changing suite behavior (see git history).
 local okp, errp = pcall(require, "replay")
 local okpal, errpal = pcall(require, "palette")
+local okvp, errvp = pcall(require, "viewport")
+if not okvp then print("[run_lua_tests] preload viewport failed: " .. tostring(errvp)) end
 if not okpal then print("[run_lua_tests] preload palette failed: " .. tostring(errpal)) end
 if not okp then print("[run_lua_tests] preload replay failed: " .. tostring(errp)) end
 

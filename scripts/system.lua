@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 --  Caesura (AmeKAG) �� system.lua
 --  System facilities: save/load, config, backlog, saveplace/loadplace.
 --  Spec [4.1]: Backlog with voice + layers snapshots
@@ -374,6 +374,8 @@ end
 -- Config management -- Spec [4.3]
 -- ===========================================================================
 
+-- viewport-relative defaults (logical resolution; viewport helper is preloaded)
+local _vw, _vh = require("viewport").wh()
 System.defaults = {
     -- Audio
     bgm_volume    = 1.0,
@@ -387,8 +389,8 @@ System.defaults = {
     font_size     = 24,
 
     -- Display
-    screen_width  = 1280,
-    screen_height = 720,
+    screen_width  = _vw,   -- viewport-relative logical width  (was 1280)
+    screen_height = _vh,   -- viewport-relative logical height (was 720)
     fullscreen    = false,
     window_title  = "Caesura",
 
@@ -440,8 +442,9 @@ function System.set_config(ctx, key, value)
             if config then config.se_volume = tonumber(value) or 1.0 end
         end)
     elseif key == "screen_width" or key == "screen_height" then
-        local w = System._config.screen_width or 1280
-        local h = System._config.screen_height or 720
+        local vw, vh = require("viewport").wh()  -- viewport-relative fallback (was 1280/720)
+        local w = System._config.screen_width or vw
+        local h = System._config.screen_height or vh
         pcall(function()
             local backend = require("backend")
             if backend and backend.set_resolution then

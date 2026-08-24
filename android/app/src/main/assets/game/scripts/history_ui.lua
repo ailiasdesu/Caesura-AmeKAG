@@ -91,7 +91,8 @@ function HistoryUI.show(ctx)
     footerLayer.visible = true
 
     while true do
-        local w, h = 1280, 720
+        local w, h = require("viewport").wh()  -- viewported from 1280x720
+        local footerY = h - 30
 
         -- Full-screen dark overlay
         bgLayer.x, bgLayer.y = 0, 0
@@ -104,7 +105,7 @@ function HistoryUI.show(ctx)
         titleLayer.texture = solid(16, 16, 48, 224)
 
         backend.render_text("Backlog / 消息记录", 20, 8, 255, 200, 60, 255)
-        backend.render_text("Entry " .. selected .. " / " .. #ctx.backlog, 640, 8, 60, 200, 120, 255)
+        backend.render_text("Entry " .. selected .. " / " .. #ctx.backlog, math.floor(w / 2), 8, 60, 200, 120, 255)
 
         -- Separator under title
         local sep = layers.ensure(ctx, "_history_sep", 96)
@@ -126,7 +127,7 @@ function HistoryUI.show(ctx)
                 local hl = layers.ensure(ctx, "_history_hl" .. i, 98)
                 hl.visible = true
                 hl.x, hl.y = 10, y - 1
-                hl.w, hl.h = 1260, entryH + 2
+                hl.w, hl.h = w - 20, entryH + 2
                 hl.texture = solid(32, 64, 160, 100)
             end
 
@@ -145,16 +146,16 @@ function HistoryUI.show(ctx)
 
             -- Timestamp
             if e.time then
-                backend.render_text(e.time, 1150, y + 1, 140, 140, 160, 255)
+                backend.render_text(e.time, w - 130, y + 1, 140, 140, 160, 255)
             elseif e.timestamp then
-                backend.render_text(os.date("%H:%M", e.timestamp), 1150, y + 1, 140, 140, 160, 255)
+                backend.render_text(os.date("%H:%M", e.timestamp), w - 130, y + 1, 140, 140, 160, 255)
             end
 
             -- Scene tag
             if e.scene and #e.scene > 0 then
                 local sceneShort = e.scene:match("[^/]+$") or e.scene
                 sceneShort = sceneShort:sub(1, 20)
-                backend.render_text("[" .. sceneShort .. "]", 750, y + 1, 90, 150, 255, 255)
+                backend.render_text("[" .. sceneShort .. "]", math.floor(w * 750 / 1280), y + 1, 90, 150, 255, 255)
             end
             y = y + entryH + 2
         end
@@ -165,13 +166,13 @@ function HistoryUI.show(ctx)
         end
 
         -- Footer
-        footerLayer.x, footerLayer.y = 0, 690
+        footerLayer.x, footerLayer.y = 0, footerY
         footerLayer.w, footerLayer.h = w, 30
         footerLayer.texture = solid(16, 16, 48, 224)
         local filterLabel = (filter == 0) and "All"
                          or (filter == 1) and "Voice-only"
                          or "Sprite-only"
-        backend.render_text("[Up/Down] Navigate  [Enter] Jump  [V] Voice  [F] Filter: " .. filterLabel .. "  [Esc] Close", 20, 693, 60, 200, 120, 255)
+        backend.render_text("[Up/Down] Navigate  [Enter] Jump  [V] Voice  [F] Filter: " .. filterLabel .. "  [Esc] Close", 20, footerY + 3, 60, 200, 120, 255)
 
         -- Yield to engine frame
         coroutine.yield()

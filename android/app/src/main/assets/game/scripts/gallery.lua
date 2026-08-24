@@ -133,8 +133,9 @@ function Gallery.show(ctx, startId)
     backend.set_input_focus("GAME")
 
     local w, h = backend.get_resolution()
-    w = w or 1280
-    h = h or 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    w = w or vw
+    h = h or vh
 
     -- Layer 1: Dark semi-transparent full-screen overlay background
     local overlayTex = solid(0, 0, 0, 180)
@@ -213,8 +214,9 @@ function Gallery._renderCurrent(ctx)
     gs._renderedIndex = gs.index
 
     local w, h = backend.get_resolution()
-    w = w or 1280
-    h = h or 720
+    local vw, vh = require("viewport").wh()  -- viewported from 1280x720
+    w = w or vw
+    h = h or vh
 
     -- Load CG texture (centered, with padding)
     local tex = backend.load_texture(cg.path)

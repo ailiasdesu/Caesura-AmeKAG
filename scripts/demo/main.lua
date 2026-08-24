@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- Caesura (AmeKAG) Demo -- Complete engine capability demonstration
 -- ============================================================================
 -- Scene 1: Classical classroom -- layered rendering + text
@@ -9,7 +9,7 @@
 local layers  = require("layers")
 local backend = require("backend")
 local w, h = backend.get_resolution()
-if not w then w, h = 1280, 720 end
+if not w then w, h = require("viewport").wh() end  -- viewport-relative (was 1280/720)
 
 -- Color helpers
 local function solid(r, g, b, a)
