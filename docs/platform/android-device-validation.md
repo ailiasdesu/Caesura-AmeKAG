@@ -7,14 +7,14 @@
 
 | 字段 | 值 |
 |---|---|
-| Device model | *（如 Pixel 8 / Xiaomi 14）* |
-| Android version | *（如 14 / 15）* |
+| Device model | **Xiaomi M2012K11AC (alioth, 小米 11)** [magisk root] |
+| Android version | **13 (SDK 33)** |
 | ABI | arm64-v8a |
-| Build commit | *（git rev-parse HEAD）* |
-| APK hash | *（sha256sum app-release.apk）* |
-| NDK version | *（装 NDK 后记录，如 r26d）* |
-| SDL3 android pkg | *（SDL3_DIR 来源与版本）* |
-| 验证人/日期 | *（device-unverified 前不得填）* |
+| Build commit | *（构建完成时 git rev-parse HEAD）* |
+| APK hash | *（sha256sum 本地 app-debug.apk）* |
+| NDK version | **r27.3.13750724 (windows, dl.google.com/android-ndk-r27d-windows.zip → D:\green\ndk\27.3.13750724)** |
+| SDL3 android pkg | **3.2.4 本地切片（D:\green\android-build-src\sdl3-android）；OpenSSL 3.3.2 同目录 android-arm64** |
+| 验证人/日期 | *（跑通清单后填）* |
 
 ## 验收清单（计划 A4：launch/touch/long press/pinch/portrait-landscape/lifecycle/IME-CJK/save-load/audio/memory）
 
@@ -35,11 +35,11 @@
 
 | 层级 | 状态 | 依据 |
 |---|---|---|
-| script-contract | ✅ | scripts/build_android.sh 单入口 + 清晰错误（本会话验证） |
-| build-verified | ⏳ pending | 需 NDK + Android SDL3 CMake 包；命令 bash scripts/build_android.sh --smoke |
-| install-verified | ⏳ pending | 需 A2 宿主层（gradle app 模块 + SDLActivity） |
+| script-contract | ✅ | scripts/build_android.sh 单入口 + 清晰错误（本地已验证） |
+| build-verified | ✅ CI (2026-08-24) / 本地链构建中 | ios/android-compile 探针全绿；本机 NDK r27.3 + SDL3 3.2.4 + OpenSSL 3.3.2 切片 → setup_android_local.sh |
+| install-verified | ⏳ pending | 本地 APK 构建后 adb install（root pm 通道） |
 | device-verified | ⏳ pending | 本表清单全部 item |
-| release-verified | ⏳ pending | TestFlight/分发链约束 |
+| release-verified | ⏳ pending | A5 签名环境未配置（keystore 由用户持有） |
 
 ## Known Issues（一经真机发现即记录，勿删除历史）
 
