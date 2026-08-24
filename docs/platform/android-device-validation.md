@@ -44,6 +44,6 @@
 ## Known Issues（真机发现，勿删除历史）
 
 1. **系统槽（quicksave -1 / autosave -2）此前被 SaveManager 0..99 守卫拒绝**：引擎 60s 自动存档每轮报 [STORAGE] [ERROR] Slot -2 out of range 且不写文件（桌面同样触发）。已修复：slotPath 映射 save_quick.json / save_auto.json，守卫 [-2..99]，listSaves 仍只枚举 0..99；真机验证 saves/save_auto.json 生成、错误清零。
-2. **选择分支 UI 文本真机未复现**（2026-08-24 FirstVN 行走）：[save] 之后屏幕文字消失（对话/选择按钮均不可见，日志无错误；桌面/headless/web 同款 story 全绿）。疑与 save→text_scene 状态有关，后续排查。记录为 device-open。
+2. **真机对话文本冻结**（2026-08-24 FirstVN 行走，已重新定位）：首帧后的文本页不再更新（页 1 文字常驻，剧情已推进到 i18n/选择；屏幕仅背景）。共享 Lua 栈的 web 回归测试（save→choice 全绿）证明 Lua 侧干净——指向 C++ GLES TextRenderer 图集更新路径（bgfx::update 纹理在帧内被采样后失效/GLES 特有）。另修复同路径的 captureThumbnailPNG 帧内 bgfx::frame()（双 present 隐患 + 每存 3.9MB 缩略图）。文本冻结本身 device-open。
 3. tmpvar_5 shader 变体编译失败（GLES ESSL 转换非阻塞回退 Normal）——已知非阻塞项，所有 10 程序 READY。
 4. （已闭环 2026-08-24）多指/长按派发：新增 platform/GestureDetector（单指长按 ≥500ms + 双指捏合比例脉冲），Engine finger 流接入、每帧 tick 派发到 MobileAdapter::onLongPress/onPinch；长按真机验证，捏合单测覆盖。
