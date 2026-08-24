@@ -178,7 +178,7 @@ private:
     // GlyphQuad: axis-aligned quad + per-glyph italic shear (top-edge
     // horizontal offset in px; 0 = upright). The bottom edge stays fixed,
     // so advance metrics are unchanged by italics.
-    struct GlyphQuad { float x, y, w, h, shear = 0.0f, u0, v0, u1, v1; };
+    struct GlyphQuad { float x, y, w, h, shear = 0.0f, u0, v0, u1, v1; float advance = 0.0f; };
     GlyphQuad buildGlyph(char ch, float penX, float penY, float scaleW, float scaleH);
     GlyphQuad buildGlyph(uint32_t cp, float penX, float penY, float scaleW, float scaleH);
 
@@ -198,7 +198,7 @@ private:
         FT_Library ftLib = nullptr;
         FT_Face    ftFace = nullptr;
         float ascent = 0.0f, descent = 0.0f, lineGap = 0.0f;
-        int atlasW = 1024, atlasH = 1024;
+        int atlasW = 2048, atlasH = 2048;
         int penX = 1, penY = 1, maxRowH = 0;
         std::unordered_map<uint32_t, GlyphMetrics> glyphs;
     };
@@ -242,6 +242,7 @@ private:
     int m_fontGlyphW = 8, m_fontGlyphH = 16;
     int m_atlasCols = 32;
     float m_ttfFontSize = 24.0f;
+    std::string m_ttfPath;
 
     TextCursor m_cursor;
 };

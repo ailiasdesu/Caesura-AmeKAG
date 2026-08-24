@@ -903,18 +903,22 @@ static int lua_Render_text_set_font(lua_State* L) {
     }
 
     const std::string faceStr = face;
-    if (faceStr.empty() || faceStr == "default") {
+    if (faceStr == "bitmap" || faceStr == "builtin") {
         dev->setFont(0);  // reset to built-in bitmap font
         lua_pushboolean(L, 1);
         return 1;
     }
 
-    if (dev->loadTTF(face, size)) {
+    const char* fontToLoad = (faceStr.empty() || faceStr == "default")
+        ? "assets/fonts/NotoSansCJKsc-Regular.otf"
+        : face;
+
+    if (dev->loadTTF(fontToLoad, size > 0 ? size : 22.0f)) {
         lua_pushboolean(L, 1);
         return 1;
     }
 
-    DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] text_set_font: failed to load TTF: %s", face);
+    DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] text_set_font: failed to load TTF: %s", fontToLoad);
     dev->setFont(0);  // fall back to built-in font
     lua_pushboolean(L, 0);
     return 1;
@@ -927,7 +931,11 @@ static int lua_Render_text_reset_state(lua_State* L) {
     // that allows the Lua [reset] command to call backend.text_reset_state without error.
     (void)L;
     IRenderDevice* dev = getRender(L);
-    if (dev) dev->setFont(0);  // reset to default font
+    if (dev) {
+        if (!dev->loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", 22.0f)) {
+            dev->setFont(0);  // reset to default font
+        }
+    }
     return 0;
 }
 

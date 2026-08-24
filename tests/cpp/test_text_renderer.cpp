@@ -227,3 +227,13 @@ TEST_CASE("Text layout: empty glyph list produces empty vertex stream") {
     CHECK(verts.empty());
     CHECK(indices.empty());
 }
+
+TEST_CASE("TextRenderer: loadTTF handles invalid arguments and uninitialized state safely") {
+    TextRenderer tr;
+    // Uninitialized renderer should reject loadTTF gracefully without crashing
+    CHECK_FALSE(tr.loadTTF(nullptr, 22.0f));
+    CHECK_FALSE(tr.loadTTF("", 22.0f));
+    CHECK_FALSE(tr.loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", 0.0f));
+    CHECK_FALSE(tr.loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", -10.0f));
+    CHECK_FALSE(tr.loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", 22.0f));
+}

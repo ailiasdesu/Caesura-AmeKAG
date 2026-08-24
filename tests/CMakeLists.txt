@@ -100,9 +100,11 @@ file(GENERATE
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
     CONTENT "
 file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/scripts]])
+file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/assets]])
 file(COPY [[${CMAKE_SOURCE_DIR}/tests/audio/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/tests/audio]])
 file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/demo]])
 file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/scripts]])
+file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/assets]])
 file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/demo]])
 "
 )

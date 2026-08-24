@@ -401,6 +401,9 @@ void TextRenderer::onDeviceLost() {
 void TextRenderer::onDeviceRestored() {
     if (m_savedDevice) {
         init(m_savedDevice);
+        if (!m_ttfPath.empty()) {
+            loadTTF(m_ttfPath.c_str(), m_ttfFontSize);
+        }
         printf("[TextRenderer] Device restored — reinitialized\n");
     }
 }
@@ -485,8 +488,16 @@ bool TextRenderer::loadFontAtlas(FontId id) {
 
 void TextRenderer::setFont(FontId id) {
     if (id == m_currentFont) return;
+    if (id == FontId::TTF) {
+        if (!m_ttfPath.empty()) {
+            loadTTF(m_ttfPath.c_str(), m_ttfFontSize);
+        }
+        return;
+    }
     m_currentFont = id;
+    m_ttf.reset();
     loadFontAtlas(id);
+    invalidateCache();
 }
 
 // ===========================================================================
@@ -508,18 +519,21 @@ TextRenderer::GlyphQuad TextRenderer::buildGlyph(
         auto it = m_ttf->glyphs.find(cp);
         if (it != m_ttf->glyphs.end()) {
             const auto& gm = it->second;
-        float gw = (float)gm.w * scaleW;
-        float gh = (float)gm.h * scaleH;
-        float atlasW = (float)m_ttf->atlasW;
-        float atlasH = (float)m_ttf->atlasH;
-        GlyphQuad q;
-        q.x = penX + gm.offsetX * scaleW;
-        q.y = penY + gm.offsetY * scaleH;
-        q.w = gw; q.h = gh;
-        q.u0 = (float)gm.x / atlasW; q.v0 = (float)gm.y / atlasH;
-        q.u1 = (float)(gm.x + gm.w) / atlasW; q.v1 = (float)(gm.y + gm.h) / atlasH;
-        q.w = (float)gm.advance * scaleW;
-        return q;
+            float gw = (float)gm.w * scaleW;
+            float gh = (float)gm.h * scaleH;
+            float atlasW = (float)m_ttf->atlasW;
+            float atlasH = (float)m_ttf->atlasH;
+            GlyphQuad q;
+            q.x = penX + gm.offsetX * scaleW;
+            q.y = penY - gm.offsetY * scaleH + m_ttf->ascent * scaleH;
+            q.w = gw;
+            q.h = gh;
+            q.u0 = (float)gm.x / atlasW;
+            q.v0 = (float)gm.y / atlasH;
+            q.u1 = (float)(gm.x + gm.w) / atlasW;
+            q.v1 = (float)(gm.y + gm.h) / atlasH;
+            q.advance = (float)gm.advance * scaleW;
+            return q;
         }
     }
 
@@ -552,6 +566,7 @@ TextRenderer::GlyphQuad TextRenderer::buildGlyph(
     q.v0 = ((float)(row * m_fontGlyphH))     / atlasH;
     q.u1 = ((float)((col+1) * m_fontGlyphW)) / atlasW;
     q.v1 = ((float)((row+1) * m_fontGlyphH)) / atlasH;
+    q.advance = gw;
     return q;
 }
 
@@ -761,7 +776,7 @@ void TextRenderer::renderText(uint16_t viewId, const std::string& text,
             bar.u0 = 0; bar.v0 = 0; bar.u1 = 1; bar.v1 = 1;
             strikeBars.push_back(bar);
         }
-        penX += q.w;
+        penX += q.advance;
     }
 
     submitGlyphQuads(viewId, quads.data(), (int)quads.size(), color, scale, scale);
@@ -797,7 +812,7 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
             GlyphQuad q = buildGlyph(cp, rubyPenX, y - m_fontGlyphH * rubyScale - 2.0f,
                                       rubyScale, rubyScale);
             quads.push_back(q);
-            rubyPenX += q.w;
+            rubyPenX += q.advance;
         }
     }
 
@@ -812,7 +827,7 @@ void TextRenderer::renderRuby(uint16_t viewId, const std::string& text,
             i += clen;
             GlyphQuad q = buildGlyph(cp, penX, y, 1.0f, 1.0f);
             quads.push_back(q);
-            penX += q.w;
+            penX += q.advance;
         }
     }
 
@@ -873,47 +888,64 @@ bool TextRenderer::loadTTF(const char* path, float fontSize) {
     m_ttf->descent = m_ttf->ftFace->size->metrics.descender / 64.0f;
     m_ttf->lineGap = 0.0f;
     m_ttfFontSize = fontSize;
+    m_ttfPath = path;
     m_cursor.lineHeight = m_ttf->ftFace->size->metrics.height / 64.0f;
 
-    // Create runtime atlas
-    std::vector<uint8_t> atlas(m_ttf->atlasW * m_ttf->atlasH, 0);
+    // Create runtime atlas (RGBA8: 2048 x 2048 x 4 bytes = 16MB)
+    m_ttf->atlasW = 2048;
+    m_ttf->atlasH = 2048;
+    std::vector<uint8_t> atlas(static_cast<size_t>(m_ttf->atlasW) * m_ttf->atlasH * 4, 0);
 
     // Rasterize ASCII 32-126
-    size_t failed = 0;
     for (uint32_t cp = 32; cp <= 126; cp++)
-        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
+        rasterizeTTFGlyph(cp, atlas);
 
-    // Rasterize CJK Unified (partial: most common 500 chars)
-    for (uint32_t cp = 0x4E00; cp < 0x4E00 + 500 && cp <= 0x9FFF; cp++)
-        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
+    // Rasterize General Punctuation (0x2000-0x206F: quotes, dashes, ellipsis, etc.)
+    for (uint32_t cp = 0x2000; cp <= 0x206F; cp++)
+        rasterizeTTFGlyph(cp, atlas);
 
-    // Rasterize Hiragana + Katakana
-    for (uint32_t cp = 0x3040; cp <= 0x30FF; cp++)
-        if (!rasterizeTTFGlyph(cp, atlas)) ++failed;
+    // Rasterize CJK Symbols & Punctuation (0x3000-0x303F: ideographic comma/period, brackets, etc.)
+    for (uint32_t cp = 0x3000; cp <= 0x303F; cp++)
+        rasterizeTTFGlyph(cp, atlas);
 
-    if (failed > 0) {
-        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
-                  "[TextRenderer] Warning: %zu of %zu glyphs failed to "
-                  "rasterize (missing glyph or atlas full); they will fall "
-                  "back to the bitmap font.",
-                  failed, m_ttf->glyphs.size() + failed);
+    // Rasterize Hiragana (0x3040-0x309F)
+    for (uint32_t cp = 0x3040; cp <= 0x309F; cp++)
+        rasterizeTTFGlyph(cp, atlas);
+
+    // Rasterize Katakana (0x30A0-0x30FF)
+    for (uint32_t cp = 0x30A0; cp <= 0x30FF; cp++)
+        rasterizeTTFGlyph(cp, atlas);
+
+    // Rasterize Fullwidth & Halfwidth Forms (0xFF00-0xFFEF: fullwidth punctuation, etc.)
+    for (uint32_t cp = 0xFF00; cp <= 0xFFEF; cp++)
+        rasterizeTTFGlyph(cp, atlas);
+
+    // Rasterize CJK Unified Ideographs (0x4E00..0x9FFF): loop through common CJK characters
+    for (uint32_t cp = 0x4E00; cp <= 0x9FFF; cp++) {
+        if (!rasterizeTTFGlyph(cp, atlas)) {
+            if (m_ttf->penY + (int)fontSize + 1 >= m_ttf->atlasH) {
+                break; // Atlas full
+            }
+        }
     }
 
-    // Upload atlas as bgfx texture
+    // Upload atlas as bgfx RGBA8 texture (r=g=b=255, a=coverage, matching bitmap atlas and fs_texture shader)
     if (bgfx::isValid(m_fontTexture))
         bgfx::destroy(m_fontTexture);
-    const bgfx::Memory* mem = bgfx::copy(atlas.data(), m_ttf->atlasW * m_ttf->atlasH);
+    const bgfx::Memory* mem = bgfx::copy(atlas.data(), (uint32_t)atlas.size());
     m_fontTexture = bgfx::createTexture2D(
         (uint16_t)m_ttf->atlasW, (uint16_t)m_ttf->atlasH,
-        false, 1, bgfx::TextureFormat::R8,
+        false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
     m_atlasCols = m_ttf->atlasW;
     m_fontGlyphW = (int)fontSize;
     m_fontGlyphH = (int)fontSize;
     m_currentFont = FontId::TTF;
 
-    printf("[TextRenderer] TTF loaded: %s (%.0fpx), %zu glyphs rasterized\n",
-           path, fontSize, m_ttf->glyphs.size());
+    invalidateCache();
+
+    printf("[TextRenderer] TTF loaded: %s (%.0fpx), %zu glyphs rasterized into %dx%d RGBA8 atlas\n",
+           path, fontSize, m_ttf->glyphs.size(), m_ttf->atlasW, m_ttf->atlasH);
     return true;
 }
 
@@ -922,6 +954,7 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
     if (m_ttf->glyphs.count(cp)) return true;
 
     FT_UInt glyphIndex = FT_Get_Char_Index(m_ttf->ftFace, cp);
+    if (glyphIndex == 0 && cp != 32) return false;
 
     FT_Error ftErr = FT_Load_Glyph(m_ttf->ftFace, glyphIndex, FT_LOAD_DEFAULT);
     if (ftErr) return false;
@@ -932,7 +965,15 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
     FT_Bitmap* bitmap = &m_ttf->ftFace->glyph->bitmap;
     int w = (int)bitmap->width;
     int h = (int)bitmap->rows;
-    if (w <= 0 || h <= 0) return false;
+    if (w <= 0 || h <= 0) {
+        if (cp == 32 || glyphIndex != 0) {
+            GlyphMetrics gm{};
+            gm.advance = (int)(m_ttf->ftFace->glyph->advance.x >> 6);
+            m_ttf->glyphs[cp] = gm;
+            return true;
+        }
+        return false;
+    }
 
     int advance = (int)(m_ttf->ftFace->glyph->advance.x >> 6);
     int xoff = m_ttf->ftFace->glyph->bitmap_left;
@@ -948,12 +989,19 @@ bool TextRenderer::rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas) {
         return false;
     }
 
-    // Copy glyph to atlas (FreeType grayscale -> R8 atlas, direct copy)
+    // Copy glyph to atlas (FreeType grayscale -> RGBA8 atlas: RGB=255, A=coverage)
     for (int row = 0; row < h; row++) {
         for (int col = 0; col < w; col++) {
             int ax = m_ttf->penX + col;
             int ay = m_ttf->penY + row;
-            atlas[ay * m_ttf->atlasW + ax] = bitmap->buffer[row * bitmap->pitch + col];
+            uint8_t cov = bitmap->buffer[row * bitmap->pitch + col];
+            if (cov > 0) {
+                size_t idx = (static_cast<size_t>(ay) * m_ttf->atlasW + ax) * 4;
+                atlas[idx + 0] = 255;
+                atlas[idx + 1] = 255;
+                atlas[idx + 2] = 255;
+                atlas[idx + 3] = cov;
+            }
         }
     }
 
@@ -1313,10 +1361,9 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
                                   bgfx::ProgramHandle program) {
     if (!ensureCacheBuffers() || text.empty()) return x;
 
-    bgfx::TextureHandle tex = (m_ttf && bgfx::isValid(m_fontTexture))
-        ? m_fontTexture : m_fontTexture;
+    bgfx::TextureHandle tex = m_fontTexture;
     uint16_t texW = m_ttf ? (uint16_t)m_ttf->atlasW : (uint16_t)(m_atlasCols * m_fontGlyphW);
-    uint16_t texH = m_ttf ? (uint16_t)m_ttf->atlasH : (uint16_t)(m_fontGlyphH * 13);
+    uint16_t texH = m_ttf ? (uint16_t)m_ttf->atlasH : (uint16_t)(m_fontGlyphH * 3);
 
     const float invW = 1.0f / float(texW);
     const float invH = 1.0f / float(texH);

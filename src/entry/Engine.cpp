@@ -361,6 +361,16 @@ bool Engine::initPlatformPhase() {
     // GPU monitor may now query the render stats safely (round 39).
     if (m_gpuMonitor) m_gpuMonitor->setGpuAvailable(true);
 
+    // Wire up default CJK font if available in GPU mode (P0 text visibility)
+    if (gpuMode) {
+        const char* defaultFont = "assets/fonts/NotoSansCJKsc-Regular.otf";
+        if (m_renderDevice->loadTTF(defaultFont, 22.0f)) {
+            DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "Loaded default font: %s (22px)", defaultFont);
+        } else {
+            DEBUG_WARN(SubSys::Engine, ErrCode::Ok, "Default font not loaded: %s (using bitmap fallback)", defaultFont);
+        }
+    }
+
     // Render info (GPU caps)
     if (gpuMode) {
         const RenderRuntimeInfo renderInfo = m_renderDevice->getRuntimeInfo();

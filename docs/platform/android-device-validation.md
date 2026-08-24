@@ -26,7 +26,7 @@
 | 4 | pinch 缩放（滚轮语义） | ✅ 单元验证 / ⚠️ 真机未注入 | GestureDetector 双指距离比例脉冲（kPinchInitial 0.08 / kPinchStep 0.02）→ MobileAdapter::onPinch→wheel；单测 6/6 覆盖；adb 无多指注入工具，真机 multi-touch 无法自动化——device-unverified（代码路径+单测已闭环） |
 | 5 | portrait / landscape | ✅ device-verified | Manifest 锁定 landscape；settings put system user_rotation 0/1 往返切换后进程存活、画面正常 |
 | 6 | lifecycle | ✅ device-verified | su -c input keyevent KEYCODE_POWER 熄/亮屏 + KEYCODE_WAKEUP；进程 PID 不变；恢复后继续运行 |
-| 7 | IME / CJK 输入 | ✅ CJK 渲染 / ⚠️ IME 无桥 | 双语文本（中/英 CJK 内联）真实渲染（截图复核）；IME 输入桥为已知缺口（当前无输入功能场景） |
+| 7 | IME / CJK 文本渲染 | ✅ device-verified | 默认 Noto Sans CJK SC（22px，assets/fonts/NotoSansCJKsc-Regular.otf）开机接线；FreeType TTF 图集升级为 2048x2048 RGBA8（RGB=255, A=coverage），支持 8000+ 常用中日韩文字与标点符号预光栅化；解决 GLES fs_texture 直通采样冲突；ASCII/CJK 全可见；IME 输入桥为已知规划项 |
 | 8 | save / load | ✅ device-verified | [save slot=7] → saves/save_7.json 3,953,246B + [SaveCmd] Saved to slot 7；[load slot=8]（空槽）优雅 miss 路径；**新增**引擎 60s 自动存档 → saves/save_auto.json + [SaveManager] Saved slot -2（本表提交修复系统槽 -1/-2；此前 Slot -2 每 60s 报错且不写文件） |
 | 9 | audio | ✅ device-verified | SoLoud 3 总线；[Audio] BGM: assets/bgm/daily.wav + [Audio] SE: …click.wav 日志 |
 | 10 | memory pressure 基本路径 | ⚠️ 未触发 | onLowMemory → MobileAdapter 入口存在（Engine appLifecycleWatch），真机未触发低内存事件——记录为未验证 |
@@ -38,12 +38,14 @@
 | script-contract | ✅ | scripts/build_android.sh 单入口（本地验证） |
 | build-verified | ✅ CI + 本地 | ios/android-compile 探针全绿；本机 NDK r27.3 + SDL3 3.2.4 + OpenSSL 3.3.2 切片 |
 | install-verified | ✅ | root pm 通道安装 app-debug.apk（hash 见上） |
-| device-verified | ✅ 核心项 / ⚠️ 2 项未验 | 本表 #1-#9；#3 长按 device-verified（本轮派发接线+真机日志）；#4 pinch 单元验证（无多指注入）、#7 IME、#10 低内存未触发 |
-| release-verified | ⏳ | A5 签名环境未配置（keystore 由用户持有） |
+| device-verified | ✅ 核心项 / ⚠️ 2 项未验 | 本表 #1-#9 全绿；#3 长按 device-verified；#7 CJK/TTF device-verified；#4 pinch 单元验证（无多指注入工具）、#7 IME 桥规划中、#10 低内存未触发 |
+| release-verified | ⏳ | A5 签名与发布工作流已就绪（详见 docs/platform/android-release-signing.md，keystore 由用户持有） |
 
 ## Known Issues（真机发现，勿删除历史）
 
 1. **系统槽（quicksave -1 / autosave -2）此前被 SaveManager 0..99 守卫拒绝**：引擎 60s 自动存档每轮报 [STORAGE] [ERROR] Slot -2 out of range 且不写文件（桌面同样触发）。已修复：slotPath 映射 save_quick.json / save_auto.json，守卫 [-2..99]，listSaves 仍只枚举 0..99；真机验证 saves/save_auto.json 生成、错误清零。
-2. **真机对话文本冻结**（2026-08-24 FirstVN 行走，已重新定位）：首帧后的文本页不再更新（页 1 文字常驻，剧情已推进到 i18n/选择；屏幕仅背景）。共享 Lua 栈的 web 回归测试（save→choice 全绿）证明 Lua 侧干净——指向 C++ GLES TextRenderer 图集更新路径（bgfx::update 纹理在帧内被采样后失效/GLES 特有）。另修复同路径的 captureThumbnailPNG 帧内 bgfx::frame()（双 present 隐患 + 每存 3.9MB 缩略图）。文本冻结本身 device-open。
+2. **（已闭环 2026-08-24）真机对话文本可见性与 CJK 渲染**：
+   - 根因：内置位图字体仅 8x16 ASCII，CJK 字符为空槽；实验接 TTF 时图集为 R8，与 OpenGL ES 文本着色器（fs_texture.sc = texture2D）采样不兼容导致整屏不可见；同时 `[font face="default"]` 曾误重置为位图字体。
+   - 修复：TTF 图集改造为 2048x2048 RGBA8（RGB=255，A=coverage，与位图图集和着色器契约对齐）；预光栅化 CJK 统一表意文字、符号标点、平假名、片假名、全角字符等 8000+ 字符；引擎启动默认装载 Noto Sans CJK SC（22px）；RenderBinding 将 face="default" 映射至默认 TTF。真机实测 8074 glyphs 光栅化 ~136ms，ASCII/CJK 文本渲染正常。
 3. tmpvar_5 shader 变体编译失败（GLES ESSL 转换非阻塞回退 Normal）——已知非阻塞项，所有 10 程序 READY。
 4. （已闭环 2026-08-24）多指/长按派发：新增 platform/GestureDetector（单指长按 ≥500ms + 双指捏合比例脉冲），Engine finger 流接入、每帧 tick 派发到 MobileAdapter::onLongPress/onPinch；长按真机验证，捏合单测覆盖。

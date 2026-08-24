@@ -268,6 +268,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying demo to output directory..."
 )
 
+# Copy engine assets (fonts, etc.) to output directory
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/assets"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+    COMMENT "Copying assets to output directory..."
+)
+
 # Copy the prebuilt web player so the editor package/web endpoint and the
 # HTTP smoke can assemble a site from the output dir (same pattern as demo).
 if(EXISTS "${CMAKE_SOURCE_DIR}/web/dist/index.html")
