@@ -23,6 +23,11 @@ bool SDL3PlatformBackend::init(const char* title, int width, int height) {
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+#if defined(__ANDROID__)
+    // Device-day: bgfx GLES uses the SDL-owned EGL context; the window must
+    // be created OpenGL-capable or SDL_GL_CreateContext refuses it.
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+#endif
 
     m_window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -81,6 +86,25 @@ void SDL3PlatformBackend::setFullscreen(bool fullscreen) {
         SDL_SetWindowFullscreen(m_window, fullscreen);
         printf("[SDL3] Fullscreen: %s\n", fullscreen ? "on" : "off");
     }
+}
+
+bool SDL3PlatformBackend::createGLContext() {
+#if defined(__ANDROID__)
+    if (m_glContext) return true;
+    if (!SDL_GL_CreateContext(m_window)) {
+        fprintf(stderr, "[SDL3] SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+        return false;
+    }
+    if (!SDL_GL_MakeCurrent(m_window, SDL_GL_GetCurrentContext())) {
+        fprintf(stderr, "[SDL3] SDL_GL_MakeCurrent failed: %s\n", SDL_GetError());
+        return false;
+    }
+    m_glContext = SDL_GL_GetCurrentContext();
+    fprintf(stderr, "[SDL3] EGL context created: %p\n", m_glContext);
+    return true;
+#else
+    return true;
+#endif
 }
 
 void* SDL3PlatformBackend::getNativeWindowHandle() const {

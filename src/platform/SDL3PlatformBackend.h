@@ -26,6 +26,8 @@ public:
     MouseState getMouseState() const override;
 
     void* getNativeWindowHandle() const override;
+    bool createGLContext() override;
+    void* getGLContext() override { return m_glContext; }
     int getWindowWidth() const override  { return m_width; }
     int getWindowHeight() const override { return m_height; }
     void setFullscreen(bool fullscreen) override;
@@ -39,6 +41,7 @@ public:
 
 private:
     SDL_Window* m_window = nullptr;
+    void* m_glContext = nullptr;
     int  m_width  = 1280;
     int  m_height = 720;
     bool m_initialized = false;

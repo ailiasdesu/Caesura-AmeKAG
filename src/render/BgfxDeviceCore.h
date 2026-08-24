@@ -9,6 +9,10 @@ namespace Caesura {
 
 class BgfxDeviceCore {
 public:
+#if defined(__ANDROID__)
+    static void setOverrideGLContext(void* ctx);
+#endif
+public:
     BgfxDeviceCore() = default;
     ~BgfxDeviceCore();
 

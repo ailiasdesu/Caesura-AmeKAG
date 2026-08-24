@@ -34,6 +34,11 @@ public:
     // -- Native window handle (for bgfx/other GPU surface creation) --------
     virtual void* getNativeWindowHandle() const = 0;
 
+    // Track M device-day: some backends need an OS-level GL/EGL context
+    // handed to the render device (bgfx on Android). No-op-safe default.
+    virtual bool createGLContext() { return true; }
+    virtual void* getGLContext() { return nullptr; }
+
     // -- Window properties -------------------------------------------------
     virtual int getWindowWidth() const  = 0;
     virtual int getWindowHeight() const = 0;

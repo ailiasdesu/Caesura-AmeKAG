@@ -83,7 +83,14 @@ void BgfxRenderDevice::flushBatch() { m_draw->flushBatch(); }
 // getBackendName extracted to BgfxDeviceCore
 
 
+#if defined(__ANDROID__)
+extern "C" void* caesuraAndroidGLContext();  // set by Engine from SDL3PlatformBackend
+#endif
+
 bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
+#if defined(__ANDROID__)
+    BgfxDeviceCore::setOverrideGLContext(caesuraAndroidGLContext());
+#endif
     m_bgfxInitialized = false;
     m_shutdownComplete = false;
     m_shaders = std::make_unique<BgfxShaderManager>();

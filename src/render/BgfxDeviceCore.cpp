@@ -6,6 +6,9 @@
 #include <bx/bx.h>
 #include <cstdio>
 #include <cstring>
+#if defined(__ANDROID__)
+static void* s_overrideGLContext = nullptr;  // set via setOverrideGLContext
+#endif
 
 namespace Caesura {
 
@@ -26,6 +29,8 @@ bool BgfxDeviceCore::setPreferredBackend(const char* name) {
         s_preferredBackend = bgfx::RendererType::WebGPU;
     } else if (strcmp(name, "opengl") == 0 || strcmp(name, "OpenGL") == 0) {
         s_preferredBackend = bgfx::RendererType::OpenGL;
+    } else if (strcmp(name, "gles") == 0 || strcmp(name, "opengles") == 0) {
+        s_preferredBackend = bgfx::RendererType::OpenGLES;
     } else {
         DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                   "[BgfxRenderDevice] Unknown backend: %s", name);
@@ -38,6 +43,10 @@ bool BgfxDeviceCore::setPreferredBackend(const char* name) {
 const char* BgfxDeviceCore::getBackendName() const {
     return bgfx::getRendererName(bgfx::getCaps()->rendererType);
 }
+
+#if defined(__ANDROID__)
+void BgfxDeviceCore::setOverrideGLContext(void* ctx) { s_overrideGLContext = ctx; }
+#endif
 
 bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     // [10.2.22] main-thread-only guarantee: bgfx must be driven from
@@ -57,6 +66,11 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     // -- bgfx platform setup (native window handle from SDL) --
     bgfx::Init initParams;
     initParams.platformData.nwh = nativeWindowHandle;
+#if defined(__ANDROID__)
+    // Device-day: reuse the SDL-owned EGL context (bgfx's own EGL bootstrap
+    // fails silently on this device; providing it externally is the fix).
+    initParams.platformData.context = s_overrideGLContext;
+#endif
     initParams.type     = s_preferredBackend;
     initParams.vendorId = BGFX_PCI_ID_NONE;
     initParams.resolution.width  = uint32_t(width);

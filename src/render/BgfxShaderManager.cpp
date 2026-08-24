@@ -41,6 +41,35 @@ struct ShaderUniformMetadata {
     uint16_t constantBufferSize = 0;
 };
 
+// Track M device-day: convert GLSL 120 textual bytecode to ESSL 3.00 for
+// the OpenGLES renderer (the vendored blobs are desktop GL; the device
+// driver rejects attribute/varying/gl_FragColor). Text-only rewrites.
+static std::string toEssl300(const uint8_t* code, uint32_t size, bool fragment) {
+    // VSH11/FSH11 blobs: binary header then the GLSL text, NUL-terminated
+    // before the trailing attribute/uniform metadata. Header length varies
+    // (vertex vs fragment), so scan for the first printable ASCII run.
+    uint32_t start = 12;
+    while (start < size && code[start] != '#') ++start;  // GLSL text starts with #version/#define
+    uint32_t end = start;
+    while (end < size && code[end] != 0) ++end;
+    std::string t(reinterpret_cast<const char*>(code + start), end - start);
+    auto rep = [&t](const char* a, const char* b) {
+        size_t p = 0;
+        while ((p = t.find(a, p)) != std::string::npos) { t.replace(p, strlen(a), b); p += strlen(b); }
+    };
+    rep("#version 430 core", "#version 300 es");
+    rep("#version 120", "#version 300 es");
+    rep("#version 110", "#version 300 es");
+    rep("#version 100", "#version 300 es");
+    rep("attribute", "in");
+    rep("varying", fragment ? "in" : "out");
+    rep("texture2D", "texture");
+    rep("textureCube", "texture");
+    rep("gl_FragColor", "oFragColor");
+    if (fragment) { rep("#version 300 es", "#version 300 es\nout vec4 oFragColor;"); }
+    return t;
+}
+
 static bgfx::ShaderHandle buildBgfxShader(
     const uint8_t* bytecode,
     uint32_t codeSize,
@@ -108,7 +137,13 @@ static bgfx::ShaderHandle buildBgfxShader(
 
     bx::write(&writer, uniform ? uniform->constantBufferSize : uint16_t(0), err);
 
-    return bgfx::createShader(mem);
+    bgfx::ShaderHandle handle = bgfx::createShader(mem);
+    if (!bgfx::isValid(handle)) {
+        DEBUG_ERR(SubSys::Render, ErrCode::Ok,
+                  "[BgfxShaderManager] bgfx::createShader FAILED (renderer=%s)",
+                  bgfx::getRendererName(bgfx::getCaps()->rendererType));
+    }
+    return handle;
 }
 
 
@@ -184,6 +219,27 @@ void BgfxShaderManager::initEmbeddedShaders() {
         fsPostfxBlur     = { kEmbeddedDXBC_fs_postfx_blur,     kEmbeddedDXBC_fs_postfx_blur_size };
         fsPostfxBloom    = { kEmbeddedDXBC_fs_postfx_bloom,    kEmbeddedDXBC_fs_postfx_bloom_size };
     } else if (isGL) {
+        if (renderer == bgfx::RendererType::OpenGLES) {
+            // device-day: ESSL text conversion on every GL bytecode
+            auto conv = [](const uint8_t* d, uint32_t n, bool frag) -> Bytecode {
+                std::string e = toEssl300(d, n, frag);
+                fprintf(stderr, "[ESSL] %s first=%s\n", frag ? "fs" : "vs", e.substr(0, 120).c_str());
+                if (e.find("tmpvar") != std::string::npos) fprintf(stderr, "[ESSL-TMPVAR] %s\n", e.c_str());
+                auto* mem = new uint8_t[e.size()];
+                memcpy(mem, e.data(), e.size());
+                return { mem, e.size() };
+            };
+            vsSprite   = conv(kEmbeddedGL_vs_sprite,   uint32_t(kEmbeddedGL_vs_sprite_size), false);
+            fsTexture  = conv(kEmbeddedGL_fs_texture,  uint32_t(kEmbeddedGL_fs_texture_size), true);
+            vsFullscreen = conv(kEmbeddedGL_vs_fullscreen, uint32_t(kEmbeddedGL_vs_fullscreen_size), false);
+            fsBlend    = conv(kEmbeddedGL_fs_blend,    uint32_t(kEmbeddedGL_fs_blend_size), true);
+            fsTransition = conv(kEmbeddedGL_fs_transition, uint32_t(kEmbeddedGL_fs_transition_size), true);
+            fsVfx      = conv(kEmbeddedGL_fs_vfx,      uint32_t(kEmbeddedGL_fs_vfx_size), true);
+            stretchVs  = conv(kEmbeddedGL_stretch_blt_vs, uint32_t(kEmbeddedGL_stretch_blt_vs_size), false);
+            stretchFs  = conv(kEmbeddedGL_stretch_blt_fs, uint32_t(kEmbeddedGL_stretch_blt_fs_size), true);
+            affineVs   = conv(kEmbeddedGL_affine_blt_vs, uint32_t(kEmbeddedGL_affine_blt_vs_size), false);
+            affineFs   = conv(kEmbeddedGL_affine_blt_fs, uint32_t(kEmbeddedGL_affine_blt_fs_size), true);
+        } else {
         vsSprite   = { kEmbeddedGL_vs_sprite, kEmbeddedGL_vs_sprite_size };
         fsTexture  = { kEmbeddedGL_fs_texture, kEmbeddedGL_fs_texture_size };
         vsFullscreen = { kEmbeddedGL_vs_fullscreen, kEmbeddedGL_vs_fullscreen_size };
@@ -194,6 +250,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
         stretchFs  = { kEmbeddedGL_stretch_blt_fs, kEmbeddedGL_stretch_blt_fs_size };
         affineVs   = { kEmbeddedGL_affine_blt_vs, kEmbeddedGL_affine_blt_vs_size };
         affineFs   = { kEmbeddedGL_affine_blt_fs, kEmbeddedGL_affine_blt_fs_size };
+        }
     } else if (isMetal) {
         vsSprite   = { kEmbeddedMetal_vs_sprite, kEmbeddedMetal_vs_sprite_size };
         fsTexture  = { kEmbeddedMetal_fs_texture, kEmbeddedMetal_fs_texture_size };

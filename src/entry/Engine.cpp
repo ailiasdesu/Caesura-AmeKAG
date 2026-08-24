@@ -51,6 +51,11 @@ extern "C" {
 #include <utility>
 
 
+#if defined(__ANDROID__)
+static void* g_androidGLContext = nullptr;
+extern "C" void* caesuraAndroidGLContext() { return g_androidGLContext; }
+#endif
+
 namespace Caesura {
 
 namespace {
@@ -272,6 +277,17 @@ bool Engine::initPlatformPhase() {
     }
     m_platformInitialized = true;
     BackendRegistry::instance().setPlatformBackend(m_platformBackend.get());
+
+    // Track M device-day: hand an OS GL/EGL context to the render device
+    // (bgfx on Android needs the SDL-owned EGL context; desktop no-op).
+    if (!m_platformBackend->createGLContext()) {
+        DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_PlatformInitFailed,
+                    "Platform GL context creation failed.");
+        return false;
+    }
+#if defined(__ANDROID__)
+    g_androidGLContext = m_platformBackend->getGLContext();
+#endif
 
     // Display metrics service (Track P1): injected from main.cpp when a
     // platform impl is available; Null default otherwise. Registered so

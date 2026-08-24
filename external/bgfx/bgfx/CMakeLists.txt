@@ -1,4 +1,4 @@
-﻿# bgfx - cross-platform rendering library (depends on bx, bimg)
+# bgfx - cross-platform rendering library (depends on bx, bimg)
 cmake_minimum_required(VERSION 3.25)
 project(bgfx_lib C CXX)
 
@@ -30,6 +30,12 @@ if(WIN32)
     target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_DIRECT3D11=1 BGFX_CONFIG_RENDERER_DIRECT3D12=0 BGFX_CONFIG_RENDERER_OPENGL=43)
 elseif(APPLE)
     target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_METAL=1)
+elseif(ANDROID)
+    # Track M: without a renderer define bgfx defaults to NO backend on
+    # Android (OpenGL init fails, renderer falls back to Noop). GLES 3.0
+    # matches the device OpenGLES driver; context comes from SDL (see
+    # SDL3PlatformBackend::createGLContext).
+    target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_OPENGLES=30)
 endif()
 
 target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_VULKAN=0)

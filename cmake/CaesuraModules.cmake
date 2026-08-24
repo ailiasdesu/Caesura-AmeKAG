@@ -145,6 +145,7 @@ elseif(ANDROID)
     target_link_libraries(CaesuraSystemDependencies INTERFACE
         Threads::Threads
         log android
+        EGL GLESv2
         "${ANDROID_OPENSSL_SSL}"
         "${ANDROID_OPENSSL_CRYPTO}"
     )
