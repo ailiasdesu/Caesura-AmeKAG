@@ -20,6 +20,33 @@ extern "C" {
 #include "rpc/api/IRpcDispatcher.h"
 #include <atomic>
 #include <cmath>
+#if defined(__ANDROID__)
+#include <android/log.h>
+#include <unistd.h>
+#include <pthread.h>
+// Device-day bridge: tee native stderr to logcat so engine diagnostics are
+// visible via adb logcat (SDL3 redirects stdout but not stderr).
+static void* caesura_stderr_bridge(void* arg) {
+    char buf[1024];
+    ssize_t n;
+    int fd = (int)(intptr_t)arg;
+    while ((n = read(fd, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = 0;
+        __android_log_write(ANDROID_LOG_ERROR, "engine-stderr", buf);
+    }
+    return nullptr;
+}
+static void caesura_tee_stderr() {
+    int fds[2];
+    pthread_t th;
+    if (pipe(fds) != 0) return;
+    dup2(fds[1], 2);
+    dup2(2, 1);          // stdout joins the logcat pipe too (no console on Android)
+    close(fds[1]);
+    pthread_create(&th, nullptr, caesura_stderr_bridge, (void*)(intptr_t)fds[0]);
+    (void)th;
+}
+#endif
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -904,9 +931,29 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken) {
 
 } // namespace
 
-int main(int argc, char* argv[]) {
+// Track M fix (device-found, round 39): SDL3's Android JNI glue resolves
+// the entry via dlsym with the C name "SDL_main". SDL_main.h only renames
+// main -> SDL_main when included (this TU does not include SDL.h), so the
+// rename is applied explicitly for Android; extern "C" keeps the symbol
+// unmangled (C++ linkage would mangle it and nativeRunMain fails with
+// "Couldn't find function SDL_main"). Desktop keeps SDL_MAIN_HANDLED and
+// is unaffected.
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define main SDL_main
+#define CAESURA_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "CaesuraAmeKAG", __VA_ARGS__)
+#define CAESURA_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "CaesuraAmeKAG", __VA_ARGS__)
+#else
+#define CAESURA_LOGI(...) ((void)0)
+#define CAESURA_LOGE(...) ((void)0)
+#endif
+extern "C" int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
+    CAESURA_LOGI("[main] Starting Caesura (AmeKAG)...");
+#if defined(__ANDROID__)
+    caesura_tee_stderr();
+#endif
     fprintf(stderr, "[main] Starting Caesura (AmeKAG)...\n");
 
     // Resource root resolution (Track I3 / Android R6):
@@ -1040,12 +1087,15 @@ int main(int argc, char* argv[]) {
         config.miniGame = new Caesura::BgfxMiniGameBackend();
     }
 
+    CAESURA_LOGI("[main] EngineConfig assembled; constructing Engine...");
     Caesura::Engine engine(std::move(config));
 
     if (!engine.init()) {
+        CAESURA_LOGE("[main] ENGINE INIT FAILED");
         fprintf(stderr, "Failed to initialize engine.\n");
         return 1;
     }
+    CAESURA_LOGI("[main] Engine init OK");
 
     // -- Editor mode: hidden window + owner-thread RPC dispatcher ----------
     if (editorMode) {

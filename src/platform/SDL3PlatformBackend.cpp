@@ -102,6 +102,12 @@ void* SDL3PlatformBackend::getNativeWindowHandle() const {
         nwh = SDL_GetPointerProperty(props,
             SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, nullptr);
     }
+#if defined(__ANDROID__)
+    if (!nwh) {
+        nwh = SDL_GetPointerProperty(props,
+            SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr);
+    }
+#endif
 
     return nwh;
 }
