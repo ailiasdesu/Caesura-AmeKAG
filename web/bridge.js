@@ -267,6 +267,32 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     capture_thumbnail: () => null,
   }
   const jsBackend = {
+    // Logical resolution for the Lua layout stack (scripts/viewport.lua):
+    // the web player's #stage is the render target, so viewport-following
+    // layout defaults (bg/fg layer sizes, message box, dialogue positions)
+    // must resolve to the STAGE size, not the desktop 1920x1080 default.
+    // Call-time lookup (the stage element exists only after the DOM is
+    // mounted); jsdom tests report 0x0 and fall back to the classic
+    // 1280x720 stage (matching the hardcoded values the desktop engine
+    // used before the resolution change).
+    get_resolution: () => {
+      // NOTE: wasmoon marshals a JS ARRAY return as a single opaque value
+      // (neither string nor indexable table). Return a STRING in the
+      // engine's "<w>x<h>" shape; the Lua wrapper in the bootstrap parses
+      // it back into two numeric returns for viewport.lua / rtt.lua.
+      try {
+        const el = document.getElementById('stage')
+        if (el) {
+          const w = el.clientWidth, h = el.clientHeight
+          if (w > 0 && h > 0) {
+            if (typeof window !== 'undefined') window.__caesuraLayoutRes = [w, h]
+            return String(w + 'x' + h)
+          }
+        }
+      } catch { /* jsdom / pre-DOM */ }
+      if (typeof window !== 'undefined') window.__caesuraLayoutRes = [1280, 720]
+      return '1280x720'
+    },
     // audio_play routes through the real WebAudio engine when available;
     // the core state machine always records the call (telemetry + fallback).
     audio_play: (kind, file, opts) => {
@@ -351,11 +377,29 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       local jsb = _G.backend
       local t = {}
       for k, v in pairs(jsb) do t[k] = v end
+      -- wasmoon marshals a JS-array return as ONE value (observed: a
+      -- "1280,720" string), but the engine contract (DevCore.get_resolution,
+      -- scripts/viewport.lua / rtt.lua) is TWO numeric returns. Wrap the
+      -- JS call in real Lua so viewport-following layout resolves to the
+      -- stage size ((1280,720)) instead of falling back to the desktop
+      -- 1920x1080 default.
+      local _jsRes = t.get_resolution
+      if _jsRes ~= nil then
+        t.get_resolution = function()
+          local ok, r = pcall(_jsRes)
+          if ok and type(r) == 'string' then
+            local w, h = r:match('^(%d+)x(%d+)$')
+            if w and h then return tonumber(w), tonumber(h) end
+          end
+          return nil
+        end
+      end
       _G.backend = t
     end
     for _, name in ipairs({'backend','layers','audio','rtt','blend','transition','transform','vfx','flow','replay','pool','config','system','settings','gallery','music_room','title_menu','saveload_menu','chapter_select','dev_hud','history_ui','toast','ks_i18n','fileutil','sandbox','mods'}) do
       package.loaded[name] = _G[name]
     end
+
     -- Web parity (round 77): load the REAL pure-Lua i18n module (scripts/
     -- i18n.lua has set_language; a JS-object stub would report a non-table
     -- type and the [i18n language=] handler would degrade before recording
@@ -366,6 +410,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
 
   // ---- load the real kag command table ----
   await lua.doString(`local kag = require('kag')`)
+
+
 
   // ---- web save/load bridge (round 46) ----
   // [save] already works through jsKAG.save_game. [load] needs a real

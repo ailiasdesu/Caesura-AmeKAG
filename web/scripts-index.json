@@ -74,5 +74,6 @@
  "tokenizer": true,
  "transform": true,
  "transition": true,
- "vfx": true
+ "vfx": true,
+ "viewport": true
 }
