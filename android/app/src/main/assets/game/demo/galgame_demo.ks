@@ -1,0 +1,90 @@
+; Caesura Galgame Demo — version 3 (minimal, incrementally tested)
+[font face="default" size=22]
+[pt speed=60]
+
+[bg storage="assets/bg/classroom.png"]
+[wait time=300]
+
+[playbgm storage="assets/bgm/daily.wav" volume=0.8]
+
+[ch name="Narrator" text="Welcome to Caesura AmeKAG Engine Demo."]
+[p]
+
+[ch name="Narrator" text="This is a test of the KAG scripting system."]
+[p]
+
+*chapter_01
+
+; Scene 1 — Classroom
+[cl]
+[bg storage="assets/bg/classroom.png"]
+[wait time=400]
+
+[ch name="Narrator" text="Afternoon sunlight filters through the window."]
+
+[playse storage="assets/se/click.wav"]
+
+[ch name="Teacher" text="Welcome to our class. Today we learn something interesting."
+     voice="assets/voice/line01.wav" sprite="assets/fg/girl_uniform.png"]
+[p]
+
+*chapter_02
+
+; Scene 2 — Hallway (flash + crossfade transition demo)
+[flash time=300 r=255 g=255 b=255]
+[cl]
+[bg storage="assets/bg/hana.png"]
+[trans time=500 method=dissolve]
+[wait time=400]
+
+[ch name="Narrator" text="After class, you walk to the hallway."]
+
+[fg storage="assets/fg/girl_uniform.png"]
+[position layer="fg" pos="right"]
+
+[playvoice storage="assets/voice/line01.wav"]
+[ch name="Sakura" text="Hello! Are you a new student? My name is Sakura."
+     sprite="assets/fg/girl_uniform.png"]
+[p]
+
+; Neo-Genesis performance demo: sprite slide-in, fade emphasis, text vib
+[sprite_move speaker="Sakura" x=120 y=200 time=500]
+[sprite_fade speaker="Sakura" to=200 time=300]
+[ch name="Sakura" text="(she leans in, a little shy)"]
+[vib time=200 intensity=2]
+[p]
+
+; Scene 3 — Library
+[cl]
+[bg storage="assets/bg/classroom.png"]
+[wait time=400]
+
+[ch name="Narrator" text="After school, you go to the library with Sakura."]
+[ch name="Sakura" text="Look, there is an old notebook here."]
+[p]
+
+; Ending
+[cl]
+[bg storage="assets/bg/hana.png"]
+
+[ch name="Narrator" text="The day ends. You return home, looking forward to tomorrow."]
+
+[wait time=1000]
+[stopbgm]
+
+[ch name="Narrator" text="Thank you for watching the Caesura AmeKAG demo."]
+[p]
+
+; Unlock the good ending (title menu Endings gallery)
+[ending id=good_end name="Good End — Home"]
+[p]
+
+; ED credits via the [scroll] effect
+[scroll text="Caesura AmeKAG" speed=80]
+[scroll text="A cross-platform visual novel engine" speed=80]
+[scroll text="bgfx rendering / SDL3 / Lua 5.4 / KAG scripting" speed=80]
+[p]
+
+[end]
+
+*chapter_03

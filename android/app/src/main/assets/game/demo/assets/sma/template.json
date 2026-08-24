@@ -1,0 +1,154 @@
+{
+ "_comment": "Caesura SMA asset template (design doc §2.2). Copy this file, strip the _comment fields, and edit. Validate with: lua scripts/kag/sma_check.lua <file>. Weight layout: per-vertex 2 interleaved entries ([2i-1] bone A, [2i] bone B), sums must equal 1 (the engine does not normalize).",
+ "texture": "chara/your_character.png",
+ "atlas": {
+  "w": 512,
+  "h": 512
+ },
+ "bones": [
+  {
+   "id": 0,
+   "parent": -1,
+   "pivot": [
+    0.5,
+    1
+   ]
+  },
+  {
+   "id": 1,
+   "parent": 0,
+   "pivot": [
+    0.5,
+    0.6
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "body",
+   "current": "default",
+   "tex": 0,
+   "variants": {
+    "default": {
+     "positions": [
+      [
+       0.3,
+       0.4
+      ],
+      [
+       0.7,
+       0.4
+      ],
+      [
+       0.7,
+       1
+      ],
+      [
+       0.3,
+       1
+      ]
+     ],
+     "uvs": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       0,
+       1
+      ]
+     ],
+     "indices": [
+      0,
+      1,
+      2,
+      0,
+      2,
+      3
+     ],
+     "weights": [
+      {
+       "bone": 0,
+       "w": 1
+      },
+      {
+       "bone": 1,
+       "w": 0
+      },
+      {
+       "bone": 0,
+       "w": 1
+      },
+      {
+       "bone": 1,
+       "w": 0
+      },
+      {
+       "bone": 0,
+       "w": 0.5
+      },
+      {
+       "bone": 1,
+       "w": 0.5
+      },
+      {
+       "bone": 0,
+       "w": 0.5
+      },
+      {
+       "bone": 1,
+       "w": 0.5
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "animations": {
+  "idle": {
+   "duration": 2,
+   "tracks": [
+    {
+     "bone": 1,
+     "frames": [
+      {
+       "t": 0,
+       "rot": 0,
+       "scale": 1,
+       "offset": [
+        0,
+        0
+       ]
+      },
+      {
+       "t": 1,
+       "rot": 0.05,
+       "scale": 1,
+       "offset": [
+        0,
+        0
+       ]
+      },
+      {
+       "t": 2,
+       "rot": 0,
+       "scale": 1,
+       "offset": [
+        0,
+        0
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

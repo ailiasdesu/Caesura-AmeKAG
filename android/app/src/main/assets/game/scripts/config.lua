@@ -8,7 +8,7 @@
 
 config = {}
 config.dev_mode = true  -- true = dev mode (lax sandbox), false = Release (strict sandbox)
-config.entry_script = "../demo/first_vn/entry.lua"
+config.entry_script = "../demo/entry.lua"
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 -- Backend Selection (spec [0.4] factory pattern)

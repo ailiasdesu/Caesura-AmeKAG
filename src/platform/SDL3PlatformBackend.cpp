@@ -88,6 +88,12 @@ void SDL3PlatformBackend::setFullscreen(bool fullscreen) {
     }
 }
 
+void SDL3PlatformBackend::postFrame() {
+#if defined(__ANDROID__)
+    if (m_window) SDL_GL_SwapWindow(m_window);
+#endif
+}
+
 bool SDL3PlatformBackend::createGLContext() {
 #if defined(__ANDROID__)
     if (m_glContext) return true;

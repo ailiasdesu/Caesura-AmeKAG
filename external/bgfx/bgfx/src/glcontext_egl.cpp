@@ -161,7 +161,17 @@ WL_EGL_IMPORT
 
 			BX_UNUSED(_width, _height);
 
-			if (EGLNativeWindowType(0) == _nwh)
+			// Caesura device-day: when an external context is in use the SDL
+			// window surface is already current — present into THAT surface so
+			// SDL_GL_SwapWindow shows our frames (a fresh eglCreateWindowSurface
+			// on the same ANativeWindow stays invisible because SDL composites
+			// its own surface).
+			if (EGL_NO_SURFACE != defaultSurface
+			&&  0 != g_platformData.context)
+			{
+				m_surface = defaultSurface;
+			}
+			else if (EGLNativeWindowType(0) == _nwh)
 			{
 				m_surface = eglCreatePbufferSurface(m_display, _config, NULL);
 			}

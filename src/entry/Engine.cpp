@@ -994,6 +994,13 @@ void Engine::processEvents() {
                 m_inputRouter->notifyResize(event.window.data1,
                                             event.window.data2);
             }
+            // Track M device-day: the device window is portrait (e.g.
+            // 1080x2276) while the engine initializes desktop-sized
+            // (1280x720); without this the scene renders into a 720-high
+            // band and appears squeezed to the bottom of the screen.
+            if (m_renderDevice) {
+                m_renderDevice->resize(event.window.data1, event.window.data2);
+            }
         }
         // -- GPU device reset from SDL (triggers recovery at next loop iteration) --
         if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
@@ -1214,6 +1221,10 @@ void Engine::render(float dt) {
     if (m_renderDevice) {
         m_renderDevice->drawDebugOverlay("Caesura (AmeKAG) v1.0.0");
     }
+
+    // Track M device-day: present the GL surface (Android swap) after every
+    // frame's draw pass.
+    if (m_platformBackend) m_platformBackend->postFrame();
 
     // -- Reserved: 3D mini-game render hook (main thread, after KAG pass) --
     if (m_miniGameBackend && m_miniGameBackend->isActive()) {

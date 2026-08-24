@@ -38,6 +38,10 @@ public:
     // handed to the render device (bgfx on Android). No-op-safe default.
     virtual bool createGLContext() { return true; }
     virtual void* getGLContext() { return nullptr; }
+    // Track M device-day: called at the end of every engine frame. The SDL3
+    // backend presents the GL surface here on Android (SDL_GL_SwapWindow);
+    // other platforms are no-ops.
+    virtual void postFrame() {}
 
     // -- Window properties -------------------------------------------------
     virtual int getWindowWidth() const  = 0;

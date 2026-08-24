@@ -28,6 +28,7 @@ public:
     void* getNativeWindowHandle() const override;
     bool createGLContext() override;
     void* getGLContext() override { return m_glContext; }
+    void postFrame() override;
     int getWindowWidth() const override  { return m_width; }
     int getWindowHeight() const override { return m_height; }
     void setFullscreen(bool fullscreen) override;

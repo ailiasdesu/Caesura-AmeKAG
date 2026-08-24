@@ -205,11 +205,21 @@ void BgfxDeviceCore::endFrame() {
     if (!m_bgfxInitialized) return;
     CAESURA_ASSERT_MAIN_THREAD();
     bgfx::frame();
+    static int s_probe = 0;
+    if (s_probe++ < 40) {
+        const bgfx::Stats* st = bgfx::getStats();
+        fprintf(stderr, "[BGFX-PROBE] endFrame draw=%u\n", (unsigned)st->numDraw);
+    }
 }
 
 void BgfxDeviceCore::commit_frame() {
     if (!m_bgfxInitialized) return;
     bgfx::frame();
+    static int s_probe2 = 0;
+    if (s_probe2++ < 40) {
+        const bgfx::Stats* st = bgfx::getStats();
+        fprintf(stderr, "[BGFX-PROBE] commit draw=%u\n", (unsigned)st->numDraw);
+    }
 }
 
 void BgfxDeviceCore::setupDefaultViews() {
