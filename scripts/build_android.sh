@@ -151,7 +151,7 @@ fi
 if [[ "$SMOKE" == "1" || -z "$TARGET" ]]; then
     # --smoke (or default): build the module-lib graph only — ensures all
     # sources compile under NDK clang without producing an executable/APK.
-    EXTRA+=(--target CaesuraEngine)
+    EXTRA+=(--target CaesuraAmeKAG)   # module graph + libCaesuraAmeKAG.so (R1 MODULE)
 fi
 
 echo "=== Building ($BUILD_TYPE) ==="

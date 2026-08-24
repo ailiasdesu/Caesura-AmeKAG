@@ -50,7 +50,9 @@ public class MainActivity extends SDLActivity {
     @Override
     protected String[] getArguments() {
         if (mResourceRoot != null) {
-            return new String[] { "--resource-root", mResourceRoot };
+            // --backend opengl: bgfx default is D3D11 which cannot exist on
+            // Android; the device day also passes it explicitly (probe plan R2).
+            return new String[] { "--resource-root", mResourceRoot, "--backend", "opengl" };
         }
         return new String[0];
     }
