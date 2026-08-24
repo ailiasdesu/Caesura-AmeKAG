@@ -124,19 +124,18 @@ TEST_CASE("SaveManager: out-of-range slots rejected on all ops") {
     SaveManager sm;
     sm.init(dir.string());
 
-    // save/load/delete must refuse slots outside 0..99 (audit: the
-    // guards existed but were untested; a negative slot would write
-    // save_-1.json, an oversized one save_100.json; the LIST bound is
-    // covered by the preceding test case)
+    // save/load/delete must refuse slots outside [-2..99] (the system
+    // slots -1 quicksave / -2 autosave are legal since 2026-08-24 and map
+    // to dedicated files; see the system-slots test case below).
     CHECK_FALSE(sm.save(100, {{"n", 1}}, "s", 0));
-    CHECK_FALSE(sm.save(-1, {{"n", 1}}, "s", 0));
+    CHECK_FALSE(sm.save(-3, {{"n", 1}}, "s", 0));
     CHECK(sm.load(100).empty());
-    CHECK(sm.load(-1).empty());
+    CHECK(sm.load(-3).empty());
     CHECK_FALSE(sm.deleteSlot(100));
-    CHECK_FALSE(sm.deleteSlot(-1));
+    CHECK_FALSE(sm.deleteSlot(-3));
     // the filesystem stayed clean
     CHECK_FALSE(std::filesystem::exists(dir.path() / "save_100.json"));
-    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_-1.json"));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_-3.json"));
 }
 
 TEST_CASE("SaveManager: deleteSlot removes save") {
@@ -290,4 +289,47 @@ TEST_CASE("SaveManager: multiple save/load cycles do not leak or corrupt") {
     CHECK(sm.slotExists(0));
     CHECK(sm.slotExists(1));
     CHECK(sm.slotExists(2));
+}
+
+TEST_CASE("SaveManager: system slots quicksave (-1) / autosave (-2) roundtrip") {
+    TestPaths::ScopedTempDir dir("roundtrip_system_slots");
+    SaveManager sm;
+    sm.init(dir.string());
+
+    json quick = {{"scene", "chapter1"}, {"note", "quick"}};
+    json auto_ = {{"scene", "chapter1"}, {"note", "autosave"}};
+
+    // System slots save/load like normal slots.
+    CHECK(sm.save(-1, quick, "chapter1", 7));
+    CHECK(sm.save(-2, auto_, "chapter1", 9));
+    CHECK(sm.slotExists(-1));
+    CHECK(sm.slotExists(-2));
+
+    json loadedQuick = sm.load(-1);
+    json loadedAuto  = sm.load(-2);
+    CHECK_FALSE(loadedQuick.empty());
+    CHECK(loadedQuick["note"] == "quick");
+    CHECK_FALSE(loadedAuto.empty());
+    CHECK(loadedAuto["note"] == "autosave");
+
+    // Dedicated files land outside the 0..99 naming scheme.
+    CHECK(std::filesystem::exists(dir.string() + "/save_quick.json"));
+    CHECK(std::filesystem::exists(dir.string() + "/save_auto.json"));
+
+    // The save menu enumerates 0..99 only: system slots never appear there.
+    auto metas = sm.listSaves();
+    for (const auto& m : metas) {
+        CHECK(m.slot >= 0);
+        CHECK(m.slot <= 99);
+    }
+
+    // Boundaries: -3 and 100 rejected.
+    CHECK_FALSE(sm.save(-3, quick, "s", 0));
+    CHECK_FALSE(sm.slotExists(-3));
+    CHECK_FALSE(sm.save(100, quick, "s", 0));
+
+    // Delete works for system slots too.
+    CHECK(sm.deleteSlot(-2));
+    CHECK_FALSE(sm.slotExists(-2));
+    CHECK(sm.slotExists(-1));
 }

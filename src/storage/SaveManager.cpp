@@ -127,8 +127,18 @@ void SaveManager::clearEncryptionKey() {
 // ============================================================================
 
 std::string SaveManager::slotPath(int slot) const {
+    // System slots live in dedicated files OUTSIDE the 0..99 UI range:
+    // quicksave (-1, F5/F6) and autosave (-2, engine timer) map to their own
+    // files; listSaves() enumerates 0..99 only, so they never clutter the
+    // save menu. Anything else negative/absurd fabricates no path at all.
+    if (slot == -1) return m_saveDir + "save_quick.json";
+    if (slot == -2) return m_saveDir + "save_auto.json";
+    if (slot < 0 || slot > 99) return "";
     return m_saveDir + "save_" + std::to_string(slot) + ".json";
 }
+
+// Slot validity: the player-visible 0..99 plus the system slots -2/-1.
+static bool validSlot(int slot) { return slot >= -2 && slot <= 99; }
 
 static constexpr size_t MAX_SAVE_SIZE = 10 * 1024 * 1024;  // 10 MiB
 
@@ -261,8 +271,8 @@ bool SaveManager::save(int slot, const json& gameData,
                        const std::string& thumbnailPng) {
     // Slot bound: negative or absurd slots fabricate paths outside the save
     // dir; the UI only uses 0..99. Guard at the boundary.
-    if (slot < 0 || slot > 99) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
+    if (!validSlot(slot)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [-2..99]", slot);
         return false;
     }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
@@ -302,8 +312,8 @@ bool SaveManager::save(int slot, const json& gameData,
 // ============================================================================
 
 json SaveManager::load(int slot, SaveMeta* outMeta) {
-    if (slot < 0 || slot > 99) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
+    if (!validSlot(slot)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [-2..99]", slot);
         return {};
     }
     // [R2-FIX] This is the canonical C++ JSON save path (Path A).
@@ -432,13 +442,13 @@ std::vector<SaveMeta> SaveManager::listSaves() {
 }
 
 bool SaveManager::slotExists(int slot) {
-    if (slot < 0 || slot > 99) return false;
+    if (!validSlot(slot)) return false;
     return !readFile(slotPath(slot)).empty();
 }
 
 bool SaveManager::deleteSlot(int slot) {
-    if (slot < 0 || slot > 99) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [0..99]", slot);
+    if (!validSlot(slot)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Slot %d out of range [-2..99]", slot);
         return false;
     }
     std::string path = slotPath(slot);

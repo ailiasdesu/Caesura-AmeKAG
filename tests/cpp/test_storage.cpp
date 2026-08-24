@@ -379,16 +379,18 @@ TEST_CASE("Storage: slot boundary semantics (0 and 99 valid, out-of-range reject
     CHECK(sm.slotExists(99));
 
     // Out of range: rejected, never fabricates paths or crashes.
+    // (System slots -1/-2 are LEGAL since 2026-08-24; -3 below the system
+    // range and 100 above the player range must be rejected.)
     CHECK_FALSE(sm.save(100, gd, "hi", 0));
     CHECK_FALSE(sm.save(1000, gd, "hi", 0));
-    CHECK_FALSE(sm.save(-1, gd, "neg", 0));
+    CHECK_FALSE(sm.save(-3, gd, "neg", 0));
     CHECK(sm.load(100).is_null());
     CHECK(sm.load(1000).is_null());
-    CHECK(sm.load(-1).is_null());
+    CHECK(sm.load(-3).is_null());
     CHECK_FALSE(sm.slotExists(100));
-    CHECK_FALSE(sm.slotExists(-1));
+    CHECK_FALSE(sm.slotExists(-3));
     CHECK_FALSE(sm.deleteSlot(100));
-    CHECK_FALSE(sm.deleteSlot(-1));
+    CHECK_FALSE(sm.deleteSlot(-3));
 
     // Exactly the two legal slots are listed.
     auto saves = sm.listSaves();
@@ -777,12 +779,13 @@ TEST_CASE("Storage: encrypted provider mirrors slot bounds/overwrite/delete") {
     CHECK(sm.slotExists(99));
 
     // Out-of-range rejected identically under encryption.
+    // (System slots -1/-2 are legal since 2026-08-24; -3 is below range.)
     CHECK_FALSE(sm.save(100, {{"n", 1}}, "hi", 0));
-    CHECK_FALSE(sm.save(-1, {{"n", 1}}, "neg", 0));
+    CHECK_FALSE(sm.save(-3, {{"n", 1}}, "neg", 0));
     CHECK(sm.load(100).is_null());
-    CHECK(sm.load(-1).is_null());
+    CHECK(sm.load(-3).is_null());
     CHECK_FALSE(sm.deleteSlot(100));
-    CHECK_FALSE(sm.deleteSlot(-1));
+    CHECK_FALSE(sm.deleteSlot(-3));
 
     // Overwrite same encrypted slot replaces payload + metadata.
     REQUIRE(sm.save(5, {{"phase", 1}}, "sceneA", 3));
