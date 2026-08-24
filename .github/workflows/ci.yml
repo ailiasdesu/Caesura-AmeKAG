@@ -243,7 +243,8 @@ jobs:
       - name: Bundled layout boot smoke (xvfb; A3/R6 contract)
         run: |
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
-          xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG
+          xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG first_vn
+          xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG demo
 
       - name: Lua script suites (main + orphan)
         run: |
