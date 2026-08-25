@@ -1,9 +1,9 @@
-# KAG Neo-Genesis Command Contracts (auto-generated)
+﻿# KAG Neo-Genesis Command Contracts (auto-generated)
 
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (128)
+## Commands (131)
 
 ### `[add]`
 
@@ -682,6 +682,19 @@ _Category: vfx · Blocking: no (fire-and-forget) · KAG3-compatible palette/LUT 
 | `intensity` | number | 1.0 | 0.0..1.0 | - |
 | `path` | string |  | - | - |
 
+### `[particle_weather]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · Declarative weather atmosphere particle system_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `action` | enum | start | - | - |
+| `count` | number | 10 | 0..500 | - |
+| `intensity` | number | 1.0 | 0.0..5.0 | - |
+| `speed` | number | 1.0 | 0.1..10.0 | - |
+| `type` | enum | rain | - | - |
+| `wind` | number | 0 | -10..10 | - |
+
 ### `[particles]`
 
 _Category: vfx · Blocking: no (fire-and-forget) · KAG3-compatible particles command_
@@ -790,6 +803,30 @@ _Category: layer · Blocking: no (fire-and-forget) · KAG3-compatible position c
 | `scale` | number | 1.0 | 0.01..16 | - |
 | `x` | number | 0 | - | - |
 | `y` | number | 0 | - | - |
+
+### `[postprocess]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · Apply post-processing full-screen shader effect_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `amount` | number | 0.0 | 0.0..1.0 | - |
+| `b` | number | 255 | 0..255 | - |
+| `effect` | enum | - | - | yes |
+| `g` | number | 255 | 0..255 | - |
+| `intensity` | number | 1.0 | 0.0..1.0 | - |
+| `lutMix` | number | 1.0 | 0.0..1.0 | - |
+| `r` | number | 255 | 0..255 | - |
+| `radius` | number | 0.0 | 0.0..64.0 | - |
+| `rgb` | string | - | - | - |
+| `strength` | number | - | 0.0..1.0 | - |
+
+### `[postprocess_off]`
+
+_Category: vfx · Blocking: no (fire-and-forget) · Disable all active post-processing shaders_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
 
 ### `[preload]`
 

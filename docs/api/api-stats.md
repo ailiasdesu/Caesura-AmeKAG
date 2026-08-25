@@ -10,13 +10,13 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 34 |
-| Pure-virtual interface methods | 408 |
-| Lua binding functions (luaL_Reg entries) | 159 |
+| Pure-virtual interface methods | 412 |
+| Lua binding functions (luaL_Reg entries) | 160 |
 | KAG command handler files | 13 |
-| KAG contract commands (command-contracts.md) | 128 |
+| KAG contract commands (command-contracts.md) | 131 |
 | RPC HTTP endpoints (EditorServer) | 36 |
 | RPC stdin JSON-RPC methods | 29 |
-| Lua runtime scripts (scripts/, excl. demo/check) | 77 |
+| Lua runtime scripts (scripts/, excl. demo/check) | 78 |
 
 ## 2. C++ interfaces by module
 
@@ -37,7 +37,7 @@
 | minigame | IMiniGameBackend.h | 13 |
 | platform | IDisplayService.h | 1 |
 | platform | ILifecycleService.h | 4 |
-| platform | IMobileAdapter.h | 17 |
+| platform | IMobileAdapter.h | 21 |
 | platform | IPlatformBackend.h | 15 |
 | render | IGpuMonitor.h | 8 |
 | render | ILayerManager.h | 21 |
@@ -70,7 +70,7 @@
 | RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
 | SaveBinding.cpp | 12 | KAG |
 | SmaBinding.cpp | 8 | sma |
-| SteamBinding.cpp | 18 | steam |
+| SteamBinding.cpp | 19 | steam |
 | VFXBinding.cpp | 10 | VFX |
 
 ## 4. RPC surface
