@@ -5,6 +5,7 @@ import { createPlayer } from './bridge.js'
 import { DomRenderer } from './dom-renderer.js'
 import { buildSceneOptions } from './scene-options.js'
 import { createPlayerSettings, VOLUME_BUSSES } from './player-settings.js'
+import { TouchGestureDetector } from './touch-gestures.js'
 
 const stage = document.getElementById('stage')
 const logEl = document.getElementById('log')
@@ -76,6 +77,10 @@ window.addEventListener('unhandledrejection', (e) => {
 
 const renderer = new DomRenderer(player.core, stage)
 let storyBundle = null
+// Non-null when the story bundle failed to load: the reason string. Read by
+// the boot guard below (and by any host inspecting the failure) so a broken
+// package can never be mistaken for a working one.
+let storyBundleError = null
 
 // ---- player settings (round 86) -------------------------------------
 // Centralized, persistent settings (language / auto / text speed / skip /
@@ -203,6 +208,74 @@ const syncTextures = () => {
   }
 }
 
+// ---- boot-failure visibility (Sprint 1 / t3) --------------------------
+// A missing or empty story bundle means the PACKAGING chain failed
+// (scripts/package_game.sh -> ks_bake --web -> cache/story/story.lua).
+// Historically that was swallowed: one log line plus a silent switch to the
+// raw demo scenes, so a broken package still looked like a working game and
+// the browser smoke stayed green. Failure is now explicit on three surfaces:
+//   (a) a visible page banner (#boot-error, built here so no index.html
+//       change is needed and every DOM fixture gets it too),
+//   (b) window.__caesuraErrors — the machine-readable array that
+//       scripts/web_browser_smoke.mjs asserts is empty,
+//   (c) the demo fallback content only in an EXPLICIT dev mode.
+//
+// DEV_MODE is deliberately opt-in ONLY (?dev=1, or self.__CAESURA_DEV__ for
+// a fixture). Host-based detection was rejected: both the vite dev server
+// (127.0.0.1:5174) and the packaged-site verification harness
+// (scripts/web_browser_smoke.mjs serves dist/ over 127.0.0.1) live on
+// loopback, so "localhost means dev" would re-hide the failure in exactly
+// the environment whose job is to catch it. An explicit flag cannot be
+// inherited by accident, and a dev who really wants the raw .ks list adds
+// ?dev=1 to the URL.
+const DEV_MODE = (() => {
+  try {
+    if (typeof self !== 'undefined' && self.__CAESURA_DEV__ === true) return true
+    return new URLSearchParams(location.search).get('dev') === '1'
+  } catch { return false }
+})()
+
+/** Render (or update) the top-of-page error banner. Text only — the detail
+ *  string comes from the network/Lua side, so it is never interpolated as
+ *  HTML. Idempotent: repeated failures reuse the same element. */
+function showBootError(title, detail, hint) {
+  if (typeof document === 'undefined' || !document.body) return
+  let el = document.getElementById('boot-error')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'boot-error'
+    el.setAttribute('role', 'alert')
+    el.style.cssText = 'margin:0;padding:12px 16px;background:#3a0f0f;color:#ffb3b3;'
+      + 'border-bottom:2px solid #f66;font:14px/1.5 monospace;white-space:pre-wrap;'
+    document.body.insertBefore(el, document.body.firstChild)
+  }
+  el.textContent = ''
+  const mk = (text, css) => {
+    const d = document.createElement('div')
+    d.textContent = text
+    if (css) d.style.cssText = css
+    el.appendChild(d)
+  }
+  mk('\u26A0 ' + title, 'font-weight:bold;color:#ff8080')
+  mk(detail)
+  if (hint) mk(hint, 'color:#ffd9a0')
+}
+
+/** Single funnel for a fatal boot problem: page banner + smoke-visible error
+ *  array + log + status line. Never throws (a reporting failure must not
+ *  mask the failure being reported). */
+function reportBootFailure(title, detail, hint) {
+  const line = title + ': ' + detail
+  try { window.__caesuraErrors.push(line) } catch { /* array not installed yet */ }
+  try { log('FATAL ' + line) } catch { /* log element absent */ }
+  try { if (statusEl) statusEl.textContent = 'FAILED: ' + title } catch { /* noop */ }
+  try { showBootError(title, detail, hint) } catch { /* DOM unavailable */ }
+}
+
+const BAKE_HINT = 'Rebuild the package: bash scripts/package_game.sh <game>'
+  + ' (step 2 bakes cache/story/story.lua via scripts/ks_bake.lua --web).'
+  + ' Add ?dev=1 to run the raw demo scenes instead.'
+
 async function loadStoryBundle() {
   try {
     const res = await fetch(STORY_BASE)
@@ -213,13 +286,30 @@ async function loadStoryBundle() {
     const SQ = String.fromCharCode(39)
     const code = '  local chunk = assert(load(STORY_SRC, ' + SQ + '@story.lua' + SQ + ', ' + SQ + 't' + SQ + ', _ENV))' + String.fromCharCode(10) + '  return chunk()'
     const bundle = await player.lua.doString(code)
+    // A bundle that parses but carries no scenes is a packaging failure too:
+    // the old code fell through to populateFallbackScenes() and the player
+    // silently offered demo content in place of the game.
+    const sceneCount = bundle && bundle.scenes ? Object.keys(bundle.scenes).length : 0
+    if (sceneCount === 0) throw new Error('bundle carries 0 scenes')
     storyBundle = bundle
-    log('story bundle: ' + Object.keys(bundle.scenes).length + ' scenes, ' + bundle.assets.length + ' assets')
+    log('story bundle: ' + sceneCount + ' scenes, ' + bundle.assets.length + ' assets')
     populateScenePicker(bundle.scenes)
-    populateFallbackScenes()
   } catch (e) {
-    log('story bundle unavailable: ' + String(e).slice(0, 80))
-    populateFallbackScenes()
+    storyBundleError = String((e && e.message) || e).slice(0, 160)
+    reportBootFailure(
+      'story bundle unavailable (packaging failed)',
+      storyBundleError + ' @ ' + STORY_BASE,
+      BAKE_HINT,
+    )
+    if (DEV_MODE) {
+      log('dev mode (?dev=1): offering the raw demo scenes as a fallback')
+      populateFallbackScenes()
+    } else {
+      // Production: refuse to substitute content. The picker stays empty and
+      // the initial auto-run is suppressed below, so nobody can mistake demo
+      // scenes for the packaged game.
+      log('production: demo fallback disabled — the packaged story is missing')
+    }
   }
 }
 
@@ -300,6 +390,12 @@ async function runScene(name) {
   let out
   if (storyBundle && storyBundle.scenes[name]) {
     out = await player.runFromBundle(storyBundle, name, runOpts)
+  } else if (storyBundleError && !DEV_MODE) {
+    // No bundle + production: the raw-.ks path would quietly play demo
+    // content in place of the packaged game. Refuse, visibly.
+    reportBootFailure('cannot run scene without a story bundle', name, BAKE_HINT)
+    statusEl.textContent = 'FAILED: story bundle missing'
+    return
   } else {
     const ks = await (await fetch(DEMO_BASE + name)).text()
     out = await player.runScene(ks, name, runOpts)
@@ -327,6 +423,10 @@ async function advance() {
   let out
   if (storyBundle && storyBundle.scenes[sel]) {
     out = await player.runFromBundle(storyBundle, sel, advOpts)
+  } else if (storyBundleError && !DEV_MODE) {
+    reportBootFailure('cannot advance without a story bundle', String(sel), BAKE_HINT)
+    statusEl.textContent = 'FAILED: story bundle missing'
+    return
   } else {
     const ks = await (await fetch(DEMO_BASE + sel)).text()
     out = await player.runScene(ks, sel, advOpts)
@@ -481,13 +581,69 @@ requestAnimationFrame(frame)
 // Default scene: URL ?scene=<name> wins, else the FIRST scene of the
 // loaded story bundle, else the demo fallback -- a packaged game must boot
 // without any manual bundle edits (Validation-Release task book §9).
+const requestedScene = new URLSearchParams(location.search).get('scene')
 const initialScene =
-    new URLSearchParams(location.search).get('scene')
+    requestedScene
     ?? (storyBundle ? Object.keys(storyBundle.scenes)[0] : null)
-    ?? 'galgame_demo.ks'
-void runScene(initialScene)
+    ?? (DEV_MODE ? 'galgame_demo.ks' : null)
+if (initialScene) {
+  void runScene(initialScene)
+} else {
+  // Bundle load failed and this is not an explicit dev session: booting a
+  // demo scene here is exactly the silent substitution t3 removes. Leave the
+  // banner + __caesuraErrors entry as the only outcome.
+  statusEl.textContent = 'FAILED: no story bundle — nothing to run'
+  log('boot aborted: story bundle missing (see the error banner above)')
+}
 
-// Register PWA Service Worker for offline asset caching
+// Mobile Touch Gestures (M5): 2-finger tap (menu/history), 3-finger hold (skip), swipe-down (hide UI), swipe-up (backlog)
+const gestureDetector = new TouchGestureDetector({
+  onTwoFingerTap: () => {
+    // 2-finger tap: toggle settings/system menu and backlog
+    const settingsLang = document.getElementById('settings-lang')
+    if (settingsLang) {
+      const panel = settingsLang.closest('.panel-row') || settingsLang.parentElement
+      if (panel) {
+        panel.style.display = (panel.style.display === 'none') ? '' : 'none'
+      }
+    }
+    if (backlogEl) {
+      backlogEl.style.display = (backlogEl.style.display === 'none') ? '' : 'none'
+    }
+  },
+  onThreeFingerHold: ({ active }) => {
+    // 3-finger hold: fast-forward skip mode
+    settings.set('skipMode', Boolean(active))
+    if (player && player.core) {
+      player.core.skip_mode = Boolean(active)
+    }
+  },
+  onSwipeDown: () => {
+    // Swipe-down: hide dialogue box / UI overlay
+    const msgEl = document.querySelector('.caesura-message') || document.querySelector('.message-layer')
+    if (msgEl) {
+      msgEl.style.display = (msgEl.style.display === 'none') ? '' : 'none'
+    }
+  },
+  onSwipeUp: () => {
+    // Swipe-up: open backlog view
+    if (backlogEl) {
+      backlogEl.style.display = ''
+      backlogEl.scrollTop = backlogEl.scrollHeight
+    }
+  }
+})
+gestureDetector.attach(stage || (typeof document !== 'undefined' ? document.body : null))
+if (typeof window !== 'undefined') {
+  window.__caesuraGestures = gestureDetector
+}
+
+// Register PWA Service Worker for offline asset caching.
+// Registered as a CLASSIC worker on purpose (no { type: 'module' }): web/sw.js is
+// written as a classic script and must stay that way. If a module worker is ever
+// wanted, sw.js has to be converted in the SAME change — adding ESM syntax there
+// while this call stays classic is a SyntaxError that kills the whole PWA offline
+// cache silently (web/test/sw.test.mjs locks both halves of this contract).
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch((err) => {
