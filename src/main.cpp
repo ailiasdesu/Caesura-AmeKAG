@@ -314,13 +314,19 @@ private:
                     "local ad = {} for _, d in ipairs(meta.animDetails or {}) do ad[#ad + 1] = string.format('{\"name\":%q,\"duration\":%s,\"tracks\":%s}', tostring(d.name), d.duration or 0, jl(d.tracks or {})) end "
                     "return string.format('{\"bones\":%d,\"anims\":[%s],\"parts\":%d,\"verts\":%d,\"tris\":%d,\"boneTree\":[%s],\"animDetails\":[%s]}', "
                     "meta.bones or 0, table.concat(anims, ','), meta.parts or 0, meta.verts or 0, meta.tris or 0, table.concat(bt, ','), table.concat(ad, ',')) end\n"
-                    "local res = checker.validate_file(\"" + path + "\")\n"
+                    // The path arrives as a CHUNK ARGUMENT (varargs), never
+                    // concatenated into the source, so quotes / newlines /
+                    // backslashes inside it can no longer alter the program.
+                    "local res = checker.validate_file(...)\n"
                     "return string.format('{\"ok\":%s,\"errors\":%s,\"meta\":%s}', "
                     "res.ok and 'true' or 'false', jl(res.errors or {}), jm(res.meta or {}))";
                 Caesura::RpcSmaValidateResult result;
-                if (luaL_loadstring(L, code.c_str()) == LUA_OK
-                    && lua_pcall(L, 0, 1, 0) == LUA_OK
-                    && lua_isstring(L, -1)) {
+                bool smaLuaOk = false;
+                if (luaL_loadstring(L, code.c_str()) == LUA_OK) {
+                    lua_pushlstring(L, path.data(), path.size());  // -> ...
+                    smaLuaOk = lua_pcall(L, 1, 1, 0) == LUA_OK && lua_isstring(L, -1);
+                }
+                if (smaLuaOk) {
                     try {
                         auto j = nlohmann::json::parse(lua_tostring(L, -1));
                         result.ok = j.value("ok", false);
@@ -890,11 +896,18 @@ void runStdioRpc(Caesura::Engine& engine) {
     engine.shutdown();
 }
 
-bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken) {
+bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken,
+                   bool insecureNoAuth) {
     auto dispatcher = std::make_shared<EngineRpcDispatcher>(engine);
     Caesura::EditorServer editor;
     editor.setDispatcher(dispatcher);
     if (!authToken.empty()) editor.setAuthToken(authToken);
+    // Secure by default: with no configured token EditorServer generates one
+    // (printed to stderr + written to .caesura-editor-token). The editor RPC
+    // exposes /api/eval and /api/run, i.e. arbitrary Lua, so an unauthenticated
+    // listener is a local privilege boundary hole. --editor-insecure is the
+    // explicit, loudly-warned escape hatch.
+    if (insecureNoAuth) editor.setInsecureNoAuth(true);
     // Serve the bundled web-editor frontend (web-editor/dist). Resolve it
     // relative to the current directory, walking up a few levels so the
     // editor works whether launched from the repo root or a build dir
@@ -1010,6 +1023,9 @@ extern "C" int main(int argc, char* argv[]) {
     bool headless = false;
     bool editorMode = false;
     bool editorStdio = false;
+    // Explicit opt-out of the default-deny editor auth gate. Deliberately a
+    // FLAG rather than a token: it carries no secret, so argv exposure is fine.
+    bool editorInsecure = false;
     // Optional GPU backend override: --backend <opengl|vulkan|dx11|dx12|metal|webgpu>
     std::string renderBackend;
     // Optional deterministic frame limit: --frames N (GPU smoke runs; 0 = unlimited)
@@ -1035,6 +1051,8 @@ extern "C" int main(int argc, char* argv[]) {
             headless = true;
         } else if (arg == "--editor") {
             editorMode = true;
+        } else if (arg == "--editor-insecure") {
+            editorInsecure = true;
         } else if (arg == "--editor-stdio") {
             editorMode = true;
             editorStdio = true;
@@ -1125,7 +1143,7 @@ extern "C" int main(int argc, char* argv[]) {
 
         const bool editorOk = editorStdio
             ? (runStdioRpc(engine), true)
-            : runHttpEditor(engine, editorToken);
+            : runHttpEditor(engine, editorToken, editorInsecure);
         if (!editorOk) return 1;
         printf("Caesura (AmeKAG) shut down cleanly.\n");
         return 0;

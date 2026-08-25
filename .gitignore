@@ -95,6 +95,10 @@ tmp/
 .agent-teams/
 .vite/
 
+# Auto-generated editor RPC bearer token (EditorServer writes it when
+# CAESURA_EDITOR_TOKEN is unset). It is a live credential — never commit it.
+.caesura-editor-token
+
 # Agent probe scratch files (convergence cleanup: agents may leave
 # one-off scan/probe scripts; never commit them)
 /*_probe.lua

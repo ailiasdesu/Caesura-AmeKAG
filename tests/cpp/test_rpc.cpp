@@ -6,6 +6,8 @@
 #include "rpc/api/IEditorServer.h"
 #include "rpc/api/IRpcDispatcher.h"
 #include "rpc/ConstantTime.h"
+#include "rpc/ProjectContext.h"
+#include "rpc/services/ProjectService.h"
 #include "entry/Engine.h"
 #include "script/vm/LuaManager.h"
 #include <httplib.h>
@@ -66,6 +68,17 @@ private:
     mutable std::mutex m_mutex;
     std::vector<RpcRequest> m_requests;
 };
+
+// [Sprint 1 t4] The HTTP editor is default-deny: start() requires a bearer
+// token and generates one when none was configured. Route/transport tests
+// below are not about authentication, so they opt into the documented escape
+// hatch EXPLICITLY (--editor-insecure equivalent) instead of relying on an
+// open gate. Auth behavior itself is covered by the dedicated cases at the
+// end of section 3.
+bool startOpen(EditorServer& es) {
+    es.setInsecureNoAuth(true);
+    return es.start(0);
+}
 
 RpcReply successReply(const RpcRequest& request) {
     if (std::holds_alternative<RpcStatusRequest>(request.payload)) {
@@ -414,7 +427,7 @@ TEST_CASE("EditorServer::construct and stop without start") {
 
 TEST_CASE("EditorServer::start and stop joins its worker") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     CHECK(es.isRunning());
     CHECK(es.port() > 0);
     es.stop();
@@ -583,7 +596,7 @@ TEST_CASE("EditorServer HTTP worker submits DTOs through dispatcher") {
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     EditorServer es;
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
 
     httplib::Client client("127.0.0.1", es.port());
     auto run = client.Post("/api/run", "return 3", "text/plain");
@@ -645,7 +658,7 @@ TEST_CASE("EditorServer rejects invalid animation load transforms before dispatc
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     EditorServer es;
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
 
     httplib::Client client("127.0.0.1", es.port());
     const std::vector<std::string> invalidBodies = {
@@ -686,7 +699,7 @@ TEST_CASE("EditorServer lists static animation images case-insensitively as vali
     REQUIRE(files.add("caesura_rpc_static_ignore.TxT"));
 
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
 
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Get("/api/live2d/models");
@@ -734,7 +747,7 @@ TEST_CASE("EditorServer /api/assets lists scanned dirs with kind + type filters"
     REQUIRE(files.add("bgm", "caesura_rpc_asset_bgm.ogg"));
 
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
 
     auto all = client.Get("/api/assets");
@@ -812,7 +825,7 @@ TEST_CASE("EditorServer /api/assets lists scanned dirs with kind + type filters"
 
 TEST_CASE("EditorServer reports dispatcher unavailable over HTTP") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
 
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Get("/api/status");
@@ -928,7 +941,7 @@ TEST_CASE("RpcServer rejects empty run before reaching the dispatcher") {
 
 TEST_CASE("EditorServer returns 404 for unknown route") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Get("/api/nonexistent-route");
     if (response) CHECK(response->status == 404);
@@ -939,7 +952,7 @@ TEST_CASE("EditorServer returns 404 for GET on a POST-only route") {
     EditorServer es;
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Get("/api/stop");  // /api/stop is POST-only
     if (response) CHECK(response->status == 404);
@@ -951,7 +964,7 @@ TEST_CASE("EditorServer returns 404 for POST on a GET-only route") {
     EditorServer es;
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Post("/api/status", "", "application/json");
     if (response) CHECK(response->status == 404);
@@ -994,7 +1007,7 @@ TEST_CASE("EditorServer enforces a configured bearer token (401)") {
 
 TEST_CASE("EditorServer rejects non-local CORS origins with 403") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
 
     httplib::Headers evil;
@@ -1015,7 +1028,7 @@ TEST_CASE("EditorServer rejects non-local CORS origins with 403") {
 
 TEST_CASE("EditorServer allows localhost CORS origin") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
 
     httplib::Headers local;
@@ -1024,6 +1037,171 @@ TEST_CASE("EditorServer allows localhost CORS origin") {
     REQUIRE(response);
     CHECK(response->status == 200);
     es.stop();
+}
+
+// [Sprint 1 t4] Auth is DEFAULT-DENY: an editor started without any explicit
+// configuration must not serve /api/* to an unauthenticated caller. start()
+// generates a token, reports it, and only that token opens the gate.
+TEST_CASE("EditorServer requires a token by default and generates one") {
+    namespace fsn = std::filesystem;
+    const fsn::path tokenFile = fsn::current_path() / ".caesura-editor-token";
+    std::error_code preEc;
+    const bool preexisting = fsn::exists(tokenFile, preEc);
+
+    EditorServer es;
+    auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
+    es.setDispatcher(dispatcher);
+    REQUIRE_FALSE(es.insecureNoAuth());
+    REQUIRE(es.start(0));
+
+    const std::string generated = es.authToken();
+    CHECK_FALSE(generated.empty());
+    CHECK(generated.size() >= 32);  // 24 random bytes rendered as hex
+
+    httplib::Client client("127.0.0.1", es.port());
+    auto anonymous = client.Get("/api/ping");
+    REQUIRE(anonymous);
+    CHECK(anonymous->status == 401);
+    CHECK(anonymous->body.find("Unauthorized") != std::string::npos);
+
+    // Lua execution and packaging routes are closed to anonymous callers too.
+    auto anonymousRun = client.Post("/api/run", "return 3", "text/plain");
+    REQUIRE(anonymousRun);
+    CHECK(anonymousRun->status == 401);
+    CHECK(dispatcher->requestCount() == 0);
+
+    httplib::Headers good;
+    good.emplace("Authorization", "Bearer " + generated);
+    auto authorized = client.Get("/api/ping", good);
+    REQUIRE(authorized);
+    CHECK(authorized->status == 200);
+
+    // The generated token is handed to the frontend through a file so the
+    // editor can pick it up without the operator copying it by hand.
+    const std::string reported = es.authTokenFile();
+    if (!reported.empty()) {
+        std::ifstream in(reported, std::ios::binary);
+        REQUIRE(in.good());
+        std::string stored((std::istreambuf_iterator<char>(in)),
+                           std::istreambuf_iterator<char>());
+        CHECK(stored == generated);
+    }
+
+    es.stop();
+    if (!preexisting) {
+        std::error_code rmEc;
+        fsn::remove(tokenFile, rmEc);
+    }
+}
+
+// A token supplied by the operator (CAESURA_EDITOR_TOKEN via setAuthToken) is
+// used as-is; start() must not overwrite it with a generated one.
+TEST_CASE("EditorServer keeps a configured token instead of generating one") {
+    EditorServer es;
+    es.setAuthToken("operator-token");
+    REQUIRE(es.start(0));
+    CHECK(es.authToken() == "operator-token");
+    CHECK(es.authTokenFile().empty());  // nothing written for configured tokens
+
+    httplib::Client client("127.0.0.1", es.port());
+    httplib::Headers good;
+    good.emplace("Authorization", "Bearer operator-token");
+    auto ok = client.Get("/api/ping", good);
+    REQUIRE(ok);
+    CHECK(ok->status == 200);
+    es.stop();
+}
+
+// The escape hatch stays available and explicit (--editor-insecure).
+TEST_CASE("EditorServer insecure mode serves without authentication") {
+    EditorServer es;
+    es.setInsecureNoAuth(true);
+    CHECK(es.insecureNoAuth());
+    REQUIRE(es.start(0));
+    CHECK(es.authToken().empty());  // no token established in insecure mode
+
+    httplib::Client client("127.0.0.1", es.port());
+    auto ok = client.Get("/api/ping");
+    REQUIRE(ok);
+    CHECK(ok->status == 200);
+    es.stop();
+}
+
+// --- 3b. Project import confinement (Sprint 1 t4) --------------------------
+
+// /api/project/import used to accept ANY absolute directory, turning it into an
+// arbitrary-directory read/copy primitive. The source must now canonicalize
+// inside an allowed import root.
+TEST_CASE("ProjectService::importProject refuses sources outside allowed roots") {
+    namespace fsn = std::filesystem;
+    const ProjectContext ctx = ProjectContext::fromEnvironment();
+    rpc::service::ProjectService projects(ctx);
+
+    // A directory that looks like a project but lives outside every allowed
+    // root (system temp dir) must be refused, not copied.
+    std::error_code ec;
+    const fsn::path outside =
+        fsn::temp_directory_path(ec) / "caesura_t4_outside_import";
+    REQUIRE_FALSE(ec);
+    fsn::remove_all(outside, ec);
+    REQUIRE(fsn::create_directories(outside, ec));
+    {
+        std::ofstream story(outside / "story.ks", std::ios::binary);
+        story << "; outside import probe\n[p]";
+    }
+
+    const std::string destName = "caesura_t4_outside_dest";
+    const fsn::path dest = ctx.projectRoot() / destName;
+    fsn::remove_all(dest, ec);
+
+    const auto refused = projects.importProject(outside.string(), destName);
+    CHECK(refused.status == 403);
+    CHECK(refused.body.value("error", std::string()).find("allowed import roots") !=
+        std::string::npos);
+    CHECK_FALSE(fsn::exists(dest, ec));
+
+    // Traversal out of the projects root is refused by the same check.
+    const auto traversal =
+        projects.importProject("../../etc", "caesura_t4_traversal_dest");
+    CHECK(traversal.status == 403);
+
+    // A non-existent path inside an allowed root still reports 404 (the
+    // confinement check must not mask ordinary "not found").
+    const auto missing = projects.importProject(
+        (ctx.projectRoot() / "caesura_t4_definitely_missing").string(),
+        "caesura_t4_missing_dest");
+    CHECK(missing.status == 404);
+
+    fsn::remove_all(outside, ec);
+}
+
+// Sources inside an allowed root keep working: the fix must not break the
+// legitimate editor workflow (importing a project from the engine tree).
+TEST_CASE("ProjectService::importProject accepts a source inside the engine root") {
+    namespace fsn = std::filesystem;
+    const ProjectContext ctx = ProjectContext::fromEnvironment();
+    rpc::service::ProjectService projects(ctx);
+
+    std::error_code ec;
+    const fsn::path inside = ctx.sourceRoot() / "tmp" / "caesura_t4_inside_import";
+    fsn::remove_all(inside, ec);
+    REQUIRE(fsn::create_directories(inside, ec));
+    {
+        std::ofstream story(inside / "story.ks", std::ios::binary);
+        story << "; inside import probe\n[p]";
+    }
+
+    const std::string destName = "caesura_t4_inside_dest";
+    const fsn::path dest = ctx.projectRoot() / destName;
+    fsn::remove_all(dest, ec);
+
+    const auto accepted = projects.importProject(inside.string(), destName);
+    CHECK(accepted.status == 200);
+    CHECK(accepted.body.value("ok", false));
+    CHECK(fsn::exists(dest / "story.ks", ec));
+
+    fsn::remove_all(dest, ec);
+    fsn::remove_all(inside, ec);
 }
 
 // --- 4. Lifecycle ----------------------------------------------------------
@@ -1061,7 +1239,7 @@ TEST_CASE("RpcServer keeps processing request lines after stop") {
 
 TEST_CASE("EditorServer start while running is idempotent") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     const int firstPort = es.port();
     CHECK(es.isRunning());
     CHECK(es.start(0));          // second start while running -> no-op success
@@ -1073,11 +1251,11 @@ TEST_CASE("EditorServer start while running is idempotent") {
 
 TEST_CASE("EditorServer can start again after stop") {
     EditorServer es;
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     es.stop();
     CHECK_FALSE(es.isRunning());
 
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     CHECK(es.isRunning());
     CHECK(es.port() > 0);
     httplib::Client client("127.0.0.1", es.port());
@@ -1122,7 +1300,7 @@ TEST_CASE("EditorServer rejects an empty run body with 400") {
     EditorServer es;
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Post("/api/run", "", "text/plain");
     REQUIRE(response);
@@ -1139,7 +1317,7 @@ TEST_CASE("EditorServer propagates a throwing dispatcher as HTTP 500") {
         });
     EditorServer es;
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
     auto response = client.Post("/api/run", "return 1", "text/plain");
     REQUIRE(response);
@@ -1152,7 +1330,7 @@ TEST_CASE("EditorServer does not dispatch oversized request bodies") {
     EditorServer es;
     auto dispatcher = std::make_shared<RecordingRpcDispatcher>(successReply);
     es.setDispatcher(dispatcher);
-    REQUIRE(es.start(0));
+    REQUIRE(startOpen(es));
     httplib::Client client("127.0.0.1", es.port());
 
     // Far beyond the default httplib payload cap (8 MiB): the body is

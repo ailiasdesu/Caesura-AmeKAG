@@ -14,16 +14,20 @@
 #include <nlohmann_json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <sstream>
+#include <system_error>
 
 namespace fs = std::filesystem;
 namespace Caesura {
@@ -281,6 +285,13 @@ bool EditorServer::start(int port) {
 
     if (m_thread.joinable()) stop();
 
+    // Secure by default: establish (or generate) the bearer token BEFORE the
+    // socket is bound, so no request can ever be served unauthenticated.
+    if (!ensureAuthToken()) {
+        m_port = 0;
+        return false;
+    }
+
     m_server = std::make_unique<httplib::Server>();
     const int boundPort = port == 0
         ? m_server->bind_to_any_port("127.0.0.1")
@@ -313,6 +324,124 @@ void EditorServer::setDispatcher(std::shared_ptr<IRpcDispatcher> dispatcher) {
 void EditorServer::setAuthToken(const std::string& token) {
     std::lock_guard<std::mutex> lock(m_dispatcherMutex);
     m_authToken = token;
+}
+
+void EditorServer::setInsecureNoAuth(bool insecure) {
+    m_insecureNoAuth.store(insecure);
+}
+
+bool EditorServer::insecureNoAuth() const {
+    return m_insecureNoAuth.load();
+}
+
+std::string EditorServer::authToken() const {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    return m_authToken;
+}
+
+std::string EditorServer::authTokenFile() const {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    return m_authTokenFile;
+}
+
+std::string EditorServer::generateAuthToken() {
+    // std::random_device is the platform CSPRNG on the toolchains we ship
+    // (MSVC: rand_s/RtlGenRandom, libstdc++/libc++: /dev/urandom). It is only
+    // used for the loopback editor token, never for archive crypto (that is
+    // ICryptoEngine's job), and a failure here fails CLOSED: start() refuses
+    // to serve rather than falling back to a predictable token.
+    try {
+        std::random_device rd;
+        std::uniform_int_distribution<unsigned> dist(0, 255);
+        static constexpr char kHex[] = "0123456789abcdef";
+        std::string token;
+        token.reserve(48);
+        for (int i = 0; i < 24; ++i) {
+            const unsigned byte = dist(rd) & 0xFFu;
+            token.push_back(kHex[(byte >> 4) & 0x0Fu]);
+            token.push_back(kHex[byte & 0x0Fu]);
+        }
+        return token;
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
+bool EditorServer::ensureAuthToken() {
+    // Explicit, loud escape hatch: --editor-insecure (setInsecureNoAuth) or
+    // CAESURA_EDITOR_INSECURE=1. Anything else requires a bearer token.
+    if (!m_insecureNoAuth.load()) {
+        if (const char* env = std::getenv("CAESURA_EDITOR_INSECURE")) {
+            const std::string value(env);
+            if (value == "1" || value == "true" || value == "TRUE" ||
+                value == "yes" || value == "on") {
+                m_insecureNoAuth.store(true);
+            }
+        }
+    }
+    if (m_insecureNoAuth.load()) {
+        fprintf(stderr,
+            "[EditorServer] *** INSECURE MODE: HTTP editor has NO authentication."
+            " /api/eval and /api/run execute arbitrary Lua and /api/build,"
+            " /api/package/* write files, so ANY local process can drive this"
+            " engine. Use only on a trusted machine; prefer"
+            " CAESURA_EDITOR_TOKEN. ***\n");
+        return true;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+        if (!m_authToken.empty()) return true;  // caller configured one
+    }
+
+    const std::string token = generateAuthToken();
+    if (token.empty()) {
+        fprintf(stderr, "[EditorServer] Refusing to start: no editor token was "
+                        "configured (CAESURA_EDITOR_TOKEN) and no system "
+                        "entropy source is available to generate one. Pass "
+                        "--editor-insecure to start without authentication.\n");
+        return false;
+    }
+
+    // Hand the generated token to the frontend through a file next to the
+    // running editor. Best effort: an unwritable cwd must not stop the editor,
+    // the token is still on stderr.
+    std::string tokenFile;
+    {
+        std::error_code ec;
+        const fs::path path = fs::current_path(ec) / ".caesura-editor-token";
+        if (!ec) {
+            std::ofstream out(path, std::ios::trunc | std::ios::binary);
+            if (out) {
+                out << token;
+                out.close();
+                std::error_code permEc;
+                // Owner-only where the platform honours it (POSIX). Windows
+                // ACLs are not modelled by std::filesystem::permissions, so
+                // the file inherits the directory ACL there.
+                fs::permissions(path,
+                    fs::perms::owner_read | fs::perms::owner_write,
+                    fs::perm_options::replace, permEc);
+                tokenFile = path.string();
+            }
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+        m_authToken = token;
+        m_authTokenFile = tokenFile;
+    }
+
+    fprintf(stderr, "[EditorServer] Generated editor token: %s\n", token.c_str());
+    if (!tokenFile.empty()) {
+        fprintf(stderr, "[EditorServer] Token written to: %s\n", tokenFile.c_str());
+    } else {
+        fprintf(stderr, "[EditorServer] Token file could not be written; use the "
+                        "value above in the editor connection panel.\n");
+    }
+    fprintf(stderr, "[EditorServer] Send it as: Authorization: Bearer <token>\n");
+    return true;
 }
 
 RpcReply EditorServer::dispatchRequest(RpcRequest request) const {
@@ -420,17 +549,20 @@ void EditorServer::serverLoop(int port) {
             res.set_header("Access-Control-Allow-Origin", origin.c_str());
             res.set_header("Vary", "Origin");
         }
-        // [Review R-3] API-token gate: the editor binds only to loopback
-        // (127.0.0.1), so no external host can reach it — the residual risk is
-        // another LOCAL process driving /api/run, /api/eval, etc. to execute
-        // arbitrary Lua. Mitigation is the bearer-token gate below: when
-        // m_authToken (CAESURA_EDITOR_TOKEN) is set, every /api/* request must
-        // present "Authorization: Bearer <token>" or get 401. When the token is
-        // empty the gate is open, preserving the existing editor workflow and
-        // tests ("default open + mandatory auth once configured" — backwards
-        // compatible hardening, not default-deny). CORS preflight (OPTIONS)
-        // carries no Authorization header and must not be gated, or the browser
-        // web editor breaks; the actual request behind the preflight is checked.
+        // [Sprint 1 t4] API-token gate, DEFAULT-DENY. The editor binds only to
+        // loopback (127.0.0.1), so no external host can reach it — but the
+        // residual risk is real: another LOCAL process driving /api/run,
+        // /api/eval (arbitrary Lua) or /api/build, /api/package/* (file
+        // writes). Therefore every /api/* request must present
+        // "Authorization: Bearer <token>" or get 401. start() guarantees a
+        // token exists (configured via CAESURA_EDITOR_TOKEN/setAuthToken, or
+        // generated and reported on stderr + .caesura-editor-token), so an
+        // empty token here can only mean the explicit escape hatch
+        // (--editor-insecure / CAESURA_EDITOR_INSECURE=1) — which warns loudly
+        // at startup. Fail closed if neither holds.
+        // CORS preflight (OPTIONS) carries no Authorization header and must not
+        // be gated, or the browser web editor breaks; the actual request behind
+        // the preflight is checked.
         if (req.method != "OPTIONS") {
             const std::string auth = req.get_header_value("Authorization");
             std::string token;
@@ -438,9 +570,11 @@ void EditorServer::serverLoop(int port) {
                 std::lock_guard<std::mutex> lock(m_dispatcherMutex);
                 token = m_authToken;
             }
-            if (!token.empty()) {
+            const bool insecure = m_insecureNoAuth.load();
+            if (!insecure) {
+                // Fail closed: no token configured means no request is served.
                 const std::string expected = "Bearer " + token;
-                if (!constantTimeEquals(auth, expected)) {
+                if (token.empty() || !constantTimeEquals(auth, expected)) {
                     res.status = 401;
                     res.set_content("{\"error\":\"Unauthorized\"}", "application/json");
                     return httplib::Server::HandlerResponse::Handled;

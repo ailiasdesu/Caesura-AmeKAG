@@ -13,15 +13,32 @@ exe = sys.argv[1] if len(sys.argv) > 1 else "CaesuraAmeKAG.exe"
 cwd = os.path.dirname(os.path.abspath(exe)) or "."
 
 port = 9876
+# [Sprint 1 t4] The HTTP editor is default-deny: it now requires a bearer
+# token and generates one when none is configured. The smoke test supplies
+# its own token so it does not have to read the generated one back, and sends
+# it on every request.
+TOKEN = "headless-http-smoke-token"
+_env = dict(os.environ)
+_env["CAESURA_EDITOR_TOKEN"] = TOKEN
 proc = subprocess.Popen(
     [exe, "--editor"],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     cwd=cwd,
+    env=_env,
 )
 
 results = []
 BASE = "http://127.0.0.1:%d" % port
+
+
+def _repo_root_for_import():
+    # The engine runs with cwd=build/Debug in-tree; the repo root is two
+    # levels up. Fall back to cwd when that layout does not hold.
+    candidate = os.path.dirname(os.path.dirname(os.path.abspath(cwd)))
+    if os.path.isdir(os.path.join(candidate, "src")):
+        return candidate
+    return os.path.abspath(cwd)
 
 
 def check(name, ok, detail=""):
@@ -31,7 +48,8 @@ def check(name, ok, detail=""):
 
 
 def request(path, data=None, timeout=30, headers=None):
-    hdrs = {"Content-Type": "application/json"}
+    hdrs = {"Content-Type": "application/json",
+            "Authorization": "Bearer " + TOKEN}
     if headers:
         hdrs.update(headers)
     req = urllib.request.Request(
@@ -61,7 +79,10 @@ def main():
         if proc.poll() is not None:
             break
         try:
-            with urllib.request.urlopen(BASE + "/api/ping", timeout=1) as r:
+            _probe = urllib.request.Request(
+                BASE + "/api/ping",
+                headers={"Authorization": "Bearer " + TOKEN})
+            with urllib.request.urlopen(_probe, timeout=1) as r:
                 if r.status == 200:
                     ready = True
                     break
@@ -348,9 +369,22 @@ def main():
     check("cors-short-origin-no-crash", st == 403, "%s %s" % (st, resp))
     st, resp = request("/api/status", headers={"Origin": "http://localhost:5173"})
     check("cors-localhost-allowed", st == 200, "%s %s" % (st, resp))
-    # No token configured in the default editor launch: requests stay open.
+    # [Sprint 1 t4] Auth is default-deny: a request WITHOUT the bearer token
+    # must be refused even though the editor binds to loopback only.
+    _anon = urllib.request.Request(BASE + "/api/status",
+                                   headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(_anon, timeout=10) as r:
+            _anon_status = r.status
+    except urllib.error.HTTPError as e:
+        _anon_status = e.code
+        e.read()
+    except Exception:
+        _anon_status = -1
+    check("anonymous-request-rejected", _anon_status == 401, str(_anon_status))
+    # The configured token opens the gate.
     st, resp = request("/api/status")
-    check("no-token-open", st == 200, "%s %s" % (st, resp))
+    check("token-authorized", st == 200, "%s %s" % (st, resp))
 
     # ---- Project Manager endpoints (Sprint 2, task book §6.3) ----
     # GET /api/project/templates -> 5 templates in manifest order.
@@ -397,11 +431,16 @@ def main():
     check("project-duplicate-missing-src", st == 404, "%s %s" % (st, resp))
 
     # Import an existing on-disk directory (absolute path outside projects/).
+    # [Sprint 1 t4] Import sources are confined to the allowed roots
+    # (projects/, the engine source root, CAESURA_EDITOR_IMPORT_ROOTS), so the
+    # fixture lives inside the repo instead of the system temp directory.
     import tempfile
-    src_tmp = tempfile.mkdtemp(prefix="caesura_import_")
+    _import_root = os.path.join(_repo_root_for_import(), "tmp")
+    os.makedirs(_import_root, exist_ok=True)
+    src_tmp = tempfile.mkdtemp(prefix="caesura_import_", dir=_import_root)
     with open(os.path.join(src_tmp, "story.ks"), "w", encoding="utf-8") as f:
         f.write("; imported by headless_http_smoke\n[p]")
-    empty_tmp = tempfile.mkdtemp(prefix="caesura_empty_")
+    empty_tmp = tempfile.mkdtemp(prefix="caesura_empty_", dir=_import_root)
     iname = "smoke_import_%d" % int(_t.time())
     st, resp = request("/api/project/import",
                        data=json.dumps({"srcPath": src_tmp, "name": iname}).encode())
@@ -420,6 +459,18 @@ def main():
                        data=json.dumps({"srcPath": os.path.join(src_tmp, "nope"),
                                         "name": "z8"}).encode())
     check("project-import-missing-src", st == 404, "%s %s" % (st, resp))
+
+    # [Sprint 1 t4] A source OUTSIDE the allowed import roots is refused with
+    # 403 -- /api/project/import must not be an arbitrary-directory copy.
+    _outside = tempfile.mkdtemp(prefix="caesura_outside_")
+    with open(os.path.join(_outside, "story.ks"), "w", encoding="utf-8") as f:
+        f.write("; outside root\n[p]")
+    st, resp = request("/api/project/import",
+                       data=json.dumps({"srcPath": _outside,
+                                        "name": "z6"}).encode())
+    check("project-import-outside-root-rejected", st == 403, "%s %s" % (st, resp))
+    import shutil as _sh_outside
+    _sh_outside.rmtree(_outside, ignore_errors=True)
 
     # Source without a story entry point (story.ks/entry.lua) -> 400.
     st, resp = request("/api/project/import",
