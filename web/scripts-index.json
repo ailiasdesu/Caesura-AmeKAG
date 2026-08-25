@@ -39,6 +39,7 @@
  "kag.layout_math": true,
  "kag.lsp": true,
  "kag.operation": true,
+ "kag.quickmenu": true,
  "kag.schema": true,
  "kag.semantic": true,
  "kag.sma": true,
