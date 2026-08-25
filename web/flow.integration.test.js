@@ -2,7 +2,7 @@
 // Full browser-flow integration: real wasmoon engine + DOM renderer +
 // the complete galgame demo scene, driven click-by-click.
 import { describe, it, expect, beforeAll } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPlayer } from './bridge.js'
@@ -20,19 +20,25 @@ const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
 const fileFetch = async (url) => {
   const u = new URL(url)
   if (u.pathname.startsWith('/assets/lang/')) {
-    const rel = u.pathname.replace('/assets/lang/', '').replaceAll('/', '\\')
-    const p = join(assetsDir, 'lang', rel)
-    // Only serve files that actually exist on disk; a missing lang code must
-    // reject so the bridge's try/catch treats it as absent.
+    const rel = u.pathname.replace('/assets/lang/', '')
+    const p = join(assetsDir, 'lang', ...rel.split('/'))
+    const isFile = existsSync(p) && statSync(p).isFile()
     return {
-      ok: existsSync(p),
-      status: existsSync(p) ? 200 : 404,
-      text: async () => (existsSync(p) ? readFileSync(p, 'utf8') : ''),
+      ok: isFile,
+      status: isFile ? 200 : 404,
+      text: async () => (isFile ? readFileSync(p, 'utf8') : ''),
       json: async () => index,
     }
   }
-  const p = u.pathname.replace('/scripts/', scriptsDir + '/').replaceAll('/', '\\')
-  return { ...({ text: async () => readFileSync(p, 'utf8'), json: async () => index }), status: 200, ok: true }
+  const rel = u.pathname.replace('/scripts/', '')
+  const p = join(scriptsDir, ...rel.split('/'))
+  const isFile = existsSync(p) && statSync(p).isFile()
+  return {
+    ok: isFile,
+    status: isFile ? 200 : 404,
+    text: async () => (isFile ? readFileSync(p, 'utf8') : ''),
+    json: async () => index,
+  }
 }
 
 let player = null

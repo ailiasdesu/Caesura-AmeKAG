@@ -177,7 +177,9 @@ jobs:
           submodules: recursive
 
       - name: Install Dependencies
-        run: brew install cmake sdl3 freetype zstd openssl@3 pkg-config lua
+        run: |
+          brew install cmake sdl3 freetype zstd openssl@3 pkg-config lua
+          python3 -m pip install --quiet pyyaml --break-system-packages 2>/dev/null || true
 
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCAESURA_ENABLE_FFMPEG=OFF -DBX_CONFIG_DEBUG=1 -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
@@ -220,7 +222,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget
+          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget python3-yaml
 
       - name: Configure ALSA null device (headless audio)
         run: |

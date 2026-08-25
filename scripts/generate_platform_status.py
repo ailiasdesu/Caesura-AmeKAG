@@ -26,6 +26,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any, Tuple, List, Dict, Optional
 
 # Try importing yaml; provide robust fallback if pyyaml is unavailable
 try:
@@ -69,8 +70,105 @@ STATUS_SYMBOLS = {
 }
 
 
+def _parse_val(val_str: str) -> Any:
+    val_str = val_str.strip()
+    if val_str in ("null", "~", "", "None"):
+        return None
+    if val_str in ("true", "True"):
+        return True
+    if val_str in ("false", "False"):
+        return False
+    if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
+        return val_str[1:-1]
+    try:
+        if "." in val_str:
+            return float(val_str)
+        return int(val_str)
+    except ValueError:
+        return val_str
+
+
+def _parse_yaml_fallback(text: str) -> Any:
+    """Fallback recursive indentation-based YAML parser for basic types, dicts and lists."""
+    lines = text.splitlines()
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        cleaned.append((indent, stripped))
+
+    if not cleaned:
+        return {}
+
+    def _parse_block(idx: int, parent_indent: int) -> Tuple[Any, int]:
+        if idx >= len(cleaned):
+            return {}, idx
+        cur_indent, first_line = cleaned[idx]
+        if cur_indent < parent_indent:
+            return {}, idx
+
+        if first_line.startswith("- "):
+            result_list = []
+            while idx < len(cleaned):
+                ind, line = cleaned[idx]
+                if ind < cur_indent:
+                    break
+                if ind == cur_indent and line.startswith("- "):
+                    item_content = line[2:].strip()
+                    if not item_content:
+                        sub, next_idx = _parse_block(idx + 1, cur_indent + 1)
+                        result_list.append(sub)
+                        idx = next_idx
+                    elif ":" in item_content and not item_content.startswith('"') and not item_content.startswith("'"):
+                        k, v = item_content.split(":", 1)
+                        k = k.strip()
+                        v = v.strip()
+                        sub_dict = {k: _parse_val(v) if v else {}}
+                        if not v:
+                            nested, next_idx = _parse_block(idx + 1, cur_indent + 2)
+                            sub_dict[k] = nested
+                            idx = next_idx
+                        else:
+                            idx += 1
+                        result_list.append(sub_dict)
+                    else:
+                        result_list.append(_parse_val(item_content))
+                        idx += 1
+                else:
+                    break
+            return result_list, idx
+        else:
+            result_dict = {}
+            while idx < len(cleaned):
+                ind, line = cleaned[idx]
+                if ind < cur_indent:
+                    break
+                if ind == cur_indent:
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        k = k.strip()
+                        v = v.strip()
+                        if not v:
+                            sub, next_idx = _parse_block(idx + 1, cur_indent + 1)
+                            result_dict[k] = sub
+                            idx = next_idx
+                        else:
+                            result_dict[k] = _parse_val(v)
+                            idx += 1
+                    else:
+                        idx += 1
+                else:
+                    break
+            return result_dict, idx
+
+    res, _ = _parse_block(0, 0)
+    return res
+
+
 def load_yaml(file_path: Path) -> dict:
-    """Load YAML file with PyYAML or simple fallback parser."""
+    """Load YAML file with PyYAML or robust fallback parser."""
     if not file_path.exists():
         raise FileNotFoundError(f"Matrix file not found: {file_path}")
 
@@ -78,12 +176,7 @@ def load_yaml(file_path: Path) -> dict:
     if HAS_PYYAML:
         return yaml.safe_load(text)
 
-    # Minimal fallback parser for standard key-value / basic dict structure
-    # in environments where pyyaml is not pre-installed.
-    import json
-    raise RuntimeError(
-        f"PyYAML is required to parse {file_path}. Please install pyyaml via `pip install pyyaml`."
-    )
+    return _parse_yaml_fallback(text)
 
 
 def validate_matrix(data: dict, repo_root: Path) -> list[str]:

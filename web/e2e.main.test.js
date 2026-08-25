@@ -9,7 +9,7 @@
 // One page load per file (a single browser session), with ordered cases so
 // later cases build on the parked scene, exactly like a user would.
 import { describe, it, expect, beforeAll } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -35,7 +35,7 @@ function makeFetch() {
   return async (input) => {
     const url = typeof input === 'string' ? input : String(input?.url ?? '')
     const p = resolvePathFromUrl(url)
-    if (p && existsSync(p)) {
+    if (p && existsSync(p) && statSync(p).isFile()) {
       const text = () => readFileSync(p, 'utf8')
       return {
         ok: true,

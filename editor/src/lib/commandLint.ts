@@ -26,6 +26,7 @@ export const KNOWN_COMMANDS: string[] = [
   'endbutton', 'sel', 'select', 'endselect', 'nameplate', 'textbox',
   'sprite_fade', 'sprite_move', 'sprite_scale', 'sprite_swap', 'history',
   'voice_wait', 'waitforclick', 'waitclick', 'reset', 'skip', 'auto', 'nvl',
+  'input', 'edit',
   // layer
   'bg', 'fg', 'cl', 'image', 'position', 'layopt', 'ld', 'fadeout', 'layfade',
   'scroll', 'trans', 'move', 'moveto', 'quake', 'shake', 'vfx', 'flash', 'blur', 'fade',
@@ -41,6 +42,8 @@ export const KNOWN_COMMANDS: string[] = [
   'loadplace', 'preload', 'get_texture', 'is_loaded', 'is_pending',
   'flush_cache', 'video', 'stopvideo', 'ai_dialog', 'i18n', 'set', 'inc', 'random',
   'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
+  // live2d
+  'live2d_expression', 'live2d_lip_sync', 'live2d_motion',
   // round 71: KAG3-compat arithmetic + character + effects + notification
   'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
   'textspeed', 'cps', 'palette', 'vibrate', 'notify',

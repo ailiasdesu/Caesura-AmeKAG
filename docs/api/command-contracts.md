@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (123)
+## Commands (128)
 
 ### `[add]`
 
@@ -221,6 +221,29 @@ _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible div: var 
 | `name` | string | - | - | yes |
 | `value` | number | - | - | yes |
 
+### `[edit]`
+
+_Category: text · Blocking: yes (waits for completion) · KAG3 alias of [input]_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `bg_color` | string | #202020 | - | - |
+| `btn_cancel` | string |  | - | - |
+| `btn_ok` | string | OK | - | - |
+| `color` | string | #ffffff | - | - |
+| `cond` | string | - | - | - |
+| `default` | string |  | - | - |
+| `font_size` | number | 28 | 12..72 | - |
+| `height` | number | 180 | 60..1080 | - |
+| `max_length` | number | 32 | 1..512 | - |
+| `maxlen` | number | 32 | 1..512 | - |
+| `name` | string | - | - | yes |
+| `password` | boolean | false | - | - |
+| `prompt` | string |  | - | - |
+| `width` | number | 640 | 120..1920 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
 ### `[emb]`
 
 _Category: system · Blocking: no (fire-and-forget) · KAG3-compatible emb command_
@@ -399,6 +422,29 @@ _Category: system · Blocking: no (fire-and-forget) · increment a numeric varia
 | `by` | number | 1 | - | - |
 | `var` | string | - | - | yes |
 
+### `[input]`
+
+_Category: text · Blocking: yes (waits for completion) · prompt user for text input via virtual keyboard / IME and store to variable_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `bg_color` | string | #202020 | - | - |
+| `btn_cancel` | string |  | - | - |
+| `btn_ok` | string | OK | - | - |
+| `color` | string | #ffffff | - | - |
+| `cond` | string | - | - | - |
+| `default` | string |  | - | - |
+| `font_size` | number | 28 | 12..72 | - |
+| `height` | number | 180 | 60..1080 | - |
+| `max_length` | number | 32 | 1..512 | - |
+| `maxlen` | number | 32 | 1..512 | - |
+| `name` | string | - | - | yes |
+| `password` | boolean | false | - | - |
+| `prompt` | string |  | - | - |
+| `width` | number | 640 | 120..1920 | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
 ### `[l]`
 
 _Category: text · Blocking: no (fire-and-forget) · line break_
@@ -487,6 +533,36 @@ _Category: save · Blocking: no (fire-and-forget) · KAG3-compatible listsaves c
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+
+### `[live2d_expression]`
+
+_Category: character · Blocking: no (fire-and-forget) · Set a Live2D facial expression on a model_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `expression` | string | - | - | yes |
+| `model` | string | - | - | yes |
+| `weight` | number | 1.0 | 0.0..1.0 | - |
+
+### `[live2d_lip_sync]`
+
+_Category: character · Blocking: no (fire-and-forget) · Set Live2D lip sync mouth open parameter (0.0 = closed, 1.0 = fully open)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `model` | string | - | - | yes |
+| `value` | number | 0.0 | 0.0..1.0 | - |
+
+### `[live2d_motion]`
+
+_Category: character · Blocking: no (fire-and-forget) · Play a Live2D motion animation on a model with optional fade times_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `fadein` | number | 500 | 0..10000 | - |
+| `fadeout` | number | 500 | 0..10000 | - |
+| `model` | string | - | - | yes |
+| `motion` | string | - | - | yes |
 
 ### `[load]`
 

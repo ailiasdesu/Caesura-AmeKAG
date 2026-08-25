@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism",
     "electron": "electron .",
     "electron:dev": "vite --port 5173 & electron ."
   },

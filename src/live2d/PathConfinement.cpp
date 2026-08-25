@@ -5,13 +5,29 @@
 
 namespace Caesura {
 
-std::string confineToModelRoot(const std::string& path) {
+std::string confineToModelRoot(const std::string& rawPath) {
     namespace fs = std::filesystem;
     // [round 97] Fail closed on empty input: fs::absolute("") resolves to
     // the CWD on macOS (libc++) but to an empty path on Windows, so without
     // this guard an empty path is accepted as 'inside the root' on macOS
     // (round 96 test caught the divergence).
-    if (path.empty()) return {};
+    if (rawPath.empty()) return {};
+
+    // Reject UNC network paths
+    if (rawPath.rfind("\\\\", 0) == 0 || rawPath.rfind("//", 0) == 0) return {};
+
+    // Reject Windows drive letter paths on non-Windows platforms
+#ifndef _WIN32
+    if (rawPath.length() >= 2 && std::isalpha(static_cast<unsigned char>(rawPath[0])) && rawPath[1] == ':') {
+        return {};
+    }
+#endif
+
+    std::string path = rawPath;
+    for (char& ch : path) {
+        if (ch == '\\') ch = '/';
+    }
+
     std::error_code ec;
     const fs::path root = fs::current_path(ec);
     if (ec) return {};

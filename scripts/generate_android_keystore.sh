@@ -73,7 +73,9 @@ if [[ "$IS_TEST" -eq 1 ]]; then
     if [[ "$KEYSTORE" == "caesura-release.keystore" ]]; then
         KEYSTORE="caesura-test.keystore"
     fi
-    ALIAS="${ALIAS:-caesura-test}"
+    if [[ "$ALIAS" == "caesura" ]]; then
+        ALIAS="caesura-test"
+    fi
     STOREPASS="${STOREPASS:-caesura_test_pass}"
     KEYPASS="${KEYPASS:-$STOREPASS}"
     DNAME="CN=Caesura CI Test, OU=Engineering, O=Caesura, C=JP"

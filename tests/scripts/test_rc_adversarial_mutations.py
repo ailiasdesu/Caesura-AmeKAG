@@ -48,8 +48,11 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
         temp_dir = Path(tempfile.mkdtemp(prefix="caesura_rc_mut_"))
         
         # Mirror artifacts/release
+        rel_dir = REPO_ROOT / "artifacts" / "release"
+        if not rel_dir.exists() or not (rel_dir / "manifest.json").exists():
+            subprocess.run([sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle"], cwd=str(REPO_ROOT), check=True)
         sandbox_release = temp_dir / "artifacts" / "release"
-        shutil.copytree(REPO_ROOT / "artifacts" / "release", sandbox_release)
+        shutil.copytree(rel_dir, sandbox_release)
         
         # Mirror docs/status
         sandbox_docs = temp_dir / "docs" / "status"
