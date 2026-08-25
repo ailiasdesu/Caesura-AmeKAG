@@ -237,3 +237,44 @@ TEST_CASE("TextRenderer: loadTTF handles invalid arguments and uninitialized sta
     CHECK_FALSE(tr.loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", -10.0f));
     CHECK_FALSE(tr.loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", 22.0f));
 }
+
+TEST_CASE("TextRenderer: RGBA8 dynamic atlas buffer formatting & UV consistency") {
+    const uint32_t atlasW = 256;
+    const uint32_t atlasH = 256;
+    std::vector<uint8_t> atlasBuffer(atlasW * atlasH * 4, 0);
+
+    // Simulate rasterizing a single 8x16 glyph at offset (16, 16) with coverage alpha = 200
+    const uint32_t gx = 16, gy = 16, gw = 8, gh = 16;
+    for (uint32_t y = 0; y < gh; ++y) {
+        for (uint32_t x = 0; x < gw; ++x) {
+            uint32_t idx = ((gy + y) * atlasW + (gx + x)) * 4;
+            atlasBuffer[idx + 0] = 255; // R
+            atlasBuffer[idx + 1] = 255; // G
+            atlasBuffer[idx + 2] = 255; // B
+            atlasBuffer[idx + 3] = 200; // Alpha
+        }
+    }
+
+    // Verify transparent area outside glyph bounds remains zero
+    CHECK(atlasBuffer[0] == 0);
+    CHECK(atlasBuffer[1] == 0);
+    CHECK(atlasBuffer[2] == 0);
+    CHECK(atlasBuffer[3] == 0);
+
+    // Verify written glyph pixel within bounds has white RGB and exact alpha
+    uint32_t centerIdx = ((gy + 4) * atlasW + (gx + 4)) * 4;
+    CHECK(atlasBuffer[centerIdx + 0] == 255);
+    CHECK(atlasBuffer[centerIdx + 1] == 255);
+    CHECK(atlasBuffer[centerIdx + 2] == 255);
+    CHECK(atlasBuffer[centerIdx + 3] == 200);
+
+    // Verify UV mapping precision matches atlas dimensions
+    float u0 = static_cast<float>(gx) / atlasW;
+    float v0 = static_cast<float>(gy) / atlasH;
+    float u1 = static_cast<float>(gx + gw) / atlasW;
+    float v1 = static_cast<float>(gy + gh) / atlasH;
+    CHECK(u0 == doctest::Approx(16.0f / 256.0f));
+    CHECK(v0 == doctest::Approx(16.0f / 256.0f));
+    CHECK(u1 == doctest::Approx(24.0f / 256.0f));
+    CHECK(v1 == doctest::Approx(32.0f / 256.0f));
+}

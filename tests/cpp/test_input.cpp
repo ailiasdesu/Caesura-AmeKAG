@@ -1106,6 +1106,7 @@ TEST_CASE("Pointer: interface exposes pointer abstraction") {
     pe.action = PointerAction::Down;
     pe.x = 5; pe.y = 7; pe.pointerId = 3; pe.activePointers = 2;
     CHECK(pe.pointerId == 3);
+    CHECK(pe.activePointers == 2);
     IInputRouter* r = &routerInstance();
     r->submitPointer(pe);   // smoke: no crash
 }

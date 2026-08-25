@@ -2,6 +2,7 @@
 /build/
 /build-*/
 /dist/
+/artifacts/
 bin/
 cmake-build*/
 out/

@@ -69,7 +69,7 @@ The unified platform status is derived from [`docs/status/platform-matrix.yaml`]
    - **Runtime & VM**: Wasmoon Lua 5.4 Wasm VM and HTML5 Canvas / DOM text layer.
    - **Vitest Suites**: `npm --prefix web test` (23 test files, 319 tests passed). Subpath hosting and offline cache resiliency verified.
 4. **Android (Tier 1 — Primary Mobile Platform)**
-   - **Hardware Validation**: Xiaomi 11 (`M2012K11AC` / Snapdragon 888 / Adreno 660 / Android 14).
+   - **Hardware Validation**: Redmi K40 (`M2012K11AC` / Snapdragon 870 / Adreno 650 / Android 13).
    - **Latest HEAD Evidence**: `docs/platform/android-latest-head-validation.md` documenting commit `62132e783dd238752659d4227ff26b0235258ea9` with 88/88 checks passing.
    - **Signing & Packaging**: Release APK (`assembleRelease`) and AAB (`bundleRelease`) verified with `apksigner` V1/V2/V3 signatures.
 5. **macOS (Tier 2 — Desktop Platform)**

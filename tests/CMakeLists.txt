@@ -240,6 +240,26 @@ if(Python3_EXECUTABLE)
         TIMEOUT 300
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
     )
+    add_test(
+        NAME CaesuraRcAdversarialMutations
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_rc_adversarial_mutations.py
+    )
+    set_tests_properties(CaesuraRcAdversarialMutations PROPERTIES
+        LABELS "qa;release;adversarial"
+        TIMEOUT 60
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME CaesuraPlatformMatrixAdversarial
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_platform_matrix_adversarial.py
+    )
+    set_tests_properties(CaesuraPlatformMatrixAdversarial PROPERTIES
+        LABELS "qa;platform;adversarial"
+        TIMEOUT 60
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
 endif()
 
 # Copy scripts to test output directory so sandbox.lua et al are found

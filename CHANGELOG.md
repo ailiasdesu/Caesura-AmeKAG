@@ -39,3 +39,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 16-module architectural coupling enforcement with CI gating.
 - Full 1,052 C++ doctest suite with 385,299 assertions.
 - 158 Lua test suites and 319 Web Vitest unit tests.
+
+---
+
+## Historical Releases & Evolution Rounds
+
+### Round 101–127 — Productization & Steam SDK Integration
+- **Web Editor expansion**: live syntax highlighting, scene outline, LSP diagnostics panel.
+- **KAG3 ecosystem tooling**: `.xp3` archive parser and TLG5/6 image decoders.
+- **Packaging & distribution**: `package_game.sh` one-click builds, Web baselines, CPack Release ZIP.
+- **Cross-platform hardening**: Metal readiness, Android (NDK/arm64) build chain, CARC nonce-reuse detection.
+
+### Round 81 — Editor live cross-referencing & Job exception isolation
+- **Editor**: live engine position cross-reference in the scene outline.
+- **Editor**: drive the live scene to a label via an eval jump.
+- **Script**: LSP label rename across definition and navigation sites.
+- **Script**: i18n plural tables, numeric formatting, and CLI round-trip.
+- **Tests (C++)**: job exception isolation + engine lifecycle round-trip.
+
+### Round 80 — Scene outline panel & LSP label rename
+- **Editor**: scene outline parser and read-only panel wiring.
+- **Script**: LSP label rename across definition + navigation sites.
+- **Script**: i18n plural tables + numeric format + CLI round-trip.
+- **Tests**: HTTP smoke over the round-71-80 command surface.
+
+### Round 71–79 — KAG3 Compat & Advanced Control Flow
+- **Script**: `ks_check` structural warnings, missing expression, duplicate params.
+- **Script**: KAG3-compat command batch (arithmetic, character, text speed, effects, notify).
+- **Web**: palette LUT binding, real i18n module, goto/i18n parity.
+

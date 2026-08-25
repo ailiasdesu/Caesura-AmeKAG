@@ -167,9 +167,9 @@ platforms:
     tier: 1
     summary_status: verified
     environment:
-      device: "Xiaomi M2012K11AC (alioth, 小米 11)"
-      soc_gpu: "Snapdragon 888 / Adreno 660"
-      android_os: "Android 13 / 14 (API level 33/34)"
+      device: "Redmi K40 (M2012K11AC, haydn, Snapdragon 870 / Adreno 650 / Android 13)"
+      soc_gpu: "Snapdragon 870 / Adreno 650"
+      android_os: "Android 13 (API level 33)"
       abi: "arm64-v8a"
       ndk: "NDK r27.3.13750724"
       graphics_api: "OpenGL ES 3.2 (bgfx GLES)"

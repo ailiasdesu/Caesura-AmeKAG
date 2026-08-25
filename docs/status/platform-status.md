@@ -101,9 +101,9 @@
 
 #### Environment & Runtime Stack
 
-- **Device**: `Xiaomi M2012K11AC (alioth, 小米 11)`
-- **Soc Gpu**: `Snapdragon 888 / Adreno 660`
-- **Android Os**: `Android 13 / 14 (API level 33/34)`
+- **Device**: `Redmi K40 (M2012K11AC, haydn, Snapdragon 870 / Adreno 650 / Android 13)`
+- **Soc Gpu**: `Snapdragon 870 / Adreno 650`
+- **Android Os**: `Android 13 (API level 33)`
 - **Abi**: `arm64-v8a`
 - **Ndk**: `NDK r27.3.13750724`
 - **Graphics Api**: `OpenGL ES 3.2 (bgfx GLES)`

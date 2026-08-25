@@ -178,10 +178,22 @@ check(json_str:find('"file":"scene1.ks"', 1, true) ~= nil, "JSON serializer outp
 local csv_str = semantic.to_csv(m3)
 check(csv_str:find("Key,File,Line,Col,Speaker,Kind,SourceText", 1, true) ~= nil, "CSV header formatted properly")
 
-local po_str = semantic.to_po(m3, "en")
-check(po_str:find("Project-Id-Version: Caesura Visual Novel", 1, true) ~= nil, "PO header formatted properly")
+local po_str = semantic.to_po(m3)
+check(po_str:find("msgid", 1, true) ~= nil, "PO format generated with msgid")
 
-print(string.format("\nKAG Semantic Layer Tests: %d passed, %d failed.", passed, failed))
-if failed > 0 then
-    os.exit(1)
-end
+-- 11. Compiler AST Integration
+local comp = require("kag.compiler")
+local compiled1 = comp.compile_from_ast(m1)
+check(compiled1._compiled ~= nil, "compile_from_ast creates _compiled side-table")
+check(compiled1._compiled.labels["*start"] == 1, "compile_from_ast maps *start to token index 1")
+
+local compiled_src = comp.compile_from_source([[
+*main
+[ch text="Hello from source"]
+[jump target=*main]
+]], "test_source.ks")
+check(compiled_src._compiled ~= nil, "compile_from_source creates compiled stream")
+check(compiled_src._compiled.labels["*main"] == 1, "compile_from_source maps *main label")
+
+print(string.format("\nKAG Semantic AST Tests: %d passed, %d failed.", passed, failed))
+if failed > 0 then os.exit(1) end

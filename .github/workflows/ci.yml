@@ -143,6 +143,16 @@ jobs:
           Pop-Location
           if ($code -ne 0) { exit $code }
 
+      - name: Web Player unit & integration tests (vitest)
+        shell: pwsh
+        run: |
+          Push-Location web
+          npm ci --no-audit --no-fund
+          npm test
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { exit $code }
+
       - name: Test
         shell: pwsh
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
@@ -261,6 +271,13 @@ jobs:
           # a temp file and diff against the committed artifact -- fails red
           # when stale/missing. Lightweight: node only, no wasmoon install.
           node web/gen-index.mjs --check
+
+      - name: Web Player unit & integration tests (vitest)
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          npm test
+          cd ..
 
       - name: Test
         run: |

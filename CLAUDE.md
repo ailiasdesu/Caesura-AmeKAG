@@ -74,7 +74,7 @@ cd build/tests/Debug && ./CaesuraTests.exe
 # Run tests via CTest (specify the configuration for multi-config generators)
 ctest -C Debug --test-dir build --output-on-failure
 # Lua script suites (run from repo root; external/lua/lua.exe is vendored):
-#   - main suite: 134 files, order-sensitive (sandbox locks globals mid-run)
+#   - main suite: 136 files, order-sensitive (sandbox locks globals mid-run)
 #   - orphan suite: 24 order-incompatible tests (create global mocks) run
 #     separately — they must never be merged into run_lua_tests.lua
 external/lua/lua.exe tests/scripts/run_lua_tests.lua
