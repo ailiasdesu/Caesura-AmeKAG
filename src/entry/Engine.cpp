@@ -695,10 +695,35 @@ void Engine::run(const OwnerPump& ownerPump) {
         if (m_mobileAdapter && m_gestureDetector) {
             const GestureEvent ge = m_gestureDetector->tick(
                 static_cast<double>(SDL_GetTicks()));
-            if (ge.kind == GestureEvent::Kind::LongPress) {
+            switch (ge.kind) {
+            case GestureEvent::Kind::LongPress:
                 m_mobileAdapter->onLongPress(ge.x, ge.y);
-            } else if (ge.kind == GestureEvent::Kind::Pinch) {
+                break;
+            case GestureEvent::Kind::Pinch:
                 m_mobileAdapter->onPinch(ge.x, ge.y, ge.scale);
+                break;
+            // Multi-finger gestures (audit fix): the detector and the adapter
+            // both grew TwoFingerTap/ThreeFingerHold/SwipeDown/SwipeUp, but
+            // this dispatch forwarded only the first two kinds, so the new
+            // gestures were unreachable at runtime and only unit tests ever
+            // saw them. A swipe reports its END point in x/y and its travel
+            // in deltaX/deltaY, hence the start reconstruction below.
+            case GestureEvent::Kind::TwoFingerTap:
+                m_mobileAdapter->onTwoFingerTap(ge.x, ge.y);
+                break;
+            case GestureEvent::Kind::ThreeFingerHold:
+                m_mobileAdapter->onThreeFingerHold(ge.x, ge.y);
+                break;
+            case GestureEvent::Kind::SwipeDown:
+                m_mobileAdapter->onSwipeDown(ge.x - ge.deltaX, ge.y - ge.deltaY,
+                                             ge.x, ge.y);
+                break;
+            case GestureEvent::Kind::SwipeUp:
+                m_mobileAdapter->onSwipeUp(ge.x - ge.deltaX, ge.y - ge.deltaY,
+                                           ge.x, ge.y);
+                break;
+            case GestureEvent::Kind::None:
+                break;
             }
         }
 
