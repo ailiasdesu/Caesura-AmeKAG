@@ -71,6 +71,9 @@ local tests = {
     "test_ai",
     "test_color_filter",
     "test_sandbox",
+    -- Escape regressions for the hardened sandbox: rawset/debug.getmetatable
+    -- routes are gone and load() is host-only, so these must stay red-on-regress.
+    "test_sandbox_escape",
     "test_label_index",
     "test_expr_cache",
     "test_expr_lang",
@@ -164,6 +167,11 @@ local tests = {
     "test_settings",
     "test_frame_bench",
     "test_input_cmd",
+    "test_postprocess",
+    "test_particle_weather",
+    "test_layered_vfs",
+    "test_steam_achievements",
+    "test_quickmenu",
 }
 
 local passed, failed = 0, 0
