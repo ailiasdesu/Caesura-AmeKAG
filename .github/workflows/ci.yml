@@ -89,7 +89,7 @@ jobs:
           $lua = Get-ChildItem -Recurse build/lua -Filter "lua.exe" | Select-Object -First 1
           if (-not $lua) { $lua = Get-ChildItem -Recurse build -Filter "lua.exe" | Select-Object -First 1 }
           if ($lua) {
-            & $lua.FullName scripts/schema_doc.lua > docs/api/command-contracts.md
+            python -c "import subprocess, sys; out = subprocess.check_output([sys.argv[1], 'scripts/schema_doc.lua'], encoding='utf-8'); open('docs/api/command-contracts.md', 'w', encoding='utf-8', newline='\n').write(out)" $lua.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           git diff --exit-code docs/api/api-stats.md docs/api/command-contracts.md

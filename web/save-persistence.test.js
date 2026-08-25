@@ -19,7 +19,8 @@ const wasmFile = join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm')
 const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
 const fileFetch = async (url) => {
   const u = new URL(url)
-  const p = u.pathname.replace('/scripts/', scriptsDir + '/').replaceAll('/', '\\')
+  const rel = u.pathname.replace('/scripts/', '')
+  const p = join(scriptsDir, ...rel.split('/'))
   return { text: async () => readFileSync(p, 'utf8'), json: async () => index }
 }
 
