@@ -147,6 +147,60 @@ do
     check("loadstring global removed", rawget(_G, "loadstring") == nil)
     check("loadfile global removed", rawget(_G, "loadfile") == nil)
     check("dofile global removed", rawget(_G, "dofile") == nil)
+
+    -- ARITY REGRESSION (the guard must not change load's calling contract).
+    -- Lua distinguishes an ABSENT 4th argument (chunk inherits the caller's
+    -- _ENV) from an explicitly passed nil (chunk gets _ENV = nil). A guard
+    -- that declares four parameters and forwards them unconditionally turns
+    -- every 2-arg / 3-arg call into the second case, and the chunk dies on its
+    -- first global access with "attempt to index a nil value (upvalue '_ENV')".
+    -- Real 2-3 arg callers: tests/scripts/test_label_jump.lua:17,50,
+    -- test_ks_bake.lua:124, test_example_game.lua:87, scripts/music_room.lua:117,
+    -- and the pcall(load, ...) sites in scripts/kag/expr.lua +
+    -- scripts/kag/compiler.lua (the [if]/[eval]/[emb] expression path).
+    do
+        -- 2 args: env ABSENT -> globals must be reachable.
+        local f2, e2 = load("return type(tostring)", "=arity2")
+        check("2-arg load compiles", type(f2) == "function", tostring(e2))
+        local ok2, r2 = pcall(f2)
+        check("2-arg load chunk keeps caller _ENV (globals reachable)",
+              ok2 and r2 == "function", tostring(r2))
+
+        -- 3 args: mode given, env ABSENT -> same requirement.
+        local f3, e3 = load("return type(tostring)", "=arity3", "t")
+        check("3-arg load compiles", type(f3) == "function", tostring(e3))
+        local ok3, r3 = pcall(f3)
+        check("3-arg load chunk keeps caller _ENV", ok3 and r3 == "function",
+              tostring(r3))
+
+        -- 4 args with an EXPLICIT nil env: Lua semantics say _ENV = nil, so
+        -- this MUST still fail. Collapsing it into the absent case would mean
+        -- the sandbox silently rewrites the language for its callers.
+        local f4 = load("return type(tostring)", "=arity4", "t", nil)
+        check("4-arg explicit-nil env still compiles", type(f4) == "function")
+        local ok4, r4 = pcall(f4)
+        check("4-arg explicit-nil env keeps Lua semantics (_ENV is nil)",
+              not ok4 and type(r4) == "string"
+              and r4:find("_ENV", 1, true) ~= nil, tostring(r4))
+
+        -- 4 args with a real env table: the sandbox env path itself.
+        local f5 = load("return X", "=arity5", "t", { X = 42 })
+        local ok5, r5 = pcall(f5)
+        check("4-arg table env honoured", ok5 and r5 == 42, tostring(r5))
+
+        -- pcall(load, ...) — the exact shape kag/expr.lua:567,585 and
+        -- kag/compiler.lua:610,632 use, including the binary AOT path.
+        local okp, cp = pcall(load, "return 1 + 1", "=kag_expr_probe", "t", {})
+        check("pcall(load, 4 args) works (expr.lua shape)",
+              okp and type(cp) == "function" and cp() == 2)
+        local okp2, cp2 = pcall(load, "return type(tostring)", "=kag_expr_probe2")
+        check("pcall(load, 2 args) keeps caller _ENV",
+              okp2 and type(cp2) == "function" and cp2() == "function")
+        local okb, cb = pcall(load, string.dump(function() return 7 end),
+                              "=kag_expr_bc", "b", {})
+        check("pcall(load, binary) works for a trusted caller (AOT path)",
+              okb and type(cb) == "function" and cb() == 7)
+    end
 end
 
 -- ---------------------------------------------------------------------------
