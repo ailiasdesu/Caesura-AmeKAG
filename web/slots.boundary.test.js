@@ -3,7 +3,7 @@
 // Injected in-memory Map storage backend (no localStorage): proves the bridge has
 // no hard dependency on localStorage and lets corrupt payloads be seeded for checks.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPlayer } from './bridge.js'

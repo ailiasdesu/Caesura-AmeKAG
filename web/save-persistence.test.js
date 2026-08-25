@@ -8,7 +8,7 @@
 // engine over the same storage), plus overwrite / invalid slot / empty save /
 // corrupt payload / quota-failure observability.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPlayer } from './bridge.js'
