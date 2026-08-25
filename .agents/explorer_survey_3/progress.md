@@ -1,13 +1,11 @@
-# Progress Log
+# Progress — Explorer 3 (Survey: Pillar R3 & R4)
 
-Last visited: 2026-08-24T15:17:15Z
+Last visited: 2026-08-25T08:57:15+08:00
 
 ## Status
-- [x] Initialized DISPATCH.md, BRIEFING.md, progress.md
-- [x] Task 1: Investigate `src/live2d/` and `src/minigame/` implementation and lifecycle
-- [x] Task 2: Investigate `src/render/` post-processing shaders, compilation, fallbacks, stall prevention
-- [x] Task 3: Investigate test suites (C++ doctest, Lua test suite, benchmark/stress tests)
-- [x] Task 4: Run module coupling check (`python scripts/count_coupling.py`)
-- [x] Task 5: Design mobile stress validation test cases and zero-regression verification plan
-- [x] Task 6: Write `report.md` and `handoff.md`
-- [x] Task 7: Send message to parent orchestrator
+- [x] Initialized DISPATCH.md and BRIEFING.md
+- [x] Investigate Web platform templates, PWA, Service Worker, Manifest, Audio unlocking, Orientation helpers (Pillar R3)
+- [x] Investigate Demo Game (`demo/example_game/`) and Template Projects (`tools/project_templates/`) (Pillar R4)
+- [x] Investigate Script syntax, commands (`[tween]`, `[vfx]`, `[input]`), UI presets, and validation mechanisms
+- [x] Synthesize findings and write comprehensive `handoff.md`
+- [x] Send summary message to parent

@@ -1,0 +1,18 @@
+"DepotBuild"
+{
+    "DepotID" "<DEPOTID_WINDOWS>"
+    // ContentRoot maps to the repo root; FileMapping paths are relative to it.
+    // The Windows ZIP from CPack (build/CaesuraAmeKAG-*.zip) should be
+    // extracted into content/ before running steamcmd.
+    "FileMapping"
+    {
+        "LocalPath" "content/*"
+        "DepotPath" "."
+        "recursive" "1"
+    }
+    "FileExclusion" "*.pdb"
+    "FileExclusion" "*.lib"
+    "FileExclusion" "*.exp"
+    "FileExclusion" "tools/*"
+    "FileExclusion" "scripts/__pycache__/*"
+}

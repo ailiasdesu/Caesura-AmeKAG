@@ -1,41 +1,41 @@
-# BRIEFING — 2026-08-24T15:17:00Z
+# BRIEFING — 2026-08-25T08:57:20+08:00
 
 ## Mission
-Survey Milestone R4 (Live2D, 3D Minigame, Post-FX Mobile Stress Validation) and Baseline Zero-Regression QA across all 16 modules.
+Investigate Pillar R3 (Web Player PWA & Mobile Web Offline Experience) and Pillar R4 (Creator Tools & Sample Game Polish) for Caesura (AmeKAG) engine survey.
 
 ## 🔒 My Identity
 - Archetype: explorer
-- Roles: investigation, synthesis
+- Roles: investigator, synthesizer
 - Working directory: d:\文件存放处\code\Caesura(AmeKAG)\.agents\explorer_survey_3
-- Original parent: 8e11fb75-1dc9-4c55-91e3-cdd835179626
-- Milestone: R4 Live2D, 3D Minigame, Post-FX & Zero-Regression QA
+- Original parent: e719b389-c81d-4035-b5ae-7b9d40b96a30
+- Milestone: Post-RC Production Sprint Survey (R3/R4)
 
 ## 🔒 Key Constraints
-- Read-only investigation — do NOT modify engine source code
-- Full alignment with AGENTS.md charter (module boundaries, BackendRegistry, zero-regression QA)
+- Read-only investigation — do NOT implement
+- AGENTS.md module boundaries and coupling limits
+- Output structured analysis and handoff report in `.agents/explorer_survey_3/handoff.md`
 
 ## Current Parent
-- Conversation ID: 8e11fb75-1dc9-4c55-91e3-cdd835179626
-- Updated: 2026-08-24T15:17:00Z
+- Conversation ID: e719b389-c81d-4035-b5ae-7b9d40b96a30
+- Updated: 2026-08-25T08:57:20+08:00
 
 ## Investigation State
-- **Explored paths**: `src/live2d/`, `src/minigame/`, `src/render/`, `tests/cpp/`, `tests/scripts/`, `scripts/count_coupling.py`
+- **Explored paths**:
+  - `web/` (`index.html`, `main.mjs`, `bridge.js`, `sw.js`, `manifest.webmanifest`, `vite.config.js`, `audio-engine.js`, `dom-renderer.js`)
+  - `scripts/` (`package_game.sh`, `ks_check.lua`, `ks_bake.lua`, `verify_sample_game.sh`, `verify_template.sh`)
+  - `demo/example_game/` (`story.ks`, `DESIGN.md`, `README.md`, `entry.lua`)
+  - `tools/project_templates/` (`manifest.json`, `blank/`, `basic/`, `kag3/`, `live2d/`, `showcase/`)
+  - `scripts/kag/commands/` (`tween.lua`, `vfx.lua`, `text.lua`, `layout.lua`, `schema.lua`)
 - **Key findings**:
-  - C++ doctest suite: 1028/1028 passed (315,931 assertions).
-  - Lua test suite: 133/133 passed.
-  - Module coupling: all 16 modules pass charter limits.
-  - Live2D: Cubism 5 integration with D3D11/GLShared/GLReadback/Metal native render paths + Null fallback.
-  - 3D Minigame: Precached geometry, multi-target shaders (DXBC/GLSL/MSL), zero-alloc collision loop.
-  - Post-FX: Vignette, LUT, SoftBlur, downsampled Bloom with RTT ping-pong and no pipeline stalls.
-  - Mobile stress validation plan defined.
-- **Unexplored areas**: None (Milestone R4 survey complete).
+  - Web player PWA: `sw.js` and `manifest.webmanifest` exist, but `sw.js` is not copied into `web/dist` or `dist/<game>/`, PWA icons `icon-192.png` / `icon-512.png` are missing, and orientation lock helper needs adding. AudioContext touch-to-unlock is verified and passing.
+  - Sample game & templates: 29/29 `.ks` files pass `ks_check.lua` with 0 errors. `[tween]`, `[vfx bloom/vignette]`, `[textbox]`, `[nameplate]`, `[input]` are fully implemented in engine. `demo/example_game/story.ks` is ready for modern tween/VFX upgrades.
+- **Unexplored areas**: None for R3/R4 survey scope.
 
 ## Key Decisions Made
-- All 5 investigation areas completed, synthesized into `report.md` and `handoff.md`.
+- Generated comprehensive 5-component handoff report with exact reproduction commands and actionable implementation steps.
 
 ## Artifact Index
-- DISPATCH.md — Dispatch log
-- BRIEFING.md — Situational awareness working memory
-- progress.md — Heartbeat and progress log
-- report.md — Comprehensive investigation report
-- handoff.md — 5-component self-contained handoff
+- `.agents/explorer_survey_3/DISPATCH.md` — Initial dispatch message
+- `.agents/explorer_survey_3/progress.md` — Progress tracker
+- `.agents/explorer_survey_3/BRIEFING.md` — Working memory
+- `.agents/explorer_survey_3/handoff.md` — Authoritative survey report

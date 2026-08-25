@@ -463,3 +463,12 @@ const initialScene =
     ?? (storyBundle ? Object.keys(storyBundle.scenes)[0] : null)
     ?? 'galgame_demo.ks'
 void runScene(initialScene)
+
+// Register PWA Service Worker for offline asset caching
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('[PWA] ServiceWorker registration failed:', err)
+    })
+  })
+}

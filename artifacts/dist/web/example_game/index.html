@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#181818" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="./web-assets/manifest-B03Yg-Dt.webmanifest" />
+  <title>Caesura Web Player — G5 MVP</title>
+  <style>
+    /* W3: ship the CJK font with the player. @font-face + a real family means
+       the packaged NotoSansCJKsc is used for stage text (font load verified by
+       document.fonts.check in the browser smoke); the stack falls back to
+       system CJK fonts (-apple-system / Segoe UI / PingFang / Noto Sans CJK)
+       when the asset is absent or another script is missing. */
+    @font-face {
+      font-family: 'CaesuraNoto';
+      src: url('assets/fonts/NotoSansCJKsc-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    html, body { margin: 0; background: #111; color: #ddd; font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
+    #stage { position: relative; width: 1280px; height: 720px; margin: 12px auto; background: #000; overflow: hidden;
+      font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
+    .caesura-message { font-family: 'CaesuraNoto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', system-ui, sans-serif; }
+    .caesura-layer { position: absolute; }
+    .caesura-layer img { width: 100%; height: 100%; object-fit: contain; }
+    .caesura-message { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 24px;
+      background: rgba(0,0,0,0.6); color: #fff; font-size: 20px; white-space: pre-wrap; min-height: 72px; }
+    .controls { text-align: center; padding: 8px; }
+    .controls button { margin: 0 6px; padding: 6px 14px; cursor: pointer; }
+    #log { max-width: 1280px; margin: 8px auto; padding: 8px; font-family: monospace; font-size: 12px;
+      white-space: pre-wrap; height: 140px; overflow-y: auto; background: #1a1a1a; color: #8c8; border-radius: 6px; }
+    .backlog-wrap { max-width: 1280px; margin: 8px auto; }
+    .backlog-title { font-size: 12px; color: #888; margin-bottom: 4px; }
+    #backlog { max-height: 160px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .backlog-entry { padding: 4px 6px; font-size: 14px; color: #ccc; cursor: pointer; border-radius: 4px; }
+    .backlog-entry:hover { background: #2a2a2a; }
+    .backlog-entry .bl-line { color: #666; font-size: 11px; margin-right: 8px; }
+    .backlog-entry.active { background: #223344; color: #fff; }
+    .status-line { max-width: 1280px; margin: 6px auto; padding: 0 8px; font-size: 13px; color: #9cf; }
+    .endings-wrap { max-width: 1280px; margin: 8px auto; }
+    #endings { max-height: 96px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .ending-entry { padding: 4px 6px; font-size: 13px; color: #fc9; border-radius: 4px; }
+    .ending-entry::before { content: "★ "; color: #fa3; }
+    .saves-wrap { max-width: 1280px; margin: 8px auto; }
+    .saves-actions { margin: 4px 0; display: flex; gap: 6px; align-items: center; }
+    .saves-actions input { width: 64px; padding: 4px 6px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; }
+    #saves { max-height: 160px; overflow-y: auto; background: #181818; border-radius: 6px; padding: 8px; }
+    .save-entry { display: flex; gap: 8px; align-items: center; padding: 4px 6px; font-size: 13px; border-radius: 4px; }
+    .save-entry:hover { background: #2a2a2a; }
+    .save-entry .slot-num { color: #6cf; font-weight: bold; min-width: 2ch; }
+    .save-entry .slot-meta { color: #999; flex: 1; }
+    .save-entry button { padding: 2px 8px; font-size: 12px; cursor: pointer; }
+  </style>
+  <script type="module" crossorigin src="./web-assets/index--agdECqV.js"></script>
+<script>self.__CAESURA_WASM_FILE__ = new URL("web-assets/glue.wasm", document.baseURI || location.href).href</script>
+</head>
+<body>
+  <div class="controls">
+    <select id="scene"></select>
+    <button id="run">▶ Run Scene</button>
+    <button id="advance">Click to Advance</button>
+    <button id="auto">⏩ Auto</button>
+    <span id="status"></span>
+  </div>
+  <div class="controls settings-bar">
+    <label>Lang
+      <select id="settings-lang">
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="ja">日本語</option>
+      </select>
+    </label>
+    <label>Auto
+      <input id="settings-auto" type="checkbox" />
+    </label>
+    <label>Speed <input id="settings-speed" type="range" min="1" max="80" value="20" /></label>
+    <label>BGM <input id="settings-bgm" type="range" min="0" max="1" step="0.05" value="1" /></label>
+    <label>SE <input id="settings-se" type="range" min="0" max="1" step="0.05" value="1" /></label>
+    <label>Voice <input id="settings-voice" type="range" min="0" max="1" step="0.05" value="1" /></label>
+    <button id="settings-reset" type="button">↺ Reset</button>
+  </div>
+  <div id="stage"></div>
+  <div class="status-line">Audio: <span id="audio-status">—</span></div>
+  <div class="endings-wrap">
+    <div class="backlog-title">Endings (<span id="endings-count">0</span>)</div>
+    <div id="endings"></div>
+  </div>
+  <div class="saves-wrap">
+    <div class="backlog-title">Save Slots (<span id="saves-count">0</span>)</div>
+    <div class="saves-actions">
+      <input id="save-slot" type="number" min="0" max="99" value="1" />
+      <button id="save-now">💾 Save Current</button>
+      <button id="refresh-slots">⟳ Refresh</button>
+      <span id="saves-storage" class="slot-storage"></span>
+    </div>
+    <div id="saves"></div>
+  </div>
+  <div class="backlog-wrap">
+    <div class="backlog-title">Backlog (<span id="backlog-count">0</span>)</div>
+    <div id="backlog"></div>
+  </div>
+  <div id="log"></div>
+</body>
+</html>

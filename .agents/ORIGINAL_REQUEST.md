@@ -106,3 +106,61 @@ Integrity mode: development
 - [ ] Full baseline test suites pass: C++ 1052+ doctest cases (0 failed), Lua 158 suites (0 failed), 16/16 coupling limits pass.
 - [ ] `docs/status/release-candidate-report.md` generated with definitive `RC-GO` status.
 
+## 2026-08-25T00:50:38Z
+
+Comprehensive post-RC production sprint to build multi-platform release packages, run exhaustive performance benchmark profiling, enhance Web player PWA & offline capabilities, and enrich creator tools & sample game visual effects.
+
+Working directory: d:/文件存放处/code/Caesura(AmeKAG)
+Integrity mode: development
+
+## Requirements
+
+### R1. Multi-Platform Release Packaging & Distribution Bundling
+- Generate clean Release builds across supported desktop and mobile targets for v1.0.0-rc.1:
+  - Windows CPack binary package (`CaesuraAmeKAG-1.0.0-rc.1-win64.zip`).
+  - Web standalone static distribution bundle packaging the full engine + demo game via `scripts/package_game.sh`.
+  - Android signed Release APK and Android App Bundle (`.aab`) via `scripts/build_android_release.sh`.
+- Produce unified cryptographic checksums (SHA-256) and release artifact manifest in `artifacts/dist/`.
+
+### R2. Engine Performance Benchmarking & Baseline Profiling
+- Execute comprehensive performance benchmarks across core subsystems:
+  - Font glyph atlas rasterization and cache lookup speed.
+  - Audio handle allocation and 3-bus mixer under concurrency.
+  - Large script tokenization and execution throughput (9600+ tokens).
+  - Backlog memory overhead and incremental serialization scaling (500+ history records).
+  - Frame rendering time and CPU dispatch budget (`tests/scripts/test_frame_bench.lua`).
+- Record and document all benchmark telemetry in `docs/design/engine-performance-baseline.md`.
+
+### R3. Web Player PWA & Mobile Web Offline Experience
+- Implement Service Worker (`sw.js`) for static asset caching, offline gameplay, and fast load times in the web distribution bundle.
+- Provide Web App Manifest (`manifest.webmanifest`) enabling "Add to Home Screen" standalone borderless fullscreen display on mobile devices.
+- Support browser audio autoplay unlocking and viewport orientation lock helpers.
+
+### R4. Creator Tools & Sample Game Polish
+- Enhance the example visual novel (`demo/example_game/`) and template projects (`tools/project_templates/`):
+  - Incorporate declarative tweening animations (`[tween]`) and post-processing visual effects (`[vfx bloom]`, `[vfx vignette]`).
+  - Provide polished, reusable UI style presets (dialogue box skins, choice buttons, quick-menu layouts).
+- Validate all sample scripts with zero syntax or contract validation errors.
+
+## Acceptance Criteria
+
+### Release Packaging
+- [ ] Windows CPack ZIP artifact generated cleanly and verified.
+- [ ] Web static bundle packages without missing assets or relative path errors.
+- [ ] Android Release APK/AAB verified with `apksigner`.
+- [ ] `artifacts/dist/checksums.txt` generated with verified SHA-256 hashes.
+
+### Performance Benchmarking
+- [ ] `scripts/run_benchmarks.sh` (or equivalent test scripts) completes with 0 errors.
+- [ ] `docs/design/engine-performance-baseline.md` updated with empirical execution times and memory figures.
+
+### Web PWA & Offline
+- [ ] Service worker registers and caches required Web Wasm runtime and asset files.
+- [ ] Web manifest passes standard PWA schema validation.
+
+### Creator Tools & Samples
+- [ ] Example game runs through all branches with visual effects and declarative tweens.
+- [ ] All 1052+ C++ tests and 158+ Lua test suites continue to pass 100% (zero regressions).
+- [ ] Architecture coupling limits in `AGENTS.md` strictly maintained (0 violations).
+
+
