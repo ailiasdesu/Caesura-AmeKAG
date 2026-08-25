@@ -205,7 +205,10 @@ const syncTextures = () => {
 
 async function loadStoryBundle() {
   try {
-    const src = await (await fetch(STORY_BASE)).text()
+    const res = await fetch(STORY_BASE)
+    if (!res.ok) throw new Error('status ' + res.status)
+    const src = await res.text()
+    if (!src || src.trim().length === 0) throw new Error('empty bundle')
     player.lua.global.set('STORY_SRC', src)
     const SQ = String.fromCharCode(39)
     const code = '  local chunk = assert(load(STORY_SRC, ' + SQ + '@story.lua' + SQ + ', ' + SQ + 't' + SQ + ', _ENV))' + String.fromCharCode(10) + '  return chunk()'
@@ -216,6 +219,7 @@ async function loadStoryBundle() {
     populateFallbackScenes()
   } catch (e) {
     log('story bundle unavailable: ' + String(e).slice(0, 80))
+    populateFallbackScenes()
   }
 }
 
