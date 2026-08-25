@@ -178,6 +178,9 @@ describe('main.mjs E2E (real DOM + real wasmoon)', () => {
   }, 120000)
 
   it('backlog accumulates across advances and the DOM mirrors core state', async () => {
+    pickDemoScene()
+    $('run').click()
+    await waitStatus('parked: ', 'run parks')
     const countEl = $('backlog-count')
     const n0 = Number(countEl.textContent)
     // Drive real Advance clicks: each committed page pushes a backlog entry
