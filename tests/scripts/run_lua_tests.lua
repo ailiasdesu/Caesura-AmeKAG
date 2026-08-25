@@ -37,6 +37,7 @@ local tests = {
     "test_ks_bake",
     "test_lsp",
     "test_kag_semantic",
+    "test_live2d_cmds",
     "test_schema_types",
     "test_determinism",
     "test_fuzz",

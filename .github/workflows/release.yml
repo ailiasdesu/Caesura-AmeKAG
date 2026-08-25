@@ -1,0 +1,116 @@
+name: Caesura GA Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Windows x64 Release Build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup CMake and MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCAESURA_BUILD_TESTS=ON
+
+      - name: Build Engine & Tools
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Run Core Test Suite
+        run: |
+          cd build/tests/Release
+          ./CaesuraTests.exe
+
+      - name: Package Windows ZIP
+        run: |
+          cd build
+          cpack -C Release -G ZIP
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-zip
+          path: build/CaesuraAmeKAG-*.zip
+
+  build-web:
+    name: Web Wasm Player PWA Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies & Test
+        run: |
+          cd web
+          npm ci
+          npm test
+
+      - name: Build Web Static PWA Distribution
+        run: |
+          cd web
+          npm run build
+
+      - name: Package Web Distribution
+        run: |
+          tar -czf caesura-web-pwa.tar.gz -C web/dist .
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-pwa-bundle
+          path: caesura-web-pwa.tar.gz
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Generate SHA-256 Checksums
+        run: |
+          mkdir -p dist
+          find release-artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.apk" \) -exec cp {} dist/ \;
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            docs/status/release-candidate-report-semantic-head.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true

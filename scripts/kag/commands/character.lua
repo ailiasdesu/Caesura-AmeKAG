@@ -56,6 +56,27 @@ schema.define("csl", {
     x       = { type = "number", default = 0 },
     y       = { type = "number", default = 0 },
 })
+schema.define("live2d_motion", {
+    _meta = { category = "character", blocking = false,
+        desc = "Play a Live2D motion animation on a model with optional fade times" },
+    model   = { type = "string", required = true, positional_index = 1 },
+    motion  = { type = "string", required = true, positional_index = 2 },
+    fadein  = { type = "number", default = 500, min = 0, max = 10000 },
+    fadeout = { type = "number", default = 500, min = 0, max = 10000 },
+})
+schema.define("live2d_expression", {
+    _meta = { category = "character", blocking = false,
+        desc = "Set a Live2D facial expression on a model" },
+    model      = { type = "string", required = true, positional_index = 1 },
+    expression = { type = "string", required = true, positional_index = 2 },
+    weight     = { type = "number", default = 1.0, min = 0.0, max = 1.0 },
+})
+schema.define("live2d_lip_sync", {
+    _meta = { category = "character", blocking = false,
+        desc = "Set Live2D lip sync mouth open parameter (0.0 = closed, 1.0 = fully open)" },
+    model   = { type = "string", required = true, positional_index = 1 },
+    value   = { type = "number", default = 0.0, min = 0.0, max = 1.0 },
+})
 
 local CharacterCommands = {}
 
@@ -150,6 +171,39 @@ function CharacterCommands.csl(ctx, params)
         return
     end
     layers.move_layer(node, params.x or 0, params.y or 0)
+end
+
+-- [live2d_motion model=name motion=tap_body fadein=500 fadeout=500]
+function CharacterCommands.live2d_motion(ctx, params)
+    local model = params.model or params[1]
+    local motion = params.motion or params[2]
+    if not model or not motion then return end
+    ctx.live2d = ctx.live2d or {}
+    ctx.live2d[model] = ctx.live2d[model] or {}
+    ctx.live2d[model].current_motion = motion
+    ctx.live2d[model].fadein = params.fadein or 500
+    ctx.live2d[model].fadeout = params.fadeout or 500
+end
+
+-- [live2d_expression model=name expression=smile weight=1.0]
+function CharacterCommands.live2d_expression(ctx, params)
+    local model = params.model or params[1]
+    local expr = params.expression or params[2]
+    if not model or not expr then return end
+    ctx.live2d = ctx.live2d or {}
+    ctx.live2d[model] = ctx.live2d[model] or {}
+    ctx.live2d[model].expression = expr
+    ctx.live2d[model].expression_weight = params.weight or 1.0
+end
+
+-- [live2d_lip_sync model=name value=0.8]
+function CharacterCommands.live2d_lip_sync(ctx, params)
+    local model = params.model or params[1]
+    local val = params.value or params[2] or 0.0
+    if not model then return end
+    ctx.live2d = ctx.live2d or {}
+    ctx.live2d[model] = ctx.live2d[model] or {}
+    ctx.live2d[model].lip_sync = val
 end
 
 return CharacterCommands

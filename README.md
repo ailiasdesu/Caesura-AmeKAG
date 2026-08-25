@@ -31,6 +31,60 @@ and a **complete example game "The One-Way Reply"** (`demo/example_game/`, three
 
 ---
 
+## 统一语义分析架构（KAG Unified Semantic Architecture）
+
+```
+                        ┌─────────────────────────┐
+                        │     KAG Source (.ks)    │
+                        └────────────┬────────────┘
+                                     │
+                        ┌────────────▼────────────┐
+                        │   LPeg Tokenizer Engine │
+                        │ (scripts/tokenizer.lua) │
+                        └────────────┬────────────┘
+                                     │
+                        ┌────────────▼────────────┐
+                        │   Unified Semantic AST  │
+                        │ (scripts/kag/semantic)  │
+                        └────────────┬────────────┘
+          ┌──────────────────────────┼──────────────────────────┐
+          │                          │                          │
+ ┌────────▼────────┐        ┌────────▼────────┐        ┌────────▼────────┐
+ │ Runtime Engine  │        │  Creator Tools  │        │ Analysis & IDE  │
+ │ (Compiler/VM)   │        │                 │        │                 │
+ ├─────────────────┤        ├─────────────────┤        ├─────────────────┤
+ │ • compiler.lua  │        │ • Story Flow    │        │ • LSP (lsp.lua) │
+ │ • scheduler.lua │        │ • i18n Pipeline │        │ • ks_check.lua  │
+ │ • compile(ast)  │        │ • CSV/PO Export │        │ • AI Dev Tools  │
+ └─────────────────┘        └─────────────────┘        └─────────────────┘
+```
+
+---
+
+## 创作者统一命令行（Creator Toolchain CLI）
+
+Caesura 提供了开箱即用的统一脚手架工具 `scripts/caesura.py`：
+
+```bash
+# 1. 环境体检（检查 Lua、Python、Node、FFmpeg、CARC 打包工具）
+python scripts/caesura.py doctor
+
+# 2. 一键创建新游戏（支持 showcase / basic / live2d 模板）
+python scripts/caesura.py create my_project --template showcase
+
+# 3. 剧情分支图生成与死分支诊断（Mermaid / JSON 拓扑图）
+python scripts/caesura.py flow my_project/ --lint
+
+# 4. 多语言本地化全流程（提取 -> 翻译 -> 编译 -> 覆盖率门禁）
+python scripts/caesura.py i18n my_project/ --extract
+python scripts/caesura.py i18n my_project/ --lint
+
+# 5. 剧本静态契约校验
+python scripts/caesura.py check my_project/story.ks
+```
+
+---
+
 ## 引擎能力总览（Capability Overview / 引擎能力总览）
 
 引擎能力按 6 个能力域组织，共 **82 项跟踪能力**（权威矩阵：
