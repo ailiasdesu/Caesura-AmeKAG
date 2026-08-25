@@ -171,7 +171,7 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
             man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
             ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-04", "Manifest", "Commit SHA tampered to all zeros", ret, out, err, 1, "Manifest commit mismatch")
+            self.record_and_assert("MUT-MAN-04", "Manifest", "Commit SHA tampered to all zeros", ret, out, err, 1, "commit mismatch")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

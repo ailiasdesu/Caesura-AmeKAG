@@ -3,7 +3,7 @@
 scripts/verify_android_regression.py
 =============================================================================
 Caesura (AmeKAG) — Android Latest HEAD Regression & Verification Suite
-Target Commit: 62132e783dd238752659d4227ff26b0235258ea9
+Target Commit: Dynamically resolved from git HEAD or latest test snapshot
 
 Automated validation of all 10 Android regression pillars:
   1. Boot & Manifest / Host Activity Configuration

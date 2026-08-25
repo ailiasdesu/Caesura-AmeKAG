@@ -605,7 +605,6 @@ def verify_release_bundle(
     verbose: bool = False
 ) -> Tuple[bool, List[str], Dict[str, Any]]:
     """Strictly validates all release candidate constraints, checksums, and reports."""
-    commit_full, commit_short = get_target_commit(repo_root, target_commit)
     main_suites, orphan_suites, total_suites = get_lua_suite_counts(repo_root)
     errors = []
     summary: Dict[str, Any] = {
@@ -643,9 +642,16 @@ def verify_release_bundle(
     if decision != "RC-GO":
         errors.append(f"Manifest decision is not 'RC-GO': got '{decision}'")
 
-    commit = manifest.get("commit")
-    if commit and commit != commit_full and not commit.startswith(commit_short):
-        errors.append(f"Manifest commit mismatch: got '{commit}', expected '{commit_full}'")
+    manifest_commit = str(manifest.get("commit", "")).strip()
+    if target_commit:
+        expected_commit_full, expected_commit_short = get_target_commit(repo_root, target_commit)
+        if manifest_commit != expected_commit_full and not manifest_commit.startswith(expected_commit_short):
+            errors.append(f"Manifest commit mismatch: got '{manifest_commit}', expected '{expected_commit_full}'")
+    else:
+        if not manifest_commit:
+            errors.append("Manifest is missing required 'commit' field")
+        expected_commit_full = manifest_commit
+        expected_commit_short = manifest_commit[:8] if len(manifest_commit) >= 8 else manifest_commit
 
     # Verify Baseline Tests in Manifest
     baselines = manifest.get("baseline_test_suites", {})
@@ -790,6 +796,14 @@ def verify_release_bundle(
         rf = reports_dir / r
         if not rf.exists() or rf.stat().st_size == 0:
             errors.append(f"Missing or empty release report: {rf}")
+        elif r.endswith(".json"):
+            try:
+                rj = json.loads(rf.read_text(encoding="utf-8"))
+                rep_commit = rj.get("commit")
+                if rep_commit and rep_commit != expected_commit_full and not rep_commit.startswith(expected_commit_short):
+                    errors.append(f"Report '{r}' commit mismatch: got '{rep_commit}', expected '{expected_commit_full}'")
+            except Exception:
+                pass
     summary["reports"] = "PASS" if not any("report" in e for e in errors) else "FAIL"
 
     # 7. Verify Authoritative Report Document
@@ -802,9 +816,8 @@ def verify_release_bundle(
             errors.append("Authoritative report does not contain definitive 'RC-GO' declaration")
         if "RC-NO-GO" in doc_text:
             errors.append("Authoritative report contains conflicting 'RC-NO-GO' declaration")
-        commit_full, commit_short = get_target_commit(repo_root, target_commit)
-        if commit_short not in doc_text and commit_full not in doc_text:
-            errors.append(f"Authoritative report does not cite target commit SHA ({commit_short})")
+        if expected_commit_short not in doc_text and expected_commit_full not in doc_text:
+            errors.append(f"Authoritative report does not cite target commit SHA ({expected_commit_short})")
         summary["authoritative_doc"] = "PASS" if not any("report" in e or "declaration" in e for e in errors) else "FAIL"
 
     is_valid = (len(errors) == 0)
@@ -812,13 +825,22 @@ def verify_release_bundle(
 
 
 def print_summary(summary: Dict[str, Any], errors: List[str], release_dir: Path, target_commit: Optional[str] = None) -> None:
-    commit_full, commit_short = get_target_commit(ROOT, target_commit)
+    manifest_path = release_dir / "manifest.json"
+    displayed_commit = "UNKNOWN"
+    if manifest_path.exists():
+        try:
+            m = json.loads(manifest_path.read_text(encoding="utf-8"))
+            displayed_commit = m.get("commit", "UNKNOWN")
+        except Exception:
+            pass
+    if target_commit:
+        displayed_commit = target_commit
     print("=" * 80)
     print("  Caesura (AmeKAG) — Release Candidate Gate Verification Summary")
     print("=" * 80)
     print(f"Target Bundle Path : {release_dir}")
     print(f"Target Version     : {VERSION_STRING}")
-    print(f"Target Commit      : {commit_full}")
+    print(f"Target Commit      : {displayed_commit}")
     print(f"Gate Decision      : {summary.get('decision', 'UNKNOWN')}")
     print("-" * 80)
     print(f"  [1] Manifest Structure & Schema     : {summary.get('manifest')}")
