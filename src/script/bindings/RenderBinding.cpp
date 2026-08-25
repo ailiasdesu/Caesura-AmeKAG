@@ -103,19 +103,10 @@ static RenderTextureHandle resolveTexture(lua_State* L, uint32_t id, IRenderDevi
     return tex;
 }
 
-static int getTableInt(lua_State* L, const char* key, int def) {
-    lua_getfield(L, -1, key);
-    int v = lua_isnumber(L, -1) ? (int)lua_tointeger(L, -1) : def;
-    lua_pop(L, 1);
-    return v;
-}
-
-static float getTableFloat(lua_State* L, const char* key, float def) {
-    lua_getfield(L, -1, key);
-    float v = lua_isnumber(L, -1) ? (float)lua_tonumber(L, -1) : def;
-    lua_pop(L, 1);
-    return v;
-}
+// NOTE: the string-keyed getTableInt/getTableFloat helpers were removed with
+// the old submit_batch record format (t11). The batch path now reads positional
+// integer slots; see batchNum below. Nothing else in this file read tables by
+// string key, so keeping them would only produce unused-function warnings.
 
 // -- Render.load_texture(file) ----------------------------------------------
 
@@ -217,58 +208,99 @@ static int lua_Render_set_view_name(lua_State* L) {
 
 // -- Render.submit_batch(...) -- batch-submit layer quads -------------------
 
+// Positional batch wire format, produced by scripts/layers.lua Layers.render.
+// batch[1] = live command count; command i occupies the 16 slots starting at
+// 1 + (i-1)*16. Reading by integer index avoids the ~11 string-keyed
+// lua_getfield hashes the old per-command-table format paid for every quad.
+//
+// The producer REUSES one array across frames, so slots past the live count
+// hold stale numbers from a busier frame. batch[1] is the only length
+// authority: lua_rawlen must never be used here.
+namespace batchfmt {
+enum : int {
+    kCount    = 1,   // batch[1]
+    kStride   = 16,
+    kViewId   = 1,   // offsets within a command, 1-based
+    kTex      = 2,
+    kRt       = 3,
+    kX        = 4,
+    kY        = 5,
+    kW        = 6,
+    kH        = 7,
+    kOpacity  = 8,
+    kBlend    = 9,
+    kScaleX   = 10,
+    kScaleY   = 11,
+    kRotation = 12,
+    kClipX    = 13,
+    kClipY    = 14,
+    kClipW    = 15,
+    kClipH    = 16,
+};
+}  // namespace batchfmt
+
+// Read one positional slot as a double. Absent/non-numeric -> def, so a
+// truncated array degrades to defaults instead of reading garbage.
+static inline double batchNum(lua_State* L, int tableIdx, int slot, double def) {
+    lua_rawgeti(L, tableIdx, slot);
+    double v = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : def;
+    lua_pop(L, 1);
+    return v;
+}
+
 static int lua_Render_submit_batch(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTABLE);
 
     IRenderDevice* dev = getRender(L);
     if (!dev) { lua_pushboolean(L, 0); return 1; }
 
-    int n = (int)lua_rawlen(L, 1);
-    if (n > 1024) n = 1024;  // per-frame batch cap: a runaway table must
-                             // not submit thousands of GPU draws in one frame
+    // Live length comes from the header slot, NEVER lua_rawlen: the producer's
+    // array is reused and its tail intentionally holds stale values.
+    int n = (int)batchNum(L, 1, batchfmt::kCount, 0);
+    if (n < 0) n = 0;
+    if (n > 1024) n = 1024;  // per-frame batch cap: a runaway count must not
+                             // submit thousands of GPU draws in one frame
     if (n == 0) { lua_pushboolean(L, 1); return 1; }
-
 
     dev->beginBatch();
 
     // Batch-level texture resolution cache: many quads share the same texId
     // (a layer tree repeats the same image), so resolve each id once instead
-    // of hitting the TextureManager map per quad.
-    RenderTextureHandle texCache[256];
-    uint32_t texCacheId[256];
-    uint32_t texCacheN = 0;
+    // of hitting the TextureManager map per quad. Hash lookup, not the old
+    // 256-entry linear scan (which cost O(distinct textures) per quad).
+    // static: the map's buckets survive across frames, so a steady-state
+    // scene performs zero allocation here. Cleared every call because texture
+    // ids are recycled by the TextureManager and a stale handle would blit a
+    // freed texture.
+    static std::unordered_map<uint32_t, RenderTextureHandle> texCache;
+    texCache.clear();
 
-    for (int i = 1; i <= n; i++) {
-        lua_rawgeti(L, 1, i);
-        if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
-        uint32_t texId  = (uint32_t)getTableInt(L, "tex", 0);
-        float    x      = getTableFloat(L, "x", 0);
-        float    y      = getTableFloat(L, "y", 0);
-        float    w      = getTableFloat(L, "w", 128);
-        float    h      = getTableFloat(L, "h", 128);
-        int      opacity = getTableInt(L, "opacity", 255);
+    for (int i = 0; i < n; i++) {
+        const int base = batchfmt::kCount + i * batchfmt::kStride;
+
+        uint32_t texId   = (uint32_t)batchNum(L, 1, base + batchfmt::kTex, 0);
+        float    x       = (float)batchNum(L, 1, base + batchfmt::kX, 0);
+        float    y       = (float)batchNum(L, 1, base + batchfmt::kY, 0);
+        float    w       = (float)batchNum(L, 1, base + batchfmt::kW, 128);
+        float    h       = (float)batchNum(L, 1, base + batchfmt::kH, 128);
+        int      opacity = (int)batchNum(L, 1, base + batchfmt::kOpacity, 255);
         opacity = std::min(std::max(opacity, 0), 255);  // clamp (RD-5)
 
         RenderTextureHandle tex;
-        uint32_t hit = 0;
         if (texId != 0) {
-            for (uint32_t c = 0; c < texCacheN; c++) {
-                if (texCacheId[c] == texId) { tex = texCache[c]; hit = 1; break; }
-            }
-            if (!hit) {
+            auto it = texCache.find(texId);
+            if (it != texCache.end()) {
+                tex = it->second;
+            } else {
                 auto* texture = getTexture(L);
                 uint32_t rawHandle = texture ? texture->getTextureHandle(texId) : 0;
                 tex = textureManagerHandle(rawHandle);
-                if (texCacheN < 256) {
-                    texCache[texCacheN] = tex;
-                    texCacheId[texCacheN] = texId;
-                    texCacheN++;
-                }
+                texCache.emplace(texId, tex);
             }
         }
         // If no explicit texture or tex is invalid, check if an RTT viewport handle was supplied
         if (!tex.isValid()) {
-            uint32_t rtId = (uint32_t)getTableInt(L, "rt", 0);
+            uint32_t rtId = (uint32_t)batchNum(L, 1, base + batchfmt::kRt, 0);
             if (rtId != 0 && dev) {
                 tex = dev->getViewportTexture(ViewportHandle{ rtId });
             }
@@ -276,8 +308,6 @@ static int lua_Render_submit_batch(lua_State* L) {
         if (tex.isValid()) {
             dev->blitTexture(VIEW_MAIN, (uint32_t)tex.idx, x, y, w, h, (uint8_t)opacity);
         }
-
-        lua_pop(L, 1);
     }
 
     dev->flushBatch();

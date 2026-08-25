@@ -65,6 +65,9 @@ local tests = {
     "test_schema_coerce",
     "test_kag3_import",
     "test_layers",
+    -- Per-frame allocation budget for the pooled render batch: the command
+    -- tables are recycled, so a steady scene must not grow the Lua heap.
+    "test_layers_alloc",
     "test_mods",
     "test_replay",
     "test_scene_reload",

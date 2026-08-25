@@ -5,13 +5,13 @@
 --  size, clipping, hit testing, dirty tracking, per-layer RTT.
 --  Render pipeline: DFS traversal → z-order sort → blend child RTs →
 --  submit via backend.submit_batch → flush to screen.
---  Uses pool.lua for per-frame batch command tables (reduces GC).
+--  Batch submission uses one persistent positional array (zero per-frame
+--  table allocation); see the submit_batch wire format above Layers.render.
 --  Krkrz reference: LayerIntf.h, LayerManager.h, drawable.h (28 blend types)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local backend   = require("backend")
 local rtt       = require("rtt")
-local pool       = require("pool")
 local blend_lib = require("blend")
 
 -- [R11-FIX] This Lua layer tree (7 types) operates ABOVE the C++ ILayerManager (3 slots).
@@ -390,8 +390,14 @@ local function clearDirtyRecursive(node)
     if not node then return end
     node.dirty = false
     node.dirty_rect = nil
-    for _, child in ipairs(node.children or {}) do
-        clearDirtyRecursive(child)
+    -- `node.children or {}` would allocate a throwaway empty table for every
+    -- childless node on every frame (this runs post-render across the whole
+    -- tree). Guard instead of defaulting.
+    local kids = node.children
+    if kids then
+        for i = 1, #kids do
+            clearDirtyRecursive(kids[i])
+        end
     end
 end
 
@@ -525,13 +531,48 @@ end
 --  4. Clear all dirty flags.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- ═══════════════════════════════════════════════════════════════════════════
+--  submit_batch wire format (t11) — POSITIONAL FLAT ARRAY
+--
+--  batch[1]            = command count N (integer)
+--  batch[1 + (i-1)*16 + k] = field k of command i (1 <= i <= N, 1 <= k <= 16)
+--
+--    k= 1 view_id     k= 2 tex        k= 3 rt (0 = none)  k= 4 x
+--    k= 5 y           k= 6 w          k= 7 h              k= 8 opacity 0..255
+--    k= 9 blend mode  (NUMERIC id via blend.resolve, not a string)
+--    k=10 scaleX      k=11 scaleY     k=12 rotation
+--    k=13 clipX       k=14 clipY      k=15 clipW          k=16 clipH
+--                                     (clipW/clipH <= 0 means "no clip")
+--
+--  Every slot is a number — never nil — so the array part stays contiguous and
+--  the C++ reader uses lua_rawgeti (integer index, no string hashing) instead
+--  of ~11 lua_getfield calls per command.
+--
+--  RESIDUE SAFETY: the array is module-scoped and reused every frame, so a
+--  frame that emits fewer commands than its predecessor leaves stale numbers
+--  in the tail. batch[1] is the ONLY authority on how much is live; the reader
+--  must never use lua_rawlen. Tests assert this (test_layers_alloc.lua).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+local BATCH_STRIDE = 16
+local batchArray   = {}   -- persistent flat command array (zero per-frame alloc)
+
+-- config is optional: layers.lua must stay loadable in sandboxes/benches where
+-- the config module was never preloaded. Reading package.loaded directly is one
+-- table index (the sandboxed require resolves nothing else anyway) — the old
+-- code paid a pcall + require on EVERY frame, and requiring config at module
+-- scope would run config.apply() before kag/init.lua is ready for it.
+local function peekConfig()
+    return package.loaded["config"]
+end
+
 function Layers.render()
     local root = Layers.get_root()
     if not root then return end
 
-    local batch = pool.eventTablePool:acquire()
-    batch.commands = pool.eventTablePool:acquire()
-    batch.layer_count = 0
+    local cmds  = batchArray
+    local count = 0
+    cmds[1] = 0
 
     local function renderNode(node, parent_wx, parent_wy)
         if not node or not node.visible then return end
@@ -554,9 +595,14 @@ function Layers.render()
         wx = wx + qx
         wy = wy + qy
 
-        -- render children first (bottom → top)
-        for _, child in ipairs(node.children or {}) do
-            renderNode(child, wx, wy)
+        -- render children first (bottom → top). Guarded rather than
+        -- `or {}`: leaf nodes are the majority and that idiom allocates one
+        -- empty table per leaf per frame.
+        local kids = node.children
+        if kids then
+            for i = 1, #kids do
+                renderNode(kids[i], wx, wy)
+            end
         end
 
         -- emit commands for visible nodes with tex/rt and view_id.
@@ -576,32 +622,38 @@ function Layers.render()
             node.rt = rtt.acquire(node.w, node.h)
         end
         if node.view_id and (node.rt or (nodeTex and nodeTex ~= 0)) then
-            batch.commands[#batch.commands + 1] = {
-                view_id    = node.view_id,
-                tex        = nodeTex,
-                rt         = node.rt,
-                x          = wx,
-                y          = wy,
-                w          = node.w or 0,
-                h          = node.h or 0,
-                blend_mode = node.blend_mode or "alpha",
-                opacity    = node.opacity or 255,
-                scaleX     = node.scale or node.scaleX or 1.0,
-                scaleY     = node.scale or node.scaleY or 1.0,
-                rotation   = node.rotation or 0,
-                clipX      = node.clipX,
-                clipY      = node.clipY,
-                clipW      = node.clipW,
-                clipH      = node.clipH,
-            }
-            batch.layer_count = batch.layer_count + 1
+            -- Positional write into the persistent flat array (see the wire
+            -- format above). No table is constructed per command per frame.
+            local base = 1 + count * BATCH_STRIDE
+            cmds[base + 1]  = node.view_id
+            cmds[base + 2]  = nodeTex
+            cmds[base + 3]  = node.rt or 0
+            cmds[base + 4]  = wx
+            cmds[base + 5]  = wy
+            cmds[base + 6]  = node.w or 0
+            cmds[base + 7]  = node.h or 0
+            cmds[base + 8]  = node.opacity or 255
+            cmds[base + 9]  = blend_lib.resolve(node.blend_mode or "alpha")
+            cmds[base + 10] = node.scale or node.scaleX or 1.0
+            cmds[base + 11] = node.scale or node.scaleY or 1.0
+            cmds[base + 12] = node.rotation or 0
+            cmds[base + 13] = node.clipX or 0
+            cmds[base + 14] = node.clipY or 0
+            cmds[base + 15] = node.clipW or 0
+            cmds[base + 16] = node.clipH or 0
+            count = count + 1
         end
     end
 
     renderNode(root, 0, 0)
 
-    if batch.layer_count > 0 then
-        backend.submit_batch(batch.commands)
+    -- Header LAST: the count is the only live-length authority, so the tail of
+    -- the reused array (stale numbers from a busier previous frame) is never
+    -- read. Writing it after traversal also makes a partial traversal harmless.
+    cmds[1] = count
+
+    if count > 0 then
+        backend.submit_batch(cmds)
     end
 
     -- Accessibility color filter (Neo-Genesis): config.accessibility
@@ -610,10 +662,11 @@ function Layers.render()
     -- over the composited scene each frame. The preset matrix is synced
     -- to C++ on every frame (cheap table write) so config changes apply
     -- immediately; UI text drawn later via render_text is unaffected.
-    -- pcall: layers.render must stay usable in sandboxes/benches where
-    -- the config module is not preloaded (filter simply stays off).
-    local ok_cfg, config = pcall(require, "config")
-    local cf = ok_cfg and config.accessibility and config.accessibility.color_filter
+    -- peekConfig (module scope) replaced a per-frame pcall(require, "config"):
+    -- layers.render must stay usable in sandboxes/benches where the config
+    -- module was never preloaded (the filter simply stays off).
+    local config = peekConfig()
+    local cf = config and config.accessibility and config.accessibility.color_filter
     if cf and cf ~= "none" then
         local target = root and root.rt
         if (not target or target == 0) then
