@@ -254,25 +254,36 @@ def main():
     # ---- Round 71-79 command surface (over HTTP /api/eval) --------------
     # The HTTP editor exposes the same Lua eval dispatch as the stdio RPC
     # (POST /api/eval: raw Lua body -> {status, result}), so the round-75
-    # schema.coerce + handler + rawset-anchored-ctx patterns run unchanged
-    # over HTTP. There is no dedicated save / math / textspeed HTTP name --
+    # schema.coerce + handler patterns run unchanged over HTTP (the ctx is
+    # local per request and persisted through the save layer when a later
+    # request must read it). There is no dedicated save / math / textspeed HTTP name --
     # the generic eval route is the reachable surface for these commands.
     # (Save slot I/O goes through the KAG C++ bindings over the same eval
     # bridge; /api/stats stays the first-class health route.)
 
-    # (a) Math command chain via schema.coerce + handler, then read f.x back
-    # via a follow-up eval. The eval sandbox traps new global writes, so the
-    # sampled ctx is anchored once with rawset (permitted) and reused by the
-    # follow-up eval -- identical to the stdio smoke.
+    # (a) Math command chain via schema.coerce + handler, then read f.x back in
+    # a LATER request.
+    #
+    # [Sprint 1] /api/eval runs with _ENV == the real _G, so the ctx used to be
+    # anchored with rawset(_G, '_smokeHttpMathCtx', ctx): a genuinely new,
+    # permanently leaked engine global, written by smuggling the assignment past
+    # the sandbox's __newindex guard. That bypass is closed, and the old comment
+    # calling it "(permitted)" described exactly the escape being fixed. The ctx
+    # is now LOCAL in every request, and the cross-request read goes through the
+    # engine's own persistence (KAG.save_game / KAG.load_game -> SaveManager),
+    # which is the mechanism a real game uses to carry a ctx across a boundary.
+    # Probe slot 24 is deleted at the end of the chain.
     st, resp = request("/api/eval", data=b"local kag=require('kag'); local s=require('kag.schema'); "
-        b"local ctx={f={},sf={},tf={},mp={},lf={}}; rawset(_G,'_smokeHttpMathCtx',ctx); "
+        b"local ctx={f={},sf={},tf={},mp={},lf={}}; "
         b"local p=s.coerce('add',{name='f.x',value=5},ctx); kag.add(ctx,p); "
+        b"local ok=KAG.save_game(24, ctx, 'assets/script/main.ks', 4, ''); "
+        b"if not ok then return 'unsaved' end; "
         b"return tostring(ctx.f.x)")
     check("http-math-add-executes",
         st == 200 and resp.get("result") == "5", "%s %s" % (st, resp))
 
     st, resp = request("/api/eval", data=b"local kag=require('kag'); local s=require('kag.schema'); "
-        b"local ctx=_G._smokeHttpMathCtx; "
+        b"local ctx={f={},sf={},tf={},mp={},lf={}}; "
         b"local function run(c,p) local q=s.coerce(c,p or {},ctx); kag[c](ctx,q) end "
         b"ctx.f.n=10; run('mul',{name='f.n',value=3}); run('div',{name='f.n',value=2}); "
         b"run('dec',{name='f.n',amount=3}); run('mod',{name='f.n',value=5}); run('sub',{name='f.n',value=1}); "
@@ -280,9 +291,18 @@ def main():
     check("http-math-family-mul-div-dec-mod-sub",
         st == 200 and resp.get("result") == "1.0", "%s %s" % (st, resp))
 
-    st, resp = request("/api/eval", data=b"return tostring(_G._smokeHttpMathCtx.f.x)")
+    # Cross-request read: the ctx the FIRST eval computed and persisted is read
+    # back in this separate request through the save layer.
+    st, resp = request("/api/eval",
+        data=b"local data = KAG.load_game(24); "
+              b"if not data then return 'absent' end; "
+              b"return tostring(data.f and data.f.x)")
     check("http-math-read-via-eval",
         st == 200 and resp.get("result") == "5", "%s %s" % (st, resp))
+
+    st, resp = request("/api/eval", data=b"return tostring(KAG.delete_save(24))")
+    check("http-math-probe-save-cleanup",
+        st == 200 and resp.get("result") == "true", "%s %s" % (st, resp))
 
     # (b) The contract registry reflects the round 71-79 commands over HTTP.
     # registrySize() is authoritative (assert >= 118 -- the exact current

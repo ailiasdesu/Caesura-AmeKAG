@@ -245,21 +245,37 @@ try:
     # (a) Math command result executed through the real schema-coerce +
     # dispatch path (identical to the scheduler's non-flow-control dispatch:
     # params = Schema.coerce(cmd, params, ctx); handler(ctx, params) -- then
-    # read back via eval. The eval sandbox traps new global writes, so the
-    # sampled ctx is anchored once with rawset (permitted) and reused by the
-    # follow-up eval.
+    # read back via eval.
+    #
+    # [Sprint 1] eval runs with _ENV == the real _G, so anchoring the ctx with
+    # rawset(_G, '_smokeMathCtx', ctx) created a permanently leaked engine
+    # global by smuggling the write past the sandbox's __newindex guard -- the
+    # very escape that hardening closed (the old "(permitted)" note described
+    # the bypass, not a sanctioned API). The ctx is now LOCAL in every request,
+    # and the cross-request read goes through the engine's own persistence
+    # (KAG.save_game / KAG.load_game -> SaveManager), the mechanism a real game
+    # uses to carry a ctx across a boundary. Probe slot 14 is deleted after.
     r = request({"id": 100, "method": "eval", "code":
         "local kag=require('kag'); local s=require('kag.schema'); "
-        "local ctx={f={},sf={},tf={},mp={},lf={}}; rawset(_G,'_smokeMathCtx',ctx); "
+        "local ctx={f={},sf={},tf={},mp={},lf={}}; "
         "local p=s.coerce('add',{name='f.x',value=5},ctx); kag.add(ctx,p); "
+        "local ok=KAG.save_game(14, ctx, 'assets/script/main.ks', 4, ''); "
+        "if not ok then return 'unsaved' end; "
         "return tostring(ctx.f.x)"})
     check("math-add-executes",
         r.get("status") == "ok" and r.get("result") == "5")
 
     r = request({"id": 101, "method": "eval", "code":
-        "return tostring(_G._smokeMathCtx.f.x)"})
+        "local data = KAG.load_game(14); "
+        "if not data then return 'absent' end; "
+        "return tostring(data.f and data.f.x)"})
     check("math-add-read-via-eval",
         r.get("status") == "ok" and r.get("result") == "5")
+
+    r = request({"id": 199, "method": "eval", "code":
+        "return tostring(KAG.delete_save(14))"})
+    check("math-probe-save-cleanup",
+        r.get("status") == "ok" and r.get("result") == "true")
 
     # The rest of the math family shares the same coerce + dispatch path.
     r = request({"id": 102, "method": "eval", "code":
