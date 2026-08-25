@@ -214,12 +214,18 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `solutions/runtime-crashes/bgfx-predefined-uniform-name-conflict.md` | bgfx 预定义 uniform 命名冲突 |
 | `solutions/deferred-gpu-tests.md` | 无 GPU 环境下无法覆盖的测试项清单 |
 
+### team/ — 团队项目记忆与开发流程
+| 文件 | 内容 |
+|------|------|
+| `team/project-memory.md` | 长期项目记忆（铁律、开发流程、平台事实、决策索引、踩坑库） |
+
 ### 规则
 - **新 API 文档** → `docs/api/`
 - **新架构/设计文档** → `docs/design/`
 - **新使用指南** → `docs/guides/`
 - **执行计划与记录** → `docs/plans/`（按日期命名：`YYYY-MM-DD-NNN-描述.md`）
 - **可复用的经验/模式** → `docs/solutions/`
+- **长期项目记忆与团队规范** → `docs/team/`
 - **历史需求文档** → `docs/brainstorms/`（仅保留被 plans/ 引用的 origin 需求，无引用后删除）
 - **禁止**将一次性执行提示词（prompts）留在 docs/ 中——执行完成后删除，仅保留执行总结
 
