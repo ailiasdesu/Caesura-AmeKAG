@@ -306,6 +306,9 @@ async function runScene(name) {
   }
   syncTextures()
   await renderer.render()
+  syncBacklog()
+  syncEndings()
+  syncAudioStatus()
   statusEl.textContent = 'parked: ' + out
   log('result: ' + out)
 }
@@ -330,6 +333,9 @@ async function advance() {
   }
   syncTextures()
   await renderer.render()
+  syncBacklog()
+  syncEndings()
+  syncAudioStatus()
   statusEl.textContent = 'advance: ' + out
   log('advance: ' + out)
 }
@@ -410,6 +416,9 @@ async function renderSlots() {
       const out = await player.loadSlot(s.slot, { sceneSources: {} })
       syncTextures()
       await renderer.render()
+      syncBacklog()
+      syncEndings()
+      syncAudioStatus()
       statusEl.textContent = 'load: ' + out
       log('load result: ' + out)
       renderSlots()
