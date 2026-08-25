@@ -121,8 +121,10 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
       const ks = readFileSync(join(here, '..', 'demo', 'galgame_demo.ks'), 'utf8')
       player.lua.global.set('KS_TMP_SRC', ks)
       ksc = await player.lua.doString([
-        '  local cmp = require("kag.compiler").compile_from_source(KS_TMP_SRC, "galgame.ks")',
-        '  return require("kag.compiler").serialize(cmp)',
+        '  local compiler = require("kag.compiler")',
+        '  local cmp = compiler.compile_from_source(KS_TMP_SRC, "galgame.ks")',
+        '  local ser = compiler.serialize(cmp)',
+        '  return "return " .. compiler.encode_lua_literal(ser)',
       ].join(String.fromCharCode(10)))
     }
     player.lua.global.set('KSC_SRC', ksc)
