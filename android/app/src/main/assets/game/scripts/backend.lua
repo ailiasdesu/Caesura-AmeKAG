@@ -538,4 +538,24 @@ function Backend.text_reset_state()
     return render_or_guard("text_reset_state")
 end
 
+-- =========================================================================
+-- Platform / IME / Text Input
+-- =========================================================================
+
+function Backend.start_text_input()
+    return devcore_or_guard("start_text_input")
+end
+
+function Backend.stop_text_input()
+    return devcore_or_guard("stop_text_input")
+end
+
+function Backend.set_text_input_rect(x, y, w, h, cursor)
+    return devcore_or_guard("set_text_input_rect", x, y, w, h, cursor)
+end
+
+function Backend.is_text_input_active()
+    return devcore_or_guard("is_text_input_active")
+end
+
 return Backend

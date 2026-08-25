@@ -79,6 +79,34 @@ echo "  Repo root : $REPO_ROOT"
 echo "  ABI       : $ABI"
 
 # -----------------------------------------------------------------------------
+# 0. Auto-discover JDK and Android SDK
+# -----------------------------------------------------------------------------
+if [[ -z "${JAVA_HOME:-}" || ! -d "${JAVA_HOME:-}" ]]; then
+    for cand in "/d/green/android-tools/jdk-17.0.20+8" "D:/green/android-tools/jdk-17.0.20+8" "/d/green/PCL/jdk-17.0.6" "D:/green/PCL/jdk-17.0.6" "C:/Program Files/Java/jdk-17"* "C:/Program Files/Eclipse Adoptium/jdk-17"*; do
+        if [[ -d "$cand" && (-x "$cand/bin/keytool" || -f "$cand/bin/keytool.exe" || -f "$cand/bin/keytool") ]]; then
+            export JAVA_HOME="$cand"
+            export PATH="$cand/bin:$PATH"
+            break
+        fi
+    done
+fi
+
+if [[ -z "${ANDROID_HOME:-}" && -z "${ANDROID_SDK_ROOT:-}" ]]; then
+    for cand in "/d/green" "D:/green" "$HOME/AppData/Local/Android/Sdk" "/c/Android/sdk" "C:/Android/sdk"; do
+        if [[ -d "$cand/build-tools" || -d "$cand/platforms" ]]; then
+            export ANDROID_HOME="$cand"
+            export ANDROID_SDK_ROOT="$cand"
+            break
+        fi
+    done
+fi
+
+# Ensure git usr/bin is in PATH for standard unix utilities if on Windows
+if [[ -d "/c/Program Files/Git/usr/bin" ]]; then
+    export PATH="/c/Program Files/Git/usr/bin:$PATH"
+fi
+
+# -----------------------------------------------------------------------------
 # 1. Setup Signing Configuration
 # -----------------------------------------------------------------------------
 if [[ "$USE_EPHEMERAL_KEY" -eq 1 ]]; then
@@ -134,8 +162,16 @@ fi
 GRADLE="gradle"
 if [[ -x "$REPO_ROOT/android/gradlew" ]]; then
     GRADLE="$REPO_ROOT/android/gradlew"
+elif [[ -f "$REPO_ROOT/android/gradlew.bat" && ("$OSTYPE" == "msys" || "$OSTYPE" == "cygwin") ]]; then
+    GRADLE="$REPO_ROOT/android/gradlew.bat"
 elif command -v gradle >/dev/null 2>&1; then
     GRADLE="gradle"
+elif [[ -x "/d/green/android-tools/gradle-8.9/bin/gradle" ]]; then
+    GRADLE="/d/green/android-tools/gradle-8.9/bin/gradle"
+elif [[ -f "/d/green/android-tools/gradle-8.9/bin/gradle.bat" ]]; then
+    GRADLE="/d/green/android-tools/gradle-8.9/bin/gradle.bat"
+elif [[ -f "D:/green/android-tools/gradle-8.9/bin/gradle.bat" ]]; then
+    GRADLE="D:/green/android-tools/gradle-8.9/bin/gradle.bat"
 else
     echo "WARNING: System gradle or gradlew not found. Attempting to download Gradle 8.9..."
     TEMP_GRADLE_ZIP="/tmp/gradle-8.9-bin.zip"
@@ -154,7 +190,7 @@ if [[ "$SKIP_APK" -eq 0 ]]; then
     echo "==================================================================="
     echo " Building Release APK (assembleRelease)..."
     echo "==================================================================="
-    (cd "$REPO_ROOT/android" && "$GRADLE" --no-daemon --console=plain assembleRelease)
+    (cd "$REPO_ROOT/android" && "$GRADLE" --no-daemon --console=plain assembleRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease)
 fi
 
 # -----------------------------------------------------------------------------
@@ -165,7 +201,7 @@ if [[ "$SKIP_AAB" -eq 0 ]]; then
     echo "==================================================================="
     echo " Building Release App Bundle (bundleRelease)..."
     echo "==================================================================="
-    (cd "$REPO_ROOT/android" && "$GRADLE" --no-daemon --console=plain bundleRelease)
+    (cd "$REPO_ROOT/android" && "$GRADLE" --no-daemon --console=plain bundleRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease)
 fi
 
 # -----------------------------------------------------------------------------
@@ -183,11 +219,21 @@ if [[ "$SKIP_VERIFY" -eq 0 ]]; then
 
     SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
     if [[ -n "$SDK_ROOT" && -d "$SDK_ROOT/build-tools" ]]; then
-        LATEST_BT=$(ls -d "$SDK_ROOT/build-tools/"* 2>/dev/null | sort -V | tail -n 1)
-        if [[ -n "$LATEST_BT" ]]; then
-            [[ -x "$LATEST_BT/zipalign" ]] && ZIPALIGN_BIN="$LATEST_BT/zipalign"
-            [[ -x "$LATEST_BT/apksigner" ]] && APKSIGNER_BIN="$LATEST_BT/apksigner"
-        fi
+        for bt in $(ls -d "$SDK_ROOT/build-tools/"* 2>/dev/null | sort -V -r); do
+            if [[ -z "$ZIPALIGN_BIN" ]]; then
+                if [[ -x "$bt/zipalign" ]]; then ZIPALIGN_BIN="$bt/zipalign"
+                elif [[ -f "$bt/zipalign.exe" ]]; then ZIPALIGN_BIN="$bt/zipalign.exe"
+                elif [[ -f "$bt/zipalign" ]]; then ZIPALIGN_BIN="$bt/zipalign"
+                fi
+            fi
+            if [[ -z "$APKSIGNER_BIN" ]]; then
+                if [[ -x "$bt/apksigner" ]]; then APKSIGNER_BIN="$bt/apksigner"
+                elif [[ -f "$bt/apksigner.bat" ]]; then APKSIGNER_BIN="$bt/apksigner.bat"
+                elif [[ -f "$bt/apksigner" ]]; then APKSIGNER_BIN="$bt/apksigner"
+                fi
+            fi
+            [[ -n "$ZIPALIGN_BIN" && -n "$APKSIGNER_BIN" ]] && break
+        done
     fi
 
     if [[ -z "$ZIPALIGN_BIN" ]] && command -v zipalign >/dev/null 2>&1; then

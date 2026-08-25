@@ -7,6 +7,8 @@
 
 [font face="default" size=22]
 [pt speed=50]
+[textbox x=120 y=480 w=1040 h=200 color="20,24,32" opacity=210 visible=true]
+[nameplate x=120 y=435 w=220 h=40 color="30,36,48" opacity=230 text_color="240,245,255"]
 
 ; --- Parameterized macro: scene entry with backdrop + title -----------------
 [macro scene_open args="bg,title,trans"]
@@ -54,11 +56,11 @@
 [position layer=fg pos=right]
 [ch name="Mio" text="I'm Mio. I keep the keys to the old wing."]
 [p]
-[sprite_move speaker="Mio" x=480 y=360 time=600]
-[sprite_fade speaker="Mio" to=120 time=400]
+[tween target="Mio" attr="x" from=1280 to=480 dur=600 ease=ease_out]
+[tween target="Mio" attr="alpha" from=255 to=120 dur=400 ease=ease_out]
 [ch name="Mio" text="If you hear a mailbox at night... don't answer it."]
 [p]
-[sprite_fade speaker="Mio" to=255 time=400]
+[tween target="Mio" attr="alpha" from=120 to=255 dur=400 ease=ease_out]
 
 ; --- i18n plural demo ({items} expands one/other by n) -----------------------
 [set tf.letters 1]
@@ -78,6 +80,7 @@
 [cl]
 [trans method=dissolve]
 [bg storage="assets/bg/hana.png"]
+[vfx postfx="vignette" amount=0.4]
 [blur amount=0.25]
 [particles rate=12 sizeMax=2 sizeMin=1 speedMax=1 speedMin=0.5]
 [wait time=500]
@@ -154,6 +157,7 @@
 ; ===========================================================================
 *scene4
 [cl]
+[vfx postfx="none"]
 [trans method=dissolve]
 [bg storage="assets/bg/classroom.png"]
 [preload storage="assets/bg/hana.png"]
@@ -292,6 +296,7 @@
 
 [flash r=230 g=230 b=255 time=150]
 [playse storage="assets/se/click.wav" volume=0.7]
+[vfx postfx="bloom" strength=0.8]
 [quake intensity=8 time=350]
 [shake time=400 amplitude=7]
 [vib intensity=5 time=200]
@@ -352,6 +357,7 @@ end
 ; ===========================================================================
 *ending_zero
 [cl]
+[vfx postfx="none"]
 [bg storage="assets/bg/hana.png"]
 [palette effect="night" intensity=0.4]
 [trans time=700 method=crossfade]
@@ -374,6 +380,7 @@ end
 
 *ending_companion
 [cl]
+[vfx postfx="none"]
 [bg storage="assets/bg/classroom.png"]
 [trans time=600 method=dissolve]
 [wait time=400]
@@ -395,6 +402,7 @@ end
 
 *ending_promise
 [cl]
+[vfx postfx="none"]
 [bg storage="assets/bg/classroom.png"]
 [trans time=600 method=dissolve]
 [wait time=400]

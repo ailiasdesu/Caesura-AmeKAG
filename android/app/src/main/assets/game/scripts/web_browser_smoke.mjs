@@ -321,6 +321,41 @@ async function main() {
     record('image (stage has layers)', !!anyLayer, 'layers=' + anyLayer)
     record('image (layer <img> decoded)', imgOk && (imgOk.ready > 0 || imgOk.total === 0), JSON.stringify(imgOk))
 
+    // 3b. layout guard: every .caesura-layer rect must fit inside #stage.
+    // The engine default moved to 1920x1080 (desktop logical buffer); the
+    // web player's stage is the render target, so jsBackend.get_resolution
+    // reports the stage size and the viewport-following layout defaults
+    // (bg/fg sizes, message box) resolve to stage dimensions. If that
+    // chain ever regresses (viewport.lua falling back to 1920x1080 on web,
+    // // a missing get_resolution, or a stale scripts index), the layers
+    // blow past the stage and this check fails.
+    const layout = await cdp.eval("(() => {\n" +
+      "  const stage = document.getElementById('stage')\n" +
+      "  if (!stage) return { ok: false, why: 'no #stage' }\n" +
+      "  const sr = stage.getBoundingClientRect()\n" +
+      "  const els = [...document.querySelectorAll('.caesura-layer')]\n" +
+      "  if (els.length === 0) return { ok: false, why: 'no layers yet', stage: { w: Math.round(sr.width), h: Math.round(sr.height) } }\n" +
+      "  const bad = []\n" +
+      "  let bgW = 0, bgH = 0\n" +
+      "  for (const el of els) {\n" +
+      "    const r = el.getBoundingClientRect()\n" +
+      "    const m = 2 // px tolerance\n" +
+      "    if (r.width > bgW) bgW = r.width\n" +
+      "    if (r.height > bgH) bgH = r.height\n" +
+      "    if (r.width > sr.width + m || r.height > sr.height + m ||\n" +
+      "        r.left < sr.left - m || r.top < sr.top - m ||\n" +
+      "        r.right > sr.right + m || r.bottom > sr.bottom + m) {\n" +
+      "      bad.push({ w: Math.round(r.width), h: Math.round(r.height), l: Math.round(r.left - sr.left), t: Math.round(r.top - sr.top) })\n" +
+      "    }\n" +
+      "  }\n" +
+      "  const lres = (typeof window !== 'undefined') ? (window.__caesuraLayoutRes || null) : null\n" +
+      "  return { ok: bad.length === 0, layers: els.length, bad: bad.slice(0, 4), res: lres,\n" +
+      "           bgFull: bgW >= sr.width - 2 && bgH >= sr.height - 2,\n" +
+      "           stage: { w: Math.round(sr.width), h: Math.round(sr.height) } }\n" +
+      "})()")
+    record('layout: all layer rects inside #stage (resolution regression)', layout && layout.ok === true, JSON.stringify(layout))
+    record('layout: background layer fills the stage', layout && layout.bgFull === true, JSON.stringify(layout))
+
     // 4b. --cjk mode: CJK / font / packaged-asset verification (plan W3).
     // Drives the dedicated demo/cjk_smoke.ks page by page and asserts the
     // REAL rendered text (Chinese / Japanese / English / mixed punctuation),

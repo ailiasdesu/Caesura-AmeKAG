@@ -12,15 +12,30 @@ const STATIC_ASSETS = [
   './scene-options.js',
   './scripts-index.json',
   './manifest.webmanifest',
-  './assets/fonts/NotoSansCJKsc-Regular.otf'
+  './web-assets/glue.wasm',
+  './scripts/index.json',
+  './cache/story/story.lua',
+  './assets/fonts/NotoSansCJKsc-Regular.otf',
+  './assets/icon-192.png',
+  './assets/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Pre-caching warning (some assets might load on-demand):', err);
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Pre-cache statically available assets with fault tolerance
+      await Promise.allSettled(
+        STATIC_ASSETS.map(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              await cache.put(url, res);
+            }
+          } catch {
+            // Optional or dynamically generated asset miss during install
+          }
+        })
+      );
     }).then(() => self.skipWaiting())
   );
 });
@@ -43,6 +58,9 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
 
+  const url = new URL(request.url);
+  if (!url.protocol.startsWith('http')) return;
+
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -57,9 +75,9 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       }).catch(() => {
-        // Offline fallback
-        if (request.destination === 'document') {
-          return caches.match('./index.html');
+        // Offline fallback for navigation / documents
+        if (request.destination === 'document' || request.mode === 'navigate') {
+          return caches.match('./index.html').then((html) => html || caches.match('./'));
         }
       });
     })

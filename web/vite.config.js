@@ -31,6 +31,16 @@ function copyRuntimeDirs() {
       } else {
         console.warn('[vite] WARN: wasmoon glue.wasm not found under node_modules — packaged player would fetch it from unpkg.')
       }
+      // Copy PWA Service Worker and Web App Manifest into dist/
+      const swFile = resolve(process.cwd(), 'sw.js')
+      if (existsSync(swFile)) {
+        cpSync(swFile, resolve(process.cwd(), 'dist', 'sw.js'))
+      }
+      const manifestFile = resolve(process.cwd(), 'manifest.webmanifest')
+      if (existsSync(manifestFile)) {
+        cpSync(manifestFile, resolve(process.cwd(), 'dist', 'manifest.webmanifest'))
+      }
+
       // bridge.js hard-depends on scriptsBase + 'index.json'; generate it for
       // the copied scripts tree so web/dist is self-contained (W0: the bare
       // dist used to boot-fail on /scripts/index.json 404).

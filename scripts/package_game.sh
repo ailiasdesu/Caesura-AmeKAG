@@ -61,22 +61,25 @@ ASSET_SRC="assets"
 NO_WEB_BUILD=0
 RELEASE=0
 ENTRY=""
+ZIP_ARCHIVE=""
 DEFAULT_INPUT="demo/example_game"
+POSITIONAL=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --out)           OUT="$2";        shift 2;;
-        --assets)        ASSET_SRC="$2";  shift 2;;
-        --no-web-build)  NO_WEB_BUILD=1;  shift;;
-        --release)       RELEASE=1;       shift;;
-        --entry)         ENTRY="$2";      shift 2;;
+        --out)           OUT="$2";         shift 2;;
+        --assets)        ASSET_SRC="$2";   shift 2;;
+        --no-web-build)  NO_WEB_BUILD=1;   shift;;
+        --release)       RELEASE=1;        shift;;
+        --entry)         ENTRY="$2";       shift 2;;
+        --zip)           ZIP_ARCHIVE="$2"; shift 2;;
         -h|--help)       sed -n "1,64p" "$BASH_SOURCE"; exit 0;;
-        *)               break;;
+        -*)              echo "[package] FATAL: unknown option: $1"; exit 1;;
+        *)               POSITIONAL+=("$1"); shift;;
     esac
 done
 
 # --------------------------------------------------- 1. resolve input ------
-POSITIONAL=("$@")
 if [ "${#POSITIONAL[@]}" -eq 0 ]; then POSITIONAL=("$DEFAULT_INPUT"); fi
 
 KAGS=()
@@ -211,7 +214,26 @@ echo "  Serve locally:  cd [$OUT] && python -m http.server 8080"
 echo "  Or upload to itch.io / Netlify / GitHub Pages / S3."
 echo "=================================================================="
 
-# --------------------------------------------------- 6. --release -----------
+# ---------------------------------------------------- 6. zip archive ---------
+if [ -n "$ZIP_ARCHIVE" ]; then
+    echo ""
+    echo "[package] Step 5/5: archive -> $ZIP_ARCHIVE"
+    mkdir -p "$(dirname "$ZIP_ARCHIVE")"
+    python -c "
+import os, zipfile, sys
+out_dir = sys.argv[1]
+zip_path = sys.argv[2]
+with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    for root, dirs, files in os.walk(out_dir):
+        for f in files:
+            full_p = os.path.join(root, f)
+            rel_p = os.path.relpath(full_p, out_dir)
+            zf.write(full_p, rel_p)
+print(f'  Created zip archive: {zip_path} ({os.path.getsize(zip_path)} bytes)')
+" "$OUT" "$ZIP_ARCHIVE"
+fi
+
+# --------------------------------------------------- 7. --release -----------
 if [ "$RELEASE" -eq 1 ]; then
     echo ""
     echo "[package] --release: desktop CPack handoff (see docs/guides/release-process.md)"

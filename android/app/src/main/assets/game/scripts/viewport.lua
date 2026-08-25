@@ -17,7 +17,10 @@ local M = {}
 -- current logical resolution, or the provided fallback
 function M.logical(fallback_w, fallback_h)
     local ok, backend = pcall(require, "backend")
-    if ok and type(backend) == "table" and type(backend.get_resolution) == "function" then
+    -- Accept any callable get_resolution: the C++ DevCore registers a Lua
+    -- function, while the web player's wasmoon bridge marshals JS functions
+    -- as CALLABLE USERDATA (type ~= "function" but invocable via pcall).
+    if ok and type(backend) == "table" and backend.get_resolution ~= nil then
         local ok2, w, h = pcall(backend.get_resolution)
         if ok2 and type(w) == "number" and type(h) == "number" and w > 0 and h > 0 then
             return math.floor(w), math.floor(h)

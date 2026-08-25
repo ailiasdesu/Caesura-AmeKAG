@@ -566,4 +566,48 @@ function Schema.checkInterp(text)
     return issues
 end
 
+Schema.define("input", {
+    _meta = {
+        category = "text",
+        blocking = true,
+        desc = "prompt user for text input via virtual keyboard / IME and store to variable"
+    },
+    name        = { type = "string", required = true },
+    prompt      = { type = "string", default = "", interpolate = true },
+    default     = { type = "string", default = "", interpolate = true },
+    maxlen      = { type = "number", default = 32, min = 1, max = 512 },
+    max_length  = { type = "number", default = 32, min = 1, max = 512 },
+    x           = { type = "number", default = 0 },
+    y           = { type = "number", default = 0 },
+    width       = { type = "number", default = 640, min = 120, max = 1920 },
+    height      = { type = "number", default = 180, min = 60, max = 1080 },
+    font_size   = { type = "number", default = 28, min = 12, max = 72 },
+    color       = { type = "string", default = "#ffffff" },
+    bg_color    = { type = "string", default = "#202020" },
+    password    = { type = "boolean", default = false },
+    cond        = { type = "string" },
+    btn_ok      = { type = "string", default = "OK" },
+    btn_cancel  = { type = "string", default = "" },
+})
+
+Schema.define("edit", {
+    _meta = { category = "text", blocking = true, desc = "KAG3 alias of [input]" },
+    name        = { type = "string", required = true },
+    prompt      = { type = "string", default = "", interpolate = true },
+    default     = { type = "string", default = "", interpolate = true },
+    maxlen      = { type = "number", default = 32, min = 1, max = 512 },
+    max_length  = { type = "number", default = 32, min = 1, max = 512 },
+    x           = { type = "number", default = 0 },
+    y           = { type = "number", default = 0 },
+    width       = { type = "number", default = 640, min = 120, max = 1920 },
+    height      = { type = "number", default = 180, min = 60, max = 1080 },
+    font_size   = { type = "number", default = 28, min = 12, max = 72 },
+    color       = { type = "string", default = "#ffffff" },
+    bg_color    = { type = "string", default = "#202020" },
+    password    = { type = "boolean", default = false },
+    cond        = { type = "string" },
+    btn_ok      = { type = "string", default = "OK" },
+    btn_cancel  = { type = "string", default = "" },
+})
+
 return Schema

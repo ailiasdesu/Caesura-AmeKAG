@@ -55,6 +55,67 @@
     .save-entry .slot-num { color: #6cf; font-weight: bold; min-width: 2ch; }
     .save-entry .slot-meta { color: #999; flex: 1; }
     .save-entry button { padding: 2px 8px; font-size: 12px; cursor: pointer; }
+
+    /* Mobile orientation hint overlay */
+    #rotate-device-overlay {
+      display: none;
+    }
+    @media screen and (orientation: portrait) and (max-width: 1024px) {
+      #rotate-device-overlay {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(17, 17, 17, 0.96);
+        color: #fff;
+        z-index: 100000;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      .rotate-phone-icon {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 16px;
+        border: 3px solid #6cf;
+        border-radius: 8px;
+        animation: rotate-hint 2s ease-in-out infinite;
+        position: relative;
+      }
+      .rotate-phone-icon::after {
+        content: '';
+        position: absolute;
+        bottom: 4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #6cf;
+      }
+      @keyframes rotate-hint {
+        0%, 10% { transform: rotate(0deg); }
+        50%, 60% { transform: rotate(-90deg); }
+        100% { transform: rotate(0deg); }
+      }
+      .rotate-title {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #6cf;
+      }
+      .rotate-desc {
+        font-size: 14px;
+        color: #bbb;
+        max-width: 320px;
+        line-height: 1.5;
+      }
+    }
   </style>
 </head>
 <body>
@@ -104,6 +165,11 @@
     <div id="backlog"></div>
   </div>
   <div id="log"></div>
+  <div id="rotate-device-overlay">
+    <div class="rotate-phone-icon"></div>
+    <div class="rotate-title">Please Rotate Device / 请旋转设备</div>
+    <div class="rotate-desc">For the best visual novel experience, please rotate your screen to landscape.<br>为获得最佳视听与阅读体验，请将屏幕旋转至横向模式。</div>
+  </div>
   <script type="module" src="./main.mjs"></script>
 </body>
 </html>

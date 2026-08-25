@@ -332,6 +332,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     render_text: (...args) => { const t = args[0]; if (typeof t === 'string') core.appendText(t); return 1 }, clear_text: () => core.clearText(),
     text_render_ruby: () => {}, text_set_font: () => {}, text_reset_state: () => {},
     create_lut_texture: () => 0, render_frame: () => {}, set_screen_offset: () => {},
+    is_postfx_supported: (kind) => true, set_postfx: (kind, pf) => {}, clear_postfx: () => {},
     particles_create_emitter: () => 0, particles_emit: () => {}, particles_destroy_emitter: () => {}, clear_particles: () => {},
     video_stop: () => {}, video_play: () => 0, video_is_playing: () => false,
     ai_available: () => false, ai_query_async: () => {}, ai_cancel: () => {},

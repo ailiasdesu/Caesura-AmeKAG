@@ -15,6 +15,8 @@
 
 [font face="default" size=22]
 [pt speed=50]
+[textbox x=120 y=480 w=1040 h=200 color="20,24,32" opacity=210 visible=true]
+[nameplate x=120 y=435 w=220 h=40 color="30,36,48" opacity=230 text_color="240,245,255"]
 
 ; =============================================================================
 ;  Scene 1 — Title / introduction
