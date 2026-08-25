@@ -36,6 +36,7 @@ local tests = {
     "test_carc_import",
     "test_ks_bake",
     "test_lsp",
+    "test_kag_semantic",
     "test_schema_types",
     "test_determinism",
     "test_fuzz",
