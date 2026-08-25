@@ -569,8 +569,21 @@ const scheduleAuto = () => {
 
 // render loop: sync core state to DOM every frame (CSS transitions
 // interpolate sprite moves/fades between renders).
+//
+// t12: render() returns a promise and crosses the wasm boundary (getLayers),
+// so firing it per frame without awaiting used to let slow passes overlap.
+// Serialization now lives INSIDE DomRenderer.render() — an in-flight pass
+// absorbs further calls into a single trailing pass that reads fresh state —
+// which is the right place for it: every caller (this loop, runScene, advance,
+// the save/load handlers) gets the guarantee, not just this one. The loop
+// therefore stays synchronous: awaiting here would stall the backlog/endings/
+// audio sync behind a wasm hop. The promise is explicitly voided, and a
+// rejection is reported instead of becoming an unhandled rejection (main.mjs
+// counts those as page errors via window.__caesuraErrors).
 const frame = () => {
-  renderer.render()
+  void renderer.render().catch((e) => {
+    log('render error: ' + String((e && e.message) || e).slice(0, 120))
+  })
   syncBacklog()
   syncEndings()
   syncAudioStatus()

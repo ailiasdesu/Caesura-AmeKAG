@@ -23,6 +23,19 @@ function paletteFilter(palette) {
   return 'brightness(' + (1 - 0.18 * t).toFixed(3) + ') sepia(' + b + '%) hue-rotate(' + h + 'deg) saturate(' + sat.toFixed(3) + ')'
 }
 
+// Write a style property only when the DOM value actually differs (t12).
+//
+// Why compare against the ELEMENT and not a cached "last written" map: a cache
+// goes stale the moment anything else touches the node (devtools, another
+// script, a CSS-clearing widget, or an element reused for a different layer),
+// and a stale cache makes the renderer REFUSE to repair the difference. Reading
+// el.style.<prop> is an inline-style read — it parses the style attribute and
+// does NOT force layout or style recalc (unlike getComputedStyle), so the
+// comparison is cheap and the renderer stays self-healing by construction.
+function setStyle(el, prop, value) {
+  if (el.style[prop] !== value) el.style[prop] = value
+}
+
 export class DomRenderer {
   constructor(core, rootEl, opts = {}) {
     this.core = core
@@ -35,6 +48,24 @@ export class DomRenderer {
     /** Optional external layer source (Lua Layers.snapshot()); when set it
      *  takes precedence over core.renderList(). */
     this.getLayers = opts.getLayers ?? null
+    // ---- render serialization (t12) ------------------------------------
+    // render() crosses the wasm boundary via getLayers(); the rAF loop calls
+    // it without awaiting, so a slow pass used to overlap with the next one
+    // (both walking the same layer list and writing the same nodes).
+    // _inFlight holds the running pass; while it runs, further calls do not
+    // start a second walk — they set _pending and share _pendingPromise, so a
+    // burst of N frames collapses to "the current pass + exactly one more".
+    //
+    // Why this cannot make the picture lag: the coalesced pass runs
+    // immediately after the current one and reads core state FRESH at that
+    // moment, so it renders the newest state, not a queued stale frame. The
+    // work that is dropped is only the redundant intermediate walks whose
+    // output would have been overwritten in the same rAF burst anyway. The
+    // last requested frame is always executed — never skipped.
+    this._inFlight = null
+    this._pending = false
+    this._pendingPromise = null
+    this._pendingResolve = null
     this._subscribe()
   }
 
@@ -48,16 +79,69 @@ export class DomRenderer {
   /** Set the URL for a texture id (img src resolution). */
   setTextureUrl(id, url) { this.textureUrls.set(id, url) }
 
-  /** Full re-render: sync DOM to core state. Cheap for demo sizes. */
-  async render() {
+  /** Sync DOM to core state.
+   *
+   *  Two shapes, picked by whether a layer source can suspend:
+   *   - no getLayers (core.renderList, plain JS): the whole pass is
+   *     SYNCHRONOUS. It cannot overlap with anything, so it is not queued —
+   *     callers observe the finished DOM immediately after render() returns,
+   *     which is the long-standing contract several suites rely on
+   *     (adapter.test.js calls render() without awaiting and asserts at once).
+   *   - getLayers set (the wasmoon hop): serialized. An in-flight pass absorbs
+   *     further calls into ONE trailing pass; the returned promise resolves
+   *     after a pass that started at or after this call, so an awaiting caller
+   *     always observes the state it asked for.
+   *  Always returns a promise, so `await renderer.render()` is valid on both. */
+  render() {
+    if (!this.getLayers) {
+      this._renderWithList(this.core.renderList())
+      return Promise.resolve()
+    }
+    if (this._inFlight) {
+      // A pass is running: ask for one more and hand every waiter the same
+      // promise (one trailing pass, no matter how many frames pile up).
+      this._pending = true
+      if (!this._pendingPromise) {
+        this._pendingPromise = new Promise((resolve) => { this._pendingResolve = resolve })
+      }
+      return this._pendingPromise
+    }
+    this._inFlight = this._runPasses()
+    return this._inFlight
+  }
+
+  /** Drive passes until no further render was requested while one ran.
+   *  Each iteration takes ownership of the waiters that queued BEFORE it
+   *  started, so a request arriving mid-pass gets a fresh promise and its own
+   *  later pass — an awaiting caller is never resolved by a pass that began
+   *  before its request. */
+  async _runPasses() {
+    try {
+      this._renderWithList(await this.getLayers())
+      while (this._pending) {
+        this._pending = false
+        const resolve = this._pendingResolve
+        this._pendingPromise = null
+        this._pendingResolve = null
+        this._renderWithList(await this.getLayers())
+        if (resolve) resolve()
+      }
+    } finally {
+      this._inFlight = null
+    }
+  }
+
+  /** One full pass over an already-resolved layer list: synchronous, so the
+   *  DOM is never observed half-updated (the only await in the render path is
+   *  the layer fetch above). */
+  _renderWithList(list) {
     const alive = new Set()
     // Web-side color grading: the active LUT (backend.set_palette ->
     // core.palette) tints the whole render output via a CSS filter, the
     // DOM analog of the desktop s_lutTex/u_paletteParams binding. day/
     // neutral (handle null) applies nothing; night applies a blue-dark
     // grade scaled by intensity.
-    this.root.style.filter = paletteFilter(this.core.palette)
-    const list = this.getLayers ? await this.getLayers() : this.core.renderList()
+    setStyle(this.root, 'filter', paletteFilter(this.core.palette))
     // text layer rendered separately (overlay) if it has content
     for (const n of list) {
       let el = this._els.get(n.name)
@@ -74,18 +158,32 @@ export class DomRenderer {
       }
       // CSS transitions animate engine-driven moves/fades (sprite_move /
       // sprite_fade yield per frame; the DOM sees the endpoint).
-      el.style.transition = 'left 300ms linear, top 300ms linear, opacity 300ms linear'
-      el.style.left = n.x + 'px'
-      el.style.top = n.y + 'px'
-      el.style.width = n.w + 'px'
-      el.style.height = n.h + 'px'
+      //
+      // t12: every write below goes through setStyle, which compares against
+      // the element's current inline value first. A steady scene therefore
+      // costs ZERO style writes per frame instead of 7 per layer, and the
+      // renderer still repairs any value changed behind its back (the
+      // comparison reads the DOM, not a cache).
+      setStyle(el, 'transition', 'left 300ms linear, top 300ms linear, opacity 300ms linear')
+      setStyle(el, 'left', n.x + 'px')
+      setStyle(el, 'top', n.y + 'px')
+      setStyle(el, 'width', n.w + 'px')
+      setStyle(el, 'height', n.h + 'px')
       // engine opacity is 0..255; DOM wants 0..1
-      el.style.opacity = String((Number(n.opacity) || 255) / 255)
-      el.style.zIndex = String(n.z)
+      setStyle(el, 'opacity', String((Number(n.opacity) || 255) / 255))
+      setStyle(el, 'zIndex', String(n.z))
       const url = n.texture ? this.textureUrls.get(n.texture) : null
       if (el.tagName === 'IMG') {
-        if (url) el.setAttribute('src', url)
-        else el.removeAttribute('src')
+        // Re-setting src to the SAME URL makes the browser re-run its image
+        // load path (cache revalidation, and a decode on some engines), so
+        // compare with the attribute actually on the node. getAttribute
+        // returns the literal string that was set (el.src would return an
+        // absolutized URL and never match a relative one).
+        if (url) {
+          if (el.getAttribute('src') !== url) el.setAttribute('src', url)
+        } else if (el.hasAttribute('src')) {
+          el.removeAttribute('src')
+        }
       } else {
         el.textContent = url ? '' : ''
       }
