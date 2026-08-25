@@ -137,9 +137,12 @@ brew install cmake sdl3 freetype zstd openssl@3   # ffmpeg 可选，见上
 ## 2. 克隆与首次配置
 
 ```bash
-# 克隆（仓库较大，含 vendored 第三方库，约 1–2 GB）
-git clone <你的 fork 或本仓库地址> CaesuraAmeKAG
+# 推荐 1：部分克隆（仅按需下载当前提交的 blob，保留完整分支历史，下载量仅 ~25MB，速度提升 15 倍）
+git clone --filter=blob:none https://github.com/ailiasdesu/Caesura-AmeKAG.git CaesuraAmeKAG
 cd CaesuraAmeKAG
+
+# 推荐 2：浅克隆（仅拉取最新 HEAD，适合 CI 或快速体验）
+# git clone --depth=1 https://github.com/ailiasdesu/Caesura-AmeKAG.git CaesuraAmeKAG
 
 # 确认在 master 分支
 git branch --show-current          # -> master

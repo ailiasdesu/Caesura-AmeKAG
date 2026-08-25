@@ -298,6 +298,15 @@ jobs:
       - name: Test Coverage Check
         run: python3 tests/scripts/check_test_coverage.py
 
+      - name: Platform Matrix Freshness & Validation
+        run: python3 scripts/generate_platform_status.py --check
+
+      - name: Android Subsystem Regression Gate
+        run: python3 scripts/verify_android_regression.py
+
+      - name: Release Candidate Gate & Evidence Verifier
+        run: python3 scripts/verify_release_candidate.py --check
+
   # ============================================================
   # Release Package (Windows only)
   # ============================================================

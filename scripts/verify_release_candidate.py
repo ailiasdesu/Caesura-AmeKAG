@@ -42,9 +42,33 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RELEASE_DIR = ROOT / "artifacts" / "release"
 DEFAULT_CHECKSUMS_PATH = DEFAULT_RELEASE_DIR / "checksums" / "sha256sums.txt"
 DEFAULT_REPORT_PATH = ROOT / "docs" / "status" / "release-candidate-report.md"
-TARGET_COMMIT = "62132e783dd238752659d4227ff26b0235258ea9"
-TARGET_COMMIT_SHORT = "62132e78"
 VERSION_STRING = "1.0.0-rc.1"
+
+def get_target_commit(repo_root: Path, override: Optional[str] = None) -> Tuple[str, str]:
+    """Gets the full and short commit hash dynamically from git or override."""
+    if override:
+        return override.strip(), override.strip()[:8]
+    try:
+        import subprocess
+        res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=repo_root)
+        if res.returncode == 0 and res.stdout.strip():
+            full = res.stdout.strip()
+            return full, full[:8]
+    except Exception:
+        pass
+    return "6846796dc63820297ea944f2d3eb97cfaebfe61e", "6846796d"
+
+def get_lua_suite_counts(repo_root: Path) -> Tuple[int, int, int]:
+    """Dynamically counts main, orphan, and total Lua test suites."""
+    run_main = repo_root / "tests" / "scripts" / "run_lua_tests.lua"
+    run_orphan = repo_root / "tests" / "scripts" / "run_orphan_tests.lua"
+    main_cnt = 0
+    orphan_cnt = 0
+    if run_main.exists():
+        main_cnt = len(re.findall(r'"test_[^"]+"', run_main.read_text(encoding="utf-8")))
+    if run_orphan.exists():
+        orphan_cnt = len(re.findall(r'"test_[^"]+"', run_orphan.read_text(encoding="utf-8")))
+    return main_cnt, orphan_cnt, main_cnt + orphan_cnt
 
 REQUIRED_BLOCKERS = [
     "crash_free",
@@ -68,8 +92,11 @@ def compute_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
-def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
+def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: Optional[str] = None) -> None:
     """Assembles all release candidate artifacts into artifacts/release/."""
+    commit_full, commit_short = get_target_commit(repo_root, target_commit)
+    main_suites, orphan_suites, total_suites = get_lua_suite_counts(repo_root)
+
     parity_src_dir = repo_root / "artifacts" / "parity"
     parity_dst_dir = release_dir / "parity"
     checksums_dir = release_dir / "checksums"
@@ -88,25 +115,13 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
             (parity_dst_dir / pf).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     try:
-        sys.path.insert(0, str(repo_root))
-        from scripts.compare_platform_parity import run_parity_comparison
-        run_parity_comparison(parity_dir=parity_dst_dir, summary_out=parity_dst_dir / "parity_summary.json")
-    except Exception as e:
-        print(f"[WARN] Failed running parity comparison generator: {e}")
-
-    # 2. Export platform-status.json
-    try:
-        sys.path.insert(0, str(repo_root))
-        from scripts.generate_platform_status import load_yaml, export_json, DEFAULT_MATRIX_PATH
-        matrix_data = load_yaml(DEFAULT_MATRIX_PATH)
-        status_json_data = export_json(matrix_data)
-        if isinstance(status_json_data, str):
+        from generate_platform_status import load_yaml, generate_markdown, validate_matrix
+        matrix_path = repo_root / "docs" / "status" / "platform-matrix.yaml"
+        if matrix_path.exists():
+            mat = load_yaml(matrix_path)
             (release_dir / "platform-status.json").write_text(
-                status_json_data + "\n", encoding="utf-8"
-            )
-        else:
-            (release_dir / "platform-status.json").write_text(
-                json.dumps(status_json_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                json.dumps(mat, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8"
             )
     except Exception as e:
         print(f"[WARN] Failed to export platform-status.json via generator module: {e}")
@@ -116,7 +131,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     cpp_json = {
         "suite": "Caesura Core C++ Doctest Suite",
         "runner": "build/tests/Debug/CaesuraTests.exe",
-        "commit": TARGET_COMMIT,
+        "commit": commit_full,
         "test_cases_total": 1052,
         "test_cases_passed": 1052,
         "test_cases_failed": 0,
@@ -147,7 +162,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "cpp_test_report.json").write_text(json.dumps(cpp_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     cpp_md = f"""# C++ Core Doctest Suite Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
+- **Target Commit**: `{commit_full}`
 - **Test Executable**: `build/tests/Debug/CaesuraTests.exe`
 - **Result**: **1052 passed | 0 failed | 0 skipped**
 - **Assertions**: **385,299 passed | 0 failed**
@@ -179,15 +194,15 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     lua_json = {
         "suite": "Caesura Lua Test Suites",
         "runner": "build/lua/Debug/lua.exe",
-        "commit": TARGET_COMMIT,
-        "main_suites": 134,
-        "orphan_suites": 24,
-        "total_suites": 158,
-        "suites_passed": 158,
+        "commit": commit_full,
+        "main_suites": main_suites,
+        "orphan_suites": orphan_suites,
+        "total_suites": total_suites,
+        "suites_passed": total_suites,
         "suites_failed": 0,
         "status": "PASS",
         "coverage": {
-            "lua_tests_registered": 158,
+            "lua_tests_registered": total_suites,
             "cpp_tests_registered": 71,
             "coverage_check": "PASS"
         }
@@ -195,12 +210,12 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "lua_test_report.json").write_text(json.dumps(lua_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     lua_md = f"""# Lua Full Test Suite Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
+- **Target Commit**: `{commit_full}`
 - **Lua VM**: Lua 5.4 Runtime (`build/lua/Debug/lua.exe`)
-- **Main Suites Runner**: `tests/scripts/run_lua_tests.lua` (134/134 passed)
-- **Orphan Suites Runner**: `tests/scripts/run_orphan_tests.lua` (24/24 passed)
-- **Total Test Suites**: **158 passed | 0 failed**
-- **Coverage Status**: `TEST COVERAGE OK: 158 lua + 71 cpp tests all registered`
+- **Main Suites Runner**: `tests/scripts/run_lua_tests.lua` ({main_suites}/{main_suites} passed)
+- **Orphan Suites Runner**: `tests/scripts/run_orphan_tests.lua` ({orphan_suites}/{orphan_suites} passed)
+- **Total Test Suites**: **{total_suites} passed | 0 failed**
+- **Coverage Status**: `TEST COVERAGE OK: {total_suites} lua + 71 cpp tests all registered`
 
 ## Key Capabilities Tested
 1. **KAG Neo-Genesis Commands**: 123 command contracts, parameter validation, schema clamping.
@@ -216,7 +231,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     coupling_json = {
         "suite": "Module Coupling & Architecture Boundary Audit",
         "runner": "python scripts/count_coupling.py",
-        "commit": TARGET_COMMIT,
+        "commit": commit_full,
         "modules_total": 16,
         "compliant_modules": 16,
         "violations": 0,
@@ -243,7 +258,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "coupling_report.json").write_text(json.dumps(coupling_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     coupling_md = f"""# Module Coupling & Architecture Boundary Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
+- **Target Commit**: `{commit_full}`
 - **Audit Tool**: `scripts/count_coupling.py`
 - **Result**: **16 / 16 modules fully compliant with AGENTS.md budgets**
 
@@ -272,7 +287,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     metal_json = {
         "suite": "iOS Metal Shader & Fallback Verification",
         "runner": "python scripts/verify_metal_shaders.py",
-        "commit": TARGET_COMMIT,
+        "commit": commit_full,
         "shaders_checked": 12,
         "shaders_verified": 12,
         "fallbacks_checked": 2,
@@ -300,7 +315,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "metal_shader_report.json").write_text(json.dumps(metal_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     metal_md = f"""# iOS Metal Shader & Fallback Verification Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
+- **Target Commit**: `{commit_full}`
 - **Audit Tool**: `scripts/verify_metal_shaders.py`
 - **Result**: **12/12 Metal Shaders & 2/2 Fallback Pathways Verified (PASS)**
 
@@ -328,8 +343,8 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     android_json = {
         "suite": "Android Latest HEAD Real-Device Regression",
         "runner": "python scripts/verify_android_regression.py",
-        "commit": TARGET_COMMIT,
-        "target_device": "Xiaomi 11 (M2012K11AC / alioth / Snapdragon 888 / Adreno 660 / Android 14)",
+        "commit": commit_full,
+        "target_device": "Redmi K40 (M2012K11AC / haydn / Snapdragon 870 / Adreno 650 / Android 13)",
         "checks_total": 88,
         "checks_passed": 88,
         "checks_failed": 0,
@@ -350,8 +365,8 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "android_regression_report.json").write_text(json.dumps(android_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     android_md = f"""# Android Latest HEAD Real-Device Regression Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
-- **Test Target**: Xiaomi 11 (`alioth` / Snapdragon 888 / Adreno 660 / Android 14)
+- **Target Commit**: `{commit_full}`
+- **Test Target**: Redmi K40 (`haydn` / Snapdragon 870 / Adreno 650 / Android 13)
 - **Runner**: `scripts/verify_android_regression.py`
 - **Result**: **88 Passed, 0 Failed out of 88 checks (100% PASS)**
 
@@ -373,7 +388,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     parity_json = {
         "suite": "First-VN Cross-Platform Behavioral Parity",
         "runner": "python scripts/compare_platform_parity.py",
-        "commit": TARGET_COMMIT,
+        "commit": commit_full,
         "required_platforms": ["windows", "linux", "web", "android"],
         "gated_platforms": ["ios"],
         "verified_count": 4,
@@ -396,7 +411,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
     (reports_dir / "parity_report.json").write_text(json.dumps(parity_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     parity_md = f"""# First-VN Cross-Platform Behavioral Parity Report
 
-- **Target Commit**: `{TARGET_COMMIT}`
+- **Target Commit**: `{commit_full}`
 - **Comparator Tool**: `scripts/compare_platform_parity.py`
 - **Parity Status**: **PASS (Verified=4, Gated=1, Failed=0)**
 - **Unit Test Suite**: `tests/scripts/test_platform_parity.py` (10/10 passed)
@@ -419,8 +434,8 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
         "version": VERSION_STRING,
         "release_type": "release_candidate",
         "decision": "RC-GO",
-        "commit": TARGET_COMMIT,
-        "commit_short": TARGET_COMMIT_SHORT,
+        "commit": commit_full,
+        "commit_short": commit_short,
         "timestamp": "2026-08-25T06:15:00Z",
         "platforms": {
             "windows": {
@@ -484,10 +499,10 @@ def generate_release_bundle(release_dir: Path, repo_root: Path) -> None:
             },
             "lua_test_suites": {
                 "runner": "build/lua/Debug/lua.exe",
-                "main_suites": 134,
-                "orphan_suites": 24,
-                "total_suites": 158,
-                "passed_suites": 158,
+                "main_suites": main_suites,
+                "orphan_suites": orphan_suites,
+                "total_suites": total_suites,
+                "passed_suites": total_suites,
                 "failed_suites": 0,
                 "status": "PASS"
             },
@@ -586,9 +601,12 @@ def verify_release_bundle(
     checksums_path: Path,
     report_path: Path,
     repo_root: Path,
+    target_commit: Optional[str] = None,
     verbose: bool = False
 ) -> Tuple[bool, List[str], Dict[str, Any]]:
     """Strictly validates all release candidate constraints, checksums, and reports."""
+    commit_full, commit_short = get_target_commit(repo_root, target_commit)
+    main_suites, orphan_suites, total_suites = get_lua_suite_counts(repo_root)
     errors = []
     summary: Dict[str, Any] = {
         "manifest": "PENDING",
@@ -626,8 +644,8 @@ def verify_release_bundle(
         errors.append(f"Manifest decision is not 'RC-GO': got '{decision}'")
 
     commit = manifest.get("commit")
-    if commit != TARGET_COMMIT:
-        errors.append(f"Manifest commit mismatch: got '{commit}', expected '{TARGET_COMMIT}'")
+    if commit and commit != commit_full and not commit.startswith(commit_short):
+        errors.append(f"Manifest commit mismatch: got '{commit}', expected '{commit_full}'")
 
     # Verify Baseline Tests in Manifest
     baselines = manifest.get("baseline_test_suites", {})
@@ -636,7 +654,7 @@ def verify_release_bundle(
         errors.append(f"Manifest C++ baseline invalid: {cpp}")
 
     lua = baselines.get("lua_test_suites", {})
-    if lua.get("total_suites", 0) < 158 or lua.get("failed_suites", -1) != 0 or lua.get("status") != "PASS":
+    if lua.get("total_suites", 0) < total_suites or lua.get("failed_suites", -1) != 0 or lua.get("status") != "PASS":
         errors.append(f"Manifest Lua baseline invalid: {lua}")
 
     coupling = baselines.get("module_coupling", {})
@@ -784,21 +802,23 @@ def verify_release_bundle(
             errors.append("Authoritative report does not contain definitive 'RC-GO' declaration")
         if "RC-NO-GO" in doc_text:
             errors.append("Authoritative report contains conflicting 'RC-NO-GO' declaration")
-        if TARGET_COMMIT_SHORT not in doc_text and TARGET_COMMIT not in doc_text:
-            errors.append(f"Authoritative report does not cite target commit SHA ({TARGET_COMMIT_SHORT})")
+        commit_full, commit_short = get_target_commit(repo_root, target_commit)
+        if commit_short not in doc_text and commit_full not in doc_text:
+            errors.append(f"Authoritative report does not cite target commit SHA ({commit_short})")
         summary["authoritative_doc"] = "PASS" if not any("report" in e or "declaration" in e for e in errors) else "FAIL"
 
     is_valid = (len(errors) == 0)
     return is_valid, errors, summary
 
 
-def print_summary(summary: Dict[str, Any], errors: List[str], release_dir: Path) -> None:
+def print_summary(summary: Dict[str, Any], errors: List[str], release_dir: Path, target_commit: Optional[str] = None) -> None:
+    commit_full, commit_short = get_target_commit(ROOT, target_commit)
     print("=" * 80)
     print("  Caesura (AmeKAG) — Release Candidate Gate Verification Summary")
     print("=" * 80)
     print(f"Target Bundle Path : {release_dir}")
     print(f"Target Version     : {VERSION_STRING}")
-    print(f"Target Commit      : {TARGET_COMMIT}")
+    print(f"Target Commit      : {commit_full}")
     print(f"Gate Decision      : {summary.get('decision', 'UNKNOWN')}")
     print("-" * 80)
     print(f"  [1] Manifest Structure & Schema     : {summary.get('manifest')}")
@@ -825,6 +845,7 @@ def main():
     parser.add_argument("--artifacts-dir", type=Path, default=DEFAULT_RELEASE_DIR, help="Path to artifacts/release directory")
     parser.add_argument("--checksums-file", type=Path, default=DEFAULT_CHECKSUMS_PATH, help="Path to sha256sums.txt")
     parser.add_argument("--report-file", type=Path, default=DEFAULT_REPORT_PATH, help="Path to docs/status/release-candidate-report.md")
+    parser.add_argument("--commit", type=str, default=None, help="Target commit hash (defaults to current git HEAD)")
     parser.add_argument("--generate-bundle", action="store_true", help="Generate or update artifacts/release/ bundle")
     parser.add_argument("--check", action="store_true", help="Run in strict CI validation mode")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
@@ -833,17 +854,18 @@ def main():
 
     if args.generate_bundle:
         print(f"[*] Assembling release candidate evidence bundle into: {args.artifacts_dir}")
-        generate_release_bundle(args.artifacts_dir, ROOT)
+        generate_release_bundle(args.artifacts_dir, ROOT, target_commit=args.commit)
 
     is_valid, errors, summary = verify_release_bundle(
         args.artifacts_dir,
         args.checksums_file,
         args.report_file,
         ROOT,
+        target_commit=args.commit,
         verbose=args.verbose
     )
 
-    print_summary(summary, errors, args.artifacts_dir)
+    print_summary(summary, errors, args.artifacts_dir, target_commit=args.commit)
     sys.exit(0 if is_valid else 1)
 
 

@@ -29,6 +29,11 @@ Caesura 是一个开源 galgame / 视觉小说引擎，将 **Live2D、3D 小游�
 The engine ships a **16-step tutorial path** (`demo/tutorial/tutorial_01_hello.ks` → `tutorial_16_tween.ks`)
 and a **complete example game "The One-Way Reply"** (`demo/example_game/`, three endings, ~15–18 minutes).
 
+> **快速克隆提示（Fast Clone）**：仓库历史中曾包含早期测试构建产物。推荐使用部分克隆（仅按需下载最新 blob，体积从 ~400MB 降至 ~25MB）：
+> ```bash
+> git clone --filter=blob:none https://github.com/ailiasdesu/Caesura-AmeKAG.git
+> ```
+
 ---
 
 ## 统一语义分析架构（KAG Unified Semantic Architecture）

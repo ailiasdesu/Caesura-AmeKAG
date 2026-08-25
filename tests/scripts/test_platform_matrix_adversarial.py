@@ -479,39 +479,46 @@ platforms:
             "Empirical vulnerability confirmed: test: None bypassed empty test command check."
         )
 
+    def test_vulnerability_str_none_bypass_on_test_field(self):
+        """
+        Verify that test: null / None is caught and rejected as empty.
+        """
+        data = self.get_clean_data()
+        data["platforms"]["windows"]["capabilities"]["build"]["evidence"]["test"] = None
+        errors = gps.validate_matrix(data, REPO_ROOT)
+        self.assertTrue(
+            any("evidence test command is empty" in e for e in errors),
+            "Null/None test command must be rejected with an error."
+        )
+
     def test_vulnerability_str_none_bypass_on_verified_at_field(self):
         """
-        Adversarial Observation:
-        When a verified capability has verified_at: null (None in Python),
-        `str(evidence.get('verified_at', ''))` becomes "None", which evaluates to non-empty.
-        This allows null verified_at timestamps to bypass validation.
+        Verify that verified_at: null / None is caught and rejected as empty.
         """
         data = self.get_clean_data()
         data["platforms"]["windows"]["capabilities"]["build"]["evidence"]["verified_at"] = None
         errors = gps.validate_matrix(data, REPO_ROOT)
-        # Demonstrating empirical finding:
-        is_bypassed = not any("evidence verified_at timestamp is empty" in e for e in errors)
         self.assertTrue(
-            is_bypassed,
-            "Empirical vulnerability confirmed: verified_at: None bypassed empty timestamp check."
+            any("evidence verified_at timestamp is empty" in e for e in errors),
+            "Null/None verified_at timestamp must be rejected with an error."
         )
 
     def test_vulnerability_probe_evidence_unchecked(self):
         """
-        Adversarial Observation:
-        When a capability has status: probe, its evidence dictionary is not validated.
-        Bogus document paths or invalid commit hashes in probe capabilities are silently ignored
-        by validate_matrix(), yet rendered into Section 3 (Global Evidence Registry Index).
+        Verify that probe capabilities with non-existent evidence documents are rejected.
         """
         data = self.get_clean_data()
         data["platforms"]["macos"]["capabilities"]["build"]["evidence"] = {
-            "commit": "NOT_A_HEX_SHA",
+            "commit": "6846796d",
             "document": "fake/non_existent_file.md",
             "test": "imaginary test",
             "verified_at": "2026-08-25T00:00:00Z"
         }
         errors = gps.validate_matrix(data, REPO_ROOT)
-        self.assertEqual(len(errors), 0, "Empirical finding: probe evidence is completely unvalidated.")
+        self.assertTrue(
+            any("referenced document does not exist" in e for e in errors),
+            "Probe evidence pointing to missing documents must be caught."
+        )
 
 
 if __name__ == "__main__":

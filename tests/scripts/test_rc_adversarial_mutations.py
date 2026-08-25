@@ -11,6 +11,7 @@ Purpose: Stress-test scripts/verify_release_candidate.py and scripts/compare_pla
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -553,8 +554,7 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
         temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
         try:
             doc_text = s_rep.read_text(encoding="utf-8")
-            doc_text = doc_text.replace("62132e783dd238752659d4227ff26b0235258ea9", "unknown_commit_hash")
-            doc_text = doc_text.replace("62132e78", "unknown")
+            doc_text = re.sub(r"[0-9a-fA-F]{7,40}", "unknown_hash", doc_text)
             s_rep.write_text(doc_text, encoding="utf-8")
 
             ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)

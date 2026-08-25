@@ -228,9 +228,15 @@ class AndroidVerifier:
                 self.check("Sunset ending check", "f.is_sun == 1" in story_content)
 
     def run_all(self):
+        try:
+            import subprocess
+            res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ROOT)
+            head_commit = res.stdout.strip() if res.returncode == 0 and res.stdout.strip() else "latest"
+        except Exception:
+            head_commit = "latest"
         print("===================================================================")
         print(" Caesura (AmeKAG) — Android Latest HEAD Regression Verification")
-        print(" Target Commit: 62132e783dd238752659d4227ff26b0235258ea9")
+        print(f" Target Commit: {head_commit}")
         print("===================================================================")
         self.verify_boot_and_manifest()
         self.verify_cjk_font_atlas()

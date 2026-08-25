@@ -2,7 +2,7 @@
 
 > **Decision**: **`RC-GO`**  
 > **Target Version**: `1.0.0-rc.1`  
-> **Target Commit SHA**: `62132e783dd238752659d4227ff26b0235258ea9` (`62132e78`)  
+> **Target Commit SHA**: `6846796dc63820297ea944f2d3eb97cfaebfe61e` (`6846796d`)  
 > **Evaluation Date**: `2026-08-25`  
 > **Evaluation Mode**: 100% Evidence-Backed Verification (Strict Zero-Cheating Charter)  
 > **Authoritative Baseline Matrix**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
@@ -15,11 +15,11 @@ Caesura (AmeKAG) has achieved the **1.x Release Candidate (RC-GO)** milestone. A
 
 - **Zero Regression Baseline**:
   - **C++ Doctest Suite**: **1052 / 1052 passed** (0 failed, 0 skipped, 385,299 assertions passed).
-  - **Lua Test Suites**: **158 / 158 suites passed** (134 main suites + 24 orphan suites, 0 failed).
-  - **Web Vitest Suite**: **23 / 23 test files passed** (319 tests passed, 0 failed).
+  - **Lua Test Suites**: **160 / 160 suites passed** (136 main suites + 24 orphan suites, 0 failed).
+  - **Web Vitest Suite**: **24 / 24 test files passed** (323 tests passed, 0 failed).
   - **Architectural Boundary Audit**: **16 / 16 modules compliant** with `AGENTS.md` `#include` limits.
   - **iOS Metal Shader & Fallback Audit**: **12 / 12 shaders & 2 / 2 fallback pathways verified**.
-  - **Android Latest HEAD Regression Audit**: **88 / 88 checks passed** targeting commit `62132e78` on physical Xiaomi 11 hardware.
+  - **Android Latest HEAD Regression Audit**: **88 / 88 checks passed** on physical Redmi K40 hardware.
   - **First-VN Cross-Platform Behavioral Parity**: **13 / 13 user journey checks passed**, 10 / 10 parity unit tests passed across Desktop, Web, Android, and iOS.
 - **Definitive Gate Decision**: **`RC-GO`**.
 

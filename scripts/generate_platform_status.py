@@ -165,14 +165,16 @@ def validate_matrix(data: dict, repo_root: Path) -> list[str]:
                     )
                     continue
 
-                commit = str(evidence.get("commit", "")).strip()
+                raw_commit = evidence.get("commit")
+                commit = str(raw_commit).strip() if raw_commit is not None else ""
                 if not commit or not hex_re.match(commit):
                     errors.append(
                         f"Platform '{plat_name}' capability '{cap_name}' evidence commit '{commit}' is invalid (must be 7-40 hex chars)."
                     )
 
-                doc_rel = str(evidence.get("document", "")).strip()
-                if not doc_rel:
+                raw_doc = evidence.get("document")
+                doc_rel = str(raw_doc).strip() if raw_doc is not None else ""
+                if not doc_rel or doc_rel.lower() == "none":
                     errors.append(
                         f"Platform '{plat_name}' capability '{cap_name}' evidence document path is empty."
                     )
@@ -183,17 +185,29 @@ def validate_matrix(data: dict, repo_root: Path) -> list[str]:
                             f"Platform '{plat_name}' capability '{cap_name}' referenced document does not exist: {doc_rel}"
                         )
 
-                test_cmd = str(evidence.get("test", "")).strip()
-                if not test_cmd:
+                raw_test = evidence.get("test")
+                test_cmd = str(raw_test).strip() if raw_test is not None else ""
+                if not test_cmd or test_cmd.lower() == "none":
                     errors.append(
                         f"Platform '{plat_name}' capability '{cap_name}' evidence test command is empty."
                     )
 
-                verified_at = str(evidence.get("verified_at", "")).strip()
-                if not verified_at:
+                raw_verified_at = evidence.get("verified_at")
+                verified_at = str(raw_verified_at).strip() if raw_verified_at is not None else ""
+                if not verified_at or verified_at.lower() == "none":
                     errors.append(
                         f"Platform '{plat_name}' capability '{cap_name}' evidence verified_at timestamp is empty."
                     )
+
+            elif status == "probe" and isinstance(cap_info.get("evidence"), dict):
+                evidence = cap_info["evidence"]
+                raw_doc = evidence.get("document")
+                if raw_doc:
+                    doc_path = repo_root / str(raw_doc)
+                    if not doc_path.exists():
+                        errors.append(
+                            f"Platform '{plat_name}' probe capability '{cap_name}' referenced document does not exist: {raw_doc}"
+                        )
 
             # iOS real_device MUST be hardware-gated
             if plat_name == "ios" and cap_name == "real_device":
