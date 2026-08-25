@@ -86,6 +86,15 @@ tests/scripts/config/
 FrameworkShaders/
 editor/tsconfig.tsbuildinfo
 tmp/
+# Multi-agent runtime state and scratch reports. .agents/ used to be
+# tracked (234 files of BRIEFING/handoff/report/DISPATCH noise plus one-off
+# probe scripts) which turned every agent round into a noisy diff; keep
+# them on disk, out of the index. Durable material belongs in docs/ per
+# AGENTS.md §12.
+.agents/
+.agent-teams/
+.vite/
+
 # Agent probe scratch files (convergence cleanup: agents may leave
 # one-off scan/probe scripts; never commit them)
 /*_probe.lua
