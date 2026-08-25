@@ -73,8 +73,8 @@ local function to_array_tok(tok)
         local cmd = tok.cmd or tok.type
         if tok.type == "label" then
             return { "label", { name = tok.name } }
-        elseif tok.type == "text" then
-            return { "ch", { text = tok.content or "" } }
+        elseif tok.type == "text" or tok.type == "blocktext" then
+            return { "ch", { text = tok.text or tok.content or "" } }
         elseif tok.type == "iscript" then
             return { "iscript", { body = tok.body or "" } }
         end
@@ -549,7 +549,12 @@ end
 --  Pure, deterministic, idempotent (recompiling a compiled stream is a no-op
 --  when the side table is already present and complete).
 function compiler.compile(tokens)
-    if not tokens or #tokens == 0 then return tokens end
+    if not tokens then return tokens end
+    -- Support direct compilation from a Unified Semantic AST model
+    if type(tokens) == "table" and tokens.nodes ~= nil and type(tokens.nodes) == "table" then
+        tokens = tokens.nodes
+    end
+    if #tokens == 0 then return tokens end
     if tokens._compiled then return tokens end
 
     -- 1) Normalize to array format + keyed params FIRST: tokenizer.parse
@@ -966,5 +971,22 @@ end
 -- Web player bundle encoding (round 35): reuse the cache literal writer
 -- so ks_bake --web can emit story bundles without a JSON dependency.
 compiler.encode_lua_literal = encode_lua_literal
+
+--- compiler.compile_from_ast(ast_model) → compiled instruction stream
+function compiler.compile_from_ast(ast_model)
+    return compiler.compile(ast_model)
+end
+
+--- compiler.compile_from_source(ks_text, filename) → compiled instruction stream
+function compiler.compile_from_source(ks_text, filename)
+    local ok, sem = pcall(require, "kag.semantic")
+    if ok and sem then
+        local ast = sem.parse(ks_text, filename)
+        return compiler.compile(ast)
+    end
+    local tok = require("tokenizer")
+    local tokens = tok.parse_with_offsets(ks_text)
+    return compiler.compile(tokens)
+end
 
 return compiler

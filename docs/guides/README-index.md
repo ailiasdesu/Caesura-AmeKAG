@@ -13,6 +13,7 @@
 |------|--------|------|
 | [getting-started.md](getting-started.md) | 从克隆到跑通示例游戏：三平台环境、构建、运行、测试、FAQ | 所有人（第一站） |
 | [kag-language-tour.md](kag-language-tour.md) | KAG Neo-Genesis 完整语法：123 命令分类表、表达式管道、五段常用模板 | 剧本作者 |
+| [creator-toolchain-and-i18n.md](creator-toolchain-and-i18n.md) | 创作者工具链与统一语义层：kag_semantic.lua、Story Flow 大纲流向图与多语言流水线 | 创作者/工具开发者 |
 | [template-quickstart.md](template-quickstart.md) | 用 demo/template 骨架五分钟起一个新的视觉小说项目 | 新作者 |
 | [sample-library.md](sample-library.md) | 16 教程 + 示例游戏 + showcase 的清单与覆盖矩阵 | 学习者 |
 | [community.md](community.md) | 社区入口、16 步学习路径、参与贡献方式、发布入口 | 新来者 |
