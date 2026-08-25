@@ -22,6 +22,11 @@ local replay     = require("replay")      -- input recording/playback (preload f
 local layers     = require("layers")      -- layer tree (preload for sandbox; color filter submit)
 local palette    = require("palette")     -- color LUT palette (preload for sandbox; [palette] cmd)
 local flow       = require("flow")
+local quickmenu  = require("kag.quickmenu") -- QuickMenu bindings (auto/skip/log/qsave/qload/title/config)
+local toast      = require("toast")       -- corner notifications; QuickMenu shows "Auto ON"/"Saved (slot n)"
+                                          -- through it, and the sandbox resolves require() from
+                                          -- package.loaded only, so it must be preloaded here or the
+                                          -- feedback stays permanently silent on device.
 
 -- Graphics
 local layers     = require("layers")
