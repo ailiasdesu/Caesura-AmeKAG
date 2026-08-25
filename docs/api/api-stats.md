@@ -13,7 +13,7 @@
 | Pure-virtual interface methods | 408 |
 | Lua binding functions (luaL_Reg entries) | 159 |
 | KAG command handler files | 13 |
-| KAG contract commands (command-contracts.md) | 123 |
+| KAG contract commands (command-contracts.md) | 128 |
 | RPC HTTP endpoints (EditorServer) | 36 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 77 |

@@ -42,6 +42,9 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.results: List[MutationTestResult] = []
+        rel_dir = REPO_ROOT / "artifacts" / "release"
+        if not rel_dir.exists() or not (rel_dir / "manifest.json").exists() or not (rel_dir / "parity").exists():
+            subprocess.run([sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle"], cwd=str(REPO_ROOT), check=True)
 
     def create_sandbox(self) -> Tuple[Path, Path, Path, Path]:
         """Creates an isolated sandbox containing copies of artifacts/release and docs."""

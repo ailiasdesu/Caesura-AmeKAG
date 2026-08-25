@@ -22,12 +22,13 @@ const index = JSON.parse(readFileSync(join(here, "scripts-index.json"), "utf8"))
 const fileFetch = async (url) => {
   const u = new URL(url)
   if (u.pathname.startsWith("/assets/lang/")) {
-    const rel = u.pathname.replace("/assets/lang/", "").split("/").join("\\")
-    const p = join(assetsDir, "lang", rel)
+    const rel = u.pathname.replace("/assets/lang/", "")
+    const p = join(assetsDir, "lang", ...rel.split("/"))
     return { ok: existsSync(p), status: existsSync(p) ? 200 : 404,
       text: async () => (existsSync(p) ? readFileSync(p, "utf8") : ""), json: async () => index }
   }
-  const p = u.pathname.replace("/scripts/", scriptsDir + "/").split("/").join("\\")
+  const rel = u.pathname.replace("/scripts/", "")
+  const p = join(scriptsDir, ...rel.split("/"))
   return { ...({ text: async () => readFileSync(p, "utf8"), json: async () => index }), status: 200, ok: true }
 }
 let player = null

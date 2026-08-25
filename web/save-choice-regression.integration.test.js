@@ -16,15 +16,15 @@ const rootDir = join(here, '..')
 const scriptsDir = join(rootDir, 'scripts')
 const assetsDir = join(rootDir, 'assets')
 const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
-const BS = String.fromCharCode(92)
 const fileFetch = async (url) => {
   const u = new URL(url)
   if (u.pathname.startsWith('/assets/lang/')) {
-    const rel = u.pathname.replace('/assets/lang/', '').replaceAll('/', BS)
-    const p = join(assetsDir, 'lang', rel)
+    const rel = u.pathname.replace('/assets/lang/', '')
+    const p = join(assetsDir, 'lang', ...rel.split('/'))
     return { ok: existsSync(p), status: existsSync(p) ? 200 : 404, text: async () => (existsSync(p) ? readFileSync(p, 'utf8') : ''), json: async () => index }
   }
-  const p = u.pathname.replace('/scripts/', scriptsDir + '/').replaceAll('/', BS)
+  const rel = u.pathname.replace('/scripts/', '')
+  const p = join(scriptsDir, ...rel.split('/'))
   return { text: async () => readFileSync(p, 'utf8'), json: async () => index, status: 200, ok: true }
 }
 
