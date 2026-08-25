@@ -29,7 +29,8 @@ const fileFetch = async (url) => {
   }
   const rel = u.pathname.replace("/scripts/", "")
   const p = join(scriptsDir, ...rel.split("/"))
-  return { ...({ text: async () => readFileSync(p, "utf8"), json: async () => index }), status: 200, ok: true }
+  const ok = existsSync(p)
+  return { ok, status: ok ? 200 : 404, text: async () => (ok ? readFileSync(p, "utf8") : ""), json: async () => index }
 }
 let player = null
 beforeAll(async () => {
