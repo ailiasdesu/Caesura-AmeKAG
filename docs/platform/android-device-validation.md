@@ -7,7 +7,7 @@
 
 | 字段 | 值 |
 |---|---|
-| Device model | **Xiaomi M2012K11AC (alioth, 小米 11)** [magisk root] |
+| Device model | **Redmi K40 (M2012K11AC, haydn, Snapdragon 870 / Adreno 650)** [magisk root] |
 | Android version | **13 (SDK 33)** |
 | ABI | arm64-v8a |
 | Build commit | **6e90d7df + 本表提交**（存储系统槽 + FirstVN 设备入口） |
