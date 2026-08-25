@@ -25,6 +25,36 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from verify_release_candidate import get_target_commit
 VERIFIER_SCRIPT = REPO_ROOT / "scripts" / "verify_release_candidate.py"
 COMPARATOR_SCRIPT = REPO_ROOT / "scripts" / "compare_platform_parity.py"
+RC_REPORT_PATH = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
+
+COMMIT_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
+
+
+def report_declared_commit() -> Tuple[str, str]:
+    """Reads the commit SHA the authoritative report declares (the report is never rewritten)."""
+    text = RC_REPORT_PATH.read_text(encoding="utf-8") if RC_REPORT_PATH.exists() else ""
+    m = re.search(r"Target Commit SHA\*\*:\s*`([0-9a-fA-F]{40})`", text)
+    if m:
+        full = m.group(1).lower()
+        return full, full[:8]
+    return get_target_commit(REPO_ROOT)
+
+
+def ensure_bundle() -> None:
+    """Generates artifacts/release/ if absent, pinned to the commit the report declares.
+
+    The generator refuses to fabricate evidence and refuses to rewrite the report, so the bundle
+    must be pinned to the report's declared SHA rather than to whatever HEAD happens to be.
+    """
+    rel_dir = REPO_ROOT / "artifacts" / "release"
+    if rel_dir.exists() and (rel_dir / "manifest.json").exists() and (rel_dir / "parity").exists():
+        return
+    commit_full, _ = report_declared_commit()
+    subprocess.run(
+        [sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle", "--commit", commit_full],
+        cwd=str(REPO_ROOT),
+        check=True,
+    )
 
 
 class MutationTestResult:
@@ -44,9 +74,7 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.results: List[MutationTestResult] = []
-        rel_dir = REPO_ROOT / "artifacts" / "release"
-        if not rel_dir.exists() or not (rel_dir / "manifest.json").exists() or not (rel_dir / "parity").exists():
-            subprocess.run([sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle"], cwd=str(REPO_ROOT), check=True)
+        ensure_bundle()
 
     def create_sandbox(self) -> Tuple[Path, Path, Path, Path]:
         """Creates an isolated sandbox containing copies of artifacts/release and docs."""
@@ -62,14 +90,11 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
         # Mirror docs/status
         sandbox_docs = temp_dir / "docs" / "status"
         sandbox_docs.mkdir(parents=True, exist_ok=True)
+        # The authoritative report is copied VERBATIM: rewriting its declared SHA here would make
+        # the "target-commit inconsistency" mutation path unreachable (the very defect the RC gate
+        # must be able to reject).
         rep_path = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
         rep_text = rep_path.read_text(encoding="utf-8") if rep_path.exists() else ""
-        commit_full, commit_short = get_target_commit(REPO_ROOT)
-        rep_text = re.sub(
-            r'> \*\*Target Commit SHA\*\*:\s*`[0-9a-fA-F]+`\s*\(`[0-9a-fA-F]+`\)',
-            f'> **Target Commit SHA**: `{commit_full}` (`{commit_short}`)',
-            rep_text
-        )
         (sandbox_docs / "release-candidate-report.md").write_text(rep_text, encoding="utf-8")
         shutil.copy2(REPO_ROOT / "docs" / "status" / "platform-matrix.yaml", sandbox_docs / "platform-matrix.yaml")
         if (REPO_ROOT / "docs" / "status" / "platform-status.md").exists():
@@ -88,7 +113,35 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
 
         return temp_dir, sandbox_release, checksums_file, report_file
 
-    def run_verifier(self, sandbox_release: Path, checksums_file: Path, report_file: Path, repo_root_override: Optional[Path] = None) -> Tuple[int, str, str]:
+    def create_repo_sandbox(self) -> Tuple[Path, Path, Path, Path, Path]:
+        """Creates a self-contained sandbox REPO ROOT (evidence sources included).
+
+        Unlike create_sandbox (which mirrors only the bundle and leaves evidence sources pointing
+        at the real checkout), this mirrors artifacts/parity/ and the Lua suite runners too, so the
+        verifier can be pointed at it with --repo-root and mutations may delete raw evidence
+        sources without touching the real repository.
+        """
+        temp_dir, sandbox_release, checksums_file, report_file = self.create_sandbox()
+
+        # Mirror raw parity evidence sources (artifacts/parity/*.json)
+        src_parity = REPO_ROOT / "artifacts" / "parity"
+        dst_parity = temp_dir / "artifacts" / "parity"
+        dst_parity.mkdir(parents=True, exist_ok=True)
+        if src_parity.exists():
+            for f in src_parity.glob("*.json"):
+                shutil.copy2(f, dst_parity / f.name)
+
+        # Mirror the Lua suite runners so get_lua_suite_counts() stays identical to the real repo
+        dst_tests = temp_dir / "tests" / "scripts"
+        dst_tests.mkdir(parents=True, exist_ok=True)
+        for runner in ("run_lua_tests.lua", "run_orphan_tests.lua"):
+            src_runner = REPO_ROOT / "tests" / "scripts" / runner
+            if src_runner.exists():
+                shutil.copy2(src_runner, dst_tests / runner)
+
+        return temp_dir, temp_dir, sandbox_release, checksums_file, report_file
+
+    def run_verifier(self, sandbox_release: Path, checksums_file: Path, report_file: Path, repo_root_override: Optional[Path] = None, repo_root_arg: Optional[Path] = None) -> Tuple[int, str, str]:
         """Runs verify_release_candidate.py against sandbox paths."""
         cmd = [
             sys.executable,
@@ -97,6 +150,8 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
             "--checksums-file", str(checksums_file),
             "--report-file", str(report_file),
         ]
+        if repo_root_arg is not None:
+            cmd.extend(["--repo-root", str(repo_root_arg)])
         cwd = str(repo_root_override or REPO_ROOT)
         res = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         return res.returncode, res.stdout, res.stderr
@@ -622,6 +677,119 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
 
             ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
             self.record_and_assert("MUT-DOC-07", "Platform Status", "Truncated platform-status.json (< 6 platforms)", ret, out, err, 1, "platform-status.json has only 1 platforms, expected 6")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_mut_doc_08_target_commit_inconsistent_with_bundle(self):
+        """Authoritative report declares a DIFFERENT commit than the bundle manifest (stale report).
+
+        Regression lock: neither the verifier nor this harness may rewrite the report's declared
+        SHA, otherwise this inconsistency can never be observed.
+        """
+        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
+        try:
+            man_path = s_rel / "manifest.json"
+            manifest = json.loads(man_path.read_text(encoding="utf-8"))
+            bundle_commit = str(manifest["commit"]).lower()
+
+            stale_commit = ("f" * 40) if bundle_commit != "f" * 40 else ("e" * 40)
+            doc_text = s_rep.read_text(encoding="utf-8")
+            doc_text = COMMIT_SHA_RE.sub(stale_commit, doc_text)
+            doc_text = doc_text.replace(bundle_commit[:8], stale_commit[:8])
+            s_rep.write_text(doc_text, encoding="utf-8")
+
+            self.assertNotIn(bundle_commit[:8], s_rep.read_text(encoding="utf-8"))
+
+            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
+            self.record_and_assert(
+                "MUT-DOC-08", "Documentation",
+                "Report target commit inconsistent with bundle manifest commit",
+                ret, out, err, 1, "target-commit mismatch"
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_mut_doc_09_report_never_auto_rewritten_by_generator(self):
+        """--generate-bundle must REFUSE (exit 1) when the report cites a different commit.
+
+        The authoritative report is a fixed human-signed artifact: the generator may not silently
+        realign it to HEAD, so a mismatch has to surface as a hard failure with the SHA to write.
+        """
+        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
+        try:
+            sandbox_report = sandbox_root / "docs" / "status" / "release-candidate-report.md"
+            before = sandbox_report.read_text(encoding="utf-8")
+            foreign_commit = "abcdef0123456789abcdef0123456789abcdef01"
+
+            res = subprocess.run(
+                [
+                    sys.executable, str(VERIFIER_SCRIPT),
+                    "--generate-bundle",
+                    "--repo-root", str(sandbox_root),
+                    "--artifacts-dir", str(s_rel),
+                    "--checksums-file", str(s_chk),
+                    "--report-file", str(sandbox_report),
+                    "--commit", foreign_commit,
+                ],
+                cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, encoding="utf-8", errors="replace",
+            )
+            after = sandbox_report.read_text(encoding="utf-8")
+            self.assertEqual(before, after, "Generator must NOT rewrite the authoritative report")
+
+            self.record_and_assert(
+                "MUT-DOC-09", "Documentation",
+                "Generator refuses to auto-rewrite report on commit mismatch",
+                res.returncode, res.stdout, res.stderr, 1, "does not cite the bundle commit"
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_mut_par_08_missing_linux_evidence_source(self):
+        """Raw evidence source artifacts/parity/linux.json deleted -> verifier MUST be red.
+
+        Regression lock for the synthesized-snapshot defect: a platform whose harness never ran has
+        no evidence and must never be accepted as 'verified'.
+        """
+        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
+        try:
+            (sandbox_root / "artifacts" / "parity" / "linux.json").unlink()
+
+            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep, repo_root_arg=sandbox_root)
+            self.record_and_assert(
+                "MUT-PAR-08", "Parity",
+                "Missing raw evidence source artifacts/parity/linux.json",
+                ret, out, err, 1, "Missing parity evidence source for linux"
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_mut_par_09_generator_refuses_synthesizing_missing_platform(self):
+        """--generate-bundle MUST fail hard when a required platform snapshot is absent."""
+        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
+        try:
+            (sandbox_root / "artifacts" / "parity" / "android.json").unlink()
+            commit_full, _ = report_declared_commit()
+
+            res = subprocess.run(
+                [
+                    sys.executable, str(VERIFIER_SCRIPT),
+                    "--generate-bundle",
+                    "--repo-root", str(sandbox_root),
+                    "--artifacts-dir", str(s_rel),
+                    "--checksums-file", str(s_chk),
+                    "--report-file", str(s_rep),
+                    "--commit", commit_full,
+                ],
+                cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, encoding="utf-8", errors="replace",
+            )
+            self.record_and_assert(
+                "MUT-PAR-09", "Parity",
+                "Generator refuses to synthesize a 'verified' snapshot for android",
+                res.returncode, res.stdout, res.stderr, 1,
+                "Missing parity snapshot for required platform 'android'"
+            )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

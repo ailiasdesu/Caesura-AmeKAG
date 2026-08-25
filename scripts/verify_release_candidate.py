@@ -70,6 +70,25 @@ def get_lua_suite_counts(repo_root: Path) -> Tuple[int, int, int]:
         orphan_cnt = len(re.findall(r'"test_[^"]+"', run_orphan.read_text(encoding="utf-8")))
     return main_cnt, orphan_cnt, main_cnt + orphan_cnt
 
+# Platforms whose behavioral parity evidence MUST exist as a real snapshot produced by a real
+# verification harness. Evidence is never synthesized for these platforms.
+REQUIRED_PARITY_PLATFORMS = ["windows", "linux", "web", "android"]
+
+# Hardware-gated platforms: an absent snapshot is honest (no physical device attached) and is
+# recorded as 'hardware-gated' with NO route evidence at all.
+GATED_PARITY_PLATFORMS = {
+    "ios": (
+        "docs/platform/ios-device-validation.md",
+        "hardware_gated",
+        "Physical Apple hardware (iPhone/iPad) gated; no on-device First-VN run recorded.",
+    ),
+}
+
+
+class BundleGenerationError(RuntimeError):
+    """Raised when the release evidence bundle cannot be assembled from real evidence."""
+
+
 REQUIRED_BLOCKERS = [
     "crash_free",
     "save_corruption_free",
@@ -97,6 +116,21 @@ def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: O
     commit_full, commit_short = get_target_commit(repo_root, target_commit)
     main_suites, orphan_suites, total_suites = get_lua_suite_counts(repo_root)
 
+    # 0. Validate (NEVER rewrite) docs/status/release-candidate-report.md against the bundle
+    #    commit. The authoritative report is a fixed, human-signed artifact: silently rewriting it
+    #    would make the gate structurally unable to reject a stale declaration.
+    doc_report_path = repo_root / "docs" / "status" / "release-candidate-report.md"
+    if doc_report_path.exists():
+        doc_text = doc_report_path.read_text(encoding="utf-8")
+        if commit_full not in doc_text and commit_short not in doc_text:
+            raise BundleGenerationError(
+                f"Authoritative report {doc_report_path} does not cite the bundle commit "
+                f"{commit_full} ({commit_short}).\n"
+                f"       The report is a human-signed artifact and is never rewritten "
+                f"automatically. Update it manually, e.g. the header line:\n"
+                f'       > **Target Commit SHA**: `{commit_full}` (`{commit_short}`)'
+            )
+
     parity_src_dir = repo_root / "artifacts" / "parity"
     parity_dst_dir = release_dir / "parity"
     checksums_dir = release_dir / "checksums"
@@ -106,47 +140,45 @@ def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: O
     checksums_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Mirror parity snapshots and generate canonical summary
-    parity_files = {
-        "windows": ("verified", "scripts/verify_first_vn.sh", "automated_headless"),
-        "linux": ("verified", "scripts/verify_first_vn.sh", "automated_headless"),
-        "web": ("verified", "npm --prefix web test", "automated_vitest"),
-        "android": ("verified", "scripts/verify_android_regression.py", "device_regression_harness"),
-        "ios": ("hardware-gated", "docs/platform/ios-device-validation.md", "hardware_gated"),
-    }
-    for plat, (st, runn, vtype) in parity_files.items():
+    # 1. Mirror parity snapshots. Evidence is NEVER synthesized: a platform without a real
+    #    snapshot in artifacts/parity/<plat>.json is a hard failure, not an implicit "verified".
+    for plat in REQUIRED_PARITY_PLATFORMS:
+        pf = f"{plat}.json"
+        src = parity_src_dir / pf
+        if not src.exists():
+            raise BundleGenerationError(
+                f"Missing parity snapshot for required platform '{plat}': {src}\n"
+                f"       Run the platform's real verification harness so that "
+                f"artifacts/parity/{plat}.json exists; the generator refuses to synthesize a "
+                f"'verified' snapshot for a platform that was never exercised."
+            )
+        try:
+            data = json.loads(src.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise BundleGenerationError(f"Failed parsing parity snapshot {src}: {e}")
+        (parity_dst_dir / pf).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    # iOS is hardware-gated: an absent snapshot is honest (no Apple hardware attached) and is
+    # recorded as such WITHOUT fabricating any route evidence.
+    for plat, (runn, vtype, gate_reason) in GATED_PARITY_PLATFORMS.items():
         pf = f"{plat}.json"
         src = parity_src_dir / pf
         if src.exists():
-            data = json.loads(src.read_text(encoding="utf-8"))
+            try:
+                data = json.loads(src.read_text(encoding="utf-8"))
+            except Exception as e:
+                raise BundleGenerationError(f"Failed parsing parity snapshot {src}: {e}")
         else:
             data = {
                 "$schema": "https://caesura.engine/schemas/first_vn_state_snapshot.v1.json",
                 "platform": plat,
                 "story": "first_vn",
-                "status": st,
+                "status": "hardware-gated",
                 "evidence": {
                     "runner": runn,
                     "commit": commit_short,
-                    "verification_type": vtype
-                },
-                "route_a": {
-                    "choice": "sun",
-                    "route": "sun",
-                    "flag_is_sun": 1,
-                    "final_label": "*ending",
-                    "ending": "sunset",
-                    "save_roundtrip": True,
-                    "languages": ["zh", "en", "ja"]
-                },
-                "route_b": {
-                    "choice": "rain",
-                    "route": "rain",
-                    "flag_is_sun": 0,
-                    "final_label": "*ending",
-                    "ending": "rain_shelter",
-                    "save_roundtrip": True,
-                    "languages": ["zh", "en", "ja"]
+                    "verification_type": vtype,
+                    "gate_reason": gate_reason
                 }
             }
         (parity_dst_dir / pf).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -631,17 +663,6 @@ def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: O
             lines.append(f"{sha}  {rel_path_str.replace('\\', '/')}")
     (checksums_dir / "sha256sums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # 6. Update docs/status/release-candidate-report.md with dynamic target commit
-    doc_report_path = repo_root / "docs" / "status" / "release-candidate-report.md"
-    if doc_report_path.exists():
-        doc_text = doc_report_path.read_text(encoding="utf-8")
-        doc_text = re.sub(
-            r'> \*\*Target Commit SHA\*\*:\s*`[0-9a-fA-F]+`\s*\(`[0-9a-fA-F]+`\)',
-            f'> **Target Commit SHA**: `{commit_full}` (`{commit_short}`)',
-            doc_text
-        )
-        doc_report_path.write_text(doc_text, encoding="utf-8")
-
     print(f"[OK] Generated complete release evidence bundle in {release_dir}")
 
 
@@ -777,12 +798,26 @@ def verify_release_bundle(
             summary["checksums"] = "PASS" if checked_count >= 10 and not errors else "FAIL"
 
     # 4. Verify Parity Snapshots
+    #    Both the bundled snapshot AND its source evidence file (artifacts/parity/<plat>.json)
+    #    must exist for every required platform. A platform whose harness never ran has no
+    #    evidence, and the gate must say so instead of accepting a synthesized "verified".
     parity_dir = release_dir / "parity"
-    req_platforms = ["windows", "linux", "web", "android"]
+    parity_src_dir = repo_root / "artifacts" / "parity"
+    req_platforms = list(REQUIRED_PARITY_PLATFORMS)
     for rp in req_platforms:
+        src_snap_file = parity_src_dir / f"{rp}.json"
+        if not src_snap_file.exists():
+            errors.append(
+                f"Missing parity evidence source for {rp}: artifacts/parity/{rp}.json "
+                f"(expected at {src_snap_file}) — run that platform's verification harness; "
+                f"evidence is never synthesized"
+            )
         snap_file = parity_dir / f"{rp}.json"
         if not snap_file.exists():
-            errors.append(f"Missing parity snapshot for {rp}: {snap_file}")
+            errors.append(
+                f"Missing parity snapshot for {rp}: {snap_file} "
+                f"(source evidence: artifacts/parity/{rp}.json)"
+            )
         else:
             try:
                 snap = json.loads(snap_file.read_text(encoding="utf-8"))
@@ -866,7 +901,11 @@ def verify_release_bundle(
         if "RC-NO-GO" in doc_text:
             errors.append("Authoritative report contains conflicting 'RC-NO-GO' declaration")
         if expected_commit_short not in doc_text and expected_commit_full not in doc_text:
-            errors.append(f"Authoritative report does not cite target commit SHA ({expected_commit_short})")
+            errors.append(
+                f"Authoritative report does not cite target commit SHA ({expected_commit_short}): "
+                f"target-commit mismatch between the bundle commit '{expected_commit_full}' and "
+                f"{report_path} — update the report manually to cite that SHA"
+            )
         summary["authoritative_doc"] = "PASS" if not any("report" in e or "declaration" in e for e in errors) else "FAIL"
 
     is_valid = (len(errors) == 0)
@@ -917,21 +956,28 @@ def main():
     parser.add_argument("--checksums-file", type=Path, default=DEFAULT_CHECKSUMS_PATH, help="Path to sha256sums.txt")
     parser.add_argument("--report-file", type=Path, default=DEFAULT_REPORT_PATH, help="Path to docs/status/release-candidate-report.md")
     parser.add_argument("--commit", type=str, default=None, help="Target commit hash (defaults to current git HEAD)")
+    parser.add_argument("--repo-root", type=Path, default=None, help="Repository root used to resolve evidence sources (defaults to the checkout containing this script)")
     parser.add_argument("--generate-bundle", action="store_true", help="Generate or update artifacts/release/ bundle")
     parser.add_argument("--check", action="store_true", help="Run in strict CI validation mode")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
+    repo_root = args.repo_root.resolve() if args.repo_root else ROOT
 
     if args.generate_bundle:
         print(f"[*] Assembling release candidate evidence bundle into: {args.artifacts_dir}")
-        generate_release_bundle(args.artifacts_dir, ROOT, target_commit=args.commit)
+        try:
+            generate_release_bundle(args.artifacts_dir, repo_root, target_commit=args.commit)
+        except BundleGenerationError as e:
+            print(f"[FAIL] Release evidence bundle generation aborted: {e}")
+            print("\nGATE DECISION: RC-NO-GO (Evidence Bundle Incomplete)")
+            sys.exit(1)
 
     is_valid, errors, summary = verify_release_bundle(
         args.artifacts_dir,
         args.checksums_file,
         args.report_file,
-        ROOT,
+        repo_root,
         target_commit=args.commit,
         verbose=args.verbose
     )

@@ -203,6 +203,11 @@ python scripts/verify_android_regression.py
 python scripts/verify_metal_shaders.py
 ```
 
+### Evidence Integrity Contract
+
+- **Evidence is never synthesized.** `--generate-bundle` mirrors `artifacts/parity/<platform>.json` produced by each platform's real harness. If a required platform snapshot (`windows`, `linux`, `web`, `android`) is absent, bundle generation aborts with a non-zero exit and `--check` rejects the candidate, naming the missing file. Only the hardware-gated `ios` platform may lack a snapshot, and it is then recorded as `hardware-gated` with no route evidence at all.
+- **This report is never rewritten automatically.** The `Target Commit SHA` above is a fixed, human-maintained declaration. When the target commit changes, update the header manually; the verifier only *validates* that the bundle commit and this report agree and fails loudly (`target-commit mismatch`) when they do not.
+
 ---
 
 ## 8. Conclusion
