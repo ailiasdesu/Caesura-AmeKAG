@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from verify_release_candidate import get_target_commit
 VERIFIER_SCRIPT = REPO_ROOT / "scripts" / "verify_release_candidate.py"
 COMPARATOR_SCRIPT = REPO_ROOT / "scripts" / "compare_platform_parity.py"
 
@@ -60,7 +62,15 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
         # Mirror docs/status
         sandbox_docs = temp_dir / "docs" / "status"
         sandbox_docs.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO_ROOT / "docs" / "status" / "release-candidate-report.md", sandbox_docs / "release-candidate-report.md")
+        rep_path = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
+        rep_text = rep_path.read_text(encoding="utf-8") if rep_path.exists() else ""
+        commit_full, commit_short = get_target_commit(REPO_ROOT)
+        rep_text = re.sub(
+            r'> \*\*Target Commit SHA\*\*:\s*`[0-9a-fA-F]+`\s*\(`[0-9a-fA-F]+`\)',
+            f'> **Target Commit SHA**: `{commit_full}` (`{commit_short}`)',
+            rep_text
+        )
+        (sandbox_docs / "release-candidate-report.md").write_text(rep_text, encoding="utf-8")
         shutil.copy2(REPO_ROOT / "docs" / "status" / "platform-matrix.yaml", sandbox_docs / "platform-matrix.yaml")
         if (REPO_ROOT / "docs" / "status" / "platform-status.md").exists():
             shutil.copy2(REPO_ROOT / "docs" / "status" / "platform-status.md", sandbox_docs / "platform-status.md")

@@ -630,6 +630,18 @@ def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: O
             sha = compute_sha256(full_p)
             lines.append(f"{sha}  {rel_path_str.replace('\\', '/')}")
     (checksums_dir / "sha256sums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # 6. Update docs/status/release-candidate-report.md with dynamic target commit
+    doc_report_path = repo_root / "docs" / "status" / "release-candidate-report.md"
+    if doc_report_path.exists():
+        doc_text = doc_report_path.read_text(encoding="utf-8")
+        doc_text = re.sub(
+            r'> \*\*Target Commit SHA\*\*:\s*`[0-9a-fA-F]+`\s*\(`[0-9a-fA-F]+`\)',
+            f'> **Target Commit SHA**: `{commit_full}` (`{commit_short}`)',
+            doc_text
+        )
+        doc_report_path.write_text(doc_text, encoding="utf-8")
+
     print(f"[OK] Generated complete release evidence bundle in {release_dir}")
 
 
