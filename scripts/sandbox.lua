@@ -341,7 +341,17 @@ local _G_whitelist = {
     _KAG_onTextInput    = true,
     _KAG_onTextEditing  = true,
     _KAG_onKeyDown      = true,
-    -- Engine runtime state globals (set by C++ main loop)
+    -- Engine runtime state globals (set by C++ main loop).
+    -- These MUST all be listed: lua_setglobal honours __newindex, so a C++
+    -- write to an unlisted key that is not already a raw field raises
+    -- lua_error, and the engine-side writers are not inside a protected call
+    -- -- i.e. a panic, not a silent no-op. DevCoreBinding's _CAESURA_QUIT is
+    -- the live example: it is only written when DevCore.quit() runs, which can
+    -- happen after lockdown.
+    _CAESURA_QUIT = true,
+    _CAESURA_DEVICE_RESTORED = true,
+    _CAESURA_DEBUG_PAUSED = true,
+    _CAESURA_DEBUG_IS_PAUSED = true,
     _CAESURA_GPU_QUALITY  = true,
     _CAESURA_VFX_ENABLED  = true,
     _CAESURA_GPU_TIME_MS  = true,
