@@ -360,9 +360,13 @@ void TextRenderer::shutdown() {
     }
     m_ttf.reset();
 
-    // Track 2: batch cache and CJK atlas cleanup
-    if (bgfx::isValid(m_msgCache.vb)) { bgfx::destroy(m_msgCache.vb); m_msgCache.vb = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_msgCache.ib)) { bgfx::destroy(m_msgCache.ib); m_msgCache.ib = BGFX_INVALID_HANDLE; }
+    // Track 2: batch cache and CJK atlas cleanup (every LRU slot owns buffers)
+    for (size_t i = 0; i < kCacheSlots; ++i) {
+        MessageLayerCache& s = m_cacheSlots[i];
+        if (bgfx::isValid(s.vb)) { bgfx::destroy(s.vb); s.vb = BGFX_INVALID_HANDLE; }
+        if (bgfx::isValid(s.ib)) { bgfx::destroy(s.ib); s.ib = BGFX_INVALID_HANDLE; }
+        s.invalidateGeometry();
+    }
     if (bgfx::isValid(m_u_color))    { bgfx::destroy(m_u_color);   m_u_color   = BGFX_INVALID_HANDLE; }
     if (bgfx::isValid(m_cjkAtlas))   { bgfx::destroy(m_cjkAtlas);  m_cjkAtlas  = BGFX_INVALID_HANDLE; }
     m_cjkGlyphs.clear();
@@ -390,8 +394,14 @@ void TextRenderer::onDeviceLost() {
         m_texSampler = BGFX_INVALID_HANDLE;
     }
     m_ttf.reset();
-    if (bgfx::isValid(m_msgCache.vb)) { bgfx::destroy(m_msgCache.vb); m_msgCache.vb = BGFX_INVALID_HANDLE; }
-    if (bgfx::isValid(m_msgCache.ib)) { bgfx::destroy(m_msgCache.ib); m_msgCache.ib = BGFX_INVALID_HANDLE; }
+    // Device loss destroys every slot's buffers; the geometry they held is gone
+    // too, so no slot may report a hit after restore.
+    for (size_t i = 0; i < kCacheSlots; ++i) {
+        MessageLayerCache& s = m_cacheSlots[i];
+        if (bgfx::isValid(s.vb)) { bgfx::destroy(s.vb); s.vb = BGFX_INVALID_HANDLE; }
+        if (bgfx::isValid(s.ib)) { bgfx::destroy(s.ib); s.ib = BGFX_INVALID_HANDLE; }
+        s.invalidateGeometry();
+    }
     if (bgfx::isValid(m_u_color))    { bgfx::destroy(m_u_color);   m_u_color   = BGFX_INVALID_HANDLE; }
     if (bgfx::isValid(m_cjkAtlas))   { bgfx::destroy(m_cjkAtlas);  m_cjkAtlas  = BGFX_INVALID_HANDLE; }
     m_cjkGlyphs.clear();
@@ -1154,8 +1164,10 @@ bool TextRenderer::loadCjkAtlas(const std::string& atlasPath, const std::string&
 // ---------------------------------------------------------------------------
 
 void TextRenderer::invalidateCache() {
-    m_msgCache.cachedText.clear();
-    m_msgCache.markAllDirty();
+    // Every slot's geometry is stale (the atlas moved, or the caller asked for
+    // a hard reset): drop the reusable geometry but keep the GPU buffers, which
+    // are pooled resources and are rewritten by the next rebuild.
+    for (size_t i = 0; i < kCacheSlots; ++i) m_cacheSlots[i].invalidateGeometry();
 }
 
 // ---------------------------------------------------------------------------
@@ -1205,34 +1217,73 @@ TextRenderer::DirtyRangeResult TextRenderer::computeDirtyRange(
     return out;
 }
 
-void TextRenderer::updateDirtyRange(const std::string& newText) {
+void TextRenderer::updateDirtyRange(MessageLayerCache& slot, const std::string& newText) {
     // Delegate the codepoint diff to the pure helper; keep the member writes
     // here so the cache state stays in one place.
     const DirtyRangeResult r =
-        computeDirtyRange(m_msgCache.cachedText, newText, m_msgCache.maxGlyphs);
-    if (!r.changed) { m_msgCache.clearDirty(); return; }
-    m_msgCache.dirtyStart = r.start;
-    m_msgCache.dirtyEnd   = r.end;
-    m_msgCache.cachedText = newText;
+        computeDirtyRange(slot.cachedText, newText, slot.maxGlyphs);
+    if (!r.changed) { slot.clearDirty(); return; }
+    slot.dirtyStart = r.start;
+    slot.dirtyEnd   = r.end;
+    slot.cachedText = newText;
 }
 
-bool TextRenderer::ensureCacheBuffers() {
-    uint32_t maxVerts = m_msgCache.maxGlyphs * 6;
-    uint32_t maxInds  = m_msgCache.maxGlyphs * 6;
+// ---------------------------------------------------------------------------
+// Pure append detection (GPU-free)
+// ---------------------------------------------------------------------------
 
-    if (!bgfx::isValid(m_msgCache.vb)) {
-        m_msgCache.vb = bgfx::createDynamicVertexBuffer(
+TextRenderer::AppendResult TextRenderer::detectAppend(const std::string& oldText,
+                                                      const std::string& newText) {
+    AppendResult out;
+    if (oldText.empty()) return out;                 // nothing cached to extend
+    if (newText.size() <= oldText.size()) return out; // identical or shortened
+    if (newText.compare(0, oldText.size(), oldText) != 0) return out; // rewritten
+
+    // Defensive: the shared prefix must end on a codepoint boundary. A cached
+    // text truncated mid-sequence (only reachable through maxGlyphs clamping
+    // or a corrupt caller) must fall back to a full rebuild rather than resume
+    // layout from a byte that is not a lead byte.
+    const uint8_t* nd = reinterpret_cast<const uint8_t*>(newText.data());
+    if ((nd[oldText.size()] & 0xC0) == 0x80) return out;  // continuation byte
+
+    // The prefix itself must decode into whole codepoints ending exactly at
+    // oldText.size(); countUtf8Glyphs is lenient, so walk it strictly here.
+    size_t pos = 0;
+    uint32_t prefixGlyphs = 0;
+    while (pos < oldText.size()) {
+        const int clen = utf8_char_len(nd[pos]);
+        if (pos + (size_t)clen > oldText.size()) return out;  // truncated prefix
+        pos += (size_t)clen;
+        ++prefixGlyphs;
+    }
+
+    out.isAppend = true;
+    out.tailByteOffset = oldText.size();
+    out.prefixGlyphs = prefixGlyphs;
+    out.tailGlyphs = countUtf8Glyphs(nd + oldText.size(),
+                                     newText.size() - oldText.size());
+    return out;
+}
+
+bool TextRenderer::ensureCacheBuffers(MessageLayerCache& slot) {
+    // Buffers are created lazily PER SLOT: a session that only ever draws one
+    // text line pays for exactly one VB/IB pair, same as the old single slot.
+    uint32_t maxVerts = slot.maxGlyphs * 6;
+    uint32_t maxInds  = slot.maxGlyphs * 6;
+
+    if (!bgfx::isValid(slot.vb)) {
+        slot.vb = bgfx::createDynamicVertexBuffer(
             maxVerts, m_posTexLayout, BGFX_BUFFER_ALLOW_RESIZE);
-        if (!bgfx::isValid(m_msgCache.vb)) {
+        if (!bgfx::isValid(slot.vb)) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "[TextRenderer] Failed to create dynamic vertex buffer.");
             return false;
         }
     }
-    if (!bgfx::isValid(m_msgCache.ib)) {
-        m_msgCache.ib = bgfx::createDynamicIndexBuffer(
+    if (!bgfx::isValid(slot.ib)) {
+        slot.ib = bgfx::createDynamicIndexBuffer(
             maxInds, BGFX_BUFFER_ALLOW_RESIZE | BGFX_BUFFER_INDEX32);
-        if (!bgfx::isValid(m_msgCache.ib)) {
+        if (!bgfx::isValid(slot.ib)) {
             DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                       "[TextRenderer] Failed to create dynamic index buffer.");
             return false;
@@ -1268,7 +1319,8 @@ TextRenderer::GlyphLayoutResult TextRenderer::layoutGlyphs(
     GlyphLookupFn lookup, void* userData,
     bool hasCjk, float invW, float invH,
     float cjkInvW, float cjkInvH,
-    bool useTtf, float ttfAscent, size_t maxGlyphs) {
+    bool useTtf, float ttfAscent, size_t maxGlyphs,
+    size_t byteBegin) {
 
     GlyphLayoutResult result;
     const uint8_t* tdata = reinterpret_cast<const uint8_t*>(text.data());
@@ -1276,7 +1328,11 @@ TextRenderer::GlyphLayoutResult TextRenderer::layoutGlyphs(
     bool anyNonCjk = false;
     bool anyGlyph = false;
 
-    for (int i = 0; i < tlen; ) {
+    // byteBegin > 0 == incremental append: skip the already-laid prefix. The
+    // caller resumes penX from the cached absolute pen, so the emitted tail is
+    // bit-identical to the same slice of a full layout (each glyph's position
+    // depends only on the running pen and the glyph table).
+    for (int i = (int)((byteBegin < text.size()) ? byteBegin : text.size()); i < tlen; ) {
         int clen = utf8_char_len(tdata[i]);
         if (i + clen > tlen) clen = tlen - i;
         const uint32_t cp = utf8_codepoint(&tdata[i], clen);
@@ -1316,6 +1372,8 @@ TextRenderer::GlyphLayoutResult TextRenderer::layoutGlyphs(
     }
 
     result.penAdvance = penX;
+    result.anyGlyph = anyGlyph;
+    result.anyNonCjk = anyNonCjk;
     result.allCjk = hasCjk && anyGlyph && !anyNonCjk;
     return result;
 }
@@ -1323,7 +1381,8 @@ TextRenderer::GlyphLayoutResult TextRenderer::layoutGlyphs(
 void TextRenderer::buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
                                      float screenW, float screenH,
                                      std::vector<float>& verts,
-                                     std::vector<uint32_t>& indices) {
+                                     std::vector<uint32_t>& indices,
+                                     uint32_t glyphIndexBase) {
     verts.clear();
     indices.clear();
     verts.reserve(glyphs.size() * 6 * 4);
@@ -1332,7 +1391,9 @@ void TextRenderer::buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
 
     for (size_t gi = 0; gi < glyphs.size(); ++gi) {
         const LaidGlyph& d = glyphs[gi];
-        const uint32_t vbase = static_cast<uint32_t>(gi * 6);
+        // Absolute vertex slot: a tail written at glyph slot `glyphIndexBase`
+        // must reference vertices (base+gi)*6, not (gi)*6.
+        const uint32_t vbase = static_cast<uint32_t>((glyphIndexBase + gi) * 6);
         float nx0, ny0, nx1, ny1;
         if (ndcOk) {
             nx0 = (d.gx / screenW) * 2.0f - 1.0f;
@@ -1356,12 +1417,29 @@ void TextRenderer::buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
     }
 }
 
-float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
+// Shared bind+submit for a slot's resident geometry. Every path (full rebuild,
+// incremental append, pure cache hit) ends here, so they cannot drift apart in
+// texture selection or buffer ranges.
+void TextRenderer::submitCachedSlot(MessageLayerCache& slot, uint16_t viewId,
+                                    TextColor color, bgfx::ProgramHandle program) {
+    float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
+    bgfx::setUniform(m_u_color, fc);
+    // TD-13: a cached CJK-only line samples the CJK atlas -- binding the TTF
+    // texture for it would sample wrong glyphs.
+    const bool needCjk = slot.cacheIsCjk && bgfx::isValid(m_cjkAtlas);
+    bgfx::setTexture(0, m_texSampler, needCjk ? m_cjkAtlas : m_fontTexture);
+    bgfx::setVertexBuffer(0, slot.vb, 0, slot.glyphCount * 6);
+    bgfx::setIndexBuffer(slot.ib, 0, slot.glyphCount * 6);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
+    bgfx::submit(viewId, program);
+}
+
+float TextRenderer::rebuildCache(MessageLayerCache& slot, uint16_t viewId,
+                                  const std::string& text,
                                   float x, float y, TextColor color,
                                   bgfx::ProgramHandle program) {
-    if (!ensureCacheBuffers() || text.empty()) return x;
+    if (!ensureCacheBuffers(slot) || text.empty()) return x;
 
-    bgfx::TextureHandle tex = m_fontTexture;
     uint16_t texW = m_ttf ? (uint16_t)m_ttf->atlasW : (uint16_t)(m_atlasCols * m_fontGlyphW);
     uint16_t texH = m_ttf ? (uint16_t)m_ttf->atlasH : (uint16_t)(m_fontGlyphH * 3);
 
@@ -1377,7 +1455,7 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
                                           hasCjk, invW, invH, cjkInvW, cjkInvH,
                                           m_ttf != nullptr,
                                           m_ttf ? (float)m_ttf->ascent : 8.0f,
-                                          m_msgCache.maxGlyphs);
+                                          slot.maxGlyphs);
 
     // Pure vertex phase.
     std::vector<float> verts;
@@ -1385,32 +1463,197 @@ float TextRenderer::rebuildCache(uint16_t viewId, const std::string& text,
     buildQuadVertices(laid.glyphs, (float)m_screenWidth, (float)m_screenHeight,
                       verts, indices);
 
-    m_msgCache.glyphCount = static_cast<uint32_t>(laid.glyphs.size());
-    m_msgCache.cacheIsCjk = laid.allCjk;
+    slot.glyphCount = static_cast<uint32_t>(laid.glyphs.size());
+    slot.cacheIsCjk = laid.allCjk && bgfx::isValid(m_cjkAtlas);
+    // Incremental-append bookkeeping for the NEXT frame of a typewriter reveal.
+    slot.penEnd    = laid.penAdvance;
+    slot.anyGlyph  = laid.anyGlyph;
+    slot.anyNonCjk = laid.anyNonCjk;
+    slot.geometryValid = true;
 
-    uint32_t nv = m_msgCache.glyphCount * 6, ni = m_msgCache.glyphCount * 6;
     struct PosTexVertex { float x, y, u, v; };
     static_assert(sizeof(PosTexVertex) == 4 * sizeof(float),
                   "PosTexVertex layout must match the float vertex stream");
-    const bgfx::Memory* vm = bgfx::copy(verts.data(), (uint32_t)(verts.size() * sizeof(float)));
-    const bgfx::Memory* im = bgfx::copy(indices.data(), (uint32_t)(indices.size() * sizeof(uint32_t)));
-    bgfx::update(m_msgCache.vb, 0, vm);
-    bgfx::update(m_msgCache.ib, 0, im);
+    const uint32_t vBytes = (uint32_t)(verts.size() * sizeof(float));
+    const uint32_t iBytes = (uint32_t)(indices.size() * sizeof(uint32_t));
+    const bgfx::Memory* vm = bgfx::copy(verts.data(), vBytes);
+    const bgfx::Memory* im = bgfx::copy(indices.data(), iBytes);
+    bgfx::update(slot.vb, 0, vm);
+    bgfx::update(slot.ib, 0, im);
 
-    float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
-    bgfx::setUniform(m_u_color, fc);
-    // TD-13: Use CJK atlas texture when CJK-only text is detected
-    const bool allCjk = laid.allCjk;
-    bgfx::TextureHandle useTex = (allCjk && bgfx::isValid(m_cjkAtlas)) ? m_cjkAtlas : tex;
-    bgfx::setTexture(0, m_texSampler, useTex);
-    bgfx::setVertexBuffer(0, m_msgCache.vb, 0, nv);
-    bgfx::setIndexBuffer(m_msgCache.ib, 0, ni);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(viewId, program);
+    ++m_cacheStats.rebuildFull;
+    m_cacheStats.glyphsLaidOut += laid.glyphs.size();
+    m_cacheStats.vertexBytesUploaded += vBytes;
+    m_cacheStats.indexBytesUploaded  += iBytes;
 
-    m_msgCache.cacheIsCjk = allCjk && bgfx::isValid(m_cjkAtlas);
-    m_msgCache.clearDirty();
+    submitCachedSlot(slot, viewId, color, program);
+    slot.clearDirty();
     return laid.penAdvance;
+}
+
+float TextRenderer::appendToCache(MessageLayerCache& slot, uint16_t viewId,
+                                  const std::string& text, const CachePlan& plan,
+                                  float x, float y, TextColor color,
+                                  bgfx::ProgramHandle program) {
+    if (!ensureCacheBuffers(slot)) return x;
+
+    uint16_t texW = m_ttf ? (uint16_t)m_ttf->atlasW : (uint16_t)(m_atlasCols * m_fontGlyphW);
+    uint16_t texH = m_ttf ? (uint16_t)m_ttf->atlasH : (uint16_t)(m_fontGlyphH * 3);
+
+    const float invW = 1.0f / float(texW);
+    const float invH = 1.0f / float(texH);
+    const bool hasCjk = bgfx::isValid(m_cjkAtlas);
+    const float cjkInvW = 1.0f / float(m_atlasW);
+    const float cjkInvH = 1.0f / float(m_atlasH);
+
+    // Lay out ONLY the tail, resuming from the cached ABSOLUTE pen. Using the
+    // stored float (not x + cachedPenAdvance) is what keeps the tail vertices
+    // bit-identical to a full rebuild's.
+    GlyphLayoutResult tail = layoutGlyphs(text, slot.penEnd, y,
+                                          &TextRenderer::glyphLookupForCache, this,
+                                          hasCjk, invW, invH, cjkInvW, cjkInvH,
+                                          m_ttf != nullptr,
+                                          m_ttf ? (float)m_ttf->ascent : 8.0f,
+                                          (size_t)plan.glyphsToLayout,
+                                          plan.byteBegin);
+
+    std::vector<float> verts;
+    std::vector<uint32_t> indices;
+    buildQuadVertices(tail.glyphs, (float)m_screenWidth, (float)m_screenHeight,
+                      verts, indices, slot.glyphCount);
+
+    const uint32_t firstGlyph = slot.glyphCount;
+    slot.glyphCount = firstGlyph + (uint32_t)tail.glyphs.size();
+    // Fold the tail's CJK flags into the prefix's: allCjk is a property of the
+    // WHOLE text, so the verdict must match what a full layout would compute.
+    slot.anyGlyph  = slot.anyGlyph  || tail.anyGlyph;
+    slot.anyNonCjk = slot.anyNonCjk || tail.anyNonCjk;
+    slot.cacheIsCjk = hasCjk && slot.anyGlyph && !slot.anyNonCjk
+                      && bgfx::isValid(m_cjkAtlas);
+    slot.penEnd = tail.penAdvance;
+    slot.cachedText = text;
+    slot.geometryValid = true;
+
+    // Partial upload: only the appended range. Both bgfx::update overloads take
+    // an ELEMENT offset, not a byte offset (_startVertex / _startIndex, see
+    // bgfx.h) -- 6 vertices and 6 indices per glyph.
+    const uint32_t vBytes = (uint32_t)(verts.size() * sizeof(float));
+    const uint32_t iBytes = (uint32_t)(indices.size() * sizeof(uint32_t));
+    if (vBytes > 0) {
+        const bgfx::Memory* vm = bgfx::copy(verts.data(), vBytes);
+        bgfx::update(slot.vb, firstGlyph * 6u, vm);
+    }
+    if (iBytes > 0) {
+        const bgfx::Memory* im = bgfx::copy(indices.data(), iBytes);
+        bgfx::update(slot.ib, firstGlyph * 6u, im);
+    }
+
+    ++m_cacheStats.rebuildIncremental;
+    m_cacheStats.glyphsLaidOut += tail.glyphs.size();
+    m_cacheStats.vertexBytesUploaded += vBytes;
+    m_cacheStats.indexBytesUploaded  += iBytes;
+
+    submitCachedSlot(slot, viewId, color, program);
+    slot.clearDirty();
+    return tail.penAdvance;
+}
+
+// ---------------------------------------------------------------------------
+// Cache update planning (pure): the single source of truth for "reuse / extend
+// / rebuild" and for the amount of work that choice implies. renderTextCached()
+// dispatches on this, and the tests measure it, so the measured policy IS the
+// shipped policy.
+// ---------------------------------------------------------------------------
+
+TextRenderer::CachePlan TextRenderer::planCacheUpdate(const MessageLayerCache& slot,
+                                                      uint16_t viewId,
+                                                      const std::string& text,
+                                                      float x, float y) {
+    CachePlan plan;
+    const uint32_t vBytesPerGlyph = 6u * 4u * (uint32_t)sizeof(float);
+    const uint32_t iBytesPerGlyph = 6u * (uint32_t)sizeof(uint32_t);
+
+    // Full rebuild is the default: it is always correct.
+    const auto fullRebuild = [&]() {
+        plan.action = CacheAction::FullRebuild;
+        plan.byteBegin = 0;
+        plan.firstGlyph = 0;
+        const uint32_t all = countUtf8Glyphs(
+            reinterpret_cast<const uint8_t*>(text.data()), text.size());
+        plan.glyphsToLayout = (all < slot.maxGlyphs) ? all : slot.maxGlyphs;
+        plan.vertexBytes = plan.glyphsToLayout * vBytesPerGlyph;
+        plan.indexBytes  = plan.glyphsToLayout * iBytesPerGlyph;
+        return plan;
+    };
+
+    if (!slot.geometryValid) return fullRebuild();
+    // Position/view are part of the geometry: moved text must be re-laid.
+    if (slot.cachedViewId != viewId || slot.cachedX != x || slot.cachedY != y)
+        return fullRebuild();
+
+    if (slot.cachedText == text) {
+        if (slot.isDirty()) return fullRebuild();  // explicitly invalidated
+        plan.action = CacheAction::Hit;
+        return plan;   // zero layout, zero upload
+    }
+
+    const AppendResult app = detectAppend(slot.cachedText, text);
+    // The slot's resident glyph count must line up with the prefix, or the tail
+    // would be written at the wrong offset. (A prefix clamped by maxGlyphs is
+    // exactly this case, so it correctly falls back to a full rebuild.)
+    if (!app.isAppend || slot.glyphCount != app.prefixGlyphs
+        || slot.glyphCount >= slot.maxGlyphs) {
+        return fullRebuild();
+    }
+
+    const uint32_t budget = slot.maxGlyphs - slot.glyphCount;
+    plan.action = CacheAction::Append;
+    plan.byteBegin = app.tailByteOffset;
+    plan.firstGlyph = slot.glyphCount;
+    plan.glyphsToLayout = (app.tailGlyphs < budget) ? app.tailGlyphs : budget;
+    plan.vertexBytes = plan.glyphsToLayout * vBytesPerGlyph;
+    plan.indexBytes  = plan.glyphsToLayout * iBytesPerGlyph;
+    return plan;
+}
+
+size_t TextRenderer::selectCacheSlot(const MessageLayerCache* slots, size_t count,
+                                     uint16_t viewId, const std::string& text,
+                                     float x, float y) {
+    if (!slots || count == 0) return 0;
+    // 1. Exact key hit -- nothing to lay out or upload.
+    for (size_t i = 0; i < count; ++i) {
+        const MessageLayerCache& s = slots[i];
+        if (s.geometryValid && s.matches(viewId, text, x, y)) return i;
+    }
+    // 2. Append-compatible slot: same view + position, cachedText is a strict
+    //    prefix of text. This is the typewriter reveal's steady state.
+    for (size_t i = 0; i < count; ++i) {
+        const MessageLayerCache& s = slots[i];
+        if (!s.geometryValid) continue;
+        if (s.cachedViewId != viewId || s.cachedX != x || s.cachedY != y) continue;
+        if (detectAppend(s.cachedText, text).isAppend) return i;
+    }
+    // 3. Least-recently-used slot (an unused slot has lastUse == 0 and wins).
+    size_t victim = 0;
+    for (size_t i = 1; i < count; ++i) {
+        if (slots[i].lastUse < slots[victim].lastUse) victim = i;
+    }
+    return victim;
+}
+
+MessageLayerCache& TextRenderer::acquireSlot(uint16_t viewId, const std::string& text,
+                                             float x, float y) {
+    const size_t idx = selectCacheSlot(m_cacheSlots, kCacheSlots, viewId, text, x, y);
+    MessageLayerCache& s = m_cacheSlots[idx];
+    // An eviction is a LIVE slot being handed to a different key: that is the
+    // event the old single-slot cache suffered on every alternating draw.
+    if (s.geometryValid && !s.matches(viewId, text, x, y)
+        && !detectAppend(s.cachedText, text).isAppend) {
+        ++m_cacheStats.evictions;
+    }
+    m_lastSlot = idx;
+    s.lastUse = ++m_cacheClock;
+    return s;
 }
 
 float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
@@ -1421,41 +1664,367 @@ float TextRenderer::renderTextCached(uint16_t viewId, const std::string& text,
     bgfx::ProgramHandle prog = bgfx::isValid(program) ? program : m_fallbackProgram;
     if (!bgfx::isValid(prog)) return x;
 
-    bool keyHit = m_msgCache.matches(viewId, text, x, y);
-    if (!keyHit) {
-        // Key mismatch (text, view, or position): recompute the dirty range
-        // and force a rebuild with the new key.
-        if (text != m_msgCache.cachedText) updateDirtyRange(text);
-        else m_msgCache.markAllDirty();
-        m_msgCache.cachedViewId = viewId;
-        m_msgCache.cachedX = x;
-        m_msgCache.cachedY = y;
+    // Slot selection (LRU): an exact key hit needs no work; an append-
+    // compatible slot lets the typewriter reveal extend existing geometry;
+    // otherwise the least-recently-used slot is re-keyed.
+    MessageLayerCache& slot = acquireSlot(viewId, text, x, y);
+    const bool exactHit = slot.geometryValid && slot.matches(viewId, text, x, y);
+
+    // planCacheUpdate() is the ONE policy function; the tests measure it, so the
+    // measured behavior is the shipped behavior.
+    const CachePlan plan = planCacheUpdate(slot, viewId, text, x, y);
+
+    if (plan.action == CacheAction::Hit) {
+        ++m_cacheStats.cacheHits;
+        if (!ensureCacheBuffers(slot)) return x;
+        submitCachedSlot(slot, viewId, color, prog);
+        // The pen advance was computed once at rebuild time; skip the per-frame
+        // O(n) glyph-advance walk.
+        return x + slot.cachedPenAdvance;
     }
 
-    if (m_msgCache.isDirty()) {
-        const float pen = rebuildCache(viewId, text, x, y, color, prog);
-        // Store the pen advance (pen - x) so a cache hit skips the O(n) walk.
-        m_msgCache.cachedPenAdvance = pen - x;
+    if (plan.action == CacheAction::Append) {
+        // Typewriter growth: lay out and upload ONLY the new tail.
+        const float pen = appendToCache(slot, viewId, text, plan, x, y, color, prog);
+        slot.cachedPenAdvance = pen - x;
         return pen;
     }
 
-    if (!ensureCacheBuffers()) return x;
-
-    float fc[4] = { color.r/255.0f, color.g/255.0f, color.b/255.0f, color.a/255.0f };
-    bgfx::setUniform(m_u_color, fc);
-    // Cache-hit texture: a cached CJK-only line samples the CJK atlas --
-    // binding the TTF texture for it would sample wrong glyphs.
-    const bool needCjk = m_msgCache.cacheIsCjk && bgfx::isValid(m_cjkAtlas);
-    bgfx::setTexture(0, m_texSampler, needCjk ? m_cjkAtlas : m_fontTexture);
-    bgfx::setVertexBuffer(0, m_msgCache.vb, 0, m_msgCache.glyphCount * 6);
-    bgfx::setIndexBuffer(m_msgCache.ib, 0, m_msgCache.glyphCount * 6);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(viewId, prog);
-
-    // Cache hit: the pen advance was computed once at rebuild time; skip the
-    // per-frame O(n) glyph-advance walk.
-    return x + m_msgCache.cachedPenAdvance;
+    // Full rebuild: new text, rewritten/shortened text, moved text, or a
+    // re-keyed slot. Keeps the dirty-range bookkeeping for observability.
+    if (!exactHit) {
+        if (text != slot.cachedText) updateDirtyRange(slot, text);
+        else slot.markAllDirty();
+        slot.cachedViewId = viewId;
+        slot.cachedX = x;
+        slot.cachedY = y;
+    }
+    slot.cachedText = text;
+    // A re-keyed slot's old glyph bookkeeping must not leak into the new text.
+    slot.glyphCount = 0;
+    slot.anyGlyph = slot.anyNonCjk = false;
+    const float pen = rebuildCache(slot, viewId, text, x, y, color, prog);
+    slot.cachedPenAdvance = pen - x;
+    return pen;
 }
 
+// ===========================================================================
+// CJK Kinsoku Shori (避头尾法则) line-breaking rules
+// ===========================================================================
+
+bool TextRenderer::isKinsokuLineStartForbidden(uint32_t cp) {
+    // 1. ASCII closing punctuation and quotes
+    switch (cp) {
+        case '!': case '"': case '\'': case ')': case ',':
+        case '.': case ':': case ';': case '?': case ']':
+        case '}':
+            return true;
+        default: break;
+    }
+
+    // 2. Unicode quotes and brackets (closing)
+    switch (cp) {
+        case 0x00BB: // » Right-pointing double angle quotation mark
+        case 0x2019: // ’ Right single quotation mark
+        case 0x201D: // ” Right double quotation mark
+        case 0x203A: // › Single right-pointing angle quotation mark
+        case 0x3009: // 〉 Right angle bracket
+        case 0x300B: // 》 Right double angle bracket
+        case 0x300D: // 」 Right corner bracket
+        case 0x300F: // 』 Right white corner bracket
+        case 0x3011: // 】 Right black lenticular bracket
+        case 0x3015: // 〕 Right tortoise shell bracket
+        case 0x3017: // 〗 Right white lenticular bracket
+        case 0x3019: // 㙹 / 㙙 Right white tortoise shell bracket
+        case 0x301B: // 㛼 / 㛛 Right white square bracket
+        case 0xFE5A: // ﹚ Small right parenthesis
+        case 0xFE5C: // ﹜ Small right curly bracket
+        case 0xFE5E: // ﹞ Small right tortoise shell bracket
+        case 0xFF09: // ） Fullwidth right parenthesis
+        case 0xFF3D: // ］ Fullwidth right square bracket
+        case 0xFF5D: // ｝ Fullwidth right curly bracket
+        case 0xFF60: // ｠ Fullwidth right white parenthesis
+        case 0xFF63: // ｣ Halfwidth right corner bracket
+            return true;
+        default: break;
+    }
+
+    // 3. Commas, periods, question/exclamation, fullwidth & halfwidth
+    switch (cp) {
+        case 0x3001: // 、 Ideographic comma
+        case 0x3002: // 。 Ideographic full stop
+        case 0xFE50: // ﹐ Small comma
+        case 0xFE51: // ﹑ Small ideographic comma
+        case 0xFE52: // ﹒ Small full stop
+        case 0xFE54: // ﹔ Small semicolon
+        case 0xFE55: // ﹕ Small colon
+        case 0xFE56: // ﹖ Small question mark
+        case 0xFE57: // ﹗ Small exclamation mark
+        case 0xFF01: // ！ Fullwidth exclamation mark
+        case 0xFF0C: // ， Fullwidth comma
+        case 0xFF0E: // ． Fullwidth full stop
+        case 0xFF1A: // ： Fullwidth colon
+        case 0xFF1B: // ； Fullwidth semicolon
+        case 0xFF1F: // ？ Fullwidth question mark
+        case 0xFF61: // ｡ Halfwidth ideographic full stop
+        case 0xFF64: // ､ Halfwidth ideographic comma
+            return true;
+        default: break;
+    }
+
+    // 4. Connecting / middle dots / ellipsis / dashes / prolonging / iteration marks
+    switch (cp) {
+        case 0x00B7: // · Middle dot
+        case 0x2014: // — Em dash
+        case 0x2015: // ― Horizontal bar
+        case 0x2025: // ‥ Two dot leader
+        case 0x2026: // … Horizontal ellipsis
+        case 0x3005: // 々 Ideographic iteration mark
+        case 0x301C: // 〜 Wave dash
+        case 0x303B: // 〻 Vertical ideographic iteration mark
+        case 0x303C: // 〼 Masu mark
+        case 0x309D: // ゝ Hiragana iteration mark
+        case 0x309E: // ゞ Hiragana voiced iteration mark
+        case 0x30FB: // ・ Katakana middle dot
+        case 0x30FC: // ー Katakana-Hiragana prolonged sound mark
+        case 0x30FD: // ヽ Katakana iteration mark
+        case 0x30FE: // ヾ Katakana voiced iteration mark
+        case 0xFF5E: // ～ Fullwidth tilde
+        case 0xFF65: // ･ Halfwidth katakana middle dot
+        case 0xFF70: // ｰ Halfwidth katakana-hiragana prolonged sound mark
+            return true;
+        default: break;
+    }
+
+    // 5. Small Kana (Hiragana & Katakana)
+    // Small Hiragana
+    switch (cp) {
+        case 0x3041: // ぁ
+        case 0x3043: // ぃ
+        case 0x3045: // ぅ
+        case 0x3047: // ぇ
+        case 0x3049: // ぉ
+        case 0x3063: // っ
+        case 0x3083: // ゃ
+        case 0x3085: // ゅ
+        case 0x3087: // ょ
+        case 0x308E: // ゎ
+        case 0x3095: // ゕ
+        case 0x3096: // ゖ
+            return true;
+        default: break;
+    }
+    // Small Katakana
+    switch (cp) {
+        case 0x30A1: // ァ
+        case 0x30A3: // ィ
+        case 0x30A5: // ゥ
+        case 0x30A7: // ェ
+        case 0x30A9: // ォ
+        case 0x30C3: // ッ
+        case 0x30E3: // ャ
+        case 0x30E5: // ュ
+        case 0x30E7: // ョ
+        case 0x30EE: // ヮ
+        case 0x30F5: // ヵ
+        case 0x30F6: // ヶ
+            return true;
+        default: break;
+    }
+    // Halfwidth Small Katakana (0xFF67..0xFF6F: ｧ ｨ ｩ ｪ ｫ ｬ ｭ ｮ ｯ)
+    if (cp >= 0xFF67 && cp <= 0xFF6F) return true;
+    // Katakana Phonetic Extensions (0x31F0..0x31FF: ㇰ..ㇿ)
+    if (cp >= 0x31F0 && cp <= 0x31FF) return true;
+
+    // 6. Units and symbols that shouldn't start a line
+    switch (cp) {
+        case 0x0025: // % Percent
+        case 0x00B0: // ° Degree
+        case 0x2032: // ′ Prime
+        case 0x2033: // ″ Double prime
+        case 0x2103: // ℃ Degree Celsius
+        case 0xFF05: // ％ Fullwidth percent
+            return true;
+        default: break;
+    }
+
+    return false;
+}
+
+bool TextRenderer::isKinsokuLineEndForbidden(uint32_t cp) {
+    // 1. ASCII opening brackets
+    switch (cp) {
+        case '(': case '[': case '{':
+            return true;
+        default: break;
+    }
+
+    // 2. Unicode quotes and brackets (opening)
+    switch (cp) {
+        case 0x00AB: // « Left-pointing double angle quotation mark
+        case 0x2018: // ‘ Left single quotation mark
+        case 0x201C: // “ Left double quotation mark
+        case 0x2039: // ‹ Single left-pointing angle quotation mark
+        case 0x3008: // 〈 Left angle bracket
+        case 0x300A: // 《 Left double angle bracket
+        case 0x300C: // 「 Left corner bracket
+        case 0x300E: // 『 Left white corner bracket
+        case 0x3010: // 【 Left black lenticular bracket
+        case 0x3014: // 〔 Left tortoise shell bracket
+        case 0x3016: // 〖 Left white lenticular bracket
+        case 0x3018: // 〘 Left white tortoise shell bracket
+        case 0x301A: // 〚 Left white square bracket
+        case 0xFE59: // ﹙ Small left parenthesis
+        case 0xFE5B: // ﹛ Small left curly bracket
+        case 0xFE5D: // ﹝ Small left tortoise shell bracket
+        case 0xFF08: // （ Fullwidth left parenthesis
+        case 0xFF3B: // ［ Fullwidth left square bracket
+        case 0xFF5B: // ｛ Fullwidth left curly bracket
+        case 0xFF5F: // ｟ Fullwidth left white parenthesis
+        case 0xFF62: // ｢ Halfwidth left corner bracket
+            return true;
+        default: break;
+    }
+
+    // 3. Currency and prefix symbols
+    switch (cp) {
+        case 0x0023: // # Number sign
+        case 0x0024: // $ Dollar
+        case 0x00A3: // £ Pound
+        case 0x00A5: // ¥ Yen
+        case 0x00A7: // § Section sign
+        case 0x20AC: // € Euro
+        case 0x20A9: // ₩ Won
+        case 0x2116: // № Numero sign
+        case 0xFF03: // ＃ Fullwidth number sign
+        case 0xFF04: // ＄ Fullwidth dollar
+        case 0xFFE1: // ￡ Fullwidth pound
+        case 0xFFE5: // ￥ Fullwidth yen
+        case 0xFFE6: // ￦ Fullwidth won
+            return true;
+        default: break;
+    }
+
+    return false;
+}
+
+// ===========================================================================
+// Kinsoku-aware greedy line breaking
+//
+// WIRING STATUS (t10): the three predicates above used to be an API with unit
+// tests and NO caller -- nothing in the engine asked them where a line may
+// break. wrapTextKinsoku() is the missing decision point: it is the one place
+// that turns those predicates into an actual line-break result, and it is
+// exercised by behavior tests (given a text + width, assert the forbidden
+// positions are not broken).
+//
+// It is NOT yet the engine's production wrap path, and that is deliberate:
+//   * Production message wrapping happens in Lua, in scripts/kag/text_layout.lua
+//     (wrap_paragraph -> can_break, with its own OPENING/CLOSING_PUNCTUATION
+//     tables). The C++ renderText() only honors explicit '\n'; it has never
+//     measured a max width, so there is no C++ caller to hand this to.
+//   * Routing production text through here would mean either adding a Lua
+//     binding (src/script/bindings/) or widening IRenderDevice -- both outside
+//     this task's file set, and both would put TWO kinsoku tables in the same
+//     decision path until one side is deleted.
+// Who should wire it, and where: whoever owns the C++/Lua duplication decision.
+// Either (1) delete the Lua table and have text_layout.lua call a new
+// kag.text_measure binding that forwards to wrapTextKinsoku(), or (2) declare
+// Lua authoritative for wrapping and keep this as the C++-side (ErrorUI /
+// future native UI) implementation. Until then this is a tested, self-contained
+// algorithm rather than an untested unused predicate set.
+// ===========================================================================
+
+std::vector<size_t> TextRenderer::wrapTextKinsoku(const std::string& text,
+                                                  float maxWidth,
+                                                  AdvanceFn advance, void* userData) {
+    std::vector<size_t> breaks;
+    breaks.push_back(0);
+    if (text.empty() || !advance) { breaks.push_back(text.size()); return breaks; }
+
+    // Decode once: byte offset + codepoint + advance per character.
+    struct Ch { size_t off; size_t len; uint32_t cp; float adv; };
+    std::vector<Ch> chars;
+    const uint8_t* d = reinterpret_cast<const uint8_t*>(text.data());
+    const size_t n = text.size();
+    for (size_t i = 0; i < n; ) {
+        int clen = utf8_char_len(d[i]);
+        if (i + (size_t)clen > n) clen = (int)(n - i);
+        const uint32_t cp = utf8_codepoint(&d[i], clen);
+        chars.push_back(Ch{ i, (size_t)clen, cp, advance(cp, userData) });
+        i += (size_t)clen;
+    }
+
+    size_t lineStart = 0;               // index into chars
+    float  lineWidth = 0.0f;
+    for (size_t i = 0; i < chars.size(); ++i) {
+        // Explicit newline always breaks and is consumed by the break.
+        if (chars[i].cp == '\n') {
+            breaks.push_back(chars[i].off + chars[i].len);
+            lineStart = i + 1;
+            lineWidth = 0.0f;
+            continue;
+        }
+
+        const float next = lineWidth + chars[i].adv;
+        if (next <= maxWidth || i == lineStart) {
+            // Fits (or is the sole character on the line: never produce an
+            // empty line, even for a glyph wider than maxWidth).
+            lineWidth = next;
+            continue;
+        }
+
+        // Overflow at i: the greedy break is "before i". Walk left to the last
+        // position the kinsoku rules allow. Position k means "break between
+        // chars[k-1] and chars[k]".
+        size_t breakAt = i;
+        while (breakAt > lineStart + 1
+               && !canBreakBetween(chars[breakAt - 1].cp, chars[breakAt].cp)) {
+            --breakAt;
+        }
+        // No legal position inside the line: fall back to the overflow point.
+        // (Standard behavior -- a forbidden pair that spans the whole line must
+        // still be laid out somewhere, and an infinite loop is never acceptable.)
+        if (breakAt <= lineStart) breakAt = i;
+
+        breaks.push_back(chars[breakAt].off);
+        lineStart = breakAt;
+        lineWidth = 0.0f;
+        for (size_t k = breakAt; k <= i; ++k) lineWidth += chars[k].adv;
+    }
+
+    breaks.push_back(text.size());
+    return breaks;
+}
+
+bool TextRenderer::canBreakBetween(uint32_t leftCodepoint, uint32_t rightCodepoint) {
+    if (leftCodepoint == 0 || rightCodepoint == 0) return true;
+
+    // Cannot break after line-end forbidden characters
+    if (isKinsokuLineEndForbidden(leftCodepoint)) return false;
+
+    // Cannot break before line-start forbidden characters
+    if (isKinsokuLineStartForbidden(rightCodepoint)) return false;
+
+    // Unicode combining marks (cannot break before combining mark)
+    if ((rightCodepoint >= 0x0300 && rightCodepoint <= 0x036F) ||
+        (rightCodepoint >= 0x1AB0 && rightCodepoint <= 0x1AFF) ||
+        (rightCodepoint >= 0x1DC0 && rightCodepoint <= 0x1DFF) ||
+        (rightCodepoint >= 0x20D0 && rightCodepoint <= 0x20FF) ||
+        (rightCodepoint >= 0xFE20 && rightCodepoint <= 0xFE2F)) {
+        return false;
+    }
+
+    // Inseparable consecutive punctuation pairs:
+    // Two ellipses (……), two em-dashes (—— or ――), two two-dot leaders (‥‥)
+    if ((leftCodepoint == 0x2026 && rightCodepoint == 0x2026) ||
+        (leftCodepoint == 0x2025 && rightCodepoint == 0x2025) ||
+        (leftCodepoint == 0x2014 && rightCodepoint == 0x2014) ||
+        (leftCodepoint == 0x2015 && rightCodepoint == 0x2015)) {
+        return false;
+    }
+
+    return true;
+}
 
 } // namespace Caesura

@@ -18,7 +18,12 @@ struct CjkGlyph {
     int16_t advance = 0, offsetX = 0, offsetY = 0;
 };
 
-// Resident vertex/index buffer for text layer batching
+// Resident vertex/index buffer for text layer batching.
+//
+// One instance == one LRU slot of TextRenderer's text-geometry cache. The slot
+// owns its dynamic VB/IB; eviction re-keys the slot and rebuilds into the SAME
+// buffers (the buffers are the pooled resource, so eviction costs no GPU
+// allocation).
 struct MessageLayerCache {
     bgfx::DynamicVertexBufferHandle vb = BGFX_INVALID_HANDLE;
     bgfx::DynamicIndexBufferHandle  ib = BGFX_INVALID_HANDLE;
@@ -36,9 +41,35 @@ struct MessageLayerCache {
     }
     bool        cacheIsCjk = false;     // TD-13: whether cached text uses CJK atlas
 
+    // -- Incremental-append bookkeeping ----------------------------------
+    // penEnd is the ABSOLUTE pen X after cachedText. An append-only update
+    // resumes layout from exactly this float (reconstructing it as
+    // x + cachedPenAdvance would round differently and break byte equivalence
+    // with the full-rebuild path).
+    float penEnd = 0.0f;
+    // Cumulative CJK bookkeeping: layoutGlyphs() derives allCjk from the whole
+    // text, so an incremental update has to fold the prefix's flags back in.
+    bool anyGlyph = false;
+    bool anyNonCjk = false;
+    // false == the buffers hold nothing reusable (fresh slot, invalidated
+    // cache, or post-device-loss).
+    bool geometryValid = false;
+    // LRU stamp (TextRenderer::m_cacheClock at the last use). 0 == never used.
+    uint64_t lastUse = 0;
+
     bool isDirty() const { return dirtyStart < dirtyEnd; }
     void markAllDirty() { dirtyStart = 0; dirtyEnd = maxGlyphs; }
     void clearDirty()   { dirtyStart = dirtyEnd = 0; }
+    // Drop reusable geometry without touching the GPU buffers.
+    void invalidateGeometry() {
+        cachedText.clear();
+        glyphCount = 0;
+        penEnd = 0.0f;
+        anyGlyph = anyNonCjk = false;
+        geometryValid = false;
+        cachedViewId = 0xFFFF;
+        markAllDirty();
+    }
 };
 
 enum class FontId : uint8_t { Small = 0, Large = 1, TTF = 2 };
@@ -112,23 +143,38 @@ public:
         std::vector<LaidGlyph> glyphs;
         float penAdvance = 0.0f;   // final pen X after all advances
         bool allCjk = false;       // every emitted glyph came from CJK
+        // Raw bookkeeping behind allCjk. An incremental (append-only) update
+        // only lays out the tail, so it must OR these into the prefix's flags
+        // to reach the same allCjk verdict the full path computes.
+        bool anyGlyph = false;
+        bool anyNonCjk = false;
     };
     // Pure: decode UTF-8 `text`, look up each codepoint, emit quads + UVs.
     // No bgfx/device state is touched. maxGlyphs truncates the output list.
+    // `byteBegin` starts the decode at a byte offset (must be a codepoint
+    // boundary): the incremental append path lays out ONLY the new tail, with
+    // penX resumed from the cached absolute pen. Per-codepoint layout depends
+    // on nothing but the pen and the glyph table, which is what makes the tail
+    // result bit-identical to the corresponding slice of a full layout.
     static GlyphLayoutResult layoutGlyphs(const std::string& text,
                                           float penX, float penY,
                                           GlyphLookupFn lookup, void* userData,
                                           bool hasCjk, float invW, float invH,
                                           float cjkInvW, float cjkInvH,
                                           bool useTtf, float ttfAscent,
-                                          size_t maxGlyphs);
+                                          size_t maxGlyphs,
+                                          size_t byteBegin = 0);
     // Pure: turn laid-out glyphs into a triangle-list vertex stream
     // (6 verts x {x,y,u,v} per glyph) + indices. screenW/H <= 0 falls back
     // to raw pixel coordinates (matches rebuildCache()).
+    // `glyphIndexBase` is the glyph slot the first emitted glyph occupies in
+    // the resident buffer: indices are absolute, so a tail update written at
+    // vertex offset base*6 must emit indices starting from base*6 too.
     static void buildQuadVertices(const std::vector<LaidGlyph>& glyphs,
                                   float screenW, float screenH,
                                   std::vector<float>& verts,
-                                  std::vector<uint32_t>& indices);
+                                  std::vector<uint32_t>& indices,
+                                  uint32_t glyphIndexBase = 0);
 
     // -- Pure dirty-range math (headless-testable) -------------------------
     // Count UTF-8 codepoints in a byte range (lenient: a truncated trailing
@@ -147,6 +193,89 @@ public:
                                               const std::string& newText,
                                               uint32_t maxGlyphs);
 
+    // -- Pure append detection (headless-testable) -------------------------
+    // The typewriter reveal grows a line one codepoint at a time, so the new
+    // text is the old text plus a tail. That is the ONLY shape the cache can
+    // update incrementally: every already-laid glyph keeps its position, so
+    // only the tail needs layout and only the tail's vertices need uploading.
+    struct AppendResult {
+        bool isAppend = false;    // newText == oldText + non-empty tail
+        size_t tailByteOffset = 0;  // byte offset of the tail in newText
+        uint32_t prefixGlyphs = 0;  // codepoints in the shared prefix
+        uint32_t tailGlyphs = 0;    // codepoints in the tail
+    };
+    // isAppend is false for identical text, shortened text, any rewrite, and
+    // for a prefix that is not codepoint-aligned (defensive: a truncated
+    // multi-byte lead byte must never be treated as a complete prefix).
+    static AppendResult detectAppend(const std::string& oldText,
+                                     const std::string& newText);
+
+    // -- Cache update planning (headless-testable) -------------------------
+    // The decision "reuse as-is / extend the tail / rebuild everything", plus
+    // the exact work that decision implies. This is the SAME function the
+    // production renderTextCached() uses to choose its path, so a test that
+    // calls it is measuring the real policy, not a re-implementation of it.
+    enum class CacheAction : uint8_t {
+        Hit = 0,        // geometry reusable as-is: no layout, no upload
+        Append,         // lay out + upload ONLY the appended tail
+        FullRebuild     // lay out + upload everything
+    };
+    struct CachePlan {
+        CacheAction action = CacheAction::FullRebuild;
+        uint32_t glyphsToLayout = 0;  // codepoints handed to layoutGlyphs()
+        uint32_t firstGlyph = 0;      // glyph slot the upload starts at
+        uint32_t vertexBytes = 0;     // bytes handed to bgfx::update (VB)
+        uint32_t indexBytes = 0;      // bytes handed to bgfx::update (IB)
+        size_t   byteBegin = 0;       // layoutGlyphs() start offset
+    };
+    // Pure: no bgfx, no member writes. `slot` is inspected, never modified.
+    static CachePlan planCacheUpdate(const MessageLayerCache& slot,
+                                     uint16_t viewId, const std::string& text,
+                                     float x, float y);
+
+    // -- Pure LRU slot selection (headless-testable) -----------------------
+    // Picks the slot index this draw should use, in priority order:
+    //   1. exact-key hit (reuse as-is),
+    //   2. append-compatible slot (same view/pos, cachedText is a prefix),
+    //   3. least-recently-used slot (an unused slot has lastUse == 0 and wins).
+    // Pure: reads the slots, writes nothing. The caller stamps lastUse.
+    static size_t selectCacheSlot(const MessageLayerCache* slots, size_t count,
+                                  uint16_t viewId, const std::string& text,
+                                  float x, float y);
+
+    // -- Instrumentation (test-only observability) -------------------------
+    // Counters for the batch cache. They are plain uint64 increments on the
+    // paths that already do far heavier work (a bgfx::update or a full glyph
+    // layout), so they are compiled into every configuration rather than
+    // guarded by CAESURA_DEBUG: a release-only code shape could not be
+    // measured by the tests that must prove the optimization.
+    struct CacheStats {
+        uint64_t rebuildFull = 0;       // full layout + full upload
+        uint64_t rebuildIncremental = 0; // tail-only layout + tail-only upload
+        uint64_t cacheHits = 0;         // no layout, no upload
+        uint64_t glyphsLaidOut = 0;     // codepoints passed through layoutGlyphs
+        uint64_t vertexBytesUploaded = 0; // bytes handed to bgfx::update (VB)
+        uint64_t indexBytesUploaded = 0;  // bytes handed to bgfx::update (IB)
+        uint64_t evictions = 0;         // LRU slots re-keyed to a new text
+    };
+    const CacheStats& cacheStats() const { return m_cacheStats; }
+    void resetCacheStats() { m_cacheStats = CacheStats{}; }
+
+    // -- Kinsoku-aware line breaking (headless-testable) -------------------
+    // Greedy wrap of `text` into lines no wider than maxWidth, honoring the
+    // kinsoku rules via canBreakBetween(). Width comes from an injected
+    // advance callback so this is GPU-free and unit-testable.
+    // Returns byte offsets: line i spans [breaks[i], breaks[i+1]).
+    using AdvanceFn = float (*)(uint32_t codepoint, void* userData);
+    static std::vector<size_t> wrapTextKinsoku(const std::string& text,
+                                               float maxWidth,
+                                               AdvanceFn advance, void* userData);
+
+    // -- CJK Kinsoku Shori (避头尾法则) line-breaking rules ----------------
+    static bool isKinsokuLineStartForbidden(uint32_t codepoint);
+    static bool isKinsokuLineEndForbidden(uint32_t codepoint);
+    static bool canBreakBetween(uint32_t leftCodepoint, uint32_t rightCodepoint);
+
     void newline();
     void clearText(uint16_t viewId);
     void setCursor(float x, float y) { m_cursor.x = x; m_cursor.y = y; }
@@ -161,7 +290,15 @@ public:
                            float x, float y, TextColor color,
                            bgfx::ProgramHandle program = BGFX_INVALID_HANDLE);
     void invalidateCache();
-    const MessageLayerCache& cache() const { return m_msgCache; }
+    // The most recently used slot. Kept as `cache()` so existing callers and
+    // tests that inspected the single-slot cache keep compiling.
+    const MessageLayerCache& cache() const { return m_cacheSlots[m_lastSlot]; }
+    // Slot count and per-slot inspection: one text layer (name / body / ruby)
+    // occupies one slot, so a frame drawing N distinct texts needs N slots to
+    // avoid mutual eviction.
+    static constexpr size_t kCacheSlots = 8;
+    size_t cacheSlotCount() const { return kCacheSlots; }
+    const MessageLayerCache& cacheSlot(size_t i) const { return m_cacheSlots[i]; }
 
     // -- CJK static atlas (Track 2) --
     bool loadCjkAtlas(const std::string& atlasPath, const std::string& metaPath);
@@ -213,11 +350,26 @@ private:
 
     // -- Batch cache internals (Track 2) --
     struct GlyphDraw { float gx, gy, w, h, u0, v0, u1, v1; };
-    void updateDirtyRange(const std::string& newText);
-    float rebuildCache(uint16_t viewId, const std::string& text,
+    void updateDirtyRange(MessageLayerCache& slot, const std::string& newText);
+    // Full rebuild: lay out every codepoint, upload the whole VB/IB.
+    float rebuildCache(MessageLayerCache& slot, uint16_t viewId,
+                       const std::string& text,
                        float x, float y, TextColor color,
                        bgfx::ProgramHandle program);
-    bool ensureCacheBuffers();
+    // Append-only update: lay out ONLY the new tail and upload ONLY its
+    // vertex/index range. Returns the new absolute pen X.
+    float appendToCache(MessageLayerCache& slot, uint16_t viewId,
+                        const std::string& text, const CachePlan& plan,
+                        float x, float y, TextColor color,
+                        bgfx::ProgramHandle program);
+    // Bind + submit a slot's resident geometry (shared by every path).
+    void submitCachedSlot(MessageLayerCache& slot, uint16_t viewId,
+                          TextColor color, bgfx::ProgramHandle program);
+    bool ensureCacheBuffers(MessageLayerCache& slot);
+    // Pick the slot for this key via selectCacheSlot(), then stamp its LRU
+    // clock and count an eviction when a live slot is re-keyed.
+    MessageLayerCache& acquireSlot(uint16_t viewId, const std::string& text,
+                                   float x, float y);
 
     // -- Track 2 state --
     uint16_t m_atlasW = 2048, m_atlasH = 2048;
@@ -225,7 +377,14 @@ private:
     std::unordered_map<uint32_t, CjkGlyph> m_cjkGlyphs;
     bool m_expanding = false;
     bgfx::UniformHandle m_u_color = BGFX_INVALID_HANDLE;
-    MessageLayerCache m_msgCache;
+    // LRU set of text-geometry slots. Capacity 8: a visual-novel frame draws
+    // speaker name + message body + a handful of ruby runs / choice labels, so
+    // 8 covers the observed worst case while costing at most 8 dynamic VB/IB
+    // pairs (created lazily, only when a slot is first used).
+    MessageLayerCache m_cacheSlots[kCacheSlots];
+    size_t   m_lastSlot = 0;     // most recently used slot (cache() target)
+    uint64_t m_cacheClock = 0;   // monotonic LRU stamp source
+    CacheStats m_cacheStats;
 
     IRenderDevice* m_savedDevice = nullptr;
     bool m_initialized = false;

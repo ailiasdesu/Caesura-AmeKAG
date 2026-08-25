@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cstring>
+#include <unordered_map>
 
 using namespace Caesura;
 
@@ -278,3 +280,627 @@ TEST_CASE("TextRenderer: RGBA8 dynamic atlas buffer formatting & UV consistency"
     CHECK(u1 == doctest::Approx(24.0f / 256.0f));
     CHECK(v1 == doctest::Approx(32.0f / 256.0f));
 }
+
+TEST_CASE("CJK Kinsoku Shori: Line start forbidden characters (行首禁则 / 避头)") {
+    // Closing brackets and quotes
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(')'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(']'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden('}'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden('!'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden('?'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(','));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden('.'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(':'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(';'));
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF09)); // ）
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF3D)); // ］
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF5D)); // ｝
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3009)); // 〉
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x300B)); // 》
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x300D)); // 」
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x300F)); // 』
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3011)); // 】
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3015)); // 〕
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x2019)); // ’
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x201D)); // ”
+
+    // Commas and periods
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3001)); // 、
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3002)); // 。
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF0C)); // ，
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF0E)); // ．
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF01)); // ！
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF1F)); // ？
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF1A)); // ：
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF1B)); // ；
+
+    // Japanese small kana
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3041)); // ぁ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3063)); // っ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3083)); // ゃ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30A1)); // ァ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30C3)); // ッ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30E3)); // ャ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30F5)); // ヵ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30F6)); // ヶ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF67)); // ｧ
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF6F)); // ｯ
+
+    // Ellipsis, middle dot, dashes, iteration
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x2026)); // …
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x2014)); // —
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x00B7)); // ·
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30FB)); // ・
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x30FC)); // ー
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0xFF5E)); // ～
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x301C)); // 〜
+    CHECK(TextRenderer::isKinsokuLineStartForbidden(0x3005)); // 々
+
+    // Regular letters/characters are NOT forbidden at start
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden('A'));
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden('z'));
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden(0x4E2D)); // 中
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden(0x3042)); // あ (normal vowel)
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden(0x30A2)); // ア (normal vowel)
+    CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden(0x304B)); // か
+}
+
+TEST_CASE("CJK Kinsoku Shori: Line end forbidden characters (行尾禁则 / 避尾)") {
+    // Opening brackets and quotes
+    CHECK(TextRenderer::isKinsokuLineEndForbidden('('));
+    CHECK(TextRenderer::isKinsokuLineEndForbidden('['));
+    CHECK(TextRenderer::isKinsokuLineEndForbidden('{'));
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0xFF08)); // （
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0xFF3B)); // ［
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0xFF5B)); // ｛
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x3008)); // 〈
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x300A)); // 《
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x300C)); // 「
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x300E)); // 『
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x3010)); // 【
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x3014)); // 〔
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x2018)); // ‘
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x201C)); // “
+
+    // Currency and prefixes
+    CHECK(TextRenderer::isKinsokuLineEndForbidden('$'));
+    CHECK(TextRenderer::isKinsokuLineEndForbidden('#'));
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x00A5)); // ¥
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0xFFE5)); // ￥
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x20AC)); // €
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x00A3)); // £
+    CHECK(TextRenderer::isKinsokuLineEndForbidden(0x2116)); // №
+
+    // Regular letters/characters are NOT forbidden at end
+    CHECK_FALSE(TextRenderer::isKinsokuLineEndForbidden('A'));
+    CHECK_FALSE(TextRenderer::isKinsokuLineEndForbidden('9'));
+    CHECK_FALSE(TextRenderer::isKinsokuLineEndForbidden(0x4E2D)); // 中
+    CHECK_FALSE(TextRenderer::isKinsokuLineEndForbidden(0x3042)); // あ
+    CHECK_FALSE(TextRenderer::isKinsokuLineEndForbidden(0x3002)); // 。(line start forbidden, not line end)
+}
+
+TEST_CASE("CJK Kinsoku Shori: canBreakBetween rules") {
+    // Normal CJK characters can break between each other
+    CHECK(TextRenderer::canBreakBetween(0x4E2D, 0x6587)); // "中文"
+
+    // Cannot break before line-start forbidden characters
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x4E2D, 0x3002)); // "中。"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x4E2D, 0xFF0C)); // "中，"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x4E2D, 0x300D)); // "中」"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x4E2D, 0x3063)); // "中っ"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x304D, 0x3083)); // "きゃ" (ki + small ya)
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x30AC, 0x30FC)); // "ガー" (ga + prolonged sound)
+
+    // Cannot break after line-end forbidden characters
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x300C, 0x4E2D)); // "「中"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x300A, 0x4E2D)); // "《中"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0xFFE5, '1'));    // "￥1"
+
+    // Cannot break between two ellipses or two dashes
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x2026, 0x2026)); // "……"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x2014, 0x2014)); // "——"
+    CHECK_FALSE(TextRenderer::canBreakBetween(0x2015, 0x2015)); // "――"
+}
+
+// =============================================================================
+// t10 — batch-cache incremental append, LRU slot selection, kinsoku wrapping.
+//
+// These tests are GPU-free by construction: the cache POLICY
+// (TextRenderer::planCacheUpdate / selectCacheSlot / detectAppend) and the cache
+// GEOMETRY (layoutGlyphs / buildQuadVertices) are pure statics, and the
+// production renderTextCached() dispatches on exactly those functions. So what
+// is measured and asserted here is the shipped policy, not a parallel model.
+// =============================================================================
+
+namespace {
+
+// Mirror of the production upload sizes (6 verts x 4 floats, 6 uint32 indices
+// per glyph). Local on purpose: a change to the vertex format breaks these
+// numbers loudly instead of silently invalidating the measurement.
+constexpr uint32_t kVBytesPerGlyph = 6u * 4u * (uint32_t)sizeof(float);
+constexpr uint32_t kIBytesPerGlyph = 6u * (uint32_t)sizeof(uint32_t);
+
+std::unordered_map<uint32_t, TableGlyph> makeAsciiCjkTable() {
+    std::unordered_map<uint32_t, TableGlyph> t;
+    for (uint32_t cp = 'a'; cp <= 'z'; ++cp)
+        t[cp] = {makeGm((int)(cp - 'a') * 8, 16, 8, 16, 9), false};
+    t[' '] = {makeGm(0, 32, 0, 0, 6), false};
+    const uint32_t cjk[] = {0x4F60,0x597D,0x4E16,0x754C,0x7684,0x8BDD,0x8BED,0x58F0,
+                            0x97F3,0x5F88,0x6E29,0x67D4,0x4E2D,0x6587,0x5B57,0x7B26};
+    for (size_t i = 0; i < sizeof(cjk)/sizeof(cjk[0]); ++i)
+        t[cjk[i]] = {makeGm((int)i * 24, 100, 22, 22, 24, 1, 4), true};
+    return t;
+}
+
+// Test-local UTF-8 encoder: the production decoder is what is under test, so
+// the encoding side must not share code with it.
+std::string utf8Encode(uint32_t cp) {
+    std::string s;
+    if (cp < 0x80) { s += (char)cp; }
+    else if (cp < 0x800) {
+        s += (char)(0xC0 | (cp >> 6));
+        s += (char)(0x80 | (cp & 0x3F));
+    } else {
+        s += (char)(0xE0 | (cp >> 12));
+        s += (char)(0x80 | ((cp >> 6) & 0x3F));
+        s += (char)(0x80 | (cp & 0x3F));
+    }
+    return s;
+}
+
+uint32_t decodeFirstCodepoint(const std::string& s, size_t at) {
+    const uint8_t* d = reinterpret_cast<const uint8_t*>(s.data()) + at;
+    if ((d[0] & 0x80) == 0) return d[0];
+    if ((d[0] & 0xE0) == 0xC0) return ((uint32_t)(d[0] & 0x1F) << 6) | (d[1] & 0x3F);
+    return ((uint32_t)(d[0] & 0x0F) << 12) | ((uint32_t)(d[1] & 0x3F) << 6) | (d[2] & 0x3F);
+}
+
+// GPU-free stand-in for one cache slot plus its resident buffers: applies
+// exactly the writes rebuildCache()/appendToCache() perform (including the
+// partial-range write), so the simulated buffers equal what bgfx would hold.
+struct SimSlot {
+    MessageLayerCache meta;
+    std::vector<float> vb;
+    std::vector<uint32_t> ib;
+    SimSlot() {
+        vb.assign((size_t)meta.maxGlyphs * 6 * 4, 0.0f);
+        ib.assign((size_t)meta.maxGlyphs * 6, 0u);
+    }
+};
+
+struct SimCounters {
+    uint64_t fullRebuilds = 0, appends = 0, hits = 0;
+    uint64_t glyphsLaidOut = 0;
+    uint64_t vertexBytes = 0, indexBytes = 0;
+};
+
+void simDraw(SimSlot& s, uint16_t viewId, const std::string& text,
+             float x, float y,
+             const std::unordered_map<uint32_t, TableGlyph>& table,
+             float screenW, float screenH, SimCounters& c) {
+    const auto plan = TextRenderer::planCacheUpdate(s.meta, viewId, text, x, y);
+
+    if (plan.action == TextRenderer::CacheAction::Hit) { ++c.hits; return; }
+
+    const float penStart = (plan.action == TextRenderer::CacheAction::Append)
+                         ? s.meta.penEnd : x;
+    auto laid = TextRenderer::layoutGlyphs(
+        text, penStart, y, lookupFromTable, (void*)&table,
+        true, 1.0f / 256.0f, 1.0f / 48.0f, 1.0f / 4096.0f, 1.0f / 4096.0f,
+        false, 0.0f, (size_t)plan.glyphsToLayout, plan.byteBegin);
+
+    std::vector<float> verts;
+    std::vector<uint32_t> indices;
+    TextRenderer::buildQuadVertices(laid.glyphs, screenW, screenH, verts, indices,
+                                    plan.firstGlyph);
+
+    for (size_t i = 0; i < verts.size(); ++i)
+        s.vb[(size_t)plan.firstGlyph * 6 * 4 + i] = verts[i];
+    for (size_t i = 0; i < indices.size(); ++i)
+        s.ib[(size_t)plan.firstGlyph * 6 + i] = indices[i];
+
+    if (plan.action == TextRenderer::CacheAction::Append) {
+        ++c.appends;
+        s.meta.glyphCount = plan.firstGlyph + (uint32_t)laid.glyphs.size();
+        s.meta.anyGlyph  = s.meta.anyGlyph  || laid.anyGlyph;
+        s.meta.anyNonCjk = s.meta.anyNonCjk || laid.anyNonCjk;
+    } else {
+        ++c.fullRebuilds;
+        s.meta.glyphCount = (uint32_t)laid.glyphs.size();
+        s.meta.anyGlyph  = laid.anyGlyph;
+        s.meta.anyNonCjk = laid.anyNonCjk;
+        s.meta.cachedViewId = viewId;
+        s.meta.cachedX = x;
+        s.meta.cachedY = y;
+    }
+    s.meta.cacheIsCjk = s.meta.anyGlyph && !s.meta.anyNonCjk;
+    s.meta.penEnd = laid.penAdvance;
+    s.meta.cachedText = text;
+    s.meta.cachedPenAdvance = laid.penAdvance - x;
+    s.meta.geometryValid = true;
+    s.meta.clearDirty();
+
+    c.glyphsLaidOut += laid.glyphs.size();
+    c.vertexBytes += (uint64_t)verts.size() * sizeof(float);
+    c.indexBytes  += (uint64_t)indices.size() * sizeof(uint32_t);
+}
+
+// The PRE-t10 behavior for the same draw: rebuildCache() ignored the dirty range
+// and re-laid + re-uploaded the WHOLE text whenever the key missed, and the key
+// contained the full text so a growing line missed on every frame.
+void simDrawLegacyFullRebuild(const std::string& text, float x, float y,
+                              const std::unordered_map<uint32_t, TableGlyph>& table,
+                              float screenW, float screenH, SimCounters& c) {
+    auto laid = TextRenderer::layoutGlyphs(
+        text, x, y, lookupFromTable, (void*)&table,
+        true, 1.0f / 256.0f, 1.0f / 48.0f, 1.0f / 4096.0f, 1.0f / 4096.0f,
+        false, 0.0f, 2048, 0);
+    std::vector<float> verts;
+    std::vector<uint32_t> indices;
+    TextRenderer::buildQuadVertices(laid.glyphs, screenW, screenH, verts, indices, 0);
+    ++c.fullRebuilds;
+    c.glyphsLaidOut += laid.glyphs.size();
+    c.vertexBytes += (uint64_t)verts.size() * sizeof(float);
+    c.indexBytes  += (uint64_t)indices.size() * sizeof(uint32_t);
+}
+
+// Fullwidth-ish advance model: CJK / fullwidth = 2 units, ASCII = 1.
+float fixedAdvance(uint32_t cp, void* userData) {
+    (void)userData;
+    if (cp == '\n') return 0.0f;
+    return (cp >= 0x1100) ? 2.0f : 1.0f;
+}
+
+std::vector<std::string> makeTypewriterFrames(int codepoints) {
+    const uint32_t cjk[] = {0x4F60,0x597D,0x4E16,0x754C,0x7684,0x8BDD,0x8BED,0x58F0,
+                            0x97F3,0x5F88,0x6E29,0x67D4,0x4E2D,0x6587,0x5B57,0x7B26};
+    std::vector<std::string> frames;
+    std::string acc;
+    for (int i = 0; i < codepoints; ++i) {
+        if (i % 4 == 3) acc += (char)('a' + (i % 26));   // ASCII
+        else acc += utf8Encode(cjk[i % 16]);             // CJK
+        frames.push_back(acc);
+    }
+    return frames;
+}
+
+} // namespace
+TEST_CASE("Batch cache: detectAppend recognizes only append-shaped growth") {
+    auto a = TextRenderer::detectAppend("Hel", "Hello");
+    CHECK(a.isAppend);
+    CHECK(a.tailByteOffset == 3);
+    CHECK(a.prefixGlyphs == 3);
+    CHECK(a.tailGlyphs == 2);
+
+    const std::string cjk2 = utf8Encode(0x4F60) + utf8Encode(0x597D);
+    const std::string cjk3 = cjk2 + utf8Encode(0x4E16);
+    auto b = TextRenderer::detectAppend(cjk2, cjk3);
+    CHECK(b.isAppend);
+    CHECK(b.tailByteOffset == 6);      // two 3-byte codepoints
+    CHECK(b.prefixGlyphs == 2);
+    CHECK(b.tailGlyphs == 1);
+
+    // NOT appends: identical, shortened, rewritten, nothing cached.
+    CHECK_FALSE(TextRenderer::detectAppend("Hello", "Hello").isAppend);
+    CHECK_FALSE(TextRenderer::detectAppend("Hello", "Hell").isAppend);
+    CHECK_FALSE(TextRenderer::detectAppend("Hello", "Hallo!").isAppend);
+    CHECK_FALSE(TextRenderer::detectAppend("", "Hello").isAppend);
+
+    // Defensive: a prefix truncated mid-sequence must NOT count as an append --
+    // resuming layout from a continuation byte would desync the UTF-8 decode.
+    CHECK_FALSE(TextRenderer::detectAppend(cjk3.substr(0, 7), cjk3).isAppend);
+}
+
+TEST_CASE("Batch cache: plan picks Hit / Append / FullRebuild correctly") {
+    MessageLayerCache slot;
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abc", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+
+    slot.cachedText = "abc";
+    slot.glyphCount = 3;
+    slot.cachedViewId = 1;
+    slot.cachedX = 10.0f; slot.cachedY = 20.0f;
+    slot.geometryValid = true;
+    slot.clearDirty();
+
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abc", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::Hit);
+
+    const auto app = TextRenderer::planCacheUpdate(slot, 1, "abcde", 10.0f, 20.0f);
+    CHECK(app.action == TextRenderer::CacheAction::Append);
+    CHECK(app.glyphsToLayout == 2);            // ONLY the tail
+    CHECK(app.firstGlyph == 3);
+    CHECK(app.byteBegin == 3);
+    CHECK(app.vertexBytes == 2 * kVBytesPerGlyph);
+    CHECK(app.indexBytes == 2 * kIBytesPerGlyph);
+
+    // Different view / moved / shortened / rewritten => full rebuild.
+    CHECK(TextRenderer::planCacheUpdate(slot, 2, "abcde", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abcde", 11.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abcde", 10.0f, 21.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "ab", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "aXcde", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+
+    // An explicitly invalidated slot rebuilds even for identical text.
+    slot.markAllDirty();
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abc", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+
+    // A slot whose resident glyph count disagrees with the prefix (maxGlyphs
+    // clamping) must NOT append: the tail would land at the wrong offset.
+    slot.clearDirty();
+    slot.glyphCount = 2;
+    CHECK(TextRenderer::planCacheUpdate(slot, 1, "abcde", 10.0f, 20.0f).action
+          == TextRenderer::CacheAction::FullRebuild);
+}
+
+TEST_CASE("Batch cache: incremental append is byte-identical to a full rebuild") {
+    // CORRECTNESS RED LINE. Reveal a 60-codepoint mixed CJK/ASCII line one
+    // codepoint per frame through the incremental path, then build the same
+    // final text from scratch, and memcmp the ENTIRE resident vertex/index
+    // buffers (raw bytes, not an epsilon compare).
+    const auto table = makeAsciiCjkTable();
+    const auto frames = makeTypewriterFrames(60);
+    const std::string finalText = frames.back();
+
+    SimSlot incremental; SimCounters incCount;
+    for (const auto& f : frames)
+        simDraw(incremental, 1, f, 32.0f, 48.0f, table, 1280.0f, 720.0f, incCount);
+
+    SimSlot full; SimCounters fullCount;
+    simDraw(full, 1, finalText, 32.0f, 48.0f, table, 1280.0f, 720.0f, fullCount);
+
+    REQUIRE(incremental.meta.glyphCount == 60);
+    REQUIRE(incremental.meta.glyphCount == full.meta.glyphCount);
+    REQUIRE(incCount.appends == 59);        // the reveal really used the tail path
+    REQUIRE(fullCount.fullRebuilds == 1);
+
+    // Whole buffers, including the untouched tail: a partial upload must never
+    // leave stale geometry anywhere.
+    CHECK(std::memcmp(incremental.vb.data(), full.vb.data(),
+                      incremental.vb.size() * sizeof(float)) == 0);
+    CHECK(std::memcmp(incremental.ib.data(), full.ib.data(),
+                      incremental.ib.size() * sizeof(uint32_t)) == 0);
+
+    // Derived state must agree too: penEnd drives the caller's cursor and
+    // cacheIsCjk selects the atlas -- a mismatch renders wrong glyphs.
+    CHECK(incremental.meta.penEnd == full.meta.penEnd);
+    CHECK(incremental.meta.cachedPenAdvance == full.meta.cachedPenAdvance);
+    CHECK(incremental.meta.cacheIsCjk == full.meta.cacheIsCjk);
+    CHECK(incremental.meta.cacheIsCjk == false);   // the line contains ASCII
+}
+
+TEST_CASE("Batch cache: CJK-only reveal keeps the CJK-only verdict incrementally") {
+    const auto table = makeAsciiCjkTable();
+    const uint32_t cjk[] = {0x4F60,0x597D,0x4E16,0x754C,0x7684};
+    std::vector<std::string> frames;
+    std::string acc;
+    for (int i = 0; i < 5; ++i) { acc += utf8Encode(cjk[i]); frames.push_back(acc); }
+
+    SimSlot inc; SimCounters ic;
+    for (const auto& f : frames) simDraw(inc, 1, f, 0.0f, 0.0f, table, 1280.0f, 720.0f, ic);
+    SimSlot full; SimCounters fc;
+    simDraw(full, 1, frames.back(), 0.0f, 0.0f, table, 1280.0f, 720.0f, fc);
+
+    CHECK(inc.meta.cacheIsCjk == true);
+    CHECK(inc.meta.cacheIsCjk == full.meta.cacheIsCjk);
+    CHECK(std::memcmp(inc.vb.data(), full.vb.data(), inc.vb.size() * sizeof(float)) == 0);
+
+    // Appending ONE ASCII glyph must flip the verdict, exactly as a full
+    // rebuild of that text would.
+    const std::string mixed = frames.back() + "a";
+    simDraw(inc, 1, mixed, 0.0f, 0.0f, table, 1280.0f, 720.0f, ic);
+    SimSlot fullMixed; SimCounters fmc;
+    simDraw(fullMixed, 1, mixed, 0.0f, 0.0f, table, 1280.0f, 720.0f, fmc);
+    CHECK(inc.meta.cacheIsCjk == false);
+    CHECK(inc.meta.cacheIsCjk == fullMixed.meta.cacheIsCjk);
+    CHECK(std::memcmp(inc.vb.data(), fullMixed.vb.data(),
+                      inc.vb.size() * sizeof(float)) == 0);
+}
+
+TEST_CASE("Batch cache: typewriter reveal measurement (before vs after)") {
+    // MEASUREMENT. 60-codepoint line, one codepoint per frame, then held for 30
+    // frames (the reader is reading it) = 90 draws. Counters are the same
+    // quantities production CacheStats tracks: codepoints handed to
+    // layoutGlyphs, and bytes handed to bgfx::update.
+    const auto table = makeAsciiCjkTable();
+    auto frames = makeTypewriterFrames(60);
+    const std::string finalText = frames.back();
+    for (int i = 0; i < 30; ++i) frames.push_back(finalText);
+
+    SimCounters before;
+    for (const auto& f : frames)
+        simDrawLegacyFullRebuild(f, 32.0f, 48.0f, table, 1280.0f, 720.0f, before);
+
+    SimSlot slot; SimCounters after;
+    for (const auto& f : frames)
+        simDraw(slot, 1, f, 32.0f, 48.0f, table, 1280.0f, 720.0f, after);
+
+    MESSAGE("typewriter: 60 codepoints revealed + 30 held frames = 90 draws");
+    MESSAGE("  BEFORE  layouts=", before.fullRebuilds,
+            " glyphsLaidOut=", before.glyphsLaidOut,
+            " vertexBytes=", before.vertexBytes,
+            " indexBytes=", before.indexBytes);
+    MESSAGE("  AFTER   full=", after.fullRebuilds, " append=", after.appends,
+            " hit=", after.hits,
+            " glyphsLaidOut=", after.glyphsLaidOut,
+            " vertexBytes=", after.vertexBytes,
+            " indexBytes=", after.indexBytes);
+
+    // Before: all 90 frames re-laid the whole current text.
+    // 60 reveal frames = 1+2+...+60 = 1830 codepoints, + 30 held frames x 60.
+    CHECK(before.fullRebuilds == 90);
+    CHECK(before.glyphsLaidOut == 1830 + 30 * 60);
+    CHECK(before.vertexBytes == (uint64_t)(1830 + 30 * 60) * kVBytesPerGlyph);
+    CHECK(before.indexBytes == (uint64_t)(1830 + 30 * 60) * kIBytesPerGlyph);
+
+    // After: 1 full rebuild (first frame) + 59 tail appends + 30 pure hits.
+    CHECK(after.fullRebuilds == 1);
+    CHECK(after.appends == 59);
+    CHECK(after.hits == 30);
+    CHECK(after.glyphsLaidOut == 60);      // each codepoint laid out exactly once
+    CHECK(after.vertexBytes == (uint64_t)60 * kVBytesPerGlyph);
+    CHECK(after.indexBytes == (uint64_t)60 * kIBytesPerGlyph);
+
+    // O(N^2) -> O(N). Exact figures for this scenario (pinned, not ratios, so a
+    // regression shows up as a concrete number):
+    //   layout codepoints  3630 -> 60
+    //   vertex bytes     348480 -> 5760
+    //   index bytes       87120 -> 1440
+    CHECK(before.glyphsLaidOut == 3630);
+    CHECK(before.vertexBytes == 348480);
+    CHECK(before.indexBytes == 87120);
+    CHECK(after.glyphsLaidOut == 60);
+    CHECK(after.vertexBytes == 5760);
+    CHECK(after.indexBytes == 1440);
+    // 3630 / 60 = 60.5, so integer division is 60.
+    CHECK(before.glyphsLaidOut / after.glyphsLaidOut == 60);
+    CHECK(before.vertexBytes / after.vertexBytes == 60);
+    CHECK(before.indexBytes / after.indexBytes == 60);
+    // Per-frame averages across the 90 draws: 3872 -> 64 vertex bytes/frame,
+    // 40.3 -> 0.67 laid-out codepoints/frame.
+    CHECK(before.vertexBytes / 90 == 3872);
+    CHECK(after.vertexBytes / 90 == 64);
+}
+
+TEST_CASE("Batch cache: LRU keeps concurrent text layers resident (single slot thrashes)") {
+    // A visual-novel frame draws several distinct texts. With ONE slot they
+    // evict each other every frame; with the LRU set each keeps its geometry.
+    MessageLayerCache slots[TextRenderer::kCacheSlots];
+    const std::string name = "aoi";
+    const std::string body = "hello there";
+    const std::string ruby = "furigana";
+    struct Draw { uint16_t view; const std::string* text; float x, y; };
+    const Draw draws[] = {
+        {1, &name, 32.0f, 400.0f},
+        {1, &body, 32.0f, 440.0f},
+        {1, &ruby, 32.0f, 380.0f},
+    };
+
+    uint64_t clock = 0;
+    const auto commit = [&clock](MessageLayerCache* arr, size_t i, const Draw& d) {
+        arr[i].cachedText = *d.text;
+        arr[i].cachedViewId = d.view;
+        arr[i].cachedX = d.x; arr[i].cachedY = d.y;
+        arr[i].glyphCount = (uint32_t)d.text->size();
+        arr[i].geometryValid = true;
+        arr[i].clearDirty();
+        arr[i].lastUse = ++clock;
+    };
+
+    for (const auto& d : draws) {
+        const size_t i = TextRenderer::selectCacheSlot(
+            slots, TextRenderer::kCacheSlots, d.view, *d.text, d.x, d.y);
+        commit(slots, i, d);
+    }
+    size_t live = 0;
+    for (size_t i = 0; i < TextRenderer::kCacheSlots; ++i)
+        if (slots[i].geometryValid) ++live;
+    CHECK(live == 3);          // three distinct slots, no mutual eviction
+
+    // Second frame: all three are exact hits.
+    for (const auto& d : draws) {
+        const size_t i = TextRenderer::selectCacheSlot(
+            slots, TextRenderer::kCacheSlots, d.view, *d.text, d.x, d.y);
+        CHECK(TextRenderer::planCacheUpdate(slots[i], d.view, *d.text, d.x, d.y).action
+              == TextRenderer::CacheAction::Hit);
+        slots[i].lastUse = ++clock;
+    }
+
+    // Contrast: capacity 1 rebuilds on every single draw.
+    MessageLayerCache single[1];
+    MessageLayerCache lru[TextRenderer::kCacheSlots];
+    uint32_t singleRebuilds = 0, lruRebuilds = 0;
+    for (int frame = 0; frame < 2; ++frame) {
+        for (const auto& d : draws) {
+            const size_t si = TextRenderer::selectCacheSlot(single, 1, d.view, *d.text, d.x, d.y);
+            if (TextRenderer::planCacheUpdate(single[si], d.view, *d.text, d.x, d.y).action
+                == TextRenderer::CacheAction::FullRebuild) ++singleRebuilds;
+            commit(single, si, d);
+
+            const size_t li = TextRenderer::selectCacheSlot(
+                lru, TextRenderer::kCacheSlots, d.view, *d.text, d.x, d.y);
+            if (TextRenderer::planCacheUpdate(lru[li], d.view, *d.text, d.x, d.y).action
+                == TextRenderer::CacheAction::FullRebuild) ++lruRebuilds;
+            commit(lru, li, d);
+        }
+    }
+    MESSAGE("3 text layers x 2 frames: single-slot full rebuilds=", singleRebuilds,
+            "  LRU-8 full rebuilds=", lruRebuilds);
+    CHECK(singleRebuilds == 6);   // every draw thrashes
+    CHECK(lruRebuilds == 3);      // one per layer, then hits
+}
+
+TEST_CASE("Batch cache: LRU evicts the least-recently-used slot") {
+    MessageLayerCache slots[TextRenderer::kCacheSlots];
+    uint64_t clock = 0;
+    for (size_t i = 0; i < TextRenderer::kCacheSlots; ++i) {
+        const std::string t = "text" + std::to_string(i);
+        const size_t idx = TextRenderer::selectCacheSlot(
+            slots, TextRenderer::kCacheSlots, 1, t, 0.0f, (float)i);
+        CHECK(idx == i);              // unused slots are taken in order
+        slots[idx].cachedText = t;
+        slots[idx].cachedViewId = 1;
+        slots[idx].cachedX = 0.0f; slots[idx].cachedY = (float)i;
+        slots[idx].glyphCount = (uint32_t)t.size();
+        slots[idx].geometryValid = true;
+        slots[idx].clearDirty();
+        slots[idx].lastUse = ++clock;
+    }
+    slots[0].lastUse = ++clock;       // slot 0 is no longer the oldest
+    CHECK(TextRenderer::selectCacheSlot(slots, TextRenderer::kCacheSlots,
+                                        1, "ninth", 0.0f, 99.0f) == 1);
+}
+
+TEST_CASE("Kinsoku wrap: no line starts with forbidden punctuation") {
+    // "中文，中文。" at a width where the naive greedy break lands right before
+    // the fullwidth comma -- which kinsoku forbids.
+    const std::string text = utf8Encode(0x4E2D) + utf8Encode(0x6587) + utf8Encode(0xFF0C)
+                           + utf8Encode(0x4E2D) + utf8Encode(0x6587) + utf8Encode(0x3002);
+    auto breaks = TextRenderer::wrapTextKinsoku(text, 4.0f, fixedAdvance, nullptr);
+    REQUIRE(breaks.size() >= 3);           // at least one real break
+    for (size_t i = 1; i + 1 < breaks.size(); ++i) {
+        REQUIRE(breaks[i] < text.size());
+        CHECK_FALSE(TextRenderer::isKinsokuLineStartForbidden(
+            decodeFirstCodepoint(text, breaks[i])));
+    }
+}
+
+TEST_CASE("Kinsoku wrap: never breaks immediately after an opening bracket") {
+    // 「中文中文」 -- 「 is 3 bytes, so a break offset of 3 would mean the line
+    // ended on the opening bracket.
+    const std::string text = utf8Encode(0x300C) + utf8Encode(0x4E2D) + utf8Encode(0x6587)
+                           + utf8Encode(0x4E2D) + utf8Encode(0x6587) + utf8Encode(0x300D);
+    auto breaks = TextRenderer::wrapTextKinsoku(text, 4.0f, fixedAdvance, nullptr);
+    for (size_t i = 1; i + 1 < breaks.size(); ++i) CHECK(breaks[i] != 3);
+}
+
+TEST_CASE("Kinsoku wrap: ASCII wraps greedily and explicit newlines always break") {
+    auto breaks = TextRenderer::wrapTextKinsoku("abcdefghij", 4.0f, fixedAdvance, nullptr);
+    REQUIRE(breaks.size() == 4);
+    CHECK(breaks[0] == 0);
+    CHECK(breaks[1] == 4);
+    CHECK(breaks[2] == 8);
+    CHECK(breaks[3] == 10);
+
+    auto nl = TextRenderer::wrapTextKinsoku("ab\ncd", 100.0f, fixedAdvance, nullptr);
+    REQUIRE(nl.size() == 3);
+    CHECK(nl[1] == 3);     // just past the '\n'
+    CHECK(nl[2] == 5);
+}
+
+TEST_CASE("Kinsoku wrap: a glyph wider than the line still yields non-empty lines") {
+    // Width 1 with 2-unit CJK glyphs: each char gets its own line, the wrap
+    // terminates, and no zero-length line is emitted.
+    const std::string text = utf8Encode(0x4E2D) + utf8Encode(0x6587) + utf8Encode(0x5B57);
+    auto breaks = TextRenderer::wrapTextKinsoku(text, 1.0f, fixedAdvance, nullptr);
+    REQUIRE(breaks.size() >= 2);
+    for (size_t i = 1; i < breaks.size(); ++i) CHECK(breaks[i] > breaks[i - 1]);
+    CHECK(breaks.back() == text.size());
+}
+
