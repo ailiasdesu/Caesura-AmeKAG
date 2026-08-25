@@ -747,21 +747,24 @@ TEST_CASE("Batch cache: typewriter reveal measurement (before vs after)") {
     CHECK(after.vertexBytes == (uint64_t)60 * kVBytesPerGlyph);
     CHECK(after.indexBytes == (uint64_t)60 * kIBytesPerGlyph);
 
-    // O(N^2) -> O(N). Exact figures for this scenario (pinned, not ratios, so a
-    // regression shows up as a concrete number):
-    //   layout codepoints  3630 -> 60
-    //   vertex bytes     348480 -> 5760
-    //   index bytes       87120 -> 1440
+    // O(N^2) -> O(N). Exact figures for this scenario (pinned as absolute
+    // numbers, not ratios, so a regression reports a concrete value):
+    //   layout codepoints  3630 -> 60      (60.5x less layout work)
+    //   vertex bytes     348480 -> 5760    (60.5x fewer uploaded bytes)
+    //   index bytes       87120 -> 1440    (60.5x)
     CHECK(before.glyphsLaidOut == 3630);
     CHECK(before.vertexBytes == 348480);
     CHECK(before.indexBytes == 87120);
     CHECK(after.glyphsLaidOut == 60);
     CHECK(after.vertexBytes == 5760);
     CHECK(after.indexBytes == 1440);
-    // 3630 / 60 = 60.5, so integer division is 60.
-    CHECK(before.glyphsLaidOut / after.glyphsLaidOut == 60);
-    CHECK(before.vertexBytes / after.vertexBytes == 60);
-    CHECK(before.indexBytes / after.indexBytes == 60);
+    // The reduction factor is EXACTLY 60.5x, not 61x: 3630 / 60 = 60.5. Asserted
+    // in cross-multiplied integer form so integer division cannot round the
+    // claim upward (a ratio written as "== 61" would be an overstatement, and
+    // "== 60" silently truncates the real figure).
+    CHECK(before.glyphsLaidOut * 2 == after.glyphsLaidOut * 121);   // 60.5x
+    CHECK(before.vertexBytes  * 2 == after.vertexBytes  * 121);     // 60.5x
+    CHECK(before.indexBytes   * 2 == after.indexBytes   * 121);     // 60.5x
     // Per-frame averages across the 90 draws: 3872 -> 64 vertex bytes/frame,
     // 40.3 -> 0.67 laid-out codepoints/frame.
     CHECK(before.vertexBytes / 90 == 3872);
