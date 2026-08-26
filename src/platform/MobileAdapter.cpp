@@ -21,6 +21,28 @@ static bool validCoord(float v) {
     return std::isfinite(v);
 }
 
+// ── Gesture tracing (C6 收口) ─────────────────────────────────────────────
+// Every gesture mapping below used to printf unconditionally. Gestures sit on
+// a per-frame path (a pinch pulses every ~2% of travel and a three-finger hold
+// re-arms on every touch sequence), so an unconditional printf floods stdout
+// on a real device and costs a formatted write per pulse.
+//
+// SDL_LogDebug on SDL_LOG_CATEGORY_INPUT is used rather than the engine's
+// DEBUG_* macros, deliberately:
+//   * platform has 0/4 cross-module dependencies today (scripts/
+//     count_coupling.py) and links only SDL3 + lua. DEBUG_* would pull in
+//     CaesuraDebug, which requires editing cmake/CaesuraModules.cmake — a
+//     shared coupling point outside this task's file set — for no gain here.
+//   * SDL's documented defaults are app=info, assert=warn, test=verbose and
+//     *=error (SDL_log.h), so INPUT-category DEBUG output is SILENT unless a
+//     developer opts in — precisely the "no flood, still diagnosable" behavior
+//     this fix wants.
+//   * On Android these lines reach logcat instead of a swallowed stdout.
+// Turn them on while debugging a device with:
+//   SDL_SetLogPriority(SDL_LOG_CATEGORY_INPUT, SDL_LOG_PRIORITY_DEBUG);
+#define MOBILE_GESTURE_TRACE(...) \
+    SDL_LogDebug(SDL_LOG_CATEGORY_INPUT, __VA_ARGS__)
+
 // ══════════════════════════════════════════════════════════════════════════
 //  onOrientationChanged -- display orientation change (P7)
 // ══════════════════════════════════════════════════════════════════════════
@@ -215,8 +237,8 @@ void MobileAdapter::onPinch(float centerX, float centerY, float scale) {
     if (delta == 0.0f) return;
 
     // Map pinch scale delta to a vertical mouse-wheel (zoom) event.
-    printf("[Mobile] Pinch -> wheel (%.0f, %.0f scale=%.3f)\n",
-           centerX * m_displayScale, centerY * m_displayScale, scale);
+    MOBILE_GESTURE_TRACE("[Mobile] Pinch -> wheel (%.0f, %.0f scale=%.3f)",
+                         centerX * m_displayScale, centerY * m_displayScale, scale);
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_WHEEL;
     ev.wheel.y = delta * kPinchToWheelScale;
@@ -230,8 +252,8 @@ void MobileAdapter::onLongPress(float x, float y) {
     // Long press → right mouse button click.
     // Note: press-duration tracking (>500ms) is done by the platform layer;
     // this adapter only maps the detected press to a right-click.
-    printf("[Mobile] Long press -> right click (%.0f, %.0f)\n",
-           x * m_displayScale, y * m_displayScale);
+    MOBILE_GESTURE_TRACE("[Mobile] Long press -> right click (%.0f, %.0f)",
+                         x * m_displayScale, y * m_displayScale);
     SDL_Event ev = {};
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.x = x * m_displayScale;
@@ -243,6 +265,68 @@ void MobileAdapter::onLongPress(float x, float y) {
     // Synthesize immediate button-up
     ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
     ev.button.down = false;
+    SDL_PushEvent(&ev);
+}
+
+void MobileAdapter::onTwoFingerTap(float centerX, float centerY) {
+    if (!validCoord(centerX) || !validCoord(centerY)) return;
+    MOBILE_GESTURE_TRACE("[Mobile] Two-finger tap -> right click (%.0f, %.0f)",
+                         centerX * m_displayScale, centerY * m_displayScale);
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    ev.button.x = centerX * m_displayScale;
+    ev.button.y = centerY * m_displayScale;
+    ev.button.button = SDL_BUTTON_RIGHT;
+    ev.button.down = true;
+    ev.button.clicks = 1;
+    SDL_PushEvent(&ev);
+    ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    ev.button.down = false;
+    SDL_PushEvent(&ev);
+}
+
+void MobileAdapter::onThreeFingerHold(float centerX, float centerY) {
+    if (!validCoord(centerX) || !validCoord(centerY)) return;
+    MOBILE_GESTURE_TRACE("[Mobile] Three-finger hold -> skip toggle (%.0f, %.0f)",
+                         centerX * m_displayScale, centerY * m_displayScale);
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_KEY_DOWN;
+    ev.key.key = SDLK_LCTRL;
+    ev.key.down = true;
+    ev.key.repeat = false;
+    SDL_PushEvent(&ev);
+}
+
+// NOT WIRED (C6 known gap): SDLK_SPACE has no consumer in src/ or scripts/ —
+// Engine.cpp's key handler has no SPACE branch and no _GAME_KEY_SPACE global
+// exists, so this injection currently lands nowhere. Kept so the gesture chain
+// stays testable end to end and so wiring it later is a one-place change; see
+// the header for who should wire it.
+void MobileAdapter::onSwipeDown(float startX, float startY, float endX, float endY) {
+    if (!validCoord(startX) || !validCoord(startY) || !validCoord(endX) || !validCoord(endY)) return;
+    MOBILE_GESTURE_TRACE("[Mobile] SwipeDown -> SPACE (%.0f, %.0f -> %.0f, %.0f)",
+                         startX * m_displayScale, startY * m_displayScale,
+                         endX * m_displayScale, endY * m_displayScale);
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_KEY_DOWN;
+    ev.key.key = SDLK_SPACE;
+    ev.key.down = true;
+    ev.key.repeat = false;
+    SDL_PushEvent(&ev);
+}
+
+// NOT WIRED (C6 known gap): SDLK_PAGEUP has no consumer either. The intended
+// action (open backlog) has no native keyboard binding yet.
+void MobileAdapter::onSwipeUp(float startX, float startY, float endX, float endY) {
+    if (!validCoord(startX) || !validCoord(startY) || !validCoord(endX) || !validCoord(endY)) return;
+    MOBILE_GESTURE_TRACE("[Mobile] SwipeUp -> PAGEUP (%.0f, %.0f -> %.0f, %.0f)",
+                         startX * m_displayScale, startY * m_displayScale,
+                         endX * m_displayScale, endY * m_displayScale);
+    SDL_Event ev = {};
+    ev.type = SDL_EVENT_KEY_DOWN;
+    ev.key.key = SDLK_PAGEUP;
+    ev.key.down = true;
+    ev.key.repeat = false;
     SDL_PushEvent(&ev);
 }
 

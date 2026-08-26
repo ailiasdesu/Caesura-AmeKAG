@@ -515,3 +515,87 @@ TEST_CASE("Platform Stress: SDL3PlatformBackend pre-init and post-shutdown resil
     CHECK_FALSE(backend.isTextInputActive());
     CHECK_FALSE(backend.startTextInput());
 }
+
+// =============================================================================
+// M5: MobileAdapter Gestures (TwoFingerTap, ThreeFingerHold, SwipeDown, SwipeUp)
+// =============================================================================
+
+namespace {
+struct EventProbe {
+    SDL_Event last{};
+    int count = 0;
+    static bool SDLCALL watch(void* userdata, SDL_Event* ev) {
+        auto* probe = static_cast<EventProbe*>(userdata);
+        probe->last = *ev;
+        probe->count++;
+        return true;
+    }
+};
+
+struct EventProbeGuard {
+    EventProbe probe;
+    EventProbeGuard() { SDL_AddEventWatch(EventProbe::watch, &probe); }
+    ~EventProbeGuard() { SDL_RemoveEventWatch(EventProbe::watch, &probe); }
+};
+} // namespace
+
+TEST_CASE("MobileAdapter::two-finger tap injects right click pair") {
+    EventProbeGuard g;
+    MobileAdapter ma;
+    ma.setDisplayScale(2.0f);
+
+    ma.onTwoFingerTap(100.0f, 150.0f);
+    REQUIRE(g.probe.count == 2);
+    CHECK(g.probe.last.type == SDL_EVENT_MOUSE_BUTTON_UP);
+    CHECK(g.probe.last.button.button == SDL_BUTTON_RIGHT);
+}
+
+TEST_CASE("MobileAdapter::three-finger hold injects skip key event") {
+    EventProbeGuard g;
+    MobileAdapter ma;
+
+    ma.onThreeFingerHold(200.0f, 300.0f);
+    REQUIRE(g.probe.count == 1);
+    CHECK(g.probe.last.type == SDL_EVENT_KEY_DOWN);
+    CHECK(g.probe.last.key.key == SDLK_LCTRL);
+}
+
+TEST_CASE("MobileAdapter::swipe down and up inject action key events") {
+    EventProbeGuard g;
+    MobileAdapter ma;
+
+    ma.onSwipeDown(100.0f, 100.0f, 100.0f, 200.0f);
+    REQUIRE(g.probe.count == 1);
+    CHECK(g.probe.last.type == SDL_EVENT_KEY_DOWN);
+    CHECK(g.probe.last.key.key == SDLK_SPACE);
+
+    ma.onSwipeUp(100.0f, 200.0f, 100.0f, 100.0f);
+    REQUIRE(g.probe.count == 2);
+    CHECK(g.probe.last.type == SDL_EVENT_KEY_DOWN);
+    CHECK(g.probe.last.key.key == SDLK_PAGEUP);
+}
+
+TEST_CASE("MobileAdapter::new gestures reject non-finite coordinates") {
+    EventProbeGuard g;
+    MobileAdapter ma;
+
+    ma.onTwoFingerTap(NAN, 100.0f);
+    ma.onThreeFingerHold(100.0f, INFINITY);
+    ma.onSwipeDown(NAN, 0.0f, 0.0f, 0.0f);
+    ma.onSwipeUp(0.0f, 0.0f, INFINITY, 0.0f);
+
+    CHECK(g.probe.count == 0);
+}
+
+TEST_CASE("MobileAdapter::polymorphic dispatch via IMobileAdapter interface") {
+    EventProbeGuard g;
+    MobileAdapter ma;
+    IMobileAdapter* iface = &ma;
+
+    iface->onTwoFingerTap(50.0f, 50.0f);
+    iface->onThreeFingerHold(50.0f, 50.0f);
+    iface->onSwipeDown(0.0f, 0.0f, 0.0f, 100.0f);
+    iface->onSwipeUp(0.0f, 100.0f, 0.0f, 0.0f);
+
+    CHECK(g.probe.count == 5); // 2 from TwoFingerTap (down+up), 1 skip, 1 swipe down, 1 swipe up
+}

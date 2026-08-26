@@ -1,5 +1,5 @@
 // test_gesture_detector.cpp - GestureDetector unit tests (pure state machine).
-// Long-press (one finger held still) and pinch (two-finger distance ratio)
+// Long-press, pinch, two-finger tap, three-finger hold, and swipe down/up
 // detection against a synthetic finger stream; no SDL / GPU involvement.
 #include "doctest.h"
 #include "platform/GestureDetector.h"
@@ -14,8 +14,13 @@ public:
     GestureDetector det;
     int longPress = 0;
     int pinch = 0;
+    int twoFingerTap = 0;
+    int threeFingerHold = 0;
+    int swipeDown = 0;
+    int swipeUp = 0;
     float lastScale = 1.0f;
     float lastX = 0.0f, lastY = 0.0f;
+    float lastDeltaX = 0.0f, lastDeltaY = 0.0f;
 
     void pump(double nowMs) {
         const GestureEvent e = det.tick(nowMs);
@@ -26,19 +31,35 @@ public:
             pinch++;
             lastScale = e.scale;
             lastX = e.x; lastY = e.y;
+        } else if (e.kind == GestureEvent::Kind::TwoFingerTap) {
+            twoFingerTap++;
+            lastX = e.x; lastY = e.y;
+        } else if (e.kind == GestureEvent::Kind::ThreeFingerHold) {
+            threeFingerHold++;
+            lastX = e.x; lastY = e.y;
+        } else if (e.kind == GestureEvent::Kind::SwipeDown) {
+            swipeDown++;
+            lastX = e.x; lastY = e.y;
+            lastDeltaX = e.deltaX; lastDeltaY = e.deltaY;
+        } else if (e.kind == GestureEvent::Kind::SwipeUp) {
+            swipeUp++;
+            lastX = e.x; lastY = e.y;
+            lastDeltaX = e.deltaX; lastDeltaY = e.deltaY;
         }
     }
 };
 
 } // namespace
 
-TEST_CASE("GestureDetector: quick tap produces no gestures") {
+TEST_CASE("GestureDetector: quick tap produces no long press or pinch") {
     EventSink s;
     s.det.onFingerDown(0, 100, 100, 0);
     s.det.onFingerUp(0, 80);
     for (double t = 0; t < 2000; t += 16) s.pump(t);
     CHECK(s.longPress == 0);
     CHECK(s.pinch == 0);
+    CHECK(s.swipeDown == 0);
+    CHECK(s.swipeUp == 0);
 }
 
 TEST_CASE("GestureDetector: held still finger fires exactly one long press") {
@@ -126,4 +147,320 @@ TEST_CASE("GestureDetector: activeFingerCount tracks the stream") {
     CHECK(s.det.activeFingerCount() == 1);
     s.det.reset();
     CHECK(s.det.activeFingerCount() == 0);
+}
+
+// =============================================================================
+// M5: Mobile Touch Gestures (TwoFingerTap, ThreeFingerHold, SwipeDown, SwipeUp)
+// =============================================================================
+
+TEST_CASE("GestureDetector: TwoFingerTap detected when released within 300ms") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 200.0f, 10.0);
+    s.det.onFingerUp(0, 120.0);
+    s.det.onFingerUp(1, 130.0);
+    s.pump(140.0);
+
+    CHECK(s.twoFingerTap == 1);
+    CHECK(s.lastX == doctest::Approx(150.0f));
+    CHECK(s.lastY == doctest::Approx(200.0f));
+}
+
+TEST_CASE("GestureDetector: TwoFingerTap rejected if fingers move beyond slop") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 200.0f, 10.0);
+    s.det.onFingerMove(0, 140.0f, 200.0f, 50.0); // 40px > 16px slop
+    s.det.onFingerUp(0, 120.0);
+    s.det.onFingerUp(1, 130.0);
+    s.pump(140.0);
+
+    CHECK(s.twoFingerTap == 0);
+}
+
+TEST_CASE("GestureDetector: TwoFingerTap rejected if held longer than 300ms") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 200.0f, 10.0);
+    s.det.onFingerUp(0, 400.0); // 400ms > 300ms threshold
+    s.det.onFingerUp(1, 410.0);
+    s.pump(420.0);
+
+    CHECK(s.twoFingerTap == 0);
+}
+
+TEST_CASE("GestureDetector: ThreeFingerHold detected when 3 fingers held for >= 200ms") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+    s.det.onFingerDown(2, 300.0f, 100.0f, 0.0);
+
+    s.pump(100.0);
+    CHECK(s.threeFingerHold == 0);
+
+    s.pump(200.0);
+    CHECK(s.threeFingerHold == 1);
+    CHECK(s.lastX == doctest::Approx(200.0f)); // centroid (100+200+300)/3
+    CHECK(s.lastY == doctest::Approx(100.0f));
+
+    // Subsequent ticks do not re-trigger repeatedly while held
+    s.pump(300.0);
+    CHECK(s.threeFingerHold == 1);
+
+    s.det.onFingerUp(0, 350.0);
+    s.det.onFingerUp(1, 360.0);
+    s.det.onFingerUp(2, 370.0);
+}
+
+TEST_CASE("GestureDetector: ThreeFingerHold cancelled if any finger moves beyond slop") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+    s.det.onFingerDown(2, 300.0f, 100.0f, 0.0);
+
+    s.det.onFingerMove(2, 350.0f, 100.0f, 50.0); // 50px > 16px slop
+    s.pump(200.0);
+    CHECK(s.threeFingerHold == 0);
+}
+
+TEST_CASE("GestureDetector: SwipeDown detected on single finger vertical downward drag") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerMove(0, 105.0f, 170.0f, 50.0);
+    s.det.onFingerUp(0, 100.0);
+    s.pump(110.0);
+
+    CHECK(s.swipeDown == 1);
+    CHECK(s.swipeUp == 0);
+    CHECK(s.lastDeltaY == doctest::Approx(70.0f));
+    CHECK(s.lastX == doctest::Approx(105.0f));
+    CHECK(s.lastY == doctest::Approx(170.0f));
+}
+
+TEST_CASE("GestureDetector: SwipeUp detected on single finger vertical upward drag") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+    s.det.onFingerMove(0, 95.0f, 120.0f, 50.0);
+    s.det.onFingerUp(0, 100.0);
+    s.pump(110.0);
+
+    CHECK(s.swipeUp == 1);
+    CHECK(s.swipeDown == 0);
+    CHECK(s.lastDeltaY == doctest::Approx(-80.0f));
+    CHECK(s.lastX == doctest::Approx(95.0f));
+    CHECK(s.lastY == doctest::Approx(120.0f));
+}
+
+TEST_CASE("GestureDetector: Horizontal movement is not recognized as vertical swipe") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerMove(0, 200.0f, 110.0f, 50.0); // dx = 100, dy = 10
+    s.det.onFingerUp(0, 100.0);
+    s.pump(110.0);
+
+    CHECK(s.swipeDown == 0);
+    CHECK(s.swipeUp == 0);
+}
+
+// =============================================================================
+// C6 收口: threshold BOUNDARY tests — "must NOT fire" is asserted as carefully
+// as "must fire". Every constant is read from GestureDetector, so retuning a
+// threshold moves these tests with it instead of silently invalidating them,
+// and each pair brackets one threshold from both sides.
+//
+// The native thresholds are aligned with web/touch-gestures.js (C7) — see the
+// comparison table in GestureDetector.h. These cases therefore also pin the
+// two-端 agreement: retuning one side only makes the paired case here fail.
+// =============================================================================
+
+TEST_CASE("GestureDetector boundary: swipe just under 50 px does not fire, exactly 50 px does") {
+    {
+        EventSink s;
+        const float justUnder = GestureDetector::kSwipeMinDistance - 1.0f; // 49
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 100.0f, 100.0f + justUnder, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        for (double t = 100.0; t < 220.0; t += 16.0) s.pump(t);
+        CHECK(s.swipeDown == 0);
+        CHECK(s.swipeUp == 0);
+    }
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 100.0f, 100.0f + GestureDetector::kSwipeMinDistance, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        s.pump(110.0);
+        CHECK(s.swipeDown == 1);
+        CHECK(s.lastDeltaY == doctest::Approx(GestureDetector::kSwipeMinDistance));
+    }
+}
+
+TEST_CASE("GestureDetector boundary: dominance ratio 1.5 brackets the diagonal case") {
+    {
+        // dy = 60 clears the distance gate, but dx = 50 so |dy| < 1.5*|dx| = 75.
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 150.0f, 160.0f, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        for (double t = 100.0; t < 220.0; t += 16.0) s.pump(t);
+        CHECK(s.swipeDown == 0);
+        CHECK(s.swipeUp == 0);
+    }
+    {
+        // dx = 40, dy = 60 == 1.5 * 40 -> inclusive comparison accepts it.
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 140.0f, 160.0f, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        s.pump(110.0);
+        CHECK(s.swipeDown == 1);
+    }
+}
+
+TEST_CASE("GestureDetector boundary: two-finger tap at exactly 300 ms fires, 1 ms later does not") {
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 200.0f, 0.0);
+        s.det.onFingerUp(0, GestureDetector::kTwoFingerTapMaxMs);
+        s.det.onFingerUp(1, GestureDetector::kTwoFingerTapMaxMs);
+        s.pump(GestureDetector::kTwoFingerTapMaxMs + 10.0);
+        CHECK(s.twoFingerTap == 1);
+    }
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 200.0f, 0.0);
+        s.det.onFingerUp(0, GestureDetector::kTwoFingerTapMaxMs + 1.0);
+        s.det.onFingerUp(1, GestureDetector::kTwoFingerTapMaxMs + 1.0);
+        for (double t = 310.0; t < 440.0; t += 16.0) s.pump(t);
+        CHECK(s.twoFingerTap == 0);
+    }
+}
+
+TEST_CASE("GestureDetector boundary: two-finger tap tolerance is 20 px, not the 16 px hold slop") {
+    // Web parity: twoFingerTapMaxMovePx == 20. An 18 px wobble exceeds the
+    // long-press slop (16) yet must STILL read as a tap; 22 px must not.
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 200.0f, 0.0);
+        s.det.onFingerMove(0, 118.0f, 200.0f, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        s.det.onFingerUp(1, 110.0);
+        s.pump(120.0);
+        CHECK(s.twoFingerTap == 1);
+    }
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 200.0f, 0.0);
+        s.det.onFingerMove(0, 122.0f, 200.0f, 50.0);
+        s.det.onFingerUp(0, 100.0);
+        s.det.onFingerUp(1, 110.0);
+        for (double t = 120.0; t < 250.0; t += 16.0) s.pump(t);
+        CHECK(s.twoFingerTap == 0);
+    }
+}
+
+TEST_CASE("GestureDetector boundary: a wobble that returns to its origin is still not a tap") {
+    // maxTravel semantics: comparing only the FINAL offset would accept this,
+    // even though the finger travelled 40 px away and back.
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 200.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 200.0f, 0.0);
+    s.det.onFingerMove(0, 140.0f, 200.0f, 30.0);
+    s.det.onFingerMove(0, 100.0f, 200.0f, 60.0);
+    s.det.onFingerUp(0, 100.0);
+    s.det.onFingerUp(1, 110.0);
+    for (double t = 120.0; t < 250.0; t += 16.0) s.pump(t);
+    CHECK(s.twoFingerTap == 0);
+}
+
+TEST_CASE("GestureDetector boundary: three-finger hold brackets 200 ms") {
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+    s.det.onFingerDown(2, 300.0f, 100.0f, 0.0);
+    s.pump(GestureDetector::kThreeFingerHoldMs - 1.0);
+    CHECK(s.threeFingerHold == 0);
+    s.pump(GestureDetector::kThreeFingerHoldMs);
+    CHECK(s.threeFingerHold == 1);
+}
+
+TEST_CASE("GestureDetector boundary: three-finger hold tolerates 22 px but not 30 px of wobble") {
+    // Web parity: threeFingerHoldMaxMovePx == 25, deliberately looser than the
+    // 16 px single-finger slop (three resting fingers wobble more than one).
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+        s.det.onFingerDown(2, 300.0f, 100.0f, 0.0);
+        s.det.onFingerMove(2, 322.0f, 100.0f, 50.0);
+        s.pump(250.0);
+        CHECK(s.threeFingerHold == 1);
+    }
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+        s.det.onFingerDown(2, 300.0f, 100.0f, 0.0);
+        s.det.onFingerMove(2, 330.0f, 100.0f, 50.0);
+        for (double t = 250.0; t < 520.0; t += 16.0) s.pump(t);
+        CHECK(s.threeFingerHold == 0);
+    }
+}
+
+TEST_CASE("GestureDetector boundary: long press keeps its own 16 px slop") {
+    // The looser multi-finger tolerances must not have relaxed the shipped
+    // single-finger long-press behavior.
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 114.0f, 100.0f, 50.0); // 14 px < 16 -> still held
+        s.pump(GestureDetector::kLongPressMs + 10.0);
+        CHECK(s.longPress == 1);
+    }
+    {
+        EventSink s;
+        s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+        s.det.onFingerMove(0, 118.0f, 100.0f, 50.0); // 18 px > 16 -> a drag
+        for (double t = 510.0; t < 900.0; t += 16.0) s.pump(t);
+        CHECK(s.longPress == 0);
+    }
+}
+
+TEST_CASE("GestureDetector boundary: lifting the last of two fingers is not a swipe") {
+    // Sequence guard (m_seqMaxFingers): a two-finger drag ends with one finger
+    // still down, and that final lift must not decay into a one-finger swipe.
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+    s.det.onFingerMove(0, 100.0f, 300.0f, 50.0);   // 200 px, far past 50
+    s.det.onFingerMove(1, 200.0f, 300.0f, 50.0);
+    s.det.onFingerUp(1, 400.0);
+    s.det.onFingerUp(0, 420.0);
+    for (double t = 430.0; t < 580.0; t += 16.0) s.pump(t);
+    CHECK(s.swipeDown == 0);
+    CHECK(s.swipeUp == 0);
+    CHECK(s.twoFingerTap == 0);                    // moved too far, held too long
+}
+
+TEST_CASE("GestureDetector boundary: a single-finger swipe still fires after a multi-finger sequence") {
+    // The sequence guard must clear once every finger is up, otherwise the
+    // first swipe after any two-finger gesture would be swallowed forever.
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 0.0);
+    s.det.onFingerUp(1, 50.0);
+    s.det.onFingerUp(0, 60.0);
+    for (double t = 70.0; t < 220.0; t += 16.0) s.pump(t);
+    const int tapsFromFirstSequence = s.twoFingerTap;
+
+    s.det.onFingerDown(0, 100.0f, 100.0f, 1000.0);
+    s.det.onFingerMove(0, 100.0f, 200.0f, 1050.0);
+    s.det.onFingerUp(0, 1100.0);
+    s.pump(1110.0);
+    CHECK(s.swipeDown == 1);
+    CHECK(s.twoFingerTap == tapsFromFirstSequence);
 }

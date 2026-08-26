@@ -83,6 +83,40 @@ public:
     /// responsibility; this callback fires once when the press is detected.
     void onLongPress(float x, float y) override;
 
+    // ── Multi-finger gestures (C6) ─────────────────────────────────────
+    // Each of the four maps a gesture onto an EXISTING desktop input so the
+    // touch path shares the keyboard/mouse handlers instead of growing a
+    // parallel one. Consumer status verified by grepping the engine and the
+    // Lua tree — two are live end to end, two are NOT WIRED yet and say so
+    // rather than pretending to work:
+
+    /// Two-finger tap -> right-click pair.
+    /// WIRED: Engine.cpp dispatches SDL_BUTTON_RIGHT to _KAG_onRightClick.
+    void onTwoFingerTap(float centerX, float centerY) override;
+
+    /// Three-finger hold -> LCTRL keydown (skip mode).
+    /// WIRED: Engine.cpp forwards LCTRL/RCTRL to _KAG_onCtrlDown, which is the
+    /// same toggle a desktop Ctrl press performs (scripts/kag/quickmenu.lua
+    /// owns skip_mode).
+    void onThreeFingerHold(float centerX, float centerY) override;
+
+    /// Swipe down -> SDLK_SPACE keydown.
+    /// NOT WIRED (C6 known gap): nothing in src/ or scripts/ consumes
+    /// SDLK_SPACE — Engine.cpp's key handler has no SPACE branch and no
+    /// _GAME_KEY_SPACE global exists, so this gesture currently injects an
+    /// event that lands nowhere. The web half (main.mjs onSwipeDown) hides the
+    /// message layer directly in JS, which is why the gap never showed there.
+    /// Wiring it needs a "hide UI overlay" entry point on the KAG side (an
+    /// Engine.cpp key branch plus a Lua handler) — both outside this task's
+    /// file set, hence documented instead of silently left looking finished.
+    void onSwipeDown(float startX, float startY, float endX, float endY) override;
+
+    /// Swipe up -> SDLK_PAGEUP keydown.
+    /// NOT WIRED (C6 known gap): same as onSwipeDown — no SDLK_PAGEUP consumer
+    /// exists. The intended action (open backlog) has no keyboard binding yet
+    /// on the native side.
+    void onSwipeUp(float startX, float startY, float endX, float endY) override;
+
     // ── Display ────────────────────────────────────────────────────────
 
     /// Get display scale factor (DPI-based).

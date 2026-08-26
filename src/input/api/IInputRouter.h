@@ -15,11 +15,15 @@ enum class InputFocus {
 // sources (Android JNI / iOS) submit PointerEvent; the legacy SDL
 // touch->mouse injection (MobileAdapter) stays as a compatibility path.
 enum class PointerAction : uint8_t {
-    Down,       // first contact
-    Move,       // contact moved
-    Up,         // contact released
-    LongPress,  // contact held > typical threshold (500ms)
-    Pinch,      // two-contact scale delta (scale is cumulative)
+    Down,            // first contact
+    Move,            // contact moved
+    Up,              // contact released
+    LongPress,       // contact held > typical threshold (500ms)
+    Pinch,           // two-contact scale delta (scale is cumulative)
+    TwoFingerTap,    // two contacts tapped & released (<300ms)
+    ThreeFingerHold, // three contacts held still (>200ms) -> skip mode
+    SwipeDown,       // vertical downward swipe
+    SwipeUp,         // vertical upward swipe
 };
 
 struct PointerEvent {

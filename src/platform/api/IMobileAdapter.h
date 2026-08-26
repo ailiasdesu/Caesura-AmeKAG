@@ -37,6 +37,10 @@ public:
     virtual void resetPinch() = 0;
     virtual float getLastPinchScale() const = 0;
     virtual void onLongPress(float x, float y) = 0;
+    virtual void onTwoFingerTap(float centerX, float centerY) = 0;
+    virtual void onThreeFingerHold(float centerX, float centerY) = 0;
+    virtual void onSwipeDown(float startX, float startY, float endX, float endY) = 0;
+    virtual void onSwipeUp(float startX, float startY, float endX, float endY) = 0;
 
     // -- Display -----------------------------------------------------------
     virtual float getDisplayScale() const = 0;

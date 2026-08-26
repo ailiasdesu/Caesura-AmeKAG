@@ -1278,4 +1278,152 @@ TEST_CASE("InputRouter Stress: GAME focus high-throughput text stream with UTF-8
     }
 }
 
+// =============================================================================
+// M5: Pointer Gesture Actions Routing Tests
+// =============================================================================
+
+TEST_CASE("Pointer: TwoFingerTap routes right-click pair") {
+    InputRouter router;
+    int mouseUpCalls = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_MOUSE_BUTTON_UP && ev.button.button == SDL_BUTTON_RIGHT) {
+            ++mouseUpCalls;
+        }
+    });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::TwoFingerTap, 100, 100);
+    CHECK(mouseUpCalls == 1);
+}
+
+TEST_CASE("Pointer: ThreeFingerHold routes skip keydown") {
+    InputRouter router;
+    int skipCalls = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.key == SDLK_LCTRL) {
+            ++skipCalls;
+        }
+    });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::ThreeFingerHold, 100, 100);
+    CHECK(skipCalls == 1);
+}
+
+TEST_CASE("Pointer: SwipeDown routes space keydown to hide UI") {
+    InputRouter router;
+    int spaceCalls = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.key == SDLK_SPACE) {
+            ++spaceCalls;
+        }
+    });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::SwipeDown, 100, 200);
+    CHECK(spaceCalls == 1);
+}
+
+TEST_CASE("Pointer: SwipeUp routes pageup keydown for backlog") {
+    InputRouter router;
+    int pageUpCalls = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.key == SDLK_PAGEUP) {
+            ++pageUpCalls;
+        }
+    });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::SwipeUp, 100, 100);
+    CHECK(pageUpCalls == 1);
+}
+
+// -----------------------------------------------------------------------------
+// C6 收口: the four cases above assert "a key/button came out". These add the
+// behavioral properties a per-key counter cannot see: the DOWN half and its
+// flags, coordinate forwarding, focus routing, and — the part a predicate test
+// misses entirely — that a gesture does NOT leak extra events.
+// -----------------------------------------------------------------------------
+
+TEST_CASE("Pointer: TwoFingerTap emits a complete down/up pair with click flags") {
+    InputRouter router;
+    std::vector<SDL_Event> seen;
+    router.registerGameCallback([&](const SDL_Event& ev) { seen.push_back(ev); });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::TwoFingerTap, 640, 360);
+
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0].type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+    CHECK(seen[0].button.button == SDL_BUTTON_RIGHT);
+    CHECK(seen[0].button.down == true);
+    CHECK(seen[0].button.clicks == 1);
+    // Coordinates must survive the hop: a right-click at the wrong place is
+    // worse than no right-click.
+    CHECK(seen[0].button.x == doctest::Approx(640.0f));
+    CHECK(seen[0].button.y == doctest::Approx(360.0f));
+    CHECK(seen[1].type == SDL_EVENT_MOUSE_BUTTON_UP);
+    CHECK(seen[1].button.button == SDL_BUTTON_RIGHT);
+    CHECK(seen[1].button.down == false);
+}
+
+TEST_CASE("Pointer: each key gesture emits exactly one keydown and nothing else") {
+    struct Case { PointerAction action; SDL_Keycode key; const char* name; };
+    const Case cases[] = {
+        { PointerAction::ThreeFingerHold, SDLK_LCTRL,  "ThreeFingerHold" },
+        { PointerAction::SwipeDown,       SDLK_SPACE,  "SwipeDown" },
+        { PointerAction::SwipeUp,         SDLK_PAGEUP, "SwipeUp" },
+    };
+    for (const auto& c : cases) {
+        InputRouter router;
+        std::vector<SDL_Event> seen;
+        router.registerGameCallback([&](const SDL_Event& ev) { seen.push_back(ev); });
+        router.setFocus(InputFocus::GAME);
+
+        PointEv(router, c.action, 10, 20);
+
+        CAPTURE(c.name);
+        REQUIRE(seen.size() == 1);              // no stray companion events
+        CHECK(seen[0].type == SDL_EVENT_KEY_DOWN);
+        CHECK(seen[0].key.key == c.key);
+        CHECK(seen[0].key.down == true);
+        CHECK(seen[0].key.repeat == false);     // repeat would re-toggle skip
+    }
+}
+
+TEST_CASE("Pointer: gestures follow focus — GAME focus does not reach the KAG callback") {
+    InputRouter router;
+    int gameEvents = 0, kagEvents = 0;
+    router.registerGameCallback([&](const SDL_Event&) { ++gameEvents; });
+    router.registerKAGCallback([&](const SDL_Event&) { ++kagEvents; });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::TwoFingerTap, 100, 100);
+    PointEv(router, PointerAction::ThreeFingerHold, 100, 100);
+    PointEv(router, PointerAction::SwipeDown, 100, 100);
+    PointEv(router, PointerAction::SwipeUp, 100, 100);
+
+    // tap emits a down+up pair, the three key gestures one event each
+    CHECK(gameEvents == 5);
+    CHECK(kagEvents == 0);
+}
+
+TEST_CASE("Pointer: gesture actions emit no wheel events (no Pinch fallthrough)") {
+    // Regression guard: the four gesture cases share the switch with Pinch, and
+    // an accidental fallthrough there would inject bogus zoom.
+    InputRouter router;
+    int wheelEvents = 0;
+    router.registerGameCallback([&](const SDL_Event& ev) {
+        if (ev.type == SDL_EVENT_MOUSE_WHEEL) ++wheelEvents;
+    });
+    router.setFocus(InputFocus::GAME);
+
+    PointEv(router, PointerAction::TwoFingerTap, 100, 100);
+    PointEv(router, PointerAction::ThreeFingerHold, 100, 100);
+    PointEv(router, PointerAction::SwipeDown, 100, 100);
+    PointEv(router, PointerAction::SwipeUp, 100, 100);
+    CHECK(wheelEvents == 0);
+}
+
+
 

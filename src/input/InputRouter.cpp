@@ -127,6 +127,57 @@ void InputRouter::submitPointer(const PointerEvent& event) {
             dispatchSdlEvent(ev);
             break;
         }
+        // The four multi-finger actions below mirror MobileAdapter's mapping
+        // exactly (same SDL event for the same gesture), so a native app that
+        // submits PointerEvent from Android/iOS and one that goes through the
+        // legacy SDL touch path behave identically. Keep the two in step.
+        case PointerAction::TwoFingerTap: {
+            // Two-finger tap -> right-click pair. WIRED: Engine.cpp routes
+            // SDL_BUTTON_RIGHT to _KAG_onRightClick.
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_RIGHT;
+            ev.button.x = static_cast<float>(event.x);
+            ev.button.y = static_cast<float>(event.y);
+            ev.button.down = true;
+            ev.button.clicks = 1;
+            dispatchSdlEvent(ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            ev.button.down = false;
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::ThreeFingerHold: {
+            // Three-finger hold -> LCTRL (skip mode). WIRED: Engine.cpp
+            // forwards LCTRL/RCTRL to _KAG_onCtrlDown, the same toggle a
+            // desktop Ctrl press performs.
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = SDLK_LCTRL;
+            ev.key.down = true;
+            ev.key.repeat = false;
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::SwipeDown: {
+            // Swipe-down -> SDLK_SPACE. NOT WIRED (C6 known gap): no SPACE
+            // consumer exists in src/ or scripts/, so this lands nowhere until
+            // a "hide UI overlay" binding is added on the KAG side.
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = SDLK_SPACE;
+            ev.key.down = true;
+            ev.key.repeat = false;
+            dispatchSdlEvent(ev);
+            break;
+        }
+        case PointerAction::SwipeUp: {
+            // Swipe-up -> SDLK_PAGEUP. NOT WIRED (C6 known gap): no PAGEUP
+            // consumer exists; "open backlog" has no native key binding yet.
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = SDLK_PAGEUP;
+            ev.key.down = true;
+            ev.key.repeat = false;
+            dispatchSdlEvent(ev);
+            break;
+        }
     }
 }
 
