@@ -90,6 +90,16 @@ if _G.debug then
         getinfo      = raw_debug.getinfo,
         traceback    = raw_debug.traceback,
     }
+    -- package.loaded keeps its OWN reference to every stdlib table, and the
+    -- require wrapper in section 4 resolves names from package.loaded alone --
+    -- so narrowing _G.debug without narrowing this handed the untouched library
+    -- straight back through require("debug"). That was a full escape, not a
+    -- cosmetic gap: getupvalue reaches the real_rawset / real_load / _G_mt
+    -- upvalues this file captured in section 0, i.e. the whole hardening below
+    -- is only as strong as this line.
+    if _G.package and _G.package.loaded then
+        _G.package.loaded.debug = _G.debug
+    end
     raw_debug = nil  -- release the local: no closure below can capture it
 end
 
@@ -157,6 +167,16 @@ end
 -- "@tests/scripts/../../scripts/i18n.lua"; rejecting ".." outright would have
 -- broken i18n/config under the suite. Resolving it keeps the check honest
 -- without letting a path climb out of the repo unnoticed.
+-- Engine root, derived from THIS file's own source: "@D:/repo/scripts/sandbox.lua"
+-- yields "D:/repo/", while a relative "@scripts/sandbox.lua" yields "". Trust
+-- anchors are built on it so a directory merely NAMED scripts/ somewhere else on
+-- the filesystem cannot be mistaken for engine code.
+local ROOT_PREFIX = ""
+if type(SELF_SOURCE) == "string" and SELF_SOURCE:sub(1, 1) == "@" then
+    local self_path = SELF_SOURCE:sub(2):gsub("\\", "/")
+    ROOT_PREFIX = self_path:match("^(.*/)scripts/[^/]+$") or ""
+end
+
 local function normalise_path(path)
     local parts = {}
     for seg in path:gmatch("[^/]+") do
@@ -187,8 +207,14 @@ function caller_is_trusted()
     if src:sub(1, 1) ~= "@" then return false end   -- dynamic chunk: untrusted
     local path = normalise_path(src:sub(2):gsub("\\", "/"))
     if path:find("%.%.") then return false end     -- unresolved climb: untrusted
-    return path:find("^scripts/") ~= nil or path:find("^tests/") ~= nil
-        or path:find("/scripts/") ~= nil or path:find("/tests/") ~= nil
+    -- Anchored at THIS engine's root, not matched as a substring: "/scripts/"
+    -- anywhere in the path used to trust any file under any directory that
+    -- happened to be called scripts, e.g. D:/tmp/scripts/evil.lua. ROOT_PREFIX
+    -- comes from this file's own source, so a relative source ("@scripts/
+    -- sandbox.lua") yields "" and the anchors below stay relative.
+    return path == ROOT_PREFIX .. "scripts" or path == ROOT_PREFIX .. "tests"
+        or path:sub(1, #ROOT_PREFIX + 8) == ROOT_PREFIX .. "scripts/"
+        or path:sub(1, #ROOT_PREFIX + 6) == ROOT_PREFIX .. "tests/"
 end
 
 -- The forwarding is varargs-exact on PURPOSE. Lua distinguishes an ABSENT 4th
@@ -198,6 +224,16 @@ end
 -- tests/scripts/test_label_jump.lua, scripts/music_room.lua:117 — into the
 -- second case.
 _G.load = function(chunk, chunkname, mode, ...)
+    -- chunkname is DATA supplied by the compiling code, but caller_is_trusted()
+    -- reads it back as provenance -- so load(src, "@scripts/evil.lua") used to
+    -- mint a chunk that counted as engine code and could compile further code
+    -- forever. A chunk built from a string never came from a file, so strip the
+    -- "@" claim: real file provenance can only come from Lua's own file loader
+    -- (loadfile/require), never from here. Verified: the forged chunk still
+    -- RUNS, it just cannot compile more code.
+    if type(chunkname) == "string" and chunkname:sub(1, 1) == "@" then
+        chunkname = "=" .. chunkname:sub(2)
+    end
     if not caller_is_trusted() then
         local binary = (type(mode) == "string" and mode:find("b", 1, true) ~= nil)
             or (type(chunk) == "string"

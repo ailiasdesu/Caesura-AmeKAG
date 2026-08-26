@@ -895,6 +895,13 @@ if __name__ == "__main__":
         print(f"{r.test_id:<12} | {r.category:<14} | {r.expected_exit:<8} | {r.actual_exit:<8} | {str(r.matched_error):<14} | {st:<6} | {r.description}")
     print("=" * 100)
     print(f"Total Mutation Tests Run: {len(TestReleaseCandidateAdversarialMutations.results)}")
-    all_passed = all(r.passed for r in TestReleaseCandidateAdversarialMutations.results)
-    print(f"Overall Empirical Result: {'ALL MUTATIONS CAUGHT & REJECTED (100% PASS)' if all_passed else 'SOME MUTATIONS MISSED'}")
+    # all([]) is True, so a run that collected NOTHING used to print
+    # "100% PASS" -- the exit code was right but the headline lied, which is
+    # exactly the kind of self-congratulating output this suite exists to catch.
+    results = TestReleaseCandidateAdversarialMutations.results
+    all_passed = bool(results) and all(r.passed for r in results)
+    if not results:
+        print("Overall Empirical Result: NO MUTATIONS RAN (suite collected nothing)")
+    else:
+        print(f"Overall Empirical Result: {'ALL MUTATIONS CAUGHT & REJECTED (100% PASS)' if all_passed else 'SOME MUTATIONS MISSED'}")
     sys.exit(0 if test_result.wasSuccessful() else 1)
