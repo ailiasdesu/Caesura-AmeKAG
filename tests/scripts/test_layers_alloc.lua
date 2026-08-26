@@ -161,15 +161,37 @@ end
 -- 6400 table allocations produce.
 layers.init()
 for i = 1, 32 do addQuad("churn_" .. i, 100 + i, i, i, 64, 64) end
+-- The verification mock above copies every live slot into a fresh table on each
+-- submit (that copy is what the wire-format assertions read). During the
+-- allocation measurement it would BE the allocation -- 512 slots x 200 frames --
+-- so the measured number would describe the test harness, not layers.lua.
+-- Swap in a non-allocating observer for the measurement window.
+local measureSubmit = function(cmds) lastRef = cmds; lastCount = cmds[1]; return true end
+local verifySubmit = backend.submit_batch
+backend.submit_batch = measureSubmit
 for _ = 1, 20 do layers.render() end     -- warmup: grow the array to steady size
+-- The GC must be STOPPED across the measurement window. collectgarbage("count")
+-- reports the LIVE heap, so with the collector running this measures "whatever
+-- happened not to be reclaimed yet" -- a number that depends on when the GC
+-- last ran and therefore on which other suites share this Lua state. Measured
+-- that way the same code read 41 KB standalone and 89 KB inside the full runner,
+-- i.e. the assertion passed or failed based on its neighbours. With the GC
+-- stopped the growth IS the allocation, and it is deterministic.
 collectgarbage("collect")
+collectgarbage("stop")
 local kbBefore = collectgarbage("count")
 for _ = 1, 200 do layers.render() end
 local kbAfter = collectgarbage("count")
+collectgarbage("restart")
 local grewKb = kbAfter - kbBefore
-print(string.format("  [measure] 32 quads x 200 frames: GC heap grew %.1f KB", grewKb))
-check("200 frames x 32 quads allocate < 64 KB (was ~1 table/node/frame)",
+print(string.format("  [measure] 32 quads x 200 frames, GC stopped: allocated %.1f KB", grewKb))
+-- The old code allocated one 16-field table per visible node per frame: 32 x 200
+-- = 6400 tables, measured at 7220 KB with the GC stopped. The reused positional
+-- array allocates nothing steady-state; the bound is generous enough for Lua
+-- internal bookkeeping yet two orders of magnitude below the old cost.
+check("200 frames x 32 quads allocate < 64 KB (old code: 7220 KB)",
       grewKb < 64, string.format("%.1f KB", grewKb))
+backend.submit_batch = verifySubmit
 
 -- Restore the real submit so later suites are unaffected.
 backend.submit_batch = realSubmit
