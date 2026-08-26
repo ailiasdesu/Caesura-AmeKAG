@@ -232,6 +232,120 @@ do
           or _G._SANDBOX_MODE == "dev")
 end
 
+
+-- ---------------------------------------------------------------------------
+-- 6. SECOND-REFERENCE escapes (reviewer t6, both CRITICAL, both real)
+-- ---------------------------------------------------------------------------
+--  Sections 1-5 all tested the _G path. Two escapes lived in the routes that
+--  do NOT go through _G, which is exactly why they survived 41 green
+--  assertions. The shape is general and worth naming: a capability is not
+--  removed by narrowing ONE reference to it.
+--
+--  6a. require("debug") returned the untouched library.
+--      sandbox.lua narrows _G.debug to {getinfo, traceback}, but package.loaded
+--      holds its OWN reference to every stdlib table, and the section 4 require
+--      wrapper resolves names from package.loaded ALONE. So require("debug")
+--      handed back getupvalue / getmetatable / getregistry.
+--      That was a TOTAL break, not a gap: every hardened wrapper in sandbox.lua
+--      keeps the original primitive as a section-0 upvalue, so one
+--      debug.getupvalue call retrieves real_rawset, real_load and the _G
+--      metatable -- the reviewer used it to flip _SANDBOX_MODE from strict to
+--      dev. The t2 report cited "getupvalue is removed in section 2" as the
+--      reason those upvalues were safe; that premise was false through require.
+--      Fixed by narrowing both references together (sandbox.lua:100-102).
+--
+--  6b. load()'s trust check read attacker-supplied data as provenance.
+--      caller_is_trusted() decides from the caller's chunk source, but a
+--      chunkname is just a string the compiling code passes in. A trusted
+--      caller could mint load(src, "@scripts/evil.lua") and the resulting
+--      chunk counted as engine code -- permanently, and it could mint more.
+--      Fixed by normalising a string chunk's "@" claim to "=" (a chunk built
+--      from a string never came from a file; only Lua's own file loader can
+--      assert file provenance) plus anchoring the trusted-path test at this
+--      engine's own root instead of matching "/scripts/" as a substring.
+do
+    -- 6a: the require path must be exactly as narrow as the _G path.
+    local dbgRequired = require("debug")
+    check("require('debug') is the SAME table as _G.debug", dbgRequired == debug)
+    check("require('debug').getupvalue nil (was the whole-hardening escape)",
+          dbgRequired.getupvalue == nil)
+    check("require('debug').getmetatable nil", dbgRequired.getmetatable == nil)
+    check("require('debug').getuservalue nil", dbgRequired.getuservalue == nil)
+    check("require('debug').getregistry nil", dbgRequired.getregistry == nil)
+    check("require('debug').sethook nil", dbgRequired.sethook == nil)
+    check("require('debug').setmetatable nil", dbgRequired.setmetatable == nil)
+    check("require('debug') keeps getinfo/traceback",
+          type(dbgRequired.getinfo) == "function"
+          and type(dbgRequired.traceback) == "function")
+
+    -- The same divergence must not exist for ANY other stdlib table: an
+    -- identity check catches a future narrowing that forgets package.loaded,
+    -- whichever library it touches.
+    local diverged = {}
+    for _, name in ipairs({ "debug", "io", "os", "string", "table", "math",
+                            "coroutine", "package", "_G" }) do
+        local viaG, viaLoaded = rawget(_G, name), package.loaded[name]
+        if viaG ~= nil and viaLoaded ~= nil and viaG ~= viaLoaded then
+            diverged[#diverged + 1] = name
+        end
+    end
+    check("no stdlib table has a second un-narrowed package.loaded reference",
+          #diverged == 0, table.concat(diverged, ","))
+
+    -- Spot-check the narrowed members through the require path too, so a
+    -- future "narrow _G.io but forget package.loaded.io" fails here rather
+    -- than in a security review.
+    local ioRequired = require("io")
+    check("require('io') read-only narrowing holds",
+          ioRequired.lines == nil and ioRequired.read == nil
+          and ioRequired.tmpfile == nil)
+    local osRequired = require("os")
+    check("require('os').getenv removed", osRequired.getenv == nil)
+    local pkgRequired = require("package")
+    check("require('package') search disabled",
+          pkgRequired.loadlib == nil and pkgRequired.searchpath == nil)
+end
+
+do
+    -- 6b: a forged "@" chunkname must not mint a trusted chunk.
+    -- This file lives under tests/ so it IS trusted and may compile; the point
+    -- is that what it compiles does not inherit that trust.
+    local forged = load([[
+        local f, err = load("return 7", "=inner", "t", {})
+        if f then return "COMPILED:" .. tostring(f()) end
+        return "REFUSED:" .. tostring(err)
+    ]], "@scripts/evil.lua", "t", { load = load, tostring = tostring })
+    check("forged @chunkname still COMPILES for a trusted caller",
+          type(forged) == "function")
+    local okF, resF = pcall(forged)
+    check("forged @chunkname chunk still RUNS (no functional regression)", okF,
+          tostring(resF))
+    check("forged @chunkname chunk CANNOT compile further code",
+          okF and type(resF) == "string" and resF:find("^REFUSED:") ~= nil
+          and resF:find("Sandbox", 1, true) ~= nil, tostring(resF))
+
+    -- The same body with an honest "=" name must behave identically, i.e. the
+    -- refusal is not specific to the forged spelling.
+    local honest = load([[
+        local f = load("return 7", "=inner", "t", {})
+        return tostring(f)
+    ]], "=dyn", "t", { load = load, tostring = tostring })
+    local okH, resH = pcall(honest)
+    check("honest =chunkname chunk is refused the same way",
+          okH and resH == "nil", tostring(resH))
+
+    -- Trust is anchored at THIS engine's root, not any directory named
+    -- "scripts": a path with /scripts/ deeper inside it must not be trusted.
+    -- Exercised through the documented failure contract rather than by writing
+    -- a file outside the workspace.
+    local outside = load([[return load("return 1", "=x", "t", {}) ~= nil]],
+                         "@D:/tmp/scripts/evil.lua", "t",
+                         { load = load })
+    local okO, resO = pcall(outside)
+    check("a stray directory named scripts/ is not trusted",
+          okO and resO == false, tostring(resO))
+end
+
 print(string.format("\nResults: %d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
 print("SANDBOX ESCAPE TESTS DONE")
