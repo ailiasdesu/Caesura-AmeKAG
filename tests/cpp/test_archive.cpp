@@ -2,8 +2,10 @@
 #include "doctest.h"
 #include "archive/CARCReader.h"
 #include "archive/CARCWriter.h"
+#include "archive/CarcAssetProvider.h"
 #include "archive/CryptoEngine.h"
 #include "archive/DeltaCARC.h"
+#include "resource/ProviderChain.h"
 #include "archive/api/IArchiveReader.h"
 #include "archive/api/IArchiveWriter.h"
 #include "archive/api/ICryptoEngine.h"
@@ -966,3 +968,259 @@ TEST_CASE("DeltaCARC G11: apply rejects body-tampered and truncated deltas") {
     REQUIRE(applied.open(out.string()));
     CHECK(readText(applied, "a.txt") == "two");
 }
+
+TEST_CASE("CarcAssetProvider: dynamic priority and custom source name") {
+    auto reader = std::make_unique<carc::CARCReader>();
+    carc::CarcAssetProvider provider(std::move(reader), 40, "CARC:patch.carc");
+    CHECK(provider.priority() == 40);
+    CHECK(provider.getSource() == "CARC:patch.carc");
+}
+
+TEST_CASE("ProviderChain: Multi-CARC Layered VFS priority resolution") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_layered_vfs");
+
+    // Base CARC (prio 10)
+    fs::path basePath = temp.path() / "base.carc";
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(basePath.string()));
+        w.addFile("script/start.ks", reinterpret_cast<const uint8_t*>("base script"), 11);
+        w.addFile("bg/title.png", reinterpret_cast<const uint8_t*>("base bg"), 7);
+        w.addFile("audio/bgm.ogg", reinterpret_cast<const uint8_t*>("base audio"), 10);
+        REQUIRE(w.finalize());
+    }
+
+    // DLC CARC (prio 30)
+    fs::path dlcPath = temp.path() / "dlc_01.carc";
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(dlcPath.string()));
+        w.addFile("bg/title.png", reinterpret_cast<const uint8_t*>("dlc bg override"), 15);
+        w.addFile("script/dlc_extra.ks", reinterpret_cast<const uint8_t*>("dlc extra"), 9);
+        REQUIRE(w.finalize());
+    }
+
+    // Patch CARC (prio 40)
+    fs::path patchPath = temp.path() / "patch.carc";
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(patchPath.string()));
+        w.addFile("script/start.ks", reinterpret_cast<const uint8_t*>("patched script"), 14);
+        REQUIRE(w.finalize());
+    }
+
+    auto baseReader = std::make_unique<carc::CARCReader>();
+    REQUIRE(baseReader->open(basePath.string()));
+    auto dlcReader = std::make_unique<carc::CARCReader>();
+    REQUIRE(dlcReader->open(dlcPath.string()));
+    auto patchReader = std::make_unique<carc::CARCReader>();
+    REQUIRE(patchReader->open(patchPath.string()));
+
+    ProviderChain chain;
+    // Add out of order: base, patch, dlc
+    chain.addProvider(std::make_unique<carc::CarcAssetProvider>(std::move(baseReader), 10, "CARC:base"));
+    chain.addProvider(std::make_unique<carc::CarcAssetProvider>(std::move(patchReader), 40, "CARC:patch"));
+    chain.addProvider(std::make_unique<carc::CarcAssetProvider>(std::move(dlcReader), 30, "CARC:dlc"));
+
+    // 1. Patch (40) overrides Base (10) for script/start.ks
+    auto startData = chain.read("script/start.ks");
+    REQUIRE_FALSE(startData.empty());
+    CHECK(std::string(startData.begin(), startData.end()) == "patched script");
+
+    // 2. DLC (30) overrides Base (10) for bg/title.png
+    auto bgData = chain.read("bg/title.png");
+    REQUIRE_FALSE(bgData.empty());
+    CHECK(std::string(bgData.begin(), bgData.end()) == "dlc bg override");
+
+    // 3. Base (10) serves non-overridden audio/bgm.ogg
+    auto bgmData = chain.read("audio/bgm.ogg");
+    REQUIRE_FALSE(bgmData.empty());
+    CHECK(std::string(bgmData.begin(), bgmData.end()) == "base audio");
+
+    // 4. DLC expansion script/dlc_extra.ks is present
+    CHECK(chain.exists("script/dlc_extra.ks"));
+    auto extraData = chain.read("script/dlc_extra.ks");
+    REQUIRE_FALSE(extraData.empty());
+    CHECK(std::string(extraData.begin(), extraData.end()) == "dlc extra");
+
+    // 5. Missing file
+    CHECK_FALSE(chain.exists("nonexistent.png"));
+    CHECK(chain.read("nonexistent.png").empty());
+}
+
+// ===========================================================================
+// C1 mount policy (t13): the layered-VFS mount PLAN, not just the chain.
+//
+// The chain test above proves priority resolution once providers exist. These
+// pin the step before it -- which archives the composition root decides to
+// mount at all, at which priority, and in which order -- because that is where
+// the two real hazards live: a name pattern silently gaining top priority, and
+// the same archive being mounted twice.
+// ===========================================================================
+
+namespace Caesura {
+// Declared in src/entry/Engine_Assets.cpp (composition root).
+int carcMountPriority(const std::string& filename, bool inDlcDir);
+std::vector<std::pair<std::string, int>> carcMountPlan(const std::string& root);
+}  // namespace Caesura
+
+TEST_CASE("Layered VFS C1: mount priority table is exactly the documented one") {
+    // patch layer -- highest, wins over everything shipped
+    CHECK(Caesura::carcMountPriority("patch.carc", false) == 40);
+    CHECK(Caesura::carcMountPriority("patch_001.carc", false) == 40);
+    CHECK(Caesura::carcMountPriority("patch_hotfix_v2.carc", false) == 40);
+    // dlc -- by name prefix, or by living in dlc/
+    CHECK(Caesura::carcMountPriority("dlc_extra.carc", false) == 30);
+    CHECK(Caesura::carcMountPriority("anything.carc", true) == 30);
+    // localization packs
+    CHECK(Caesura::carcMountPriority("lang_en.carc", false) == 20);
+    CHECK(Caesura::carcMountPriority("lang_zh.carc", false) == 20);
+    // shipped data
+    CHECK(Caesura::carcMountPriority("base.carc", false) == 10);
+    CHECK(Caesura::carcMountPriority("data.carc", false) == 10);
+    CHECK(Caesura::carcMountPriority("game.carc", false) == 10);
+
+    // Anything unrecognized must stay INERT (-1), never join the chain at a
+    // guessed priority. A stray archive dropped next to the executable is not
+    // silently promoted into the asset path.
+    CHECK(Caesura::carcMountPriority("random.carc", false) == -1);
+    CHECK(Caesura::carcMountPriority("save_backup.carc", false) == -1);
+    CHECK(Caesura::carcMountPriority("Patch.carc", false) == -1);   // case-sensitive by design
+    CHECK(Caesura::carcMountPriority("mypatch_1.carc", false) == -1); // prefix, not substring
+    CHECK(Caesura::carcMountPriority("", false) == -1);
+}
+
+TEST_CASE("Layered VFS C1: mount plan orders by priority and mounts each archive once") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_mount_plan");
+    const fs::path root = temp.path();
+
+    auto writeArchive = [](const fs::path& p, const char* body) {
+        carc::CARCWriter w;
+        REQUIRE(w.create(p.string()));
+        w.addFile("probe.txt", reinterpret_cast<const uint8_t*>(body),
+                  static_cast<uint32_t>(std::strlen(body)));
+        REQUIRE(w.finalize());
+    };
+
+    writeArchive(root / "base.carc", "base");
+    writeArchive(root / "patch_002.carc", "patch2");
+    writeArchive(root / "patch_001.carc", "patch1");
+    writeArchive(root / "lang_en.carc", "lang");
+    writeArchive(root / "unrelated.carc", "inert");     // must NOT be mounted
+    fs::create_directories(root / "dlc");
+    writeArchive(root / "dlc" / "chapter2.carc", "dlc-by-directory");
+
+    const auto plan = Caesura::carcMountPlan(root.string());
+
+    // The inert archive is absent; everything else is mounted exactly once.
+    // (Regression guard: keying dedup on the iterator's path spelling while
+    // re-checking a fallback list by bare name mounted base.carc TWICE --
+    // two providers, two open streams, one file.)
+    CHECK(plan.size() == 5);
+    int baseCount = 0;
+    for (const auto& entry : plan) {
+        CHECK(entry.first != "unrelated.carc");
+        if (entry.first == "base.carc") baseCount++;
+    }
+    CHECK(baseCount == 1);
+
+    // Descending priority, ties broken by name for determinism.
+    CHECK(plan[0] == std::make_pair(std::string("patch_001.carc"), 40));
+    CHECK(plan[1] == std::make_pair(std::string("patch_002.carc"), 40));
+    CHECK(plan[2] == std::make_pair(std::string("chapter2.carc"), 30));
+    CHECK(plan[3] == std::make_pair(std::string("lang_en.carc"), 20));
+    CHECK(plan[4] == std::make_pair(std::string("base.carc"), 10));
+
+    // Non-decreasing check stated independently of the exact names above, so
+    // adding a layer later cannot quietly break the ordering invariant.
+    for (size_t i = 1; i < plan.size(); ++i) {
+        CHECK(plan[i - 1].second >= plan[i].second);
+    }
+}
+
+TEST_CASE("Layered VFS C1: mount plan is empty for a directory with no archives") {
+    Caesura::TestPaths::ScopedTempDir temp("archive_mount_plan_empty");
+    CHECK(Caesura::carcMountPlan(temp.path().string()).empty());
+    // A path that does not exist must be handled as "nothing to mount", not a throw.
+    CHECK(Caesura::carcMountPlan((temp.path() / "does_not_exist").string()).empty());
+}
+
+// ===========================================================================
+// C2 delta tooling (t13): the full generate -> verify -> apply round trip
+// asserted on CONTENT, not just on return codes.
+//
+// The existing DeltaCARC G11 case covers rejection of tampered/truncated
+// deltas. What was missing is the positive path a release engineer actually
+// runs: change some files, add one, remove one, and confirm the rebuilt
+// archive is byte-identical to the intended target.
+// ===========================================================================
+
+TEST_CASE("DeltaCARC C2: generate/verify/apply round trip reproduces the target exactly") {
+    namespace fs = std::filesystem;
+    Caesura::TestPaths::ScopedTempDir temp("archive_delta_roundtrip");
+
+    const fs::path basePath  = temp.path() / "base.carc";
+    const fs::path newPath   = temp.path() / "new.carc";
+    const fs::path deltaPath = temp.path() / "patch.carc";
+    const fs::path outPath   = temp.path() / "rebuilt.carc";
+
+    // base: a.ks (will change), b.png (untouched), gone.txt (will be removed)
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(basePath.string()));
+        w.addFile("a.ks", reinterpret_cast<const uint8_t*>("scene one v1"), 12);
+        w.addFile("b.png", reinterpret_cast<const uint8_t*>("shared asset"), 12);
+        w.addFile("gone.txt", reinterpret_cast<const uint8_t*>("to be removed"), 13);
+        REQUIRE(w.finalize());
+    }
+    // target: a.ks changed, b.png identical, gone.txt dropped, c.ogg added
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(newPath.string()));
+        w.addFile("a.ks", reinterpret_cast<const uint8_t*>("scene one v2 CHANGED"), 20);
+        w.addFile("b.png", reinterpret_cast<const uint8_t*>("shared asset"), 12);
+        w.addFile("c.ogg", reinterpret_cast<const uint8_t*>("brand new file"), 14);
+        REQUIRE(w.finalize());
+    }
+
+    REQUIRE(carc::DeltaCARC::generate(basePath.string(), newPath.string(), deltaPath.string()));
+    REQUIRE(fs::exists(deltaPath));
+    REQUIRE(carc::DeltaCARC::verify(deltaPath.string()));
+    REQUIRE(carc::DeltaCARC::apply(basePath.string(), deltaPath.string(), outPath.string()));
+
+    carc::CARCReader rebuilt;
+    REQUIRE(rebuilt.open(outPath.string()));
+    carc::CARCReader target;
+    REQUIRE(target.open(newPath.string()));
+
+    // Same file set, same count -- the removed entry really is gone and the
+    // added one really arrived.
+    CHECK(rebuilt.numFiles() == target.numFiles());
+    CHECK(rebuilt.hasFile("a.ks"));
+    CHECK(rebuilt.hasFile("b.png"));
+    CHECK(rebuilt.hasFile("c.ogg"));
+    CHECK_FALSE(rebuilt.hasFile("gone.txt"));
+
+    // Content equality per entry (updated, untouched, and newly added).
+    CHECK(readText(rebuilt, "a.ks") == "scene one v2 CHANGED");
+    CHECK(readText(rebuilt, "b.png") == "shared asset");
+    CHECK(readText(rebuilt, "c.ogg") == "brand new file");
+    CHECK(readText(rebuilt, "a.ks") == readText(target, "a.ks"));
+    CHECK(readText(rebuilt, "b.png") == readText(target, "b.png"));
+    CHECK(readText(rebuilt, "c.ogg") == readText(target, "c.ogg"));
+
+    // Applying to the WRONG base must fail: the delta header pins the source
+    // SHA-256, so a patch cannot be smeared onto an unrelated archive.
+    const fs::path wrongBase = temp.path() / "wrong.carc";
+    {
+        carc::CARCWriter w;
+        REQUIRE(w.create(wrongBase.string()));
+        w.addFile("a.ks", reinterpret_cast<const uint8_t*>("unrelated"), 9);
+        REQUIRE(w.finalize());
+    }
+    CHECK_FALSE(carc::DeltaCARC::apply(wrongBase.string(), deltaPath.string(),
+                                       (temp.path() / "bad.carc").string()));
+}
+
