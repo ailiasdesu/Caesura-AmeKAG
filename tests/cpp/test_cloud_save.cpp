@@ -1,9 +1,18 @@
 // test_cloud_save.cpp - HTTP cloud-save provider (C7) round trip against a
 // local mock REST server: configure -> save slot -> push -> pull -> verify.
 #include "doctest.h"
+#include "TestPaths.h"
 #include "storage/SaveManager.h"
 #include "storage/HttpCloudSaveProvider.h"
+#include "storage/CloudSaveProvider.h"
+#include "storage/api/ISaveProvider.h"
+#include "steam/api/ISteamBackend.h"
+#include "di/BackendRegistry.h"
 #include <httplib.h>
+#include <algorithm>
+#include <cstring>
+#include <filesystem>
+#include <map>
 #include <nlohmann_json.hpp>
 #include <thread>
 #include <map>
@@ -13,6 +22,72 @@
 #include <cstdio>
 
 using namespace Caesura;
+
+namespace {
+
+// In-memory Steam Remote Storage stand-in. Kept in an anonymous namespace with
+// its own name: test_storage.cpp defines a file-scope MockSteamBackend, and two
+// different definitions of the same external-linkage class would be an ODR
+// violation across translation units.
+class CloudMockSteam final : public ISteamBackend {
+public:
+    std::map<std::string, std::string> files;
+
+    bool init() override { return true; }
+    void shutdown() override {}
+    void runCallbacks() override {}
+    bool isOverlayActive() const override { return false; }
+    bool unlockAchievement(const char*) override { return true; }
+    bool isAchievementUnlocked(const char*) const override { return false; }
+    bool resetAchievement(const char*) override { return true; }
+    bool resetAllAchievements() override { return true; }
+    bool setStatInt(const char*, int32_t) override { return true; }
+    int32_t getStatInt(const char*) const override { return 0; }
+    bool setStatFloat(const char*, float) override { return true; }
+    float getStatFloat(const char*) const override { return 0.0f; }
+    bool storeStats() override { return true; }
+    bool cloudWrite(const char* fileName, const void* data, int32_t size) override {
+        if (!fileName || size < 0) return false;
+        files[fileName] = std::string(static_cast<const char*>(data),
+                                      static_cast<size_t>(size));
+        return true;
+    }
+    int32_t cloudRead(const char* fileName, void* buffer, int32_t maxSize) override {
+        const auto it = files.find(fileName ? fileName : "");
+        if (it == files.end() || !buffer || maxSize <= 0) return 0;
+        const int32_t n = std::min<int32_t>(maxSize,
+                                            static_cast<int32_t>(it->second.size()));
+        std::memcpy(buffer, it->second.data(), static_cast<size_t>(n));
+        return n;
+    }
+    int32_t cloudFileSize(const char* fileName) const override {
+        const auto it = files.find(fileName ? fileName : "");
+        return it == files.end() ? 0 : static_cast<int32_t>(it->second.size());
+    }
+    bool cloudFileExists(const char* fileName) const override {
+        return files.count(fileName ? fileName : "") > 0;
+    }
+    bool cloudDelete(const char* fileName) override {
+        files.erase(fileName ? fileName : "");
+        return true;
+    }
+    int32_t cloudQuotaTotal() const override { return 8 * 1024 * 1024; }
+    int32_t cloudQuotaUsed() const override { return 0; }
+    int32_t cloudFileCount() const override {
+        return static_cast<int32_t>(files.size());
+    }
+    const char* cloudFileNameAt(int32_t index) const override {
+        if (index < 0) return "";
+        int32_t i = 0;
+        for (const auto& entry : files) {
+            if (i++ == index) return entry.first.c_str();
+        }
+        return "";
+    }
+    const char* name() const override { return "cloud-mock-steam"; }
+};
+
+}  // namespace
 
 TEST_CASE("HttpCloudSaveProvider: push/pull round trip via mock server") {
     // Mock REST server: in-memory file store.
@@ -169,5 +244,157 @@ TEST_CASE("HttpCloudSaveProvider: bearer token sent as Authorization header (ST-
     srv.stop();
     t.join();
     std::remove("st_ok.json");
+}
+
+TEST_CASE("SaveManager::configureCloudSync steam endpoint requires a backend") {
+    // No Steam backend is registered in the test process, so the steam endpoint
+    // must FAIL CLOSED and keep the existing provider. Installing a
+    // CloudSaveProvider over a null backend would make load()/listSaves()
+    // report every existing save as gone (readFile returns "" for all of them).
+    TestPaths::ScopedTempDir dir("cloud_steam_nobackend");
+    SaveManager mgr;
+    mgr.init(dir.string());
+    REQUIRE(mgr.configureCloudSync(""));  // local provider installed
+    ISaveProvider* before = mgr.getSaveProvider();
+    REQUIRE(before != nullptr);
+
+    // A save made locally must still be visible after the refused switch.
+    REQUIRE(mgr.save(3, nlohmann::json{{"hp", 7}}, "chapter_1", 11));
+    REQUIRE(mgr.slotExists(3));
+
+    for (const char* endpoint : {"steam", "steam://", "steamcloud"}) {
+        CAPTURE(endpoint);
+        CHECK_FALSE(mgr.configureCloudSync(endpoint));
+        CHECK(mgr.getSaveProvider() == before);  // provider untouched
+        CHECK(mgr.slotExists(3));                // save still reachable
+    }
+
+    // Local-only provider has no cloud end: push/pull refuse and say so
+    // (t5 finding -- these used to be indistinguishable from a failed transfer).
+    CHECK_FALSE(mgr.pushSlotToCloud(3));
+    CHECK_FALSE(mgr.pullSlotFromCloud(3));
+    CHECK(mgr.slotExists(3));  // a refused sync never touches the save
+}
+
+// End-to-end save -> load round trip under the steam endpoint. This is the
+// case t14 asks about: once CloudSaveProvider is installed, Steam Remote
+// Storage IS the store, so the round trip must work without any local file.
+TEST_CASE("SaveManager: steam endpoint save/load round trip goes through the cloud") {
+    CloudMockSteam steam;
+    BackendRegistry::instance().setSteamBackend(&steam);
+    struct Restore {
+        ~Restore() { BackendRegistry::instance().setSteamBackend(nullptr); }
+    } restore;
+
+    TestPaths::ScopedTempDir dir("cloud_steam_roundtrip");
+    SaveManager mgr;
+    mgr.init(dir.string());
+    REQUIRE(mgr.configureCloudSync("steam"));
+    REQUIRE(mgr.getSaveProvider() != nullptr);
+    REQUIRE(mgr.getSaveProvider()->supportsCloudSync());
+
+    const nlohmann::json data = {{"scene", "chapter_7"}, {"affinity", 88}};
+    REQUIRE(mgr.save(5, data, "chapter_7", 314));
+
+    // The bytes landed in Steam Remote Storage under the FLAT key, not on disk.
+    CHECK(steam.files.count("save_5.json") == 1);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_5.json"));
+
+    // Round trip: load() reads back through the same provider.
+    SaveMeta meta;
+    const nlohmann::json loaded = mgr.load(5, &meta);
+    REQUIRE(loaded.is_object());
+    CHECK(loaded.value("affinity", 0) == 88);
+    CHECK(meta.sceneName == "chapter_7");
+    CHECK(meta.tokenIndex == 314);
+    CHECK(mgr.slotExists(5));
+
+    // listSaves() enumerates the cloud store too.
+    bool listed = false;
+    for (const auto& m : mgr.listSaves()) {
+        if (m.slot == 5) listed = true;
+    }
+    CHECK(listed);
+
+    // delete removes the cloud object.
+    CHECK(mgr.deleteSlot(5));
+    CHECK(steam.files.count("save_5.json") == 0);
+    CHECK_FALSE(mgr.slotExists(5));
+}
+
+// Who wins when local and cloud disagree? Nobody implicitly: each direction is
+// an explicit call, and the side named by the call wins for that call only.
+TEST_CASE("CloudSaveProvider: push and pull are explicit one-way transfers") {
+    CloudMockSteam steam;
+    CloudSaveProvider provider(&steam);
+
+    TestPaths::ScopedTempDir dir("cloud_conflict");
+    const std::string localPath = (dir.path() / "save_9.json").string();
+
+    // Local says "local-newer", cloud says "cloud-older".
+    {
+        std::ofstream f(localPath, std::ios::binary | std::ios::trunc);
+        f << "local-newer";
+    }
+    steam.files["save_9.json"] = "cloud-older";
+
+    // push: local wins, cloud replaced. The directory component is stripped, so
+    // the cloud key stays flat.
+    REQUIRE(provider.pushToCloud(localPath));
+    CHECK(steam.files["save_9.json"] == "local-newer");
+
+    // pull: cloud wins, local file replaced.
+    steam.files["save_9.json"] = "cloud-authoritative";
+    REQUIRE(provider.pullFromCloud(localPath));
+    {
+        std::ifstream f(localPath, std::ios::binary);
+        std::string got((std::istreambuf_iterator<char>(f)),
+                        std::istreambuf_iterator<char>());
+        CHECK(got == "cloud-authoritative");
+    }
+
+    // A missing cloud object must NOT wipe the local save: pull aborts before
+    // opening the local file for writing.
+    steam.files.erase("save_9.json");
+    CHECK_FALSE(provider.pullFromCloud(localPath));
+    {
+        std::ifstream f(localPath, std::ios::binary);
+        std::string got((std::istreambuf_iterator<char>(f)),
+                        std::istreambuf_iterator<char>());
+        CHECK(got == "cloud-authoritative");  // untouched by the failed pull
+    }
+
+    // An empty cloud object is treated the same way (no silent truncation).
+    steam.files["save_9.json"] = "";
+    CHECK_FALSE(provider.pullFromCloud(localPath));
+    {
+        std::ifstream f(localPath, std::ios::binary);
+        std::string got((std::istreambuf_iterator<char>(f)),
+                        std::istreambuf_iterator<char>());
+        CHECK(got == "cloud-authoritative");
+    }
+
+    // push with no local file must not fabricate a cloud write from the cloud's
+    // own copy (the earlier revision looped cloud -> cloud and reported true).
+    steam.files["save_absent.json"] = "cloud-only";
+    CHECK_FALSE(provider.pushToCloud((dir.path() / "save_absent.json").string()));
+    CHECK(steam.files["save_absent.json"] == "cloud-only");  // unchanged
+}
+
+TEST_CASE("CloudSaveProvider: null backend refuses both transfer directions") {
+    CloudSaveProvider provider(nullptr);
+    TestPaths::ScopedTempDir dir("cloud_null_backend");
+    const std::string localPath = (dir.path() / "save_0.json").string();
+    {
+        std::ofstream f(localPath, std::ios::binary | std::ios::trunc);
+        f << "local-data";
+    }
+    CHECK_FALSE(provider.pushToCloud(localPath));
+    CHECK_FALSE(provider.pullFromCloud(localPath));
+    // The local file survives a refused pull.
+    std::ifstream f(localPath, std::ios::binary);
+    std::string got((std::istreambuf_iterator<char>(f)),
+                    std::istreambuf_iterator<char>());
+    CHECK(got == "local-data");
 }
 

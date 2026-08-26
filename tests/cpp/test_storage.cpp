@@ -17,6 +17,7 @@
 #include "TestPaths.h"
 #include <filesystem>
 #include <cstring>
+#include <cstdio>
 #include <fstream>
 
 using namespace Caesura;
@@ -186,9 +187,21 @@ TEST_CASE("Storage: CloudSaveProvider small-file roundtrip") {
     CHECK(steam.cloudFileExists("save_1.json"));
     CHECK(provider.readFile("save_1.json") == payload);
 
-    REQUIRE(provider.writeFile("local_slot.json", "local-data"));
+    // pushToCloud reads the LOCAL file and uploads it. This used to be asserted
+    // against a cloud-only object: writeFile put the bytes in the cloud, then
+    // pushToCloud read them back OUT of the cloud and wrote them straight back,
+    // so a cloud->cloud no-op reported success and "nothing local to push" was
+    // indistinguishable from a real upload (t14). Give it a real local file.
+    {
+        std::ofstream local("local_slot.json", std::ios::binary | std::ios::trunc);
+        local << "local-data";
+    }
     CHECK(provider.pushToCloud("local_slot.json"));
     CHECK(provider.readFile("local_slot.json") == "local-data");
+    std::remove("local_slot.json");
+
+    // Without a local file the push must FAIL rather than echo the cloud copy.
+    CHECK_FALSE(provider.pushToCloud("cloud_only_slot.json"));
 
     REQUIRE(provider.deleteFile("save_1.json"));
     CHECK_FALSE(steam.cloudFileExists("save_1.json"));

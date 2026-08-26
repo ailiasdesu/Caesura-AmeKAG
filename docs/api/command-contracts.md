@@ -1,9 +1,9 @@
-﻿# KAG Neo-Genesis Command Contracts (auto-generated)
+# KAG Neo-Genesis Command Contracts (auto-generated)
 
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (131)
+## Commands (134)
 
 ### `[add]`
 
@@ -692,7 +692,7 @@ _Category: vfx · Blocking: no (fire-and-forget) · Declarative weather atmosphe
 | `count` | number | 10 | 0..500 | - |
 | `intensity` | number | 1.0 | 0.0..5.0 | - |
 | `speed` | number | 1.0 | 0.1..10.0 | - |
-| `type` | enum | rain | - | - |
+| `type` | enum | - | - | - |
 | `wind` | number | 0 | -10..10 | - |
 
 ### `[particles]`
@@ -814,8 +814,8 @@ _Category: vfx · Blocking: no (fire-and-forget) · Apply post-processing full-s
 | `b` | number | 255 | 0..255 | - |
 | `effect` | enum | - | - | yes |
 | `g` | number | 255 | 0..255 | - |
-| `intensity` | number | 1.0 | 0.0..1.0 | - |
-| `lutMix` | number | 1.0 | 0.0..1.0 | - |
+| `intensity` | number | - | 0.0..1.0 | - |
+| `lutMix` | number | 0.0 | 0.0..1.0 | - |
 | `r` | number | 255 | 0..255 | - |
 | `radius` | number | 0.0 | 0.0..64.0 | - |
 | `rgb` | string | - | - | - |
@@ -823,10 +823,11 @@ _Category: vfx · Blocking: no (fire-and-forget) · Apply post-processing full-s
 
 ### `[postprocess_off]`
 
-_Category: vfx · Blocking: no (fire-and-forget) · Disable all active post-processing shaders_
+_Category: vfx · Blocking: no (fire-and-forget) · Disable post-processing: the whole chain, or one stage with effect=_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+| `effect` | enum | - | - | - |
 
 ### `[preload]`
 
@@ -1115,6 +1116,17 @@ _Category: text · Blocking: yes (waits for completion) · KAG3-compatible sprit
 | `speaker` | string | - | - | yes |
 | `sprite` | string | - | - | yes |
 
+### `[steam_achievement]`
+
+_Category: system · Blocking: no (fire-and-forget) · unlock a Steamworks achievement (warns, never fails, when Steam is absent)_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `cond` | string | - | - | - |
+| `id` | string | - | - | - |
+| `name` | string | - | - | - |
+| `silent` | boolean | false | - | - |
+
 ### `[stopbgm]`
 
 _Category: audio · Blocking: no (fire-and-forget) · KAG3-compatible stopbgm command_
@@ -1213,6 +1225,32 @@ _Category: layer · Blocking: yes (waits for completion) · declaratively tween 
 | `target` | string | - | - | yes |
 | `to` | string | - | - | yes |
 | `wait` | boolean | true | - | - |
+
+### `[typewriter]`
+
+_Category: text · Blocking: no (fire-and-forget) · Configure typewriter sound effects on character reveal_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `action` | enum | set | - | - |
+| `enabled` | boolean | true | - | - |
+| `file` | string |  | - | - |
+| `interval` | number | 1 | 1..100 | - |
+| `sound` | string |  | - | - |
+| `volume` | number | 1.0 | 0.0..2.0 | - |
+
+### `[typewriter_sound]`
+
+_Category: text · Blocking: no (fire-and-forget) · Alias for typewriter sound configuration_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `action` | enum | set | - | - |
+| `enabled` | boolean | true | - | - |
+| `file` | string |  | - | - |
+| `interval` | number | 1 | 1..100 | - |
+| `sound` | string |  | - | - |
+| `volume` | number | 1.0 | 0.0..2.0 | - |
 
 ### `[unlock]`
 

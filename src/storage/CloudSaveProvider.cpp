@@ -1,8 +1,11 @@
 // CloudSaveProvider →→ ISaveProvider backed by Steam Remote Storage
 #include "CloudSaveProvider.h"
+#include "LocalFileSaveProvider.h"
 #include "../steam/api/ISteamBackend.h"
+#include "../debug/api/DebugLog.h"
 #include <cstring>
 #include <sstream>
+#include <fstream>
 #include <limits>
 #include <iomanip>
 
@@ -10,8 +13,22 @@ namespace Caesura {
 
 CloudSaveProvider::CloudSaveProvider(ISteamBackend* steam) : m_steam(steam) {}
 
-std::string CloudSaveProvider::readFile(const std::string& path) {
+// Cloud key for a slot path: Steam Remote Storage is a FLAT per-user namespace,
+// so the directory component is stripped ("saves/save_2.json" -> "save_2.json").
+// Mirrors HttpCloudSaveProvider::safeName. Every entry point normalizes through
+// this, which also closes a real inconsistency: SaveManager hands out full paths
+// ("<saveDir>/save_5.json") while pushToCloud used only the basename, so the
+// same slot could end up as TWO different cloud objects depending on which call
+// wrote it. It additionally keeps a local absolute path (drive letters,
+// separators) out of the cloud key space.
+std::string CloudSaveProvider::cloudKey(const std::string& slotPath) {
+    const auto pos = slotPath.find_last_of("/\\");
+    return pos == std::string::npos ? slotPath : slotPath.substr(pos + 1);
+}
+
+std::string CloudSaveProvider::readFile(const std::string& rawPath) {
     if (!m_steam) return "";
+    const std::string path = cloudKey(rawPath);
     // Check if chunked
     std::string metaName = path + ".meta";
     if (m_steam->cloudFileExists(metaName.c_str())) {
@@ -56,8 +73,9 @@ std::string CloudSaveProvider::readFile(const std::string& path) {
     return result;
 }
 
-bool CloudSaveProvider::writeFile(const std::string& path, const std::string& content) {
+bool CloudSaveProvider::writeFile(const std::string& rawPath, const std::string& content) {
     if (!m_steam) return false;
+    const std::string path = cloudKey(rawPath);
     if (content.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) return false;
     int32_t size = static_cast<int32_t>(content.size());
     // Small files: direct write
@@ -92,8 +110,9 @@ bool CloudSaveProvider::writeFile(const std::string& path, const std::string& co
     return true;
 }
 
-bool CloudSaveProvider::deleteFile(const std::string& path) {
+bool CloudSaveProvider::deleteFile(const std::string& rawPath) {
     if (!m_steam) return false;
+    const std::string path = cloudKey(rawPath);
     // Delete chunks if present
     std::string metaName = path + ".meta";
     if (m_steam->cloudFileExists(metaName.c_str())) {
@@ -133,16 +152,84 @@ std::vector<std::string> CloudSaveProvider::listFiles(const std::string&) {
     return {};
 }
 
+// push = LOCAL FILE -> CLOUD. One direction, no merge, no timestamp compare:
+// the on-disk file wins and the cloud copy of that slot is replaced. Pushing a
+// stale local save therefore overwrites a newer cloud save -- that is the
+// CALLER's decision. Nothing in the engine calls this on its own (only the
+// explicit Lua KAG.cloud_push binding), so there is no automatic path that can
+// clobber cloud data behind the player's back.
 bool CloudSaveProvider::pushToCloud(const std::string& slotPath) {
-    std::string content = readFile(slotPath);
-    if (content.empty()) return false;
-    return writeFile(slotPath, content);
+    if (!m_steam) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                   "[CloudSaveProvider] pushToCloud(%s) refused: no Steam backend "
+                   "(Steamworks unavailable or not initialized)", slotPath.c_str());
+        return false;
+    }
+    // Read the LOCAL file only. The previous revision fell back to reading the
+    // CLOUD copy and writing it straight back, so a cloud->cloud no-op reported
+    // success and "nothing local to push" was indistinguishable from a real
+    // upload.
+    std::ifstream in(slotPath, std::ios::binary);
+    if (!in.is_open()) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                   "[CloudSaveProvider] pushToCloud(%s): no local file to push",
+                   slotPath.c_str());
+        return false;
+    }
+    std::string content((std::istreambuf_iterator<char>(in)),
+                        std::istreambuf_iterator<char>());
+    if (content.empty()) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                   "[CloudSaveProvider] pushToCloud(%s): local file is empty; "
+                   "refusing to replace the cloud copy with nothing",
+                   slotPath.c_str());
+        return false;
+    }
+    // Same ceiling readFile() enforces on the way back: never ship a payload
+    // upstream that this engine would refuse to reassemble.
+    if (content.size() > static_cast<size_t>(kMaxChunkedSize)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[CloudSaveProvider] pushToCloud(%s) refused: %zu bytes exceeds "
+                  "the %d-byte chunked ceiling", slotPath.c_str(), content.size(),
+                  static_cast<int>(kMaxChunkedSize));
+        return false;
+    }
+    return writeFile(cloudKey(slotPath), content);
 }
 
+// pull = CLOUD -> LOCAL FILE. One direction, no merge, no timestamp compare:
+// the cloud copy wins and REPLACES the local file. This is the only call that
+// can destroy an on-disk save the player made offline, so it is guarded three
+// ways: an absent/empty cloud file aborts BEFORE the local file is touched; the
+// write goes through LocalFileSaveProvider (temp file + atomic rename under the
+// same 10 MiB ceiling as SaveManager), so a crash or an oversized cloud payload
+// cannot truncate the existing save; and nothing in the engine invokes it
+// automatically (only the explicit Lua KAG.cloud_pull binding).
 bool CloudSaveProvider::pullFromCloud(const std::string& slotPath) {
-    // pullFromCloud is handled by readFile
-    (void)slotPath;
-    return false;
+    if (!m_steam) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                   "[CloudSaveProvider] pullFromCloud(%s) refused: no Steam backend "
+                   "(Steamworks unavailable or not initialized)", slotPath.c_str());
+        return false;
+    }
+    const std::string content = readFile(cloudKey(slotPath));
+    if (content.empty()) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                   "[CloudSaveProvider] pullFromCloud(%s): cloud copy absent or "
+                   "empty; local file left untouched", slotPath.c_str());
+        return false;
+    }
+    // Atomic + size-capped write (ST-3). A raw ofstream here would truncate the
+    // player's local save the moment it opened the file.
+    LocalFileSaveProvider local;
+    if (!local.writeFile(slotPath, content)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[CloudSaveProvider] pullFromCloud(%s): local write rejected "
+                  "(oversized payload or unwritable path); previous local save kept",
+                  slotPath.c_str());
+        return false;
+    }
+    return true;
 }
 
 } // namespace Caesura

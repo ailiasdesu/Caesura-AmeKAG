@@ -769,4 +769,104 @@ function SystemCommands.ai_dialog(ctx, params)
     return true
 end
 
+-- ═══════════════════════════════════════════════════════════════════════════
+--  [steam_achievement id="ACH_01" cond="f.flag" silent=true]
+--  Unlock a Steamworks achievement through steam.set_achievement(id) /
+--  steam.unlock_achievement(id).
+--
+--  DEGRADATION IS NOT SILENT (t14). Three outcomes, each distinguishable:
+--    * unlocked   -- the binding returned truthy; one "[steam_achievement]
+--                    unlocked <id>" line.
+--    * refused    -- the binding returned falsy (Null backend: no Steam SDK, no
+--                    running client, or an id the app does not declare). A
+--                    WARN line names the id, because a missing achievement is
+--                    a shipping bug the developer must see.
+--    * unavailable-- no steam global at all (engine built without the binding,
+--                    or a bare Lua host). WARN naming the id.
+--  The command still returns true in every case: a story must not stall or
+--  crash because Steam is absent. Pass silent=true to suppress the two WARN
+--  lines when a title deliberately runs achievements as best-effort.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+function SystemCommands.steam_achievement(ctx, params)
+    params = params or {}
+
+    -- Optional [if]-style guard, same shape as [input cond=...]: an achievement
+    -- fires only when the expression is truthy.
+    if type(params.cond) == "string" and params.cond ~= "" then
+        local okExpr, exprLang = pcall(require, "kag.expr")
+        if okExpr and exprLang then
+            local ok, v
+            if params.cond:find("[&|!?]") then
+                ok, v = exprLang.evaluate(ctx, params.cond)
+            else
+                ok, v = exprLang.evaluateTranslated(ctx, params.cond, params.cond)
+            end
+            if not (ok and v) then return true end
+        end
+    end
+
+    local id = params.id or params.name or params[1]
+    if not id or id == "" then
+        print("[WARN] [steam_achievement] ignored: no achievement id given")
+        return true
+    end
+    id = tostring(id)
+
+    local silent = params.silent == true or params.silent == "true"
+
+    -- rawget avoids the sandbox __index panic on an absent global; the
+    -- package.loaded fallback is what the Lua-only test host injects.
+    local steam = rawget(_G, "steam")
+        or (package and package.loaded and package.loaded["steam"])
+
+    if not steam then
+        if not silent then
+            print(string.format(
+                "[WARN] [steam_achievement] %s NOT unlocked: no Steam binding in "
+                .. "this build/host", id))
+        end
+        -- Record the attempt so a debug overlay / test can see what was tried
+        -- even when Steam is absent (ctx.tf is the documented no-trap scratch).
+        if ctx and type(ctx.tf) == "table" then
+            ctx.tf.steam_achievement_result = "unavailable"
+        end
+        return true
+    end
+
+    local fn = steam.set_achievement
+    if type(fn) ~= "function" then fn = steam.unlock_achievement end
+    if type(fn) ~= "function" then
+        if not silent then
+            print(string.format(
+                "[WARN] [steam_achievement] %s NOT unlocked: steam binding has no "
+                .. "set_achievement/unlock_achievement", id))
+        end
+        if ctx and type(ctx.tf) == "table" then
+            ctx.tf.steam_achievement_result = "unavailable"
+        end
+        return true
+    end
+
+    -- pcall: a backend that raises must not take the scene down with it.
+    local called, unlocked = pcall(fn, id)
+    if called and unlocked then
+        print(string.format("[steam_achievement] unlocked %s", id))
+        if ctx and type(ctx.tf) == "table" then
+            ctx.tf.steam_achievement_result = "unlocked"
+        end
+        return true
+    end
+
+    if not silent then
+        print(string.format(
+            "[WARN] [steam_achievement] %s NOT unlocked: Steam refused it "
+            .. "(no SDK/client, or the app does not declare this id)", id))
+    end
+    if ctx and type(ctx.tf) == "table" then
+        ctx.tf.steam_achievement_result = "refused"
+    end
+    return true
+end
+
 return SystemCommands

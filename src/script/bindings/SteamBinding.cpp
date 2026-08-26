@@ -156,6 +156,10 @@ STEAM_BODY(cloud_list, lua_newtable(L);, {
 
 static const luaL_Reg steam_functions[] = {
     {"unlock_achievement",      lua_steam_unlock_achievement},
+    // set_achievement is an ALIAS of unlock_achievement (identical C function),
+    // matching Steamworks' own SetAchievement naming so scripts written against
+    // either vocabulary work. Counted once in the API total below.
+    {"set_achievement",         lua_steam_unlock_achievement},
     {"is_achievement_unlocked", lua_steam_is_achievement_unlocked},
     {"reset_achievement",       lua_steam_reset_achievement},
     {"reset_all_achievements",  lua_steam_reset_all_achievements},
@@ -179,7 +183,9 @@ static const luaL_Reg steam_functions[] = {
 void registerSteamBinding(lua_State* L) {
     luaL_newlib(L, steam_functions);
     lua_setglobal(L, "steam");
-    DEBUG_INFO(SubSys::Scripting, ErrCode::Ok, "[Lua] Steam module registered (19 APIs).");
+    // 19 distinct functions + 1 alias (set_achievement -> unlock_achievement).
+    DEBUG_INFO(SubSys::Scripting, ErrCode::Ok,
+               "[Lua] Steam module registered (19 APIs + 1 alias).");
 }
 
 } // namespace Caesura

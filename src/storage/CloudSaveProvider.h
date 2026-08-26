@@ -12,6 +12,9 @@ public:
     explicit CloudSaveProvider(ISteamBackend* steam);
     ~CloudSaveProvider() override = default;
 
+    // Paths are normalized to a FLAT cloud key (directory component stripped),
+    // so "<saveDir>/save_5.json" and "save_5.json" address the SAME cloud
+    // object whichever entry point is used.
     std::string readFile(const std::string& path) override;
     bool writeFile(const std::string& path, const std::string& content) override;
     bool deleteFile(const std::string& path) override;
@@ -23,6 +26,9 @@ public:
     bool supportsCloudSync() const override { return true; }
 
 private:
+    // Flat cloud key for a slot path (directory component stripped).
+    static std::string cloudKey(const std::string& slotPath);
+
     ISteamBackend* m_steam;
     static constexpr int32_t kChunkSize = 256 * 1024; // 256KB Steam limit
     // Hard cap on a single chunked save; protects against corrupt .meta

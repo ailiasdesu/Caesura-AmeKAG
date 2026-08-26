@@ -10,6 +10,7 @@
 
 #include "SaveManager.h"
 #include "api/ISaveProvider.h"
+#include "CloudSaveProvider.h"
 #include "HttpCloudSaveProvider.h"
 #include "LocalFileSaveProvider.h"
 #include "../di/BackendRegistry.h"
@@ -88,26 +89,124 @@ void SaveManager::init(const std::string& saveDir) {
 //  Encrypted save format: [4-byte "CAES"][12-byte nonce][16-byte tag][ciphertext]
 // ============================================================================
 
-// Cloud sync (C7): swap the provider for an HTTP-backed one (keeps the
-// local files as the offline source of truth), push/pull a slot's file.
+// Cloud sync (C7): swap the save provider. WHERE THE BYTES LIVE differs per
+// endpoint, and that difference is the whole story for "who wins" (t14):
+//
+//   ""                -> LocalFileSaveProvider. Disk is the only store.
+//   "http(s)://..."   -> HttpCloudSaveProvider. read/write/delete/list still go
+//                        to the LOCAL disk (it delegates to an internal
+//                        LocalFileSaveProvider); only the explicit
+//                        pushSlotToCloud/pullSlotFromCloud calls touch the
+//                        remote. Disk stays the source of truth.
+//   "steam"           -> CloudSaveProvider. Steam Remote Storage IS the store:
+//                        save()/load()/listSaves()/slotExists() all read and
+//                        write cloud files, and the local save_N.json files are
+//                        NOT consulted (only pushSlotToCloud reads one, to
+//                        upload it). This is by design -- Steam Cloud handles
+//                        its own local caching -- but it means switching to the
+//                        steam endpoint changes which store the player sees.
+//
+// There is no merge and no timestamp arbitration anywhere: whichever side a
+// call names wins for that call. No code path syncs implicitly, so simply
+// configuring an endpoint never moves or destroys a save.
 bool SaveManager::configureCloudSync(const std::string& endpoint) {
     if (endpoint.empty()) {
         m_saveProvider = std::make_unique<LocalFileSaveProvider>();
         return true;
     }
+    if (endpoint == "steam" || endpoint == "steam://" || endpoint == "steamcloud") {
+        auto* steam = BackendRegistry::instance().getSteamBackend();
+        if (!steam) {
+            // Fail closed. A CloudSaveProvider over a null backend answers "" to
+            // every readFile and false to every writeFile, so installing it here
+            // would make save() fail and load()/listSaves() report the player's
+            // existing saves as GONE -- a silent, total loss of visibility with
+            // no diagnostic. Keep the current provider instead and say why.
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                      "[SaveManager] configureCloudSync(\"%s\") refused: no Steam "
+                      "backend is registered. Keeping the current save provider; "
+                      "installing Steam Cloud without a backend would hide every "
+                      "existing save.", endpoint.c_str());
+            printf("[SaveManager] Cloud sync NOT configured: Steam backend unavailable\n");
+            return false;
+        }
+        m_saveProvider = std::make_unique<CloudSaveProvider>(steam);
+        printf("[SaveManager] Cloud sync configured: Steam Remote Storage "
+               "(cloud is the save store; local files are not read)\n");
+        return true;
+    }
     m_saveProvider = std::make_unique<HttpCloudSaveProvider>(endpoint);
-    printf("[SaveManager] Cloud sync configured: %s\n", endpoint.c_str());
+    printf("[SaveManager] Cloud sync configured: %s (local disk stays the store; "
+           "push/pull are explicit)\n", endpoint.c_str());
     return true;
 }
 
+// push/pull are EXPLICIT, caller-driven, one-directional transfers. They are
+// never invoked by save()/load()/listSaves(), so configuring cloud sync alone
+// never moves a byte: no automatic path can overwrite a player's save.
+//
+// A false return used to be ambiguous (audit t5): "no provider installed"
+// (misconfiguration -- init() was never called), "the provider has no cloud
+// end" (local-only, working as intended) and "the transfer failed" all looked
+// identical. Each case now leaves a distinct diagnostic; readFile/writeFile can
+// fall back to their own ifstream, but a cloud transfer has no meaningful
+// fallback, so these still fail closed.
 bool SaveManager::pushSlotToCloud(int slot) {
-    if (!m_saveProvider) return false;
-    return m_saveProvider->pushToCloud(slotPath(slot));
+    if (!m_saveProvider) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[SaveManager] pushSlotToCloud(%d) refused: no save provider "
+                  "installed (call init() / configureCloudSync() first)", slot);
+        return false;
+    }
+    if (!m_saveProvider->supportsCloudSync()) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Ok,
+                   "[SaveManager] pushSlotToCloud(%d): local-only provider has no "
+                   "cloud end; nothing to sync", slot);
+        return false;
+    }
+    const std::string path = slotPath(slot);
+    if (path.empty()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok,
+                  "[SaveManager] pushSlotToCloud(%d) refused: slot out of range "
+                  "[-2..99]", slot);
+        return false;
+    }
+    const bool ok = m_saveProvider->pushToCloud(path);
+    if (!ok) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                   "[SaveManager] pushSlotToCloud(%d) failed (see provider "
+                   "diagnostic above); the cloud copy is unchanged", slot);
+    }
+    return ok;
 }
 
 bool SaveManager::pullSlotFromCloud(int slot) {
-    if (!m_saveProvider) return false;
-    return m_saveProvider->pullFromCloud(slotPath(slot));
+    if (!m_saveProvider) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] pullSlotFromCloud(%d) refused: no save provider "
+                  "installed (call init() / configureCloudSync() first)", slot);
+        return false;
+    }
+    if (!m_saveProvider->supportsCloudSync()) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Ok,
+                   "[SaveManager] pullSlotFromCloud(%d): local-only provider has no "
+                   "cloud end; nothing to sync", slot);
+        return false;
+    }
+    const std::string path = slotPath(slot);
+    if (path.empty()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Ok,
+                  "[SaveManager] pullSlotFromCloud(%d) refused: slot out of range "
+                  "[-2..99]", slot);
+        return false;
+    }
+    const bool ok = m_saveProvider->pullFromCloud(path);
+    if (!ok) {
+        DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                   "[SaveManager] pullSlotFromCloud(%d) failed (see provider "
+                   "diagnostic above); the local save is unchanged", slot);
+    }
+    return ok;
 }
 
 void SaveManager::setEncryptionKey(const uint8_t key[32]) {

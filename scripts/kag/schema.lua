@@ -610,4 +610,20 @@ Schema.define("edit", {
     btn_cancel  = { type = "string", default = "" },
 })
 
+-- [steam_achievement id="ACH_01" cond="f.flag" silent=true]
+-- Handler: kag/commands/system.lua SystemCommands.steam_achievement.
+-- Never blocks and never fails a scene: when Steam is absent or refuses the id
+-- the command warns (unless silent=true) and continues.
+Schema.define("steam_achievement", {
+    _meta = {
+        category = "system",
+        blocking = false,
+        desc = "unlock a Steamworks achievement (warns, never fails, when Steam is absent)"
+    },
+    id     = { type = "string" },
+    name   = { type = "string" },   -- alias for id (KAG3-style naming)
+    cond   = { type = "string" },   -- unlock only when this expression is truthy
+    silent = { type = "boolean", default = false },  -- suppress the NOT-unlocked warning
+})
+
 return Schema

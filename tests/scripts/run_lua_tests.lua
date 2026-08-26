@@ -173,10 +173,7 @@ local tests = {
     "test_postprocess",
     "test_particle_weather",
     "test_layered_vfs",
-    -- test_steam_achievements stays unlisted until its own commit lands: a
-    -- registration naming a file the repository does not contain makes the
-    -- runner exit 1 on a fresh clone while passing locally, so each name goes
-    -- back in the SAME commit that adds its file.
+    "test_steam_achievements",
     "test_quickmenu",
 }
 
