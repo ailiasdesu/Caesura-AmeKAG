@@ -11,6 +11,7 @@
 
 #include "archive/CARCReader.h"
 #include "archive/CARCWriter.h"
+#include "archive/DeltaCARC.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -20,19 +21,102 @@ namespace fs = std::filesystem;
 
 static void printUsage() {
     std::cerr << "Usage: carc_pack.exe <input_dir> <output.carc> [public.key] [private.key]\n"
+              << "       carc_pack.exe pack <input_dir> <output.carc> [public.key] [private.key]\n"
               << "       carc_pack.exe list <archive.carc> [public.key]\n"
-              << "       carc_pack.exe extract <archive.carc> <out_dir> [public.key]\n"
+              << "       carc_pack.exe extract <archive.carc> <out_dir> [public.key] [--path rel]\n"
+              << "       carc_pack.exe delta <old.carc> <new.carc> <delta.carc>\n"
+              << "       carc_pack.exe apply <base.carc> <delta.carc> <output.carc>\n"
+              << "       carc_pack.exe verify-delta <delta.carc>\n"
               << "  input_dir      directory to pack\n"
               << "  output.carc    CARC archive to create\n"
               << "  public.key     (optional) path to public key (verify on read)\n"
               << "  private.key    (optional) path to save private key\n"
               << "  list           print the archive's file names (one per line)\n"
-              << "  extract        extract all files into out_dir\n";
+              << "  extract        extract all files into out_dir\n"
+              << "  delta/patch    generate differential patch between two CARC archives\n"
+              << "  apply          apply differential patch to base archive to produce output archive\n"
+              << "  verify-delta   verify cryptographic integrity and structure of delta patch\n";
 }
 
 static std::string relativePath(const fs::path& filePath, const fs::path& baseDir)
 {
     return fs::relative(filePath, baseDir).generic_string();
+}
+
+static int doDelta(int argc, char* argv[])
+{
+    if (argc < 5) {
+        std::cerr << "Usage: carc_pack.exe delta <old.carc> <new.carc> <delta.carc>\n";
+        return 1;
+    }
+    std::string oldPath = argv[2];
+    std::string newPath = argv[3];
+    std::string deltaPath = argv[4];
+
+    if (!fs::exists(oldPath)) {
+        std::cerr << "Error: old archive not found: " << oldPath << "\n";
+        return 1;
+    }
+    if (!fs::exists(newPath)) {
+        std::cerr << "Error: new archive not found: " << newPath << "\n";
+        return 1;
+    }
+
+    if (!Caesura::carc::DeltaCARC::generate(oldPath, newPath, deltaPath)) {
+        std::cerr << "Error: failed to generate delta patch from " << oldPath
+                  << " to " << newPath << "\n";
+        return 1;
+    }
+    std::cout << "Created differential patch: " << deltaPath << "\n";
+    return 0;
+}
+
+static int doApply(int argc, char* argv[])
+{
+    if (argc < 5) {
+        std::cerr << "Usage: carc_pack.exe apply <base.carc> <delta.carc> <output.carc>\n";
+        return 1;
+    }
+    std::string basePath = argv[2];
+    std::string deltaPath = argv[3];
+    std::string outputPath = argv[4];
+
+    if (!fs::exists(basePath)) {
+        std::cerr << "Error: base archive not found: " << basePath << "\n";
+        return 1;
+    }
+    if (!fs::exists(deltaPath)) {
+        std::cerr << "Error: delta patch not found: " << deltaPath << "\n";
+        return 1;
+    }
+
+    if (!Caesura::carc::DeltaCARC::apply(basePath, deltaPath, outputPath)) {
+        std::cerr << "Error: failed to apply delta patch " << deltaPath
+                  << " to base " << basePath << "\n";
+        return 1;
+    }
+    std::cout << "Applied delta patch: " << outputPath << "\n";
+    return 0;
+}
+
+static int doVerifyDelta(int argc, char* argv[])
+{
+    if (argc < 3) {
+        std::cerr << "Usage: carc_pack.exe verify-delta <delta.carc>\n";
+        return 1;
+    }
+    std::string deltaPath = argv[2];
+    if (!fs::exists(deltaPath)) {
+        std::cerr << "Error: delta patch file not found: " << deltaPath << "\n";
+        return 1;
+    }
+
+    if (!Caesura::carc::DeltaCARC::verify(deltaPath)) {
+        std::cerr << "Error: delta patch verification failed: " << deltaPath << "\n";
+        return 1;
+    }
+    std::cout << "Delta patch verified successfully: " << deltaPath << "\n";
+    return 0;
 }
 
 static int doList(int argc, char* argv[])
@@ -147,24 +231,41 @@ static int doExtract(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    // subcommand dispatch: list / extract / pack (default)
-    if (argc >= 2 && std::string(argv[1]) == "list") {
-        return doList(argc, argv);
-    }
-    if (argc >= 2 && std::string(argv[1]) == "extract") {
-        return doExtract(argc, argv);
+    // subcommand dispatch
+    if (argc >= 2) {
+        std::string cmd = argv[1];
+        if (cmd == "list") {
+            return doList(argc, argv);
+        }
+        if (cmd == "extract") {
+            return doExtract(argc, argv);
+        }
+        if (cmd == "delta" || cmd == "patch") {
+            return doDelta(argc, argv);
+        }
+        if (cmd == "apply") {
+            return doApply(argc, argv);
+        }
+        if (cmd == "verify-delta" || cmd == "verify") {
+            return doVerifyDelta(argc, argv);
+        }
     }
 
-    // ---- pack mode (original behavior) ----
-    if (argc < 3) {
+    // ---- pack mode (original or explicit 'pack' subcommand) ----
+    int argOffset = 0;
+    if (argc >= 2 && std::string(argv[1]) == "pack") {
+        argOffset = 1;
+    }
+
+    if (argc < 3 + argOffset) {
         printUsage();
         return 1;
     }
 
-    std::string inputDir = argv[1];
-    std::string outputCarc = argv[2];
-    std::string pubKeyPath = (argc > 3) ? argv[3] : "";
-    std::string privKeyPath = (argc > 4) ? argv[4] : "";
+    std::string inputDir = argv[1 + argOffset];
+    std::string outputCarc = argv[2 + argOffset];
+    std::string pubKeyPath = (argc > 3 + argOffset) ? argv[3 + argOffset] : "";
+    std::string privKeyPath = (argc > 4 + argOffset) ? argv[4 + argOffset] : "";
 
     if (!fs::exists(inputDir) || !fs::is_directory(inputDir)) {
         std::cerr << "Error: input directory not found: " << inputDir << "\n";

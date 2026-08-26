@@ -6,6 +6,7 @@ set(TOOL_NAME carc_pack)
 add_executable(${TOOL_NAME} main.cpp)
 target_link_libraries(${TOOL_NAME} PRIVATE
     Caesura::Archive
+    Caesura::Debug
     Caesura::BuildOptions
 )
 

@@ -98,6 +98,32 @@ def cmd_check(args):
     res = subprocess.run([lua, "scripts/ks_check.lua", args.path])
     return res.returncode
 
+def cmd_patch(args):
+    raw_args = args.patch_args
+    if not raw_args:
+        print("Usage: caesura patch <base.carc> <target.carc> <delta.carc>")
+        print("       caesura patch create <base.carc> <target.carc> <delta.carc>")
+        print("       caesura patch apply <base.carc> <delta.carc> <output.carc>")
+        print("       caesura patch verify <delta.carc>")
+        return 1
+
+    first = raw_args[0]
+    if first == "create" and len(raw_args) >= 4:
+        cmd = [sys.executable, "scripts/carc_pack.py", "delta", raw_args[1], raw_args[2], raw_args[3]]
+    elif first == "apply" and len(raw_args) >= 4:
+        cmd = [sys.executable, "scripts/carc_pack.py", "apply", raw_args[1], raw_args[2], raw_args[3]]
+    elif first == "verify" and len(raw_args) >= 2:
+        cmd = [sys.executable, "scripts/carc_pack.py", "verify-delta", raw_args[1]]
+    elif len(raw_args) == 3:
+        # Default: <base.carc> <target.carc> <delta.carc>
+        cmd = [sys.executable, "scripts/carc_pack.py", "delta", raw_args[0], raw_args[1], raw_args[2]]
+    else:
+        print(f"Error: invalid patch arguments: {' '.join(raw_args)}", file=sys.stderr)
+        return 1
+
+    res = subprocess.run(cmd)
+    return res.returncode
+
 def main():
     parser = argparse.ArgumentParser(prog="caesura", description="Caesura (AmeKAG) Creator CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -134,6 +160,11 @@ def main():
     p_check = subparsers.add_parser("check", help="Statically validate .ks contracts")
     p_check.add_argument("path", help="Path to .ks scene")
     p_check.set_defaults(func=cmd_check)
+    
+    # patch
+    p_patch = subparsers.add_parser("patch", help="Differential CARC patch creation, application, and verification")
+    p_patch.add_argument("patch_args", nargs="*", help="Arguments: <base.carc> <target.carc> <delta.carc> or create|apply|verify ...")
+    p_patch.set_defaults(func=cmd_patch)
     
     args = parser.parse_args()
     sys.exit(args.func(args))
