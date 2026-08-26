@@ -170,11 +170,12 @@ local tests = {
     "test_settings",
     "test_frame_bench",
     "test_input_cmd",
-    -- test_postprocess / test_particle_weather / test_layered_vfs /
-    -- test_steam_achievements are intentionally NOT listed yet: their files are
-    -- still uncommitted WIP, and a registration that names a file the repository
-    -- does not contain makes the runner exit 1 on a fresh clone while passing
-    -- locally. Each name goes back in the SAME commit that adds its file.
+    "test_postprocess",
+    "test_particle_weather",
+    -- test_layered_vfs / test_steam_achievements stay unlisted until their own
+    -- commits land: a registration naming a file the repository does not contain
+    -- makes the runner exit 1 on a fresh clone while passing locally, so each
+    -- name goes back in the SAME commit that adds its file.
     "test_quickmenu",
 }
 
