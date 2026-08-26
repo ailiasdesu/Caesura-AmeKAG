@@ -40,12 +40,23 @@ end
 local passed, failed, skipped = 0, 0, 0
 local results = {}
 
+-- skip() raises this sentinel so the enclosing test() records ONE SKIP instead
+-- of a SKIP *and* a PASS. Before this, `if not f then skip(...); return end`
+-- inside a test body printed [SKIP] and then returned normally out of pcall, so
+-- the same check was counted twice: 26 test() calls reported PASS 26 / SKIP 3 /
+-- TOTAL 29. A missing precondition is not a passing assertion.
+local SKIP_SENTINEL = {}
+
 local function test(name, fn)
     local ok, err = pcall(fn)
     if ok then
         passed = passed + 1
         results[#results + 1] = { name = name, status = "PASS" }
         print("[PASS] " .. name)
+    elseif type(err) == "table" and err.sentinel == SKIP_SENTINEL then
+        skipped = skipped + 1
+        results[#results + 1] = { name = name, status = "SKIP", reason = err.reason }
+        print("[SKIP] " .. name .. " — " .. err.reason)
     else
         failed = failed + 1
         results[#results + 1] = { name = name, status = "FAIL", error = tostring(err) }
@@ -53,10 +64,13 @@ local function test(name, fn)
     end
 end
 
-local function skip(name, reason)
-    skipped = skipped + 1
-    results[#results + 1] = { name = name, status = "SKIP", reason = reason }
-    print("[SKIP] " .. name .. " — " .. reason)
+-- Declare the current test skipped. Raises, so nothing after the call runs and
+-- the enclosing test() attributes the result to SKIP. Both skip(reason) and the
+-- legacy skip(name, reason) spelling work; the name is redundant because test()
+-- already knows it.
+local function skip(nameOrReason, reason)
+    error({ sentinel = SKIP_SENTINEL,
+            reason = reason or nameOrReason or "no reason given" }, 0)
 end
 
 local function assert_eq(expected, actual, msg)
@@ -267,18 +281,37 @@ end)
 test("CARC pack tool binary exists", function()
     -- Round 60: multi-config MSVC puts the tool at bin/Debug (or Release);
     -- single-config Linux/macOS builds put it at bin/ (no .exe).
+    --
+    -- A BUILD ARTIFACT IS NOT A REPOSITORY INVARIANT. bin/ is gitignored, so on
+    -- a fresh clone this check has nothing to find and asserting made the whole
+    -- orphan suite exit 1 (fresh clone 23/24, built workspace 24/24) -- a red
+    -- that says "you have not compiled yet", not "the code is wrong". The build
+    -- itself is what proves carc_pack links; its behaviour is covered by the
+    -- doctest cases in tests/cpp/test_archive.cpp. So: verify the binary when a
+    -- build is present, skip honestly when it is not.
     local sep = package.config:sub(1, 1)
     local exe = sep == "\\" and ".exe" or ""
-    local found = false
-    for _, path in ipairs({
+    local candidates = {
         "bin" .. sep .. "Debug" .. sep .. "carc_pack" .. exe,
         "bin" .. sep .. "Release" .. sep .. "carc_pack" .. exe,
         "bin" .. sep .. "carc_pack" .. exe,
-    }) do
+    }
+    local foundPath = nil
+    for _, path in ipairs(candidates) do
         local f = io.open(path, "rb")
-        if f then f:close(); found = true; print("  Found: " .. path); break end
+        if f then f:close(); foundPath = path; break end
     end
-    assert(found, "carc_pack binary not found (bin/Debug, bin/Release or bin)")
+    if not foundPath then
+        skip("carc_pack not built (bin/ is a gitignored build artifact) -- "
+             .. "run: cmake --build build --config Debug --target carc_pack")
+    end
+    print("  Found: " .. foundPath)
+    -- Present means present AND non-empty: a zero-byte file from an interrupted
+    -- link would otherwise pass as "exists".
+    local f = assert(io.open(foundPath, "rb"))
+    local size = f:seek("end")
+    f:close()
+    assert(size and size > 0, foundPath .. " is empty (interrupted build?)")
 end)
 
 -- CARC verification (file pre-created by CI/developer)
