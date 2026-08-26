@@ -1219,6 +1219,72 @@ function TextCommands.cps(ctx, params)
     apply_text_cps(ctx, params, "cps")
 end
 
+-- =============================================================================
+--  [typewriter sound="assets/se/type.wav" interval=1 volume=1.0]
+--  Configure typewriter sound effects on character reveal.
+--
+--  WIRING STATUS: WRITE-ONLY / NOT WIRED. The handler below stores
+--  ctx.typewriter_sound / _interval / _volume, and a repo-wide grep for those
+--  three keys finds NO reader outside this file -- nothing plays a sound when a
+--  character is revealed. The command therefore configures a capability the
+--  engine does not have yet. It is kept rather than deleted because the schema
+--  and parameter surface are the agreed contract, but it must not be described
+--  as working.
+--
+--  Who should read them, and where -- two points, both outside this batch:
+--    1. The reveal advance in scripts/kag_runner.lua update() (:446-455) is the
+--       only place that knows a NEW character just became visible: it computes
+--       shown = floor(reveal.elapsed / speed) and writes text_scene's
+--       reveal_chars. A per-character SE must fire exactly when
+--       shown > previous_shown, honoring _interval (once every N chars), and
+--       must NOT fire on the instant-reveal paths (skip_mode at kag_runner:484,
+--       the first click in on_click() at :692) or a skipped line would
+--       machine-gun dozens of SE in a single frame.
+--    2. Playback is backend.audio_play("se", file) (scripts/backend.lua:66).
+--       That call carries no per-SE volume today (only the bus-level
+--       backend.audio_set_bus_volume), so honoring _volume needs either a volume
+--       argument on the SE path or an explicit bus-volume ride -- a separate
+--       decision, not a detail.
+--  Not done in this batch: the scope here is closing out the typography markup;
+--  a frame-driven audio trigger in kag_runner is new runtime behavior and needs
+--  its own tests for the skip / auto / click instant-reveal interactions.
+-- =============================================================================
+schema.define("typewriter", {
+    _meta = { category = "text", blocking = false, desc = "Configure typewriter sound effects on character reveal" },
+    sound    = { type = "string", default = "" },
+    file     = { type = "string", default = "" },
+    interval = { type = "number", default = 1, min = 1, max = 100 },
+    volume   = { type = "number", default = 1.0, min = 0.0, max = 2.0 },
+    action   = { type = "enum", values = { ["set"] = true, ["stop"] = true, ["clear"] = true, ["off"] = true }, default = "set" },
+    enabled  = { type = "boolean", default = true },
+})
+
+schema.define("typewriter_sound", {
+    _meta = { category = "text", blocking = false, desc = "Alias for typewriter sound configuration" },
+    sound    = { type = "string", default = "" },
+    file     = { type = "string", default = "" },
+    interval = { type = "number", default = 1, min = 1, max = 100 },
+    volume   = { type = "number", default = 1.0, min = 0.0, max = 2.0 },
+    action   = { type = "enum", values = { ["set"] = true, ["stop"] = true, ["clear"] = true, ["off"] = true }, default = "set" },
+    enabled  = { type = "boolean", default = true },
+})
+
+function TextCommands.typewriter(ctx, params)
+    params = params or {}
+    local action = params.action or "set"
+    if action == "stop" or action == "clear" or action == "off" or params.enabled == false then
+        ctx.typewriter_sound = ""
+        ctx.typewriter_sound_interval = 1
+        ctx.typewriter_sound_volume = 1.0
+        return
+    end
+    local sound = params.sound or params.file or ""
+    ctx.typewriter_sound = sound
+    ctx.typewriter_sound_interval = math.max(1, tonumber(params.interval) or 1)
+    ctx.typewriter_sound_volume = tonumber(params.volume) or 1.0
+end
+TextCommands.typewriter_sound = TextCommands.typewriter
+
 
 -- =============================================================================
 --  [button text="Choice 1" target="*label_a"]

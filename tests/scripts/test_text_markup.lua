@@ -412,6 +412,193 @@ for _, pref in ipairs({ 32 }) do
     end)())
 end
 
+
+-- ---------------------------------------------------------------------------
+-- 9. {letter_spacing=N} / {spacing=N} — the ONE new typography tag that is
+--    actually wired: it feeds measure_character()'s advance, so it changes both
+--    glyph advance and the greedy wrap positions.
+--
+--    These drive the REAL path end to end (markup string -> parse_markup ->
+--    span_characters -> measure/wrap_spans, plus the full [ch] command for the
+--    integration case). Deliberately NO hand-built character table: a synthetic
+--    table would bypass the parse and span layers, which is exactly where a
+--    regression would live.
+-- ---------------------------------------------------------------------------
+
+-- 9a. parse: recognized under both spellings, scoped by its close tag
+local ls1 = TextLayout.parse_markup("ab{letter_spacing=4}cd{/letter_spacing}ef")
+check("letter_spacing: three spans, middle one carries the spacing",
+      #ls1.spans == 3
+      and ls1.spans[1].letter_spacing == nil
+      and ls1.spans[2].letter_spacing == 4
+      and ls1.spans[3].letter_spacing == nil)
+check("letter_spacing: markup stripped from plain text", ls1.plain == "abcdef")
+
+local ls2 = TextLayout.parse_markup("x{spacing=2}y{/spacing}z")
+check("letter_spacing: {spacing=N} alias parses", #ls2.spans == 3
+      and ls2.spans[2].letter_spacing == 2 and ls2.plain == "xyz")
+
+local ls3 = TextLayout.parse_markup(
+    "a{letter_spacing=3}b{letter_spacing=9}c{/letter_spacing}d{/letter_spacing}e")
+check("letter_spacing: nested tags restore the outer value on close",
+      #ls3.spans == 5
+      and ls3.spans[1].letter_spacing == nil
+      and ls3.spans[2].letter_spacing == 3
+      and ls3.spans[3].letter_spacing == 9
+      and ls3.spans[4].letter_spacing == 3
+      and ls3.spans[5].letter_spacing == nil)
+
+-- 9b. measurement: exactly N px of extra advance per character
+do
+    local optsWide = { max_width = 100000, font_size = 24 }
+    local plainLine = TextLayout.wrap_spans(
+        TextLayout.parse_markup("aaaa").spans, optsWide)[1]
+    local spacedLine = TextLayout.wrap_spans(
+        TextLayout.parse_markup("{letter_spacing=5}aaaa{/letter_spacing}").spans,
+        optsWide)[1]
+    -- 4 characters, +5 px each => exactly +20 px of measured width
+    check("letter_spacing: width grows by N per character (4 chars, +5 => +20)",
+          math.abs((spacedLine.width - plainLine.width) - 20) < 0.001)
+    check("letter_spacing: zero spacing measures like no markup",
+          math.abs(TextLayout.wrap_spans(
+              TextLayout.parse_markup("{letter_spacing=0}aaaa{/letter_spacing}").spans,
+              optsWide)[1].width - plainLine.width) < 0.001)
+end
+
+-- 9c. THE behavior that matters: the wrap position actually moves.
+--     10 ASCII chars at 12 px each fit a 120 px box exactly; +4 px of spacing
+--     makes each 16 px, so the line has to break earlier.
+do
+    local opts = { max_width = 120, font_size = 24 }   -- ASCII advance = 12 px
+    local plainLines = TextLayout.wrap_spans(
+        TextLayout.parse_markup(string.rep("a", 10)).spans, opts)
+    local spacedLines = TextLayout.wrap_spans(
+        TextLayout.parse_markup(
+            "{letter_spacing=4}" .. string.rep("a", 10) .. "{/letter_spacing}").spans,
+        opts)
+    check("letter_spacing: unspaced 10 chars fit one line", #plainLines == 1)
+    check("letter_spacing: spacing forces an extra line", #spacedLines > #plainLines)
+    check("letter_spacing: first spaced line holds fewer chars",
+          utf8.len(spacedLines[1].text) < utf8.len(plainLines[1].text))
+    check("letter_spacing: no spaced line exceeds max_width", (function()
+        for _, ln in ipairs(spacedLines) do
+            if ln.width > opts.max_width + 0.001 then return false end
+        end
+        return true
+    end)())
+    check("letter_spacing: all characters preserved across the re-wrap", (function()
+        local total = 0
+        for _, ln in ipairs(spacedLines) do total = total + (utf8.len(ln.text) or 0) end
+        return total == 10
+    end)())
+end
+
+-- 9d. a mid-line spacing change splits the segment AND widens only that part
+do
+    local opts = { max_width = 100000, font_size = 24 }
+    local line = TextLayout.wrap_spans(
+        TextLayout.parse_markup("aa{letter_spacing=6}bb{/letter_spacing}cc").spans,
+        opts)[1]
+    check("letter_spacing: mid-line change splits into 3 segments",
+          #line.segments == 3)
+    -- 12 px/char: "aa" and "cc" measure 24, "bb" measures 24 + 2*6 = 36
+    check("letter_spacing: only the spaced segment is wider",
+          math.abs(line.segments[1].width - 24) < 0.001
+          and math.abs(line.segments[2].width - 36) < 0.001
+          and math.abs(line.segments[3].width - 24) < 0.001)
+end
+
+-- 9e. negative spacing tightens but can never measure backwards
+--     (measure_character clamps the per-character advance at 0, so an absurd
+--     negative value cannot produce a negative width and hang the greedy wrap).
+do
+    local opts = { max_width = 120, font_size = 24 }
+    local tight = TextLayout.wrap_spans(
+        TextLayout.parse_markup(
+            "{letter_spacing=-4}" .. string.rep("a", 10) .. "{/letter_spacing}").spans,
+        opts)
+    check("letter_spacing: negative spacing still fits one line", #tight == 1)
+    check("letter_spacing: negative spacing narrows the line",
+          tight[1].width < 120 and tight[1].width > 0)
+    local absurd = TextLayout.wrap_spans(
+        TextLayout.parse_markup(
+            "{letter_spacing=-9999}" .. string.rep("a", 10) .. "{/letter_spacing}").spans,
+        opts)
+    check("letter_spacing: absurd negative spacing terminates with width 0",
+          #absurd == 1 and absurd[1].width == 0)
+end
+
+-- 9f. integration through the real [ch] command: a spaced long line produces
+--     MORE typewriter draws (one per wrapped line) than the unspaced one.
+do
+    -- 300 chars, not 100: with 100 the plain text already wraps to 2 lines and
+    -- the spaced one also lands on 2 (the last line is short either way), so a
+    -- draw-count assertion at 100 would pass or fail on the ceil boundary rather
+    -- than on the behavior. The per-line length assertion below is the robust
+    -- signal at any length; the count assertion needs enough text for the
+    -- narrower lines to accumulate into an extra one.
+    local longA = string.rep("a", 300)
+    local mk = function()
+        return {
+            backlog = {},
+            f = {}, sf = {}, tf = {}, mp = {}, variables = {}, characters = {},
+            text_state = { line = 1, char_offset = 0, opacity = 255,
+                           cursor_x = 32, cursor_y = 580, draws = {}, font_size = nil },
+            textCursorX = 32, textCursorY = 580,
+            current_scene = "scene.ks", currentScene = "scene.ks", token_index = 1,
+        }
+    end
+    local ctxLS0 = mk()
+    TextCommands.ch(ctxLS0, { text = longA })
+    local ctxLS1 = mk()
+    TextCommands.ch(ctxLS1, { text = "{letter_spacing=6}" .. longA .. "{/letter_spacing}" })
+    check("letter_spacing: [ch] spacing increases the wrapped draw count",
+          #ctxLS1.text_state.draws > #ctxLS0.text_state.draws)
+    check("letter_spacing: [ch] first rendered line is shorter when spaced",
+          utf8.len(ctxLS1.text_state.draws[1].text)
+              < utf8.len(ctxLS0.text_state.draws[1].text))
+    check("letter_spacing: [ch] draws stay typewriter-revealed",
+          ctxLS1.text_state.draws[1].typewriter == true)
+    -- The rendered draw text is the markup-stripped plain text: the tag must
+    -- never leak into what the player sees.
+    check("letter_spacing: markup absent from the rendered draw text", (function()
+        for _, d in ipairs(ctxLS1.text_state.draws) do
+            if type(d.text) == "string" and d.text:find("letter_spacing", 1, true) then
+                return false
+            end
+        end
+        return true
+    end)())
+end
+
+-- 9g. {font=} and {line_height=} parse and reach the segment, but nothing
+--     downstream consumes them (see the WIRING STATUS block in
+--     kag/text_layout.lua). Pinned so the not-wired state is explicit and a
+--     future wiring change has to update this test deliberately.
+do
+    local m = TextLayout.parse_markup("a{font=Serif}b{/font}c")
+    check("font: parses into the span (still unconsumed downstream)",
+          #m.spans == 3 and m.spans[2].font == "Serif" and m.plain == "abc")
+    local lh = TextLayout.parse_markup("a{line_height=40}b{/line_height}c")
+    check("line_height: parses into the span (still unconsumed downstream)",
+          #lh.spans == 3 and lh.spans[2].line_height == 40 and lh.plain == "abc")
+    -- Both DO split segments (same_style compares them) even though no consumer
+    -- reads the values -- that split is their only observable effect today.
+    local opts = { max_width = 100000, font_size = 24 }
+    local fontLine = TextLayout.wrap_spans(m.spans, opts)[1]
+    check("font: a font change splits segments",
+          #fontLine.segments == 3 and fontLine.segments[2].font == "Serif")
+    local lhLine = TextLayout.wrap_spans(lh.spans, opts)[1]
+    check("line_height: a line_height change splits segments",
+          #lhLine.segments == 3 and lhLine.segments[2].line_height == 40)
+    -- ...and neither affects measured width (they are not advance-affecting)
+    local plainLine = TextLayout.wrap_spans(
+        TextLayout.parse_markup("abc").spans, opts)[1]
+    check("font/line_height do not affect measured width",
+          math.abs(fontLine.width - plainLine.width) < 0.001
+          and math.abs(lhLine.width - plainLine.width) < 0.001)
+end
+
 local failed = 0
 for _, ok in ipairs(results) do
     if not ok then failed = failed + 1 end

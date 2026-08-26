@@ -3,27 +3,158 @@
 local TextLayout = {}
 
 local OPENING_PUNCTUATION = {
-    [0x0028] = true, [0x005B] = true, [0x007B] = true,
-    [0x2018] = true, [0x201C] = true,
-    [0x3008] = true, [0x300A] = true, [0x300C] = true,
-    [0x300E] = true, [0x3010] = true, [0x3014] = true,
-    [0x3016] = true, [0x3018] = true, [0x301A] = true,
-    [0xFF08] = true, [0xFF3B] = true, [0xFF5B] = true,
+    -- ASCII brackets
+    [0x0028] = true, -- (
+    [0x005B] = true, -- [
+    [0x007B] = true, -- {
+    -- Quotes
+    [0x00AB] = true, -- «
+    [0x2018] = true, -- ‘
+    [0x201C] = true, -- “
+    [0x2039] = true, -- ‹
+    -- CJK brackets
+    [0x3008] = true, -- 〈
+    [0x300A] = true, -- 《
+    [0x300C] = true, -- 「
+    [0x300E] = true, -- 『
+    [0x3010] = true, -- 【
+    [0x3014] = true, -- 〔
+    [0x3016] = true, -- 〖
+    [0x3018] = true, -- 〘
+    [0x301A] = true, -- 〚
+    [0xFE59] = true, -- ﹙
+    [0xFE5B] = true, -- ﹛
+    [0xFE5D] = true, -- ﹝
+    [0xFF08] = true, -- （
+    [0xFF3B] = true, -- ［
+    [0xFF5B] = true, -- ｛
+    [0xFF5F] = true, -- ｟
+    [0xFF62] = true, -- ｢
+    -- Currency and prefix symbols (cannot end a line)
+    [0x0023] = true, -- #
+    [0x0024] = true, -- $
+    [0x00A3] = true, -- £
+    [0x00A5] = true, -- ¥
+    [0x00A7] = true, -- §
+    [0x20AC] = true, -- €
+    [0x20A9] = true, -- ₩
+    [0x2116] = true, -- №
+    [0xFF03] = true, -- ＃
+    [0xFF04] = true, -- ＄
+    [0xFFE1] = true, -- ￡
+    [0xFFE5] = true, -- ￥
+    [0xFFE6] = true, -- ￦
 }
 
 local CLOSING_PUNCTUATION = {
-    [0x0021] = true, [0x0029] = true, [0x002C] = true,
-    [0x002E] = true, [0x003A] = true, [0x003B] = true,
-    [0x003F] = true, [0x005D] = true, [0x007D] = true,
-    [0x2019] = true, [0x201D] = true, [0x2026] = true,
-    [0x3001] = true, [0x3002] = true, [0x3009] = true,
-    [0x300B] = true, [0x300D] = true, [0x300F] = true,
-    [0x3011] = true, [0x3015] = true, [0x3017] = true,
-    [0x3019] = true, [0x301B] = true,
-    [0xFF01] = true, [0xFF09] = true, [0xFF0C] = true,
-    [0xFF0E] = true, [0xFF1A] = true, [0xFF1B] = true,
-    [0xFF1F] = true, [0xFF3D] = true, [0xFF5D] = true,
+    -- ASCII closing punctuation and quotes
+    [0x0021] = true, -- !
+    [0x0022] = true, -- "
+    [0x0027] = true, -- '
+    [0x0029] = true, -- )
+    [0x002C] = true, -- ,
+    [0x002E] = true, -- .
+    [0x003A] = true, -- :
+    [0x003B] = true, -- ;
+    [0x003F] = true, -- ?
+    [0x005D] = true, -- ]
+    [0x007D] = true, -- }
+    -- Quotes
+    [0x00BB] = true, -- »
+    [0x2019] = true, -- ’
+    [0x201D] = true, -- ”
+    [0x203A] = true, -- ›
+    -- CJK closing brackets
+    [0x3009] = true, -- 〉
+    [0x300B] = true, -- 》
+    [0x300D] = true, -- 」
+    [0x300F] = true, -- 』
+    [0x3011] = true, -- 】
+    [0x3015] = true, -- 〕
+    [0x3017] = true, -- 〗
+    [0x3019] = true, -- 㙹
+    [0x301B] = true, -- 㛼
+    [0xFE5A] = true, -- ﹚
+    [0xFE5C] = true, -- ﹜
+    [0xFE5E] = true, -- ﹞
+    [0xFF09] = true, -- ）
+    [0xFF3D] = true, -- ］
+    [0xFF5D] = true, -- ｝
+    [0xFF60] = true, -- ｠
+    [0xFF63] = true, -- ｣
+    -- CJK commas, periods, marks
+    [0x3001] = true, -- 、
+    [0x3002] = true, -- 。
+    [0xFE50] = true, -- ﹐
+    [0xFE51] = true, -- ﹑
+    [0xFE52] = true, -- ﹒
+    [0xFE54] = true, -- ﹔
+    [0xFE55] = true, -- ﹕
+    [0xFE56] = true, -- ﹖
+    [0xFE57] = true, -- ﹗
+    [0xFF01] = true, -- ！
+    [0xFF0C] = true, -- ，
+    [0xFF0E] = true, -- ．
+    [0xFF1A] = true, -- ：
+    [0xFF1B] = true, -- ；
+    [0xFF1F] = true, -- ？
+    [0xFF61] = true, -- ｡
+    [0xFF64] = true, -- ､
+    -- Connecting / middle dots / ellipsis / dashes / prolonging / iteration marks
+    [0x00B7] = true, -- ·
+    [0x2014] = true, -- —
+    [0x2015] = true, -- ―
+    [0x2025] = true, -- ‥
+    [0x2026] = true, -- …
+    [0x3005] = true, -- 々
+    [0x301C] = true, -- 〜
+    [0x303B] = true, -- 〻
+    [0x303C] = true, -- 〼
+    [0x309D] = true, -- ゝ
+    [0x309E] = true, -- ゞ
+    [0x30FB] = true, -- ・
+    [0x30FC] = true, -- ー
+    [0x30FD] = true, -- ヽ
+    [0x30FE] = true, -- ヾ
+    [0xFF5E] = true, -- ～
+    [0xFF65] = true, -- ･
+    [0xFF70] = true, -- ｰ
+    -- Japanese Small Hiragana
+    [0x3041] = true, -- ぁ
+    [0x3043] = true, -- ぃ
+    [0x3045] = true, -- ぅ
+    [0x3047] = true, -- ぇ
+    [0x3049] = true, -- ぉ
+    [0x3063] = true, -- っ
+    [0x3083] = true, -- ゃ
+    [0x3085] = true, -- ゅ
+    [0x3087] = true, -- ょ
+    [0x308E] = true, -- ゎ
+    [0x3095] = true, -- ゕ
+    [0x3096] = true, -- ゖ
+    -- Japanese Small Katakana
+    [0x30A1] = true, -- ァ
+    [0x30A3] = true, -- ィ
+    [0x30A5] = true, -- ゥ
+    [0x30A7] = true, -- ェ
+    [0x30A9] = true, -- ォ
+    [0x30C3] = true, -- ッ
+    [0x30E3] = true, -- ャ
+    [0x30E5] = true, -- ュ
+    [0x30E7] = true, -- ョ
+    [0x30EE] = true, -- ヮ
+    [0x30F5] = true, -- ヵ
+    [0x30F6] = true, -- ヶ
+    -- Units / Symbols
+    [0x0025] = true, -- %
+    [0x00B0] = true, -- °
+    [0x2032] = true, -- ′
+    [0x2033] = true, -- ″
+    [0x2103] = true, -- ℃
+    [0xFF05] = true, -- ％
 }
+for cp = 0xFF67, 0xFF6F do CLOSING_PUNCTUATION[cp] = true end
+for cp = 0x31F0, 0x31FF do CLOSING_PUNCTUATION[cp] = true end
 
 local function is_combining(codepoint)
     return (codepoint >= 0x0300 and codepoint <= 0x036F)
@@ -81,6 +212,13 @@ local function can_break(left, right, preserve_words)
     if OPENING_PUNCTUATION[left.codepoint] then return false end
     if CLOSING_PUNCTUATION[right.codepoint] then return false end
     if is_combining(right.codepoint) then return false end
+    -- Inseparable consecutive punctuation pairs
+    if (left.codepoint == 0x2026 and right.codepoint == 0x2026)
+        or (left.codepoint == 0x2025 and right.codepoint == 0x2025)
+        or (left.codepoint == 0x2014 and right.codepoint == 0x2014)
+        or (left.codepoint == 0x2015 and right.codepoint == 0x2015) then
+        return false
+    end
     if preserve_words
         and is_ascii_word(left.codepoint)
         and is_ascii_word(right.codepoint) then
@@ -96,7 +234,15 @@ local function measure_character(character, options)
     width = math.max(width, 0)
     -- {size=N} markup: scale the advance by the span's relative size
     local scale = character.scale or 1
-    return width * scale
+    -- {letter_spacing=N} markup: this is THE wiring point for that tag. Because
+    -- every width decision (measure_range, wrap_paragraph's fit test, segment
+    -- widths that position the next draw) funnels through here, adding the extra
+    -- advance makes the tag genuinely take effect on both glyph advance and line
+    -- breaking. Negative values are allowed (tightening) but the per-character
+    -- advance is clamped at 0 below so a large negative spacing can never make a
+    -- line measure backwards, which would let wrap_paragraph loop forever.
+    local extra_spacing = tonumber(character.letter_spacing) or 0
+    return math.max(0, (width * scale) + extra_spacing)
 end
 
 local function measure_range(characters, first, last, options)
@@ -128,8 +274,14 @@ local function append_line(lines, characters, first, last, options)
 end
 
 -- Span-aware append: groups consecutive characters that share the same
--- inline style (color / scale / bold) into segments so the caller can
--- emit one draw per segment (inline text markup: {color}/{size}/{b}).
+-- inline style (color / scale / bold / font / spacing) into segments
+-- so the caller can emit one draw per segment.
+--
+-- NOTE on segment.font and segment.line_height: both are emitted here and both
+-- participate in same_style() (so changing either really does start a new
+-- segment), but NO downstream consumer reads them -- see the "WIRING STATUS"
+-- block above parse_open_tag(). They are carried, not honored. Do not read this
+-- as "the feature works"; the segment split is the only observable effect today.
 local function append_line_segments(lines, characters, first, last, options)
     while last >= first and is_space(characters[last]) do
         last = last - 1
@@ -144,10 +296,15 @@ local function append_line_segments(lines, characters, first, last, options)
     local italic = characters[first].italic
     local strike = characters[first].strike
     local instant = characters[first].instant
+    local font = characters[first].font
+    local letter_spacing = characters[first].letter_spacing
+    local line_height = characters[first].line_height
     local function same_style(a, b)
         return a.color == b.color and a.scale == b.scale
             and a.bold == b.bold and a.italic == b.italic
             and a.strike == b.strike and a.instant == b.instant
+            and a.font == b.font and a.letter_spacing == b.letter_spacing
+            and a.line_height == b.line_height
     end
     for i = first + 1, last + 1 do
         local c = characters[i]
@@ -155,11 +312,15 @@ local function append_line_segments(lines, characters, first, last, options)
             segments[#segments + 1] = {
                 text = join_range(characters, seg_first, i - 1),
                 color = color,
+                size = characters[seg_first].size,
                 scale = scale,
                 bold = bold,
                 italic = italic,
                 strike = strike,
                 instant = instant,
+                font = font,                    -- carried, NOT consumed (see above)
+                letter_spacing = letter_spacing,-- already applied inside width
+                line_height = line_height,      -- carried, NOT consumed (see above)
                 width = measure_range(characters, seg_first, i - 1, options),
             }
             if i > last then break end
@@ -170,6 +331,9 @@ local function append_line_segments(lines, characters, first, last, options)
             italic = characters[i].italic
             strike = characters[i].strike
             instant = characters[i].instant
+            font = characters[i].font
+            letter_spacing = characters[i].letter_spacing
+            line_height = characters[i].line_height
         end
     end
     lines[#lines + 1] = {
@@ -224,7 +388,7 @@ local function wrap_paragraph(characters, options, lines, append)
                 end
             end
         end
-        break_at = break_at or last_fit
+        break_at = break_at or math.max(first, last_fit)
 
         append(lines, characters, first, break_at, options)
         first = break_at + 1
@@ -299,11 +463,61 @@ end
 --   {i}/{/i}                       — italic shear (rendered, top-edge offset)
 --   {s}/{/s}                       — strikethrough (rendered, middle bar)
 --   {size=N}/{/size}               — absolute font size (rendered, scaling)
+--   {font=...}/{/font}             — per-span font family (PARSED, NOT WIRED)
+--   {letter_spacing=N} / {spacing=N} / {/letter_spacing} — extra char spacing
+--                                     (WIRED: changes advance and wrapping)
+--   {line_height=N} / {/line_height} — span line height (PARSED, NOT WIRED)
 --   Unknown {tags} pass through as literal text.
+--
+-- ---------------------------------------------------------------------------
+-- WIRING STATUS of the three markup tags added in this batch. Established by
+-- grepping the whole repo for downstream readers PER FEATURE, not as a blanket
+-- claim: "the markup parses" is not the same as "the engine honors it".
+--
+--   {letter_spacing=N} / {spacing=N}  ==>  WIRED, actually takes effect.
+--     measure_character() adds it to the per-character advance
+--     ((width * scale) + extra_spacing), so it changes glyph advance AND the
+--     greedy wrap positions. Locked by behavior tests in
+--     tests/scripts/test_text_markup.lua (the "letter_spacing:" cases), which
+--     drive the real path: markup string -> parse_markup -> span_characters ->
+--     measure/wrap, never a hand-built character table.
+--
+--   {line_height=N}  ==>  PARSED and carried into the span/segment, NOT WIRED.
+--     append_line_segments() folds it into every segment and same_style()
+--     compares it (so changing it does split segments), but NOTHING downstream
+--     reads segment.line_height. What actually drives line advance is the
+--     BLOCK-level options.line_height read in kag/text_scene.lua
+--     (add_wrapped :132, add_wrapped_spans :156, add_ruby :186), so a span-level
+--     line height is computed and then dropped.
+--     Who should wire it, and where: kag/text_scene.lua add_wrapped_spans()
+--     would have to advance y by max(segment.line_height) across each line's
+--     segments instead of the single options.line_height. That changes layout
+--     semantics (mixed line heights within one wrapped line, plus how it
+--     interacts with the typewriter reveal's per-draw y), i.e. NEW behavior
+--     rather than closing out this batch -- deliberately not done here.
+--
+--   {font=...}  ==>  PARSED and carried into the span/segment, NOT WIRED, and
+--     not wirable from Lua alone. text_scene.lua reads no .font, and the render
+--     chain carries no font argument at all:
+--       text_scene.lua:267  render_backend.render_text(text, x, y, r,g,b,a,
+--                                                      scale, bold, italic, strike)
+--       -> backend.lua:280  Backend.render_text(the same 11 args)
+--       -> KAGBinding.cpp   lua_KAG_render_text (reads exactly those 11)
+--       -> IRenderDevice::renderText(viewId, text, x, y, r,g,b,a, scale,
+--                                    bold, italic, strike)
+--     The only font switch is the GLOBAL, stateful backend.text_set_font(face,
+--     size) used by the block-level [font] command; it reloads the entire TTF
+--     atlas and invalidates the text cache, so calling it per span would thrash
+--     the atlas on every draw.
+--     Who should wire it, and where: whoever owns the render interface. It needs
+--     (1) a font parameter threaded through backend.render_text -> KAGBinding ->
+--     IRenderDevice/TextRenderer, and (2) TextRenderer keeping more than one
+--     resident TTF atlas so a per-span family does not force a reload. Both are
+--     outside this batch's file set and are new capability, not WIP closure.
 -- ---------------------------------------------------------------------------
 
 local function parse_open_tag(tag)
-    local name = tag:match("^(%a+)")
+    local name = tag:match("^([%a_]+)")
     if not name then return nil end
     if name == "i" then return { kind = "italic" } end
     if name == "b" then return { kind = "bold" } end
@@ -311,6 +525,21 @@ local function parse_open_tag(tag)
     if name == "size" then
         local size = tonumber(tag:match("^size%s*=%s*(%d+)%s*$"))
         if size then return { kind = "size", size = size } end
+        return nil
+    end
+    if name == "font" then
+        local font = tag:match("^font%s*=%s*[\"']?([^\"'}]+)[\"']?%s*$")
+        if font then return { kind = "font", font = font } end
+        return nil
+    end
+    if name == "letter_spacing" or name == "spacing" then
+        local ls = tonumber(tag:match("^[%a_]+%s*=%s*([%-%d%.]+)%s*$"))
+        if ls then return { kind = "letter_spacing", letter_spacing = ls } end
+        return nil
+    end
+    if name == "line_height" then
+        local lh = tonumber(tag:match("^line_height%s*=%s*([%-%d%.]+)%s*$"))
+        if lh then return { kind = "line_height", line_height = lh } end
         return nil
     end
     if name == "color" then
@@ -328,10 +557,12 @@ local function parse_open_tag(tag)
     return nil
 end
 
-local MARKUP_CLOSE_NAMES = { color = true, b = true, i = true, size = true,
-                             s = true }
+local MARKUP_CLOSE_NAMES = {
+    color = true, b = true, i = true, size = true, s = true,
+    font = true, letter_spacing = true, spacing = true, line_height = true,
+}
 
---- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold, italic}}, plain }
+--- TextLayout.parse_markup(text) → { spans = {{text, color, size, bold, italic, font, letter_spacing, line_height}}, plain }
 --  Splits a message into styled spans and returns the markup-stripped
 --  plain text (backlog / reveal counters use the visible characters only).
 --  size is an absolute font size (px); bold/italic are booleans.
@@ -344,11 +575,17 @@ function TextLayout.parse_markup(text)
     local bold_stack = {}
     local italic_stack = {}
     local strike_stack = {}
+    local font_stack = {}
+    local letter_spacing_stack = {}
+    local line_height_stack = {}
     local current_color = nil
     local current_size = nil
     local current_bold = false
     local current_italic = false
     local current_strike = false
+    local current_font = nil
+    local current_letter_spacing = nil
+    local current_line_height = nil
     local buf = {}
 
     local function flush()
@@ -362,6 +599,9 @@ function TextLayout.parse_markup(text)
             bold = current_bold,
             italic = current_italic,
             strike = current_strike,
+            font = current_font,
+            letter_spacing = current_letter_spacing,
+            line_height = current_line_height,
         }
         plain_parts[#plain_parts + 1] = s
     end
@@ -393,10 +633,19 @@ function TextLayout.parse_markup(text)
                     elseif parsed.kind == "strike" then
                         strike_stack[#strike_stack + 1] = true
                         current_strike = true
+                    elseif parsed.kind == "font" then
+                        font_stack[#font_stack + 1] = parsed.font
+                        current_font = parsed.font
+                    elseif parsed.kind == "letter_spacing" then
+                        letter_spacing_stack[#letter_spacing_stack + 1] = parsed.letter_spacing
+                        current_letter_spacing = parsed.letter_spacing
+                    elseif parsed.kind == "line_height" then
+                        line_height_stack[#line_height_stack + 1] = parsed.line_height
+                        current_line_height = parsed.line_height
                     end
                     i = close_at + 1
                 else
-                    local close_name = tag:match("^%s*/(%a+)%s*$")
+                    local close_name = tag:match("^%s*/([%a_]+)%s*$")
                     if close_name and MARKUP_CLOSE_NAMES[close_name] then
                         flush()
                         if close_name == "color" and #color_stack > 0 then
@@ -414,6 +663,15 @@ function TextLayout.parse_markup(text)
                         elseif close_name == "s" and #strike_stack > 0 then
                             strike_stack[#strike_stack] = nil
                             current_strike = #strike_stack > 0
+                        elseif close_name == "font" and #font_stack > 0 then
+                            font_stack[#font_stack] = nil
+                            current_font = font_stack[#font_stack]
+                        elseif (close_name == "letter_spacing" or close_name == "spacing") and #letter_spacing_stack > 0 then
+                            letter_spacing_stack[#letter_spacing_stack] = nil
+                            current_letter_spacing = letter_spacing_stack[#letter_spacing_stack]
+                        elseif close_name == "line_height" and #line_height_stack > 0 then
+                            line_height_stack[#line_height_stack] = nil
+                            current_line_height = line_height_stack[#line_height_stack]
                         end
                         i = close_at + 1
                     else
@@ -430,7 +688,8 @@ function TextLayout.parse_markup(text)
     flush()
     if #spans == 0 then
         spans = { { text = text, color = nil, size = nil, bold = false,
-                    italic = false, strike = false } }
+                    italic = false, strike = false, font = nil,
+                    letter_spacing = nil, line_height = nil } }
     end
     return { spans = spans, plain = table.concat(plain_parts) }
 end
@@ -448,11 +707,15 @@ local function span_characters(spans, options)
                 text = utf8.char(codepoint),
                 codepoint = codepoint,
                 color = span.color,
+                size = span.size,
                 scale = scale,
                 bold = span.bold == true,
                 italic = span.italic == true,
                 strike = span.strike == true,
                 instant = span.instant == true,
+                font = span.font,
+                letter_spacing = span.letter_spacing or 0,
+                line_height = span.line_height,
             }
         end
     end
