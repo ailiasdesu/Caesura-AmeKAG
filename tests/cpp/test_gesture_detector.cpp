@@ -464,3 +464,120 @@ TEST_CASE("GestureDetector boundary: a single-finger swipe still fires after a m
     CHECK(s.swipeDown == 1);
     CHECK(s.twoFingerTap == tapsFromFirstSequence);
 }
+
+// ---------------------------------------------------------------------------
+// Interaction between gestures that share a starting shape. Two fingers can
+// become a pinch, a tap, or (with a third) a hold, and tick() returns at most
+// one event per call -- so the question is not "does each gesture work" but
+// "can two of them fire off one physical gesture".
+// ---------------------------------------------------------------------------
+
+TEST_CASE("GestureDetector overlap: a pinch too small to start is still only one verdict") {
+    EventSink s;
+    s.det.onFingerDown(0, 300.0f, 300.0f, 0.0);
+    s.det.onFingerDown(1, 400.0f, 300.0f, 10.0);   // 100 px apart
+    s.pump(20.0);
+    s.det.onFingerMove(0, 302.0f, 300.0f, 40.0);   // squeeze 4 px: ratio 0.96,
+    s.det.onFingerMove(1, 398.0f, 300.0f, 40.0);   // under the 0.08 threshold
+    s.pump(60.0);
+    CHECK(s.pinch == 0);
+    s.det.onFingerUp(0, 120.0);
+    s.det.onFingerUp(1, 130.0);
+    for (double t = 140.0; t < 400.0; t += 16.0) s.pump(t);
+    // 2 px of travel released inside 300 ms IS a tap by the documented
+    // contract; what must not happen is both a pinch and a tap.
+    CHECK(s.twoFingerTap == 1);
+    CHECK(s.pinch == 0);
+}
+
+TEST_CASE("GestureDetector overlap: a real pinch release is not also a tap") {
+    EventSink s;
+    s.det.onFingerDown(0, 300.0f, 300.0f, 0.0);
+    s.det.onFingerDown(1, 400.0f, 300.0f, 10.0);
+    s.pump(20.0);
+    s.det.onFingerMove(0, 250.0f, 300.0f, 40.0);   // 50 px outward: past both
+    s.det.onFingerMove(1, 450.0f, 300.0f, 40.0);   // the tap slop and 0.08
+    s.pump(60.0);
+    CHECK(s.pinch >= 1);
+    s.det.onFingerUp(0, 100.0);
+    s.det.onFingerUp(1, 110.0);
+    for (double t = 120.0; t < 500.0; t += 16.0) s.pump(t);
+    CHECK(s.twoFingerTap == 0);
+}
+
+TEST_CASE("GestureDetector overlap: three fingers held long do not also long-press") {
+    // Long press requires exactly one finger, so three held past 500 ms must
+    // yield the hold and nothing else -- including after the extra time that
+    // would have satisfied the long-press timer.
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 5.0);
+    s.det.onFingerDown(2, 300.0f, 100.0f, 10.0);
+    for (double t = 20.0; t < 900.0; t += 16.0) s.pump(t);
+    CHECK(s.threeFingerHold == 1);
+    CHECK(s.longPress == 0);
+}
+
+TEST_CASE("GestureDetector overlap: 2 to 3 to 2 fingers is no tap, and the guard clears") {
+    // The sequence peaked at three fingers, so dropping back to two and
+    // releasing is not a two-finger tap. The guard must also clear afterwards:
+    // one that stays armed swallows every later gesture, the same failure shape
+    // the swipe guard had.
+    EventSink s;
+    s.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    s.det.onFingerDown(1, 200.0f, 100.0f, 10.0);
+    s.det.onFingerDown(2, 300.0f, 100.0f, 20.0);
+    s.pump(40.0);
+    s.det.onFingerUp(2, 60.0);
+    s.pump(80.0);
+    s.det.onFingerUp(0, 100.0);
+    s.det.onFingerUp(1, 110.0);
+    for (double t = 120.0; t < 400.0; t += 16.0) s.pump(t);
+    CHECK(s.twoFingerTap == 0);
+
+    s.det.onFingerDown(0, 500.0f, 500.0f, 500.0);
+    s.det.onFingerDown(1, 560.0f, 500.0f, 505.0);
+    s.pump(520.0);
+    s.det.onFingerUp(0, 600.0);
+    s.det.onFingerUp(1, 610.0);
+    for (double t = 620.0; t < 900.0; t += 16.0) s.pump(t);
+    CHECK(s.twoFingerTap == 1);
+}
+
+TEST_CASE("GestureDetector overlap: two consecutive two-finger taps both fire") {
+    EventSink s;
+    for (int round = 0; round < 2; ++round) {
+        const double base = round * 1000.0;
+        s.det.onFingerDown(0, 100.0f, 100.0f, base);
+        s.det.onFingerDown(1, 160.0f, 100.0f, base + 5.0);
+        s.pump(base + 20.0);
+        s.det.onFingerUp(0, base + 100.0);
+        s.det.onFingerUp(1, base + 110.0);
+        for (double t = base + 120.0; t < base + 400.0; t += 16.0) s.pump(t);
+    }
+    CHECK(s.twoFingerTap == 2);
+}
+
+TEST_CASE("GestureDetector overlap: lift order does not change the verdict") {
+    EventSink a;
+    a.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    a.det.onFingerDown(1, 160.0f, 100.0f, 5.0);
+    a.pump(20.0);
+    a.det.onFingerUp(0, 100.0);
+    a.det.onFingerUp(1, 110.0);
+    for (double t = 120.0; t < 400.0; t += 16.0) a.pump(t);
+
+    EventSink b;
+    b.det.onFingerDown(0, 100.0f, 100.0f, 0.0);
+    b.det.onFingerDown(1, 160.0f, 100.0f, 5.0);
+    b.pump(20.0);
+    b.det.onFingerUp(1, 100.0);   // reversed
+    b.det.onFingerUp(0, 110.0);
+    for (double t = 120.0; t < 400.0; t += 16.0) b.pump(t);
+
+    CHECK(a.twoFingerTap == b.twoFingerTap);
+    CHECK(a.twoFingerTap == 1);
+    CHECK(a.swipeDown == b.swipeDown);
+    CHECK(a.swipeUp == b.swipeUp);
+}
+
