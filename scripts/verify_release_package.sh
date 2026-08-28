@@ -160,7 +160,7 @@ list_engine_pids() {
         powershell -NoProfile -Command \
             "(Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue).Id" 2>/dev/null | tr -d '\r'
     else
-        pgrep -f CaesuraAmeKAG 2>/dev/null || true
+        pgrep -x CaesuraAmeKAG 2>/dev/null || true
     fi
 }
 stop_pid() {
@@ -184,10 +184,15 @@ trap cleanup EXIT
 # image name: a harness doing "taskkill //IM CaesuraAmeKAG.exe" to "clean up"
 # kills a parallel session's running engine too. Other sessions (editor e2e,
 # dev debugging) must be finished or quiesced before this script runs.
+#
+# POSIX matches by EXACT process name (pgrep -x), NEVER pgrep -f: this script's
+# own wrapper chain (xvfb-run / bash) carries the archive path -- which contains
+# "CaesuraAmeKAG" -- in its command line, so -f self-matches and aborts a clean
+# run (first bitten: CI run 33189827175, Linux · Package).
 if command -v powershell >/dev/null 2>&1; then
     STALE_ENGINES="$(powershell -NoProfile -Command "(Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue).Id" 2>/dev/null | tr -d '\r')"
 else
-    STALE_ENGINES="$(pgrep -f CaesuraAmeKAG 2>/dev/null || true)"
+    STALE_ENGINES="$(pgrep -x CaesuraAmeKAG 2>/dev/null || true)"
 fi
 if [ -n "$STALE_ENGINES" ]; then
     printf 'FAIL: engine processes already running -- port 9876 is not clean:\n'
@@ -198,7 +203,7 @@ if [ -n "$STALE_ENGINES" ]; then
     if command -v powershell >/dev/null 2>&1; then
         printf '        powershell "Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue | Stop-Process -Force"\n'
     else
-        printf '        pkill -f CaesuraAmeKAG   (or: kill <pid-from-ps>)\n'
+        printf '        pkill -x CaesuraAmeKAG   (or: kill <pid-from-ps>)\n'
     fi
     exit 2
 fi
