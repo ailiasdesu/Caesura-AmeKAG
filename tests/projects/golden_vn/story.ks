@@ -5,10 +5,13 @@
 ;  surface. Unlike a "showcase", this is the LONG-TERM regression fixture
 ;  every release drives end-to-end (task book §14 / release-gate.md).
 ;
-;  Covered features:
-;    dialogue / choices / save+load / rollback / history / backlog / NVL /
-;    i18n hot-switch / audio (bgm+se+voice) / tween / layout / replay / mod /
+;  Covered features (v1 -- gate-asserted or source-present; the README
+;  covered/uncovered tables are authoritative):
+;    dialogue / choices / eval / macro / save + load(miss) / cross-scene jump /
+;    i18n hot-switch / audio (bgm+se+voice) / tween / layout /
 ;    text markup / transitions / expression conditionals / sprite placement
+;  Source-face only (semantics NOT asserted in v1 -- see README uncovered
+;  list): rollback / history / backlog / NVL / replay / mod / save roundtrip
 ;
 ;  All text is bilingual via [i18n language=...] hot-switching (the pattern
 ;  proven by demo/example_game) so the project needs no fnv1a line tables.
@@ -39,12 +42,37 @@
 [p]
 
 ; =============================================================================
-;  Section A — choices + save/load + rollback + history/backlog
+;  Section A0 — [eval] expression variables + parameterized macro (v1)
+; =============================================================================
+*eval_check
+[set var="f.energy" value=10]
+[eval exp="f.energy = f.energy + 5"]
+[if exp="f.energy >= 15"]
+[ch name="Heroine" text="Energy is 15 or more: [eval] arithmetic applied. / 能量达到 15：[eval] 算术已生效。" sprite="assets/fg/girl_uniform.png"]
+[else]
+[ch name="Heroine" text="Energy is below 15. / 能量不足 15。"]
+[endif]
+[p]
+
+; Parameterized macro (same pattern as demo/example_game): definition at flow
+; depth 0, called below from the main path -- statically safe, inlined by the
+; compiler (and equally served by the runtime splice).
+[macro route_note args="where"]
+[ch name="Narrator" text="%where% — macro-expanded line. / %where% —— 宏展开的一行。"]
+[endmacro]
+
+[route_note where="Macro check complete"]
+[set var="f.macroUsed" value=1]
+[p]
+
+; =============================================================================
+;  Section A — choices + save/load (+ rollback/history/backlog source-face)
 ; =============================================================================
 *choice_moment
 [ch name="Narrator" text="Choose a route. / 选择一条路线。"]
 [p]
 [save slot=9]
+[set var="f.savedByStory" value=1]
 [notify msg="Golden autosaved / 黄金存档完成"]
 
 [select]
@@ -53,6 +81,7 @@
 [endselect]
 
 *route_forest
+[set var="f.route" value="forest"]
 [cl]
 [trans method=dissolve]
 [bg storage="assets/bg/hana.png"]
@@ -61,13 +90,15 @@
 [p]
 
 ; NOTE: [history]/[rollback] are blocking popups -- driven by the sample
-; game headless driver (which substitutes [notify]). Golden VN lists them
-; as covered features but keeps the auto-run main path non-blocking.
+; game headless driver (which substitutes [notify]). Golden VN v1 keeps them
+; source-face only (semantics NOT asserted -- README uncovered list) and
+; keeps the auto-run main path non-blocking.
 [ch name="Narrator" text="The forest rustles. / 森林沙沙作响。"]
 [p]
 [jump *common_mid]
 
 *route_city
+[set var="f.route" value="city"]
 [cl]
 [trans method=dissolve]
 [bg storage="assets/bg/hana.png"]
@@ -108,6 +139,15 @@
 [layout_slot parent="panel" layer="fg" index=1 size="200x100"]
 [p]
 
+; --- v1 save/load point: an UNWRITTEN slot (99) is loaded, so the run is
+; deterministic -- the documented graceful-miss path continues and the marker
+; below proves [load] itself was dispatched and survived (a written slot would
+; jump back to the save point instead and loop the fixture on real runs).
+[set var="f.before_load" value=1]
+[load slot=99]
+[set var="f.after_load" value=1]
+[p]
+
 ; =============================================================================
 ;  Section C — i18n hot-switch + audio + expression conditional
 ; =============================================================================
@@ -145,7 +185,8 @@
 ; =============================================================================
 *replay_hook
 ; [replay mode=record] waits on a real input stream; replay.lua unit tests
-; and the sample game cover it. Golden VN names replay as a covered feature.
+; and the sample game cover it. Golden VN v1 keeps replay source-face only
+; (execution NOT asserted here -- see README uncovered list).
 [ch name="Narrator" text="Replay is covered by dedicated tests. / 回放由专项测试覆盖。"]
 [p]
 

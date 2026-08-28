@@ -1,45 +1,105 @@
-# Golden Project (tests/projects/golden_vn/)
+# Golden Project v1 (tests/projects/golden_vn/)
 
 > **长期回归夹具**——产品化总任务书（§14 / release-gate.md §7）要求每次 release 都完整跑一遍的
-> 黄金项目。不是 showcase，是**自动化全 feature 面回归**。
+> 黄金项目。既有基线 = **d39b12d0**（story.ks 166 行 + entry.lua + README + `scripts/verify_golden_vn.sh`
+> 18/18 端到端门禁）；本文件记录 **v1 增量**（在既有之上扩展，全部保持 26/26 门禁）。
+> **v1 禁止声称全覆盖**——下方清单按【既有（d39b12d0）／v1 增量】分列，未覆盖项如实列出。
 
-## 目的
+## 目录
 
-- 覆盖引擎全部主要功能面，作为 release 前的确定性冒烟
-- 新 PR 若改到 KAG 命令 / 存档 / 渲染 / 音频 / i18n 等热路径，跑它即可发现回归
-- 与 `demo/example_game/`（面向用户的示例游戏）互补：golden_vn 偏测试、example_game 偏展示
+| 文件 | 作用 |
+|---|---|
+| `story.ks` | 主场景（dialogue / choices A·B / [eval] 变量 / save+load / macro / 中英文本 / i18n / audio / tween / layout / 转场 / credits） |
+| `golden_cross.ks` | 跨场景 [jump] 专用起点（独立于 choices，避免调度器 deferred pending-jump 与场景切换叠加） |
+| `scene_b.ks` | 跨场景 [jump] 目标场景（独立收尾，进入即 [end]） |
+| `entry.lua` | 真实 GPU 运行入口（标准 UI wiring，同 demo/example_game 模式） |
+| `../scripts/golden_vn_headless.lua` | v1 headless 驱动（route 选择 + 四大功能旗标断言 + cross 模式） |
+| `assets/` | 引用仓库共享资产（assets/bg|fg|bgm|se|voice），**不新增二进制** |
 
 ## 运行
 
 ```bash
-# 直接跑（需真实 GPU 窗口）
-lua tests/projects/golden_vn/entry.lua
+# 静态契约（门禁 1）：零违规（golden_cross 有 2 条预期性 [WARN]——见下）
+build/lua/Debug/lua.exe scripts/ks_check.lua tests/projects/golden_vn/story.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua tests/projects/golden_vn/scene_b.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua tests/projects/golden_vn/golden_cross.ks
 
-# 完整门禁（静态契约 + headless 全跑 + 分支可达 + feature 覆盖）
-bash scripts/verify_golden_vn.sh
+# headless 双路线（门禁 2）：route A / route B
+GOLDEN_ROUTE=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
+GOLDEN_ROUTE=2 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
+
+# headless 跨场景（门禁 3）
+GOLDEN_CROSS=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
+
+# 完整门禁（静态契约 + headless 全跑 + 分支可达 + feature 覆盖 + v1 旗标）
+bash scripts/verify_golden_vn.sh        # 实测 26/26 PASS
+
+# 真实 GPU 窗口运行
+build/lua/Debug/lua.exe tests/projects/golden_vn/entry.lua
 ```
 
-## 覆盖的 feature 面
+## 覆盖清单（既有 d39b12d0 / v1 增量）
 
-| Feature | 脚本位置（story.ks） |
-|---|---|
-| dialogue / text markup (color/b/i/s) | 开场+Section A |
-| choices [select]/[sel] | *choice_moment |
-| save/load（slot 9 自动存档） | Section A |
-| rollback / history（阻塞式，headless 用非阻塞替代） | Section A 注释 |
-| NVL 模式 | *common_mid |
-| tween（非阻塞 wait=false，headless 兼容） | *common_mid |
-| layout 容器（hbox） | *common_mid |
-| i18n 热切换（en/ja/zh） | *i18n_check |
-| audio（bgm/se/voice） | Section A/C |
-| expression conditional [if] | *i18n_check |
-| replay / mod（专项测试覆盖，主路径非阻塞） | Section D |
-| 转场 [trans] | Section A/B |
-| 结束 [end] + credits | Section D |
+### 既有基线（d39b12d0，本次未改动/仅保留）
+| Feature | 位置 | 状态 |
+|---|---|---|
+| dialogue（中英双语文本） | [ch]/[p] 主路径 | 既有，未改 |
+| branch choices A/B（[select]/[sel] 块本身） | *choice_moment | 既有，未改（仅分支内新增 f.route 记录——见增量） |
+| [save slot=9]（写点） | *choice_moment | 既有，未改（其后新增 savedByStory 标记——见增量） |
+| NVL 模式 token | *common_mid | 既有，未改 |
+| tween / layout / layout_slot | *common_mid | 既有，未改 |
+| i18n 热切换 en/ja/zh | *i18n_check | 既有，未改 |
+| audio（bgm/se/voice）/ [if] / [trans] / credits / [end] | 既有各段 | 既有，未改 |
+| replay / mod（source 注释面） | Section D | 既有，未改（专项测试覆盖） |
 
-## 为什么某些命令在主路径外
+### v1 增量（本次新增/增强，真缺口）
+| Feature | 增量 | headless 旗标 |
+|---|---|---|
+| [eval] 表达式变量 | Section A0（[eval exp="f.energy = f.energy + 5"] + [if 15] 断言）——既有仅 [set]+[if]，无 [eval] | EVAL_OK |
+| [load] 点 | *common_mid（[load slot=99] 未写槽位 graceful-miss + [set f.after_load] 标记）——既有仅 [save] 无 [load] | LOAD_MISS_OK |
+| macro（参数化） | [macro route_note args=...]/[endmacro] + 调用 [route_note where=...]——既有全仓无 macro 使用 | MACRO_OK |
+| 跨场景 jump | golden_cross.ks（新）+ scene_b.ks（新）+ load_tokens 重映射 seam——既有 story.ks 全为场景内跳转 | XSCENE_OK |
+| 分支路由断言（enable 项） | 两分支 [set var="f.route" value="forest"/"city"]——既有分支不记 route，route 断言不可实现（first_vn 同款模式）；GOLDEN_ROUTE=1/2 → ROUTE forest/city | ROUTE |
+| 写点标记（enable 项） | [save slot=9] 后 [set f.savedByStory=1] | FLAGS 行 |
+| 驱动 | tests/scripts/golden_vn_headless.lua（仿 first_vn_headless 扩展；tests/scripts 此前**无** golden 专用驱动，既有入口=sample_game_headless.lua 通用驱动，保持原用并向 verify_golden_vn.sh Step 4b 增补专用断言） | — |
+| 门禁 | verify_golden_vn.sh：既有 18 项检查全部保留（14 项 feature 清单未删一项），新增 5 项 feature grep（load/eval/macro/jump/set）+ Step 4b 三组（route1/route2/cross） | 26/26 |
 
-`[history]`、`[replay mode=record]`、阻塞 `[tween]` 在无输入/无真实时钟的 headless 环境会死等
-（v1.0.0 时 [history]/[gallery] 阻塞式菜单 headless 死等的教训）。golden_vn 的原则：**feature 面
-必须被提到（source grep 锁定），但自动回归主路径保持非阻塞**；这些阻塞特性由
-`tests/scripts/sample_game_headless.lua`（example_game）与 replay.lua / tween 单元测试分别覆盖。
+## v1 未覆盖（诚实清单，禁止声称覆盖）
+
+| Feature | 状态 | 原因 / 现有专项覆盖 |
+|---|---|---|
+| rollback / history | **未覆盖** | 阻塞式弹窗，headless 死等；由 sample_game_headless（替代 [notify]）与 kag/snapshot 单测覆盖 |
+| backlog | 未作为 v1 断言 | 同上 |
+| NVL 模式语义 | story 含 [nvl] token（source 面），**v1 不做语义断言** | 后续 v2 |
+| 语音（voice）语义 | story 含 [playvoice] token（source 面），headless 仅 mock 返回 false | 后续 v2 + 真机 |
+| Live2D | **未覆盖** | SDK 依赖，v2+ |
+| Steam | **未覆盖** | SDK 依赖，Phase2 |
+| replay 实跑 / mod 实跑 | 未覆盖（story 注释保留 source 面） | replay.lua / mod 单测专项 |
+| 存档真实读写（真机语义） | 未覆盖 | v1 只用未写槽位 miss 路径 + 写槽位 token 派发；真实 roundtrip 属 v2 |
+
+## 跨场景 jump 痕迹说明（诚实记录）
+
+调度器把非 `*` 的 `[jump]/[call]/[link]` storage 目标固定解析为
+`assets/script/<target>.ks`（`scripts/scheduler.lua` `is_safe_scene_path`）——引擎运行时的
+场景布局约定。为把夹具源码保留在 `tests/projects/golden_vn/` 下，headless 驱动
+`tests/scripts/golden_vn_headless.lua` 在 GOLDEN_CROSS=1 时把 `ctx.load_tokens` 的
+`assets/script/golden_scene_b.ks` 逻辑名**重映射**到夹具文件（打印 XSCENE_REMAP 自证）。
+这是唯一的测试缝：调度器跨场景机制（前缀构建 / 安全检查 / switch 预算 / token+label 交换 /
+新 local frame）全部真实执行。**为什么用独立 golden_cross.ks（不在 story.ks 主路径）**：
+[select] 选择的实现采用延迟 pending-jump（在下一处协程死亡点结算，见
+`scripts/kag/commands/text.lua:1475` 与 `kag_runner.lua:538`）——若在任意选择之后立刻做
+跨场景切换，该延迟跳转会在 新场景 labelMap 中解析旧标签（"Choice label not found"）并导致
+运行停摆。这是引擎语义限制，v1 用"cross 独立起点"绕开并把交叉验证留给专项（test_flow_edge_scene）。
+story.ks 内 [jump] 均为场景内标签跳转。另外 golden_cross.ks 会触发 2 条
+ks_check 预期性 [WARN]：其一 "cross-scene target scene 'golden_scene_b.ks' not found in
+scene directory"——静态视角看不到 headless 驱动的 load_tokens 重映射缝（与运行时 XSCENE_REMAP
+是同一测试缝的两面）；其二 "token(s) unreachable after [jump]"——回退路径行。两条均属 lint
+层不增计数，exit 0；见 scripts/ks_check.lua:48-51。
+
+## 与 first_vn / package_game 的同构关系
+
+- 结构同 `tests/projects/first_vn/`（story.ks + entry.lua + assets/ 引用共享池；同款
+  [select] 延迟 pending-jump 行为——first_vn 的 ROUTE sun/rain 验证模式与本项目一致）。
+- `package_game.sh tests/projects/golden_vn` 可直接打包为 Web 站（多 .ks 目录会被收集并逐档
+  ks_check；web 端 bundle 化后跨场景由 story bundle 内 scene 键按名解析）。
+- 门禁链：`verify_golden_vn.sh`（4 步 + 4b v1 旗标，实测 26/26 PASS）→ 本地/CI 全量门禁。

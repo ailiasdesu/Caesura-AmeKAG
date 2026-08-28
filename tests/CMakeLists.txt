@@ -281,6 +281,26 @@ if(Python3_EXECUTABLE)
     )
 endif()
 
+# Golden Project regression gate (tests/projects/golden_vn): static ks_check
+# contracts plus headless route / cross-scene flag assertions via
+# scripts/verify_golden_vn.sh. Fixture and driver are fully tracked; the
+# script FATALs with a clear message when no lua interpreter is present, and
+# post-build hosts always have build/lua/<config>/lua, so no SKIP_RETURN_CODE.
+find_program(CAESURA_BASH_PROGRAM bash)
+if(CAESURA_BASH_PROGRAM)
+    add_test(
+        NAME CaesuraGoldenVn
+        COMMAND ${CAESURA_BASH_PROGRAM}
+                ${CMAKE_SOURCE_DIR}/scripts/verify_golden_vn.sh
+    )
+    set_tests_properties(CaesuraGoldenVn PROPERTIES
+        LABELS "qa;golden;lua;regression"
+        RUN_SERIAL TRUE
+        TIMEOUT 900
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
+
 # Copy scripts to test output directory so sandbox.lua et al are found
 add_custom_command(TARGET CaesuraTests POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

@@ -107,7 +107,7 @@ done
 # ---- 4. Feature surface coverage (source greps, no run needed) ----
 note "Step 4: feature surface coverage in story.ks"
 SRC="$(cat "$STORY")"
-FEATURES="playbgm playse playvoice save select nvl tween layout layout_slot i18n history replay trans end"
+FEATURES="playbgm playse playvoice save load select nvl tween layout layout_slot i18n history replay trans eval macro jump set end"
 for feat in $FEATURES; do
     if printf "%s" "$SRC" | grep -q "\[$feat"; then
         check "feature [$feat] present" 0
@@ -115,6 +115,43 @@ for feat in $FEATURES; do
         check "feature [$feat] present" 4 "missing from story.ks"
     fi
 done
+
+# ---- 4b. v1 headless flags (golden_vn_headless.lua: eval/save-load/macro/xscene) ----
+note "Step 4b: v1 feature flags via golden_vn_headless.lua (routes + cross-scene)"
+if [ ! -f "tests/scripts/golden_vn_headless.lua" ]; then
+    check "golden_vn_headless.lua present" 4 "driver file missing"
+else
+    V1_OK=1
+    for route in 1 2; do
+        V1_OUT="$(GOLDEN_ROUTE="$route" SAMPLE_STORY="$STORY" SAMPLE_FRAMES="$FRAME_BUDGET" \
+                  "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+        V1_RC=$?
+        printf "  [route=%s] %s\n" "$route" "$(printf '%s\n' "$V1_OUT" | grep -E "RESULT|ROUTE|EVAL_OK|LOAD_MISS_OK|MACRO_OK" | tr '\n' ' ')"
+        ROUTE_EXPECT=$([ "$route" = "1" ] && echo forest || echo city)
+        if [ "$V1_RC" -eq 0 ] \
+           && printf '%s\n' "$V1_OUT" | grep -q "RESULT DONE" \
+           && printf '%s\n' "$V1_OUT" | grep -q "ROUTE $ROUTE_EXPECT" \
+           && printf '%s\n' "$V1_OUT" | grep -q "EVAL_OK" \
+           && printf '%s\n' "$V1_OUT" | grep -q "LOAD_MISS_OK" \
+           && printf '%s\n' "$V1_OUT" | grep -q "MACRO_OK"; then
+            check "v1 flags route=$route (eval/save-load/macro, route=$ROUTE_EXPECT)" 0
+        else
+            V1_OK=0
+            check "v1 flags route=$route (eval/save-load/macro, route=$ROUTE_EXPECT)" 1 "rc=$V1_RC"
+        fi
+    done
+    XOUT="$(GOLDEN_CROSS=1 SAMPLE_STORY="tests/projects/golden_vn/golden_cross.ks" \
+             SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+    XRC=$?
+    printf "  [cross] %s\n" "$(printf '%s\n' "$XOUT" | grep -E "RESULT|XSCENE_OK|XSCENE_REMAP" | tr '\n' ' ')"
+    if [ "$XRC" -eq 0 ] \
+       && printf '%s\n' "$XOUT" | grep -q "RESULT DONE" \
+       && printf '%s\n' "$XOUT" | grep -q "XSCENE_OK"; then
+        check "v1 cross-scene jump (scene_b executed, XSCENE_OK)" 0
+    else
+        check "v1 cross-scene jump (scene_b executed, XSCENE_OK)" 1 "rc=$XRC"
+    fi
+fi
 
 # ---- 5. Web smoke (informational) ----
 echo ""
