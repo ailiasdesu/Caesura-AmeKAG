@@ -134,11 +134,15 @@ elseif(ANDROID)
     # Track M: OpenSLES is the Android backend — NDK has no ALSA/WASAPI,
     # and AUTO picks nothing (same silent-init-failure pattern as Linux).
     set(SOLOUD_BACKEND_OPENSLES ON CACHE BOOL "" FORCE)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    # iOS: the CoreAudio backend is required — AUTO picks nothing and audio
-    # init fails (same silent break pattern as Linux/ALSA). Scoped to iOS:
-    # macOS desktop keeps its current (backend-less, CMake-tested) behavior
-    # because CoreAudio init on CI headless runners breaks the http smoke.
+elseif(APPLE)
+    # CoreAudio serves BOTH iOS and macOS desktop — AUTO picks nothing and
+    # audio init fails with error 7 (same silent break pattern as Linux/ALSA).
+    # macOS desktop was deliberately backend-less until Sprint6-L2 because
+    # CoreAudio init on headless CI runners broke the http smoke; the engine
+    # now degrades LOUDLY to NullAudio when the real backend fails to init
+    # (Engine audio fallback), so real Macs get sound while headless CI still
+    # boots. First evidence a backend-less mac package cannot boot at all:
+    # CI run 33194926388, macOS · Package verify probe (SoLoud init failed: 7).
     set(SOLOUD_BACKEND_COREAUDIO ON CACHE BOOL "" FORCE)
 endif()
 
