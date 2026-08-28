@@ -46,7 +46,10 @@ const fileFetch = async (url) => {
 // regeneration command, never a silent `return` that vitest reports as passed.
 const bakedStoryPath = join(rootDir, 'cache', 'story', 'story.lua')
 const hasBakedStory = existsSync(bakedStoryPath)
-const BAKE_CMD = 'external/lua/lua.exe scripts/ks_bake.lua --dir demo --web cache/story'
+// checkout-executable interpreter (build/lua/Debug/lua.exe); the released
+// package ships the interpreter at external/lua/lua.exe (gitignored, not in a
+// fresh clone).
+const BAKE_CMD = 'build/lua/Debug/lua.exe scripts/ks_bake.lua --dir demo --web cache/story'
 if (!hasBakedStory) {
   // eslint-disable-next-line no-console
   console.warn('[flow.integration] cache/story/story.lua absent — the on-disk '

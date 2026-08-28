@@ -25,7 +25,10 @@ const readdirSafe = (d) => { try { return readdirSync(d) } catch { return [] } }
 const ROOT_STORY = join(root, 'cache', 'story', 'story.lua')
 const DIST = join(here, 'dist')
 const DIST_STORY = join(DIST, 'cache', 'story', 'story.lua')
-const BAKE_CMD = 'external/lua/lua.exe scripts/ks_bake.lua --dir demo --web cache/story'
+// checkout-executable interpreter (build/lua/Debug/lua.exe); the released
+// package ships the interpreter at external/lua/lua.exe (gitignored, not in a
+// fresh clone).
+const BAKE_CMD = 'build/lua/Debug/lua.exe scripts/ks_bake.lua --dir demo --web cache/story'
 const BUILD_CMD = 'cd web && npm run build'
 const hasRootStory = existsSync(ROOT_STORY)
 const hasDist = existsSync(DIST)

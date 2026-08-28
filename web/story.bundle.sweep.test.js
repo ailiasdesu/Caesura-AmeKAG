@@ -197,8 +197,10 @@ if (!bundleExists) {
     it('reports the generation step (informational, does not fail)', () => {
       expect(true).toBe(true)
       // eslint-disable-next-line no-console
+      // checkout-executable intepreter (build/lua/Debug/lua.exe); the released
+      // package ships the interpreter at external/lua/lua.exe (gitignored).
       console.warn('[story.bundle.sweep] cache/story/story.lua not found — sweep skipped. '
-        + 'Regenerate with: external/lua/lua.exe scripts/ks_bake.lua --dir demo --web cache/story')
+        + 'Regenerate with: build/lua/Debug/lua.exe scripts/ks_bake.lua --dir demo --web cache/story')
     })
   })
 }
