@@ -36,6 +36,16 @@ input[type=text] { background:#14141c; color:var(--fg); border:1px solid #444; p
   <div>Lua: <span id="lua">-</span></div>
   <button onclick="refreshStatus()">刷新状态</button>
   <hr>
+  <b>访问令牌</b>
+  <div style="font-size:11px;color:#9a9ab0">
+    引擎默认要求 Bearer 令牌：启动时它把令牌打到 stderr，并写入启动目录下的
+    <code>.caesura-editor-token</code>。把令牌粘到这里保存（存在 localStorage），
+    或直接用 <code>?token=…</code> 打开本页面。
+  </div>
+  <div class="row"><input type="text" id="tokenInput" placeholder="Bearer 令牌"></div>
+  <div class="row"><button class="primary" onclick="saveToken()">保存</button>
+    <button onclick="clearToken()">清除</button></div>
+  <hr>
   <b>资源</b>
   <ul id="assets"></ul>
   <b>Live2D 模型</b>
@@ -86,12 +96,44 @@ input[type=text] { background:#14141c; color:var(--fg); border:1px solid #444; p
   </div>
 </div>
 <script>
+// The HTTP editor is default-deny (bearer token). The token is printed on
+// stderr and written to .caesura-editor-token next to the launch directory;
+// a stranger pastes it once here (persisted in localStorage) or opens this
+// page with ?token=<token>. Without it every /api/* call answers 401 and the
+// UI would silently look "broken", so surface the state instead.
+var EDITOR_TOKEN = (function () {
+  try {
+    var q = new URLSearchParams(location.search).get('token');
+    if (q) { localStorage.setItem('caesura.editorToken', q); return q; }
+    return localStorage.getItem('caesura.editorToken') || '';
+  } catch (e) { return ''; }
+})();
+function saveToken() {
+  EDITOR_TOKEN = document.getElementById('tokenInput').value.trim();
+  try { localStorage.setItem('caesura.editorToken', EDITOR_TOKEN); } catch (e) {}
+  refreshStatus(); loadAssets(); loadModels(); loadLogs();
+}
+function clearToken() {
+  EDITOR_TOKEN = '';
+  try { localStorage.removeItem('caesura.editorToken'); } catch (e) {}
+  document.getElementById('tokenInput').value = '';
+  refreshStatus();
+}
 async function apiCall(method, body) {
+  var headers = {'Content-Type':'application/json'};
+  if (EDITOR_TOKEN) headers['Authorization'] = 'Bearer ' + EDITOR_TOKEN;
   const r = await fetch('/api/' + method, {
     method: body ? 'POST' : 'GET',
-    headers: {'Content-Type':'application/json'},
+    headers: headers,
     body: body ? JSON.stringify(body) : undefined
   });
+  if (r.status === 401) {
+    var el = document.getElementById('status');
+    if (el) { el.textContent = '需要令牌'; el.className = 'badge'; }
+    var err = new Error('unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
   return r.json();
 }
 function showTab(name) {
@@ -110,8 +152,12 @@ async function refreshStatus() {
     el.textContent = s.status || '?';
     el.className = 'badge' + (s.status === 'ok' ? ' ok' : '');
     document.getElementById('port').textContent = s.port ?? '-';
-    document.getElementById('lua').textContent = s.lua_available ? '可用' : '不可用';
-  } catch(e) { document.getElementById('status').textContent = 'ERR'; }
+    document.getElementById('lua').textContent = s.lua ? '可用' : '不可用';
+  } catch(e) {
+    // an auth failure already produced the actionable 需要令牌 badge; only
+    // genuine connection/parse errors deserve the opaque ERR
+    if (!e || !e.unauthorized) document.getElementById('status').textContent = 'ERR';
+  }
 }
 async function loadAssets() {
   try {
@@ -188,6 +234,10 @@ async function loadLogs() {
     });
   } catch(e) {}
 }
+(function () {
+  var input = document.getElementById('tokenInput');
+  if (input && EDITOR_TOKEN) input.value = EDITOR_TOKEN;
+})();
 refreshStatus(); loadAssets(); loadModels(); loadLogs();
 setInterval(refreshStatus, 5000);
 setInterval(loadLogs, 5000);

@@ -310,7 +310,30 @@ bool EditorServer::start(int port) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     if (m_running) {
-        printf("[EditorServer] Started on http://localhost:%d\n", m_port);
+        printf("[EditorServer] Started on http://127.0.0.1:%d\n", m_port);
+        // A stranger who just launched the executable needs an address to open,
+        // not a secret to assemble by hand. The static shell accepts ?token= and
+        // stores it, so print the complete URL; stderr keeps the raw token and
+        // the header form for scripts. Printed here rather than in
+        // ensureAuthToken() because m_port is only real after bind.
+        // 127.0.0.1 rather than localhost on purpose: the server binds only
+        // 127.0.0.1 (see bind_to_port above), while Windows resolves localhost
+        // as ::1 first -- a stale twin editor listening on ::1:9876 then serves
+        // a DIFFERENT token and the browser sees alternating 200/401. Both t3
+        // (release verify) and t5 (browser e2e) independently hit this trap.
+        std::string tokenForUrl;
+        {
+            std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+            tokenForUrl = m_authToken;
+        }
+        if (!tokenForUrl.empty()) {
+            printf("[EditorServer] Open the editor: http://127.0.0.1:%d/?token=%s\n",
+                   m_port, tokenForUrl.c_str());
+        } else {
+            printf("[EditorServer] Open the editor: http://127.0.0.1:%d/ "
+                   "(INSECURE MODE: no token required)\n", m_port);
+        }
+        fflush(stdout);
         return true;
     }
     return false;
@@ -563,7 +586,17 @@ void EditorServer::serverLoop(int port) {
         // CORS preflight (OPTIONS) carries no Authorization header and must not
         // be gated, or the browser web editor breaks; the actual request behind
         // the preflight is checked.
-        if (req.method != "OPTIONS") {
+        //
+        // The STATIC SHELL is likewise not gated, and that is the whole point of
+        // the gate being scoped to /api/*: a browser navigating to
+        // http://localhost:9876/ cannot attach an Authorization header, so
+        // gating "/" made the editor unreachable from a browser at all -- the
+        // only way in was --editor-insecure, i.e. the security fix pushed people
+        // to turn security off. index.html carries no secret and no capability;
+        // it reads ?token= (or localStorage) and sends the bearer on every
+        // /api/* call it makes, each of which is still default-deny below.
+        const bool staticShell = (req.path == "/" || req.path == "/index.html");
+        if (req.method != "OPTIONS" && !staticShell) {
             const std::string auth = req.get_header_value("Authorization");
             std::string token;
             {
