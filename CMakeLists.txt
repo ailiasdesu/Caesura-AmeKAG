@@ -527,7 +527,10 @@ install(DIRECTORY tools/project_templates/ DESTINATION tools/project_templates)
 # leftover which does NOT exist in a fresh clone, so a file-based install would
 # break CI packaging. TARGETS also lands the right name per platform (lua.exe /
 # lua), matching both find_lua() probe names.
-install(TARGETS lua_cli RUNTIME DESTINATION external/lua)
+# BUNDLE DESTINATION: iOS forces executable targets to MACOSX_BUNDLE, and an
+# install(TARGETS <exe>) without it is a CONFIGURE error there (same red point
+# the engine target hit above; the audit probe caught lua_cli on 33169661969).
+install(TARGETS lua_cli RUNTIME DESTINATION external/lua BUNDLE DESTINATION external/lua)
 # The editor frontend is part of the release contract: getting-started.md tells a
 # stranger to unzip and run "CaesuraAmeKAG.exe --editor". Ship dist/ ONLY, never
 # web-editor/ wholesale (node_modules/ and release/ are build junk). Not OPTIONAL
