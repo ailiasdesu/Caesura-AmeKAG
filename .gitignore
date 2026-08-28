@@ -114,6 +114,7 @@ cache/
 # Steamworks SDK (proprietary, manual download -- same pattern as Live2D)
 steamworks_sdk_*.zip
 external/steamworks/
+steam_appid.txt
 
 # PM-created projects (user content)
 projects/*
