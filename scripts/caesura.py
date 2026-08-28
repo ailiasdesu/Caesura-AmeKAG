@@ -104,7 +104,13 @@ def cmd_create(args):
     if template_src is None and template == "showcase":
         # Legacy in-checkout fallback: demo/example_game doubles as the
         # showcase template when no project_templates tree is around.
-        legacy = os.path.join("demo", "example_game")
+        # N4: anchor on THIS SCRIPT, not the CWD -- a non-repo-root CWD must
+        # not silently disable the fallback (the old CWD-relative
+        # os.path.join('demo', 'example_game') could never find it from
+        # anywhere but the repo root).
+        legacy = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "demo", "example_game")
         if os.path.isdir(legacy):
             template_src = legacy
     if template_src is None:

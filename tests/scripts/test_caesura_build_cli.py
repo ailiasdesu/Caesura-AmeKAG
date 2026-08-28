@@ -170,6 +170,42 @@ class TestAssetScanner(unittest.TestCase):
         self.assertIn("assets/bg/__no_such_asset__.png", missing)
 
 
+class TestCreateCommand(unittest.TestCase):
+    """caesura create: template resolution (no engine binary needed)."""
+
+    def test_showcase_fallback_resolves_from_non_repo_cwd(self):
+        """N4 regression: the legacy demo/example_game fallback must anchor on
+        the CLI script, not the CWD.
+
+        Reproduce with a minimal extracted-CLI tree in a temp dir and a CWD
+        that is NOT the repo root: the old CWD-relative
+        os.path.join('demo','example_game') could never find the template
+        there and 'create' failed with "template 'showcase' not found".
+        """
+        with tempfile.TemporaryDirectory() as td:
+            pkg = Path(td) / "pkg"
+            (pkg / "scripts").mkdir(parents=True)
+            shutil.copy2(ROOT / "scripts" / "caesura.py", pkg / "scripts" / "caesura.py")
+            shutil.copy2(ROOT / "scripts" / "caesura_build.py", pkg / "scripts" / "caesura_build.py")
+            shutil.copytree(ROOT / "demo" / "example_game", pkg / "demo" / "example_game")
+            workdir = Path(td) / "somewhere-else"
+            workdir.mkdir()
+            res = subprocess.run(
+                [sys.executable, str(pkg / "scripts" / "caesura.py"),
+                 "create", "myproj", "--template", "showcase"],
+                cwd=str(workdir), capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=300)
+            joined = res.stdout + res.stderr
+            self.assertEqual(res.returncode, 0,
+                             "showcase fallback must work from a non-repo CWD\n" + joined)
+            self.assertNotIn("Traceback", joined)
+            created = workdir / "myproj"
+            self.assertTrue((created / "story.ks").is_file(),
+                            "myproj/story.ks missing:\n" +
+                            "\n".join(sorted(p.name for p in created.iterdir()))
+                            if created.exists() else "myproj was not created")
+
+
 @unittest.skipIf(ENGINE is None, "no engine binary (build/ is gitignored)")
 class TestGameOnlyBuild(unittest.TestCase):
     """Full build against the real engine binary and the stock basic template."""
@@ -236,6 +272,14 @@ class TestGameOnlyBuild(unittest.TestCase):
         cached = list((self.out / "cache" / "ksc").glob("*.ksc"))
         self.assertTrue(cached, "cache/ksc is empty: the player pays a cold compile at boot")
         self.assertEqual(len(info["precompiled_scenes"]), len(info["scenes"]), info)
+        # N5: BUILD-INFO must carry an honest precompile record (status /
+        # reason / scene_count) -- never a silent single-WARN skip.
+        pc = info.get("precompile")
+        self.assertIsNotNone(pc, info)
+        self.assertEqual(set(pc.keys()), {"status", "reason", "scene_count"}, pc)
+        self.assertIn(pc["status"], {"ok", "skipped", "partial"}, pc)
+        self.assertIsInstance(pc["reason"], str, pc)
+        self.assertEqual(pc["scene_count"], len(info["precompiled_scenes"]), pc)
 
     def test_no_developer_tooling_shipped(self):
         stray = [p.name for p in (self.out / "scripts").rglob("*")
@@ -243,13 +287,27 @@ class TestGameOnlyBuild(unittest.TestCase):
         self.assertEqual(stray, [], "dev-only files leaked into the player package")
 
     def test_package_does_not_reference_the_repo(self):
-        """Nothing inside the package may point back at the source checkout."""
-        needle = str(ROOT).replace("\\", "/").lower()
-        offenders = []
-        for p in (self.out / "scripts" / "config.lua",
-                  self.out / "projects" / "basic" / "caesura-boot.lua"):
-            if needle in p.read_text(encoding="utf-8", errors="replace").replace("\\", "/").lower():
-                offenders.append(p.name)
+        """Nothing inside the package may point back at the source checkout.
+
+        N3 upgrade: scan EVERY text file in the assembled output (including
+        BUILD-INFO.json) for the checkout root under BOTH slash forms -- the
+        old engine_source leaked the build machine's absolute path into the
+        player package, and a two-file probe would have missed it.
+        """
+        needle_fwd = str(ROOT).replace("\\", "/").lower()
+        needle_bwd = str(ROOT).replace("/", "\\").lower()
+        offenders, scanned = [], 0
+        for p in self.out.rglob("*"):
+            if not p.is_file():
+                continue
+            raw = p.read_bytes()
+            if b"\x00" in raw:
+                continue                       # binaries: exe/dll/fonts/ksc/...
+            scanned += 1
+            text = raw.decode("utf-8", errors="replace").lower()
+            if needle_fwd in text.replace("\\", "/") or needle_bwd in text.replace("/", "\\"):
+                offenders.append(p.relative_to(self.out).as_posix())
+        self.assertGreater(scanned, 20, "text-file scan did not cover the package")
         self.assertEqual(offenders, [])
 
 

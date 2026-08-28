@@ -45,6 +45,7 @@ allowlists exactly scripts/ | assets/ | tests/ | demo/ | projects/ for post-lock
 io.open — a game placed anywhere else cannot perform cross-scene [jump] at runtime.
 """
 
+import datetime
 import json
 import os
 import platform
@@ -551,6 +552,19 @@ os.exit(failed == 0 and 0 or 1)
 '''
 
 
+_PATH_SHAPED = re.compile(r"(?:[A-Za-z]:[\\/]|\\\\|/)[^\s'\"]{2,}")
+
+
+def neutralize_paths(text):
+    """Strip anything path-shaped out of a message bound for BUILD-INFO.
+
+    BUILD-INFO ships to players, so no field may name the build machine's
+    directory layout (N3). Subprocess and timeout errors embed the command
+    line they failed on, so scrub rather than trust the message text.
+    """
+    return _PATH_SHAPED.sub("<path>", text) if text else text
+
+
 def precompile_scenes(out: Path, scene_rels):
     """Warm cache/ksc inside the package. Returns (ok_list, fail_list, note)."""
     try:
@@ -694,15 +708,35 @@ def assemble(project: Path, entry_scene: Path, engine: Path, out: Path,
     scene_rels = ["%s/%s" % (game_root, p.relative_to(project).as_posix()) for p in scenes]
     pre_ok, pre_fail, pre_note = precompile_scenes(out, scene_rels)
     if pre_fail or pre_note:
-        say("[build] precompile: %d/%d scene(s) cached%s"
-            % (len(pre_ok), len(scene_rels), (" -- " + pre_note) if pre_note else ""))
+        if pre_note.startswith("skipped"):
+            # N5: honest SKIP -- no lua interpreter (or subprocess error). The
+            # player pays a cold compile at first boot instead; say so, and
+            # record it in BUILD-INFO rather than a single silent WARN line.
+            say("[build] precompile: SKIPPED (%s) -- %d/%d scene(s) not pre-cached; "
+                "the player pays a cold compile at boot"
+                % (pre_note, len(pre_ok), len(scene_rels)))
+        else:
+            say("[build] precompile: %d/%d scene(s) cached%s"
+                % (len(pre_ok), len(scene_rels), (" -- " + pre_note) if pre_note else ""))
         for f in pre_fail[:5]:
             say("[build]   WARN scene did not precompile: %s" % f)
+        pre_status = "skipped" if pre_note.startswith("skipped") else "partial"
+        pre_reason = neutralize_paths(
+            pre_note or ("%d scene(s) failed" % len(pre_fail)))
     else:
         say("[build] precompile: %d/%d scene(s) cached into cache/ksc"
             % (len(pre_ok), len(scene_rels)))
+        pre_status, pre_reason = "ok", ""
 
     # 7. provenance + player note
+    # Only claim a checkout build when the binary actually came from this
+    # tree: --engine may point at a CI artifact or another machine's build,
+    # and a fixed label would state a falsehood about the package's origin.
+    try:
+        engine.resolve().relative_to(ROOT)
+        engine_origin = "local checkout build"
+    except ValueError:
+        engine_origin = "prebuilt engine binary"
     info = {
         "kind": "caesura-game-only",
         "schema": 1,
@@ -710,13 +744,20 @@ def assemble(project: Path, entry_scene: Path, engine: Path, out: Path,
         "entry_scene": story_rel,
         "boot_script": boot_rel,
         "engine_binary": engine.name,
-        "engine_source": str(engine),
+        # N3: provenance must stay neutral -- engine_source used to carry the
+        # build machine's absolute checkout path into the player package.
+        # No BUILD-INFO field may contain an absolute path (either slash form).
+        "engine_origin": engine_origin,
+        "engine_modified_utc": datetime.datetime.fromtimestamp(
+            engine.stat().st_mtime, datetime.timezone.utc).isoformat(),
         "runtime_libs": [l.name for l in libs],
         "scenes": sorted(p.relative_to(project).as_posix() for p in project.rglob("*.ks")),
         "dev_mode": dev_mode,
         "shared_assets": shared_assets,
         "precompiled_scenes": pre_ok,
         "precompile_failures": pre_fail,
+        "precompile": {"status": pre_status, "reason": pre_reason,
+                       "scene_count": len(pre_ok)},
         "asset_refs": len(refs),
         "assets_pulled_from_repo": copied,
         "assets_missing": missing,
