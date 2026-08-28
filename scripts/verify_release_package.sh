@@ -35,10 +35,11 @@
 # usage:
 #   bash scripts/verify_release_package.sh [ZIP] [--skip-if-missing]
 #                                          [--port N | --port=N] [--keep]
-#   ZIP defaults to the newest build/CaesuraAmeKAG-*.zip
-#   Unknown -flags are rejected instead of being read as a ZIP path: reading
+#   ARCHIVE defaults to the newest build/CaesuraAmeKAG-*.zip or
+#   build/CaesuraAmeKAG-*.tar.gz (Zip = Windows CPack, tar.gz = Linux/Sprint6-L1)
+#   Unknown -flags are rejected instead of being read as an archive path: reading
 #   "--port 9999" as a filename produced the baffling diagnostic
-#   "no release ZIP at the given path: 9999".
+#   "no release archive at the given path: 9999".
 # =====================================================================
 set -u
 
@@ -83,9 +84,13 @@ if [ -z "$ZIP" ]; then
     # (CaesuraAmeKAG-<v>-Source.zip); picking either by mtime made every content
     # assertion below fail against an archive that was never meant to contain an
     # executable -- a confusing red that says nothing about the desktop package.
-    # CPack names desktop archives <name>-<version>-<System>-<Arch>.zip.
-    CANDS="$(ls -t "$REPO_ROOT"/build/CaesuraAmeKAG-*.zip 2>/dev/null \
-           | grep -v '\.sha256$' | grep -v -- '-web\.zip$' | grep -v -- '-Source\.zip$' || true)"
+    # CPack names desktop archives <name>-<version>-<System>-<Arch>.zip;
+    # Sprint6-L1 also ships the Linux flavor as <same>-Linux-x86_64.tar.gz, so
+    # accept BOTH container formats here (a wrong container is as misleading as
+    # a wrong flavor -- excluding it would produce the same confusing red).
+    CANDS="$(ls -t "$REPO_ROOT"/build/CaesuraAmeKAG-*.zip "$REPO_ROOT"/build/CaesuraAmeKAG-*.tar.gz 2>/dev/null \
+           | grep -v '\.sha256$' | grep -v -- '-web\.zip$' | grep -v -- '-Source\.zip$' \
+           | grep -v -- '-web\.tar\.gz$' | grep -v -- '-Source\.tar\.gz$' || true)"
     ZIP="$(printf '%s\n' "$CANDS" | head -1)"
     # Auto-selection is mtime-based, so SAY which archive won and what else was
     # in the running. A silent pick is how a stale package gets verified and
@@ -98,9 +103,9 @@ if [ -z "$ZIP" ]; then
 fi
 if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
     if [ -n "$ZIP" ]; then
-        printf 'no release ZIP at the given path: %s\n' "$ZIP"
+        printf 'no release archive at the given path: %s\n' "$ZIP"
     else
-        printf 'no release ZIP found (looked for %s/build/CaesuraAmeKAG-*.zip)\n' "$REPO_ROOT"
+        printf 'no release archive found (looked for %s/build/CaesuraAmeKAG-*.zip and -*.tar.gz)\n' "$REPO_ROOT"
     fi
     printf 'produce one with:\n'
     printf '  cmake --build build --config Release --parallel\n'
@@ -190,10 +195,21 @@ if [ -n "$STALE_ENGINES" ]; then
     printf '      A leftover engine can dual-bind 9876 and answer this run with its OWN\n'
     printf '      (deleted) webRoot and token, faking 404/401 failures.\n'
     printf '      Kill it first (kill by PID, never by image name):\n'
-    printf '        powershell "Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue | Stop-Process -Force"\n'
+    if command -v powershell >/dev/null 2>&1; then
+        printf '        powershell "Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue | Stop-Process -Force"\n'
+    else
+        printf '        pkill -f CaesuraAmeKAG   (or: kill <pid-from-ps>)\n'
+    fi
     exit 2
 fi
-unzip -q "$ZIP" -d "$WORK" || { printf 'FAIL: unzip failed\n'; exit 2; }
+# Extract by container format: ZIP (Windows CPack) and tar.gz (Linux/Sprint6-L1)
+# both land as a single top-level directory holding the engine executable.
+case "$ZIP" in
+    *.tar.gz|*.tgz)
+        tar -xzf "$ZIP" -C "$WORK" || { printf 'FAIL: tar -xzf failed for %s\n' "$ZIP"; exit 2; } ;;
+    *)
+        unzip -q "$ZIP" -d "$WORK" || { printf 'FAIL: unzip failed\n'; exit 2; } ;;
+esac
 # Prefer the top-level directory that actually holds the engine executable.
 # Blindly taking the first directory made a wrong-archive run (the web bundle,
 # whose first top dir is assets/) report six content failures about a package
