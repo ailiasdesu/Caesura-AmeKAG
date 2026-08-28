@@ -589,6 +589,21 @@ if(UNIX AND NOT APPLE AND TARGET SDL3::SDL3)
     endif()
     set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN")
 endif()
+# Sprint6-L2: macOS mirrors the Linux self-carry rule. CI builds SDL3 from
+# source (its dylib id is @rpath/libSDL3.<v>.dylib), the package ships the
+# SONAME dylib beside the executable, and @loader_path plays the role of
+# $ORIGIN. brew's SDL3 is NOT a supported package source: its absolute
+# install_name (/opt/homebrew/...) would pin the binary to the build machine.
+# iOS packaging is a separate lane (bundle layout), hence the explicit
+# CMAKE_SYSTEM_NAME guard (repo convention; version-independent, unlike the
+# CMake>=3.14 builtin IOS variable).
+if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND TARGET SDL3::SDL3)
+    get_target_property(_caesura_sdl3_type_mac SDL3::SDL3 TYPE)
+    if(_caesura_sdl3_type_mac STREQUAL "SHARED_LIBRARY")
+        install(FILES "$<TARGET_SONAME_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+    endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "@loader_path")
+endif()
 # Without the Steam runtime DLL beside the executable the process cannot even
 # START ("error while loading shared libraries: steam_api64.dll") -- exactly what
 # a stranger hits after unzipping a Steam-enabled build. The configure-time copy

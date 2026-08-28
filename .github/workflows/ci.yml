@@ -423,6 +423,75 @@ jobs:
             build/CaesuraAmeKAG-*-Linux-*.tar.gz.sha256
 
   # ============================================================
+  # Release Package (macOS TGZ) -- Sprint6-L2, mirrors release-linux.
+  # macOS has no Xvfb and headless --editor behavior on macos-latest is
+  # UNPROVEN (bgfx/Metal window creation may fail without a GUI session):
+  # the verify step runs as a continue-on-error PROBE for the first runs,
+  # so build/cpack/upload stay decisive while the verify log gathers real
+  # headless evidence. Tighten to a hard gate once behavior is known.
+  # ============================================================
+  release-macos:
+    name: "macOS · Package"
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-latest
+    timeout-minutes: 40
+    needs: build-macos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: brew install cmake freetype zstd openssl@3 pkg-config
+
+      # DIFF vs release-linux: SDL3 goes to RUNNER_TEMP (not brew, whose
+      # dylib carries an absolute install_name; the source build ids as
+      # @rpath/... which @loader_path resolves beside the executable).
+      - name: Build SDL3 from source
+        run: |
+          curl -fsSL -o SDL3-3.2.0.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+          tar xzf SDL3-3.2.0.tar.gz
+          cd SDL3-3.2.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/sdl3-mac"
+          cmake --build build --parallel $(sysctl -n hw.logicalcpu)
+          cmake --install build
+          cd ..
+          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
+
+      - name: Configure Release
+        env:
+          SDL3_DIR: ${{ runner.temp }}/sdl3-mac/lib/cmake/SDL3
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCAESURA_ENABLE_FFMPEG=OFF -DCMAKE_PREFIX_PATH="$(brew --prefix openssl@3)"
+
+      - name: Build Release
+        run: |
+          set -o pipefail
+          cmake --build build --parallel $(sysctl -n hw.logicalcpu) > build.log 2>&1 || { echo '=== build errors ==='; grep -iE 'error:|fatal error|undefined' build.log | head -30; tail -40 build.log; exit 1; }
+          tail -3 build.log
+
+      - name: SDL3 link evidence (otool)
+        run: otool -L build/CaesuraAmeKAG | grep -i sdl3 || true
+
+      - name: Package (CPack TGZ)
+        run: cd build && cpack -G TGZ
+
+      - name: Verify release package (probe; headless --editor unknown)
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          TGZ=$(ls build/CaesuraAmeKAG-*-Darwin-*.tar.gz | head -1)
+          echo "verifying: $TGZ"
+          bash scripts/verify_release_package.sh "$TGZ"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: caesura-amekag-macos-arm64
+          path: |
+            build/CaesuraAmeKAG-*-Darwin-*.tar.gz
+            build/CaesuraAmeKAG-*-Darwin-*.tar.gz.sha256
+
+  # ============================================================
   # iOS compile audit (Track I I1) - RED-GREEN probe, never blocks.
   # No Mac hardware in the repo dev loop; this surfaces the iOS toolchain
   # gaps so they can be closed incrementally. continue-on-error keeps the
