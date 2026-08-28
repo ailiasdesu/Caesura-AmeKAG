@@ -2,8 +2,8 @@
 
 > **Decision**: **`RC-GO`**  
 > **Target Version**: `1.0.0-rc.1`  
-> **Target Commit SHA**: `d63f6529f9af9933cc4720ddae6df7502c70059a` (`d63f6529`)  
-> **Evaluation Date**: `2026-08-25`  
+> **Target Commit SHA**: `14ffa1743f42b55d8685c9776c3f82f9900d3d9c` (`14ffa174`)  
+> **Evaluation Date**: `2026-08-28`  
 > **Evaluation Mode**: 100% Evidence-Backed Verification (Strict Zero-Cheating Charter)  
 > **Authoritative Baseline Matrix**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
 
