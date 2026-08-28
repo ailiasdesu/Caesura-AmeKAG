@@ -269,7 +269,10 @@ Before publishing, confirm the archive is complete and runnable:
 > The package also bundles its own Lua interpreter (`external/lua/lua.exe`,
 > installed from the `lua_cli` target), so `caesura build` inside an extracted
 > ZIP needs no system Lua on PATH — verified by the 29-assertion release check
-> including a PATH-stripped create→build→run probe (2026-08-28).
+> including a PATH-stripped create→build→run probe (2026-08-28). 29 = 28 strict
+> + 1 POSIX note: on POSIX the stripped-PATH probe degrades to a note (the
+> /usr/bin distro lua cannot be stripped), and the true property is guarded by
+> the `ran under the PACKAGED lua` assertion (2026-08-29, Linux TGZ lane).
 
 ```bash
 # List archive contents:
@@ -307,7 +310,7 @@ bash scripts/verify_release_package.sh
 bash scripts/verify_release_package.sh build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --port=9876 --keep
 ```
 
-29 checks in five groups:
+29 checks in five groups (POSIX: 28 strict-PASS + 1 note — the stripped-PATH probe degrades when /usr/bin's distro lua cannot be stripped; the `ran under the PACKAGED lua` assertion still guards the property):
 
 | Group | Asserts |
 |-------|---------|
