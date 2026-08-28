@@ -1,0 +1,849 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+caesura_build.py — game-only desktop build & distribution packaging for the
+Caesura (AmeKAG) creator CLI (backing store for "caesura build" / "caesura package").
+
+Why this module exists
+----------------------
+The product task book (docs/plans/audit/Caesura-AmeKAG_产品化推进总任务书.md §7.1)
+requires a *game-only package*: what a player downloads and double-clicks. Nothing
+in the repo produced that shape before — CPack ships the whole developer tree
+(scripts + demo + full 39 MB shared asset pool + projects/), and
+scripts/package_game.sh only produces the Web static site.
+
+Design decision: this module NEVER configures or invokes a C++ toolchain.
+------------------------------------------------------------------------
+"caesura build" assembles a *runnable game directory around an engine binary that
+already exists*. It does not run cmake. Reasons:
+  1. Configuring MSVC/bgfx/SDL3/FFmpeg from a CLI wrapper cannot be made honest:
+     the failure surface (missing generator, SDK, Steamworks, Live2D SDK, FFmpeg
+     DLLs) is exactly the "CMake/bgfx/SDL concepts" the task book wants hidden,
+     and a wrapper that shells out to cmake exposes them anyway — as a wall of
+     compiler output.
+  2. A creator iterating on a story rebuilds the *game*, not the engine. Coupling
+     the two would make every package run a multi-minute C++ build.
+  3. The engine is shipped to creators as a prebuilt binary (CPack ZIP / release
+     artifact), so "an engine binary exists" is the normal state, not an edge case.
+Therefore a missing engine binary is a first-class, actionable diagnostic (doctor
+style: what was searched, what to do next), never a traceback.
+
+Output shape (game-only)
+------------------------
+    <out>/
+      CaesuraAmeKAG.exe          engine binary (+ every runtime lib beside it)
+      SDL3.dll, av*.dll, ...     copied from the engine binary's directory
+      scripts/                   engine Lua runtime (config.lua re-pointed)
+      assets/                    engine-required assets (fonts/, lang/) + game assets
+      projects/<game>/           the game itself (.ks scenes, entry.lua, assets)
+      cache/ksc, saves, settings, logs
+      BUILD-INFO.json            provenance manifest
+      HOW-TO-PLAY.txt            player-facing launch note
+
+projects/ is used as the in-package game root because scripts/sandbox.lua:314-316
+allowlists exactly scripts/ | assets/ | tests/ | demo/ | projects/ for post-lockdown
+io.open — a game placed anywhere else cannot perform cross-scene [jump] at runtime.
+"""
+
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+
+# The repo path itself can contain non-ASCII (this checkout does), and the
+# Windows console default code page mangles it. Match the convention already
+# used by scripts/verify_release_candidate.py:35-39.
+for _stream in (sys.stdout, sys.stderr):
+    if getattr(_stream, "encoding", "") != "utf-8" and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+ROOT = Path(__file__).resolve().parent.parent
+
+# Engine-required assets: hardcoded in src/entry/Engine.cpp:366 and
+# src/script/bindings/RenderBinding.cpp:945,967 (default font) and read by
+# scripts/i18n.lua:62 (language packs). A game-only package without these
+# renders no text at all, so they ship unconditionally.
+ENGINE_REQUIRED_ASSETS = ("fonts", "lang")
+
+PRUNE_DIR_NAMES = {"__pycache__", ".git", ".svn", "node_modules"}
+PRUNE_SUFFIXES = {".pyc", ".pyo", ".bak"}
+
+# Where a bare project NAME is looked up (in order).
+PROJECT_SEARCH_DIRS = ("projects", "tools/project_templates", "tests/projects", "demo")
+
+# Where an engine binary is looked for (in order), relative to ROOT.
+ENGINE_SEARCH_DIRS = (
+    "build/Release", "build/Debug", "build",
+    "bin/Release", "bin/Debug", "bin",
+    "build/RelWithDebInfo",
+)
+
+
+class BuildError(Exception):
+    """A user-actionable failure. main() prints .args[0] and exits 1 — no traceback."""
+
+
+# ----------------------------------------------------------------- helpers --
+
+def _exe_name() -> str:
+    return "CaesuraAmeKAG.exe" if os.name == "nt" else "CaesuraAmeKAG"
+
+
+def _ignore_junk(_dir, names):
+    return [n for n in names
+            if n in PRUNE_DIR_NAMES or os.path.splitext(n)[1] in PRUNE_SUFFIXES]
+
+
+def _copy_tree(src: Path, dst: Path) -> None:
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dst, dirs_exist_ok=True, ignore=_ignore_junk)
+
+
+def _rel(p: Path) -> str:
+    try:
+        return str(p.relative_to(ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(p).replace("\\", "/")
+
+
+def find_bash() -> str:
+    """Resolve git-bash EXPLICITLY, never the bare name "bash".
+
+    subprocess resolves a bare name through CreateProcess, which searches the
+    Windows system directory BEFORE PATH -- so "bash" finds
+    C:/Windows/System32/bash.exe (the WSL launcher). package_game.sh then runs
+    inside WSL, where web/node_modules holds the WINDOWS rollup binary, and the
+    web build dies with "Cannot find module @rollup/rollup-linux-x64-gnu".
+    Empirically reproduced on this host; the same script succeeds when invoked
+    with the git-bash absolute path.
+    """
+    env = os.environ.get("CAESURA_BASH", "").strip()
+    if env and Path(env).is_file():
+        return env
+    if os.name == "nt":
+        for c in (r"C:\Program Files\Git\bin\bash.exe",
+                  r"C:\Program Files\Git\usr\bin\bash.exe",
+                  r"C:\Program Files (x86)\Git\bin\bash.exe"):
+            if Path(c).is_file():
+                return c
+        found = shutil.which("bash")
+        if found and "system32" not in found.lower():
+            return found
+        raise BuildError(
+            "No git-bash found (needed by scripts/package_game.sh for the web target).\n"
+            "  Searched: CAESURA_BASH, C:/Program Files/Git/bin/bash.exe,\n"
+            "            C:/Program Files/Git/usr/bin/bash.exe, PATH (excluding System32/WSL)\n"
+            "  Fix: install Git for Windows, or set CAESURA_BASH=<path to git bash.exe>."
+        )
+    found = shutil.which("bash")
+    if not found:
+        raise BuildError("No bash interpreter found (needed by scripts/package_game.sh).")
+    return found
+
+
+def find_lua() -> str:
+    """Packaged interpreter first, then the build-tree lua_cli, then PATH.
+
+    external/lua/lua[.exe] exists in the RELEASE PACKAGE (installed from the
+    lua_cli target) but is gitignored in a checkout: a fresh clone only has
+    the interpreter at build/lua/<config>/lua[.exe] after cmake --build --
+    the same place CI looks (ci.yml recurses build/lua first). Probing only
+    external/lua/ went red on every machine without a stale hand-built relic
+    or a PATH lua, while looking green on dev machines that have the relic.
+    """
+    candidates = [ROOT / "external/lua/lua.exe", ROOT / "external/lua/lua"]
+    for cfg in ("Release", "Debug", "RelWithDebInfo", "MinSizeRel", ""):
+        base = (ROOT / "build" / "lua" / cfg) if cfg else (ROOT / "build" / "lua")
+        candidates.append(base / "lua.exe")
+        candidates.append(base / "lua")
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    for c in ("lua5.4", "lua"):
+        if shutil.which(c):
+            return c
+    raise BuildError(
+        "No Lua 5.4 interpreter found.\n"
+        "  Searched: external/lua/lua[.exe], build/lua/<config>/lua[.exe], "
+        "lua5.4, lua (PATH)\n"
+        "  Fix: build the engine first (cmake --build build), install Lua 5.4, "
+        "or run from an extracted release package."
+    )
+
+
+# --------------------------------------------------------- project resolve --
+
+def resolve_project(spec: str) -> Path:
+    """A path (absolute / cwd-relative / ROOT-relative) or a bare project name."""
+    cands = []
+    p = Path(spec)
+    if p.is_absolute():
+        cands.append(p)
+    else:
+        cands.append(Path.cwd() / p)
+        cands.append(ROOT / p)
+        for d in PROJECT_SEARCH_DIRS:
+            cands.append(ROOT / d / spec)
+    for c in cands:
+        if c.is_dir():
+            return c.resolve()
+    searched = "\n".join("    " + _rel(c) for c in cands)
+    raise BuildError(
+        "Project not found: %s\n"
+        "  Searched:\n%s\n"
+        "  Fix: pass a project directory, or create one:\n"
+        "    python scripts/caesura.py create my_game --template basic"
+        % (spec, searched)
+    )
+
+
+def collect_scenes(project: Path):
+    scenes = sorted(project.rglob("*.ks"))
+    if not scenes:
+        raise BuildError(
+            "No .ks scenes in project: %s\n"
+            "  A Caesura game needs at least one KAG scene (story.ks).\n"
+            "  Fix: add story.ks, or point at the right directory." % _rel(project)
+        )
+    return scenes
+
+
+def pick_entry_scene(project: Path, scenes, requested):
+    """Entry scene: --entry, else story.ks, else the shallowest scene."""
+    if requested:
+        for s in scenes:
+            if s.name == requested or str(s).replace("\\", "/").endswith(requested):
+                return s
+        raise BuildError(
+            "--entry scene not found in project: %s\n  Available: %s"
+            % (requested, ", ".join(s.name for s in scenes))
+        )
+    for s in scenes:
+        if s.name == "story.ks":
+            return s
+    return sorted(scenes, key=lambda s: (len(s.relative_to(project).parts), s.name))[0]
+
+
+# ---------------------------------------------------------- engine binary --
+
+def find_engine(explicit=None, config=None):
+    """Locate the engine binary. Returns Path. Raises BuildError with guidance."""
+    searched = []
+    if explicit:
+        p = Path(explicit)
+        if not p.is_absolute():
+            p = (Path.cwd() / p).resolve()
+        if p.is_dir():
+            p = p / _exe_name()
+        searched.append(p)
+        if p.is_file():
+            return p
+        raise BuildError(
+            "--engine does not point at an engine binary: %s\n"
+            "  Expected a file (or a directory containing %s)." % (p, _exe_name())
+        )
+    env = os.environ.get("CAESURA_ENGINE", "").strip()
+    if env:
+        p = Path(env)
+        if p.is_dir():
+            p = p / _exe_name()
+        searched.append(p)
+        if p.is_file():
+            return p
+    dirs = list(ENGINE_SEARCH_DIRS)
+    if config:
+        dirs.insert(0, "build/%s" % config)
+        dirs.insert(1, "bin/%s" % config)
+    for d in dirs:
+        p = ROOT / d / _exe_name()
+        if p not in searched:
+            searched.append(p)
+        if p.is_file():
+            return p
+    raise BuildError(
+        "Engine binary not found -- nothing to build a game around.\n"
+        "  Searched (in order):\n%s\n"
+        "  This command packages a game AROUND an existing engine binary;\n"
+        "  it deliberately does not configure or run a C++ toolchain.\n"
+        "  Fix, pick one:\n"
+        "    1. Use a release build of the engine:\n"
+        "         python scripts/caesura.py build <project> --engine <dir-with-%s>\n"
+        "       or set CAESURA_ENGINE=<dir-with-%s>\n"
+        "    2. Build the engine once from this checkout:\n"
+        "         cmake -B build -DCAESURA_LIVE2D=OFF\n"
+        "         cmake --build build --config Release --parallel\n"
+        "  Check your toolchain first with:  python scripts/caesura.py doctor"
+        % ("\n".join("    " + _rel(s) for s in searched), _exe_name(), _exe_name())
+    )
+
+
+def runtime_libs(engine: Path):
+    """Shared libraries sitting beside the engine binary (SDL3, FFmpeg, Steam...)."""
+    sufs = (".dll",) if os.name == "nt" else (".so", ".dylib")
+    out = []
+    for f in sorted(engine.parent.iterdir()):
+        if f.is_file() and (f.suffix.lower() in sufs or ".so." in f.name):
+            out.append(f)
+    return out
+
+
+# ------------------------------------------------------------------ gating --
+
+def run_ks_check(scenes, lua: str) -> None:
+    failures = []
+    for s in scenes:
+        res = subprocess.run([lua, "scripts/ks_check.lua", _rel(s)],
+                             cwd=str(ROOT), capture_output=True, text=True)
+        tail = (res.stdout or "") + (res.stderr or "")
+        if res.returncode != 0:
+            failures.append((s, tail.strip()))
+    if failures:
+        lines = ["Contract check (ks_check) failed -- refusing to package a broken game:"]
+        for s, out in failures:
+            lines.append("  %s" % _rel(s))
+            for ln in out.splitlines()[:20]:
+                lines.append("      " + ln)
+        lines.append("  Fix the scene(s) above, or re-run with --skip-check to package anyway.")
+        raise BuildError("\n".join(lines))
+
+
+# -------------------------------------------------------------- assembling --
+
+BOOT_TEMPLATE = '''-- ==========================================================================
+--  GENERATED by scripts/caesura_build.py — do not edit by hand.
+--  Game-only boot shim: runs the author's entry.lua when it can locate its
+--  own story, and otherwise starts the packaged entry scene directly.
+--  Loaded by src/main.cpp:1204 as (scripts/ + config.entry_script).
+-- ==========================================================================
+
+local kag_runner = require("kag_runner")
+local layers     = require("layers")
+
+local GAME_ROOT  = %(game_root)s
+local STORY_PATH = %(story_path)s
+
+-- Published for [iscript] blocks and project entry scripts that want to know
+-- where they were packaged to.
+_G.CAESURA_GAME_ROOT  = GAME_ROOT
+_G.CAESURA_STORY_PATH = STORY_PATH
+
+local project_entry = %(project_entry)s
+if project_entry and loadfile then
+    local chunk, load_err = loadfile(project_entry)
+    if chunk then
+        local ok, err = pcall(chunk)
+        if not ok then
+            print("[caesura] project entry.lua raised: " .. tostring(err))
+        end
+    elseif load_err then
+        print("[caesura] project entry.lua not loadable: " .. tostring(load_err))
+    end
+end
+
+-- The author's entry.lua may have failed to find its story (its search paths
+-- are repo-relative). Verify the runner really started; otherwise boot the
+-- packaged scene ourselves so the package is never a black window.
+if not kag_runner.get_ctx() then
+    print("[caesura] booting packaged entry scene: " .. STORY_PATH)
+    local started, why = kag_runner.start(STORY_PATH)
+    if not started then
+        print("[caesura] FATAL: cannot start " .. STORY_PATH .. " (" .. tostring(why) .. ")")
+    end
+end
+
+-- ---------------------------------------------------------------------------
+--  Frame hooks. Engine.cpp calls the GLOBALS engine_update(dt) (Engine.cpp:757)
+--  and engine_render() (Engine.cpp:1372) every frame, and _KAG_onClick on
+--  input. A project entry.lua is NOT required to define them (neither
+--  tests/projects/first_vn/entry.lua nor tools/project_templates/*/entry.lua
+--  do -- only demo/entry.lua and scripts/*_demo_entry.lua), and without them
+--  the story loads but never advances: a black window with audio silence.
+--  Install the standard KAG hooks for whatever the project left undefined.
+-- ---------------------------------------------------------------------------
+
+local toast = nil
+do
+    local ok, mod = pcall(require, "toast")
+    if ok then toast = mod end
+end
+
+if type(_G.engine_update) ~= "function" then
+    function _G.engine_update(dt)
+        dt = dt or 0.016
+        if toast then pcall(function() toast.update(dt) end) end
+        kag_runner.update(dt)
+    end
+end
+
+if type(_G.engine_render) ~= "function" then
+    function _G.engine_render()
+        layers.render()
+        kag_runner.render()
+    end
+end
+
+if type(_G._KAG_onClick) ~= "function" then
+    function _G._KAG_onClick()
+        kag_runner.on_click()
+    end
+end
+'''
+
+
+def _lua_str(s: str) -> str:
+    return '"%s"' % s.replace("\\", "/").replace('"', '\\"')
+
+
+def patch_runtime_config(config_lua: Path, entry_rel: str, dev_mode: bool) -> None:
+    """Re-point config.entry_script (and dev_mode) in the PACKAGED scripts/config.lua.
+
+    Byte-level line replacement on purpose: the file mixes UTF-8 with mojibake
+    box-drawing comments (scripts/config.lua:1), so a decode/encode round trip
+    would corrupt it. Only the two ASCII assignment lines are touched.
+    """
+    data = config_lua.read_bytes()
+    new_entry = ('config.entry_script = "%s"  -- caesura build (game-only)' % entry_rel).encode("utf-8")
+    data, n = re.subn(rb"(?m)^config\.entry_script\s*=.*$", new_entry.replace(b"\\", b"\\\\"), data, count=1)
+    if n != 1:
+        raise BuildError(
+            "Cannot re-point config.entry_script in %s (expected exactly one "
+            "assignment, found %d). The engine runtime layout changed; update "
+            "scripts/caesura_build.py." % (_rel(config_lua), n)
+        )
+    flag = b"true" if dev_mode else b"false"
+    data, n2 = re.subn(rb"(?m)^config\.dev_mode\s*=[^\r\n]*",
+                       b"config.dev_mode = " + flag +
+                       b"  -- caesura build (" + (b"dev" if dev_mode else b"release") + b")",
+                       data, count=1)
+    if n2 != 1:
+        raise BuildError("Cannot set config.dev_mode in %s (found %d assignments)."
+                         % (_rel(config_lua), n2))
+    config_lua.write_bytes(data)
+
+
+# Attributes that name an asset in a KAG token, per docs/api/command-contracts.md
+# (storage= for bg/playbgm/playse/image, sprite= for [ch], file= for video/SMA).
+ASSET_ATTR_RE = re.compile(r'\b(storage|sprite|file)\s*=\s*"([^"]+)"')
+
+
+def scan_asset_refs(scenes):
+    """Every distinct STATIC asset path the scenes reference (source order, deduped).
+
+    Paths carrying a macro parameter (%name%) or a brace interpolation (${...})
+    are resolved at runtime, not at build time -- e.g.
+    demo/example_game/story.ks:16 has storage="assets/bg/%bg%" inside a
+    [macro]. Reporting those as "missing" would be a false alarm, so they are
+    excluded here and surfaced separately by scan_dynamic_asset_refs.
+    """
+    refs, seen = [], set()
+    for s in scenes:
+        try:
+            text = s.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for _attr, ref in ASSET_ATTR_RE.findall(text):
+            ref = ref.replace("\\", "/")
+            if not ref or ref in seen or ".." in ref:
+                continue
+            if "%" in ref or "${" in ref:
+                continue
+            seen.add(ref)
+            refs.append(ref)
+    return refs
+
+
+def scan_dynamic_asset_refs(scenes):
+    """Asset references whose path is computed at runtime (macro arg / ${expr})."""
+    out, seen = [], set()
+    for s in scenes:
+        try:
+            text = s.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for _attr, ref in ASSET_ATTR_RE.findall(text):
+            ref = ref.replace("\\", "/")
+            if ("%" in ref or "${" in ref) and ref not in seen:
+                seen.add(ref)
+                out.append(ref)
+    return out
+
+
+def resolve_referenced_assets(refs, project: Path, out: Path):
+    """Copy every referenced asset that is not in the package yet from the repo
+    shared pool. Returns (copied, missing).
+
+    Without this, a project that references the shared pool (every stock
+    template does: tools/project_templates/basic/story.ks:57 uses
+    assets/bg/hana.png, which does NOT exist under the template's own assets/)
+    would ship with holes and render placeholders instead of art.
+    """
+    copied, missing = [], []
+    for ref in refs:
+        dst = out / ref
+        if dst.exists():
+            continue
+        for src in (project / ref, ROOT / ref):
+            if src.is_file():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                copied.append(ref)
+                break
+        else:
+            missing.append(ref)
+    return copied, missing
+
+
+# Developer-only files that live in scripts/ but are never loaded by the engine
+# runtime (build/CI helpers). A player package has no use for them.
+DEV_SCRIPT_SUFFIXES = {".py", ".sh", ".bat", ".mjs", ".vdf", ".bak", ".pyc", ".pyo"}
+
+
+def prune_dev_scripts(scripts_dir: Path) -> int:
+    removed = 0
+    for p in sorted(scripts_dir.rglob("*")):
+        if p.is_dir():
+            continue
+        if p.suffix.lower() in DEV_SCRIPT_SUFFIXES:
+            p.unlink()
+            removed += 1
+    for d in sorted(scripts_dir.rglob("*"), reverse=True):
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+    return removed
+
+
+# Build-time scene precompile. Run INSIDE the package with the vendored Lua so
+# cache/ksc/<scene>.ksc exists before the player's first launch.
+#
+# Why this is load-bearing, not an optimization: the engine caps Lua at
+# 2,000,000 instructions per budget window (src/script/vm/LuaManager.cpp:63),
+# reset once before the entry script (src/main.cpp:1207) and once per frame
+# (src/entry/Engine.cpp:1023). A cold tokenize+compile of a large scene runs
+# inside that single startup window, so a big story dies at boot with
+# "Sandbox: instruction budget exceeded". Empirically reproduced with
+# demo/example_game/story.ks (454 lines) -- the package booted only after the
+# .ksc cache existed. flow.load_scene keys freshness on a content hash
+# (scripts/flow.lua:47), so a precompiled cache stays valid until the scene is
+# edited, and a stale one merely costs a recompile.
+PRECOMPILE_LUA = '''-- generated by scripts/caesura_build.py (build-time scene precompile)
+package.path = "scripts/?.lua;scripts/?/init.lua;scripts/kag/?.lua;" .. package.path
+local ok, flow = pcall(require, "flow")
+if not ok then print("PRECOMPILE-SKIP require flow: " .. tostring(flow)); os.exit(0) end
+local failed = 0
+for _, scene in ipairs({%(scenes)s}) do
+    local s, err = flow.load_scene(scene)
+    if s then
+        print("PRECOMPILE-OK " .. scene .. " tokens=" .. tostring(#s.tokens))
+    else
+        failed = failed + 1
+        print("PRECOMPILE-FAIL " .. scene .. " " .. tostring(err))
+    end
+end
+os.exit(failed == 0 and 0 or 1)
+'''
+
+
+def precompile_scenes(out: Path, scene_rels):
+    """Warm cache/ksc inside the package. Returns (ok_list, fail_list, note)."""
+    try:
+        lua = find_lua()
+    except BuildError as e:
+        return [], [], "skipped (%s)" % str(e).splitlines()[0]
+    lua_abs = str(Path(lua).resolve()) if Path(lua).exists() else lua
+    script = out / "caesura-precompile.lua"
+    script.write_text(
+        PRECOMPILE_LUA % {"scenes": ", ".join('"%s"' % s for s in scene_rels)},
+        encoding="utf-8", newline="\n")
+    try:
+        res = subprocess.run([lua_abs, "caesura-precompile.lua"], cwd=str(out),
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=600)
+    except (OSError, subprocess.SubprocessError) as exc:
+        script.unlink(missing_ok=True)
+        return [], [], "skipped (%s)" % exc
+    finally:
+        script.unlink(missing_ok=True)
+    # scripts/kag/compiler.lua:863 shells out to `mkdir -p "<dir>"` to create
+    # cache/ksc. On Windows, cmd's mkdir has no -p flag and takes it as a
+    # DIRECTORY NAME, so every compile leaves a literal "-p" directory behind
+    # (it also litters the repo root during normal engine runs -- pre-existing
+    # engine bug, reported separately). Do not ship it to players.
+    stray = out / "-p"
+    if stray.is_dir():
+        shutil.rmtree(stray, ignore_errors=True)
+
+    ok_list, fail_list = [], []
+    for line in (res.stdout or "").splitlines():
+        if line.startswith("PRECOMPILE-OK "):
+            ok_list.append(line.split(" ", 2)[1])
+        elif line.startswith("PRECOMPILE-FAIL "):
+            fail_list.append(line[len("PRECOMPILE-FAIL "):])
+    note = "" if res.returncode == 0 else "lua exited %d" % res.returncode
+    return ok_list, fail_list, note
+
+
+def assemble(project: Path, entry_scene: Path, engine: Path, out: Path,
+             shared_assets: bool, dev_mode: bool, quiet=False) -> dict:
+    def say(msg):
+        if not quiet:
+            print(msg)
+
+    game_name = project.name
+    if out.exists():
+        # Refuse to delete a directory we did not create: -o accepts any path,
+        # and an unconditional rmtree would erase e.g. a pre-existing dist/
+        # full of unrelated files. Every assemble() run writes BUILD-INFO.json,
+        # so its presence marks the directory as a previous build output; an
+        # empty directory is also safe to reuse.
+        if any(out.iterdir()) and not (out / "BUILD-INFO.json").exists():
+            raise BuildError(
+                "Refusing to overwrite %s: it exists, is not empty, and has no "
+                "BUILD-INFO.json (not a previous 'caesura build' output). "
+                "Pick a new or empty -o directory, or delete it yourself."
+                % _rel(out))
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+
+    # 1. engine binary + every runtime lib beside it (no manual DLL copying
+    #    is ever asked of the player — that is the whole point of game-only).
+    shutil.copy2(engine, out / engine.name)
+    libs = runtime_libs(engine)
+    for lib in libs:
+        shutil.copy2(lib, out / lib.name)
+    say("[build] engine: %s (+%d runtime lib%s)"
+        % (engine.name, len(libs), "" if len(libs) == 1 else "s"))
+
+    # 2. engine Lua runtime
+    _copy_tree(ROOT / "scripts", out / "scripts")
+    for junk in ("game_logic.lua",):
+        p = out / "scripts" / junk
+        if p.exists():
+            p.unlink()
+    pruned = prune_dev_scripts(out / "scripts")
+    say("[build] runtime: scripts/ (%d dev-only file%s pruned)"
+        % (pruned, "" if pruned == 1 else "s"))
+
+    # 3. assets — engine-required, then the game's own, then (opt-in) the pool
+    (out / "assets").mkdir(exist_ok=True)
+    for sub in ENGINE_REQUIRED_ASSETS:
+        src = ROOT / "assets" / sub
+        if src.is_dir():
+            _copy_tree(src, out / "assets" / sub)
+    if shared_assets:
+        _copy_tree(ROOT / "assets", out / "assets")
+        say("[build] assets: engine-required + repo shared pool (--with-shared-assets)")
+    else:
+        say("[build] assets: engine-required (%s) + game assets"
+            % ", ".join(ENGINE_REQUIRED_ASSETS))
+    proj_assets = project / "assets"
+    if proj_assets.is_dir():
+        _copy_tree(proj_assets, out / "assets")
+
+    # 4. the game itself, under the sandbox-allowlisted projects/ root
+    game_root = "projects/%s" % game_name
+    _copy_tree(project, out / "projects" / game_name)
+    story_rel = "%s/%s" % (game_root, entry_scene.relative_to(project).as_posix())
+    say("[build] game: %s (entry scene %s)" % (game_root, story_rel))
+
+    # 4b. assets the scenes actually reference but the project does not own
+    #     (stock templates reference the repo shared pool by design).
+    scenes = sorted(project.rglob("*.ks"))
+    refs = scan_asset_refs(scenes)
+    copied, missing = resolve_referenced_assets(refs, project, out)
+    dynamic = scan_dynamic_asset_refs(scenes)
+    say("[build] referenced assets: %d static (%d pulled from repo pool, %d missing)%s"
+        % (len(refs), len(copied), len(missing),
+           ", %d runtime-computed" % len(dynamic) if dynamic else ""))
+    if missing:
+        for m in missing[:8]:
+            say("[build]   WARN missing asset (engine will draw a placeholder): %s" % m)
+    if dynamic and not shared_assets:
+        # A macro/expression path cannot be resolved statically: whatever the
+        # author passes at runtime must already be in the package.
+        say("[build]   NOTE runtime-computed asset path(s) -- verify their targets ship: %s"
+            % ", ".join(dynamic[:5]))
+
+    # 5. generated boot shim + re-pointed runtime config
+    project_entry = "%s/entry.lua" % game_root
+    has_entry = (out / "projects" / game_name / "entry.lua").is_file()
+    boot_rel = "%s/caesura-boot.lua" % game_root
+    (out / boot_rel).write_text(BOOT_TEMPLATE % {
+        "game_root": _lua_str(game_root),
+        "story_path": _lua_str(story_rel),
+        "project_entry": _lua_str(project_entry) if has_entry else "nil",
+    }, encoding="utf-8", newline="\n")
+    patch_runtime_config(out / "scripts" / "config.lua", "../" + boot_rel, dev_mode)
+    say("[build] boot: scripts/config.lua -> ../%s (dev_mode=%s)"
+        % (boot_rel, "true" if dev_mode else "false"))
+
+    # 6. writable runtime dirs (the engine writes saves/settings/logs and the
+    #    KAG compiler caches bytecode under cache/ksc)
+    for d in ("cache/ksc", "saves", "settings", "logs"):
+        (out / d).mkdir(parents=True, exist_ok=True)
+
+    # 6b. precompile every scene into cache/ksc (see PRECOMPILE_LUA: a cold
+    #     compile of a large scene blows the startup Lua instruction budget).
+    scene_rels = ["%s/%s" % (game_root, p.relative_to(project).as_posix()) for p in scenes]
+    pre_ok, pre_fail, pre_note = precompile_scenes(out, scene_rels)
+    if pre_fail or pre_note:
+        say("[build] precompile: %d/%d scene(s) cached%s"
+            % (len(pre_ok), len(scene_rels), (" -- " + pre_note) if pre_note else ""))
+        for f in pre_fail[:5]:
+            say("[build]   WARN scene did not precompile: %s" % f)
+    else:
+        say("[build] precompile: %d/%d scene(s) cached into cache/ksc"
+            % (len(pre_ok), len(scene_rels)))
+
+    # 7. provenance + player note
+    info = {
+        "kind": "caesura-game-only",
+        "schema": 1,
+        "game": game_name,
+        "entry_scene": story_rel,
+        "boot_script": boot_rel,
+        "engine_binary": engine.name,
+        "engine_source": str(engine),
+        "runtime_libs": [l.name for l in libs],
+        "scenes": sorted(p.relative_to(project).as_posix() for p in project.rglob("*.ks")),
+        "dev_mode": dev_mode,
+        "shared_assets": shared_assets,
+        "precompiled_scenes": pre_ok,
+        "precompile_failures": pre_fail,
+        "asset_refs": len(refs),
+        "assets_pulled_from_repo": copied,
+        "assets_missing": missing,
+        "assets_runtime_computed": dynamic,
+        "host": {"os": platform.system(), "machine": platform.machine(),
+                 "python": platform.python_version()},
+    }
+    (out / "BUILD-INFO.json").write_text(
+        json.dumps(info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    (out / "HOW-TO-PLAY.txt").write_text(
+        "%s -- Caesura (AmeKAG)\n\n"
+        "Double-click %s to play. Everything needed is in this folder;\n"
+        "no installation, no separate runtime, no manual DLL copying.\n\n"
+        "Saves are written to saves/, settings to settings/, logs to logs/.\n"
+        "Build provenance: BUILD-INFO.json\n" % (game_name, engine.name),
+        encoding="utf-8", newline="\n")
+    return info
+
+
+# ------------------------------------------------------------------ public --
+
+def cmd_build(args) -> int:
+    try:
+        project = resolve_project(args.project)
+        scenes = collect_scenes(project)
+        entry_scene = pick_entry_scene(project, scenes, getattr(args, "entry", None))
+        engine = find_engine(getattr(args, "engine", None), getattr(args, "config", None))
+        out = Path(args.out) if args.out else (ROOT / "dist" / ("%s-game" % project.name))
+        if not out.is_absolute():
+            out = (Path.cwd() / out).resolve()
+        if not args.skip_check:
+            run_ks_check(scenes, find_lua())
+            print("[build] ks_check: %d scene(s) pass contracts" % len(scenes))
+        else:
+            print("[build] ks_check: SKIPPED (--skip-check)")
+        info = assemble(project, entry_scene, engine, out,
+                        shared_assets=args.with_shared_assets, dev_mode=args.dev)
+    except BuildError as e:
+        print("caesura build: %s" % e, file=sys.stderr)
+        return 1
+    print("")
+    print("=" * 66)
+    print("  GAME-ONLY BUILD COMPLETE -> %s" % out)
+    print("    play:   %s" % (out / info["engine_binary"]))
+    print("    scenes: %d   entry: %s" % (len(info["scenes"]), info["entry_scene"]))
+    print("    package it:  python scripts/caesura.py package %s" % args.project)
+    print("=" * 66)
+    return 0
+
+
+def _zip_dir(src: Path, zip_path: Path) -> int:
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+    if zip_path.exists():
+        zip_path.unlink()
+    top = zip_path.name
+    for suf in (".zip",):
+        if top.endswith(suf):
+            top = top[: -len(suf)]
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(src):
+            dirs[:] = [d for d in dirs if d not in PRUNE_DIR_NAMES]
+            for f in files:
+                full = Path(root) / f
+                zf.write(full, str(Path(top) / full.relative_to(src)))
+    return zip_path.stat().st_size
+
+
+def cmd_package(args) -> int:
+    targets = ["windows", "web"] if args.target == "both" else [args.target]
+    if args.target == "auto":
+        targets = ["windows"] if os.name == "nt" else ["web"]
+    produced = []
+    try:
+        project = resolve_project(args.project)
+    except BuildError as e:
+        print("caesura package: %s" % e, file=sys.stderr)
+        return 1
+    out_dir = Path(args.out) if args.out else (ROOT / "dist")
+    if not out_dir.is_absolute():
+        out_dir = (Path.cwd() / out_dir).resolve()
+
+    for target in targets:
+        if target == "windows":
+            # Desktop game-only ZIP: build the directory, then archive it.
+            stage = out_dir / ("%s-game" % project.name)
+            build_args = type("A", (), {
+                "project": str(project), "out": str(stage),
+                "engine": getattr(args, "engine", None),
+                "config": getattr(args, "config", None),
+                "entry": getattr(args, "entry", None),
+                "skip_check": args.skip_check,
+                "with_shared_assets": args.with_shared_assets,
+                "dev": args.dev,
+            })()
+            rc = cmd_build(build_args)
+            if rc != 0:
+                return rc
+            tag = "win64" if os.name == "nt" else platform.system().lower()
+            zip_path = out_dir / ("%s-%s.zip" % (project.name, tag))
+            size = _zip_dir(stage, zip_path)
+            produced.append((zip_path, size))
+            print("[package] windows game-only ZIP: %s (%d bytes)" % (zip_path, size))
+        elif target == "web":
+            # Reuse the existing, verified Web pipeline verbatim.
+            web_out = out_dir / ("%s-web" % project.name)
+            zip_path = out_dir / ("%s-web.zip" % project.name)
+            cmd = [find_bash(), "scripts/package_game.sh", _rel(project),
+                   "--out", _rel(web_out), "--zip", _rel(zip_path)]
+            # flush: the child writes straight to the inherited handles, so an
+            # unflushed announcement would print AFTER its own output.
+            print("[package] web: %s" % " ".join(cmd), flush=True)
+            res = subprocess.run(cmd, cwd=str(ROOT))
+            if res.returncode != 0:
+                print("caesura package: web packaging failed (scripts/package_game.sh "
+                      "exited %d -- see its output above)." % res.returncode, file=sys.stderr)
+                return res.returncode
+            if zip_path.exists():
+                produced.append((zip_path, zip_path.stat().st_size))
+        else:
+            print("caesura package: unknown target '%s' (windows|web|both|auto)" % target,
+                  file=sys.stderr)
+            return 1
+
+    print("")
+    print("=" * 66)
+    print("  PACKAGE COMPLETE (%d artifact%s)" % (len(produced), "" if len(produced) == 1 else "s"))
+    for p, s in produced:
+        print("    %s  (%.2f MB)" % (p, s / (1024 * 1024)))
+    print("=" * 66)
+    return 0

@@ -260,6 +260,24 @@ if(Python3_EXECUTABLE)
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+    # caesura build/package CLI contract tests. Shells out to
+    # `python scripts/caesura.py build|package` exactly as a creator would; it
+    # never starts the engine, only copies the exe and writes tempfiles, so no
+    # RUN_SERIAL / FIXTURES_REQUIRED / engine-target dependency is needed.
+    # SKIP_RETURN_CODE 77: on a host with no built engine (build/ and bin/ are
+    # gitignored, i.e. not a repository invariant) the runner exits 77 and ctest
+    # reports Skipped rather than Failed, so a fresh clone stays green.
+    add_test(
+        NAME CaesuraBuildCli
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_caesura_build_cli.py
+    )
+    set_tests_properties(CaesuraBuildCli PROPERTIES
+        LABELS "qa;cli;build;package"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 1200
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
 endif()
 
 # Copy scripts to test output directory so sandbox.lua et al are found

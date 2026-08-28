@@ -6,13 +6,23 @@ Unified interface for project scaffolding, doctor diagnostics, story flow, and i
 
 import sys, os, subprocess, shutil, argparse
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from caesura_build import cmd_build, cmd_package  # noqa: E402
+
 def find_lua():
+    # Anchored at the CLI's own root (checkout or extracted package), not the
+    # CWD, mirroring caesura_build.find_lua: external/lua/ ships only in the
+    # release package (gitignored in a checkout), while a built checkout has
+    # the lua_cli product at build/lua/<config>/lua[.exe] (where CI looks too).
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = [
-        os.path.join('external', 'lua', 'lua.exe'),
-        os.path.join('external', 'lua', 'lua'),
-        'lua',
-        'lua5.4',
+        os.path.join(root, 'external', 'lua', 'lua.exe'),
+        os.path.join(root, 'external', 'lua', 'lua'),
     ]
+    for cfg in ('Release', 'Debug', 'RelWithDebInfo', 'MinSizeRel', ''):
+        base = os.path.join(root, 'build', 'lua', cfg) if cfg else os.path.join(root, 'build', 'lua')
+        candidates.append(os.path.join(base, 'lua.exe'))
+        candidates.append(os.path.join(base, 'lua'))
     for c in candidates:
         if os.path.exists(c) and (os.access(c, os.X_OK) or os.name == 'nt'):
             return c
@@ -23,7 +33,13 @@ def cmd_doctor(args):
     tools = [
         ("Python 3", [sys.executable, "--version"], "Required for creator toolchain"),
         ("Lua 5.4", [find_lua(), "-v"], "Core script runtime"),
-        ("Node.js / npm", ["npm", "--version"], "Web player test & packaging"),
+        # On Windows npm is npm.cmd; a bare "npm" is not resolved by
+        # subprocess without shell=True, so doctor reported it missing on every
+        # Windows machine that had it (an explicit reproduction of the
+        # FileNotFoundError). Resolve both forms.
+        ("Node.js / npm",
+         [shutil.which("npm") or shutil.which("npm.cmd") or "npm", "--version"],
+         "Web player test & packaging"),
         ("CMake", ["cmake", "--version"], "C++ build system"),
         ("Git", ["git", "--version"], "Version control"),
     ]
@@ -44,26 +60,66 @@ def cmd_doctor(args):
     print(f"\nDoctor check complete: {passed}/{len(tools)} critical tools ready.")
     return 0
 
+def find_templates_root():
+    """Resolve tools/project_templates/ by anchoring on THIS SCRIPT (the CLI
+    executable), mirroring main.cpp's SDL_GetBasePath webRoot logic:
+      1. the directory next to the script -- a release package puts scripts/
+         at the package root next to tools/, and a checkout does the same;
+      2. fall back to a walk up from the CWD (in-tree / build-dir workflows).
+    Returns an absolute path, or None when no templates tree is found.
+    """
+    seen = set()
+
+    def probe(start):
+        p = os.path.abspath(start)
+        while p and p not in seen:
+            seen.add(p)
+            candidate = os.path.join(p, "tools", "project_templates")
+            if os.path.isdir(candidate):
+                return os.path.abspath(candidate)
+            parent = os.path.dirname(p)
+            if parent == p:
+                break
+            p = parent
+        return None
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    found = probe(script_dir)
+    if found is None:
+        found = probe(os.getcwd())
+    return found
+
+
 def cmd_create(args):
     name = args.name
     template = args.template or "showcase"
     target_dir = args.out or name
-    
-    template_src = os.path.join("tools", "project_templates", template)
-    if not os.path.exists(template_src):
-        # Fallback to demo/example_game if showcase requested
-        if template == "showcase" and os.path.exists("demo/example_game"):
-            template_src = "demo/example_game"
-        else:
-            print(f"Error: template '{template}' not found in tools/project_templates/", file=sys.stderr)
-            return 1
-            
+
+    templates_root = find_templates_root()
+    template_src = None
+    if templates_root is not None:
+        candidate = os.path.join(templates_root, template)
+        if os.path.isdir(candidate):
+            template_src = candidate
+    if template_src is None and template == "showcase":
+        # Legacy in-checkout fallback: demo/example_game doubles as the
+        # showcase template when no project_templates tree is around.
+        legacy = os.path.join("demo", "example_game")
+        if os.path.isdir(legacy):
+            template_src = legacy
+    if template_src is None:
+        where = templates_root if templates_root else "tools/project_templates"
+        print(f"Error: template '{template}' not found (searched: {where})",
+              file=sys.stderr)
+        return 1
+
     if os.path.exists(target_dir):
         print(f"Error: target directory '{target_dir}' already exists.", file=sys.stderr)
         return 1
-        
+
     shutil.copytree(template_src, target_dir)
     print(f"[OK] Project '{name}' created from template '{template}' at: {target_dir}")
+    print(f"     (template from: {template_src})")
     return 0
 
 def cmd_flow(args):
@@ -165,7 +221,42 @@ def main():
     p_patch = subparsers.add_parser("patch", help="Differential CARC patch creation, application, and verification")
     p_patch.add_argument("patch_args", nargs="*", help="Arguments: <base.carc> <target.carc> <delta.carc> or create|apply|verify ...")
     p_patch.set_defaults(func=cmd_patch)
-    
+
+    # build — game-only desktop directory (see scripts/caesura_build.py)
+    p_build = subparsers.add_parser(
+        "build", help="Assemble a game-only, double-click-runnable desktop build")
+    p_build.add_argument("project", help="Project directory or name (e.g. basic, tests/projects/first_vn)")
+    p_build.add_argument("-o", "--out", help="Output directory (default dist/<project>-game)")
+    p_build.add_argument("--engine", help="Engine binary or the directory containing it "
+                                         "(default: search build/, bin/; env CAESURA_ENGINE)")
+    p_build.add_argument("--config", choices=["Debug", "Release", "RelWithDebInfo"],
+                         help="Prefer this build configuration when searching for the engine")
+    p_build.add_argument("--entry", help="Entry scene (default story.ks)")
+    p_build.add_argument("--skip-check", action="store_true",
+                         help="Do not run the ks_check contract gate")
+    p_build.add_argument("--with-shared-assets", action="store_true",
+                         help="Also ship the repo shared asset pool (assets/), not just what the game needs")
+    p_build.add_argument("--dev", action="store_true",
+                         help="Keep config.dev_mode = true (default: release, strict sandbox)")
+    p_build.set_defaults(func=cmd_build)
+
+    # package — distributable archives (desktop ZIP / web bundle)
+    p_pkg = subparsers.add_parser(
+        "package", help="Package a project into distributable archives (desktop ZIP / web bundle)")
+    p_pkg.add_argument("project", help="Project directory or name")
+    p_pkg.add_argument("--target", choices=["windows", "web", "both", "auto"], default="windows",
+                       help="windows = game-only desktop ZIP, web = static site via package_game.sh")
+    p_pkg.add_argument("-o", "--out", help="Output directory (default dist/)")
+    p_pkg.add_argument("--engine", help="Engine binary or its directory (desktop target)")
+    p_pkg.add_argument("--config", choices=["Debug", "Release", "RelWithDebInfo"],
+                       help="Prefer this build configuration when searching for the engine")
+    p_pkg.add_argument("--entry", help="Entry scene (default story.ks)")
+    p_pkg.add_argument("--skip-check", action="store_true", help="Do not run the ks_check contract gate")
+    p_pkg.add_argument("--with-shared-assets", action="store_true",
+                       help="Also ship the repo shared asset pool (assets/)")
+    p_pkg.add_argument("--dev", action="store_true", help="Keep config.dev_mode = true")
+    p_pkg.set_defaults(func=cmd_package)
+
     args = parser.parse_args()
     sys.exit(args.func(args))
 
