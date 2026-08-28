@@ -245,7 +245,12 @@ do
     local outA = expr.translate(bigA)
     local dtA = os.clock() - tA0
     check("300 interp translate no leftover '?'", outA:find("?", 1, true) == nil)
-    check("300 interp translate under 2s", dtA < 2.0, string.format("%.3fs", dtA))
+    -- Time budgets below are LOAD-SENSITIVE sentinels, not precise baselines:
+    -- they run on the Debug lua_cli (~2x slower than Release) and flaked under
+    -- parallel-build load (2.07s/2.49s against the old 2.0s cap). A real
+    -- complexity regression (O(n^2) -> O(n^3)) blows far past these budgets;
+    -- the correctness checks ("no leftover '?'") are the actual guards.
+    check("300 interp translate under 6s", dtA < 6.0, string.format("%.3fs", dtA))
 
     -- (B) huge single expression: 500 chained ternary (right-assoc flat
     --     chain) -- the O(n^2) ternary-recursion worst case a naive author
@@ -258,7 +263,7 @@ do
     local outB = expr.translate(bigB)
     local dtB = os.clock() - tB0
     check("500-ternary chain no leftover '?'", outB:find("?", 1, true) == nil)
-    check("500-ternary chain under 2s", dtB < 2.0, string.format("%.3fs", dtB))
+    check("500-ternary chain under 8s", dtB < 8.0, string.format("%.3fs", dtB))
 
     -- (C) multi-arg call, 80 args each with a ternary: round 84 comma
     --     segment path. Verify segment count preserved (80 args, 79
@@ -272,7 +277,7 @@ do
     check("80-arg translate no leftover '?'", outC:find("?", 1, true) == nil)
     local commas = select(2, outC:gsub(",", ""))
     check("80-arg translate keeps 79 commas", commas == 79, commas)
-    check("80-arg translate under 0.1s", dtC < 0.1, string.format("%.4fs", dtC))
+    check("80-arg translate under 0.5s", dtC < 0.5, string.format("%.4fs", dtC))
 
     -- (D) scan-heavy text: many long-bracket strings with '?' ':' ',' '&'
     --     inside (must be SKIPPED by find_top/match_colon) plus real
