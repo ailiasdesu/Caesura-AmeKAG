@@ -1,14 +1,14 @@
 # Caesura (AmeKAG) — Cross-Platform Visual Novel Engine / 跨平台视觉小说引擎
 
-> **16 modules · 34 pure-virtual interfaces · 123 KAG Neo-Genesis command contracts · 0 circular dependencies**
-> **16 模块 · 34 纯虚接口 · 123 KAG Neo-Genesis 命令契约 · 0 循环依赖**
+> **16 modules · 34 pure-virtual interface headers · 134 KAG Neo-Genesis command contracts · 0 circular dependencies**
+> **16 模块 · 34 纯虚接口头 · 134 KAG Neo-Genesis 命令契约 · 0 循环依赖**
 > C++20 · bgfx · SDL3 · SoLoud · Lua 5.4 · CMake · MIT License
 > Live API census: `python scripts/api_stats.py` → [docs/api/api-stats.md](docs/api/api-stats.md) / 实时 API 普查
 
 <p align="center">
   <b>Platforms 平台</b>&nbsp; Windows&nbsp;&nbsp; Android&nbsp;&nbsp; macOS&nbsp;&nbsp; Linux&nbsp;&nbsp; iOS (Track I)&nbsp;&nbsp; Web&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Status 状态</b>&nbsp; Tests passing 测试全绿&nbsp;&nbsp;·&nbsp;&nbsp;
-  <b>Contracts 契约</b>&nbsp;123 KAG commands 命令&nbsp;&nbsp;·&nbsp;&nbsp;
+  <b>Contracts 契约</b>&nbsp;134 KAG commands 命令&nbsp;&nbsp;·&nbsp;&nbsp;
   <b>Interfaces 接口</b>&nbsp;34 pure-virtual 纯虚
   <br>
   <sub><i>文本徽章（不依赖外部 CI 服务，计数取自 [docs/api/api-stats.md](docs/api/api-stats.md) 实时普查与阶段 G 最近审计）—
@@ -113,15 +113,15 @@ post-processing chain (bloom / vignette / LUT grade / soft blur; full-screen per
 
 ### 脚本 Scripting (40 项 / 40 items)
 
-Lua 5.4 VM（协程调度器 + 沙箱 + 指令预算防死循环）；**KAG Neo-Genesis 解析器**（123 个声明式契约命令、
+Lua 5.4 VM（协程调度器 + 沙箱 + 指令预算防死循环）；**KAG Neo-Genesis 解析器**（134 个声明式契约命令、
 KAG3 兼容裸参数 / TJS 表达式 / 旧变量系统 / 控制流）；`[until exp timeout]` 声明式条件等待、
 `[button cond]` 条件选择（Ren'Py menu 对齐）、`[nvl]` NVL 模式、内联文本标记（`{color}`/`{size}`/`{b}`/`{i}`/`{s}`）、
 i18n 本地化管线（`{key}` token + 逐行翻译 + 中英日热切换 + 整页重绘，超 Ren'Py）、参数化宏（含嵌套宏定义）、
 标签索引 O(1) 跳转、场景级调试器（断点/单步/作用域检查）、mod 加载器、输入录制/回放（自动演示 + 帧导出 PNG → 视频）、
 无障碍（字幕、TTS 钩子、色盲/高对比滤镜）、LLM 对话（`[ai_dialog]`，OpenAI 兼容 / Ollama 实测）、
-LSP 导航（label 定义/引用）、AOT 编译与嵌套预算硬化、**声明式补间 `[tween]`（ctx.tweens 管理器，线性/缓入/缓出/回弹）**、**声明式布局 `[layout...]`（hbox/vbox/grid 容器 + 纯数学坐标计算，与 [position]/[tween] 组合）**。**123/123 契约命令全部有运行时执行覆盖**，指令预算防死循环。
+LSP 导航（label 定义/引用）、AOT 编译与嵌套预算硬化、**声明式补间 `[tween]`（ctx.tweens 管理器，线性/缓入/缓出/回弹）**、**声明式布局 `[layout...]`（hbox/vbox/grid 容器 + 纯数学坐标计算，与 [position]/[tween] 组合）**。契约命令运行时执行覆盖：round 107 记录 **123/123**；此后契约总数增至 **134**，新增 11 条的覆盖**尚未复核**（unverified）。指令预算防死循环。
 EN: Lua 5.4 VM (coroutine scheduler + sandbox + instruction budget against infinite loops); **KAG Neo-Genesis parser**
-(123 declarative contract commands; KAG3-compatible bare args / TJS expressions / legacy variable system / control flow);
+(134 declarative contract commands; KAG3-compatible bare args / TJS expressions / legacy variable system / control flow);
 `[until exp timeout]` conditional waits, `[button cond]` choices (Ren'Py-menu aligned), `[nvl]` mode, inline marks,
 i18n pipeline (`{key}` tokens + line-by-line translation + real-time zh/en/ja switching + full-page redraw, beyond Ren'Py),
 parameterized macros (nested definitions), O(1) label-index jumps, scene debugger (breakpoints/step/scope), mod loader,
@@ -129,7 +129,7 @@ input record/replay (auto-demo + frame-export PNG → video), accessibility (sub
 LLM dialogue (`[ai_dialog]`, OpenAI-compatible, measured on Ollama), LSP navigation, AOT compile + nested-budget hardening;
 declarative `[tween]` (ctx.tweens manager; linear/ease-in/out/back-out) and declarative `[layout...]` (hbox/vbox/grid containers,
 pure-math coordinate solver composing with [position]/[tween]).
-**All 123/123 contract commands have runtime execution coverage**; the instruction budget prevents infinite loops.
+Runtime execution coverage was **123/123 as recorded at round 107**; the contract total has since grown to **134** and the 11 newer commands are **not yet re-audited**. The instruction budget prevents infinite loops.
 
 ### 音频 Audio (4 项 / 4 items)
 
@@ -157,13 +157,13 @@ Steamworks (achievements/stats/cloud, conditionally compiled + Null default); as
 
 ### 开发工具 Development (10 项 / 10 items)
 
-编辑器 RPC（**HTTP :9876 + stdin/stdout JSON-RPC 双传输**，25 HTTP 端点 / 29 stdio 方法，owner-thread DTO 分发，
+编辑器 RPC（**HTTP :9876 + stdin/stdout JSON-RPC 双传输**，36 HTTP 端点 / 29 stdio 方法，owner-thread DTO 分发，
 传输层不持有 `lua_State*`）；结构日志（环形缓冲 + 子系统统计）；帧剖析（GPU 提交数 / 瞬时分配 / Lua GC）；
 NullJobSystem 同步测试替身；headless 无 GPU 模式；DevMode 棋盘格占位纹理；Lua 调试器（断点/步进/检查 + 陈旧暂停拒绝）；
 AI 开发助手（`kag/aidev.lua`，本地规则诊断 + LLM 解释/修复/生成 + IDE /api/eval 接入）；LSP 导航（Monaco provider）；
 **SMA 骨骼网格动画**（CPU 软蒙皮 + GPU compute 蒙皮（D3D11 像素级一致验证）+ 2-bone IK + E-mote 部件切换 +
 `[sma_play]`/`[sma_anim]`/`[sma_ik]` 等契约 + `sma.*` Lua 绑定）。
-EN: Editor RPC (**dual transport: HTTP :9876 + stdin/stdout JSON-RPC**, 25 HTTP endpoints / 29 stdio methods,
+EN: Editor RPC (**dual transport: HTTP :9876 + stdin/stdout JSON-RPC**, 36 HTTP endpoints / 29 stdio methods,
 owner-thread DTO dispatch, transport never holds a `lua_State*`); structured logging (ring buffer + subsystem stats);
 frame profiling (GPU submits / transient allocations / Lua GC); NullJobSystem synchronous test double; headless no-GPU mode;
 DevMode checkerboard placeholder; Lua debugger (breakpoints/step/inspect + stale-pause rejection); AI dev assistant
@@ -227,8 +227,8 @@ EN: Strict DI: **`src/main.cpp` + `src/entry/` is the only composition root crea
 └──────────────────────────────────────────────────────────┘
 ```
 
-**16 个内部模块（15 个子系统库 + entry 组合根）**，运行时后端访问全部集中在 `BackendRegistry` 并通过 **31 个纯虚接口（390 个纯虚方法）** 暴露。CMake 目标图无循环依赖；实现级依赖见 [engine-architecture-topology.md](docs/design/engine-architecture-topology.md)。
-EN: **16 internal modules (15 subsystem libraries + the entry composition root)**; all runtime backend access goes through `BackendRegistry`, exposed via **31 pure-virtual interfaces (390 pure-virtual methods)**. The CMake target graph has no circular dependencies; implementation-level deps are in [engine-architecture-topology.md](docs/design/engine-architecture-topology.md).
+**16 个内部模块（15 个子系统库 + entry 组合根）**，运行时后端访问全部集中在 `BackendRegistry` 并通过 **34 个纯虚接口头（412 个纯虚方法）** 暴露（权威计数由 `python scripts/api_stats.py` 生成，见 [api-stats.md](docs/api/api-stats.md)；下表为其中的 runtime 后端服务子集）。CMake 目标图无循环依赖；实现级依赖见 [engine-architecture-topology.md](docs/design/engine-architecture-topology.md)。
+EN: **16 internal modules (15 subsystem libraries + the entry composition root)**; all runtime backend access goes through `BackendRegistry`, exposed via **34 pure-virtual interface headers (412 pure-virtual methods)** — authoritative counts are generated by `python scripts/api_stats.py` (see [api-stats.md](docs/api/api-stats.md)); the table below lists the runtime-backend subset. The CMake target graph has no circular dependencies; implementation-level deps are in [engine-architecture-topology.md](docs/design/engine-architecture-topology.md).
 
 ### 数据流（Lua → Scheduler → Backend / Data flow）
 
@@ -266,7 +266,7 @@ Lua in .ks; `kag.jump`/`kag.call`/`kag.save_game` provide Lua→KAG callbacks; e
 | 16 | `steam` | Steamworks 成就/统计/云存档（条件编译） | 1 |
 | | **合计 / Total** | | **31** |
 
-### 31 个纯虚接口（runtime 后端服务 / 31 pure-virtual interfaces — runtime backend services)
+### runtime 后端服务接口（下列 31 项为 `BackendRegistry` 暴露的服务；接口头总数 34 见 api-stats.md / runtime backend services)
 
 | 接口 | 模块 | 实现 |
 |-------|------|------|
@@ -295,7 +295,7 @@ Lua in .ks; `kag.jump`/`kag.call`/`kag.save_game` provide Lua→KAG callbacks; e
 | `IDebugManager` | debug | DebugManager（环形缓冲、剖析） |
 | `IPlatformBackend` | platform | SDL3PlatformBackend |
 | `IMobileAdapter` | platform | MobileAdapter（手指事件/方向/触摸→鼠标） |
-| `IEditorServer` | rpc | EditorServer（httplib，25 端点） |
+| `IEditorServer` | rpc | EditorServer（httplib，36 个 HTTP 端点） |
 | `IRpcServer` | rpc | RpcServer（JSON-RPC） |
 | `IRpcDispatcher` | rpc | 组合根 owner-thread 分发器 |
 | `IInputRouter` | input | InputRouter（KAG/Game 焦点） |
@@ -389,14 +389,19 @@ cmake -B build -DCAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative
 
 | 套件 | 命令（仓库根或标注目录） | 通过标准 |
 |------|--------------------------|----------|
-| C++ doctest | `cd build/tests/Debug && ./CaesuraTests.exe` | 0 failed, 0 skipped（976 用例） |
-| C++ CTest | `ctest -C Debug --test-dir build --output-on-failure` | 全过 |
-| Lua 主套件 | `external/lua/lua.exe tests/scripts/run_lua_tests.lua` | 全过（132 套件，顺序敏感） |
+| C++ doctest | `cd build/tests/Debug && ./CaesuraTests.exe` | 0 failed, 0 skipped（2026-08-27 实测 1119 用例 / 385783 断言） |
+| C++ CTest | `ctest -C Debug --test-dir build --output-on-failure` | 全过（14 target，`ctest --test-dir build -N` 列出） |
+| Lua 主套件 | `external/lua/lua.exe tests/scripts/run_lua_tests.lua` | 全过（实测 143，顺序敏感） |
 | Lua 孤儿套件 | `external/lua/lua.exe tests/scripts/run_orphan_tests.lua` | 全过（24 套件，单独跑） |
-| Web vitest | `cd web && npm test` | 全过（297 用例） |
-| Editor vitest | `cd editor && npm test` | 全过（530 用例） |
+| Web vitest | `cd web && npm test` | 全过（实测 368 用例 / 27 文件） |
+| Editor vitest | `cd editor && npm test` | 全过（实测 615 用例 / 35 文件） |
 | 耦合门禁 | `python scripts/count_coupling.py --ci` | PASS（entry/di/script ≤14，其余 ≤4） |
 | Web 索引守卫 | `node web/gen-index.mjs --check` | CHECK OK（改过 `scripts/*.lua` 先重跑 gen-index） |
+| 平台矩阵守卫 | `python scripts/generate_platform_status.py --check` | `[OK] ... up-to-date` |
+| 首个 VN 旅程 | `bash scripts/verify_first_vn.sh` | `RESULT: PASS (13/13 checks)` |
+
+> 上表数字是 2026-08-27 在 master `6053024b` 的**本机实跑值**，随开发增长；判定标准是
+> **0 failed / 0 skipped**，不要把具体条数当门禁。
 
 doctest 过滤器：`-tc="*Name*"`（用例名）、`-ts="*Suite*"`（套件名）、`-tce`（排除）、`-s`（显示通过）、`-d`（耗时）。
 doctest filters: `-tc="*Name*"` (test case), `-ts="*Suite*"` (suite), `-tce` (exclude), `-s` (show passes), `-d` (durations).
@@ -541,10 +546,10 @@ for f in demo/tutorial/tutorial_*.ks; do external/lua/lua.exe scripts/ks_check.l
 
 ## KAG Script Compatibility / KAG 脚本兼容性
 
-**123 个 KAG Neo-Genesis 命令**（declarative contracts，类别：system / text / layer / audio /
+**134 个 KAG Neo-Genesis 命令**（declarative contracts，类别：system / text / layer / audio /
 transition / vfx / save / resource / video / layout / tween / sma / math）——权威契约见
 [command-contracts.md](docs/api/command-contracts.md)（自动生成，含类型/默认值/范围/必需/阻塞语义）。
-**123 KAG Neo-Genesis commands** (declarative contracts; categories: system / text / layer / audio /
+**134 KAG Neo-Genesis commands** (declarative contracts; categories: system / text / layer / audio /
 transition / vfx / save / resource / video / layout / tween / sma / math) — authoritative contracts in
 [command-contracts.md](docs/api/command-contracts.md) (auto-generated: types / defaults / ranges /
 required / blocking semantics).
@@ -564,7 +569,8 @@ required / blocking semantics).
   与 [kag-language-tour.md](docs/guides/kag-language-tour.md)
 - 语言白皮书（下一代设计：命令契约/schema/变量系统/宏/i18n）→ [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md)
 - 标准定义 → [nextgen-kag-standard.md](docs/design/nextgen-kag-standard.md)
-- 运行时契约覆盖：**123/123 命令全部可执行**（round 90 起 118/118 满覆盖；round 102 +postfx、round 106 +tween、round 107 +layout 3 命令 → 123）
+- 运行时契约覆盖：round 107 记录 **123/123 命令全部可执行**（round 90 起 118/118；round 102 +postfx、round 106 +tween、round 107 +layout → 123）。
+  ⚠️ 契约总数此后增至 **134**，新增的 11 条**尚未复核运行时覆盖**（unverified，需重跑覆盖审计后再更新本行）
 - KAG3 compatibility layer: bare positional arguments, TJS expressions (`&& || ! != ?:` string-aware
   translation), the `%f.x%` legacy variable system, `[elsif]`/`[call *label]`/`[end]`→ending,
   `[goto]`→`jump` alias — see [kag-expression-language.md](docs/api/kag-expression-language.md) and
@@ -572,8 +578,8 @@ required / blocking semantics).
 - Language whitepaper (next-gen design: command contracts/schema/variable system/macros/i18n) →
   [kag-neo-genesis-language.md](docs/design/kag-neo-genesis-language.md)
 - Standard definition → [nextgen-kag-standard.md](docs/design/nextgen-kag-standard.md)
-- Runtime contract coverage: **all 123/123 commands executable** (118/118 full coverage since round 90;
-  round 102 +postfx, round 106 +tween, round 107 +layout 3 commands → 123)
+- Runtime contract coverage: **123/123 commands executable as recorded at round 107** (118/118 since round 90;
+  round 102 +postfx, round 106 +tween, round 107 +layout 3 commands → 123). The contract total is now **134**; the 11 newer commands are **unverified** for runtime coverage.
 
 ---
 
@@ -588,10 +594,10 @@ required / blocking semantics).
 
 | 文件 | 内容 |
 |------|------|
-| [command-contracts.md](docs/api/command-contracts.md) | **123 个 KAG Neo-Genesis 命令**的声明式契约参考（自动生成，权威） |
+| [command-contracts.md](docs/api/command-contracts.md) | **134 个 KAG Neo-Genesis 命令**的声明式契约参考（`lua scripts/schema_doc.lua` 生成，权威） |
 | [lua-modules.md](docs/api/lua-modules.md) | Lua 模块 API 参考（154 个绑定函数） |
-| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | 全部 31 个 C++ 纯虚接口定义（390 方法） |
-| [editor-api-reference.md](docs/api/editor-api-reference.md) | 编辑器 RPC 端点参考（25 HTTP / 29 stdio） |
+| [cpp-interfaces.md](docs/api/cpp-interfaces.md) | C++ 纯虚接口定义（权威计数见 api-stats.md：34 个接口头 / 412 方法） |
+| [editor-api-reference.md](docs/api/editor-api-reference.md) | 编辑器 RPC 端点参考（36 HTTP / 29 stdio） |
 | NEW 新 [scene-builder-rpc-bridge.md](docs/api/scene-builder-rpc-bridge.md) | Scene Builder 面板 ↔ 引擎 RPC 桥接手册（round 108） |
 | [api-stats.md](docs/api/api-stats.md) | 实时 API 普查（`python scripts/api_stats.py` 生成） |
 | [kag-commands.md](docs/api/kag-commands.md) | 已弃用的 KAG3 兼容参考（被 command-contracts.md 取代） |
@@ -771,22 +777,22 @@ entry points, topic categories and learning paths are in [docs/guides/community.
 
 | 指标 | 数值 / Value |
 |------|------|
-| C++ 接口 | **34** 纯虚接口 / **408** 纯虚方法 |
-| KAG 命令契约 | **123**（多类别，自动生成权威） |
+| C++ 接口 | **34** 纯虚接口 / **412** 纯虚方法 |
+| KAG 命令契约 | **134**（多类别，自动生成权威） |
 | Lua 绑定函数 | **159**（11 个绑定文件） |
 | RPC 表面 | **36** HTTP 端点 + **29** stdio JSON-RPC 方法 |
-| Lua 运行时脚本 | **75**（scripts/，不含 demo/check） |
+| Lua 运行时脚本 | **78**（scripts/，不含 demo/check） |
 | 能力矩阵 | **82** 项 / 6 域 |
-| 测试 · C++ | **1,052** 用例（385,299 断言，doctest 全绿） |
-| 测试 · Lua | **134** 主套件 + **24** 孤儿套件（全绿） |
-| 测试 · Web | **297** 用例（vitest，20 文件） |
+| 测试 · C++ | **1,119** 用例（385,783 断言，doctest 全绿） |
+| 测试 · Lua | **143** 主套件 + **24** 孤儿套件（全绿） |
+| 测试 · Web | **368** 用例（vitest，27 文件，2026-08-27 实测） |
 | 测试 · Editor | **615** 用例（vitest 全绿） |
 | 耦合门禁 | PASS（entry/di/script ≤14，其余 ≤4） |
 | CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP + Android APK/AAB + iOS probe） |
 | 示例库 | tutorial 01–16 + showcase + galgame/full_pipeline/sma + example_game + template + first_vn |
 | 移动端真机验证 | 小米 11 (alioth / Snapdragon 888 / Adreno 660 / Android 14) 全链路 100% 闭环 |
 
-> 以上数字为最近一次全量门禁实测（阶段 G round 108–113）；实时口径见
+> 以上数字为最近一次全量门禁实测（Sprint 4，2026-08-28）；实时口径见
 > [api-stats.md](docs/api/api-stats.md)（API 表面）与 ROADMAP-200 各轮门禁列。若发现不一致，
 > 请运行 `python scripts/api_stats.py` 重新生成 API 普查。
 > The numbers above are from the latest full gate run (stage G rounds 108–113); the live view is

@@ -464,10 +464,43 @@ def generate_markdown(data: dict) -> str:
     lines.append("")
     lines.append("## 4. Release Candidate Gate & Blockers")
     lines.append("")
-    lines.append("- [x] **Windows (Tier 1)**: 100% C++ doctests (1052 passed), 100% Lua suites (158 passed), First-VN E2E verified.")
+    # Evidence must not be retyped here: hardcoded suite totals silently rot as
+    # the suites grow (this line claimed 1052 doctests / 158 Lua suites long
+    # after the real numbers had moved on). Derive the Windows gate line from
+    # the matrix entry that is actually validated above.
+    win_runtime = (
+        platforms.get("windows", {})
+        .get("capabilities", {})
+        .get("runtime", {})
+        .get("evidence", {})
+    )
+    win_notes = str(win_runtime.get("notes", "")).strip()
+    win_commit = str(win_runtime.get("commit", "")).strip()
+    if win_notes:
+        suffix = f" (commit `{win_commit}`)" if win_commit else ""
+        lines.append(f"- [x] **Windows (Tier 1)**: {win_notes}{suffix}; First-VN E2E verified.")
+    else:
+        lines.append("- [x] **Windows (Tier 1)**: see the Windows runtime evidence row above; First-VN E2E verified.")
     lines.append("- [x] **Linux (Tier 1)**: 11/11 CTest targets verified, headless Xvfb bundle boot verified.")
-    lines.append("- [x] **Web (Tier 1)**: 318 Vitest suites passed, CDP real-browser unlock and reload save persistence verified.")
-    lines.append("- [x] **Android (Tier 1)**: Real device Xiaomi 11 Adreno 660 CJK RGBA8 atlas, multi-texture batching, IME bridge, and V1/V2/V3 release signing verified.")
+    lines.append("- [x] **Web (Tier 1)**: Vitest suite green (cd web && npm test; 368 tests / 27 files measured 2026-08-27), CDP real-browser unlock and reload save persistence verified.")
+    # Same rot class as the Windows line above: the hardware retyped here still
+    # said "Xiaomi 11 Adreno 660" long after 3f742f0b established the device is a
+    # Redmi K40 (Adreno 650, Android 13) -- and it contradicted this very
+    # document's own Android environment block ~120 lines earlier. Derive the
+    # device from the matrix instead of naming it a second time.
+    android_env = platforms.get("android", {}).get("environment", {})
+    android_device = str(android_env.get("device", "")).strip()
+    android_gpu = str(android_env.get("soc_gpu", "")).strip()
+    if android_device:
+        android_hw = android_device
+    elif android_gpu:
+        android_hw = android_gpu
+    else:
+        android_hw = "the device named in the Android environment block above"
+    lines.append(
+        f"- [x] **Android (Tier 1)**: Real device {android_hw} -- CJK RGBA8 atlas, "
+        "multi-texture batching, IME bridge, and V1/V2/V3 release signing verified."
+    )
     lines.append("- [ ] **macOS (Tier 2)**: CI compile probe verified; physical Apple Silicon hardware gated.")
     lines.append("- [ ] **iOS (Tier 2)**: Xcode / Metal shader compilation probe verified; physical device / TestFlight hardware & credential gated.")
     lines.append("")

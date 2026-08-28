@@ -20,7 +20,7 @@
 
 ## 1. HTTP RPC API
 
-**Base URL**: `http://localhost:9876`
+**Base URL**: `http://127.0.0.1:9876`
 **Content-Type**: `application/json`
 **CORS**: 仅放行 localhost/127.0.0.1 来源（回显具体 origin，不设 `*`）
 
@@ -736,7 +736,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 ```
 1. 启动 HTTP 编辑器宿主
-   → `CaesuraAmeKAG --editor`，监听 http://localhost:9876
+   → `CaesuraAmeKAG --editor`，监听 http://127.0.0.1:9876
 
 2. 编辑器客户端连接 HTTP API
    → GET /api/ping 确认连接；仓库当前不附带静态 web-editor 前端

@@ -11,7 +11,17 @@ job in `.github/workflows/ci.yml` (CPack ZIP, Windows only).
 - **CMake 3.25+** and a Visual Studio 2022 toolchain.
 - **Python 3.8+** (stdlib only — no extra packages).
 - **gh** (GitHub CLI, `gh --version`) — authenticated (`gh auth login`).
-- **SDL3** via vcpkg (`vcpkg install sdl3 --triplet x64-windows`).
+- **SDL3**: optional on Windows — the repo ships a prebuilt package at
+  `external/SDL3/SDL3-3.2.0/cmake` and `CMakeLists.txt:33-42` selects it whenever
+  no `SDL3_DIR` and no `CMAKE_TOOLCHAIN_FILE` are given (this machine's
+  `build/CMakeCache.txt` resolves `SDL3_DIR` to that bundled package and contains
+  zero vcpkg entries). Use vcpkg (`vcpkg install sdl3 --triplet x64-windows`) only
+  when you deliberately want a system SDL3 — CI's release job does.
+- **Steamworks**: a `-DCAESURA_HAS_STEAM=ON` build links `steam_api64.dll`, which
+  `install()` does **not** ship. Such an executable dies at startup in a clean
+  extract with `error while loading shared libraries: steam_api64.dll` (reproduced
+  on a `cmake --install` tree), so either package the DLL or release a
+  `CAESURA_HAS_STEAM=OFF` build.
 
 > Releases are **tagged from `master`**. All work lands on `master` first,
 > gated green, and only then is tagged and published.
@@ -31,8 +41,8 @@ job in `.github/workflows/ci.yml` (CPack ZIP, Windows only).
                        ▼
 ┌─ 2. 全量门禁（跳过=禁止发版）─────────────────────────┐
 │  2.1 Release 构建零错误                                 │
-│  2.2 C++ 套件 976/976（build/tests/Release 或 Debug）    │  ← CWD 必须是 build/tests/<cfg>
-│  2.3 Lua 主套件 132 + 孤儿 24（仓库根）                  │
+│  2.2 C++ 套件 0 failed / 0 skipped（build/tests/<cfg>）  │  ← CWD 必须是 build/tests/<cfg>
+│  2.3 Lua 主套件 + 孤儿套件 均 0 failed（仓库根）         │
 │  2.4 耦合预算 python scripts/count_coupling.py --ci     │
 │  2.5 ks_check 静态契约（demo + 16 教程，0 violations）   │
 │  2.6 生成物新鲜度（api_stats / gen_changelog / gen-index）│
@@ -62,7 +72,7 @@ job in `.github/workflows/ci.yml` (CPack ZIP, Windows only).
 
 | 产物 | 路径 | 说明 |
 |------|------|------|
-| 桌面 ZIP | `build/CaesuraAmeKAG-1.0.x-Windows-AMD64.zip` | 引擎 + demo + 资产 + SDL3/FFmpeg DLL（约 88 MB / 386 文件） |
+| 桌面 ZIP | `build/CaesuraAmeKAG-1.0.x-Windows-AMD64.zip` | 引擎 + demo + 资产 + SDL3/FFmpeg DLL（已发布 v1.0.1 实测 88 MB / **403 文件**） |
 | 校验和 | `build/CaesuraAmeKAG-1.0.x-Windows-AMD64.zip.sha256` | CPack 自动生成 |
 | CHANGELOG | `CHANGELOG.md`（仓库根） | 手工润色后的发布说明 |
 | Web 站（可选） | `dist/<game>/`（package_game.sh 产物） | 静态 HTML5 播放器站（itch/GitHub Pages/Netlify） |
@@ -121,8 +131,11 @@ ctest -C Debug --test-dir build --output-on-failure
 
 ### 2.3 Lua script suites (from repo root)
 ```bash
-external/lua/lua.exe tests/scripts/run_lua_tests.lua
-external/lua/lua.exe tests/scripts/run_orphan_tests.lua
+# external/lua/lua.exe is gitignored (it ships only inside the release package).
+# On a fresh clone use the lua_cli build product instead -- same interpreter:
+#   build/lua/Debug/lua.exe  (or Release)
+external/lua/lua.exe tests/scripts/run_lua_tests.lua      # expect: 0 failed (143 measured 2026-08-27)
+external/lua/lua.exe tests/scripts/run_orphan_tests.lua   # expect: 0 failed (24 measured 2026-08-27)
 ```
 
 ### 2.4 Coupling budget
@@ -144,6 +157,8 @@ external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
 CI regenerates generated docs and fails on drift. Refresh locally:
 ```bash
 python scripts/api_stats.py               # regenerates docs/api/api-stats.md
+lua scripts/schema_doc.lua > docs/api/command-contracts.md   # regenerates the command contracts (134)
+python scripts/generate_platform_status.py --check           # platform matrix freshness guard
 python scripts/gen_changelog.py          # regenerates CHANGELOG.md (see §3)
 node web/gen-index.mjs                    # regenerates web/scripts-index.json
 node web/gen-index.mjs --check           # freshness guard (fails red if stale/missing)
@@ -193,8 +208,15 @@ order entries by impact. The curated `CHANGELOG.md` is what you commit.
 ## 4. Package with CPack
 
 CPack (ZIP generator) is wired into `CMakeLists.txt` — it installs the
-executable, `scripts/`, `demo/`, `assets/`, `shaders/`, `README.md`, `LICENSE`,
-and (on Windows) the SDL3 DLL and FFmpeg DLLs.
+executable, `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/`,
+`web-editor/dist/` (the editor frontend `--editor` serves), `README.md`,
+`LICENSE`, and (on Windows) the SDL3 DLL and FFmpeg DLLs.
+
+> **The editor frontend is part of the release contract.** `getting-started.md`
+> tells a stranger to unzip and run `CaesuraAmeKAG.exe --editor`; if
+> `web-editor/dist/index.html` is missing from the archive the engine logs
+> `web-editor/dist not found; serving API only` and every page load answers
+> 404 — the API is up but there is no UI. §5.1 verifies this on the real ZIP.
 
 ```bash
 # Build Release first, then package:
@@ -219,10 +241,35 @@ Before publishing, confirm the archive is complete and runnable:
 | Check | Expected |
 |-------|----------|
 | Executable present | `CaesuraAmeKAG.exe` at the archive root |
-| Runtime DLLs present | `SDL3.dll` + `avcodec/avformat/avutil/swscale/swresample-*.dll` (FFmpeg builds) |
-| Data dirs present | `scripts/`, `demo/`, `assets/`, `shaders/` |
+| Runtime DLLs present | `SDL3.dll` + `avcodec/avformat/avutil/swscale/swresample-*.dll` (FFmpeg builds) + `steam_api64.dll` when configured with `-DCAESURA_HAS_STEAM=ON` |
+| Editor frontend present | `web-editor/dist/index.html` (without it `--editor` serves the API only) |
+| Data dirs present | `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/` |
+| Project templates present | `tools/project_templates/` with the 5 templates + `manifest.json` (Project Manager + `caesura.py create` depend on it) |
 | Licensing | `README.md` + `LICENSE` at the archive root |
 | Smoke test | Extract to a clean folder, launch `CaesuraAmeKAG.exe` from that folder, verify the demo boots without missing-resource errors |
+
+> **Sprint 4 closed this gap.** `tools/project_templates/` (5 templates +
+> `manifest.json`) now ships in the install set, and BOTH consumers resolve it from
+> a package layout (verified on a simulated release tree outside this repository):
+> - `scripts/caesura.py create` anchors the templates root on the CLI script's own
+>   directory first (a release package puts `scripts/` at the top level next to
+>   `tools/`, and a checkout does too), then falls back to a CWD walk-up —
+>   `python scripts/caesura.py create my_game --template basic` works from any
+>   working directory, in a checkout or inside an extracted ZIP;
+> - `ProjectContext::sourceRoot()` (`src/rpc/ProjectContext.h`, the editor's
+>   `/api/project/*` templates root) accepts a package layout
+>   (`tools/project_templates` + `scripts` + `demo`, **no** `src/`) and
+>   prefers the EXECUTABLE's own directory over the compile-time
+>   `CAESURA_SOURCE_DIR` macro — so a package built on a dev machine resolves to
+>   the package itself, not the developer's checkout.
+>
+> The stranger path is now "unzip → `python scripts/caesura.py create my_game`
+> → `python scripts/caesura.py build my_game` → run the game directory"; the
+> editor's Project Manager `/api/project/templates` answers 200 from the package.
+> The package also bundles its own Lua interpreter (`external/lua/lua.exe`,
+> installed from the `lua_cli` target), so `caesura build` inside an extracted
+> ZIP needs no system Lua on PATH — verified by the 28-assertion release check
+> including a PATH-stripped create→build→run probe (2026-08-28).
 
 ```bash
 # List archive contents:
@@ -246,9 +293,57 @@ ls -la && ./CaesuraAmeKAG.exe --frames 60   # --frames = deterministic GPU smoke
 > The ZIP also bundles vendored dependency trees (`include/`, `lib/`, `cmake/` for
 > freetype/soloud/zstd) and a `scripts/__pycache__/` — expected CPack artifacts, not errors.
 
+### 5.1 Automated stranger-path check (`verify_release_package.sh`)
+
+The table above is checked mechanically by
+`scripts/verify_release_package.sh`. It extracts the ZIP into a temp dir
+**outside the repository**, launches `--editor` from there, and asserts the
+things a stranger actually needs — not just that files exist:
+
+```bash
+# newest build/CaesuraAmeKAG-*.zip by default:
+bash scripts/verify_release_package.sh
+# or an explicit archive / port / keep the temp dir for inspection:
+bash scripts/verify_release_package.sh build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --port=9876 --keep
+```
+
+28 checks in five groups:
+
+| Group | Asserts |
+|-------|---------|
+| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter) |
+| serving | the process survives in the extracted folder, `GET /` **with** the token returns **200 and the editor HTML**, no `web-editor/dist not found` in the log, `/api/ping` answers ok |
+| auth | unauthenticated `GET /` is **401** — the gate must stay closed; the script never relaxes auth to turn a run green |
+| token discovery | with no `CAESURA_EDITOR_TOKEN`, the engine writes `.caesura-editor-token` beside the executable, prints it on stderr, and that token really opens the editor |
+| creator toolchain | out-of-repo, with lua stripped from PATH: `caesura.py create` from a packaged template, `caesura.py build --engine .` (ks_check + precompile must resolve the bundled interpreter), and the built game exits 0 on `--frames 60` |
+
+Failure semantics are deliberate: a **missing archive** exits 2 and prints the
+CPack command that produces one (`--skip-if-missing` turns that into exit 77,
+the ctest SKIP convention — build products are not repository invariants); a
+**present but broken** archive exits 1 and lists every failed check. An early
+engine exit is reported as such (with the stderr tail) rather than blamed on
+HTTP, because a missing runtime DLL kills the process before the listener binds.
+
 ---
 
 ## 6. Publish a GitHub release
+
+> **What a release actually contains today (measured on the published `v1.0.1`,
+> 2026-08-27).** Both release paths produce **Windows-only desktop artifacts**:
+> - `.github/workflows/release.yml` (tag-triggered) has exactly two build jobs —
+>   `build-windows` (CPack ZIP) and `build-web` (`caesura-web-pwa.tar.gz`). There is
+>   **no Linux, macOS, Android or iOS job**, so the `find` step that globs
+>   `*.apk` never matches anything.
+> - The published `v1.0.1` assets are `CaesuraAmeKAG-1.0.1-Windows-AMD64.zip`
+>   (403 files) and `example_game-web.zip` — verified with
+>   `gh release view --json assets`.
+> - Platform statuses in [platform-status.md](../status/platform-status.md) describe
+>   **build/runtime verification**, not shipped artifacts: Linux/Android are
+>   `verified` there yet nothing for them is attached to a GitHub release, and
+>   every platform's `release` capability is `pending`.
+>
+> Do not promise cross-platform downloads in release notes until a job produces
+> those artifacts.
 
 Use the GitHub CLI. Two flows are supported.
 
@@ -331,6 +426,7 @@ node web/gen-index.mjs --check
 python scripts/gen_changelog.py --from-tag v1.0.0-alpha --tag v1.0.1
 cmake --build build --config Release --parallel
 cd build && cpack -C Release -G ZIP && cd ..
+bash scripts/verify_release_package.sh          # stranger path on the real ZIP (see §5.1)
 
 # publish
 git tag -a v1.0.1 -m "Caesura (AmeKAG) v1.0.1"

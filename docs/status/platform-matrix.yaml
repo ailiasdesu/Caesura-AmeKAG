@@ -1,8 +1,8 @@
 version: 1
 schema_version: "1.0.0"
 generated_document: "docs/status/platform-status.md"
-last_updated: "2026-08-25T02:00:00Z"
-head_commit: "62132e783dd238752659d4227ff26b0235258ea9"
+last_updated: "2026-08-27T15:20:00Z"
+head_commit: "6053024b"
 
 allowed_status_enums:
   - verified
@@ -35,27 +35,27 @@ platforms:
       runtime:
         status: verified
         evidence:
-          commit: "62132e78"
+          commit: "6053024b"
           document: "docs/plans/2026-08-24-027-antigravity-handoff.md"
-          test: "build/tests/Debug/CaesuraTests.exe && external/lua/lua.exe tests/scripts/run_lua_tests.lua"
-          verified_at: "2026-08-25T01:57:33Z"
-          notes: "1052 doctest cases (0 failed), 134 main Lua suites (0 failed), 24 orphan suites (0 failed)"
+          test: "(cd build/tests/Debug && ./CaesuraTests.exe) && external/lua/lua.exe tests/scripts/run_lua_tests.lua && external/lua/lua.exe tests/scripts/run_orphan_tests.lua"
+          verified_at: "2026-08-27T15:20:00Z"
+          notes: "Re-measured on 6053024b: 1119 doctest cases / 385783 assertions (0 failed, 0 skipped), 143 main Lua suites (0 failed), 24 orphan suites (0 failed), coupling gate PASS"
       first_vn:
         status: verified
         evidence:
-          commit: "62132e78"
+          commit: "6053024b"
           document: "scripts/verify_first_vn.sh"
           test: "bash scripts/verify_first_vn.sh"
-          verified_at: "2026-08-25T01:57:33Z"
-          notes: "13/13 user journey checks passed (template, creation, metadata, validation, headless run, choices A/B, save/load, package)"
+          verified_at: "2026-08-27T15:20:00Z"
+          notes: "13/13 user journey checks passed on 6053024b (template, creation, metadata, validation, headless run, choices A/B, save/load, package). Journey starts from a BUILT source tree, not from the released ZIP."
       packaging:
         status: verified
         evidence:
-          commit: "62132e78"
-          document: "docs/plans/audit/ROADMAP-200.md"
-          test: "cd build && cpack -C Release -G ZIP"
-          verified_at: "2026-08-25T01:57:33Z"
-          notes: "Standalone ZIP artifact (CaesuraAmeKAG-1.0.1-Windows-AMD64.zip)"
+          commit: "6053024b"
+          document: "docs/guides/release-process.md"
+          test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (28/28 assertions; incl. out-of-repo, PATH-stripped create/build/run probe)"
+          verified_at: "2026-08-28T11:40:00Z"
+          notes: "CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 28/28 on both Release (sha256 d8bd5340...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH (2026-08-28)."
       release:
         status: pending
         evidence:
@@ -203,7 +203,7 @@ platforms:
         evidence:
           commit: "1f054039"
           document: "docs/platform/android-device-validation.md"
-          test: "Physical Xiaomi 11 adb/su logcat + screencap suite"
+          test: "Physical Redmi K40 adb/su logcat + screencap suite"
           verified_at: "2026-08-24T22:00:00Z"
           notes: "Launch, touch tap, long press (GestureDetector), landscape orientation lock, sleep/wake power cycle, save slot 7 + autosave"
       signing:

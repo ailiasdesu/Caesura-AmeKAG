@@ -4,8 +4,8 @@
 # Caesura (AmeKAG) — Unified Platform Status Matrix
 
 > **Single Source of Truth**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
-> **Repository HEAD Commit**: `62132e783dd238752659d4227ff26b0235258ea9`  
-> **Last Synchronized**: `2026-08-25T02:00:00Z`  
+> **Repository HEAD Commit**: `6053024b`  
+> **Last Synchronized**: `2026-08-27T15:20:00Z`  
 > **Verification Status**: 100% Evidence-Backed (Zero Undocumented Claims)
 
 ---
@@ -52,9 +52,9 @@
 | Capability | Status | Evidence Document | Verification Command / Procedure | Commit | Verified At | Notes |
 |---|:---:|---|---|:---:|:---:|---|
 | **Build** | 🟢 `verified` | [`README.md`](../../README.md) | `cmake --build build --config Debug --parallel` | `62132e78` | `2026-08-25T01:57:33Z` | — |
-| **Runtime** | 🟢 `verified` | [`docs/plans/2026-08-24-027-antigravity-handoff.md`](../../docs/plans/2026-08-24-027-antigravity-handoff.md) | `build/tests/Debug/CaesuraTests.exe && external/lua/lua.exe tests/scripts/run_lua_tests.lua` | `62132e78` | `2026-08-25T01:57:33Z` | 1052 doctest cases (0 failed), 134 main Lua suites (0 failed), 24 orphan suites (0 failed) |
-| **First Vn** | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/verify_first_vn.sh` | `62132e78` | `2026-08-25T01:57:33Z` | 13/13 user journey checks passed (template, creation, metadata, validation, headless run, choices A/B, save/load, package) |
-| **Packaging** | 🟢 `verified` | [`docs/plans/audit/ROADMAP-200.md`](../../docs/plans/audit/ROADMAP-200.md) | `cd build && cpack -C Release -G ZIP` | `62132e78` | `2026-08-25T01:57:33Z` | Standalone ZIP artifact (CaesuraAmeKAG-1.0.1-Windows-AMD64.zip) |
+| **Runtime** | 🟢 `verified` | [`docs/plans/2026-08-24-027-antigravity-handoff.md`](../../docs/plans/2026-08-24-027-antigravity-handoff.md) | `(cd build/tests/Debug && ./CaesuraTests.exe) && external/lua/lua.exe tests/scripts/run_lua_tests.lua && external/lua/lua.exe tests/scripts/run_orphan_tests.lua` | `6053024b` | `2026-08-27T15:20:00Z` | Re-measured on 6053024b: 1119 doctest cases / 385783 assertions (0 failed, 0 skipped), 143 main Lua suites (0 failed), 24 orphan suites (0 failed), coupling gate PASS |
+| **First Vn** | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/verify_first_vn.sh` | `6053024b` | `2026-08-27T15:20:00Z` | 13/13 user journey checks passed on 6053024b (template, creation, metadata, validation, headless run, choices A/B, save/load, package). Journey starts from a BUILT source tree, not from the released ZIP. |
+| **Packaging** | 🟢 `verified` | [`docs/guides/release-process.md`](../../docs/guides/release-process.md) | `cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (28/28 assertions; incl. out-of-repo, PATH-stripped create/build/run probe)` | `6053024b` | `2026-08-28T11:40:00Z` | CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 28/28 on both Release (sha256 d8bd5340...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH (2026-08-28). |
 | **Release** | ⏳ `pending` | [`docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md`](../../docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md) | `RC-GO decision gate` | `62132e78` | `2026-08-25T01:57:33Z` | — |
 
 ### 2.2 Linux (x64 / Ubuntu 24.04 / WSL) (Tier 1) — 🟢 `verified`
@@ -116,7 +116,7 @@
 | **Build** | 🟢 `verified` | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | `scripts/build_android.sh --release --abi arm64-v8a` | `1f054039` | `2026-08-24T22:00:00Z` | libCaesuraAmeKAG.so MODULE target + SDL3 3.2.4 & OpenSSL 3.3.2 slices |
 | **Runtime** | 🟢 `verified` | [`docs/plans/2026-08-24-028-android-full-closure.md`](../../docs/plans/2026-08-24-028-android-full-closure.md) | `bash scripts/android_device_smoke.sh` | `1f054039` | `2026-08-24T22:00:00Z` | FreeType 2048x2048 RGBA8 CJK font atlas (8074 glyphs), transient buffer fix, RTT viewport fix |
 | **First Vn** | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Full E2E walkthrough on device (story.ks -> choice 1 sunset -> ending pass)` | `1f054039` | `2026-08-24T22:00:00Z` | — |
-| **Real Device** | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Physical Xiaomi 11 adb/su logcat + screencap suite` | `1f054039` | `2026-08-24T22:00:00Z` | Launch, touch tap, long press (GestureDetector), landscape orientation lock, sleep/wake power cycle, save slot 7 + autosave |
+| **Real Device** | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Physical Redmi K40 adb/su logcat + screencap suite` | `1f054039` | `2026-08-24T22:00:00Z` | Launch, touch tap, long press (GestureDetector), landscape orientation lock, sleep/wake power cycle, save slot 7 + autosave |
 | **Signing** | 🟢 `verified` | [`docs/platform/android-release-signing.md`](../../docs/platform/android-release-signing.md) | `apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk` | `8aa51c36` | `2026-08-24T23:30:00Z` | V1/V2/V3 signing verified true, zipalign 4-byte check passed, zero hardcoded credentials |
 | **Aab** | 🟢 `verified` | [`docs/platform/android-release-signing.md`](../../docs/platform/android-release-signing.md) | `cd android && gradle bundleRelease` | `8aa51c36` | `2026-08-24T23:30:00Z` | app-release.aab built with language/density/abi splits disabled for visual novel assets |
 | **Release** | ⏳ `pending` | [`docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md`](../../docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md) | `Official keystore signing & store publishing gate` | `62132e78` | `2026-08-25T01:57:33Z` | — |
@@ -181,9 +181,9 @@ All `verified` and `probe` capabilities are anchored by concrete evidence artifa
 | Platform | Capability | Status | Anchor Document | Execution Test Command | Commit SHA |
 |---|---|:---:|---|---|:---:|
 | Windows (x64) | Build | 🟢 `verified` | [`README.md`](../../README.md) | `cmake --build build --config Debug --parallel` | `62132e78` |
-| Windows (x64) | Runtime | 🟢 `verified` | [`docs/plans/2026-08-24-027-antigravity-handoff.md`](../../docs/plans/2026-08-24-027-antigravity-handoff.md) | `build/tests/Debug/CaesuraTests.exe && external/lua/lua.exe tests/scripts/run_lua_tests.lua` | `62132e78` |
-| Windows (x64) | First Vn | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/verify_first_vn.sh` | `62132e78` |
-| Windows (x64) | Packaging | 🟢 `verified` | [`docs/plans/audit/ROADMAP-200.md`](../../docs/plans/audit/ROADMAP-200.md) | `cd build && cpack -C Release -G ZIP` | `62132e78` |
+| Windows (x64) | Runtime | 🟢 `verified` | [`docs/plans/2026-08-24-027-antigravity-handoff.md`](../../docs/plans/2026-08-24-027-antigravity-handoff.md) | `(cd build/tests/Debug && ./CaesuraTests.exe) && external/lua/lua.exe tests/scripts/run_lua_tests.lua && external/lua/lua.exe tests/scripts/run_orphan_tests.lua` | `6053024b` |
+| Windows (x64) | First Vn | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/verify_first_vn.sh` | `6053024b` |
+| Windows (x64) | Packaging | 🟢 `verified` | [`docs/guides/release-process.md`](../../docs/guides/release-process.md) | `cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (28/28 assertions; incl. out-of-repo, PATH-stripped create/build/run probe)` | `6053024b` |
 | Windows (x64) | Release | ⏳ `pending` | [`docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md`](../../docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md) | `RC-GO decision gate` | `62132e78` |
 | Linux (x64 / Ubuntu 24.04 / WSL) | Build | 🟢 `verified` | [`docs/plans/2026-08-22-025-delivery-handoff.md`](../../docs/plans/2026-08-22-025-delivery-handoff.md) | `cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)` | `806275cf` |
 | Linux (x64 / Ubuntu 24.04 / WSL) | Runtime | 🟢 `verified` | [`docs/plans/2026-08-22-025-delivery-handoff.md`](../../docs/plans/2026-08-22-025-delivery-handoff.md) | `ctest --test-dir build --output-on-failure` | `806275cf` |
@@ -198,7 +198,7 @@ All `verified` and `probe` capabilities are anchored by concrete evidence artifa
 | Android (ARM64) | Build | 🟢 `verified` | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | `scripts/build_android.sh --release --abi arm64-v8a` | `1f054039` |
 | Android (ARM64) | Runtime | 🟢 `verified` | [`docs/plans/2026-08-24-028-android-full-closure.md`](../../docs/plans/2026-08-24-028-android-full-closure.md) | `bash scripts/android_device_smoke.sh` | `1f054039` |
 | Android (ARM64) | First Vn | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Full E2E walkthrough on device (story.ks -> choice 1 sunset -> ending pass)` | `1f054039` |
-| Android (ARM64) | Real Device | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Physical Xiaomi 11 adb/su logcat + screencap suite` | `1f054039` |
+| Android (ARM64) | Real Device | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Physical Redmi K40 adb/su logcat + screencap suite` | `1f054039` |
 | Android (ARM64) | Signing | 🟢 `verified` | [`docs/platform/android-release-signing.md`](../../docs/platform/android-release-signing.md) | `apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk` | `8aa51c36` |
 | Android (ARM64) | Aab | 🟢 `verified` | [`docs/platform/android-release-signing.md`](../../docs/platform/android-release-signing.md) | `cd android && gradle bundleRelease` | `8aa51c36` |
 | Android (ARM64) | Release | ⏳ `pending` | [`docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md`](../../docs/Caesura_AmeKAG_Agent_Pack/05_RELEASE_CANDIDATE.md) | `Official keystore signing & store publishing gate` | `62132e78` |
@@ -220,10 +220,10 @@ All `verified` and `probe` capabilities are anchored by concrete evidence artifa
 
 ## 4. Release Candidate Gate & Blockers
 
-- [x] **Windows (Tier 1)**: 100% C++ doctests (1052 passed), 100% Lua suites (158 passed), First-VN E2E verified.
+- [x] **Windows (Tier 1)**: Re-measured on 6053024b: 1119 doctest cases / 385783 assertions (0 failed, 0 skipped), 143 main Lua suites (0 failed), 24 orphan suites (0 failed), coupling gate PASS (commit `6053024b`); First-VN E2E verified.
 - [x] **Linux (Tier 1)**: 11/11 CTest targets verified, headless Xvfb bundle boot verified.
-- [x] **Web (Tier 1)**: 318 Vitest suites passed, CDP real-browser unlock and reload save persistence verified.
-- [x] **Android (Tier 1)**: Real device Xiaomi 11 Adreno 660 CJK RGBA8 atlas, multi-texture batching, IME bridge, and V1/V2/V3 release signing verified.
+- [x] **Web (Tier 1)**: Vitest suite green (cd web && npm test; 368 tests / 27 files measured 2026-08-27), CDP real-browser unlock and reload save persistence verified.
+- [x] **Android (Tier 1)**: Real device Redmi K40 (M2012K11AC, haydn, Snapdragon 870 / Adreno 650 / Android 13) -- CJK RGBA8 atlas, multi-texture batching, IME bridge, and V1/V2/V3 release signing verified.
 - [ ] **macOS (Tier 2)**: CI compile probe verified; physical Apple Silicon hardware gated.
 - [ ] **iOS (Tier 2)**: Xcode / Metal shader compilation probe verified; physical device / TestFlight hardware & credential gated.
 

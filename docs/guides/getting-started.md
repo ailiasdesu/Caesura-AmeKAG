@@ -4,7 +4,7 @@
 > 测试 → 常见问题。全程约 30–60 分钟（构建占大头）。
 >
 > 配套文档：[KAG 语言教程](kag-language-tour.md)（语法）· [命令契约](../../docs/api/command-contracts.md)
-> （123 命令权威参考）· [资源管线](asset-pipeline.md)（资产格式与目录）·
+> （134 命令权威参考）· [资源管线](asset-pipeline.md)（资产格式与目录）·
 > [示例库](sample-library.md)（16 教程 + 完整游戏）。
 
 ---
@@ -16,14 +16,70 @@
 
 ### ⚡ 五个步骤
 
-1. **下载 Release**（Windows ZIP）→ 解压 → 双击 `CaesuraAmeKAG.exe --editor`；
-   首次打开默认就是 **Project Manager** 面板（模板列表）。
-2. **创建项目**：选择 **basic** 模板 → 输入项目名 → **Create**。
-   新项目含 `story.ks`（两场景双分支示例）+ `caesura.project.json` 元数据。
-3. **编辑**：打开 `story.ks`（Monaco 编辑器 + KAG 语法着色/LSP）；
-   改对白/加分支/换背景照 [ch]/[bg]/[sel] 语法写。
-4. **运行与调试**：Debug 面板 **▶ Run Current Scene** 直接跑；断点/Step Into/Over/Out 单步。
-5. **打包**：Build 面板 **Build CARC**（加密归档）+ **Package**（Web 站）；Web 包自动启动首个场景。
+> **⚠️ 当前实测口径（2026-08-27）**：下面这条路径的起点是 **克隆源码 + 构建一次**，
+> 不是"下载 Release 双击就有 IDE"。
+>
+> - **已发布的 [v1.0.1 ZIP](https://github.com/ailiasdesu/Caesura-AmeKAG/releases)**（403 文件）
+>   里 `web-editor` 与 `project_templates` 命中数均为 **0**，`--editor` 打印
+>   `web-editor/dist not found; serving API only`，`/api/project/*` 全部 404。
+> - **Sprint 4 已修好的部分（本机在安装树实测）**：`install()` 现在会装
+>   `web-editor/dist/`，静态壳免令牌，启动日志直接给出可点开的地址
+>   （`[EditorServer] Open the editor: http://127.0.0.1:9876/?token=...`），
+>   带令牌请求 `/api/project/templates` 返回 200。
+> - **Sprint 4 已闭环（模拟发布包实测）**：`tools/project_templates/`
+>   （5 模板 + manifest.json）已随发布包安装，且 `caesura.py create` 与编辑器
+>   `ProjectContext::sourceRoot()` 都接受发布包布局——模板按「可执行文件 /
+>   CLI 脚本所在目录」优先解析（回退 CWD 上探），不再依赖编译期
+>   `CAESURA_SOURCE_DIR` 指向开发机源码树。见
+>   [release-process.md](release-process.md) §5。
+>
+> 因此"解压即建项目"成立：`python scripts/caesura.py create my_game` →
+> `python scripts/caesura.py build my_game` → 运行 `dist/my_game-game`；
+> 下面写的是**当前真的能走通**的路径。
+
+1. **构建引擎**（一次性，§1–§2）：`cmake -B build` → `cmake --build build --config Debug --parallel`。
+   Windows 上仓库自带 SDL3 预编译包（`external/SDL3/SDL3-3.2.0`），
+   **不传 `-DCMAKE_TOOLCHAIN_FILE` 时会自动使用它**——vcpkg 不是必需项（本机
+   `build/CMakeCache.txt` 里 `SDL3_DIR` 就指向仓库内置包，vcpkg 命中数为 0）。
+2. **创建项目**：`python scripts/caesura.py create my_vn --template basic`
+   （从 `tools/project_templates/basic` 复制，产出 `story.ks` 两场景双分支 +
+   `caesura.project.json`）。模板按 CLI 脚本自身位置自动解析（仓库根或解压的
+   发布包内均可），不再要求从仓库根执行。
+3. **编辑**：用任意文本编辑器改 `my_vn/story.ks`（`[bg]`/`[ch]`/`[sel]` 语法见
+   [KAG 语言教程](kag-language-tour.md)）。**Monaco 编辑器 + Project Manager +
+   Build Manager 面板属于 `editor/` 这个 React IDE**，需要 `cd editor && npm ci &&
+   npm run dev`（http://localhost:5173）后在浏览器里连引擎——它**不在**引擎二进制里，
+   `editor/dist/` 也不入库（`.gitignore:35`）。
+4. **运行**：从仓库根 `./build/Debug/CaesuraAmeKAG.exe`；静态校验
+   `external/lua/lua.exe scripts/ks_check.lua my_vn/story.ks`；
+   无 GPU 也能跑逻辑：`external/lua/lua.exe scripts/kag_runner.lua my_vn/story.ks`。
+5. **打包**（两种产物，都实测可用）：
+   - **桌面 game-only 包**：`python scripts/caesura.py build my_vn -o dist/my_vn-game`
+     —— 产出可双击的自包含目录（引擎 exe + SDL3/FFmpeg DLL + 只属于该游戏的
+     `assets/` + 预编译 `cache/ksc` + `HOW-TO-PLAY.txt` + `BUILD-INFO.json`）。
+     实测（`tests/projects/first_vn`）：`./CaesuraAmeKAG.exe --frames 60` 退出码 0、
+     日志无 FATAL。`caesura package --target windows|web|both` 进一步压成可分发归档。
+   - **静态 Web 站**：`bash scripts/package_game.sh --out dist/my_vn my_vn`
+     （itch.io / GitHub Pages / Netlify 直接托管）。
+
+**引擎自带的 `--editor` 是什么**：`./build/Debug/CaesuraAmeKAG.exe --editor` 在
+:9876 起 HTTP 服务并提供 `web-editor/dist/index.html`——一个**单文件调试面板**
+（脚本 / 调试 / 帧捕获 / 日志四个页签），**没有** Project Manager、没有 Monaco。
+它默认要求 bearer 令牌：启动时令牌打印在 stderr 并写入启动目录的
+`.caesura-editor-token`。
+
+> **令牌与浏览器（两种版本行为不同，先认版本）**：
+> - **Sprint 4 之后**（判据：启动日志出现
+>   `[EditorServer] Open the editor: http://127.0.0.1:9876/?token=...`）——
+>   静态壳（`/` 与 `/index.html`）免令牌，页面读取 `?token=` 存入 localStorage，
+>   之后所有 `/api/*` 带 bearer；直接点开日志里那条地址即可。安装树实测：
+>   `GET /` 无令牌 200、带令牌 200（`<title>Caesura Web Editor</title>`），
+>   `/api/project/templates` 带令牌 200。
+> - **Sprint 4 之前的二进制**——门禁覆盖包括静态页在内的所有非 OPTIONS 请求：
+>   `curl -H "Authorization: Bearer <令牌>" http://127.0.0.1:9876/` 返回 200，
+>   但浏览器地址栏访问 `/` 或 `/?token=<令牌>` 都 **401**（地址栏无法附带
+>   Authorization 头，服务端也不解析 `?token=`），唯一浏览器入口是
+>   `--editor-insecure`。
 
 ### ✅ 完成判定（Tiny VN 必须包含）
 
@@ -45,7 +101,7 @@ Caesura (AmeKAG) 是 **C++20 + bgfx 渲染 + SDL3 窗口 + Lua 5.4 脚本** 的�
 | CMake | **3.25+** | 顶层 CMakeLists 要求 min 3.25 |
 | C++ 编译器 | VS2022 (MSVC v143) / GCC 13+ / Xcode 15+ (Apple Clang) | 见 §1 各平台 |
 | Python | 3.8+ | 仅标准库：api_stats / gen_changelog / 耦合计数脚本 |
-| Lua | 不需安装 | 仓库 **vendored** `external/lua/lua.exe`（Lua 5.4） |
+| Lua | 不需安装 | CMake 构建自带 `lua_cli` 目标（产物 `build/lua/<配置>/lua.exe`，Lua 5.4）；发布包内置 `external/lua/lua.exe`。CLI 的 `find_lua` 依次探测两处再回退 PATH |
 | Node.js | 18+ | 仅 Web 播放器 / editor 需要（§6） |
 
 > **磁盘与内存**：全量 Debug 构建约需 3–5 GB 磁盘（thirdparty + build 目录）；
@@ -230,8 +286,9 @@ cmake --build build --parallel
 
 | 参数 | 作用 |
 |------|------|
-| `--editor` | 启动编辑器模式（HTTP :9876，需 `CAESURA_EDITOR_TOKEN`） |
-| `--editor-stdio` | stdio JSON-RPC 编辑器（默认） |
+| `--editor` | HTTP 编辑器（:9876）。未设 `CAESURA_EDITOR_TOKEN` 时引擎自动生成令牌，打到 stderr 并写入启动目录的 `.caesura-editor-token` |
+| `--editor-insecure` | 关闭编辑器鉴权（仅本机调试；会大声告警） |
+| `--editor-stdio` | stdio JSON-RPC 编辑器 |
 | `--backend <type>` | 强制渲染后端（metal/opengl/vulkan/dx11/dx12/webgpu） |
 | `--frames N` | 渲染 N 帧后确定性退出（CI/冒烟用） |
 | `--export-replay r.json --export-dir out` | 逐帧导出 PNG 序列（§8） |
@@ -241,9 +298,10 @@ cmake --build build --parallel
 
 ## 4. 测试（跑通 Demo 前的自检）
 
-> **测试基线（ROADMAP-200 权威）**：C++ 用例 **976**（8858 断言）·
-> Lua 主套件 **132** + 孤儿套件 **24** · 16 教程 · **123** 命令契约 · **31** 个 C++ 接口。
-> 任何 PR 合入前这些必须全绿。
+> **测试基线（本机实测，2026-08-27 master `6053024b`）**：C++ 用例 **1119**（385783 断言）·
+> Lua 主套件 **143** + 孤儿套件 **24** · Web vitest **368** · Editor vitest **615** ·
+> CTest **13** 个 target · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
+> 任何 PR 合入前这些必须全绿。基线数字随开发增长，**以本地实跑输出为准**，不要把本行当门禁。
 
 ### 4.1 C++ 测试（doctest / CTest）
 
@@ -251,9 +309,9 @@ cmake --build build --parallel
 # Windows：从 build/tests/Debug 运行（CWD 影响资源路径，别从仓库根跑）
 cd build/tests/Debug
 ./CaesuraTests.exe
-# 预期输出尾部：
-#   [doctest] test cases:  976 |  976 passed | 0 failed | 0 skipped
-#   [doctest] assertions: 8858 | 8858 passed | 0 failed
+# 预期输出尾部（2026-08-27 本机实测；数字随开发增长，关键是 0 failed / 0 skipped）：
+#   [doctest] test cases:   1119 |   1119 passed | 0 failed | 0 skipped
+#   [doctest] assertions: 385783 | 385783 passed | 0 failed
 
 # Linux / macOS
 cd build/tests && ./CaesuraTests
@@ -273,15 +331,18 @@ cd build/tests && ./CaesuraTests
 
 ```bash
 ctest -C Debug --test-dir build --output-on-failure
-# 覆盖 10 个冒烟测试（headless HTTP/RPC/LSP）+ AI smoke（无 Ollama 自动跳过）
+# 14 个 target（`ctest --test-dir build -N` 列出）：资产同步 + 6 组分模块 doctest 分片
+# + headless CLI/RPC/HTTP 冒烟 + AI smoke（无 Ollama 自动跳过）+ RC/平台矩阵对抗测试
+# + 构建 CLI 契约（无引擎时 SKIP 77）
 ```
 
 ### 4.2 Lua 套件（两种：主套件 + 孤儿套件）
 
 ```bash
-# 从仓库根运行（vendored 解释器）
-external/lua/lua.exe tests/scripts/run_lua_tests.lua      # 主套件 132 个用例
-external/lua/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件 24 个用例
+# 从仓库根运行；解释器用构建产物 build/lua/<配置>/lua.exe——全新克隆没有
+# external/lua/lua.exe（那是发布包内置路径，find_lua 会依次探测两处）
+build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua      # 主套件（实测 143 passed / 143 total）
+build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件（实测 24 passed / 24 total）
 
 # 主套件 = 大部分测试；孤儿套件 = 会创建全局 mock 的测试（沙箱中途锁全局），
 # 每个测试子进程隔离运行。两套都必须全绿，孤儿永远不能并入主套件。
@@ -295,7 +356,7 @@ external/lua/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件 24 个�
 
 ```bash
 # 校验单个场景（引擎+Web 双端在跑的脚本契约）
-external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/galgame_demo.ks
 # 校验全部 16 个教程
 external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
 # 预期：OK — all scenes pass contract checks（0 violations）
@@ -463,8 +524,9 @@ A: 构建时没找到 FFmpeg（`CAESURA_ENABLE_FFMPEG=ON` 但库缺失会静默�
    `CAESURA_VIDEO_FFMPEG`（只有找到 FFmpeg 才定义）。
 
 **Q: `lua` 命令找不到**
-A: 仓库 vendored 解释器在 `external/lua/lua.exe`，无需安装。所有文档命令里
-   的 `lua` 都指它；PATH 里没有时用完整路径。
+A: 无需安装：构建后解释器在 `build/lua/<配置>/lua.exe`（`lua_cli` 目标产物），
+   发布包内置 `external/lua/lua.exe`（注意：该文件不入库，全新克隆里没有，
+   须先构建）。文档命令里的 `lua` 指其中任意一个；PATH 里没有时用完整路径。
 
 **Q: 引擎窗口闪退**
 A: 在终端里直接运行看输出（不要双击 exe）。常见：缺 SDL3.dll（Windows Release
@@ -498,11 +560,14 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 
 ### 2. 测试
 
-- [ ] C++ 测试：`cd build/tests/Debug && ./CaesuraTests.exe` → 0 failed（基线 976）
-- [ ] Lua 主套件：`external/lua/lua.exe tests/scripts/run_lua_tests.lua` → 132 全绿
-- [ ] Lua 孤儿套件：`external/lua/lua.exe tests/scripts/run_orphan_tests.lua` → 24 全绿
-- [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`
-- [ ] Web 脚本索引守卫：`node web/gen-index.mjs --check` → `CHECK OK`
+- [ ] C++ 测试：`cd build/tests/Debug && ./CaesuraTests.exe` → **0 failed, 0 skipped**（2026-08-27 实测 1119 用例）
+- [ ] Lua 主套件：`external/lua/lua.exe tests/scripts/run_lua_tests.lua` → 0 failed（实测 143）
+- [ ] Lua 孤儿套件：`external/lua/lua.exe tests/scripts/run_orphan_tests.lua` → 0 failed（实测 24）
+- [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`（14 target）
+- [ ] 耦合门禁：`python scripts/count_coupling.py --ci` → `PASS: All modules within thresholds`
+- [ ] Web 脚本索引守卫：`node web/gen-index.mjs --check` → `CHECK OK: N modules up to date`
+- [ ] 平台矩阵新鲜度：`python scripts/generate_platform_status.py --check` → `[OK] ... up-to-date`
+- [ ] 首个 VN 用户旅程：`bash scripts/verify_first_vn.sh` → `RESULT: PASS (13/13 checks)`
 
 ### 3. Demo 运行
 
@@ -522,7 +587,12 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 
 ### 5. 编辑器 / 视频导出（可选）
 
-- [ ] 编辑器：`./build/Debug/CaesuraAmeKAG.exe --editor`（HTTP :9876）/ `--editor-stdio`（stdio JSON-RPC）
+- [ ] 编辑器（单文件调试面板）：`./build/Debug/CaesuraAmeKAG.exe --editor` → 日志出现
+      `[EditorServer] Serving web editor from: <repo>/web-editor/dist` 与令牌行；
+      带令牌请求 `curl -H "Authorization: Bearer $(cat .caesura-editor-token)" http://127.0.0.1:9876/api/ping`
+      → `{"status":"ok",...}`，不带令牌 → `401`
+- [ ] React IDE（Project Manager / Monaco / Build Manager）：`cd editor && npm ci && npm run dev`
+      → http://localhost:5173 出现 `Caesura Editor`，在页头填入令牌后 Connect
 - [ ] 视频导出：`./build/Debug/CaesuraAmeKAG.exe --export-replay r.json --export-dir out --frames 300`
       （需真实 GPU 窗口；`--headless` 在有 `--export-replay` 时被自动忽略）
 
@@ -533,7 +603,7 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 ## 10. Next Steps
 
 - [KAG 语言教程](kag-language-tour.md) — 完整语法 + 命令分类 + 五段常用模板
-- [命令契约](../../docs/api/command-contracts.md) — 123 命令权威参考（自动生成）
+- [命令契约](../../docs/api/command-contracts.md) — 134 命令权威参考（`lua scripts/schema_doc.lua` 生成）
 - [Lua 模块 API](../../docs/api/lua-modules.md) — Lua 绑定 API
 - [资源管线](asset-pipeline.md) — 资产格式支持矩阵 + 目录规范
 - [一键打包](packaging-ux.md) — 从 .ks 到可分发 Web 站的单条命令

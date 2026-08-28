@@ -537,7 +537,7 @@ def generate_release_bundle(release_dir: Path, repo_root: Path, target_commit: O
                 "status": "verified",
                 "evidence_path": "docs/platform/android-latest-head-validation.md",
                 "test_command": "python scripts/verify_android_regression.py",
-                "notes": "88/88 checks passed on Xiaomi 11, FreeType RGBA8 2048x2048 atlas, APK/AAB release signing"
+                "notes": "88/88 checks passed on Redmi K40, FreeType RGBA8 2048x2048 atlas, APK/AAB release signing"
             },
             "macos": {
                 "display_name": "macOS (Apple Silicon / Intel)",

@@ -87,7 +87,7 @@ The unified platform status is derived from [`docs/status/platform-matrix.yaml`]
 |-------------|-------------|:------:|----------------------|
 | **R1** | Unified Platform Status Matrix & Generator | 🟢 **PASS** | `docs/status/platform-matrix.yaml` defines 6 platforms with 7 strict enums. `scripts/generate_platform_status.py` validates schema and generates `docs/status/platform-status.md` Character-exact with `--check`. |
 | **R2** | First-VN Cross-Platform Behavioral Parity | 🟢 **PASS** | `tests/projects/first_vn/story.ks` E2E flow verified (13/13 checks). `artifacts/release/parity/` contains valid snapshots for Windows, Linux, Web, Android, and iOS. `scripts/compare_platform_parity.py` and 10 unit tests pass. |
-| **R3** | Android Latest HEAD Real-Device Regression | 🟢 **PASS** | Commit `62132e78` validated on physical Xiaomi 11 hardware. FreeType CJK RGBA8 atlas, multi-texture quad batching, touch scaling, save persistence, and IME bridge verified (88/88 checks). |
+| **R3** | Android Latest HEAD Real-Device Regression | 🟢 **PASS** | Commit `62132e78` validated on physical Redmi K40 hardware. FreeType CJK RGBA8 atlas, multi-texture quad batching, touch scaling, save persistence, and IME bridge verified (88/88 checks). |
 | **R4** | iOS Real-Device Track & Hardware Gate Audit | 🟢 **PASS** | `docs/platform/ios-device-validation.md` documents Track I0–I6, audits 12 Metal shaders and fallbacks, and strictly enforces `hardware-gated` boundary markers. |
 | **R5** | Release Candidate Gate & Evidence Bundle | 🟢 **PASS** | Complete `artifacts/release/` bundle assembled with `manifest.json`, `platform-status.json`, `parity/`, `checksums/sha256sums.txt`, and structured reports. `scripts/verify_release_candidate.py` exits 0. |
 
