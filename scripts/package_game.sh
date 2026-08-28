@@ -149,6 +149,25 @@ echo ""
 echo "[package] Step 3/5: assemble web player + runtime"
 WEB_DIST="web/dist"
 if [ "$NO_WEB_BUILD" -eq 0 ]; then
+    # Guard (round 5, shared-state coupling): vite closeBundle copies repo-root
+    # cache/story into web/dist UNCONDITIONALLY (web/vite.config.js
+    # RUNTIME_DIRS). When the demo bundle is missing -- cache/story/story.lua is
+    # a gitignored generated artifact that several flows clean/rewrite -- the
+    # rebuilt web/dist ships without story.lua and resources.test.js's
+    # "dist exists but bundle missing = bad build must FAIL" sentinel fires by
+    # design. Bake the demo bundle first; a bake failure is FATAL -- never
+    # continue to produce a broken dist.
+    if [ ! -f "$ROOT/cache/story/story.lua" ]; then
+        echo "[package]   cache/story/story.lua missing -- baking demo bundle first"
+        if ! "$LUA" scripts/ks_bake.lua --dir demo --web "$ROOT/cache/story"; then
+            echo "[package] FATAL: demo bundle bake failed (cache/story/story.lua); aborting instead of rebuilding web/dist without it"
+            exit 1
+        fi
+        if [ ! -f "$ROOT/cache/story/story.lua" ]; then
+            echo "[package] FATAL: bake reported success but $ROOT/cache/story/story.lua does not exist"
+            exit 1
+        fi
+    fi
     if [ -d web/node_modules/vite ] || [ -d node_modules/vite ]; then
         echo "[package]   (re)building web player -> $WEB_DIST"
         ( cd web && node_modules/.bin/vite build >/dev/null 2>&1 )
