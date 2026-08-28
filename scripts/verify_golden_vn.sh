@@ -79,6 +79,18 @@ else
     check "ks_check: clean contract, zero warnings" 0
 fi
 
+# ---- 1b. ks_check: v2 roundtrip scene (lives under tests/scripts/ -- the
+#      _safeScenePath allowlist location that makes save->load resume legal) ----
+note "Step 1b: ks_check tests/scripts/golden_rt.ks"
+RTKS_OUT="$("$LUA" scripts/ks_check.lua tests/scripts/golden_rt.ks 2>&1)"
+RTKS_RC=$?
+echo "$RTKS_OUT" | sed "s/^/  /"
+if [ "$RTKS_RC" -eq 0 ]; then
+    check "ks_check: roundtrip scene clean contract" 0
+else
+    check "ks_check: roundtrip scene clean contract" "$RTKS_RC"
+fi
+
 # ---- 2. Headless full run to [end] ----
 note "Step 2: headless full run to [end] (frame budget=$FRAME_BUDGET)"
 MAIN_OUT="$(SAMPLE_STORY="$STORY" SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" "$DRIVER" 2>&1)"
@@ -151,6 +163,54 @@ else
     else
         check "v1 cross-scene jump (scene_b executed, XSCENE_OK)" 1 "rc=$XRC"
     fi
+fi
+
+# ---- 4c. v2 semantic flags (rollback / history+backlog / save->load roundtrip) ----
+note "Step 4c: v2 semantic flags via golden_vn_headless.lua"
+RBOUT="$(GOLDEN_RB=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+RBRC=$?
+printf "  [rollback] %s\n" "$(printf '%s\n' "$RBOUT" | grep -E "RB_|RESULT" | tr '\n' ' ')"
+if [ "$RBRC" -eq 0 ] \
+   && printf '%s\n' "$RBOUT" | grep -q "RESULT DONE" \
+   && printf '%s\n' "$RBOUT" | grep -q "RB_FORWARD rb=2 observedB=true" \
+   && printf '%s\n' "$RBOUT" | grep -q "RB_POP1 ok=true rb=2 rewind=true" \
+   && printf '%s\n' "$RBOUT" | grep -q "RB_POP2 ok=true rb=1" \
+   && printf '%s\n' "$RBOUT" | grep -q "RB_POP2_A" \
+   && printf '%s\n' "$RBOUT" | grep -q "RB_REPLAY_END"; then
+    check "v2 rollback semantic (pop1 rewinds token + f.rb=2, pop2 restores f.rb=1)" 0
+else
+    check "v2 rollback semantic (pop1 rewinds token + f.rb=2, pop2 restores f.rb=1)" 1 "rc=$RBRC"
+fi
+HIOUT="$(GOLDEN_HISTORY=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+HIRC=$?
+printf "  [history] %s\n" "$(printf '%s\n' "$HIOUT" | grep -E "HISTORY|BACKLOG|RESULT" | tr '\n' ' ')"
+if [ "$HIRC" -eq 0 ] \
+   && printf '%s\n' "$HIOUT" | grep -q "RESULT DONE" \
+   && printf '%s\n' "$HIOUT" | grep -q "HISTORY_OPEN backlog=2" \
+   && printf '%s\n' "$HIOUT" | grep -q "BACKLOG_OK" \
+   && printf '%s\n' "$HIOUT" | grep -q "HISTORY_OK"; then
+    check "v2 history/backlog semantic (overlay opens, 2 verifiable entries, Esc close, story continues)" 0
+else
+    check "v2 history/backlog semantic (overlay opens, 2 verifiable entries, Esc close, story continues)" 1 "rc=$HIRC"
+fi
+RTOUT="$(GOLDEN_ROUNDTRIP=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+RTRC=$?
+printf "  [roundtrip] %s\n" "$(printf '%s\n' "$RTOUT" | grep -E "RT_|ROUNDTRIP|RESULT" | tr '\n' ' ')"
+# t58 hardening: restore-only degradation (rejected load path) matched every
+# old grep -- also require the resume to be ARMED (RT_RESUME_ARMED, printed
+# only when _pendingLoadScene carries the accepted path) and the replay to
+# actually re-execute [save] (>=2 "Saved to slot 9" lines).
+RTSAVES=$(printf '%s\n' "$RTOUT" | grep -c "\[SaveCmd\] Saved to slot 9")
+if [ "$RTRC" -eq 0 ] \
+   && printf '%s\n' "$RTOUT" | grep -q "RESULT DONE" \
+   && printf '%s\n' "$RTOUT" | grep -q "RT_FORWARD marker=POST_SAVE_MUTATED counter=2" \
+   && printf '%s\n' "$RTOUT" | grep -q "ROUNDTRIP_OK" \
+   && printf '%s\n' "$RTOUT" | grep -q "RT_RESUME_ARMED" \
+   && [ "$RTSAVES" -ge 2 ] \
+   && printf '%s\n' "$RTOUT" | grep -q "RT_REPLAY_END"; then
+    check "v2 save->load roundtrip (restore + resume armed + replay re-save, to [end])" 0
+else
+    check "v2 save->load roundtrip (restore + resume armed + replay re-save, to [end])" 1 "rc=$RTRC saves=$RTSAVES"
 fi
 
 # ---- 5. Web smoke (informational) ----

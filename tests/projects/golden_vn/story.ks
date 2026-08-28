@@ -13,6 +13,13 @@
 ;  Source-face only (semantics NOT asserted in v1 -- see README uncovered
 ;  list): rollback / history / backlog / NVL / replay / mod / save roundtrip
 ;
+;  v2 (2026-08-29): Sections E/F below [end] ADD semantic assertions for
+;  rollback + history + backlog (driver GOLDEN_RB / GOLDEN_HISTORY) and a
+;  dedicated roundtrip scene (tests/scripts/golden_rt.ks, driver
+;  GOLDEN_ROUNDTRIP) tests the real save->load restore chain. Sections E/F are
+;  labels AFTER the final [end]; only the headless driver's stage jumps visit
+;  them, so the normal gate paths are untouched.
+;
 ;  All text is bilingual via [i18n language=...] hot-switching (the pattern
 ;  proven by demo/example_game) so the project needs no fnv1a line tables.
 ;  Assets reference the shared repo pool (assets/bg|fg|bgm|se|voice).
@@ -205,3 +212,44 @@
 [p]
 [wait time=800]
 [end]
+
+; =============================================================================
+;  Section E (v2) — rollback semantic section.
+;  Reached ONLY via the headless driver's GOLDEN_RB stage jump. The driver
+;  drives kag_runner.rollback() — the API behind the engine's rollback key —
+;  while the run is paused at the [wait]: the forward state is f.rb=1 -> 2
+;  (snapshots: line one advance {1}, line two advance {2}); rollback #1 pops
+;  the 2-snapshot (mechanical evidence: token rewound, f.rb still 2),
+;  rollback #2 pops the 1-snapshot — f.rb==1 is observable ONLY from
+;  snapshot.restore (no forward path writes 1 after line one; no new snapshot
+;  is pushed while the driver holds still — the [wait] is the pause point).
+; =============================================================================
+*rollback_check
+[set var="f.rb" value="1"]
+[ch name="A" text="Rollback probe line one"]
+[set var="f.rb" value="2"]
+[ch name="A" text="Rollback probe line two"]
+[if exp="f.rb == 2"]
+[set var="f.rbObsB" value="1"]
+[endif]
+[set var="f.rbReady" value="1"]
+[wait time=6000]
+[end]
+
+; =============================================================================
+;  Section F (v2) — history/backlog semantic section.
+;  Reached ONLY via the headless driver's GOLDEN_HISTORY stage jump. The
+;  [history] overlay opens with a non-empty backlog (2+ lines), the driver
+;  verifies ctx.backlog CONTENT (text/name/scene/token_index per entry) while
+;  it is open, closes it with Esc (input_focus history -> kag) and the story
+;  continues past the block to [end] — open/close/jump-continue semantics.
+; =============================================================================
+*history_check
+[ch name="A" text="History probe line one"]
+[ch name="B" text="History probe line two"]
+[history]
+[set var="f.historyClosed" value="1"]
+[ch name="A" text="History probe after close"]
+[wait time=6000]
+[end]
+

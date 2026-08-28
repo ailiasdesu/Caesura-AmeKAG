@@ -30,14 +30,50 @@
 --    GOLDEN_ROUTE=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
 --    GOLDEN_ROUTE=2 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
 --    GOLDEN_CROSS=1   build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua
+--    GOLDEN_RB=1       build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v2)
+--    GOLDEN_HISTORY=1  build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v2)
+--    GOLDEN_ROUNDTRIP=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua    (v2)
+--
+--  v2 modes:
+--    GOLDEN_RB       stages a jump to *rollback_check and drives
+--                    kag_runner.rollback() twice while the run pauses at the
+--                    [wait]: #1 pops the {f.rb=2} snapshot (token rewound,
+--                    f.rb still 2), #2 pops the {f.rb=1} snapshot (the
+--                    "only via snapshot.restore" value). Prints RB_FORWARD_* /
+--                    RB_POP1_* / RB_POP2_A / RB_REPLAY_END.
+--    GOLDEN_HISTORY  stages a jump to *history_check, verifies ctx.backlog
+--                    content while the [history] overlay is open (count +
+--                    text/name/scene/token_index per entry), closes it with
+--                    Esc and asserts the story continues. Prints
+--                    HISTORY_OPEN / BACKLOG_ENTRY1 / BACKLOG_OK /
+--                    HISTORY_OK.
+--    GOLDEN_ROUNDTRIP drives tests/scripts/golden_rt.ks (allowlisted scene
+--                    path — see the file header), issues the load through
+--                    SaveCommands.load(ctx,{slot=9}) — the exact [load] tag
+--                    handler — while the story pauses at the [wait], asserts
+--                    the restore synchronously (f.rtMarker back to PRE_SAVE),
+--                    then drives the resume-from-save replay to [end].
+--                    Prints RT_FORWARD_* / RT_RESUME_ARMED / ROUNDTRIP_OK /
+--                    RT_REPLAY_END.
+--    Engine-defect note (v2, reported not fixed): a same-scene [load] TAG
+--    re-enters the saved resume point and re-executes the downstream [load]
+--    token, looping on the native runner; the cursor+1 self-reference guard
+--    exists only in web/bridge.js. The driver therefore drives the same
+--    handler instead of an in-story [load] tag.
 --
 --  Env knobs:
 --    SAMPLE_STORY      .ks path (default story.ks, or golden_cross.ks with
---                      GOLDEN_CROSS=1)
---    SAMPLE_ENDING     optional label jump at boot (reachability probe)
+--                      GOLDEN_CROSS=1, or golden_rt.ks with GOLDEN_ROUNDTRIP=1)
+--    SAMPLE_ENDING     optional label jump at boot (reachability probe;
+--                      defaulted to rollback_check / history_check in v2 modes)
 --    SAMPLE_FRAMES     frame budget (default 200000)
 --    GOLDEN_ROUTE      1-based select-option index (default: first option)
 --    GOLDEN_CROSS      1 = drive tests/projects/golden_vn/golden_cross.ks
+--    GOLDEN_RB / GOLDEN_HISTORY / GOLDEN_ROUNDTRIP   1 = enable v2 mode (see above)
+--
+--  v1 note (unchanged): KAG.load_game returns a non-table so [load slot=99]
+--  takes the graceful-miss path; the v2 roundtrip mode overrides the mock
+--  with an in-memory slot store (KAG.save_game/load_game).
 --
 --  Exit: 0 = reached [end] (DONE), 1 = frame limit / fatal, 2 = target label
 --  not found.
@@ -56,10 +92,23 @@ local function callable(t)
     })
 end
 
+-- v2 roundtrip: in-memory save store. v1 mock semantics (load_game returns a
+-- non-table -> graceful miss) are the DEFAULT; GOLDEN_ROUNDTRIP overrides
+-- save_game/load_game with the store so [save slot=9] really persists and the
+-- load handler sees the captured state table.
+local _savedSlots = {}
 _G.KAG = callable({
     is_voice_playing  = function() return false end,
     is_bgm_playing    = function() return false end,
     get_active_voices = function() return 0 end,
+    save_game = function(slot, state)
+        _savedSlots[tonumber(slot) or 0] = state
+        return true
+    end,
+    load_game = function(slot)
+        local s = _savedSlots[tonumber(slot) or 0]
+        return s, nil
+    end,
 })
 _G.Render  = callable({})
 _G.DevCore = callable({})
@@ -73,10 +122,16 @@ _G.backend = callable({
 local kag_runner = require("kag_runner")
 
 local CROSS  = os.getenv("GOLDEN_CROSS") == "1"
+local RB     = os.getenv("GOLDEN_RB") == "1"
+local HIST   = os.getenv("GOLDEN_HISTORY") == "1"
+local RT     = os.getenv("GOLDEN_ROUNDTRIP") == "1"
 local STORY  = os.getenv("SAMPLE_STORY")
+    or (RT and "tests/scripts/golden_rt.ks")
     or (CROSS and "tests/projects/golden_vn/golden_cross.ks"
                   or "tests/projects/golden_vn/story.ks")
 local ENDING = os.getenv("SAMPLE_ENDING")
+    or (RB and "rollback_check")
+    or (HIST and "history_check")
 local FMAX   = tonumber(os.getenv("SAMPLE_FRAMES")) or 200000
 local CHOICE = tonumber(os.getenv("GOLDEN_ROUTE") or "")
 
@@ -109,6 +164,12 @@ if ENDING and ENDING ~= "" then
         print("ENDING_NOT_FOUND: " .. target)
         os.exit(2)
     end
+    -- The staged token restart requires a dead-branch signal: the choice-path
+    -- _pendingJump is the one that re-spawns the scheduler at a "*label".
+    -- (Plain stop_flag alone ends the runner with "Script ended" -- the v1
+    -- sample driver's ending probe shares this; a staged jump without the
+    -- pending signal is hollow.)
+    ctx._pendingJump = target
     ctx.stop_flag = true
     print("ENDING_JUMP: " .. target)
 end
@@ -142,11 +203,87 @@ end
 
 local frames, clicks = 0, 0
 local result = nil
+
+-- ---- v2 mode state ----------------------------------------------------------
+local rbDone    = false   -- GOLDEN_RB: rollback pair executed
+local histEsc   = false   -- GOLDEN_HISTORY: overlay Esc sent
+local rtLoaded  = false   -- GOLDEN_ROUNDTRIP: load() issued + restore checked
+
 while frames < FMAX do
     frames = frames + 1
     local ok, reason = kag_runner.update(0.016)
     local ctx = _G._CAESURA_CTX
+
+    -- v2 rollback: the run pauses at the [wait] (f.rbReady==1); drive the two
+    -- snapshot pops synchronously (both restores are immediate).
+    if RB and not rbDone and ctx and ctx.f and ctx.f.rbReady == 1 then
+        rbDone = true
+        local preIdx = (type(ctx.token_index) == "number") and ctx.token_index or nil
+        print("RB_FORWARD rb=" .. tostring(ctx.f.rb)
+              .. " observedB=" .. tostring(ctx.f.rbObsB == 1))
+        local ok1 = kag_runner.rollback()
+        print("RB_POP1 ok=" .. tostring(ok1)
+              .. " rb=" .. tostring(ctx.f.rb)
+              .. " rewind=" .. tostring(preIdx ~= nil and type(ctx.token_index) == "number"
+                                          and ctx.token_index < preIdx))
+        local ok2 = kag_runner.rollback()
+        print("RB_POP2 ok=" .. tostring(ok2) .. " rb=" .. tostring(ctx.f.rb))
+        if ok1 and ok2 and ctx.f.rb == 1 then print("RB_POP2_A") end
+    end
+
+    -- v2 history: while the [history] overlay is open, verify backlog content
+    -- (count + per-entry fields), then close it with Esc.
+    if HIST and not histEsc and ctx and ctx.input_focus == "history" then
+        histEsc = true
+        local bl = ctx.backlog or {}
+        local e1 = bl[1]
+        print("HISTORY_OPEN backlog=" .. tostring(#bl))
+        print("BACKLOG_ENTRY1 text=" .. tostring(e1 and e1.text or "?")
+              .. " name=" .. tostring(e1 and e1.name or "?")
+              .. " scene=" .. tostring(e1 and e1.scene or "?")
+              .. " token=" .. tostring(e1 and e1.token_index or "?"))
+        local okCount    = (#bl >= 2)
+        local okContent  = (e1 and type(e1.text) == "string" and #e1.text > 0
+                            and type(e1.name) == "string" and #e1.name > 0
+                            and type(e1.scene) == "string" and #e1.scene > 0
+                            and type(e1.token_index) == "number" and e1.token_index >= 1)
+        if okCount and okContent then print("BACKLOG_OK") end
+        _G._GAME_KEY_ESC = true
+    end
+
+    -- v2 roundtrip: the run pauses at the [wait] (f.rtReady==1); issue the
+    -- load through the exact [load] tag handler and assert the restore
+    -- synchronously, before any replay can re-run.
+    if RT and not rtLoaded and ctx and ctx.f and ctx.f.rtReady == 1 then
+        rtLoaded = true
+        print("RT_FORWARD marker=" .. tostring(ctx.f.rtMarker)
+              .. " counter=" .. tostring(ctx.f.rtCounter))
+        local okL, SaveCmds = pcall(require, "kag.commands.save")
+        local okH, herr = false, nil
+        if okL then okH, herr = pcall(SaveCmds.load, ctx, { slot = 9 }) end
+        print("RT_LOAD_CALL ok=" .. tostring(okH) .. (herr and (" " .. tostring(herr)) or ""))
+        -- t58 hardening: the restore greps alone cannot distinguish the full
+        -- resume chain from restore-only (a _safeScenePath rejection still
+        -- restores state but never arms the resume). _pendingLoadScene is set
+        -- ONLY on the accepted path, so asserting it locks the replay chain.
+        local pls = ctx._pendingLoadScene
+        if pls == "tests/scripts/golden_rt.ks" then
+            print("RT_RESUME_ARMED scene=" .. tostring(pls))
+        else
+            print("RT_RESUME_MISSING scene=" .. tostring(pls))
+        end
+        if okH and ctx.f.rtMarker == "PRE_SAVE" and ctx.f.rtCounter == 1 then
+            print("ROUNDTRIP_OK")
+        else
+            print("RT_RESTORE_BAD marker=" .. tostring(ctx.f.rtMarker)
+                  .. " counter=" .. tostring(ctx.f.rtCounter))
+        end
+    end
+
     if reason == "ended" then
+        if RB and rbDone then print("RB_REPLAY_END") end
+        if HIST and ctx and ctx.f and ctx.f.historyClosed == 1 then print("HISTORY_OK") end
+        if RT and rtLoaded then print("RT_REPLAY_END") end
         result = "DONE:" .. frames
         break
     end
