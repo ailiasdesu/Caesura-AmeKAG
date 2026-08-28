@@ -514,6 +514,28 @@ install(DIRECTORY demo/ DESTINATION demo)
 install(DIRECTORY assets/ DESTINATION assets)
 install(DIRECTORY projects/ DESTINATION projects)
 install(DIRECTORY shaders/ DESTINATION shaders OPTIONAL)
+# Project Manager templates are part of the release contract: the stranger
+# path is "unzip -> caesura.py create" and the editor Project Manager, both of
+# which resolve tools/project_templates/ next to the executable
+# (docs/guides/release-process.md §5). Ship ONLY project_templates/ here --
+# the tools/ directory also contains carc_pack sources/build junk.
+install(DIRECTORY tools/project_templates/ DESTINATION tools/project_templates)
+# "Unzip -> caesura.py build" must not require a system Lua: caesura_build.py's
+# find_lua() probes <package>/external/lua/lua.exe then .../lua before falling
+# back to PATH. Install the lua_cli TARGET (built at build/lua/<cfg>/lua[.exe])
+# rather than external/lua/lua.exe -- that path is a gitignored, hand-built
+# leftover which does NOT exist in a fresh clone, so a file-based install would
+# break CI packaging. TARGETS also lands the right name per platform (lua.exe /
+# lua), matching both find_lua() probe names.
+install(TARGETS lua_cli RUNTIME DESTINATION external/lua)
+# The editor frontend is part of the release contract: getting-started.md tells a
+# stranger to unzip and run "CaesuraAmeKAG.exe --editor". Ship dist/ ONLY, never
+# web-editor/ wholesale (node_modules/ and release/ are build junk). Not OPTIONAL
+# on purpose: dist/index.html is a TRACKED file, so a fresh clone always has it,
+# and if it ever disappears the package must fail loudly rather than quietly ship
+# an engine whose editor answers 404. The trailing slash matters -- without it
+# CMake produces web-editor/dist/dist/.
+install(DIRECTORY web-editor/dist/ DESTINATION web-editor/dist)
 install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
@@ -543,6 +565,15 @@ endif()
 # the ZIP content uniform, mirroring the FFmpeg DLL gate below.
 if(WIN32 AND TARGET SDL3::SDL3)
     install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+endif()
+# Without the Steam runtime DLL beside the executable the process cannot even
+# START ("error while loading shared libraries: steam_api64.dll") -- exactly what
+# a stranger hits after unzipping a Steam-enabled build. The configure-time copy
+# above only populates build/<cfg>/, not the package. OPTIONAL because the SDK
+# path is user-supplied.
+if(CAESURA_HAS_STEAM AND WIN32 AND STEAM_LIBRARY)
+    get_filename_component(CAESURA_STEAM_BIN_DIR "${STEAM_LIBRARY}" DIRECTORY)
+    install(FILES "${CAESURA_STEAM_BIN_DIR}/steam_api64.dll" DESTINATION . OPTIONAL)
 endif()
 if(CAESURA_FFMPEG_FOUND AND WIN32)
     install(FILES

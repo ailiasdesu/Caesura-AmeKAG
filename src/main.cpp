@@ -2,6 +2,10 @@ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+
+// SDL_GetBasePath: anchors the bundled editor frontend to the EXECUTABLE's own
+// directory, so a release ZIP works from any working directory.
+#include <SDL3/SDL_filesystem.h>
 }
 #include "render/BgfxRenderDevice.h"
 #include "di/api/ITextureBudget.h"
@@ -908,20 +912,35 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken,
     // listener is a local privilege boundary hole. --editor-insecure is the
     // explicit, loudly-warned escape hatch.
     if (insecureNoAuth) editor.setInsecureNoAuth(true);
-    // Serve the bundled web-editor frontend (web-editor/dist). Resolve it
-    // relative to the current directory, walking up a few levels so the
-    // editor works whether launched from the repo root or a build dir
-    // (e.g. build/Debug -> ../../web-editor/dist).
+    // Serve the bundled web-editor frontend (web-editor/dist). A release ZIP is
+    // extracted anywhere and launched from any working directory, so the
+    // EXECUTABLE's own directory is the authoritative anchor (SDL_GetBasePath
+    // derives it from the loaded image path; SDL is already initialised here).
+    // The CWD walk-up stays as a fallback so the in-tree workflows keep working
+    // unchanged (repo root, or build/Debug -> ../../web-editor/dist).
     {
         namespace fs = std::filesystem;
         std::string webRoot;
-        fs::path probe = fs::current_path();
-        for (int i = 0; i < 4 && webRoot.empty(); ++i) {
-            auto candidate = probe / "web-editor" / "dist" / "index.html";
-            if (fs::exists(candidate)) {
-                webRoot = (probe / "web-editor" / "dist").string();
+        std::error_code ec;
+        // Three levels up from the binary covers the macOS bundle layout
+        // (.app/Contents/MacOS/), which BUNDLE DESTINATION . already produces.
+        if (const char* base = SDL_GetBasePath()) {
+            fs::path probe = fs::path(base);
+            for (int i = 0; i < 3 && webRoot.empty(); ++i) {
+                if (fs::exists(probe / "web-editor" / "dist" / "index.html", ec)) {
+                    webRoot = (probe / "web-editor" / "dist").string();
+                }
+                probe = probe.parent_path();
             }
-            probe = probe.parent_path();
+        }
+        if (webRoot.empty()) {
+            fs::path probe = fs::current_path(ec);
+            for (int i = 0; i < 4 && webRoot.empty() && !ec; ++i) {
+                if (fs::exists(probe / "web-editor" / "dist" / "index.html", ec)) {
+                    webRoot = (probe / "web-editor" / "dist").string();
+                }
+                probe = probe.parent_path();
+            }
         }
         if (!webRoot.empty()) editor.setWebRoot(webRoot);
         else fprintf(stderr, "[EditorServer] web-editor/dist not found; serving API only\n");
