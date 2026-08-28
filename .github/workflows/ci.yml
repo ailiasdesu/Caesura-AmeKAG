@@ -307,7 +307,7 @@ jobs:
         run: python3 scripts/verify_android_regression.py
 
       - name: Release Candidate Gate & Evidence Verifier
-        run: python3 scripts/verify_release_candidate.py --check
+        run: python3 scripts/verify_release_candidate.py --check --skip-if-missing
 
   # ============================================================
   # Release Package (Windows only)

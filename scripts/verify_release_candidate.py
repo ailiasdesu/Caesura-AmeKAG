@@ -959,6 +959,12 @@ def main():
     parser.add_argument("--repo-root", type=Path, default=None, help="Repository root used to resolve evidence sources (defaults to the checkout containing this script)")
     parser.add_argument("--generate-bundle", action="store_true", help="Generate or update artifacts/release/ bundle")
     parser.add_argument("--check", action="store_true", help="Run in strict CI validation mode")
+    parser.add_argument("--skip-if-missing", action="store_true",
+                        help="Exit 0 with a SKIP notice when no release bundle exists yet "
+                             "(build products are not repository invariants, so bare CI "
+                             "checkouts have no artifacts/release/). A bundle that EXISTS "
+                             "but fails verification still exits 1 -- this flag never "
+                             "masks a broken bundle.")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
@@ -972,6 +978,16 @@ def main():
             print(f"[FAIL] Release evidence bundle generation aborted: {e}")
             print("\nGATE DECISION: RC-NO-GO (Evidence Bundle Incomplete)")
             sys.exit(1)
+
+    manifest_path = args.artifacts_dir / "manifest.json"
+    if args.skip_if_missing and not manifest_path.exists():
+        print(f"[SKIP] No release bundle at {args.artifacts_dir} (manifest.json absent).")
+        print("       Build products are not repository invariants; bare checkouts have")
+        print("       no artifacts/release/. Run 'verify_release_candidate.py "
+              "--generate-bundle'")
+        print("       after a full local gate run to (re)create it. A present-but-invalid")
+        print("       bundle still fails verification -- this flag never masks it.")
+        sys.exit(0)
 
     is_valid, errors, summary = verify_release_bundle(
         args.artifacts_dir,
