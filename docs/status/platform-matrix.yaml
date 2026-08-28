@@ -53,9 +53,9 @@ platforms:
         evidence:
           commit: "6053024b"
           document: "docs/guides/release-process.md"
-          test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (28/28 assertions; incl. out-of-repo, PATH-stripped create/build/run probe)"
-          verified_at: "2026-08-28T11:40:00Z"
-          notes: "CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 28/28 on both Release (sha256 d8bd5340...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH (2026-08-28)."
+          test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (29/29 assertions; incl. out-of-repo, PATH-stripped create/build/run probe, demo/ non-empty)"
+          verified_at: "2026-08-28T22:38:00Z"
+          notes: "CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 29/29 on both Release (sha256 b6a5b93c...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH and a demo/ non-empty check (2026-08-28)."
       release:
         status: pending
         evidence:

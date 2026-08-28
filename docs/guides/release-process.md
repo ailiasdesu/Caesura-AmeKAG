@@ -134,8 +134,8 @@ ctest -C Debug --test-dir build --output-on-failure
 # external/lua/lua.exe is gitignored (it ships only inside the release package).
 # On a fresh clone use the lua_cli build product instead -- same interpreter:
 #   build/lua/Debug/lua.exe  (or Release)
-external/lua/lua.exe tests/scripts/run_lua_tests.lua      # expect: 0 failed (143 measured 2026-08-27)
-external/lua/lua.exe tests/scripts/run_orphan_tests.lua   # expect: 0 failed (24 measured 2026-08-27)
+build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua      # expect: 0 failed (143 measured 2026-08-27)
+build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua   # expect: 0 failed (24 measured 2026-08-27)
 ```
 
 ### 2.4 Coupling budget
@@ -147,10 +147,10 @@ python scripts/count_coupling.py --ci
 Every demo scene must pass the declarative KAG command contracts before
 testing (the same gate CI enforces before its test steps):
 ```bash
-external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
 # expect: OK — all scenes pass contract checks
 # also sweep the per-capability tutorial series (16 scenes, tutorial_01..16):
-external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
 ```
 
 ### 2.6 Doc / index freshness (generated artifacts)
@@ -268,7 +268,7 @@ Before publishing, confirm the archive is complete and runnable:
 > editor's Project Manager `/api/project/templates` answers 200 from the package.
 > The package also bundles its own Lua interpreter (`external/lua/lua.exe`,
 > installed from the `lua_cli` target), so `caesura build` inside an extracted
-> ZIP needs no system Lua on PATH — verified by the 28-assertion release check
+> ZIP needs no system Lua on PATH — verified by the 29-assertion release check
 > including a PATH-stripped create→build→run probe (2026-08-28).
 
 ```bash
@@ -307,11 +307,11 @@ bash scripts/verify_release_package.sh
 bash scripts/verify_release_package.sh build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --port=9876 --keep
 ```
 
-28 checks in five groups:
+29 checks in five groups:
 
 | Group | Asserts |
 |-------|---------|
-| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter) |
+| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `demo/` (non-empty, anchored on `demo/cjk_smoke.ks` — ProjectContext.looksLikeEngineRoot needs scripts+demo), `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter) |
 | serving | the process survives in the extracted folder, `GET /` **with** the token returns **200 and the editor HTML**, no `web-editor/dist not found` in the log, `/api/ping` answers ok |
 | auth | unauthenticated `GET /` is **401** — the gate must stay closed; the script never relaxes auth to turn a run green |
 | token discovery | with no `CAESURA_EDITOR_TOKEN`, the engine writes `.caesura-editor-token` beside the executable, prints it on stderr, and that token really opens the editor |
@@ -324,6 +324,22 @@ the ctest SKIP convention — build products are not repository invariants); a
 engine exit is reported as such (with the stderr tail) rather than blamed on
 HTTP, because a missing runtime DLL kills the process before the listener binds.
 
+> **Run it serially — the 9876 port-hygiene guard is a whole-machine check.**
+> The script aborts with exit 2 while ANY `CaesuraAmeKAG` process is alive on
+> the host: a leftover engine from another session can dual-bind
+> `127.0.0.1:9876` (Windows SO_REUSEADDR) and answer with its own deleted
+> webRoot (404 `index.html not found`) or its own token (401), faking package
+> failures that are not the package's (observed in Sprint 4: 5 checks went red
+> because of a stale engine, not the ZIP). Consequences for teams and
+> harnesses:
+> - verification must run **serially** — one editor-engine verification at a
+>   time, after other engine-driving sessions (editor e2e, dev debugging)
+>   have quiesced;
+> - engine cleanup must always be **by PID, never by image name**:
+>   `taskkill //IM CaesuraAmeKAG.exe` (or `killall CaesuraAmeKAG`) would kill a
+>   parallel session's running engine mid-run — a classic cross-session
+>   interference that this script's own guard exists to detect, not to cause.
+	
 ---
 
 ## 6. Publish a GitHub release
@@ -417,9 +433,9 @@ See also: `docs/guides/getting-started.md` (build/runtime), `AGENTS.md` §12
 cmake --build build --config Release --parallel
 cd build/tests/Debug && ./CaesuraTests.exe && cd ../../..
 # (a Release-gate may also run the Release tests: cd build/tests/Release && ./CaesuraTests.exe)
-external/lua/lua.exe tests/scripts/run_lua_tests.lua
+build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua
 python scripts/count_coupling.py --ci
-external/lua/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/galgame_demo.ks demo/full_pipeline_demo.ks scripts/demo_story.ks
 node web/gen-index.mjs --check
 
 # changelog + package

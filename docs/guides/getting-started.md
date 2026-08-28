@@ -51,8 +51,8 @@
    npm run dev`（http://localhost:5173）后在浏览器里连引擎——它**不在**引擎二进制里，
    `editor/dist/` 也不入库（`.gitignore:35`）。
 4. **运行**：从仓库根 `./build/Debug/CaesuraAmeKAG.exe`；静态校验
-   `external/lua/lua.exe scripts/ks_check.lua my_vn/story.ks`；
-   无 GPU 也能跑逻辑：`external/lua/lua.exe scripts/kag_runner.lua my_vn/story.ks`。
+   `build/lua/Debug/lua.exe scripts/ks_check.lua my_vn/story.ks`；
+   无 GPU 也能跑逻辑：`build/lua/Debug/lua.exe scripts/kag_runner.lua my_vn/story.ks`。
 5. **打包**（两种产物，都实测可用）：
    - **桌面 game-only 包**：`python scripts/caesura.py build my_vn -o dist/my_vn-game`
      —— 产出可双击的自包含目录（引擎 exe + SDL3/FFmpeg DLL + 只属于该游戏的
@@ -298,9 +298,9 @@ cmake --build build --parallel
 
 ## 4. 测试（跑通 Demo 前的自检）
 
-> **测试基线（本机实测，2026-08-27 master `6053024b`）**：C++ 用例 **1119**（385783 断言）·
-> Lua 主套件 **143** + 孤儿套件 **24** · Web vitest **368** · Editor vitest **615** ·
-> CTest **13** 个 target · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
+> **测试基线（本机实测，2026-08-28 master `4e4abf57` + 本轮 N1 用例）**：C++ 用例 **1120**（385790 断言）·
+> Lua 主套件 **143** + 孤儿套件 **24** · Web vitest **369** · Editor vitest **615** ·
+> CTest **14** 个 target · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
 > 任何 PR 合入前这些必须全绿。基线数字随开发增长，**以本地实跑输出为准**，不要把本行当门禁。
 
 ### 4.1 C++ 测试（doctest / CTest）
@@ -309,9 +309,9 @@ cmake --build build --parallel
 # Windows：从 build/tests/Debug 运行（CWD 影响资源路径，别从仓库根跑）
 cd build/tests/Debug
 ./CaesuraTests.exe
-# 预期输出尾部（2026-08-27 本机实测；数字随开发增长，关键是 0 failed / 0 skipped）：
-#   [doctest] test cases:   1119 |   1119 passed | 0 failed | 0 skipped
-#   [doctest] assertions: 385783 | 385783 passed | 0 failed
+# 预期输出尾部（2026-08-28 本机实测；数字随开发增长，关键是 0 failed / 0 skipped）：
+#   [doctest] test cases:   1120 |   1120 passed | 0 failed | 0 skipped
+#   [doctest] assertions: 385790 | 385790 passed | 0 failed
 
 # Linux / macOS
 cd build/tests && ./CaesuraTests
@@ -358,7 +358,7 @@ build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件（�
 # 校验单个场景（引擎+Web 双端在跑的脚本契约）
 build/lua/Debug/lua.exe scripts/ks_check.lua demo/galgame_demo.ks
 # 校验全部 16 个教程
-external/lua/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/tutorial/*.ks
 # 预期：OK — all scenes pass contract checks（0 violations）
 ```
 
@@ -408,10 +408,10 @@ node web/gen-index.mjs --check    # 三平台 CI 都跑；改过 scripts/*.lua �
 
 ```bash
 # 1) 静态契约校验（推荐每次都跑）
-external/lua/lua.exe scripts/ks_check.lua my_first_scene.ks
+build/lua/Debug/lua.exe scripts/ks_check.lua my_first_scene.ks
 
 # 2) 用 KAG runner 直接驱动到 [end]（无 GPU 也能验证逻辑）
-external/lua/lua.exe scripts/kag_runner.lua my_first_scene.ks
+build/lua/Debug/lua.exe scripts/kag_runner.lua my_first_scene.ks
 
 # 3) 在引擎里跑：把 .ks 放进 scripts/ 或 demo/，从引擎入口引用；
 #    或直接改 demo/example_game/story.ks 的剧情（§7 模板法）
@@ -432,7 +432,7 @@ external/lua/lua.exe scripts/kag_runner.lua my_first_scene.ks
 - **完整示例游戏** `demo/example_game/`（《单程回信 The One-Way Reply》）：
   三结局 + 选择分支 + i18n 双语 + SMA 骨骼动画 + 双存档点。
   ```bash
-  external/lua/lua.exe demo/example_game/entry.lua
+  build/lua/Debug/lua.exe demo/example_game/entry.lua
   # 或从 build 输出目录：cd build/Debug && lua ../../demo/example_game/entry.lua
   ```
 
@@ -441,7 +441,7 @@ external/lua/lua.exe scripts/kag_runner.lua my_first_scene.ks
 
 ```bash
 for f in demo/tutorial/tutorial_*.ks; do
-  external/lua/lua.exe scripts/ks_check.lua "$f"
+  build/lua/Debug/lua.exe scripts/ks_check.lua "$f"
 done
 ```
 
@@ -560,9 +560,9 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 
 ### 2. 测试
 
-- [ ] C++ 测试：`cd build/tests/Debug && ./CaesuraTests.exe` → **0 failed, 0 skipped**（2026-08-27 实测 1119 用例）
-- [ ] Lua 主套件：`external/lua/lua.exe tests/scripts/run_lua_tests.lua` → 0 failed（实测 143）
-- [ ] Lua 孤儿套件：`external/lua/lua.exe tests/scripts/run_orphan_tests.lua` → 0 failed（实测 24）
+- [ ] C++ 测试：`cd build/tests/Debug && ./CaesuraTests.exe` → **0 failed, 0 skipped**（2026-08-28 实测 1120 用例）
+- [ ] Lua 主套件：`build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua` → 0 failed（实测 143）
+- [ ] Lua 孤儿套件：`build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua` → 0 failed（实测 24）
 - [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`（14 target）
 - [ ] 耦合门禁：`python scripts/count_coupling.py --ci` → `PASS: All modules within thresholds`
 - [ ] Web 脚本索引守卫：`node web/gen-index.mjs --check` → `CHECK OK: N modules up to date`
@@ -571,7 +571,7 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 
 ### 3. Demo 运行
 
-- [ ] KAG 示例游戏：`lua demo/example_game/entry.lua`（无 `lua` 用 `external/lua/lua.exe`）
+- [ ] KAG 示例游戏：`lua demo/example_game/entry.lua`（无 `lua` 用 `build/lua/Debug/lua.exe`）
       → 打印 `[ExampleGame] Loading: demo/example_game/story.ks` 且无 FATAL
 - [ ] 打开 KAG 语言向导剧本：`lua scripts/kag_demo_entry.lua` / `scripts/demo_story.ks`
 - [ ] 脚本契约校验：`lua scripts/ks_check.lua demo/example_game/story.ks` → 0 violations
@@ -583,7 +583,7 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 - [ ] 转换输出：`lua scripts/kag3_import.lua -o out/ <scene.ks>` 生成 `<name>.imported.ks`
 - [ ] CARC 提取导入：`lua scripts/kag3_import.lua --carc game.carc --path assets/script/main.ks`
       （依赖 `bin/Debug/carc_pack.exe`，见 [carc-packaging](../guides/carc-packaging.md)）
-- [ ] 导入器回归：`external/lua/lua.exe tests/scripts/test_kag3_import.lua` → 全绿（99 check）
+- [ ] 导入器回归：`build/lua/Debug/lua.exe tests/scripts/test_kag3_import.lua` → 全绿（99 check）
 
 ### 5. 编辑器 / 视频导出（可选）
 
@@ -596,7 +596,7 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 - [ ] 视频导出：`./build/Debug/CaesuraAmeKAG.exe --export-replay r.json --export-dir out --frames 300`
       （需真实 GPU 窗口；`--headless` 在有 `--export-replay` 时被自动忽略）
 
-> `lua` 指仓库 vendored 的 `external/lua/lua.exe`；把常用命令固化进脚本可省去每次重复。
+> `lua` 指 `lua_cli` 构建产物 `build/lua/<配置>/lua.exe`（发布包内则是内置的 `external/lua/lua.exe`）；把常用命令固化进脚本可省去每次重复。
 
 ---
 

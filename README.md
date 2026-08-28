@@ -346,8 +346,8 @@ includes of concrete headers — only `I*.h` (pure-virtual, no data members); 3.
 > **工具链 / Toolchain**：Windows 用 VS2022 + CMake 3.25+ + vcpkg；Linux (Ubuntu 24.04) 用 GCC 13+（SDL3 源码构建、FreeType、zstd、OpenSSL）；macOS 用 Xcode 15+ + Homebrew（`brew install cmake sdl3 freetype zstd openssl@3 ffmpeg`）。
 > Windows: VS2022 + CMake 3.25+ + vcpkg; Linux (Ubuntu 24.04): GCC 13+ (SDL3 built from source, FreeType, zstd, OpenSSL); macOS: Xcode 15+ + Homebrew.
 
-> **运行要求 / Runtime**：引擎从**项目根目录**启动（资源路径相对 CWD 解析）；仓库自带 Lua 解释器 `external/lua/lua.exe`（vendored）。
-> Run the engine from the **repository root** (asset paths resolve relative to CWD); a Lua interpreter `external/lua/lua.exe` is vendored.
+> **运行要求 / Runtime**：引擎从**项目根目录**启动（资源路径相对 CWD 解析）；Lua 解释器由 CMake 的 `lua_cli` 目标产出（`build/lua/<配置>/lua.exe`），发布包内置为 `external/lua/lua.exe`——该文件不入库，全新克隆里没有。
+> Run the engine from the **repository root** (asset paths resolve relative to CWD); the Lua interpreter is built by the `lua_cli` CMake target (`build/lua/<config>/lua.exe`) and ships inside the release package as `external/lua/lua.exe` — it is gitignored and never present in a fresh clone.
 
 ### 1. 克隆（Clone）
 
@@ -389,11 +389,11 @@ cmake -B build -DCAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative
 
 | 套件 | 命令（仓库根或标注目录） | 通过标准 |
 |------|--------------------------|----------|
-| C++ doctest | `cd build/tests/Debug && ./CaesuraTests.exe` | 0 failed, 0 skipped（2026-08-27 实测 1119 用例 / 385783 断言） |
+| C++ doctest | `cd build/tests/Debug && ./CaesuraTests.exe` | 0 failed, 0 skipped（2026-08-28 实测 1120 用例 / 385790 断言） |
 | C++ CTest | `ctest -C Debug --test-dir build --output-on-failure` | 全过（14 target，`ctest --test-dir build -N` 列出） |
-| Lua 主套件 | `external/lua/lua.exe tests/scripts/run_lua_tests.lua` | 全过（实测 143，顺序敏感） |
-| Lua 孤儿套件 | `external/lua/lua.exe tests/scripts/run_orphan_tests.lua` | 全过（24 套件，单独跑） |
-| Web vitest | `cd web && npm test` | 全过（实测 368 用例 / 27 文件） |
+| Lua 主套件 | `build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua` | 全过（实测 143，顺序敏感） |
+| Lua 孤儿套件 | `build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua` | 全过（24 套件，单独跑） |
+| Web vitest | `cd web && npm test` | 全过（实测 369 用例：342 通过 + 27 环境跳过 / 27 文件） |
 | Editor vitest | `cd editor && npm test` | 全过（实测 615 用例 / 35 文件） |
 | 耦合门禁 | `python scripts/count_coupling.py --ci` | PASS（entry/di/script ≤14，其余 ≤4） |
 | Web 索引守卫 | `node web/gen-index.mjs --check` | CHECK OK（改过 `scripts/*.lua` 先重跑 gen-index） |
@@ -411,7 +411,7 @@ doctest filters: `-tc="*Name*"` (test case), `-ts="*Suite*"` (suite), `-tce` (ex
 ```bash
 # 仓库根（git bash / POSIX）
 bash scripts/verify_sample_game.sh        # 端到端验证（ks_check + headless DONE + 三结局可达，5/5 PASS）
-lua demo/example_game/entry.lua          # 直接跑（无 lua 用 external/lua/lua.exe）
+lua demo/example_game/entry.lua          # 直接跑（无 lua 用 build/lua/Debug/lua.exe）
 ```
 
 一键打包为静态 Web 站（itch.io / GitHub Pages / Netlify）：
@@ -538,8 +538,8 @@ EN: 16 progressive teaching scripts (`demo/tutorial/`; round 90 built 14 → rou
 运行方式（仓库根 / From the repo root）：
 
 ```bash
-external/lua/lua.exe scripts/ks_check.lua demo/tutorial/tutorial_01_hello.ks   # 单个校验 / validate one
-for f in demo/tutorial/tutorial_*.ks; do external/lua/lua.exe scripts/ks_check.lua $f; done  # 全部 / all
+build/lua/Debug/lua.exe scripts/ks_check.lua demo/tutorial/tutorial_01_hello.ks   # 单个校验 / validate one
+for f in demo/tutorial/tutorial_*.ks; do build/lua/Debug/lua.exe scripts/ks_check.lua $f; done  # 全部 / all
 ```
 
 ---
@@ -783,7 +783,7 @@ entry points, topic categories and learning paths are in [docs/guides/community.
 | RPC 表面 | **36** HTTP 端点 + **29** stdio JSON-RPC 方法 |
 | Lua 运行时脚本 | **78**（scripts/，不含 demo/check） |
 | 能力矩阵 | **82** 项 / 6 域 |
-| 测试 · C++ | **1,119** 用例（385,783 断言，doctest 全绿） |
+| 测试 · C++ | **1,120** 用例（385,790 断言，doctest 全绿） |
 | 测试 · Lua | **143** 主套件 + **24** 孤儿套件（全绿） |
 | 测试 · Web | **369** 用例（342 通过 + 27 环境跳过；vitest，27 文件，2026-08-28 实测） |
 | 测试 · Editor | **615** 用例（vitest 全绿） |
