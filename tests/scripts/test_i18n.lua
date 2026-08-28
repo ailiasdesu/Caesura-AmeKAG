@@ -429,7 +429,13 @@ local ks = require("ks_i18n")
 local tmpdir = "tmp/test_i18n"
 local function reset_tmp()
     pcall(os.execute, 'rm -rf "tmp/test_i18n"')
-    pcall(os.execute, 'mkdir -p "tmp/test_i18n"')
+    -- Windows cmd has no -p: without the split a literal "-p" dir appears in
+    -- the CWD (same split as test_ks_bake.lua / scripts/system.lua).
+    if package.config:sub(1, 1) == "\\" then
+        pcall(os.execute, 'mkdir "tmp\\test_i18n" 2>nul')
+    else
+        pcall(os.execute, 'mkdir -p "tmp/test_i18n"')
+    end
 end
 reset_tmp()
 local fixture = "demo/x.ks"
@@ -528,7 +534,11 @@ local SAVE_ARG = _G.arg
 local cli_dir = "tmp/test_i18n/cli"       -- forward slashes (C6 whitelist)
 local cli_lang = "tmp/test_i18n/cli/cli_e2e.lua"
 pcall(os.execute, 'rm -rf "tmp/test_i18n/cli"')
-pcall(os.execute, 'mkdir -p "tmp/test_i18n/cli"')
+if package.config:sub(1, 1) == "\\" then
+    pcall(os.execute, 'mkdir "tmp\\test_i18n\\cli" 2>nul')
+else
+    pcall(os.execute, 'mkdir -p "tmp/test_i18n/cli"')
+end
 
 -- Real demo snippet (galgame_demo.ks dialogue + a bare text token).
 local fcli = io.open(cli_dir .. "/galgame_demo.ks", "w")

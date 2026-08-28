@@ -853,14 +853,25 @@ function compiler.writeCache(tokens, cachePath)
     local ok, text = pcall(encode_lua_literal, data)
     if not ok or type(text) ~= "string" then return false end
     text = "return " .. text
-    -- ensure the cache directory exists (best-effort; Windows and
-    -- POSIX both accept `mkdir -p` through a shell). Sandboxed envs may
-    -- disable os.execute — tolerate that (the dir may already exist).
+    -- ensure the cache directory exists (best-effort). Windows cmd's
+    -- mkdir has NO -p option -- `mkdir -p "<dir>"` happily creates a
+    -- literal "-p" DIRECTORY in the CWD on every compile (observed residue
+    -- build/tests/Debug/-p; dev runs would litter the repo root too). Same
+    -- cross-platform pattern as scripts/system.lua:504 and
+    -- music_room.lua:129-134: check existence first and never pass -p on
+    -- Windows (cmd's mkdir already creates intermediate components); keep
+    -- `mkdir -p` on POSIX. Sandboxed envs may disable os.execute —
+    -- tolerate that (the dir may already exist).
     local dir = cachePath:match("^(.*)[/\\][^/\\]+$")
     if dir then
         local sep = package.config:sub(1, 1)
-        local q = sep == "\\" and '"' or "'"
-        pcall(os.execute, "mkdir -p " .. q .. dir .. q .. " 2>nul")
+        if sep == "\\" then
+            local d = dir:gsub("[/\\]+$", "")
+            pcall(os.execute, 'if not exist "' .. d .. '" mkdir "' .. d .. '"')
+        else
+            local q = "'"
+            pcall(os.execute, "mkdir -p " .. q .. dir .. q .. " 2>/dev/null")
+        end
     end
     local ok3, f = pcall(io.open, cachePath, "w")
     if not ok3 or not f then return false end

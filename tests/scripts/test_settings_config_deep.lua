@@ -278,7 +278,13 @@ end
 -- config's ensure_dir() cannot create settings/ from scratch here (its
 -- os.rename/mmDir probe needs the parent to exist), so pre-create it; the
 -- directory is gitignored and cleaned with the files at the end.
-pcall(os.execute, "mkdir -p settings")
+-- Windows cmd has no -p: without the split a literal "-p" dir appears in
+-- the CWD. "settings" is gitignored and needs no separators.
+if package.config:sub(1, 1) == "\\" then
+    pcall(os.execute, "mkdir settings 2>nul")
+else
+    pcall(os.execute, "mkdir -p settings")
+end
 
 local config = require("config")   -- require-time apply() already ran
 
