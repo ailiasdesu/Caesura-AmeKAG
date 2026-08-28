@@ -166,7 +166,7 @@ Tests link the same internal static module libraries as the application. Each `t
 ## Key Documentation
 
 - `AGENTS.md` — authoritative rules for module boundaries, interfaces, BackendRegistry, naming (read first; 完整文档分类见 AGENTS.md §12)
-- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (123 commands; supersedes kag-commands.md)
+- `docs/api/command-contracts.md` — auto-generated KAG Neo-Genesis command contracts reference (134 commands; supersedes kag-commands.md)
 - `docs/api/lua-modules.md` — Lua binding API reference
 - `docs/api/cpp-interfaces.md` — all 34 C++ interface definitions
 - `docs/api/editor-api-reference.md` — RPC endpoints for the web editor
