@@ -785,7 +785,7 @@ entry points, topic categories and learning paths are in [docs/guides/community.
 | 能力矩阵 | **82** 项 / 6 域 |
 | 测试 · C++ | **1,119** 用例（385,783 断言，doctest 全绿） |
 | 测试 · Lua | **143** 主套件 + **24** 孤儿套件（全绿） |
-| 测试 · Web | **368** 用例（vitest，27 文件，2026-08-27 实测） |
+| 测试 · Web | **369** 用例（342 通过 + 27 环境跳过；vitest，27 文件，2026-08-28 实测） |
 | 测试 · Editor | **615** 用例（vitest 全绿） |
 | 耦合门禁 | PASS（entry/di/script ≤14，其余 ≤4） |
 | CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP + Android APK/AAB + iOS probe） |
