@@ -299,7 +299,7 @@ cmake --build build --parallel
 ## 4. 测试（跑通 Demo 前的自检）
 
 > **测试基线（本机实测，2026-08-28 master `4e4abf57` + 本轮 N1 用例）**：C++ 用例 **1120**（385790 断言）·
-> Lua 主套件 **143** + 孤儿套件 **24** · Web vitest **369** · Editor vitest **615** ·
+> Lua 主套件 **143** + 孤儿套件 **24** · Web vitest **368**（工件齐备全跑） · Editor vitest **615** ·
 > CTest **14** 个 target · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
 > 任何 PR 合入前这些必须全绿。基线数字随开发增长，**以本地实跑输出为准**，不要把本行当门禁。
 

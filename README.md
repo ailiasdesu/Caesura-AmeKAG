@@ -393,7 +393,7 @@ cmake -B build -DCAESURA_LIVE2D=ON -DCUBISM_SDK_ROOT="path/to/CubismSdkForNative
 | C++ CTest | `ctest -C Debug --test-dir build --output-on-failure` | 全过（14 target，`ctest --test-dir build -N` 列出） |
 | Lua 主套件 | `build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua` | 全过（实测 143，顺序敏感） |
 | Lua 孤儿套件 | `build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua` | 全过（24 套件，单独跑） |
-| Web vitest | `cd web && npm test` | 全过（实测 369 用例：342 通过 + 27 环境跳过 / 27 文件） |
+| Web vitest | `cd web && npm test` | 全过（工件齐备实测 368/368 · 27 文件 · 0 skipped；缺 story bundle/web dist 时为 342 通过 + 27 环境跳过） |
 | Editor vitest | `cd editor && npm test` | 全过（实测 615 用例 / 35 文件） |
 | 耦合门禁 | `python scripts/count_coupling.py --ci` | PASS（entry/di/script ≤14，其余 ≤4） |
 | Web 索引守卫 | `node web/gen-index.mjs --check` | CHECK OK（改过 `scripts/*.lua` 先重跑 gen-index） |
@@ -785,7 +785,7 @@ entry points, topic categories and learning paths are in [docs/guides/community.
 | 能力矩阵 | **82** 项 / 6 域 |
 | 测试 · C++ | **1,120** 用例（385,790 断言，doctest 全绿） |
 | 测试 · Lua | **143** 主套件 + **24** 孤儿套件（全绿） |
-| 测试 · Web | **369** 用例（342 通过 + 27 环境跳过；vitest，27 文件，2026-08-28 实测） |
+| 测试 · Web | **368** 用例（27 文件全跑全过；story bundle 与 web/dist 齐备，2026-08-28 实测） |
 | 测试 · Editor | **615** 用例（vitest 全绿） |
 | 耦合门禁 | PASS（entry/di/script ≤14，其余 ≤4） |
 | CI | 三平台绿（Windows/macOS/Linux，Release + CPack ZIP + Android APK/AAB + iOS probe） |

@@ -482,7 +482,7 @@ def generate_markdown(data: dict) -> str:
     else:
         lines.append("- [x] **Windows (Tier 1)**: see the Windows runtime evidence row above; First-VN E2E verified.")
     lines.append("- [x] **Linux (Tier 1)**: 11/11 CTest targets verified, headless Xvfb bundle boot verified.")
-    lines.append("- [x] **Web (Tier 1)**: Vitest suite green (cd web && npm test; 369 tests (342 passed + 27 environment-skipped) / 27 files measured 2026-08-28), CDP real-browser unlock and reload save persistence verified.")
+    lines.append("- [x] **Web (Tier 1)**: Vitest suite green (cd web && npm test; 368 tests / 27 files, all run and passed with the story bundle and web dist present, measured 2026-08-28), CDP real-browser unlock and reload save persistence verified.")
     # Same rot class as the Windows line above: the hardware retyped here still
     # said "Xiaomi 11 Adreno 660" long after 3f742f0b established the device is a
     # Redmi K40 (Adreno 650, Android 13) -- and it contradicted this very

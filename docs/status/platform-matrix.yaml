@@ -35,19 +35,19 @@ platforms:
       runtime:
         status: verified
         evidence:
-          commit: "6053024b"
+          commit: "7935dffb"
           document: "docs/plans/2026-08-24-027-antigravity-handoff.md"
-          test: "(cd build/tests/Debug && ./CaesuraTests.exe) && external/lua/lua.exe tests/scripts/run_lua_tests.lua && external/lua/lua.exe tests/scripts/run_orphan_tests.lua"
-          verified_at: "2026-08-27T15:20:00Z"
-          notes: "Re-measured on 6053024b: 1119 doctest cases / 385783 assertions (0 failed, 0 skipped), 143 main Lua suites (0 failed), 24 orphan suites (0 failed), coupling gate PASS"
+          test: "(cd build/tests/Debug && ./CaesuraTests.exe) && build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua && build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua"
+          verified_at: "2026-08-28T15:00:00Z"
+          notes: "Re-measured on 7935dffb: 1120 doctest cases / 385790 assertions (0 failed, 0 skipped), 143 main Lua suites (0 failed), 24 orphan suites (0 failed), coupling gate PASS, 14/14 ctest targets"
       first_vn:
         status: verified
         evidence:
-          commit: "6053024b"
+          commit: "d406e780"
           document: "scripts/verify_first_vn.sh"
           test: "bash scripts/verify_first_vn.sh"
-          verified_at: "2026-08-27T15:20:00Z"
-          notes: "13/13 user journey checks passed on 6053024b (template, creation, metadata, validation, headless run, choices A/B, save/load, package). Journey starts from a BUILT source tree, not from the released ZIP."
+          verified_at: "2026-08-28T15:15:00Z"
+          notes: "13/13 user journey checks passed on d406e780 (template, creation, metadata, validation, headless run, choices A/B, save/load, package). Journey starts from a BUILT source tree, not from the released ZIP; the Lua interpreter resolves via the three-level probe (bare-clone safe)."
       packaging:
         status: verified
         evidence:
