@@ -115,6 +115,70 @@ def _rel(p: Path) -> str:
         return str(p).replace("\\", "/")
 
 
+def _looks_like_caesura_output(out: Path) -> bool:
+    """Best-effort marker: does this dir look like the residue of a 'caesura
+    build' run that failed before BUILD-INFO.json was written? (The marker
+    files are ones only assemble() creates; a crashed/killed build cannot run
+    the t19 self-cleanup, so this distinguishes its residue from an unrelated
+    user directory for the refusal message.)"""
+    try:
+        if (out / _exe_name()).is_file() or (out / "HOW-TO-PLAY.txt").is_file():
+            return True
+        return any((out / "projects").glob("*/caesura-boot.lua"))
+    except OSError:
+        return False
+
+
+def _prepare_out(out: Path) -> None:
+    """S2 guard + ownership acquisition for an assemble() output directory.
+
+    Refuses to delete a directory we did not create: -o accepts any path, and an
+    unconditional rmtree would erase e.g. a pre-existing dist/ full of unrelated
+    files. Every assemble() run writes BUILD-INFO.json, so its presence marks the
+    directory as a previous build output; an empty directory is also safe to
+    reuse. t19/A2: the refusal message now distinguishes a crashed build's
+    residue (marker files, no BUILD-INFO) from an unrelated user directory.
+    """
+    if not out.exists():
+        return
+    if any(out.iterdir()) and not (out / "BUILD-INFO.json").exists():
+        if _looks_like_caesura_output(out):
+            raise BuildError(
+                "Refusing to overwrite %s: a previous 'caesura build' into this "
+                "directory FAILED before BUILD-INFO.json was written, leaving "
+                "this partial output behind (a crashed/killed build cannot clean "
+                "itself up). Delete it, or pick a new -o, then re-run." % _rel(out))
+        raise BuildError(
+            "Refusing to overwrite %s: it exists, is not empty, and has no "
+            "BUILD-INFO.json (not a previous 'caesura build' output). "
+            "Pick a new or empty -o directory, or delete it yourself."
+            % _rel(out))
+    shutil.rmtree(out)
+
+
+def _assemble_clean(project: Path, entry_scene: Path, engine: Path, out: Path,
+                    shared_assets: bool, dev_mode: bool, quiet: bool = False) -> dict:
+    """t19/A2: run assemble() and self-clean the output WE own on failure.
+
+    A run that fails mid-assemble (disk error, crash, Ctrl+C) must not leave a
+    half-written directory that blocks the same -o forever: the S2 guarantee
+    refuses any non-empty dir without BUILD-INFO.json, and a failure before that
+    file was written creates exactly that state. So from the moment _prepare_out
+    gave us ownership (cleared previous build output or confirmed a fresh path),
+    any failure removes only what we created -- user directories are refused
+    BEFORE ownership, and never touched.
+    """
+    took_ownership = False
+    try:
+        _prepare_out(out)
+        took_ownership = True
+        return assemble(project, entry_scene, engine, out,
+                        shared_assets=shared_assets, dev_mode=dev_mode, quiet=quiet)
+    finally:
+        if took_ownership and not (out / "BUILD-INFO.json").exists():
+            shutil.rmtree(out, ignore_errors=True)
+
+
 def find_bash() -> str:
     """Resolve git-bash EXPLICITLY, never the bare name "bash".
 
@@ -611,19 +675,7 @@ def assemble(project: Path, entry_scene: Path, engine: Path, out: Path,
             print(msg)
 
     game_name = project.name
-    if out.exists():
-        # Refuse to delete a directory we did not create: -o accepts any path,
-        # and an unconditional rmtree would erase e.g. a pre-existing dist/
-        # full of unrelated files. Every assemble() run writes BUILD-INFO.json,
-        # so its presence marks the directory as a previous build output; an
-        # empty directory is also safe to reuse.
-        if any(out.iterdir()) and not (out / "BUILD-INFO.json").exists():
-            raise BuildError(
-                "Refusing to overwrite %s: it exists, is not empty, and has no "
-                "BUILD-INFO.json (not a previous 'caesura build' output). "
-                "Pick a new or empty -o directory, or delete it yourself."
-                % _rel(out))
-        shutil.rmtree(out)
+    _prepare_out(out)
     out.mkdir(parents=True)
 
     # 1. engine binary + every runtime lib beside it (no manual DLL copying
@@ -793,9 +845,13 @@ def cmd_build(args) -> int:
             print("[build] ks_check: %d scene(s) pass contracts" % len(scenes))
         else:
             print("[build] ks_check: SKIPPED (--skip-check)")
-        info = assemble(project, entry_scene, engine, out,
-                        shared_assets=args.with_shared_assets, dev_mode=args.dev)
-    except BuildError as e:
+        info = _assemble_clean(project, entry_scene, engine, out,
+                               shared_assets=args.with_shared_assets,
+                               dev_mode=args.dev)
+    except (BuildError, OSError) as e:
+        # OSError: assembly I/O failure (disk full, source vanished, ...).
+        # _assemble_clean already removed the partial output (t19/A2); report
+        # the error plainly instead of a traceback.
         print("caesura build: %s" % e, file=sys.stderr)
         return 1
     print("")

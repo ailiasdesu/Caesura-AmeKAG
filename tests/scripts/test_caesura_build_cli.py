@@ -310,6 +310,80 @@ class TestGameOnlyBuild(unittest.TestCase):
         self.assertGreater(scanned, 20, "text-file scan did not cover the package")
         self.assertEqual(offenders, [])
 
+    def test_failed_mid_build_cleans_up_and_same_out_reruns(self):
+        """t19/A2: a failure AFTER assemble() owns the output must not leave a
+        half-written directory that blocks the same -o forever.
+
+        The S2 guard refuses any non-empty dir without BUILD-INFO.json, so a
+        build that crashed before that file was written used to leave exactly
+        that state, permanently. Inject a real disk-class IO error (raised by
+        shutil.copy2 after the engine binary was copied) through a driver that
+        runs the REAL argparse -> cmd_build -> assemble chain; then re-run the
+        real CLI to the same -o and expect success.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "game"
+            driver = Path(td) / "t19_fault_driver.py"
+            driver.write_text(
+                "import sys\n"
+                "sys.path.insert(0, %r)\n" % str(ROOT / "scripts") +
+                "import caesura_build\n"
+                "_real_copy2 = caesura_build.shutil.copy2\n"
+                "_count = {'n': 0}\n"
+                "def _flaky(src, dst, *a, **k):\n"
+                "    _count['n'] += 1\n"
+                "    if _count['n'] == 2:\n"
+                "        # fail right after the engine binary (marker) was copied\n"
+                "        raise OSError('t19: injected disk error after engine copy')\n"
+                "    return _real_copy2(src, dst, *a, **k)\n"
+                "caesura_build.shutil.copy2 = _flaky\n"
+                "sys.argv = ['caesura.py', 'build', 'basic', '-o', sys.argv[1]]\n"
+                "import caesura\n"
+                "caesura.main()\n",
+                encoding="utf-8")
+            res = subprocess.run([sys.executable, str(driver), str(out)],
+                                 cwd=str(ROOT), capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=900)
+            joined = res.stdout + res.stderr
+            self.assertNotEqual(res.returncode, 0, joined)
+            self.assertNotIn("Traceback", joined)          # clean error, not a dump
+            self.assertIn("t19: injected disk error", joined)
+            self.assertFalse(out.exists(),
+                             "mid-build failure left a partial output behind:\n" + joined)
+            rc2, log2 = run_cli("build", "basic", "-o", str(out))
+            self.assertEqual(rc2, 0, log2)
+            self.assertTrue((out / "BUILD-INFO.json").is_file(), log2)
+
+    def test_out_guard_names_failed_build_residue(self):
+        """t19/(b): a crashed build's residue (marker files, no BUILD-INFO.json)
+        gets a message that says so and tells the user what to do -- not the
+        identical 'must be from caesura build' refusal."""
+        with tempfile.TemporaryDirectory() as td:
+            residue = Path(td) / "game"
+            residue.mkdir()
+            (residue / "CaesuraAmeKAG.exe").write_bytes(b"MZ-fake-marker")
+            rc, out = run_cli("build", "basic", "-o", str(residue))
+            self.assertEqual(rc, 1, out)
+            self.assertIn("FAILED before BUILD-INFO.json", out)
+            self.assertIn("Delete it", out)
+            self.assertNotIn("not a previous", out)
+            # the residue is NOT touched (S2 guarantee)
+            self.assertTrue((residue / "CaesuraAmeKAG.exe").is_file(), out)
+
+    def test_out_guard_refuses_unrelated_dir_without_touching_it(self):
+        """t19/(b): an unrelated user directory (no caesura markers) is refused
+        with the original wording and left COMPLETELY untouched."""
+        with tempfile.TemporaryDirectory() as td:
+            unrelated = Path(td) / "my-notes"
+            unrelated.mkdir()
+            (unrelated / "notes.txt").write_text("hello, world", encoding="utf-8")
+            rc, out = run_cli("build", "basic", "-o", str(unrelated))
+            self.assertEqual(rc, 1, out)
+            self.assertIn("not a previous", out)
+            self.assertNotIn("FAILED before BUILD-INFO.json", out)
+            self.assertEqual(
+                (unrelated / "notes.txt").read_text(encoding="utf-8"), "hello, world", out)
+
 
 @unittest.skipIf(ENGINE is None, "no engine binary (build/ is gitignored)")
 class TestDesktopPackage(unittest.TestCase):
