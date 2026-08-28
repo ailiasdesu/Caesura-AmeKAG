@@ -286,6 +286,16 @@ class TestGameOnlyBuild(unittest.TestCase):
                  if p.is_file() and p.suffix.lower() in caesura_build.DEV_SCRIPT_SUFFIXES]
         self.assertEqual(stray, [], "dev-only files leaked into the player package")
 
+    def test_no_stray_dash_p_directory_in_package(self):
+        """t24 sentinel: compiler.lua's Windows 'mkdir -p' defect was fixed in
+        b38ac5de (Windows branch is 'if not exist ... mkdir'). A literal '-p'
+        directory anywhere in the assembled output would mean the defect is
+        back or an old scripts tree got packaged -- the caesura_build.py
+        cleanup workaround was removed on this guarantee."""
+        stray = [p for p in self.out.rglob("-p")]
+        self.assertEqual(stray, [], "literal '-p' directory in package: "
+                                    "re-check scripts/kag/compiler.lua mkdir")
+
     def test_package_does_not_reference_the_repo(self):
         """Nothing inside the package may point back at the source checkout.
 

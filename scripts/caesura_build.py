@@ -122,7 +122,15 @@ def _looks_like_caesura_output(out: Path) -> bool:
     the t19 self-cleanup, so this distinguishes its residue from an unrelated
     user directory for the refusal message.)"""
     try:
-        if (out / _exe_name()).is_file() or (out / "HOW-TO-PLAY.txt").is_file():
+        # Platform-agnostic engine-binary markers: residue carries the name
+        # of the platform that BUILT it, and this wording chooser must not
+        # flip its verdict based on which platform inspects the directory --
+        # a planted CaesuraAmeKAG.exe marker read as "unrelated" on the
+        # Linux/macOS guard (CI run 33184701644). Both branches refuse either
+        # way; only the message differs, so matching generously is safe.
+        _exe_markers = ("CaesuraAmeKAG.exe", "CaesuraAmeKAG")
+        if any((out / n).is_file() for n in _exe_markers) \
+                or (out / "HOW-TO-PLAY.txt").is_file():
             return True
         return any((out / "projects").glob("*/caesura-boot.lua"))
     except OSError:
@@ -649,14 +657,10 @@ def precompile_scenes(out: Path, scene_rels):
         return [], [], "skipped (%s)" % exc
     finally:
         script.unlink(missing_ok=True)
-    # scripts/kag/compiler.lua:863 shells out to `mkdir -p "<dir>"` to create
-    # cache/ksc. On Windows, cmd's mkdir has no -p flag and takes it as a
-    # DIRECTORY NAME, so every compile leaves a literal "-p" directory behind
-    # (it also litters the repo root during normal engine runs -- pre-existing
-    # engine bug, reported separately). Do not ship it to players.
-    stray = out / "-p"
-    if stray.is_dir():
-        shutil.rmtree(stray, ignore_errors=True)
+    # (t24) the old compiler.lua Windows 'mkdir -p' defect was fixed in
+    # b38ac5de (if not exist branch); the cleanup below was removed and the
+    # absence of a stray '-p' directory is now locked by
+    # test_no_stray_dash_p_directory_in_package instead.
 
     ok_list, fail_list = [], []
     for line in (res.stdout or "").splitlines():
