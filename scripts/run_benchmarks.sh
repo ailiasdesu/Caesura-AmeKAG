@@ -50,13 +50,34 @@ set -u
 
 cd "$(dirname "$0")/.." || exit 1   # repo root
 
-LUA="external/lua/lua.exe"
+# Lua interpreter probe -- same three levels as scripts/caesura_build.py::find_lua:
+#   packaged external/lua/lua[.exe] (release-package artifact; gitignored in a
+#   checkout) -> build-tree lua_cli product (build/lua/<config>/lua[.exe], which
+#   a fresh clone has after cmake --build) -> PATH lua5.4 / lua.
+# FATAL only when ALL levels miss, listing every location probed (honest
+# diagnostics; never a silent skip). Keep in sync with caesura_build.find_lua.
+LUA=""
+for _luacand in \
+    external/lua/lua.exe external/lua/lua \
+    build/lua/Release/lua.exe build/lua/Release/lua \
+    build/lua/Debug/lua.exe build/lua/Debug/lua \
+    build/lua/RelWithDebInfo/lua.exe build/lua/RelWithDebInfo/lua \
+    build/lua/MinSizeRel/lua.exe build/lua/MinSizeRel/lua \
+    build/lua/lua.exe build/lua/lua
+do
+    if [ -f "$_luacand" ]; then LUA="$_luacand"; break; fi
+done
+if [ -z "$LUA" ]; then
+    LUA="$(command -v lua5.4 2>/dev/null || true)"
+    [ -n "$LUA" ] || LUA="$(command -v lua 2>/dev/null || true)"
+fi
+
 LOG="tmp/bench-latest.txt"
 RUN_WEB=0
 [ "${1:-}" = "--web" ] && RUN_WEB=1
 
-if [ ! -f "$LUA" ]; then
-  echo "ERROR: $LUA not found (run from repo root)" >&2
+if [ -z "$LUA" ] || [ ! -e "$LUA" ]; then
+  echo "ERROR: no Lua interpreter (probed: external/lua/lua[.exe], build/lua/{Release,Debug,RelWithDebInfo,MinSizeRel}/lua[.exe], build/lua/lua[.exe], PATH lua5.4/lua)" >&2
   exit 1
 fi
 

@@ -23,10 +23,29 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT" || { echo "[verify] cannot cd repo root"; exit 1; }
 
-LUA="external/lua/lua.exe"
-if [ ! -f "$LUA" ]; then LUA="$(command -v lua || true)"; fi
-if [ -z "$LUA" ] || ! [ -e "$LUA" ]; then
-    echo "[verify] FATAL: no Lua interpreter found (expected external/lua/lua.exe)"; exit 1
+# Lua interpreter probe -- same three levels as scripts/caesura_build.py::find_lua:
+#   packaged external/lua/lua[.exe] (release-package artifact; gitignored in a
+#   checkout) -> build-tree lua_cli product (build/lua/<config>/lua[.exe], which
+#   a fresh clone has after cmake --build) -> PATH lua5.4 / lua.
+# FATAL only when ALL levels miss, listing every location probed (honest
+# diagnostics; never a silent skip). Keep in sync with caesura_build.find_lua.
+LUA=""
+for _luacand in \
+    external/lua/lua.exe external/lua/lua \
+    build/lua/Release/lua.exe build/lua/Release/lua \
+    build/lua/Debug/lua.exe build/lua/Debug/lua \
+    build/lua/RelWithDebInfo/lua.exe build/lua/RelWithDebInfo/lua \
+    build/lua/MinSizeRel/lua.exe build/lua/MinSizeRel/lua \
+    build/lua/lua.exe build/lua/lua
+do
+    if [ -f "$_luacand" ]; then LUA="$_luacand"; break; fi
+done
+if [ -z "$LUA" ]; then
+    LUA="$(command -v lua5.4 2>/dev/null || true)"
+    [ -n "$LUA" ] || LUA="$(command -v lua 2>/dev/null || true)"
+fi
+if [ -z "$LUA" ] || [ ! -e "$LUA" ]; then
+    echo "[verify] FATAL: no Lua interpreter (probed: external/lua/lua[.exe], build/lua/{Release,Debug,RelWithDebInfo,MinSizeRel}/lua[.exe], build/lua/lua[.exe], PATH lua5.4/lua)"; exit 1
 fi
 
 STORY="${SAMPLE_STORY:-demo/example_game/story.ks}"
