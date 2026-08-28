@@ -10,7 +10,7 @@
 | 文件 | 作用 |
 |---|---|
 | `story.ks` | 主场景（dialogue / choices A·B / [eval] 变量 / save+load / macro / 中英文本 / i18n / audio / tween / layout / 转场 / credits） |
-| `golden_cross.ks` | 跨场景 [jump] 专用起点（独立于 choices，避免调度器 deferred pending-jump 与场景切换叠加） |
+| `golden_cross.ks` | 跨场景 [jump] 专用起点（独立覆盖面；"选择后立即跨场景"的直连场景在 tests/scripts/test_select_crossscene_flow.lua——引擎限制已于 t38 修复） |
 | `scene_b.ks` | 跨场景 [jump] 目标场景（独立收尾，进入即 [end]） |
 | `entry.lua` | 真实 GPU 运行入口（标准 UI wiring，同 demo/example_game 模式） |
 | `../scripts/golden_vn_headless.lua` | v1 headless 驱动（route 选择 + 四大功能旗标断言 + cross 模式） |
@@ -86,11 +86,20 @@ build/lua/Debug/lua.exe tests/projects/golden_vn/entry.lua
 `assets/script/golden_scene_b.ks` 逻辑名**重映射**到夹具文件（打印 XSCENE_REMAP 自证）。
 这是唯一的测试缝：调度器跨场景机制（前缀构建 / 安全检查 / switch 预算 / token+label 交换 /
 新 local frame）全部真实执行。**为什么用独立 golden_cross.ks（不在 story.ks 主路径）**：
-[select] 选择的实现采用延迟 pending-jump（在下一处协程死亡点结算，见
-`scripts/kag/commands/text.lua:1475` 与 `kag_runner.lua:538`）——若在任意选择之后立刻做
-跨场景切换，该延迟跳转会在 新场景 labelMap 中解析旧标签（"Choice label not found"）并导致
-运行停摆。这是引擎语义限制，v1 用"cross 独立起点"绕开并把交叉验证留给专项（test_flow_edge_scene）。
-story.ks 内 [jump] 均为场景内标签跳转。另外 golden_cross.ks 会触发 2 条
+"选择后立即跨场景 [jump]"曾因 [select] 的延迟 pending-jump（在下一处协程死亡点结算，见
+`scripts/kag/commands/text.lua:1475` 与 `kag_runner.lua` 死亡分支）在 新场景 labelMap 中
+解析旧标签（"Choice label not found"）而运行停摆——**该引擎限制已于 t38/t43 修复**
+（`scripts/kag_runner.lua` 死亡分支：场景切换先于 pendingJump 消费）。丢弃语义仅适用于
+**无返回的跨场景 [jump]/[link]**（切换即新流权威，场景局部标签在新场景不存在，残留延迟
+跳转被响亮丢弃）；**跨场景 [call] 有返回语义**——`[return]` 恢复调用者场景并清除切换信号，
+选择后的延迟跳转仍在调用者场景内解析、选择分支照常重放（t43 回归锁定）。约束：**选择标签须属于
+恢复后场景**——若选择发生在 callee 内且 [return] 前未消费，其标签必不在调用者 labelMap，
+由 [return] 恢复点响亮丢弃而非停摆（t49 回归锁定，Case E）。直连复现/回归在
+`tests/scripts/test_select_crossscene_flow.lua`（Case B：选择→立即跨场景 [jump]——修复前
+FRAME_LIMIT 停摆 / 修复后 DONE 且新场景推进到 [end]；Case A 锁旧语义不回归；Case C：
+选择→跨场景 [call]→[return]——回放保留（route=b）；孤儿套件注册）。golden_cross.ks + XSCENE_REMAP 保留为独立的
+跨场景覆盖面（不与选择叠加，覆盖面互不干扰）。story.ks 内 [jump] 均为场景内标签跳转，
+因此主路径仍不需要该缝。另外 golden_cross.ks 会触发 2 条
 ks_check 预期性 [WARN]：其一 "cross-scene target scene 'golden_scene_b.ks' not found in
 scene directory"——静态视角看不到 headless 驱动的 load_tokens 重映射缝（与运行时 XSCENE_REMAP
 是同一测试缝的两面）；其二 "token(s) unreachable after [jump]"——回退路径行。两条均属 lint

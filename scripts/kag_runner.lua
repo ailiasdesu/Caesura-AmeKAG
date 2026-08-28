@@ -535,6 +535,37 @@ function kag_runner.update(dt)
             end)
             return resume_scheduler("update", delta_ms)
         end
+        if ctx._scene_changed then
+            -- A cross-scene switch is processed BEFORE the deferred
+            -- [select]/[button] pending-jump: the choice label target is
+            -- SCENE-LOCAL, and a run-ending switch (cross-scene [jump]/[link])
+            -- already swapped tokens/labelMap to the NEW scene where that
+            -- label cannot exist -- resolving it there printed "Choice label
+            -- not found" and left the run stalled not-running forever (t33 /
+            -- Golden Project finding). The explicit [jump]/[link] is the new
+            -- flow authority, so the stale redirect is dropped loudly here.
+            -- (A cross-scene [call] is NOT an authority: [return] restores the
+            -- caller's tokens/labels and clears _scene_changed, so a deferred
+            -- choice jump made before the call still resolves in the caller
+            -- scene -- t43. Caveat, t49: the choice label must belong to the
+            -- RESTORED scene -- a pending jump created by a callee-internal
+            -- [select] is dropped at the [return] restore point, not here.)
+            ctx._scene_changed = false
+            if ctx._pendingJump then
+                print("[KAG Runner] Dropping deferred choice jump across scene"
+                      .. " switch: " .. tostring(ctx._pendingJump)
+                      .. " (current scene: "
+                      .. tostring(ctx.current_scene or ctx.currentScene or "?")
+                      .. ")")
+                ctx._pendingJump = nil
+            end
+            -- Scene changes (jump/call/link) invalidate every snapshot.
+            ctx._undoStack = {}
+            kag_co = coroutine.create(function()
+                scheduler.run(ctx, ctx.tokens, ctx.token_index)
+            end)
+            return resume_scheduler("update", delta_ms)
+        end
         if ctx._pendingJump then
             -- History/choice jump: reload the target scene and resume at the
             -- requested token (cleared on failure so we don't loop). The
@@ -580,15 +611,7 @@ function kag_runner.update(dt)
             end
             print("[KAG Runner] Failed to load jump target: " .. tostring(target.scene or target))
         end
-        if ctx._scene_changed then
-            ctx._scene_changed = false
-            -- Scene changes (jump/call/link) invalidate every snapshot.
-            ctx._undoStack = {}
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
-            return resume_scheduler("update", delta_ms)
-        elseif resume_from_save() then
+        if resume_from_save() then
             -- [load]: restart the saved scene at the saved token.
             kag_co = coroutine.create(function()
                 scheduler.run(ctx, ctx.tokens, ctx.token_index)

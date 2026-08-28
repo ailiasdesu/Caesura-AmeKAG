@@ -38,6 +38,7 @@ local tests = {
     "test_wait_delay",
     "test_kag3_import_e2e",
     "test_settings_config_deep",
+    "test_select_crossscene_flow",
 }
 
 local passed, failed = 0, 0

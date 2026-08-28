@@ -223,6 +223,29 @@ function scheduler.run(ctx, tokens, start_index)
         compiled_exprDumps = compiled.exprDumps
     end
 
+    -- t49: after the [return] restore (explicit or implicit) the CALLER's
+    -- labelMap is current again. A deferred [select]/[button] jump created
+    -- inside the scene being LEFT carries a SCENE-LOCAL label: if that label
+    -- does not exist in the restored scene, resolving it later (runner dead
+    -- branch) printed "Choice label not found" and stalled not-running
+    -- forever (t46 boundary finding on the t43 change). Drop it loudly here
+    -- -- the t38 drop semantics, now scoped to the actually dangling case;
+    -- a label that DOES exist (choice made in the caller, call returns) is
+    -- kept and its legitimate replay is untouched (t43 Case C).
+    local function prune_dangling_pending_jump()
+        local pj = ctx._pendingJump
+        if type(pj) ~= "string" or pj:sub(1, 1) ~= "*" then return end
+        local lbl = pj:gsub("^*", "")
+        local idx = compiled.labels[lbl] or find_label(tokens, lbl, ctx.label_index)
+        if not idx then
+            print("[KAG Runner] Dropping deferred choice jump: label " .. pj
+                  .. " not in restored scene "
+                  .. tostring(ctx.current_scene or ctx.currentScene or "?")
+                  .. " (choice labels are scene-local)")
+            ctx._pendingJump = nil
+        end
+    end
+
     local i = start_index
     while i <= #tokens do
         local tok = tokens[i]
@@ -451,6 +474,19 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.tokens = tokens
                 refresh_compiled()
                 i = frame.index - 1
+                -- t43: a cross-scene [call] set _scene_changed via load_tokens
+                -- (to ask update() to re-spawn after a run-ending switch), but
+                -- the coroutine never died -- the call ran inline and we are
+                -- now back in the CALLER's scene. The switch signal is moot;
+                -- leaving it set made the runner's dead-coroutine branch drop
+                -- a still-valid deferred [select] jump (t40 regression).
+                ctx._scene_changed = false
+                -- t49: a deferred choice jump left DANGLING by a callee-internal
+                -- [select] (never consumed before [return]) targets a callee
+                -- label that cannot exist in the restored caller scene -- drop
+                -- it loudly here instead of stalling at the runner's dead
+                -- branch ("Choice label not found: <label>", FRAME_LIMIT).
+                prune_dangling_pending_jump()
             else
                 return  -- No call stack, end execution
             end
@@ -1409,6 +1445,11 @@ function scheduler.run(ctx, tokens, start_index)
             ctx.tokens = tokens
             refresh_compiled()
             i = (frame.index or 1)
+            -- t43 (implicit-return mirror of the explicit [return]): caller
+            -- scene restored, the cross-scene switch signal is moot.
+            ctx._scene_changed = false
+            -- t49: mirror of the explicit-return dangling-label guard.
+            prune_dangling_pending_jump()
         end
         coroutine.yield()
     end
