@@ -967,13 +967,34 @@ encode_lua_literal = function(t)
         return "{" .. table.concat(parts, ",") .. "}"
     end
     local parts = {}
-    for k, v in pairs(t) do
+    -- t28: deterministic key order. pairs() follows the hash table's
+    -- internal layout, which varies per Lua run -- three bakes of the same
+    -- demo tree produced three different (semantically identical) web
+    -- bundles, and every .ksc cache baked from the same source differed
+    -- too. Emit explicit [key]= pairs in a stable order: numeric keys
+    -- ascending, then string keys byte-wise. Non-(number|string) keys do
+    -- not occur in serialized data; leave their original order untouched.
+    local keys = {}
+    for k in pairs(t) do keys[#keys + 1] = k end
+    local sortable = true
+    for _, k in ipairs(keys) do
+        local tk = type(k)
+        if tk ~= "number" and tk ~= "string" then sortable = false; break end
+    end
+    if sortable then
+        table.sort(keys, function(x, y)
+            local tx, ty = type(x), type(y)
+            if tx ~= ty then return tx < ty end
+            return x < y
+        end)
+    end
+    for _, k in ipairs(keys) do
         if type(k) == "number" then
             parts[#parts + 1] = "[" .. string.format("%.17g", k) .. "]="
-                .. encode_literal_value(v)
+                .. encode_literal_value(t[k])
         else
-            parts[#parts + 1] = "[" .. lua_escape(k) .. "]="
-                .. encode_literal_value(v)
+            parts[#parts + 1] = "[" .. lua_escape(tostring(k)) .. "]="
+                .. encode_literal_value(t[k])
         end
     end
     return "{" .. table.concat(parts, ",") .. "}"
