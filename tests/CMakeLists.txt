@@ -247,6 +247,7 @@ if(Python3_EXECUTABLE)
     )
     set_tests_properties(CaesuraRcAdversarialMutations PROPERTIES
         LABELS "qa;release;adversarial"
+        SKIP_RETURN_CODE 77
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )

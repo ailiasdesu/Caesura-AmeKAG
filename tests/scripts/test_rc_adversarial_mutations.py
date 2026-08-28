@@ -7,6 +7,15 @@ Author: Challenger 1 (Empirical Challenger Agent)
 Purpose: Stress-test scripts/verify_release_candidate.py and scripts/compare_platform_parity.py
          against extensive adversarial mutations across manifests, checksums, parity snapshots,
          data leaks, and markdown reports. Asserts that EVERY mutation is caught and exits with code 1.
+
+SKIP semantics (ctest SKIP_RETURN_CODE 77): artifacts/release/ (the RC evidence
+bundle) is produced by the release process and gitignored — it is NOT a
+repository invariant. On a fresh clone the bundle does not exist and can only
+be produced once the local build evidence exists; auto-generating it from the
+test would either take over the release process or fail hard. So when the
+bundle is absent this suite exits 77 (SKIP) BEFORE running any case, and the
+mutations themselves only ever run against a sandbox copy of an existing
+bundle. A missing bundle is never a FAIL and never a fake PASS.
 """
 
 import json
@@ -26,6 +35,7 @@ from verify_release_candidate import get_target_commit
 VERIFIER_SCRIPT = REPO_ROOT / "scripts" / "verify_release_candidate.py"
 COMPARATOR_SCRIPT = REPO_ROOT / "scripts" / "compare_platform_parity.py"
 RC_REPORT_PATH = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
+SKIP_EXIT = 77  # ctest SKIP_RETURN_CODE 77: build products are not repo invariants
 
 COMMIT_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
 
@@ -883,6 +893,20 @@ class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    # Bundle prerequisite gate. artifacts/release/ is a gitignored build product,
+    # not a repository invariant: on a fresh clone it does not exist and can only
+    # be produced once the local build evidence exists. Auto-generating it in
+    # setUpClass would either take over the release process or fail hard
+    # (the macOS old red: CalledProcessError -> suite ERROR -> exit 1 -> ctest
+    # FAIL). Missing bundle => SKIP (77), here, before any case runs.
+    rel_dir = REPO_ROOT / "artifacts" / "release"
+    if not (rel_dir / "manifest.json").is_file():
+        print("Caesura RC adversarial mutations: no release evidence bundle on "
+              "this host (artifacts/release/manifest.json) -> SKIP (77), not FAIL;\n"
+              "  generate it first:\n"
+              "    python scripts/verify_release_candidate.py --generate-bundle\n"
+              "  (build products are gitignored; the bundle is not a repo invariant)")
+        sys.exit(SKIP_EXIT)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestReleaseCandidateAdversarialMutations)
     runner = unittest.TextTestRunner(verbosity=2)
     test_result = runner.run(suite)
