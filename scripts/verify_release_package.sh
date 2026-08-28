@@ -13,7 +13,20 @@
 #      relaxing authentication;
 #   4. a stranger can obtain the token without reading source: with no
 #      CAESURA_EDITOR_TOKEN configured the engine writes
-#      .caesura-editor-token into its working directory.
+#      .caesura-editor-token into its working directory;
+#   5. demo/ is present and NON-EMPTY (anchored on a stable file) --
+#      ProjectContext.looksLikeEngineRoot requires scripts + demo, and a
+#      package missing demo/ silently degrades the editor's Project Manager
+#      sourceRoot resolution (an empty demo/ dir is equally useless).
+#
+# RUN SERIALLY on the machine. The port-hygiene guard below is a WHOLE-MACHINE
+# check: it sees every CaesuraAmeKAG process by name, and aborts (exit 2) while
+# ANY engine is running -- the point, not a bug, because a leftover engine can
+# dual-bind 127.0.0.1:9876 (Windows SO_REUSEADDR) and answer with its own
+# (deleted) webRoot and token, faking 404/401 failures against a good package.
+# Never run two editor-engine verifications in parallel on one host. A harness
+# that cleans up engines BY IMAGE NAME (taskkill //IM CaesuraAmeKAG.exe) kills a
+# parallel session's engine mid-run too -- always clean by PID.
 #
 # Deliberately NOT tolerant: a missing ZIP or a missing file inside it is
 # a FAILURE, never a silent pass. --skip-if-missing exits 77 (the ctest
@@ -159,6 +172,13 @@ trap cleanup EXIT
 # A precondition this script cannot fix must FAIL LOUDLY with the reason, never
 # slither into per-check verdicts. Checks both stacks: the server binds
 # 127.0.0.1, yet a twin can hold ::1:9876.
+#
+# N7 contract: STALE_ENGINES is a WHOLE-MACHINE check (every CaesuraAmeKAG by
+# name). Verification must therefore run SERIALLY on a host -- one editor-engine
+# verification at a time -- and all engine cleanup must be by PID, never by
+# image name: a harness doing "taskkill //IM CaesuraAmeKAG.exe" to "clean up"
+# kills a parallel session's running engine too. Other sessions (editor e2e,
+# dev debugging) must be finished or quiesced before this script runs.
 if command -v powershell >/dev/null 2>&1; then
     STALE_ENGINES="$(powershell -NoProfile -Command "(Get-Process CaesuraAmeKAG -ErrorAction SilentlyContinue).Id" 2>/dev/null | tr -d '\r')"
 else
@@ -231,6 +251,19 @@ for cand in "$ROOT/external/lua/lua.exe" "$ROOT/external/lua/lua"; do
 done
 if [ -n "$LUAEXE" ]; then ok "external/lua/lua(.exe) bundled"
 else bad "external/lua/lua(.exe)" "bundled Lua interpreter missing (install(TARGETS lua_cli ...) must ship it)"; fi
+# Sprint 5 (N6): ProjectContext.looksLikeEngineRoot requires scripts + demo;
+# without demo/ the editor Project Manager sourceRoot resolution silently
+# degrades. Non-empty is anchored on a real stable file -- demo/cjk_smoke.ks
+# is tracked in repo and shipped via install(DIRECTORY demo/ ...); an empty
+# demo/ directory would pass dir-existence but still break creation.
+DEMO_ANCHOR="$ROOT/demo/cjk_smoke.ks"
+DEMO_ENTRIES=""
+[ -d "$ROOT/demo" ] && DEMO_ENTRIES="$(find "$ROOT/demo" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
+if [ -d "$ROOT/demo" ] && [ -f "$DEMO_ANCHOR" ] && [ "$DEMO_ENTRIES" -gt 0 ] 2>/dev/null; then
+    ok "demo/ present and non-empty (${DEMO_ENTRIES} top-level entr$( { [ "$DEMO_ENTRIES" = "1" ] && echo y || echo ies; } ); anchored demo/cjk_smoke.ks)"
+else
+    bad "demo/ present and non-empty" "demo/ missing, empty or without $DEMO_ANCHOR (ProjectContext.looksLikeEngineRoot needs scripts+demo)"
+fi
 
 # --------------------------------------------------------------- 3. serve
 head_ "3. launch --editor from the extracted folder and fetch the editor"
