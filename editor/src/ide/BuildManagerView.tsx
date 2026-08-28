@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { RpcError, type EngineClient } from '../lib/rpc'
+import { buildRunSceneSnippet } from '../lib/sceneRun'
 import { useEditor } from '../store'
 
 interface Props {
@@ -35,11 +36,48 @@ function failureDetail(e: unknown): { error?: string; logTail?: string } {
  * [A-Za-z0-9_-] and runs scripts/package_game.sh into dist/<name> (confined
  * server-side). The panel surfaces the engine's log tail so packaging
  * failures stay diagnosable without leaving the IDE.
- * Running a scene stays in the Debug panel ("Run Current Scene") and is not
- * duplicated here.
+ *
+ * The RUN block (t35, Studio P2 aggregation) drives the project entry scene
+ * over the SAME convention as DebugView's "Run Current Scene" —
+ * EngineClient.evalRaw(buildRunSceneSnippet(path)) — so the two panels
+ * share the /api/eval kag_runner path (kr.stop() first makes every run
+ * idempotent; no new protocol). Stop goes through EngineClient.stop()
+ * (/api/stop). Engine auto-spawn stays out of scope: without a connection
+ * the controls disable with an honest hint (Studio does not spawn the
+ * engine — separate P2 item).
  */
 export function BuildManagerView({ client }: Props) {
-  const setSideView = useEditor((s) => s.setSideView)
+  const engineConnected = useEditor((s) => s.engineConnected)
+
+  // ---- RUN (project entry scene; mirrors DebugView.runCurrentScene) ----
+  const [runScene, setRunScene] = useState(DEFAULT_STORY)
+  const [runRunning, setRunRunning] = useState(false)
+  const [runMsg, setRunMsg] = useState('')
+
+  const handleRun = async () => {
+    if (!engineConnected) return
+    setRunRunning(true)
+    setRunMsg('')
+    try {
+      const scene = runScene.trim() || DEFAULT_STORY
+      const result = await client.evalRaw(buildRunSceneSnippet(scene))
+      setRunMsg('Scene: ' + scene + (result.trim() ? ' → ' + result.trim() : ''))
+    } catch (e) {
+      setRunMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRunRunning(false)
+    }
+  }
+
+  const handleStop = async () => {
+    if (!engineConnected) return
+    try {
+      await client.stop()
+      setRunMsg('Stop requested')
+    } catch (e) {
+      setRunMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const [outputPath, setOutputPath] = useState(DEFAULT_OUTPUT)
   const [keyPath, setKeyPath] = useState(DEFAULT_KEY)
@@ -183,14 +221,45 @@ export function BuildManagerView({ client }: Props) {
         )}
       </section>
 
-      {/* Run — already provided by the Debug panel; not duplicated here. */}
+      {/* RUN (t35) — project entry scene over the DebugView run convention. */}
       <section className="explorer-section">
-        <div className="explorer-section-title">RUN</div>
-        <div className="explorer-empty">
-          Run the current scene from the Debug panel (&quot;Run Current
-          Scene&quot;).
+        <div className="explorer-section-title">
+          RUN
+          <span className={"debug-badge " + (engineConnected ? 'running' : '')}>
+            {engineConnected ? (runRunning ? 'running…' : 'connected') : 'no engine'}
+          </span>
         </div>
-        <button onClick={() => setSideView('debug')}>Open Debug Panel</button>
+        <input
+          className="explorer-filter"
+          placeholder={DEFAULT_STORY}
+          aria-label="Run story path"
+          value={runScene}
+          onChange={(e) => setRunScene(e.target.value)}
+          disabled={!engineConnected}
+        />
+        <button
+          className="primary"
+          disabled={!engineConnected || runRunning}
+          onClick={() => void handleRun()}
+        >
+          {runRunning ? 'Running…' : 'Run'}
+        </button>
+        <button
+          disabled={!engineConnected}
+          onClick={() => void handleStop()}
+        >
+          Stop
+        </button>
+        <div className="explorer-empty">
+          Runs the project entry scene on the connected engine (same
+          kag_runner channel as the Debug panel — idempotent, stop-first).
+        </div>
+        {!engineConnected && (
+          <div className="explorer-empty">
+            先以 --editor 启动引擎并 Connect（Studio 不自动 spawn 引擎）.
+          </div>
+        )}
+        {runMsg && <div className="panel-msg">{runMsg}</div>}
       </section>
 
       {error && <div className="panel-error">{error}</div>}

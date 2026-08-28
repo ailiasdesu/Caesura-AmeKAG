@@ -23,6 +23,9 @@ function makeClient(over: Partial<EngineClient> = {}): EngineClient {
       outputDir: 'dist/example_game',
       logTail: '  PACKAGE COMPLETE -> dist/example_game\n',
     })),
+    // t35 RUN block: same client surface DebugView uses (evalRaw + stop).
+    evalRaw: vi.fn(async (): Promise<string> => 'true'),
+    stop: vi.fn(async (): Promise<{ status: string }> => ({ status: 'ok' })),
     ...over,
   } as unknown as EngineClient
 }
@@ -211,10 +214,77 @@ describe('BuildManagerView (component)', () => {
     expect(done.disabled).toBe(false)
   })
 
-  it('points Run at the Debug panel without duplicating it', () => {
+  // ------------------------------------------------------------------
+  // t35: RUN block (project entry scene over the DebugView convention)
+  // ------------------------------------------------------------------
+  it('RUN renders enabled with a connected badge when the engine is connected', () => {
+    useEditor.setState({ engineConnected: true })
     render(<BuildManagerView client={makeClient()} />)
-    expect(screen.getByText(/Run Current Scene/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Debug Panel' }))
-    expect(useEditor.getState().sideView).toBe('debug')
+    const run = screen.getByRole('button', { name: /^Run$/ }) as HTMLButtonElement
+    const stop = screen.getByRole('button', { name: 'Stop' }) as HTMLButtonElement
+    expect(run.disabled).toBe(false)
+    expect(stop.disabled).toBe(false)
+    expect(screen.getByText('connected')).toBeTruthy()
+    expect(
+      (screen.getByLabelText('Run story path') as HTMLInputElement).value,
+    ).toBe('demo/example_game/story.ks')
+  })
+
+  it('RUN disables the controls and shows the honest hint when the engine is disconnected', () => {
+    useEditor.setState({ engineConnected: false })
+    render(<BuildManagerView client={makeClient()} />)
+    const run = screen.getByRole('button', { name: /^Run$/ }) as HTMLButtonElement
+    const stop = screen.getByRole('button', { name: 'Stop' }) as HTMLButtonElement
+    expect(run.disabled).toBe(true)
+    expect(stop.disabled).toBe(true)
+    expect(screen.getByText('no engine')).toBeTruthy()
+    expect(screen.getByText(/先以 --editor 启动引擎并 Connect/)).toBeTruthy()
+  })
+
+  it('clicking Run issues the kag_runner eval snippet for the entered story path', async () => {
+    useEditor.setState({ engineConnected: true })
+    const client = makeClient()
+    render(<BuildManagerView client={client} />)
+    fireEvent.change(screen.getByLabelText('Run story path'), {
+      target: { value: 'projects/my_vn/story.ks' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(client.evalRaw).toHaveBeenCalledTimes(1)
+    const code = (client.evalRaw as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(code).toContain('require("kag_runner")')
+    expect(code).toContain('kr.start("projects/my_vn/story.ks")')
+    expect(screen.getByText(/Scene: projects\/my_vn\/story\.ks/)).toBeTruthy()
+  })
+
+  it('clicking Stop issues client.stop() and surfaces the request', async () => {
+    useEditor.setState({ engineConnected: true })
+    const client = makeClient()
+    render(<BuildManagerView client={client} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(client.stop).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Stop requested')).toBeTruthy()
+  })
+
+  it('RUN disables while a run is in flight and re-enables afterwards', async () => {
+    useEditor.setState({ engineConnected: true })
+    let resolve!: (v: string) => void
+    const client = makeClient({
+      evalRaw: vi.fn(
+        () =>
+          new Promise<string>((res) => {
+            resolve = res
+          }),
+      ),
+    })
+    render(<BuildManagerView client={client} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    const running = screen.getByRole('button', { name: /Running…/ }) as HTMLButtonElement
+    expect(running.disabled).toBe(true)
+    resolve('true')
+    await new Promise((r) => setTimeout(r, 0))
+    const done = screen.getByRole('button', { name: /^Run$/ }) as HTMLButtonElement
+    expect(done.disabled).toBe(false)
   })
 })
