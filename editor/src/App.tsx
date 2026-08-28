@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { EngineClient } from './lib/rpc'
+import { useEngineHeartbeat } from './lib/engineHeartbeat'
 import { registerKagLanguage } from './ide/kagLanguage'
 import { ActivityBar } from './ide/ActivityBar'
 import { StatusBar } from './ide/StatusBar'
@@ -35,6 +36,9 @@ export function App() {
   // Layer "settings" entry: the workbench theme is applied via data-theme on
   // the root app node so the CSS palette can react to the persisted choice.
   const theme = useEditor((s) => s.settings.theme)
+
+  // t45: store-level connection heartbeat (7s; pin only engineConnected).
+  useEngineHeartbeat(clientRef.current)
 
   useEffect(() => {
     setEngineClient(clientRef.current)
