@@ -13,7 +13,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:9876',
+        target: 'http://127.0.0.1:9876',   // Windows: localhost resolves ::1 first (EditorServer binds IPv4 only)
         changeOrigin: true,
       },
     },

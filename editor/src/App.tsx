@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { EngineClient } from './lib/rpc'
 import { useEngineHeartbeat } from './lib/engineHeartbeat'
+import { createConnEpochGuard } from './lib/connEpoch'
 import { registerKagLanguage } from './ide/kagLanguage'
 import { ActivityBar } from './ide/ActivityBar'
 import { StatusBar } from './ide/StatusBar'
@@ -40,16 +41,37 @@ export function App() {
   // t45: store-level connection heartbeat (7s; pin only engineConnected).
   useEngineHeartbeat(clientRef.current)
 
+  // t54 conn-state epoch guard: the mount effect's startup ping runs WITHOUT a
+  // token (StrictMode double-mount runs it twice). A manual Connect can succeed
+  // (status 200) while a stale startup-ping catch is still settling — that late
+  // write would downgrade conn/engineConnected back to error/false. Every App
+  // conn-state write stamps the epoch at the moment it STARTED; a manual
+  // Connect (via bumpConnEpoch) invalidates earlier stamps, so stale writes are
+  // dropped. DebugView's refresh and the heartbeat write fresh truth directly
+  // and are unaffected. StrictMode-safe: both mount effects stamp the same
+  // epoch and are invalidated together.
+  // t60: the guard body moved to lib/connEpoch.ts (pure, unit-locked) -- the
+  // component-level detector could not distinguish guard presence (see
+  // App.connGuard.test.tsx header note); connEpoch.test.ts is the regression
+  // lock for the staleness semantics below.
+  const connEpochRef = useRef<ReturnType<typeof createConnEpochGuard>>(createConnEpochGuard())
+  const bumpConnEpoch = () => {
+    connEpochRef.current.bump()
+  }
+
   useEffect(() => {
     setEngineClient(clientRef.current)
+    const epoch = connEpochRef.current.stamp()
     void (async () => {
       setConn('connecting')
       try {
         const st = await clientRef.current.ping()
         void st
+        if (connEpochRef.current.isStale(epoch)) return
         setConn('connected')
         setEngine({ engineConnected: true })
       } catch (e) {
+        if (connEpochRef.current.isStale(epoch)) return
         setConn('error')
         setConnError(e instanceof Error ? e.message : String(e))
         setEngine({ engineConnected: false })
@@ -65,7 +87,12 @@ export function App() {
           client={clientRef.current}
           state={conn}
           error={connError}
-          onState={setConn}
+          onState={(s) => {
+            // A manual Connect result is authoritative: bump the epoch so any
+            // still-settling startup ping loses its right to write. (t54)
+            if (s === 'connected' || s === 'connecting') bumpConnEpoch()
+            setConn(s)
+          }}
           onError={setConnError}
         />
       </header>

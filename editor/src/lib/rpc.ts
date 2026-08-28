@@ -1,6 +1,6 @@
 // Caesura Editor — engine HTTP RPC client.
 // Mirrors the 21 routes of src/rpc/EditorServer.cpp (docs/api/editor-api-reference.md).
-// All calls go through /api/* (Vite dev proxy → localhost:9876, or same-origin
+// All calls go through /api/* (Vite dev proxy → 127.0.0.1:9876, or same-origin
 // in production). Every request carries the optional bearer token from the
 // engine's CAESURA_EDITOR_TOKEN env var (set via the connection panel).
 
