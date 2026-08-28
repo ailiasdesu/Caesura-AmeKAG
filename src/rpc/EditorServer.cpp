@@ -227,44 +227,6 @@ void overlayStringMeta(Json& base, const Json& stored) {
     }
 }
 
-// Repo-root discovery that survives out-of-tree builds: when the editor runs
-// from a build directory (build/Debug, /root/build-linux, ...) the source
-// tree is NOT on the cwd chain -- ProjectContext owns the macro-first + walk
-// discovery (task book §7). Back-compat helper for anonymous-namespace utils.
-fs::path engineRoot() {
-    return ProjectContext::fromEnvironment().sourceRoot();
-}
-
-// Resolve a managed-project reference ("projects/<name>"; a bare sanitized
-// <name> is tolerated for symmetry with /api/project/duplicate) into
-// <engineRoot>/projects/<name>. Returns an empty path when the input escapes
-// the managed root -- traversal, drive letters/schemes, absolute paths, nested
-// separators or characters outside [A-Za-z0-9_-] share the sanitizer policy
-// of create/duplicate/import.
-fs::path confineManagedProjectPath(const std::string& p) {
-    const std::string prefix = "projects/";
-    std::string norm = p;
-    for (char& ch : norm) {
-        if (ch == char(92)) ch = '/';  // normalize backslash separators
-    }
-    while (!norm.empty() && norm.back() == '/') norm.pop_back();
-    if (norm.empty()) return {};
-    if (norm.find("..") != std::string::npos) return {};
-    if (norm[0] == '/') return {};                       // absolute path
-    if (norm.find(':') != std::string::npos) return {};  // drive / scheme
-
-    std::string name = norm;
-    if (norm.rfind(prefix, 0) == 0) name = norm.substr(prefix.size());
-    if (name.empty() || name.find('/') != std::string::npos) return {};
-    for (char ch : name) {
-        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' ||
-              ch == '-')) {
-            return {};
-        }
-    }
-    return engineRoot() / "projects" / name;
-}
-
 } // namespace
 
 // =========================================================================
@@ -526,8 +488,12 @@ void EditorServer::serverLoop(int port) {
 
     // Single source of truth for filesystem roots (task book §7). All
     // template/project/build/package resolution goes through ctx; business
-    // handlers must not guess with fs::current_path().
-    const ProjectContext ctx = ProjectContext::fromEnvironment();
+    // handlers must not guess with fs::current_path(). The composition root
+    // injects the EXECUTABLE's own directory (src/main.cpp ->
+    // setSourceAnchor, from SDL_GetBasePath); the anchor wins over the
+    // compile-time CAESURA_SOURCE_DIR macro so a release package resolves to
+    // itself even when built on a dev machine (Sprint 4 -- N1).
+    const ProjectContext ctx = ProjectContext::fromEnvironment(m_sourceAnchor);
     // Core Service layer (task book §14): handlers below are thin transport
     // wrappers; business logic lives in the services.
     rpc::service::ProjectService projects(ctx);
@@ -1365,10 +1331,12 @@ void EditorServer::serverLoop(int port) {
     // task-book principle that Editor-internal RPC may evolve freely.
     // ---------------------------------------------------------------------
 
-    // Templates root: tools/project_templates under the repo root. Paths are
-    // confined to <cwd>/tools/project_templates (no ".." / absolute escapes).
-    const auto templatesRoot = []() -> fs::path {
-        return engineRoot() / "tools" / "project_templates";
+    // Templates root: tools/project_templates under the resolved engine root
+    // (ctx.sourceRoot() -- the injected exe anchor / macro / CWD walk, NEVER a
+    // separate resolution that could disagree with the services above). Paths
+    // are confined there (no ".." / absolute escapes).
+    const auto templatesRoot = [&ctx]() -> fs::path {
+        return ctx.sourceRoot() / "tools" / "project_templates";
     };
 
     const auto confineTemplatePath = [&](const std::string& p) -> fs::path {

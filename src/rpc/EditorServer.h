@@ -6,6 +6,7 @@
 //  Uses cpp-httplib (header-only). Runs on a background thread.
 // ===========================================================================
 
+#include <filesystem>
 #include <string>
 #include <functional>
 #include <thread>
@@ -68,6 +69,17 @@ public:
     // Set the web editor static files directory.
     void setWebRoot(const std::string& path) override { m_webRoot = path; }
 
+    // Composition-root injection (task book N1): anchor ProjectContext's
+    // source-root discovery on the executable's own directory (the caller --
+    // src/main.cpp -- derives it from SDL_GetBasePath). When set, that anchor
+    // wins over the compile-time CAESURA_SOURCE_DIR macro, so a release
+    // package resolves its projects/templates root to itself even when it was
+    // built on a machine whose macro still points at a live source tree
+    // (Sprint 4 semantics). Call BEFORE start(); empty = keep macro-first.
+    void setSourceAnchor(std::filesystem::path anchor) {
+        m_sourceAnchor = std::move(anchor);
+    }
+
     void setArchiveWriterFactory(ArchiveWriterFactory factory) override {
         m_archiveWriterFactory = std::move(factory);
     }
@@ -88,6 +100,9 @@ private:
     // CAESURA_EDITOR_INSECURE=1). Atomic: read from the HTTP worker thread.
     std::atomic<bool> m_insecureNoAuth{false};
     std::string m_authTokenFile;  // guarded by m_dispatcherMutex
+    // Executable-directory anchor for ProjectContext (see setSourceAnchor);
+    // written by the composition root before start(), read in serverLoop.
+    std::filesystem::path m_sourceAnchor;
 
     // Generate a cryptographically-unpredictable hex token, or an empty
     // string when no entropy source is available (caller fails closed).

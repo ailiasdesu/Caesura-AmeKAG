@@ -912,6 +912,21 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken,
     // listener is a local privilege boundary hole. --editor-insecure is the
     // explicit, loudly-warned escape hatch.
     if (insecureNoAuth) editor.setInsecureNoAuth(true);
+
+    // Composition-root injection (N1): the editor's ProjectContext resolves
+    // projects/templates from the EXECUTABLE's own directory first, so a
+    // release package resolves to itself even when it was built on a machine
+    // whose CAESURA_SOURCE_DIR macro still points at a live source tree.
+    // SDL_GetBasePath returns UTF-8 -- convert via std::u8string so non-ASCII
+    // paths survive the ANSI code page on Windows (same route the removed
+    // executableDirectory() used).
+    if (const char* base = SDL_GetBasePath()) {
+        const std::string utf8(base);
+        std::filesystem::path exeDir = std::filesystem::path(
+            std::u8string(reinterpret_cast<const char8_t*>(utf8.data()),
+                          utf8.size())).parent_path();
+        editor.setSourceAnchor(std::move(exeDir));
+    }
     // Serve the bundled web-editor frontend (web-editor/dist). A release ZIP is
     // extracted anywhere and launched from any working directory, so the
     // EXECUTABLE's own directory is the authoritative anchor (SDL_GetBasePath
@@ -925,7 +940,13 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken,
         // Three levels up from the binary covers the macOS bundle layout
         // (.app/Contents/MacOS/), which BUNDLE DESTINATION . already produces.
         if (const char* base = SDL_GetBasePath()) {
-            fs::path probe = fs::path(base);
+            // SDL returns UTF-8: route through char8_t so non-ASCII install
+            // paths survive the ANSI code page (mirrors setSourceAnchor above).
+            // Note the trailing separator is kept here on purpose -- this probe
+            // appends subpaths, whereas setSourceAnchor takes parent_path() to
+            // get the directory itself. Do not "unify" the two.
+            fs::path probe = fs::path(
+                std::u8string(reinterpret_cast<const char8_t*>(base)));
             for (int i = 0; i < 3 && webRoot.empty(); ++i) {
                 if (fs::exists(probe / "web-editor" / "dist" / "index.html", ec)) {
                     webRoot = (probe / "web-editor" / "dist").string();

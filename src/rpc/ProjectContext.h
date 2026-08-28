@@ -7,7 +7,7 @@
 // engine roots. Everything resolves through ProjectContext:
 //
 //   ProjectContext
-//   ├── sourceRoot   (repo root; CAESURA_SOURCE_DIR macro or upward walk)
+//   ├── sourceRoot   (injected exe anchor > CAESURA_SOURCE_DIR macro > CWD walk)
 //   ├── projectRoot  (sourceRoot/projects)
 //   ├── templatesRoot (sourceRoot/tools/project_templates)
 //   ├── assetRoot    (sourceRoot/assets)
@@ -19,21 +19,8 @@
 // environment. Kept inside src/rpc (editor-internal, not api/) so editor
 // RPC may evolve freely without touching the public interface surface.
 
-#include <cstring>
 #include <filesystem>
 #include <string>
-
-// SDL_GetBasePath -- the SAME anchor main.cpp uses for the editor webRoot:
-// the executable's own directory (SDL3: malloc'd UTF-8 string, NULL on
-// failure). Declared by hand on purpose: the Rpc TU has no SDL include path,
-// <windows.h> under /Zc:preprocessor exhausts the MSVC compiler heap (C1060)
-// and its own redeclaration of GetModuleFileNameW conflicts (C2733), and
-// bx/platform.h defines _WIN32_WINNT=0x0601 which cpp-httplib (included later
-// in the same TU) rejects with "#error ... Windows 10 or later". The symbol
-// resolves at link time -- every consumer of this header links SDL3.
-extern "C" {
-    const char* SDL_GetBasePath(void);
-}
 
 namespace fs = std::filesystem;
 
@@ -42,11 +29,19 @@ namespace Caesura {
 class ProjectContext {
 public:
     // Build the context from the executable environment.
-    //   useMacroFirst: prefer the CMake-injected CAESURA_SOURCE_DIR so
-    //   out-of-tree builds (WSL/CI) resolve to the real source tree.
-    static ProjectContext fromEnvironment(bool useMacroFirst = true) {
+    //   exeDir: optional executable-directory anchor injected by the
+    //   composition root (src/main.cpp -> EditorServer::setSourceAnchor),
+    //   mirroring the webRoot SDL_GetBasePath anchoring. When non-empty it is
+    //   probed FIRST and wins over the compile-time CAESURA_SOURCE_DIR macro:
+    //   a release package must resolve to itself even when it was built on a
+    //   machine whose macro still points at a live source tree (Sprint 4 --
+    //   the anchor always precedes the macro, never the other way round).
+    //   When empty the anchor step is skipped and the macro (in-tree /
+    //   out-of-tree dev builds) then the CWD walk-up are used -- the
+    //   pre-injection dev and test behavior.
+    static ProjectContext fromEnvironment(const fs::path& exeDir = {}) {
         ProjectContext c;
-        c.m_sourceRoot = discoverSourceRoot(useMacroFirst);
+        c.m_sourceRoot = discoverSourceRoot(exeDir);
         c.m_buildRoot = fs::current_path();  // exe's working directory
         c.m_platform = detectPlatform();
         return c;
@@ -78,33 +73,22 @@ private:
         return fs::exists(p / "scripts", ec) && fs::exists(p / "demo", ec);  // package
     }
 
-    // Executable's own directory via SDL_GetBasePath (declared above). The
-    // returned UTF-8 string is owned by SDL -- never freed here.
-    static fs::path executableDirectory() {
-        const char* base = SDL_GetBasePath();
-        if (base == nullptr || *base == '\0') return fs::current_path();
-        // Paths outside ASCII (this checkout's repo path is not) must survive:
-        // the input is UTF-8, and fs::path(char*) on MSVC would interpret it
-        // via the ANSI code page (GBK on zh-CN) and resolve the wrong folder.
-        std::string utf8(base);
-        const fs::path dir = fs::path(
-            std::u8string(reinterpret_cast<const char8_t*>(utf8.data()),
-                          utf8.size())).parent_path();
-        return dir.empty() ? fs::current_path() : dir;
-    }
-
-    static fs::path discoverSourceRoot(bool useMacroFirst) {
-        // 1. Release-package anchor FIRST: the executable's own directory
-        //    (mirrors main.cpp's SDL_GetBasePath webRoot anchoring). Three
-        //    levels up covers the macOS .app/Contents/MacOS/ bundle layout
-        //    that BUNDLE DESTINATION . already produces. This must win over
-        //    CAESURA_SOURCE_DIR: on the machine that BUILT the package the
-        //    macro still points at a live source tree, and an honest
-        //    stranger-path run of that package would silently create projects
-        //    inside the checkout instead of next to the executable.
-        {
-            fs::path probe = executableDirectory();
-            for (int i = 0; i < 3 && !probe.empty(); ++i) {
+    static fs::path discoverSourceRoot(const fs::path& exeDir) {
+        // 1. Composition-root anchor (EXECUTABLE's own directory, injected by
+        //    src/main.cpp -> EditorServer::setSourceAnchor, mirroring the
+        //    webRoot SDL_GetBasePath anchoring). Three levels up covers the
+        //    macOS .app/Contents/MacOS/ bundle layout that BUNDLE DESTINATION
+        //    . already produces. MUST win over CAESURA_SOURCE_DIR: on the
+        //    machine that BUILT the package the macro still points at a live
+        //    source tree, and an honest stranger-path run of that package
+        //    would silently create projects inside the checkout instead of
+        //    next to the executable.
+        if (!exeDir.empty()) {
+            fs::path probe = exeDir;
+            // Four probes = the executable's own directory plus three ascents:
+            // a release package keeps the exe at the root (hit on the first
+            // probe), while .app/Contents/MacOS needs all three.
+            for (int i = 0; i < 4 && !probe.empty(); ++i) {
                 if (looksLikeEngineRoot(probe)) return probe;
                 fs::path parent = probe.parent_path();
                 if (parent == probe) break;
@@ -115,7 +99,7 @@ private:
         //    (WSL/CI build dirs are NOT on the exe walk chain); the macro
         //    never exists on a stranger's machine.
 #ifdef CAESURA_SOURCE_DIR
-        if (useMacroFirst) {
+        {
             const fs::path fromMacro(CAESURA_SOURCE_DIR);
             if (looksLikeEngineRoot(fromMacro)) return fromMacro;
         }

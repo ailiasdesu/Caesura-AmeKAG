@@ -1204,6 +1204,45 @@ TEST_CASE("ProjectService::importProject accepts a source inside the engine root
     fsn::remove_all(inside, ec);
 }
 
+// --- N1: composition-root injection (ProjectContext::fromEnvironment(exeDir)) --
+
+// The injected executable-directory anchor must win over the compile-time
+// CAESURA_SOURCE_DIR macro: a release package resolves to ITSELF even when it
+// was built on a machine whose macro still points at a live source tree
+// (Sprint 4 semantics). An empty anchor must keep the macro-first behavior.
+TEST_CASE("ProjectContext::fromEnvironment prefers the injected exe anchor over the macro") {
+    namespace fsn = std::filesystem;
+    std::error_code ec;
+    const fsn::path pkg = fsn::temp_directory_path(ec) / "caesura_n1_pkg_anchor";
+    fsn::remove_all(pkg, ec);
+    // A release-package layout: templates + scripts + demo, NO src/.
+    REQUIRE(fsn::create_directories(pkg / "tools" / "project_templates", ec));
+    REQUIRE(fsn::create_directories(pkg / "scripts", ec));
+    REQUIRE(fsn::create_directories(pkg / "demo", ec));
+
+    // Direct exe-dir anchor (a ZIP extracted anywhere, exe at the top level).
+    const ProjectContext ctx = ProjectContext::fromEnvironment(pkg);
+    CHECK(ctx.sourceRoot() == pkg);
+
+    // macOS-style bundle layout: .app/Contents/MacOS/<exe> -- the 3-level
+    // upward walk must still find the package root.
+    const fsn::path bundleExeDir = pkg / "App.app" / "Contents" / "MacOS";
+    REQUIRE(fsn::create_directories(bundleExeDir, ec));
+    const ProjectContext ctxBundle = ProjectContext::fromEnvironment(bundleExeDir);
+    CHECK(ctxBundle.sourceRoot() == pkg);
+
+    // Empty anchor keeps pre-injection behavior: macro-first (this test binary
+    // ships CAESURA_SOURCE_DIR pointing at the checkout).
+    const ProjectContext ctxDefault = ProjectContext::fromEnvironment();
+#ifndef CAESURA_SOURCE_DIR
+    CHECK(ctxDefault.sourceRoot() == ctxDefault.sourceRoot());  // no macro: any
+#else
+    CHECK(ctxDefault.sourceRoot() == fsn::path(CAESURA_SOURCE_DIR));
+#endif
+
+    fsn::remove_all(pkg, ec);
+}
+
 // --- 4. Lifecycle ----------------------------------------------------------
 
 TEST_CASE("RpcServer dispatches via processRequestLine before run") {
