@@ -425,9 +425,19 @@ else
     # below are the evidence that the package lua ran ks_check + precompile.
     NO_LUA_PATH="$(printf '%s' "$PATH" | tr ':' '
 ' | grep -vi 'lua' | paste -sd: -)"
-    if [ -z "$(PATH="$NO_LUA_PATH" command -v lua 2>/dev/null)" ] \
-       && [ -z "$(PATH="$NO_LUA_PATH" command -v lua5.4 2>/dev/null)" ]; then
+    SYS_LUA="$(PATH="$NO_LUA_PATH" command -v lua 2>/dev/null || true)"
+    [ -n "$SYS_LUA" ] || SYS_LUA="$(PATH="$NO_LUA_PATH" command -v lua5.4 2>/dev/null || true)"
+    if [ -z "$SYS_LUA" ]; then
         ok "no lua on stripped PATH (package lua is the only interpreter)"
+    elif ! command -v powershell >/dev/null 2>&1; then
+        # POSIX: the distro lua lives in /usr/bin, which CANNOT be stripped
+        # without killing bash/coreutils (the strip only drops lua-named dirs).
+        # The self-sufficiency property is still asserted strictly below by the
+        # "ran under the PACKAGED lua" log checks -- find_lua() must prefer
+        # <pkg>/external/lua ahead of any PATH lua. First seen: CI run
+        # 33192030337 (Linux · Package), where /usr/bin/lua made the strict
+        # form unsatisfiable on every Linux host.
+        ok "stripped PATH keeps distro lua ($SYS_LUA) -- POSIX bin dirs unstrippable; packaged-lua usage asserted below"
     else
         bad "no lua on stripped PATH" "command -v lua still resolves -- PATH strip failed"
     fi
