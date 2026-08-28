@@ -51,7 +51,7 @@ platforms:
       packaging:
         status: verified
         evidence:
-          commit: "6053024b"
+          commit: "7935dffb"
           document: "docs/guides/release-process.md"
           test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (29/29 assertions; incl. out-of-repo, PATH-stripped create/build/run probe, demo/ non-empty)"
           verified_at: "2026-08-28T22:38:00Z"
