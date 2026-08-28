@@ -739,7 +739,11 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
    → `CaesuraAmeKAG --editor`，监听 http://127.0.0.1:9876
 
 2. 编辑器客户端连接 HTTP API
-   → GET /api/ping 确认连接；仓库当前不附带静态 web-editor 前端
+   → GET /api/ping 确认连接；仓库附带静态 web-editor 前端（`web-editor/dist/
+   index.html`，单文件调试面板，随发布包分发进 `web-editor/dist`）：`/` 与
+   `/index.html` 静态壳免令牌，页面读 `?token=` 存入 localStorage 后所有
+   `/api/*` 戴 Bearer 令牌（default-deny）；启动日志直接给出可点开的地址
+   （`[EditorServer] Open the editor: http://127.0.0.1:9876/?token=...`）。
 
 3. 浏览资源
    → GET /api/assets?type=image  列出所有图片
