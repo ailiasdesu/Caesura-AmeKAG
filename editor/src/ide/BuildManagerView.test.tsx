@@ -267,6 +267,47 @@ describe('BuildManagerView (component)', () => {
     expect(screen.getByText('Stop requested')).toBeTruthy()
   })
 
+  it('RUN surfaces the engine error and re-enables after evalRaw rejects (no unhandled rejection)', async () => {
+    useEditor.setState({ engineConnected: true })
+    const client = makeClient({
+      evalRaw: vi.fn(async () => {
+        throw new Error('kag_runner: bad path')
+      }),
+    })
+    render(<BuildManagerView client={client} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByText('kag_runner: bad path')).toBeTruthy()
+    const run = screen.getByRole('button', { name: /^Run$/ }) as HTMLButtonElement
+    expect(run.disabled).toBe(false)
+  })
+
+  it('a Stop before the run completes keeps the Stop message (run-id guard)', async () => {
+    useEditor.setState({ engineConnected: true })
+    let resolveRun!: (v: string) => void
+    const client = makeClient({
+      evalRaw: vi.fn(
+        () =>
+          new Promise<string>((res) => {
+            resolveRun = res
+          }),
+      ),
+    })
+    render(<BuildManagerView client={client} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByText('Stop requested')).toBeTruthy()
+    // Late run resolve must NOT overwrite the Stop message…
+    resolveRun('true')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.queryByText(/Scene:/)).toBeNull()
+    expect(screen.getByText('Stop requested')).toBeTruthy()
+    // …while the busy flag still resets (finally stays unguarded).
+    const run = screen.getByRole('button', { name: /^Run$/ }) as HTMLButtonElement
+    expect(run.disabled).toBe(false)
+  })
+
   it('RUN disables while a run is in flight and re-enables afterwards', async () => {
     useEditor.setState({ engineConnected: true })
     let resolve!: (v: string) => void

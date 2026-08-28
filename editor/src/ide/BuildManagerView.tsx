@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { RpcError, type EngineClient } from '../lib/rpc'
 import { buildRunSceneSnippet } from '../lib/sceneRun'
 import { useEditor } from '../store'
@@ -53,17 +53,26 @@ export function BuildManagerView({ client }: Props) {
   const [runScene, setRunScene] = useState(DEFAULT_STORY)
   const [runRunning, setRunRunning] = useState(false)
   const [runMsg, setRunMsg] = useState('')
+  // t41 run-id guard: a Stop invalidates any in-flight run's message write, so
+  // a late evalRaw resolve can never overwrite 'Stop requested'. finally stays
+  // unguarded so runRunning (a busy flag, not a message) always resets.
+  const runIdRef = useRef(0)
 
   const handleRun = async () => {
     if (!engineConnected) return
+    const myRun = ++runIdRef.current
     setRunRunning(true)
     setRunMsg('')
     try {
       const scene = runScene.trim() || DEFAULT_STORY
       const result = await client.evalRaw(buildRunSceneSnippet(scene))
-      setRunMsg('Scene: ' + scene + (result.trim() ? ' → ' + result.trim() : ''))
+      if (runIdRef.current === myRun) {
+        setRunMsg('Scene: ' + scene + (result.trim() ? ' → ' + result.trim() : ''))
+      }
     } catch (e) {
-      setRunMsg(e instanceof Error ? e.message : String(e))
+      if (runIdRef.current === myRun) {
+        setRunMsg(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setRunRunning(false)
     }
@@ -71,6 +80,7 @@ export function BuildManagerView({ client }: Props) {
 
   const handleStop = async () => {
     if (!engineConnected) return
+    runIdRef.current++ // invalidate the in-flight run's message writes
     try {
       await client.stop()
       setRunMsg('Stop requested')
