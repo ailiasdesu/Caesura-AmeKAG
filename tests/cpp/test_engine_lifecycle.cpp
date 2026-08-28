@@ -9,6 +9,7 @@
 #include "../src/platform/NullPlatformBackend.h"
 #include "../src/minigame/NullMiniGameBackend.h"
 #include <memory>
+#include <utility>
 
 using namespace Caesura;
 
@@ -77,6 +78,63 @@ TEST_CASE("Engine: service access before init throws") {
         threw = true;
     }
     CHECK(threw);
+}
+
+// t56: a real audio backend whose init() fails must degrade to the silent
+// Null backend instead of killing engine startup (macOS vendored-SoLoud
+// no-backend regression: 'Audio backend init failed.' -> hard exit).
+// Exercise the failure through the same EngineConfig::audio seam main.cpp
+// uses for SoLoudAudioEngine; headless defaults supply platform/render
+// nulls, so no GPU or display is needed.
+namespace {
+struct FailingAudioBackend : IAudioBackend {
+    bool init() override { return false; }
+    void shutdown() override {}
+    void update(float) override {}
+    void suspend() override {}
+    void resume() override {}
+    unsigned int playBGM(const std::string&, float) override { return 0; }
+    void stopBGM(float) override {}
+    unsigned int playVoice(const std::string&) override { return 0; }
+    void stopVoice() override {}
+    unsigned int playSE(const std::string&) override { return 0; }
+    unsigned int playRawPCM(const float*, unsigned int, unsigned int,
+                            unsigned int) override { return 0; }
+    unsigned int playSE3D(const std::string&, float, float, float) override { return 0; }
+    void stopSE() override {}
+    void setSEVolume(unsigned int, float) override {}
+    float getSEVolume(unsigned int) override { return 0.0f; }
+    void stopSEHandle(unsigned int) override {}
+    void update3dListener(float, float, float, float, float, float,
+                          float, float, float) override {}
+    void setGlobalVolume(float) override {}
+    float getGlobalVolume() const override { return 1.0f; }
+    void setBusVolume(const char*, float) override {}
+    float getBusVolume(const char*) const override { return 0.0f; }
+    void flushWaveCache() override {}
+    unsigned int consumeVoiceCompletions() override { return 0; }
+    bool isVoicePlaying() override { return false; }
+    bool isBGMPlaying() override { return false; }
+    bool isSEPlaying() override { return false; }
+    int activeVoiceCount() override { return 0; }
+    float getPosition(const char*) override { return 0.0f; }
+    float getLength(const char*) override { return 0.0f; }
+    void fadeVolume(const char*, float, float) override {}
+    const char* getBackendName() const override { return "FailingAudio"; }
+};
+} // namespace
+
+TEST_CASE("Engine: failing real audio init degrades to NullAudio (t56)") {
+    auto& reg = BackendRegistry::instance();
+    EngineConfig cfg = makeConfig();          // headless defaults: Null platform/render
+    cfg.audio = new FailingAudioBackend();    // real-backend failure seam
+    Engine engine(std::move(cfg));
+    CHECK(engine.init());                     // must NOT be killed by the audio failure
+    CHECK(reg.getAudioBackend() != nullptr);
+    CHECK(dynamic_cast<NullAudioBackend*>(reg.getAudioBackend()) != nullptr);
+    // the muted engine remains fully serviceable
+    CHECK(engine.audio().getBackendName() != nullptr);
+    engine.shutdown();
 }
 
 // ============================================================================

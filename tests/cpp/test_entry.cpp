@@ -680,7 +680,7 @@ TEST_CASE("Entry: Engine headless init uses safe default backends") {
         }
     }
 
-    SUBCASE("audio failure drains initialized rendering without shutting down audio") {
+    SUBCASE("audio failure degrades to the silent backend and keeps running (t56)") {
         Caesura::Test::LifecycleProbe platform;
         Caesura::Test::LifecycleProbe render;
         Caesura::Test::LifecycleProbe audio;
@@ -693,15 +693,17 @@ TEST_CASE("Entry: Engine headless init uses safe default backends") {
             cfg.audio = new Caesura::Test::AudioBackend(audio);
 
             Engine engine(std::move(cfg));
-            CHECK_FALSE(engine.init());
-            CHECK(platform.shutdownCalls == 1);
-            CHECK(render.beginShutdownCalls == 1);
-            CHECK(render.flushCalls == 1);
-            CHECK(render.advanceCalls == 2);
-            CHECK(render.shutdownCalls == 1);
+            // t56: a failing real audio backend must NOT kill startup -- the
+            // engine degrades to the silent backend and keeps the run alive
+            // (macOS vendored-SoLoud no-backend regression).
+            CHECK(engine.init());
+            CHECK(platform.initCalls == 1);
+            CHECK(render.initCalls == 1);
             CHECK(audio.initCalls == 1);
-            CHECK(audio.shutdownCalls == 0);
-            checkEngineRegistryCleared();
+            CHECK(audio.shutdownCalls == 0);   // failed backend replaced, not shutdown
+            CHECK(BackendRegistry::instance().getAudioBackend() != nullptr);
+            engine.shutdown();
+            checkEngineRegistryCleared();      // shutdown still drains everything
         }
     }
 

@@ -386,7 +386,21 @@ bool Engine::initPlatformPhase() {
     if (!m_audioBackend->init()) {
         DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
                     "Audio backend init failed.");
-        return false;
+        // t56: a machine without a usable audio device (CI runner, server,
+        // macOS where the vendored SoLoud has no backend compiled) must not
+        // keep the engine from starting. Keep the ERROR record above as the
+        // auditable trace, then continue loudly on the silent backend
+        // supplied by the default-construction helper. (The default headless
+        // path never enters this branch: the silent backend's init() is
+        // unconditional true, so headless semantics are unchanged.)
+        DEBUG_WARN(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
+                   "audio unavailable -- continuing with silent NullAudio");
+        m_audioBackend = createHeadlessAudioBackend();
+        if (!m_audioBackend->init()) {
+            DEBUG_ERROR(SubSys::Engine, ErrCode::Engine_AudioInitFailed,
+                        "NullAudio fallback failed to initialize.");
+            return false;
+        }
     }
     m_audioInitialized = true;
     BackendRegistry::instance().setAudioBackend(m_audioBackend.get());
