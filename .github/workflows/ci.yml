@@ -359,6 +359,70 @@ jobs:
           path: release-artifacts/
 
   # ============================================================
+  # Release Package (Linux TGZ) -- Sprint6-L1. Same gate semantics as the
+  # Windows release job: master/tags only, needs the Linux test job green.
+  # The TGZ carries libSDL3.so.0 beside the executable ($ORIGIN RPATH); the
+  # 29-assertion verifier runs against the packed artifact under Xvfb.
+  # ============================================================
+  release-linux:
+    name: "Linux · Package"
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget python3-yaml xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+
+      - name: Configure ALSA null device (headless audio)
+        run: |
+          printf "pcm.!default { type null }\nctl.!default { type null }\n" | sudo tee /etc/asound.conf
+
+      - name: Build SDL3 from source
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.2.0/SDL3-3.2.0.tar.gz
+          tar xzf SDL3-3.2.0.tar.gz
+          cd SDL3-3.2.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+          sudo ldconfig
+          cd ..
+          rm -rf SDL3-3.2.0 SDL3-3.2.0.tar.gz
+
+      - name: Configure Release
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCAESURA_ENABLE_FFMPEG=OFF
+
+      - name: Build Release
+        run: |
+          set -o pipefail
+          cmake --build build --parallel $(nproc) > build.log 2>&1 || { echo '=== build errors ==='; grep -iE 'error:|fatal error|undefined' build.log | head -30; tail -40 build.log; exit 1; }
+          tail -3 build.log
+
+      - name: Package (CPack TGZ)
+        run: cd build && cpack -G TGZ
+
+      - name: Verify release package (29 assertions, serial)
+        run: |
+          TGZ=$(ls build/CaesuraAmeKAG-*-Linux-*.tar.gz | head -1)
+          echo "verifying: $TGZ"
+          xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_release_package.sh "$TGZ"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: caesura-amekag-linux-x64
+          path: |
+            build/CaesuraAmeKAG-*-Linux-*.tar.gz
+            build/CaesuraAmeKAG-*-Linux-*.tar.gz.sha256
+
+  # ============================================================
   # iOS compile audit (Track I I1) - RED-GREEN probe, never blocks.
   # No Mac hardware in the repo dev loop; this surfaces the iOS toolchain
   # gaps so they can be closed incrementally. continue-on-error keeps the

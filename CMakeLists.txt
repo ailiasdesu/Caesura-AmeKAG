@@ -545,7 +545,14 @@ set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "AiliasDesu")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cross-Platform Visual Novel Engine — SDL3 + bgfx + SoLoud + Lua 5.4")
-set(CPACK_GENERATOR "ZIP")
+# Sprint6-L1: every non-Windows platform ships a TGZ -- tar preserves the
+# executable bit, which a ZIP extracted with unzip loses (t29: this also
+# covers the future macOS lane with zero further CMake churn).
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+else()
+    set(CPACK_GENERATOR "TGZ")
+endif()
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 
 # Deterministic, human-readable artifact name (version + platform): e.g.
@@ -568,6 +575,19 @@ endif()
 # the ZIP content uniform, mirroring the FFmpeg DLL gate below.
 if(WIN32 AND TARGET SDL3::SDL3)
     install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+endif()
+# Sprint6-L1: the Linux artifact must carry its own SDL3 -- CI builds SDL3
+# from source into /usr/local, and a stranger's distro has no libSDL3
+# package to fall back on (Ubuntu 24.04 ships none). Install the SONAME
+# file: that is the exact name the loader requests (install(FILES)
+# dereferences the symlink, so the package carries a real libSDL3.so.0),
+# and the engine finds it beside the executable through $ORIGIN below.
+if(UNIX AND NOT APPLE AND TARGET SDL3::SDL3)
+    get_target_property(_caesura_sdl3_type SDL3::SDL3 TYPE)
+    if(_caesura_sdl3_type STREQUAL "SHARED_LIBRARY")
+        install(FILES "$<TARGET_SONAME_FILE:SDL3::SDL3>" DESTINATION . OPTIONAL)
+    endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN")
 endif()
 # Without the Steam runtime DLL beside the executable the process cannot even
 # START ("error while loading shared libraries: steam_api64.dll") -- exactly what
