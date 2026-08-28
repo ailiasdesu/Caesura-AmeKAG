@@ -118,6 +118,11 @@ beforeAll(async () => {
   // boot (the bundle's scene ordering is not part of the contract).
   try { window.history.replaceState(null, '', '?scene=tutorial/tutorial_04_audio.ks') } catch { /* jsdom fallback */ }
   globalThis.__CAESURA_WASM_FILE__ = wasmFile
+  // CI checkouts never carry cache/story/story.lua (gitignored), so the boot
+  // takes the bundle-missing path; the demo fallback is DEV_MODE-gated
+  // (b6bfcd98 refuses to fake demo content in production). These suites drive
+  // the RAW demo flow, so opt into dev mode explicitly.
+  globalThis.__CAESURA_DEV__ = true
   globalThis.AudioContext = function () { activeCtx = makeFakeAudioContext(); return activeCtx }
   setupDom()
   globalThis.fetch = makeFetch()

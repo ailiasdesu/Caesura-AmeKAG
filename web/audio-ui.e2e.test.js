@@ -161,6 +161,11 @@ async function advanceOnce() {
 
 beforeAll(async () => {
   globalThis.__CAESURA_WASM_FILE__ = wasmFile
+  // CI checkouts never carry cache/story/story.lua (gitignored), so the
+  // boot takes the bundle-missing path; the demo fallback is DEV_MODE-gated
+  // (b6bfcd98 refuses to fake demo content in production). These suites drive
+  // the RAW demo flow, so opt into dev mode explicitly.
+  globalThis.__CAESURA_DEV__ = true
   setupDom()
   globalThis.fetch = makeFetch()
   if (typeof globalThis.requestAnimationFrame !== 'function') {
