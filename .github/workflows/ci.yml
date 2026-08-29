@@ -424,11 +424,13 @@ jobs:
 
   # ============================================================
   # Release Package (macOS TGZ) -- Sprint6-L2, mirrors release-linux.
-  # macOS has no Xvfb and headless --editor behavior on macos-latest is
-  # UNPROVEN (bgfx/Metal window creation may fail without a GUI session):
-  # the verify step runs as a continue-on-error PROBE for the first runs,
-  # so build/cpack/upload stay decisive while the verify log gathers real
-  # headless evidence. Tighten to a hard gate once behavior is known.
+  # The verify step is a HARD GATE (round-9+). Round-7's red was a
+  # verify-script false positive: ps -args returned empty for a live,
+  # serving engine on this runner, so a live process was judged dead.
+  # Fixed by launcher-recorded pid/rc files (0422c17c, sections 3-4);
+  # the fixed script then ran 30/30 green as a probe on round-8
+  # (run 33248475888; editor ready in 3s, token in 1s -- 45s cap ok).
+  # Headless --editor is PROVEN to serve on macos-latest.
   # ============================================================
   release-macos:
     name: "macOS · Package"
@@ -475,8 +477,7 @@ jobs:
       - name: Package (CPack TGZ)
         run: cd build && cpack -G TGZ
 
-      - name: Verify release package (probe; headless --editor unknown)
-        continue-on-error: true
+      - name: Verify release package (30 assertions, hard gate)
         timeout-minutes: 20
         run: |
           TGZ=$(ls build/CaesuraAmeKAG-*-Darwin-*.tar.gz | head -1)
