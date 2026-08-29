@@ -153,8 +153,8 @@
   - **iOS 真机实测**：12/12 Metal Shaders 与 Xcode 流程完备，物理真机处于 `hardware-gated`；
   - **低内存压力中断（onLowMemory）**：真机物理触发未覆盖；
   - **多指手势注入**：单测覆盖，真机物理多指注入未实测；
-  - **Linux 真渲染绿证（GL 实际渲染、非 Noop）**：t92/t94 修复后的首证处于 **CI round-5 判读中**——不得写成已验证（round-4 教训：Linux 包内游戏 requested=D3D11→actual=Noop、exit 0 假绿）；
-  - **macOS §3 结论（隐藏窗口 Metal drawable 假设）**：**取证中（.ips + demo 探针）**——editor 检查失败路径会抓 `~/Library/Logs/DiagnosticReports/CaesuraAmeKAG*.ips` 头（异常类型+崩溃帧，`bca67d42`）+ 纯诊断可见窗口 demo 探针（`--frames 60` rc+tail）作内容 vs 编辑器路径判别。
+  - **Linux 真渲染绿证（GL 实际渲染、非 Noop）**：**已获证（round-7，run 33245271845 @ 0fce3311）**——Linux · Package verify 30/30 含 renderdisabled=0，为 Linux 发布包真渲染首证（M1）；round-4 教训参考：Linux 包内游戏曾 requested=D3D11→actual=Noop、exit 0 假绿；
+  - **macOS §3 红（editor 检查）**：**已定性为 verify 脚本时序/存活检测误报（round-7 反转，修复面=verify_release_package.sh §3，T-E1 修复中）**——证据：无 .ips、demo 探针 rc=0、GPU degrade WARN 证明帧循环长期运行、rc 未落盘=进程未退出、同节 browser-nav/api-ping 通过；根因为慢 runner（软渲染 ~98ms/帧）上首查/存活检测时序。取证工具链保留：`bca67d42` 抓 `CaesuraAmeKAG*.ips` 头 + 纯诊断 demo 探针。
 
 ### 5.3 关键历史决策与评估
 - **KAG3 生态兼容决策**：
