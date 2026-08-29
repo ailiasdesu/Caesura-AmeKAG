@@ -1,0 +1,57 @@
+{
+  "_comment": "人工证据层（t103 采纳建议）：本文件由人工维护，capability_closure.py 读取合并。commands 键必须落在扫描器已知命令名集合内（未知键被响亮拒绝，exit 非 0）；out_of_scope 数组渲染为矩阵「人工判级（范围外能力）」区段。",
+  "commands": {
+    "typewriter": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。",
+      "evidence": "scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）",
+      "source": "t101 task output"
+    }
+  },
+  "out_of_scope": [
+    {
+      "name": "letter_spacing",
+      "grade": "VERIFIED（位置级）",
+      "evidence": "t105 接线：scripts/kag/text_scene.lua add_wrapped_spans 逐字符 draw（commit 33fb6b19）+ tests/scripts/test_text_markup.lua 9h/9i 共 9 断言（x 序列 100/116、段边界 158、多字节 127、typewriter×spacing）",
+      "note": "位置级已按布局口径（measure_character：rawWidth*scale+spacing）精确复现；像素级视觉待 M4 GPU 冒烟确认。布局级（wrap/measure）t101 已核真。"
+    },
+    {
+      "name": "SwipeDown",
+      "grade": "UNWIRED（native）",
+      "evidence": "platform/MobileAdapter.cpp:305-317（SDL_EVENT_FINGER_MOTION → SDLK_SPACE 映射）无消费方",
+      "note": "C6 gap：手势 key 映射后无场景/控制层消费；web 侧已接（web/main.mjs:634-644 SwipeDown hook）——native 与 web 能力不一致，待 M4 平台矩阵标注。"
+    },
+    {
+      "name": "SwipeUp",
+      "grade": "UNWIRED（native）",
+      "evidence": "platform/MobileAdapter.cpp:318-330（同族手势 → SDLK_PAGEUP 映射）无消费方",
+      "note": "同 SwipeDown：native 无消费方；web 侧已接（web/main.mjs:634-644）。"
+    },
+    {
+      "name": "LongPress",
+      "grade": "VERIFIED",
+      "evidence": "t101 复核 file:line 链（SDL_EVENT_FINGER_DOWN 长按检测 → InputRouter/驱动消费；详见 t101 task output）",
+      "note": "t101 全链证据在案；native 手势链已接。"
+    },
+    {
+      "name": "Pinch",
+      "grade": "VERIFIED",
+      "evidence": "t101 复核 file:line 链（双指缩放 → 驾驶消费；详见 t101 task output）",
+      "note": "t101 全链证据在案。"
+    },
+    {
+      "name": "TwoFingerTap",
+      "grade": "VERIFIED",
+      "evidence": "t101 复核 file:line 链（详见 t101 task output）",
+      "note": "t101 全链证据在案。"
+    },
+    {
+      "name": "ThreeFingerHold",
+      "grade": "VERIFIED",
+      "evidence": "t101 复核 file:line 链（详见 t101 task output）",
+      "note": "t101 全链证据在案。"
+    }
+  ]
+}
