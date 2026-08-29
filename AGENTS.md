@@ -165,6 +165,8 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 |------|------|
 | `design/engine-architecture-topology.md` | 引擎架构拓扑说明（16 模块 + 数据流） |
 | `design/engine-capability-matrix.md` | 82 项能力的完成状态矩阵 |
+| `design/platform-support-matrix.md` | 平台×七级阶梯支持矩阵（Support→Store，每格证据码注记；平台表述唯一口径） |
+| `design/capability-closure-matrix.md` | KAG 命令能力闭环矩阵（`scripts/capability_closure.py` 自动生成，勿手改） |
 | `design/engine-safety-and-qa-mechanisms.md` | JobSystem 线程安全、Lua 沙箱、BackendRegistry 依赖说明 |
 | `design/engine-topology-mermaid.md` | 1 张 Mermaid 架构拓扑图源码 |
 | `design/backend-registry-dependency-guide.md` | BackendRegistry 依赖矩阵与使用规范 |
@@ -184,6 +186,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
 | 文件 | 内容 |
 |------|------|
+| `plans/2026-08-29-029-consolidation-sprint.md` | **当前冲刺计划**（029，Consolidation Sprint：feature 冻结、平台七级阶梯纪律、能力闭环矩阵、M1-M5 里程碑重排） |
 | `plans/2026-08-24-028-android-full-closure.md` | **最新状态**交接文档（028，Android 全链路真机闭环、IME 输入桥接、Release 签名与 iOS/Metal 加固） |
 | `plans/2026-08-24-027-antigravity-handoff.md` | 交接文档（027，Antigravity 接手现状、铁律、环境速查） |
 | `plans/2026-08-23-026-delivery-handoff.md` | 交接文档（026，Validation-Release 阶段总结；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
