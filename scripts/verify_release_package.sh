@@ -150,6 +150,27 @@ own_engine_pids() {
 kill_own_engines() {
     local p
     for p in $(own_engine_pids); do stop_pid "$p"; done
+    # t102: the ps-based scan is not trustworthy on the mac runner -- also
+    # kill the engine recorded at launch (engine.pid), so cleanup cannot
+    # orphan a live --editor on any platform.
+    # t108: pragmatic identity guard -- kill -0 liveness first, then verify
+    # via ps -p (comm/args contains CaesuraAmeKAG) when ps can answer; when the
+    # platform ps cannot inspect the pid (empty result / git-bash limited
+    # fields) degrade to the liveness check with the recorded pid (it is OUR
+    # launch; CI runner semantics unchanged).
+    for p in $(cat "$WORK/engine.pid" 2>/dev/null); do
+        [ -n "$p" ] && [ "$p" -gt 0 ] 2>/dev/null || continue
+        if ! kill -0 "$p" 2>/dev/null; then continue; fi
+        if command -v ps >/dev/null 2>&1; then
+            PSLINE="$(ps -p "$p" -o comm= 2>/dev/null)"
+            if [ -z "$PSLINE" ]; then PSLINE="$(ps -p "$p" -o args= 2>/dev/null)"; fi
+            if [ -z "$PSLINE" ] || printf '%s' "$PSLINE" | grep -qi 'CaesuraAmeKAG'; then
+                stop_pid "$p"
+            fi
+        else
+            stop_pid "$p"
+        fi
+    done
 }
 cleanup() {
     for p in $(own_engine_pids); do stop_pid "$p"; done
@@ -351,14 +372,13 @@ if [ -z "$EXE" ]; then
 else
     TOKEN="relverify-$$-$(date +%s)"
     OUT="$WORK/editor.out"; ERR="$WORK/editor.err"
-    # t81/t93: record the engine's own exit code for the stayed-alive
-    # diagnostics (a detached background launch otherwise loses it; the rc file
-    # is written by the launcher subshell only after the engine process really
-    # exits). t93: explicit rc sequence -- on POSIX a crashed child can linger
-    # briefly (crash-report handling) and round-4 macOS printed '(not
-    # recorded)'; the reader below polls up to 3s instead of the old 1s grace.
-    rm -f "$WORK/editor.rc"
-    ( cd "$ROOT" && CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR"; rc=$?; echo "$rc" >"$WORK/editor.rc" ) &
+    T3_START="$(date +%s)"
+    # t81/t93/t102: record the engine's own exit code AND its direct pid.
+    # The launcher subshell backgrounds the engine, records the real engine
+    # pid (NOT the subshell's) in engine.pid, waits for it and writes the
+    # exit code to editor.rc only when the engine really exits.
+    rm -f "$WORK/editor.rc" "$WORK/engine.pid"
+    ( cd "$ROOT" && { CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR" & EPID=$!; echo "$EPID" >"$WORK/engine.pid"; wait "$EPID"; echo "$?" >"$WORK/editor.rc"; } ) &
     CODE="000"
     ALIVE=1
     for _ in $(seq 1 45); do
@@ -366,16 +386,25 @@ else
         CODE="$(curl -s -o "$WORK/root.html" -m 3 -w '%{http_code}' \
                  -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$PORT/" 2>/dev/null)"
         [ -n "$CODE" ] || CODE="000"
+        # t102: readiness-poll -- keep asking until the server answers (up to
+        # 45s; slow software-rendered runners take multiple seconds). Already-
+        # passing checks must not regress: the first non-000 response is the
+        # truth, so the GET / below uses the READY code.
         [ "$CODE" != "000" ] && break
-        # A dead process will never answer: fail fast and SAY WHY instead of
-        # burning 45s and blaming the HTTP layer (a missing runtime DLL kills
-        # the process before the listener ever binds). Ownership check: a
-        # foreign engine still running on another address must NOT count as
-        # ours -- only a pid that appeared after our launch does.
-        if [ -z "$(own_engine_pids)" ]; then ALIVE=0; break; fi
+        # t102: death = the launcher recorded the exit (editor.rc exists). The
+        # loop NEVER declares death from a process-name scan: on the round-7
+        # mac runner the ps -args probe returned empty while the engine was
+        # alive and serving (the same section then got browser-nav/api-ping
+        # 200) -- a live process was judged dead and rc read as "(not
+        # recorded)". A genuinely dead engine still fails fast: its launcher
+        # writes editor.rc ~1s after the exit and the next iteration
+        # ends the wait.
+        if [ -f "$WORK/editor.rc" ]; then ALIVE=0; break; fi
     done
 
+    printf '        [diag] editor readiness poll took %ss (45s cap)\n' "$(( $(date +%s) - T3_START ))"
     if [ "$ALIVE" = "1" ]; then
+        printf '        [diag] editor ready after %ss\n' "$(( $(date +%s) - T3_START ))"
         ok "engine process stayed alive in the extracted folder"
     else
         bad "engine process stayed alive" "it exited early; stderr tail: $(tail -2 "$ERR" 2>/dev/null | tr '\n' ' | ')"
@@ -386,7 +415,7 @@ else
         # t93: poll up to 3s for the launcher to record rc (POSIX crash
         # handling can delay reaping beyond the old 1s grace).
         RCR=0
-        while [ ! -f "$WORK/editor.rc" ] && [ "$RCR" -lt 6 ]; do RCR=$((RCR + 1)); sleep 0.5; done
+        while [ ! -s "$WORK/editor.rc" ] && [ "$RCR" -lt 6 ]; do RCR=$((RCR + 1)); sleep 0.5; done
         printf '        [diag] engine exit code: %s\n' "$(cat "$WORK/editor.rc" 2>/dev/null || echo '(not recorded)')"
         printf '        [diag] stdout tail (15 lines):\n'
         tail -n 15 "$OUT" 2>/dev/null | sed 's/^/          /'
@@ -498,14 +527,25 @@ if [ -z "$EXE" ]; then
     bad "token discoverable" "no executable to launch"
 else
     OUT2="$WORK/editor2.out"; ERR2="$WORK/editor2.err"
-    rm -f "$ROOT/.caesura-editor-token"
-    ( cd "$ROOT" && env -u CAESURA_EDITOR_TOKEN "$EXE" --editor >"$OUT2" 2>"$ERR2" & )
+    rm -f "$ROOT/.caesura-editor-token" "$WORK/engine.pid" "$WORK/editor2.rc"
+    # t102: record the engine pid so kill_own_engines() at the end of this
+    # section cannot orphan it on the mac runner (ps scan unreliable there).
+    # t108: symmetric launcher -- editor2.rc confirms the exit, so the token
+    # loop below judges death WITHOUT a process-name scan (the round-7 §3
+    # false-dead root: mac ps -args returns empty for a live process).
+    ( cd "$ROOT" && { env -u CAESURA_EDITOR_TOKEN "$EXE" --editor >"$OUT2" 2>"$ERR2" & EPID=$!; echo "$EPID" >"$WORK/engine.pid"; wait "$EPID"; echo "$?" >"$WORK/editor2.rc"; } ) &
     GEN=""
+    T4_START="$(date +%s)"
     for _ in $(seq 1 45); do
         sleep 1
         [ -s "$ROOT/.caesura-editor-token" ] && GEN="$(tr -d '\r\n' < "$ROOT/.caesura-editor-token")" && break
-        [ -z "$(own_engine_pids)" ] && break
+        # t108: death = the launcher recorded the exit (editor2.rc exists). A
+        # live but slow engine keeps the whole 45x1s window open for the token.
+        if [ -s "$WORK/editor2.rc" ]; then break; fi
     done
+    if [ -n "$GEN" ]; then
+        printf '        [diag] token appeared after %ss\n' "$(( $(date +%s) - T4_START ))"
+    fi
     if [ -n "$GEN" ]; then ok ".caesura-editor-token written next to the executable"
     else bad ".caesura-editor-token written" "no token file appeared in $ROOT"; fi
 
