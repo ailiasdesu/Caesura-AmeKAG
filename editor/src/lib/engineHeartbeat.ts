@@ -9,6 +9,16 @@
 // -> false. It never writes engineScene/enginePaused, so DebugView's own
 // refresh path and the ConnectionPanel flows keep working unchanged.
 //
+// engineConnected has EXACTLY THREE writers, all reading the same HTTP
+// truth (EngineClient against the live engine):
+//   1. App.tsx mount effect -- one-shot ping at app open (t54 epoch-guarded).
+//   2. DebugView.tsx mount effect -- refresh() + 1.5s poll while mounted
+//      (DebugView.tsx:75-79, debugState()).
+//   3. This heartbeat -- 7s poll (client.ping()), published only on change.
+// None of the three reads engineConnected to decide whether to ping, so
+// there is no feedback loop: the last writer to run simply reflects the
+// engine's current reachability, and the badge converges (t47 conclusion d).
+//
 // Lifecycle: the returned cleanup clears the interval; a StrictMode/HMR
 // double mount therefore never starts a second timer (mount -> cleanup ->
 // mount). The first beat runs immediately so the badges reflect reality the
