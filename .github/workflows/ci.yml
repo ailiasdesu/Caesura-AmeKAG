@@ -408,7 +408,7 @@ jobs:
       - name: Package (CPack TGZ)
         run: cd build && cpack -G TGZ
 
-      - name: Verify release package (29 assertions, serial)
+      - name: Verify release package (30 assertions, serial)
         run: |
           TGZ=$(ls build/CaesuraAmeKAG-*-Linux-*.tar.gz | head -1)
           echo "verifying: $TGZ"
