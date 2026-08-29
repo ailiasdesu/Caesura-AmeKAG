@@ -351,11 +351,14 @@ if [ -z "$EXE" ]; then
 else
     TOKEN="relverify-$$-$(date +%s)"
     OUT="$WORK/editor.out"; ERR="$WORK/editor.err"
-    # t81: record the engine's own exit code for the stayed-alive diagnostics
-    # (a detached background launch otherwise loses it; the rc file is written
-    # by the launcher subshell only after the engine process really exits).
+    # t81/t93: record the engine's own exit code for the stayed-alive
+    # diagnostics (a detached background launch otherwise loses it; the rc file
+    # is written by the launcher subshell only after the engine process really
+    # exits). t93: explicit rc sequence -- on POSIX a crashed child can linger
+    # briefly (crash-report handling) and round-4 macOS printed '(not
+    # recorded)'; the reader below polls up to 3s instead of the old 1s grace.
     rm -f "$WORK/editor.rc"
-    ( cd "$ROOT" && CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR"; echo "$?" >"$WORK/editor.rc" ) &
+    ( cd "$ROOT" && CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR"; rc=$?; echo "$rc" >"$WORK/editor.rc" ) &
     CODE="000"
     ALIVE=1
     for _ in $(seq 1 45); do
@@ -380,12 +383,53 @@ else
         # only evidence -- the FAIL line above keeps two stderr lines (e.g. the
         # round-3 macOS run showed only [ShaderCache] compileVariant errors).
         # Print what the process actually logged, capped.
-        [ -f "$WORK/editor.rc" ] || sleep 1
+        # t93: poll up to 3s for the launcher to record rc (POSIX crash
+        # handling can delay reaping beyond the old 1s grace).
+        RCR=0
+        while [ ! -f "$WORK/editor.rc" ] && [ "$RCR" -lt 6 ]; do RCR=$((RCR + 1)); sleep 0.5; done
         printf '        [diag] engine exit code: %s\n' "$(cat "$WORK/editor.rc" 2>/dev/null || echo '(not recorded)')"
         printf '        [diag] stdout tail (15 lines):\n'
         tail -n 15 "$OUT" 2>/dev/null | sed 's/^/          /'
         printf '        [diag] [RENDER]/FATAL/ERROR across stdout+stderr:\n'
         grep -hE '\[RENDER\]|FATAL|\[ERROR\]' "$OUT" "$ERR" 2>/dev/null | head -12 | sed 's/^/          /'
+
+        # t93: macOS crash-report capture -- a crashing --editor (Metal drawable
+        # hypothesis, H2) lands as CaesuraAmeKAG-*.ips in
+        # ~/Library/Logs/DiagnosticReports; print the newest report head
+        # (exception type + crashed-thread frames -- watch for MTLDrawable/
+        # CAMetalLayer/nextDrawable frames as H2 evidence). The block is silent
+        # on non-mac (no DiagnosticReports dir); Linux best-effort via
+        # coredumpctl when it finds caesura core dumps.
+        MAC_CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
+        if [ -d "$MAC_CRASH_DIR" ]; then
+            printf '        [diag] macOS DiagnosticReports (newest CaesuraAmeKAG):\n'
+            ls -t "$MAC_CRASH_DIR" 2>/dev/null | grep -i 'caesura' | head -5 | sed 's/^/          /'
+            LATEST_IPS="$(ls -t "$MAC_CRASH_DIR"/CaesuraAmeKAG*.ips 2>/dev/null | head -1)"
+            if [ -n "$LATEST_IPS" ]; then
+                printf '        [diag] newest report %s (head 80):\n' "$(basename "$LATEST_IPS")"
+                head -80 "$LATEST_IPS" 2>/dev/null | sed 's/^/          /'
+            else
+                printf '        [diag] no CaesuraAmeKAG*.ips report (crash may not produce one)\n'
+            fi
+        elif command -v coredumpctl >/dev/null 2>&1; then
+            CRASH_LINES="$(coredumpctl list --no-pager 2>/dev/null | grep -i caesura | tail -5 || true)"
+            if [ -n "$CRASH_LINES" ]; then
+                printf '        [diag] Linux coredumpctl (caesura core dumps):\n'
+                printf '%s\n' "$CRASH_LINES" | sed 's/^/          /'
+            fi
+        fi
+
+        # t93: pure-diagnostic demo probe -- NOT a check ([PASS]/[FAIL] and the
+        # 30 count are untouched). H1 (scene content) vs H2 (hidden window /
+        # editor path) discriminator: a visible-window 60-frame DEMO run that
+        # exits 0 while --editor died is hard evidence for an editor-path
+        # (e.g. Metal drawable) crash.
+        DEMO_OUT="$WORK/demo-probe.log"
+        ( cd "$ROOT" && "$EXE" --frames 60 ) >"$DEMO_OUT" 2>&1
+        DEMO_RC=$?
+        printf '        [diag] demo probe: "%s" --frames 60 -> rc=%s\n' "$(basename "$EXE")" "$DEMO_RC"
+        printf '        [diag] demo probe log tail (8 lines):\n'
+        tail -8 "$DEMO_OUT" 2>/dev/null | sed 's/^/          /'
     fi
 
     if [ "$CODE" = "200" ]; then ok "GET / with token -> 200"
