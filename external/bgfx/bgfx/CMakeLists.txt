@@ -45,6 +45,15 @@ elseif(UNIX)
     # via GLX under xvfb on CI. Placed after ANDROID because CMake sets UNIX=1
     # there too.
     target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_OPENGL=43)
+    # Round-5: with the GL renderer live, renderer_gl.cpp instantiates bx
+    # float4x4_inverse -> simd128_f32_dot, whose _mm_dp_ps builtin GCC gates
+    # behind -msse4.1 (simd128_sse.inl:374). MSVC emits the intrinsic without
+    # an /arch gate, so the Windows binary already assumes SSE4.1 -- this only
+    # aligns Linux x86_64 with that de-facto baseline. Non-x86 keeps defaults
+    # (bx selects the NEON path there).
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+        target_compile_options(bgfx PRIVATE -msse4.1)
+    endif()
 endif()
 
 target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_VULKAN=0)
