@@ -178,3 +178,47 @@ Steam API 仅可选初始化。Sprint7 真正缺口在 **SDK 就位 → 带 SDK 
 - `docs/guides/steam-release.md`：引擎侧现状 + 人类操作步骤（权威 ✅/⏳）——本审计是其**自动化/预研补充**。
 - `scripts/steam/*.vdf` 模板：本审计未改动，Sprint7 在其上做参数化脚本。
 - 任务书 Phase2「Steam」与 §18.4"不假装完成"约束贯穿全文；所有 ⚠️UNVERIFIED 项在 Sprint7 排期里都应有"联网核对"前置步骤。
+- **文末附录**：Steamworks 外部事实核对（2026-08-29 快照，t77 落仓版）——关闭 R10；落地前登录 partner 后台复核 appfee 页（约 10 分钟）。
+
+---
+
+## 附录：Steamworks 外部事实核对（2026-08-29 快照）
+
+> 来源：t77 联网核对（web_search 6 批次，官方 partner.steamgames.com + 近期第三方交叉）。
+> 快照日期：2026-08-29。**落地前请登录 partner 后台并复核 appfee 页（约 10 分钟）**——费用/审核类条款随时间修订，以登录所见为准。
+> 本附录关闭审计 R10（外部事实未核对项）；置信度标注：高=官方文档 + 多方交叉；中=官方确认存在但细节以登录后台为准；UNVERIFIED=未检索到官方确定表述。
+
+### ① SDK 二进制再分发许可
+| 事实 | 来源 URL | 置信度 | 备注 |
+|---|---|---|---|
+| SDK 二进制（steam_api64.dll / libsteam_api.so/dylib）允许作为**你的应用的一部分**随游戏包再分发；无按份授权费；禁止=以独立 SDK 包再分发或公开 SDK 源码 | partner.steamgames.com/documentation/sdk_access_agreement（官方全文，含 schinese 页） | 高 | 与生态实践交叉（castle-engine.io/steam、kb.heathen.group 上传页均按 DLL 随游戏分发叙述）。CAESURA_HAS_STEAM 的 steam_api64.dll 进 Release ZIP/TGZ/CI artifact 合规；SDK 本体永不入 git 纪律不变（R1 不变） |
+| 协议要求按要求展示 Valve 标识/许可说明（署名类条款）；是否强制随包附 LICENSE 文本未检索到明确要求 | 同上官方页 | 中高（附 LICENSE 为保险项） | 建议发行时附 SDK 许可说明（三方包或附 LICENSE 文本）；措辞以登录版协议为准 |
+
+### ② Steam Direct（$100 / $1000 可退）
+| 事实 | 来源 URL | 置信度 | 备注 |
+|---|---|---|---|
+| 每 App 一次性 **$100** 入驻费 | partner.steamgames.com/doc/gettingstarted/appfee + datahumble.com/blog/steam-direct-fee-requirements-roi-2026-guide + thegamemarketer.com/insight-posts/how-to-publish-your-game-on-steam-guide（2026）+ gamemakerblog.com（2023） | 高 | 4 处交叉；数值以官方 appfee 页为准 |
+| 累计收入达到 **$1,000**（美元等价）后可退/抵扣该费用 | 同上 | 高 | 个别二手表述有 gross/net 差异；登录后台核对当期条款 |
+| 审核周期：官网未承诺固定天数（第三方称通常约 2 周内） | 无官方页 | **UNVERIFIED** | 以申请时后台进度为准；替代求证=partner 后台 Help/工单、Steamworks 社区论坛 |
+| 所需资料（类别级）：税务表（W-8/W-9 或所在国等效）、银行账户、发布者实体信息 | 官方 gettingstarted 文档链 + 2026 三方指南 | 中高 | 具体表单以登录后台清单为准 |
+
+### ③ steamcmd 上传链路与无头 CI Guard 方案
+| 事实 | 来源 URL | 置信度 | 备注 |
+|---|---|---|---|
+| app_build.vdf（AppID/Desc/BuildOutput/ContentRoot/Depots{DepotID→depot_build.vdf}）+ depot_build.vdf（FileMapping/FileExclusion）+ `steamcmd +login <user> +run_app_build ... +quit` | partner.steamgames.com/doc/sdk/uploading | 高 | 官方权威；本仓 scripts/steam/*.vdf 模板结构与其一致（⏳未执行） |
+| 登录=账号+密码+Steam Guard；无头 CI 无 Valve 专用文档——社区实践=专用构建账号 + CI secrets 持凭据；方案 A=交互登录后缓存 config.vdf（含 SteamGuard token 字段），方案 B=每次手机/邮箱码（TOTP 自动化属灰色，官方无接口）；`+set_steam_guard_code <code>` 可为本次登录供码 | 官方 uploading（仅陈述 Guard 存在）+ kb.heathen.group + Miziziziz/Steam-And-Itch-Command-Line-Tools-Guide（社区实践） | 中（需实测） | Sprint7 核心决策：推荐方案 A（专用账号+config.vdf 缓存+定期人工码）；凭据严禁入仓库 |
+| 三平台 depot：无强制 schema；惯例=每平台一 depot（win64/linux64/macos），Linux 用 steam-launcher.sh，macOS 可裸二进制（本引擎现状） | 官方 uploading（建议命名清晰）+ 社区惯例 | 中（惯例性） | Linux steam-launcher.sh 合规性以官方 wiki 专页为准（⏳提交前查一次） |
+
+### ④ 成就/统计/云存档：后台定义 vs API 触发分工
+| 事实 | 来源 URL | 置信度 | 备注 |
+|---|---|---|---|
+| 定义面=partner 后台 App Admin（Achievements/Stats/Cloud 页）：成就名/图标/描述、统计键名与范围、云档 enable；触发面=ISteamUserStats（SetAchievement/GetStat/StoreStats/RequestCurrentStats）+ ISteamRemoteStorage（写云档，自动云同步需后台启用） | partner.steamgames.com/doc/api/ISteamUserStats + gdevelop wiki publish-to-steam + castle-engine.io/steam（交叉） | 高 | 引擎 bindings 已就绪；Sprint7 只需后台同名校验（R5 登记表仍建议）；防作弊服务器校验=可选 P2 |
+
+### ⑤ default/beta 分支发布机制
+| 事实 | 来源 URL | 置信度 | 备注 |
+|---|---|---|---|
+| 构建上传到分支；default=玩家所见；beta/preview（password 或不可见）用于验证；往 default 发布需商店审核+构建验证 | partner.steamgames.com/doc/store/application/builds + gamedev.stackexchange.com/questions/186506（beta 上传实践）+ Miziziziz 指南 | 高 | 机制官方明确；首发走 beta→default 路径建议 |
+| SetLive/可见性改动的权限门禁细节（独立 vs 团队、构建默认 public 是否需验证）：官方 builds 页确认机制存在，门禁细节未检索到确定表述 | 同上官方页 | **UNVERIFIED（细节）** | 以登录后台为准；替代求证=partner 后台 + 社区 |
+
+---
+（附录完。t77 清单全量见任务 t77 output；本节为落仓版。其余正文未改动。）
