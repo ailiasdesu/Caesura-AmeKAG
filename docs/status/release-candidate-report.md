@@ -2,10 +2,12 @@
 
 > **Decision**: **`RC-GO`**  
 > **Target Version**: `1.0.0-rc.1`  
-> **Target Commit SHA**: `14ffa1743f42b55d8685c9776c3f82f9900d3d9c` (`14ffa174`)  
-> **Evaluation Date**: `2026-08-28`  
+> **Target Commit SHA**: `a59bab975d2bd84e8891e7a685c4d39ec507c816` (`a59bab97`)  
+> **Evaluation Date**: `2026-08-29`  
 > **Evaluation Mode**: 100% Evidence-Backed Verification (Strict Zero-Cheating Charter)  
 > **Authoritative Baseline Matrix**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
+> **CI 证据链 (M2 Sprint6-L2 再签发)**: round-9 run `33249852324` @ `a59bab97`（mac verify 硬门首跑 success、9/10 绿，Windows Release·Package 终态见结论节）+ round-8 run `33248475888`（修复后 verify 30/30 探针绿；`[diag] editor ready 3s` / `token 1s` 计时产出）+ round-7 run `33245271845`（Linux 真渲染 M1 首证，Linux Package 30/30 `renderdisabled=0`）。  
+> **RC 批同行提交注记**: `4364b0d2`（docs/audit 扫描器标注层，零引擎产物面；本树 HEAD）与待入库 `fix(web)`（web 播放器修复，非 CPack 引擎产物面）——均不在本报告 RC-GO 的引擎产物面证据范围内——`4364b0d2` 由 round-10 后验；`fix(web)` 诊断中、随后续批次后验。  
 
 ---
 
@@ -215,3 +217,5 @@ python scripts/verify_metal_shaders.py
 All technical requirements, architectural invariants, release blockers, and evidence bundles have been validated with zero compromises and zero undocumented claims.
 
 **Caesura (AmeKAG) Visual Novel Engine version `1.0.0-rc.1` is officially designated: `RC-GO`.**
+
+**M2 Sprint6-L2 再签发补充确认 (2026-08-29)**: round-9 run `33249852324` @ `a59bab97` 于本报告签发时**终态=completed/success（10/10 全绿含 Windows Release·Package 收尾）**；同批本地 `CaesuraRcAdversarialMutations` ctest 自愈验证通过（再签发后 bundle 更新，陈旧 bundle 红点消除）。同行提交 `4364b0d2`（docs/audit 标注层，零引擎产物面）与待入库 `fix(web)`（web 播放器修复，非 CPack 引擎产物面）分别由 round-10 与后续批次后验（`fix(web)` 诊断中），不影响本 RC-GO。
