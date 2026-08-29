@@ -102,6 +102,20 @@ bool BgfxRenderDevice::init(void* nativeWindowHandle, int width, int height) {
     }
     m_bgfxInitialized = true;
     m_shaders->initEmbeddedShaders();
+    // t73 (b): never submit a half-broken program. When any core embedded
+    // shader failed to build (manager already printed the one-shot ERROR),
+    // switch bgfx to IFH so the frame loop keeps running with rendering
+    // skipped -- verify probes distinguish "alive, rendering disabled"
+    // from a hard crash.
+    if (m_shaders->coreProgramsBroken()) {
+        // t75: only CORE-program failures disable rendering. Non-core failures
+        // (vfx/transition/stretch/affine/postfx) are counted + logged loudly by
+        // the manager; their draw sites already guard + skip, so rendering must
+        // continue (a single broken VFX shader must not black the screen).
+        printf("[RENDER][ERROR] [BgfxRenderDevice] CORE shader programs broken; "
+               "rendering disabled (BGFX_DEBUG_IFH) - frame loop continues.\n");
+        bgfx::setDebug(BGFX_DEBUG_IFH);
+    }
     m_drawState.shaders = m_shaders.get();
     m_drawState.device  = m_deviceCore.get();
     m_draw = std::make_unique<BgfxDraw>();
@@ -372,6 +386,16 @@ bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int he
 
     m_shaders = std::make_unique<BgfxShaderManager>();
     m_shaders->initEmbeddedShaders();
+    // t73 (b): same degrade gate as the primary init path.
+    if (m_shaders->coreProgramsBroken()) {
+        // t75: only CORE-program failures disable rendering. Non-core failures
+        // (vfx/transition/stretch/affine/postfx) are counted + logged loudly by
+        // the manager; their draw sites already guard + skip, so rendering must
+        // continue (a single broken VFX shader must not black the screen).
+        printf("[RENDER][ERROR] [BgfxRenderDevice] CORE shader programs broken; "
+               "rendering disabled (BGFX_DEBUG_IFH) - frame loop continues.\n");
+        bgfx::setDebug(BGFX_DEBUG_IFH);
+    }
     m_drawState.shaders = m_shaders.get();
     m_drawState.device  = m_deviceCore.get();
     m_draw = std::make_unique<BgfxDraw>();

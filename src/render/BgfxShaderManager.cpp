@@ -147,6 +147,80 @@ static bgfx::ShaderHandle buildBgfxShader(
 }
 
 
+// ---------------------------------------------------------------------------
+// t73: embedded-shader feeding contract (pure, GPU-free, unit-tested).
+//
+// The Metal / desktop-GL embedded arrays spell complete shaderc BGFX
+// binaries: [VSH11|FSH11][hashIn][hashOut][uniCount][uni...][codeSize]
+// [source text][0][trailing attrs/cb ignored by every parser]. The source
+// text (MSL / GLSL) is what ShaderMtl::create / ShaderGL::create feed to
+// newLibraryWithSource / glShaderSource. Re-wrapping these arrays inside
+// buildBgfxShader nests a second header in front and the renderer hands the
+// whole inner binary to the compiler as source -- the t71 macOS SIGABRT
+// ("vertexFunction must not be nil") chain.
+// ---------------------------------------------------------------------------
+
+bool BgfxShaderManager::usesDirectFeed(bool isMetal, bool isGL, bool isGLES) {
+    // Metal + desktop GL: direct. GLES (ESSL text rewrite path), D3D (raw
+    // DXBC payload) and Vulkan (raw SPIR-V words) keep the engine wrapper.
+    return isMetal || (isGL && !isGLES);
+}
+
+bool BgfxShaderManager::isDirectFeedBinary(const uint8_t* data, size_t size) {
+    if (nullptr == data || size < 18) {
+        return false;
+    }
+    const bool vsh = ('V' == data[0]);
+    const bool fsh = ('F' == data[0]);
+    if (!vsh && !fsh) return false;
+    if ('S' != data[1] || 'H' != data[2]) return false;
+    if (data[3] < 6) return false;  // BGFX binary version (>=6 => hashOut present)
+
+    size_t pos = 12;
+    const uint16_t count = static_cast<uint16_t>(data[pos] | (data[pos + 1] << 8));
+    pos += 2;
+    // Walk the uniform records exactly like ShaderMtl::create / ShaderGL::create:
+    // nameSize, name, type, num, regIndex u16, regCount u16,
+    // + texInfo u16 (ver>=8), + texFormat u16 (ver>=10).
+    for (uint16_t ii = 0; ii < count; ++ii) {
+        if (pos >= size) return false;
+        const uint8_t nameSize = data[pos];
+        pos += 1u + nameSize;
+        if (pos > size) return false;
+        pos += 1 /*type*/ + 1 /*num*/ + 2 /*regIndex*/ + 2 /*regCount*/;
+        if (data[3] >= 8)  pos += 2;  // texInfo
+        if (data[3] >= 10) pos += 2;  // texFormat
+        if (pos > size) return false;
+    }
+    if (pos + 4 > size) return false;
+    const uint32_t codeSize = static_cast<uint32_t>(
+        data[pos] | (data[pos + 1] << 8) | (data[pos + 2] << 16) | (data[pos + 3] << 24));
+    pos += 4;
+    if (0 == codeSize || pos + codeSize + 1 > size) return false;
+    // Source payload must start with the shader text, not with another
+    // binary header (binary-in-binary check).
+    if ('#' != data[pos]) return false;
+    if (0 != data[pos + codeSize]) return false;  // NUL terminator
+    return true;
+}
+
+bool BgfxShaderManager::coreProgramsBroken() const {
+    // CORE = the pipelines the engine cannot render anything with:
+    //   - m_fallbackProgram (vsSprite+fsTexture): sprite/quad/text/blit
+    //     pipeline -- every BgfxDraw blit, BgfxQuadBatch flush,
+    //     TextRenderer pages, ParticleSystem and SmaMeshRenderer fallback
+    //     submit this program (BgfxDraw_Blit.cpp:73-79,
+    //     BgfxQuadBatch.cpp:141, TextRenderer.cpp:662/730,
+    //     ParticleSystem.cpp:43/195, SmaMeshRenderer.cpp:371-408);
+    //   - m_blendProgram (vsFullscreen+fsBlend): the composite/blend-mode
+    //     pipeline (BgfxDraw_Effects.cpp:60-76).
+    // Optional (gracefully skipped by their draw-site guards, so a failure
+    // must NOT disable the renderer -- t75): transition, VFX, stretch,
+    // affine, postfx stages.
+    return !bgfx::isValid(m_fallbackProgram)
+        || !bgfx::isValid(m_blendProgram);
+}
+
 // initEmbeddedShaders
 // Picks the correct embedded bytecode (SPIR-V for Vulkan, DXBC for
 // D3D11/D3D12), wraps it in a proper bgfx binary header via
@@ -181,6 +255,11 @@ void BgfxShaderManager::initEmbeddedShaders() {
     const bool isGL = renderer == bgfx::RendererType::OpenGL ||
                       renderer == bgfx::RendererType::OpenGLES;
     const bool isMetal = renderer == bgfx::RendererType::Metal;
+    const bool isGLESv = renderer == bgfx::RendererType::OpenGLES;
+    // t73: Metal + desktop GL embedded arrays are complete shaderc binaries
+    // and are fed to bgfx::createShader untouched; GLES (ESSL text rewrite),
+    // D3D (raw DXBC) and Vulkan (raw SPIR-V) keep the engine wrapper.
+    const bool directFeed = usesDirectFeed(isMetal, isGL, isGLESv);
 
     Bytecode vsSprite, fsTexture, vsFullscreen, fsBlend, fsTransition, fsVfx;
     Bytecode stretchVs, stretchFs, affineVs, affineFs;
@@ -288,21 +367,55 @@ void BgfxShaderManager::initEmbeddedShaders() {
                             const char* name,
                             const ShaderUniformMetadata* fragmentUniform) -> bgfx::ProgramHandle {
         if (!vs.data || !fs.data || vs.size == 0 || fs.size == 0) {
-            printf("[BgfxShaderManager] %s: no embedded data.\n", name);
+            ++m_buildFailures;
+            m_failedProgramNames += std::string(name) + " ";
+            fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %s: no embedded data.\n", name);
+            return BGFX_INVALID_HANDLE;
+        }
+        // t73: on the direct-feed path validate the blob before submission so a
+        // malformed / binary-in-binary embed is caught loudly HERE instead of
+        // reaching a renderer pipeline state with a nil vertex function.
+        if (directFeed
+        &&  (!isDirectFeedBinary(vs.data, vs.size)
+         ||  !isDirectFeedBinary(fs.data, fs.size))) {
+            ++m_buildFailures;
+            m_failedProgramNames += std::string(name) + " ";
+            fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %s: embedded data is not a "
+                            "direct-feedable shader binary (vs feed=%d fs feed=%d). "
+                            "Shader format regression?\n",
+                    name, isDirectFeedBinary(vs.data, vs.size),
+                    isDirectFeedBinary(fs.data, fs.size));
             return BGFX_INVALID_HANDLE;
         }
         const uint16_t vsAttrs[] = { 0x0001, 0x0010 };
-        bgfx::ShaderHandle vsHandle = buildBgfxShader(
-            vs.data, (uint32_t)vs.size, false, 2, vsAttrs);
-        bgfx::ShaderHandle fsHandle = buildBgfxShader(
-            fs.data, (uint32_t)fs.size, true, 0, nullptr, fragmentUniform);
+        bgfx::ShaderHandle vsHandle = BGFX_INVALID_HANDLE;
+        bgfx::ShaderHandle fsHandle = BGFX_INVALID_HANDLE;
+        if (directFeed) {
+            // Complete shaderc binary: pass through unchanged. The static
+            // embedded arrays outlive every frame, so makeRef (no release)
+            // is safe; the trailing attrs/cb bytes are ignored by the parsers.
+            vsHandle = bgfx::createShader(bgfx::makeRef(vs.data, (uint32_t)vs.size));
+            fsHandle = bgfx::createShader(bgfx::makeRef(fs.data, (uint32_t)fs.size));
+        } else {
+            vsHandle = buildBgfxShader(
+                vs.data, (uint32_t)vs.size, false, 2, vsAttrs);
+            fsHandle = buildBgfxShader(
+                fs.data, (uint32_t)fs.size, true, 0, nullptr, fragmentUniform);
+        }
         if (!bgfx::isValid(vsHandle) || !bgfx::isValid(fsHandle)) {
-            printf("[BgfxShaderManager] %s: shader build failed.\n", name);
+            ++m_buildFailures;
+            m_failedProgramNames += std::string(name) + " ";
+            fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %s: shader build failed.\n", name);
             if (bgfx::isValid(vsHandle)) bgfx::destroy(vsHandle);
             if (bgfx::isValid(fsHandle)) bgfx::destroy(fsHandle);
             return BGFX_INVALID_HANDLE;
         }
         bgfx::ProgramHandle prog = bgfx::createProgram(vsHandle, fsHandle, true);
+        if (!bgfx::isValid(prog)) {
+            ++m_buildFailures;
+            m_failedProgramNames += std::string(name) + " ";
+            fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %s: program build failed.\n", name);
+        }
         printf("[BgfxShaderManager] %s program %s.\n", name,
                bgfx::isValid(prog) ? "READY" : "FAILED");
         return prog;
@@ -366,6 +479,21 @@ void BgfxShaderManager::initEmbeddedShaders() {
     if (bgfx::isValid(m_fallbackProgram)) {
         CompositeShaderKey fk;
         CompositeShaderCache::instance().registerProgram(fk, m_fallbackProgram);
+    }
+
+    // t73/t75 degrade contract (b): FAIL LOUD once, keep the frame loop alive.
+    if (coreProgramsBroken()) {
+        fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %d embedded shader build "
+                        "failure(s) - CORE programs broken: rendering disabled "
+                        "(IFH), engine keeps running, no half-broken program "
+                        "will be submitted.\n", m_buildFailures);
+    } else if (m_buildFailures > 0) {
+        fprintf(stderr, "[RENDER][ERROR] [BgfxShaderManager] %d non-core embedded shader "
+                        "build failure(s): %s - affected effects will be skipped, "
+                        "rendering continues.\n", m_buildFailures, m_failedProgramNames.c_str());
+    } else if (directFeed) {
+        printf("[BgfxShaderManager] Embedded shader feed mode: direct "
+               "(%s).\n", bgfx::getRendererName(renderer));
     }
 }
 } // namespace Caesura

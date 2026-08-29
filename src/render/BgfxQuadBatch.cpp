@@ -92,6 +92,15 @@ void BgfxQuadBatch::flushBatch() {
     std::vector<MergeGroup> groups;
     computeMergeGroups(m_state->batchQuads, groups);
 
+    // t75: never submit an invalid program handle -- the fallback program is
+    // the core sprite/quad pipeline, but a failure must not turn this into a
+    // poison submit; skip the batch and let the next frame retry.
+    if (!bgfx::isValid(m_state->shaders->getFallbackProgram())) {
+        m_state->batchQuads.clear();
+        m_state->batching = false;
+        return;
+    }
+
     for (const auto& g : groups) {
         const auto& q = m_state->batchQuads[g.startQuad];
         const uint32_t groupVertCount = g.quadCount * 4;

@@ -10,6 +10,7 @@
 
 #include "doctest.h"
 #include "render/EmbeddedShaders.h"
+#include "render/BgfxShaderManager.h"
 #include "minigame/EmbeddedMiniGameShaders.h"
 #include "render/api/IRenderDevice.h"
 #include "render/SmaSkinner.h"
@@ -192,4 +193,112 @@ TEST_CASE("metal: SMA Skeletal Skinning CPU fallback math") {
     CHECK(std::fabs(out[0].x - 10.f) < kEps);
     // Vertex 1: 50% bone 0 (2+10=12) + 50% bone 1 (2+20=22) -> 17
     CHECK(std::fabs(out[1].x - 17.f) < kEps);
+}
+// =============================================================================
+// 5. t73: embedded-shader feeding contract (Binary-in-Binary regression)
+// =============================================================================
+
+namespace {
+// Reproduces the PRE-t73 loader's buildBgfxShader byte layout applied to a
+// complete shaderc shader binary (binary-in-binary): magic, hashIn, hashOut,
+// uniformCount, codeSize, the whole inner blob, NUL, numAttrs, attrIds (u16
+// pairs), cbSize u16. Layout from git show HEAD:src/render/BgfxShaderManager.cpp.
+std::vector<uint8_t> oldWrapBinary(const uint8_t* blob, size_t blobSize) {
+    std::vector<uint8_t> out;
+    const auto push = [&out](uint8_t b) { out.push_back(b); };
+    const auto u32 = [&push](uint32_t v) {
+        push(uint8_t(v & 0xFF)); push(uint8_t((v >> 8) & 0xFF));
+        push(uint8_t((v >> 16) & 0xFF)); push(uint8_t((v >> 24) & 0xFF));
+    };
+    push('V'); push('S'); push('H'); push(11);
+    u32(0); u32(0);
+    push(0); push(0);                        // uniformCount = 0
+    u32(uint32_t(blobSize));                 // codeSize = inner binary length
+    for (size_t ii = 0; ii < blobSize; ++ii) push(blob[ii]);
+    push(0);                                 // NUL
+    push(2);                                 // numAttrs
+    push(0x01); push(0x00); push(0x10); push(0x00);  // attr ids {1, 16} (u16)
+    push(0); push(0);                        // cbSize
+    return out;
+}
+} // namespace
+
+TEST_CASE("metal: all 10 embedded shaders are direct-feedable shader binaries (t73)") {
+    using BM = BgfxShaderManager;
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_vs_sprite,      kEmbeddedMetal_vs_sprite_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_vs_fullscreen,  kEmbeddedMetal_vs_fullscreen_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_stretch_blt_vs, kEmbeddedMetal_stretch_blt_vs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_affine_blt_vs,  kEmbeddedMetal_affine_blt_vs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_fs_texture,     kEmbeddedMetal_fs_texture_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_fs_blend,       kEmbeddedMetal_fs_blend_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_fs_transition,  kEmbeddedMetal_fs_transition_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_fs_vfx,         kEmbeddedMetal_fs_vfx_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_stretch_blt_fs, kEmbeddedMetal_stretch_blt_fs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedMetal_affine_blt_fs,  kEmbeddedMetal_affine_blt_fs_size));
+
+    // Feeding-mode mapping: Metal + desktop GL feed directly; GLES (ESSL text
+    // rewrite), D3D (raw DXBC) and Vulkan (raw SPIR-V) keep the engine wrap.
+    CHECK(BM::usesDirectFeed(true,  false, false));
+    CHECK(BM::usesDirectFeed(false, true,  false));
+    CHECK_FALSE(BM::usesDirectFeed(false, true,  true));   // GLES
+    CHECK_FALSE(BM::usesDirectFeed(false, false, false));  // D3D / Vulkan
+    CHECK_FALSE(BM::usesDirectFeed(false, false, true));   // GLES-only (no desktop GL)
+    CHECK(BM::usesDirectFeed(true,  true,  true));         // Metal dominates
+
+    // Negative controls: raw source is NOT a binary, nullptr is NOT a binary.
+    CHECK_FALSE(BM::isDirectFeedBinary(nullptr, 64));
+    CHECK_FALSE(BM::isDirectFeedBinary(kEmbeddedMetal_vs_sprite, 0));
+    CHECK_FALSE(BM::isDirectFeedBinary(
+        reinterpret_cast<const uint8_t*>(kEmbeddedMSL_MiniGame_VS),
+        std::strlen(kEmbeddedMSL_MiniGame_VS)));
+}
+
+TEST_CASE("metal: pre-t73 double wrap rejected by direct-feed validator (t71 root)") {
+    // t71 root cause: the loader used to feed a COMPLETE shaderc binary
+    // through buildBgfxShader, producing [outer VSH11][inner VSH11+MSL]:
+    // the renderer then handed the inner binary to the MSL compiler as
+    // source and the pipeline ended up with a nil vertex function. The
+    // validator must reject that nesting so the loader can never do it.
+    const std::vector<uint8_t> nested =
+        oldWrapBinary(kEmbeddedMetal_vs_sprite, kEmbeddedMetal_vs_sprite_size);
+    CHECK_FALSE(BgfxShaderManager::isDirectFeedBinary(nested.data(), nested.size()));
+    const std::vector<uint8_t> nestedFs =
+        oldWrapBinary(kEmbeddedMetal_fs_texture, kEmbeddedMetal_fs_texture_size);
+    CHECK_FALSE(BgfxShaderManager::isDirectFeedBinary(nestedFs.data(), nestedFs.size()));
+    // And the raw arrays stay feedable (what the new loader hands to bgfx).
+    CHECK(BgfxShaderManager::isDirectFeedBinary(
+        kEmbeddedMetal_vs_sprite, kEmbeddedMetal_vs_sprite_size));
+    CHECK(BgfxShaderManager::isDirectFeedBinary(
+        kEmbeddedMetal_fs_texture, kEmbeddedMetal_fs_texture_size));
+}
+// =============================================================================
+// 6. GL: embedded-shader feeding contract (t75 -- GL regression lock)
+// =============================================================================
+
+TEST_CASE("gl: 9 of 10 GL embedded shaders direct-feedable; fs_vfx old-layout (t75)") {
+    using BM = BgfxShaderManager;
+
+    // Desktop GL embedded arrays are complete shaderc BGFX binaries. Nine of
+    // them carry the current record layout and are direct-feedable; fs_vfx is
+    // legacy-layout data (v11 header but uniform records WITHOUT the
+    // texInfo/texFormat fields added in bgfx binary version >= 8/>=10, so the
+    // codeSize field is read at a 4-byte-per-record offset error). The
+    // validator must keep rejecting it; array regeneration is backlog work
+    // (build-time shaderc pipeline, t71 plan (c)) -- this test locks the
+    // CURRENT state honestly instead of pretending it is fixed.
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_vs_sprite,        kEmbeddedGL_vs_sprite_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_vs_fullscreen,    kEmbeddedGL_vs_fullscreen_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_stretch_blt_vs,   kEmbeddedGL_stretch_blt_vs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_affine_blt_vs,    kEmbeddedGL_affine_blt_vs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_texture,       kEmbeddedGL_fs_texture_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_blend,         kEmbeddedGL_fs_blend_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_transition,    kEmbeddedGL_fs_transition_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_stretch_blt_fs,   kEmbeddedGL_stretch_blt_fs_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_affine_blt_fs,    kEmbeddedGL_affine_blt_fs_size));
+    // fs_vfx: legacy layout -- must be rejected (locked as-is, see comment).
+    CHECK_FALSE(BM::isDirectFeedBinary(kEmbeddedGL_fs_vfx,     kEmbeddedGL_fs_vfx_size));
+
+    // t75 feed-mode semantics: desktop GL feeds directly, GLES wraps.
+    CHECK(BM::usesDirectFeed(false, true,  false));
+    CHECK_FALSE(BM::usesDirectFeed(false, true,  true));
 }

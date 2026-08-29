@@ -15,6 +15,20 @@ public:
 
     void initEmbeddedShaders();
 
+    // -- t73: embedded-shader feeding contract ---------------------------------
+    // Metal and desktop-GL embedded arrays are COMPLETE shaderc BGFX binaries
+    // (VSH11/FSH11 fourcc at offset 0 with '#include'/'#version' source text in
+    // the payload). They must go DIRECTLY to bgfx::createShader; re-wrapping
+    // them inside buildBgfxShader nests a binary inside a binary and hands
+    // "VSH<ver>..." to the MSL/GLSL compiler (t71 SIGABRT root cause).
+    static bool usesDirectFeed(bool isMetal, bool isGL, bool isGLES);
+    // Pure format probe (no GPU): true iff [data,size) is a text-coded BGFX
+    // shader binary a renderer can consume directly (binary-in-binary inputs
+    // and truncated buffers return false).
+    static bool isDirectFeedBinary(const uint8_t* data, size_t size);
+    int  shaderBuildFailures() const { return m_buildFailures; }
+    bool coreProgramsBroken() const;
+
     bgfx::ProgramHandle getFallbackProgram()    const { return m_fallbackProgram; }
     bgfx::ProgramHandle getBlendProgram()       const { return m_blendProgram; }
     bgfx::ProgramHandle getTransitionProgram()  const { return m_transitionProgram; }
@@ -75,6 +89,8 @@ private:
     bgfx::ProgramHandle m_postfxBlur       = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_postfxBloom      = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_postfxParams   = BGFX_INVALID_HANDLE;
+    int m_buildFailures = 0;  // t73: loud-degrade tally (see coreProgramsBroken)
+    std::string m_failedProgramNames;  // t73: non-core failure tally for the one-shot ERROR
     bool m_embeddedInit = false;  // per-instance initEmbeddedShaders guard
 };
 
