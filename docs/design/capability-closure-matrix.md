@@ -1,9 +1,9 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-08-29T10:52:32Z
+> 生成时间（输入源最新 mtime）：2026-08-29T11:17:18Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：65f6b8d37ef164cf
+> 源指纹（输入内容 sha256 前 16 hex）：8b3dffbc2883288a
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -36,10 +36,10 @@
 | add | Y | Y | n | 50 | ? | ? | ? | PARTIAL | scripts/kag/commands/math.lua:121 |
 | ai_dialog | Y | Y | Y | 7 | ? | ? | ? | CLOSED | scripts/kag/commands/system.lua:714 |
 | assert | Y | Y | n | 7 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:506 |
-| auto | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:1111 |
+| auto | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1111 |
 | bg | Y | Y | Y | 21 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:120 |
-| bgm | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag.lua:490 |
-| blur | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag/commands/transition.lua:292 |
+| bgm | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:490 |
+| blur | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/transition.lua:292 |
 | br | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag.lua:212 |
 | button | Y | Y | n | 38 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1340 |
 | call | n | Y | n | 75 | ? | ? | ? | EXTRA | scripts/kag.lua:512 |
@@ -77,14 +77,14 @@
 | fadeout | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:371 |
 | fadevol | Y | Y | Y | - | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:104 |
 | fg | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:156 |
-| flash | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:368 |
+| flash | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/vfx.lua:368 |
 | flush_cache | n | Y | Y | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:254 |
 | font | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:1067 |
 | g | n | Y | n | 2 | ? | ? | ? | EXTRA | scripts/kag.lua:363 |
-| gallery | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:333 |
+| gallery | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:333 |
 | get_texture | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:226 |
 | has_pending_transition | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:308 |
-| history | Y | Y | n | 9 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:231 |
+| history | Y | Y | n | 9 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:231 |
 | hr | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:217 |
 | i18n | Y | Y | n | 60 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:691 |
 | image | Y | Y | Y | 1 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:217 |
@@ -93,7 +93,7 @@
 | is_loaded | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:235 |
 | is_pending | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:244 |
 | jump | n | Y | n | 178 | ? | ? | ? | EXTRA | scripts/kag.lua:501 |
-| l | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:906 |
+| l | Y | Y | n | 4 | VERIFIED（位置级） ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:906 |
 | layfade | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:335 |
 | layopt | Y | Y | Y | 1 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:311 |
 | layout | Y | Y | n | 26 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/layout.lua:169 |
@@ -105,47 +105,47 @@
 | live2d_lip_sync | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/character.lua:200 |
 | live2d_motion | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/character.lua:177 |
 | load | Y | Y | Y | 69 | ? | ? | ? | CLOSED | scripts/kag/commands/save.lua:298 |
-| loadplace | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/commands/save.lua:554 |
+| loadplace | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/save.lua:554 |
 | macro | n | Y | n | 56 | ? | ? | ? | EXTRA | scripts/kag.lua:241 |
 | mod | Y | Y | n | 13 | ? | ? | ? | PARTIAL | scripts/kag/commands/math.lua:125 |
 | move | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:387 |
 | moveto | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:288 |
 | mul | Y | Y | n | 11 | ? | ? | ? | PARTIAL | scripts/kag/commands/math.lua:123 |
 | music | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:343 |
-| nameplate | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:418 |
+| nameplate | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:418 |
 | notify | Y | Y | n | 38 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:648 |
 | nvl | Y | Y | Y | 18 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:976 |
 | p | Y | Y | Y | 286 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:947 |
 | palette | Y | Y | n | 26 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:451 |
 | particle_weather | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:589 |
 | particles | Y | Y | Y | - | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:384 |
-| play | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag.lua:467 |
+| play | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:467 |
 | playbgm | Y | Y | Y | 16 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:109 |
 | playbgmstop | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:148 |
 | playse | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:210 |
-| playstop | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag.lua:427 |
+| playstop | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:427 |
 | playvoice | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:240 |
 | position | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:297 |
 | postprocess | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:507 |
 | postprocess_off | Y | Y | Y | 2 | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:519 |
-| preload | Y | Y | n | 11 | ? | ? | ? | PARTIAL | scripts/kag/commands/resource.lua:154 |
+| preload | Y | Y | n | 11 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/resource.lua:154 |
 | preload_transition | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:280 |
 | promote_transition_slot | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:294 |
-| pt | Y | Y | n | 11 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:1152 |
+| pt | Y | Y | n | 11 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1152 |
 | push_backlog | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:333 |
 | quake | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:421 |
 | r | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag.lua:288 |
 | random | Y | Y | n | 14 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:528 |
 | relocalize_backlog | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:1513 |
 | relocalize_page | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:1571 |
-| replay | Y | Y | n | 5 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:579 |
+| replay | Y | Y | n | 5 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:579 |
 | reset | Y | Y | Y | 1 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:1135 |
 | return_to_caller | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag.lua:528 |
 | rollback | Y | Y | n | 12 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:389 |
-| ruby | Y | Y | n | 7 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:1034 |
-| s | Y | Y | n | 7 | ? | ? | ? | PARTIAL | scripts/kag.lua:303 |
+| ruby | Y | Y | n | 7 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1034 |
+| s | Y | Y | n | 7 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:303 |
 | save | Y | Y | Y | 75 | ? | ? | ? | CLOSED | scripts/kag/commands/save.lua:243 |
-| saveload | Y | Y | n | 9 | ? | ? | ? | PARTIAL | scripts/kag/commands/save.lua:495 |
+| saveload | Y | Y | n | 9 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/save.lua:495 |
 | saveplace | Y | Y | n | 7 | ? | ? | ? | PARTIAL | scripts/kag/commands/save.lua:550 |
 | scroll | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:215 |
 | se | n | Y | n | 6 | ? | ? | ? | EXTRA | scripts/kag.lua:443 |
@@ -160,7 +160,7 @@
 | skip | Y | Y | n | 18 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1081 |
 | sma_anim | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:723 |
 | sma_ik | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:733 |
-| sma_play | Y | Y | n | 6 | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:712 |
+| sma_play | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:712 |
 | sma_stop | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:747 |
 | sma_variant | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:741 |
 | sprite_fade | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:466 |
@@ -199,6 +199,15 @@
 
 ## 人工覆盖（⚠）
 
+- auto — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：ctx.auto_mode 状态写+明确消费点（kag_runner 自动前进）
+  - evidence：scripts/kag/commands/text.lua:1111-1116（ctx.auto_mode）→ scripts/kag_runner.lua:511（auto 消费）
+- bgm — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：别名链 KAG.bgm=KAG.play→play 的 backend 链
+  - evidence：scripts/kag.lua:490（KAG.bgm=KAG.play）→ play（见 play 条目）→ backend.audio_*
+- blur — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：模块委托链 VFX.blur→rtt.alloc GPU blur（headless 无 GPU 降级注记）
+  - evidence：scripts/kag/commands/transition.lua:292 → scripts/vfx.lua:183 VFX.blur（rtt.alloc GPU blur）
 - button — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：组合链（staging→render 分离系设计，架构注 :1297-1310）——button 注册本地化选项，endbutton cond 过滤+_renderChoices 绘制+blocking+命中跳转，间接真实触达 backend.render_text。
   - evidence：scripts/kag/commands/text.lua:1340-1372（注册 ctx._choiceButtons）→ :1374+ endbutton（_renderChoices 绘制+阻塞+跳转）→ TextScene draws → backend.render_text
@@ -214,27 +223,72 @@
 - eval — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：双轨——主轨 scheduler 内联（flow-inline，表达式求值入 ctx.tf.eval_result 可观察）；handler 为 strict 兜底（sandbox.execute + rawset(ctx.tf,...)——t110 判据边缘形态，人工判真伪）。
   - evidence：scripts/scheduler.lua:4/30/97-109（inline 主轨，"eval"=true）；scripts/kag/commands/system.lua:179-224（strict 兜底，rawset(ctx.tf,...)）
+- flash — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：模块表委托 VFX.flash→backend.create_solid_texture+__flash 层，阻塞全屏闪白
+  - evidence：scripts/kag/commands/vfx.lua:368-370 → scripts/vfx.lua:266-320 VFX.flash（backend.create_solid_texture :314 + __flash 层 :286-292, z=9998）
+- gallery — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：模块委托链 gallery.lua show→backend.set_input_focus/get_resolution+layers.ensure 覆盖层，UI 全链路通过
+  - evidence：scripts/kag/commands/system.lua:333 → scripts/gallery.lua:97 show → :133 backend.set_input_focus(GAME) / :135 backend.get_resolution / :143 layers.ensure(_gallery_overlay,95)
+- history — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：HistoryUI.show 模块调用→backlog 覆盖层（层系统+backend 渲染），真实可观察
+  - evidence：scripts/kag/commands/system.lua:231-241 → scripts/history_ui.lua :19 backend.create_solid_texture / :27-31 layers.get / :86-87 layers.ensure(_history_bg/_history_title)+注释 :9 自证 backend.render_text；jump→ctx._pendingJump
 - i18n — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 PARTIAL 复核批人工核真：handler 经 i18n.set_language + kt.relocalize_page 全页重放，间接但真实触达渲染效果面（TextScene draws→backend.render_text），画面即时换语言可观察。
   - evidence：scripts/kag/commands/system.lua:685-712（contract+schema；i18n.set_language + kt.relocalize_page）；scripts/kag/commands/text.lua relocalize_page（全页重放）→ scripts/kag/text_scene.lua draws → 渲染循环 backend.render_text
+- l — Observable=VERIFIED（位置级） · PlatformTested=? · Packaged=?
+  - reason：t117 复核：行断语义=cursor 状态（textCursorY/X + text_scene cursor + update_text_state(l)）→渲染循环消费；位置级与 letter_spacing 同类（像素级待 M4）
+  - evidence：scripts/kag/commands/text.lua:906（ctx.textCursorY/X + TextScene.get_state().cursor_x/y + update_text_state(l)）→ scripts/kag/text_scene.lua:42-43/65-66（渲染循环 cursor 消费）
 - layout — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：handler 调用同文件工具函数 apply_container（:126-137 layers.move_layer 真实移动图层）——扫描器漏检形态（handler 体外本地函数触达），人工判真伪 VERIFIED。
   - evidence：scripts/kag/commands/layout.lua:169-199（handler）→ :126-137 apply_container（layers.move_layer）+ :118-123 recompute（math2.measure 槽位）
 - layout_slot — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：同链——槽位注册→recompute+apply_container→layers.move_layer，真实图层重排。
   - evidence：scripts/kag/commands/layout.lua:204-238 → :126-137 apply_container（layers.move_layer）
+- loadplace — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：状态-流链——ctx._pendingJump+stop_flag→runner 跳转路径（bookmark 恢复可观察；test_flow_edge_call.lua:363-381 有覆盖）
+  - evidence：scripts/kag/commands/save.lua:554-556 → scripts/system.lua:334-345 loadplace（ctx._pendingJump={scene,index}+ctx.stop_flag=true）→ runner 跳转
+- nameplate — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：同文件私有工具函数 _renderNameplate 内 layers./backend. 直呼——_ 前缀私有函数调用图盲区（v4 B 类）
+  - evidence：scripts/kag/commands/text.lua:418（handler）→ :431 _renderNameplate（layers.ensure(_nameplate,3)+backend.create_solid_texture+backend.render_text+layers.mark_dirty）
 - notify — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：toast.show 模块表调用，toast 模块内 backend.render_text + create_solid_texture + _toast_bg layer——间接真实触达（角标 toast 可观察）。
   - evidence：scripts/kag/commands/system.lua:648-677 → toast.show → scripts/toast.lua:41 backend.render_text + :14 create_solid_texture + :36 _toast_bg layer
+- play — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：模块委托链 kag.commands.audio playbgm/playse/playvoice→backend.audio_*
+  - evidence：scripts/kag.lua:467-500 play（路由到 audio 模块）→ scripts/kag/commands/audio.lua playbgm:109/playse/playvoice → backend.audio_play
+- playstop — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：模块委托链 audio.stopbgm→backend
+  - evidence：scripts/kag.lua:427-432 playstop（→ audio.stopbgm）→ scripts/kag/commands/audio.lua stopbgm → backend.audio_stop
+- preload — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：同文件工具链——load_texture/load_audio 内 backend 直呼（真实资源预加载+占位符），扫描器漏检=同文件工具函数（局限8）
+  - evidence：scripts/kag/commands/resource.lua:154-217（handler）→ :78-107 load_texture（backend.load_texture :97 / backend.load_texture_async :85）+ :113-131 load_audio（backend.audio_play/audio_stop :120/123）+ scene→flow.load_scene :201
+- pt — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：ctx.text_speed 状态写+注释自证消费点（kag_runner 每帧读取推进 reveal），textspeed 同款模式
+  - evidence：scripts/kag/commands/text.lua:1152-1154（ctx.text_speed=params.speed）+ :1156-1170（注释自证 kag_runner.lua 消费）
+- replay — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：模块委托链 replay.load→state.mode=playback→kag_runner replay.tick 回放推进（可观察）
+  - evidence：scripts/kag/commands/system.lua:579 → scripts/replay.lua:140 load（mode=playback）→ scripts/kag_runner.lua:441/443 replay.tick(delta_ms, click_cb)
 - rollback — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：模块链——kag_runner.rollback() token 级快照弹出+重跑（下一次渲染反映，可观察倒带；blocking=true 契约）。
   - evidence：scripts/kag/commands/system.lua:389-397 → scripts/kag_runner.rollback()（快照恢复+重跑）
+- ruby — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：TextScene.add_ruby→draws→render 循环 backend.render_ruby，注音标注可观察
+  - evidence：scripts/kag/commands/text.lua:1034-1059 → scripts/kag/text_scene.lua:179-214 add_ruby + :250-253 render_backend.render_ruby
+- s — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：别名链=wait 实现（KAG3 s 字符快捷等待默认 250ms），delay 同款
+  - evidence：scripts/kag.lua:303-308（require kag.commands.system.wait, ms 默认 250）→ scripts/kag/commands/system.lua:50-83 wait
+- saveload — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t116 复核：saveload_menu.show UI 覆盖层→结果 save/load 真实读写；headless pcall 降级注记
+  - evidence：scripts/kag/commands/save.lua:495-521（:498-511 headless 降级；:512 SaveLoad.show；:515-517 SaveCommands.save/load）
 - select — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：语法糖组合——select no-op 开块（契约 blocking=false 设计如此），sel=button、endselect=endbutton 别名赋值，选择块完整语义=button/endbutton 链。
   - evidence：scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）
 - skip — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：ctx.skip_mode 状态写 + kag_runner 明确消费点（auto-advance/seen-skip）——状态写+消费点模式（textspeed 同款）。
   - evidence：scripts/kag/commands/text.lua:1081-1097（ctx.skip_mode 切换，seen off-toggle 审计修复注记）→ scripts/kag_runner.lua:467/482-483（消费）
+- sma_play — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t117 复核：绑定接口链 sma.spawn→sma.render binding().draw_mesh（GPU 网格渲染）；扫描器盲区 D 类（binding. 非 backend./layers. token）
+  - evidence：scripts/kag/sma.lua:712 sma_play → :392 sma.spawn（ctx.sma_actors 状态）→ :540-556 sma.render binding().draw_mesh(handle,view,texId,...)
 - textspeed — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：apply_text_cps 写 ctx.text_speed（注释自证 real read point kag_runner），kag_runner.update 揭示速率消费——状态写+明确消费点，字符揭示速度变化可观察。
   - evidence：scripts/kag/commands/text.lua:1214-1216（handler）→ :1173-1198 apply_text_cps（ctx.text_speed=floor(1000/cps)）→ scripts/kag_runner.lua update()（揭示速率消费，reference :446-455）

@@ -1,37 +1,29 @@
 {
   "_comment": "人工证据层（t103 采纳建议）：本文件由人工维护，capability_closure.py 读取合并。commands 键必须落在扫描器已知命令名集合内（未知键被响亮拒绝，exit 非 0）；out_of_scope 数组渲染为矩阵「人工判级（范围外能力）」区段。",
   "commands": {
-    "typewriter": {
+    "auto": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。",
-      "evidence": "scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）",
-      "source": "t101 task output"
+      "reason": "t116 复核：ctx.auto_mode 状态写+明确消费点（kag_runner 自动前进）",
+      "evidence": "scripts/kag/commands/text.lua:1111-1116（ctx.auto_mode）→ scripts/kag_runner.lua:511（auto 消费）",
+      "source": "t116 task output"
     },
-    "i18n": {
+    "bgm": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t110 PARTIAL 复核批人工核真：handler 经 i18n.set_language + kt.relocalize_page 全页重放，间接但真实触达渲染效果面（TextScene draws→backend.render_text），画面即时换语言可观察。",
-      "evidence": "scripts/kag/commands/system.lua:685-712（contract+schema；i18n.set_language + kt.relocalize_page）；scripts/kag/commands/text.lua relocalize_page（全页重放）→ scripts/kag/text_scene.lua draws → 渲染循环 backend.render_text",
-      "source": "t110 task output"
+      "reason": "t117 复核：别名链 KAG.bgm=KAG.play→play 的 backend 链",
+      "evidence": "scripts/kag.lua:490（KAG.bgm=KAG.play）→ play（见 play 条目）→ backend.audio_*",
+      "source": "t117 task output"
     },
-    "eval": {
+    "blur": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t110 复核：双轨——主轨 scheduler 内联（flow-inline，表达式求值入 ctx.tf.eval_result 可观察）；handler 为 strict 兜底（sandbox.execute + rawset(ctx.tf,...)——t110 判据边缘形态，人工判真伪）。",
-      "evidence": "scripts/scheduler.lua:4/30/97-109（inline 主轨，\"eval\"=true）；scripts/kag/commands/system.lua:179-224（strict 兜底，rawset(ctx.tf,...)）",
-      "source": "t110 task output"
-    },
-    "textspeed": {
-      "observable": "VERIFIED",
-      "platform_tested": "?",
-      "packaged": "?",
-      "reason": "t110 复核：apply_text_cps 写 ctx.text_speed（注释自证 real read point kag_runner），kag_runner.update 揭示速率消费——状态写+明确消费点，字符揭示速度变化可观察。",
-      "evidence": "scripts/kag/commands/text.lua:1214-1216（handler）→ :1173-1198 apply_text_cps（ctx.text_speed=floor(1000/cps)）→ scripts/kag_runner.lua update()（揭示速率消费，reference :446-455）",
-      "source": "t110 task output"
+      "reason": "t117 复核：模块委托链 VFX.blur→rtt.alloc GPU blur（headless 无 GPU 降级注记）",
+      "evidence": "scripts/kag/commands/transition.lua:292 → scripts/vfx.lua:183 VFX.blur（rtt.alloc GPU blur）",
+      "source": "t117 task output"
     },
     "button": {
       "observable": "VERIFIED",
@@ -39,14 +31,6 @@
       "packaged": "?",
       "reason": "t110 复核：组合链（staging→render 分离系设计，架构注 :1297-1310）——button 注册本地化选项，endbutton cond 过滤+_renderChoices 绘制+blocking+命中跳转，间接真实触达 backend.render_text。",
       "evidence": "scripts/kag/commands/text.lua:1340-1372（注册 ctx._choiceButtons）→ :1374+ endbutton（_renderChoices 绘制+阻塞+跳转）→ TextScene draws → backend.render_text",
-      "source": "t110 task output"
-    },
-    "notify": {
-      "observable": "VERIFIED",
-      "platform_tested": "?",
-      "packaged": "?",
-      "reason": "t110 复核：toast.show 模块表调用，toast 模块内 backend.render_text + create_solid_texture + _toast_bg layer——间接真实触达（角标 toast 可观察）。",
-      "evidence": "scripts/kag/commands/system.lua:648-677 → toast.show → scripts/toast.lua:41 backend.render_text + :14 create_solid_texture + :36 _toast_bg layer",
       "source": "t110 task output"
     },
     "delay": {
@@ -57,13 +41,70 @@
       "evidence": "scripts/kag.lua:337-347（require .wait + :343-345 裸位置防御）→ scripts/kag/commands/system.lua:50-83 wait（Operation+yield 帧流）",
       "source": "t110 task output"
     },
-    "select": {
+    "emb": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t110 复核：语法糖组合——select no-op 开块（契约 blocking=false 设计如此），sel=button、endselect=endbutton 别名赋值，选择块完整语义=button/endbutton 链。",
-      "evidence": "scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）",
+      "reason": "t113 复核：sandbox.execute/load 执行嵌段 + rawset(ctx.tf,emb_result)——ctx.tf 触达（t110 判据边缘形态，人工判真伪）；嵌段可经 env 触达任意能力。",
+      "evidence": "scripts/kag/commands/system.lua:92-170（sandbox 执行 + rawset(ctx.tf,...)）",
+      "source": "t113 task output"
+    },
+    "endselect": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t113 复核：别名=endbutton（同一实现），选择块完整链（t110 已核）。",
+      "evidence": "scripts/kag/commands/text.lua:1490-1492（return TextCommands.endbutton）→ endbutton/_renderChoices → TextScene → backend.render_text",
+      "source": "t113 task output"
+    },
+    "eval": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t110 复核：双轨——主轨 scheduler 内联（flow-inline，表达式求值入 ctx.tf.eval_result 可观察）；handler 为 strict 兜底（sandbox.execute + rawset(ctx.tf,...)——t110 判据边缘形态，人工判真伪）。",
+      "evidence": "scripts/scheduler.lua:4/30/97-109（inline 主轨，\"eval\"=true）；scripts/kag/commands/system.lua:179-224（strict 兜底，rawset(ctx.tf,...)）",
       "source": "t110 task output"
+    },
+    "flash": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：模块表委托 VFX.flash→backend.create_solid_texture+__flash 层，阻塞全屏闪白",
+      "evidence": "scripts/kag/commands/vfx.lua:368-370 → scripts/vfx.lua:266-320 VFX.flash（backend.create_solid_texture :314 + __flash 层 :286-292, z=9998）",
+      "source": "t116 task output"
+    },
+    "gallery": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：模块委托链 gallery.lua show→backend.set_input_focus/get_resolution+layers.ensure 覆盖层，UI 全链路通过",
+      "evidence": "scripts/kag/commands/system.lua:333 → scripts/gallery.lua:97 show → :133 backend.set_input_focus(GAME) / :135 backend.get_resolution / :143 layers.ensure(_gallery_overlay,95)",
+      "source": "t117 task output"
+    },
+    "history": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：HistoryUI.show 模块调用→backlog 覆盖层（层系统+backend 渲染），真实可观察",
+      "evidence": "scripts/kag/commands/system.lua:231-241 → scripts/history_ui.lua :19 backend.create_solid_texture / :27-31 layers.get / :86-87 layers.ensure(_history_bg/_history_title)+注释 :9 自证 backend.render_text；jump→ctx._pendingJump",
+      "source": "t116 task output"
+    },
+    "i18n": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t110 PARTIAL 复核批人工核真：handler 经 i18n.set_language + kt.relocalize_page 全页重放，间接但真实触达渲染效果面（TextScene draws→backend.render_text），画面即时换语言可观察。",
+      "evidence": "scripts/kag/commands/system.lua:685-712（contract+schema；i18n.set_language + kt.relocalize_page）；scripts/kag/commands/text.lua relocalize_page（全页重放）→ scripts/kag/text_scene.lua draws → 渲染循环 backend.render_text",
+      "source": "t110 task output"
+    },
+    "l": {
+      "observable": "VERIFIED（位置级）",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：行断语义=cursor 状态（textCursorY/X + text_scene cursor + update_text_state(l)）→渲染循环消费；位置级与 letter_spacing 同类（像素级待 M4）",
+      "evidence": "scripts/kag/commands/text.lua:906（ctx.textCursorY/X + TextScene.get_state().cursor_x/y + update_text_state(l)）→ scripts/kag/text_scene.lua:42-43/65-66（渲染循环 cursor 消费）",
+      "source": "t117 task output",
+      "note": "位置级：光标/行断状态语义（同 letter_spacing 位置级前列）；像素级视觉待 M4 GPU 冒烟确认。"
     },
     "layout": {
       "observable": "VERIFIED",
@@ -81,13 +122,109 @@
       "evidence": "scripts/kag/commands/layout.lua:204-238 → :126-137 apply_container（layers.move_layer）",
       "source": "t113 task output"
     },
-    "endselect": {
+    "loadplace": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t113 复核：别名=endbutton（同一实现），选择块完整链（t110 已核）。",
-      "evidence": "scripts/kag/commands/text.lua:1490-1492（return TextCommands.endbutton）→ endbutton/_renderChoices → TextScene → backend.render_text",
+      "reason": "t117 复核：状态-流链——ctx._pendingJump+stop_flag→runner 跳转路径（bookmark 恢复可观察；test_flow_edge_call.lua:363-381 有覆盖）",
+      "evidence": "scripts/kag/commands/save.lua:554-556 → scripts/system.lua:334-345 loadplace（ctx._pendingJump={scene,index}+ctx.stop_flag=true）→ runner 跳转",
+      "source": "t117 task output"
+    },
+    "nameplate": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：同文件私有工具函数 _renderNameplate 内 layers./backend. 直呼——_ 前缀私有函数调用图盲区（v4 B 类）",
+      "evidence": "scripts/kag/commands/text.lua:418（handler）→ :431 _renderNameplate（layers.ensure(_nameplate,3)+backend.create_solid_texture+backend.render_text+layers.mark_dirty）",
+      "source": "t117 task output"
+    },
+    "notify": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t110 复核：toast.show 模块表调用，toast 模块内 backend.render_text + create_solid_texture + _toast_bg layer——间接真实触达（角标 toast 可观察）。",
+      "evidence": "scripts/kag/commands/system.lua:648-677 → toast.show → scripts/toast.lua:41 backend.render_text + :14 create_solid_texture + :36 _toast_bg layer",
+      "source": "t110 task output"
+    },
+    "play": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：模块委托链 kag.commands.audio playbgm/playse/playvoice→backend.audio_*",
+      "evidence": "scripts/kag.lua:467-500 play（路由到 audio 模块）→ scripts/kag/commands/audio.lua playbgm:109/playse/playvoice → backend.audio_play",
+      "source": "t117 task output"
+    },
+    "playstop": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：模块委托链 audio.stopbgm→backend",
+      "evidence": "scripts/kag.lua:427-432 playstop（→ audio.stopbgm）→ scripts/kag/commands/audio.lua stopbgm → backend.audio_stop",
+      "source": "t117 task output"
+    },
+    "preload": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：同文件工具链——load_texture/load_audio 内 backend 直呼（真实资源预加载+占位符），扫描器漏检=同文件工具函数（局限8）",
+      "evidence": "scripts/kag/commands/resource.lua:154-217（handler）→ :78-107 load_texture（backend.load_texture :97 / backend.load_texture_async :85）+ :113-131 load_audio（backend.audio_play/audio_stop :120/123）+ scene→flow.load_scene :201",
+      "source": "t116 task output"
+    },
+    "pt": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：ctx.text_speed 状态写+注释自证消费点（kag_runner 每帧读取推进 reveal），textspeed 同款模式",
+      "evidence": "scripts/kag/commands/text.lua:1152-1154（ctx.text_speed=params.speed）+ :1156-1170（注释自证 kag_runner.lua 消费）",
+      "source": "t116 task output"
+    },
+    "replay": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t117 复核：模块委托链 replay.load→state.mode=playback→kag_runner replay.tick 回放推进（可观察）",
+      "evidence": "scripts/kag/commands/system.lua:579 → scripts/replay.lua:140 load（mode=playback）→ scripts/kag_runner.lua:441/443 replay.tick(delta_ms, click_cb)",
+      "source": "t117 task output"
+    },
+    "rollback": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t113 复核：模块链——kag_runner.rollback() token 级快照弹出+重跑（下一次渲染反映，可观察倒带；blocking=true 契约）。",
+      "evidence": "scripts/kag/commands/system.lua:389-397 → scripts/kag_runner.rollback()（快照恢复+重跑）",
       "source": "t113 task output"
+    },
+    "ruby": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：TextScene.add_ruby→draws→render 循环 backend.render_ruby，注音标注可观察",
+      "evidence": "scripts/kag/commands/text.lua:1034-1059 → scripts/kag/text_scene.lua:179-214 add_ruby + :250-253 render_backend.render_ruby",
+      "source": "t116 task output"
+    },
+    "s": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：别名链=wait 实现（KAG3 s 字符快捷等待默认 250ms），delay 同款",
+      "evidence": "scripts/kag.lua:303-308（require kag.commands.system.wait, ms 默认 250）→ scripts/kag/commands/system.lua:50-83 wait",
+      "source": "t116 task output"
+    },
+    "saveload": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t116 复核：saveload_menu.show UI 覆盖层→结果 save/load 真实读写；headless pcall 降级注记",
+      "evidence": "scripts/kag/commands/save.lua:495-521（:498-511 headless 降级；:512 SaveLoad.show；:515-517 SaveCommands.save/load）",
+      "source": "t116 task output"
+    },
+    "select": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t110 复核：语法糖组合——select no-op 开块（契约 blocking=false 设计如此），sel=button、endselect=endbutton 别名赋值，选择块完整语义=button/endbutton 链。",
+      "evidence": "scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）",
+      "source": "t110 task output"
     },
     "skip": {
       "observable": "VERIFIED",
@@ -97,13 +234,21 @@
       "evidence": "scripts/kag/commands/text.lua:1081-1097（ctx.skip_mode 切换，seen off-toggle 审计修复注记）→ scripts/kag_runner.lua:467/482-483（消费）",
       "source": "t113 task output"
     },
-    "emb": {
+    "sma_play": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
-      "reason": "t113 复核：sandbox.execute/load 执行嵌段 + rawset(ctx.tf,emb_result)——ctx.tf 触达（t110 判据边缘形态，人工判真伪）；嵌段可经 env 触达任意能力。",
-      "evidence": "scripts/kag/commands/system.lua:92-170（sandbox 执行 + rawset(ctx.tf,...)）",
-      "source": "t113 task output"
+      "reason": "t117 复核：绑定接口链 sma.spawn→sma.render binding().draw_mesh（GPU 网格渲染）；扫描器盲区 D 类（binding. 非 backend./layers. token）",
+      "evidence": "scripts/kag/sma.lua:712 sma_play → :392 sma.spawn（ctx.sma_actors 状态）→ :540-556 sma.render binding().draw_mesh(handle,view,texId,...)",
+      "source": "t117 task output"
+    },
+    "textspeed": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t110 复核：apply_text_cps 写 ctx.text_speed（注释自证 real read point kag_runner），kag_runner.update 揭示速率消费——状态写+明确消费点，字符揭示速度变化可观察。",
+      "evidence": "scripts/kag/commands/text.lua:1214-1216（handler）→ :1173-1198 apply_text_cps（ctx.text_speed=floor(1000/cps)）→ scripts/kag_runner.lua update()（揭示速率消费，reference :446-455）",
+      "source": "t110 task output"
     },
     "tween": {
       "observable": "VERIFIED",
@@ -113,20 +258,20 @@
       "evidence": "scripts/kag/commands/tween.lua:201-254（handler）→ :58-62 resolve_layer（layers.get/find）+ :73-83 step_tween/apply_step（layers.move_layer/set_layer_opacity/mark_dirty）+ :165-186 update 驱动",
       "source": "t113 task output"
     },
+    "typewriter": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。",
+      "evidence": "scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）",
+      "source": "t101 task output"
+    },
     "vibrate": {
       "observable": "VERIFIED",
       "platform_tested": "?",
       "packaged": "?",
       "reason": "t113 复核：委托链——trans.vib（transition.lua:455-476 layers.get_layer(message)+mark_dirty 消息层抖动）+ blocking 300ms。",
       "evidence": "scripts/kag/commands/vfx.lua:495-500 → kag.commands.transition trans.vib（transition.lua:455-476）",
-      "source": "t113 task output"
-    },
-    "rollback": {
-      "observable": "VERIFIED",
-      "platform_tested": "?",
-      "packaged": "?",
-      "reason": "t113 复核：模块链——kag_runner.rollback() token 级快照弹出+重跑（下一次渲染反映，可观察倒带；blocking=true 契约）。",
-      "evidence": "scripts/kag/commands/system.lua:389-397 → scripts/kag_runner.rollback()（快照恢复+重跑）",
       "source": "t113 task output"
     }
   },
