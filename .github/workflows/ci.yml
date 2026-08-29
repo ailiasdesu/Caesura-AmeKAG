@@ -254,7 +254,7 @@ jobs:
 
       - name: Bundled layout boot smoke (xvfb; A3/R6 contract)
         run: |
-          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          sudo apt-get install -y xvfb libgl1 libegl1 libglx-mesa0 libgl1-mesa-dri
           xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG first_vn
           xvfb-run -a -s "-screen 0 1280x720x24" bash scripts/verify_bundle_boot.sh build/CaesuraAmeKAG demo
 
@@ -378,7 +378,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget python3-yaml xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          sudo apt-get install -y cmake build-essential lua5.4 libfreetype-dev libzstd-dev libssl-dev libx11-dev libxrandr-dev libxext-dev libxfixes-dev libxi-dev libxcursor-dev libxinerama-dev libpulse-dev libasound2-dev libwayland-dev libdrm-dev libgbm-dev libibus-1.0-dev libudev-dev pkg-config wget python3-yaml xvfb libgl1 libegl1 libglx-mesa0 libgl1-mesa-dri
 
       - name: Configure ALSA null device (headless audio)
         run: |
