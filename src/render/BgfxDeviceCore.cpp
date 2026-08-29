@@ -12,7 +12,10 @@ static void* s_overrideGLContext = nullptr;  // set via setOverrideGLContext
 
 namespace Caesura {
 
-static bgfx::RendererType::Enum s_preferredBackend = bgfx::RendererType::Direct3D11;
+// t92: per-platform default (see BgfxDeviceCore::platformDefaultBackend).
+// --backend explicit override still wins via setPreferredBackend; bgfx's
+// auto-select retry (RendererType::Count) only covers init failure.
+static bgfx::RendererType::Enum s_preferredBackend = BgfxDeviceCore::platformDefaultBackend();
 
 BgfxDeviceCore::~BgfxDeviceCore() { shutdown(); }
 
@@ -38,6 +41,40 @@ bool BgfxDeviceCore::setPreferredBackend(const char* name) {
     }
     printf("[BgfxRenderDevice] Preferred backend set to: %s\n", name);
     return true;
+}
+
+// t94 must-fix: bgfx stubs renderer slots that are NOT compiled in as noop
+// placeholders, so bgfx::getRendererName(RendererType::Metal) returns "Noop"
+// on a non-Apple build. REQUESTED-side prints therefore map the enum through
+// the engine's own table; the ACTUAL side keeps bgfx's name (a live renderer
+// always names itself correctly).
+static const char* requestedBackendName(bgfx::RendererType::Enum type) {
+    switch (type) {
+    case bgfx::RendererType::Direct3D11: return "Direct3D 11";
+    case bgfx::RendererType::Direct3D12: return "Direct3D 12";
+    case bgfx::RendererType::Metal:      return "Metal";
+    case bgfx::RendererType::OpenGL:     return "OpenGL";
+    case bgfx::RendererType::OpenGLES:   return "OpenGLES";
+    case bgfx::RendererType::Vulkan:     return "Vulkan";
+    case bgfx::RendererType::Noop:       return "Noop";
+    case bgfx::RendererType::Count:      return "auto-select";
+    default:                             return bgfx::getRendererName(type);
+    }
+}
+
+bgfx::RendererType::Enum BgfxDeviceCore::platformDefaultBackend() {
+#if defined(_WIN32)
+    // Windows: D3D11 is the primary desktop backend (GL43 also compiled in).
+    return bgfx::RendererType::Direct3D11;
+#elif defined(__APPLE__)
+    // macOS / iOS: Metal (bgfx compiled with BGFX_CONFIG_RENDERER_METAL=1).
+    return bgfx::RendererType::Metal;
+#else
+    // Linux / BSD / other: OpenGL (mesa). The vendored bgfx must compile the
+    // GL renderer (BGFX_CONFIG_RENDERER_OPENGL=43) for this to be live -- see
+    // the captain-side external/bgfx/bgfx/CMakeLists.txt diff (t92 note).
+    return bgfx::RendererType::OpenGL;
+#endif
 }
 
 const char* BgfxDeviceCore::getBackendName() const {
@@ -82,10 +119,10 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     initParams.profile  = false;
     initParams.callback = &g_bgfxDebugCallback;
 
-    printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, bgfx::getRendererName(s_preferredBackend));
+    printf("[BgfxRenderDevice] nwh=%p, w=%d, h=%d, backend=%s\n", nativeWindowHandle, width, height, requestedBackendName(s_preferredBackend));
     if (!bgfx::init(initParams)) {
         // Fallback: let bgfx auto-select best renderer
-        const char* preferredName = bgfx::getRendererName(s_preferredBackend);
+        const char* preferredName = requestedBackendName(s_preferredBackend);
         DEBUG_ERR(SubSys::Render, ErrCode::Ok,
                   "[BgfxRenderDevice] %s init failed; trying auto-select...", preferredName);
         initParams.type = bgfx::RendererType::Count;
@@ -103,6 +140,15 @@ bool BgfxDeviceCore::init(void* nativeWindowHandle, int width, int height) {
     const char* rendererName = bgfx::getRendererName(caps->rendererType);
     printf("[BgfxRenderDevice] Renderer: %s (%s)\n", rendererName,
            caps->homogeneousDepth ? "homogeneous" : "non-homogeneous");
+
+    // t92: requested/actual mismatch must be loud on every build (Release
+    // included). Noop landing here is the classic "fake green" (round4 Linux:
+    // requested D3D11, actual Noop, renderdisabled=1) -- this line turns the
+    // silent degradation into a first-class diagnostic.
+    if (caps->rendererType != s_preferredBackend) {
+        printf("[RENDER] [ERROR] requested=%s actual=%s\n",
+               requestedBackendName(s_preferredBackend), rendererName);
+    }
 
 
     // Enable debug text for engine HUD overlay

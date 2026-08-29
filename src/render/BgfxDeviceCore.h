@@ -29,6 +29,11 @@ public:
     static constexpr uint16_t VIEW_POSTFX    = 40;
 
     static bool setPreferredBackend(const char* name);
+    // t92: per-platform DEFAULT backend used when no --backend override is
+    // given (_WIN32 -> Direct3D11, __APPLE__ -> Metal, else -> OpenGL).
+    // setPreferredBackend (--backend) still takes precedence; bgfx's own
+    // auto-select retry (RendererType::Count) remains a fallback only.
+    static bgfx::RendererType::Enum platformDefaultBackend();
     const char* getBackendName() const;
 
     bool init(void* nativeWindowHandle, int width, int height);

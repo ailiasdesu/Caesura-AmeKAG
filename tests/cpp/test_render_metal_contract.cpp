@@ -11,6 +11,7 @@
 #include "doctest.h"
 #include "render/EmbeddedShaders.h"
 #include "render/BgfxShaderManager.h"
+#include "render/BgfxDeviceCore.h"
 #include "minigame/EmbeddedMiniGameShaders.h"
 #include "render/api/IRenderDevice.h"
 #include "render/SmaSkinner.h"
@@ -366,4 +367,74 @@ TEST_CASE("metal: embedded shader hash pairing fs.hashIn == paired vs.hashOut (t
     CHECK(shaderHashIn(kEmbeddedMetal_fs_vfx)     == kFamilyHash);
     CHECK(shaderHashIn(kEmbeddedMetal_stretch_blt_fs) == kFamilyHash);
     CHECK(shaderHashIn(kEmbeddedMetal_affine_blt_fs)  == kFamilyHash);
+}
+// =============================================================================
+// 8. t92: per-platform default backend resolution
+// =============================================================================
+
+TEST_CASE("render: per-platform default backend resolution (t92)") {
+    // The resolver is pure (no GPU). Each platform's branch is compiled out on
+    // the others, so the non-Windows arms are exercised by the CI matrix
+    // (Linux GCC job runs this same binary; mac clang job likewise) -- the
+    // honest verification surface for the Linux branch is CI, not this host.
+    const bgfx::RendererType::Enum d = BgfxDeviceCore::platformDefaultBackend();
+#if defined(_WIN32)
+    CHECK(d == bgfx::RendererType::Direct3D11);
+#elif defined(__APPLE__)
+    CHECK(d == bgfx::RendererType::Metal);
+#else
+    CHECK(d == bgfx::RendererType::OpenGL);
+#endif
+    // --backend override precedence is NOT exercised here: setPreferredBackend
+    // mutates the process-global static and tests must stay side-effect free.
+    // The override path is the round4 evidence path and is covered by the
+    // engine --backend gate runs.
+}
+
+// =============================================================================
+// 9. t92: mesa-compliant GL fragment code (bgfx_FragColor convention)
+// =============================================================================
+
+namespace {
+// Current-layout walk (records carry texInfo/texFormat) -> the GLSL code text.
+std::string shaderCodeText(const uint8_t* d) {
+    size_t off = 12;
+    const size_t size = 1u;  // placeholder; the arrays are never shorter than 18
+    const uint16_t count = uint16_t(d[off] | (d[off + 1] << 8));
+    off += 2;
+    for (uint16_t ii = 0; ii < count; ++ii) {
+        const uint8_t ns = d[off];
+        off += 1u + ns + 6u + 4u;  // name + type/num + reg + texInfo + texFormat
+    }
+    const uint32_t cs = uint32_t(d[off]) | (uint32_t(d[off + 1]) << 8)
+                      | (uint32_t(d[off + 2]) << 16) | (uint32_t(d[off + 3]) << 24);
+    off += 4;
+    return std::string(reinterpret_cast<const char*>(d + off), cs);
+}
+} // namespace
+
+TEST_CASE("gl: mesa-compliant fragment code bgfx_FragColor (t92)") {
+    // gl_FragColor is REMOVED in GLSL 3.30+ core (error C7616) -- a strict-core
+    // GL context (mesa EGL on CI, and any future core-profile setup) rejects
+    // it. bgfx binds the fragment output by NAME (glBindFragDataLocation(
+    // m_id, 0, "bgfx_FragColor"), renderer_gl.cpp ProgramGL::init), so the
+    // embedded FS code must declare and write 'out vec4 bgfx_FragColor;'.
+    // Windows compat-profile GL still accepts this form (the explicit output
+    // binds location 0 exactly like the old implicit gl_FragColor did).
+    const struct { const uint8_t* data; size_t size; } fsArrays[] = {
+        { kEmbeddedGL_fs_texture,     kEmbeddedGL_fs_texture_size },
+        { kEmbeddedGL_fs_blend,       kEmbeddedGL_fs_blend_size },
+        { kEmbeddedGL_fs_transition,  kEmbeddedGL_fs_transition_size },
+        { kEmbeddedGL_fs_vfx,         kEmbeddedGL_fs_vfx_size },
+        { kEmbeddedGL_stretch_blt_fs, kEmbeddedGL_stretch_blt_fs_size },
+        { kEmbeddedGL_affine_blt_fs,  kEmbeddedGL_affine_blt_fs_size },
+    };
+    for (const auto& a : fsArrays) {
+        const std::string code = shaderCodeText(a.data);
+        CHECK(code.find("gl_FragColor") == std::string::npos);
+        CHECK(code.find("bgfx_FragColor") != std::string::npos);
+        CHECK(code.find("out vec4 bgfx_FragColor;") != std::string::npos);
+        // The substitution must not have broken the direct-feed contract.
+        CHECK(BgfxShaderManager::isDirectFeedBinary(a.data, a.size));
+    }
 }

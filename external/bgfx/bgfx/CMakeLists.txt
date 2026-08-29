@@ -36,6 +36,15 @@ elseif(ANDROID)
     # matches the device OpenGLES driver; context comes from SDL (see
     # SDL3PlatformBackend::createGLContext).
     target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_OPENGLES=30)
+elseif(UNIX)
+    # Sprint6-L1 (t92/round-4): same trap as the Android note above -- with no
+    # renderer define bgfx compiles ZERO backends on desktop Linux, auto-select
+    # scores everything 0 and Noop wins, so the packaged game never really
+    # rendered (round-4 evidence: requested=Direct3D 11, actual=Noop). Desktop
+    # GL 4.3 matches the embedded shader profile; mesa provides the context
+    # via GLX under xvfb on CI. Placed after ANDROID because CMake sets UNIX=1
+    # there too.
+    target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_OPENGL=43)
 endif()
 
 target_compile_definitions(bgfx PRIVATE BGFX_CONFIG_RENDERER_VULKAN=0)

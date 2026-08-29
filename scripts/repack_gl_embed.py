@@ -123,6 +123,71 @@ def repack(data, hashin):
     return bytes(out)
 
 
+def walk_current(data):
+    """Walk the CURRENT layout (uniform records carry texInfo/texFormat).
+
+    Returns (records, code_off, code_size)."""
+    off = 12
+    count = int.from_bytes(data[off:off + 2], "little")
+    off += 2
+    records = []
+    for _ in range(count):
+        ns = data[off]
+        off += 1
+        name = data[off:off + ns].decode("utf-8")
+        off += ns
+        rec = [name, data[off], data[off + 1]]      # name, type, num
+        off += 2
+        rec.append(int.from_bytes(data[off:off + 2], "little")); off += 2   # regIndex
+        rec.append(int.from_bytes(data[off:off + 2], "little")); off += 2   # regCount
+        rec.append(int.from_bytes(data[off:off + 2], "little")); off += 2   # texInfo
+        rec.append(int.from_bytes(data[off:off + 2], "little")); off += 2   # texFormat
+        records.append(rec)
+    code_size = int.from_bytes(data[off:off + 4], "little")
+    off += 4
+    if off >= len(data) or data[off] != ord("#"):
+        raise SystemExit("ERROR: current-layout walk failed (code does not start with '#')")
+    return records, off, code_size
+
+
+def substitute_code(code):
+    """t92 mesa-compliance pass: gl_FragColor is REMOVED in GLSL 3.30+ core
+    (error C7616); bgfx binds the fragment output by NAME to location 0 via
+    glBindFragDataLocation(m_id, 0, "bgfx_FragColor") (renderer_gl.cpp
+    ProgramGL::init, BGFX_CONFIG_RENDERER_OPENGL >= 31), so the correct 430
+    form is an explicit 'out vec4 bgfx_FragColor;' written like any other
+    output. Replaces 'gl_FragColor' -> 'bgfx_FragColor' and inserts the out
+    declaration after the first 'in ...;' line. Code length changes =>
+    shaderSize is recomputed by the caller."""
+    text = code.decode("utf-8")
+    n = text.count("gl_FragColor")
+    if 0 == n:
+        return code, 0
+    text = text.replace("gl_FragColor", "bgfx_FragColor")
+    m = re.search(r"^in [^\n;]+;\n", text, re.M)
+    if m:
+        text = text[:m.end()] + "out vec4 bgfx_FragColor;\n" + text[m.end():]
+    return text.encode("utf-8"), n
+
+
+def emit_current(name, data, records, new_code, tail):
+    """Re-emit the array from current-layout records with a new code section
+    (recomputing shaderSize; tail = the old NUL/pad/attrs bytes preserved)."""
+    count = len(records)
+    out = bytearray()
+    out += data[0:12]
+    out += count.to_bytes(2, "little")
+    for (rname, type_, num, reg_index, reg_count, tex_info, tex_format) in records:
+        nb = rname.encode("utf-8")
+        out += bytes([len(nb)]) + nb + bytes([type_, num])
+        out += reg_index.to_bytes(2, "little") + reg_count.to_bytes(2, "little")
+        out += tex_info.to_bytes(2, "little") + tex_format.to_bytes(2, "little")
+    out += len(new_code).to_bytes(4, "little")
+    out += new_code
+    out += tail
+    return bytes(out)
+
+
 def emit_c_array(name, data) -> str:
     lines = []
     for i in range(0, len(data), 12):
@@ -137,6 +202,8 @@ def main() -> int:
     ap.add_argument("--file", default=str(DEFAULT_FILE))
     ap.add_argument("--hashin", default=None, help="hex u32 for bytes 4..7")
     ap.add_argument("--hashin-from-vs", default=None, help="array name whose hashOut becomes hashIn")
+    ap.add_argument("--substitute", action="store_true",
+                    help="gl_FragColor -> bgfx_FragColor + out decl (t92 mesa pass)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -153,6 +220,35 @@ def main() -> int:
 
     print("[repack] %s: len=%d current_layout_valid=%s hashIn=%s"
           % (args.array, len(data), is_direct_feed_binary(data), data[4:8].hex()))
+
+    if args.substitute:
+        records, code_off, code_size = walk_current(data)
+        code = data[code_off:code_off + code_size]
+        new_code, subs = substitute_code(code)
+        print("[repack] %s: substitute %d gl_FragColor occurrence(s), code %d -> %d bytes"
+              % (args.array, subs, code_size, len(new_code)))
+        if 0 == subs:
+            print("[repack] no gl_FragColor found; nothing to substitute")
+            return 0
+        tail = data[code_off + code_size:]
+        new_data = emit_current(args.array, data, records, new_code, tail)
+        print("[repack] new len=%d valid=%s" % (len(new_data), is_direct_feed_binary(new_data)))
+        if not is_direct_feed_binary(new_data):
+            print("[repack] ERROR: substituted bytes fail validation", file=sys.stderr)
+            return 1
+        if args.dry_run:
+            print("[repack] dry-run: no file written")
+            return 0
+        pat = re.compile(r"const uint8_t " + re.escape(args.array) +
+                         r"\[\] = \{.*?\};\s*const size_t " + re.escape(args.array) +
+                         r"_size = \d+;", re.S)
+        if not pat.search(text):
+            print("[repack] ERROR: array+size pattern not found", file=sys.stderr)
+            return 1
+        path.write_text(pat.sub(emit_c_array(args.array, new_data), text, count=1),
+                        encoding="utf-8", newline="\n")
+        print("[repack] written %s" % path)
+        return 0
 
     if is_direct_feed_binary(data) and hashin is None:
         print("[repack] array already in the current layout; nothing to do "
