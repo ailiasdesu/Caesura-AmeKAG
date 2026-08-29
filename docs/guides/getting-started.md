@@ -23,7 +23,7 @@
 > 才能解压即建；**[v1.0.1 ZIP](https://github.com/ailiasdesu/Caesura-AmeKAG/releases)
 > 及更早的发布包为旧包**（无这些目录，`--editor` 会打印
 > `web-editor/dist not found; serving API only`）——旧包请走路径 B。
-> 包内容验证用 `bash scripts/verify_release_package.sh`（29 项断言；
+> 包内容验证用 `bash scripts/verify_release_package.sh`（30 项断言；
 > 发布流程见 [release-process.md](release-process.md) §5，含 SDL3/lua_cli/模板/
 > web-editor 自包含安装）。
 
