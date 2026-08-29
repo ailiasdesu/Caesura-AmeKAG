@@ -89,7 +89,7 @@ build/lua/Debug/lua.exe tests/projects/golden_vn/entry.lua
 >
 > **roundtrip 为什么由驱动发 load 而非 story 内 [load] tag（引擎缺陷，已报告不修）**：同场景
 > `[save]→[load]` tag 会回到存档 token 位置重放，重放到 [load] token 再次设置 pending——
-> 原生 runner 无自引用守卫（cursor+1 守卫只存在于 web/bridge.js:650），形成循环。驱动改走
+> 原生 runner 无自引用守卫（cursor+1 守卫只存在于 web/bridge.js:650 与 1024），形成循环。驱动改走
 > 同一 handler（SaveCommands.load），恢复语义等价、断言同步（重放前）。修复归属 save.lua/
 > kag_runner 的引擎侧（本轮约束：不碰 scripts/kag/**）。
 

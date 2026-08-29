@@ -284,7 +284,28 @@ local function resume_from_save()
     ctx.label_index = nil  -- scene swap bypasses the scheduler: rebuild
     -- Coerce the restored token index: crafted saves may carry a string or
     -- table; scheduler.run compares `i <= #tokens` numerically.
-    ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+    -- t62 (round-94 guard, native port of web/bridge.js:650-655 and
+    -- 1024-1029): a self-referential load -- [save] then [load] back-to-back
+    -- in the SAME scene -- recorded a resume point at/before the consumed
+    -- [load] token, so a plain restore re-executes the [save]/[load] block
+    -- forever. When the reloaded scene is the current one AND the resume was
+    -- triggered BY a [load] tag sitting exactly at the current cursor AND the
+    -- saved resume point is at/before it, advance past the [load] so
+    -- execution continues forward. (The cursor-at-load-tag check keeps a
+    -- direct SaveCommands.load() issued from a pause point -- the Golden VN
+    -- roundtrip driver -- on the exact saved token: there is no load tag to
+    -- skip there.) Cross-scene loads (a genuine [load] into a different
+    -- scene) are unchanged: the scene differs, so the saved token is used
+    -- exactly.
+    local cur = tonumber(ctx.token_index) or 1
+    local curTok = ctx.tokens and ctx.tokens[cur]
+    local atLoadTag = type(curTok) == "table" and curTok[1] == "load"
+    if ctx._pendingLoadOriginScene == path and atLoadTag
+        and (tonumber(ctx._pendingLoadToken) or 1) <= cur then
+        ctx.token_index = cur + 1
+    else
+        ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
+    end
     ctx.currentScene = path
     -- The saved [load] set stop_flag to end the running script; clear it so
     -- the resumed coroutine actually executes tokens (scheduler returns

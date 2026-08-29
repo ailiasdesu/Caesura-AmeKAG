@@ -31,6 +31,7 @@ local tests = {
     "test_contracts_runtime2",
     "test_contract_runtime_gaps",
     "test_saveflow",
+    "test_save_load_samescene",
     "test_bench_dispatch",
     "test_math_cmds",
     "test_character_cmds",

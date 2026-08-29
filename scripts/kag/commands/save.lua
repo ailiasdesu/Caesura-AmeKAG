@@ -32,7 +32,9 @@ function SaveCommands._safeScenePath(sp)
     if sp:find("..", 1, true) then return false end
     if sp:find("^scripts/") == 1 or sp:find("^assets/script/") == 1
         or sp:find("^assets/scripts/") == 1 or sp:find("^demo/") == 1
-        or sp:find("^tests/scripts/") == 1 then
+        or sp:find("^tests/scripts/") == 1
+        or sp:find("^tests/projects/") == 1
+        or sp:find("^projects/") == 1 then
         return sp:find("%.ks$") ~= nil
     end
     return false
