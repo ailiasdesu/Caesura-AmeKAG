@@ -300,3 +300,70 @@ TEST_CASE("gl: all 10 GL embedded shaders direct-feedable (t79)") {
     CHECK(BM::usesDirectFeed(false, true,  false));
     CHECK_FALSE(BM::usesDirectFeed(false, true,  true));
 }
+// =============================================================================
+// 7. t85: embedded shader hashIn/hashOut pairing (bgfx_p.h:5140 cross-binary)
+// =============================================================================
+
+namespace {
+// t80 note: fs.hashIn == paired-vs.hashOut is a CROSS-BINARY property the
+// per-array validator cannot see. Offset口径 matches the repack guide
+// (docs/solutions/build-errors/bgfx-shader-binary-repack.md 坑 2):
+//   magic(0..3) | hashIn(4..7) | hashOut(8..11) | count(12..13) | ...
+uint32_t shaderHashIn(const uint8_t* d) {
+    return uint32_t(d[4]) | (uint32_t(d[5]) << 8)
+         | (uint32_t(d[6]) << 16) | (uint32_t(d[7]) << 24);
+}
+uint32_t shaderHashOut(const uint8_t* d) {
+    return uint32_t(d[8]) | (uint32_t(d[9]) << 8)
+         | (uint32_t(d[10]) << 16) | (uint32_t(d[11]) << 24);
+}
+} // namespace
+
+TEST_CASE("gl: embedded shader hash pairing fs.hashIn == paired vs.hashOut (t85)") {
+    // Same varying.def -> one shared hash across the whole family.
+    const uint32_t kFamilyHash = 0x3C3E1E6Fu;
+    CHECK(shaderHashOut(kEmbeddedGL_vs_sprite)      == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedGL_vs_fullscreen)  == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedGL_stretch_blt_vs) == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedGL_affine_blt_vs)  == kFamilyHash);
+
+    // Fallback: vs_sprite + fs_texture (BgfxShaderManager buildProgram).
+    CHECK(shaderHashIn(kEmbeddedGL_fs_texture) == shaderHashOut(kEmbeddedGL_vs_sprite));
+    // Fullscreen family: vs_fullscreen + blend/transition/vfx.
+    CHECK(shaderHashIn(kEmbeddedGL_fs_blend)      == shaderHashOut(kEmbeddedGL_vs_fullscreen));
+    CHECK(shaderHashIn(kEmbeddedGL_fs_transition) == shaderHashOut(kEmbeddedGL_vs_fullscreen));
+    CHECK(shaderHashIn(kEmbeddedGL_fs_vfx)        == shaderHashOut(kEmbeddedGL_vs_fullscreen));
+    // Dedicated blit pairs.
+    CHECK(shaderHashIn(kEmbeddedGL_stretch_blt_fs) == shaderHashOut(kEmbeddedGL_stretch_blt_vs));
+    CHECK(shaderHashIn(kEmbeddedGL_affine_blt_fs)  == shaderHashOut(kEmbeddedGL_affine_blt_vs));
+
+    // Every checked FS carries the family hash (locks the invariant value).
+    CHECK(shaderHashIn(kEmbeddedGL_fs_texture) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedGL_fs_blend)   == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedGL_fs_transition) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedGL_fs_vfx)     == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedGL_stretch_blt_fs) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedGL_affine_blt_fs)  == kFamilyHash);
+}
+
+TEST_CASE("metal: embedded shader hash pairing fs.hashIn == paired vs.hashOut (t85)") {
+    const uint32_t kFamilyHash = 0x3C3E1E6Fu;
+    CHECK(shaderHashOut(kEmbeddedMetal_vs_sprite)      == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedMetal_vs_fullscreen)  == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedMetal_stretch_blt_vs) == kFamilyHash);
+    CHECK(shaderHashOut(kEmbeddedMetal_affine_blt_vs)  == kFamilyHash);
+
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_texture) == shaderHashOut(kEmbeddedMetal_vs_sprite));
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_blend)      == shaderHashOut(kEmbeddedMetal_vs_fullscreen));
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_transition) == shaderHashOut(kEmbeddedMetal_vs_fullscreen));
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_vfx)        == shaderHashOut(kEmbeddedMetal_vs_fullscreen));
+    CHECK(shaderHashIn(kEmbeddedMetal_stretch_blt_fs) == shaderHashOut(kEmbeddedMetal_stretch_blt_vs));
+    CHECK(shaderHashIn(kEmbeddedMetal_affine_blt_fs)  == shaderHashOut(kEmbeddedMetal_affine_blt_vs));
+
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_texture) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_blend)   == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_transition) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedMetal_fs_vfx)     == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedMetal_stretch_blt_fs) == kFamilyHash);
+    CHECK(shaderHashIn(kEmbeddedMetal_affine_blt_fs)  == kFamilyHash);
+}
