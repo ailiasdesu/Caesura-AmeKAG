@@ -597,7 +597,7 @@ def prune_dev_scripts(scripts_dir: Path) -> int:
 # cache/ksc/<scene>.ksc exists before the player's first launch.
 #
 # Why this is load-bearing, not an optimization: the engine caps Lua at
-# 2,000,000 instructions per budget window (src/script/vm/LuaManager.cpp:63),
+# 20,000,000 instructions per budget window (src/script/vm/LuaManager.cpp:63),
 # reset once before the entry script (src/main.cpp:1207) and once per frame
 # (src/entry/Engine.cpp:1023). A cold tokenize+compile of a large scene runs
 # inside that single startup window, so a big story dies at boot with

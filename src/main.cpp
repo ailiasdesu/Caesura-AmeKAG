@@ -231,8 +231,15 @@ private:
                     m_engine.lua().state() != nullptr};
                 return reply;
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcRunScriptRequest>) {
+                // Every RPC-driven run/eval opens its own budget window,
+                // symmetric with the boot entry-scene reset and the per-frame
+                // reset in Engine::processEvents. Without this, cumulative
+                // counts within one frame false-kill 12-14.7KB scene loads
+                // (t59 audit).
+                m_engine.lua().resetInstructionBudget();
                 return startManagedRun(operation.script);
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcEvaluateRequest>) {
+                m_engine.lua().resetInstructionBudget();
                 return evaluate(operation.code);
             } else if constexpr (std::is_same_v<Operation, Caesura::RpcKagDebugRequest>) {
                 return kagDebugAction(operation);

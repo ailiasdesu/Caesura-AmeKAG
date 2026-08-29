@@ -264,7 +264,7 @@ class TestGameOnlyBuild(unittest.TestCase):
             self.assertTrue((self.out / ref).is_file(), "missing packaged asset: %s" % ref)
 
     def test_scenes_are_precompiled_into_the_ksc_cache(self):
-        # A cold compile of a large scene blows the 2,000,000-instruction
+        # A cold compile of a large scene blows the 20,000,000-instruction
         # startup budget (src/script/vm/LuaManager.cpp:63) -- reproduced with
         # demo/example_game/story.ks, which only booted once cache/ksc existed.
         info = json.loads((self.out / "BUILD-INFO.json").read_text(encoding="utf-8"))

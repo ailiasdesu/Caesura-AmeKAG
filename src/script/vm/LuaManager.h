@@ -43,7 +43,10 @@ private:
     bool m_initialized = false;
 
     int  m_instructionCount = 0;
-    int  m_instructionBudget = 2000000;
+    // 20M covers one cold tokenize of a ~120KB scene through the pure-Lua
+    // LPeg VM (~140 instr/byte, t59 audit); .ksc precompile stays the fast
+    // path, and the per-window runaway guard keeps its purpose.
+    int  m_instructionBudget = 20000000;
     bool m_budgetExceeded = false;
 };
 
