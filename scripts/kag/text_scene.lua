@@ -158,11 +158,35 @@ function TextScene.add_wrapped_spans(ctx, spans, options)
     for _, line in ipairs(lines) do
         local seg_x = x
         for _, seg in ipairs(line.segments) do
-            TextScene.add_text(
-                ctx, seg.text, seg_x, y,
-                seg.color or options.color, options.group,
-                seg.scale or 1, seg.bold == true, seg.italic == true,
-                seg.instant == true, seg.strike == true)
+            local spacing = tonumber(seg.letter_spacing)
+            if spacing and spacing ~= 0 then
+                -- t105 visual letter-spacing: the engine's render_text has no
+                -- per-glyph spacing parameter, so a spaced segment must be
+                -- emitted one character per draw. x advances by the SAME
+                -- per-character advance the layout already used
+                -- (measure_character: rawWidth * scale + spacing, clamped >= 0;
+                -- scale/spacing are uniform per segment because same_style()
+                -- groups by both). UTF-8 code-point iteration keeps multibyte
+                -- text (CJK) on character boundaries -- never byte slices.
+                local scale = seg.scale or 1
+                local char_x = seg_x
+                for _, cp in utf8.codes(seg.text) do
+                    local ch = utf8.char(cp)
+                    TextScene.add_text(
+                        ctx, ch, char_x, y,
+                        seg.color or options.color, options.group,
+                        scale, seg.bold == true, seg.italic == true,
+                        seg.instant == true, seg.strike == true)
+                    local raw = tonumber(TextLayout.measure(ch, options)) or 0
+                    char_x = char_x + math.max(0, (raw * scale) + spacing)
+                end
+            else
+                TextScene.add_text(
+                    ctx, seg.text, seg_x, y,
+                    seg.color or options.color, options.group,
+                    seg.scale or 1, seg.bold == true, seg.italic == true,
+                    seg.instant == true, seg.strike == true)
+            end
             seg_x = seg_x + seg.width
         end
         y = y + line_height

@@ -599,6 +599,110 @@ do
           and math.abs(lhLine.width - plainLine.width) < 0.001)
 end
 
+-- ---------------------------------------------------------------------------
+-- 9h. VISUAL (t105): a letter_spaced segment renders ONE DRAW PER CHARACTER
+--     with x advancing by glyph advance + spacing. t101 verified the engine's
+--     render_text has no per-glyph spacing parameter (11-arg KAG binding), so
+--     the visual gap must be produced by per-character draws; the x sequence
+--     must replicate the layout's per-character advance exactly
+--     (rawWidth * scale + spacing, clamped >= 0) so glyph positions stay
+--     aligned with measure/wrap.
+-- ---------------------------------------------------------------------------
+do
+    local function mkctx()
+        return {
+            text_state = { line = 1, char_offset = 0, opacity = 255,
+                           cursor_x = 32, cursor_y = 580, draws = {} },
+            textCursorX = 32, textCursorY = 580,
+        }
+    end
+    local opts = { x = 100, y = 580, max_width = 100000, line_height = 24,
+                   font_size = 24, color = { r = 255, g = 255, b = 255 } }
+
+    -- spaced span: two chars -> two draws, x = 100 then 100 + 12 + 4
+    local ctxV = mkctx()
+    TextScene.add_wrapped_spans(ctxV,
+        TextLayout.parse_markup("{letter_spacing=4}ab{/letter_spacing}").spans,
+        opts)
+    local d = ctxV.text_state.draws
+    check("letter_spacing visual: one draw per character",
+          #d == 2 and d[1].text == "a" and d[2].text == "b")
+    check("letter_spacing visual: x advances by glyph + spacing",
+          d[1].x == 100 and math.abs(d[2].x - 116) < 0.001)
+
+    -- segment boundary: the next segment starts at seg.width, which counts
+    -- the LAST char's spacing too -- so the per-char loop must also advance
+    -- past the final spacing (x_cc = 158 = 100 + 24 + 34).
+    local ctxV2 = mkctx()
+    TextScene.add_wrapped_spans(ctxV2,
+        TextLayout.parse_markup(
+            "aa{letter_spacing=5}bb{/letter_spacing}cc").spans, opts)
+    local d2 = ctxV2.text_state.draws
+    check("letter_spacing visual: mixed line = single + per-char + single",
+          #d2 == 4 and d2[1].text == "aa" and d2[2].text == "b"
+          and d2[3].text == "b" and d2[4].text == "cc")
+    check("letter_spacing visual: next segment aligns with seg.width",
+          d2[1].x == 100 and math.abs(d2[2].x - 124) < 0.001
+          and math.abs(d2[3].x - 141) < 0.001
+          and math.abs(d2[4].x - 158) < 0.001)
+
+    -- UTF-8 multibyte: CJK is full-width (24 px at font 24); the second
+    -- character x = 100 + 24 + 3 = 127 -- character boundary, not bytes.
+    local ctxV3 = mkctx()
+    TextScene.add_wrapped_spans(ctxV3,
+        TextLayout.parse_markup("{letter_spacing=3}中b{/letter_spacing}").spans,
+        opts)
+    local d3 = ctxV3.text_state.draws
+    check("letter_spacing visual: multibyte split on char boundary",
+          #d3 == 2 and d3[1].text == "中" and d3[2].text == "b"
+          and d3[1].x == 100 and math.abs(d3[2].x - 127) < 0.001)
+
+    -- regression: spacing=0 and no spacing keep the single-draw path
+    local ctxZ = mkctx()
+    TextScene.add_wrapped_spans(ctxZ,
+        TextLayout.parse_markup("{letter_spacing=0}ab{/letter_spacing}").spans,
+        opts)
+    check("letter_spacing visual: spacing=0 single draw",
+          #ctxZ.text_state.draws == 1 and ctxZ.text_state.draws[1].text == "ab")
+    local ctxP = mkctx()
+    TextScene.add_wrapped_spans(ctxP,
+        TextLayout.parse_markup("ab").spans, opts)
+    check("letter_spacing visual: unspaced span single draw (zero regression)",
+          #ctxP.text_state.draws == 1 and ctxP.text_state.draws[1].text == "ab"
+          and ctxP.text_state.draws[1].x == 100)
+end
+
+-- 9i. typewriter x per-character spacing: partial reveal shows exactly the
+--     first k characters as full glyphs at their laid-out x positions (each
+--     per-char draw is its own typewriter unit, so the truncation math is
+--     exact and the visible prefix stays aligned).
+do
+    local ctxT = {
+        text_state = { line = 1, char_offset = 0, opacity = 255,
+                       cursor_x = 32, cursor_y = 580, draws = {} },
+        textCursorX = 32, textCursorY = 580,
+    }
+    TextScene.add_wrapped_spans(ctxT,
+        TextLayout.parse_markup("{letter_spacing=4}abc{/letter_spacing}").spans,
+        { x = 100, y = 580, max_width = 100000, line_height = 24,
+          font_size = 24, color = { r = 255, g = 255, b = 255 } })
+    local calls = {}
+    local function mock(text, x)
+        calls[#calls + 1] = { text = text, x = x }
+    end
+    local mock_backend = {
+        render_text = mock,
+        render_ruby = function() end,
+    }
+    ctxT.text_state.reveal_chars = 2
+    TextScene.render(ctxT, mock_backend)
+    check("typewriter x spacing: reveal=2 shows exactly the first two glyphs",
+          #calls == 3 and calls[1].text == "a" and calls[2].text == "b"
+          and calls[3].text == "")
+    check("typewriter x spacing: revealed glyphs at laid-out x positions",
+          calls[1].x == 100 and math.abs(calls[2].x - 116) < 0.001)
+end
+
 local failed = 0
 for _, ok in ipairs(results) do
     if not ok then failed = failed + 1 end
