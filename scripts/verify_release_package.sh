@@ -351,7 +351,11 @@ if [ -z "$EXE" ]; then
 else
     TOKEN="relverify-$$-$(date +%s)"
     OUT="$WORK/editor.out"; ERR="$WORK/editor.err"
-    ( cd "$ROOT" && CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR" & )
+    # t81: record the engine's own exit code for the stayed-alive diagnostics
+    # (a detached background launch otherwise loses it; the rc file is written
+    # by the launcher subshell only after the engine process really exits).
+    rm -f "$WORK/editor.rc"
+    ( cd "$ROOT" && CAESURA_EDITOR_TOKEN="$TOKEN" "$EXE" --editor >"$OUT" 2>"$ERR"; echo "$?" >"$WORK/editor.rc" ) &
     CODE="000"
     ALIVE=1
     for _ in $(seq 1 45); do
@@ -372,6 +376,16 @@ else
         ok "engine process stayed alive in the extracted folder"
     else
         bad "engine process stayed alive" "it exited early; stderr tail: $(tail -2 "$ERR" 2>/dev/null | tr '\n' ' | ')"
+        # t81 forensics: an early exit leaves the exit code and stdout as the
+        # only evidence -- the FAIL line above keeps two stderr lines (e.g. the
+        # round-3 macOS run showed only [ShaderCache] compileVariant errors).
+        # Print what the process actually logged, capped.
+        [ -f "$WORK/editor.rc" ] || sleep 1
+        printf '        [diag] engine exit code: %s\n' "$(cat "$WORK/editor.rc" 2>/dev/null || echo '(not recorded)')"
+        printf '        [diag] stdout tail (15 lines):\n'
+        tail -n 15 "$OUT" 2>/dev/null | sed 's/^/          /'
+        printf '        [diag] [RENDER]/FATAL/ERROR across stdout+stderr:\n'
+        grep -hE '\[RENDER\]|FATAL|\[ERROR\]' "$OUT" "$ERR" 2>/dev/null | head -12 | sed 's/^/          /'
     fi
 
     if [ "$CODE" = "200" ]; then ok "GET / with token -> 200"
@@ -573,6 +587,14 @@ else
         else
             bad "game exe --frames 60" "exit=$RR bootfatal=$BOOTFATAL kagrunner=$KAGRUN renderdisabled=$RENDERDISABLED; tail: $(tail -5 "$RL" | tr '
 ' ' | ')"
+            # t81 forensics: the per-program renderer failures live INSIDE $RL
+            # (e.g. the round-3 Linux GL/mesa run) -- the FAIL line above keeps
+            # only a 5-line tail. Print every [RENDER] line (capped) plus the
+            # backend/renderer identification line so CI logs carry the cause.
+            printf '        [diag] $RL [RENDER] lines (max 25):\n'
+            grep '\[RENDER\]' "$RL" 2>/dev/null | head -25 | sed 's/^/          /'
+            printf '        [diag] backend/renderer identification:\n'
+            grep -iE 'render.*(backend|created|initialized|selected|using|device)|backend.*render' "$RL" 2>/dev/null | head -6 | sed 's/^/          /'
         fi
     else
         bad "game exe --frames 60" "no dist game at $GAME"
