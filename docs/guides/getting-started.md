@@ -188,6 +188,14 @@ sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev \
 # 不装也没关系：引擎自动回退 pl_mpeg（仅 MPEG-1 视频），构建不失败
 ```
 
+> **Linux 运行游戏额外依赖（libEGL.so.1）**：bgfx 的 GL 上下文走 `glcontext_egl` 路径，运行时 `dlopen('libEGL.so.1')`（非 GLX）。运行/发行 Linux 机器需装 `libegl1`；缺失时启动日志出现连串 `[bgfx WARN] Failed get egl*`（每个符号解析失败），随后经空函数指针 SEGV——不是干净的 init 失败。安装一行：
+>
+> ```bash
+> sudo apt-get install -y libegl1
+> ```
+
+Linux 真渲染已验证（CI round-7：run 33245271845 @ 0fce3311，Linux Package 30/30 含 `renderdisabled=0`）。
+
 ### 1.3 macOS（Xcode + Homebrew）
 
 ```bash
@@ -213,8 +221,12 @@ brew install cmake sdl3 freetype zstd openssl@3   # ffmpeg 可选，见上
 | 测试二进制 | `build/tests/Debug/CaesuraTests.exe` | `build/tests/CaesuraTests` | `build/tests/CaesuraTests` |
 | SDL3 来源 | vcpkg 必备（同 CI build-windows；仅带完整 vendored 拷贝的本地工作树可免 toolchain） | 源码装（见上） | Homebrew |
 | 默认渲染后端 | D3D11（bgfx auto） | OpenGL 4.3 | Metal（D3D11 失败后 auto-select） |
+| CPU 要求 | x86_64 + SSE4.1（MSVC 从不设 ISA 门槛，Windows 二进制始终如此；2008+ 常规 CPU 均满足） | x86_64 + SSE4.1（142d0dbe 起显式 `-msse4.1` 对齐；Steam Deck Zen2 无影响） | Apple Silicon（Arm64；Intel 支持为 hardware-gated 待验证） |
+| 运行时依赖（游戏） | 无需额外系统包（D3D11 随系统） | **libegl1**（bgfx GL 上下文运行时 dlopen `libEGL.so.1`；缺失=`Failed get egl*` 后 SEGV） | 系统框架内置（Metal） |
 | FFmpeg | 内置（可选 vcpkg） | apt dev 包（可选） | brew ffmpeg（可选） |
 | 注意 | 必须从**项目根**启动（资源相对 CWD） | 同左 | 同左 |
+
+> 平台×能力的七级支持分级（Support→Build→Boot→Gameplay→First-VN→Package→Store，每格附证据注记）见 [平台支持矩阵](../design/platform-support-matrix.md)。
 
 ---
 
