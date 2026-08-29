@@ -577,33 +577,53 @@ def main():
     # into dist/<outName>. The engine runs with cwd=build/Debug here, so a
     # success also proves the endpoint locates the repository root itself.
     import shutil as _shutil
-    st, resp = request("/api/package/web",
-                       data=json.dumps({"storyPath": "demo/example_game/story.ks",
-                                        "outName": "smoke_pkg"}).encode(),
-                       timeout=300)
-    check("package-web-ok", st == 200 and resp.get("ok") is True
-          and resp.get("outputDir") == "dist/smoke_pkg"
-          and isinstance(resp.get("logTail"), str)
-          and "PACKAGE COMPLETE" in resp.get("logTail", ""),
-          "%s %s" % (st, str(resp)[:400]))
+    # package_game.sh can only assemble when web/node_modules/vite exists
+    # (it rebuilds web/dist) or a prebuilt web/dist/index.html is present
+    # (it reuses it); with NEITHER, the script fails BY DESIGN (step 3
+    # honest degradation). Bare CI build jobs and fresh clones lack both --
+    # assert only what the environment supports and SKIP loudly otherwise.
+    # First seen: run 33232664396 macOS · Clang, where the audio fallback
+    # un-skipped this smoke on mac for the first time and only these two
+    # checks hit the gap (73/75). CAESURA_SMOKE_FORCE_NO_WEB=1 forces the
+    # skip branch (detector for the guard itself).
+    _smoke_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _web_ready = (os.path.isdir(os.path.join(_smoke_repo, "web", "node_modules", "vite"))
+                  or os.path.isfile(os.path.join(_smoke_repo, "web", "dist", "index.html")))
+    if os.environ.get("CAESURA_SMOKE_FORCE_NO_WEB") == "1":
+        _web_ready = False
+    if _web_ready:
+        st, resp = request("/api/package/web",
+                           data=json.dumps({"storyPath": "demo/example_game/story.ks",
+                                            "outName": "smoke_pkg"}).encode(),
+                           timeout=300)
+        check("package-web-ok", st == 200 and resp.get("ok") is True
+              and resp.get("outputDir") == "dist/smoke_pkg"
+              and isinstance(resp.get("logTail"), str)
+              and "PACKAGE COMPLETE" in resp.get("logTail", ""),
+              "%s %s" % (st, str(resp)[:400]))
 
-    # Real artifacts must exist on disk (static site + baked story bundle).
-    # The engine writes dist/ under its CWD; in-tree builds keep that under
-    # the repo too (build/Debug/dist). Accept either layout so out-of-tree
-    # (WSL/CI prefix builds) is not a false failure.
-    _repo_root = os.path.dirname(os.path.dirname(cwd))  # build/Debug -> repo
-    _pkg_candidates = [
-        os.path.join(cwd, "dist", "smoke_pkg"),
-        os.path.join(_repo_root, "dist", "smoke_pkg"),
-    ]
-    _pkg_dir = next((p for p in _pkg_candidates if os.path.isdir(p)),
-                    _pkg_candidates[0])
-    check("package-web-artifacts",
-          os.path.isfile(os.path.join(_pkg_dir, "index.html"))
-          and os.path.isfile(os.path.join(_pkg_dir, "MANIFEST.txt"))
-          and os.path.isfile(os.path.join(_pkg_dir, "cache", "story", "story.lua")),
-          _pkg_dir)
-    _shutil.rmtree(_pkg_dir, ignore_errors=True)
+        # Real artifacts must exist on disk (static site + baked story bundle).
+        # The engine writes dist/ under its CWD; in-tree builds keep that under
+        # the repo too (build/Debug/dist). Accept either layout so out-of-tree
+        # (WSL/CI prefix builds) is not a false failure.
+        _repo_root = os.path.dirname(os.path.dirname(cwd))  # build/Debug -> repo
+        _pkg_candidates = [
+            os.path.join(cwd, "dist", "smoke_pkg"),
+            os.path.join(_repo_root, "dist", "smoke_pkg"),
+        ]
+        _pkg_dir = next((p for p in _pkg_candidates if os.path.isdir(p)),
+                        _pkg_candidates[0])
+        check("package-web-artifacts",
+              os.path.isfile(os.path.join(_pkg_dir, "index.html"))
+              and os.path.isfile(os.path.join(_pkg_dir, "MANIFEST.txt"))
+              and os.path.isfile(os.path.join(_pkg_dir, "cache", "story", "story.lua")),
+              _pkg_dir)
+        _shutil.rmtree(_pkg_dir, ignore_errors=True)
+    else:
+        print("SKIP package-web-ok (web toolchain absent: neither "
+              "web/node_modules/vite nor web/dist/index.html -- "
+              "package_game.sh degrades by design)")
+        print("SKIP package-web-artifacts (same precondition)")
 
     # Path traversal -> 400.
     st, resp = request("/api/package/web",
