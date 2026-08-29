@@ -973,7 +973,22 @@ bool runHttpEditor(Caesura::Engine& engine, const std::string& authToken,
         if (!webRoot.empty()) editor.setWebRoot(webRoot);
         else fprintf(stderr, "[EditorServer] web-editor/dist not found; serving API only\n");
     }
-    if (!editor.start(9876)) {
+    // WinNAT dynamic excluded port ranges can swallow the default port with
+    // WSAEACCES even when nothing listens (observed 2026-08-29: range
+    // 9813-9912 covered 9876). Devs without admin rights can re-home the
+    // editor instead of restarting winnat.
+    int editorPort = 9876;
+    if (const char* portEnv = std::getenv("CAESURA_EDITOR_PORT")) {
+        char* end = nullptr;
+        const long parsed = std::strtol(portEnv, &end, 10);
+        if (end && *end == '\0' && parsed >= 1 && parsed <= 65535) {
+            editorPort = static_cast<int>(parsed);
+            fprintf(stderr, "[EditorServer] CAESURA_EDITOR_PORT override: %d\n", editorPort);
+        } else {
+            fprintf(stderr, "[EditorServer] [ERROR] CAESURA_EDITOR_PORT is invalid ('%s'); using default 9876\n", portEnv);
+        }
+    }
+    if (!editor.start(editorPort)) {
         editor.setDispatcher({});
         dispatcher->close();
         engine.shutdown();
@@ -1180,7 +1195,7 @@ extern "C" int main(int argc, char* argv[]) {
     if (editorMode) {
         fprintf(stderr, editorStdio
             ? "[main] Editor mode: JSON-RPC on stdin/stdout (GPU enabled)\n"
-            : "[main] Editor mode: HTTP editor on port 9876 (GPU enabled)\n");
+            : "[main] Editor mode: HTTP editor (default 127.0.0.1:9876; GPU enabled)\n");
 
         std::string scriptDir = Caesura::discoverStartupScriptDir();
         Caesura::configureStartupLuaPath(engine.lua().state(), scriptDir);
