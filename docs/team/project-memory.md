@@ -97,6 +97,7 @@
 ### 4.1 Windows 开发机
 - **工具链**：Visual Studio 2022 (MSVC v143), CMake 3.25+, vcpkg (`C:/vcpkg`), Python 3.12+, Node 18+。
 - **构建输出**：桌面引擎 `build/Debug/CaesuraAmeKAG.exe`，测试程序 `build/tests/Debug/CaesuraTests.exe`。
+- **编辑器端口漂移（WinNAT 动态排除段）**：Windows 动态保留端口段随 WSL2/Docker/Hyper-V 生命周期漂移，可能覆盖 9876——症状『昨天还能跑今天不行』（editor bind WSAEACCES 两实证 `bcf23b0c`/`6286146a`）。自查：`netsh int ipv4 show excludedportrange protocol=tcp`（看 9876 是否落在排除段）+ `netstat -ano | grep 9876`；解锁：管理员 `net stop winnat && net start winnat`（重排动态段，也可能不复现），或设 `CAESURA_EDITOR_PORT=<空闲端口>` 再跑 `--editor`（覆盖生效 stderr 打 `[EditorServer] CAESURA_EDITOR_PORT override: <port>`；默认仍 9876）。FAQ 见 `docs/guides/getting-started.md`。
 
 ### 4.2 Android 移动端实机
 - **硬件档案**：`Redmi K40 (M2012K11AC, haydn, Snapdragon 870 / Adreno 650 / Android 13)`，Magisk Root。
@@ -119,6 +120,7 @@
 - **设计分辨率**：全平台统一 1920×1080，UI 布局基于 `scripts/viewport.lua` 计算相对坐标。
 - **每帧提交**：`scripts/layers.lua` 对可见节点每帧提交 quad（`dirty` 标记仅用于 RTT 懒分配，不可用于跳过顶点提交）。
 - **字形图集**：`TextRenderer` 采用 **2048×2048 RGBA8** 动态图集（`r=g=b=255, a=coverage`），启动时预载 `NotoSansCJKsc-Regular.otf` 约 8074 个常用字符，完美兼容移动端 GLES `fs_texture` 单一贴图直通采样。
+- **bgfx 渲染器编译面由 vendored CMake 平台分支决定**：`external/bgfx/bgfx/CMakeLists.txt` 按 WIN32→D3D11+GL43、APPLE→Metal、ANDROID→GLES30、UNIX→GL43（**置于 ANDROID 之后**——CMake 在 ANDROID 下同时设 UNIX=1）、公共尾行 VULKAN=0；平台分支未命中=零渲染器编译，auto-select 全 0 分→Noop 胜出（黑屏但 exit=0 的『假绿』，Android/Linux 双实证）。引擎侧 `BgfxDeviceCore::platformDefaultBackend()` 按平台返回默认（_WIN32→Direct3D11、__APPLE__→Metal、else→OpenGL，`fcf9824b`），与 `--backend` 运行时显式覆盖互不冲突（编译面 vs 运行时首选）。init 后失配哨兵：`[RENDER] [ERROR] requested=%s actual=%s`（仅当 `caps->rendererType != s_preferredBackend`，Release 也打；requested 侧经引擎映射表 `requestedBackendName()`——bgfx 会把未编译渲染器槽位 stub 成 Noop 占位，直接 `getRendererName` 会失真）。出处 `docs/solutions/runtime-crashes/bgfx-noop-renderer-platform-gap.md` + `fcf9824b`/`80815bb7`。
 
 ### 4.4 Web 端（WebAssembly / Wasmoon）
 - **路径归一化**：引擎资源路径统一归一化为 `/assets/<path>`，防止出现 `/assets/assets/` 404。
@@ -143,14 +145,16 @@
 ### 5.2 状态划分（实测 vs Gated）
 - ✅ **已完成实测验证**：
   - Windows x64 完整引擎运行、编辑器 RPC 与 1052 C++ 测试；
-  - Linux WSL/Ubuntu 无头与窗口化验证；
+  - Linux WSL/Ubuntu 无头与窗口化验证（注：t92 之前的『窗口化』存在 requested/actual 失配假绿风险，真渲染绿证见下方 ⏳ 项）；
   - Web 播放器 PWA 离线缓存、DOM 渲染、Wasmoon 323 项 Vitest；
   - Android 真机（Redmi K40）全链路闭环：启动、渲染、字形、分支、存档、生命周期。
 - ⏳ **声明 / 硬件受限项（Honest Gating）**：
   - **IME 输入法候选词真机输入**：C++ 底层接口与 Lua 绑定已闭环，真机实体输入法弹出与实际打字处于 `claimed / device-unverified (pending)`；
   - **iOS 真机实测**：12/12 Metal Shaders 与 Xcode 流程完备，物理真机处于 `hardware-gated`；
   - **低内存压力中断（onLowMemory）**：真机物理触发未覆盖；
-  - **多指手势注入**：单测覆盖，真机物理多指注入未实测。
+  - **多指手势注入**：单测覆盖，真机物理多指注入未实测；
+  - **Linux 真渲染绿证（GL 实际渲染、非 Noop）**：t92/t94 修复后的首证处于 **CI round-5 判读中**——不得写成已验证（round-4 教训：Linux 包内游戏 requested=D3D11→actual=Noop、exit 0 假绿）；
+  - **macOS §3 结论（隐藏窗口 Metal drawable 假设）**：**取证中（.ips + demo 探针）**——editor 检查失败路径会抓 `~/Library/Logs/DiagnosticReports/CaesuraAmeKAG*.ips` 头（异常类型+崩溃帧，`bca67d42`）+ 纯诊断可见窗口 demo 探针（`--frames 60` rc+tail）作内容 vs 编辑器路径判别。
 
 ### 5.3 关键历史决策与评估
 - **KAG3 生态兼容决策**：
@@ -158,6 +162,10 @@
   - 《LimeLight Lemonade Jam》商业作品移植评估：引擎核心能力 100% 就绪，移植阻塞点为官方加密 XP3（需通过提取后的 `unencrypted.xp3` 载入）。
 - **统一语义层（KAG Semantic Layer）**：
   - 决策：在 `scripts/kag/semantic.lua` 建立统一 AST / CFG 模型，作为 Story Flow、i18n、LSP、CLI 统一真相源，根除正则表达式解析分歧。
+- **『响亮降级』配套铁律**：把崩溃改成 exit 0 + 降级标记（渲染禁用/静音继续跑）的修复，**必须同批**给验证层加『降级标记缺席』断言——退出码从此不再是该子系统健康的充分证据（实例：音频 NullAudio 降级靠 packaged-lua 正属性兜底；渲染 IFH 守卫靠 `verify_release_package.sh` §5 grep `rendering disabled (BGFX_DEBUG_IFH)`=0，配套 `c1f43885` 让包验证在守卫被触发时失败）。
+- **IFH 禁渲染门只看核心程序**：`coreProgramsBroken()` = `{fallback, blend}` 两程序（vsSprite+fsTexture / vsFullscreen+fsBlend）任一无效才禁用渲染（`BGFX_DEBUG_IFH` + `[RENDER][ERROR]` 标排行，帧循环继续）；非核心（vfx/transition/stretch/affine/postfx）失败→响亮计数 + 各自 draw 点守卫跳过，**渲染继续**（单坏 VFX 不得黑屏；`e771c853`）。
+- **blend 合法枚举 uniform 驱动同程序别名**：28 模式共用单 `fs_blend` 程序（模式经 `u_blendParams.w` uniform 传递），未注册合法键（10/11/16）别名到确定性靶 `NormalKey()` 并计数（`m_aliasedVariants` 为 doctest 判别面）；越界键保持响亮 ERROR + Normal 降级；`precompileCommon` 改注册表快照同源迭代根除预编/注册双清单漂移（`7fa1c40f`）。
+- **EditorServer bind 失败响亮化 + lastError 契约**：bind 失败 stderr 打 `[EditorServer] [ERROR] failed to bind 127.0.0.1:<port>: socket error <code>`（10013=排除段/权限，10048=被占）+ 排查提示（不再静默退出），并暴露 `lastError()` 供测试断言（`bcf23b0c`）。
 
 ---
 
@@ -178,3 +186,6 @@
 | **Toolchain** | Windows Python 子进程乱码与管道卡死 | Windows 默认使用 GBK 编码导致 UTF-8 字符解码崩溃 | 子进程显式声明 `encoding="utf-8", errors="replace"` | Commit `31e2fb32` / CLI |
 | **QA / RC** | 后续日常提交导致 RC `--check` 误报红 | Verifier 将 HEAD Commit 与 Manifest 写死比对 | 改为以 Manifest 基线为权威，`--check` 校验内部自洽性 | Commit `9f5a022f` / Verifier |
 | **Matrix** | 平台矩阵 `test: null` 绕过校验 | `str(None)` 转换为字符串 `"None"` 导致空判定失效 | 显式拦截 None 值并增强 probe 状态下引用文档存在性校验 | Commit `5a87ca86` / Matrix |
+| **Render（日志）** | 引擎日志分段两种形态并存——多数 `[RENDER] [ERROR]` 带空格，BgfxRenderDevice IFH 行 `[RENDER][ERROR]` 无空格 | debug 宏经 `Caesura::debug::log`（`[%s] [%s]` 带空格分段），IFH 行是手写 printf 紧连 | 断言/复核 grep 用单 token（`grep -F '[RENDER]'`）或带空格/无空格双形态各测；连写 `[RENDER][ERROR]` 漏掉多数日志、带空格漏掉 IFH 行（曾致误报『0 错误』） | Round34 教训 / `BgfxRenderDevice.cpp:115,395` |
+| **Render（shader repack）** | GL 内嵌数组手工 repack 后 `createProgram` 返回 INVALID / 编译失败 | 三坑：①uniform 记录缺 texInfo/texFormat 字段（ver>=8/>=10 应有 2+2 字节，每条记录固定 10 字节尾部）；②`fsh.hashIn` 必须等于配对 `vsh.hashOut`（bgfx_p.h:5140 配对检查，失败即 INVALID，BX_TRACE 不可见）；③bgfx 内部 debugfont 覆盖层用 `gl_FragColor`（GLSL 3.30 后移除，C7616 WARN——观察项非业务 bug，别与业务数组症状混淆） | 按布局重建（shaderSize **替换而非 append**）+ `fs[4:8]=vs[8:12]` + 字节 walk 回放校验 + `--backend opengl --frames 60` 断言 program READY 无 build failed；工具 `scripts/repack_gl_embed.py`（--hashin-from-vs，幂等） | `docs/solutions/build-errors/bgfx-shader-binary-repack.md` / t79 实测 |
+| **QA/RC** | 本机 RC 对抗突变测试随 Lua 套件增长必红 | `verify_release_candidate.py` **动态计数**当前 Lua 套件（`get_lua_suite_counts` 读 run_lua_tests.lua/run_orphan_tests.lua），旧 evidence bundle 记录数落后于套件增长→校验失败 | 套件增长后重新 `--generate-bundle` 并再签发（by-design）；CI 裸检出无 `artifacts/release/` → `test_rc_adversarial_mutations.py` exit **77 SKIP**，缺失 bundle 永不 FAIL/假 PASS | `scripts/verify_release_candidate.py:61,678` / SKIP 语义 |
