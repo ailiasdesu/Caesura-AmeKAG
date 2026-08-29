@@ -11,6 +11,20 @@
 #include "../../external/cpp-httplib/httplib.h"
 #include "../debug/api/DebugLog.h"
 
+// Socket-error capture for the loud bind/listen diagnostics (t88): httplib
+// does not expose the OS error, so read it at the failure point. ws2tcpip.h
+// after winsock2.h; POSIX uses errno (declared by <cerrno>).
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <cerrno>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
+
 #include <nlohmann_json.hpp>
 
 #include <algorithm>
@@ -38,6 +52,66 @@ using Json = nlohmann::json;
 
 std::string dumpJson(const Json& value) {
     return value.dump(-1, ' ', false, Json::error_handler_t::replace);
+}
+
+// The OS error behind a failed httplib bind/listen. Must be read immediately
+// at the failure point (before any other Winsock/errno-touching call).
+int lastSocketError() {
+#ifdef _WIN32
+    return static_cast<int>(WSAGetLastError());
+#else
+    return errno;
+#endif
+}
+
+// Re-run the failing bind with a raw socket so the OS error code is captured
+// reliably: httplib does not surface it, and WSAGetLastError after httplib's
+// own cleanup frequently reads 0. Returns the OS error, or -1 when the raw
+// bind unexpectedly succeeds (caller then keeps the original capture).
+int probeBindError(int port) {
+#ifdef _WIN32
+    const SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) return static_cast<int>(WSAGetLastError());
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<u_short>(port));
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    const int rc = ::bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    const int err = (rc == 0) ? -1 : static_cast<int>(WSAGetLastError());
+    ::closesocket(s);
+    return err;
+#else
+    const int s = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) return errno;
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<unsigned short>(port));
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    const int rc = ::bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    const int err = (rc == 0) ? -1 : errno;
+    ::close(s);
+    return err;
+#endif
+}
+
+// Loud, actionable bind failure text. t84: Windows dynamic exclusion ranges
+// silently covered 9876 -> start() returned false -> engine exited 1 with ZERO
+// [EditorServer] output; this message is the paper trail for that class.
+std::string bindFailureMessage(int port, int socketError) {
+    std::string msg = "[EditorServer] [ERROR] failed to bind 127.0.0.1:";
+    msg += std::to_string(port);
+    msg += ": socket error ";
+    msg += std::to_string(socketError);
+#ifdef _WIN32
+    msg += " (10013=WSAEACCES access denied / dynamic exclusion, 10048=WSAEADDRINUSE already in use)";
+#endif
+    msg += "\n[EditorServer] [ERROR]   - port already in use? netstat -ano | grep 127.0.0.1:";
+    msg += std::to_string(port);
+#ifdef _WIN32
+    msg += "\n[EditorServer] [ERROR]   - Windows may reserve the port in a dynamic exclusion range (observed 9813-9912 covering 9876 on 2026-08-29):";
+    msg += " netsh int ipv4 show excludedportrange protocol=tcp; unblock with admin: net stop winnat && net start winnat (or pick another port)";
+#endif
+    return msg;
 }
 
 std::string pathToUtf8(const fs::path& path) {
@@ -239,9 +313,15 @@ EditorServer::~EditorServer() {
     stop();
 }
 
+std::string EditorServer::lastError() const {
+    std::lock_guard<std::mutex> lock(m_dispatcherMutex);
+    return m_lastError;
+}
+
 bool EditorServer::start(int port) {
     if (m_running) {
         printf("[EditorServer] Already running on port %d\n", m_port);
+        { std::lock_guard<std::mutex> lock(m_dispatcherMutex); m_lastError.clear(); }
         return true;
     }
 
@@ -250,6 +330,11 @@ bool EditorServer::start(int port) {
     // Secure by default: establish (or generate) the bearer token BEFORE the
     // socket is bound, so no request can ever be served unauthenticated.
     if (!ensureAuthToken()) {
+        const std::string msg =
+            "[EditorServer] [ERROR] failed to establish an auth token "
+            "(editor refuses to start unauthenticated; check token generation)";
+        fprintf(stderr, "%s\n", msg.c_str());
+        { std::lock_guard<std::mutex> lock(m_dispatcherMutex); m_lastError = msg; }
         m_port = 0;
         return false;
     }
@@ -259,6 +344,16 @@ bool EditorServer::start(int port) {
         ? m_server->bind_to_any_port("127.0.0.1")
         : (m_server->bind_to_port("127.0.0.1", port) ? port : -1);
     if (boundPort < 0) {
+        // t88: loud bind failure -- a silent false here surfaced only as
+        // "engine exited 1" (t84: dynamic exclusion range covered 9876).
+        int sockErr = lastSocketError();
+        if (sockErr == 0) {
+            const int probeErr = probeBindError(port);
+            if (probeErr > 0) sockErr = probeErr;
+        }
+        const std::string msg = bindFailureMessage(port, sockErr);
+        fprintf(stderr, "%s\n", msg.c_str());
+        { std::lock_guard<std::mutex> lock(m_dispatcherMutex); m_lastError = msg; }
         m_server.reset();
         m_port = 0;
         return false;
@@ -296,6 +391,9 @@ bool EditorServer::start(int port) {
                    "(INSECURE MODE: no token required)\n", m_port);
         }
         fflush(stdout);
+        // t89 must-fix: honor the lastError() contract -- a successful start()
+        // clears any stale failure from a previous attempt on this instance.
+        { std::lock_guard<std::mutex> lock(m_dispatcherMutex); m_lastError.clear(); }
         return true;
     }
     return false;
@@ -1420,6 +1518,12 @@ void EditorServer::serverLoop(int port) {
     // ---------------------------------------------------------------------
     printf("[EditorServer] Listening on port %d...\n", port);
     if (!svr.listen_after_bind()) {
+        // t88: loud listen failure too (same silent-death class as bind).
+        const std::string msg = "[EditorServer] [ERROR] failed to listen on 127.0.0.1:"
+            + std::to_string(port) + ": socket error "
+            + std::to_string(lastSocketError());
+        fprintf(stderr, "%s\n", msg.c_str());
+        { std::lock_guard<std::mutex> lock(m_dispatcherMutex); m_lastError = msg; }
         DEBUG_ERR(SubSys::Platform, ErrCode::Ok,
                   "[EditorServer] Failed to listen on port %d", port);
     }

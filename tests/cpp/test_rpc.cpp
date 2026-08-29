@@ -13,6 +13,17 @@
 #include <httplib.h>
 #include <nlohmann_json.hpp>
 
+// EditorServer bind-failure regression tests (t88) need a held loopback port.
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -79,6 +90,83 @@ bool startOpen(EditorServer& es) {
     es.setInsecureNoAuth(true);
     return es.start(0);
 }
+
+// Holds a listening loopback socket on an OS-assigned port for the
+// "port already in use" editor tests (t88). Windows: SO_EXCLUSIVEADDRUSE makes
+// the reservation unbreachable -- deterministically the same bind-failure class
+// as the t84 dynamic-exclusion WSAEACCES case; POSIX: a plain listening socket
+// refuses any second bind.
+class HeldLoopbackPort {
+public:
+    HeldLoopbackPort() {
+#ifdef _WIN32
+        static const bool wsa = [] {
+            WSADATA d{};
+            return WSAStartup(MAKEWORD(2, 2), &d) == 0;
+        }();
+        (void)wsa;
+        m_sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (m_sock == INVALID_SOCKET) return;
+        BOOL exclusive = TRUE;
+        ::setsockopt(m_sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                     reinterpret_cast<const char*>(&exclusive), sizeof(exclusive));
+#else
+        m_sock = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (m_sock < 0) return;
+#endif
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = 0;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+#ifdef _WIN32
+        const int addrLen = static_cast<int>(sizeof(addr));
+#else
+        const socklen_t addrLen = static_cast<socklen_t>(sizeof(addr));
+#endif
+        if (::bind(m_sock, reinterpret_cast<sockaddr*>(&addr), addrLen) != 0 ||
+            ::listen(m_sock, 1) != 0) {
+            closeIfOpen();
+            return;
+        }
+#ifdef _WIN32
+        int len = sizeof(addr);
+#else
+        socklen_t len = sizeof(addr);
+#endif
+        if (::getsockname(m_sock, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
+            closeIfOpen();
+            return;
+        }
+        m_port = static_cast<int>(ntohs(addr.sin_port));
+    }
+    ~HeldLoopbackPort() { closeIfOpen(); }
+    HeldLoopbackPort(const HeldLoopbackPort&) = delete;
+    HeldLoopbackPort& operator=(const HeldLoopbackPort&) = delete;
+    bool valid() const { return m_valid; }
+    int port() const { return m_port; }
+private:
+    void closeIfOpen() {
+#ifdef _WIN32
+        if (m_sock != INVALID_SOCKET) {
+            ::closesocket(m_sock);
+            m_sock = INVALID_SOCKET;
+        }
+#else
+        if (m_sock >= 0) {
+            ::close(m_sock);
+            m_sock = -1;
+        }
+#endif
+        m_valid = false;
+    }
+#ifdef _WIN32
+    SOCKET m_sock = INVALID_SOCKET;
+#else
+    int m_sock = -1;
+#endif
+    bool m_valid = true;
+    int m_port = 0;
+};
 
 RpcReply successReply(const RpcRequest& request) {
     if (std::holds_alternative<RpcStatusRequest>(request.payload)) {
@@ -456,6 +544,40 @@ TEST_CASE("IEditorServer interface completeness") {
     IEditorServer* iface = &es;
     CHECK(iface != nullptr);
     CHECK(iface->isRunning() == false);
+}
+
+TEST_CASE("EditorServer::bind failure is loud (lastError) on an occupied port") {
+    // t88 regression: a held 127.0.0.1:<port> socket makes the bind fail
+    // (same class as the t84 dynamic-exclusion WSAEACCES case). start() must
+    // return false AND publish the failure in lastError() -- the silent
+    // "engine exits 1 with zero [EditorServer] output" defect.
+    HeldLoopbackPort held;
+    REQUIRE(held.valid());
+    EditorServer es;
+    es.setInsecureNoAuth(true);
+    CHECK_FALSE(es.start(held.port()));
+    CHECK_FALSE(es.isRunning());
+    CHECK(es.port() == 0);
+    CHECK_FALSE(es.lastError().empty());
+    CHECK(es.lastError().find("failed to bind 127.0.0.1:") != std::string::npos);
+
+    // t89 must-fix regression: a later successful start() on the SAME instance
+    // clears the stale failure message (lastError() contract).
+    REQUIRE(startOpen(es));
+    CHECK(es.isRunning());
+    CHECK(es.lastError().empty());
+    es.stop();
+}
+
+TEST_CASE("EditorServer::start succeeds on a free port with empty lastError") {
+    EditorServer es;
+    es.setInsecureNoAuth(true);
+    REQUIRE(startOpen(es));
+    CHECK(es.isRunning());
+    CHECK(es.port() > 0);
+    CHECK(es.lastError().empty());
+    es.stop();
+    CHECK_FALSE(es.isRunning());
 }
 
 TEST_CASE("RpcServer submits runtime DTOs to dispatcher") {

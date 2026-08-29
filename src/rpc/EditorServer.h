@@ -37,6 +37,12 @@ public:
     bool isRunning() const override { return m_running.load(); }
     int  port() const override { return m_port; }
 
+    // Last failure message set by start()/the listener thread (bind failure,
+    // auth-token establishment, listen failure). Empty when the last start()
+    // succeeded or no start has run. Concrete-class diagnostics for tests;
+    // not part of IEditorServer.
+    std::string lastError() const;
+
     // Post a log entry for the web editor to poll.
     void pushLog(const std::string& level, const std::string& message) override;
     // Optional bearer token; when set, requests must present
@@ -103,6 +109,9 @@ private:
     // Executable-directory anchor for ProjectContext (see setSourceAnchor);
     // written by the composition root before start(), read in serverLoop.
     std::filesystem::path m_sourceAnchor;
+    // Last failure message (see lastError()); guarded by m_dispatcherMutex so
+    // the worker thread (listen failure) can publish while start() reads.
+    std::string m_lastError;
 
     // Generate a cryptographically-unpredictable hex token, or an empty
     // string when no entropy source is available (caller fails closed).

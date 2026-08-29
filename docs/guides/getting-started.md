@@ -546,6 +546,20 @@ A: VS 实例注册缺失（vswhere 查为空 / `HKLM\SOFTWARE\Microsoft\VisualSt
    值需带 `,version=17.x` 后缀）；② VS Installer →“修改”→“修复”重建实例注册。
    vcpkg 报同错（`VCPKG_VISUAL_STUDIO_PATH` 也无效）——先修实例注册再装 SDL3。
 
+**Q: Windows 下 `--editor` 启动即退出、退出码 1（且无任何 `[EditorServer]` 输出）**
+A: 端口绑定失败的典型症状（进程干净关机、退出码 1、stdout 无 `[EditorServer] Started`/
+   `Listening on port` 行）。根因多为端口被占或**落在 Windows 动态排除端口段**——
+   2026-08-29 本机实测 `netstat` 无任何 9876 监听，但 bind 报 `WSAEACCES(10013)`：
+   排除段 [9813-9912] 恰好覆盖 9876（WinNAT 家族，随 WSL2/Docker/Hyper-V 生命周期漂移，
+   这也是“昨天还能跑今天不行”的来源）。自查：`netsh int ipv4 show excludedportrange 
+   protocol=tcp`（看 9876 是否落在某区间；`netstat -ano | grep 9876` 见被占）；
+   解锁：管理员 PowerShell `net stop winnat && net start winnat`（重排动态段，也可能复现）
+   或改监听端口。修复后版本（本轮 P1）会在 stderr 打印响亮错误：
+   `[EditorServer] [ERROR] failed to bind 127.0.0.1:<port>: socket error <code>`
+   （10013=排除段/权限，10048=被占）+ 排查提示，不再静默退出。
+   无 admin 的替代解锁：设环境变量 `CAESURA_EDITOR_PORT=<空闲端口>` 再跑 `--editor`
+   （覆盖生效时 stderr 打印 `[EditorServer] CAESURA_EDITOR_PORT override: <port>`；默认仍为 9876）。
+
 **Q: CMake 报 `CMake 3.25 or higher is required`**
 A: 版本太旧。`cmake --version` 查看；Windows 用 winget 装最新，Linux `sudo apt install cmake`
    后 Ubuntu 24.04 自带 3.28，macOS `brew upgrade cmake`。
