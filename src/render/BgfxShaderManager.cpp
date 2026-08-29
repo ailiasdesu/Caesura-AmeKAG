@@ -477,7 +477,14 @@ void BgfxShaderManager::initEmbeddedShaders() {
     }
     CompositeShaderCache::instance().precompileCommon();
     if (bgfx::isValid(m_fallbackProgram)) {
+        // Reserved (non-enum) key: the fallback program is NOT a blend-mode
+        // variant. Registering it under the default {0,false} key would clobber
+        // the Normal blend entry (mode semantics travel via u_blendParams on the
+        // blend program), and the alias branch prefers Normal -- so keep the
+        // fallback on its own slot.
         CompositeShaderKey fk;
+        fk.blendMode  = -1;
+        fk.usePalette = false;
         CompositeShaderCache::instance().registerProgram(fk, m_fallbackProgram);
     }
 

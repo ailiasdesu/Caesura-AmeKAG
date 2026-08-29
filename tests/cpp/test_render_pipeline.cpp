@@ -73,6 +73,48 @@ TEST_CASE("ShaderCache::evict oldest when full") {
     CHECK(cache.size() <= 64);
 }
 
+TEST_CASE("ShaderCache::legal unregistered blend modes alias the non-palette program (t86)") {
+    // t86 regression: precompileCommon asks for Difference(10)/Exclusion(11)/
+    // Add(16) without palette; the engine individually registers a subset
+    // (Normal..SoftLight 0-9), so these are legal keys that are never
+    // individually registered -- by design they resolve to the SAME
+    // non-palette program (the blend mode travels as a uniform). The unregistered
+    // path must NOT be taken for legal enums (the round-3 / release-verify
+    // '[ERROR] unregistered variant blend=10/11' noise), and out-of-range keys
+    // keep the loud documented degrade.
+    CompositeShaderCache& cache = CompositeShaderCache::instance();
+    CompositeShaderKey normalKey;
+    normalKey.blendMode = static_cast<int>(BlendMode::Normal);
+    bgfx::ProgramHandle ph{ 1 };    // idx-valid handle: bgfx::isValid is idx-based
+    cache.registerProgram(normalKey, ph);
+    CHECK(cache.size() >= 1);
+
+    // t90 discriminator: the t86-era handle-equality check alone could not tell
+    // the aliased path apart from the OLD unregistered path -- both returned the
+    // SAME handle (only the log level differed, ERROR vs INFO, and doctest has
+    // no log capture). The alias-path counter is the observable surface: every
+    // legal first-time lookup resolves through the alias branch and increments
+    // it exactly once; the old code never increments it. RED under the old code.
+    const size_t aliasBefore = cache.aliasedVariantCount();
+    for (int mode : { (int)BlendMode::Difference,   // 10
+                      (int)BlendMode::Exclusion,    // 11
+                      (int)BlendMode::Add }) {      // 16
+        CompositeShaderKey key;
+        key.blendMode = mode;
+        CHECK(cache.getProgram(key).idx == ph.idx);
+    }
+    CHECK(cache.aliasedVariantCount() == aliasBefore + 3);
+
+    // Out-of-range stays on the diagnostic degrade (Normal fallback, loud log).
+    CompositeShaderKey bad;
+    bad.blendMode = static_cast<int>(BlendMode::COUNT) + 3;
+    CHECK(cache.getProgram(bad).idx == ph.idx);
+    // t90: out-of-range is NOT a legal blend mode -- the alias branch is gated
+    // by the legal range, so the counter does not advance here (the degrade
+    // path is still exercised and must remain observable).
+    CHECK(cache.aliasedVariantCount() == aliasBefore + 3);
+}
+
 TEST_CASE("TextRenderer::glyphQuadToNDC italic shears the top edge only") {
     // 1280x720 ortho; pixel (px,py) -> NDC ((px/1280)*2-1, 1-(py/720)*2)
     const float sw = 1280.0f, sh = 720.0f;

@@ -2,8 +2,18 @@
 #include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
 #include <cstdio>
 #include <algorithm>
+#include <vector>   // t90: precompileCommon registry-snapshot iteration
 
 namespace Caesura {
+
+// t90: the canonical non-palette key (Normal blend mode, no palette) -- the
+// deterministic alias target for unregistered legal-mode lookups.
+static CompositeShaderKey NormalKey() {
+    CompositeShaderKey k;
+    k.blendMode  = static_cast<int>(BlendMode::Normal);
+    k.usePalette = false;
+    return k;
+}
 
 // ---------------------------------------------------------------------------
 // Singleton
@@ -147,25 +157,19 @@ bgfx::ProgramHandle CompositeShaderCache::getProgram(const CompositeShaderKey& k
 // ---------------------------------------------------------------------------
 
 void CompositeShaderCache::precompileCommon() {
-    // Most common blend modes without palette -- preloaded eagerly
-    static const BlendMode kCommonModes[] = {
-        BlendMode::Normal,
-        BlendMode::Multiply,
-        BlendMode::Screen,
-        BlendMode::Overlay,
-        BlendMode::Darken,
-        BlendMode::Lighten,
-        BlendMode::Add,
-        BlendMode::Difference,
-        BlendMode::Exclusion,
-        BlendMode::SoftLight
-    };
-
-    for (auto mode : kCommonModes) {
-        CompositeShaderKey key;
-        key.blendMode  = static_cast<int>(mode);
-        key.usePalette = false;
-        getProgram(key);
+    // t90: precompile what is ACTUALLY registered (same-source list) instead of
+    // a hardcoded kCommonModes array -- the old hardcoded list ({0..5,16,10,11,9})
+    // drifted from the engine's registration subset ({0..9}) and produced the
+    // round-3 'unregistered variant blend=10/11' [ERROR] noise. Iterating the
+    // registry kills the drift class: the alias branch stays as a defensive
+    // fallback for hypothetical post-init legal-mode lookups.
+    // Snapshot first: getProgram touches the LRU list (mutates the container
+    // we are iterating -- a straight range-for would be undefined behavior).
+    std::vector<CompositeShaderKey> keys;
+    keys.reserve(m_cache.size());
+    for (const auto& pair : m_cache) keys.push_back(pair.first);
+    for (const auto& key : keys) {
+        if (!key.usePalette) getProgram(key);
     }
 }
 
@@ -188,6 +192,38 @@ void CompositeShaderCache::precompileCommon() {
 // EmbeddedShaders / file-load path and injected here.
 
 bgfx::ProgramHandle CompositeShaderCache::compileVariant(const CompositeShaderKey& key) {
+    // t86: ONE program serves every LEGAL blend mode (fs_blend.sc design;
+    // the mode is passed as a uniform, u_blendParams.w, at draw time). A legal
+    // non-palette key that was not individually registered (Difference 10 /
+    // Exclusion 11 / Add 16 are in precompileCommon's ten-most-common list but
+    // the engine registers a different subset) therefore resolves to the
+    // SAME registered non-palette program -- expected aliasing, not an error.
+    if (!key.usePalette
+        && key.blendMode >= 0
+        && key.blendMode < static_cast<int>(BlendMode::COUNT)) {
+        // Deterministic target (t90): prefer the Normal key (the canonical
+        // non-palette entry) so a legal-mode alias always resolves to the mode
+        // program, never to an arbitrary first entry of an unordered scan.
+        auto normal = m_cache.find(NormalKey());
+        if (normal != m_cache.end()) {
+            ++m_aliasedVariants;
+            DEBUG_INFO(SubSys::Render, ErrCode::Ok,
+                       "[ShaderCache] blend=%d uses the registered Normal "
+                       "program (uniform-driven aliasing, deterministic target).",
+                       key.blendMode);
+            return normal->second.program;
+        }
+        for (const auto& pair : m_cache) {
+            if (!pair.first.usePalette && pair.first.blendMode >= 0) {
+                ++m_aliasedVariants;
+                DEBUG_INFO(SubSys::Render, ErrCode::Ok,
+                           "[ShaderCache] blend=%d uses the registered non-palette "
+                           "program (uniform-driven aliasing).", key.blendMode);
+                return pair.second.program;
+            }
+        }
+    }
+
     // All Programs registered by IRenderDevice::initEmbeddedShaders()
     // and registered via registerProgram(). If we reach here, the program
     // was not registered -- fall back to Normal blend mode.

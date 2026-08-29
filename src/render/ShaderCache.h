@@ -110,13 +110,19 @@ public:
     void registerProgram(const CompositeShaderKey& key, bgfx::ProgramHandle program);
 
     // -- Precompile helpers ------------------------------------------------
-    // Pre-loads the 10 most common combinations (Normal, Multiply, Screen,
-    // Overlay, Darken, Lighten, Add, Subtract, Alpha, Erase) all without palette.
+    // Pre-loads every registered non-palette combination (t90: the registry is
+    // the source list; a hardcoded "most common" array drifted from the engine
+    // registration subset and produced unregistered-variant [ERROR] noise).
     void precompileCommon();
 
     // -- Stats -------------------------------------------------------------
     size_t size() const    { return m_cache.size(); }
     size_t maxSize() const { return MAX_ENTRIES; }
+    // t90: observable alias-path probe -- counts how many getProgram lookups
+    // resolved through the uniform-driven non-palette aliasing branch (the
+    // only externally observable difference between the alias fix and the old
+    // unregistered-error fallback; doctest asserts it moves).
+    size_t aliasedVariantCount() const { return m_aliasedVariants; }
 
 private:
     CompositeShaderCache() = default;
@@ -138,6 +144,7 @@ private:
     std::unordered_map<CompositeShaderKey, CacheEntry> m_cache;
     std::list<CompositeShaderKey> m_lruList;   // front = most-recently-used
 
+    size_t m_aliasedVariants = 0;   // t90: alias-path hits (see accessor above)
     bool m_initialized = false;
 };
 
