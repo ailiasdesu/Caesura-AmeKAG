@@ -563,10 +563,15 @@ else
         # KAG runner never starting. Distinguish, don't guess.
         BOOTFATAL=$(grep -c '\[caesura\] FATAL' "$RL" || true)
         KAGRUN=$(grep -c 'KAG Runner] Started' "$RL" || true)
-        if [ "$RR" = "0" ] && [ "$BOOTFATAL" = "0" ] && [ "$KAGRUN" -ge 1 ]; then
-            ok "game exe --frames 60 -> exit 0, KAG runner started, no boot fatal"
+        # The shader guard degrades loudly instead of crashing: a broken shader
+        # set now exits 0 with rendering disabled (BGFX_DEBUG_IFH). Exit codes
+        # alone can no longer prove the renderer works -- the guard marker must
+        # be ABSENT, so a silently degraded run fails this same check.
+        RENDERDISABLED=$(grep -c 'rendering disabled (BGFX_DEBUG_IFH)' "$RL" || true)
+        if [ "$RR" = "0" ] && [ "$BOOTFATAL" = "0" ] && [ "$KAGRUN" -ge 1 ] && [ "$RENDERDISABLED" = "0" ]; then
+            ok "game exe --frames 60 -> exit 0, KAG runner started, renderer alive, no boot fatal"
         else
-            bad "game exe --frames 60" "exit=$RR bootfatal=$BOOTFATAL kagrunner=$KAGRUN; tail: $(tail -5 "$RL" | tr '
+            bad "game exe --frames 60" "exit=$RR bootfatal=$BOOTFATAL kagrunner=$KAGRUN renderdisabled=$RENDERDISABLED; tail: $(tail -5 "$RL" | tr '
 ' ' | ')"
         fi
     else
