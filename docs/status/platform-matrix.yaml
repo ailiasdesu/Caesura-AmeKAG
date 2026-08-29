@@ -53,10 +53,10 @@ platforms:
         evidence:
           commit: "7935dffb"
           document: "docs/guides/release-process.md"
-          test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (29/29 assertions; incl. out-of-repo, PATH-stripped create/build/run probe, demo/ non-empty)"
+          test: "cpack -C Release -G ZIP && bash scripts/verify_release_package.sh (30/30 assertions; incl. out-of-repo, PATH-stripped create/build/run probe, demo/ non-empty; +SDL3 dylib relocatability check added 2026-08-29 — 1 otool scope note on Windows)"
           verified_at: "2026-08-28T22:38:00Z"
           # NOTE(2026-08-29): Windows Release·Package in run 33193556904 (d310747a) still in_progress at measurement time; evidence below remains the last verified run (7935dffb).
-          notes: "CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 29/29 on both Release (sha256 b6a5b93c...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH and a demo/ non-empty check (2026-08-28)."
+          notes: "CPack ZIP builds and the extracted archive boots from its own folder (--frames 60 exits 0). The install-set gaps measured on v1.0.1 (no web-editor/dist, no tools/project_templates, hand-copied steam_api64.dll) were closed in Sprint 4: the install set now ships web-editor/dist, tools/project_templates (5 templates), external/lua (lua_cli product) and steam_api64.dll (OPTIONAL, Steam builds only). Verified by scripts/verify_release_package.sh 30/30 (29 strict + 1 otool scope note since 2026-08-29, when the SDL3 dylib relocatability hard gate was added; Windows has no otool so the check notes instead of asserting) on both Release (sha256 b6a5b93c...) and Debug ZIPs, including an out-of-repo create->build->run probe with lua stripped from PATH and a demo/ non-empty check (2026-08-28)."
       release:
         status: pending
         evidence:
@@ -105,7 +105,7 @@ platforms:
           document: "docs/guides/release-process.md"
           test: "CI run 33193556904 'Linux · Package' job: CPack TGZ then verify_release_package.sh on CaesuraAmeKAG-1.0.1-Linux-x86_64.tar.gz (36.2MB)"
           verified_at: "2026-08-29T01:30:00Z"
-          notes: "Linux TGZ lane green on run 33193556904 (commit d310747a). verify semantics = 29 items: 28 strict-PASS + 1 POSIX note (the stripped-PATH probe degrades to a note on POSIX because /usr/bin distro lua cannot be stripped; the true `ran under the PACKAGED lua` assertion still guards the property). Channel code chain: 4bc22248 (TGZ lane) + be815fa3 (pgrep -x) + d82a0f72 (probe degradation)."
+          notes: "Linux TGZ lane green on run 33193556904 (commit d310747a). verify semantics = 30 items on every lane (count is platform-uniform since 2026-08-29): Linux = 28 strict-PASS + 2 notes (the stripped-PATH probe degrades to a note on POSIX because /usr/bin distro lua cannot be stripped — the true `ran under the PACKAGED lua` assertion still guards the property — plus the SDL3 relocatability scope note, since no otool on Linux); Windows = 29 strict + 1 note; macOS = 29 strict + 1 note with a packaged SDL3 dylib (real otool assertion), 28 strict + 2 notes when statically linked. Channel code chain: 4bc22248 (TGZ lane) + be815fa3 (pgrep -x) + d82a0f72 (probe degradation)."
       release:
         status: pending
         evidence:

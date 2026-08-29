@@ -268,11 +268,15 @@ Before publishing, confirm the archive is complete and runnable:
 > editor's Project Manager `/api/project/templates` answers 200 from the package.
 > The package also bundles its own Lua interpreter (`external/lua/lua.exe`,
 > installed from the `lua_cli` target), so `caesura build` inside an extracted
-> ZIP needs no system Lua on PATH — verified by the 29-assertion release check
-> including a PATH-stripped create→build→run probe (2026-08-28). 29 = 28 strict
-> + 1 POSIX note: on POSIX the stripped-PATH probe degrades to a note (the
-> /usr/bin distro lua cannot be stripped), and the true property is guarded by
-> the `ran under the PACKAGED lua` assertion (2026-08-29, Linux TGZ lane).
+> ZIP needs no system Lua on PATH — verified by the 30-assertion release check
+> including a PATH-stripped create→build→run probe (2026-08-28). Count per lane:
+> Windows 29 strict + 1 note; Linux 28 strict + 2 notes; macOS 29 strict + 1
+> note (the otool SDL3 hard gate is a real assertion there). The two scope
+> notes are (a) on POSIX the stripped-PATH probe degrades to a note (the
+> /usr/bin distro lua cannot be stripped — the property stays guarded by the
+> `ran under the PACKAGED lua` assertion, 2026-08-29 Linux TGZ lane) and (b)
+> the SDL3 relocatability check passes as a note where otool or a packaged
+> dylib is absent (Windows/Linux, or statically linked; 2026-08-29).
 
 ```bash
 # List archive contents:
@@ -310,11 +314,11 @@ bash scripts/verify_release_package.sh
 bash scripts/verify_release_package.sh build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --port=9876 --keep
 ```
 
-29 checks in five groups (POSIX: 28 strict-PASS + 1 note — the stripped-PATH probe degrades when /usr/bin's distro lua cannot be stripped; the `ran under the PACKAGED lua` assertion still guards the property):
+30 checks in five groups (the two scope-note paths: the stripped-PATH probe degrades when /usr/bin's distro lua cannot be stripped — the `ran under the PACKAGED lua` assertion still guards the property — and the SDL3 relocatability check is a note where otool or a packaged dylib is absent. Lane composition: Windows 29 strict + 1 note; Linux 28 strict + 2 notes; macOS 29 strict + 1 note with the packaged SDL3 dylib, 28 strict + 2 notes when statically linked):
 
 | Group | Asserts |
 |-------|---------|
-| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `demo/` (non-empty, anchored on `demo/cjk_smoke.ks` — ProjectContext.looksLikeEngineRoot needs scripts+demo), `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter) |
+| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `demo/` (non-empty, anchored on `demo/cjk_smoke.ks` — ProjectContext.looksLikeEngineRoot needs scripts+demo), `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter), packaged SDL3 dylib relocatability (macOS hard gate: `otool -D` LC_ID_DYLIB and the engine's SDL3 load items via `otool -L` must be `@rpath/`/`@loader_path/` — an absolute brew-style install path pins the package to the build host; note-pass where otool or a packaged dylib is absent) |
 | serving | the process survives in the extracted folder, `GET /` **with** the token returns **200 and the editor HTML**, no `web-editor/dist not found` in the log, `/api/ping` answers ok |
 | auth | unauthenticated `GET /` is **401** — the gate must stay closed; the script never relaxes auth to turn a run green |
 | token discovery | with no `CAESURA_EDITOR_TOKEN`, the engine writes `.caesura-editor-token` beside the executable, prints it on stderr, and that token really opens the editor |

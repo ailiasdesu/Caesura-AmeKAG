@@ -286,6 +286,64 @@ else
     bad "demo/ present and non-empty" "demo/ missing, empty or without $DEMO_ANCHOR (ProjectContext.looksLikeEngineRoot needs scripts+demo)"
 fi
 
+# ------------------------------------------- 2b. packaged SDL3 dylib relocatability
+# macOS hard gate (t36 plan item d, landed 2026-08-29): the Darwin TGZ must run
+# on ANY machine, not be pinned to the build host. Two related regressions:
+#   (1) a brew-built SDL3 dylib shipped as-is carries an ABSOLUTE LC_ID_DYLIB
+#       (/opt/homebrew/opt/sdl3/lib/libSDL3.dylib) -- the package only runs on
+#       the builder (E6 evidence in docs/plans/audit/macos-packaging-lane-plan.md);
+#   (2) the engine binary's SDL3 LOAD path is absolute -- same pin, other side.
+# Assert BOTH when otool exists AND a libSDL3*.dylib is packaged. The glob
+# carries the version on purpose: SDL3's real SONAME file is libSDL3.0.dylib,
+# not libSDL3.dylib (a match only on the unversioned name would silently take
+# the note path and leave the gate empty). No otool (Windows/Linux) or no
+# packaged dylib (statically linked SDL3) -> ok WITH a scope note, the same
+# note-pass precedent as the POSIX stripped-PATH probe, so the check count
+# stays platform-uniform (30/30 on every lane) and Windows/Linux runs keep
+# every existing verdict byte-identical.
+head_ "2b. packaged SDL3 dylib is relocatable"
+if ! command -v otool >/dev/null 2>&1; then
+    ok "packaged SDL3 dylib is relocatable -- otool absent (Windows/Linux): dylib relocation is a macOS-only property, nothing to assert here [note]"
+else
+    SDL_DYLIB="$(compgen -G "$ROOT/libSDL3*.dylib" 2>/dev/null | head -1)"
+    if [ -z "$SDL_DYLIB" ]; then
+        ok "packaged SDL3 dylib is relocatable -- no libSDL3*.dylib in package (statically linked SDL3; nothing to relocate) [note]"
+    elif [ -z "$EXE" ]; then
+        bad "packaged SDL3 dylib is relocatable" "dylib present ($SDL_DYLIB) but no engine executable to inspect (otool -L)"
+    else
+        # (1) LC_ID_DYLIB of the packaged dylib: @rpath/@loader_path/@executable_path
+        #     (i.e. relative-ish) -- NEVER an absolute path.
+        DYLIB_BAD=""
+        DYLIB_ID="$(otool -D "$SDL_DYLIB" 2>/dev/null | tail -1 | tr -d ' ')"
+        case "$DYLIB_ID" in
+            @rpath/*|@loader_path/*|@executable_path/*) ;;
+            *) DYLIB_BAD="LC_ID_DYLIB=$DYLIB_ID (absolute install_name pins the package to the build host)" ;;
+        esac
+        # (2) every SDL3 load item of the engine binary must be @rpath/@loader_path-
+        #     relative; an absolute /opt/homebrew/... load path is the same pin.
+        EXEBAD=""
+        EXE_SDL_N=0
+        while IFS= read -r _sdl_line; do
+            EXE_SDL_N=$((EXE_SDL_N + 1))
+            case "$_sdl_line" in
+                @rpath/*|@loader_path/*|@executable_path/*) ;;
+                *) EXEBAD="$EXEBAD; $_sdl_line" ;;
+            esac
+        done <<< "$(otool -L "$EXE" 2>/dev/null | grep -i sdl3 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]].*//')"
+        if [ "$EXE_SDL_N" = "0" ]; then
+            EXEBAD="no SDL3 load item in otool -L output although $SDL_DYLIB is packaged"
+        fi
+        EXEBAD="${EXEBAD#; }"
+        if [ -z "$DYLIB_BAD" ] && [ -z "$EXEBAD" ]; then
+            ok "packaged SDL3 dylib is relocatable (id=$DYLIB_ID; engine SDL3 load item is @rpath/@loader_path)"
+        elif [ -n "$DYLIB_BAD" ]; then
+            bad "packaged SDL3 dylib is relocatable" "$DYLIB_BAD (absolute path pins the package to the build host)"
+        else
+            bad "packaged SDL3 dylib is relocatable" "$EXEBAD (absolute path pins the package to the build host)"
+        fi
+    fi
+fi
+
 # --------------------------------------------------------------- 3. serve
 head_ "3. launch --editor from the extracted folder and fetch the editor"
 if [ -z "$EXE" ]; then
