@@ -63,6 +63,12 @@ do
     check("whitelist: _KAG_onKeyDown", ok3)
     local ok4 = pcall(function() _G._GAME_KEY_BACKSPACE = true end)
     check("whitelist: _GAME_KEY_BACKSPACE", ok4)
+    -- t109: native swipe consumers route via SDLK_SPACE/SDLK_PAGEUP -> these
+    -- hooks; they must be whitelisted like every other _KAG_on* handler.
+    local ok5 = pcall(function() _G._KAG_onKeySpace = function() end end)
+    check("whitelist: _KAG_onKeySpace", ok5)
+    local ok6 = pcall(function() _G._KAG_onKeyPageUp = function() end end)
+    check("whitelist: _KAG_onKeyPageUp", ok6)
     local ok_blocked = pcall(function() _G._UNAUTHORIZED_TEST_VAR_FORBIDDEN = 123 end)
     check("strict: unauthorized global blocked", not ok_blocked)
 end

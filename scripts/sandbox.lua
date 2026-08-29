@@ -377,6 +377,8 @@ local _G_whitelist = {
     _KAG_onTextInput    = true,
     _KAG_onTextEditing  = true,
     _KAG_onKeyDown      = true,
+    _KAG_onKeySpace     = true,  -- t109: native SwipeDown -> message-layer toggle
+    _KAG_onKeyPageUp    = true,  -- t109: native SwipeUp -> open backlog view
     -- Engine runtime state globals (set by C++ main loop).
     -- These MUST all be listed: lua_setglobal honours __newindex, so a C++
     -- write to an unlisted key that is not already a raw field raises

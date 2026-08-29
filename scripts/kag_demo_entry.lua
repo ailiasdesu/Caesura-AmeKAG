@@ -91,6 +91,29 @@ function _KAG_onCtrlUp()
     _prevSkipMode = nil
 end
 
+-- t109: native swipe consumers (MobileAdapter injects SDLK_SPACE /
+-- SDLK_PAGEUP, Engine.cpp routes them here via _KAG_onKeySpace /
+-- _KAG_onKeyPageUp). Mirror the WEB gesture semantics:
+--   web/main.mjs:634-640  SwipeDown -> hide/toggle the dialogue box
+--   web/main.mjs:641-647  SwipeUp   -> open backlog view (bottom-scrolled)
+function _KAG_onKeySpace()
+    local ctx = _G._CAESURA_CTX
+    if not ctx then return end
+    local msg = layers.get("message")
+    if msg then
+        msg.visible = not msg.visible
+    end
+end
+
+function _KAG_onKeyPageUp()
+    local ctx = _G._CAESURA_CTX
+    if ctx and ctx.input_focus ~= "history" and not history_co then
+        history_co = coroutine.create(function()
+            require("kag.commands.system").history(ctx, {})
+        end)
+    end
+end
+
 function engine_update(dt)
     -- F4: toggle the developer HUD (perf overlay)
     if _G._GAME_KEY_F4 then

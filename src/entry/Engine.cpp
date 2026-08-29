@@ -1338,6 +1338,31 @@ void Engine::processEvents() {
                         if (lua_pcall(L, 0, 0, 0) != LUA_OK) { lua_pop(L, 1); }
                     } else { lua_pop(L, 1); }
                 }
+                // t109: native SwipeDown/SwipeUp consumers (MobileAdapter maps
+                // them to SDLK_SPACE / SDLK_PAGEUP, MobileAdapter.cpp:305-330);
+                // mirror the WEB gesture semantics (web/main.mjs:634-647) --
+                // SPACE toggles the message-layer UI overlay, PAGEUP opens the
+                // backlog view. Same guard style as _KAG_onCtrlDown above.
+                if (event.key.key == SDLK_SPACE && !event.key.repeat && !isLuaExecutionPaused()) {
+                    lua_getglobal(L, "_KAG_onKeySpace");
+                    if (lua_isfunction(L, -1)) {
+                        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                            const char* err = lua_tostring(L, -1);
+                            fprintf(stderr, "_KAG_onKeySpace: %s\n", err ? err : "unknown");
+                            lua_pop(L, 1);
+                        }
+                    } else { lua_pop(L, 1); }
+                }
+                if (event.key.key == SDLK_PAGEUP && !event.key.repeat && !isLuaExecutionPaused()) {
+                    lua_getglobal(L, "_KAG_onKeyPageUp");
+                    if (lua_isfunction(L, -1)) {
+                        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+                            const char* err = lua_tostring(L, -1);
+                            fprintf(stderr, "_KAG_onKeyPageUp: %s\n", err ? err : "unknown");
+                            lua_pop(L, 1);
+                        }
+                    } else { lua_pop(L, 1); }
+                }
             }
             if (event.type == SDL_EVENT_KEY_UP) {
                 if (event.key.key == SDLK_BACKSPACE) { lua_pushboolean(L, 0); lua_setglobal(L, "_GAME_KEY_BACKSPACE"); }

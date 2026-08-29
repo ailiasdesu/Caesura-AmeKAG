@@ -158,9 +158,9 @@ void InputRouter::submitPointer(const PointerEvent& event) {
             break;
         }
         case PointerAction::SwipeDown: {
-            // Swipe-down -> SDLK_SPACE. NOT WIRED (C6 known gap): no SPACE
-            // consumer exists in src/ or scripts/, so this lands nowhere until
-            // a "hide UI overlay" binding is added on the KAG side.
+            // Swipe-down -> SDLK_SPACE. WIRED (t109): Engine.cpp routes
+            // SDLK_SPACE to _KAG_onKeySpace (message-layer toggle, mirrors
+            // the web gesture).
             ev.type = SDL_EVENT_KEY_DOWN;
             ev.key.key = SDLK_SPACE;
             ev.key.down = true;
@@ -169,8 +169,9 @@ void InputRouter::submitPointer(const PointerEvent& event) {
             break;
         }
         case PointerAction::SwipeUp: {
-            // Swipe-up -> SDLK_PAGEUP. NOT WIRED (C6 known gap): no PAGEUP
-            // consumer exists; "open backlog" has no native key binding yet.
+            // Swipe-up -> SDLK_PAGEUP. WIRED (t109): Engine.cpp routes
+            // SDLK_PAGEUP to _KAG_onKeyPageUp (backlog/history overlay,
+            // mirrors the web gesture).
             ev.type = SDL_EVENT_KEY_DOWN;
             ev.key.key = SDLK_PAGEUP;
             ev.key.down = true;

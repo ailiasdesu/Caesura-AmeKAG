@@ -98,6 +98,43 @@ check("history scroll no crash", okH and coroutine.status(coH) == "suspended")
 _G._GAME_KEY_ESC = true
 local rEsc = coroutine.resume(coH)
 check("history esc exits", rEsc and coroutine.status(coH) == "dead")
+-- t109: native SwipeUp -> SDLK_PAGEUP -> _KAG_onKeyPageUp opens the
+-- backlog/history overlay. The hook lives in kag_demo_entry.lua (not loadable
+-- here -- it autostarts demo_story.ks); this test locks the same body by
+-- replicating it VERBATIM (drift risk documented at the entry site).
+do
+    local _savedUI = package.loaded["history_ui"]
+    package.loaded["history_ui"] = { show = function(c2)
+        return { index = 1, name = "target", label = "line 1",
+                 scene = "t.ks", token_index = 1 }
+    end }
+    local ctxK = { backlog = { { text = "x", name = "s", scene = "t.ks",
+                                 token_index = 7 } },
+                   f = {}, tf = {}, sf = {}, mp = {}, input_focus = "kag" }
+    local _savedCtx = _G._CAESURA_CTX
+    _G._CAESURA_CTX = ctxK
+    local history_co
+    local _hookPageUp = function()  -- VERBATIM: kag_demo_entry.lua _KAG_onKeyPageUp
+        local ctx = _G._CAESURA_CTX
+        if ctx and ctx.input_focus ~= "history" and not history_co then
+            history_co = coroutine.create(function()
+                require("kag.commands.system").history(ctx, {})
+            end)
+        end
+    end
+    _hookPageUp()
+    check("page-up hook opens history overlay coroutine", history_co ~= nil)
+    local okP, errP = coroutine.resume(history_co)
+    check("page-up hook overlay runs", okP == true)
+    check("page-up hook jumps to target", ctxK._pendingJump ~= nil
+          and ctxK._pendingJump.index == 1)
+    local coRef = history_co
+    _hookPageUp()
+    check("page-up hook single-flight while overlay open", history_co == coRef)
+    _G._CAESURA_CTX = _savedCtx
+    package.loaded["history_ui"] = _savedUI
+end
+
 -- suite hygiene: restore the saved real module (a later [history]
 -- test would otherwise hit the last mock)
 package.loaded["history_ui"] = _hu_saved or package.loaded["history_ui"]

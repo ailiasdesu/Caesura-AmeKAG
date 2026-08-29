@@ -101,20 +101,17 @@ public:
     void onThreeFingerHold(float centerX, float centerY) override;
 
     /// Swipe down -> SDLK_SPACE keydown.
-    /// NOT WIRED (C6 known gap): nothing in src/ or scripts/ consumes
-    /// SDLK_SPACE — Engine.cpp's key handler has no SPACE branch and no
-    /// _GAME_KEY_SPACE global exists, so this gesture currently injects an
-    /// event that lands nowhere. The web half (main.mjs onSwipeDown) hides the
-    /// message layer directly in JS, which is why the gap never showed there.
-    /// Wiring it needs a "hide UI overlay" entry point on the KAG side (an
-    /// Engine.cpp key branch plus a Lua handler) — both outside this task's
-    /// file set, hence documented instead of silently left looking finished.
+    /// WIRED (t109): Engine.cpp's key-down handler routes SDLK_SPACE to the
+    /// Lua hook _KAG_onKeySpace (guard-pattern same as _KAG_onCtrlDown), which
+    /// toggles the message layer visibility -- mirroring the web gesture
+    /// (web/main.mjs onSwipeDown hides/toggles the dialogue box).
     void onSwipeDown(float startX, float startY, float endX, float endY) override;
 
     /// Swipe up -> SDLK_PAGEUP keydown.
-    /// NOT WIRED (C6 known gap): same as onSwipeDown — no SDLK_PAGEUP consumer
-    /// exists. The intended action (open backlog) has no keyboard binding yet
-    /// on the native side.
+    /// WIRED (t109): Engine.cpp routes SDLK_PAGEUP to the Lua hook
+    /// _KAG_onKeyPageUp (guard-pattern same as _KAG_onCtrlDown), which opens
+    /// the backlog/history overlay -- mirroring the web gesture
+    /// (web/main.mjs onSwipeUp shows + bottom-scrolls the backlog view).
     void onSwipeUp(float startX, float startY, float endX, float endY) override;
 
     // ── Display ────────────────────────────────────────────────────────

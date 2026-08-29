@@ -297,11 +297,9 @@ void MobileAdapter::onThreeFingerHold(float centerX, float centerY) {
     SDL_PushEvent(&ev);
 }
 
-// NOT WIRED (C6 known gap): SDLK_SPACE has no consumer in src/ or scripts/ —
-// Engine.cpp's key handler has no SPACE branch and no _GAME_KEY_SPACE global
-// exists, so this injection currently lands nowhere. Kept so the gesture chain
-// stays testable end to end and so wiring it later is a one-place change; see
-// the header for who should wire it.
+// WIRED (t109): Engine.cpp's key-down handler routes SDLK_SPACE to the Lua
+// hook _KAG_onKeySpace (kag_demo_entry.lua), which toggles the message-layer
+// visibility -- mirroring the web gesture (web/main.mjs onSwipeDown).
 void MobileAdapter::onSwipeDown(float startX, float startY, float endX, float endY) {
     if (!validCoord(startX) || !validCoord(startY) || !validCoord(endX) || !validCoord(endY)) return;
     MOBILE_GESTURE_TRACE("[Mobile] SwipeDown -> SPACE (%.0f, %.0f -> %.0f, %.0f)",
@@ -315,8 +313,9 @@ void MobileAdapter::onSwipeDown(float startX, float startY, float endX, float en
     SDL_PushEvent(&ev);
 }
 
-// NOT WIRED (C6 known gap): SDLK_PAGEUP has no consumer either. The intended
-// action (open backlog) has no native keyboard binding yet.
+// WIRED (t109): Engine.cpp routes SDLK_PAGEUP to the Lua hook
+// _KAG_onKeyPageUp (kag_demo_entry.lua), which opens the backlog/history
+// overlay -- mirroring the web gesture (web/main.mjs onSwipeUp).
 void MobileAdapter::onSwipeUp(float startX, float startY, float endX, float endY) {
     if (!validCoord(startX) || !validCoord(startY) || !validCoord(endX) || !validCoord(endY)) return;
     MOBILE_GESTURE_TRACE("[Mobile] SwipeUp -> PAGEUP (%.0f, %.0f -> %.0f, %.0f)",
