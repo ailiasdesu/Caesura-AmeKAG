@@ -49,11 +49,17 @@
 
 **路径 B 五步（克隆源码 + 构建；10–30+ 分钟，不占 30 分钟 KPI 预算）**
 
-1. **构建引擎**（一次性，§1–§2）：`cmake -B build -G "Visual Studio 17 2022" -A x64`
-   → `cmake --build build --config Debug --parallel`。仓库自带 Windows 预编译 SDL3
-   （`external/SDL3/SDL3-3.2.0`），**不传 `-DCMAKE_TOOLCHAIN_FILE` 时自动使用它**——
-   vcpkg 不是必需项（`build/CMakeCache.txt` 的 `SDL3_DIR` 实测指向内置包，vcpkg
-   命中数为 0）。**注意**：git bash 下不带 `-G` 的 `cmake -B build` 会选错生成器
+1. **构建引擎**（一次性，§1–§2）：先备好 vcpkg SDL3（§1.1 第 4 步，Windows **必备**——
+   新鲜克隆的 `external/SDL3` 只含头与 CMake 配置，预编译 `.lib/.dll` 被 `.gitignore`
+   的 `SDL3-*/` 排除、不入库；**不传 toolchain 直接 configure 会报
+   `SDL3::SDL3 is not an executable or library`**——CI 的 build-windows 自己就用
+   vcpkg，见 `.github/workflows/ci.yml` `Install SDL3 (vcpkg)` 步），然后：
+   `cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"`
+   → `cmake --build build --config Debug --parallel`（示例命令与 §2.1 相同；
+   三平台差异速查表里 `SDL3 来源` 行的 Windows 单元格已同步为 vcpkg 口径）。
+   例外：本地工作树若带**完整** vendored 拷贝（`external/SDL3/SDL3-3.2.0` 含
+   `lib/` `bin/` 的历史手工产物）才能不传 toolchain 自动使用——**新鲜克隆没有这个例外**。
+   **注意**：git bash 下不带 `-G` 的 `cmake -B build` 会选错生成器
    （首跑报 `CMAKE_C_COMPILER not set`）——git bash 与 PowerShell 都建议带
    `-G "Visual Studio 17 2022" -A x64`。
 2. **创建项目**：`python scripts/caesura.py create my_vn --template basic`（同路径 A，
@@ -71,6 +77,10 @@
    game-only 目录；实测 `--frames 60` 退出码 0、Runner 正常启动）；Web 站
    `bash scripts/package_game.sh --out dist/my_vn my_vn`（itch.io / GitHub Pages /
    Netlify 直接托管）。
+   > **Web 站前置**：首次跑 `package_game.sh` 前先 `cd web && npm ci`（依赖安装见
+   > §6，装好后无需重复）。**仓库没有 `web/dist/` 时 `package_game.sh` 按设计 FAIL**
+   > （提示 `FAIL: web player not built (missing web/dist/index.html)`，不是脚本 bug）——
+   > 先 `cd web && npm ci && npm run build` 生成 `web/dist/` 再打包。
 
 **引擎自带的 `--editor` 是什么**：`./build/Debug/CaesuraAmeKAG.exe --editor` 在
 :9876 起 HTTP 服务并提供 `web-editor/dist/index.html`——一个**单文件调试面板**
@@ -134,14 +144,19 @@ winget install Kitware.CMake
 # 3) 安装 Git
 winget install Git.Git
 
-# 4) （可选）vcpkg 提供 SDL3 的 CMake 包——**不装也能构建**：仓库自带
-#    Windows x64 预编译 SDL3（external/SDL3/SDL3-3.2.0），configure 不传
-#    toolchain 文件时自动使用（build/CMakeCache.txt 的 SDL3_DIR 实测指向它，
-#    vcpkg 命中数为 0）。要用 vcpkg 版本再执行：
+# 4) 安装 vcpkg 并提供 SDL3（Windows **必备**——与 CI 同源：仓库新鲜克隆的
+#    external/SDL3 只含头+CMake 配置（3.6M/92 文件），预编译 .lib/.dll 被
+#    .gitignore 的 SDL3-*/ 排除不入库；CI build-windows 的 "Install SDL3 (vcpkg)"
+#    步就是这么装的，见 .github/workflows/ci.yml）：
 git clone https://github.com/microsoft/vcpkg C:/vcpkg
 cd C:/vcpkg && .\bootstrap-vcpkg.bat
+# vcpkg 新版 bootstrap 需要 cmake >= 4.3.3（runner 可能滞后——CI 先 pip 升级：
+#   python -m pip install --quiet --upgrade cmake）
+python -m pip install --quiet --upgrade cmake
 .\vcpkg install sdl3 --triplet x64-windows
-# 记住 vcpkg 根目录，稍后配置时用（或直接跳过本步）
+# 记住 vcpkg 根目录，稍后配置时用（CI 用 $env:VCPKG_INSTALLATION_ROOT 指它）
+# 例外：本地工作树带完整 vendored 拷贝（external/SDL3/SDL3-3.2.0 含 .lib/.dll）
+# 才可省 toolchain；git-internal 只有头+CMake 配置，新鲜克隆必须走本步。
 
 # 5) （可选，不阻塞）git bash：仓库内脚本约定用 git bash 运行
 ```
@@ -196,7 +211,7 @@ brew install cmake sdl3 freetype zstd openssl@3   # ffmpeg 可选，见上
 | 构建命令 | `cmake --build build --config Debug` | `cmake --build build`（配置在 configure 时定） | 同 Linux |
 | 可执行产物 | `build/Debug/CaesuraAmeKAG.exe` | `build/CaesuraAmeKAG` | `build/CaesuraAmeKAG` |
 | 测试二进制 | `build/tests/Debug/CaesuraTests.exe` | `build/tests/CaesuraTests` | `build/tests/CaesuraTests` |
-| SDL3 来源 | 仓库内置 external/SDL3（自动，可选 vcpkg） | 源码装（见上） | Homebrew |
+| SDL3 来源 | vcpkg 必备（同 CI build-windows；仅带完整 vendored 拷贝的本地工作树可免 toolchain） | 源码装（见上） | Homebrew |
 | 默认渲染后端 | D3D11（bgfx auto） | OpenGL 4.3 | Metal（D3D11 失败后 auto-select） |
 | FFmpeg | 内置（可选 vcpkg） | apt dev 包（可选） | brew ffmpeg（可选） |
 | 注意 | 必须从**项目根**启动（资源相对 CWD） | 同左 | 同左 |
@@ -244,11 +259,16 @@ Caesura(AmeKAG)/
 
 ```powershell
 # 1) 配置（一次性；生成 Visual Studio 解决方案）。
-#    默认用仓库内置 SDL3（external/SDL3，Windows x64 预编译）——不传 toolchain：
-cmake -B build -S . -G "Visual Studio 17 2022" -A x64
-#    可选：已按 §1.1 装了 vcpkg SDL3 时改用这一行（二选一）：
-#    cmake -B build -S . -G "Visual Studio 17 2022" -A x64 `
-#      -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+#    默认 = vcpkg SDL3（Windows 必备，与 CI build-windows 的 Configure 步同款：
+#    含 -DCMAKE_TOOLCHAIN_FILE 与 -DVCPKG_APPLOCAL_DEPS=OFF；CI 路径用
+#    $env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake，本机自装为
+#    C:/vcpkg/...，见 .github/workflows/ci.yml）：
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_APPLOCAL_DEPS=OFF
+#    例外：本地工作树带完整 vendored 拷贝（external/SDL3/SDL3-3.2.0 含
+#    .lib/.dll 的历史手工产物）可省 toolchain 行——git-internal 只含头+CMake
+#    配置（预编译件被 .gitignore 的 SDL3-*/ 排除），**新鲜克隆没有这个例外**。
 
 # 2) 构建 Debug（主开发配置）
 cmake --build build --config Debug --parallel
@@ -361,7 +381,7 @@ ctest -C Debug --test-dir build --output-on-failure
 # 从仓库根运行；解释器用构建产物 build/lua/<配置>/lua.exe——全新克隆没有
 # external/lua/lua.exe（那是发布包内置路径，find_lua 会依次探测两处）
 build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua      # 主套件（实测 143 passed / 143 total）
-build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件（实测 25 passed / 25 total）
+build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua   # 孤儿套件（实测 26 passed / 26 total）
 
 # 主套件 = 大部分测试；孤儿套件 = 会创建全局 mock 的测试（沙箱中途锁全局），
 # 每个测试子进程隔离运行。两套都必须全绿，孤儿永远不能并入主套件。
@@ -517,6 +537,14 @@ ffmpeg -framerate 60 -i export_out/frame_%05d.png -c:v libx264 -pix_fmt yuv420p 
 A: Windows 上未装 vcpkg SDL3 或没传 toolchain 文件。`vcpkg install sdl3 --triplet x64-windows`
    后，configure 时带 `-DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"`。
    Linux/macOS 上确认已装 SDL3（§1.2/§1.3），或改用 Homebrew `brew install sdl3`。
+
+**Q: CMake（或 vcpkg）报 `Could not find any instance of Visual Studio`**
+A: VS 实例注册缺失（vswhere 查为空 / `HKLM\SOFTWARE\Microsoft\VisualStudio` 的 Instances
+   键不存在——MSVC 工具链可能在而注册不在）。两招：① 钉实例——configure 时加
+   `-DCMAKE_GENERATOR_INSTANCE="<VS 安装路径>,version=<版本>"`（路径用
+   `vswhere -latest` 查——如 `C:/Program Files/Microsoft Visual Studio/2022/Community`；
+   值需带 `,version=17.x` 后缀）；② VS Installer →“修改”→“修复”重建实例注册。
+   vcpkg 报同错（`VCPKG_VISUAL_STUDIO_PATH` 也无效）——先修实例注册再装 SDL3。
 
 **Q: CMake 报 `CMake 3.25 or higher is required`**
 A: 版本太旧。`cmake --version` 查看；Windows 用 winget 装最新，Linux `sudo apt install cmake`
