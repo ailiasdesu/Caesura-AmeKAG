@@ -107,8 +107,24 @@ note "Step 3: choice-route reachability (branches -> [end])"
 for b in $BRANCHES; do
     RL="$(SAMPLE_STORY="$STORY" SAMPLE_ENDING="$b" SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" "$DRIVER" 2>&1 | grep -E "RESULT|ENDING" || true)"
     printf "%s\n" "$RL" | sed "s/^/  /"
+    # t67 criterion tightening: the v1 probe accepted a VACUOUS pass -- the
+    # staging used stage_label_jump+stop_flag without _pendingJump, so the
+    # runner ended immediately and "RESULT DONE" matched while the branch
+    # NEVER ran (pre-fix measured 2026-08-29: route_forest DONE:2 token=37
+    # clicks=0, route_city DONE:2 token=48 clicks=0). The sample driver now
+    # arms _pendingJump (mirroring golden_vn_headless); true runs measured
+    # (post-fix): DONE:4169 token=122 clicks=2004 (forest) / DONE:4144
+    # token=122 clicks=1979 (city). Require real branch progress:
+    # clicks>=50 and token>=100 leave an order-of-magnitude margin while
+    # the hollow run (clicks=0, token<=48) can never satisfy them.
     if printf "%s\n" "$RL" | grep -q "RESULT DONE"; then
-        check "$b branch reachable -> DONE" 0
+        TOK="$(printf "%s\n" "$RL" | grep -o 'token=[0-9]*' | grep -o '[0-9]*' | head -1)"
+        CLK="$(printf "%s\n" "$RL" | grep -o 'clicks=[0-9]*' | grep -o '[0-9]*' | head -1)"
+        if [ "${CLK:-0}" -ge 50 ] && [ "${TOK:-0}" -ge 100 ]; then
+            check "$b branch reachable -> DONE" 0
+        else
+            check "$b branch reachable -> DONE" 1 "hollow run: token=${TOK:-?} clicks=${CLK:-?}"
+        fi
     elif printf "%s\n" "$RL" | grep -q "ENDING_NOT_FOUND"; then
         check "$b branch reachable -> DONE" 2
     else

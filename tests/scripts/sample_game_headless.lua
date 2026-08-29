@@ -76,6 +76,11 @@ if ENDING and ENDING ~= "" then
         print("ENDING_NOT_FOUND: " .. target)
         os.exit(2)
     end
+    -- t67: _pendingJump is what makes the runner's dead-coroutine branch
+    -- re-spawn the scheduler at a "*label" (mirror golden_vn_headless.lua).
+    -- Plain stop_flag alone ends the runner with "Script ended" and the
+    -- probe passed vacuously (DONE:2 clicks=0 -- branch never ran, t52 C).
+    ctx._pendingJump = target
     ctx.stop_flag = true -- end the current coroutine; update() re-spawns
     print("ENDING_JUMP: " .. target)
 end
