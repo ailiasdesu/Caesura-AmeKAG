@@ -1,19 +1,19 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-08-29T11:17:18Z
+> 生成时间（输入源最新 mtime）：2026-08-29T11:29:43Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：8b3dffbc2883288a
+> 源指纹（输入内容 sha256 前 16 hex）：77f7242067beaadf
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
 
+- UNWIRED：0 · PARTIAL：69 · CLOSED：61 · EXTRA：31 · EXPERIMENTAL(人工)：4
+- **恒等式：134 = CLOSED(61) + PARTIAL(69) + UNWIRED(0) + EXPERIMENTAL(在册 4)；165 = 134(Declared) + EXTRA(31) + EXPERIMENTAL(合约外 0)**
 - 合约总数（Declared，docs/api/command-contracts.md）：**134**
 - 已注册（Dispatched）：**165**
 - 触达效果面（Consumed，调用形上下文，v2）：**66**
 - 测试引用（Tested，启发式计数）：**137**
-- UNWIRED：0 · PARTIAL：73 · CLOSED：61 · EXTRA：31
-- **恒等式：134 = CLOSED(61) + PARTIAL(73) + UNWIRED(0)；165 = 134(Declared) + EXTRA(31)**
 
 **范围声明（t103 MUST-FIX 3）**：本矩阵的 134 = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 134 内**：
 - 原生手势链：SwipeDown / SwipeUp / LongPress / Pinch / TwoFingerTap / ThreeFingerHold（平台层）；
@@ -24,6 +24,8 @@
 产出；流控/API 命令按设计不在注册表——EXTRA 不是缺陷信号（A 类入册与否=产品决策待议）。
 
 > 状态定义：**UNWIRED**=有合约无处理器；**PARTIAL**=已注册但处理器体未以调用形触达效果面（v2 口径）；
+> **EXPERIMENTAL**=人工覆盖状态（能力存在但无消费方/无真实测试面——freeze 政策显式标注；
+>   见『EXPERIMENTAL』节与 overrides reason/note；不覆盖的声明：机器判级仍为 PARTIAL/EXTRA。
 > **CLOSED**=已注册且调用形触达效果面；**EXTRA**=已注册但无合约。
 > ⚠ = 人工覆盖（docs/design/capability-closure-overrides.json；详见『人工覆盖』节）。
 
@@ -40,14 +42,14 @@
 | bg | Y | Y | Y | 21 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:120 |
 | bgm | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:490 |
 | blur | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/transition.lua:292 |
-| br | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag.lua:212 |
+| br | Y | Y | n | 3 | VERIFIED（位置级） ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:212 |
 | button | Y | Y | n | 38 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1340 |
 | call | n | Y | n | 75 | ? | ? | ? | EXTRA | scripts/kag.lua:512 |
 | camera | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:495 |
 | cancel | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag.lua:220 |
 | capture_state | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/save.lua:227 |
 | ch | Y | Y | Y | 549 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:609 |
-| chapter | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:349 |
+| chapter | Y | Y | n | 3 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:349 |
 | cl | Y | Y | Y | 11 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:183 |
 | clear | n | Y | Y | 1 | ? | ? | ? | EXTRA | scripts/kag.lua:349 |
 | clearscreen | n | Y | Y | - | ? | ? | ? | EXTRA | scripts/kag.lua:209 |
@@ -74,7 +76,7 @@
 | eval | Y | Y | n | 49 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:179 |
 | fade | Y | Y | Y | 2 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:568 |
 | fadebgm | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:174 |
-| fadeout | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:371 |
+| fadeout | Y | Y | n | 2 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:371 |
 | fadevol | Y | Y | Y | - | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:104 |
 | fg | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:156 |
 | flash | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/vfx.lua:368 |
@@ -101,9 +103,9 @@
 | layout_slot | Y | Y | n | 25 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/layout.lua:204 |
 | ld | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag.lua:397 |
 | listsaves | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/save.lua:523 |
-| live2d_expression | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/character.lua:189 |
-| live2d_lip_sync | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/character.lua:200 |
-| live2d_motion | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/character.lua:177 |
+| live2d_expression | Y | Y | n | - | ? ⚠ | ? ⚠ | ? ⚠ | EXPERIMENTAL | scripts/kag/commands/character.lua:189 |
+| live2d_lip_sync | Y | Y | n | - | ? ⚠ | ? ⚠ | ? ⚠ | EXPERIMENTAL | scripts/kag/commands/character.lua:200 |
+| live2d_motion | Y | Y | n | - | ? ⚠ | ? ⚠ | ? ⚠ | EXPERIMENTAL | scripts/kag/commands/character.lua:177 |
 | load | Y | Y | Y | 69 | ? | ? | ? | CLOSED | scripts/kag/commands/save.lua:298 |
 | loadplace | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/save.lua:554 |
 | macro | n | Y | n | 56 | ? | ? | ? | EXTRA | scripts/kag.lua:241 |
@@ -111,7 +113,7 @@
 | move | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:387 |
 | moveto | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:288 |
 | mul | Y | Y | n | 11 | ? | ? | ? | PARTIAL | scripts/kag/commands/math.lua:123 |
-| music | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:343 |
+| music | Y | Y | n | 3 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:343 |
 | nameplate | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:418 |
 | notify | Y | Y | n | 38 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:648 |
 | nvl | Y | Y | Y | 18 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:976 |
@@ -126,15 +128,15 @@
 | playstop | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:427 |
 | playvoice | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:240 |
 | position | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/layer.lua:297 |
-| postprocess | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:507 |
+| postprocess | Y | Y | n | 3 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/vfx.lua:507 |
 | postprocess_off | Y | Y | Y | 2 | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:519 |
 | preload | Y | Y | n | 11 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/resource.lua:154 |
 | preload_transition | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:280 |
 | promote_transition_slot | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/resource.lua:294 |
 | pt | Y | Y | n | 11 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1152 |
 | push_backlog | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:333 |
-| quake | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:421 |
-| r | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag.lua:288 |
+| quake | Y | Y | n | 2 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:421 |
+| r | Y | Y | n | 3 | VERIFIED（位置级） ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:288 |
 | random | Y | Y | n | 14 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:528 |
 | relocalize_backlog | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:1513 |
 | relocalize_page | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/text.lua:1571 |
@@ -155,14 +157,14 @@
 | setbgmvolume | Y | Y | Y | 7 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:356 |
 | setsevolume | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:361 |
 | setvoicevolume | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:366 |
-| shake | Y | Y | n | 2 | ? | ? | ? | PARTIAL | scripts/kag.lua:417 |
+| shake | Y | Y | n | 2 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:417 |
 | showtext | n | Y | Y | - | ? | ? | ? | EXTRA | scripts/kag.lua:206 |
 | skip | Y | Y | n | 18 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1081 |
-| sma_anim | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:723 |
-| sma_ik | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:733 |
+| sma_anim | Y | Y | n | - | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:723 |
+| sma_ik | Y | Y | n | - | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:733 |
 | sma_play | Y | Y | n | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:712 |
-| sma_stop | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:747 |
-| sma_variant | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/sma.lua:741 |
+| sma_stop | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:747 |
+| sma_variant | Y | Y | n | - | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/sma.lua:741 |
 | sprite_fade | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:466 |
 | sprite_move | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:506 |
 | sprite_scale | Y | Y | Y | 6 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:545 |
@@ -179,16 +181,16 @@
 | trans | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:299 |
 | tween | Y | Y | n | 14 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/tween.lua:201 |
 | typewriter | Y | Y | n | - | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1272 |
-| typewriter_sound | Y | Y | n | - | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:1286 |
+| typewriter_sound | Y | Y | n | - | ? ⚠ | ? ⚠ | ? ⚠ | EXPERIMENTAL | scripts/kag/commands/text.lua:1286 |
 | unlock | Y | Y | n | 50 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:399 |
 | update | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag/commands/tween.lua:165 |
 | vfx | Y | Y | Y | 11 | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:279 |
 | vib | Y | Y | Y | 5 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:455 |
 | vibrate | Y | Y | n | 13 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/vfx.lua:495 |
 | video | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/video.lua:54 |
-| voice | Y | Y | n | 4 | ? | ? | ? | PARTIAL | scripts/kag.lua:433 |
+| voice | Y | Y | n | 4 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:433 |
 | voice_off | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag/commands/text.lua:1125 |
-| voice_wait | Y | Y | n | 3 | ? | ? | ? | PARTIAL | scripts/kag.lua:297 |
+| voice_wait | Y | Y | n | 3 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag.lua:297 |
 | wait | Y | Y | n | 63 | ? | ? | ? | PARTIAL | scripts/kag/commands/system.lua:50 |
 | wait_click | n | Y | n | - | ? | ? | ? | EXTRA | scripts/kag.lua:323 |
 | waitbgm | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/audio.lua:339 |
@@ -208,9 +210,15 @@
 - blur — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：模块委托链 VFX.blur→rtt.alloc GPU blur（headless 无 GPU 降级注记）
   - evidence：scripts/kag/commands/transition.lua:292 → scripts/vfx.lua:183 VFX.blur（rtt.alloc GPU blur）
+- br — Observable=VERIFIED（位置级） · PlatformTested=? · Packaged=?
+  - reason：t119 复核：自派发链 br→KAG.l（t117 位置级已核）——行断效果；照 l 先例用位置级口径
+  - evidence：scripts/kag.lua:212-214（function KAG.br → KAG.l(ctx,params)）→ l（text.lua:906 位置级）
 - button — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：组合链（staging→render 分离系设计，架构注 :1297-1310）——button 注册本地化选项，endbutton cond 过滤+_renderChoices 绘制+blocking+命中跳转，间接真实触达 backend.render_text。
   - evidence：scripts/kag/commands/text.lua:1340-1372（注册 ctx._choiceButtons）→ :1374+ endbutton（_renderChoices 绘制+阻塞+跳转）→ TextScene draws → backend.render_text
+- chapter — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块链+状态-流链——ChapterSelect.show（层系统+render_text）→ctx._pendingJump runner 消费
+  - evidence：scripts/kag/commands/system.lua:349-361 → scripts/chapter_select.lua:51 layers.ensure/_chapter_bg + :59/:69 backend.render_text → ctx._pendingJump
 - delay — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：别名链——delay=require(kag.commands.system).wait 同一实现（独立 schema 保 ms coercion），与 [wait] 帧流阻断语义完全一致。
   - evidence：scripts/kag.lua:337-347（require .wait + :343-345 裸位置防御）→ scripts/kag/commands/system.lua:50-83 wait（Operation+yield 帧流）
@@ -223,6 +231,9 @@
 - eval — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：双轨——主轨 scheduler 内联（flow-inline，表达式求值入 ctx.tf.eval_result 可观察）；handler 为 strict 兜底（sandbox.execute + rawset(ctx.tf,...)——t110 判据边缘形态，人工判真伪）。
   - evidence：scripts/scheduler.lua:4/30/97-109（inline 主轨，"eval"=true）；scripts/kag/commands/system.lua:179-224（strict 兜底，rawset(ctx.tf,...)）
+- fadeout — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 Layer.layfade（opacity 0..1→0..255 换算注记）→层透明度动画
+  - evidence：scripts/kag.lua:371-385 → scripts/kag/commands/layer.lua layfade
 - flash — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t116 复核：模块表委托 VFX.flash→backend.create_solid_texture+__flash 层，阻塞全屏闪白
   - evidence：scripts/kag/commands/vfx.lua:368-370 → scripts/vfx.lua:266-320 VFX.flash（backend.create_solid_texture :314 + __flash 层 :286-292, z=9998）
@@ -244,9 +255,21 @@
 - layout_slot — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：同链——槽位注册→recompute+apply_container→layers.move_layer，真实图层重排。
   - evidence：scripts/kag/commands/layout.lua:204-238 → :126-137 apply_container（layers.move_layer）
+- live2d_expression — Observable=? · PlatformTested=? · Packaged=? · Status=EXPERIMENTAL
+  - reason：t119 判级：写 ctx.live2d[model].expression 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:189-197
+- live2d_lip_sync — Observable=? · PlatformTested=? · Packaged=? · Status=EXPERIMENTAL
+  - reason：t119 判级：写 ctx.live2d[model].lip_sync 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:200-207
+- live2d_motion — Observable=? · PlatformTested=? · Packaged=? · Status=EXPERIMENTAL
+  - reason：t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:177-186
 - loadplace — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：状态-流链——ctx._pendingJump+stop_flag→runner 跳转路径（bookmark 恢复可观察；test_flow_edge_call.lua:363-381 有覆盖）
   - evidence：scripts/kag/commands/save.lua:554-556 → scripts/system.lua:334-345 loadplace（ctx._pendingJump={scene,index}+ctx.stop_flag=true）→ runner 跳转
+- music — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 music_room.show（UI 全链：solid texture/render_text/get_resolution）
+  - evidence：scripts/kag/commands/system.lua:343-345 → scripts/music_room.lua:21 create_solid_texture + :168 render_text + :172 get_resolution
 - nameplate — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：同文件私有工具函数 _renderNameplate 内 layers./backend. 直呼——_ 前缀私有函数调用图盲区（v4 B 类）
   - evidence：scripts/kag/commands/text.lua:418（handler）→ :431 _renderNameplate（layers.ensure(_nameplate,3)+backend.create_solid_texture+backend.render_text+layers.mark_dirty）
@@ -259,12 +282,21 @@
 - playstop — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：模块委托链 audio.stopbgm→backend
   - evidence：scripts/kag.lua:427-432 playstop（→ audio.stopbgm）→ scripts/kag/commands/audio.lua stopbgm → backend.audio_stop
+- postprocess — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：同文件工具函数 apply_postfx→backend.set_postfx/clear_postfx/is_postfx_supported——GPU postfx 可观察（同文件工具链盲区；ctx._postfx bookkeeping NOT-WIRED 注记属持久化缺口）
+  - evidence：scripts/kag/commands/vfx.lua:507-515 → :230-271 apply_postfx（backend.set_postfx :258 / clear_postfx :232 / is_postfx_supported :236）
 - preload — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t116 复核：同文件工具链——load_texture/load_audio 内 backend 直呼（真实资源预加载+占位符），扫描器漏检=同文件工具函数（局限8）
   - evidence：scripts/kag/commands/resource.lua:154-217（handler）→ :78-107 load_texture（backend.load_texture :97 / backend.load_texture_async :85）+ :113-131 load_audio（backend.audio_play/audio_stop :120/123）+ scene→flow.load_scene :201
 - pt — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t116 复核：ctx.text_speed 状态写+注释自证消费点（kag_runner 每帧读取推进 reveal），textspeed 同款模式
   - evidence：scripts/kag/commands/text.lua:1152-1154（ctx.text_speed=params.speed）+ :1156-1170（注释自证 kag_runner.lua 消费）
+- quake — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 vfx.quake（修正绑定注记：standalone [quake] 不再跑 shake）
+  - evidence：scripts/kag.lua:421-424 → scripts/kag/commands/vfx.lua:376-378 → scripts/vfx.lua:28 VFX.quake
+- r — Observable=VERIFIED（位置级） · PlatformTested=? · Packaged=?
+  - reason：t119 复核：别名链 KAG.r=KAG.l or KAG.br → l/br（位置级）
+  - evidence：scripts/kag.lua:288（KAG.r = KAG.l or KAG.br）→ l/br 位置级链
 - replay — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：模块委托链 replay.load→state.mode=playback→kag_runner replay.tick 回放推进（可观察）
   - evidence：scripts/kag/commands/system.lua:579 → scripts/replay.lua:140 load（mode=playback）→ scripts/kag_runner.lua:441/443 replay.tick(delta_ms, click_cb)
@@ -283,12 +315,27 @@
 - select — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：语法糖组合——select no-op 开块（契约 blocking=false 设计如此），sel=button、endselect=endbutton 别名赋值，选择块完整语义=button/endbutton 链。
   - evidence：scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）
+- shake — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 vfx.shake→VFX.shake（层动画）
+  - evidence：scripts/kag.lua:417-420 → scripts/kag/commands/vfx.lua:372-374 → scripts/vfx.lua:82 VFX.shake
 - skip — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：ctx.skip_mode 状态写 + kag_runner 明确消费点（auto-advance/seen-skip）——状态写+消费点模式（textspeed 同款）。
   - evidence：scripts/kag/commands/text.lua:1081-1097（ctx.skip_mode 切换，seen off-toggle 审计修复注记）→ scripts/kag_runner.lua:467/482-483（消费）
+- sma_anim — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：sma.play_anim→actor 状态→sma.render（binding().draw_mesh）模块内状态-消费闭环；测试 0 引用但消费链真实
+  - evidence：scripts/kag/sma.lua:723-731 → :601 sma.play_anim → :540-556 sma.render（binding().draw_mesh，t117 已核）
+- sma_ik — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：sma.set_ik→actor IK 字段→sma.render 消费（绑定接口渲染）
+  - evidence：scripts/kag/sma.lua:733-739 → :630 sma.set_ik → sma.render:540-556 消费
 - sma_play — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t117 复核：绑定接口链 sma.spawn→sma.render binding().draw_mesh（GPU 网格渲染）；扫描器盲区 D 类（binding. 非 backend./layers. token）
   - evidence：scripts/kag/sma.lua:712 sma_play → :392 sma.spawn（ctx.sma_actors 状态）→ :540-556 sma.render binding().draw_mesh(handle,view,texId,...)
+- sma_stop — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：sma.despawn 内 binding().destroy_mesh 绑定接口直呼——网格销毁可观察（绑定接口链盲区）
+  - evidence：scripts/kag/sma.lua:747-749 → :442-452 sma.despawn（binding().destroy_mesh :448-449）
+- sma_variant — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：sma.set_variant→actor variant/tex→sma.render 消费
+  - evidence：scripts/kag/sma.lua:741-745 → :652 sma.set_variant → sma.render:540-556 消费
 - textspeed — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t110 复核：apply_text_cps 写 ctx.text_speed（注释自证 real read point kag_runner），kag_runner.update 揭示速率消费——状态写+明确消费点，字符揭示速度变化可观察。
   - evidence：scripts/kag/commands/text.lua:1214-1216（handler）→ :1173-1198 apply_text_cps（ctx.text_speed=floor(1000/cps)）→ scripts/kag_runner.lua update()（揭示速率消费，reference :446-455）
@@ -298,9 +345,18 @@
 - typewriter — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。
   - evidence：scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）
+- typewriter_sound — Observable=? · PlatformTested=? · Packaged=? · Status=EXPERIMENTAL
+  - reason：t119 判级：WRITE-ONLY 声音配置——源码自证（text.lua:1226-1232 nothing plays a sound when a character is revealed / must not be described as working），配置三键全仓无读者，Tested=0
+  - evidence：scripts/kag/commands/text.lua:1286（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1272-1285 写入 ctx.typewriter_sound/_interval/_volume；无读者（:1226-1232 自证）
 - vibrate — Observable=VERIFIED · PlatformTested=? · Packaged=?
   - reason：t113 复核：委托链——trans.vib（transition.lua:455-476 layers.get_layer(message)+mark_dirty 消息层抖动）+ blocking 300ms。
   - evidence：scripts/kag/commands/vfx.lua:495-500 → kag.commands.transition trans.vib（transition.lua:455-476）
+- voice — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 audio.playvoice（schema.coerce play 迁移条件注记）→backend.audio_play（voice 轨）
+  - evidence：scripts/kag.lua:433-440 → scripts/kag/commands/audio.lua playvoice → backend.audio_play
+- voice_wait — Observable=VERIFIED · PlatformTested=? · Packaged=?
+  - reason：t119 复核：模块委托 audio.voice_wait（CLOSED 链）→等待语音完成+点击跳过
+  - evidence：scripts/kag.lua:297-299 → scripts/kag/commands/audio.lua voice_wait
 
 ## 人工判级（范围外能力）
 
@@ -313,6 +369,25 @@
 | Pinch | VERIFIED | t101 复核 file:line 链（双指缩放 → 驾驶消费；详见 t101 task output） | t101 全链证据在案。 |
 | TwoFingerTap | VERIFIED | t101 复核 file:line 链（详见 t101 task output） | t101 全链证据在案。 |
 | ThreeFingerHold | VERIFIED | t101 复核 file:line 链（详见 t101 task output） | t101 全链证据在案。 |
+
+## EXPERIMENTAL
+
+- live2d_expression - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
+  - reason：t119 判级：写 ctx.live2d[model].expression 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:189-197
+  - note：同 live2d_motion（M4 特性矩阵 Live2D 行）。
+- live2d_lip_sync - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
+  - reason：t119 判级：写 ctx.live2d[model].lip_sync 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:200-207
+  - note：同 live2d_motion（M4 特性矩阵 Live2D 行）。
+- live2d_motion - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
+  - reason：t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated
+  - evidence：scripts/kag/commands/character.lua:177-186
+  - note：CAESURA_LIVE2D=ON 构建下由 Live2D 后端消费并按 M4 特性矩阵重判。
+- typewriter_sound - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
+  - reason：t119 判级：WRITE-ONLY 声音配置——源码自证（text.lua:1226-1232 nothing plays a sound when a character is revealed / must not be described as working），配置三键全仓无读者，Tested=0
+  - evidence：scripts/kag/commands/text.lua:1286（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1272-1285 写入 ctx.typewriter_sound/_interval/_volume；无读者（:1226-1232 自证）
+  - note：建议接线点：kag_runner reveal 推进处（text.lua:1235-1239 已指向 :446-455）读 _interval/_volume。
 
 ## UNWIRED
 
@@ -347,9 +422,6 @@
 - l - scripts/kag/commands/text.lua:906；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - layout - scripts/kag/commands/layout.lua:169；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - layout_slot - scripts/kag/commands/layout.lua:204；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
-- live2d_expression - scripts/kag/commands/character.lua:189；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
-- live2d_lip_sync - scripts/kag/commands/character.lua:200；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
-- live2d_motion - scripts/kag/commands/character.lua:177；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - loadplace - scripts/kag/commands/save.lua:554；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - mod - scripts/kag/commands/math.lua:125；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - mul - scripts/kag/commands/math.lua:123；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
@@ -384,7 +456,6 @@
 - textspeed - scripts/kag/commands/text.lua:1214；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - tween - scripts/kag/commands/tween.lua:201；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - typewriter - scripts/kag/commands/text.lua:1272；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
-- typewriter_sound - scripts/kag/commands/text.lua:1286；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - unlock - scripts/kag/commands/system.lua:399；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - vibrate - scripts/kag/commands/vfx.lua:495；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）
 - voice - scripts/kag.lua:433；处理器体未以调用形触达效果面（v2 已剥注释与字符串字面量）

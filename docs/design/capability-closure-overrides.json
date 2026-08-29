@@ -25,6 +25,15 @@
       "evidence": "scripts/kag/commands/transition.lua:292 → scripts/vfx.lua:183 VFX.blur（rtt.alloc GPU blur）",
       "source": "t117 task output"
     },
+    "br": {
+      "observable": "VERIFIED（位置级）",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：自派发链 br→KAG.l（t117 位置级已核）——行断效果；照 l 先例用位置级口径",
+      "evidence": "scripts/kag.lua:212-214（function KAG.br → KAG.l(ctx,params)）→ l（text.lua:906 位置级）",
+      "source": "t119 task output",
+      "note": "位置级：行断光标状态语义（同 l/letter_spacing 位置级）；像素级待 M4。"
+    },
     "button": {
       "observable": "VERIFIED",
       "platform_tested": "?",
@@ -32,6 +41,14 @@
       "reason": "t110 复核：组合链（staging→render 分离系设计，架构注 :1297-1310）——button 注册本地化选项，endbutton cond 过滤+_renderChoices 绘制+blocking+命中跳转，间接真实触达 backend.render_text。",
       "evidence": "scripts/kag/commands/text.lua:1340-1372（注册 ctx._choiceButtons）→ :1374+ endbutton（_renderChoices 绘制+阻塞+跳转）→ TextScene draws → backend.render_text",
       "source": "t110 task output"
+    },
+    "chapter": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块链+状态-流链——ChapterSelect.show（层系统+render_text）→ctx._pendingJump runner 消费",
+      "evidence": "scripts/kag/commands/system.lua:349-361 → scripts/chapter_select.lua:51 layers.ensure/_chapter_bg + :59/:69 backend.render_text → ctx._pendingJump",
+      "source": "t119 task output"
     },
     "delay": {
       "observable": "VERIFIED",
@@ -64,6 +81,14 @@
       "reason": "t110 复核：双轨——主轨 scheduler 内联（flow-inline，表达式求值入 ctx.tf.eval_result 可观察）；handler 为 strict 兜底（sandbox.execute + rawset(ctx.tf,...)——t110 判据边缘形态，人工判真伪）。",
       "evidence": "scripts/scheduler.lua:4/30/97-109（inline 主轨，\"eval\"=true）；scripts/kag/commands/system.lua:179-224（strict 兜底，rawset(ctx.tf,...)）",
       "source": "t110 task output"
+    },
+    "fadeout": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 Layer.layfade（opacity 0..1→0..255 换算注记）→层透明度动画",
+      "evidence": "scripts/kag.lua:371-385 → scripts/kag/commands/layer.lua layfade",
+      "source": "t119 task output"
     },
     "flash": {
       "observable": "VERIFIED",
@@ -122,6 +147,36 @@
       "evidence": "scripts/kag/commands/layout.lua:204-238 → :126-137 apply_container（layers.move_layer）",
       "source": "t113 task output"
     },
+    "live2d_expression": {
+      "observable": "?",
+      "platform_tested": "?",
+      "packaged": "?",
+      "status": "EXPERIMENTAL",
+      "reason": "t119 判级：写 ctx.live2d[model].expression 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated",
+      "evidence": "scripts/kag/commands/character.lua:189-197",
+      "source": "t119 task output",
+      "note": "同 live2d_motion（M4 特性矩阵 Live2D 行）。"
+    },
+    "live2d_lip_sync": {
+      "observable": "?",
+      "platform_tested": "?",
+      "packaged": "?",
+      "status": "EXPERIMENTAL",
+      "reason": "t119 判级：写 ctx.live2d[model].lip_sync 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated",
+      "evidence": "scripts/kag/commands/character.lua:200-207",
+      "source": "t119 task output",
+      "note": "同 live2d_motion（M4 特性矩阵 Live2D 行）。"
+    },
+    "live2d_motion": {
+      "observable": "?",
+      "platform_tested": "?",
+      "packaged": "?",
+      "status": "EXPERIMENTAL",
+      "reason": "t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated",
+      "evidence": "scripts/kag/commands/character.lua:177-186",
+      "source": "t119 task output",
+      "note": "CAESURA_LIVE2D=ON 构建下由 Live2D 后端消费并按 M4 特性矩阵重判。"
+    },
     "loadplace": {
       "observable": "VERIFIED",
       "platform_tested": "?",
@@ -129,6 +184,14 @@
       "reason": "t117 复核：状态-流链——ctx._pendingJump+stop_flag→runner 跳转路径（bookmark 恢复可观察；test_flow_edge_call.lua:363-381 有覆盖）",
       "evidence": "scripts/kag/commands/save.lua:554-556 → scripts/system.lua:334-345 loadplace（ctx._pendingJump={scene,index}+ctx.stop_flag=true）→ runner 跳转",
       "source": "t117 task output"
+    },
+    "music": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 music_room.show（UI 全链：solid texture/render_text/get_resolution）",
+      "evidence": "scripts/kag/commands/system.lua:343-345 → scripts/music_room.lua:21 create_solid_texture + :168 render_text + :172 get_resolution",
+      "source": "t119 task output"
     },
     "nameplate": {
       "observable": "VERIFIED",
@@ -162,6 +225,14 @@
       "evidence": "scripts/kag.lua:427-432 playstop（→ audio.stopbgm）→ scripts/kag/commands/audio.lua stopbgm → backend.audio_stop",
       "source": "t117 task output"
     },
+    "postprocess": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：同文件工具函数 apply_postfx→backend.set_postfx/clear_postfx/is_postfx_supported——GPU postfx 可观察（同文件工具链盲区；ctx._postfx bookkeeping NOT-WIRED 注记属持久化缺口）",
+      "evidence": "scripts/kag/commands/vfx.lua:507-515 → :230-271 apply_postfx（backend.set_postfx :258 / clear_postfx :232 / is_postfx_supported :236）",
+      "source": "t119 task output"
+    },
     "preload": {
       "observable": "VERIFIED",
       "platform_tested": "?",
@@ -177,6 +248,23 @@
       "reason": "t116 复核：ctx.text_speed 状态写+注释自证消费点（kag_runner 每帧读取推进 reveal），textspeed 同款模式",
       "evidence": "scripts/kag/commands/text.lua:1152-1154（ctx.text_speed=params.speed）+ :1156-1170（注释自证 kag_runner.lua 消费）",
       "source": "t116 task output"
+    },
+    "quake": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 vfx.quake（修正绑定注记：standalone [quake] 不再跑 shake）",
+      "evidence": "scripts/kag.lua:421-424 → scripts/kag/commands/vfx.lua:376-378 → scripts/vfx.lua:28 VFX.quake",
+      "source": "t119 task output"
+    },
+    "r": {
+      "observable": "VERIFIED（位置级）",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：别名链 KAG.r=KAG.l or KAG.br → l/br（位置级）",
+      "evidence": "scripts/kag.lua:288（KAG.r = KAG.l or KAG.br）→ l/br 位置级链",
+      "source": "t119 task output",
+      "note": "位置级：行断光标语义（同 br/l）。"
     },
     "replay": {
       "observable": "VERIFIED",
@@ -226,6 +314,14 @@
       "evidence": "scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）",
       "source": "t110 task output"
     },
+    "shake": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 vfx.shake→VFX.shake（层动画）",
+      "evidence": "scripts/kag.lua:417-420 → scripts/kag/commands/vfx.lua:372-374 → scripts/vfx.lua:82 VFX.shake",
+      "source": "t119 task output"
+    },
     "skip": {
       "observable": "VERIFIED",
       "platform_tested": "?",
@@ -234,6 +330,22 @@
       "evidence": "scripts/kag/commands/text.lua:1081-1097（ctx.skip_mode 切换，seen off-toggle 审计修复注记）→ scripts/kag_runner.lua:467/482-483（消费）",
       "source": "t113 task output"
     },
+    "sma_anim": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：sma.play_anim→actor 状态→sma.render（binding().draw_mesh）模块内状态-消费闭环；测试 0 引用但消费链真实",
+      "evidence": "scripts/kag/sma.lua:723-731 → :601 sma.play_anim → :540-556 sma.render（binding().draw_mesh，t117 已核）",
+      "source": "t119 task output"
+    },
+    "sma_ik": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：sma.set_ik→actor IK 字段→sma.render 消费（绑定接口渲染）",
+      "evidence": "scripts/kag/sma.lua:733-739 → :630 sma.set_ik → sma.render:540-556 消费",
+      "source": "t119 task output"
+    },
     "sma_play": {
       "observable": "VERIFIED",
       "platform_tested": "?",
@@ -241,6 +353,22 @@
       "reason": "t117 复核：绑定接口链 sma.spawn→sma.render binding().draw_mesh（GPU 网格渲染）；扫描器盲区 D 类（binding. 非 backend./layers. token）",
       "evidence": "scripts/kag/sma.lua:712 sma_play → :392 sma.spawn（ctx.sma_actors 状态）→ :540-556 sma.render binding().draw_mesh(handle,view,texId,...)",
       "source": "t117 task output"
+    },
+    "sma_stop": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：sma.despawn 内 binding().destroy_mesh 绑定接口直呼——网格销毁可观察（绑定接口链盲区）",
+      "evidence": "scripts/kag/sma.lua:747-749 → :442-452 sma.despawn（binding().destroy_mesh :448-449）",
+      "source": "t119 task output"
+    },
+    "sma_variant": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：sma.set_variant→actor variant/tex→sma.render 消费",
+      "evidence": "scripts/kag/sma.lua:741-745 → :652 sma.set_variant → sma.render:540-556 消费",
+      "source": "t119 task output"
     },
     "textspeed": {
       "observable": "VERIFIED",
@@ -264,7 +392,18 @@
       "packaged": "?",
       "reason": "t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。",
       "evidence": "scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）",
-      "source": "t101 task output"
+      "source": "t101 task output",
+      "note": "Observable=VERIFIED 指逐字揭示机制（[pt]/[textspeed] 驱动，t101 链）；[typewriter] 命令本体=声音配置 WRITE-ONLY 不工作（见 typewriter_sound 条目）——两口径并存不冲突（t119 双口径防误读）。"
+    },
+    "typewriter_sound": {
+      "observable": "?",
+      "platform_tested": "?",
+      "packaged": "?",
+      "status": "EXPERIMENTAL",
+      "reason": "t119 判级：WRITE-ONLY 声音配置——源码自证（text.lua:1226-1232 nothing plays a sound when a character is revealed / must not be described as working），配置三键全仓无读者，Tested=0",
+      "evidence": "scripts/kag/commands/text.lua:1286（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1272-1285 写入 ctx.typewriter_sound/_interval/_volume；无读者（:1226-1232 自证）",
+      "source": "t119 task output",
+      "note": "建议接线点：kag_runner reveal 推进处（text.lua:1235-1239 已指向 :446-455）读 _interval/_volume。"
     },
     "vibrate": {
       "observable": "VERIFIED",
@@ -273,6 +412,22 @@
       "reason": "t113 复核：委托链——trans.vib（transition.lua:455-476 layers.get_layer(message)+mark_dirty 消息层抖动）+ blocking 300ms。",
       "evidence": "scripts/kag/commands/vfx.lua:495-500 → kag.commands.transition trans.vib（transition.lua:455-476）",
       "source": "t113 task output"
+    },
+    "voice": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 audio.playvoice（schema.coerce play 迁移条件注记）→backend.audio_play（voice 轨）",
+      "evidence": "scripts/kag.lua:433-440 → scripts/kag/commands/audio.lua playvoice → backend.audio_play",
+      "source": "t119 task output"
+    },
+    "voice_wait": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t119 复核：模块委托 audio.voice_wait（CLOSED 链）→等待语音完成+点击跳过",
+      "evidence": "scripts/kag.lua:297-299 → scripts/kag/commands/audio.lua voice_wait",
+      "source": "t119 task output"
     }
   },
   "out_of_scope": [

@@ -554,15 +554,18 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp):
     n_part = len(by_status.get("PARTIAL", []))
     n_closed = len(by_status.get("CLOSED", []))
     n_extra = len(by_status.get("EXTRA", []))
+    n_exp = len(by_status.get("EXPERIMENTAL", []))
+    n_exp_decl = sum(1 for r in by_status.get("EXPERIMENTAL", []) if r["declared"])
+    n_exp_extra = n_exp - n_exp_decl
+    L.append("- UNWIRED：" + str(n_unw) + " · PARTIAL：" + str(n_part)
+             + " · CLOSED：" + str(n_closed) + " · EXTRA：" + str(n_extra) + " · EXPERIMENTAL(人工)：" + str(n_exp))
+    L.append("- **恒等式：" + str(declared_total) + " = CLOSED(" + str(n_closed)
+             + ") + PARTIAL(" + str(n_part) + ") + UNWIRED(" + str(n_unw) + ") + EXPERIMENTAL(在册 " + str(n_exp_decl) + ")；"
+             + str(n_disp) + " = " + str(declared_total) + "(Declared) + EXTRA(" + str(n_extra) + ") + EXPERIMENTAL(合约外 " + str(n_exp_extra) + ")**")
     L.append("- 合约总数（Declared，docs/api/command-contracts.md）：**" + str(declared_total) + "**")
     L.append("- 已注册（Dispatched）：**" + str(n_disp) + "**")
     L.append("- 触达效果面（Consumed，调用形上下文，v2）：**" + str(n_cons) + "**")
     L.append("- 测试引用（Tested，启发式计数）：**" + str(n_test) + "**")
-    L.append("- UNWIRED：" + str(n_unw) + " · PARTIAL：" + str(n_part)
-             + " · CLOSED：" + str(n_closed) + " · EXTRA：" + str(n_extra))
-    L.append("- **恒等式：" + str(declared_total) + " = CLOSED(" + str(n_closed)
-             + ") + PARTIAL(" + str(n_part) + ") + UNWIRED(" + str(n_unw) + ")；"
-             + str(n_disp) + " = " + str(declared_total) + "(Declared) + EXTRA(" + str(n_extra) + ")**")
     L.append("")
     L.append("**范围声明（t103 MUST-FIX 3）**：本矩阵的 " + str(declared_total)
              + " = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 "
@@ -575,6 +578,8 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp):
     L.append("产出；流控/API 命令按设计不在注册表——EXTRA 不是缺陷信号（A 类入册与否=产品决策待议）。")
     L.append("")
     L.append("> 状态定义：**UNWIRED**=有合约无处理器；**PARTIAL**=已注册但处理器体未以调用形触达效果面（v2 口径）；")
+    L.append("> **EXPERIMENTAL**=人工覆盖状态（能力存在但无消费方/无真实测试面——freeze 政策显式标注；")
+    L.append(">   见『EXPERIMENTAL』节与 overrides reason/note；不覆盖的声明：机器判级仍为 PARTIAL/EXTRA。")
     L.append("> **CLOSED**=已注册且调用形触达效果面；**EXTRA**=已注册但无合约。")
     L.append("> ⚠ = 人工覆盖（docs/design/capability-closure-overrides.json；详见『人工覆盖』节）。")
     L.append("")
@@ -621,6 +626,19 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp):
                      + " | " + str(it.get("evidence")) + " | " + str(it.get("note", "")) + " |")
     else:
         L.append("（无；docs/design/capability-closure-overrides.json 的 out_of_scope 数组驱动）")
+    L.append("")
+    L.append("## EXPERIMENTAL")
+    L.append("")
+    exps = sorted(by_status.get("EXPERIMENTAL", []), key=lambda x: x["name"])
+    if exps:
+        for r in exps:
+            ov = r.get("override") or {}
+            L.append("- " + r["name"] + " - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：" + (("PARTIAL（合约内）") if r["declared"] else "EXTRA（合约外）"))
+            L.append("  - reason：" + str(ov.get("reason", "")))
+            L.append("  - evidence：" + str(ov.get("evidence", "")))
+            L.append("  - note：" + str(ov.get("note", "")))
+    else:
+        L.append("（无）")
     L.append("")
     L.append("## UNWIRED")
     L.append("")
@@ -755,7 +773,7 @@ def main():
             "tested": sum(1 for r in records if r["tested_count"] > 0),
         },
         "status_counts": {st: sum(1 for r in records if r["status"] == st)
-                          for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA")},
+                          for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")},
         "commands": records,
         "private_helpers": [{"name": n, "file": f, "line": ln} for n, f, ln in private],
     }
