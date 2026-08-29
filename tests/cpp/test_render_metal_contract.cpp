@@ -275,17 +275,16 @@ TEST_CASE("metal: pre-t73 double wrap rejected by direct-feed validator (t71 roo
 // 6. GL: embedded-shader feeding contract (t75 -- GL regression lock)
 // =============================================================================
 
-TEST_CASE("gl: 9 of 10 GL embedded shaders direct-feedable; fs_vfx old-layout (t75)") {
+TEST_CASE("gl: all 10 GL embedded shaders direct-feedable (t79)") {
     using BM = BgfxShaderManager;
 
-    // Desktop GL embedded arrays are complete shaderc BGFX binaries. Nine of
-    // them carry the current record layout and are direct-feedable; fs_vfx is
-    // legacy-layout data (v11 header but uniform records WITHOUT the
-    // texInfo/texFormat fields added in bgfx binary version >= 8/>=10, so the
-    // codeSize field is read at a 4-byte-per-record offset error). The
-    // validator must keep rejecting it; array regeneration is backlog work
-    // (build-time shaderc pipeline, t71 plan (c)) -- this test locks the
-    // CURRENT state honestly instead of pretending it is fixed.
+    // Desktop GL embedded arrays are complete shaderc BGFX binaries with the
+    // current record layout (uniform records carry texInfo/texFormat since
+    // bgfx binary version >= 8/>=10). fs_vfx was repacked to the current
+    // layout by (a) parsing the old uniform records, (b) re-emitting them with
+    // the 4-byte texInfo+texFormat pair zeroed (the exact 33a0a206 transform
+    // that the other arrays already carry), keeping the GLSL code section
+    // byte-identical (see docs/solutions/build-errors/bgfx-shader-binary-repack.md).
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_vs_sprite,        kEmbeddedGL_vs_sprite_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_vs_fullscreen,    kEmbeddedGL_vs_fullscreen_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_stretch_blt_vs,   kEmbeddedGL_stretch_blt_vs_size));
@@ -293,10 +292,9 @@ TEST_CASE("gl: 9 of 10 GL embedded shaders direct-feedable; fs_vfx old-layout (t
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_texture,       kEmbeddedGL_fs_texture_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_blend,         kEmbeddedGL_fs_blend_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_transition,    kEmbeddedGL_fs_transition_size));
+    CHECK(BM::isDirectFeedBinary(kEmbeddedGL_fs_vfx,           kEmbeddedGL_fs_vfx_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_stretch_blt_fs,   kEmbeddedGL_stretch_blt_fs_size));
     CHECK(BM::isDirectFeedBinary(kEmbeddedGL_affine_blt_fs,    kEmbeddedGL_affine_blt_fs_size));
-    // fs_vfx: legacy layout -- must be rejected (locked as-is, see comment).
-    CHECK_FALSE(BM::isDirectFeedBinary(kEmbeddedGL_fs_vfx,     kEmbeddedGL_fs_vfx_size));
 
     // t75 feed-mode semantics: desktop GL feeds directly, GLES wraps.
     CHECK(BM::usesDirectFeed(false, true,  false));
