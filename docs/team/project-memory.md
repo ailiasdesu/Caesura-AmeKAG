@@ -154,7 +154,7 @@
   - **低内存压力中断（onLowMemory）**：真机物理触发未覆盖；
   - **多指手势注入**：单测覆盖，真机物理多指注入未实测；
   - **Linux 真渲染绿证（GL 实际渲染、非 Noop）**：**已获证（round-7，run 33245271845 @ 0fce3311）**——Linux · Package verify 30/30 含 renderdisabled=0，为 Linux 发布包真渲染首证（M1）；round-4 教训参考：Linux 包内游戏曾 requested=D3D11→actual=Noop、exit 0 假绿；
-  - **macOS §3 红（editor 检查）**：**已定性为 verify 脚本时序/存活检测误报（round-7 反转，修复面=verify_release_package.sh §3，T-E1 修复中）**——证据：无 .ips、demo 探针 rc=0、GPU degrade WARN 证明帧循环长期运行、rc 未落盘=进程未退出、同节 browser-nav/api-ping 通过；根因为慢 runner（软渲染 ~98ms/帧）上首查/存活检测时序。取证工具链保留：`bca67d42` 抓 `CaesuraAmeKAG*.ips` 头 + 纯诊断 demo 探针。
+  - **macOS §3 红（editor 检查）**：**已修复并获绿证（round-8 run 33248475888 verify 30/30；自 round-9 起 mac verify 硬门）**——round-7 红定性为 verify 脚本 ps 探测误报（mac runner 对活进程 ps -args 返回空→活判死+首查 000；证据：无 .ips、demo 探针 rc=0、GPU degrade WARN 证明帧循环长期运行、rc 未落盘=进程未退出、同节 browser-nav/api-ping 通过），修复=launcher 直记 pid/rc 判死（`0422c17c` §3/§4 对称；mac 实测 editor ready 3s/token 1s，45s 上限余量充足）。取证工具链保留：`bca67d42` 抓 `CaesuraAmeKAG*.ips` 头 + 纯诊断 demo 探针。
 
 ### 5.3 关键历史决策与评估
 - **KAG3 生态兼容决策**：
