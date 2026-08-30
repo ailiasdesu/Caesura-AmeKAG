@@ -300,7 +300,11 @@ local function resume_from_save()
     -- exactly.
     local cur = tonumber(ctx.token_index) or 1
     local curTok = ctx.tokens and ctx.tokens[cur]
-    local atLoadTag = type(curTok) == "table" and curTok[1] == "load"
+    -- Shape-agnostic: flow.load_scene tokens carry the command at [1];
+    -- the web bridge's raw tokenizer.parse tokens carry it in .cmd (t69:
+    -- the [1]-only check never fired on web, so a self-referential
+    -- [save]->[load] re-spawned forever).
+    local atLoadTag = type(curTok) == "table" and (curTok[1] == "load" or curTok.cmd == "load")
     if ctx._pendingLoadOriginScene == path and atLoadTag
         and (tonumber(ctx._pendingLoadToken) or 1) <= cur then
         ctx.token_index = cur + 1

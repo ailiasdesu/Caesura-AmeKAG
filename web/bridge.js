@@ -605,6 +605,15 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         -- In advance mode only the preserved coroutine is resumed: the outer
         -- re-wrap below (label/load jumps) must not orphan the live cursor.
         local result = ''
+        -- One CUMULATIVE frame budget for the whole run: the outer loop
+        -- re-spawns the coroutine on [load]/label jumps, and a per-segment
+        -- counter reset made maxFrames unable to bound a respawn cycle
+        -- (t69: a self-referential [save]->[load] whose discriminator misses
+        -- re-spawns forever, immune to any budget — the silent hang that
+        -- froze three CI jobs). A cumulative budget turns that regression
+        -- class into a loud ERR:frame-limit fast-fail.
+        local frames = 0
+        local clicks = 0
         while result == '' do
         -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
         -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
@@ -627,8 +636,6 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         else
           co2 = wrap_co()
         end
-        local frames = 0
-        local clicks = 0
         while true do
           local status = coroutine.status(co2)
           if status == 'dead' then
@@ -654,7 +661,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- at the saved cursor) must resume exactly at the saved token.
                 local cur9 = tonumber(ctx.token_index) or 1
                 local curTok9 = ntoks and ntoks[cur9]
-                local atLoadTag9 = type(curTok9) == "table" and curTok9[1] == "load"
+                local atLoadTag9 = type(curTok9) == "table" and (curTok9[1] == "load" or curTok9.cmd == "load")
                 if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
                   and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
                   ctx.token_index = cur9 + 1
@@ -987,6 +994,11 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           return nil
         end
         local result = ''
+        -- One CUMULATIVE frame budget across [load] respawn segments (see
+        -- runScene: a per-segment reset let a self-referential [save]->[load]
+        -- re-spawn forever, immune to maxFrames — t69).
+        local frames = 0
+        local clicks = 0
         while result == '' do
         -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
         -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
@@ -1006,8 +1018,6 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         else
           co2 = wrap_co()
         end
-        local frames = 0
-        local clicks = 0
         while true do
           local status = coroutine.status(co2)
           if status == 'dead' then
@@ -1036,7 +1046,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- at the saved cursor) must resume exactly at the saved token.
                 local cur9 = tonumber(ctx.token_index) or 1
                 local curTok9 = ntoks and ntoks[cur9]
-                local atLoadTag9 = type(curTok9) == "table" and curTok9[1] == "load"
+                local atLoadTag9 = type(curTok9) == "table" and (curTok9[1] == "load" or curTok9.cmd == "load")
                 if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
                   and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
                   ctx.token_index = cur9 + 1
