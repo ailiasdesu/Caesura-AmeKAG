@@ -533,6 +533,64 @@ function KAG.return_to_caller(ctx)
     end
 end
 
+-- t125: DEFAULT gesture hooks for the native SwipeDown/SwipeUp consumers.
+-- Engine.cpp routes SDLK_SPACE -> _KAG_onKeySpace and SDLK_PAGEUP ->
+-- _KAG_onKeyPageUp (same guard style as _KAG_onCtrlDown). The web player
+-- layer serves these gestures to every game (web/main.mjs:634-647); the
+-- runtime default gives every native game the same parity. Semantics
+-- mirror kag_demo_entry.lua's override:
+--   SwipeDown -> toggle message-layer visibility
+--   SwipeUp   -> open the backlog/history overlay (input_focus guard +
+--                single-flight coroutine + kag.commands.system.history)
+-- Override rule: an entry that defines the same globals AFTER
+-- require("kag") wins (the demo entry is the reference override -- its
+-- engine_update drives the overlay frames; see the driver caveat at
+-- kag_demo_entry.lua).
+-- Headless/defensive: ctx or message layer may be absent -> no-op.
+-- NOTE: single-flight state lives on ctx (_gesture_history_co) so tests
+-- can drive the real overlay coroutine (drift-proof) and per-context
+-- games stay isolated.
+local function defaultKeySpace()
+    local ctx = _G._CAESURA_CTX
+    if not ctx then return end
+    -- t130 (M-F1): bind the layers module like the :398 precedent (function-
+    -- local require); the bare global `layers` does NOT exist at kag.lua
+    -- scope (only the demo entry's closure sees an entry-local `layers`),
+    -- so a non-override entry pressing SPACE/SwipeDown would nil-call.
+    -- pcall keeps the headless contract: layers module absent -> no-op.
+    local ok, layers = pcall(require, "layers")
+    if not ok or not layers or type(layers.get) ~= "function" then return end
+    local msg = layers.get("message")
+    if msg then
+        msg.visible = not msg.visible
+    end
+end
+
+local function defaultKeyPageUp()
+    local ctx = _G._CAESURA_CTX
+    if ctx and ctx.input_focus ~= "history" and not ctx._gesture_history_co then
+        ctx._gesture_history_co = coroutine.create(function()
+            require("kag.commands.system").history(ctx, {})
+        end)
+    end
+end
+
+-- Public contract (t127 suggest 2): KAG.gesture_defaults are the canonical
+-- runtime defaults for the native swipe gestures. Entries override by
+-- defining _G._KAG_onKeySpace / _G._KAG_onKeyPageUp AFTER require("kag")
+-- (first-definition-wins at install time). Both defaults are headless-safe
+-- (no ctx / no message layer / layers module absent -> no-op). PAGEUP state
+-- lives on ctx._gesture_history_co (single-flight, per-context); the overlay
+-- coroutine needs a frame driver (see kag_demo_entry.lua override).
+-- Exported for tests and future entries: the canonical runtime defaults.
+KAG.gesture_defaults = {
+    space = defaultKeySpace,
+    page_up = defaultKeyPageUp,
+}
+
+_G._KAG_onKeySpace = _G._KAG_onKeySpace or defaultKeySpace
+_G._KAG_onKeyPageUp = _G._KAG_onKeyPageUp or defaultKeyPageUp
+
 -- NOTE: KAG.save_game / KAG.load_game are C bindings registered by
 -- SaveBinding (src/script/bindings/SaveBinding.cpp). Do not redefine them
 -- here: a Lua-level redefinition shadows the C functions and breaks the

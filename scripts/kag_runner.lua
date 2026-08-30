@@ -284,8 +284,9 @@ local function resume_from_save()
     ctx.label_index = nil  -- scene swap bypasses the scheduler: rebuild
     -- Coerce the restored token index: crafted saves may carry a string or
     -- table; scheduler.run compares `i <= #tokens` numerically.
-    -- t62 (round-94 guard, native port of web/bridge.js:650-655 and
-    -- 1024-1029): a self-referential load -- [save] then [load] back-to-back
+    -- t62 (round-94 guard; web/bridge.js keeps TWO mirrored copies of this
+    -- exact discriminator -- search "atLoadTag9" (t69) -- change all three
+    -- sites together): a self-referential load -- [save] then [load] back-to-back
     -- in the SAME scene -- recorded a resume point at/before the consumed
     -- [load] token, so a plain restore re-executes the [save]/[load] block
     -- forever. When the reloaded scene is the current one AND the resume was
@@ -461,6 +462,15 @@ function kag_runner.update(dt)
             if tw and tw.update then tw.update(ctx, delta_ms) end
         end)
     end
+
+    -- [t127 M-F2] Overlay pump for the runtime default PAGEUP hook: the
+    -- default in KAG.gesture_defaults parks its backlog coroutine in
+    -- ctx._gesture_history_co. Entries that override the hook drive their
+    -- own coroutine and never set this slot; without this per-frame driver
+    -- a pump-less entry would freeze on the first frame with input_focus
+    -- stuck on "history" (soft-lock). Body lives in pump_gesture_overlay
+    -- (named export, t131) so tests can drive its paths directly.
+    kag_runner.pump_gesture_overlay(ctx)
 
     -- Typewriter reveal: advance the visible character count by the
     -- configured text speed (ms per char). Skip/auto modes reveal instantly.
@@ -789,6 +799,26 @@ end
 -- that frame so the scheduler cannot advance twice.
 function kag_runner.debug_resume()
     return resume_scheduler("debug-resume")
+end
+
+-- [t131] Overlay pump for the runtime default PAGEUP hook, exported so the
+-- lua suite can drive the dead/error/no-op paths directly. Normal close
+-- restores input_focus inside the history command itself; only the error
+-- path forces it back here.
+function kag_runner.pump_gesture_overlay(c)
+    if not (c and c._gesture_history_co) then return end
+    local hco = c._gesture_history_co
+    if coroutine.status(hco) == "dead" then
+        c._gesture_history_co = nil
+        return
+    end
+    local ok, err = coroutine.resume(hco)
+    if not ok then
+        print("[History] overlay error: " .. tostring(err))
+        c._gesture_history_co = nil
+        c.input_focus = "kag"
+        pcall(function() require("history_ui")._hideAll(c) end)
+    end
 end
 
 return kag_runner

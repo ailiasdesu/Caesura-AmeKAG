@@ -98,14 +98,23 @@ check("history scroll no crash", okH and coroutine.status(coH) == "suspended")
 _G._GAME_KEY_ESC = true
 local rEsc = coroutine.resume(coH)
 check("history esc exits", rEsc and coroutine.status(coH) == "dead")
--- t109: native SwipeUp -> SDLK_PAGEUP -> _KAG_onKeyPageUp opens the
--- backlog/history overlay. The hook lives in kag_demo_entry.lua (not loadable
--- here -- it autostarts demo_story.ks); this test locks the same body by
--- replicating it VERBATIM (drift risk documented at the entry site).
+-- t125: the default gesture hooks are the RUNTIME canon (scripts/kag.lua
+-- setup tail, exported as KAG.gesture_defaults). Tests use the exported
+-- defaults directly -- no replica, no drift, no ambient-global dependence.
+-- The runtime installs them on _G only when an entry has not already
+-- defined its own (first-definition-wins), so the overlay driver caveat
+-- stays with the entry (see kag_demo_entry.lua).
 do
+    local defaults = require("kag").gesture_defaults
+    check("runtime gesture defaults exported", type(defaults) == "table"
+          and type(defaults.page_up) == "function"
+          and type(defaults.space) == "function")
+
     local _savedUI = package.loaded["history_ui"]
     package.loaded["history_ui"] = { show = function(c2)
-        return { index = 1, name = "target", label = "line 1",
+        -- Real history_ui.show returns a jump-bearing table; the history
+        -- handler only sets ctx._pendingJump when result.jump is truthy.
+        return { jump = true, index = 1, name = "target", label = "line 1",
                  scene = "t.ks", token_index = 1 }
     end }
     local ctxK = { backlog = { { text = "x", name = "s", scene = "t.ks",
@@ -113,24 +122,63 @@ do
                    f = {}, tf = {}, sf = {}, mp = {}, input_focus = "kag" }
     local _savedCtx = _G._CAESURA_CTX
     _G._CAESURA_CTX = ctxK
-    local history_co
-    local _hookPageUp = function()  -- VERBATIM: kag_demo_entry.lua _KAG_onKeyPageUp
-        local ctx = _G._CAESURA_CTX
-        if ctx and ctx.input_focus ~= "history" and not history_co then
-            history_co = coroutine.create(function()
-                require("kag.commands.system").history(ctx, {})
-            end)
-        end
-    end
-    _hookPageUp()
-    check("page-up hook opens history overlay coroutine", history_co ~= nil)
-    local okP, errP = coroutine.resume(history_co)
-    check("page-up hook overlay runs", okP == true)
-    check("page-up hook jumps to target", ctxK._pendingJump ~= nil
+    local hook = defaults.page_up
+    local okHook = pcall(hook)
+    check("runtime page-up default callable", okHook == true)
+    check("runtime page-up default creates overlay coroutine (ctx slot)",
+          type(ctxK._gesture_history_co) == "thread")
+    local okP, errP = coroutine.resume(ctxK._gesture_history_co)
+    check("runtime page-up default overlay runs", okP == true)
+    check("runtime page-up default jumps to target", ctxK._pendingJump ~= nil
           and ctxK._pendingJump.index == 1)
-    local coRef = history_co
-    _hookPageUp()
-    check("page-up hook single-flight while overlay open", history_co == coRef)
+    local coRef = ctxK._gesture_history_co
+    pcall(hook)
+    check("runtime page-up default single-flight while overlay open",
+          ctxK._gesture_history_co == coRef)
+    -- guard: history already open -> no new coroutine slot
+    ctxK._gesture_history_co = nil
+    ctxK.input_focus = "history"
+    pcall(hook)
+    check("runtime page-up default guarded when history open",
+          ctxK._gesture_history_co == nil)
+    -- t130 (M-F1): actually EXECUTE the space default with a stubbed layers
+    -- module (t127 blind spot: the 10 t125 assertions only ran page_up).
+    local _savedLayers = package.loaded["layers"]
+    local msg = { visible = true }
+    package.loaded["layers"] = { get = function(name)
+        if name == "message" then return msg end
+        return nil
+    end }
+    local okT1 = pcall(defaults.space)
+    check("runtime space default toggles message layer", okT1 == true
+          and msg.visible == false)
+    local okT2 = pcall(defaults.space)
+    check("runtime space default toggles back", okT2 == true
+          and msg.visible == true)
+    package.loaded["layers"] = { get = function() return nil end }
+    local okT3 = pcall(defaults.space)
+    check("runtime space default no-message-layer no-op", okT3 == true
+          and msg.visible == true)
+    package.loaded["layers"] = _savedLayers
+    -- headless: no ctx -> no-op without error
+    _G._CAESURA_CTX = nil
+    local okHQ = pcall(defaults.page_up)
+    check("runtime page-up default headless no-op", okHQ == true)
+
+    local _savedCtx2 = _G._CAESURA_CTX
+    _G._CAESURA_CTX = nil
+    local okS = pcall(defaults.space)
+    check("runtime space default headless no-op", okS == true)
+    -- t130 (M-F1) regression lock: a layers module WITHOUT get (the t127
+    -- hazard shape) must not nil-call the default space body.
+    local _savedLayers2 = package.loaded["layers"]
+    package.loaded["layers"] = { }
+    local ctxS = { }
+    _G._CAESURA_CTX = ctxS
+    local okS2 = pcall(defaults.space)
+    check("runtime space default no-layer no-op", okS2 == true)
+    package.loaded["layers"] = _savedLayers2
+    _G._CAESURA_CTX = _savedCtx2
     _G._CAESURA_CTX = _savedCtx
     package.loaded["history_ui"] = _savedUI
 end
@@ -140,5 +188,28 @@ end
 package.loaded["history_ui"] = _hu_saved or package.loaded["history_ui"]
 package.loaded["layers"] = layers_b2
 _G._CAESURA_BACKEND = be_b
+
+-- [t131] direct coverage for the kag_runner overlay pump paths
+do
+    local okR, runner = pcall(require, "kag_runner")
+    check("kag_runner loads in harness", okR == true)
+    if okR then
+        check("pump_gesture_overlay exported", type(runner.pump_gesture_overlay) == "function")
+        local c1 = {}
+        local ok1 = pcall(runner.pump_gesture_overlay, c1)
+        check("pump slot-nil no-op", ok1 == true and c1._gesture_history_co == nil)
+        local dead = coroutine.create(function() end)
+        coroutine.resume(dead)
+        local c2 = { _gesture_history_co = dead, input_focus = "history" }
+        runner.pump_gesture_overlay(c2)
+        check("pump clears dead co", c2._gesture_history_co == nil)
+        check("pump dead path keeps focus", c2.input_focus == "history")
+        local boom = coroutine.create(function() error("boom") end)
+        local c3 = { _gesture_history_co = boom, input_focus = "history" }
+        runner.pump_gesture_overlay(c3)
+        check("pump clears erroring co", c3._gesture_history_co == nil)
+        check("pump error path resets focus", c3.input_focus == "kag")
+    end
+end
 
 print("HISTORY TESTS DONE")

@@ -91,11 +91,20 @@ function _KAG_onCtrlUp()
     _prevSkipMode = nil
 end
 
--- t109: native swipe consumers (MobileAdapter injects SDLK_SPACE /
--- SDLK_PAGEUP, Engine.cpp routes them here via _KAG_onKeySpace /
--- _KAG_onKeyPageUp). Mirror the WEB gesture semantics:
---   web/main.mjs:634-640  SwipeDown -> hide/toggle the dialogue box
---   web/main.mjs:641-647  SwipeUp   -> open backlog view (bottom-scrolled)
+-- t109/t125: native swipe consumers (MobileAdapter injects SDLK_SPACE /
+-- SDLK_PAGEUP; Engine.cpp routes them here via _KAG_onKeySpace /
+-- _KAG_onKeyPageUp). A RUNTIME DEFAULT now exists (scripts/kag.lua setup
+-- tail) with the same semantics; this entry KEEPS its override
+-- deliberately: its engine_update drives the history overlay coroutine
+-- every frame (history_ui.show is a yield-forever loop), and the demo's
+-- driver owns its own `history_co` -- dropping this override would route
+-- PAGEUP to the runtime coroutine, which nothing drives in this entry
+-- (overlay would freeze with input_focus stuck on "history" and clicks
+-- blocked). Entries without a driver should leave the runtime default in
+-- place and extend their own engine_update if they want frame-driven
+-- overlays.
+-- Web mirror: web/main.mjs:634-640 SwipeDown -> hide/toggle dialogue box;
+-- web/main.mjs:641-647 SwipeUp -> open backlog view (bottom-scrolled).
 function _KAG_onKeySpace()
     local ctx = _G._CAESURA_CTX
     if not ctx then return end
