@@ -1,9 +1,9 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-08-30T02:47:04Z
+> 生成时间（输入源最新 mtime）：2026-08-30T03:50:04Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：6b9f0a3e42f4e77d
+> 源指纹（输入内容 sha256 前 16 hex）：f86f286e16b27592
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -13,6 +13,11 @@
 - 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**89**
 - 测试引用（Tested，启发式计数）：**137**
 - UNWIRED：0 · PARTIAL：51 · CLOSED：79 · EXTRA：31 · EXPERIMENTAL(人工)：4
+- **幻影绑定（v5）**：**7** 处 backend.<name> 调用命中
+  - 提取模式：union of: bindings/*.cpp luaL_Reg { name, lua_X }; backend.lua ^function Backend.X; backend_factory.lua cmd==X; kag.lua ^function KAG.X
+  - 清单大小：196 个可解析名（cpp=156 · shim=68 · factory=62 · kag=20，绑定文件 11 个）
+  - web/jsBackend 交叉核对（仅报告，不参与判定）：幻影名在 web/bridge.js 亦有=is_valid,load_image,render_frame,set_palette
+    · 原生+js 均无=（无）
 - **恒等式：**134 = CLOSED(79) + PARTIAL(51) + UNWIRED(0) + EXPERIMENTAL(在册 4)；165 = 134(Declared) + EXTRA(31) + EXPERIMENTAL(合约外 0)**
 
 **范围声明（t103 MUST-FIX 3）**：本矩阵的 134 = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 134 内**：
@@ -26,6 +31,7 @@
 > **CLOSED**=已注册且调用形触达效果面；**EXTRA**=已注册但无合约。
 > **EXPERIMENTAL**=人工覆盖状态（能力存在但无消费方/无真实测试面——freeze 政策显式标注；见『EXPERIMENTAL』节与 overrides reason/note；机器判级仍为 PARTIAL/EXTRA）。
 > ⚠ = 人工覆盖（docs/design/capability-closure-overrides.json；详见『人工覆盖』节）。
+> 　* = 存在幻影绑定命中（backend.<name> 不在原生绑定面；详见『幻影绑定（v5）』节）；Consumed 列已按 v5 幻影过滤。
 
 ## Commands
 
@@ -116,7 +122,7 @@
 | notify | Y | Y | n | 38 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/system.lua:648 |
 | nvl | Y | Y | Y | 18 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:976 |
 | p | Y | Y | Y | 282 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:947 |
-| palette | Y | Y | Y | 26 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:451 |
+| palette* | Y | Y | Y | 26 | ? | ? | ? | PARTIAL | scripts/kag/commands/vfx.lua:451 |
 | particle_weather | Y | Y | Y | 3 | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:589 |
 | particles | Y | Y | Y | - | ? | ? | ? | CLOSED | scripts/kag/commands/vfx.lua:384 |
 | play | Y | Y | Y | 6 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | CLOSED | scripts/kag.lua:467 |
@@ -176,7 +182,7 @@
 | text | Y | Y | Y | 40 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:839 |
 | textbox | Y | Y | Y | 7 | ? | ? | ? | CLOSED | scripts/kag/commands/text.lua:381 |
 | textspeed | Y | Y | n | 42 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1214 |
-| trans | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:299 |
+| trans* | Y | Y | Y | 4 | ? | ? | ? | CLOSED | scripts/kag/commands/transition.lua:299 |
 | tween | Y | Y | Y | 14 | VERIFIED ⚠ | ? ⚠ | ? ⚠ | CLOSED | scripts/kag/commands/tween.lua:201 |
 | typewriter | Y | Y | n | - | VERIFIED ⚠ | ? ⚠ | ? ⚠ | PARTIAL | scripts/kag/commands/text.lua:1272 |
 | typewriter_sound | Y | Y | n | - | ? ⚠ | ? ⚠ | ? ⚠ | EXPERIMENTAL | scripts/kag/commands/text.lua:1286 |
@@ -390,7 +396,31 @@
 ## 可疑翻转清单（v4 保守维持；含队长裁决）
 
 - palette — v3 PARTIAL → v4 CLOSED；**已裁决：维持 PARTIAL**（理由与 v5 候选见下）
-  - reason：v4 穿透命中的 backend.set_palette 为幻影绑定——palette.lua:10-11 自证「C++ 侧无 LUT 绑定，set_palette/destroy_texture 未接线（src 与 web bridge 均无）」；真实效果面仅 backend.load_image（LUT 图加载，palette.lua:44）。apply/clear 经 lut_available() 守卫降级为可见 no-op（palette.lua:14-24）——全链半程：加载真实/应用未接线，按裁决维持 PARTIAL。v5 候选：模块穿透落点的 backend.* 名须对照真实绑定面校验（防幻影绑定翻绿）。
+  - reason：v5 已核真（t134）：渗透命中的 set_palette/load_image/is_valid 均为幻影绑定——三者不在原生绑定面（bindings/*.cpp luaL_Reg 156 键、backend.lua shim 68 def、backend_factory 62 cmd、kag.lua KAG 20 def 的并集）；web/jsBackend 提供同名项（bridge.js:325-327）但原生引擎无。仅 destroy_texture 为真实绑定（shim:188→RenderBinding:981）。apply/clear 经 lut_available() 守卫降级为可见 no-op（palette.lua:14-24）——全链半程：纹理销毁真实/LUT 应用未接线，按裁决维持 PARTIAL。
+
+## 幻影绑定（v5）
+
+> v5 判据：backend.<name> 命中若 name 不在真实绑定面（bindings/*.cpp luaL_Reg + backend.lua shim def + backend_factory cmd 分派 + kag.lua KAG def 的并集，见上方「幻影绑定（v5）」提取模式）——该命中为**幻影**：从 Consumed 证据中剔除，并在本节列出 file:line。过时的宿主侧（web jsBackend）提供同名项不改变判定：原生绑定面以本机 src/script/bindings 与 scripts/ 为唯一口径。
+
+> web/jsBackend 同步存在（原生缺失，web 桥提供）：is_valid, load_image, render_frame, set_palette
+
+| 命令 | 幻影名 | file:line |
+|---|---|---|
+| palette | load_image | scripts/palette.lua:44 |
+| palette | is_valid | scripts/palette.lua:45 |
+| palette | set_palette | scripts/palette.lua:75 |
+| palette | set_palette | scripts/palette.lua:84 |
+| palette | is_valid | scripts/palette.lua:98 |
+| trans | render_frame | scripts/kag/commands/transition.lua:307 |
+| trans | render_frame | scripts/kag/commands/transition.lua:346 |
+
+## 版本翻转（v4→v5 幻影过滤）
+
+（无）
+
+## 可疑翻转清单（v5 人类级保守维持）
+
+（无）
 
 ## UNWIRED
 
@@ -492,8 +522,9 @@
 - _renderNameplate - text.lua:431
 - _safeScenePath - save.lua:30
 
-## 数据与判级局限（v4）
+## 数据与判级局限（v5）
 
+9. **v5 幻影绑定过滤**：Consumed 的 backend.* 命中按名对照真实绑定面（bindings/*.cpp luaL_Reg + backend.lua shim def + backend_factory cmd 分派 + kag.lua KAG def 的并集，动态提取）校验；不在面上的命中为幻影，从 Consumed 证据剔除并在『幻影绑定（v5）』列 file:line。幻影命中可能因注释剥离/多跳链（>1 跳穿透）漏检——只按已捕获的调用形上下文判定；web/jsBackend 同名项仅作交叉报告，不改变原生判定。
 1. **Consumed 为调用形文本启发式**：注释与字符串字面量先被剥离（strip_lua 状态机），要求 backend./layers./kag. 的 <ident>( 调用形，或 ctx.tf. / ctx.tf[ / ctx.tf= 字段/赋值。仍可能低估（经本地别名或工具函数间接调用时本体不含直接调用；如 palette 命令经 palette 模块间接生效——如实归 PARTIAL），也可能高估（kag. 自派发计入）。脚本不执行 Lua，无法做数据流分析。
 2. **Dispatched 为静态解析**：commands 导出表函数/赋值键 + kag.lua 显式映射与 function KAG.x 定义 + sma_commands 子表。jump/call/endmacro 等直接 API 计入 EXTRA(api-alias)；[jump]/[if] 等 token 的流控处理由 scheduler.lua 编译期内联；两条轨道并存，本扫描器按注册键计 Dispatched。
 3. **Tested 为原始引用计数**：tests/scripts/*.lua 与 web/*.test.js 中 [<name> 或 kag.<name> 出现次数，不区分断言与非断言上下文（注释/数组/字符串也算）。

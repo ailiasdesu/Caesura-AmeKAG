@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capability Closure scanner v2 (029 artifact A; t103 MUST-FIX + overrides).
+"""Capability Closure scanner v5 (029 artifact A; t103 MUST-FIX + overrides; t134 phantom-binding validation).
 
 For every KAG command contract in docs/api/command-contracts.md, grade the
 four closure dimensions that can be measured statically:
@@ -15,6 +15,13 @@ four closure dimensions that can be measured statically:
                 field access) no longer counts -- the v1 substring heuristic
                 produced false positives from require("kag.xxx") literals and
                 trailing comment blocks (assert / endbutton / waitclick).
+                 V5 (t134): backend.<name> hits are validated against the REAL
+                 binding surface (dynamically extracted from
+                 src/script/bindings/*.cpp luaL_Reg + scripts/backend.lua shim
+                 defs + backend_factory.lua cmd dispatch + kag.lua KAG defs).
+                 A hit whose name is NOT on that surface is a PHANTOM BINDING:
+                 dropped from Consumed evidence and listed in the
+                 幻影绑定（v5） section with file:line.
   Tested     -- HEURISTIC reference count in tests/scripts/*.lua and
                 web/*.test.js (NOT assertion-level coverage)
 
@@ -34,6 +41,7 @@ Usage:
 
 import hashlib
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -48,6 +56,10 @@ TESTS_WEB = REPO / "web"
 OVERRIDES = REPO / "docs" / "design" / "capability-closure-overrides.json"
 OUT_JSON = REPO / "build" / "capability-closure.json"
 OUT_MD = REPO / "docs" / "design" / "capability-closure-matrix.md"
+BINDINGS_DIR = REPO / "src" / "script" / "bindings"
+BACKEND_LUA_PATH = REPO / "scripts" / "backend.lua"
+FACTORY_PATH = REPO / "scripts" / "backend_factory.lua"
+WEB_BRIDGE = REPO / "web" / "bridge.js"
 
 NL = chr(10)
 TABLE_FILE = {
@@ -86,7 +98,9 @@ def source_mtime(paths):
 
 def source_fingerprint():
     h = hashlib.sha256()
-    paths = [CONTRACTS, KAG_LUA, SMA_LUA, OVERRIDES]
+    paths = [CONTRACTS, KAG_LUA, SMA_LUA, OVERRIDES,
+             BACKEND_LUA_PATH, FACTORY_PATH]
+    paths += sorted(BINDINGS_DIR.glob("*.cpp"))
     paths += sorted(COMMANDS_DIR.glob("*.lua"))
     if TESTS_LUA.is_dir():
         paths += sorted(TESTS_LUA.rglob("*.lua"))
@@ -124,7 +138,7 @@ HUMAN_PARTIAL = {
 ADJUDICATED = {
     "palette": {
         "verdict": "维持 PARTIAL",
-        "reason": "v4 穿透命中的 backend.set_palette 为幻影绑定——palette.lua:10-11 自证「C++ 侧无 LUT 绑定，set_palette/destroy_texture 未接线（src 与 web bridge 均无）」；真实效果面仅 backend.load_image（LUT 图加载，palette.lua:44）。apply/clear 经 lut_available() 守卫降级为可见 no-op（palette.lua:14-24）——全链半程：加载真实/应用未接线，按裁决维持 PARTIAL。v5 候选：模块穿透落点的 backend.* 名须对照真实绑定面校验（防幻影绑定翻绿）。"
+        "reason": "v5 已核真（t134）：渗透命中的 set_palette/load_image/is_valid 均为幻影绑定——三者不在原生绑定面（bindings/*.cpp luaL_Reg 156 键、backend.lua shim 68 def、backend_factory 62 cmd、kag.lua KAG 20 def 的并集）；web/jsBackend 提供同名项（bridge.js:325-327）但原生引擎无。仅 destroy_texture 为真实绑定（shim:188→RenderBinding:981）。apply/clear 经 lut_available() 守卫降级为可见 no-op（palette.lua:14-24）——全链半程：纹理销毁真实/LUT 应用未接线，按裁决维持 PARTIAL。"
     },
 }
 
@@ -440,7 +454,7 @@ def v4_file_index(path):
     if path in V4_FILES_CACHE:
         return V4_FILES_CACHE[path]
     fp = REPO / path
-    info = {"lines": [], "locals": {}, "modules": {}, "fns": {}}
+    info = {"lines": [], "locals": {}, "modules": {}, "fns": {}, "local_lines": {}}
     if fp.exists():
         info["lines"] = fp.read_text(encoding="utf-8").splitlines()
     V4_FILES_CACHE[path] = info
@@ -476,6 +490,7 @@ def v4_index_file(path):
                 end = b
                 break
         info["locals"][name] = NL.join(lines[i:end])
+        info["local_lines"][name] = i + 1
     for i, l in enumerate(lines):
         s = l.strip()
         if s.startswith("local ") and "require(" in s and "=" in s:
@@ -559,13 +574,20 @@ def v4_module_calls(clean, info):
     return out
 
 
-def v4_penetrated_hits(body, file_path):
+def v4_penetrated_landings(body, file_path):
+    """One-hop penetration target bodies as (slice_text, src_file, base_line).
+
+    Same traversal as the v4 hit scan: same-file local functions the body
+    calls + require()d module functions. Base line is the 1-based line OF
+    the slice's first line in its source file (needed for v5 file:line
+    phantom evidence).
+    """
     clean = strip_lua(body)
-    hits = []
+    out = []
     info = v4_index_file(file_path)
     for name in v4_local_call(clean, info):
         lb = info["locals"].get(name) or ""
-        hits.extend(call_hits(lb))
+        out.append((lb, file_path, info.get("local_lines", {}).get(name, 1)))
     for alias, fn, mod in v4_module_calls(clean, info):
         mp = v4_module_path(mod)
         if not mp:
@@ -579,7 +601,14 @@ def v4_penetrated_hits(body, file_path):
         if idx is None:
             continue
         body2 = StringUtils_file_slice(minfo, idx)
-        hits.extend(call_hits(body2))
+        out.append((body2, mp, idx + 1))
+    return out
+
+
+def v4_penetrated_hits(body, file_path):
+    hits = []
+    for slice_text, _src, _base in v4_penetrated_landings(body, file_path):
+        hits.extend(call_hits(slice_text))
     seen = set()
     out = []
     for h in hits:
@@ -601,6 +630,155 @@ def StringUtils_file_slice(info, idx):
     return NL.join(lines[idx:end])
 
 
+# ---------------------------------------------------------------------------
+# v5: phantom-binding validation (t134). The REAL binding surface for
+# backend.<name> is extracted DYNAMICALLY from the native registration
+# sites -- NOT a single fixed list:
+#   (a) src/script/bindings/*.cpp luaL_Reg entries { "name", lua_X }
+#       (KAGBinding flat table, plus Render/DevCore/Save/VFX/SMA/Steam/
+#        MiniGame/AI/Debug/Engine subtables reached via the shim's
+#        render_or_guard / devcore_or_guard routing),
+#   (b) scripts/backend.lua 'function Backend.name' shim defs (the Lua-side
+#       API surface -- e.g. audio_play/audio_stop/load_texture are shim
+#       functions, NOT luaL_Reg keys),
+#   (c) scripts/backend_factory.lua dispatch cmd strings (the BackendFactory
+#       proxy registry -- legacy _CAESURA_BACKEND-style routing),
+#   (d) scripts/kag.lua 'function KAG.name' defs (fallback chain in
+#       backend.lua's resolve(): _CAESURA_BACKEND -> KAG -> kag module).
+# A backend.X consumption hit whose X is NOT on (a)|(b)|(c)|(d) is a PHANTOM
+# BINDING: dropped from Consumed evidence and listed in the 幻影绑定 section
+# with file:line evidence.
+# ---------------------------------------------------------------------------
+
+V5_SURFACE_CACHE = None
+
+
+def extract_v5_surface():
+    """Return (surface_set, meta) -- meta describes extraction pattern+sizes."""
+    global V5_SURFACE_CACHE
+    if V5_SURFACE_CACHE is not None:
+        return V5_SURFACE_CACHE
+    cpp_names = set()
+    cpp_files = 0
+    if BINDINGS_DIR.is_dir():
+        for p in sorted(BINDINGS_DIR.glob("*.cpp")):
+            cpp_files += 1
+            txt = p.read_text(encoding="utf-8")
+            for m in re.finditer(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,\s*lua_', txt):
+                cpp_names.add(m.group(1))
+    shim_names = set()
+    if BACKEND_LUA_PATH.exists():
+        txt = BACKEND_LUA_PATH.read_text(encoding="utf-8")
+        for m in re.finditer(r'^function Backend\.([A-Za-z_][A-Za-z0-9_]*)', txt, re.M):
+            shim_names.add(m.group(1))
+    factory_cmds = set()
+    if FACTORY_PATH.exists():
+        txt = FACTORY_PATH.read_text(encoding="utf-8")
+        for m in re.finditer(r'elseif cmd == "([A-Za-z0-9_]+)"', txt):
+            factory_cmds.add(m.group(1))
+        for m in re.finditer(r'if cmd == "([A-Za-z0-9_]+)"', txt):
+            factory_cmds.add(m.group(1))
+    kag_names = set()
+    if KAG_LUA.exists():
+        txt = KAG_LUA.read_text(encoding="utf-8")
+        for m in re.finditer(r'^function KAG\.([A-Za-z_][A-Za-z0-9_]*)', txt, re.M):
+            kag_names.add(m.group(1))
+    surface = cpp_names | shim_names | factory_cmds | kag_names
+    meta = {
+        "pattern": ("union of: bindings/*.cpp luaL_Reg { name, lua_X }; "
+                    "backend.lua ^function Backend.X; backend_factory.lua cmd==X; "
+                    "kag.lua ^function KAG.X"),
+        "files": cpp_files,
+        "cpp": len(cpp_names),
+        "shim": len(shim_names),
+        "factory": len(factory_cmds),
+        "kag": len(kag_names),
+        "union": len(surface),
+    }
+    V5_SURFACE_CACHE = (surface, meta)
+    return V5_SURFACE_CACHE
+
+
+def js_backend_surface():
+    """Optional cross-ref (NOT used in judgment): field names of the web
+    jsBackend object in web/bridge.js (the browser-side backend shim).
+    """
+    out = set()
+    if WEB_BRIDGE.exists():
+        txt = WEB_BRIDGE.read_text(encoding="utf-8")
+        # line-anchored object fields (4-space indent) AND inline entries of
+        # share-a-line literals (create_lut_texture: ..., render_frame: ...).
+        for m in re.finditer(r'^\s{4}([A-Za-z_][A-Za-z0-9_]*):\s*\(', txt, re.M):
+            out.add(m.group(1))
+        for m in re.finditer(r'\b([A-Za-z_][A-Za-z0-9_]*):\s*\(', txt):
+            out.add(m.group(1))
+    return out
+
+
+def backend_name_hits(clean):
+    """[(name, offset)] for backend.<name>( call-context hits in stripped code."""
+    out = []
+    pos = 0
+    n = len(clean)
+    while True:
+        p = clean.find("backend.", pos)
+        if p < 0:
+            return out
+        q = p + len("backend.")
+        s = q
+        while s < n and (clean[s].isalnum() or clean[s] == "_"):
+            s += 1
+        if s == q:
+            pos = p + 1
+            continue
+        name = clean[q:s]
+        t = s
+        while t < n and clean[t] in (" ", chr(9)):
+            t += 1
+        if t < n and clean[t] == "(":
+            out.append((name, p))
+        pos = p + 1
+
+
+def clean_line_offset(clean, pos):
+    """1-based line of a position in a body slice (slice line 1 = 1)."""
+    return clean[:pos].count(chr(10)) + 1
+
+
+def v5_phantom_evidence(rec):
+    """Collect backend.<name> call-context hits (direct + v4 landings) with
+    file:line, and split into REAL (name on surface) vs PHANTOM hits.
+    Returns (real_names set, phantom list of {name,file,line}).
+    """
+    surface, _ = extract_v5_surface()
+    real = set()
+    phantom = []
+    seen = set()
+    direct = strip_lua(rec["body"])
+    for name, p in backend_name_hits(direct):
+        line = rec["line"] + clean_line_offset(direct, p) - 1
+        if name in surface:
+            real.add(name)
+        else:
+            key = (name, rec["file"], line)
+            if key not in seen:
+                seen.add(key)
+                phantom.append({"name": name, "file": rec["file"], "line": line})
+    for slice_text, src_file, base_line in v4_penetrated_landings(rec["body"], rec["file"]):
+        cl = strip_lua(slice_text)
+        for name, p in backend_name_hits(cl):
+            line = base_line + clean_line_offset(cl, p) - 1
+            if name in surface:
+                real.add(name)
+            else:
+                key = (name, src_file, line)
+                if key not in seen:
+                    seen.add(key)
+                    phantom.append({"name": name, "file": src_file, "line": line})
+    phantom.sort(key=lambda x: (x["file"], x["line"], x["name"]))
+    return real, phantom
+
+
 def consumed_for(rec, body):
     """v3 direct hits + v4 one-hop penetration."""
     hits = call_hits(body)
@@ -609,6 +787,18 @@ def consumed_for(rec, body):
         if h not in hits:
             hits.append(h)
     return hits
+
+
+def fill_v5(rec):
+    """Compute v5 phantom-filtered consumed + phantom evidence for a record."""
+    real, phant = v5_phantom_evidence(rec)
+    hits5 = [h for h in (rec.get("hits") or []) if h != "backend."]
+    if real:
+        hits5.append("backend.")
+    rec["consumed_v5"] = bool(hits5)
+    rec["hits_v5"] = hits5
+    rec["phantom_real"] = sorted(real)
+    rec["phantom_hits"] = phant
 
 
 def resolve_consumed(name, index, depth):
@@ -622,6 +812,7 @@ def resolve_consumed(name, index, depth):
         rec["consumed_v3"] = bool(v3)
         rec["hits"] = hits
         rec["hits_v3"] = v3
+        fill_v5(rec)
         return rec["consumed"]
     rhs = rec["body"]
     if rhs.startswith("function"):
@@ -631,6 +822,7 @@ def resolve_consumed(name, index, depth):
         rec["consumed_v3"] = bool(v3)
         rec["hits"] = hits
         rec["hits_v3"] = v3
+        fill_v5(rec)
         return rec["consumed"]
     rec["alias_rhs"] = rhs
     for branch in rhs.split(" or "):
@@ -641,6 +833,11 @@ def resolve_consumed(name, index, depth):
                 ok = resolve_consumed(target, index, depth + 1)
                 rec["consumed"] = ok
                 rec["consumed_v3"] = ok
+                t5 = index[target].get("consumed_v5")
+                rec["consumed_v5"] = ok if t5 is None else t5
+                rec["hits_v5"] = list(index[target].get("hits_v5") or [])
+                rec["phantom_hits"] = list(index[target].get("phantom_hits") or [])
+                rec["phantom_real"] = list(index[target].get("phantom_real") or [])
                 rec["alias_target"] = table + "." + target
                 return ok
     hits = consumed_for(rec, rhs)
@@ -649,6 +846,7 @@ def resolve_consumed(name, index, depth):
     rec["consumed_v3"] = bool(v3)
     rec["hits"] = hits
     rec["hits_v3"] = v3
+    fill_v5(rec)
     return rec["consumed"]
 
 
@@ -729,12 +927,17 @@ def build_records(overrides_map):
                        "body": info.get("body", ""),
                        "consumed": None, "hits": [],
                        "consumed_v3": None, "hits_v3": [],
+                       "consumed_v5": None, "hits_v5": [],
+                       "phantom_hits": [], "phantom_real": [],
                        "rhs": info.get("body", "")}
     for name, mp in kag_map.items():
         index[name] = {"kind": "assign", "file": "scripts/kag.lua",
                        "line": mp["line"], "body": mp["rhs"],
                        "consumed": None, "hits": [],
-                       "consumed_v3": None, "hits_v3": [], "rhs": mp["rhs"]}
+                       "consumed_v3": None, "hits_v3": [],
+                       "consumed_v5": None, "hits_v5": [],
+                       "phantom_hits": [], "phantom_real": [],
+                       "rhs": mp["rhs"]}
     for name in sorted(index):
         resolve_consumed(name, index, 0)
     contract_lines = {}
@@ -743,6 +946,8 @@ def build_records(overrides_map):
             contract_lines[l[6:-2]] = ln
     records = []
     suspected = []
+    suspected_v5 = []
+    flips_v45 = []
     for name in sorted(set(declared_names) | set(index)):
         declared = name in declared_names
         rec = index.get(name)
@@ -750,22 +955,49 @@ def build_records(overrides_map):
             dispatched = True
             consumed = rec.get("consumed") or False
             consumed_v3 = rec.get("consumed_v3") or False
+            consumed_v5 = rec.get("consumed_v5") or False
             hits = rec.get("hits") or []
+            hits_v5 = rec.get("hits_v5") or []
+            phantom_hits = rec.get("phantom_hits") or []
+            phantom_real = rec.get("phantom_real") or []
             evidence = rec["file"] + ":" + str(rec["line"])
             alias = rec.get("alias_target")
             source_type = classify_source(rec["file"], rec["kind"], rec.get("rhs", ""))
         else:
             dispatched, consumed = False, False
             consumed_v3 = False
+            consumed_v5 = False
             hits = []
+            hits_v5 = []
+            phantom_hits = []
+            phantom_real = []
             evidence = None
             alias = None
             source_type = None
         status_v3 = grade_status(declared, dispatched, consumed_v3)
         status_v4 = grade_status(declared, dispatched, consumed)
-        status = status_v4
+        status_v5 = grade_status(declared, dispatched, consumed_v5)
+        # v5 phantom-downgrade governance: any human-VERIFIED name that the
+        # phantom filter now downgrades is HIGHLY suspicious (v4 evidence
+        # destroyed) -- conservatively keep human grade + captain adjudication.
+        # Non-verified machine downgrades are accepted (phantom evidence was
+        # never real; this is the t134 fix direction).
+        flip_v5 = None
+        if status_v5 == "PARTIAL" and status_v4 == "CLOSED":
+            if name in HUMAN_VERIFIED:
+                flip_v5 = "suspect-keep-v4"
+                suspected_v5.append({
+                    "name": name, "v4": status_v4, "v5": status_v5,
+                    "phantom": phantom_hits})
+                status_v5 = status_v4
+            else:
+                flip_v5 = "phantom-filtered"
+                flips_v45.append({
+                    "name": name, "v4": status_v4, "v5": status_v5,
+                    "phantom": phantom_hits})
+        status = status_v5
         flip = None
-        if status_v4 == "CLOSED" and status_v3 == "PARTIAL":
+        if status_v5 == "CLOSED" and status_v3 == "PARTIAL":
             if name in HUMAN_VERIFIED:
                 flip = "accepted-human-verified"
             else:
@@ -778,16 +1010,21 @@ def build_records(overrides_map):
         rec_out = {
             "name": name, "declared": declared, "dispatched": dispatched,
             "consumed": consumed, "consumed_v3": consumed_v3, "consumed_hits": hits,
+            "consumed_v5": consumed_v5, "hits_v5": hits_v5,
+            "phantom_hits": phantom_hits, "phantom_real": phantom_real,
             "tested_count": tcount, "tested_files": tfiles,
             "status": status, "status_v3": status_v3, "status_v4": status_v4,
+            "status_v5": status_v5,
             "evidence": evidence, "alias": alias,
             "contract_line": contract_lines.get(name),
             "source_type": source_type, "override": ov or None, "flip": flip,
+            "flip_v5": flip_v5,
         }
         if ov and ov.get("status"):
             rec_out["status"] = ov["status"]
         records.append(rec_out)
-    return records, private, len(declared_names), suspected
+    surface, surface_meta = extract_v5_surface()
+    return records, private, len(declared_names), suspected, suspected_v5, flips_v45, surface_meta
 
 
 def guard_partial(records):
@@ -802,7 +1039,35 @@ def guard_partial(records):
         sys.exit(3)
 
 
-def render_markdown(records, private, declared_total, oos, generated_at, fp, suspected):
+def guard_phantom(records):
+    """t134 self-check: palette must auto-classify its set_palette hit as
+    phantom (ADJUDICATED ruling requires the phantom evidence to exist);
+    if the phantom filter changes any human-VERIFIED grade, flag loudly.
+    """
+    bad = []
+    by_name = {r["name"]: r for r in records}
+    pal = by_name.get("palette")
+    if not pal:
+        bad.append("palette record missing")
+    else:
+        ph = [p for p in (pal.get("phantom_hits") or []) if p.get("name") == "set_palette"]
+        if not ph:
+            bad.append("palette lacks set_palette phantom evidence")
+        for p in ph:
+            if not p.get("file", "").endswith("palette.lua"):
+                bad.append("palette phantom not in palette.lua: " + str(p))
+    v5_susp = [r for r in records
+               if r.get("flip_v5") == "suspect-keep-v4"]
+    for r in v5_susp:
+        print("[closure] v5-SUSPECT(keep v4 human grade): " + r["name"]
+              + " phantom=" + str([p["name"] + "@" + p["file"] + ":" + str(p["line"]) for p in (r.get("phantom_hits") or [])][:6]))
+    if bad:
+        print("[closure] ERROR v5 phantom self-check: " + "; ".join(bad))
+        sys.exit(5)
+    print("[closure] v5 phantom self-check OK")
+
+
+def render_markdown(records, private, declared_total, oos, generated_at, fp, suspected, suspected_v5, flips_v45, surface_meta):
     by_status = {}
     for r in records:
         by_status.setdefault(r["status"], []).append(r)
@@ -833,6 +1098,29 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("- 测试引用（Tested，启发式计数）：**" + str(n_test) + "**")
     L.append("- UNWIRED：" + str(n_unw) + " · PARTIAL：" + str(n_part)
              + " · CLOSED：" + str(n_closed) + " · EXTRA：" + str(n_extra) + " · EXPERIMENTAL(人工)：" + str(n_exp))
+    all_phantom = []
+    seen_ph = set()
+    for r in records:
+        for p in (r.get("phantom_hits") or []):
+            k = (p["name"], p["file"], p["line"])
+            if k not in seen_ph:
+                seen_ph.add(k)
+                all_phantom.append(p)
+    all_phantom.sort(key=lambda x: (x["file"], x["line"], x["name"]))
+    n_phant = len(all_phantom)
+    L.append("- **幻影绑定（v5）**：**" + str(n_phant) + "** 处 backend.<name> 调用命中")
+    L.append("  - 提取模式：" + str(surface_meta.get("pattern", "")))
+    L.append("  - 清单大小：" + str(surface_meta.get("union", 0)) + " 个可解析名（cpp="
+             + str(surface_meta.get("cpp", 0)) + " · shim=" + str(surface_meta.get("shim", 0))
+             + " · factory=" + str(surface_meta.get("factory", 0))
+             + " · kag=" + str(surface_meta.get("kag", 0))
+             + "，绑定文件 " + str(surface_meta.get("files", 0)) + " 个）")
+    js_surface = js_backend_surface()
+    js_only = sorted(set(p["name"] for p in all_phantom) - js_surface)
+    js_both = sorted(set(p["name"] for p in all_phantom) & js_surface)
+    if js_only or js_both:
+        L.append("  - web/jsBackend 交叉核对（仅报告，不参与判定）：幻影名在 web/bridge.js 亦有=" + (",".join(js_both) or "（无）"))
+        L.append("    · 原生+js 均无=" + (",".join(js_only) or "（无）"))
     L.append("- **恒等式：**" + str(declared_total) + " = CLOSED(" + str(n_closed)
              + ") + PARTIAL(" + str(n_part) + ") + UNWIRED(" + str(n_unw) + ") + EXPERIMENTAL(在册 " + str(n_exp_decl) + ")；"
              + str(n_disp) + " = " + str(declared_total) + "(Declared) + EXTRA(" + str(n_extra) + ") + EXPERIMENTAL(合约外 " + str(n_exp_extra) + ")**")
@@ -850,6 +1138,7 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("> **CLOSED**=已注册且调用形触达效果面；**EXTRA**=已注册但无合约。")
     L.append("> **EXPERIMENTAL**=人工覆盖状态（能力存在但无消费方/无真实测试面——freeze 政策显式标注；见『EXPERIMENTAL』节与 overrides reason/note；机器判级仍为 PARTIAL/EXTRA）。")
     L.append("> ⚠ = 人工覆盖（docs/design/capability-closure-overrides.json；详见『人工覆盖』节）。")
+    L.append("> \u3000* = 存在幻影绑定命中（backend.<name> 不在原生绑定面；详见『幻影绑定（v5）』节）；Consumed 列已按 v5 幻影过滤。")
     L.append("")
     L.append("## Commands")
     L.append("")
@@ -861,10 +1150,11 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
         pt = str(ov.get("platform_tested", "?"))
         pk = str(ov.get("packaged", "?"))
         mark = " ⚠" if ov else ""
-        L.append("| " + r["name"] + " | "
+        phmark = "*" if (r.get("phantom_hits") or []) else ""
+        L.append("| " + r["name"] + phmark + " | "
                  + ("Y" if r["declared"] else "n") + " | "
                  + ("Y" if r["dispatched"] else "n") + " | "
-                 + ("Y" if r["consumed"] else "n") + " | "
+                 + ("Y" if r["consumed_v5"] else "n") + " | "
                  + (str(r["tested_count"]) if r["tested_count"] else "-") + " | "
                  + obs + mark + " | " + pt + mark + " | " + pk + mark + " | "
                  + r["status"] + " | " + (r["evidence"] or "-") + " |")
@@ -921,6 +1211,56 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     else:
         L.append("（无）")
     L.append("")
+    L.append("## 幻影绑定（v5）")
+    L.append("")
+    L.append("> v5 判据：backend.<name> 命中若 name 不在真实绑定面（bindings/*.cpp luaL_Reg + backend.lua shim def + backend_factory cmd 分派 + kag.lua KAG def 的并集，见上方「幻影绑定（v5）」提取模式）——该命中为**幻影**：从 Consumed 证据中剔除，并在本节列出 file:line。过时的宿主侧（web jsBackend）提供同名项不改变判定：原生绑定面以本机 src/script/bindings 与 scripts/ 为唯一口径。")
+    L.append("")
+    if all_phantom:
+        if js_both:
+            L.append("> web/jsBackend 同步存在（原生缺失，web 桥提供）：" + ", ".join(js_both))
+        if js_only:
+            L.append("> 原生与 web/jsBackend **均无**（两端都不存在）：" + ", ".join(js_only))
+        L.append("")
+        L.append("| 命令 | 幻影名 | file:line |")
+        L.append("|---|---|---|")
+        for r in sorted(records, key=lambda x: x["name"]):
+            ph = r.get("phantom_hits") or []
+            if not ph:
+                continue
+            for p in ph:
+                L.append("| " + r["name"] + " | " + str(p.get("name"))
+                         + " | " + str(p.get("file")) + ":" + str(p.get("line")) + " |")
+    else:
+        L.append("（无；所有 backend.* 调用名均在绑定面上）")
+    L.append("")
+    L.append("## 版本翻转（v4→v5 幻影过滤）")
+    L.append("")
+    if flips_v45:
+        for f in sorted(flips_v45, key=lambda x: x["name"]):
+            phnames = ", ".join(sorted({p.get("name", "?") for p in f.get("phantom", [])}))
+            L.append("- " + f["name"] + " — v4 " + f["v4"] + " → v5 " + f["v5"]
+                     + "；幻影名：" + (phnames or "?") + "（机器判级，非人工翻绿）")
+    else:
+        L.append("（无）")
+    L.append("")
+    L.append("## 可疑翻转清单（v5 人类级保守维持）")
+    L.append("")
+    if suspected_v5:
+        for s in suspected_v5:
+            adj = ADJUDICATED.get(s["name"])
+            if adj:
+                L.append("- " + s["name"] + " — v4 " + s["v4"] + " → v5 " + s["v5"]
+                         + "；**已裁决：" + str(adj.get("verdict")) + "**（幻影证据见下）")
+                L.append("  - reason：" + str(adj.get("reason")))
+            else:
+                L.append("- " + s["name"] + " — v4 " + s["v4"] + " → v5 " + s["v5"]
+                         + "；人类 VERIFIED 被幻影过滤降级——保守维持人类级（v4），待队长裁决")
+            for p in s.get("phantom", [])[:10]:
+                L.append("  - 幻影命中：" + str(p.get("name")) + " @ "
+                         + str(p.get("file")) + ":" + str(p.get("line")))
+    else:
+        L.append("（无）")
+    L.append("")
     L.append("## UNWIRED")
     L.append("")
     unwired = sorted(by_status.get("UNWIRED", []), key=lambda x: x["name"])
@@ -956,8 +1296,9 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     else:
         L.append("（无）")
     L.append("")
-    L.append("## 数据与判级局限（v4）")
+    L.append("## 数据与判级局限（v5）")
     L.append("")
+    L.append("9. **v5 幻影绑定过滤**：Consumed 的 backend.* 命中按名对照真实绑定面（bindings/*.cpp luaL_Reg + backend.lua shim def + backend_factory cmd 分派 + kag.lua KAG def 的并集，动态提取）校验；不在面上的命中为幻影，从 Consumed 证据剔除并在『幻影绑定（v5）』列 file:line。幻影命中可能因注释剥离/多跳链（>1 跳穿透）漏检——只按已捕获的调用形上下文判定；web/jsBackend 同名项仅作交叉报告，不改变原生判定。")
     L.append("1. **Consumed 为调用形文本启发式**：注释与字符串字面量先被剥离（strip_lua 状态机），要求 backend./layers./kag. 的 <ident>( 调用形，或 ctx.tf. / ctx.tf[ / ctx.tf= 字段/赋值。仍可能低估（经本地别名或工具函数间接调用时本体不含直接调用；如 palette 命令经 palette 模块间接生效——如实归 PARTIAL），也可能高估（kag. 自派发计入）。脚本不执行 Lua，无法做数据流分析。")
     L.append("2. **Dispatched 为静态解析**：commands 导出表函数/赋值键 + kag.lua 显式映射与 function KAG.x 定义 + sma_commands 子表。jump/call/endmacro 等直接 API 计入 EXTRA(api-alias)；[jump]/[if] 等 token 的流控处理由 scheduler.lua 编译期内联；两条轨道并存，本扫描器按注册键计 Dispatched。")
     L.append("3. **Tested 为原始引用计数**：tests/scripts/*.lua 与 web/*.test.js 中 [<name> 或 kag.<name> 出现次数，不区分断言与非断言上下文（注释/数组/字符串也算）。")
@@ -984,11 +1325,13 @@ def main():
     handlers_probe.update(kag_defs_probe)
     known = sorted(set(declared_names_probe) | set(handlers_probe))
     overrides_map, oos = load_overrides(set(known))
-    records, private, declared_total, suspected = build_records(overrides_map)
+    records, private, declared_total, suspected, suspected_v5, flips_v45, surface_meta = build_records(overrides_map)
     guard_partial(records)
+    guard_phantom(records)
     fp = source_fingerprint()
     generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(source_mtime([
-        CONTRACTS, KAG_LUA, SMA_LUA, COMMANDS_DIR, TESTS_LUA, TESTS_WEB, OVERRIDES])))
+        CONTRACTS, KAG_LUA, SMA_LUA, COMMANDS_DIR, TESTS_LUA, TESTS_WEB, OVERRIDES,
+        BACKEND_LUA_PATH, FACTORY_PATH, BINDINGS_DIR])))
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": generated_at,
@@ -1014,13 +1357,19 @@ def main():
         "status_counts_v4_raw": {st: sum(1 for r in records if r["status_v4"] == st)
                                  for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")},
         "suspected_flips": suspected,
+        "suspected_flips_v5": suspected_v5,
+        "flips_v45": flips_v45,
+        "binding_surface": surface_meta,
+        "status_counts_v5_raw": {st: sum(1 for r in records if r["status_v5"] == st)
+                                 for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")},
         "commands": records,
         "private_helpers": [{"name": n, "file": f, "line": ln} for n, f, ln in private],
     }
     with open(OUT_JSON, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write(NL)
-    md = render_markdown(records, private, declared_total, oos, generated_at, fp, suspected)
+    md = render_markdown(records, private, declared_total, oos, generated_at, fp,
+                         suspected, suspected_v5, flips_v45, surface_meta)
     OUT_MD.parent.mkdir(parents=True, exist_ok=True)
     OUT_MD.write_text(md, encoding="utf-8")
     print("[closure] declared=" + str(declared_total)
@@ -1030,7 +1379,11 @@ def main():
     print("[closure] statuses=" + str(payload["status_counts"]))
     print("[closure] v4_raw=" + str(payload["status_counts_v4_raw"]))
     print("[closure] overrides=" + str(len(overrides_map)) + " out_of_scope=" + str(len(oos)))
-    print("[closure] suspected_flips=" + str(len(suspected)))
+    print("[closure] suspected_flips=" + str(len(suspected))
+          + " v5_suspect=" + str(len(suspected_v5))
+          + " flips_v45=" + str(len(flips_v45))
+          + " phantom_hits=" + str(sum(1 for r in records for _ in (r.get("phantom_hits") or []))))
+    print("[closure] binding_surface=" + str(surface_meta))
     print("[closure] json -> " + str(OUT_JSON.relative_to(REPO)) + "  md -> " + str(OUT_MD.relative_to(REPO)))
     return 0
 
