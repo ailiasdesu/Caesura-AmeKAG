@@ -311,6 +311,72 @@ JSON scenes load via `load_scene(path)` + `enter(handle)`.
 
 ---
 
+
+## Gesture hooks & overlay pump (native SwipeDown/SwipeUp consumers)
+
+Native touch gestures map to synthetic keyboard events on the engine side:
+`MobileAdapter` converts SwipeDown to `SDLK_SPACE` and SwipeUp to
+`SDLK_PAGEUP`, and the Engine.cpp key-down handler routes them to the Lua
+hooks below (same guard style as `_KAG_onCtrlDown`). The web player layer
+serves the same gestures to every game (web/main.mjs); the runtime default
+gives native games the same parity.
+
+### Global hooks: `_KAG_onKeySpace` / `_KAG_onKeyPageUp`
+
+- `_G._KAG_onKeySpace` — SwipeDown / `SDLK_SPACE`: toggle the `message`
+  layer visibility (mirrors the web gesture hiding/toggling the dialogue
+  box). Headless-safe: no ctx / no message layer / layers module absent →
+  no-op.
+- `_G._KAG_onKeyPageUp` — SwipeUp / `SDLK_PAGEUP`: open the
+  backlog/history overlay (`input_focus ~= "history"` guard + single-flight
+  coroutine + `kag.commands.system.history`). Headless-safe: no ctx →
+  no-op.
+- **First-definition-wins override rule**: the runtime installs the defaults
+  with `_G._KAG_onKeySpace = _G._KAG_onKeySpace or <default>` (and the same
+  for `_KAG_onKeyPageUp`) at kag.lua setup time; an entry that defines the
+  same globals AFTER `require("kag")` overrides them (no init-registration
+  needed). Install site: `scripts/kag.lua` (setup tail, before `return KAG`).
+
+### `KAG.gesture_defaults` (public export)
+
+`KAG.gesture_defaults = { space = ..., page_up = ... }` (`scripts/kag.lua`)
+are the canonical runtime defaults — exported so tests and future entries
+reference the same functions instead of replicating them. Entries override
+the GLOBALS after `require("kag")` (first-definition-wins); both defaults
+are headless-safe; `page_up` state lives on `ctx._gesture_history_co`
+(single-flight, per-context) and the overlay coroutine needs a frame driver
+(see `kag_runner.pump_gesture_overlay` below).
+
+### `ctx._gesture_history_co` slot
+
+The default `page_up` hook parks its single-flight overlay coroutine on
+`ctx._gesture_history_co` (per-context). The runtime pump (below) drives it
+every frame; entries that override the hook never set the slot → zero
+overhead.
+
+### `kag_runner.pump_gesture_overlay(ctx)`
+
+Runtime overlay pump (`scripts/kag_runner.lua`, exported for the lua suite
+so the dead/error/no-op paths are directly drivable):
+
+- no coroutine in `ctx._gesture_history_co` → no-op;
+- coroutine `dead` → clear the slot;
+- resume error → print `[History] overlay error: ...`, clear the slot,
+  restore `ctx.input_focus = "kag"` and call `history_ui._hideAll(ctx)`
+  (only the ERROR path forces focus back; normal close restores it inside
+  the history command itself).
+
+### Override example: demo entry
+
+Entries with their own pumps override the hooks and never set the gesture
+slot (zero overhead). The reference override is `scripts/kag_demo_entry.lua`
+(`_KAG_onKeySpace` / `_KAG_onKeyPageUp` + its `engine_update` drains its own
+`history_co`). The demo keeps the override deliberately: its per-frame
+driver owns its own coroutine — dropping it would route PAGEUP to the
+runtime coroutine, which nothing drives in that entry (overlay freeze with
+`input_focus` stuck on "history").
+
+
 ## Save (registered on the KAG module)
 
 ```lua
