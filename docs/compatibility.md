@@ -64,6 +64,7 @@ KAG3 兼容是**有边界的**——清单内兼容，清单外不假装支持�
 1. **命令集合稳定**：已发布命令（含分类、阻塞性）在 1.x 内**不删除、不重命名**。
 2. **参数 schema 稳定**：name / type / default / required 不做破坏性修改。
 3. **别名稳定**：KAG3 兼容别名（§2.1）保持生效。
+4. **宏覆盖语义稳定**：宏名冲突按确定性规则裁决——**非专用分支命令**（如 `[text]`）的宏**覆盖**内置处理器；**专用分支命令**（`[jump]`/`[call]`/`[if]` 等流控/分支命令）仅**静态安全宏**（顶层定义、无 erase 依赖）在编译期内联覆盖，动态宏在运行期被分支命令**胜出并静默忽略**（依据 `scripts/scheduler.lua:348` 静态安全宏判定；`kag/compiler.lua`/`scheduler.lua` 派发链）。
 
 ### 3.2 参数语义规则
 
@@ -238,8 +239,9 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 
 | 维度 | 值 | 权威来源 |
 |------|----|---------|
-| C++ API 接口 | **31** 个接口头 / **390** 纯虚方法 | `docs/api/api-stats.md` |
+| C++ API 接口 | **34** 个接口头 / **412** 纯虚方法 | `docs/api/api-stats.md`（自动生成源；数字随 `python scripts/api_stats.py` 同步） |
 | KAG Neo-Genesis 命令 | **134** 个契约命令 | `docs/api/command-contracts.md` |
+| 能力闭环矩阵 | **134 = CLOSED 79 + PARTIAL 51 + UNWIRED 0 + EXPERIMENTAL 4**（EXTRA 31 = 注册但无合约，属设计行为） | `docs/design/capability-closure-matrix.md` |
 | KAG3 兼容 | 裸位置参数 **13** families / TJS 表达式 / `%f.x%` / `[elsif]` / `[call *label]` / `[end]` / `[goto]`→`[jump]` | `docs/api/kag-commands.md`、`kag-expression-language.md` |
 | 存档格式 | JSON + AES-256-GCM + `CAES` 信封 | `docs/design/save-security-audit.md`、`engine-architecture-topology.md` |
 | 存档 schema | 迁移链 **v1 → v5**（自动升级，步数上限 64） | `engine-capability-matrix.md` (C4) |
@@ -264,3 +266,5 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 - **G8**：无 KAG3 引擎↔本引擎 A/B 双跑对拍设施。
 - **G9**：doctor 工具组不含存档迁移链自检。
 - **G10**：docs/api/lua-modules.md 为手写参考，存在漂移风险（无生成器锁定）。
+- **G11（已修，2026-08-30 t140）**：§9 速查表 C++ API 计数过时（31/390）——按 `docs/api/api-stats.md` 权威值改为 **34 接口头 / 412 纯虚方法**（自动生成源，数字随 `python scripts/api_stats.py` 再生成同步，勿手改）。
+- **G12（已修，2026-08-30 t140）**：宏名冲突语义未入承诺清单——已增补 §3.1 第 4 条（非专用分支命令宏覆盖内置；专用分支命令仅静态安全宏编译期内联覆盖、动态宏被分支胜出静默忽略；依据 `scripts/scheduler.lua:348`）。判据：该规则是作者可观察的确定性派发语义（迁移脚本依赖宏覆盖 `[text]` 等行为），属兼容承诺面而非实现细节，故入 §3.1 而非仅附录。
