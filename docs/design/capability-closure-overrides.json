@@ -441,13 +441,13 @@
       "name": "SwipeDown",
       "grade": "WIRED",
       "evidence": "native 消费方已接（commit 4c074c7b：Engine 钩子 _KAG_onKeySpace + scripts/kag_demo_entry.lua 实装 + InputRouter/MobileAdapter 接线；测试 +6：test_history.lua/test_sandbox.lua）",
-      "note": "per-game opt-in 语义（钩子经 kag_demo_entry 实装=游戏侧显式接入才生效）；web=player 层全游戏生效（web/main.mjs:634-647）；真机手势 E2E 仍 hardware-gated（M4 平台矩阵）；后续方向=缺省钩子下沉 kag 运行时（backlog）。"
+      "note": "缺省钩子已下沉 kag 运行时（t125/t130 M-F1）：scripts/kag.lua:553-567 defaultKeySpace（handler 级 pcall require layers + type 守卫，:561-562；layers.get(message) 可见性切换 :563-566）经 KAG.gesture_defaults 导出（:586-589）+ 全局安装 _KAG_onKeySpace（:591-592，first-definition-wins），Engine 钩子路由 SDLK_SPACE；kag_runner 每帧 overlay pump（t127 M-F2，kag_runner.lua:467-481 驱动 ctx._gesture_history_co 死槽清除）。入口覆写优先（kag_demo_entry.lua 为官方覆写示例）——native 缺省行为与 web player 层全局手势（web/main.mjs:634-647）平权；真机手势 E2E 仍 hardware-gated（M4）；per-game opt-in 语义已由运行时缺省取代。"
     },
     {
       "name": "SwipeUp",
       "grade": "WIRED",
       "evidence": "native 消费方已接（commit 4c074c7b：Engine 钩子 _KAG_onKeyPageUp + scripts/kag_demo_entry.lua 实装 + InputRouter/MobileAdapter 接线；测试 +6）",
-      "note": "同 SwipeDown（per-game opt-in；web player 层 main.mjs:634-647；真机 E2E hardware-gated；缺省钩子下沉=kag 运行时 backlog）。"
+      "note": "缺省钩子已下沉 kag 运行时（t125/t130 M-F1）：scripts/kag.lua:569-575 defaultKeyPageUp（input_focus 守卫 + ctx._gesture_history_co 单飞协程 :571-574 + kag.commands.system.history）+ KAG.gesture_defaults:586-589 + _KAG_onKeyPageUp 全局安装 :591-592（first-definition-wins），Engine 钩子路由 SDLK_PAGEUP；kag_runner overlay pump（kag_runner.lua:467-481）。入口覆写优先（kag_demo_entry.lua 官方示例）——与 web player 层（main.mjs:634-647）平权；真机 E2E hardware-gated（M4）。"
     },
     {
       "name": "LongPress",
