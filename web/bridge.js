@@ -647,9 +647,17 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- past the [load] so execution continues forward and completes.
                 -- Cross-scene loads (a real [load] into a different scene) are
                 -- unchanged: the scene differs, so _pendingLoadToken is used.
-                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene)
-                  and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
-                  ctx.token_index = ctx.token_index + 1
+                -- t69: mirror native kag_runner atLoadTag discriminator (t62):
+                -- cursor+1 applies ONLY when the token at the saved resume
+                -- point IS a [load] tag (self-referential [save]->[load]);
+                -- a pause-point direct load of the same scene (no load tag
+                -- at the saved cursor) must resume exactly at the saved token.
+                local cur9 = tonumber(ctx.token_index) or 1
+                local curTok9 = ntoks and ntoks[cur9]
+                local atLoadTag9 = type(curTok9) == "table" and curTok9[1] == "load"
+                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
+                  and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
+                  ctx.token_index = cur9 + 1
                 else
                   ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
                 end
@@ -1021,9 +1029,17 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
                 -- continues forward and the scene completes. Cross-scene loads
                 -- (a genuine [load] into a different scene) are unchanged: the
                 -- scene differs, so _pendingLoadToken is used as-is.
-                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene)
-                  and (tonumber(ctx._pendingLoadToken) or 1) <= ctx.token_index then
-                  ctx.token_index = ctx.token_index + 1
+                -- t69: mirror native kag_runner atLoadTag discriminator (t62):
+                -- cursor+1 applies ONLY when the token at the saved resume
+                -- point IS a [load] tag (self-referential [save]->[load]);
+                -- a pause-point direct load of the same scene (no load tag
+                -- at the saved cursor) must resume exactly at the saved token.
+                local cur9 = tonumber(ctx.token_index) or 1
+                local curTok9 = ntoks and ntoks[cur9]
+                local atLoadTag9 = type(curTok9) == "table" and curTok9[1] == "load"
+                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
+                  and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
+                  ctx.token_index = cur9 + 1
                 else
                   ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
                 end
