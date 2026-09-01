@@ -1,6 +1,6 @@
 # Caesura (AmeKAG) — Editor Developer API Reference
 
-> **面向 web-editor 前端开发者的完整接口文档**
+> **面向编辑器前端开发者的完整接口文档**（React/Monaco IDE 源码在 `editor/`；发布包内随引擎分发的 `web-editor/dist/index.html` 是单文件调试面板）
 > 最后更新: 2026-08-15
 
 ---
@@ -22,7 +22,7 @@
 
 **Base URL**: `http://127.0.0.1:9876`
 **Content-Type**: `application/json`
-**CORS**: 仅放行 localhost/127.0.0.1 来源（回显具体 origin，不设 `*`）
+**CORS**: 仅放行本机来源——origin 主机为 `127.0.0.1` 或 `localhost` 均放行（逐 origin 校验并回显具体值，不设 `*`）；访问与示例一律用 `127.0.0.1`（服务只绑 IPv4，Windows 下 localhost 优先解析 ::1）
 
 > 当前状态：默认 `--editor` 启动 HTTP `EditorServer` 并监听 9876；
 > `--editor-stdio` 启动 GPU + stdin/stdout 换行分隔 JSON-RPC，`--headless` 启动
@@ -215,6 +215,19 @@ stdio 传输的 `smaSave` 方法同构（请求字段 `path` / `content`）。
 
 ---
 
+### 1.5b 重载脚本（HTTP）
+
+**`POST /api/reload`**
+
+请求 owner-thread 重新加载 Lua 脚本（热重载；与 stdio `reload` 方法同构）。
+
+```
+→ (no body)
+← {"status":"ok"}
+```
+
+---
+
 ### 1.6 查看日志
 
 **`GET /api/logs`**
@@ -344,10 +357,34 @@ HTTP worker 与 `/api/run` 走同一 owner-thread Lua 派发（Lua 脚本错误 
 > **LSP 语言服务**：编辑器 `lspCall()` 把请求桥接为 `return kag.lsp.json(...)` 经本端点求值，
 > 返回 JSON 文本字符串供渲染器解析。支持的方法见下方 [附录 C：LSP 语言服务方法](#附录-c-lsp-语言服务方法经-apieval-桥接)。
 
+### 1.10b 运行时统计（HTTP）
+
+**`GET /api/stats`**
+
+IDE 面板用引擎运行时统计（纹理预算/网格/任务队列/Lua 堆）。
+
+```
+→ GET /api/stats
+← {"status":"ok","texture_tier":2,"texture_budget_mb":156.25,"mesh_count":12,
+   "job_workers":4,"job_pending":0,"lua_kb":512}
+```
+
+### 1.10c 预览帧拾取（HTTP）
+
+**`GET /api/pick?x=&y=`**
+
+IDE 预览帧命中测试：返回包含该窗口像素的 Lua 图层树节点（自下而上）。
+坐标越界（<0 或 >8192）→ HTTP 400。
+
+```
+→ GET /api/pick?x=640&y=360
+← {"status":"ok","hits":[...]}
+```
+
 ### 1.11 调试端点（HTTP /api/debug/*）
 
 Lua 调试器既可通过 stdio RPC 调用（见 §1.12），也可经以下 HTTP 路由访问，
-共 7 条（`GET /api/debug/getState` 同时是 §1.2 `/api/state` 的保留旧路径），
+共 10 条（`GET /api/debug/getState` 同时是 §1.2 `/api/state` 的保留旧路径），
 均由 HTTP worker 提交 DTO、由 owner thread dispatcher 执行：
 
 | 方法 | 路径 | 说明 |
@@ -358,6 +395,9 @@ Lua 调试器既可通过 stdio RPC 调用（见 §1.12），也可经以下 HTT
 | `POST` | `/api/debug/removeBreakpoint` | 移除断点（请求体 `source` + `line`） |
 | `POST` | `/api/debug/clearBreakpoints` | 清除全部断点 |
 | `POST` | `/api/debug/continue` | 恢复暂停的调试运行（可选 `pauseId`） |
+| `POST` | `/api/debug/stepInto` | 单步进入（进入被调用的 Lua 函数） |
+| `POST` | `/api/debug/stepOver` | 单步跳过（不进入被调用的 Lua 函数） |
+| `POST` | `/api/debug/stepOut` | 单步跳出（运行至当前函数返回） |
 | `GET` | `/api/debug/inspect?name=&frame=&global=` | 检查 Lua 局部或全局变量 |
 
 `setBreakpoint` / `removeBreakpoint` 请求体（`application/json`）：
@@ -772,7 +812,7 @@ KAG 脚本语法：`[command param="value"]`，写在 `.ks` 文件中。
 
 ## 附录 B：KAG 场景调试 JSON-RPC 方法
 
-`--headless` / `--editor` 的 stdin/stdout JSON-RPC 除 Lua 调试器（`setBreakpoint`/`stepInto`/`inspectLocal`…）外，还提供 **KAG 场景层调试**（Lua 调试器看不到 KAG token）：
+`--headless` / `--editor-stdio` 的 stdin/stdout JSON-RPC 除 Lua 调试器（`setBreakpoint`/`stepInto`/`inspectLocal`…）外，还提供 **KAG 场景层调试**（Lua 调试器看不到 KAG token）：
 
 | 方法 | 参数 | 说明 |
 |---|---|---|

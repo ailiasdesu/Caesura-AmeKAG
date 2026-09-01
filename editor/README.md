@@ -3,7 +3,7 @@
 VS Code-style web IDE for the engine, built with Vite + React + TypeScript
 and **Monaco Editor** (the VS Code editor core). It combines a powerful
 code editor with visual editing (live frame preview, Live2D model loading)
-against the engine's HTTP RPC server (`localhost:9876`, 18 routes).
+against the engine's HTTP RPC server (`127.0.0.1:9876`, 36 routes — 34 `/api/*` + `GET /` and `GET /index.html` static).
 
 > Roadmap: market-analysis P2-7 (visual editor front-end). The RPC backend
 > was already complete; this front-end adds the IDE shell around it.
@@ -30,7 +30,7 @@ against the engine's HTTP RPC server (`localhost:9876`, 18 routes).
 ### 1. Start the engine in editor mode
 
 ```bash
-./build/Debug/CaesuraAmeKAG.exe --editor          # HTTP on :9876 (hidden GPU window)
+./build/Debug/CaesuraAmeKAG.exe --editor          # HTTP on 127.0.0.1:9876 (hidden GPU window)
 # optional bearer auth:
 #   CAESURA_EDITOR_TOKEN=secret ./build/Debug/CaesuraAmeKAG.exe --editor
 ```
@@ -40,7 +40,7 @@ against the engine's HTTP RPC server (`localhost:9876`, 18 routes).
 ```bash
 cd editor
 npm install
-npm run dev        # http://localhost:5173  (dev proxy → engine :9876)
+npm run dev        # http://127.0.0.1:5173  (dev proxy → engine 127.0.0.1:9876)
 ```
 
 Production build:
@@ -62,12 +62,12 @@ Explorer to edit; use Run and Debug to drive the engine.
 ```
 editor/
 ├── index.html
-├── vite.config.ts          # /api proxy → localhost:9876
+├── vite.config.ts          # /api proxy → 127.0.0.1:9876
 ├── package.json
 └── src/
     ├── App.tsx             # workbench shell
     ├── store.ts            # zustand IDE state (tabs/views/engine)
-    ├── lib/rpc.ts          # typed engine RPC client (18 routes)
+    ├── lib/rpc.ts          # typed engine RPC client (36 routes: 34 /api/* + 2 static)
     ├── ide/
     │   ├── ActivityBar.tsx # left activity bar
     │   ├── StatusBar.tsx   # bottom status line
