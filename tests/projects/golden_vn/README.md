@@ -14,7 +14,7 @@
 | `golden_cross.ks` | 跨场景 [jump] 专用起点（独立覆盖面；"选择后立即跨场景"的直连场景在 tests/scripts/test_select_crossscene_flow.lua——引擎限制已于 t38 修复） |
 | `scene_b.ks` | 跨场景 [jump] 目标场景（独立收尾，进入即 [end]） |
 | `entry.lua` | 真实 GPU 运行入口（标准 UI wiring，同 demo/example_game 模式） |
-| `../scripts/golden_vn_headless.lua` | v1 headless 驱动（route 选择 + 四大功能旗标断言 + cross 模式）+ v2 语义模式（GOLDEN_RB / GOLDEN_HISTORY / GOLDEN_ROUNDTRIP） |
+| `../scripts/golden_vn_headless.lua` | v1 headless 驱动（route 选择 + 四大功能旗标断言 + cross 模式）+ v2/v3 语义模式（GOLDEN_RB / GOLDEN_HISTORY / GOLDEN_ROUNDTRIP / GOLDEN_NVL / GOLDEN_VOICE） |
 | `../../tests/scripts/golden_rt.ks` | v2 真实存档 roundtrip 场景（tests/scripts/ 放行路径——原因见 v2 覆盖表下方说明） |
 | （无本地 assets/） | 本项目**不含**本地 assets/ 目录；场景中的资源路径（assets/bg|fg|bgm|se|voice 前缀，如 story.ks:40 [bg storage="assets/bg/classroom.png"]）由引擎在仓库根 CWD 下直接解析到**仓库共享资产池**（assets/），项目不新增任何二进制 |
 
@@ -38,8 +38,12 @@ GOLDEN_RB=1       build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua  
 GOLDEN_HISTORY=1  build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua  # history/backlog
 GOLDEN_ROUNDTRIP=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua # 真实存档 roundtrip
 
-# 完整门禁（静态契约 + headless 全跑 + 分支可达 + feature 覆盖 + v1 旗标 + v2 语义旗标）
-bash scripts/verify_golden_vn.sh        # 实测 30/30 PASS
+# headless v3 语义模式（门禁 4d/4e；同 v2——主 [end] 后仅 stage-jump 可达）
+GOLDEN_NVL=1   build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua   # NVL 累积/翻页/存档持久化/退出
+GOLDEN_VOICE=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua   # voice backlog/存档序列化/真派发
+
+# 完整门禁（静态契约 + headless 全跑 + 分支可达 + feature 覆盖 + v1 旗标 + v2/v3 语义旗标）
+bash scripts/verify_golden_vn.sh        # 实测 32/32 PASS
 
 # 真实 GPU 窗口运行
 build/lua/Debug/lua.exe tests/projects/golden_vn/entry.lua
