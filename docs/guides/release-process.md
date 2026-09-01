@@ -209,7 +209,7 @@ order entries by impact. The curated `CHANGELOG.md` is what you commit.
 
 CPack (ZIP generator) is wired into `CMakeLists.txt` — it installs the
 executable, `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/`,
-`web-editor/dist/` (the editor frontend `--editor` serves), `README.md`,
+`web-editor/dist/` (the single-file debug panel `--editor` serves — `web-editor/dist/index.html`; the React IDE lives in `editor/` and is NOT shipped), `README.md`,
 `LICENSE`, and (on Windows) the SDL3 DLL and FFmpeg DLLs.
 
 > **The editor frontend is part of the release contract.** `getting-started.md`
