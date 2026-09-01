@@ -16,7 +16,7 @@
 | `entry.lua` | 真实 GPU 运行入口（标准 UI wiring，同 demo/example_game 模式） |
 | `../scripts/golden_vn_headless.lua` | v1 headless 驱动（route 选择 + 四大功能旗标断言 + cross 模式）+ v2 语义模式（GOLDEN_RB / GOLDEN_HISTORY / GOLDEN_ROUNDTRIP） |
 | `../../tests/scripts/golden_rt.ks` | v2 真实存档 roundtrip 场景（tests/scripts/ 放行路径——原因见 v2 覆盖表下方说明） |
-| `assets/` | 引用仓库共享资产（assets/bg|fg|bgm|se|voice），**不新增二进制** |
+| （无本地 assets/） | 本项目**不含**本地 assets/ 目录；场景中的资源路径（assets/bg|fg|bgm|se|voice 前缀，如 story.ks:40 [bg storage="assets/bg/classroom.png"]）由引擎在仓库根 CWD 下直接解析到**仓库共享资产池**（assets/），项目不新增任何二进制 |
 
 ## 运行
 
@@ -94,12 +94,12 @@ build/lua/Debug/lua.exe tests/projects/golden_vn/entry.lua
 > kag_runner 的引擎侧（本轮约束：不碰 scripts/kag/**）。
 
 
-## v2 仍未覆盖（诚实清单，禁止声称覆盖）
+## 覆盖与仍未覆盖（诚实清单，禁止声称覆盖）
 
 | Feature | 状态 | 原因 / 现有专项覆盖 |
 |---|---|---|
-| NVL 模式语义 | story 含 [nvl] token（source 面），**v2 仍不做语义断言** | 后续 v3 |
-| 语音（voice）语义 | story 含 [playvoice] token（source 面），headless 仅 mock 返回 false | 后续 v3 + 真机 |
+| NVL 模式语义 | **已覆盖（v3，2026-08-30）**：story.ks Section G `*nvl_check` 两 [ch] 无 [p] 累积于同一页（page_src/draws/光标推进 + TextScene.commit 封页）+ [nvl clear] 翻页 + [save slot=7] nvl_mode 持久化 + [nvl off] 退出 | GOLDEN_NVL=1 → NVL_ACCUM_OK / NVL_PAGE_OK / NVL_SAVE_OK / NVL_OFF_OK（4 断言） |
+| 语音（voice）语义 | **已覆盖（v3，2026-08-30）**：story.ks Section H `*voice_check` [ch voice=] backlog voice 字段 + save backlog[].voice 序列化 + [playvoice storage=] 真派发（mock is_voice_playing=false 不阻塞） | GOLDEN_VOICE=1 → VOICE_BL_OK / VOICE_SAVE_OK / VOICE_DISPATCH_OK（3 断言） |
 | Live2D | **未覆盖** | SDK 依赖，v3+ |
 | Steam | **未覆盖** | SDK 依赖，Phase2 |
 | replay 实跑 / mod 实跑 | 未覆盖（story 注释保留 source 面） | replay.lua / mod 单测专项 |
@@ -142,8 +142,10 @@ scene directory"——静态视角看不到 headless 驱动的 load_tokens 重�
 
 ## 与 first_vn / package_game 的同构关系
 
-- 结构同 `tests/projects/first_vn/`（story.ks + entry.lua + assets/ 引用共享池；同款
-  [select] 延迟 pending-jump 行为——first_vn 的 ROUTE sun/rain 验证模式与本项目一致）。
+- 结构基线同 `tests/projects/first_vn/`（story.ks + entry.lua + 同款 [select] 延迟
+  pending-jump 行为——first_vn 的 ROUTE sun/rain 验证模式与本项目一致）；**差异在于资产来源**：
+  first_vn 自带本地 assets/ 目录（tests/projects/first_vn/assets/），而 golden_vn **无本地
+  assets/**，直接引用仓库根共享资产池（assets/bg|fg|bgm|se|voice）。
 - `package_game.sh tests/projects/golden_vn` 可直接打包为 Web 站（多 .ks 目录会被收集并逐档
   ks_check；web 端 bundle 化后跨场景由 story bundle 内 scene 键按名解析）。
 - 门禁链：`verify_golden_vn.sh`（4 步 + 4b v1 旗标 + 4c v2 语义旗标，实测 30/30 PASS）→ 本地/CI 全量门禁。
