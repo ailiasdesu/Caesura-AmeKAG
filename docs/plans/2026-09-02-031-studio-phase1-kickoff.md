@@ -79,7 +79,7 @@
 |---|---|---|---|---|
 | R-PM-1 New Project | §6.3:307 | 新建后含 entry.lua+story.ks+assets 骨架且可立即 Run | S | T2 caesura.py create（现成，模板 5/5） |
 | R-PM-2 Open Project | §6.3:308 | 打开后 PM/AB/SE/SP 全组件挂载项目上下文 | M | 项目识别规范：**待确认**（SA 无独立规范资产） |
-| R-PM-3 Recent Projects | §6.3:309 | 持久化列表+点击可 Open | S | lib/recentProjects.ts（layers 证据，UI 层待核） |
+| R-PM-3 Recent Projects | §6.3:309 | 持久化列表+点击可 Open | S | 已核实端到端接线（D11 调查+队长锚点复核：ProjectManagerView.tsx:54/:375 → store.ts:112/:196-198 → lib/recentProjects.ts 含单测）——UI 层无缺口 |
 | R-PM-4 Duplicate | §6.3:310 | 复制→重命名→资产引用不含旧名 | M | **需确认**资产引用面（SA 无专项盘点） |
 | R-PM-5 Import | §6.3:311 | 选 KAG3 包→导入+成功/失败/迁移报告 | M | kag3_import 命令行面（**待确认**） |
 | R-PM-6 五模板 | §6.3:316-320 | 五者可选可 New 带预览/描述 | M | tools/project_templates（现成 5/5） |
