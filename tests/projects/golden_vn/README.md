@@ -1,10 +1,11 @@
-# Golden Project v2 (tests/projects/golden_vn/)
+# Golden Project v3 (tests/projects/golden_vn/)
 
 > **长期回归夹具**——产品化总任务书（§14 / release-gate.md §7）要求每次 release 都完整跑一遍的
 > 黄金项目。既有基线 = **d39b12d0**（story.ks 166 行 + entry.lua + README + `scripts/verify_golden_vn.sh`
-> 18/18 端到端门禁）；本文件记录 **v1 增量**（26/26 门禁）与 **v2 增量**（2026-08-29，
-> 30/30 门禁——rollback/history/backlog 语义断言 + 真实 save→load roundtrip）。
-> **v2 仍有未覆盖项**——下方清单按【既有（d39b12d0）／v1 增量／v2 增量】分列，未覆盖项如实列出。
+> 18/18 端到端门禁）；本文件记录 **v1 增量**（26/26 门禁）、**v2 增量**（2026-08-29，
+> 30/30 门禁——rollback/history/backlog 语义断言 + 真实 save→load roundtrip）与 **v3 增量**
+> （2026-08-30，32/32 门禁——NVL 模式语义 + voice 语义 mock 面；覆盖详情见「覆盖与仍未覆盖」表）。
+> **v3 仍有未覆盖项**——下方清单按【既有（d39b12d0）／v1 增量／v2 增量】分列，未覆盖项如实列出。
 
 ## 目录
 
@@ -152,4 +153,4 @@ scene directory"——静态视角看不到 headless 驱动的 load_tokens 重�
   assets/**，直接引用仓库根共享资产池（assets/bg|fg|bgm|se|voice）。
 - `package_game.sh tests/projects/golden_vn` 可直接打包为 Web 站（多 .ks 目录会被收集并逐档
   ks_check；web 端 bundle 化后跨场景由 story bundle 内 scene 键按名解析）。
-- 门禁链：`verify_golden_vn.sh`（4 步 + 4b v1 旗标 + 4c v2 语义旗标，实测 30/30 PASS）→ 本地/CI 全量门禁。
+- 门禁链：`verify_golden_vn.sh`（4 步 + 4b v1 旗标 + 4c v2 语义旗标 + 4d/4e v3 语义旗标，实测 32/32 PASS）→ 本地/CI 全量门禁。
