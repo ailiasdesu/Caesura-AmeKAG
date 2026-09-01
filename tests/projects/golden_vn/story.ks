@@ -253,3 +253,57 @@
 [wait time=6000]
 [end]
 
+; =============================================================================
+;  Section G (v3) — NVL semantic section.
+;  Reached ONLY via the headless driver's GOLDEN_NVL stage jump. v1 kept the
+;  [nvl] token source-face (every line followed by [p], so no multi-line
+;  page ever accumulated and nothing was asserted). Here two [ch] lines
+;  ACCUMULATE on one full-screen page (no [p] between them); the driver
+;  asserts ctx.nvl_mode / page_src / draws / cursor advance / backlog and
+;  the TextScene.commit seal (previous line sealed, appended line
+;  typewriter-live). [nvl clear] then breaks the page (draws wiped, cursor
+;  back to the NVL top), [save slot=7] proves nvl_mode persists into the
+;  saved state (save.lua capture_state), and [nvl off] exits (mode false,
+;  page dropped, hidden-visibility bookkeeping cleared).
+; =============================================================================
+*nvl_check
+[nvl]
+[ch name="A" text="NVL accumulated line one"]
+[ch name="B" text="NVL accumulated line two"]
+[set var="f.nvlAccumReady" value=1]
+[wait time=6000]
+[nvl clear]
+[ch name="A" text="NVL fresh page line three"]
+[set var="f.nvlPageReady" value=1]
+[wait time=6000]
+[save slot=7]
+[set var="f.nvlSaveReady" value=1]
+[wait time=6000]
+[nvl off]
+[set var="f.nvlOffReady" value=1]
+[wait time=6000]
+[end]
+
+; =============================================================================
+;  Section H (v3) — voice semantic section.
+;  Reached ONLY via the headless driver's GOLDEN_VOICE stage jump. v1 kept
+;  [playvoice] source-face. Here: [ch voice=] routes the file into the
+;  backlog entry (text.lua push_backlog voice field) AND into the saved
+;  state (save.lua capture_state backlog[].voice), then [playvoice
+;  storage=] dispatches through the real backend.audio_play("voice")
+;  contract — the headless mock records each dispatch and reports
+;  is_voice_playing=false, so the handler must not stall — and the story
+;  continues past it to [end].
+; =============================================================================
+*voice_check
+[ch voice="assets/voice/line01.wav" name="A" text="Voiced backlog probe one"]
+[set var="f.voiceChReady" value=1]
+[wait time=6000]
+[save slot=8]
+[set var="f.voiceSaveReady" value=1]
+[wait time=6000]
+[playvoice storage="assets/voice/line02.wav"]
+[set var="f.voicePlayReady" value=1]
+[wait time=6000]
+[end]
+

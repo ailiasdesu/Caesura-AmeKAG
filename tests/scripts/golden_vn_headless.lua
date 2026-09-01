@@ -33,6 +33,8 @@
 --    GOLDEN_RB=1       build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v2)
 --    GOLDEN_HISTORY=1  build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v2)
 --    GOLDEN_ROUNDTRIP=1 build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua    (v2)
+--    GOLDEN_NVL=1      build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v3)
+--    GOLDEN_VOICE=1    build/lua/Debug/lua.exe tests/scripts/golden_vn_headless.lua     (v3)
 --
 --  v2 modes:
 --    GOLDEN_RB       stages a jump to *rollback_check and drives
@@ -60,6 +62,31 @@
 --    token, looping on the native runner; the cursor+1 self-reference guard
 --    exists only in web/bridge.js. The driver therefore drives the same
 --    handler instead of an in-story [load] tag.
+--
+--  v3 modes (2026-08-30):
+--    GOLDEN_NVL       stages a jump to *nvl_check and asserts the NVL
+--                     accumulation semantics: two [ch] lines on ONE page
+--                     (ctx.nvl_mode true, page_src[].opts.nvl, draws
+--                     appended, textCursorY advanced, TextScene.commit
+--                     seal = prior draws typewriter=false / appended
+--                     draw true, backlog carries both lines), the
+--                     [nvl clear] page break (page_src==1 fresh page,
+--                     cursor back toward the NVL top), [save slot=7]
+--                     (state.nvl_mode==true, save.lua:165) and [nvl off]
+--                     (mode false, page dropped, nvl_hidden_vis cleared).
+--                     Prints NVL_ACCUM_OK / NVL_PAGE_OK / NVL_SAVE_OK /
+--                     NVL_OFF_OK.
+--    GOLDEN_VOICE     stages a jump to *voice_check and asserts the voice
+--                     routing: [ch voice=] stores the file in the backlog
+--                     entry (text.lua push_backlog voice field) AND in the
+--                     saved state (save.lua:87 backlog[].voice), and
+--                     [playvoice storage=] dispatches backend.audio_play
+--                     ("voice") -- the mock's play_voice spy records each
+--                     call (the C++ binding contract) while
+--                     is_voice_playing=false makes the wait loop return
+--                     immediately, so the story continues past it to
+--                     [end]. Prints VOICE_BL_OK / VOICE_SAVE_OK /
+--                     VOICE_DISPATCH_OK.
 --
 --  Env knobs:
 --    SAMPLE_STORY      .ks path (default story.ks, or golden_cross.ks with
@@ -97,10 +124,19 @@ end
 -- save_game/load_game with the store so [save slot=9] really persists and the
 -- load handler sees the captured state table.
 local _savedSlots = {}
+-- v3 voice spy: the C++ binding contract is KAG.play_voice(file)
+-- (backend.lua audio_play "voice" -> call_resolved("play_voice") when
+-- _CAESURA_BACKEND is absent, as in this headless mock). Every voice
+-- dispatch ([ch voice=] and [playvoice]) lands here, in story order.
+local _voicePlays = {}
 _G.KAG = callable({
     is_voice_playing  = function() return false end,
     is_bgm_playing    = function() return false end,
     get_active_voices = function() return 0 end,
+    play_voice        = function(file)
+        _voicePlays[#_voicePlays + 1] = file
+        return true
+    end,
     save_game = function(slot, state)
         _savedSlots[tonumber(slot) or 0] = state
         return true
@@ -125,6 +161,8 @@ local CROSS  = os.getenv("GOLDEN_CROSS") == "1"
 local RB     = os.getenv("GOLDEN_RB") == "1"
 local HIST   = os.getenv("GOLDEN_HISTORY") == "1"
 local RT     = os.getenv("GOLDEN_ROUNDTRIP") == "1"
+local NVL    = os.getenv("GOLDEN_NVL") == "1"
+local VOICE  = os.getenv("GOLDEN_VOICE") == "1"
 local STORY  = os.getenv("SAMPLE_STORY")
     or (RT and "tests/scripts/golden_rt.ks")
     or (CROSS and "tests/projects/golden_vn/golden_cross.ks"
@@ -132,6 +170,8 @@ local STORY  = os.getenv("SAMPLE_STORY")
 local ENDING = os.getenv("SAMPLE_ENDING")
     or (RB and "rollback_check")
     or (HIST and "history_check")
+    or (NVL and "nvl_check")
+    or (VOICE and "voice_check")
 local FMAX   = tonumber(os.getenv("SAMPLE_FRAMES")) or 200000
 local CHOICE = tonumber(os.getenv("GOLDEN_ROUTE") or "")
 
@@ -209,6 +249,16 @@ local rbDone    = false   -- GOLDEN_RB: rollback pair executed
 local histEsc   = false   -- GOLDEN_HISTORY: overlay Esc sent
 local rtLoaded  = false   -- GOLDEN_ROUNDTRIP: load() issued + restore checked
 
+-- ---- v3 mode state ----------------------------------------------------------
+local nvlAccumed = false   -- GOLDEN_NVL: accumulation inspected
+local nvlPaged   = false   -- GOLDEN_NVL: [nvl clear] page break inspected
+local nvlSaved   = false   -- GOLDEN_NVL: save-state nvl_mode inspected
+local nvlOffed   = false   -- GOLDEN_NVL: [nvl off] inspected
+local nvlCursor1 = nil     -- cursor Y at accumulation (page-reset baseline)
+local voiceCh    = false   -- GOLDEN_VOICE: backlog voice inspected
+local voiceSave  = false   -- GOLDEN_VOICE: save-state backlog voice inspected
+local voicePlay  = false   -- GOLDEN_VOICE: playvoice dispatch inspected
+
 while frames < FMAX do
     frames = frames + 1
     local ok, reason = kag_runner.update(0.016)
@@ -280,10 +330,170 @@ while frames < FMAX do
         end
     end
 
+    -- v3 NVL: the run parks at the [wait] after two accumulated [ch] lines
+    -- (no [p] between them). Assert the full-screen accumulation semantics:
+    -- mode on, one page_src entry per line with opts.nvl, draws appended,
+    -- cursor advanced below NVL_Y0 (and the ctx/state mirrors consistent),
+    -- the TextScene.commit seal (prior sealed, appended typewriter-live),
+    -- and the backlog carrying both lines without the inline prefix.
+    if NVL and not nvlAccumed and ctx and ctx.f and ctx.f.nvlAccumReady == 1 then
+        nvlAccumed = true
+        local st  = require("kag.text_scene").get_state(ctx)
+        local ps  = st.page_src or {}
+        local dr  = st.draws or {}
+        local bl  = ctx.backlog or {}
+        nvlCursor1 = ctx.textCursorY
+        print("NVL_ACCUM mode=" .. tostring(ctx.nvl_mode)
+              .. " page_src=" .. tostring(#ps) .. " draws=" .. tostring(#dr)
+              .. " cursorY=" .. tostring(ctx.textCursorY)
+              .. " stateY=" .. tostring(st.cursor_y)
+              .. " backlog=" .. tostring(#bl))
+        local okMode  = (ctx.nvl_mode == true)
+        local okPage  = (#ps == 2)
+                        and (ps[1] and ps[1].opts and ps[1].opts.nvl == true)
+                        and (ps[2] and ps[2].opts and ps[2].opts.nvl == true)
+        local okDraws = (#dr >= 2)
+        local okCur   = (type(ctx.textCursorY) == "number" and ctx.textCursorY > 160)
+                        and (ctx.textCursorY == st.cursor_y)
+        local okSeal  = (#dr >= 2) and (dr[1].typewriter == false)
+                        and (dr[#dr].typewriter == true)
+        local okBl    = (#bl == 2) and (bl[1] and bl[1].name == "A")
+                        and (bl[2] and bl[2].name == "B")
+                        and (type(bl[1].text) == "string"
+                             and bl[1].text:find("「", 1, true) == nil)
+        if okMode and okPage and okDraws and okCur and okSeal and okBl then
+            print("NVL_ACCUM_OK")
+        else
+            print("NVL_ACCUM_BAD mode=" .. tostring(okMode)
+                  .. " page=" .. tostring(okPage) .. " draws=" .. tostring(okDraws)
+                  .. " cursor=" .. tostring(okCur) .. " seal=" .. tostring(okSeal)
+                  .. " backlog=" .. tostring(okBl))
+        end
+    end
+
+    -- v3 NVL: after [nvl clear] + the fresh-page [ch], assert the page break
+    -- semantics: the old page is gone (page_src==1), the cursor was reset
+    -- toward the NVL top (strictly above the accumulation cursor), mode stays
+    -- on.
+    if NVL and not nvlPaged and ctx and ctx.f and ctx.f.nvlPageReady == 1 then
+        nvlPaged = true
+        local st  = require("kag.text_scene").get_state(ctx)
+        local ps  = st.page_src or {}
+        local dr  = st.draws or {}
+        print("NVL_PAGE mode=" .. tostring(ctx.nvl_mode)
+              .. " page_src=" .. tostring(#ps) .. " draws=" .. tostring(#dr)
+              .. " cursorY=" .. tostring(ctx.textCursorY)
+              .. " prevCursorY=" .. tostring(nvlCursor1))
+        local okMode = (ctx.nvl_mode == true)
+        local okPage = (#ps == 1)
+                       and (ps[1] and ps[1].opts and ps[1].opts.nvl == true)
+        local okCur  = (type(ctx.textCursorY) == "number"
+                        and ctx.textCursorY > 160
+                        and nvlCursor1 ~= nil
+                        and ctx.textCursorY < nvlCursor1)
+        if okMode and okPage and (#dr >= 1) and okCur then
+            print("NVL_PAGE_OK")
+        else
+            print("NVL_PAGE_BAD mode=" .. tostring(okMode)
+                  .. " page=" .. tostring(okPage)
+                  .. " cursor=" .. tostring(okCur))
+        end
+    end
+
+    -- v3 NVL: while still in NVL mode, [save slot=7] must persist nvl_mode
+    -- into the saved state (save.lua capture_state line 165) together with
+    -- the accumulated backlog entries.
+    if NVL and not nvlSaved and ctx and ctx.f and ctx.f.nvlSaveReady == 1 then
+        nvlSaved = true
+        local s7  = _savedSlots[7]
+        local sbl = s7 and s7.backlog or {}
+        print("NVL_SAVE nvl_mode=" .. tostring(s7 and s7.nvl_mode)
+              .. " backlog=" .. tostring(#sbl))
+        if s7 and s7.nvl_mode == true and #sbl >= 2 then
+            print("NVL_SAVE_OK")
+        else
+            print("NVL_SAVE_BAD")
+        end
+    end
+
+    -- v3 NVL: after [nvl off], assert the exit semantics: mode false, the
+    -- full-screen page dropped, the hidden-visibility bookkeeping cleared.
+    if NVL and not nvlOffed and ctx and ctx.f and ctx.f.nvlOffReady == 1 then
+        nvlOffed = true
+        local st = require("kag.text_scene").get_state(ctx)
+        local ps = st.page_src or {}
+        print("NVL_OFF mode=" .. tostring(ctx.nvl_mode)
+              .. " page_src=" .. tostring(#ps)
+              .. " hidden_vis_cleared=" .. tostring(ctx.nvl_hidden_vis == nil))
+        if ctx.nvl_mode == false and #ps == 0 and ctx.nvl_hidden_vis == nil then
+            print("NVL_OFF_OK")
+        else
+            print("NVL_OFF_BAD")
+        end
+    end
+
+    -- v3 voice: after [ch voice=], the backlog entry must carry the voice
+    -- file (text.lua push_backlog voice field, V-key replay contract).
+    if VOICE and not voiceCh and ctx and ctx.f and ctx.f.voiceChReady == 1 then
+        voiceCh = true
+        local bl = ctx.backlog or {}
+        local e  = bl[#bl]
+        print("VOICE_CH backlog=" .. tostring(#bl)
+              .. " voice=" .. tostring(e and e.voice or "?")
+              .. " name=" .. tostring(e and e.name or "?"))
+        if e and e.voice == "assets/voice/line01.wav"
+           and e.name == "A"
+           and type(e.text) == "string" and #e.text > 0 then
+            print("VOICE_BL_OK")
+        else
+            print("VOICE_BL_BAD")
+        end
+    end
+
+    -- v3 voice: after [save slot=8], the SAVED state must carry the voice
+    -- field per backlog entry (save.lua capture_state line 87).
+    if VOICE and not voiceSave and ctx and ctx.f and ctx.f.voiceSaveReady == 1 then
+        voiceSave = true
+        local s8  = _savedSlots[8]
+        local sbl = s8 and s8.backlog or {}
+        local e   = sbl[#sbl]
+        print("VOICE_SAVE backlogs=" .. tostring(#sbl)
+              .. " voice=" .. tostring(e and e.voice or "?")
+              .. " name=" .. tostring(e and e.name or "?"))
+        if e and e.voice == "assets/voice/line01.wav"
+           and e.name == "A"
+           and type(e.text) == "string" and #e.text > 0 then
+            print("VOICE_SAVE_OK")
+        else
+            print("VOICE_SAVE_BAD")
+        end
+    end
+
+    -- v3 voice: after [playvoice storage=], the mock's play_voice spy must
+    -- have recorded BOTH dispatches in story order ([ch voice=] then the
+    -- playvoice tag) -- the exact backend.audio_play("voice") contract --
+    -- and, with is_voice_playing=false, the wait loop must not stall the
+    -- runner (the story reaches the following markers/[end]).
+    if VOICE and not voicePlay and ctx and ctx.f and ctx.f.voicePlayReady == 1 then
+        voicePlay = true
+        print("VOICE_PLAY dispatches=" .. tostring(#_voicePlays)
+              .. " first=" .. tostring(_voicePlays[1] or "?")
+              .. " second=" .. tostring(_voicePlays[2] or "?"))
+        if #_voicePlays >= 2
+           and _voicePlays[1] == "assets/voice/line01.wav"
+           and _voicePlays[2] == "assets/voice/line02.wav" then
+            print("VOICE_DISPATCH_OK")
+        else
+            print("VOICE_DISPATCH_BAD")
+        end
+    end
+
     if reason == "ended" then
         if RB and rbDone then print("RB_REPLAY_END") end
         if HIST and ctx and ctx.f and ctx.f.historyClosed == 1 then print("HISTORY_OK") end
         if RT and rtLoaded then print("RT_REPLAY_END") end
+        if NVL and nvlOffed then print("NVL_REPLAY_END") end
+        if VOICE and voicePlay then print("VOICE_REPLAY_END") end
         result = "DONE:" .. frames
         break
     end

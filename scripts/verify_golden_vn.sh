@@ -229,6 +229,39 @@ else
     check "v2 save->load roundtrip (restore + resume armed + replay re-save, to [end])" 1 "rc=$RTRC saves=$RTSAVES"
 fi
 
+# ---- 4d. v3 semantic flags: NVL mode (accumulate / page-turn / save / off) ----
+note "Step 4d: v3 NVL semantic flags via golden_vn_headless.lua"
+NVLOUT="$(GOLDEN_NVL=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+NVLRC=$?
+printf "  [nvl] %s\n" "$(printf '%s\n' "$NVLOUT" | grep -E "NVL_|RESULT" | tr '\n' ' ')"
+if [ "$NVLRC" -eq 0 ] \
+   && printf '%s\n' "$NVLOUT" | grep -q "RESULT DONE" \
+   && printf '%s\n' "$NVLOUT" | grep -q "NVL_ACCUM_OK" \
+   && printf '%s\n' "$NVLOUT" | grep -q "NVL_PAGE_OK" \
+   && printf '%s\n' "$NVLOUT" | grep -q "NVL_SAVE_OK" \
+   && printf '%s\n' "$NVLOUT" | grep -q "NVL_OFF_OK" \
+   && printf '%s\n' "$NVLOUT" | grep -q "NVL_REPLAY_END"; then
+    check "v3 NVL semantic (accum/page/save/off)" 0
+else
+    check "v3 NVL semantic (accum/page/save/off)" 1 "rc=$NVLRC"
+fi
+
+# ---- 4e. v3 semantic flags: voice (backlog field / save serialize / dispatch) ----
+note "Step 4e: v3 voice semantic flags via golden_vn_headless.lua"
+VOOUT="$(GOLDEN_VOICE=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
+VORC=$?
+printf "  [voice] %s\n" "$(printf '%s\n' "$VOOUT" | grep -E "VOICE_|RESULT" | tr '\n' ' ')"
+if [ "$VORC" -eq 0 ] \
+   && printf '%s\n' "$VOOUT" | grep -q "RESULT DONE" \
+   && printf '%s\n' "$VOOUT" | grep -q "VOICE_BL_OK" \
+   && printf '%s\n' "$VOOUT" | grep -q "VOICE_SAVE_OK" \
+   && printf '%s\n' "$VOOUT" | grep -q "VOICE_DISPATCH_OK" \
+   && printf '%s\n' "$VOOUT" | grep -q "VOICE_REPLAY_END"; then
+    check "v3 voice semantic (backlog/save/dispatch)" 0
+else
+    check "v3 voice semantic (backlog/save/dispatch)" 1 "rc=$VORC"
+fi
+
 # ---- 5. Web smoke (informational) ----
 echo ""
 note "Step 5: Web smoke (manual — not executed here)"
