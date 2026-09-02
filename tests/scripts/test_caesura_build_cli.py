@@ -36,6 +36,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -204,6 +205,49 @@ class TestCreateCommand(unittest.TestCase):
                             "myproj/story.ks missing:\n" +
                             "\n".join(sorted(p.name for p in created.iterdir()))
                             if created.exists() else "myproj was not created")
+
+    def test_create_posts_meta_name_basename_and_iso_dates(self):
+        """M1-L: default metadata name = target dir basename; created ==
+        modified is a valid ISO-8601 UTC timestamp; template untouched."""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "demo_x"
+            rc, out = run_cli("create", str(target), "--template", "blank")
+            self.assertEqual(rc, 0, "create failed\n" + out)
+            meta = json.loads((target / "caesura.project.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["name"], "demo_x", "name must be target basename")
+            self.assertEqual(meta["template"], "blank", "template field must survive")
+            datetime.strptime(meta["created"], "%Y-%m-%dT%H:%M:%SZ")
+            datetime.strptime(meta["modified"], "%Y-%m-%dT%H:%M:%SZ")
+            self.assertEqual(meta["created"], meta["modified"], "created==modified")
+
+    def test_create_posts_meta_name_override(self):
+        """M1-L: --name overrides the metadata name; template still intact."""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "demo_y"
+            rc, out = run_cli("create", str(target), "--template", "blank",
+                              "--name", "My Studio Project")
+            self.assertEqual(rc, 0, "create failed\n" + out)
+            meta = json.loads((target / "caesura.project.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["name"], "My Studio Project",
+                             "--name must override the basename")
+            self.assertEqual(meta["template"], "blank",
+                             "template field must not be rewritten")
+
+    def test_create_posts_meta_description_only_when_given(self):
+        """M1-L: description stays empty without --description and is stored
+        with it; JSON is written with indent (not a single line)."""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "demo_z"
+            rc, out = run_cli("create", str(target), "--template", "blank",
+                              "--description", "A demo VN with \u6c49\u8bed\u6587\u672c")
+            self.assertEqual(rc, 0, "create failed\n" + out)
+            pj = target / "caesura.project.json"
+            meta = json.loads(pj.read_text(encoding="utf-8"))
+            self.assertEqual(meta["description"], "A demo VN with \u6c49\u8bed\u6587\u672c",
+                             "--description must be stored")
+            text = pj.read_text(encoding="utf-8")
+            self.assertTrue(text.endswith("\n"), "json must end with newline")
+            self.assertIn('  "name":', text, "json must be indented")
 
 
 @unittest.skipIf(ENGINE is None, "no engine binary (build/ is gitignored)")

@@ -4,7 +4,8 @@ Caesura (AmeKAG) — Creator Unified Command Line Interface (CLI)
 Unified interface for project scaffolding, doctor diagnostics, story flow, and i18n.
 """
 
-import sys, os, subprocess, shutil, argparse
+import sys, os, json, subprocess, shutil, argparse
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from caesura_build import cmd_build, cmd_package  # noqa: E402
@@ -124,6 +125,30 @@ def cmd_create(args):
         return 1
 
     shutil.copytree(template_src, target_dir)
+
+    # M1-L: post-process caesura.project.json metadata. Pure copytree left
+    # name=template id and empty created/modified, so a Studio New Project
+    # showed no trace of the chosen name. Missing/corrupt manifest degrades
+    # to a WARN and continues -- create must not fail on a template without
+    # one (the legacy demo/example_game fallback has no manifest).
+    project_json = os.path.join(target_dir, "caesura.project.json")
+    try:
+        with open(project_json, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        meta["name"] = args.project_name or os.path.basename(os.path.abspath(target_dir))
+        if args.description is not None:
+            meta["description"] = args.description
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        meta["created"] = now
+        meta["modified"] = now
+        with open(project_json, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+    except FileNotFoundError:
+        print(f"[WARN] caesura.project.json not found after copy: {project_json}")
+    except (json.JSONDecodeError, OSError) as warn:
+        print(f"[WARN] caesura.project.json unreadable; left as-copied: {warn}")
+
     print(f"[OK] Project '{name}' created from template '{template}' at: {target_dir}")
     print(f"     (template from: {template_src})")
     return 0
@@ -199,6 +224,10 @@ def main():
     p_create.add_argument("name", help="Project name")
     p_create.add_argument("--template", choices=["showcase", "basic", "blank", "live2d", "kag3"], default="showcase")
     p_create.add_argument("-o", "--out", help="Target output directory")
+    p_create.add_argument("--name", dest="project_name", default=None,
+                         help="Display name for caesura.project.json (default: target directory basename)")
+    p_create.add_argument("--description", default=None,
+                         help="Optional project description stored in caesura.project.json")
     p_create.set_defaults(func=cmd_create)
     
     # flow
