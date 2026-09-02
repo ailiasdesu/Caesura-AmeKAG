@@ -70,3 +70,9 @@
 
 审查点名的 `[typewriter]` / `letter_spacing` / `SwipeDown` 闭环状态为示意性举例、未经本仓实查——
 T-D1 核真后才可进矩阵；矩阵中任何格子的状态都必须可追溯到 file:line 或测试 / CI 证据。
+
+## 七、与 Caesura Studio Phase 1 的衔接（2026-09-02 加注）
+
+本 sprint（M1–M5）收官后的下一优先级是 Caesura Studio Phase 1（任务书 §6）。立项草案、交接现状与决策定稿分别见
+`2026-09-02-031-studio-phase1-kickoff.md` / `2026-09-02-032-studio-phase1-handoff.md` / `2026-09-02-033-studio-phase1-decisions.md`；
+本文件的判据与纪律不因此改变（Feature 冻结仍然有效，Studio 工作属「既有能力接线」而非新 KAG command）。
