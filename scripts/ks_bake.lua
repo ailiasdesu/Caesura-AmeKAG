@@ -25,6 +25,52 @@ local tokenizer = require("tokenizer")
 local compiler = require("kag.compiler")
 
 local OUT_ROOT = "cache/ksc"
+local IS_WINDOWS = package.config:sub(1, 1) == BS
+
+-- mkdir -p equivalent. cmd.exe mkdir is recursive but rejects '/' and needs
+-- 2>nul to stay quiet when the dir exists; on POSIX that redirection would
+-- create a literal file named "nul", so the two branches must not share text.
+local function ensureDir(path)
+    if IS_WINDOWS then
+        os.execute('mkdir "' .. path:gsub("/", BS) .. '" 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '"')
+    end
+end
+
+-- Every *.ks under dir (recursive) as sorted, '/'-separated, CWD-relative
+-- paths. The listing shells differ (cmd.exe `dir /s /b` lists a directory's
+-- own files before descending; find follows readdir order), so the order
+-- contract is enforced here rather than trusted from either shell.
+local function listKsFiles(dir)
+    local out = {}
+    if IS_WINDOWS then
+        local pf = io.popen('dir /s /b "' .. dir .. BS .. '*.ks" 2>nul')
+        if pf then
+            -- dir /b on absolute inputs yields full paths; strip the CWD
+            -- prefix so io.open works even when the repo path is non-ASCII
+            -- (Lua 5.4 io.open is byte-oriented on Windows).
+            local cwd = io.popen("cd"):read("*a") or ""
+            cwd = cwd:gsub("^%s*(.-)%s*$", "%1"):gsub(BS, "/")
+            for raw_line in pf:lines() do
+                local line = raw_line:gsub(BS, "/")
+                if cwd ~= "" and line:sub(1, #cwd) == cwd then
+                    line = line:sub(#cwd + 2)
+                end
+                out[#out + 1] = line
+            end
+            pf:close()
+        end
+    else
+        local pf = io.popen('find "' .. dir .. '" -type f -name "*.ks"')
+        if pf then
+            for line in pf:lines() do out[#out + 1] = line end
+            pf:close()
+        end
+    end
+    table.sort(out)
+    return out
+end
 
 -- Same sanitization as flow.load_scene: resolved path -> flat file name.
 local function kscPathFor(resolved, outRoot)
@@ -149,23 +195,7 @@ if is_script then
     end
     for _, p in ipairs(inputs) do add(p) end
     for _, d in ipairs(dirs) do
-        local cmd = "dir /s /b \"" .. d .. "\\*.ks\" 2>nul"
-        local pf = io.popen(cmd)
-        if pf then
-            for raw_line in pf:lines() do
-                local line = raw_line:gsub("\\", "/")
-                -- dir /b on absolute inputs yields full paths; strip the CWD
-                -- prefix so io.open works even when the repo path is non-ASCII
-                -- (Lua 5.4 io.open is byte-oriented on Windows).
-                local cwd = io.popen("cd"):read("*a") or ""
-                cwd = cwd:gsub("^%s*(.-)%s*$", "%1"):gsub("\\", "/")
-                if cwd ~= "" and line:sub(1, #cwd) == cwd then
-                    line = line:sub(#cwd + 2)
-                end
-                add(line)
-            end
-            pf:close()
-        end
+        for _, p in ipairs(listKsFiles(d)) do add(p) end
     end
 
     if #collected == 0 then
@@ -183,8 +213,7 @@ if is_script then
         end
         local encoded = compiler.encode_lua_literal(bundle)
         local outPath = webOut .. "/story.lua"
-        local dirCmd = "mkdir \"" .. webOut .. "\" 2>nul"
-        pcall(os.execute, dirCmd)
+        ensureDir(webOut)
         local w = io.open(outPath, "w")
         if not w then
             print("[error] cannot write " .. outPath)
@@ -230,4 +259,6 @@ return {
     bakeScene = bakeScene,
     isFresh = isFresh,
     kscPathFor = kscPathFor,
+    listKsFiles = listKsFiles,
+    ensureDir = ensureDir,
 }
