@@ -274,10 +274,21 @@ jobs:
           # when stale/missing. Lightweight: node only, no wasmoon install.
           node web/gen-index.mjs --check
 
+      - name: Web package hard gate (t144 design A)
+        run: |
+          # Bare checkout: cache/, web/dist/ and dist/ are all gitignored. Bake the
+          # demo bundle first (web/vite.config.js closeBundle copies cache/story
+          # unconditionally and ENOENTs without it), build the player, package
+          # first_vn against it and assert the packaged tree. web/dist now exists,
+          # so resources.test.js's dist cases run for real in the vitest step.
+          lua5.4 scripts/ks_bake.lua --dir demo --web cache/story
+          (cd web && npm ci --no-audit --no-fund && npm run build)
+          bash scripts/package_game.sh --no-web-build tests/projects/first_vn
+          bash scripts/verify_web_package.sh dist/first_vn
+
       - name: Web Player unit & integration tests (vitest)
         run: |
           cd web
-          npm ci --no-audit --no-fund
           npm test
           cd ..
 
