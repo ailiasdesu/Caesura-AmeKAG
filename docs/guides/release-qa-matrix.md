@@ -36,7 +36,7 @@
 | Windows | ✅（CPack ZIP） | ✅ | ✅ | 发布路径已验证 |
 | Linux | ✅ | ✅ | ✅（WSL 实机 ctest 11/11） | 已验证 |
 | macOS | ✅（代码） | ✅（CI 编译 - Clang 严格修复后 2m12s） | ⏳ **pending** | **需 Mac 真机**（§8 诚实标注） |
-| Web | ✅（package_game.sh） | ✅ | ✅（Chrome+Edge CDP 验证） | boot/text(含CJK)/image(input img 解码)/input/audio(WebAudio source+autoplay 解锁)/save(跨 reload 持久)/自动启动全通过（2026-08-23 scripts/web_browser_smoke.mjs） |
+| Web | ✅（package_game.sh） | ✅（Linux job：bake → vite build → package first_vn → `verify_web_package.sh` 25 断言；deploy-web.yml 发布前 verify + Chrome smoke root/subpath 硬门） | ✅（Chrome+Edge CDP 验证） | boot/text(含CJK)/image(input img 解码)/input/audio(WebAudio source+autoplay 解锁)/save(跨 reload 持久)/自动启动全通过（2026-08-23 scripts/web_browser_smoke.mjs） |
 
 ## Real environment
 

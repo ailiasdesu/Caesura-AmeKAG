@@ -127,7 +127,7 @@
 - **索引与胶水文件**：
   - `web/scripts-index.json` 是提交工件，新增 `scripts/*.lua` 后必须运行 `node web/gen-index.mjs`；
   - `glue.wasm` 必须本地 Pin（`__CAESURA_WASM_FILE__`），严禁依赖 unpkg 在线 CDN。
-- **打包与冒烟**：`bash scripts/package_game.sh` + `node scripts/web_browser_smoke.mjs`。
+- **打包与冒烟**：`bash scripts/package_game.sh` + `bash scripts/verify_web_package.sh dist/<game>`（25 断言，CI Linux job 硬门）+ `node scripts/web_browser_smoke.mjs`（`--print-browser` 只解析浏览器；`CHROME_BIN` 仅对 chrome 生效；`CI=1` 加 `--no-sandbox`）。`ks_bake.lua --dir` 自 2026-09-03 起在 POSIX 可用（此前为 cmd.exe `dir /s /b`，Linux 上静默产出 0 场景）。
 
 ### 4.5 CI 与自动化门禁
 - **工作流配置**：`.github/workflows/ci.yml`（Windows MSVC、Ubuntu GCC/Clang、macOS AppleClang）。

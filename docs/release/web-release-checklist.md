@@ -26,6 +26,7 @@
 | 12 | tab suspend/resume | ✅ | 真实标签切换（visibilitychange hidden→visible，6.5s）：场景无跳变、WebAudio 存活、返回后输入/循环恢复（Chrome+Edge） |
 | 13 | stress case | ✅ | web_stress_vn 3 整轮（36 页+循环）：纹理缓存 12 恒定、DOM 层 1、0 页面/引擎（含 WASM）错误；boot Chrome 1966ms / Edge 2715ms（实测记录） |
 | 14 | no known blocker | ✅ | 全量 `cd web && npm test` 318/318（22 文件）；w3 审查 APPROVE；w5/w7 无遗留 P0 |
+| 15 | CI 硬门（t144 A+C，2026-09-03） | ✅ | ci.yml Linux job：bake → vite build → `package_game.sh --no-web-build tests/projects/first_vn` → `verify_web_package.sh dist/first_vn`（25 断言，ctest `CaesuraVerifyWebPackage` 12 用例）；deploy-web.yml：verify + headless Chrome smoke（root + `/<repo>/` 子路径）后才 upload/deploy；浏览器解析契约 ctest `CaesuraSmokeBrowserResolve` 6 用例 |
 
 ## 已知限制（不阻塞 RC-READY，记录在案）
 

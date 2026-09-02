@@ -15,6 +15,7 @@ cd web && npx vite build     # 或 npm run build；0 依赖修复后 web/dist/sc
 - bundle 目标：`web/dist/web-assets/index-*.js`（159KB，gzip 46KB），入口 `<script type="module" crossorigin src="/web-assets/index-*.js">`。
 - **模块索引**：`web/bridge.js` 在启动时硬依赖 `scriptsBase + 'index.json'`（无容错，404 即 boot 失败）。
   - CI 工件：`web/scripts-index.json`（已提交，`node web/gen-index.mjs --check` 保鲜）。
+  - CI 硬门（t144 A+C）：Linux job 每次 push/PR 打包 `tests/projects/first_vn` 并跑 `scripts/verify_web_package.sh`（25 条文件断言：布局 / 相对 `./web-assets/` 引用 / 本地 wasm pin / story bundle 场景键与资产对应 / `scripts/index.json` 与 gen-index 字节一致 / 资产隔离 / MANIFEST）；`deploy-web.yml` 发布前再跑 verify + `web_browser_smoke.mjs`（root 与 `/<repo>/` 子路径）。
   - vite build：`closeBundle` 现在自动为 `web/dist/scripts/index.json` 生成（vite.config.js `copyRuntimeDirs`）。
   - dev server：`vite.config.js` 的 `devScriptsIndex` 中间件按需生成（此前 dev 模式会 404 挂机）。
 

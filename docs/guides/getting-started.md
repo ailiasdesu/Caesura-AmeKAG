@@ -351,7 +351,7 @@ cmake --build build --parallel
 
 > **测试基线（本机实测，2026-08-29 master `1af807c0` + 本轮 N1 用例）**：C++ 用例 **1120**（385790 断言）·
 > Lua 主套件 **143** + 孤儿套件 **25**（2026-08-29 起含 select→跨场景 [jump] 回归） · Web vitest **368**（工件齐备全跑） · Editor vitest **625**（36 文件，2026-08-29 实测于 HEAD b7e1e7ce；t54 在途改动可能再增，以提交时点 CI 为准） ·
-> CTest **15** 个 target（含 CaesuraGoldenVn 金项目门禁与 CaesuraBuildCli SKIP77 契约） · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
+> CTest **17** 个 target（含 CaesuraGoldenVn 金项目门禁、CaesuraBuildCli / CaesuraVerifyWebPackage / CaesuraSmokeBrowserResolve SKIP77 契约） · 16 教程 · **134** 命令契约 · **34** 个 C++ 接口头（`docs/api/api-stats.md`，由 `python scripts/api_stats.py` 生成）。
 > 任何 PR 合入前这些必须全绿。基线数字随开发增长，**以本地实跑输出为准**，不要把本行当门禁。
 
 ### 4.1 C++ 测试（doctest / CTest）
@@ -382,7 +382,7 @@ cd build/tests && ./CaesuraTests
 
 ```bash
 ctest -C Debug --test-dir build --output-on-failure
-# 15 个 target（`ctest --test-dir build -N` 列出）：资产同步 + 6 组分模块 doctest 分片
+# 17 个 target（`ctest --test-dir build -N` 列出）：资产同步 + 6 组分模块 doctest 分片
 # + headless CLI/RPC/HTTP 冒烟 + AI smoke（无 Ollama 自动跳过）+ RC/平台矩阵对抗测试
 # + 构建 CLI 契约（无引擎时 SKIP 77）+ CaesuraGoldenVn（金项目门禁）
 ```
@@ -647,7 +647,7 @@ A: `node web/gen-index.mjs` 重生成 `web/scripts-index.json` 并提交。
 - [ ] C++ 测试：`cd build/tests/Debug && ./CaesuraTests.exe` → **0 failed, 0 skipped**（2026-08-29 实测 1120 用例 / 385790 断言）
 - [ ] Lua 主套件：`build/lua/Debug/lua.exe tests/scripts/run_lua_tests.lua` → 0 failed（实测 143）
 - [ ] Lua 孤儿套件：`build/lua/Debug/lua.exe tests/scripts/run_orphan_tests.lua` → 0 failed（实测 25）
-- [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`（15 target，含 CaesuraGoldenVn）
+- [ ] CTest：`ctest -C Debug --test-dir build --output-on-failure`（17 target，含 CaesuraGoldenVn）
 - [ ] 耦合门禁：`python scripts/count_coupling.py --ci` → `PASS: All modules within thresholds`
 - [ ] Web 脚本索引守卫：`node web/gen-index.mjs --check` → `CHECK OK: N modules up to date`
 - [ ] 平台矩阵新鲜度：`python scripts/generate_platform_status.py --check` → `[OK] ... up-to-date`
