@@ -7,10 +7,10 @@
 ;  as you go. Assets referenced here live in the shared repo pool
 ;  (assets/bg|fg|bgm|se|voice) so the template runs out of the box; for a
 ;  standalone project copy assets into your own <project>/assets/ tree (see
-;  demo/template/assets/README.md).
+;  tools/project_templates/basic/assets/<category>/README.md).
 ;
-;  Run:  lua demo/template/entry.lua
-;  Check: lua scripts/ks_check.lua demo/template/story.ks
+;  Run:  lua tools/project_templates/basic/entry.lua
+;  Check: lua scripts/ks_check.lua tools/project_templates/basic/story.ks
 ; =============================================================================
 
 [font face="default" size=22]
@@ -86,7 +86,7 @@
 
 [ch name="Narrator" text="— End of template —"]
 [p]
-[ch name="Narrator" text="Edit demo/template/story.ks and make it yours."]
+[ch name="Narrator" text="Edit tools/project_templates/basic/story.ks and make it yours."]
 [p]
 [wait time=800]
 [end]

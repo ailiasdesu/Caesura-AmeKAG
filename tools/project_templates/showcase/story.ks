@@ -46,6 +46,7 @@
 [ch name="Narrator" text="A declarative tween slides the sprite across the foreground layer."]
 [p]
 [layfade layer="bg" to=0 time=200]
+[fg storage="assets/fg/girl_uniform.png"]
 [tween target="fg" attr="x" from=0 to=320 dur=600 ease=ease_in_out wait=false]
 [ch name="Heroine" text="This is a tween — smooth motion without manual frame math." sprite="assets/fg/girl_uniform.png"]
 [p]

@@ -458,9 +458,11 @@ _Category: layer · Blocking: yes (waits for completion) · fade one layer to an
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
+| `alpha` | number | - | 0..255 | - |
 | `duration` | number | 300 | 0..30000 | - |
 | `layer` | string | bg | - | - |
 | `name` | string | - | - | - |
+| `opacity` | number | - | 0..255 | - |
 | `time` | number | 300 | 0..30000 | - |
 | `to` | number | 255 | 0..255 | - |
 

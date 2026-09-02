@@ -161,6 +161,7 @@ local tests = {
     "test_audio_fade",
     "test_trans_behavior",
     "test_fadeout",
+    "test_layfade_contract",
     "test_backend_guard",
     "test_accessibility",
     "test_label_bench",

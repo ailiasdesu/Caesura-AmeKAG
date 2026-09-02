@@ -14,6 +14,8 @@ _schema3.define("layfade", {
     layer = { type = "string", default = "bg" },
     name = { type = "string" },
     to = { type = "number", default = 255, min = 0, max = 255 },
+    opacity = { type = "number", min = 0, max = 255 },  -- legacy hybrid: <=1 fraction, >1 byte (handler converts)
+    alpha   = { type = "number", min = 0, max = 255 },  -- alias (KAG3 name)
     time = { type = "number", default = 300, min = 0, max = 30000 },
     duration = { type = "number", default = 300, min = 0, max = 30000 },
 })
@@ -328,7 +330,9 @@ function LayerCommands.layopt(ctx, params)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  [layfade layer="bg" opacity=0 time=500]
+--  [layfade layer="bg" to=0 time=500]  (canonical, 0..255 byte)
+--  [layfade layer="bg" opacity=0.5 time=500]  (legacy alias: <=1 fraction,
+--  >1 passes through as 0..255)
 --  Frame-stepped opacity transition for an existing layer (D2.6).
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -343,19 +347,27 @@ function LayerCommands.layfade(ctx, params)
         print("[LayerCmd] layfade: layer not found: " .. tostring(layerName))
         return
     end
+    -- [M1-F] contract unification: the schema canonical target is "to"
+    -- (0..255 byte, default 255 via coerce). opacity/alpha keep the
+    -- legacy hybrid convention below; "to" needs no scaling -- its unit
+    -- IS the byte range (to=1 stays 1, unlike opacity=1 -> 255).
     local target = tonumber(params.opacity or params.alpha)
+    if target ~= nil then
+        -- Scale ambiguity (audit): layopt's schema is 0..1 but fade_to /
+        -- set_layer_opacity operate in 0..255. Accept BOTH: values <= 1
+        -- are treated as 0..1 fractions (0.5 -> 128), larger values pass
+        -- through as 0..255 (legacy [layfade opacity=128]). Non-breaking.
+        -- tonumber FIRST: the tokenizer hands raw strings and Lua 5.4
+        -- raises on string-vs-number compare (review blocking).
+        if target <= 1 then
+            target = math.floor(target * 255 + 0.5)
+        end
+    else
+        target = tonumber(params.to)
+    end
     if target == nil then
         print("[LayerCmd] layfade: opacity required")
         return
-    end
-    -- Scale ambiguity (audit): layopt's schema is 0..1 but fade_to /
-    -- set_layer_opacity operate in 0..255. Accept BOTH: values <= 1
-    -- are treated as 0..1 fractions (0.5 -> 128), larger values pass
-    -- through as 0..255 (legacy [layfade opacity=128]). Non-breaking.
-    -- tonumber FIRST: the tokenizer hands raw strings and Lua 5.4
-    -- raises on string-vs-number compare (review blocking).
-    if target <= 1 then
-        target = math.floor(target * 255 + 0.5)
     end
     local duration = params.time or params.duration or 500
     layers.fade_to(node, target, duration)
