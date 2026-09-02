@@ -4,6 +4,15 @@ name: Deploy Web Player (GitHub Pages)
 # Manually deploy the web player static site (vite build + package_game.sh)
 # to GitHub Pages. Pick a game in the Actions -> Run workflow dialog.
 # Fully decoupled from ci.yml: no engine build, no GPU, ubuntu-latest.
+#
+# Release-path hard gate (t144 design C): the packaged site is verified with
+# scripts/verify_web_package.sh and booted in headless Chrome by
+# scripts/web_browser_smoke.mjs -- at the root and under a /<repo>/ subpath
+# (the real project-site mount) -- BEFORE anything is uploaded to Pages. A
+# failing gate skips the deploy steps; that is the point.
+#
+# Untrusted / expression values (inputs, repository name, step outputs) reach
+# shell only through env:, never by textual ${{ }} substitution in run:.
 
 on:
   workflow_dispatch:
@@ -39,20 +48,18 @@ jobs:
         with:
           submodules: recursive
 
+      # Node 22: the smoke's CDP client uses the global WebSocket, which is
+      # behind --experimental-websocket on Node 20/21.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Install web dependencies
         working-directory: web
         run: npm ci --no-audit --no-fund
-
-      - name: Build web player (vite build)
-        working-directory: web
-        run: npm run build
 
       - name: Install Lua (POSIX interpreter)
         run: |
@@ -63,11 +70,24 @@ jobs:
       - name: Regenerate web scripts index (freshness guard)
         run: node web/gen-index.mjs
 
+      # web/vite.config.js closeBundle copies cache/story into dist
+      # unconditionally; on a bare checkout it does not exist yet.
+      - name: Bake demo story bundle
+        run: lua scripts/ks_bake.lua --dir demo --web cache/story
+
+      - name: Build web player (vite build)
+        working-directory: web
+        run: npm run build
+
       # --no-web-build reuses web/dist from the npm build above; the script
       # keeps its game-specific override so only the chosen game bundle ships.
       - name: Package game static site
-        run: bash scripts/package_game.sh --no-web-build "${{ inputs.game }}"
+        env:
+          GAME_INPUT: ${{ inputs.game }}
+        run: bash scripts/package_game.sh --no-web-build "$GAME_INPUT"
 
+      # The exit 1 below is load-bearing: every later step reads $OUT from this
+      # output, so an empty OUT must never reach the verify/smoke/upload steps.
       - name: Resolve packaged output directory
         id: resolve
         run: |
@@ -78,6 +98,30 @@ jobs:
           fi
           echo "Resolved package directory: $OUT"
           echo "out=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Verify packaged site (25 assertions, hard gate)
+        env:
+          OUT: ${{ steps.resolve.outputs.out }}
+        run: bash scripts/verify_web_package.sh "$OUT"
+
+      # CHROME_BIN is exported by the ubuntu runner image; CI=true makes the
+      # smoke add --no-sandbox. The subpath run mirrors the project-site mount
+      # (https://<owner>.github.io/<repo>/).
+      - name: Browser smoke (root + project-site subpath, hard gate)
+        env:
+          OUT: ${{ steps.resolve.outputs.out }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          node scripts/web_browser_smoke.mjs --root "$OUT" --browser chrome
+          node scripts/web_browser_smoke.mjs --root "$OUT" --browser chrome --subpath "$REPO_NAME"
+
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-smoke-screenshots
+          path: build/web-smoke/*.png
+          if-no-files-found: ignore
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
