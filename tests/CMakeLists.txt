@@ -293,6 +293,20 @@ if(Python3_EXECUTABLE)
         TIMEOUT 600
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+    # Web package gate (t144 design C): browser resolution contract of
+    # scripts/web_browser_smoke.mjs (--print-browser; no browser is launched).
+    # SKIP_RETURN_CODE 77 when node is missing from the host.
+    add_test(
+        NAME CaesuraSmokeBrowserResolve
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_smoke_browser_resolve.py
+    )
+    set_tests_properties(CaesuraSmokeBrowserResolve PROPERTIES
+        LABELS "qa;web;smoke"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 120
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
 endif()
 
 # Golden Project regression gate (tests/projects/golden_vn): static ks_check
