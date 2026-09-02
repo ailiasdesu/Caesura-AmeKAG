@@ -131,6 +131,49 @@ check("7a: encode_lua_literal round-trips web bundle", okWeb == true)
 check("7b: encode_lua_literal exported by compiler",
       type(compiler.encode_lua_literal) == "function")
 
+-- ---------------------------------------------------------------------------
+-- 8. portable --dir listing and --web output dir creation (Web package CI
+--    gate, t144 design A). The CLI's --dir collection used to shell out to
+--    cmd.exe `dir /s /b`, which yields nothing on the Linux runners that bake
+--    demo/ before packaging; the two shells also disagree on traversal order
+--    (dir: root files before subdirs; find: whatever readdir gives), so the
+--    contract is a Lua-side sorted, '/'-separated, CWD-relative list.
+-- ---------------------------------------------------------------------------
+local IS_WINDOWS = package.config:sub(1, 1) == "\\"
+local DIR_FIX = "tmp/bake_dir"
+ensure_dir(DIR_FIX)
+ensure_dir(DIR_FIX .. "/sub")
+for _, rel in ipairs({ "z.ks", "m.ks", "sub/a.ks", "not.txt" }) do
+    local f = assert(io.open(DIR_FIX .. "/" .. rel, "w"))
+    f:write("*start\n[end]\n")
+    f:close()
+end
+
+check("8a: listKsFiles exported", type(bake.listKsFiles) == "function")
+local okList, listed = pcall(function() return bake.listKsFiles(DIR_FIX) end)
+check("8b: listKsFiles runs", okList == true, listed)
+local joined = okList and type(listed) == "table" and table.concat(listed, "|") or tostring(listed)
+check("8c: listKsFiles is sorted, '/'-separated, relative and skips non-.ks",
+      joined == DIR_FIX .. "/m.ks|" .. DIR_FIX .. "/sub/a.ks|" .. DIR_FIX .. "/z.ks", joined)
+
+check("8d: ensureDir exported", type(bake.ensureDir) == "function")
+local NESTED = "tmp/bake_nested/x/y"
+local okDir = pcall(function() bake.ensureDir(NESTED) end)
+local probe = okDir and io.open(NESTED .. "/probe.txt", "w") or nil
+check("8e: ensureDir creates nested directories", probe ~= nil)
+if probe then probe:close() end
+if not IS_WINDOWS then
+    local stray = io.open("nul", "r")
+    check("8f: no stray 'nul' file left behind on POSIX", stray == nil)
+    if stray then stray:close(); os.remove("nul") end
+end
+
+-- cleanup (files first, then empty dirs bottom-up; leftovers are harmless:
+-- ensure_dir/ensureDir are idempotent and the *.ks filter ignores strays)
+for _, rel in ipairs({ "z.ks", "m.ks", "sub/a.ks", "not.txt" }) do os.remove(DIR_FIX .. "/" .. rel) end
+os.remove(DIR_FIX .. "/sub"); os.remove(DIR_FIX)
+os.remove(NESTED .. "/probe.txt"); os.remove(NESTED); os.remove("tmp/bake_nested/x"); os.remove("tmp/bake_nested")
+
 -- cleanup
 os.remove(SCENE)
 os.remove("cache/ksc/tmp_bake_test.ksc")
