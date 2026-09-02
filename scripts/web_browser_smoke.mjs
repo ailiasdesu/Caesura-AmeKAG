@@ -19,6 +19,11 @@
 // Usage (from repo root, git bash):
 //   node scripts/web_browser_smoke.mjs                              # web/dist + Chrome
 //   node scripts/web_browser_smoke.mjs --root dist/example_game --browser edge
+//   node scripts/web_browser_smoke.mjs --root dist/example_game --browser /usr/bin/chromium
+//   node scripts/web_browser_smoke.mjs --print-browser               # resolve only, no launch
+//   Browser lookup: --browser <path> verbatim; chrome|edge -> built-in table
+//   (Windows / Linux / macOS); CHROME_BIN is tried first for chrome only.
+//   CI=1 adds --no-sandbox --disable-dev-shm-usage for hosted runners.
 //   node scripts/web_browser_smoke.mjs --root dist/example_game --scene story.ks
 //   node scripts/web_browser_smoke.mjs --root dist/example_game --unlock
 //
@@ -40,7 +45,12 @@ const arg = (name, dflt) => {
 const has = (name) => ARGV.includes(name)
 
 const ROOT = resolve(arg('--root', join(process.cwd(), 'web', 'dist')))
+// A browser name (chrome/edge -> CHROME_PATHS table) or an executable path.
 const BROWSER = arg('--browser', 'chrome')
+// Safe for file names: a path-type --browser must not escape build/web-smoke/.
+const BROWSER_LABEL = BROWSER.replace(/[^a-z0-9_-]/gi, '_').slice(-40)
+// Resolve the browser, print its path and exit -- no server, no launch.
+const PRINT_BROWSER = has('--print-browser')
 // 0 = auto-pick a free port (default); pin by passing --port/--cdp-port.
 const HTTP_PORT = Number(arg('--port', 0))
 const CDP_PORT = Number(arg('--cdp-port', 0))
@@ -78,12 +88,21 @@ const CHROME_PATHS = {
   chrome: [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     '/c/Program Files/Google/Chrome/Application/chrome.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ],
   edge: [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
     '/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     '/c/Program Files/Microsoft/Edge/Application/msedge.exe',
+    '/usr/bin/microsoft-edge',
+    '/usr/bin/microsoft-edge-stable',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
   ],
 }
 
@@ -140,7 +159,16 @@ function startServer(httpPortUsed, cdpPortUsed) {
 
 // ---------------------------------------------------------------- browser
 function findBrowser() {
-  for (const p of CHROME_PATHS[BROWSER] ?? CHROME_PATHS.chrome) {
+  // An explicit executable path is used verbatim -- no table fallback, so a
+  // typo cannot silently test a different browser.
+  if (BROWSER.includes('/') || BROWSER.includes('\\')) return existsSync(BROWSER) ? BROWSER : null
+  // Own-property lookup: 'constructor' / 'toString' are not browsers.
+  if (!Object.prototype.hasOwnProperty.call(CHROME_PATHS, BROWSER)) return null
+  let table = CHROME_PATHS[BROWSER]
+  // CHROME_BIN (exported by GitHub's ubuntu runner images) is a hint for the
+  // chrome request only; it must never override an explicit --browser edge.
+  if (BROWSER === 'chrome' && process.env.CHROME_BIN) table = [process.env.CHROME_BIN, ...table]
+  for (const p of table) {
     if (existsSync(p)) return p
   }
   return null
@@ -224,13 +252,23 @@ class Cdp {
 
 // -------------------------------------------------------------------- main
 async function main() {
+  // Resolver-only mode goes first so it works on a bare checkout (no dist).
+  if (PRINT_BROWSER) {
+    const found = findBrowser()
+    if (!found) {
+      console.error('[web-smoke] FATAL: browser not found: ' + BROWSER_LABEL)
+      process.exit(1)
+    }
+    console.log(found)
+    process.exit(0)
+  }
   if (!existsSync(join(ROOT, 'index.html'))) {
     console.error('[web-smoke] FATAL: no index.html under ' + ROOT)
     process.exit(1)
   }
   const browser = findBrowser()
   if (!browser) {
-    console.error('[web-smoke] FATAL: browser not found: ' + BROWSER)
+    console.error('[web-smoke] FATAL: browser not found: ' + BROWSER_LABEL)
     process.exit(1)
   }
 
@@ -253,10 +291,13 @@ async function main() {
       '--disable-features=Translate',
       '--disable-extensions',
       '--remote-debugging-port=' + cdpPort,
-      '--user-data-dir=' + join(process.cwd(), 'build', 'web-smoke', 'profile-' + BROWSER + '-' + Date.now()),
+      '--user-data-dir=' + join(process.cwd(), 'build', 'web-smoke', 'profile-' + BROWSER_LABEL + '-' + Date.now()),
       '--window-size=1280,900',
     ]
     if (!UNLOCK) args.push('--autoplay-policy=no-user-gesture-required')
+    // Hosted CI runners: the Chrome sandbox cannot be set up and /dev/shm is
+    // tiny; both flags are a no-op for a developer's local run (CI unset).
+    if (process.env.CI) args.push('--no-sandbox', '--disable-dev-shm-usage')
     args.push(url)
 
     console.log('[web-smoke] root:', ROOT)
@@ -291,6 +332,8 @@ async function main() {
     } catch (e) {
       const dump = await cdp.eval("JSON.stringify({st: (document.getElementById('status')||{}).textContent || '', log: ((document.getElementById('log')||{}).textContent || '').slice(-300), ready: document.readyState, scripts: [...document.querySelectorAll('script')].map(function(s){return (s.src || 'inline').split('/').slice(-2).join('/')}), wasmPin: (typeof self.__CAESURA_WASM_FILE__ === 'string' ? String(self.__CAESURA_WASM_FILE__) : 'none')})").catch(() => '')
       console.error('[boot-timeout]', String(dump))
+      // Best-effort evidence for the CI artifact upload; never mask the timeout.
+      try { await cdp.screenshot('build/web-smoke/smoke-' + BROWSER_LABEL + '-boot-timeout.png') } catch { /* noop */ }
       throw e
     }
     record('boot (engine load + auto run parks)', !!parked, JSON.stringify(parked))
@@ -539,7 +582,7 @@ async function main() {
       record('unlock: AudioContext running after user gesture', after === 'running', 'before=' + before + ' after=' + after)
     }
 
-    await cdp.screenshot('build/web-smoke/smoke-' + BROWSER + '.png')
+    await cdp.screenshot('build/web-smoke/smoke-' + BROWSER_LABEL + '.png')
     await cdp.send('Page.close')
   } finally {
     server.close()
