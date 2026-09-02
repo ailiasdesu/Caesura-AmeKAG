@@ -270,7 +270,7 @@ if [ -n "$EXE" ]; then ok "engine executable: $(basename "$EXE")"
 else bad "engine executable" "neither CaesuraAmeKAG.exe nor CaesuraAmeKAG at the archive root"; fi
 
 if [ -f "$ROOT/web-editor/dist/index.html" ]; then ok "web-editor/dist/index.html"
-else bad "web-editor/dist/index.html" "web-editor/dist/index.html is NOT in the package (CMake install() must ship it; --editor serves this single-file debug panel -- the React IDE in editor/ is a source-tree component and is NOT part of release packages)"; fi
+else bad "web-editor/dist/index.html" "web-editor/dist/index.html is NOT in the package (CMake install() must ship it; --editor serves this single-file debug panel -- the React IDE in editor/ ships separately as editor/dist/ when the packaging job built it, see the editor/dist sentinels below)"; fi
 
 for d in scripts assets; do
     if [ -d "$ROOT/$d" ]; then ok "$d/ present"; else bad "$d/ present" "missing from the archive"; fi
