@@ -209,7 +209,7 @@ order entries by impact. The curated `CHANGELOG.md` is what you commit.
 
 CPack (ZIP generator) is wired into `CMakeLists.txt` — it installs the
 executable, `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/`,
-`web-editor/dist/` (the single-file debug panel `--editor` serves — `web-editor/dist/index.html`; the React IDE lives in `editor/` and is NOT shipped), `README.md`,
+`web-editor/dist/` (the single-file debug panel `--editor` serves — `web-editor/dist/index.html`), `editor/dist/` (the React/Monaco IDE — OPTIONAL CMake install: `editor/dist` is gitignored so engine-only builds must not fail; the loud sentinel lives in §5.1 with two assertions: `editor/dist/index.html` + `editor/dist/assets/*.js` ≥ 1 chunk), `README.md`,
 `LICENSE`, and (on Windows) the SDL3 DLL and FFmpeg DLLs.
 
 > **The editor frontend is part of the release contract.** `getting-started.md`
@@ -217,6 +217,24 @@ executable, `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/`,
 > `web-editor/dist/index.html` is missing from the archive the engine logs
 > `web-editor/dist not found; serving API only` and every page load answers
 > 404 — the API is up but there is no UI. §5.1 verifies this on the real ZIP.
+> Since the Studio Phase 1 wiring (`feat(studio)`), the full React/Monaco IDE
+> (`editor/dist`) also ships when a packaging job builds it first: the CMake
+> install is OPTIONAL (a fresh clone has no `editor/dist`), the packaging jobs
+> run a `Build editor IDE (editor/dist ships in the package)` step —
+> `cd editor && npm ci --no-audit --no-fund && npm run build` — before CPack
+> (release.yml `build-windows`; ci.yml `release`, `release-linux`,
+> `release-macos`), and the §5.1 sentinels (`two` assertions, total 32)
+> fail loudly when the build was skipped or produced a stub.
+>
+> A release ZIP carries **both** frontends, but a stranger's `--editor` keeps
+> serving `web-editor/dist/index.html` by default — the IDE at `editor/dist/`
+> is reached through the `CAESURA_EDITOR_WEBROOT` override: when the env var is
+> set and `<dir>/index.html` exists the engine mounts that directory at `/`
+> (log `[EDITOR] webroot override active: <dir>`, route count stays 36 in both
+> modes), and an unset or invalid value falls back byte-identically to the
+> probe-derived webRoot. The dev-checkout command is documented first in
+> `editor/README.md`:
+> `CAESURA_EDITOR_WEBROOT=editor/dist ./build/Debug/CaesuraAmeKAG.exe --editor`.
 
 ```bash
 # Build Release first, then package:
@@ -243,6 +261,7 @@ Before publishing, confirm the archive is complete and runnable:
 | Executable present | `CaesuraAmeKAG.exe` at the archive root |
 | Runtime DLLs present | `SDL3.dll` + `avcodec/avformat/avutil/swscale/swresample-*.dll` (FFmpeg builds) + `steam_api64.dll` when configured with `-DCAESURA_HAS_STEAM=ON` |
 | Editor frontend present | `web-editor/dist/index.html` (without it `--editor` serves the API only) |
+| Studio IDE present | `editor/dist/index.html` + at least one `editor/dist/assets/*.js` chunk — OPTIONAL install shipped by the packaging jobs (see §4); the two §5.1 sentinels fail loudly when a release ZIP lacks it |
 | Data dirs present | `scripts/`, `demo/`, `assets/`, `projects/`, `shaders/` |
 | Project templates present | `tools/project_templates/` with the 5 templates + `manifest.json` (Project Manager + `caesura.py create` depend on it) |
 | Licensing | `README.md` + `LICENSE` at the archive root |
@@ -268,10 +287,12 @@ Before publishing, confirm the archive is complete and runnable:
 > editor's Project Manager `/api/project/templates` answers 200 from the package.
 > The package also bundles its own Lua interpreter (`external/lua/lua.exe`,
 > installed from the `lua_cli` target), so `caesura build` inside an extracted
-> ZIP needs no system Lua on PATH — verified by the 30-assertion release check
+> ZIP needs no system Lua on PATH — verified by the 32-assertion release check
 > including a PATH-stripped create→build→run probe (2026-08-28). Count per lane:
-> Windows 29 strict + 1 note; Linux 28 strict + 2 notes; macOS 29 strict + 1
-> note (the otool SDL3 hard gate is a real assertion there). The two scope
+> Windows 31 strict + 1 note; Linux 30 strict + 2 notes; macOS 31 strict + 1
+> note (the otool SDL3 hard gate is a real assertion there). The two extra
+> strict assertions since the Studio wiring are the IDE sentinels —
+> `editor/dist/index.html` + an `editor/dist/assets/*.js` chunk. The two scope
 > notes are (a) on POSIX the stripped-PATH probe degrades to a note (the
 > /usr/bin distro lua cannot be stripped — the property stays guarded by the
 > `ran under the PACKAGED lua` assertion, 2026-08-29 Linux TGZ lane) and (b)
@@ -314,11 +335,11 @@ bash scripts/verify_release_package.sh
 bash scripts/verify_release_package.sh build/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip --port=9876 --keep
 ```
 
-30 checks in five groups (the two scope-note paths: the stripped-PATH probe degrades when /usr/bin's distro lua cannot be stripped — the `ran under the PACKAGED lua` assertion still guards the property — and the SDL3 relocatability check is a note where otool or a packaged dylib is absent. Lane composition: Windows 29 strict + 1 note; Linux 28 strict + 2 notes; macOS 29 strict + 1 note with the packaged SDL3 dylib, 28 strict + 2 notes when statically linked):
+32 checks in five groups (the two scope-note paths: the stripped-PATH probe degrades when /usr/bin's distro lua cannot be stripped — the `ran under the PACKAGED lua` assertion still guards the property — and the SDL3 relocatability check is a note where otool or a packaged dylib is absent. Lane composition: Windows 31 strict + 1 note; Linux 30 strict + 2 notes; macOS 31 strict + 1 note with the packaged SDL3 dylib, 30 strict + 2 notes when statically linked; the IDE sentinels are strict on every lane):
 
 | Group | Asserts |
 |-------|---------|
-| contents | executable, `web-editor/dist/index.html`, `scripts/`, `assets/`, `demo/` (non-empty, anchored on `demo/cjk_smoke.ks` — ProjectContext.looksLikeEngineRoot needs scripts+demo), `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter), packaged SDL3 dylib relocatability (macOS hard gate: `otool -D` LC_ID_DYLIB and the engine's SDL3 load items via `otool -L` must be `@rpath/`/`@loader_path/` — an absolute brew-style install path pins the package to the build host; note-pass where otool or a packaged dylib is absent) |
+| contents | executable, `web-editor/dist/index.html`, `editor/dist/index.html` + at least one `editor/dist/assets/*.js` chunk (Studio IDE sentinels — the ~700B Vite index.html is no byte-floor target, the asset chunk is the stub guard), `scripts/`, `assets/`, `demo/` (non-empty, anchored on `demo/cjk_smoke.ks` — ProjectContext.looksLikeEngineRoot needs scripts+demo), `tools/project_templates/` (all 5 templates), `external/lua/lua[.exe]` (bundled interpreter), packaged SDL3 dylib relocatability (macOS hard gate: `otool -D` LC_ID_DYLIB and the engine's SDL3 load items via `otool -L` must be `@rpath/`/`@loader_path/` — an absolute brew-style install path pins the package to the build host; note-pass where otool or a packaged dylib is absent) |
 | serving | the process survives in the extracted folder, `GET /` **with** the token returns **200 and the editor HTML**, no `web-editor/dist not found` in the log, `/api/ping` answers ok |
 | auth | unauthenticated `GET /` is **401** — the gate must stay closed; the script never relaxes auth to turn a run green |
 | token discovery | with no `CAESURA_EDITOR_TOKEN`, the engine writes `.caesura-editor-token` beside the executable, prints it on stderr, and that token really opens the editor |

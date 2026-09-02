@@ -32,6 +32,18 @@
 > stdio 已接入 breakpoint、Continue、Step、变量检查和调试状态命令。
 > `run` / `eval` 已迁移到 managed coroutine（`startManagedRun` + `pumpManagedRuns`），
 > 可正常执行含 `coroutine.yield()` 的脚本；不再返回 `unsupported_yieldable_execution`。
+>
+> **静态根覆盖**：默认 `--editor` 以探测推导的 webRoot 服务 `/` 与 `/index.html`（发布包内为
+> `web-editor/dist` 单文件调试面板：ifstream 直读，不设 mount）。设置环境变量
+> `CAESURA_EDITOR_WEBROOT=<dir>` 且 `<dir>/index.html` 存在时，`<dir>` 经
+> `set_mount_point("/")` 成为静态根——整棵多文件 SPA（index.html + assets/*.js/*.css）以
+> 正确 Content-Type 服务（httplib 内建扩展表），显式 `GET /` 与 `GET /index.html` handler
+> 仍按解析后的根注册。激活契约：仅 mount 成功时打印
+> `[EDITOR] webroot override active: <dir>`（grep 该行可作激活门，防静默 set_mount_point
+> 失败）；未设置或指向不含 index.html 的目录时，逐字节回退默认 webRoot（
+> `[EditorServer] Serving web editor from: <dir>` 行仍在）。**路由计数 36（34 `/api/*` +
+> `GET /` / `GET /index.html`）两种模式均不变**——mount 与 route handler 并存时 httplib
+> 先派发 mount 点文件、后派发 route，无新路由注册。
 
 ### 1.1 健康检查
 

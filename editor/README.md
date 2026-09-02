@@ -51,6 +51,25 @@ npm run preview    # serve the bundle (same /api proxy in dev only;
                    # deploy behind the engine origin for same-origin API)
 ```
 
+### 2b. Serve the production build from the engine
+
+`CAESURA_EDITOR_WEBROOT` points `--editor` at a static root — the whole
+multi-file SPA (index.html + assets/*.js/*.css, correct Content-Type via
+httplib mount):
+
+```bash
+npm run build                                # static bundle in editor/dist/
+CAESURA_EDITOR_WEBROOT=editor/dist ./build/Debug/CaesuraAmeKAG.exe --editor
+# -> the IDE on http://127.0.0.1:9876/ (startup logs
+#    '[EDITOR] webroot override active: editor/dist')
+```
+
+Without the env var (or when it points at a directory without `index.html`),
+`--editor` falls back byte-for-byte to the packaged single-file debug panel
+(`web-editor/dist/index.html`, tracked, shipped by the CMake install). The two
+frontends coexist: `web-editor/` is the release-package debug panel, `editor/`
+is the full React/Monaco IDE; the route count (36) is unchanged in both modes.
+
 ### 3. Connect
 
 The header shows the engine state; enter the bearer token if the engine
