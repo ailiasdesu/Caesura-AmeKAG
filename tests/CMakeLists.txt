@@ -279,6 +279,20 @@ if(Python3_EXECUTABLE)
         TIMEOUT 1200
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+    # Web package gate (t144 design A): contract tests for
+    # scripts/verify_web_package.sh against a synthetic dist/<game>/ tree.
+    # SKIP_RETURN_CODE 77 when bash or node is missing from the host.
+    add_test(
+        NAME CaesuraVerifyWebPackage
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_verify_web_package.py
+    )
+    set_tests_properties(CaesuraVerifyWebPackage PROPERTIES
+        LABELS "qa;web;package"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 600
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
 endif()
 
 # Golden Project regression gate (tests/projects/golden_vn): static ks_check
