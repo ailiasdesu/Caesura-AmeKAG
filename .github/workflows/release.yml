@@ -40,6 +40,17 @@ jobs:
           cd build/tests/Release
           ./CaesuraTests.exe
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build editor IDE (editor/dist ships in the package)
+        run: |
+          cd editor
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Package Windows ZIP
         run: |
           cd build

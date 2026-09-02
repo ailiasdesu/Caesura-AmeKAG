@@ -1385,15 +1385,44 @@ void EditorServer::serverLoop(int port) {
 
     // ---------------------------------------------------------------------
     // Static file serving -- web editor frontend
-    // Static file serving -- web editor frontend
     // ---------------------------------------------------------------------
     // Serve the single-file editor (web-editor/dist/index.html). We read the
     // file through our own ifstream instead of httplib set_mount_point: on
     // Windows, non-ASCII (e.g. CJK) directory paths in the mount dir are
     // re-encoded by the narrow-string CRT layer and silently 404. The
     // explicit handler keeps the path as-is end to end.
-    if (!m_webRoot.empty() && fs::exists(m_webRoot)) {
-        const auto indexFile = (fs::path(m_webRoot) / "index.html").string();
+    //
+    // [M1-B] CAESURA_EDITOR_WEBROOT override: when set and <dir>/index.html
+    // exists, that directory becomes the static root -- the whole multi-file
+    // SPA (index.html + assets/*.js/*.css) is mounted with httplib
+    // set_mount_point so the assets are served with the correct Content-Type
+    // (built-in extension table). The explicit GET / and GET /index.html
+    // handlers stay registered with the resolved root so the documented route
+    // count (36) is unchanged in both modes; note that httplib dispatches the
+    // mount-point file handler BEFORE route handlers (routing()), so in
+    // override mode the mount serves "/" and "/index.html" itself -- same
+    // file, Content-Type without charset (modern browsers honor the SPA's
+    // <meta charset>). An unset or invalid value leaves the probe-derived
+    // webRoot untouched: fallback mode is byte-identical with the
+    // pre-override build (single-file ifstream panel).
+    std::string servedRoot   = m_webRoot;
+    bool        overrideActive = false;
+    if (const char* envRoot = std::getenv("CAESURA_EDITOR_WEBROOT")) {
+        if (envRoot[0] != '\0') {
+            std::error_code ec;
+            fs::path ep(envRoot);
+            if (fs::exists(ep / "index.html", ec)) {
+                servedRoot      = ep.string();
+                overrideActive  = true;
+            } else {
+                printf("[EDITOR] webroot override ignored (dir missing index.html): %s\n",
+                       envRoot);
+            }
+        }
+    }
+
+    if (!servedRoot.empty() && fs::exists(servedRoot)) {
+        const auto indexFile = (fs::path(servedRoot) / "index.html").string();
         auto serveIndex = [indexFile](const httplib::Request&, httplib::Response& res) {
             std::ifstream f(indexFile, std::ios::binary);
             if (!f) {
@@ -1405,9 +1434,24 @@ void EditorServer::serverLoop(int port) {
                              std::istreambuf_iterator<char>());
             res.set_content(body, "text/html; charset=utf-8");
         };
+        if (overrideActive) {
+            // Loud contract: "webroot override active" is only printed when
+            // the mount actually registered, so a gate grep on that line
+            // cannot be satisfied by a silent set_mount_point failure.
+            const bool mounted = svr.set_mount_point("/", servedRoot);
+            if (mounted) {
+                printf("[EDITOR] webroot override active: %s\n", servedRoot.c_str());
+            } else {
+                printf("[EDITOR] webroot override mount FAILED: %s (single-file fallback)\n",
+                       servedRoot.c_str());
+                overrideActive = false;
+            }
+        }
         svr.Get("/", serveIndex);
         svr.Get("/index.html", serveIndex);
-        printf("[EditorServer] Serving web editor from: %s\n", m_webRoot.c_str());
+        if (!overrideActive) {
+            printf("[EditorServer] Serving web editor from: %s\n", servedRoot.c_str());
+        }
     }
 
     // ---------------------------------------------------------------------

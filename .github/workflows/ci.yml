@@ -339,6 +339,13 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release --parallel
 
+      - name: Build editor IDE (editor/dist ships in the package)
+        shell: pwsh
+        run: |
+          cd editor
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Package (CPack)
         shell: pwsh
         run: cd build; cpack -C Release -G ZIP
@@ -405,10 +412,16 @@ jobs:
           cmake --build build --parallel $(nproc) > build.log 2>&1 || { echo '=== build errors ==='; grep -iE 'error:|fatal error|undefined' build.log | head -30; tail -40 build.log; exit 1; }
           tail -3 build.log
 
+      - name: Build editor IDE (editor/dist ships in the package)
+        run: |
+          cd editor
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Package (CPack TGZ)
         run: cd build && cpack -G TGZ
 
-      - name: Verify release package (30 assertions, serial)
+      - name: Verify release package (32 assertions, serial)
         run: |
           TGZ=$(ls build/CaesuraAmeKAG-*-Linux-*.tar.gz | head -1)
           echo "verifying: $TGZ"
@@ -474,10 +487,16 @@ jobs:
       - name: SDL3 link evidence (otool)
         run: otool -L build/CaesuraAmeKAG | grep -i sdl3 || true
 
+      - name: Build editor IDE (editor/dist ships in the package)
+        run: |
+          cd editor
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Package (CPack TGZ)
         run: cd build && cpack -G TGZ
 
-      - name: Verify release package (30 assertions, hard gate)
+      - name: Verify release package (32 assertions, hard gate)
         timeout-minutes: 20
         run: |
           TGZ=$(ls build/CaesuraAmeKAG-*-Darwin-*.tar.gz | head -1)

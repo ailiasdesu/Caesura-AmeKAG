@@ -276,6 +276,16 @@ for d in scripts assets; do
     if [ -d "$ROOT/$d" ]; then ok "$d/ present"; else bad "$d/ present" "missing from the archive"; fi
 done
 
+# Studio Phase 1 (M1): the React IDE build (editor/dist) ships in the package.
+# CMakeLists installs it OPTIONAL (editor/dist is gitignored, a fresh clone has
+# none) -- these two assertions are the loud sentinel that OPTIONAL gave up.
+# Vite's index.html is ~700B by design: assert the asset chunks, not a byte floor.
+if [ -f "$ROOT/editor/dist/index.html" ]; then ok "editor/dist/index.html"
+else bad "editor/dist/index.html" "editor/dist/index.html is NOT in the package (packaging jobs must run npm run build in editor/ before cpack; CMake install(DIRECTORY editor/dist/ ... OPTIONAL) then ships it)"; fi
+EDITOR_JS=$(ls "$ROOT"/editor/dist/assets/*.js 2>/dev/null | wc -l | tr -d ' ')
+if [ "${EDITOR_JS:-0}" -ge 1 ]; then ok "editor/dist/assets/*.js ($EDITOR_JS chunks)"
+else bad "editor/dist/assets/*.js" "no JS chunks under editor/dist/assets -- the IDE build is a stub or was not run"; fi
+
 # Sprint 5: the stranger-creation path needs the project templates (create)
 # and a standalone Lua interpreter (ks_check/precompile) IN the package.
 # python stays a documented prerequisite (doctor: Required); lua is not -- the

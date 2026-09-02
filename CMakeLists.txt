@@ -543,6 +543,13 @@ install(TARGETS lua_cli RUNTIME DESTINATION external/lua BUNDLE DESTINATION exte
 # an engine whose editor answers 404. The trailing slash matters -- without it
 # CMake produces web-editor/dist/dist/.
 install(DIRECTORY web-editor/dist/ DESTINATION web-editor/dist)
+# editor/ (React/Monaco IDE, Studio Phase 1) is the opposite case: editor/dist
+# is gitignored, so a fresh clone never has it and install() must not fail the
+# package build on machines that only build the engine. OPTIONAL skips it
+# silently -- the loud "it should have been there" sentinel lives in
+# scripts/verify_release_package.sh (editor/dist/index.html + assets/*.js), and
+# the release/ci packaging jobs run `npm run build` in editor/ before cpack.
+install(DIRECTORY editor/dist/ DESTINATION editor/dist OPTIONAL)
 install(FILES README.md LICENSE DESTINATION . OPTIONAL)
 
 set(CPACK_PACKAGE_NAME "CaesuraAmeKAG")
