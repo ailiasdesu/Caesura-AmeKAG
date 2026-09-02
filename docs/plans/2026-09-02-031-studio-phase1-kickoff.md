@@ -115,7 +115,7 @@
 2. **Inspector 与 Console 是否纳入 MVP 分解与优先级**（SB 开放问题#1：本草案按五组件边界处理，Inspector 交叉 R-SP-5、Console 交叉 R-BM-4）。
 3. **R-AB-7 引用关系 / R-AB-8 拖入**：MVP 内还是明确后置（任务书 §6.4 文本标注「后续」/「第一版可以后做」）。
 4. **Scene Preview 形态**：引擎独立窗口（真 GPU）vs Studio 嵌入式画布（§6.2 布局图画的是嵌入式）——影响 R-SP 实现路径与验证面。
-5. **模板展示名映射**：任务书名称（Blank VN / Basic VN / Live2D VN / KAG3 Migration / Advanced·Showcase）vs tools/project_templates 目录名（basic/blank/kag3/live2d/showcase）——UI 展示名需定。
+5. **模板展示名映射**：任务书名称（Blank VN / Basic VN / Live2D VN / KAG3 Migration / Advanced / Showcase）vs tools/project_templates 目录名（basic/blank/kag3/live2d/showcase）——UI 展示名需定。
 6. **Studio 与 029 衔接**：029（M1-M5）收官后 Studio=下一优先级（任务书 §6 行 236）——是否在 029 文档加注软衔接。
 7. **Studio MVP 目标机**：Windows 优先（任务书 Phase2 才跨平台；当前 electron 壳与 vite 链 Windows 已跑通）vs 三平台同期——影响验证矩阵与 electron 打包范围。
 8. **Script Editor 文件管理归属**（SB 开放问题#7）：SE 内建 tab 树 vs AB 双击打开——决定 R-SE-11 落点。
