@@ -20,6 +20,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // M1-J: release packages must not ship sourcemaps (.map files ~16MB for
+    // the main bundle alone); set CAESURA_EDITOR_SOURCEMAP=1 to opt back in.
+    sourcemap: process.env.CAESURA_EDITOR_SOURCEMAP === '1',
   },
 })
