@@ -141,7 +141,7 @@ def cmd_create(args):
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         meta["created"] = now
         meta["modified"] = now
-        with open(project_json, "w", encoding="utf-8") as f:
+        with open(project_json, "w", encoding="utf-8", newline="\n") as f:
             json.dump(meta, f, indent=2, ensure_ascii=False)
             f.write("\n")
     except FileNotFoundError:
