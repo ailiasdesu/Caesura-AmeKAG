@@ -93,6 +93,7 @@ tmp/
 # AGENTS.md §12.
 .agents/
 .agent-teams/
+/agent-tools/
 .vite/
 
 # Auto-generated editor RPC bearer token (EditorServer writes it when
