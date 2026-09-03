@@ -24,6 +24,49 @@
 #include "lualib.h"
 
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+/*
+** UTF-8 path support for the module searcher (Caesura patch, t176 family).
+** readable() probes require/searchpath candidates through a narrow fopen();
+** under the C locale the CRT converts via the ANSI code page, so a Lua
+** module stored under a non-ASCII install directory is reported as
+** non-existent (EILSEQ) even though it is on disk. Convert path and mode
+** to UTF-16 and open with _wfopen; any conversion or open failure falls
+** back to plain fopen, so ASCII paths behave byte-identically. POSIX
+** builds never see this (defined as fopen below).
+*/
+static FILE *loadlib_fopen_utf8 (const char *path, const char *mode) {
+  int plen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+  int mlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, NULL, 0);
+  if (plen > 0 && mlen > 0) {
+    wchar_t *wpath = (wchar_t *)malloc((size_t)plen * sizeof(wchar_t));
+    wchar_t *wmode = (wchar_t *)malloc((size_t)mlen * sizeof(wchar_t));
+    if (wpath != NULL && wmode != NULL) {
+      if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wpath, plen) > 0 &&
+          MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, wmode, mlen) > 0) {
+        FILE *file = _wfopen(wpath, wmode);
+        free(wpath); free(wmode);
+        if (file != NULL) return file;
+        return fopen(path, mode);  /* wide open failed: legacy fallback */
+      }
+    }
+    free(wpath); free(wmode);
+  }
+  return fopen(path, mode);  /* conversion failed: legacy fallback */
+}
+#else
+#define loadlib_fopen_utf8 fopen
+#endif
+
+
 /*
 ** LUA_CSUBSEP is the character that replaces dots in submodule names
 ** when searching for a C loader.
@@ -423,7 +466,7 @@ static int ll_loadlib (lua_State *L) {
 
 
 static int readable (const char *filename) {
-  FILE *f = fopen(filename, "r");  /* try to open file */
+  FILE *f = loadlib_fopen_utf8(filename, "r");  /* try to open file */
   if (f == NULL) return 0;  /* open failed */
   fclose(f);
   return 1;

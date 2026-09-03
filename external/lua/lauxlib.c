@@ -26,6 +26,48 @@
 
 #include "lauxlib.h"
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+/*
+** UTF-8 path support for the script loader (Caesura patch, t176 family).
+** luaL_loadfilex opens the CLI script through a narrow fopen(); the CRT
+** converts via the ANSI code page (ill-formed UTF-8 under the C locale),
+** so a script located under a non-ASCII install directory fails with
+** EILSEQ ("cannot open ...: Illegal byte sequence"). Convert path and
+** mode to UTF-16 and open with _wfopen; any conversion or open failure
+** falls back to plain fopen, so ASCII paths behave byte-identically.
+** POSIX builds never see this (defined as fopen below).
+*/
+static FILE *lauxlib_fopen_utf8 (const char *path, const char *mode) {
+  int plen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+  int mlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, NULL, 0);
+  if (plen > 0 && mlen > 0) {
+    wchar_t *wpath = (wchar_t *)malloc((size_t)plen * sizeof(wchar_t));
+    wchar_t *wmode = (wchar_t *)malloc((size_t)mlen * sizeof(wchar_t));
+    if (wpath != NULL && wmode != NULL) {
+      if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wpath, plen) > 0 &&
+          MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, wmode, mlen) > 0) {
+        FILE *file = _wfopen(wpath, wmode);
+        free(wpath); free(wmode);
+        if (file != NULL) return file;
+        return fopen(path, mode);  /* wide open failed: legacy fallback */
+      }
+    }
+    free(wpath); free(wmode);
+  }
+  return fopen(path, mode);  /* conversion failed: legacy fallback */
+}
+#else
+#define lauxlib_fopen_utf8 fopen
+#endif
+
 
 #if !defined(MAX_SIZET)
 /* maximum value for size_t */
@@ -794,7 +836,7 @@ LUALIB_API int luaL_loadfilex (lua_State *L, const char *filename,
   else {
     lua_pushfstring(L, "@%s", filename);
     errno = 0;
-    lf.f = fopen(filename, "r");
+    lf.f = lauxlib_fopen_utf8(filename, "r");
     if (lf.f == NULL) return errfile(L, "open", fnameindex);
   }
   lf.n = 0;
