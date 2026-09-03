@@ -1,4 +1,4 @@
-// Caesura IDE — KAG language service client.
+// Caesura Studio — KAG language service client.
 // Bridges the engine's /api/eval endpoint to Monaco providers:
 // completion / hover / diagnostics, driven by the engine's declarative
 // command contracts (scripts/kag/lsp.lua). The engine returns a JSON

@@ -32,7 +32,7 @@
 | 产物 | 位置 | 定位 |
 |---|---|---|
 | **Caesura Web Editor** | `web-editor/dist/index.html`（11KB 单文件；随发布包安装，`CMakeLists.txt:545`；EditorServer 默认静态根） | Studio 生态下的 **Web 端编辑器/调试面板**：零依赖、随引擎包走、浏览器直开 `http://127.0.0.1:9876/` |
-| **Caesura IDE** | `editor/`（React/Monaco 五视图；`editor/dist` 随发布包安装于 `editor/dist/`，`CMakeLists.txt:546-553`；经 `CAESURA_EDITOR_WEBROOT` 覆盖静态根或 Electron 壳加载） | Studio 生态下的 **桌面 IDE** |
+| **Caesura Studio** | `editor/`（React/Monaco 五视图；`editor/dist` 随发布包安装于 `editor/dist/`，`CMakeLists.txt:546-553`；经 `CAESURA_EDITOR_WEBROOT` 覆盖静态根或 Electron 壳加载） | Studio 生态下的 **桌面 IDE** |
 
 约束：二者共用同一 EditorServer HTTP RPC（36 条路由，/api/* 34 条）与同一 token 门控；不得为任一方新增平行 RPC 入口（任务书 §18.1 禁止平行架构）。文档中一律用上表名称，不再写「web-editor vs editor 待合并」。
 

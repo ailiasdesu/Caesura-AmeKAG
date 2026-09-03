@@ -1,4 +1,4 @@
-// Caesura IDE — Electron main process.
+// Caesura Studio — Electron main process.
 // Launches the engine in editor mode (hidden GPU window + HTTP RPC on
 // :9876), opens the IDE window, proxies /api to the engine and recycles
 // the engine process on quit. VS Code-style desktop IDE (Electron is the
@@ -149,7 +149,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: 'Caesura IDE',
+    title: 'Caesura Studio',
     backgroundColor: '#1e1e2e',
     webPreferences: {
       contextIsolation: true,

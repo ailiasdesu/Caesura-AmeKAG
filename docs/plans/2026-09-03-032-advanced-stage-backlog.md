@@ -26,7 +26,7 @@
 ## 2. PackagingService 的 Git Bash 依赖（产品级技术债）
 
 - **现状（原始）**：Windows Web packaging = C++ → CreateProcessW(Git Bash) → package_game.sh → Lua/Node/Vite。CreateProcessW/显式解析/Unicode/handle list 已安全（round 32），但系统侧存在 Bash runtime 依赖。
-- **风险**：`Caesura IDE → 一键 Web 发布` 要成为『普通用户不用管环境』的体验，必须先消除（开发环境无碍，产品分发是硬伤）。
+- **风险**：`Caesura Studio → 一键 Web 发布` 要成为『普通用户不用管环境』的体验，必须先消除（开发环境无碍，产品分发是硬伤）。
 - **目标轨迹（选定 ①，②为后续可选）**：
   1. ✅ `package_game.sh` 收敛为平台无关 CLI（t179：`scripts/package_game.mjs` Node ESM 唯一实现 + sh 7 行薄包装 + CLI 契约测试）；t180 进行中：PackagingService/caesura build CLI/package_distribution 全部切 Node（findGitBash→findNode），消除产品路径的 Bash 依赖。
   2. C++/Rust helper → deterministic packaging API（引擎内直接驱动，最终可二进制化，无 shell 中介）— 后续可选演进。
