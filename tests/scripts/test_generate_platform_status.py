@@ -321,6 +321,8 @@ class TestHeadDriftGate(unittest.TestCase):
             direct = gps.generate_markdown(gps.load_yaml(self.yaml))
         self.assertIn(f"`{PINNED_GIT_HEAD}`", direct)
         self.assertNotIn("head_commit source:", direct, "md must not embed the resolution path")
+        self.assertNotIn("Last Synchronized", direct, "legacy yaml timestamp must be gone")
+        self.assertIn("> **Generated At**:", direct, "execution-time timestamp line present")
 
         with git_broken():
             direct = gps.generate_markdown(gps.load_yaml(self.yaml))
@@ -334,6 +336,24 @@ class TestHeadDriftGate(unittest.TestCase):
         self.assertEqual(code, 0, f"S6 failed: {err}")
         self.assertIn(f'"evidence_head_commit": "{FAKE_YAML_HEAD}"', out)
         self.assertNotIn('"head_commit":', out, "legacy JSON key must be gone")
+        self.assertIn('"generated_at"', out, "JSON carries the execution-time timestamp")
+
+    def test_s11_generated_at_normalized_in_check(self):
+        """Two generations at different moments must still --check as fresh.
+
+        The Generated At line is generator-execution time; the byte comparison
+        must normalize it out (otherwise any re-check looks stale). A 1.1s
+        sleep guarantees the two runs have different timestamps even at
+        second precision.
+        """
+        import time as _time
+        code, out, err = run_main(self._argv_gen(["--head", FAKE_YAML_HEAD]))
+        self.assertEqual(code, 0, f"S11 generation failed: {err}")
+        _time.sleep(1.1)
+        code, out, err = run_main(self._argv_check(["--head", FAKE_YAML_HEAD]))
+        self.assertEqual(code, 0, f"S11 timestamp normalization failed: {err!r}")
+        self.assertIn("up-to-date", out)
+        self.assertNotIn("Generated At", err, "timestamp drift must not red the check")
 
     def test_s7_short_sha_prefix_counts_as_synced(self):
         """A yaml head_commit that is a short prefix of the effective HEAD counts as synced."""

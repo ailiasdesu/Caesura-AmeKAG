@@ -339,6 +339,9 @@ jobs:
       - name: Platform Matrix Generator Unit Tests
         run: python3 tests/scripts/test_generate_platform_status.py
 
+      - name: Plan Status Fact-Sync Check
+        run: python3 scripts/generate_plan_status.py --check
+
       - name: Capability Closure Matrix Freshness
         run: |
           # Round 32 (Track B): closure matrix must match the current source

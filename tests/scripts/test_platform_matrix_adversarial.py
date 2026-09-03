@@ -453,9 +453,13 @@ platforms:
         generated = gps.generate_markdown(self.valid_data)
         self.assertTrue(self.status_md_path.exists(), "docs/status/platform-status.md must exist")
         actual = self.status_md_path.read_text(encoding="utf-8")
+        # t196: Generated At is generator-execution time, so both sides are
+        # normalized through the SAME helper the generator's --check uses
+        # (scripts/generate_platform_status.py::normalize_freshness) -- a strict
+        # byte compare would otherwise be red every run (timestamp always differs).
         self.assertEqual(
-            actual.replace("\r\n", "\n").strip(),
-            generated.replace("\r\n", "\n").strip(),
+            gps.normalize_freshness(actual),
+            gps.normalize_freshness(generated),
             "docs/status/platform-status.md is out of sync with generator output!"
         )
 

@@ -45,6 +45,16 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MATRIX_PATH = ROOT / "docs" / "status" / "platform-matrix.yaml"
 DEFAULT_OUTPUT_PATH = ROOT / "docs" / "status" / "platform-status.md"
 
+
+def normalize_freshness(md_text: str) -> str:
+    """t196: Generated At is generator-execution time, so it is normalized out of
+    byte comparisons (a re-check seconds later would otherwise look stale). Single
+    source for both --check and the adversarial strict-sync gate
+    (tests/scripts/test_platform_matrix_adversarial.py); same discipline as the
+    capability_closure EOL normalization precedent."""
+    return re.sub(r"> \*\*Generated At\*\*: .*", "",
+                  md_text.replace("\r\n", "\n")).strip()
+
 VALID_STATUS_ENUMS = {
     "verified",
     "probe",
@@ -427,7 +437,12 @@ def generate_markdown(data: dict, head_commit: Optional[str] = None) -> str:
             head_commit = eager_git
         else:
             head_commit = _yaml_evidence_head(data, default="unknown")
-    last_updated = data.get("last_updated", datetime.datetime.now(datetime.timezone.utc).isoformat())
+    # t196: generated_at = generator EXECUTION time. The yaml's legacy
+    # `last_updated` was a hand-edited value (it drifted from reality) and is
+    # no longer read -- an old yaml carrying the key is simply ignored. The
+    # timestamp is display-only and is normalized out of the --check byte
+    # comparison (see below).
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     platforms = data.get("platforms", {})
 
     lines = []
@@ -438,7 +453,7 @@ def generate_markdown(data: dict, head_commit: Optional[str] = None) -> str:
     lines.append("")
     lines.append(f"> **Single Source of Truth**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  ")
     lines.append(f"> **Evidence HEAD Commit**: `{head_commit}`  ")
-    lines.append(f"> **Last Synchronized**: `{last_updated}`  ")
+    lines.append(f"> **Generated At**: `{generated_at}`  ")
     lines.append(f"> **Verification Status**: 100% Evidence-Backed (Zero Undocumented Claims)")
     lines.append("")
     lines.append("---")
@@ -628,7 +643,7 @@ def export_json(data: dict) -> str:
     summary = {
         "schema_version": data.get("schema_version", "1.0.0"),
         "evidence_head_commit": _yaml_evidence_head(data),
-        "last_updated": data.get("last_updated", ""),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "platforms": {},
     }
 
@@ -769,8 +784,11 @@ def main():
                 sys.exit(1)
 
         existing_md = args.output.read_text(encoding="utf-8")
-        # Normalize line endings for cross-platform comparison
-        if existing_md.replace("\r\n", "\n").strip() != generated_md.replace("\r\n", "\n").strip():
+        # t196: Generated At is generator-execution time, so it is normalized
+        # out of the byte comparison (a re-check seconds later would otherwise
+        # look stale). See module-level normalize_freshness() for the single
+        # source shared with the adversarial strict-sync gate.
+        if normalize_freshness(existing_md) != normalize_freshness(generated_md):
             print(
                 f"[ERROR] '{args.output}' is stale or modified. Run `python scripts/generate_platform_status.py` to regenerate.",
                 file=sys.stderr,
