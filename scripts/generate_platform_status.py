@@ -9,7 +9,7 @@ and generates docs/status/platform-status.md.
 Supports:
   --check        CI mode: validates schema and ensures docs/status/platform-status.md is fresh (exit 0 on match, 1 on diff/error).
                  Drift guard: when the effective head (--head or the auto-discovered evidence HEAD -- the
-                 newest commit touching any path outside docs/) differs from the yaml 'head_commit', the
+                 newest commit touching any path outside docs/) differs from the yaml 'evidence_head_commit', the
                  check fails loudly (exit 1) with a fix hint.
   --head <sha>   Explicit matrix head commit. Priority: --head > evidence HEAD > yaml static value; a
                  missing git env prints a [WARN] and falls back to yaml.
@@ -352,7 +352,7 @@ def _git_evidence_head() -> Optional[str]:
         and (shallow_proc.stdout or "").strip() == "true"
     ):
         print(
-            "[WARN] git repo is shallow; evidence HEAD unavailable -- using matrix yaml head_commit.",
+            "[WARN] git repo is shallow; evidence HEAD unavailable -- using matrix yaml evidence_head_commit.",
             file=sys.stderr,
         )
         return None
@@ -372,6 +372,19 @@ def _git_evidence_head() -> Optional[str]:
     return head[:40] if head else None
 
 
+def _yaml_evidence_head(data: dict, default: str = "") -> str:
+    """Read the matrix's evidence head commit (key 'evidence_head_commit' wins).
+
+    Backward compatibility: a legacy 'head_commit' key is still accepted, so
+    pre-migration boards keep working until the docs sync task renames the key.
+    The generator itself never writes the YAML (read-only consumer).
+    """
+    val = data.get("evidence_head_commit")
+    if val is None:
+        val = data.get("head_commit")
+    return str(val).strip() if val is not None else default
+
+
 def resolve_head_commit(cli_head: Optional[str], data: dict) -> Tuple[Optional[str], str]:
     """Resolve the effective matrix head commit.
 
@@ -388,11 +401,10 @@ def resolve_head_commit(cli_head: Optional[str], data: dict) -> Tuple[Optional[s
     git_head = _git_evidence_head()
     if git_head:
         return git_head, "git"
-    yaml_head = data.get("head_commit")
-    yaml_str = str(yaml_head).strip() if yaml_head is not None else ""
+    yaml_str = _yaml_evidence_head(data)
     print(
         f"[WARN] evidence HEAD unavailable (git missing, ROOT not a repository, or shallow clone); "
-        f"falling back to matrix yaml head_commit={yaml_str!r}.",
+        f"falling back to matrix evidence_head_commit={yaml_str!r}.",
         file=sys.stderr,
     )
     return (yaml_str if yaml_str else None), "yaml"
@@ -414,7 +426,7 @@ def generate_markdown(data: dict, head_commit: Optional[str] = None) -> str:
         if eager_git:
             head_commit = eager_git
         else:
-            head_commit = data.get("head_commit", "unknown")
+            head_commit = _yaml_evidence_head(data, default="unknown")
     last_updated = data.get("last_updated", datetime.datetime.now(datetime.timezone.utc).isoformat())
     platforms = data.get("platforms", {})
 
@@ -425,7 +437,7 @@ def generate_markdown(data: dict, head_commit: Optional[str] = None) -> str:
     lines.append("# Caesura (AmeKAG) — Unified Platform Status Matrix")
     lines.append("")
     lines.append(f"> **Single Source of Truth**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  ")
-    lines.append(f"> **Repository HEAD Commit**: `{head_commit}`  ")
+    lines.append(f"> **Evidence HEAD Commit**: `{head_commit}`  ")
     lines.append(f"> **Last Synchronized**: `{last_updated}`  ")
     lines.append(f"> **Verification Status**: 100% Evidence-Backed (Zero Undocumented Claims)")
     lines.append("")
@@ -615,7 +627,7 @@ def export_json(data: dict) -> str:
     platforms = data.get("platforms", {})
     summary = {
         "schema_version": data.get("schema_version", "1.0.0"),
-        "head_commit": data.get("head_commit", ""),
+        "evidence_head_commit": _yaml_evidence_head(data),
         "last_updated": data.get("last_updated", ""),
         "platforms": {},
     }
@@ -734,7 +746,7 @@ def main():
         # denote the same commit and count as synced. An unresolved effective
         # head (no --head and no usable git) skips this check -- a missing git
         # env must not falsely red the freshness gate.
-        yaml_head_raw = str(data.get("head_commit", "") or "").strip()
+        yaml_head_raw = _yaml_evidence_head(data)
         if yaml_head_raw and effective_head is not None:
             same_commit = (
                 effective_head == yaml_head_raw
@@ -743,12 +755,12 @@ def main():
             )
             if not same_commit:
                 print(
-                    f"[ERROR] Platform matrix data lags the code HEAD: yaml head_commit={yaml_head_raw}, "
+                    f"[ERROR] Platform matrix data lags the code HEAD: yaml evidence_head_commit={yaml_head_raw}, "
                     f"effective HEAD={effective_head} (source: {head_source})",
                     file=sys.stderr,
                 )
                 print(
-                    "        Fix: update `head_commit` in the matrix YAML "
+                    "        Fix: update `evidence_head_commit` in the matrix YAML "
                     "(docs/status/platform-matrix.yaml) to the current evidence HEAD and re-run the generator "
                     "(python scripts/generate_platform_status.py), or run `--check --head <sha>` to verify the docs "
                     "against a specific commit only.",

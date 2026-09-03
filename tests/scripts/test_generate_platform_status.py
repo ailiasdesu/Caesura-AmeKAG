@@ -60,7 +60,7 @@ version: 1
 schema_version: "1.0.0"
 generated_document: "platform-status.md"
 last_updated: "2026-09-03T01:42:00Z"
-head_commit: "{FAKE_YAML_HEAD}"
+evidence_head_commit: "{FAKE_YAML_HEAD}"
 
 allowed_status_enums:
   - verified
@@ -258,11 +258,11 @@ class TestHeadDriftGate(unittest.TestCase):
         code, out, err = run_main(self._argv_check())
         self.assertEqual(code, 1, f"S2 expected exit 1, got {code}")
         self.assertIn("lags the code HEAD", err)
-        self.assertIn(f"yaml head_commit={FAKE_YAML_HEAD}", err)
+        self.assertIn(f"yaml evidence_head_commit={FAKE_YAML_HEAD}", err)
         self.assertIn("effective HEAD=", err)
         self.assertIn("(source: git)", err)
         self.assertIn("Fix:", err)
-        self.assertIn("update `head_commit`", err)
+        self.assertIn("update `evidence_head_commit`", err)
 
     def test_s2b_drift_pinned_git_exit1_deterministic(self):
         """Pinned-evidence variant of S2: deterministic even where git is broken."""
@@ -296,7 +296,7 @@ class TestHeadDriftGate(unittest.TestCase):
             code, out, err = run_main(self._argv_gen())
             self.assertEqual(code, 0, f"S4 generation failed: {err}")
             self.assertIn("[WARN]", err)
-            self.assertIn(f"falling back to matrix yaml head_commit={FAKE_YAML_HEAD!r}", err)
+            self.assertIn(f"falling back to matrix evidence_head_commit={FAKE_YAML_HEAD!r}", err)
 
         with git_broken():
             code, out, err = run_main(self._argv_check())
@@ -332,7 +332,8 @@ class TestHeadDriftGate(unittest.TestCase):
         """--json behavior unchanged: it reports the yaml head_commit value."""
         code, out, err = run_main(["--json", "--matrix", str(self.yaml), "--output", str(self.md)])
         self.assertEqual(code, 0, f"S6 failed: {err}")
-        self.assertIn(f'"head_commit": "{FAKE_YAML_HEAD}"', out)
+        self.assertIn(f'"evidence_head_commit": "{FAKE_YAML_HEAD}"', out)
+        self.assertNotIn('"head_commit":', out, "legacy JSON key must be gone")
 
     def test_s7_short_sha_prefix_counts_as_synced(self):
         """A yaml head_commit that is a short prefix of the effective HEAD counts as synced."""
@@ -418,7 +419,7 @@ class TestHeadDriftGate(unittest.TestCase):
             code, out, err = run_main(self._argv_gen())
             self.assertEqual(code, 0, f"S9 generation failed: {err}")
             self.assertIn("[WARN] git repo is shallow; evidence HEAD unavailable", err)
-            self.assertIn("falling back to matrix yaml head_commit=", err)
+            self.assertIn("falling back to matrix evidence_head_commit=", err)
         self.assertEqual(len(calls), 1, f"git must stop after the is-shallow probe, got {calls}")
         self.assertEqual(calls[0][:3], ["git", "rev-parse", "--is-shallow-repository"])
 
@@ -437,6 +438,37 @@ class TestHeadDriftGate(unittest.TestCase):
         self.assertEqual(code, 1, f"S9 tampered md expected exit 1, got {code}")
         self.assertIn("is stale or modified", err)
         self.assertNotIn("lags the code HEAD", err)
+
+    def test_s10_legacy_head_commit_key_still_read(self):
+        """A pre-migration yaml using the legacy 'head_commit' key still works.
+
+        The new 'evidence_head_commit' key wins when both exist; when only the
+        legacy key is present it feeds generation, the drift compare (with the
+        renamed message wording) and the JSON export alike.
+        """
+        legacy_yaml = MINIMAL_YAML.replace("evidence_head_commit:", "head_commit:")
+        self.yaml.write_text(legacy_yaml, encoding="utf-8")
+
+        # Baseline md (same effective head as the yaml value).
+        code, out, err = run_main(self._argv_gen(["--head", FAKE_YAML_HEAD]))
+        self.assertEqual(code, 0, f"S10 legacy generation failed: {err}")
+        self.assertIn(f"`{FAKE_YAML_HEAD}`", self.md.read_text(encoding="utf-8"))
+
+        # Drift compare reads the legacy value: a differing evidence HEAD reds
+        # with the renamed wording.
+        with git_head_pinned(PINNED_GIT_HEAD):
+            code, out, err = run_main(self._argv_check())
+        self.assertEqual(code, 1, f"S10 legacy drift expected exit 1, got {code}")
+        self.assertIn(f"yaml evidence_head_commit={FAKE_YAML_HEAD}", err)
+
+        # --head equal to the legacy value -> synced -> exit 0.
+        code, out, err = run_main(self._argv_check(["--head", FAKE_YAML_HEAD]))
+        self.assertEqual(code, 0, f"S10 legacy sync expected exit 0, got {code}; stderr={err!r}")
+
+        # JSON export carries the legacy value under the new key.
+        code, out, err = run_main(["--json", "--matrix", str(self.yaml), "--output", str(self.md)])
+        self.assertEqual(code, 0, f"S10 json failed: {err}")
+        self.assertIn(f'"evidence_head_commit": "{FAKE_YAML_HEAD}"', out)
 
     def test_resolve_priority_cli_git_yaml(self):
         """resolve_head_commit priority: --head > evidence HEAD > yaml (direct unit check)."""
