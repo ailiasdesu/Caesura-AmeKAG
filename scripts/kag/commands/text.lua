@@ -2,7 +2,7 @@
 --  Caesura (AmeKAG) ?? kag/commands/text.lua
 --  Phase 4: KAG text tag handlers ?? [ch], [text], [l], [r], [er], [p]
 --  Manages character dialog display, backlog, and text cursor state.
---  All rendering delegates to backend.font_render_text / backend.font_clear.
+--  All rendering delegates to backend.render_text / backend.clear_text.
 -- =============================================================================
 
 local backend = require("backend")
@@ -1028,7 +1028,8 @@ end
 -- =============================================================================
 --  [ruby text="?h??" ruby="????"]
 --  Render base text with ruby (furigana) annotation above it.
---  Delegates to backend.text_render_ruby for glyph layout.
+--  Delegates to TextScene.add_ruby -- glyph layout via TextLayout.measure_ruby
+--  and rendering via backend.render_ruby (KAGBinding luaL_Reg "render_ruby").
 -- =============================================================================
 
 function TextCommands.ruby(ctx, params)

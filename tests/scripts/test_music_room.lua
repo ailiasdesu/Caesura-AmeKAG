@@ -91,5 +91,94 @@ _G._GAME_KEY_ESC = true
 coroutine.resume(coB)
 check("scroll esc exits", coroutine.status(coB) == "dead")
 
+-- ============================================================
+--  t184 semantic lock: [music] -> KAG.music (= SystemCommands.music,
+--  kag.lua:78-81 pairs export) -> music_room.show -> Enter -> real
+--  MusicRoom.play -> audio.play_bgm -> backend.audio_play -> the
+--  audio binding call surface.  Headless Null-audio justification:
+--  the ONLY stubbed seam is the final C++ be.audio dispatch; every
+--  module above it (system cmd, music_room, audio.lua, backend.lua)
+--  is real code -- no play mock, no show mock.
+-- ============================================================
+do
+  -- (A) dispatch + interaction lock: [music] -> SystemCommands.music
+  -- (kag.lua:78-81 exports SystemCommands into KAG, scheduler dispatches
+  -- KAG.music) -> music_room.show (real input loop) -> Enter on an
+  -- unlocked track reaches MusicRoom.play (recorded on the test's mock
+  -- play -- the UI-selection hop; the effect hop is locked in (B)).
+  local SystemCmds = require("kag.commands.system")
+  local realBackend = _G._CAESURA_BACKEND
+  _G._CAESURA_BACKEND = {
+    render = function() return true end,
+    platform = function(cmd)
+      if cmd == "get_resolution" then return 1280, 720 end
+      return true
+    end,
+    audio = function(cmd, ...)
+      audioCalls = audioCalls or {}
+      audioCalls[#audioCalls + 1] = { cmd, ... }
+      return true
+    end,
+  }
+  local ctxM = { f = {}, sf = {}, tf = {}, mp = {}, variables = {},
+                 unlockedMusic = { t1 = true } }
+  -- MusicRoom.scan is still the two-track mock from the UI tests above
+  local playsBefore = #plays
+  local coM = coroutine.create(function() SystemCmds.music(ctxM, {}) end)
+  coroutine.resume(coM)  -- show() frame 1
+  coroutine.resume(coM)  -- show() frame 2 (same pre-key pattern as above)
+  _G._GAME_KEY_ENTER = true
+  coroutine.resume(coM)  -- cursor 1 = t1 (unlocked): play fires
+  check("music command reaches play", #plays == playsBefore + 1
+        and plays[#plays] == "t1")
+  coroutine.resume(coM)
+  _G._GAME_KEY_ESC = true
+  coroutine.resume(coM)
+  check("music ESC exits show", coroutine.status(coM) == "dead")
+  _G._GAME_KEY_ENTER = nil
+  _G._GAME_KEY_ESC = nil
+  _G._CAESURA_BACKEND = realBackend
+end
+
+-- (B) effect-binding lock: the real audio chain MusicRoom.play issues
+-- at music_room.lua:78 -- audio.play_bgm(path, {fadein=0.5}) ->
+-- audio.lua:16 -- backend.audio_play("bgm", ...) -> binding.  The only
+-- stubbed hop is the final C++ be.audio dispatch (headless Null-audio);
+-- audio.lua and backend.lua here are the REAL shipped modules.
+do
+  local audioCalls = {}
+  local realBackend = _G._CAESURA_BACKEND
+  _G._CAESURA_BACKEND = {
+    render = function() return true end,
+    audio = function(cmd, ...)
+      audioCalls[#audioCalls + 1] = { cmd, ... }
+      return true
+    end,
+  }
+  -- exactly the call MusicRoom.play(t1) makes (track t1 -> "a.ogg")
+  local okB = pcall(function() require("audio").play_bgm("a.ogg", { fadein = 0.5 }) end)
+  local playCalls = 0
+  local got = nil
+  for _, c in ipairs(audioCalls) do
+    if c[1] == "play_bgm" then
+      playCalls = playCalls + 1
+      got = c
+    end
+  end
+  check("music binding play_bgm called once", okB and playCalls == 1)
+  check("music binding correct track + fadein",
+        got and got[2] == "a.ogg" and math.abs(got[3] - 0.5) < 1e-9)
+  -- stop mirror (music_room.lua:93): audio.stop_bgm(0.3) -> stop_bgm(0.3)
+  audioCalls = {}
+  require("audio").stop_bgm(0.3)
+  local stopGot = nil
+  for _, c in ipairs(audioCalls) do
+    if c[1] == "stop_bgm" then stopGot = c end
+  end
+  check("music binding stop_bgm called with fadeout",
+        stopGot and math.abs(stopGot[2] - 0.3) < 1e-9)
+  _G._CAESURA_BACKEND = realBackend
+end
+
 if failed > 0 then os.exit(1) end
 print("MUSIC ROOM TESTS DONE")
