@@ -4,14 +4,26 @@
 
 #include "archive/api/IArchiveWriter.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cctype>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 using Json = nlohmann::json;
@@ -74,6 +86,253 @@ std::string confineToBuild(const std::string& p) {
     if (norm.rfind("build/", 0) != 0) norm = "build/" + norm;
     return norm;
 }
+
+#if defined(_WIN32)
+
+bool isRegularFile(const fs::path& path) {
+    std::error_code ec;
+    return fs::is_regular_file(path, ec) && !ec;
+}
+
+std::wstring lowerPathForCompare(const fs::path& path) {
+    std::wstring value = path.generic_wstring();
+    for (wchar_t& ch : value) {
+        if (ch == L'\\') ch = L'/';
+        if (ch >= L'A' && ch <= L'Z') {
+            ch = static_cast<wchar_t>(ch - L'A' + L'a');
+        }
+    }
+    return value;
+}
+
+bool isWindowsSystemBash(const fs::path& path) {
+    const std::wstring value = lowerPathForCompare(path);
+    return value.find(L"/system32/") != std::wstring::npos;
+}
+
+fs::path findGitBash() {
+    // CAESURA_BASH is an explicit operator override. It is intentionally
+    // checked before PATH so a machine with WSL's System32/bash.exe first in
+    // PATH cannot silently route package_game.sh through WSL.
+    if (const wchar_t* env = _wgetenv(L"CAESURA_BASH")) {
+        if (*env) {
+            const fs::path overridePath(env);
+            if (isRegularFile(overridePath)) return overridePath;
+        }
+    }
+
+    std::vector<fs::path> candidates;
+    const auto addGitRoot = [&candidates](const wchar_t* root) {
+        if (!root || !*root) return;
+        const fs::path base(root);
+        candidates.push_back(base / L"Git" / L"bin" / L"bash.exe");
+        candidates.push_back(base / L"Git" / L"usr" / L"bin" / L"bash.exe");
+    };
+    addGitRoot(_wgetenv(L"ProgramW6432"));
+    addGitRoot(_wgetenv(L"ProgramFiles"));
+    addGitRoot(_wgetenv(L"ProgramFiles(x86)"));
+    if (const wchar_t* localAppData = _wgetenv(L"LOCALAPPDATA")) {
+        if (*localAppData) {
+            candidates.push_back(fs::path(localAppData) / L"Programs" / L"Git" /
+                                 L"bin" / L"bash.exe");
+            candidates.push_back(fs::path(localAppData) / L"Programs" / L"Git" /
+                                 L"usr" / L"bin" / L"bash.exe");
+        }
+    }
+    for (const auto& candidate : candidates) {
+        if (isRegularFile(candidate)) return candidate;
+    }
+
+    // Git can be installed outside the standard Program Files locations. Walk
+    // PATH ourselves rather than asking CreateProcess/shutil.which to resolve
+    // the bare name: Windows puts System32/bash.exe (the WSL launcher) ahead
+    // of PATH. Any other explicit PATH candidate is allowed: official
+    // PortableGit installs commonly live under names such as PortableGit or
+    // GitPortable and do not contain a literal /Git/ path component.
+    if (const wchar_t* pathEnv = _wgetenv(L"PATH")) {
+        const std::wstring pathList(pathEnv);
+        size_t start = 0;
+        while (start <= pathList.size()) {
+            const size_t end = pathList.find(L';', start);
+            std::wstring piece = pathList.substr(
+                start, end == std::wstring::npos ? std::wstring::npos : end - start);
+            while (piece.size() >= 2 && piece.front() == L'"' && piece.back() == L'"') {
+                piece = piece.substr(1, piece.size() - 2);
+            }
+            if (!piece.empty()) {
+                const fs::path candidate = fs::path(piece) / L"bash.exe";
+                if (isRegularFile(candidate) && !isWindowsSystemBash(candidate)) {
+                    return candidate;
+                }
+            }
+            if (end == std::wstring::npos) break;
+            start = end + 1;
+        }
+    }
+    return {};
+}
+
+std::wstring quoteWindowsProcessArg(const std::wstring& raw) {
+    std::wstring quoted;
+    quoted.reserve(raw.size() + 4);
+    quoted.push_back(L'"');
+    size_t backslashes = 0;
+    for (const wchar_t ch : raw) {
+        if (ch == L'\\') {
+            ++backslashes;
+            continue;
+        }
+        if (ch == L'"') {
+            quoted.append(backslashes * 2 + 1, L'\\');
+            quoted.push_back(ch);
+            backslashes = 0;
+            continue;
+        }
+        quoted.append(backslashes, L'\\');
+        backslashes = 0;
+        quoted.push_back(ch);
+    }
+    quoted.append(backslashes * 2, L'\\');
+    quoted.push_back(L'"');
+    return quoted;
+}
+
+std::wstring widenAscii(const std::string& raw) {
+    std::wstring widened;
+    widened.reserve(raw.size());
+    for (const unsigned char ch : raw) {
+        widened.push_back(static_cast<wchar_t>(ch));
+    }
+    return widened;
+}
+
+bool runProcessCapture(const fs::path& executable,
+                       const std::vector<std::wstring>& arguments,
+                       std::string& output,
+                       int& exitCode,
+                       DWORD& spawnError) {
+    SECURITY_ATTRIBUTES security{};
+    security.nLength = sizeof(security);
+    security.bInheritHandle = TRUE;
+
+    HANDLE readPipe = nullptr;
+    HANDLE writePipe = nullptr;
+    if (!CreatePipe(&readPipe, &writePipe, &security, 0)) {
+        spawnError = GetLastError();
+        return false;
+    }
+
+    HANDLE nullInput = CreateFileW(
+        L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &security,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (nullInput == INVALID_HANDLE_VALUE) {
+        spawnError = GetLastError();
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+    if (!SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0)) {
+        spawnError = GetLastError();
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+
+    std::wstring commandLine = quoteWindowsProcessArg(executable.native());
+    for (const auto& argument : arguments) {
+        commandLine.push_back(L' ');
+        commandLine += quoteWindowsProcessArg(argument);
+    }
+    std::vector<wchar_t> mutableCommand(commandLine.begin(), commandLine.end());
+    mutableCommand.push_back(L'\0');
+
+    SIZE_T attributeBytes = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
+    if (attributeBytes == 0) {
+        spawnError = GetLastError();
+        CloseHandle(nullInput);
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+    std::vector<unsigned char> attributeStorage(attributeBytes);
+    auto* attributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
+        attributeStorage.data());
+    if (!InitializeProcThreadAttributeList(attributeList, 1, 0, &attributeBytes)) {
+        spawnError = GetLastError();
+        CloseHandle(nullInput);
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+    HANDLE inheritedHandles[] = {nullInput, writePipe};
+    if (!UpdateProcThreadAttribute(
+            attributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+            inheritedHandles, sizeof(inheritedHandles), nullptr, nullptr)) {
+        spawnError = GetLastError();
+        DeleteProcThreadAttributeList(attributeList);
+        CloseHandle(nullInput);
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+
+    STARTUPINFOEXW startup{};
+    startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = nullInput;
+    startup.StartupInfo.hStdOutput = writePipe;
+    startup.StartupInfo.hStdError = writePipe;
+    startup.lpAttributeList = attributeList;
+
+    PROCESS_INFORMATION process{};
+    const BOOL created = CreateProcessW(
+        executable.c_str(), mutableCommand.data(), nullptr, nullptr, TRUE,
+        CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr,
+        &startup.StartupInfo, &process);
+    DeleteProcThreadAttributeList(attributeList);
+    CloseHandle(nullInput);
+    if (!created) {
+        spawnError = GetLastError();
+        CloseHandle(readPipe);
+        CloseHandle(writePipe);
+        return false;
+    }
+    CloseHandle(writePipe);
+
+    constexpr size_t kMaxLogBytes = 1u << 20;
+    char buffer[4096];
+    DWORD bytesRead = 0;
+    while (ReadFile(readPipe, buffer, sizeof(buffer), &bytesRead, nullptr) &&
+           bytesRead > 0) {
+        if (output.size() < kMaxLogBytes) {
+            const size_t remaining = kMaxLogBytes - output.size();
+            output.append(buffer, std::min<size_t>(bytesRead, remaining));
+        }
+    }
+    CloseHandle(readPipe);
+
+    const DWORD waitResult = WaitForSingleObject(process.hProcess, INFINITE);
+    if (waitResult != WAIT_OBJECT_0) {
+        spawnError = GetLastError();
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        return false;
+    }
+    DWORD processExit = 0;
+    if (!GetExitCodeProcess(process.hProcess, &processExit)) {
+        spawnError = GetLastError();
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        return false;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    exitCode = static_cast<int>(processExit);
+    return true;
+}
+
+#endif
 
 } // namespace
 
@@ -160,12 +419,18 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
                                    {"error", "scripts/package_game.sh not found (engine must run inside the repository)"}}};
     }
 
-    std::string scriptArg;
     try {
         const fs::path repoRoot = scriptPath.parent_path().parent_path();
         if (!fs::exists(repoRoot / fs::path(sp))) {
             return ServiceResult::err(400, "storyPath not found: " + sp);
         }
+    } catch (...) {
+        return ServiceResult{503, {{"ok", false},
+                                   {"error", "failed to resolve storyPath against the engine source root"}}};
+    }
+#if !defined(_WIN32)
+    std::string scriptArg;
+    try {
         scriptArg = fs::relative(scriptPath, m_ctx.buildRoot()).generic_string();
     } catch (...) {
         scriptArg.clear();
@@ -177,18 +442,34 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     for (auto& ch : scriptArg) {
         if (ch == static_cast<char>(92)) ch = '/';
     }
-
+#endif
+    std::string output;
+    int exitCode = -1;
+#if defined(_WIN32)
+    const fs::path bashPath = findGitBash();
+    if (bashPath.empty()) {
+        return ServiceResult{503, {{"ok", false},
+                                   {"error", "Git Bash not found (set CAESURA_BASH to bash.exe)"},
+                                   {"outputDir", outDir}}};
+    }
+    DWORD spawnError = ERROR_SUCCESS;
+    if (!runProcessCapture(
+            bashPath,
+            {scriptPath.native(), L"--out", widenAscii(outDir), widenAscii(sp)},
+            output, exitCode, spawnError)) {
+        return ServiceResult{500, {{"ok", false},
+                                   {"error", "failed to spawn Git Bash (Windows error " +
+                                                 std::to_string(spawnError) + ")"},
+                                   {"outputDir", outDir}}};
+    }
+#else
     const std::string command = "bash \"" + scriptArg + "\" --out \"" +
                                 outDir + "\" \"" + sp + "\" 2>&1";
-    std::string output;
-#if defined(_WIN32)
-    FILE* pipe = _popen(command.c_str(), "r");
-#else
     FILE* pipe = ::popen(command.c_str(), "r");
-#endif
     if (!pipe) {
+        const char* const spawnError = "failed to spawn bash (is git bash on PATH?)";
         return ServiceResult{500, {{"ok", false},
-                                   {"error", "failed to spawn bash (is git bash on PATH?)"},
+                                   {"error", spawnError},
                                    {"outputDir", outDir}}};
     }
     constexpr size_t kMaxLogBytes = 1u << 20;
@@ -197,10 +478,7 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     while ((chunk = fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
         if (output.size() < kMaxLogBytes) output.append(buffer, chunk);
     }
-#if defined(_WIN32)
-    const int exitCode = _pclose(pipe);
-#else
-    const int exitCode = ::pclose(pipe);
+    exitCode = ::pclose(pipe);
 #endif
     const std::string tail = logTailOf(output);
 

@@ -36,8 +36,59 @@ PACKAGE = ROOT / "scripts" / "package_game.sh"
 GEN_INDEX = ROOT / "web" / "gen-index.mjs"
 SKIP_EXIT = 77
 
-BASH = shutil.which("bash")
 NODE = shutil.which("node")
+
+
+def _is_windows_system_bash(path):
+    """Return true for the WSL launcher exposed as System32/bash.exe."""
+    if not path:
+        return False
+    normalized = str(path).replace("\\", "/").lower()
+    return "/windows/system32/" in normalized
+
+
+def _find_windows_path_bash(path_value):
+    for raw_entry in path_value.split(";"):
+        entry = raw_entry.strip().strip('"')
+        if not entry:
+            continue
+        candidate = Path(entry) / "bash.exe"
+        if candidate.is_file() and not _is_windows_system_bash(candidate):
+            return str(candidate)
+    return None
+
+
+def find_git_bash():
+    """Resolve Git Bash without allowing Windows' WSL launcher to win."""
+    override = os.environ.get("CAESURA_BASH", "").strip()
+    if override and Path(override).is_file():
+        return override
+    if os.name != "nt":
+        return shutil.which("bash")
+
+    candidates = []
+    for variable in ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"):
+        root = os.environ.get(variable, "").strip()
+        if root:
+            candidates.extend((
+                Path(root) / "Git" / "bin" / "bash.exe",
+                Path(root) / "Git" / "usr" / "bin" / "bash.exe",
+            ))
+    local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+    if local_app_data:
+        candidates.extend((
+            Path(local_app_data) / "Programs" / "Git" / "bin" / "bash.exe",
+            Path(local_app_data) / "Programs" / "Git" / "usr" / "bin" / "bash.exe",
+        ))
+
+    for candidate in candidates:
+        if Path(candidate).is_file():
+            return str(candidate)
+
+    return _find_windows_path_bash(os.environ.get("PATH", ""))
+
+
+BASH = find_git_bash()
 
 
 def posix(p):
@@ -115,6 +166,36 @@ class TestGoodPackage(unittest.TestCase):
             rc, out = run_verify(make_dist(tmp, story_lua=story))
             self.assertEqual(rc, 0, out)
             self.assertIn("FAIL 0", out)
+
+    def test_verifier_package_path_with_unicode_parentheses_pass(self):
+        # The repository itself has both characters in its Windows path, and
+        # this temp prefix makes the package argument exercise the same shell
+        # quoting boundary instead of relying on an ASCII-only temp path.
+        with tempfile.TemporaryDirectory(prefix="Caesura(AmeKAG)_中文_") as tmp:
+            rc, out = run_verify(make_dist(tmp))
+            self.assertEqual(rc, 0, out)
+            self.assertIn("FAIL 0", out)
+
+
+class TestBashResolution(unittest.TestCase):
+
+    def test_runner_does_not_select_windows_system_bash(self):
+        self.assertIsNotNone(BASH, "a bash interpreter is required by this suite")
+        if os.name == "nt":
+            self.assertFalse(_is_windows_system_bash(BASH), BASH)
+
+    def test_path_scan_skips_system32_and_finds_later_portable_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            system_bin = Path(tmp) / "Windows" / "System32"
+            portable_bin = Path(tmp) / "PortableGit" / "bin"
+            system_bin.mkdir(parents=True)
+            portable_bin.mkdir(parents=True)
+            (system_bin / "bash.exe").write_bytes(b"")
+            (portable_bin / "bash.exe").write_bytes(b"")
+
+            resolved = _find_windows_path_bash(
+                "%s;%s" % (system_bin, portable_bin))
+            self.assertEqual(resolved, str(portable_bin / "bash.exe"))
 
 
 class TestBrokenPackageGoesRed(unittest.TestCase):
