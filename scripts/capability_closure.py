@@ -1040,6 +1040,111 @@ def tested_count(name):
 # status_machine for comparison). Unknown values are rejected loudly.
 VALID_OVERRIDE_STATUS = {"CLOSED", "PARTIAL", "EXTRA", "UNWIRED", "EXPERIMENTAL"}
 
+# t197 (032 5): platform_tested / packaged protocol value domain. Legal
+# platform_tested = missing / "-" / comma-separated subset of PLATFORM_ENUMS
+# (canonical form: deduped + sorted); legal packaged = missing / "-" / non-empty
+# string <= MAX_PACKAGED_LEN. Values outside the domain are migrated to "-" by
+# migrate_protocol_fields (no evidence = unverified) and any survivor is
+# rejected loudly (exit 2) -- same governance pattern as VALID_OVERRIDE_STATUS.
+PLATFORM_ENUMS = frozenset({"win", "linux", "macos", "web", "android", "ios"})
+MAX_PACKAGED_LEN = 120
+# t197 B3: legacy placeholders ("?" / "未知" / "unknown") = no evidence. They are
+# migrated to "-" even when they would satisfy the packaged string domain.
+LEGACY_PLACEHOLDER_VALUES = frozenset({"?", "未知", "unknown"})
+
+
+def normalize_platform_tested(raw):
+    """Return the canonical protocol string ('-' = no evidence) or None when the
+    value is outside the legal domain."""
+    if raw is None or raw == "":
+        return "-"
+    if not isinstance(raw, str):
+        return None
+    if raw == "-":
+        return "-"
+    parts = [p.strip() for p in raw.split(",")]
+    if not parts or any(p not in PLATFORM_ENUMS for p in parts):
+        return None
+    return ",".join(sorted(set(parts)))
+
+
+def normalize_packaged(raw):
+    if raw is None or raw == "":
+        return "-"
+    if not isinstance(raw, str):
+        return None
+    if raw == "-":
+        return "-"
+    v = raw.strip()
+    if not v or len(v) > MAX_PACKAGED_LEN:
+        return None
+    return v
+
+
+def migrate_protocol_fields(data, overrides_path):
+    """t197 B3: survey + migrate non-protocol platform_tested/packaged values to
+    '-' (no evidence = unverified). Rewrites the overrides JSON only when a
+    change was made. Returns (bad_before_pt, bad_before_pk, changed_pt,
+    changed_pk): bad_before_* counts values outside the protocol domain
+    (migrated to '-'); changed_* counts all rewrites (incl. canonical
+    dedupe/sort). After migration the bad counts must be 0."""
+    cmds = data.get("commands", {})
+    bad_before_pt = bad_before_pk = 0
+    changed_pt = changed_pk = 0
+    for k, v in cmds.items():
+        if not isinstance(v, dict):
+            continue
+        for key in ("platform_tested", "packaged"):
+            if key not in v:
+                continue
+            old = v[key]
+            norm = (normalize_platform_tested(old) if key == "platform_tested"
+                    else normalize_packaged(old))
+            if old in LEGACY_PLACEHOLDER_VALUES or norm is None:
+                if key == "platform_tested":
+                    bad_before_pt += 1
+                    changed_pt += 1
+                else:
+                    bad_before_pk += 1
+                    changed_pk += 1
+                v[key] = "-"
+            elif norm != old:
+                v[key] = norm
+                if key == "platform_tested":
+                    changed_pt += 1
+                else:
+                    changed_pk += 1
+    if changed_pt or changed_pk:
+        overrides_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(overrides_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.write(NL)
+    return bad_before_pt, bad_before_pk, changed_pt, changed_pk
+
+
+def validate_protocol_fields(commands):
+    """t197 B1/B2: return [(name, field, value)] for values outside the
+    protocol domain (the scanner exits 2 when non-empty)."""
+    bad = []
+    for k, v in commands.items():
+        if not isinstance(v, dict):
+            continue
+        pt = v.get("platform_tested", "-")
+        if normalize_platform_tested(pt) is None:
+            bad.append((k, "platform_tested", pt))
+        pk = v.get("packaged", "-")
+        if normalize_packaged(pk) is None:
+            bad.append((k, "packaged", pk))
+    return bad
+
+
+def platform_reported(raw):
+    return normalize_platform_tested(raw) not in (None, "-")
+
+
+def packaged_reported(raw):
+    return normalize_packaged(raw) not in (None, "-")
+
 
 def load_overrides(known_names):
     if not OVERRIDES.exists():
@@ -1060,6 +1165,21 @@ def load_overrides(known_names):
         print("[closure] ERROR: overrides 'status' values must be one of "
               + ", ".join(sorted(VALID_OVERRIDE_STATUS)) + ": "
               + ", ".join(k + "=" + str(s) for k, s in bad_status))
+        sys.exit(2)
+    # t197 B3: migrate non-protocol platform_tested/packaged to '-' (no
+    # evidence = unverified); prints survey/migration counts.
+    before = migrate_protocol_fields(data, OVERRIDES)
+    print("[closure] t197 overrides protocol migration: platform_tested bad="
+          + str(before[0]) + "->0 (changed " + str(before[2])
+          + ") · packaged bad=" + str(before[1]) + "->0 (changed " + str(before[3]) + ")")
+    # t197 B1/B2: any survivor outside the protocol domain is a hard error.
+    bad_values = validate_protocol_fields(commands)
+    if bad_values:
+        print("[closure] ERROR: overrides protocol values illegal ("
+              + ", ".join(k + "." + f + "=" + repr(v) for k, f, v in bad_values)
+              + "); platform_tested: '-' or comma-separated subset of "
+              + ",".join(sorted(PLATFORM_ENUMS))
+              + "; packaged: '-' or non-empty string <=" + str(MAX_PACKAGED_LEN) + " chars")
         sys.exit(2)
     return commands, oos
 
@@ -1252,6 +1372,17 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("- 测试引用（Tested，启发式计数）：**" + str(n_test) + "**")
     L.append("- UNWIRED：" + str(n_unw) + " · PARTIAL：" + str(n_part)
              + " · CLOSED：" + str(n_closed) + " · EXTRA：" + str(n_extra) + " · EXPERIMENTAL(人工)：" + str(n_exp))
+    # t197 (032 5): four-layer closure productization. The legacy stats line
+    # above is kept byte-stable (generate_plan_status.py regex depends on it).
+    n_plat4 = sum(1 for r in records
+                  if platform_reported((r.get("override") or {}).get("platform_tested")))
+    n_pkg4 = sum(1 for r in records
+                 if packaged_reported((r.get("override") or {}).get("packaged")))
+    L.append("- **四层闭包（2026-09-04）**：Structural Closed=" + str(n_closed)
+             + " · Runtime 测试证据=" + str(n_test)
+             + " · Platform=" + str(n_plat4) + " · Packaged=" + str(n_pkg4))
+    L.append("  - 列注记：Platform/Packaged 两列随 Phase2 分发逐项真实验证填充（当前无证据=诚实 0）；"
+             "Runtime=语义测试证据存在（非全部效果面验证）。")
     all_phantom = []
     seen_ph = set()
     for r in records:
@@ -1312,22 +1443,23 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
         L.append("")
     L.append("## Commands")
     L.append("")
-    L.append("| Command | Declared | Dispatched | Consumed | Tested | Observable | Platform Tested | Packaged | Status | 证据 |")
+    L.append("| Command | Declared | Dispatched | Consumed | Structural | Runtime | Platform | Packaged | Observable | 证据 |")
     L.append("|---|---|---|---|---|---|---|---|---|---|")
     for r in sorted(records, key=lambda x: x["name"]):
         ov = r.get("override") or {}
         obs = str(ov.get("observable", "?"))
-        pt = str(ov.get("platform_tested", "?"))
-        pk = str(ov.get("packaged", "?"))
+        pt = normalize_platform_tested(ov.get("platform_tested", "-")) or "-"
+        pk = normalize_packaged(ov.get("packaged", "-")) or "-"
         mark = " ⚠" if ov else ""
         phmark = "*" if (r.get("phantom_hits") or []) else ""
         L.append("| " + r["name"] + phmark + " | "
                  + ("Y" if r["declared"] else "n") + " | "
                  + ("Y" if r["dispatched"] else "n") + " | "
                  + ("Y" if r["consumed_v5"] else "n") + " | "
-                 + (str(r["tested_count"]) if r["tested_count"] else "-") + " | "
-                 + obs + mark + " | " + pt + mark + " | " + pk + mark + " | "
                  + r["status"] + (mark if (r.get("override") or {}).get("status") else "") + " | "
+                 + ("✓" + str(r["tested_count"]) if r["tested_count"] else "-") + " | "
+                 + pt + mark + " | " + pk + mark + " | "
+                 + obs + mark + " | "
                  + (r["evidence"] or "-") + " |")
     L.append("")
     L.append("## 人工覆盖（⚠）")
@@ -1476,7 +1608,10 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("1. **Consumed 为调用形文本启发式**：注释与字符串字面量先被剥离（strip_lua 状态机），要求 backend./layers./kag. 的 <ident>( 调用形，或 ctx.tf. / ctx.tf[ / ctx.tf= 字段/赋值。仍可能低估（经本地别名或工具函数间接调用时本体不含直接调用；如 palette 命令经 palette 模块间接生效——如实归 PARTIAL），也可能高估（kag. 自派发计入）。脚本不执行 Lua，无法做数据流分析。")
     L.append("2. **Dispatched 为静态解析**：commands 导出表函数/赋值键 + kag.lua 显式映射与 function KAG.x 定义 + sma_commands 子表。jump/call/endmacro 等直接 API 计入 EXTRA(api-alias)；[jump]/[if] 等 token 的流控处理由 scheduler.lua 编译期内联；两条轨道并存，本扫描器按注册键计 Dispatched。")
     L.append("3. **Tested 为原始引用计数**：tests/scripts/*.lua 与 web/*.test.js 中 [<name> 或 kag.<name> 出现次数，不区分断言与非断言上下文（注释/数组/字符串也算）。")
-    L.append("4. **Observable / Platform Tested / Packaged 首版为 ?**，可由 overrides JSON 人工覆盖（⚠ 标记）；平台运行矩阵/打包验证由 M4/release 验证工件补证。")
+    L.append("4. **Observable / Platform / Packaged 协议化（t197）**：Observable 可由 overrides JSON 人工覆盖（⚠ 标记）；"
+             "Platform（platform_tested）/ Packaged（packaged）现为协议值（默认 '-'=无证据；platform_tested 为 "
+             + ",".join(sorted(PLATFORM_ENUMS)) + " 逗号分隔去重排序子集，packaged 为 <=" + str(MAX_PACKAGED_LEN)
+             + " 字符描述），非协议值由扫描器自动迁移为 '-'（诚实未验证）；平台运行矩阵/打包验证由 Phase2 分发逐项补证。")
     L.append("5. 判级只依赖命令名静态匹配；同名异构（如 vfx 的 flash 与 transition 的 flash）以注册表实际键为准。导出表引用的子表（如 TransCommands.Bezier = Bezier）经 pairs() 一并注册为调度键——EXTRA(subtable-key)，非用户命令面。")
     L.append("6. 合约计数以 command-contracts.md 的 ### 条目数为准（表头标注 134 须一致）。")
     L.append("7. overrides JSON 的 commands 键必须落在已知命令名集合内；未知键被响亮拒绝（exit 非 0），绝不静默忽略。")
