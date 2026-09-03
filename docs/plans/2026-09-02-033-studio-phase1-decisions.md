@@ -23,7 +23,7 @@
 
 | 项 | 定稿 | 状态 |
 |---|---|---|
-| ① Web Package CI 硬门 | **A + C**（t144 简报 `build/t144-web-package-ci-hard-gate-brief.md` §B/§C）：A = Linux CI job 在 vitest 前 bake → vite build → `package_game.sh --no-web-build tests/projects/first_vn` → 新 `scripts/verify_web_package.sh` 文件断言；C = `deploy-web.yml` 发布前对打包产物跑 `web_browser_smoke.mjs`。前置修复：`scripts/web_browser_smoke.mjs:77-88` `CHROME_PATHS` 只有 Windows 路径，须支持 Linux/macOS 与 `CHROME_BIN`；deploy-web.yml:45 Node 20 → 22（全局 WebSocket 不再需要 flag） | **本批执行** |
+| ① Web Package CI 硬门 | **A + C**（t144 简报 `build/t144-web-package-ci-hard-gate-brief.md` §B/§C）：A = Linux CI job 在 vitest 前 bake → vite build → `package_game.sh --no-web-build tests/projects/first_vn` → 新 `scripts/verify_web_package.sh` 文件断言；C = `deploy-web.yml` 发布前对打包产物跑 `web_browser_smoke.mjs`。前置修复：`scripts/web_browser_smoke.mjs:77-88` `CHROME_PATHS` 只有 Windows 路径，须支持 Linux/macOS 与 `CHROME_BIN`；deploy-web.yml:45 Node 20 → 22（全局 WebSocket 不再需要 flag） | **已完成**（71ef2841→a7ff1ce9 十一提交：十提交 A+C + mapfile 修复；r26 run 33704740139 十 job 全绿，Linux job「Web package hard gate」bake→vite→package→verify 25/25；vitest 工件齐备 370 用例实跑；[B-F] 矩阵翻转已落；deploy-web.yml 首次实跑=手动 dispatch 留给用户） |
 | ② A 类 16 条流程控制命令注册 | 未拍板 | 不开工 |
 | ③ Showcase D1–D5（030 §7.1） | 未拍板 | 不开工 |
 

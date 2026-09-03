@@ -1,8 +1,8 @@
 version: 1
 schema_version: "1.0.0"
 generated_document: "docs/status/platform-status.md"
-last_updated: "2026-08-27T15:20:00Z"
-head_commit: "6053024b"
+last_updated: "2026-09-03T01:42:00Z"
+head_commit: "93bd5c33"
 
 allowed_status_enums:
   - verified
@@ -163,6 +163,14 @@ platforms:
           document: "docs/status/web-release-status.md"
           test: "Track W W8 release checklist (14/14 PASS)"
           verified_at: "2026-08-24T12:00:00Z"
+      packaging:
+        status: verified
+        evidence:
+          commit: "a7ff1ce9"
+          document: "docs/status/web-release-status.md"
+          test: "bash scripts/package_game.sh --no-web-build tests/projects/first_vn && bash scripts/verify_web_package.sh dist/first_vn (25/25) — Linux CI hard gate run 33704740139; deploy-web.yml pre-publish verify + headless Chrome smoke (root + /<repo>/ subpath)"
+          verified_at: "2026-09-03T01:46:00Z"
+          notes: "t144 design A+C landed 2026-09-03 (033 §2 ①): bake demo -> vite build -> package first_vn -> 25 file assertions in CI; smoke moved to the only real release path (deploy-web) as a hard gate. ks_bake --dir/--web POSIX-portable since ae9d5a57; verify script bash-3.2-safe since a7ff1ce9 (mapfile drop)."
 
   android:
     display_name: "Android (ARM64)"

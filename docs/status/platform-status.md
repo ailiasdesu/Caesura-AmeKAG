@@ -4,8 +4,8 @@
 # Caesura (AmeKAG) — Unified Platform Status Matrix
 
 > **Single Source of Truth**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
-> **Repository HEAD Commit**: `6053024b`  
-> **Last Synchronized**: `2026-08-27T15:20:00Z`  
+> **Repository HEAD Commit**: `93bd5c33`  
+> **Last Synchronized**: `2026-09-03T01:42:00Z`  
 > **Verification Status**: 100% Evidence-Backed (Zero Undocumented Claims)
 
 ---
@@ -16,7 +16,7 @@
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Windows (x64)** | Tier 1 | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | — | 🟢 `verified` | ⏳ `pending` |
 | **Linux (x64 / Ubuntu 24.04 / WSL)** | Tier 1 | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | — | 🟢 `verified` | ⏳ `pending` |
-| **Web Player (WASM / DOM)** | Tier 1 | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | — | 🟢 `verified` |
+| **Web Player (WASM / DOM)** | Tier 1 | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` |
 | **Android (ARM64)** | Tier 1 | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | 🟢 `verified` | ⏳ `pending` |
 | **macOS (Apple Silicon / Intel)** | Tier 2 | 🟡 `probe` | 🟡 `probe` | ⏳ `pending` | ⏳ `pending` | 🔒 `hardware-gated` | — | ⏳ `pending` |
 | **iOS (Track I / Metal)** | Tier 2 | 🟡 `probe` | 🟡 `probe` | ⏳ `pending` | ⏳ `pending` | 🔒 `hardware-gated` | 🔑 `credential-gated` | ⏳ `pending` |
@@ -96,6 +96,7 @@
 | **First Vn** | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/package_game.sh tests/projects/first_vn` | `6e90d7df` | `2026-08-24T12:00:00Z` | — |
 | **Browser** | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock` | `6e90d7df` | `2026-08-24T12:00:00Z` | Real-browser CDP assertions: boot (parked), CJK text, images, input, audio unlock (suspended->running), reload save persistence |
 | **Release Candidate** | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `Track W W8 release checklist (14/14 PASS)` | `6e90d7df` | `2026-08-24T12:00:00Z` | — |
+| **Packaging** | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `bash scripts/package_game.sh --no-web-build tests/projects/first_vn && bash scripts/verify_web_package.sh dist/first_vn (25/25) — Linux CI hard gate run 33704740139; deploy-web.yml pre-publish verify + headless Chrome smoke (root + /<repo>/ subpath)` | `a7ff1ce9` | `2026-09-03T01:46:00Z` | t144 design A+C landed 2026-09-03 (033 §2 ①): bake demo -> vite build -> package first_vn -> 25 file assertions in CI; smoke moved to the only real release path (deploy-web) as a hard gate. ks_bake --dir/--web POSIX-portable since ae9d5a57; verify script bash-3.2-safe since a7ff1ce9 (mapfile drop). |
 
 ### 2.4 Android (ARM64) (Tier 1) — 🟢 `verified`
 
@@ -195,6 +196,7 @@ All `verified` and `probe` capabilities are anchored by concrete evidence artifa
 | Web Player (WASM / DOM) | First Vn | 🟢 `verified` | [`scripts/verify_first_vn.sh`](../../scripts/verify_first_vn.sh) | `bash scripts/package_game.sh tests/projects/first_vn` | `6e90d7df` |
 | Web Player (WASM / DOM) | Browser | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock` | `6e90d7df` |
 | Web Player (WASM / DOM) | Release Candidate | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `Track W W8 release checklist (14/14 PASS)` | `6e90d7df` |
+| Web Player (WASM / DOM) | Packaging | 🟢 `verified` | [`docs/status/web-release-status.md`](../../docs/status/web-release-status.md) | `bash scripts/package_game.sh --no-web-build tests/projects/first_vn && bash scripts/verify_web_package.sh dist/first_vn (25/25) — Linux CI hard gate run 33704740139; deploy-web.yml pre-publish verify + headless Chrome smoke (root + /<repo>/ subpath)` | `a7ff1ce9` |
 | Android (ARM64) | Build | 🟢 `verified` | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | `scripts/build_android.sh --release --abi arm64-v8a` | `1f054039` |
 | Android (ARM64) | Runtime | 🟢 `verified` | [`docs/plans/2026-08-24-028-android-full-closure.md`](../../docs/plans/2026-08-24-028-android-full-closure.md) | `bash scripts/android_device_smoke.sh` | `1f054039` |
 | Android (ARM64) | First Vn | 🟢 `verified` | [`docs/platform/android-device-validation.md`](../../docs/platform/android-device-validation.md) | `Full E2E walkthrough on device (story.ks -> choice 1 sunset -> ending pass)` | `1f054039` |
