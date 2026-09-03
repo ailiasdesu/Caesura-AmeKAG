@@ -109,9 +109,15 @@ def source_fingerprint():
     for p in paths:
         if not p.exists():
             continue
-        h.update(str(p.relative_to(REPO)).encode("utf-8"))
+        # as_posix() keeps the path bytes identical on Windows (backslash
+        # native strings) and POSIX; EOL-normalize content because CRLF vs LF
+        # is a checkout artifact (autocrlf), not content. Together the
+        # fingerprint is identical across machines -- round 32 CI: Windows
+        # hashed 'docs\design\...' + CRLF while the Linux runner hashed
+        # 'docs/design/...' + LF, silently differing.
+        h.update(p.relative_to(REPO).as_posix().encode("utf-8"))
         h.update(chr(0).encode("utf-8"))
-        h.update(p.read_bytes())
+        h.update(p.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()[:16]
 
 
