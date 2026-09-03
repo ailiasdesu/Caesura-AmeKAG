@@ -1,9 +1,9 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-09-03T17:04:05Z
+> 生成时间（输入源最新 mtime）：2026-09-03T18:31:26Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：0a2b1361a2b70b44
+> 源指纹（输入内容 sha256 前 16 hex）：b5a072ad83724b57
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -11,16 +11,16 @@
 - 合约总数（Declared，docs/api/command-contracts.md）：**134**
 - 已注册（Dispatched）：**165**
 - 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**89**
-- 测试引用（Tested，启发式计数）：**137**
-- UNWIRED：0 · PARTIAL：3 · CLOSED：127 · EXTRA：31 · EXPERIMENTAL(人工)：4
-- **四层闭包（2026-09-04）**：Structural Closed=127 · Runtime 测试证据=137 · Platform=0 · Packaged=0
+- 测试引用（Tested，启发式计数）：**139**
+- UNWIRED：0 · PARTIAL：2 · CLOSED：129 · EXTRA：31 · EXPERIMENTAL(人工)：3
+- **四层闭包（2026-09-04）**：Structural Closed=129 · Runtime 测试证据=139 · Platform=0 · Packaged=0
   - 列注记：Platform/Packaged 两列随 Phase2 分发逐项真实验证填充（当前无证据=诚实 0）；Runtime=语义测试证据存在（非全部效果面验证）。
 - **幻影绑定（v5）**：**7** 处 backend.<name> 调用命中
   - 提取模式：union of: bindings/*.cpp luaL_Reg { name, lua_X }; backend.lua ^function Backend.X; backend_factory.lua cmd==X; kag.lua ^function KAG.X
   - 清单大小：196 个可解析名（cpp=156 · shim=68 · factory=62 · kag=20，绑定文件 11 个）
   - web/jsBackend 交叉核对（仅报告，不参与判定）：幻影名在 web/bridge.js 亦有=is_valid,load_image,render_frame,set_palette
     · 原生+js 均无=（无）
-- **恒等式：**134 = CLOSED(127) + PARTIAL(3) + UNWIRED(0) + EXPERIMENTAL(在册 4)；165 = 134(Declared) + EXTRA(31) + EXPERIMENTAL(合约外 0)**
+- **恒等式：**134 = CLOSED(129) + PARTIAL(2) + UNWIRED(0) + EXPERIMENTAL(在册 3)；165 = 134(Declared) + EXTRA(31) + EXPERIMENTAL(合约外 0)**
 
 **范围声明（t103 MUST-FIX 3）**：本矩阵的 134 = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 134 内**：
 - 原生手势链：SwipeDown / SwipeUp / LongPress / Pinch / TwoFingerTap / ThreeFingerHold（平台层）；
@@ -110,7 +110,7 @@
 | camera | Y | Y | Y | CLOSED | ✓6 | - | - | ? | scripts/kag/commands/transition.lua:495 |
 | cancel | Y | Y | Y | CLOSED | ✓6 | - | - | ? | scripts/kag.lua:220 |
 | capture_state | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/save.lua:227 |
-| ch | Y | Y | Y | CLOSED | ✓556 | - | - | ? | scripts/kag/commands/text.lua:609 |
+| ch | Y | Y | Y | CLOSED | ✓567 | - | - | ? | scripts/kag/commands/text.lua:609 |
 | chapter | Y | Y | Y | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:312 |
 | cl | Y | Y | Y | CLOSED | ✓11 | - | - | ? | scripts/kag/commands/layer.lua:185 |
 | clear | n | Y | Y | EXTRA | ✓1 | - | - | ? | scripts/kag.lua:349 |
@@ -180,7 +180,7 @@
 | notify | Y | Y | n | CLOSED | ✓38 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:594 |
 | nvl | Y | Y | Y | CLOSED | ✓24 | - | - | ? | scripts/kag/commands/text.lua:976 |
 | p | Y | Y | Y | CLOSED | ✓287 | - | - | ? | scripts/kag/commands/text.lua:947 |
-| palette* | Y | Y | Y | PARTIAL | ✓26 | - | - | ? | scripts/kag/commands/vfx.lua:451 |
+| palette* | Y | Y | Y | PARTIAL | ✓26 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/vfx.lua:451 |
 | particle_weather | Y | Y | Y | CLOSED | ✓3 | - | - | ? | scripts/kag/commands/vfx.lua:589 |
 | particles | Y | Y | Y | CLOSED | - | - | - | ? | scripts/kag/commands/vfx.lua:384 |
 | play | Y | Y | Y | CLOSED | ✓6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:467 |
@@ -195,7 +195,7 @@
 | preload | Y | Y | Y | CLOSED | ✓11 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/resource.lua:154 |
 | preload_transition | n | Y | Y | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:280 |
 | promote_transition_slot | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:294 |
-| pt | Y | Y | n | CLOSED | ✓11 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1153 |
+| pt | Y | Y | n | CLOSED | ✓16 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1153 |
 | push_backlog | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/text.lua:333 |
 | quake | Y | Y | n | CLOSED | ✓2 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:421 |
 | r | Y | Y | Y | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED（位置级） ⚠ | scripts/kag.lua:288 |
@@ -237,13 +237,13 @@
 | stopvideo | Y | Y | Y | CLOSED | ✓3 | - | - | ? | scripts/kag/commands/video.lua:110 |
 | stopvoice | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/audio.lua:308 |
 | sub | Y | Y | n | CLOSED ⚠ | ✓8 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:122 |
-| text | Y | Y | Y | CLOSED ⚠ | ✓43 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:839 |
+| text | Y | Y | Y | CLOSED ⚠ | ✓44 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:839 |
 | textbox | Y | Y | Y | CLOSED | ✓7 | - | - | ? | scripts/kag/commands/text.lua:381 |
 | textspeed | Y | Y | n | CLOSED | ✓42 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1215 |
 | trans* | Y | Y | Y | CLOSED | ✓4 | - | - | ? | scripts/kag/commands/transition.lua:299 |
 | tween | Y | Y | Y | CLOSED | ✓14 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/tween.lua:201 |
-| typewriter | Y | Y | n | PARTIAL | - | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1273 |
-| typewriter_sound | Y | Y | n | EXPERIMENTAL ⚠ | - | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/text.lua:1287 |
+| typewriter | Y | Y | n | CLOSED ⚠ | ✓7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1273 |
+| typewriter_sound | Y | Y | n | CLOSED ⚠ | ✓6 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/text.lua:1287 |
 | unlock | Y | Y | n | CLOSED | ✓50 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:362 |
 | update | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/tween.lua:165 |
 | vfx | Y | Y | Y | CLOSED | ✓11 | - | - | ? | scripts/kag/commands/vfx.lua:279 |
@@ -368,6 +368,9 @@
 - notify — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t110 复核：toast.show 模块表调用，toast 模块内 backend.render_text + create_solid_texture + _toast_bg layer——间接真实触达（角标 toast 可观察）。
   - evidence：scripts/kag/commands/system.lua:648-677 → toast.show → scripts/toast.lua:41 backend.render_text + :14 create_solid_texture + :36 _toast_bg layer
+- palette — Observable=? · PlatformTested=- · Packaged=-
+  - reason：t200 勘察：LUT 贴图后处理=新后端能力（3D LUT 纹理 stage；现有 postfx lut=参数矩阵分级非贴图采样，backend.lua:234-240 / fs_postfx_lut.hlsl:15-24）；029 冻结期维持 PARTIAL，随 Phase2/3D LUT 立项接线。原生绑定点核对：set_palette/load_image/is_valid=幻影（web jsBackend 独有），destroy_texture 真实但被 lut_available 守卫挡死（palette.lua:14-24）。
+  - evidence：scripts/kag/commands/vfx.lua:468-493 handler → scripts/palette.lua:30-153（load/apply/clear/unload/day/night/toggle）→ :14-24 lut_available 守卫（backend.set_palette 缺失恒假）→ no-op 降级；bindings：RenderBinding.cpp 无 set_palette（web/bridge.js:318-327 jsBackend 独有）
 - play — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t117 复核：模块委托链 kag.commands.audio playbgm/playse/playvoice→backend.audio_*
   - evidence：scripts/kag.lua:467-500 play（路由到 audio 模块）→ scripts/kag/commands/audio.lua playbgm:109/playse/playvoice → backend.audio_play
@@ -449,12 +452,12 @@
 - tween — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t113 复核：工具函数链——resolve_layer/step_tween/apply_step 内 layers.move_layer/set_layer_opacity/mark_dirty，真实图层属性动画（blocking Operation；wait=false 由 kag_runner.update 驱动）。
   - evidence：scripts/kag/commands/tween.lua:201-254（handler）→ :58-62 resolve_layer（layers.get/find）+ :73-83 step_tween/apply_step（layers.move_layer/set_layer_opacity/mark_dirty）+ :165-186 update 驱动
-- typewriter — Observable=VERIFIED · PlatformTested=- · Packaged=-
-  - reason：t101 全链证据：引擎侧逐字揭示（kag_runner.lua update() 计算 shown=floor(reveal.elapsed/speed) 并写入 text_scene reveal_chars，见 commands/text.lua:1235-1239 注释引用的 :446-455；text_scene.lua render() 按 reveal 截断每线条形 draw :232-266）——reveal 非 0 时字符逐个可见，语义闭环。
-  - evidence：scripts/kag_runner.lua（update 揭示推进，参考 commands/text.lua:1235-1239）；scripts/kag/text_scene.lua:232-266（reveal 截断）；引擎 C++ TextRenderer（字形增量渲染，t101 已核）
-- typewriter_sound — Observable=? · PlatformTested=- · Packaged=- · Status=EXPERIMENTAL (raw: PARTIAL)
-  - reason：t119 判级：WRITE-ONLY 声音配置——源码自证（text.lua:1226-1232 nothing plays a sound when a character is revealed / must not be described as working），配置三键全仓无读者，Tested=0
-  - evidence：scripts/kag/commands/text.lua:1286（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1272-1285 写入 ctx.typewriter_sound/_interval/_volume；无读者（:1226-1232 自证）
+- typewriter — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
+  - reason：t201 接线（B 批）：逐字揭示唯一消费点 kag_runner.lua update() 内新增 SE 触发（interval 跨边界语义：last_shown=上次触发边界，1 char/帧下 interval=N 仍每 N 字符触发一次——首版实现按帧更新 last_shown 导致 interval>=2 永不触发，t201 实测修正）；[ch]/[text] reveal 初始化含 last_shown=0（新行重置）；skip/click 即时路径在块外写 last_shown=total（瞬时揭示零爆发，防 follow-through 连响）；snapshot restore 封 last_shown=total（回滚零爆发）。v1 诚实注记：volume 无 per-SE 消费面（IAudioBackend.playSE 无 volume 参数，src/audio/api/IAudioBackend.h:38），按 plan 忽略并列入 follow-up（per-SE 音量=接口扩展，契约层）。
+  - evidence：scripts/kag_runner.lua:489-505（reveal 推进内间隔触发 backend.audio_play('se', sound)）+ :770-779（click 即时写 last_shown=total）+ :536-542（skip 即时同款）；scripts/kag/commands/text.lua:830/898（reveal={...,last_shown=0} 新行重置）；scripts/kag/snapshot.lua:82-88（restore 封印）；tests/scripts/test_typewriter_sound.lua（语义测试 38 断言：interval=1/3、skip、click 即时+封印、action=off、新行重置、alias 场景）
+- typewriter_sound — Observable=? · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
+  - reason：t201 接线（B 批）：与 typewriter 共享 handler（text.lua:1290 别名）与消费字段 ctx.typewriter_sound/_interval——kag_runner reveal 推进处消费（见 typewriter 条目）；t119 的 WRITE-ONLY 判级证据已被本批接线取代；v1 不含 per-SE volume（contract gap，follow-up 记录）。
+  - evidence：scripts/kag/commands/text.lua:1290（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1273-1289 写 ctx.typewriter_sound/_interval → scripts/kag_runner.lua:489-505 消费（backend.audio_play('se', sound)）；tests/scripts/test_typewriter_sound.lua case 8（[typewriter_sound] 场景 2 字符→2 SE+文件参数 s.ogg 正确）
 - unlock — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t188 批3a §unlock：unlockedCG/unlockedMusic 写 + gallery.lua:51-103 消费 + save 持久化；test_unlock.lua 9 checks。
   - evidence：scripts/kag/commands/system.lua:399-413 -> scripts/gallery.lua:51-103 + scripts/music_room.lua（持久化经 save.lua）；测试 test_unlock.lua
@@ -506,10 +509,6 @@
   - reason：t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated
   - evidence：scripts/kag/commands/character.lua:177-186
   - note：CAESURA_LIVE2D=ON 构建下由 Live2D 后端消费并按 M4 特性矩阵重判。
-- typewriter_sound - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
-  - reason：t119 判级：WRITE-ONLY 声音配置——源码自证（text.lua:1226-1232 nothing plays a sound when a character is revealed / must not be described as working），配置三键全仓无读者，Tested=0
-  - evidence：scripts/kag/commands/text.lua:1286（TextCommands.typewriter_sound = TextCommands.typewriter）→ :1272-1285 写入 ctx.typewriter_sound/_interval/_volume；无读者（:1226-1232 自证）
-  - note：建议接线点：kag_runner reveal 推进处（text.lua:1235-1239 已指向 :446-455）读 _interval/_volume。
 
 ## 可疑翻转清单（v4 保守维持；含队长裁决）
 
@@ -548,7 +547,6 @@
 
 - hr - scripts/kag.lua:217；处理器体未以调用形触达效果面（v4 一跳穿透下仍无命中；注释/字符串已剥离）
 - palette - scripts/kag/commands/vfx.lua:451；处理器体未以调用形触达效果面（v4 一跳穿透下仍无命中；注释/字符串已剥离）
-- typewriter - scripts/kag/commands/text.lua:1273；处理器体未以调用形触达效果面（v4 一跳穿透下仍无命中；注释/字符串已剥离）
 
 ## EXTRA
 
