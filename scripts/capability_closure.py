@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Capability Closure scanner v5 (029 artifact A; t103 MUST-FIX + overrides; t134 phantom-binding validation).
+"""Capability Closure scanner v5+v6 (029 artifact A; t103 MUST-FIX + overrides; t134 phantom-binding
+validation; t185 status adjudication: an overrides entry may carry 'status' to authoritatively
+set the final Status column -- the machine grade stays recorded as status_machine for comparison).
 
 For every KAG command contract in docs/api/command-contracts.md, grade the
 four closure dimensions that can be measured statically:
@@ -89,6 +91,133 @@ GUARD_PARTIAL = {
     "assert": "body: kag.expr evaluate + error (no effect surface call)",
     "endbutton": "body: kag.expr evaluateTranslated + ctx state (no effect surface call)",
 }
+
+# =============================================================================
+# t192 (v7): machine-grade adjudication categories. Sources are the batch3
+# read-only audits (t181/t188/t189/t190) -- these lists are their INPUTS; an
+# implementer must not add/remove names without a new audit verdict.
+# Values carry the audit reference + consumption anchor per entry.
+# =============================================================================
+
+# PAIRING_GROUPS: same effect surface across commands/aliases; any member
+# reaching Consumed (call-form) -> whole (declared) group grades CLOSED.
+PAIRING_GROUPS = {
+    # t181 button / t189 endbutton: one choice engine (button registers,
+    # endbutton renders + hit-tests via _KAG_onClick; text.lua:1340/:1375+)
+    "button": ["endbutton"],
+    # t181 select: sel = button alias (text.lua:1488), endselect = endbutton
+    # alias (:1491) -- shared implementation; "sel" stays EXTRA (no contract)
+    "select": ["sel", "endselect"],
+    # t188 delay: alias shares SystemCommands.wait (kag.lua:337-347)
+    "delay": ["wait"],
+}
+
+# EXEMPT_PURE: zero backend.*/engine.* call-form + registered handler +
+# semantic tests == CLOSED (pure Lua state/execution, or a dedicated
+# non-backend namespace; the audits verified the effect chains).
+EXEMPT_PURE = {
+    # t183/t185 adjudicated group (status field retained as adjudication history)
+    "i18n": "t183/t185 (system.lua:691-712 -> i18n.set_language + relocalize_page)",
+    "add": "t183/t185 (math.lua:83-119 binop -> ctx scope write)",
+    "sub": "t183/t185 (math.lua:83-119)",
+    "mul": "t183/t185 (math.lua:83-119)",
+    "div": "t183/t185 (math.lua:83-119)",
+    "mod": "t183/t185 (math.lua:83-119)",
+    "dec": "t183/t185 (math.lua:129-141)",
+    "ending": "t183/t185 (system.lua:365-375 -> save.lua:176/418 + title_menu:30-53)",
+    "saveplace": "t183/t185 (save.lua:550-552 -> system.lua:313-361 -> _pendingJump)",
+    # t188 batch3a: pure Lua state/execution
+    "emb": "t188 emb (system.lua:92-178 sandbox.execute/load + ctx mutation sync)",
+    "eval": "t188 eval (live=scheduler.lua:1099 inline)",
+    "set": "t188 set (system.lua:453-465 resolve_var/infer_value scope write)",
+    "inc": "t188 inc (system.lua:471-484 nil-safe increment)",
+    "assert": "t188 assert (system.lua:506-526 exprLang.evaluate + error->handle_error)",
+    "random": "t188 random (system.lua:528-545 integer-floor scope write)",
+    "skip": "t188 skip (text.lua:1082-1094 ctx.skip_mode -> kag_runner:481-530)",
+    "unlock": "t188 unlock (system.lua:399-413 -> gallery.lua:51-103 + save persistence)",
+    # t190 batch3c: proprietary sma.* namespace surface (SmaBinding.cpp:197-211
+    # luaL_Reg; composition root Engine.cpp:605-612) -- dedicated-namespace
+    # effect surface, NOT backend.*
+    "sma_play": "t190 sma_play (sma.lua:712-721 -> binding().create_mesh @sma.lua:382-383)",
+    "sma_anim": "t190 sma_anim (sma.lua:723-731 -> sma.update re-skin @:528-533; per-frame pump caveat)",
+    "sma_ik": "t190 sma_ik (sma.lua:733-739 -> 2-bone constraint -> update_mesh)",
+    "sma_variant": "t190 sma_variant (sma.lua:741-745 -> binding().destroy_mesh/create_mesh immediate)",
+    "sma_stop": "t190 sma_stop (sma.lua:747-749 -> binding().destroy_mesh @:452-453)",
+}
+
+# EXEMPT_CONSUMED: zero (or all-real) backend.* call-form inside the handler;
+# the effect is consumed at runner/scheduler/layers/module APIs and semantic
+# tests exist == CLOSED.
+EXEMPT_CONSUMED = {
+    "wait": "t188 wait (system.lua:50-84 Operation/CancelToken + scheduler-dt yield loop)",
+    "waitclick": "t188 waitclick (kag.lua:312-318 waiting_input -> runner click flow)",
+    "waitforclick": "t188 waitforclick (kag.lua:388-396 waiting_input loop -> runner)",
+    "auto": "t189 auto (text.lua:1112 ctx.auto_mode -> kag_runner:525-536 auto-advance)",
+    "cps": "t189 cps (text.lua:1219 -> apply_text_cps:1197 ctx.text_speed -> kag_runner:482)",
+    "pt": "t189 pt (text.lua:1153 ctx.text_speed -> same read point)",
+    "textspeed": "t189 textspeed (text.lua:1215 ctx.text_speed=floor(1000/cps) -> kag_runner:482)",
+    "nameplate": "t189 nameplate (text.lua:418 -> _renderNameplate:431-454 layers+render_text)",
+    "voice_off": "t189 voice_off (text.lua:1126 ctx.voice_muted -> audio.lua:243 gate + save:168/375)",
+    "voice_wait": "t189 voice_wait (kag.lua:297 -> audio.lua:277-301 wait loop + click-skip)",
+    "br": "t189 br (kag.lua:212 -> KAG.l real line break)",
+    "s": "t189 s (kag.lua:303 -> System.wait(ms=250))",
+    "shake": "t189 shake (kag.lua:417 -> vfx.lua:82 -> node.shake.offset -> layers.lua:585-593)",
+    "quake": "t189 quake (kag.lua:421 -> vfx.lua:28-70 -> node.quake.offset -> layers.lua:585-593)",
+    "notify": "t189 notify (system.lua:648-675 -> toast.show toast.lua:18-41 real UI)",
+    "replay": "t188 replay (system.lua:579-604 -> replay module + kag_runner tick :442-448/:740)",
+    "rollback": "t188 rollback (system.lua:389-397 -> kag_runner.rollback:710 snapshot chain)",
+    "saveload": "t188 saveload (save.lua:495-523 -> saveload_menu -> SaveCommands.save/load C++)",
+}
+
+
+def apply_v7(records):
+    """t192: machine-grade categories. Runs AFTER guard_partial so the t103
+    regression locks keep checking the PRE-v7 machine grade (their premise --
+    assert/endbutton have no CONSUMED call-form -- stays true; the CLOSED
+    grade comes from the audited category, not the heuristic). Never
+    downgrades; raw machine grade stays in status_machine / status_v5."""
+    by = {r["name"]: r for r in records}
+    flips = []
+    # Phase 1: EXEMPT categories. List membership IS the audit evidence of
+    # handler + semantic tests -- the scanner tested_count is a heuristic
+    # that misses direct-handler tests like sma.commands.sma_anim(...).
+    for name in sorted(set(EXEMPT_PURE) | set(EXEMPT_CONSUMED)):
+        r = by.get(name)
+        if not r or not r["declared"]:
+            continue
+        cat = "EXEMPT_PURE" if name in EXEMPT_PURE else "EXEMPT_CONSUMED"
+        if not r.get("v7_cat"):
+            r["v7_cat"] = cat
+        if r["status"] != "CLOSED" and r["dispatched"]:
+            r["status"] = "CLOSED"
+            flips.append(name)
+    # Phase 2: PAIRING -- once any group member is CLOSED (machine, EXEMPT,
+    # or adjudicated override), the whole declared group grades CLOSED.
+    for lead, members in PAIRING_GROUPS.items():
+        group = [lead] + list(members)
+        if any(by.get(g, {}).get("status") == "CLOSED" for g in group if g in by):
+            for g in group:
+                r = by.get(g)
+                if r and r["declared"] and not r.get("v7_cat"):
+                    r["v7_cat"] = "PAIRING"
+                if r and r["declared"] and r["status"] != "CLOSED":
+                    r["status"] = "CLOSED"
+                    flips.append(g)
+    return flips
+
+
+def guard_categories():
+    """t192: category-list guards (exit 3 -- same code as guard_partial)."""
+    bad = []
+    if len(PAIRING_GROUPS) != 3:
+        bad.append("PAIRING_GROUPS=%d (expect 3 groups)" % len(PAIRING_GROUPS))
+    if len(EXEMPT_PURE) < 21:
+        bad.append("EXEMPT_PURE=%d (expect >=21)" % len(EXEMPT_PURE))
+    if len(EXEMPT_CONSUMED) < 18:
+        bad.append("EXEMPT_CONSUMED=%d (expect >=18)" % len(EXEMPT_CONSUMED))
+    if bad:
+        print("[closure] ERROR: t192 v7 category guards violated: " + "; ".join(bad))
+        sys.exit(3)
 
 
 def source_mtime(paths):
@@ -906,6 +1035,12 @@ def tested_count(name):
     return total, files
 
 
+# v6: an overrides entry may carry a 'status' field that AUTHORITATIVELY
+# adjudicates the final Status column (machine grade preserved as
+# status_machine for comparison). Unknown values are rejected loudly.
+VALID_OVERRIDE_STATUS = {"CLOSED", "PARTIAL", "EXTRA", "UNWIRED", "EXPERIMENTAL"}
+
+
 def load_overrides(known_names):
     if not OVERRIDES.exists():
         return {}, []
@@ -915,6 +1050,16 @@ def load_overrides(known_names):
     bad = [k for k in commands if k not in known_names]
     if bad:
         print("[closure] ERROR: overrides reference unknown commands: " + ", ".join(bad))
+        sys.exit(2)
+    bad_status = [
+        (k, v.get("status")) for k, v in commands.items()
+        if isinstance(v, dict) and v.get("status")
+        and v.get("status") not in VALID_OVERRIDE_STATUS
+    ]
+    if bad_status:
+        print("[closure] ERROR: overrides 'status' values must be one of "
+              + ", ".join(sorted(VALID_OVERRIDE_STATUS)) + ": "
+              + ", ".join(k + "=" + str(s) for k, s in bad_status))
         sys.exit(2)
     return commands, oos
 
@@ -1027,7 +1172,10 @@ def build_records(overrides_map):
             "flip_v5": flip_v5,
         }
         if ov and ov.get("status"):
+            rec_out["status_machine"] = rec_out["status"]
             rec_out["status"] = ov["status"]
+        else:
+            rec_out["status_machine"] = rec_out["status"]
         records.append(rec_out)
     surface, surface_meta = extract_v5_surface()
     return records, private, len(declared_names), suspected, suspected_v5, flips_v45, surface_meta
@@ -1146,6 +1294,22 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("> ⚠ = 人工覆盖（docs/design/capability-closure-overrides.json；详见『人工覆盖』节）。")
     L.append("> \u3000* = 存在幻影绑定命中（backend.<name> 不在原生绑定面；详见『幻影绑定（v5）』节）；Consumed 列已按 v5 幻影过滤。")
     L.append("")
+    L.append("> 状态定义（v7 附加）：**PAIRING/EXEMPT_PURE/EXEMPT_CONSUMED**=t192 机器判级类别——配对/别名同族效果面并接、纯状态/纯 Lua 执行豁免、非 backend 直调消费豁免；由审计批（t181/t188/t189/t190）裁决名单驱动，不依赖 overrides status 字段，机器自判 CLOSED。")
+    L.append("")
+    if any(r.get("v7_cat") for r in records):
+        L.append("## v7 机器判级（t192）")
+        L.append("")
+        for cat, title in (("PAIRING", "PAIRING_GROUPS（配对/别名同族并接）"),
+                           ("EXEMPT_PURE", "EXEMPT_PURE（纯 Lua 状态/专属命名空间豁免）"),
+                           ("EXEMPT_CONSUMED", "EXEMPT_CONSUMED（非 backend 直调消费）")):
+            rows = [r for r in records if r.get("v7_cat") == cat]
+            L.append("### " + title + " — " + str(len(rows)) + " 条")
+            L.append("")
+            for r in sorted(rows, key=lambda x: x["name"]):
+                src = {**EXEMPT_PURE, **EXEMPT_CONSUMED}.get(r["name"], "t181/t189")
+                L.append("- " + r["name"] + " — " + src
+                         + ("  [status: " + r["status"] + "]" if r["status"] != "CLOSED" else ""))
+        L.append("")
     L.append("## Commands")
     L.append("")
     L.append("| Command | Declared | Dispatched | Consumed | Tested | Observable | Platform Tested | Packaged | Status | 证据 |")
@@ -1163,7 +1327,8 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
                  + ("Y" if r["consumed_v5"] else "n") + " | "
                  + (str(r["tested_count"]) if r["tested_count"] else "-") + " | "
                  + obs + mark + " | " + pt + mark + " | " + pk + mark + " | "
-                 + r["status"] + " | " + (r["evidence"] or "-") + " |")
+                 + r["status"] + (mark if (r.get("override") or {}).get("status") else "") + " | "
+                 + (r["evidence"] or "-") + " |")
     L.append("")
     L.append("## 人工覆盖（⚠）")
     L.append("")
@@ -1171,10 +1336,13 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     if ovs:
         for r in sorted(ovs, key=lambda x: x["name"]):
             ov = r["override"]
+            raw_note = ""
+            if ov.get("status"):
+                raw_note = " (raw: " + str(r.get("status_machine")) + ")"
             L.append("- " + r["name"] + " — Observable=" + str(ov.get("observable", "?"))
                      + " · PlatformTested=" + str(ov.get("platform_tested", "?"))
                      + " · Packaged=" + str(ov.get("packaged", "?"))
-                     + ((" · Status=" + str(ov["status"])) if ov.get("status") else ""))
+                     + ((" · Status=" + str(ov["status"]) + raw_note) if ov.get("status") else ""))
             L.append("  - reason：" + str(ov.get("reason", "")))
             L.append("  - evidence：" + str(ov.get("evidence", "")))
     else:
@@ -1313,6 +1481,7 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("6. 合约计数以 command-contracts.md 的 ### 条目数为准（表头标注 134 须一致）。")
     L.append("7. overrides JSON 的 commands 键必须落在已知命令名集合内；未知键被响亮拒绝（exit 非 0），绝不静默忽略。")
     L.append("8. **v4 已修复（历史注记保留）**：v3 判据只扫 handler 直接体——同文件工具函数/委托链内的效果面调用（t110-t119 五批人工核真 18+ 例：layout/layout_slot/tween/vibrate/nameplate 的工具函数链、模块表委托 toast.show/VFX.flash/HistoryUI.show 等）不被捕获；v4 一跳穿透（同文件 local + require()d 模块函数）已覆盖该盲区。仍存在的判定噪声：跨两跳以上的链（工具函数再调工具函数）、绑定接口（binding().draw_mesh 类——sma_play 等经人工证据层覆盖）、rawset(ctx.tf, ...) 形态（判据边缘）。")
+    L.append("10. **raw 口径（t185/t192 定稿）**：任何『raw/机器原判级』汇总一律以**记录级 status_machine** 为准（=overrides 人工裁决与 v7 类别应用之前的机器判级，永不丢弃）；status_counts_v4_raw/status_counts_v5_raw 为版本快照口径，仅作对账，不作最终判定依据。")
     L.append("")
     L.append("## 复现")
     L.append("")
@@ -1332,7 +1501,9 @@ def main():
     known = sorted(set(declared_names_probe) | set(handlers_probe))
     overrides_map, oos = load_overrides(set(known))
     records, private, declared_total, suspected, suspected_v5, flips_v45, surface_meta = build_records(overrides_map)
-    guard_partial(records)
+    guard_partial(records)   # t103 locks check the PRE-v7 machine grade
+    v7_flips = apply_v7(records)  # t192 machine-grade categories (PAIRING/EXEMPT)
+    guard_categories()
     guard_phantom(records)
     fp = source_fingerprint()
     generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(source_mtime([
@@ -1368,6 +1539,8 @@ def main():
         "binding_surface": surface_meta,
         "status_counts_v5_raw": {st: sum(1 for r in records if r["status_v5"] == st)
                                  for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")},
+        "status_counts_raw_machine": {st: sum(1 for r in records if (r.get("status_machine") or r["status"]) == st)
+                                      for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")},
         "commands": records,
         "private_helpers": [{"name": n, "file": f, "line": ln} for n, f, ln in private],
     }
@@ -1384,6 +1557,8 @@ def main():
           + " tested=" + str(payload["counts"]["tested"]))
     print("[closure] statuses=" + str(payload["status_counts"]))
     print("[closure] v4_raw=" + str(payload["status_counts_v4_raw"]))
+    print("[closure] v7_flips=" + str(len(v7_flips)) + " " + " ".join(sorted(v7_flips)))
+    print("[closure] raw_machine(status_machine)=" + str({st: sum(1 for r in records if (r.get("status_machine") or r["status"]) == st) for st in ("UNWIRED", "PARTIAL", "CLOSED", "EXTRA", "EXPERIMENTAL")}))
     print("[closure] overrides=" + str(len(overrides_map)) + " out_of_scope=" + str(len(oos)))
     print("[closure] suspected_flips=" + str(len(suspected))
           + " v5_suspect=" + str(len(suspected_v5))

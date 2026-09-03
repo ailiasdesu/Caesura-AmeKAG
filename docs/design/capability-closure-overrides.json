@@ -40,7 +40,8 @@
       "packaged": "?",
       "reason": "t110 复核：组合链（staging→render 分离系设计，架构注 :1297-1310）——button 注册本地化选项，endbutton cond 过滤+_renderChoices 绘制+blocking+命中跳转，间接真实触达 backend.render_text。",
       "evidence": "scripts/kag/commands/text.lua:1340-1372（注册 ctx._choiceButtons）→ :1374+ endbutton（_renderChoices 绘制+阻塞+跳转）→ TextScene draws → backend.render_text",
-      "source": "t110 task output"
+      "source": "t110 task output",
+      "status": "CLOSED"
     },
     "chapter": {
       "observable": "VERIFIED",
@@ -88,7 +89,8 @@
       "packaged": "?",
       "reason": "t119 复核：模块委托 Layer.layfade（opacity 0..1→0..255 换算注记）→层透明度动画",
       "evidence": "scripts/kag.lua:371-385 → scripts/kag/commands/layer.lua layfade",
-      "source": "t119 task output"
+      "source": "t119 task output",
+      "status": "CLOSED"
     },
     "flash": {
       "observable": "VERIFIED",
@@ -112,7 +114,8 @@
       "packaged": "?",
       "reason": "t116 复核：HistoryUI.show 模块调用→backlog 覆盖层（层系统+backend 渲染），真实可观察",
       "evidence": "scripts/kag/commands/system.lua:231-241 → scripts/history_ui.lua :19 backend.create_solid_texture / :27-31 layers.get / :86-87 layers.ensure(_history_bg/_history_title)+注释 :9 自证 backend.render_text；jump→ctx._pendingJump",
-      "source": "t116 task output"
+      "source": "t116 task output",
+      "status": "CLOSED"
     },
     "i18n": {
       "observable": "VERIFIED",
@@ -120,7 +123,8 @@
       "packaged": "?",
       "reason": "t110 PARTIAL 复核批人工核真：handler 经 i18n.set_language + kt.relocalize_page 全页重放，间接但真实触达渲染效果面（TextScene draws→backend.render_text），画面即时换语言可观察。",
       "evidence": "scripts/kag/commands/system.lua:685-712（contract+schema；i18n.set_language + kt.relocalize_page）；scripts/kag/commands/text.lua relocalize_page（全页重放）→ scripts/kag/text_scene.lua draws → 渲染循环 backend.render_text",
-      "source": "t110 task output"
+      "source": "t110 task output",
+      "status": "CLOSED"
     },
     "l": {
       "observable": "VERIFIED（位置级）",
@@ -191,7 +195,8 @@
       "packaged": "?",
       "reason": "t119 复核：模块委托 music_room.show（UI 全链：solid texture/render_text/get_resolution）",
       "evidence": "scripts/kag/commands/system.lua:343-345 → scripts/music_room.lua:21 create_solid_texture + :168 render_text + :172 get_resolution",
-      "source": "t119 task output"
+      "source": "t119 task output",
+      "status": "CLOSED"
     },
     "nameplate": {
       "observable": "VERIFIED",
@@ -312,7 +317,8 @@
       "packaged": "?",
       "reason": "t110 复核：语法糖组合——select no-op 开块（契约 blocking=false 设计如此），sel=button、endselect=endbutton 别名赋值，选择块完整语义=button/endbutton 链。",
       "evidence": "scripts/kag/commands/text.lua:1484-1486（开块）+ :1488 sel=button + :1491 endselect=endbutton → button/endbutton 链（见 button 条目）",
-      "source": "t110 task output"
+      "source": "t110 task output",
+      "status": "CLOSED"
     },
     "shake": {
       "observable": "VERIFIED",
@@ -428,6 +434,184 @@
       "reason": "t119 复核：模块委托 audio.voice_wait（CLOSED 链）→等待语音完成+点击跳过",
       "evidence": "scripts/kag.lua:297-299 → scripts/kag/commands/audio.lua voice_wait",
       "source": "t119 task output"
+    },
+    "text": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真（维持 CLOSED）：效果链真实——kag_runner.lua:670 每帧 kag.text_scene.render -> text_scene.lua:267/291 backend.render_text/render_ruby（KAGBinding.cpp:77-78 真实绑定）；测试 handle 语义（test_textflow:15-66 等）。",
+      "evidence": "scripts/kag_runner.lua:670 -> scripts/kag/text_scene.lua:267/291 -> src/script/bindings/KAGBinding.cpp:77-78",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用（非配对命令）；b) 不适用（渲染型）；c) 测试语义断言存在：test_textflow:15-66（er/r/l/p 光标与阻塞、text 换行）。注：HUMAN_VERIFIED 语义=机器判级已 CLOSED，本条目为人工证据层备份；text.lua:5/:1031 注释幽灵名（font_render_text/font_clear/text_render_ruby）为文档漂移，t184 已修正。",
+      "status": "CLOSED"
+    },
+    "add": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "sub": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "mul": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "div": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "mod": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "dec": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t181 核真：binop 驱动器 math.lua:83-119（resolve_var 五作用域+nil-safe 起始 0+div/mod 零除可视错误+no-op）；handler :121-141；效果面=变量状态写。",
+      "evidence": "scripts/kag/commands/math.lua:83-119（handler :121-141）-> ctx.{f,sf,tf,mp,lf}；tests/scripts/test_math_cmds.lua:40-127",
+      "source": "t181 task output",
+      "note": "【口径说明】a) 不适用；b) 纯状态命令豁免：算术效果面=引擎变量状态写（ctx.f/sf/tf/mp/lf），零 backend.* 属设计如此，扫描器 Consumed=n 为口径缺陷非缺口；c) 测试语义断言存在：test_math_cmds:40-127（值/nil-safe/五作用域/零除 no-op/inc-dec 孪生对称）。",
+      "status": "CLOSED"
+    },
+    "ending": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t182 核真（case d）：system.lua:365-375 状态记录（seen_endings）-> save.lua:176/418-419 持久化闭环 -> title_menu.lua:30-53 展示（render_text 原生）；测试 test_gallery_bare:25-32 真语义。",
+      "evidence": "scripts/kag/commands/system.lua:365-375 -> scripts/kag/commands/save.lua:176/418 -> scripts/title_menu.lua:30-53",
+      "source": "t182 task output",
+      "note": "【口径说明】a) 不适用；b) 部分纯状态（状态记录无 backend 直调，展示闭环经 title_menu 渲染）；c) 测试语义断言存在：test_gallery_bare:25-32（[ending e1] parse+seen_endings）+ test_example_game:63-66（gallery 集成）。",
+      "status": "CLOSED"
+    },
+    "saveplace": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t182 核真（case d）：save.lua:550-552 -> System.saveplace（system.lua:313-331 内存书签 scene+token_index+tf 深拷贝）-> loadplace :334-361 经 _pendingJump 真恢复（+layers.restore_text_state :352-357）；测试 test_flow_edge_call I1 :363-385 / I2 :391-401（round-74 边界）。",
+      "evidence": "scripts/kag/commands/save.lua:550-552 -> scripts/system.lua:313-361 -> scripts/kag_runner.lua jump 路径",
+      "source": "t182 task output",
+      "note": "【口径说明】a) 不适用；b) 纯内存状态型（不落盘=设计，system.lua:295-297 spec [10.2.38]）——扫描器 Consumed=n 为口径缺陷；c) 测试语义断言存在：test_flow_edge_call I1/I2（saveplace-in-call 捕获+不序列化 call_stack+loadplace 恢复）。",
+      "status": "CLOSED"
+    },
+    "wait": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §wait：Operation/CancelToken + scheduler-dt 逐帧 yield（stop_flag/_next_index 提前退出；ms 0/60000 守卫）；效果=暂停推进（消费=kag_runner resume）——悬浮控制型纯 Lua。",
+      "evidence": "scripts/kag/commands/system.lua:50-84 -> scripts/kag/operation.lua + scripts/scheduler.lua（帧 dt）; 测试 tests/scripts/test_wait_delay.lua（27 checks）",
+      "source": "t188 task output"
+    },
+    "waitclick": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §waitclick：ctx.waiting_input -> runner 点击恢复；test_waitclick.lua 9 checks。",
+      "evidence": "scripts/kag.lua:312-318 -> scripts/kag_runner.lua（点击流 waiting_input）; 测试 test_waitclick.lua",
+      "source": "t188 task output"
+    },
+    "waitforclick": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §waitforclick：waiting_input while-loop 重建（与 waitclick 同机制）；test_contract_runtime_gaps.lua + test_kag3_compat.lua。",
+      "evidence": "scripts/kag.lua:388-396 -> scripts/kag_runner.lua; 测试 test_contract_runtime_gaps.lua/test_kag3_compat.lua",
+      "source": "t188 task output"
+    },
+    "set": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §set：resolve_var 五作用域 + infer_value 类型推断（纯状态写）；test_variables.lua 13 checks。",
+      "evidence": "scripts/kag/commands/system.lua:453-465 -> ctx.{f,sf,tf,mp,lf}; 测试 test_variables.lua",
+      "source": "t188 task output"
+    },
+    "inc": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §inc：nil-safe 增量（by 参数）；test_variables.lua + test_math_cmds.lua（inc/dec 孪生）。",
+      "evidence": "scripts/kag/commands/system.lua:471-483 -> ctx scope; 测试 test_variables.lua/test_math_cmds.lua",
+      "source": "t188 task output"
+    },
+    "assert": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §assert：exprLang.evaluate + error(scene:line) -> scheduler pcall/handle_error（开发期诊断链）；test_modern_commands.lua。",
+      "evidence": "scripts/kag/commands/system.lua:506-526 -> scripts/kag/expr.lua -> scripts/scheduler.lua（pcall/handle_error）; 测试 test_modern_commands.lua",
+      "source": "t188 task output"
+    },
+    "random": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §random：整数 floor 范围随机写变量（:486 死定义已随 t192 删除，:511 有效）；test_variables.lua/契约套件。",
+      "evidence": "scripts/kag/commands/system.lua:511-528 -> ctx scope; 测试 test_variables.lua",
+      "source": "t188 task output"
+    },
+    "unlock": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t188 批3a §unlock：unlockedCG/unlockedMusic 写 + gallery.lua:51-103 消费 + save 持久化；test_unlock.lua 9 checks。",
+      "evidence": "scripts/kag/commands/system.lua:399-413 -> scripts/gallery.lua:51-103 + scripts/music_room.lua（持久化经 save.lua）；测试 test_unlock.lua",
+      "source": "t188 task output"
+    },
+    "cps": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t189 批3b §cps：apply_text_cps 写 ctx.text_speed（kag_runner:482 真实读取）+ test_textspeed.lua 语义。",
+      "evidence": "scripts/kag/commands/text.lua:1219 -> scripts/kag_runner.lua:482; 测试 test_textspeed.lua",
+      "source": "t189 task output"
+    },
+    "voice_off": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t189 批3b §voice_off：ctx.voice_muted -> audio.lua:243 播放门控 + save.lua:168/375 持久化；test_contracts_runtime.lua 语义。",
+      "evidence": "scripts/kag/commands/text.lua:1126 -> scripts/audio.lua:243 + scripts/kag/commands/save.lua:168/375; 测试 test_contracts_runtime.lua",
+      "source": "t189 task output"
+    },
+    "endbutton": {
+      "observable": "VERIFIED",
+      "platform_tested": "?",
+      "packaged": "?",
+      "reason": "t189 批3b §endbutton：完整共享选择链（cond 过滤->_renderChoices->命中测试 _KAG_onClick->_selectedChoice->yield->x= 写入->_pendingJump）+ test_choice.lua 语义；配对口径见 PAIRING（t192 v7，与 button 同族）。",
+      "evidence": "scripts/kag/commands/text.lua:1375-1479 -> src/entry/Engine.cpp:761(_KAG_onClick 派发) -> scripts/kag_runner.lua:600; 测试 test_choice.lua",
+      "source": "t189 task output"
     }
   },
   "out_of_scope": [
