@@ -2,6 +2,21 @@
 
 > 状态：方向记录 + 进度跟踪，非执行授权。任何执行批次按分步放行惯例等用户『执行』口令，或并入既有阶段计划。
 
+<!-- plan-status:generated -->
+
+## 事实状态（自动生成 — 勿手改）
+
+- **closure: PARTIAL=3 / CLOSED=127 / UNWIRED=0 / EXTRA=31 / EXPERIMENTAL=4**
+  - 证据：docs/design/capability-closure-matrix.md:15 (stats line)
+- **Node migration: COMPLETE**
+  - 证据：scripts/package_game.mjs; src/rpc/services/PackagingService.cpp findNode & no findGitBash; scripts/caesura_build.py find_node; scripts/package_distribution.py _find_node -- all satisfied
+- **Unicode UTF-8 widening: COMPLETE**
+  - 证据：external/lua/liolib.c contains lua_fopen_utf8; external/lua/lua.c contains wmain; external/lua/lauxlib.c contains lauxlib_fopen_utf8; external/lua/loadlib.c contains loadlib_fopen_utf8 -- all satisfied
+
+<!-- /plan-status:generated -->
+
+
+
 ## 1. platform-status 语义命名修正 ✅ 已完成
 
 - **反馈**：`platform-status.md` 的 `Repository HEAD Commit` 保存的是 evidence HEAD（最后一个非 docs 提交），而非真实仓库 HEAD——多数时候二者一致，但矩阵同步 commit 后必然漂移。第三方读者易误解，影响自动化审计口径。
@@ -30,6 +45,21 @@
   - 批3（其余 36 个 PARTIAL 只读核真）：t188 批3a（15 命令，15/15 建议 WIRED ✅）→ t189 批3b（文本展示型 16）/ t190 批3c（SMA 5）在飞。
   - 下一迭代：PAIRING_GROUPS/EXEMPT_PURE 机器判级改进（守护：白名单+幻影哨兵 exit 5；顺序=t187+批3 终态后）。
 - **度量目标**：PARTIAL 逐批下降；每批落地以『真实效果面闭环 + 测试锁 + 矩阵计数同步』三合一验收。
+
+## 4. 文档事实化（2026-09-03 用户反馈，已立项）
+
+- **教训**：代码验证体系曾快于计划文档（032 的『37 PARTIAL / t180 进行中』在收敛后过时）——计划文档不再人工维护事实进度，由生成器从仓库事实生成。
+- **落地**：`scripts/generate_plan_status.py` 生成 032 的『事实状态』段（marker 包围，静态事实=closure 计数/Node 迁移判据/Unicode 四站点判据）；`--check` 守卫（ci.yml 已接线）；platform-status 的 `last_updated`（yaml 人工旧值）→ `Generated At`（generator execution time），--check 对时间戳行归一化，不再作为验证依据。
+
+## 5. 四层闭包产品化（方向——CLOSED 不再当完成度百分比）
+
+- **认知**（2026-09-03 用户工程评价）：127 CLOSED ≠ 127 个命令全部真实运行时验证过——CLOSED 有一部分来自机器判级（v7 机制/人工 observable 证据），因此 Closure 必须分层：
+  1. **Structural Closed**（结构闭包）=『代码架构证明能到效果面』——即现状 Status 机判（v7 三类豁免+机器 Consumed）；
+  2. **Runtime Verified**（运行闭包）=『真实跑起来证明效果正确』——语义测试实测（现有 tests/ 证据，需协议化判据）；
+  3. **Platform Verified**（平台闭包）=『Windows/Linux/Web/Android/... 都跑过』——overrides 的 platform_tested 字段（现多 ?，需按平台补充）；
+  4. **Packaged**（发布闭包）=『最终 package 中也存在』——overrides 的 packaged 字段（现多 ?）。
+- **目标形态**：矩阵每命令四层独立列/标记（每层有明确判据协议），计数表展示四层计数（当前大致：Structural 127 / Runtime 137 tested / Platform ? / Packaged ?——诚实呈现，不求百分百），Status 列措辞明示=Structural Closed。
+- **推进方式**：划入下一阶段主线（029 冻结期可做判据协议与逐列填充；Platform/Packaged 列随 Phase2 分发推进逐项真实验证），落地为独立派单批（先协议后填列）。
 
 ---
 （方向记录；执行批次按分步放行惯例派单。）

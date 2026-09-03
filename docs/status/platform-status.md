@@ -5,7 +5,7 @@
 
 > **Single Source of Truth**: [`docs/status/platform-matrix.yaml`](platform-matrix.yaml)  
 > **Evidence HEAD Commit**: `6949d3268f6752379882a4d30fcdc1e40cc267ea`  
-> **Last Synchronized**: `2026-09-03T01:42:00Z`  
+> **Generated At**: `2026-09-03T16:16:18.017442+00:00`  
 > **Verification Status**: 100% Evidence-Backed (Zero Undocumented Claims)
 
 ---
