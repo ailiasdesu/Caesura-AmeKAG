@@ -22,6 +22,75 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+/*
+** Windows Unicode path support (Caesura patch).
+** fopen() takes a narrow path that the CRT converts via the system ANSI
+** code page: on an en-US runner (CP1252) a UTF-8 Chinese path becomes
+** "??" and the open fails. lua_fopen_utf8 converts the UTF-8 path and
+** mode to UTF-16 with CP_UTF8 and opens via _wfopen; any conversion or
+** open failure falls back to plain fopen, so ASCII paths keep the exact
+** legacy behavior. POSIX builds never see this (defined as fopen).
+*/
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+static FILE *lua_fopen_utf8 (const char *path, const char *mode) {
+  int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+  int mlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, NULL, 0);
+  if (wlen > 0 && mlen > 0) {
+    wchar_t *wpath = (wchar_t *)malloc((size_t)wlen * sizeof(wchar_t));
+    wchar_t *wmode = (wchar_t *)malloc((size_t)mlen * sizeof(wchar_t));
+    if (wpath != NULL && wmode != NULL) {
+      if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wpath, wlen) > 0 &&
+          MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, wmode, mlen) > 0) {
+        FILE *f = _wfopen(wpath, wmode);
+        free(wpath); free(wmode);
+        if (f != NULL)
+          return f;  /* opened through the UTF-16 form */
+        return fopen(path, mode);  /* wide open failed: legacy fallback */
+      }
+    }
+    free(wpath); free(wmode);
+  }
+  return fopen(path, mode);  /* conversion failed: legacy fallback */
+}
+#else
+#define lua_fopen_utf8 fopen
+#endif
+
+#if defined(_WIN32)
+/* Same UTF-8 -> UTF-16 treatment for io.popen: the child command is a
+** narrow string that cmd.exe interprets via the ANSI code page, so a
+** UTF-8 path inside it (e.g. a Chinese repo directory in argv[0]) turns
+** into "???/not found" on non-matching code pages. _wpopen is the wide
+** form; any conversion failure falls back to _popen. */
+static FILE *lua_popen_utf8 (const char *cmd, const char *mode) {
+  int clen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd, -1, NULL, 0);
+  int mlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, NULL, 0);
+  if (clen > 0 && mlen > 0) {
+    wchar_t *wcmd = (wchar_t *)malloc((size_t)clen * sizeof(wchar_t));
+    wchar_t *wmode = (wchar_t *)malloc((size_t)mlen * sizeof(wchar_t));
+    if (wcmd != NULL && wmode != NULL) {
+      if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, cmd, -1, wcmd, clen) > 0 &&
+          MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, wmode, mlen) > 0) {
+        FILE *f = _wpopen(wcmd, wmode);
+        free(wcmd); free(wmode);
+        if (f != NULL) return f;
+        return _popen(cmd, mode);
+      }
+    }
+    free(wcmd); free(wmode);
+  }
+  return _popen(cmd, mode);
+}
+#endif
+
 
 
 
@@ -61,7 +130,7 @@ static int l_checkmode (const char *mode) {
 
 #elif defined(LUA_USE_WINDOWS)	/* }{ */
 
-#define l_popen(L,c,m)		(_popen(c,m))
+#define l_popen(L,c,m)		(lua_popen_utf8(c,m))
 #define l_pclose(L,file)	(_pclose(file))
 
 #if !defined(l_checkmodep)
@@ -260,7 +329,7 @@ static LStream *newfile (lua_State *L) {
 
 static void opencheck (lua_State *L, const char *fname, const char *mode) {
   LStream *p = newfile(L);
-  p->f = fopen(fname, mode);
+  p->f = lua_fopen_utf8(fname, mode);
   if (l_unlikely(p->f == NULL))
     luaL_error(L, "cannot open file '%s' (%s)", fname, strerror(errno));
 }
@@ -273,7 +342,7 @@ static int io_open (lua_State *L) {
   const char *md = mode;  /* to traverse/check mode */
   luaL_argcheck(L, l_checkmode(md), 2, "invalid mode");
   errno = 0;
-  p->f = fopen(filename, mode);
+  p->f = lua_fopen_utf8(filename, mode);
   return (p->f == NULL) ? luaL_fileresult(L, 0, filename) : 1;
 }
 

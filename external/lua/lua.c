@@ -15,6 +15,16 @@
 
 #include <signal.h>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "lua.h"
 
 #include "lauxlib.h"
@@ -668,7 +678,7 @@ static int pmain (lua_State *L) {
 }
 
 
-int main (int argc, char **argv) {
+static int lua_cli_main (int argc, char **argv) {
   int status, result;
   lua_State *L = luaL_newstate();  /* create state */
   if (L == NULL) {
@@ -685,4 +695,64 @@ int main (int argc, char **argv) {
   lua_close(L);
   return (result && status == LUA_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
+
+#if defined(_WIN32)
+/*
+** wmain: the MSVC console entry receives the wide (UTF-16) command line.
+** Convert every argument to UTF-8 (CP_UTF8) so Lua sees the real characters
+** -- the CRT narrow argv path converts via the system ANSI code page, and
+** an en-US runner (CP1252) mangles a UTF-8 Chinese path into "??" before
+** io.open/io.popen ever sees it. Conversion failures fall back to the
+** system-ANSI narrow form for that argument only (avoiding best-fit alias
+** characters) and print a warning.
+*/
+int wmain (int argc, wchar_t **wargv) {
+  int i, rc;
+  char **argv = (char **)malloc((size_t)(argc + 1) * sizeof(char *));
+  if (argv == NULL) {
+    fprintf(stderr, "[lua] WARN: out of memory converting arguments\n");
+    return EXIT_FAILURE;
+  }
+  for (i = 0; i < argc; i++) {
+    int wlen = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, NULL, 0, NULL, NULL);
+    if (wlen > 0) {
+      argv[i] = (char *)malloc((size_t)wlen);
+      if (argv[i] != NULL) {
+        if (WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, argv[i], wlen, NULL, NULL) > 0)
+          continue;
+        free(argv[i]);
+      }
+    }
+    /* Fallback: the wide argument was not convertible to UTF-8 (rare); use
+    ** the system-ANSI narrow form so the program still has an argument. */
+    fprintf(stderr, "[lua] WARN: failed to convert argument %d to UTF-8\n", i);
+    {
+      int alen = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wargv[i], -1,
+                                     NULL, 0, NULL, NULL);
+      argv[i] = (char *)malloc(alen > 0 ? (size_t)alen : 1);
+      if (argv[i] != NULL) {
+        if (alen > 0)
+          WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wargv[i], -1,
+                             argv[i], alen, NULL, NULL);
+        else
+          argv[i][0] = '\0';
+      }
+    }
+    if (argv[i] == NULL)
+      argv[i] = (char *)"";  /* last resort: empty argument */
+  }
+  argv[argc] = NULL;
+  rc = lua_cli_main(argc, argv);
+  for (i = 0; i < argc; i++) {
+    if (argv[i] != (char *)"")
+      free(argv[i]);
+  }
+  free(argv);
+  return rc;
+}
+#else
+int main (int argc, char **argv) {
+  return lua_cli_main(argc, argv);
+}
+#endif
 
