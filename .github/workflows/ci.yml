@@ -165,6 +165,16 @@ jobs:
           $exe = "build/${{ matrix.config }}/CaesuraAmeKAG.exe"
           if (Test-Path $exe) { Write-Host "Engine OK: $((Get-Item $exe).Length/1MB) MB" }
 
+      - name: Web Packaging Unicode E2E
+        if: matrix.config == 'Debug'
+        shell: pwsh
+        run: |
+          # Round 32 (Track A): real engine + POST /api/package/web with a
+          # Chinese story path and output name - CreateProcessW / widenUtf8
+          # path-safety gate (tests/scripts/test_package_web_unicode.py).
+          python tests/scripts/test_package_web_unicode.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   # ============================================================
   # macOS Clang
   # ============================================================
@@ -313,6 +323,21 @@ jobs:
 
       - name: Platform Matrix Freshness & Validation
         run: python3 scripts/generate_platform_status.py --check
+
+      - name: Platform Matrix Generator Unit Tests
+        run: python3 tests/scripts/test_generate_platform_status.py
+
+      - name: Capability Closure Matrix Freshness
+        run: |
+          # Round 32 (Track B): closure matrix must match the current source
+          # census. generated_at embeds the newest-input mtime by design, so
+          # it differs across checkouts - normalize that line out of the diff
+          # (git diff -I ignores hunks whose changed lines all match).
+          python3 scripts/capability_closure.py
+          if ! git diff -I "> 生成时间" --exit-code -- docs/design/capability-closure-matrix.md; then
+            echo "Capability closure matrix is stale - run scripts/capability_closure.py and commit"
+            exit 1
+          fi
 
       - name: Android Subsystem Regression Gate
         run: python3 scripts/verify_android_regression.py
