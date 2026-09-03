@@ -59,6 +59,12 @@ bool sanitizeWebOutName(const std::string& raw, std::string& out) {
         }
         out.push_back(static_cast<char>(ch));
     }
+    // Windows trims trailing dots/spaces from names (NTFS normalization);
+    // a name that collapses to "." or ".." would alias a parent directory.
+    // Reject outright — review NIT-1 depth defense.
+    while (!out.empty() && (out.back() == '.' || out.back() == ' ')) {
+        out.pop_back();
+    }
     return !out.empty();
 }
 
@@ -484,7 +490,8 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
 
     std::string name = outName.empty() ? "example_game" : outName;
     if (!outName.empty() && !sanitizeWebOutName(outName, name)) {
-        return ServiceResult::err(400, "outName contains no usable characters ([A-Za-z0-9_-])");
+        return ServiceResult::err(
+            400, "outName contains no usable characters (Unicode allowed; control, path separator, slash and Windows-illegal characters are stripped)");
     }
     const std::string outDir = "dist/" + name;
 

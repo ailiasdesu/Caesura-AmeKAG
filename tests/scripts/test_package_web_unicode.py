@@ -182,6 +182,27 @@ def main():
         check("negative-control-400",
               st == 400 and "control characters" in neg_err,
               "%s %s" % (st, body[:200]))
+        # ---- outName sanitizer locks (review NIT-b) ----
+        st, body = request("/api/package/web",
+                           data=json.dumps({"storyPath": GAME_KS,
+                                            "outName": ".."}).encode("utf-8"),
+                           timeout=30)
+        check("negative-outname-dotdot-400", st == 400, "%s %s" % (st, body[:200]))
+        st, body = request("/api/package/web",
+                           data=json.dumps({"storyPath": GAME_KS,
+                                            "outName": "<>:\"|*?"}).encode("utf-8"),
+                           timeout=30)
+        check("negative-outname-all-stripped-400", st == 400, "%s %s" % (st, body[:200]))
+        st, body = request("/api/package/web",
+                           data=json.dumps({"storyPath": GAME_KS,
+                                            "outName": "a<b"}).encode("utf-8"),
+                           timeout=30)
+        resp2 = json.loads(body) if body else {}
+        check("positive-outname-illegal-stripped",
+              st == 200 and resp2.get("outputDir") == "dist/ab",
+              "%s %s" % (st, body[:200]))
+        # cleanup the stripped-name output produced above
+        shutil.rmtree(os.path.join(REPO, "dist", "ab"), ignore_errors=True)
     except Exception as exc:
         check("no-exception", False, repr(exc))
     finally:
