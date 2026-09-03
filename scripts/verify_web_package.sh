@@ -100,7 +100,8 @@ NASSET="$(find "$DIST/assets" -type f 2>/dev/null | head -1 | wc -l | tr -d ' ')
 [ -d "$DIST/assets" ] && [ "$NASSET" -ge 1 ] && ok "assets/ present and non-empty" || bad "assets/ present and non-empty" "missing or empty $DIST/assets"
 STORY="$DIST/cache/story/story.lua"
 [ -f "$STORY" ]                     && ok "cache/story/story.lua present" || bad "cache/story/story.lua present" "missing $STORY"
-mapfile -t KS < <(find "$DIST/demo" -type f -name '*.ks' 2>/dev/null | LC_ALL=C sort)
+KS=()
+while IFS= read -r k; do KS+=("$k"); done < <(find "$DIST/demo" -type f -name '*.ks' 2>/dev/null | LC_ALL=C sort)
 [ "${#KS[@]}" -ge 1 ]               && ok "demo/<game>/*.ks >= 1 (${#KS[@]})" || bad "demo/<game>/*.ks >= 1" "no scenes under $DIST/demo"
 MANIFEST="$DIST/MANIFEST.txt"
 [ -f "$MANIFEST" ]                  && ok "MANIFEST.txt present"      || bad "MANIFEST.txt present" "missing $MANIFEST"
