@@ -28,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -275,8 +276,13 @@ class TestRealPackage(unittest.TestCase):
     @unittest.skipUnless(real_package_inputs_present(),
                          "needs web/dist (cd web && npm run build) and a lua interpreter")
     def test_first_vn_packaged_by_package_game_passes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            out_dir = Path(tmp) / "first_vn"
+        # t193 (A2 contract): package_game.mjs rejects --out outside the repo
+        # root by design (Node fs.rmSync has no '..' refusal; the old bash
+        # relied on coreutils). Package into a unique subdir under ROOT/dist —
+        # OS temp dirs live outside ROOT — and clean it up afterwards.
+        pkg_root = ROOT / "dist" / ("verify-t193-" + uuid.uuid4().hex[:12])
+        out_dir = pkg_root / "first_vn"
+        try:
             res = subprocess.run(
                 [BASH, posix(PACKAGE), "--no-web-build", "--out", posix(out_dir),
                  "tests/projects/first_vn"],
@@ -287,6 +293,10 @@ class TestRealPackage(unittest.TestCase):
             rc, out = run_verify(out_dir)
             self.assertEqual(rc, 0, out)
             self.assertIn("FAIL 0", out)
+        finally:
+            shutil.rmtree(pkg_root, ignore_errors=True)
+        self.assertFalse(pkg_root.exists(),
+                         "t193: verify package residue left at %s" % pkg_root)
 
 
 if __name__ == "__main__":
