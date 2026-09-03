@@ -5,6 +5,8 @@
 > 本文档只记录决策与依据，不描述实现；实现记录见各执行批的 commit body 与 `docs/solutions/`。
 > 所有 file:line 均为写入时刻实读（HEAD `1a25fd0c`）。
 
+> 📌 **2026-09-03 用户拍板修订**：决策 #7 的 Electron 壳→**Rust 壳（Tauri 2）**——『不用 Electron，用 Rust 套，保证效率』。方案与里程碑见 `2026-09-03-034-studio-rust-shell.md`；现有 editor/electron 壳与依赖退役（S4）。
+
 ## 1. 草案 031 决策位定稿
 
 | # | 决策位 | 定稿 | 依据（实况） |
