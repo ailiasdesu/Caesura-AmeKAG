@@ -109,61 +109,21 @@ bool isRegularFile(const fs::path& path) {
     return fs::is_regular_file(path, ec) && !ec;
 }
 
-std::wstring lowerPathForCompare(const fs::path& path) {
-    std::wstring value = path.generic_wstring();
-    for (wchar_t& ch : value) {
-        if (ch == L'\\') ch = L'/';
-        if (ch >= L'A' && ch <= L'Z') {
-            ch = static_cast<wchar_t>(ch - L'A' + L'a');
-        }
-    }
-    return value;
-}
-
-bool isWindowsSystemBash(const fs::path& path) {
-    const std::wstring value = lowerPathForCompare(path);
-    return value.find(L"/system32/") != std::wstring::npos;
-}
-
-fs::path findGitBash() {
-    // CAESURA_BASH is an explicit operator override. It is intentionally
-    // checked before PATH so a machine with WSL's System32/bash.exe first in
-    // PATH cannot silently route package_game.sh through WSL.
-    if (const wchar_t* env = _wgetenv(L"CAESURA_BASH")) {
+fs::path findNode() {
+    // CAESURA_NODE is an explicit operator override, checked before PATH so a
+    // machine with an nvm/nvs shim first in PATH cannot silently route web
+    // packaging through an unexpected node (explicit resolution, never a bare
+    // name -- same discipline as the former bash resolver).
+    if (const wchar_t* env = _wgetenv(L"CAESURA_NODE")) {
         if (*env) {
             const fs::path overridePath(env);
             if (isRegularFile(overridePath)) return overridePath;
         }
     }
 
-    std::vector<fs::path> candidates;
-    const auto addGitRoot = [&candidates](const wchar_t* root) {
-        if (!root || !*root) return;
-        const fs::path base(root);
-        candidates.push_back(base / L"Git" / L"bin" / L"bash.exe");
-        candidates.push_back(base / L"Git" / L"usr" / L"bin" / L"bash.exe");
-    };
-    addGitRoot(_wgetenv(L"ProgramW6432"));
-    addGitRoot(_wgetenv(L"ProgramFiles"));
-    addGitRoot(_wgetenv(L"ProgramFiles(x86)"));
-    if (const wchar_t* localAppData = _wgetenv(L"LOCALAPPDATA")) {
-        if (*localAppData) {
-            candidates.push_back(fs::path(localAppData) / L"Programs" / L"Git" /
-                                 L"bin" / L"bash.exe");
-            candidates.push_back(fs::path(localAppData) / L"Programs" / L"Git" /
-                                 L"usr" / L"bin" / L"bash.exe");
-        }
-    }
-    for (const auto& candidate : candidates) {
-        if (isRegularFile(candidate)) return candidate;
-    }
-
-    // Git can be installed outside the standard Program Files locations. Walk
-    // PATH ourselves rather than asking CreateProcess/shutil.which to resolve
-    // the bare name: Windows puts System32/bash.exe (the WSL launcher) ahead
-    // of PATH. Any other explicit PATH candidate is allowed: official
-    // PortableGit installs commonly live under names such as PortableGit or
-    // GitPortable and do not contain a literal /Git/ path component.
+    // Walk PATH ourselves: directory entries are rejected by isRegularFile;
+    // node.exe never lives in the Windows system directory, so no System32
+    // exclusion is needed here (unlike bash, whose System32 launcher is WSL).
     if (const wchar_t* pathEnv = _wgetenv(L"PATH")) {
         const std::wstring pathList(pathEnv);
         size_t start = 0;
@@ -175,14 +135,31 @@ fs::path findGitBash() {
                 piece = piece.substr(1, piece.size() - 2);
             }
             if (!piece.empty()) {
-                const fs::path candidate = fs::path(piece) / L"bash.exe";
-                if (isRegularFile(candidate) && !isWindowsSystemBash(candidate)) {
-                    return candidate;
-                }
+                const fs::path candidate = fs::path(piece) / L"node.exe";
+                if (isRegularFile(candidate)) return candidate;
             }
             if (end == std::wstring::npos) break;
             start = end + 1;
         }
+    }
+
+    // Standard install locations (nodejs installers).
+    std::vector<fs::path> candidates;
+    const auto addRoot = [&candidates](const wchar_t* root) {
+        if (!root || !*root) return;
+        candidates.push_back(fs::path(root) / L"nodejs" / L"node.exe");
+    };
+    addRoot(_wgetenv(L"ProgramW6432"));
+    addRoot(_wgetenv(L"ProgramFiles"));
+    addRoot(_wgetenv(L"ProgramFiles(x86)"));
+    if (const wchar_t* localAppData = _wgetenv(L"LOCALAPPDATA")) {
+        if (*localAppData) {
+            candidates.push_back(fs::path(localAppData) / L"Programs" / L"nodejs" /
+                                 L"node.exe");
+        }
+    }
+    for (const auto& candidate : candidates) {
+        if (isRegularFile(candidate)) return candidate;
     }
     return {};
 }
@@ -495,10 +472,10 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     }
     const std::string outDir = "dist/" + name;
 
-    fs::path scriptPath = m_ctx.sourceRoot() / "scripts" / "package_game.sh";
+    fs::path scriptPath = m_ctx.sourceRoot() / "scripts" / "package_game.mjs";
     if (!fs::exists(scriptPath)) {
         return ServiceResult{503, {{"ok", false},
-                                   {"error", "scripts/package_game.sh not found (engine must run inside the repository)"}}};
+                                   {"error", "scripts/package_game.mjs not found (engine must run inside the repository)"}}};
     }
 
     try {
@@ -522,7 +499,7 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     }
     if (scriptArg.empty()) {
         return ServiceResult{503, {{"ok", false},
-                                   {"error", "failed to resolve scripts/package_game.sh relative to the engine working directory"}}};
+                                   {"error", "failed to resolve scripts/package_game.mjs relative to the engine working directory"}}};
     }
     for (auto& ch : scriptArg) {
         if (ch == static_cast<char>(92)) ch = '/';
@@ -531,28 +508,28 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     std::string output;
     int exitCode = -1;
 #if defined(_WIN32)
-    const fs::path bashPath = findGitBash();
-    if (bashPath.empty()) {
+    const fs::path nodePath = findNode();
+    if (nodePath.empty()) {
         return ServiceResult{503, {{"ok", false},
-                                   {"error", "Git Bash not found (set CAESURA_BASH to bash.exe)"},
+                                   {"error", "Node.js not found (set CAESURA_NODE to node.exe)"},
                                    {"outputDir", outDir}}};
     }
     DWORD spawnError = ERROR_SUCCESS;
     if (!runProcessCapture(
-            bashPath,
+            nodePath,
             {scriptPath.native(), L"--out", widenUtf8(outDir), widenUtf8(sp)},
             output, exitCode, spawnError)) {
         return ServiceResult{500, {{"ok", false},
-                                   {"error", "failed to spawn Git Bash (Windows error " +
+                                   {"error", "failed to spawn Node.js (Windows error " +
                                                  std::to_string(spawnError) + ")"},
                                    {"outputDir", outDir}}};
     }
 #else
-    const std::string command = "bash \"" + scriptArg + "\" --out \"" +
+    const std::string command = "node \"" + scriptArg + "\" --out \"" +
                                 outDir + "\" \"" + sp + "\" 2>&1";
     FILE* pipe = ::popen(command.c_str(), "r");
     if (!pipe) {
-        const char* const spawnError = "failed to spawn bash (is git bash on PATH?)";
+        const char* const spawnError = "failed to spawn node (is node on PATH?)";
         return ServiceResult{500, {{"ok", false},
                                    {"error", spawnError},
                                    {"outputDir", outDir}}};
@@ -570,7 +547,7 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     if (exitCode != 0) {
         return ServiceResult{500, {{"status", "error"},
                                    {"ok", false},
-                                   {"error", "package_game.sh failed with exit code " +
+                                   {"error", "package_game.mjs failed with exit code " +
                                                  std::to_string(exitCode)},
                                    {"outputDir", outDir},
                                    {"logTail", tail}}};

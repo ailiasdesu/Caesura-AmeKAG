@@ -10,7 +10,7 @@ The product task book (docs/plans/audit/Caesura-AmeKAG_产品化推进总任务�
 requires a *game-only package*: what a player downloads and double-clicks. Nothing
 in the repo produced that shape before — CPack ships the whole developer tree
 (scripts + demo + full 39 MB shared asset pool + projects/), and
-scripts/package_game.sh only produces the Web static site.
+scripts/package_game.mjs (Node CLI, t179) only produces the Web static site.
 
 Design decision: this module NEVER configures or invokes a C++ toolchain.
 ------------------------------------------------------------------------
@@ -187,39 +187,35 @@ def _assemble_clean(project: Path, entry_scene: Path, engine: Path, out: Path,
             shutil.rmtree(out, ignore_errors=True)
 
 
-def find_bash() -> str:
-    """Resolve git-bash EXPLICITLY, never the bare name "bash".
+def find_node() -> str:
+    """Resolve Node EXPLICITLY, never the bare name semantics alone.
 
-    subprocess resolves a bare name through CreateProcess, which searches the
-    Windows system directory BEFORE PATH -- so "bash" finds
-    C:/Windows/System32/bash.exe (the WSL launcher). package_game.sh then runs
-    inside WSL, where web/node_modules holds the WINDOWS rollup binary, and the
-    web build dies with "Cannot find module @rollup/rollup-linux-x64-gnu".
-    Empirically reproduced on this host; the same script succeeds when invoked
-    with the git-bash absolute path.
+    Node is already an implicit hard dependency of web packaging (vite/wasmoon
+    toolchain); with the package_game.mjs CLI (t179) Git Bash is no longer
+    required. Resolution order: CAESURA_NODE override -> PATH -> common
+    installer locations. A bare-path resolution is still validated to be an
+    actual file (nvm/nvs shims can shadow the real node on PATH).
     """
-    env = os.environ.get("CAESURA_BASH", "").strip()
+    env = os.environ.get("CAESURA_NODE", "").strip()
     if env and Path(env).is_file():
         return env
+    found = shutil.which("node")
+    if found and Path(found).is_file():
+        return found
+    candidates = []
     if os.name == "nt":
-        for c in (r"C:\Program Files\Git\bin\bash.exe",
-                  r"C:\Program Files\Git\usr\bin\bash.exe",
-                  r"C:\Program Files (x86)\Git\bin\bash.exe"):
-            if Path(c).is_file():
-                return c
-        found = shutil.which("bash")
-        if found and "system32" not in found.lower():
-            return found
-        raise BuildError(
-            "No git-bash found (needed by scripts/package_game.sh for the web target).\n"
-            "  Searched: CAESURA_BASH, C:/Program Files/Git/bin/bash.exe,\n"
-            "            C:/Program Files/Git/usr/bin/bash.exe, PATH (excluding System32/WSL)\n"
-            "  Fix: install Git for Windows, or set CAESURA_BASH=<path to git bash.exe>."
-        )
-    found = shutil.which("bash")
-    if not found:
-        raise BuildError("No bash interpreter found (needed by scripts/package_game.sh).")
-    return found
+        for root in (os.environ.get("ProgramW6432"), os.environ.get("ProgramFiles"),
+                     os.environ.get("ProgramFiles(x86)"),
+                     os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")):
+            if root:
+                candidates.append(os.path.join(root, "nodejs", "node.exe"))
+    else:
+        candidates.extend(["/usr/local/bin/node", "/usr/bin/node"])
+    for c in candidates:
+        if Path(c).is_file():
+            return c
+    raise BuildError(
+        "No Node.js found (web packaging requires node; set CAESURA_NODE)")
 
 
 def find_lua() -> str:
@@ -924,14 +920,14 @@ def cmd_package(args) -> int:
             # Reuse the existing, verified Web pipeline verbatim.
             web_out = out_dir / ("%s-web" % project.name)
             zip_path = out_dir / ("%s-web.zip" % project.name)
-            cmd = [find_bash(), "scripts/package_game.sh", _rel(project),
+            cmd = [find_node(), "scripts/package_game.mjs", _rel(project),
                    "--out", _rel(web_out), "--zip", _rel(zip_path)]
             # flush: the child writes straight to the inherited handles, so an
             # unflushed announcement would print AFTER its own output.
             print("[package] web: %s" % " ".join(cmd), flush=True)
             res = subprocess.run(cmd, cwd=str(ROOT))
             if res.returncode != 0:
-                print("caesura package: web packaging failed (scripts/package_game.sh "
+                print("caesura package: web packaging failed (scripts/package_game.mjs "
                       "exited %d -- see its output above)." % res.returncode, file=sys.stderr)
                 return res.returncode
             if zip_path.exists():

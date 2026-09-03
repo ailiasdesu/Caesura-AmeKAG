@@ -71,6 +71,34 @@ def ensure_windows_package(version: str, dist_dir: str, force_build: bool = Fals
     print(f"[Windows] Staged {target_name} ({os.path.getsize(target_path):,} bytes)")
     return target_path
 
+def _find_node() -> str:
+    """Resolve Node explicitly: CAESURA_NODE env -> PATH -> common installs.
+
+    Mirrors caesura_build.find_node semantics (t180); bare-name resolution is
+    validated to an actual file so nvm/nvs shims cannot silently switch the
+    runtime used for web packaging.
+    """
+    env = os.environ.get("CAESURA_NODE", "").strip()
+    if env and os.path.isfile(env):
+        return env
+    found = shutil.which("node")
+    if found and os.path.isfile(found):
+        return found
+    candidates = []
+    if os.name == "nt":
+        for root in (os.environ.get("ProgramW6432"), os.environ.get("ProgramFiles"),
+                     os.environ.get("ProgramFiles(x86)"),
+                     os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")):
+            if root:
+                candidates.append(os.path.join(root, "nodejs", "node.exe"))
+    else:
+        candidates.extend(["/usr/local/bin/node", "/usr/bin/node"])
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return ""
+
+
 def ensure_web_package(version: str, dist_dir: str, force_build: bool = False) -> str:
     """Ensure Web standalone static PWA distribution bundle is packaged and staged."""
     target_name = f"CaesuraAmeKAG-{version}-web.zip"
@@ -81,8 +109,13 @@ def ensure_web_package(version: str, dist_dir: str, force_build: bool = False) -
         print(f"[Web] Found existing staged artifact: {target_name}")
         return target_path
 
-    print("[Web] Packaging web player and demo game via scripts/package_game.sh...")
-    cmd = ["bash", "scripts/package_game.sh", "demo/example_game", "--out", "dist/example_game", "--zip", target_path]
+    print("[Web] Packaging web player and demo game via scripts/package_game.mjs...")
+    node = _find_node()
+    if not node:
+        raise RuntimeError(
+            "[Web] No Node.js found (web packaging requires node; set CAESURA_NODE)")
+    cmd = [node, "scripts/package_game.mjs", "demo/example_game",
+           "--out", "dist/example_game", "--zip", target_path]
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
     if not os.path.exists(target_path):
