@@ -1107,6 +1107,36 @@ extern "C" int main(int argc, char* argv[]) {
     // require a bearer token on every HTTP editor request.
     const char* envToken = std::getenv("CAESURA_EDITOR_TOKEN");
     std::string editorToken = envToken ? envToken : "";
+    // --help / -h: print usage to stdout and exit 0 before any engine
+    // initialization (TTFV dry-run audit P1 -- a bare `--help` must work
+    // from any working directory with zero side effects).
+    for (int i = 1; i < argc; i++) {
+        const std::string a = argv[i];
+        if (a == "--help" || a == "-h") {
+            const std::string argv0 = argv[0] ? argv[0] : "CaesuraAmeKAG";
+            const size_t lastSlash = argv0.find_last_of("/\\");
+            const std::string prog = lastSlash == std::string::npos ? argv0 : argv0.substr(lastSlash + 1);
+            printf("Usage: %s [options]\n", prog.c_str());
+            printf("\n");
+            printf("Caesura (AmeKAG) -- cross-platform visual novel engine.\n");
+            printf("\n");
+            printf("Options:\n");
+            printf("  --headless            run without a GPU window (headless/stdio mode)\n");
+            printf("  --editor              run the HTTP editor server (127.0.0.1:9876, hidden GPU window)\n");
+            printf("  --editor-stdio        run the stdin/stdout JSON-RPC editor transport\n");
+            printf("  --editor-insecure     disable the default-deny editor auth gate (loud warning; use at your own risk)\n");
+            printf("  --backend <name>      GPU backend override (opengl|vulkan|dx11|dx12|metal|webgpu)\n");
+            printf("  --frames <N>          deterministic frame limit (0 = unlimited)\n");
+            printf("  --resolution <WxH>    render canvas size (default 1920x1080)\n");
+            printf("  --export-replay <f>   replay a recorded input JSON while exporting frames\n");
+            printf("  --export-dir <dir>    frame export directory (default export_out)\n");
+            printf("  --help, -h            print this help and exit\n");
+            printf("\n");
+            printf("Environment:\n");
+            printf("  CAESURA_EDITOR_TOKEN  bearer token for the HTTP editor (default-deny; unset = auto-generated)\n");
+            return 0;
+        }
+    }
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--headless") {
