@@ -58,8 +58,9 @@
   2. **Runtime Verified**（运行闭包）=『真实跑起来证明效果正确』——语义测试实测（现有 tests/ 证据，需协议化判据）；
   3. **Platform Verified**（平台闭包）=『Windows/Linux/Web/Android/... 都跑过』——overrides 的 platform_tested 字段（现多 ?，需按平台补充）；
   4. **Packaged**（发布闭包）=『最终 package 中也存在』——overrides 的 packaged 字段（现多 ?）。
-- **目标形态**：矩阵每命令四层独立列/标记（每层有明确判据协议），计数表展示四层计数（当前大致：Structural 127 / Runtime 137 tested / Platform ? / Packaged ?——诚实呈现，不求百分百），Status 列措辞明示=Structural Closed。
+- **目标形态**：矩阵每命令四层独立列/标记（每层有明确判据协议），计数表展示四层计数（诚实呈现，不求百分百），Status 列措辞明示=Structural Closed。
 - **推进方式**：划入下一阶段主线（029 冻结期可做判据协议与逐列填充；Platform/Packaged 列随 Phase2 分发推进逐项真实验证），落地为独立派单批（先协议后填列）。
+- **✅ 已产品化（2026-09-04 t197）**：矩阵列演进完成——`| Command | Declared | Dispatched | Consumed | Structural | Runtime | Platform | Packaged | Observable | 证据 |`；Status 并入 Structural、Tested 并入 Runtime（✔N=测试证据）；overrides 值域协议化（platform_tested=平台枚举或 `-`、packaged=产物标识或 `-`，非法 exit 2；现状 `?` 全部迁移为 `-`=无证据诚实）；四层计数行=Structural Closed 127 / Runtime 测试证据 137 / Platform 0 / Packaged 0（实测对账一致）；旧统计行保留（plan-status 生成器兼容）；新测试 test_capability_closure.py 10 用例。**Platform/Packaged 保持 0 直至 Phase2 真实验证（by design）**。
 
 ---
 （方向记录；执行批次按分步放行惯例派单。）

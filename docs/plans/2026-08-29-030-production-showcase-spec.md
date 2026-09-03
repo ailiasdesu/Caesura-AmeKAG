@@ -32,7 +32,7 @@
 
 ## ③ 能力与平台对照（禁止凭印象写支持度）
 
-引用口径：`docs/design/platform-support-matrix.md`（029 工件 B，七级阶梯+证据码；证据快照基线=run **33245271845 @ 0fce3311**）与 `docs/design/capability-closure-matrix.md`（`scripts/capability_closure.py` 自动生成；`Platform Tested`/`Packaged` 列当前多数格为 `?`）。
+引用口径：`docs/design/platform-support-matrix.md`（029 工件 B，七级阶梯+证据码；证据快照基线=run **33245271845 @ 0fce3311**）与 `docs/design/capability-closure-matrix.md`（`scripts/capability_closure.py` 自动生成；`Platform`/`Packaged` 两列=协议化值——平台枚举/产物标识，无证据=`-`；当前为 0/全 `-`，随 Phase2 分发逐项真实验证填充）。
 
 ### 3.1 平台总表相关格（逐格按证据码，非声称）
 
@@ -43,7 +43,7 @@
 
 ### 3.2 能力矩阵相关格（证据码=file:line，未核真不写入）
 
-- capability-closure-matrix.md 的能力状态（CLOSED/PARTIAL/UNWIRED）与 `Platform Tested`/`Packaged` 两列（现状多为 `?`）是展示品选型依据：**制作排期前必须完成展示品所需命令的核真**（沿用 T-D1 式 file:line 证据链；见029 §六），禁止凭印象挑选支持度。
+- capability-closure-matrix.md 的能力状态（CLOSED/PARTIAL/UNWIRED）与 `Platform`/`Packaged` 两列（协议化值；无证据=`-`，当前 0/全 `-`，随 Phase2 分发逐项真实验证填充）是展示品选型依据：**制作排期前必须完成展示品所需命令的核真**（沿用 T-D1 式 file:line 证据链；见029 §六），禁止凭印象挑选支持度。
 - golden project（tests/projects/golden_vn/）为可玩链路回归基线，其断言覆盖能力集=能力矩阵核真的最小集合。
 
 ### 3.3 发布前置缺口 → 立项条件
@@ -116,7 +116,7 @@
 ### 7.2 风险（评审通过前须知）
 
 - **发布面缺口（立项条件 A/B）**：Web Package 无验证门禁、Android APK 链路未接线——评审通过≠可以发布；两项闭合仍在 Sprint6/7 范围（Store 级=Sprint7 统一推进）。
-- **Web 包体与性能**：音/图/BGM 总量受浏览器传输与移动端限制；bgfx Web 端（wasmoon 链路）能力=Web 角度的 Platform Tested 格多为 `?`——Live2D/VFX 在 Web 的行为需在立项条件 A 的门禁里先行探明。
+- **Web 包体与性能**：音/图/BGM 总量受浏览器传输与移动端限制；bgfx Web 端（wasmoon 链路）能力=Web 角度的 Platform 格当前为 `-`（无证据）——Live2D/VFX 在 Web 的行为需在立项条件 A 的门禁里先行探明。
 - **Live2D/Cubism 许可**：SDK 商业许可与再分发条款；Android/Web 平台的模型运行条件（引擎 Live2D 后端覆盖范围）需评审时核对。
 - **评审前置未满足**：工件 A 或 Sprint6-L2/M2 未达 → M5 判据不满足，评审自然推迟（029:65），本草案不因此设「完成」替代判据。
 - **能力矩阵红点**：展示品选型依赖的任一命令为 UNWIRED/PARTIAL 且未排接线 → 制作排期风险（评审记录应附选型×矩阵状态对照）。
