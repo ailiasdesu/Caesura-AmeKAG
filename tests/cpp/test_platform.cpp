@@ -294,7 +294,7 @@ TEST_CASE("Display: SDL3DisplayService with no platform backend reports zeros") 
 TEST_CASE("Display: SDL3DisplayService with an uninitialized platform is safe") {
     // No window yet (backend constructed, init() not called) -> zero metrics.
     SDL3PlatformBackend backend;
-    SDL3DisplayService svc(&backend);
+    SDL3DisplayService svc(backend.window());
     const auto m = svc.currentMetrics();
     CHECK(m.pixelWidth == 0);
     CHECK(m.pixelHeight == 0);

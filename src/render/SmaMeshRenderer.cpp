@@ -3,6 +3,7 @@
 #include "EmbeddedShaders.h"
 #include "SmaSkinner.h"
 #include "../debug/api/DebugLog.h"   // P1-6: api header instead of concrete DebugManager.h
+#include "../di/BackendRegistry.h"
 #include <bgfx/bgfx.h>
 #include <bx/bx.h>
 #include <bx/error.h>
@@ -96,8 +97,37 @@ struct Bytecode {
 SmaMeshRenderer::SmaMeshRenderer() = default;
 
 SmaMeshRenderer::~SmaMeshRenderer() {
+    if (m_listenerRegistered) {
+        BackendRegistry::instance().unregisterDeviceLostListener(this);
+        m_listenerRegistered = false;
+    }
+    releaseGpuResources();
+}
+
+void SmaMeshRenderer::releaseMeshGpuResources(MeshEntry& entry) {
+    if (bgfx::isValid(entry.ib)) bgfx::destroy(entry.ib);
+    if (bgfx::isValid(entry.gpuIn)) bgfx::destroy(entry.gpuIn);
+    if (bgfx::isValid(entry.gpuOut)) bgfx::destroy(entry.gpuOut);
+    entry.ib = BGFX_INVALID_HANDLE;
+    entry.gpuIn = BGFX_INVALID_HANDLE;
+    entry.gpuOut = BGFX_INVALID_HANDLE;
+    entry.gpuReady = false;
+    entry.gpuSkinReady = false;
+    entry.gpuSkinned = false;
+    entry.gpuDirty = false;
+}
+
+void SmaMeshRenderer::releaseGpuResources() {
+    for (auto& entry : m_meshes) {
+        releaseMeshGpuResources(entry);
+    }
     if (bgfx::isValid(m_boneBuffer)) bgfx::destroy(m_boneBuffer);
     if (bgfx::isValid(m_skinProgram)) bgfx::destroy(m_skinProgram);
+    m_boneBuffer = BGFX_INVALID_HANDLE;
+    m_skinProgram = BGFX_INVALID_HANDLE;
+    m_shaders.reset();
+    m_initialized = false;
+    m_skinWarningShown = false;
 }
 
 void SmaMeshRenderer::init() {
@@ -168,6 +198,22 @@ void SmaMeshRenderer::init() {
     }
 
     m_initialized = true;
+    if (!m_listenerRegistered) {
+        BackendRegistry::instance().registerDeviceLostListener(this);
+        m_listenerRegistered = true;
+    }
+}
+
+void SmaMeshRenderer::onDeviceLost() {
+    releaseGpuResources();
+}
+
+void SmaMeshRenderer::onDeviceRestored() {
+    init();
+    if (!m_initialized) return;
+    for (auto& entry : m_meshes) {
+        uploadMeshGpuResources(entry);
+    }
 }
 
 void SmaMeshRenderer::setSkinMode(SkinMode mode) {
@@ -198,6 +244,41 @@ bool SmaMeshRenderer::useGpuSkin(const MeshEntry& entry) const {
     return capable;  // Auto: capability-based
 }
 
+void SmaMeshRenderer::uploadMeshGpuResources(MeshEntry& entry) {
+    releaseMeshGpuResources(entry);
+    entry.ib = bgfx::createIndexBuffer(
+        bgfx::copy(entry.mesh.indices.data(),
+                   static_cast<uint32_t>(entry.mesh.indices.size() * sizeof(uint16_t))));
+    entry.gpuReady = bgfx::isValid(entry.ib);
+
+    const uint64_t caps = bgfx::getCaps()->supported;
+    if (entry.gpuReady && (caps & BGFX_CAPS_COMPUTE)
+        && bgfx::isValid(m_skinProgram) && bgfx::isValid(m_boneBuffer)) {
+        const uint32_t vcount = static_cast<uint32_t>(entry.mesh.vertices.size());
+        std::vector<float> data;
+        data.reserve(vcount * 8);
+        for (const SMAMeshVertex& v : entry.mesh.vertices) {
+            data.push_back(v.x);
+            data.push_back(v.y);
+            data.push_back(v.u);
+            data.push_back(v.v);
+            data.push_back(static_cast<float>(v.bone0));
+            data.push_back(static_cast<float>(v.bone1));
+            data.push_back(v.w0);
+            data.push_back(v.w1);
+        }
+        entry.gpuIn = bgfx::createVertexBuffer(
+            bgfx::copy(data.data(),
+                       static_cast<uint32_t>(data.size() * sizeof(float))),
+            m_skinLayout, BGFX_BUFFER_COMPUTE_READ);
+        entry.gpuOut = bgfx::createDynamicVertexBuffer(
+            vcount, m_layout, BGFX_BUFFER_COMPUTE_WRITE);
+        entry.gpuSkinReady =
+            bgfx::isValid(entry.gpuIn) && bgfx::isValid(entry.gpuOut);
+    }
+    entry.gpuDirty = entry.gpuSkinReady && !entry.pendingPoses.empty();
+}
+
 // ---------------------------------------------------------------------------
 // IMeshRenderer
 // ---------------------------------------------------------------------------
@@ -219,41 +300,9 @@ MeshHandle SmaMeshRenderer::createMesh(const SMAMesh& mesh) {
         const SMAMeshVertex& v = mesh.vertices[i];
         entry.skinned[i] = { v.x, v.y, v.u, v.v };
     }
-    entry.ib = bgfx::createIndexBuffer(
-        bgfx::makeRef(mesh.indices.data(),
-                      static_cast<uint32_t>(mesh.indices.size() * sizeof(uint16_t))));
-    entry.gpuReady = bgfx::isValid(entry.ib);
-
     // S5: compute input/output buffers when the skin pipeline is usable.
-    // The INPUT is a STATIC buffer (created with its data): D3D11 forbids
-    // USAGE_DYNAMIC with a shader-resource bind, which bgfx's dynamic
-    // compute-read buffers use — they silently fail to render on D3D11.
-    const uint64_t caps = bgfx::getCaps()->supported;
-    if (entry.gpuReady && (caps & BGFX_CAPS_COMPUTE)
-        && bgfx::isValid(m_skinProgram) && bgfx::isValid(m_boneBuffer)) {
-        const uint32_t vcount = static_cast<uint32_t>(mesh.vertices.size());
-        std::vector<float> data;
-        data.reserve(vcount * 8);
-        for (const SMAMeshVertex& v : mesh.vertices) {
-            data.push_back(v.x);
-            data.push_back(v.y);
-            data.push_back(v.u);
-            data.push_back(v.v);
-            data.push_back(static_cast<float>(v.bone0));
-            data.push_back(static_cast<float>(v.bone1));
-            data.push_back(v.w0);
-            data.push_back(v.w1);
-        }
-        entry.gpuIn = bgfx::createVertexBuffer(
-            bgfx::copy(data.data(),
-                       static_cast<uint32_t>(data.size() * sizeof(float))),
-            m_skinLayout, BGFX_BUFFER_COMPUTE_READ);
-        entry.gpuOut = bgfx::createDynamicVertexBuffer(
-            vcount, m_layout, BGFX_BUFFER_COMPUTE_WRITE);
-        if (bgfx::isValid(entry.gpuIn) && bgfx::isValid(entry.gpuOut)) {
-            entry.gpuSkinReady = true;
-        }
-    }
+    // The INPUT is STATIC: D3D11 forbids DYNAMIC usage with an SRV bind.
+    uploadMeshGpuResources(entry);
 
     m_meshes.push_back(std::move(entry));
     return m_meshes.back().handle;
@@ -262,9 +311,7 @@ MeshHandle SmaMeshRenderer::createMesh(const SMAMesh& mesh) {
 void SmaMeshRenderer::destroyMesh(MeshHandle handle) {
     for (auto it = m_meshes.begin(); it != m_meshes.end(); ++it) {
         if (it->handle == handle) {
-            if (bgfx::isValid(it->ib)) bgfx::destroy(it->ib);
-            if (bgfx::isValid(it->gpuIn)) bgfx::destroy(it->gpuIn);
-            if (bgfx::isValid(it->gpuOut)) bgfx::destroy(it->gpuOut);
+            releaseMeshGpuResources(*it);
             m_meshes.erase(it);
             return;
         }
@@ -275,15 +322,19 @@ void SmaMeshRenderer::updateMesh(MeshHandle handle,
                                  const std::vector<BonePose>& poses) {
     MeshEntry* entry = find(handle);
     if (!entry || !entry->gpuReady) return;
+    entry->pendingPoses = poses;
     if (useGpuSkin(*entry)) {
         // Defer the GPU work to drawMesh (same-frame order: the bone
         // buffer upload + dispatch must run in the draw's view, before
         // its submit). Store the poses for packing at draw time.
-        entry->pendingPoses = poses;
         entry->gpuDirty = true;
         return;
     }
     skinMesh(entry->mesh, poses, entry->skinned);
+    // A later switch back to GPU mode must not reuse output skinned with an
+    // older pose. The retained pose also lets device restoration rebuild the
+    // first GPU frame deterministically.
+    entry->gpuDirty = entry->gpuSkinReady;
 }
 
 void SmaMeshRenderer::skinOnGpu(MeshEntry& entry,

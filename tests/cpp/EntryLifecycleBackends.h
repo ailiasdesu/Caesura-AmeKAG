@@ -149,7 +149,10 @@ public:
     }
     bool isInitialized() const override { return m_probe.initResult; }
     void beginShutdown() override { ++m_probe.beginShutdownCalls; }
-    void shutdown() override { ++m_probe.shutdownCalls; }
+    void shutdown() override {
+        ++m_probe.shutdownCalls;
+        if (m_probe.onShutdown) m_probe.onShutdown();
+    }
     void flushAllRTT() override { ++m_probe.flushCalls; }
     void beginFrame() override {}
     void endFrame() override {}

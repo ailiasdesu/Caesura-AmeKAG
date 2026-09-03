@@ -1,4 +1,5 @@
 #pragma once
+#include "../di/api/IDeviceLostListener.h"
 #include "render/api/IMeshRenderer.h"
 #include "SmaSkinner.h"
 #include <bgfx/bgfx.h>
@@ -27,7 +28,7 @@ class BgfxShaderManager;
 //  invalid handle, meshCount() still tracks bookkeeping when initialized.
 // ===========================================================================
 
-class SmaMeshRenderer final : public IMeshRenderer {
+class SmaMeshRenderer final : public IMeshRenderer, public IDeviceLostListener {
 public:
     SmaMeshRenderer(); // defined out-of-line (owns BgfxShaderManager)
     ~SmaMeshRenderer() override;
@@ -61,11 +62,15 @@ public:
 
     size_t meshCount() const override { return m_meshes.size(); }
 
+    // -- IDeviceLostListener ----------------------------------------------
+    void onDeviceLost() override;
+    void onDeviceRestored() override;
+
 private:
     struct MeshEntry {
         MeshHandle handle;
         SMAMesh mesh; // CPU copy (skinning input)
-        bgfx::IndexBufferHandle ib;
+        bgfx::IndexBufferHandle ib = BGFX_INVALID_HANDLE;
         std::vector<SmaSkinnedVertex> skinned;
         // S5 GPU skinning resources (valid when gpuSkinReady).
         // gpuIn is STATIC (D3D11 forbids DYNAMIC usage with an SRV bind).
@@ -82,6 +87,9 @@ private:
     };
 
     MeshEntry* find(MeshHandle handle);
+    void uploadMeshGpuResources(MeshEntry& entry);
+    void releaseMeshGpuResources(MeshEntry& entry);
+    void releaseGpuResources();
 
     // Effective mode for a given mesh: Auto resolves against the backend
     // caps (compute supported + D3D11/GL renderer).
@@ -101,6 +109,7 @@ private:
     SkinMode m_skinMode = SkinMode::Auto;
     mutable bool m_skinWarningShown = false;  // one-time Gpu-force fallback note
     bool m_initialized = false;
+    bool m_listenerRegistered = false;
 };
 
 } // namespace Caesura

@@ -99,7 +99,9 @@ void removeDebugPauseProbe(lua_State* L) {
 
 // Factory for GpuMonitor (defined in Engine_Gpu.cpp — F1)
 std::unique_ptr<IGpuMonitor> createGpuMonitor(bool headless);
-std::unique_ptr<IDisplayService> createDisplayService(const EngineConfig& config);
+std::unique_ptr<IDisplayService> createDisplayService(
+    const EngineConfig& config, const IPlatformBackend* platformBackend);
+SDL_Window* getSDLWindow(const IPlatformBackend* platformBackend);
 std::unique_ptr<ISteamBackend> createDefaultSteamIntegration();
 std::unique_ptr<IAudioBackend> createHeadlessAudioBackend();
 std::unique_ptr<IRenderDevice> createHeadlessRenderDevice();
@@ -131,6 +133,7 @@ void registerMiniGameLuaRegistryService(lua_State* L,
                                          IMiniGameBackend* miniGameBackend);
 
 EngineConfig::~EngineConfig() {
+    delete displayService;
     delete steam;
     delete animation;
     delete miniGame;
@@ -160,6 +163,7 @@ Engine::Engine(EngineConfig&& config)
     , m_renderDevice(std::exchange(m_config.render, nullptr))
     , m_audioBackend(std::exchange(m_config.audio, nullptr))
     , m_platformBackend(std::exchange(m_config.platform, nullptr))
+    , m_displayService(std::exchange(m_config.displayService, nullptr))
     , m_lua(std::exchange(m_config.lua, nullptr))
     , m_hotReload(std::make_unique<HotReload>())
     , m_inputRouter(std::exchange(m_config.inputRouter, nullptr))
@@ -194,7 +198,7 @@ IAudioBackend& Engine::audio() { requireInitialized(); return *m_audioBackend; }
 IPlatformBackend& Engine::platform() { requireInitialized(); return *m_platformBackend; }
 
 bool Engine::init() {
-    if (m_initAttempted) {
+    if (m_initAttempted || m_shutdownComplete) {
         fprintf(stderr, "[Engine] init() may only be called once per Engine instance.\n");
         return false;
     }
@@ -293,7 +297,7 @@ bool Engine::initPlatformPhase() {
     // platform impl is available; Null default otherwise. Registered so
     // script/engine bindings can query live metrics without platform ifdefs.
     if (!m_displayService) {
-        m_displayService = createDisplayService(m_config);
+        m_displayService = createDisplayService(m_config, m_platformBackend.get());
     }
     BackendRegistry::instance().setDisplayService(m_displayService.get());
 
@@ -320,9 +324,9 @@ bool Engine::initPlatformPhase() {
     // (they are never queued); register once here.
     SDL_AddEventWatch(&Engine::appLifecycleWatch, this);
 
-    if (m_config.editorMode) {
-        SDL_HideWindow(static_cast<SDL_Window*>(
-            m_platformBackend->getNativeWindowHandle()));
+    SDL_Window* sdlWindow = getSDLWindow(m_platformBackend.get());
+    if (m_config.editorMode && sdlWindow) {
+        SDL_HideWindow(sdlWindow);
     }
 
     void* nwh = gpuMode ? m_platformBackend->getNativeWindowHandle() : nullptr;
@@ -347,14 +351,10 @@ bool Engine::initPlatformPhase() {
     // resolution on Android (OS-imposed window), so the renderer maps the
     // logical scene (1920x1080) to the real surface (e.g. 2320x956) and the
     // game fills the display instead of clipping/letterboxing.
-    {
-        SDL_Window* win = static_cast<SDL_Window*>(
-            m_platformBackend ? m_platformBackend->getNativeWindowHandle() : nullptr);
-        if (win) {
-            int pw = 0, ph = 0;
-            if (SDL_GetWindowSizeInPixels(win, &pw, &ph) && pw > 0 && ph > 0) {
-                m_renderDevice->setPresentSize(uint32_t(pw), uint32_t(ph));
-            }
+    if (sdlWindow) {
+        int pw = 0, ph = 0;
+        if (SDL_GetWindowSizeInPixels(sdlWindow, &pw, &ph) && pw > 0 && ph > 0) {
+            m_renderDevice->setPresentSize(uint32_t(pw), uint32_t(ph));
         }
     }
     BackendRegistry::instance().setRenderDevice(m_renderDevice.get());
@@ -1789,6 +1789,12 @@ void Engine::shutdown() {
     m_animationBackend.reset();
     registry.setAnimationBackend(nullptr);
 
+    // SmaMeshRenderer owns bgfx programs and per-mesh GPU buffers. Destroy it
+    // while the renderer context is still alive; member destruction after
+    // m_renderDevice->shutdown() would release GPU handles too late.
+    registry.setMeshRenderer(nullptr);
+    m_meshRenderer.reset();
+
     // Animation can release textures through ITextureManager during shutdown.
     if (m_textureManagerInitialized) {
         m_textureManager->shutdown();
@@ -1808,6 +1814,8 @@ void Engine::shutdown() {
     m_deferredAsyncLoads.clear();
 
     if (m_renderInitialized) { m_renderDevice->shutdown(); }
+    registry.setDisplayService(nullptr);
+    m_displayService.reset();
     if (m_platformInitialized) m_platformBackend->shutdown();
 
     registry.setVideoPlayer(nullptr);
@@ -1825,6 +1833,8 @@ void Engine::shutdown() {
     registry.setResourceGenerationTracker(nullptr);
     registry.setSteamBackend(nullptr);
     registry.setMobileAdapter(nullptr);
+    registry.setLifecycleService(nullptr);
+    registry.setAudioFocusService(nullptr);
     registry.setRenderDevice(nullptr);
     registry.setAudioBackend(nullptr);
     registry.setPlatformBackend(nullptr);

@@ -131,6 +131,14 @@ TEST_CASE("SmaMeshRenderer no-GPU contract (deferred)") {
     CHECK_NOTHROW(renderer.drawMesh(0, h, 1, 0.f, 0.f, 1.f, 1.f));
 }
 
+TEST_CASE("SmaMeshRenderer device-loss callbacks are safe without GPU") {
+    SmaMeshRenderer renderer;
+    CHECK_NOTHROW(renderer.onDeviceLost());
+    CHECK_NOTHROW(renderer.onDeviceRestored());
+    CHECK_FALSE(renderer.isInitialized());
+    CHECK(renderer.meshCount() == 0);
+}
+
 // ===========================================================================
 // S5: GPU skinning math — packBonePoses + compute-shader replica must
 // agree with the CPU reference (skinMesh) exactly.

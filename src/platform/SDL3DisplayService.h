@@ -2,23 +2,23 @@
 
 #include "api/IDisplayService.h"
 
+struct SDL_Window;
+
 namespace Caesura {
 
-class IPlatformBackend;
-
-// Desktop display metrics from SDL3. The window handle is queried lazily
-// through IPlatformBackend::getNativeWindowHandle() on each call, so the
-// service can be constructed before the platform backend has created its
-// window (composition root order). No SDL dependency leaks into the header.
+// Desktop display metrics queried lazily from the SDL window owned by
+// SDL3PlatformBackend. The bgfx-native handle
+// is deliberately not used here: it may be an HWND, NSWindow, X11 Window, or
+// ANativeWindow rather than an SDL_Window.
 class SDL3DisplayService final : public IDisplayService {
 public:
-    explicit SDL3DisplayService(const IPlatformBackend* platform)
-        : m_platform(platform) {}
+    explicit SDL3DisplayService(SDL_Window* window)
+        : m_window(window) {}
 
     DisplayMetrics currentMetrics() const override;
 
 private:
-    const IPlatformBackend* m_platform = nullptr;
+    SDL_Window* m_window = nullptr;
 };
 
 } // namespace Caesura

@@ -5,6 +5,8 @@
 #include "debug/DebugProtocol.h"
 #include "di/BackendRegistry.h"
 #include "render/api/IGpuMonitor.h"
+#include "platform/api/IDisplayService.h"
+#include "platform/SDL3PlatformBackend.h"
 #include "script/vm/LuaManager.h"
 #include "EntryLifecycleBackends.h"
 #include <SDL3/SDL.h>
@@ -19,6 +21,12 @@ extern "C" {
 }
 
 using namespace Caesura;
+
+namespace Caesura {
+std::unique_ptr<IDisplayService> createDisplayService(
+    const EngineConfig& config, const IPlatformBackend* platformBackend);
+SDL_Window* getSDLWindow(const IPlatformBackend* platformBackend);
+}
 
 namespace {
 
@@ -44,6 +52,18 @@ private:
     FrameMetrics m_metrics;
 };
 
+class TestDisplayService final : public IDisplayService {
+public:
+    explicit TestDisplayService(int& destructorCalls)
+        : m_destructorCalls(destructorCalls) {}
+    ~TestDisplayService() override { ++m_destructorCalls; }
+
+    DisplayMetrics currentMetrics() const override { return {}; }
+
+private:
+    int& m_destructorCalls;
+};
+
 void checkEngineRegistryCleared() {
     auto& registry = BackendRegistry::instance();
     CHECK(registry.getPlatformBackend() == nullptr);
@@ -66,6 +86,10 @@ void checkEngineRegistryCleared() {
     CHECK(registry.getAnimationBackend() == nullptr);
     CHECK(registry.getSteamBackend() == nullptr);
     CHECK(registry.getLuaManager() == nullptr);
+    CHECK(registry.getDisplayService() == nullptr);
+    CHECK(registry.getLifecycleService() == nullptr);
+    CHECK(registry.getAudioFocusService() == nullptr);
+    CHECK(registry.getMeshRenderer() == nullptr);
 }
 
 } // namespace
@@ -97,6 +121,7 @@ TEST_CASE("Entry: EngineConfig pointer fields default nullptr") {
     CHECK(cfg.miniGame == nullptr);
     CHECK(cfg.animation == nullptr);
     CHECK(cfg.steam == nullptr);
+    CHECK(cfg.displayService == nullptr);
 }
 
 TEST_CASE("Entry: EngineConfig headless mode flag") {
@@ -261,6 +286,55 @@ TEST_CASE("Entry: unconsumed EngineConfig releases injected ownership") {
     CHECK(audio.shutdownCalls == 0);
 }
 
+TEST_CASE("Entry: injected display service transfers ownership and unregisters") {
+    int displayDestructorCalls = 0;
+    auto* display = new TestDisplayService(displayDestructorCalls);
+
+    {
+        EngineConfig cfg;
+        cfg.headless = true;
+        cfg.displayService = display;
+
+        Engine engine(std::move(cfg));
+        CHECK(engine.config().displayService == nullptr);
+        REQUIRE(engine.init());
+        CHECK(BackendRegistry::instance().getDisplayService() == display);
+
+        engine.shutdown();
+        CHECK(BackendRegistry::instance().getDisplayService() == nullptr);
+        CHECK(displayDestructorCalls == 1);
+    }
+
+    CHECK(displayDestructorCalls == 1);
+    checkEngineRegistryCleared();
+}
+
+TEST_CASE("Entry: default display service uses only SDL3 platform windows") {
+    Caesura::Test::LifecycleProbe platform;
+    EngineConfig cfg;
+    cfg.width = 321;
+    cfg.height = 123;
+    cfg.headless = false;
+    auto platformBackend = std::make_unique<Caesura::Test::PlatformBackend>(platform);
+
+    // A non-SDL platform must not expose its native OS handle as SDL_Window*.
+    auto display = Caesura::createDisplayService(cfg, platformBackend.get());
+    REQUIRE(display != nullptr);
+    DisplayMetrics metrics = display->currentMetrics();
+    CHECK(metrics.logicalWidth == 321);
+    CHECK(metrics.logicalHeight == 123);
+
+    // The concrete SDL backend provides the actual SDL window accessor. An
+    // uninitialized backend has no window, so metrics remain unavailable but
+    // the call is safe and never casts the bgfx-native OS handle.
+    SDL3PlatformBackend sdlPlatform;
+    display = Caesura::createDisplayService(cfg, &sdlPlatform);
+    REQUIRE(display != nullptr);
+    metrics = display->currentMetrics();
+    CHECK(metrics.logicalWidth == 0);
+    CHECK(metrics.logicalHeight == 0);
+}
+
 TEST_CASE("Entry: Engine default construct then destruct") {
     // Test that default-constructed Engine (no init) destructs safely
     CHECK_NOTHROW({
@@ -269,6 +343,42 @@ TEST_CASE("Entry: Engine default construct then destruct") {
         Engine engine(std::move(cfg));
         // Destructor runs here — must not crash
     });
+}
+
+TEST_CASE("Entry: shutdown before init permanently rejects initialization") {
+    Caesura::Test::LifecycleProbe platform;
+    Caesura::Test::LifecycleProbe render;
+    Caesura::Test::LifecycleProbe audio;
+
+    {
+        EngineConfig cfg;
+        cfg.headless = true;
+        cfg.platform = new Caesura::Test::PlatformBackend(platform);
+        cfg.render = new Caesura::Test::RenderDevice(render);
+        cfg.audio = new Caesura::Test::AudioBackend(audio);
+
+        Engine engine(std::move(cfg));
+        engine.shutdown();
+
+        CHECK_FALSE(engine.init());
+        CHECK(platform.initCalls == 0);
+        CHECK(render.initCalls == 0);
+        CHECK(audio.initCalls == 0);
+        checkEngineRegistryCleared();
+    }
+
+    CHECK(platform.destructorCalls == 1);
+    CHECK(render.destructorCalls == 1);
+    CHECK(audio.destructorCalls == 1);
+}
+
+TEST_CASE("Entry: custom platform native handle is never treated as SDL window") {
+    Caesura::Test::LifecycleProbe platform;
+    platform.providedNativeHandle = reinterpret_cast<void*>(0x1234);
+    Caesura::Test::PlatformBackend platformBackend(platform);
+
+    CHECK(platformBackend.getNativeWindowHandle() == reinterpret_cast<void*>(0x1234));
+    CHECK(Caesura::getSDLWindow(&platformBackend) == nullptr);
 }
 
 TEST_CASE("Entry: debugger attaches after Lua safety hook and detaches before VM shutdown") {
@@ -505,6 +615,11 @@ TEST_CASE("Entry: Engine headless init uses safe default backends") {
         Caesura::Test::LifecycleProbe platform;
         Caesura::Test::LifecycleProbe render;
         Caesura::Test::LifecycleProbe audio;
+        bool meshReleasedBeforeRenderShutdown = false;
+        render.onShutdown = [&] {
+            meshReleasedBeforeRenderShutdown =
+                BackendRegistry::instance().getMeshRenderer() == nullptr;
+        };
         platform.providedNativeHandle = reinterpret_cast<void*>(0x1234);
         {
             EngineConfig cfg;
@@ -530,6 +645,7 @@ TEST_CASE("Entry: Engine headless init uses safe default backends") {
         CHECK(render.flushCalls == 1);
         CHECK(render.advanceCalls == 2);
         CHECK(render.shutdownCalls == 1);
+        CHECK(meshReleasedBeforeRenderShutdown);
         CHECK(audio.shutdownCalls == 1);
         CHECK(platform.destructorCalls == 1);
         CHECK(render.destructorCalls == 1);
