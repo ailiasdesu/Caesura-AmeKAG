@@ -827,7 +827,7 @@ function TextCommands.ch(ctx, params)
     ctx.waiting_input = true
     update_text_state(ctx, "ch", utf8.len(plain) or #plain)
     -- Typewriter reveal: animate chars in over text_speed ms/char.
-    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0 }
+    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0, last_shown = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 
@@ -895,7 +895,7 @@ function TextCommands.text(ctx, params)
     animate_text_opacity(ctx, params)
     ctx.waiting_input = true
     update_text_state(ctx, "text", utf8.len(plain) or #plain)
-    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0 }
+    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0, last_shown = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 

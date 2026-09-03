@@ -81,6 +81,10 @@ function snapshot.capture(ctx)
         text_state = copy_text_state(text_state),
         reveal = (type(ctx.reveal) == "table") and {
             total = ctx.reveal.total, elapsed = ctx.reveal.total or 0,
+            -- [typewriter sound] (t201): restore marks the whole line
+            -- revealed (no typewriter replay); seal the SE boundary at
+            -- total so a rollback cannot fire a burst of SEs.
+            last_shown = ctx.reveal.total or 0,
         } or nil,
         layers = require("layers").capture_snapshot(),
     }

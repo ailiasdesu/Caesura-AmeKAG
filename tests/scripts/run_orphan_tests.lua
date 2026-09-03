@@ -40,6 +40,7 @@ local tests = {
     "test_kag3_import_e2e",
     "test_settings_config_deep",
     "test_select_crossscene_flow",
+    "test_typewriter_sound",
 }
 
 local passed, failed = 0, 0

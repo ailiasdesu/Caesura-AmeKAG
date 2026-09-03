@@ -486,6 +486,23 @@ function kag_runner.update(dt)
                 math.floor(ctx.reveal.elapsed / speed))
             local st = require("kag.text_scene").get_state(ctx)
             st.reveal_chars = shown
+            -- [typewriter sound] per-character SE (t201): fire when the
+            -- reveal crossed >= interval NEW characters since the LAST
+            -- FIRE -- not since the last frame, or a 1-char-per-frame
+            -- reveal with interval=3 would never fire at all (t201
+            -- empirical trace). last_shown is therefore the count at the
+            -- last fire; the skip/click instant writes mark
+            -- last_shown = total OUTSIDE this block, so an instant-reveal
+            -- line cannot fire a burst of SEs (t200 plan 2.3).
+            local prev = ctx.reveal.last_shown or 0
+            if shown > prev and type(ctx.typewriter_sound) == "string"
+               and ctx.typewriter_sound ~= "" then
+                local interval = tonumber(ctx.typewriter_sound_interval) or 1
+                if (shown - prev) >= interval then
+                    backend.audio_play("se", ctx.typewriter_sound)
+                    ctx.reveal.last_shown = shown
+                end
+            end
         end
     end
 
@@ -519,6 +536,9 @@ function kag_runner.update(dt)
             if ctx.reveal then
                 local st = require("kag.text_scene").get_state(ctx)
                 st.reveal_chars = ctx.reveal.total
+                -- [typewriter sound] (t201): same boundary mark as the
+                -- click-instant write -- skip shows the line instantly.
+                ctx.reveal.last_shown = ctx.reveal.total
             end
             return kag_runner.on_click()
         end
@@ -751,6 +771,11 @@ function kag_runner.on_click()
         local st = require("kag.text_scene").get_state(ctx)
         if st.reveal_chars < ctx.reveal.total then
             st.reveal_chars = ctx.reveal.total
+            -- [typewriter sound] (t201): the click-instant reveal shows the
+            -- whole remainder; mark the SE boundary complete so the
+            -- elapsed-driven follow-through cannot fire a burst of SEs for
+            -- characters that were never animated char-by-char.
+            ctx.reveal.last_shown = ctx.reveal.total
             return true, "revealed"
         end
     end
