@@ -27,6 +27,14 @@ import time
 import urllib.error
 import urllib.request
 
+# GitHub Windows runners default stdout to the legacy cp1252 code page; this
+# test prints Chinese response details, so force UTF-8 output (round 32 CI).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ENGINE = os.path.join(REPO, "build", "Debug", "CaesuraAmeKAG.exe")
 PORT = 9876
