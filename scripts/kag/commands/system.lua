@@ -171,57 +171,20 @@ end
 
 -- ═══════════════════════════════════════════════════════════════════════════
 --  [eval exp="1+2*3"]
---  Evaluate Lua expression and return result.
---  Phase 9: Uses sandbox.execute() when sandbox.is_strict() is true.
---  In dev mode, handled inline by scheduler.lua _execute loop.
+--  Evaluate a Lua expression and return the result in tf.eval_result.
+--  Live path: scheduler.lua treats [eval] as flow-control
+--  (flow_commands["eval"]=true, scheduler.lua:30) and evaluates it INLINE
+--  (scheduler.lua:1099 -- TJS operator parity + whitelist env). This
+--  handler is therefore a REGISTRY STUB, same class as KAG.macro/endmacro
+--  (kag.lua:241-243): the old strict-mode sandbox fallback body was dead
+--  (the inline branch intercepts first -- its own comment said so, and the
+--  t192/t195 eval-path audit found no direct KAG.eval/SystemCommands.eval
+--  callers anywhere in scripts/tests/demo) and was removed. The key stays
+--  exported so the dispatch census / direct-API surface remain intact
+--  (removing it would leave [eval] looking UNDISPATCHED to the scanner).
 -- ═══════════════════════════════════════════════════════════════════════════
 
-function SystemCommands.eval(ctx, params)
-    local exp = params.exp or params.code
-    if type(exp) ~= "string" and type(params[1]) == "string" then
-        exp = params[1]
-    end
-    exp = exp or ""
-    if #exp == 0 then return end
-
-    -- If not strict, let scheduler handle it inline (backward compat)
-    if not getSandbox().is_strict() then
-        -- Scheduler intercepts before dispatch; this is a no-op
-        return
-    end
-
-    -- Strict mode: evaluate through sandbox
-    local env = {
-        ctx  = ctx,
-        tf   = ctx.tf or {},
-        f    = ctx.f or {},
-        sf   = ctx.sf or {},
-        mp   = ctx.mp or {},
-    }
-
-    -- Wrap expression as a return statement to capture the result
-    local code = "return " .. exp
-    local ok, result, envOut = getSandbox().execute(code, env)
-
-    -- Sync back mutations -- type-guarded like [emb] (review warn: this
-    -- path is dead today -- the scheduler intercepts [eval] -- but the
-    -- invariant must hold if it ever becomes reachable).
-    if envOut then
-        if type(envOut.tf) == "table" then ctx.tf = envOut.tf end
-        if type(envOut.f) == "table" then ctx.f = envOut.f end
-        if type(envOut.sf) == "table" then ctx.sf = envOut.sf end
-        if type(envOut.mp) == "table" then ctx.mp = envOut.mp end
-    end
-
-    if ok then
-        if type(ctx.tf) ~= "table" then ctx.tf = {} end
-        rawset(ctx.tf, "eval_result", result)  -- security LOW: no __newindex trap
-    else
-        print("[SystemCmd] eval error: " .. tostring(result))
-        if type(ctx.tf) ~= "table" then ctx.tf = {} end
-        rawset(ctx.tf, "eval_result", nil)
-    end
-end
+function SystemCommands.eval(ctx, params) end
 
 -- ═══════════════════════════════════════════════════════════════════════════
 --  [history] — open backlog overlay UI
@@ -480,23 +443,6 @@ function SystemCommands.inc(ctx, params)
         return
     end
     t[key] = (tonumber(t[key]) or 0) + by
-end
-
---- [random var="f.dice" min=1 max=6] — write a random integer.
-function SystemCommands.random(ctx, params)
-    local var = params.var
-    if type(var) ~= "string" and type(params[1]) == "string" then
-        var = params[1]
-    end
-    local min = tonumber(params.min or params[2] or 0) or 0
-    local max = tonumber(params.max or params[3] or 100) or 100
-    local t, key = resolve_var(ctx, var)
-    if not t then
-        print("[WARN] [random] unknown variable scope: " .. tostring(var))
-        return
-    end
-    if min > max then min, max = max, min end
-    t[key] = math.random(min, max)
 end
 
 --- [assert exp="f.hp > 0" msg="hp must be positive"] — development-time

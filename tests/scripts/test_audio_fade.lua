@@ -80,9 +80,10 @@ local ctxG = { f = {}, tf = {}, sf = {}, mp = {}, variables = {} }
 -- typo'd named param on [bg]: pair table must not reach load_texture
 pcall(Layer3.bg, ctxG, { { "storag", "x.png" } })
 check("layer resolve pair safe", #calls3 == 0)
--- eval/emb exp: the guard must reject the pair table (eval is a no-op
--- in non-strict mode, so value capture is impossible -- source-lock
--- the guard form in both handlers instead)
+-- emb/assert exp: the guard must reject the pair table (source-lock
+-- the guard form in the live handlers). [eval] is a registry stub since
+-- t195 (its live path is scheduler.lua inline), so its exp-guard no
+-- longer exists here -- the guard-lock now covers emb + assert.
 local f2 = assert(io.open("scripts/kag/commands/system.lua", "r"))
 local src2 = f2:read("*a")
 f2:close()
@@ -95,7 +96,7 @@ while true do
     gcount = gcount + 1
     pos = p + 1
 end
-check("eval exp guarded", gcount == 3)
+check("exp guarded in live handlers", gcount == 2)
 package.loaded["layers"] = layers3
 _G._CAESURA_BACKEND = be3
 
