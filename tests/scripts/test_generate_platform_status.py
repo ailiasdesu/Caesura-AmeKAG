@@ -158,7 +158,8 @@ GIT_LOG_EVIDENCE_CMD = ["git", "log", "-1", "--format=%H", "--", ".", ":(exclude
 
 
 def git_head_pinned(stdout: str = PINNED_GIT_HEAD, returncode: int = 0, record: list = None):
-    """Patch subprocess.run so the evidence-HEAD `git log ...` call returns pinned.
+    """Patch subprocess.run for a FULL (non-shallow) repo: the is-shallow probe
+    answers "false" and the evidence-HEAD `git log ...` call returns pinned.
 
     When `record` is given, every git argv is appended (as a list) so the test
     can assert the generator really used the pathspec command. Non-git
@@ -169,7 +170,23 @@ def git_head_pinned(stdout: str = PINNED_GIT_HEAD, returncode: int = 0, record: 
         if cmd and cmd[0] == "git":
             if record is not None:
                 record.append(list(cmd))
+            if cmd[:3] == ["git", "rev-parse", "--is-shallow-repository"]:
+                return _GitResult(0, "false\n")
             return _GitResult(returncode, stdout)
+        return _ORIG_SUBPROCESS_RUN(cmd, **kwargs)
+    return mock.patch.object(gps.subprocess, "run", side_effect=fake_run)
+
+
+def git_shallow(record: list = None):
+    """Patch subprocess.run for a SHALLOW clone: the is-shallow probe answers
+    "true" and any further git invocation is unexpected (raise)."""
+    def fake_run(cmd, **kwargs):
+        if cmd and cmd[0] == "git":
+            if record is not None:
+                record.append(list(cmd))
+            if cmd[:3] == ["git", "rev-parse", "--is-shallow-repository"]:
+                return _GitResult(0, "true\n")
+            raise AssertionError(f"shallow guard must stop before git log, got: {cmd}")
         return _ORIG_SUBPROCESS_RUN(cmd, **kwargs)
     return mock.patch.object(gps.subprocess, "run", side_effect=fake_run)
 
@@ -222,6 +239,8 @@ class TestHeadDriftGate(unittest.TestCase):
         self.assertEqual(code, 0, f"S1 baseline generation failed: {err}")
         self.assertTrue(self.md.exists(), "baseline md was not generated")
         self.assertTrue(self.md.stat().st_size > 200, "baseline md looks like a stub")
+        self.assertNotIn("head_commit source:", self.md.read_text(encoding="utf-8"),
+                         "md must not embed the head resolution path")
 
         code, out, err = run_main(self._argv_check(["--head", FAKE_YAML_HEAD]))
         self.assertEqual(code, 0, f"S1 expected exit 0, got {code}; stderr={err!r}")
@@ -296,16 +315,17 @@ class TestHeadDriftGate(unittest.TestCase):
 
     # ------------------------------------------------------------------ S5
     def test_s5_library_call_parity_with_cli(self):
-        """generate_markdown(data) without head args embeds evidence HEAD exactly as the CLI."""
+        """generate_markdown(data) without head args embeds evidence HEAD exactly as the CLI;
+        the bytes depend only on the head value, never on the resolution path."""
         with git_head_pinned(PINNED_GIT_HEAD):
             direct = gps.generate_markdown(gps.load_yaml(self.yaml))
         self.assertIn(f"`{PINNED_GIT_HEAD}`", direct)
-        self.assertIn("head_commit source: git", direct)
+        self.assertNotIn("head_commit source:", direct, "md must not embed the resolution path")
 
         with git_broken():
             direct = gps.generate_markdown(gps.load_yaml(self.yaml))
         self.assertIn(f"`{FAKE_YAML_HEAD}`", direct)
-        self.assertIn("head_commit source: yaml", direct)
+        self.assertNotIn("head_commit source:", direct)
 
     # ------------------------------------------------------------------ S6
     def test_s6_json_still_uses_raw_yaml_head(self):
@@ -384,6 +404,39 @@ class TestHeadDriftGate(unittest.TestCase):
             code, out, err = run_main(self._argv_check())
         self.assertEqual(code, 1, f"S8 code-after-sync must drift, got {code}")
         self.assertIn("lags the code HEAD", err)
+
+    # ------------------------------------------------------------------ S9
+    def test_s9_shallow_clone_guard_falls_back_to_yaml(self):
+        """A shallow clone (CI fetch-depth:1) must NOT compute an evidence HEAD.
+
+        is-shallow=true -> [WARN] + yaml fallback -> drift skipped, and the md
+        byte-freshness branch still runs (fresh -> 0; tampered -> 1 with the
+        'is stale or modified' message).
+        """
+        calls = []
+        with git_shallow(record=calls):
+            code, out, err = run_main(self._argv_gen())
+            self.assertEqual(code, 0, f"S9 generation failed: {err}")
+            self.assertIn("[WARN] git repo is shallow; evidence HEAD unavailable", err)
+            self.assertIn("falling back to matrix yaml head_commit=", err)
+        self.assertEqual(len(calls), 1, f"git must stop after the is-shallow probe, got {calls}")
+        self.assertEqual(calls[0][:3], ["git", "rev-parse", "--is-shallow-repository"])
+
+        with git_shallow():
+            code, out, err = run_main(self._argv_check())
+        self.assertEqual(code, 0, f"S9 fresh md expected exit 0, got {code}; stderr={err!r}")
+        self.assertIn("[WARN] git repo is shallow; evidence HEAD unavailable", err)
+        self.assertNotIn("lags the code HEAD", err, "drift must be skipped on a shallow clone")
+
+        # Tampered md must still red on the byte-freshness branch, not drift.
+        self.md.write_text(
+            self.md.read_text(encoding="utf-8") + "\n<!-- tampered -->\n", encoding="utf-8"
+        )
+        with git_shallow():
+            code, out, err = run_main(self._argv_check())
+        self.assertEqual(code, 1, f"S9 tampered md expected exit 1, got {code}")
+        self.assertIn("is stale or modified", err)
+        self.assertNotIn("lags the code HEAD", err)
 
     def test_resolve_priority_cli_git_yaml(self):
         """resolve_head_commit priority: --head > evidence HEAD > yaml (direct unit check)."""
