@@ -153,18 +153,6 @@ bool isStoryPathAllowed(const std::string& path) {
     return false;
 }
 
-// Reduce an output name to [A-Za-z0-9_-]. Returns false when nothing usable
-// remains (the caller answers 400 instead of guessing a name).
-bool sanitizeWebOutName(const std::string& raw, std::string& out) {
-    out.clear();
-    for (unsigned char ch : raw) {
-        if (std::isalnum(ch) || ch == '_' || ch == '-') {
-            out.push_back(static_cast<char>(ch));
-        }
-    }
-    return !out.empty();
-}
-
 // Keep only the last lines of packaging output for the reply payload.
 std::string logTailOf(const std::string& log) {
     constexpr size_t kMaxLines = 30;
