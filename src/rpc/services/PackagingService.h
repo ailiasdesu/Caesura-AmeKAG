@@ -31,6 +31,11 @@ public:
     ServiceResult packageWeb(const std::string& storyPath,
                              const std::string& outName);
 
+    // A1 (unified): true UTF-8 -> wstring conversion for the Windows wide
+    // argument path (MultiByteToWideChar CP_UTF8) and the POSIX minimal
+    // decoder; invalid bytes map to U+FFFD (deterministic, never crashes).
+    static std::wstring widenUtf8(const std::string& utf8);
+
 private:
     ProjectContext m_ctx;
     ArchiveWriterFactory m_writerFactory;

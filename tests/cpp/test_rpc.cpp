@@ -8,6 +8,7 @@
 #include "rpc/ConstantTime.h"
 #include "rpc/ProjectContext.h"
 #include "rpc/services/ProjectService.h"
+#include "rpc/services/PackagingService.h"
 #include "entry/Engine.h"
 #include "script/vm/LuaManager.h"
 #include <httplib.h>
@@ -1500,4 +1501,43 @@ TEST_CASE("EditorServer does not dispatch oversized request bodies") {
     auto response = client.Post("/api/live2d/load", huge, "application/json");
     CHECK(dispatcher->requestCount() == 0);
     es.stop();
+}
+
+TEST_CASE("rpc::service::PackagingService::widenUtf8 decodes real UTF-8 to wchar code points") {
+    // U+4E2D (中) is E4 B8 AD in UTF-8; the old widenAscii mapped each byte
+    // to a Latin-1 wchar (U+00E4 U+00B8 U+00AD) -- not a Unicode conversion.
+    const std::wstring zh = rpc::service::PackagingService::widenUtf8("\xE4\xB8\xAD");
+    CHECK(zh.size() == 1);
+    CHECK(zh[0] == static_cast<wchar_t>(0x4E2D));
+
+    // ASCII pass-through stays byte-for-byte.
+    const std::wstring ascii = rpc::service::PackagingService::widenUtf8("abc/def_09-%");
+    CHECK(ascii == L"abc/def_09-%");
+
+    // Malformed bytes never crash and produce a deterministic U+FFFD each.
+    const std::wstring broken = rpc::service::PackagingService::widenUtf8("\xFF\xFE");
+    CHECK(broken.size() == 2);
+    CHECK(broken[0] == static_cast<wchar_t>(0xFFFD));
+    CHECK(broken[1] == static_cast<wchar_t>(0xFFFD));
+
+    // Truncated 3-byte sequence: lead byte alone -> one replacement.
+    const std::wstring trunc = rpc::service::PackagingService::widenUtf8("\xE4");
+    CHECK(trunc.size() == 1);
+    CHECK(trunc[0] == static_cast<wchar_t>(0xFFFD));
+
+    // Surrogate halves are invalid code points -> replaced. Note: the
+    // Windows lenient fallback may emit more than one replacement unit
+    // for a malformed 3-byte lead (deterministic per platform); the
+    // contract is: no crash, at least one U+FFFD, bounded length.
+    const std::wstring surr = rpc::service::PackagingService::widenUtf8("\xED\xA0\x80");
+    CHECK(surr.size() >= 1);
+    CHECK(surr.size() <= 3);
+    bool surrHasFffd = false;
+    for (wchar_t c : surr) {
+        if (c == static_cast<wchar_t>(0xFFFD)) surrHasFffd = true;
+    }
+    CHECK(surrHasFffd);
+
+    // Empty input yields an empty wide string.
+    CHECK(rpc::service::PackagingService::widenUtf8("").empty());
 }

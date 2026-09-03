@@ -46,9 +46,18 @@ bool isStoryPathAllowed(const std::string& path) {
 bool sanitizeWebOutName(const std::string& raw, std::string& out) {
     out.clear();
     for (unsigned char ch : raw) {
-        if (std::isalnum(ch) || ch == '_' || ch == '-') {
-            out.push_back(static_cast<char>(ch));
+        // A1: keep every UTF-8 code point (Chinese, CJK, parentheses,
+        // percent, spaces all survive); strip only control characters,
+        // path separators and Windows-illegal filename characters
+        // (<>:"|*? — review NIT-1 hardening). ASCII alnum/underscore/
+        // hyphen/dot are unchanged. Empty result (nothing but stripped
+        // chars) = 400.
+        if (ch < 0x20 || ch == 0x7F || ch == '/' || ch == '\\' ||
+            ch == '<' || ch == '>' || ch == ':' || ch == '"' ||
+            ch == '|' || ch == '*' || ch == '?') {
+            continue;
         }
+        out.push_back(static_cast<char>(ch));
     }
     return !out.empty();
 }
@@ -197,15 +206,6 @@ std::wstring quoteWindowsProcessArg(const std::wstring& raw) {
     return quoted;
 }
 
-std::wstring widenAscii(const std::string& raw) {
-    std::wstring widened;
-    widened.reserve(raw.size());
-    for (const unsigned char ch : raw) {
-        widened.push_back(static_cast<wchar_t>(ch));
-    }
-    return widened;
-}
-
 bool runProcessCapture(const fs::path& executable,
                        const std::vector<std::wstring>& arguments,
                        std::string& output,
@@ -336,6 +336,77 @@ bool runProcessCapture(const fs::path& executable,
 
 } // namespace
 
+std::wstring PackagingService::widenUtf8(const std::string& utf8) {
+#if defined(_WIN32)
+    // True UTF-8 -> UTF-16 via MultiByteToWideChar. Strict mode first
+    // (MB_ERR_INVALID_CHARS rejects malformed input); on failure fall back
+    // to the flag-less conversion, which substitutes U+FFFD per invalid
+    // unit -- deterministic and never crashes (the old widenAscii mapped
+    // each byte to a Latin-1 wchar, producing U+00E4 U+00B8 U+00AD for 中).
+    if (utf8.empty()) return std::wstring();
+    const int count = static_cast<int>(utf8.size());
+    int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                     utf8.data(), count, nullptr, 0);
+    if (length == 0) {
+        length = MultiByteToWideChar(CP_UTF8, 0,
+                                     utf8.data(), count, nullptr, 0);
+    }
+    std::wstring out(static_cast<size_t>(length), L'\0');
+    if (length > 0) {
+        MultiByteToWideChar(CP_UTF8, 0,
+                            utf8.data(), count, out.data(), length);
+    }
+    return out;
+#else
+    // POSIX: wchar_t is 32-bit, so one decoded code point maps to one
+    // element. Minimal UTF-8 decoder; malformed bytes (bad lead byte,
+    // truncated/invalid continuation, overlong, surrogates, > U+10FFFF)
+    // yield U+FFFD and advance one byte -- mirrors the Windows fallback.
+    std::wstring out;
+    out.reserve(utf8.size());
+    const size_t n = utf8.size();
+    size_t i = 0;
+    while (i < n) {
+        const unsigned char b = static_cast<unsigned char>(utf8[i]);
+        unsigned int cp = 0;
+        int extra = 0;
+        if (b < 0x80) {
+            cp = b;
+            out.push_back(static_cast<wchar_t>(cp));
+            ++i;
+            continue;
+        } else if ((b & 0xE0) == 0xC0) {
+            cp = b & 0x1F; extra = 1;
+        } else if ((b & 0xF0) == 0xE0) {
+            cp = b & 0x0F; extra = 2;
+        } else if ((b & 0xF8) == 0xF0) {
+            cp = b & 0x07; extra = 3;
+        } else {
+            out.push_back(0xFFFD); ++i; continue;
+        }
+        if (i + static_cast<size_t>(extra) >= n) {
+            // Truncated sequence: continuation bytes are missing.
+            out.push_back(0xFFFD); ++i; continue;
+        }
+        bool ok = true;
+        for (int k = 1; k <= extra; ++k) {
+            const unsigned char c = static_cast<unsigned char>(utf8[i + static_cast<size_t>(k)]);
+            if ((c & 0xC0) != 0x80) { ok = false; break; }
+            cp = (cp << 6) | (c & 0x3F);
+        }
+        const unsigned int minCp = extra == 1 ? 0x80u : (extra == 2 ? 0x800u : 0x10000u);
+        if (!ok || cp < minCp || cp > 0x10FFFF ||
+            (cp >= 0xD800 && cp <= 0xDFFF)) {
+            // Invalid continuation / overlong / surrogate / out of range.
+            out.push_back(0xFFFD); ++i; continue;
+        }
+        out.push_back(static_cast<wchar_t>(cp));
+        i += static_cast<size_t>(extra) + 1;
+    }
+    return out;
+#endif
+}
+
 ServiceResult PackagingService::build(const std::string& rawOutputPath,
                                       const std::string& rawKeyPath) {
     std::string outputPath = confineToBuild(rawOutputPath);
@@ -399,9 +470,13 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
         return ServiceResult::err(400, "storyPath must be a relative repository path");
     }
     for (unsigned char ch : sp) {
-        const bool safe = std::isalnum(ch) || ch == '/' || ch == '_' ||
-                          ch == '-' || ch == '.' || ch == ' ';
-        if (!safe) return ServiceResult::err(400, "storyPath contains unsupported characters");
+        // A1: Unicode story names are allowed (Chinese, parentheses,
+        // percent, spaces all pass); only control characters remain
+        // forbidden -- a control byte in a path is never legitimate.
+        if (ch < 0x20 || ch == 0x7F) {
+            return ServiceResult::err(400,
+                "storyPath contains control characters (Unicode paths are allowed)");
+        }
     }
     if (!isStoryPathAllowed(sp)) {
         return ServiceResult::err(400, "storyPath must live under assets/, demo/, tests/projects/ or projects/");
@@ -421,7 +496,10 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
 
     try {
         const fs::path repoRoot = scriptPath.parent_path().parent_path();
-        if (!fs::exists(repoRoot / fs::path(sp))) {
+        // A1: fs::path(std::string) converts the narrow string via the
+        // ANSI code page on MSVC (UTF-8 中文 -> GBK garbage -> "not found").
+        // u8path interprets the bytes as UTF-8, matching the JSON contract.
+        if (!fs::exists(repoRoot / fs::u8path(sp))) {
             return ServiceResult::err(400, "storyPath not found: " + sp);
         }
     } catch (...) {
@@ -455,7 +533,7 @@ ServiceResult PackagingService::packageWeb(const std::string& storyPath,
     DWORD spawnError = ERROR_SUCCESS;
     if (!runProcessCapture(
             bashPath,
-            {scriptPath.native(), L"--out", widenAscii(outDir), widenAscii(sp)},
+            {scriptPath.native(), L"--out", widenUtf8(outDir), widenUtf8(sp)},
             output, exitCode, spawnError)) {
         return ServiceResult{500, {{"ok", false},
                                    {"error", "failed to spawn Git Bash (Windows error " +
