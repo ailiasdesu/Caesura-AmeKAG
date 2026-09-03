@@ -308,6 +308,14 @@ jobs:
           bash scripts/package_game.sh --no-web-build tests/projects/first_vn
           bash scripts/verify_web_package.sh dist/first_vn
 
+      - name: Web package real-browser boot smoke (t199 A gate)
+        run: |
+          # Headless Chrome boots the packaged dist/ first_vn and asserts the
+          # web player (12 checks incl. boot/text; --unlock for Chrome
+          # autoplay-gesture). CHROME_BIN drives the runner's preinstalled
+          # chrome; falls back to the portable CHROME_PATHS table.
+          node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock
+
       - name: Web Player unit & integration tests (vitest)
         run: |
           cd web
