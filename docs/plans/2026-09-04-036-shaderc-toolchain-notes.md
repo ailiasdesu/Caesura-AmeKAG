@@ -1,6 +1,6 @@
 # 036 · Shaderc 工具链勘察笔记（035 后置项）
 
-> 状态：GL 已激活（shaderc 工具链构建成功 → GL profile 130 数组入库，Lut3D 在 GL/GLES 真生效）；Metal 轮=**取消**（Metal 后端属 macOS/iOS=用户明令排除项，勿再生成）
+> 状态：**已全部激活**（2026-09-04 后：用户裁定 metal 属于底层欠账要做——只排除实机测试；shaderc 工具链已本地构建成功 → GL profile 130 + Metal MSL 15×2 数组入库，Lut3D 在 GL/GLES/Metal 真生效）
 > 日期：2026-09-04
 > 背景：t214 palette 3D-LUT 的 GL/Metal 着色器数组待 shaderc 生成（D3D DXBC 已 fxc 本地闭环）。
 
@@ -39,6 +39,8 @@ D3D11 全链已闭环（t214：program READY + 冒烟零错误）。GL/Metal 维
 3. shaders/embed_to_c.py → 更新 src/render/EmbeddedShaders_GL.cpp / EmbeddedShaders_Metal.cpp
 4. BgfxShaderManager case 4 从 identity 换真实 program（t214 ShaderManager 预留）
 
-## 4. 现状（诚实标记）
+## 4. 现状（诚实标记，2026-09-04 更新）
 - D3D11：lut3d 全链绿色（DXBC 嵌入）
-- GL/Metal/Vulkan：identity 回落（不崩），数组未生成——platform_tested 仍 '-'；矩阵注记已写明
+- GL（profile 130）：15 数组已生成并嵌入（bgfx_FragColor 显式输出），本地 doctest 1137/1137 + ctest 16/17 绿
+- Metal（MSL）：15 数组已生成并嵌入（shaderc osx -p metal），BgfxShaderManager Metal 分支已接线 postfx
+- Vulkan：SPIR-V 数组不在本批范围（保留 identity 回落）
