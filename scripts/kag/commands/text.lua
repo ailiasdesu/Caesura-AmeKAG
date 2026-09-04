@@ -768,6 +768,8 @@ function TextCommands.ch(ctx, params)
         -- typewriter only animates the line being appended.
         TextScene.commit(ctx)
     end
+    -- [hr] (t202): the standing rule belongs to the finished page.
+    TextCommands._hideHr(ctx)
 
     -- Calculate X positions based on "pos" (normal mode) or the fixed NVL
     -- column (full-screen page).
@@ -864,6 +866,8 @@ function TextCommands.text(ctx, params)
         -- NVL accumulation: seal prior lines, append below the cursor.
         TextScene.commit(ctx)
     end
+    -- [hr] (t202): the standing rule belongs to the finished page.
+    TextCommands._hideHr(ctx)
 
     local lineHeight = resolve_line_height(ctx)
     local x = nvl and NVL_X or 32
@@ -914,6 +918,40 @@ function TextCommands.l(ctx, params)
 end
 
 -- =============================================================================
+--  [hr] -- horizontal rule (decorative separator, KAG3 compat)
+--  Draws a thin full-width rule at the current text cursor position and
+--  advances the cursor one line so following text continues below it.
+--  The rule lives on the _hr layer (above _textbox, below text) and is
+--  hidden by the next [ch]/[text]/[er]/[reset] - it belongs to the page.
+--  Zero-parameter contract (decorative; no style surface yet - honest).
+-- =============================================================================
+
+function TextCommands.hr(ctx, params)
+    local vw = require("viewport").logical(1920, 1080)
+    local lineHeight = tonumber(resolve_line_height(ctx)) or 24
+    local y = tonumber(ctx.textCursorY) or 580
+    local layers = require("layers")
+    local node = layers.ensure(ctx, "_hr", 2)
+    node.visible = true
+    node.x, node.y = 32, y
+    node.w = math.max(8, vw - 64)
+    node.h = 2
+    node.texture = backend.create_solid_texture(160, 160, 160, 200)
+    layers.mark_dirty(node)
+    -- The rule occupies one row: advance so following text sits below it.
+    ctx.textCursorY = y + lineHeight
+    ctx.textCursorX = 32
+end
+
+-- Hide the standing rule (called by [ch]/[text]/[er]/[reset]).
+function TextCommands._hideHr(ctx)
+    local ok, node = pcall(require("layers").get, "_hr")
+    if ok and node and node.visible ~= false then
+        node.visible = false
+    end
+end
+
+-- =============================================================================
 --  [r] ?? carriage return: reset cursor to start of current line
 -- =============================================================================
 
@@ -930,6 +968,8 @@ end
 function TextCommands.er(ctx, params)
     backend.clear_text()
     TextScene.clear(ctx)
+    -- [hr] (t202): page cleared -> the standing rule goes with it.
+    TextCommands._hideHr(ctx)
     if ctx.nvl_mode then
         -- Erasing the NVL page also resets the accumulation cursor.
         nvl_reset_cursor(ctx)
@@ -952,6 +992,8 @@ function TextCommands.p(ctx, params)
     coroutine.yield()
     backend.clear_text()
     TextScene.clear(ctx)
+    -- [hr] (t202): page cleared -> the standing rule goes with it.
+    TextCommands._hideHr(ctx)
     if ctx.nvl_mode then
         -- NVL page break: the next line starts a fresh page at the top.
         nvl_reset_cursor(ctx)
@@ -1137,6 +1179,8 @@ function TextCommands.reset(ctx, params)
     TextScene.reset(ctx)
     backend.text_reset_state()
     ctx.reveal = nil
+    -- [hr] (t202): reset also drops the standing rule.
+    TextCommands._hideHr(ctx)
 end
 
 -- =============================================================================

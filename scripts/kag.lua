@@ -213,8 +213,10 @@ function KAG.br(ctx, params)
     if KAG.l then KAG.l(ctx, params) end
 end
 
--- [hr] �� horizontal rule (decorative, no-op)
-function KAG.hr(ctx, params) end
+-- [hr] -- horizontal rule (decorative separator; TextCommands.hr draws it)
+function KAG.hr(ctx, params)
+    if text_cmds and text_cmds.hr then return text_cmds.hr(ctx, params) end
+end
 
 -- [cancel] �� cancel current voice/transition (backward compat)
 function KAG.cancel(ctx, params)

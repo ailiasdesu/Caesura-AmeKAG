@@ -41,6 +41,7 @@ local tests = {
     "test_settings_config_deep",
     "test_select_crossscene_flow",
     "test_typewriter_sound",
+    "test_hr",
 }
 
 local passed, failed = 0, 0
