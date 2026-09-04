@@ -206,6 +206,14 @@ IPlatformBackend* BackendRegistry::createPlatformBackend(const char* name) {
     return nullptr;
 }
 
+void BackendRegistry::setErrorReporter(ErrorReporter reporter) {
+    m_errorReporter = std::move(reporter);
+}
+
+const BackendRegistry::ErrorReporter& BackendRegistry::getErrorReporter() const {
+    return m_errorReporter;
+}
+
 // (Round 21 P1-5) The Lua "Engine" binding and registry-key helpers moved
 // to script/bindings/EngineBinding.*; the DI container no longer depends on
 // the Lua C API.

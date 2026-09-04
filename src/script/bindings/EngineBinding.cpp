@@ -107,12 +107,30 @@ static int lua_Engine_get_backend_info(lua_State* L) {
     return 1;
 }
 
+static int lua_Engine_report_command_error(lua_State* L) {
+    // Script runtime error -> di ErrorReporter -> ErrorUI (installed by the
+    // composition root). Accepts (command, error, scene?, line?) and returns 1
+    // always; no-op when no reporter is installed (headless/tests).
+    auto& registry = BackendRegistry::instance();
+    const auto& reporter = registry.getErrorReporter();
+    if (reporter) {
+        const char* cmd   = luaL_checkstring(L, 1);
+        const char* err   = luaL_checkstring(L, 2);
+        const char* scene = luaL_optstring(L, 3, "");
+        int line = static_cast<int>(luaL_optinteger(L, 4, 0));
+        reporter(cmd ? cmd : "", err ? err : "", scene ? scene : "", line);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 void registerEngineBindings(lua_State* L) {
     static const luaL_Reg engine_funcs[] = {
         { "select_render_backend",   lua_Engine_select_render_backend   },
         { "select_audio_backend",    lua_Engine_select_audio_backend    },
         { "select_platform_backend", lua_Engine_select_platform_backend },
         { "get_backend_info",        lua_Engine_get_backend_info        },
+        { "report_command_error",      lua_Engine_report_command_error      },
         { nullptr, nullptr }
     };
 

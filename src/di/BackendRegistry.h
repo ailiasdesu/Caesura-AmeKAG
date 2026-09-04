@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <functional>
 
 namespace Caesura {
 
@@ -121,10 +122,21 @@ public:
     void notifyDeviceLost();
     void notifyDeviceRestored();
 
+    // -- Error reporter (script runtime error -> ErrorUI bridge). di is the
+    //    all-knowing module and std::function carries no concrete backend
+    //    dependency; the Engine (composition root) installs the real sink. --
+    using ErrorReporter = std::function<void(const std::string& command,
+                                             const std::string& error,
+                                             const std::string& scene,
+                                             int line)>;
+    void setErrorReporter(ErrorReporter reporter);
+    const ErrorReporter& getErrorReporter() const;
+
 private:
     BackendRegistry() = default;
     std::unordered_map<std::type_index, void*> m_services;
     std::vector<IDeviceLostListener*> m_deviceLostListeners;
+    ErrorReporter m_errorReporter;
 };
 
 } // namespace Caesura
