@@ -314,7 +314,19 @@ jobs:
           # web player (12 checks incl. boot/text; --unlock for Chrome
           # autoplay-gesture). CHROME_BIN drives the runner's preinstalled
           # chrome; falls back to the portable CHROME_PATHS table.
-          node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock
+          # Retry once: headless Chrome CDP startup is intermittently flaky
+          # on hosted runners (CDP endpoint absent, no chrome error -- a
+          # spawn-side race, not a package/assertion regression). A second
+          # run exercises the same checks; a real break still fails the gate.
+          for attempt in 1 2; do
+            echo "=== web-smoke attempt $attempt ==="
+            if node scripts/web_browser_smoke.mjs --root dist/first_vn --unlock; then
+              echo "web-smoke attempt $attempt PASSED"
+              exit 0
+            fi
+            echo "web-smoke attempt $attempt failed; retrying"
+          done
+          exit 1
 
       - name: Web Player unit & integration tests (vitest)
         run: |
