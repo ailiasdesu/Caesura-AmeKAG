@@ -40,6 +40,7 @@ TEST_CASE("postfx: PostFxKind enum values are fixed") {
     CHECK(static_cast<int>(IRenderDevice::PostFxKind::LutColorGrade) == 1);
     CHECK(static_cast<int>(IRenderDevice::PostFxKind::SoftBlur) == 2);
     CHECK(static_cast<int>(IRenderDevice::PostFxKind::Bloom) == 3);
+    CHECK(static_cast<int>(IRenderDevice::PostFxKind::Lut3D) == 4); // t214
 }
 
 TEST_CASE("postfx: PostFxHandle is a uint32_t") {
@@ -58,6 +59,10 @@ TEST_CASE("postfx: PostFxParams defaults match the contract") {
     CHECK(p.g == doctest::Approx(1.0f));
     CHECK(p.b == doctest::Approx(1.0f));
     CHECK(p.lutMix == doctest::Approx(0.0f));
+    // t214: Lut3D fields default to "no texture" (borrowed semantics: the
+    // TextureManager stays the owner; the stage only references it).
+    CHECK_FALSE(p.lutTexture.isValid());
+    CHECK(p.lutSize == 0);
 }
 
 TEST_CASE("postfx: every PostFx method surface exists (compile-time)") {
@@ -79,7 +84,7 @@ TEST_CASE("postfx: every PostFx method surface exists (compile-time)") {
 
 TEST_CASE("Null postfx: all kinds unsupported") {
     NullRenderDevice dev;
-    for (int k = 0; k <= 3; ++k) {
+    for (int k = 0; k <= 4; ++k) { // t214: Lut3D=4 degrades like the rest
         auto kind = static_cast<IRenderDevice::PostFxKind>(k);
         CHECK_FALSE(dev.isPostFxSupported(kind));
     }
@@ -88,7 +93,7 @@ TEST_CASE("Null postfx: all kinds unsupported") {
 TEST_CASE("Null postfx: createPostFx returns invalid handle (0)") {
     NullRenderDevice dev;
     IRenderDevice::PostFxParams p;
-    for (int k = 0; k <= 3; ++k) {
+    for (int k = 0; k <= 4; ++k) { // t214: Lut3D=4 included
         auto kind = static_cast<IRenderDevice::PostFxKind>(k);
         CHECK(dev.createPostFx(kind, p) == 0);
     }

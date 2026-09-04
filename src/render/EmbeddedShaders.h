@@ -129,5 +129,7 @@ extern const uint8_t  kEmbeddedDXBC_fs_postfx_blur[];
 extern const size_t   kEmbeddedDXBC_fs_postfx_blur_size;
 extern const uint8_t  kEmbeddedDXBC_fs_postfx_bloom[];
 extern const size_t   kEmbeddedDXBC_fs_postfx_bloom_size;
+extern const uint8_t  kEmbeddedDXBC_fs_postfx_lut3d[];
+extern const size_t   kEmbeddedDXBC_fs_postfx_lut3d_size;
 
 } // namespace Caesura

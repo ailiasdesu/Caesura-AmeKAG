@@ -55,6 +55,7 @@ function BackendFactory.create(opts)
         elseif cmd == "fill_viewport" then return Render.fill_viewport(...)
         elseif cmd == "load_texture" then return Render.load_texture(...)
         elseif cmd == "load_texture_async" then return Render.load_texture_async(...)
+        elseif cmd == "is_valid_handle" then return Render.is_valid_handle(...)
         elseif cmd == "destroy_texture" then return Render.destroy_texture(...)
         elseif cmd == "create_solid_texture" then
             return Render.create_solid_texture(...)

@@ -324,6 +324,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     // renderer turns into a color-grading filter on the render output.
     load_image: (f) => core.loadTexture(String(f ?? '')),
     is_valid: (h) => core.textures.has(Number(h)),
+    is_valid_handle: (type, h) => core.textures.has(Number(h)), // t214: real-name alias (palette.lua); HandleType::TEXTURE=0
     set_palette: (h, intensity, size) => core.setPalette(h, intensity, size),
     font_render_text: () => 1, font_clear: () => {}, line_height: () => 22,
     // Lua contract: render_text(text, x, y, r, g, b, a) — the text is the
@@ -332,7 +333,15 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     render_text: (...args) => { const t = args[0]; if (typeof t === 'string') core.appendText(t); return 1 }, clear_text: () => core.clearText(),
     text_render_ruby: () => {}, text_set_font: () => {}, text_reset_state: () => {},
     create_lut_texture: () => 0, render_frame: () => {}, set_screen_offset: () => {},
-    is_postfx_supported: (kind) => true, set_postfx: (kind, pf) => {}, clear_postfx: () => {},
+    is_postfx_supported: (kind) => true,
+    // t214: unify the palette surface -- "lut3d" drives the real DOM color
+    // grade (core.setPalette); other postfx kinds stay no-op on the DOM path.
+    set_postfx: (kind, pf) => {
+      if (kind === 'lut3d') {
+        core.setPalette((pf && pf.lutId) || 0, (pf && typeof pf.intensity === 'number') ? pf.intensity : 1.0, (pf && pf.lutSize) || 0)
+      }
+    },
+    clear_postfx: () => {},
     particles_create_emitter: () => 0, particles_emit: () => {}, particles_destroy_emitter: () => {}, clear_particles: () => {},
     video_stop: () => {}, video_play: () => 0, video_is_playing: () => false,
     ai_available: () => false, ai_query_async: () => {}, ai_cancel: () => {},

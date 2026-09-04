@@ -430,6 +430,7 @@ static IRenderDevice::PostFxKind resolvePostFxKind(const char* name) {
     if (strcmp(name, "vignette") == 0) return IRenderDevice::PostFxKind::Vignette;
     if (strcmp(name, "lut") == 0)      return IRenderDevice::PostFxKind::LutColorGrade;
     if (strcmp(name, "softblur") == 0) return IRenderDevice::PostFxKind::SoftBlur;
+    if (strcmp(name, "lut3d") == 0)  return IRenderDevice::PostFxKind::Lut3D;
     return IRenderDevice::PostFxKind::Bloom; // "bloom" (default)
 }
 
@@ -472,6 +473,33 @@ static IRenderDevice::PostFxParams resolvePostFxParams(lua_State* L, int tableId
     return p;
 }
 
+// t214: Lut3D params -- lutId (TextureManager id) + optional lutSize (0 =
+// derive from the texture height; the 2D-packed layout requires
+// width == N*N). The texture is BORROWED: the manager stays the owner.
+static void resolveLut3D(lua_State* L, int tableIdx, IRenderDevice::PostFxParams& p,
+                         bool& isLut3D) {
+    p.lutTexture = {};
+    p.lutSize = 0;
+    if (!isLut3D) return;
+    lua_getfield(L, tableIdx, "lutId");
+    const lua_Integer lutId = lua_isnumber(L, -1) ? (lua_Integer)lua_tointeger(L, -1) : 0;
+    lua_pop(L, 1);
+    lua_getfield(L, tableIdx, "lutSize");
+    const lua_Integer lutSize = lua_isnumber(L, -1) ? (lua_Integer)lua_tointeger(L, -1) : 0;
+    lua_pop(L, 1);
+    if (lutId <= 0) return; // clear request: no texture -> stage skipped
+    ITextureManager* tm = getTexture(L);
+    if (!tm || !tm->isValid((uint32_t)lutId)) return;
+    uint16_t w = 0, h = 0;
+    tm->getTextureSizeById((uint32_t)lutId, w, h);
+    uint16_t n = (lutSize > 0) ? (uint16_t)lutSize : h;
+    if (n < 2 || w != (uint16_t)(n * n)) return; // LUT layout contract violated
+    const uint32_t bgfxIdx = tm->getTextureHandle((uint32_t)lutId);
+    if (bgfxIdx == 0) return; // manager reports invalid (idx 0 = invalid per contract)
+    p.lutTexture = RenderTextureHandle{ static_cast<uint16_t>(bgfxIdx) };
+    p.lutSize = (uint8_t)n;
+}
+
 // Get-or-create the _POSTFX_HANDLES table in the Lua registry, pushing it.
 static void postFxHandleTable(lua_State* L) {
     lua_getfield(L, LUA_REGISTRYINDEX, "_POSTFX_HANDLES");
@@ -510,7 +538,9 @@ static int lua_Render_set_postfx(lua_State* L) {
     const IRenderDevice::PostFxKind kind = resolvePostFxKind(kindName);
     if (!dev->isPostFxSupported(kind)) { lua_pushinteger(L, 0); return 1; }
 
-    const IRenderDevice::PostFxParams params = resolvePostFxParams(L, 2);
+    IRenderDevice::PostFxParams params = resolvePostFxParams(L, 2);
+    bool isLut3D = (kind == IRenderDevice::PostFxKind::Lut3D);
+    resolveLut3D(L, 2, params, isLut3D);
     uint32_t handle = postFxHandle(L, 1); // key is the kind string itself
     if (handle == 0) {
         handle = (uint32_t)dev->createPostFx(kind, params);

@@ -193,6 +193,7 @@ public:
         LutColorGrade = 1, // 3x1 color matrix grade; params: strength, rgb, lutMix
         SoftBlur = 2,      // gaussian soften; params: radius(px), amount
         Bloom = 3,         // bright-pass + downsampled additive glow; params: strength, amount(threshold)
+        Lut3D = 4,         // 3D LUT (t214/t209): 2D-packed LUT texture + intensity blend; params: lutTexture, lutSize
     };
     struct PostFxParams {
         float strength = 1.0f; // master intensity 0..1
@@ -200,6 +201,8 @@ public:
         float amount  = 0.0f;  // bloom threshold / blur mix
         float r = 1.0f, g = 1.0f, b = 1.0f; // tint color (vignette/LUT)
         float lutMix = 0.0f;   // LUT grade mix 0..1 (1 = full grade)
+        RenderTextureHandle lutTexture{}; // Lut3D (t214): 2D-packed LUT texture (borrowed; TextureManager owns it)
+        uint8_t lutSize = 0;   // Lut3D cube side N (16/64); 0 = derive from texture height (width must be N*N)
     };
     using PostFxHandle = uint32_t; // 0 = invalid/unsupported
     virtual bool isPostFxSupported(PostFxKind kind) const = 0;

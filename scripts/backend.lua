@@ -185,6 +185,11 @@ function Backend.load_texture(file)
     return render_or_guard("load_texture", file)
 end
 
+function Backend.is_valid_handle(handleType, handle)
+    -- HandleType::TEXTURE = 0 (engine ResourceHandle validator: type, id)
+    return render_or_guard("is_valid_handle", handleType or 0, handle)
+end
+
 function Backend.destroy_texture(id)
     return render_or_guard("destroy_texture", id)
 end

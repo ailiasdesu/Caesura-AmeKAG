@@ -29,6 +29,7 @@ BgfxShaderManager::~BgfxShaderManager() {
     if (bgfx::isValid(m_postfxLut))          bgfx::destroy(m_postfxLut);
     if (bgfx::isValid(m_postfxBlur))         bgfx::destroy(m_postfxBlur);
     if (bgfx::isValid(m_postfxBloom))        bgfx::destroy(m_postfxBloom);
+    if (bgfx::isValid(m_postfxLut3d))        bgfx::destroy(m_postfxLut3d);
     if (bgfx::isValid(m_u_postfxParams))     bgfx::destroy(m_u_postfxParams);
 }
 
@@ -268,6 +269,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
     // back to fsTexture (identity copy) so the chain stays functional
     // (graceful degradation, no visual effect on those backends).
     Bytecode fsPostfxVignette, fsPostfxLut, fsPostfxBlur, fsPostfxBloom;
+    Bytecode fsPostfxLut3d; // t214: 3D LUT stage (D3D bytecode today)
 
     if (isVulkan) {
         vsSprite   = { reinterpret_cast<const uint8_t*>(kEmbeddedVS_Sprite),
@@ -297,6 +299,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
         fsPostfxLut      = { kEmbeddedDXBC_fs_postfx_lut,      kEmbeddedDXBC_fs_postfx_lut_size };
         fsPostfxBlur     = { kEmbeddedDXBC_fs_postfx_blur,     kEmbeddedDXBC_fs_postfx_blur_size };
         fsPostfxBloom    = { kEmbeddedDXBC_fs_postfx_bloom,    kEmbeddedDXBC_fs_postfx_bloom_size };
+        fsPostfxLut3d    = { kEmbeddedDXBC_fs_postfx_lut3d,    kEmbeddedDXBC_fs_postfx_lut3d_size };
     } else if (isGL) {
         if (renderer == bgfx::RendererType::OpenGLES) {
             // device-day: ESSL text conversion on every GL bytecode
@@ -355,6 +358,10 @@ void BgfxShaderManager::initEmbeddedShaders() {
     if (fsPostfxLut.size == 0)      fsPostfxLut      = fsTexture;
     if (fsPostfxBlur.size == 0)     fsPostfxBlur     = fsTexture;
     if (fsPostfxBloom.size == 0)    fsPostfxBloom    = fsTexture;
+    // t214: Lut3D ships D3D bytecode; GL/Metal/Vulkan fall back to the
+    // identity copy (same policy as the other postfx PS above) until the
+    // shaderc-generated arrays are regen'd (shaders/compile_shaders.bat).
+    if (fsPostfxLut3d.size == 0)    fsPostfxLut3d    = fsTexture;
 
     if (!vsSprite.data || vsSprite.size == 0 ||
         !fsTexture.data || fsTexture.size == 0) {
@@ -445,6 +452,7 @@ void BgfxShaderManager::initEmbeddedShaders() {
     m_postfxLut      = buildProgram(vsFullscreen, fsPostfxLut,      "PostFxLutGrade",  &postfxParams);
     m_postfxBlur     = buildProgram(vsFullscreen, fsPostfxBlur,     "PostFxSoftBlur",  &postfxParams);
     m_postfxBloom    = buildProgram(vsFullscreen, fsPostfxBloom,    "PostFxBloom",     &postfxParams);
+    m_postfxLut3d    = buildProgram(vsFullscreen, fsPostfxLut3d,    "PostFxLut3D",     &postfxParams);
     m_u_postfxParams = bgfx::createUniform("PostFxParams", bgfx::UniformType::Vec4, 4);
 
     // Verify fallback program is valid before registering

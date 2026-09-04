@@ -503,13 +503,27 @@ BgfxRenderDevice::PostFxHandle BgfxRenderDevice::createPostFx(PostFxKind kind, c
     PostFxStage stage;
     stage.kind = kind;
     stage.params = params;
+    stage.lutTex = toBgfx(params.lutTexture);
+    stage.lutSize = params.lutSize;
+    if (kind == PostFxKind::Lut3D) {
+        printf("[RENDER][INFO] PostFx Lut3D create: tex=%u size=%u intensity=%.2f\n",
+               stage.lutTex.idx, stage.lutSize, stage.params.strength);
+    }
     m_postFxStages.push_back(stage);
     return static_cast<PostFxHandle>(m_postFxStages.size()); // stable handle = index+1
 }
 
 void BgfxRenderDevice::setPostFxParams(PostFxHandle handle, const PostFxParams& params) {
     if (handle == 0 || handle > m_postFxStages.size()) return;
-    m_postFxStages[handle - 1].params = params;
+    PostFxStage& st = m_postFxStages[handle - 1];
+    st.params = params;
+    // Lut3D (t214): refresh the borrowed texture/size (palette apply/clear).
+    st.lutTex = toBgfx(params.lutTexture);
+    st.lutSize = params.lutSize;
+    if (st.kind == PostFxKind::Lut3D) {
+        printf("[RENDER][INFO] PostFx Lut3D set: tex=%u size=%u intensity=%.2f\n",
+               st.lutTex.idx, st.lutSize, st.params.strength);
+    }
 }
 
 void BgfxRenderDevice::destroyPostFx(PostFxHandle handle) {
@@ -613,6 +627,14 @@ static void submitFullscreenQuadNoTex(uint16_t viewId, bgfx::ProgramHandle progr
 void BgfxRenderDevice::runPostFxChain() {
     if (!m_bgfxInitialized || !m_deviceCore || m_postFxStages.empty()) return;
     if (!m_shaders || !bgfx::isValid(m_shaders->getPostFxParams())) return;
+    {
+        static bool s_chainRan = false;
+        if (!s_chainRan) {
+            printf("[RENDER][INFO] PostFx chain executing (stages=%zu)\n",
+                   m_postFxStages.size());
+            s_chainRan = true;
+        }
+    }
 
     const int W = m_deviceCore->getWidth();
     const int H = m_deviceCore->getHeight();
@@ -677,7 +699,42 @@ void BgfxRenderDevice::runPostFxChain() {
             bgfx::setUniform(uParams, params, 4);
         };
 
-        if (kind == PostFxKind::Bloom) {
+        if (kind == PostFxKind::Lut3D) {
+            // 3D LUT (t214): scene t0 + 2D-packed LUT t1, single pass.
+            // Borrowed texture: guard each frame (palette.unload can destroy
+            // it out from under the stage -- then the stage is skipped).
+            if (!bgfx::isValid(st.lutTex) || st.lutSize < 2) continue;
+            {
+                static bool s_lut3dRan = false; // one-shot diagnostics (t214)
+                if (!s_lut3dRan) {
+                    printf("[RENDER][INFO] PostFx Lut3D stage executing (N=%u)\n",
+                           st.lutSize);
+                    s_lut3dRan = true;
+                }
+            }
+            const int slot = static_cast<int>(i % 2);
+            PostFxRt out{};
+            if (last || single) {
+                bgfx::setViewFrameBuffer(kPostFxView, BGFX_INVALID_HANDLE);
+            } else {
+                out = getScratchRt(slot, W, H);
+                if (!bgfx::isValid(out.fb)) continue;
+                bgfx::setViewFrameBuffer(kPostFxView, out.fb);
+            }
+            float params[16] = {
+                st.params.strength, 0.0f, 0.0f, 0.0f,
+                1.0f, 1.0f, 1.0f, 1.0f,
+                1.0f / float(W), 1.0f / float(H), float(st.lutSize), 0.0f,
+                0.0f, 0.0f, 0.0f, 0.0f
+            };
+            bgfx::setUniform(uParams, params, 4);
+            bgfx::setTexture(0, uS0, resultTex);
+            bgfx::setTexture(1, uS1, st.lutTex);
+            submitFullscreenQuadNoTex(kPostFxView, prog);
+            resultTex = (last || single)
+                ? bgfx::TextureHandle{}
+                : bgfx::getTexture(out.fb, 0);
+        } else if (kind == PostFxKind::Bloom) {
             // Internal multi-pass: bright-extract (½ res) -> blur ¼ -> blur ¼ -> add.
             static const int slot = 4; // bloom scratch slots (0..3 used by single-pass chain)
             const int hw = std::max(W / 2, 1), hh = std::max(H / 2, 1);

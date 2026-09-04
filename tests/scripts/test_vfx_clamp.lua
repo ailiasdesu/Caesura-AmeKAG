@@ -27,8 +27,8 @@ check("feed is clamped vars", site == "r, g, b, 255")
 --  [palette] command: routes to scripts/palette.lua (LUT color grading).
 --  palette.lua drives the backend through the GLOBAL `backend`; we mock
 --  _G.backend with a recorder and assert the palette handler forwards
---  params + defaults to palette.load -> backend.load_image and
---  palette.apply -> backend.set_palette.
+--  params + defaults to palette.load -> backend.load_texture and
+--  palette.apply -> backend.set_postfx("lut3d", ...).
 -- ═══════════════════════════════════════════════════════════════════════
 local vfxLog = {}
 
@@ -36,16 +36,16 @@ local vfxLog = {}
 -- no-op for anything vfx.lua/layers touch at require time (we do not run
 -- the blocking effect loops in this file).
 local backendMock = setmetatable({
-    load_image = function(path)
-        vfxLog[#vfxLog + 1] = { "load_image", path }
+    load_texture = function(path)
+        vfxLog[#vfxLog + 1] = { "load_texture", path }
         return 42
     end,
-    is_valid = function(h)
-        vfxLog[#vfxLog + 1] = { "is_valid", h }
-        return h ~= nil and h > 0
+    is_valid_handle = function(kind, h)
+        vfxLog[#vfxLog + 1] = { "is_valid_handle", kind, h }
+        return kind == 0 and h ~= nil and h > 0
     end,
-    set_palette = function(handle, intensity, size)
-        vfxLog[#vfxLog + 1] = { "set_palette", handle, intensity, size }
+    set_postfx = function(kind, params)
+        vfxLog[#vfxLog + 1] = { "set_postfx", kind, params }
         return true
     end,
     destroy_texture = function(handle)
@@ -86,11 +86,11 @@ do
     }, {}))
     local oks, sps = false, false
     for _, c in ipairs(vfxLog) do
-        if c[1] == "load_image" and c[2] == "assets/lut/a.png" then oks = true end
-        if c[1] == "set_palette" and c[2] == 42 and c[3] == 0.5 and c[4] == 16 then sps = true end
+        if c[1] == "load_texture" and c[2] == "assets/lut/a.png" then oks = true end
+        if c[1] == "set_postfx" and c[2] == "lut3d" and c[3] and c[3].lutId == 42 and c[3].strength == 0.5 then sps = true end
     end
     check("palette apply loads LUT image", oks)
-    check("palette apply applies LUT (handle, intensity, size)", sps)
+    check("palette apply applies LUT (handle, intensity)", sps)
 end
 
 -- palette apply without a path: re-apply a previously-loaded id
@@ -102,7 +102,7 @@ do
     VFXCommands.palette(ctx, { effect = "apply", id = "lut1", intensity = 0.8 })
     local sps = false
     for _, c in ipairs(vfxLog) do
-        if c[1] == "set_palette" and c[2] == 42 and c[3] == 0.8 then sps = true end
+        if c[1] == "set_postfx" and c[2] == "lut3d" and c[3] and c[3].lutId == 42 and c[3].strength == 0.8 then sps = true end
     end
     check("palette apply id-only re-applies", sps)
 end
@@ -114,7 +114,7 @@ do
     VFXCommands.palette(ctx, { effect = "clear" })
     local clr = false
     for _, c in ipairs(vfxLog) do
-        if c[1] == "set_palette" and c[2] == nil and c[3] == 0.0 and c[4] == 0 then clr = true end
+        if c[1] == "set_postfx" and c[2] == "lut3d" and c[3] and c[3].lutId == 0 and c[3].intensity == 0 then clr = true end
     end
     check("palette clear disables LUT", clr)
 end

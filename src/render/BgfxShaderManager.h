@@ -63,6 +63,7 @@ public:
             case 1: return m_postfxLut;        // LutColorGrade
             case 2: return m_postfxBlur;       // SoftBlur
             case 3: return m_postfxBloom;      // Bloom
+            case 4: return m_postfxLut3d;       // Lut3D (t214)
             default: return BGFX_INVALID_HANDLE;
         }
     }
@@ -88,6 +89,7 @@ private:
     bgfx::ProgramHandle m_postfxLut        = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_postfxBlur       = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle m_postfxBloom      = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_postfxLut3d      = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_u_postfxParams   = BGFX_INVALID_HANDLE;
     int m_buildFailures = 0;  // t73: loud-degrade tally (see coreProgramsBroken)
     std::string m_failedProgramNames;  // t73: non-core failure tally for the one-shot ERROR

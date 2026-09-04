@@ -1,25 +1,42 @@
-﻿-- Caesura (AmeKAG) - Palette / LUT Management (Lua layer)
+-- Caesura (AmeKAG) - Palette / LUT Management (Lua layer)
 -- Provides load/apply/clear for 3D color lookup tables (LUTs).
 -- All GPU operations go through the backend table (no direct bgfx calls).
+-- t214: real-name surface -- load_texture/is_valid_handle + set_postfx
+-- ("lut3d") replace the legacy phantom names (set_palette/load_image/
+-- is_valid). The 2D-packed LUT (256x16 = 16^3, 4096x64 = 64^3) is sampled
+-- by the Lut3D postfx stage; the texture stays TextureManager-owned.
+-- Backend resolution: the GLOBAL backend (set by the web boot bridge)
+-- wins; the native engine falls back to the backend module (which routes
+-- through the _CAESURA_BACKEND unified proxy).
 
 local palette = {}
 
 -- Internal registry: lut_id -> { handle, path, size }
 local luts = {}
 
--- Round 72: the C++ side has NO LUT bindings yet (backend.set_palette and
--- backend.destroy_texture are not wired anywhere in src/ or the web bridge).
--- Guard every LUT-touching op so a [palette] tag degrades with a visible
--- notice instead of crashing mid-scene with a nil call.
+-- Active LUT id (so unload can clear the stage pointing at a destroyed
+-- texture before releasing it; the chain also isValid-guards each frame).
+local active_id = nil
+
+-- Resolve the backend surface (global first, module fallback).
+local function get_backend()
+    local g = rawget(_G, "backend")
+    if type(g) == "table" then return g end
+    local ok, b = pcall(require, "backend")
+    if ok and type(b) == "table" then return b end
+    return nil
+end
+
+-- t214: capability guard -- set_postfx is the LUT postfx surface on both
+-- the native module (shim -> Proxy.render -> RenderBinding) and the web
+-- global (jsBackend). The binding's isPostFxSupported decides the rest.
 local function lut_available()
-    local b = backend  -- global; may be unset in headless probes
-    return type(b) == "table"
-        and type(b.set_palette) == "function"
-        and type(b.destroy_texture) == "function"
+    local b = get_backend()
+    return type(b) == "table" and type(b.set_postfx) == "function"
 end
 local function lut_noop(what)
     print(string.format(
-        "[palette] %s: LUT backend not wired (set_palette/destroy_texture missing) -- no-op",
+        "[palette] %s: LUT postfx not wired (set_postfx missing) -- no-op",
         what))
 end
 
@@ -28,10 +45,6 @@ end
 -- @param path    file path to the 256x16 or 4096x64 LUT image (.png)
 -- @return true on success, nil+error on failure
 function palette.load(lut_id, path)
-    -- Round 82: load() was the one LUT op without the lut_available() guard —
-    -- set_night_mode() (and toggle_mode()) reached it headless and crashed on
-    -- the nil backend global. Guard like apply/clear/unload: visible no-op
-    -- instead of a mid-scene crash.
     if not lut_available() then lut_noop("load") return false end
     if not lut_id or #lut_id == 0 then
         return nil, "palette.load: lut_id required"
@@ -40,16 +53,17 @@ function palette.load(lut_id, path)
         return nil, "palette.load: path required"
     end
 
-    -- Load texture through backend (TextureManager)
-    local handle = backend.load_image(path)
-    if not handle or not backend.is_valid(handle) then
+    -- Load texture through backend (TextureManager); real names (t214).
+    local b = get_backend()
+    local handle = b.load_texture(path)
+    if not handle or not b.is_valid_handle or not b.is_valid_handle(0, handle) then -- HandleType::TEXTURE = 0
         return nil, "palette.load: failed to load LUT image: " .. path
     end
 
     luts[lut_id] = {
         handle = handle,
         path   = path,
-        size   = 16,  -- default 16^3; 4096x64 = 64^3
+        size   = 0,  -- 0 = derive at apply (N = texture height; width must be N*N)
     }
 
     return true
@@ -58,7 +72,7 @@ end
 --- Apply a loaded LUT to the current rendering output.
 -- Intensity controls the blend: 0 = no effect, 1 = full LUT.
 -- @param lut_id     string ID from palette.load()
--- @param intensity  float 0.0–1.0 (default 1.0)
+-- @param intensity  float 0.0-1.0 (default 1.0)
 -- @return true on success, nil+error on failure
 function palette.apply(lut_id, intensity)
     if not lut_available() then lut_noop("apply") return false end
@@ -70,9 +84,18 @@ function palette.apply(lut_id, intensity)
         return nil, "palette.apply: LUT not loaded: " .. tostring(lut_id)
     end
 
-    -- Request the backend to apply the palette for future submits
-    -- The backend will bind s_lutTex and set u_paletteParams
-    backend.set_palette(entry.handle, intensity, entry.size)
+    -- t214: real surface -- the Lut3D postfx stage binds the borrowed
+    -- texture at sampler t1 and blends by intensity. 0/false return =
+    -- not supported on this device (visible degradation).
+    local b = get_backend()
+    -- strength = native PostFxParams field; intensity = web jsBackend field.
+    local ok = b.set_postfx("lut3d", {
+        lutId = entry.handle,
+        strength = intensity, intensity = intensity,
+        lutSize = entry.size,
+    })
+    if not ok then lut_noop("apply") return false end
+    active_id = lut_id
 
     return true
 end
@@ -81,7 +104,9 @@ end
 -- @return true
 function palette.clear()
     if not lut_available() then lut_noop("clear") return end
-    backend.set_palette(nil, 0.0, 0)
+    local b = get_backend()
+    b.set_postfx("lut3d", { lutId = 0, intensity = 0, lutSize = 0 })
+    active_id = nil
     return true
 end
 
@@ -95,8 +120,12 @@ function palette.unload(lut_id)
         return nil, "palette.unload: LUT not found: " .. tostring(lut_id)
     end
 
-    if entry.handle and backend.is_valid(entry.handle) then
-        backend.destroy_texture(entry.handle)
+    -- If the unloaded LUT is the active one, clear the stage first so a
+    -- destroyed texture is never referenced (chain also guards isValid).
+    if active_id == lut_id then palette.clear() end
+    local b = get_backend()
+    if entry.handle and b.is_valid_handle and b.is_valid_handle(0, entry.handle) then
+        b.destroy_texture(entry.handle)
     end
     luts[lut_id] = nil
     return true
@@ -104,9 +133,11 @@ end
 
 --- Unload all LUTs.
 function palette.unload_all()
+    if active_id then palette.clear() end
+    local b = get_backend()
     for id, entry in pairs(luts) do
-        if entry.handle and backend.is_valid(entry.handle) then
-            backend.destroy_texture(entry.handle)
+        if entry.handle and b.is_valid_handle and b.is_valid_handle(0, entry.handle) then
+            b.destroy_texture(entry.handle)
         end
     end
     luts = {}

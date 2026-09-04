@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 --  Caesura (AmeKAG) -- tests/scripts/test_p2_features.lua
 --  U2.1-U2.4: gallery, music_room, palette, i18n module tests
 --  Run: external\lua\lua.exe tests/scripts/test_p2_features.lua
@@ -89,12 +89,9 @@ end
 
 do
     local mock_backend = {
-        load_image = function(path) return 42 end,
-        is_valid = function(h) return h and h > 0 end,
-        apply_lut = function(h, i) return true end,
-        clear_lut = function() return true end,
-        set_palette = function(handle, intensity) return true end,
-        free_image = function(handle) end,
+        load_texture = function(path) return (path and #path > 0) and 1 or nil end,
+        is_valid_handle = function(kind, h) return kind == 0 and h ~= nil and h > 0 end,
+        set_postfx = function(kind, params) return kind == "lut3d" and params ~= nil end,
         destroy_texture = function(handle) end,
     }
     package.loaded["backend"] = mock_backend

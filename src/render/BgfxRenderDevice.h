@@ -135,6 +135,11 @@ private:
         PostFxKind kind = PostFxKind::Vignette;
         PostFxParams params;
         bool enabled = true;
+        // Lut3D (t214): borrowed texture handle (TextureManager owns the
+        // texture; the stage never destroys it -- palette.unload destroys
+        // via the manager, the chain guards with bgfx::isValid each frame).
+        bgfx::TextureHandle lutTex = BGFX_INVALID_HANDLE;
+        uint8_t lutSize = 0;
     };
     std::vector<PostFxStage> m_postFxStages;        // ordered chain (stable handles = index+1)
 
