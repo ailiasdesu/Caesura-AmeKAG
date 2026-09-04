@@ -607,7 +607,9 @@ jobs:
       # bundles the same install tree as the TGZ (hdiutil, runner-native);
       # signing/notarization stay account-gated (ad-hoc unsigned DMG today).
       - name: Package (CPack DMG)
-        run: cd build && cpack -G DMG
+        # CPack's macOS disk-image generator is named DragNDrop (the "DMG"
+        # alias is not registered on every CMake version -- observed 3.25+).
+        run: cd build && cpack -G DragNDrop
 
       - name: Verify DMG exists and mounts/contains the bundle
         run: |
