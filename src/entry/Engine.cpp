@@ -50,6 +50,14 @@ extern "C" {
 #include <stdexcept>
 #include <utility>
 
+#if defined(__ANDROID__)
+#include <functional>
+namespace Caesura {
+void setMobileNativeAudioFocusSink(std::function<void(int)> sink);
+void mobileNativeDrainAudioFocus();
+} // namespace Caesura
+#endif
+
 
 #if defined(__ANDROID__)
 static void* g_androidGLContext = nullptr;
@@ -204,6 +212,19 @@ bool Engine::init() {
     }
     m_initAttempted = true;
 
+#if defined(__ANDROID__)
+    // Android audio-focus bridge (t211): install the drain sink up front;
+    // per-frame drain is a no-op until focus events arrive on the UI thread.
+    Caesura::setMobileNativeAudioFocusSink([](int code) {
+        AudioFocusEvent ev = (code == -1) ? AudioFocusEvent::FocusLost
+                          : ((code == -2 || code == -3) ? AudioFocusEvent::InterruptionBegin
+                                                        : AudioFocusEvent::FocusGained);
+        if (auto* s = BackendRegistry::instance().getAudioFocusService()) {
+            s->post(ev);
+        }
+    });
+#endif
+
     const bool useHeadlessDefaults = m_config.headless && !m_config.editorMode;
     if (useHeadlessDefaults && !m_audioBackend) {
         m_audioBackend = createHeadlessAudioBackend();
@@ -253,6 +274,14 @@ bool Engine::init() {
     if (!initOptionalPhase()) {
         fprintf(stderr, "[Engine] Optional subsystems init had issues (non-fatal).\n");
     }
+
+    // t212 ①: runtime script command errors surface through ErrorUI. The
+    // handle path is re-entrancy safe (diag assembly never throws); scene/line
+    // are re-read from ctx inside handleFatalError (G2).
+    BackendRegistry::instance().setErrorReporter(
+        [this](const std::string&, const std::string& error, const std::string&, int) {
+            handleFatalError("Script runtime error", error.c_str());
+        });
 
     DEBUG_INFO(SubSys::Engine, ErrCode::Ok, "All subsystems initialized.");
     m_initialized = true;
@@ -630,6 +659,9 @@ void Engine::run(const OwnerPump& ownerPump) {
     while (m_running) {
         PROFILE_SCOPE("frame");
         m_skipLuaCallbacksThisFrame = false;
+#if defined(__ANDROID__)
+        Caesura::mobileNativeDrainAudioFocus();
+#endif
         if (ownerPump) ownerPump();
         m_skipLuaCallbacksThisFrame = pumpDebugger();
         publishDebugPauseState();
@@ -1402,6 +1434,10 @@ void Engine::render(float dt) {
     // Headless mode (not editor): no GPU rendering
     if (m_config.headless && !m_config.editorMode) return;
 
+    // t214-followup: postfx chain frame hook (beginFrame prepares chain state;
+    // commit_frame at the end runs runPostFxChain before the core swap).
+    if (m_renderDevice) m_renderDevice->beginFrame();
+
     // NOTE: instruction budget was reset once in processEvents this frame;
     // resetting again here would double the per-frame allowance.
     // Drive active videos by real frame time (frame-rate pacing inside).
@@ -1436,6 +1472,9 @@ void Engine::render(float dt) {
     if (m_miniGameBackend && m_miniGameBackend->isActive()) {
         m_miniGameBackend->render();
     }
+
+    // t214-followup: postfx chain frame hook (runs staged postfx then swap).
+    if (m_renderDevice) m_renderDevice->commit_frame();
 
 }
 
@@ -1480,6 +1519,10 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
     diag.platform = SDL_GetPlatform();
     if (m_renderDevice) diag.gpuBackend = m_renderDevice->getBackendName();
     diag.logDir = "logs";
+    // t212 G2: failing command/line captured from the runner ctx below
+    // (declared at function scope: ErrorUI::show is called outside the block).
+    std::string ctxCmd;
+    int ctxLine = 0;
     {
         // Currently running KAG scene from the runner ctx (same authoritative
         // source the debugger uses). Any failure leaves it empty -- building
@@ -1487,15 +1530,21 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
         lua_State* L = m_lua ? m_lua->state() : nullptr;
         if (L) {
             const int stackTop = lua_gettop(L);
+            // t212 G2: fetch scene + failing command/line from the runner
+            // ctx (scheduler stashes ctx.error_command/error_token_line on a
+            // runtime command error). Empty when not a command error (OOM/GPU
+            // recovery paths) -- building diagnostics must never throw while
+            // handling a fatal error.
             const char* snippet =
                 "local ok, ctx = pcall(function() "
                 "return require('kag_runner').get_ctx() end); "
-                "if ok and ctx then return tostring(ctx.current_scene or '') end; "
-                "return ''";
+                "if ok and ctx then return tostring(ctx.current_scene or ''), "
+                "tostring(ctx.error_command or ''), ctx.error_token_line or 0 end";
             if (luaL_loadstring(L, snippet) == LUA_OK
-                && lua_pcall(L, 0, 1, 0) == LUA_OK
-                && lua_isstring(L, -1)) {
-                diag.scenePath = lua_tostring(L, -1);
+                && lua_pcall(L, 0, 3, 0) == LUA_OK) {
+                if (lua_isstring(L, -3)) diag.scenePath = lua_tostring(L, -3);
+                if (lua_isstring(L, -2)) ctxCmd = lua_tostring(L, -2);
+                if (lua_isnumber(L, -1)) ctxLine = (int)lua_tointeger(L, -1);
             }
             lua_settop(L, stackTop);
         }
@@ -1504,9 +1553,10 @@ void Engine::handleFatalError(const char* context, const char* luaError) {
     ErrorAction action = ErrorUI::show(
         "Engine Runtime Error",
         msg,
-        "", 0,
+        "",  // scriptTrace: the runtime traceback is carried inside msg (t212 G4)
+        ctxLine,
         m_renderDevice != nullptr,
-        "",  // commandName: not known at this level
+        ctxCmd,  // t212 G2: failing KAG command (empty when not a command error)
         diag
     );
 

@@ -375,6 +375,12 @@ function kag_runner.start(scene_path)
     }
     rawset(_G, "_CAESURA_CTX", ctx)
 
+    -- t212: first-definition-wins runtime-error handler (gesture-hook
+    -- precedent). A pre-set ctx.handle_error (custom recovery policy) is
+    -- kept; the default reports to the composition-root chain and keeps
+    -- console + file-log (Debug.log) visibility, with G4 traceback.
+    kag_runner.install_error_handler(ctx)
+
     -- Load initial scene
     local scene = flow.load_scene(scene_path)
     if not scene then
@@ -848,6 +854,38 @@ function kag_runner.pump_gesture_overlay(c)
         c.input_focus = "kag"
         pcall(function() require("history_ui")._hideAll(c) end)
     end
+end
+
+-- t212: runtime-error handler install helper (named export so the lua
+-- suite can drive the default and first-definition-wins paths directly).
+function kag_runner.install_error_handler(c)
+    if c == nil then return nil end
+    if c.handle_error == nil then
+        c.handle_error = function(cmd, err, scene, line)
+            -- G4: attach Lua stack traceback (level 2 = caller of the handler).
+            local msg = debug.traceback(tostring(err), 2)
+            if msg == "" then msg = tostring(err) end
+            local label = string.format("[ErrorUI] %s @ %s:%s: %s",
+                tostring(cmd), tostring(scene or "?"), tostring(line or 0), msg)
+            -- File + console visibility first: Debug.log writes the engine's
+            -- logs/caesura_*.log (headless tooling and windowed player alike);
+            -- plain print covers console-only contexts.
+            local dbg = rawget(_G, "Debug")
+            if dbg and type(dbg.log) == "function" then
+                pcall(dbg.log, "error", label)
+            else
+                print(label)
+            end
+            -- Composition-root chain: Engine.report_command_error -> di
+            -- ErrorReporter -> ErrorUI (no-op when no reporter is installed).
+            local eng = rawget(_G, "Engine")
+            if eng and type(eng.report_command_error) == "function" then
+                pcall(eng.report_command_error, cmd, msg,
+                      tostring(scene or ""), tonumber(line) or 0)
+            end
+        end
+    end
+    return c.handle_error
 end
 
 return kag_runner

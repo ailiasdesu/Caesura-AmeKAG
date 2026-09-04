@@ -1414,8 +1414,16 @@ function scheduler.run(ctx, tokens, start_index)
                             ctx.current_scene or ctx.currentScene or "?",
                             tostring(ctx.token_index or ctx.tokenIndex or "?"),
                             tostring(err)))
+                        -- t212 G2: the ErrorUI chain needs scene + line
+                        -- (previously only the print carried them); stash the
+                        -- same fields on ctx so Engine::handleFatalError can
+                        -- read them for the DiagnosticInfo.
+                        ctx.error_command = actual_cmd
+                        ctx.error_token_line = ctx.token_index or ctx.tokenIndex or 0
                         if ctx.handle_error then
-                            pcall(ctx.handle_error, actual_cmd, tostring(err), i)
+                            pcall(ctx.handle_error, actual_cmd, tostring(err),
+                                  ctx.current_scene or ctx.currentScene or "",
+                                  ctx.token_index or ctx.tokenIndex or 0)
                         end
                     end
                 end

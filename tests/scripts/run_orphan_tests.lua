@@ -42,6 +42,8 @@ local tests = {
     "test_select_crossscene_flow",
     "test_typewriter_sound",
     "test_hr",
+    "test_errorui_wiring",
+    "test_palette",
 }
 
 local passed, failed = 0, 0
