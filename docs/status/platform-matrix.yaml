@@ -1,7 +1,7 @@
 version: 1
 schema_version: "1.0.0"
 generated_document: "docs/status/platform-status.md"
-evidence_head_commit: "0d6f428492027523393182e50687e403f250918d"
+evidence_head_commit: "648a886823917b883403447ce1d81a9a6b2dacc4"
 
 allowed_status_enums:
   - verified
