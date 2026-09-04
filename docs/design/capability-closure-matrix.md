@@ -1,9 +1,9 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-09-04T11:19:45Z
+> 生成时间（输入源最新 mtime）：2026-09-04T14:49:45Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：a5063cbd49dd0b0e
+> 源指纹（输入内容 sha256 前 16 hex）：c11d3af2d377632a
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -13,7 +13,7 @@
 - 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**89**
 - 测试引用（Tested，启发式计数）：**139**
 - UNWIRED：0 · PARTIAL：0 · CLOSED：131 · EXTRA：31 · EXPERIMENTAL(人工)：3
-- **四层闭包（2026-09-04）**：Structural Closed=131 · Runtime 测试证据=139 · Platform=0 · Packaged=0
+- **四层闭包（2026-09-04）**：Structural Closed=131 · Runtime 测试证据=139 · Platform=3 · Packaged=0
   - 列注记：Platform/Packaged 两列随 Phase2 分发逐项真实验证填充（当前无证据=诚实 0）；Runtime=语义测试证据存在（非全部效果面验证）。
 - **幻影绑定（v5）**：**2** 处 backend.<name> 调用命中
   - 提取模式：union of: bindings/*.cpp luaL_Reg { name, lua_X }; backend.lua ^function Backend.X; backend_factory.lua cmd==X; kag.lua ^function KAG.X
@@ -149,7 +149,7 @@
 | get_texture | n | Y | Y | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:226 |
 | has_pending_transition | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:308 |
 | history | Y | Y | n | CLOSED ⚠ | ✓9 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:194 |
-| hr | Y | Y | Y | CLOSED ⚠ | ✓6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:217 |
+| hr | Y | Y | Y | CLOSED ⚠ | ✓6 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:217 |
 | i18n | Y | Y | n | CLOSED ⚠ | ✓60 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:637 |
 | image | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/layer.lua:219 |
 | inc | Y | Y | n | CLOSED | ✓29 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:434 |
@@ -180,7 +180,7 @@
 | notify | Y | Y | n | CLOSED | ✓38 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:594 |
 | nvl | Y | Y | Y | CLOSED | ✓24 | - | - | ? | scripts/kag/commands/text.lua:1018 |
 | p | Y | Y | Y | CLOSED | ✓293 | - | - | ? | scripts/kag/commands/text.lua:987 |
-| palette | Y | Y | n | CLOSED ⚠ | ✓28 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/vfx.lua:451 |
+| palette | Y | Y | n | CLOSED ⚠ | ✓28 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/vfx.lua:451 |
 | particle_weather | Y | Y | Y | CLOSED | ✓3 | - | - | ? | scripts/kag/commands/vfx.lua:589 |
 | particles | Y | Y | Y | CLOSED | - | - | - | ? | scripts/kag/commands/vfx.lua:384 |
 | play | Y | Y | Y | CLOSED | ✓6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:469 |
@@ -242,7 +242,7 @@
 | textspeed | Y | Y | n | CLOSED | ✓42 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1259 |
 | trans* | Y | Y | Y | CLOSED | ✓4 | - | - | ? | scripts/kag/commands/transition.lua:299 |
 | tween | Y | Y | Y | CLOSED | ✓14 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/tween.lua:201 |
-| typewriter | Y | Y | n | CLOSED ⚠ | ✓7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1317 |
+| typewriter | Y | Y | n | CLOSED ⚠ | ✓7 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1317 |
 | typewriter_sound | Y | Y | n | CLOSED ⚠ | ✓6 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/text.lua:1331 |
 | unlock | Y | Y | n | CLOSED | ✓50 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:362 |
 | update | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/tween.lua:165 |
@@ -326,8 +326,8 @@
 - history — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
   - reason：t116 复核：HistoryUI.show 模块调用→backlog 覆盖层（层系统+backend 渲染），真实可观察
   - evidence：scripts/kag/commands/system.lua:231-241 → scripts/history_ui.lua :19 backend.create_solid_texture / :27-31 layers.get / :86-87 layers.ensure(_history_bg/_history_title)+注释 :9 自证 backend.render_text；jump→ctx._pendingJump
-- hr — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
-  - reason：t213 接线（拍板 A）：kag.lua:217 空桩改委托 text_cmds.hr（保留注册键=Dispatched 依据，t195 死定义纪律同款）；TextCommands.hr（text.lua:929）绘制 _hr 层（layers.ensure+create_solid_texture+mark_dirty，viewport.logical 宽×resolve_line_height，x=32 y=cursor w=vw-64 h=2 实心条）+ 光标推进一行 + textCursorX=32；_hideHr 清理挂点 5 处（[ch]/[text]/[er]/[p]/[reset]，页清则线清）。
+- hr — Observable=VERIFIED · PlatformTested=win · Packaged=- · Status=CLOSED (raw: PARTIAL)
+  - reason：t213 接线（拍板 A）：kag.lua:217 空桩改委托 text_cmds.hr（保留注册键=Dispatched 依据，t195 死定义纪律同款）；TextCommands.hr（text.lua:929）绘制 _hr 层（layers.ensure+create_solid_texture+mark_dirty，viewport.logical 宽×resolve_line_height，x=32 y=cursor w=vw-64 h=2 实心条）+ 光标推进一行 + textCursorX=32；_hideHr 清理挂点 5 处（[ch]/[text]/[er]/[p]/[reset]，页清则线清）。 [035 ②+③ 2026-09-04] platform_tested=win：真实 D3D11 GPU 冒烟（build/Debug --backend dx11），palette=PostFx Lut3D create tex=5 intensity=0.80 + set 0.50 + clear(tex=65535)，脚本 token 7/7 全消费（hr/typewriter 执行）；packaged 保持 -（本批开发位，无对应发布包）。
   - evidence：scripts/kag.lua:216-218（桩改委托）→ scripts/kag/commands/text.lua:929+（TextCommands.hr/_hideHr）→ tests/scripts/test_hr.lua（27 断言：dispatch 身份 KAG.hr@kag.lua:217→TextCmds.hr@text.lua:929/裸 ctx 兼容/parse/绘制触发/光标推进/复用同节点/五路清理）
 - i18n — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
   - reason：t110 PARTIAL 复核批人工核真：handler 经 i18n.set_language + kt.relocalize_page 全页重放，间接但真实触达渲染效果面（TextScene draws→backend.render_text），画面即时换语言可观察。
@@ -371,8 +371,8 @@
 - notify — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t110 复核：toast.show 模块表调用，toast 模块内 backend.render_text + create_solid_texture + _toast_bg layer——间接真实触达（角标 toast 可观察）。
   - evidence：scripts/kag/commands/system.lua:648-677 → toast.show → scripts/toast.lua:41 backend.render_text + :14 create_solid_texture + :36 _toast_bg layer
-- palette — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
-  - reason：t214 实现：Lut3D postfx stage（PostFxKind::Lut3D=4 + PostFxParams 纹理/lutSize 两字段，零新方法）+ BgfxRenderDevice 借纹理 uS1 采样 + 着色器×3 家族（DXBC fxc 本地编译嵌入；GL/Metal shaderc 数组生成命令已附）+ palette.lua 真名面重写（load_texture/is_valid_handle(0,h)/set_postfx('lut3d')，旧幻影 set_palette/load_image/is_valid 移除）+ web 桥统一原生面。D3D11 GPU 冒烟 300 帧：PostFxLut3D program READY + create tex=2 size=16 intensity=0.50，0 渲染错误，RC=0。
+- palette — Observable=VERIFIED · PlatformTested=win · Packaged=- · Status=CLOSED (raw: PARTIAL)
+  - reason：t214 实现：Lut3D postfx stage（PostFxKind::Lut3D=4 + PostFxParams 纹理/lutSize 两字段，零新方法）+ BgfxRenderDevice 借纹理 uS1 采样 + 着色器×3 家族（DXBC fxc 本地编译嵌入；GL/Metal shaderc 数组生成命令已附）+ palette.lua 真名面重写（load_texture/is_valid_handle(0,h)/set_postfx('lut3d')，旧幻影 set_palette/load_image/is_valid 移除）+ web 桥统一原生面。D3D11 GPU 冒烟 300 帧：PostFxLut3D program READY + create tex=2 size=16 intensity=0.50，0 渲染错误，RC=0。 [035 ②+③ 2026-09-04] platform_tested=win：真实 D3D11 GPU 冒烟（build/Debug --backend dx11），palette=PostFx Lut3D create tex=5 intensity=0.80 + set 0.50 + clear(tex=65535)，脚本 token 7/7 全消费（hr/typewriter 执行）；packaged 保持 -（本批开发位，无对应发布包）。
   - evidence：src/render/api/IRenderDevice.h（PostFxKind::Lut3D=4/PostFxParams 两字段）+ src/render/BgfxRenderDevice.cpp(:240-246 runPostFxChain Lut3D 分支) + shaders/dx11/fs_postfx_lut3d.{hlsl,dxbc} + src/script/bindings/RenderBinding.cpp（lutId/lutSize 推导）+ scripts/palette.lua（真名面）+ scripts/kag/commands/vfx.lua:451+（handler）→ tests/scripts/test_palette.lua（26 断言）+ tests/cpp/test_render_postfx.cpp（9 用例/40 断言）
 - play — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t117 复核：模块委托链 kag.commands.audio playbgm/playse/playvoice→backend.audio_*
@@ -455,8 +455,8 @@
 - tween — Observable=VERIFIED · PlatformTested=- · Packaged=-
   - reason：t113 复核：工具函数链——resolve_layer/step_tween/apply_step 内 layers.move_layer/set_layer_opacity/mark_dirty，真实图层属性动画（blocking Operation；wait=false 由 kag_runner.update 驱动）。
   - evidence：scripts/kag/commands/tween.lua:201-254（handler）→ :58-62 resolve_layer（layers.get/find）+ :73-83 step_tween/apply_step（layers.move_layer/set_layer_opacity/mark_dirty）+ :165-186 update 驱动
-- typewriter — Observable=VERIFIED · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
-  - reason：t201 接线（B 批）：逐字揭示唯一消费点 kag_runner.lua update() 内新增 SE 触发（interval 跨边界语义：last_shown=上次触发边界，1 char/帧下 interval=N 仍每 N 字符触发一次——首版实现按帧更新 last_shown 导致 interval>=2 永不触发，t201 实测修正）；[ch]/[text] reveal 初始化含 last_shown=0（新行重置）；skip/click 即时路径在块外写 last_shown=total（瞬时揭示零爆发，防 follow-through 连响）；snapshot restore 封 last_shown=total（回滚零爆发）。v1 诚实注记：volume 无 per-SE 消费面（IAudioBackend.playSE 无 volume 参数，src/audio/api/IAudioBackend.h:38），按 plan 忽略并列入 follow-up（per-SE 音量=接口扩展，契约层）。
+- typewriter — Observable=VERIFIED · PlatformTested=win · Packaged=- · Status=CLOSED (raw: PARTIAL)
+  - reason：t201 接线（B 批）：逐字揭示唯一消费点 kag_runner.lua update() 内新增 SE 触发（interval 跨边界语义：last_shown=上次触发边界，1 char/帧下 interval=N 仍每 N 字符触发一次——首版实现按帧更新 last_shown 导致 interval>=2 永不触发，t201 实测修正）；[ch]/[text] reveal 初始化含 last_shown=0（新行重置）；skip/click 即时路径在块外写 last_shown=total（瞬时揭示零爆发，防 follow-through 连响）；snapshot restore 封 last_shown=total（回滚零爆发）。v1 诚实注记：volume 无 per-SE 消费面（IAudioBackend.playSE 无 volume 参数，src/audio/api/IAudioBackend.h:38），按 plan 忽略并列入 follow-up（per-SE 音量=接口扩展，契约层）。 [035 ②+③ 2026-09-04] platform_tested=win：真实 D3D11 GPU 冒烟（build/Debug --backend dx11），palette=PostFx Lut3D create tex=5 intensity=0.80 + set 0.50 + clear(tex=65535)，脚本 token 7/7 全消费（hr/typewriter 执行）；packaged 保持 -（本批开发位，无对应发布包）。
   - evidence：scripts/kag_runner.lua:489-505（reveal 推进内间隔触发 backend.audio_play('se', sound)）+ :770-779（click 即时写 last_shown=total）+ :536-542（skip 即时同款）；scripts/kag/commands/text.lua:830/898（reveal={...,last_shown=0} 新行重置）；scripts/kag/snapshot.lua:82-88（restore 封印）；tests/scripts/test_typewriter_sound.lua（语义测试 38 断言：interval=1/3、skip、click 即时+封印、action=off、新行重置、alias 场景）
 - typewriter_sound — Observable=? · PlatformTested=- · Packaged=- · Status=CLOSED (raw: PARTIAL)
   - reason：t201 接线（B 批）：与 typewriter 共享 handler（text.lua:1290 别名）与消费字段 ctx.typewriter_sound/_interval——kag_runner reveal 推进处消费（见 typewriter 条目）；t119 的 WRITE-ONLY 判级证据已被本批接线取代；v1 不含 per-SE volume（contract gap，follow-up 记录）。
