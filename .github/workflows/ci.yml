@@ -611,19 +611,20 @@ jobs:
         # alias is not registered on every CMake version -- observed 3.25+).
         run: cd build && cpack -G DragNDrop
 
-      - name: Verify DMG exists and mounts/contains the bundle
+      - name: Verify DMG exists and mounts/contains the payload
         run: |
           set -e
           DMG=$(ls build/CaesuraAmeKAG-*-Darwin-*.dmg | head -1)
           test -n "$DMG" && test -s "$DMG" || { echo "no DMG produced"; exit 1; }
           echo "dmg: $DMG ($(du -h "$DMG" | cut -f1))"
-          # Mount read-only and confirm a .app bundle (any Caesar* name) and
-          # the payload dirs (scripts/demo/assets) exist inside the image.
+          # Mount read-only and confirm the payload: bare executable (the
+          # macOS build is NOT a .app bundle -- MACOSX_BUNDLE is iOS-only in
+          # CMakeLists; the DMG is a bare-dir layout mirroring the TGZ) plus
+          # the payload dirs (scripts/demo/assets) inside the image.
           MNT=$(mktemp -d /tmp/caesura-dmg.XXXXXX)
           hdiutil attach -readonly -nobrowse -mountpoint "$MNT" "$DMG" >/dev/null
-          APP=$(find "$MNT" -maxdepth 5 -name '*.app' -type d | head -1)
-          test -n "$APP" || { echo "no .app inside DMG"; hdiutil detach "$MNT" >/dev/null || true; exit 1; }
-          echo "app: $APP"
+          test -x "$MNT/CaesuraAmeKAG" || { echo "no bare executable in DMG"; hdiutil detach "$MNT" >/dev/null || true; exit 1; }
+          echo "exe: $MNT/CaesuraAmeKAG"
           test -d "$MNT/scripts"
           test -d "$MNT/demo"
           test -d "$MNT/assets"
