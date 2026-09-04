@@ -120,6 +120,7 @@ local tests = {
     "test_saveplace",
     "test_story_meta",
     "test_saveload",
+    "test_golden_save_migration",
     "test_audio_cmds",
     "test_textflow",
     "test_vib_camera",
