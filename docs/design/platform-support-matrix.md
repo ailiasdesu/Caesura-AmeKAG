@@ -14,7 +14,7 @@
 | **Boot**（引擎启动/跑帧） | ✓ [W-C] | ✓ [L-C] | ⏳ [M-C] | ✓ [B-C] | ✓ [D-C] | ⏳ [I-C] |
 | **Gameplay**（游戏可玩） | ✓ [W-D] | ✓ [L-D] | ⏳ [M-D] | ✓ [B-D] | ✓ [D-D] | ⏳ [I-D] |
 | **First-VN**（官方示例完整跑） | ✓ [W-E] | ✓ [L-E] | ⏳ [M-E] | ✓ [B-E] | ✓ [D-E] | ⏳ [I-E] |
-| **Package**（发布包） | ✓ [W-F] | ✓ [L-F] | ✓ [M-F] | ✓ [B-F] | ? [D-F] | ⏳ [I-F] |
+| **Package**（发布包） | ✓ [W-F] | ✓ [L-F] | ✓ [M-F] | ✓ [B-F] | ✓ [D-F] | ⏳ [I-F] |
 | **Store**（商店分发） | ? [S] | ? [S] | ? [S] | ? [S] | ? [S] | ? [S] |
 
 ## 2. 证据注记
@@ -26,8 +26,8 @@
 - **Linux**：[L-A/B] Linux · GCC（SDL3 源码构建+Configure+Build）。[L-C] 同 job「Bundled layout boot smoke (xvfb; A3/R6 contract)」。[L-D/E/F] **Linux · Package「Verify release package (30 assertions, serial)」30/30 通过，含 renderdisabled=0（M1：Linux 发布包真渲染首证；五层链 platformDefaultBackend→BGFX_CONFIG_RENDERER_OPENGL=43→gl_FragColor substitute→-msse4.1→libegl1，见 §3）。
 - **macOS**：[M-A/B] macOS · Clang（Configure+Build+Lua+Test）。[M-C/D/E] ⏳ windowed Metal 运行 hardware-gated（本机无 Mac 桌面窗口证据；CI 无窗口桌面验证）。[M-F] macOS · Package（CPack TGZ 产物上传 ✓；verify 30/30 ✓ @ round-8 run 33248475888——round-7 §3 红定性为 verify 脚本 ps 探测误报（活进程 ps -args 空返回→活判死；无 .ips、demo 探针 rc=0、GPU degrade WARN 证明帧循环长期运行），修复=launcher 直记 pid/rc（0422c17c，§3/§4 对称；mac 实测 editor ready 3s/token 1s），自 round-9 起 verify 为硬门。
 - **Web**：[B-A/B/C/D/E] CI「Web Player unit & integration tests (vitest)」+ web vitest 全量（工件齐备 368/368 基线）+ web_browser_smoke.mjs（first_vn 浏览器冒烟，subpath/jsdom 等断言）+（本地 W0-W7 轮记录）。[B-F] ✓ **Linux CI 硬门**（r26 run 33704740139@a7ff1ce9：bake demo→vite build→package first_vn→`scripts/verify_web_package.sh dist/first_vn` 25/25 文件断言，vitest dist 用例实跑）+ `deploy-web.yml` 发布前 verify 25/25 + headless Chrome smoke（root + `/<repo>/` 子路径）双硬门；ks_bake --dir/--web 自 2026-09-03 起 POSIX 可移植（此前 cmd.exe `dir /s /b` 在 Linux 静默产出 0 场景）。
-- **Android**：[D-A/B] Android CMake probe (audit) + Android static contract (no NDK)（探针/契约级，continue-on-error 审计）。[D-C/D/E] K40 真机记录 docs/plans/2026-08-24-028-android-full-closure.md（全链路闭环：启动、渲染、字形、分支、存档、生命周期；另见 project-memory §5.2）。[D-F] ? 仅出 libCaesuraAmeKAG.so（R1 MODULE 产物）；APK 链路（gradle/SDLActivity/JNI R6/R8）未接线。
-- **iOS**：[I-A/B] iOS CMake probe (audit)（探针级，continue-on-error 审计；修复链含 SDL3-iOS、OpenSSL、CODE_SIGNING_ALLOWED=NO、BUNDLE DESTINATION）。[I-C/D/E/F] ⏳ 其余全部 hardware-gated（真机/模拟器未验，签名与真机部署属后续轮）。
+- **Android**：[D-A/B] Android CMake probe (audit) + Android static contract (no NDK)（探针/契约级，continue-on-error 审计）。[D-C/D/E] K40 真机记录 docs/plans/2026-08-24-028-android-full-closure.md（全链路闭环：启动、渲染、字形、分支、存档、生命周期；另见 project-memory §5.2）。[D-F] ✓ APK 发布链路已落地（2026-09-04 核实）：android/ gradle 工程（SDLActivity + MainActivity + HID/audio 模块 + AndroidManifest + assets 预置）已提交（feat(android) 系列：IME 输入桥、audio-focus JNI、Release 签名管线、A5 E2E 设备入口 + verification zipalign/apksigner CI step + APK/AAB upload artifacts）；引擎侧 R1 MODULE 出 libCaesuraAmeKAG.so + CMake ANDROID 分支 + OpenSSL 路径已落地。真机安装/运行证据保留在 K40 记录（D-C/D/E）。
+- **iOS**：[I-A/B] iOS CMake probe (gate)（2026-09-04 起硬门：continue-on-error 移除，job 名 audit→gate；修复链含 SDL3-iOS、OpenSSL、CODE_SIGNING_ALLOWED=NO、BUNDLE DESTINATION、Metal shader 数组）。[I-C/D/E/F] ⏳ 其余全部 hardware-gated（真机/模拟器未验，签名与真机部署属后续轮）。
 
 ## 3. 基线与运行时要求
 
