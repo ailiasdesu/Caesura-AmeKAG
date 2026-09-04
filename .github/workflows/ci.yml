@@ -488,6 +488,19 @@ jobs:
       - name: Package (CPack TGZ)
         run: cd build && cpack -G TGZ
 
+      - name: Build AppImage (release lane; t210 script, CI wiring)
+        run: |
+          set -euo pipefail
+          appimagetool=build/appimagetool-x86_64
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O "$appimagetool"
+          chmod +x "$appimagetool"
+          TGZ=$(ls build/CaesuraAmeKAG-*-Linux-*.tar.gz | head -1)
+          echo "appimage from: $TGZ"
+          APPIMAGETOOL="$PWD/$appimagetool" bash scripts/build_appimage.sh --tgz "$TGZ"
+          APP=$(ls build/CaesuraAmeKAG-*-Linux-*.AppImage | head -1)
+          test -f "$APP" || { echo "AppImage not produced"; exit 1; }
+          ls -la "$APP" build/CaesuraAmeKAG-*-Linux-*.sha256
+
       - name: Verify release package (32 assertions, serial)
         run: |
           TGZ=$(ls build/CaesuraAmeKAG-*-Linux-*.tar.gz | head -1)
@@ -501,6 +514,10 @@ jobs:
           path: |
             build/CaesuraAmeKAG-*-Linux-*.tar.gz
             build/CaesuraAmeKAG-*-Linux-*.tar.gz.sha256
+            build/CaesuraAmeKAG-*-Linux-*.AppImage
+            build/CaesuraAmeKAG-*-Linux-*.sha256
+            build/CaesuraAmeKAG-*-Linux-*.AppImage
+            build/CaesuraAmeKAG-*-Linux-*.sha256
 
   # ============================================================
   # Release Package (macOS TGZ) -- Sprint6-L2, mirrors release-linux.
