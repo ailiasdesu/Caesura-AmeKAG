@@ -591,6 +591,30 @@ jobs:
           echo "verifying: $TGZ"
           bash scripts/verify_release_package.sh "$TGZ"
 
+      # 035 D4: DMG is the macOS storefront artifact. CPack's DMG generator
+      # bundles the same install tree as the TGZ (hdiutil, runner-native);
+      # signing/notarization stay account-gated (ad-hoc unsigned DMG today).
+      - name: Package (CPack DMG)
+        run: cd build && cpack -G DMG
+
+      - name: Verify DMG exists and mounts/contains the bundle
+        run: |
+          set -e
+          DMG=$(ls build/CaesuraAmeKAG-*-Darwin-*.dmg | head -1)
+          test -n "$DMG" && test -s "$DMG" || { echo "no DMG produced"; exit 1; }
+          echo "dmg: $DMG ($(du -h "$DMG" | cut -f1))"
+          # Mount read-only and confirm a .app bundle (any Caesar* name) and
+          # the payload dirs (scripts/demo/assets) exist inside the image.
+          MNT=$(mktemp -d /tmp/caesura-dmg.XXXXXX)
+          hdiutil attach -readonly -nobrowse -mountpoint "$MNT" "$DMG" >/dev/null
+          APP=$(find "$MNT" -maxdepth 5 -name '*.app' -type d | head -1)
+          test -n "$APP" || { echo "no .app inside DMG"; hdiutil detach "$MNT" >/dev/null || true; exit 1; }
+          echo "app: $APP"
+          test -d "$MNT/scripts"
+          test -d "$MNT/demo"
+          test -d "$MNT/assets"
+          hdiutil detach "$MNT" >/dev/null
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -598,18 +622,19 @@ jobs:
           path: |
             build/CaesuraAmeKAG-*-Darwin-*.tar.gz
             build/CaesuraAmeKAG-*-Darwin-*.tar.gz.sha256
+            build/CaesuraAmeKAG-*-Darwin-*.dmg
 
   # ============================================================
-  # iOS compile audit (Track I I1) - RED-GREEN probe, never blocks.
-  # No Mac hardware in the repo dev loop; this surfaces the iOS toolchain
-  # gaps so they can be closed incrementally. continue-on-error keeps the
-  # branch CI green while the job reports its state in the workflow log.
+  # iOS compile (Track I I1) - HARD GATE since 2026-09-04 (035 D batch).
+  # The toolchain gaps closed over the red-green probe cycles (SDL3/OpenSSL
+  # iOS slices, CMake iOS branch, LUA_USE_IOS, BUNDLE DESTINATION,
+  # Metal shader arrays) now build green on every run -- the probe is
+  # promoted to a blocking gate so a regression fails the branch loudly.
   # ============================================================
   ios-compile:
-    name: "iOS CMake probe (audit)"
+    name: "iOS CMake probe (gate)"
     runs-on: macos-latest
     timeout-minutes: 30
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
