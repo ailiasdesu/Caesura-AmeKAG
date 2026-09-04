@@ -17,6 +17,7 @@ OUT = os.path.join(BASE, "src", "render")
 FILES = ["vs_sprite", "vs_fullscreen", "stretch_blt_vs", "affine_blt_vs",
          "fs_texture", "fs_blend", "fs_transition", "fs_vfx",
          "fs_postfx_vignette", "fs_postfx_lut", "fs_postfx_blur", "fs_postfx_bloom",
+         "fs_postfx_lut3d",
          "stretch_blt_fs", "affine_blt_fs"]
 
 
@@ -40,8 +41,19 @@ def make(prefix, src_dir, ext, header_note):
     return "\n".join(out)
 
 
-with open(os.path.join(OUT, "EmbeddedShaders_GL.cpp"), "w", encoding="utf-8", newline="\n") as f:
-    f.write(make("GL", LINUX, ".bin", "OpenGL (GLSL)"))
-with open(os.path.join(OUT, "EmbeddedShaders_Metal.cpp"), "w", encoding="utf-8", newline="\n") as f:
-    f.write(make("Metal", MACOS, ".metal.bin", "Metal (MSL)"))
-print("Regenerated EmbeddedShaders_GL.cpp + EmbeddedShaders_Metal.cpp")
+import sys
+do_gl = do_metal = True
+if len(sys.argv) > 1:
+    do_gl = do_metal = False
+    for a in sys.argv[1:]:
+        if a == "--gl": do_gl = True
+        if a == "--metal": do_metal = True
+
+if do_gl:
+    with open(os.path.join(OUT, "EmbeddedShaders_GL.cpp"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(make("GL", LINUX, ".bin", "OpenGL (GLSL)"))
+    print("Regenerated EmbeddedShaders_GL.cpp")
+if do_metal:
+    with open(os.path.join(OUT, "EmbeddedShaders_Metal.cpp"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(make("Metal", MACOS, ".metal.bin", "Metal (MSL)"))
+    print("Regenerated EmbeddedShaders_Metal.cpp")

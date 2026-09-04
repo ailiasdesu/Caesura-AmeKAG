@@ -321,6 +321,12 @@ void BgfxShaderManager::initEmbeddedShaders() {
             stretchFs  = conv(kEmbeddedGL_stretch_blt_fs, uint32_t(kEmbeddedGL_stretch_blt_fs_size), true);
             affineVs   = conv(kEmbeddedGL_affine_blt_vs, uint32_t(kEmbeddedGL_affine_blt_vs_size), false);
             affineFs   = conv(kEmbeddedGL_affine_blt_fs, uint32_t(kEmbeddedGL_affine_blt_fs_size), true);
+            // t216: GL postfx arrays now ship; convert for ESSL too.
+            fsPostfxVignette = conv(kEmbeddedGL_fs_postfx_vignette, uint32_t(kEmbeddedGL_fs_postfx_vignette_size), true);
+            fsPostfxLut      = conv(kEmbeddedGL_fs_postfx_lut,      uint32_t(kEmbeddedGL_fs_postfx_lut_size), true);
+            fsPostfxBlur     = conv(kEmbeddedGL_fs_postfx_blur,     uint32_t(kEmbeddedGL_fs_postfx_blur_size), true);
+            fsPostfxBloom    = conv(kEmbeddedGL_fs_postfx_bloom,    uint32_t(kEmbeddedGL_fs_postfx_bloom_size), true);
+            fsPostfxLut3d    = conv(kEmbeddedGL_fs_postfx_lut3d,    uint32_t(kEmbeddedGL_fs_postfx_lut3d_size), true);
         } else {
         vsSprite   = { kEmbeddedGL_vs_sprite, kEmbeddedGL_vs_sprite_size };
         fsTexture  = { kEmbeddedGL_fs_texture, kEmbeddedGL_fs_texture_size };
@@ -332,6 +338,12 @@ void BgfxShaderManager::initEmbeddedShaders() {
         stretchFs  = { kEmbeddedGL_stretch_blt_fs, kEmbeddedGL_stretch_blt_fs_size };
         affineVs   = { kEmbeddedGL_affine_blt_vs, kEmbeddedGL_affine_blt_vs_size };
         affineFs   = { kEmbeddedGL_affine_blt_fs, kEmbeddedGL_affine_blt_fs_size };
+        // t216: GL postfx arrays now ship (profile 130); real effects on GL.
+        fsPostfxVignette = { kEmbeddedGL_fs_postfx_vignette, kEmbeddedGL_fs_postfx_vignette_size };
+        fsPostfxLut      = { kEmbeddedGL_fs_postfx_lut,      kEmbeddedGL_fs_postfx_lut_size };
+        fsPostfxBlur     = { kEmbeddedGL_fs_postfx_blur,     kEmbeddedGL_fs_postfx_blur_size };
+        fsPostfxBloom    = { kEmbeddedGL_fs_postfx_bloom,    kEmbeddedGL_fs_postfx_bloom_size };
+        fsPostfxLut3d    = { kEmbeddedGL_fs_postfx_lut3d,    kEmbeddedGL_fs_postfx_lut3d_size };
         }
     } else if (isMetal) {
         vsSprite   = { kEmbeddedMetal_vs_sprite, kEmbeddedMetal_vs_sprite_size };

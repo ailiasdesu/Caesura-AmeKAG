@@ -93,6 +93,16 @@ extern const uint8_t  kEmbeddedGL_stretch_blt_fs[];
 extern const size_t   kEmbeddedGL_stretch_blt_fs_size;
 extern const uint8_t  kEmbeddedGL_affine_blt_fs[];
 extern const size_t   kEmbeddedGL_affine_blt_fs_size;
+extern const uint8_t  kEmbeddedGL_fs_postfx_vignette[];
+extern const size_t   kEmbeddedGL_fs_postfx_vignette_size;
+extern const uint8_t  kEmbeddedGL_fs_postfx_lut[];
+extern const size_t   kEmbeddedGL_fs_postfx_lut_size;
+extern const uint8_t  kEmbeddedGL_fs_postfx_blur[];
+extern const size_t   kEmbeddedGL_fs_postfx_blur_size;
+extern const uint8_t  kEmbeddedGL_fs_postfx_bloom[];
+extern const size_t   kEmbeddedGL_fs_postfx_bloom_size;
+extern const uint8_t  kEmbeddedGL_fs_postfx_lut3d[];
+extern const size_t   kEmbeddedGL_fs_postfx_lut3d_size;
 
 // ---------------------------------------------------------------------------
 // Precompiled Metal MSL bytecodes (Metal backend)
