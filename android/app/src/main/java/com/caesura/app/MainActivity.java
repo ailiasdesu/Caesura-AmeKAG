@@ -1,5 +1,6 @@
 package com.caesura.app;
 
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -36,10 +37,30 @@ public class MainActivity extends SDLActivity {
 
     private String mResourceRoot;
 
+    /** Audio-focus bridge (t211): MainActivity forwards AudioManager changes
+     *  to the engine via JNI (no-op outside games; engine drains per frame). */
+    public static native void nativeOnAudioFocusChanged(int code);
+    private AudioManager mAudioManager;
+    private final AudioManager.OnAudioFocusChangeListener mFocusListener = change -> nativeOnAudioFocusChanged(change);
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mAudioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (mAudioManager != null) {
+            int r = mAudioManager.requestAudioFocus(mFocusListener,
+                    AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            Log.i(LOG_TAG, "audio focus requested: " + r);
+        }
         mResourceRoot = extractGameBundle();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mAudioManager != null) {
+            mAudioManager.abandonAudioFocus(mFocusListener);
+        }
     }
 
     @Override

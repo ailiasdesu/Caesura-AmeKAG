@@ -7,6 +7,21 @@
 #include <cstdio>
 #include <SDL3/SDL.h>
 
+// ── Android JNI audio-focus bridge (t211 / Track M A2 JNI) ──────────────────
+// The JNI natives below receive Android audio-focus changes from the host
+// Activity (com.caesura.app.MainActivity). They run on the UI thread, so they
+// NEVER touch engine services directly (SoLoud suspend/resume are
+// CAESURA_ASSERT_MAIN_THREAD). Events are enqueued thread-safely and drained
+// ON THE ENGINE/SDL THREAD by the composition root (paired Engine patch:
+// setMobileNativeAudioFocusSink + mobileNativeDrainAudioFocus).
+#if defined(__ANDROID__)
+#include <jni.h>
+#include <functional>
+#include <mutex>
+#include <utility>
+#include <vector>
+#endif
+
 // Minimal Lua include -- we only need lua_State* for callbacks
 extern "C" {
 #include <lua.h>
@@ -347,5 +362,64 @@ bool MobileAdapter::isFingerDown(int fingerId) const {
     if (fingerId < 0 || fingerId >= MAX_TOUCH_POINTS) return false;
     return m_touchPoints[fingerId].active;
 }
+
+#if defined(__ANDROID__)
+
+// ══════════════════════════════════════════════════════════════════════════
+//  JNI audio-focus bridge (Track M A2 / t211)
+// ══════════════════════════════════════════════════════════════════════════
+// Android's audio-focus arbitration is NOT surfaced by SDL3, so the host
+// Activity (com.caesura.app.MainActivity) forwards AudioManager changes here.
+//
+// Threading contract: the AudioManager listener fires on the UI thread, while
+// engine services must only be touched on the engine/SDL thread (SoLoud
+// suspend/resume are CAESURA_ASSERT_MAIN_THREAD). These natives therefore
+// ONLY enqueue; the composition root drains on its SDL-thread loop via the
+// paired Engine patch (setMobileNativeAudioFocusSink + drain call per frame).
+// The sink receives raw Android focus codes; Engine maps them onto
+// AudioFocusEvent and posts into IAudioFocusService.
+namespace {
+
+std::mutex g_focusMutex;
+std::vector<int> g_pendingFocus;
+std::function<void(int)> g_focusSink;
+
+} // namespace
+
+// Install the drain sink (called from the composition root, engine thread).
+void setMobileNativeAudioFocusSink(std::function<void(int)> sink) {
+    std::lock_guard<std::mutex> lock(g_focusMutex);
+    g_focusSink = std::move(sink);
+}
+
+// Drain pending focus changes on the engine/SDL thread (called once per frame
+// by the composition root). No-op when nothing is pending or no sink is set.
+void mobileNativeDrainAudioFocus() {
+    std::function<void(int)> sink;
+    std::vector<int> pending;
+    {
+        std::lock_guard<std::mutex> lock(g_focusMutex);
+        if (g_pendingFocus.empty() || !g_focusSink) return;
+        pending.swap(g_pendingFocus);
+        sink = g_focusSink;
+    }
+    for (int code : pending) {
+        sink(code);
+    }
+}
+
+// Android AudioManager constants (the platform contract; values from the
+// android.media.AudioManager API): AUDIOFOCUS_GAIN=1, GAIN_TRANSIENT=2,
+// GAIN_TRANSIENT_MAY_DUCK=3, AUDIOFOCUS_LOSS=-1, LOSS_TRANSIENT=-2,
+// LOSS_TRANSIENT_CAN_DUCK=-3. Kept as raw ints: MainActivity forwards the
+// AudioManager change, Engine owns the AudioFocusEvent mapping.
+extern "C" JNIEXPORT void JNICALL
+Java_com_caesura_app_MainActivity_nativeOnAudioFocusChanged(
+    JNIEnv*, jobject, jint code) {
+    std::lock_guard<std::mutex> lock(g_focusMutex);
+    g_pendingFocus.push_back(static_cast<int>(code));
+}
+
+#endif // __ANDROID__
 
 } // namespace Caesura
