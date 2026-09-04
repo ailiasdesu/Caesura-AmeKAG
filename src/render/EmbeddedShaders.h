@@ -128,6 +128,17 @@ extern const uint8_t  kEmbeddedMetal_stretch_blt_fs[];
 extern const size_t   kEmbeddedMetal_stretch_blt_fs_size;
 extern const uint8_t  kEmbeddedMetal_affine_blt_fs[];
 extern const size_t   kEmbeddedMetal_affine_blt_fs_size;
+// 035: Metal postfx arrays (shaderc osx).
+extern const uint8_t  kEmbeddedMetal_fs_postfx_vignette[];
+extern const size_t   kEmbeddedMetal_fs_postfx_vignette_size;
+extern const uint8_t  kEmbeddedMetal_fs_postfx_lut[];
+extern const size_t   kEmbeddedMetal_fs_postfx_lut_size;
+extern const uint8_t  kEmbeddedMetal_fs_postfx_blur[];
+extern const size_t   kEmbeddedMetal_fs_postfx_blur_size;
+extern const uint8_t  kEmbeddedMetal_fs_postfx_bloom[];
+extern const size_t   kEmbeddedMetal_fs_postfx_bloom_size;
+extern const uint8_t  kEmbeddedMetal_fs_postfx_lut3d[];
+extern const size_t   kEmbeddedMetal_fs_postfx_lut3d_size;
 
 // -- Round-102 post-processing chain full-screen PS (DXBC, D3D11/D3D12) --------
 // Compiled from shaders/dx11/fs_postfx_*.hlsl via fxc /T ps_4_0 /E main.

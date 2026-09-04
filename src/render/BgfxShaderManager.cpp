@@ -49,11 +49,33 @@ static std::string toEssl300(const uint8_t* code, uint32_t size, bool fragment) 
     // VSH11/FSH11 blobs: binary header then the GLSL text, NUL-terminated
     // before the trailing attribute/uniform metadata. Header length varies
     // (vertex vs fragment), so scan for the first printable ASCII run.
-    uint32_t start = 12;
-    while (start < size && code[start] != '#') ++start;  // GLSL text starts with #version/#define
-    uint32_t end = start;
-    while (end < size && code[end] != 0) ++end;
-    std::string t(reinterpret_cast<const char*>(code + start), end - start);
+    // VSH11/FSH11 blobs: 4B magic + 8B hashes + uniform table + 4B
+    // codeSize, then the GLSL text (NUL-terminated). Walk the uniform
+    // records exactly like isDirectFeedBinary to locate the code segment;
+    // the payload begins with plain GLSL ("in vec2"/"uniform") because
+    // glsl-optimizer trims leading "#version" directives.
+    uint32_t pos = 4 + 4 + 4;
+    if (pos + 2 > size) return "";
+    uint16_t count = static_cast<uint16_t>(code[pos] | (code[pos + 1] << 8));
+    pos += 2;
+    for (uint16_t ii = 0; ii < count; ++ii) {
+        if (pos >= size) return "";
+        uint8_t nameSize = code[pos];
+        pos += 1u + nameSize;
+        if (pos > size) return "";
+        pos += 1 /*type*/ + 1 /*num*/ + 2 /*regIndex*/ + 2 /*regCount*/;
+        if (code[3] >= 8)  pos += 2;  // texInfo
+        if (code[3] >= 10) pos += 2;  // texFormat
+        if (pos > size) return "";
+    }
+    if (pos + 4 > size) return "";
+    uint32_t codeSize = static_cast<uint32_t>(
+        code[pos] | (code[pos + 1] << 8) | (code[pos + 2] << 16) | (code[pos + 3] << 24));
+    pos += 4;
+    if (0 == codeSize || pos + codeSize > size) return "";
+    uint32_t end = pos;
+    while (end < size && end < pos + codeSize && code[end] != 0) ++end;
+    std::string t(reinterpret_cast<const char*>(code + pos), end - pos);
     auto rep = [&t](const char* a, const char* b) {
         size_t p = 0;
         while ((p = t.find(a, p)) != std::string::npos) { t.replace(p, strlen(a), b); p += strlen(b); }
@@ -198,9 +220,14 @@ bool BgfxShaderManager::isDirectFeedBinary(const uint8_t* data, size_t size) {
         data[pos] | (data[pos + 1] << 8) | (data[pos + 2] << 16) | (data[pos + 3] << 24));
     pos += 4;
     if (0 == codeSize || pos + codeSize + 1 > size) return false;
-    // Source payload must start with the shader text, not with another
-    // binary header (binary-in-binary check).
-    if ('#' != data[pos]) return false;
+    // Source payload must NOT start with another bgfx shader binary header
+    // (binary-in-binary check). Note: glsl-optimizer output strips the
+    // "#version" directive (shaderc_glsl.cpp "Trim all directives"), so the
+    // payload legitimately begins with "in vec2"/"out vec4"/"uniform" etc.
+    if (pos + 2 < size
+    &&  ('V' == data[pos] || 'F' == data[pos])
+    &&  'S' == data[pos + 1]
+    &&  'H' == data[pos + 2]) { return false; }
     if (0 != data[pos + codeSize]) return false;  // NUL terminator
     return true;
 }
@@ -356,6 +383,12 @@ void BgfxShaderManager::initEmbeddedShaders() {
         stretchFs  = { kEmbeddedMetal_stretch_blt_fs, kEmbeddedMetal_stretch_blt_fs_size };
         affineVs   = { kEmbeddedMetal_affine_blt_vs, kEmbeddedMetal_affine_blt_vs_size };
         affineFs   = { kEmbeddedMetal_affine_blt_fs, kEmbeddedMetal_affine_blt_fs_size };
+        // 035: Metal postfx arrays now ship (shaderc osx), wire like D3D/GL.
+        fsPostfxVignette = { kEmbeddedMetal_fs_postfx_vignette, kEmbeddedMetal_fs_postfx_vignette_size };
+        fsPostfxLut      = { kEmbeddedMetal_fs_postfx_lut,      kEmbeddedMetal_fs_postfx_lut_size };
+        fsPostfxBlur     = { kEmbeddedMetal_fs_postfx_blur,     kEmbeddedMetal_fs_postfx_blur_size };
+        fsPostfxBloom    = { kEmbeddedMetal_fs_postfx_bloom,    kEmbeddedMetal_fs_postfx_bloom_size };
+        fsPostfxLut3d    = { kEmbeddedMetal_fs_postfx_lut3d,    kEmbeddedMetal_fs_postfx_lut3d_size };
     }
 
     // Stretch/affine fall back to sprite+texture on platforms without

@@ -14,6 +14,10 @@ uniform vec4 VFXParams[3];        // [0]=rgb+fadeAlpha, [1]=blur+quake, [2]=effe
 #define u_qx      VFXParams[1].z
 #define u_qy      VFXParams[1].w
 
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main()
 {
     vec2 uv = v_texcoord0;
@@ -39,5 +43,17 @@ void main()
         c = texture2D(s_texture, uv);
     }
 
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+
+    bgfx_FragColor = c;
+
+
+    #else
+
+
     gl_FragColor = c;
+
+
+    #endif
 }

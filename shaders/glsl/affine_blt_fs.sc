@@ -8,7 +8,19 @@ $input v_texcoord0
 
 SAMPLER2D(s_texture, 0);
 
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main()
 {
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+    bgfx_FragColor = texture2D(s_texture, v_texcoord0);
+
+    #else
+
     gl_FragColor = texture2D(s_texture, v_texcoord0);
+
+    #endif
 }

@@ -4,6 +4,10 @@ $input v_texcoord0
 SAMPLER2D(s_texture,  0);
 SAMPLER2D(s_texture1, 1);
 uniform vec4 PostFxParams[4]; // [0]=strength,0,threshold,0 [1]=tint [2]=texel [3]=spare
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main() {
     vec2 uv = v_texcoord0;
     vec4 src = texture2D(s_texture, uv);
@@ -13,5 +17,13 @@ void main() {
     vec3 bloom = texture2D(s_texture1, uv).rgb;
     vec3 add = (bloom + bright) * max(PostFxParams[0].x, 0.0);
     add *= max(PostFxParams[1].rgb, vec3(0.0));
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+    bgfx_FragColor = vec4(clamp(src.rgb + add, 0.0, 1.0), src.a);
+
+    #else
+
     gl_FragColor = vec4(clamp(src.rgb + add, 0.0, 1.0), src.a);
+
+    #endif
 }

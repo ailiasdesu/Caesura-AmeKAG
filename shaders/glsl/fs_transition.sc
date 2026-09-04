@@ -14,6 +14,10 @@ uniform vec4 TransParams;         // x=progress, y=method, z=pad, w=pad
 #define u_progress TransParams.x
 #define u_method  int(TransParams.y)
 
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main()
 {
     vec4 fc = texture2D(s_texture, v_texcoord0);
@@ -26,5 +30,17 @@ void main()
     else if (u_method == 4) t = step(1.0 - v_texcoord0.y, t);
     else if (u_method == 5) t = step(v_texcoord0.y, t);
 
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+
+    bgfx_FragColor = mix(fc, tc, t);
+
+
+    #else
+
+
     gl_FragColor = mix(fc, tc, t);
+
+
+    #endif
 }

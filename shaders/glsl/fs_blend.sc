@@ -83,6 +83,10 @@ vec3 bHardMix(    vec3 a, vec3 b) {
     return r;
 }
 
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main()
 {
     vec4 base  = texture2D(s_texture,  v_texcoord0) * u_opacity;
@@ -137,5 +141,17 @@ void main()
             break;
     }
 
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+
+    bgfx_FragColor = vec4(c, alpha) * u_globalAlpha;
+
+
+    #else
+
+
     gl_FragColor = vec4(c, alpha) * u_globalAlpha;
+
+
+    #endif
 }

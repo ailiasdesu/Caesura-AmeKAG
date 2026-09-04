@@ -3,6 +3,10 @@ $input v_texcoord0
 #include <bgfx_shader.sh>
 SAMPLER2D(s_texture, 0);
 uniform vec4 PostFxParams[4]; // [0]=0,radius,amount,0 [1]=tint [2]=texel [3]=spare
+
+#if BGFX_SHADER_LANGUAGE_GLSL
+out vec4 bgfx_FragColor;
+#endif
 void main() {
     vec2 uv = v_texcoord0;
     vec2 texel = PostFxParams[2].xy;
@@ -23,5 +27,13 @@ void main() {
     float amount = clamp(PostFxParams[0].z, 0.0, 1.0);
     vec4 mixed = mix(original, sum, amount);
     mixed.rgb *= max(PostFxParams[1].rgb, vec3(0.0));
+    #if BGFX_SHADER_LANGUAGE_GLSL
+
+    bgfx_FragColor = vec4(mixed.rgb, original.a);
+
+    #else
+
     gl_FragColor = vec4(mixed.rgb, original.a);
+
+    #endif
 }
