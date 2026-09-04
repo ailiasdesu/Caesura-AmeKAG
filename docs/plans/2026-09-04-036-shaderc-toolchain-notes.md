@@ -1,6 +1,7 @@
 # 036 · Shaderc 工具链勘察笔记（035 后置项）
 
-> 状态：DONE（发现文档）→ 日期：2026-09-04
+> 状态：GL 已激活（t216 第一段：shaderc 工具链构建成功 → GL profile 130 数组入库，Lut3D 在 GL/GLES 真生效）→ Metal 待 glslang 轮（t216 第二段）
+> 日期：2026-09-04
 > 背景：t214 palette 3D-LUT 的 GL/Metal 着色器数组待 shaderc 生成（D3D DXBC 已 fxc 本地闭环）。
 
 ## 1. 结论
