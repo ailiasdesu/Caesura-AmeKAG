@@ -252,6 +252,56 @@ The archive root is the versioned folder `CaesuraAmeKAG-1.0.0-Windows-AMD64/`
 
 ---
 
+### 4.1 Linux AppImage（AppImage 发行适配，035 D 块）
+
+Linux 发行除 TGZ（Sprint6-L1，cpack -G TGZ，CMAKE_SYSTEM_NAME 为
+Linux-<arch> 命名）外另提供 **AppImage** 形态：单文件、免安装、任意现代
+Linux 桌面可直接运行。AppImage 由 scripts/build_appimage.sh 从 CPack TGZ 产物
+就地转换（**不改 CPack/install 语义**——AppImage 只重排目录结构，内容与 TGZ
+同源）。
+
+前置：Linux 主机 CPack TGZ（Linux lane 产物）：
+
+    cmake --build build -j$(nproc) && (cd build && cpack -C Release -G TGZ)
+
+前置：appimagetool（缺失时脚本打印安装指引并以退出码 2 结束，AppDir 仍在）。
+见脚本输出指引；或 export APPIMAGETOOL=/path/to/appimagetool。
+
+    # 缺省自动取 build/ 下最新 CaesuraAmeKAG-*-Linux-*.tar.gz
+    bash scripts/build_appimage.sh
+    # 显式输入/输出
+    bash scripts/build_appimage.sh --tgz build/CaesuraAmeKAG-1.0.0-Linux-x86_64.tar.gz \
+                                   --out dist/
+
+产物：<TGZ 同名>.AppImage（+ .sha256 侧车）；阶段 AppDir 留在
+build/appimage/AppDir（dry-run 检视用；重跑自动重建）。
+
+AppDir 布局（AppImage 规范）：
+
+| 路径 | 说明 |
+|---|---|
+| AppRun | 入口包装：cd 到 AppDir 根 -> exec usr/bin/CaesuraAmeKAG "$@"（引擎 CWD 资源解析与 TGZ lane 同构） |
+| usr/bin/CaesuraAmeKAG | 引擎二进制（TGZ 根 exe 迁入；SDL_GetBasePath 上探两层的包根锚定仍成立） |
+| usr/share/applications/caesura-amekag.desktop（+ 根副本） | desktop entry（tools/appimage/caesura-amekag.desktop） |
+| usr/share/icons/hicolor/256x256/apps/caesura-amekag.png（+ 根副本） | 图标（tools/appimage/caesura-amekag.png，当前为占位图，正式美术接入时替换该文件即可） |
+| scripts/ assets/ web-editor/ editor/ tools/ external/ README.md LICENSE | 与 TGZ 同 install 语义的 payload（lua 解释器/资源/编辑器/模板原样进 AppDir） |
+
+运行时依赖由宿主提供（与 TGZ 同约定，不捆绑）：SDL3（系统发行包）、OpenGL、
+libEGL.so.1（bgfx EGL 路径，Linux 运行时依赖见平台矩阵）；CPU 基线
+x86_64 + SSE4.1。
+
+退出码语义：0 = 打包完成（appimagetool 已就位）；2 = appimagetool 缺失（打印
+安装指引，**AppDir 布局仍已生成**——dry-run 布局验证入口）；1 = TGZ 缺失/布局校验失败。
+
+验证现状（诚实标注）：本机（WSL Ubuntu 无 FUSE/appimagetool）已验证 dry-run
+布局生成（AppDir 全结构 + 退出码 2 + 安装指引）；.AppImage 实际产物的运行验证
+（appimagetool 打包 + 启动 + 渲染）属 Linux 主机/CI 域——**CI 接线后置**
+（.github/workflows/ci.yml 由 captain 收敛，不在本文件范围）；
+verify_release_package.sh 的 30 断言以 ZIP/TGZ 为对象，AppImage 的 verify 集成
+待 CI 接线时一并补充。
+
+---
+
 ## 5. Verify the ZIP contents
 
 Before publishing, confirm the archive is complete and runnable:

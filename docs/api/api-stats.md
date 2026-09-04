@@ -11,7 +11,7 @@
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 34 |
 | Pure-virtual interface methods | 412 |
-| Lua binding functions (luaL_Reg entries) | 160 |
+| Lua binding functions (luaL_Reg entries) | 161 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 134 |
 | RPC HTTP endpoints (EditorServer) | 36 |
@@ -64,7 +64,7 @@
 | AIBinding.cpp | 5 | _AI_CALLBACKS, _AI_CALLBACKS, AI |
 | DebugBinding.cpp | 10 | Debug |
 | DevCoreBinding.cpp | 13 | _CAESURA_QUIT, DevCore |
-| EngineBinding.cpp | 4 | Engine |
+| EngineBinding.cpp | 5 | Engine |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |
 | RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
