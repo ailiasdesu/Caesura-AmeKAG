@@ -1324,12 +1324,14 @@ def guard_phantom(records):
     if not pal:
         bad.append("palette record missing")
     else:
-        ph = [p for p in (pal.get("phantom_hits") or []) if p.get("name") == "set_palette"]
-        if not ph:
-            bad.append("palette lacks set_palette phantom evidence")
-        for p in ph:
-            if not p.get("file", "").endswith("palette.lua"):
-                bad.append("palette phantom not in palette.lua: " + str(p))
+        # t214: palette's legacy phantom names (set_palette/load_image/is_valid)
+        # were REPLACED by the real-name surface (load_texture/is_valid_handle/
+        # set_postfx). The sentinel now asserts the OLD phantom names are ABSENT
+        # (fix landed); a resurrection would fail loudly.
+        for p in (pal.get("phantom_hits") or []):
+            if p.get("name") in ("set_palette", "load_image", "is_valid"):
+                bad.append("palette resurrected phantom: " + str(p.get("name"))
+                          + " @ " + str(p.get("file")))
     v5_susp = [r for r in records
                if r.get("flip_v5") == "suspect-keep-v4"]
     for r in v5_susp:
