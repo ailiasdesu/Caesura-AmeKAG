@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Caesura (AmeKAG)
+Comment=Cross-Platform Visual Novel Engine — SDL3 + bgfx + SoLoud + Lua 5.4
+Exec=CaesuraAmeKAG
+Icon=caesura-amekag
+Terminal=false
+Categories=Game;Development;
