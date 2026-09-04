@@ -139,7 +139,7 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 
 ### 5.3 entry.lua
 
-- 项目入口是 **`entry.lua`**（KAG runner 启动入口），启动形如 `lua <project>/entry.lua`（vendored `external/lua/lua.exe`，Lua 5.4）。
+- 项目入口是 **`entry.lua`**（KAG runner 启动入口），启动形如 `lua <project>/entry.lua`（checkout 内解释器为构建产物 `build/lua/<cfg>/lua.exe`，发布包内为 `external/lua/lua.exe`；Lua 5.4）。
 - 入口与启动方式在 1.x 内保持稳定；模板见 `docs/guides/template-quickstart.md`。
 
 ### 5.4 mod 目录
@@ -153,12 +153,12 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 
 ### 6.1 运行时
 
-- **Lua 5.4**（仓库 vendored `external/lua/lua.exe`；Web 端 wasmoon，Lua 5.4）。
+- **Lua 5.4**（checkout 内解释器为构建产物 `build/lua/<cfg>/lua.exe`，发布包内为 `external/lua/lua.exe`；Web 端 wasmoon，Lua 5.4）。
 - 引擎内嵌**指令预算沙箱** + 白名单环境（`kag/init.lua` 预加载清单，sandbox `require` 只认 `package.loaded`）。
 
 ### 6.2 脚本 API 稳定性
 
-- 绑定层（`src/script/bindings/*.cpp`，154 个 `luaL_Reg` 条目，注册 `KAG`/`Render`/`VFX`/`Debug`/`DevCore`/`mini_game`/`sma`/`steam`/`AI`/`Engine` 等全局）在 1.x 内**不删除、不重命名**已公开绑定。
+- 绑定层（`src/script/bindings/*.cpp`，160 个 `luaL_Reg` 条目（`docs/api/api-stats.md`，自动生成源），注册 `KAG`/`Render`/`VFX`/`Debug`/`DevCore`/`mini_game`/`sma`/`steam`/`AI`/`Engine` 等全局）在 1.x 内**不删除、不重命名**已公开绑定。
 - Lua 模块 API 参考：`docs/api/lua-modules.md`。新绑定只增不删；已公开签名参数不可破坏性修改。
 
 ### 6.3 沙箱边界（安全与可预测）
@@ -241,7 +241,7 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 |------|----|---------|
 | C++ API 接口 | **34** 个接口头 / **412** 纯虚方法 | `docs/api/api-stats.md`（自动生成源；数字随 `python scripts/api_stats.py` 同步） |
 | KAG Neo-Genesis 命令 | **134** 个契约命令 | `docs/api/command-contracts.md` |
-| 能力闭环矩阵 | **134 = CLOSED 79 + PARTIAL 51 + UNWIRED 0 + EXPERIMENTAL 4**（EXTRA 31 = 注册但无合约，属设计行为） | `docs/design/capability-closure-matrix.md` |
+| 能力闭环矩阵 | **134 = CLOSED 129 + PARTIAL 2 + UNWIRED 0 + EXPERIMENTAL 3**（EXTRA 31 = 注册但无合约，属设计行为；四层口径见矩阵统计行：Structural Closed=129 · Runtime 测试证据=139 · Platform=0 · Packaged=0） | `docs/design/capability-closure-matrix.md` |
 | KAG3 兼容 | 裸位置参数 **13** families / TJS 表达式 / `%f.x%` / `[elsif]` / `[call *label]` / `[end]` / `[goto]`→`[jump]` | `docs/api/kag-commands.md`、`kag-expression-language.md` |
 | 存档格式 | JSON + AES-256-GCM + `CAES` 信封 | `docs/design/save-security-audit.md`、`engine-architecture-topology.md` |
 | 存档 schema | 迁移链 **v1 → v5**（自动升级，步数上限 64） | `engine-capability-matrix.md` (C4) |
