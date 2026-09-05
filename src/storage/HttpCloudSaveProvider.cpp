@@ -156,15 +156,31 @@ bool HttpCloudSaveProvider::httpDelete(const std::string& name) {
 }
 
 bool HttpCloudSaveProvider::pushToCloud(const std::string& slotPath) {
-    const std::string content = m_local->readFile(slotPath);
+    const std::string content = readLocalFile(slotPath);
     if (content.empty()) return false;  // nothing local to push
-    return httpPut(safeName(slotPath), content);
+    return writeCloudFile(slotPath, content);
 }
 
 bool HttpCloudSaveProvider::pullFromCloud(const std::string& slotPath) {
-    const std::string body = httpGet(safeName(slotPath));
+    const std::string body = readCloudFile(slotPath);
     if (body.empty()) return false;  // 404 or offline
-    return m_local->writeFile(slotPath, body);
+    return writeLocalFile(slotPath, body);
+}
+
+std::string HttpCloudSaveProvider::readLocalFile(const std::string& slotPath) {
+    return m_local->readFile(slotPath);
+}
+
+bool HttpCloudSaveProvider::writeLocalFile(const std::string& slotPath, const std::string& bytes) {
+    return m_local->writeFile(slotPath, bytes);
+}
+
+std::string HttpCloudSaveProvider::readCloudFile(const std::string& slotPath) {
+    return httpGet(safeName(slotPath));
+}
+
+bool HttpCloudSaveProvider::writeCloudFile(const std::string& slotPath, const std::string& bytes) {
+    return httpPut(safeName(slotPath), bytes);
 }
 
 } // namespace Caesura

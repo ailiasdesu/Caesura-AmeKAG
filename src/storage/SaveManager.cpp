@@ -10,9 +10,11 @@
 
 #include "SaveManager.h"
 #include "api/ISaveProvider.h"
+#include "api/ICloudSaveTransport.h"
 #include "CloudSaveProvider.h"
 #include "HttpCloudSaveProvider.h"
 #include "LocalFileSaveProvider.h"
+#include "AtomicSaveFile.h"
 #include "../di/BackendRegistry.h"
 #include "../archive/api/ICryptoEngine.h"
 #include "../debug/api/DebugLog.h"
@@ -171,11 +173,23 @@ bool SaveManager::pushSlotToCloud(int slot) {
                   "[-2..99]", slot);
         return false;
     }
-    const bool ok = m_saveProvider->pushToCloud(path);
+    auto* transport = dynamic_cast<ICloudSaveTransport*>(m_saveProvider.get());
+    if (!transport) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[SaveManager] Cloud provider does not support validated staged transfers");
+        return false;
+    }
+    const auto bytes = transport->readLocalFile(path);
+    if (loadContents(slot, decodeSaveBytes(bytes), nullptr).is_null()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+                  "[SaveManager] Cloud push refused: local save fails current policy or validation");
+        return false;
+    }
+    const bool ok = transport->writeCloudFile(path, bytes);
     if (!ok) {
         DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
                    "[SaveManager] pushSlotToCloud(%d) failed (see provider "
-                   "diagnostic above); the cloud copy is unchanged", slot);
+                   "diagnostic above); transfer did not report success", slot);
     }
     return ok;
 }
@@ -200,11 +214,23 @@ bool SaveManager::pullSlotFromCloud(int slot) {
                   "[-2..99]", slot);
         return false;
     }
-    const bool ok = m_saveProvider->pullFromCloud(path);
+    auto* transport = dynamic_cast<ICloudSaveTransport*>(m_saveProvider.get());
+    if (!transport) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Cloud provider does not support validated staged transfers");
+        return false;
+    }
+    const auto bytes = transport->readCloudFile(path);
+    if (loadContents(slot, decodeSaveBytes(bytes), nullptr).is_null()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Cloud pull refused: remote save fails current policy or validation");
+        return false;
+    }
+    const bool ok = transport->writeLocalFile(path, bytes);
     if (!ok) {
         DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
                    "[SaveManager] pullSlotFromCloud(%d) failed (see provider "
-                   "diagnostic above); the local save is unchanged", slot);
+                   "diagnostic above); transfer did not report success", slot);
     }
     return ok;
 }
@@ -240,9 +266,18 @@ std::string SaveManager::slotPath(int slot) const {
 static bool validSlot(int slot) { return slot >= -2 && slot <= 99; }
 
 static constexpr size_t MAX_SAVE_SIZE = 10 * 1024 * 1024;  // 10 MiB
+static constexpr size_t ENCRYPT_HEADER_SIZE = 4 + 12 + 16;
 
-std::string SaveManager::readFile(const std::string& path) {
-    if (m_saveProvider) return m_saveProvider->readFile(path);
+static bool hasEncryptedMagic(const std::string& bytes) {
+    return bytes.size() >= 4 && std::memcmp(bytes.data(), "CAES", 4) == 0;
+}
+
+std::string SaveManager::readRawFile(const std::string& path) {
+    if (m_saveProvider) {
+        auto bytes = m_saveProvider->readFile(path);
+        if (bytes.size() > MAX_SAVE_SIZE) return {};
+        return bytes;
+    }
     std::ifstream in(path, std::ios::binary);
     if (!in) return "";
 
@@ -253,111 +288,100 @@ std::string SaveManager::readFile(const std::string& path) {
     std::string content(static_cast<size_t>(sz), '\0');
     in.seekg(0, std::ios::beg);
     in.read(&content[0], sz);
-
-    // Decrypt if key is set and data starts with "CAES" magic
-    if (m_keySet && content.size() >= 4 && std::memcmp(content.data(), "CAES", 4) == 0) {
-        if (content.size() < 32) {
-            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Encrypted save too short");
-            return "";
-        }
-        const auto* nonce = reinterpret_cast<const uint8_t*>(content.data() + 4);
-        const auto* tag   = reinterpret_cast<const uint8_t*>(content.data() + 16);
-        const auto* ct    = reinterpret_cast<const uint8_t*>(content.data() + 32);
-        size_t ctLen = content.size() - 32;
-
-        auto* crypto = BackendRegistry::instance().getCryptoEngine();
-        if (!crypto) {
-            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
-            return "";
-        }
-        auto plain = crypto->decrypt(ct, ctLen, m_encryptKey, 32, nonce, 12, tag, 16);
-        if (plain.empty()) {
-            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Decryption failed (wrong key or corrupted data)");
-            return "";
-        }
-        return std::string(reinterpret_cast<char*>(plain.data()), plain.size());
-    }
-
+    if (!in) return "";
     return content;
 }
 
-bool SaveManager::writeFile(const std::string& path, const std::string& content) {
-    if (m_saveProvider) return m_saveProvider->writeFile(path, content);
+std::string SaveManager::readFile(const std::string& path) {
+    return decodeSaveBytes(readRawFile(path));
+}
 
-    // Symmetric to readFile()'s MAX_SAVE_SIZE guard: reject oversized payloads
-    // up front so they never reach disk as a file that load()/slotExists()/
-    // listSaves() would silently skip. Also refuses the write when even a
-    // smaller payload would balloon past the ceiling (e.g. +32 B encryption
-    // header), keeping the on-disk size always loadable.
-    if (content.size() > MAX_SAVE_SIZE) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
-                  "[SaveManager] Rejecting write to %s: payload %zu bytes exceeds MAX_SAVE_SIZE (%zu)",
-                  path.c_str(), content.size(), MAX_SAVE_SIZE);
-        return false;
-    }
-
-    std::string dataToWrite;
-    if (m_keySet) {
-        uint8_t nonce[12];
-        uint8_t tag[16];
-        auto* crypto = BackendRegistry::instance().getCryptoEngine();
-        if (!crypto) {
-            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
-            return false;
+std::string SaveManager::decodeSaveBytes(const std::string& content) {
+    if (content.empty() || content.size() > MAX_SAVE_SIZE) return "";
+    if (!hasEncryptedMagic(content)) {
+        if (m_encryptionPolicy == SaveEncryptionPolicy::RequireEncrypted) {
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed,
+                      "[SaveManager] Plaintext save rejected by require-encrypted policy");
+            return {};
         }
-        crypto->generateNonce(nonce, 12);
-
-        auto cipher = crypto->encrypt(            reinterpret_cast<const uint8_t*>(content.data()), content.size(),
-            m_encryptKey, 32, nonce, 12, tag, 16);
-        if (cipher.empty()) {
-            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Encryption failed");
-            return false;
+        if (m_keySet) {
+            DEBUG_WARN(SubSys::Storage, ErrCode::Ok,
+                       "[SaveManager] Reading unauthenticated plaintext under compatible policy");
         }
-
-        dataToWrite.reserve(4 + 12 + 16 + cipher.size());
-        dataToWrite.append("CAES", 4);
-        dataToWrite.append(reinterpret_cast<char*>(nonce), 12);
-        dataToWrite.append(reinterpret_cast<char*>(tag), 16);
-        dataToWrite.append(reinterpret_cast<char*>(cipher.data()), cipher.size());
-    } else {
-        dataToWrite = content;
+        return content;
     }
+    // Once CAES is recognized, every failure terminates before any JSON parsing.
+    if (!m_keySet || content.size() <= ENCRYPT_HEADER_SIZE) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed,
+                  "[SaveManager] Encrypted save requires a key and a complete CAES envelope");
+        return {};
+    }
+    auto* crypto = BackendRegistry::instance().getCryptoEngine();
+    if (!crypto) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
+        return {};
+    }
+    const auto* raw = reinterpret_cast<const uint8_t*>(content.data());
+    const auto plain = crypto->decrypt(raw + ENCRYPT_HEADER_SIZE, content.size() - ENCRYPT_HEADER_SIZE,
+                                       m_encryptKey, 32, raw + 4, 12, raw + 16, 16);
+    if (plain.empty()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed,
+                  "[SaveManager] Decryption failed (wrong key or corrupted data)");
+        return {};
+    }
+    return {reinterpret_cast<const char*>(plain.data()), plain.size()};
+}
 
-    // Mirror readFile()'s file-size check on the exact bytes that would hit
-    // disk (encrypted output grows by the 4+12+16 header): any payload the
-    // manager would refuse to read back must not be written in the first place.
-    if (dataToWrite.size() > MAX_SAVE_SIZE) {
+bool SaveManager::encodeSave(const std::string& content, std::string& bytes) {
+    if (!m_keySet && m_encryptionPolicy == SaveEncryptionPolicy::RequireEncrypted) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed,
+                  "[SaveManager] Require-encrypted save refused: no encryption key is set");
+        return false;
+    }
+    const size_t overhead = m_keySet ? ENCRYPT_HEADER_SIZE : 0;
+    if (content.size() > MAX_SAVE_SIZE - overhead) {
         DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
-                  "[SaveManager] Rejecting write to %s: on-disk size %zu bytes exceeds MAX_SAVE_SIZE (%zu)",
-                  path.c_str(), dataToWrite.size(), MAX_SAVE_SIZE);
+                  "[SaveManager] Save payload plus encryption header exceeds MAX_SAVE_SIZE (%zu)",
+                  MAX_SAVE_SIZE);
         return false;
     }
-
-    // Atomic write: write to a temp file next to the target, flush, then
-    // rename. A crash mid-write leaves the previous save intact instead of
-    // truncating it (rename is atomic on the same filesystem).
-    const std::string tmpPath = path + ".tmp";
-    std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Failed to open file for writing: %s", tmpPath.c_str());
+    if (!m_keySet) {
+        bytes = content;
+        return true;
+    }
+    auto* crypto = BackendRegistry::instance().getCryptoEngine();
+    if (!crypto) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] CryptoEngine not initialized");
         return false;
     }
-    out.write(dataToWrite.c_str(), static_cast<std::streamsize>(dataToWrite.size()));
-    out.flush();
-    if (!out.good()) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Write failed for %s", tmpPath.c_str());
-        std::filesystem::remove(tmpPath);  // no stale partial temp file
+    uint8_t nonce[12];
+    uint8_t tag[16];
+    crypto->generateNonce(nonce, sizeof(nonce));
+    const auto cipher = crypto->encrypt(reinterpret_cast<const uint8_t*>(content.data()), content.size(),
+                                         m_encryptKey, 32, nonce, sizeof(nonce), tag, sizeof(tag));
+    if (cipher.empty() || cipher.size() > MAX_SAVE_SIZE - ENCRYPT_HEADER_SIZE) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed, "[SaveManager] Encryption failed or output exceeds save limit");
         return false;
     }
-    out.close();
-    std::error_code ec;
-    std::filesystem::rename(tmpPath, path, ec);
-    if (ec) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Rename failed: %s", ec.message().c_str());
-        std::filesystem::remove(tmpPath);
-        return false;
-    }
+    bytes.reserve(ENCRYPT_HEADER_SIZE + cipher.size());
+    bytes.assign("CAES", 4);
+    bytes.append(reinterpret_cast<const char*>(nonce), sizeof(nonce));
+    bytes.append(reinterpret_cast<const char*>(tag), sizeof(tag));
+    bytes.append(reinterpret_cast<const char*>(cipher.data()), cipher.size());
     return true;
+}
+
+bool SaveManager::writeFile(const std::string& path, const std::string& content) {
+    std::string bytes;
+    return encodeSave(content, bytes) && writeRawFile(path, bytes);
+}
+
+bool SaveManager::writeRawFile(const std::string& path, const std::string& dataToWrite) {
+    if (m_saveProvider) return m_saveProvider->writeFile(path, dataToWrite);
+    if (detail::writeSaveFileAtomically(path, dataToWrite)) return true;
+    DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+              "[SaveManager] Atomic save publication failed: %s", path.c_str());
+    return false;
 }
 
 // ============================================================================
@@ -420,7 +444,22 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
     // was removed; all KAG [save]/[load] commands and scripts use the
     // KAG.save_game() / KAG.load_game() bindings which route here.
 
-    std::string contents = readFile(slotPath(slot));
+    return loadContents(slot, readFile(slotPath(slot)), outMeta);
+}
+
+json SaveManager::loadLegacyPlaintext(int slot, SaveMeta* outMeta) {
+    if (!validSlot(slot) || m_saveDir.empty()) return {};
+    const auto contents = readRawFile(slotPath(slot));
+    if (hasEncryptedMagic(contents)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_CryptoFailed,
+                  "[SaveManager] Legacy plaintext import refuses CAES data; use authenticated load");
+        return {};
+    }
+    // This explicit read never writes the original or changes encryption policy.
+    return loadContents(slot, contents, outMeta);
+}
+
+json SaveManager::loadContents(int slot, const std::string& contents, SaveMeta* outMeta) {
     if (contents.empty()) return json();
 
     json envelope;
@@ -464,20 +503,23 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
     int schemaVer     = safeInt("schema_version", 1);
     std::string engineVer = safeStr("engine_version");
 
-    if (outMeta) {
-        outMeta->slot          = slot;
-        outMeta->timestamp     = ts;
-        outMeta->sceneName     = scene;
-        outMeta->tokenIndex    = tokenIdx;
-        outMeta->thumbnail     = thumb;
-        outMeta->schemaVersion = schemaVer;
-    }
-
     // Handle schema migration on the "data" sub-object
     json data = envelope.value("data", json());
+    if (data.is_null()) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Save envelope has missing or null data");
+        return {};
+    }
     if (schemaVer < m_currentSchemaVersion) {
-        data = migrate(data, schemaVer);
-        if (outMeta) outMeta->schemaVersion = m_currentSchemaVersion;
+        try {
+            data = migrate(data, schemaVer);
+        } catch (...) {
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                      "[SaveManager] Save migration failed");
+            return {};
+        }
+        if (data.is_null()) return {};
+        schemaVer = m_currentSchemaVersion;
     }
 
     if (!engineVer.empty() && engineVer != ENGINE_VERSION) {
@@ -487,6 +529,18 @@ json SaveManager::load(int slot, SaveMeta* outMeta) {
 
     printf("[SaveManager] Loaded slot %d (v%d, %s, token %d)\n",
            slot, schemaVer, scene.c_str(), tokenIdx);
+    // Publish metadata only after the entire load succeeds. Empty objects and
+    // arrays are valid data; only null represents a failed load.
+    if (outMeta) {
+        SaveMeta meta;
+        meta.slot = slot;
+        meta.timestamp = ts;
+        meta.sceneName = std::move(scene);
+        meta.tokenIndex = tokenIdx;
+        meta.thumbnail = std::move(thumb);
+        meta.schemaVersion = schemaVer;
+        *outMeta = std::move(meta);
+    }
     return data;
 }
 
@@ -542,6 +596,11 @@ std::vector<SaveMeta> SaveManager::listSaves() {
 
 bool SaveManager::slotExists(int slot) {
     if (!validSlot(slot)) return false;
+    // Preserve the legacy compatible/no-key presence query even for opaque CAES bytes.
+    // load()/listSaves() still reject those bytes until a key is supplied.
+    if (!m_keySet && m_encryptionPolicy == SaveEncryptionPolicy::Compatible) {
+        return !readRawFile(slotPath(slot)).empty();
+    }
     return !readFile(slotPath(slot)).empty();
 }
 
@@ -592,6 +651,11 @@ json SaveManager::migrate(const json& data, int fromVersion) {
         int nextVer = it->second.first;
         printf("[SaveManager] Applying migration v%d -> v%d\n", ver, nextVer);
         current = it->second.second(current);
+        if (current.is_null()) {
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                      "[SaveManager] Migration returned null data at v%d", ver);
+            return {};
+        }
         ver = nextVer;
         steps++;
     }

@@ -10,6 +10,8 @@
 
 namespace Caesura {
 
+uint32_t CAESURA_EVENT_ASYNC_LOAD = 0;
+
 static bool isPathSafe(const std::string& path) {
     return !path.empty() && path.find("..") == std::string::npos;
 }
@@ -29,37 +31,38 @@ AsyncLoader::~AsyncLoader() {
 
 void AsyncLoader::init() {
     if (m_running) return;
+    // SDL keeps registered user-event IDs for the process lifetime. Reserve
+    // once on first use, without calling SDL during static initialization.
+    static const uint32_t eventType = [] {
+        CAESURA_EVENT_ASYNC_LOAD = SDL_RegisterEvents(1);
+        return CAESURA_EVENT_ASYNC_LOAD;
+    }();
+    if (eventType == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[AsyncLoader] No SDL user-event type available");
+        return;
+    }
     m_running = true;
-    m_cancelRequested = false;
     printf("[AsyncLoader] Initialized via JobSystem (max 16 pending)\n");
 }
 
 void AsyncLoader::shutdown() {
     if (!m_running) return;
     m_running = false;
-    m_cancelRequested = true;
+    cancelAll();
 
     if (auto* jobSystem = BackendRegistry::instance().getJobSystem()) {
         jobSystem->waitIdle();
         jobSystem->pollMainThreadJobs();
     }
 
-    {
-        std::lock_guard<std::mutex> lock(m_completeMutex);
-        m_completed.clear();
-    }
-    {
-        std::lock_guard<std::mutex> lock(m_inflightMutex);
-        m_inflight.clear();
-    }
-    m_pendingCount = 0;
-    m_cancelRequested = false;
     printf("[AsyncLoader] Shutdown complete.\n");
 }
 
 AsyncLoader::CompletedLoad AsyncLoader::processRequest(const AsyncLoadRequest& req) {
     CompletedLoad result;
     result.id   = req.id;
+    result.generation = req.generation;
     result.path = req.path;
     result.type = req.type;
 
@@ -143,7 +146,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
         return -1;
     }
 
-    m_cancelRequested.store(false);
+    const uint64_t generation = m_generation.load();
 
     const std::string cacheKey = makeKey(path, type);
 
@@ -158,6 +161,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
             const int id = m_nextId.fetch_add(1);
             CompletedLoad hit = it->second;
             hit.id = id;
+            hit.generation = generation;
             {
                 std::lock_guard<std::mutex> lock2(m_completeMutex);
                 m_completed.push_back(std::move(hit));
@@ -190,15 +194,15 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     }
 
     int id = m_nextId.fetch_add(1);
-    AsyncLoadRequest req{id, path, type};
+    AsyncLoadRequest req{id, path, type, generation};
 
     auto entry = std::make_shared<InFlightEntry>();
+    entry->generation = generation;
     entry->result    = std::make_shared<CompletedLoad>();
-    entry->cancelled = std::make_shared<std::atomic<bool>>(false);
     entry->waiterIds.push_back(id);
 
     // Register the in-flight entry BEFORE submitting: a second enqueue for the
-    // same key (from this thread or, in tests, another) now shares the load.
+    // same key on this thread now shares the load.
     {
         std::lock_guard<std::mutex> lock(m_inflightMutex);
         m_inflight[cacheKey] = entry;
@@ -208,19 +212,17 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     m_pendingCount++;
 
     auto result    = entry->result;
-    auto cancelled = entry->cancelled;
 
     const uint64_t jobId = jobSystem->submit(
-        [req, result, cancelled, this]() {
-            if (m_cancelRequested.load()) {
-                cancelled->store(true);
-                return;
-            }
+        [req, result, this]() {
+            if (!m_running || req.generation != m_generation.load()) return;
+            // cancelAll may run during the read/decode. Only this worker owns
+            // the result until the main-thread callback, which rechecks epoch.
             *result = processRequest(req);
         },
         JobPriority::Normal,
-        [this, cacheKey, entry, result]() {
-            bool cancelled = entry->cancelled->load();
+        [this, cacheKey, entry]() {
+            if (!m_running || entry->generation != m_generation.load()) return;
             // Release the in-flight entry (no-op if cancelAll already dropped it).
             {
                 std::lock_guard<std::mutex> lock(m_inflightMutex);
@@ -229,7 +231,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
                     m_inflight.erase(eit);
                 }
             }
-            finishInFlight(entry, cancelled);
+            finishInFlight(entry);
         });
 
     if (jobId == 0) {
@@ -243,7 +245,7 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
                 removed = true;
             }
         }
-        if (removed) m_pendingCount--;
+        if (removed && generation == m_generation.load()) m_pendingCount--;
         DEBUG_ERR(SubSys::Resource, ErrCode::Ok,
             "[AsyncLoader] Job submission failed: %s", path.c_str());
         return -1;
@@ -254,34 +256,15 @@ int AsyncLoader::enqueue(const std::string& path, const std::string& type) {
     return id;
 }
 
-void AsyncLoader::finishInFlight(const std::shared_ptr<InFlightEntry>& entry,
-                                 bool cancelled) {
+void AsyncLoader::finishInFlight(const std::shared_ptr<InFlightEntry>& entry) {
     // Must run on the main thread (real JobSystem) or synchronously on the
     // submitting thread (NullJobSystem). Collect the waiters that shared this
     // load, then discharge every one with a CompletedLoad so pendingCount
     // drains and drainCompleted() sees a terminal entry per enqueue.
-    if (!entry || entry->waiterIds.empty()) return;
+    if (!entry || entry->waiterIds.empty() || !m_running
+        || entry->generation != m_generation.load()) return;
 
     std::vector<int> waiters = std::move(entry->waiterIds);
-
-    if (cancelled) {
-        // Pre-empted by cancelAll while queued: deliver a terminal (failed)
-        // result to every waiter so counters stay balanced and callers observe
-        // the load ending. Failed loads are not cached, so a later enqueue
-        // retries the source (retry is allowed by design).
-        std::lock_guard<std::mutex> lock(m_completeMutex);
-        for (int wid : waiters) {
-            CompletedLoad failed;
-            failed.id     = wid;
-            failed.path   = entry->result->path;
-            failed.type   = entry->result->type;
-            failed.success = false;
-            m_completed.push_back(std::move(failed));
-        }
-        // pendingCount is decremented only when drainCompleted()/poll() consume
-        // these entries, matching the synchronous-job cap accounting.
-        return;
-    }
 
     const CompletedLoad& r = *entry->result;
 
@@ -323,7 +306,15 @@ void AsyncLoader::finishInFlight(const std::shared_ptr<InFlightEntry>& entry,
 }
 
 void AsyncLoader::cancelAll() {
-    m_cancelRequested.store(true);
+    // Control operations and job completions are main-thread-only. Workers
+    // observe this atomic epoch but retain ownership of their private result
+    // until the job system delivers the callback; no worker is freed or joined.
+    m_generation.fetch_add(1);
+    m_pendingCount = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_completeMutex);
+        m_completed.clear();
+    }
     // The cache contract mirrors cancelAll: everything in flight is
     // invalidated, so cached decodes go too (hot-reload-safe).
     {
@@ -334,33 +325,23 @@ void AsyncLoader::cancelAll() {
     }
     // Drop in-flight dedup associations: a fresh enqueue of the same key starts
     // a brand-new load. Jobs that were already running still hold their own
-    // shared_ptr<InFlightEntry> and discharge their waiters on completion.
+    // shared_ptr<InFlightEntry>, whose stale callbacks become no-ops.
     {
         std::lock_guard<std::mutex> lock(m_inflightMutex);
         m_inflight.clear();
     }
+    reclaimStaleEvents();
     printf("[AsyncLoader] All loads cancelled.\n");
 }
 
 bool AsyncLoader::poll() {
-    std::lock_guard<std::mutex> lock(m_completeMutex);
-    if (m_completed.empty()) return false;
-
-    auto completed = std::move(m_completed);
-    m_completed.clear();
+    // Release the completion mutex before invoking SDL filters/watchers, which
+    // may themselves query the loader. Both delivery paths share accounting.
+    auto completed = drainCompleted();
+    if (completed.empty()) return false;
 
     for (auto& c : completed) {
-        m_pendingCount--;
-        SDL_Event event;
-        SDL_zero(event);
-        event.type = CAESURA_EVENT_ASYNC_LOAD;
-        event.user.data1 = new CompletedLoad(std::move(c));
-        if (SDL_PushEvent(&event) != 0) {
-            // Event queue full: free the payload instead of leaking it.
-            delete static_cast<CompletedLoad*>(event.user.data1);
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
-        }
+        postCompleteEvent(std::move(c));
     }
     return true;
 }
@@ -368,26 +349,50 @@ bool AsyncLoader::poll() {
 std::vector<AsyncLoader::CompletedLoad> AsyncLoader::drainCompleted() {
     std::lock_guard<std::mutex> lock(m_completeMutex);
     std::vector<CompletedLoad> out;
-    out.swap(m_completed);
+    for (auto& completed : m_completed) {
+        if (isCurrent(completed)) out.push_back(std::move(completed));
+    }
+    m_completed.clear();
     m_pendingCount -= static_cast<int>(out.size());
     return out;
 }
 
-void AsyncLoader::postCompleteEvent(int requestId, const std::string& path,
-                                     const std::vector<uint8_t>& data, bool success) {
-    auto* completed = new CompletedLoad{};
-    completed->id = requestId;
-    completed->path = path;
-    completed->data = data;
-    completed->success = success;
-    SDL_Event event;
-    SDL_zero(event);
-    event.type = CAESURA_EVENT_ASYNC_LOAD;
-    event.user.data1 = completed;
-    if (SDL_PushEvent(&event) != 0) {
+bool AsyncLoader::isCurrent(const CompletedLoad& completed) const {
+    return m_running && completed.generation == m_generation.load();
+}
+
+void AsyncLoader::reclaimStaleEvents() {
+    // SDL owns only a shallow event copy. A host owns events already taken;
+    // this loader reclaims only its stale payloads still in the SDL queue.
+    if (!SDL_WasInit(SDL_INIT_EVENTS)) return;
+    SDL_FilterEvents([](void* owner, SDL_Event* event) -> bool {
+        if (event->type != CAESURA_EVENT_ASYNC_LOAD || event->user.data2 != owner) {
+            return true;
+        }
+        auto* completed = static_cast<CompletedLoad*>(event->user.data1);
+        auto* loader = static_cast<AsyncLoader*>(owner);
+        if (completed && loader->isCurrent(*completed)) return true;
         delete completed;
+        return false;
+    }, this);
+}
+
+void AsyncLoader::postCompleteEvent(CompletedLoad completed) {
+    if (!isCurrent(completed)) return;
+    const uint64_t generation = completed.generation;
+    auto payload = std::make_unique<CompletedLoad>(std::move(completed));
+    SDL_Event event{};
+    event.type = CAESURA_EVENT_ASYNC_LOAD;
+    event.user.data1 = payload.get();
+    event.user.data2 = this;
+    if (SDL_PushEvent(&event)) {
+        payload.release(); // queue consumer (or shutdown) owns it now
+        // An SDL filter may cancel/reload reentrantly before the push enters
+        // the queue. It may also publish fresh results: reclaim only stale ones.
+        if (!m_running || generation != m_generation.load()) reclaimStaleEvents();
+    } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-            "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
+            "[AsyncLoader] SDL event rejected or push failed: %s", SDL_GetError());
     }
 }
 

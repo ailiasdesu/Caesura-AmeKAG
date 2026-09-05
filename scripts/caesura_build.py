@@ -219,7 +219,7 @@ def find_node() -> str:
 
 
 def find_lua() -> str:
-    """Packaged interpreter first, then the build-tree lua_cli, then PATH.
+    """Explicit CAESURA_LUA, then packaged/build-tree interpreters, then PATH.
 
     external/lua/lua[.exe] exists in the RELEASE PACKAGE (installed from the
     lua_cli target) but is gitignored in a checkout: a fresh clone only has
@@ -228,13 +228,23 @@ def find_lua() -> str:
     external/lua/ went red on every machine without a stale hand-built relic
     or a PATH lua, while looking green on dev machines that have the relic.
     """
+    # Validation supplies the exact lua_cli product for this build/configuration.
+    # A configured path is authoritative, including when it is invalid.
+    if "CAESURA_LUA" in os.environ:
+        explicit = os.environ["CAESURA_LUA"]
+        path = Path(explicit).resolve()
+        if not explicit or not path.is_file():
+            raise BuildError("CAESURA_LUA does not point at a Lua interpreter: %s"
+                             % (explicit or "<empty>"))
+        return str(path)
+
     candidates = [ROOT / "external/lua/lua.exe", ROOT / "external/lua/lua"]
     for cfg in ("Release", "Debug", "RelWithDebInfo", "MinSizeRel", ""):
         base = (ROOT / "build" / "lua" / cfg) if cfg else (ROOT / "build" / "lua")
         candidates.append(base / "lua.exe")
         candidates.append(base / "lua")
     for c in candidates:
-        if c.exists():
+        if c.is_file():
             return str(c)
     for c in ("lua5.4", "lua"):
         if shutil.which(c):
@@ -319,14 +329,15 @@ def find_engine(explicit=None, config=None):
             "--engine does not point at an engine binary: %s\n"
             "  Expected a file (or a directory containing %s)." % (p, _exe_name())
         )
-    env = os.environ.get("CAESURA_ENGINE", "").strip()
-    if env:
-        p = Path(env)
-        if p.is_dir():
+    if "CAESURA_ENGINE" in os.environ:
+        env = os.environ["CAESURA_ENGINE"]
+        p = Path(env).resolve()
+        if env and p.is_dir():
             p = p / _exe_name()
-        searched.append(p)
-        if p.is_file():
+        if env and p.is_file():
             return p
+        raise BuildError("CAESURA_ENGINE does not point at an engine binary: %s"
+                         % (env or "<empty>"))
     dirs = list(ENGINE_SEARCH_DIRS)
     if config:
         dirs.insert(0, "build/%s" % config)
@@ -638,6 +649,8 @@ def precompile_scenes(out: Path, scene_rels):
     try:
         lua = find_lua()
     except BuildError as e:
+        if "CAESURA_LUA" in os.environ:
+            raise
         return [], [], "skipped (%s)" % str(e).splitlines()[0]
     lua_abs = str(Path(lua).resolve()) if Path(lua).exists() else lua
     script = out / "caesura-precompile.lua"
@@ -649,7 +662,8 @@ def precompile_scenes(out: Path, scene_rels):
                              capture_output=True, text=True, encoding="utf-8",
                              errors="replace", timeout=600)
     except (OSError, subprocess.SubprocessError) as exc:
-        script.unlink(missing_ok=True)
+        if "CAESURA_LUA" in os.environ:
+            raise BuildError("CAESURA_LUA precompile execution failed: %s" % exc) from exc
         return [], [], "skipped (%s)" % exc
     finally:
         script.unlink(missing_ok=True)

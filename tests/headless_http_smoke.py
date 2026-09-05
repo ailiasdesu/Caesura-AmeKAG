@@ -33,11 +33,13 @@ BASE = "http://127.0.0.1:%d" % port
 
 
 def _repo_root_for_import():
-    # The engine runs with cwd=build/Debug in-tree; the repo root is two
-    # levels up. Fall back to cwd when that layout does not hold.
-    candidate = os.path.dirname(os.path.dirname(os.path.abspath(cwd)))
-    if os.path.isdir(os.path.join(candidate, "src")):
-        return candidate
+    # Single-config builds run in build/, multi-config builds in build/Debug
+    # or build/Release. Check both parent depths and keep standalone fallback.
+    candidate = os.path.abspath(cwd)
+    for _ in range(3):
+        if os.path.isdir(os.path.join(candidate, "src")):
+            return candidate
+        candidate = os.path.dirname(candidate)
     return os.path.abspath(cwd)
 
 
@@ -574,7 +576,7 @@ def main():
     # ---- Web packaging endpoint (POST /api/package/web, Sprint 6) ----
     # The engine wraps scripts/package_game.sh: whitelisted repo-relative
     # story paths (assets/ demo/ tests/projects/ projects/) are packaged
-    # into dist/<outName>. The engine runs with cwd=build/Debug here, so a
+    # into dist/<outName>. The engine runs with cwd=build[/<config>] here, so a
     # success also proves the endpoint locates the repository root itself.
     import shutil as _shutil
     # package_game.sh can only assemble when web/node_modules/vite exists
@@ -603,10 +605,9 @@ def main():
               "%s %s" % (st, str(resp)[:400]))
 
         # Real artifacts must exist on disk (static site + baked story bundle).
-        # The engine writes dist/ under its CWD; in-tree builds keep that under
-        # the repo too (build/Debug/dist). Accept either layout so out-of-tree
-        # (WSL/CI prefix builds) is not a false failure.
-        _repo_root = os.path.dirname(os.path.dirname(cwd))  # build/Debug -> repo
+        # package_game.mjs resolves dist/ against its source root. Retain the
+        # engine-CWD candidate for staged hosts, and resolve either build depth.
+        _repo_root = _repo_root_for_import()
         _pkg_candidates = [
             os.path.join(cwd, "dist", "smoke_pkg"),
             os.path.join(_repo_root, "dist", "smoke_pkg"),

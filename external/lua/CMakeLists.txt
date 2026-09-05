@@ -33,13 +33,22 @@ else()
     target_compile_options(lua PRIVATE -w)
 endif()
 
-# iOS (Track I): the luaconf LUA_USE_IOS guard stubs l_system() — iOS
-# provides no system() implementation (loslib.c:133-138).
+# Desktop flags enable POSIX process/status handling and the native loader in
+# both the library and its interpreter. Android keeps its existing setup.
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # The luaconf LUA_USE_IOS guard stubs l_system(): iOS has no system().
     target_compile_definitions(lua PRIVATE LUA_USE_IOS)
     if(TARGET lua_cli)
         target_compile_definitions(lua_cli PRIVATE LUA_USE_IOS)
     endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
+    # Static-library consumers need these too, not just lua_cli. CMake picks
+    # the platform's dl library; libm supplies Lua's pow/floor implementations.
+    target_link_libraries(lua PUBLIC ${CMAKE_DL_LIBS} m)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS libSystem already provides the loader and math functions.
+    target_compile_definitions(lua PUBLIC LUA_USE_MACOSX)
 endif()
 
 # Round 70: standalone interpreter for the script test suites. The engine

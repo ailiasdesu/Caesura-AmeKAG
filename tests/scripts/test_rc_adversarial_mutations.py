@@ -1,931 +1,231 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""Mutation regression for execution provenance, independent of local release bundles.
+
+Fixtures are explicitly synthetic and confined to TemporaryDirectory. A valid
+fixture may pass diagnostic validation, but can NEVER pass release verification.
+No repository artifacts, reports or source history are read or rewritten.
 """
-test_rc_adversarial_mutations.py — Adversarial Mutation Stress Test Suite for Release Candidate Gate
+from __future__ import annotations
 
-Author: Challenger 1 (Empirical Challenger Agent)
-Purpose: Stress-test scripts/verify_release_candidate.py and scripts/compare_platform_parity.py
-         against extensive adversarial mutations across manifests, checksums, parity snapshots,
-         data leaks, and markdown reports. Asserts that EVERY mutation is caught and exits with code 1.
-
-SKIP semantics (ctest SKIP_RETURN_CODE 77): artifacts/release/ (the RC evidence
-bundle) is produced by the release process and gitignored — it is NOT a
-repository invariant. On a fresh clone the bundle does not exist and can only
-be produced once the local build evidence exists; auto-generating it from the
-test would either take over the release process or fail hard. So when the
-bundle is absent this suite exits 77 (SKIP) BEFORE running any case, and the
-mutations themselves only ever run against a sandbox copy of an existing
-bundle. A missing bundle is never a FAIL and never a fake PASS.
-"""
-
+import copy
 import json
-import os
-import re
-import shutil
-import subprocess
+from pathlib import Path
 import sys
 import tempfile
 import unittest
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from verify_release_candidate import get_target_commit
-VERIFIER_SCRIPT = REPO_ROOT / "scripts" / "verify_release_candidate.py"
-COMPARATOR_SCRIPT = REPO_ROOT / "scripts" / "compare_platform_parity.py"
-RC_REPORT_PATH = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
-SKIP_EXIT = 77  # ctest SKIP_RETURN_CODE 77: build products are not repo invariants
-
-COMMIT_SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
-
-
-def report_declared_commit() -> Tuple[str, str]:
-    """Reads the commit SHA the authoritative report declares (the report is never rewritten)."""
-    text = RC_REPORT_PATH.read_text(encoding="utf-8") if RC_REPORT_PATH.exists() else ""
-    m = re.search(r"Target Commit SHA\*\*:\s*`([0-9a-fA-F]{40})`", text)
-    if m:
-        full = m.group(1).lower()
-        return full, full[:8]
-    return get_target_commit(REPO_ROOT)
-
-
-def ensure_bundle() -> None:
-    """Generates artifacts/release/ if absent, pinned to the commit the report declares.
-
-    The generator refuses to fabricate evidence and refuses to rewrite the report, so the bundle
-    must be pinned to the report's declared SHA rather than to whatever HEAD happens to be.
-    """
-    rel_dir = REPO_ROOT / "artifacts" / "release"
-    if rel_dir.exists() and (rel_dir / "manifest.json").exists() and (rel_dir / "parity").exists():
-        return
-    commit_full, _ = report_declared_commit()
-    subprocess.run(
-        [sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle", "--commit", commit_full],
-        cwd=str(REPO_ROOT),
-        check=True,
-    )
-
-
-class MutationTestResult:
-    def __init__(self, test_id: str, category: str, description: str, expected_exit: int, actual_exit: int, matched_error: bool, stdout: str, stderr: str):
-        self.test_id = test_id
-        self.category = category
-        self.description = description
-        self.expected_exit = expected_exit
-        self.actual_exit = actual_exit
-        self.matched_error = matched_error
-        self.stdout = stdout
-        self.stderr = stderr
-        self.passed = (expected_exit == actual_exit) and matched_error
+from test_validation_evidence import EvidenceFixture, sha
+from collect_validation_evidence import EvidenceError
+import compare_platform_parity as comparator
+from verify_release_candidate import verify_evidence
 
 
 class TestReleaseCandidateAdversarialMutations(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.results: List[MutationTestResult] = []
-        ensure_bundle()
-
-    def create_sandbox(self) -> Tuple[Path, Path, Path, Path]:
-        """Creates an isolated sandbox containing copies of artifacts/release and docs."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_rc_mut_"))
-        
-        # Mirror artifacts/release
-        rel_dir = REPO_ROOT / "artifacts" / "release"
-        if not rel_dir.exists() or not (rel_dir / "manifest.json").exists():
-            subprocess.run([sys.executable, str(VERIFIER_SCRIPT), "--generate-bundle"], cwd=str(REPO_ROOT), check=True)
-        sandbox_release = temp_dir / "artifacts" / "release"
-        shutil.copytree(rel_dir, sandbox_release)
-        
-        # Mirror docs/status
-        sandbox_docs = temp_dir / "docs" / "status"
-        sandbox_docs.mkdir(parents=True, exist_ok=True)
-        # The authoritative report is copied VERBATIM: rewriting its declared SHA here would make
-        # the "target-commit inconsistency" mutation path unreachable (the very defect the RC gate
-        # must be able to reject).
-        rep_path = REPO_ROOT / "docs" / "status" / "release-candidate-report.md"
-        rep_text = rep_path.read_text(encoding="utf-8") if rep_path.exists() else ""
-        (sandbox_docs / "release-candidate-report.md").write_text(rep_text, encoding="utf-8")
-        shutil.copy2(REPO_ROOT / "docs" / "status" / "platform-matrix.yaml", sandbox_docs / "platform-matrix.yaml")
-        if (REPO_ROOT / "docs" / "status" / "platform-status.md").exists():
-            shutil.copy2(REPO_ROOT / "docs" / "status" / "platform-status.md", sandbox_docs / "platform-status.md")
-
-        # Mirror docs/platform
-        sandbox_plat_docs = temp_dir / "docs" / "platform"
-        sandbox_plat_docs.mkdir(parents=True, exist_ok=True)
-        if (REPO_ROOT / "docs" / "platform" / "android-latest-head-validation.md").exists():
-            shutil.copy2(REPO_ROOT / "docs" / "platform" / "android-latest-head-validation.md", sandbox_plat_docs / "android-latest-head-validation.md")
-        if (REPO_ROOT / "docs" / "platform" / "ios-device-validation.md").exists():
-            shutil.copy2(REPO_ROOT / "docs" / "platform" / "ios-device-validation.md", sandbox_plat_docs / "ios-device-validation.md")
-
-        checksums_file = sandbox_release / "checksums" / "sha256sums.txt"
-        report_file = sandbox_docs / "release-candidate-report.md"
-
-        return temp_dir, sandbox_release, checksums_file, report_file
-
-    def create_repo_sandbox(self) -> Tuple[Path, Path, Path, Path, Path]:
-        """Creates a self-contained sandbox REPO ROOT (evidence sources included).
-
-        Unlike create_sandbox (which mirrors only the bundle and leaves evidence sources pointing
-        at the real checkout), this mirrors artifacts/parity/ and the Lua suite runners too, so the
-        verifier can be pointed at it with --repo-root and mutations may delete raw evidence
-        sources without touching the real repository.
-        """
-        temp_dir, sandbox_release, checksums_file, report_file = self.create_sandbox()
-
-        # Mirror raw parity evidence sources (artifacts/parity/*.json)
-        src_parity = REPO_ROOT / "artifacts" / "parity"
-        dst_parity = temp_dir / "artifacts" / "parity"
-        dst_parity.mkdir(parents=True, exist_ok=True)
-        if src_parity.exists():
-            for f in src_parity.glob("*.json"):
-                shutil.copy2(f, dst_parity / f.name)
-
-        # Mirror the Lua suite runners so get_lua_suite_counts() stays identical to the real repo
-        dst_tests = temp_dir / "tests" / "scripts"
-        dst_tests.mkdir(parents=True, exist_ok=True)
-        for runner in ("run_lua_tests.lua", "run_orphan_tests.lua"):
-            src_runner = REPO_ROOT / "tests" / "scripts" / runner
-            if src_runner.exists():
-                shutil.copy2(src_runner, dst_tests / runner)
-
-        return temp_dir, temp_dir, sandbox_release, checksums_file, report_file
-
-    def run_verifier(self, sandbox_release: Path, checksums_file: Path, report_file: Path, repo_root_override: Optional[Path] = None, repo_root_arg: Optional[Path] = None) -> Tuple[int, str, str]:
-        """Runs verify_release_candidate.py against sandbox paths."""
-        cmd = [
-            sys.executable,
-            str(VERIFIER_SCRIPT),
-            "--artifacts-dir", str(sandbox_release),
-            "--checksums-file", str(checksums_file),
-            "--report-file", str(report_file),
-        ]
-        if repo_root_arg is not None:
-            cmd.extend(["--repo-root", str(repo_root_arg)])
-        cwd = str(repo_root_override or REPO_ROOT)
-        res = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-        return res.returncode, res.stdout, res.stderr
-
-    def run_comparator(self, parity_dir: Path, summary_file: Optional[Path] = None) -> Tuple[int, str, str]:
-        """Runs compare_platform_parity.py against specified parity directory."""
-        cmd = [
-            sys.executable,
-            str(COMPARATOR_SCRIPT),
-            "--dir", str(parity_dir),
-        ]
-        if summary_file:
-            cmd.extend(["--summary", str(summary_file)])
-        res = subprocess.run(cmd, cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-        return res.returncode, res.stdout, res.stderr
-
-    def record_and_assert(self, test_id: str, category: str, description: str, ret: int, out: str, err: str, expected_ret: int, expected_needle: str):
-        matched = (expected_needle.lower() in out.lower() or expected_needle.lower() in err.lower())
-        res = MutationTestResult(test_id, category, description, expected_ret, ret, matched, out, err)
-        self.__class__.results.append(res)
-        self.assertEqual(ret, expected_ret, f"[{test_id}] Exit code mismatch: expected {expected_ret}, got {ret}\nOutput: {out}\nError: {err}")
-        self.assertTrue(matched, f"[{test_id}] Expected error substring '{expected_needle}' not found in output!\nOutput: {out}\nError: {err}")
-
-    # =========================================================================
-    # 0. Baseline Test
-    # =========================================================================
-    def test_00_baseline_untampered(self):
-        """Baseline untampered release bundle MUST pass with exit code 0."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("BASE-01", "Baseline", "Untampered release candidate evidence bundle", ret, out, err, 0, "RC-GO (Approved")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    # =========================================================================
-    # 1. Manifest Tampering Mutations
-    # =========================================================================
-    def test_mut_man_01_decision_maybe(self):
-        """Manifest decision tampered to 'RC-MAYBE'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["decision"] = "RC-MAYBE"
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-01", "Manifest", "Decision tampered to 'RC-MAYBE'", ret, out, err, 1, "Manifest decision is not 'RC-GO'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_02_decision_nogo(self):
-        """Manifest decision tampered to 'RC-NO-GO'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["decision"] = "RC-NO-GO"
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-02", "Manifest", "Decision tampered to 'RC-NO-GO'", ret, out, err, 1, "Manifest decision is not 'RC-GO'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_03_version_mismatch(self):
-        """Manifest version tampered to '0.9.0-rc.1'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["version"] = "0.9.0-rc.1"
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-03", "Manifest", "Version tampered to '0.9.0-rc.1'", ret, out, err, 1, "Manifest version mismatch")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_04_commit_mismatch(self):
-        """Manifest commit tampered to non-matching SHA."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["commit"] = "0000000000000000000000000000000000000000"
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-04", "Manifest", "Commit SHA tampered to all zeros", ret, out, err, 1, "commit mismatch")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_05_cpp_doctests_regressed(self):
-        """Manifest C++ doctests total_cases regressed to 1050 (< 1052)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["cpp_doctests"]["total_cases"] = 1050
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-05", "Manifest", "C++ doctests count regressed (< 1052)", ret, out, err, 1, "Manifest C++ baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_06_cpp_doctests_failed(self):
-        """Manifest C++ doctests failed_cases set to 2 (> 0)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["cpp_doctests"]["failed_cases"] = 2
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-06", "Manifest", "C++ doctests failed_cases > 0", ret, out, err, 1, "Manifest C++ baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_07_lua_suites_regressed(self):
-        """Manifest Lua test suites total_suites regressed to 150 (< 158)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["lua_test_suites"]["total_suites"] = 150
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-07", "Manifest", "Lua test suites total_suites regressed (< 158)", ret, out, err, 1, "Manifest Lua baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_08_lua_suites_failed(self):
-        """Manifest Lua test suites failed_suites set to 1 (> 0)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["lua_test_suites"]["failed_suites"] = 1
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-08", "Manifest", "Lua test suites failed_suites > 0", ret, out, err, 1, "Manifest Lua baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_09_coupling_violations(self):
-        """Manifest module coupling violations set to 2 (> 0)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["module_coupling"]["violations"] = 2
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-09", "Manifest", "Module coupling violations > 0", ret, out, err, 1, "Manifest coupling baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_10_android_checks_regressed(self):
-        """Manifest Android regression checks_passed regressed to 80 (< 88)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["baseline_test_suites"]["android_regression"]["checks_passed"] = 80
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-10", "Manifest", "Android regression checks regressed (< 88)", ret, out, err, 1, "Manifest Android regression baseline invalid")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_11_active_blocker_present(self):
-        """Manifest active_blockers count set to 1 (> 0)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["release_blockers_review"]["active_blockers"] = 1
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-11", "Manifest", "Active blockers count > 0", ret, out, err, 1, "Release blockers not fully cleared")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_12_missing_required_blocker(self):
-        """Manifest checklist missing 'crash_free' blocker."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            del data["release_blockers_review"]["checklist"]["crash_free"]
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-12", "Manifest", "Missing required blocker 'crash_free'", ret, out, err, 1, "Missing required blocker review item in manifest: crash_free")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_13_blocker_not_cleared(self):
-        """Manifest blocker 'save_corruption_free' set to 'BLOCKED'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            data = json.loads(man_path.read_text(encoding="utf-8"))
-            data["release_blockers_review"]["checklist"]["save_corruption_free"]["status"] = "BLOCKED"
-            man_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-13", "Manifest", "Blocker status not CLEARED ('BLOCKED')", ret, out, err, 1, "Blocker item 'save_corruption_free' not CLEARED")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_14_corrupted_manifest_json(self):
-        """Manifest file is invalid/corrupted JSON."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            man_path.write_text("{ this is corrupted json", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-14", "Manifest", "Corrupted manifest JSON syntax", ret, out, err, 1, "Failed to parse manifest.json")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_man_15_missing_manifest(self):
-        """Manifest file is deleted / missing."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            man_path.unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-MAN-15", "Manifest", "Missing manifest.json file completely", ret, out, err, 1, "Missing release manifest")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    # =========================================================================
-    # 2. Checksum & Cryptographic Integrity Mutations
-    # =========================================================================
-    def test_mut_chk_01_tampered_manifest_sha(self):
-        """SHA-256 hash for manifest.json altered in sha256sums.txt."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            lines = s_chk.read_text(encoding="utf-8").splitlines()
-            new_lines = []
-            for line in lines:
-                if "manifest.json" in line:
-                    new_lines.append("ffff" + line[4:])
-                else:
-                    new_lines.append(line)
-            s_chk.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-01", "Checksums", "Altered manifest.json SHA-256 in sha256sums.txt", ret, out, err, 1, "SHA-256 mismatch for artifacts/release/manifest.json")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_02_tampered_report_sha(self):
-        """SHA-256 hash for cpp_test_report.json altered in sha256sums.txt."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            lines = s_chk.read_text(encoding="utf-8").splitlines()
-            new_lines = []
-            for line in lines:
-                if "cpp_test_report.json" in line:
-                    new_lines.append("0000" + line[4:])
-                else:
-                    new_lines.append(line)
-            s_chk.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-02", "Checksums", "Altered cpp_test_report.json SHA-256 in sha256sums.txt", ret, out, err, 1, "SHA-256 mismatch for artifacts/release/reports/cpp_test_report.json")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_03_tampered_parity_sha(self):
-        """SHA-256 hash for parity/windows.json altered in sha256sums.txt."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            lines = s_chk.read_text(encoding="utf-8").splitlines()
-            new_lines = []
-            for line in lines:
-                if "parity/windows.json" in line:
-                    new_lines.append("aaaa" + line[4:])
-                else:
-                    new_lines.append(line)
-            s_chk.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-03", "Checksums", "Altered parity/windows.json SHA-256 in sha256sums.txt", ret, out, err, 1, "SHA-256 mismatch for artifacts/release/parity/windows.json")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_04_missing_referenced_file(self):
-        """sha256sums.txt references a non-existent file."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            content = s_chk.read_text(encoding="utf-8")
-            content += "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  artifacts/release/non_existent_file.json\n"
-            s_chk.write_text(content, encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-04", "Checksums", "Referenced non-existent file in sha256sums.txt", ret, out, err, 1, "Checksum referenced file not found")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_05_empty_sha256sums(self):
-        """sha256sums.txt is empty (0 bytes)."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            s_chk.write_text("", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-05", "Checksums", "Empty sha256sums.txt file", ret, out, err, 1, "Checksums file is empty")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_06_missing_sha256sums(self):
-        """sha256sums.txt is deleted / missing."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            s_chk.unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-06", "Checksums", "Missing sha256sums.txt file completely", ret, out, err, 1, "Missing checksums file")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_chk_07_malformed_checksum_line(self):
-        """sha256sums.txt has a malformed single-token line."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            s_chk.write_text("just_a_single_invalid_hash_string_without_path\n", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-CHK-07", "Checksums", "Malformed checksum line without path", ret, out, err, 1, "Malformed checksum line")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    # =========================================================================
-    # 3. Cross-Platform Parity Snapshot Mutations
-    # =========================================================================
-    def test_mut_par_01_windows_status_not_verified(self):
-        """Windows parity snapshot status changed to 'probe'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            win_p = s_rel / "parity" / "windows.json"
-            data = json.loads(win_p.read_text(encoding="utf-8"))
-            data["status"] = "probe"
-            win_p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-01", "Parity", "Windows parity status set to 'probe'", ret, out, err, 1, "Platform windows parity status not 'verified'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_02_windows_route_a_ending_divergence(self):
-        """Windows route_a ending changed from 'sunset' to 'midnight'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            win_p = s_rel / "parity" / "windows.json"
-            data = json.loads(win_p.read_text(encoding="utf-8"))
-            data["route_a"]["ending"] = "midnight"
-            win_p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-02", "Parity", "Windows route_a ending divergence ('midnight')", ret, out, err, 1, "Platform windows route_a ending not 'sunset'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_03_linux_route_b_ending_divergence(self):
-        """Linux route_b ending changed from 'rain_shelter' to 'soaked'."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            lin_p = s_rel / "parity" / "linux.json"
-            data = json.loads(lin_p.read_text(encoding="utf-8"))
-            data["route_b"]["ending"] = "soaked"
-            lin_p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-03", "Parity", "Linux route_b ending divergence ('soaked')", ret, out, err, 1, "Platform linux route_b ending not 'rain_shelter'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_04_ios_status_not_gated(self):
-        """iOS parity snapshot status changed to 'verified' without hardware proof."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            ios_p = s_rel / "parity" / "ios.json"
-            data = json.loads(ios_p.read_text(encoding="utf-8"))
-            data["status"] = "verified"
-            ios_p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-04", "Parity", "iOS parity status illegally set to 'verified'", ret, out, err, 1, "iOS parity status must be 'hardware-gated'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_05_missing_web_snapshot(self):
-        """Missing web.json in parity directory."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            (s_rel / "parity" / "web.json").unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-05", "Parity", "Missing required web.json parity snapshot", ret, out, err, 1, "Missing parity snapshot for web")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_06_missing_ios_snapshot(self):
-        """Missing ios.json in parity directory."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            (s_rel / "parity" / "ios.json").unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-06", "Parity", "Missing ios.json parity snapshot", ret, out, err, 1, "Missing iOS parity snapshot")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_07_corrupted_snapshot_json(self):
-        """Corrupted JSON in android.json parity snapshot."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            (s_rel / "parity" / "android.json").write_text("{ not json", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-PAR-07", "Parity", "Corrupted android.json snapshot syntax", ret, out, err, 1, "Failed parsing parity snapshot")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    # =========================================================================
-    # 4. Out-of-Sync Documentation & Report Bundle Mutations
-    # =========================================================================
-    def test_mut_doc_01_missing_rc_go_declaration(self):
-        """Authoritative report missing 'RC-GO' declaration."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            doc_text = s_rep.read_text(encoding="utf-8")
-            doc_text = doc_text.replace("RC-GO", "RC-PENDING")
-            s_rep.write_text(doc_text, encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-01", "Documentation", "Authoritative report missing 'RC-GO' declaration", ret, out, err, 1, "Authoritative report does not contain definitive 'RC-GO' declaration")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_02_conflicting_rc_no_go_declaration(self):
-        """Authoritative report contains conflicting 'RC-NO-GO' declaration."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            doc_text = s_rep.read_text(encoding="utf-8")
-            doc_text += "\n\nWarning: We also declare RC-NO-GO due to pending items.\n"
-            s_rep.write_text(doc_text, encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-02", "Documentation", "Authoritative report contains conflicting 'RC-NO-GO'", ret, out, err, 1, "Authoritative report contains conflicting 'RC-NO-GO' declaration")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_03_missing_commit_sha_in_report(self):
-        """Authoritative report missing target commit SHA citation."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            doc_text = s_rep.read_text(encoding="utf-8")
-            doc_text = re.sub(r"[0-9a-fA-F]{7,40}", "unknown_hash", doc_text)
-            s_rep.write_text(doc_text, encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-03", "Documentation", "Authoritative report missing target commit SHA", ret, out, err, 1, "Authoritative report does not cite target commit SHA")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_04_missing_authoritative_report_file(self):
-        """Authoritative report file deleted / missing."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            s_rep.unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-04", "Documentation", "Missing authoritative release candidate report file", ret, out, err, 1, "Missing authoritative release candidate report")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_05_missing_bundle_report_file(self):
-        """Missing structured report file in artifacts/release/reports/."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            (s_rel / "reports" / "android_regression_report.md").unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-05", "Reports", "Missing android_regression_report.md in bundle", ret, out, err, 1, "Missing or empty release report")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_06_empty_bundle_report_file(self):
-        """Empty (0 bytes) report file in artifacts/release/reports/."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            (s_rel / "reports" / "coupling_report.json").write_text("", encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-06", "Reports", "Empty 0-byte coupling_report.json in bundle", ret, out, err, 1, "Missing or empty release report")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_07_platform_status_truncated(self):
-        """platform-status.json has fewer than 6 platforms."""
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            st_path = s_rel / "platform-status.json"
-            data = json.loads(st_path.read_text(encoding="utf-8"))
-            data["platforms"] = {"windows": data["platforms"]["windows"]}  # only 1 platform
-            st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert("MUT-DOC-07", "Platform Status", "Truncated platform-status.json (< 6 platforms)", ret, out, err, 1, "platform-status.json has only 1 platforms, expected 6")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_08_target_commit_inconsistent_with_bundle(self):
-        """Authoritative report declares a DIFFERENT commit than the bundle manifest (stale report).
-
-        Regression lock: neither the verifier nor this harness may rewrite the report's declared
-        SHA, otherwise this inconsistency can never be observed.
-        """
-        temp_dir, s_rel, s_chk, s_rep = self.create_sandbox()
-        try:
-            man_path = s_rel / "manifest.json"
-            manifest = json.loads(man_path.read_text(encoding="utf-8"))
-            bundle_commit = str(manifest["commit"]).lower()
-
-            stale_commit = ("f" * 40) if bundle_commit != "f" * 40 else ("e" * 40)
-            doc_text = s_rep.read_text(encoding="utf-8")
-            doc_text = COMMIT_SHA_RE.sub(stale_commit, doc_text)
-            doc_text = doc_text.replace(bundle_commit[:8], stale_commit[:8])
-            s_rep.write_text(doc_text, encoding="utf-8")
-
-            self.assertNotIn(bundle_commit[:8], s_rep.read_text(encoding="utf-8"))
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep)
-            self.record_and_assert(
-                "MUT-DOC-08", "Documentation",
-                "Report target commit inconsistent with bundle manifest commit",
-                ret, out, err, 1, "target-commit mismatch"
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_doc_09_report_never_auto_rewritten_by_generator(self):
-        """--generate-bundle must REFUSE (exit 1) when the report cites a different commit.
-
-        The authoritative report is a fixed human-signed artifact: the generator may not silently
-        realign it to HEAD, so a mismatch has to surface as a hard failure with the SHA to write.
-        """
-        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
-        try:
-            sandbox_report = sandbox_root / "docs" / "status" / "release-candidate-report.md"
-            before = sandbox_report.read_text(encoding="utf-8")
-            foreign_commit = "abcdef0123456789abcdef0123456789abcdef01"
-
-            res = subprocess.run(
-                [
-                    sys.executable, str(VERIFIER_SCRIPT),
-                    "--generate-bundle",
-                    "--repo-root", str(sandbox_root),
-                    "--artifacts-dir", str(s_rel),
-                    "--checksums-file", str(s_chk),
-                    "--report-file", str(sandbox_report),
-                    "--commit", foreign_commit,
-                ],
-                cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace",
-            )
-            after = sandbox_report.read_text(encoding="utf-8")
-            self.assertEqual(before, after, "Generator must NOT rewrite the authoritative report")
-
-            self.record_and_assert(
-                "MUT-DOC-09", "Documentation",
-                "Generator refuses to auto-rewrite report on commit mismatch",
-                res.returncode, res.stdout, res.stderr, 1, "does not cite the bundle commit"
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_08_missing_linux_evidence_source(self):
-        """Raw evidence source artifacts/parity/linux.json deleted -> verifier MUST be red.
-
-        Regression lock for the synthesized-snapshot defect: a platform whose harness never ran has
-        no evidence and must never be accepted as 'verified'.
-        """
-        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
-        try:
-            (sandbox_root / "artifacts" / "parity" / "linux.json").unlink()
-
-            ret, out, err = self.run_verifier(s_rel, s_chk, s_rep, repo_root_arg=sandbox_root)
-            self.record_and_assert(
-                "MUT-PAR-08", "Parity",
-                "Missing raw evidence source artifacts/parity/linux.json",
-                ret, out, err, 1, "Missing parity evidence source for linux"
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_par_09_generator_refuses_synthesizing_missing_platform(self):
-        """--generate-bundle MUST fail hard when a required platform snapshot is absent."""
-        temp_dir, sandbox_root, s_rel, s_chk, s_rep = self.create_repo_sandbox()
-        try:
-            (sandbox_root / "artifacts" / "parity" / "android.json").unlink()
-            commit_full, _ = report_declared_commit()
-
-            res = subprocess.run(
-                [
-                    sys.executable, str(VERIFIER_SCRIPT),
-                    "--generate-bundle",
-                    "--repo-root", str(sandbox_root),
-                    "--artifacts-dir", str(s_rel),
-                    "--checksums-file", str(s_chk),
-                    "--report-file", str(s_rep),
-                    "--commit", commit_full,
-                ],
-                cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace",
-            )
-            self.record_and_assert(
-                "MUT-PAR-09", "Parity",
-                "Generator refuses to synthesize a 'verified' snapshot for android",
-                res.returncode, res.stdout, res.stderr, 1,
-                "Missing parity snapshot for required platform 'android'"
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    # =========================================================================
-    # 5. Direct Parity Comparator Adversarial Stress Tests
-    # =========================================================================
-    def test_mut_cmp_01_forbidden_gpu_key(self):
-        """Parity snapshot contains leaked GPU key ('gpu_vendor')."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_cmp_mut_"))
-        try:
-            for f in (REPO_ROOT / "artifacts" / "release" / "parity").glob("*.json"):
-                shutil.copy2(f, temp_dir / f.name)
-
-            and_file = temp_dir / "android.json"
-            data = json.loads(and_file.read_text(encoding="utf-8"))
-            data["route_a"]["gpu_vendor"] = "Qualcomm Adreno 660"
-            and_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_comparator(temp_dir)
-            self.record_and_assert("MUT-CMP-01", "Comparator", "Data leak: Forbidden GPU key 'gpu_vendor'", ret, out, err, 1, "Forbidden key pattern 'gpu'")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_cmp_02_forbidden_pointer_address(self):
-        """Parity snapshot contains leaked memory pointer value ('0x7ffe00112233')."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_cmp_mut_"))
-        try:
-            for f in (REPO_ROOT / "artifacts" / "release" / "parity").glob("*.json"):
-                shutil.copy2(f, temp_dir / f.name)
-
-            win_file = temp_dir / "windows.json"
-            data = json.loads(win_file.read_text(encoding="utf-8"))
-            data["route_a"]["native_handle"] = "0x7ffe00112233"
-            win_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_comparator(temp_dir)
-            self.record_and_assert("MUT-CMP-02", "Comparator", "Data leak: Forbidden native pointer address '0x7ffe00112233'", ret, out, err, 1, "Forbidden value pattern")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_cmp_03_forbidden_path_pattern(self):
-        """Parity snapshot contains leaked OS absolute path ('/home/ubuntu/caesura/save.json')."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_cmp_mut_"))
-        try:
-            for f in (REPO_ROOT / "artifacts" / "release" / "parity").glob("*.json"):
-                shutil.copy2(f, temp_dir / f.name)
-
-            lin_file = temp_dir / "linux.json"
-            data = json.loads(lin_file.read_text(encoding="utf-8"))
-            data["route_a"]["save_path"] = "/home/ubuntu/caesura/save.json"
-            lin_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_comparator(temp_dir)
-            self.record_and_assert("MUT-CMP-03", "Comparator", "Data leak: Forbidden Linux absolute path '/home/ubuntu/...'", ret, out, err, 1, "Forbidden value pattern")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_cmp_04_missing_language_locale(self):
-        """Web snapshot missing required Japanese ('ja') locale in route_a."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_cmp_mut_"))
-        try:
-            for f in (REPO_ROOT / "artifacts" / "release" / "parity").glob("*.json"):
-                shutil.copy2(f, temp_dir / f.name)
-
-            web_file = temp_dir / "web.json"
-            data = json.loads(web_file.read_text(encoding="utf-8"))
-            data["route_a"]["languages"] = ["zh", "en"]  # Missing 'ja'
-            web_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_comparator(temp_dir)
-            self.record_and_assert("MUT-CMP-04", "Comparator", "Missing language locale 'ja' in route_a", ret, out, err, 1, "route_a.languages")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_mut_cmp_05_cross_platform_divergence(self):
-        """Android route_b ending diverges to 'divergent_rain_ending'."""
-        temp_dir = Path(tempfile.mkdtemp(prefix="caesura_cmp_mut_"))
-        try:
-            for f in (REPO_ROOT / "artifacts" / "release" / "parity").glob("*.json"):
-                shutil.copy2(f, temp_dir / f.name)
-
-            and_file = temp_dir / "android.json"
-            data = json.loads(and_file.read_text(encoding="utf-8"))
-            data["route_b"]["ending"] = "divergent_rain_ending"
-            and_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-            ret, out, err = self.run_comparator(temp_dir)
-            self.record_and_assert("MUT-CMP-05", "Comparator", "Cross-platform divergence in route_b ending", ret, out, err, 1, "Cross-platform divergence between windows and android")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="caesura-rc-mutation-")
+        self.addCleanup(temporary.cleanup)
+        self.f = EvidenceFixture(Path(temporary.name))
+
+    def test_baseline_fixture_diagnostic_validation(self):
+        self.f.collect()
+        self.assertEqual(self.f.verify(), [])
+
+    def test_fixture_never_grants_release(self):
+        self.f.collect()
+        self.assertTrue(self.f.verify(release=True))
+
+    def test_missing_manifest_rejected(self):
+        self.f.collect()
+        (self.f.output / "manifest.json").unlink()
+        self.assertTrue(self.f.verify())
+
+    def test_invalid_manifest_json_rejected(self):
+        self.f.collect()
+        (self.f.output / "manifest.json").write_text("{truncated", encoding="utf-8")
+        self.assertTrue(self.f.verify())
+
+    def test_legacy_autogenerated_rc_go_not_execution_evidence(self):
+        self.f.collect()
+        (self.f.output / "manifest.json").write_text(
+            json.dumps({"decision": "RC-GO", "commit": "a" * 40}), encoding="utf-8")
+        self.assertTrue(any("Legacy" in error for error in self.f.verify()))
+
+    def test_bundled_receipt_cannot_be_its_own_trust_anchor(self):
+        self.f.collect()
+        errors = verify_evidence(self.f.output, self.f.profile_path, "test-debug",
+                                 self.f.output / "execution-receipt.json", source_sha="a" * 40, release=False)
+        self.assertTrue(errors)
+
+    def test_bundled_profile_cannot_be_its_own_trust_anchor(self):
+        self.f.collect()
+        errors = verify_evidence(self.f.output, self.f.output / "profile.json", "test-debug",
+                                 self.f.run_path, source_sha="a" * 40, release=False)
+        self.assertTrue(errors)
+
+    def test_trusted_profile_cannot_be_reduced_after_execution(self):
+        self.f.collect()
+        self.f.profile["profiles"]["test-debug"]["checks"][0]["required"] = False
+        self.f.write_profile()
+        self.assertTrue(self.f.verify())
+
+    def test_receipt_cannot_select_different_profile_name(self):
+        self.f.run["profile_name"] = "another-profile"
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_source_change_during_execution_not_pass(self):
+        self.f.run["source_changed_during_run"] = True
+        self.f.run["finished_worktree_fingerprint"] = "d" * 64
+        self.assertEqual(self.f.collect()["result"], "FAIL")
+
+    def test_changed_fingerprint_without_changed_flag_rejected(self):
+        self.f.run["source_changed_during_run"] = False
+        self.f.run["finished_worktree_fingerprint"] = "d" * 64
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_fixture_change_during_execution_is_failure(self):
+        self.f.run["fixtures_changed_during_run"] = True
+        self.f.run["finished_fixture_sha256"] = "d" * 64
+        self.assertEqual(self.f.collect()["result"], "FAIL")
+        self.assertTrue(any("Fixture" in error for error in self.f.verify()))
+
+    def test_changed_fixture_without_changed_flag_rejected(self):
+        self.f.run["finished_fixture_sha256"] = "d" * 64
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_missing_finished_fixture_identity_is_rejected(self):
+        del self.f.run["finished_fixture_sha256"]
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_null_finished_fixture_requires_computation_error_and_change_flag(self):
+        self.f.run["finished_fixture_sha256"] = None
+        self.f.run["fixtures_changed_during_run"] = True
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_fixture_fingerprint_computation_error_remains_failure(self):
+        self.f.run.update(finished_fixture_sha256=None, fixtures_changed_during_run=True,
+                          fixture_error="fixture disappeared during execution")
+        self.assertEqual(self.f.collect()["result"], "FAIL")
+        self.assertTrue(self.f.verify())
+
+    def test_collected_report_symlink_cannot_escape_bundle(self):
+        self.f.collect()
+        bundled = self.f.output / "inputs/cpp/stdout"
+        outside = self.f.raw / "cpp.stdout"
+        original_resolve = Path.resolve
+
+        def symlink_resolution(path, *args, **kwargs):
+            return outside if path == bundled else original_resolve(path, *args, **kwargs)
+
+        # Model filesystem symlink resolution without requiring Windows symlink privileges.
+        with patch.object(Path, "resolve", symlink_resolution):
+            self.assertTrue(self.f.verify())
+
+    def test_check_time_cannot_extend_beyond_run(self):
+        self.f.run["checks"][0]["finished_at"] = "2027-01-01T00:00:00Z"
+        with self.assertRaises(EvidenceError):
+            self.f.collect()
+
+    def test_exit_77_is_skip_and_fails_required_gate(self):
+        self.f.run["checks"][0]["exit_code"] = 77
+        manifest = self.f.collect()
+        self.assertEqual(manifest["checks"][0]["result"], "SKIP")
+        self.assertEqual(manifest["result"], "FAIL")
+        self.assertTrue(self.f.verify())
+
+    def test_ctest_named_optional_skip_stays_visible(self):
+        self.f.profile["profiles"]["test-debug"]["checks"][0].update(
+            parser="ctest-junit", allowed_skips=["optional-ai"])
+        self.f.write_profile()
+        self.f.run["profile_sha256"] = sha(self.f.profile_path)
+        self.f.run["checks"][0]["report"] = self.f.file("ctest.xml",
+            '<testsuite tests="2"><testcase name="core"/><testcase name="optional-ai"><skipped/></testcase></testsuite>')
+        manifest = self.f.collect()
+        self.assertEqual(manifest["result"], "PASS")
+        self.assertEqual(manifest["checks"][0]["counts"]["skipped"], 1)
+
+    def test_unlisted_ctest_skip_is_failure(self):
+        self.f.profile["profiles"]["test-debug"]["checks"][0]["parser"] = "ctest-junit"
+        self.f.write_profile()
+        self.f.run["profile_sha256"] = sha(self.f.profile_path)
+        self.f.run["checks"][0]["report"] = self.f.file("ctest.xml",
+            '<testsuite tests="2"><testcase name="core"/><testcase name="required-save"><skipped/></testcase></testsuite>')
+        self.assertEqual(self.f.collect()["result"], "FAIL")
+
+
+def manifest_mutation(path, value):
+    def test(self):
+        manifest = self.f.collect()
+        target = manifest
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = copy.deepcopy(value)
+        (self.f.output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertTrue(self.f.verify(), f"Mutation not rejected: {path}")
+    return test
+
+
+for name, path, value in [
+    ("source_sha", ("context", "source_sha"), "d" * 40),
+    ("workflow", ("context", "workflow"), "other-workflow"),
+    ("repository", ("context", "repository"), "attacker/repo"),
+    ("run_attempt", ("context", "run_attempt"), 2),
+    ("run_id", ("context", "run_id"), "other-run"),
+    ("fixture_digest", ("context", "fixture_sha256"), "d" * 64),
+    ("finished_fixture_digest", ("context", "finished_fixture_sha256"), "d" * 64),
+    ("fixture_change_flag", ("context", "fixtures_changed_during_run"), True),
+    ("worktree_fingerprint", ("context", "worktree_fingerprint"), "d" * 64),
+    ("purpose", ("context", "purpose"), "validation"),
+    ("toolchain", ("context", "toolchain"), {}),
+    ("timestamp", ("context", "finished_at"), "2025-01-01T00:00:00Z"),
+    ("result", ("result",), "RC-GO"),
+    ("profile_name", ("profile_name",), "other"),
+    ("profile_digest", ("profile_sha256",), "d" * 64),
+    ("receipt_digest", ("receipt_sha256",), "d" * 64),
+    ("discovery_count", ("checks", 0, "counts", "discovered"), 1),
+    ("passed_count", ("checks", 0, "counts", "passed"), 10000),
+    ("failed_count", ("checks", 0, "counts", "failed"), 1),
+    ("skipped_count", ("checks", 0, "counts", "skipped"), 1),
+    ("executed_count", ("checks", 0, "counts", "executed"), 0),
+    ("required_flag", ("checks", 0, "required"), False),
+    ("check_parser", ("checks", 0, "parser"), "exit-code"),
+    ("exit_code", ("checks", 0, "exit_code"), 77),
+    ("command", ("checks", 0, "command"), ["echo", "PASS"]),
+    ("cwd", ("checks", 0, "cwd"), "other-directory"),
+    ("binary_digest", ("checks", 0, "files", "binary", "sha256"), "d" * 64),
+    ("executed_program_digest", ("checks", 0, "files", "executed_program", "sha256"), "d" * 64),
+    ("log_path_traversal", ("checks", 0, "files", "stdout", "path"), "../../outside"),
+    ("log_digest", ("checks", 0, "files", "stdout", "sha256"), "d" * 64),
+    ("checks_removed", ("checks",), []),
+]:
+    setattr(TestReleaseCandidateAdversarialMutations, f"test_mutation_{name}", manifest_mutation(path, value))
+
+
+class ParityMutationTests(unittest.TestCase):
+    """Keep comparator adversarial coverage using clearly local constructed data."""
+
+    def test_gpu_key_is_not_semantic_parity(self):
+        self.assertTrue(comparator.sanitize_check_obj({"route_a": {"gpu_vendor": "fixture"}}))
+
+    def test_native_pointer_is_not_semantic_parity(self):
+        self.assertTrue(comparator.sanitize_check_obj({"route_a": {"handle": "0x7ffe00112233"}}))
+
+    def test_absolute_path_is_not_semantic_parity(self):
+        self.assertTrue(comparator.sanitize_check_obj({"route_a": {"save_path": "/home/fixture/save"}}))
+
+    def test_missing_locale_rejected(self):
+        route = {**comparator.CANONICAL_ROUTE_A, "languages": ["zh", "en"]}
+        self.assertTrue(comparator.compare_route(route, comparator.CANONICAL_ROUTE_A, "route_a"))
+
+    def test_divergent_ending_rejected(self):
+        route = {**comparator.CANONICAL_ROUTE_B, "ending": "different"}
+        self.assertTrue(comparator.compare_route(route, comparator.CANONICAL_ROUTE_B, "route_b"))
 
 
 if __name__ == "__main__":
-    # Bundle prerequisite gate. artifacts/release/ is a gitignored build product,
-    # not a repository invariant: on a fresh clone it does not exist and can only
-    # be produced once the local build evidence exists. Auto-generating it in
-    # setUpClass would either take over the release process or fail hard
-    # (the macOS old red: CalledProcessError -> suite ERROR -> exit 1 -> ctest
-    # FAIL). Missing bundle => SKIP (77), here, before any case runs.
-    rel_dir = REPO_ROOT / "artifacts" / "release"
-    if not (rel_dir / "manifest.json").is_file():
-        print("Caesura RC adversarial mutations: no release evidence bundle on "
-              "this host (artifacts/release/manifest.json) -> SKIP (77), not FAIL;\n"
-              "  generate it first:\n"
-              "    python scripts/verify_release_candidate.py --generate-bundle\n"
-              "  (build products are gitignored; the bundle is not a repo invariant)")
-        sys.exit(SKIP_EXIT)
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestReleaseCandidateAdversarialMutations)
-    runner = unittest.TextTestRunner(verbosity=2)
-    test_result = runner.run(suite)
-    
-    print("\n" + "=" * 100)
-    print(f"{'ID':<12} | {'Category':<14} | {'Expected':<8} | {'Actual':<8} | {'Matched Error':<14} | {'Status':<6} | {'Description'}")
-    print("-" * 100)
-    for r in TestReleaseCandidateAdversarialMutations.results:
-        st = "PASS" if r.passed else "FAIL"
-        print(f"{r.test_id:<12} | {r.category:<14} | {r.expected_exit:<8} | {r.actual_exit:<8} | {str(r.matched_error):<14} | {st:<6} | {r.description}")
-    print("=" * 100)
-    print(f"Total Mutation Tests Run: {len(TestReleaseCandidateAdversarialMutations.results)}")
-    # all([]) is True, so a run that collected NOTHING used to print
-    # "100% PASS" -- the exit code was right but the headline lied, which is
-    # exactly the kind of self-congratulating output this suite exists to catch.
-    results = TestReleaseCandidateAdversarialMutations.results
-    all_passed = bool(results) and all(r.passed for r in results)
-    if not results:
-        print("Overall Empirical Result: NO MUTATIONS RAN (suite collected nothing)")
-    else:
-        print(f"Overall Empirical Result: {'ALL MUTATIONS CAUGHT & REJECTED (100% PASS)' if all_passed else 'SOME MUTATIONS MISSED'}")
-    sys.exit(0 if test_result.wasSuccessful() else 1)
+    unittest.main(verbosity=2)

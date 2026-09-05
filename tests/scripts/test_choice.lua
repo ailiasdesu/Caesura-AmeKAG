@@ -10,6 +10,15 @@ package.path = "scripts/?.lua;scripts/kag/?.lua;" .. package.path
 local TextCommands = require("kag.commands.text")
 local TextScene = require("kag.text_scene")
 
+local function start_choice(ctx, command)
+    local co = coroutine.create(function()
+        (command or TextCommands.endbutton)(ctx, {})
+    end)
+    local ok, err = coroutine.resume(co)
+    assert(ok, tostring(err))
+    return co
+end
+
 -- Minimal ctx
 local ctx = {
     f = {}, sf = {}, tf = {}, mp = {},
@@ -22,9 +31,8 @@ local ctx = {
     },
 }
 
--- endbutton installs the choice click handler (its trailing yield raises
--- outside a coroutine; the install itself succeeded -- assert the state)
-pcall(function() TextCommands.endbutton(ctx, {}) end)
+-- Keep the actual command suspended while exercising its installed handler.
+local choiceCo = start_choice(ctx)
 check("endbutton installs choice mode", ctx._choiceMode == true)
 check("choice buttons active", ctx._choiceButtonsActive ~= nil and #ctx._choiceButtonsActive == 2)
 check("button regions assigned", ctx._choiceButtonsActive[1].y ~= nil)
@@ -39,6 +47,10 @@ check("choice 2 selected", ctx._selectedChoice ~= nil and ctx._selectedChoice.ta
 check("choice mode cleared", ctx._choiceMode == false)
 check("waiting_input cleared", ctx.waiting_input == false)
 check("handler restored", _G._KAG_onClick ~= handler or _G._KAG_onClick == nil)
+assert(coroutine.resume(choiceCo))
+check("selected choice commits and releases its UI", ctx._pendingJump == "*right"
+      and #TextScene.get_state(ctx).draws == 0)
+assert(coroutine.close(choiceCo))
 
 -- Click far outside any button must NOT select
 local ctx2 = {
@@ -48,12 +60,13 @@ local ctx2 = {
     backlog = {}, layers = {},
     _choiceButtons = { { text = "Only", target = "*only" } },
 }
-pcall(function() TextCommands.endbutton(ctx2, {}) end)
+local choiceCo2 = start_choice(ctx2)
 _G._GAME_MOUSE_X = 700   -- right of the 600 hit-box
 _G._GAME_MOUSE_Y = 500
 local h2 = _G._KAG_onClick
 pcall(h2)
 check("out-of-box click not selected", ctx2._selectedChoice == nil)
+assert(coroutine.close(choiceCo2))
 
 -- bare target (audit): [button *route_a text="A"] -- the bare arg is
 -- the JUMP TARGET (*route_a); text= is the displayed label
@@ -78,7 +91,7 @@ local ctxC = {
         { text = "Leave", target = "*leave" },
     },
 }
-pcall(function() TextCommands.endbutton(ctxC, {}) end)
+local choiceCoC = start_choice(ctxC)
 check("cond filters false choices", ctxC._choiceButtonsActive ~= nil
       and #ctxC._choiceButtonsActive == 2)
 check("cond keeps true choice", ctxC._choiceButtonsActive[1]
@@ -91,6 +104,8 @@ _G._GAME_MOUSE_Y = ctxC._choiceButtonsActive[1].y + 5
 pcall(hC)
 check("cond choice clickable", ctxC._selectedChoice ~= nil
       and ctxC._selectedChoice.target == "*door")
+assert(coroutine.resume(choiceCoC))
+assert(coroutine.close(choiceCoC))
 
 -- all hidden: the block dissolves without entering choice mode
 local ctxD = {
@@ -102,9 +117,10 @@ local ctxD = {
         { text = "Open door", target = "*door", cond = "f.has_key == true" },
     },
 }
-pcall(function() TextCommands.endbutton(ctxD, {}) end)
+local choiceCoD = start_choice(ctxD)
 check("all-hidden block dissolves", ctxD._choiceMode == nil
       and ctxD._choiceButtons == nil)
+assert(coroutine.close(choiceCoD))
 
 -- TJS short-circuit form: f.has_key && f.other (both must hold)
 local ctxE = {
@@ -117,10 +133,11 @@ local ctxE = {
         { text = "Fallback", target = "*f" },
     },
 }
-pcall(function() TextCommands.endbutton(ctxE, {}) end)
+local choiceCoE = start_choice(ctxE)
 check("cond TJS && short-circuit", ctxE._choiceButtonsActive ~= nil
       and #ctxE._choiceButtonsActive == 1
       and ctxE._choiceButtonsActive[1].target == "*f")
+assert(coroutine.close(choiceCoE))
 
 -- ---- round 59: [button cond] edge cases --------------------------------
 -- C1. numeric inequality + unconditional survive (raw-TJS path)
@@ -135,11 +152,12 @@ do
             { text = "C", target = "*c" },
         },
     }
-    pcall(function() TextCommands.endbutton(ctxF, {}) end)
+    local co = start_choice(ctxF)
     check("cond numeric inequality filters", ctxF._choiceButtonsActive ~= nil
           and #ctxF._choiceButtonsActive == 2
           and ctxF._choiceButtonsActive[1].target == "*b"
           and ctxF._choiceButtonsActive[2].target == "*c")
+    assert(coroutine.close(co))
 end
 
 -- C2. missing var cond is falsy -> hidden -> all-hidden dissolves
@@ -152,9 +170,10 @@ do
             { text = "A", target = "*a", cond = "f.nope" },
         },
     }
-    pcall(function() TextCommands.endbutton(ctxG, {}) end)
+    local co = start_choice(ctxG)
     check("cond missing var hidden, block dissolves", ctxG._choiceMode == nil
           and ctxG._choiceButtons == nil)
+    assert(coroutine.close(co))
 end
 
 -- C3. empty-string cond treated as unconditional
@@ -168,9 +187,10 @@ do
             { text = "B", target = "*b" },
         },
     }
-    pcall(function() TextCommands.endbutton(ctxH, {}) end)
+    local co = start_choice(ctxH)
     check("cond empty string kept as unconditional",
           ctxH._choiceButtonsActive ~= nil and #ctxH._choiceButtonsActive == 2)
+    assert(coroutine.close(co))
 end
 
 -- C4. combined TJS cond (== && !=) through the raw-TJS path
@@ -185,10 +205,11 @@ do
             { text = "C", target = "*c" },
         },
     }
-    pcall(function() TextCommands.endbutton(ctxI, {}) end)
+    local co = start_choice(ctxI)
     check("cond combined TJS keeps only true", ctxI._choiceButtonsActive ~= nil
           and #ctxI._choiceButtonsActive == 2
           and ctxI._choiceButtonsActive[1].target == "*a")
+    assert(coroutine.close(co))
 end
 
 -- C5. endselect parity with endbutton
@@ -202,18 +223,20 @@ do
             { text = "B", target = "*b" },
         },
     }
-    pcall(function() TextCommands.endselect(ctxJ, {}) end)
+    local co = start_choice(ctxJ, TextCommands.endselect)
     check("endselect filters like endbutton", ctxJ._choiceButtonsActive ~= nil
           and #ctxJ._choiceButtonsActive == 1
           and ctxJ._choiceButtonsActive[1].target == "*b")
+    assert(coroutine.close(co))
 end
 
 -- C6. endbutton with no staged choices is a no-op
 do
     local ctxK = { f = {}, sf = {}, tf = {}, mp = {}, _choiceButtons = {} }
-    pcall(function() TextCommands.endbutton(ctxK, {}) end)
+    local co = start_choice(ctxK)
     check("endbutton no choices no-op", ctxK._choiceMode == nil
           and ctxK._choiceButtons == nil)
+    assert(coroutine.close(co))
 end
 
 -- ---------------------------------------------------------------------------
@@ -230,9 +253,10 @@ do
     check("[button] no-endbutton no block", ctxL._choiceMode == nil
           and ctxL.waiting_input == nil
           and ctxL._choiceButtonsActive == nil)
-    pcall(function() TextCommands.endbutton(ctxL, {}) end)
+    local co = start_choice(ctxL)
     check("staged [button] renders on later [endbutton]",
           ctxL._choiceButtonsActive ~= nil and #ctxL._choiceButtonsActive == 1)
+    assert(coroutine.close(co))
 end
 
 -- round 74: cond-hidden choices renumber 1-based in the visible block
@@ -247,12 +271,13 @@ do
             { text = "C", target = "*c" },                   -- shown
         },
     }
-    pcall(function() TextCommands.endbutton(ctxM, {}) end)
+    local co = start_choice(ctxM)
     check("cond-hidden renumber starts at 1", ctxM._choiceButtonsActive ~= nil
           and #ctxM._choiceButtonsActive == 2
           and ctxM._choiceButtonsActive[1].index == 1
           and ctxM._choiceButtonsActive[2].index == 2
           and ctxM._choiceButtonsActive[2].target == "*c")
+    assert(coroutine.close(co))
 end
 
 print("CHOICE TESTS DONE")

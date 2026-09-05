@@ -130,6 +130,9 @@ TEST_CASE("HotReload closes the active coroutine during a forced reload") {
         require("kag")
 
         local co = coroutine.create(function()
+            local cleanup <close> = setmetatable({}, {
+                __close = function() reload_cleanup_finished = true end,
+            })
             coroutine.yield("ready")
         end)
         assert(coroutine.resume(co))
@@ -156,8 +159,19 @@ TEST_CASE("HotReload closes the active coroutine during a forced reload") {
     }
 
     hr.init("__missing_hotreload_dir__", L);
+    int cancellationCalls = 0;
+    hr.setBeforeReloadCallback([&] {
+        ++cancellationCalls;
+        lua_getglobal(L, "reload_cleanup_finished");
+        CHECK(lua_toboolean(L, -1) != 0);
+        lua_pop(L, 1);
+        lua_getglobal(L, "reload_count");
+        CHECK(lua_tointeger(L, -1) == 1);
+        lua_pop(L, 1);
+    });
     hr.requestReload();
     CHECK(hr.checkAndReload());
+    CHECK(cancellationCalls == 1);
     CHECK(lua_gettop(L) == 0);
 
     lua_getglobal(L, "close_argument_was_thread");

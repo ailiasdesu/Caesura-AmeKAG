@@ -7,12 +7,11 @@
 
 - **主线程约束**：所有渲染/音频/输入后端操作必须发生在主线程
   （`CAESURA_ASSERT_MAIN_THREAD()` 运行时断言，定义见 `src/di/api/ThreadAssert.h`）。
-- **JobSystem**（`src/job/`）：多线程任务队列，工作线程仅执行
-  **无共享状态**的加载/解码任务（图片解码、资源读取）；结果经
+- **JobSystem**（`src/job/`）：多线程任务队列，工作线程执行
+  I/O、解码等后台工作，不得直接操作需要主线程的后端；结果经
   主线程轮询（`pollMainThreadJobs`）消费，避免跨线程触碰后端。
-- **资源异步管线**（`src/resource/`）：`AsyncLoader` 工作线程
-  解码 → 主线程 `onComplete` 上传 GPU；缓存（`m_rgbaCache`）与
-  完成队列均以互斥锁保护（2026-08 修复 1×1 PNG 解码崩溃时加固）。
+- **资源异步管线**（`src/resource/`）：worker读取/解码，主线程onComplete写入完成缓冲，经SDL事件或drain交付Engine，后者复核请求代次后上传GPU并调用Lua；缓存与完成队列以互斥锁保护。
+- **完成屏障与关停**：`waitIdle()`只等待worker及回调发布；poll执行有限快照，嵌套poll不递归执行新回调。关停关闭任务入口、join线程后做最终快照，回调内再次关停会使剩余批次失效。Engine先取消脚本异步请求并完成Job关停，再销毁VFX、渲染、图层、小游戏及资源后端。后台任务自身仍须能正常结束，不能同步等待主线程回调。
 - **音频句柄**：SoLoud 句柄生命周期（retire/fade）仅在主线程
   执行；跨线程只传递不持有。
 - 详细数据流见 `docs/design/engine-architecture-topology.md`。
@@ -48,12 +47,14 @@
   `csmSizeInt` 截断防护（Live2D 文件读取）、宏递归防护
   （round-75 起改为**基于拼接深度**——嵌套拼接栈 >100 才报错，替换旧的累计调用计数上限，
   顺序调用 1000+/大循环不再被误判为自递归）。
-- **存档安全**：AES-256-GCM 加密 + 槽位路径包含校验 + schema 迁移。
+- **存档安全（2026-09-05 源码同步）**：AES-256-GCM、槽位范围校验和 schema 迁移；本段不作为最新测试已通过的记录。
   - 加密布局：文件前缀魔数 `CAES`（4B）+ nonce（12B）+ GCM tag（16B）+ ciphertext
-    （`src/storage/SaveManager.cpp`）；设置加密密钥 `set_encryption_key` 后读写自动
-    加密/解密，密钥未设或数据不以 `CAES` 开头则按明文往返（跨版本兼容）。
+    （`src/storage/SaveManager.cpp`）。`envelope.dump()` 整体加密，包含 scene、timestamp、schema_version 等元数据；它们随密文认证，不是明文文件头。
+  - SaveManager 统一编码/解码，provider 只传输原始字节。默认 `Compatible` 允许旧明文读取；`RequireEncrypted` 拒绝非 CAES，未设 key 或 clear key 后保存失败且不触碰原档。已识别 CAES 的解密失败不能回退 JSON；兼容模式不防整个文件替换为合法明文。
+  - `loadLegacyPlaintext()` 是显式只读导入入口：拒绝 CAES、不改变策略、不写回源文件。普通读取和显式导入失败时均不改变输出 `SaveMeta`；合法空对象/数组与失败 null 区分。
+  - 云同步经 `ICloudSaveTransport` 分离本地/云端：读取一次 → 按策略/key与存档结构验证 → 提交同一份字节。拒绝发生在目标写入前，有效的严格模式同步保留；直接 provider 字节 API 不执行 SaveManager 策略。
   - schema 迁移链：`v1→v2`(playtime)→`v3`(minigame)→`v4`(live2d)→`v5`(editor)，
-    读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`）。
+    读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`），不自动写盘或创建备份。槽位文件名/AAD 绑定和旧密文防重放尚未提供；详细边界见 [存档安全说明](save-security-audit.md)。
 - **测试基线（阶段 G 终态 / round 113 口径，round 114 终验复核）**：C++ doctest
   `976/976` 用例（`8858` 断言）/ Lua 主套件 `132/132` + 孤儿 `24/24` /
   web `297/297`（20 文件）/ editor `530/530` / KAG 契约 `123` /

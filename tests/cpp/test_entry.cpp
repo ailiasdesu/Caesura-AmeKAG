@@ -9,6 +9,7 @@
 #include "platform/SDL3PlatformBackend.h"
 #include "script/vm/LuaManager.h"
 #include "EntryLifecycleBackends.h"
+#include "PublisherArchives.h"
 #include <SDL3/SDL.h>
 #include <cstring>
 #include <stdexcept>
@@ -195,6 +196,20 @@ TEST_CASE("Entry: Engine constructs in headless mode without crash") {
     cfg.headless = true;
     Engine engine(std::move(cfg));
     CHECK(true);
+}
+
+TEST_CASE("U4: Engine applies host save encryption policy after configuration move") {
+    EngineConfig config;
+    config.headless = true;
+    config.saveEncryptionPolicy = SaveEncryptionPolicy::RequireEncrypted;
+    EngineConfig moved(std::move(config));
+    Engine engine(std::move(moved));
+    REQUIRE(engine.init());
+    auto* saves = BackendRegistry::instance().getSaveManager();
+    REQUIRE(saves != nullptr);
+    CHECK(saves->getEncryptionPolicy() == SaveEncryptionPolicy::RequireEncrypted);
+    CHECK_FALSE(saves->isEncryptionEnabled());
+    engine.shutdown();
 }
 
 TEST_CASE("Entry: Engine default construct then destruct without init") {
@@ -996,4 +1011,66 @@ TEST_CASE("Entry: Engine::handleAppLifecycle maps SDL app events to adapter call
     Engine::handleAppLifecycle(nullptr, nullptr, SDL_EVENT_WILL_ENTER_BACKGROUND);
 
     engine.shutdown();
+}
+
+TEST_CASE("U8: EngineConfig preserves publisher policy and value-owned key across moves") {
+    Caesura::Test::PublisherArchives files;
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    EngineConfig moved(std::move(config));
+    CHECK(moved.archiveTrustMode == ArchiveTrustMode::PinnedPublisher);
+    REQUIRE(moved.archivePublisherKey.has_value());
+    CHECK(*moved.archivePublisherKey == files.trustedKey);
+    config.archivePublisherKey = files.attackerKey;
+    CHECK(*moved.archivePublisherKey == files.trustedKey);
+    Engine engine(std::move(moved));
+    CHECK(engine.config().archiveTrustMode == ArchiveTrustMode::PinnedPublisher);
+    CHECK(engine.config().archivePublisherKey == files.trustedKey);
+}
+
+TEST_CASE("U8: strict Engine init fails closed and rolls back every registered service") {
+    Caesura::Test::PublisherArchives files;
+    bool provideKey = true;
+    SUBCASE("missing host key even with no archives") { provideKey = false; }
+    SUBCASE("untrusted patch blocks base and loose fallback") {
+        files.mount("base.carc", true);
+        files.mount("patch.carc", false);
+        std::ofstream(files.root / "u8_publisher_payload.txt") << "loose fallback";
+    }
+    SUBCASE("corrupt package blocks a previously staged trusted patch") {
+        files.mount("patch.carc", true);
+        std::ofstream(files.root / "base.carc", std::ios::binary) << "corrupt";
+    }
+    Caesura::Test::ScopedWorkingDirectory workingDirectory(files.root);
+    EngineConfig config;
+    config.headless = true;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    if (provideKey) config.archivePublisherKey = files.trustedKey;
+    Engine engine(std::move(config));
+    CHECK_FALSE(engine.init());
+    CHECK_FALSE(engine.init());
+    CHECK_THROWS_AS(engine.lua(), std::logic_error);
+    CHECK_THROWS_AS(engine.jobSystem(), std::logic_error);
+    checkEngineRegistryCleared();
+    CHECK_NOTHROW(engine.shutdown());
+}
+
+TEST_CASE("U8: strict Engine init accepts trusted archives before Lua startup configuration") {
+    Caesura::Test::PublisherArchives files;
+    files.mount("base.carc", true);
+    files.mount("patch.carc", true);
+    Caesura::Test::ScopedWorkingDirectory workingDirectory(files.root);
+    EngineConfig config;
+    config.headless = true;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    Engine engine(std::move(config));
+    REQUIRE(engine.init());
+    REQUIRE(luaL_dostring(engine.lua().state(),
+        "config = { carc_verify_on_startup = false }") == LUA_OK);
+    CHECK(engine.config().archiveTrustMode == ArchiveTrustMode::PinnedPublisher);
+    CHECK(engine.config().archivePublisherKey == files.trustedKey);
+    engine.shutdown();
+    checkEngineRegistryCleared();
 }

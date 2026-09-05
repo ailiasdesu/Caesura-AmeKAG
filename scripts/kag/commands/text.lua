@@ -1450,6 +1450,25 @@ function TextCommands.endbutton(ctx, params)
         return
     end
 
+    local operation <close> = Operation.start(ctx)
+    local oldClick = _G._KAG_onClick
+    local clickHandler
+    local cleaned = false
+    local function cleanup()
+        if cleaned then return end
+        cleaned = true
+        if clickHandler and _G._KAG_onClick == clickHandler then
+            _G._KAG_onClick = oldClick
+        end
+        ctx._choiceMode = false
+        ctx.waiting_input = false
+        ctx._choiceButtons = nil
+        ctx._choiceButtonsActive = nil
+        ctx._selectedChoice = nil
+        TextScene.remove_group(ctx, "choices")
+    end
+    operation.token:register(cleanup)
+
     -- Store choice draws in the persistent text scene (shared render
     -- path with the language hot-switch redraw).
     _renderChoices(ctx, ctx._choiceButtons)
@@ -1463,10 +1482,9 @@ function TextCommands.endbutton(ctx, params)
     -- Override the global click callback for choice detection. The engine
     -- dispatches clicks with no arguments (coalesced); read the mouse
     -- position from the per-frame globals instead.
-    local oldClick = _G._KAG_onClick
-    _G._KAG_onClick = function()
-        if not ctx._choiceMode then
-            if oldClick then oldClick() end
+    clickHandler = function()
+        if cleaned or operation.token.cancelled or ctx._session_active == false
+            or not ctx._choiceMode then
             return
         end
         local x, y = _G._GAME_MOUSE_X, _G._GAME_MOUSE_Y
@@ -1481,22 +1499,22 @@ function TextCommands.endbutton(ctx, params)
                 ctx._choiceMode = false
                 ctx._choiceButtonsActive = nil
                 ctx.waiting_input = false
-                _G._KAG_onClick = oldClick  -- restore
+                if _G._KAG_onClick == clickHandler then
+                    _G._KAG_onClick = oldClick
+                end
                 return
             end
         end
     end
+    _G._KAG_onClick = clickHandler
 
     -- Block until user selects
     coroutine.yield()
     
     -- After selection, jump to target label
     local selected = ctx._selectedChoice
-    ctx._selectedChoice = nil
-    
-    -- Ensure click handler is restored
-    _G._KAG_onClick = oldClick
-    TextScene.remove_group(ctx, "choices")
+    cleanup()
+    if operation.token.cancelled or ctx._session_active == false then return end
     
     if selected then
         -- KAG3 [sel x="tf.result"]: write the chosen option target label
@@ -1520,6 +1538,7 @@ function TextCommands.endbutton(ctx, params)
             ctx._pendingJump = selected.target
         end
     end
+    operation:complete()
 end
 
 -- KAG3 select syntax: [select] opens the block (no-op), [sel] registers
@@ -1721,8 +1740,36 @@ function TextCommands.input(ctx, params)
     if max_allowed_y < 20 then max_allowed_y = 20 end
     box_y = math.max(0, math.min(box_y, max_allowed_y))
 
+    -- Own callbacks and native input before the first fallible UI/backend call.
+    local operation <close> = Operation.start(ctx)
+    local previousHandlers = {
+        _KAG_onTextInput = _G._KAG_onTextInput,
+        _KAG_onTextEditing = _G._KAG_onTextEditing,
+        _KAG_onKeyDown = _G._KAG_onKeyDown,
+        _KAG_onClick = _G._KAG_onClick,
+    }
+    local inputHandlers = {}
+    local cleaned = false
+    local nativeInputStarted = false
+    local function cleanup()
+        if cleaned then return end
+        cleaned = true
+        for name, handler in pairs(inputHandlers) do
+            if _G[name] == handler then _G[name] = previousHandlers[name] end
+        end
+        ctx._inputMode = false
+        ctx.waiting_input = false
+        TextScene.remove_group(ctx, "text_input")
+        if nativeInputStarted then
+            nativeInputStarted = false
+            backend.stop_text_input()
+        end
+    end
+    operation.token:register(cleanup)
+
     -- 3. Notify platform backend
     backend.set_text_input_rect(box_x, box_y, box_w, box_h, 0)
+    nativeInputStarted = true
     backend.start_text_input()
 
     -- UTF-8 Helpers
@@ -1794,20 +1841,9 @@ function TextCommands.input(ctx, params)
     ctx._inputMode = true
     ctx.waiting_input = true
 
-    local oldTextInput = _G._KAG_onTextInput
-    local oldTextEditing = _G._KAG_onTextEditing
-    local oldKeyDown = _G._KAG_onKeyDown
-    local oldClick = _G._KAG_onClick
-
     local function cleanup_and_finish(save_result)
-        backend.stop_text_input()
-        TextScene.remove_group(ctx, "text_input")
-        _G._KAG_onTextInput = oldTextInput
-        _G._KAG_onTextEditing = oldTextEditing
-        _G._KAG_onKeyDown = oldKeyDown
-        _G._KAG_onClick = oldClick
-        ctx._inputMode = false
-        ctx.waiting_input = false
+        if cleaned or operation.token.cancelled or ctx._session_active == false then return end
+        cleanup()
 
         if save_result then
             local scopeName, key = var_name:match("^([%a_]+)%.([%w_]+)$")
@@ -1824,9 +1860,9 @@ function TextCommands.input(ctx, params)
         end
     end
 
-    _G._KAG_onTextInput = function(text)
-        if not ctx._inputMode then
-            if oldTextInput then oldTextInput(text) end
+    inputHandlers._KAG_onTextInput = function(text)
+        if cleaned or operation.token.cancelled or ctx._session_active == false
+            or not ctx._inputMode then
             return
         end
         if type(text) == "string" and #text > 0 then
@@ -1869,18 +1905,18 @@ function TextCommands.input(ctx, params)
         end
     end
 
-    _G._KAG_onTextEditing = function(text, start, length)
-        if not ctx._inputMode then
-            if oldTextEditing then oldTextEditing(text, start, length) end
+    inputHandlers._KAG_onTextEditing = function(text, start, length)
+        if cleaned or operation.token.cancelled or ctx._session_active == false
+            or not ctx._inputMode then
             return
         end
         comp_text = tostring(text or "")
         redraw_ui()
     end
 
-    _G._KAG_onKeyDown = function(keyCode, keyName)
-        if not ctx._inputMode then
-            if oldKeyDown then oldKeyDown(keyCode, keyName) end
+    inputHandlers._KAG_onKeyDown = function(keyCode, keyName)
+        if cleaned or operation.token.cancelled or ctx._session_active == false
+            or not ctx._inputMode then
             return
         end
         if keyName == "backspace" or keyCode == 8 or keyCode == 0x08 then
@@ -1897,9 +1933,9 @@ function TextCommands.input(ctx, params)
         end
     end
 
-    _G._KAG_onClick = function()
-        if not ctx._inputMode then
-            if oldClick then oldClick() end
+    inputHandlers._KAG_onClick = function()
+        if cleaned or operation.token.cancelled or ctx._session_active == false
+            or not ctx._inputMode then
             return
         end
         local mx = _G._GAME_MOUSE_X or 0
@@ -1916,12 +1952,15 @@ function TextCommands.input(ctx, params)
             return
         end
     end
+    for name, handler in pairs(inputHandlers) do _G[name] = handler end
 
     coroutine.yield()
 
-    if ctx._inputMode then
+    if operation.token.cancelled or ctx._session_active == false then return end
+    if not cleaned then
         cleanup_and_finish(true)
     end
+    operation:complete()
 end
 
 TextCommands.edit = TextCommands.input

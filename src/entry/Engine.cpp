@@ -26,6 +26,7 @@ extern "C" {
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../script/vm/LuaManager.h"
+#include "../script/state/GameState.h"
 #include "../debug/HotReload.h"
 #include "../debug/DebugProtocol.h"
 #include "../job/api/IJobSystem.h"
@@ -34,6 +35,7 @@ extern "C" {
 #include "../resource/api/IResourceGenerationTracker.h"
 #include "../steam/api/ISteamBackend.h"
 #include "../script/bindings/SteamBinding.h"
+#include "../script/bindings/RenderBinding.h"
 #include "../script/bindings/VFXBinding.h"
 #include "../storage/api/ISaveManager.h"
 #include "../storage/LocalFileSaveProvider.h"
@@ -130,7 +132,8 @@ std::unique_ptr<IAnimationBackend> createDefaultAnimationBackend();
 std::unique_ptr<IAnimationBackend> createFallbackAnimationBackend();
 void attachRenderDeviceToAnimationBackend(IAnimationBackend* animationBackend,
                                            IRenderDevice* renderDevice);
-void registerDefaultAssetProviders(AssetManager& assetManager);
+bool registerDefaultAssetProviders(AssetManager& assetManager,
+                                   const EngineConfig& config, const std::string& root);
 void registerEngineLuaRegistryServices(lua_State* L,
                                        IInputRouter* inputRouter,
                                        IVideoPlayer* videoPlayer,
@@ -462,6 +465,7 @@ bool Engine::initPlatformPhase() {
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
     BackendRegistry::instance().setAsyncLoader(m_asyncLoader.get());
     m_saveManager->init("saves/");
+    m_saveManager->setEncryptionPolicy(m_config.saveEncryptionPolicy);
     BackendRegistry::instance().setSaveManager(m_saveManager.get());
     // Thumbnail capture needs bgfx initialized (audit SIGSEGV guard).
     // Set AFTER the manager exists AND the render device is up -- the
@@ -510,6 +514,10 @@ bool Engine::initScriptingPhase() {
 
     // HotReload for scripts/ directory
     m_hotReload->init("scripts/", m_lua->state());
+    m_hotReload->setBeforeReloadCallback([this] {
+        cancelRenderAsyncLoads(m_lua->state());
+        m_deferredAsyncLoads.clear();
+    });
     // Scene (.ks) and mod content live outside scripts/: watch them too so
     // editing a running scene hot-reloads surgically (kag_runner.reload_scene).
     m_hotReload->addWatchRoot("assets/script/");
@@ -562,8 +570,14 @@ bool Engine::initAssetPhase() {
     m_assetManager->init();
     m_assetManagerInitialized = true;
     // Inject CARC providers (moved from AssetManager to break resource→archive cycle)
-    registerDefaultAssetProviders(*m_assetManager);
+    if (!registerDefaultAssetProviders(*m_assetManager, m_config, ".")) {
+        return false;
+    }
     m_asyncLoader->init();
+    if (!m_asyncLoader->isRunning()) {
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok, "Async loader initialization failed");
+        return false;
+    }
     m_asyncLoaderInitialized = true;
 
     return true;
@@ -663,9 +677,11 @@ void Engine::run(const OwnerPump& ownerPump) {
         Caesura::mobileNativeDrainAudioFocus();
 #endif
         if (ownerPump) ownerPump();
+        if (m_shutdownComplete) break;
         m_skipLuaCallbacksThisFrame = pumpDebugger();
         publishDebugPauseState();
         processEvents();
+        if (m_shutdownComplete) break;
 
         // --- GPU device loss recovery check (before any per-frame rendering) ---
         if (m_renderDevice && m_renderDevice->consumeDeviceLost()) {
@@ -694,6 +710,7 @@ void Engine::run(const OwnerPump& ownerPump) {
 
         // JobSystem main-thread callbacks + async load SDL events
         m_jobSystem->pollMainThreadJobs();
+        if (m_shutdownComplete) break;
         if (!(m_config.headless || m_config.editorMode)) {
             m_asyncLoader->poll();
         }
@@ -996,12 +1013,14 @@ void Engine::quit() {
 }
 
 
-void Engine::dispatchAsyncLoad(CompletedLoad* completed) {
-    lua_State* L = m_lua ? m_lua->state() : nullptr;
-    if (!L) {
-        delete completed;
+void Engine::dispatchAsyncLoad(std::unique_ptr<CompletedLoad> completed) {
+    if (!completed || !m_asyncLoader->isCurrent(*completed)) return;
+    if (isLuaExecutionPaused()) {
+        m_deferredAsyncLoads.push_back(std::move(completed));
         return;
     }
+    lua_State* L = m_lua ? m_lua->state() : nullptr;
+    if (!L) return;
 
     uint32_t texId = 0;
     if (completed->success && completed->type == "texture" &&
@@ -1014,42 +1033,35 @@ void Engine::dispatchAsyncLoad(CompletedLoad* completed) {
     }
 
     lua_getglobal(L, "_ASYNC_CALLBACKS");
-    if (lua_istable(L, -1)) {
-        lua_pushinteger(L, completed->id);
-        lua_gettable(L, -2);
-        int cbRef = (int)lua_tointeger(L, -1);
-        lua_pop(L, 2);
-        if (cbRef > 0) {
-            lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
-            if (lua_isfunction(L, -1)) {
-                lua_pushboolean(L, completed->success ? 1 : 0);
-                lua_pushstring(L, completed->path.c_str());
-                lua_pushinteger(L, static_cast<lua_Integer>(texId));
-                if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-                    fprintf(stderr, "[AsyncLoader] callback error: %s\n",
-                            lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
-                    lua_pop(L, 1);
-                }
-                printf("[AsyncLoader] Callback #%d: %s (%s)\n",
-                       completed->id, completed->path.c_str(),
-                       completed->success ? "ok" : "fail");
-            } else { lua_pop(L, 1); }
-            luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
-            lua_getglobal(L, "_ASYNC_CALLBACKS");
-            if (lua_istable(L, -1)) {
-                lua_pushinteger(L, completed->id);
-                lua_pushnil(L);
-                lua_settable(L, -3);
-            }
-            lua_pop(L, 1);
-        }
-    } else { lua_pop(L, 1); }
-    delete completed;
+    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
+    lua_rawgeti(L, -1, completed->id);
+    const int cbRef = static_cast<int>(lua_tointeger(L, -1));
+    lua_pop(L, 1);
+    lua_pushnil(L);
+    lua_rawseti(L, -2, completed->id);
+    lua_pop(L, 1);
+    if (cbRef <= 0) return;
+
+    // Retain the function on the Lua stack, then release its reference before
+    // calling it. Reentrant cancellation/reload may reuse that reference for
+    // a new request, which must never be unreferenced by this old completion.
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
+    luaL_unref(L, LUA_REGISTRYINDEX, cbRef);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    lua_pushboolean(L, completed->success ? 1 : 0);
+    lua_pushstring(L, completed->path.c_str());
+    lua_pushinteger(L, static_cast<lua_Integer>(texId));
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+        fprintf(stderr, "[AsyncLoader] callback error: %s\n",
+                lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown");
+        lua_pop(L, 1);
+    }
 }
 
 void Engine::processEvents() {
     // Steam callbacks every frame
     m_steamBackend->runCallbacks();
+    if (m_shutdownComplete) return;
 
     lua_State* L = m_lua->state();
     if (L) {
@@ -1068,29 +1080,27 @@ void Engine::processEvents() {
     // Track 3: Reset Lua instruction budget each frame
     m_lua->resetInstructionBudget();
 
+    // Move the deferred batch out before invoking Lua: a callback may reload,
+    // cancel, or pause again. Every result is rechecked at its dispatch point.
+    if (!isLuaExecutionPaused() && !m_deferredAsyncLoads.empty()) {
+        auto deferred = std::move(m_deferredAsyncLoads);
+        m_deferredAsyncLoads.clear();
+        for (auto& completed : deferred) {
+            dispatchAsyncLoad(std::move(completed));
+            if (m_shutdownComplete) return;
+        }
+    }
+
     // Headless/Editor mode: no SDL event loop -- deliver completed async
     // loads directly (texture upload + Lua callback) instead of queueing
     // SDL events that nothing would ever consume.
     if (m_config.headless || m_config.editorMode) {
         for (auto& c : m_asyncLoader->drainCompleted()) {
-            dispatchAsyncLoad(new CompletedLoad(std::move(c)));
+            dispatchAsyncLoad(std::make_unique<CompletedLoad>(std::move(c)));
+            if (m_shutdownComplete) return;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
-    }
-    // Deferred loads (Lua paused): re-dispatch when unpaused. This must run
-    // for both modes, so it stays after the headless early return only for
-    // GPU mode -- headless/editor never pause-loads (no SDL event source).
-    if (!isLuaExecutionPaused() && !m_deferredAsyncLoads.empty()) {
-        for (auto& completed : m_deferredAsyncLoads) {
-            SDL_Event deferred;
-            SDL_zero(deferred);
-            deferred.type = CAESURA_EVENT_ASYNC_LOAD;
-            auto* rawCompletion = completed.release();
-            deferred.user.data1 = rawCompletion;
-            if (!SDL_PushEvent(&deferred)) delete rawCompletion;
-        }
-        m_deferredAsyncLoads.clear();
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -1184,19 +1194,12 @@ void Engine::processEvents() {
         }
 
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
-        if (event.type == CAESURA_EVENT_ASYNC_LOAD) {
-            auto* completed = static_cast<CompletedLoad*>(event.user.data1);
-            if (completed && isLuaExecutionPaused()) {
-                m_deferredAsyncLoads.emplace_back(completed);
-                continue;
-            }
-            if (completed) {
-                dispatchAsyncLoad(completed);
-                continue;
-            }
+        if (event.type == CAESURA_EVENT_ASYNC_LOAD &&
+            event.user.data2 == m_asyncLoader.get()) {
+            dispatchAsyncLoad(std::unique_ptr<CompletedLoad>(
+                static_cast<CompletedLoad*>(event.user.data1)));
+            continue;
         }
-        // (original dispatch body moved to Engine::dispatchAsyncLoad)
-        // (dispatch body moved to Engine::dispatchAsyncLoad)
 
         if ((event.type == SDL_EVENT_MOUSE_MOTION ||
              event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
@@ -1771,6 +1774,7 @@ void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
     m_initialized = false;
+    m_running = false;
 
     // Unregister the SDL app-lifecycle watch first: a background event
     // delivered after this point must not reach Lua state being torn down.
@@ -1784,6 +1788,17 @@ void Engine::shutdown() {
     if (!m_initAttempted) return;
 
     auto& registry = BackendRegistry::instance();
+
+    // Invalidate script-owned loads before draining generic completions. Stop
+    // admission and join workers while every backend is still alive; final
+    // legal callbacks must precede VFX, render, layer and mini-game teardown.
+    if (m_luaInitialized && !GameState::stopRunner(m_lua->state())) {
+        fprintf(stderr, "[Engine] Runner cleanup failed during shutdown.\n");
+    }
+    if (m_asyncLoaderInitialized) cancelRenderAsyncLoads(m_lua->state());
+    m_deferredAsyncLoads.clear();
+    if (m_jobSystemInitialized) m_jobSystem->shutdown();
+    if (m_asyncLoaderInitialized) m_asyncLoader->shutdown();
 
     VFXBinding_Shutdown(m_particleSystem.get());
 
@@ -1804,9 +1819,7 @@ void Engine::shutdown() {
     m_miniGameBackend.reset();
     registry.setMiniGameBackend(nullptr);
 
-    if (m_asyncLoaderInitialized) m_asyncLoader->shutdown();
     if (m_assetManagerInitialized) m_assetManager->shutdown();
-    if (m_jobSystemInitialized) m_jobSystem->shutdown();
     if (m_steamInitialized) {
         m_steamBackend->shutdown();
     }

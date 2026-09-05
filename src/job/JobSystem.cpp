@@ -51,7 +51,8 @@ bool JobSystem::WorkQueue::empty() const {
 
 void JobSystem::init() {
     CAESURA_ASSERT_MAIN_THREAD();
-    if (m_running.exchange(true)) return;
+    if (m_shuttingDown || m_running.exchange(true)) return;
+    ++m_dispatchEpoch;
 
     m_workerCount = computeWorkerCount();
     m_queues.reserve(static_cast<size_t>(m_workerCount));
@@ -62,16 +63,21 @@ void JobSystem::init() {
         m_workers.emplace_back(&JobSystem::workerLoop, this, i);
     }
 
-    for (auto& t : m_workers) {
-    }
-
     printf("[JobSystem] Initialized: %d worker(s) (hw=%u)\n",
            m_workerCount, std::thread::hardware_concurrency());
 }
 
 void JobSystem::shutdown() {
     CAESURA_ASSERT_MAIN_THREAD();
+    if (m_shuttingDown) {
+        // A final callback may be shutting down its owner. Do not deliver
+        // further callbacks from this snapshot after that nested boundary.
+        if (m_polling) ++m_dispatchEpoch;
+        return;
+    }
     if (!m_running.exchange(false)) return;
+    m_shuttingDown = true;
+    ++m_dispatchEpoch;
 
     waitIdle();
     notifyWorkers();
@@ -83,10 +89,14 @@ void JobSystem::shutdown() {
     m_queues.clear();
     m_workerCount = 0;
 
+    // Workers have joined and admission is closed. If shutdown was invoked
+    // inside an earlier poll, its remaining callbacks are cancelled instead.
+    pollMainThreadJobs();
     {
         std::lock_guard<std::mutex> lock(m_mainMutex);
         m_mainJobs.clear();
     }
+    m_shuttingDown = false;
 
     printf("[JobSystem] Shutdown complete.\n");
 }
@@ -117,6 +127,13 @@ void JobSystem::enqueueMainThreadJob(MainThreadFn fn) {
 
 void JobSystem::pollMainThreadJobs() {
     CAESURA_ASSERT_MAIN_THREAD();
+    if (m_polling) return;
+    struct PollGuard {
+        bool& polling;
+        ~PollGuard() { polling = false; }
+    } guard{m_polling};
+    m_polling = true;
+    const uint64_t epoch = m_dispatchEpoch;
 
     std::deque<MainThreadFn> batch;
     {
@@ -125,6 +142,7 @@ void JobSystem::pollMainThreadJobs() {
     }
 
     for (auto& fn : batch) {
+        if (epoch != m_dispatchEpoch) break;
         if (!fn) continue;
         try {
             fn();
@@ -143,7 +161,6 @@ void JobSystem::pollMainThreadJobs() {
 void JobSystem::waitIdle() {
     CAESURA_ASSERT_MAIN_THREAD();
     while (m_pendingJobs.load() > 0) {
-        pollMainThreadJobs();
         std::unique_lock<std::mutex> lock(m_waitMutex);
         m_cv.wait_for(lock, std::chrono::milliseconds(10), [this] {
             return m_pendingJobs.load() == 0;

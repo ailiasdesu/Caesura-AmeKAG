@@ -41,6 +41,7 @@ end
 
 function Operation.start(ctx)
     assert(type(ctx) == "table", "operation context must be a table")
+    assert(ctx._session_active ~= false, "operation session is no longer active")
 
     local token = CancelToken.new()
     ctx.active_operations = ctx.active_operations or {}

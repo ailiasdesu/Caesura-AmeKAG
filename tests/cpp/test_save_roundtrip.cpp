@@ -1,12 +1,17 @@
 // test_save_roundtrip.cpp - save/load roundtrip integration tests
 #include "doctest.h"
 #include "storage/SaveManager.h"
+#include "storage/LocalFileSaveProvider.h"
+#include "entry/Engine.h"
+#include "entry/EngineConfig.h"
 #include "TestPaths.h"
 #include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <new>
+#include <stdexcept>
 #include <cstdio>
 
 using namespace Caesura;
@@ -31,6 +36,45 @@ private:
     carc::CryptoEngine m_engine;
     carc::ICryptoEngine* m_previous;
 };
+
+std::string readSaveBytes(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+void writeSaveBytes(const std::filesystem::path& path, const std::string& bytes) {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(file.good());
+}
+
+std::array<uint8_t, 32> saveTestKey(uint8_t first = 1) {
+    std::array<uint8_t, 32> key{};
+    for (size_t i = 0; i < key.size(); ++i) key[i] = static_cast<uint8_t>(first + i);
+    return key;
+}
+
+EngineConfig headlessSaveConfig() {
+    EngineConfig config;
+    config.headless = true;
+    return config;
+}
+
+void checkSingleEncryptedEnvelope(const std::string& bytes,
+                                  const std::array<uint8_t, 32>& key,
+                                  const json& expectedData) {
+    REQUIRE(bytes.size() > 32);
+    REQUIRE(bytes.substr(0, 4) == "CAES");
+    auto* crypto = BackendRegistry::instance().getCryptoEngine();
+    REQUIRE(crypto != nullptr);
+    const auto* raw = reinterpret_cast<const uint8_t*>(bytes.data());
+    const auto plain = crypto->decrypt(raw + 32, bytes.size() - 32,
+                                       key.data(), key.size(), raw + 4, 12, raw + 16, 16);
+    REQUIRE_FALSE(plain.empty());
+    const auto envelope = json::parse(plain.begin(), plain.end(), nullptr, false);
+    REQUIRE(envelope.is_object());
+    CHECK(envelope.at("data") == expectedData);
+}
 
 } // namespace
 
@@ -332,4 +376,314 @@ TEST_CASE("SaveManager: system slots quicksave (-1) / autosave (-2) roundtrip") 
     CHECK(sm.deleteSlot(-2));
     CHECK_FALSE(sm.slotExists(-2));
     CHECK(sm.slotExists(-1));
+}
+
+TEST_CASE("U4: Engine default save provider encrypts bytes and reloads after restart") {
+    TestPaths::ScopedTempDir dir("engine_default_provider_encryption");
+    const auto key = saveTestKey();
+    const json data = {{"secret", "U4_ENGINE_PRIVATE_PAYLOAD"}, {"route", "sun"}};
+    const auto path = dir.path() / "save_4.json";
+
+    {
+        Engine engine(headlessSaveConfig());
+        REQUIRE(engine.init());
+        auto* saves = BackendRegistry::instance().getSaveManager();
+        REQUIRE(saves != nullptr);
+        // Keep the actual provider installed by Engine::init(); only isolate its directory.
+        REQUIRE(dynamic_cast<LocalFileSaveProvider*>(saves->getSaveProvider()) != nullptr);
+        saves->init(dir.string());
+        saves->setEncryptionKey(key.data());
+        REQUIRE(saves->save(4, data, "U4_PRIVATE_SCENE", 17));
+        const auto bytes = readSaveBytes(path);
+        CHECK(bytes.substr(0, 4) == "CAES");
+        CHECK(bytes.find("U4_ENGINE_PRIVATE_PAYLOAD") == std::string::npos);
+        CHECK(bytes.find("U4_PRIVATE_SCENE") == std::string::npos);
+    }
+
+    const auto original = readSaveBytes(path);
+    {
+        Engine engine(headlessSaveConfig());
+        REQUIRE(engine.init());
+        auto* saves = BackendRegistry::instance().getSaveManager();
+        REQUIRE(saves != nullptr);
+        saves->init(dir.string());
+        SaveMeta meta;
+        meta.sceneName = "unchanged";
+        meta.tokenIndex = 987;
+        CHECK(saves->load(4, &meta).is_null());
+        CHECK(meta.sceneName == "unchanged");
+        CHECK(meta.tokenIndex == 987);
+
+        const auto wrongKey = saveTestKey(80);
+        saves->setEncryptionKey(wrongKey.data());
+        CHECK(saves->load(4, &meta).is_null());
+        CHECK(meta.sceneName == "unchanged");
+        saves->setEncryptionKey(key.data());
+        CHECK(saves->load(4, &meta) == data);
+        CHECK(meta.sceneName == "U4_PRIVATE_SCENE");
+        CHECK(meta.tokenIndex == 17);
+        CHECK(saves->slotExists(4));
+        REQUIRE(saves->listSaves().size() == 1);
+        CHECK(saves->listSaves().front().slot == 4);
+        CHECK(readSaveBytes(path) == original);
+        checkSingleEncryptedEnvelope(original, key, data);
+    }
+}
+
+TEST_CASE("U4: Local provider keeps legacy plaintext unchanged until explicit save") {
+    TestPaths::ScopedTempDir dir("provider_plaintext_compatibility");
+    ScopedCryptoRegistration crypto;
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    const json data = {{"legacy", "U4_PLAINTEXT_IMPORT"}, {"hp", 12}};
+    REQUIRE(saves.save(1, data, "legacy", 8));
+    const auto path = dir.path() / "save_1.json";
+    const auto original = readSaveBytes(path);
+    REQUIRE(original.find("U4_PLAINTEXT_IMPORT") != std::string::npos);
+
+    const auto key = saveTestKey();
+    saves.setEncryptionKey(key.data());
+    CHECK(saves.load(1) == data);
+    CHECK(readSaveBytes(path) == original);
+    REQUIRE(saves.save(1, data, "legacy", 8));
+    const auto encrypted = readSaveBytes(path);
+    CHECK(encrypted != original);
+    CHECK(encrypted.find("U4_PLAINTEXT_IMPORT") == std::string::npos);
+    checkSingleEncryptedEnvelope(encrypted, key, data);
+}
+
+TEST_CASE("U4: Local provider reads existing CAES and encrypts only once on resave") {
+    TestPaths::ScopedTempDir dir("provider_existing_caes");
+    ScopedCryptoRegistration crypto;
+    const auto key = saveTestKey();
+    const json data = {{"marker", "U4_PRE_PROVIDER_CAES"}, {"nested", {{"flag", true}}}};
+    {
+        // Produce the established CAES format through the previously working no-provider path.
+        SaveManager legacy;
+        legacy.init(dir.string());
+        legacy.setEncryptionKey(key.data());
+        REQUIRE(legacy.save(2, data, "legacy-caes", 3));
+    }
+    const auto path = dir.path() / "save_2.json";
+    const auto original = readSaveBytes(path);
+    REQUIRE(original.substr(0, 4) == "CAES");
+
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    saves.setEncryptionKey(key.data());
+    CHECK(saves.load(2) == data);
+    CHECK(readSaveBytes(path) == original);
+    REQUIRE(saves.save(2, data, "legacy-caes", 3));
+    checkSingleEncryptedEnvelope(readSaveBytes(path), key, data);
+}
+
+TEST_CASE("U4: Local provider rejects malformed CAES without changing load metadata") {
+    TestPaths::ScopedTempDir dir("provider_malformed_caes");
+    ScopedCryptoRegistration crypto;
+    const auto key = saveTestKey();
+    SaveManager legacy;
+    legacy.init(dir.string());
+    legacy.setEncryptionKey(key.data());
+    REQUIRE(legacy.save(6, {{"secret", "U4_AUTHENTICATED"}}, "original", 4));
+    const auto path = dir.path() / "save_6.json";
+    const auto original = readSaveBytes(path);
+    REQUIRE(original.size() > 32);
+
+    std::vector<std::string> malformed = {"CAES", original.substr(0, 31), original.substr(0, 32),
+        "CAES" + json({{"data", {{"forged", true}}}}).dump()};
+    for (const size_t offset : {size_t{0}, size_t{4}, size_t{16}, size_t{32}}) {
+        auto changed = original;
+        changed[offset] = static_cast<char>(changed[offset] ^ 0x40);
+        malformed.push_back(std::move(changed));
+    }
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    saves.setEncryptionKey(key.data());
+    for (size_t i = 0; i < malformed.size(); ++i) {
+        CAPTURE(i);
+        writeSaveBytes(path, malformed[i]);
+        SaveMeta meta;
+        meta.sceneName = "unchanged";
+        meta.tokenIndex = 987;
+        CHECK(saves.load(6, &meta).is_null());
+        CHECK(meta.sceneName == "unchanged");
+        CHECK(meta.tokenIndex == 987);
+        CHECK(saves.listSaves().empty());
+        CHECK(saves.loadLegacyPlaintext(6, &meta).is_null());
+        CHECK(meta.sceneName == "unchanged");
+        CHECK(meta.tokenIndex == 987);
+        CHECK(readSaveBytes(path) == malformed[i]);
+    }
+}
+
+TEST_CASE("U4: require-encrypted preserves existing bytes without a key and after clear") {
+    TestPaths::ScopedTempDir dir("required_encryption_key_lifecycle");
+    ScopedCryptoRegistration crypto;
+    SaveManager saves;
+    saves.init(dir.string());
+    SUBCASE("LocalFile provider") { saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>()); }
+    SUBCASE("legacy file path") { CHECK(saves.getSaveProvider() == nullptr); }
+    const json oldData = {{"route", "original"}};
+    REQUIRE(saves.save(1, oldData, "legacy", 6));
+    const auto path = dir.path() / "save_1.json";
+    const auto original = readSaveBytes(path);
+    CHECK(saves.getEncryptionPolicy() == SaveEncryptionPolicy::Compatible);
+    saves.setEncryptionPolicy(SaveEncryptionPolicy::RequireEncrypted);
+    CHECK_FALSE(saves.save(1, {{"route", "must-not-replace"}}, "other", 7));
+    CHECK(readSaveBytes(path) == original);
+    CHECK(saves.load(1).is_null());
+
+    const auto key = saveTestKey();
+    saves.setEncryptionKey(key.data());
+    REQUIRE(saves.save(2, oldData, "encrypted", 6));
+    const auto encryptedPath = dir.path() / "save_2.json";
+    const auto encrypted = readSaveBytes(encryptedPath);
+    checkSingleEncryptedEnvelope(encrypted, key, oldData);
+    saves.clearEncryptionKey();
+    CHECK(saves.getEncryptionPolicy() == SaveEncryptionPolicy::RequireEncrypted);
+    CHECK_FALSE(saves.save(2, {{"route", "must-not-replace"}}, "other", 7));
+    CHECK(readSaveBytes(encryptedPath) == encrypted);
+    CHECK(saves.load(2).is_null());
+    saves.setEncryptionKey(key.data());
+    CHECK(saves.load(2) == oldData);
+}
+
+TEST_CASE("U4: strict legacy plaintext import is explicit read-only and policy preserving") {
+    TestPaths::ScopedTempDir dir("explicit_legacy_import");
+    ScopedCryptoRegistration crypto;
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    const json oldData = {{"route", "legacy-import"}};
+    REQUIRE(saves.save(1, oldData, "legacy", 6));
+    const auto path = dir.path() / "save_1.json";
+    const auto original = readSaveBytes(path);
+    saves.setEncryptionPolicy(SaveEncryptionPolicy::RequireEncrypted);
+    SaveMeta meta;
+    meta.sceneName = "unchanged";
+    CHECK(saves.load(1, &meta).is_null());
+    CHECK(meta.sceneName == "unchanged");
+    CHECK(saves.listSaves().empty());
+    CHECK(saves.loadLegacyPlaintext(1, &meta) == oldData);
+    CHECK(meta.sceneName == "legacy");
+    CHECK(readSaveBytes(path) == original);
+    CHECK(saves.getEncryptionPolicy() == SaveEncryptionPolicy::RequireEncrypted);
+    CHECK_FALSE(saves.isEncryptionEnabled());
+    CHECK_FALSE(saves.save(2, oldData, "imported", 6));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "save_2.json"));
+
+    const auto key = saveTestKey();
+    saves.setEncryptionKey(key.data());
+    REQUIRE(saves.save(2, oldData, "imported", 6));
+    CHECK(readSaveBytes(path) == original); // The source is preserved; migration is caller-directed.
+    checkSingleEncryptedEnvelope(readSaveBytes(dir.path() / "save_2.json"), key, oldData);
+    CHECK(saves.load(2) == oldData);
+    meta.sceneName = "unchanged";
+    CHECK(saves.loadLegacyPlaintext(2, &meta).is_null());
+    CHECK(meta.sceneName == "unchanged");
+    saves.clearEncryptionKey();
+    CHECK(saves.loadLegacyPlaintext(2, &meta).is_null());
+    CHECK(meta.sceneName == "unchanged");
+}
+
+TEST_CASE("U4: whole-file plaintext replacement is compatible-only") {
+    TestPaths::ScopedTempDir dir("plaintext_replacement_policy");
+    ScopedCryptoRegistration crypto;
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    const json replacement = {{"route", "plaintext-replacement"}};
+    REQUIRE(saves.save(1, replacement, "plain", 3));
+    const auto path = dir.path() / "save_1.json";
+    const auto validPlaintext = readSaveBytes(path);
+    const auto key = saveTestKey();
+    saves.setEncryptionKey(key.data());
+    REQUIRE(saves.save(1, {{"route", "encrypted"}}, "encrypted", 9));
+    REQUIRE(readSaveBytes(path).substr(0, 4) == "CAES");
+    writeSaveBytes(path, validPlaintext);
+    CHECK(saves.load(1) == replacement); // Compatibility is not protection from complete replacement.
+    saves.setEncryptionPolicy(SaveEncryptionPolicy::RequireEncrypted);
+    SaveMeta meta;
+    meta.sceneName = "unchanged";
+    CHECK(saves.load(1, &meta).is_null());
+    CHECK(meta.sceneName == "unchanged");
+    CHECK(saves.listSaves().empty());
+    CHECK(readSaveBytes(path) == validPlaintext);
+}
+
+TEST_CASE("U4: keyed provider writes fail before touching the slot when crypto is missing") {
+    TestPaths::ScopedTempDir dir("missing_crypto_provider_write");
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    REQUIRE(saves.save(1, {{"route", "original"}}, "legacy", 3));
+    const auto path = dir.path() / "save_1.json";
+    const auto original = readSaveBytes(path);
+    const auto key = saveTestKey();
+    saves.setEncryptionKey(key.data());
+    struct RestoreCrypto {
+        carc::ICryptoEngine* previous = BackendRegistry::instance().getCryptoEngine();
+        ~RestoreCrypto() { BackendRegistry::instance().setCryptoEngine(previous); }
+    } restore;
+    BackendRegistry::instance().setCryptoEngine(nullptr);
+    CHECK_FALSE(saves.save(1, {{"route", "must-not-replace"}}, "other", 4));
+    CHECK(readSaveBytes(path) == original);
+    CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+}
+
+TEST_CASE("U4: unsuccessful decoded loads preserve every metadata field") {
+    TestPaths::ScopedTempDir dir("load_failure_metadata");
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    json envelope = {{"schema_version", saves.currentSchemaVersion()}, {"scene", "replacement"},
+                     {"timestamp", 123}, {"token_index", 2}, {"thumbnail", "replacement"}};
+    SUBCASE("missing data") {}
+    SUBCASE("null data") { envelope["data"] = nullptr; }
+    SUBCASE("migration returns null") {
+        const auto version = saves.currentSchemaVersion();
+        envelope["data"] = {{"old", true}};
+        saves.registerMigration(version, version + 1, [](json) { return json(); });
+    }
+    SUBCASE("migration throws") {
+        const auto version = saves.currentSchemaVersion();
+        envelope["data"] = {{"old", true}};
+        saves.registerMigration(version, version + 1, [](json) -> json {
+            throw std::runtime_error("controlled migration failure");
+        });
+    }
+    writeSaveBytes(dir.path() / "save_1.json", envelope.dump());
+    SaveMeta meta;
+    meta.slot = 91;
+    meta.timestamp = 456;
+    meta.sceneName = "sentinel-scene";
+    meta.thumbnail = "sentinel-thumbnail";
+    meta.tokenIndex = 789;
+    meta.schemaVersion = 90;
+    CHECK(saves.load(1, &meta).is_null());
+    CHECK(meta.slot == 91);
+    CHECK(meta.timestamp == 456);
+    CHECK(meta.sceneName == "sentinel-scene");
+    CHECK(meta.thumbnail == "sentinel-thumbnail");
+    CHECK(meta.tokenIndex == 789);
+    CHECK(meta.schemaVersion == 90);
+}
+
+TEST_CASE("U4: valid empty object and array save data remain loadable") {
+    TestPaths::ScopedTempDir dir("load_empty_containers");
+    SaveManager saves;
+    saves.init(dir.string());
+    saves.setSaveProvider(std::make_unique<LocalFileSaveProvider>());
+    for (const auto& data : {json::object(), json::array()}) {
+        REQUIRE(saves.save(1, data, "empty-container", 4));
+        SaveMeta meta;
+        const auto loaded = saves.load(1, &meta);
+        CHECK_FALSE(loaded.is_null());
+        CHECK(loaded == data);
+        CHECK(meta.sceneName == "empty-container");
+        CHECK(meta.tokenIndex == 4);
+    }
 }

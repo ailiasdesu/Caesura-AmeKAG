@@ -59,12 +59,16 @@ auto* lua      = BackendRegistry::instance().getLuaManager()->state();
 ### 1.1 IArchiveReader
 
 ```cpp
+using ArchivePublicKey = std::array<uint8_t, 32>; // Raw Ed25519 public key
+
 class IArchiveReader {
 public:
     virtual ~IArchiveReader() = default;
 
     virtual bool open(const std::string& path,
                       const std::string& pubKeyPath = "") = 0;
+    virtual bool open(const std::string& path,
+                      const ArchivePublicKey& expectedKey) = 0;
     virtual void close() = 0;
     virtual std::vector<uint8_t> readFile(const std::string& relativePath) = 0;
     virtual bool hasFile(const std::string& relativePath) const = 0;
@@ -75,12 +79,15 @@ public:
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `open` | `path`: .carc 文件路径；`pubKeyPath`: Ed25519 公钥路径（可选） | `bool` | 打开归档，可选签名验证 |
+| `open(path, pubKeyPath)` | 归档路径；可选显式公钥文件路径 | `bool` | 始终验签；未指定公钥时使用归档内嵌公钥，仅证明自签内容一致性；显式公钥读取失败不回退 |
+| `open(path, expectedKey)` | 归档路径；宿主提供的32字节公钥 | `bool` | 用宿主固定公钥验签并解密索引，归档或旁置文件不能更换验证公钥 |
 | `close` | — | — | 关闭归档，释放资源 |
 | `readFile` | `relativePath`: 归档内相对路径 | `vector<uint8_t>` | 读取文件内容，未找到返回空 |
 | `hasFile` | `relativePath` | `bool` | 检查文件是否存在 |
 | `numFiles` | — | `size_t` | 归档内文件总数 |
 | `isOpen` | — | `bool` | 归档是否已打开 |
+
+EngineConfig 的 `archiveTrustMode` 默认为 `ArchiveTrustMode::Compatible`。选择 `PinnedPublisher` 时，必须在 `Engine::init()` 前填入 `archivePublisherKey`；Engine持有按值复制的公钥。固定公钥约束覆盖全部识别到的自动挂载层，任一验证失败则初始化失败并回滚，不降级到低优先级资源。此策略只认证CARC，松散文件、入口Lua、manifest与宿主本身仍不因此获得认证。
 
 ### 1.2 IArchiveWriter
 
@@ -414,13 +421,15 @@ struct PointerEvent {
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
 | `init` | — | — | 启动工作线程池 |
-| `shutdown` | — | — | 等待并关闭所有线程 |
+| `shutdown` | — | — | 停止接收任务，join工作线程，在后端仍存活时执行一次最终回调快照；回调中重入关停会取消剩余回调 |
 | `submit` | `work`, `priority=Normal`, `onComplete=nullptr` | `uint64_t` | 提交异步任务，返回 job ID |
-| `pollMainThreadJobs` | — | — | 执行已完成任务的 `onComplete` 回调 |
-| `waitIdle` | — | — | 阻塞直到所有任务完成 |
+| `pollMainThreadJobs` | — | — | 主线程执行一个就绪快照；嵌套poll不递归排空，新任务回调留到后续poll |
+| `waitIdle` | — | — | 仅等待worker工作及其回调入队，不执行回调；worker不得同步等待主线程回调 |
 | `workerCount` | — | `int` | 工作线程数 |
-| `pendingJobs` | — | `int` | 待处理任务数 |
+| `pendingJobs` | — | `int` | 未完成worker及回调发布的任务数；0不代表主线程回调已经执行 |
 | `isRunning` | — | `bool` | 任务系统是否运行中 |
+
+生命周期与轮询由主线程控制。最终关停快照执行期间拒绝新任务和重新初始化；普通poll中的关停/重启会使旧批次失效。NullJobSystem保留同步执行work和callback的特性，但与真实实现一致拒绝空work，并在work关闭或重启实例后丢弃旧callback。
 
 **线程安全约束**：
 - `submit` 可将 CPU 工作（解码、物理）分发到 Worker 线程
@@ -788,7 +797,7 @@ struct VideoHandle { uint32_t id = 0; explicit operator bool() const; };
 
 ```cpp
 struct CompletedLoad {
-    int id; std::string path, type; bool success;
+    int id; uint64_t generation; std::string path, type; bool success;
     std::vector<uint8_t> rgba; uint16_t width, height;
     std::vector<uint8_t> data;
 };
@@ -798,11 +807,14 @@ struct CompletedLoad {
 |------|------|
 | `init` / `shutdown` | 生命周期 |
 | `enqueue(path, type)` | 入队加载请求，返回 load ID |
-| `cancelAll` | 取消所有待处理加载 |
+| `cancelAll` | 递增请求代次，立即结算旧请求计数并清理缓存、完成缓冲和自身旧 SDL 事件 |
 | `poll` | 轮询完成结果（需每帧调用） |
 | `drainCompleted` | 非 SDL 交付：返回并清空全部已完成加载（调用方负责纹理上传 + Lua 回调） |
+| `isCurrent(completed)` | 消费者在上传或调用 Lua 前复核代次；已经取出的结果也可能因取消、重载或关闭失效 |
 | `pendingCount` | 待处理加载数 |
 | `isRunning` | 加载器是否运行中 |
+
+控制与消费操作在主线程执行。worker 保持自身结果所有权直到完成回调；取消不提前释放 worker 正在写入的内存。Engine 在暂停时持有完成结果，恢复时逐项检查代次，并在调用 Lua 前释放旧 callback registry 引用，避免回调重入取消后误删新引用。
 
 ### 12.3 IResourceGenerationTracker
 
@@ -942,32 +954,39 @@ load_animation、breakpoints、debug_resume、inspect、kag_debug 等）均定�
 
 ### 16.1 ISaveManager
 
-JSON 存档管理，支持加密和 schema 迁移。
+JSON 存档管理，支持加密策略、显式旧明文导入和 schema 迁移。本节于 2026-09-05 按 [ISaveManager.h](../../src/storage/api/ISaveManager.h) 同步；不代表最新回归已通过。
+
+`SaveEncryptionPolicy` 定义在接口头中：`Compatible`（默认，保留旧明文读取；有 key 时仍加密每次写入）和 `RequireEncrypted`（普通读取拒绝明文，缺 key 拒绝写入）。`EngineConfig::saveEncryptionPolicy` 在组合根接入该策略；策略不能从存档文件内容推断。
 
 | 方法 | 说明 |
 |------|------|
 | `init(saveDir)` | 初始化，指定存档目录 |
 | `save(slot, data, sceneName, tokenIndex, thumbnailPng)` | 保存到指定槽位 |
-| `load(slot, outMeta)` | 加载槽位，可选返回元数据 |
+| `load(slot, outMeta=nullptr)` | 加载槽位；失败返回 null JSON 且不改变 `outMeta`；空对象/数组是合法数据 |
+| `loadLegacyPlaintext(slot, outMeta=nullptr)` | 显式只读导入旧明文；拒绝 CAES，不改变策略、不写回源文件；失败不改变 `outMeta` |
 | `listSaves` | 列出所有存档槽位及元数据 |
 | `slotExists(slot)` | 槽位是否存在 |
 | `deleteSlot(slot)` | 删除槽位 |
 | `setEncryptionKey(key[32])` | 设置 AES-256 加密密钥 |
-| `clearEncryptionKey` | 清除密钥（存档不加密） |
-| `isEncryptionEnabled` | 是否启用加密 |
+| `clearEncryptionKey` | 清除 key，不改变策略；严格模式下后续保存失败，兼容模式下后续保存为明文 |
+| `isEncryptionEnabled` | 当前是否设置了 key；不等同于策略查询 |
+| `setEncryptionPolicy(policy)` | 设置 `SaveEncryptionPolicy`，不生成 key 或迁移现有文件 |
+| `getEncryptionPolicy()` | 获取当前加密策略 |
 | `setSaveProvider(provider)` | 注入自定义存储后端 |
 | `getSaveProvider` | 获取当前存储后端 |
-| `configureCloudSync(endpoint)` | 配置 HTTP 云端存档端点（""=仅本地） |
-| `pushSlotToCloud(slot)` | 推送指定槽位到云端 |
-| `pullSlotFromCloud(slot)` | 从云端拉取指定槽位 |
+| `configureCloudSync(endpoint)` | `""`=本地；HTTP(S)=本地存储加显式同步；`steam`/`steam://`/`steamcloud`=Steam 云存储；配置本身不搬运字节 |
+| `pushSlotToCloud(slot)` | 暂存本地字节，按当前策略/key和存档结构验证，再上传同一份字节 |
+| `pullSlotFromCloud(slot)` | 暂存远端字节，按当前策略/key和存档结构验证，再将同一份字节提交到本地 |
 | `captureThumbnailPNG(w=320, h=180)` | 捕获存档缩略图 PNG |
 | `setGfxReady(ready)` | 设置 GPU 就绪标志（SIGSEGV 守卫：渲染器未初始化前禁截缩略图） |
 | `currentSchemaVersion` | 当前存档格式版本号 |
 | `registerMigration(fromVer, toVer, fn)` | 注册 schema 迁移函数 |
 
+SaveManager 加密整个 JSON 信封，包括 scene、timestamp、schema_version、token_index、thumbnail、engine_version 和 data。CAES 认证失败没有明文回退。内存迁移不自动写盘；迁移返回 null 或抛异常时加载失败且元数据不变。兼容模式允许完整明文替换，两种策略均没有槽位文件名绑定和防重放保证。
+
 ### 16.2 ISaveProvider
 
-抽象存储后端（本地文件、云同步等）。
+抽象存储后端（本地文件、云同步等）。读写保留包括 NUL 在内的原始字节，不解析 JSON，也不负责加解密。SaveManager 在 provider 边界统一处理格式与策略。
 
 | 方法 | 说明 |
 |------|------|
@@ -975,11 +994,24 @@ JSON 存档管理，支持加密和 schema 迁移。
 | `writeFile(path, content)` | 写入原始字节 |
 | `deleteFile(path)` | 删除文件 |
 | `listFiles(pattern)` | 列出匹配文件 |
-| `pushToCloud(slotPath)` | 推送存档到云端（默认 no-op） |
-| `pullFromCloud(slotPath)` | 从云端拉取存档（默认 no-op） |
-| `supportsCloudSync` | 是否支持云同步（默认 false） |
+| `pushToCloud(slotPath)` | provider 直接原始字节上传；本地实现返回 false，不做 SaveManager 策略校验 |
+| `pullFromCloud(slotPath)` | provider 直接原始字节下载；本地实现返回 false，不做 SaveManager 策略校验 |
+| `supportsCloudSync` | 当前 provider 是否提供云同步；SaveManager 的安全同步还要求实现下述 transport |
 
 **默认实现**：`LocalFileSaveProvider` — 使用 `std::ifstream/std::ofstream`
+
+### 16.3 ICloudSaveTransport
+
+可选的云传输能力，定义于 [ICloudSaveTransport.h](../../src/storage/api/ICloudSaveTransport.h)，由 `HttpCloudSaveProvider` 与 `CloudSaveProvider` 实现。接口无数据成员，四个操作均为纯虚方法：
+
+| 方法 | 说明 |
+|------|------|
+| `readLocalFile(slotPath)` | 只读取本地上传源，返回暂存字节，不改变任一端点 |
+| `writeLocalFile(slotPath, bytes)` | 将调用方给定的同一份字节提交到本地 |
+| `readCloudFile(slotPath)` | 只取得远端下载源，返回暂存字节，不先覆盖本地 |
+| `writeCloudFile(slotPath, bytes)` | 上传调用方给定的同一份字节，不重新读取本地文件 |
+
+SaveManager 持有读取结果，验证其 CAES/明文策略、key 和可加载结构后才调用对应 write。校验失败不会调用目标写入；校验中的内存迁移不改变传输字节。必须区分本地和云端：Steam provider 的普通 `readFile/writeFile` 指向云存储，但 push/pull 分别是本地→云端和云端→本地。仅声明 `supportsCloudSync()` 而未实现此 transport 的 provider，不能通过 SaveManager 发起安全同步。
 
 ---
 

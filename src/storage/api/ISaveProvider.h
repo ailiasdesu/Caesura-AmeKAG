@@ -11,7 +11,10 @@
 
 namespace Caesura {
 
-// Abstract save storage backend
+// Abstract save storage backend. Providers transport opaque bytes, including NULs.
+// SaveManager owns JSON/CAES encoding and policy; providers must not parse,
+// encrypt, decrypt, or otherwise transform the content. Cloud push/pull are
+// explicit raw-byte transfers and never implicitly migrate an existing save.
 class ISaveProvider {
 public:
     virtual ~ISaveProvider() = default;

@@ -86,10 +86,17 @@ TEST_CASE("E3 KAG: deeply nested if does not crash") {
 
 // -- GameState persistence (E3 Step 2) ----------------------------------
 
+static void bindBoundaryContext(lua_State* state) {
+    lua_newtable(state);
+    REQUIRE(GameState::bind(state, -1));
+    lua_pop(state, 1);
+}
+
 TEST_CASE("E3 GameState: persist across save/load cycle") {
     LuaManager lm1;
     REQUIRE(lm1.init());
     lua_State* L1 = lm1.state();
+    bindBoundaryContext(L1);
     REQUIRE(GameState::push(L1));
     lua_pushstring(L1, "persist_value");
     lua_setfield(L1, -2, "persist_key");
@@ -100,6 +107,7 @@ TEST_CASE("E3 GameState: persist across save/load cycle") {
     LuaManager lm2;
     REQUIRE(lm2.init());
     lua_State* L2 = lm2.state();
+    bindBoundaryContext(L2);
     REQUIRE(GameState::push(L2));
     lua_getfield(L2, -1, "persist_key");
     CHECK(lua_isnil(L2, -1));
@@ -110,6 +118,7 @@ TEST_CASE("E3 GameState: nested table storage") {
     LuaManager lm;
     REQUIRE(lm.init());
     lua_State* L = lm.state();
+    bindBoundaryContext(L);
     REQUIRE(GameState::push(L));
     lua_newtable(L);
     lua_pushstring(L, "inner");
@@ -122,10 +131,11 @@ TEST_CASE("E3 GameState: nested table storage") {
     lua_pop(L, 3);
 }
 
-TEST_CASE("E3 GameState: push after create returns existing ctx") {
+TEST_CASE("E3 GameState: push after bind returns existing ctx") {
     LuaManager lm;
     REQUIRE(lm.init());
     lua_State* L = lm.state();
+    bindBoundaryContext(L);
     REQUIRE(GameState::push(L));
     lua_pushstring(L, "persistent");
     lua_setfield(L, -2, "sticky_key");
@@ -272,7 +282,8 @@ TEST_CASE("E3 GameState: survives coroutine context switch") {
     LuaManager lm;
     REQUIRE(lm.init());
     lua_State* L = lm.state();
-    // Create GameState in main thread via C API
+    // Bind a fixture-owned table; VM init creates no independent context.
+    bindBoundaryContext(L);
     REQUIRE(GameState::push(L));
     lua_pushstring(L, "cross_coro_value");
     lua_setfield(L, -2, "coro_key");

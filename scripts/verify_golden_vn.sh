@@ -21,29 +21,39 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT" || { echo "[verify-golden] cannot cd repo root"; exit 1; }
 
-# Lua interpreter probe -- same three levels as scripts/caesura_build.py::find_lua:
-#   packaged external/lua/lua[.exe] (release-package artifact; gitignored in a
-#   checkout) -> build-tree lua_cli product (build/lua/<config>/lua[.exe], which
-#   a fresh clone has after cmake --build) -> PATH lua5.4 / lua.
-# FATAL only when ALL levels miss, listing every location probed (honest
-# diagnostics; never a silent skip). Keep in sync with caesura_build.find_lua.
-LUA=""
-for _luacand in \
-    external/lua/lua.exe external/lua/lua \
-    build/lua/Release/lua.exe build/lua/Release/lua \
-    build/lua/Debug/lua.exe build/lua/Debug/lua \
-    build/lua/RelWithDebInfo/lua.exe build/lua/RelWithDebInfo/lua \
-    build/lua/MinSizeRel/lua.exe build/lua/MinSizeRel/lua \
-    build/lua/lua.exe build/lua/lua
-do
-    if [ -f "$_luacand" ]; then LUA="$_luacand"; break; fi
-done
-if [ -z "$LUA" ]; then
-    LUA="$(command -v lua5.4 2>/dev/null || true)"
-    [ -n "$LUA" ] || LUA="$(command -v lua 2>/dev/null || true)"
-fi
-if [ -z "$LUA" ] || [ ! -e "$LUA" ]; then
-    echo "[verify-golden] FATAL: no Lua interpreter (probed: external/lua/lua[.exe], build/lua/{Release,Debug,RelWithDebInfo,MinSizeRel}/lua[.exe], build/lua/lua[.exe], PATH lua5.4/lua)"; exit 1
+# CTest supplies the exact lua_cli product; never replace an explicit path
+# with another configuration, a packaged relic, or an interpreter on PATH.
+if [ "${CAESURA_LUA+x}" = x ]; then
+    LUA="$CAESURA_LUA"
+    if command -v cygpath >/dev/null 2>&1; then
+        LUA="$(cygpath -u "$LUA")" || {
+            echo "[verify-golden] FATAL: cannot convert CAESURA_LUA path"; exit 1;
+        }
+    fi
+    if [ -z "$CAESURA_LUA" ] || [ ! -f "$LUA" ]; then
+        echo "[verify-golden] FATAL: CAESURA_LUA does not point at a Lua interpreter: $CAESURA_LUA"
+        exit 1
+    fi
+else
+    # Unconfigured manual invocation retains the developer convenience probe.
+    LUA=""
+    for _luacand in \
+        external/lua/lua.exe external/lua/lua \
+        build/lua/Release/lua.exe build/lua/Release/lua \
+        build/lua/Debug/lua.exe build/lua/Debug/lua \
+        build/lua/RelWithDebInfo/lua.exe build/lua/RelWithDebInfo/lua \
+        build/lua/MinSizeRel/lua.exe build/lua/MinSizeRel/lua \
+        build/lua/lua.exe build/lua/lua
+    do
+        if [ -f "$_luacand" ]; then LUA="$_luacand"; break; fi
+    done
+    if [ -z "$LUA" ]; then
+        LUA="$(command -v lua5.4 2>/dev/null || true)"
+        [ -n "$LUA" ] || LUA="$(command -v lua 2>/dev/null || true)"
+    fi
+    if [ -z "$LUA" ] || [ ! -e "$LUA" ]; then
+        echo "[verify-golden] FATAL: no Lua interpreter (probed: external/lua/lua[.exe], build/lua/{Release,Debug,RelWithDebInfo,MinSizeRel}/lua[.exe], build/lua/lua[.exe], PATH lua5.4/lua)"; exit 1
+    fi
 fi
 
 STORY="${GOLDEN_STORY:-tests/projects/golden_vn/story.ks}"
@@ -70,8 +80,8 @@ KSC_OUT="$("$LUA" scripts/ks_check.lua "$STORY" 2>&1)"
 KSC_RC=$?
 echo "$KSC_OUT" | sed "s/^/  /"
 WARN_COUNT="$(printf "%s" "$KSC_OUT" | grep -c "^[WARN]" || true)"
-if [ "$KSC_RC" -eq 1 ]; then
-    check "ks_check: clean contract" 1 "($WARN_COUNT warnings)"
+if [ "$KSC_RC" -ne 0 ]; then
+    check "ks_check: clean contract" "$KSC_RC" "($WARN_COUNT warnings)"
 elif [ "$WARN_COUNT" -gt 0 ]; then
     note "  (informational: $WARN_COUNT lint warning(s), not a CI gate)"
     check "ks_check: clean contract" 0

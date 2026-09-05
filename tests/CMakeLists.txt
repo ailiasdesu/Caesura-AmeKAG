@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
-find_package(Python3 COMPONENTS Interpreter QUIET)
+if(CAESURA_REQUIRE_TEST_PREREQUISITES)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+else()
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+endif()
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 
@@ -8,6 +12,7 @@ set(TEST_SOURCES
     cpp/test_core.cpp
     cpp/test_debug_manager_edge.cpp
     cpp/test_carc.cpp
+    cpp/test_carc_boundaries.cpp
     cpp/test_carc_debug.cpp
     cpp/test_system.cpp
     cpp/test_source_encoding.cpp
@@ -19,8 +24,10 @@ set(TEST_SOURCES
     cpp/test_input.cpp
     cpp/test_gesture_detector.cpp
     cpp/test_async.cpp
+    cpp/test_async_cancellation.cpp
     cpp/test_null_jobsystem.cpp
     cpp/test_job_system.cpp
+    cpp/test_job_shutdown.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
     cpp/test_audio_integration.cpp
@@ -39,10 +46,14 @@ set(TEST_SOURCES
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
     cpp/test_entry.cpp
+    cpp/test_entry_async.cpp
+    cpp/test_entry_shutdown.cpp
+    cpp/test_entry_session.cpp
     cpp/test_di.cpp
     cpp/test_minigame.cpp
     cpp/test_platform.cpp
     cpp/test_storage.cpp
+    cpp/test_save_atomicity.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
     cpp/test_golden_saves.cpp
@@ -55,6 +66,7 @@ set(TEST_SOURCES
     cpp/test_cloud_save.cpp
     cpp/test_mini_collision.cpp
     cpp/test_ai.cpp
+    cpp/test_ai_callbacks.cpp
     cpp/test_backend_registry.cpp
     cpp/test_mesh_renderer.cpp
     cpp/test_sma_skinner.cpp
@@ -98,16 +110,18 @@ target_link_libraries(CaesuraTests PRIVATE
 
 enable_testing()
 
+if(NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(probes/crypto_allocation)
+endif()
+
 file(GENERATE
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
     CONTENT "
-file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/scripts]])
-file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/assets]])
-file(COPY [[${CMAKE_SOURCE_DIR}/tests/audio/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/tests/audio]])
-file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/demo]])
-file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/scripts]])
-file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/assets]])
-file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/demo]])
+set(CAESURA_FIXTURE_SOURCE_ROOT [[${CMAKE_SOURCE_DIR}]])
+set(CAESURA_FIXTURE_BUILD_ROOT [[${CMAKE_BINARY_DIR}]])
+set(CAESURA_FIXTURE_TEST_OUTPUT [[$<TARGET_FILE_DIR:CaesuraTests>]])
+set(CAESURA_FIXTURE_APP_OUTPUT [[$<TARGET_FILE_DIR:CaesuraAmeKAG>]])
+include([[${CMAKE_CURRENT_SOURCE_DIR}/SyncTestAssets.cmake]])
 "
 )
 
@@ -150,12 +164,12 @@ add_caesura_doctest(CaesuraUnitTests
 add_caesura_doctest(CaesuraEntryTests
     LABELS entry lifecycle
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_entry.cpp,*test_engine_lifecycle.cpp,*test_galgame_startup.cpp
+    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_entry_shutdown.cpp,*test_entry_session.cpp,*test_engine_lifecycle.cpp,*test_job_shutdown.cpp,*test_galgame_startup.cpp
 )
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem
     RESOURCE_LOCK save-files
-    ARGS --source-file=*test_storage.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
+    ARGS --source-file=*test_storage.cpp,*test_save_atomicity.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
 )
 add_caesura_doctest(CaesuraScriptTests
     LABELS script lua
@@ -165,7 +179,7 @@ add_caesura_doctest(CaesuraScriptTests
 add_caesura_doctest(CaesuraRenderResourceTests
     LABELS render resource
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
+    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_async_cancellation.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
 )
 add_caesura_doctest(CaesuraAudioTests
     LABELS audio
@@ -189,7 +203,77 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    add_test(
+        NAME CaesuraLuaPosix
+        COMMAND $<TARGET_FILE:lua_cli> ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_lua_posix.lua
+    )
+    set_tests_properties(CaesuraLuaPosix PROPERTIES
+        LABELS "script;lua;platform"
+        TIMEOUT 15
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
+
 if(Python3_EXECUTABLE)
+    if(WIN32)
+        add_executable(CarcMemoryProbe probes/carc_memory_probe.cpp)
+        target_link_libraries(CarcMemoryProbe PRIVATE
+            Caesura::Archive Caesura::Debug Caesura::BuildOptions psapi)
+        add_test(
+            NAME CaesuraCarcMemory
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_carc_memory.py
+                    --probe $<TARGET_FILE:CarcMemoryProbe>
+        )
+        set_tests_properties(CaesuraCarcMemory PROPERTIES
+            LABELS "archive;allocation;isolation"
+            TIMEOUT 90
+            RUN_SERIAL TRUE
+        )
+    endif()
+    add_test(
+        NAME CaesuraFixtureSync
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_fixture_sync.py
+    )
+    set_tests_properties(CaesuraFixtureSync PROPERTIES
+        LABELS "qa;assets"
+        TIMEOUT 180
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME CaesuraArchiveTrustCli
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_archive_trust_cli.py
+                $<TARGET_FILE:CaesuraAmeKAG> $<TARGET_FILE:carc_pack>
+    )
+    set_tests_properties(CaesuraArchiveTrustCli PROPERTIES
+        LABELS "archive;trust;cli"
+        TIMEOUT 180
+        RUN_SERIAL TRUE
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    add_test(
+        NAME CaesuraValidationEvidence
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_evidence.py
+    )
+    add_test(
+        NAME CaesuraValidationRunner
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_runner.py
+    )
+    add_test(
+        NAME CaesuraValidationProcess
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_process.py
+    )
+    set_tests_properties(CaesuraValidationEvidence CaesuraValidationRunner CaesuraValidationProcess PROPERTIES
+        LABELS "qa;validation"
+        TIMEOUT 180
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
     add_test(
         NAME CaesuraHeadlessRpcSmoke
         COMMAND ${Python3_EXECUTABLE}
@@ -247,7 +331,6 @@ if(Python3_EXECUTABLE)
     )
     set_tests_properties(CaesuraRcAdversarialMutations PROPERTIES
         LABELS "qa;release;adversarial"
-        SKIP_RETURN_CODE 77
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -261,21 +344,19 @@ if(Python3_EXECUTABLE)
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
-    # caesura build/package CLI contract tests. Shells out to
-    # `python scripts/caesura.py build|package` exactly as a creator would; it
-    # never starts the engine, only copies the exe and writes tempfiles, so no
-    # RUN_SERIAL / FIXTURES_REQUIRED / engine-target dependency is needed.
-    # SKIP_RETURN_CODE 77: on a host with no built engine (build/ and bin/ are
-    # gitignored, i.e. not a repository invariant) the runner exits 77 and ctest
-    # reports Skipped rather than Failed, so a fresh clone stays green.
+    # Validate this build/configuration's engine and Lua interpreter. Explicit
+    # paths propagate through the real CLI, including package precompilation.
+    # Missing products are failures; unconfigured manual runs retain discovery.
     add_test(
         NAME CaesuraBuildCli
-        COMMAND ${Python3_EXECUTABLE}
+        COMMAND ${CMAKE_COMMAND} -E env
+                "CAESURA_ENGINE=$<TARGET_FILE:CaesuraAmeKAG>"
+                "CAESURA_LUA=$<TARGET_FILE:lua_cli>"
+                ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_caesura_build_cli.py
     )
     set_tests_properties(CaesuraBuildCli PROPERTIES
         LABELS "qa;cli;build;package"
-        SKIP_RETURN_CODE 77
         TIMEOUT 1200
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -312,13 +393,17 @@ endif()
 # Golden Project regression gate (tests/projects/golden_vn): static ks_check
 # contracts plus headless route / cross-scene flag assertions via
 # scripts/verify_golden_vn.sh. Fixture and driver are fully tracked; the
-# script FATALs with a clear message when no lua interpreter is present, and
-# post-build hosts always have build/lua/<config>/lua, so no SKIP_RETURN_CODE.
+# interpreter is this build's lua_cli target. A missing product is a failure.
 find_program(CAESURA_BASH_PROGRAM bash)
+if(CAESURA_REQUIRE_TEST_PREREQUISITES AND NOT CAESURA_BASH_PROGRAM)
+    message(FATAL_ERROR "Complete validation requires Bash for the Golden VN regression")
+endif()
 if(CAESURA_BASH_PROGRAM)
     add_test(
         NAME CaesuraGoldenVn
-        COMMAND ${CAESURA_BASH_PROGRAM}
+        COMMAND ${CMAKE_COMMAND} -E env
+                "CAESURA_LUA=$<TARGET_FILE:lua_cli>"
+                ${CAESURA_BASH_PROGRAM}
                 ${CMAKE_SOURCE_DIR}/scripts/verify_golden_vn.sh
     )
     set_tests_properties(CaesuraGoldenVn PROPERTIES
@@ -327,21 +412,30 @@ if(CAESURA_BASH_PROGRAM)
         TIMEOUT 900
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME CaesuraValidationOutputPaths
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_output_paths.py
+                    --bash ${CAESURA_BASH_PROGRAM}
+        )
+        set_tests_properties(CaesuraValidationOutputPaths PROPERTIES
+            LABELS "qa;validation;cli;golden"
+            TIMEOUT 180
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endif()
+
 endif()
 
-# Copy scripts to test output directory so sandbox.lua et al are found
-add_custom_command(TARGET CaesuraTests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/scripts"
-    "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/tests/audio"
-    "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/demo"
-    "$<TARGET_FILE_DIR:CaesuraTests>/demo"
-    COMMENT "Copying test scripts and audio files..."
+# Always refresh runtime fixtures when CaesuraTests is built, including when
+# only Lua/demo/assets changed and the C++ executable does not relink.
+add_custom_target(CaesuraTestAssets
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
+    COMMENT "Synchronizing test runtime fixtures..."
+    VERBATIM
 )
+add_dependencies(CaesuraTests CaesuraTestAssets)
 
 # CaesuraTests links production modules, including the SDL-backed platform
 # implementation. Keep the runtime beside the fresh test binary instead of

@@ -1,8 +1,12 @@
 #pragma once
 
 #include <cstdint>  // uint32_t (GCC strict; MSVC used to get it transitively)
+#include <optional>
 #include <string>
 #include <utility>
+
+#include "../storage/api/ISaveManager.h"
+#include "../archive/api/IArchiveReader.h"
 
 // Minimal forward declarations to avoid transitive includes
 namespace Caesura {
@@ -21,6 +25,10 @@ class IGpuMonitor;
 class VideoPlayer;
 class ILayerManager;
 class ISandboxQuota;
+
+// Selected by the host before Engine::init(); Lua and package metadata cannot
+// choose the expected publisher. This authenticates CARC archives only.
+enum class ArchiveTrustMode { Compatible, PinnedPublisher };
 
 // Move-only dependency bundle consumed by Engine.
 // Every pointer transfers ownership when the configuration is moved into Engine.
@@ -46,6 +54,9 @@ struct EngineConfig {
         , animation(std::exchange(other.animation, nullptr))
         , steam(std::exchange(other.steam, nullptr))
         , displayService(std::exchange(other.displayService, nullptr))
+        , saveEncryptionPolicy(other.saveEncryptionPolicy)
+        , archiveTrustMode(other.archiveTrustMode)
+        , archivePublisherKey(other.archivePublisherKey)
         , title(other.title)
         , width(other.width)
         , height(other.height)
@@ -82,6 +93,16 @@ struct EngineConfig {
     // Display metrics service (Track P1). nullptr = Engine supplies a Null
     // default; desktop builds inject SDL3DisplayService from main.cpp.
     IDisplayService*  displayService  = nullptr;
+
+    // Host-selected policy; keys are supplied separately through the save API.
+    SaveEncryptionPolicy saveEncryptionPolicy = SaveEncryptionPolicy::Compatible;
+
+    // Compatible verifies each archive with its own embedded key. PinnedPublisher
+    // requires this host-provided key for every recognized automatic CARC mount.
+    // Engine owns a value copy; loose files, entry Lua and the host are outside
+    // this policy. Supplying a key alone never silently selects a trust mode.
+    ArchiveTrustMode archiveTrustMode = ArchiveTrustMode::Compatible;
+    std::optional<carc::ArchivePublicKey> archivePublisherKey;
 
     // Dimensions
     const char*       title           = "Caesura (AmeKAG)";

@@ -11,6 +11,8 @@
 #include <unordered_map>
 #include <filesystem>
 #include <chrono>
+#include <functional>
+#include <utility>
 
 struct lua_State;
 
@@ -54,6 +56,11 @@ public:
     // Force a reload next frame (used by ErrorUI retry)
     void requestReload() { m_reloadRequested = true; }
 
+    // Invalidate old async work after coroutine cleanup and before state reset.
+    void setBeforeReloadCallback(std::function<void()> callback) {
+        m_beforeReloadCallback = std::move(callback);
+    }
+
 private:
     void scanDirectory();
     void showWarningOverlay(const std::string& message);
@@ -72,6 +79,7 @@ private:
     bool                       m_reloadRequested = false;
     int                        m_warningFrames = 0;
     std::string                m_warningText;
+    std::function<void()>       m_beforeReloadCallback;
 
     // file path → last_write_time
     using Clock = std::filesystem::file_time_type;

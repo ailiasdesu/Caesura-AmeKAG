@@ -9,6 +9,7 @@
 #include <sstream>
 #include <iomanip>
 #include <limits>
+#include <new>
 
 namespace Caesura::carc {
 
@@ -37,6 +38,29 @@ bool checkedRead(std::istream& s, void* dst, std::streamsize size) {
 // open -- load and verify a CARC file
 // ==========================================================================
 bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
+try
+{
+    if (pubKeyPath.empty()) return openWithExpectedKey(path, nullptr);
+    ArchivePublicKey expectedKey{};
+    if (!CryptoEngine::readPublicKey(pubKeyPath, expectedKey.data())) {
+        close();
+        return false;
+    }
+    return open(path, expectedKey);
+}
+catch (const std::bad_alloc&) {
+    close();
+    return false;
+}
+
+bool CARCReader::open(const std::string& path, const ArchivePublicKey& expectedKey)
+{
+    static_assert(std::tuple_size<ArchivePublicKey>::value == PUBLICKEY_SIZE);
+    return openWithExpectedKey(path, expectedKey.data());
+}
+
+bool CARCReader::openWithExpectedKey(const std::string& path, const uint8_t* expectedKey)
+try
 {
     close();
 
@@ -86,20 +110,15 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
         return false;
     }
 
-    // 2. Read public key
-    if (!pubKeyPath.empty()) {
-        if (!CryptoEngine::readPublicKey(pubKeyPath, m_publicKey)) {
-            close();
-            return false;
-        }
-        m_hasPublicKey = true;
-    } else {
-        if (!readTrailingPublicKey()) {
-            close();
-            return false;
-        }
-        m_hasPublicKey = true;
+    // 2. Select the verification key. Host bytes are copied once and never
+    // replaced by archive metadata or a neighboring .pub file.
+    if (expectedKey) {
+        memcpy(m_publicKey, expectedKey, PUBLICKEY_SIZE);
+    } else if (!readTrailingPublicKey()) {
+        close();
+        return false;
     }
+    m_hasPublicKey = true;
 
     // 3. Verify signature
     if (!verifySignature()) {
@@ -160,6 +179,12 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
 
     return true;
 }
+catch (const std::bad_alloc&) {
+    // An unsuccessful open must not expose a partial index or an open stream.
+    // Avoid allocating a diagnostic while the caller is already out of memory.
+    close();
+    return false;
+}
 
 void CARCReader::close()
 {
@@ -181,6 +206,7 @@ std::vector<uint8_t> CARCReader::readFile(const std::string& relativePath)
 }
 
 std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH_SIZE])
+try
 {
     if (!m_stream.is_open()) return {};
 
@@ -230,6 +256,11 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
     }
     if (result != destLen) return {};
     return decompressed;
+}
+catch (const std::bad_alloc&) {
+    // Temporary buffers/stream locks unwind before returning. The verified
+    // index remains usable, and the next read resets the stream position/state.
+    return {};
 }
 
 // ==========================================================================

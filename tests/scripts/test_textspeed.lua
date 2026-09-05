@@ -184,7 +184,7 @@ end
 -- floor now drives reveal again).  Reveal is no longer pinned to total.
 do
     local kr, ctx, ts = launch(
-        '[textspeed cps=60]\n[ch text="ABCDEFGHIJ"]\n')
+        '[textspeed cps=60]\n[ch text="ABCDEFGHIJ"]\n[wait time=60000]\n')
     kr.update(0.001)              -- create reveal, 0 chars
     ctx.skip_mode = true
     kr.update(0.016)              -- skip pins reveal to total
@@ -194,6 +194,9 @@ do
     kr.update(0.016)              -- 16ms / 16 (cps=60 -> speed 16) = 1 char
     check("skip-off resumes per-char accumulation",
         reveal_chars(ts, ctx) == "1", "reveal " .. reveal_chars(ts, ctx))
+    check("skip toggle is measured before session end",
+        ctx.co ~= nil and coroutine.status(ctx.co) == "suspended")
+    assert(kr.stop())
 end
 
 -- text_speed cps extremes via the REAL [textspeed] command: cps=1 (slowest,

@@ -7,6 +7,8 @@
 add_library(CaesuraBuildOptions INTERFACE)
 add_library(Caesura::BuildOptions ALIAS CaesuraBuildOptions)
 
+include(${CMAKE_CURRENT_LIST_DIR}/CaesuraValidation.cmake)
+
 # Engine version propagated from the root project() so every module (save
 # envelopes, diagnostics UI) reads the released binary's version.
 target_compile_definitions(CaesuraBuildOptions INTERFACE

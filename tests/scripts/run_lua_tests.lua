@@ -51,6 +51,8 @@ local tests = {
     "test_backlog",
     "test_kag3_compat",
     "test_choice",
+    "test_history_cleanup",
+    "test_input_session_cleanup",
     "test_text_markup",
     "test_i18n",
     "test_i18n_cmd",

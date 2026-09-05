@@ -9,9 +9,9 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 34 |
-| Pure-virtual interface methods | 412 |
-| Lua binding functions (luaL_Reg entries) | 161 |
+| API interface headers (src/*/api/I*.h) | 35 |
+| Pure-virtual interface methods | 421 |
+| Lua binding functions (luaL_Reg entries) | 162 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 134 |
 | RPC HTTP endpoints (EditorServer) | 36 |
@@ -22,7 +22,7 @@
 
 | Module | Interface file | Pure-virtual methods |
 |--------|----------------|----------------------|
-| archive | IArchiveReader.h | 6 |
+| archive | IArchiveReader.h | 7 |
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
 | audio | IAudioBackend.h | 31 |
@@ -47,14 +47,15 @@
 | render | ITextureManager.h | 17 |
 | render | IVideoPlayer.h | 18 |
 | resource | IAssetProvider.h | 5 |
-| resource | IAsyncLoader.h | 8 |
+| resource | IAsyncLoader.h | 9 |
 | resource | IResourceGenerationTracker.h | 4 |
 | rpc | IEditorServer.h | 9 |
 | rpc | IRpcDispatcher.h | 1 |
 | rpc | IRpcServer.h | 5 |
 | script | ILuaManager.h | 12 |
 | steam | ISteamBackend.h | 23 |
-| storage | ISaveManager.h | 18 |
+| storage | ICloudSaveTransport.h | 4 |
+| storage | ISaveManager.h | 21 |
 | storage | ISaveProvider.h | 7 |
 
 ## 3. Lua bindings by source file
@@ -64,7 +65,7 @@
 | AIBinding.cpp | 5 | _AI_CALLBACKS, _AI_CALLBACKS, AI |
 | DebugBinding.cpp | 10 | Debug |
 | DevCoreBinding.cpp | 13 | _CAESURA_QUIT, DevCore |
-| EngineBinding.cpp | 5 | Engine |
+| EngineBinding.cpp | 6 | Engine |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |
 | RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |

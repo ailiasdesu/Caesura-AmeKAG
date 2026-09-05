@@ -1,7 +1,6 @@
 // ===========================================================================
 //  Caesura (AmeKAG) -- GameState.cpp
-//  Spec [10.2.31]: Creates the ctx table in the Lua registry with all
-//  required fields for KAG script execution.
+//  Native reference to the Lua runner's session table.
 // ===========================================================================
 
 extern "C" {
@@ -9,83 +8,50 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "../state/GameState.h"
-#include <cstdio>
 
 namespace Caesura {
 
-void GameState::create(lua_State* L) {
-    if (!L) return;
+bool GameState::bind(lua_State* L, int index) {
+    if (!L) return false;
 
-    // ctx = {}
-    lua_newtable(L);
+    const int stackTop = lua_gettop(L);
+    if (index == 0 || index > stackTop || index < -stackTop) return false;
 
-    // ctx.co = nil           -- 当前协程 (set later by scheduler)
-    lua_pushnil(L);
-    lua_setfield(L, -2, "co");
+    const int valueType = lua_type(L, index);
+    if (valueType != LUA_TTABLE && valueType != LUA_TNIL) return false;
 
-    // ctx.tokens = {}        -- Token 序列 (filled by parser)
-    lua_newtable(L);
-    lua_setfield(L, -2, "tokens");
-
-    // ctx.token_index = 1    -- 当前执行位置
-    lua_pushinteger(L, 1);
-    lua_setfield(L, -2, "token_index");
-
-    // ctx.call_stack = {}    -- call/return 调用栈
-    lua_newtable(L);
-    lua_setfield(L, -2, "call_stack");
-
-    // ctx.f = {}             -- 全局变量 (flags)
-    lua_newtable(L);
-    lua_setfield(L, -2, "f");
-
-    // ctx.sf = {}            -- 系统变量 (system flags)
-    lua_newtable(L);
-    lua_setfield(L, -2, "sf");
-
-    // ctx.tf = {}            -- 临时变量 (temp flags, scoped per sub-call)
-    lua_newtable(L);
-    lua_setfield(L, -2, "tf");
-
-    // ctx.layers = {}        -- 图层引用 (bg, fg, message, etc.)
-    lua_newtable(L);
-    lua_setfield(L, -2, "layers");
-
-    // ctx.backlog = {}       -- 历史消息
-    lua_newtable(L);
-    lua_setfield(L, -2, "backlog");
-
-    // ctx.active_operations = {}  -- 活跃 CancelToken 列表
-    lua_newtable(L);
-    lua_setfield(L, -2, "active_operations");
-
-    // ctx.stop_flag = false  -- 脚本终止标志
-    lua_pushboolean(L, 0);
-    lua_setfield(L, -2, "stop_flag");
-
-    // ctx.input_focus = "kag"  -- 当前输入焦点目标
-    lua_pushstring(L, "kag");
-    lua_setfield(L, -2, "input_focus");
-
-    // Store ctx in Lua registry: registry["caesura_ctx"] = ctx
+    // Resolve negative indices before pushing the registry key.
+    const int valueIndex = lua_absindex(L, index);
     lua_pushstring(L, REGISTRY_KEY);
-    lua_pushvalue(L, -2);       // duplicate ctx
-    lua_settable(L, LUA_REGISTRYINDEX);
-
-    lua_pop(L, 1);  // pop ctx
-
-    printf("[GameState] ctx table created in Lua registry.\n");
+    lua_pushvalue(L, valueIndex);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+    return true;
 }
 
 bool GameState::push(lua_State* L) {
     if (!L) return false;
 
     lua_pushstring(L, REGISTRY_KEY);
-    if (lua_gettable(L, LUA_REGISTRYINDEX) == LUA_TNIL) {
+    lua_rawget(L, LUA_REGISTRYINDEX);
+    if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
         return false;
     }
     return true;
+}
+
+bool GameState::stopRunner(lua_State* L) {
+    if (!L) return true;
+    const int stackTop = lua_gettop(L);
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "kag_runner");
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "stop");
+    if (!lua_isfunction(L, -1)) { lua_settop(L, stackTop); return false; }
+    const bool stopped = lua_pcall(L, 0, 1, 0) == LUA_OK && lua_toboolean(L, -1);
+    lua_settop(L, stackTop);
+    return stopped;
 }
 
 } // namespace Caesura

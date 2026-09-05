@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+**当前规划入口：** `docs/plans/README.md` → `docs/plans/2026-09-05-001-refactor-runtime-foundation-plan.md`。2026-09-05 起此前所有计划的排期与执行授权失效，仅保留“底层优先、Studio 暂停”两项产品方向约束。旧计划和项目记忆只供历史追溯，不能重新激活旧阶段、冻结或平台排除规则。
+
 Caesura (AmeKAG) is a cross-platform visual novel engine — C++20, bgfx rendering, SDL3 windowing, SoLoud audio, Lua 5.4 scripting. Its 16 internal static module libraries are separated by 15 API-only CMake targets and 34 pure-virtual interfaces (live census: `python scripts/api_stats.py`), then linked into one executable. Module-boundary and interface rules are authoritative in `AGENTS.md` §1–3.
 
 ## Plugin Requirements

@@ -54,6 +54,36 @@ function kag_runner.stage_label_jump(ctx, path)
 end
 local kag_co = nil
 local ctx = nil
+local changing_session = false
+
+local function publish_context(value)
+    local engine = rawget(_G, "Engine")
+    if engine and type(engine.bind_active_context) == "function" then
+        assert(engine.bind_active_context(value))
+    end
+    ctx = value
+    rawset(_G, "_CAESURA_CTX", value)
+end
+
+local function scheduler_running()
+    if not kag_co then return false end
+    local status = coroutine.status(kag_co)
+    return status == "running" or status == "normal"
+end
+
+local function has_continuation(c)
+    return c and (c._pendingSceneReload or c._pendingRollback
+        or c._scene_changed or c._pendingJump or c._pendingLoadScene)
+end
+
+local function spawn_scheduler(index)
+    local owner = ctx
+    owner._session_active = true
+    kag_co = coroutine.create(function()
+        scheduler.run(owner, owner.tokens, index)
+    end)
+    owner.co = kag_co
+end
 
 local default_resume_adapter = {
     is_paused = function()
@@ -90,9 +120,84 @@ end
 
 local function close_scheduler_coroutine()
     if not kag_co then return true end
-    local closed, close_error = coroutine.close(kag_co)
+    if scheduler_running() then return false, "scheduler-running" end
+    local co = kag_co
     kag_co = nil
+    if ctx then ctx.co = nil end
+    local was_changing = changing_session
+    changing_session = true
+    local called, closed, close_error = pcall(coroutine.close, co)
+    changing_session = was_changing
+    if not called then return false, closed end
     return closed, close_error
+end
+
+local function cancel_session_work(owner)
+    local failed, first_error = false, nil
+    local function cleanup(fn, ...)
+        local ok, err = pcall(fn, ...)
+        if not ok and not failed then failed, first_error = true, tostring(err) end
+    end
+    cleanup(function() require("kag.operation").cancel_all(owner) end)
+    local tweens = owner.tweens
+    owner.tweens = {}
+    cleanup(function()
+        for _, tween in ipairs(tweens or {}) do tween.cancelled = true end
+    end)
+    local overlay = owner._gesture_history_co
+    owner._gesture_history_co = nil
+    if overlay then
+        cleanup(function()
+            local closed, err = coroutine.close(overlay)
+            if not closed then error(err, 0) end
+        end)
+    end
+    -- Cleanup can enqueue more native work. Invalidate both callback families
+    -- after closing scopes, before publishing or resuming another session.
+    cleanup(function()
+        local backend = require("backend")
+        if type(backend.cancel_async_loads) == "function" then backend.cancel_async_loads() end
+    end)
+    cleanup(function()
+        local backend = require("backend")
+        if type(backend.ai_cancel) == "function" then backend.ai_cancel() end
+    end)
+    if failed then error(first_error, 0) end
+end
+
+local function finish_session(retain_context)
+    if changing_session then return false, "session-changing" end
+    if scheduler_running() then return false, "scheduler-running" end
+    if not ctx then return close_scheduler_coroutine() end
+    local owner = ctx
+    if owner._gesture_history_co then
+        local status = coroutine.status(owner._gesture_history_co)
+        if status == "running" or status == "normal" then return false, "overlay-running" end
+    end
+    changing_session = true
+    owner._session_active = false
+    owner.stop_flag = true
+    local closed, close_error = close_scheduler_coroutine()
+    local cancelled, cancel_error = pcall(cancel_session_work, owner)
+    owner._pendingSceneReload, owner._pendingRollback = nil, nil
+    owner._scene_changed, owner._pendingJump = false, nil
+    owner._pendingLoadScene, owner._pendingLoadToken = nil, nil
+    owner.waiting_input = false
+    if not retain_context then publish_context(nil) end
+    changing_session = false
+    if not closed then return false, close_error end
+    if not cancelled then return false, cancel_error end
+    return true
+end
+
+function kag_runner.stop()
+    return finish_session(false)
+end
+
+-- Full reload retains the final f/sf view while terminating its execution.
+-- HotReload may reset transient fields, but only a fresh start can run it again.
+function kag_runner.stop_for_reload()
+    return finish_session(true)
 end
 
 -- KAG scene debugger resume entry points (called from the RPC eval
@@ -105,6 +210,7 @@ function kag_runner.debug_resume()
 end
 
 function kag_runner.debug_step()
+    if changing_session then return false, "session-changing" end
     if ctx then ctx._kag_debug_paused = false end
     require("kag_debug").step()
     return true
@@ -160,7 +266,17 @@ end
 --  at the new token. When `path` is not the running scene, only the
 --  scene cache is invalidated. Returns true + status.
 function kag_runner.reload_scene(path)
+    if changing_session then return false, "session-changing" end
     if not ctx then return false, "no-context" end
+    if ctx._kag_debug_paused then return false, "kag-paused" end
+    local allowed, reason = can_resume()
+    if not allowed then return false, reason end
+    if kag_co then
+        local status = coroutine.status(kag_co)
+        if coroutine.running() == kag_co or status == "running" or status == "normal" then
+            return false, "scheduler-running"
+        end
+    end
     local target = path
     if not target or #target == 0 then
         target = ctx.current_scene or ctx.currentScene
@@ -168,8 +284,8 @@ function kag_runner.reload_scene(path)
     if not target or #target == 0 then return false, "no-scene" end
 
     local flow = require("flow")
-    local scene = flow.reload_scene(target)
-    if not scene then return false, "reload-failed" end
+    local loaded, scene = pcall(flow.reload_scene, target)
+    if not loaded or not scene then return false, "reload-failed" end
 
     local running = ctx.current_scene or ctx.currentScene
     if target ~= running then
@@ -180,9 +296,20 @@ function kag_runner.reload_scene(path)
     local new_index = kag_runner.remap_token_index(
         ctx.tokens or {}, ctx.token_index or 1, new_tokens)
 
-    -- Stage the swap: end the running coroutine (stop_flag) and let
-    -- update() re-spawn at the remapped position -- same pattern as
-    -- rollback/jump, so the debugger and backlog see one code path.
+    -- Close the old scheduler synchronously: its cleanup may enqueue requests
+    -- that must belong to the cancellation below, never to the new scene.
+    changing_session = true
+    ctx._session_active = false
+    local closed, close_error = close_scheduler_coroutine()
+    local cancelled, cancel_error = pcall(cancel_session_work, ctx)
+    changing_session = false
+    if not closed or not cancelled then
+        ctx._session_active = false
+        return false, close_error or cancel_error
+    end
+
+    -- Stage the swap; update() starts the replacement before processing old
+    -- input waits. Failed/cache-only reloads never reach this boundary.
     ctx.tokens = new_tokens
     ctx.labelMap = scene.labels
     ctx.label_index = nil      -- raw tokens: next jump re-scans
@@ -192,12 +319,16 @@ function kag_runner.reload_scene(path)
     ctx.call_stack = nil       -- stale frames point into the old stream
     ctx._pendingSceneReload = true
     ctx.stop_flag = true
+    ctx._session_active = true
     return true, "reloaded"
 end
 
 local function resume_scheduler(origin, value)
     if not kag_co then return false, "not-running" end
-    if coroutine.status(kag_co) == "dead" then return false, "dead" end
+    if coroutine.status(kag_co) == "dead" then
+        if not has_continuation(ctx) then finish_session(true) end
+        return false, "dead"
+    end
 
     local allowed, reason = can_resume()
     if not allowed then return false, reason end
@@ -216,9 +347,7 @@ local function resume_scheduler(origin, value)
     end
     if not resumed then
         print("[KAG Runner] " .. origin .. " resume failed: " .. tostring(result))
-        if kag_co and coroutine.status(kag_co) == "dead" then
-            close_scheduler_coroutine()
-        end
+        finish_session(false)
         return false, result
     end
     -- KAG scene debugger pause: the scheduler yielded "__kag_pause"
@@ -232,6 +361,10 @@ local function resume_scheduler(origin, value)
     end
     -- DebugProtocol resume notification: the anchored coroutine was
     -- advanced directly; report the same state the caller expects.
+    if kag_co and coroutine.status(kag_co) == "dead" and not has_continuation(ctx) then
+        local finished, finish_error = finish_session(true)
+        if not finished then return false, finish_error end
+    end
     return true, result
 end
 
@@ -256,7 +389,8 @@ end
 -- flow.load_scene returns {tokens, labels, path}; we extract tokens, store
 -- labels on ctx, and set _scene_changed so update() knows to re-spawn the coro.
 
-local function load_tokens(path)
+local function load_tokens(owner, path)
+    if changing_session or ctx ~= owner or not owner._session_active then return nil end
     local scene = flow.load_scene(path)
     if scene then
         ctx.labelMap = scene.labels
@@ -331,6 +465,7 @@ end
 -- Load a .ks scene and begin executing it. Returns true on success.
 
 function kag_runner.start(scene_path)
+    if changing_session then return false, "session-changing" end
     local allowed, reason = can_resume()
     if not allowed then
         print("[KAG Runner] Start blocked: " .. reason)
@@ -341,11 +476,16 @@ function kag_runner.start(scene_path)
         if coroutine.status(kag_co) ~= "dead" then
             return false, "already-running"
         end
-        close_scheduler_coroutine()
     end
 
-    -- Build execution context
-    ctx = {
+    local loaded, scene = pcall(flow.load_scene, scene_path)
+    if not loaded or type(scene) ~= "table" or type(scene.tokens) ~= "table" then
+        print("[KAG Runner] Failed to load scene: " .. tostring(scene_path))
+        return false, loaded and "scene-load-failed" or scene
+    end
+
+    -- Prepare a candidate before changing the published session reference.
+    local candidate = {
         f = {}, sf = {}, tf = {},
         tokens = {}, token_index = 1,
         call_stack = {}, layers = {}, backlog = {},
@@ -367,13 +507,15 @@ function kag_runner.start(scene_path)
             end
             return false
         end)(),
-        load_tokens = load_tokens,
         -- Token-level rollback stack (see kag/snapshot.lua); cleared on
         -- [load] and on scene changes. Bounded to cap memory.
         _undoStack = {},
         _undoLimit = 64,
     }
-    rawset(_G, "_CAESURA_CTX", ctx)
+    candidate.load_tokens = function(path) return load_tokens(candidate, path) end
+    local stopped, stop_error = finish_session(false)
+    if not stopped then return false, stop_error end
+    publish_context(candidate)
 
     -- t212: first-definition-wins runtime-error handler (gesture-hook
     -- precedent). A pre-set ctx.handle_error (custom recovery policy) is
@@ -381,12 +523,6 @@ function kag_runner.start(scene_path)
     -- console + file-log (Debug.log) visibility, with G4 traceback.
     kag_runner.install_error_handler(ctx)
 
-    -- Load initial scene
-    local scene = flow.load_scene(scene_path)
-    if not scene then
-        print("[KAG Runner] Failed to load scene: " .. scene_path)
-        return false
-    end
     ctx.tokens = scene.tokens
     ctx.labelMap = scene.labels
     ctx.label_index = nil  -- resume path: rebuild for the restored scene
@@ -412,9 +548,7 @@ function kag_runner.start(scene_path)
     ctx._sceneSwitches = 0
 
     -- Start coroutine
-    kag_co = coroutine.create(function()
-        scheduler.run(ctx, ctx.tokens, 1)
-    end)
+    spawn_scheduler(1)
 
     -- Advance past any non-blocking initial tokens (font, pt, etc.)
     local resumed, resume_reason = resume_scheduler("start")
@@ -432,13 +566,31 @@ end
 local auto_advance_ms = 0  -- accumulated ms before auto-mode advances
 
 function kag_runner.update(dt)
-    if not kag_co then return false, "not-running" end
+    if changing_session then return false, "session-changing" end
+    if not kag_co and ctx and ctx._gesture_history_co then
+        kag_runner.pump_gesture_overlay(ctx)
+    end
+    if not kag_co and not has_continuation(ctx) then
+        return false, ctx and "ended" or "not-running"
+    end
     -- KAG scene debugger pause: while a breakpoint/step holds the
     -- scheduler, do not advance. The editor resumes by calling
     -- KAGDebug.continue_run() (or KAGDebug.step()) via RPC; the next
     -- update() then resumes the coroutine normally.
     if ctx and ctx._kag_debug_paused then
         return false, "kag-paused"
+    end
+    if ctx and ctx._pendingSceneReload then
+        local allowed, reason = can_resume()
+        if not allowed then return false, reason end
+        close_scheduler_coroutine()
+        ctx._pendingSceneReload = nil
+        ctx.stop_flag = false
+        ctx.waiting_input = false
+        ctx.reveal = nil
+        auto_advance_ms = 0
+        spawn_scheduler(ctx.token_index)
+        return resume_scheduler("update", math.max(0, (tonumber(dt) or 0) * 1000))
     end
     -- Replay system: record mode advances the capture clock every frame;
     -- playback mode fires due clicks before normal input processing -- the
@@ -570,20 +722,9 @@ function kag_runner.update(dt)
     end
     auto_advance_ms = 0
 
-    local status = coroutine.status(kag_co)
+    local status = kag_co and coroutine.status(kag_co) or "dead"
     if status == "dead" then
         close_scheduler_coroutine()
-        if ctx._pendingSceneReload then
-            -- Scene hot reload: the .ks was re-parsed (flow.reload_scene)
-            -- and ctx.tokens/token_index remapped; re-spawn the scheduler
-            -- at the new position (stop_flag ended the old coroutine).
-            ctx._pendingSceneReload = nil
-            ctx.stop_flag = false
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
-            return resume_scheduler("update", delta_ms)
-        end
         if ctx._pendingRollback then
             -- Rollback: a snapshot was already restored into ctx by
             -- rollback(); re-spawn the scheduler at the saved position.
@@ -591,9 +732,7 @@ function kag_runner.update(dt)
             -- or scheduler.run returns immediately and the script halts.
             ctx._pendingRollback = nil
             ctx.stop_flag = false
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
+            spawn_scheduler(ctx.token_index)
             return resume_scheduler("update", delta_ms)
         end
         if ctx._scene_changed then
@@ -622,9 +761,7 @@ function kag_runner.update(dt)
             end
             -- Scene changes (jump/call/link) invalidate every snapshot.
             ctx._undoStack = {}
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
+            spawn_scheduler(ctx.token_index)
             return resume_scheduler("update", delta_ms)
         end
         if ctx._pendingJump then
@@ -643,16 +780,16 @@ function kag_runner.update(dt)
                 -- resolved their targets). Delegates to the shared staging
                 -- helper so tests exercise the SAME code path.
                 if kag_runner.stage_label_jump(ctx, path) then
-                    kag_co = coroutine.create(function()
-                        scheduler.run(ctx, ctx.tokens, ctx.token_index)
-                    end)
+                    spawn_scheduler(ctx.token_index)
                     return resume_scheduler("update", delta_ms)
                 end
                 print("[KAG Runner] Choice label not found: " .. tostring(path:sub(2)))
+                finish_session(true)
                 return false, "label-not-found"
             end
             if type(path) ~= "string" or not require("kag.commands.save")._safeScenePath(path) then
                 print("[KAG Runner] Rejected unsafe jump target: " .. tostring(path))
+                finish_session(true)
                 return false, "unsafe-jump-target"
             end
             local scene = flow.load_scene(path)
@@ -665,21 +802,18 @@ function kag_runner.update(dt)
                 ctx.token_index = math.max(1, tonumber(target.index) or 1)
                 ctx.stop_flag = false
                 ctx._undoStack = {}
-                kag_co = coroutine.create(function()
-                    scheduler.run(ctx, ctx.tokens, ctx.token_index)
-                end)
+                spawn_scheduler(ctx.token_index)
                 return resume_scheduler("update", delta_ms)
             end
             print("[KAG Runner] Failed to load jump target: " .. tostring(target.scene or target))
         end
         if resume_from_save() then
             -- [load]: restart the saved scene at the saved token.
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
+            spawn_scheduler(ctx.token_index)
             return resume_scheduler("update", delta_ms)
         else
             print("[KAG Runner] Script ended")
+            finish_session(true)
         end
         return false, "ended"
     end
@@ -734,6 +868,7 @@ end
 -- stopped via stop_flag; update() re-spawns it at the saved token.
 
 function kag_runner.rollback()
+    if changing_session then return false, "session-changing" end
     if not ctx then return false, "no-context" end
     if type(ctx._undoStack) ~= "table" or #ctx._undoStack == 0 then
         return false, "nothing-to-rollback"
@@ -755,6 +890,7 @@ end
 -- advance past click-blocking operations like [p] (page break).
 
 function kag_runner.on_click()
+    if changing_session then return false, "session-changing" end
     -- History/backlog overlay owns the pointer while open: ignore clicks so
     -- the overlay coroutine is not batch-resumed underneath. (Checked first:
     -- the guard must hold even when no coroutine is running yet.)
@@ -818,7 +954,7 @@ function kag_runner.on_click()
     ctx.waiting_input = false
     -- Batch resume through all non-blocking tokens until next [p]
     local count = 0
-    while coroutine.status(kag_co) ~= "dead" and not ctx.waiting_input and count < 200 do
+    while kag_co and coroutine.status(kag_co) ~= "dead" and not ctx.waiting_input and count < 200 do
         local resumed, resume_reason = resume_scheduler("click")
         if not resumed then
             return false, resume_reason
@@ -833,6 +969,7 @@ end
 -- anchored coroutine. It observes state only; Engine skips normal update on
 -- that frame so the scheduler cannot advance twice.
 function kag_runner.debug_resume()
+    if changing_session then return false, "session-changing" end
     return resume_scheduler("debug-resume")
 end
 
@@ -850,6 +987,7 @@ function kag_runner.pump_gesture_overlay(c)
     local ok, err = coroutine.resume(hco)
     if not ok then
         print("[History] overlay error: " .. tostring(err))
+        pcall(coroutine.close, hco)
         c._gesture_history_co = nil
         c.input_focus = "kag"
         pcall(function() require("history_ui")._hideAll(c) end)

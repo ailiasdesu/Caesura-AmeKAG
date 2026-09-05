@@ -6,6 +6,7 @@
 #include "archive/CARCReader.h"
 #include "archive/CRLManager.h"
 #include "TestPaths.h"
+#include "PublisherArchives.h"
 #include <cstring>
 #include <cstdio>
 #include <vector>
@@ -714,4 +715,53 @@ TEST_CASE("CARCReader::verifyChainTrust fails with hash mismatch") {
 
     r.close();
     fs::remove(path);
+}
+
+TEST_CASE("U8: reader pins the host publisher and retains path-key compatibility") {
+    Caesura::Test::PublisherArchives files;
+    CARCReader concrete;
+    IArchiveReader& reader = concrete;
+    REQUIRE(reader.open(files.trusted.string(), files.trustedKey));
+    const auto payload = reader.readFile("u8_publisher_payload.txt");
+    CHECK(std::string(payload.begin(), payload.end()) == "publisher A");
+    CHECK_FALSE(reader.open(files.attacker.string(), files.trustedKey));
+    CHECK_FALSE(reader.isOpen());
+    CHECK(reader.numFiles() == 0);
+    CHECK_FALSE(reader.hasFile("u8_publisher_payload.txt"));
+    CHECK(reader.readFile("u8_publisher_payload.txt").empty());
+
+    CHECK(reader.open(files.trusted.string(), files.trustedKeyPath.string()));
+    CHECK_FALSE(reader.open(files.attacker.string(), files.trustedKeyPath.string()));
+    CHECK_FALSE(reader.open(files.trusted.string(), (files.temp.path() / "missing.pub").string()));
+    const auto badKey = files.temp.path() / "short.pub";
+    { std::ofstream stream(badKey, std::ios::binary); stream << "short"; }
+    CHECK_FALSE(reader.open(files.trusted.string(), badKey.string()));
+    CHECK_FALSE(reader.isOpen());
+}
+
+TEST_CASE("U8: embedded and sidecar keys cannot grant publisher trust") {
+    Caesura::Test::PublisherArchives files;
+    const auto package = files.mount("patch.carc", false);
+    REQUIRE(CryptoEngine::writePublicKey((files.root / "patch.pub").string(),
+                                       files.attackerKey.data()));
+    CARCReader reader;
+    REQUIRE(reader.open(package.string())); // valid attacker self-signature
+    CHECK_FALSE(reader.open(package.string(), files.trustedKey));
+    // Even forging the trailing declaration of publisher A does not repair B's signature.
+    Caesura::Test::PublisherArchives::replaceEmbeddedKey(package, files.trustedKey);
+    CHECK_FALSE(reader.open(package.string(), files.trustedKey));
+    CHECK_FALSE(reader.isOpen());
+}
+
+TEST_CASE("U8: pinned bytes remain authoritative when a declared or on-disk key changes") {
+    Caesura::Test::PublisherArchives files;
+    const auto package = files.mount("base.carc", true);
+    Caesura::Test::PublisherArchives::replaceEmbeddedKey(package, files.attackerKey);
+    REQUIRE(CryptoEngine::writePublicKey(files.trustedKeyPath.string(), files.attackerKey.data()));
+    CARCReader reader;
+    REQUIRE(reader.open(package.string(), files.trustedKey));
+    const auto payload = reader.readFile("u8_publisher_payload.txt");
+    CHECK(std::string(payload.begin(), payload.end()) == "publisher A");
+    CHECK_FALSE(reader.open(package.string()));
+    CHECK_FALSE(reader.open(package.string(), files.trustedKeyPath.string()));
 }

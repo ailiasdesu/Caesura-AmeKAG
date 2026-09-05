@@ -1,23 +1,23 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-09-04T14:49:45Z
+> 生成时间（输入源最新 mtime）：2026-09-05T07:11:32Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：c11d3af2d377632a
+> 源指纹（输入内容 sha256 前 16 hex）：42d909e155619bad
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
 
 - 合约总数（Declared，docs/api/command-contracts.md）：**134**
 - 已注册（Dispatched）：**165**
-- 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**89**
+- 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**90**
 - 测试引用（Tested，启发式计数）：**139**
 - UNWIRED：0 · PARTIAL：0 · CLOSED：131 · EXTRA：31 · EXPERIMENTAL(人工)：3
 - **四层闭包（2026-09-04）**：Structural Closed=131 · Runtime 测试证据=139 · Platform=3 · Packaged=0
   - 列注记：Platform/Packaged 两列随 Phase2 分发逐项真实验证填充（当前无证据=诚实 0）；Runtime=语义测试证据存在（非全部效果面验证）。
 - **幻影绑定（v5）**：**2** 处 backend.<name> 调用命中
   - 提取模式：union of: bindings/*.cpp luaL_Reg { name, lua_X }; backend.lua ^function Backend.X; backend_factory.lua cmd==X; kag.lua ^function KAG.X
-  - 清单大小：197 个可解析名（cpp=157 · shim=69 · factory=63 · kag=20，绑定文件 11 个）
+  - 清单大小：198 个可解析名（cpp=158 · shim=69 · factory=64 · kag=20，绑定文件 11 个）
   - web/jsBackend 交叉核对（仅报告，不参与判定）：幻影名在 web/bridge.js 亦有=render_frame
     · 原生+js 均无=（无）
 - **恒等式：**134 = CLOSED(131) + PARTIAL(0) + UNWIRED(0) + EXPERIMENTAL(在册 3)；165 = 134(Declared) + EXTRA(31) + EXPERIMENTAL(合约外 0)**
@@ -124,14 +124,14 @@
 | dec | Y | Y | n | CLOSED ⚠ | ✓19 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:129 |
 | delay | Y | Y | n | CLOSED | ✓33 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:339 |
 | div | Y | Y | n | CLOSED ⚠ | ✓15 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:124 |
-| edit | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/text.lua:1927 |
+| edit | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/text.lua:1966 |
 | emb | Y | Y | n | CLOSED | ✓16 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:92 |
 | end | n | Y | n | EXTRA | ✓213 | - | - | ? | scripts/kag.lua:86 |
-| endbutton | Y | Y | n | CLOSED | ✓30 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1419 |
+| endbutton | Y | Y | Y | CLOSED | ✓30 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1419 |
 | endform | n | Y | n | EXTRA | ✓1 | - | - | ? | scripts/kag.lua:362 |
 | ending | Y | Y | n | CLOSED ⚠ | ✓22 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:328 |
 | endmacro | n | Y | n | EXTRA | ✓54 | - | - | ? | scripts/kag.lua:244 |
-| endselect | Y | Y | n | CLOSED | ✓22 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1535 |
+| endselect | Y | Y | n | CLOSED | ✓22 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1554 |
 | endtag | n | Y | n | EXTRA | ✓1 | - | - | ? | scripts/kag.lua:358 |
 | er | Y | Y | Y | CLOSED | ✓6 | - | - | ? | scripts/kag/commands/text.lua:968 |
 | erasemacro | n | Y | n | EXTRA | ✓6 | - | - | ? | scripts/kag.lua:245 |
@@ -153,7 +153,7 @@
 | i18n | Y | Y | n | CLOSED ⚠ | ✓60 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:637 |
 | image | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/layer.lua:219 |
 | inc | Y | Y | n | CLOSED | ✓29 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:434 |
-| input | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/text.lua:1675 |
+| input | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/text.lua:1694 |
 | is_loaded | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:235 |
 | is_pending | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/resource.lua:244 |
 | jump | n | Y | n | EXTRA | ✓178 | - | - | ? | scripts/kag.lua:503 |
@@ -200,8 +200,8 @@
 | quake | Y | Y | n | CLOSED | ✓2 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:423 |
 | r | Y | Y | Y | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED（位置级） ⚠ | scripts/kag.lua:290 |
 | random | Y | Y | n | CLOSED | ✓14 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:474 |
-| relocalize_backlog | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/text.lua:1558 |
-| relocalize_page | n | Y | Y | EXTRA | - | - | - | ? | scripts/kag/commands/text.lua:1616 |
+| relocalize_backlog | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/text.lua:1577 |
+| relocalize_page | n | Y | Y | EXTRA | - | - | - | ? | scripts/kag/commands/text.lua:1635 |
 | replay | Y | Y | n | CLOSED | ✓5 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:525 |
 | reset | Y | Y | Y | CLOSED | ✓5 | - | - | ? | scripts/kag/commands/text.lua:1178 |
 | return_to_caller | n | Y | n | EXTRA | - | - | - | ? | scripts/kag.lua:530 |
@@ -213,8 +213,8 @@
 | saveplace | Y | Y | n | CLOSED ⚠ | ✓7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/save.lua:550 |
 | scroll | Y | Y | Y | CLOSED | ✓5 | - | - | ? | scripts/kag/commands/transition.lua:215 |
 | se | n | Y | Y | EXTRA | ✓6 | - | - | ? | scripts/kag.lua:445 |
-| sel | n | Y | n | EXTRA | ✓66 | - | - | ? | scripts/kag/commands/text.lua:1533 |
-| select | Y | Y | n | CLOSED ⚠ | ✓33 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1529 |
+| sel | n | Y | n | EXTRA | ✓66 | - | - | ? | scripts/kag/commands/text.lua:1552 |
+| select | Y | Y | n | CLOSED ⚠ | ✓33 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1548 |
 | set | Y | Y | n | CLOSED | ✓114 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:416 |
 | setbgmvolume | Y | Y | Y | CLOSED | ✓7 | - | - | ? | scripts/kag/commands/audio.lua:356 |
 | setsevolume | Y | Y | Y | CLOSED | ✓6 | - | - | ? | scripts/kag/commands/audio.lua:361 |
@@ -237,7 +237,7 @@
 | stopvideo | Y | Y | Y | CLOSED | ✓3 | - | - | ? | scripts/kag/commands/video.lua:110 |
 | stopvoice | Y | Y | Y | CLOSED | ✓1 | - | - | ? | scripts/kag/commands/audio.lua:308 |
 | sub | Y | Y | n | CLOSED ⚠ | ✓8 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:122 |
-| text | Y | Y | Y | CLOSED ⚠ | ✓48 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:841 |
+| text | Y | Y | Y | CLOSED ⚠ | ✓49 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:841 |
 | textbox | Y | Y | Y | CLOSED | ✓7 | - | - | ? | scripts/kag/commands/text.lua:381 |
 | textspeed | Y | Y | n | CLOSED | ✓42 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1259 |
 | trans* | Y | Y | Y | CLOSED | ✓4 | - | - | ? | scripts/kag/commands/transition.lua:299 |
@@ -253,7 +253,7 @@
 | voice | Y | Y | Y | CLOSED | ✓4 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:435 |
 | voice_off | Y | Y | n | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1168 |
 | voice_wait | Y | Y | n | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:299 |
-| wait | Y | Y | n | CLOSED | ✓64 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:50 |
+| wait | Y | Y | n | CLOSED | ✓65 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:50 |
 | wait_click | n | Y | n | EXTRA | - | - | - | ? | scripts/kag.lua:325 |
 | waitbgm | Y | Y | Y | CLOSED | ✓3 | - | - | ? | scripts/kag/commands/audio.lua:339 |
 | waitclick | Y | Y | n | CLOSED | ✓3 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:314 |
@@ -515,6 +515,7 @@
 
 ## 可疑翻转清单（v4 保守维持；含队长裁决）
 
+- endbutton — v3 PARTIAL → v4 CLOSED；v4 判据翻 CLOSED 但非人工已核 VERIFIED——保守维持 v3，待裁决
 - hr — v3 PARTIAL → v4 CLOSED；v4 判据翻 CLOSED 但非人工已核 VERIFIED——保守维持 v3，待裁决
 
 ## 幻影绑定（v5）
@@ -569,11 +570,11 @@
 - preload_transition - scripts/kag/commands/resource.lua:280；B:api-helper-export（已注册但无合约条目）
 - promote_transition_slot - scripts/kag/commands/resource.lua:294；B:api-helper-export（已注册但无合约条目）
 - push_backlog - scripts/kag/commands/text.lua:333；B:api-helper-export（已注册但无合约条目）
-- relocalize_backlog - scripts/kag/commands/text.lua:1558；B:api-helper-export（已注册但无合约条目）
-- relocalize_page - scripts/kag/commands/text.lua:1616；B:api-helper-export（已注册但无合约条目）
+- relocalize_backlog - scripts/kag/commands/text.lua:1577；B:api-helper-export（已注册但无合约条目）
+- relocalize_page - scripts/kag/commands/text.lua:1635；B:api-helper-export（已注册但无合约条目）
 - return_to_caller - scripts/kag.lua:530；A:user-command-missing-contract（已注册但无合约条目）
 - se - scripts/kag.lua:445；A:user-command-missing-contract（已注册但无合约条目）
-- sel - scripts/kag/commands/text.lua:1533；B:api-helper-export（已注册但无合约条目）
+- sel - scripts/kag/commands/text.lua:1552；B:api-helper-export（已注册但无合约条目）
 - showtext - scripts/kag.lua:206；A:user-command-missing-contract（已注册但无合约条目）
 - update - scripts/kag/commands/tween.lua:165；B:api-helper-export（已注册但无合约条目）
 - wait_click - scripts/kag.lua:325；A:user-command-missing-contract（已注册但无合约条目）
@@ -582,8 +583,8 @@
 
 - _hideHr - text.lua:947
 - _postfx - vfx.lua:274
-- _relocalizeCC - text.lua:1599
-- _relocalizeChoices - text.lua:1574
+- _relocalizeCC - text.lua:1618
+- _relocalizeChoices - text.lua:1593
 - _renderNameplate - text.lua:431
 - _safeScenePath - save.lua:30
 

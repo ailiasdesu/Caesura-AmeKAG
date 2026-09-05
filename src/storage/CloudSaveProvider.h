@@ -2,12 +2,13 @@
 // Splits saves > 256KB into chunks (Steam Remote Storage per-file limit)
 #pragma once
 #include "api/ISaveProvider.h"
+#include "api/ICloudSaveTransport.h"
 #include <cstdint>  // fixed-width types (GCC strict)
 
 namespace Caesura {
 class ISteamBackend;
 
-class CloudSaveProvider : public ISaveProvider {
+class CloudSaveProvider : public ISaveProvider, public ICloudSaveTransport {
 public:
     explicit CloudSaveProvider(ISteamBackend* steam);
     ~CloudSaveProvider() override = default;
@@ -24,6 +25,10 @@ public:
     bool pushToCloud(const std::string& slotPath) override;
     bool pullFromCloud(const std::string& slotPath) override;
     bool supportsCloudSync() const override { return true; }
+    std::string readLocalFile(const std::string& slotPath) override;
+    bool writeLocalFile(const std::string& slotPath, const std::string& bytes) override;
+    std::string readCloudFile(const std::string& slotPath) override;
+    bool writeCloudFile(const std::string& slotPath, const std::string& bytes) override;
 
 private:
     // Flat cloud key for a slot path (directory component stripped).

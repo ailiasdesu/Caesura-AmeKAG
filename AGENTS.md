@@ -183,13 +183,17 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `guides/live2d-setup.md` | Cubism SDK 集成步骤 |
 
 ### plans/ — 执行记录与当前计划
-按日期命名（`YYYY-MM-DD-NNN-描述.md`），最新交接文档为权威现状：
+按日期命名（`YYYY-MM-DD-NNN-描述.md`）。当前计划入口为 `docs/plans/README.md`。
+
+**2026-09-05 重新规划决定：此前所有计划的排期、阶段、冻结规则、平台排除与执行授权均已废止，仅保留“底层优先、Studio 暂停”两项产品方向约束。历史计划、交接文档及项目记忆中的旧优先级不得覆盖当前计划；事实状态以当前源码与可复核运行证据为准。**
+
 | 文件 | 内容 |
 |------|------|
-| `plans/2026-08-29-029-consolidation-sprint.md` | **当前冲刺计划**（029，Consolidation Sprint：feature 冻结、平台七级阶梯纪律、能力闭环矩阵、M1-M5 里程碑重排） |
-| `plans/2026-08-24-028-android-full-closure.md` | **最新状态**交接文档（028，Android 全链路真机闭环、IME 输入桥接、Release 签名与 iOS/Metal 加固） |
+| `plans/2026-09-05-001-refactor-runtime-foundation-plan.md` | **当前唯一后续迭代计划**：可信验证、运行时正确性、状态恢复、真实后端及交付闭环；Studio 暂停 |
+| `plans/2026-08-29-029-consolidation-sprint.md` | 历史冲刺记录（029；排期与冻结规则已废止） |
+| `plans/2026-08-24-028-android-full-closure.md` | 历史交接记录（028，Android 真机链路、IME、签名与 iOS/Metal 工作） |
 | `plans/2026-08-24-027-antigravity-handoff.md` | 交接文档（027，Antigravity 接手现状、铁律、环境速查） |
-| `plans/2026-08-23-026-delivery-handoff.md` | 交接文档（026，Validation-Release 阶段总结；round 101+ 权威在 plans/audit/ROADMAP-200.md） |
+| `plans/2026-08-23-026-delivery-handoff.md` | 历史交接文档（026，Validation-Release 阶段总结；round 101+ 历史记录在 plans/audit/ROADMAP-200.md） |
 | `plans/2026-08-22-025-delivery-handoff.md` | 交接文档（025；WSL Linux 全量测试 + 8 项跨平台修复） |
 | `plans/2026-08-22-024-delivery-handoff.md` | 交接文档（024，round 127 完成 / 产品化 Sprint 4-5c + Steam SDK） |
 | `plans/2026-08-21-023-delivery-handoff.md` | 交接文档（023，round 121 完成 / Sprint 1-3） |
@@ -200,7 +204,7 @@ src/entry/:        接收 EngineConfig → 补齐默认后端 → init → 注�
 | `plans/2026-08-12-007-delivery-handoff.md` | 交接文档（007，SMA 游戏循环接驳） |
 | `plans/2026-08-12-006-delivery-handoff.md` | 交接文档（006，停滞修复 + 表达力扩展） |
 | `plans/2026-08-12-005-delivery-handoff.md` | 交接文档（005，[until]/[button cond]/aidev） |
-| `plans/2026-08-12-004-generation-gap-roadmap.md` | 代差路线图（五大战役，权威规划） |
+| `plans/2026-08-12-004-generation-gap-roadmap.md` | 历史代差路线图（五大战役；不再提供当前排期） |
 | `plans/2026-08-04-006-perf-baseline-update.md` | 性能基线更新 |
 | `plans/2026-06-17-001-feat-engine-stability-hardening-plan.md` | 引擎稳定性加固计划 |
 | `plans/2026-06-18-galgame-core-readiness-audit.md` | Galgame 核心就绪度排查方案 |

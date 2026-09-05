@@ -9,12 +9,13 @@
 // untouched) -- cloud sync is an enhancement, never a blocker.
 #pragma once
 #include "api/ISaveProvider.h"
+#include "api/ICloudSaveTransport.h"
 #include <memory>
 #include <string>
 
 namespace Caesura {
 
-class HttpCloudSaveProvider final : public ISaveProvider {
+class HttpCloudSaveProvider final : public ISaveProvider, public ICloudSaveTransport {
 public:
     // endpoint may be http:// or https://; bearerToken (optional) is sent as
     // an Authorization header on every cloud request (ST-2).
@@ -30,6 +31,10 @@ public:
     bool pushToCloud(const std::string& slotPath) override;
     bool pullFromCloud(const std::string& slotPath) override;
     bool supportsCloudSync() const override { return true; }
+    std::string readLocalFile(const std::string& slotPath) override;
+    bool writeLocalFile(const std::string& slotPath, const std::string& bytes) override;
+    std::string readCloudFile(const std::string& slotPath) override;
+    bool writeCloudFile(const std::string& slotPath, const std::string& bytes) override;
 
 private:
     // Basename only: remote keys must never contain path separators.

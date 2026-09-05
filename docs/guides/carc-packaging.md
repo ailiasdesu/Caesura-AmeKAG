@@ -56,7 +56,7 @@ carc_pack.exe extract <archive.carc> <out_dir> [--path <rel>] [public.key]
 
 ### 密钥管理
 
-- **公钥** (32 字节): 嵌入到引擎中，用于运行时验证签名和解密
+- **公钥** (32 字节): 归档尾部包含一份；固定发布者模式由宿主另行选择可信公钥，用于验证签名和派生索引解密密钥
 - **私钥** (64 字节): 仅用于打包时签名，**不应分发**
 - 密钥文件为原始二进制格式
 
@@ -113,31 +113,47 @@ Caesura 引擎**没有 `carc://` 协议**。资源请求统一走纯路径：打
 
 ## 运行时加载
 
-引擎在组合根的 `registerDefaultAssetProviders`（`src/entry/Engine_Assets.cpp`）中，按 `data.carc`、`game.carc`、`patch.carc` 的顺序自动探测并注册存在的归档作为 `CarcAssetProvider`（纯路径语义，见上节）：
+引擎在组合根 `registerDefaultAssetProviders`（`src/entry/Engine_Assets.cpp`）中自动发现并挂载资源根及其 `dlc/` 子目录下的归档。优先级越大，资源覆盖顺序越靠前：
 
-```cpp
-// src/entry/Engine_Assets.cpp（组合根，Engine 启动时自动处理，无需游戏代码手动注册）
-void registerDefaultAssetProviders(AssetManager& assetManager) {
-    const char* carcFiles[] = {"data.carc", "game.carc", "patch.carc"};
-    for (const char* fname : carcFiles) {
-        auto reader = std::make_unique<carc::CARCReader>();
-        if (reader->open(fname)) {
-            assetManager.addProvider(
-                std::make_unique<carc::CarcAssetProvider>(std::move(reader)));
-            printf("[Engine] Registered CARC: %s\n", fname);
-        }
-    }
-}
+| 优先级 | 自动识别的归档 |
+| --- | --- |
+| 40 | `patch.carc`、`patch_*.carc` |
+| 30 | `dlc_*.carc`、`dlc/` 下的其他 `*.carc` |
+| 20 | `lang_*.carc` |
+| 10 | `base.carc`、`data.carc`、`game.carc` |
+| 5 | 资源根与 `assets/` 中的松散文件 |
+
+匹配区分大小写，固定名称和前缀按上表写法，扩展名必须为 `.carc`；资源根中不符合上述命名规则的归档不会挂载。同名归档去重，资源根中的文件优先于 `dlc/` 下的同名文件。`assetManager` 由 `Engine` 独占持有，资源请求通过提供者链按优先级查找。
+
+### 选择发布者信任策略
+
+默认 `--carc-trust compatible` 保持原有行为：使用归档内嵌公钥检查签名，跳过打不开或验证失败的包。这能检查包与其自报公钥是否一致，不能确认发布者身份；攻击者替换整个包和自报公钥后仍可能通过。
+
+宿主需要确认包由指定发布者签名时，必须同时指定 `--carc-trust pinned` 和 `--carc-public-key <path>`：
+
+```bash
+# 在当前启动目录下选择可信公钥，再切换到游戏资源根
+./CaesuraAmeKAG --resource-root ./release \
+  --carc-trust pinned --carc-public-key ./trusted/publisher.pub
+
+# 显式使用兼容行为（也可省略此选项）
+./CaesuraAmeKAG --resource-root ./release --carc-trust compatible
 ```
 
-`assetManager` 由 `Engine` 独占持有并注入组合根辅助函数，不通过全局单例访问。`ProviderChain` 按优先级依次在磁盘目录与已注册的 CARC 提供者中查找同名路径。
+`--carc-public-key` 必须是**恰好 32 字节的原始二进制公钥**，不能使用十六进制文本、PEM 或包含额外字节的文件。相对路径基于进程启动时的工作目录，在切换 `--resource-root` 之前只读取一次；读取后的字节复制进 `EngineConfig`。缺少模式、缺少公钥、不可读或长度不符的文件、未知模式/选项、相互冲突的重复参数都会在创建引擎之前报错并以非零状态退出。相同值的重复信任参数允许出现；`compatible` 与公钥参数同时出现会报错。
+
+固定模式把同一份宿主公钥应用于**每个自动识别的挂载包**。任一已发现包打不开、损坏或签名不匹配，或者挂载目录发现失败，都会使引擎初始化失败并以非零状态退出；不会继续使用部分已验证包。没有 `dlc/` 是正常情况，没有归档时仍要求提供公钥。现有 `carc_pack` 每次打包都会生成新密钥对，因此分别调用它生成的多个包通常不能在单一固定公钥下同时挂载；本功能没有加入密钥复用、轮换或多发布者支持。
+
+公钥的可信性来自宿主选择。宿主负责通过可信渠道取得并保护该文件；引擎不会从包内声明、发行清单、自动寻找的相邻 `.pub` 文件或 Lua 配置选择公钥。Lua `config.carc_verify_on_startup` 已不再控制验签：签名验证在初始挂载阶段完成，其 `true` / `false` 值均不能关闭固定发布者策略。
+
+固定发布者模式只认证已识别并挂载的 CARC 包。松散资源、入口 Lua、清单以及可被替换的宿主程序仍在此认证范围之外；成功启动不代表整个发行目录已通过认证。CARC 的索引密钥可从公钥派生，能读取归档的人可以提取其内容；归档加密也不构成 DRM 或内容保密保证。
 
 ## 安全注意事项
 
 1. **私钥绝不提交到版本控制** — 将 `*.key` 添加到 `.gitignore`
-2. **公钥嵌入引擎** — 运行时验证签名使用
-3. **AES-256-GCM 提供认证加密** — 同时保护机密性和完整性
-4. **Ed25519 签名在加密之上** — 防止恶意资源替换
+2. **宿主选择可信公钥** — 使用固定发布者模式时，从可信渠道提供公钥；仅信任包内嵌公钥不能认证发布者
+3. **AES-256-GCM 检查条目完整性** — 索引包含解密信息，格式本身不保证内容保密
+4. **Ed25519 签名认证 CARC 字节** — 固定宿主公钥后才可拒绝其他发布者的替换包；认证范围不包含整个发行目录
 5. **nonce 复用检测（默认开启）** — CryptoEngine 按 (AES key, nonce) 键界维护一个**有界**（1024 条，约 45 KB）进程级复用注册表。encrypt() 以同一 (key, nonce) 加密两次会在第二次**拒绝产出密文**（返回空），fail-closed 地避免 GCM 重放 keystream 泄露。注册表按 (key, nonce) **成对**键界，因此同一 nonce 在不同 key 下使用（安全语义）不会被误判。generateNonce() 使用 CSPRNG（96-bit 碰撞概率 < 2^-48），正常打包路径不会触注册表；仅当调用方在固定 key 下以确定性/计数器方式生成 nonce 时，可调用 CryptoEngine::setNonceReuseDetection(false) 关闭检测（默认开启）。
 
 ## 常见问题

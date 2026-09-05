@@ -87,20 +87,37 @@ default/range/type 破坏性改变；已发布参数移除；i18n 语言键与�
 
 ### 4.1 存档格式
 
-- **容器**：JSON 存档，经 **AES-256-GCM** 加密。
-- **信封**：`CAES` 魔数信封 = 明文信封元数据（`scene` / `timestamp` / `schema_version` / `engine_version`）+ GCM 密文与认证 tag。
-- **实现**：`src/storage/` —— `ISaveManager` / `ISaveProvider`；加密由 SaveManager 密钥集 + `CAES` 魔数决定，provider 无加密意识。
-- **审计参考**：`docs/design/save-security-audit.md`。
+以下存档说明于 **2026-09-05 按当前源码同步**，不代表最新构建或回归已经通过。
+
+- **内容**：SaveManager 将 `schema_version`、`timestamp`、`scene`、`token_index`、`thumbnail`、`engine_version` 和 `data` 一起组成 JSON 信封，再对整个 `envelope.dump()` 编码。
+- **加密布局**：`CAES`（4B）+ nonce（12B）+ GCM tag（16B）+ ciphertext。设置 key 后，**整个 JSON 信封都在密文内**；上述元数据不是明文文件头，并随密文接受 AES-256-GCM 认证。CAES 外层没有独立版本字段，JSON `schema_version` 属于加密内容。
+- **存储职责**：`ISaveProvider` 只传输原始字节；SaveManager 在调用 provider 前编码、读取后解码。本地默认 provider、自定义 provider、HTTP 和 Steam 路径遵循相同的 SaveManager 加密策略。
+- **策略来源**：`SaveEncryptionPolicy` 由调用方选择，不能由待验存档自报。`EngineConfig::saveEncryptionPolicy` 默认 `Compatible`；C++ 可通过 `ISaveManager::setEncryptionPolicy()` 配置。策略不生成或持久化 key，key 仍由调用方通过现有接口提供。
+
+| 策略 | 普通读取 | 保存 |
+|---|---|---|
+| `Compatible`（默认） | 可读合法旧明文；CAES 必须有正确 key 并通过认证 | 有 key 一律写 CAES，无 key 写明文 |
+| `RequireEncrypted` | 拒绝非 CAES；CAES 必须有正确 key 并通过认证 | 缺 key 时拒绝写入；清除 key 不会清除策略，也不能覆盖旧档 |
+
+识别为 CAES 后，缺 key、截断或认证失败直接终止，不能回退 JSON。`Compatible` 为保留旧明文兼容而允许整个文件被替换为合法明文 JSON；它不提供防此类替换的保证。两种策略都不提供槽位文件名绑定或旧密文防重放。
+
+**显式旧明文导入**：`loadLegacyPlaintext(slot, outMeta)` 是 C++ 只读入口，可在严格策略下由调用方明确选择使用。它拒绝 CAES，不临时降低策略，不重写源文件；调用方取得数据后，提供 key 并显式 `save()` 才会写出密文。原档保留和目标槽位由调用方选择，没有自动批量迁移。
+
+**云同步**：SaveManager 使用 `ICloudSaveTransport` 暂存一次读取的字节，按当前策略/key、JSON 信封和迁移结果验证，成功后才将**同一份原始字节**上传或提交到本地。Steam 的本地/云端端点明确区分；不会把 push 错接成 cloud→cloud。验证失败不写入目标，验证成功也不重新读取或重新加密。provider 的直接字节传输 API 不替调用方执行此策略，游戏应使用 SaveManager 的槽位同步 API。
+
+实现依据：[SaveManager.cpp](../src/storage/SaveManager.cpp)、[ISaveManager.h](../src/storage/api/ISaveManager.h)、[ICloudSaveTransport.h](../src/storage/api/ICloudSaveTransport.h)。安全边界见 [存档安全说明](design/save-security-audit.md)。
 
 ### 4.2 schema 迁移链
 
 - 存档 schema 版本 **v1 → v2 → v3 → v4 → v5** 自动升级链（`SaveManager` 的 `migrate()`，链式查找已注册迁移，步数上限 64 防环）。
-- 每个迁移注册为**幂等且向后兼容**：读旧 schema 存档 → 加载时自动升级到当前 schema；迁移失败保留 `.bak` 原始文件。
+- 加载时对 `data` 执行已注册的内存迁移，不自动覆盖存档，也不自动创建 `.bak`。只有调用方随后显式保存才写出当前格式。
+- `load()` / `loadLegacyPlaintext()` 失败返回 null JSON，且保持调用方传入的 `SaveMeta` 不变；缺失/null `data`、迁移返回 null 或抛异常均属失败。合法空对象 `{}` 与空数组 `[]` 可以成功返回，不能仅用 `json.empty()` 判断加载失败。
+- 当前实现保留未来 `schema_version` 不迁移透传的行为；这不等于已经验证新版本存档能被旧版本引擎正确解释。
 - 权威声明：`docs/design/engine-architecture-topology.md`（storage 行「schema v1→v5 迁移」）、`docs/design/engine-capability-matrix.md` (C4)。
 
 ### 4.3 Golden Save 跨版本迁移承诺
 
-- 建立 **Golden Save 语料**（Golden Project 的一部分，见总任务书 QA）：对每个主要版本保留一组参考存档；升级回归测试必须保证「旧版本存档 → 新版本引擎 → 读档成功，且场景/变量/进度语义不丢失」。
+- **Golden Save 语料**用于保留版本参考存档；升级回归需要检查「旧版本存档 → 新版本引擎 → 读档成功，且场景/变量/进度语义不丢失」。夹具存在本身不证明所有发布版之间已完成验证，结论以实际样本来源和运行记录为准。
 - 1.x 内任何 schema 变更都必须通过 Golden Save 从最旧支持版本开始的完整链迁移。
 
 ### 4.4 字段扩展规则（只增不删）

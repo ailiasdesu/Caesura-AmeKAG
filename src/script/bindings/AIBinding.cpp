@@ -17,7 +17,6 @@ extern "C" {
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 
 namespace Caesura {
 
@@ -33,12 +32,6 @@ struct AiRequest {
 };
 
 std::atomic<uint64_t> g_nextRequestId{1};
-// P1-2 (round 36): epoch-based cancellation. lua_AI_cancel records the
-// request-id watermark at cancel time; a worker only marks its request
-// "cancelled" when its own id <= epoch. Requests submitted AFTER the cancel
-// (id > epoch) are unaffected - the old boolean latch never reset and would
-// have cancelled every subsequent request forever.
-std::atomic<uint64_t> g_cancelEpoch{0};
 
 // ---- config read (config.ai.*) -------------------------------------------
 
@@ -264,6 +257,24 @@ static int lua_AI_query(lua_State* L) {
     return 1;
 }
 
+// Consume the VM-owned numeric entry before invoking or releasing its callback.
+// A reentrant cancel or a stale completion must never unref a reused slot.
+int takeAiCallback(lua_State* L, lua_Integer id) {
+    lua_getglobal(L, "_AI_CALLBACKS");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        return LUA_NOREF;
+    }
+    lua_rawgeti(L, -1, id);
+    const int reference = lua_isinteger(L, -1)
+        ? static_cast<int>(lua_tointeger(L, -1)) : LUA_NOREF;
+    lua_pop(L, 1);
+    lua_pushnil(L);
+    lua_rawseti(L, -2, id);
+    lua_pop(L, 1);
+    return reference;
+}
+
 static int lua_AI_query_async(lua_State* L) {
     const char* prompt = luaL_checkstring(L, 1);
     AiConfig cfg = readConfig(L);
@@ -284,6 +295,8 @@ static int lua_AI_query_async(lua_State* L) {
 
     // Store the callback: global _AI_CALLBACKS[id] = ref.
     const uint64_t id = g_nextRequestId.fetch_add(1);
+    lua_pushvalue(L, cbIdx);
+    const int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);
     lua_getglobal(L, "_AI_CALLBACKS");
     if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
@@ -291,39 +304,29 @@ static int lua_AI_query_async(lua_State* L) {
         lua_pushvalue(L, -1);
         lua_setglobal(L, "_AI_CALLBACKS");
     }
-    lua_insert(L, -2);  // [callbacks, callback]
-    int cbRef = luaL_ref(L, LUA_REGISTRYINDEX);  // pops callback
-    lua_pushinteger(L, (lua_Integer)id);
     lua_pushinteger(L, cbRef);
-    lua_settable(L, -3);
+    lua_rawseti(L, -2, static_cast<lua_Integer>(id));
     lua_pop(L, 1);  // callbacks table
+
+    // Lua threads share the registry, but the submitting coroutine can finish
+    // and be collected before the HTTP job completes. Dispatch on its VM's
+    // permanently rooted main thread instead. Engine joins jobs before closing
+    // that VM, including when the callback has already been cancelled.
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+    lua_State* mainThread = lua_tothread(L, -1);
+    lua_pop(L, 1);
 
     auto request = std::make_shared<AiRequest>();
     std::string promptCopy = prompt;
     AiConfig cfgCopy = cfg;
-    jobs->submit(
-        [request, promptCopy, cfgCopy, id]() {
+    const uint64_t jobId = jobs->submit(
+        [request, promptCopy, cfgCopy]() {
             doQuery(promptCopy, cfgCopy, request->result, request->error);
-            if (g_cancelEpoch.load() >= id) {
-                request->error = "cancelled";
-            }
         },
         JobPriority::Normal,
-        [L, id, request]() {
+        [L = mainThread, id, request]() {
             // Main thread: invoke the stored callback with (text, err).
-            lua_getglobal(L, "_AI_CALLBACKS");
-            if (!lua_istable(L, -1)) {
-                lua_pop(L, 1);
-                return;
-            }
-            lua_pushinteger(L, (lua_Integer)id);
-            lua_gettable(L, -2);  // callback ref (number) or nil
-            int cbRef = lua_isnil(L, -1) ? LUA_NOREF
-                                         : (int)lua_tointeger(L, -1);
-            lua_pop(L, 1);
-            lua_pushnil(L);  // remove the callback entry
-            lua_setfield(L, -2, std::to_string(id).c_str());
-            lua_pop(L, 1);  // callbacks table
+            const int cbRef = takeAiCallback(L, static_cast<lua_Integer>(id));
 
             if (cbRef != LUA_NOREF) {
                 lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
@@ -350,15 +353,18 @@ static int lua_AI_query_async(lua_State* L) {
                 }
             }
         });
-    lua_pushboolean(L, 1);
+    if (jobId == 0) {
+        const int rejectedRef = takeAiCallback(L, static_cast<lua_Integer>(id));
+        luaL_unref(L, LUA_REGISTRYINDEX, rejectedRef);
+    }
+    lua_pushboolean(L, jobId != 0);
     return 1;
 }
 
 static int lua_AI_cancel(lua_State* L) {
-    // Cancel everything submitted so far (id <= watermark); future requests
-    // get ids above the watermark and run normally (P1-2 fix).
-    g_cancelEpoch.store(g_nextRequestId.load());
-    // Drop all stored callbacks so they never fire after cancel.
+    // Cancellation belongs to this VM. Removing its entries suppresses both
+    // ready and in-flight completions without touching another VM's requests.
+    // The HTTP worker owns no Lua objects and may finish after cancellation.
     lua_getglobal(L, "_AI_CALLBACKS");
     if (lua_istable(L, -1)) {
         lua_pushnil(L);

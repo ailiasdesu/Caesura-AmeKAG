@@ -44,18 +44,9 @@ class ISaveManager;
 struct CompletedLoad;
 namespace carc { class ICryptoEngine; }
 
-// [R1-FIX] GameState Architecture Note:
-// There are TWO ctx tables in the system:
-//   1. C++ GameState ctx (Lua registry key "caesura_ctx", 13 fields)
-//      - Created by GameState::create(L) during LuaManager::init()
-//      - Used by: scheduler.lua, save.lua, all KAG commands
-//      - Persisted by: SaveManager (C++ JSON path via KAG.save_game)
-//   2. Legacy Conductor local ctx (Lua table in conductor.lua, 12 fields)
-//      - Created by Conductor.execute() for backward compat
-//      - Contains: skipMode, autoMode, readFile, waiting_input
-//      - NOT persisted - values are ephemeral per-scene
-//   Migration: All scripts should use the C++ GameState ctx (ctx1).
-//   Conductor is deprecated and no longer auto-loaded by kag/init.lua.
+// The Lua KAG runner owns its session table. GameState references that exact
+// table in the VM registry for native queries and hot reload; VM initialization
+// creates no independent state. Engine stops the runner before native teardown.
 class Engine : public ILifecycleListener, public IAudioFocusListener {
 public:
     using OwnerPump = std::function<void()>;
@@ -205,7 +196,7 @@ private:
     std::unique_ptr<carc::ICryptoEngine> m_cryptoEngine;
     // Dispatch one completed async load (texture upload + Lua callback).
     // Used by both the SDL event path and the headless/editor drain path.
-    void dispatchAsyncLoad(CompletedLoad* completed);
+    void dispatchAsyncLoad(std::unique_ptr<CompletedLoad> completed);
 
     std::vector<std::unique_ptr<CompletedLoad>> m_deferredAsyncLoads;
     // Cached last-written GPU-state globals: written to Lua only when the

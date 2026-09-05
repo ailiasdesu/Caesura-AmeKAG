@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(CAESURA_REQUIRE_TEST_PREREQUISITES "Fail configure when validation prerequisites are missing" OFF)
+
 # Force modern CMake policies (FreeType sets 3.0...3.5 which can cause issues)
 cmake_policy(SET CMP0053 NEW)  # Variable expansion in strings
 cmake_policy(SET CMP0054 NEW)  # if() argument handling
@@ -208,6 +210,10 @@ else()
     add_executable(${PROJECT_NAME} src/main.cpp)
 endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE Caesura::Engine Caesura::Rpc)
+if(WIN32)
+    # Preserve the host public-key path from the native wide command line.
+    target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set_target_properties(${PROJECT_NAME} PROPERTIES

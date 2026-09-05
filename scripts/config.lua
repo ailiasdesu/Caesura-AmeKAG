@@ -75,7 +75,7 @@ config.se_volume    = 1.0
 
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
 -- CARC validation ([10.2.30])
-config.carc_verify_on_startup = true  -- Verify CARC signature before loading scripts
+config.carc_verify_on_startup = true  -- Legacy/ignored: mounts always verify; publisher trust is host-selected before Lua startup.
 
 -- Persistence file paths (relative to game root)
 -- �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T

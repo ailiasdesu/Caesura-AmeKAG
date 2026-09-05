@@ -54,6 +54,7 @@ void HotReload::shutdown() {
     m_scriptState = ScriptState::IDLE;
     m_reloadRequested = false;
     m_warningFrames = 0;
+    m_beforeReloadCallback = {};
 }
 
 void HotReload::scanDirectory() {
@@ -80,11 +81,29 @@ void HotReload::scanDirectory() {
 // Helper: push GameState ctx table from Lua registry (avoids script/ dependency)
 static bool pushGameState(lua_State* L) {
     if (!L) return false;
-    if (lua_getfield(L, LUA_REGISTRYINDEX, "caesura_ctx") == LUA_TNIL) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "caesura_ctx");
+    if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
         return false;
     }
     return true;
+}
+
+// The Lua runner owns the coroutine. Legacy helper-only states may have no
+// loaded runner, but a real session must stop through its owner before reset.
+static bool stopRunnerForReload(lua_State* L, bool& handled) {
+    const int stackTop = lua_gettop(L);
+    handled = false;
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "kag_runner");
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "stop_for_reload");
+    if (!lua_isfunction(L, -1)) { lua_settop(L, stackTop); return true; }
+    handled = true;
+    const bool stopped = lua_pcall(L, 0, 1, 0) == LUA_OK && lua_toboolean(L, -1);
+    lua_settop(L, stackTop);
+    return stopped;
 }
 
 // Helper: cancel all active operations stored in ctx.active_operations.
@@ -163,6 +182,7 @@ bool HotReload::checkAndReload() {
     // Check for changes
     bool changed = m_reloadRequested;
     m_reloadRequested = false;
+    bool changedLua = false;
     std::vector<std::string> changedKs;
 
     if (!changed) {
@@ -177,6 +197,8 @@ bool HotReload::checkAndReload() {
                 if (path.size() >= 3
                     && path.compare(path.size() - 3, 3, ".ks") == 0) {
                     changedKs.push_back(path);
+                } else {
+                    changedLua = true;
                 }
                 DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                            "HotReload: change detected in %s", path.c_str());
@@ -184,8 +206,8 @@ bool HotReload::checkAndReload() {
         }
     }
 
-    if (!changed) {
-        // Check for new files
+    if (!changed || (!changedLua && !changedKs.empty())) {
+        // New Lua files also require a full reload when a scene changed.
         namespace fs = std::filesystem;
         try {
             for (const auto& root : m_watchRoots) {
@@ -198,6 +220,7 @@ bool HotReload::checkAndReload() {
                             m_fileTimes[path] = entry.last_write_time();
                             changed = true;
                             if (ext == ".ks") changedKs.push_back(path);
+                            else changedLua = true;
                             DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                                        "HotReload: new file detected: %s", path.c_str());
                         }
@@ -221,7 +244,7 @@ bool HotReload::checkAndReload() {
     // position remapped, game state preserved) instead of the nuclear
     // reset. The runner's Lua hook reports success/failure; a failure
     // (parse error in the edited file) leaves the game running untouched.
-    if (!changedKs.empty()) {
+    if (!changedLua && !changedKs.empty()) {
         int reloaded = 0;
         for (const auto& path : changedKs) {
             lua_getglobal(m_L, "require");
@@ -235,14 +258,15 @@ bool HotReload::checkAndReload() {
             }
             lua_getfield(m_L, -1, "reload_scene");
             if (lua_isfunction(m_L, -1)) {
-                lua_pushvalue(m_L, -2);  // self = module
-                lua_pushstring(m_L, path.c_str());
-                if (lua_pcall(m_L, 2, 1, 0) == LUA_OK) {
+                const auto scenePath = std::filesystem::path(path).generic_string();
+                lua_pushstring(m_L, scenePath.c_str());
+                if (lua_pcall(m_L, 1, 2, 0) == LUA_OK) {
+                    const bool accepted = lua_toboolean(m_L, -2) != 0;
                     const char* r = lua_tostring(m_L, -1);
                     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                                "HotReload: scene reload %s -> %s",
                                path.c_str(), r ? r : "?");
-                    ++reloaded;
+                    if (accepted) ++reloaded;
                 } else {
                     const char* err = lua_tostring(m_L, -1);
                     fprintf(stderr, "[HotReload] scene reload failed for %s: %s\n",
@@ -263,8 +287,16 @@ bool HotReload::checkAndReload() {
     m_scriptState = ScriptState::RELOADING;
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok, "HotReload: starting script reload...");
 
-    // Step 1: Cancel all active operations
-    cancelAllActiveOps(m_L);
+    bool runnerHandled = false;
+    if (!stopRunnerForReload(m_L, runnerHandled)) {
+        m_scriptState = ScriptState::IDLE;
+        m_warningFrames = 120;
+        m_warningText = "KAG reload refused: runner could not stop";
+        return false;
+    }
+    if (!runnerHandled) {
+        // Helper-only/legacy state: no Lua runner is loaded to own cleanup.
+        cancelAllActiveOps(m_L);
 
     // Cancellations are synchronous →→ no sleep needed
 
@@ -290,6 +322,11 @@ bool HotReload::checkAndReload() {
         }
         lua_pop(m_L, 2);  // pop co (or nil), ctx -- NO, need ctx still
     }
+    }
+
+    // Old operation callbacks and coroutine cleanup may enqueue more work.
+    // Invalidate it after cleanup, before replacing the script context.
+    if (m_beforeReloadCallback) m_beforeReloadCallback();
 
     // Step 3: Reset GameState (sf/f preserved)
     if (pushGameState(m_L)) {

@@ -1,0 +1,167 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "foundation-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CAESURA_ENABLE_FFMPEG": "OFF",
+        "CAESURA_LIVE2D": "OFF",
+        "CAESURA_HAS_STEAM": "OFF",
+        "CAESURA_REQUIRE_TEST_PREREQUISITES": "ON"
+      }
+    },
+    {
+      "name": "windows-foundation",
+      "inherits": "foundation-base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/presets/windows-foundation",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-ffmpeg",
+      "inherits": "windows-foundation",
+      "binaryDir": "${sourceDir}/build/presets/windows-ffmpeg",
+      "cacheVariables": {
+        "CAESURA_ENABLE_FFMPEG": "ON"
+      }
+    },
+    {
+      "name": "linux-foundation",
+      "inherits": "foundation-base",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/presets/linux-foundation",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-sanitized",
+      "inherits": "linux-foundation",
+      "binaryDir": "${sourceDir}/build/presets/linux-sanitized",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CAESURA_SANITIZERS": "address-undefined"
+      }
+    },
+    {
+      "name": "macos-foundation",
+      "inherits": "foundation-base",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/presets/macos-foundation",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-foundation",
+      "configuration": "Debug",
+      "jobs": 4
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-foundation",
+      "configuration": "Release",
+      "jobs": 4
+    },
+    {
+      "name": "windows-ffmpeg-debug",
+      "configurePreset": "windows-ffmpeg",
+      "configuration": "Debug",
+      "jobs": 4
+    },
+    {
+      "name": "linux-foundation",
+      "configurePreset": "linux-foundation",
+      "jobs": 4
+    },
+    {
+      "name": "linux-sanitized",
+      "configurePreset": "linux-sanitized",
+      "jobs": 4
+    },
+    {
+      "name": "macos-foundation",
+      "configurePreset": "macos-foundation",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-foundation",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-foundation",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "linux-foundation",
+      "configurePreset": "linux-foundation",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "linux-sanitized",
+      "configurePreset": "linux-sanitized",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "macos-foundation",
+      "configurePreset": "macos-foundation",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

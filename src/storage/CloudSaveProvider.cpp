@@ -165,6 +165,11 @@ bool CloudSaveProvider::pushToCloud(const std::string& slotPath) {
                    "(Steamworks unavailable or not initialized)", slotPath.c_str());
         return false;
     }
+    const auto content = readLocalFile(slotPath);
+    return !content.empty() && writeCloudFile(slotPath, content);
+}
+
+std::string CloudSaveProvider::readLocalFile(const std::string& slotPath) {
     // Read the LOCAL file only. The previous revision fell back to reading the
     // CLOUD copy and writing it straight back, so a cloud->cloud no-op reported
     // success and "nothing local to push" was indistinguishable from a real
@@ -174,27 +179,31 @@ bool CloudSaveProvider::pushToCloud(const std::string& slotPath) {
         DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
                    "[CloudSaveProvider] pushToCloud(%s): no local file to push",
                    slotPath.c_str());
-        return false;
+        return {};
     }
-    std::string content((std::istreambuf_iterator<char>(in)),
-                        std::istreambuf_iterator<char>());
-    if (content.empty()) {
+    in.seekg(0, std::ios::end);
+    const auto size = in.tellg();
+    if (size <= 0) {
         DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
                    "[CloudSaveProvider] pushToCloud(%s): local file is empty; "
                    "refusing to replace the cloud copy with nothing",
                    slotPath.c_str());
-        return false;
+        return {};
     }
     // Same ceiling readFile() enforces on the way back: never ship a payload
     // upstream that this engine would refuse to reassemble.
-    if (content.size() > static_cast<size_t>(kMaxChunkedSize)) {
+    if (size > kMaxChunkedSize) {
         DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
                   "[CloudSaveProvider] pushToCloud(%s) refused: %zu bytes exceeds "
-                  "the %d-byte chunked ceiling", slotPath.c_str(), content.size(),
+                  "the %d-byte chunked ceiling", slotPath.c_str(), static_cast<size_t>(size),
                   static_cast<int>(kMaxChunkedSize));
-        return false;
+        return {};
     }
-    return writeFile(cloudKey(slotPath), content);
+    std::string content(static_cast<size_t>(size), '\0');
+    in.seekg(0, std::ios::beg);
+    in.read(content.data(), static_cast<std::streamsize>(content.size()));
+    if (!in) return {};
+    return content;
 }
 
 // pull = CLOUD -> LOCAL FILE. One direction, no merge, no timestamp compare:
@@ -212,13 +221,25 @@ bool CloudSaveProvider::pullFromCloud(const std::string& slotPath) {
                    "(Steamworks unavailable or not initialized)", slotPath.c_str());
         return false;
     }
-    const std::string content = readFile(cloudKey(slotPath));
+    const std::string content = readCloudFile(slotPath);
     if (content.empty()) {
         DEBUG_WARN(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
                    "[CloudSaveProvider] pullFromCloud(%s): cloud copy absent or "
                    "empty; local file left untouched", slotPath.c_str());
         return false;
     }
+    return writeLocalFile(slotPath, content);
+}
+
+std::string CloudSaveProvider::readCloudFile(const std::string& slotPath) {
+    return readFile(slotPath);
+}
+
+bool CloudSaveProvider::writeCloudFile(const std::string& slotPath, const std::string& bytes) {
+    return writeFile(slotPath, bytes);
+}
+
+bool CloudSaveProvider::writeLocalFile(const std::string& slotPath, const std::string& content) {
     // Atomic + size-capped write (ST-3). A raw ofstream here would truncate the
     // player's local save the moment it opened the file.
     LocalFileSaveProvider local;
