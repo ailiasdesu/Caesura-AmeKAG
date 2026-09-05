@@ -147,6 +147,15 @@
 - API普查和能力矩阵按源码重新生成；平台矩阵只同步用于新鲜度检查的源码锚点，每项平台能力仍保留实际历史验证commit/日期，未伪称重测所有平台。平台矩阵和历史计划事实块检查通过。
 - 分支已推送`origin/codex/runtime-foundation`。本次交付要求为合并到master并使云端CI全绿；合并及CI结果待后续实际记录。U11仅有只读地图，未开始实现。
 
+### PR #3 首轮 CI 反馈与修复
+
+- 首轮 run `33950845183` 如实失败。Windows/macOS 验证器把短路径或 `/var` 别名根与已解析的夹具路径比较，误报越界；入口统一规范根路径，新增两项别名/越界回归，Windows 17/17、定向 POSIX 2/2 通过。
+- Android NDK 的标准库缺少 `std::jthread`/`stop_token`；并发归档测试改为 `std::thread` 与作用域释放/等待守卫，保留创建中途异常时的安全收尾。完整本机 Debug 构建通过，C++ 1229/1229、388674 断言、0 failed、0 skipped；独立审查未发现阻断项。
+- Linux 内置 Lua 缺少桌面平台宏，实际产物的 `io.popen` 失败；为 Linux/Darwin 加入对应宏及传递链接依赖，新增直接使用 `lua_cli` 的 POSIX 进程/动态加载回归。云端结果待验证，不以系统 Lua 代替构建产物。
+- Linux HTTP smoke 缺少显示环境，普通 CTest 与原生证据执行均接入已有 Xvfb；HTTP 保持必跑，真实外部 AI 服务仍单独记录条件跳过。
+- 两项 Lua 场景测试错误使用 Windows `2>nul`，在 Linux 创建/删除根目录文件，触发执行期间源码变化检测。改为各平台原生命令后，Windows 与隔离 Linux 的 11/11、9/9 断言通过；Linux 确认无 `nul`、无场景残留、源码摘要不变。保留源码稳定性检查。
+- 修复提交为 `ec749d03`；原始失败日志、定向回归及审查证据保存在 `artifacts/validation/delivery-u10/`。管理员合并已获用户授权，前提仍为本 PR 最新提交 CI 全绿；U11 不开展。
+
 ## 并行所有权
 
 - resource agent：U3/U5代码与SDL回归已交付，独立只读审查完成。
