@@ -4,7 +4,8 @@
 check_test_coverage.py — prevent orphan-test regressions (round 14).
 
 Verifies that every test_*.lua in tests/scripts/ is registered in the main
-runner (run_lua_tests.lua) OR the isolated orphan runner (run_orphan_tests.lua),
+runner (run_lua_tests.lua), the isolated orphan runner (run_orphan_tests.lua),
+or a direct lua_cli CTest command,
 and that every test_*.cpp in tests/cpp/ is registered in tests/CMakeLists.txt.
 
 Exit code 1 lists any unregistered test — the "silent green" failure mode.
@@ -40,6 +41,14 @@ def main():
         registered |= set(re.findall(r'"([a-z0-9_]+)"', src))
     # "replay" is a preload require, not a test — exclude it from the check.
     registered.discard("replay")
+    cmake = read(CMAKE)
+    commands = re.sub(r"#\[(=*)\[.*?\]\1\]", "", cmake, flags=re.S)
+    commands = re.sub(r"(?m)#.*$", "", commands)
+    for command in re.findall(r"add_test\s*\((.*?)\)", commands, re.S):
+        registered |= set(re.findall(
+            r"COMMAND\s+\$<TARGET_FILE:lua_cli>\s+"
+            r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/scripts/(test_[a-z0-9_]+)\.lua(?=\s|$)",
+            command))
     for t in lua_tests:
         if t not in registered:
             problems.append(f"Lua test not registered: tests/scripts/{t}.lua")
@@ -49,7 +58,6 @@ def main():
         fn for fn in os.listdir(CPP)
         if fn.startswith("test_") and fn.endswith(".cpp")
     )
-    cmake = read(CMAKE)
     listed = set(re.findall(r"cpp/(test_[a-z0-9_]+.cpp)", cmake))
     for f in cpp_tests:
         if f not in listed:
