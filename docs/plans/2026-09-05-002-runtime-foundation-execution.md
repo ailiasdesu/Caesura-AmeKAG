@@ -2,7 +2,7 @@
 
 当前计划：docs/plans/2026-09-05-001-refactor-runtime-foundation-plan.md。
 
-目标仍为完成 U1–U29，底层优先，Studio 暂停。本记录只登记实际工作，不缩小目标，也不把排期当成完成证据。
+路线图保留 U1–U29，底层优先，Studio 暂停。用户最新决定：今天的实现止于 U10，不开展 U11；完成提交、推送、合并 master，并修复 CI 至全绿。U11–U29保留为后续工作，本记录不把排期当成完成证据。
 
 ## 工作区
 
@@ -16,7 +16,7 @@
 | 单元 | 状态 | 现状与下一项证明 |
 |---|---|---|
 | U1 | 本机适用验收通过 | 53项证据测试、57项隔离mutation及真实run→collect→verify通过；无自动RC-GO；CI发布身份继续由U23承担 |
-| U2 | 进行中 | Windows Debug完整验收通过；独立检出Release构建/Cpp/Lua通过，测试产物路径修复后3项相关CTest通过；当前提交的Release复核、完整跨平台/sanitizer、Web skipped分类与性能基线仍待完成 |
+| U2 | 进行中 | U10源码已通过Windows Debug与独立干净检出Release完整profile；完整跨平台/sanitizer、Web skipped分类与性能基线保留后续，今天只处理合并所需CI |
 | U3 | 本机回归通过 | 真实SDL所有权、过滤器重入与取消释放计数通过；Engine统一暂停/恢复消费路径有真实Lua回归；跨平台整机释放观测仍依U2/U16 |
 | U4 | 本机适用验收通过 | 默认provider、两种策略、legacy导入、HTTP/Steam替身staging及metadata回归通过；云校验mutation两例必红且原源码摘要已恢复 |
 | U5 | 本机适用验收通过 | 请求epoch、旧worker/cache隔离、SDL重入取消、Engine暂停/回调重入、完整与局部脚本重载均已有运行回归；平台扩展仍依U2 |
@@ -138,6 +138,14 @@
 3. 加入最后的延迟跳转终态回归与AI同步/GC验证后，再执行一次完整11项profile：**Cpp1229 passed、0 failed、0 skipped，388674断言；Lua主147/147与孤儿30/30；Python15/7/53/57、耦合、注册检查均通过；CTest23 passed、0 failed、1允许的真实AI服务skip，161.85s。**
 
 最终run为`9fa6f181-343b-4069-b0f3-3f32eb2843ba`，原始receipt `artifacts/validation/raw/windows-debug-u10-04/run.json`；collect和diagnostic verify PASS。执行前后源码与夹具摘要均一致。该次是完整本机Debug验证，仍为dirty快照，不授予发布资格或未运行平台证明。当前9个单元达到本机适用/定向验收；U2及U11–U29继续。
+
+## U10交付检查（用户决定今天不开展U11）
+
+- `5c073cb9753c803f44f01636673498e348f54977`在独立干净检出完成完整Release profile，run `0bbb0ef2-0d76-4814-b62e-cbabcae01d60`，原始目录`raw/windows-release-u10-03`。11项检查全部通过，Cpp1229、Lua147/30、CTest23 passed+1允许AI skip；dirty=false、源码/夹具一致，collector与严格verifier通过，仅证明该profile，不代表发布批准。
+- 原独立检出的U2路径修复已核对摘要后保存在stash `cb96db3f6dfb383bc70bc23e786064d608851232`，再更新到U10提交。未删除该备份。
+- CI预检查修正Windows测试步骤中多余的`Pop-Location`文本，并将原生会话3项回归纳入Entry专项过滤。Debug全量构建与Entry专项通过；Web Player 370/370、现有Editor 631/631通过，记录`artifacts/validation/delivery-u10/preflight.json`及JSON报告。没有新增Studio功能。
+- API普查和能力矩阵按源码重新生成；平台矩阵只同步用于新鲜度检查的源码锚点，每项平台能力仍保留实际历史验证commit/日期，未伪称重测所有平台。平台矩阵和历史计划事实块检查通过。
+- 分支已推送`origin/codex/runtime-foundation`。本次交付要求为合并到master并使云端CI全绿；合并及CI结果待后续实际记录。U11仅有只读地图，未开始实现。
 
 ## 并行所有权
 
