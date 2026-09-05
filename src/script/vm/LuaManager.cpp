@@ -4,6 +4,7 @@
 #include <lualib.h>
 }
 #include "../vm/LuaManager.h"
+#include "../state/GameState.h"
 #include "../bindings/KAGBinding.h"
 #include "../bindings/EngineBinding.h"
 #include "../bindings/RenderBinding.h"
@@ -17,7 +18,6 @@
 #include "../bindings/SaveBinding.h"
 #include "../bindings/SteamBinding.h"
 #include "../bindings/AIBinding.h"
-#include "../state/GameState.h"
 #include "../../di/BackendRegistry.h"
 #include "../../di/api/ThreadAssert.h"
 #include "../../debug/api/DebugLog.h"
@@ -78,9 +78,6 @@ bool LuaManager::init() {
 
     luaL_openlibs(m_L);
 
-    // Create the global KAG context table in Lua registry before modules load
-    GameState::create(m_L);
-
     registerModules();
 
     lua_pushlightuserdata(m_L, this);
@@ -112,6 +109,9 @@ void LuaManager::lockdownScriptEnv() {
 
 void LuaManager::shutdown() {
     if (m_L) {
+        if (!GameState::stopRunner(m_L)) {
+            fprintf(stderr, "[Lua] Runner cleanup failed during VM shutdown.\n");
+        }
         lua_close(m_L);
         m_L = nullptr;
     }

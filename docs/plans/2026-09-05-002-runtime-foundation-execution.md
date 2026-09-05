@@ -16,7 +16,7 @@
 | 单元 | 状态 | 现状与下一项证明 |
 |---|---|---|
 | U1 | 本机适用验收通过 | 53项证据测试、57项隔离mutation及真实run→collect→verify通过；无自动RC-GO；CI发布身份继续由U23承担 |
-| U2 | 进行中 | Windows Debug完整及定向验收通过；Demo/AI假通过、夹具更新与删除镜像已修复；Release、完整跨平台/sanitizer、Web skipped分类与性能基线仍待完成 |
+| U2 | 进行中 | Windows Debug完整验收通过；独立检出Release构建/Cpp/Lua通过，测试产物路径修复后3项相关CTest通过；当前提交的Release复核、完整跨平台/sanitizer、Web skipped分类与性能基线仍待完成 |
 | U3 | 本机回归通过 | 真实SDL所有权、过滤器重入与取消释放计数通过；Engine统一暂停/恢复消费路径有真实Lua回归；跨平台整机释放观测仍依U2/U16 |
 | U4 | 本机适用验收通过 | 默认provider、两种策略、legacy导入、HTTP/Steam替身staging及metadata回归通过；云校验mutation两例必红且原源码摘要已恢复 |
 | U5 | 本机适用验收通过 | 请求epoch、旧worker/cache隔离、SDL重入取消、Engine暂停/回调重入、完整与局部脚本重载均已有运行回归；平台扩展仍依U2 |
@@ -24,7 +24,8 @@
 | U6 | 本机适用验收通过 | worker-only等待、有限回调快照、重入关停/重启与Engine销毁屏障有回归；JobSystem的POSIX sanitizer及两种Job实现的行覆盖率已测量 |
 | U8 | 本机适用验收通过 | 预启动宿主公钥、全部识别CARC层固定验证、失败回滚与CLI已接通；12项核心及39项CLI回归通过；不认证整个分发目录 |
 | U9 | 本机及POSIX定向验收通过 | 合法签名边界、并发/短读、真实分配失败及恢复已测；Reader有界拒绝、OpenSSL上下文异常释放已修复；真实包内存/耗时留样，不宣称全平台或穷尽fuzz |
-| U10–U29 | 待执行 | 仍属于完整目标；U10真实会话身份与生命周期测试补丁准备中，尚未应用或验收 |
+| U10 | 本机适用验收通过 | 唯一会话引用、start/stop/reload/EOF/失败终态、真实协程与输入清理、资源/AI回调失效及Engine关停顺序已验证；Cpp1229与Lua147/30全绿 |
+| U11–U29 | 待执行 | 仍属于完整目标；U11恢复状态、提交前副作用和旧格式证据已完成只读地图，尚未实现或验收 |
 
 ## 本轮实际执行
 
@@ -112,6 +113,31 @@
 3. EVP修复及新probe注册后，重做完整Debug构建、完整C++、耦合/注册检查及完整CTest：1212 passed、0 failed、0 skipped，388153断言；CTest22 passed、0 failed、1允许的真实AI skip，151.30s。run `28768856-56db-4332-b9a9-ca765c4d4905`，原始目录`windows-debug-u2-u9-03`；collect/diagnostic verify PASS。Lua未受该非Windows修改影响，复用上一条通过证据。
 
 三次receipt的源码与夹具前后摘要均一致。后两次是各自范围的定向profile，不能合称一次完整profile全PASS，更不能把dirty快照当成发布批准。最终独立审查已处理新增probe的sanitizer配置遗漏；其余本批边界测试、资源释放与夹具镜像审查无待处理阻断项。当前共有8个单元达到本机适用或定向验收，U2和U10–U29继续执行。
+
+## 第六批唯一脚本会话与失败终态（2026-09-05）
+
+- 初始8项真实runner回归全部RED：C++ registry与runner/global身份不同、失败start遗留状态、stop缺失、旧load_tokens写入后继会话，以及完整reload未关闭实际wait/tween协程。`GameState`改为只引用table/nil的绑定桥，验证普通栈索引与类型、保留栈和拒绝时旧引用；VM init不再创建影子表。桥的84条断言先通过，Lua runner统一发布到`Engine.bind_active_context`、自身和`_CAESURA_CTX`。
+- start先准备场景，成功后才替换旧上下文；场景准备异常返回失败，已开始执行的候选失败则关闭。所有scheduler创建点集中捕获所属ctx并发布同一个co引用。stop/完整reload/自然结束/无效延迟跳转关闭旧协程与操作、停止旧tween、再撤销资源及AI回调；清理期间拒绝重入start/update等操作。自然EOF保留可查询的最终表，并继续返回既有`ended`状态；显式恢复请求可以创建新协程，不能复活旧协程。
+- Engine在Job、async及render/layer等后端销毁之前停止runner；LuaManager关闭VM时也调用幂等停止入口。真实Engine回归覆盖A停止/B启动、成功/失败载入、worker与loader两个队列边界，A引用可GC且不进入纹理配额申请；B恰好一次申请并在headless guard处返回失败。另证明scope清理先于Job/render/layer关闭，清理中新排队的载入也不回调。不声称创建了真实GPU资源。
+- AI六项原生回归全部先RED。修复数字键记录用字符串键删除导致的重复unref，取消按VM移除回调，移除跨VM全局cancel epoch；completion使用VM主Lua线程，拒收submit时释放引用并返回false。之后补上提交协程实际GC后的投递及真实NullJobSystem同步完成两个分支，均进入最终完整C++验证。
+- 独立生命周期审查发现并修复两项P1：HistoryUI没有关闭作用域，reload后残留history输入焦点；选择/文本输入关闭协程后残留全局回调及原生输入模式。HistoryUI新增真实`<close>`，选择和输入新增`Operation <close>`、幂等清理、函数身份恢复及失活closure guard；普通完成、取消与部分初始化失败共享清理。历史18项、输入26项通过，RED分别为14/18及8/26通过。旧choice/i18n夹具改为实际协程挂起，保留并加强原断言。
+- 后续独立审查补出缺失label/不安全pending jump绕过终止清理的问题；两种真实runner场景先RED，再加统一finish，GREEN通过。其他引用桥、关停、输入恢复及U2路径修复无新增阻断项；AI与原生回归另经独立只读审查。失败跳转、自然EOF、同场景reload的旧运动取消、失败替换保留pending reload都已进入持续C++测试。
+
+### U2：独立Release检出与明确产物路径
+
+- 在`D:/文件存放处/code/Caesura-foundation-validation`创建独立detached检出`1d9a71f15d91870b7b3d079d027e834b7dc8303d`，使用windows-foundation preset，FFmpeg/Steam/Live2D关闭。SDL3为本机已有SDK，96个文件摘要保存在`u2-fresh-preparation/sdl3-sdk.json`；这是新源码/构建目录验证，不是全新机器依赖安装证明。
+- 新Release配置与全量构建退出0，Cpp1212/1212、388142断言，Lua145/30及验证器检查通过。原完整run `126615b1-46eb-49f1-87bd-533382480070`因BuildCli找不到preset目录的引擎而skip、Golden找不到Lua而FAIL，如实采集FAIL；该检出执行期间dirty=false且源码/夹具一致。
+- CTest现在显式传入当前配置的`CaesuraAmeKAG`和`lua_cli`路径，经`CAESURA_ENGINE`/`CAESURA_LUA`传递到实际CLI、预编译和Golden。显式无效值（含空值和Lua目录）不能回退或skip；无显式配置的手动发现保持可用。Golden契约检查任何非零退出均FAIL，不能把42/127等失败当作通过。
+- 9项路径检查通过，包括中文/空格、陈旧默认程序、缺失显式产物与真实CLI失败清理。测试哨兵使用`/bin/sh`，避免宿主PATH中的Windows WSL bash截获`env bash`而造成夹具错误；哨兵仅验证选择路径，始终故意返回失败，不冒充Golden通过。
+- 只将U2路径修复应用到独立检出，不混入U10代码；原Release二进制不变，相关3项CTest全部通过，run `c9a0a863-934b-4126-aa4a-6a8096ab1f37`，目录`raw/windows-release-output-paths-02`，collect/diagnostic verify PASS。此补丁快照为dirty诊断，不能改写原完整FAIL为单次全绿；U10新代码的Release仍需复核。
+
+### U10最终集成证据
+
+1. 初次完整run `846932f0-0fca-4e84-a38d-cd4eb17bf60c`如实FAIL。Cpp1227/1228：新增重载测试错误地把重载后新动画的合法执行也当作旧动画继续；改为严格观察旧tween取消、计时不再前进及新co身份。Lua还暴露新依赖未纳入隔离fixture、旧静态检查匹配到错误helper、以及EOF清理后返回状态不兼容；分别修正夹具定位与真实`ended`返回，不放松时限或减少测试。
+2. 定向完整运行时复核`772fde91-f1da-4d5e-a920-406b61444588`中Cpp1228、Lua主147及CTest23 passed+1允许AI skip通过，只有旧textspeed夹具失败。它在EOF后重置显示状态，改为在真实wait期间测量skip-off且断言会话仍活跃；仅复跑孤儿套件30/30通过，run `8843ca72-1076-4f47-ba33-31743998bb34`。以上失败和修复receipt保留。
+3. 加入最后的延迟跳转终态回归与AI同步/GC验证后，再执行一次完整11项profile：**Cpp1229 passed、0 failed、0 skipped，388674断言；Lua主147/147与孤儿30/30；Python15/7/53/57、耦合、注册检查均通过；CTest23 passed、0 failed、1允许的真实AI服务skip，161.85s。**
+
+最终run为`9fa6f181-343b-4069-b0f3-3f32eb2843ba`，原始receipt `artifacts/validation/raw/windows-debug-u10-04/run.json`；collect和diagnostic verify PASS。执行前后源码与夹具摘要均一致。该次是完整本机Debug验证，仍为dirty快照，不授予发布资格或未运行平台证明。当前9个单元达到本机适用/定向验收；U2及U11–U29继续。
 
 ## 并行所有权
 

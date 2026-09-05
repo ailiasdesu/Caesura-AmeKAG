@@ -81,11 +81,29 @@ void HotReload::scanDirectory() {
 // Helper: push GameState ctx table from Lua registry (avoids script/ dependency)
 static bool pushGameState(lua_State* L) {
     if (!L) return false;
-    if (lua_getfield(L, LUA_REGISTRYINDEX, "caesura_ctx") == LUA_TNIL) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "caesura_ctx");
+    if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
         return false;
     }
     return true;
+}
+
+// The Lua runner owns the coroutine. Legacy helper-only states may have no
+// loaded runner, but a real session must stop through its owner before reset.
+static bool stopRunnerForReload(lua_State* L, bool& handled) {
+    const int stackTop = lua_gettop(L);
+    handled = false;
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "kag_runner");
+    if (!lua_istable(L, -1)) { lua_settop(L, stackTop); return true; }
+    lua_getfield(L, -1, "stop_for_reload");
+    if (!lua_isfunction(L, -1)) { lua_settop(L, stackTop); return true; }
+    handled = true;
+    const bool stopped = lua_pcall(L, 0, 1, 0) == LUA_OK && lua_toboolean(L, -1);
+    lua_settop(L, stackTop);
+    return stopped;
 }
 
 // Helper: cancel all active operations stored in ctx.active_operations.
@@ -269,8 +287,16 @@ bool HotReload::checkAndReload() {
     m_scriptState = ScriptState::RELOADING;
     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok, "HotReload: starting script reload...");
 
-    // Step 1: Cancel all active operations
-    cancelAllActiveOps(m_L);
+    bool runnerHandled = false;
+    if (!stopRunnerForReload(m_L, runnerHandled)) {
+        m_scriptState = ScriptState::IDLE;
+        m_warningFrames = 120;
+        m_warningText = "KAG reload refused: runner could not stop";
+        return false;
+    }
+    if (!runnerHandled) {
+        // Helper-only/legacy state: no Lua runner is loaded to own cleanup.
+        cancelAllActiveOps(m_L);
 
     // Cancellations are synchronous →→ no sleep needed
 
@@ -295,6 +321,7 @@ bool HotReload::checkAndReload() {
             lua_pop(m_L, 1);  // pop coroutine table
         }
         lua_pop(m_L, 2);  // pop co (or nil), ctx -- NO, need ctx still
+    }
     }
 
     // Old operation callbacks and coroutine cleanup may enqueue more work.

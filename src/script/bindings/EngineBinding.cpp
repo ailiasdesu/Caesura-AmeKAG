@@ -12,6 +12,7 @@ extern "C" {
 #include "../../render/api/IRenderDevice.h"
 #include "../../audio/api/IAudioBackend.h"
 #include "../../platform/api/IPlatformBackend.h"
+#include "../state/GameState.h"
 #include <cstdio>
 
 namespace Caesura {
@@ -107,6 +108,20 @@ static int lua_Engine_get_backend_info(lua_State* L) {
     return 1;
 }
 
+// Internal runner bridge: publish its exact session table, or clear on stop.
+// Require an explicit argument so a missing value cannot silently clear state.
+static int lua_Engine_bind_active_context(lua_State* L) {
+    if (lua_gettop(L) != 1) {
+        return luaL_error(L,
+            "Engine.bind_active_context expects exactly one table or nil");
+    }
+    if (!GameState::bind(L, 1)) {
+        return luaL_argerror(L, 1, "table or nil expected");
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static int lua_Engine_report_command_error(lua_State* L) {
     // Script runtime error -> di ErrorReporter -> ErrorUI (installed by the
     // composition root). Accepts (command, error, scene?, line?) and returns 1
@@ -130,6 +145,7 @@ void registerEngineBindings(lua_State* L) {
         { "select_audio_backend",    lua_Engine_select_audio_backend    },
         { "select_platform_backend", lua_Engine_select_platform_backend },
         { "get_backend_info",        lua_Engine_get_backend_info        },
+        { "bind_active_context",     lua_Engine_bind_active_context     },
         { "report_command_error",      lua_Engine_report_command_error      },
         { nullptr, nullptr }
     };

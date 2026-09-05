@@ -133,17 +133,17 @@ i18n.lines[choiceKey] = "選択肢A"
 local savedClick = _G._KAG_onClick
 local ctxB = fresh_ctx()
 TextCommands.button(ctxB, { text = "Choice A", target = "*a" })
-pcall(function() TextCommands.endbutton(ctxB, {}) end)
+local choiceCoB = coroutine.create(function() TextCommands.endbutton(ctxB, {}) end)
+assert(coroutine.resume(choiceCoB))
 check("button: registered label localized",
       ctxB._choiceButtonsActive ~= nil
       and ctxB._choiceButtonsActive[1].text == "選択肢A")
 check("button: draw uses localized label", ctxB.text_state.draws[1] ~= nil
       and ctxB.text_state.draws[1].text == "1. 選択肢A")
--- endbutton's trailing yield raised inside pcall: the installed click
--- closure is leaked unless restored (suite runs one process).
-_G._KAG_onClick = savedClick
-ctxB._choiceMode = nil
-ctxB._choiceButtonsActive = nil
+assert(coroutine.close(choiceCoB))
+check("button: closing choice restores input and removes UI",
+      _G._KAG_onClick == savedClick and ctxB._choiceMode == false
+      and ctxB._choiceButtonsActive == nil and #ctxB.text_state.draws == 0)
 
 -- [sel] alias shares the handler (KAG3 select syntax)
 local ctxS = fresh_ctx()
@@ -269,7 +269,8 @@ i18n.lines["scene.ks:" .. i18n.fnv1a("hi")] = "hallo"
 i18n.lines[choiceKey] = "選択肢A"
 local ctxCH = fresh_ctx()
 TextCommands.button(ctxCH, { text = "Choice A", target = "*a" })
-pcall(function() TextCommands.endbutton(ctxCH, {}) end)
+local choiceCoCH = coroutine.create(function() TextCommands.endbutton(ctxCH, {}) end)
+assert(coroutine.resume(choiceCoCH))
 i18n.lines[choiceKey] = "新選択"
 TextCommands.relocalize_page(ctxCH)
 check("redraw: active choice re-localized",
@@ -281,9 +282,10 @@ for _, d in ipairs(ctxCH.text_state.draws) do
 end
 check("redraw: choice group re-rendered",
       choiceDraw ~= nil and choiceDraw.text == "1. 新選択")
-_G._KAG_onClick = savedClick
-ctxCH._choiceMode = nil
-ctxCH._choiceButtonsActive = nil
+assert(coroutine.close(choiceCoCH))
+check("redraw: closing relocalized choice releases input and UI",
+      _G._KAG_onClick == savedClick and ctxCH._choiceMode == false
+      and ctxCH._choiceButtonsActive == nil and #ctxCH.text_state.draws == 0)
 i18n.lines[choiceKey] = nil
 
 -- Closed captions (cc_mode) re-localize from their recorded source.

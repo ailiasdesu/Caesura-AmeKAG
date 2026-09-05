@@ -49,6 +49,14 @@ function HistoryUI.show(ctx)
         return
     end
 
+    local previous_focus = ctx.input_focus or "kag"
+    local scope <close> = setmetatable({}, {__close = function()
+        if ctx.input_focus == "history" then
+            ctx.input_focus = previous_focus
+            pcall(function() backend.set_input_focus(string.upper(previous_focus)) end)
+        end
+        HistoryUI._hideAll(ctx)
+    end})
     ctx.input_focus = "history"
     local selected = #ctx.backlog
     local scroll   = 0
@@ -195,16 +203,9 @@ function HistoryUI.show(ctx)
         elseif key_consumed("_GAME_KEY_ENTER") then
             local e = ctx.backlog[selected]
             if e and e.scene and e.token_index then
-                ctx.input_focus = "kag"
-                pcall(function() backend.set_input_focus("KAG") end)
-                -- Clean up overlay layers before jumping (incl. highlights)
-                HistoryUI._hideAll(ctx)
                 return { jump = true, scene = e.scene, index = e.token_index }
             end
         elseif key_consumed("_GAME_KEY_ESC") then
-            ctx.input_focus = "kag"
-            pcall(function() backend.set_input_focus("KAG") end)
-            HistoryUI._hideAll(ctx)
             return
         end
         -- V: replay voice (key dispatched by the engine when available)

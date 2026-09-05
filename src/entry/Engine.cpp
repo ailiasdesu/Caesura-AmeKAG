@@ -26,6 +26,7 @@ extern "C" {
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../script/vm/LuaManager.h"
+#include "../script/state/GameState.h"
 #include "../debug/HotReload.h"
 #include "../debug/DebugProtocol.h"
 #include "../job/api/IJobSystem.h"
@@ -1791,6 +1792,9 @@ void Engine::shutdown() {
     // Invalidate script-owned loads before draining generic completions. Stop
     // admission and join workers while every backend is still alive; final
     // legal callbacks must precede VFX, render, layer and mini-game teardown.
+    if (m_luaInitialized && !GameState::stopRunner(m_lua->state())) {
+        fprintf(stderr, "[Engine] Runner cleanup failed during shutdown.\n");
+    }
     if (m_asyncLoaderInitialized) cancelRenderAsyncLoads(m_lua->state());
     m_deferredAsyncLoads.clear();
     if (m_jobSystemInitialized) m_jobSystem->shutdown();

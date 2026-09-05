@@ -59,7 +59,7 @@ check("rollback exists", type(kag_runner.rollback) == "function")
 -- (2) the snapshot push is unconditional (not gated on reveal==nil, which
 -- [ch]/[text] always set -- that bug left the undo stack permanently empty).
 local runner_src = io.open("scripts/kag_runner.lua", "r"):read("*a")
-local idx = runner_src:find("_pendingRollback", 1, true)
+local idx = runner_src:find("if ctx._pendingRollback then", 1, true)
 local respawn_blk = idx and runner_src:sub(idx, idx + 400) or ""
 check("rollback respawn clears stop_flag",
       respawn_blk:find("stop_flag = false", 1, true) ~= nil)
@@ -68,4 +68,5 @@ check("snapshot push not gated on reveal==nil",
 check("snapshot push calls capture",
       runner_src:find('require("kag.snapshot").capture(ctx)', 1, true) ~= nil)
 
+for _, passed in ipairs(results) do assert(passed, "rollback check failed") end
 print("ROLLBACK TESTS DONE")

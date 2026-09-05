@@ -48,6 +48,7 @@ set(TEST_SOURCES
     cpp/test_entry.cpp
     cpp/test_entry_async.cpp
     cpp/test_entry_shutdown.cpp
+    cpp/test_entry_session.cpp
     cpp/test_di.cpp
     cpp/test_minigame.cpp
     cpp/test_platform.cpp
@@ -65,6 +66,7 @@ set(TEST_SOURCES
     cpp/test_cloud_save.cpp
     cpp/test_mini_collision.cpp
     cpp/test_ai.cpp
+    cpp/test_ai_callbacks.cpp
     cpp/test_backend_registry.cpp
     cpp/test_mesh_renderer.cpp
     cpp/test_sma_skinner.cpp
@@ -330,21 +332,19 @@ if(Python3_EXECUTABLE)
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
-    # caesura build/package CLI contract tests. Shells out to
-    # `python scripts/caesura.py build|package` exactly as a creator would; it
-    # never starts the engine, only copies the exe and writes tempfiles, so no
-    # RUN_SERIAL / FIXTURES_REQUIRED / engine-target dependency is needed.
-    # SKIP_RETURN_CODE 77: on a host with no built engine (build/ and bin/ are
-    # gitignored, i.e. not a repository invariant) the runner exits 77 and ctest
-    # reports Skipped rather than Failed, so a fresh clone stays green.
+    # Validate this build/configuration's engine and Lua interpreter. Explicit
+    # paths propagate through the real CLI, including package precompilation.
+    # Missing products are failures; unconfigured manual runs retain discovery.
     add_test(
         NAME CaesuraBuildCli
-        COMMAND ${Python3_EXECUTABLE}
+        COMMAND ${CMAKE_COMMAND} -E env
+                "CAESURA_ENGINE=$<TARGET_FILE:CaesuraAmeKAG>"
+                "CAESURA_LUA=$<TARGET_FILE:lua_cli>"
+                ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_caesura_build_cli.py
     )
     set_tests_properties(CaesuraBuildCli PROPERTIES
         LABELS "qa;cli;build;package"
-        SKIP_RETURN_CODE 77
         TIMEOUT 1200
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -381,8 +381,7 @@ endif()
 # Golden Project regression gate (tests/projects/golden_vn): static ks_check
 # contracts plus headless route / cross-scene flag assertions via
 # scripts/verify_golden_vn.sh. Fixture and driver are fully tracked; the
-# script FATALs with a clear message when no lua interpreter is present, and
-# post-build hosts always have build/lua/<config>/lua, so no SKIP_RETURN_CODE.
+# interpreter is this build's lua_cli target. A missing product is a failure.
 find_program(CAESURA_BASH_PROGRAM bash)
 if(CAESURA_REQUIRE_TEST_PREREQUISITES AND NOT CAESURA_BASH_PROGRAM)
     message(FATAL_ERROR "Complete validation requires Bash for the Golden VN regression")
@@ -390,7 +389,9 @@ endif()
 if(CAESURA_BASH_PROGRAM)
     add_test(
         NAME CaesuraGoldenVn
-        COMMAND ${CAESURA_BASH_PROGRAM}
+        COMMAND ${CMAKE_COMMAND} -E env
+                "CAESURA_LUA=$<TARGET_FILE:lua_cli>"
+                ${CAESURA_BASH_PROGRAM}
                 ${CMAKE_SOURCE_DIR}/scripts/verify_golden_vn.sh
     )
     set_tests_properties(CaesuraGoldenVn PROPERTIES
@@ -399,6 +400,20 @@ if(CAESURA_BASH_PROGRAM)
         TIMEOUT 900
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME CaesuraValidationOutputPaths
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_output_paths.py
+                    --bash ${CAESURA_BASH_PROGRAM}
+        )
+        set_tests_properties(CaesuraValidationOutputPaths PROPERTIES
+            LABELS "qa;validation;cli;golden"
+            TIMEOUT 180
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endif()
+
 endif()
 
 # Always refresh runtime fixtures when CaesuraTests is built, including when

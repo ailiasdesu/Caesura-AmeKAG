@@ -90,7 +90,7 @@ graph TD
 | **render** | `IRenderDevice` `ITextureManager` `ILayerManager` `IParticleSystem` `IVideoPlayer` `IGpuMonitor` `IMeshRenderer` | `BgfxRenderDevice`+分拆实现（Draw/Blit/Effects）`BgfxDeviceCore`(视图管线) `BgfxQuadBatch`(批次) `RTTManager` `TextRenderer`(FreeType/CJK/ruby) `TextureManager`(预算+LRU) `LayerManager`(BG/FG/MSG 三层+dirty) `ParticleSystem` `VideoPlayer`(pl_mpeg/FFmpeg) `GpuMonitor`(自适应降级) `SmaMeshRenderer`(GPU 蒙皮) + 内嵌 shader（DXBC/GLSL/Metal/SPIR-V） | 入：Lua 绘制命令（submit_batch/render_text/blit/postfx）、纹理加载、视频帧；出：bgfx 帧缓冲、RTT 视图、后处理链、截图 readback、GPU 指标 |
 | **resource** | `IAssetProvider` `IAsyncLoader` `IResourceGenerationTracker` | `AssetManager` + `ProviderChain`（Dir→CARC 提供者链，优先级+完整性）+ `DirAssetProvider` + `ImageDecoder`(stb) + `AsyncLoader` + `XP3Archive`(KAG3 XP3 读取) | 入：资源路径/URL、异步加载请求；出：解码缓冲（主线程 onComplete 上传 GPU）、代际失效句柄（`invalidate_handles`） |
 | **rpc** | `IEditorServer` `IRpcServer` `IRpcDispatcher` | `EditorServer`(HTTP 编辑器端口 9876，25 端点) + `RpcServer`(stdio JSON-RPC，29 方法) | 入：编辑器 HTTP/stdin 请求（eval/run/断点/资产清单/SMA 校验）；出：owner-thread DTO 分发（`unsupported_yieldable_execution` 拒绝直接 yield 主状态） |
-| **script** | `ILuaManager` | `LuaManager`(Lua 5.4 VM+指令预算沙箱) `GameState` + `bindings/*.cpp`(11 个绑定文件、154 个 luaL_Reg 条目：KAG/Render/Save/VFX/Sma/Steam/AI/Debug/DevCore/Engine/MiniGame) | 入：Lua 脚本、KAG .ks token（经 tokenizer→scheduler）、RPC eval；出：经 BackendRegistry 触达全部后端；`engine_update/engine_render` 每帧回调、`_CAESURA_CTX` 执行上下文 |
+| **script** | `ILuaManager` | `LuaManager`(Lua 5.4 VM+指令预算沙箱)、`GameState`(runner会话引用) + `bindings/*.cpp`(KAG/Render/Save/VFX/Sma/Steam/AI/Debug/DevCore/Engine/MiniGame) | 入：Lua 脚本、KAG .ks token（经 tokenizer→scheduler）、RPC eval；出：经 BackendRegistry 触达全部后端；`engine_update/engine_render` 每帧回调、`_CAESURA_CTX` 执行上下文 |
 | **steam** | `ISteamBackend` | `SteamBackend`（成就/统计/云存档/overlay，条件编译 `CAESURA_HAS_STEAM`；无 SDK 时 Null 安全默认） | 入：Lua `steam.*` 18 API 调用；出：Steamworks 成就解锁/统计写入/Remote Storage 云文件 |
 | **storage** | `ISaveManager` `ISaveProvider` | `SaveManager`(AES-256-GCM + `CAES` 魔数 + schema v1→v5 迁移) `CloudSaveProvider` `HttpCloudSaveProvider` | 入：Lua `KAG.save_game/load_game` 等 12 API、自动存档计时器；出：加密存档文件（槽位目录）、云 push/pull、缩略图 |
 
@@ -223,6 +223,13 @@ while (m_running) {
 KAG↔Lua 双向调用：`[eval]/[emb]/[iscript]` 内嵌 Lua，`kag.jump/kag.call/kag.save_game`
 从 Lua 驱动剧本。真实场景执行上下文暴露为 `_CAESURA_CTX`（编辑器 `/api/eval` 读它做
 行号/位置联动）。
+
+Lua runner负责创建和发布会话表；runner、`_CAESURA_CTX`与C++ registry的
+`caesura_ctx`引用同一对象，VM初始化不再另建影子状态。启动先准备场景再发布；
+显式停止、重载和执行失败同步关闭实际协程及输入作用域，再撤销资源与AI回调。
+自然EOF保留最终表供查询和保存，但旧协程及旧请求已终止；显式恢复通过新协程执行。
+Engine在Job和各后端销毁前停止会话。此生命周期约束不代表存档字段、冷启动图层恢复
+或迁移已全部闭合，相关验收继续由当前计划U11承担。
 
 ## 当前边界
 

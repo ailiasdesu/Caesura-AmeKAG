@@ -148,6 +148,7 @@ do
             coroutine.yield()
         end },
         config = {},
+        ["kag.operation"] = require("kag.operation"),
         replay = { get_mode = function() return "off" end },
         backend = { cancel_async_loads = function()
             cancellation_calls = cancellation_calls + 1

@@ -10,7 +10,11 @@ Python3_EXECUTABLE guard at the end of that file); the repo CI does not
 otherwise execute tests/*.py. NOTE: the registration must exist for this
 statement to be true — this file never registers itself.
 
-SKIP semantics (ctest SKIP_RETURN_CODE 77): the engine binary lives under
+CTest supplies exact CAESURA_ENGINE / CAESURA_LUA paths for the active build.
+Invalid configured paths fail; the selected paths propagate to every real CLI
+subprocess, including scene validation and package precompilation.
+
+Unconfigured manual SKIP semantics: the engine binary lives under
 build/ | bin/, which are gitignored — it is NOT a repo invariant. Everything
 that can be verified WITHOUT a binary (error paths, project resolution,
 argument parsing, the asset scanner) always runs. The build/package cases and
@@ -28,6 +32,7 @@ Layers under test are the REAL ones: every case shells out to
 called directly, so a broken argparse wiring or a broken import cannot pass.
 """
 
+import filecmp
 import json
 import os
 import shutil
@@ -60,11 +65,18 @@ def run_cli(*args, timeout=900):
 def engine_available():
     try:
         return caesura_build.find_engine()
-    except caesura_build.BuildError:
+    except caesura_build.BuildError as error:
+        if "CAESURA_ENGINE" in os.environ:
+            raise SystemExit("Configured build CLI engine is invalid: %s" % error)
         return None
 
 
 ENGINE = engine_available()
+if "CAESURA_LUA" in os.environ:
+    try:
+        caesura_build.find_lua()
+    except caesura_build.BuildError as error:
+        raise SystemExit("Configured build CLI Lua interpreter is invalid: %s" % error)
 
 
 class TestErrorPaths(unittest.TestCase):
@@ -270,6 +282,8 @@ class TestGameOnlyBuild(unittest.TestCase):
     def test_engine_and_runtime_libs_are_beside_the_binary(self):
         exe = self.out / caesura_build._exe_name()
         self.assertTrue(exe.is_file(), self.log)
+        self.assertTrue(filecmp.cmp(exe, ENGINE, shallow=False),
+                        "package did not copy the selected engine binary")
         if os.name == "nt":
             # A player must not copy DLLs by hand: SDL3 has to be in the folder.
             self.assertTrue((self.out / "SDL3.dll").is_file(),

@@ -2,6 +2,7 @@
 #include "doctest.h"
 #include "debug/DebugProtocol.h"
 #include "debug/HotReload.h"
+#include "U10SessionFixture.h"
 
 #include <chrono>
 #include <filesystem>
@@ -160,4 +161,91 @@ TEST_CASE("DebugProtocol preserves Lua hook ownership") {
 
     hr.shutdown();
     lua_close(L);
+}
+
+TEST_CASE("HotReload: full reload closes a real runner wait before async invalidation") {
+    u10_test::SessionFixture runtime;
+    runtime.init();
+    auto* L = runtime.state();
+    u10_test::runLua(L, R"lua(
+        assert(runner.start('A.ks'))
+        old_ctx, old_co = runner.get_ctx(), u10_last_co
+        old_token = assert(old_ctx.active_operations[1])
+        old_cleanup = 0
+        old_token:register(function() old_cleanup = old_cleanup + 1 end)
+        assert(runner.update(0.025))
+        assert(coroutine.status(old_co) == 'suspended')
+        assert(not old_token.cancelled and old_cleanup == 0)
+        assert(u10_close_calls[old_token] == nil)
+    )lua");
+    HotReload reload;
+    reload.init("__missing_u10_hotreload_directory__", L);
+    int invalidations = 0;
+    reload.setBeforeReloadCallback([&] {
+        ++invalidations;
+        u10_test::runLua(L, R"lua(
+            assert(coroutine.status(old_co) == 'dead')
+            assert(old_token.cancelled and old_cleanup == 1)
+            assert(u10_close_calls[old_token] == 1)
+            assert(#old_ctx.active_operations == 0)
+        )lua");
+    });
+    reload.requestReload();
+    REQUIRE(reload.checkAndReload());
+    CHECK(invalidations == 1);
+    u10_test::runLua(L, R"lua(
+        runner.update(1)
+        assert(coroutine.status(old_co) == 'dead')
+        assert(old_cleanup == 1 and u10_close_calls[old_token] == 1)
+        assert(runner.start('B.ks'))
+        assert(runner.get_ctx() ~= old_ctx)
+        assert(#runner.get_ctx().active_operations == 1)
+        assert(not runner.get_ctx().active_operations[1].cancelled)
+    )lua");
+    runtime.assertPublished();
+    reload.shutdown();
+}
+
+TEST_CASE("HotReload: full reload closes a blocking tween and old motion cannot resume") {
+    u10_test::SessionFixture runtime;
+    runtime.init();
+    auto* L = runtime.state();
+    u10_test::runLua(L, R"lua(
+        local layers = require('layers')
+        layers.init()
+        actor = layers.add_layer(layers.get_root(), {id='actor', name='actor', x=0, y=0})
+        assert(runner.start('tween.ks'))
+        old_ctx, old_co = runner.get_ctx(), u10_last_co
+        old_token = assert(old_ctx.active_operations[1])
+        old_cleanup = 0
+        old_token:register(function() old_cleanup = old_cleanup + 1 end)
+        assert(runner.update(0.05))
+        assert(actor.x > 0 and actor.x < 100, 'real tween must advance before reload')
+        frozen_x = actor.x
+        assert(coroutine.status(old_co) == 'suspended')
+        assert(not old_token.cancelled and old_cleanup == 0)
+    )lua");
+    HotReload reload;
+    reload.init("__missing_u10_hotreload_directory__", L);
+    reload.requestReload();
+    REQUIRE(reload.checkAndReload());
+    u10_test::runLua(L, R"lua(
+        assert(coroutine.status(old_co) == 'dead')
+        assert(old_token.cancelled and old_cleanup == 1)
+        assert(u10_close_calls[old_token] == 1 and #old_ctx.active_operations == 0)
+        runner.update(5)
+        assert(actor.x == frozen_x, 'closed tween must not reach its old target')
+    )lua");
+    // A second full reload cannot finalize the old coroutine a second time.
+    reload.requestReload();
+    REQUIRE(reload.checkAndReload());
+    u10_test::runLua(L, R"lua(
+        assert(old_cleanup == 1 and u10_close_calls[old_token] == 1)
+        assert(runner.start('B.ks'))
+        assert(runner.get_ctx() ~= old_ctx)
+        runner.update(0.05)
+        assert(actor.x == frozen_x)
+    )lua");
+    runtime.assertPublished();
+    reload.shutdown();
 }
