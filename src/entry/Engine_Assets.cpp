@@ -17,27 +17,15 @@
 // an unrecognized .carc in the game directory stays inert instead of joining
 // the chain at a guessed priority.
 //
-// TRUST BOUNDARY (audited decision, t13)
+// HOST PUBLISHER TRUST (U8)
 // -----------------------------------------------------------------------------
-// Auto-mounting patch_*.carc at the top priority does NOT widen the engine's
-// attack surface: anyone able to drop a file into the game directory can
-// already replace base.carc or the executable itself, so no additional
-// signature gate here would contain them. (CARCReader::verifySignature exists
-// but needs a public key that the shipping layout does not provide; no caller
-// in the engine invokes IAssetProvider::verify today -- that is a separate,
-// unbuilt trust-chain feature, not something this mount path can fake.)
-//
-// The realistic hazard is OPERATIONAL, not adversarial: a leftover or
-// half-downloaded patch_*.carc silently overriding shipped content, with the
-// symptom appearing far from the cause. The mitigation is therefore
-// diagnostic, not preventive:
-//   * every mount is printed unconditionally (printf, not DEBUG_INFO, which
-//     compiles to nothing in a Release build -- exactly the build a player
-//     bug report comes from);
-//   * a patch layer is additionally reported through DEBUG_WARN (unconditional
-//     in every build) so "an override was active" is visible in logs/ without
-//     having to reproduce with a debug binary.
+// Compatible mode verifies self-signatures; it does not identify a publisher.
+// PinnedPublisher requires the host's fixed key for every recognized CARC layer
+// before any archive provider is inserted. A rejected layer fails initialization
+// rather than skipping to lower CARC or loose providers. This does not authenticate
+// loose resources, entry Lua, manifests, or a replaceable host executable.
 
+#include "EngineConfig.h"
 #include "../archive/CARCReader.h"
 #include "../archive/CarcAssetProvider.h"
 #include "../resource/AssetManager.h"
@@ -105,29 +93,39 @@ struct CarcMountCandidate {
 // observed as two "Registered CARC (priority 10)" lines for one file. Two
 // providers over the same archive is not merely noisy: each holds its own
 // open stream and read position for the same bytes.
-static std::vector<CarcMountCandidate> collectCarcMounts(const fs::path& root) {
+static std::vector<CarcMountCandidate> collectCarcMounts(
+    const fs::path& root, bool* scanSucceeded = nullptr) {
     std::vector<CarcMountCandidate> candidates;
     std::set<std::string> seenNames;
-    std::error_code ec;
+    bool scanOk = true;
 
     auto scan = [&](const fs::path& dir, bool inDlcDir) {
-        if (!fs::exists(dir, ec) || !fs::is_directory(dir, ec)) return;
-        for (const auto& entry : fs::directory_iterator(dir, ec)) {
-            if (ec) break;
-            if (!entry.is_regular_file(ec)) continue;
-            if (entry.path().extension().string() != ".carc") continue;
-
-            const std::string filename = entry.path().filename().string();
-            const int priority = carcMountPriority(filename, inDlcDir);
-            if (priority == kCarcPriorityNone) continue;      // inert by design
-            if (!seenNames.insert(filename).second) continue;  // already mounted
-
-            candidates.push_back({ entry.path().generic_string(), filename, priority });
+        std::error_code ec;
+        const bool exists = fs::exists(dir, ec);
+        if (ec || (!exists && !inDlcDir)) { scanOk = false; return; }
+        if (!exists) return; // The optional dlc directory may be absent.
+        if (!fs::is_directory(dir, ec) || ec) { scanOk = false; return; }
+        fs::directory_iterator it(dir, ec), end;
+        if (ec) { scanOk = false; return; }
+        while (it != end) {
+            const auto& entry = *it;
+            const bool regular = entry.is_regular_file(ec);
+            if (ec) { scanOk = false; return; }
+            if (regular && entry.path().extension().string() == ".carc") {
+                const std::string filename = entry.path().filename().string();
+                const int priority = carcMountPriority(filename, inDlcDir);
+                if (priority != kCarcPriorityNone && seenNames.insert(filename).second) {
+                    candidates.push_back({entry.path().generic_string(), filename, priority});
+                }
+            }
+            it.increment(ec);
+            if (ec) { scanOk = false; return; }
         }
     };
 
     scan(root, false);
     scan(root / "dlc", true);
+    if (scanSucceeded) *scanSucceeded = scanOk;
 
     std::sort(candidates.begin(), candidates.end(),
               [](const CarcMountCandidate& a, const CarcMountCandidate& b) {
@@ -149,27 +147,53 @@ std::vector<std::pair<std::string, int>> carcMountPlan(const std::string& root) 
     return plan;
 }
 
-void registerDefaultAssetProviders(AssetManager& assetManager) {
-    for (const auto& cand : collectCarcMounts(".")) {
+bool registerDefaultAssetProviders(AssetManager& assetManager,
+                                   const EngineConfig& config, const std::string& root) {
+    const bool pinned = config.archiveTrustMode == ArchiveTrustMode::PinnedPublisher;
+    if ((config.archiveTrustMode != ArchiveTrustMode::Compatible && !pinned) ||
+        (pinned && !config.archivePublisherKey)) {
+        fprintf(stderr, "[Engine] CARC trust configuration invalid: pinned mode requires a host public key.\n");
+        return false;
+    }
+
+    printf("[Engine] CARC trust: %s. Loose resources, entry Lua, manifests and the host executable remain unauthenticated.\n",
+           pinned ? "host-pinned publisher" : "compatible self-signature (publisher unauthenticated)");
+    std::vector<std::unique_ptr<IAssetProvider>> staged;
+    bool scanSucceeded = false;
+    const auto candidates = collectCarcMounts(root, &scanSucceeded);
+    if (pinned && !scanSucceeded) {
+        fprintf(stderr, "[Engine] CARC mount discovery failed; strict initialization rejected.\n");
+        return false;
+    }
+    for (const auto& candidate : candidates) {
         auto reader = std::make_unique<carc::CARCReader>();
-        if (!reader->open(cand.path)) continue;
+        const bool opened = pinned
+            ? reader->open(candidate.path, *config.archivePublisherKey)
+            : reader->open(candidate.path);
+        if (!opened) {
+            fprintf(stderr, "[Engine] CARC verification failed (%s): %s\n",
+                    pinned ? "host-pinned publisher; initialization rejected" : "compatible; skipped",
+                    candidate.path.c_str());
+            if (pinned) return false;
+            continue;
+        }
+        staged.push_back(std::make_unique<carc::CarcAssetProvider>(
+            std::move(reader), candidate.priority, "CARC:" + candidate.name));
+    }
 
-        assetManager.addProvider(std::make_unique<carc::CarcAssetProvider>(
-            std::move(reader), cand.priority, "CARC:" + cand.name));
-
-        // Unconditional: this record must survive a Release build, because
-        // "which layer served this asset" is the first question a player bug
-        // report raises.
-        printf("[Engine] Registered CARC (priority %d): %s\n",
-               cand.priority, cand.path.c_str());
-
-        if (cand.priority == kCarcPriorityPatch) {
-            // DEBUG_WARN is not compiled out in Release (unlike DEBUG_INFO).
+    // All strict candidates have passed before the first provider is visible.
+    for (auto& provider : staged) {
+        printf("[Engine] Registered CARC (priority %d, %s): %s\n",
+               provider->priority(), pinned ? "publisher authenticated" : "self-signature only",
+               provider->getSource().c_str());
+        if (provider->priority() == kCarcPriorityPatch) {
             DEBUG_WARN(SubSys::Archive, ErrCode::Ok,
                        "[Engine] Patch layer active: %s overrides shipped content",
-                       cand.name.c_str());
+                       provider->getSource().c_str());
         }
+        assetManager.addProvider(std::move(provider));
     }
+    return true;
 }
 
 } // namespace Caesura

@@ -22,7 +22,8 @@
 | U5 | 本机适用验收通过 | 请求epoch、旧worker/cache隔离、SDL重入取消、Engine暂停/回调重入、完整与局部脚本重载均已有运行回归；平台扩展仍依U2 |
 | U7 | 本机及POSIX定向验收通过 | 两条存档写入路径共用独占临时文件与原生替换；Windows13项存档/云回归及POSIX18场景ASan/UBSan通过；不等同断电保证 |
 | U6 | 本机适用验收通过 | worker-only等待、有限回调快照、重入关停/重启与Engine销毁屏障有回归；JobSystem的POSIX sanitizer及两种Job实现的行覆盖率已测量 |
-| U8–U29 | 待执行 | 仍属于完整目标；按计划依赖推进；U8已有源码调查，未据准备文档宣称实现 |
+| U8 | 本机适用验收通过 | 预启动宿主公钥、全部识别CARC层固定验证、失败回滚与CLI已接通；12项核心及39项CLI回归通过；不认证整个分发目录 |
+| U9–U29 | 待执行 | 仍属于完整目标；U9与U2夹具修复已有未应用的测试补丁，按实际运行结果推进 |
 
 ## 本轮实际执行
 
@@ -81,12 +82,25 @@
 - 先前对全部测试翻译单元同时插桩的POSIX编译在240s超时，没有测试结果；确认WSL编译进程已终止后，改用独立目标文件及限定插桩范围，一次新构建约13s完成。失败产物保留于u6-posix，未作为通过证据复用。
 - U8源码地图与约束见artifacts/validation/u8-preparation.md。U2中MESSAGE后return造成的未执行分支、其他平台/Release验证及后续U8–U29仍未完成。
 
+## 第四批CARC发行者信任（2026-09-05）
+
+- 新增`ArchiveTrustMode::{Compatible,PinnedPublisher}`与按值持有的32字节`archivePublisherKey`。默认兼容模式验证归档自签名；固定模式只使用宿主预先提供的字节，归档内嵌声明及旁置公钥文件不能替换它。保留原公钥文件路径API，新增公钥字节overload复用既有验签、索引解密及解析路径。
+- 自动挂载按原名称/优先级/去重规则收集全部候选，固定模式在任何provider进入资源链前验证全部候选；错误模式、缺少宿主公钥、发现失败或任一包验证失败均使Engine初始化失败并走既有关停回滚，不使用部分已验证链。松散文件、入口Lua、manifest和宿主程序仍不在CARC认证范围内。
+- `--carc-trust compatible|pinned`和`--carc-public-key PATH`在切换资源根之前解析和验证。固定模式要求显式公钥，文件恰好32字节且只读一次；坏值、长度、未知选项或冲突配置在创建Engine之前拒绝。删除Lua启动之后的重复嵌入公钥检查；旧`carc_verify_on_startup`值不再控制验签。
+- 12项C++核心RED为4通过/8失败，覆盖攻击者包被误接受、候选链部分注册和Engine失败未回滚。CLI在旧二进制上9/34通过，明确证明指定pinned A后B包仍被接受；修复后核心及相关archive/entry/源码约束132项通过。
+- CLI中发现一个实际Windows中文路径问题：窄argv不能直接当UTF-8解码。仅对公钥参数从原始宽命令行提取路径，检查参数数量和选项索引，RAII释放argv，保留原生路径用于打开与重复值比较；Windows目标链接系统shell32。另修正三处测试诊断字符串匹配，保留非零退出、未执行config、未响应ping的断言。最终39项CLI全部通过，包含中文、空格、冲突参数、A/B替换、错误长度和Lua true/false。
+- `CaesuraArchiveTrustCli`已加入CTest，全部原生profiles的CTest发现数下限提高到21，Windows Debug的C++下限提高到1204。独立安全审查覆盖核心、CLI/晚期检查删除及最后宽路径增量，未发现阻断问题。
+- 完整windows-debug运行：11个check实际退出0；全量Debug构建通过，C++1204 passed、0 failed、0 skipped、387374 assertions；Lua145/30、验证器15/7/53/57、耦合与注册检查通过；CTest20 passed、0 failed、1允许的真实AI服务skip（131.29s），包含39项CLI脚本。源码和夹具前后摘要一致。receipt：artifacts/validation/raw/windows-debug-u8-01/run.json；run_id=b329f72d-4049-4af4-af92-09d930e8d5cf；collect和diagnostic verify均PASS。归一化证据位于artifacts/validation/3f7e335b5f1ae8112357230df2a62f22d916adc7/b329f72d-4049-4af4-af92-09d930e8d5cf/windows-debug/，仍是dirty快照诊断，不是发布批准或未运行平台证明。
+- 当前`carc_pack`每次打包生成新发行者，未新增同密钥签署多个不同包、轮换或多发行者授权。CARC索引密钥可由公钥派生，不能把它称为DRM或内容保密机制。运行时固定公钥验证通过不代表这些作者工具与分发能力完成。
+- 后续准备：artifacts/validation/u9-prepared/u9-tests.apply_patch新增8个合法签名边界/共享reader并发用例，尚未应用或运行；artifacts/validation/u2-fixtures-prepared/u2-fixture-repair.patch修复Demo/AI假通过及仅Lua变化时夹具不刷新的问题，亦未应用或运行。二者涉及CMake时应按上下文合并，不能覆盖其他修改。更强的删除文件镜像一致性、实际分配失败、精确上限与真实包性能仍待验证。
+
 ## 并行所有权
 
 - resource agent：U3/U5代码与SDL回归已交付，独立只读审查完成。
 - storage agent：U4/U7代码及存档回归已交付，POSIX分支另有独立运行证据。
 - reload agent：重载边界、Lua回归与平台矩阵测试隔离已交付；Engine接线完成只读审查。
 - U6主代理：任务系统、Null模拟、Engine屏障与回归；契约/最终代码只读审查通过；POSIX agent仅负责独立编译与证据工件。
+- U8：核心补丁准备、CLI实现与独立安全审查分别负责；主代理应用补丁、统一构建/验证及文档；后续U9/U2 agent仅准备artifact补丁。
 - evidence agent：U1实现和独立审查已完成。
 - 主代理：构建/测试统一执行、U2执行器与profiles/CMake/CI、组合根接线、集成审查与本记录。
 

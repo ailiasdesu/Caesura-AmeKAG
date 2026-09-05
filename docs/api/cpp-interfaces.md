@@ -59,12 +59,16 @@ auto* lua      = BackendRegistry::instance().getLuaManager()->state();
 ### 1.1 IArchiveReader
 
 ```cpp
+using ArchivePublicKey = std::array<uint8_t, 32>; // Raw Ed25519 public key
+
 class IArchiveReader {
 public:
     virtual ~IArchiveReader() = default;
 
     virtual bool open(const std::string& path,
                       const std::string& pubKeyPath = "") = 0;
+    virtual bool open(const std::string& path,
+                      const ArchivePublicKey& expectedKey) = 0;
     virtual void close() = 0;
     virtual std::vector<uint8_t> readFile(const std::string& relativePath) = 0;
     virtual bool hasFile(const std::string& relativePath) const = 0;
@@ -75,12 +79,15 @@ public:
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `open` | `path`: .carc 文件路径；`pubKeyPath`: Ed25519 公钥路径（可选） | `bool` | 打开归档，可选签名验证 |
+| `open(path, pubKeyPath)` | 归档路径；可选显式公钥文件路径 | `bool` | 始终验签；未指定公钥时使用归档内嵌公钥，仅证明自签内容一致性；显式公钥读取失败不回退 |
+| `open(path, expectedKey)` | 归档路径；宿主提供的32字节公钥 | `bool` | 用宿主固定公钥验签并解密索引，归档或旁置文件不能更换验证公钥 |
 | `close` | — | — | 关闭归档，释放资源 |
 | `readFile` | `relativePath`: 归档内相对路径 | `vector<uint8_t>` | 读取文件内容，未找到返回空 |
 | `hasFile` | `relativePath` | `bool` | 检查文件是否存在 |
 | `numFiles` | — | `size_t` | 归档内文件总数 |
 | `isOpen` | — | `bool` | 归档是否已打开 |
+
+EngineConfig 的 `archiveTrustMode` 默认为 `ArchiveTrustMode::Compatible`。选择 `PinnedPublisher` 时，必须在 `Engine::init()` 前填入 `archivePublisherKey`；Engine持有按值复制的公钥。固定公钥约束覆盖全部识别到的自动挂载层，任一验证失败则初始化失败并回滚，不降级到低优先级资源。此策略只认证CARC，松散文件、入口Lua、manifest与宿主本身仍不因此获得认证。
 
 ### 1.2 IArchiveWriter
 

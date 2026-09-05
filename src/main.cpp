@@ -64,15 +64,92 @@ static void caesura_tee_stderr() {
 #include <thread>
 #include <type_traits>
 #include <utility>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace Caesura {
 std::string discoverStartupScriptDir();
 void configureStartupLuaPath(lua_State* L, const std::string& scriptDir);
 void applyDevModeToTextureManager(lua_State* L);
-void validateCarcOnStartup(lua_State* L);
 }
 
 namespace {
+
+bool archivePublisherKeyPath(int argc, char* argv[], int optionIndex,
+                             std::filesystem::path& path) {
+    try {
+        if (optionIndex < 1 || optionIndex + 1 >= argc) return false;
+#if defined(_WIN32)
+        // main() receives code-page converted argv on Windows. Recover only
+        // this host-selected path from the original Unicode command line.
+        int wideArgc = 0;
+        const std::unique_ptr<wchar_t*, decltype(&LocalFree)> wideArgs(
+            CommandLineToArgvW(GetCommandLineW(), &wideArgc), &LocalFree);
+        if (!wideArgs || wideArgc != argc ||
+            std::wstring(wideArgs.get()[optionIndex]) != L"--carc-public-key" ||
+            std::string(argv[optionIndex]) != "--carc-public-key") {
+            fprintf(stderr, "[main] ERROR: --carc-public-key command-line mapping failed.\n");
+            return false;
+        }
+        path = std::filesystem::path(wideArgs.get()[optionIndex + 1]);
+#else
+        path = std::filesystem::path(argv[optionIndex + 1]);
+#endif
+        return !path.empty();
+    } catch (const std::exception& error) {
+        fprintf(stderr, "[main] ERROR: --carc-public-key path could not be resolved: %s\n",
+                error.what());
+        return false;
+    }
+}
+
+std::string archiveKeyPathLabel(const std::filesystem::path& path) {
+    try {
+        const auto utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    } catch (const std::exception&) {
+        // A diagnostic conversion must not prevent opening a valid native path.
+        return "<host-selected path>";
+    }
+}
+
+bool readArchivePublisherKey(const std::filesystem::path& keyPath,
+                             Caesura::carc::ArchivePublicKey& key) {
+    const std::string pathLabel = archiveKeyPathLabel(keyPath);
+    try {
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(keyPath, ec)) {
+            fprintf(stderr, "[main] ERROR: --carc-public-key is not a readable file: %s\n",
+                    pathLabel.c_str());
+            return false;
+        }
+        std::ifstream input(keyPath, std::ios::binary);
+        if (!input) {
+            fprintf(stderr, "[main] ERROR: --carc-public-key cannot be opened: %s\n",
+                    pathLabel.c_str());
+            return false;
+        }
+        input.read(reinterpret_cast<char*>(key.data()),
+                   static_cast<std::streamsize>(key.size()));
+        char extra = 0;
+        if (input.gcount() != static_cast<std::streamsize>(key.size()) ||
+            input.get(extra) || !input.eof() || input.bad()) {
+            fprintf(stderr, "[main] ERROR: --carc-public-key must contain exactly 32 raw bytes: %s\n",
+                    pathLabel.c_str());
+            return false;
+        }
+        return true;
+    } catch (const std::exception& error) {
+        fprintf(stderr, "[main] ERROR: --carc-public-key could not be read (%s): %s\n",
+                pathLabel.c_str(), error.what());
+        return false;
+    }
+}
 
 Caesura::RpcReply rpcError(Caesura::RpcReplyStatus status,
                            const char* code,
@@ -1031,60 +1108,15 @@ extern "C" int main(int argc, char* argv[]) {
 #endif
     fprintf(stderr, "[main] Starting Caesura (AmeKAG)...\n");
 
-    // Resource root resolution (Track I3 / Android R6):
-    //   1. --resource-root <dir>  (explicit; iOS launcher passes
-    //      SDL_GetBasePath(), the Android JNI wrapper its install dir)
-    //   2. CAESURA_RESOURCE_ROOT env var
-    //   3. legacy walk-up: relative to CWD, walk parents until assets/ is
-    //      found and chdir there (unchanged backward-compatible behavior).
-    {
-        namespace fs = std::filesystem;
-        const char* envRoot = std::getenv("CAESURA_RESOURCE_ROOT");
-        std::string resourceRoot;
-        bool rootExplicit = false;
-        for (int i = 1; i < argc - 1; ++i) {
-            if (std::string(argv[i]) == "--resource-root" && i + 1 < argc) {
-                resourceRoot = argv[i + 1];
-                rootExplicit = true;
-                break;
-            }
-        }
-        if (resourceRoot.empty() && envRoot && *envRoot) {
-            resourceRoot = envRoot;
-            rootExplicit = true;
-        }
-
-        fs::path target;
-        if (rootExplicit) {
-            target = fs::path(resourceRoot);
-            if (!fs::is_directory(target) || !fs::is_directory(target / "assets")) {
-                fprintf(stderr, "[main] ERROR: --resource-root has no assets/ directory: %s\n",
-                        resourceRoot.c_str());
-                return 1;
-            }
-        } else {
-            fs::path probe = fs::current_path();
-            for (int i = 0; i < 6; ++i) {
-                if (fs::exists(probe / "assets") && fs::is_directory(probe / "assets")) {
-                    target = probe;
-                    break;
-                }
-                probe = probe.parent_path();
-            }
-            if (target.empty()) target = fs::current_path();
-        }
-
-        std::error_code ec;
-        fs::current_path(target, ec);
-        if (!ec) {
-            fprintf(stderr, "[main] Working directory: %s\n", target.string().c_str());
-        }
-    }
-
     // -- Parse CLI flags -------------------------------------------------
     bool headless = false;
     bool editorMode = false;
     bool editorStdio = false;
+    std::string resourceRoot;
+    bool rootExplicit = false;
+    Caesura::ArchiveTrustMode archiveTrustMode = Caesura::ArchiveTrustMode::Compatible;
+    bool archiveTrustExplicit = false;
+    std::filesystem::path publisherKeyPath;
     // Explicit opt-out of the default-deny editor auth gate. Deliberately a
     // FLAG rather than a token: it carries no secret, so argv exposure is fine.
     bool editorInsecure = false;
@@ -1121,6 +1153,9 @@ extern "C" int main(int argc, char* argv[]) {
             printf("Caesura (AmeKAG) -- cross-platform visual novel engine.\n");
             printf("\n");
             printf("Options:\n");
+            printf("  --resource-root <dir> resource directory containing assets/\n");
+            printf("  --carc-trust <mode>   CARC policy: compatible (default) or pinned\n");
+            printf("  --carc-public-key <f> 32 raw public-key bytes; requires --carc-trust pinned\n");
             printf("  --headless            run without a GPU window (headless/stdio mode)\n");
             printf("  --editor              run the HTTP editor server (127.0.0.1:9876, hidden GPU window)\n");
             printf("  --editor-stdio        run the stdin/stdout JSON-RPC editor transport\n");
@@ -1139,6 +1174,14 @@ extern "C" int main(int argc, char* argv[]) {
     }
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
+        const bool takesValue = arg == "--resource-root" || arg == "--carc-trust" ||
+            arg == "--carc-public-key" || arg == "--backend" || arg == "--frames" ||
+            arg == "--export-replay" || arg == "--export-dir" || arg == "--resolution";
+        if (takesValue && (i + 1 >= argc || argv[i + 1][0] == '\0' ||
+                           std::string(argv[i + 1]).rfind("--", 0) == 0)) {
+            fprintf(stderr, "[main] ERROR: %s requires a value.\n", arg.c_str());
+            return 1;
+        }
         if (arg == "--headless") {
             headless = true;
         } else if (arg == "--editor") {
@@ -1148,6 +1191,33 @@ extern "C" int main(int argc, char* argv[]) {
         } else if (arg == "--editor-stdio") {
             editorMode = true;
             editorStdio = true;
+        } else if (arg == "--resource-root") {
+            const std::string value = argv[++i];
+            if (!rootExplicit) resourceRoot = value;
+            rootExplicit = true;
+        } else if (arg == "--carc-trust") {
+            const std::string value = argv[++i];
+            if (value != "compatible" && value != "pinned") {
+                fprintf(stderr, "[main] ERROR: Invalid --carc-trust value: %s\n", value.c_str());
+                return 1;
+            }
+            const auto mode = value == "pinned" ? Caesura::ArchiveTrustMode::PinnedPublisher
+                                                 : Caesura::ArchiveTrustMode::Compatible;
+            if (archiveTrustExplicit && mode != archiveTrustMode) {
+                fprintf(stderr, "[main] ERROR: Conflicting --carc-trust options.\n");
+                return 1;
+            }
+            archiveTrustMode = mode;
+            archiveTrustExplicit = true;
+        } else if (arg == "--carc-public-key") {
+            std::filesystem::path value;
+            if (!archivePublisherKeyPath(argc, argv, i, value)) return 1;
+            ++i;
+            if (!publisherKeyPath.empty() && value.native() != publisherKeyPath.native()) {
+                fprintf(stderr, "[main] ERROR: Conflicting --carc-public-key options.\n");
+                return 1;
+            }
+            publisherKeyPath = std::move(value);
         } else if (arg == "--backend" && i + 1 < argc) {
             renderBackend = argv[++i];
         } else if (arg == "--frames" && i + 1 < argc) {
@@ -1173,6 +1243,68 @@ extern "C" int main(int argc, char* argv[]) {
                 fprintf(stderr, "Invalid --resolution value: %s\n", argv[i]);
                 return 1;
             }
+        } else {
+            fprintf(stderr, "[main] ERROR: Unknown command-line option: %s\n", arg.c_str());
+            return 1;
+        }
+    }
+
+    if (archiveTrustMode == Caesura::ArchiveTrustMode::PinnedPublisher &&
+        publisherKeyPath.empty()) {
+        fprintf(stderr, "[main] ERROR: --carc-public-key is required for --carc-trust pinned.\n");
+        return 1;
+    }
+    std::optional<Caesura::carc::ArchivePublicKey> archivePublisherKey;
+    if (!publisherKeyPath.empty()) {
+        if (!archiveTrustExplicit || archiveTrustMode != Caesura::ArchiveTrustMode::PinnedPublisher) {
+            fprintf(stderr, "[main] ERROR: --carc-public-key requires explicit --carc-trust pinned.\n");
+            return 1;
+        }
+        Caesura::carc::ArchivePublicKey key{};
+        // Read once before changing CWD. Relative host paths are never resolved
+        // against the game's resource root or an automatically selected sidecar.
+        if (!readArchivePublisherKey(publisherKeyPath, key)) return 1;
+        archivePublisherKey = key;
+    }
+
+    // Resource root resolution (Track I3 / Android R6):
+    //   1. --resource-root <dir>  (explicit; iOS launcher passes
+    //      SDL_GetBasePath(), the Android JNI wrapper its install dir)
+    //   2. CAESURA_RESOURCE_ROOT env var
+    //   3. legacy walk-up: relative to CWD, walk parents until assets/ is
+    //      found and chdir there (unchanged backward-compatible behavior).
+    {
+        namespace fs = std::filesystem;
+        const char* envRoot = std::getenv("CAESURA_RESOURCE_ROOT");
+        if (resourceRoot.empty() && envRoot && *envRoot) {
+            resourceRoot = envRoot;
+            rootExplicit = true;
+        }
+
+        fs::path target;
+        if (rootExplicit) {
+            target = fs::path(resourceRoot);
+            if (!fs::is_directory(target) || !fs::is_directory(target / "assets")) {
+                fprintf(stderr, "[main] ERROR: --resource-root has no assets/ directory: %s\n",
+                        resourceRoot.c_str());
+                return 1;
+            }
+        } else {
+            fs::path probe = fs::current_path();
+            for (int i = 0; i < 6; ++i) {
+                if (fs::exists(probe / "assets") && fs::is_directory(probe / "assets")) {
+                    target = probe;
+                    break;
+                }
+                probe = probe.parent_path();
+            }
+            if (target.empty()) target = fs::current_path();
+        }
+
+        std::error_code ec;
+        fs::current_path(target, ec);
+        if (!ec) {
+            fprintf(stderr, "[main] Working directory: %s\n", target.string().c_str());
         }
     }
 
@@ -1202,6 +1334,8 @@ extern "C" int main(int argc, char* argv[]) {
     config.frameLimit     = frameLimit;
     config.exportReplayFile = exportReplayFile;
     config.exportDir        = exportDir;
+    config.archiveTrustMode = archiveTrustMode;
+    config.archivePublisherKey = archivePublisherKey;
 
     // Create GPU-mode implementations here; Engine supplies safe defaults otherwise.
     if (!headless || editorMode) {
@@ -1271,9 +1405,6 @@ extern "C" int main(int argc, char* argv[]) {
     if (!engine.lua().loadScript((scriptDir + "kag/init.lua").c_str())) {
         fprintf(stderr, "Warning: Failed to load KAG init.\n");
     }
-
-    // [10.2.30] CARC startup validation
-    Caesura::validateCarcOnStartup(L);
 
     // One-time startup loads are separate budget windows from the per-frame
     // game loop: reset the instruction budget before parsing the entry scene.

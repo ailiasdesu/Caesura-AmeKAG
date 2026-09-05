@@ -10,7 +10,7 @@
 |--------|-------|
 | Module libraries (src/) | 15 |
 | API interface headers (src/*/api/I*.h) | 35 |
-| Pure-virtual interface methods | 420 |
+| Pure-virtual interface methods | 421 |
 | Lua binding functions (luaL_Reg entries) | 161 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 134 |
@@ -22,7 +22,7 @@
 
 | Module | Interface file | Pure-virtual methods |
 |--------|----------------|----------------------|
-| archive | IArchiveReader.h | 6 |
+| archive | IArchiveReader.h | 7 |
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
 | audio | IAudioBackend.h | 31 |

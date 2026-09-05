@@ -265,7 +265,7 @@ TEST_CASE("Main entry point uses texture manager interface") {
     CHECK(source.find("Caesura::applyDevModeToTextureManager(L)") != std::string::npos);
 }
 
-TEST_CASE("Main entry point delegates CARC startup validation") {
+TEST_CASE("Archive trust is not reselected after Lua startup configuration") {
     const auto repoRoot = findRepoRoot();
     REQUIRE_FALSE(repoRoot.empty());
 
@@ -274,13 +274,13 @@ TEST_CASE("Main entry point delegates CARC startup validation") {
     CHECK(source.find("#include \"archive/CARCReader.h\"") == std::string::npos);
     CHECK(source.find("carc::CARCReader") == std::string::npos);
     CHECK(source.find("verifySignature()") == std::string::npos);
-    CHECK(source.find("Caesura::validateCarcOnStartup(L)") != std::string::npos);
+    CHECK(source.find("validateCarcOnStartup") == std::string::npos);
     REQUIRE(std::filesystem::exists(helperPath));
 
     const std::string helper = readFile(helperPath);
-    CHECK(countOccurrences(helper, "[main] CARC startup validation enabled.") == 1);
-    CHECK(helper.find("carc::CARCReader") != std::string::npos);
-    CHECK(helper.find("verifySignature()") != std::string::npos);
+    CHECK(countOccurrences(helper, "[main] CARC startup validation enabled.") == 0);
+    CHECK(helper.find("carc::CARCReader") == std::string::npos);
+    CHECK(helper.find("verifySignature()") == std::string::npos);
 }
 
 TEST_CASE("Install layout includes configured demo entry script") {

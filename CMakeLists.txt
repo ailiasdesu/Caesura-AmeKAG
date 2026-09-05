@@ -210,6 +210,10 @@ else()
     add_executable(${PROJECT_NAME} src/main.cpp)
 endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE Caesura::Engine Caesura::Rpc)
+if(WIN32)
+    # Preserve the host public-key path from the native wide command line.
+    target_link_libraries(${PROJECT_NAME} PRIVATE shell32)
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set_target_properties(${PROJECT_NAME} PROPERTIES

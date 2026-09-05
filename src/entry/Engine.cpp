@@ -131,7 +131,8 @@ std::unique_ptr<IAnimationBackend> createDefaultAnimationBackend();
 std::unique_ptr<IAnimationBackend> createFallbackAnimationBackend();
 void attachRenderDeviceToAnimationBackend(IAnimationBackend* animationBackend,
                                            IRenderDevice* renderDevice);
-void registerDefaultAssetProviders(AssetManager& assetManager);
+bool registerDefaultAssetProviders(AssetManager& assetManager,
+                                   const EngineConfig& config, const std::string& root);
 void registerEngineLuaRegistryServices(lua_State* L,
                                        IInputRouter* inputRouter,
                                        IVideoPlayer* videoPlayer,
@@ -568,7 +569,9 @@ bool Engine::initAssetPhase() {
     m_assetManager->init();
     m_assetManagerInitialized = true;
     // Inject CARC providers (moved from AssetManager to break resource→archive cycle)
-    registerDefaultAssetProviders(*m_assetManager);
+    if (!registerDefaultAssetProviders(*m_assetManager, m_config, ".")) {
+        return false;
+    }
     m_asyncLoader->init();
     if (!m_asyncLoader->isRunning()) {
         DEBUG_ERR(SubSys::Resource, ErrCode::Ok, "Async loader initialization failed");

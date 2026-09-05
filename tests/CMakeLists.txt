@@ -200,6 +200,18 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
 
 if(Python3_EXECUTABLE)
     add_test(
+        NAME CaesuraArchiveTrustCli
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_archive_trust_cli.py
+                $<TARGET_FILE:CaesuraAmeKAG> $<TARGET_FILE:carc_pack>
+    )
+    set_tests_properties(CaesuraArchiveTrustCli PROPERTIES
+        LABELS "archive;trust;cli"
+        TIMEOUT 180
+        RUN_SERIAL TRUE
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    add_test(
         NAME CaesuraValidationEvidence
         COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_evidence.py

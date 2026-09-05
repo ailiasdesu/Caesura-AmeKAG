@@ -38,6 +38,23 @@ bool checkedRead(std::istream& s, void* dst, std::streamsize size) {
 // ==========================================================================
 bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
 {
+    if (pubKeyPath.empty()) return openWithExpectedKey(path, nullptr);
+    ArchivePublicKey expectedKey{};
+    if (!CryptoEngine::readPublicKey(pubKeyPath, expectedKey.data())) {
+        close();
+        return false;
+    }
+    return open(path, expectedKey);
+}
+
+bool CARCReader::open(const std::string& path, const ArchivePublicKey& expectedKey)
+{
+    static_assert(std::tuple_size<ArchivePublicKey>::value == PUBLICKEY_SIZE);
+    return openWithExpectedKey(path, expectedKey.data());
+}
+
+bool CARCReader::openWithExpectedKey(const std::string& path, const uint8_t* expectedKey)
+{
     close();
 
     m_stream.open(path, std::ios::binary);
@@ -86,20 +103,15 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
         return false;
     }
 
-    // 2. Read public key
-    if (!pubKeyPath.empty()) {
-        if (!CryptoEngine::readPublicKey(pubKeyPath, m_publicKey)) {
-            close();
-            return false;
-        }
-        m_hasPublicKey = true;
-    } else {
-        if (!readTrailingPublicKey()) {
-            close();
-            return false;
-        }
-        m_hasPublicKey = true;
+    // 2. Select the verification key. Host bytes are copied once and never
+    // replaced by archive metadata or a neighboring .pub file.
+    if (expectedKey) {
+        memcpy(m_publicKey, expectedKey, PUBLICKEY_SIZE);
+    } else if (!readTrailingPublicKey()) {
+        close();
+        return false;
     }
+    m_hasPublicKey = true;
 
     // 3. Verify signature
     if (!verifySignature()) {

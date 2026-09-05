@@ -11,6 +11,10 @@
 #include "archive/api/ICryptoEngine.h"
 #include "di/BackendRegistry.h"
 #include "TestPaths.h"
+#include "PublisherArchives.h"
+#include "entry/EngineConfig.h"
+#include "resource/AssetManager.h"
+#include "resource/DirAssetProvider.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
@@ -1224,3 +1228,126 @@ TEST_CASE("DeltaCARC C2: generate/verify/apply round trip reproduces the target 
                                        (temp.path() / "bad.carc").string()));
 }
 
+
+namespace Caesura {
+bool registerDefaultAssetProviders(AssetManager& assetManager,
+                                   const EngineConfig& config, const std::string& root);
+}
+
+TEST_CASE("U8: every recognized automatic CARC layer requires the pinned publisher") {
+    const std::vector<std::string> names = {
+        "base.carc", "data.carc", "game.carc", "patch.carc", "patch_hotfix.carc",
+        "dlc_expansion.carc", "lang_en.carc", "dlc/episode.carc", "dlc/patch_extra.carc"
+    };
+    Caesura::Test::PublisherArchives files;
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    for (const auto& name : names) {
+        CAPTURE(name);
+        const auto package = files.mount(name, true);
+        {
+            AssetManager assets;
+            assets.init();
+            REQUIRE(registerDefaultAssetProviders(assets, config, files.root.string()));
+            const auto payload = assets.read("u8_publisher_payload.txt");
+            CHECK(std::string(payload.begin(), payload.end()) == "publisher A");
+        }
+        files.mount(name, false);
+        {
+            AssetManager assets;
+            assets.init();
+            CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+            CHECK_FALSE(assets.exists("u8_publisher_payload.txt"));
+        }
+        std::filesystem::remove(package);
+    }
+}
+
+TEST_CASE("U8: failed strict registration never inserts a partial archive chain") {
+    Caesura::Test::PublisherArchives files;
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    SUBCASE("untrusted patch cannot override trusted base") {
+        files.mount("patch.carc", false);
+        files.mount("base.carc", true);
+    }
+    SUBCASE("late untrusted base cannot leave an earlier trusted patch mounted") {
+        files.mount("patch.carc", true);
+        files.mount("base.carc", false);
+    }
+    SUBCASE("corrupt recognized package cannot be skipped") {
+        files.mount("patch.carc", true);
+        std::ofstream(files.root / "base.carc", std::ios::binary) << "corrupt";
+    }
+    AssetManager assets;
+    assets.init();
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    CHECK_FALSE(assets.exists("u8_publisher_payload.txt"));
+    CHECK(assets.read("u8_publisher_payload.txt").empty());
+}
+
+TEST_CASE("U8: pinned mode rejects missing and wrong host keys without fallback") {
+    Caesura::Test::PublisherArchives files;
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    AssetManager assets;
+    assets.init();
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    files.mount("base.carc", true);
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    config.archivePublisherKey = files.attackerKey;
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    CHECK_FALSE(assets.exists("u8_publisher_payload.txt"));
+}
+
+TEST_CASE("U8: compatible mode preserves old self-signed archives and skip behavior") {
+    Caesura::Test::PublisherArchives files;
+    files.mount("base.carc", true);
+    files.mount("patch.carc", false);
+    std::ofstream(files.root / "lang_bad.carc", std::ios::binary) << "corrupt";
+    EngineConfig config;
+    CHECK(config.archiveTrustMode == ArchiveTrustMode::Compatible);
+    CHECK_FALSE(config.archivePublisherKey.has_value());
+    // A key without an explicit mode change must not silently enable strict mode.
+    config.archivePublisherKey = files.trustedKey;
+    AssetManager assets;
+    assets.init();
+    REQUIRE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    const auto payload = assets.read("u8_publisher_payload.txt");
+    CHECK(std::string(payload.begin(), payload.end()) == "attacker B");
+}
+
+TEST_CASE("U8: successful CARC authentication leaves loose fallback outside its scope") {
+    Caesura::Test::PublisherArchives files;
+    files.mount("base.carc", true);
+    files.mount("random.carc", false); // unrecognized root archives remain inert
+    std::ofstream(files.root / "u8_loose_only.txt") << "unauthenticated loose source";
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    AssetManager assets;
+    assets.init();
+    auto loose = std::make_unique<DirAssetProvider>(files.root.string());
+    CHECK(loose->getSource().rfind("Dir:", 0) == 0);
+    assets.addProvider(std::move(loose));
+    REQUIRE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    const auto payload = assets.read("u8_loose_only.txt");
+    CHECK(std::string(payload.begin(), payload.end()) == "unauthenticated loose source");
+}
+
+TEST_CASE("U8: strict discovery cannot silently accept an unscannable mount root") {
+    Caesura::Test::PublisherArchives files;
+    EngineConfig config;
+    config.archiveTrustMode = ArchiveTrustMode::PinnedPublisher;
+    config.archivePublisherKey = files.trustedKey;
+    AssetManager assets;
+    assets.init();
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.trusted.string()));
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config,
+        (files.temp.path() / "missing_root").string()));
+    REQUIRE(registerDefaultAssetProviders(assets, config, files.root.string()));
+    config.archiveTrustMode = static_cast<ArchiveTrustMode>(123);
+    CHECK_FALSE(registerDefaultAssetProviders(assets, config, files.root.string()));
+}

@@ -37,27 +37,30 @@ public:
     CARCReader() = default;
     ~CARCReader() { close(); }
 
-    // Open a .carc file.  pubKeyPath can be empty; the reader will
-    // look for a .pub key alongside the archive or use an embedded key.
-    bool open(const std::string& path, const std::string& pubKeyPath = "");
+    // An empty key path checks the embedded self-signature for compatibility.
+    // A specified key path is authoritative; unreadable keys never fall back.
+    bool open(const std::string& path, const std::string& pubKeyPath = "") override;
 
-    void close();
+    // Verify against host-selected bytes, independent of embedded/sidecar keys.
+    bool open(const std::string& path, const ArchivePublicKey& expectedKey) override;
+
+    void close() override;
 
     // Read a single file: decrypt + decompress.
     // Returns empty vector if the file is not found or on error.
-    std::vector<uint8_t> readFile(const std::string& relativePath);
+    std::vector<uint8_t> readFile(const std::string& relativePath) override;
     std::vector<uint8_t> readFileByHash(const uint8_t pathHash[PATH_HASH_SIZE]);
 
     // Check if a file exists in the index (does not decrypt/decompress).
-    bool hasFile(const std::string& relativePath) const;
+    bool hasFile(const std::string& relativePath) const override;
     bool hasFileByHash(const uint8_t pathHash[PATH_HASH_SIZE]) const;
 
     // Metadata
     const std::vector<std::string>& fileList() const { return m_fileList; }
     const std::unordered_map<std::string, CarcFileInfo>& index() const { return m_index; }
-    size_t numFiles() const { return m_fileList.size(); }
+    size_t numFiles() const override { return m_fileList.size(); }
     uint32_t version() const { return m_header.version; }
-    bool isOpen() const { return m_stream.is_open(); }
+    bool isOpen() const override { return m_stream.is_open(); }
 
     // Utility: hash a path string to 32-byte SHA-256
     static void hashPath(const std::string& path, uint8_t out[PATH_HASH_SIZE]);
@@ -84,12 +87,14 @@ public:
     /// Set the root Ed25519 public key for certificate verification
     void setRootPublicKey(const uint8_t key[PUBLICKEY_SIZE]);
 
-    /// Get the public key read from this CARC
+    /// Get the verification key: host-selected, or embedded in compatible mode.
     const uint8_t* publicKey() const { return m_publicKey; }
     bool hasPublicKey() const { return m_hasPublicKey; }
     bool verifySignature();
 
 private:
+    bool openWithExpectedKey(const std::string& path, const uint8_t* expectedKey);
+
     CARCHeader m_header;
     // pathHash (32-byte as hex string) →→ FileInfo
     std::unordered_map<std::string, CarcFileInfo> m_index;
