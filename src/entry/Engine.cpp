@@ -673,9 +673,11 @@ void Engine::run(const OwnerPump& ownerPump) {
         Caesura::mobileNativeDrainAudioFocus();
 #endif
         if (ownerPump) ownerPump();
+        if (m_shutdownComplete) break;
         m_skipLuaCallbacksThisFrame = pumpDebugger();
         publishDebugPauseState();
         processEvents();
+        if (m_shutdownComplete) break;
 
         // --- GPU device loss recovery check (before any per-frame rendering) ---
         if (m_renderDevice && m_renderDevice->consumeDeviceLost()) {
@@ -704,6 +706,7 @@ void Engine::run(const OwnerPump& ownerPump) {
 
         // JobSystem main-thread callbacks + async load SDL events
         m_jobSystem->pollMainThreadJobs();
+        if (m_shutdownComplete) break;
         if (!(m_config.headless || m_config.editorMode)) {
             m_asyncLoader->poll();
         }
@@ -1054,6 +1057,7 @@ void Engine::dispatchAsyncLoad(std::unique_ptr<CompletedLoad> completed) {
 void Engine::processEvents() {
     // Steam callbacks every frame
     m_steamBackend->runCallbacks();
+    if (m_shutdownComplete) return;
 
     lua_State* L = m_lua->state();
     if (L) {
@@ -1077,7 +1081,10 @@ void Engine::processEvents() {
     if (!isLuaExecutionPaused() && !m_deferredAsyncLoads.empty()) {
         auto deferred = std::move(m_deferredAsyncLoads);
         m_deferredAsyncLoads.clear();
-        for (auto& completed : deferred) dispatchAsyncLoad(std::move(completed));
+        for (auto& completed : deferred) {
+            dispatchAsyncLoad(std::move(completed));
+            if (m_shutdownComplete) return;
+        }
     }
 
     // Headless/Editor mode: no SDL event loop -- deliver completed async
@@ -1086,6 +1093,7 @@ void Engine::processEvents() {
     if (m_config.headless || m_config.editorMode) {
         for (auto& c : m_asyncLoader->drainCompleted()) {
             dispatchAsyncLoad(std::make_unique<CompletedLoad>(std::move(c)));
+            if (m_shutdownComplete) return;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return;
@@ -1762,6 +1770,7 @@ void Engine::shutdown() {
     if (m_shutdownComplete) return;
     m_shutdownComplete = true;
     m_initialized = false;
+    m_running = false;
 
     // Unregister the SDL app-lifecycle watch first: a background event
     // delivered after this point must not reach Lua state being torn down.
@@ -1775,6 +1784,14 @@ void Engine::shutdown() {
     if (!m_initAttempted) return;
 
     auto& registry = BackendRegistry::instance();
+
+    // Invalidate script-owned loads before draining generic completions. Stop
+    // admission and join workers while every backend is still alive; final
+    // legal callbacks must precede VFX, render, layer and mini-game teardown.
+    if (m_asyncLoaderInitialized) cancelRenderAsyncLoads(m_lua->state());
+    m_deferredAsyncLoads.clear();
+    if (m_jobSystemInitialized) m_jobSystem->shutdown();
+    if (m_asyncLoaderInitialized) m_asyncLoader->shutdown();
 
     VFXBinding_Shutdown(m_particleSystem.get());
 
@@ -1795,9 +1812,7 @@ void Engine::shutdown() {
     m_miniGameBackend.reset();
     registry.setMiniGameBackend(nullptr);
 
-    if (m_asyncLoaderInitialized) m_asyncLoader->shutdown();
     if (m_assetManagerInitialized) m_assetManager->shutdown();
-    if (m_jobSystemInitialized) m_jobSystem->shutdown();
     if (m_steamInitialized) {
         m_steamBackend->shutdown();
     }

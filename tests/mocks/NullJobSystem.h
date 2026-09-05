@@ -17,10 +17,14 @@ public:
     ~NullJobSystem() override = default;
 
     void init() override {
+        if (m_running) return;
+        ++m_epoch;
         m_running = true;
     }
 
     void shutdown() override {
+        if (!m_running) return;
+        ++m_epoch;
         m_running = false;
         m_jobId = 1;
     }
@@ -29,7 +33,8 @@ public:
                     JobPriority priority = JobPriority::Normal,
                     MainThreadFn onComplete = nullptr) override {
         (void)priority;
-        if (!m_running) return 0;
+        if (!m_running || !work) return 0;
+        const uint64_t epoch = m_epoch;
         uint64_t id = m_jobId++;
         // Exception isolation mirrors the real JobSystem: a throwing task or
         // completion callback is caught, reported, and swallowed so it can
@@ -48,7 +53,7 @@ public:
                         "isolated and swallowed\n");
             }
         }
-        if (onComplete) {
+        if (onComplete && m_running && epoch == m_epoch) {
             try {
                 onComplete();
             } catch (const std::exception& e) {
@@ -79,6 +84,7 @@ public:
 
 private:
     bool m_running = false;
+    uint64_t m_epoch = 0;
     uint64_t m_jobId = 1;
 };
 

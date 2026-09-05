@@ -1,6 +1,6 @@
 #include "doctest.h"
 #include "job/JobSystem.h"
-#include "entry/Engine.h"
+#include "di/api/ThreadAssert.h"
 #include "mocks/NullJobSystem.h"
 #include <atomic>
 #include <chrono>

@@ -414,13 +414,15 @@ struct PointerEvent {
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
 | `init` | — | — | 启动工作线程池 |
-| `shutdown` | — | — | 等待并关闭所有线程 |
+| `shutdown` | — | — | 停止接收任务，join工作线程，在后端仍存活时执行一次最终回调快照；回调中重入关停会取消剩余回调 |
 | `submit` | `work`, `priority=Normal`, `onComplete=nullptr` | `uint64_t` | 提交异步任务，返回 job ID |
-| `pollMainThreadJobs` | — | — | 执行已完成任务的 `onComplete` 回调 |
-| `waitIdle` | — | — | 阻塞直到所有任务完成 |
+| `pollMainThreadJobs` | — | — | 主线程执行一个就绪快照；嵌套poll不递归排空，新任务回调留到后续poll |
+| `waitIdle` | — | — | 仅等待worker工作及其回调入队，不执行回调；worker不得同步等待主线程回调 |
 | `workerCount` | — | `int` | 工作线程数 |
-| `pendingJobs` | — | `int` | 待处理任务数 |
+| `pendingJobs` | — | `int` | 未完成worker及回调发布的任务数；0不代表主线程回调已经执行 |
 | `isRunning` | — | `bool` | 任务系统是否运行中 |
+
+生命周期与轮询由主线程控制。最终关停快照执行期间拒绝新任务和重新初始化；普通poll中的关停/重启会使旧批次失效。NullJobSystem保留同步执行work和callback的特性，但与真实实现一致拒绝空work，并在work关闭或重启实例后丢弃旧callback。
 
 **线程安全约束**：
 - `submit` 可将 CPU 工作（解码、物理）分发到 Worker 线程

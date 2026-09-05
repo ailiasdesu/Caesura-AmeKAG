@@ -24,24 +24,24 @@ public:
     JobSystem& operator=(const JobSystem&) = delete;
 
     // Lifecycle (main thread only)
-    void init();
-    void shutdown();
+    void init() override;
+    void shutdown() override;
 
     // Submit CPU work. Returns opaque job id (0 on failure).
     // onComplete, if set, runs on main thread after work finishes.
     uint64_t submit(JobFn work,
                     JobPriority priority = JobPriority::Normal,
-                    MainThreadFn onComplete = nullptr);
+                    MainThreadFn onComplete = nullptr) override;
 
-    // Drain main-thread callback queue (call once per frame from Engine).
-    void pollMainThreadJobs();
+    // Run one callback snapshot; nested polls defer to the next outer call.
+    void pollMainThreadJobs() override;
 
-    // Block until all submitted jobs finish (main thread; used during shutdown).
-    void waitIdle();
+    // Wait for worker bodies and callback publication, without invoking callbacks.
+    void waitIdle() override;
 
-    int  workerCount() const { return m_workerCount; }
-    int  pendingJobs() const { return m_pendingJobs.load(); }
-    bool isRunning()   const { return m_running.load(); }
+    int  workerCount() const override { return m_workerCount; }
+    int  pendingJobs() const override { return m_pendingJobs.load(); }
+    bool isRunning()   const override { return m_running.load(); }
     bool isWorkerThread() const;
 
 private:
@@ -56,7 +56,7 @@ private:
         mutable std::mutex mutex;
 
         void push(Job job);
-        bool pop(Job& out);    // owner: take from back (LIFO)
+        bool pop(Job& out);    // owner: take the highest-priority front item
         bool steal(Job& out);  // thief: take from front
         bool empty() const;
     };
@@ -69,6 +69,10 @@ private:
     void notifyWorkers();
 
     std::atomic<bool> m_running{false};
+    // Owner-thread state; workers never inspect callback dispatch state.
+    uint64_t m_dispatchEpoch = 0;
+    bool m_polling = false;
+    bool m_shuttingDown = false;
     int m_workerCount = 0;
 
     std::vector<std::unique_ptr<WorkQueue>> m_queues;

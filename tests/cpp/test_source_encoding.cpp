@@ -494,7 +494,8 @@ TEST_CASE("Engine composition root owns save system initialization") {
     REQUIRE(unregisterAsync != std::string::npos);
     REQUIRE(unregisterJob != std::string::npos);
     CHECK(asyncShutdown < assetShutdown);
-    CHECK(assetShutdown < jobShutdown);
+    // Workers and final callbacks finish while the asset owner is still alive.
+    CHECK(jobShutdown < asyncShutdown);
     CHECK(jobShutdown < unregisterAsync);
     CHECK(jobShutdown < unregisterJob);
 

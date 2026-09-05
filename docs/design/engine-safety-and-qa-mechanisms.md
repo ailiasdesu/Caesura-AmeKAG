@@ -7,12 +7,11 @@
 
 - **主线程约束**：所有渲染/音频/输入后端操作必须发生在主线程
   （`CAESURA_ASSERT_MAIN_THREAD()` 运行时断言，定义见 `src/di/api/ThreadAssert.h`）。
-- **JobSystem**（`src/job/`）：多线程任务队列，工作线程仅执行
-  **无共享状态**的加载/解码任务（图片解码、资源读取）；结果经
+- **JobSystem**（`src/job/`）：多线程任务队列，工作线程执行
+  I/O、解码等后台工作，不得直接操作需要主线程的后端；结果经
   主线程轮询（`pollMainThreadJobs`）消费，避免跨线程触碰后端。
-- **资源异步管线**（`src/resource/`）：`AsyncLoader` 工作线程
-  解码 → 主线程 `onComplete` 上传 GPU；缓存（`m_rgbaCache`）与
-  完成队列均以互斥锁保护（2026-08 修复 1×1 PNG 解码崩溃时加固）。
+- **资源异步管线**（`src/resource/`）：worker读取/解码，主线程onComplete写入完成缓冲，经SDL事件或drain交付Engine，后者复核请求代次后上传GPU并调用Lua；缓存与完成队列以互斥锁保护。
+- **完成屏障与关停**：`waitIdle()`只等待worker及回调发布；poll执行有限快照，嵌套poll不递归执行新回调。关停关闭任务入口、join线程后做最终快照，回调内再次关停会使剩余批次失效。Engine先取消脚本异步请求并完成Job关停，再销毁VFX、渲染、图层、小游戏及资源后端。后台任务自身仍须能正常结束，不能同步等待主线程回调。
 - **音频句柄**：SoLoud 句柄生命周期（retire/fade）仅在主线程
   执行；跨线程只传递不持有。
 - 详细数据流见 `docs/design/engine-architecture-topology.md`。

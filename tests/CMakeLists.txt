@@ -26,6 +26,7 @@ set(TEST_SOURCES
     cpp/test_async_cancellation.cpp
     cpp/test_null_jobsystem.cpp
     cpp/test_job_system.cpp
+    cpp/test_job_shutdown.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
     cpp/test_audio_integration.cpp
@@ -45,6 +46,7 @@ set(TEST_SOURCES
     cpp/test_error_ui.cpp
     cpp/test_entry.cpp
     cpp/test_entry_async.cpp
+    cpp/test_entry_shutdown.cpp
     cpp/test_di.cpp
     cpp/test_minigame.cpp
     cpp/test_platform.cpp
@@ -157,7 +159,7 @@ add_caesura_doctest(CaesuraUnitTests
 add_caesura_doctest(CaesuraEntryTests
     LABELS entry lifecycle
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_engine_lifecycle.cpp,*test_galgame_startup.cpp
+    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_entry_shutdown.cpp,*test_engine_lifecycle.cpp,*test_job_shutdown.cpp,*test_galgame_startup.cpp
 )
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem
