@@ -16,14 +16,15 @@
 | 单元 | 状态 | 现状与下一项证明 |
 |---|---|---|
 | U1 | 本机适用验收通过 | 53项证据测试、57项隔离mutation及真实run→collect→verify通过；无自动RC-GO；CI发布身份继续由U23承担 |
-| U2 | 进行中 | Windows Debug完整profile通过；执行器15项、进程管理Windows7/Linux6项通过；Release、完整跨平台/sanitizer与性能基线仍待完成 |
+| U2 | 进行中 | Windows Debug完整及定向验收通过；Demo/AI假通过、夹具更新与删除镜像已修复；Release、完整跨平台/sanitizer、Web skipped分类与性能基线仍待完成 |
 | U3 | 本机回归通过 | 真实SDL所有权、过滤器重入与取消释放计数通过；Engine统一暂停/恢复消费路径有真实Lua回归；跨平台整机释放观测仍依U2/U16 |
 | U4 | 本机适用验收通过 | 默认provider、两种策略、legacy导入、HTTP/Steam替身staging及metadata回归通过；云校验mutation两例必红且原源码摘要已恢复 |
 | U5 | 本机适用验收通过 | 请求epoch、旧worker/cache隔离、SDL重入取消、Engine暂停/回调重入、完整与局部脚本重载均已有运行回归；平台扩展仍依U2 |
 | U7 | 本机及POSIX定向验收通过 | 两条存档写入路径共用独占临时文件与原生替换；Windows13项存档/云回归及POSIX18场景ASan/UBSan通过；不等同断电保证 |
 | U6 | 本机适用验收通过 | worker-only等待、有限回调快照、重入关停/重启与Engine销毁屏障有回归；JobSystem的POSIX sanitizer及两种Job实现的行覆盖率已测量 |
 | U8 | 本机适用验收通过 | 预启动宿主公钥、全部识别CARC层固定验证、失败回滚与CLI已接通；12项核心及39项CLI回归通过；不认证整个分发目录 |
-| U9–U29 | 待执行 | 仍属于完整目标；U9与U2夹具修复已有未应用的测试补丁，按实际运行结果推进 |
+| U9 | 本机及POSIX定向验收通过 | 合法签名边界、并发/短读、真实分配失败及恢复已测；Reader有界拒绝、OpenSSL上下文异常释放已修复；真实包内存/耗时留样，不宣称全平台或穷尽fuzz |
+| U10–U29 | 待执行 | 仍属于完整目标；U10真实会话身份与生命周期测试补丁准备中，尚未应用或验收 |
 
 ## 本轮实际执行
 
@@ -93,6 +94,24 @@
 - 完整windows-debug运行：11个check实际退出0；全量Debug构建通过，C++1204 passed、0 failed、0 skipped、387374 assertions；Lua145/30、验证器15/7/53/57、耦合与注册检查通过；CTest20 passed、0 failed、1允许的真实AI服务skip（131.29s），包含39项CLI脚本。源码和夹具前后摘要一致。receipt：artifacts/validation/raw/windows-debug-u8-01/run.json；run_id=b329f72d-4049-4af4-af92-09d930e8d5cf；collect和diagnostic verify均PASS。归一化证据位于artifacts/validation/3f7e335b5f1ae8112357230df2a62f22d916adc7/b329f72d-4049-4af4-af92-09d930e8d5cf/windows-debug/，仍是dirty快照诊断，不是发布批准或未运行平台证明。
 - 当前`carc_pack`每次打包生成新发行者，未新增同密钥签署多个不同包、轮换或多发行者授权。CARC索引密钥可由公钥派生，不能把它称为DRM或内容保密机制。运行时固定公钥验证通过不代表这些作者工具与分发能力完成。
 - 后续准备：artifacts/validation/u9-prepared/u9-tests.apply_patch新增8个合法签名边界/共享reader并发用例，尚未应用或运行；artifacts/validation/u2-fixtures-prepared/u2-fixture-repair.patch修复Demo/AI假通过及仅Lua变化时夹具不刷新的问题，亦未应用或运行。二者涉及CMake时应按上下文合并，不能覆盖其他修改。更强的删除文件镜像一致性、实际分配失败、精确上限与真实包性能仍待验证。
+
+## 第五批真实夹具与CARC异常边界（2026-09-05）
+
+- U2保留Demo和AI各5个用例，去掉资源缺失或Ollama不可用时MESSAGE后return的假通过。Demo改为真实tokenizer/compiler/scheduler执行及内容/分支/EOF断言；AI普通回归使用真实loopback HTTP的模型发现与请求响应，真实Ollama仍由独立smoke检查，缺服务明确skip。LuaManager测试夹具显式shutdown，成功pcall不读取无效错误栈。
+- 构建依赖和CTest setup共用`tests/SyncTestAssets.cmake`，每次准确镜像7个生成夹具目录，清除陈旧文件但保留二进制、存档等其他输出。删除前预检全部根、祖先与子项，拒绝source重叠、输出越界、符号链接/junction及分号引起的GLOB结果歧义。独立审查发现的方括号路径、POSIX冒号、分号条目问题均已修复；Windows24项、WSL30项通过，0 skipped。
+- 实际无重链接检查中，修改复制后的tokenizer并放入陈旧文件，再次构建可恢复精确副本且删除陈旧项，C++二进制SHA与mtime均未变化。另对Demo缺失、full-pipeline缺失、对白篡改、tokenizer空参数、禁用[end]做5次输出夹具敏感性检查，全部按预期失败且逐项恢复SHA。证据：`artifacts/validation/u2-sync-proof/result.json`、`u2-sensitivity/result.json`；均非发布证据。
+- U9新增8个合法签名语料用例，覆盖19个subcase：整数/区域边界、index/entry不一致、坏tag、解压尺寸、重复索引既有语义、close/reopen、真实截断后短读与恢复，以及4线程共享reader读取。首轮8/8、764断言通过，没有据此虚构解析器缺陷；相关archive/entry定向套件118/118通过。
+- 独立Windows子进程在受限JobObject提交额度中实际复现两条bad_alloc：read抛异常，open还遗留部分打开状态。Reader现在对分配失败返回empty/false；open清理全部打开状态，read保留索引并允许再次读取。新增`CaesuraCarcMemory`持续执行两例，RED均失败、GREEN均通过；限制为基线加8MiB，外层128MiB并带超时。证据：`u9-measure/contract-red*`、`u2-u9-green/result.json`。
+- POSIX进一步复现OpenSSL加/解密先创建EVP上下文、后续vector分配异常时漏释放，两条释放断言RED；改为unique_ptr原生deleter后10条检查全部通过。`tests/probes/crypto_allocation`仅在原生非Windows构建注册，standalone亦可运行。独立审查补正了主工程sanitizer继承；复用真实`CaesuraValidation.cmake`的GCC ASan/UBSan检查通过，CryptoEngine与probe编译、最终链接均确认插桩，启用泄漏检测。证据：`u9-crypto-allocation/{red,green,sanitized}`；这是定向POSIX证明，不是完整Linux引擎或Clang验证。
+- 真实包使用139个文件、39,824,624字节，归档30,917,289字节；3个新进程417/417路径、长度与SHA精确匹配。Reader修复后的Windows暖缓存样本中位数：open353.8546ms、read调用合计424.7545ms、含摘要循环465.5651ms、峰值工作集50,556,928字节。原始包未重打，配置/构建/读取退出码及输入摘要留存于`u9-measure-after/summary.json`。此样本早于仅影响非Windows的EVP修复；共享主机、未定预算，不作性能PASS或升降判断，也不据此引入流式重构。
+
+### 本批集成证据
+
+1. 完整Windows Debug run `a16fcaf8-b94a-41b8-bf95-d4f1e20b9b0a`：构建、Cpp1212/1212、Lua孤儿30/30及CTest22 passed+1真实AI允许skip通过；Lua主套件2个既有耗时阈值失败，验证器15项中3项Git malloc失败。该完整receipt如实采集为FAIL，路径`artifacts/validation/raw/windows-debug-u2-u9-01/run.json`。
+2. 在没有并发构建时仅复跑失败的Lua主套件与验证器，源码、二进制、阈值不变：145/145及15/15通过，collect/diagnostic verify PASS，run `aebc429d-c00f-459b-bbb6-f7c87c52f1f0`，原始目录`windows-debug-u2-u9-02`。结果支持瞬时资源/耗时波动，未定位到具体外部进程，不宣称已消除主机资源风险。
+3. EVP修复及新probe注册后，重做完整Debug构建、完整C++、耦合/注册检查及完整CTest：1212 passed、0 failed、0 skipped，388153断言；CTest22 passed、0 failed、1允许的真实AI skip，151.30s。run `28768856-56db-4332-b9a9-ca765c4d4905`，原始目录`windows-debug-u2-u9-03`；collect/diagnostic verify PASS。Lua未受该非Windows修改影响，复用上一条通过证据。
+
+三次receipt的源码与夹具前后摘要均一致。后两次是各自范围的定向profile，不能合称一次完整profile全PASS，更不能把dirty快照当成发布批准。最终独立审查已处理新增probe的sanitizer配置遗漏；其余本批边界测试、资源释放与夹具镜像审查无待处理阻断项。当前共有8个单元达到本机适用或定向验收，U2和U10–U29继续执行。
 
 ## 并行所有权
 

@@ -20,6 +20,7 @@
 #include <mutex>
 #include <array>
 #include <algorithm>
+#include <memory>
 
 extern "C" {
 #include "../../external/ed25519/ed25519.h"
@@ -210,24 +211,24 @@ std::vector<uint8_t> CryptoEngine::encrypt(
         return out;
     } catch (const std::exception&) { return {}; }
 #else
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    const std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(
+        EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     if (!ctx) return {};
     int len = 0;
     std::vector<uint8_t> out(plaintextLen + 16);
     int outLen = 0;
     bool ok = false;
     do {
-        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, nullptr) != 1) break;
-        if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, nonce) != 1) break;
-        if (EVP_EncryptUpdate(ctx, out.data(), &len, plaintext, (int)plaintextLen) != 1) break;
+        if (EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, nullptr) != 1) break;
+        if (EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr, key, nonce) != 1) break;
+        if (EVP_EncryptUpdate(ctx.get(), out.data(), &len, plaintext, (int)plaintextLen) != 1) break;
         outLen = len;
-        if (EVP_EncryptFinal_ex(ctx, out.data() + len, &len) != 1) break;
+        if (EVP_EncryptFinal_ex(ctx.get(), out.data() + len, &len) != 1) break;
         outLen += len;
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, (int)tagLen, tag) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, (int)tagLen, tag) != 1) break;
         ok = true;
     } while (false);
-    EVP_CIPHER_CTX_free(ctx);
     if (!ok) return {};
     out.resize(outLen);
     return out;
@@ -265,24 +266,24 @@ std::vector<uint8_t> CryptoEngine::decrypt(
         return out;
     } catch (const std::exception&) { return {}; }
 #else
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    const std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(
+        EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     if (!ctx) return {};
     int len = 0;
     std::vector<uint8_t> out(ciphertextLen);
     int outLen = 0;
     bool ok = false;
     do {
-        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, nullptr) != 1) break;
-        if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, nonce) != 1) break;
-        if (EVP_DecryptUpdate(ctx, out.data(), &len, ciphertext, (int)ciphertextLen) != 1) break;
+        if (EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, nullptr) != 1) break;
+        if (EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, key, nonce) != 1) break;
+        if (EVP_DecryptUpdate(ctx.get(), out.data(), &len, ciphertext, (int)ciphertextLen) != 1) break;
         outLen = len;
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, (int)tagLen, const_cast<uint8_t*>(tag)) != 1) break;
-        if (EVP_DecryptFinal_ex(ctx, out.data() + len, &len) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, (int)tagLen, const_cast<uint8_t*>(tag)) != 1) break;
+        if (EVP_DecryptFinal_ex(ctx.get(), out.data() + len, &len) != 1) break;
         outLen += len;
         ok = true;
     } while (false);
-    EVP_CIPHER_CTX_free(ctx);
     if (!ok) return {};
     out.resize(outLen);
     return out;

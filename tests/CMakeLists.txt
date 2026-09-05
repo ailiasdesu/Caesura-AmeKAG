@@ -12,6 +12,7 @@ set(TEST_SOURCES
     cpp/test_core.cpp
     cpp/test_debug_manager_edge.cpp
     cpp/test_carc.cpp
+    cpp/test_carc_boundaries.cpp
     cpp/test_carc_debug.cpp
     cpp/test_system.cpp
     cpp/test_source_encoding.cpp
@@ -107,16 +108,18 @@ target_link_libraries(CaesuraTests PRIVATE
 
 enable_testing()
 
+if(NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(probes/crypto_allocation)
+endif()
+
 file(GENERATE
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
     CONTENT "
-file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/scripts]])
-file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/assets]])
-file(COPY [[${CMAKE_SOURCE_DIR}/tests/audio/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/tests/audio]])
-file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraTests>/demo]])
-file(COPY [[${CMAKE_SOURCE_DIR}/scripts/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/scripts]])
-file(COPY [[${CMAKE_SOURCE_DIR}/assets/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/assets]])
-file(COPY [[${CMAKE_SOURCE_DIR}/demo/]] DESTINATION [[$<TARGET_FILE_DIR:CaesuraAmeKAG>/demo]])
+set(CAESURA_FIXTURE_SOURCE_ROOT [[${CMAKE_SOURCE_DIR}]])
+set(CAESURA_FIXTURE_BUILD_ROOT [[${CMAKE_BINARY_DIR}]])
+set(CAESURA_FIXTURE_TEST_OUTPUT [[$<TARGET_FILE_DIR:CaesuraTests>]])
+set(CAESURA_FIXTURE_APP_OUTPUT [[$<TARGET_FILE_DIR:CaesuraAmeKAG>]])
+include([[${CMAKE_CURRENT_SOURCE_DIR}/SyncTestAssets.cmake]])
 "
 )
 
@@ -199,6 +202,32 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
 )
 
 if(Python3_EXECUTABLE)
+    if(WIN32)
+        add_executable(CarcMemoryProbe probes/carc_memory_probe.cpp)
+        target_link_libraries(CarcMemoryProbe PRIVATE
+            Caesura::Archive Caesura::Debug Caesura::BuildOptions psapi)
+        add_test(
+            NAME CaesuraCarcMemory
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_carc_memory.py
+                    --probe $<TARGET_FILE:CarcMemoryProbe>
+        )
+        set_tests_properties(CaesuraCarcMemory PROPERTIES
+            LABELS "archive;allocation;isolation"
+            TIMEOUT 90
+            RUN_SERIAL TRUE
+        )
+    endif()
+    add_test(
+        NAME CaesuraFixtureSync
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_fixture_sync.py
+    )
+    set_tests_properties(CaesuraFixtureSync PROPERTIES
+        LABELS "qa;assets"
+        TIMEOUT 180
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
     add_test(
         NAME CaesuraArchiveTrustCli
         COMMAND ${Python3_EXECUTABLE}
@@ -372,19 +401,14 @@ if(CAESURA_BASH_PROGRAM)
     )
 endif()
 
-# Copy scripts to test output directory so sandbox.lua et al are found
-add_custom_command(TARGET CaesuraTests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/scripts"
-    "$<TARGET_FILE_DIR:CaesuraTests>/scripts"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/tests/audio"
-    "$<TARGET_FILE_DIR:CaesuraTests>/tests/audio"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/demo"
-    "$<TARGET_FILE_DIR:CaesuraTests>/demo"
-    COMMENT "Copying test scripts and audio files..."
+# Always refresh runtime fixtures when CaesuraTests is built, including when
+# only Lua/demo/assets changed and the C++ executable does not relink.
+add_custom_target(CaesuraTestAssets
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/sync_caesura_test_assets_$<CONFIG>.cmake"
+    COMMENT "Synchronizing test runtime fixtures..."
+    VERBATIM
 )
+add_dependencies(CaesuraTests CaesuraTestAssets)
 
 # CaesuraTests links production modules, including the SDL-backed platform
 # implementation. Keep the runtime beside the fresh test binary instead of

@@ -7,6 +7,9 @@
 #include <nlohmann_json.hpp>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <vector>
+#include "script/vm/LuaManager.h"
 
 // Include the binding sources directly so the tests exercise the same code
 // the engine links (no separate test target for bindings).
@@ -134,49 +137,70 @@ TEST_CASE("AI.available false when endpoint unset") {
     CHECK(lua_toboolean(L, -1) == false);
     lua_close(L);
 }
-TEST_CASE("AI query against real Ollama (skipped when unreachable)") {
-    // Real end-to-end: requires a local Ollama server on 127.0.0.1:11434.
-    // Follows the test_audio pattern -- clean skip on machines without
-    // Ollama (CI), real verification where it is installed. Uses an EMPTY
-    // model so the binding exercises its auto-discovery (GET /api/tags)
-    // against the live server; discovery failure would fall back to
-    // "llama3" and surface as http-404 here.
-    httplib::Client probe("127.0.0.1", 11434);
-    probe.set_connection_timeout(1, 0);
-    probe.set_read_timeout(2, 0);
-    auto tags = probe.Get("/api/tags");
-    if (!tags || tags->status != 200) {
-        MESSAGE("Ollama unreachable (127.0.0.1:11434), skipping real-AI test");
-        return;
-    }
-    std::string model;
-    try {
-        auto j = nlohmann::json::parse(tags->body);
-        const auto& models = j["models"];
-        if (models.is_array() && !models.empty()) {
-            model = models[0].value("name", std::string());
+// Real-service coverage remains in CaesuraHeadlessAiSmoke (optional SKIP 77
+// when no local Ollama/model is available). This required C++ test verifies
+// HTTP discovery and the native Lua binding contract, not model quality.
+TEST_CASE("AI query auto-discovers an Ollama model over loopback HTTP") {
+    httplib::Server server;
+    std::atomic<int> discoveries{0};
+    std::mutex requestsMutex;
+    std::vector<std::string> requests;
+    server.Get("/api/tags", [&](const httplib::Request&, httplib::Response& res) {
+        ++discoveries;
+        res.set_content(R"({"models":[{"name":"fixture-model:latest"}]})",
+                        "application/json");
+    });
+    server.Post("/api/generate", [&](const httplib::Request& req, httplib::Response& res) {
+        {
+            std::lock_guard<std::mutex> lock(requestsMutex);
+            requests.push_back(req.body);
         }
-    } catch (const std::exception&) {}
-    REQUIRE(!model.empty());  // server reachable but no models pulled
+        res.set_content(R"({"response":"deterministic loopback reply","done":true})",
+                        "application/json");
+    });
+    const int port = server.bind_to_any_port("127.0.0.1");
+    REQUIRE(port > 0);
+    // Stop/join even when a REQUIRE throws; never leave a joinable thread.
+    struct Listener {
+        httplib::Server& server;
+        std::thread worker;
+        explicit Listener(httplib::Server& value)
+            : server(value), worker([&value]() { value.listen_after_bind(); }) {
+            server.wait_until_ready();
+        }
+        ~Listener() {
+            server.stop();
+            if (worker.joinable()) worker.join();
+        }
+    } listener(server);
 
-    lua_State* L = luaL_newstate();
-    luaL_openlibs(L);
-    luaL_dostring(L,
-        "config = { ai = { endpoint = 'http://127.0.0.1:11434',"
-        " model = '', timeout_ms = 120000 } }");
-    Caesura::registerAIBinding(L);
-
-    lua_getglobal(L, "AI");
-    lua_getfield(L, -1, "query");
-    lua_pushstring(L, "Reply with the single word: hello");
-    REQUIRE(lua_pcall(L, 1, 2, 0) == LUA_OK);
-    if (lua_isstring(L, -2)) {
-        std::string reply = lua_tostring(L, -2);
-        CHECK(!reply.empty());
-        MESSAGE("Real Ollama reply (auto-discovered model " << model
-                << "): " << reply.substr(0, 80));
-    } else {
-        FAIL("real ollama query returned nil: " << lua_tostring(L, -1));
-    }
-    lua_close(L);
+    Caesura::LuaManager lua;
+    struct LuaShutdown {
+        Caesura::LuaManager& manager;
+        ~LuaShutdown() { manager.shutdown(); }
+    } cleanup{lua};
+    REQUIRE(lua.init());
+    lua_State* L = lua.state();
+    const char* code = R"lua(
+        local endpoint = ...
+        config = {ai = {endpoint = endpoint, model = '', timeout_ms = 3000}}
+        assert(AI.available(), 'native AI binding must be available')
+        local reply, err = AI.query('discover this model', {system = 'fixture system'})
+        assert(reply == 'deterministic loopback reply', 'native query response')
+        assert(err == nil, 'successful query must not return an error')
+    )lua";
+    REQUIRE(luaL_loadstring(L, code) == LUA_OK);
+    const std::string endpoint = "http://127.0.0.1:" + std::to_string(port);
+    lua_pushlstring(L, endpoint.data(), endpoint.size());
+    const int result = lua_pcall(L, 1, 0, 0);
+    INFO("Lua error: " << (result != LUA_OK && lua_tostring(L, -1) ? lua_tostring(L, -1) : "none"));
+    REQUIRE(result == LUA_OK);
+    CHECK(discoveries.load() == 1);
+    std::lock_guard<std::mutex> lock(requestsMutex);
+    REQUIRE(requests.size() == 1);
+    const auto body = nlohmann::json::parse(requests.front());
+    CHECK(body.at("model") == "fixture-model:latest");
+    CHECK(body.at("prompt") == "discover this model");
+    CHECK(body.at("system") == "fixture system");
+    CHECK(body.at("stream") == false);
 }

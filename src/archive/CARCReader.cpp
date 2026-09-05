@@ -9,6 +9,7 @@
 #include <sstream>
 #include <iomanip>
 #include <limits>
+#include <new>
 
 namespace Caesura::carc {
 
@@ -37,6 +38,7 @@ bool checkedRead(std::istream& s, void* dst, std::streamsize size) {
 // open -- load and verify a CARC file
 // ==========================================================================
 bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
+try
 {
     if (pubKeyPath.empty()) return openWithExpectedKey(path, nullptr);
     ArchivePublicKey expectedKey{};
@@ -46,6 +48,10 @@ bool CARCReader::open(const std::string& path, const std::string& pubKeyPath)
     }
     return open(path, expectedKey);
 }
+catch (const std::bad_alloc&) {
+    close();
+    return false;
+}
 
 bool CARCReader::open(const std::string& path, const ArchivePublicKey& expectedKey)
 {
@@ -54,6 +60,7 @@ bool CARCReader::open(const std::string& path, const ArchivePublicKey& expectedK
 }
 
 bool CARCReader::openWithExpectedKey(const std::string& path, const uint8_t* expectedKey)
+try
 {
     close();
 
@@ -172,6 +179,12 @@ bool CARCReader::openWithExpectedKey(const std::string& path, const uint8_t* exp
 
     return true;
 }
+catch (const std::bad_alloc&) {
+    // An unsuccessful open must not expose a partial index or an open stream.
+    // Avoid allocating a diagnostic while the caller is already out of memory.
+    close();
+    return false;
+}
 
 void CARCReader::close()
 {
@@ -193,6 +206,7 @@ std::vector<uint8_t> CARCReader::readFile(const std::string& relativePath)
 }
 
 std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH_SIZE])
+try
 {
     if (!m_stream.is_open()) return {};
 
@@ -242,6 +256,11 @@ std::vector<uint8_t> CARCReader::readFileByHash(const uint8_t pathHash[PATH_HASH
     }
     if (result != destLen) return {};
     return decompressed;
+}
+catch (const std::bad_alloc&) {
+    // Temporary buffers/stream locks unwind before returning. The verified
+    // index remains usable, and the next read resets the stream position/state.
+    return {};
 }
 
 // ==========================================================================

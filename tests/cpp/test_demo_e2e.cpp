@@ -7,7 +7,7 @@
 #include "script/bindings/DebugBinding.h"
 #include <fstream>
 #include <sstream>
-#include <filesystem>
+#include <memory>
 
 extern "C" {
 #include <lua.h>
@@ -16,12 +16,21 @@ extern "C" {
 
 using namespace Caesura;
 
-static LuaManager* initDemoLua() {
-    auto* lm = new LuaManager();
-    if (!lm->init()) { delete lm; return nullptr; }
+struct DemoLuaDeleter {
+    void operator()(LuaManager* manager) const {
+        manager->shutdown();
+        delete manager;
+    }
+};
+
+static std::unique_ptr<LuaManager, DemoLuaDeleter> initDemoLua() {
+    std::unique_ptr<LuaManager, DemoLuaDeleter> lm(new LuaManager());
+    if (!lm->init()) return nullptr;
     lua_State* L = lm->state();
-    luaL_dostring(L,
-        "package.path = 'scripts/?.lua;scripts/?/init.lua;' .. package.path");
+    if (luaL_dostring(L,
+        "package.path = 'scripts/?.lua;scripts/?/init.lua;' .. package.path") != LUA_OK) {
+        return nullptr;
+    }
     registerKAGBinding(L);
     registerRenderBinding(L);
     registerDevCoreBinding(L);
@@ -41,7 +50,7 @@ static bool requireModule(lua_State* L, const char* name) {
 }
 
 static std::string readDemoScript() {
-    std::ifstream f("../../scripts/demo_story.ks");
+    std::ifstream f("scripts/demo_story.ks", std::ios::binary);
     if (!f.is_open()) return "";
     std::stringstream ss;
     ss << f.rdbuf();
@@ -49,109 +58,138 @@ static std::string readDemoScript() {
 }
 
 TEST_CASE("Demo E2E: tokenizer and scheduler modules load") {
-    auto* lm = initDemoLua();
+    auto lm = initDemoLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
     CHECK(requireModule(L, "tokenizer"));
     CHECK(requireModule(L, "scheduler"));
-    delete lm;
 }
 
-TEST_CASE("Demo E2E: scheduler runs 10-line demo for 50 iterations") {
-    auto* lm = initDemoLua();
+// Execute the production tokenizer/compiler/scheduler; only backend command
+// handlers are replaced. Their observed payloads are the test oracle.
+static void installDemoDriver(lua_State* L) {
+    const char* code = R"lua(
+        function runDemoWithStubs(script, maxFrames)
+            local dispatched = {}
+            package.loaded['kag'] = setmetatable({}, {
+                __index = function(_, key)
+                    return function(_, params)
+                        dispatched[#dispatched + 1] = {cmd = key, params = params}
+                    end
+                end
+            })
+            local tokens = require('tokenizer').parse(script)
+            assert(#tokens > 0, 'demo must contain executable tokens')
+            local ctx = {
+                f = {}, sf = {}, tf = {}, tokens = tokens, token_index = 1,
+                call_stack = {}, layers = {}, backlog = {},
+                active_operations = {}, stop_flag = false,
+                variables = {}, characters = {}, unlockedCG = {},
+                unlockedMusic = {}, seen_scenes = {}, waiting_input = false,
+                macros = {}, load_tokens = function() return nil end,
+            }
+            local co = coroutine.create(function()
+                require('scheduler').run(ctx, tokens, 1)
+            end)
+            local frames = 0
+            while coroutine.status(co) ~= 'dead' and frames < maxFrames do
+                frames = frames + 1
+                local ok, err = coroutine.resume(co, 16)
+                assert(ok, err)
+            end
+            assert(coroutine.status(co) == 'dead', 'demo did not finish')
+            assert(ctx.error_command == nil, 'a demo command handler failed')
+            return ctx, dispatched, tokens, frames
+        end
+    )lua";
+    REQUIRE(luaL_dostring(L, code) == LUA_OK);
+}
+
+TEST_CASE("Demo E2E: scheduler dispatches 10 lines and stops at [end]") {
+    auto lm = initDemoLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
-    REQUIRE(requireModule(L, "tokenizer"));
-    REQUIRE(requireModule(L, "scheduler"));
+    installDemoDriver(L);
 
     std::string kag = "*start\n";
     for (int i = 1; i <= 10; ++i) {
         kag += "[ch name=\"T" + std::to_string(i) + "\" text=\"line " + std::to_string(i) + "\"]\n[p]\n";
     }
-    kag += "[end]\n";
+    kag += "[end]\n[ch text=\"unreachable after end\"]\n";
 
-    lua_pushstring(L, kag.c_str());
-    const char* code =
-        "local tokenizer = require('tokenizer'); "
-        "local scheduler = require('scheduler'); "
-        "local tokens = tokenizer.parse(...); "
-        "local ctx = {}; "
-        "for i = 1, 50 do "
-        "  local ok, err = pcall(scheduler.run, ctx, tokens); "
-        "  if not ok then error(err) end; "
-        "end; "
-        "assert(true)";
-    int r = luaL_dostring(L, code);
-    if (r != LUA_OK) {
-        MESSAGE("Lua error: " << (lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown"));
-    }
+    const char* code = R"lua(
+        local ctx, dispatched, tokens, frames = runDemoWithStubs(..., 50)
+        assert(#tokens == 23, 'expected label, ten ch/p pairs, end and sentinel')
+        assert(frames > 10, 'scheduler must resume through the token stream')
+        assert(#dispatched == 20, 'all ten ch/p pairs must dispatch exactly once')
+        for i = 1, 10 do
+            local line = dispatched[2 * i - 1]
+            assert(line.cmd == 'ch', 'dialogue dispatch order')
+            assert(line.params.name == 'T' .. i, 'speaker payload')
+            assert(line.params.text == 'line ' .. i, 'dialogue payload')
+            assert(dispatched[2 * i].cmd == 'p', 'page-wait dispatch order')
+        end
+    )lua";
+    REQUIRE(luaL_loadstring(L, code) == LUA_OK);
+    lua_pushlstring(L, kag.data(), kag.size());
+    const int r = lua_pcall(L, 1, 0, 0);
+    INFO("Lua error: " << (r != LUA_OK && lua_tostring(L, -1) ? lua_tostring(L, -1) : "none"));
     CHECK(r == LUA_OK);
-    delete lm;
 }
 
-TEST_CASE("Demo E2E: demo_story.ks parses and scheduler runs it") {
-    auto* lm = initDemoLua();
+TEST_CASE("Demo E2E: demo_story.ks dispatches dialogue through EOF") {
+    auto lm = initDemoLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
-    REQUIRE(requireModule(L, "tokenizer"));
-    REQUIRE(requireModule(L, "scheduler"));
+    installDemoDriver(L);
 
-    std::string script = readDemoScript();
-    if (script.empty()) {
-        MESSAGE("demo_story.ks not found, skipping");
-        delete lm;
-        return;
-    }
+    const std::string script = readDemoScript();
+    INFO("Required fixture: scripts/demo_story.ks (test executable working directory)");
+    REQUIRE(!script.empty());
 
-    const char* code =
-        "local tokenizer = require('tokenizer'); "
-        "local tokens = tokenizer.parse(...); "
-        "assert(#tokens > 0, 'should parse demo script')";
+    const char* code = R"lua(
+        local ctx, dispatched = runDemoWithStubs(..., 8000)
+        local found, dialogue = {}, {}
+        for _, item in ipairs(dispatched) do
+            found[item.cmd] = true
+            if item.cmd == 'ch' then dialogue[#dialogue + 1] = item.params end
+        end
+        for _, cmd in ipairs({'font','pt','bg','wait','fg','position','layopt',
+                              'p','text','ruby','reset','playbgm','playse',
+                              'stopse','cl','l','er'}) do
+            assert(found[cmd], 'demo command never dispatched: ' .. cmd)
+        end
+        assert(#dialogue > 10, 'demo dialogue must be executed')
+        assert(dialogue[1].name == 'Narrator', 'opening speaker')
+        assert(dialogue[1].text == 'Welcome to Caesura (AmeKAG).', 'opening dialogue')
+        assert(dialogue[#dialogue].text == 'Thanks for trying Caesura (AmeKAG)!',
+               'closing dialogue must execute')
+        assert(dispatched[#dispatched].cmd == 'er', 'must reach final clear at EOF')
+    )lua";
     REQUIRE(luaL_loadstring(L, code) == LUA_OK);
-    lua_pushstring(L, script.c_str());
+    lua_pushlstring(L, script.data(), script.size());
     const int r = lua_pcall(L, 1, 0, 0);
+    INFO("Lua error: " << (r != LUA_OK && lua_tostring(L, -1) ? lua_tostring(L, -1) : "none"));
     CHECK(r == LUA_OK);
-    delete lm;
 }
 
-namespace {
-std::filesystem::path fullPipelineRepoRoot() {
-    auto path = std::filesystem::current_path();
-    while (!path.empty()) {
-        if (std::filesystem::exists(path / "src") &&
-            std::filesystem::exists(path / "tests" / "cpp")) {
-            return path;
-        }
-        const auto parent = path.parent_path();
-        if (parent == path) break;
-        path = parent;
-    }
-    return {};
-}
-
-std::string readFullPipelineDemo() {
-    const auto root = fullPipelineRepoRoot();
-    if (root.empty()) return "";
-    std::ifstream f(root / "demo" / "full_pipeline_demo.ks");
+static std::string readFullPipelineDemo() {
+    std::ifstream f("demo/full_pipeline_demo.ks", std::ios::binary);
     if (!f.is_open()) return "";
     std::stringstream ss;
     ss << f.rdbuf();
     return ss.str();
 }
-} // namespace
 
 TEST_CASE("Demo E2E: full_pipeline_demo.ks parses the complete command surface") {
-    auto* lm = initDemoLua();
+    auto lm = initDemoLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
     REQUIRE(requireModule(L, "tokenizer"));
 
     const std::string script = readFullPipelineDemo();
-    if (script.empty()) {
-        MESSAGE("full_pipeline_demo.ks not found, skipping");
-        delete lm;
-        return;
-    }
+    INFO("Required fixture: demo/full_pipeline_demo.ks (test executable working directory)");
+    REQUIRE(!script.empty());
 
     const char* code =
         "local tokenizer = require('tokenizer'); "
@@ -172,66 +210,39 @@ TEST_CASE("Demo E2E: full_pipeline_demo.ks parses the complete command surface")
         MESSAGE("Lua error: " << (lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown"));
     }
     CHECK(r == LUA_OK);
-    delete lm;
 }
 TEST_CASE("Demo E2E: full_pipeline_demo.ks drives to [end] with stub handlers") {
-    auto* lm = initDemoLua();
+    auto lm = initDemoLua();
     REQUIRE(lm != nullptr);
     lua_State* L = lm->state();
 
     const std::string script = readFullPipelineDemo();
-    if (script.empty()) {
-        MESSAGE("full_pipeline_demo.ks not found, skipping");
-        delete lm;
-        return;
-    }
+    INFO("Required fixture: demo/full_pipeline_demo.ks (test executable working directory)");
+    REQUIRE(!script.empty());
 
+    installDemoDriver(L);
     const char* code = R"lua(
-        package.loaded['kag'] = nil
-        local dispatched = {}
-        local stub = setmetatable({}, {
-            __index = function(_, key)
-                return function(ctx, params)
-                    dispatched[#dispatched + 1] = tostring(key)
-                end
-            end
-        })
-        package.loaded['kag'] = stub
-
-        local tokenizer = require('tokenizer')
-        local scheduler = require('scheduler')
-        local tokens = tokenizer.parse(...)
-
-        local ctx = {
-            f = {}, sf = {}, tf = {},
-            tokens = tokens, token_index = 1,
-            call_stack = {}, layers = {}, backlog = {},
-            active_operations = {}, stop_flag = false,
-            variables = {}, characters = {},
-            unlockedCG = {}, unlockedMusic = {}, seen_scenes = {},
-            waiting_input = false, macros = {},
-            load_tokens = function() return nil end,
-        }
-
-        local co = coroutine.create(function()
-            scheduler.run(ctx, tokens, 1)
-        end)
-        local guard = 0
-        while coroutine.status(co) ~= 'dead' and guard < 8000 do
-            guard = guard + 1
-            local ok, err = coroutine.resume(co, 16)
-            if not ok then error(err, 0) end
+        local script = ...
+        local ctx, dispatched = runDemoWithStubs(
+            script .. '\n[ch text="unreachable after end"]\n', 8000)
+        local found, dialogue = {}, {}
+        for _, item in ipairs(dispatched) do
+            found[item.cmd] = true
+            if item.cmd == 'ch' then dialogue[item.params.text] = true end
         end
-        assert(coroutine.status(co) == 'dead', 'full pipeline did not reach [end]')
-
-        local found = {}
-        for _, name in ipairs(dispatched) do found[name] = true end
         for _, cmd in ipairs({'font','pt','bg','fg','cl','ch','p','ruby','er',
                               'playbgm','playse','playvoice','setbgmvolume','stopbgm',
                               'wait','button','endbutton','save','load','trans',
                               'quake','vfx'}) do
             assert(found[cmd], 'command never dispatched: ' .. cmd)
         end
+        assert(ctx.tf.eval_result == 42, '[eval] must execute')
+        assert(ctx.tf.demo_value == 42, '[iscript] must execute')
+        assert(dialogue['The condition evaluated to true.'], 'true branch must execute')
+        assert(not dialogue['The condition evaluated to false.'], 'false branch must be skipped')
+        assert(dialogue['You chose the library route.'], 'route must execute')
+        assert(dialogue['Thank you for playing.'], 'ending dialogue must execute')
+        assert(not dialogue['unreachable after end'], '[end] must stop execution')
     )lua";
     REQUIRE(luaL_loadstring(L, code) == LUA_OK);
     lua_pushstring(L, script.c_str());
@@ -240,5 +251,4 @@ TEST_CASE("Demo E2E: full_pipeline_demo.ks drives to [end] with stub handlers") 
         MESSAGE("Lua error: " << (lua_tostring(L, -1) ? lua_tostring(L, -1) : "unknown"));
     }
     CHECK(r == LUA_OK);
-    delete lm;
 }
