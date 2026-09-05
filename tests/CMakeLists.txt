@@ -164,7 +164,7 @@ add_caesura_doctest(CaesuraUnitTests
 add_caesura_doctest(CaesuraEntryTests
     LABELS entry lifecycle
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_entry_shutdown.cpp,*test_engine_lifecycle.cpp,*test_job_shutdown.cpp,*test_galgame_startup.cpp
+    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_entry_shutdown.cpp,*test_entry_session.cpp,*test_engine_lifecycle.cpp,*test_job_shutdown.cpp,*test_galgame_startup.cpp
 )
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem

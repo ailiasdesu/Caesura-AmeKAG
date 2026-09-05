@@ -160,7 +160,6 @@ jobs:
       - name: Test
         shell: pwsh
         run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
-          Pop-Location
 
       - name: Smoke Test
         if: matrix.config == 'Debug'
