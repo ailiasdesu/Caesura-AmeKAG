@@ -462,6 +462,7 @@ bool Engine::initPlatformPhase() {
     BackendRegistry::instance().setDebugManager(&DebugManager::instance());
     BackendRegistry::instance().setAsyncLoader(m_asyncLoader.get());
     m_saveManager->init("saves/");
+    m_saveManager->setEncryptionPolicy(m_config.saveEncryptionPolicy);
     BackendRegistry::instance().setSaveManager(m_saveManager.get());
     // Thumbnail capture needs bgfx initialized (audit SIGSEGV guard).
     // Set AFTER the manager exists AND the render device is up -- the
@@ -564,6 +565,10 @@ bool Engine::initAssetPhase() {
     // Inject CARC providers (moved from AssetManager to break resource→archive cycle)
     registerDefaultAssetProviders(*m_assetManager);
     m_asyncLoader->init();
+    if (!m_asyncLoader->isRunning()) {
+        DEBUG_ERR(SubSys::Resource, ErrCode::Ok, "Async loader initialization failed");
+        return false;
+    }
     m_asyncLoaderInitialized = true;
 
     return true;
@@ -1088,6 +1093,7 @@ void Engine::processEvents() {
             deferred.type = CAESURA_EVENT_ASYNC_LOAD;
             auto* rawCompletion = completed.release();
             deferred.user.data1 = rawCompletion;
+            deferred.user.data2 = m_asyncLoader.get();
             if (!SDL_PushEvent(&deferred)) delete rawCompletion;
         }
         m_deferredAsyncLoads.clear();
@@ -1184,7 +1190,8 @@ void Engine::processEvents() {
         }
 
         // -- G8-U3: Async load completion (custom SDL event from AsyncLoader) --
-        if (event.type == CAESURA_EVENT_ASYNC_LOAD) {
+        if (event.type == CAESURA_EVENT_ASYNC_LOAD &&
+            event.user.data2 == m_asyncLoader.get()) {
             auto* completed = static_cast<CompletedLoad*>(event.user.data1);
             if (completed && isLuaExecutionPaused()) {
                 m_deferredAsyncLoads.emplace_back(completed);

@@ -9,8 +9,8 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 34 |
-| Pure-virtual interface methods | 412 |
+| API interface headers (src/*/api/I*.h) | 35 |
+| Pure-virtual interface methods | 419 |
 | Lua binding functions (luaL_Reg entries) | 161 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 134 |
@@ -54,7 +54,8 @@
 | rpc | IRpcServer.h | 5 |
 | script | ILuaManager.h | 12 |
 | steam | ISteamBackend.h | 23 |
-| storage | ISaveManager.h | 18 |
+| storage | ICloudSaveTransport.h | 4 |
+| storage | ISaveManager.h | 21 |
 | storage | ISaveProvider.h | 7 |
 
 ## 3. Lua bindings by source file

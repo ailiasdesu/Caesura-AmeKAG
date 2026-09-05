@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include "../storage/api/ISaveManager.h"
+
 // Minimal forward declarations to avoid transitive includes
 namespace Caesura {
 
@@ -46,6 +48,7 @@ struct EngineConfig {
         , animation(std::exchange(other.animation, nullptr))
         , steam(std::exchange(other.steam, nullptr))
         , displayService(std::exchange(other.displayService, nullptr))
+        , saveEncryptionPolicy(other.saveEncryptionPolicy)
         , title(other.title)
         , width(other.width)
         , height(other.height)
@@ -82,6 +85,9 @@ struct EngineConfig {
     // Display metrics service (Track P1). nullptr = Engine supplies a Null
     // default; desktop builds inject SDL3DisplayService from main.cpp.
     IDisplayService*  displayService  = nullptr;
+
+    // Host-selected policy; keys are supplied separately through the save API.
+    SaveEncryptionPolicy saveEncryptionPolicy = SaveEncryptionPolicy::Compatible;
 
     // Dimensions
     const char*       title           = "Caesura (AmeKAG)";

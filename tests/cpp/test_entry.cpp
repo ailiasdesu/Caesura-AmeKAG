@@ -197,6 +197,20 @@ TEST_CASE("Entry: Engine constructs in headless mode without crash") {
     CHECK(true);
 }
 
+TEST_CASE("U4: Engine applies host save encryption policy after configuration move") {
+    EngineConfig config;
+    config.headless = true;
+    config.saveEncryptionPolicy = SaveEncryptionPolicy::RequireEncrypted;
+    EngineConfig moved(std::move(config));
+    Engine engine(std::move(moved));
+    REQUIRE(engine.init());
+    auto* saves = BackendRegistry::instance().getSaveManager();
+    REQUIRE(saves != nullptr);
+    CHECK(saves->getEncryptionPolicy() == SaveEncryptionPolicy::RequireEncrypted);
+    CHECK_FALSE(saves->isEncryptionEnabled());
+    engine.shutdown();
+}
+
 TEST_CASE("Entry: Engine default construct then destruct without init") {
     Caesura::Test::LifecycleProbe platform;
     Caesura::Test::LifecycleProbe render;

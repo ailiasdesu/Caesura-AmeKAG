@@ -10,6 +10,8 @@
 
 namespace Caesura {
 
+uint32_t CAESURA_EVENT_ASYNC_LOAD = 0;
+
 static bool isPathSafe(const std::string& path) {
     return !path.empty() && path.find("..") == std::string::npos;
 }
@@ -29,6 +31,17 @@ AsyncLoader::~AsyncLoader() {
 
 void AsyncLoader::init() {
     if (m_running) return;
+    // SDL keeps registered user-event IDs for the process lifetime. Reserve
+    // once on first use, without calling SDL during static initialization.
+    static const uint32_t eventType = [] {
+        CAESURA_EVENT_ASYNC_LOAD = SDL_RegisterEvents(1);
+        return CAESURA_EVENT_ASYNC_LOAD;
+    }();
+    if (eventType == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[AsyncLoader] No SDL user-event type available");
+        return;
+    }
     m_running = true;
     m_cancelRequested = false;
     printf("[AsyncLoader] Initialized via JobSystem (max 16 pending)\n");
@@ -51,6 +64,18 @@ void AsyncLoader::shutdown() {
     {
         std::lock_guard<std::mutex> lock(m_inflightMutex);
         m_inflight.clear();
+    }
+    // SDL owns only the shallow event copy, never user.data1. Events already
+    // taken by Engine belong to that consumer; reclaim only this loader's
+    // payloads still in the queue, leaving other owners' events untouched.
+    if (SDL_WasInit(SDL_INIT_EVENTS)) {
+        SDL_FilterEvents([](void* owner, SDL_Event* event) -> bool {
+            if (event->type != CAESURA_EVENT_ASYNC_LOAD || event->user.data2 != owner) {
+                return true;
+            }
+            delete static_cast<CompletedLoad*>(event->user.data1);
+            return false;
+        }, this);
     }
     m_pendingCount = 0;
     m_cancelRequested = false;
@@ -343,24 +368,13 @@ void AsyncLoader::cancelAll() {
 }
 
 bool AsyncLoader::poll() {
-    std::lock_guard<std::mutex> lock(m_completeMutex);
-    if (m_completed.empty()) return false;
-
-    auto completed = std::move(m_completed);
-    m_completed.clear();
+    // Release the completion mutex before invoking SDL filters/watchers, which
+    // may themselves query the loader. Both delivery paths share accounting.
+    auto completed = drainCompleted();
+    if (completed.empty()) return false;
 
     for (auto& c : completed) {
-        m_pendingCount--;
-        SDL_Event event;
-        SDL_zero(event);
-        event.type = CAESURA_EVENT_ASYNC_LOAD;
-        event.user.data1 = new CompletedLoad(std::move(c));
-        if (SDL_PushEvent(&event) != 0) {
-            // Event queue full: free the payload instead of leaking it.
-            delete static_cast<CompletedLoad*>(event.user.data1);
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
-        }
+        postCompleteEvent(std::move(c));
     }
     return true;
 }
@@ -373,21 +387,17 @@ std::vector<AsyncLoader::CompletedLoad> AsyncLoader::drainCompleted() {
     return out;
 }
 
-void AsyncLoader::postCompleteEvent(int requestId, const std::string& path,
-                                     const std::vector<uint8_t>& data, bool success) {
-    auto* completed = new CompletedLoad{};
-    completed->id = requestId;
-    completed->path = path;
-    completed->data = data;
-    completed->success = success;
-    SDL_Event event;
-    SDL_zero(event);
+void AsyncLoader::postCompleteEvent(CompletedLoad completed) {
+    auto payload = std::make_unique<CompletedLoad>(std::move(completed));
+    SDL_Event event{};
     event.type = CAESURA_EVENT_ASYNC_LOAD;
-    event.user.data1 = completed;
-    if (SDL_PushEvent(&event) != 0) {
-        delete completed;
+    event.user.data1 = payload.get();
+    event.user.data2 = this;
+    if (SDL_PushEvent(&event)) {
+        payload.release(); // queue consumer (or shutdown) owns it now
+    } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-            "[AsyncLoader] SDL_PushEvent failed: %s", SDL_GetError());
+            "[AsyncLoader] SDL event rejected or push failed: %s", SDL_GetError());
     }
 }
 

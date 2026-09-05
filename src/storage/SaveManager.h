@@ -37,6 +37,7 @@ public:
 
     // Load: returns the "data" sub-object, or empty json on failure
     json load(int slot, SaveMeta* outMeta = nullptr) override;
+    json loadLegacyPlaintext(int slot, SaveMeta* outMeta = nullptr) override;
 
     std::vector<SaveMeta> listSaves() override;
     bool slotExists(int slot) override;
@@ -53,6 +54,8 @@ public:
     void setEncryptionKey(const uint8_t key[32]) override;
     void clearEncryptionKey() override;
     bool isEncryptionEnabled() const override { return m_keySet; }
+    void setEncryptionPolicy(SaveEncryptionPolicy policy) override { m_encryptionPolicy = policy; }
+    SaveEncryptionPolicy getEncryptionPolicy() const override { return m_encryptionPolicy; }
 
     // Thumbnail capture (SU-4 stub — bgfx readback deferred)
 
@@ -71,14 +74,20 @@ public:
 private:
     std::string m_saveDir;
     int m_currentSchemaVersion = 1;
-        bool m_keySet = false;
+    bool m_keySet = false;
+    SaveEncryptionPolicy m_encryptionPolicy = SaveEncryptionPolicy::Compatible;
     uint8_t m_encryptKey[32] = {0};
     std::unique_ptr<ISaveProvider> m_saveProvider;
     std::unordered_map<int, std::pair<int, MigrationFn>> m_migrations;
 
     std::string slotPath(int slot) const;
+    std::string readRawFile(const std::string& path);
+    bool writeRawFile(const std::string& path, const std::string& bytes);
     std::string readFile(const std::string& path);
+    std::string decodeSaveBytes(const std::string& bytes);
     bool writeFile(const std::string& path, const std::string& content);
+    bool encodeSave(const std::string& content, std::string& bytes);
+    json loadContents(int slot, const std::string& contents, SaveMeta* outMeta);
     void registerBuiltinMigrations();
 };
 

@@ -1,159 +1,105 @@
-# 存档系统防篡改安全审计（SaveSystem Tamper-Resistance Audit）
+# 存档系统认证与兼容边界
 
-> 审计对象：`src/storage/`（SaveManager / ISaveProvider / 加密路径）+ `src/archive/`（CryptoEngine）。
-> 审计方式：只读代码分析 + 现有测试用例核对（`tests/cpp/test_storage.cpp`、`tests/cpp/test_save_roundtrip.cpp`）。
-> 结论性质：**设计观察与缓解建议，未改动任何实现，未 git 提交**（受命不改实现）。
-> 相关既有记录：round 85「自定义 provider 绕过 AES 加密（设计观察）」、round 86「存档大小上限对称修复」。
+> **2026-09-05 限定源码同步**：仅核对 SaveManager 的加密策略、provider 边界、显式旧明文导入、云同步暂存校验与加载失败语义。本文不代表重新完成全仓安全审计，也不宣称最新回归已经通过。
+> 历史文档曾将信封元数据误写为明文，并将 provider 绕过加密列为当时的现状。本次按当前工作树修正这些表述；测试结果应查对应运行日志，不能由本文推导。
 
----
+## 1. 加密实际覆盖哪些数据
 
-## 0. 交互面与信任边界速览
+[SaveManager::save](../../src/storage/SaveManager.cpp) 先构造以下完整 JSON 信封：
 
-| 路径 | 位置 | 输入来源 | 信任边界 |
-|------|------|----------|----------|
-| `KAG.save_game(slot,data,scene,token)` | `SaveBinding.cpp:186` | Lua 游戏脚本 | 槽位受限 0..99 |
-| `KAG.load_game(slot)` | `SaveBinding.cpp:203` | Lua 游戏脚本 | 槽位受限 0..99 |
-| `KAG.delete_save/save_exists/cloud_*/set_encryption_key` | `SaveBinding.cpp` | Lua 游戏脚本 | 槽位受限 / 云端点由脚本提供 |
-| 存档文件内容 | 磁盘 `saves/save_<slot>.json` | **外部攻击者可篡改**（本审计核心场景） | 明文无签名 / 加密时 GCM 认证 |
-| 云沙箱（CloudSaveProvider/Steam） | `CloudSaveProvider.cpp` | Steam Remote Storage（攻击者可伪冒） | 无端到端签名 |
+```text
+schema_version, timestamp, scene, token_index,
+thumbnail, engine_version, data
+            ↓ envelope.dump()
+            ↓ encodeSave()，设置 key 时执行 AES-256-GCM
+CAES (4B) | nonce (12B) | tag (16B) | ciphertext（整个 JSON 信封）
+```
 
----
+`scene`、`timestamp`、`schema_version` 等元数据与游戏 `data` 一起处于密文中，随整段密文接受 GCM 认证。它们不是位于 ciphertext 外的明文信封；缺少 AAD 不意味着这些已加密字段未被认证。修改密文字节或使用不匹配的 nonce/key 会使认证失败，不能把未经认证的解密内容交给 JSON 解析器。
 
-## 1. 审计矩阵（核心结论表）
+CAES 外层没有独立格式版本字段；`schema_version` 是 JSON 中的数据迁移版本。当前 [ICryptoEngine](../../src/archive/api/ICryptoEngine.h) 没有 AAD 参数，存档槽位文件名、文件路径也未加入认证上下文。外部 `CAES` 魔数是格式识别标记，不等于槽位身份或版本的新认证字段。
 
-| # | 审计维度 | 现状 | 认证/防护覆盖 | 风险评级 |
-|---|----------|------|----------------|:--------:|
-| a | **AES-GCM 认证覆盖** | 密文与 tag 由 GCM 认证；**nonce、魔数 `CAES`、明文信封元数据、槽位文件路径均不在 GCM AAD 内** | 篡改密文/nonce → 解密失败（有测试覆盖）；篡改信封元数据字段（`scene`/`timestamp`/`schema_version`）→ **无法检测**（见 2a） | **中** |
-| b | **槽位回滚 / 重放** | 信封含 `timestamp`（`time(nullptr)`）但**无单调计数器，写入端不校验旧于现有则拒绝** | 攻击者用旧存档覆盖新存档 → 加载成功，时间戳回退无告警 | **中** |
-| c | **槽位交换 / 复制** | 槽位仅体现在**磁盘文件名**，密文内部**无槽位绑定** | `save_1.json` 密文整体拷到 `save_2.json` → 加载为有效存档，且 `SaveMeta.slot` 由调用方填充（与文件不绑定） | **中** |
-| d | **自定义 provider 绕过 AES** | 安装 `ISaveProvider` 后（含 LocalFile/Cloud/InMemory）加密**完全被旁路**：`SaveManager::writeFile/readFile` 首行即转发原始明文给 provider（`SaveManager.cpp:130,170`） | InMemoryProvider 仅内存无持久化 → **本地低风险**；Cloud/云轮询 provider 若持续 → 明文云落盘隐患 | **低–中** |
-| e | **路径注入** | 槽位 0..99 强校验（save/load/delete 均拦）；`slotPath` = `m_saveDir + "save_" + to_string(slot) + ".json"`；`m_saveDir` 固定 `"saves/"`（Engine.cpp:347），无 `../` 逃逸 | **已防御**：槽位越权 + 目录来自组合根硬编码，无外部注入面 | **低** |
-| f | **schema 迁移注入** | 迁移仅当 `schemaVer < current` 触发；`migrate()` 非对象返回原样、链上限 64 步；迁移实现为固定闭包（仅条件加字段） | 恶意 `schema_version`（如 v0/超大 v99）不会执行任意代码；v99(>current) 原样透传（有测试覆盖） | **低** |
+## 2. 加密策略由调用方决定
 
----
+策略定义在 [ISaveManager.h](../../src/storage/api/ISaveManager.h)。[EngineConfig](../../src/entry/EngineConfig.h) 的 `saveEncryptionPolicy` 默认 `Compatible`，组合根在初始化存档管理器时设置策略；策略不能由待验文件自报。
 
-## 2. 逐项分析与证据
+| 策略 | 读取 | 保存 |
+|---|---|---|
+| `Compatible` | 接受合法旧明文；识别 CAES 后必须有正确 key 并通过认证 | 有 key 一律编码为 CAES，无 key 写明文 |
+| `RequireEncrypted` | 普通 `load()` 拒绝非 CAES；CAES 必须有正确 key 并通过认证 | 未设 key 或 clear key 后直接失败，不进入 provider/磁盘写入 |
 
-### 2a. AES-GCM 认证覆盖（#a）— 关键发现
+两种策略都会在识别到 CAES 后对缺 key、截断、错误 tag 或解密失败直接返回失败，绝不回退 JSON。设置 key 不会扫描或改写已有文件；清除 key 不会清除严格策略。
 
-**加密/解密实现**：`CryptoEngine::encrypt/decrypt`（`src/archive/CryptoEngine.cpp`）。
+兼容模式仍接受“把整个密文文件替换为一个合法明文 JSON 信封”，这是保留旧明文读取的边界；读取此类内容不能声称获得了真实性保证。严格模式拒绝这类替换，但仍不防重放已有的合法密文。
 
-- Windows BCrypt：`BCRYPT_INIT_AUTH_MODE_INFO(auth)` 将结构清零后仅设置 `pbNonce/cbNonce` 与 `pbTag/cbTag`，**未设置 `pbAuthData/cbAuthData`** → 无 AAD。
-- OpenSSL EVP：初始化后**没有对 AAD 的 `EVP_EncryptUpdate`（flag 0）调用** → 无 AAD。
+### 显式旧明文导入
 
-**结果**：GCM tag 只认证：
-- 密文体（任何密文字节翻转 → tag 失配拒绝）；
-- 隐式认证 nonce 与 key（换成错误的 nonce/key → tag 失配，测试 wrong-key 与 tampered nonce 均覆盖）；
-- **不认证**：`CAES` 魔数、明文信封的 `scene/timestamp/schema_version/engine_version` 等、**槽位标识 / 文件路径**。
+`loadLegacyPlaintext(slot, outMeta)` 是 C++ 的显式只读入口。它可以由严格模式的调用方主动选择使用，但具有以下固定行为：
 
-**后果**：外部攻击者（能改磁盘文件、无法解密）可以对加密存档做以下**仍会被接受的篡改**：
-1. 把 slot 1 的整个密文文件复制为 slot 2（解密成功，内容合法，见 2c）。
-2. 若游戏读取 `data` 时信任信封外的自定义字段，或依赖 `meta.timestamp/scene` 做逻辑判断，则可被伪造。
+- 拒绝 CAES；有效或损坏的 CAES 都必须走普通认证读取，不能借导入入口退回明文。
+- 不改变管理器策略，不自动创建备份，不重写源文件。
+- 复用 JSON 信封和内存迁移检查，成功后返回数据及可选元数据。
+- 调用方提供 key 并随后显式 `save()` 才会写出密文；保留原槽位还是写入新槽位由调用方决定。
 
-> 缓解后文见 §3-A（AAD 绑定槽位/版本）与 §4（成本评估）。
+导入是调用方对旧明文数据的显式选择，不将该明文补成“已认证来源”。
 
-> **测试佐证**：`test_storage.cpp` tampered ciphertext & nonce rejected（770-818）、wrong key rejects（632-655）、forged CAES-magic decoy rejected（691-717）均**只验证密文/nonce 篡改被拒**，**没有**任何元数据字段篡改被拒或槽位交换被拒的用例——与上述审计结论一致（当前设计确实不防御这两类）。
+## 3. Provider 与云同步的职责
 
-### 2b. 槽位回滚 / 重放（#b）
+[ISaveProvider](../../src/storage/api/ISaveProvider.h) 是原始字节存储接口，包括 NUL 在内的内容应保持不变。SaveManager 在 provider 写入前编码、读取后解码；默认 LocalFile、自定义内存 provider、HTTP 和 Steam 的 SaveManager 路径不会因安装 provider 而绕过加密。原先 `readFile/writeFile` 首行直接转发造成的旁路已在当前源码中移除，不再需要额外的加密 provider 包装器。
 
-- 写入端 `save()` 填充 `envelope["timestamp"] = time(nullptr)`（`SaveManager.cpp:274`）；**无进程持久化单调计数器**，每次全新取自系统时钟。
-- 加载端 `load()` 读取时间戳仅填 `SaveMeta.timestamp`，**无新存档不得被旧存档覆盖的写入/加载校验**。
-- 攻击者保存旧版（更早时间戳）的合法密文为同名文件 → 重载 = 时间回退，无法检测。
-- 说明：若加密键每会话变化，跨会话的旧密文本就走不通（见 2g 密钥瞬态），所以回滚威胁主要在**同一密钥生命周期内**。
+云同步使用可选接口 [ICloudSaveTransport](../../src/storage/api/ICloudSaveTransport.h)：
 
-### 2c. 槽位交换 / 复制（#c）
+| 操作 | 方向与职责 |
+|---|---|
+| `readLocalFile(slotPath)` | 只取得本地上传源的字节 |
+| `writeCloudFile(slotPath, bytes)` | 上传给定字节，不重新读取上传源 |
+| `readCloudFile(slotPath)` | 只取得远端下载源的字节，不先覆盖本地 |
+| `writeLocalFile(slotPath, bytes)` | 将给定字节提交到本地 |
 
-- 槽位只体现在**文件名**（`slotPath`），密文载荷内**无槽位字段**，tag 也未绑定槽位。
-- `SaveMeta.slot` 在 `load()` 内直接 `outMeta->slot = slot`（来自调用参数，`SaveManager.cpp:335`），不读取文件内容——文件被换名后加载的 `meta.slot` 显示的是**新文件名对应的槽位**，与密文来源无关。
-- slot 1 密文拷到 slot 2：解密成功、加载成功、`meta.slot==2`。**槽位语义由文件名而非内容决定** → 单槽位内拷入他槽密文不可被内容层识别。
+`SaveManager::pushSlotToCloud/pullSlotFromCloud` 的顺序为：**读取一次 → 暂存 bytes → 按当前策略/key 解码与认证 → 检查可加载信封及迁移结果 → 提交同一份 bytes**。明文、坏 tag、错 key、缺 key 或不可加载数据被拒绝时，不调用目标写入。校验成功后也不重新读取源文件；验证期间的内存迁移不会让传输内容被重新序列化或再次加密。
 
-### 2d. 自定义 provider 绕过 AES（#d）
+[HttpCloudSaveProvider](../../src/storage/HttpCloudSaveProvider.cpp) 的普通存储仍在本地，显式同步才访问远端。[CloudSaveProvider](../../src/storage/CloudSaveProvider.cpp) 的普通 `readFile/writeFile` 指向 Steam 云存储，因此必须额外区分本地/云端；push 是本地→云端，pull 是云端→本地。
 
-- `SaveManager::writeFile/readFile`（`SaveManager.cpp:169-170 / 129-130`）：`if (m_saveProvider) return m_saveProvider->writeFile(path, content);`——**安装 provider 即完全跳过加密/解密**，payload 以明文进出 provider。
-- provider 不含加密意识：`ISaveProvider` 注释与 `test_storage.cpp:505-509` ARCHITECTURE NOTE 均承认 ISaveProvider 是原始字节存储、无加密意识，加密由 SaveManager 的 m_keySet + CAES 魔数决定。
-- **威胁模型评级**：
-  - **InMemorySaveProvider（测试用）**：仅进程内存、无持久化，进程退出即消失 → **低风险**（设计观察，round 85 已记录）。
-  - **CloudSaveProvider / HttpCloudSaveProvider**：若在加密密钥已启用的产品中把它设为 `m_saveProvider`（`configureCloudSync(endpoint)`），则云端/HTTP 落盘的是**明文 JSON** → 云侧敏感存档泄露，评级**中**（取决于是否真实启用 + 密钥是否启用）。
-- **并发观察**（round 94 已记录）：SaveManager 无主线程守卫、无内部互斥；并发安全性完全委托给 provider（线程安全）——与加密/篡改无直接关系，但提示引擎层不保证 I/O 原子性，仅单个文件原子重命名。
+provider 的直接 `pushToCloud/pullFromCloud` 保留原始字节传输行为，不执行 SaveManager 的策略。游戏应通过 SaveManager 的槽位 API 同步；声明支持云同步但未实现暂存 transport 的自定义 provider 会被该路径拒绝。
 
-### 2e. 路径注入 / 越权（#e）— 已防御
+这里的“失败不覆盖”指**验证未通过时尚未提交**。它不扩大底层文件替换、远端写入失败或断电场景的原子性/持久性保证；也没有新增云冲突合并或时间戳仲裁。
 
-- `save/load/slotExists/deleteSlot` 全部先做 `slot < 0 || slot > 99` 拦截（`SaveManager.cpp:258,299,406,411`），杜绝用越权槽位拼接 `../` 或逃逸存档目录。
-- `slotPath` 完全由 `slot`（受限整数）+ `m_saveDir`（组合根硬编码 `"saves/"`）拼接，**无来自用户/Lua 的路径成分**。
-- `LocalFileSaveProvider::listFiles` 将 pattern 拆目录+glob 后遍历目录（`ISaveProvider.cpp:37-57`），pattern 由 SaveManager 内部构造，不暴露给 Lua。
-- **结论**：未发现可被外部攻击者触发的 `../` 逃逸。唯一理论面是组合根把任意目录传给 `init()`，但那是调用方责任，非存档层漏洞。
-- 云侧：`HttpCloudSaveProvider::safeName` 剥离目录成分（:15-19）防云键路径注入；`CloudSaveProvider` 的 `.meta/.chunkNNN` 键由内部路径拼接，槽位受限。
+## 4. 加载失败与迁移
 
-### 2f. schema 迁移注入（#f）— 已防御
+`load()` 和 `loadLegacyPlaintext()` 以 null JSON 表示失败，只有成功出口才更新 `SaveMeta`。以下失败不会改动调用方原有的 slot、timestamp、sceneName、thumbnail、tokenIndex 或 schemaVersion：
 
-- `load()` 仅当 `schemaVer < m_currentSchemaVersion` 才调用 `migrate()`（`SaveManager.cpp:345`）；未来版本（> current）**原样透传不迁移**（测试 unknown future schema version 覆盖）。
-- `migrate()`：非对象直接返回；链查找 `m_migrations`（仅有 registerMigration 注册的内置闭包）；步数上限 64 防环。
-- **无任意函数执行**：迁移是固定 lambda（v1→v5 仅 if(!contains) 补字段）。恶意 payload 无法把迁移转成代码执行，最多通过构造 `schema_version` 触发已有的内置迁移，行为确定且无副作用。
-- **剩余面**：`envelope.value("schema_version", 1)` 对缺失/非数值的默认；极端值 0 触发从 v0 链查找（无注册 → 直接 break）→ 安全。
-- 结论：**低风险**，无需改动。
+- CAES 认证失败或当前策略拒绝输入；
+- JSON 解析失败、信封不是对象、缺少 `data` 或 `data` 为 null；
+- 已注册迁移返回 null 或抛异常。
 
-### 2g. 加密密钥管理（审计附加观察）
+合法空对象 `{}` 与空数组 `[]` 是可以成功加载的数据，不能用 `json.empty()` 代替 `is_null()` 判定失败。读取和迁移在内存中完成，不自动覆盖旧档或生成 `.bak`。
 
-- 唯一生产调用方是 Lua `KAG.set_encryption_key`（`SaveBinding.cpp:294-301`，接受 32 字节 Lua 字符串），无进程内密钥派生/持久化存储。
-- 密钥仅存于 `SaveManager::m_encryptKey[32]`，析构时 secureErase（`SaveManager.cpp:52-55`）。跨会话不持久 → **每个会话密钥不同，历史密文在会话重启后不可读**（除非脚本每次重建同一密钥）。
-- 这本身不是漏洞，但：既然密钥是瞬态/每会话，**同一密钥生命周期很短**，降低了回滚/交换的现实可利用时长（必须在一次密钥有效的窗口内篡改）。这缓解了 2b/2c 的实际风险，但**不消除**。文档化即可。
+内置迁移链仍为 v1→v2(playtime)→v3(minigame)→v4(live2d)→v5(editor)，查找已注册迁移，最多执行 64 步。当前源码保留未来 `schema_version` 不迁移透传的行为；这不是所有跨版本组合已经验证的声明。迁移函数由引擎/调用方注册，文件本身不能提供可执行迁移代码。
 
----
+槽位范围保留普通槽位 0..99、quicksave -1 和 autosave -2，路径由 SaveManager 生成；这里没有扩大任意路径读写能力。`slotExists()` 不是完整真实性检查：兼容模式无 key 时保留原始字节存在探测，实际读取是否成功应检查 `load()`。
 
-## 3. 缓解建议（按优先级，均为可选、不强推）
+## 5. 仍然存在的认证边界
 
-### A. GCM AAD 绑定槽位 + 版本（削弱 #a/#c）— 成本 M，收益高
-- 在 `CryptoEngine::encrypt/decrypt` 增加 AAD 入参（如 `const uint8_t* aad, size_t aadLen`），调用方把**槽位标识 + schema_version（+可选魔数版本）**作为 AAD。
-- 效果：槽位 A → 槽位 B 的密文复制后，因 AAD 不匹配被 GCM 拒（解出 #a 元数据篡改 + #c 槽位交换一大半）。
-- 增量成本：约改 1 接口 + 2 后端路径（BCrypt/OpenSSL）+ SaveManager 两处调用 + 回归测试；工作量约 **M（半轮）**。需注意向后兼容（旧存档无 AAD → 升级需迁移或双路径）。
+### 槽位文件名未绑定
 
-### B. 槽位绑定 HMAC / 单调计数器防回滚（削弱 #b）— 成本 M–L，收益中
-- 方案 1（轻）：在信封加入**单调计数**（进程内 `std::atomic<uint64_t>` 按槽位维护或自文件读取最大值+1），加载时若加载计数值 < 现有计数值则拒绝/告警。成本 **S–M**。
-- 方案 2（重）：槽位专属 HMAC（独立密钥对 `{slot, schema_version, timestamp, data}` 做 MAC 附在信封），加载时验签。成本 **M**，且需导出/持久化第二把 MAC 密钥（与 2g 的瞬态密钥模型冲突，需一并设计）。
-- 现实权衡：攻击场景是同一密钥生命周期内被本地攻击者回滚——较低威胁；建议以**文档承认** + 方案 1（进程内计数）为准，方案 2 仅在需要对抗存档工具外篡改时上。
+SaveManager 的 JSON 信封没有由引擎加入并核验的槽位身份，CryptoEngine 接口也未传入槽位 AAD。成功加载时，`SaveMeta.slot` 来自请求参数。使用相同 key 时，把 slot 1 的完整有效密文复制为 slot 2 的文件仍可通过认证；严格模式不会阻止这类槽位交换。
 
-### C. Provider 加密强制（制约 #d）— 成本 M，收益中
-- 把加密从 SaveManager 明文→provider 下沉为**在调用 provider 前后强制加/解密**（即 provider 边界必须过密），或在 `setSaveProvider` 安装自定义/云 provider 时保持密钥加密语义（提供加密代理 provider 包装任意后端）。
-- 对 InMemory（测试）可豁免；对 Cloud/HTTP 若产品启用加密则必须强制。成本 **M**（需新增加密 provider 适配器或重构 SaveManager I/O 顺序）。
-- 建议：先文档化云启用加密时 provider 路径必须经加密适配器，避免未来误用。
+未来若要求防槽位交换，需要定义受认证的槽位身份及旧格式兼容行为。本文没有新增实现或排期承诺，也不再把“元数据位于明文”作为引入 AAD 的理由。
 
-### D. 保持现状（明确接受的）：
-- #e 路径注入已防御，无需改。
-- #f 迁移注入已防御，无需改。
-- 2g 密钥瞬态：文档化行为即可，不改。
-- InMemoryProvider 明文：检测用，不改（round 85 已接受）。
+### 时间戳认证不等于防重放
 
----
+`timestamp` 在密文内受认证，但没有可信的单调状态或旧档拒绝机制。恢复同一 key 下更早的完整密文仍可能成功；云同步的策略校验也不比较哪端更新，不自动解决版本冲突。
 
-## 4. 增量成本评估汇总
+### 密钥由调用方管理
 
-| 建议 | 工作量 | 破坏/兼容性 | 是否推荐 |
-|------|:------:|-------------|:--------:|
-| A. GCM AAD 槽位/版本绑定 | M | 旧密文需迁移/双路径 | 推荐（若在意存档槽位完整性） |
-| B. 单调计数器（轻） | S–M | 新字段，旧存档默认 0 兼容 | 推荐做轻量版 |
-| C. provider 加密强制 | M | 需新增适配器/改 I/O 顺序 | 有条件做（云启用加密时） |
+`setEncryptionKey()` 接收调用方的 32 字节 key；`clearEncryptionKey()` 和析构会清除管理器持有的 key。引擎没有因此自动生成每会话新 key，也没有实现 key 持久化。重启后要读取旧密文，调用方必须重新提供相同 key；是否跨会话复用由调用方决定，不能据“内存中保存 key”推断重放窗口只限单次进程。
 
-> 全部为建议存量，**不影响当前基线构建/测试**；如需实施，按 AGENTS.md §10 走接口变更流程（新增 AAD 入参属 ICryptoEngine 接口变更）。
+## 6. 回归入口与结果范围
 
----
+以下文件包含相关回归入口；本节只登记验证面，不替代实际运行日志：
 
-## 5. 结论与优先级
+- [test_storage.cpp](../../tests/cpp/test_storage.cpp)：既有加密、槽位、迁移和 provider 行为。
+- [test_save_roundtrip.cpp](../../tests/cpp/test_save_roundtrip.cpp)：Engine 默认 provider 加密、重建 Engine 读取、单层 CAES、兼容/严格策略、显式导入、失败元数据及空容器。
+- [test_cloud_save.cpp](../../tests/cpp/test_cloud_save.cpp)：HTTP/Steam 原始密文字节、严格模式拒绝非法同步、合法同步及同一暂存 buffer 提交。
 
-| 优先级 | 项 | 处置 |
-|:------:|----|------|
-| P1 | 无**高危且修复极小**的利用面（无路径逃逸、无迁移代码注入、无任意文件写） | —— |
-| P2 | AES-GCM 不认证元数据/槽位（#a/#c），提供 AAD 绑定为最有效加固 | 建议 A（M） |
-| P2 | 槽位回滚无单调计数（#b） | 建议 B 轻量版（S–M） |
-| P3 | 自定义/云 provider 绕过加密（#d） | 文档化 + 条件做建议 C（M） |
-| P3 | 密钥瞬态（2g）、路径注入（#e）、迁移注入（#f） | 文档化 / 已防御，不改 |
-
-**总结**：存档系统基础是健壮的——密文/nonce/key 篡改均被 GCM 拒绝且有测试覆盖，槽位边界与路径拼接已防注入。**主要缺口在认证不覆盖元数据与槽位绑定、无回滚防护**，威胁等级为本地攻击者 + 同密钥窗口内篡改，属**中等级**；建议优先做 GCM AAD 槽位绑定（成本低、直接消除槽位交换 + 元数据伪造两类篡改）。
-
----
-
-## 附：审计核对过的测试佐证索引
-
-- `tests/cpp/test_storage.cpp`：加密往返（512）、磁盘非明文（561）、无密钥拒载（599）、错钥+forged 魔数（632/691）、密文/nonce 篡改拒（770）、槽位边界（325/719）、迁移链（413/974）、自定义 InMemoryProvider（1070/1109）、并发 provider（1234+）。
-- `tests/cpp/test_save_roundtrip.cpp`：密钥场景 + transientKey 瞬态密钥（263）。
-- 未覆盖（与本审计结论一致的空白）：**无元数据字段篡改被拒、槽位交换被拒、回滚被拒用例**——当前设计确实不防御。
-
+槽位绑定、防重放、完整云冲突处理和断电持久性未因这些测试入口而获得已实现或已通过结论。

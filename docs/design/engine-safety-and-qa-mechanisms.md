@@ -48,12 +48,14 @@
   `csmSizeInt` 截断防护（Live2D 文件读取）、宏递归防护
   （round-75 起改为**基于拼接深度**——嵌套拼接栈 >100 才报错，替换旧的累计调用计数上限，
   顺序调用 1000+/大循环不再被误判为自递归）。
-- **存档安全**：AES-256-GCM 加密 + 槽位路径包含校验 + schema 迁移。
+- **存档安全（2026-09-05 源码同步）**：AES-256-GCM、槽位范围校验和 schema 迁移；本段不作为最新测试已通过的记录。
   - 加密布局：文件前缀魔数 `CAES`（4B）+ nonce（12B）+ GCM tag（16B）+ ciphertext
-    （`src/storage/SaveManager.cpp`）；设置加密密钥 `set_encryption_key` 后读写自动
-    加密/解密，密钥未设或数据不以 `CAES` 开头则按明文往返（跨版本兼容）。
+    （`src/storage/SaveManager.cpp`）。`envelope.dump()` 整体加密，包含 scene、timestamp、schema_version 等元数据；它们随密文认证，不是明文文件头。
+  - SaveManager 统一编码/解码，provider 只传输原始字节。默认 `Compatible` 允许旧明文读取；`RequireEncrypted` 拒绝非 CAES，未设 key 或 clear key 后保存失败且不触碰原档。已识别 CAES 的解密失败不能回退 JSON；兼容模式不防整个文件替换为合法明文。
+  - `loadLegacyPlaintext()` 是显式只读导入入口：拒绝 CAES、不改变策略、不写回源文件。普通读取和显式导入失败时均不改变输出 `SaveMeta`；合法空对象/数组与失败 null 区分。
+  - 云同步经 `ICloudSaveTransport` 分离本地/云端：读取一次 → 按策略/key与存档结构验证 → 提交同一份字节。拒绝发生在目标写入前，有效的严格模式同步保留；直接 provider 字节 API 不执行 SaveManager 策略。
   - schema 迁移链：`v1→v2`(playtime)→`v3`(minigame)→`v4`(live2d)→`v5`(editor)，
-    读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`）。
+    读取时按版本步进迁移 `data` 子对象（`registerBuiltinMigrations`），不自动写盘或创建备份。槽位文件名/AAD 绑定和旧密文防重放尚未提供；详细边界见 [存档安全说明](save-security-audit.md)。
 - **测试基线（阶段 G 终态 / round 113 口径，round 114 终验复核）**：C++ doctest
   `976/976` 用例（`8858` 断言）/ Lua 主套件 `132/132` + 孤儿 `24/24` /
   web `297/297`（20 文件）/ editor `530/530` / KAG 契约 `123` /

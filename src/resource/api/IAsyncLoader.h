@@ -5,7 +5,9 @@
 
 namespace Caesura {
 
-inline constexpr uint32_t CAESURA_EVENT_ASYNC_LOAD = 0x8000;
+// Reserved once by AsyncLoader::init through SDL_RegisterEvents. Zero means
+// no event type is available yet; consumers must not assign this value.
+extern uint32_t CAESURA_EVENT_ASYNC_LOAD;
 
 // ============================================================================
 // IAsyncLoader — pure virtual interface for async asset loading
@@ -32,6 +34,10 @@ public:
 
     virtual int  enqueue(const std::string& path, const std::string& type) = 0;
     virtual void cancelAll() = 0;
+    // Publish completed results as SDL events. On successful publication the
+    // consumer owns user.data1 (CompletedLoad*) and must delete it exactly once;
+    // user.data2 identifies the publishing loader. Rejected events are released
+    // by the loader. shutdown() reclaims only its still-queued SDL payloads.
     virtual bool poll() = 0;
 
     // Non-SDL delivery for hosts without an SDL event loop (headless/editor

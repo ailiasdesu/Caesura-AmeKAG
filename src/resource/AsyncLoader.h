@@ -59,8 +59,7 @@ private:
     static std::string makeKey(const std::string& path, const std::string& type);
 
     CompletedLoad processRequest(const AsyncLoadRequest& req);
-    void postCompleteEvent(int requestId, const std::string& path,
-                           const std::vector<uint8_t>& data, bool success);
+    void postCompleteEvent(CompletedLoad completed);
     // Runs on the main thread (or synchronously under NullJobSystem) when a
     // shared in-flight load finishes: releases the entry and delivers one
     // CompletedLoad (+ pendingCount accounting) to every registered waiter.
