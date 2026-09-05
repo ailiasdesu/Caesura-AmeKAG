@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
-find_package(Python3 COMPONENTS Interpreter QUIET)
+if(CAESURA_REQUIRE_TEST_PREREQUISITES)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+else()
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+endif()
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 
@@ -191,6 +195,26 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
 
 if(Python3_EXECUTABLE)
     add_test(
+        NAME CaesuraValidationEvidence
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_evidence.py
+    )
+    add_test(
+        NAME CaesuraValidationRunner
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_runner.py
+    )
+    add_test(
+        NAME CaesuraValidationProcess
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_validation_process.py
+    )
+    set_tests_properties(CaesuraValidationEvidence CaesuraValidationRunner CaesuraValidationProcess PROPERTIES
+        LABELS "qa;validation"
+        TIMEOUT 180
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    add_test(
         NAME CaesuraHeadlessRpcSmoke
         COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/headless_rpc_smoke.py
@@ -247,7 +271,6 @@ if(Python3_EXECUTABLE)
     )
     set_tests_properties(CaesuraRcAdversarialMutations PROPERTIES
         LABELS "qa;release;adversarial"
-        SKIP_RETURN_CODE 77
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -315,6 +338,9 @@ endif()
 # script FATALs with a clear message when no lua interpreter is present, and
 # post-build hosts always have build/lua/<config>/lua, so no SKIP_RETURN_CODE.
 find_program(CAESURA_BASH_PROGRAM bash)
+if(CAESURA_REQUIRE_TEST_PREREQUISITES AND NOT CAESURA_BASH_PROGRAM)
+    message(FATAL_ERROR "Complete validation requires Bash for the Golden VN regression")
+endif()
 if(CAESURA_BASH_PROGRAM)
     add_test(
         NAME CaesuraGoldenVn
