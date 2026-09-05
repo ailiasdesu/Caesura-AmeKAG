@@ -203,6 +203,18 @@ set_tests_properties(CaesuraHeadlessCliSmoke PROPERTIES
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    add_test(
+        NAME CaesuraLuaPosix
+        COMMAND $<TARGET_FILE:lua_cli> ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_lua_posix.lua
+    )
+    set_tests_properties(CaesuraLuaPosix PROPERTIES
+        LABELS "script;lua;platform"
+        TIMEOUT 15
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
+
 if(Python3_EXECUTABLE)
     if(WIN32)
         add_executable(CarcMemoryProbe probes/carc_memory_probe.cpp)

@@ -202,14 +202,22 @@ TEST_CASE("U9: one reader supports concurrent exact reads and independent failur
     std::atomic<bool> start{false};
     std::atomic<unsigned> failures{0};
     {
-        // jthread ensures earlier workers join even if a later creation throws.
+        // Release and join earlier workers even if a later creation throws.
+        // Use thread here because Android's libc++ lacks jthread/stop_token.
         // No close/open/verifySignature call overlaps the reader worker phase.
-        std::vector<std::jthread> workers;
+        std::vector<std::thread> workers;
         workers.reserve(4);
+        struct JoinWorkers {
+            std::atomic<bool>& start;
+            std::vector<std::thread>& workers;
+            ~JoinWorkers() {
+                start.store(true, std::memory_order_release);
+                for (auto& worker : workers) worker.join();
+            }
+        } joinWorkers{start, workers};
         for (unsigned worker = 0; worker < 4; ++worker) {
-            workers.emplace_back([&, worker](std::stop_token stop) {
+            workers.emplace_back([&, worker] {
                 while (!start.load(std::memory_order_acquire)) {
-                    if (stop.stop_requested()) return;
                     std::this_thread::yield();
                 }
                 try {

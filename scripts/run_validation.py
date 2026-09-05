@@ -53,6 +53,9 @@ def _fingerprint_entries(root: Path, entries: list[Path], *, required: bool,
 
 
 def fingerprint_paths(root: Path, paths: list[str]) -> str:
+    # Compare resolved fixture targets against the same canonical root, even
+    # when callers reached it through a directory alias (macOS /var, etc.).
+    root = root.resolve()
     entries = []
     stack = [(root / name, frozenset()) for name in paths]
     while stack:

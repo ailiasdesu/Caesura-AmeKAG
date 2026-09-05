@@ -29,6 +29,7 @@
 package.path = "scripts/?.lua;scripts/?/init.lua;scripts/kag/?.lua;scripts/kag/commands/?.lua;" .. package.path
 
 local DIR = "tmp/test_select_crossscene"
+local IS_WINDOWS = package.config:sub(1, 1) == "\\"
 
 -- ---- Mock C++ bindings (identical to sample_game_headless.lua) ----
 local function callable(t)
@@ -68,7 +69,11 @@ local function check(name, cond, detail)
 end
 
 local function write_file(path, text)
-    pcall(os.execute, 'mkdir "' .. DIR .. '" 2>nul')
+    if IS_WINDOWS then
+        pcall(os.execute, 'mkdir "' .. DIR:gsub('/', '\\') .. '" 2>nul')
+    else
+        pcall(os.execute, 'mkdir -p "' .. DIR .. '" 2>/dev/null')
+    end
     local f = io.open(path, "w")
     if not f then return false end
     f:write(text)
@@ -296,7 +301,11 @@ check("E: callee-select un-consumed before [return] does NOT stall (DONE)",
 check("E: caller tail ran to [end] (route=caller-done)",
       eOut.route == "caller-done", "route=" .. tostring(eOut.route))
 
-pcall(os.execute, 'rm -rf "' .. DIR .. '" 2>nul')
+if IS_WINDOWS then
+    pcall(os.execute, 'rmdir /s /q "' .. DIR:gsub('/', '\\') .. '" 2>nul')
+else
+    pcall(os.execute, 'rm -rf "' .. DIR .. '" 2>/dev/null')
+end
 
 print("")
 print(string.format("select/cross-scene flow tests: %d passed, %d failed", passed, failed))

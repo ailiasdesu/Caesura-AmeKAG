@@ -19,6 +19,7 @@ package.path = 'scripts/?.lua;scripts/?/init.lua;scripts/kag/?.lua;scripts/kag/c
 
 local DIR_A = 'demo/t62_saveload'
 local DIR_B = 'tests/projects/caesura-t62'
+local IS_WINDOWS = package.config:sub(1, 1) == '\\'
 
 -- ---- Mock C++ bindings (audio callable + REAL in-memory save stubs) ----
 local function callable(t)
@@ -76,7 +77,11 @@ local function check(name, cond, detail)
 end
 
 local function wf(dir, name, text)
-    pcall(os.execute, 'mkdir "' .. dir .. '" 2>nul')
+    if IS_WINDOWS then
+        pcall(os.execute, 'mkdir "' .. dir:gsub('/', '\\') .. '" 2>nul')
+    else
+        pcall(os.execute, 'mkdir -p "' .. dir .. '" 2>/dev/null')
+    end
     local f = io.open(dir .. '/' .. name, 'w')
     if not f then return false end
     f:write(text)
@@ -169,8 +174,13 @@ check('B2: non-.ks under tests/projects rejected',
 check('B2: unreachable path rejected',
       saveCmds._safeScenePath('/etc/passwd') == false)
 
-pcall(os.execute, 'rmdir /s /q "' .. DIR_A .. '" 2>nul')
-pcall(os.execute, 'rmdir /s /q "' .. DIR_B .. '" 2>nul')
+for _, dir in ipairs({DIR_A, DIR_B}) do
+    if IS_WINDOWS then
+        pcall(os.execute, 'rmdir /s /q "' .. dir:gsub('/', '\\') .. '" 2>nul')
+    else
+        pcall(os.execute, 'rm -rf "' .. dir .. '" 2>/dev/null')
+    end
+end
 
 print('')
 print(string.format('save/load same-scene + allowlist tests: %d passed, %d failed', passed, failed))

@@ -335,7 +335,7 @@ jobs:
 
       - name: Test
         run: |
-          ctest --test-dir build --output-on-failure 2>&1 | tee ctest.log
+          xvfb-run -a -s "-screen 0 1280x720x24" ctest --test-dir build --output-on-failure 2>&1 | tee ctest.log
           exit ${PIPESTATUS[0]}
 
       - name: Upload ctest log on failure
@@ -379,7 +379,7 @@ jobs:
       - name: Native validation evidence (not release approval)
         run: |
           RAW="$RUNNER_TEMP/caesura-native-validation"
-          python3 scripts/run_validation.py --profile-name linux-debug \
+          xvfb-run -a -s "-screen 0 1280x720x24" python3 scripts/run_validation.py --profile-name linux-debug \
             --build-dir build --configuration Debug --run-dir "$RAW" || execution_failed=1
           python3 - "$RAW" <<'PY'
           import json

@@ -140,6 +140,44 @@ class ValidationRunnerTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             fingerprint_paths(self.repo, ["missing.fixture"])
 
+    def fixture_root_aliases(self):
+        root = self.repo / "fixture-root"
+        root.mkdir()
+        (root / "fixture.txt").write_text("fixture alias contents\n", encoding="utf-8")
+        (root / "alias-segment").mkdir()
+        # Parent traversal is a real root alias on every supported host and
+        # needs no Windows symlink privilege. POSIX also tests a root symlink,
+        # matching the macOS /var -> /private/var temporary-directory case.
+        aliases = [root / "alias-segment" / ".."]
+        if sys.platform != "win32":
+            linked = self.repo / "fixture-root-link"
+            linked.symlink_to(root, target_is_directory=True)
+            aliases.append(linked)
+        return root, aliases
+
+    def test_fixture_fingerprint_accepts_equivalent_root_aliases(self):
+        root, aliases = self.fixture_root_aliases()
+        expected = fingerprint_paths(root.resolve(), ["fixture.txt"])
+        for alias in aliases:
+            with self.subTest(alias=alias):
+                self.assertNotEqual(alias, alias.resolve())
+                self.assertEqual(alias.resolve(), root.resolve())
+                self.assertEqual(fingerprint_paths(alias, ["fixture.txt"]), expected)
+
+    def test_fixture_fingerprint_alias_root_still_rejects_outside_targets(self):
+        root, aliases = self.fixture_root_aliases()
+        outside = self.repo / "outside.fixture"
+        outside.write_text("outside the fixture root\n", encoding="utf-8")
+        candidates = ["../outside.fixture", str(outside.resolve())]
+        if sys.platform != "win32":
+            (root / "outside-link.fixture").symlink_to(outside)
+            candidates.append("outside-link.fixture")
+        for alias in aliases:
+            for candidate in candidates:
+                with self.subTest(alias=alias, candidate=candidate):
+                    with self.assertRaisesRegex(ValueError, "Fixture escapes repository"):
+                        fingerprint_paths(alias, [candidate])
+
     def test_marks_source_changes_during_execution(self):
         code = "from pathlib import Path; Path('fixture.txt').write_text('changed during test')"
         result = self.execute([self.check(code=code)])
