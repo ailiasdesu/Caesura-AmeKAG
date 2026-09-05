@@ -17,10 +17,10 @@
 |---|---|---|
 | U1 | 本机适用验收通过 | 53项证据测试、57项隔离mutation及真实run→collect→verify通过；无自动RC-GO；CI发布身份继续由U23承担 |
 | U2 | 进行中 | Windows Debug完整profile通过；执行器15项、进程管理Windows7/Linux6项通过；Release、完整跨平台/sanitizer与性能基线仍待完成 |
-| U3 | 本机回归通过 | 5项真实SDL回归由4红变全绿，最终完整C++/CTest通过；跨平台释放观测及Engine暂停消费路径不据此宣称已验证 |
+| U3 | 本机回归通过 | 真实SDL所有权、过滤器重入与取消释放计数通过；Engine统一暂停/恢复消费路径有真实Lua回归；跨平台整机释放观测仍依U2/U16 |
 | U4 | 本机适用验收通过 | 默认provider、两种策略、legacy导入、HTTP/Steam替身staging及metadata回归通过；云校验mutation两例必红且原源码摘要已恢复 |
-| U5 | 回归准备完成 | 5项确定性取消回归位于artifact补丁，尚未应用；需接通Engine最终代次检查与热重载/后端取消路径 |
-| U7 | 回归准备中 | 原子写盘调查与artifact补丁准备，尚未应用 |
+| U5 | 本机适用验收通过 | 请求epoch、旧worker/cache隔离、SDL重入取消、Engine暂停/回调重入、完整与局部脚本重载均已有运行回归；平台扩展仍依U2 |
+| U7 | 本机及POSIX定向验收通过 | 两条存档写入路径共用独占临时文件与原生替换；Windows13项存档/云回归及POSIX18场景ASan/UBSan通过；不等同断电保证 |
 | U6、U8–U29 | 待执行 | 仍属于完整目标；按计划依赖推进 |
 
 ## 本轮实际执行
@@ -46,10 +46,33 @@
 
 执行器覆盖真实退出码、预/后置binary与fixture指纹、配置/源码目录身份、进程树清理、唯一目录和参数不经shell解释。U2的完整跨平台与性能要求仍未完成，计划整体保持active。
 
+## 第二批运行时与存档修复（2026-09-05）
+
+- U5 先复现取消后旧 waiter 回流、pending 不归零；修复后5项确定性核心测试通过。补充两项真实SDL取消/过滤器重入精确释放检查，包含既有回归的42项 AsyncLoader 测试全通过。
+- Engine 的真实Lua测试复现无窗口模式忽略调试暂停；统一消费函数现在逐项检查代次，并以unique_ptr持有延迟结果。另以“旧回调取消后连续建立两个新回调”复现 registry 引用复用后误释放，改为执行闭包前移除并释放旧引用。
+- 完整脚本重载在旧操作回调和coroutine.close清理之后取消异步任务，再重置上下文。局部场景重载先成功解析、关闭旧协程、取消旧请求，再切换场景；解析失败与非当前场景刷新保留旧任务；暂停或协程正在执行时拒绝切换。修复dot-call、混合Lua/KS变更检测及Windows路径分隔符；局部重载26项Lua检查通过。
+- U7 初始6项回归3红，包含真实Windows文件占用导致旧档被删除。新写盘函数通过CREATE_NEW/O_EXCL独占创建同目录临时文件，检查写入/flush/close，单次替换发布且没有remove旧档的回退。Windows下12项原子存档用例及1项HTTP密文拉取故障用例通过，覆盖并发、临时文件撞名、六类受控失败和进程中断。
+- POSIX独立验证直接编译当前ISaveProvider.cpp，GCC15.2+ASan/UBSan，18场景、128断言、0失败，无sanitizer诊断；源码前后摘要一致。环境为WSL2、v9fs，不代表完整Linux引擎、原生ext4、所有文件系统或断电持久性。证据：artifacts/validation/u5-u7-posix/result.json。
+
+### 验证记录与范围
+
+1. 完整windows-debug执行：run_id=5ec2d07c-6eb5-4031-b8ff-8842bebc42b9；全量Debug构建、Lua145/30、验证器15/7/53/57、耦合与注册检查通过。Cpp1182中1项旧静态检查失败，CTest同时暴露平台矩阵测试依赖当前Git HEAD的问题。原始receipt为artifacts/validation/raw/windows-debug-u5-u7-01/run.json；已如实采集为FAIL。
+2. 移除“未使用RenderBinding.h”这一已经失效的静态断言，保留该测试及其他具体后端禁用断言，未减少测试用例。定向profile再次全量构建与完整C++：1182 passed、0 failed、0 skipped，386930 assertions全部通过。该次CTest为18 passed、1 failed、1允许的AI smoke skip；唯一失败是平台矩阵。receipt为artifacts/validation/raw/windows-debug-u5-u7-02/run.json，run_id=0f80580d-4281-4d46-a24f-f217ba020227，也如实采集为FAIL。
+3. 平台矩阵测试改为按历史证据自身的HEAD检查内容一致性，并新增不同HEAD必须拒绝的用例，32项通过。未修改生产生成器、历史矩阵及其证据标签；默认当前HEAD过期检查仍然有效。只复跑失败的CaesuraPlatformMatrixAdversarial，CTest通过，collect与diagnostic verify通过。receipt为artifacts/validation/raw/windows-debug-u5-u7-03/run.json，run_id=c4a751a8-d57b-4ab2-878e-2cc99e8d288e。
+
+三次执行均记录源码与夹具前后摘要一致；最后一次是单项profile，不能冒充一次完整windows-debug全PASS记录。最终采用完整C++通过结果，以及CTest已通过项加修复后的单项复跑；后续Python测试修复未改变生产源码与C++二进制。以上均为dirty工作树诊断证据，未授予发布资格。
+
+### 本次发现的后续验证边界
+
+- 完整C++日志中，既有Ollama与demo_story缺失分支仍以MESSAGE后return显示在“passed”中；统计上的0 skipped不能证明这些分支实际执行。外部AI与Demo资源路径的显式适用性和缺失处理继续归U2/U21，不能据总数宣称已验证。
+- 取消失败夹具最初使用短非法图片，触发独立的Debug SEH：ImageDecoder调用bimg::imageParse未传显式bx::Error，错误作用域可能断言。取消测试改用确定性的空资源读取失败，保留晚到失败覆盖；解码器问题尚未修改，不将它归因于取消代次。
+- U6源码调查已记录于artifacts/validation/u6-preparation.md：waitIdle按时序决定是否执行callback、shutdown清空剩余callback、回调重入shutdown与Engine先销毁部分后端的问题。尚未应用U6代码或测试。
+
 ## 并行所有权
 
-- resource agent：U3首批已冻结；U5只准备artifact补丁，收到主代理信号后才应用。
-- storage agent：U4实现、回归与文档已冻结；U7暂只准备artifact补丁。
+- resource agent：U3/U5代码与SDL回归已交付，独立只读审查完成。
+- storage agent：U4/U7代码及存档回归已交付，POSIX分支另有独立运行证据。
+- reload agent：重载边界、Lua回归与平台矩阵测试隔离已交付；Engine接线完成只读审查。
 - evidence agent：U1实现和独立审查已完成。
 - 主代理：构建/测试统一执行、U2执行器与profiles/CMake/CI、组合根接线、集成审查与本记录。
 

@@ -37,6 +37,9 @@ class TestPlatformMatrixAdversarial(unittest.TestCase):
         cls.status_md_path = REPO_ROOT / "docs" / "status" / "platform-status.md"
         cls.script_path = REPO_ROOT / "scripts" / "generate_platform_status.py"
         cls.valid_data = gps.load_yaml(cls.matrix_path)
+        # Snapshot consistency uses its recorded evidence commit. The checkout
+        # can advance without making those historical observations current.
+        cls.recorded_head = cls.valid_data["evidence_head_commit"]
 
     def get_clean_data(self) -> dict:
         return copy.deepcopy(self.valid_data)
@@ -311,9 +314,9 @@ class TestPlatformMatrixAdversarial(unittest.TestCase):
     # 5. CLI Execution & Freshness Check (--check)
     # -------------------------------------------------------------------------
     def test_cli_check_success_on_unmodified_repo(self):
-        """Verify --check exits 0 on current synchronized repository files."""
+        """Verify the recorded snapshot matches its explicitly pinned evidence HEAD."""
         res = subprocess.run(
-            [sys.executable, str(self.script_path), "--check"],
+            [sys.executable, str(self.script_path), "--check", "--head", self.recorded_head],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
@@ -329,7 +332,8 @@ class TestPlatformMatrixAdversarial(unittest.TestCase):
 
         try:
             res = subprocess.run(
-                [sys.executable, str(self.script_path), "--check", "--output", str(tmp_md_path)],
+                [sys.executable, str(self.script_path), "--check", "--head", self.recorded_head,
+                 "--output", str(tmp_md_path)],
                 cwd=str(REPO_ROOT),
                 capture_output=True,
                 text=True,
@@ -339,6 +343,20 @@ class TestPlatformMatrixAdversarial(unittest.TestCase):
         finally:
             if tmp_md_path.exists():
                 tmp_md_path.unlink()
+
+    def test_cli_check_rejects_mismatched_evidence_head(self) -> None:
+        """Pinning snapshot checks must not disable the CLI's evidence drift guard."""
+        other_prefix = "1" if self.recorded_head.startswith("0") else "0"
+        mismatched_head = other_prefix + self.recorded_head[1:]
+        res = subprocess.run(
+            [sys.executable, str(self.script_path), "--check", "--head", mismatched_head],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 1, "A different evidence HEAD must be rejected.")
+        self.assertIn("lags the code HEAD", res.stderr)
+        self.assertIn(f"effective HEAD={mismatched_head} (source: cli)", res.stderr)
 
     def test_cli_check_detects_missing_output_file(self):
         """Verify --check exits 1 when output markdown does not exist."""
@@ -449,8 +467,8 @@ platforms:
         self.assertTrue(len(checked_docs) >= 15, f"Expected at least 15 evidence documents, got {len(checked_docs)}")
 
     def test_production_markdown_is_strictly_in_sync(self):
-        """Verify docs/status/platform-status.md matches exactly what the generator produces."""
-        generated = gps.generate_markdown(self.valid_data)
+        """Verify recorded markdown content matches the YAML at its evidence HEAD."""
+        generated = gps.generate_markdown(self.valid_data, head_commit=self.recorded_head)
         self.assertTrue(self.status_md_path.exists(), "docs/status/platform-status.md must exist")
         actual = self.status_md_path.read_text(encoding="utf-8")
         # t196: Generated At is generator-execution time, so both sides are

@@ -18,6 +18,7 @@
 #include <atomic>
 #include <thread>
 #include <fstream>
+#include <functional>
 #include <cstdio>
 
 using namespace Caesura;
@@ -294,7 +295,9 @@ public:
 // same real-event consumer; sanitizers can diagnose lifetime regressions there.
 class AsyncPayloadProbe {
 public:
-    explicit AsyncPayloadProbe(bool accept = true) : m_accept(accept) {
+    explicit AsyncPayloadProbe(bool accept = true,
+                               std::function<void()> onFirstEvent = {})
+        : m_accept(accept), m_onFirstEvent(std::move(onFirstEvent)) {
         SDL_GetEventFilter(&m_previousFilter, &m_previousFilterData);
 #if defined(_MSC_VER) && defined(_DEBUG)
         s_active.store(this);
@@ -355,8 +358,11 @@ private:
         auto* probe = static_cast<AsyncPayloadProbe*>(userdata);
         if (event->type == CAESURA_EVENT_ASYNC_LOAD && event->user.data1) {
             CompletedLoad* unset = nullptr;
-            probe->m_payload.compare_exchange_strong(
-                unset, static_cast<CompletedLoad*>(event->user.data1));
+            if (probe->m_payload.compare_exchange_strong(
+                    unset, static_cast<CompletedLoad*>(event->user.data1))
+                && probe->m_onFirstEvent) {
+                probe->m_onFirstEvent();
+            }
             if (!probe->m_accept) return false;
         }
         return !probe->m_previousFilter ||
@@ -394,6 +400,7 @@ private:
     SDL_EventFilter m_previousFilter = nullptr;
     void* m_previousFilterData = nullptr;
     bool m_accept;
+    std::function<void()> m_onFirstEvent;
     bool m_consumed = false;
 };
 
@@ -531,4 +538,92 @@ TEST_CASE("AsyncLoader SDL ownership: event type is reserved from other SDL user
     CHECK(CAESURA_EVENT_ASYNC_LOAD >= SDL_EVENT_USER);
     CHECK(CAESURA_EVENT_ASYNC_LOAD < SDL_EVENT_LAST);
     CHECK(otherType != CAESURA_EVENT_ASYNC_LOAD);
+}
+
+TEST_CASE("AsyncLoader U5 SDL: cancellation reclaims only its queued payloads once") {
+    ScopedAsyncEvents events;
+    REQUIRE(events.ready);
+    TestPaths::ScopedTempDir dir("async_sdl_cancel");
+    AsyncPayloadProbe probe;
+    AsyncLoaderFixture<NullJobSystem> infra;
+    installAsyncByteAsset(infra.assets, dir);
+    REQUIRE(infra.loader.enqueue("u3_ownership.bin", "bytes") > 0);
+    REQUIRE(infra.loader.poll());
+    REQUIRE(probe.payload() != nullptr);
+    probe.checkReleaseCount(0);
+
+    CompletedLoad foreignPayload;
+    int foreignOwner = 0;
+    SDL_Event foreign{};
+    foreign.type = CAESURA_EVENT_ASYNC_LOAD;
+    foreign.user.data1 = &foreignPayload;
+    foreign.user.data2 = &foreignOwner;
+    REQUIRE(SDL_PushEvent(&foreign));
+
+    infra.loader.cancelAll();
+    infra.loader.cancelAll();
+    probe.checkReleaseCount(1);
+    SDL_Event event{};
+    int ownEvents = 0;
+    int foreignEvents = 0;
+    while (takeAsyncEvent(event)) {
+        if (event.user.data1 == probe.payload()) ++ownEvents;
+        if (event.user.data1 == &foreignPayload) ++foreignEvents;
+    }
+    CHECK(ownEvents == 0);
+    CHECK(foreignEvents == 1);
+    CHECK(infra.loader.pendingCount() == 0);
+    CHECK(infra.loader.drainCompleted().empty());
+    infra.loader.shutdown();
+    probe.checkReleaseCount(1);
+}
+
+TEST_CASE("AsyncLoader U5 SDL: reentrant filter cancellation preserves the fresh event") {
+    ScopedAsyncEvents events;
+    REQUIRE(events.ready);
+    TestPaths::ScopedTempDir dir("async_sdl_reentrant_cancel");
+    AsyncLoader* loader = nullptr;
+    int freshId = -1;
+    bool freshPosted = false;
+    AsyncPayloadProbe probe(true, [&] {
+        loader->cancelAll();
+        freshId = loader->enqueue("u3_ownership.bin", "bytes");
+        freshPosted = loader->poll();
+    });
+    AsyncLoaderFixture<NullJobSystem> infra;
+    loader = &infra.loader;
+    installAsyncByteAsset(infra.assets, dir);
+    const int oldId = loader->enqueue("u3_ownership.bin", "bytes");
+    const int oldSecondId = loader->enqueue("u3_ownership.bin", "bytes");
+    REQUIRE(oldId > 0);
+    REQUIRE(oldSecondId > oldId);
+    // Both old results leave the loader together. The first SDL filter cancels
+    // them and publishes a new generation before the original push completes.
+    REQUIRE(loader->poll());
+    REQUIRE(probe.payload() != nullptr);
+    probe.checkReleaseCount(1);
+    CHECK(freshId > oldSecondId);
+    CHECK(freshPosted);
+    CHECK(loader->pendingCount() == 0);
+
+    SDL_Event event{};
+    int oldEvents = 0;
+    int freshEvents = 0;
+    while (takeAsyncEvent(event)) {
+        if (event.user.data1 == probe.payload()) {
+            ++oldEvents; // never dereference a prematurely freed red payload
+            continue;
+        }
+        std::unique_ptr<CompletedLoad> result(
+            static_cast<CompletedLoad*>(event.user.data1));
+        REQUIRE(result != nullptr);
+        CHECK(result->id == freshId);
+        CHECK(result->success);
+        CHECK(loader->isCurrent(*result));
+        ++freshEvents;
+    }
+    CHECK(oldEvents == 0);
+    CHECK(freshEvents == 1);
+    CHECK(loader->drainCompleted().empty());
+    probe.checkReleaseCount(1);
 }

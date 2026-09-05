@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "TestPaths.h"
 #include "storage/SaveManager.h"
+#include "storage/AtomicSaveFile.h"
 #include "storage/HttpCloudSaveProvider.h"
 #include "storage/CloudSaveProvider.h"
 #include "storage/api/ISaveProvider.h"
@@ -717,4 +718,47 @@ TEST_CASE("CloudSaveProvider: null backend refuses both transfer directions") {
     std::string got((std::istreambuf_iterator<char>(f)),
                     std::istreambuf_iterator<char>());
     CHECK(got == "local-data");
+}
+
+TEST_CASE("Cloud sync: encrypted pull publication failures preserve the complete local envelope") {
+    CloudCryptoRegistration crypto;
+    EncryptedCloudServer server;
+    TestPaths::ScopedTempDir directory("atomic_cloud_pull");
+    const auto slot = directory.path() / "save_3.json";
+    SaveManager manager;
+    manager.init(directory.string());
+    REQUIRE(manager.configureCloudSync(server.endpoint()));
+    const std::array<uint8_t, 32> key{1, 2, 3, 4};
+    manager.setEncryptionKey(key.data());
+    const json previous = {{"chapter", 1}, {"text", "complete local state"}};
+    const json replacement = {{"chapter", 2}, {"text", "complete cloud state"}};
+    REQUIRE(manager.save(3, previous, "old", 3));
+    const auto oldEnvelope = cloudFileBytes(slot);
+    REQUIRE(manager.save(3, replacement, "new", 9));
+    REQUIRE(manager.pushSlotToCloud(3));
+    const auto cloudEnvelope = server.bytes();
+    REQUIRE(cloudEnvelope.substr(0, 4) == "CAES");
+    REQUIRE(cloudEnvelope != oldEnvelope);
+    replaceCloudFileBytes(slot, oldEnvelope);
+    const std::array<detail::SaveWriteStage, 6> stages = {
+        detail::SaveWriteStage::CreateTemporary, detail::SaveWriteStage::Write,
+        detail::SaveWriteStage::Flush, detail::SaveWriteStage::Close,
+        detail::SaveWriteStage::Replace, detail::SaveWriteStage::WriteProgress
+    };
+    for (auto stage : stages) {
+        INFO("cloud publication stage=", static_cast<int>(stage));
+        detail::ScopedSaveWriteTestHook hook({
+            [](detail::SaveWriteStage current, const std::filesystem::path&, void* context) {
+                return current != *static_cast<detail::SaveWriteStage*>(context);
+            }, &stage
+        });
+        CHECK_FALSE(manager.pullSlotFromCloud(3));
+        CHECK(cloudFileBytes(slot) == oldEnvelope);
+        CHECK(manager.load(3) == previous);
+        CHECK(std::distance(std::filesystem::directory_iterator(directory.path()),
+                            std::filesystem::directory_iterator()) == 1);
+    }
+    REQUIRE(manager.pullSlotFromCloud(3));
+    CHECK(cloudFileBytes(slot) == cloudEnvelope);
+    CHECK(manager.load(3) == replacement);
 }

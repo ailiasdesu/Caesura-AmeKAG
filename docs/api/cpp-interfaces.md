@@ -788,7 +788,7 @@ struct VideoHandle { uint32_t id = 0; explicit operator bool() const; };
 
 ```cpp
 struct CompletedLoad {
-    int id; std::string path, type; bool success;
+    int id; uint64_t generation; std::string path, type; bool success;
     std::vector<uint8_t> rgba; uint16_t width, height;
     std::vector<uint8_t> data;
 };
@@ -798,11 +798,14 @@ struct CompletedLoad {
 |------|------|
 | `init` / `shutdown` | 生命周期 |
 | `enqueue(path, type)` | 入队加载请求，返回 load ID |
-| `cancelAll` | 取消所有待处理加载 |
+| `cancelAll` | 递增请求代次，立即结算旧请求计数并清理缓存、完成缓冲和自身旧 SDL 事件 |
 | `poll` | 轮询完成结果（需每帧调用） |
 | `drainCompleted` | 非 SDL 交付：返回并清空全部已完成加载（调用方负责纹理上传 + Lua 回调） |
+| `isCurrent(completed)` | 消费者在上传或调用 Lua 前复核代次；已经取出的结果也可能因取消、重载或关闭失效 |
 | `pendingCount` | 待处理加载数 |
 | `isRunning` | 加载器是否运行中 |
+
+控制与消费操作在主线程执行。worker 保持自身结果所有权直到完成回调；取消不提前释放 worker 正在写入的内存。Engine 在暂停时持有完成结果，恢复时逐项检查代次，并在调用 Lua 前释放旧 callback registry 引用，避免回调重入取消后误删新引用。
 
 ### 12.3 IResourceGenerationTracker
 

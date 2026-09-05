@@ -69,5 +69,22 @@ check("factory video_play", src:find('"video_play" then return Render.video_play
 check("factory video_stop", src:find('"video_stop" then return Render.video_stop', 1, true) ~= nil)
 check("factory video_is_playing", src:find('"video_is_playing" then return Render.video_is_playing', 1, true) ~= nil)
 
+-- Execute the production factory in an isolated environment: the shared suite
+-- may already have locked require and registered a different backend.
+local cancel_calls = 0
+local env = setmetatable({
+    KAG = {}, DevCore = {}, Engine = {},
+    Render = { cancel_async_loads = function()
+        cancel_calls = cancel_calls + 1
+        return "cancelled"
+    end },
+}, { __index = _G })
+env._G = env
+local factory = assert(load(src, "@scripts/backend_factory.lua", "t", env))()
+local proxy = factory.create()
+local ok, result = pcall(proxy.render, "cancel_async_loads")
+check("factory forwards async cancellation", ok and result == "cancelled")
+check("factory cancels exactly once", cancel_calls == 1)
+
 if failed > 0 then os.exit(1) end
 print("BACKEND GUARD TESTS DONE")

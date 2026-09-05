@@ -23,6 +23,7 @@ set(TEST_SOURCES
     cpp/test_input.cpp
     cpp/test_gesture_detector.cpp
     cpp/test_async.cpp
+    cpp/test_async_cancellation.cpp
     cpp/test_null_jobsystem.cpp
     cpp/test_job_system.cpp
     cpp/test_image_decoder.cpp
@@ -43,10 +44,12 @@ set(TEST_SOURCES
     cpp/test_resource_handle.cpp
     cpp/test_error_ui.cpp
     cpp/test_entry.cpp
+    cpp/test_entry_async.cpp
     cpp/test_di.cpp
     cpp/test_minigame.cpp
     cpp/test_platform.cpp
     cpp/test_storage.cpp
+    cpp/test_save_atomicity.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
     cpp/test_golden_saves.cpp
@@ -154,12 +157,12 @@ add_caesura_doctest(CaesuraUnitTests
 add_caesura_doctest(CaesuraEntryTests
     LABELS entry lifecycle
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_entry.cpp,*test_engine_lifecycle.cpp,*test_galgame_startup.cpp
+    ARGS --source-file=*test_entry.cpp,*test_entry_async.cpp,*test_engine_lifecycle.cpp,*test_galgame_startup.cpp
 )
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem
     RESOURCE_LOCK save-files
-    ARGS --source-file=*test_storage.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
+    ARGS --source-file=*test_storage.cpp,*test_save_atomicity.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
 )
 add_caesura_doctest(CaesuraScriptTests
     LABELS script lua
@@ -169,7 +172,7 @@ add_caesura_doctest(CaesuraScriptTests
 add_caesura_doctest(CaesuraRenderResourceTests
     LABELS render resource
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
+    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_async_cancellation.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
 )
 add_caesura_doctest(CaesuraAudioTests
     LABELS audio

@@ -807,7 +807,7 @@ static int lua_Render_load_texture_async(lua_State* L) {
 
 // -- Render.cancel_async_loads() --------------------------------------------
 
-static int lua_Render_cancel_async_loads(lua_State* L) {
+void cancelRenderAsyncLoads(lua_State* L) {
     auto* async = getAsync(L);
     if (async) async->cancelAll();
     // Release all stored callbacks so they never fire for cancelled loads.
@@ -823,6 +823,10 @@ static int lua_Render_cancel_async_loads(lua_State* L) {
         lua_setglobal(L, "_ASYNC_CALLBACKS");
     }
     lua_pop(L, 1);
+}
+
+static int lua_Render_cancel_async_loads(lua_State* L) {
+    cancelRenderAsyncLoads(L);
     lua_pushboolean(L, 1);
     return 1;
 }

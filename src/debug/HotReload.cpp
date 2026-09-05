@@ -54,6 +54,7 @@ void HotReload::shutdown() {
     m_scriptState = ScriptState::IDLE;
     m_reloadRequested = false;
     m_warningFrames = 0;
+    m_beforeReloadCallback = {};
 }
 
 void HotReload::scanDirectory() {
@@ -163,6 +164,7 @@ bool HotReload::checkAndReload() {
     // Check for changes
     bool changed = m_reloadRequested;
     m_reloadRequested = false;
+    bool changedLua = false;
     std::vector<std::string> changedKs;
 
     if (!changed) {
@@ -177,6 +179,8 @@ bool HotReload::checkAndReload() {
                 if (path.size() >= 3
                     && path.compare(path.size() - 3, 3, ".ks") == 0) {
                     changedKs.push_back(path);
+                } else {
+                    changedLua = true;
                 }
                 DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                            "HotReload: change detected in %s", path.c_str());
@@ -184,8 +188,8 @@ bool HotReload::checkAndReload() {
         }
     }
 
-    if (!changed) {
-        // Check for new files
+    if (!changed || (!changedLua && !changedKs.empty())) {
+        // New Lua files also require a full reload when a scene changed.
         namespace fs = std::filesystem;
         try {
             for (const auto& root : m_watchRoots) {
@@ -198,6 +202,7 @@ bool HotReload::checkAndReload() {
                             m_fileTimes[path] = entry.last_write_time();
                             changed = true;
                             if (ext == ".ks") changedKs.push_back(path);
+                            else changedLua = true;
                             DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                                        "HotReload: new file detected: %s", path.c_str());
                         }
@@ -221,7 +226,7 @@ bool HotReload::checkAndReload() {
     // position remapped, game state preserved) instead of the nuclear
     // reset. The runner's Lua hook reports success/failure; a failure
     // (parse error in the edited file) leaves the game running untouched.
-    if (!changedKs.empty()) {
+    if (!changedLua && !changedKs.empty()) {
         int reloaded = 0;
         for (const auto& path : changedKs) {
             lua_getglobal(m_L, "require");
@@ -235,14 +240,15 @@ bool HotReload::checkAndReload() {
             }
             lua_getfield(m_L, -1, "reload_scene");
             if (lua_isfunction(m_L, -1)) {
-                lua_pushvalue(m_L, -2);  // self = module
-                lua_pushstring(m_L, path.c_str());
-                if (lua_pcall(m_L, 2, 1, 0) == LUA_OK) {
+                const auto scenePath = std::filesystem::path(path).generic_string();
+                lua_pushstring(m_L, scenePath.c_str());
+                if (lua_pcall(m_L, 1, 2, 0) == LUA_OK) {
+                    const bool accepted = lua_toboolean(m_L, -2) != 0;
                     const char* r = lua_tostring(m_L, -1);
                     DEBUG_INFO(SubSys::Dbg, ErrCode::Ok,
                                "HotReload: scene reload %s -> %s",
                                path.c_str(), r ? r : "?");
-                    ++reloaded;
+                    if (accepted) ++reloaded;
                 } else {
                     const char* err = lua_tostring(m_L, -1);
                     fprintf(stderr, "[HotReload] scene reload failed for %s: %s\n",
@@ -290,6 +296,10 @@ bool HotReload::checkAndReload() {
         }
         lua_pop(m_L, 2);  // pop co (or nil), ctx -- NO, need ctx still
     }
+
+    // Old operation callbacks and coroutine cleanup may enqueue more work.
+    // Invalidate it after cleanup, before replacing the script context.
+    if (m_beforeReloadCallback) m_beforeReloadCallback();
 
     // Step 3: Reset GameState (sf/f preserved)
     if (pushGameState(m_L)) {

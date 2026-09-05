@@ -17,6 +17,7 @@ struct AsyncLoadRequest {
     int         id = 0;
     std::string path;
     std::string type;
+    uint64_t    generation = 0;
 };
 
 // ============================================================================
@@ -40,6 +41,7 @@ public:
     void cancelAll() override;
     bool poll() override;
     std::vector<CompletedLoad> drainCompleted() override;
+    bool isCurrent(const CompletedLoad& completed) const override;
 
     int  pendingCount() const override { return m_pendingCount.load(); }
     bool isRunning()   const override { return m_running; }
@@ -51,35 +53,35 @@ private:
     // the same asset is requested concurrently (round 90 gap: dedup only via
     // the completion cache could not collapse two truly-parallel requests).
     struct InFlightEntry {
+        uint64_t generation = 0;                        // immutable request epoch
         std::vector<int>  waiterIds;                     // every enqueue id sharing this load
         std::shared_ptr<CompletedLoad>   result;         // filled by the worker thread
-        std::shared_ptr<std::atomic<bool>> cancelled;    // set when the job was pre-empted
     };
 
     static std::string makeKey(const std::string& path, const std::string& type);
 
     CompletedLoad processRequest(const AsyncLoadRequest& req);
     void postCompleteEvent(CompletedLoad completed);
+    void reclaimStaleEvents();
     // Runs on the main thread (or synchronously under NullJobSystem) when a
     // shared in-flight load finishes: releases the entry and delivers one
     // CompletedLoad (+ pendingCount accounting) to every registered waiter.
-    void finishInFlight(const std::shared_ptr<InFlightEntry>& entry,
-                        bool cancelled);
+    void finishInFlight(const std::shared_ptr<InFlightEntry>& entry);
 
     AssetManager* m_assetManager = nullptr;
     std::atomic<bool> m_running{false};
     std::atomic<int>  m_pendingCount{0};
     std::atomic<int>  m_nextId{1};
-    std::atomic<bool> m_cancelRequested{false};
+    std::atomic<uint64_t> m_generation{1};
 
     std::mutex m_completeMutex;
     std::vector<CompletedLoad> m_completed;
 
     // Per-(path,type) in-flight dedup table. Guarded by m_inflightMutex; the
-    // engine touches it from the main thread, tests may use several. cancelAll
+    // control operations and callbacks run on the main thread. cancelAll
     // clears the map (a later enqueue starts a fresh load); a running job still
-    // holds its own shared_ptr<InFlightEntry>, so its waiters are discharged
-    // correctly even after the map entry is dropped.
+    // holds its own shared_ptr<InFlightEntry> until completion, but stale
+    // callbacks may not publish results or change current pending accounting.
     std::mutex m_inflightMutex;
     std::unordered_map<std::string, std::shared_ptr<InFlightEntry>> m_inflight;
 
@@ -87,7 +89,7 @@ private:
     // are kept (bounded by total bytes) so re-entering the same scene does
     // not re-read + re-decode the same files. cancelAll() clears it (its
     // contract is "invalidate everything"). Guarded by m_cacheMutex; the
-    // engine touches it from the main thread, tests may use several.
+    // engine touches it only from the main thread.
     std::mutex m_cacheMutex;
     std::unordered_map<std::string, CompletedLoad> m_rgbaCache;
     std::vector<std::string> m_cacheOrder;  // FIFO eviction order

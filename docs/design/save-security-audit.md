@@ -62,7 +62,15 @@ CAES 外层没有独立格式版本字段；`schema_version` 是 JSON 中的数�
 
 provider 的直接 `pushToCloud/pullFromCloud` 保留原始字节传输行为，不执行 SaveManager 的策略。游戏应通过 SaveManager 的槽位 API 同步；声明支持云同步但未实现暂存 transport 的自定义 provider 会被该路径拒绝。
 
-这里的“失败不覆盖”指**验证未通过时尚未提交**。它不扩大底层文件替换、远端写入失败或断电场景的原子性/持久性保证；也没有新增云冲突合并或时间戳仲裁。
+验证失败不会进入提交步骤。验证通过后的本地写入使用下述同目录临时文件替换；远端写入失败、云冲突合并与时间戳仲裁仍由各自接口的实际行为决定。
+
+### 本地文件的发布边界
+
+LocalFileSaveProvider 与 SaveManager 无 provider 路径共用写盘函数：独占创建同目录 `.caesura-save-tmp-<pid>-<sequence>`，完整写入并检查原生 flush 与 close，最后执行 Windows `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)` 或 POSIX `rename`。不通过删除旧槽位来重试替换，失败只清理本次独占创建的临时文件。并发成功写入可以改变同一槽位；失败返回值不是跨写入者的比较交换承诺。
+
+正式槽位始终是读取入口；遗留 `.tmp` 与 `.caesura-save-tmp-*` 不自动晋升、复用或作为存档列出。清理应在所有写入进程停止、正式存档确认完整后离线进行，不能仅凭文件名中的 PID 判断文件已无主。
+
+进程中断、文件占用、故障注入与密文回归覆盖发布点前后的完整版本可见性，不模拟断电，也不承诺任意文件系统、网络盘或存储设备的断电持久性。
 
 ## 4. 加载失败与迁移
 
@@ -101,5 +109,6 @@ SaveManager 的 JSON 信封没有由引擎加入并核验的槽位身份，Crypt
 - [test_storage.cpp](../../tests/cpp/test_storage.cpp)：既有加密、槽位、迁移和 provider 行为。
 - [test_save_roundtrip.cpp](../../tests/cpp/test_save_roundtrip.cpp)：Engine 默认 provider 加密、重建 Engine 读取、单层 CAES、兼容/严格策略、显式导入、失败元数据及空容器。
 - [test_cloud_save.cpp](../../tests/cpp/test_cloud_save.cpp)：HTTP/Steam 原始密文字节、严格模式拒绝非法同步、合法同步及同一暂存 buffer 提交。
+- [test_save_atomicity.cpp](../../tests/cpp/test_save_atomicity.cpp)：临时文件碰撞、阶段失败、并发完整写入、真实进程中断及加密管理器两条写入路径；云拉取失败保留旧密文由 test_cloud_save.cpp 覆盖。
 
 槽位绑定、防重放、完整云冲突处理和断电持久性未因这些测试入口而获得已实现或已通过结论。

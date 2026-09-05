@@ -3,6 +3,10 @@
 #include "debug/DebugProtocol.h"
 #include "debug/HotReload.h"
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+
 extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
@@ -27,6 +31,68 @@ void countingHook(lua_State*, lua_Debug* ar) {
 void replacementHook(lua_State*, lua_Debug*) {}
 
 } // namespace
+
+TEST_CASE("HotReload selects scene or full reload before invalidating async work") {
+    bool luaChanged = false;
+    bool luaAdded = false;
+    bool sceneAccepted = true;
+    SUBCASE("scene-only reload uses its dot-call path") {}
+    SUBCASE("failed scene reload keeps pending async work") { sceneAccepted = false; }
+    SUBCASE("mixed Lua and scene changes require full reload") { luaChanged = true; }
+    SUBCASE("new Lua alongside a scene change requires full reload") { luaAdded = true; }
+    const bool fullReload = luaChanged || luaAdded;
+
+    const auto root = std::filesystem::temp_directory_path() /
+        ("caesura_reload_async_" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directory(root);
+    const auto scenePath = root / "scene.ks";
+    const auto luaPath = root / "helper.lua";
+    std::ofstream(scenePath) << "[end]\n";
+    if (!luaAdded) std::ofstream(luaPath) << "return {}\n";
+
+    lua_State* L = luaL_newstate();
+    REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+    lua_pushboolean(L, sceneAccepted);
+    lua_setglobal(L, "scene_accepted");
+    REQUIRE(luaL_dostring(L, R"lua(
+        scene_reload_calls, full_reload_calls = 0, 0
+        package.preload.kag_runner = function()
+            return { reload_scene = function(path)
+                assert(type(path) == "string", "scene path must be the first argument")
+                assert(not path:find("\\", 1, true), "scene paths use forward slashes")
+                scene_reload_calls = scene_reload_calls + 1
+                return scene_accepted, "scene-result"
+            end }
+        end
+        package.preload.kag = function()
+            full_reload_calls = full_reload_calls + 1
+            return {}
+        end
+    )lua") == LUA_OK);
+
+    HotReload reload;
+    reload.init(root.string(), L);
+    int cancellationCalls = 0;
+    reload.setBeforeReloadCallback([&] { ++cancellationCalls; });
+    if (luaAdded) std::ofstream(luaPath) << "return {}\n";
+    const auto changedTime = std::filesystem::last_write_time(scenePath) +
+        std::chrono::seconds(1);
+    std::filesystem::last_write_time(scenePath, changedTime);
+    if (luaChanged) std::filesystem::last_write_time(luaPath, changedTime);
+
+    CHECK(reload.checkAndReload());
+    CHECK(cancellationCalls == (fullReload ? 1 : 0));
+    lua_getglobal(L, "scene_reload_calls");
+    CHECK(lua_tointeger(L, -1) == (fullReload ? 0 : 1));
+    lua_getglobal(L, "full_reload_calls");
+    CHECK(lua_tointeger(L, -1) == (fullReload ? 1 : 0));
+    lua_settop(L, 0);
+    reload.shutdown();
+    lua_close(L);
+    std::filesystem::remove_all(root);
+}
 
 TEST_CASE("DebugProtocol preserves Lua hook ownership") {
     HotReload hr;

@@ -339,7 +339,6 @@ TEST_CASE("Engine core avoids unused concrete adapter dependencies") {
     CHECK(source.find("../audio/SoLoudAudioEngine.h") == std::string::npos);
     CHECK(source.find("SoLoudAudioEngine") == std::string::npos);
     CHECK(source.find("../render/BgfxRenderDevice.h") == std::string::npos);
-    CHECK(source.find("../script/bindings/RenderBinding.h") == std::string::npos);
     CHECK(source.find("../minigame/BgfxMiniGameBackend.h") == std::string::npos);
     CHECK(source.find("../rpc/RpcServer.h") == std::string::npos);
     CHECK(source.find("RpcServer::instance()") == std::string::npos);

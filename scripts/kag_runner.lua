@@ -161,6 +161,15 @@ end
 --  scene cache is invalidated. Returns true + status.
 function kag_runner.reload_scene(path)
     if not ctx then return false, "no-context" end
+    if ctx._kag_debug_paused then return false, "kag-paused" end
+    local allowed, reason = can_resume()
+    if not allowed then return false, reason end
+    if kag_co then
+        local status = coroutine.status(kag_co)
+        if coroutine.running() == kag_co or status == "running" or status == "normal" then
+            return false, "scheduler-running"
+        end
+    end
     local target = path
     if not target or #target == 0 then
         target = ctx.current_scene or ctx.currentScene
@@ -180,9 +189,17 @@ function kag_runner.reload_scene(path)
     local new_index = kag_runner.remap_token_index(
         ctx.tokens or {}, ctx.token_index or 1, new_tokens)
 
-    -- Stage the swap: end the running coroutine (stop_flag) and let
-    -- update() re-spawn at the remapped position -- same pattern as
-    -- rollback/jump, so the debugger and backlog see one code path.
+    -- Close the old scheduler synchronously: its cleanup may enqueue requests
+    -- that must belong to the cancellation below, never to the new scene.
+    -- Retain the dead coroutine until update() consumes the pending reload.
+    if kag_co then
+        local closed, close_error = coroutine.close(kag_co)
+        if not closed then print("[KAG Runner] Scene reload cleanup failed: " .. tostring(close_error)) end
+    end
+    require("backend").cancel_async_loads()
+
+    -- Stage the swap; update() starts the replacement before processing old
+    -- input waits. Failed/cache-only reloads never reach this boundary.
     ctx.tokens = new_tokens
     ctx.labelMap = scene.labels
     ctx.label_index = nil      -- raw tokens: next jump re-scans
@@ -432,13 +449,27 @@ end
 local auto_advance_ms = 0  -- accumulated ms before auto-mode advances
 
 function kag_runner.update(dt)
-    if not kag_co then return false, "not-running" end
+    if not kag_co and not (ctx and ctx._pendingSceneReload) then return false, "not-running" end
     -- KAG scene debugger pause: while a breakpoint/step holds the
     -- scheduler, do not advance. The editor resumes by calling
     -- KAGDebug.continue_run() (or KAGDebug.step()) via RPC; the next
     -- update() then resumes the coroutine normally.
     if ctx and ctx._kag_debug_paused then
         return false, "kag-paused"
+    end
+    if ctx and ctx._pendingSceneReload then
+        local allowed, reason = can_resume()
+        if not allowed then return false, reason end
+        close_scheduler_coroutine()
+        ctx._pendingSceneReload = nil
+        ctx.stop_flag = false
+        ctx.waiting_input = false
+        ctx.reveal = nil
+        auto_advance_ms = 0
+        kag_co = coroutine.create(function()
+            scheduler.run(ctx, ctx.tokens, ctx.token_index)
+        end)
+        return resume_scheduler("update", math.max(0, (tonumber(dt) or 0) * 1000))
     end
     -- Replay system: record mode advances the capture clock every frame;
     -- playback mode fires due clicks before normal input processing -- the
@@ -573,17 +604,6 @@ function kag_runner.update(dt)
     local status = coroutine.status(kag_co)
     if status == "dead" then
         close_scheduler_coroutine()
-        if ctx._pendingSceneReload then
-            -- Scene hot reload: the .ks was re-parsed (flow.reload_scene)
-            -- and ctx.tokens/token_index remapped; re-spawn the scheduler
-            -- at the new position (stop_flag ended the old coroutine).
-            ctx._pendingSceneReload = nil
-            ctx.stop_flag = false
-            kag_co = coroutine.create(function()
-                scheduler.run(ctx, ctx.tokens, ctx.token_index)
-            end)
-            return resume_scheduler("update", delta_ms)
-        end
         if ctx._pendingRollback then
             -- Rollback: a snapshot was already restored into ctx by
             -- rollback(); re-spawn the scheduler at the saved position.

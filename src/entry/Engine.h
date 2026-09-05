@@ -205,7 +205,7 @@ private:
     std::unique_ptr<carc::ICryptoEngine> m_cryptoEngine;
     // Dispatch one completed async load (texture upload + Lua callback).
     // Used by both the SDL event path and the headless/editor drain path.
-    void dispatchAsyncLoad(CompletedLoad* completed);
+    void dispatchAsyncLoad(std::unique_ptr<CompletedLoad> completed);
 
     std::vector<std::unique_ptr<CompletedLoad>> m_deferredAsyncLoads;
     // Cached last-written GPU-state globals: written to Lua only when the

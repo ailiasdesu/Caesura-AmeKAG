@@ -14,6 +14,7 @@
 #include "CloudSaveProvider.h"
 #include "HttpCloudSaveProvider.h"
 #include "LocalFileSaveProvider.h"
+#include "AtomicSaveFile.h"
 #include "../di/BackendRegistry.h"
 #include "../archive/api/ICryptoEngine.h"
 #include "../debug/api/DebugLog.h"
@@ -377,31 +378,10 @@ bool SaveManager::writeFile(const std::string& path, const std::string& content)
 
 bool SaveManager::writeRawFile(const std::string& path, const std::string& dataToWrite) {
     if (m_saveProvider) return m_saveProvider->writeFile(path, dataToWrite);
-    // Atomic write: write to a temp file next to the target, flush, then
-    // rename. A crash mid-write leaves the previous save intact instead of
-    // truncating it (rename is atomic on the same filesystem).
-    const std::string tmpPath = path + ".tmp";
-    std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Failed to open file for writing: %s", tmpPath.c_str());
-        return false;
-    }
-    out.write(dataToWrite.c_str(), static_cast<std::streamsize>(dataToWrite.size()));
-    out.flush();
-    if (!out.good()) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Write failed for %s", tmpPath.c_str());
-        std::filesystem::remove(tmpPath);  // no stale partial temp file
-        return false;
-    }
-    out.close();
-    std::error_code ec;
-    std::filesystem::rename(tmpPath, path, ec);
-    if (ec) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed, "[SaveManager] Rename failed: %s", ec.message().c_str());
-        std::filesystem::remove(tmpPath);
-        return false;
-    }
-    return true;
+    if (detail::writeSaveFileAtomically(path, dataToWrite)) return true;
+    DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveWriteFailed,
+              "[SaveManager] Atomic save publication failed: %s", path.c_str());
+    return false;
 }
 
 // ============================================================================
